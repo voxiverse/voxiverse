@@ -1,5 +1,6 @@
 package client
 
+import "core:math"
 import "core:mem/virtual"
 import "core:testing"
 
@@ -125,4 +126,25 @@ add_columns :: proc(w: ^World, r: i32) {
 			world_set_column(w, c)
 		}
 	}
+}
+
+// Other players move smoothly between snapshots, take the short way round
+// when turning, ignore late snapshots and vanish when nothing comes.
+@(test)
+test_other_players_interpolate :: proc(t: ^testing.T) {
+	o: Other_Player
+	other_snapshot(&o, 10, {position = {0, 64, 0}, yaw = 3.0})
+	other_snapshot(&o, 11, {position = {1, 64, 0}, yaw = -3.0}) // turned 0.28 rad, across ±π
+	other_snapshot(&o, 9, {position = {50, 0, 0}}) // late: ignored
+	testing.expect_value(t, o.count, 2)
+	v, ok := other_view(&o, 10.5)
+	testing.expect(t, ok && abs(v.position.x - 0.5) < 1e-9)
+	testing.expectf(t, abs(abs(v.yaw) - math.PI) < 0.01, "turned the long way: yaw %v", v.yaw)
+	v, ok = other_view(&o, 20)
+	testing.expect(t, ok && v.position.x == 1, "after the newest: stays there")
+	_, ok = other_view(&o, 11 + STALE_TICKS + 1)
+	testing.expect(t, !ok, "stale players are hidden")
+	for i in 0 ..< 20 {other_snapshot(&o, u32(12 + i), {position = {f64(i), 0, 0}})}
+	testing.expect_value(t, o.count, SNAPSHOTS)
+	testing.expect(t, abs(render_tick(100, 0.5) - (100 + 15 - INTERPOLATION_TICKS)) < 1e-9)
 }

@@ -321,6 +321,19 @@ var_widgets :: proc(ctx: ^ui.Context, table: base.Var_Table, data: rawptr) -> (c
 				base.var_set_f64(table, data, &v, f64(value))
 				changed = true
 			}
+		case .Text:
+			// Edited in place; a keystroke that makes it invalid is refused.
+			r := ui.next(ctx)
+			ui.label(ctx, label, ui.cut_left(&r, r.w * 0.45))
+			_, offset := base.var_kind(table, &v)
+			value := (^base.Var_Text)(uintptr(data) + offset)
+			text := make([dynamic]u8, context.temp_allocator)
+			append(&text, base.var_text(value))
+			ui.text_input(ctx, v.field, &text, r, placeholder = v.help)
+			if string(text[:]) != base.var_text(value) &&
+			   base.var_set(table, data, base.var_name(table, &v), string(text[:])) == .None {
+				changed = true
+			}
 		}
 	}
 	return

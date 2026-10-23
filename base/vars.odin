@@ -21,7 +21,7 @@ import "core:strings"
 //	table := base.Var_Table{"", Settings, SETTINGS_VARS[:], &defaults}
 //	base.var_set(table, &settings, "fov", "90")
 //
-// Supported field types: bool, i32, int, f32.
+// Supported field types: bool, i32, int, f32, Var_Text.
 
 Var :: struct {
 	field:    string, // struct field name; also the console name
@@ -29,6 +29,27 @@ Var :: struct {
 	label:    string, // for menus; empty: made from the field name
 	min, max: f64, // numbers: allowed range
 	step:     f64, // numbers: slider step (0 = continuous, ints use 1)
+	check:    proc(text: string) -> bool, // text: what is allowed (nil: anything that fits)
+}
+
+// Var_Text: a text variable's value, stored in place (settings stay plain
+// values: copied, compared and saved like the rest).
+Var_Text :: struct {
+	len: u8,
+	buf: [VAR_TEXT_MAX]u8,
+}
+
+VAR_TEXT_MAX :: 48
+
+var_text :: proc(t: ^Var_Text) -> string {
+	return string(t.buf[:t.len])
+}
+
+// var_text_set stores s; false (unchanged) if it does not fit.
+var_text_set :: proc(t: ^Var_Text, s: string) -> bool {
+	if len(s) > VAR_TEXT_MAX {return false}
+	t.len = u8(copy(t.buf[:], s))
+	return true
 }
 
 Var_Table :: struct {
@@ -42,6 +63,7 @@ Var_Kind :: enum u8 {
 	Bool,
 	Int,
 	F32,
+	Text,
 }
 
 Var_Error :: enum u8 {
@@ -78,13 +100,15 @@ var_kind :: proc(t: Var_Table, v: ^Var) -> (kind: Var_Kind, offset: uintptr) {
 		kind = .Int
 	case f32:
 		kind = .F32
+	case Var_Text:
+		kind = .Text
 	case:
 		panic("unsupported variable type")
 	}
 	return kind, f.offset
 }
 
-// var_get_f64 reads a variable as a number (bools are 0 or 1).
+// var_get_f64 reads a variable as a number (bools are 0 or 1; texts 0).
 var_get_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var) -> f64 {
 	kind, offset := var_kind(t, v)
 	p := rawptr(uintptr(data) + offset)
@@ -97,6 +121,7 @@ var_get_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var) -> f64 {
 		return f64((^int)(p)^)
 	case .F32:
 		return f64((^f32)(p)^)
+	case .Text:
 	}
 	return 0
 }
@@ -107,6 +132,7 @@ var_set_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var, value: f64) -> Var_Erro
 	p := rawptr(uintptr(data) + offset)
 	value := value
 	err := Var_Error.None
+	if kind == .Text {return .Bad_Value}
 	if kind != .Bool && (value < v.min || value > v.max) {
 		value = clamp(value, v.min, v.max)
 		err = .Out_Of_Range
@@ -122,6 +148,7 @@ var_set_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var, value: f64) -> Var_Erro
 		}
 	case .F32:
 		(^f32)(p)^ = f32(value)
+	case .Text:
 	}
 	return err
 }
@@ -130,10 +157,14 @@ var_set_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var, value: f64) -> Var_Erro
 var_set :: proc(t: Var_Table, data: rawptr, name: string, value_text: string) -> Var_Error {
 	v, found := var_find(t, name)
 	if !found {return .Unknown_Name}
-	kind, _ := var_kind(t, v)
+	kind, offset := var_kind(t, v)
 	text := strings.trim_space(value_text)
 	value: f64
 	switch kind {
+	case .Text:
+		if v.check != nil && !v.check(text) {return .Bad_Value}
+		if !var_text_set((^Var_Text)(uintptr(data) + offset), text) {return .Bad_Value}
+		return .None
 	case .Bool:
 		switch text {
 		case "1", "true", "on", "yes":
@@ -159,9 +190,11 @@ var_format :: proc(
 	v: ^Var,
 	allocator := context.temp_allocator,
 ) -> string {
-	kind, _ := var_kind(t, v)
+	kind, offset := var_kind(t, v)
 	value := var_get_f64(t, data, v)
 	switch kind {
+	case .Text:
+		return strings.clone(var_text((^Var_Text)(uintptr(data) + offset)), allocator)
 	case .Bool:
 		return "true" if value != 0 else "false"
 	case .Int:
@@ -173,6 +206,11 @@ var_format :: proc(
 }
 
 var_reset :: proc(t: Var_Table, data: rawptr, v: ^Var) {
+	kind, offset := var_kind(t, v)
+	if kind == .Text {
+		(^Var_Text)(uintptr(data) + offset)^ = (^Var_Text)(uintptr(t.defaults) + offset)^
+		return
+	}
 	var_set_f64(t, data, v, var_get_f64(t, t.defaults, v))
 }
 
@@ -228,7 +266,7 @@ var_table_check :: proc(t: Var_Table) -> bool {
 	ok := true
 	for &v in t.vars {
 		kind, _ := var_kind(t, &v)
-		if kind != .Bool {
+		if kind == .Int || kind == .F32 {
 			if v.min > v.max {ok = false}
 			d := var_get_f64(t, t.defaults, &v)
 			if d < v.min || d > v.max {ok = false}

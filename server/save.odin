@@ -5,6 +5,7 @@ import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:time"
@@ -29,13 +30,14 @@ Saved_Player :: struct {
 	yaw, pitch: f32, // where they were looking
 }
 WORLD_FILE :: "world.cfg"
-WORLD_FORMAT :: 1
+WORLD_FORMAT :: 2 // 2: players by name (format 1's single player becomes LEGACY_PLAYER)
+LEGACY_PLAYER :: "Player"
 
 Store :: struct {
 	dir:       string, // "" = this world is not saved
 	saved:     map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
 	regions:   map[game.Region_Pos]bool, // read from disk; true = changed since written
-	player:    Maybe(Saved_Player), // from world.cfg, for the next join
+	players:   map[string]Saved_Player, // by name: from world.cfg, and those who left
 	writer:    game.Writer,
 	last_save: time.Tick,
 }
@@ -72,6 +74,8 @@ store_close :: proc(s: ^Server) {
 	st := &s.store
 	for _, bytes in st.saved {delete(bytes)}
 	delete(st.saved)
+	for name in st.players {delete(name)}
+	delete(st.players)
 	delete(st.regions)
 	game.writer_destroy(&st.writer)
 	delete(st.dir)
@@ -102,6 +106,18 @@ keep_edits :: proc(s: ^Server, c: ^Chunk) {
 	game.write_chunk_blocks(w, &c.blocks)
 	if old, had := s.store.saved[c.pos]; had {delete(old)}
 	s.store.saved[c.pos] = transmute([]u8)strings.clone(string(w.buf[:])) // an owned copy
+}
+
+// keep_player stores a playing client's player under its name (when it
+// leaves, and before each save).
+keep_player :: proc(s: ^Server, c: ^Client) {
+	name := client_name(c)
+	p := Saved_Player{c.player, c.look[0], c.look[1]}
+	if _, had := s.store.players[name]; had {
+		s.store.players[name] = p
+	} else {
+		s.store.players[strings.clone(name)] = p
+	}
 }
 
 // mark_edited notes that pos's region must be written at the next save.
@@ -249,15 +265,20 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "time = %.9f", s.clock)
-	if s.client.state == .Playing || s.store.player != nil {
-		p :=
-			Saved_Player{s.client.player, s.client.look[0], s.client.look[1]} if s.client.state == .Playing else s.store.player.?
-		fmt.sbprintfln(&b, "player.x = %.6f", p.state.position.x)
-		fmt.sbprintfln(&b, "player.y = %.6f", p.state.position.y)
-		fmt.sbprintfln(&b, "player.z = %.6f", p.state.position.z)
-		fmt.sbprintfln(&b, "player.yaw = %.6f", p.yaw)
-		fmt.sbprintfln(&b, "player.pitch = %.6f", p.pitch)
-		fmt.sbprintfln(&b, "player.flying = %v", p.state.flying)
+	for &c in s.clients {
+		if c.state == .Playing {keep_player(s, &c)}
+	}
+	names := make([dynamic]string, context.temp_allocator)
+	for name in s.store.players {append(&names, name)}
+	slice.sort(names[:])
+	for name in names {
+		p := s.store.players[name]
+		fmt.sbprintfln(&b, "player.%s.x = %.6f", name, p.state.position.x)
+		fmt.sbprintfln(&b, "player.%s.y = %.6f", name, p.state.position.y)
+		fmt.sbprintfln(&b, "player.%s.z = %.6f", name, p.state.position.z)
+		fmt.sbprintfln(&b, "player.%s.yaw = %.6f", name, p.yaw)
+		fmt.sbprintfln(&b, "player.%s.pitch = %.6f", name, p.pitch)
+		fmt.sbprintfln(&b, "player.%s.flying = %v", name, p.state.flying)
 	}
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &s.rules, &b)
@@ -270,8 +291,11 @@ write_world_file :: proc(s: ^Server) -> bool {
 @(private = "file")
 read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	rules_text := strings.builder_make(context.temp_allocator)
-	player: Saved_Player
-	have_player := 0
+	Partial :: struct {
+		player: Saved_Player,
+		coords: int, // of x, y, z read
+	}
+	players := make(map[string]Partial, context.temp_allocator)
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
@@ -293,19 +317,32 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
-		case key == "player.x", key == "player.y", key == "player.z":
-			if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
-				player.state.position[int(key[len(key) - 1] - 'x')] = v
-				have_player += 1
+		case strings.has_prefix(key, "player."):
+			// player.<name>.<field>; format 1 had one player: player.<field>.
+			after := key[len("player."):]
+			name, field := LEGACY_PLAYER, after
+			if dot := strings.last_index_byte(after, '.'); dot >= 0 {
+				name, field = after[:dot], after[dot + 1:]
 			}
-		case key == "player.yaw":
-			if v, ok := strconv.parse_f32(value);
-			   ok && !math.is_nan(v) && abs(v) < 1e6 {player.yaw = v}
-		case key == "player.pitch":
-			if v, ok := strconv.parse_f32(value);
-			   ok && !math.is_nan(v) {player.pitch = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
-		case key == "player.flying":
-			player.state.flying = value == "true"
+			if !game.name_valid(name) {continue}
+			p := players[name]
+			switch field {
+			case "x", "y", "z":
+				if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
+					p.player.state.position[int(field[0] - 'x')] = v
+					p.coords += 1
+				}
+			case "yaw":
+				if v, ok := strconv.parse_f32(value);
+				   ok && !math.is_nan(v) && abs(v) < 1e6 {p.player.yaw = v}
+			case "pitch":
+				if v, ok := strconv.parse_f32(value);
+				   ok &&
+				   !math.is_nan(v) {p.player.pitch = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
+			case "flying":
+				p.player.state.flying = value == "true"
+			}
+			players[name] = p
 		case strings.has_prefix(key, "rules."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}
@@ -318,7 +355,9 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			p.text,
 		)
 	}
-	if have_player == 3 {s.store.player = player}
+	for name, p in players {
+		if p.coords == 3 {s.store.players[strings.clone(name)] = p.player}
+	}
 	log.infof("server world loaded dir=%s seed=%d", s.store.dir, s.config.seed)
 	return true
 }

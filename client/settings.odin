@@ -15,6 +15,7 @@ import "../game"
 // through the tables.
 
 Settings :: struct {
+	name:              base.Var_Text, // the player's name ("": DEFAULT_NAME)
 	ui_scale:          f32, // 0 = automatic
 	mouse_sensitivity: f32,
 	invert_mouse:      bool,
@@ -40,6 +41,11 @@ SETTINGS_DEFAULTS := Settings {
 
 @(rodata)
 SETTINGS_VARS := [?]base.Var {
+	{
+		field = "name",
+		help = "your name in multiplayer: letters, digits, _ or -",
+		check = proc(s: string) -> bool {return s == "" || game.name_valid(s)},
+	},
 	{
 		field = "ui_scale",
 		label = "UI scale (0 = automatic)",
@@ -73,6 +79,14 @@ SETTINGS_VARS := [?]base.Var {
 	},
 	{field = "fullscreen", help = "cover the whole screen (F11)"},
 	{field = "volume", help = "sound volume", min = 0, max = 1, step = 0.05},
+}
+
+DEFAULT_NAME :: "Player" // also the one player of format-1 saves (server.LEGACY_PLAYER)
+
+// player_name: the name to play under.
+player_name :: proc(s: ^Settings) -> string {
+	name := base.var_text(&s.name)
+	return name if name != "" else DEFAULT_NAME
 }
 
 // Debug switches: for development, never saved.

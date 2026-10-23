@@ -5,31 +5,48 @@ import "core:mem"
 
 import "../base"
 import "../game"
+import "../netcode"
 
-// Interest management (the area is defined in game/interest.odin): which
-// chunks a client has, which to send next and which to tell it to drop.
+// Clients, and interest management for each (the area is defined in
+// game/interest.odin): which chunks a client has, which to send next and
+// which to tell it to drop; and which chunks no client wants any more.
 
 Client_State :: enum u8 {
-	Connecting,
+	Free, // an empty seat
+	Connecting, // connected, waiting for Hello
 	Playing,
-	Gone,
+	Gone, // refused; dropped soon (kick_at), or the local pipe closed
 }
 
+// Client_Link: how to reach a client.
+Client_Link :: union {
+	Local, // the in-process pipe (Server.local)
+	netcode.Peer_Id,
+}
+
+Local :: struct {}
+
 Client :: struct {
-	state:      Client_State,
-	position:   [3]f64,
-	center:     game.Chunk_Pos, // the chunk the client is in
-	moved:      bool, // center changed since the last unload pass
-	has:        map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
-	columns:    map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
-	cursor:     int, // offsets before this are all sent
-	player:     game.Player_State,
-	inputs:     game.Input_Queue,
-	teleported: bool, // since the last Player_Update
-	edits:      [MAX_QUEUED_EDITS]game.Edit, // waiting for their input (oldest first)
-	edit_count: int,
-	teleport:   [2]f32, // yaw, pitch to look after it
-	look:       [2]f32, // yaw, pitch of the last input applied (saved with the player)
+	state:       Client_State,
+	link:        Client_Link,
+	can_cheat:   bool,
+	name_buf:    [game.MAX_NAME_LENGTH]u8,
+	name_len:    int,
+	kick_at:     u64, // tick to drop a refused client
+	kick_reason: string, // (a constant)
+	position:    [3]f64,
+	center:      game.Chunk_Pos, // the chunk the client is in
+	moved:       bool, // center changed since the last unload pass
+	has:         map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	columns:     map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
+	cursor:      int, // offsets before this are all sent
+	player:      game.Player_State,
+	inputs:      game.Input_Queue,
+	teleported:  bool, // since the last Player_Update
+	edits:       [MAX_QUEUED_EDITS]game.Edit, // waiting for their input (oldest first)
+	edit_count:  int,
+	teleport:    [2]f32, // yaw, pitch to look after it
+	look:        [2]f32, // yaw, pitch of the last input applied (saved with the player)
 }
 
 // MAX_QUEUED_EDITS: edits waiting for the input they follow; more than this
@@ -51,6 +68,23 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 	return nil
 }
 
+// client_reset frees the seat (keeping its maps' memory for the next).
+@(private)
+client_reset :: proc(c: ^Client) {
+	has, columns := c.has, c.columns
+	clear(&has)
+	clear(&columns)
+	c^ = {
+		has     = has,
+		columns = columns,
+	}
+}
+
+@(private)
+client_name :: proc(c: ^Client) -> string {
+	return string(c.name_buf[:c.name_len])
+}
+
 @(private)
 set_position :: proc(c: ^Client, p: [3]f64) {
 	c.position = p
@@ -62,7 +96,7 @@ set_position :: proc(c: ^Client, p: [3]f64) {
 	}
 }
 
-// client_wants: pos is within the interest area plus margin.
+// client_wants: pos is within the client's interest area plus margin.
 @(private)
 client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i32) -> bool {
 	if c.state != .Playing {return false}
@@ -73,12 +107,23 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 	)
 }
 
-// stream requests and sends the nearest chunks the client lacks, within the
-// tick's budgets.
+// anyone_wants: some playing client wants pos.
 @(private)
-stream :: proc(s: ^Server) {
-	c := &s.client
+anyone_wants :: proc(s: ^Server, pos: game.Chunk_Pos, margin: i32) -> bool {
+	for &c in s.clients {
+		if client_wants(&c, pos, s.config, margin) {return true}
+	}
+	return false
+}
+
+// stream requests and sends the nearest chunks the client lacks, within the
+// tick's budgets (and, over the network, while the client keeps up).
+@(private)
+stream :: proc(s: ^Server, c: ^Client) {
 	budget := SEND_BUDGET
+	if p, ok := c.link.(netcode.Peer_Id); ok && netcode.host_backlog(&s.host, p) > MAX_BACKLOG {
+		budget = 0
+	}
 	requesting := true
 	all_sent := true
 	for i in c.cursor ..< len(s.offsets) {
@@ -96,38 +141,42 @@ stream :: proc(s: ^Server) {
 		}
 		if chunk.state != .Ready || budget == 0 {continue}
 		column := [2]i32{pos.x, pos.z}
-		if c.columns[column] == 0 {send_message(s, column_message(s, column))}
+		if c.columns[column] == 0 {send_message(s, c, column_message(s, column))}
 		c.columns[column] += 1
-		send_message(s, game.Chunk_Message{pos = pos}, &chunk.blocks)
+		send_message(s, c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		c.has[pos] = {}
 		budget -= 1
 		if budget == 0 && !requesting {break}
 	}
 }
 
-// unload_far tells the client to drop chunks it no longer needs and frees
-// those no client needs.
+// drop_far tells the client to drop chunks it no longer needs.
 @(private)
-unload_far :: proc(s: ^Server) {
-	c := &s.client
+drop_far :: proc(s: ^Server, c: ^Client) {
 	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	for pos in c.has {
 		if !client_wants(c, pos, s.config, game.CLIENT_DROP_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
 		delete_key(&c.has, pos)
-		send_message(s, game.Unload_Chunk{pos})
+		send_message(s, c, game.Unload_Chunk{pos})
 		column := [2]i32{pos.x, pos.z}
 		c.columns[column] -= 1
 		if c.columns[column] == 0 {delete_key(&c.columns, column)}
 	}
-	clear(&drop)
+}
+
+// unload_unwanted frees the chunks no client needs (edited ones go to the
+// save, not away).
+@(private)
+unload_unwanted :: proc(s: ^Server) {
+	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	for pos in s.world.by_pos {
-		if !client_wants(c, pos, s.config, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
+		if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
 		if chunk := world_get(&s.world, pos); chunk.state == .Ready {
-			keep_edits(s, chunk) // edited chunks go to the save, not away
+			keep_edits(s, chunk)
 			world_unload(&s.world, pos)
 		}
 	}

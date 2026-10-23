@@ -15,9 +15,10 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 3
+PROTOCOL_VERSION :: 4
 MAX_MESSAGE_SIZE :: 64 * 1024
-MAX_NAME_LENGTH :: 32
+MAX_NAME_LENGTH :: 16
+MAX_PLAYERS :: 32 // a server's seats at most
 
 // Positions and chunk coordinates are kept far from integer overflow: block
 // coordinates stay within ±2^28 (chunk coordinates within ±2^24).
@@ -28,7 +29,7 @@ CHUNK_LIMIT :: WORLD_LIMIT >> CHUNK_SHIFT
 
 Hello :: struct {
 	protocol: u32,
-	name:     string, // view into the message
+	name:     string, // view into the message; name_valid
 }
 
 // Input is one tick of the player's controls, numbered so the server can
@@ -88,6 +89,8 @@ Client_Message :: union {
 Welcome :: struct {
 	protocol:    u32,
 	tick_rate:   u32,
+	player:      u16, // this client's player id
+	cheats:      bool, // may send Teleport, Set_Rule and Admin (else they end the connection)
 	spawn:       [3]f64,
 	view_radius: u32, // the interest area, in chunks (see interest.odin)
 	view_height: u32,
@@ -135,6 +138,37 @@ Time :: struct {
 	time: f64,
 }
 
+// Player_Joined: someone is in the world (sent for everyone already there
+// after Welcome, and for each newcomer).
+Player_Joined :: struct {
+	player: u16,
+	name:   string, // view into the message
+}
+
+Player_Left :: struct {
+	player: u16,
+}
+
+// Players: where the other players near you are, every tick (the newest
+// wins; tick orders them for interpolation).
+Players :: struct {
+	tick:    u32,
+	count:   int,
+	entries: [MAX_PLAYERS]Player_Entry,
+}
+
+Player_Entry :: struct {
+	player:     u16,
+	position:   [3]f64, // feet
+	yaw, pitch: f32,
+	flying:     bool,
+}
+
+// Notice: something the server wants the player to read (console).
+Notice :: struct {
+	text: string, // view into the message
+}
+
 // Column: the y of the highest solid block in each block column of a chunk
 // column (x fastest). Sky light needs it: the client cannot see above what
 // it has loaded. Sent before a column's first chunk, and again when an edit
@@ -171,6 +205,10 @@ Server_Message :: union {
 	Block_Changed,
 	Column,
 	Time,
+	Player_Joined,
+	Player_Left,
+	Players,
+	Notice,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -202,6 +240,40 @@ Server_Kind :: enum u8 {
 	Block_Changed,
 	Column,
 	Time,
+	Player_Joined,
+	Player_Left,
+	Players,
+	Notice,
+}
+
+// message_reliable: whether messages of a kind (from sender) must arrive,
+// in order; the rest are states sent every tick or so, where only the
+// newest matters (a remote connection may drop them).
+message_reliable :: proc(sender: Side, kind: u8) -> bool {
+	if sender == .Client {
+		return kind != u8(Client_Kind.Ping)
+	}
+	switch kind {
+	case u8(Server_Kind.Player_Update),
+	     u8(Server_Kind.Players),
+	     u8(Server_Kind.Pong),
+	     u8(Server_Kind.Time):
+		return false
+	}
+	return true
+}
+
+// name_valid: a player name is 1..MAX_NAME_LENGTH letters, digits, '_' or '-'.
+name_valid :: proc(name: string) -> bool {
+	if len(name) == 0 || len(name) > MAX_NAME_LENGTH {return false}
+	for c in transmute([]u8)name {
+		switch c {
+		case 'a' ..= 'z', 'A' ..= 'Z', '0' ..= '9', '_', '-':
+		case:
+			return false
+		}
+	}
+	return true
 }
 
 // message_kind_name names a message kind (its first byte) sent by sender,
@@ -248,6 +320,14 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "column"
 		case u8(Server_Kind.Time):
 			return "time"
+		case u8(Server_Kind.Player_Joined):
+			return "joined"
+		case u8(Server_Kind.Player_Left):
+			return "left"
+		case u8(Server_Kind.Players):
+			return "players"
+		case u8(Server_Kind.Notice):
+			return "notice"
 		}
 	}
 	return ""
@@ -296,6 +376,8 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(Server_Kind.Welcome))
 		write_u32(w, v.protocol)
 		write_u32(w, v.tick_rate)
+		write_u16(w, v.player)
+		write_u8(w, 1 if v.cheats else 0)
 		write_position(w, v.spawn)
 		write_u32(w, v.view_radius)
 		write_u32(w, v.view_height)
@@ -347,6 +429,28 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Time:
 		write_u8(w, u8(Server_Kind.Time))
 		write_f64(w, v.time)
+	case Player_Joined:
+		write_u8(w, u8(Server_Kind.Player_Joined))
+		write_u16(w, v.player)
+		write_string(w, v.name)
+	case Player_Left:
+		write_u8(w, u8(Server_Kind.Player_Left))
+		write_u16(w, v.player)
+	case Players:
+		write_u8(w, u8(Server_Kind.Players))
+		write_u32(w, v.tick)
+		write_u8(w, u8(v.count))
+		for i in 0 ..< v.count {
+			e := v.entries[i]
+			write_u16(w, e.player)
+			write_position(w, e.position)
+			write_f32(w, e.yaw)
+			write_f32(w, e.pitch)
+			write_u8(w, 1 if e.flying else 0)
+		}
+	case Notice:
+		write_u8(w, u8(Server_Kind.Notice))
+		write_string(w, v.text)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -409,12 +513,16 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	switch read_u8(&r) {
 	case u8(Server_Kind.Welcome):
 		w := Welcome {
-			protocol    = read_u32(&r),
-			tick_rate   = read_u32(&r),
-			spawn       = read_position(&r),
-			view_radius = read_u32(&r),
-			view_height = read_u32(&r),
+			protocol  = read_u32(&r),
+			tick_rate = read_u32(&r),
+			player    = read_u16(&r),
 		}
+		cheats := read_u8(&r)
+		if cheats > 1 {reader_fail(&r)}
+		w.cheats = cheats == 1
+		w.spawn = read_position(&r)
+		w.view_radius = read_u32(&r)
+		w.view_height = read_u32(&r)
 		read_vars(&r, rules_table(), &w.rules)
 		if w.view_radius == 0 ||
 		   w.view_radius > MAX_VIEW_RADIUS ||
@@ -488,6 +596,36 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		if !time_valid(t.time) {reader_fail(&r)}
 		m = t
+	case u8(Server_Kind.Player_Joined):
+		j := Player_Joined {
+			player = read_u16(&r),
+			name   = read_string(&r, MAX_NAME_LENGTH),
+		}
+		if r.ok && !name_valid(j.name) {reader_fail(&r)}
+		m = j
+	case u8(Server_Kind.Player_Left):
+		m = Player_Left {
+			player = read_u16(&r),
+		}
+	case u8(Server_Kind.Players):
+		p := Players {
+			tick  = read_u32(&r),
+			count = int(read_u8(&r)),
+		}
+		if p.count > MAX_PLAYERS {reader_fail(&r)}
+		for &e in p.entries[:min(p.count, MAX_PLAYERS)] {
+			e.player = read_u16(&r)
+			e.position = read_position(&r)
+			e.yaw, e.pitch = read_f32(&r), read_f32(&r)
+			flags := read_u8(&r)
+			if flags > 1 || abs(e.pitch) > PITCH_LIMIT || !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
+			e.flying = flags == 1
+		}
+		m = p
+	case u8(Server_Kind.Notice):
+		m = Notice {
+			text = read_string(&r, MAX_REASON_LENGTH),
+		}
 	case:
 		return
 	}
@@ -562,6 +700,8 @@ write_vars :: proc(w: ^Writer, t: base.Var_Table, data: rawptr) {
 			write_i32(w, i32(value))
 		case .F32:
 			write_f32(w, f32(value))
+		case .Text:
+			panic("game rules are numbers")
 		}
 	}
 }
@@ -580,6 +720,8 @@ read_vars :: proc(r: ^Reader, t: base.Var_Table, data: rawptr) {
 			value = f64(read_i32(r))
 		case .F32:
 			value = f64(read_f32(r))
+		case .Text:
+			panic("game rules are numbers")
 		}
 		if !r.ok {return}
 		if kind != .Bool && (value < v.min || value > v.max) {
@@ -638,3 +780,33 @@ read_chunk_pos :: proc(r: ^Reader) -> (c: Chunk_Pos) {
 	if !in_world(c) {reader_fail(r)}
 	return
 }
+
+// Server_Info: what a server tells LAN discovery about itself (netcode
+// carries it as bytes).
+Server_Info :: struct {
+	protocol:    u32,
+	name:        string, // view into the bytes when decoded
+	players:     int,
+	max_players: int,
+	password:    bool,
+}
+
+encode_server_info :: proc(w: ^Writer, i: Server_Info) {
+	write_u32(w, i.protocol)
+	write_string(w, i.name)
+	write_u8(w, u8(i.players))
+	write_u8(w, u8(i.max_players))
+	write_u8(w, 1 if i.password else 0)
+}
+
+decode_server_info :: proc(data: []u8) -> (i: Server_Info, ok: bool) {
+	r := reader_make(data)
+	i.protocol = read_u32(&r)
+	i.name = read_string(&r, MAX_SERVER_NAME)
+	i.players = int(read_u8(&r))
+	i.max_players = int(read_u8(&r))
+	i.password = read_u8(&r) == 1
+	return i, reader_finish(&r)
+}
+
+MAX_SERVER_NAME :: 48

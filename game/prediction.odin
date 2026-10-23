@@ -101,6 +101,11 @@ sequence_before_or_at :: proc(a, b: u32) -> bool {
 	return i32(a - b) <= 0
 }
 
+// sequence_before: a comes strictly before b (allowing wraparound).
+sequence_before :: proc(a, b: u32) -> bool {
+	return i32(a - b) < 0
+}
+
 Input_Queue :: struct {
 	inputs:  [INPUT_QUEUE_MAX]Input,
 	head:    int,

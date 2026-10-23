@@ -216,6 +216,14 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
 		case game.Time:
 			return fmt.tprintf("time time=%.6f", v.time), true
+		case game.Player_Joined:
+			return fmt.tprintf("joined player=%d name=%q", v.player, v.name), true
+		case game.Player_Left:
+			return fmt.tprintf("left player=%d", v.player), true
+		case game.Players:
+			return fmt.tprintf("players tick=%d count=%d", v.tick, v.count), true
+		case game.Notice:
+			return fmt.tprintf("notice text=%q", v.text), true
 		}
 	}
 	return "", true

@@ -1,33 +1,46 @@
 package client
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem/virtual"
+import "core:net"
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
 import "../base"
 import "../game"
 import "../gpu"
+import "../netcode"
 import "../platform"
 import "../render"
 import "../server"
 
 // A Session is one visit to a world: from choosing Singleplayer until
-// leaving. It owns the in-process server, the connection, the client's
-// world copy and the predicted player; everything it allocates long-term is
-// in its arena, freed at once by session_end. The client talks to the
-// server only through messages, as it will over the network: it sends
+// leaving. It owns the connection (to its own in-process server, or over
+// the network to someone else's), the client's world copy, the predicted
+// player and what it knows of the other players; everything it allocates
+// long-term is in its arena, freed at once by session_end. The client talks
+// to the server only through messages, the same either way: it sends
 // inputs, predicts their effect (game/prediction.odin), and the server's
 // Player_Updates have the last word.
 
 Session_Config :: struct {
+	name:        string, // the player's
+	join:        Maybe(Join), // play on that server; otherwise host the world here
 	seed:        i64,
 	view_radius: i32,
 	view_height: i32,
-	trace:       bool, // record every message to net.trace from the start
+	trace:       bool, // record every message to net.trace from the start (hosting only)
 	save_dir:    string, // the world's directory; "" = scratch, not saved
+}
+
+// Join: a server to play on.
+Join :: struct {
+	address:  net.Endpoint,
+	password: string,
 }
 
 Session_State :: enum u8 {
@@ -40,9 +53,17 @@ Session :: struct {
 	state:       Session_State,
 	failure:     string, // why it failed (in the arena)
 	arena:       virtual.Arena,
-	pipe:        game.Pipe,
+	pipe:        game.Pipe, // to our own server (hosting)
 	endpoint:    game.Endpoint,
 	server:      server.Server,
+	remote:      bool, // playing on someone else's server, through link
+	link:        netcode.Link,
+	last_flush:  time.Tick,
+	traffic:     [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
+	others:      map[u16]Other_Player, // the other players, by player id (players.odin)
+	newest_tick: u32, // of the newest Players message
+	newest_at:   time.Tick, // when it came
+	notices:     [dynamic]string, // from the server, for the console (the App takes them)
 	welcome:     game.Welcome,
 	world:       World, // set up from Welcome
 	world_init:  bool,
@@ -66,6 +87,7 @@ Session :: struct {
 	writer:      game.Writer,
 	scratch:     ^game.Block_Array, // decoding target for chunk messages
 	received:    [dynamic]game.Packet,
+	last_acked:  u32, // the newest Player_Update applied
 	stats:       Session_Stats,
 	config:      Session_Config,
 	net:         Net_Stats,
@@ -107,7 +129,20 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
+	s.notices = make([dynamic]string, arena)
+	s.others = make(map[u16]Other_Player, arena)
+	s.config.name = strings.clone(config.name, arena)
 
+	if join, remote := config.join.?; remote {
+		s.remote = true
+		if err := netcode.link_connect(&s.link, join.address, join.password, time.tick_now());
+		   err != nil {
+			fail(s, fmt.tprintf("cannot open a network socket (%v)", err))
+			return false
+		}
+		log.infof("session connecting to=%s", net.endpoint_to_string(join.address))
+		return true // Hello goes once the link is up
+	}
 	cores := os.get_processor_core_count()
 	if !server.start(
 	&s.server,
@@ -118,6 +153,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		workers      = max(1, cores / 4),
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
+		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},
 	) {
@@ -125,8 +161,19 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		return false
 	}
 	if config.trace {session_trace(s)}
-	send_message(s, game.Hello{game.PROTOCOL_VERSION, "player"})
+	send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.name})
 	return true
+}
+
+// session_hosting: the world runs here (else on a remote server).
+session_hosting :: proc(s: ^Session) -> bool {
+	return !s.remote
+}
+
+// session_can_cheat: the server lets this player teleport, change rules and
+// run admin commands (sending one otherwise ends the connection).
+session_can_cheat :: proc(s: ^Session) -> bool {
+	return s.state == .Playing && s.welcome.cheats
 }
 
 // session_end stops everything and frees the session; false if the server
@@ -134,6 +181,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool {
 	ok := true
 	if s.server.thread != nil {ok = server.stop(&s.server)}
+	if s.remote {netcode.link_close(&s.link, "left the game")}
 	if s.world_init {
 		world_remove_all_meshes(&s.world)
 		for h in s.world.mesh_removals {render.world_remove_mesh(pass, g, h)}
@@ -165,9 +213,10 @@ session_update :: proc(
 	look: bool,
 ) {
 	base.profile_scope("session")
-	game.pipe_set_conditions(&s.pipe, conditions)
+	if !s.remote {game.pipe_set_conditions(&s.pipe, conditions)}
 	net_update(s, dt)
 	receive(s)
+	defer flush(s)
 	if s.state != .Playing {return}
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	s.cloud_drift += f64(dt) * render.CLOUD_SPEED
@@ -234,9 +283,29 @@ session_set_rule :: proc(s: ^Session, name, value: string) {
 
 @(private = "file")
 receive :: proc(s: ^Session) {
-	game.receive(s.endpoint, &s.received)
+	if s.remote {
+		was := s.link.state
+		netcode.link_update(&s.link, time.tick_now())
+		if s.link.state == .Failed {
+			fail(s, s.link.reason)
+			return
+		}
+		if was != .Connected && s.link.state == .Connected {
+			log.info("session connected")
+			send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.name})
+		}
+		netcode.link_receive(&s.link, &s.received)
+		for p in s.received {
+			s.traffic[.Server].messages[p[0]] += 1
+			s.traffic[.Server].bytes[p[0]] += len(p)
+		}
+	} else {
+		game.receive(s.endpoint, &s.received)
+	}
 	defer {
-		for p in s.received {game.packet_free(s.endpoint, p)}
+		for p in s.received {
+			if s.remote {netcode.link_free(&s.link, p)} else {game.packet_free(s.endpoint, p)}
+		}
 		clear(&s.received)
 	}
 	for p in s.received {
@@ -278,16 +347,40 @@ receive :: proc(s: ^Session) {
 			world_remove_chunk(&s.world, v.pos)
 			s.stats.unloads += 1
 		case game.Player_Update:
-			if s.state != .Playing {
-				fail(s, "the server sent a player update before welcoming us")
-				return
+			// States can overtake the Welcome over the network (they travel
+			// unreliably, apart from it); newer ones follow every tick.
+			if s.state != .Playing {continue}
+			// Over the network a teleport (sent reliably) may arrive after a
+			// newer update: then only its direction still matters.
+			if v.acked != 0 && game.sequence_before(v.acked, s.last_acked) {
+				if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
+				continue
 			}
+			s.last_acked = v.acked
 			game.prediction_reconcile(&s.prediction, v, &s.rules, {&s.world, world_block})
 			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
 		case game.Rules_Changed:
 			s.rules = v.rules
 		case game.Time:
 			s.clock = v.time
+		case game.Player_Joined:
+			s.others[v.player] = {
+				name = strings.clone(v.name, virtual.arena_allocator(&s.arena)),
+			}
+			notice(s, fmt.tprintf("%s joined", v.name))
+		case game.Player_Left:
+			if o, known := s.others[v.player]; known {notice(s, fmt.tprintf("%s left", o.name))}
+			delete_key(&s.others, v.player)
+		case game.Players:
+			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
+				s.newest_tick, s.newest_at = v.tick, time.tick_now()
+			}
+			for i in 0 ..< v.count {
+				e := v.entries[i]
+				if o, known := &s.others[e.player]; known {other_snapshot(o, v.tick, e)}
+			}
+		case game.Notice:
+			notice(s, v.text)
 		case game.Edit_Result:
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.
@@ -349,9 +442,34 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		position = w.spawn + {0, game.PLAYER_EYE, 0},
 	}
 	s.state = .Playing
-	if t, ok := s.teleport.?; ok {send_message(s, t)}
+	if t, ok := s.teleport.?; ok && w.cheats {send_message(s, t)}
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
 }
+
+// session_others_now: the server time (ticks) to show the other players at.
+session_others_now :: proc(s: ^Session) -> f64 {
+	return render_tick(s.newest_tick, f32(time.duration_seconds(time.tick_since(s.newest_at))))
+}
+
+// notice keeps a message from the server for the console.
+@(private = "file")
+notice :: proc(s: ^Session, text: string) {
+	log.info("session ", text)
+	append(&s.notices, strings.clone(text, virtual.arena_allocator(&s.arena)))
+}
+
+// flush sends what is due over the network (about once per display frame
+// at most: acknowledgements need not go out a thousand times a second).
+@(private = "file")
+flush :: proc(s: ^Session) {
+	if !s.remote {return}
+	now := time.tick_now()
+	if time.tick_diff(s.last_flush, now) < FLUSH_INTERVAL {return}
+	s.last_flush = now
+	netcode.link_flush(&s.link, now)
+}
+
+FLUSH_INTERVAL :: 8 * time.Millisecond
 
 // session_trace starts recording every message to net.trace next to the
 // executable (see netdump and replay in DEBUGGING.md).
@@ -386,7 +504,7 @@ net_update :: proc(s: ^Session, dt: f32) {
 	}
 	n.rate_timer += dt
 	if n.rate_timer >= 1 {
-		now := game.pipe_traffic(&s.pipe)
+		now := s.traffic if s.remote else game.pipe_traffic(&s.pipe)
 		for side in game.Side {
 			for k in 0 ..< 256 {
 				n.rates[side].messages[k] = int(
@@ -409,7 +527,7 @@ fail :: proc(s: ^Session, reason: string) {
 	log.errorf("session %s", reason)
 	s.state = .Failed
 	s.failure = strings.clone(reason, virtual.arena_allocator(&s.arena))
-	game.close(s.endpoint)
+	if !s.remote && s.pipe.allocator.procedure != nil {game.close(s.endpoint)}
 }
 
 // The blocks a player can place, in hotbar order.
@@ -531,5 +649,12 @@ block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
 send_message :: proc(s: ^Session, m: game.Client_Message) {
 	clear(&s.writer.buf)
 	game.encode_client(&s.writer, m)
-	game.send(s.endpoint, s.writer.buf[:])
+	data := s.writer.buf[:]
+	if s.remote {
+		s.traffic[.Client].messages[data[0]] += 1
+		s.traffic[.Client].bytes[data[0]] += len(data)
+		netcode.link_send(&s.link, data, game.message_reliable(.Client, data[0]))
+	} else {
+		game.send(s.endpoint, data)
+	}
 }

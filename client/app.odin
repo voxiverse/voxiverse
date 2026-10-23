@@ -3,6 +3,7 @@ package client
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
@@ -14,6 +15,7 @@ import "../base"
 import "../font"
 import "../game"
 import "../gpu"
+import "../netcode"
 import "../platform"
 import "../render"
 import "../ui"
@@ -65,6 +67,7 @@ App :: struct {
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
+	script_failed:    bool, // an --exec script could not go on (fails the run)
 	console:          Console,
 	input:            Input_State,
 	settings:         Settings,
@@ -256,6 +259,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		fly_test_update(app)
 		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)
 		clear(&app.session.sounds)
+		for n in app.session.notices {console_print(&app.console, n)}
+		clear(&app.session.notices)
 		if app.session.state == .Failed {
 			app.message = fmt.aprintf("Disconnected: %s", app.session.failure)
 			leave_world(app)
@@ -316,24 +321,54 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	return true
 }
 
-// enter_world starts a singleplayer session.
 // enter_world starts a session in the world saved at save_dir (created if
 // new, with seed), or with save_dir "" a scratch world nothing is saved of
-// (scripts and tests).
+// (scripts and tests). The world runs here; others can join once it is
+// opened to the LAN.
 enter_world :: proc(app: ^App, save_dir: string, seed: i64) {
+	start_session(
+		app,
+		{
+			name = player_name(&app.settings),
+			seed = seed,
+			save_dir = save_dir,
+			view_radius = app.settings.view_radius,
+			view_height = app.settings.view_height,
+			trace = app.debug.net_trace,
+		},
+	)
+}
+
+// join_server plays on the server at address ("host" or "host:port"; the
+// default port if none).
+join_server :: proc(app: ^App, address: string, password: string) {
+	ep, err := net.resolve_ip4(address)
+	if err != nil {
+		delete(app.message)
+		app.message = fmt.aprintf("Cannot find %s (%v)", address, err)
+		app.screen = .Title
+		return
+	}
+	if ep.port == 0 {ep.port = netcode.DEFAULT_PORT}
+	start_session(
+		app,
+		{
+			name = player_name(&app.settings),
+			join = Join{ep, password},
+			view_radius = app.settings.view_radius,
+			view_height = app.settings.view_height,
+		},
+	)
+}
+
+@(private = "file")
+start_session :: proc(app: ^App, config: Session_Config) {
 	if app.session != nil {return}
 	delete(app.message)
 	app.message = ""
 	app.session = new(Session)
-	config := Session_Config {
-		seed        = seed,
-		save_dir    = save_dir,
-		view_radius = app.settings.view_radius,
-		view_height = app.settings.view_height,
-		trace       = app.debug.net_trace,
-	}
 	if !session_start(app.session, config) {
-		app.message = fmt.aprintf("Could not start the world: %s", app.session.failure)
+		app.message = fmt.aprintf("Could not start: %s", app.session.failure)
 		leave_world(app)
 		return
 	}

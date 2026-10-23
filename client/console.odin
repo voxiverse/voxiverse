@@ -257,6 +257,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				} else {
 					t.yaw, t.pitch = app.session.camera.yaw, app.session.camera.pitch
 				}
+				if app.session.state == .Playing && !cheats_allowed(app, "tp") {return}
 				session_teleport(app.session, t)
 			},
 		},
@@ -297,6 +298,7 @@ register_builtin_commands :: proc(c: ^Console) {
 						)
 						return
 					}
+					if !cheats_allowed(app, "set rules") {return}
 					session_set_rule(app.session, args[0], args[1])
 					return
 				}
@@ -482,8 +484,30 @@ register_builtin_commands :: proc(c: ^Console) {
 				console_print(&app.console, "save: not in a saved world", .Warning)
 				return
 			}
+			if !cheats_allowed(app, "save") {return}
 			send_message(app.session, game.Admin{"save"})
 		}})
+	console_register(
+		c,
+		{
+			"join",
+			"join <host[:port]> [password]: play on a server",
+			proc(app: ^App, args: []string) {
+				if len(args) == 0 {
+					console_print(&app.console, "join <host[:port]> [password]", .Warning)
+					return
+				}
+				if app.session != nil {leave_world(app)}
+				join_server(app, args[0], args[1] if len(args) > 1 else "")
+			},
+		},
+	)
+	console_register(
+		c,
+		{"open_lan", "let others on the LAN join this world", proc(app: ^App, args: []string) {
+				session_open_lan(app)
+			}},
+	)
 	console_register(
 		c,
 		{
@@ -511,6 +535,7 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, "time: not a time of day", .Warning)
 					return
 				}
+				if !cheats_allowed(app, "time") {return}
 				send_message(
 					app.session,
 					game.Admin{strings.concatenate({"time ", args[0]}, context.temp_allocator)},
@@ -521,4 +546,25 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})
+}
+
+// cheats_allowed: the server lets this player run cheat commands (asking
+// anyway would end the connection); else says so.
+@(private = "file")
+cheats_allowed :: proc(app: ^App, command: string) -> bool {
+	if app.session != nil && session_can_cheat(app.session) {return true}
+	console_print(&app.console, fmt.tprintf("%s: not allowed on this server", command), .Warning)
+	return false
+}
+
+// session_open_lan asks our own server to take players from the LAN.
+session_open_lan :: proc(app: ^App) {
+	switch {
+	case app.session == nil || app.session.state != .Playing:
+		console_print(&app.console, "open_lan: not in a world", .Warning)
+	case !session_hosting(app.session):
+		console_print(&app.console, "open_lan: only the host can open the world", .Warning)
+	case:
+		send_message(app.session, game.Admin{"open_lan"})
+	}
 }

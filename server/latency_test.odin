@@ -135,7 +135,7 @@ run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Re
 	defer delete(c.chunks)
 	defer delete(c.results)
 
-	send(&c, game.Hello{game.PROTOCOL_VERSION, "latency test"})
+	send(&c, game.Hello{game.PROTOCOL_VERSION, "latency_test"})
 	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
 	tick_wait :: proc() {time.sleep(game.TICK_DURATION)}
 

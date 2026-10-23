@@ -72,7 +72,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	rc, ok = decode_server(encode_s(Rules_Changed{changed})[:], scratch)
 	testing.expect(t, ok && rc.(Rules_Changed).rules == changed)
 
-	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
+	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, 3, true, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
 	m: Server_Message
 	m, ok = decode_server(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
@@ -87,6 +87,25 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, CHUNK_MIN_Y, 1 << 20})
 	m, ok = decode_server(encode_s(Time{12345.678})[:], scratch)
 	testing.expect(t, ok && m.(Time).time == 12345.678)
+	m, ok = decode_server(encode_s(Player_Joined{7, "bob_the-builder"})[:], scratch)
+	testing.expect(t, ok && m.(Player_Joined) == Player_Joined{7, "bob_the-builder"})
+	m, ok = decode_server(encode_s(Player_Left{7})[:], scratch)
+	testing.expect(t, ok && m.(Player_Left).player == 7)
+	players := Players {
+		tick  = 123,
+		count = 2,
+	}
+	players.entries[0] = {4, {1.5, -60, 2e6}, 1, -0.5, true}
+	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false}
+	m, ok = decode_server(encode_s(players)[:], scratch)
+	testing.expect(t, ok && m.(Players) == players)
+	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
+	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
+	// Names: letters, digits, _ and -, 1..16 of them.
+	m, ok = decode_server(encode_s(Player_Joined{1, "bad name"})[:], scratch)
+	testing.expect(t, !ok, "a name with a space decoded")
+	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
+	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}
 }
 
 @(test)
@@ -137,7 +156,11 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	generate(9, {0, 0, 0}, terrain.array)
 
 	server := [][dynamic]u8 {
-		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8, 4, RULES_DEFAULTS}),
+		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, 1, false, {}, 8, 4, RULES_DEFAULTS}),
+		encode_s(Player_Joined{2, "Alice"}),
+		encode_s(Player_Left{2}),
+		encode_s(Players{tick = 9, count = 1}),
+		encode_s(Notice{"hello"}),
 		encode_s(Player_Update{1, {}, false, 0, 0}),
 		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Edit_Result{1, false, {}, .Stone}),
@@ -272,6 +295,7 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 					write_i32(w, i32(value))
 				case .F32:
 					write_f32(w, f32(value))
+				case .Text:
 				}
 			}
 		},

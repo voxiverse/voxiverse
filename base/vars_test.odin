@@ -92,3 +92,48 @@ test_vars_file_round_trip :: proc(t: ^testing.T) {
 		testing.expect_value(t, problems[3].error, Var_Error.Out_Of_Range)
 	}
 }
+
+@(private = "file")
+Text_Settings :: struct {
+	name:  Var_Text,
+	motto: Var_Text,
+}
+
+@(private = "file")
+TEXT_DEFAULTS := Text_Settings{}
+
+@(private = "file", rodata)
+TEXT_VARS := [?]Var {
+	{field = "name", help = "lower case letters only", check = proc(s: string) -> bool {
+			for c in s {if c < 'a' || c > 'z' {return false}}
+			return true
+		}},
+	{field = "motto", help = "anything"},
+}
+
+// Text variables: set, checked, formatted, saved and read back, reset.
+@(test)
+test_vars_text :: proc(t: ^testing.T) {
+	table := Var_Table{"", Text_Settings, TEXT_VARS[:], &TEXT_DEFAULTS}
+	testing.expect(t, var_table_check(table))
+	s := TEXT_DEFAULTS
+	testing.expect_value(t, var_set(table, &s, "name", "  alice "), Var_Error.None)
+	testing.expect_value(t, var_text(&s.name), "alice")
+	testing.expect_value(t, var_set(table, &s, "name", "Bob"), Var_Error.Bad_Value)
+	testing.expect_value(t, var_text(&s.name), "alice") // unchanged
+	testing.expect_value(
+		t,
+		var_set(table, &s, "motto", strings.repeat("x", VAR_TEXT_MAX + 1, context.temp_allocator)),
+		Var_Error.Bad_Value,
+	)
+	testing.expect_value(t, var_set(table, &s, "motto", "be = kind"), Var_Error.None)
+	b := strings.builder_make(context.temp_allocator)
+	vars_write(table, &s, &b)
+	back := TEXT_DEFAULTS
+	testing.expect_value(t, len(vars_read(table, &back, strings.to_string(b))), 0)
+	testing.expect_value(t, var_text(&back.motto), "be = kind")
+	testing.expect_value(t, var_text(&back.name), "alice")
+	v, _ := var_find(table, "name")
+	var_reset(table, &back, v)
+	testing.expect_value(t, var_text(&back.name), "")
+}
