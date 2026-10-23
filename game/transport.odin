@@ -39,6 +39,10 @@ Conditions :: struct {
 	latency_ms:     f32, // one way
 	jitter_ms:      f32, // added at random, 0..jitter (order is kept)
 	bandwidth_kbps: f32, // per direction, kilobytes per second; 0 = unlimited
+	// Over UDP only (netcode.Conditions; the pipe is reliable and ordered,
+	// as the in-process protocol requires):
+	loss_percent:   f32,
+	dup_percent:    f32,
 }
 
 // Traffic counts what one side sent, by message kind (the first byte).

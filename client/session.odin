@@ -34,6 +34,7 @@ Session_Config :: struct {
 	view_radius: i32,
 	view_height: i32,
 	trace:       bool, // record every message to net.trace from the start (hosting only)
+	capture:     bool, // write every packet to net.pcap (joining only)
 	save_dir:    string, // the world's directory; "" = scratch, not saved
 }
 
@@ -58,6 +59,7 @@ Session :: struct {
 	server:      server.Server,
 	remote:      bool, // playing on someone else's server, through link
 	link:        netcode.Link,
+	capture:     netcode.Capture,
 	last_flush:  time.Tick,
 	traffic:     [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
 	others:      map[u16]Other_Player, // the other players, by player id (players.odin)
@@ -140,6 +142,13 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 			fail(s, fmt.tprintf("cannot open a network socket (%v)", err))
 			return false
 		}
+		if config.capture {
+			path := path_next_to_exe("net.pcap")
+			if netcode.capture_open(&s.capture, path) {
+				s.link.socket.capture = &s.capture
+				log.infof("session capturing packets path=%s", path)
+			}
+		}
 		log.infof("session connecting to=%s", net.endpoint_to_string(join.address))
 		return true // Hello goes once the link is up
 	}
@@ -182,6 +191,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	ok := true
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
+	netcode.capture_close(&s.capture)
 	if s.world_init {
 		world_remove_all_meshes(&s.world)
 		for h in s.world.mesh_removals {render.world_remove_mesh(pass, g, h)}
@@ -213,7 +223,16 @@ session_update :: proc(
 	look: bool,
 ) {
 	base.profile_scope("session")
-	if !s.remote {game.pipe_set_conditions(&s.pipe, conditions)}
+	if s.remote {
+		s.link.socket.conditions = {
+			loss       = conditions.loss_percent / 100,
+			duplicate  = conditions.dup_percent / 100,
+			latency_ms = conditions.latency_ms,
+			jitter_ms  = conditions.jitter_ms,
+		}
+	} else {
+		game.pipe_set_conditions(&s.pipe, conditions)
+	}
 	net_update(s, dt)
 	receive(s)
 	defer flush(s)

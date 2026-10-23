@@ -40,6 +40,8 @@ Config :: struct {
 	port:            int, // ... on this UDP port (0: any free one)
 	password:        string, // remote players must know it ("": none)
 	name:            string, // what LAN discovery shows
+	capture:         string, // write every packet to this pcap file once listening ("": no)
+	conditions:      netcode.Conditions, // simulated loss etc. on what the server sends (tests)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -79,6 +81,7 @@ Server :: struct {
 	clients:     []Client, // index = player id
 	host:        netcode.Host, // remote players (listening when host_open)
 	listening:   bool,
+	capture:     netcode.Capture, // (config.capture)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -118,6 +121,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	arena := virtual.arena_allocator(&s.arena)
 	s.config.password = strings.clone(config.password, arena)
 	s.config.name = strings.clone(config.name, arena)
+	s.config.capture = strings.clone(config.capture, arena)
 	// A saved world's seed and rules replace the config's.
 	if !store_open(s, config.save_dir) {
 		store_close(s)
@@ -187,6 +191,7 @@ stop :: proc(s: ^Server) -> bool {
 	thread.destroy(s.thread)
 	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
 	if s.listening {netcode.host_close(&s.host, "the server stopped")}
+	netcode.capture_close(&s.capture)
 	store_close(s)
 	world_destroy(&s.world)
 	delete(s.tops)
@@ -218,6 +223,15 @@ listen :: proc(s: ^Server, first, last: int) -> bool {
 		err = netcode.host_open(&s.host, port, s.config.max_players, s.config.password)
 		if err == nil {
 			s.listening = true
+			s.host.socket.conditions = s.config.conditions
+			if s.config.capture != "" {
+				if netcode.capture_open(&s.capture, s.config.capture) {
+					s.host.socket.capture = &s.capture
+					log.infof("server capturing packets path=%s", s.config.capture)
+				} else {
+					log.errorf("server cannot write the capture path=%s", s.config.capture)
+				}
+			}
 			log.infof("server listening port=%d password=%v", port, s.config.password != "")
 			update_info(s)
 			return true

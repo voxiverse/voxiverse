@@ -1,7 +1,10 @@
 package game
 
+import "core:fmt"
 import "core:math"
 import "core:math/rand"
+import "core:os"
+import "core:strings"
 import "core:testing"
 
 import "../base"
@@ -559,4 +562,41 @@ test_decode_fuzz :: proc(t: ^testing.T) {
 		decode_server(corrupt, scratch)
 	}
 	testing.expect(t, accepted < 40_000)
+}
+
+// The Wireshark dissector names message kinds as the game does (and knows
+// every kind): tools/wireshark/voxiverse.lua.
+@(test)
+test_dissector_knows_every_kind :: proc(t: ^testing.T) {
+	data, err := os.read_entire_file_from_path(
+		"tools/wireshark/voxiverse.lua",
+		context.temp_allocator,
+	)
+	if !testing.expectf(t, err == nil, "cannot read the dissector: %v", err) {return}
+	lua := string(data)
+	for side in Side {
+		table_name := "CLIENT_KINDS" if side == .Client else "SERVER_KINDS"
+		start := strings.index(
+			lua,
+			strings.concatenate({"local ", table_name, " = {"}, context.temp_allocator),
+		)
+		if !testing.expectf(t, start >= 0, "%s missing", table_name) {continue}
+		body := lua[start:]
+		body = body[:strings.index_byte(body, '}')]
+		for kind in 1 ..< 256 {
+			name := message_kind_name(side, u8(kind))
+			entry := fmt.tprintf("[%d] = %q", kind, name)
+			if name == "" {
+				testing.expectf(
+					t,
+					!strings.contains(body, fmt.tprintf("[%d] =", kind)),
+					"%s has kind %d, the game does not",
+					table_name,
+					kind,
+				)
+			} else {
+				testing.expectf(t, strings.contains(body, entry), "%s lacks %s", table_name, entry)
+			}
+		}
+	}
 }

@@ -95,9 +95,12 @@ Debug_Switches :: struct {
 	chunk_borders:      bool,
 	hot_reload_shaders: bool,
 	net_trace:          bool,
+	net_capture:        bool,
 	net_latency_ms:     f32,
 	net_jitter_ms:      f32,
 	net_bandwidth_kbps: f32,
+	net_loss:           f32, // percent
+	net_duplicate:      f32, // percent
 }
 
 @(rodata)
@@ -118,6 +121,10 @@ DEBUG_VARS := [?]base.Var {
 		help = "record every message to net.trace (from the next world; net_trace starts it now)",
 	},
 	{
+		field = "net_capture",
+		help = "write every packet of the next remote game to net.pcap (Wireshark: tools/wireshark)",
+	},
+	{
 		field = "net_latency_ms",
 		help = "simulated one-way latency, ms",
 		min = 0,
@@ -126,17 +133,31 @@ DEBUG_VARS := [?]base.Var {
 	},
 	{
 		field = "net_jitter_ms",
-		help = "simulated extra random delay, ms (order is kept)",
+		help = "simulated extra random delay, ms (in-process: order is kept; over UDP it reorders)",
 		min = 0,
 		max = 1000,
 		step = 5,
 	},
 	{
 		field = "net_bandwidth_kbps",
-		help = "simulated bandwidth per direction, KB/s; 0 = unlimited",
+		help = "simulated bandwidth per direction, KB/s; 0 = unlimited (in-process only)",
 		min = 0,
 		max = 100000,
 		step = 10,
+	},
+	{
+		field = "net_loss",
+		help = "simulated packet loss on what this client sends, % (remote games)",
+		min = 0,
+		max = 50,
+		step = 1,
+	},
+	{
+		field = "net_duplicate",
+		help = "simulated packet duplication on what this client sends, % (remote games)",
+		min = 0,
+		max = 50,
+		step = 1,
 	},
 }
 

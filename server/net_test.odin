@@ -252,3 +252,99 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 sync_listen :: proc(s: ^Server) {
 	for !s.listening {time.sleep(time.Millisecond)}
 }
+
+// M7's exit check (the half a machine can do alone): two players over real
+// sockets with 10% loss, 10% duplication and jitter on every socket, both
+// ways. Every chunk each receives is exactly what the world generator
+// makes there; they see each other; an edit by one reaches the other.
+@(test)
+test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
+	bad := netcode.Conditions {
+		loss       = 0.1,
+		duplicate  = 0.1,
+		latency_ms = 15,
+		jitter_ms  = 25,
+	}
+	config := Config {
+		seed        = 31,
+		view_radius = 3,
+		view_height = 2,
+		workers     = 2,
+		max_players = 4,
+		listen      = true,
+		conditions  = bad,
+	}
+	srv: Server
+	if !testing.expect(t, start(&srv, config, {})) {return}
+	defer stop(&srv)
+	port := srv.host.socket.port
+
+	a, b: Net_Client
+	net_connect(&a, port, "alpha")
+	net_connect(&b, port, "beta")
+	defer net_close(&a)
+	defer net_close(&b)
+	a.link.socket.conditions = bad
+	b.link.socket.conditions = bad
+	// The whole interest area, not just enough to land on.
+	@(static) want: int
+	want = game.interest_count(config.view_radius, config.view_height)
+	ok := net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+			return(
+				landed(cs[0]) &&
+				landed(cs[1]) &&
+				len(cs[0].chunks) >= want &&
+				len(cs[1].chunks) >= want \
+			)
+		}, 60)
+	if !testing.expectf(
+		t,
+		ok,
+		"chunks: %d and %d of %d",
+		len(a.chunks),
+		len(b.chunks),
+		want,
+	) {return}
+
+	expected := new(game.Block_Array)
+	defer free(expected)
+	for c in ([]^Net_Client{&a, &b}) {
+		damaged := 0
+		for pos, &blocks in c.chunks {
+			game.generate(config.seed, pos, expected)
+			for i in 0 ..< len(expected) {
+				got := blocks.uniform if blocks.array == nil else blocks.array[i]
+				if got != expected[i] {
+					damaged += 1
+					break
+				}
+			}
+		}
+		testing.expectf(
+			t,
+			damaged == 0,
+			"%s: %d of %d chunks differ from the world",
+			c.name,
+			damaged,
+			len(c.chunks),
+		)
+	}
+
+	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+			return len(cs[0].seen) == 1 && len(cs[1].seen) == 1
+		}, 30)
+	testing.expect(t, ok, "the players do not see each other")
+
+	feet := a.update.state.position
+	@(static) below: game.Block_Pos
+	below = {i32(math.floor(feet.x)), i32(math.floor(feet.y)) - 1, i32(math.floor(feet.z))}
+	net_send(&a, game.Edit{1, a.seq, below, .Air})
+	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+			for ch in cs[1].changed {
+				if ch.pos == below && ch.block == .Air && 1 in cs[0].results {return true}
+			}
+			return false
+		}, 30)
+	testing.expect(t, ok, "beta never heard of alpha's edit (or alpha of its result)")
+	testing.expect(t, a.results[1].accepted, "alpha's edit was refused")
+}

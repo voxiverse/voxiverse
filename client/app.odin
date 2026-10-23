@@ -260,6 +260,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
 			bandwidth_kbps = app.debug.net_bandwidth_kbps,
+			loss_percent   = app.debug.net_loss,
+			dup_percent    = app.debug.net_duplicate,
 		}
 		session_update(
 			app.session,
@@ -383,6 +385,7 @@ join_server :: proc(app: ^App, address: string, password: string) {
 		{
 			name = player_name(&app.settings),
 			join = Join{ep, password},
+			capture = app.debug.net_capture,
 			view_radius = app.settings.view_radius,
 			view_height = app.settings.view_height,
 		},

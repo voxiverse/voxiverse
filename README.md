@@ -97,6 +97,18 @@ can draw), fullscreen, field of view, view distance and volume.
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
 runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.
 
+## Playing together
+
+- **From your own world:** pause, then **Open to LAN**. Others on your network see it under
+  **Multiplayer** (or join `your-address:27315`).
+- **A dedicated server:** `./build.sh serve -- --world worlds/home --password secret` (or run
+  `build/voxiverse-server --help` for every flag: port, name, seats, view distance, cheats).
+  Ctrl+C saves and stops it.
+- **Over the internet:** forward UDP port 27315 on the host's router to the host, then join its
+  public address. There is no relay or hole punching (yet).
+
+Your name is set in **Multiplayer** or Options. Worlds keep each player's place by name.
+
 ## Layout
 
 See [PLAN.md](PLAN.md#layout). Packages only depend downward: `base/` depends on nothing,

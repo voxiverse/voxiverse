@@ -30,6 +30,7 @@ Options :: struct {
 	view_height: int `usage:"view distance up and down, chunks (default 6)"`,
 	cheats:      bool `usage:"let every player teleport, change rules and run server commands"`,
 	seconds:     int `usage:"stop after this many seconds (0: run until stopped)"`,
+	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
 }
 
 // stop_requested is set by the Ctrl+C / SIGTERM handler (stop_*.odin).
@@ -68,6 +69,7 @@ run :: proc(opts: Options) -> bool {
 		port            = opts.port,
 		password        = opts.password,
 		name            = name,
+		capture         = opts.capture,
 	}
 	srv := new(server.Server)
 	defer free(srv)

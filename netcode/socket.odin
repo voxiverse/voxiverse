@@ -14,6 +14,7 @@ Socket :: struct {
 	port:       int, // bound
 	conditions: Conditions,
 	held:       [dynamic]Held, // delayed by the simulation, not yet sent
+	capture:    ^Capture, // records every packet sent and received (nil: none)
 	recv_buf:   [MTU + 1]u8, // one byte more: anything that fills it is too long
 }
 
@@ -68,7 +69,7 @@ socket_close :: proc(s: ^Socket) {
 socket_send :: proc(s: ^Socket, to: net.Endpoint, data: []u8, now: time.Tick) {
 	c := s.conditions
 	if c == {} {
-		net.send_udp(s.socket, data, to) // a full buffer drops it: UDP may
+		send_now(s, to, data) // a full buffer drops it: UDP may
 		return
 	}
 	if rand.float32() < c.loss {return}
@@ -89,7 +90,7 @@ socket_pump :: proc(s: ^Socket, now: time.Tick) {
 			i += 1
 			continue
 		}
-		net.send_udp(s.socket, h.data, h.to)
+		send_now(s, h.to, h.data)
 		delete(h.data)
 		unordered_remove(&s.held, i)
 	}
@@ -105,7 +106,23 @@ socket_receive :: proc(s: ^Socket) -> (data: []u8, from: net.Endpoint, ok: bool)
 		n, src, err := net.recv_udp(s.socket, s.recv_buf[:])
 		if err == .Would_Block {return nil, {}, false}
 		if err != nil || n <= 0 || n > MTU {continue}
+		if s.capture != nil {capture_packet(s.capture, src, local(s, src), s.recv_buf[:n])}
 		return s.recv_buf[:n], src, true
 	}
 	return nil, {}, false
+}
+
+@(private = "file")
+send_now :: proc(s: ^Socket, to: net.Endpoint, data: []u8) {
+	if s.capture != nil {capture_packet(s.capture, local(s, to), to, data)}
+	net.send_udp(s.socket, data, to)
+}
+
+// local: this socket's address as seen by peer (bound to every interface,
+// it has no single one; loopback peers see loopback).
+@(private = "file")
+local :: proc(s: ^Socket, peer: net.Endpoint) -> net.Endpoint {
+	if a, ok := peer.address.(net.IP4_Address);
+	   ok && a[0] == 127 {return {net.IP4_Loopback, s.port}}
+	return {net.IP4_Any, s.port}
 }
