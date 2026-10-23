@@ -28,6 +28,12 @@ This branch is a from-scratch rewrite; [PLAN.md](PLAN.md) has the design and mil
 That's all. The shader compiler is fetched by the build itself on first use (a pinned,
 checksum-verified glslang release in `build/tools/`).
 
+Optional, recommended for development: the Vulkan validation layer, which debug builds turn
+on automatically and which reports GPU API misuse in the log.
+
+- Linux: `vulkan-validation-layers` (Fedora, Arch) / `vulkan-validationlayers` (Debian, Ubuntu)
+- Windows / macOS: the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
+
 ## Build
 
 `./build.sh <command>` on Linux/macOS, `build <command>` on Windows:
@@ -38,6 +44,8 @@ checksum-verified glslang release in `build/tools/`).
 | `test` | Run the unit tests |
 | `fmt` | Format all sources in place |
 | `shaders` | Compile `assets/shaders` to SPIR-V (only what changed) |
+| `build` | Build the game into `build/` (debug; `--release` for optimized) |
+| `run` | Build and run; arguments after `--` go to the game, e.g. `run -- --frames 120` |
 
 ## Layout
 

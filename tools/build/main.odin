@@ -8,24 +8,29 @@ import "core:strings"
 
 // The Voxiverse build driver. build.sh / build.bat hand every argument to it:
 //
-//	build check     type-check every package and verify formatting
-//	build test      run the unit tests
-//	build fmt       format all sources in place
-//	build shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)
+//	build check                type-check every package and verify formatting
+//	build test                 run the unit tests
+//	build fmt                  format all sources in place
+//	build shaders              compile assets/shaders to SPIR-V (fetches the pinned glslang once)
+//	build build [--release]    build the game into build/
+//	build run [--release] [-- game args...]
 //
 // It runs from the repository root (the wrapper scripts cd there).
 
 // PACKAGES are type-checked by `check`, each on its own so one broken
 // package doesn't hide errors in the others.
-PACKAGES :: []string{"base", "tools/build"}
+PACKAGES :: []string{"base", "platform", "gpu", "client", "tools/build"}
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string{"base"}
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
-SOURCE_DIRS :: []string{"base", "tools"}
+SOURCE_DIRS :: []string{"base", "platform", "gpu", "client", "tools"}
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
 // CHECK_FLAGS: library packages have no main of their own.
 CHECK_FLAGS :: []string{"-no-entry-point"}
+
+GAME_PACKAGE :: "client"
+GAME_NAME :: "voxiverse"
 
 SHADER_DIR :: "assets/shaders"
 SHADER_OUT_DIR :: "build/shaders"
@@ -49,6 +54,10 @@ main :: proc() {
 		ok = format_sources()
 	case "shaders":
 		ok = shaders()
+	case "build":
+		_, ok = build_game(args[1:])
+	case "run":
+		ok = run_game(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		ok = true
@@ -65,6 +74,47 @@ usage :: proc() {
 	fmt.println("  test      run the unit tests")
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
+	fmt.println("  build     build the game into build/ (debug; --release for optimized)")
+	fmt.println("  run       build, then run it; arguments after -- go to the game")
+}
+
+// build_game compiles shaders and the game. Debug builds keep symbols and
+// turn on Vulkan validation; --release optimizes.
+build_game :: proc(args: []string) -> (exe: string, ok: bool) {
+	release := false
+	for arg in args {
+		switch arg {
+		case "--release":
+			release = true
+		case:
+			fmt.eprintfln("build: unknown option '%s'", arg)
+			return "", false
+		}
+	}
+	shaders() or_return
+	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
+	mode := []string{"-o:speed"} if release else []string{"-debug"}
+	cmd := slice.concatenate(
+		[][]string {
+			{"odin", "build", GAME_PACKAGE},
+			ODIN_FLAGS,
+			mode,
+			{strings.concatenate({"-out:", exe})},
+		},
+	)
+	run(cmd) or_return
+	fmt.printfln("built  %s (%s)", exe, "release" if release else "debug")
+	return exe, true
+}
+
+run_game :: proc(args: []string) -> bool {
+	build_args, game_args := args, []string{}
+	if i, found := slice.linear_search(args, "--"); found {
+		build_args, game_args = args[:i], args[i + 1:]
+	}
+	exe, ok := build_game(build_args)
+	if !ok {return false}
+	return run(slice.concatenate([][]string{{exe}, game_args}))
 }
 
 check :: proc() -> bool {
