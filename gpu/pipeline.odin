@@ -36,6 +36,7 @@ Depth_Mode :: enum u8 {
 	Off, // ignores depth (UI)
 	Test_Write, // opaque geometry
 	Test, // overlays that hide behind geometry without occluding (debug lines)
+	Background, // drawn after the world, at the far plane (0), where nothing is yet
 }
 
 create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool) {
@@ -121,7 +122,7 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		sType            = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		depthTestEnable  = b32(desc.depth != .Off),
 		depthWriteEnable = b32(desc.depth == .Test_Write),
-		depthCompareOp   = .GREATER,
+		depthCompareOp   = .GREATER_OR_EQUAL if desc.depth == .Background else .GREATER,
 	}
 	blend := vk.PipelineColorBlendStateCreateInfo {
 		sType           = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,

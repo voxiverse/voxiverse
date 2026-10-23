@@ -81,6 +81,8 @@ jobs:
           # the client's messages against a fresh server goes cleanly.
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
+          # The sky through a day (screenshots uploaded below; validation must stay clean).
+          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; time 0.8; wait 5; screenshot sky_night; wait 5; quit"
           # A crash must be reported with our stack, then still kill the run.
           if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt

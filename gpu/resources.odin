@@ -30,8 +30,19 @@ Image :: struct {
 // over distance.
 DEPTH_FORMAT :: vk.Format.D32_SFLOAT
 
+// buffer_address is where shaders find b (GL_EXT_buffer_reference); b needs
+// SHADER_DEVICE_ADDRESS usage.
+buffer_address :: proc(g: ^Gpu, b: Buffer) -> u64 {
+	info := vk.BufferDeviceAddressInfo {
+		sType  = .BUFFER_DEVICE_ADDRESS_INFO,
+		buffer = b.handle,
+	}
+	return u64(vk.GetBufferDeviceAddress(g.device, &info))
+}
+
 // create_buffer makes a buffer; host_visible ones are mapped and coherent
-// (written by the CPU each frame), others are device-local.
+// (written by the CPU each frame), others are device-local. With
+// SHADER_DEVICE_ADDRESS usage, shaders can read it through buffer_address.
 create_buffer :: proc(
 	g: ^Gpu,
 	size: int,
@@ -53,7 +64,7 @@ create_buffer :: proc(
 	vk.GetBufferMemoryRequirements(g.device, b.handle, &reqs)
 	props: vk.MemoryPropertyFlags =
 		{.HOST_VISIBLE, .HOST_COHERENT} if host_visible else {.DEVICE_LOCAL}
-	if b.memory, ok = allocate(g, reqs, props); !ok {
+	if b.memory, ok = allocate(g, reqs, props, .SHADER_DEVICE_ADDRESS in usage); !ok {
 		vk.DestroyBuffer(g.device, b.handle, nil)
 		return {}, false
 	}
@@ -247,6 +258,7 @@ allocate :: proc(
 	g: ^Gpu,
 	reqs: vk.MemoryRequirements,
 	props: vk.MemoryPropertyFlags,
+	device_address := false,
 ) -> (
 	mem: vk.DeviceMemory,
 	ok: bool,
@@ -256,8 +268,13 @@ allocate :: proc(
 	for i in 0 ..< mem_props.memoryTypeCount {
 		if reqs.memoryTypeBits & (1 << i) == 0 {continue}
 		if mem_props.memoryTypes[i].propertyFlags & props != props {continue}
+		flags := vk.MemoryAllocateFlagsInfo {
+			sType = .MEMORY_ALLOCATE_FLAGS_INFO,
+			flags = {.DEVICE_ADDRESS},
+		}
 		info := vk.MemoryAllocateInfo {
 			sType           = .MEMORY_ALLOCATE_INFO,
+			pNext           = &flags if device_address else nil,
 			allocationSize  = reqs.size,
 			memoryTypeIndex = i,
 		}

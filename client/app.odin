@@ -32,9 +32,6 @@ Screen :: enum u8 {
 	Game, // a session exists
 }
 
-// The sky, linear (the swapchain encodes sRGB); fog fades to it.
-SKY_COLOR :: [3]f32{0.30, 0.52, 0.85}
-
 // CHUNK_VERTEX_CAPACITY: vertices of all chunk meshes together (8 bytes
 // each: 128 MiB).
 CHUNK_VERTEX_CAPACITY :: 16 * 1024 * 1024
@@ -47,6 +44,8 @@ App :: struct {
 	ui:               ui.Context,
 	ui_pass:          render.Ui_Pass,
 	world_pass:       render.World_Pass,
+	sky_pass:         render.Sky_Pass,
+	scenes:           render.Scene_Buffers,
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	shader_watch:     Shader_Watch,
@@ -114,6 +113,11 @@ app_init :: proc(app: ^App) -> bool {
 	debug_frag, debug_frag_ok := read_shader("debug.frag.spv")
 	if !debug_vert_ok || !debug_frag_ok {return false}
 	if !render.debug_init(&app.debug_pass, g, debug_vert, debug_frag) {return false}
+	sky_vert, sky_vert_ok := read_shader("sky.vert.spv")
+	sky_frag, sky_frag_ok := read_shader("sky.frag.spv")
+	if !sky_vert_ok || !sky_frag_ok {return false}
+	if !render.sky_init(&app.sky_pass, g, sky_vert, sky_frag) {return false}
+	if !render.scene_init(&app.scenes, g) {return false}
 	return world_pass_init(app)
 }
 
@@ -141,12 +145,7 @@ world_pass_init :: proc(app: ^App) -> bool {
 	return render.world_init(
 		&app.world_pass,
 		&app.g,
-		{
-			vertex_capacity = CHUNK_VERTEX_CAPACITY,
-			staging_size = 8 * 1024 * 1024,
-			fog_color = SKY_COLOR,
-			fog_distance = f32(app.settings.view_radius * game.CHUNK_SIZE),
-		},
+		{vertex_capacity = CHUNK_VERTEX_CAPACITY, staging_size = 8 * 1024 * 1024},
 		vert,
 		frag,
 		pixels[:],
@@ -166,6 +165,8 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		screenshots_save(app) // the last frames' screenshots are done now
 		gpu.renderdoc_log_captures(&app.renderdoc)
 		render.world_destroy(&app.world_pass, &app.g)
+		render.sky_destroy(&app.sky_pass, &app.g)
+		render.scene_destroy(&app.scenes, &app.g)
 		render.debug_destroy(&app.debug_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
 	}
@@ -251,16 +252,24 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
 		in_world := app.session != nil && app.session.state == .Playing
 		camera: render.Camera
+		scene: u64
 		if in_world {
-			camera = camera_render(&app.session.camera, w.width, w.height, app.settings.fov)
+			s := app.session
+			camera = camera_render(&s.camera, w.width, w.height, app.settings.fov)
+			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
+			sky := render.sky_at(game.time_of_day(s.clock))
+			scene = render.scene_upload(
+				&app.scenes,
+				g,
+				render.scene_make(camera, sky, fog, s.cloud_drift),
+			)
 			world_debug_lines(app)
 		}
 		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
-		clear_color :=
-			[4]f32{SKY_COLOR.r, SKY_COLOR.g, SKY_COLOR.b, 1} if in_world else {0, 0, 0, 1}
-		gpu.begin_rendering(frame, clear_color)
+		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
-			render.world_draw(&app.world_pass, g, frame, camera)
+			render.world_draw(&app.world_pass, g, frame, camera, scene)
+			render.sky_draw(&app.sky_pass, g, frame, scene)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)
@@ -279,7 +288,6 @@ enter_world :: proc(app: ^App, save_dir: string, seed: i64) {
 	delete(app.message)
 	app.message = ""
 	app.session = new(Session)
-	app.world_pass.settings.fog_distance = f32(app.settings.view_radius * game.CHUNK_SIZE)
 	config := Session_Config {
 		seed        = seed,
 		save_dir    = save_dir,

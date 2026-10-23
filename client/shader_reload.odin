@@ -65,6 +65,10 @@ shader_watch_destroy :: proc(w: ^Shader_Watch) {
 	w^ = {}
 }
 
+// INCLUDE_USERS: the passes whose shaders include scene.glsl.
+@(private = "file", rodata)
+INCLUDE_USERS := [?]string{"world", "sky"}
+
 // shader_watch_update checks for changes every half second.
 shader_watch_update :: proc(app: ^App, dt: f32) {
 	w := &app.shader_watch
@@ -91,9 +95,17 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 		return
 	}
 	// Reload each pass whose shaders changed.
-	reloaded: [3]bool
+	// An include (.glsl) changes every pass that uses it.
+	passes := make([dynamic]string, context.temp_allocator)
 	for name in changed {
-		pass := filepath.stem(name)
+		if filepath.ext(name) == ".glsl" {
+			append(&passes, ..INCLUDE_USERS[:])
+		} else {
+			append(&passes, filepath.stem(name))
+		}
+	}
+	reloaded: [4]bool
+	for pass in passes {
 		vert, vert_ok := read_shader(
 			strings.concatenate({pass, ".vert.spv"}, context.temp_allocator),
 		)
@@ -112,6 +124,9 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 		case "debug":
 			if reloaded[2] {continue}
 			ok, reloaded[2] = render.debug_reload(&app.debug_pass, &app.g, vert, frag), true
+		case "sky":
+			if reloaded[3] {continue}
+			ok, reloaded[3] = render.sky_reload(&app.sky_pass, &app.g, vert, frag), true
 		case:
 			continue
 		}
@@ -127,7 +142,7 @@ scan :: proc(w: ^Shader_Watch) -> []string {
 	if err != nil {return nil}
 	for e in entries {
 		ext := filepath.ext(e.name)
-		if ext != ".vert" && ext != ".frag" && ext != ".comp" {continue}
+		if ext != ".vert" && ext != ".frag" && ext != ".comp" && ext != ".glsl" {continue}
 		old, seen := w.times[e.name]
 		if !seen {
 			w.times[strings.clone(e.name)] = e.modification_time // new: the starting state

@@ -40,8 +40,6 @@ Camera :: struct {
 World_Settings :: struct {
 	vertex_capacity: u32, // vertices in the shared buffer
 	staging_size:    int, // bytes per frame slot
-	fog_color:       [3]f32, // linear
-	fog_distance:    f32, // blocks: fully fogged from here
 }
 
 Upload_Result :: enum {
@@ -86,14 +84,14 @@ World_Frame :: struct {
 	freed:        [dynamic]base.Range, // reusable once this slot comes round again
 }
 
+// World_Push matches world.vert's push constants.
 @(private)
 World_Push :: struct {
-	view_proj:    matrix[4, 4]f32,
+	scene:        u64, // the scene's address (scene.odin)
+	_:            u64,
 	chunk_offset: [3]f32,
 	textures:     u32,
-	camera:       [3]f32,
 	sampler_id:   u32,
-	fog:          [4]f32,
 }
 
 // world_init creates the pipeline and buffers. texture_pixels holds every
@@ -396,7 +394,8 @@ upload_setup :: proc(p: ^World_Pass, f: ^World_Frame, cmd: vk.CommandBuffer) -> 
 }
 
 // world_draw draws every mesh in the camera's view. Call inside rendering.
-world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera) {
+// scene: this frame's scene_upload (for the same camera).
+world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera, scene: u64) {
 	p.stats.meshes = p.meshes.count
 	p.stats.vertices_used = p.ranges.used
 	p.stats.drawn = 0
@@ -411,16 +410,9 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 	vk.CmdBindIndexBuffer(cmd, p.indices.handle, 0, .UINT16)
 	planes := frustum_planes(camera.view_proj)
 	push := World_Push {
-		view_proj  = camera.view_proj,
+		scene      = scene,
 		textures   = u32(p.textures_id),
-		camera     = camera.position,
 		sampler_id = u32(gpu.Sampler.Pixel_Art),
-		fog        = {
-			p.settings.fog_color.r,
-			p.settings.fog_color.g,
-			p.settings.fog_color.b,
-			p.settings.fog_distance,
-		},
 	}
 	it: base.Pool_Iterator
 	for m in base.pool_next(&p.meshes, &it) {

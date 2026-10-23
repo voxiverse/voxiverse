@@ -37,35 +37,36 @@ Session_State :: enum u8 {
 }
 
 Session :: struct {
-	state:      Session_State,
-	failure:    string, // why it failed (in the arena)
-	arena:      virtual.Arena,
-	pipe:       game.Pipe,
-	endpoint:   game.Endpoint,
-	server:     server.Server,
-	welcome:    game.Welcome,
-	world:      World, // set up from Welcome
-	world_init: bool,
-	camera:     View, // the eyes, from the prediction; looking turns it every frame
-	teleport:   Maybe(game.Teleport), // requested before joining: sent on Welcome
-	prediction: game.Prediction,
-	rules:      game.Rules, // the server's, as last announced
-	clock:      f64, // world time: the server's last word, carried on since (game/time.odin)
-	tick_time:  f32, // seconds into the current client tick
-	toggle_fly: bool, // a double-tapped jump waits for the next tick
-	last_jump:  time.Tick, // for double-tap detection
-	autopilot:  Maybe(game.Player_Input), // overrides the controls (fly_test)
-	aim:        Maybe(game.Ray_Hit), // the block under the crosshair, within reach
-	edits:      [dynamic]game.Edit, // predicted, waiting for Edit_Result
-	next_edit:  u32,
-	edit_timer: f32, // seconds until a held button edits again
-	hotbar:     int, // index into HOTBAR
-	writer:     game.Writer,
-	scratch:    ^game.Block_Array, // decoding target for chunk messages
-	received:   [dynamic]game.Packet,
-	stats:      Session_Stats,
-	config:     Session_Config,
-	net:        Net_Stats,
+	state:       Session_State,
+	failure:     string, // why it failed (in the arena)
+	arena:       virtual.Arena,
+	pipe:        game.Pipe,
+	endpoint:    game.Endpoint,
+	server:      server.Server,
+	welcome:     game.Welcome,
+	world:       World, // set up from Welcome
+	world_init:  bool,
+	camera:      View, // the eyes, from the prediction; looking turns it every frame
+	teleport:    Maybe(game.Teleport), // requested before joining: sent on Welcome
+	prediction:  game.Prediction,
+	rules:       game.Rules, // the server's, as last announced
+	clock:       f64, // world time: the server's last word, carried on since (game/time.odin)
+	cloud_drift: f64, // blocks the clouds have moved
+	tick_time:   f32, // seconds into the current client tick
+	toggle_fly:  bool, // a double-tapped jump waits for the next tick
+	last_jump:   time.Tick, // for double-tap detection
+	autopilot:   Maybe(game.Player_Input), // overrides the controls (fly_test)
+	aim:         Maybe(game.Ray_Hit), // the block under the crosshair, within reach
+	edits:       [dynamic]game.Edit, // predicted, waiting for Edit_Result
+	next_edit:   u32,
+	edit_timer:  f32, // seconds until a held button edits again
+	hotbar:      int, // index into HOTBAR
+	writer:      game.Writer,
+	scratch:     ^game.Block_Array, // decoding target for chunk messages
+	received:    [dynamic]game.Packet,
+	stats:       Session_Stats,
+	config:      Session_Config,
+	net:         Net_Stats,
 }
 
 // Net_Stats: what the F3 overlay shows about the connection.
@@ -166,6 +167,7 @@ session_update :: proc(
 	receive(s)
 	if s.state != .Playing {return}
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
+	s.cloud_drift += f64(dt) * render.CLOUD_SPEED
 	if look {
 		look_update(&s.camera, input, settings)
 		if .Space in input.pressed {

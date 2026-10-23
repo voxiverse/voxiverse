@@ -87,7 +87,9 @@ struct, its default, and one line to the table; a test checks every table.
 In development builds, saving a file in `assets/shaders` recompiles it (through
 `build/build-driver shaders`) and swaps the affected pipelines within about a second. A
 shader that fails to compile logs glslang's message with file and line, and the old one
-keeps running. `set debug.hot_reload_shaders 0` turns it off.
+keeps running. `set debug.hot_reload_shaders 0` turns it off. `scene.glsl` is included by
+the world and sky shaders (the per-frame scene, sky colours, clouds); saving it reloads both.
+`time <name|0..1>` with `set rules.daylight_cycle 0` holds the sky still while you work.
 
 ## Saves
 

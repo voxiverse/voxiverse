@@ -339,13 +339,21 @@ shaders :: proc() -> bool {
 	if !found {return false}
 	os.make_directory_all(SHADER_OUT_DIR)
 
+	// Shaders may #include any .glsl here: a newer include rebuilds them all.
+	newest_include: i64
+	for src in sources {
+		if filepath.ext(src.name) == ".glsl" {
+			newest_include = max(newest_include, src.modification_time._nsec)
+		}
+	}
 	ok := true
 	compiled := 0
 	for src in sources {
 		if !slice.contains(SHADER_EXTS, filepath.ext(src.name)) {continue}
 		out := path_join({SHADER_OUT_DIR, strings.concatenate({src.name, ".spv"})})
+		newest := max(src.modification_time._nsec, newest_include)
 		if dst, serr := os.stat(out, context.allocator);
-		   serr == nil && dst.modification_time._nsec >= src.modification_time._nsec {
+		   serr == nil && dst.modification_time._nsec >= newest {
 			continue
 		}
 		if run({glslang, "-V", "--target-env", "vulkan1.3", "--quiet", "-o", out, src.fullpath}) {

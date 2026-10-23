@@ -180,6 +180,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		descriptorBindingPartiallyBound              = true,
 		descriptorBindingSampledImageUpdateAfterBind = true,
 		shaderSampledImageArrayNonUniformIndexing    = true,
+		bufferDeviceAddress                          = true,
 	}
 	features13 := vk.PhysicalDeviceVulkan13Features {
 		sType            = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
@@ -344,7 +345,8 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 		features12.runtimeDescriptorArray &&
 		features12.descriptorBindingPartiallyBound &&
 		features12.descriptorBindingSampledImageUpdateAfterBind &&
-		features12.shaderSampledImageArrayNonUniformIndexing,
+		features12.shaderSampledImageArrayNonUniformIndexing &&
+		features12.bufferDeviceAddress,
 	)
 }
 
