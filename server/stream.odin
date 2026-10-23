@@ -26,8 +26,14 @@ Client :: struct {
 	player:     game.Player_State,
 	inputs:     game.Input_Queue,
 	teleported: bool, // since the last Player_Update
+	edits:      [MAX_QUEUED_EDITS]game.Edit, // waiting for their input (oldest first)
+	edit_count: int,
 	teleport:   [2]f32, // yaw, pitch to look after it
 }
+
+// MAX_QUEUED_EDITS: edits waiting for the input they follow; more than this
+// means the client is far ahead of what it has sent, or lying.
+MAX_QUEUED_EDITS :: 64
 
 @(private)
 client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.Allocator_Error {

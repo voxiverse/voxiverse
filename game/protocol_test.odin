@@ -39,8 +39,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	tp, ok = decode_client(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
 	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
 	edit: Client_Message
-	edit, ok = decode_client(encode_c(Edit{5, {-3, WORLD_MIN_Y, 7}, .Sand})[:])
-	testing.expect(t, ok && edit.(Edit) == Edit{5, {-3, WORLD_MIN_Y, 7}, .Sand})
+	edit, ok = decode_client(encode_c(Edit{5, 9, {-3, WORLD_MIN_Y, 7}, .Sand})[:])
+	testing.expect(t, ok && edit.(Edit) == Edit{5, 9, {-3, WORLD_MIN_Y, 7}, .Sand})
 	result: Server_Message
 	result, ok = decode_server(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air})[:], scratch)
 	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air})
@@ -158,7 +158,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, {}, .Stone})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)
@@ -420,6 +420,7 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 	bad_client(t, "edit with an unknown block", proc(w: ^Writer) {
 		write_u8(w, 6)
 		write_u32(w, 1)
+		write_u32(w, 0)
 		write_i32(w, 0)
 		write_i32(w, 0)
 		write_i32(w, 0)

@@ -292,10 +292,10 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	}
 	head := below + {0, 2, 0}
 	edits := []game.Edit {
-		{1, below, .Air}, // break the block underfoot: fine
-		{2, head, .Stone}, // place inside the player: no
-		{3, below + {0, 0, 30}, .Air}, // out of reach: no
-		{4, below + {0, -200, 0}, .Stone}, // not loaded: no
+		{1, 60, below, .Air}, // break the block underfoot: fine
+		{2, 60, head, .Stone}, // place inside the player: no
+		{3, 60, below + {0, 0, 30}, .Air}, // out of reach: no
+		{4, 60, below + {0, -200, 0}, .Stone}, // not loaded: no
 	}
 	for e in edits {fake_send(&c, e)}
 	testing.expect(
@@ -330,6 +330,75 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 		t,
 		c.player.state.position.x > start_x + 0.5,
 		"did not walk: x %v -> %v",
+		start_x,
+		c.player.state.position.x,
+	)
+	testing.expect(t, stop(&srv))
+}
+
+// An edit waits for the input it follows: one sent before the inputs that
+// bring the player into reach is judged from where those inputs put him.
+@(test)
+test_edit_follows_its_input :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	testing.expect(
+		t,
+		start(
+			&srv,
+			{seed = 5, view_radius = 2, view_height = 2, workers = 2, allow_cheats = true},
+			{&pipe, .Server},
+		),
+	)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	defer delete(c.results)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
+
+	// Hover in open air at y 100 (flying), where the chunks are all air.
+	fake_send(&c, game.Teleport{{0.5, 100, 0.5}, 0, 0})
+	seq: u32 = 0
+	for i in 0 ..< 45 {
+		seq += 1
+		fake_send(&c, game.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}})
+		time.sleep(game.TICK_DURATION)
+		fake_receive(t, &c)
+	}
+	@(static) want: u32
+	want = seq
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.player.acked == want}),
+	)
+	testing.expect(t, c.player.state.flying, "not flying")
+	start_x := c.player.state.position.x
+
+	// Place a block 12 blocks ahead (out of reach now), after the 30 inputs
+	// that fly there, sent before them.
+	target := game.Block_Pos{12, 101, 0}
+	fake_send(&c, game.Edit{id = 1, after = seq + 30, pos = target, block = .Stone})
+	for _ in 0 ..< 30 {
+		seq += 1
+		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}})
+		time.sleep(game.TICK_DURATION)
+		fake_receive(t, &c)
+	}
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.results) == 1}),
+	)
+	testing.expectf(
+		t,
+		len(c.results) == 1 && c.results[0].accepted,
+		"refused: judged before the inputs that brought it into reach (x %v -> %v)",
 		start_x,
 		c.player.state.position.x,
 	)

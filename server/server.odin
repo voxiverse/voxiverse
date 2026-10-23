@@ -275,7 +275,7 @@ receive_messages :: proc(s: ^Server) {
 				disconnect(s, "edit before hello")
 				return
 			}
-			send_message(s, apply_edit(s, v))
+			queue_edit(s, v)
 		}
 	}
 }
@@ -287,8 +287,10 @@ simulate_player :: proc(s: ^Server) {
 	c := &s.client
 	buf: [game.INPUT_BUDGET_MAX]game.Input
 	query := game.Block_Query{&s.world, world_block}
+	run_due_edits(s) // edits after inputs applied in earlier ticks
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+		run_due_edits(s)
 	}
 	set_position(c, c.player.position)
 	send_message(
@@ -302,6 +304,34 @@ simulate_player :: proc(s: ^Server) {
 		},
 	)
 	c.teleported = false
+}
+
+// queue_edit holds an edit until the input it follows has been applied
+// (refusing it outright if too many are waiting).
+@(private = "file")
+queue_edit :: proc(s: ^Server, e: game.Edit) {
+	c := &s.client
+	if c.edit_count == MAX_QUEUED_EDITS {
+		current, _ := world_block(&s.world, e.pos)
+		send_message(s, game.Edit_Result{id = e.id, pos = e.pos, block = current})
+		return
+	}
+	c.edits[c.edit_count] = e
+	c.edit_count += 1
+	run_due_edits(s)
+}
+
+// run_due_edits applies queued edits whose input has been applied, in order.
+@(private = "file")
+run_due_edits :: proc(s: ^Server) {
+	c := &s.client
+	n := 0
+	for n < c.edit_count && game.sequence_before_or_at(c.edits[n].after, c.inputs.last) {
+		send_message(s, apply_edit(s, c.edits[n]))
+		n += 1
+	}
+	copy(c.edits[:], c.edits[n:c.edit_count])
+	c.edit_count -= n
 }
 
 // apply_edit checks an edit against the shared rules, from where the server

@@ -431,7 +431,8 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	hit, aimed := s.aim.?
 	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
 	edit := game.Edit {
-		id = s.next_edit + 1,
+		id    = s.next_edit + 1,
+		after = s.prediction.next_sequence - 1, // the last input predicted
 	}
 	if !place {
 		b, _ := world_block(&s.world, hit.block)

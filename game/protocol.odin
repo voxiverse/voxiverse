@@ -58,9 +58,12 @@ Set_Rule :: struct {
 }
 
 // Edit asks to put block at pos (Air: break). The client has already
-// applied it (predicted); Edit_Result says what became of it.
+// applied it (predicted); Edit_Result says what became of it. The server
+// applies it right after input `after`, where the client was when it made
+// the edit, so reach is judged the same however late it arrives.
 Edit :: struct {
 	id:    u32,
+	after: u32,
 	pos:   Block_Pos,
 	block: Block,
 }
@@ -257,6 +260,7 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Edit:
 		write_u8(w, u8(Client_Kind.Edit))
 		write_u32(w, v.id)
+		write_u32(w, v.after)
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
 	}
@@ -358,6 +362,7 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 	case u8(Client_Kind.Edit):
 		m = Edit {
 			id    = read_u32(&r),
+			after = read_u32(&r),
 			pos   = read_block_pos(&r),
 			block = read_block(&r),
 		}

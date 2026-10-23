@@ -111,7 +111,9 @@ per frame) → build the UI → build a `Frame_Packet` → render. Tick rate is 
 ### Authority and netcode
 - Client sends tick-stamped input commands; the server simulates every player with the shared
   physics and sends snapshots; the client predicts its own player and reconciles.
-- Block edits are requests: predicted locally, confirmed or rolled back by the server.
+- Block edits are requests: predicted locally, confirmed or rolled back by the server. Each
+  names the input it follows, and the server applies it right after that input, so reach is
+  judged from the same position however late it arrives.
 - Transport is an interface. First implementation: in-process queues, with the server on its
   own thread (singleplayer keeps a separate client replica on purpose, so authority stays
   honest). Later: UDP (own reliability layer on `core:net`, or ENet behind the interface).
@@ -200,7 +202,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M2 | UI + text: `ui/`, generated font atlas, UI pass, title screen with mouse + keyboard navigation, console overlay | UI behaviour tests (hit-testing, focus, layers) + visual check |
 | M3 | World through the boundary: in-process server thread, handshake, worldgen with seed, chunk streaming and unloading, meshing jobs (face shading + ambient occlusion), chunk rendering, fly camera | Flying 1000+ blocks keeps memory flat (session arena stats) and frames within budget: `fly_test`, run in CI |
 | M3.5 | Developer tools: thread-tagged key=value logger; settings/rules/debug variables with descriptor tables, settings file, tuning panel; debug drawing; screenshots (uploaded by CI); shader hot reload; crash handler; network trace + `netdump`, network condition simulator, F3 net stats, replay of recorded client messages | Each tool used in a test or CI run (done; loss/duplication/reordering simulation moved to M7 with the UDP reliability layer) |
-| M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation, flood-fill block and sky light (add and removal) | Same results with artificial latency injected into the transport |
+| M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation, block and sky light | Same results with artificial latency injected into the transport: `server/latency_test.odin` (done) |
 | M5 | Persistence: region files, save/load/quit, saving modified chunks when the server unloads them | Save → quit → load round-trips exactly |
 | M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | — |
 | M7 | Remote multiplayer: UDP transport with its reliability layer, simulated loss/duplication/reordering, Wireshark dissector, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines; transfers survive 10% loss |
