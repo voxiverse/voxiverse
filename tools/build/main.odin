@@ -24,6 +24,7 @@ PACKAGES :: []string {
 	"base",
 	"font",
 	"ui",
+	"game",
 	"platform",
 	"gpu",
 	"render",
@@ -32,9 +33,19 @@ PACKAGES :: []string {
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
-TEST_PACKAGES :: []string{"base", "font", "ui"}
+TEST_PACKAGES :: []string{"base", "font", "ui", "game"}
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
-SOURCE_DIRS :: []string{"base", "font", "ui", "platform", "gpu", "render", "client", "tools"}
+SOURCE_DIRS :: []string {
+	"base",
+	"font",
+	"ui",
+	"game",
+	"platform",
+	"gpu",
+	"render",
+	"client",
+	"tools",
+}
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
 // CHECK_FLAGS: library packages have no main of their own.
