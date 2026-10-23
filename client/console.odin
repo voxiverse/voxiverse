@@ -5,6 +5,8 @@ import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:os"
+import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
@@ -166,17 +168,20 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"screen",
-			"screen <title|options|quit>: switch screens (quit: the quit dialog)",
+			"screen <title|options|worlds|quit>: switch screens (quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
 				switch args[0] if len(args) > 0 else "" {
 				case "title":
 					app.screen = .Title
 				case "options":
 					app.screen = .Options
+				case "worlds":
+					worlds_refresh(&app.worlds)
+					app.screen = .Worlds
 				case "quit":
 					app.quit_dialog = true
 				case:
-					console_print(&app.console, "screen: title, options or quit", .Warning)
+					console_print(&app.console, "screen: title, options, worlds or quit", .Warning)
 				}
 			},
 		},
@@ -200,9 +205,13 @@ register_builtin_commands :: proc(c: ^Console) {
 		}})
 	console_register(
 		c,
-		{"singleplayer", "enter a singleplayer world", proc(app: ^App, args: []string) {
-				enter_world(app)
-			}},
+		{
+			"singleplayer",
+			"enter a singleplayer world",
+			proc(app: ^App, args: []string) {
+				enter_world(app, "", 0x5eed) // a scratch world: nothing saved
+			},
+		},
 	)
 	console_register(
 		c,
@@ -452,6 +461,29 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 	)
+	console_register(
+		c,
+		{
+			"world",
+			"world <name>: play the saved world name (created if new)",
+			proc(app: ^App, args: []string) {
+				if len(args) == 0 {
+					console_print(&app.console, "world <name>", .Warning)
+					return
+				}
+				name := strings.join(args, " ", context.temp_allocator)
+				path := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name
+				if os.exists(path) {enter_world(app, path, 0)} else {world_create(app, name, "")}
+			},
+		},
+	)
+	console_register(c, {"save", "save the world now", proc(app: ^App, args: []string) {
+			if app.session == nil || app.session.config.save_dir == "" {
+				console_print(&app.console, "save: not in a saved world", .Warning)
+				return
+			}
+			send_message(app.session, game.Admin{"save"})
+		}})
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

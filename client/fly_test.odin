@@ -54,7 +54,7 @@ fly_test_command :: proc(app: ^App, args: []string) {
 		console_print(&app.console, "fly_test: give a distance in blocks", .Warning)
 		return
 	}
-	if app.session == nil {enter_world(app)}
+	if app.session == nil {enter_world(app, "", 0x5eed)} 	// a scratch world
 	if app.session == nil {return}
 	t := &app.fly_test
 	frames := t.frames // keep the (large) stats buffer's storage

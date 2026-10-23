@@ -89,6 +89,15 @@ In development builds, saving a file in `assets/shaders` recompiles it (through
 shader that fails to compile logs glslang's message with file and line, and the old one
 keeps running. `set debug.hot_reload_shaders 0` turns it off.
 
+## Saves
+
+A world is a directory: `world.cfg` (text: format, seed, player, rules) and `regions/` with
+the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates from
+the seed). Files are replaced through a temporary file, so a crash mid-save keeps the previous
+save; a region file that fails its checksum is moved aside (`.damaged-<time>`) with an error,
+never loaded. `server/save_test.odin` covers save, quit and load, edits surviving unloading,
+and damaged files.
+
 ## Debug drawing
 
 `render.debug_line` / `render.debug_box` draw world-space lines for one frame from anywhere on
@@ -100,7 +109,8 @@ neighbours' edges.
 
 | Command | |
 |---|---|
-| `singleplayer` / `leave` | Enter / leave a world |
+| `singleplayer` / `leave` | Enter a scratch world (never saved: for scripts and tests) / leave the world |
+| `world <name>`, `save` | Play a saved world (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
 | `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |

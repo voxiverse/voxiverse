@@ -28,7 +28,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 			app.tuning = false
 		case app.quit_dialog:
 			app.quit_dialog = false
-		case app.screen == .Options:
+		case app.screen == .Options, app.screen == .Worlds:
 			app.screen = .Title
 		case app.screen == .Game:
 			app.paused = !app.paused
@@ -49,6 +49,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		title_screen(app, ctx)
 	case .Options:
 		options_screen(app, ctx)
+	case .Worlds:
+		worlds_screen(app, ctx)
 	case .Game:
 		game_screen(app, ctx)
 	}
@@ -68,7 +70,10 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	if ui.button(ctx, "Singleplayer", ui.next(ctx)) {enter_world(app)}
+	if ui.button(ctx, "Singleplayer", ui.next(ctx)) {
+		worlds_refresh(&app.worlds)
+		app.screen = .Worlds
+	}
 	ui.button(ctx, "Multiplayer", ui.next(ctx), disabled = true) // arrives in M7
 	if ui.button(ctx, "Options", ui.next(ctx)) {app.screen = .Options}
 	if ui.button(ctx, "Quit", ui.next(ctx)) {app.quit_dialog = true}
@@ -107,7 +112,13 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 	if ui.button(ctx, "Resume", ui.next(ctx)) {app.paused = false}
-	if ui.button(ctx, "Leave World", ui.next(ctx)) {leave_world(app)}
+	if ui.button(
+		ctx,
+		"Save and Leave" if app.session.config.save_dir != "" else "Leave World",
+		ui.next(ctx),
+	) {
+		leave_world(app)
+	}
 }
 
 // net_line: round trip, traffic per second each way, the busiest kind.

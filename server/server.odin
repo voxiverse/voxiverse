@@ -26,7 +26,8 @@ Config :: struct {
 	view_radius:  i32, // chunks, horizontally
 	view_height:  i32, // chunks above and below
 	workers:      int,
-	allow_cheats: bool, // honour Teleport and Set_Rule (singleplayer)
+	allow_cheats: bool, // honour Teleport, Set_Rule and Admin (singleplayer)
+	save_dir:     string, // the world's directory; "" = not saved (its seed and rules win over these)
 	rules:        game.Rules, // zero: the defaults
 }
 
@@ -56,6 +57,7 @@ Server :: struct {
 	log_tag:     base.Log_Tag,
 	rules:       game.Rules, // server thread only
 	tops:        map[[2]i32]i32, // edited column tops (columns.odin)
+	store:       Store, // saving (save.odin)
 	// Server thread only, after start:
 	arena:       virtual.Arena,
 	world:       World,
@@ -86,6 +88,12 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&s.arena)
+	// A saved world's seed and rules replace the config's.
+	if !store_open(s, config.save_dir) {
+		store_close(s)
+		virtual.arena_destroy(&s.arena)
+		return false
+	}
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
 	// Loaded chunks stay within the unload distance of a client, plus
 	// chunks still generating that were requested before it moved.
@@ -95,7 +103,7 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 	)
 	capacity += config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	if err := world_init(&s.world, config.seed, capacity, config.workers, arena); err != nil {
+	if err := world_init(&s.world, s.config.seed, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
 		virtual.arena_destroy(&s.arena)
 		return false
@@ -129,6 +137,8 @@ stop :: proc(s: ^Server) -> bool {
 	sync.atomic_store(&s.stopping, true)
 	thread.join(s.thread)
 	thread.destroy(s.thread)
+	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
+	store_close(s)
 	world_destroy(&s.world)
 	delete(s.tops)
 	used := s.arena.total_used
@@ -178,6 +188,7 @@ server_main :: proc(t: ^thread.Thread) {
 tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	s.tick += 1
+	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
 	world_collect(&s.world, proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
 			s := (^Server)(data)
 			return client_wants(&s.client, pos, s.config, game.SERVER_UNLOAD_MARGIN)
@@ -216,10 +227,9 @@ receive_messages :: proc(s: ^Server) {
 				return
 			}
 			s.client.state = .Playing
-			spawn := spawn_point(s.config.seed)
-			s.client.player = {
-				position = spawn,
-			}
+			// Where they left, in a saved world; else above the terrain.
+			s.client.player = s.store.player.? or_else {position = spawn_point(s.config.seed)}
+			spawn := s.client.player.position
 			set_position(&s.client, spawn)
 			send_message(
 				s,
@@ -270,6 +280,17 @@ receive_messages :: proc(s: ^Server) {
 			}
 		case game.Ping:
 			send_message(s, game.Pong{v.id})
+		case game.Admin:
+			if !s.config.allow_cheats {
+				disconnect(s, "cheats are not allowed")
+				return
+			}
+			switch v.command {
+			case "save":
+				save(s)
+			case:
+				log.warnf("server unknown admin command command=%q", v.command)
+			}
 		case game.Edit:
 			if s.client.state != .Playing {
 				disconnect(s, "edit before hello")
@@ -362,6 +383,7 @@ apply_edit :: proc(s: ^Server, e: game.Edit) -> game.Edit_Result {
 	}
 	if !allowed || !world_set_block(&s.world, e.pos, e.block) {return result}
 	result.accepted, result.block = true, e.block
+	mark_edited(s, game.chunk_of(e.pos))
 	column := [2]i32{e.pos.x >> game.CHUNK_SHIFT, e.pos.z >> game.CHUNK_SHIFT}
 	if column_edited(s, e.pos, e.block) && s.client.columns[column] > 0 {
 		send_message(s, column_message(s, column))

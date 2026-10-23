@@ -53,7 +53,10 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 
 ## Running
 
-`build run` opens the title screen; Singleplayer generates a world and puts you in it.
+`build run` opens the title screen. Singleplayer lists your worlds: create one (any text works
+as a seed, or leave it empty for a random one), play, or delete. Worlds save every minute and
+when you leave; they live in `voxiverse/saves` in your user data directory
+(`~/.local/share` on Linux, `%APPDATA%` on Windows, `~/Library/Application Support` on macOS).
 
 | Key | |
 |---|---|

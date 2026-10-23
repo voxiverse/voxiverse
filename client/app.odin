@@ -7,6 +7,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
+import "core:strings"
 
 import "../base"
 import "../font"
@@ -27,6 +28,7 @@ FONT_DATA :: #load("../assets/fonts/jetbrains_mono_regular.ttf")
 Screen :: enum u8 {
 	Title,
 	Options,
+	Worlds,
 	Game, // a session exists
 }
 
@@ -48,6 +50,7 @@ App :: struct {
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	shader_watch:     Shader_Watch,
+	worlds:           Worlds_Screen,
 	session:          ^Session, // nil outside a world
 	paused:           bool, // the pause menu is open (in a world)
 	debug:            Debug_Switches,
@@ -170,6 +173,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	shader_watch_destroy(&app.shader_watch)
+	worlds_destroy(&app.worlds)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)
@@ -267,14 +271,18 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 }
 
 // enter_world starts a singleplayer session.
-enter_world :: proc(app: ^App) {
+// enter_world starts a session in the world saved at save_dir (created if
+// new, with seed), or with save_dir "" a scratch world nothing is saved of
+// (scripts and tests).
+enter_world :: proc(app: ^App, save_dir: string, seed: i64) {
 	if app.session != nil {return}
 	delete(app.message)
 	app.message = ""
 	app.session = new(Session)
 	app.world_pass.settings.fog_distance = f32(app.settings.view_radius * game.CHUNK_SIZE)
 	config := Session_Config {
-		seed        = 0x5eed,
+		seed        = seed,
+		save_dir    = save_dir,
 		view_radius = app.settings.view_radius,
 		view_height = app.settings.view_height,
 		trace       = app.debug.net_trace,
@@ -295,6 +303,8 @@ leave_world :: proc(app: ^App) {
 	if !session_end(app.session, &app.world_pass, &app.g) {
 		log.error("the server stopped with an error (see above)")
 		app.server_failed = true
+		delete(app.message)
+		app.message = strings.clone("The world could not be saved (see the log)")
 	}
 	free(app.session)
 	app.session = nil

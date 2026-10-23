@@ -89,7 +89,7 @@ stream :: proc(s: ^Server) {
 		all_sent = false
 		chunk := world_get(&s.world, pos)
 		if chunk == nil {
-			if requesting {requesting = world_request(&s.world, pos)}
+			if requesting {requesting = request_chunk(s, pos)}
 			if !requesting && budget == 0 {break}
 			continue
 		}
@@ -125,6 +125,9 @@ unload_far :: proc(s: ^Server) {
 		if !client_wants(c, pos, s.config, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
-		if chunk := world_get(&s.world, pos); chunk.state == .Ready {world_unload(&s.world, pos)}
+		if chunk := world_get(&s.world, pos); chunk.state == .Ready {
+			keep_edits(s, chunk) // edited chunks go to the save, not away
+			world_unload(&s.world, pos)
+		}
 	}
 }

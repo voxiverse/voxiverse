@@ -27,6 +27,7 @@ Session_Config :: struct {
 	view_radius: i32,
 	view_height: i32,
 	trace:       bool, // record every message to net.trace from the start
+	save_dir:    string, // the world's directory; "" = scratch, not saved
 }
 
 Session_State :: enum u8 {
@@ -111,6 +112,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		view_height  = config.view_height,
 		workers      = max(1, cores / 4),
 		allow_cheats = true, // our own world
+		save_dir     = config.save_dir,
 	},
 	{&s.pipe, .Server},
 	) {

@@ -137,6 +137,35 @@ world_request :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	return true
 }
 
+// world_insert adds a ready chunk from a save (blocks: uniform, or the
+// contents of array copied into one of the world's).
+world_insert :: proc(
+	w: ^World,
+	pos: game.Chunk_Pos,
+	uniform: game.Block,
+	array: ^game.Block_Array,
+) -> ^Chunk {
+	assert(pos not_in w.by_pos)
+	handle, chunk, ok := base.pool_add(
+		&w.chunks,
+		Chunk{pos = pos, state = .Ready, modified = true},
+	)
+	assert(ok, "chunk pool full")
+	chunk.blocks = {
+		uniform = uniform,
+	}
+	if array != nil {
+		dst, err := game.block_arrays_take(&w.arrays)
+		assert(err == nil, "chunk arrays exhausted")
+		dst^ = array^
+		chunk.blocks = {
+			array = dst,
+		}
+	}
+	w.by_pos[pos] = handle
+	return chunk
+}
+
 // world_collect stores finished chunks; keep decides whether a chunk is
 // still wanted (it may have left every client's interest meanwhile).
 world_collect :: proc(

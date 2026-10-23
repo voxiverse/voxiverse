@@ -57,6 +57,11 @@ Set_Rule :: struct {
 	value: string,
 }
 
+// Admin runs a server command ("save"); a cheat, like Set_Rule.
+Admin :: struct {
+	command: string,
+}
+
 // Edit asks to put block at pos (Air: break). The client has already
 // applied it (predicted); Edit_Result says what became of it. The server
 // applies it right after input `after`, where the client was when it made
@@ -75,6 +80,7 @@ Client_Message :: union {
 	Teleport,
 	Set_Rule,
 	Edit,
+	Admin,
 }
 
 // Server -> client.
@@ -173,6 +179,7 @@ Client_Kind :: enum u8 {
 	Teleport,
 	Set_Rule,
 	Edit,
+	Admin,
 }
 
 @(private = "file")
@@ -206,6 +213,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "set_rule"
 		case u8(Client_Kind.Edit):
 			return "edit"
+		case u8(Client_Kind.Admin):
+			return "admin"
 		}
 	} else {
 		switch kind {
@@ -263,6 +272,9 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u32(w, v.after)
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
+	case Admin:
+		write_u8(w, u8(Client_Kind.Admin))
+		write_string(w, v.command)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -365,6 +377,10 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			after = read_u32(&r),
 			pos   = read_block_pos(&r),
 			block = read_block(&r),
+		}
+	case u8(Client_Kind.Admin):
+		m = Admin {
+			command = read_string(&r, MAX_RULE_TEXT),
 		}
 	case:
 		return

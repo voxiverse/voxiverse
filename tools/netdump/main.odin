@@ -20,7 +20,7 @@ import "../../game"
 Options :: struct {
 	file:    string `args:"pos=0" usage:"trace file (default build/net.trace)"`,
 	summary: bool `usage:"counts and bytes per message kind instead of messages"`,
-	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, edit, welcome, reject, chunk, unload, pong, player, rules, edit_result, block, column)"`,
+	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, edit, admin, welcome, reject, chunk, unload, pong, player, rules, edit_result, block, column)"`,
 	sender:  string `usage:"only messages from client or server"`,
 	from:    f64 `usage:"only from this many seconds into the session"`,
 	to:      f64 `usage:"only up to this many seconds into the session"`,
@@ -140,7 +140,16 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 		case game.Set_Rule:
 			return fmt.tprintf("set_rule name=%s value=%s", v.name, v.value), true
 		case game.Edit:
-			return fmt.tprintf("edit id=%d pos=%v block=%v", v.id, v.pos, v.block), true
+			return fmt.tprintf(
+					"edit id=%d after=%d pos=%v block=%v",
+					v.id,
+					v.after,
+					v.pos,
+					v.block,
+				),
+				true
+		case game.Admin:
+			return fmt.tprintf("admin command=%q", v.command), true
 		case game.Ping:
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
