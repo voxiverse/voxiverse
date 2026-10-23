@@ -12,8 +12,9 @@ import "core:strings"
 //	build test                 run the unit tests
 //	build fmt                  format all sources in place
 //	build shaders              compile assets/shaders to SPIR-V (fetches the pinned glslang once)
-//	build build [--release | --sanitize]    build the game into build/
+//	build build [--release | --sanitize]    build the game and the dedicated server into build/
 //	build run [--release | --sanitize] [-- game args...]
+//	build serve [--release] [-- server args...]   run the dedicated server
 //	build debug [--lldb] [-- game args...]   debug build under gdb/lldb with Odin printers
 //
 // It runs from the repository root (the wrapper scripts cd there).
@@ -34,6 +35,7 @@ PACKAGES :: []string {
 	"client",
 	"client/mesh",
 	"client/sfx",
+	"dedicated",
 	"tools/build",
 	"tools/netdump",
 	"tools/replay",
@@ -57,6 +59,7 @@ TEST_PACKAGES :: []string {
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"base",
+	"dedicated",
 	"audio",
 	"netcode",
 	"font",
@@ -76,6 +79,8 @@ CHECK_FLAGS :: []string{"-no-entry-point"}
 
 GAME_PACKAGE :: "client"
 GAME_NAME :: "voxiverse"
+SERVER_PACKAGE :: "dedicated"
+SERVER_NAME :: "voxiverse-server"
 
 SHADER_DIR :: "assets/shaders"
 SHADER_OUT_DIR :: "build/shaders"
@@ -91,7 +96,7 @@ main :: proc() {
 	}
 	ok: bool
 	switch args[0] {
-	case "check", "test", "build", "run", "debug":
+	case "check", "test", "build", "run", "serve", "debug":
 		// The game's packages link miniaudio; even type-checking wants it.
 		if !ensure_miniaudio() {os.exit(1)}
 	}
@@ -108,6 +113,8 @@ main :: proc() {
 		_, ok = build_game(args[1:])
 	case "run":
 		ok = run_game(args[1:])
+	case "serve":
+		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
 	case "netdump", "replay", "sfx":
@@ -135,6 +142,7 @@ usage :: proc() {
 		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
 	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
+	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
 		"  debug     build, then run it in the debugger (gdb, --lldb, RAD Debugger on Windows)",
 	)
@@ -185,9 +193,20 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 		},
 	)
 	run(cmd) or_return
+	server_exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
+	server_cmd := slice.concatenate(
+		[][]string {
+			{"odin", "build", SERVER_PACKAGE},
+			ODIN_FLAGS,
+			mode[:],
+			{strings.concatenate({"-out:", server_exe})},
+		},
+	)
+	run(server_cmd) or_return
 	fmt.printfln(
-		"built  %s (%s%s%s)",
+		"built  %s, %s (%s%s%s)",
 		exe,
+		server_exe,
 		"release" if release else "debug",
 		" + sanitizer" if sanitize else "",
 		" + profiling" if profile else "",
@@ -243,6 +262,17 @@ debug_game :: proc(args: []string) -> bool {
 		)
 		return run(cmd)
 	}
+}
+
+// serve builds everything and runs the dedicated server with server_args.
+serve :: proc(args: []string) -> bool {
+	build_args, server_args := args, []string{}
+	if i, found := slice.linear_search(args, "--"); found {
+		build_args, server_args = args[:i], args[i + 1:]
+	}
+	build_game(build_args) or_return
+	exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
+	return run(slice.concatenate([][]string{{exe}, server_args}))
 }
 
 run_game :: proc(args: []string) -> bool {
