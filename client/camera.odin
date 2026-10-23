@@ -74,3 +74,25 @@ normalize :: proc(v: [3]f32) -> [3]f32 {
 	l := math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 	return v / l
 }
+
+// world_debug_lines adds this frame's world-space debug drawing.
+world_debug_lines :: proc(app: ^App) {
+	dd := &app.debug_draw
+	if app.debug.chunk_borders {
+		c := game.chunk_origin(camera_chunk(&app.session.camera))
+		lo := [3]f64{f64(c.x), f64(c.y), f64(c.z)}
+		render.debug_box(dd, lo, lo + game.CHUNK_SIZE, render.YELLOW)
+		// The neighbours' vertical edges, two chunks up and down.
+		for dz in -1 ..= 2 {
+			for dx in -1 ..= 2 {
+				x, z := lo.x + f64(dx * game.CHUNK_SIZE), lo.z + f64(dz * game.CHUNK_SIZE)
+				render.debug_line(
+					dd,
+					{x, lo.y - 2 * game.CHUNK_SIZE, z},
+					{x, lo.y + 3 * game.CHUNK_SIZE, z},
+					render.BLUE,
+				)
+			}
+		}
+	}
+}

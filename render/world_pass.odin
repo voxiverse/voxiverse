@@ -124,7 +124,7 @@ world_init :: proc(
 			color_format = gpu.color_format(g),
 			vertex_stride = WORLD_VERTEX_SIZE,
 			attributes = attributes[:],
-			depth_test = true,
+			depth = .Test_Write,
 			cull_back = true,
 		},
 	)

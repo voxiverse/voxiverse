@@ -6,7 +6,6 @@ import "core:math"
 import "core:strconv"
 
 import "../base"
-import "../game"
 import "../server"
 
 // The M3 exit check, as a console command: `fly_test <blocks> [quit]` waits
@@ -80,13 +79,7 @@ fly_test_update :: proc(app: ^App) {
 			if t.waited > FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "never joined the world")}
 			return
 		}
-		r, h := i32(s.welcome.view_radius), i32(s.welcome.view_height)
-		loaded := s.world.chunks.count >= game.interest_count(r, h)
-		settled :=
-			len(s.world.to_mesh) == 0 &&
-			len(s.world.uploads) == 0 &&
-			s.world.stats.mesh_jobs_busy == 0
-		if !(loaded && settled) {
+		if !world_settled(app) {
 			if t.waited >
 			   FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the world did not finish loading")}
 			return

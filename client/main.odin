@@ -47,13 +47,14 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 
 	ok := app_init(app)
 	if ok {
-		app.scripted = true
-		for command in split_semicolons(opts.exec) {console_execute(app, command)}
-		app.scripted = false
+		script: Script
+		script_init(&script, opts.exec)
+		defer script_destroy(&script)
 		frames := 0
 		last := time.tick_now()
 		for opts.frames == 0 || frames < opts.frames {
 			free_all(context.temp_allocator)
+			script_run(app, &script)
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture) {break}
 			frames += 1
@@ -96,17 +97,4 @@ log_frame_stats :: proc(s: ^base.Frame_Stats) {
 		sum.p99,
 		sum.max,
 	)
-}
-
-@(private)
-split_semicolons :: proc(s: string) -> []string {
-	out := make([dynamic]string, context.temp_allocator)
-	start := 0
-	for i in 0 ..= len(s) {
-		if i == len(s) || s[i] == ';' {
-			append(&out, s[start:i])
-			start = i + 1
-		}
-	}
-	return out[:]
 }

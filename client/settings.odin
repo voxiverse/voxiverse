@@ -64,14 +64,18 @@ SETTINGS_VARS := [?]base.Var {
 
 // Debug switches: for development, never saved.
 Debug_Switches :: struct {
-	overlay: bool, // F3
+	overlay:       bool, // F3
+	chunk_borders: bool,
 }
 
 @(rodata)
 DEBUG_DEFAULTS := Debug_Switches{}
 
 @(rodata)
-DEBUG_VARS := [?]base.Var{{field = "overlay", help = "debug overlay (F3)"}}
+DEBUG_VARS := [?]base.Var {
+	{field = "overlay", help = "debug overlay (F3)"},
+	{field = "chunk_borders", help = "outline the camera's chunk and its neighbours' edges"},
+}
 
 settings_table :: proc() -> base.Var_Table {
 	return {"", Settings, SETTINGS_VARS[:], &SETTINGS_DEFAULTS}

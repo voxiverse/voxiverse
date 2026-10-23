@@ -45,6 +45,8 @@ App :: struct {
 	ui:               ui.Context,
 	ui_pass:          render.Ui_Pass,
 	world_pass:       render.World_Pass,
+	debug_pass:       render.Debug_Pass,
+	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	session:          ^Session, // nil outside a world
 	paused:           bool, // the pause menu is open (in a world)
 	debug:            Debug_Switches,
@@ -101,6 +103,11 @@ app_init :: proc(app: ^App) -> bool {
 	frag, frag_ok := read_shader("ui.frag.spv")
 	if !vert_ok || !frag_ok {return false}
 	if !render.ui_init(&app.ui_pass, g, vert, frag) {return false}
+	render.debug_draw_init(&app.debug_draw)
+	debug_vert, debug_vert_ok := read_shader("debug.vert.spv")
+	debug_frag, debug_frag_ok := read_shader("debug.frag.spv")
+	if !debug_vert_ok || !debug_frag_ok {return false}
+	if !render.debug_init(&app.debug_pass, g, debug_vert, debug_frag) {return false}
 	return world_pass_init(app)
 }
 
@@ -153,10 +160,12 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		screenshots_save(app) // the last frames' screenshots are done now
 		gpu.renderdoc_log_captures(&app.renderdoc)
 		render.world_destroy(&app.world_pass, &app.g)
+		render.debug_destroy(&app.debug_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
 	}
 	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
+	render.debug_draw_destroy(&app.debug_draw)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)
@@ -226,12 +235,18 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		render.world_upload(&app.world_pass, g, frame)
 		render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
 		in_world := app.session != nil && app.session.state == .Playing
+		camera: render.Camera
+		if in_world {
+			camera = camera_render(&app.session.camera, w.width, w.height, app.settings.fov)
+			world_debug_lines(app)
+		}
+		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
 		clear_color :=
 			[4]f32{SKY_COLOR.r, SKY_COLOR.g, SKY_COLOR.b, 1} if in_world else {0, 0, 0, 1}
 		gpu.begin_rendering(frame, clear_color)
 		if in_world {
-			camera := camera_render(&app.session.camera, w.width, w.height, app.settings.fov)
 			render.world_draw(&app.world_pass, g, frame, camera)
+			render.debug_draw(&app.debug_pass, g, frame, camera)
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)
 		gpu.end_rendering(frame)

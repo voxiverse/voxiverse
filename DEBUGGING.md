@@ -44,7 +44,7 @@ subsystem (`gpu`, `server`, `session`, ...) and put values in `key=value` form.
 | `build debug [--lldb]` | Debug build started in gdb (or lldb) with the Odin printers loaded |
 | `run -- --frames N` | Run N frames and exit; fails on any validation finding or leak (what CI does) |
 | `run -- --capture-frame N` | Under RenderDoc: capture frame N (see GPU captures) |
-| `run -- --exec "cmd; cmd"` | Run console commands at startup, e.g. `--exec "screen options"` to reproduce a state |
+| `run -- --exec "cmd; cmd"` | Run a script of console commands, e.g. `--exec "screen options"` to reproduce a state. Scripts can pause: `wait <frames>`, `wait_world` (until the world has loaded and meshed): `--exec "singleplayer; wait_world; screenshot world; wait 3; quit"` |
 | <kbd>F2</kbd> / `screenshot [name]` | Save the next frame as `build/screenshots/<name>.png` (CI uploads the folder: the world runs take one at the start and end of each flight) |
 | <kbd>F3</kbd> / `debug` | Overlay: position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time |
 
@@ -80,6 +80,13 @@ Settings are saved to `settings.cfg` in the user config directory (`~/.config/vo
 Linux), or to the path in `VX_SETTINGS` (empty: none). Changes made by `--exec` scripts are
 never saved, so test runs cannot change your settings. New variable: add the field to its
 struct, its default, and one line to the table; a test checks every table.
+
+## Debug drawing
+
+`render.debug_line` / `render.debug_box` draw world-space lines for one frame from anywhere on
+the main thread (hidden behind terrain, never hiding it); see `world_debug_lines` in
+`client/camera.odin`. `set debug.chunk_borders 1` outlines the camera's chunk and its
+neighbours' edges.
 
 ## World commands
 

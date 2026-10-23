@@ -26,10 +26,16 @@ Pipeline_Desc :: struct {
 	vertex_stride:  u32,
 	attributes:     []Vertex_Attribute, // locations 0, 1, ...
 	alpha_blend:    bool, // standard "over" blending
-	// Depth test and write with reverse Z (nearer = greater). Off: the
-	// pipeline ignores depth (UI).
-	depth_test:     bool,
+	depth:          Depth_Mode,
 	cull_back:      bool, // skip triangles wound clockwise on screen
+	lines:          bool, // line list instead of triangle list
+}
+
+// Depth_Mode: reverse Z (nearer = greater) when tested.
+Depth_Mode :: enum u8 {
+	Off, // ignores depth (UI)
+	Test_Write, // opaque geometry
+	Test, // overlays that hide behind geometry without occluding (debug lines)
 }
 
 create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool) {
@@ -81,7 +87,7 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 	}
 	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
 		sType    = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		topology = .TRIANGLE_LIST,
+		topology = .LINE_LIST if desc.lines else .TRIANGLE_LIST,
 	}
 	viewport := vk.PipelineViewportStateCreateInfo {
 		sType         = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -113,8 +119,8 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 	}
 	depth := vk.PipelineDepthStencilStateCreateInfo {
 		sType            = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		depthTestEnable  = b32(desc.depth_test),
-		depthWriteEnable = b32(desc.depth_test),
+		depthTestEnable  = b32(desc.depth != .Off),
+		depthWriteEnable = b32(desc.depth == .Test_Write),
 		depthCompareOp   = .GREATER,
 	}
 	blend := vk.PipelineColorBlendStateCreateInfo {
