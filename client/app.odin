@@ -9,6 +9,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+import "../audio"
 import "../base"
 import "../font"
 import "../game"
@@ -48,6 +49,10 @@ App :: struct {
 	scenes:           render.Scene_Buffers,
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
+	mixer:            audio.Mixer, // fed to the sound card by audio_device
+	audio_device:     audio.Device,
+	sounds:           Sound_Bank,
+	volume:           f32, // as last told to the mixer
 	shader_watch:     Shader_Watch,
 	worlds:           Worlds_Screen,
 	session:          ^Session, // nil outside a world
@@ -118,7 +123,19 @@ app_init :: proc(app: ^App) -> bool {
 	if !sky_vert_ok || !sky_frag_ok {return false}
 	if !render.sky_init(&app.sky_pass, g, sky_vert, sky_frag) {return false}
 	if !render.scene_init(&app.scenes, g) {return false}
+	audio_init(app)
 	return world_pass_init(app)
+}
+
+// audio_init makes the sounds and opens the sound card; without one the
+// game runs silent.
+@(private = "file")
+audio_init :: proc(app: ^App) {
+	audio.mixer_init(&app.mixer, audio.DEVICE_RATE)
+	sounds_init(&app.sounds, &app.mixer)
+	audio.set_volume(&app.mixer, app.settings.volume)
+	app.volume = app.settings.volume
+	audio.device_open(&app.audio_device, &app.mixer)
 }
 
 // world_pass_init sets up chunk rendering with the generated block textures.
@@ -170,6 +187,16 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		render.debug_destroy(&app.debug_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
 	}
+	a := audio.stats(&app.mixer)
+	log.infof(
+		"audio device=%v played=%d mixed_seconds=%.1f dropped=%d",
+		app.audio_device.open,
+		a.played,
+		f64(a.frames) / f64(max(app.mixer.rate, 1)),
+		app.mixer.dropped,
+	)
+	audio.device_close(&app.audio_device) // before the sounds it plays go
+	sounds_destroy(&app.sounds)
 	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
@@ -201,6 +228,10 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	scale := ui_scale(app)
 	input := ui_input(&app.input, scale)
 	handle_global_keys(app, &input)
+	if app.settings.volume != app.volume {
+		audio.set_volume(&app.mixer, app.settings.volume)
+		app.volume = app.settings.volume
+	}
 	if app.session != nil {
 		// The world keeps running behind menus (the server would anyway).
 		playing := !app.paused && !app.console.open && !app.tuning
@@ -219,6 +250,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			w.mouse_captured,
 		)
 		fly_test_update(app)
+		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)
+		clear(&app.session.sounds)
 		if app.session.state == .Failed {
 			app.message = fmt.aprintf("Disconnected: %s", app.session.failure)
 			leave_world(app)

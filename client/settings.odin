@@ -22,6 +22,7 @@ Settings :: struct {
 	view_radius:       i32, // chunks
 	view_height:       i32,
 	show_frame_times:  bool,
+	volume:            f32, // 0..1, all sound
 }
 
 @(rodata)
@@ -31,6 +32,7 @@ SETTINGS_DEFAULTS := Settings {
 	fov               = 70,
 	view_radius       = 12,
 	view_height       = 6,
+	volume            = 0.8,
 }
 
 @(rodata)
@@ -61,6 +63,7 @@ SETTINGS_VARS := [?]base.Var {
 		max = 16,
 	},
 	{field = "show_frame_times", help = "show frame times in the corner"},
+	{field = "volume", help = "sound volume", min = 0, max = 1, step = 0.05},
 }
 
 // Debug switches: for development, never saved.

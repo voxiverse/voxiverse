@@ -60,6 +60,8 @@ Session :: struct {
 	edits:       [dynamic]game.Edit, // predicted, waiting for Edit_Result
 	next_edit:   u32,
 	edit_timer:  f32, // seconds until a held button edits again
+	sounds:      [dynamic]Sound_Event, // this frame's; the App plays and clears them
+	walked:      f32, // blocks on the ground since the last footstep
 	hotbar:      int, // index into HOTBAR
 	writer:      game.Writer,
 	scratch:     ^game.Block_Array, // decoding target for chunk messages
@@ -104,6 +106,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	game.writer_init(&s.writer, arena)
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
+	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 
 	cores := os.get_processor_core_count()
 	if !server.start(
@@ -189,6 +192,7 @@ session_update :: proc(
 			s.toggle_fly = false
 		}
 		send_message(s, game.prediction_tick(&s.prediction, in_, &s.rules, query))
+		movement_sounds(s)
 	}
 	if look {edit_controls(s, input, dt)}
 	game.prediction_decay(&s.prediction, dt)
@@ -295,7 +299,11 @@ receive :: proc(s: ^Session) {
 				}
 			}
 		case game.Block_Changed:
-			world_set_block(&s.world, v.pos, v.block)
+			// Someone else's edit: heard where it happened.
+			old, _ := world_block(&s.world, v.pos)
+			if world_set_block(&s.world, v.pos, v.block) && old != v.block {
+				edit_sound(s, v.pos, old, v.block)
+			}
 		case game.Column:
 			if s.state != .Playing {
 				fail(s, "the server sent a column before welcoming us")
@@ -453,11 +461,73 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		if !loaded || !game.can_place_at(current, edit.pos, s.prediction.state) {return false}
 		edit.block = block
 	}
+	before, _ := world_block(&s.world, edit.pos)
 	if !world_set_block(&s.world, edit.pos, edit.block) {return false}
+	edit_sound(s, edit.pos, before, edit.block)
 	s.next_edit = edit.id
 	append(&s.edits, edit)
 	send_message(s, edit)
 	return true
+}
+
+// edit_sound: a block at pos went from old to new.
+@(private = "file")
+edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
+	centre := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5
+	if new == .Air {
+		append(&s.sounds, Sound_Event{.Break, old, centre, 1})
+	} else {
+		append(&s.sounds, Sound_Event{.Place, new, centre, 1})
+	}
+}
+
+// movement_sounds: footsteps every STRIDE blocks walked, a jump, a landing
+// (louder the harder), from the tick the prediction just ran. Flying is
+// silent.
+@(private = "file")
+movement_sounds :: proc(s: ^Session) {
+	was, now := s.prediction.previous, s.prediction.state
+	if now.flying || was.flying {
+		s.walked = 0
+		return
+	}
+	feet := now.position
+	if was.on_ground && !now.on_ground && now.velocity.y > 0 {
+		append(&s.sounds, Sound_Event{.Jump, .Air, feet, 1})
+	}
+	under, solid := block_under(s, feet)
+	if !was.on_ground && now.on_ground {
+		speed := -was.velocity.y
+		if speed >= LAND_MIN_SPEED && solid {
+			loud := clamp((speed - LAND_MIN_SPEED) / (LAND_LOUD_SPEED - LAND_MIN_SPEED), 0.25, 1)
+			append(&s.sounds, Sound_Event{.Land, under, feet, loud})
+		}
+		s.walked = 0
+	}
+	if now.on_ground {
+		d := now.position - was.position
+		s.walked += f32(math.sqrt(d.x * d.x + d.z * d.z))
+		if s.walked >= STRIDE {
+			s.walked -= STRIDE
+			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1})}
+		}
+	}
+}
+
+// block_under: the block the player stands on (under the middle of the
+// feet, else under a corner of them, at the edge of a drop).
+@(private = "file")
+block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
+	y := i32(math.floor(feet.y - 0.05))
+	h := f64(game.PLAYER_WIDTH) / 2
+	for o in ([?][2]f64{{0, 0}, {-h, -h}, {h, -h}, {-h, h}, {h, h}}) {
+		b, _ := world_block(
+			&s.world,
+			{i32(math.floor(feet.x + o.x)), y, i32(math.floor(feet.z + o.y))},
+		)
+		if game.block_solid(b) {return b, true}
+	}
+	return .Air, false
 }
 
 @(private)

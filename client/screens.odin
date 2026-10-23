@@ -3,7 +3,9 @@ package client
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "core:sync"
 
+import "../audio"
 import "../base"
 import "../game"
 import "../gpu"
@@ -236,6 +238,17 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 			),
 		)
 	}
+	a := audio.stats(&app.mixer)
+	append(
+		&lines,
+		fmt.tprintf(
+			"audio: %s, %d voices, %d sounds played, %d dropped",
+			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "no device (silent)",
+			a.voices,
+			a.played,
+			sync.atomic_load(&app.mixer.dropped),
+		),
+	)
 	t := &ctx.theme
 	r := ctx.screen
 	r = ui.cut_top(&r, f32(len(lines)) * t.row_height + 8)

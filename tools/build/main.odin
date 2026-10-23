@@ -22,6 +22,7 @@ import "core:strings"
 // package doesn't hide errors in the others.
 PACKAGES :: []string {
 	"base",
+	"audio",
 	"font",
 	"ui",
 	"game",
@@ -31,25 +32,30 @@ PACKAGES :: []string {
 	"render",
 	"client",
 	"client/mesh",
+	"client/sfx",
 	"tools/build",
 	"tools/netdump",
 	"tools/replay",
+	"tools/sfx",
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
 	"base",
+	"audio",
 	"font",
 	"ui",
 	"game",
 	"server",
 	"render",
 	"client/mesh",
+	"client/sfx",
 	"client",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"base",
+	"audio",
 	"font",
 	"ui",
 	"game",
@@ -82,6 +88,11 @@ main :: proc() {
 	}
 	ok: bool
 	switch args[0] {
+	case "check", "test", "build", "run", "debug":
+		// The game's packages link miniaudio; even type-checking wants it.
+		if !ensure_miniaudio() {os.exit(1)}
+	}
+	switch args[0] {
 	case "check":
 		ok = check()
 	case "test":
@@ -96,7 +107,7 @@ main :: proc() {
 		ok = run_game(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay":
+	case "netdump", "replay", "sfx":
 		ok = run_tool(args[0], args[1:])
 	case "help", "-h", "--help":
 		usage()
@@ -116,6 +127,7 @@ usage :: proc() {
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
+	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
 	fmt.println(
 		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
 	)
@@ -388,7 +400,7 @@ run :: proc(cmd: []string) -> bool {
 	return werr == nil && state.exited && state.exit_code == 0
 }
 
-// run_tool builds and runs tools/<name> with args (netdump, replay).
+// run_tool builds and runs tools/<name> with args (netdump, replay, sfx).
 run_tool :: proc(name: string, args: []string) -> bool {
 	exe := path_join({"build", strings.concatenate({name, exe_suffix()})})
 	cmd := slice.concatenate(

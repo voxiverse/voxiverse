@@ -204,7 +204,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M3.5 | Developer tools: thread-tagged key=value logger; settings/rules/debug variables with descriptor tables, settings file, tuning panel; debug drawing; screenshots (uploaded by CI); shader hot reload; crash handler; network trace + `netdump`, network condition simulator, F3 net stats, replay of recorded client messages | Each tool used in a test or CI run (done; loss/duplication/reordering simulation moved to M7 with the UDP reliability layer) |
 | M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation, block and sky light | Same results with artificial latency injected into the transport: `server/latency_test.odin` (done) |
 | M5 | Persistence: region files, save/load/quit, saving modified chunks when the server unloads them | Save → quit → load round-trips exactly: `server/save_test.odin` (done) |
-| M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | — |
+| M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | The sky at sunrise, day, dusk and night rendered in CI under validation; mixer and every sound tested offline; the time of day survives save and load (done) |
 | M7 | Remote multiplayer: UDP transport with its reliability layer, simulated loss/duplication/reordering, Wireshark dissector, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines; transfers survive 10% loss |
 | M8 | Entities: one mob, server AI, replication by handle with interest management | — |
 

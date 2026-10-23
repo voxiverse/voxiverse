@@ -93,12 +93,22 @@ the world and sky shaders (the per-frame scene, sky colours, clouds); saving it 
 
 ## Saves
 
-A world is a directory: `world.cfg` (text: format, seed, player, rules) and `regions/` with
+A world is a directory: `world.cfg` (text: format, seed, time, player, rules) and `regions/` with
 the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates from
 the seed). Files are replaced through a temporary file, so a crash mid-save keeps the previous
 save; a region file that fails its checksum is moved aside (`.damaged-<time>`) with an error,
 never loaded. `server/save_test.odin` covers save, quit and load, edits surviving unloading,
 and damaged files.
+
+## Sound
+
+Every sound effect is synthesized at startup (`client/sfx`: no recordings) and mixed by our
+own mixer (`audio/`); miniaudio only opens the sound card. `build sfx` writes them all to
+`build/sounds/*.wav` to listen to outside the game. F3 shows the device, voices playing,
+sounds played and dropped; the log's last `audio` line sums up the run. Without a sound card
+(CI, a headless box) the game logs a warning and runs silent. `set volume 0..1` is the
+player's volume. On Linux and macOS the build compiles Odin's miniaudio library once (into the
+Odin install; Windows ships it), which needs a C compiler.
 
 ## Debug drawing
 
