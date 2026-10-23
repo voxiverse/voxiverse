@@ -16,12 +16,16 @@ Client_State :: enum u8 {
 }
 
 Client :: struct {
-	state:    Client_State,
-	position: [3]f64,
-	center:   game.Chunk_Pos, // the chunk the client is in
-	moved:    bool, // center changed since the last unload pass
-	has:      map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
-	cursor:   int, // offsets before this are all sent
+	state:      Client_State,
+	position:   [3]f64,
+	center:     game.Chunk_Pos, // the chunk the client is in
+	moved:      bool, // center changed since the last unload pass
+	has:        map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	cursor:     int, // offsets before this are all sent
+	player:     game.Player_State,
+	inputs:     game.Input_Queue,
+	teleported: bool, // since the last Player_Update
+	teleport:   [2]f32, // yaw, pitch to look after it
 }
 
 @(private)

@@ -22,10 +22,12 @@ import "../game"
 //	ok := server.stop(&srv) // false if it stopped on an error
 
 Config :: struct {
-	seed:        i64,
-	view_radius: i32, // chunks, horizontally
-	view_height: i32, // chunks above and below
-	workers:     int,
+	seed:         i64,
+	view_radius:  i32, // chunks, horizontally
+	view_height:  i32, // chunks above and below
+	workers:      int,
+	allow_cheats: bool, // honour Teleport and Set_Rule (singleplayer)
+	rules:        game.Rules, // zero: the defaults
 }
 
 // Stats is a snapshot, published at the end of every tick.
@@ -52,6 +54,7 @@ Server :: struct {
 	stats_mutex: sync.Mutex,
 	stats:       Stats,
 	log_tag:     base.Log_Tag,
+	rules:       game.Rules, // server thread only
 	// Server thread only, after start:
 	arena:       virtual.Arena,
 	world:       World,
@@ -75,6 +78,7 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 	s^ = {
 		config   = config,
 		endpoint = endpoint,
+		rules    = config.rules if config.rules != {} else game.RULES_DEFAULTS,
 	}
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
 		log.errorf("server cannot reserve its memory: %v", err)
@@ -178,6 +182,7 @@ tick :: proc(s: ^Server) {
 		}, s)
 	receive_messages(s)
 	if s.client.state == .Playing {
+		simulate_player(s)
 		if s.client.moved {
 			s.client.moved = false
 			unload_far(s)
@@ -210,6 +215,9 @@ receive_messages :: proc(s: ^Server) {
 			}
 			s.client.state = .Playing
 			spawn := spawn_point(s.config.seed)
+			s.client.player = {
+				position = spawn,
+			}
 			set_position(&s.client, spawn)
 			send_message(
 				s,
@@ -219,19 +227,73 @@ receive_messages :: proc(s: ^Server) {
 					spawn = spawn,
 					view_radius = u32(s.config.view_radius),
 					view_height = u32(s.config.view_height),
+					rules = s.rules,
 				},
 			)
 			log.infof("server player joined name=%q", v.name)
-		case game.Move:
+		case game.Input:
 			if s.client.state != .Playing {
-				disconnect(s, "move before hello")
+				disconnect(s, "input before hello")
 				return
 			}
-			set_position(&s.client, v.position)
+			game.input_queue_push(&s.client.inputs, v)
+		case game.Teleport:
+			if !s.config.allow_cheats || s.client.state != .Playing {
+				disconnect(s, "cheats are not allowed")
+				return
+			}
+			s.client.player = {
+				position = v.position,
+			}
+			s.client.teleport = {v.yaw, v.pitch}
+			s.client.teleported = true
+		case game.Set_Rule:
+			if !s.config.allow_cheats {
+				disconnect(s, "cheats are not allowed")
+				return
+			}
+			switch err := base.var_set(game.rules_table(), &s.rules, v.name, v.value); err {
+			case .None, .Out_Of_Range:
+				if err ==
+				   .Out_Of_Range {log.warnf("server rule clamped name=%q value=%q", v.name, v.value)}
+				log.infof("server rule changed name=%s value=%s", v.name, v.value)
+				send_message(s, game.Rules_Changed{s.rules})
+			case .Unknown_Name, .Bad_Value:
+				log.warnf(
+					"server rule not changed name=%q value=%q problem=%v",
+					v.name,
+					v.value,
+					err,
+				)
+			}
 		case game.Ping:
 			send_message(s, game.Pong{v.id})
 		}
 	}
+}
+
+// simulate_player applies this tick's inputs and tells the client where
+// its player is.
+@(private = "file")
+simulate_player :: proc(s: ^Server) {
+	c := &s.client
+	buf: [game.INPUT_BUDGET_MAX]game.Input
+	query := game.Block_Query{&s.world, world_block}
+	for msg in game.input_queue_tick(&c.inputs, &buf) {
+		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+	}
+	set_position(c, c.player.position)
+	send_message(
+		s,
+		game.Player_Update {
+			acked = c.inputs.last,
+			state = c.player,
+			teleported = c.teleported,
+			yaw = c.teleport[0],
+			pitch = c.teleport[1],
+		},
+	)
+	c.teleported = false
 }
 
 // disconnect rejects the client and closes the connection (a protocol

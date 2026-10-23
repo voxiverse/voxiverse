@@ -53,14 +53,15 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 
 ## Running
 
-`build run` opens the title screen; Singleplayer generates a world and flies you into it.
+`build run` opens the title screen; Singleplayer generates a world and puts you in it.
 
 | Key | |
 |---|---|
 | Mouse | Look |
-| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Fly |
-| <kbd>Space</kbd> / <kbd>Shift</kbd> | Up / down |
-| <kbd>Ctrl</kbd> | Fly fast |
+| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Walk |
+| <kbd>Space</kbd> | Jump; double-tap to fly or stop flying (flying: up) |
+| <kbd>Shift</kbd> | Sneak (flying: down) |
+| <kbd>Ctrl</kbd> | Sprint |
 | <kbd>Esc</kbd> | Pause menu (Resume, Leave World) |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |
 | <kbd>F4</kbd> | Tuning panel: every setting and debug switch, live |

@@ -89,6 +89,14 @@ world_destroy :: proc(w: ^World) {
 	w^ = {}
 }
 
+// world_block reads one block for physics (game.Block_Query); not loaded
+// while the chunk is missing or still generating.
+world_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+	c := world_get((^World)(data), game.chunk_of(p))
+	if c == nil || c.state != .Ready {return .Air, false}
+	return game.chunk_get(&c.blocks, game.local_of(p)), true
+}
+
 world_get :: proc(w: ^World, pos: game.Chunk_Pos) -> ^Chunk {
 	h, ok := w.by_pos[pos]
 	if !ok {return nil}

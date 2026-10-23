@@ -8,18 +8,20 @@ import "core:time"
 // prints and summarises, replay feeds the client's messages to a fresh
 // server), so a trace never disagrees with what the game did.
 //
-// File: "VXNT", u32 trace version, the header fields, then records:
+// File: "VXNT", u32 trace version, the header fields (u8 for the bool),
+// then records:
 // u64 nanoseconds since the session started, u8 sender (0 client, 1
 // server), u32 length, the message bytes. Little-endian.
 
 TRACE_MAGIC :: "VXNT"
-TRACE_VERSION :: 1
+TRACE_VERSION :: 2
 
 Trace_Header :: struct {
-	protocol:    u32,
-	seed:        i64,
-	view_radius: u32,
-	view_height: u32,
+	protocol:     u32,
+	seed:         i64,
+	view_radius:  u32,
+	view_height:  u32,
+	allow_cheats: bool, // the server honoured Teleport and Set_Rule
 }
 
 Trace_Record :: struct {
@@ -46,6 +48,7 @@ trace_open :: proc(t: ^Trace_Writer, path: string, h: Trace_Header) -> bool {
 	write_u32(w, u32(h.seed >> 32))
 	write_u32(w, h.view_radius)
 	write_u32(w, h.view_height)
+	write_u8(w, 1 if h.allow_cheats else 0)
 	os.write(f, w.buf[:])
 	return true
 }
@@ -89,6 +92,7 @@ trace_read :: proc(
 	header.seed = i64(lo | hi << 32)
 	header.view_radius = read_u32(&r)
 	header.view_height = read_u32(&r)
+	header.allow_cheats = read_u8(&r) == 1
 	if !r.ok {return}
 	for r.pos < len(r.data) {
 		lo, hi = u64(read_u32(&r)), u64(read_u32(&r))

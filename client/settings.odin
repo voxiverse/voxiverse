@@ -6,6 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 
 import "../base"
+import "../game"
 
 // The player's settings (saved) and the debug switches (not saved), each a
 // plain struct described once by a variable table (see base/vars.odin and
@@ -127,9 +128,16 @@ Variables :: struct {
 	data:  rawptr,
 }
 
-// app_variables lists every table the console can reach.
-app_variables :: proc(app: ^App) -> [2]Variables {
-	return {{settings_table(), &app.settings}, {debug_table(), &app.debug}}
+// app_variables lists every table the console can reach: settings, debug
+// switches, and in a world the server's rules (a copy: changing them goes
+// through session_set_rule).
+app_variables :: proc(app: ^App) -> []Variables {
+	out := make([dynamic]Variables, context.temp_allocator)
+	append(&out, Variables{settings_table(), &app.settings}, Variables{debug_table(), &app.debug})
+	if app.session != nil && app.session.state == .Playing {
+		append(&out, Variables{game.rules_table(), &app.session.rules})
+	}
+	return out[:]
 }
 
 // settings_path: VX_SETTINGS, else voxiverse/settings.cfg in the user's

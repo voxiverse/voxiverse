@@ -6,6 +6,7 @@ import "core:math"
 import "core:strconv"
 
 import "../base"
+import "../game"
 import "../server"
 
 // The M3 exit check, as a console command: `fly_test <blocks> [quit]` waits
@@ -21,6 +22,7 @@ import "../server"
 Fly_Test_Phase :: enum u8 {
 	Off,
 	Loading,
+	Lifting, // teleport and rule change requested, waiting for the server
 	Flying,
 }
 
@@ -37,7 +39,8 @@ Fly_Test :: struct {
 	failed:       bool,
 }
 
-FLY_TEST_SPEED :: 40 // blocks per second (a sprint in most games)
+FLY_TEST_SPEED :: 40 // blocks per second (rules.fly_sprint_speed during the test)
+FLY_TEST_HEIGHT :: 100 // above the highest terrain
 FLY_TEST_LOAD_TIMEOUT :: 60 // seconds
 
 @(private)
@@ -84,29 +87,47 @@ fly_test_update :: proc(app: ^App) {
 			   FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the world did not finish loading")}
 			return
 		}
-		// Above the spawn's hills, facing +x.
-		s.camera.position.y += 20
-		s.camera.yaw, s.camera.pitch = -math.PI / 2, -0.4
-		t.start = s.camera.position
+		// Like a player would: up above the hills (a cheat; singleplayer
+		// allows it), faster flight, then fly towards +x holding sprint.
+		p := s.prediction.state.position
+		session_teleport(s, {{p.x, FLY_TEST_HEIGHT, p.z}, -math.PI / 2, -0.4})
+		session_set_rule(s, "rules.fly_sprint_speed", fmt.tprint(FLY_TEST_SPEED))
+		t.phase = .Lifting
+		log.infof("fly_test loaded seconds=%.1f chunks=%d", t.waited, s.world.chunks.count)
+	case .Lifting:
+		t.waited += dt
+		if s.prediction.state.position.y < FLY_TEST_HEIGHT - 1 ||
+		   s.rules.fly_sprint_speed != FLY_TEST_SPEED {
+			if t.waited >
+			   FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the teleport or rule change never arrived")}
+			return
+		}
+		s.toggle_fly = true
+		s.autopilot = game.Player_Input {
+			move    = {0, 1},
+			yaw     = -math.PI / 2,
+			pitch   = -0.4,
+			buttons = {.Sprint},
+		}
+		t.start = s.prediction.state.position
 		t.client_arena = s.arena.total_used
 		t.server_arena = server.stats(&s.server).arena_used
 		t.rss_start = base.resident_memory()
 		t.phase = .Flying
 		screenshot_request(app, "fly_test_start")
-		log.infof(
-			"fly_test loaded seconds=%.1f chunks=%d speed=%d",
-			t.waited,
-			s.world.chunks.count,
-			FLY_TEST_SPEED,
-		)
+		log.infof("fly_test flying speed=%d", FLY_TEST_SPEED)
 	case .Flying:
 		if s.state != .Playing {
 			fly_test_finish(app, "left the world mid-flight")
 			return
 		}
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
-		s.camera.position.x += f64(min(dt, 0.1)) * FLY_TEST_SPEED // a hitch must not skip terrain
-		if s.camera.position.x - t.start.x >= t.distance {fly_test_finish(app, "")}
+		p := s.prediction.state
+		if !p.flying && p.position.x - t.start.x > 2 {
+			fly_test_finish(app, "stopped flying (landed?)")
+			return
+		}
+		if p.position.x - t.start.x >= t.distance {fly_test_finish(app, "")}
 	}
 }
 
@@ -148,7 +169,7 @@ fly_test_finish :: proc(app: ^App, error: string) {
 		sum := base.frame_stats_summary(&t.frames)
 		log.infof(
 			"fly_test flew blocks=%.0f frames=%d avg_ms=%.2f p50=%.2f p99=%.2f max=%.2f",
-			s.camera.position.x - t.start.x,
+			s.prediction.state.position.x - t.start.x,
 			sum.count,
 			sum.avg,
 			sum.p50,
@@ -175,9 +196,17 @@ fly_test_finish :: proc(app: ^App, error: string) {
 		}
 	}
 	for f in failures {log.errorf("fly_test %s", f)}
+	if s != nil {
+		log.infof(
+			"fly_test prediction corrections=%d pending_inputs=%d",
+			s.prediction.corrections,
+			s.prediction.count,
+		)
+	}
 	if len(failures) == 0 {log.info("fly_test passed")}
 	if s != nil {screenshot_request(app, "fly_test_end")} 	// saved at exit too
 	t.failed = len(failures) > 0
 	t.phase = .Off
+	if s != nil {s.autopilot = nil}
 	if t.quit {app.quit = true}
 }

@@ -191,6 +191,20 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 			),
 		)
 		append(&lines, net_line(s))
+		pr := &s.prediction
+		append(
+			&lines,
+			fmt.tprintf(
+				"player: %s%s, inputs in flight %d, corrections %d (now %.2f blocks off)",
+				"flying" if pr.state.flying else "walking",
+				", on ground" if pr.state.on_ground else "",
+				pr.count,
+				pr.corrections,
+				math.sqrt(
+					pr.error.x * pr.error.x + pr.error.y * pr.error.y + pr.error.z * pr.error.z,
+				),
+			),
+		)
 	}
 	t := &ctx.theme
 	r := ctx.screen
@@ -289,7 +303,24 @@ tuning_panel :: proc(app: ^App, ctx: ^ui.Context) {
 			.Left,
 			t.text_muted,
 		)
-		if var_widgets(ctx, v.table, v.data) && v.data == &app.settings {settings_changed(app)}
+		if v.table.type == game.Rules {
+			// The server's: edit a copy, ask for each change.
+			edited := app.session.rules
+			if var_widgets(ctx, v.table, &edited) {
+				for &var in v.table.vars {
+					if base.var_get_f64(v.table, &edited, &var) !=
+					   base.var_get_f64(v.table, v.data, &var) {
+						session_set_rule(
+							app.session,
+							base.var_name(v.table, &var),
+							base.var_format(v.table, &edited, &var),
+						)
+					}
+				}
+			}
+		} else if var_widgets(ctx, v.table, v.data) && v.data == &app.settings {
+			settings_changed(app)
+		}
 	}
 }
 

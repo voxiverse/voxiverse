@@ -20,7 +20,7 @@ import "../../game"
 Options :: struct {
 	file:    string `args:"pos=0" usage:"trace file (default build/net.trace)"`,
 	summary: bool `usage:"counts and bytes per message kind instead of messages"`,
-	kind:    string `usage:"only this kind (hello, move, ping, welcome, reject, chunk, unload, pong)"`,
+	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, welcome, reject, chunk, unload, pong, player, rules)"`,
 	sender:  string `usage:"only messages from client or server"`,
 	from:    f64 `usage:"only from this many seconds into the session"`,
 	to:      f64 `usage:"only up to this many seconds into the session"`,
@@ -118,14 +118,27 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 		switch v in m {
 		case game.Hello:
 			return fmt.tprintf("hello protocol=%d name=%q", v.protocol, v.name), true
-		case game.Move:
-			return fmt.tprintf(
-					"move position=[%.2f, %.2f, %.2f]",
-					v.position.x,
-					v.position.y,
-					v.position.z,
-				),
-				true
+		case game.Input:
+			text := fmt.tprintf(
+				"input seq=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
+				v.sequence,
+				v.input.move.x,
+				v.input.move.y,
+				v.input.yaw,
+				v.input.pitch,
+				v.input.buttons,
+			)
+			return text, true
+		case game.Teleport:
+			text := fmt.tprintf(
+				"teleport position=[%.2f, %.2f, %.2f]",
+				v.position.x,
+				v.position.y,
+				v.position.z,
+			)
+			return text, true
+		case game.Set_Rule:
+			return fmt.tprintf("set_rule name=%s value=%s", v.name, v.value), true
 		case game.Ping:
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
@@ -160,6 +173,21 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("unload pos=%v", v.pos), true
 		case game.Pong:
 			return fmt.tprintf("pong id=%d", v.id), true
+		case game.Player_Update:
+			p := v.state.position
+			text := fmt.tprintf(
+				"player acked=%d position=[%.3f, %.3f, %.3f] on_ground=%v flying=%v%s",
+				v.acked,
+				p.x,
+				p.y,
+				p.z,
+				v.state.on_ground,
+				v.state.flying,
+				" teleported" if v.teleported else "",
+			)
+			return text, true
+		case game.Rules_Changed:
+			return "rules", true
 		}
 	}
 	return "", true

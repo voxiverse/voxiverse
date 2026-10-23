@@ -15,9 +15,11 @@ import "../server"
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the in-process server, the connection, the client's
-// world copy and the camera; everything it allocates long-term is in its
-// arena, freed at once by session_end. The client talks to the server only
-// through messages, as it will over the network.
+// world copy and the predicted player; everything it allocates long-term is
+// in its arena, freed at once by session_end. The client talks to the
+// server only through messages, as it will over the network: it sends
+// inputs, predicts their effect (game/prediction.odin), and the server's
+// Player_Updates have the last word.
 
 Session_Config :: struct {
 	seed:        i64,
@@ -42,13 +44,17 @@ Session :: struct {
 	welcome:    game.Welcome,
 	world:      World, // set up from Welcome
 	world_init: bool,
-	camera:     Fly_Camera,
-	teleport:   Maybe(Fly_Camera), // requested before joining: applied on Welcome
+	camera:     View, // the eyes, from the prediction; looking turns it every frame
+	teleport:   Maybe(game.Teleport), // requested before joining: sent on Welcome
+	prediction: game.Prediction,
+	rules:      game.Rules, // the server's, as last announced
+	tick_time:  f32, // seconds into the current client tick
+	toggle_fly: bool, // a double-tapped jump waits for the next tick
+	last_jump:  time.Tick, // for double-tap detection
+	autopilot:  Maybe(game.Player_Input), // overrides the controls (fly_test)
 	writer:     game.Writer,
 	scratch:    ^game.Block_Array, // decoding target for chunk messages
 	received:   [dynamic]game.Packet,
-	sent_at:    f32, // seconds since the last Move
-	last_sent:  [3]f64,
 	stats:      Session_Stats,
 	config:     Session_Config,
 	net:        Net_Stats,
@@ -91,14 +97,15 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 
 	cores := os.get_processor_core_count()
 	if !server.start(
-		&s.server,
-		{
-			seed = config.seed,
-			view_radius = config.view_radius,
-			view_height = config.view_height,
-			workers = max(1, cores / 4),
-		},
-		{&s.pipe, .Server},
+	&s.server,
+	{
+		seed         = config.seed,
+		view_radius  = config.view_radius,
+		view_height  = config.view_height,
+		workers      = max(1, cores / 4),
+		allow_cheats = true, // our own world
+	},
+	{&s.pipe, .Server},
 	) {
 		fail(s, "the server did not start")
 		return false
@@ -132,8 +139,9 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	return ok
 }
 
-// session_update handles messages, moves the camera (when look is true:
-// the mouse is captured) and starts meshing. Every frame, drawn or not.
+// session_update handles messages, turns the view (when look is true: the
+// mouse is captured), runs the client's ticks (inputs: sent and predicted)
+// and starts meshing. Every frame, drawn or not.
 session_update :: proc(
 	s: ^Session,
 	input: ^Input_State,
@@ -147,13 +155,31 @@ session_update :: proc(
 	net_update(s, dt)
 	receive(s)
 	if s.state != .Playing {return}
-	if look {camera_update(&s.camera, input, settings, dt)}
-	s.sent_at += dt
-	if s.sent_at >= 1.0 / game.TICK_RATE && s.camera.position != s.last_sent {
-		send_message(s, game.Move{s.camera.position})
-		s.last_sent = s.camera.position
-		s.sent_at = 0
+	if look {
+		look_update(&s.camera, input, settings)
+		if .Space in input.pressed {
+			if time.duration_seconds(time.tick_since(s.last_jump)) <
+			   DOUBLE_TAP_SECONDS {s.toggle_fly = true}
+			s.last_jump = time.tick_now()
+		}
 	}
+	// Fixed ticks, like the server's; a long hitch is not caught up on.
+	s.tick_time += dt
+	if s.tick_time > 4 * game.TICK_SECONDS {s.tick_time = game.TICK_SECONDS}
+	query := game.Block_Query{&s.world, world_block}
+	for s.tick_time >= game.TICK_SECONDS {
+		s.tick_time -= game.TICK_SECONDS
+		in_ :=
+			s.autopilot.? or_else (player_input(input, s.camera) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
+		if s.toggle_fly {
+			in_.buttons += {.Toggle_Fly}
+			s.toggle_fly = false
+		}
+		send_message(s, game.prediction_tick(&s.prediction, in_, &s.rules, query))
+	}
+	game.prediction_decay(&s.prediction, dt)
+	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
+	s.camera.position = eyes + {0, game.PLAYER_EYE, 0}
 	world_update(&s.world, camera_chunk(&s.camera))
 }
 
@@ -163,13 +189,19 @@ session_apply :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 	if s.world_init {world_apply(&s.world, pass, g)}
 }
 
-// session_teleport moves the camera (now, or on joining).
-session_teleport :: proc(s: ^Session, camera: Fly_Camera) {
+// session_teleport asks the server to move the player (feet at position;
+// now, or as soon as we have joined).
+session_teleport :: proc(s: ^Session, t: game.Teleport) {
 	if s.state == .Playing {
-		s.camera = camera
+		send_message(s, t)
 	} else {
-		s.teleport = camera
+		s.teleport = t
 	}
+}
+
+// session_set_rule asks the server to change a rule (rules.* name).
+session_set_rule :: proc(s: ^Session, name, value: string) {
+	send_message(s, game.Set_Rule{name, value})
 }
 
 @(private = "file")
@@ -217,6 +249,15 @@ receive :: proc(s: ^Session) {
 			}
 			world_remove_chunk(&s.world, v.pos)
 			s.stats.unloads += 1
+		case game.Player_Update:
+			if s.state != .Playing {
+				fail(s, "the server sent a player update before welcoming us")
+				return
+			}
+			game.prediction_reconcile(&s.prediction, v, &s.rules, {&s.world, world_block})
+			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
+		case game.Rules_Changed:
+			s.rules = v.rules
 		}
 	}
 }
@@ -244,9 +285,13 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		return
 	}
 	s.world_init = true
-	s.camera = s.teleport.? or_else {position = w.spawn}
-	s.last_sent = w.spawn
+	s.rules = w.rules
+	game.prediction_init(&s.prediction, {position = w.spawn})
+	s.camera = {
+		position = w.spawn + {0, game.PLAYER_EYE, 0},
+	}
 	s.state = .Playing
+	if t, ok := s.teleport.?; ok {send_message(s, t)}
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
 }
 
@@ -255,10 +300,11 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 session_trace :: proc(s: ^Session) -> bool {
 	path := path_next_to_exe("net.trace")
 	header := game.Trace_Header {
-		protocol    = game.PROTOCOL_VERSION,
-		seed        = s.config.seed,
-		view_radius = u32(s.config.view_radius),
-		view_height = u32(s.config.view_height),
+		protocol     = game.PROTOCOL_VERSION,
+		seed         = s.config.seed,
+		view_radius  = u32(s.config.view_radius),
+		view_height  = u32(s.config.view_height),
+		allow_cheats = true, // as session_start configures it
 	}
 	if !game.pipe_trace_start(&s.pipe, path, header) {
 		log.errorf("net trace cannot write path=%s", path)
@@ -308,7 +354,7 @@ fail :: proc(s: ^Session, reason: string) {
 	game.close(s.endpoint)
 }
 
-@(private = "file")
+@(private)
 send_message :: proc(s: ^Session, m: game.Client_Message) {
 	clear(&s.writer.buf)
 	game.encode_client(&s.writer, m)

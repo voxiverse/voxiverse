@@ -68,7 +68,7 @@ test_trace_round_trip :: proc(t: ^testing.T) {
 	path := "build/test/trace_test.trace"
 	os.make_directory_all("build/test")
 	defer os.remove(path)
-	header := Trace_Header{PROTOCOL_VERSION, -1234567890123, 12, 6}
+	header := Trace_Header{PROTOCOL_VERSION, -1234567890123, 12, 6, true}
 
 	pipe: Pipe
 	pipe_init(&pipe)

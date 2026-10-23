@@ -10,6 +10,7 @@ import "core:strings"
 import "core:sync"
 
 import "../base"
+import "../game"
 import "../ui"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -216,7 +217,7 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"tp",
-			"tp <x> <y> <z> [yaw pitch]: move the camera (angles in degrees)",
+			"tp <x> <y> <z> [yaw pitch]: move the player (feet; angles in degrees)",
 			proc(app: ^App, args: []string) {
 				if app.session == nil {
 					console_print(&app.console, "tp: not in a world", .Warning)
@@ -234,14 +235,20 @@ register_builtin_commands :: proc(c: ^Console) {
 						return
 					}
 				}
-				cam := Fly_Camera {
+				t := game.Teleport {
 					position = {values[0], values[1], values[2]},
 				}
 				if len(args) == 5 {
-					cam.yaw = f32(values[3]) * math.RAD_PER_DEG
-					cam.pitch = f32(values[4]) * math.RAD_PER_DEG
+					t.yaw = f32(values[3]) * math.RAD_PER_DEG
+					t.pitch = clamp(
+						f32(values[4]) * math.RAD_PER_DEG,
+						-game.PITCH_LIMIT,
+						game.PITCH_LIMIT,
+					)
+				} else {
+					t.yaw, t.pitch = app.session.camera.yaw, app.session.camera.pitch
 				}
-				session_teleport(app.session, cam)
+				session_teleport(app.session, t)
 			},
 		},
 	)
@@ -261,6 +268,27 @@ register_builtin_commands :: proc(c: ^Console) {
 			proc(app: ^App, args: []string) {
 				if len(args) != 2 {
 					console_print(&app.console, "set <name> <value>", .Warning)
+					return
+				}
+				if strings.has_prefix(args[0], "rules.") {
+					// The server's: ask it (it announces the result).
+					if app.session == nil {
+						console_print(
+							&app.console,
+							"set: rules belong to a world's server; enter one first",
+							.Warning,
+						)
+						return
+					}
+					if _, ok := base.var_find(game.rules_table(), args[0]); !ok {
+						console_print(
+							&app.console,
+							fmt.tprintf("set: no rule '%s' (try: vars rules)", args[0]),
+							.Warning,
+						)
+						return
+					}
+					session_set_rule(app.session, args[0], args[1])
 					return
 				}
 				for v in app_variables(app) {

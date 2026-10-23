@@ -102,7 +102,8 @@ neighbours' edges.
 |---|---|
 | `singleplayer` / `leave` | Enter / leave a world |
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
-| `tp <x> <y> <z> [yaw pitch]` | Move the camera (also before the world has loaded: applied on joining) |
+| `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
+| `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
 
 `--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
@@ -115,6 +116,7 @@ disagree.
 
 | | |
 |---|---|
+| F3 `player:` line | Walking or flying, inputs not yet acknowledged by the server, prediction corrections so far and the visual offset still fading. Corrections should stay near 0: each means client and server disagreed |
 | F3 `net:` line | Round trip (a ping a second; includes the server's tick wait), bytes per second each way, the most frequent message kind |
 | `set debug.net_latency_ms 150`, `net_jitter_ms`, `net_bandwidth_kbps` | Simulate a slower connection, live. The stream stays reliable and in order, as the protocol requires; packet loss, duplication and reordering arrive with the UDP transport (M7), whose reliability layer they test. |
 | `set debug.net_trace 1` (next world) / `net_trace` (now) | Record every message both ways to `build/net.trace` |

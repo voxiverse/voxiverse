@@ -1,6 +1,7 @@
 package server
 
 import "core:log"
+import "core:math"
 import "core:testing"
 import "core:time"
 
@@ -20,6 +21,8 @@ Fake_Client :: struct {
 	scratch:  ^game.Block_Array,
 	chunks:   int, // chunk messages received
 	unloads:  int,
+	player:   game.Player_Update, // the latest
+	rules:    game.Rules,
 }
 
 @(private = "file")
@@ -47,6 +50,10 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			testing.expectf(t, v.pos not_in c.has, "chunk %v sent twice", v.pos)
 			c.has[v.pos] = {}
 			c.chunks += 1
+		case game.Player_Update:
+			c.player = v
+		case game.Rules_Changed:
+			c.rules = v.rules
 		case game.Pong:
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
@@ -84,7 +91,13 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 		t,
 		start(
 			&srv,
-			{seed = 5, view_radius = RADIUS, view_height = HEIGHT, workers = 2},
+			{
+				seed = 5,
+				view_radius = RADIUS,
+				view_height = HEIGHT,
+				workers = 2,
+				allow_cheats = true,
+			},
 			{&pipe, .Server},
 		),
 	)
@@ -115,7 +128,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	STEP :: 2 * game.CHUNK_SIZE
 	for step in 1 ..= 1500 / STEP {
 		pos.x += STEP
-		fake_send(&c, game.Move{pos})
+		fake_send(&c, game.Teleport{pos, 0, 0})
 		center := game.chunk_of({i32(pos.x), i32(pos.y), i32(pos.z)})
 		@(static) step_center: game.Chunk_Pos
 		step_center = center
@@ -180,7 +193,8 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 			first = game.Hello{game.PROTOCOL_VERSION + 1, "old"},
 			reason = "protocol version mismatch",
 		},
-		{first = game.Move{}, reason = "move before hello"},
+		{first = game.Input{}, reason = "input before hello"},
+		{first = game.Teleport{}, reason = "cheats are not allowed"},
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
@@ -215,4 +229,63 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		delete(c.has)
 		game.pipe_destroy(&pipe)
 	}
+}
+
+// The server moves the player from inputs, at most one per tick however
+// fast they arrive, and acknowledges them.
+@(test)
+test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	testing.expect(
+		t,
+		start(&srv, {seed = 5, view_radius = 2, view_height = 2, workers = 2}, {&pipe, .Server}),
+	)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	// Joined, and standing on the ground once its chunks exist.
+	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
+	for i in 1 ..= 60 { 	// a second of standing still lets it fall and land
+		fake_send(&c, game.Input{u32(i), {}})
+		time.sleep(game.TICK_DURATION)
+		fake_receive(t, &c)
+	}
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.player.acked == 60}),
+	)
+	testing.expect(t, c.player.state.on_ground, "never landed")
+	start_x := c.player.state.position.x
+
+	// 90 inputs walking +x, all at once: no faster than one per tick.
+	sent_at := time.tick_now()
+	for i in 61 ..= 150 {
+		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}})
+	}
+	time.sleep(time.Second)
+	fake_receive(t, &c)
+	ticks := time.duration_seconds(time.tick_since(sent_at)) * game.TICK_RATE
+	applied := f64(c.player.acked - 60)
+	testing.expectf(
+		t,
+		applied <= ticks + game.INPUT_BUDGET_MAX + 1,
+		"applied %v inputs in %v ticks",
+		applied,
+		ticks,
+	)
+	testing.expectf(
+		t,
+		c.player.state.position.x > start_x + 0.5,
+		"did not walk: x %v -> %v",
+		start_x,
+		c.player.state.position.x,
+	)
+	testing.expect(t, stop(&srv))
 }

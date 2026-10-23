@@ -69,10 +69,11 @@ run :: proc(opts: Options) -> bool {
 	) {log.warnf("replay cannot record path=%s", opts.out)}
 	srv: server.Server
 	config := server.Config {
-		seed        = header.seed,
-		view_radius = i32(header.view_radius),
-		view_height = i32(header.view_height),
-		workers     = 2,
+		seed         = header.seed,
+		view_radius  = i32(header.view_radius),
+		view_height  = i32(header.view_height),
+		workers      = 2,
+		allow_cheats = header.allow_cheats,
 	}
 	if !server.start(&srv, config, {&pipe, .Server}) {return false}
 	client := game.Endpoint{&pipe, .Client}
