@@ -408,7 +408,7 @@ expect_duplicate_id_errors :: proc(next: log.Logger) -> log.Logger {
 			options: log.Options,
 			location := #caller_location,
 		) {
-			if strings.has_prefix(text, "ui: a second widget with the same id") {return}
+			if strings.has_prefix(text, "ui duplicate widget id") {return}
 			forward.procedure(forward.data, level, text, options, location)
 		},
 		lowest_level = next.lowest_level,

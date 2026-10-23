@@ -57,7 +57,7 @@ renderdoc_attach :: proc(rd: ^Renderdoc, capture_dir, name: string) -> bool {
 	if get_api == nil {return false}
 	api: rawptr
 	if get_api(RENDERDOC_API_VERSION_1_6_0, &api) != 1 || api == nil {
-		log.warn("gpu: RenderDoc is loaded but did not provide API 1.6")
+		log.warn("gpu renderdoc is loaded but did not provide API 1.6")
 		return false
 	}
 	rd.api = cast(^Renderdoc_Api)api
@@ -66,7 +66,7 @@ renderdoc_attach :: proc(rd: ^Renderdoc, capture_dir, name: string) -> bool {
 	path := strings.concatenate({capture_dir, "/", name}, context.temp_allocator)
 	rd.api.SetCaptureFilePathTemplate(strings.clone_to_cstring(path, context.temp_allocator))
 	log.infof(
-		"gpu: RenderDoc %d.%d.%d attached, captures go to %s_frame*.rdc",
+		"gpu renderdoc attached version=%d.%d.%d captures=%s_frame*.rdc",
 		major,
 		minor,
 		patch,
@@ -91,7 +91,7 @@ renderdoc_log_captures :: proc(rd: ^Renderdoc) {
 		length := u32(len(buf))
 		timestamp: u64
 		if rd.api.GetCapture(i, &buf[0], &length, &timestamp) == 1 && length > 0 {
-			log.infof("gpu: RenderDoc capture %s", string(buf[:length - 1]))
+			log.infof("gpu renderdoc capture path=%s", string(buf[:length - 1]))
 		}
 	}
 }

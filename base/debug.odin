@@ -12,16 +12,16 @@ import "core:strings"
 //
 //	main :: proc() {
 //		dbg: base.Debug
-//		context = base.debug_begin(&dbg, "voxiverse.log")
+//		context = base.debug_begin(&dbg, "voxiverse.log", "main")
 //		ok := run()
 //		ok = base.debug_end(&dbg) && ok // reports leaks
 //		os.exit(0 if ok else 1)
 //	}
 //
 // What it gives you:
-// - Logging to the console and to a log file (overwritten each run). The
-//   console shows Info and up (VX_LOG=debug for everything); the file always
-//   has everything.
+// - Logging (log.odin) to the console and to a log file (overwritten each
+//   run). The console shows Info and up (VX_LOG=debug for everything); the
+//   file always has everything. The calling thread's lines are tagged tag.
 // - Failed asserts and panics print a stack trace before stopping.
 // - In debug builds, every allocation through context.allocator is tracked;
 //   debug_end lists leaks and bad frees with their source locations and
@@ -34,8 +34,7 @@ Debug :: struct {
 	tracked:    bool,
 	backing:    mem.Allocator, // untracked: the debug machinery's own memory
 	log_file:   ^os.File,
-	console:    log.Logger,
-	file:       log.Logger,
+	sink:       Log_Sink,
 	logger:     log.Logger,
 	break_mode: bool,
 }
@@ -44,7 +43,7 @@ Debug :: struct {
 @(private = "file")
 active: ^Debug
 
-debug_begin :: proc(d: ^Debug, log_file_name: string) -> runtime.Context {
+debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Context {
 	ctx := context
 	d^ = {}
 	d.backing = ctx.allocator
@@ -53,17 +52,14 @@ debug_begin :: proc(d: ^Debug, log_file_name: string) -> runtime.Context {
 
 	console_level: log.Level =
 		.Debug if os.get_env("VX_LOG", context.temp_allocator) == "debug" else .Info
-	d.console = log.create_console_logger(console_level, allocator = d.backing)
-	d.logger = d.console
 	if path, ok := log_file_path(log_file_name); ok {
 		if f, err := os.open(path, {.Write, .Create, .Trunc}); err == nil {
 			d.log_file = f
-			d.file = log.create_file_logger(f, .Debug, allocator = d.backing)
-			d.logger = log.create_multi_logger(d.console, d.file, allocator = d.backing)
 		} else {
 			fmt.eprintfln("debug: cannot write log file %s: %v", path, err)
 		}
 	}
+	d.logger = log_sink_init(&d.sink, d.log_file, console_level, tag)
 	ctx.logger = d.logger
 	ctx.assertion_failure_proc = assertion_failure
 
@@ -82,16 +78,16 @@ debug_end :: proc(d: ^Debug) -> bool {
 	ok := true
 	if d.tracked {
 		for _, entry in d.tracking.allocation_map {
-			log.errorf("leak: %d bytes allocated at %v", entry.size, entry.location)
+			log.errorf("memory leak bytes=%d at=%v", entry.size, entry.location)
 			ok = false
 		}
 		for entry in d.tracking.bad_free_array {
-			log.errorf("bad free of %p at %v", entry.memory, entry.location)
+			log.errorf("memory bad free pointer=%p at=%v", entry.memory, entry.location)
 			ok = false
 		}
 		if ok {
 			log.debugf(
-				"memory: no leaks (%d allocations, peak %v)",
+				"memory no leaks allocations=%d peak_bytes=%v",
 				d.tracking.total_allocation_count,
 				d.tracking.peak_memory_allocated,
 			)
@@ -100,11 +96,7 @@ debug_end :: proc(d: ^Debug) -> bool {
 	}
 
 	context.allocator = d.backing
-	if d.log_file != nil {
-		log.destroy_multi_logger(d.logger)
-		log.destroy_file_logger(d.file) // also closes the file
-	}
-	log.destroy_console_logger(d.console)
+	if d.log_file != nil {os.close(d.log_file)}
 	active = nil
 	return ok
 }

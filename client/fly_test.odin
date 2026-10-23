@@ -63,7 +63,7 @@ fly_test_command :: proc(app: ^App, args: []string) {
 		frames   = frames,
 	}
 	t.frames.count = 0
-	log.infof("fly_test: waiting for the world to load, then flying %.0f blocks", distance)
+	log.infof("fly_test waiting for the world to load blocks=%.0f", distance)
 }
 
 @(private)
@@ -100,7 +100,7 @@ fly_test_update :: proc(app: ^App) {
 		t.rss_start = base.resident_memory()
 		t.phase = .Flying
 		log.infof(
-			"fly_test: loaded in %.1f s (%d chunks); flying at %d blocks/s",
+			"fly_test loaded seconds=%.1f chunks=%d speed=%d",
 			t.waited,
 			s.world.chunks.count,
 			FLY_TEST_SPEED,
@@ -153,7 +153,7 @@ fly_test_finish :: proc(app: ^App, error: string) {
 		   ) {append(&failures, "server chunk arrays past capacity")}
 		sum := base.frame_stats_summary(&t.frames)
 		log.infof(
-			"fly_test: flew %.0f blocks in %d frames: frame avg %.2f ms, p50 %.2f, p99 %.2f, max %.2f",
+			"fly_test flew blocks=%.0f frames=%d avg_ms=%.2f p50=%.2f p99=%.2f max=%.2f",
 			s.camera.position.x - t.start.x,
 			sum.count,
 			sum.avg,
@@ -162,7 +162,7 @@ fly_test_finish :: proc(app: ^App, error: string) {
 			sum.max,
 		)
 		log.infof(
-			"fly_test: client %d chunks (room for %d), arrays %.1f MiB, arena %d B; server %d chunks, arrays %.1f MiB, arena %d B; %d meshes dropped as stale",
+			"fly_test memory client_chunks=%d client_capacity=%d client_arrays_mib=%.1f client_arena=%d server_chunks=%d server_arrays_mib=%.1f server_arena=%d stale_meshes=%d",
 			w.chunks.count,
 			capacity,
 			f64(w.arrays.committed) / (1 << 20),
@@ -174,14 +174,14 @@ fly_test_finish :: proc(app: ^App, error: string) {
 		)
 		if rss := base.resident_memory(); rss > 0 && t.rss_start > 0 {
 			log.infof(
-				"fly_test: process resident memory %.1f MiB at the start of the flight, %.1f MiB at the end",
+				"fly_test resident memory start_mib=%.1f end_mib=%.1f",
 				f64(t.rss_start) / (1 << 20),
 				f64(rss) / (1 << 20),
 			)
 		}
 	}
-	for f in failures {log.errorf("fly_test: %s", f)}
-	if len(failures) == 0 {log.info("fly_test: passed")}
+	for f in failures {log.errorf("fly_test %s", f)}
+	if len(failures) == 0 {log.info("fly_test passed")}
 	t.failed = len(failures) > 0
 	t.phase = .Off
 	if t.quit {app.quit = true}

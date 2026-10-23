@@ -125,7 +125,7 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 		added: bool
 		h, c, added = base.pool_add(&w.chunks, Client_Chunk{pos = m.pos})
 		if !added {
-			log.errorf("client: no room for chunk %v (%d loaded)", m.pos, w.chunks.count)
+			log.errorf("client no room for chunk pos=%v loaded=%d", m.pos, w.chunks.count)
 			return false
 		}
 		w.by_pos[m.pos] = h
@@ -137,7 +137,7 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 	} else {
 		array, err := game.block_arrays_take(&w.arrays)
 		if err != nil {
-			log.errorf("client: out of chunk arrays (%v)", err)
+			log.errorf("client out of chunk arrays (%v)", err)
 			return false
 		}
 		array^ = scratch^

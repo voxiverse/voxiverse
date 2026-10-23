@@ -37,7 +37,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 		lpszClassName = win.L(CLASS_NAME),
 	}
 	if win.RegisterClassExW(&class) == 0 {
-		log.errorf("platform: RegisterClassExW failed (%d)", win.GetLastError())
+		log.errorf("platform RegisterClassExW failed (%d)", win.GetLastError())
 		return false
 	}
 
@@ -62,7 +62,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 		w, // reaches WM_NCCREATE, which stores it for window_proc
 	)
 	if n.hwnd == nil {
-		log.errorf("platform: CreateWindowExW failed (%d)", win.GetLastError())
+		log.errorf("platform CreateWindowExW failed (%d)", win.GetLastError())
 		win.UnregisterClassW(win.L(CLASS_NAME), n.instance)
 		return false
 	}
@@ -99,7 +99,7 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 		dwFlags     = 0 if captured else win.RIDEV_REMOVE,
 	}
 	if !win.RegisterRawInputDevices(&device, 1, size_of(device)) {
-		log.errorf("platform: RegisterRawInputDevices failed (%d)", win.GetLastError())
+		log.errorf("platform RegisterRawInputDevices failed (%d)", win.GetLastError())
 		return
 	}
 	n.captured = captured

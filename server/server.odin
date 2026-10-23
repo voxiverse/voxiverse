@@ -51,7 +51,7 @@ Server :: struct {
 	failed:      bool, // (atomic)
 	stats_mutex: sync.Mutex,
 	stats:       Stats,
-
+	log_tag:     base.Log_Tag,
 	// Server thread only, after start:
 	arena:       virtual.Arena,
 	world:       World,
@@ -77,7 +77,7 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 		endpoint = endpoint,
 	}
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
-		log.errorf("server: cannot reserve its memory: %v", err)
+		log.errorf("server cannot reserve its memory: %v", err)
 		return false
 	}
 	arena := virtual.arena_allocator(&s.arena)
@@ -91,12 +91,12 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 	capacity += config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
 	if err := world_init(&s.world, config.seed, capacity, config.workers, arena); err != nil {
-		log.errorf("server: cannot allocate the world: %v", err)
+		log.errorf("server cannot allocate the world: %v", err)
 		virtual.arena_destroy(&s.arena)
 		return false
 	}
 	if err := client_init(&s.client, config, arena); err != nil {
-		log.errorf("server: cannot allocate client state: %v", err)
+		log.errorf("server cannot allocate client state: %v", err)
 		world_destroy(&s.world)
 		virtual.arena_destroy(&s.arena)
 		return false
@@ -108,7 +108,7 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 	s.thread.init_context = context
 	thread.start(s.thread)
 	log.infof(
-		"server: started (seed %d, view %d x %d chunks, %d worldgen workers, room for %d chunks)",
+		"server started seed=%d view=%dx%d workers=%d capacity=%d",
 		config.seed,
 		config.view_radius,
 		config.view_height,
@@ -127,7 +127,7 @@ stop :: proc(s: ^Server) -> bool {
 	world_destroy(&s.world)
 	used := s.arena.total_used
 	virtual.arena_destroy(&s.arena)
-	log.infof("server: stopped after %d ticks (session arena: %v)", s.tick, base_bytes(used))
+	log.infof("server stopped ticks=%d arena=%v", s.tick, base_bytes(used))
 	failed := sync.atomic_load(&s.failed)
 	s^ = {}
 	return !failed
@@ -146,6 +146,7 @@ stats :: proc(s: ^Server) -> Stats {
 @(private = "file")
 server_main :: proc(t: ^thread.Thread) {
 	s := (^Server)(t.data)
+	context.logger = base.log_retag(&s.log_tag, context.logger, "server")
 	base.profile_thread_start("server")
 	next := time.tick_now()
 	for !sync.atomic_load(&s.stopping) {
@@ -157,7 +158,7 @@ server_main :: proc(t: ^thread.Thread) {
 		next = time.tick_add(next, game.TICK_DURATION)
 		left := time.tick_diff(time.tick_now(), next)
 		if left < -5 * game.TICK_DURATION {
-			log.debugf("server: %v behind, skipping ticks", -left)
+			log.debugf("server behind, skipping ticks behind=%v", -left)
 			next = time.tick_now()
 		} else if left > 0 {
 			time.sleep(left)
@@ -220,7 +221,7 @@ receive_messages :: proc(s: ^Server) {
 					view_height = u32(s.config.view_height),
 				},
 			)
-			log.infof("server: %q joined", v.name)
+			log.infof("server player joined name=%q", v.name)
 		case game.Move:
 			if s.client.state != .Playing {
 				disconnect(s, "move before hello")
@@ -235,7 +236,7 @@ receive_messages :: proc(s: ^Server) {
 // error is the client's bug or an attack; either way it is logged).
 @(private = "file")
 disconnect :: proc(s: ^Server, reason: string) {
-	log.warnf("server: disconnecting the client: %s", reason)
+	log.warnf("server disconnecting client reason=%q", reason)
 	send_message(s, game.Reject{reason})
 	game.close(s.endpoint)
 	s.client.state = .Gone

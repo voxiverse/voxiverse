@@ -13,7 +13,7 @@ Native_Window :: struct {}
 
 @(private)
 native_open :: proc(w: ^Window, title: string) -> bool {
-	log.error("platform: the macOS backend is not written yet (milestone M1b)")
+	log.error("platform the macOS backend is not written yet (milestone M1b)")
 	return false
 }
 

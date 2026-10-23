@@ -194,14 +194,14 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 		// Every field but __handle must resolve.
 		count, ok := dynlib.initialize_symbols(&x, "libX11.so.6", "X")
 		if !ok || count != reflect.struct_field_count(X11) - 1 {
-			log.errorf("platform: could not load libX11.so.6 (%s)", dynlib.last_error())
+			log.errorf("platform could not load libX11.so.6 (%s)", dynlib.last_error())
 			return false
 		}
 	}
 	n := &w.native
 	n.display = x.OpenDisplay(nil)
 	if n.display == nil {
-		log.error("platform: cannot open the X display (is DISPLAY set?)")
+		log.error("platform cannot open the X display (is DISPLAY set?)")
 		return false
 	}
 	// Without this, holding a key produces fake release+press pairs.
@@ -234,7 +234,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 		&attributes,
 	)
 	if n.window == 0 {
-		log.error("platform: XCreateWindow failed")
+		log.error("platform XCreateWindow failed")
 		x.CloseDisplay(n.display)
 		return false
 	}
@@ -254,7 +254,7 @@ setup_raw_motion :: proc(n: ^Native_Window) {
 	if xi.__handle == nil {
 		count, ok := dynlib.initialize_symbols(&xi, "libXi.so.6")
 		if !ok || count != reflect.struct_field_count(XI) - 1 {
-			log.info("platform: libXi not available; mouse look uses pointer warping")
+			log.info("platform libXi not available; mouse look uses pointer warping")
 			return
 		}
 	}

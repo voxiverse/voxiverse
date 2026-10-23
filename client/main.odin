@@ -21,7 +21,7 @@ Options :: struct {
 
 main :: proc() {
 	dbg: base.Debug
-	context = base.debug_begin(&dbg, "voxiverse.log")
+	context = base.debug_begin(&dbg, "voxiverse.log", "main")
 
 	opts: Options
 	flags.parse_or_exit(&opts, os.args, .Unix)
@@ -31,20 +31,19 @@ main :: proc() {
 			log.infof("profiling to %s (open with Spall: https://gravitymoth.com/spall/)", path)
 		}
 	}
-	ok := run(opts)
+	ok := run(opts, &dbg.sink)
 	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
 }
 
-run :: proc(opts: Options) -> bool {
+run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 	app := new(App)
 	defer free(app)
 
 	// The console shows the log too (from here on).
-	app_logger := log.create_multi_logger(context.logger, console_logger(&app.console))
-	defer log.destroy_multi_logger(app_logger)
-	context.logger = app_logger
+	base.log_set_listener(sink, console_listener, &app.console)
+	defer base.log_set_listener(sink, nil, nil)
 
 	ok := app_init(app)
 	if ok {
@@ -68,7 +67,7 @@ run :: proc(opts: Options) -> bool {
 		}
 		if app.fly_test.failed || app.fly_test.phase != .Off {
 			if app.fly_test.phase !=
-			   .Off {log.error("fly_test: the run ended before the test finished")}
+			   .Off {log.error("fly_test the run ended before the test finished")}
 			ok = false
 		}
 	}
@@ -88,7 +87,7 @@ log_frame_stats :: proc(s: ^base.Frame_Stats) {
 	sum := base.frame_stats_summary(s)
 	if sum.count == 0 {return}
 	log.infof(
-		"frame time: %d frames, avg %.2f ms, p50 %.2f, p99 %.2f, max %.2f",
+		"frame times frames=%d avg_ms=%.2f p50=%.2f p99=%.2f max=%.2f",
 		sum.count,
 		sum.avg,
 		sum.p50,

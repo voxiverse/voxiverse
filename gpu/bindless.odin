@@ -166,7 +166,7 @@ register_texture :: proc(g: ^Gpu, view: vk.ImageView) -> (id: Texture_Id, ok: bo
 		b.texture_ids[i] = true
 		return Texture_Id(i), true
 	}
-	log.error("gpu: out of texture slots")
+	log.error("gpu out of texture slots")
 	return 0, false
 }
 

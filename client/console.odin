@@ -74,21 +74,14 @@ console_print :: proc(c: ^Console, text: string, level := log.Level.Info) {
 	}
 }
 
-// console_logger forwards log messages into the console (combine with the
-// usual loggers via log.create_multi_logger).
-console_logger :: proc(c: ^Console) -> log.Logger {
-	return log.Logger {
-		procedure = proc(
-			data: rawptr,
-			level: log.Level,
-			text: string,
-			options: log.Options,
-			location := #caller_location,
-		) {
-			console_print(cast(^Console)data, text, level)
-		},
-		data = c,
-		lowest_level = .Info,
+// console_listener receives every log line (base.log_set_listener); lines
+// from other threads show their tag.
+console_listener :: proc(data: rawptr, level: log.Level, tag: string, text: string) {
+	c := (^Console)(data)
+	if tag == "main" {
+		console_print(c, text, level)
+	} else {
+		console_print(c, fmt.tprintf("[%s] %s", tag, text), level)
 	}
 }
 

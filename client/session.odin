@@ -60,7 +60,7 @@ Session_Stats :: struct {
 session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s^ = {}
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
-		log.errorf("session: cannot reserve memory: %v", err)
+		log.errorf("session cannot reserve memory: %v", err)
 		return false
 	}
 	arena := virtual.arena_allocator(&s.arena)
@@ -102,7 +102,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	delete(s.received)
 	if s.pipe.allocator.procedure != nil {game.pipe_destroy(&s.pipe)}
 	log.infof(
-		"session: ended (%d chunks received, %.1f MiB; session arena %.1f MiB)",
+		"session ended chunks_received=%d received_mib=%.1f arena_mib=%.1f",
 		s.stats.chunks_received,
 		f64(s.stats.bytes_received) / (1 << 20),
 		f64(s.arena.total_used) / (1 << 20),
@@ -213,17 +213,12 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	s.camera = s.teleport.? or_else {position = w.spawn}
 	s.last_sent = w.spawn
 	s.state = .Playing
-	log.infof(
-		"session: joined (view %d x %d chunks, room for %d)",
-		w.view_radius,
-		w.view_height,
-		capacity,
-	)
+	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
 }
 
 @(private = "file")
 fail :: proc(s: ^Session, reason: string) {
-	log.errorf("session: %s", reason)
+	log.errorf("session %s", reason)
 	s.state = .Failed
 	s.failure = strings.clone(reason, virtual.arena_allocator(&s.arena))
 	game.close(s.endpoint)

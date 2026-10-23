@@ -27,6 +27,7 @@ Jobs :: struct {
 	queue:     Queue(Job),
 	threads:   []^thread.Thread,
 	names:     []string,
+	tags:      []Log_Tag, // each worker's tagged logger
 	pending:   int, // submitted and not finished (atomic)
 	stopping:  bool, // (atomic)
 	allocator: mem.Allocator,
@@ -59,6 +60,7 @@ jobs_init :: proc(
 	queue_init(&j.queue, allocator, loc)
 	j.threads = make([]^thread.Thread, count, allocator, loc)
 	j.names = make([]string, count, allocator, loc)
+	j.tags = make([]Log_Tag, count, allocator, loc)
 	ctx := context
 	ctx.allocator = allocator
 	for i in 0 ..< count {
@@ -84,6 +86,7 @@ jobs_destroy :: proc(j: ^Jobs) {
 	assert(sync.atomic_load(&j.pending) == 0)
 	for n in j.names {delete(n, j.allocator)}
 	delete(j.names, j.allocator)
+	delete(j.tags, j.allocator)
 	delete(j.threads, j.allocator)
 	queue_destroy(&j.queue)
 	j^ = {}
@@ -111,6 +114,7 @@ jobs_worker_count :: proc(j: ^Jobs) -> int {
 @(private = "file")
 worker_main :: proc(t: ^thread.Thread) {
 	j := (^Jobs)(t.data)
+	context.logger = log_retag(&j.tags[t.user_index], context.logger, j.names[t.user_index])
 	profile_thread_start(j.names[t.user_index])
 	for job in queue_pop(&j.queue) {
 		job.procedure(job.data)

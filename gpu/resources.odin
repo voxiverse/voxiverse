@@ -264,6 +264,6 @@ allocate :: proc(
 		check(vk.AllocateMemory(g.device, &info, nil, &mem)) or_return
 		return mem, true
 	}
-	log.errorf("gpu: no memory type with %v for %d bytes", props, reqs.size)
+	log.errorf("gpu no memory type with %v for %d bytes", props, reqs.size)
 	return 0, false
 }

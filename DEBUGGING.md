@@ -16,6 +16,20 @@ captures and profiling. Everything here is exercised in CI or by `tools/debugger
 
 Validation needs the layer installed (see README); without it you get one warning at startup.
 
+## Reading the log
+
+```
+console:    3.214 INFO  server     server player joined name="player"
+            3.215 WARN  main       gpu renderdoc is loaded but did not provide API 1.6 (gpu/renderdoc.odin:60)
+file:       3.214512 | INFO | server | server player joined name="player" | server/server.odin:224
+```
+
+Seconds since start, level, the thread that logged (`main`, `server`, `worldgen 2`, `mesh 1`),
+then the message: what happened, then `key=value` pairs to filter on
+(`grep 'pos=\[1,6,4\]' build/voxiverse.log`). The console adds the source location to
+warnings and errors; the file has it on every line. New code: start messages with the
+subsystem (`gpu`, `server`, `session`, ...) and put values in `key=value` form.
+
 ## Switches
 
 | Switch | Effect |

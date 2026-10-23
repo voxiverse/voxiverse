@@ -47,7 +47,7 @@ timing_log_summary :: proc(g: ^Gpu) {
 	s := gpu_frame_summary(g)
 	if s.count == 0 {return}
 	log.infof(
-		"GPU time:   %d frames, avg %.3f ms, p50 %.3f, p99 %.3f, max %.3f",
+		"gpu frame times frames=%d avg_ms=%.3f p50=%.3f p99=%.3f max=%.3f",
 		s.count,
 		s.avg,
 		s.p50,
@@ -131,7 +131,7 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 		{._64},
 	)
 	if result != .SUCCESS {
-		log.warnf("gpu: timestamp results unavailable: %v", result)
+		log.warnf("gpu timestamp results unavailable: %v", result)
 		return
 	}
 
@@ -192,13 +192,13 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 timing_setup :: proc(g: ^Gpu, valid_bits: u32, period: f32, calibration_available: bool) {
 	g.timing = valid_bits > 0 && period > 0
 	if !g.timing {
-		log.info("gpu: timestamps not supported on this queue; no GPU timing")
+		log.info("gpu timestamps not supported on this queue; no GPU timing")
 		return
 	}
 	g.timestamp_period = period
 	g.timestamp_mask = max(u64) if valid_bits >= 64 else (u64(1) << valid_bits) - 1
 	if !calibration_available {
-		log.info("gpu: GPU timing on (approximate alignment in traces)")
+		log.info("gpu GPU timing on (approximate alignment in traces)")
 		base.profile_name_gpu_track(false)
 		return
 	}
@@ -217,8 +217,5 @@ timing_setup :: proc(g: ^Gpu, valid_bits: u32, period: f32, calibration_availabl
 	g.calibrated = has_device && has_host
 	g.host_time_domain = host_domain
 	base.profile_name_gpu_track(g.calibrated)
-	log.infof(
-		"gpu: GPU timing on%s",
-		" (calibrated to the trace clock)" if g.calibrated else " (approximate alignment in traces)",
-	)
+	log.infof("gpu timing on calibrated=%v", g.calibrated)
 }

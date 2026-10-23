@@ -125,7 +125,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), session arena %.1f MiB",
+				"client %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), session arena %.1f MiB",
 				w.chunks.count,
 				len(w.chunks.items) - 1,
 				f64(w.arrays.committed) / (1 << 20),
@@ -138,7 +138,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"render: %d meshes, %d drawn, vertices %.1f%% of %d M",
+				"render %d meshes, %d drawn, vertices %.1f%% of %d M",
 				ws.meshes,
 				ws.drawn,
 				100 * f64(ws.vertices_used) / f64(CHUNK_VERTEX_CAPACITY),
@@ -149,7 +149,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"server: tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB",
+				"server tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB",
 				st.tick_ms,
 				st.chunks_loaded,
 				st.chunks_generating,

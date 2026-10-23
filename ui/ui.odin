@@ -352,7 +352,7 @@ interact :: proc(
 			ctx.errors += 1
 			if !already_reported(ctx, id) {
 				log.errorf(
-					"ui: a second widget with the same id this frame (same label in the same id scope?) at %v",
+					"ui duplicate widget id this frame (same label in the same id scope?) at=%v",
 					loc,
 				)
 			}

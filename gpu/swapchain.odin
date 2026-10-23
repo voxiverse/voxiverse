@@ -47,7 +47,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	}
 	handle: vk.SwapchainKHR
 	if result := vk.CreateSwapchainKHR(g.device, &info, nil, &handle); result != .SUCCESS {
-		log.errorf("gpu: vkCreateSwapchainKHR failed: %v", result)
+		log.errorf("gpu vkCreateSwapchainKHR failed: %v", result)
 		return false
 	}
 	destroy_swapchain(g, sc) // destroys old (retired by oldSwapchain above)
@@ -91,7 +91,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	)
 	if !ok {return false}
 	log.infof(
-		"gpu: swapchain %dx%d, %d images, %v",
+		"gpu swapchain size=%dx%d images=%d format=%v",
 		extent.width,
 		extent.height,
 		sc.count,

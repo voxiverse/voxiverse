@@ -94,7 +94,7 @@ glyph_cache_get :: proc(c: ^Glyph_Cache, r: rune, size: u16) -> (entry: Glyph_En
 	if bm.width > 0 && bm.height > 0 {
 		x, y, placed := shelf_place(c, bm.width, bm.height)
 		if !placed {
-			log.warnf("ui: glyph atlas full (%d glyphs) - clearing it", len(c.entries))
+			log.warnf("ui glyph atlas full (%d glyphs) - clearing it", len(c.entries))
 			glyph_cache_clear(c)
 			c.resets += 1
 			x, y, placed = shelf_place(c, bm.width, bm.height)

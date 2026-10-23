@@ -163,7 +163,7 @@ destroy_pipeline :: proc(g: ^Gpu, p: ^Pipeline) {
 @(private)
 create_shader_module :: proc(g: ^Gpu, spirv: []byte) -> (module: vk.ShaderModule, ok: bool) {
 	if len(spirv) == 0 || len(spirv) % 4 != 0 {
-		log.errorf("gpu: invalid SPIR-V (%d bytes)", len(spirv))
+		log.errorf("gpu invalid SPIR-V (%d bytes)", len(spirv))
 		return 0, false
 	}
 	info := vk.ShaderModuleCreateInfo {

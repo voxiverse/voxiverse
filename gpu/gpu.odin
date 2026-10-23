@@ -77,7 +77,7 @@ create_instance :: proc(
 	lib, loaded := dynlib.load_library(loader_name)
 	if !loaded {
 		log.errorf(
-			"gpu: cannot load the Vulkan loader %s - is a Vulkan driver installed?",
+			"gpu cannot load the Vulkan loader %s - is a Vulkan driver installed?",
 			loader_name,
 		)
 		return false
@@ -85,7 +85,7 @@ create_instance :: proc(
 	g.loader = lib
 	get_instance_proc_addr, found := dynlib.symbol_address(lib, "vkGetInstanceProcAddr")
 	if !found {
-		log.errorf("gpu: %s has no vkGetInstanceProcAddr", loader_name)
+		log.errorf("gpu %s has no vkGetInstanceProcAddr", loader_name)
 		return false
 	}
 	vk.load_proc_addresses_global(get_instance_proc_addr)
@@ -93,7 +93,7 @@ create_instance :: proc(
 	version: u32
 	if vk.EnumerateInstanceVersion(&version) != .SUCCESS || version < vk.API_VERSION_1_3 {
 		log.errorf(
-			"gpu: Vulkan 1.3 required, the loader offers %d.%d",
+			"gpu Vulkan 1.3 required, the loader offers %d.%d",
 			version >> 22,
 			(version >> 12) & 0x3ff,
 		)
@@ -106,7 +106,7 @@ create_instance :: proc(
 	use_validation := validation.enabled && has_validation_layer()
 	if validation.enabled && !use_validation {
 		log.warn(
-			"gpu: validation requested but VK_LAYER_KHRONOS_validation is not installed (Linux: vulkan-validation-layers package; Windows/macOS: Vulkan SDK)",
+			"gpu validation requested but VK_LAYER_KHRONOS_validation is not installed (Linux: vulkan-validation-layers package; Windows/macOS: Vulkan SDK)",
 		)
 	}
 	if use_validation {
@@ -142,7 +142,7 @@ create_instance :: proc(
 		pNext                   = &features if use_validation else nil,
 	}
 	if result := vk.CreateInstance(&info, nil, &g.instance); result != .SUCCESS {
-		log.errorf("gpu: vkCreateInstance failed: %v", result)
+		log.errorf("gpu vkCreateInstance failed: %v", result)
 		return false
 	}
 	vk.load_proc_addresses_instance(g.instance)
@@ -150,9 +150,9 @@ create_instance :: proc(
 		vk.CreateDebugUtilsMessengerEXT(g.instance, &messenger_info, nil, &g.messenger)
 		g.debug_utils = true
 		log.infof(
-			"gpu: validation enabled (synchronization%s%s)",
-			", best practices" if validation.best_practices else "",
-			", GPU-assisted" if validation.gpu_assisted else "",
+			"gpu validation on best_practices=%v gpu_assisted=%v",
+			validation.best_practices,
+			validation.gpu_assisted,
 		)
 	}
 	return true
@@ -206,7 +206,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		ppEnabledExtensionNames = raw_data(device_extensions),
 	}
 	if result := vk.CreateDevice(g.physical, &info, nil, &g.device); result != .SUCCESS {
-		log.errorf("gpu: vkCreateDevice failed: %v", result)
+		log.errorf("gpu vkCreateDevice failed: %v", result)
 		return false
 	}
 	vk.load_proc_addresses_device(g.device)
@@ -299,11 +299,11 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 	}
 	if best_score < 0 {
 		log.error(
-			"gpu: no GPU with Vulkan 1.3 (dynamic rendering, synchronization2, descriptor indexing) that can present to this window",
+			"gpu no GPU with Vulkan 1.3 (dynamic rendering, synchronization2, descriptor indexing) that can present to this window",
 		)
 		return false
 	}
-	log.infof("gpu: using %s", g.device_name)
+	log.infof("gpu device name=%q", g.device_name)
 	return true
 }
 

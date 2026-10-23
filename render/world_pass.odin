@@ -233,7 +233,7 @@ world_add_mesh :: proc(
 	if !ok {
 		if !p.full_reported {
 			log.errorf(
-				"render: chunk vertex buffer full (%d of %d vertices used); raise vertex_capacity",
+				"render chunk vertex buffer full (%d of %d vertices used); raise vertex_capacity",
 				p.ranges.used,
 				p.ranges.capacity,
 			)
@@ -244,7 +244,7 @@ world_add_mesh :: proc(
 	h, _, added := base.pool_add(&p.meshes, Mesh{chunk, r})
 	if !added {
 		base.range_free(&p.ranges, r)
-		log.error("render: too many chunk meshes")
+		log.error("render too many chunk meshes")
 		return 0, .Full
 	}
 	copy(f.staging.mapped[f.staging_used:][:len(vertices)], vertices)
@@ -317,7 +317,7 @@ upload_setup :: proc(p: ^World_Pass, f: ^World_Frame, cmd: vk.CommandBuffer) -> 
 	data := p.setup_pending
 	if f.staging_used + len(data) > f.staging.size {
 		log.errorf(
-			"render: world staging (%d bytes) too small for setup data (%d)",
+			"render world staging (%d bytes) too small for setup data (%d)",
 			f.staging.size,
 			len(data),
 		)

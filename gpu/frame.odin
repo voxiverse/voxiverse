@@ -73,7 +73,7 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		sc.stale = true
 		return
 	case:
-		log.errorf("gpu: vkAcquireNextImageKHR failed: %v", result)
+		log.errorf("gpu vkAcquireNextImageKHR failed: %v", result)
 		return
 	}
 	// Only now: resetting before a failed acquire would leave nothing to
@@ -167,7 +167,7 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 	case .SUBOPTIMAL_KHR, .ERROR_OUT_OF_DATE_KHR:
 		sc.stale = true
 	case:
-		log.errorf("gpu: vkQueuePresentKHR failed: %v", result)
+		log.errorf("gpu vkQueuePresentKHR failed: %v", result)
 	}
 	g.frame_index = (g.frame_index + 1) % FRAMES_IN_FLIGHT
 }
@@ -284,7 +284,7 @@ image_barrier :: proc(cmd: vk.CommandBuffer, image: vk.Image, from, to: vk.Image
 // check logs a failed Vulkan call; use with or_return.
 check :: proc(result: vk.Result, loc := #caller_location) -> bool {
 	if result == .SUCCESS {return true}
-	log.errorf("gpu: Vulkan call failed: %v", result, location = loc)
+	log.errorf("gpu Vulkan call failed: %v", result, location = loc)
 	return false
 }
 
