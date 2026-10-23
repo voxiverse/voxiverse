@@ -12,6 +12,7 @@ Pipeline :: struct {
 }
 
 Pipeline_Desc :: struct {
+	name:           string, // for validation messages and captures
 	vertex_spirv:   []byte,
 	fragment_spirv: []byte,
 	color_format:   vk.Format,
@@ -104,6 +105,8 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		vk.DestroyPipelineLayout(g.device, p.layout, nil)
 		return {}, false
 	}
+	set_name(g, .PIPELINE, u64(p.handle), desc.name)
+	set_name(g, .PIPELINE_LAYOUT, u64(p.layout), desc.name)
 	return p, true
 }
 

@@ -7,12 +7,14 @@ import "core:strings"
 import "core:sync"
 import vk "vendor:vulkan"
 
+import "../base"
+
 // Vulkan device, swapchain and frame pacing. Vulkan 1.3 core features only:
 // dynamic rendering (no render passes or framebuffers) and synchronization2.
 //
 // Setup is two-phase because the window owns surface creation:
 //
-//	gpu.create_instance(&g, platform.vulkan_loader_name(), platform.vulkan_instance_extensions(), validation)
+//	gpu.create_instance(&g, platform.vulkan_loader_name(), platform.vulkan_instance_extensions(), gpu.Validation{enabled = true})
 //	surface := platform.vulkan_create_surface(&window, g.instance)
 //	gpu.init_device(&g, surface)
 //
@@ -20,6 +22,15 @@ import vk "vendor:vulkan"
 // a pointer to it.
 
 FRAMES_IN_FLIGHT :: 2
+
+// Validation configures the Khronos validation layer (when installed).
+// Synchronization validation is always on with it: it catches CPU/GPU and
+// GPU/GPU races, the hardest Vulkan bugs to find otherwise.
+Validation :: struct {
+	enabled:        bool,
+	best_practices: bool, // advice about API usage; noisy
+	gpu_assisted:   bool, // checks inside shaders (out-of-bounds etc.); slow
+}
 
 Gpu :: struct {
 	loader:            dynlib.Library,
@@ -35,8 +46,9 @@ Gpu :: struct {
 	frames:            [FRAMES_IN_FLIGHT]Frame_Sync,
 	frame_index:       int,
 	ctx:               runtime.Context, // logger etc. for the validation callback
-	// Validation messages at warning level or above since startup. Tests and
-	// CI runs treat any as a failure.
+	debug_utils:       bool, // object names and command labels are available
+	// Validation-layer warnings and errors since startup. Tests and CI runs
+	// treat any as a failure.
 	validation_issues: int,
 }
 
@@ -46,7 +58,7 @@ create_instance :: proc(
 	g: ^Gpu,
 	loader_name: string,
 	extensions: []cstring,
-	validation: bool,
+	validation: Validation,
 ) -> bool {
 	g^ = {}
 	g.ctx = context
@@ -80,16 +92,20 @@ create_instance :: proc(
 	exts := make([dynamic]cstring, context.temp_allocator)
 	append(&exts, ..extensions)
 	layers := make([dynamic]cstring, context.temp_allocator)
-	use_validation := validation && has_validation_layer()
-	if validation && !use_validation {
+	use_validation := validation.enabled && has_validation_layer()
+	if validation.enabled && !use_validation {
 		log.warn(
 			"gpu: validation requested but VK_LAYER_KHRONOS_validation is not installed (Linux: vulkan-validation-layers package; Windows/macOS: Vulkan SDK)",
 		)
 	}
 	if use_validation {
 		append(&layers, "VK_LAYER_KHRONOS_validation")
-		append(&exts, "VK_EXT_debug_utils")
+		append(&exts, "VK_EXT_debug_utils", "VK_EXT_validation_features")
 	}
+	enabled_features := make([dynamic]vk.ValidationFeatureEnableEXT, context.temp_allocator)
+	append(&enabled_features, vk.ValidationFeatureEnableEXT.SYNCHRONIZATION_VALIDATION)
+	if validation.best_practices {append(&enabled_features, vk.ValidationFeatureEnableEXT.BEST_PRACTICES)}
+	if validation.gpu_assisted {append(&enabled_features, vk.ValidationFeatureEnableEXT.GPU_ASSISTED)}
 
 	app := vk.ApplicationInfo {
 		sType            = .APPLICATION_INFO,
@@ -98,6 +114,12 @@ create_instance :: proc(
 		apiVersion       = vk.API_VERSION_1_3,
 	}
 	messenger_info := debug_messenger_info(g)
+	features := vk.ValidationFeaturesEXT {
+		sType                         = .VALIDATION_FEATURES_EXT,
+		pNext                         = &messenger_info,
+		enabledValidationFeatureCount = u32(len(enabled_features)),
+		pEnabledValidationFeatures    = raw_data(enabled_features),
+	}
 	info := vk.InstanceCreateInfo {
 		sType                   = .INSTANCE_CREATE_INFO,
 		pApplicationInfo        = &app,
@@ -106,7 +128,7 @@ create_instance :: proc(
 		enabledExtensionCount   = u32(len(exts)),
 		ppEnabledExtensionNames = raw_data(exts),
 		// Also report problems during vkCreateInstance/vkDestroyInstance.
-		pNext                   = &messenger_info if use_validation else nil,
+		pNext                   = &features if use_validation else nil,
 	}
 	if result := vk.CreateInstance(&info, nil, &g.instance); result != .SUCCESS {
 		log.errorf("gpu: vkCreateInstance failed: %v", result)
@@ -115,7 +137,12 @@ create_instance :: proc(
 	vk.load_proc_addresses_instance(g.instance)
 	if use_validation {
 		vk.CreateDebugUtilsMessengerEXT(g.instance, &messenger_info, nil, &g.messenger)
-		log.info("gpu: validation enabled")
+		g.debug_utils = true
+		log.infof(
+			"gpu: validation enabled (synchronization%s%s)",
+			", best practices" if validation.best_practices else "",
+			", GPU-assisted" if validation.gpu_assisted else "",
+		)
 	}
 	return true
 }
@@ -154,15 +181,19 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	}
 	vk.load_proc_addresses_device(g.device)
 	vk.GetDeviceQueue(g.device, g.queue_family, 0, &g.queue)
+	set_name(g, .QUEUE, u64(uintptr(g.queue)), "main queue")
 	choose_surface_format(g) // fixed from here on, so pipelines can use it
 
-	for &f in g.frames {
-		if !create_frame_sync(g, &f) {return false}
+	for &f, i in g.frames {
+		if !create_frame_sync(g, &f, i) {return false}
 	}
 	return true
 }
 
-destroy :: proc(g: ^Gpu) {
+// destroy releases everything and returns the final count of validation
+// findings. Some validation runs asynchronously and only finishes while the
+// device and instance are torn down, so read the count here, not earlier.
+destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 	if g.device != nil {
 		vk.DeviceWaitIdle(g.device)
 		for &f in g.frames {destroy_frame_sync(g, &f)}
@@ -174,9 +205,11 @@ destroy :: proc(g: ^Gpu) {
 		if g.messenger != 0 {vk.DestroyDebugUtilsMessengerEXT(g.instance, g.messenger, nil)}
 		vk.DestroyInstance(g.instance, nil)
 	}
+	validation_issues = sync.atomic_load(&g.validation_issues)
 	if g.loader != nil {dynlib.unload_library(g.loader)}
 	delete(g.device_name)
 	g^ = {}
+	return
 }
 
 // color_format is the swapchain's pixel format, for pipelines that draw to it.
@@ -284,8 +317,14 @@ debug_messenger_info :: proc(g: ^Gpu) -> vk.DebugUtilsMessengerCreateInfoEXT {
 	}
 }
 
-// debug_callback reports validation messages through the application's
-// logger (the context captured at create_instance) and counts them.
+// debug_callback reports layer and loader messages through the
+// application's logger (the context captured at create_instance).
+//
+// Validation findings (warnings and errors other than best-practices advice
+// and layer notices) are counted, logged with the stack of our code that made
+// the offending call (the layer calls back synchronously from inside it) and
+// stop in an attached debugger with VX_BREAK=1. Loader messages go to the
+// log file at debug level.
 @(private)
 debug_callback :: proc "system" (
 	severity: vk.DebugUtilsMessageSeverityFlagsEXT,
@@ -295,12 +334,71 @@ debug_callback :: proc "system" (
 ) -> b32 {
 	g := cast(^Gpu)user_data
 	context = g.ctx
-	sync.atomic_add(&g.validation_issues, 1)
 	message := string(data.pMessage) if data != nil && data.pMessage != nil else "(no message)"
-	if .ERROR in severity {
-		log.errorf("vulkan: %s", message)
-	} else {
-		log.warnf("vulkan: %s", message)
+	id := string(data.pMessageIdName) if data != nil && data.pMessageIdName != nil else ""
+
+	switch {
+	case !(.WARNING in severity || .ERROR in severity) ||
+	     !(.VALIDATION in types || .PERFORMANCE in types):
+		// Loader messages (e.g. a driver that doesn't apply to this machine).
+		log.debugf("vulkan [%s]: %s", id, message)
+		return false
+	case strings.has_prefix(id, "VALIDATION-SETTINGS") ||
+	     strings.has_prefix(id, "WARNING-Setting"):
+		// The layer describing its own configuration (GPU-assisted mode).
+		log.infof("vulkan [%s]: %s", id, message)
+		return false
+	case strings.has_prefix(id, "BestPractices-"):
+		// Advice (VX_VALIDATION=best): worth reading, not a bug.
+		log.warnf("vulkan advice [%s]: %s", id, message)
+		return false
 	}
+	sync.atomic_add(&g.validation_issues, 1)
+	level: log.Level = .Error if .ERROR in severity else .Warning
+	log.logf(level, "vulkan [%s]: %s", id, message)
+	if !base.log_stack_trace(level, 1) {
+		log.logf(
+			level,
+			"  (found by the validation layer's own thread, after the call returned: use the object names and labels above)",
+		)
+	}
+	base.debug_break()
 	return false
+}
+
+// set_name labels a Vulkan object for validation messages, RenderDoc and
+// other tools, e.g. set_name(g, .FENCE, u64(fence), "frame 0 fence").
+// Dispatchable handles (queue, command buffer, ...) pass u64(uintptr(h)).
+// No-op without the debug utils extension.
+set_name :: proc(g: ^Gpu, type: vk.ObjectType, handle: u64, name: string) {
+	if !g.debug_utils || handle == 0 {return}
+	info := vk.DebugUtilsObjectNameInfoEXT {
+		sType        = .DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		objectType   = type,
+		objectHandle = handle,
+		pObjectName  = strings.clone_to_cstring(name, context.temp_allocator),
+	}
+	vk.SetDebugUtilsObjectNameEXT(g.device, &info)
+}
+
+// begin_label / end_label bracket a section of a command buffer, so
+// validation messages and captures (RenderDoc) show where work came from.
+begin_label :: proc(
+	g: ^Gpu,
+	cmd: vk.CommandBuffer,
+	name: string,
+	color := [4]f32{0.5, 0.5, 0.5, 1},
+) {
+	if !g.debug_utils {return}
+	label := vk.DebugUtilsLabelEXT {
+		sType      = .DEBUG_UTILS_LABEL_EXT,
+		pLabelName = strings.clone_to_cstring(name, context.temp_allocator),
+		color      = color,
+	}
+	vk.CmdBeginDebugUtilsLabelEXT(cmd, &label)
+}
+
+end_label :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
+	if !g.debug_utils {return}
+	vk.CmdEndDebugUtilsLabelEXT(cmd)
 }

@@ -12,8 +12,8 @@ import "core:strings"
 //	build test                 run the unit tests
 //	build fmt                  format all sources in place
 //	build shaders              compile assets/shaders to SPIR-V (fetches the pinned glslang once)
-//	build build [--release]    build the game into build/
-//	build run [--release] [-- game args...]
+//	build build [--release | --sanitize]    build the game into build/
+//	build run [--release | --sanitize] [-- game args...]
 //
 // It runs from the repository root (the wrapper scripts cd there).
 
@@ -74,18 +74,23 @@ usage :: proc() {
 	fmt.println("  test      run the unit tests")
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
-	fmt.println("  build     build the game into build/ (debug; --release for optimized)")
+	fmt.println(
+		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
+	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 }
 
 // build_game compiles shaders and the game. Debug builds keep symbols and
-// turn on Vulkan validation; --release optimizes.
+// turn on Vulkan validation; --release optimizes; --sanitize is a debug build
+// with AddressSanitizer (use-after-free, overflows; best on Linux/macOS).
 build_game :: proc(args: []string) -> (exe: string, ok: bool) {
-	release := false
+	release, sanitize := false, false
 	for arg in args {
 		switch arg {
 		case "--release":
 			release = true
+		case "--sanitize":
+			sanitize = true
 		case:
 			fmt.eprintfln("build: unknown option '%s'", arg)
 			return "", false
@@ -94,6 +99,14 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 	shaders() or_return
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
 	mode := []string{"-o:speed"} if release else []string{"-debug"}
+	if sanitize {
+		mode = {"-debug", "-sanitize:address"}
+		// Leaks are the tracking allocator's job; LSan would also report
+		// GPU drivers' own allocations.
+		if _, set := os.lookup_env("ASAN_OPTIONS", context.allocator); !set {
+			os.set_env("ASAN_OPTIONS", "detect_leaks=0")
+		}
+	}
 	cmd := slice.concatenate(
 		[][]string {
 			{"odin", "build", GAME_PACKAGE},
@@ -103,7 +116,11 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 		},
 	)
 	run(cmd) or_return
-	fmt.printfln("built  %s (%s)", exe, "release" if release else "debug")
+	fmt.printfln(
+		"built  %s (%s)",
+		exe,
+		"release" if release else "debug + sanitizer" if sanitize else "debug",
+	)
 	return exe, true
 }
 

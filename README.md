@@ -47,6 +47,9 @@ on automatically and which reports GPU API misuse in the log.
 | `build` | Build the game into `build/` (debug; `--release` for optimized) |
 | `run` | Build and run; arguments after `--` go to the game, e.g. `run -- --frames 120` |
 
+Debugging (validation, leak tracking, stack traces, sanitizer, debuggers, RenderDoc): see
+[DEBUGGING.md](DEBUGGING.md).
+
 ## Layout
 
 See [PLAN.md](PLAN.md#layout). Packages only depend downward: `base/` depends on nothing,

@@ -1,5 +1,6 @@
 package gpu
 
+import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
@@ -69,7 +70,16 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 			sType = .SEMAPHORE_CREATE_INFO,
 		}
 		check(vk.CreateSemaphore(g.device, &semaphore_info, nil, &sc.render_finished[i])) or_return
+		set_name(g, .IMAGE, u64(sc.images[i]), fmt.tprintf("swapchain image %d", i))
+		set_name(g, .IMAGE_VIEW, u64(sc.views[i]), fmt.tprintf("swapchain image %d view", i))
+		set_name(
+			g,
+			.SEMAPHORE,
+			u64(sc.render_finished[i]),
+			fmt.tprintf("swapchain image %d rendered", i),
+		)
 	}
+	set_name(g, .SWAPCHAIN_KHR, u64(handle), "swapchain")
 	log.infof(
 		"gpu: swapchain %dx%d, %d images, %v",
 		extent.width,

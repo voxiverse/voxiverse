@@ -1,5 +1,6 @@
 package gpu
 
+import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
@@ -182,7 +183,7 @@ end_rendering :: proc(frame: Frame) {
 }
 
 @(private)
-create_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync) -> bool {
+create_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync, index: int) -> bool {
 	pool_info := vk.CommandPoolCreateInfo {
 		sType            = .COMMAND_POOL_CREATE_INFO,
 		flags            = {.TRANSIENT},
@@ -206,6 +207,11 @@ create_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync) -> bool {
 		sType = .SEMAPHORE_CREATE_INFO,
 	}
 	check(vk.CreateSemaphore(g.device, &semaphore_info, nil, &f.image_acquired)) or_return
+
+	set_name(g, .COMMAND_POOL, u64(f.pool), fmt.tprintf("frame %d command pool", index))
+	set_name(g, .COMMAND_BUFFER, u64(uintptr(f.cmd)), fmt.tprintf("frame %d commands", index))
+	set_name(g, .FENCE, u64(f.fence), fmt.tprintf("frame %d fence", index))
+	set_name(g, .SEMAPHORE, u64(f.image_acquired), fmt.tprintf("frame %d image acquired", index))
 	return true
 }
 
