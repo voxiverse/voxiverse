@@ -157,6 +157,17 @@ net_wait :: proc(
 	return true
 }
 
+// at_rest: on the ground and still, as of the server's last word.
+@(private)
+at_rest :: proc(c: ^Net_Client) -> bool {
+	@(static) last: [3]f64
+	@(static) still: int
+	s := c.update.state
+	if s.on_ground && s.position == last {still += 1} else {still = 0}
+	last = s.position
+	return still >= 5
+}
+
 @(private)
 landed :: proc(c: ^Net_Client) -> bool {
 	return c.welcomed && c.update.state.on_ground && c.update.acked > 0 && len(c.chunks) > 50
@@ -230,11 +241,14 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "bob never heard of alice's edit")
 	testing.expect(t, alice.results[1].accepted, "alice's edit was refused")
 
-	// Bob leaves: Alice is told.
+	// Bob (standing where Alice dug: they spawn together) comes to rest,
+	// then leaves: Alice is told.
+	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {return at_rest(cs[1])})
+	testing.expect(t, ok, "bob never came to rest")
+	bob_at := bob.update.state.position
 	netcode.link_close(&bob.link, "bye")
 	ok = net_wait(t, {&alice}, proc(cs: []^Net_Client) -> bool {return len(cs[0].others) == 0})
 	testing.expect(t, ok, "alice was not told bob left")
-	bob_at := bob.update.state.position
 
 	// Saved by name: after a restart, each comes back where they were.
 	alice_at := alice.update.state.position
