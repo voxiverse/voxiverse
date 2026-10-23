@@ -52,6 +52,7 @@ Session :: struct {
 	toggle_fly: bool, // a double-tapped jump waits for the next tick
 	last_jump:  time.Tick, // for double-tap detection
 	autopilot:  Maybe(game.Player_Input), // overrides the controls (fly_test)
+	aim:        Maybe(game.Ray_Hit), // the block under the crosshair, within reach
 	writer:     game.Writer,
 	scratch:    ^game.Block_Array, // decoding target for chunk messages
 	received:   [dynamic]game.Packet,
@@ -180,6 +181,16 @@ session_update :: proc(
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	s.camera.position = eyes + {0, game.PLAYER_EYE, 0}
+	s.aim = nil
+	f := render.forward(s.camera.yaw, s.camera.pitch)
+	if hit, ok := game.raycast(
+		query,
+		s.camera.position,
+		{f64(f.x), f64(f.y), f64(f.z)},
+		f64(s.rules.reach),
+	); ok {
+		s.aim = hit
+	}
 	world_update(&s.world, camera_chunk(&s.camera))
 }
 

@@ -72,6 +72,11 @@ camera_render :: proc(c: ^View, width, height: i32, fov_degrees: f32) -> render.
 // world_debug_lines adds this frame's world-space debug drawing.
 world_debug_lines :: proc(app: ^App) {
 	dd := &app.debug_draw
+	if hit, ok := app.session.aim.?; ok && !app.paused {
+		// The aimed-at block: a thin outline just outside its faces.
+		b := [3]f64{f64(hit.block.x), f64(hit.block.y), f64(hit.block.z)}
+		render.debug_box(dd, b - 0.004, b + 1.004, {16, 16, 20, 220})
+	}
 	if app.debug.chunk_borders {
 		c := game.chunk_origin(camera_chunk(&app.session.camera))
 		lo := [3]f64{f64(c.x), f64(c.y), f64(c.z)}
