@@ -28,7 +28,8 @@ Console :: struct {
 	count:     int,
 	mutex:     sync.Mutex,
 	input:     [dynamic]u8,
-	history:   [dynamic]string,
+	history:   [dynamic]string, // lines typed (oldest first; console_line.odin)
+	line:      Console_Line_State,
 	scroll:    f32, // lines scrolled up from the bottom
 	commands:  [dynamic]Command,
 	allocator: runtime.Allocator,
@@ -41,16 +42,33 @@ Console_Line :: struct {
 }
 
 Command :: struct {
+	name:     string,
+	help:     string,
+	run:      proc(app: ^App, args: []string),
+	complete: Completer,
+}
+
+// Command_Spec: what console_register is given (complete apart).
+Command_Spec :: struct {
 	name: string,
 	help: string,
 	run:  proc(app: ^App, args: []string),
 }
+
+// Completer: what argument `arg` (0: the first) can be, for Tab.
+Completer :: proc(app: ^App, arg: int, args: []string) -> []string
 
 console_init :: proc(c: ^Console, allocator := context.allocator) {
 	c.allocator = allocator
 	c.input = make([dynamic]u8, allocator)
 	c.history = make([dynamic]string, allocator)
 	c.commands = make([dynamic]Command, allocator)
+	c.line = {
+		browsing = -1,
+		found    = -1,
+		draft    = make([dynamic]u8, allocator),
+		query    = make([dynamic]u8, allocator),
+	}
 }
 
 console_destroy :: proc(c: ^Console) {
@@ -58,11 +76,13 @@ console_destroy :: proc(c: ^Console) {
 	for h in c.history {delete(h, c.allocator)}
 	delete(c.input)
 	delete(c.history)
+	delete(c.line.draft)
+	delete(c.line.query)
 	delete(c.commands)
 }
 
-console_register :: proc(c: ^Console, cmd: Command) {
-	append(&c.commands, cmd)
+console_register :: proc(c: ^Console, cmd: Command_Spec, complete: Completer = nil) {
+	append(&c.commands, Command{cmd.name, cmd.help, cmd.run, complete})
 }
 
 console_print :: proc(c: ^Console, text: string, level := log.Level.Info) {
@@ -93,7 +113,6 @@ console_execute :: proc(app: ^App, line: string) {
 	c := &app.console
 	text := strings.trim_space(line)
 	if text == "" {return}
-	append(&c.history, strings.clone(text, c.allocator))
 	console_print(c, fmt.tprintf("> %s", text))
 	args := strings.fields(text, context.temp_allocator)
 	for cmd in c.commands {
@@ -103,6 +122,13 @@ console_execute :: proc(app: ^App, line: string) {
 		}
 	}
 	console_print(c, fmt.tprintf("unknown command '%s' (try: help)", args[0]), .Warning)
+}
+
+// console_clear empties the scrollback.
+console_clear :: proc(c: ^Console) {
+	sync.guard(&c.mutex)
+	for i in 0 ..< c.count {delete(c.lines[(c.first + i) % CONSOLE_MAX_LINES].text, c.allocator)}
+	c.first, c.count = 0, 0
 }
 
 // console_ui draws the console over the top half of the screen.
@@ -119,13 +145,32 @@ console_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	inner := ui.rect_shrink(area, t.padding)
 	input_rect := ui.cut_bottom(&inner, t.row_height)
 	ui.cut_bottom(&inner, t.spacing)
-	if ui.text_input(ctx, "console input", &c.input, input_rect, "command (help)") {
-		console_execute(app, string(c.input[:]))
-		clear(&c.input)
-		c.scroll = 0
+	console_line_keys(app, ctx)
+	if c.line.searching {
+		hint := ui.cut_bottom(&inner, t.row_height)
+		if line, run := console_search_ui(app, ctx, hint, input_rect); run {
+			console_remember(c, line)
+			console_execute(app, line)
+			clear(&c.input)
+			c.scroll = 0
+		}
+	} else {
+		if ui.text_input(
+			ctx,
+			"console input",
+			&c.input,
+			input_rect,
+			"command (help; Tab completes)",
+		) {
+			line := string(c.input[:])
+			console_remember(c, line)
+			console_execute(app, line)
+			clear(&c.input)
+			c.scroll = 0
+		}
+		// Keep the input focused while the console is open.
+		ctx.focused = ui.get_id(ctx, "console input")
 	}
-	// Keep the input focused while the console is open.
-	ctx.focused = ui.get_id(ctx, "console input")
 
 	line_h := t.font_size * 1.35
 	if ui.rect_contains(area, ctx.input.mouse) {c.scroll += ctx.input.wheel.y * 3}
@@ -191,20 +236,18 @@ register_builtin_commands :: proc(c: ^Console) {
 				}
 			},
 		},
+		complete_screen,
 	)
 	console_register(c, {"console", "show the console", proc(app: ^App, args: []string) {
 			app.console.open = true
 		}})
 	console_register(c, {"help", "list commands", proc(app: ^App, args: []string) {
-			for cmd in app.console.commands {
-				console_print(&app.console, fmt.tprintf("  %-10s %s", cmd.name, cmd.help))
-			}
-		}})
-	console_register(c, {"clear", "clear the console", proc(app: ^App, args: []string) {
-			c := &app.console
-			sync.guard(&c.mutex)
-			for i in 0 ..< c.count {delete(c.lines[(c.first + i) % CONSOLE_MAX_LINES].text, c.allocator)}
-			c.first, c.count = 0, 0
+				for cmd in app.console.commands {
+					console_print(&app.console, fmt.tprintf("  %-10s %s", cmd.name, cmd.help))
+				}
+			}}, complete_command)
+	console_register(c, {"clear", "clear the console (Ctrl+L)", proc(app: ^App, args: []string) {
+			console_clear(&app.console)
 		}})
 	console_register(c, {"quit", "quit the game", proc(app: ^App, args: []string) {
 			app.quit = true
@@ -344,6 +387,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				)
 			},
 		},
+		complete_variables,
 	)
 	console_register(
 		c,
@@ -365,6 +409,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				}
 			},
 		},
+		complete_vars,
 	)
 	console_register(
 		c,
@@ -390,6 +435,7 @@ register_builtin_commands :: proc(c: ^Console) {
 					.Warning,
 				)
 			}},
+		complete_variables,
 	)
 	console_register(
 		c,
@@ -473,6 +519,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				}
 			},
 		},
+		complete_block,
 	)
 	console_register(
 		c,
@@ -489,6 +536,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				if os.exists(path) {enter_world(app, path, 0)} else {world_create(app, name, "")}
 			},
 		},
+		complete_world,
 	)
 	console_register(c, {"save", "save the world now", proc(app: ^App, args: []string) {
 			if app.session == nil || app.session.config.save_dir == "" {
@@ -560,6 +608,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				)
 			},
 		},
+		complete_time,
 	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning

@@ -125,12 +125,40 @@ ui_key :: proc(k: platform.Key) -> (ui.Key, bool) {
 		return .Page_Down, true
 	case .A:
 		return .A, true
+	case .B:
+		return .B, true
 	case .C:
 		return .C, true
+	case .D:
+		return .D, true
+	case .E:
+		return .E, true
+	case .F:
+		return .F, true
+	case .G:
+		return .G, true
+	case .H:
+		return .H, true
+	case .K:
+		return .K, true
+	case .L:
+		return .L, true
+	case .N:
+		return .N, true
+	case .P:
+		return .P, true
+	case .R:
+		return .R, true
+	case .U:
+		return .U, true
 	case .V:
 		return .V, true
+	case .W:
+		return .W, true
 	case .X:
 		return .X, true
+	case .Y:
+		return .Y, true
 	}
 	return {}, false
 }

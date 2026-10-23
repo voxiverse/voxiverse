@@ -266,10 +266,73 @@ test_text_input_editing :: proc(t: ^testing.T) {
 	text_frame(ctx, keys({.Down}), &text)
 	testing.expect_value(t, ctx.focused, get_id(ctx, "name"))
 
+	// Ctrl+A: the start of the line (readline), not select-all.
 	text_frame(ctx, keys({.A}, {.Ctrl}), &text)
-	text_frame(ctx, {mouse = {-100, -100}, text = []rune{'o', 'k'}}, &text)
-	testing.expect_value(t, string(text[:]), "ok")
+	text_frame(ctx, {mouse = {-100, -100}, text = []rune{'>'}}, &text)
+	testing.expect_value(t, string(text[:]), ">hXél")
 	testing.expect(t, text_frame(ctx, keys({.Enter}), &text), "Enter submits")
+}
+
+// The readline keys: moving by characters and words, killing and yanking.
+@(test)
+test_text_input_readline :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	text := make([dynamic]u8)
+	defer delete(text)
+	field := Vec2{150, 115}
+	text_frame(ctx, at(field), &text)
+	text_frame(ctx, press(field), &text)
+	text_frame(ctx, release(field), &text)
+	type :: proc(ctx: ^Context, text: ^[dynamic]u8, s: string) {
+		runes := make([dynamic]rune, context.temp_allocator)
+		for r in s {append(&runes, r)}
+		text_frame(ctx, {mouse = {-100, -100}, text = runes[:]}, text)
+	}
+	key :: proc(ctx: ^Context, text: ^[dynamic]u8, k: Key, m: bit_set[Modifier] = {}) {
+		text_frame(ctx, keys({k}, m), text)
+	}
+	type(ctx, &text, "set view_radius 8")
+	key(ctx, &text, .W, {.Ctrl}) // kill "8"
+	testing.expect_value(t, string(text[:]), "set view_radius ")
+	key(ctx, &text, .W, {.Ctrl}) // kill "view_radius " (back to a space)
+	testing.expect_value(t, string(text[:]), "set ")
+	key(ctx, &text, .Y, {.Ctrl}) // yank it back
+	testing.expect_value(t, string(text[:]), "set view_radius ")
+	key(ctx, &text, .Backspace, {.Alt}) // a word: "radius" (the _ is part of it)
+	testing.expect_value(t, string(text[:]), "set ")
+
+	clear(&text)
+	type(ctx, &text, "one two three")
+	key(ctx, &text, .A, {.Ctrl})
+	key(ctx, &text, .F, {.Alt}) // after "one"
+	key(ctx, &text, .F, {.Ctrl}) // past the space
+	key(ctx, &text, .K, {.Ctrl}) // kill "two three"
+	testing.expect_value(t, string(text[:]), "one ")
+	key(ctx, &text, .E, {.Ctrl})
+	key(ctx, &text, .Y, {.Ctrl})
+	testing.expect_value(t, string(text[:]), "one two three")
+	key(ctx, &text, .B, {.Alt}) // before "three"
+	key(ctx, &text, .U, {.Ctrl}) // kill "one two "
+	testing.expect_value(t, string(text[:]), "three")
+	key(ctx, &text, .D, {.Alt}) // kill "three"
+	testing.expect_value(t, string(text[:]), "")
+	type(ctx, &text, "ab")
+	key(ctx, &text, .B, {.Ctrl})
+	key(ctx, &text, .D, {.Ctrl}) // delete the b
+	key(ctx, &text, .H, {.Ctrl}) // and the a
+	testing.expect_value(t, string(text[:]), "")
+	// Alt+letter is a shortcut, not text (X11 also reports the letter).
+	text_frame(
+		ctx,
+		{mouse = {-100, -100}, text = []rune{'f'}, keys_pressed = {.F}, modifiers = {.Alt}},
+		&text,
+	)
+	testing.expect_value(t, string(text[:]), "")
+	// AltGr (Ctrl+Alt) types.
+	text_frame(ctx, {mouse = {-100, -100}, text = []rune{'@'}, modifiers = {.Ctrl, .Alt}}, &text)
+	testing.expect_value(t, string(text[:]), "@")
 }
 
 @(test)

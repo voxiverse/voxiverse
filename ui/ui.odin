@@ -65,10 +65,25 @@ Key :: enum u8 {
 	End,
 	Page_Up,
 	Page_Down,
-	A, // with ctrl: select all
+	// Letters, for the editing shortcuts (with Ctrl or Alt; widgets.odin).
+	A,
+	B,
 	C,
+	D,
+	E,
+	F,
+	G,
+	H,
+	K,
+	L,
+	N,
+	P,
+	R,
+	U,
 	V,
+	W,
 	X,
+	Y,
 }
 
 Modifier :: enum u8 {
@@ -89,6 +104,7 @@ Input :: struct {
 	text:           []rune, // typed text this frame
 }
 
+KILL_SIZE :: 1024
 MAX_ID_DEPTH :: 32
 MAX_CLIP_DEPTH :: 32
 MAX_LAYOUT_DEPTH :: 32
@@ -104,6 +120,8 @@ Context :: struct {
 	focus_visible:  bool, // keyboard navigation in use: draw focus rings
 	modal_open:     bool, // a modal was drawn last frame: lower layers are inert
 	edit:           Text_Edit, // state of the focused text field
+	kill:           [KILL_SIZE]u8, // the last text killed (Ctrl+W, Ctrl+K, ...), for Ctrl+Y
+	kill_len:       int,
 	errors:         int, // misuse so far (duplicate ids); checks fail on any
 	reported:       [16]Id, // each logged once, not every frame
 	frame_arena:    virtual.Arena,

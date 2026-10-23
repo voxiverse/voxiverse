@@ -28,6 +28,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	}
 	if app.input.escape {
 		switch {
+		case app.console.open && console_search_cancel(&app.console):
 		case app.console.open:
 			app.console.open = false
 		case app.tuning:

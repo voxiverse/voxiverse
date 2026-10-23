@@ -90,6 +90,7 @@ app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
 	register_builtin_commands(&app.console)
 	settings_load(app)
+	console_history_load(&app.console)
 	app.debug = DEBUG_DEFAULTS
 	shader_watch_init(&app.shader_watch)
 
@@ -213,6 +214,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	audio.device_close(&app.audio_device) // before the sounds it plays go
 	sounds_destroy(&app.sounds)
 	if app.settings_dirty {settings_save(app)}
+	console_history_save(&app.console)
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)

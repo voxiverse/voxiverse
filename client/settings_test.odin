@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "../base"
+import "../ui"
 
 // Every variable table names real fields of supported types, with defaults
 // inside their ranges.
@@ -61,4 +62,48 @@ test_fps_counter :: proc(t: ^testing.T) {
 	for _ in 0 ..< 250 {fps_update(&f, 2, gpu)}
 	testing.expectf(t, abs(f.fps - 500) < 1e-2, "fps %v", f.fps)
 	testing.expect_value(t, f.gpu_ms, 1)
+}
+
+// Tab: one fit completes (and adds a space), several extend to what they
+// share, and when that adds nothing they are listed.
+@(test)
+test_console_completion :: proc(t: ^testing.T) {
+	commands := []string{"set", "save", "screen", "screenshot", "summon", "tp"}
+	done, choices := complete_word("tp", commands)
+	testing.expect(t, done == "tp " && choices == nil)
+	done, choices = complete_word("su", commands)
+	testing.expect_value(t, done, "summon ")
+	done, choices = complete_word("scr", commands)
+	testing.expect(t, done == "screen" && choices == nil, "extends to the shared part")
+	done, choices = complete_word("screen", commands)
+	testing.expect(t, done == "screen" && len(choices) == 2, "lists when it cannot extend")
+	done, choices = complete_word("s", commands)
+	testing.expect(t, done == "s" && len(choices) == 5)
+	done, choices = complete_word("x", commands)
+	testing.expect(t, done == "x" && choices == nil)
+}
+
+// History: typed lines (not twice in a row), walked with the draft kept.
+@(test)
+test_console_history :: proc(t: ^testing.T) {
+	c: Console
+	console_init(&c)
+	defer console_destroy(&c)
+	console_remember(&c, "time noon")
+	console_remember(&c, "time noon")
+	console_remember(&c, "  summon ")
+	console_remember(&c, "")
+	testing.expect_value(t, len(c.history), 2)
+	append(&c.input, "half typed")
+	e: ui.Text_Edit
+	walk_history(&c, -1, &e)
+	testing.expect_value(t, string(c.input[:]), "summon")
+	walk_history(&c, -1, &e)
+	walk_history(&c, -1, &e) // the oldest stays
+	testing.expect_value(t, string(c.input[:]), "time noon")
+	testing.expect_value(t, e.cursor, len("time noon"))
+	walk_history(&c, 1, &e)
+	walk_history(&c, 1, &e) // past the newest: the draft again
+	testing.expect_value(t, string(c.input[:]), "half typed")
+	testing.expect_value(t, c.line.browsing, -1)
 }

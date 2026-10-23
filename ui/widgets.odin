@@ -196,12 +196,28 @@ text_input :: proc(
 	return
 }
 
-// edit_text applies this frame's typing and editing keys to text.
+// edit_text applies this frame's typing and editing keys to text: the
+// usual arrows, Home/End, Backspace/Delete, and the readline (Emacs) keys
+// shells and Claude Code use:
+//
+//	Ctrl+A / Ctrl+E          start / end of the line
+//	Ctrl+B / Ctrl+F          back / forward a character
+//	Alt+B / Alt+F, Ctrl+←/→  back / forward a word
+//	Ctrl+W                   kill back to the previous space
+//	Alt+Backspace, Ctrl+Backspace   kill the word before the cursor
+//	Alt+D, Ctrl+Delete       kill the word after it
+//	Ctrl+U / Ctrl+K          kill to the start / end of the line
+//	Ctrl+Y                   yank (insert) the last text killed
+//	Ctrl+D, Ctrl+H           delete forward / backward a character
+//
+// Shift with a movement extends the selection. Text typed with Alt (not
+// AltGr, which is Ctrl+Alt) is a shortcut, not text.
 @(private)
 edit_text :: proc(ctx: ^Context, e: ^Text_Edit, text: ^[dynamic]u8) -> (submitted: bool) {
 	in_ := &ctx.input
 	keys := in_.keys_pressed
-	shift, ctrl := .Shift in in_.modifiers, .Ctrl in in_.modifiers
+	shift, ctrl, alt := .Shift in in_.modifiers, .Ctrl in in_.modifiers, .Alt in in_.modifiers
+	ctrl_only, alt_only := ctrl && !alt, alt && !ctrl
 	e.cursor = clamp(e.cursor, 0, len(text))
 	e.anchor = clamp(e.anchor, 0, len(text))
 
@@ -216,42 +232,109 @@ edit_text :: proc(ctx: ^Context, e: ^Text_Edit, text: ^[dynamic]u8) -> (submitte
 		e.cursor = to
 		if !extend {e.anchor = to}
 	}
+	// kill removes [a, b) into the kill buffer.
+	kill :: proc(ctx: ^Context, e: ^Text_Edit, text: ^[dynamic]u8, a, b: int) {
+		if a >= b {return}
+		ctx.kill_len = copy(ctx.kill[:], text[a:b])
+		remove_range(text, a, b)
+		e.cursor, e.anchor = a, a
+	}
+	left := .Left in keys || ctrl_only && .B in keys
+	right := .Right in keys || ctrl_only && .F in keys
+	word_left := ctrl_only && .Left in keys || alt_only && .B in keys
+	word_right := ctrl_only && .Right in keys || alt_only && .F in keys
 
-	if ctrl && .A in keys {
-		e.anchor, e.cursor = 0, len(text)
+	switch {
+	case word_left:
+		move(e, word_start(text[:], e.cursor), shift)
+	case word_right:
+		move(e, word_end(text[:], e.cursor), shift)
+	case left:
+		if !shift && e.cursor != e.anchor {
+			move(e, min(e.cursor, e.anchor), false)
+		} else {
+			move(e, prev_rune_start(text[:], e.cursor), shift)
+		}
+	case right:
+		if !shift && e.cursor != e.anchor {
+			move(e, max(e.cursor, e.anchor), false)
+		} else {
+			move(e, next_rune_start(text[:], e.cursor), shift)
+		}
 	}
-	if .Left in keys {
-		if !shift &&
-		   e.cursor !=
-			   e.anchor {move(e, min(e.cursor, e.anchor), false)} else {move(e, prev_rune_start(text[:], e.cursor), shift)}
-	}
-	if .Right in keys {
-		if !shift &&
-		   e.cursor !=
-			   e.anchor {move(e, max(e.cursor, e.anchor), false)} else {move(e, next_rune_start(text[:], e.cursor), shift)}
-	}
-	if .Home in keys {move(e, 0, shift)}
-	if .End in keys {move(e, len(text), shift)}
-	if .Backspace in keys {
+	if .Home in keys || ctrl_only && .A in keys {move(e, 0, shift)}
+	if .End in keys || ctrl_only && .E in keys {move(e, len(text), shift)}
+
+	switch {
+	case ctrl_only && .W in keys:
+		if !delete_selection(e, text) {
+			start := e.cursor
+			for start > 0 && text[start - 1] == ' ' {start -= 1}
+			for start > 0 && text[start - 1] != ' ' {start -= 1}
+			kill(ctx, e, text, start, e.cursor)
+		}
+	case .Backspace in keys && (ctrl || alt):
+		if !delete_selection(e, text) {kill(ctx, e, text, word_start(text[:], e.cursor), e.cursor)}
+	case alt_only && .D in keys, ctrl_only && .Delete in keys:
+		if !delete_selection(e, text) {kill(ctx, e, text, e.cursor, word_end(text[:], e.cursor))}
+	case ctrl_only && .U in keys:
+		kill(ctx, e, text, 0, e.cursor)
+	case ctrl_only && .K in keys:
+		kill(ctx, e, text, e.cursor, len(text))
+	case ctrl_only && .Y in keys:
+		delete_selection(e, text)
+		inject_at(text, e.cursor, ..ctx.kill[:ctx.kill_len])
+		e.cursor += ctx.kill_len
+		e.anchor = e.cursor
+	case .Backspace in keys, ctrl_only && .H in keys:
 		if !delete_selection(e, text) && e.cursor > 0 {
 			start := prev_rune_start(text[:], e.cursor)
 			remove_range(text, start, e.cursor)
 			e.cursor, e.anchor = start, start
 		}
-	}
-	if .Delete in keys {
+	case .Delete in keys, ctrl_only && .D in keys:
 		if !delete_selection(e, text) && e.cursor < len(text) {
 			remove_range(text, e.cursor, next_rune_start(text[:], e.cursor))
 		}
 	}
-	for r in in_.text {
-		delete_selection(e, text)
-		bytes, n := utf8.encode_rune(r)
-		inject_at(text, e.cursor, ..bytes[:n])
-		e.cursor += n
-		e.anchor = e.cursor
+	if !alt_only {
+		for r in in_.text {
+			delete_selection(e, text)
+			bytes, n := utf8.encode_rune(r)
+			inject_at(text, e.cursor, ..bytes[:n])
+			e.cursor += n
+			e.anchor = e.cursor
+		}
 	}
 	return .Enter in keys
+}
+
+// word_start: where the word before i begins (skipping spaces and
+// punctuation first); a word is letters, digits, _ and anything non-ASCII.
+@(private)
+word_start :: proc(s: []u8, i: int) -> int {
+	j := i
+	for j > 0 && !is_word_byte(s[j - 1]) {j -= 1}
+	for j > 0 && is_word_byte(s[j - 1]) {j -= 1}
+	return j
+}
+
+// word_end: where the word after i ends.
+@(private)
+word_end :: proc(s: []u8, i: int) -> int {
+	j := i
+	for j < len(s) && !is_word_byte(s[j]) {j += 1}
+	for j < len(s) && is_word_byte(s[j]) {j += 1}
+	return j
+}
+
+@(private)
+is_word_byte :: proc(b: u8) -> bool {
+	switch b {
+	case 'a' ..= 'z', 'A' ..= 'Z', '0' ..= '9', '_', 0x80 ..= 0xff:
+		return true
+	}
+	return false
 }
 
 @(private)
