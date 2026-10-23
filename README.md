@@ -44,11 +44,12 @@ on automatically and which reports GPU API misuse in the log.
 | `test` | Run the unit tests |
 | `fmt` | Format all sources in place |
 | `shaders` | Compile `assets/shaders` to SPIR-V (only what changed) |
-| `build` | Build the game into `build/` (debug; `--release` for optimized) |
+| `build` | Build the game into `build/` (debug; `--release`, `--sanitize`, `--profile`) |
 | `run` | Build and run; arguments after `--` go to the game, e.g. `run -- --frames 120` |
+| `debug` | Build and start in gdb/lldb (RAD Debugger on Windows) with Odin pretty-printers |
 
-Debugging (validation, leak tracking, stack traces, sanitizer, debuggers, RenderDoc): see
-[DEBUGGING.md](DEBUGGING.md).
+Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with
+Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md](DEBUGGING.md).
 
 ## Layout
 

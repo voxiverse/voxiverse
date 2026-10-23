@@ -47,6 +47,13 @@ Gpu :: struct {
 	frame_index:       int,
 	ctx:               runtime.Context, // logger etc. for the validation callback
 	debug_utils:       bool, // object names and command labels are available
+	// GPU timing (timing.odin)
+	timing:            bool,
+	calibrated:        bool, // GPU timestamps convertible to the trace clock
+	host_time_domain:  vk.TimeDomainKHR,
+	timestamp_period:  f32, // ns per tick
+	timestamp_mask:    u64,
+	gpu_frame_stats:   base.Frame_Stats,
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
 	validation_issues: int,
@@ -166,14 +173,17 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		dynamicRendering = true,
 		synchronization2 = true,
 	}
-	device_extensions := [?]cstring{"VK_KHR_swapchain"}
+	device_extensions := make([dynamic]cstring, context.temp_allocator)
+	append(&device_extensions, "VK_KHR_swapchain")
+	calibration := has_device_extension(g.physical, "VK_KHR_calibrated_timestamps")
+	if calibration {append(&device_extensions, "VK_KHR_calibrated_timestamps")}
 	info := vk.DeviceCreateInfo {
 		sType                   = .DEVICE_CREATE_INFO,
 		pNext                   = &features13,
 		queueCreateInfoCount    = 1,
 		pQueueCreateInfos       = &queue_info,
-		enabledExtensionCount   = len(device_extensions),
-		ppEnabledExtensionNames = &device_extensions[0],
+		enabledExtensionCount   = u32(len(device_extensions)),
+		ppEnabledExtensionNames = raw_data(device_extensions),
 	}
 	if result := vk.CreateDevice(g.physical, &info, nil, &g.device); result != .SUCCESS {
 		log.errorf("gpu: vkCreateDevice failed: %v", result)
@@ -183,6 +193,10 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	vk.GetDeviceQueue(g.device, g.queue_family, 0, &g.queue)
 	set_name(g, .QUEUE, u64(uintptr(g.queue)), "main queue")
 	choose_surface_format(g) // fixed from here on, so pipelines can use it
+
+	props: vk.PhysicalDeviceProperties
+	vk.GetPhysicalDeviceProperties(g.physical, &props)
+	timing_setup(g, queue_timestamp_bits(g), props.limits.timestampPeriod, calibration)
 
 	for &f, i in g.frames {
 		if !create_frame_sync(g, &f, i) {return false}
@@ -196,6 +210,11 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 	if g.device != nil {
 		vk.DeviceWaitIdle(g.device)
+		// The last frames' GPU timings are still unread; oldest slot first.
+		for i in 0 ..< FRAMES_IN_FLIGHT {
+			timing_collect(g, &g.frames[(g.frame_index + i) % FRAMES_IN_FLIGHT].timing)
+		}
+		timing_log_summary(g)
 		for &f in g.frames {destroy_frame_sync(g, &f)}
 		destroy_swapchain(g, &g.swapchain)
 		vk.DestroyDevice(g.device, nil)
@@ -295,6 +314,27 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 }
 
 @(private)
+has_device_extension :: proc(device: vk.PhysicalDevice, name: string) -> bool {
+	count: u32
+	vk.EnumerateDeviceExtensionProperties(device, nil, &count, nil)
+	exts := make([]vk.ExtensionProperties, count, context.temp_allocator)
+	vk.EnumerateDeviceExtensionProperties(device, nil, &count, raw_data(exts))
+	for &e in exts {
+		if string(cstring(&e.extensionName[0])) == name {return true}
+	}
+	return false
+}
+
+@(private)
+queue_timestamp_bits :: proc(g: ^Gpu) -> u32 {
+	count: u32
+	vk.GetPhysicalDeviceQueueFamilyProperties(g.physical, &count, nil)
+	families := make([]vk.QueueFamilyProperties, count, context.temp_allocator)
+	vk.GetPhysicalDeviceQueueFamilyProperties(g.physical, &count, raw_data(families))
+	return families[g.queue_family].timestampValidBits
+}
+
+@(private)
 has_validation_layer :: proc() -> bool {
 	count: u32
 	vk.EnumerateInstanceLayerProperties(&count, nil)
@@ -381,14 +421,16 @@ set_name :: proc(g: ^Gpu, type: vk.ObjectType, handle: u64, name: string) {
 	vk.SetDebugUtilsObjectNameEXT(g.device, &info)
 }
 
-// begin_label / end_label bracket a section of a command buffer, so
-// validation messages and captures (RenderDoc) show where work came from.
+// begin_label / end_label bracket a section of a command buffer: it is
+// named in validation messages and captures (RenderDoc) and timed on the GPU
+// (timing.odin). Use between begin_frame and end_frame; pairs must balance.
 begin_label :: proc(
 	g: ^Gpu,
 	cmd: vk.CommandBuffer,
 	name: string,
 	color := [4]f32{0.5, 0.5, 0.5, 1},
 ) {
+	timing_section_begin(g, &g.frames[g.frame_index].timing, cmd, name)
 	if !g.debug_utils {return}
 	label := vk.DebugUtilsLabelEXT {
 		sType      = .DEBUG_UTILS_LABEL_EXT,
@@ -399,6 +441,7 @@ begin_label :: proc(
 }
 
 end_label :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
+	timing_section_end(g, &g.frames[g.frame_index].timing, cmd)
 	if !g.debug_utils {return}
 	vk.CmdEndDebugUtilsLabelEXT(cmd)
 }

@@ -14,12 +14,20 @@ import "core:strings"
 //	build shaders              compile assets/shaders to SPIR-V (fetches the pinned glslang once)
 //	build build [--release | --sanitize]    build the game into build/
 //	build run [--release | --sanitize] [-- game args...]
+//	build debug [--lldb] [-- game args...]   debug build under gdb/lldb with Odin printers
 //
 // It runs from the repository root (the wrapper scripts cd there).
 
 // PACKAGES are type-checked by `check`, each on its own so one broken
 // package doesn't hide errors in the others.
-PACKAGES :: []string{"base", "platform", "gpu", "client", "tools/build"}
+PACKAGES :: []string {
+	"base",
+	"platform",
+	"gpu",
+	"client",
+	"tools/build",
+	"tools/debugger/printer_test",
+}
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string{"base"}
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
@@ -58,6 +66,8 @@ main :: proc() {
 		_, ok = build_game(args[1:])
 	case "run":
 		ok = run_game(args[1:])
+	case "debug":
+		ok = debug_game(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		ok = true
@@ -78,29 +88,41 @@ usage :: proc() {
 		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
 	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
+	fmt.println(
+		"  debug     build, then run it in the debugger (gdb, --lldb, RAD Debugger on Windows)",
+	)
 }
 
 // build_game compiles shaders and the game. Debug builds keep symbols and
-// turn on Vulkan validation; --release optimizes; --sanitize is a debug build
-// with AddressSanitizer (use-after-free, overflows; best on Linux/macOS).
+// turn on Vulkan validation; --release optimizes; --sanitize adds
+// AddressSanitizer (use-after-free, overflows; best on Linux/macOS);
+// --profile writes a Spall trace (combine with --release for real numbers).
 build_game :: proc(args: []string) -> (exe: string, ok: bool) {
-	release, sanitize := false, false
+	release, sanitize, profile := false, false, false
 	for arg in args {
 		switch arg {
 		case "--release":
 			release = true
 		case "--sanitize":
 			sanitize = true
+		case "--profile":
+			profile = true
 		case:
 			fmt.eprintfln("build: unknown option '%s'", arg)
 			return "", false
 		}
 	}
+	if release && sanitize {
+		fmt.eprintln("build: --sanitize is a debug build; drop --release")
+		return "", false
+	}
 	shaders() or_return
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
-	mode := []string{"-o:speed"} if release else []string{"-debug"}
+	mode := make([dynamic]string)
+	append(&mode, "-o:speed" if release else "-debug")
+	if profile {append(&mode, "-define:VX_PROFILE=true")}
 	if sanitize {
-		mode = {"-debug", "-sanitize:address"}
+		append(&mode, "-sanitize:address")
 		// Leaks are the tracking allocator's job; LSan would also report
 		// GPU drivers' own allocations.
 		if _, set := os.lookup_env("ASAN_OPTIONS", context.allocator); !set {
@@ -111,17 +133,69 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 		[][]string {
 			{"odin", "build", GAME_PACKAGE},
 			ODIN_FLAGS,
-			mode,
+			mode[:],
 			{strings.concatenate({"-out:", exe})},
 		},
 	)
 	run(cmd) or_return
 	fmt.printfln(
-		"built  %s (%s)",
+		"built  %s (%s%s%s)",
 		exe,
-		"release" if release else "debug + sanitizer" if sanitize else "debug",
+		"release" if release else "debug",
+		" + sanitizer" if sanitize else "",
+		" + profiling" if profile else "",
 	)
 	return exe, true
+}
+
+// debug_game runs a debug build under the platform's debugger with the Odin
+// pretty-printers from tools/debugger loaded.
+debug_game :: proc(args: []string) -> bool {
+	opts, game_args := args, []string{}
+	if i, found := slice.linear_search(args, "--"); found {
+		opts, game_args = args[:i], args[i + 1:]
+	}
+	use_lldb := ODIN_OS == .Darwin
+	for opt in opts {
+		switch opt {
+		case "--lldb":
+			use_lldb = true
+		case "--gdb":
+			use_lldb = false
+		case:
+			fmt.eprintfln("build: unknown option '%s'", opt)
+			return false
+		}
+	}
+	exe, ok := build_game({})
+	if !ok {return false}
+	when ODIN_OS == .Windows {
+		// PDB debug info; RAD Debugger understands Odin types natively.
+		if _, found := capture({"where", "raddbg"}); found {
+			return run(slice.concatenate([][]string{{"raddbg", exe}, game_args}))
+		}
+		fmt.eprintln(
+			"build: open build\\voxiverse.exe in RAD Debugger, RemedyBG or Visual Studio (see DEBUGGING.md)",
+		)
+		return false
+	} else {
+		if use_lldb {
+			cmd := slice.concatenate(
+				[][]string {
+					{"lldb", "-o", "command script import tools/debugger/odin_lldb.py", "--", exe},
+					game_args,
+				},
+			)
+			return run(cmd)
+		}
+		cmd := slice.concatenate(
+			[][]string {
+				{"gdb", "-q", "-x", "tools/debugger/odin_gdb.py", "--args", exe},
+				game_args,
+			},
+		)
+		return run(cmd)
+	}
 }
 
 run_game :: proc(args: []string) -> bool {

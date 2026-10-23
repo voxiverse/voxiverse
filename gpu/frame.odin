@@ -28,6 +28,7 @@ Frame_Sync :: struct {
 	cmd:            vk.CommandBuffer,
 	fence:          vk.Fence,
 	image_acquired: vk.Semaphore,
+	timing:         Frame_Timing,
 }
 
 // Frame is what a caller records into between begin_frame and end_frame.
@@ -83,6 +84,7 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		flags = {.ONE_TIME_SUBMIT},
 	}
 	check(vk.BeginCommandBuffer(f.cmd, &begin)) or_return
+	timing_frame_begin(g, &f.timing, f.cmd)
 
 	frame = Frame {
 		cmd         = f.cmd,
@@ -101,6 +103,7 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 	f := &g.frames[g.frame_index]
 	sc := &g.swapchain
 	image_barrier(frame.cmd, frame.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
+	timing_frame_end(g, &f.timing, frame.cmd)
 	if !check(vk.EndCommandBuffer(frame.cmd)) {return}
 
 	wait := vk.SemaphoreSubmitInfo {
@@ -212,11 +215,12 @@ create_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync, index: int) -> bool {
 	set_name(g, .COMMAND_BUFFER, u64(uintptr(f.cmd)), fmt.tprintf("frame %d commands", index))
 	set_name(g, .FENCE, u64(f.fence), fmt.tprintf("frame %d fence", index))
 	set_name(g, .SEMAPHORE, u64(f.image_acquired), fmt.tprintf("frame %d image acquired", index))
-	return true
+	return timing_init(g, &f.timing, index)
 }
 
 @(private)
 destroy_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync) {
+	timing_destroy(g, &f.timing)
 	if f.image_acquired != 0 {vk.DestroySemaphore(g.device, f.image_acquired, nil)}
 	if f.fence != 0 {vk.DestroyFence(g.device, f.fence, nil)}
 	if f.pool != 0 {vk.DestroyCommandPool(g.device, f.pool, nil)} 	// frees cmd too
