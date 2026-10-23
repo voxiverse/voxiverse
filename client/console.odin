@@ -219,7 +219,11 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "title":
 					app.screen = .Title
 				case "options":
-					app.screen = .Options
+					if app.session != nil {
+						app.paused, app.in_game_options = true, true // over the game
+					} else {
+						app.screen = .Options
+					}
 				case "worlds":
 					worlds_refresh(&app.worlds)
 					app.screen = .Worlds

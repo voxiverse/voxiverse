@@ -93,6 +93,7 @@ Session :: struct {
 	scratch:     ^game.Block_Array, // decoding target for chunk messages
 	received:    [dynamic]game.Packet,
 	last_acked:  u32, // the newest Player_Update applied
+	frozen:      bool, // paused, the world standing still (session_freeze)
 	stats:       Session_Stats,
 	config:      Session_Config,
 	net:         Net_Stats,
@@ -184,6 +185,16 @@ session_hosting :: proc(s: ^Session) -> bool {
 	return !s.remote
 }
 
+// session_freeze stops the world while we are paused, if it is ours and
+// nobody else can be in it (no remote server, not open to the LAN); then
+// the server stands still and so do we. Unpausing lets both go on.
+session_freeze :: proc(s: ^Session, paused: bool) {
+	want := paused && !s.remote && s.state == .Playing && server.stats(&s.server).port == 0
+	if want == s.frozen {return}
+	s.frozen = want
+	server.freeze(&s.server, want)
+}
+
 // session_can_cheat: the server lets this player teleport, change rules and
 // run admin commands (sending one otherwise ends the connection).
 session_can_cheat :: proc(s: ^Session) -> bool {
@@ -243,6 +254,11 @@ session_update :: proc(
 	receive(s)
 	defer flush(s)
 	if s.state != .Playing {return}
+	if s.frozen {
+		s.tick_time = 0 // and no inputs: the server's player waits too
+		world_update(&s.world, camera_chunk(&s.camera)) // what arrives still meshes
+		return
+	}
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	s.cloud_drift += f64(dt) * render.CLOUD_SPEED
 	if look {

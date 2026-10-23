@@ -30,6 +30,7 @@ Var :: struct {
 	min, max: f64, // numbers: allowed range
 	step:     f64, // numbers: slider step (0 = continuous, ints use 1)
 	check:    proc(text: string) -> bool, // text: what is allowed (nil: anything that fits)
+	hint:     string, // text: shown in an empty field
 }
 
 // Var_Text: a text variable's value, stored in place (settings stay plain

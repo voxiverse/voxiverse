@@ -26,6 +26,7 @@ Fake_Client :: struct {
 	results:        [dynamic]game.Edit_Result,
 	columns:        map[[2]i32]game.Column,
 	column_updates: int,
+	clock:          f64, // the last Time
 }
 
 @(private = "file")
@@ -68,8 +69,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		case game.Column:
 			if v.pos in c.columns {c.column_updates += 1}
 			c.columns[v.pos] = v
+		case game.Time:
+			c.clock = v.time
 		case game.Block_Changed,
-		     game.Time,
 		     game.Pong,
 		     game.Player_Joined,
 		     game.Player_Left,
@@ -412,4 +414,65 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 		c.player.state.position.x,
 	)
 	testing.expect(t, stop(&srv))
+}
+
+// Paused alone, the world stands still (time, entities); open to the LAN,
+// a freeze is ignored: someone else could be playing.
+@(test)
+test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	ok := start(
+		&srv,
+		{seed = 5, view_radius = 2, view_height = 1, workers = 1, allow_cheats = true},
+		{&pipe, .Server},
+	)
+	if !testing.expect(t, ok) {return}
+	defer stop(&srv)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	defer delete(c.results)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "solo"})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.clock > 0}),
+	)
+	@(static) before: f64
+	freeze(&srv, true)
+	time.sleep(1100 * time.Millisecond) // a Time sent after the freeze
+	fake_receive(t, &c)
+	before = c.clock
+	time.sleep(2100 * time.Millisecond) // two more Time messages
+	fake_receive(t, &c)
+	testing.expectf(t, c.clock == before, "time went on while frozen: %v -> %v", before, c.clock)
+
+	freeze(&srv, false)
+	testing.expect(
+		t,
+		wait_until(
+			t,
+			&c,
+			proc(c: ^Fake_Client) -> bool {return c.clock > before},
+			3 * time.Second,
+		),
+		"time did not go on after the freeze",
+	)
+
+	// Open to the LAN: freezing does nothing.
+	fake_send(&c, game.Admin{"open_lan"})
+	time.sleep(100 * time.Millisecond)
+	freeze(&srv, true)
+	time.sleep(1100 * time.Millisecond)
+	fake_receive(t, &c)
+	before = c.clock
+	time.sleep(2100 * time.Millisecond)
+	fake_receive(t, &c)
+	testing.expectf(t, c.clock > before, "a world open to the LAN froze at %v", before)
 }

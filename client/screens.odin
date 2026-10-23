@@ -20,7 +20,11 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 		app.console.open = !app.console.open
 	}
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
-	if .F4 in app.input.pressed {app.tuning = !app.tuning}
+	if .F4 in app.input.pressed {
+		app.tuning = !app.tuning
+		// Tuning is watching the game respond: no pause menu in the way.
+		if app.tuning {app.paused, app.in_game_options = false, false}
+	}
 	if .F2 in app.input.pressed {screenshot_request(app, "")}
 	if .F11 in app.input.pressed {
 		app.settings.fullscreen = !app.settings.fullscreen
@@ -40,6 +44,9 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 		case app.screen == .Multiplayer:
 			multiplayer_close(&app.multiplayer)
 			app.screen = .Title
+		case app.screen == .Game && app.in_game_options:
+			if app.settings_dirty {settings_save(app)}
+			app.in_game_options = false // back to the pause menu
 		case app.screen == .Game:
 			app.paused = !app.paused
 		case:
@@ -117,14 +124,19 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		hotbar(ctx, s)
 		return
 	}
+	if app.in_game_options {
+		if options_panel(app, ctx, true) {app.in_game_options = false}
+		return
+	}
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	column := ui.rect_center(ctx.screen, 320, 3 * t.row_height + 2 * t.spacing + 80)
+	column := ui.rect_center(ctx.screen, 320, 4 * t.row_height + 3 * t.spacing + 80)
 	ui.title(ctx, "Paused", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 	if ui.button(ctx, "Resume", ui.next(ctx)) {app.paused = false}
+	if ui.button(ctx, "Options", ui.next(ctx)) {app.in_game_options = true}
 	if session_hosting(s) {
 		port := server.stats(&s.server).port
 		label := fmt.tprintf("Open to LAN: port %d", port) if port != 0 else "Open to LAN"
@@ -305,20 +317,45 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 }
 
 options_screen :: proc(app: ^App, ctx: ^ui.Context) {
+	if options_panel(app, ctx, false) {app.screen = .Title}
+}
+
+// options_panel: the settings, with Back (true when pressed). In a game it
+// sits on a panel without dimming the world, so changes show as they are
+// made.
+options_panel :: proc(app: ^App, ctx: ^ui.Context, in_game: bool) -> (back: bool) {
 	ui.push_id(ctx, "options")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
 	rows := f32(len(SETTINGS_VARS) + 1)
-	column := ui.rect_center(ctx.screen, 560, rows * (t.row_height + t.spacing) + 90)
+	height := rows * (t.row_height + t.spacing) + 90
+	if in_game {
+		// Docked left, the game in view to the right: changes show as made.
+		prev := ui.begin_layer(ctx, .Modal)
+		defer ui.end_layer(ctx, prev)
+		r := ctx.screen
+		panel := ui.cut_left(&r, 560 + 4 * t.padding)
+		ui.panel(ctx, panel)
+		column := ui.rect_shrink(panel, 2 * t.padding)
+		column.h = min(column.h, height)
+		return options_body(app, ctx, column)
+	}
+	return options_body(app, ctx, ui.rect_center(ctx.screen, 560, height))
+}
+
+@(private = "file")
+options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (back: bool) {
+	column := area
 	ui.title(ctx, "Options", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 	if var_widgets(ctx, settings_table(), &app.settings) {settings_changed(app)}
 	ui.next(ctx, 10)
 	if ui.button(ctx, "Back", ui.next(ctx)) {
-		app.screen = .Title
 		if app.settings_dirty {settings_save(app)}
+		return true
 	}
+	return false
 }
 
 // var_widgets draws a checkbox or slider per variable of the table, in the
@@ -363,7 +400,7 @@ var_widgets :: proc(ctx: ^ui.Context, table: base.Var_Table, data: rawptr) -> (c
 			value := (^base.Var_Text)(uintptr(data) + offset)
 			text := make([dynamic]u8, context.temp_allocator)
 			append(&text, base.var_text(value))
-			ui.text_input(ctx, v.field, &text, r, placeholder = v.help)
+			ui.text_input(ctx, v.field, &text, r, placeholder = v.hint)
 			if string(text[:]) != base.var_text(value) &&
 			   base.var_set(table, data, base.var_name(table, &v), string(text[:])) == .None {
 				changed = true

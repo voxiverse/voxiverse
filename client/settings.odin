@@ -45,6 +45,7 @@ SETTINGS_VARS := [?]base.Var {
 		field = "name",
 		help = "your name in multiplayer: letters, digits, _ or -",
 		check = proc(s: string) -> bool {return s == "" || game.name_valid(s)},
+		hint = DEFAULT_NAME,
 	},
 	{
 		field = "ui_scale",
@@ -64,9 +65,16 @@ SETTINGS_VARS := [?]base.Var {
 		max = 110,
 		step = 1,
 	},
-	{field = "view_radius", help = "view distance across, chunks (next world)", min = 2, max = 32},
+	{
+		field = "view_radius",
+		label = "View radius (next world)",
+		help = "view distance across, chunks (next world)",
+		min = 2,
+		max = 32,
+	},
 	{
 		field = "view_height",
+		label = "View height (next world)",
 		help = "view distance up and down, chunks (next world)",
 		min = 1,
 		max = 16,

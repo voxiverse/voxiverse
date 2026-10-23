@@ -85,7 +85,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
 | <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose the block to place |
-| <kbd>Esc</kbd> | Pause menu (Resume, Leave World) |
+| <kbd>Esc</kbd> | Pause menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |

@@ -67,6 +67,7 @@ Server :: struct {
 	local:       game.Endpoint, // the in-process player's pipe (none: a dedicated server)
 	thread:      ^thread.Thread,
 	stopping:    bool, // (atomic)
+	frozen:      bool, // (atomic) the local player paused: time and entities stand still
 	failed:      bool, // (atomic)
 	stats_mutex: sync.Mutex,
 	stats:       Stats,
@@ -207,6 +208,13 @@ stop :: proc(s: ^Server) -> bool {
 	return !failed
 }
 
+// freeze stops (or restarts) time and entities while the local player is
+// paused. Ignored while anyone else could be playing: remote players, or
+// the world open to the LAN.
+freeze :: proc(s: ^Server, on: bool) {
+	sync.atomic_store(&s.frozen, on)
+}
+
 // block_capacity is the most chunk arrays the server can ever hold.
 block_capacity :: proc(s: ^Server) -> int {
 	return s.capacity
@@ -279,7 +287,8 @@ tick :: proc(s: ^Server) {
 			return anyone_wants((^Server)(data), pos, game.SERVER_UNLOAD_MARGIN)
 		}, s)
 	receive_messages(s)
-	s.clock = game.advance_time(s.clock, f64(game.TICK_SECONDS), &s.rules)
+	frozen := sync.atomic_load(&s.frozen) && !s.listening
+	if !frozen {s.clock = game.advance_time(s.clock, f64(game.TICK_SECONDS), &s.rules)}
 	moved := false
 	for &c in s.clients {
 		if c.state != .Playing {continue}
@@ -292,7 +301,7 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	if moved {unload_unwanted(s)}
-	entities_tick(s)
+	if !frozen {entities_tick(s)}
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		send_players(s, &c)

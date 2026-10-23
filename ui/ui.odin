@@ -428,6 +428,10 @@ rect_shrink :: proc(r: Rect, by: f32) -> Rect {
 	return {r.x + by, r.y + by, max(r.w - 2 * by, 0), max(r.h - 2 * by, 0)}
 }
 
+rect_expand :: proc(r: Rect, by: f32) -> Rect {
+	return {r.x - by, r.y - by, r.w + 2 * by, r.h + 2 * by}
+}
+
 rect_center :: proc(outer: Rect, w, h: f32) -> Rect {
 	return {outer.x + (outer.w - w) / 2, outer.y + (outer.h - h) / 2, w, h}
 }

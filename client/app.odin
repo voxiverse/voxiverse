@@ -64,6 +64,7 @@ App :: struct {
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	paused:           bool, // the pause menu is open (in a world)
+	in_game_options:  bool, // ... showing Options
 	debug:            Debug_Switches,
 	settings_dirty:   bool, // changed since loaded or saved
 	scripted:         bool, // running --exec commands: settings changes are not saved
@@ -254,8 +255,11 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		audio.set_volume(&app.mixer, app.settings.volume)
 		app.volume = app.settings.volume
 	}
+	if !app.paused {app.in_game_options = false}
 	if app.session != nil {
-		// The world keeps running behind menus (the server would anyway).
+		// Paused alone in our own world, it stands still; anyone else could
+		// be playing (a remote server, the LAN open), so it runs on.
+		session_freeze(app.session, app.paused)
 		playing := !app.paused && !app.console.open && !app.tuning
 		platform.set_mouse_captured(w, playing && w.focused)
 		conditions := game.Conditions {
