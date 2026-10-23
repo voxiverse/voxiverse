@@ -31,7 +31,13 @@ backdrop :: proc(ctx: ^Context) {
 	fill_rect(ctx, ctx.screen, ctx.theme.backdrop)
 }
 
-button :: proc(ctx: ^Context, text: string, r: Rect, disabled := false) -> bool {
+button :: proc(
+	ctx: ^Context,
+	text: string,
+	r: Rect,
+	disabled := false,
+	loc := #caller_location,
+) -> bool {
 	t := &ctx.theme
 	shown := display_label(text)
 	if disabled {
@@ -39,7 +45,7 @@ button :: proc(ctx: ^Context, text: string, r: Rect, disabled := false) -> bool 
 		draw_text(ctx, r, shown, t.font_size, with_alpha(t.text, t.disabled_alpha), .Center)
 		return false
 	}
-	it := interact(ctx, get_id(ctx, text), r)
+	it := interact(ctx, get_id(ctx, text), r, loc = loc)
 	fill, ink := t.background, t.text
 	if it.pressed {
 		fill, ink = t.pressed, t.hover_text
@@ -54,9 +60,15 @@ button :: proc(ctx: ^Context, text: string, r: Rect, disabled := false) -> bool 
 }
 
 // checkbox toggles value; returns true when it changed.
-checkbox :: proc(ctx: ^Context, text: string, value: ^bool, r: Rect) -> bool {
+checkbox :: proc(
+	ctx: ^Context,
+	text: string,
+	value: ^bool,
+	r: Rect,
+	loc := #caller_location,
+) -> bool {
 	t := &ctx.theme
-	it := interact(ctx, get_id(ctx, text), r)
+	it := interact(ctx, get_id(ctx, text), r, loc = loc)
 	if it.clicked {value^ = !value^}
 	box_size := r.h - 2 * t.padding
 	row := r
@@ -80,10 +92,11 @@ slider :: proc(
 	r: Rect,
 	step: f32 = 0,
 	format := "%.2f",
+	loc := #caller_location,
 ) -> bool {
 	t := &ctx.theme
 	id := get_id(ctx, text)
-	it := interact(ctx, id, r)
+	it := interact(ctx, id, r, loc = loc)
 	old := value^
 	row := r
 	label_rect := cut_left(&row, r.w * 0.4)
@@ -126,12 +139,13 @@ text_input :: proc(
 	text: ^[dynamic]u8,
 	r: Rect,
 	placeholder := "",
+	loc := #caller_location,
 ) -> (
 	submitted: bool,
 ) {
 	t := &ctx.theme
 	id := get_id(ctx, id_label)
-	it := interact(ctx, id, r)
+	it := interact(ctx, id, r, loc = loc)
 	e := &ctx.edit
 	if it.focused {
 		if e.id != id {

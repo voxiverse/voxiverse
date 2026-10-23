@@ -65,6 +65,10 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 	}
 }
 
+input_destroy :: proc(s: ^Input_State) {
+	delete(s.text)
+}
+
 // ui_input converts to the UI's units (pixels / scale).
 ui_input :: proc(s: ^Input_State, scale: f32) -> ui.Input {
 	mods: bit_set[ui.Modifier]

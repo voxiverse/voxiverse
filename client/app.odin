@@ -95,6 +95,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	ui.destroy(&app.ui)
 	validation_issues = gpu.destroy(&app.g)
 	platform.window_close(&app.window)
+	input_destroy(&app.input)
 	console_destroy(&app.console)
 	return
 }

@@ -62,6 +62,10 @@ run :: proc(opts: Options) -> bool {
 			last = now
 		}
 		log_frame_stats(&app.frame_stats)
+		if app.ui.errors > 0 {
+			log.errorf("%d UI error(s) during this run (see above)", app.ui.errors)
+			ok = false
+		}
 	}
 	if issues := app_destroy(app); issues > 0 {
 		log.errorf("%d validation finding(s) during this run", issues)

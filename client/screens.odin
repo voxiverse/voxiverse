@@ -26,7 +26,12 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	}
 }
 
+// Each screen and dialog draws in its own id scope, so equal labels in
+// different places (the title's "Quit" and the dialog's "Quit") are distinct
+// widgets.
 app_ui :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "screen")
+	defer ui.pop_id(ctx)
 	switch app.screen {
 	case .Title:
 		title_screen(app, ctx)
@@ -39,6 +44,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 }
 
 title_screen :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "title")
+	defer ui.pop_id(ctx)
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 320, 5 * t.row_height + 4 * t.spacing + 120)
 	ui.title(ctx, "Voxiverse", ui.cut_top(&column, 80))
@@ -52,6 +59,8 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 }
 
 options_screen :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "options")
+	defer ui.pop_id(ctx)
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 520, 5 * t.row_height + 4 * t.spacing + 80)
 	ui.title(ctx, "Options", ui.cut_top(&column, 80))
@@ -71,6 +80,8 @@ options_screen :: proc(app: ^App, ctx: ^ui.Context) {
 }
 
 quit_dialog :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "quit dialog")
+	defer ui.pop_id(ctx)
 	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)

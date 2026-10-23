@@ -1,6 +1,7 @@
 package ui
 
 import "core:hash"
+import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 
@@ -103,6 +104,8 @@ Context :: struct {
 	focus_visible:  bool, // keyboard navigation in use: draw focus rings
 	modal_open:     bool, // a modal was drawn last frame: lower layers are inert
 	edit:           Text_Edit, // state of the focused text field
+	errors:         int, // misuse so far (duplicate ids); checks fail on any
+	reported:       [16]Id, // each logged once, not every frame
 	frame_arena:    virtual.Arena,
 	frame_alloc:    mem.Allocator,
 
@@ -331,12 +334,38 @@ Interaction :: struct {
 
 // interact registers a widget for this frame and reports how it is being
 // used. Every interactive widget goes through here.
-interact :: proc(ctx: ^Context, id: Id, r: Rect, focusable := true) -> (it: Interaction) {
+// loc is where the widget was called from, for error reports.
+interact :: proc(
+	ctx: ^Context,
+	id: Id,
+	r: Rect,
+	focusable := true,
+	loc := #caller_location,
+) -> (
+	it: Interaction,
+) {
+	// Two widgets with one id would share hover, press and focus state: one
+	// silently eats the other's clicks. Same label in the same scope; give
+	// one a "##suffix" or wrap its group in push_id.
+	for w in ctx.widgets {
+		if w.id == id {
+			ctx.errors += 1
+			if !already_reported(ctx, id) {
+				log.errorf(
+					"ui: a second widget with the same id this frame (same label in the same id scope?) at %v",
+					loc,
+				)
+			}
+			break
+		}
+	}
 	visible := rect_intersect(r, current_clip(ctx))
 	append(&ctx.widgets, Widget{id = id, rect = visible, layer = ctx.layer, focusable = focusable})
-	inert := ctx.modal_open && ctx.layer < .Modal
+	// Under a modal: drawn, but no hover, clicks or focus, and it must not
+	// touch the shared interaction state either.
+	if ctx.modal_open && ctx.layer < .Modal {return}
 
-	it.hovered = !inert && ctx.hot == id
+	it.hovered = ctx.hot == id
 	if it.hovered && .Left in ctx.input.mouse_pressed {
 		ctx.active = id
 		if focusable {ctx.focused = id}
@@ -346,9 +375,21 @@ interact :: proc(ctx: ^Context, id: Id, r: Rect, focusable := true) -> (it: Inte
 		ctx.active = 0
 	}
 	it.pressed = ctx.active == id && .Left in ctx.input.mouse_down
-	it.focused = !inert && ctx.focused == id
+	it.focused = ctx.focused == id
 	if it.focused && ctx.activate_focus {it.clicked = true}
 	return
+}
+
+@(private)
+already_reported :: proc(ctx: ^Context, id: Id) -> bool {
+	for r in ctx.reported {if r == id {return true}}
+	for &r in ctx.reported {
+		if r == 0 {
+			r = id
+			return false
+		}
+	}
+	return true // table full: stop logging; errors still counts
 }
 
 // ---------------------------------------------------------------------------

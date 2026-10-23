@@ -1,5 +1,7 @@
 package ui
 
+import "core:log"
+import "core:strings"
 import "core:testing"
 
 import "../font"
@@ -341,4 +343,75 @@ test_layout_cuts :: proc(t: ^testing.T) {
 	end_frame(ctx)
 	testing.expect_value(t, a, Rect{10, 20, 200, 40})
 	testing.expect_value(t, b, Rect{10, 65, 200, 40})
+}
+
+// The bug found by hand in M2: the title screen's "Quit" and the quit
+// dialog's "Quit" shared an id; the inert one under the modal consumed the
+// mouse release, so the dialog's button never clicked.
+@(private = "file")
+quit_frames :: proc(ctx: ^Context, input: Input, scope_dialog: bool) -> (dialog_quit: bool) {
+	begin_frame(ctx, input, SCREEN, 1)
+	button(ctx, "Quit", {100, 400, 200, 40}) // title screen
+	prev := begin_layer(ctx, .Modal)
+	if scope_dialog {push_id(ctx, "quit dialog")}
+	dialog_quit = button(ctx, "Quit", MODAL_BUTTON)
+	if scope_dialog {pop_id(ctx)}
+	end_layer(ctx, prev)
+	end_frame(ctx)
+	return
+}
+
+@(test)
+test_duplicate_ids_are_reported :: proc(t: ^testing.T) {
+	context.logger = expect_duplicate_id_errors(context.logger)
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	quit_frames(ctx, at(OUTSIDE), false)
+	testing.expect(t, ctx.errors > 0, "two widgets with one id must be reported")
+	errors := ctx.errors
+	quit_frames(ctx, at(OUTSIDE), true)
+	testing.expect_value(t, ctx.errors, errors) // scoped: no new errors
+}
+
+@(test)
+test_modal_button_clicks_despite_same_label_below :: proc(t: ^testing.T) {
+	context.logger = expect_duplicate_id_errors(context.logger)
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	over := Vec2{350, 260}
+	for scoped in ([]bool{false, true}) {
+		quit_frames(ctx, at(over), scoped)
+		quit_frames(ctx, press(over), scoped)
+		testing.expectf(
+			t,
+			quit_frames(ctx, release(over), scoped),
+			"dialog Quit must click (scoped=%v)",
+			scoped,
+		)
+	}
+}
+
+// expect_duplicate_id_errors drops the (deliberately triggered) duplicate-id
+// error and forwards everything else: the test runner learns of failed
+// expectations through the logger, so swallowing all of it would hide them.
+@(private = "file")
+expect_duplicate_id_errors :: proc(next: log.Logger) -> log.Logger {
+	@(static) forward: log.Logger
+	forward = next
+	return log.Logger {
+		procedure = proc(
+			data: rawptr,
+			level: log.Level,
+			text: string,
+			options: log.Options,
+			location := #caller_location,
+		) {
+			if strings.has_prefix(text, "ui: a second widget with the same id") {return}
+			forward.procedure(forward.data, level, text, options, location)
+		},
+		lowest_level = next.lowest_level,
+		options = next.options,
+	}
 }
