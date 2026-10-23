@@ -1,0 +1,62 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Every OS sets up the way a developer does: odinup for the pinned toolchain,
+# then the build driver (which fetches the pinned shader compiler itself).
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.odinup
+          key: odinup-${{ runner.os }}-${{ hashFiles('odinup.toml') }}
+
+      - name: Cache shader compiler
+        uses: actions/cache@v4
+        with:
+          path: build/tools
+          key: glslang-${{ runner.os }}-${{ hashFiles('tools/build/glslang.odin') }}
+
+      - name: Toolchain (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: |
+          if [ ! -x "$HOME/.odinup/bin/odinup" ]; then
+            ODIN="$(sed -n 's/^odin = "\(.*\)"/\1/p' odinup.toml)"
+            curl -sSfL https://raw.githubusercontent.com/voxiverse/odinup/main/install.sh | ODINUP_ODIN_VERSION="$ODIN" sh
+          fi
+          echo "$HOME/.odinup/bin" >> "$GITHUB_PATH"
+
+      - name: Toolchain (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (-not (Test-Path "$env:USERPROFILE\.odinup\bin\odinup.exe")) {
+            $env:ODINUP_ODIN_VERSION = (Select-String -Path odinup.toml -Pattern '^odin = "(.*)"').Matches[0].Groups[1].Value
+            irm https://raw.githubusercontent.com/voxiverse/odinup/main/install.ps1 | iex
+          }
+          "$env:USERPROFILE\.odinup\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Project tools (ols, odinfmt)
+        run: |
+          odinup install
+          odinup check
+
+      - name: Check
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
+      - name: Test
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
+      - name: Shaders
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} shaders
