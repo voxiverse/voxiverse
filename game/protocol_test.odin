@@ -102,6 +102,29 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false}
 	m, ok = decode_server(encode_s(players)[:], scratch)
 	testing.expect(t, ok && m.(Players) == players)
+	m, ok = decode_server(encode_s(Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5})[:], scratch)
+	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5})
+	m, ok = decode_server(encode_s(Entity_Despawn{77, true})[:], scratch)
+	testing.expect(t, ok && m.(Entity_Despawn) == Entity_Despawn{77, true})
+	m, ok = decode_server(encode_s(Entity_Hurt{9})[:], scratch)
+	testing.expect(t, ok && m.(Entity_Hurt).entity == 9)
+	ents := Entities {
+		tick  = 5,
+		count = ENTITIES_PER_MESSAGE,
+	}
+	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2}}
+	ents_bytes := encode_s(ents)
+	testing.expectf(
+		t,
+		len(ents_bytes) <= 1150,
+		"a full Entities is %d bytes: too big for a packet",
+		len(ents_bytes),
+	)
+	m, ok = decode_server(ents_bytes[:], scratch)
+	testing.expect(t, ok && m.(Entities) == ents)
+	at: Client_Message
+	at, ok = decode_client(encode_c(Attack{12, 34})[:])
+	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
 	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
 	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
 	// Names: letters, digits, _ and -, 1..16 of them.
@@ -164,6 +187,10 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Player_Left{2}),
 		encode_s(Players{tick = 9, count = 1}),
 		encode_s(Notice{"hello"}),
+		encode_s(Entity_Spawn{1, .Critter, {}, 0}),
+		encode_s(Entity_Despawn{1, false}),
+		encode_s(Entities{tick = 1, count = 1}),
+		encode_s(Entity_Hurt{1}),
 		encode_s(Player_Update{1, {}, false, 0, 0}),
 		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Edit_Result{1, false, {}, .Stone}),

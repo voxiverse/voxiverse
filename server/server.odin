@@ -82,6 +82,7 @@ Server :: struct {
 	host:        netcode.Host, // remote players (listening when host_open)
 	listening:   bool,
 	capture:     netcode.Capture, // (config.capture)
+	entities:    Entities, // (entities.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -154,6 +155,8 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		}
 	}
 	game.writer_init(&s.writer, arena)
+	entities_init(&s.entities, s.config.seed)
+	load_entities(s)
 	if local.pipe != nil {
 		s.clients[0].state = .Connecting
 		s.clients[0].link = Local{}
@@ -194,6 +197,7 @@ stop :: proc(s: ^Server) -> bool {
 	netcode.capture_close(&s.capture)
 	store_close(s)
 	world_destroy(&s.world)
+	entities_destroy(&s.entities)
 	delete(s.tops)
 	used := s.arena.total_used
 	virtual.arena_destroy(&s.arena)
@@ -288,9 +292,11 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	if moved {unload_unwanted(s)}
+	entities_tick(s)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		send_players(s, &c)
+		replicate(s, &c)
 		stream(s, &c)
 	}
 	kick_due(s)
@@ -433,6 +439,12 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			return
 		}
 		queue_edit(s, c, v)
+	case game.Attack:
+		if c.state != .Playing {
+			disconnect(s, c, "attack before hello")
+			return
+		}
+		attack(s, c, v)
 	}
 }
 
@@ -519,6 +531,9 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 			broadcast(s, game.Time{s.clock})
 			return
 		}
+	case strings.has_prefix(command, "summon"):
+		if !summon(s, c, .Critter) {notice(s, c, "Nowhere to put it (look at open ground nearby)")}
+		return
 	case command == "open_lan":
 		if s.listening {
 			notice(s, c, fmt.tprintf("Already open on port %d", s.host.socket.port))
@@ -656,6 +671,27 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		}
 	}
 	return result
+}
+
+// attack: a player hits an entity, if it is within reach of where the
+// server has the player (with the same slack as edits). The client chose it
+// by its own ray; the server only checks it was possible.
+@(private = "file")
+attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
+	ent, index := entity_find(s, a.entity)
+	if ent == nil {return} 	// gone already: a late click
+	eye := game.player_eye(c.player)
+	lo, hi := game.entity_box(ent.kind, ent.body.position)
+	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
+	d := closest - eye
+	reach := f64(s.rules.reach) + game.EDIT_REACH_SLACK
+	if d.x * d.x + d.y * d.y + d.z * d.z > reach * reach {return}
+	if entity_attack(s, ent, c.player.position) {
+		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
+		entity_died(s, index)
+	} else {
+		entity_hurt_shown(s, a.entity)
+	}
 }
 
 // anyone_else_in: a block at pos would be inside another player.

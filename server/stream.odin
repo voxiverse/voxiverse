@@ -39,6 +39,7 @@ Client :: struct {
 	moved:       bool, // center changed since the last unload pass
 	has:         map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
 	columns:     map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
+	known:       map[u32]struct{}, // entities it has been told about (entities.odin)
 	cursor:      int, // offsets before this are all sent
 	player:      game.Player_State,
 	inputs:      game.Input_Queue,
@@ -65,18 +66,21 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 	// Its columns: the interest area's columns plus the margin.
 	columns := game.interest_count(config.view_radius + game.CLIENT_DROP_MARGIN, 0)
 	c.columns = base.map_make_fixed(map[[2]i32]int, columns, arena) or_return
+	c.known = base.map_make_fixed(map[u32]struct{}, MAX_KNOWN_ENTITIES, arena) or_return
 	return nil
 }
 
 // client_reset frees the seat (keeping its maps' memory for the next).
 @(private)
 client_reset :: proc(c: ^Client) {
-	has, columns := c.has, c.columns
+	has, columns, known := c.has, c.columns, c.known
 	clear(&has)
 	clear(&columns)
+	clear(&known)
 	c^ = {
 		has     = has,
 		columns = columns,
+		known   = known,
 	}
 }
 

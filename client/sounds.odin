@@ -17,6 +17,8 @@ Sound_Kind :: enum u8 {
 	Place,
 	Step,
 	Land,
+	Entity_Hurt,
+	Entity_Die,
 }
 
 Sound_Event :: struct {
@@ -29,6 +31,7 @@ Sound_Event :: struct {
 Sound_Bank :: struct {
 	block:   [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
 	player:  [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
+	critter: [sfx.Critter_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples: [dynamic][]f32, // owned
 }
 
@@ -51,6 +54,9 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for p in sfx.Player_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v))}
 	}
+	for c in sfx.Critter_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.critter[c][v] = add(b, m, sfx.critter_sound(c, v))}
+	}
 }
 
 sounds_destroy :: proc(b: ^Sound_Bank) {
@@ -69,6 +75,10 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		pitch := rand.float32_range(0.9, 1.1)
 		variant := rand.int_max(sfx.VARIANTS)
 		switch e.kind {
+		case .Entity_Hurt:
+			audio.play(m, {b.critter[.Hurt][variant], gain, pitch})
+		case .Entity_Die:
+			audio.play(m, {b.critter[.Die][variant], gain, pitch})
 		case .Land:
 			audio.play(m, {b.player[.Land][variant], gain, pitch})
 			if mat, ok := sfx.material_of(e.block); ok {
@@ -78,10 +88,12 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 			mat, ok := sfx.material_of(e.block)
 			if !ok {continue}
 			action := [Sound_Kind]sfx.Action {
-				.Break = .Break,
-				.Place = .Place,
-				.Step  = .Step,
-				.Land  = .Step,
+				.Break       = .Break,
+				.Place       = .Place,
+				.Step        = .Step,
+				.Land        = .Step,
+				.Entity_Hurt = .Step,
+				.Entity_Die  = .Step,
 			}
 			audio.play(m, {b.block[mat][action[e.kind]][variant], gain, pitch})
 		}

@@ -74,6 +74,10 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Player_Joined,
 		     game.Player_Left,
 		     game.Players,
+		     game.Entity_Spawn,
+		     game.Entity_Despawn,
+		     game.Entities,
+		     game.Entity_Hurt,
 		     game.Notice: // not checked here
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)

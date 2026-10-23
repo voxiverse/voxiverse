@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 4
+PROTOCOL_VERSION :: 5
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -74,6 +74,13 @@ Edit :: struct {
 	block: Block,
 }
 
+// Attack hits an entity (left click on it). Like an Edit it follows input
+// `after`, so reach is judged from where the player was.
+Attack :: struct {
+	entity: u32,
+	after:  u32,
+}
+
 Client_Message :: union {
 	Hello,
 	Input,
@@ -82,6 +89,7 @@ Client_Message :: union {
 	Set_Rule,
 	Edit,
 	Admin,
+	Attack,
 }
 
 // Server -> client.
@@ -169,6 +177,42 @@ Notice :: struct {
 	text: string, // view into the message
 }
 
+// Entity_Spawn: an entity is near you now (it came into your area, or into
+// being). Entities say where they are every tick after (Entities).
+Entity_Spawn :: struct {
+	entity:   u32,
+	kind:     Entity_Kind,
+	position: [3]f64,
+	yaw:      f32,
+}
+
+// Entity_Despawn: forget it (out of your area, gone, or died: show it).
+Entity_Despawn :: struct {
+	entity: u32,
+	died:   bool,
+}
+
+// Entities: where the entities near you are, every tick (the newest wins),
+// a batch of at most ENTITIES_PER_MESSAGE (more go in more messages).
+Entities :: struct {
+	tick:    u32,
+	count:   int,
+	entries: [ENTITIES_PER_MESSAGE]Entity_Entry,
+}
+
+ENTITIES_PER_MESSAGE :: 28 // fits one packet
+
+Entity_Entry :: struct {
+	entity:     u32,
+	position:   [3]f64,
+	yaw, pitch: f32, // body turn; head up/down
+}
+
+// Entity_Hurt: it was hit (flash, sound).
+Entity_Hurt :: struct {
+	entity: u32,
+}
+
 // Column: the y of the highest solid block in each block column of a chunk
 // column (x fastest). Sky light needs it: the client cannot see above what
 // it has loaded. Sent before a column's first chunk, and again when an edit
@@ -209,6 +253,10 @@ Server_Message :: union {
 	Player_Left,
 	Players,
 	Notice,
+	Entity_Spawn,
+	Entity_Despawn,
+	Entities,
+	Entity_Hurt,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -225,6 +273,7 @@ Client_Kind :: enum u8 {
 	Set_Rule,
 	Edit,
 	Admin,
+	Attack,
 }
 
 @(private = "file")
@@ -244,6 +293,10 @@ Server_Kind :: enum u8 {
 	Player_Left,
 	Players,
 	Notice,
+	Entity_Spawn,
+	Entity_Despawn,
+	Entities,
+	Entity_Hurt,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -257,7 +310,8 @@ message_reliable :: proc(sender: Side, kind: u8) -> bool {
 	case u8(Server_Kind.Player_Update),
 	     u8(Server_Kind.Players),
 	     u8(Server_Kind.Pong),
-	     u8(Server_Kind.Time):
+	     u8(Server_Kind.Time),
+	     u8(Server_Kind.Entities):
 		return false
 	}
 	return true
@@ -295,6 +349,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "edit"
 		case u8(Client_Kind.Admin):
 			return "admin"
+		case u8(Client_Kind.Attack):
+			return "attack"
 		}
 	} else {
 		switch kind {
@@ -328,6 +384,14 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "players"
 		case u8(Server_Kind.Notice):
 			return "notice"
+		case u8(Server_Kind.Entity_Spawn):
+			return "spawn"
+		case u8(Server_Kind.Entity_Despawn):
+			return "despawn"
+		case u8(Server_Kind.Entities):
+			return "entities"
+		case u8(Server_Kind.Entity_Hurt):
+			return "hurt"
 		}
 	}
 	return ""
@@ -365,6 +429,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Admin:
 		write_u8(w, u8(Client_Kind.Admin))
 		write_string(w, v.command)
+	case Attack:
+		write_u8(w, u8(Client_Kind.Attack))
+		write_u32(w, v.entity)
+		write_u32(w, v.after)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -451,6 +519,30 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Notice:
 		write_u8(w, u8(Server_Kind.Notice))
 		write_string(w, v.text)
+	case Entity_Spawn:
+		write_u8(w, u8(Server_Kind.Entity_Spawn))
+		write_u32(w, v.entity)
+		write_u8(w, u8(v.kind))
+		write_position(w, v.position)
+		write_f32(w, v.yaw)
+	case Entity_Despawn:
+		write_u8(w, u8(Server_Kind.Entity_Despawn))
+		write_u32(w, v.entity)
+		write_u8(w, 1 if v.died else 0)
+	case Entities:
+		write_u8(w, u8(Server_Kind.Entities))
+		write_u32(w, v.tick)
+		write_u8(w, u8(v.count))
+		for i in 0 ..< v.count {
+			e := v.entries[i]
+			write_u32(w, e.entity)
+			write_position(w, e.position)
+			write_f32(w, e.yaw)
+			write_f32(w, e.pitch)
+		}
+	case Entity_Hurt:
+		write_u8(w, u8(Server_Kind.Entity_Hurt))
+		write_u32(w, v.entity)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -498,6 +590,11 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 	case u8(Client_Kind.Admin):
 		m = Admin {
 			command = read_string(&r, MAX_RULE_TEXT),
+		}
+	case u8(Client_Kind.Attack):
+		m = Attack {
+			entity = read_u32(&r),
+			after  = read_u32(&r),
 		}
 	case:
 		return
@@ -625,6 +722,42 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	case u8(Server_Kind.Notice):
 		m = Notice {
 			text = read_string(&r, MAX_REASON_LENGTH),
+		}
+	case u8(Server_Kind.Entity_Spawn):
+		e := Entity_Spawn {
+			entity = read_u32(&r),
+		}
+		kind := read_u8(&r)
+		if !entity_kind_valid(kind) {reader_fail(&r)}
+		e.kind = Entity_Kind(kind) if entity_kind_valid(kind) else {}
+		e.position = read_position(&r)
+		e.yaw = read_f32(&r)
+		if !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
+		m = e
+	case u8(Server_Kind.Entity_Despawn):
+		d := Entity_Despawn {
+			entity = read_u32(&r),
+		}
+		flag := read_u8(&r)
+		if flag > 1 {reader_fail(&r)}
+		d.died = flag == 1
+		m = d
+	case u8(Server_Kind.Entities):
+		e := Entities {
+			tick  = read_u32(&r),
+			count = int(read_u8(&r)),
+		}
+		if e.count > ENTITIES_PER_MESSAGE {reader_fail(&r)}
+		for &x in e.entries[:min(e.count, ENTITIES_PER_MESSAGE)] {
+			x.entity = read_u32(&r)
+			x.position = read_position(&r)
+			x.yaw, x.pitch = read_f32(&r), read_f32(&r)
+			if !(abs(x.yaw) <= 1e6) || abs(x.pitch) > PITCH_LIMIT {reader_fail(&r)}
+		}
+		m = e
+	case u8(Server_Kind.Entity_Hurt):
+		m = Entity_Hurt {
+			entity = read_u32(&r),
 		}
 	case:
 		return

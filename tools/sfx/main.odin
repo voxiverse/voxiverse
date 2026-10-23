@@ -28,6 +28,13 @@ main :: proc() {
 			}
 		}
 	}
+	for c in sfx.Critter_Sound {
+		for v in 0 ..< sfx.VARIANTS {
+			name := fmt.tprintf("Critter_%v_%d.wav", c, v)
+			write_wav(filepath.join({dir, name}) or_else name, sfx.critter_sound(c, v)) or_continue
+			count += 1
+		}
+	}
 	for p in sfx.Player_Sound {
 		for v in 0 ..< sfx.VARIANTS {
 			name := fmt.tprintf("Player_%v_%d.wav", p, v)

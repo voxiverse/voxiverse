@@ -429,11 +429,16 @@ register_builtin_commands :: proc(c: ^Console) {
 	)
 	console_register(
 		c,
-		{"break", "break the aimed block (left click)", proc(app: ^App, args: []string) {
+		{
+			"break",
+			"hit the aimed entity, or break the aimed block (left click)",
+			proc(app: ^App, args: []string) {
+				if app.session != nil && session_attack(app.session) {return}
 				if app.session == nil || !session_edit(app.session, false, .Air) {
 					console_print(&app.console, "break: nothing breakable aimed at", .Warning)
 				}
-			}},
+			},
+		},
 	)
 	console_register(
 		c,
@@ -507,6 +512,13 @@ register_builtin_commands :: proc(c: ^Console) {
 				join_server(app, args[0], args[1] if len(args) > 1 else "")
 			},
 		},
+	)
+	console_register(
+		c,
+		{"summon", "summon: a critter in front of you", proc(app: ^App, args: []string) {
+				if !cheats_allowed(app, "summon") {return}
+				send_message(app.session, game.Admin{"summon critter"})
+			}},
 	)
 	console_register(
 		c,

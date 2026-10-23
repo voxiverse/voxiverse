@@ -150,6 +150,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 				true
 		case game.Admin:
 			return fmt.tprintf("admin command=%q", v.command), true
+		case game.Attack:
+			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
 		case game.Ping:
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
@@ -224,6 +226,14 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("players tick=%d count=%d", v.tick, v.count), true
 		case game.Notice:
 			return fmt.tprintf("notice text=%q", v.text), true
+		case game.Entity_Spawn:
+			return fmt.tprintf("spawn entity=%d kind=%v at=%v", v.entity, v.kind, v.position), true
+		case game.Entity_Despawn:
+			return fmt.tprintf("despawn entity=%d died=%v", v.entity, v.died), true
+		case game.Entities:
+			return fmt.tprintf("entities tick=%d count=%d", v.tick, v.count), true
+		case game.Entity_Hurt:
+			return fmt.tprintf("hurt entity=%d", v.entity), true
 		}
 	}
 	return "", true

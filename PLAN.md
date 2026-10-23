@@ -206,7 +206,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M5 | Persistence: region files, save/load/quit, saving modified chunks when the server unloads them | Save → quit → load round-trips exactly: `server/save_test.odin` (done) |
 | M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | The sky at sunrise, day, dusk and night rendered in CI under validation; mixer and every sound tested offline; the time of day survives save and load (done) |
 | M7 | Remote multiplayer: UDP transport with its reliability layer, simulated loss/duplication/reordering, Wireshark dissector, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines; transfers survive 10% loss: `server/net_test.odin` (two players through 10% loss/duplication with jitter on every socket, every chunk exact) plus a hand test across machines (done: two Windows PCs on a LAN) |
-| M8 | Entities: one mob, server AI, replication by handle with interest management | — |
+| M8 | Entities: one mob, server AI, replication by handle with interest management | `server/entity_test.odin`: a critter simulated on the server, told only to players near it, hit to death, kept by the save; critters spawn by day within the cap and go when nobody is near; pathfinding tests; the fly test keeps memory flat while they come and go |
 
 ## Worth re-typing from the old tree (ideas, not code)
 

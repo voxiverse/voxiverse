@@ -35,6 +35,9 @@ test_every_sound_is_well_formed :: proc(t: ^testing.T) {
 	for p in Player_Sound {
 		for v in 0 ..< VARIANTS {check(t, "player sound", player_sound(p, v, context.temp_allocator), levels)}
 	}
+	for c in Critter_Sound {
+		for v in 0 ..< VARIANTS {check(t, "critter sound", critter_sound(c, v, context.temp_allocator), levels)}
+	}
 }
 
 // Variants differ; breaking is bigger than placing, which is bigger than a

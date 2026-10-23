@@ -100,7 +100,7 @@ player_step :: proc(
 	delta := [3]f64{f64(s.velocity.x * dt), f64(vy * dt), f64(s.velocity.z * dt)}
 	s.on_ground = false
 	for axis in ([3]int{1, 0, 2}) {
-		moved, hit := sweep(s.position, axis, delta[axis], q)
+		moved, hit := sweep(s.position, PLAYER_WIDTH, PLAYER_HEIGHT, axis, delta[axis], q)
 		s.position[axis] += moved
 		if hit {
 			if axis == 1 && delta.y < 0 {s.on_ground = true}
@@ -125,13 +125,23 @@ solid_at :: proc(q: Block_Query, p: Block_Pos) -> bool {
 	return !loaded || block_solid(b)
 }
 
-// sweep moves the box at position along one axis by up to delta and
-// returns how far it got and whether a block stopped it.
-@(private = "file")
-sweep :: proc(position: [3]f64, axis: int, delta: f64, q: Block_Query) -> (moved: f64, hit: bool) {
+// sweep moves a box (width across, height up, position at the centre of
+// its bottom) along one axis by up to delta and returns how far it got and
+// whether a block stopped it. Players and entities share it.
+sweep :: proc(
+	position: [3]f64,
+	width, height: f64,
+	axis: int,
+	delta: f64,
+	q: Block_Query,
+) -> (
+	moved: f64,
+	hit: bool,
+) {
 	if delta == 0 {return 0, false}
 	EPS :: 1e-7 // touching a block's face is not overlapping it
-	lo, hi := player_box(position)
+	half := width / 2
+	lo, hi := position - {half, 0, half}, position + {half, height, half}
 	// The blocks the box covers on the other two axes.
 	a1, a2 := (axis + 1) % 3, (axis + 2) % 3
 	from1, to1 := i32(math.floor(lo[a1] + EPS)), i32(math.floor(hi[a1] - EPS))

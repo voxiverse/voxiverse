@@ -63,7 +63,9 @@ Session :: struct {
 	last_flush:  time.Tick,
 	traffic:     [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
 	others:      map[u16]Other_Player, // the other players, by player id (players.odin)
-	newest_tick: u32, // of the newest Players message
+	entities:    map[u32]Other_Entity, // near us, by id (entities.odin)
+	puffs:       [dynamic]Puff, // dying entities' particles
+	newest_tick: u32, // of the newest Players or Entities message
 	newest_at:   time.Tick, // when it came
 	notices:     [dynamic]string, // from the server, for the console (the App takes them)
 	welcome:     game.Welcome,
@@ -80,6 +82,7 @@ Session :: struct {
 	last_jump:   time.Tick, // for double-tap detection
 	autopilot:   Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:         Maybe(game.Ray_Hit), // the block under the crosshair, within reach
+	aim_entity:  Maybe(u32), // an entity under the crosshair, nearer than that block
 	edits:       [dynamic]game.Edit, // predicted, waiting for Edit_Result
 	next_edit:   u32,
 	edit_timer:  f32, // seconds until a held button edits again
@@ -133,6 +136,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, arena)
 	s.others = make(map[u16]Other_Player, arena)
+	s.entities = make(map[u32]Other_Entity, 64)
+	s.puffs = make([dynamic]Puff, 0, 256, arena)
 	s.config.name = strings.clone(config.name, arena)
 
 	if join, remote := config.join.?; remote {
@@ -191,6 +196,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	ok := true
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
+	delete(s.entities) // the heap: entities come and go
 	netcode.capture_close(&s.capture)
 	if s.world_init {
 		world_remove_all_meshes(&s.world)
@@ -276,7 +282,22 @@ session_update :: proc(
 	); ok {
 		s.aim = hit
 	}
+	// An entity in front of the aimed block takes the click instead.
+	s.aim_entity = nil
+	nearest := s.aim.?.distance if s.aim != nil else f64(s.rules.reach)
+	if id, _, ok := entity_aimed(s, s.camera.position, {f64(f.x), f64(f.y), f64(f.z)}, nearest);
+	   ok {
+		s.aim_entity = id
+	}
 	world_update(&s.world, camera_chunk(&s.camera))
+}
+
+// session_attack hits the aimed entity; false if none is aimed at.
+session_attack :: proc(s: ^Session) -> bool {
+	id, ok := s.aim_entity.?
+	if !ok {return false}
+	send_message(s, game.Attack{id, s.prediction.next_sequence - 1})
+	return true
 }
 
 // session_apply does the session's GPU work for this frame; between
@@ -400,6 +421,33 @@ receive :: proc(s: ^Session) {
 			}
 		case game.Notice:
 			notice(s, v.text)
+		case game.Entity_Spawn:
+			s.entities[v.entity] = {
+				kind      = v.kind,
+				last_seen = v.position,
+			}
+			e := &s.entities[v.entity]
+			track_add(&e.track, {tick = s.newest_tick, position = v.position, yaw = v.yaw})
+		case game.Entities:
+			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
+				s.newest_tick, s.newest_at = v.tick, time.tick_now()
+			}
+			for i in 0 ..< v.count {
+				x := v.entries[i]
+				if e, known := &s.entities[x.entity]; known {
+					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false})
+				}
+			}
+		case game.Entity_Despawn:
+			if e, known := &s.entities[v.entity]; known && v.died {
+				entity_died(s, e)
+			}
+			delete_key(&s.entities, v.entity)
+		case game.Entity_Hurt:
+			if e, known := &s.entities[v.entity]; known {
+				e.hurt_at = time.tick_now()
+				append(&s.sounds, Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1})
+			}
 		case game.Edit_Result:
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.
@@ -575,6 +623,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	pressed := input.mouse_pressed & {.Left, .Right} != {}
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
+	if breaking && !placing && session_attack(s) {return}
 	session_edit(s, placing && !breaking, HOTBAR[s.hotbar])
 }
 

@@ -37,6 +37,11 @@ Player_Sound :: enum u8 {
 	Land,
 }
 
+Critter_Sound :: enum u8 {
+	Hurt, // a short bleat
+	Die, // a long, falling one, and a puff
+}
+
 // material_of: what a block sounds like; false for air.
 material_of :: proc(b: game.Block) -> (Material, bool) {
 	switch b {
@@ -206,7 +211,51 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 	return nil
 }
 
+// critter_sound: a critter's voice, a bleat: a sliding pitch with vibrato
+// whose harmonics are shaped by two formants (no filters: each harmonic's
+// loudness is the formants' at its frequency).
+critter_sound :: proc(c: Critter_Sound, variant: int, allocator := context.allocator) -> []f32 {
+	s := Synth {
+		rng = seed(7777 + u32(c) * 131 + u32(variant) * 7),
+	}
+	r := rand_range(&s.rng, 0.9, 1.1)
+	switch c {
+	case .Hurt:
+		bleat(&s, 0.26, 560 * r, 430 * r, 1)
+		burst(&s, {start = 0, tau = 0.012, filter = .Band, freq = 1400, q = 1, gain = 0.25})
+	case .Die:
+		bleat(&s, 0.5, 470 * r, 250 * r, 1)
+		burst(&s, {start = 0.38, tau = 0.06, filter = .Low, freq = 900, gain = 0.5})
+	}
+	return finish(&s, 0.7, allocator)
+}
+
 // --- Synthesis -------------------------------------------------------------
+
+// bleat: a voiced sound from from_hz to to_hz over seconds.
+@(private)
+bleat :: proc(s: ^Synth, seconds, from_hz, to_hz, gain: f32) {
+	n := min(int(seconds * RATE), len(s.buf))
+	FORMANTS :: [2][3]f32{{900, 320, 1}, {2400, 500, 0.5}} // centre, width, height
+	phase: f32
+	for i in 0 ..< n {
+		u := f32(i) / f32(n)
+		f0 := from_hz + (to_hz - from_hz) * u
+		f0 *= 1 + 0.035 * math.sin(math.TAU * 7 * f32(i) / RATE) // vibrato
+		phase += f0 / RATE
+		x: f32
+		for k in 1 ..= 12 {
+			hz := f0 * f32(k)
+			if hz > RATE * 0.45 {break}
+			amp: f32
+			for fm in FORMANTS {amp += fm[2] * math.exp(-((hz - fm[0]) / fm[1]) * ((hz - fm[0]) / fm[1]))}
+			x += amp * math.sin(math.TAU * phase * f32(k)) / f32(k)
+		}
+		env := min(u / 0.08, 1) * (1 - u) * (1 - u * 0.3)
+		s.buf[i] += x * env * gain
+	}
+	s.len = max(s.len, n)
+}
 
 MAX_SECONDS :: 1
 

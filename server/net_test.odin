@@ -14,7 +14,7 @@ import "../netcode"
 // Players over the network: remote clients (netcode links on loopback) on a
 // server without a local player, as a dedicated server runs.
 
-@(private = "file")
+@(private)
 Net_Client :: struct {
 	link:     netcode.Link,
 	name:     string,
@@ -28,12 +28,15 @@ Net_Client :: struct {
 	others:   map[u16]string, // joined, by player id
 	seen:     map[u16][3]f64, // last Players position, by player id
 	changed:  [dynamic]game.Block_Changed,
+	entities: map[u32][3]f64, // known entities, where last seen
+	hurt:     int, // Entity_Hurt messages
+	died:     int, // Entity_Despawn with died
 	results:  map[u32]game.Edit_Result,
 	seq:      u32,
 	messages: [dynamic][]u8,
 }
 
-@(private = "file")
+@(private)
 net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "") {
 	c.name = name
 	c.scratch = new(game.Block_Array)
@@ -41,7 +44,7 @@ net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "") {
 	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, time.tick_now())
 }
 
-@(private = "file")
+@(private)
 net_close :: proc(c: ^Net_Client) {
 	netcode.link_close(&c.link, "test over")
 	free(c.scratch)
@@ -52,12 +55,13 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.others)
 	delete(c.seen)
 	delete(c.changed)
+	delete(c.entities)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
 }
 
-@(private = "file")
+@(private)
 net_send :: proc(c: ^Net_Client, m: game.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
@@ -67,7 +71,7 @@ net_send :: proc(c: ^Net_Client, m: game.Client_Message) {
 
 // net_pump: network in, messages handled, an idle input sent (once
 // welcomed, as a real client sends one every tick), network out.
-@(private = "file")
+@(private)
 net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	now := time.tick_now()
 	was := c.link.state
@@ -115,6 +119,18 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			append(&c.changed, v)
 		case game.Edit_Result:
 			c.results[v.id] = v
+		case game.Entity_Spawn:
+			c.entities[v.entity] = v.position
+		case game.Entities:
+			for i in 0 ..< v.count {
+				e := v.entries[i]
+				if e.entity in c.entities {c.entities[e.entity] = e.position}
+			}
+		case game.Entity_Despawn:
+			delete_key(&c.entities, v.entity)
+			if v.died {c.died += 1}
+		case game.Entity_Hurt:
+			c.hurt += 1
 		}
 	}
 	clear(&c.messages)
@@ -125,7 +141,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	netcode.link_flush(&c.link, now)
 }
 
-@(private = "file")
+@(private)
 net_wait :: proc(
 	t: ^testing.T,
 	clients: []^Net_Client,
@@ -141,7 +157,7 @@ net_wait :: proc(
 	return true
 }
 
-@(private = "file")
+@(private)
 landed :: proc(c: ^Net_Client) -> bool {
 	return c.welcomed && c.update.state.on_ground && c.update.acked > 0 && len(c.chunks) > 50
 }

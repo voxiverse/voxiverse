@@ -30,6 +30,7 @@ Saved_Player :: struct {
 	yaw, pitch: f32, // where they were looking
 }
 WORLD_FILE :: "world.cfg"
+ENTITIES_FILE :: "entities.cfg"
 WORLD_FORMAT :: 2 // 2: players by name (format 1's single player becomes LEGACY_PLAYER)
 LEGACY_PLAYER :: "Player"
 
@@ -132,6 +133,7 @@ save :: proc(s: ^Server) -> bool {
 	st.last_save = time.tick_now()
 	if st.dir == "" {return true}
 	ok := write_world_file(s)
+	if !write_entities(s) {ok = false}
 	regions := 0
 	for region, changed in st.regions {
 		if !changed {continue}
@@ -360,4 +362,89 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	}
 	log.infof("server world loaded dir=%s seed=%d", s.store.dir, s.config.seed)
 	return true
+}
+
+// entities.cfg: one line per entity: kind x y z yaw health natural.
+@(private = "file")
+write_entities :: proc(s: ^Server) -> bool {
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintln(
+		&b,
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural",
+	)
+	for e in s.entities.list {
+		fmt.sbprintfln(
+			&b,
+			"%s %.4f %.4f %.4f %.4f %d %v",
+			game.ENTITY_INFO[e.kind].name,
+			e.body.position.x,
+			e.body.position.y,
+			e.body.position.z,
+			e.yaw,
+			e.health,
+			e.natural,
+		)
+	}
+	return write_atomically(
+		filepath.join({s.store.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
+		b.buf[:],
+	)
+}
+
+// load_entities brings back a saved world's entities (they wait, frozen,
+// until their ground is loaded). Lines that do not read are skipped.
+load_entities :: proc(s: ^Server) {
+	if s.store.dir == "" {return}
+	path :=
+		filepath.join({s.store.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return} 	// none saved (a new world, or an older one)
+	rest := string(data)
+	loaded, skipped := 0, 0
+	for line in strings.split_lines_iterator(&rest) {
+		l := strings.trim_space(line)
+		if l == "" || l[0] == '#' {continue}
+		f := strings.fields(l, context.temp_allocator)
+		ok := len(f) == 7
+		kind: game.Entity_Kind
+		found := false
+		if ok {
+			for k in game.Entity_Kind {
+				if game.ENTITY_INFO[k].name == f[0] {kind, found = k, true}
+			}
+		}
+		pos: [3]f64
+		yaw: f32
+		health: int
+		if ok && found {
+			x, ok1 := strconv.parse_f64(f[1])
+			y, ok2 := strconv.parse_f64(f[2])
+			z, ok3 := strconv.parse_f64(f[3])
+			w, ok4 := strconv.parse_f32(f[4])
+			h, ok5 := strconv.parse_int(f[5])
+			ok =
+				ok1 &&
+				ok2 &&
+				ok3 &&
+				ok4 &&
+				ok5 &&
+				abs(x) < game.WORLD_LIMIT &&
+				abs(z) < game.WORLD_LIMIT &&
+				y > game.WORLD_MIN_Y &&
+				y < game.WORLD_MAX_Y &&
+				h > 0 &&
+				!math.is_nan(w)
+			pos, yaw, health = {x, y, z}, w, h
+		}
+		if !ok || !found {
+			skipped += 1
+			continue
+		}
+		if e := entity_spawn(s, kind, pos, f[6] == "true"); e != nil {
+			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
+			loaded += 1
+		}
+	}
+	if skipped > 0 {log.warnf("server entities skipped lines=%d path=%s", skipped, path)}
+	log.infof("server entities loaded count=%d", loaded)
 }

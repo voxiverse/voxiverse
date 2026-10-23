@@ -322,6 +322,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			)
 			world_debug_lines(app)
 			avatars_draw(s, &app.entity_draw)
+			entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
 		}
 		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
 		render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)

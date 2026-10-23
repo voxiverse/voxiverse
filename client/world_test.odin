@@ -5,6 +5,7 @@ import "core:mem/virtual"
 import "core:testing"
 
 import "../game"
+import "../render"
 
 // Chunks at the top and bottom of the world are meshed once their neighbours
 // inside the world have arrived (outside counts as air above, bedrock below).
@@ -136,7 +137,7 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 	other_snapshot(&o, 10, {position = {0, 64, 0}, yaw = 3.0})
 	other_snapshot(&o, 11, {position = {1, 64, 0}, yaw = -3.0}) // turned 0.28 rad, across ±π
 	other_snapshot(&o, 9, {position = {50, 0, 0}}) // late: ignored
-	testing.expect_value(t, o.count, 2)
+	testing.expect_value(t, o.track.count, 2)
 	v, ok := other_view(&o, 10.5)
 	testing.expect(t, ok && abs(v.position.x - 0.5) < 1e-9)
 	testing.expectf(t, abs(abs(v.yaw) - math.PI) < 0.01, "turned the long way: yaw %v", v.yaw)
@@ -145,6 +146,35 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 	_, ok = other_view(&o, 11 + STALE_TICKS + 1)
 	testing.expect(t, !ok, "stale players are hidden")
 	for i in 0 ..< 20 {other_snapshot(&o, u32(12 + i), {position = {f64(i), 0, 0}})}
-	testing.expect_value(t, o.count, SNAPSHOTS)
+	testing.expect_value(t, o.track.count, SNAPSHOTS)
 	testing.expect(t, abs(render_tick(100, 0.5) - (100 + 15 - INTERPOLATION_TICKS)) < 1e-9)
+}
+
+// A dying entity bursts into pieces that fly, are drawn, and are gone
+// after PUFF_SECONDS; its death is heard where it was.
+@(test)
+test_entity_death_puff :: proc(t: ^testing.T) {
+	s: Session
+	defer delete(s.puffs)
+	defer delete(s.sounds)
+	defer delete(s.entities)
+	e := Other_Entity {
+		kind      = .Critter,
+		last_seen = {10, 64, 10},
+	}
+	entity_died(&s, &e)
+	testing.expect_value(t, len(s.puffs), PUFF_PIECES)
+	testing.expect(t, len(s.sounds) == 1 && s.sounds[0].kind == .Entity_Die)
+	d: render.Entity_Draw
+	render.entity_draw_init(&d)
+	defer render.entity_draw_destroy(&d)
+	entities_draw(&s, &d, 0.1)
+	testing.expect_value(t, len(d.boxes), PUFF_PIECES)
+	for p in s.puffs {testing.expect(t, p.position != {10, 64, 10} || p.velocity != {})}
+	for _ in 0 ..< 10 {
+		clear(&d.boxes)
+		entities_draw(&s, &d, 0.1)
+	}
+	testing.expect_value(t, len(s.puffs), 0)
+	testing.expect_value(t, len(d.boxes), 0)
 }
