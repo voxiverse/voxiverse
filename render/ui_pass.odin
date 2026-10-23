@@ -36,24 +36,8 @@ Ui_Push :: struct {
 }
 
 ui_init :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
-	attributes := [3]gpu.Vertex_Attribute {
-		{.R32G32_SFLOAT, u32(offset_of(ui.Vertex, pos))},
-		{.R32G32_SFLOAT, u32(offset_of(ui.Vertex, uv))},
-		{.R8G8B8A8_UNORM, u32(offset_of(ui.Vertex, color))},
-	}
 	ok: bool
-	p.pipeline, ok = gpu.create_pipeline(
-		g,
-		{
-			name = "ui",
-			vertex_spirv = vertex_spirv,
-			fragment_spirv = fragment_spirv,
-			color_format = gpu.color_format(g),
-			vertex_stride = size_of(ui.Vertex),
-			attributes = attributes[:],
-			alpha_blend = true,
-		},
-	)
+	p.pipeline, ok = gpu.create_pipeline(g, ui_pipeline_desc(g, vertex_spirv, fragment_spirv))
 	if !ok {return false}
 	size := u32(ui.GLYPH_ATLAS_SIZE)
 	p.atlas = gpu.create_image(
@@ -66,6 +50,31 @@ ui_init :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) 
 	) or_return
 	p.atlas_id = gpu.register_texture(g, p.atlas.view) or_return
 	return true
+}
+
+@(private = "file", rodata)
+UI_ATTRIBUTES := [3]gpu.Vertex_Attribute {
+	{.R32G32_SFLOAT, u32(offset_of(ui.Vertex, pos))},
+	{.R32G32_SFLOAT, u32(offset_of(ui.Vertex, uv))},
+	{.R8G8B8A8_UNORM, u32(offset_of(ui.Vertex, color))},
+}
+
+@(private = "file")
+ui_pipeline_desc :: proc(g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> gpu.Pipeline_Desc {
+	return {
+		name = "ui",
+		vertex_spirv = vertex_spirv,
+		fragment_spirv = fragment_spirv,
+		color_format = gpu.color_format(g),
+		vertex_stride = size_of(ui.Vertex),
+		attributes = UI_ATTRIBUTES[:],
+		alpha_blend = true,
+	}
+}
+
+// ui_reload swaps in new shaders (hot reload); false keeps the old ones.
+ui_reload :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
+	return gpu.replace_pipeline(g, &p.pipeline, ui_pipeline_desc(g, vertex_spirv, fragment_spirv))
 }
 
 // ui_destroy releases everything; call after gpu.wait_idle.

@@ -113,21 +113,8 @@ world_init :: proc(
 		settings       = settings,
 		texture_layers = texture_layers,
 	}
-	attributes := [2]gpu.Vertex_Attribute{{.R32_UINT, 0}, {.R32_UINT, 4}}
 	ok: bool
-	p.pipeline, ok = gpu.create_pipeline(
-		g,
-		{
-			name = "world",
-			vertex_spirv = vertex_spirv,
-			fragment_spirv = fragment_spirv,
-			color_format = gpu.color_format(g),
-			vertex_stride = WORLD_VERTEX_SIZE,
-			attributes = attributes[:],
-			depth = .Test_Write,
-			cull_back = true,
-		},
-	)
+	p.pipeline, ok = gpu.create_pipeline(g, world_pipeline_desc(g, vertex_spirv, fragment_spirv))
 	if !ok {return false}
 	p.vertices = gpu.create_buffer(
 		g,
@@ -179,6 +166,35 @@ world_init :: proc(
 	}
 	copy(p.setup_pending[index_bytes:], texture_pixels)
 	return true
+}
+
+@(private = "file", rodata)
+WORLD_ATTRIBUTES := [2]gpu.Vertex_Attribute{{.R32_UINT, 0}, {.R32_UINT, 4}}
+
+@(private = "file")
+world_pipeline_desc :: proc(
+	g: ^gpu.Gpu,
+	vertex_spirv, fragment_spirv: []byte,
+) -> gpu.Pipeline_Desc {
+	return {
+		name = "world",
+		vertex_spirv = vertex_spirv,
+		fragment_spirv = fragment_spirv,
+		color_format = gpu.color_format(g),
+		vertex_stride = WORLD_VERTEX_SIZE,
+		attributes = WORLD_ATTRIBUTES[:],
+		depth = .Test_Write,
+		cull_back = true,
+	}
+}
+
+// world_reload swaps in new shaders (hot reload); false keeps the old ones.
+world_reload :: proc(p: ^World_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
+	return gpu.replace_pipeline(
+		g,
+		&p.pipeline,
+		world_pipeline_desc(g, vertex_spirv, fragment_spirv),
+	)
 }
 
 // world_destroy releases everything; call after gpu.wait_idle.

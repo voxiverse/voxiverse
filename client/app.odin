@@ -47,6 +47,7 @@ App :: struct {
 	world_pass:       render.World_Pass,
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
+	shader_watch:     Shader_Watch,
 	session:          ^Session, // nil outside a world
 	paused:           bool, // the pause menu is open (in a world)
 	debug:            Debug_Switches,
@@ -73,6 +74,8 @@ app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
 	register_builtin_commands(&app.console)
 	settings_load(app)
+	app.debug = DEBUG_DEFAULTS
+	shader_watch_init(&app.shader_watch)
 
 	if !platform.window_open(&app.window, "Voxiverse", 1280, 720) {return false}
 	g := &app.g
@@ -166,6 +169,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
+	shader_watch_destroy(&app.shader_watch)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)
@@ -188,6 +192,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	}
 	if w.close_requested || app.quit {return false}
 
+	shader_watch_update(app, app.last_frame_ms / 1000)
 	scale := ui_scale(app)
 	input := ui_input(&app.input, scale)
 	handle_global_keys(app, &input)

@@ -64,17 +64,24 @@ SETTINGS_VARS := [?]base.Var {
 
 // Debug switches: for development, never saved.
 Debug_Switches :: struct {
-	overlay:       bool, // F3
-	chunk_borders: bool,
+	overlay:            bool, // F3
+	chunk_borders:      bool,
+	hot_reload_shaders: bool,
 }
 
 @(rodata)
-DEBUG_DEFAULTS := Debug_Switches{}
+DEBUG_DEFAULTS := Debug_Switches {
+	hot_reload_shaders = true,
+}
 
 @(rodata)
 DEBUG_VARS := [?]base.Var {
 	{field = "overlay", help = "debug overlay (F3)"},
 	{field = "chunk_borders", help = "outline the camera's chunk and its neighbours' edges"},
+	{
+		field = "hot_reload_shaders",
+		help = "recompile and reload shaders when assets/shaders changes (development builds)",
+	},
 }
 
 settings_table :: proc() -> base.Var_Table {

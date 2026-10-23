@@ -81,6 +81,13 @@ Linux), or to the path in `VX_SETTINGS` (empty: none). Changes made by `--exec` 
 never saved, so test runs cannot change your settings. New variable: add the field to its
 struct, its default, and one line to the table; a test checks every table.
 
+## Shader hot reload
+
+In development builds, saving a file in `assets/shaders` recompiles it (through
+`build/build-driver shaders`) and swaps the affected pipelines within about a second. A
+shader that fails to compile logs glslang's message with file and line, and the old one
+keeps running. `set debug.hot_reload_shaders 0` turns it off.
+
 ## Debug drawing
 
 `render.debug_line` / `render.debug_box` draw world-space lines for one frame from anywhere on

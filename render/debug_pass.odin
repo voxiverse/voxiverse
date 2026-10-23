@@ -73,26 +73,42 @@ Debug_Vertex :: struct {
 }
 
 debug_init :: proc(p: ^Debug_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
-	attributes := [2]gpu.Vertex_Attribute {
-		{.R32G32B32_SFLOAT, u32(offset_of(Debug_Vertex, pos))},
-		{.R8G8B8A8_UNORM, u32(offset_of(Debug_Vertex, color))},
-	}
 	ok: bool
-	p.pipeline, ok = gpu.create_pipeline(
-		g,
-		{
-			name = "debug lines",
-			vertex_spirv = vertex_spirv,
-			fragment_spirv = fragment_spirv,
-			color_format = gpu.color_format(g),
-			vertex_stride = size_of(Debug_Vertex),
-			attributes = attributes[:],
-			alpha_blend = true,
-			depth = .Test,
-			lines = true,
-		},
-	)
+	p.pipeline, ok = gpu.create_pipeline(g, debug_pipeline_desc(g, vertex_spirv, fragment_spirv))
 	return ok
+}
+
+@(private = "file", rodata)
+DEBUG_ATTRIBUTES := [2]gpu.Vertex_Attribute {
+	{.R32G32B32_SFLOAT, u32(offset_of(Debug_Vertex, pos))},
+	{.R8G8B8A8_UNORM, u32(offset_of(Debug_Vertex, color))},
+}
+
+@(private = "file")
+debug_pipeline_desc :: proc(
+	g: ^gpu.Gpu,
+	vertex_spirv, fragment_spirv: []byte,
+) -> gpu.Pipeline_Desc {
+	return {
+		name = "debug lines",
+		vertex_spirv = vertex_spirv,
+		fragment_spirv = fragment_spirv,
+		color_format = gpu.color_format(g),
+		vertex_stride = size_of(Debug_Vertex),
+		attributes = DEBUG_ATTRIBUTES[:],
+		alpha_blend = true,
+		depth = .Test,
+		lines = true,
+	}
+}
+
+// debug_reload swaps in new shaders (hot reload); false keeps the old ones.
+debug_reload :: proc(p: ^Debug_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
+	return gpu.replace_pipeline(
+		g,
+		&p.pipeline,
+		debug_pipeline_desc(g, vertex_spirv, fragment_spirv),
+	)
 }
 
 // debug_destroy releases everything; call after gpu.wait_idle.

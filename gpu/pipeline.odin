@@ -161,6 +161,17 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 	return p, true
 }
 
+// replace_pipeline rebuilds p from desc (shader hot reload). On failure p
+// is unchanged; on success the old pipeline is destroyed once the GPU is
+// idle (a reload is rare and interactive, so the wait is fine).
+replace_pipeline :: proc(g: ^Gpu, p: ^Pipeline, desc: Pipeline_Desc) -> bool {
+	fresh := create_pipeline(g, desc) or_return
+	wait_idle(g)
+	destroy_pipeline(g, p)
+	p^ = fresh
+	return true
+}
+
 destroy_pipeline :: proc(g: ^Gpu, p: ^Pipeline) {
 	if p.handle != 0 {vk.DestroyPipeline(g.device, p.handle, nil)}
 	p^ = {}

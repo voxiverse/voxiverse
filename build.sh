@@ -7,4 +7,5 @@ command -v odin >/dev/null 2>&1 || {
 	exit 1
 }
 mkdir -p build
-exec odin run tools/build -out:build/build-driver -- "$@"
+odin build tools/build -out:build/build-driver
+exec build/build-driver "$@"
