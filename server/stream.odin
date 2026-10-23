@@ -27,33 +27,41 @@ Client_Link :: union {
 Local :: struct {}
 
 Client :: struct {
-	state:       Client_State,
-	link:        Client_Link,
-	can_cheat:   bool,
-	name_buf:    [game.MAX_NAME_LENGTH]u8,
-	name_len:    int,
-	kick_at:     u64, // tick to drop a refused client
-	kick_reason: string, // (a constant)
-	position:    [3]f64,
-	center:      game.Chunk_Pos, // the chunk the client is in
-	moved:       bool, // center changed since the last unload pass
-	has:         map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
-	columns:     map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
-	known:       map[u32]struct{}, // entities it has been told about (entities.odin)
-	cursor:      int, // offsets before this are all sent
-	player:      game.Player_State,
-	inputs:      game.Input_Queue,
-	teleported:  bool, // since the last Player_Update
-	edits:       [MAX_QUEUED_EDITS]game.Edit, // waiting for their input (oldest first)
-	edit_count:  int,
-	teleport:    [2]f32, // yaw, pitch to look after it
-	look:        [2]f32, // yaw, pitch of the last input applied (saved with the player)
-	fired_at:    u64, // tick of its last rocket (a rate limit)
+	state:        Client_State,
+	link:         Client_Link,
+	can_cheat:    bool,
+	name_buf:     [game.MAX_NAME_LENGTH]u8,
+	name_len:     int,
+	kick_at:      u64, // tick to drop a refused client
+	kick_reason:  string, // (a constant)
+	position:     [3]f64,
+	center:       game.Chunk_Pos, // the chunk the client is in
+	moved:        bool, // center changed since the last unload pass
+	has:          map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	columns:      map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
+	known:        map[u32]struct{}, // entities it has been told about (entities.odin)
+	cursor:       int, // offsets before this are all sent
+	player:       game.Player_State,
+	inputs:       game.Input_Queue,
+	teleported:   bool, // since the last Player_Update
+	actions:      [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
+	action_count: int,
+	teleport:     [2]f32, // yaw, pitch to look after it
+	look:         [2]f32, // yaw, pitch of the last input applied (saved with the player)
+	fired_at:     u64, // tick of its last rocket (a rate limit)
 }
 
-// MAX_QUEUED_EDITS: edits waiting for the input they follow; more than this
-// means the client is far ahead of what it has sent, or lying.
-MAX_QUEUED_EDITS :: 64
+// Chunks sent to a client per tick (at 30 Hz: 1440 per second).
+@(private)
+SEND_BUDGET :: 48
+// A remote client with this much unacknowledged reliable data gets no more
+// chunks until it catches up (the rest wait: streaming is nearest first).
+@(private)
+MAX_BACKLOG :: 512 * 1024
+
+// MAX_QUEUED_ACTIONS: actions waiting for the input they follow; more than
+// this means the client is far ahead of what it has sent, or lying.
+MAX_QUEUED_ACTIONS :: 64
 
 @(private)
 client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.Allocator_Error {

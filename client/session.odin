@@ -2,7 +2,6 @@ package client
 
 import "core:fmt"
 import "core:log"
-import "core:math"
 import "core:mem/virtual"
 import "core:net"
 import "core:os"
@@ -14,7 +13,6 @@ import "../base"
 import "../game"
 import "../gpu"
 import "../netcode"
-import "../platform"
 import "../render"
 import "../server"
 import "mesh"
@@ -120,6 +118,13 @@ Session_Stats :: struct {
 	bytes_received:  int,
 }
 
+// worker_count: threads for each pool (the server's generation, our
+// meshing): a quarter of the cores each, leaving the rest to the game.
+@(private)
+worker_count :: proc() -> int {
+	return max(1, os.get_processor_core_count() / 4)
+}
+
 // session_start starts the server and connects to it. On failure the
 // caller still calls session_end.
 session_start :: proc(s: ^Session, config: Session_Config) -> bool {
@@ -131,15 +136,13 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&s.arena)
-	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
-	s.endpoint = {&s.pipe, .Client}
 	s.scratch = new(game.Block_Array, arena)
 	game.writer_init(&s.writer, arena)
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16) // heap: notices come and go (an arena would only grow)
-	s.others = make(map[u16]Other_Player, arena)
+	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
 	s.entities = make(map[u32]Other_Entity, 64)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	for &pixels, t in s.texels {mesh.generate_texture(t, pixels[:])}
@@ -162,14 +165,16 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		log.infof("session connecting to=%s", net.endpoint_to_string(join.address))
 		return true // Hello goes once the link is up
 	}
-	cores := os.get_processor_core_count()
+	// Our own world: its server here, through the pipe.
+	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
+	s.endpoint = {&s.pipe, .Client}
 	if !server.start(
 	&s.server,
 	{
 		seed         = config.seed,
 		view_radius  = config.view_radius,
 		view_height  = config.view_height,
-		workers      = max(1, cores / 4),
+		workers      = worker_count(),
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
@@ -212,6 +217,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	delete(s.entities) // the heap: entities come and go
+	for _, o in s.others {delete(o.name)}
+	delete(s.others)
 	for n in s.notices {delete(n)}
 	delete(s.notices)
 	netcode.capture_close(&s.capture)
@@ -314,14 +321,6 @@ session_update :: proc(
 	world_update(&s.world, camera_chunk(&s.camera))
 }
 
-// session_attack hits the aimed entity; false if none is aimed at.
-session_attack :: proc(s: ^Session) -> bool {
-	id, ok := s.aim_entity.?
-	if !ok {return false}
-	send_message(s, game.Attack{id, s.prediction.next_sequence - 1})
-	return true
-}
-
 // session_apply does the session's GPU work for this frame; between
 // render.world_begin and world_draw.
 session_apply :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) {
@@ -343,430 +342,9 @@ session_set_rule :: proc(s: ^Session, name, value: string) {
 	send_message(s, game.Set_Rule{name, value})
 }
 
-@(private = "file")
-receive :: proc(s: ^Session) {
-	if s.remote {
-		was := s.link.state
-		netcode.link_update(&s.link, time.tick_now())
-		if s.link.state == .Failed {
-			fail(s, s.link.reason)
-			return
-		}
-		if was != .Connected && s.link.state == .Connected {
-			log.info("session connected")
-			send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.name})
-		}
-		netcode.link_receive(&s.link, &s.received)
-		for p in s.received {
-			s.traffic[.Server].messages[p[0]] += 1
-			s.traffic[.Server].bytes[p[0]] += len(p)
-		}
-	} else {
-		game.receive(s.endpoint, &s.received)
-	}
-	defer {
-		for p in s.received {
-			if s.remote {netcode.link_free(&s.link, p)} else {game.packet_free(s.endpoint, p)}
-		}
-		clear(&s.received)
-	}
-	for p in s.received {
-		if s.state == .Failed {return}
-		s.stats.bytes_received += len(p)
-		m, ok := game.decode_server(p, s.scratch)
-		if !ok {
-			fail(s, "the server sent an invalid message")
-			return
-		}
-		switch v in m {
-		case game.Welcome:
-			welcome(s, v)
-		case game.Reject:
-			fail(
-				s,
-				strings.concatenate({"the server refused: ", v.reason}, context.temp_allocator),
-			)
-		case game.Chunk_Message:
-			if s.state != .Playing {
-				fail(s, "the server sent a chunk before welcoming us")
-				return
-			}
-			if !world_set_chunk(&s.world, v, s.scratch) {
-				fail(s, "too many chunks: the server sent more than its interest area")
-				return
-			}
-			s.stats.chunks_received += 1
-		case game.Pong:
-			if s.net.ping_pending && v.id == s.net.ping_id {
-				s.net.rtt_ms = f32(time.duration_milliseconds(time.tick_since(s.net.ping_sent)))
-				s.net.ping_pending = false
-			}
-		case game.Unload_Chunk:
-			if s.state != .Playing {
-				fail(s, "the server unloaded a chunk before welcoming us")
-				return
-			}
-			world_remove_chunk(&s.world, v.pos)
-			s.stats.unloads += 1
-		case game.Player_Update:
-			// States can overtake the Welcome over the network (they travel
-			// unreliably, apart from it); newer ones follow every tick.
-			if s.state != .Playing {continue}
-			// Over the network a teleport (sent reliably) may arrive after a
-			// newer update: then only its direction still matters.
-			if v.acked != 0 && game.sequence_before(v.acked, s.last_acked) {
-				if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
-				continue
-			}
-			s.last_acked = v.acked
-			game.prediction_reconcile(&s.prediction, v, &s.rules, {&s.world, world_block})
-			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
-		case game.Rules_Changed:
-			s.rules = v.rules
-		case game.Time:
-			s.clock = v.time
-		case game.Player_Joined:
-			s.others[v.player] = {
-				name = strings.clone(v.name, virtual.arena_allocator(&s.arena)),
-			}
-			notice(s, fmt.tprintf("%s joined", v.name))
-		case game.Player_Left:
-			if o, known := s.others[v.player]; known {notice(s, fmt.tprintf("%s left", o.name))}
-			delete_key(&s.others, v.player)
-		case game.Players:
-			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
-				s.newest_tick, s.newest_at = v.tick, time.tick_now()
-			}
-			for i in 0 ..< v.count {
-				e := v.entries[i]
-				if o, known := &s.others[e.player]; known {other_snapshot(o, v.tick, e)}
-			}
-		case game.Notice:
-			notice(s, v.text)
-		case game.Bulk_Begin:
-			world_bulk_begin(&s.world, int(v.count))
-		case game.Explosion:
-			explosion_effects(s, v.position, f64(v.radius))
-		case game.Entity_Spawn:
-			s.entities[v.entity] = {
-				kind      = v.kind,
-				last_seen = v.position,
-			}
-			e := &s.entities[v.entity]
-			track_add(&e.track, {tick = s.newest_tick, position = v.position, yaw = v.yaw})
-		case game.Entities:
-			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
-				s.newest_tick, s.newest_at = v.tick, time.tick_now()
-			}
-			for i in 0 ..< v.count {
-				x := v.entries[i]
-				if e, known := &s.entities[x.entity]; known {
-					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false})
-				}
-			}
-		case game.Entity_Despawn:
-			if e, known := &s.entities[v.entity]; known && v.died {
-				entity_died(s, e)
-			}
-			delete_key(&s.entities, v.entity)
-		case game.Entity_Hurt:
-			if e, known := &s.entities[v.entity]; known {
-				e.hurt_at = time.tick_now()
-				append(&s.sounds, Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1})
-			}
-		case game.Edit_Result:
-			// The server's word, accepted or not: set it (undoing a rejected
-			// prediction) and stop waiting.
-			world_set_block(&s.world, v.pos, v.block)
-			for e, i in s.edits {
-				if e.id == v.id {
-					ordered_remove(&s.edits, i)
-					break
-				}
-			}
-		case game.Block_Changed:
-			// Someone else's edit: heard where it happened.
-			old, _ := world_block(&s.world, v.pos)
-			if world_set_block(&s.world, v.pos, v.block) && old != v.block {
-				edit_sound(s, v.pos, old, v.block)
-			}
-		case game.Column:
-			if s.state != .Playing {
-				fail(s, "the server sent a column before welcoming us")
-				return
-			}
-			world_set_column(&s.world, v)
-		}
-	}
-}
-
-@(private = "file")
-welcome :: proc(s: ^Session, w: game.Welcome) {
-	if s.state != .Connecting {
-		fail(s, "the server welcomed us twice")
-		return
-	}
-	if w.protocol != game.PROTOCOL_VERSION || w.tick_rate != game.TICK_RATE {
-		fail(s, "the server runs a different version")
-		return
-	}
-	s.welcome = w
-	// Everything the server can send us at once: the interest area plus the
-	// margin within which we keep chunks.
-	r, h :=
-		i32(w.view_radius) + game.CLIENT_DROP_MARGIN, i32(w.view_height) + game.CLIENT_DROP_MARGIN
-	capacity := game.interest_count(r, h)
-	columns := game.interest_count(r, 0)
-	cores := os.get_processor_core_count()
-	if err := world_init(
-		&s.world,
-		capacity,
-		columns,
-		max(1, cores / 4),
-		virtual.arena_allocator(&s.arena),
-	); err != nil {
-		fail(s, "out of memory for the world")
-		return
-	}
-	s.world_init = true
-	s.rules = w.rules
-	game.prediction_init(&s.prediction, {position = w.spawn})
-	s.camera = {
-		position = w.spawn + {0, game.PLAYER_EYE, 0},
-	}
-	s.state = .Playing
-	if t, ok := s.teleport.?; ok && w.cheats {send_message(s, t)}
-	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
-}
-
 // session_others_now: the server time (ticks) to show the other players at.
 session_others_now :: proc(s: ^Session) -> f64 {
 	return render_tick(s.newest_tick, f32(time.duration_seconds(time.tick_since(s.newest_at))))
 }
 
-// notice keeps a message from the server for the console.
-@(private = "file")
-notice :: proc(s: ^Session, text: string) {
-	log.info("session ", text)
-	append(&s.notices, strings.clone(text))
-}
-
-// flush sends what is due over the network (about once per display frame
-// at most: acknowledgements need not go out a thousand times a second).
-@(private = "file")
-flush :: proc(s: ^Session) {
-	if !s.remote {return}
-	now := time.tick_now()
-	if time.tick_diff(s.last_flush, now) < FLUSH_INTERVAL {return}
-	s.last_flush = now
-	netcode.link_flush(&s.link, now)
-}
-
 FLUSH_INTERVAL :: 8 * time.Millisecond
-
-// session_trace starts recording every message to net.trace next to the
-// executable (see netdump and replay in DEBUGGING.md).
-session_trace :: proc(s: ^Session) -> bool {
-	path := path_next_to_exe("net.trace")
-	header := game.Trace_Header {
-		protocol     = game.PROTOCOL_VERSION,
-		seed         = s.config.seed,
-		view_radius  = u32(s.config.view_radius),
-		view_height  = u32(s.config.view_height),
-		allow_cheats = true, // as session_start configures it
-	}
-	if !game.pipe_trace_start(&s.pipe, path, header) {
-		log.errorf("net trace cannot write path=%s", path)
-		return false
-	}
-	log.infof("net trace recording path=%s", path)
-	return true
-}
-
-// net_update pings once a second and refreshes the per-second rates.
-@(private = "file")
-net_update :: proc(s: ^Session, dt: f32) {
-	n := &s.net
-	n.ping_timer += dt
-	if n.ping_timer >= 1 && !n.ping_pending && s.state == .Playing {
-		n.ping_timer = 0
-		n.ping_id += 1
-		n.ping_sent = time.tick_now()
-		n.ping_pending = true
-		send_message(s, game.Ping{n.ping_id})
-	}
-	n.rate_timer += dt
-	if n.rate_timer >= 1 {
-		now := s.traffic if s.remote else game.pipe_traffic(&s.pipe)
-		for side in game.Side {
-			for k in 0 ..< 256 {
-				n.rates[side].messages[k] = int(
-					math.round(
-						f32(now[side].messages[k] - n.last[side].messages[k]) / n.rate_timer,
-					),
-				)
-				n.rates[side].bytes[k] = int(
-					f32(now[side].bytes[k] - n.last[side].bytes[k]) / n.rate_timer,
-				)
-			}
-		}
-		n.last = now
-		n.rate_timer = 0
-	}
-}
-
-@(private = "file")
-fail :: proc(s: ^Session, reason: string) {
-	log.errorf("session %s", reason)
-	s.state = .Failed
-	s.failure = strings.clone(reason, virtual.arena_allocator(&s.arena))
-	if !s.remote && s.pipe.allocator.procedure != nil {game.close(s.endpoint)}
-}
-
-MAX_PENDING_EDITS :: 64
-EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
-
-// edit_controls: number keys and the wheel pick the hotbar item; the mouse
-// buttons use it (item_use). Edits are predicted at once (if the shared
-// rules allow them) and sent.
-@(private = "file")
-edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
-	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
-	slots := len(hotbar_items(s))
-	for k, i in keys[:slots] {
-		if k in input.pressed {s.hotbar = i}
-	}
-	if input.wheel.y != 0 {
-		s.hotbar = (s.hotbar - int(math.sign(input.wheel.y)) + slots) % slots
-	}
-	s.hotbar = min(s.hotbar, slots - 1)
-
-	s.edit_timer -= dt
-	breaking := .Left in input.mouse_down
-	placing := .Right in input.mouse_down
-	pressed := input.mouse_pressed & {.Left, .Right} != {}
-	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
-	s.edit_timer = EDIT_REPEAT_SECONDS
-	item_use(s, held_item(s), breaking, placing)
-}
-
-// session_fire launches a rocket where we look (the server makes it).
-session_fire :: proc(s: ^Session) -> bool {
-	if !session_can_cheat(s) {return false}
-	send_message(s, game.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
-	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1})
-	return true
-}
-
-// session_edit breaks the aimed block, or places block against its face:
-// predicted now if the shared rules allow it, then sent. False if not.
-session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
-	hit, aimed := s.aim.?
-	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
-	edit := game.Edit {
-		id    = s.next_edit + 1,
-		after = s.prediction.next_sequence - 1, // the last input predicted
-	}
-	if !place {
-		b, _ := world_block(&s.world, hit.block)
-		if !game.can_break(b) {return false}
-		edit.pos, edit.block = hit.block, .Air
-	} else {
-		if hit.normal == {} {return false}
-		edit.pos = hit.block + hit.normal
-		current, loaded := world_block(&s.world, edit.pos)
-		if !loaded || !game.can_place_at(current, edit.pos, s.prediction.state) {return false}
-		edit.block = block
-	}
-	before, _ := world_block(&s.world, edit.pos)
-	if !world_set_block(&s.world, edit.pos, edit.block) {return false}
-	edit_sound(s, edit.pos, before, edit.block)
-	s.next_edit = edit.id
-	append(&s.edits, edit)
-	send_message(s, edit)
-	return true
-}
-
-// edit_sound: a block at pos went from old to new.
-@(private = "file")
-edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
-	centre := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5
-	if new == .Air {
-		append(&s.sounds, Sound_Event{.Break, old, centre, 1})
-	} else {
-		append(&s.sounds, Sound_Event{.Place, new, centre, 1})
-	}
-}
-
-// movement_sounds: footsteps every STRIDE blocks walked and landings
-// (louder the harder), from the tick the prediction just ran. Flying is
-// silent.
-@(private = "file")
-movement_sounds :: proc(s: ^Session) {
-	was, now := s.prediction.previous, s.prediction.state
-	if now.flying || was.flying {
-		s.walked = 0
-		return
-	}
-	feet := now.position
-	under, solid := block_under(s, feet)
-	if !was.on_ground && now.on_ground {
-		speed := -was.velocity.y
-		if speed >= LAND_MIN_SPEED && solid {
-			loud := clamp((speed - LAND_MIN_SPEED) / (LAND_LOUD_SPEED - LAND_MIN_SPEED), 0.25, 1)
-			append(&s.sounds, Sound_Event{.Land, under, feet, loud})
-		}
-		s.walked = 0
-	}
-	if now.on_ground {
-		d := now.position - was.position
-		s.walked += f32(math.sqrt(d.x * d.x + d.z * d.z))
-		if s.walked >= STRIDE {
-			s.walked -= STRIDE
-			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1})}
-		}
-	}
-}
-
-// block_under: the block the player stands on (under the middle of the
-// feet, else under a corner of them, at the edge of a drop).
-@(private = "file")
-block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
-	y := i32(math.floor(feet.y - 0.05))
-	h := f64(game.PLAYER_WIDTH) / 2
-	for o in ([?][2]f64{{0, 0}, {-h, -h}, {h, -h}, {-h, h}, {h, h}}) {
-		b, _ := world_block(
-			&s.world,
-			{i32(math.floor(feet.x + o.x)), y, i32(math.floor(feet.z + o.y))},
-		)
-		if game.block_collides(b) {return b, true}
-	}
-	return .Air, false
-}
-
-@(private)
-send_message :: proc(s: ^Session, m: game.Client_Message) {
-	// Text the server would refuse to decode (ending the connection).
-	#partial switch v in m {
-	case game.Admin:
-		if len(v.command) > game.MAX_ADMIN_TEXT {
-			append(&s.notices, strings.clone("Command too long"))
-			return
-		}
-	case game.Set_Rule:
-		if len(v.name) > game.MAX_RULE_TEXT || len(v.value) > game.MAX_RULE_TEXT {
-			append(&s.notices, strings.clone("Rule text too long"))
-			return
-		}
-	}
-	clear(&s.writer.buf)
-	game.encode_client(&s.writer, m)
-	data := s.writer.buf[:]
-	if s.remote {
-		s.traffic[.Client].messages[data[0]] += 1
-		s.traffic[.Client].bytes[data[0]] += len(data)
-		netcode.link_send(&s.link, data, game.message_reliable(.Client, data[0]))
-	} else {
-		game.send(s.endpoint, data)
-	}
-}

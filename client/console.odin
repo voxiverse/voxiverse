@@ -42,18 +42,25 @@ Console_Line :: struct {
 }
 
 Command :: struct {
-	name:     string,
-	help:     string,
-	run:      proc(app: ^App, args: []string),
-	complete: Completer,
+	using spec: Command_Spec,
+	complete:   Completer,
+	args:       [2]int, // how many arguments: at least, at most (-1: any); {}: not checked
+	needs:      Command_Needs,
 }
 
-// Command_Spec: what console_register is given (complete apart).
+// Command_Spec: what console_register is given (the rest apart).
 Command_Spec :: struct {
 	name: string,
-	help: string,
+	help: string, // "name <args>: what it does" (up to ": ", its usage)
 	run:  proc(app: ^App, args: []string),
 }
+
+Command_Need :: enum u8 {
+	World, // in a world (playing)
+	Cheats, // the server lets this player cheat (asking anyway would end the connection)
+	Host, // the world runs here
+}
+Command_Needs :: bit_set[Command_Need]
 
 // Completer: what argument `arg` (0: the first) can be, for Tab.
 Completer :: proc(app: ^App, arg: int, args: []string) -> []string
@@ -81,8 +88,16 @@ console_destroy :: proc(c: ^Console) {
 	delete(c.commands)
 }
 
-console_register :: proc(c: ^Console, cmd: Command_Spec, complete: Completer = nil) {
-	append(&c.commands, Command{cmd.name, cmd.help, cmd.run, complete})
+// console_register adds a command. What it needs and how many arguments
+// it takes are checked before it runs (with a warning if not).
+console_register :: proc(
+	c: ^Console,
+	cmd: Command_Spec,
+	complete: Completer = nil,
+	args := [2]int{},
+	needs := Command_Needs{},
+) {
+	append(&c.commands, Command{cmd, complete, args, needs})
 }
 
 console_print :: proc(c: ^Console, text: string, level := log.Level.Info) {
@@ -115,13 +130,35 @@ console_execute :: proc(app: ^App, line: string) {
 	if text == "" {return}
 	console_print(c, fmt.tprintf("> %s", text))
 	args := strings.fields(text, context.temp_allocator)
-	for cmd in c.commands {
-		if cmd.name == args[0] {
+	for &cmd in c.commands {
+		if cmd.name != args[0] {continue}
+		if problem := command_refused(app, &cmd, len(args) - 1); problem != "" {
+			console_print(c, fmt.tprintf("%s: %s", cmd.name, problem), .Warning)
+		} else {
 			cmd.run(app, args[1:])
-			return
 		}
+		return
 	}
 	console_print(c, fmt.tprintf("unknown command '%s' (try: help)", args[0]), .Warning)
+}
+
+// command_refused: why cmd cannot run now with n arguments ("": it can).
+@(private = "file")
+command_refused :: proc(app: ^App, cmd: ^Command, n: int) -> string {
+	if cmd.args != {} && (n < cmd.args[0] || (cmd.args[1] >= 0 && n > cmd.args[1])) {
+		usage, _, _ := strings.partition(cmd.help, ": ")
+		if !strings.has_prefix(usage, cmd.name) {usage = cmd.name}
+		return fmt.tprintf("usage: %s", usage)
+	}
+	s := app.session
+	if .World in cmd.needs && (s == nil || s.state != .Playing) {return "not in a world"}
+	if .Cheats in cmd.needs && (s == nil || !session_can_cheat(s)) {
+		return "not allowed on this server"
+	}
+	if .Host in cmd.needs && (s == nil || !session_hosting(s)) {
+		return "only the host can do that"
+	}
+	return ""
 }
 
 // console_clear empties the scrollback.
@@ -215,7 +252,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			"screen",
 			"screen <title|options|worlds|multiplayer|quit>: switch screens (quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
-				switch args[0] if len(args) > 0 else "" {
+				switch args[0] {
 				case "title":
 					app.screen = .Title
 				case "options":
@@ -241,6 +278,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		complete_screen,
+		args = {1, 1},
 	)
 	console_register(c, {"console", "show the console", proc(app: ^App, args: []string) {
 			app.console.open = true
@@ -259,7 +297,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			"singleplayer",
 			"enter a singleplayer world",
 			proc(app: ^App, args: []string) {
-				enter_world(app, "", 0x5eed) // a scratch world: nothing saved
+				enter_world(app, "", SCRATCH_SEED) // a scratch world: nothing saved
 			},
 		},
 	)
@@ -283,8 +321,8 @@ register_builtin_commands :: proc(c: ^Console) {
 					return
 				}
 				values: [5]f64
-				if len(args) != 3 && len(args) != 5 {
-					console_print(&app.console, "tp <x> <y> <z> [yaw pitch]", .Warning)
+				if len(args) == 4 {
+					console_print(&app.console, "tp: usage: tp <x> <y> <z> [yaw pitch]", .Warning)
 					return
 				}
 				for a, i in args {
@@ -311,6 +349,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				session_teleport(app.session, t)
 			},
 		},
+		args = {3, 5},
 	)
 	console_register(
 		c,
@@ -334,10 +373,6 @@ register_builtin_commands :: proc(c: ^Console) {
 			"set",
 			"set <name> <value>: change a variable (vars lists them)",
 			proc(app: ^App, args: []string) {
-				if len(args) != 2 {
-					console_print(&app.console, "set <name> <value>", .Warning)
-					return
-				}
 				if strings.has_prefix(args[0], "rules.") {
 					// The server's: ask it (it announces the result).
 					if app.session == nil {
@@ -397,6 +432,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		complete_variables,
+		args = {2, 2},
 	)
 	console_register(
 		c,
@@ -423,10 +459,6 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{"reset", "reset <name>: back to the default value", proc(app: ^App, args: []string) {
-				if len(args) != 1 {
-					console_print(&app.console, "reset <name>", .Warning)
-					return
-				}
 				for v in app_variables(app) {
 					if var, ok := base.var_find(v.table, args[0]); ok {
 						base.var_reset(v.table, v.data, var)
@@ -445,6 +477,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				)
 			}},
 		complete_variables,
+		args = {1, 1},
 	)
 	console_register(
 		c,
@@ -481,6 +514,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				session_trace(app.session)
 			},
 		},
+		args = {0, 0},
 	)
 	console_register(
 		c,
@@ -488,12 +522,14 @@ register_builtin_commands :: proc(c: ^Console) {
 			"break",
 			"hit the aimed entity, or break the aimed block (left click)",
 			proc(app: ^App, args: []string) {
-				if app.session != nil && session_attack(app.session) {return}
-				if app.session == nil || !session_edit(app.session, false, .Air) {
+				if session_attack(app.session) {return}
+				if !session_edit(app.session, false, .Air) {
 					console_print(&app.console, "break: nothing breakable aimed at", .Warning)
 				}
 			},
 		},
+		args = {0, 0},
+		needs = {.World},
 	)
 	console_register(
 		c,
@@ -501,7 +537,6 @@ register_builtin_commands :: proc(c: ^Console) {
 			"place",
 			"place [block]: place against the aimed face (right click)",
 			proc(app: ^App, args: []string) {
-				if app.session == nil {return}
 				block, holding := held_item(app.session).(game.Block)
 				if !holding {block = .Stone}
 				if len(args) > 0 {
@@ -525,6 +560,8 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		complete_block,
+		args = {0, 1},
+		needs = {.World},
 	)
 	console_register(
 		c,
@@ -532,141 +569,44 @@ register_builtin_commands :: proc(c: ^Console) {
 			"world",
 			"world <name>: play the saved world name (created if new)",
 			proc(app: ^App, args: []string) {
-				if len(args) == 0 {
-					console_print(&app.console, "world <name>", .Warning)
-					return
-				}
 				name := strings.join(args, " ", context.temp_allocator)
 				path := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name
 				if os.exists(path) {enter_world(app, path, 0)} else {world_create(app, name, "")}
 			},
 		},
 		complete_world,
+		args = {1, -1},
 	)
 	console_register(c, {"save", "save the world now", proc(app: ^App, args: []string) {
-			if app.session == nil || app.session.config.save_dir == "" {
-				console_print(&app.console, "save: not in a saved world", .Warning)
-				return
-			}
-			if !cheats_allowed(app, "save") {return}
-			send_message(app.session, game.Admin{"save"})
-		}})
+				if app.session.config.save_dir == "" {
+					console_print(&app.console, "save: not in a saved world", .Warning)
+					return
+				}
+				send_message(app.session, game.Admin{"save"})
+			}}, args = {0, 0}, needs = {.World, .Cheats})
 	console_register(
 		c,
 		{
 			"join",
 			"join <host[:port]> [password]: play on a server",
 			proc(app: ^App, args: []string) {
-				if len(args) == 0 {
-					console_print(&app.console, "join <host[:port]> [password]", .Warning)
-					return
-				}
 				if app.session != nil {leave_world(app)}
 				join_server(app, args[0], args[1] if len(args) > 1 else "")
 			},
 		},
+		args = {1, 2},
 	)
-	console_register(
-		c,
-		{"fire", "fire a rocket where you look (the launcher)", proc(app: ^App, args: []string) {
-				if !cheats_allowed(app, "fire") {return}
-				session_fire(app.session)
-			}},
-	)
+	register_world_commands(c)
 	console_register(
 		c,
 		{
-			"pos1",
-			"pos1: the aimed block is the selection's first corner",
+			"open_lan",
+			"open_lan: let others on the LAN join this world",
 			proc(app: ^App, args: []string) {
-				select_corner(app, 0)
-			},
-		},
-	)
-	console_register(
-		c,
-		{
-			"pos2",
-			"pos2: the aimed block is the selection's second corner",
-			proc(app: ^App, args: []string) {
-				select_corner(app, 1)
-			},
-		},
-	)
-	console_register(c, {"sel", "sel: forget the selection", proc(app: ^App, args: []string) {
-			if app.session != nil {app.session.selection = {}}
-		}})
-	console_register(
-		c,
-		{"fill", "fill <block>: fill the selection", proc(app: ^App, args: []string) {
-				if len(args) != 1 {
-					console_print(&app.console, "fill <block>", .Warning)
-					return
-				}
-				selection_command(app, "fill", args[0])
-			}},
-		complete_block_or_air,
-	)
-	console_register(
-		c,
-		{"replace", "replace <from> <to>: in the selection", proc(app: ^App, args: []string) {
-				if len(args) != 2 {
-					console_print(&app.console, "replace <from> <to>", .Warning)
-					return
-				}
-				selection_command(app, "replace", strings.join(args, " ", context.temp_allocator))
-			}},
-		complete_block_or_air,
-	)
-	console_register(
-		c,
-		{
-			"clear",
-			"clear: air in the whole selection (or clear the console with no selection)",
-			proc(app: ^App, args: []string) {
-				if app.session != nil &&
-				   app.session.selection[0] != nil &&
-				   app.session.selection[1] != nil {
-					selection_command(app, "fill", "air")
-				} else {
-					console_clear(&app.console)
-				}
-			},
-		},
-	)
-	console_register(
-		c,
-		{
-			"sphere",
-			"sphere <radius> [block]: a ball of block (air: a hole) at the aimed block",
-			proc(app: ^App, args: []string) {
-				aimed_command(app, "sphere", args, "air")
-			},
-		},
-		complete_sphere,
-	)
-	console_register(
-		c,
-		{
-			"explode",
-			"explode [radius]: an explosion at the aimed block",
-			proc(app: ^App, args: []string) {
-				aimed_command(app, "explode", args, "")
-			},
-		},
-	)
-	console_register(
-		c,
-		{"summon", "summon: a critter in front of you", proc(app: ^App, args: []string) {
-				if !cheats_allowed(app, "summon") {return}
-				send_message(app.session, game.Admin{"summon critter"})
-			}},
-	)
-	console_register(
-		c,
-		{"open_lan", "let others on the LAN join this world", proc(app: ^App, args: []string) {
 				session_open_lan(app)
-			}},
+			},
+		},
+		args = {0, 0},
 	)
 	console_register(
 		c,
@@ -674,7 +614,6 @@ register_builtin_commands :: proc(c: ^Console) {
 			"time",
 			"time [sunrise|day|noon|sunset|night|midnight|0..1]: show or set the time of day",
 			proc(app: ^App, args: []string) {
-				if app.session == nil {return}
 				if len(args) == 0 {
 					f := game.time_of_day(app.session.clock)
 					minutes := int(f * 24 * 60)
@@ -703,6 +642,8 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		complete_time,
+		args = {0, 1},
+		needs = {.World},
 	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
@@ -727,65 +668,5 @@ session_open_lan :: proc(app: ^App) {
 		console_print(&app.console, "open_lan: only the host can open the world", .Warning)
 	case:
 		send_message(app.session, game.Admin{"open_lan"})
-	}
-}
-
-// select_corner sets corner i of the selection to the aimed block.
-@(private = "file")
-select_corner :: proc(app: ^App, i: int) {
-	s := app.session
-	if s == nil {return}
-	hit, ok := s.aim.?
-	if !ok {
-		console_print(&app.console, "pos: aim at a block first", .Warning)
-		return
-	}
-	s.selection[i] = hit.block
-	console_print(&app.console, fmt.tprintf("pos%d: %v", i + 1, hit.block))
-}
-
-// selection_command sends a bulk edit over the selection.
-@(private = "file")
-selection_command :: proc(app: ^App, what: string, rest: string) {
-	s := app.session
-	if s == nil || !cheats_allowed(app, what) {return}
-	a, ok_a := s.selection[0].?
-	b, ok_b := s.selection[1].?
-	if !ok_a || !ok_b {
-		console_print(
-			&app.console,
-			fmt.tprintf("%s: select two corners first (pos1, pos2)", what),
-			.Warning,
-		)
-		return
-	}
-	send_message(
-		s,
-		game.Admin {
-			fmt.tprintf("%s %d %d %d %d %d %d %s", what, a.x, a.y, a.z, b.x, b.y, b.z, rest),
-		},
-	)
-}
-
-// aimed_command sends sphere/explode at the aimed block.
-@(private = "file")
-aimed_command :: proc(app: ^App, what: string, args: []string, default_block: string) {
-	s := app.session
-	if s == nil || !cheats_allowed(app, what) {return}
-	hit, ok := s.aim.?
-	if !ok {
-		console_print(&app.console, fmt.tprintf("%s: aim at a block first", what), .Warning)
-		return
-	}
-	radius := args[0] if len(args) > 0 else "4"
-	p := hit.block
-	if what == "explode" {
-		send_message(s, game.Admin{fmt.tprintf("explode %d %d %d %s", p.x, p.y, p.z, radius)})
-	} else {
-		block := args[1] if len(args) > 1 else default_block
-		send_message(
-			s,
-			game.Admin{fmt.tprintf("sphere %d %d %d %s %s", p.x, p.y, p.z, radius, block)},
-		)
 	}
 }

@@ -1,7 +1,10 @@
 package server
 
+import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:mem"
+import "core:strings"
 import "core:testing"
 import "core:time"
 
@@ -27,6 +30,8 @@ Fake_Client :: struct {
 	columns:        map[[2]i32]game.Column,
 	column_updates: int,
 	clock:          f64, // the last Time
+	notices:        [dynamic]string, // (temp allocator)
+	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 }
 
 @(private = "file")
@@ -57,7 +62,11 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 				"chunk %v before its column",
 				v.pos,
 			)
-			testing.expectf(t, v.pos not_in c.has, "chunk %v sent twice", v.pos)
+			if c.bulk_left > 0 {
+				c.bulk_left -= 1
+			} else {
+				testing.expectf(t, v.pos not_in c.has, "chunk %v sent twice", v.pos)
+			}
 			c.has[v.pos] = {}
 			c.chunks += 1
 		case game.Player_Update:
@@ -71,8 +80,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.columns[v.pos] = v
 		case game.Time:
 			c.clock = v.time
-		case game.Bulk_Begin,
-		     game.Explosion,
+		case game.Bulk_Begin:
+			c.bulk_left = int(v.count)
+		case game.Explosion,
 		     game.Block_Changed,
 		     game.Pong,
 		     game.Player_Joined,
@@ -81,8 +91,10 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Entity_Spawn,
 		     game.Entity_Despawn,
 		     game.Entities,
-		     game.Entity_Hurt,
-		     game.Notice: // not checked here
+		     game.Entity_Hurt: // not checked here
+		case game.Notice:
+			if c.notices == nil {c.notices = make([dynamic]string, context.temp_allocator)}
+			append(&c.notices, strings.clone(v.text, context.temp_allocator))
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)
@@ -490,4 +502,93 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 	time.sleep(2100 * time.Millisecond)
 	fake_receive(t, &c)
 	testing.expectf(t, c.clock > before, "a world open to the LAN froze at %v", before)
+}
+
+// Admin commands answer: what they did, how to use them when the
+// arguments are wrong, and that an unknown one is unknown.
+@(test)
+test_admin_commands :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	ok := start(
+		&srv,
+		{seed = 5, view_radius = 2, view_height = 1, workers = 1, allow_cheats = true},
+		{&pipe, .Server},
+	)
+	if !testing.expect(t, ok) {return}
+	defer stop(&srv)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "admin"})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 10}),
+	)
+	// Beside the player: loaded.
+	p := c.welcome.spawn
+	x, y, z := i32(p.x) + 2, i32(p.y), i32(p.z)
+	Case :: struct {
+		command, answer: string,
+	}
+	cases := []Case {
+		{
+			fmt.tprintf("fill %d %d %d %d %d %d lamp", x, y, z, x + 1, y + 1, z + 1),
+			"fill: 8 blocks changed",
+		},
+		{"fill 0 60 0 1 61 1 bedrock", "Usage: fill <x1 y1 z1 x2 y2 z2> <block>"},
+		{"sphere 0 0 0 99 air", "Usage: sphere <x y z> <radius> <block>"},
+		{"time", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
+		{"time teatime", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
+		{"summonx", "Unknown server command: summonx"},
+		{"summon rocket", "Usage: summon [kind]"},
+		{"fill -100 0 -100 100 60 100 dirt", "fill: too big (at most 262144 blocks)"},
+	}
+	for tc in cases {
+		clear(&c.notices)
+		fake_send(&c, game.Admin{tc.command})
+		@(static) want: string
+		want = tc.answer
+		got := wait_until(
+			t,
+			&c,
+			proc(c: ^Fake_Client) -> bool {return len(c.notices) > 0},
+			2 * time.Second,
+		)
+		testing.expectf(t, got, "%q: no answer", tc.command)
+		if got {testing.expectf(t, c.notices[0] == tc.answer, "%q: %q", tc.command, c.notices[0])}
+	}
+}
+
+// A server that cannot listen (the port is taken) fails to start, cleanly:
+// nothing leaks, and the first one runs on.
+@(test)
+test_server_start_fails_cleanly :: proc(t: ^testing.T) {
+	config := Config {
+		seed        = 3,
+		view_radius = 2,
+		view_height = 1,
+		workers     = 1,
+		listen      = true,
+	}
+	first: Server
+	if !testing.expect(t, start(&first, config, {})) {return}
+	defer testing.expect(t, stop(&first))
+	config.port = first.host.socket.port
+	second: Server
+	{
+		context.logger = log.nil_logger() // its error is the point
+		testing.expect(t, !start(&second, config, {}), "two servers on one port")
+	}
+	testing.expect(
+		t,
+		mem.check_zero(mem.ptr_to_bytes(&second)),
+		"a failed start left state behind",
+	)
 }

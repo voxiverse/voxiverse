@@ -107,3 +107,36 @@ test_console_history :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(c.input[:]), "half typed")
 	testing.expect_value(t, c.line.browsing, -1)
 }
+
+// Commands run only when they can: the right number of arguments, in a
+// world, with cheats; else a warning says why.
+@(test)
+test_console_command_needs :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	console_init(&app.console)
+	defer console_destroy(&app.console)
+	@(static) ran: int
+	ran = 0
+	console_register(&app.console, {"poke", "poke <what>: test", proc(app: ^App, args: []string) {
+				ran += 1
+			}}, args = {1, 1}, needs = {.World, .Cheats})
+	last :: proc(c: ^Console) -> string {return(
+			c.lines[(c.first + c.count - 1) % CONSOLE_MAX_LINES].text \
+		)}
+
+	console_execute(app, "poke")
+	testing.expect_value(t, last(&app.console), "poke: usage: poke <what>")
+	console_execute(app, "poke it")
+	testing.expect_value(t, last(&app.console), "poke: not in a world")
+	s := new(Session)
+	defer free(s)
+	app.session = s
+	s.state = .Playing
+	console_execute(app, "poke it")
+	testing.expect_value(t, last(&app.console), "poke: not allowed on this server")
+	s.welcome.cheats = true
+	console_execute(app, "poke it")
+	testing.expect_value(t, ran, 1)
+	app.session = nil
+}

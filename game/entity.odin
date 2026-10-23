@@ -21,6 +21,8 @@ Entity_Info :: struct {
 	run_speed:  f32, // fleeing
 	jump:       f32, // blocks it can jump up
 	saved:      bool, // kept with the world (a rocket in flight is not)
+	summonable: bool, // `summon <name>` makes one
+	hittable:   bool, // players, rockets and explosions hit it
 }
 
 @(rodata)
@@ -34,6 +36,8 @@ ENTITY_INFO := [Entity_Kind]Entity_Info {
 		run_speed = 4.2,
 		jump = 1.2,
 		saved = true,
+		summonable = true,
+		hittable = true,
 	},
 	.Rocket = {name = "rocket", width = 0.3, height = 0.3, health = 1},
 }

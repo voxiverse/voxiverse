@@ -104,3 +104,49 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		}
 	}
 }
+
+// movement_sounds: footsteps every STRIDE blocks walked and landings
+// (louder the harder), from the tick the prediction just ran. Flying is
+// silent.
+@(private)
+movement_sounds :: proc(s: ^Session) {
+	was, now := s.prediction.previous, s.prediction.state
+	if now.flying || was.flying {
+		s.walked = 0
+		return
+	}
+	feet := now.position
+	under, solid := block_under(s, feet)
+	if !was.on_ground && now.on_ground {
+		speed := -was.velocity.y
+		if speed >= LAND_MIN_SPEED && solid {
+			loud := clamp((speed - LAND_MIN_SPEED) / (LAND_LOUD_SPEED - LAND_MIN_SPEED), 0.25, 1)
+			append(&s.sounds, Sound_Event{.Land, under, feet, loud})
+		}
+		s.walked = 0
+	}
+	if now.on_ground {
+		d := now.position - was.position
+		s.walked += f32(math.sqrt(d.x * d.x + d.z * d.z))
+		if s.walked >= STRIDE {
+			s.walked -= STRIDE
+			if solid {append(&s.sounds, Sound_Event{.Step, under, feet, 1})}
+		}
+	}
+}
+
+// block_under: the block the player stands on (under the middle of the
+// feet, else under a corner of them, at the edge of a drop).
+@(private)
+block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
+	y := i32(math.floor(feet.y - 0.05))
+	h := f64(game.PLAYER_WIDTH) / 2
+	for o in ([?][2]f64{{0, 0}, {-h, -h}, {h, -h}, {-h, h}, {h, h}}) {
+		b, _ := world_block(
+			&s.world,
+			{i32(math.floor(feet.x + o.x)), y, i32(math.floor(feet.z + o.y))},
+		)
+		if game.block_collides(b) {return b, true}
+	}
+	return .Air, false
+}

@@ -6,14 +6,16 @@ import "core:math/rand"
 
 import "../game"
 
-// Entities on the server: the critters. Each tick every awake one thinks
-// (a small state machine), walks its path (A*, path.odin, within a shared
-// node budget) and moves by the shared body physics. Each client is told
+// Entities on the server: critters and rockets. What each kind is lies in
+// game.ENTITY_INFO; what it does each tick, in entities_tick's switch. A
+// critter thinks (a small state machine), walks its path (A*, path.odin,
+// within a shared node budget) and moves by the shared body physics; a
+// rocket flies until it hits something and explodes. Each client is told
 // about the ones near it: Entity_Spawn when one comes near (or into
 // being), its place in an Entities batch every tick, Entity_Despawn when it
 // leaves (or dies). Critters appear by day on grass around players and go
-// when nobody is near; an entity whose ground is not loaded waits, frozen,
-// until it is. All are saved with the world (save.odin: entities.cfg).
+// when nobody is near; one whose ground is not loaded waits, frozen, until
+// it is. Saved kinds are kept with the world (save.odin: entities.cfg).
 
 MAX_ENTITIES :: 512
 MAX_KNOWN_ENTITIES :: 256 // per client
@@ -117,23 +119,20 @@ entities_tick :: proc(s: ^Server) {
 			unordered_remove(&e.list, i)
 			continue
 		}
-		if ent.kind == .Rocket {
+		switch ent.kind {
+		case .Critter:
+			if chunk_ready(s, ent.body.position) { 	// else its ground is not loaded (yet): it waits
+				think(s, ent)
+				wish, jump := steer(s, ent)
+				game.body_step(&ent.body, ent.kind, wish, jump, &s.rules, query, game.TICK_SECONDS)
+			}
+		case .Rocket:
 			if at, hit := rocket_step(s, ent); hit {
 				append(&blasts, Sphere{at, game.ROCKET_RADIUS})
-				gone_for_good(s, ent.id)
-				unordered_remove(&e.list, i)
+				entity_died(s, i) // its explosion is what players see
 				continue
 			}
-			i += 1
-			continue
 		}
-		if !chunk_ready(s, ent.body.position) {
-			i += 1
-			continue // its ground is not loaded (yet): it waits
-		}
-		think(s, ent)
-		wish, jump := steer(s, ent)
-		game.body_step(&ent.body, ent.kind, wish, jump, &s.rules, query, game.TICK_SECONDS)
 		i += 1
 	}
 	// After the walk over the list: explosions change it.
@@ -183,7 +182,7 @@ explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
 	for i := 0; i < len(s.entities.list); {
 		ent := &s.entities.list[i]
 		impulse, near := push(ent.body.position + {0, 0.4, 0}, center, reach)
-		if !near || ent.kind == .Rocket {
+		if !near || !game.ENTITY_INFO[ent.kind].hittable {
 			i += 1
 			continue
 		}
@@ -226,7 +225,7 @@ rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		return from, true // flew out of the loaded world
 	}
 	for &other in s.entities.list {
-		if other.id == ent.id || other.kind == .Rocket {continue}
+		if other.id == ent.id || !game.ENTITY_INFO[other.kind].hittable {continue}
 		lo, hi := game.entity_box(other.kind, other.body.position)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
@@ -242,18 +241,6 @@ rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	ent.yaw = f32(math.atan2(-dir.x, -dir.z))
 	ent.pitch = clamp(f32(math.asin(clamp(dir.y, -1, 1))), -1.5, 1.5) // within the protocol's limit
 	return {}, false
-}
-
-// gone_for_good: tell those who knew an entity that it died (no puff for
-// a rocket: its explosion is what they see).
-@(private = "file")
-gone_for_good :: proc(s: ^Server, id: u32) {
-	for &c in s.clients {
-		if c.state == .Playing && id in c.known {
-			delete_key(&c.known, id)
-			send_message(s, &c, game.Entity_Despawn{id, true})
-		}
-	}
 }
 
 @(private = "file")

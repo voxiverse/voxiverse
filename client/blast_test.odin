@@ -33,19 +33,15 @@ Blast_Test_Phase :: enum u8 {
 }
 
 Blast_Test :: struct {
+	using check:  Exit_Check,
 	phase:        Blast_Test_Phase,
 	shots:        int,
 	fired:        int,
-	quit:         bool,
 	started:      time.Tick, // of the phase
 	next_shot:    time.Tick,
-	frames:       base.Frame_Stats,
 	tick_max:     f32, // the server's slowest tick seen while firing
-	client_arena: uint,
-	server_arena: uint,
 	late_before:  int,
 	shown_before: int,
-	failed:       bool,
 }
 
 BLAST_SHOT_EVERY :: 300 * time.Millisecond // over the server's rocket rate limit
@@ -55,29 +51,11 @@ BLAST_TIMEOUT :: 60 * time.Second // per phase
 
 @(private)
 blast_test_command :: proc(app: ^App, args: []string) {
-	shots, ok := strconv.parse_int(args[0] if len(args) > 0 else "")
-	if !ok || shots <= 0 {
-		console_print(&app.console, "blast_test <shots> [quit]", .Warning)
-		return
-	}
-	if app.session == nil {enter_world(app, "", 0x5eed)}
-	if app.session == nil {return}
-	if !session_hosting(app.session) {
-		// Its memory checks need the server here.
-		console_print(&app.console, "blast_test runs in a world of your own", .Warning)
-		return
-	}
 	t := &app.blast_test
-	frames := t.frames
-	t^ = {
-		phase   = .Loading,
-		shots   = shots,
-		quit    = len(args) > 1 && args[1] == "quit",
-		started = time.tick_now(),
-		frames  = frames,
-	}
-	t.frames.count = 0
-	log.infof("blast_test waiting for the world shots=%d", shots)
+	shots, ok := exit_check_start(app, &t.check, "blast_test", args)
+	if !ok {return}
+	t.phase, t.shots, t.fired, t.started, t.tick_max = .Loading, int(shots), 0, time.tick_now(), 0
+	log.infof("blast_test waiting for the world shots=%d", t.shots)
 }
 
 @(private)
@@ -117,8 +95,7 @@ blast_test_update :: proc(app: ^App) {
 			yaw   = s.camera.yaw,
 			pitch = s.camera.pitch,
 		}
-		t.client_arena = s.arena.total_used
-		t.server_arena = server.stats(&s.server).arena_used
+		exit_check_baseline(&t.check, s)
 		t.late_before = s.world.stats.groups_late
 		t.shown_before = s.world.stats.groups_shown
 		t.next_shot = time.tick_now()
@@ -158,8 +135,6 @@ blast_test_update :: proc(app: ^App) {
 		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
 		if time.tick_since(t.started) < 2 * time.Second || !world_settled(app) {return}
 		if len(s.world.groups) > 0 {return}
-		for n in s.notices {delete(n)}
-		clear(&s.notices)
 		send_message(s, game.Admin{"hash"})
 		next(t, .Comparing)
 	case .Comparing:
@@ -225,26 +200,7 @@ blast_test_compare :: proc(app: ^App, count: int, server_sum: u64) {
 	if shown := s.world.stats.groups_shown - t.shown_before; shown < t.fired - 1 {
 		append(&failures, fmt.tprintf("only %d of %d blasts were shown as one", shown, t.fired))
 	}
-	if s.arena.total_used != t.client_arena {
-		append(
-			&failures,
-			fmt.tprintf(
-				"client session arena grew from %d to %d bytes",
-				t.client_arena,
-				s.arena.total_used,
-			),
-		)
-	}
-	if st := server.stats(&s.server); st.arena_used != t.server_arena {
-		append(
-			&failures,
-			fmt.tprintf(
-				"server session arena grew from %d to %d bytes",
-				t.server_arena,
-				st.arena_used,
-			),
-		)
-	}
+	exit_check_memory(&t.check, s, &failures)
 	log.infof(
 		"blast_test shots=%d frames=%d p50=%.2f p99=%.2f max=%.2f server_tick_max=%.2f groups_shown=%d chunks=%d",
 		t.fired,
@@ -256,18 +212,14 @@ blast_test_compare :: proc(app: ^App, count: int, server_sum: u64) {
 		s.world.stats.groups_shown,
 		ours,
 	)
-	blast_test_finish(app, strings.join(failures[:], "; ", context.temp_allocator))
+	t.phase = .Off
+	exit_check_finish(app, &t.check, failures[:])
 }
 
+// blast_test_finish: a failure before the comparison.
 @(private = "file")
 blast_test_finish :: proc(app: ^App, failure: string) {
 	t := &app.blast_test
-	if failure != "" {log.errorf("blast_test %s", failure)} else {log.info("blast_test passed")}
-	if app.session != nil {
-		app.session.autopilot = nil
-		screenshot_request(app, "blast_test_end")
-	}
-	t.failed = failure != ""
 	t.phase = .Off
-	if t.quit {app.quit = true}
+	exit_check_finish(app, &t.check, {failure})
 }

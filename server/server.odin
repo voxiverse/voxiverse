@@ -6,7 +6,6 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 import "core:net"
-import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -91,17 +90,6 @@ Server :: struct {
 	tick:        u64,
 }
 
-// Chunks sent to a client per tick (at 30 Hz: 1440 per second).
-@(private)
-SEND_BUDGET :: 48
-// A remote client with this much unacknowledged reliable data gets no more
-// chunks until it catches up (the rest wait: streaming is nearest first).
-@(private)
-MAX_BACKLOG :: 512 * 1024
-// Ticks between one player's rockets, at least.
-@(private)
-FIRE_EVERY :: game.TICK_RATE / 4
-
 // A rejected remote client is told why and dropped this many ticks later.
 @(private)
 KICK_DELAY :: game.TICK_RATE
@@ -132,8 +120,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.config.capture = strings.clone(config.capture, arena)
 	// A saved world's seed and rules replace the config's.
 	if !store_open(s, config.save_dir) {
-		store_close(s)
-		virtual.arena_destroy(&s.arena)
+		teardown(s, world = false)
 		return false
 	}
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
@@ -147,17 +134,14 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.capacity = capacity
 	if err := world_init(&s.world, s.config.seed, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
-		store_close(s)
-		virtual.arena_destroy(&s.arena)
+		teardown(s, world = false)
 		return false
 	}
 	s.clients = make([]Client, s.config.max_players, arena)
 	for &c in s.clients {
 		if err := client_init(&c, s.config, arena); err != nil {
 			log.errorf("server cannot allocate client state: %v", err)
-			world_destroy(&s.world)
-			store_close(s)
-			virtual.arena_destroy(&s.arena)
+			teardown(s, world = true)
 			return false
 		}
 	}
@@ -170,9 +154,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		s.clients[0].can_cheat = config.allow_cheats
 	}
 	if config.listen && !listen(s, config.port, config.port) {
-		world_destroy(&s.world)
-		store_close(s)
-		virtual.arena_destroy(&s.arena)
+		teardown(s, world = true)
 		return false
 	}
 
@@ -201,17 +183,25 @@ stop :: proc(s: ^Server) -> bool {
 	thread.destroy(s.thread)
 	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
 	if s.listening {netcode.host_close(&s.host, "the server stopped")}
+	used := s.arena.total_used
+	ticks := s.tick
+	failed := sync.atomic_load(&s.failed)
+	teardown(s, world = true)
+	log.infof("server stopped ticks=%d arena=%v", ticks, base_bytes(used))
+	return !failed
+}
+
+// teardown frees the session, started (stop) or partly (a start that
+// failed: what was not set up yet is zero; world: whether it was).
+@(private = "file")
+teardown :: proc(s: ^Server, world: bool) {
 	netcode.capture_close(&s.capture)
 	store_close(s)
-	world_destroy(&s.world)
+	if world {world_destroy(&s.world)}
 	entities_destroy(&s.entities)
 	delete(s.tops)
-	used := s.arena.total_used
 	virtual.arena_destroy(&s.arena)
-	log.infof("server stopped ticks=%d arena=%v", s.tick, base_bytes(used))
-	failed := sync.atomic_load(&s.failed)
 	s^ = {}
-	return !failed
 }
 
 // freeze stops (or restarts) time and entities while the local player is
@@ -451,372 +441,11 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Admin:
 		admin(s, c, v.command)
 	case game.Edit:
-		queue_edit(s, c, v)
+		queue_action(s, c, v)
 	case game.Attack:
-		attack(s, c, v)
+		queue_action(s, c, v)
 	case game.Fire:
-		if s.tick >= c.fired_at + FIRE_EVERY {
-			c.fired_at = s.tick
-			fire(s, c, v.yaw, v.pitch)
-		}
-	}
-}
-
-// join: a client said hello with a free name. It is welcomed where it left
-// off (in a saved world) or above the terrain, introduced to the others and
-// they to it.
-@(private = "file")
-join :: proc(s: ^Server, c: ^Client, name: string) {
-	c.state = .Playing
-	c.name_len = copy(c.name_buf[:], name)
-	saved, has_saved := s.store.players[name]
-	c.player = saved.state if has_saved else {position = spawn_point(s.config.seed)}
-	if has_saved {
-		// Look where they looked: sent like a teleport's direction.
-		c.look = {saved.yaw, saved.pitch}
-		c.teleport = c.look
-		c.teleported = true
-	}
-	set_position(c, c.player.position)
-	send_message(
-		s,
-		c,
-		game.Welcome {
-			protocol = game.PROTOCOL_VERSION,
-			tick_rate = game.TICK_RATE,
-			player = player_id(s, c),
-			cheats = c.can_cheat,
-			spawn = c.player.position,
-			view_radius = u32(s.config.view_radius),
-			view_height = u32(s.config.view_height),
-			rules = s.rules,
-		},
-	)
-	send_message(s, c, game.Time{s.clock})
-	for &other in s.clients {
-		if &other == c || other.state != .Playing {continue}
-		send_message(s, c, game.Player_Joined{player_id(s, &other), client_name(&other)})
-		send_message(s, &other, game.Player_Joined{player_id(s, c), name})
-	}
-	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
-}
-
-// leave: a client is gone (left, timed out or was dropped): its player is
-// kept for the save and the others are told.
-@(private = "file")
-leave :: proc(s: ^Server, c: ^Client, reason: string) {
-	farewell(s, c, reason)
-	if p, ok := c.link.(netcode.Peer_Id);
-	   ok {netcode.host_kick(&s.host, p, reason, time.tick_now())}
-	client_reset(c)
-}
-
-// farewell: a playing client's player is kept for the save, and the others
-// are told it left.
-@(private = "file")
-farewell :: proc(s: ^Server, c: ^Client, reason: string) {
-	if c.state != .Playing {return}
-	keep_player(s, c)
-	for &other in s.clients {
-		if &other != c && other.state == .Playing {
-			send_message(s, &other, game.Player_Left{player_id(s, c)})
-		}
-	}
-	log.infof(
-		"server player left player=%d name=%q reason=%s",
-		player_id(s, c),
-		client_name(c),
-		reason,
-	)
-}
-
-// admin runs a server command: "save", "time <0..1>" (time of day),
-// "open_lan" (listen for players on the LAN).
-@(private = "file")
-admin :: proc(s: ^Server, c: ^Client, command: string) {
-	switch {
-	case command == "save":
-		save(s)
-		return
-	case strings.has_prefix(command, "time "):
-		if f, ok := game.parse_time_of_day(command[len("time "):]); ok {
-			s.clock = game.set_time_of_day(s.clock, f)
-			log.infof("server time set time=%.4f", s.clock)
-			broadcast(s, game.Time{s.clock})
-			return
-		}
-	case strings.has_prefix(command, "fill "),
-	     strings.has_prefix(command, "replace "),
-	     strings.has_prefix(command, "sphere "),
-	     strings.has_prefix(command, "explode "):
-		bulk_command(s, c, command)
-		return
-	case command == "hash":
-		// The chunks this client has, as the server has them (blast_test).
-		sum: u64
-		for pos in c.has {
-			if chunk := world_get(&s.world, pos); chunk != nil && chunk.state == .Ready {
-				game.chunks_hash_add(&sum, pos, &chunk.blocks)
-			}
-		}
-		notice(s, c, fmt.tprintf("hash %d %x", len(c.has), sum))
-		return
-	case command == "summon" || strings.has_prefix(command, "summon "):
-		if !summon(s, c, .Critter) {notice(s, c, "Nowhere to put it (look at open ground nearby)")}
-		return
-	case command == "open_lan":
-		if s.listening {
-			notice(s, c, fmt.tprintf("Already open on port %d", s.host.socket.port))
-		} else if listen(
-			s,
-			netcode.DEFAULT_PORT,
-			netcode.DEFAULT_PORT + netcode.DISCOVERY_PORTS - 1,
-		) {
-			notice(s, c, fmt.tprintf("Open to LAN on port %d", s.host.socket.port))
-		} else {
-			notice(s, c, "Could not open to LAN: no free port (see the log)")
-		}
-		return
-	}
-	log.warnf("server unknown admin command command=%q", command)
-}
-
-// simulate_player applies this tick's inputs and tells the client where
-// its player is.
-@(private = "file")
-simulate_player :: proc(s: ^Server, c: ^Client) {
-	buf: [game.INPUT_BUDGET_MAX]game.Input
-	query := game.Block_Query{&s.world, world_block}
-	run_due_edits(s, c) // edits after inputs applied in earlier ticks
-	for msg in game.input_queue_tick(&c.inputs, &buf) {
-		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
-		c.look = {msg.input.yaw, msg.input.pitch}
-		run_due_edits(s, c)
-	}
-	set_position(c, c.player.position)
-	update := game.Player_Update {
-		acked      = c.inputs.last,
-		state      = c.player,
-		teleported = c.teleported,
-		yaw        = c.teleport[0],
-		pitch      = c.teleport[1],
-	}
-	// A teleport must arrive (the player is told where to look); the rest
-	// are states, the newest of which wins.
-	send_message(s, c, update, reliable = c.teleported)
-	c.teleported = false
-}
-
-// send_players tells a client where the other players near it are.
-@(private = "file")
-send_players :: proc(s: ^Server, c: ^Client) {
-	m := game.Players {
-		tick = u32(s.tick),
-	}
-	near := f64((s.config.view_radius + 1) * game.CHUNK_SIZE)
-	for &other in s.clients {
-		if &other == c || other.state != .Playing {continue}
-		d := other.player.position - c.player.position
-		if d.x * d.x + d.z * d.z > near * near {continue}
-		m.entries[m.count] = {
-			player   = player_id(s, &other),
-			position = other.player.position,
-			yaw      = other.look[0],
-			pitch    = other.look[1],
-			flying   = other.player.flying,
-		}
-		m.count += 1
-	}
-	if m.count > 0 {send_message(s, c, m)}
-}
-
-// queue_edit holds an edit until the input it follows has been applied
-// (refusing it outright if too many are waiting).
-@(private = "file")
-queue_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) {
-	if c.edit_count == MAX_QUEUED_EDITS {
-		current, _ := world_block(&s.world, e.pos)
-		send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
-		return
-	}
-	c.edits[c.edit_count] = e
-	c.edit_count += 1
-	run_due_edits(s, c)
-}
-
-// run_due_edits applies queued edits whose input has been applied, in order.
-@(private = "file")
-run_due_edits :: proc(s: ^Server, c: ^Client) {
-	n := 0
-	for n < c.edit_count && game.sequence_before_or_at(c.edits[n].after, c.inputs.last) {
-		send_message(s, c, apply_edit(s, c, c.edits[n]))
-		n += 1
-	}
-	copy(c.edits[:], c.edits[n:c.edit_count])
-	c.edit_count -= n
-}
-
-// apply_edit checks an edit against the shared rules, from where the server
-// has the player, and applies it if it passes. Everyone else who has the
-// chunk hears of it.
-@(private = "file")
-apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
-	current, loaded := world_block(&s.world, e.pos)
-	result := game.Edit_Result {
-		id    = e.id,
-		pos   = e.pos,
-		block = current,
-	}
-	if !loaded {return result}
-	player := c.player
-	if !game.in_reach(
-		game.player_eye(player),
-		e.pos,
-		f64(s.rules.reach) + game.EDIT_REACH_SLACK,
-	) {return result}
-	allowed := false
-	if e.block == .Air {
-		allowed = game.can_break(current)
-	} else {
-		allowed =
-			game.can_place(e.block) &&
-			game.can_place_at(current, e.pos, player) &&
-			!anyone_else_in(s, c, e.pos)
-	}
-	if !allowed || !set_block(s, e.pos, e.block, c) {return result}
-	result.accepted, result.block = true, e.block
-	return result
-}
-
-// bulk_command runs a bulk edit command (block coordinates):
-//
-//	fill x1 y1 z1 x2 y2 z2 block
-//	replace x1 y1 z1 x2 y2 z2 from to
-//	sphere x y z radius block
-//	explode x y z radius
-@(private = "file")
-bulk_command :: proc(s: ^Server, c: ^Client, command: string) {
-	f := strings.fields(command, context.temp_allocator)
-	ints :: proc(words: []string, out: []i32) -> bool {
-		for w, i in words {
-			n, ok := strconv.parse_int(w)
-			if !ok || abs(n) >= game.WORLD_LIMIT {return false}
-			out[i] = i32(n)
-		}
-		return true
-	}
-	block_named :: proc(name: string) -> (game.Block, bool) {
-		b, ok := game.block_by_name(name)
-		return b, ok && (b == .Air || game.can_place(b))
-	}
-	e: Bulk_Edit
-	ok := false
-	switch f[0] {
-	case "fill", "replace":
-		n: [6]i32
-		want := 8 if f[0] == "fill" else 9
-		if len(f) == want && ints(f[1:7], n[:]) {
-			e.shape = Box{{n[0], n[1], n[2]}, {n[3], n[4], n[5]}}
-			if f[0] == "fill" {
-				e.op = .Set
-				e.block, ok = block_named(f[7])
-			} else {
-				from, ok1 := block_named(f[7])
-				to, ok2 := block_named(f[8])
-				e.op, e.from, e.block, ok = .Replace, from, to, ok1 && ok2
-			}
-		}
-	case "sphere", "explode":
-		n: [3]i32
-		r: f64
-		rok := false
-		if len(f) > 4 {r, rok = strconv.parse_f64(f[4])}
-		if rok && r > 0 && r <= 32 && ints(f[1:4], n[:]) {
-			center := [3]f64{f64(n[0]) + 0.5, f64(n[1]) + 0.5, f64(n[2]) + 0.5}
-			if f[0] == "explode" {
-				explode(s, center, r)
-				return
-			}
-			if len(f) == 6 {
-				e.shape, e.op = Sphere{center, r}, .Set
-				e.block, ok = block_named(f[5])
-			}
-		}
-	}
-	if !ok {
-		notice(s, c, fmt.tprintf("%s: bad arguments", f[0]))
-		return
-	}
-	changed, result := bulk_edit(s, e)
-	switch result {
-	case .Done:
-		notice(s, c, fmt.tprintf("%s: %d blocks changed", f[0], changed))
-	case .Too_Big:
-		notice(s, c, fmt.tprintf("%s: too big (at most %d blocks)", f[0], MAX_BULK_VOLUME))
-	case .Not_Loaded:
-		notice(s, c, fmt.tprintf("%s: part of it is not loaded", f[0]))
-	}
-}
-
-// attack: a player hits an entity, if it is within reach of where the
-// server has the player (with the same slack as edits). The client chose it
-// by its own ray; the server only checks it was possible.
-@(private = "file")
-attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
-	ent, index := entity_find(s, a.entity)
-	if ent == nil {return} 	// gone already: a late click
-	eye := game.player_eye(c.player)
-	lo, hi := game.entity_box(ent.kind, ent.body.position)
-	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
-	d := closest - eye
-	reach := f64(s.rules.reach) + game.EDIT_REACH_SLACK
-	if d.x * d.x + d.y * d.y + d.z * d.z > reach * reach {return}
-	if entity_attack(s, ent, c.player.position) {
-		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
-		entity_died(s, index)
-	} else {
-		entity_hurt_shown(s, a.entity)
-	}
-}
-
-// anyone_else_in: a block at pos would be inside another player.
-@(private = "file")
-anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos) -> bool {
-	for &other in s.clients {
-		if &other != c && other.state == .Playing && !game.can_place_at(.Air, pos, other.player) {
-			return true
-		}
-	}
-	return false
-}
-
-// disconnect refuses a client (a protocol error is the client's bug or an
-// attack; either way it is logged): it is told why, then dropped.
-@(private = "file")
-disconnect :: proc(s: ^Server, c: ^Client, reason: string) {
-	log.warnf("server disconnecting client player=%d reason=%q", player_id(s, c), reason)
-	send_message(s, c, game.Reject{reason})
-	switch l in c.link {
-	case Local:
-		game.close(s.local)
-		leave(s, c, reason)
-		c.state = .Gone // the pipe is closed: this seat stays shut
-	case netcode.Peer_Id:
-		// The Reject goes out with the next flushes; the connection ends after.
-		farewell(s, c, reason)
-		c.state = .Gone
-		c.kick_at = s.tick + KICK_DELAY
-		c.kick_reason = reason
-	}
-}
-
-// kick_due drops refused remote clients whose Reject has had time to go.
-@(private = "file")
-kick_due :: proc(s: ^Server) {
-	for &c in s.clients {
-		if c.state == .Gone && c.kick_at != 0 && s.tick >= c.kick_at {
-			leave(s, &c, c.kick_reason)
-		}
+		queue_action(s, c, v)
 	}
 }
 
@@ -850,7 +479,7 @@ broadcast :: proc(s: ^Server, m: game.Server_Message) {
 	}
 }
 
-@(private = "file")
+@(private)
 notice :: proc(s: ^Server, c: ^Client, text: string) {
 	log.info("server notice ", text)
 	send_message(s, c, game.Notice{text})
@@ -880,13 +509,6 @@ update_info :: proc(s: ^Server) {
 		},
 	)
 	netcode.host_set_info(&s.host, w.buf[:])
-}
-
-// spawn_point is above the terrain at the origin.
-@(private = "file")
-spawn_point :: proc(seed: i64) -> [3]f64 {
-	h := game.column_height(seed, 0, 0)
-	return {0.5, f64(h) + 3, 0.5}
 }
 
 @(private = "file")

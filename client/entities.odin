@@ -258,6 +258,7 @@ entity_aimed :: proc(
 	now := session_others_now(s)
 	distance = max_distance
 	for key, &e in s.entities {
+		if !game.ENTITY_INFO[e.kind].hittable {continue}
 		v, seen := track_view(&e.track, now)
 		if !seen {continue}
 		lo, hi := game.entity_box(e.kind, v.position)

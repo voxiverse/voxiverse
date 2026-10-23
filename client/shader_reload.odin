@@ -6,7 +6,6 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
-import "../render"
 
 // Shader hot reload (development builds, `debug.hot_reload_shaders`): when a
 // file in assets/shaders changes, run the build driver's `shaders` command
@@ -65,10 +64,6 @@ shader_watch_destroy :: proc(w: ^Shader_Watch) {
 	w^ = {}
 }
 
-// INCLUDE_USERS: the passes whose shaders include scene.glsl.
-@(private = "file", rodata)
-INCLUDE_USERS := [?]string{"world", "sky", "entity"}
-
 // shader_watch_update checks for changes every half second.
 shader_watch_update :: proc(app: ^App, dt: f32) {
 	w := &app.shader_watch
@@ -94,46 +89,26 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 		}
 		return
 	}
-	// Reload each pass whose shaders changed.
-	// An include (.glsl) changes every pass that uses it.
-	passes := make([dynamic]string, context.temp_allocator)
+	// Reload each pass whose shaders changed (an include: every pass that
+	// uses it), once.
+	reload: bit_set[Pass]
 	for name in changed {
-		if filepath.ext(name) == ".glsl" {
-			append(&passes, ..INCLUDE_USERS[:])
-		} else {
-			append(&passes, filepath.stem(name))
+		for info, p in PASSES {
+			if filepath.stem(name) == info.shader ||
+			   (filepath.ext(name) == ".glsl" && info.scene) {
+				reload += {p}
+			}
 		}
 	}
-	reloaded: [5]bool
-	for pass in passes {
-		vert, vert_ok := read_shader(
-			strings.concatenate({pass, ".vert.spv"}, context.temp_allocator),
-		)
-		frag, frag_ok := read_shader(
-			strings.concatenate({pass, ".frag.spv"}, context.temp_allocator),
-		)
-		if !vert_ok || !frag_ok {continue}
-		ok: bool
-		switch pass {
-		case "ui":
-			if reloaded[0] {continue}
-			ok, reloaded[0] = render.ui_reload(&app.ui_pass, &app.g, vert, frag), true
-		case "world":
-			if reloaded[1] {continue}
-			ok, reloaded[1] = render.world_reload(&app.world_pass, &app.g, vert, frag), true
-		case "debug":
-			if reloaded[2] {continue}
-			ok, reloaded[2] = render.debug_reload(&app.debug_pass, &app.g, vert, frag), true
-		case "sky":
-			if reloaded[3] {continue}
-			ok, reloaded[3] = render.sky_reload(&app.sky_pass, &app.g, vert, frag), true
-		case "entity":
-			if reloaded[4] {continue}
-			ok, reloaded[4] = render.entity_reload(&app.entity_pass, &app.g, vert, frag), true
-		case:
-			continue
+	for p in reload {
+		info := PASSES[p]
+		vert, frag, read := pass_shaders(info)
+		if !read {continue}
+		if info.reload(app, vert, frag) {
+			log.infof("shader reloaded pass=%s", info.shader)
+		} else {
+			log.errorf("shader reload failed pass=%s", info.shader)
 		}
-		if ok {log.infof("shader reloaded pass=%s", pass)} else {log.errorf("shader reload failed pass=%s", pass)}
 	}
 }
 

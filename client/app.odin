@@ -121,27 +121,11 @@ app_init :: proc(app: ^App) -> bool {
 		return false
 	}
 	if !ui.init(&app.ui, &app.font) {return false}
-	vert, vert_ok := read_shader("ui.vert.spv")
-	frag, frag_ok := read_shader("ui.frag.spv")
-	if !vert_ok || !frag_ok {return false}
-	if !render.ui_init(&app.ui_pass, g, vert, frag) {return false}
 	render.debug_draw_init(&app.debug_draw)
-	debug_vert, debug_vert_ok := read_shader("debug.vert.spv")
-	debug_frag, debug_frag_ok := read_shader("debug.frag.spv")
-	if !debug_vert_ok || !debug_frag_ok {return false}
-	if !render.debug_init(&app.debug_pass, g, debug_vert, debug_frag) {return false}
-	sky_vert, sky_vert_ok := read_shader("sky.vert.spv")
-	sky_frag, sky_frag_ok := read_shader("sky.frag.spv")
-	if !sky_vert_ok || !sky_frag_ok {return false}
-	if !render.sky_init(&app.sky_pass, g, sky_vert, sky_frag) {return false}
-	if !render.scene_init(&app.scenes, g) {return false}
-	entity_vert, entity_vert_ok := read_shader("entity.vert.spv")
-	entity_frag, entity_frag_ok := read_shader("entity.frag.spv")
-	if !entity_vert_ok || !entity_frag_ok {return false}
-	if !render.entity_init(&app.entity_pass, g, entity_vert, entity_frag) {return false}
 	render.entity_draw_init(&app.entity_draw)
+	if !render.scene_init(&app.scenes, g) {return false}
 	audio_init(app)
-	return world_pass_init(app)
+	return passes_init(app)
 }
 
 // audio_init makes the sounds and opens the sound card; without one the
@@ -156,11 +140,7 @@ audio_init :: proc(app: ^App) {
 }
 
 // world_pass_init sets up chunk rendering with the generated block textures.
-@(private = "file")
-world_pass_init :: proc(app: ^App) -> bool {
-	vert, vert_ok := read_shader("world.vert.spv")
-	frag, frag_ok := read_shader("world.frag.spv")
-	if !vert_ok || !frag_ok {return false}
+world_pass_init :: proc(app: ^App, vert, frag: []u8) -> bool {
 	pixels := make([dynamic]u8, context.temp_allocator)
 	level := make([]mesh.Rgba, mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE, context.temp_allocator)
 	for t in mesh.Texture {
@@ -198,12 +178,8 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		if app.session != nil {leave_world(app)}
 		screenshots_save(app) // the last frames' screenshots are done now
 		gpu.renderdoc_log_captures(&app.renderdoc)
-		render.world_destroy(&app.world_pass, &app.g)
-		render.sky_destroy(&app.sky_pass, &app.g)
-		render.entity_destroy(&app.entity_pass, &app.g)
+		passes_destroy(app)
 		render.scene_destroy(&app.scenes, &app.g)
-		render.debug_destroy(&app.debug_pass, &app.g)
-		render.ui_destroy(&app.ui_pass, &app.g)
 	}
 	a := audio.stats(&app.mixer)
 	log.infof(
@@ -362,6 +338,9 @@ frame_cap :: proc(app: ^App) -> time.Duration {
 	if in_world || app.fly_test.phase != .Off || app.blast_test.phase != .Off {return 0}
 	return time.Second / MENU_FPS
 }
+
+// SCRATCH_SEED: the seed of the scratch world (singleplayer, exit checks).
+SCRATCH_SEED :: 0x5eed
 
 // enter_world starts a session in the world saved at save_dir (created if
 // new, with seed), or with save_dir "" a scratch world nothing is saved of
