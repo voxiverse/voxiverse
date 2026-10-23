@@ -23,6 +23,7 @@ import "core:strings"
 PACKAGES :: []string {
 	"base",
 	"audio",
+	"netcode",
 	"font",
 	"ui",
 	"game",
@@ -43,6 +44,7 @@ PACKAGES :: []string {
 TEST_PACKAGES :: []string {
 	"base",
 	"audio",
+	"netcode",
 	"font",
 	"ui",
 	"game",
@@ -56,6 +58,7 @@ TEST_PACKAGES :: []string {
 SOURCE_DIRS :: []string {
 	"base",
 	"audio",
+	"netcode",
 	"font",
 	"ui",
 	"game",
