@@ -4,6 +4,8 @@ import "core:math"
 import "core:math/rand"
 import "core:testing"
 
+import "../base"
+
 @(private = "file")
 encode_s :: proc(m: Server_Message, blocks: ^Chunk_Blocks = nil) -> [dynamic]u8 {
 	w: Writer
@@ -29,10 +31,30 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok)
 	testing.expect_value(t, hello.(Hello).name, "Ünïcode name")
 	move: Client_Message
-	move, ok = decode_client(encode_c(Move{{1.5, -2e6, 3}})[:])
-	testing.expect(t, ok && move.(Move).position == {1.5, -2e6, 3})
+	input := Player_Input{{0.5, -1}, 1.25, -0.5, {.Jump, .Sprint}}
+	move, ok = decode_client(encode_c(Input{42, input})[:])
+	got := move.(Input)
+	testing.expect(t, ok && got.sequence == 42 && got.input == quantize_input(input))
+	tp: Client_Message
+	tp, ok = decode_client(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
+	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
+	rule: Client_Message
+	rule, ok = decode_client(encode_c(Set_Rule{"rules.gravity", "20"})[:])
+	testing.expect(
+		t,
+		ok && rule.(Set_Rule).name == "rules.gravity" && rule.(Set_Rule).value == "20",
+	)
+	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false}
+	upd: Server_Message
+	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
+	testing.expect(t, ok && upd.(Player_Update) == Player_Update{9, state, true, 1, -1})
+	changed := RULES_DEFAULTS
+	changed.gravity, changed.allow_flying = 12.5, false
+	rc: Server_Message
+	rc, ok = decode_server(encode_s(Rules_Changed{changed})[:], scratch)
+	testing.expect(t, ok && rc.(Rules_Changed).rules == changed)
 
-	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, {0, 40.5, 0}, 12, 6}
+	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
 	m: Server_Message
 	m, ok = decode_server(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
@@ -95,7 +117,9 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	generate(9, {0, 0, 0}, terrain.array)
 
 	server := [][dynamic]u8 {
-		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8, 4}),
+		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8, 4, RULES_DEFAULTS}),
+		encode_s(Player_Update{1, {}, false, 0, 0}),
+		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
@@ -113,7 +137,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Move{}), encode_c(Ping{3})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)
@@ -178,6 +202,8 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		for _ in 0 ..< 3 {write_f64(w, 0)}
 		write_u32(w, MAX_VIEW_RADIUS + 1)
 		write_u32(w, 4)
+		rules := RULES_DEFAULTS
+		write_vars(w, rules_table(), &rules)
 	})
 	bad_server(t, scratch, "view height zero", proc(w: ^Writer) {
 		write_u8(w, 1)
@@ -186,6 +212,8 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		for _ in 0 ..< 3 {write_f64(w, 0)}
 		write_u32(w, 8)
 		write_u32(w, 0)
+		rules := RULES_DEFAULTS
+		write_vars(w, rules_table(), &rules)
 	})
 	bad_server(t, scratch, "view height too large", proc(w: ^Writer) {
 		write_u8(w, 1)
@@ -194,12 +222,53 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		for _ in 0 ..< 3 {write_f64(w, 0)}
 		write_u32(w, 8)
 		write_u32(w, MAX_VIEW_HEIGHT + 1)
+		rules := RULES_DEFAULTS
+		write_vars(w, rules_table(), &rules)
 	})
 
 	chunk_header :: proc(w: ^Writer) {
 		write_u8(w, 3) // Chunk
 		for _ in 0 ..< 3 {write_i32(w, 0)}
 	}
+	bad_server(
+		t,
+		scratch,
+		"rules out of range",
+		proc(w: ^Writer) {
+			write_u8(w, 7) // Rules_Changed
+			rules := RULES_DEFAULTS
+			rules.gravity = 1e6
+			for &v in RULES_VARS {
+				kind, _ := base.var_kind(rules_table(), &v)
+				value := base.var_get_f64(rules_table(), &rules, &v)
+				switch kind {
+				case .Bool:
+					write_u8(w, 1 if value != 0 else 0)
+				case .Int:
+					write_i32(w, i32(value))
+				case .F32:
+					write_f32(w, f32(value))
+				}
+			}
+		},
+	)
+	bad_server(
+		t,
+		scratch,
+		"player speed absurd",
+		proc(w: ^Writer) {
+			write_u8(w, 6) // Player_Update
+			write_u32(w, 1)
+			for _ in 0 ..< 3 {write_f64(w, 0)}
+			write_f32(w, 0)
+			write_f32(w, MAX_SPEED * 2)
+			write_f32(w, 0)
+			write_u8(w, 0)
+			write_u8(w, 0)
+			write_f32(w, 0)
+			write_f32(w, 0)
+		},
+	)
 	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {
 		chunk_header(w)
 		write_u8(w, 0)
@@ -272,24 +341,73 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		write_u32(w, PROTOCOL_VERSION)
 		write_varint(w, 1 << 31)
 	})
-	bad_client(t, "NaN position", proc(w: ^Writer) {
+	bad_client(
+		t,
+		"unknown input button",
+		proc(w: ^Writer) {
+			write_u8(w, 2) // Input
+			write_u32(w, 1)
+			write_u8(w, 0)
+			write_u8(w, 0)
+			write_f32(w, 0)
+			write_f32(w, 0)
+			write_u8(w, 0x80)
+		},
+	)
+	bad_client(t, "input looking past straight up", proc(w: ^Writer) {
 		write_u8(w, 2)
-		write_f64(w, math.nan_f64())
-		write_f64(w, 0)
-		write_f64(w, 0)
+		write_u32(w, 1)
+		write_u8(w, 0)
+		write_u8(w, 0)
+		write_f32(w, 0)
+		write_f32(w, 2)
+		write_u8(w, 0)
 	})
-	bad_client(t, "infinite position", proc(w: ^Writer) {
+	bad_client(t, "input with NaN yaw", proc(w: ^Writer) {
 		write_u8(w, 2)
-		write_f64(w, 0)
-		write_f64(w, math.inf_f64(-1))
-		write_f64(w, 0)
+		write_u32(w, 1)
+		write_u8(w, 0)
+		write_u8(w, 0)
+		write_f32(w, math.nan_f32())
+		write_f32(w, 0)
+		write_u8(w, 0)
 	})
-	bad_client(t, "position past the world limit", proc(w: ^Writer) {
-		write_u8(w, 2)
-		write_f64(w, WORLD_LIMIT)
-		write_f64(w, 0)
-		write_f64(w, 0)
-	})
+	bad_client(
+		t,
+		"NaN position",
+		proc(w: ^Writer) {
+			write_u8(w, 4) // Teleport
+			write_f64(w, math.nan_f64())
+			write_f64(w, 0)
+			write_f64(w, 0)
+			write_f32(w, 0)
+			write_f32(w, 0)
+		},
+	)
+	bad_client(
+		t,
+		"infinite position",
+		proc(w: ^Writer) {
+			write_u8(w, 4) // Teleport
+			write_f64(w, 0)
+			write_f64(w, math.inf_f64(-1))
+			write_f64(w, 0)
+			write_f32(w, 0)
+			write_f32(w, 0)
+		},
+	)
+	bad_client(
+		t,
+		"position past the world limit",
+		proc(w: ^Writer) {
+			write_u8(w, 4) // Teleport
+			write_f64(w, WORLD_LIMIT)
+			write_f64(w, 0)
+			write_f64(w, 0)
+			write_f32(w, 0)
+			write_f32(w, 0)
+		},
+	)
 }
 
 @(test)

@@ -32,6 +32,8 @@ write_u32 :: proc(w: ^Writer, v: u32) {
 
 write_i32 :: proc(w: ^Writer, v: i32) {write_u32(w, u32(v))}
 
+write_f32 :: proc(w: ^Writer, v: f32) {write_u32(w, transmute(u32)v)}
+
 write_f64 :: proc(w: ^Writer, v: f64) {
 	bits := transmute(u64)v
 	write_u32(w, u32(bits))
@@ -101,6 +103,16 @@ read_u32 :: proc(r: ^Reader) -> u32 {
 }
 
 read_i32 :: proc(r: ^Reader) -> i32 {return i32(read_u32(r))}
+
+// read_f32 accepts finite values only.
+read_f32 :: proc(r: ^Reader) -> f32 {
+	v := transmute(f32)read_u32(r)
+	if math.is_nan(v) || math.is_inf(v) {
+		r.ok = false
+		return 0
+	}
+	return v
+}
 
 // read_f64 accepts finite values only.
 read_f64 :: proc(r: ^Reader) -> f64 {

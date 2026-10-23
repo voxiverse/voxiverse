@@ -16,6 +16,7 @@ import "core:math"
 PLAYER_WIDTH :: 0.6
 PLAYER_HEIGHT :: 1.8
 PLAYER_EYE :: 1.62
+PITCH_LIMIT :: 1.56 // radians: looking straight up or down is not allowed
 
 Button :: enum u8 {
 	Jump,
