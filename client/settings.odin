@@ -67,6 +67,10 @@ Debug_Switches :: struct {
 	overlay:            bool, // F3
 	chunk_borders:      bool,
 	hot_reload_shaders: bool,
+	net_trace:          bool,
+	net_latency_ms:     f32,
+	net_jitter_ms:      f32,
+	net_bandwidth_kbps: f32,
 }
 
 @(rodata)
@@ -81,6 +85,31 @@ DEBUG_VARS := [?]base.Var {
 	{
 		field = "hot_reload_shaders",
 		help = "recompile and reload shaders when assets/shaders changes (development builds)",
+	},
+	{
+		field = "net_trace",
+		help = "record every message to net.trace (from the next world; net_trace starts it now)",
+	},
+	{
+		field = "net_latency_ms",
+		help = "simulated one-way latency, ms",
+		min = 0,
+		max = 2000,
+		step = 5,
+	},
+	{
+		field = "net_jitter_ms",
+		help = "simulated extra random delay, ms (order is kept)",
+		min = 0,
+		max = 1000,
+		step = 5,
+	},
+	{
+		field = "net_bandwidth_kbps",
+		help = "simulated bandwidth per direction, KB/s; 0 = unlimited",
+		min = 0,
+		max = 100000,
+		step = 10,
 	},
 }
 

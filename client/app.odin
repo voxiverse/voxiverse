@@ -200,10 +200,16 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		// The world keeps running behind menus (the server would anyway).
 		playing := !app.paused && !app.console.open && !app.tuning
 		platform.set_mouse_captured(w, playing && w.focused)
+		conditions := game.Conditions {
+			latency_ms     = app.debug.net_latency_ms,
+			jitter_ms      = app.debug.net_jitter_ms,
+			bandwidth_kbps = app.debug.net_bandwidth_kbps,
+		}
 		session_update(
 			app.session,
 			&app.input,
 			app.settings,
+			conditions,
 			app.last_frame_ms / 1000,
 			w.mouse_captured,
 		)
@@ -271,6 +277,7 @@ enter_world :: proc(app: ^App) {
 		seed        = 0x5eed,
 		view_radius = app.settings.view_radius,
 		view_height = app.settings.view_height,
+		trace       = app.debug.net_trace,
 	}
 	if !session_start(app.session, config) {
 		app.message = fmt.aprintf("Could not start the world: %s", app.session.failure)

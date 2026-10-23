@@ -228,6 +228,8 @@ receive_messages :: proc(s: ^Server) {
 				return
 			}
 			set_position(&s.client, v.position)
+		case game.Ping:
+			send_message(s, game.Pong{v.id})
 		}
 	}
 }

@@ -32,6 +32,8 @@ PACKAGES :: []string {
 	"client",
 	"client/mesh",
 	"tools/build",
+	"tools/netdump",
+	"tools/replay",
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
@@ -94,6 +96,8 @@ main :: proc() {
 		ok = run_game(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
+	case "netdump", "replay":
+		ok = run_tool(args[0], args[1:])
 	case "help", "-h", "--help":
 		usage()
 		ok = true
@@ -110,6 +114,8 @@ usage :: proc() {
 	fmt.println("  test      run the unit tests")
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
+	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
+	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println(
 		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
 	)
@@ -372,6 +378,19 @@ run :: proc(cmd: []string) -> bool {
 	}
 	state, werr := os.process_wait(child)
 	return werr == nil && state.exited && state.exit_code == 0
+}
+
+// run_tool builds and runs tools/<name> with args (netdump, replay).
+run_tool :: proc(name: string, args: []string) -> bool {
+	exe := path_join({"build", strings.concatenate({name, exe_suffix()})})
+	cmd := slice.concatenate(
+		[][]string {
+			{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
+			ODIN_FLAGS,
+		},
+	)
+	run(cmd) or_return
+	return run(slice.concatenate([][]string{{exe}, args}))
 }
 
 // capture executes cmd and returns its stdout; ok is false if it failed or

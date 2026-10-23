@@ -47,6 +47,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			testing.expectf(t, v.pos not_in c.has, "chunk %v sent twice", v.pos)
 			c.has[v.pos] = {}
 			c.chunks += 1
+		case game.Pong:
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)

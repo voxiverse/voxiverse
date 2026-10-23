@@ -38,6 +38,11 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Welcome) == welcome)
 	m, ok = decode_server(encode_s(Reject{"full"})[:], scratch)
 	testing.expect(t, ok && m.(Reject).reason == "full")
+	ping: Client_Message
+	ping, ok = decode_client(encode_c(Ping{77})[:])
+	testing.expect(t, ok && ping.(Ping).id == 77)
+	m, ok = decode_server(encode_s(Pong{78})[:], scratch)
+	testing.expect(t, ok && m.(Pong).id == 78)
 	m, ok = decode_server(encode_s(Unload_Chunk{{-5, 2, 1 << 20}})[:], scratch)
 	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, 2, 1 << 20})
 }
@@ -94,6 +99,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
+		encode_s(Pong{1}),
 	}
 	for bytes in server {
 		for n in 0 ..< len(bytes) {
@@ -107,7 +113,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Move{})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Move{}), encode_c(Ping{3})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)

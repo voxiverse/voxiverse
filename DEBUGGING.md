@@ -108,6 +108,22 @@ neighbours' edges.
 `--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
 driver, with AddressSanitizer and with profiling.
 
+## Network
+
+Client and server only talk through messages, so the network is where to look when they
+disagree.
+
+| | |
+|---|---|
+| F3 `net:` line | Round trip (a ping a second; includes the server's tick wait), bytes per second each way, the most frequent message kind |
+| `set debug.net_latency_ms 150`, `net_jitter_ms`, `net_bandwidth_kbps` | Simulate a slower connection, live. The stream stays reliable and in order, as the protocol requires; packet loss, duplication and reordering arrive with the UDP transport (M7), whose reliability layer they test. |
+| `set debug.net_trace 1` (next world) / `net_trace` (now) | Record every message both ways to `build/net.trace` |
+| `build netdump [file]` | Print a trace, decoded by the game's own decoders: `-kind:chunk`, `-sender:client`, `-from:2 -to:3`, `-limit:20`, or `-summary` for counts and bytes per kind. Fails if any message does not decode. |
+| `build replay [file]` | Feed the trace's client messages to a fresh server with the same seed, view distance and timing (`-speed:4` for faster). Whatever the server did with them (assert, crash, disconnect) happens again outside the game; its answers go to `build/replay.trace`. Exits non-zero if the server failed or disconnected the client. |
+
+Replays repeat the server's *inputs*, not its exact output: chunk generation runs on worker
+threads, so chunks can arrive in a slightly different order.
+
 ## Threads
 
 The server and the worldgen and mesh workers log, assert and allocate like the main thread

@@ -32,9 +32,16 @@ Move :: struct {
 	position: [3]f64,
 }
 
+// Ping asks the server to answer with a Pong carrying the same id (round
+// trip time, including the wait for the server's next tick).
+Ping :: struct {
+	id: u32,
+}
+
 Client_Message :: union {
 	Hello,
 	Move,
+	Ping,
 }
 
 // Server -> client.
@@ -64,11 +71,16 @@ Unload_Chunk :: struct {
 	pos: Chunk_Pos,
 }
 
+Pong :: struct {
+	id: u32,
+}
+
 Server_Message :: union {
 	Welcome,
 	Reject,
 	Chunk_Message,
 	Unload_Chunk,
+	Pong,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -78,6 +90,7 @@ MAX_REASON_LENGTH :: 256
 Client_Kind :: enum u8 {
 	Hello = 1,
 	Move,
+	Ping,
 }
 
 @(private = "file")
@@ -86,6 +99,36 @@ Server_Kind :: enum u8 {
 	Reject,
 	Chunk,
 	Unload_Chunk,
+	Pong,
+}
+
+// message_kind_name names a message kind (its first byte) sent by sender,
+// for tools and statistics; "" if there is no such kind.
+message_kind_name :: proc(sender: Side, kind: u8) -> string {
+	if sender == .Client {
+		switch kind {
+		case u8(Client_Kind.Hello):
+			return "hello"
+		case u8(Client_Kind.Move):
+			return "move"
+		case u8(Client_Kind.Ping):
+			return "ping"
+		}
+	} else {
+		switch kind {
+		case u8(Server_Kind.Welcome):
+			return "welcome"
+		case u8(Server_Kind.Reject):
+			return "reject"
+		case u8(Server_Kind.Chunk):
+			return "chunk"
+		case u8(Server_Kind.Unload_Chunk):
+			return "unload"
+		case u8(Server_Kind.Pong):
+			return "pong"
+		}
+	}
+	return ""
 }
 
 // encode_client appends m to w.buf.
@@ -98,6 +141,9 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Move:
 		write_u8(w, u8(Client_Kind.Move))
 		write_position(w, v.position)
+	case Ping:
+		write_u8(w, u8(Client_Kind.Ping))
+		write_u32(w, v.id)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -122,6 +168,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Unload_Chunk:
 		write_u8(w, u8(Server_Kind.Unload_Chunk))
 		write_chunk_pos(w, v.pos)
+	case Pong:
+		write_u8(w, u8(Server_Kind.Pong))
+		write_u32(w, v.id)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -140,6 +189,10 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 	case u8(Client_Kind.Move):
 		m = Move {
 			position = read_position(&r),
+		}
+	case u8(Client_Kind.Ping):
+		m = Ping {
+			id = read_u32(&r),
 		}
 	case:
 		return
@@ -181,6 +234,10 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	case u8(Server_Kind.Unload_Chunk):
 		m = Unload_Chunk {
 			pos = read_chunk_pos(&r),
+		}
+	case u8(Server_Kind.Pong):
+		m = Pong {
+			id = read_u32(&r),
 		}
 	case:
 		return

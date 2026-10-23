@@ -364,6 +364,24 @@ register_builtin_commands :: proc(c: ^Console) {
 				}},
 		)
 	}
+	console_register(
+		c,
+		{
+			"net_trace",
+			"record every message of this world to net.trace",
+			proc(app: ^App, args: []string) {
+				if app.session == nil {
+					console_print(
+						&app.console,
+						"net_trace: not in a world (set debug.net_trace 1 to trace the next one)",
+						.Warning,
+					)
+					return
+				}
+				session_trace(app.session)
+			},
+		},
+	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

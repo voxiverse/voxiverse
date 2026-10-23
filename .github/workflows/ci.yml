@@ -76,7 +76,11 @@ jobs:
           VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)"
           export VK_DRIVER_FILES
           xvfb-run -a ./build/voxiverse --frames 120
-          xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 600 quit"
+          xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30; set view_radius 6; set view_height 3; fly_test 600 quit"
+          # The flight's network trace: every message decodes, and replaying
+          # the client's messages against a fresh server goes cleanly.
+          ./build.sh netdump -summary
+          ./build.sh replay -speed:2
           # A crash must be reported with our stack, then still kill the run.
           if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt

@@ -1,9 +1,11 @@
 package client
 
 import "core:log"
+import "core:math"
 import "core:mem/virtual"
 import "core:os"
 import "core:strings"
+import "core:time"
 
 import "../base"
 import "../game"
@@ -21,6 +23,7 @@ Session_Config :: struct {
 	seed:        i64,
 	view_radius: i32,
 	view_height: i32,
+	trace:       bool, // record every message to net.trace from the start
 }
 
 Session_State :: enum u8 {
@@ -47,6 +50,20 @@ Session :: struct {
 	sent_at:    f32, // seconds since the last Move
 	last_sent:  [3]f64,
 	stats:      Session_Stats,
+	config:     Session_Config,
+	net:        Net_Stats,
+}
+
+// Net_Stats: what the F3 overlay shows about the connection.
+Net_Stats :: struct {
+	rtt_ms:       f32, // last ping round trip (includes the server's tick wait)
+	ping_id:      u32,
+	ping_sent:    time.Tick,
+	ping_pending: bool,
+	ping_timer:   f32,
+	rate_timer:   f32,
+	last:         [game.Side]game.Traffic, // counters at the last rate update
+	rates:        [game.Side]game.Traffic, // per second, over the last second
 }
 
 Session_Stats :: struct {
@@ -58,7 +75,9 @@ Session_Stats :: struct {
 // session_start starts the server and connects to it. On failure the
 // caller still calls session_end.
 session_start :: proc(s: ^Session, config: Session_Config) -> bool {
-	s^ = {}
+	s^ = {
+		config = config,
+	}
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
 		log.errorf("session cannot reserve memory: %v", err)
 		return false
@@ -84,6 +103,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		fail(s, "the server did not start")
 		return false
 	}
+	if config.trace {session_trace(s)}
 	send_message(s, game.Hello{game.PROTOCOL_VERSION, "player"})
 	return true
 }
@@ -114,8 +134,17 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 
 // session_update handles messages, moves the camera (when look is true:
 // the mouse is captured) and starts meshing. Every frame, drawn or not.
-session_update :: proc(s: ^Session, input: ^Input_State, settings: Settings, dt: f32, look: bool) {
+session_update :: proc(
+	s: ^Session,
+	input: ^Input_State,
+	settings: Settings,
+	conditions: game.Conditions,
+	dt: f32,
+	look: bool,
+) {
 	base.profile_scope("session")
+	game.pipe_set_conditions(&s.pipe, conditions)
+	net_update(s, dt)
 	receive(s)
 	if s.state != .Playing {return}
 	if look {camera_update(&s.camera, input, settings, dt)}
@@ -176,6 +205,11 @@ receive :: proc(s: ^Session) {
 				return
 			}
 			s.stats.chunks_received += 1
+		case game.Pong:
+			if s.net.ping_pending && v.id == s.net.ping_id {
+				s.net.rtt_ms = f32(time.duration_milliseconds(time.tick_since(s.net.ping_sent)))
+				s.net.ping_pending = false
+			}
 		case game.Unload_Chunk:
 			if s.state != .Playing {
 				fail(s, "the server unloaded a chunk before welcoming us")
@@ -214,6 +248,56 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	s.last_sent = w.spawn
 	s.state = .Playing
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
+}
+
+// session_trace starts recording every message to net.trace next to the
+// executable (see netdump and replay in DEBUGGING.md).
+session_trace :: proc(s: ^Session) -> bool {
+	path := path_next_to_exe("net.trace")
+	header := game.Trace_Header {
+		protocol    = game.PROTOCOL_VERSION,
+		seed        = s.config.seed,
+		view_radius = u32(s.config.view_radius),
+		view_height = u32(s.config.view_height),
+	}
+	if !game.pipe_trace_start(&s.pipe, path, header) {
+		log.errorf("net trace cannot write path=%s", path)
+		return false
+	}
+	log.infof("net trace recording path=%s", path)
+	return true
+}
+
+// net_update pings once a second and refreshes the per-second rates.
+@(private = "file")
+net_update :: proc(s: ^Session, dt: f32) {
+	n := &s.net
+	n.ping_timer += dt
+	if n.ping_timer >= 1 && !n.ping_pending && s.state == .Playing {
+		n.ping_timer = 0
+		n.ping_id += 1
+		n.ping_sent = time.tick_now()
+		n.ping_pending = true
+		send_message(s, game.Ping{n.ping_id})
+	}
+	n.rate_timer += dt
+	if n.rate_timer >= 1 {
+		now := game.pipe_traffic(&s.pipe)
+		for side in game.Side {
+			for k in 0 ..< 256 {
+				n.rates[side].messages[k] = int(
+					math.round(
+						f32(now[side].messages[k] - n.last[side].messages[k]) / n.rate_timer,
+					),
+				)
+				n.rates[side].bytes[k] = int(
+					f32(now[side].bytes[k] - n.last[side].bytes[k]) / n.rate_timer,
+				)
+			}
+		}
+		n.last = now
+		n.rate_timer = 0
+	}
 }
 
 @(private = "file")

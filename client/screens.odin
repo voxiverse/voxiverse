@@ -5,6 +5,7 @@ import "core:math"
 import "core:strings"
 
 import "../base"
+import "../game"
 import "../gpu"
 import "../server"
 import "../ui"
@@ -108,6 +109,31 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	if ui.button(ctx, "Leave World", ui.next(ctx)) {leave_world(app)}
 }
 
+// net_line: round trip, traffic per second each way, the busiest kind.
+@(private = "file")
+net_line :: proc(s: ^Session) -> string {
+	n := &s.net
+	total :: proc(t: game.Traffic) -> (bytes: int) {
+		for b in t.bytes {bytes += b}
+		return
+	}
+	busiest :: proc(t: game.Traffic, sender: game.Side) -> string {
+		best := 0
+		for m, k in t.messages {if m > t.messages[best] {best = k}}
+		if t.messages[best] == 0 {return "-"}
+		return fmt.tprintf("%s %d/s", game.message_kind_name(sender, u8(best)), t.messages[best])
+	}
+	return fmt.tprintf(
+		"net: rtt %.0f ms, down %.1f KB/s (%s), up %.2f KB/s (%s)%s",
+		n.rtt_ms,
+		f64(total(n.rates[.Server])) / 1000,
+		busiest(n.rates[.Server], .Server),
+		f64(total(n.rates[.Client])) / 1000,
+		busiest(n.rates[.Client], .Client),
+		", tracing" if game.pipe_tracing(&s.pipe) else "",
+	)
+}
+
 // debug_overlay (F3): where we are and what the world costs.
 debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Tooltip)
@@ -132,7 +158,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"client %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), session arena %.1f MiB",
+				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), session arena %.1f MiB",
 				w.chunks.count,
 				len(w.chunks.items) - 1,
 				f64(w.arrays.committed) / (1 << 20),
@@ -145,7 +171,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"render %d meshes, %d drawn, vertices %.1f%% of %d M",
+				"render: %d meshes, %d drawn, vertices %.1f%% of %d M",
 				ws.meshes,
 				ws.drawn,
 				100 * f64(ws.vertices_used) / f64(CHUNK_VERTEX_CAPACITY),
@@ -156,7 +182,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"server tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB",
+				"server: tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB",
 				st.tick_ms,
 				st.chunks_loaded,
 				st.chunks_generating,
@@ -164,6 +190,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 				f64(st.arena_used) / (1 << 20),
 			),
 		)
+		append(&lines, net_line(s))
 	}
 	t := &ctx.theme
 	r := ctx.screen
