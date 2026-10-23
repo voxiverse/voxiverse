@@ -45,6 +45,7 @@ subsystem (`gpu`, `server`, `session`, ...) and put values in `key=value` form.
 | `run -- --frames N` | Run N frames and exit; fails on any validation finding or leak (what CI does) |
 | `run -- --capture-frame N` | Under RenderDoc: capture frame N (see GPU captures) |
 | `run -- --exec "cmd; cmd"` | Run console commands at startup, e.g. `--exec "screen options"` to reproduce a state |
+| <kbd>F2</kbd> / `screenshot [name]` | Save the next frame as `build/screenshots/<name>.png` (CI uploads the folder: the world runs take one at the start and end of each flight) |
 | <kbd>F3</kbd> / `debug` | Overlay: position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time |
 
 Options combine, e.g. `VX_VALIDATION=best,gpu`, `build run --release --profile`.

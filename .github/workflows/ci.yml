@@ -84,6 +84,14 @@ jobs:
           xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 300 quit"
           python3 tools/debugger/check_spall.py build/voxiverse.spall
 
+      - name: Screenshots (Linux)
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: build/screenshots/
+          if-no-files-found: ignore
+
       - name: Debugger printers (Linux)
         if: runner.os == 'Linux'
         run: tools/debugger/test_printers.sh

@@ -93,12 +93,13 @@ fly_test_update :: proc(app: ^App) {
 		}
 		// Above the spawn's hills, facing +x.
 		s.camera.position.y += 20
-		s.camera.yaw, s.camera.pitch = -math.PI / 2, -0.2
+		s.camera.yaw, s.camera.pitch = -math.PI / 2, -0.4
 		t.start = s.camera.position
 		t.client_arena = s.arena.total_used
 		t.server_arena = server.stats(&s.server).arena_used
 		t.rss_start = base.resident_memory()
 		t.phase = .Flying
+		screenshot_request(app, "fly_test_start")
 		log.infof(
 			"fly_test loaded seconds=%.1f chunks=%d speed=%d",
 			t.waited,
@@ -182,6 +183,7 @@ fly_test_finish :: proc(app: ^App, error: string) {
 	}
 	for f in failures {log.errorf("fly_test %s", f)}
 	if len(failures) == 0 {log.info("fly_test passed")}
+	if s != nil {screenshot_request(app, "fly_test_end")} 	// saved at exit too
 	t.failed = len(failures) > 0
 	t.phase = .Off
 	if t.quit {app.quit = true}

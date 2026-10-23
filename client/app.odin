@@ -38,30 +38,31 @@ SKY_COLOR :: [3]f32{0.30, 0.52, 0.85}
 CHUNK_VERTEX_CAPACITY :: 16 * 1024 * 1024
 
 App :: struct {
-	window:         platform.Window,
-	g:              gpu.Gpu,
-	renderdoc:      gpu.Renderdoc,
-	font:           font.Font,
-	ui:             ui.Context,
-	ui_pass:        render.Ui_Pass,
-	world_pass:     render.World_Pass,
-	session:        ^Session, // nil outside a world
-	paused:         bool, // the pause menu is open (in a world)
-	debug:          Debug_Switches,
-	settings_dirty: bool, // changed since loaded or saved
-	scripted:       bool, // running --exec commands: settings changes are not saved
-	tuning:         bool, // the tuning panel is open
-	message:        string, // shown on the title screen (why a session ended)
-	fly_test:       Fly_Test,
-	server_failed:  bool, // a session's server stopped on an error (fails the run)
-	console:        Console,
-	input:          Input_State,
-	settings:       Settings,
-	screen:         Screen,
-	quit_dialog:    bool,
-	quit:           bool,
-	frame_stats:    base.Frame_Stats,
-	last_frame_ms:  f32,
+	window:           platform.Window,
+	g:                gpu.Gpu,
+	renderdoc:        gpu.Renderdoc,
+	font:             font.Font,
+	ui:               ui.Context,
+	ui_pass:          render.Ui_Pass,
+	world_pass:       render.World_Pass,
+	session:          ^Session, // nil outside a world
+	paused:           bool, // the pause menu is open (in a world)
+	debug:            Debug_Switches,
+	settings_dirty:   bool, // changed since loaded or saved
+	scripted:         bool, // running --exec commands: settings changes are not saved
+	tuning:           bool, // the tuning panel is open
+	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
+	message:          string, // shown on the title screen (why a session ended)
+	fly_test:         Fly_Test,
+	server_failed:    bool, // a session's server stopped on an error (fails the run)
+	console:          Console,
+	input:            Input_State,
+	settings:         Settings,
+	screen:           Screen,
+	quit_dialog:      bool,
+	quit:             bool,
+	frame_stats:      base.Frame_Stats,
+	last_frame_ms:    f32,
 }
 
 // app_init brings everything up; on failure the caller still calls
@@ -149,6 +150,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.g.device != nil {
 		gpu.wait_idle(&app.g)
 		if app.session != nil {leave_world(app)}
+		screenshots_save(app) // the last frames' screenshots are done now
 		gpu.renderdoc_log_captures(&app.renderdoc)
 		render.world_destroy(&app.world_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
@@ -156,6 +158,8 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
 	delete(app.message)
+	for n in app.screenshot_names {delete(n)}
+	delete(app.screenshot_names)
 	validation_issues = gpu.destroy(&app.g)
 	platform.window_close(&app.window)
 	input_destroy(&app.input)
@@ -212,6 +216,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		base.profile_scope("begin_frame")
 		frame, ok = gpu.begin_frame(&app.g, w.width, w.height)
 	}
+	screenshots_save(app)
 	if !ok {return true}
 	{
 		base.profile_scope("record")

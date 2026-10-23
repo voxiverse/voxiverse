@@ -345,6 +345,16 @@ register_builtin_commands :: proc(c: ^Console) {
 				)
 			}},
 	)
+	console_register(
+		c,
+		{
+			"screenshot",
+			"screenshot [name]: save the next frame as a PNG (F2)",
+			proc(app: ^App, args: []string) {
+				screenshot_request(app, args[0] if len(args) > 0 else "")
+			},
+		},
+	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

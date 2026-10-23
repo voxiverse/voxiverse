@@ -30,6 +30,7 @@ Frame_Sync :: struct {
 	fence:          vk.Fence,
 	image_acquired: vk.Semaphore,
 	timing:         Frame_Timing,
+	screenshot:     Screenshot,
 }
 
 // Frame is what a caller records into between begin_frame and end_frame.
@@ -124,7 +125,7 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 end_frame :: proc(g: ^Gpu, frame: Frame) {
 	f := &g.frames[g.frame_index]
 	sc := &g.swapchain
-	image_barrier(frame.cmd, frame.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
+	screenshot_record(g, f, frame) // also transitions the image for presenting
 	timing_frame_end(g, &f.timing, frame.cmd)
 	if !check(vk.EndCommandBuffer(frame.cmd)) {return}
 
@@ -253,6 +254,7 @@ create_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync, index: int) -> bool {
 @(private)
 destroy_frame_sync :: proc(g: ^Gpu, f: ^Frame_Sync) {
 	timing_destroy(g, &f.timing)
+	destroy_buffer(g, &f.screenshot.buffer)
 	if f.image_acquired != 0 {vk.DestroySemaphore(g.device, f.image_acquired, nil)}
 	if f.fence != 0 {vk.DestroyFence(g.device, f.fence, nil)}
 	if f.pool != 0 {vk.DestroyCommandPool(g.device, f.pool, nil)} 	// frees cmd too

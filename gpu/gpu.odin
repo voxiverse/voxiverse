@@ -33,34 +33,35 @@ Validation :: struct {
 }
 
 Gpu :: struct {
-	loader:            dynlib.Library,
-	instance:          vk.Instance,
-	messenger:         vk.DebugUtilsMessengerEXT,
-	surface:           vk.SurfaceKHR,
-	physical:          vk.PhysicalDevice,
-	device:            vk.Device,
-	queue_family:      u32,
-	queue:             vk.Queue,
-	device_name:       string,
-	swapchain:         Swapchain,
-	frames:            [FRAMES_IN_FLIGHT]Frame_Sync,
-	frame_index:       int,
-	ctx:               runtime.Context, // logger etc. for the validation callback
-	debug_utils:       bool, // object names and command labels are available
+	loader:               dynlib.Library,
+	instance:             vk.Instance,
+	messenger:            vk.DebugUtilsMessengerEXT,
+	surface:              vk.SurfaceKHR,
+	physical:             vk.PhysicalDevice,
+	device:               vk.Device,
+	queue_family:         u32,
+	queue:                vk.Queue,
+	device_name:          string,
+	swapchain:            Swapchain,
+	frames:               [FRAMES_IN_FLIGHT]Frame_Sync,
+	frame_index:          int,
+	ctx:                  runtime.Context, // logger etc. for the validation callback
+	debug_utils:          bool, // object names and command labels are available
 	// GPU timing (timing.odin)
-	timing:            bool,
-	calibrated:        bool, // GPU timestamps convertible to the trace clock
-	host_time_domain:  vk.TimeDomainKHR,
-	timestamp_period:  f32, // ns per tick
-	timestamp_mask:    u64,
-	gpu_frame_stats:   base.Frame_Stats,
+	timing:               bool,
+	calibrated:           bool, // GPU timestamps convertible to the trace clock
+	host_time_domain:     vk.TimeDomainKHR,
+	timestamp_period:     f32, // ns per tick
+	timestamp_mask:       u64,
+	gpu_frame_stats:      base.Frame_Stats,
 	// Bindless textures and the pipeline layout every pipeline shares.
-	bindless:          Bindless,
-	pipeline_layout:   vk.PipelineLayout,
-	max_anisotropy:    f32, // 0 when not supported
+	bindless:             Bindless,
+	pipeline_layout:      vk.PipelineLayout,
+	max_anisotropy:       f32, // 0 when not supported
+	screenshot_requested: bool,
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
-	validation_issues: int,
+	validation_issues:    int,
 }
 
 // create_instance opens the Vulkan loader and creates the instance, with the

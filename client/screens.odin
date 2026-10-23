@@ -18,6 +18,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	}
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
 	if .F4 in app.input.pressed {app.tuning = !app.tuning}
+	if .F2 in app.input.pressed {screenshot_request(app, "")}
 	if app.input.escape {
 		switch {
 		case app.console.open:
