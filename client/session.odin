@@ -114,11 +114,11 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 
 // session_update handles messages, moves the camera (when look is true:
 // the mouse is captured) and starts meshing. Every frame, drawn or not.
-session_update :: proc(s: ^Session, input: ^Input_State, dt: f32, look: bool) {
+session_update :: proc(s: ^Session, input: ^Input_State, settings: Settings, dt: f32, look: bool) {
 	base.profile_scope("session")
 	receive(s)
 	if s.state != .Playing {return}
-	if look {camera_update(&s.camera, input, dt)}
+	if look {camera_update(&s.camera, input, settings, dt)}
 	s.sent_at += dt
 	if s.sent_at >= 1.0 / game.TICK_RATE && s.camera.position != s.last_sent {
 		send_message(s, game.Move{s.camera.position})

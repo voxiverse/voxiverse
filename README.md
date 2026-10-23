@@ -63,10 +63,11 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 | <kbd>Ctrl</kbd> | Fly fast |
 | <kbd>Esc</kbd> | Pause menu (Resume, Leave World) |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |
+| <kbd>F4</kbd> | Tuning panel: every setting and debug switch, live |
 | <kbd>`</kbd> | Console |
 
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
-runs commands at startup, e.g. `--exec "view 8 4; singleplayer; tp 0 80 0 45 -20"`.
+runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.
 
 ## Layout
 

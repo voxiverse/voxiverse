@@ -47,7 +47,9 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 
 	ok := app_init(app)
 	if ok {
+		app.scripted = true
 		for command in split_semicolons(opts.exec) {console_execute(app, command)}
+		app.scripted = false
 		frames := 0
 		last := time.tick_now()
 		for opts.frames == 0 || frames < opts.frames {

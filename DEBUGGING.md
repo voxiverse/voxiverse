@@ -64,12 +64,28 @@ vulkan [VUID-vkCmdDraw-renderpass]: vkCmdDraw(): This call must be issued inside
 - Some checks run on the layer's own thread after the call returned; those say so instead of
   showing a stack. Use the object names and labels, or `VX_BREAK=1`.
 
+## Variables
+
+Settings (saved), debug switches (`debug.*`, never saved) and later game rules are plain
+struct fields described by variable tables; see PLAN.md, "Console and variables".
+
+| | |
+|---|---|
+| `vars [filter]` | List variables, values and help |
+| `set <name> <value>` / `reset <name>` | Change one / back to its default (out-of-range values are clamped, with a warning) |
+| <kbd>F4</kbd> / `tune` | Tuning panel: every variable as a slider or checkbox, live |
+
+Settings are saved to `settings.cfg` in the user config directory (`~/.config/voxiverse/` on
+Linux), or to the path in `VX_SETTINGS` (empty: none). Changes made by `--exec` scripts are
+never saved, so test runs cannot change your settings. New variable: add the field to its
+struct, its default, and one line to the table; a test checks every table.
+
 ## World commands
 
 | Command | |
 |---|---|
 | `singleplayer` / `leave` | Enter / leave a world |
-| `view <radius> <height>` | View distance in chunks for the next world (default 12 x 6) |
+| `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
 | `tp <x> <y> <z> [yaw pitch]` | Move the camera (also before the world has loaded: applied on joining) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
 

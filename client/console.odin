@@ -8,7 +8,7 @@ import "core:strconv"
 import "core:strings"
 import "core:sync"
 
-import "../game"
+import "../base"
 import "../ui"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -205,48 +205,8 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{"debug", "toggle the debug overlay (F3)", proc(app: ^App, args: []string) {
-				app.show_debug = !app.show_debug
+				app.debug.overlay = !app.debug.overlay
 			}},
-	)
-	console_register(
-		c,
-		{
-			"view",
-			"view <radius> <height>: view distance in chunks (for the next world)",
-			proc(app: ^App, args: []string) {
-				if len(args) != 2 {
-					console_print(
-						&app.console,
-						fmt.tprintf(
-							"view is %d x %d chunks",
-							app.settings.view_radius,
-							app.settings.view_height,
-						),
-					)
-					return
-				}
-				r, r_ok := strconv.parse_int(args[0])
-				h, h_ok := strconv.parse_int(args[1])
-				if !r_ok ||
-				   !h_ok ||
-				   r < 1 ||
-				   r > game.MAX_VIEW_RADIUS ||
-				   h < 1 ||
-				   h > game.MAX_VIEW_HEIGHT {
-					console_print(
-						&app.console,
-						fmt.tprintf(
-							"view: radius 1..%d, height 1..%d",
-							game.MAX_VIEW_RADIUS,
-							game.MAX_VIEW_HEIGHT,
-						),
-						.Warning,
-					)
-					return
-				}
-				app.settings.view_radius, app.settings.view_height = i32(r), i32(h)
-			},
-		},
 	)
 	console_register(c, {"leave", "leave the world", proc(app: ^App, args: []string) {
 			leave_world(app)
@@ -294,24 +254,98 @@ register_builtin_commands :: proc(c: ^Console) {
 	)
 	console_register(
 		c,
-		{"ui_scale", "ui_scale <n>: UI scale (0 = automatic)", proc(app: ^App, args: []string) {
-				if len(args) != 1 {
+		{
+			"set",
+			"set <name> <value>: change a variable (vars lists them)",
+			proc(app: ^App, args: []string) {
+				if len(args) != 2 {
+					console_print(&app.console, "set <name> <value>", .Warning)
+					return
+				}
+				for v in app_variables(app) {
+					err := base.var_set(v.table, v.data, args[0], args[1])
+					switch err {
+					case .Unknown_Name:
+						continue
+					case .None:
+					case .Bad_Value:
+						console_print(
+							&app.console,
+							fmt.tprintf("set: '%s' is not a valid value for %s", args[1], args[0]),
+							.Warning,
+						)
+						return
+					case .Out_Of_Range:
+						var, _ := base.var_find(v.table, args[0])
+						console_print(
+							&app.console,
+							fmt.tprintf("set: %s is %g..%g; clamped", args[0], var.min, var.max),
+							.Warning,
+						)
+					}
+					if v.data == &app.settings {settings_changed(app)}
+					var, _ := base.var_find(v.table, args[0])
 					console_print(
 						&app.console,
-						fmt.tprintf(
-							"ui_scale is %.2f (%s)",
-							app.settings.ui_scale if app.settings.ui_scale > 0 else ui_scale(app),
-							"fixed" if app.settings.ui_scale > 0 else "automatic",
-						),
+						fmt.tprintf("%s = %s", args[0], base.var_format(v.table, v.data, var)),
 					)
 					return
 				}
-				value, ok := parse_f32(args[0])
-				if !ok || (value != 0 && (value < 0.5 || value > 4)) {
-					console_print(&app.console, "ui_scale: give 0 (automatic) or 0.5..4", .Warning)
+				console_print(
+					&app.console,
+					fmt.tprintf("set: no variable '%s' (try: vars)", args[0]),
+					.Warning,
+				)
+			},
+		},
+	)
+	console_register(
+		c,
+		{
+			"vars",
+			"vars [filter]: list variables with their values",
+			proc(app: ^App, args: []string) {
+				filter := args[0] if len(args) > 0 else ""
+				for v in app_variables(app) {
+					for &var in v.table.vars {
+						name := base.var_name(v.table, &var)
+						if !strings.contains(name, filter) {continue}
+						value := base.var_format(v.table, v.data, &var)
+						console_print(
+							&app.console,
+							fmt.tprintf("  %-22s %-8s %s", name, value, var.help),
+						)
+					}
+				}
+			},
+		},
+	)
+	console_register(
+		c,
+		{"reset", "reset <name>: back to the default value", proc(app: ^App, args: []string) {
+				if len(args) != 1 {
+					console_print(&app.console, "reset <name>", .Warning)
 					return
 				}
-				app.settings.ui_scale = value
+				for v in app_variables(app) {
+					if var, ok := base.var_find(v.table, args[0]); ok {
+						base.var_reset(v.table, v.data, var)
+						if v.data == &app.settings {settings_changed(app)}
+						console_print(
+							&app.console,
+							fmt.tprintf("%s = %s", args[0], base.var_format(v.table, v.data, var)),
+						)
+						return
+					}
+				}
+				console_print(
+					&app.console,
+					fmt.tprintf("reset: no variable '%s'", args[0]),
+					.Warning,
+				)
 			}},
 	)
+	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
+			app.tuning = !app.tuning
+		}})
 }

@@ -16,13 +16,13 @@ Fly_Camera :: struct {
 
 FLY_SPEED :: 20 // blocks per second
 FLY_FAST_SPEED :: 120 // with Control held
-MOUSE_SENSITIVITY :: 0.0025 // radians per pixel
-FOV_Y :: 70 * math.RAD_PER_DEG
+MOUSE_RADIANS_PER_PIXEL :: 0.0025 // at mouse_sensitivity 1
 NEAR_PLANE :: 0.05
 
-camera_update :: proc(c: ^Fly_Camera, input: ^Input_State, dt: f32) {
-	c.yaw -= input.look.x * MOUSE_SENSITIVITY
-	c.pitch -= input.look.y * MOUSE_SENSITIVITY
+camera_update :: proc(c: ^Fly_Camera, input: ^Input_State, settings: Settings, dt: f32) {
+	turn := MOUSE_RADIANS_PER_PIXEL * settings.mouse_sensitivity
+	c.yaw -= input.look.x * turn
+	c.pitch -= input.look.y * turn * (-1 if settings.invert_mouse else 1)
 	c.pitch = clamp(c.pitch, -1.55, 1.55)
 	c.yaw = math.mod(c.yaw, math.TAU)
 
@@ -55,13 +55,13 @@ block_at :: proc(p: [3]f64) -> game.Block_Pos {
 }
 
 // camera_render is the camera for the renderer: relative to its chunk.
-camera_render :: proc(c: ^Fly_Camera, width, height: i32) -> render.Camera {
+camera_render :: proc(c: ^Fly_Camera, width, height: i32, fov_degrees: f32) -> render.Camera {
 	chunk := camera_chunk(c)
 	origin := game.chunk_origin(chunk)
 	rel := c.position - {f64(origin.x), f64(origin.y), f64(origin.z)}
 	position := [3]f32{f32(rel.x), f32(rel.y), f32(rel.z)}
 	aspect := f32(max(width, 1)) / f32(max(height, 1))
-	proj := render.perspective_reverse_z(FOV_Y, aspect, NEAR_PLANE)
+	proj := render.perspective_reverse_z(fov_degrees * math.RAD_PER_DEG, aspect, NEAR_PLANE)
 	return {
 		chunk = chunk,
 		position = position,

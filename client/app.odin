@@ -30,13 +30,6 @@ Screen :: enum u8 {
 	Game, // a session exists
 }
 
-Settings :: struct {
-	ui_scale:         f32, // 0 = automatic
-	show_frame_times: bool,
-	view_radius:      i32, // chunks
-	view_height:      i32,
-}
-
 // The sky, linear (the swapchain encodes sRGB); fog fades to it.
 SKY_COLOR :: [3]f32{0.30, 0.52, 0.85}
 
@@ -45,27 +38,30 @@ SKY_COLOR :: [3]f32{0.30, 0.52, 0.85}
 CHUNK_VERTEX_CAPACITY :: 16 * 1024 * 1024
 
 App :: struct {
-	window:        platform.Window,
-	g:             gpu.Gpu,
-	renderdoc:     gpu.Renderdoc,
-	font:          font.Font,
-	ui:            ui.Context,
-	ui_pass:       render.Ui_Pass,
-	world_pass:    render.World_Pass,
-	session:       ^Session, // nil outside a world
-	paused:        bool, // the pause menu is open (in a world)
-	show_debug:    bool, // F3 overlay
-	message:       string, // shown on the title screen (why a session ended)
-	fly_test:      Fly_Test,
-	server_failed: bool, // a session's server stopped on an error (fails the run)
-	console:       Console,
-	input:         Input_State,
-	settings:      Settings,
-	screen:        Screen,
-	quit_dialog:   bool,
-	quit:          bool,
-	frame_stats:   base.Frame_Stats,
-	last_frame_ms: f32,
+	window:         platform.Window,
+	g:              gpu.Gpu,
+	renderdoc:      gpu.Renderdoc,
+	font:           font.Font,
+	ui:             ui.Context,
+	ui_pass:        render.Ui_Pass,
+	world_pass:     render.World_Pass,
+	session:        ^Session, // nil outside a world
+	paused:         bool, // the pause menu is open (in a world)
+	debug:          Debug_Switches,
+	settings_dirty: bool, // changed since loaded or saved
+	scripted:       bool, // running --exec commands: settings changes are not saved
+	tuning:         bool, // the tuning panel is open
+	message:        string, // shown on the title screen (why a session ended)
+	fly_test:       Fly_Test,
+	server_failed:  bool, // a session's server stopped on an error (fails the run)
+	console:        Console,
+	input:          Input_State,
+	settings:       Settings,
+	screen:         Screen,
+	quit_dialog:    bool,
+	quit:           bool,
+	frame_stats:    base.Frame_Stats,
+	last_frame_ms:  f32,
 }
 
 // app_init brings everything up; on failure the caller still calls
@@ -73,7 +69,7 @@ App :: struct {
 app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
 	register_builtin_commands(&app.console)
-	app.settings.view_radius, app.settings.view_height = 12, 6
+	settings_load(app)
 
 	if !platform.window_open(&app.window, "Voxiverse", 1280, 720) {return false}
 	g := &app.g
@@ -157,6 +153,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		render.world_destroy(&app.world_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
 	}
+	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
 	delete(app.message)
 	validation_issues = gpu.destroy(&app.g)
@@ -183,9 +180,15 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	handle_global_keys(app, &input)
 	if app.session != nil {
 		// The world keeps running behind menus (the server would anyway).
-		playing := !app.paused && !app.console.open
+		playing := !app.paused && !app.console.open && !app.tuning
 		platform.set_mouse_captured(w, playing && w.focused)
-		session_update(app.session, &app.input, app.last_frame_ms / 1000, w.mouse_captured)
+		session_update(
+			app.session,
+			&app.input,
+			app.settings,
+			app.last_frame_ms / 1000,
+			w.mouse_captured,
+		)
 		fly_test_update(app)
 		if app.session.state == .Failed {
 			app.message = fmt.aprintf("Disconnected: %s", app.session.failure)
@@ -222,7 +225,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			[4]f32{SKY_COLOR.r, SKY_COLOR.g, SKY_COLOR.b, 1} if in_world else {0, 0, 0, 1}
 		gpu.begin_rendering(frame, clear_color)
 		if in_world {
-			camera := camera_render(&app.session.camera, w.width, w.height)
+			camera := camera_render(&app.session.camera, w.width, w.height, app.settings.fov)
 			render.world_draw(&app.world_pass, g, frame, camera)
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)

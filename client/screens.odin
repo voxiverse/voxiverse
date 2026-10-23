@@ -2,7 +2,9 @@ package client
 
 import "core:fmt"
 import "core:math"
+import "core:strings"
 
+import "../base"
 import "../gpu"
 import "../server"
 import "../ui"
@@ -14,11 +16,14 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	if app.input.console_toggle {
 		app.console.open = !app.console.open
 	}
-	if .F3 in app.input.pressed {app.show_debug = !app.show_debug}
+	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
+	if .F4 in app.input.pressed {app.tuning = !app.tuning}
 	if app.input.escape {
 		switch {
 		case app.console.open:
 			app.console.open = false
+		case app.tuning:
+			app.tuning = false
 		case app.quit_dialog:
 			app.quit_dialog = false
 		case app.screen == .Options:
@@ -45,7 +50,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	case .Game:
 		game_screen(app, ctx)
 	}
-	if app.show_debug {debug_overlay(app, ctx)}
+	if app.debug.overlay {debug_overlay(app, ctx)}
+	if app.tuning {tuning_panel(app, ctx)}
 	if app.quit_dialog {quit_dialog(app, ctx)}
 	if app.settings.show_frame_times {frame_times_overlay(app, ctx)}
 	if app.console.open {console_ui(app, ctx)}
@@ -170,21 +176,93 @@ options_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "options")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
-	column := ui.rect_center(ctx.screen, 520, 5 * t.row_height + 4 * t.spacing + 80)
+	rows := f32(len(SETTINGS_VARS) + 1)
+	column := ui.rect_center(ctx.screen, 560, rows * (t.row_height + t.spacing) + 90)
 	ui.title(ctx, "Options", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	ui.checkbox(ctx, "Show frame times", &app.settings.show_frame_times, ui.next(ctx))
-	auto_scale := app.settings.ui_scale == 0
-	if ui.checkbox(ctx, "Automatic UI scale", &auto_scale, ui.next(ctx)) {
-		app.settings.ui_scale = 0 if auto_scale else ui_scale(app)
-	}
-	if !auto_scale {
-		ui.slider(ctx, "UI scale", &app.settings.ui_scale, 0.75, 3, ui.next(ctx), step = 0.25)
-		app.settings.ui_scale = f32(int(app.settings.ui_scale * 4 + 0.5)) / 4 // quarter steps
-	}
+	if var_widgets(ctx, settings_table(), &app.settings) {settings_changed(app)}
 	ui.next(ctx, 10)
-	if ui.button(ctx, "Back", ui.next(ctx)) {app.screen = .Title}
+	if ui.button(ctx, "Back", ui.next(ctx)) {
+		app.screen = .Title
+		if app.settings_dirty {settings_save(app)}
+	}
+}
+
+// var_widgets draws a checkbox or slider per variable of the table, in the
+// current layout; true if any changed.
+var_widgets :: proc(ctx: ^ui.Context, table: base.Var_Table, data: rawptr) -> (changed: bool) {
+	ui.push_id(ctx, table.prefix)
+	defer ui.pop_id(ctx)
+	for &v in table.vars {
+		label := var_label(table, &v)
+		kind, _ := base.var_kind(table, &v)
+		switch kind {
+		case .Bool:
+			value := base.var_get_f64(table, data, &v) != 0
+			if ui.checkbox(ctx, label, &value, ui.next(ctx)) {
+				base.var_set_f64(table, data, &v, 1 if value else 0)
+				changed = true
+			}
+		case .Int, .F32:
+			value := f32(base.var_get_f64(table, data, &v))
+			step := f32(v.step)
+			if kind == .Int {step = max(step, 1)}
+			format := "%.0f" if kind == .Int || step >= 1 else "%.2f"
+			if ui.slider(
+				ctx,
+				label,
+				&value,
+				f32(v.min),
+				f32(v.max),
+				ui.next(ctx),
+				step = step,
+				format = format,
+			) {
+				if step > 0 {value = f32(math.round(f64(value) / f64(step)) * f64(step))}
+				base.var_set_f64(table, data, &v, f64(value))
+				changed = true
+			}
+		}
+	}
+	return
+}
+
+// var_label: "mouse_sensitivity" -> "Mouse sensitivity".
+@(private = "file")
+var_label :: proc(table: base.Var_Table, v: ^base.Var) -> string {
+	if v.label != "" {return v.label}
+	s := strings.to_upper(v.field[:1], context.temp_allocator)
+	rest, _ := strings.replace_all(v.field[1:], "_", " ", context.temp_allocator)
+	return strings.concatenate({s, rest}, context.temp_allocator)
+}
+
+// tuning_panel (F4): every variable, live; for tuning by feel.
+tuning_panel :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "tuning")
+	defer ui.pop_id(ctx)
+	prev := ui.begin_layer(ctx, .Popup)
+	defer ui.end_layer(ctx, prev)
+	t := &ctx.theme
+	vars := app_variables(app)
+	rows := 0
+	for v in vars {rows += len(v.table.vars) + 1}
+	r := ctx.screen
+	panel := ui.cut_right(&r, 460)
+	panel.h = min(panel.h, f32(rows) * (t.row_height + t.spacing) + 2 * t.padding)
+	ui.panel(ctx, panel)
+	ui.layout_begin(ctx, ui.rect_shrink(panel, t.padding))
+	defer ui.layout_end(ctx)
+	for v in vars {
+		ui.label(
+			ctx,
+			strings.trim_suffix(v.table.prefix, ".") if v.table.prefix != "" else "settings",
+			ui.next(ctx),
+			.Left,
+			t.text_muted,
+		)
+		if var_widgets(ctx, v.table, v.data) && v.data == &app.settings {settings_changed(app)}
+	}
 }
 
 quit_dialog :: proc(app: ^App, ctx: ^ui.Context) {

@@ -76,12 +76,12 @@ jobs:
           VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)"
           export VK_DRIVER_FILES
           xvfb-run -a ./build/voxiverse --frames 120
-          xvfb-run -a ./build/voxiverse --exec "view 6 3; fly_test 600 quit"
+          xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 600 quit"
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
-          ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --exec "view 4 2; fly_test 200 quit"
+          ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; fly_test 200 quit"
           ./build.sh build --release --profile
-          xvfb-run -a ./build/voxiverse --exec "view 6 3; fly_test 300 quit"
+          xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 300 quit"
           python3 tools/debugger/check_spall.py build/voxiverse.spall
 
       - name: Debugger printers (Linux)
