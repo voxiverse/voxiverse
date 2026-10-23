@@ -177,10 +177,11 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	append(
 		&lines,
 		fmt.tprintf(
-			"%.0f FPS, frame %.2f ms, GPU %.2f ms, %v",
+			"%.0f FPS, frame %.2f ms, GPU %.2f ms, vsync %s (%v)",
 			app.fps.fps,
 			app.fps.frame_ms,
 			app.fps.gpu_ms,
+			"on" if app.g.swapchain.vsync else "off",
 			app.g.swapchain.present_mode,
 		),
 	)

@@ -69,7 +69,7 @@ SETTINGS_VARS := [?]base.Var {
 	{
 		field = "vsync",
 		label = "VSync",
-		help = "wait for the display: no tearing, frame rate capped at its refresh rate",
+		help = "wait for the display: no tearing, frame rate capped at its refresh rate (off: uncapped, may tear)",
 	},
 	{field = "fullscreen", help = "cover the whole screen (F11)"},
 	{field = "volume", help = "sound volume", min = 0, max = 1, step = 0.05},

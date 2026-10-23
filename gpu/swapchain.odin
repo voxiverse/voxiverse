@@ -4,20 +4,28 @@ import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
-// choose_present_mode: FIFO for vsync (always available); without,
-// MAILBOX (uncapped, no tearing: the newest frame replaces a waiting one),
-// else IMMEDIATE (uncapped, may tear), else FIFO after all.
+// choose_present_mode: FIFO for vsync (always available). Without:
+// IMMEDIATE, what "vsync off" means in games (frames go out at once, so
+// the frame rate is uncapped and the image may tear); else MAILBOX
+// (uncapped, no tearing: the newest frame replaces a waiting one; some
+// window systems offer only this); else FIFO after all.
 @(private = "file")
 choose_present_mode :: proc(g: ^Gpu, vsync: bool) -> vk.PresentModeKHR {
 	if vsync {return .FIFO}
+	modes := present_modes(g)
+	for want in ([]vk.PresentModeKHR{.IMMEDIATE, .MAILBOX}) {
+		for m in modes {if m == want {return m}}
+	}
+	return .FIFO
+}
+
+@(private = "file")
+present_modes :: proc(g: ^Gpu) -> []vk.PresentModeKHR {
 	count: u32
 	vk.GetPhysicalDeviceSurfacePresentModesKHR(g.physical, g.surface, &count, nil)
 	modes := make([]vk.PresentModeKHR, count, context.temp_allocator)
 	vk.GetPhysicalDeviceSurfacePresentModesKHR(g.physical, g.surface, &count, raw_data(modes))
-	for want in ([]vk.PresentModeKHR{.MAILBOX, .IMMEDIATE}) {
-		for m in modes[:count] {if m == want {return m}}
-	}
-	return .FIFO
+	return modes[:count]
 }
 
 // recreate_swapchain (re)builds the swapchain at width×height. Only the
@@ -40,7 +48,13 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	}
 	if extent.width == 0 || extent.height == 0 {return false} 	// minimized
 
+	mode := choose_present_mode(g, sc.vsync)
 	image_count := caps.minImageCount + 1
+	// MAILBOX runs uncapped only if, besides the image on screen and the one
+	// waiting to replace it, every frame in flight has an image of its own;
+	// with fewer, acquiring waits for the display (e.g. 3 images: exactly
+	// twice the refresh rate).
+	if mode == .MAILBOX {image_count = max(image_count, 2 + FRAMES_IN_FLIGHT)}
 	if caps.maxImageCount > 0 {image_count = min(image_count, caps.maxImageCount)}
 	image_count = min(image_count, MAX_SWAPCHAIN_IMAGES)
 
@@ -57,7 +71,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 		imageSharingMode = .EXCLUSIVE,
 		preTransform     = caps.currentTransform,
 		compositeAlpha   = {.OPAQUE},
-		presentMode      = choose_present_mode(g, sc.vsync),
+		presentMode      = mode,
 		clipped          = true,
 		oldSwapchain     = old,
 	}
@@ -69,7 +83,12 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	destroy_swapchain(g, sc) // destroys old (retired by oldSwapchain above)
 	sc.handle = handle
 	if info.presentMode != sc.present_mode || old == 0 {
-		log.infof("gpu present mode=%v vsync=%v", info.presentMode, sc.vsync)
+		log.infof(
+			"gpu present mode=%v vsync=%v available=%v",
+			info.presentMode,
+			sc.vsync,
+			present_modes(g),
+		)
 	}
 	sc.present_mode = info.presentMode
 	sc.extent = extent

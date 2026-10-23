@@ -47,7 +47,7 @@ subsystem (`gpu`, `server`, `session`, ...) and put values in `key=value` form.
 | `run -- --capture-frame N` | Under RenderDoc: capture frame N (see GPU captures) |
 | `run -- --exec "cmd; cmd"` | Run a script of console commands, e.g. `--exec "screen options"` to reproduce a state. Scripts can pause: `wait <frames>`, `wait_world` (until the world has loaded and meshed): `--exec "singleplayer; wait_world; screenshot world; wait 3; quit"` |
 | <kbd>F2</kbd> / `screenshot [name]` | Save the next frame as `build/screenshots/<name>.png` (CI uploads the folder: the world runs take one at the start and end of each flight) |
-| <kbd>F3</kbd> / `debug` | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; MAILBOX or IMMEDIATE without), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time |
+| <kbd>F3</kbd> / `debug` | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time |
 
 Options combine, e.g. `VX_VALIDATION=best,gpu`, `build run --release --profile`.
 
