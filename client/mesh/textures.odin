@@ -47,41 +47,98 @@ Rgba :: [4]u8
 
 // generate_texture fills pixels (TEXTURE_SIZE² values, row by row) for t.
 // Deterministic: the same on every machine and every run.
+//
+// The look is crunchy pixel art: each material has a ramp of five hand-
+// picked shades, and noise only chooses among them, so pixels form crisp
+// clusters instead of smooth gradients.
 generate_texture :: proc(t: Texture, pixels: []Rgba) {
 	assert(len(pixels) == TEXTURE_SIZE * TEXTURE_SIZE)
 	seed := u32(t) * 0x9e37_79b9
 	for y in 0 ..< TEXTURE_SIZE {
 		for x in 0 ..< TEXTURE_SIZE {
-			// Pixel noise and a smoother 4-pixel noise, both tiling.
+			// Pixel noise and a 4-pixel cell noise, both tiling.
 			fine := hash01(seed, x, y)
 			coarse := value_noise(seed ~ 0x5bd1_e995, x, y, 4)
-			c: [3]f32
+			c: Rgba
 			switch t {
 			case .Stone:
-				v := 0.42 + 0.10 * coarse + 0.08 * fine
-				if hash01(seed ~ 7, x, y) > 0.93 {v -= 0.10} 	// dark specks
-				c = {v, v, v * 1.02}
+				v := 0.25 + 0.45 * coarse + 0.30 * fine
+				if hash01(seed ~ 7, x, y) > 0.92 {v = 0} 	// dark specks
+				c = shade(STONE, v)
 			case .Dirt:
 				c = dirt(seed, x, y, fine, coarse)
 			case .Grass_Top:
-				c = grass(fine, coarse)
+				c = shade(GRASS, 0.15 + 0.45 * coarse + 0.45 * fine)
 			case .Grass_Side:
-				// Grass hangs 3-5 pixels over the dirt, with a ragged edge.
-				edge := 3 + int(hash01(seed ~ 3, x, 0) * 2.99)
-				c = grass(fine, coarse) if y < edge else dirt(seed, x, y, fine, coarse)
+				// Grass hangs 2-4 pixels over the dirt, with a ragged, shadowed edge.
+				edge := 2 + int(hash01(seed ~ 3, x, 0) * 2.99)
+				switch {
+				case y < edge:
+					c = shade(GRASS, 0.2 + 0.4 * coarse + 0.45 * fine)
+				case y == edge:
+					c = GRASS[0]
+				case:
+					c = dirt(seed, x, y, fine, coarse)
+				}
 			case .Sand:
-				v := 0.80 + 0.05 * coarse + 0.06 * fine
-				c = {v, v * 0.92, v * 0.68}
+				c = shade(SAND, 0.2 + 0.3 * coarse + 0.55 * fine)
 			case .Gravel:
-				// Pebbles: cells of one tone each, with darker gaps.
-				cell := value_noise(seed ~ 11, x, y, 3)
-				v := 0.35 + 0.25 * cell + 0.05 * fine
-				if hash01(seed ~ 13, x, y) > 0.85 {v *= 0.7}
-				c = {v * 1.04, v, v * 0.95}
+				// Pebbles: cells of one tone each, with dark gaps.
+				v := value_noise(seed ~ 11, x, y, 3) * 0.8 + 0.25 * fine
+				if hash01(seed ~ 13, x, y) > 0.82 {v = 0}
+				c = shade(GRAVEL, v)
 			}
-			pixels[y * TEXTURE_SIZE + x] = {to_u8(c.r), to_u8(c.g), to_u8(c.b), 255}
+			pixels[y * TEXTURE_SIZE + x] = c
 		}
 	}
+}
+
+// Ramps, darkest first (sRGB).
+@(private = "file", rodata)
+STONE := [5]Rgba {
+	{74, 76, 84, 255},
+	{101, 103, 110, 255},
+	{124, 126, 132, 255},
+	{146, 148, 153, 255},
+	{170, 171, 176, 255},
+}
+@(private = "file", rodata)
+DIRT := [5]Rgba {
+	{74, 50, 34, 255},
+	{99, 68, 45, 255},
+	{121, 85, 57, 255},
+	{143, 103, 70, 255},
+	{166, 124, 86, 255},
+}
+@(private = "file", rodata)
+GRASS := [5]Rgba {
+	{52, 92, 38, 255},
+	{68, 117, 45, 255},
+	{86, 140, 52, 255},
+	{104, 160, 60, 255},
+	{128, 182, 74, 255},
+}
+@(private = "file", rodata)
+SAND := [5]Rgba {
+	{196, 172, 120, 255},
+	{212, 190, 138, 255},
+	{224, 204, 152, 255},
+	{234, 217, 167, 255},
+	{244, 230, 186, 255},
+}
+@(private = "file", rodata)
+GRAVEL := [5]Rgba {
+	{70, 66, 64, 255},
+	{104, 99, 95, 255},
+	{128, 122, 116, 255},
+	{150, 144, 136, 255},
+	{176, 170, 160, 255},
+}
+
+// shade picks the ramp entry for v in 0..1.
+@(private = "file")
+shade :: proc(ramp: [5]Rgba, v: f32) -> Rgba {
+	return ramp[clamp(int(v * 5), 0, 4)]
 }
 
 // generate_mip halves src (size² pixels) into dst ((size/2)² pixels),
@@ -113,16 +170,10 @@ generate_mip :: proc(src: []Rgba, size: int, dst: []Rgba) {
 }
 
 @(private = "file")
-dirt :: proc(seed: u32, x, y: int, fine, coarse: f32) -> [3]f32 {
-	v := 0.36 + 0.08 * coarse + 0.08 * fine
-	if hash01(seed ~ 5, x, y) > 0.9 {v += 0.08} 	// small stones
-	return {v, v * 0.72, v * 0.48}
-}
-
-@(private = "file")
-grass :: proc(fine, coarse: f32) -> [3]f32 {
-	v := 0.40 + 0.10 * coarse + 0.10 * fine
-	return {v * 0.55, v, v * 0.35}
+dirt :: proc(seed: u32, x, y: int, fine, coarse: f32) -> Rgba {
+	v := 0.2 + 0.4 * coarse + 0.4 * fine
+	if hash01(seed ~ 5, x, y) > 0.9 {v = 1} 	// small stones
+	return shade(DIRT, v)
 }
 
 // hash01 is a well-mixed hash of (seed, x, y) in 0..1.

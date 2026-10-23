@@ -25,8 +25,10 @@ Texture_Id :: distinct u32
 Sampler :: enum u32 {
 	Nearest, // pixel-exact (UI glyphs)
 	Linear,
-	// Pixel art on surfaces (blocks): sharp texels up close, mipmapped and
-	// anisotropic at a distance, repeating.
+	// Pixel art on surfaces (blocks): nearest texel, nearest mip level,
+	// repeating. Crisp at every distance; the mips (averaged in linear
+	// light) keep distant surfaces from sparkling. No linear or anisotropic
+	// filtering: both blur texels.
 	Pixel_Art,
 }
 
@@ -54,13 +56,8 @@ bindless_init :: proc(g: ^Gpu) -> bool {
 			maxLod       = vk.LOD_CLAMP_NONE,
 		}
 		if s == .Pixel_Art {
-			info.magFilter = .NEAREST
-			info.mipmapMode = .LINEAR
+			info.magFilter, info.minFilter, info.mipmapMode = .NEAREST, .NEAREST, .NEAREST
 			info.addressModeU, info.addressModeV = .REPEAT, .REPEAT
-			if g.max_anisotropy > 1 {
-				info.anisotropyEnable = true
-				info.maxAnisotropy = min(g.max_anisotropy, 8)
-			}
 		}
 		check(vk.CreateSampler(g.device, &info, nil, &b.samplers[s])) or_return
 	}
