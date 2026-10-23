@@ -11,6 +11,9 @@ import vk "vendor:vulkan"
 //	layout(set = 0, binding = 0) uniform texture2D textures[];
 //	layout(set = 0, binding = 1) uniform sampler samplers[SAMPLER_COUNT];
 //
+// (texture2DArray textures[] for array textures: the same binding, viewed
+// with the type of the image at the index used.)
+//
 // and receive texture ids through push constants.
 
 MAX_TEXTURES :: 1024
@@ -22,6 +25,9 @@ Texture_Id :: distinct u32
 Sampler :: enum u32 {
 	Nearest, // pixel-exact (UI glyphs)
 	Linear,
+	// Pixel art on surfaces (blocks): sharp texels up close, mipmapped and
+	// anisotropic at a distance, repeating.
+	Pixel_Art,
 }
 
 @(private)
@@ -37,21 +43,30 @@ Bindless :: struct {
 bindless_init :: proc(g: ^Gpu) -> bool {
 	b := &g.bindless
 	for s in Sampler {
-		filter: vk.Filter = .NEAREST if s == .Nearest else .LINEAR
 		info := vk.SamplerCreateInfo {
 			sType        = .SAMPLER_CREATE_INFO,
-			magFilter    = filter,
-			minFilter    = filter,
+			magFilter    = .NEAREST if s == .Nearest else .LINEAR,
+			minFilter    = .NEAREST if s == .Nearest else .LINEAR,
 			mipmapMode   = .NEAREST,
 			addressModeU = .CLAMP_TO_EDGE,
 			addressModeV = .CLAMP_TO_EDGE,
 			addressModeW = .CLAMP_TO_EDGE,
 			maxLod       = vk.LOD_CLAMP_NONE,
 		}
+		if s == .Pixel_Art {
+			info.magFilter = .NEAREST
+			info.mipmapMode = .LINEAR
+			info.addressModeU, info.addressModeV = .REPEAT, .REPEAT
+			if g.max_anisotropy > 1 {
+				info.anisotropyEnable = true
+				info.maxAnisotropy = min(g.max_anisotropy, 8)
+			}
+		}
 		check(vk.CreateSampler(g.device, &info, nil, &b.samplers[s])) or_return
 	}
 	set_name(g, .SAMPLER, u64(b.samplers[.Nearest]), "nearest sampler")
 	set_name(g, .SAMPLER, u64(b.samplers[.Linear]), "linear sampler")
+	set_name(g, .SAMPLER, u64(b.samplers[.Pixel_Art]), "pixel art sampler")
 
 	samplers := b.samplers
 	bindings := [2]vk.DescriptorSetLayoutBinding {

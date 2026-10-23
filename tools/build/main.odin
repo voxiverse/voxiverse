@@ -35,7 +35,7 @@ PACKAGES :: []string {
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
-TEST_PACKAGES :: []string{"base", "font", "ui", "game", "server", "client/mesh"}
+TEST_PACKAGES :: []string{"base", "font", "ui", "game", "server", "render", "client/mesh"}
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"base",

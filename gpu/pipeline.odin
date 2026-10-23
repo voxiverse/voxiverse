@@ -26,6 +26,10 @@ Pipeline_Desc :: struct {
 	vertex_stride:  u32,
 	attributes:     []Vertex_Attribute, // locations 0, 1, ...
 	alpha_blend:    bool, // standard "over" blending
+	// Depth test and write with reverse Z (nearer = greater). Off: the
+	// pipeline ignores depth (UI).
+	depth_test:     bool,
+	cull_back:      bool, // skip triangles wound clockwise on screen
 }
 
 create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool) {
@@ -87,7 +91,7 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 	raster := vk.PipelineRasterizationStateCreateInfo {
 		sType       = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		polygonMode = .FILL,
-		cullMode    = {},
+		cullMode    = {.BACK} if desc.cull_back else {},
 		frontFace   = .COUNTER_CLOCKWISE,
 		lineWidth   = 1,
 	}
@@ -107,6 +111,12 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		blend_attachment.dstAlphaBlendFactor = .ONE_MINUS_SRC_ALPHA
 		blend_attachment.alphaBlendOp = .ADD
 	}
+	depth := vk.PipelineDepthStencilStateCreateInfo {
+		sType            = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		depthTestEnable  = b32(desc.depth_test),
+		depthWriteEnable = b32(desc.depth_test),
+		depthCompareOp   = .GREATER,
+	}
 	blend := vk.PipelineColorBlendStateCreateInfo {
 		sType           = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		attachmentCount = 1,
@@ -123,6 +133,7 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		sType                   = .PIPELINE_RENDERING_CREATE_INFO,
 		colorAttachmentCount    = 1,
 		pColorAttachmentFormats = &color_format,
+		depthAttachmentFormat   = DEPTH_FORMAT, // every rendering has one (begin_rendering)
 	}
 	info := vk.GraphicsPipelineCreateInfo {
 		sType               = .GRAPHICS_PIPELINE_CREATE_INFO,
@@ -134,6 +145,7 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		pViewportState      = &viewport,
 		pRasterizationState = &raster,
 		pMultisampleState   = &multisample,
+		pDepthStencilState  = &depth,
 		pColorBlendState    = &blend,
 		pDynamicState       = &dynamic_state,
 		layout              = g.pipeline_layout,

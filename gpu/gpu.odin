@@ -57,6 +57,7 @@ Gpu :: struct {
 	// Bindless textures and the pipeline layout every pipeline shares.
 	bindless:          Bindless,
 	pipeline_layout:   vk.PipelineLayout,
+	max_anisotropy:    f32, // 0 when not supported
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
 	validation_issues: int,
@@ -185,13 +186,20 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		dynamicRendering = true,
 		synchronization2 = true,
 	}
+	supported: vk.PhysicalDeviceFeatures
+	vk.GetPhysicalDeviceFeatures(g.physical, &supported)
+	features := vk.PhysicalDeviceFeatures2 {
+		sType = .PHYSICAL_DEVICE_FEATURES_2,
+		pNext = &features13,
+		features = {samplerAnisotropy = supported.samplerAnisotropy},
+	}
 	device_extensions := make([dynamic]cstring, context.temp_allocator)
 	append(&device_extensions, "VK_KHR_swapchain")
 	calibration := has_device_extension(g.physical, "VK_KHR_calibrated_timestamps")
 	if calibration {append(&device_extensions, "VK_KHR_calibrated_timestamps")}
 	info := vk.DeviceCreateInfo {
 		sType                   = .DEVICE_CREATE_INFO,
-		pNext                   = &features13,
+		pNext                   = &features,
 		queueCreateInfoCount    = 1,
 		pQueueCreateInfos       = &queue_info,
 		enabledExtensionCount   = u32(len(device_extensions)),
@@ -209,6 +217,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	props: vk.PhysicalDeviceProperties
 	vk.GetPhysicalDeviceProperties(g.physical, &props)
 	timing_setup(g, queue_timestamp_bits(g), props.limits.timestampPeriod, calibration)
+	if supported.samplerAnisotropy {g.max_anisotropy = props.limits.maxSamplerAnisotropy}
 
 	for &f, i in g.frames {
 		if !create_frame_sync(g, &f, i) {return false}

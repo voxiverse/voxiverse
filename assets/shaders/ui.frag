@@ -2,7 +2,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 0, binding = 0) uniform texture2D textures[];
-layout(set = 0, binding = 1) uniform sampler samplers[2];
+layout(set = 0, binding = 1) uniform sampler samplers[3];
 
 layout(push_constant) uniform Push {
 	vec2 screen_size;

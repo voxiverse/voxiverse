@@ -80,6 +80,16 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 		)
 	}
 	set_name(g, .SWAPCHAIN_KHR, u64(handle), "swapchain")
+	ok: bool
+	sc.depth, ok = create_image(
+		g,
+		extent.width,
+		extent.height,
+		DEPTH_FORMAT,
+		{.DEPTH_STENCIL_ATTACHMENT},
+		"depth",
+	)
+	if !ok {return false}
 	log.infof(
 		"gpu: swapchain %dx%d, %d images, %v",
 		extent.width,
@@ -97,6 +107,7 @@ destroy_swapchain :: proc(g: ^Gpu, sc: ^Swapchain) {
 		if sc.render_finished[i] != 0 {vk.DestroySemaphore(g.device, sc.render_finished[i], nil)}
 	}
 	if sc.handle != 0 {vk.DestroySwapchainKHR(g.device, sc.handle, nil)}
+	destroy_image(g, &sc.depth)
 	format, color_space := sc.format, sc.color_space // chosen once at init_device
 	sc^ = {}
 	sc.format, sc.color_space = format, color_space

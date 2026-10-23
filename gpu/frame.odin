@@ -20,6 +20,7 @@ Swapchain :: struct {
 	images:          [MAX_SWAPCHAIN_IMAGES]vk.Image,
 	views:           [MAX_SWAPCHAIN_IMAGES]vk.ImageView,
 	render_finished: [MAX_SWAPCHAIN_IMAGES]vk.Semaphore,
+	depth:           Image, // shared by all frames: rendering is ordered on the queue
 	stale:           bool, // recreate before the next frame (suboptimal / out of date)
 }
 
@@ -39,6 +40,7 @@ Frame :: struct {
 	format:      vk.Format,
 	extent:      vk.Extent2D,
 	image_index: u32,
+	depth:       Image,
 }
 
 // begin_frame waits for this frame slot's previous work, acquires a swapchain
@@ -93,8 +95,28 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		format      = sc.format,
 		extent      = sc.extent,
 		image_index = index,
+		depth       = sc.depth,
 	}
 	image_barrier(f.cmd, frame.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
+	// The depth image is cleared every frame; wait only for the previous
+	// frame's depth tests to finish with it.
+	depth_barrier := vk.ImageMemoryBarrier2 {
+		sType            = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask     = {.EARLY_FRAGMENT_TESTS, .LATE_FRAGMENT_TESTS},
+		srcAccessMask    = {.DEPTH_STENCIL_ATTACHMENT_WRITE},
+		dstStageMask     = {.EARLY_FRAGMENT_TESTS, .LATE_FRAGMENT_TESTS},
+		dstAccessMask    = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE},
+		oldLayout        = .UNDEFINED,
+		newLayout        = .DEPTH_ATTACHMENT_OPTIMAL,
+		image            = sc.depth.handle,
+		subresourceRange = whole_image(sc.depth),
+	}
+	dependency := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &depth_barrier,
+	}
+	vk.CmdPipelineBarrier2(f.cmd, &dependency)
 	return frame, true
 }
 
@@ -151,7 +173,8 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 }
 
 // begin_rendering starts dynamic rendering into the frame's image, cleared
-// to clear_color, with viewport and scissor covering it.
+// to clear_color, with viewport and scissor covering it, and the depth
+// buffer cleared to 0 (the far plane in reverse Z).
 begin_rendering :: proc(frame: Frame, clear_color: [4]f32) {
 	attachment := vk.RenderingAttachmentInfo {
 		sType = .RENDERING_ATTACHMENT_INFO,
@@ -160,6 +183,14 @@ begin_rendering :: proc(frame: Frame, clear_color: [4]f32) {
 		loadOp = .CLEAR,
 		storeOp = .STORE,
 		clearValue = {color = {float32 = clear_color}},
+	}
+	depth := vk.RenderingAttachmentInfo {
+		sType = .RENDERING_ATTACHMENT_INFO,
+		imageView = frame.depth.view,
+		imageLayout = .DEPTH_ATTACHMENT_OPTIMAL,
+		loadOp = .CLEAR,
+		storeOp = .DONT_CARE,
+		clearValue = {depthStencil = {depth = 0}},
 	}
 	area := vk.Rect2D {
 		extent = frame.extent,
@@ -170,6 +201,7 @@ begin_rendering :: proc(frame: Frame, clear_color: [4]f32) {
 		layerCount           = 1,
 		colorAttachmentCount = 1,
 		pColorAttachments    = &attachment,
+		pDepthAttachment     = &depth,
 	}
 	vk.CmdBeginRendering(frame.cmd, &info)
 	viewport := vk.Viewport {

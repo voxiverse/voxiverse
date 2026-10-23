@@ -21,7 +21,14 @@ Image :: struct {
 	format: vk.Format,
 	width:  u32,
 	height: u32,
+	mips:   u32,
+	layers: u32,
 }
+
+// DEPTH_FORMAT: 32-bit float depth, supported everywhere. The world renders
+// with reverse Z (near = 1, far = 0), which spreads float precision evenly
+// over distance.
+DEPTH_FORMAT :: vk.Format.D32_SFLOAT
 
 // create_buffer makes a buffer; host_visible ones are mapped and coherent
 // (written by the CPU each frame), others are device-local.
@@ -67,13 +74,17 @@ destroy_buffer :: proc(g: ^Gpu, b: ^Buffer) {
 	b^ = {}
 }
 
-// create_image makes a device-local 2D image with a view.
+// create_image makes a device-local 2D image (an array of layers when
+// view_type is D2_ARRAY) with mips levels, and a view of all of it.
 create_image :: proc(
 	g: ^Gpu,
 	width, height: u32,
 	format: vk.Format,
 	usage: vk.ImageUsageFlags,
 	name: string,
+	mips: u32 = 1,
+	layers: u32 = 1,
+	view_type := vk.ImageViewType.D2,
 ) -> (
 	img: Image,
 	ok: bool,
@@ -83,8 +94,8 @@ create_image :: proc(
 		imageType     = .D2,
 		format        = format,
 		extent        = {width, height, 1},
-		mipLevels     = 1,
-		arrayLayers   = 1,
+		mipLevels     = mips,
+		arrayLayers   = layers,
 		samples       = {._1},
 		tiling        = .OPTIMAL,
 		usage         = usage,
@@ -99,15 +110,15 @@ create_image :: proc(
 		return {}, false
 	}
 	check(vk.BindImageMemory(g.device, img.handle, img.memory, 0)) or_return
+	img.format, img.width, img.height, img.mips, img.layers = format, width, height, mips, layers
 	view_info := vk.ImageViewCreateInfo {
-		sType = .IMAGE_VIEW_CREATE_INFO,
-		image = img.handle,
-		viewType = .D2,
-		format = format,
-		subresourceRange = {aspectMask = {.COLOR}, levelCount = 1, layerCount = 1},
+		sType            = .IMAGE_VIEW_CREATE_INFO,
+		image            = img.handle,
+		viewType         = view_type,
+		format           = format,
+		subresourceRange = whole_image(img),
 	}
 	check(vk.CreateImageView(g.device, &view_info, nil, &img.view)) or_return
-	img.format, img.width, img.height = format, width, height
 	set_name(g, .IMAGE, u64(img.handle), name)
 	set_name(g, .IMAGE_VIEW, u64(img.view), name)
 	return img, true
@@ -172,6 +183,60 @@ copy_to_image :: proc(
 		newLayout        = .SHADER_READ_ONLY_OPTIMAL,
 		image            = img.handle,
 		subresourceRange = range,
+	}
+	dep.pImageMemoryBarriers = &to_shader
+	vk.CmdPipelineBarrier2(cmd, &dep)
+}
+
+// whole_image is the subresource range of every mip and layer.
+whole_image :: proc(img: Image) -> vk.ImageSubresourceRange {
+	aspect: vk.ImageAspectFlags = {.DEPTH} if img.format == DEPTH_FORMAT else {.COLOR}
+	return {aspectMask = aspect, levelCount = img.mips, layerCount = img.layers}
+}
+
+// upload_image records copies of regions from staging into img, which
+// becomes SHADER_READ_ONLY_OPTIMAL for fragment shaders. Replaces all of the
+// image's contents (regions should cover it); record outside rendering.
+upload_image :: proc(
+	cmd: vk.CommandBuffer,
+	staging: Buffer,
+	img: Image,
+	regions: []vk.BufferImageCopy,
+) {
+	to_transfer := vk.ImageMemoryBarrier2 {
+		sType            = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask     = {.FRAGMENT_SHADER}, // earlier frames' reads
+		dstStageMask     = {.COPY},
+		dstAccessMask    = {.TRANSFER_WRITE},
+		oldLayout        = .UNDEFINED,
+		newLayout        = .TRANSFER_DST_OPTIMAL,
+		image            = img.handle,
+		subresourceRange = whole_image(img),
+	}
+	dep := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &to_transfer,
+	}
+	vk.CmdPipelineBarrier2(cmd, &dep)
+	vk.CmdCopyBufferToImage(
+		cmd,
+		staging.handle,
+		img.handle,
+		.TRANSFER_DST_OPTIMAL,
+		u32(len(regions)),
+		raw_data(regions),
+	)
+	to_shader := vk.ImageMemoryBarrier2 {
+		sType            = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask     = {.COPY},
+		srcAccessMask    = {.TRANSFER_WRITE},
+		dstStageMask     = {.FRAGMENT_SHADER},
+		dstAccessMask    = {.SHADER_SAMPLED_READ},
+		oldLayout        = .TRANSFER_DST_OPTIMAL,
+		newLayout        = .SHADER_READ_ONLY_OPTIMAL,
+		image            = img.handle,
+		subresourceRange = whole_image(img),
 	}
 	dep.pImageMemoryBarriers = &to_shader
 	vk.CmdPipelineBarrier2(cmd, &dep)
