@@ -4,6 +4,22 @@ import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
+// choose_present_mode: FIFO for vsync (always available); without,
+// MAILBOX (uncapped, no tearing: the newest frame replaces a waiting one),
+// else IMMEDIATE (uncapped, may tear), else FIFO after all.
+@(private = "file")
+choose_present_mode :: proc(g: ^Gpu, vsync: bool) -> vk.PresentModeKHR {
+	if vsync {return .FIFO}
+	count: u32
+	vk.GetPhysicalDeviceSurfacePresentModesKHR(g.physical, g.surface, &count, nil)
+	modes := make([]vk.PresentModeKHR, count, context.temp_allocator)
+	vk.GetPhysicalDeviceSurfacePresentModesKHR(g.physical, g.surface, &count, raw_data(modes))
+	for want in ([]vk.PresentModeKHR{.MAILBOX, .IMMEDIATE}) {
+		for m in modes[:count] {if m == want {return m}}
+	}
+	return .FIFO
+}
+
 // recreate_swapchain (re)builds the swapchain at width×height. Only the
 // swapchain, its views and its per-image semaphores are touched; pipelines
 // and everything else survive a resize.
@@ -41,7 +57,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 		imageSharingMode = .EXCLUSIVE,
 		preTransform     = caps.currentTransform,
 		compositeAlpha   = {.OPAQUE},
-		presentMode      = .FIFO, // vsync; always available
+		presentMode      = choose_present_mode(g, sc.vsync),
 		clipped          = true,
 		oldSwapchain     = old,
 	}
@@ -52,6 +68,10 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	}
 	destroy_swapchain(g, sc) // destroys old (retired by oldSwapchain above)
 	sc.handle = handle
+	if info.presentMode != sc.present_mode || old == 0 {
+		log.infof("gpu present mode=%v vsync=%v", info.presentMode, sc.vsync)
+	}
+	sc.present_mode = info.presentMode
 	sc.extent = extent
 
 	check(vk.GetSwapchainImagesKHR(g.device, handle, &sc.count, nil)) or_return
@@ -108,9 +128,15 @@ destroy_swapchain :: proc(g: ^Gpu, sc: ^Swapchain) {
 	}
 	if sc.handle != 0 {vk.DestroySwapchainKHR(g.device, sc.handle, nil)}
 	destroy_image(g, &sc.depth)
-	format, color_space := sc.format, sc.color_space // chosen once at init_device
-	sc^ = {}
-	sc.format, sc.color_space = format, color_space
+	// Kept across rebuilds: the format (chosen once at init_device) and the
+	// vsync wanted, with the mode it gave.
+	keep := Swapchain {
+		format       = sc.format,
+		color_space  = sc.color_space,
+		vsync        = sc.vsync,
+		present_mode = sc.present_mode,
+	}
+	sc^ = keep
 }
 
 // choose_surface_format prefers an 8-bit sRGB format, so shaders write

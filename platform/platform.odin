@@ -15,6 +15,7 @@ Window :: struct {
 	focused:         bool,
 	close_requested: bool,
 	mouse_captured:  bool, // wanted (set_mouse_captured); held only while focused
+	fullscreen:      bool, // borderless, covering the monitor (set_fullscreen)
 	events:          [dynamic]Event, // this frame's events, refilled by poll_events
 	native:          Native_Window, // per-OS state
 }
@@ -205,6 +206,15 @@ set_mouse_captured :: proc(w: ^Window, captured: bool) {
 	if w.mouse_captured == captured {return}
 	w.mouse_captured = captured
 	native_set_mouse_captured(w, captured && w.focused)
+}
+
+// set_fullscreen makes the window cover its monitor without a frame, or
+// gives it its frame and place back. The size changes arrive as
+// Resize_Events.
+set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
+	if w.fullscreen == fullscreen {return}
+	w.fullscreen = fullscreen
+	native_set_fullscreen(w, fullscreen)
 }
 
 // vulkan_instance_extensions lists the instance extensions the surface needs.

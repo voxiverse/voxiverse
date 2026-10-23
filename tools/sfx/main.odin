@@ -13,6 +13,7 @@ import "../../client/sfx"
 //	build sfx
 main :: proc() {
 	dir := filepath.join({"build", "sounds"}) or_else "sounds"
+	os.remove_all(dir) // no leftovers of sounds that are gone
 	os.make_directory_all(dir)
 	count := 0
 	for m in sfx.Material {

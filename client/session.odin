@@ -481,7 +481,7 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 	}
 }
 
-// movement_sounds: footsteps every STRIDE blocks walked, a jump, a landing
+// movement_sounds: footsteps every STRIDE blocks walked and landings
 // (louder the harder), from the tick the prediction just ran. Flying is
 // silent.
 @(private = "file")
@@ -492,9 +492,6 @@ movement_sounds :: proc(s: ^Session) {
 		return
 	}
 	feet := now.position
-	if was.on_ground && !now.on_ground && now.velocity.y > 0 {
-		append(&s.sounds, Sound_Event{.Jump, .Air, feet, 1})
-	}
 	under, solid := block_under(s, feet)
 	if !was.on_ground && now.on_ground {
 		speed := -was.velocity.y

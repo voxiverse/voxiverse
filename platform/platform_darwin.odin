@@ -30,6 +30,9 @@ native_poll :: proc(w: ^Window) {}
 native_set_mouse_captured :: proc(w: ^Window, captured: bool) {}
 
 @(private)
+native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {}
+
+@(private)
 native_vulkan_instance_extensions :: proc() -> []cstring {
 	return nil
 }

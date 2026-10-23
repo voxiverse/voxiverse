@@ -43,3 +43,22 @@ test_settings_round_trip :: proc(t: ^testing.T) {
 	settings_changed(&b)
 	testing.expect(t, !b.settings_dirty)
 }
+
+@(test)
+test_fps_counter :: proc(t: ^testing.T) {
+	f: Fps
+	gpu := new(base.Frame_Stats)
+	defer free(gpu)
+	for _ in 0 ..< 49 {fps_update(&f, 10, gpu)}
+	testing.expect_value(t, f.fps, 0) // under half a second: nothing yet
+	for _ in 0 ..< 3 {base.frame_stats_add(gpu, 4)}
+	fps_update(&f, 10, gpu) // 50 frames in 500 ms
+	testing.expectf(t, abs(f.fps - 100) < 1e-3, "fps %v", f.fps)
+	testing.expectf(t, abs(f.frame_ms - 10) < 1e-3, "frame %v", f.frame_ms)
+	testing.expect_value(t, f.gpu_ms, 4)
+	// The next window stands alone: 250 frames of 2 ms.
+	base.frame_stats_add(gpu, 1)
+	for _ in 0 ..< 250 {fps_update(&f, 2, gpu)}
+	testing.expectf(t, abs(f.fps - 500) < 1e-2, "fps %v", f.fps)
+	testing.expect_value(t, f.gpu_ms, 1)
+}

@@ -73,6 +73,7 @@ App :: struct {
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	last_frame_ms:    f32,
+	fps:              Fps,
 }
 
 // app_init brings everything up; on failure the caller still calls
@@ -228,6 +229,9 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	scale := ui_scale(app)
 	input := ui_input(&app.input, scale)
 	handle_global_keys(app, &input)
+	if app.settings.fullscreen !=
+	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
+	gpu.set_vsync(&app.g, app.settings.vsync)
 	if app.settings.volume != app.volume {
 		audio.set_volume(&app.mixer, app.settings.volume)
 		app.volume = app.settings.volume

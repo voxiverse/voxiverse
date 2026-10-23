@@ -134,6 +134,13 @@ X11 :: struct {
 		detectable: b32,
 		supported: ^b32,
 	) -> b32,
+	SendEvent:                 proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		propagate: b32,
+		mask: xlib.EventMask,
+		event: ^xlib.XEvent,
+	) -> i32,
 }
 
 @(private)
@@ -282,6 +289,29 @@ setup_raw_motion :: proc(n: ^Native_Window) {
 		return
 	}
 	n.xi_opcode = opcode
+}
+
+// Fullscreen: asked of the window manager (EWMH _NET_WM_STATE_FULLSCREEN),
+// which removes the frame and covers the monitor; the new size arrives as
+// a ConfigureNotify like any resize.
+@(private)
+native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
+	n := &w.native
+	NET_WM_STATE_REMOVE :: 0
+	NET_WM_STATE_ADD :: 1
+	e: xlib.XEvent
+	e.xclient = {
+		type         = .ClientMessage,
+		window       = n.window,
+		message_type = x.InternAtom(n.display, "_NET_WM_STATE", false),
+		format       = 32,
+	}
+	e.xclient.data.l[0] = NET_WM_STATE_ADD if fullscreen else NET_WM_STATE_REMOVE
+	e.xclient.data.l[1] = int(x.InternAtom(n.display, "_NET_WM_STATE_FULLSCREEN", false))
+	e.xclient.data.l[3] = 1 // from a normal application
+	root := x.RootWindow(n.display, x.DefaultScreen(n.display))
+	x.SendEvent(n.display, root, false, {.SubstructureNotify, .SubstructureRedirect}, &e)
+	x.Flush(n.display)
 }
 
 @(private)

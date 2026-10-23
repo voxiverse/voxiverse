@@ -21,7 +21,9 @@ Settings :: struct {
 	fov:               f32, // degrees, vertical
 	view_radius:       i32, // chunks
 	view_height:       i32,
-	show_frame_times:  bool,
+	show_fps:          bool, // the FPS counter in the corner
+	vsync:             bool, // wait for the display (off: as many frames as possible)
+	fullscreen:        bool, // borderless, covering the monitor (F11)
 	volume:            f32, // 0..1, all sound
 }
 
@@ -32,6 +34,7 @@ SETTINGS_DEFAULTS := Settings {
 	fov               = 70,
 	view_radius       = 12,
 	view_height       = 6,
+	vsync             = true,
 	volume            = 0.8,
 }
 
@@ -62,7 +65,13 @@ SETTINGS_VARS := [?]base.Var {
 		min = 1,
 		max = 16,
 	},
-	{field = "show_frame_times", help = "show frame times in the corner"},
+	{field = "show_fps", label = "Show FPS", help = "show frames per second in the corner"},
+	{
+		field = "vsync",
+		label = "VSync",
+		help = "wait for the display: no tearing, frame rate capped at its refresh rate",
+	},
+	{field = "fullscreen", help = "cover the whole screen (F11)"},
 	{field = "volume", help = "sound volume", min = 0, max = 1, step = 0.05},
 }
 

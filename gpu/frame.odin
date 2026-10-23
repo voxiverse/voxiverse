@@ -22,6 +22,17 @@ Swapchain :: struct {
 	render_finished: [MAX_SWAPCHAIN_IMAGES]vk.Semaphore,
 	depth:           Image, // shared by all frames: rendering is ordered on the queue
 	stale:           bool, // recreate before the next frame (suboptimal / out of date)
+	vsync:           bool, // wanted: wait for the display (else as fast as possible)
+	present_mode:    vk.PresentModeKHR, // what we got
+}
+
+// set_vsync chooses between waiting for the display (no tearing, frame rate
+// capped at its refresh rate) and drawing as fast as possible; the
+// swapchain is rebuilt before the next frame.
+set_vsync :: proc(g: ^Gpu, on: bool) {
+	if g.swapchain.vsync == on && g.swapchain.handle != 0 {return}
+	g.swapchain.vsync = on
+	g.swapchain.stale = true
 }
 
 Frame_Sync :: struct {

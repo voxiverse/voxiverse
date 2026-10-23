@@ -34,7 +34,6 @@ Action :: enum u8 {
 }
 
 Player_Sound :: enum u8 {
-	Jump,
 	Land,
 }
 
@@ -189,18 +188,15 @@ block_sound :: proc(
 	return finish(&s, peak, allocator)
 }
 
-// player_sound: the player's own noises. A landing is made once, loud; the
+// player_sound: the player's own noises (no jump: heard every few seconds,
+// it would grate). A landing is made once, loud; the
 // game scales it with how hard they landed.
 player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocator) -> []f32 {
 	s := Synth {
-		rng = seed(9001 + u32(p) * 131 + u32(variant) * 7),
+		rng = seed(9132 + u32(p) * 131 + u32(variant) * 7),
 	}
 	r := rand_range(&s.rng, 0.92, 1.08)
 	switch p {
-	case .Jump:
-		// A short cloth swish: noise through a band that sweeps upwards.
-		sweep(&s, 0.14, 500 * r, 1400 * r, 0.35)
-		return finish(&s, 0.35, allocator)
 	case .Land:
 		burst(&s, {start = 0, tau = 0.070, filter = .Low, freq = 140 * r, gain = 1})
 		burst(&s, {start = 0, tau = 0.030, filter = .Low, freq = 420 * r, gain = 0.6})
@@ -293,25 +289,6 @@ tone :: proc(s: ^Synth, freq, tau, gain: f32) {
 	for i in 0 ..< n {
 		t := f32(i) / RATE
 		s.buf[i] += math.sin(phase + math.TAU * freq * t) * math.exp(-t / tau) * gain
-	}
-	s.len = max(s.len, n)
-}
-
-// sweep: noise through a band moving from lo to hi Hz over seconds, rising
-// in and falling out.
-@(private)
-sweep :: proc(s: ^Synth, seconds, lo, hi, gain: f32) {
-	n := min(int(seconds * RATE), len(s.buf))
-	f := bandpass(lo, 2)
-	for i in 0 ..< n {
-		u := f32(i) / f32(n)
-		if i % 32 == 0 {
-			// Retune, keeping the filter's state.
-			g := bandpass(lo + (hi - lo) * u, 2)
-			f.b0, f.b1, f.b2, f.a1, f.a2 = g.b0, g.b1, g.b2, g.a1, g.a2
-		}
-		env := math.sin(math.PI * u) // in and out
-		s.buf[i] += biquad(&f, rand_range(&s.rng, -1, 1)) * env * gain
 	}
 	s.len = max(s.len, n)
 }

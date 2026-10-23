@@ -16,7 +16,6 @@ Sound_Kind :: enum u8 {
 	Break,
 	Place,
 	Step,
-	Jump,
 	Land,
 }
 
@@ -70,8 +69,6 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		pitch := rand.float32_range(0.9, 1.1)
 		variant := rand.int_max(sfx.VARIANTS)
 		switch e.kind {
-		case .Jump:
-			audio.play(m, {b.player[.Jump][variant], gain, pitch})
 		case .Land:
 			audio.play(m, {b.player[.Land][variant], gain, pitch})
 			if mat, ok := sfx.material_of(e.block); ok {
@@ -84,7 +81,6 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 				.Break = .Break,
 				.Place = .Place,
 				.Step  = .Step,
-				.Jump  = .Step,
 				.Land  = .Step,
 			}
 			audio.play(m, {b.block[mat][action[e.kind]][variant], gain, pitch})

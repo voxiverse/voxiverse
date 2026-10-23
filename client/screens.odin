@@ -8,7 +8,6 @@ import "core:sync"
 import "../audio"
 import "../base"
 import "../game"
-import "../gpu"
 import "../server"
 import "../ui"
 
@@ -22,6 +21,10 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
 	if .F4 in app.input.pressed {app.tuning = !app.tuning}
 	if .F2 in app.input.pressed {screenshot_request(app, "")}
+	if .F11 in app.input.pressed {
+		app.settings.fullscreen = !app.settings.fullscreen
+		if !app.scripted {app.settings_dirty = true}
+	}
 	if app.input.escape {
 		switch {
 		case app.console.open:
@@ -59,7 +62,7 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	if app.debug.overlay {debug_overlay(app, ctx)}
 	if app.tuning {tuning_panel(app, ctx)}
 	if app.quit_dialog {quit_dialog(app, ctx)}
-	if app.settings.show_frame_times {frame_times_overlay(app, ctx)}
+	if app.settings.show_fps {fps_overlay(app, ctx)}
 	if app.console.open {console_ui(app, ctx)}
 }
 
@@ -171,7 +174,16 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Tooltip)
 	defer ui.end_layer(ctx, prev)
 	lines := make([dynamic]string, context.temp_allocator)
-	append(&lines, fmt.tprintf("frame %.2f ms", app.last_frame_ms))
+	append(
+		&lines,
+		fmt.tprintf(
+			"%.0f FPS, frame %.2f ms, GPU %.2f ms, %v",
+			app.fps.fps,
+			app.fps.frame_ms,
+			app.fps.gpu_ms,
+			app.g.swapchain.present_mode,
+		),
+	)
 	if s := app.session; s != nil && s.state == .Playing {
 		p := s.camera.position
 		append(
@@ -385,15 +397,20 @@ quit_dialog :: proc(app: ^App, ctx: ^ui.Context) {
 	if ui.button(ctx, "Cancel", no) {app.quit_dialog = false}
 }
 
-frame_times_overlay :: proc(app: ^App, ctx: ^ui.Context) {
+// fps_overlay: frames per second, big enough to read at a glance, and
+// under it the frame time and the GPU's share of it.
+fps_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Tooltip)
 	defer ui.end_layer(ctx, prev)
-	gpu_ms: f32
-	if s := gpu.gpu_frame_summary(&app.g); s.count > 0 {gpu_ms = s.avg}
-	text := fmt.tprintf("frame %5.2f ms   GPU %5.2f ms avg", app.last_frame_ms, gpu_ms)
+	f := app.fps
+	t := &ctx.theme
 	r := ctx.screen
-	r = ui.cut_top(&r, 28)
-	r = ui.cut_right(&r, 330)
-	ui.fill_rect(ctx, r, {0, 0, 0, 200})
-	ui.label(ctx, text, ui.rect_shrink(r, 4), .Right, ctx.theme.text_muted)
+	r = ui.cut_top(&r, 2 * t.row_height + 8)
+	r = ui.cut_right(&r, 260)
+	ui.fill_rect(ctx, r, {0, 0, 0, 235}) // nearly opaque: readable over bright clouds
+	inner := ui.rect_shrink(r, 4)
+	ui.label(ctx, fmt.tprintf("%.0f FPS", f.fps), ui.cut_top(&inner, t.row_height), .Right)
+	detail :=
+		fmt.tprintf("%.2f ms, GPU %.2f ms", f.frame_ms, f.gpu_ms) if f.gpu_ms > 0 else fmt.tprintf("%.2f ms", f.frame_ms)
+	ui.label(ctx, detail, ui.cut_top(&inner, t.row_height), .Right, t.text_muted)
 }

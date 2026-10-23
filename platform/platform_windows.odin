@@ -15,6 +15,7 @@ Native_Window :: struct {
 	ctx:            runtime.Context, // for the window procedure, which Windows calls
 	high_surrogate: u16, // first half of a UTF-16 surrogate pair from WM_CHAR
 	captured:       bool, // raw mouse input on, cursor hidden and clipped
+	windowed:       win.WINDOWPLACEMENT, // where the window was before fullscreen
 }
 
 @(private)
@@ -105,6 +106,53 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 	n.captured = captured
 	win.ShowCursor(win.BOOL(!captured))
 	if captured {clip_cursor(w)} else {win.ClipCursor(nil)}
+}
+
+// Fullscreen is borderless: the window loses its frame and covers its
+// monitor; leaving puts frame and placement back.
+@(private)
+native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
+	n := &w.native
+	style := win.GetWindowLongPtrW(n.hwnd, win.GWL_STYLE)
+	if fullscreen {
+		n.windowed.length = size_of(n.windowed)
+		win.GetWindowPlacement(n.hwnd, &n.windowed)
+		info := win.MONITORINFO {
+			cbSize = size_of(win.MONITORINFO),
+		}
+		win.GetMonitorInfoW(win.MonitorFromWindow(n.hwnd, .MONITOR_DEFAULTTONEAREST), &info)
+		m := info.rcMonitor
+		win.SetWindowLongPtrW(
+			n.hwnd,
+			win.GWL_STYLE,
+			style & ~win.LONG_PTR(win.WS_OVERLAPPEDWINDOW),
+		)
+		win.SetWindowPos(
+			n.hwnd,
+			win.HWND_TOP,
+			m.left,
+			m.top,
+			m.right - m.left,
+			m.bottom - m.top,
+			win.SWP_NOOWNERZORDER | win.SWP_FRAMECHANGED,
+		)
+	} else {
+		win.SetWindowLongPtrW(n.hwnd, win.GWL_STYLE, style | win.LONG_PTR(win.WS_OVERLAPPEDWINDOW))
+		win.SetWindowPlacement(n.hwnd, &n.windowed)
+		win.SetWindowPos(
+			n.hwnd,
+			nil,
+			0,
+			0,
+			0,
+			0,
+			win.SWP_NOMOVE |
+			win.SWP_NOSIZE |
+			win.SWP_NOZORDER |
+			win.SWP_NOOWNERZORDER |
+			win.SWP_FRAMECHANGED,
+		)
+	}
 }
 
 @(private = "file")

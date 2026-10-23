@@ -61,6 +61,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			now := time.tick_now()
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
+			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
 			last = now
 		}
 		log_frame_stats(&app.frame_stats)
