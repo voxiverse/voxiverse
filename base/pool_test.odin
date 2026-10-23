@@ -138,3 +138,28 @@ test_pool_generation_wraps :: proc(t: ^testing.T) {
 		pool_remove(&p, h)
 	}
 }
+
+@(test)
+test_fixed_map_never_grows :: proc(t: ^testing.T) {
+	for n in ([]int{6, 100, 6144, 6220, 10_000}) {
+		m, err := map_make_fixed(map[int]int, n)
+		testing.expect(t, err == nil)
+		capacity := cap(m)
+		for i in 0 ..< n {m[i] = i}
+		testing.expectf(
+			t,
+			cap(m) == capacity,
+			"map for %d entries grew from %d to %d",
+			n,
+			capacity,
+			cap(m),
+		)
+		// Churn (delete and insert other keys) at full size: still no growth.
+		for i in 0 ..< n {
+			delete_key(&m, i)
+			m[i + n] = i
+		}
+		testing.expectf(t, cap(m) == capacity, "map for %d entries grew under churn", n)
+		delete(m)
+	}
+}

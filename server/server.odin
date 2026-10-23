@@ -69,7 +69,9 @@ SEND_BUDGET :: 48
 // its address until stop.
 start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
-	assert(config.view_height > 0 && config.workers > 0)
+	assert(
+		config.view_height > 0 && config.view_height <= game.MAX_VIEW_HEIGHT && config.workers > 0,
+	)
 	s^ = {
 		config   = config,
 		endpoint = endpoint,
@@ -79,12 +81,12 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&s.arena)
-	s.offsets = interest_offsets(config.view_radius, config.view_height, arena)
+	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
 	// Loaded chunks stay within the unload distance of a client, plus
 	// chunks still generating that were requested before it moved.
-	capacity := count_offsets(
-		config.view_radius + UNLOAD_MARGIN,
-		config.view_height + UNLOAD_MARGIN,
+	capacity := game.interest_count(
+		config.view_radius + game.SERVER_UNLOAD_MARGIN,
+		config.view_height + game.SERVER_UNLOAD_MARGIN,
 	)
 	capacity += config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
@@ -93,7 +95,12 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 		virtual.arena_destroy(&s.arena)
 		return false
 	}
-	client_init(&s.client, len(s.offsets), arena)
+	if err := client_init(&s.client, config, arena); err != nil {
+		log.errorf("server: cannot allocate client state: %v", err)
+		world_destroy(&s.world)
+		virtual.arena_destroy(&s.arena)
+		return false
+	}
 	game.writer_init(&s.writer, arena)
 
 	s.thread = thread.create(server_main)
@@ -166,7 +173,7 @@ tick :: proc(s: ^Server) {
 	s.tick += 1
 	world_collect(&s.world, proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
 			s := (^Server)(data)
-			return client_wants(&s.client, pos, s.config, UNLOAD_MARGIN)
+			return client_wants(&s.client, pos, s.config, game.SERVER_UNLOAD_MARGIN)
 		}, s)
 	receive_messages(s)
 	if s.client.state == .Playing {
@@ -210,6 +217,7 @@ receive_messages :: proc(s: ^Server) {
 					tick_rate = game.TICK_RATE,
 					spawn = spawn,
 					view_radius = u32(s.config.view_radius),
+					view_height = u32(s.config.view_height),
 				},
 			)
 			log.infof("server: %q joined", v.name)

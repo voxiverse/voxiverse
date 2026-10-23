@@ -31,6 +31,7 @@ Validation needs the layer installed (see README); without it you get one warnin
 | `run -- --frames N` | Run N frames and exit; fails on any validation finding or leak (what CI does) |
 | `run -- --capture-frame N` | Under RenderDoc: capture frame N (see GPU captures) |
 | `run -- --exec "cmd; cmd"` | Run console commands at startup, e.g. `--exec "screen options"` to reproduce a state |
+| <kbd>F3</kbd> / `debug` | Overlay: position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time |
 
 Options combine, e.g. `VX_VALIDATION=best,gpu`, `build run --release --profile`.
 
@@ -48,6 +49,26 @@ vulkan [VUID-vkCmdDraw-renderpass]: vkCmdDraw(): This call must be issued inside
   also times it on the GPU).
 - Some checks run on the layer's own thread after the call returned; those say so instead of
   showing a stack. Use the object names and labels, or `VX_BREAK=1`.
+
+## World commands
+
+| Command | |
+|---|---|
+| `singleplayer` / `leave` | Enter / leave a world |
+| `view <radius> <height>` | View distance in chunks for the next world (default 12 x 6) |
+| `tp <x> <y> <z> [yaw pitch]` | Move the camera (also before the world has loaded: applied on joining) |
+| `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
+
+`--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
+driver, with AddressSanitizer and with profiling.
+
+## Threads
+
+The server and the worldgen and mesh workers log, assert and allocate like the main thread
+(they inherit its context) and each has its own track in profile traces. Odin's
+`-sanitize:thread` does not instrument memory accesses (as of dev-2026-10: only function
+entry and exit), so it finds no races; threaded code is covered by deterministic tests
+instead (`base/queue_test.odin`, `server/server_test.odin`).
 
 ## Debuggers
 

@@ -98,9 +98,10 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	testing.expect_value(t, c.welcome.tick_rate, game.TICK_RATE)
+	testing.expect(t, c.welcome.view_radius == RADIUS && c.welcome.view_height == HEIGHT)
 
 	// The whole interest area arrives.
-	area := count_offsets(RADIUS, HEIGHT)
+	area := game.interest_count(RADIUS, HEIGHT)
 	@(static) want: int // test-local: wait_until takes a plain proc
 	want = area
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.has) >= want}))
@@ -144,7 +145,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	// server at most its pool, and the session arena stopped growing early.
 	testing.expectf(
 		t,
-		max_client <= count_offsets(RADIUS + 1, HEIGHT + 1),
+		max_client <= game.interest_count(RADIUS + 1, HEIGHT + 1),
 		"client held %d chunks",
 		max_client,
 	)

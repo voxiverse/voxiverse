@@ -32,7 +32,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	move, ok = decode_client(encode_c(Move{{1.5, -2e6, 3}})[:])
 	testing.expect(t, ok && move.(Move).position == {1.5, -2e6, 3})
 
-	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, {0, 40.5, 0}, 12}
+	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, {0, 40.5, 0}, 12, 6}
 	m: Server_Message
 	m, ok = decode_server(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
@@ -90,7 +90,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	generate(9, {0, 0, 0}, terrain.array)
 
 	server := [][dynamic]u8 {
-		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8}),
+		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8, 4}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
@@ -160,6 +160,23 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		write_u32(w, TICK_RATE)
 		for _ in 0 ..< 3 {write_f64(w, 0)}
 		write_u32(w, MAX_VIEW_RADIUS + 1)
+		write_u32(w, 4)
+	})
+	bad_server(t, scratch, "view height zero", proc(w: ^Writer) {
+		write_u8(w, 1)
+		write_u32(w, PROTOCOL_VERSION)
+		write_u32(w, TICK_RATE)
+		for _ in 0 ..< 3 {write_f64(w, 0)}
+		write_u32(w, 8)
+		write_u32(w, 0)
+	})
+	bad_server(t, scratch, "view height too large", proc(w: ^Writer) {
+		write_u8(w, 1)
+		write_u32(w, PROTOCOL_VERSION)
+		write_u32(w, TICK_RATE)
+		for _ in 0 ..< 3 {write_f64(w, 0)}
+		write_u32(w, 8)
+		write_u32(w, MAX_VIEW_HEIGHT + 1)
 	})
 
 	chunk_header :: proc(w: ^Writer) {

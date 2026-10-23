@@ -66,8 +66,16 @@ run :: proc(opts: Options) -> bool {
 			log.errorf("%d UI error(s) during this run (see above)", app.ui.errors)
 			ok = false
 		}
+		if app.fly_test.failed || app.fly_test.phase != .Off {
+			if app.fly_test.phase !=
+			   .Off {log.error("fly_test: the run ended before the test finished")}
+			ok = false
+		}
 	}
-	if issues := app_destroy(app); issues > 0 {
+	server_failed := app.server_failed
+	issues := app_destroy(app) // leaves any world, so server failures are known after
+	if app.server_failed || server_failed {ok = false}
+	if issues > 0 {
 		log.errorf("%d validation finding(s) during this run", issues)
 		return false
 	}

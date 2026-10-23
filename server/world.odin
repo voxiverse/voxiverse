@@ -70,7 +70,7 @@ world_init :: proc(
 		max_in_flight = workers * MAX_IN_FLIGHT_PER_WORKER,
 	}
 	base.pool_init(&w.chunks, capacity, arena) or_return
-	w.by_pos = make(map[game.Chunk_Pos]Chunk_Handle, capacity, arena) or_return
+	w.by_pos = base.map_make_fixed(map[game.Chunk_Pos]Chunk_Handle, capacity, arena) or_return
 	game.block_arrays_init(&w.arrays, capacity, arena) or_return
 	w.free_tasks = make([dynamic]^Gen_Task, 0, w.max_in_flight, arena) or_return
 	tasks := make([]Gen_Task, w.max_in_flight, arena) or_return

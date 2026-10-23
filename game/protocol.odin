@@ -43,7 +43,8 @@ Welcome :: struct {
 	protocol:    u32,
 	tick_rate:   u32,
 	spawn:       [3]f64,
-	view_radius: u32, // in chunks
+	view_radius: u32, // the interest area, in chunks (see interest.odin)
+	view_height: u32,
 }
 
 // Reject ends the connection.
@@ -110,6 +111,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u32(w, v.tick_rate)
 		write_position(w, v.spawn)
 		write_u32(w, v.view_radius)
+		write_u32(w, v.view_height)
 	case Reject:
 		write_u8(w, u8(Server_Kind.Reject))
 		write_string(w, v.reason)
@@ -157,8 +159,14 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			tick_rate   = read_u32(&r),
 			spawn       = read_position(&r),
 			view_radius = read_u32(&r),
+			view_height = read_u32(&r),
 		}
-		if w.view_radius > MAX_VIEW_RADIUS {reader_fail(&r)}
+		if w.view_radius == 0 ||
+		   w.view_radius > MAX_VIEW_RADIUS ||
+		   w.view_height == 0 ||
+		   w.view_height > MAX_VIEW_HEIGHT {
+			reader_fail(&r)
+		}
 		m = w
 	case u8(Server_Kind.Reject):
 		m = Reject {

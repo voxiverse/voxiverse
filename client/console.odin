@@ -3,9 +3,12 @@ package client
 import "base:runtime"
 import "core:fmt"
 import "core:log"
+import "core:math"
+import "core:strconv"
 import "core:strings"
 import "core:sync"
 
+import "../game"
 import "../ui"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -200,6 +203,102 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(c, {"quit", "quit the game", proc(app: ^App, args: []string) {
 			app.quit = true
 		}})
+	console_register(
+		c,
+		{"singleplayer", "enter a singleplayer world", proc(app: ^App, args: []string) {
+				enter_world(app)
+			}},
+	)
+	console_register(
+		c,
+		{"debug", "toggle the debug overlay (F3)", proc(app: ^App, args: []string) {
+				app.show_debug = !app.show_debug
+			}},
+	)
+	console_register(
+		c,
+		{
+			"view",
+			"view <radius> <height>: view distance in chunks (for the next world)",
+			proc(app: ^App, args: []string) {
+				if len(args) != 2 {
+					console_print(
+						&app.console,
+						fmt.tprintf(
+							"view is %d x %d chunks",
+							app.settings.view_radius,
+							app.settings.view_height,
+						),
+					)
+					return
+				}
+				r, r_ok := strconv.parse_int(args[0])
+				h, h_ok := strconv.parse_int(args[1])
+				if !r_ok ||
+				   !h_ok ||
+				   r < 1 ||
+				   r > game.MAX_VIEW_RADIUS ||
+				   h < 1 ||
+				   h > game.MAX_VIEW_HEIGHT {
+					console_print(
+						&app.console,
+						fmt.tprintf(
+							"view: radius 1..%d, height 1..%d",
+							game.MAX_VIEW_RADIUS,
+							game.MAX_VIEW_HEIGHT,
+						),
+						.Warning,
+					)
+					return
+				}
+				app.settings.view_radius, app.settings.view_height = i32(r), i32(h)
+			},
+		},
+	)
+	console_register(c, {"leave", "leave the world", proc(app: ^App, args: []string) {
+			leave_world(app)
+		}})
+	console_register(
+		c,
+		{
+			"tp",
+			"tp <x> <y> <z> [yaw pitch]: move the camera (angles in degrees)",
+			proc(app: ^App, args: []string) {
+				if app.session == nil {
+					console_print(&app.console, "tp: not in a world", .Warning)
+					return
+				}
+				values: [5]f64
+				if len(args) != 3 && len(args) != 5 {
+					console_print(&app.console, "tp <x> <y> <z> [yaw pitch]", .Warning)
+					return
+				}
+				for a, i in args {
+					ok: bool
+					if values[i], ok = strconv.parse_f64(a); !ok {
+						console_print(&app.console, "tp: numbers please", .Warning)
+						return
+					}
+				}
+				cam := Fly_Camera {
+					position = {values[0], values[1], values[2]},
+				}
+				if len(args) == 5 {
+					cam.yaw = f32(values[3]) * math.RAD_PER_DEG
+					cam.pitch = f32(values[4]) * math.RAD_PER_DEG
+				}
+				session_teleport(app.session, cam)
+			},
+		},
+	)
+	console_register(
+		c,
+		{
+			"fly_test",
+			"fly_test <blocks> [quit]: fly and check memory stays flat",
+			fly_test_command,
+		},
+	)
 	console_register(
 		c,
 		{"ui_scale", "ui_scale <n>: UI scale (0 = automatic)", proc(app: ^App, args: []string) {

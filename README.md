@@ -53,8 +53,20 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 
 ## Running
 
-`build run` opens the title screen. The console (the <kbd>`</kbd> key) shows the log and takes
-commands (`help` lists them); `run -- --exec "cmd; cmd"` runs commands at startup.
+`build run` opens the title screen; Singleplayer generates a world and flies you into it.
+
+| Key | |
+|---|---|
+| Mouse | Look |
+| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Fly |
+| <kbd>Space</kbd> / <kbd>Shift</kbd> | Up / down |
+| <kbd>Ctrl</kbd> | Fly fast |
+| <kbd>Esc</kbd> | Pause menu (Resume, Leave World) |
+| <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |
+| <kbd>`</kbd> | Console |
+
+The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
+runs commands at startup, e.g. `--exec "view 8 4; singleplayer; tp 0 80 0 45 -20"`.
 
 ## Layout
 

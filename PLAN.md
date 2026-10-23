@@ -86,15 +86,20 @@ per frame) → build the UI → build a `Frame_Packet` → render. Tick rate is 
 `game/` (30 Hz), announced by the server in the handshake.
 
 ### World data
-- Chunks 16³, `u16` block ids (room past 256 blocks), palette + indices per chunk, light stored
-  separately.
+- Chunks 16³, `u16` block ids (room past 256 blocks). In memory a chunk is one block (all
+  air, all stone: most chunks) or a flat array from a region reserved for the session's
+  maximum, so memory has a hard ceiling; palette + runs on the wire (and on disk). Light
+  stored separately.
 - One chunk pool plus a coordinate → handle map; explicit chunk states
   (generating, ready, meshed, …) and a dirty-chunk event queue.
 - Generation, lighting and meshing run as jobs on worker threads, on immutable padded
   snapshots (18³ for meshing), never on live data.
 - Lighting is a pure function in `game/` with proper add *and* removal passes, usable on both
-  sides.
-- The server unloads chunks outside every player's interest radius (saving modified ones).
+  sides. (M3 renders with face shading and ambient occlusion; flood-fill light arrives with
+  block editing in M4, when light must spread and recede.)
+- Interest is a cylinder around each player's chunk, sent nearest first; the client drops
+  chunks one past it and the server frees them two past it (hysteresis). Both sides size
+  their storage from it once, at join.
 
 ### Authority and netcode
 - Client sends tick-stamped input commands; the server simulates every player with the shared
@@ -106,8 +111,10 @@ per frame) → build the UI → build a `Frame_Packet` → render. Tick rate is 
 - Protocol has a version handshake, validated decoding, and palette + RLE chunk encoding.
 
 ### Renderer
-- Retained resources: chunk meshes sub-allocated in device-local buffers, uploaded per chunk
-  through a staging ring (no whole-world rebuild); textures and meshes by handle.
+- Retained resources: chunk meshes sub-allocated in one device-local buffer, uploaded per
+  chunk through per-frame staging (no whole-world rebuild); textures and meshes by handle.
+  Positions relative to the camera's chunk; reverse-Z infinite projection. Greedy meshing
+  later (it must respect AO).
 - Per frame: a `Frame_Packet` (camera, atmosphere, mesh instances, debug lines, particles, UI
   vertices) written into per-frame-in-flight ring buffers.
 - Swapchain recreation touches only the swapchain and size-dependent images.
@@ -163,9 +170,9 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M1 | Window + GPU: Win32 and X11 backends, Vulkan device/swapchain/frames in flight, a clear + triangle, resize/minimize | Runs on Windows and Linux with zero validation messages |
 | M1b | macOS spike: Cocoa backend + MoltenVK showing the same triangle | Confirms MoltenVK covers the Vulkan features we use (needs a Mac) |
 | M2 | UI + text: `ui/`, generated font atlas, UI pass, title screen with mouse + keyboard navigation, console overlay | UI behaviour tests (hit-testing, focus, layers) + visual check |
-| M3 | World through the boundary: in-process server thread, handshake, worldgen with seed, chunk streaming, lighting + meshing jobs, chunk rendering, fly camera | Flying 1000+ blocks keeps memory flat (session arena stats) and frames within budget |
-| M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation | Same results with artificial latency injected into the transport |
-| M5 | Persistence: region files, save/load/quit, server-side chunk unloading | Save → quit → load round-trips exactly |
+| M3 | World through the boundary: in-process server thread, handshake, worldgen with seed, chunk streaming and unloading, meshing jobs (face shading + ambient occlusion), chunk rendering, fly camera | Flying 1000+ blocks keeps memory flat (session arena stats) and frames within budget: `fly_test`, run in CI |
+| M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation, flood-fill block and sky light (add and removal) | Same results with artificial latency injected into the transport |
+| M5 | Persistence: region files, save/load/quit, saving modified chunks when the server unloads them | Save → quit → load round-trips exactly |
 | M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | — |
 | M7 | Remote multiplayer: UDP transport, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines |
 | M8 | Entities: one mob, server AI, replication by handle with interest management | — |

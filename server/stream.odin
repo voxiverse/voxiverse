@@ -2,20 +2,12 @@ package server
 
 import "core:math"
 import "core:mem"
-import "core:slice"
 
+import "../base"
 import "../game"
 
-// Interest management: which chunks a client has, which to send next and
-// which to tell it to drop. The interest area is a cylinder of chunks around
-// the client's chunk (view_radius across, view_height above and below),
-// walked nearest first. Chunks are dropped only past a margin, so moving
-// back and forth across a chunk border does not resend anything.
-
-// UNLOAD_MARGIN: the client drops chunks 1 chunk past the interest area,
-// the server frees them 2 past it.
-@(private)
-UNLOAD_MARGIN :: 2
+// Interest management (the area is defined in game/interest.odin): which
+// chunks a client has, which to send next and which to tell it to drop.
 
 Client_State :: enum u8 {
 	Connecting,
@@ -33,11 +25,15 @@ Client :: struct {
 }
 
 @(private)
-client_init :: proc(c: ^Client, interest_chunks: int, arena: mem.Allocator) {
+client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.Allocator_Error {
 	c^ = {}
-	// Within the client margin of any center it has had: comfortably less
-	// than twice the interest area, so the map never grows.
-	c.has = make(map[game.Chunk_Pos]struct{}, 2 * interest_chunks, arena)
+	// A client holds at most its interest area plus the drop margin.
+	most := game.interest_count(
+		config.view_radius + game.CLIENT_DROP_MARGIN,
+		config.view_height + game.CLIENT_DROP_MARGIN,
+	)
+	c.has = base.map_make_fixed(map[game.Chunk_Pos]struct{}, most, arena) or_return
+	return nil
 }
 
 @(private)
@@ -55,12 +51,11 @@ set_position :: proc(c: ^Client, p: [3]f64) {
 @(private)
 client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i32) -> bool {
 	if c.state != .Playing {return false}
-	return in_area(pos - c.center, config.view_radius + margin, config.view_height + margin)
-}
-
-@(private)
-in_area :: proc(d: game.Chunk_Pos, radius, height: i32) -> bool {
-	return d.x * d.x + d.z * d.z <= radius * radius && abs(d.y) <= height
+	return game.in_interest(
+		pos - c.center,
+		config.view_radius + margin,
+		config.view_height + margin,
+	)
 }
 
 // stream requests and sends the nearest chunks the client lacks, within the
@@ -73,7 +68,7 @@ stream :: proc(s: ^Server) {
 	all_sent := true
 	for i in c.cursor ..< len(s.offsets) {
 		pos := c.center + s.offsets[i]
-		if !in_world(pos) || pos in c.has {
+		if !game.in_world(pos) || pos in c.has {
 			if all_sent {c.cursor = i + 1}
 			continue
 		}
@@ -99,7 +94,7 @@ unload_far :: proc(s: ^Server) {
 	c := &s.client
 	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	for pos in c.has {
-		if !client_wants(c, pos, s.config, 1) {append(&drop, pos)}
+		if !client_wants(c, pos, s.config, game.CLIENT_DROP_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
 		delete_key(&c.has, pos)
@@ -107,47 +102,9 @@ unload_far :: proc(s: ^Server) {
 	}
 	clear(&drop)
 	for pos in s.world.by_pos {
-		if !client_wants(c, pos, s.config, UNLOAD_MARGIN) {append(&drop, pos)}
+		if !client_wants(c, pos, s.config, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
 		if chunk := world_get(&s.world, pos); chunk.state == .Ready {world_unload(&s.world, pos)}
 	}
-}
-
-@(private)
-in_world :: proc(p: game.Chunk_Pos) -> bool {
-	return(
-		abs(p.x) < game.CHUNK_LIMIT &&
-		abs(p.y) < game.CHUNK_LIMIT &&
-		abs(p.z) < game.CHUNK_LIMIT \
-	)
-}
-
-// interest_offsets lists the chunk offsets of the interest area, nearest
-// first.
-@(private)
-interest_offsets :: proc(radius, height: i32, allocator: mem.Allocator) -> []game.Chunk_Pos {
-	out := make([dynamic]game.Chunk_Pos, 0, count_offsets(radius, height), allocator)
-	for y in -height ..= height {
-		for z in -radius ..= radius {
-			for x in -radius ..= radius {
-				if in_area({x, y, z}, radius, height) {append(&out, game.Chunk_Pos{x, y, z})}
-			}
-		}
-	}
-	slice.sort_by(out[:], proc(a, b: game.Chunk_Pos) -> bool {
-		return a.x * a.x + a.y * a.y + a.z * a.z < b.x * b.x + b.y * b.y + b.z * b.z
-	})
-	return out[:]
-}
-
-@(private)
-count_offsets :: proc(radius, height: i32) -> int {
-	n := 0
-	for z in -radius ..= radius {
-		for x in -radius ..= radius {
-			if x * x + z * z <= radius * radius {n += 1}
-		}
-	}
-	return n * int(2 * height + 1)
 }
