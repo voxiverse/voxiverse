@@ -171,6 +171,36 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 	return true
 }
 
+// world_set_block changes one block (an edit, predicted or confirmed) and
+// re-meshes every chunk whose mesh it touches: its own, and neighbours
+// whose border faces or ambient occlusion include it. False if its chunk
+// is not loaded.
+world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
+	c := world_get(w, game.chunk_of(p))
+	if c == nil {return false}
+	local := game.local_of(p)
+	if game.chunk_get(&c.blocks, local) == b {return true}
+	if game.chunk_set(&c.blocks, &w.arrays, local, b) != nil {
+		log.error("client out of chunk arrays for an edit")
+		return false
+	}
+	c.version = w.next_version
+	w.next_version += 1
+	for dz in i32(-1) ..= 1 {
+		for dy in i32(-1) ..= 1 {
+			for dx in i32(-1) ..= 1 {
+				n := world_get(w, game.chunk_of(p + {dx, dy, dz}))
+				if n == nil || n.dirty && n != c {continue}
+				n.dirty = true
+				queue_if_complete(w, n)
+			}
+		}
+	}
+	c.dirty = true
+	queue_if_complete(w, c)
+	return true
+}
+
 world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	h, ok := w.by_pos[pos]
 	if !ok {return}

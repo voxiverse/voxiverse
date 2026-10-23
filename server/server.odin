@@ -268,6 +268,12 @@ receive_messages :: proc(s: ^Server) {
 			}
 		case game.Ping:
 			send_message(s, game.Pong{v.id})
+		case game.Edit:
+			if s.client.state != .Playing {
+				disconnect(s, "edit before hello")
+				return
+			}
+			send_message(s, apply_edit(s, v))
 		}
 	}
 }
@@ -294,6 +300,37 @@ simulate_player :: proc(s: ^Server) {
 		},
 	)
 	c.teleported = false
+}
+
+// apply_edit checks an edit against the shared rules, from where the server
+// has the player, and applies it if it passes.
+@(private = "file")
+apply_edit :: proc(s: ^Server, e: game.Edit) -> game.Edit_Result {
+	current, loaded := world_block(&s.world, e.pos)
+	result := game.Edit_Result {
+		id    = e.id,
+		pos   = e.pos,
+		block = current,
+	}
+	if !loaded {return result}
+	player := s.client.player
+	if !game.in_reach(
+		game.player_eye(player),
+		e.pos,
+		f64(s.rules.reach) + game.EDIT_REACH_SLACK,
+	) {return result}
+	allowed := false
+	if e.block == .Air {
+		allowed = game.can_break(current)
+	} else {
+		allowed =
+			e.block != .Bedrock &&
+			game.block_solid(e.block) &&
+			game.can_place_at(current, e.pos, player)
+	}
+	if !allowed || !world_set_block(&s.world, e.pos, e.block) {return result}
+	result.accepted, result.block = true, e.block
+	return result
 }
 
 // disconnect rejects the client and closes the connection (a protocol

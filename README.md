@@ -62,6 +62,8 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 | <kbd>Space</kbd> | Jump; double-tap to fly or stop flying (flying: up) |
 | <kbd>Shift</kbd> | Sneak (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
+| Left / right click | Break / place a block (hold to repeat) |
+| <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose the block to place |
 | <kbd>Esc</kbd> | Pause menu (Resume, Leave World) |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |
 | <kbd>F4</kbd> | Tuning panel: every setting and debug switch, live |

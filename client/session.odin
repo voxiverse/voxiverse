@@ -10,6 +10,7 @@ import "core:time"
 import "../base"
 import "../game"
 import "../gpu"
+import "../platform"
 import "../render"
 import "../server"
 
@@ -53,6 +54,10 @@ Session :: struct {
 	last_jump:  time.Tick, // for double-tap detection
 	autopilot:  Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:        Maybe(game.Ray_Hit), // the block under the crosshair, within reach
+	edits:      [dynamic]game.Edit, // predicted, waiting for Edit_Result
+	next_edit:  u32,
+	edit_timer: f32, // seconds until a held button edits again
+	hotbar:     int, // index into HOTBAR
 	writer:     game.Writer,
 	scratch:    ^game.Block_Array, // decoding target for chunk messages
 	received:   [dynamic]game.Packet,
@@ -95,6 +100,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.scratch = new(game.Block_Array, arena)
 	game.writer_init(&s.writer, arena)
 	s.received = make([dynamic]game.Packet, 0, 256)
+	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 
 	cores := os.get_processor_core_count()
 	if !server.start(
@@ -178,6 +184,7 @@ session_update :: proc(
 		}
 		send_message(s, game.prediction_tick(&s.prediction, in_, &s.rules, query))
 	}
+	if look {edit_controls(s, input, dt)}
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	s.camera.position = eyes + {0, game.PLAYER_EYE, 0}
@@ -269,6 +276,18 @@ receive :: proc(s: ^Session) {
 			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
 		case game.Rules_Changed:
 			s.rules = v.rules
+		case game.Edit_Result:
+			// The server's word, accepted or not: set it (undoing a rejected
+			// prediction) and stop waiting.
+			world_set_block(&s.world, v.pos, v.block)
+			for e, i in s.edits {
+				if e.id == v.id {
+					ordered_remove(&s.edits, i)
+					break
+				}
+			}
+		case game.Block_Changed:
+			world_set_block(&s.world, v.pos, v.block)
 		}
 	}
 }
@@ -363,6 +382,61 @@ fail :: proc(s: ^Session, reason: string) {
 	s.state = .Failed
 	s.failure = strings.clone(reason, virtual.arena_allocator(&s.arena))
 	game.close(s.endpoint)
+}
+
+// The blocks a player can place, in hotbar order.
+@(rodata)
+HOTBAR := [?]game.Block{.Stone, .Dirt, .Grass, .Sand, .Gravel}
+
+MAX_PENDING_EDITS :: 64
+EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
+
+// edit_controls: number keys and the wheel pick the hotbar block; left
+// click breaks the aimed block, right click places against its face. Edits
+// are predicted at once (if the shared rules allow them) and sent.
+@(private = "file")
+edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
+	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
+	for k, i in keys[:len(HOTBAR)] {
+		if k in input.pressed {s.hotbar = i}
+	}
+	if input.wheel.y != 0 {
+		s.hotbar = (s.hotbar - int(math.sign(input.wheel.y)) + len(HOTBAR)) % len(HOTBAR)
+	}
+
+	s.edit_timer -= dt
+	breaking := .Left in input.mouse_down
+	placing := .Right in input.mouse_down
+	pressed := input.mouse_pressed & {.Left, .Right} != {}
+	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
+	s.edit_timer = EDIT_REPEAT_SECONDS
+	session_edit(s, placing && !breaking, HOTBAR[s.hotbar])
+}
+
+// session_edit breaks the aimed block, or places block against its face:
+// predicted now if the shared rules allow it, then sent. False if not.
+session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
+	hit, aimed := s.aim.?
+	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
+	edit := game.Edit {
+		id = s.next_edit + 1,
+	}
+	if !place {
+		b, _ := world_block(&s.world, hit.block)
+		if !game.can_break(b) {return false}
+		edit.pos, edit.block = hit.block, .Air
+	} else {
+		if hit.normal == {} {return false}
+		edit.pos = hit.block + hit.normal
+		current, loaded := world_block(&s.world, edit.pos)
+		if !loaded || !game.can_place_at(current, edit.pos, s.prediction.state) {return false}
+		edit.block = block
+	}
+	if !world_set_block(&s.world, edit.pos, edit.block) {return false}
+	s.next_edit = edit.id
+	append(&s.edits, edit)
+	send_message(s, edit)
+	return true
 }
 
 @(private)

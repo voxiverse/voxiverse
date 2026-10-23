@@ -96,6 +96,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		c := ui.rect_center(ctx.screen, 0, 0)
 		ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
 		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
+		hotbar(ctx, s)
 		return
 	}
 	prev := ui.begin_layer(ctx, .Modal)
@@ -132,6 +133,24 @@ net_line :: proc(s: ^Session) -> string {
 		busiest(n.rates[.Client], .Client),
 		", tracing" if game.pipe_tracing(&s.pipe) else "",
 	)
+}
+
+// hotbar: the placeable blocks along the bottom, the selected one framed.
+@(private = "file")
+hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
+	t := &ctx.theme
+	SLOT :: 96
+	r := ctx.screen
+	row := ui.cut_bottom(&r, t.row_height + 24)
+	row = ui.rect_center(row, f32(len(HOTBAR)) * (SLOT + t.spacing), t.row_height)
+	for b, i in HOTBAR {
+		slot := ui.cut_left(&row, SLOT)
+		ui.cut_left(&row, t.spacing)
+		ui.fill_rect(ctx, slot, {0, 0, 0, 150})
+		if i == s.hotbar {ui.stroke_rect(ctx, slot, 2, t.text)}
+		label := fmt.tprintf("%d %s", i + 1, game.BLOCK_INFO[b].name)
+		ui.label(ctx, label, slot, .Center, t.text if i == s.hotbar else t.text_muted)
+	}
 }
 
 // debug_overlay (F3): where we are and what the world costs.

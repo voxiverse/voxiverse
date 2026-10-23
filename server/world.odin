@@ -22,9 +22,10 @@ Chunk_State :: enum u8 {
 }
 
 Chunk :: struct {
-	pos:    game.Chunk_Pos,
-	state:  Chunk_State,
-	blocks: game.Chunk_Blocks,
+	pos:      game.Chunk_Pos,
+	state:    Chunk_State,
+	blocks:   game.Chunk_Blocks,
+	modified: bool, // edited since generated (M5 saves these instead of forgetting them)
 }
 
 World :: struct {
@@ -95,6 +96,16 @@ world_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 	c := world_get((^World)(data), game.chunk_of(p))
 	if c == nil || c.state != .Ready {return .Air, false}
 	return game.chunk_get(&c.blocks, game.local_of(p)), true
+}
+
+// world_set_block changes one block of a ready chunk; false if the chunk is
+// not ready (or, impossibly, out of arrays).
+world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
+	c := world_get(w, game.chunk_of(p))
+	if c == nil || c.state != .Ready {return false}
+	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
+	c.modified = true
+	return true
 }
 
 world_get :: proc(w: ^World, pos: game.Chunk_Pos) -> ^Chunk {

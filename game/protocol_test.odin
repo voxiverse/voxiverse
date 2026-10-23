@@ -38,6 +38,15 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	tp: Client_Message
 	tp, ok = decode_client(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
 	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
+	edit: Client_Message
+	edit, ok = decode_client(encode_c(Edit{5, {-3, WORLD_MIN_Y, 7}, .Sand})[:])
+	testing.expect(t, ok && edit.(Edit) == Edit{5, {-3, WORLD_MIN_Y, 7}, .Sand})
+	result: Server_Message
+	result, ok = decode_server(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air})[:], scratch)
+	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air})
+	changed_block: Server_Message
+	changed_block, ok = decode_server(encode_s(Block_Changed{{1, 2, 3}, .Gravel})[:], scratch)
+	testing.expect(t, ok && changed_block.(Block_Changed) == Block_Changed{{1, 2, 3}, .Gravel})
 	rule: Client_Message
 	rule, ok = decode_client(encode_c(Set_Rule{"rules.gravity", "20"})[:])
 	testing.expect(
@@ -120,6 +129,8 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, {}, 8, 4, RULES_DEFAULTS}),
 		encode_s(Player_Update{1, {}, false, 0, 0}),
 		encode_s(Rules_Changed{RULES_DEFAULTS}),
+		encode_s(Edit_Result{1, false, {}, .Stone}),
+		encode_s(Block_Changed{{}, .Dirt}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
@@ -137,7 +148,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, {}, .Stone})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)
@@ -371,6 +382,26 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 		write_f32(w, math.nan_f32())
 		write_f32(w, 0)
 		write_u8(w, 0)
+	})
+	bad_client(
+		t,
+		"edit above the world",
+		proc(w: ^Writer) {
+			write_u8(w, 6) // Edit
+			write_u32(w, 1)
+			write_i32(w, 0)
+			write_i32(w, WORLD_MAX_Y)
+			write_i32(w, 0)
+			write_u16(w, u16(Block.Stone))
+		},
+	)
+	bad_client(t, "edit with an unknown block", proc(w: ^Writer) {
+		write_u8(w, 6)
+		write_u32(w, 1)
+		write_i32(w, 0)
+		write_i32(w, 0)
+		write_i32(w, 0)
+		write_u16(w, 999)
 	})
 	bad_client(
 		t,

@@ -410,6 +410,48 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 	)
+	console_register(
+		c,
+		{"break", "break the aimed block (left click)", proc(app: ^App, args: []string) {
+				if app.session == nil || !session_edit(app.session, false, .Air) {
+					console_print(&app.console, "break: nothing breakable aimed at", .Warning)
+				}
+			}},
+	)
+	console_register(
+		c,
+		{
+			"place",
+			"place [block]: place against the aimed face (right click)",
+			proc(app: ^App, args: []string) {
+				if app.session == nil {return}
+				block := HOTBAR[app.session.hotbar]
+				if len(args) > 0 {
+					found := false
+					for b in game.Block {
+						if game.BLOCK_INFO[b].name == args[0] && b != .Air && b != .Bedrock {
+							block, found = b, true
+						}
+					}
+					if !found {
+						console_print(
+							&app.console,
+							fmt.tprintf("place: no placeable block '%s'", args[0]),
+							.Warning,
+						)
+						return
+					}
+				}
+				if !session_edit(app.session, true, block) {
+					console_print(
+						&app.console,
+						"place: nowhere to place (aim at a face in reach, not into yourself)",
+						.Warning,
+					)
+				}
+			},
+		},
+	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

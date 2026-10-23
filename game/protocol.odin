@@ -57,12 +57,21 @@ Set_Rule :: struct {
 	value: string,
 }
 
+// Edit asks to put block at pos (Air: break). The client has already
+// applied it (predicted); Edit_Result says what became of it.
+Edit :: struct {
+	id:    u32,
+	pos:   Block_Pos,
+	block: Block,
+}
+
 Client_Message :: union {
 	Hello,
 	Input,
 	Ping,
 	Teleport,
 	Set_Rule,
+	Edit,
 }
 
 // Server -> client.
@@ -111,6 +120,21 @@ Rules_Changed :: struct {
 	rules: Rules,
 }
 
+// Edit_Result answers an Edit: accepted or not, and the block now at pos
+// either way (the client sets it, undoing a rejected prediction).
+Edit_Result :: struct {
+	id:       u32,
+	accepted: bool,
+	pos:      Block_Pos,
+	block:    Block,
+}
+
+// Block_Changed: a block changed for some other reason (another player).
+Block_Changed :: struct {
+	pos:   Block_Pos,
+	block: Block,
+}
+
 Server_Message :: union {
 	Welcome,
 	Reject,
@@ -119,6 +143,8 @@ Server_Message :: union {
 	Pong,
 	Player_Update,
 	Rules_Changed,
+	Edit_Result,
+	Block_Changed,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -133,6 +159,7 @@ Client_Kind :: enum u8 {
 	Ping,
 	Teleport,
 	Set_Rule,
+	Edit,
 }
 
 @(private = "file")
@@ -144,6 +171,8 @@ Server_Kind :: enum u8 {
 	Pong,
 	Player_Update,
 	Rules_Changed,
+	Edit_Result,
+	Block_Changed,
 }
 
 // message_kind_name names a message kind (its first byte) sent by sender,
@@ -161,6 +190,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "teleport"
 		case u8(Client_Kind.Set_Rule):
 			return "set_rule"
+		case u8(Client_Kind.Edit):
+			return "edit"
 		}
 	} else {
 		switch kind {
@@ -178,6 +209,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "player"
 		case u8(Server_Kind.Rules_Changed):
 			return "rules"
+		case u8(Server_Kind.Edit_Result):
+			return "edit_result"
+		case u8(Server_Kind.Block_Changed):
+			return "block"
 		}
 	}
 	return ""
@@ -206,6 +241,11 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Set_Rule))
 		write_string(w, v.name)
 		write_string(w, v.value)
+	case Edit:
+		write_u8(w, u8(Client_Kind.Edit))
+		write_u32(w, v.id)
+		write_block_pos(w, v.pos)
+		write_u16(w, u16(v.block))
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -246,6 +286,16 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(Server_Kind.Rules_Changed))
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Edit_Result:
+		write_u8(w, u8(Server_Kind.Edit_Result))
+		write_u32(w, v.id)
+		write_u8(w, 1 if v.accepted else 0)
+		write_block_pos(w, v.pos)
+		write_u16(w, u16(v.block))
+	case Block_Changed:
+		write_u8(w, u8(Server_Kind.Block_Changed))
+		write_block_pos(w, v.pos)
+		write_u16(w, u16(v.block))
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -282,6 +332,12 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = Set_Rule {
 			name  = read_string(&r, MAX_RULE_TEXT),
 			value = read_string(&r, MAX_RULE_TEXT),
+		}
+	case u8(Client_Kind.Edit):
+		m = Edit {
+			id    = read_u32(&r),
+			pos   = read_block_pos(&r),
+			block = read_block(&r),
 		}
 	case:
 		return
@@ -344,6 +400,21 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		c: Rules_Changed
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Edit_Result):
+		e := Edit_Result {
+			id = read_u32(&r),
+		}
+		flag := read_u8(&r)
+		if flag > 1 {reader_fail(&r)}
+		e.accepted = flag == 1
+		e.pos = read_block_pos(&r)
+		e.block = read_block(&r)
+		m = e
+	case u8(Server_Kind.Block_Changed):
+		m = Block_Changed {
+			pos   = read_block_pos(&r),
+			block = read_block(&r),
+		}
 	case:
 		return
 	}
@@ -463,6 +534,29 @@ read_position :: proc(r: ^Reader) -> (p: [3]f64) {
 @(private = "file")
 write_chunk_pos :: proc(w: ^Writer, c: Chunk_Pos) {
 	for v in c {write_i32(w, v)}
+}
+
+@(private = "file")
+write_block_pos :: proc(w: ^Writer, p: Block_Pos) {
+	for v in p {write_i32(w, v)}
+}
+
+// read_block_pos accepts blocks inside the world only.
+@(private = "file")
+read_block_pos :: proc(r: ^Reader) -> (p: Block_Pos) {
+	for &v in p {v = read_i32(r)}
+	if !in_world(chunk_of(p)) {reader_fail(r)}
+	return
+}
+
+@(private = "file")
+read_block :: proc(r: ^Reader) -> Block {
+	id := read_u16(r)
+	if !block_valid(id) {
+		reader_fail(r)
+		return .Air
+	}
+	return Block(id)
 }
 
 @(private = "file")

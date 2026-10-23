@@ -47,3 +47,53 @@ test_world_edges_mesh :: proc(t: ^testing.T) {
 		world_destroy(&w)
 	}
 }
+
+// An edit re-meshes its chunk and the neighbours whose border it is on.
+@(test)
+test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	w: World
+	testing.expect(t, world_init(&w, 128, 1, virtual.arena_allocator(&arena)) == nil)
+	defer world_destroy(&w)
+	for z in i32(-2) ..= 2 {
+		for y in i32(-2) ..= 2 {
+			for x in i32(-2) ..= 2 {
+				testing.expect(
+					t,
+					world_set_chunk(
+						&w,
+						{pos = {x, y, z}, uniform = .Stone, is_uniform = true},
+						scratch,
+					),
+				)
+			}
+		}
+	}
+	// Pretend everything is meshed.
+	clear(&w.to_mesh)
+	for x in i32(-2) ..= 2 {
+		for y in i32(-2) ..= 2 {
+			for z in i32(-2) ..= 2 {
+				c := world_get(&w, {x, y, z})
+				c.dirty, c.queued = false, false
+			}
+		}
+	}
+	// A block in the corner of chunk (0,0,0) at (15, 0, 15): chunks +x, -y,
+	// +z (and their combinations) see it in their borders; others do not.
+	testing.expect(t, world_set_block(&w, {15, 0, 15}, .Air))
+	testing.expect(t, world_get(&w, {0, 0, 0}).dirty)
+	testing.expect(
+		t,
+		world_get(&w, {1, 0, 0}).dirty &&
+		world_get(&w, {0, -1, 0}).dirty &&
+		world_get(&w, {1, -1, 1}).dirty,
+	)
+	testing.expect(t, !world_get(&w, {-1, 0, 0}).dirty && !world_get(&w, {0, 1, 0}).dirty)
+	b, _ := world_block(&w, {15, 0, 15})
+	testing.expect_value(t, b, game.Block.Air)
+}

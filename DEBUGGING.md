@@ -104,6 +104,7 @@ neighbours' edges.
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
 | `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
+| `break`, `place [block]` | Break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
 
 `--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU

@@ -23,6 +23,7 @@ Fake_Client :: struct {
 	unloads:  int,
 	player:   game.Player_Update, // the latest
 	rules:    game.Rules,
+	results:  [dynamic]game.Edit_Result,
 }
 
 @(private = "file")
@@ -54,6 +55,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.player = v
 		case game.Rules_Changed:
 			c.rules = v.rules
+		case game.Edit_Result:
+			append(&c.results, v)
+		case game.Block_Changed:
 		case game.Pong:
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
@@ -263,6 +267,32 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, c.player.state.on_ground, "never landed")
 	start_x := c.player.state.position.x
+	defer delete(c.results)
+
+	// Edits, checked from where the server has the player.
+	feet := c.player.state.position
+	below := game.Block_Pos {
+		i32(math.floor(feet.x)),
+		i32(math.floor(feet.y)) - 1,
+		i32(math.floor(feet.z)),
+	}
+	head := below + {0, 2, 0}
+	edits := []game.Edit {
+		{1, below, .Air}, // break the block underfoot: fine
+		{2, head, .Stone}, // place inside the player: no
+		{3, below + {0, 0, 30}, .Air}, // out of reach: no
+		{4, below + {0, -200, 0}, .Stone}, // not loaded: no
+	}
+	for e in edits {fake_send(&c, e)}
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.results) == 4}),
+	)
+	if len(c.results) == 4 {
+		testing.expect(t, c.results[0].accepted && c.results[0].block == .Air)
+		for r in c.results[1:] {testing.expectf(t, !r.accepted, "edit %d accepted", r.id)}
+		testing.expect(t, c.results[1].block == .Air) // the actual block, to undo a prediction
+	}
 
 	// 90 inputs walking +x, all at once: no faster than one per tick.
 	sent_at := time.tick_now()
