@@ -58,6 +58,9 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture) {break}
 			frames += 1
+			if cap := frame_cap(app); cap > 0 {
+				if spent := time.tick_since(last); spent < cap {time.sleep(cap - spent)}
+			}
 			now := time.tick_now()
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)

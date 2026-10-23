@@ -9,6 +9,7 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
+import "core:time"
 
 import "../audio"
 import "../base"
@@ -32,6 +33,7 @@ Screen :: enum u8 {
 	Title,
 	Options,
 	Worlds,
+	Multiplayer,
 	Game, // a session exists
 }
 
@@ -51,12 +53,15 @@ App :: struct {
 	scenes:           render.Scene_Buffers,
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
+	entity_pass:      render.Entity_Pass,
+	entity_draw:      render.Entity_Draw, // this frame's boxes (other players)
 	mixer:            audio.Mixer, // fed to the sound card by audio_device
 	audio_device:     audio.Device,
 	sounds:           Sound_Bank,
 	volume:           f32, // as last told to the mixer
 	shader_watch:     Shader_Watch,
 	worlds:           Worlds_Screen,
+	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	paused:           bool, // the pause menu is open (in a world)
 	debug:            Debug_Switches,
@@ -127,6 +132,11 @@ app_init :: proc(app: ^App) -> bool {
 	if !sky_vert_ok || !sky_frag_ok {return false}
 	if !render.sky_init(&app.sky_pass, g, sky_vert, sky_frag) {return false}
 	if !render.scene_init(&app.scenes, g) {return false}
+	entity_vert, entity_vert_ok := read_shader("entity.vert.spv")
+	entity_frag, entity_frag_ok := read_shader("entity.frag.spv")
+	if !entity_vert_ok || !entity_frag_ok {return false}
+	if !render.entity_init(&app.entity_pass, g, entity_vert, entity_frag) {return false}
+	render.entity_draw_init(&app.entity_draw)
 	audio_init(app)
 	return world_pass_init(app)
 }
@@ -187,6 +197,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		gpu.renderdoc_log_captures(&app.renderdoc)
 		render.world_destroy(&app.world_pass, &app.g)
 		render.sky_destroy(&app.sky_pass, &app.g)
+		render.entity_destroy(&app.entity_pass, &app.g)
 		render.scene_destroy(&app.scenes, &app.g)
 		render.debug_destroy(&app.debug_pass, &app.g)
 		render.ui_destroy(&app.ui_pass, &app.g)
@@ -204,8 +215,10 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.settings_dirty {settings_save(app)}
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
+	render.entity_draw_destroy(&app.entity_draw)
 	shader_watch_destroy(&app.shader_watch)
 	worlds_destroy(&app.worlds)
+	multiplayer_destroy(&app.multiplayer)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)
@@ -306,11 +319,14 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 				render.scene_make(camera, sky, fog, s.cloud_drift),
 			)
 			world_debug_lines(app)
+			avatars_draw(s, &app.entity_draw)
 		}
 		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
+		render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
 		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
 			render.world_draw(&app.world_pass, g, frame, camera, scene)
+			render.entity_draw(&app.entity_pass, g, frame, scene)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
 		}
@@ -319,6 +335,18 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		gpu.end_frame(g, frame)
 	}
 	return true
+}
+
+// MENU_FPS: frames per second at most where nothing in a world moves (the
+// title, menus, the pause menu): drawing them thousands of times a second
+// with vsync off only heats the machine (and can make it whine).
+MENU_FPS :: 120
+
+// frame_cap: the shortest a frame may take now (0: no limit).
+frame_cap :: proc(app: ^App) -> time.Duration {
+	in_world := app.screen == .Game && !app.paused
+	if in_world || app.fly_test.phase != .Off {return 0}
+	return time.Second / MENU_FPS
 }
 
 // enter_world starts a session in the world saved at save_dir (created if

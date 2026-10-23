@@ -168,7 +168,7 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"screen",
-			"screen <title|options|worlds|quit>: switch screens (quit: the quit dialog)",
+			"screen <title|options|worlds|multiplayer|quit>: switch screens (quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
 				switch args[0] if len(args) > 0 else "" {
 				case "title":
@@ -178,10 +178,16 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "worlds":
 					worlds_refresh(&app.worlds)
 					app.screen = .Worlds
+				case "multiplayer":
+					multiplayer_open(app)
 				case "quit":
 					app.quit_dialog = true
 				case:
-					console_print(&app.console, "screen: title, options, worlds or quit", .Warning)
+					console_print(
+						&app.console,
+						"screen: title, options, worlds, multiplayer or quit",
+						.Warning,
+					)
 				}
 			},
 		},

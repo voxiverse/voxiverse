@@ -2,6 +2,7 @@ package client
 
 import "core:fmt"
 import "core:math"
+import "core:net"
 import "core:strings"
 import "core:sync"
 
@@ -35,6 +36,9 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 			app.quit_dialog = false
 		case app.screen == .Options, app.screen == .Worlds:
 			app.screen = .Title
+		case app.screen == .Multiplayer:
+			multiplayer_close(&app.multiplayer)
+			app.screen = .Title
 		case app.screen == .Game:
 			app.paused = !app.paused
 		case:
@@ -56,6 +60,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		options_screen(app, ctx)
 	case .Worlds:
 		worlds_screen(app, ctx)
+	case .Multiplayer:
+		multiplayer_screen(app, ctx)
 	case .Game:
 		game_screen(app, ctx)
 	}
@@ -79,7 +85,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		worlds_refresh(&app.worlds)
 		app.screen = .Worlds
 	}
-	ui.button(ctx, "Multiplayer", ui.next(ctx), disabled = true) // arrives in M7
+	if ui.button(ctx, "Multiplayer", ui.next(ctx)) {multiplayer_open(app)}
 	if ui.button(ctx, "Options", ui.next(ctx)) {app.screen = .Options}
 	if ui.button(ctx, "Quit", ui.next(ctx)) {app.quit_dialog = true}
 	if app.message != "" {
@@ -101,6 +107,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		)
 		return
 	}
+	name_tags(app, ctx)
 	if !app.paused {
 		// Crosshair.
 		c := ui.rect_center(ctx.screen, 0, 0)
@@ -112,11 +119,16 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	column := ui.rect_center(ctx.screen, 320, 2 * t.row_height + t.spacing + 80)
+	column := ui.rect_center(ctx.screen, 320, 3 * t.row_height + 2 * t.spacing + 80)
 	ui.title(ctx, "Paused", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 	if ui.button(ctx, "Resume", ui.next(ctx)) {app.paused = false}
+	if session_hosting(s) {
+		port := server.stats(&s.server).port
+		label := fmt.tprintf("Open to LAN: port %d", port) if port != 0 else "Open to LAN"
+		if ui.button(ctx, label, ui.next(ctx), disabled = port != 0) {session_open_lan(app)}
+	}
 	if ui.button(
 		ctx,
 		"Save and Leave" if app.session.config.save_dir != "" else "Leave World",
@@ -223,18 +235,37 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 				CHUNK_VERTEX_CAPACITY >> 20,
 			),
 		)
-		st := server.stats(&s.server)
-		append(
-			&lines,
-			fmt.tprintf(
-				"server: tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB",
-				st.tick_ms,
-				st.chunks_loaded,
-				st.chunks_generating,
-				f64(st.arrays_bytes) / (1 << 20),
-				f64(st.arena_used) / (1 << 20),
-			),
-		)
+		if s.remote {
+			c := &s.link.conn
+			append(
+				&lines,
+				fmt.tprintf(
+					"server: %s, %d other players, link rtt %.0f ms, packets %d out / %d in, %d resent, %d duplicates",
+					net.endpoint_to_string(s.link.server),
+					len(s.others),
+					c.rtt_ms,
+					c.stats.packets_sent,
+					c.stats.packets_received,
+					c.stats.resent,
+					c.stats.duplicates,
+				),
+			)
+		} else {
+			st := server.stats(&s.server)
+			append(
+				&lines,
+				fmt.tprintf(
+					"server: tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB, %d players%s",
+					st.tick_ms,
+					st.chunks_loaded,
+					st.chunks_generating,
+					f64(st.arrays_bytes) / (1 << 20),
+					f64(st.arena_used) / (1 << 20),
+					st.clients,
+					fmt.tprintf(", LAN port %d", st.port) if st.port != 0 else "",
+				),
+			)
+		}
 		append(&lines, net_line(s))
 		pr := &s.prediction
 		append(

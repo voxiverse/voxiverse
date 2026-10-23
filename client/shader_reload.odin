@@ -67,7 +67,7 @@ shader_watch_destroy :: proc(w: ^Shader_Watch) {
 
 // INCLUDE_USERS: the passes whose shaders include scene.glsl.
 @(private = "file", rodata)
-INCLUDE_USERS := [?]string{"world", "sky"}
+INCLUDE_USERS := [?]string{"world", "sky", "entity"}
 
 // shader_watch_update checks for changes every half second.
 shader_watch_update :: proc(app: ^App, dt: f32) {
@@ -104,7 +104,7 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 			append(&passes, filepath.stem(name))
 		}
 	}
-	reloaded: [4]bool
+	reloaded: [5]bool
 	for pass in passes {
 		vert, vert_ok := read_shader(
 			strings.concatenate({pass, ".vert.spv"}, context.temp_allocator),
@@ -127,6 +127,9 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 		case "sky":
 			if reloaded[3] {continue}
 			ok, reloaded[3] = render.sky_reload(&app.sky_pass, &app.g, vert, frag), true
+		case "entity":
+			if reloaded[4] {continue}
+			ok, reloaded[4] = render.entity_reload(&app.entity_pass, &app.g, vert, frag), true
 		case:
 			continue
 		}
