@@ -30,11 +30,12 @@ PACKAGES :: []string {
 	"gpu",
 	"render",
 	"client",
+	"client/mesh",
 	"tools/build",
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
-TEST_PACKAGES :: []string{"base", "font", "ui", "game", "server"}
+TEST_PACKAGES :: []string{"base", "font", "ui", "game", "server", "client/mesh"}
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"base",
