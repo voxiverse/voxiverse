@@ -39,6 +39,7 @@ World :: struct {
 	jobs:          base.Jobs,
 	done:          base.Queue(^Mesh_Task), // from workers
 	free_tasks:    [dynamic]^Mesh_Task,
+	urgent_tasks:  [dynamic]^Mesh_Task, // free tasks reserved for meshing edits on the spot
 	tasks:         []Mesh_Task,
 	to_mesh:       [dynamic]Chunk_Handle, // complete and dirty, waiting for a task
 	uploads:       [dynamic]^Mesh_Task, // meshed, waiting for staging room
@@ -69,6 +70,7 @@ Mesh_Task :: struct {
 	snapshot: mesh.Snapshot,
 	light:    mesh.Light_Snapshot,
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
+	urgent:   bool, // one of the reserve for edits (mesh_now)
 }
 
 // Client_Column: a column's heights (from the server) and how many of its
@@ -77,6 +79,11 @@ Client_Column :: struct {
 	heights: [game.CHUNK_SIZE * game.CHUNK_SIZE]i32,
 	chunks:  int,
 }
+
+// URGENT_TASKS: tasks kept for meshing edited chunks on the spot (an edit
+// changes the geometry of at most 8 chunks: those within a block of it).
+@(private)
+URGENT_TASKS :: 8
 
 // MESH_TASKS_PER_WORKER: snapshots in flight per mesh worker.
 @(private)
@@ -101,15 +108,17 @@ world_init :: proc(
 	// Columns: at most one per loaded chunk (in practice far fewer).
 	w.columns = base.map_make_fixed(map[[2]i32]Client_Column, columns, arena) or_return
 	count := workers * MESH_TASKS_PER_WORKER
-	w.tasks = make([]Mesh_Task, count, arena) or_return
+	w.tasks = make([]Mesh_Task, count + URGENT_TASKS, arena) or_return
 	w.free_tasks = make([dynamic]^Mesh_Task, 0, count, arena) or_return
-	w.uploads = make([dynamic]^Mesh_Task, 0, count, arena) or_return
-	for &t in w.tasks {
+	w.urgent_tasks = make([dynamic]^Mesh_Task, 0, URGENT_TASKS, arena) or_return
+	w.uploads = make([dynamic]^Mesh_Task, 0, count + URGENT_TASKS, arena) or_return
+	for &t, i in w.tasks {
 		t.world = w
 		t.vertices = make([dynamic]mesh.Vertex, heap)
 		t.scratch.queue = make([dynamic]u32, heap)
-		for &c, i in t.chunks {t.light_in.chunks[i] = &c}
-		append(&w.free_tasks, &t)
+		for &c, j in t.chunks {t.light_in.chunks[j] = &c}
+		t.urgent = i >= count
+		task_free(w, &t)
 	}
 	base.queue_init(&w.done, heap)
 	base.jobs_init(&w.jobs, "mesh", workers, heap)
@@ -217,7 +226,37 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 	// Light reaches 15 blocks: everything that close may look different.
 	remesh_box(w, p - game.LIGHT_MAX, p + game.LIGHT_MAX)
 	predict_column_top(w, p, b)
+	// Geometry changes only within a block of it: mesh those now, so faces
+	// the edit uncovers appear in the same frame (no seeing through the
+	// world while a worker gets round to it). The rest is only light.
+	a, z := game.chunk_of(p - 1), game.chunk_of(p + 1)
+	for cy in a.y ..= z.y {
+		for cz in a.z ..= z.z {
+			for cx in a.x ..= z.x {mesh_now(w, {cx, cy, cz})}
+		}
+	}
 	return true
+}
+
+// mesh_now meshes a chunk on this thread with a reserved task; its result
+// is uploaded by the next world_apply like any other. Without a free
+// reserved task it stays queued for the workers.
+@(private = "file")
+mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) {
+	h, ok := w.by_pos[pos]
+	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return}
+	c := base.pool_get(&w.chunks, h)
+	task := pop(&w.urgent_tasks)
+	task.handle, task.version, task.pos = h, c.version, pos
+	task_fill(w, task, pos)
+	mesh_task_run(task)
+	append(&w.uploads, task)
+}
+
+// task_free returns a task to its free list.
+@(private = "file")
+task_free :: proc(w: ^World, task: ^Mesh_Task) {
+	append(&w.urgent_tasks if task.urgent else &w.free_tasks, task)
 }
 
 // world_set_column stores a column's heights from the server, re-meshing
@@ -340,6 +379,7 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 		c := base.pool_get(&w.chunks, h)
 		if c == nil {continue} 	// unloaded meanwhile
 		c.queued = false
+		if !c.dirty {continue} 	// meshed meanwhile (an edit, on the spot)
 		if !neighbours_present(w, c.pos) {continue} 	// a neighbour left; requeued when it returns
 		if trivially_empty(w, c) {
 			if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
@@ -354,7 +394,7 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 		base.jobs_submit(&w.jobs, mesh_job, task)
 	}
 	remove_range(&w.to_mesh, 0, started)
-	w.stats.mesh_jobs_busy = len(w.tasks) - len(w.free_tasks)
+	w.stats.mesh_jobs_busy = len(w.tasks) - URGENT_TASKS - len(w.free_tasks)
 }
 
 // world_apply uploads finished meshes and removes old ones; call between
@@ -371,7 +411,7 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 		if c == nil || c.version != task.version {
 			// Unloaded, or changed while being meshed: mesh it again.
 			w.stats.stale_meshes += 1
-			append(&w.free_tasks, task)
+			task_free(w, task)
 			if c != nil {
 				c.queued = false
 				queue_if_complete(w, c)
@@ -382,7 +422,7 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			if c.mesh != 0 {render.world_remove_mesh(pass, g, c.mesh)}
 			c.mesh, c.dirty, c.queued = 0, false, false
 			w.stats.meshed += 1
-			append(&w.free_tasks, task)
+			task_free(w, task)
 			continue
 		}
 		bytes := slice.to_bytes(task.vertices[:])
@@ -399,7 +439,7 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 		}
 		c.dirty, c.queued = false, false
 		w.stats.meshed += 1
-		append(&w.free_tasks, task)
+		task_free(w, task)
 	}
 	resize(&w.uploads, kept)
 }
@@ -495,13 +535,17 @@ task_fill :: proc(w: ^World, task: ^Mesh_Task, pos: game.Chunk_Pos) {
 @(private = "file")
 mesh_job :: proc(data: rawptr) {
 	task := (^Mesh_Task)(data)
-	if !base.jobs_stopping(&task.world.jobs) {
-		base.profile_scope("mesh chunk")
-		game.light_chunk(&task.light_in, &task.scratch, &task.light)
-		n: mesh.Neighbourhood
-		for &c, i in task.chunks {n[i] = &c}
-		mesh.snapshot_fill(&task.snapshot, &n)
-		mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
-	}
+	if !base.jobs_stopping(&task.world.jobs) {mesh_task_run(task)}
 	base.queue_push(&task.world.done, task)
+}
+
+// mesh_task_run lights and meshes a filled task (any thread).
+@(private = "file")
+mesh_task_run :: proc(task: ^Mesh_Task) {
+	base.profile_scope("mesh chunk")
+	game.light_chunk(&task.light_in, &task.scratch, &task.light)
+	n: mesh.Neighbourhood
+	for &c, i in task.chunks {n[i] = &c}
+	mesh.snapshot_fill(&task.snapshot, &n)
+	mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
 }

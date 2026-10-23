@@ -47,32 +47,52 @@ light_scratch_destroy :: proc(s: ^Light_Scratch) {
 // out, indexed like the mesher's snapshot (-1..16 on each axis).
 light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOLUME]u8) {
 	region_origin := input.origin - CHUNK_SIZE
-	// Blocks, and seeds: lamps, and open sky.
 	clear(&s.queue)
-	for i in 0 ..< LIGHT_REGION_VOLUME {
-		p := region_pos(i)
-		c := input.chunks[(p.x / CHUNK_SIZE) + (p.y / CHUNK_SIZE) * 3 + (p.z / CHUNK_SIZE) * 9]
-		b := chunk_get(c, p % CHUNK_SIZE)
-		s.solid[i] = block_solid(b)
-		light: u8 = block_light(b)
-		ground := input.heights[p.x + p.z * LIGHT_REGION]
-		if !s.solid[i] &&
-		   (ground == NO_GROUND || region_origin.y + p.y > ground) {light |= LIGHT_MAX << 4}
-		s.light[i] = light
+	// Blocks, chunk by chunk (uniform chunks are one fill), and lamps.
+	for ci in 0 ..< 27 {
+		c := input.chunks[ci]
+		base := [3]i32{i32(ci % 3), i32(ci / 3 % 3), i32(ci / 9)} * CHUNK_SIZE
+		if c.array == nil {
+			solid, light := block_solid(c.uniform), block_light(c.uniform)
+			for y in i32(0) ..< CHUNK_SIZE {
+				for z in i32(0) ..< CHUNK_SIZE {
+					row := region_index(base + {0, y, z})
+					for x in 0 ..< CHUNK_SIZE {
+						s.solid[row + x] = solid
+						s.light[row + x] = light
+						if light > 0 {append(&s.queue, u32(row + x))}
+					}
+				}
+			}
+			continue
+		}
+		for j in 0 ..< CHUNK_VOLUME {
+			i := region_index(base + local_from_index(j))
+			b := c.array[j]
+			s.solid[i] = block_solid(b)
+			s.light[i] = block_light(b)
+			if s.light[i] > 0 {append(&s.queue, u32(i))}
+		}
 	}
-	// Only cells that can light a darker neighbour start the spread.
-	for i in 0 ..< LIGHT_REGION_VOLUME {
-		l := s.light[i]
-		if l == 0 {continue}
-		p := region_pos(i)
-		for d in NEIGHBOURS {
-			n := p + d
-			if !in_region(n) {continue}
-			j := region_index(n)
-			if s.solid[j] {continue}
-			if s.light[j] >> 4 < (l >> 4) - 1 || s.light[j] & 15 < (l & 15) - 1 {
-				append(&s.queue, u32(i))
-				break
+	// Open sky: everything above a column's top is air at full sky light.
+	// Spreading sideways starts only where a column's sky meets a taller
+	// neighbour's shade: from just above this top up to the neighbour's.
+	for z in i32(0) ..< LIGHT_REGION {
+		for x in i32(0) ..< LIGHT_REGION {
+			first := sky_start(input, region_origin, x, z) // local y of the lowest sky cell
+			for y in max(first, 0) ..< LIGHT_REGION {
+				i := region_index({x, y, z})
+				if !s.solid[i] {s.light[i] |= LIGHT_MAX << 4}
+			}
+			highest := first - 1
+			for d in ([4][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+				nx, nz := x + d[0], z + d[1]
+				if nx < 0 || nz < 0 || nx >= LIGHT_REGION || nz >= LIGHT_REGION {continue}
+				highest = max(highest, sky_start(input, region_origin, nx, nz) - 1)
+			}
+			for y in max(first, 0) ..= min(highest, LIGHT_REGION - 1) {
+				i := region_index({x, y, z})
+				if !s.solid[i] {append(&s.queue, u32(i))}
 			}
 		}
 	}
@@ -106,6 +126,15 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 			}
 		}
 	}
+}
+
+// sky_start is the local y (in the region) of a column's lowest open-sky
+// cell: just above its top.
+@(private = "file")
+sky_start :: #force_inline proc(input: ^Light_Input, region_origin: Block_Pos, x, z: i32) -> i32 {
+	top := input.heights[x + z * LIGHT_REGION]
+	if top == NO_GROUND {return -1}
+	return clamp(top + 1 - region_origin.y, -1, LIGHT_REGION) // -1: all of it
 }
 
 @(private = "file", rodata)

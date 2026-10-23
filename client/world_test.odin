@@ -98,6 +98,19 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	testing.expect(t, !world_get(&w, {-1, 0, 0}).dirty && !world_get(&w, {0, 1, 0}).dirty)
 	b, _ := world_block(&w, {15, 0, 15})
 	testing.expect_value(t, b, game.Block.Air)
+
+	// The chunks whose geometry changed were meshed on the spot: their
+	// current meshes are already waiting for upload, no worker involved.
+	for pos in ([]game.Chunk_Pos{{0, 0, 0}, {1, 0, 0}, {0, -1, 1}, {1, -1, 1}}) {
+		c := world_get(&w, pos)
+		ready := false
+		for task in w.uploads {
+			if task.pos == pos && task.version == c.version {ready = true}
+		}
+		testing.expectf(t, ready, "chunk %v not meshed on the spot", pos)
+	}
+	// One that is near enough for light but not geometry is left to workers.
+	for task in w.uploads {testing.expect(t, task.pos != {0, 1, 0})}
 }
 
 // add_columns gives every column within r of the origin flat heights.
