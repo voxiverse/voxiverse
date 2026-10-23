@@ -20,7 +20,7 @@ import "../../game"
 Options :: struct {
 	file:    string `args:"pos=0" usage:"trace file (default build/net.trace)"`,
 	summary: bool `usage:"counts and bytes per message kind instead of messages"`,
-	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, edit, welcome, reject, chunk, unload, pong, player, rules, edit_result, block)"`,
+	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, edit, welcome, reject, chunk, unload, pong, player, rules, edit_result, block, column)"`,
 	sender:  string `usage:"only messages from client or server"`,
 	from:    f64 `usage:"only from this many seconds into the session"`,
 	to:      f64 `usage:"only up to this many seconds into the session"`,
@@ -201,6 +201,10 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 				true
 		case game.Block_Changed:
 			return fmt.tprintf("block pos=%v block=%v", v.pos, v.block), true
+		case game.Column:
+			lo, hi := max(i32), min(i32)
+			for h in v.heights {lo, hi = min(lo, h), max(hi, h)}
+			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
 		}
 	}
 	return "", true

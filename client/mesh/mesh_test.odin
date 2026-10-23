@@ -18,7 +18,7 @@ test_single_block :: proc(t: ^testing.T) {
 	defer delete(out)
 
 	s[snapshot_index(3, 4, 5)] = .Stone
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	testing.expect_value(t, len(out), 24)
 	for n in count_faces(out[:]) {testing.expect_value(t, n, 1)}
 	for v in out {
@@ -46,24 +46,24 @@ test_hidden_faces_and_border :: proc(t: ^testing.T) {
 	// Two touching blocks: the shared faces are hidden.
 	s[snapshot_index(0, 0, 0)] = .Dirt
 	s[snapshot_index(1, 0, 0)] = .Dirt
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	testing.expect_value(t, len(out), 10 * 4)
 
 	// A block in the neighbour's border hides the face towards it, but is
 	// not meshed itself.
 	s[snapshot_index(-1, 0, 0)] = .Stone
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	testing.expect_value(t, len(out), 9 * 4)
 
 	// All solid: nothing visible.
 	for &b in s {b = .Stone}
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	testing.expect_value(t, len(out), 0)
 	// Open the border on top: exactly the top layer shows.
 	for z in i32(-1) ..= 16 {
 		for x in i32(-1) ..= 16 {s[snapshot_index(x, 16, z)] = .Air}
 	}
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	testing.expect_value(t, count_faces(out[:])[.Pos_Y], 256)
 	testing.expect_value(t, len(out), 256 * 4)
 }
@@ -79,7 +79,7 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	// the floor's top face darkens along its +x edge.
 	s[snapshot_index(5, 5, 5)] = .Stone
 	s[snapshot_index(6, 6, 5)] = .Stone
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	found := false
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y ||
@@ -115,7 +115,7 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	s[snapshot_index(5, 5, 5)] = .Stone
 	s[snapshot_index(6, 6, 5)] = .Stone
 	s[snapshot_index(5, 6, 6)] = .Stone
-	mesh_chunk(s, &out)
+	mesh_chunk(s, nil, &out)
 	darkest := u32(3)
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y {continue}
@@ -148,7 +148,7 @@ test_quad_split_follows_ao :: proc(t: ^testing.T) {
 		for d, i in around {
 			if (config * 37 + i * 11) % 3 == 0 {s[snapshot_index(5 + d[0], 6, 5 + d[1])] = .Stone}
 		}
-		mesh_chunk(s, &out)
+		mesh_chunk(s, nil, &out)
 		for i := 0; i < len(out); i += 4 {
 			q := out[i:][:4]
 			if vertex_face(q[0]) != .Pos_Y || vertex_position(q[0]).y != 6 {continue}
@@ -216,4 +216,35 @@ test_textures :: proc(t: ^testing.T) {
 	dst: [1]Rgba
 	generate_mip(src[:], 2, dst[:])
 	testing.expect_value(t, dst[0], Rgba{188, 188, 188, 255})
+}
+
+@(test)
+test_smooth_light :: proc(t: ^testing.T) {
+	s := new(Snapshot)
+	defer free(s)
+	light := new(Light_Snapshot)
+	defer free(light)
+	out: [dynamic]Vertex
+	defer delete(out)
+
+	// A floor block with block light 12 above it, 4 to the +x side above.
+	s[snapshot_index(5, 5, 5)] = .Stone
+	for &l in light {l = 0}
+	light[snapshot_index(5, 6, 5)] = 12
+	light[snapshot_index(6, 6, 5)] = 4
+	mesh_chunk(s, light, &out)
+	for i := 0; i < len(out); i += 4 {
+		if vertex_face(out[i]) != .Pos_Y {continue}
+		for v in out[i:][:4] {
+			_, block := vertex_light(v)
+			p := vertex_position(v)
+			// Corners on the +x edge average 12 and 4 (and dark cells).
+			if p.x == 5 {testing.expectf(t, block < 12, "corner %v: %d", p, block)}
+			testing.expect(t, block <= 12)
+		}
+	}
+	// Without light: full sky.
+	mesh_chunk(s, nil, &out)
+	sky, block := vertex_light(out[0])
+	testing.expect(t, sky == 15 && block == 0)
 }

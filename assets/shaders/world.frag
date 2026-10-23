@@ -14,7 +14,7 @@ layout(push_constant) uniform Push {
 } push;
 
 layout(location = 0) in vec3 in_uvw;
-layout(location = 1) in float in_light;
+layout(location = 1) in vec3 in_light;
 layout(location = 2) in float in_fog;
 layout(location = 0) out vec4 out_color;
 

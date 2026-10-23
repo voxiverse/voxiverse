@@ -120,6 +120,15 @@ Rules_Changed :: struct {
 	rules: Rules,
 }
 
+// Column: the y of the highest solid block in each block column of a chunk
+// column (x fastest). Sky light needs it: the client cannot see above what
+// it has loaded. Sent before a column's first chunk, and again when an edit
+// changes it.
+Column :: struct {
+	pos:     [2]i32, // chunk x, z
+	heights: [CHUNK_SIZE * CHUNK_SIZE]i32,
+}
+
 // Edit_Result answers an Edit: accepted or not, and the block now at pos
 // either way (the client sets it, undoing a rejected prediction).
 Edit_Result :: struct {
@@ -145,6 +154,7 @@ Server_Message :: union {
 	Rules_Changed,
 	Edit_Result,
 	Block_Changed,
+	Column,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -173,6 +183,7 @@ Server_Kind :: enum u8 {
 	Rules_Changed,
 	Edit_Result,
 	Block_Changed,
+	Column,
 }
 
 // message_kind_name names a message kind (its first byte) sent by sender,
@@ -213,6 +224,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "edit_result"
 		case u8(Server_Kind.Block_Changed):
 			return "block"
+		case u8(Server_Kind.Column):
+			return "column"
 		}
 	}
 	return ""
@@ -296,6 +309,15 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(Server_Kind.Block_Changed))
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
+	case Column:
+		write_u8(w, u8(Server_Kind.Column))
+		write_i32(w, v.pos.x)
+		write_i32(w, v.pos.y)
+		previous: i32
+		for h in v.heights {
+			write_svarint(w, h - previous)
+			previous = h
+		}
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -415,6 +437,17 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			pos   = read_block_pos(&r),
 			block = read_block(&r),
 		}
+	case u8(Server_Kind.Column):
+		c: Column
+		c.pos = {read_i32(&r), read_i32(&r)}
+		if !in_world({c.pos.x, 0, c.pos.y}) {reader_fail(&r)}
+		previous: i32
+		for &h in c.heights {
+			h = previous + read_svarint(&r)
+			previous = h
+			if h < WORLD_MIN_Y || h >= WORLD_MAX_Y {reader_fail(&r)}
+		}
+		m = c
 	case:
 		return
 	}

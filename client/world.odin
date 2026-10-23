@@ -43,6 +43,7 @@ World :: struct {
 	to_mesh:       [dynamic]Chunk_Handle, // complete and dirty, waiting for a task
 	uploads:       [dynamic]^Mesh_Task, // meshed, waiting for staging room
 	mesh_removals: [dynamic]render.Mesh_Handle,
+	columns:       map[[2]i32]Client_Column,
 	next_version:  u32,
 	stats:         World_Stats,
 }
@@ -59,8 +60,22 @@ Mesh_Task :: struct {
 	handle:   Chunk_Handle,
 	version:  u32,
 	pos:      game.Chunk_Pos,
+	// Copies of the 3x3x3 neighbourhood (light needs all of it) and the
+	// column heights around it.
+	arrays:   [27]game.Block_Array,
+	chunks:   [27]game.Chunk_Blocks,
+	light_in: game.Light_Input,
+	scratch:  game.Light_Scratch,
 	snapshot: mesh.Snapshot,
+	light:    mesh.Light_Snapshot,
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
+}
+
+// Client_Column: a column's heights (from the server) and how many of its
+// chunks are loaded (it is dropped with the last one).
+Client_Column :: struct {
+	heights: [game.CHUNK_SIZE * game.CHUNK_SIZE]i32,
+	chunks:  int,
 }
 
 // MESH_TASKS_PER_WORKER: snapshots in flight per mesh worker.
@@ -71,7 +86,7 @@ MESH_TASKS_PER_WORKER :: 4
 // from arena; whatever workers touch from heap.
 world_init :: proc(
 	w: ^World,
-	capacity, workers: int,
+	capacity, columns, workers: int,
 	arena: mem.Allocator,
 	heap := context.allocator,
 ) -> mem.Allocator_Error {
@@ -83,6 +98,8 @@ world_init :: proc(
 	game.block_arrays_init(&w.arrays, capacity, arena) or_return
 	w.to_mesh = make([dynamic]Chunk_Handle, 0, capacity, arena) or_return
 	w.mesh_removals = make([dynamic]render.Mesh_Handle, 0, capacity, arena) or_return
+	// Columns: at most one per loaded chunk (in practice far fewer).
+	w.columns = base.map_make_fixed(map[[2]i32]Client_Column, columns, arena) or_return
 	count := workers * MESH_TASKS_PER_WORKER
 	w.tasks = make([]Mesh_Task, count, arena) or_return
 	w.free_tasks = make([dynamic]^Mesh_Task, 0, count, arena) or_return
@@ -90,6 +107,8 @@ world_init :: proc(
 	for &t in w.tasks {
 		t.world = w
 		t.vertices = make([dynamic]mesh.Vertex, heap)
+		t.scratch.queue = make([dynamic]u32, heap)
+		for &c, i in t.chunks {t.light_in.chunks[i] = &c}
 		append(&w.free_tasks, &t)
 	}
 	base.queue_init(&w.done, heap)
@@ -102,7 +121,10 @@ world_init :: proc(
 world_destroy :: proc(w: ^World) {
 	base.jobs_destroy(&w.jobs)
 	base.queue_destroy(&w.done)
-	for &t in w.tasks {delete(t.vertices)}
+	for &t in w.tasks {
+		delete(t.vertices)
+		game.light_scratch_destroy(&t.scratch)
+	}
 	game.block_arrays_destroy(&w.arrays)
 	w^ = {}
 }
@@ -130,6 +152,12 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 		c = base.pool_get(&w.chunks, h)
 		game.chunk_release(&c.blocks, &w.arrays)
 	} else {
+		column, has_column := &w.columns[[2]i32{m.pos.x, m.pos.z}]
+		if !has_column {
+			log.errorf("client chunk before its column pos=%v", m.pos)
+			return false
+		}
+		column.chunks += 1
 		added: bool
 		h, c, added = base.pool_add(&w.chunks, Client_Chunk{pos = m.pos})
 		if !added {
@@ -186,19 +214,79 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 	}
 	c.version = w.next_version
 	w.next_version += 1
-	for dz in i32(-1) ..= 1 {
-		for dy in i32(-1) ..= 1 {
-			for dx in i32(-1) ..= 1 {
-				n := world_get(w, game.chunk_of(p + {dx, dy, dz}))
-				if n == nil || n.dirty && n != c {continue}
+	// Light reaches 15 blocks: everything that close may look different.
+	remesh_box(w, p - game.LIGHT_MAX, p + game.LIGHT_MAX)
+	predict_column_top(w, p, b)
+	return true
+}
+
+// world_set_column stores a column's heights from the server, re-meshing
+// where they changed (sky light below a top that moved).
+world_set_column :: proc(w: ^World, m: game.Column) {
+	column, existed := &w.columns[m.pos]
+	if !existed {
+		w.columns[m.pos] = {
+			heights = m.heights,
+		}
+		return
+	}
+	for h, i in m.heights {
+		old := column.heights[i]
+		if old == h {continue}
+		x := m.pos.x * game.CHUNK_SIZE + i32(i % game.CHUNK_SIZE)
+		z := m.pos.y * game.CHUNK_SIZE + i32(i / game.CHUNK_SIZE)
+		remesh_box(w, {x, min(old, h), z} - game.LIGHT_MAX, {x, max(old, h), z} + game.LIGHT_MAX)
+	}
+	column.heights = m.heights
+}
+
+// predict_column_top updates p's column height for a predicted edit (the
+// server's Column has the last word): a solid block above the top raises it;
+// removing the top finds the next solid block down (as far as is loaded).
+@(private = "file")
+predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
+	column, ok := &w.columns[[2]i32{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}]
+	if !ok {return}
+	i := int(p.x & game.CHUNK_MASK) + int(p.z & game.CHUNK_MASK) * game.CHUNK_SIZE
+	old := column.heights[i]
+	top := old
+	if game.block_solid(b) && p.y > old {
+		top = p.y
+	} else if !game.block_solid(b) && p.y == old {
+		top = game.WORLD_MIN_Y
+		for y := p.y - 1; y >= game.WORLD_MIN_Y; y -= 1 {
+			block, loaded := world_block(w, {p.x, y, p.z})
+			if !loaded || game.block_solid(block) {
+				top = y
+				break
+			}
+		}
+	}
+	if top == old {return}
+	column.heights[i] = top
+	remesh_box(
+		w,
+		{p.x, min(old, top), p.z} - game.LIGHT_MAX,
+		{p.x, max(old, top), p.z} + game.LIGHT_MAX,
+	)
+}
+
+// remesh_box re-meshes every loaded chunk that overlaps the box.
+@(private = "file")
+remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos) {
+	a, b := game.chunk_of(lo), game.chunk_of(hi)
+	b.y = min(b.y, game.CHUNK_MAX_Y - 1)
+	a.y = max(a.y, game.CHUNK_MIN_Y)
+	for cy in a.y ..= b.y {
+		for cz in a.z ..= b.z {
+			for cx in a.x ..= b.x {
+				n := world_get(w, {cx, cy, cz})
+				if n == nil {continue}
 				n.dirty = true
 				queue_if_complete(w, n)
 			}
 		}
 	}
-	c.dirty = true
-	queue_if_complete(w, c)
-	return true
 }
 
 world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
@@ -208,6 +296,9 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
 	game.chunk_release(&c.blocks, &w.arrays)
 	delete_key(&w.by_pos, pos)
+	column := &w.columns[[2]i32{pos.x, pos.z}]
+	column.chunks -= 1
+	if column.chunks <= 0 {delete_key(&w.columns, [2]i32{pos.x, pos.z})}
 	base.pool_remove(&w.chunks, h) // queued work for it is dropped as stale
 }
 
@@ -259,18 +350,7 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 		c.queued = true
 		task := pop(&w.free_tasks)
 		task.handle, task.version, task.pos = h, c.version, c.pos
-		n: mesh.Neighbourhood
-		for dz in i32(-1) ..= 1 {
-			for dy in i32(-1) ..= 1 {
-				for dx in i32(-1) ..= 1 {
-					n[mesh.neighbour_index({dx, dy, dz})] = neighbour_blocks(
-						w,
-						c.pos + {dx, dy, dz},
-					)
-				}
-			}
-		}
-		mesh.snapshot_fill(&task.snapshot, &n)
+		task_fill(w, task, c.pos)
 		base.jobs_submit(&w.jobs, mesh_job, task)
 	}
 	remove_range(&w.to_mesh, 0, started)
@@ -378,12 +458,50 @@ trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	return true
 }
 
+// task_fill copies what meshing pos needs: its neighbourhood's blocks and
+// the column heights around it (the copies are the task's own, so the job
+// never touches the live world).
+@(private = "file")
+task_fill :: proc(w: ^World, task: ^Mesh_Task, pos: game.Chunk_Pos) {
+	for i in 0 ..< 27 {
+		d := game.Chunk_Pos{i32(i % 3) - 1, i32(i / 3 % 3) - 1, i32(i / 9) - 1}
+		src := neighbour_blocks(w, pos + d)
+		if src.array != nil {
+			task.arrays[i] = src.array^
+			task.chunks[i] = {
+				array = &task.arrays[i],
+			}
+		} else {
+			task.chunks[i] = {
+				uniform = src.uniform,
+			}
+		}
+	}
+	task.light_in.origin = game.chunk_origin(pos)
+	for dz in i32(-1) ..= 1 {
+		for dx in i32(-1) ..= 1 {
+			column := w.columns[{pos.x + dx, pos.z + dz}] // present: its chunks are
+			for z in 0 ..< game.CHUNK_SIZE {
+				for x in 0 ..< game.CHUNK_SIZE {
+					rx, rz := int(dx + 1) * game.CHUNK_SIZE + x, int(dz + 1) * game.CHUNK_SIZE + z
+					task.light_in.heights[rx + rz * game.LIGHT_REGION] =
+						column.heights[x + z * game.CHUNK_SIZE]
+				}
+			}
+		}
+	}
+}
+
 @(private = "file")
 mesh_job :: proc(data: rawptr) {
 	task := (^Mesh_Task)(data)
 	if !base.jobs_stopping(&task.world.jobs) {
 		base.profile_scope("mesh chunk")
-		mesh.mesh_chunk(&task.snapshot, &task.vertices)
+		game.light_chunk(&task.light_in, &task.scratch, &task.light)
+		n: mesh.Neighbourhood
+		for &c, i in task.chunks {n[i] = &c}
+		mesh.snapshot_fill(&task.snapshot, &n)
+		mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
 	}
 	base.queue_push(&task.world.done, task)
 }

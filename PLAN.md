@@ -98,9 +98,12 @@ per frame) → build the UI → build a `Frame_Packet` → render. Tick rate is 
   (generating, ready, meshed, …) and a dirty-chunk event queue.
 - Generation, lighting and meshing run as jobs on worker threads, on immutable padded
   snapshots (18³ for meshing), never on live data.
-- Lighting is a pure function in `game/` with proper add *and* removal passes, usable on both
-  sides. (M3 renders with face shading and ambient occlusion; flood-fill light arrives with
-  block editing in M4, when light must spread and recede.)
+- Lighting is a pure function in `game/`: a chunk's sky and block light, computed whole from
+  its 3x3x3 neighbourhood and the column heights (light travels at most 15 blocks, so that is
+  all it depends on), inside the mesh job. No stored light, so no removal pass and nothing to
+  go stale: an edit re-meshes the chunks within 15 blocks. (Changed from incremental add and
+  removal passes in M4: same results, far fewer ways to be wrong.) The server sends column
+  heights (`Column`), since the client cannot see above what it has loaded.
 - Interest is a cylinder around each player's chunk, sent nearest first; the client drops
   chunks one past it and the server frees them two past it (hysteresis). Both sides size
   their storage from it once, at join.

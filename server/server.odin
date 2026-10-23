@@ -55,6 +55,7 @@ Server :: struct {
 	stats:       Stats,
 	log_tag:     base.Log_Tag,
 	rules:       game.Rules, // server thread only
+	tops:        map[[2]i32]i32, // edited column tops (columns.odin)
 	// Server thread only, after start:
 	arena:       virtual.Arena,
 	world:       World,
@@ -129,6 +130,7 @@ stop :: proc(s: ^Server) -> bool {
 	thread.join(s.thread)
 	thread.destroy(s.thread)
 	world_destroy(&s.world)
+	delete(s.tops)
 	used := s.arena.total_used
 	virtual.arena_destroy(&s.arena)
 	log.infof("server stopped ticks=%d arena=%v", s.tick, base_bytes(used))
@@ -330,6 +332,10 @@ apply_edit :: proc(s: ^Server, e: game.Edit) -> game.Edit_Result {
 	}
 	if !allowed || !world_set_block(&s.world, e.pos, e.block) {return result}
 	result.accepted, result.block = true, e.block
+	column := [2]i32{e.pos.x >> game.CHUNK_SHIFT, e.pos.z >> game.CHUNK_SHIFT}
+	if column_edited(s, e.pos, e.block) && s.client.columns[column] > 0 {
+		send_message(s, column_message(s, column))
+	}
 	return result
 }
 

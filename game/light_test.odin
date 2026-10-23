@@ -131,7 +131,7 @@ out_at :: proc(out: ^[LIGHT_OUT_VOLUME]u8, l: [3]i32) -> u8 {
 @(private = "file")
 hilly :: proc(p: Block_Pos) -> Block {
 	ground := i32(4 + (p.x * 7 + p.z * 3) % 5) // a little relief
-	if p.x >= 20 {ground = -1} // a pit the tunnel opens into
+	if p.x >= 20 {ground = -1} 	// a pit the tunnel opens into
 	if p.y <= ground {
 		// A tunnel under the surface along x, open to the sky at x > 20.
 		if p.y >= 0 && p.y <= 2 && p.z >= 6 && p.z <= 8 && p.x < 20 {return .Air}

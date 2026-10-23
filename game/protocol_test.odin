@@ -47,6 +47,15 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	changed_block: Server_Message
 	changed_block, ok = decode_server(encode_s(Block_Changed{{1, 2, 3}, .Gravel})[:], scratch)
 	testing.expect(t, ok && changed_block.(Block_Changed) == Block_Changed{{1, 2, 3}, .Gravel})
+	column := Column {
+		pos = {-7, 12},
+	}
+	for &h, i in column.heights {h = i32(i % 37) - 20 if i != 5 else WORLD_MIN_Y}
+	col: Server_Message
+	col_bytes := encode_s(column)
+	col, ok = decode_server(col_bytes[:], scratch)
+	testing.expect(t, ok && col.(Column) == column)
+	testing.expect(t, len(col_bytes) < 300) // deltas: about a byte per height
 	rule: Client_Message
 	rule, ok = decode_client(encode_c(Set_Rule{"rules.gravity", "20"})[:])
 	testing.expect(
@@ -131,6 +140,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Edit_Result{1, false, {}, .Stone}),
 		encode_s(Block_Changed{{}, .Dirt}),
+		encode_s(Column{}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
@@ -278,6 +288,18 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 			write_u8(w, 0)
 			write_f32(w, 0)
 			write_f32(w, 0)
+		},
+	)
+	bad_server(
+		t,
+		scratch,
+		"column height above the world",
+		proc(w: ^Writer) {
+			write_u8(w, 10) // Column
+			write_i32(w, 0)
+			write_i32(w, 0)
+			write_svarint(w, WORLD_MAX_Y)
+			for _ in 1 ..< CHUNK_SIZE * CHUNK_SIZE {write_svarint(w, 0)}
 		},
 	)
 	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {

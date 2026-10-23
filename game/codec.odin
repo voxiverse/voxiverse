@@ -49,6 +49,11 @@ write_varint :: proc(w: ^Writer, v: u32) {
 	append(&w.buf, u8(v))
 }
 
+// write_svarint: a signed varint (zigzag: small magnitudes are short).
+write_svarint :: proc(w: ^Writer, v: i32) {
+	write_varint(w, u32((v << 1) ~ (v >> 31)))
+}
+
 write_string :: proc(w: ^Writer, s: string) {
 	write_varint(w, u32(len(s)))
 	append(&w.buf, s)
@@ -142,6 +147,11 @@ read_varint :: proc(r: ^Reader) -> u32 {
 	}
 	r.ok = false
 	return 0
+}
+
+read_svarint :: proc(r: ^Reader) -> i32 {
+	u := read_varint(r)
+	return i32(u >> 1) ~ -i32(u & 1)
 }
 
 // read_string returns a view into the message (valid while it is), at most

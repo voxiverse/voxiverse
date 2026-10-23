@@ -4,7 +4,7 @@
 // a chunk-local position, face, AO level and texture layer. Positions are
 // relative to the camera's chunk, so floats stay exact far from the origin.
 
-layout(location = 0) in uint in_packed; // x | y << 5 | z << 10 | face << 15 | ao << 18
+layout(location = 0) in uint in_packed; // x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24
 layout(location = 1) in uint in_layer;
 
 layout(push_constant) uniform Push {
@@ -17,11 +17,19 @@ layout(push_constant) uniform Push {
 } push;
 
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
-layout(location = 1) out float out_light;
+layout(location = 1) out vec3 out_light;
 layout(location = 2) out float out_fog;
 
 const float FACE_LIGHT[6] = float[](0.80, 0.80, 1.00, 0.50, 0.65, 0.65); // +x -x +y -y +z -z
 const float AO_LIGHT[4] = float[](0.35, 0.60, 0.80, 1.00);
+const vec3 LAMP_COLOR = vec3(1.00, 0.82, 0.58); // warm, like the lamp texture
+
+// brightness of light level l (0..15): a curve, so a few levels from a
+// source still read as lit and darkness is dark (with a faint floor).
+float brightness(uint l) {
+	float x = float(l) / 15.0;
+	return 0.03 + 0.97 * x * x * (3.0 - 2.0 * x) * x;
+}
 
 void main() {
 	vec3 local = vec3(in_packed & 31u, (in_packed >> 5) & 31u, (in_packed >> 10) & 31u);
@@ -37,7 +45,10 @@ void main() {
 	else if (face < 4u) uv = vec2(local.x, local.z);
 	else uv = vec2(local.x, -local.y);
 	out_uvw = vec3(uv, float(in_layer));
-	out_light = FACE_LIGHT[face] * AO_LIGHT[ao];
+	uint sky = (in_packed >> 20) & 15u;
+	uint block = (in_packed >> 24) & 15u;
+	vec3 light = max(vec3(brightness(sky)), LAMP_COLOR * brightness(block));
+	out_light = FACE_LIGHT[face] * AO_LIGHT[ao] * light;
 
 	float distance = length(pos.xz - push.camera.xz);
 	out_fog = clamp((distance - 0.6 * push.fog.a) / (0.4 * push.fog.a), 0.0, 1.0);

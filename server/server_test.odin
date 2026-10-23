@@ -13,17 +13,19 @@ import "../game"
 
 @(private = "file")
 Fake_Client :: struct {
-	endpoint: game.Endpoint,
-	has:      map[game.Chunk_Pos]struct{},
-	welcome:  game.Welcome,
-	welcomed: bool,
-	rejected: string,
-	scratch:  ^game.Block_Array,
-	chunks:   int, // chunk messages received
-	unloads:  int,
-	player:   game.Player_Update, // the latest
-	rules:    game.Rules,
-	results:  [dynamic]game.Edit_Result,
+	endpoint:       game.Endpoint,
+	has:            map[game.Chunk_Pos]struct{},
+	welcome:        game.Welcome,
+	welcomed:       bool,
+	rejected:       string,
+	scratch:        ^game.Block_Array,
+	chunks:         int, // chunk messages received
+	unloads:        int,
+	player:         game.Player_Update, // the latest
+	rules:          game.Rules,
+	results:        [dynamic]game.Edit_Result,
+	columns:        map[[2]i32]game.Column,
+	column_updates: int,
 }
 
 @(private = "file")
@@ -48,6 +50,12 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		case game.Reject:
 			c.rejected = v.reason
 		case game.Chunk_Message:
+			testing.expectf(
+				t,
+				[2]i32{v.pos.x, v.pos.z} in c.columns,
+				"chunk %v before its column",
+				v.pos,
+			)
 			testing.expectf(t, v.pos not_in c.has, "chunk %v sent twice", v.pos)
 			c.has[v.pos] = {}
 			c.chunks += 1
@@ -57,6 +65,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.rules = v.rules
 		case game.Edit_Result:
 			append(&c.results, v)
+		case game.Column:
+			if v.pos in c.columns {c.column_updates += 1}
+			c.columns[v.pos] = v
 		case game.Block_Changed:
 		case game.Pong:
 		case game.Unload_Chunk:
@@ -112,6 +123,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	}
 	defer free(c.scratch)
 	defer delete(c.has)
+	defer delete(c.columns)
 
 	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
@@ -231,6 +243,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		testing.expect(t, stop(&srv)) // a bad client is not a server failure
 		free(c.scratch)
 		delete(c.has)
+		delete(c.columns)
 		game.pipe_destroy(&pipe)
 	}
 }
@@ -253,6 +266,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	}
 	defer free(c.scratch)
 	defer delete(c.has)
+	defer delete(c.columns)
 	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
 	// Joined, and standing on the ground once its chunks exist.
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
@@ -290,6 +304,8 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	)
 	if len(c.results) == 4 {
 		testing.expect(t, c.results[0].accepted && c.results[0].block == .Air)
+		// Breaking the top block lowered the column: an update came.
+		testing.expect(t, c.column_updates >= 1, "no column update after breaking the top block")
 		for r in c.results[1:] {testing.expectf(t, !r.accepted, "edit %d accepted", r.id)}
 		testing.expect(t, c.results[1].block == .Air) // the actual block, to undo a prediction
 	}

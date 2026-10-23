@@ -2,12 +2,14 @@ package mesh
 
 import "../../game"
 
-// Chunk meshing: visible block faces with per-vertex ambient occlusion, from
-// an immutable padded snapshot (the chunk plus a 1-block border from its 26
-// neighbours), so it runs on worker threads while the world changes.
+// Chunk meshing: visible block faces with per-vertex ambient occlusion and
+// smooth light, from an immutable padded snapshot (the chunk plus a 1-block
+// border from its 26 neighbours, and its light from game.light_chunk), so it
+// runs on worker threads while the world changes.
 //
-// Vertices are 8 bytes: chunk-local position (0..16), face, AO level and
-// texture layer. Texture coordinates follow from position and face in the
+// Vertices are 8 bytes: chunk-local position (0..16), face, AO level, sky
+// and block light (0..15 each, averaged over the open cells around the
+// corner) and texture layer. Texture coordinates follow from position and face in the
 // shader. Every quad is 4 vertices drawn with the shared index pattern
 // 0 1 2 0 2 3; quads whose AO is brighter along the 1-3 diagonal are rotated
 // so it splits them along that diagonal instead (avoids AO's classic
@@ -19,8 +21,15 @@ PADDED_VOLUME :: PADDED * PADDED * PADDED
 // Snapshot holds blocks at local positions -1..16 on each axis.
 Snapshot :: [PADDED_VOLUME]game.Block
 
+// Light_Snapshot: the same cells' light (sky << 4 | block), as
+// game.light_chunk computes it (LIGHT_OUT is PADDED).
+Light_Snapshot :: [PADDED_VOLUME]u8
+
+#assert(game.LIGHT_OUT == PADDED)
+
 Vertex :: struct {
-	// x | y << 5 | z << 10 | face << 15 | ao << 18 (ao: 0 darkest .. 3 open)
+	// x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24
+	// (ao: 0 darkest .. 3 open; sky and block light 0..15)
 	packed: u32,
 	layer:  u32, // texture array layer
 }
@@ -83,7 +92,8 @@ FACE_AXES := [Face]Face_Axes {
 CORNERS := [4][2]i32{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
 
 // mesh_chunk appends the snapshot's visible faces to out (cleared first).
-mesh_chunk :: proc(s: ^Snapshot, out: ^[dynamic]Vertex) {
+// light may be nil: everything fully lit by the sky (tests).
+mesh_chunk :: proc(s: ^Snapshot, light: ^Light_Snapshot, out: ^[dynamic]Vertex) {
 	clear(out)
 	for y in i32(0) ..< game.CHUNK_SIZE {
 		for z in i32(0) ..< game.CHUNK_SIZE {
@@ -93,7 +103,7 @@ mesh_chunk :: proc(s: ^Snapshot, out: ^[dynamic]Vertex) {
 				for axes, face in FACE_AXES {
 					front := [3]i32{x, y, z} + axes.normal
 					if game.block_solid(s[snapshot_index(front.x, front.y, front.z)]) {continue}
-					emit_face(s, out, {x, y, z}, face, axes, block_texture(b, face))
+					emit_face(s, light, out, {x, y, z}, face, axes, block_texture(b, face))
 				}
 			}
 		}
@@ -103,6 +113,7 @@ mesh_chunk :: proc(s: ^Snapshot, out: ^[dynamic]Vertex) {
 @(private = "file")
 emit_face :: proc(
 	s: ^Snapshot,
+	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
 	p: [3]i32,
 	face: Face,
@@ -121,13 +132,17 @@ emit_face :: proc(
 		du := axes.u if corner[0] == 1 else -axes.u
 		dv := axes.v if corner[1] == 1 else -axes.v
 		side1, side2 := solid(s, front + du), solid(s, front + dv)
-		level := 0 if side1 == 1 && side2 == 1 else 3 - side1 - side2 - solid(s, front + du + dv)
+		corner_solid := solid(s, front + du + dv)
+		level := 0 if side1 == 1 && side2 == 1 else 3 - side1 - side2 - corner_solid
 		ao[i] = u32(level)
+		sky, block := corner_light(light, front, du, dv, side1 == 1, side2 == 1, corner_solid == 1)
+		emits := u32(game.block_light(s[snapshot_index(p.x, p.y, p.z)]))
+		block = max(block, emits) // a light's own faces are as bright as it
 		v := base + corner[0] * axes.u + corner[1] * axes.v
 		quad[i] = {
 			packed = u32(
 				v.x,
-			) | u32(v.y) << 5 | u32(v.z) << 10 | u32(face) << 15 | u32(level) << 18,
+			) | u32(v.y) << 5 | u32(v.z) << 10 | u32(face) << 15 | u32(level) << 18 | sky << 20 | block << 24,
 			layer  = layer,
 		}
 	}
@@ -136,6 +151,34 @@ emit_face :: proc(
 		quad = {quad[1], quad[2], quad[3], quad[0]}
 	}
 	append(out, ..quad[:])
+}
+
+// corner_light averages sky and block light over the open cells touching a
+// face corner: the cell in front of the face, the two beside it, and the
+// one diagonal (unless both sides are solid, which hide it).
+@(private = "file")
+corner_light :: proc(
+	light: ^Light_Snapshot,
+	front, du, dv: [3]i32,
+	side1, side2, corner: bool,
+) -> (
+	sky, block: u32,
+) {
+	if light == nil {return 15, 0}
+	at :: proc(light: ^Light_Snapshot, p: [3]i32) -> u8 {return(
+			light[snapshot_index(p.x, p.y, p.z)] \
+		)}
+	sum_sky, sum_block, n: u32
+	add :: proc(l: u8, sum_sky, sum_block, n: ^u32) {
+		sum_sky^ += u32(l >> 4)
+		sum_block^ += u32(l & 15)
+		n^ += 1
+	}
+	add(at(light, front), &sum_sky, &sum_block, &n)
+	if !side1 {add(at(light, front + du), &sum_sky, &sum_block, &n)}
+	if !side2 {add(at(light, front + dv), &sum_sky, &sum_block, &n)}
+	if !corner && !(side1 && side2) {add(at(light, front + du + dv), &sum_sky, &sum_block, &n)}
+	return (sum_sky + n / 2) / n, (sum_block + n / 2) / n
 }
 
 // Vertex fields, for tests and debugging (the shader unpacks the same way).
@@ -149,4 +192,8 @@ vertex_face :: proc(v: Vertex) -> Face {
 
 vertex_ao :: proc(v: Vertex) -> u32 {
 	return v.packed >> 18 & 3
+}
+
+vertex_light :: proc(v: Vertex) -> (sky, block: u32) {
+	return v.packed >> 20 & 15, v.packed >> 24 & 15
 }

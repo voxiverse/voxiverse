@@ -21,6 +21,7 @@ Client :: struct {
 	center:     game.Chunk_Pos, // the chunk the client is in
 	moved:      bool, // center changed since the last unload pass
 	has:        map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	columns:    map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
 	cursor:     int, // offsets before this are all sent
 	player:     game.Player_State,
 	inputs:     game.Input_Queue,
@@ -37,6 +38,9 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 		config.view_height + game.CLIENT_DROP_MARGIN,
 	)
 	c.has = base.map_make_fixed(map[game.Chunk_Pos]struct{}, most, arena) or_return
+	// Its columns: the interest area's columns plus the margin.
+	columns := game.interest_count(config.view_radius + game.CLIENT_DROP_MARGIN, 0)
+	c.columns = base.map_make_fixed(map[[2]i32]int, columns, arena) or_return
 	return nil
 }
 
@@ -84,6 +88,9 @@ stream :: proc(s: ^Server) {
 			continue
 		}
 		if chunk.state != .Ready || budget == 0 {continue}
+		column := [2]i32{pos.x, pos.z}
+		if c.columns[column] == 0 {send_message(s, column_message(s, column))}
+		c.columns[column] += 1
 		send_message(s, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		c.has[pos] = {}
 		budget -= 1
@@ -103,6 +110,9 @@ unload_far :: proc(s: ^Server) {
 	for pos in drop {
 		delete_key(&c.has, pos)
 		send_message(s, game.Unload_Chunk{pos})
+		column := [2]i32{pos.x, pos.z}
+		c.columns[column] -= 1
+		if c.columns[column] == 0 {delete_key(&c.columns, column)}
 	}
 	clear(&drop)
 	for pos in s.world.by_pos {

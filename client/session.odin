@@ -288,6 +288,12 @@ receive :: proc(s: ^Session) {
 			}
 		case game.Block_Changed:
 			world_set_block(&s.world, v.pos, v.block)
+		case game.Column:
+			if s.state != .Playing {
+				fail(s, "the server sent a column before welcoming us")
+				return
+			}
+			world_set_column(&s.world, v)
 		}
 	}
 }
@@ -308,9 +314,15 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	r, h :=
 		i32(w.view_radius) + game.CLIENT_DROP_MARGIN, i32(w.view_height) + game.CLIENT_DROP_MARGIN
 	capacity := game.interest_count(r, h)
+	columns := game.interest_count(r, 0)
 	cores := os.get_processor_core_count()
-	if err := world_init(&s.world, capacity, max(1, cores / 4), virtual.arena_allocator(&s.arena));
-	   err != nil {
+	if err := world_init(
+		&s.world,
+		capacity,
+		columns,
+		max(1, cores / 4),
+		virtual.arena_allocator(&s.arena),
+	); err != nil {
 		fail(s, "out of memory for the world")
 		return
 	}

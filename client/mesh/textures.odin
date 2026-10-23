@@ -15,6 +15,7 @@ Texture :: enum u32 {
 	Sand,
 	Gravel,
 	Bedrock,
+	Lamp,
 }
 
 @(private = "file", rodata)
@@ -26,6 +27,7 @@ BLOCK_TEXTURES := [game.Block][3]Texture { 	// side, top, bottom
 	.Sand    = {.Sand, .Sand, .Sand},
 	.Gravel  = {.Gravel, .Gravel, .Gravel},
 	.Bedrock = {.Bedrock, .Bedrock, .Bedrock},
+	.Lamp    = {.Lamp, .Lamp, .Lamp},
 }
 
 block_texture :: proc(b: game.Block, f: Face) -> u32 {
@@ -94,6 +96,20 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				v := value_noise(seed ~ 17, x, y, 2) * 0.9 + 0.2 * fine
 				if hash01(seed ~ 19, x, y) > 0.8 {v = 0}
 				c = shade(BEDROCK, v)
+			case .Lamp:
+				// A framed panel: dark rim, a grid of warm cells, hot centres.
+				edge := x == 0 || y == 0 || x == TEXTURE_SIZE - 1 || y == TEXTURE_SIZE - 1
+				seam := x % 5 == 0 || y % 5 == 0
+				switch {
+				case edge:
+					c = LAMP[0]
+				case seam:
+					c = LAMP[1]
+				case (x % 5 == 2 || x % 5 == 3) && (y % 5 == 2 || y % 5 == 3):
+					c = LAMP[4]
+				case:
+					c = shade(LAMP, 0.45 + 0.3 * fine)
+				}
 			}
 			pixels[y * TEXTURE_SIZE + x] = c
 		}
@@ -149,6 +165,15 @@ BEDROCK := [5]Rgba {
 	{58, 58, 64, 255},
 	{80, 80, 86, 255},
 	{104, 104, 110, 255},
+}
+
+@(private = "file", rodata)
+LAMP := [5]Rgba {
+	{58, 44, 30, 255},
+	{150, 104, 52, 255},
+	{232, 176, 92, 255},
+	{250, 214, 140, 255},
+	{255, 246, 214, 255},
 }
 
 // shade picks the ramp entry for v in 0..1.

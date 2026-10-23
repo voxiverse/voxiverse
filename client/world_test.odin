@@ -17,7 +17,8 @@ test_world_edges_mesh :: proc(t: ^testing.T) {
 
 	for layer in ([]i32{game.CHUNK_MAX_Y - 1, game.CHUNK_MIN_Y}) {
 		w: World
-		testing.expect(t, world_init(&w, 64, 1, virtual.arena_allocator(&arena)) == nil)
+		testing.expect(t, world_init(&w, 64, 16, 1, virtual.arena_allocator(&arena)) == nil)
+		add_columns(&w, 1)
 		inward: i32 = -1 if layer == game.CHUNK_MAX_Y - 1 else 1
 		// Everything around (0, layer, 0) that exists, except the last one.
 		positions := make([dynamic]game.Chunk_Pos, context.temp_allocator)
@@ -57,8 +58,9 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	w: World
-	testing.expect(t, world_init(&w, 128, 1, virtual.arena_allocator(&arena)) == nil)
+	testing.expect(t, world_init(&w, 128, 32, 1, virtual.arena_allocator(&arena)) == nil)
 	defer world_destroy(&w)
+	add_columns(&w, 2)
 	for z in i32(-2) ..= 2 {
 		for y in i32(-2) ..= 2 {
 			for x in i32(-2) ..= 2 {
@@ -96,4 +98,18 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	testing.expect(t, !world_get(&w, {-1, 0, 0}).dirty && !world_get(&w, {0, 1, 0}).dirty)
 	b, _ := world_block(&w, {15, 0, 15})
 	testing.expect_value(t, b, game.Block.Air)
+}
+
+// add_columns gives every column within r of the origin flat heights.
+@(private = "file")
+add_columns :: proc(w: ^World, r: i32) {
+	for z in -r ..= r {
+		for x in -r ..= r {
+			c := game.Column {
+				pos = {x, z},
+			}
+			for &h in c.heights {h = 0}
+			world_set_column(w, c)
+		}
+	}
 }
