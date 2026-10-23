@@ -246,6 +246,9 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	})
 	testing.expect(t, ok, "bob never heard of alice's edit")
 	testing.expect(t, alice.results[1].accepted, "alice's edit was refused")
+	for ch in alice.changed {
+		testing.expect(t, ch.pos != below, "alice was told of her own edit twice")
+	}
 
 	// Bob (standing where Alice dug: they spawn together) comes to rest,
 	// then leaves: Alice is told.

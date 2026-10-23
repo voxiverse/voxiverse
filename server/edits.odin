@@ -1,15 +1,14 @@
 package server
 
+import "core:log"
 import "core:math"
 
 import "../game"
 
 // Bulk edits: a shape (sphere, box) and an operation applied to every
-// block in it, through one pipeline: chunk by chunk, each touched chunk
-// marked for the save, each touched column's top found again once, and
-// every client that has a touched chunk sent it whole (after a Bulk_Begin
-// saying how many follow, so it can show them all at once) instead of a
-// message per block.
+// block in it, chunk by chunk, each touched column's top found again once;
+// the touched chunks are sent whole at the end of the tick (changes.odin)
+// instead of a message per block.
 
 MAX_BULK_VOLUME :: 64 * 64 * 64 // blocks in the shape's box
 
@@ -67,7 +66,6 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 		}
 	}
 
-	touched := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	for cy in clo.y ..= chi.y {
 		for cz in clo.z ..= chi.z {
 			for cx in clo.x ..= chi.x {
@@ -78,38 +76,18 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 				if n > 0 {
 					changed += n
 					c.modified = true
-					mark_edited(s, pos)
-					append(&touched, pos)
+					changes_chunk(s, pos)
 				}
 			}
 		}
 	}
 	if changed == 0 {return 0, .Done}
 
-	// Column tops over the footprint, then who needs what.
-	columns := make(map[[2]i32]struct{}, 16, context.temp_allocator)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
-			if column_rescan(
-				s,
-				x,
-				z,
-				hi.y,
-			) {columns[{x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}] = {}}
-		}
-	}
-	for &c in s.clients {
-		if c.state != .Playing {continue}
-		mine := make([dynamic]game.Chunk_Pos, context.temp_allocator)
-		for pos in touched {if pos in c.has {append(&mine, pos)}}
-		if len(mine) == 0 {continue}
-		send_message(s, &c, game.Bulk_Begin{u16(len(mine))})
-		for column in columns {
-			if c.columns[column] > 0 {send_message(s, &c, column_message(s, column))}
-		}
-		for pos in mine {
-			chunk := world_get(&s.world, pos)
-			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
+			if column_rescan(s, x, z, hi.y) {
+				changes_column(s, {x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT})
+			}
 		}
 	}
 	return changed, .Done
@@ -132,7 +110,7 @@ edit_chunk :: proc(s: ^Server, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) 
 				p := origin + l
 				if !shape_has(e.shape, p) {continue}
 				old := game.chunk_get(&c.blocks, l)
-				if old == .Bedrock {continue} 	// the world's floor stays
+				if !game.can_change(old) {continue} 	// the world's floor stays
 				new := old
 				switch e.op {
 				case .Set:
@@ -143,7 +121,10 @@ edit_chunk :: proc(s: ^Server, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) 
 					new = .Air
 				}
 				if new == old {continue}
-				if game.chunk_set(&c.blocks, &s.world.arrays, l, new) != nil {return}
+				if err := game.chunk_set(&c.blocks, &s.world.arrays, l, new); err != nil {
+					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
+					return
+				}
 				changed += 1
 			}
 		}

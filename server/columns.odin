@@ -2,13 +2,13 @@ package server
 
 import "../game"
 
-// Column heights (the highest solid block of each block column) for sky
-// light. Natural terrain has no overhangs, so worldgen's column_height is
-// the answer until an edit changes a column's top; those are kept in
-// tops. (Kept for the session, like the edits themselves until M5 saves
-// them.)
+// Column heights (the highest opaque block of each block column) for sky
+// light; the rules are game/column.odin's. Natural terrain has no
+// overhangs, so worldgen's column_height is the answer until an edit
+// changes a column's top; those are kept in tops (and saved with their
+// regions).
 
-// column_top is the y of the highest solid block at (x, z).
+// column_top is the y of the highest opaque block at (x, z).
 column_top :: proc(s: ^Server, x, z: i32) -> i32 {
 	if top, ok := s.tops[{x, z}]; ok {return top}
 	return game.column_height(s.config.seed, x, z)
@@ -34,53 +34,24 @@ column_message :: proc(s: ^Server, column: [2]i32) -> game.Column {
 // column_edited updates the top of p's column after the block at p changed
 // to b; true if it changed.
 column_edited :: proc(s: ^Server, p: game.Block_Pos, b: game.Block) -> bool {
+	query := game.Block_Query{&s.world, world_block}
 	old := column_top(s, p.x, p.z)
-	top := old
-	if game.block_solid(b) && p.y > old {
-		top = p.y
-	} else if !game.block_solid(b) && p.y == old {
-		// The top was removed: the next solid block down.
-		top = game.WORLD_MIN_Y
-		for y := p.y - 1; y >= game.WORLD_MIN_Y; y -= 1 {
-			block, loaded := world_block(&s.world, {p.x, y, p.z})
-			if !loaded {
-				// Beyond what is loaded: natural terrain (or just below).
-				top = min(game.column_height(s.config.seed, p.x, p.z), y)
-				break
-			}
-			if game.block_solid(block) {
-				top = y
-				break
-			}
-		}
-	}
-	if top == old {return false}
-	if top == game.column_height(s.config.seed, p.x, p.z) {
-		delete_key(&s.tops, [2]i32{p.x, p.z})
-	} else {
-		s.tops[{p.x, p.z}] = top
-	}
-	return true
+	return column_set(s, p.x, p.z, old, game.column_top_after(query, old, p, b, s.config.seed))
 }
 
 // column_rescan finds the top of (x, z) again after a bulk edit that
 // reached up to y = from (anything above the old top and from is air);
 // true if it changed.
 column_rescan :: proc(s: ^Server, x, z: i32, from: i32) -> bool {
+	query := game.Block_Query{&s.world, world_block}
 	old := column_top(s, x, z)
-	top := i32(game.WORLD_MIN_Y)
-	for y := min(max(old, from), game.WORLD_MAX_Y - 1); y >= game.WORLD_MIN_Y; y -= 1 {
-		block, loaded := world_block(&s.world, {x, y, z})
-		if !loaded {
-			// Below what is loaded: natural terrain (or just below).
-			top = min(game.column_height(s.config.seed, x, z), y)
-			break
-		}
-		if game.block_solid(block) {
-			top = y
-			break
-		}
-	}
+	return column_set(s, x, z, old, game.column_scan(query, x, z, max(old, from), s.config.seed))
+}
+
+// column_set records a column's new top (kept only where it differs from
+// the natural terrain's); true if it changed.
+@(private = "file")
+column_set :: proc(s: ^Server, x, z: i32, old, top: i32) -> bool {
 	if top == old {return false}
 	if top == game.column_height(s.config.seed, x, z) {
 		delete_key(&s.tops, [2]i32{x, z})

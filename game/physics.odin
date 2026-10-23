@@ -122,7 +122,7 @@ solid_at :: proc(q: Block_Query, p: Block_Pos) -> bool {
 	if p.y >= WORLD_MAX_Y {return false}
 	if p.y < WORLD_MIN_Y {return true}
 	b, loaded := q.get(q.data, p)
-	return !loaded || block_solid(b)
+	return !loaded || block_collides(b)
 }
 
 // sweep moves a box (width across, height up, position at the centre of

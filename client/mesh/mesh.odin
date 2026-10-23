@@ -99,10 +99,10 @@ mesh_chunk :: proc(s: ^Snapshot, light: ^Light_Snapshot, out: ^[dynamic]Vertex) 
 		for z in i32(0) ..< game.CHUNK_SIZE {
 			for x in i32(0) ..< game.CHUNK_SIZE {
 				b := s[snapshot_index(x, y, z)]
-				if !game.block_solid(b) {continue}
+				if !game.block_opaque(b) {continue} 	// see-through blocks: M10's cutout and translucent layers
 				for axes, face in FACE_AXES {
 					front := [3]i32{x, y, z} + axes.normal
-					if game.block_solid(s[snapshot_index(front.x, front.y, front.z)]) {continue}
+					if game.block_opaque(s[snapshot_index(front.x, front.y, front.z)]) {continue}
 					emit_face(s, light, out, {x, y, z}, face, axes, block_texture(b, face))
 				}
 			}
@@ -121,7 +121,7 @@ emit_face :: proc(
 	layer: u32,
 ) {
 	solid :: #force_inline proc(s: ^Snapshot, p: [3]i32) -> int {
-		return 1 if game.block_solid(s[snapshot_index(p.x, p.y, p.z)]) else 0
+		return 1 if game.block_opaque(s[snapshot_index(p.x, p.y, p.z)]) else 0
 	}
 	front := p + axes.normal
 	// The face's plane: the far side of the block for positive normals.

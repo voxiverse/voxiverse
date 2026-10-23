@@ -324,10 +324,10 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 		{4, 60, below + {0, -200, 0}, .Stone}, // not loaded: no
 	}
 	for e in edits {fake_send(&c, e)}
-	testing.expect(
-		t,
-		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.results) == 4}),
-	)
+	// The results come at once; the column at the end of the tick.
+	wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
+		return len(c.results) == 4 && c.column_updates >= 1
+	})
 	if len(c.results) == 4 {
 		testing.expect(t, c.results[0].accepted && c.results[0].block == .Air)
 		// Breaking the top block lowered the column: an update came.

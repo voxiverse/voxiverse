@@ -13,7 +13,7 @@ World_Fn :: proc(p: Block_Pos) -> Block
 @(private = "file")
 column_top :: proc(f: World_Fn, x, z: i32) -> i32 {
 	for y := i32(TEST_TOP); y > -200; y -= 1 {
-		if block_solid(f({x, y, z})) {return y}
+		if block_opaque(f({x, y, z})) {return y}
 	}
 	return NO_GROUND
 }
@@ -82,7 +82,7 @@ reference_build :: proc(f: World_Fn, c: Chunk_Pos) -> Reference {
 				p := [3]i32{x, y, z}
 				b := f(r.origin + p)
 				i := index(p)
-				solid[i] = block_solid(b)
+				solid[i] = block_opaque(b)
 				l := block_light(b)
 				top := tops[x + z * SIZE]
 				if !solid[i] && (top == NO_GROUND || r.origin.y + y > top) {l |= 15 << 4}

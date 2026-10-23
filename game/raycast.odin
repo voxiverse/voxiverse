@@ -55,7 +55,7 @@ raycast :: proc(
 		if block.y >= WORLD_MIN_Y && block.y < WORLD_MAX_Y {
 			b, loaded := q.get(q.data, block)
 			if !loaded {return}
-			if block_solid(b) {return {block, normal, distance}, true}
+			if block_collides(b) {return {block, normal, distance}, true}
 		}
 		// Step into the next block along the axis whose boundary is nearest.
 		axis := 0

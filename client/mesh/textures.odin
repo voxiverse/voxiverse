@@ -18,27 +18,39 @@ Texture :: enum u32 {
 	Lamp,
 }
 
-@(private = "file", rodata)
-BLOCK_TEXTURES := [game.Block][3]Texture { 	// side, top, bottom
-	.Air     = {},
-	.Stone   = {.Stone, .Stone, .Stone},
-	.Dirt    = {.Dirt, .Dirt, .Dirt},
-	.Grass   = {.Grass_Side, .Grass_Top, .Dirt},
-	.Sand    = {.Sand, .Sand, .Sand},
-	.Gravel  = {.Gravel, .Gravel, .Gravel},
-	.Bedrock = {.Bedrock, .Bedrock, .Bedrock},
-	.Lamp    = {.Lamp, .Lamp, .Lamp},
+// block_faces: a block's side, top and bottom textures (a switch, so a new
+// block does not compile until it has its look).
+block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
+	switch b {
+	case .Air:
+		return
+	case .Stone:
+		return .Stone, .Stone, .Stone
+	case .Dirt:
+		return .Dirt, .Dirt, .Dirt
+	case .Grass:
+		return .Grass_Side, .Grass_Top, .Dirt
+	case .Sand:
+		return .Sand, .Sand, .Sand
+	case .Gravel:
+		return .Gravel, .Gravel, .Gravel
+	case .Bedrock:
+		return .Bedrock, .Bedrock, .Bedrock
+	case .Lamp:
+		return .Lamp, .Lamp, .Lamp
+	}
+	return
 }
 
 block_texture :: proc(b: game.Block, f: Face) -> u32 {
-	t := BLOCK_TEXTURES[b]
+	side, top, bottom := block_faces(b)
 	#partial switch f {
 	case .Pos_Y:
-		return u32(t[1])
+		return u32(top)
 	case .Neg_Y:
-		return u32(t[2])
+		return u32(bottom)
 	}
-	return u32(t[0])
+	return u32(side)
 }
 
 // Generated pixels: TEXTURE_SIZE² RGBA8 (sRGB) per layer, plus mip levels

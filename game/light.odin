@@ -53,7 +53,7 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 		c := input.chunks[ci]
 		base := [3]i32{i32(ci % 3), i32(ci / 3 % 3), i32(ci / 9)} * CHUNK_SIZE
 		if c.array == nil {
-			solid, light := block_solid(c.uniform), block_light(c.uniform)
+			solid, light := block_opaque(c.uniform), block_light(c.uniform)
 			for y in i32(0) ..< CHUNK_SIZE {
 				for z in i32(0) ..< CHUNK_SIZE {
 					row := region_index(base + {0, y, z})
@@ -69,7 +69,7 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 		for j in 0 ..< CHUNK_VOLUME {
 			i := region_index(base + local_from_index(j))
 			b := c.array[j]
-			s.solid[i] = block_solid(b)
+			s.solid[i] = block_opaque(b)
 			s.light[i] = block_light(b)
 			if s.light[i] > 0 {append(&s.queue, u32(i))}
 		}

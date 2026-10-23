@@ -176,22 +176,21 @@ net_line :: proc(s: ^Session) -> string {
 	)
 }
 
-// hotbar: the placeable blocks along the bottom, the selected one framed.
+// hotbar: the items along the bottom, the selected one framed.
 @(private = "file")
 hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
 	t := &ctx.theme
 	SLOT :: 96
 	r := ctx.screen
 	row := ui.cut_bottom(&r, t.row_height + 24)
-	slots := hotbar_slots(s)
-	row = ui.rect_center(row, f32(slots) * (SLOT + t.spacing), t.row_height)
-	for i in 0 ..< slots {
+	items := hotbar_items(s)
+	row = ui.rect_center(row, f32(len(items)) * (SLOT + t.spacing), t.row_height)
+	for item, i in items {
 		slot := ui.cut_left(&row, SLOT)
 		ui.cut_left(&row, t.spacing)
 		ui.fill_rect(ctx, slot, {0, 0, 0, 150})
 		if i == s.hotbar {ui.stroke_rect(ctx, slot, 2, t.text)}
-		name := "rocket" if i == LAUNCHER else game.BLOCK_INFO[HOTBAR[i]].name
-		label := fmt.tprintf("%d %s", i + 1, name)
+		label := fmt.tprintf("%d %s", i + 1, item_name(item))
 		ui.label(ctx, label, slot, .Center, t.text if i == s.hotbar else t.text_muted)
 	}
 }

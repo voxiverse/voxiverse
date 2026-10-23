@@ -6,6 +6,12 @@ import "core:testing"
 test_edit_rules :: proc(t: ^testing.T) {
 	testing.expect(t, can_break(.Stone) && can_break(.Grass))
 	testing.expect(t, !can_break(.Air) && !can_break(.Bedrock))
+	testing.expect(t, can_place(.Lamp) && !can_place(.Air) && !can_place(.Bedrock))
+	testing.expect(t, can_change(.Air) && can_change(.Dirt) && !can_change(.Bedrock))
+	b, ok := block_by_name("gravel")
+	testing.expect(t, ok && b == .Gravel)
+	_, ok = block_by_name("gold")
+	testing.expect(t, !ok)
 
 	player := Player_State {
 		position = {0.5, 10, 0.5}, // feet at y 10, head up to 11.8

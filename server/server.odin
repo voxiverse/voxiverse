@@ -85,6 +85,7 @@ Server :: struct {
 	listening:   bool,
 	capture:     netcode.Capture, // (config.capture)
 	entities:    Entities, // (entities.odin)
+	changes:     Changes, // blocks changed this tick (changes.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -307,6 +308,7 @@ tick :: proc(s: ^Server) {
 	}
 	if moved {unload_unwanted(s)}
 	if !frozen {entities_tick(s)}
+	changes_flush(s)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		send_players(s, &c)
@@ -677,27 +679,12 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		allowed = game.can_break(current)
 	} else {
 		allowed =
-			e.block != .Bedrock &&
-			game.block_solid(e.block) &&
+			game.can_place(e.block) &&
 			game.can_place_at(current, e.pos, player) &&
 			!anyone_else_in(s, c, e.pos)
 	}
-	if !allowed || !world_set_block(&s.world, e.pos, e.block) {return result}
+	if !allowed || !set_block(s, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
-	chunk := game.chunk_of(e.pos)
-	mark_edited(s, chunk)
-	for &other in s.clients {
-		if &other != c && other.state == .Playing && chunk in other.has {
-			send_message(s, &other, game.Block_Changed{e.pos, e.block})
-		}
-	}
-	column := [2]i32{e.pos.x >> game.CHUNK_SHIFT, e.pos.z >> game.CHUNK_SHIFT}
-	if column_edited(s, e.pos, e.block) {
-		m := column_message(s, column)
-		for &other in s.clients {
-			if other.state == .Playing && other.columns[column] > 0 {send_message(s, &other, m)}
-		}
-	}
 	return result
 }
 
@@ -719,8 +706,8 @@ bulk_command :: proc(s: ^Server, c: ^Client, command: string) {
 		return true
 	}
 	block_named :: proc(name: string) -> (game.Block, bool) {
-		for b in game.Block {if game.BLOCK_INFO[b].name == name && b != .Bedrock {return b, true}}
-		return .Air, false
+		b, ok := game.block_by_name(name)
+		return b, ok && (b == .Air || game.can_place(b))
 	}
 	e: Bulk_Edit
 	ok := false

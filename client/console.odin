@@ -502,15 +502,11 @@ register_builtin_commands :: proc(c: ^Console) {
 			"place [block]: place against the aimed face (right click)",
 			proc(app: ^App, args: []string) {
 				if app.session == nil {return}
-				block := HOTBAR[min(app.session.hotbar, len(HOTBAR) - 1)]
+				block, holding := held_item(app.session).(game.Block)
+				if !holding {block = .Stone}
 				if len(args) > 0 {
-					found := false
-					for b in game.Block {
-						if game.BLOCK_INFO[b].name == args[0] && b != .Air && b != .Bedrock {
-							block, found = b, true
-						}
-					}
-					if !found {
+					b, found := game.block_by_name(args[0])
+					if found && game.can_place(b) {block = b} else {
 						console_print(
 							&app.console,
 							fmt.tprintf("place: no placeable block '%s'", args[0]),

@@ -10,9 +10,20 @@ import "core:math"
 // where it has the player, which can lag the client by the round trip.
 EDIT_REACH_SLACK :: 1.5
 
-// can_break: solid, and not the floor of the world.
+// can_break: players may remove it (not air, not the floor of the world).
 can_break :: proc(b: Block) -> bool {
-	return block_solid(b) && b != .Bedrock
+	return BLOCK_INFO[b].breakable
+}
+
+// can_place: players may place it.
+can_place :: proc(b: Block) -> bool {
+	return BLOCK_INFO[b].placeable
+}
+
+// can_change: an edit (bulk, an explosion) may change it: air, or what
+// players may break.
+can_change :: proc(b: Block) -> bool {
+	return b == .Air || BLOCK_INFO[b].breakable
 }
 
 // can_place_at: the spot is free (air) and the player is not standing in it.

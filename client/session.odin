@@ -17,6 +17,7 @@ import "../netcode"
 import "../platform"
 import "../render"
 import "../server"
+import "mesh"
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the connection (to its own in-process server, or over
@@ -64,7 +65,8 @@ Session :: struct {
 	traffic:     [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
 	others:      map[u16]Other_Player, // the other players, by player id (players.odin)
 	entities:    map[u32]Other_Entity, // near us, by id (entities.odin)
-	puffs:       [dynamic]Puff, // dying entities' particles
+	puffs:       [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
+	texels:      [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
 	newest_tick: u32, // of the newest Players or Entities message
 	newest_at:   time.Tick, // when it came
 	notices:     [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
@@ -88,7 +90,7 @@ Session :: struct {
 	edit_timer:  f32, // seconds until a held button edits again
 	sounds:      [dynamic]Sound_Event, // this frame's; the App plays and clears them
 	walked:      f32, // blocks on the ground since the last footstep
-	hotbar:      int, // index into HOTBAR
+	hotbar:      int, // index into hotbar_items
 	writer:      game.Writer,
 	scratch:     ^game.Block_Array, // decoding target for chunk messages
 	received:    [dynamic]game.Packet,
@@ -140,6 +142,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.others = make(map[u16]Other_Player, arena)
 	s.entities = make(map[u32]Other_Entity, 64)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
+	for &pixels, t in s.texels {mesh.generate_texture(t, pixels[:])}
 	s.config.name = strings.clone(config.name, arena)
 
 	if join, remote := config.join.?; remote {
@@ -620,29 +623,16 @@ fail :: proc(s: ^Session, reason: string) {
 	if !s.remote && s.pipe.allocator.procedure != nil {game.close(s.endpoint)}
 }
 
-// The blocks a player can place, in hotbar order.
-@(rodata)
-HOTBAR := [?]game.Block{.Stone, .Dirt, .Grass, .Sand, .Gravel, .Lamp}
-
-// LAUNCHER: the hotbar slot after the blocks holds the creative rocket
-// launcher, where the server allows it (it is a cheat).
-LAUNCHER :: len(HOTBAR)
-
-// hotbar_slots: how many slots the hotbar has here.
-hotbar_slots :: proc(s: ^Session) -> int {
-	return len(HOTBAR) + (1 if session_can_cheat(s) else 0)
-}
-
 MAX_PENDING_EDITS :: 64
 EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
 
-// edit_controls: number keys and the wheel pick the hotbar block; left
-// click breaks the aimed block, right click places against its face. Edits
-// are predicted at once (if the shared rules allow them) and sent.
+// edit_controls: number keys and the wheel pick the hotbar item; the mouse
+// buttons use it (item_use). Edits are predicted at once (if the shared
+// rules allow them) and sent.
 @(private = "file")
 edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
-	slots := hotbar_slots(s)
+	slots := len(hotbar_items(s))
 	for k, i in keys[:slots] {
 		if k in input.pressed {s.hotbar = i}
 	}
@@ -657,12 +647,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	pressed := input.mouse_pressed & {.Left, .Right} != {}
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
-	if s.hotbar == LAUNCHER {
-		if breaking {session_fire(s)}
-		return
-	}
-	if breaking && !placing && session_attack(s) {return}
-	session_edit(s, placing && !breaking, HOTBAR[s.hotbar])
+	item_use(s, held_item(s), breaking, placing)
 }
 
 // session_fire launches a rocket where we look (the server makes it).
@@ -754,7 +739,7 @@ block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
 			&s.world,
 			{i32(math.floor(feet.x + o.x)), y, i32(math.floor(feet.z + o.y))},
 		)
-		if game.block_solid(b) {return b, true}
+		if game.block_collides(b) {return b, true}
 	}
 	return .Air, false
 }

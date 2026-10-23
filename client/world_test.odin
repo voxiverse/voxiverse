@@ -178,4 +178,11 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, len(s.puffs), 0)
 	testing.expect_value(t, len(d.boxes), 0)
+
+	// Effects never grow the particles past their room: the rest are dropped.
+	for len(s.puffs) < MAX_PUFFS - 5 {entity_died(&s, &e)}
+	explosion_effects(&s, {0, 64, 0}, 6)
+	entity_died(&s, &e)
+	testing.expect_value(t, len(s.puffs), MAX_PUFFS)
+	testing.expect_value(t, cap(s.puffs), MAX_PUFFS)
 }

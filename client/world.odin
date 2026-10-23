@@ -319,27 +319,14 @@ world_set_column :: proc(w: ^World, m: game.Column) {
 }
 
 // predict_column_top updates p's column height for a predicted edit (the
-// server's Column has the last word): a solid block above the top raises it;
-// removing the top finds the next solid block down (as far as is loaded).
+// server's Column has the last word).
 @(private = "file")
 predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	column, ok := &w.columns[[2]i32{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}]
 	if !ok {return}
 	i := int(p.x & game.CHUNK_MASK) + int(p.z & game.CHUNK_MASK) * game.CHUNK_SIZE
 	old := column.heights[i]
-	top := old
-	if game.block_solid(b) && p.y > old {
-		top = p.y
-	} else if !game.block_solid(b) && p.y == old {
-		top = game.WORLD_MIN_Y
-		for y := p.y - 1; y >= game.WORLD_MIN_Y; y -= 1 {
-			block, loaded := world_block(w, {p.x, y, p.z})
-			if !loaded || game.block_solid(block) {
-				top = y
-				break
-			}
-		}
-	}
+	top := game.column_top_after(game.Block_Query{w, world_block}, old, p, b, nil)
 	if top == old {return}
 	column.heights[i] = top
 	remesh_box(
@@ -632,7 +619,7 @@ trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	if c.blocks.uniform == .Air {return true} 	// (a uniform chunk of another non-solid block, water, has faces)
 	for d in ([6]game.Chunk_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		n := neighbour_blocks(w, c.pos + d)
-		if n.array != nil || !game.block_solid(n.uniform) {return false}
+		if n.array != nil || !game.block_opaque(n.uniform) {return false}
 	}
 	return true
 }

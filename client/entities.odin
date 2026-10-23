@@ -6,6 +6,7 @@ import "core:time"
 
 import "../game"
 import "../render"
+import "mesh"
 
 // Entities as the client shows them: interpolated like the other players
 // (players.odin), drawn as boxes in the entity pass. A critter has a body,
@@ -18,30 +19,26 @@ PUFF_SECONDS :: 0.7
 PUFF_PIECES :: 14
 MAX_PUFFS :: 1024
 
-// Puff: a piece of something (a dying entity, debris, smoke) flying out
-// and falling (or, with gravity 0, drifting).
+// Puff: a particle, a piece of something (a dying entity, debris, smoke,
+// flame) flying out and falling, or drifting and slowing. It shrinks as it
+// ages.
 Puff :: struct {
 	position: [3]f64,
 	velocity: [3]f32,
 	age:      f32, // seconds
-	life:     f32, // seconds it lasts (0: PUFF_SECONDS)
-	size:     f32, // half-width, blocks (0: the death puff's)
-	gravity:  f32, // blocks/s² (0: none: smoke)
+	life:     f32, // seconds it lasts
+	size:     f32, // half-width, blocks
+	gravity:  f32, // blocks/s²
+	drag:     f32, // fraction of its speed lost per second
 	color:    [4]u8,
 }
 
-// Debris colours: what each block looks like broken up.
-@(private = "file", rodata)
-DEBRIS := [game.Block][4]u8 {
-	.Air     = {},
-	.Stone   = {128, 128, 132, 255},
-	.Dirt    = {121, 85, 58, 255},
-	.Grass   = {94, 150, 64, 255},
-	.Sand    = {214, 200, 150, 255},
-	.Gravel  = {120, 112, 106, 255},
-	.Bedrock = {60, 60, 64, 255},
-	.Lamp    = {240, 200, 110, 255},
+// puff_add adds p, unless there are MAX_PUFFS already (then it is dropped:
+// effects are not worth growing memory for).
+puff_add :: proc(s: ^Session, p: Puff) {
+	if len(s.puffs) < cap(s.puffs) {append(&s.puffs, p)}
 }
+
 @(private = "file")
 SMOKE :: [4]u8{70, 68, 66, 255}
 @(private = "file")
@@ -75,16 +72,14 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 	for i := 0; i < len(s.puffs); {
 		p := &s.puffs[i]
 		p.age += dt
-		life := p.life if p.life > 0 else PUFF_SECONDS
-		if p.age > life {
+		if p.age > p.life {
 			unordered_remove(&s.puffs, i)
 			continue
 		}
-		p.velocity.y -= (p.gravity if p.life > 0 else 18) * dt
-		if p.life > 0 && p.gravity == 0 {p.velocity *= 1 - 2 * dt} 	// smoke slows
+		p.velocity.y -= p.gravity * dt
+		p.velocity *= max(1 - p.drag * dt, 0)
 		p.position += {f64(p.velocity.x * dt), f64(p.velocity.y * dt), f64(p.velocity.z * dt)}
-		base: f32 = p.size if p.size > 0 else 0.07
-		size := base * (1 - p.age / life * 0.6)
+		size := p.size * (1 - p.age / p.life * 0.6)
 		render.entity_box(d, p.position, 0, 0, -size, size, p.color, .Body)
 		i += 1
 	}
@@ -132,9 +127,9 @@ rocket :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View) {
 	)
 	tail := centre + turn_yaw({0, 0, 0.4}, v.yaw)
 	render.entity_box(d, tail, v.yaw, v.pitch, -0.07, 0.07, FLAME, .Body)
-	if len(s.puffs) < cap(s.puffs) && rand.float32() < 0.6 {
-		append(
-			&s.puffs,
+	if rand.float32() < 0.6 {
+		puff_add(
+			s,
 			Puff {
 				position = tail,
 				velocity = {
@@ -144,6 +139,7 @@ rocket :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View) {
 				},
 				life = 1.2,
 				size = 0.12,
+				drag = 2,
 				color = SMOKE,
 			},
 		)
@@ -153,9 +149,8 @@ rocket :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View) {
 // explosion_effects: the debris of what was there (the blocks are still
 // the old ones: the bulk edit comes after), smoke, and the boom.
 explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
-	room := cap(s.puffs) - len(s.puffs)
-	for _ in 0 ..< min(60, room / 2) {
-		// A random point in the sphere; its block's colour, flung out.
+	for _ in 0 ..< min(60, (cap(s.puffs) - len(s.puffs)) / 2) {
+		// A random point in the sphere; a piece of its block, flung out.
 		p: [3]f64
 		for {
 			p = {rand.float64_range(-1, 1), rand.float64_range(-1, 1), rand.float64_range(-1, 1)}
@@ -166,46 +161,54 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 			&s.world,
 			{i32(math.floor(at.x)), i32(math.floor(at.y)), i32(math.floor(at.z))},
 		)
-		if !game.block_solid(b) {continue}
+		if !game.block_collides(b) {continue}
 		out := [3]f32{f32(p.x), f32(p.y) + 0.6, f32(p.z)} * rand.float32_range(6, 14)
-		append(
-			&s.puffs,
-			Puff {
+		puff_add(
+			s,
+			{
 				position = at,
 				velocity = out,
 				life = rand.float32_range(0.8, 1.6),
 				size = 0.11,
 				gravity = 22,
-				color = DEBRIS[b],
+				color = debris_colour(s, b),
 			},
 		)
 	}
-	for _ in 0 ..< min(24, cap(s.puffs) - len(s.puffs)) {
+	for _ in 0 ..< 24 {
 		dir := [3]f32 {
 			rand.float32_range(-1, 1),
 			rand.float32_range(-0.2, 1),
 			rand.float32_range(-1, 1),
 		}
-		append(
-			&s.puffs,
-			Puff {
+		puff_add(
+			s,
+			{
 				position = center,
 				velocity = dir * f32(radius) * 1.6,
 				life = rand.float32_range(1, 2),
 				size = rand.float32_range(0.25, 0.45),
+				drag = 2,
 				color = SMOKE,
 			},
 		)
 	}
-	for _ in 0 ..< min(10, cap(s.puffs) - len(s.puffs)) {
+	for _ in 0 ..< 10 {
 		dir := [3]f32 {
 			rand.float32_range(-1, 1),
 			rand.float32_range(-1, 1),
 			rand.float32_range(-1, 1),
 		}
-		append(
-			&s.puffs,
-			Puff{position = center, velocity = dir * 8, life = 0.25, size = 0.3, color = FLAME},
+		puff_add(
+			s,
+			{
+				position = center,
+				velocity = dir * 8,
+				life = 0.25,
+				size = 0.3,
+				drag = 2,
+				color = FLAME,
+			},
 		)
 	}
 	append(&s.sounds, Sound_Event{.Explosion, .Air, center, 1})
@@ -214,23 +217,26 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 // entity_died: its puff and its last sound.
 entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 	at := e.last_seen
-	for _ in 0 ..< min(PUFF_PIECES, cap(s.puffs) - len(s.puffs)) {
+	for _ in 0 ..< PUFF_PIECES {
 		angle := rand.float32_range(0, math.TAU)
 		speed := rand.float32_range(1.5, 3.5)
-		append(
-			&s.puffs,
-			Puff {
-				position = at +
-				{
-						f64(rand.float32_range(-0.3, 0.3)),
-						f64(rand.float32_range(0.3, 0.8)),
-						f64(rand.float32_range(-0.3, 0.3)),
-					},
+		offset := [3]f64 {
+			f64(rand.float32_range(-0.3, 0.3)),
+			f64(rand.float32_range(0.3, 0.8)),
+			f64(rand.float32_range(-0.3, 0.3)),
+		}
+		puff_add(
+			s,
+			{
+				position = at + offset,
 				velocity = {
 					math.cos(angle) * speed,
 					rand.float32_range(2, 5),
 					math.sin(angle) * speed,
 				},
+				life = PUFF_SECONDS,
+				size = 0.07,
+				gravity = 18,
 				color = WOOL if rand.float32() < 0.7 else HIDE,
 			},
 		)
@@ -267,4 +273,11 @@ entity_aimed :: proc(
 turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 	c, s := math.cos(yaw), math.sin(yaw)
 	return {f64(p.x * c + p.z * s), f64(p.y), f64(-p.x * s + p.z * c)}
+}
+
+// debris_colour: a piece of b, broken up: one of the pixels of its side.
+@(private = "file")
+debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
+	side, _, _ := mesh.block_faces(b)
+	return s.texels[side][rand.int_max(len(s.texels[side]))]
 }
