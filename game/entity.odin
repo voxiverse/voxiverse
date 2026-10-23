@@ -20,6 +20,7 @@ Entity_Info :: struct {
 	walk_speed: f32, // blocks/s
 	run_speed:  f32, // fleeing
 	jump:       f32, // blocks it can jump up
+	saved:      bool, // kept with the world (a rocket in flight is not)
 }
 
 @(rodata)
@@ -32,6 +33,7 @@ ENTITY_INFO := [Entity_Kind]Entity_Info {
 		walk_speed = 1.4,
 		run_speed = 4.2,
 		jump = 1.2,
+		saved = true,
 	},
 	.Rocket = {name = "rocket", width = 0.3, height = 0.3, health = 1},
 }

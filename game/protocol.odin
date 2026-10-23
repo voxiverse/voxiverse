@@ -58,7 +58,7 @@ Set_Rule :: struct {
 	value: string,
 }
 
-// Admin runs a server command ("save", "time <0..1>"); a cheat, like Set_Rule.
+// Admin runs a server command (see server/admin.odin); a cheat, like Set_Rule.
 Admin :: struct {
 	command: string,
 }
@@ -284,6 +284,7 @@ Server_Message :: union {
 MAX_VIEW_RADIUS :: 32
 MAX_REASON_LENGTH :: 256
 MAX_RULE_TEXT :: 64
+MAX_ADMIN_TEXT :: 256
 MAX_SPEED :: 1000 // blocks/s: anything faster in a message is invalid
 
 @(private = "file")
@@ -632,7 +633,7 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		}
 	case u8(Client_Kind.Admin):
 		m = Admin {
-			command = read_string(&r, MAX_RULE_TEXT),
+			command = read_string(&r, MAX_ADMIN_TEXT),
 		}
 	case u8(Client_Kind.Attack):
 		m = Attack {

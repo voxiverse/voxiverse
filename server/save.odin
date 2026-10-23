@@ -373,6 +373,7 @@ write_entities :: proc(s: ^Server) -> bool {
 		"# Voxiverse entities (written by the server): kind x y z yaw health natural",
 	)
 	for e in s.entities.list {
+		if !game.ENTITY_INFO[e.kind].saved {continue}
 		fmt.sbprintfln(
 			&b,
 			"%s %.4f %.4f %.4f %.4f %d %v",
@@ -410,7 +411,8 @@ load_entities :: proc(s: ^Server) {
 		found := false
 		if ok {
 			for k in game.Entity_Kind {
-				if game.ENTITY_INFO[k].name == f[0] {kind, found = k, true}
+				info := &game.ENTITY_INFO[k]
+				if info.saved && info.name == f[0] {kind, found = k, true}
 			}
 		}
 		pos: [3]f64

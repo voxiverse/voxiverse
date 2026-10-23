@@ -216,14 +216,20 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		first:  game.Client_Message,
 		raw:    []u8,
 		reason: string,
+		cheats: bool, // the client may cheat
+		hello:  bool, // say hello first
 	}
 	cases := []Case {
 		{
 			first = game.Hello{game.PROTOCOL_VERSION + 1, "old"},
 			reason = "protocol version mismatch",
 		},
-		{first = game.Input{}, reason = "input before hello"},
-		{first = game.Teleport{}, reason = "cheats are not allowed"},
+		{first = game.Input{}, reason = "message before hello"},
+		{first = game.Teleport{}, reason = "message before hello"},
+		// Cheats are for players: not before hello, even where allowed.
+		{first = game.Admin{"explode 0 0 0 8"}, reason = "message before hello", cheats = true},
+		{first = game.Admin{"explode 0 0 0 8"}, reason = "cheats are not allowed", hello = true},
+		{first = game.Fire{}, reason = "cheats are not allowed", hello = true},
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
@@ -234,7 +240,13 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 			t,
 			start(
 				&srv,
-				{seed = 1, view_radius = 2, view_height = 1, workers = 1},
+				{
+					seed = 1,
+					view_radius = 2,
+					view_height = 1,
+					workers = 1,
+					allow_cheats = tc.cheats,
+				},
 				{&pipe, .Server},
 			),
 		)
@@ -245,6 +257,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		if tc.raw != nil {
 			game.send(c.endpoint, tc.raw)
 		} else {
+			if tc.hello {fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tester"})}
 			fake_send(&c, tc.first)
 		}
 		testing.expect(

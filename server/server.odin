@@ -383,6 +383,23 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		disconnect(s, c, "invalid message")
 		return
 	}
+	// Before hello only a hello (or a ping) makes sense; after it, cheats
+	// need the permission.
+	_, hello := m.(game.Hello)
+	_, ping := m.(game.Ping)
+	if c.state != .Playing && !hello && !ping {
+		disconnect(s, c, "message before hello")
+		return
+	}
+	cheat: bool
+	#partial switch _ in m {
+	case game.Teleport, game.Set_Rule, game.Admin, game.Fire:
+		cheat = true // the rocket launcher is a creative tool: a cheat
+	}
+	if cheat && !c.can_cheat {
+		disconnect(s, c, "cheats are not allowed")
+		return
+	}
 	switch v in m {
 	case game.Hello:
 		if c.state != .Connecting {
@@ -405,26 +422,14 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		}
 		join(s, c, v.name)
 	case game.Input:
-		if c.state != .Playing {
-			disconnect(s, c, "input before hello")
-			return
-		}
 		game.input_queue_push(&c.inputs, v)
 	case game.Teleport:
-		if !c.can_cheat || c.state != .Playing {
-			disconnect(s, c, "cheats are not allowed")
-			return
-		}
 		c.player = {
 			position = v.position,
 		}
 		c.teleport = {v.yaw, v.pitch}
 		c.teleported = true
 	case game.Set_Rule:
-		if !c.can_cheat {
-			disconnect(s, c, "cheats are not allowed")
-			return
-		}
 		switch err := base.var_set(game.rules_table(), &s.rules, v.name, v.value); err {
 		case .None, .Out_Of_Range:
 			if err ==
@@ -442,29 +447,12 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Ping:
 		send_message(s, c, game.Pong{v.id})
 	case game.Admin:
-		if !c.can_cheat {
-			disconnect(s, c, "cheats are not allowed")
-			return
-		}
 		admin(s, c, v.command)
 	case game.Edit:
-		if c.state != .Playing {
-			disconnect(s, c, "edit before hello")
-			return
-		}
 		queue_edit(s, c, v)
 	case game.Attack:
-		if c.state != .Playing {
-			disconnect(s, c, "attack before hello")
-			return
-		}
 		attack(s, c, v)
 	case game.Fire:
-		// The rocket launcher is a creative tool: a cheat.
-		if !c.can_cheat || c.state != .Playing {
-			disconnect(s, c, "cheats are not allowed")
-			return
-		}
 		if s.tick >= c.fired_at + FIRE_EVERY {
 			c.fired_at = s.tick
 			fire(s, c, v.yaw, v.pitch)
@@ -571,7 +559,7 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 		}
 		notice(s, c, fmt.tprintf("hash %d %x", len(c.has), sum))
 		return
-	case strings.has_prefix(command, "summon"):
+	case command == "summon" || strings.has_prefix(command, "summon "):
 		if !summon(s, c, .Critter) {notice(s, c, "Nowhere to put it (look at open ground nearby)")}
 		return
 	case command == "open_lan":

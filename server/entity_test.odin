@@ -3,6 +3,7 @@ package server
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 import "core:testing"
 import "core:time"
 
@@ -128,11 +129,21 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	net_send(&near, game.Admin{"summon critter"})
 	ok = net_wait(t, {&near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok)
+	// A rocket straight up, still flying when the server stops: not saved.
+	net_send(&near, game.Fire{near.seq, 0, 1.5})
+	ok = net_wait(t, {&near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 2})
+	testing.expect(t, ok, "the rocket never showed up")
 	netcode.link_close(&near.link, "bye")
 	netcode.link_close(&far.link, "bye")
 	time.sleep(100 * time.Millisecond)
 	testing.expect(t, stop(&srv))
 	stopped = true
+	saved, _ := os.read_entire_file_from_path(
+		filepath.join({dir, ENTITIES_FILE}, context.temp_allocator) or_else "",
+		context.temp_allocator,
+	)
+	testing.expect(t, strings.contains(string(saved), "critter"), "the critter was not saved")
+	testing.expect(t, !strings.contains(string(saved), "rocket"), "a rocket in flight was saved")
 	if !testing.expect(t, start(&srv, config, {})) {return}
 	stopped = false
 	// Near comes back where it left, beside the saved critter.

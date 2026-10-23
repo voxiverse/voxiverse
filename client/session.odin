@@ -761,6 +761,19 @@ block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
 
 @(private)
 send_message :: proc(s: ^Session, m: game.Client_Message) {
+	// Text the server would refuse to decode (ending the connection).
+	#partial switch v in m {
+	case game.Admin:
+		if len(v.command) > game.MAX_ADMIN_TEXT {
+			append(&s.notices, strings.clone("Command too long"))
+			return
+		}
+	case game.Set_Rule:
+		if len(v.name) > game.MAX_RULE_TEXT || len(v.value) > game.MAX_RULE_TEXT {
+			append(&s.notices, strings.clone("Rule text too long"))
+			return
+		}
+	}
 	clear(&s.writer.buf)
 	game.encode_client(&s.writer, m)
 	data := s.writer.buf[:]

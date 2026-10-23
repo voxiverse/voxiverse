@@ -629,7 +629,7 @@ neighbour_blocks :: proc(w: ^World, pos: game.Chunk_Pos) -> ^game.Chunk_Blocks {
 @(private = "file")
 trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	if c.blocks.array != nil {return false}
-	if !game.block_solid(c.blocks.uniform) {return true}
+	if c.blocks.uniform == .Air {return true} 	// (a uniform chunk of another non-solid block, water, has faces)
 	for d in ([6]game.Chunk_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		n := neighbour_blocks(w, c.pos + d)
 		if n.array != nil || !game.block_solid(n.uniform) {return false}

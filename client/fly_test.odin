@@ -56,6 +56,11 @@ fly_test_command :: proc(app: ^App, args: []string) {
 	}
 	if app.session == nil {enter_world(app, "", 0x5eed)} 	// a scratch world
 	if app.session == nil {return}
+	if !session_hosting(app.session) {
+		// Its memory checks need the server here.
+		console_print(&app.console, "fly_test runs in a world of your own", .Warning)
+		return
+	}
 	t := &app.fly_test
 	frames := t.frames // keep the (large) stats buffer's storage
 	t^ = {
@@ -72,7 +77,12 @@ fly_test_command :: proc(app: ^App, args: []string) {
 fly_test_update :: proc(app: ^App) {
 	t := &app.fly_test
 	s := app.session
-	if t.phase == .Off || s == nil {return}
+	if t.phase == .Off {return}
+	if s == nil {
+		// The session failed (or was left): fail, never hang.
+		fly_test_finish(app, "left the world")
+		return
+	}
 	dt := app.last_frame_ms / 1000
 	switch t.phase {
 	case .Off:

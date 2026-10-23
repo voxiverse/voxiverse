@@ -62,6 +62,11 @@ blast_test_command :: proc(app: ^App, args: []string) {
 	}
 	if app.session == nil {enter_world(app, "", 0x5eed)}
 	if app.session == nil {return}
+	if !session_hosting(app.session) {
+		// Its memory checks need the server here.
+		console_print(&app.console, "blast_test runs in a world of your own", .Warning)
+		return
+	}
 	t := &app.blast_test
 	frames := t.frames
 	t^ = {
@@ -79,7 +84,12 @@ blast_test_command :: proc(app: ^App, args: []string) {
 blast_test_update :: proc(app: ^App) {
 	t := &app.blast_test
 	s := app.session
-	if t.phase == .Off || s == nil {return}
+	if t.phase == .Off {return}
+	if s == nil {
+		// The session failed (or was left): fail, never hang.
+		blast_test_finish(app, "left the world")
+		return
+	}
 	if t.phase != .Loading && s.state != .Playing {
 		blast_test_finish(app, "left the world")
 		return

@@ -65,6 +65,14 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		t,
 		ok && rule.(Set_Rule).name == "rules.gravity" && rule.(Set_Rule).value == "20",
 	)
+	// A long command (bulk edits with far coordinates) fits; longer is invalid.
+	long := "replace -2147483000 -2147483000 -2147483000 2147483000 2147483000 2147483000 gravel sand"
+	admin: Client_Message
+	admin, ok = decode_client(encode_c(Admin{long})[:])
+	testing.expect(t, ok && admin.(Admin).command == long)
+	too_long := strings.repeat("x", MAX_ADMIN_TEXT + 1, context.temp_allocator)
+	_, ok = decode_client(encode_c(Admin{too_long})[:])
+	testing.expect(t, !ok)
 	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false}
 	upd: Server_Message
 	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
