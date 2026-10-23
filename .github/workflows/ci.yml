@@ -51,8 +51,8 @@ jobs:
 
       - name: Project tools (ols, odinfmt)
         run: |
-          odinup install
-          odinup check
+          odinup install --dev
+          odinup check --dev
 
       - name: Check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check

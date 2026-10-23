@@ -22,6 +22,7 @@ Save_Client :: struct {
 	welcome:  game.Welcome,
 	welcomed: bool,
 	player:   game.Player_Update,
+	turned:   Maybe([2]f32), // yaw, pitch of the first teleported update
 	results:  map[u32]game.Edit_Result,
 	seq:      u32,
 }
@@ -71,6 +72,7 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 			}
 		case game.Player_Update:
 			c.player = v
+			if v.teleported && c.turned == nil {c.turned = [2]f32{v.yaw, v.pitch}}
 		case game.Edit_Result:
 			c.results[v.id] = v
 			if b, had := &c.chunks[game.chunk_of(v.pos)];
@@ -187,7 +189,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			r := c.results[u32(i + 1)]
 			if testing.expectf(t, r.accepted, "edit %d refused", i + 1) {append(&edits, e)}
 		}
-		for _ in 0 ..< 20 {tick(t, &c, {move = {0, 1}, yaw = 0})} 	// walk a bit (towards -z)
+		for _ in 0 ..< 20 {tick(t, &c, {move = {0, 1}, yaw = 0.7, pitch = -0.3})} 	// walk a bit, looking that way
 		testing.expect(
 			t,
 			until(t, &c, proc(c: ^Save_Client) -> bool {return c.player.acked == c.seq}),
@@ -232,6 +234,16 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			"joined at %v, left at %v",
 			c.welcome.spawn,
 			left_at.position,
+		)
+		// Looking where they looked when they left.
+		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return c.turned != nil}))
+		look := c.turned.? or_else {}
+		testing.expectf(
+			t,
+			abs(look[0] - 0.7) < 1e-5 && abs(look[1] + 0.3) < 1e-5,
+			"looking at %v after loading, %v before",
+			look,
+			[2]f32{0.7, -0.3},
 		)
 		for e in edits {
 			got, ok := block_at(&c, e.pos)

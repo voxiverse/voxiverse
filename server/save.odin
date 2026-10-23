@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:log"
+import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strconv"
@@ -22,6 +23,11 @@ import "../game"
 // temporary file, so a crash mid-save leaves the previous save intact.
 
 AUTOSAVE_SECONDS :: 60
+
+Saved_Player :: struct {
+	state:      game.Player_State,
+	yaw, pitch: f32, // where they were looking
+}
 WORLD_FILE :: "world.cfg"
 WORLD_FORMAT :: 1
 
@@ -29,7 +35,7 @@ Store :: struct {
 	dir:       string, // "" = this world is not saved
 	saved:     map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
 	regions:   map[game.Region_Pos]bool, // read from disk; true = changed since written
-	player:    Maybe(game.Player_State), // from world.cfg, for the next join
+	player:    Maybe(Saved_Player), // from world.cfg, for the next join
 	writer:    game.Writer,
 	last_save: time.Tick,
 }
@@ -243,11 +249,14 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	if s.client.state == .Playing || s.store.player != nil {
-		p := s.client.player if s.client.state == .Playing else s.store.player.?
-		fmt.sbprintfln(&b, "player.x = %.6f", p.position.x)
-		fmt.sbprintfln(&b, "player.y = %.6f", p.position.y)
-		fmt.sbprintfln(&b, "player.z = %.6f", p.position.z)
-		fmt.sbprintfln(&b, "player.flying = %v", p.flying)
+		p :=
+			Saved_Player{s.client.player, s.client.look[0], s.client.look[1]} if s.client.state == .Playing else s.store.player.?
+		fmt.sbprintfln(&b, "player.x = %.6f", p.state.position.x)
+		fmt.sbprintfln(&b, "player.y = %.6f", p.state.position.y)
+		fmt.sbprintfln(&b, "player.z = %.6f", p.state.position.z)
+		fmt.sbprintfln(&b, "player.yaw = %.6f", p.yaw)
+		fmt.sbprintfln(&b, "player.pitch = %.6f", p.pitch)
+		fmt.sbprintfln(&b, "player.flying = %v", p.state.flying)
 	}
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &s.rules, &b)
@@ -260,7 +269,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 @(private = "file")
 read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	rules_text := strings.builder_make(context.temp_allocator)
-	player: game.Player_State
+	player: Saved_Player
 	have_player := 0
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
@@ -283,11 +292,17 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
 		case key == "player.x", key == "player.y", key == "player.z":
 			if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
-				player.position[int(key[len(key) - 1] - 'x')] = v
+				player.state.position[int(key[len(key) - 1] - 'x')] = v
 				have_player += 1
 			}
+		case key == "player.yaw":
+			if v, ok := strconv.parse_f32(value);
+			   ok && !math.is_nan(v) && abs(v) < 1e6 {player.yaw = v}
+		case key == "player.pitch":
+			if v, ok := strconv.parse_f32(value);
+			   ok && !math.is_nan(v) {player.pitch = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
 		case key == "player.flying":
-			player.flying = value == "true"
+			player.state.flying = value == "true"
 		case strings.has_prefix(key, "rules."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}

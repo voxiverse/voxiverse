@@ -40,6 +40,10 @@ Mesa's Vulkan drivers) and, on Linux, an X11 or Wayland desktop.
 The first build also fetches the pinned shader compiler (checksum-verified, into `build/`);
 after that a build takes seconds. Choose **Singleplayer**, create a world, and play.
 
+Working on the code? `odinup install --dev` also builds the development tools: the
+[ols](https://github.com/DanielGavin/ols) language server for your editor, and `odinfmt`,
+which `build check` and `build fmt` use.
+
 Optional, recommended for development: the Vulkan validation layer, which debug builds turn
 on automatically and which reports GPU API misuse in the log.
 

@@ -228,7 +228,14 @@ receive_messages :: proc(s: ^Server) {
 			}
 			s.client.state = .Playing
 			// Where they left, in a saved world; else above the terrain.
-			s.client.player = s.store.player.? or_else {position = spawn_point(s.config.seed)}
+			saved, has_saved := s.store.player.?
+			s.client.player = saved.state if has_saved else {position = spawn_point(s.config.seed)}
+			if has_saved {
+				// Look where they looked: sent like a teleport's direction.
+				s.client.look = {saved.yaw, saved.pitch}
+				s.client.teleport = s.client.look
+				s.client.teleported = true
+			}
 			spawn := s.client.player.position
 			set_position(&s.client, spawn)
 			send_message(
@@ -311,6 +318,7 @@ simulate_player :: proc(s: ^Server) {
 	run_due_edits(s) // edits after inputs applied in earlier ticks
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+		c.look = {msg.input.yaw, msg.input.pitch}
 		run_due_edits(s)
 	}
 	set_position(c, c.player.position)

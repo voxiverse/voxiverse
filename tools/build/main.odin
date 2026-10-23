@@ -304,7 +304,7 @@ check_format :: proc() -> bool {
 
 have_odinfmt :: proc() -> bool {
 	if _, ok := capture({"odinfmt", "-h"}); ok {return true}
-	fmt.eprintln("build: odinfmt not found - `odinup install` builds it (with ols)")
+	fmt.eprintln("build: odinfmt not found - `odinup install --dev` builds it (with ols)")
 	return false
 }
 

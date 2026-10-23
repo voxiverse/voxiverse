@@ -4,6 +4,9 @@
 [toolchain]
 odin = "dev-2026-10"
 
+# For working on the code (language server, and odinfmt for `build check`
+# and `build fmt`): `odinup install --dev`.
 [tools.ols]
 git = "https://github.com/DanielGavin/ols"
 rev = "c96dea912cf8"
+dev = true

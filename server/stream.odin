@@ -29,6 +29,7 @@ Client :: struct {
 	edits:      [MAX_QUEUED_EDITS]game.Edit, // waiting for their input (oldest first)
 	edit_count: int,
 	teleport:   [2]f32, // yaw, pitch to look after it
+	look:       [2]f32, // yaw, pitch of the last input applied (saved with the player)
 }
 
 // MAX_QUEUED_EDITS: edits waiting for the input they follow; more than this
