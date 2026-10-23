@@ -11,6 +11,7 @@ Block :: enum u16 {
 	Grass,
 	Sand,
 	Gravel,
+	Bedrock, // the world's floor; cannot be broken
 }
 
 Block_Info :: struct {
@@ -20,12 +21,13 @@ Block_Info :: struct {
 
 @(rodata)
 BLOCK_INFO := [Block]Block_Info {
-	.Air    = {"air", false},
-	.Stone  = {"stone", true},
-	.Dirt   = {"dirt", true},
-	.Grass  = {"grass", true},
-	.Sand   = {"sand", true},
-	.Gravel = {"gravel", true},
+	.Air     = {"air", false},
+	.Stone   = {"stone", true},
+	.Dirt    = {"dirt", true},
+	.Grass   = {"grass", true},
+	.Sand    = {"sand", true},
+	.Gravel  = {"gravel", true},
+	.Bedrock = {"bedrock", true},
 }
 
 block_valid :: #force_inline proc(id: u16) -> bool {

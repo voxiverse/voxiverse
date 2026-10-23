@@ -14,16 +14,18 @@ Texture :: enum u32 {
 	Grass_Side,
 	Sand,
 	Gravel,
+	Bedrock,
 }
 
 @(private = "file", rodata)
 BLOCK_TEXTURES := [game.Block][3]Texture { 	// side, top, bottom
-	.Air    = {},
-	.Stone  = {.Stone, .Stone, .Stone},
-	.Dirt   = {.Dirt, .Dirt, .Dirt},
-	.Grass  = {.Grass_Side, .Grass_Top, .Dirt},
-	.Sand   = {.Sand, .Sand, .Sand},
-	.Gravel = {.Gravel, .Gravel, .Gravel},
+	.Air     = {},
+	.Stone   = {.Stone, .Stone, .Stone},
+	.Dirt    = {.Dirt, .Dirt, .Dirt},
+	.Grass   = {.Grass_Side, .Grass_Top, .Dirt},
+	.Sand    = {.Sand, .Sand, .Sand},
+	.Gravel  = {.Gravel, .Gravel, .Gravel},
+	.Bedrock = {.Bedrock, .Bedrock, .Bedrock},
 }
 
 block_texture :: proc(b: game.Block, f: Face) -> u32 {
@@ -87,6 +89,11 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				v := value_noise(seed ~ 11, x, y, 3) * 0.8 + 0.25 * fine
 				if hash01(seed ~ 13, x, y) > 0.82 {v = 0}
 				c = shade(GRAVEL, v)
+			case .Bedrock:
+				// Dark, coarse, cracked: obviously the end of the world.
+				v := value_noise(seed ~ 17, x, y, 2) * 0.9 + 0.2 * fine
+				if hash01(seed ~ 19, x, y) > 0.8 {v = 0}
+				c = shade(BEDROCK, v)
 			}
 			pixels[y * TEXTURE_SIZE + x] = c
 		}
@@ -133,6 +140,15 @@ GRAVEL := [5]Rgba {
 	{128, 122, 116, 255},
 	{150, 144, 136, 255},
 	{176, 170, 160, 255},
+}
+
+@(private = "file", rodata)
+BEDROCK := [5]Rgba {
+	{22, 22, 26, 255},
+	{40, 40, 46, 255},
+	{58, 58, 64, 255},
+	{80, 80, 86, 255},
+	{104, 104, 110, 255},
 }
 
 // shade picks the ramp entry for v in 0..1.

@@ -266,9 +266,7 @@ write_chunk_pos :: proc(w: ^Writer, c: Chunk_Pos) {
 
 @(private = "file")
 read_chunk_pos :: proc(r: ^Reader) -> (c: Chunk_Pos) {
-	for &v in c {
-		v = read_i32(r)
-		if v <= -CHUNK_LIMIT || v >= CHUNK_LIMIT {reader_fail(r)}
-	}
+	for &v in c {v = read_i32(r)}
+	if !in_world(c) {reader_fail(r)}
 	return
 }

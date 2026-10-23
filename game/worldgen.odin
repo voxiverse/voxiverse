@@ -28,6 +28,7 @@ Layer :: enum i64 {
 	Cave_A    = 0x2d95,
 	Cave_B    = 0x5be7,
 	Lowland   = 0x6a03,
+	Bedrock   = 0x3c11,
 }
 
 // column_height is the y of the topmost terrain block at (x, z).
@@ -75,12 +76,26 @@ generate :: proc(
 		y := origin.y + l.y
 		h := heights[l.z][l.x]
 		b := surface_block(seed, origin.x + l.x, origin.z + l.z, y, h)
-		if b != .Air && y < h - 3 && has_caves && in_cave(&caves, l) {b = .Air}
+		if b != .Air &&
+		   y < h - 3 &&
+		   y > WORLD_MIN_Y + 4 &&
+		   has_caves &&
+		   in_cave(&caves, l) {b = .Air}
+		if y < WORLD_MIN_Y + 3 &&
+		   is_bedrock(seed, origin.x + l.x, origin.z + l.z, y) {b = .Bedrock}
 		dst[i] = b
 	}
 	first := dst[0]
 	for b in dst {if b != first {return {}, false}}
 	return first, true
+}
+
+// is_bedrock: the bottom layer, and a ragged two layers above it.
+@(private = "file")
+is_bedrock :: proc(seed: i64, x, z, y: i32) -> bool {
+	layer := y - WORLD_MIN_Y
+	if layer == 0 {return true}
+	return f32(layer) < 3 * noise.noise_2d(seed ~ i64(Layer.Bedrock), {f64(x) * 0.7, f64(z) * 0.7})
 }
 
 // surface_block is the block at height y in a column whose top is h, before

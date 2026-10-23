@@ -74,7 +74,7 @@ world_settled :: proc(app: ^App) -> bool {
 	r, h := i32(s.welcome.view_radius), i32(s.welcome.view_height)
 	w := &s.world
 	return(
-		w.chunks.count >= game.interest_count(r, h) &&
+		w.chunks.count >= game.interest_count_at(camera_chunk(&s.camera), r, h) &&
 		len(w.to_mesh) == 0 &&
 		len(w.uploads) == 0 &&
 		w.stats.mesh_jobs_busy == 0 \

@@ -12,6 +12,14 @@ CHUNK_VOLUME :: CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE
 Block_Pos :: [3]i32
 Chunk_Pos :: [3]i32
 
+// The world is bounded vertically: blocks y in WORLD_MIN_Y ..< WORLD_MAX_Y
+// (chunk layers CHUNK_MIN_Y ..< CHUNK_MAX_Y), with bedrock at the bottom.
+// Below is solid, above is air; neither is stored or sent.
+WORLD_MIN_Y :: -256
+WORLD_MAX_Y :: 256
+CHUNK_MIN_Y :: WORLD_MIN_Y / CHUNK_SIZE
+CHUNK_MAX_Y :: WORLD_MAX_Y / CHUNK_SIZE
+
 chunk_of :: #force_inline proc(p: Block_Pos) -> Chunk_Pos {
 	// Arithmetic shift: floors negative positions.
 	return {p.x >> CHUNK_SHIFT, p.y >> CHUNK_SHIFT, p.z >> CHUNK_SHIFT}

@@ -7,6 +7,17 @@ import "core:testing"
 Allocator_Error :: mem.Allocator_Error
 
 @(test)
+test_world_bounds :: proc(t: ^testing.T) {
+	testing.expect(t, in_world({0, CHUNK_MIN_Y, 0}) && in_world({0, CHUNK_MAX_Y - 1, 0}))
+	testing.expect(t, !in_world({0, CHUNK_MIN_Y - 1, 0}) && !in_world({0, CHUNK_MAX_Y, 0}))
+	testing.expect(t, !in_world({CHUNK_LIMIT, 0, 0}))
+	// Near the top, part of the area is outside the world.
+	full := interest_count(4, 2)
+	testing.expect_value(t, interest_count_at({0, 0, 0}, 4, 2), full)
+	testing.expect_value(t, interest_count_at({0, CHUNK_MAX_Y - 1, 0}, 4, 2), full * 3 / 5)
+}
+
+@(test)
 test_chunk_of_floors_negative :: proc(t: ^testing.T) {
 	testing.expect_value(t, chunk_of({0, 15, 16}), Chunk_Pos{0, 0, 1})
 	testing.expect_value(t, chunk_of({-1, -16, -17}), Chunk_Pos{-1, -1, -2})
@@ -124,6 +135,16 @@ test_generate_terrain_shape :: proc(t: ^testing.T) {
 		for b in arr {if b == .Air {air += 1}}
 	}
 	testing.expect(t, air > 0 && air < 4 * CHUNK_VOLUME / 4, "caves carve some but not most stone")
+
+	// The floor: bedrock everywhere at the bottom layer, never carved.
+	for cx in i32(-3) ..< 3 {
+		generate(SEED, {cx, CHUNK_MIN_Y, cx * 2}, arr)
+		for z in i32(0) ..< 16 {
+			for x in i32(0) ..< 16 {
+				testing.expect_value(t, arr[local_index({x, 0, z})], Block.Bedrock)
+			}
+		}
+	}
 }
 
 @(test)

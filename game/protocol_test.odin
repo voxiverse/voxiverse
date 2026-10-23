@@ -43,8 +43,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && ping.(Ping).id == 77)
 	m, ok = decode_server(encode_s(Pong{78})[:], scratch)
 	testing.expect(t, ok && m.(Pong).id == 78)
-	m, ok = decode_server(encode_s(Unload_Chunk{{-5, 2, 1 << 20}})[:], scratch)
-	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, 2, 1 << 20})
+	m, ok = decode_server(encode_s(Unload_Chunk{{-5, CHUNK_MIN_Y, 1 << 20}})[:], scratch)
+	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, CHUNK_MIN_Y, 1 << 20})
 }
 
 @(test)
@@ -157,6 +157,17 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 			write_u8(w, 4) // Unload_Chunk
 			write_i32(w, CHUNK_LIMIT)
 			write_i32(w, 0)
+			write_i32(w, 0)
+		},
+	)
+	bad_server(
+		t,
+		scratch,
+		"chunk above the world",
+		proc(w: ^Writer) {
+			write_u8(w, 4) // Unload_Chunk
+			write_i32(w, 0)
+			write_i32(w, CHUNK_MAX_Y)
 			write_i32(w, 0)
 		},
 	)

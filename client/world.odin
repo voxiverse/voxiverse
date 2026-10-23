@@ -175,14 +175,7 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 
 @(private = "file")
 queue_if_complete :: proc(w: ^World, c: ^Client_Chunk) {
-	if c.queued || !c.dirty {return}
-	for dz in i32(-1) ..= 1 {
-		for dy in i32(-1) ..= 1 {
-			for dx in i32(-1) ..= 1 {
-				if c.pos + {dx, dy, dz} not_in w.by_pos {return}
-			}
-		}
-	}
+	if c.queued || !c.dirty || !neighbours_present(w, c.pos) {return}
 	c.queued = true
 	append(&w.to_mesh, w.by_pos[c.pos])
 }
@@ -232,7 +225,10 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 		for dz in i32(-1) ..= 1 {
 			for dy in i32(-1) ..= 1 {
 				for dx in i32(-1) ..= 1 {
-					n[mesh.neighbour_index({dx, dy, dz})] = &world_get(w, c.pos + {dx, dy, dz}).blocks
+					n[mesh.neighbour_index({dx, dy, dz})] = neighbour_blocks(
+						w,
+						c.pos + {dx, dy, dz},
+					)
 				}
 			}
 		}
@@ -304,11 +300,31 @@ neighbours_present :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	for dz in i32(-1) ..= 1 {
 		for dy in i32(-1) ..= 1 {
 			for dx in i32(-1) ..= 1 {
-				if pos + {dx, dy, dz} not_in w.by_pos {return false}
+				if neighbour_blocks(w, pos + {dx, dy, dz}) == nil {return false}
 			}
 		}
 	}
 	return true
+}
+
+// Outside the world's height bounds: air above, bedrock below (never sent).
+@(private = "file", rodata)
+ABOVE_WORLD := game.Chunk_Blocks {
+	uniform = .Air,
+}
+@(private = "file", rodata)
+BELOW_WORLD := game.Chunk_Blocks {
+	uniform = .Bedrock,
+}
+
+// neighbour_blocks: a chunk's blocks, whether loaded or outside the world;
+// nil if it should exist but has not arrived.
+@(private = "file")
+neighbour_blocks :: proc(w: ^World, pos: game.Chunk_Pos) -> ^game.Chunk_Blocks {
+	if pos.y >= game.CHUNK_MAX_Y {return &ABOVE_WORLD}
+	if pos.y < game.CHUNK_MIN_Y {return &BELOW_WORLD}
+	c := world_get(w, pos)
+	return &c.blocks if c != nil else nil
 }
 
 // trivially_empty: nothing to draw without meshing: all air, or solid all
@@ -318,8 +334,8 @@ trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	if c.blocks.array != nil {return false}
 	if !game.block_solid(c.blocks.uniform) {return true}
 	for d in ([6]game.Chunk_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		n := world_get(w, c.pos + d)
-		if n.blocks.array != nil || !game.block_solid(n.blocks.uniform) {return false}
+		n := neighbour_blocks(w, c.pos + d)
+		if n.array != nil || !game.block_solid(n.uniform) {return false}
 	}
 	return true
 }

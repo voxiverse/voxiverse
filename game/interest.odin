@@ -45,7 +45,28 @@ interest_offsets :: proc(radius, height: i32, allocator := context.allocator) ->
 	return out[:]
 }
 
-// in_world: chunk coordinates the protocol can carry.
+// in_world: a chunk that exists (inside the height bounds and the limits
+// the protocol can carry).
 in_world :: proc(p: Chunk_Pos) -> bool {
-	return abs(p.x) < CHUNK_LIMIT && abs(p.y) < CHUNK_LIMIT && abs(p.z) < CHUNK_LIMIT
+	return(
+		abs(p.x) < CHUNK_LIMIT &&
+		abs(p.z) < CHUNK_LIMIT &&
+		p.y >= CHUNK_MIN_Y &&
+		p.y < CHUNK_MAX_Y \
+	)
+}
+
+// interest_count_at counts the area's chunks around center that exist
+// (fewer than interest_count near the top and bottom of the world).
+interest_count_at :: proc(center: Chunk_Pos, radius, height: i32) -> int {
+	n := 0
+	for y in -height ..= height {
+		if !in_world(center + {0, y, 0}) {continue}
+		for z in -radius ..= radius {
+			for x in -radius ..= radius {
+				if x * x + z * z <= radius * radius && in_world(center + {x, y, z}) {n += 1}
+			}
+		}
+	}
+	return n
 }
