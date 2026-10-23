@@ -207,6 +207,109 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | The sky at sunrise, day, dusk and night rendered in CI under validation; mixer and every sound tested offline; the time of day survives save and load (done) |
 | M7 | Remote multiplayer: UDP transport with its reliability layer, simulated loss/duplication/reordering, Wireshark dissector, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines; transfers survive 10% loss: `server/net_test.odin` (two players through 10% loss/duplication with jitter on every socket, every chunk exact) plus a hand test across machines (done: two Windows PCs on a LAN) |
 | M8 | Entities: one mob, server AI, replication by handle with interest management | `server/entity_test.odin`: a critter simulated on the server, told only to players near it, hit to death, kept by the save; critters spawn by day within the cap and go when nobody is near; pathfinding tests; the fly test keeps memory flat while they come and go |
+| M9 | Bulk edits: sphere/box/replace edits through one server pipeline, whole chunks re-sent, batched light and meshing, selections; a creative rocket launcher (projectile entity, explosion, debris, sound) | `blast_test`: a volley of radius-6 explosions keeps the server tick and client frames within budget with no see-through holes, memory flat, and server and two clients end with identical chunks |
+| M10 | Worldgen framework: generators as staged pipelines (climate/biomes, terrain shape, surface, carvers, features) with live-tunable parameters; Earth-like biomes, caves, ores, trees, plants; still water; cutout and translucent rendering; `worldmap` preview tool | The same seed gives the same world on Windows, Linux and macOS (map hashes in CI); chunk generation and meshing within budget; a flight over every biome keeps memory flat; screenshots of each biome |
+| M11 | Liquids: Minecraft-style water (sources, 7 flow levels, new sources between two), scheduled block updates on the server, swimming, underwater fog, light through water | A dam-break test ends in the same water on every run, on the server and on two clients; 10 000 flowing blocks stay within the tick budget |
+| M12 | Structures: templates built in-game (`structure save`), placed by worldgen (rotated, varied, fitted to the ground) across chunk borders, and procedural ones (dungeons, towers) on the same placement API | A structure comes out identical whichever order its chunks generate in; templates round-trip save/paste; placements are deterministic per seed |
+
+## M9-M12: making and changing the world
+
+The world after M8 is grassy hills, one cave noise and a critter; edits are one block at a
+time. These four milestones make it worth exploring and easy to reshape, in this order
+because each needs the one before: bulk edits are how worldgen is debugged, water is
+filled and structures are pasted; worldgen gives water somewhere to be (oceans, lakes) and
+structures somewhere to stand.
+
+### M9: bulk edits and explosions
+
+- **One edit pipeline** on the server: a shape (sphere, box) and an operation (set, replace
+  A with B, carve: air sparing bedrock). Applied chunk by chunk; each touched chunk is
+  marked edited (saved), column tops are recomputed once per touched column, and every
+  client that has a touched chunk is sent the whole chunk again (under the network backlog
+  budget) instead of thousands of single-block messages.
+- **No prediction** for bulk edits: the result arrives as chunks one round trip later. What
+  must feel instant (the flash, debris, sound of an explosion) comes from an `Explosion`
+  message played on arrival, and locally at once for the one who fired.
+- **Client side:** relight and remesh the touched chunks and their neighbours, the visible
+  ones urgently (M4's no-x-ray rule), the rest within a per-frame budget.
+- **Limits:** a largest edit volume and an edit rate per player; commands are cheats.
+- **Selections:** two corners (`pos1`/`pos2` from the aimed block), drawn as a box;
+  `fill`, `replace`, `sphere`, `clear` act on them. M12's `structure save` uses them too.
+- **The rocket launcher:** a creative hotbar item. The rocket is an M8 entity (ballistic,
+  no AI), simulated on the server; on hitting a block or entity it explodes: a sphere is
+  carved, entities and players nearby are knocked back (players stay invulnerable), debris
+  particles and a synthesized boom play where it happened.
+- **Exit check, `blast_test`:** like `fly_test`, a console command that fires a volley of
+  radius-6 rockets along a path and fails on a server tick or client frame over budget, a
+  see-through hole, memory growth, or a chunk that differs between the server and two
+  clients (chunk hashes compared).
+
+### M10: the worldgen framework
+
+- **Generators are pipelines** in their own package (`worldgen/`), chosen per world
+  (`world.cfg: generator = earth`), deterministic per chunk from the seed. Stages, each with
+  its own seed: climate (temperature, humidity, continentalness, erosion noise) and biome
+  lookup; terrain shape (a 3D density: base height from splines over the climate, plus 3D
+  noise for cliffs and overhangs); surface rules per biome (grass, sand, snow, stone
+  layers); carvers (caves, ravines); features (ores, trees, boulders, plants).
+- **Crossing chunk borders without seams:** features are placed from a per-chunk RNG and
+  every chunk also runs the placements of its 8 neighbours, writing only its own blocks;
+  a feature fits within one chunk's margin (trees, boulders). Bigger things are M12's.
+- **Parameters are a variable table** (`worldgen.*`): tunable live from the console or F4,
+  saved with the world, and `regen` regenerates the chunks around you after a change.
+- **Column tops for sky light** come from the generator (including trees), replacing
+  M3's analytic `column_height`: with overhangs, the top is no longer a formula.
+- **Noise library:** OpenSimplex2-style gradient noise, fractal sums, domain warping,
+  written in integer-friendly ways so every OS gives bit-identical worlds.
+- **New blocks:** water (still), snow, ice, clay, log, leaves, coal/iron/copper ore, tall
+  grass and flowers (cross-shaped models), cactus. Textures generated, as before.
+- **Renderer:** a cutout pass (alpha-tested: leaves, plants) and a translucent pass (water:
+  drawn after the opaque world, back to front per chunk, its surface gently moving).
+- **Tools:** `build worldmap -seed N -size 4096` renders a top-down map (biomes, heights,
+  water) to a PNG in seconds, without the game; per-stage timings in the profiler and F3.
+- **Exit check:** map hashes per seed equal on all three CI platforms; chunk generation and
+  meshing p99 within budget on worker threads; `fly_test` across every biome stays flat in
+  memory and within frame budget; a CI screenshot per biome.
+
+### M11: liquids
+
+- **Water states are block ids:** a source and flow levels 1-7 (and falling), so palettes,
+  saves and the protocol need no block metadata.
+- **Scheduled block updates** on the server: a queue of (due tick, position), so only what
+  changes is looked at; a per-tick budget; updates in unloaded chunks wait with them.
+- **Minecraft's rules:** down first, then sideways losing a level per block and preferring
+  the nearest way down within 4 blocks; a new source between two sources over solid
+  ground; placing or breaking next to water schedules its neighbours.
+- **Network:** water changes travel as per-chunk batches of changed blocks each tick, not
+  one message per block.
+- **Players:** swimming in the shared physics (buoyancy, drag, jump to rise), so
+  prediction stays exact; underwater fog and tint; sky light falls off through water.
+- **Exit check:** a dam-break test (a filled pool, a wall removed) ends in the same water
+  every run and on the server and two clients; 10 000 flowing blocks stay within the tick
+  budget; swimming has physics tests like walking's.
+
+### M12: structures
+
+- **Templates:** select a box in-game and `structure save <name>`: a `.vxs` file (palette and
+  runs, like region files, plus size, origin and which air should stay air). `structure
+  paste <name> [rotation]` goes through M9's pipeline. Templates that ship with the game
+  live in `assets/structures` (our own builds: within the assets rule).
+- **Placement:** each generator lists structure sets with a spacing; the world is cut into
+  cells, each cell picks deterministically whether and where its structure goes, so its box
+  is known before any of its chunks is generated. A chunk applies every structure piece
+  that overlaps it, after terrain and before features; foundations fill down to the
+  ground, and the space inside is cleared.
+- **Procedural structures** (dungeons as rooms joined by corridors, towers of any height)
+  produce the same pieces through the same placement API.
+- **Exit check:** a structure spanning several chunks is identical whichever order its
+  chunks are generated in; save, paste and save again gives the same file; placements are
+  the same for a seed on every run; `worldmap` marks them.
+
+### After M12 (not planned in detail yet)
+
+Survival (items and drops, inventory, health, a hostile mob at night), lava as a second
+liquid, greedy meshing and low-detail far terrain for long view distances, and M1b (macOS)
+when a Mac is at hand.
 
 ## Worth re-typing from the old tree (ideas, not code)
 
