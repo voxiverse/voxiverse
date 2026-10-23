@@ -38,6 +38,9 @@ Log_Sink :: struct {
 	listener:      proc(data: rawptr, level: log.Level, tag: string, text: string),
 	listener_data: rawptr,
 	root:          Log_Tag, // the creating thread's tagged logger
+	// Set by the crash handler: the crashing thread may hold the lock, so
+	// from here on lines are written without it (best effort).
+	crashing:      bool,
 }
 
 // Log_Tag is a thread's tagged logger state; it must outlive the logger made
@@ -133,7 +136,9 @@ tagged_logger_proc :: proc(
 
 	buf: [1024]u8
 	b := strings.builder_from_bytes(buf[:])
-	sync.guard(&s.mutex)
+	locked := !sync.atomic_load(&s.crashing)
+	if locked {sync.mutex_lock(&s.mutex)}
+	defer if locked {sync.mutex_unlock(&s.mutex)}
 	if level >= s.console_level {
 		strings.builder_reset(&b)
 		if s.color {

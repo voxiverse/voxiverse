@@ -7,6 +7,7 @@ import "core:log"
 import "core:mem"
 import "core:os"
 import "core:strings"
+import "core:sync"
 
 // Debug support for every program, set up at the top of main:
 //
@@ -26,6 +27,8 @@ import "core:strings"
 // - In debug builds, every allocation through context.allocator is tracked;
 //   debug_end lists leaks and bad frees with their source locations and
 //   returns false if there were any.
+// - Crashes (segfaults, access violations, illegal instructions) log what
+//   happened and a stack trace before the process dies (crash_*.odin).
 // - VX_BREAK=1 stops in an attached debugger instead of just logging (see
 //   debug_break), e.g. on Vulkan validation errors.
 
@@ -34,6 +37,7 @@ Debug :: struct {
 	tracked:    bool,
 	backing:    mem.Allocator, // untracked: the debug machinery's own memory
 	log_file:   ^os.File,
+	log_path:   string,
 	sink:       Log_Sink,
 	logger:     log.Logger,
 	break_mode: bool,
@@ -55,6 +59,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	if path, ok := log_file_path(log_file_name); ok {
 		if f, err := os.open(path, {.Write, .Create, .Trunc}); err == nil {
 			d.log_file = f
+			d.log_path = strings.clone(path, d.backing)
 		} else {
 			fmt.eprintfln("debug: cannot write log file %s: %v", path, err)
 		}
@@ -62,6 +67,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	d.logger = log_sink_init(&d.sink, d.log_file, console_level, tag)
 	ctx.logger = d.logger
 	ctx.assertion_failure_proc = assertion_failure
+	when ODIN_SANITIZER_FLAGS == {} {crash_handler_install()} 	// sanitizers have their own
 
 	when ODIN_DEBUG {
 		mem.tracking_allocator_init(&d.tracking, d.backing, d.backing)
@@ -97,6 +103,7 @@ debug_end :: proc(d: ^Debug) -> bool {
 
 	context.allocator = d.backing
 	if d.log_file != nil {os.close(d.log_file)}
+	delete(d.log_path, d.backing)
 	active = nil
 	return ok
 }
@@ -118,10 +125,35 @@ log_stack_trace :: proc(level: log.Level = .Error, skip := 0) -> (found: bool) {
 		   strings.has_prefix(loc.procedure, "runtime::") {
 			continue
 		}
-		log.logf(level, "  at %s (%s:%d)", loc.procedure, loc.file_path, loc.line)
+		// The frame's own location goes where the logger shows locations.
+		log.logf(
+			level,
+			"  at %s",
+			loc.procedure,
+			location = {file_path = loc.file_path, line = i32(loc.line)},
+		)
 		found = true
 	}
 	return
+}
+
+// crash_report logs a crash and the stack (from a signal handler or
+// exception filter: best effort, the process is going down anyway).
+@(private)
+crash_report :: proc(what: string) {
+	if active == nil {
+		fmt.eprintfln("crash: %s", what)
+		return
+	}
+	context = runtime.default_context()
+	context.logger = active.logger
+	sync.atomic_store(&active.sink.crashing, true)
+	log.fatalf("crash %s", what)
+	if !log_stack_trace(.Fatal, 2) {log.fatal("  (no frames of ours on this thread's stack)")}
+	if active.log_file != nil {
+		log.fatalf("crash full log: %s", active.log_path)
+		os.flush(active.log_file)
+	}
 }
 
 // debug_break stops in an attached debugger when VX_BREAK=1; otherwise it

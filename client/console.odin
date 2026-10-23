@@ -1,5 +1,6 @@
 package client
 
+import "base:intrinsics"
 import "base:runtime"
 import "core:fmt"
 import "core:log"
@@ -355,6 +356,14 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 	)
+	when ODIN_DEBUG {
+		console_register(
+			c,
+			{"crash", "crash the game (tests the crash handler)", proc(app: ^App, args: []string) {
+					intrinsics.volatile_store((^int)(uintptr(8)), 1)
+				}},
+		)
+	}
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

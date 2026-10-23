@@ -11,6 +11,7 @@ captures and profiling. Everything here is exercised in CI or by `tools/debugger
 | Vulkan misuse | The Khronos validation layer (with synchronization validation) reports it with its spec ID, the names of the objects involved, and the stack of **our** code that made the call. |
 | Memory leak / bad free | Listed at exit with the file and line that allocated it; the run fails. |
 | Failed `assert`, `panic`, bounds check | Message plus stack trace, then the program stops (in your debugger, if attached). |
+| Crash (segfault, access violation, illegal instruction, stack overflow on the main thread) | Signal or exception, faulting address and stack trace in the console and log, then the usual crash (core dump / Windows Error Reporting / your debugger). `crash` (debug builds) tests it. Off in sanitizer builds, which report crashes themselves. |
 | Frame times | Logged at exit: wall-clock and GPU time per frame (avg, p50, p99, max). |
 | Everything logged | Console (Info and up) and `build/voxiverse.log` (everything, overwritten each run). |
 

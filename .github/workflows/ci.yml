@@ -77,6 +77,9 @@ jobs:
           export VK_DRIVER_FILES
           xvfb-run -a ./build/voxiverse --frames 120
           xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 600 quit"
+          # A crash must be reported with our stack, then still kill the run.
+          if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
+          grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; fly_test 200 quit"
