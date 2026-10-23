@@ -18,6 +18,17 @@ Native_Window :: struct {
 	window:           xlib.Window,
 	wm_delete_window: xlib.Atom,
 	keys_down:        [Key]bool, // to tell auto-repeat presses from real ones
+	// Mouse capture: pointer grabbed, cursor hidden and kept at the centre.
+	// Motion comes from XInput2 raw events (device deltas, unaccelerated;
+	// XWayland feeds them from Wayland's relative pointer) when libXi is
+	// available, otherwise from how far the pointer moved off the centre.
+	captured:         bool,
+	xi_opcode:        i32, // XInput extension opcode; 0 without XInput2
+	grab_pending:     bool, // the grab failed (e.g. not yet viewable): retry
+	// Until the first warp lands, motion is measured from wherever the
+	// pointer was before: ignore it.
+	awaiting_centre:  bool,
+	hidden_cursor:    xlib.Cursor,
 }
 
 @(private)
@@ -68,6 +79,56 @@ X11 :: struct {
 		keysym: ^xlib.KeySym,
 		status: rawptr,
 	) -> i32,
+	GrabPointer:               proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		owner_events: b32,
+		mask: xlib.EventMask,
+		pointer_mode, keyboard_mode: xlib.GrabMode,
+		confine_to: xlib.Window,
+		cursor: xlib.Cursor,
+		time: xlib.Time,
+	) -> i32,
+	UngrabPointer:             proc "c" (display: ^xlib.Display, time: xlib.Time) -> i32,
+	WarpPointer:               proc "c" (
+		display: ^xlib.Display,
+		src, dst: xlib.Window,
+		src_x, src_y: i32,
+		src_width, src_height: u32,
+		dst_x, dst_y: i32,
+	) -> i32,
+	CreatePixmap:              proc "c" (
+		display: ^xlib.Display,
+		drawable: xlib.Drawable,
+		width, height, depth: u32,
+	) -> xlib.Pixmap,
+	FreePixmap:                proc "c" (display: ^xlib.Display, pixmap: xlib.Pixmap) -> i32,
+	CreatePixmapCursor:        proc "c" (
+		display: ^xlib.Display,
+		source, mask: xlib.Pixmap,
+		fg, bg: ^xlib.XColor,
+		x, y: u32,
+	) -> xlib.Cursor,
+	FreeCursor:                proc "c" (display: ^xlib.Display, cursor: xlib.Cursor) -> i32,
+	DefineCursor:              proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		cursor: xlib.Cursor,
+	) -> i32,
+	UndefineCursor:            proc "c" (display: ^xlib.Display, window: xlib.Window) -> i32,
+	QueryExtension:            proc "c" (
+		display: ^xlib.Display,
+		name: cstring,
+		opcode, event, error: ^i32,
+	) -> b32,
+	GetEventData:              proc "c" (
+		display: ^xlib.Display,
+		cookie: ^xlib.XGenericEventCookie,
+	) -> b32,
+	FreeEventData:             proc "c" (
+		display: ^xlib.Display,
+		cookie: ^xlib.XGenericEventCookie,
+	),
 	kbSetDetectableAutoRepeat: proc "c" (
 		display: ^xlib.Display,
 		detectable: b32,
@@ -77,6 +138,55 @@ X11 :: struct {
 
 @(private)
 x: X11
+
+// libXi, for raw mouse motion (optional).
+@(private)
+XI :: struct {
+	__handle:       dynlib.Library,
+	XIQueryVersion: proc "c" (display: ^xlib.Display, major, minor: ^i32) -> i32,
+	XISelectEvents: proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		masks: ^XI_Event_Mask,
+		count: i32,
+	) -> i32,
+}
+
+@(private)
+xi: XI
+
+@(private)
+XI_Event_Mask :: struct {
+	deviceid: i32,
+	mask_len: i32,
+	mask:     [^]u8,
+}
+
+@(private)
+XI_Raw_Event :: struct {
+	type:       i32,
+	serial:     uint,
+	send_event: b32,
+	display:    ^xlib.Display,
+	extension:  i32,
+	evtype:     i32,
+	time:       xlib.Time,
+	deviceid:   i32,
+	sourceid:   i32,
+	detail:     i32,
+	flags:      i32,
+	valuators:  struct {
+		mask_len: i32,
+		mask:     [^]u8,
+		values:   [^]f64,
+	},
+	raw_values: [^]f64,
+}
+
+@(private)
+XI_ALL_MASTER_DEVICES :: 1
+@(private)
+XI_RAW_MOTION :: 17
 
 @(private)
 native_open :: proc(w: ^Window, title: string) -> bool {
@@ -133,13 +243,53 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	x.SetWMProtocols(n.display, n.window, &n.wm_delete_window, 1)
 	x.MapWindow(n.display, n.window)
 	x.Flush(n.display)
+	setup_raw_motion(n)
 	return true
+}
+
+// setup_raw_motion subscribes to XInput2 raw motion (delivered to the root
+// window; used only while captured).
+@(private = "file")
+setup_raw_motion :: proc(n: ^Native_Window) {
+	if xi.__handle == nil {
+		count, ok := dynlib.initialize_symbols(&xi, "libXi.so.6")
+		if !ok || count != reflect.struct_field_count(XI) - 1 {
+			log.info("platform: libXi not available; mouse look uses pointer warping")
+			return
+		}
+	}
+	opcode, first_event, first_error: i32
+	if !x.QueryExtension(
+		n.display,
+		"XInputExtension",
+		&opcode,
+		&first_event,
+		&first_error,
+	) {return}
+	major, minor: i32 = 2, 0
+	SUCCESS :: 0
+	if xi.XIQueryVersion(n.display, &major, &minor) != SUCCESS {return}
+	bits: [(XI_RAW_MOTION + 8) / 8]u8
+	bits[XI_RAW_MOTION / 8] |= 1 << (XI_RAW_MOTION % 8)
+	mask := XI_Event_Mask{XI_ALL_MASTER_DEVICES, len(bits), &bits[0]}
+	if xi.XISelectEvents(
+		   n.display,
+		   x.RootWindow(n.display, x.DefaultScreen(n.display)),
+		   &mask,
+		   1,
+	   ) !=
+	   SUCCESS {
+		return
+	}
+	n.xi_opcode = opcode
 }
 
 @(private)
 native_close :: proc(w: ^Window) {
 	n := &w.native
 	if n.display == nil {return}
+	if n.captured {native_set_mouse_captured(w, false)}
+	if n.hidden_cursor != 0 {x.FreeCursor(n.display, n.hidden_cursor)}
 	if n.window != 0 {x.DestroyWindow(n.display, n.window)}
 	x.CloseDisplay(n.display)
 }
@@ -151,8 +301,60 @@ native_wait :: proc(w: ^Window) {
 }
 
 @(private)
+native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
+	n := &w.native
+	n.grab_pending = false
+	if captured {
+		if n.hidden_cursor == 0 {
+			// A 1x1 cursor with an empty mask: invisible.
+			pixmap := x.CreatePixmap(n.display, xlib.Drawable(n.window), 1, 1, 1)
+			black: xlib.XColor
+			n.hidden_cursor = x.CreatePixmapCursor(n.display, pixmap, pixmap, &black, &black, 0, 0)
+			x.FreePixmap(n.display, pixmap)
+		}
+		x.DefineCursor(n.display, n.window, n.hidden_cursor)
+		GRAB_SUCCESS :: 0
+		mask: xlib.EventMask = {.ButtonPress, .ButtonRelease, .PointerMotion}
+		if x.GrabPointer(
+			   n.display,
+			   n.window,
+			   true,
+			   mask,
+			   .GrabModeAsync,
+			   .GrabModeAsync,
+			   n.window,
+			   n.hidden_cursor,
+			   xlib.CurrentTime,
+		   ) !=
+		   GRAB_SUCCESS {
+			n.grab_pending = true
+		}
+		if !n.captured {n.awaiting_centre = true}
+		n.captured = true
+		warp_to_centre(w)
+	} else if n.captured {
+		x.UngrabPointer(n.display, xlib.CurrentTime)
+		x.UndefineCursor(n.display, n.window)
+		n.captured = false
+		warp_to_centre(w) // release where the cursor isn't in anyone's way
+	}
+	x.Flush(n.display)
+}
+
+@(private = "file")
+warp_to_centre :: proc(w: ^Window) {
+	x.WarpPointer(w.native.display, 0, w.native.window, 0, 0, 0, 0, w.width / 2, w.height / 2)
+}
+
+@(private)
 native_poll :: proc(w: ^Window) {
 	n := &w.native
+	if n.grab_pending {native_set_mouse_captured(w, true)}
+	moved := false
+	defer if moved {
+		warp_to_centre(w)
+		x.Flush(n.display)
+	}
 	for x.Pending(n.display) > 0 {
 		e: xlib.XEvent
 		x.NextEvent(n.display, &e)
@@ -183,7 +385,38 @@ native_poll :: proc(w: ^Window) {
 				}
 			}
 		case .MotionNotify:
-			push_event(w, Mouse_Move_Event{f32(e.xmotion.x), f32(e.xmotion.y)})
+			if n.captured {
+				// Away from the centre: put it back (keeps clicks inside).
+				dx, dy := e.xmotion.x - w.width / 2, e.xmotion.y - w.height / 2
+				if n.awaiting_centre {
+					if dx == 0 && dy == 0 {n.awaiting_centre = false}
+				} else if dx != 0 || dy != 0 {
+					// Without raw motion, this is the motion.
+					if n.xi_opcode == 0 {push_event(w, Mouse_Delta_Event{f32(dx), f32(dy)})}
+					moved = true
+				}
+			} else {
+				push_event(w, Mouse_Move_Event{f32(e.xmotion.x), f32(e.xmotion.y)})
+			}
+		case .GenericEvent:
+			cookie := &e.xcookie
+			if n.xi_opcode == 0 ||
+			   cookie.extension != n.xi_opcode ||
+			   !x.GetEventData(n.display, cookie) {
+				continue
+			}
+			defer x.FreeEventData(n.display, cookie)
+			if cookie.evtype != XI_RAW_MOTION || !n.captured || !w.focused {continue}
+			raw := (^XI_Raw_Event)(cookie.data)
+			// raw_values holds one value per set mask bit; x is axis 0, y axis 1.
+			d: [2]f64
+			next := 0
+			for axis in 0 ..< min(int(raw.valuators.mask_len) * 8, 2) {
+				if raw.valuators.mask[axis / 8] & (1 << uint(axis % 8)) == 0 {continue}
+				d[axis] = raw.raw_values[next]
+				next += 1
+			}
+			if d != {} {push_event(w, Mouse_Delta_Event{f32(d.x), f32(d.y)})}
 		case .ButtonPress, .ButtonRelease:
 			pressed := e.type == .ButtonPress
 			px, py := f32(e.xbutton.x), f32(e.xbutton.y)

@@ -14,6 +14,7 @@ Window :: struct {
 	width, height:   i32, // framebuffer size in pixels; 0 while minimized
 	focused:         bool,
 	close_requested: bool,
+	mouse_captured:  bool, // wanted (set_mouse_captured); held only while focused
 	events:          [dynamic]Event, // this frame's events, refilled by poll_events
 	native:          Native_Window, // per-OS state
 }
@@ -26,6 +27,7 @@ Event :: union {
 	Mouse_Move_Event,
 	Mouse_Button_Event,
 	Mouse_Wheel_Event,
+	Mouse_Delta_Event,
 }
 
 Resize_Event :: struct {
@@ -57,6 +59,13 @@ Mouse_Button_Event :: struct {
 	button:  Mouse_Button,
 	pressed: bool,
 	x, y:    f32,
+}
+
+// Mouse_Delta_Event is relative motion while the mouse is captured (pixels;
+// unaccelerated where the OS provides it). Captured, the cursor is hidden and
+// held inside the window, and no Mouse_Move_Events arrive.
+Mouse_Delta_Event :: struct {
+	dx, dy: f32,
 }
 
 Mouse_Wheel_Event :: struct {
@@ -189,6 +198,15 @@ wait_events :: proc(w: ^Window) -> []Event {
 	return w.events[:]
 }
 
+// set_mouse_captured hides the cursor and turns mouse motion into
+// Mouse_Delta_Events (mouse look), or ends that. The capture is released
+// while the window is unfocused and comes back with focus.
+set_mouse_captured :: proc(w: ^Window, captured: bool) {
+	if w.mouse_captured == captured {return}
+	w.mouse_captured = captured
+	native_set_mouse_captured(w, captured && w.focused)
+}
+
 // vulkan_instance_extensions lists the instance extensions the surface needs.
 vulkan_instance_extensions :: proc() -> []cstring {
 	return native_vulkan_instance_extensions()
@@ -211,5 +229,6 @@ push_event :: proc(w: ^Window, e: Event) {
 		w.width, w.height = v.width, v.height
 	case Focus_Event:
 		w.focused = v.focused
+		if w.mouse_captured {native_set_mouse_captured(w, v.focused)}
 	}
 }

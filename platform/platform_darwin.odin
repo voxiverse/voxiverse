@@ -27,6 +27,9 @@ native_wait :: proc(w: ^Window) {}
 native_poll :: proc(w: ^Window) {}
 
 @(private)
+native_set_mouse_captured :: proc(w: ^Window, captured: bool) {}
+
+@(private)
 native_vulkan_instance_extensions :: proc() -> []cstring {
 	return nil
 }

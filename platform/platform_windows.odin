@@ -14,6 +14,7 @@ Native_Window :: struct {
 	hwnd:           win.HWND,
 	ctx:            runtime.Context, // for the window procedure, which Windows calls
 	high_surrogate: u16, // first half of a UTF-16 surrogate pair from WM_CHAR
+	captured:       bool, // raw mouse input on, cursor hidden and clipped
 }
 
 @(private)
@@ -75,6 +76,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 @(private)
 native_close :: proc(w: ^Window) {
 	n := &w.native
+	if n.captured {native_set_mouse_captured(w, false)}
 	if n.hwnd != nil {win.DestroyWindow(n.hwnd)}
 	win.UnregisterClassW(win.L(CLASS_NAME), n.instance)
 }
@@ -82,6 +84,38 @@ native_close :: proc(w: ^Window) {
 @(private)
 native_wait :: proc(w: ^Window) {
 	win.WaitMessage()
+}
+
+// Captured: raw input (WM_INPUT) gives unaccelerated mouse deltas; the
+// cursor is hidden and clipped to the window so clicks stay inside.
+@(private)
+native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
+	n := &w.native
+	if captured == n.captured {return}
+	device := win.RAWINPUTDEVICE {
+		usUsagePage = win.HID_USAGE_PAGE_GENERIC,
+		usUsage     = win.HID_USAGE_GENERIC_MOUSE,
+		hwndTarget  = n.hwnd if captured else nil,
+		dwFlags     = 0 if captured else win.RIDEV_REMOVE,
+	}
+	if !win.RegisterRawInputDevices(&device, 1, size_of(device)) {
+		log.errorf("platform: RegisterRawInputDevices failed (%d)", win.GetLastError())
+		return
+	}
+	n.captured = captured
+	win.ShowCursor(win.BOOL(!captured))
+	if captured {clip_cursor(w)} else {win.ClipCursor(nil)}
+}
+
+@(private = "file")
+clip_cursor :: proc(w: ^Window) {
+	r: win.RECT
+	win.GetClientRect(w.native.hwnd, &r)
+	corners := [2]win.POINT{{r.left, r.top}, {r.right, r.bottom}}
+	win.ClientToScreen(w.native.hwnd, &corners[0])
+	win.ClientToScreen(w.native.hwnd, &corners[1])
+	clip := win.RECT{corners[0].x, corners[0].y, corners[1].x, corners[1].y}
+	win.ClipCursor(&clip)
 }
 
 @(private)
@@ -139,7 +173,29 @@ window_proc :: proc "system" (
 		if width != w.width || height != w.height {
 			push_event(w, Resize_Event{width, height})
 		}
+		if w.native.captured {clip_cursor(w)}
 		return 0
+	case win.WM_MOVE:
+		if w.native.captured {clip_cursor(w)}
+		return 0
+	case win.WM_INPUT:
+		raw: win.RAWINPUT
+		size := u32(size_of(raw))
+		if w.native.captured &&
+		   win.GetRawInputData(
+			   win.HRAWINPUT(lparam),
+			   win.RID_INPUT,
+			   &raw,
+			   &size,
+			   size_of(win.RAWINPUTHEADER),
+		   ) !=
+			   max(u32) &&
+		   raw.header.dwType == win.RIM_TYPEMOUSE &&
+		   raw.data.mouse.usFlags & win.MOUSE_MOVE_ABSOLUTE == 0 {
+			dx, dy := raw.data.mouse.lLastX, raw.data.mouse.lLastY
+			if dx != 0 || dy != 0 {push_event(w, Mouse_Delta_Event{f32(dx), f32(dy)})}
+		}
+		return win.DefWindowProcW(hwnd, msg, wparam, lparam) // releases the input
 	case win.WM_SETFOCUS, win.WM_KILLFOCUS:
 		push_event(w, Focus_Event{msg == win.WM_SETFOCUS})
 		return 0
@@ -168,6 +224,7 @@ window_proc :: proc "system" (
 		}
 		return 0
 	case win.WM_MOUSEMOVE:
+		if w.native.captured {return 0} 	// WM_INPUT reports motion instead
 		px, py := mouse_pos(lparam)
 		push_event(w, Mouse_Move_Event{px, py})
 		return 0

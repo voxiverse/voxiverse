@@ -3,8 +3,8 @@ package client
 import "../platform"
 import "../ui"
 
-// Turns a frame's platform events into ui.Input. The platform reports key
-// presses and releases; held modifiers are tracked here.
+// Turns a frame's platform events into ui.Input and game controls. The
+// platform reports key presses and releases; held keys are tracked here.
 
 Input_State :: struct {
 	mouse:          [2]f32, // pixels
@@ -12,16 +12,18 @@ Input_State :: struct {
 	mouse_pressed:  bit_set[ui.Mouse_Button],
 	mouse_released: bit_set[ui.Mouse_Button],
 	wheel:          [2]f32,
+	look:           [2]f32, // mouse motion while captured, pixels
 	keys_pressed:   bit_set[ui.Key],
-	held:           bit_set[platform.Key], // keys currently down (modifiers)
+	pressed:        bit_set[platform.Key], // this frame, not auto-repeat
+	held:           bit_set[platform.Key], // keys currently down
 	text:           [dynamic]rune,
 	escape:         bool, // pressed this frame
 	console_toggle: bool,
 }
 
 input_update :: proc(s: ^Input_State, events: []platform.Event) {
-	s.mouse_pressed, s.mouse_released, s.keys_pressed = {}, {}, {}
-	s.wheel = {}
+	s.mouse_pressed, s.mouse_released, s.keys_pressed, s.pressed = {}, {}, {}, {}
+	s.wheel, s.look = {}, {}
 	s.escape, s.console_toggle = false, false
 	clear(&s.text)
 	for e in events {
@@ -29,6 +31,7 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 		case platform.Key_Event:
 			if v.pressed {s.held += {v.key}} else {s.held -= {v.key}}
 			if !v.pressed {continue}
+			if !v.repeat {s.pressed += {v.key}}
 			if v.key == .Escape && !v.repeat {s.escape = true}
 			if v.key == .Grave && !v.repeat {s.console_toggle = true}
 			if k, ok := ui_key(v.key); ok {s.keys_pressed += {k}}
@@ -58,6 +61,8 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 			}
 		case platform.Mouse_Wheel_Event:
 			s.wheel += {v.dx, v.dy}
+		case platform.Mouse_Delta_Event:
+			s.look += {v.dx, v.dy}
 		case platform.Focus_Event:
 			if !v.focused {s.held, s.mouse_down = {}, {}} 	// releases happen elsewhere
 		case platform.Resize_Event:
