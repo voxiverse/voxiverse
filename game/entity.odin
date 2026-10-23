@@ -9,6 +9,7 @@ import "core:math"
 
 Entity_Kind :: enum u8 {
 	Critter, // a passive, boxy animal: wanders, grazes, runs away when hit
+	Rocket, // the creative rocket launcher's: flies, then explodes
 }
 
 Entity_Info :: struct {
@@ -32,7 +33,13 @@ ENTITY_INFO := [Entity_Kind]Entity_Info {
 		run_speed = 4.2,
 		jump = 1.2,
 	},
+	.Rocket = {name = "rocket", width = 0.3, height = 0.3, health = 1},
 }
+
+ROCKET_SPEED :: 32 // blocks/s
+ROCKET_GRAVITY :: 3 // blocks/s²: a slight drop
+ROCKET_RADIUS :: 4 // blocks carved
+ROCKET_LIFE :: 6 // seconds: then it goes off where it is
 
 entity_kind_valid :: proc(k: u8) -> bool {
 	return int(k) < len(Entity_Kind)

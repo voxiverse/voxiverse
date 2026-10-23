@@ -84,7 +84,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | <kbd>Shift</kbd> | Sneak (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
-| <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose the block to place |
+| <kbd>1</kbd>–<kbd>7</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, gravel, lamp), or the rocket launcher (7, where cheats are allowed) |
 | <kbd>Esc</kbd> | Pause menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
@@ -94,6 +94,11 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 
 Options has the FPS counter (**Show FPS**), **VSync** (off: as many frames as the machine
 can draw), fullscreen, field of view, view distance and volume.
+
+Where cheats are allowed (your own world, or a server with `--cheats`) the console also
+edits in bulk: `pos1` and `pos2` mark the corners of a box at the block you aim at, then
+`fill stone`, `replace dirt sand` or `clear`; `sphere 5 stone` and `explode 8` act on the
+aimed block. Hotbar slot 7 is a rocket launcher.
 
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
 runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.

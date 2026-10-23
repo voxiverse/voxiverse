@@ -77,6 +77,11 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			   .Off {log.error("fly_test the run ended before the test finished")}
 			ok = false
 		}
+		if app.blast_test.failed || app.blast_test.phase != .Off {
+			if app.blast_test.phase !=
+			   .Off {log.error("blast_test the run ended before the test finished")}
+			ok = false
+		}
 	}
 	server_failed := app.server_failed
 	issues := app_destroy(app) // leaves any world, so server failures are known after

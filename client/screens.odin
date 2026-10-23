@@ -183,13 +183,15 @@ hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
 	SLOT :: 96
 	r := ctx.screen
 	row := ui.cut_bottom(&r, t.row_height + 24)
-	row = ui.rect_center(row, f32(len(HOTBAR)) * (SLOT + t.spacing), t.row_height)
-	for b, i in HOTBAR {
+	slots := hotbar_slots(s)
+	row = ui.rect_center(row, f32(slots) * (SLOT + t.spacing), t.row_height)
+	for i in 0 ..< slots {
 		slot := ui.cut_left(&row, SLOT)
 		ui.cut_left(&row, t.spacing)
 		ui.fill_rect(ctx, slot, {0, 0, 0, 150})
 		if i == s.hotbar {ui.stroke_rect(ctx, slot, 2, t.text)}
-		label := fmt.tprintf("%d %s", i + 1, game.BLOCK_INFO[b].name)
+		name := "rocket" if i == LAUNCHER else game.BLOCK_INFO[HOTBAR[i]].name
+		label := fmt.tprintf("%d %s", i + 1, name)
 		ui.label(ctx, label, slot, .Center, t.text if i == s.hotbar else t.text_muted)
 	}
 }
@@ -228,12 +230,14 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), session arena %.1f MiB",
+				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), bulk edits %d whole %d late, session arena %.1f MiB",
 				w.chunks.count,
 				len(w.chunks.items) - 1,
 				f64(w.arrays.committed) / (1 << 20),
 				w.stats.mesh_jobs_busy,
 				len(w.to_mesh),
+				w.stats.groups_shown,
+				w.stats.groups_late,
 				f64(s.arena.total_used) / (1 << 20),
 			),
 		)

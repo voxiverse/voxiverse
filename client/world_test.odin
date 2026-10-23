@@ -155,6 +155,7 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 @(test)
 test_entity_death_puff :: proc(t: ^testing.T) {
 	s: Session
+	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS)
 	defer delete(s.puffs)
 	defer delete(s.sounds)
 	defer delete(s.entities)

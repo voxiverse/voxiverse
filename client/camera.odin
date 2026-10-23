@@ -77,6 +77,17 @@ world_debug_lines :: proc(app: ^App) {
 		b := [3]f64{f64(hit.block.x), f64(hit.block.y), f64(hit.block.z)}
 		render.debug_box(dd, b - 0.004, b + 1.004, {16, 16, 20, 220})
 	}
+	// The selection (pos1, pos2): its box, or the one corner set.
+	sel := app.session.selection
+	if a, ok := sel[0].?; ok {
+		b := sel[1].? or_else a
+		lo := [3]f64{f64(min(a.x, b.x)), f64(min(a.y, b.y)), f64(min(a.z, b.z))}
+		hi := [3]f64{f64(max(a.x, b.x)), f64(max(a.y, b.y)), f64(max(a.z, b.z))} + 1
+		render.debug_box(dd, lo - 0.01, hi + 0.01, {255, 150, 40, 255})
+	} else if b, ok2 := sel[1].?; ok2 {
+		p := [3]f64{f64(b.x), f64(b.y), f64(b.z)}
+		render.debug_box(dd, p - 0.01, p + 1.01, {255, 150, 40, 255})
+	}
 	if app.debug.chunk_borders {
 		c := game.chunk_origin(camera_chunk(&app.session.camera))
 		lo := [3]f64{f64(c.x), f64(c.y), f64(c.z)}

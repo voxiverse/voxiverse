@@ -48,6 +48,7 @@ Client :: struct {
 	edit_count:  int,
 	teleport:    [2]f32, // yaw, pitch to look after it
 	look:        [2]f32, // yaw, pitch of the last input applied (saved with the player)
+	fired_at:    u64, // tick of its last rocket (a rate limit)
 }
 
 // MAX_QUEUED_EDITS: edits waiting for the input they follow; more than this

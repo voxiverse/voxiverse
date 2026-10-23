@@ -129,10 +129,16 @@ neighbours' edges.
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
 | `break`, `place [block]` | Hit the aimed critter, else break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
 | `summon` | A critter three blocks in front of you (cheats). Critters also come by themselves in daylight, on grass 16-40 blocks from a player, at most 6 near one; they go when nobody is within 80 blocks. The server's `entities.cfg` keeps them with the world. F3 counts the entities near you |
+| `pos1`, `pos2`, `sel` | The aimed block becomes the selection's first / second corner (drawn as a box) / forget the selection |
+| `fill <block>`, `replace <from> <to>`, `clear` | Bulk edits of the selection (cheats; at most 64x64x64 blocks). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
+| `sphere <radius> [block]`, `explode [radius]` | A ball of block (default air) / an explosion (carves, knocks back, hurts critters) at the aimed block |
+| `fire` | Fire a rocket where you look, as the launcher (hotbar 7) does: it flies, falls a little and explodes on what it hits |
+| `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
 
 `--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
-driver, with AddressSanitizer and with profiling.
+driver, with AddressSanitizer and with profiling. CI also runs `blast_test 12 quit`. F3
+shows how many bulk edits were shown whole and how many late (on a timeout).
 
 ## Network
 

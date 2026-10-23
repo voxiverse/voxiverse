@@ -62,3 +62,30 @@ column_edited :: proc(s: ^Server, p: game.Block_Pos, b: game.Block) -> bool {
 	}
 	return true
 }
+
+// column_rescan finds the top of (x, z) again after a bulk edit that
+// reached up to y = from (anything above the old top and from is air);
+// true if it changed.
+column_rescan :: proc(s: ^Server, x, z: i32, from: i32) -> bool {
+	old := column_top(s, x, z)
+	top := i32(game.WORLD_MIN_Y)
+	for y := min(max(old, from), game.WORLD_MAX_Y - 1); y >= game.WORLD_MIN_Y; y -= 1 {
+		block, loaded := world_block(&s.world, {x, y, z})
+		if !loaded {
+			// Below what is loaded: natural terrain (or just below).
+			top = min(game.column_height(s.config.seed, x, z), y)
+			break
+		}
+		if game.block_solid(block) {
+			top = y
+			break
+		}
+	}
+	if top == old {return false}
+	if top == game.column_height(s.config.seed, x, z) {
+		delete_key(&s.tops, [2]i32{x, z})
+	} else {
+		s.tops[{x, z}] = top
+	}
+	return true
+}

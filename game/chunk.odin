@@ -121,3 +121,20 @@ block_arrays_give :: proc(a: ^Block_Arrays, p: ^Block_Array) {
 	a.free[a.free_len] = p
 	a.free_len += 1
 }
+
+// chunks_hash_add mixes one chunk (where it is, and its blocks) into an
+// order-independent hash of a set of chunks: two sides holding the same
+// chunks get the same sum whatever order they add them in.
+chunks_hash_add :: proc(sum: ^u64, pos: Chunk_Pos, c: ^Chunk_Blocks) {
+	h := u64(0xcbf29ce484222325)
+	mix :: #force_inline proc(h: u64, v: u64) -> u64 {return (h ~ v) * 0x100000001b3}
+	h = mix(h, u64(u32(pos.x)))
+	h = mix(h, u64(u32(pos.y)))
+	h = mix(h, u64(u32(pos.z)))
+	if c.array == nil {
+		h = mix(h, u64(c.uniform) | 1 << 32)
+	} else {
+		for b in c.array {h = mix(h, u64(b))}
+	}
+	sum^ += h ~ (h >> 29)
+}

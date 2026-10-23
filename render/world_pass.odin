@@ -72,8 +72,9 @@ World_Stats :: struct {
 
 @(private)
 Mesh :: struct {
-	chunk: [3]i32,
-	range: base.Range,
+	chunk:  [3]i32,
+	range:  base.Range,
+	hidden: bool, // uploaded, not drawn yet (world_show_mesh)
 }
 
 @(private)
@@ -225,12 +226,14 @@ world_begin :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 }
 
 // world_add_mesh uploads a chunk's vertices (a multiple of 4, at most
-// MAX_QUADS_PER_MESH quads) and returns its handle.
+// MAX_QUADS_PER_MESH quads) and returns its handle. A hidden mesh is not
+// drawn until world_show_mesh (to show several at once).
 world_add_mesh :: proc(
 	p: ^World_Pass,
 	g: ^gpu.Gpu,
 	chunk: [3]i32,
 	vertices: []u8,
+	hidden := false,
 ) -> (
 	handle: Mesh_Handle,
 	result: Upload_Result,
@@ -255,7 +258,7 @@ world_add_mesh :: proc(
 		}
 		return 0, .Full
 	}
-	h, _, added := base.pool_add(&p.meshes, Mesh{chunk, r})
+	h, _, added := base.pool_add(&p.meshes, Mesh{chunk, r, hidden})
 	if !added {
 		base.range_free(&p.ranges, r)
 		log.error("render too many chunk meshes")
@@ -273,6 +276,11 @@ world_add_mesh :: proc(
 	f.staging_used += len(vertices)
 	p.stats.uploaded_bytes += len(vertices)
 	return h, .Ok
+}
+
+// world_show_mesh starts drawing a mesh added hidden.
+world_show_mesh :: proc(p: ^World_Pass, h: Mesh_Handle) {
+	if m := base.pool_get(&p.meshes, h); m != nil {m.hidden = false}
 }
 
 // world_remove_mesh stops drawing the mesh; its memory is reused once the
@@ -416,6 +424,7 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 	}
 	it: base.Pool_Iterator
 	for m in base.pool_next(&p.meshes, &it) {
+		if m.hidden {continue}
 		origin := (m.chunk - camera.chunk) * CHUNK_EXTENT
 		lo := [3]f32{f32(origin.x), f32(origin.y), f32(origin.z)}
 		if !box_visible(&planes, lo, lo + CHUNK_EXTENT) {continue}

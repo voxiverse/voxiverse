@@ -37,6 +37,11 @@ Player_Sound :: enum u8 {
 	Land,
 }
 
+Blast_Sound :: enum u8 {
+	Launch, // a rocket leaving: a rising hiss
+	Boom, // an explosion: a deep thump, a rumble, crackle
+}
+
 Critter_Sound :: enum u8 {
 	Hurt, // a short bleat
 	Die, // a long, falling one, and a puff
@@ -230,7 +235,43 @@ critter_sound :: proc(c: Critter_Sound, variant: int, allocator := context.alloc
 	return finish(&s, 0.7, allocator)
 }
 
+// blast_sound: the rocket launcher's sounds.
+blast_sound :: proc(x: Blast_Sound, variant: int, allocator := context.allocator) -> []f32 {
+	s := Synth {
+		rng = seed(4242 + u32(x) * 131 + u32(variant) * 7),
+	}
+	r := rand_range(&s.rng, 0.9, 1.1)
+	switch x {
+	case .Launch:
+		burst(&s, {start = 0, tau = 0.02, filter = .Low, freq = 300 * r, gain = 0.8})
+		hiss(&s, 0.35, 900 * r, 3500 * r, 0.6)
+	case .Boom:
+		burst(&s, {start = 0, tau = 0.09, filter = .Low, freq = 90 * r, gain = 1})
+		burst(&s, {start = 0, tau = 0.14, filter = .Low, freq = 220 * r, gain = 0.8})
+		burst(&s, {start = 0.01, tau = 0.12, filter = .Band, freq = 700 * r, q = 0.7, gain = 0.4})
+		scatter(&s, 30, 0.03, 0.5, {tau = 0.012, filter = .Band, q = 1.5}, 400, 2500, 0.1, 0.35)
+	}
+	return finish(&s, 0.95, allocator)
+}
+
 // --- Synthesis -------------------------------------------------------------
+
+// hiss: noise through a band rising from lo to hi Hz over seconds, fading.
+@(private)
+hiss :: proc(s: ^Synth, seconds, lo, hi, gain: f32) {
+	n := min(int(seconds * RATE), len(s.buf))
+	f := bandpass(lo, 1.2)
+	for i in 0 ..< n {
+		u := f32(i) / f32(n)
+		if i % 32 == 0 {
+			g := bandpass(lo + (hi - lo) * u, 1.2)
+			f.b0, f.b1, f.b2, f.a1, f.a2 = g.b0, g.b1, g.b2, g.a1, g.a2
+		}
+		env := min(u / 0.05, 1) * (1 - u) * (1 - u)
+		s.buf[i] += biquad(&f, rand_range(&s.rng, -1, 1)) * env * gain
+	}
+	s.len = max(s.len, n)
+}
 
 // bleat: a voiced sound from from_hz to to_hz over seconds.
 @(private)

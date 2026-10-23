@@ -71,7 +71,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.columns[v.pos] = v
 		case game.Time:
 			c.clock = v.time
-		case game.Block_Changed,
+		case game.Bulk_Begin,
+		     game.Explosion,
+		     game.Block_Changed,
 		     game.Pong,
 		     game.Player_Joined,
 		     game.Player_Left,

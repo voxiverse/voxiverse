@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 5
+PROTOCOL_VERSION :: 6
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -81,6 +81,12 @@ Attack :: struct {
 	after:  u32,
 }
 
+// Fire: the creative rocket launcher, aimed yaw/pitch, after input `after`.
+Fire :: struct {
+	after:      u32,
+	yaw, pitch: f32,
+}
+
 Client_Message :: union {
 	Hello,
 	Input,
@@ -90,6 +96,7 @@ Client_Message :: union {
 	Edit,
 	Admin,
 	Attack,
+	Fire,
 }
 
 // Server -> client.
@@ -213,6 +220,19 @@ Entity_Hurt :: struct {
 	entity: u32,
 }
 
+// Bulk_Begin: the next `count` Chunk messages are one bulk edit's (show
+// them together, so no face goes missing for a frame in between).
+Bulk_Begin :: struct {
+	count: u16,
+}
+
+// Explosion: something blew up here (flash, debris, sound); the blocks it
+// took come as a bulk edit after.
+Explosion :: struct {
+	position: [3]f64,
+	radius:   f32,
+}
+
 // Column: the y of the highest solid block in each block column of a chunk
 // column (x fastest). Sky light needs it: the client cannot see above what
 // it has loaded. Sent before a column's first chunk, and again when an edit
@@ -257,6 +277,8 @@ Server_Message :: union {
 	Entity_Despawn,
 	Entities,
 	Entity_Hurt,
+	Bulk_Begin,
+	Explosion,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -274,6 +296,7 @@ Client_Kind :: enum u8 {
 	Edit,
 	Admin,
 	Attack,
+	Fire,
 }
 
 @(private = "file")
@@ -297,6 +320,8 @@ Server_Kind :: enum u8 {
 	Entity_Despawn,
 	Entities,
 	Entity_Hurt,
+	Bulk_Begin,
+	Explosion,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -351,6 +376,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "admin"
 		case u8(Client_Kind.Attack):
 			return "attack"
+		case u8(Client_Kind.Fire):
+			return "fire"
 		}
 	} else {
 		switch kind {
@@ -392,6 +419,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "entities"
 		case u8(Server_Kind.Entity_Hurt):
 			return "hurt"
+		case u8(Server_Kind.Bulk_Begin):
+			return "bulk"
+		case u8(Server_Kind.Explosion):
+			return "explosion"
 		}
 	}
 	return ""
@@ -433,6 +464,11 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Attack))
 		write_u32(w, v.entity)
 		write_u32(w, v.after)
+	case Fire:
+		write_u8(w, u8(Client_Kind.Fire))
+		write_u32(w, v.after)
+		write_f32(w, v.yaw)
+		write_f32(w, v.pitch)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -543,6 +579,13 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Entity_Hurt:
 		write_u8(w, u8(Server_Kind.Entity_Hurt))
 		write_u32(w, v.entity)
+	case Bulk_Begin:
+		write_u8(w, u8(Server_Kind.Bulk_Begin))
+		write_u16(w, v.count)
+	case Explosion:
+		write_u8(w, u8(Server_Kind.Explosion))
+		write_position(w, v.position)
+		write_f32(w, v.radius)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -596,6 +639,14 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			entity = read_u32(&r),
 			after  = read_u32(&r),
 		}
+	case u8(Client_Kind.Fire):
+		f := Fire {
+			after = read_u32(&r),
+			yaw   = read_f32(&r),
+			pitch = read_f32(&r),
+		}
+		if !(abs(f.yaw) <= 1e6) || !(abs(f.pitch) <= PITCH_LIMIT) {reader_fail(&r)}
+		m = f
 	case:
 		return
 	}
@@ -759,6 +810,17 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		m = Entity_Hurt {
 			entity = read_u32(&r),
 		}
+	case u8(Server_Kind.Bulk_Begin):
+		m = Bulk_Begin {
+			count = read_u16(&r),
+		}
+	case u8(Server_Kind.Explosion):
+		x := Explosion {
+			position = read_position(&r),
+			radius   = read_f32(&r),
+		}
+		if !(x.radius >= 0 && x.radius <= 64) {reader_fail(&r)}
+		m = x
 	case:
 		return
 	}

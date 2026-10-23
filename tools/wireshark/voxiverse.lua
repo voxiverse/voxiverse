@@ -26,13 +26,15 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "admin", [8] = "attack",
+	[9] = "fire",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
 	[5] = "pong", [6] = "player", [7] = "rules", [8] = "edit_result",
 	[9] = "block", [10] = "column", [11] = "time", [12] = "joined",
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
-	[17] = "despawn", [18] = "entities", [19] = "hurt",
+	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
+	[21] = "explosion",
 }
 
 local f = vx.fields

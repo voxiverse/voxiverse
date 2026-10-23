@@ -250,9 +250,6 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, fmt.tprintf("  %-10s %s", cmd.name, cmd.help))
 				}
 			}}, complete_command)
-	console_register(c, {"clear", "clear the console (Ctrl+L)", proc(app: ^App, args: []string) {
-			console_clear(&app.console)
-		}})
 	console_register(c, {"quit", "quit the game", proc(app: ^App, args: []string) {
 			app.quit = true
 		}})
@@ -321,6 +318,14 @@ register_builtin_commands :: proc(c: ^Console) {
 			"fly_test",
 			"fly_test <blocks> [quit]: fly and check memory stays flat",
 			fly_test_command,
+		},
+	)
+	console_register(
+		c,
+		{
+			"blast_test",
+			"blast_test <shots> [quit]: blow up terrain and check budgets, meshes, memory, sync",
+			blast_test_command,
 		},
 	)
 	console_register(
@@ -497,7 +502,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			"place [block]: place against the aimed face (right click)",
 			proc(app: ^App, args: []string) {
 				if app.session == nil {return}
-				block := HOTBAR[app.session.hotbar]
+				block := HOTBAR[min(app.session.hotbar, len(HOTBAR) - 1)]
 				if len(args) > 0 {
 					found := false
 					for b in game.Block {
@@ -562,6 +567,95 @@ register_builtin_commands :: proc(c: ^Console) {
 				}
 				if app.session != nil {leave_world(app)}
 				join_server(app, args[0], args[1] if len(args) > 1 else "")
+			},
+		},
+	)
+	console_register(
+		c,
+		{"fire", "fire a rocket where you look (the launcher)", proc(app: ^App, args: []string) {
+				if !cheats_allowed(app, "fire") {return}
+				session_fire(app.session)
+			}},
+	)
+	console_register(
+		c,
+		{
+			"pos1",
+			"pos1: the aimed block is the selection's first corner",
+			proc(app: ^App, args: []string) {
+				select_corner(app, 0)
+			},
+		},
+	)
+	console_register(
+		c,
+		{
+			"pos2",
+			"pos2: the aimed block is the selection's second corner",
+			proc(app: ^App, args: []string) {
+				select_corner(app, 1)
+			},
+		},
+	)
+	console_register(c, {"sel", "sel: forget the selection", proc(app: ^App, args: []string) {
+			if app.session != nil {app.session.selection = {}}
+		}})
+	console_register(
+		c,
+		{"fill", "fill <block>: fill the selection", proc(app: ^App, args: []string) {
+				if len(args) != 1 {
+					console_print(&app.console, "fill <block>", .Warning)
+					return
+				}
+				selection_command(app, "fill", args[0])
+			}},
+		complete_block_or_air,
+	)
+	console_register(
+		c,
+		{"replace", "replace <from> <to>: in the selection", proc(app: ^App, args: []string) {
+				if len(args) != 2 {
+					console_print(&app.console, "replace <from> <to>", .Warning)
+					return
+				}
+				selection_command(app, "replace", strings.join(args, " ", context.temp_allocator))
+			}},
+		complete_block_or_air,
+	)
+	console_register(
+		c,
+		{
+			"clear",
+			"clear: air in the whole selection (or clear the console with no selection)",
+			proc(app: ^App, args: []string) {
+				if app.session != nil &&
+				   app.session.selection[0] != nil &&
+				   app.session.selection[1] != nil {
+					selection_command(app, "fill", "air")
+				} else {
+					console_clear(&app.console)
+				}
+			},
+		},
+	)
+	console_register(
+		c,
+		{
+			"sphere",
+			"sphere <radius> [block]: a ball of block (air: a hole) at the aimed block",
+			proc(app: ^App, args: []string) {
+				aimed_command(app, "sphere", args, "air")
+			},
+		},
+		complete_sphere,
+	)
+	console_register(
+		c,
+		{
+			"explode",
+			"explode [radius]: an explosion at the aimed block",
+			proc(app: ^App, args: []string) {
+				aimed_command(app, "explode", args, "")
 			},
 		},
 	)
@@ -637,5 +731,65 @@ session_open_lan :: proc(app: ^App) {
 		console_print(&app.console, "open_lan: only the host can open the world", .Warning)
 	case:
 		send_message(app.session, game.Admin{"open_lan"})
+	}
+}
+
+// select_corner sets corner i of the selection to the aimed block.
+@(private = "file")
+select_corner :: proc(app: ^App, i: int) {
+	s := app.session
+	if s == nil {return}
+	hit, ok := s.aim.?
+	if !ok {
+		console_print(&app.console, "pos: aim at a block first", .Warning)
+		return
+	}
+	s.selection[i] = hit.block
+	console_print(&app.console, fmt.tprintf("pos%d: %v", i + 1, hit.block))
+}
+
+// selection_command sends a bulk edit over the selection.
+@(private = "file")
+selection_command :: proc(app: ^App, what: string, rest: string) {
+	s := app.session
+	if s == nil || !cheats_allowed(app, what) {return}
+	a, ok_a := s.selection[0].?
+	b, ok_b := s.selection[1].?
+	if !ok_a || !ok_b {
+		console_print(
+			&app.console,
+			fmt.tprintf("%s: select two corners first (pos1, pos2)", what),
+			.Warning,
+		)
+		return
+	}
+	send_message(
+		s,
+		game.Admin {
+			fmt.tprintf("%s %d %d %d %d %d %d %s", what, a.x, a.y, a.z, b.x, b.y, b.z, rest),
+		},
+	)
+}
+
+// aimed_command sends sphere/explode at the aimed block.
+@(private = "file")
+aimed_command :: proc(app: ^App, what: string, args: []string, default_block: string) {
+	s := app.session
+	if s == nil || !cheats_allowed(app, what) {return}
+	hit, ok := s.aim.?
+	if !ok {
+		console_print(&app.console, fmt.tprintf("%s: aim at a block first", what), .Warning)
+		return
+	}
+	radius := args[0] if len(args) > 0 else "4"
+	p := hit.block
+	if what == "explode" {
+		send_message(s, game.Admin{fmt.tprintf("explode %d %d %d %s", p.x, p.y, p.z, radius)})
+	} else {
+		block := args[1] if len(args) > 1 else default_block
+		send_message(
+			s,
+			game.Admin{fmt.tprintf("sphere %d %d %d %s %s", p.x, p.y, p.z, radius, block)},
+		)
 	}
 }

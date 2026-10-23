@@ -3,6 +3,7 @@ package client
 import "core:log"
 import "core:strconv"
 import "core:strings"
+import "core:time"
 
 import "../game"
 
@@ -10,6 +11,7 @@ import "../game"
 // one batch per frame, with two script-only commands that pause it:
 //
 //	wait <frames>    resume after that many frames
+//	sleep <seconds>  resume after that much time (frame counts vary with vsync)
 //	wait_world       resume once the world has loaded and finished meshing
 //	                 (no world, or it failed: the run fails and quits)
 //
@@ -22,6 +24,7 @@ Script :: struct {
 	next:       int,
 	wait:       int, // frames left to wait
 	wait_world: bool,
+	until:      time.Tick, // sleeping until then (zero: not)
 }
 
 script_init :: proc(s: ^Script, text: string, allocator := context.allocator) {
@@ -38,6 +41,10 @@ script_run :: proc(app: ^App, s: ^Script) {
 	if s.wait > 0 {
 		s.wait -= 1
 		return
+	}
+	if s.until != {} {
+		if time.tick_diff(time.tick_now(), s.until) > 0 {return}
+		s.until = {}
 	}
 	if s.wait_world {
 		if app.session == nil {
@@ -67,6 +74,14 @@ script_run :: proc(app: ^App, s: ^Script) {
 			return
 		case "wait_world":
 			s.wait_world = true
+			return
+		case "sleep":
+			seconds, ok := strconv.parse_f64(args[1] if len(args) > 1 else "")
+			if !ok || seconds < 0 {
+				log.warnf("script bad sleep line=%q", line)
+				continue
+			}
+			s.until = time.tick_add(time.tick_now(), time.Duration(seconds * f64(time.Second)))
 			return
 		case:
 			console_execute(app, line)

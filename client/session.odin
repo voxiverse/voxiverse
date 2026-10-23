@@ -67,7 +67,7 @@ Session :: struct {
 	puffs:       [dynamic]Puff, // dying entities' particles
 	newest_tick: u32, // of the newest Players or Entities message
 	newest_at:   time.Tick, // when it came
-	notices:     [dynamic]string, // from the server, for the console (the App takes them)
+	notices:     [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:     game.Welcome,
 	world:       World, // set up from Welcome
 	world_init:  bool,
@@ -94,6 +94,7 @@ Session :: struct {
 	received:    [dynamic]game.Packet,
 	last_acked:  u32, // the newest Player_Update applied
 	frozen:      bool, // paused, the world standing still (session_freeze)
+	selection:   [2]Maybe(game.Block_Pos), // pos1, pos2 (bulk edit commands)
 	stats:       Session_Stats,
 	config:      Session_Config,
 	net:         Net_Stats,
@@ -135,10 +136,10 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
-	s.notices = make([dynamic]string, arena)
+	s.notices = make([dynamic]string, 0, 16) // heap: notices come and go (an arena would only grow)
 	s.others = make(map[u16]Other_Player, arena)
 	s.entities = make(map[u32]Other_Entity, 64)
-	s.puffs = make([dynamic]Puff, 0, 256, arena)
+	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	s.config.name = strings.clone(config.name, arena)
 
 	if join, remote := config.join.?; remote {
@@ -208,6 +209,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	delete(s.entities) // the heap: entities come and go
+	for n in s.notices {delete(n)}
+	delete(s.notices)
 	netcode.capture_close(&s.capture)
 	if s.world_init {
 		world_remove_all_meshes(&s.world)
@@ -437,6 +440,10 @@ receive :: proc(s: ^Session) {
 			}
 		case game.Notice:
 			notice(s, v.text)
+		case game.Bulk_Begin:
+			world_bulk_begin(&s.world, int(v.count))
+		case game.Explosion:
+			explosion_effects(s, v.position, f64(v.radius))
 		case game.Entity_Spawn:
 			s.entities[v.entity] = {
 				kind      = v.kind,
@@ -538,7 +545,7 @@ session_others_now :: proc(s: ^Session) -> f64 {
 @(private = "file")
 notice :: proc(s: ^Session, text: string) {
 	log.info("session ", text)
-	append(&s.notices, strings.clone(text, virtual.arena_allocator(&s.arena)))
+	append(&s.notices, strings.clone(text))
 }
 
 // flush sends what is due over the network (about once per display frame
@@ -615,7 +622,16 @@ fail :: proc(s: ^Session, reason: string) {
 
 // The blocks a player can place, in hotbar order.
 @(rodata)
-HOTBAR := [?]game.Block{.Stone, .Dirt, .Grass, .Sand, .Gravel}
+HOTBAR := [?]game.Block{.Stone, .Dirt, .Grass, .Sand, .Gravel, .Lamp}
+
+// LAUNCHER: the hotbar slot after the blocks holds the creative rocket
+// launcher, where the server allows it (it is a cheat).
+LAUNCHER :: len(HOTBAR)
+
+// hotbar_slots: how many slots the hotbar has here.
+hotbar_slots :: proc(s: ^Session) -> int {
+	return len(HOTBAR) + (1 if session_can_cheat(s) else 0)
+}
 
 MAX_PENDING_EDITS :: 64
 EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
@@ -626,12 +642,14 @@ EDIT_REPEAT_SECONDS :: 0.25 // a held button edits again this often
 @(private = "file")
 edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
-	for k, i in keys[:len(HOTBAR)] {
+	slots := hotbar_slots(s)
+	for k, i in keys[:slots] {
 		if k in input.pressed {s.hotbar = i}
 	}
 	if input.wheel.y != 0 {
-		s.hotbar = (s.hotbar - int(math.sign(input.wheel.y)) + len(HOTBAR)) % len(HOTBAR)
+		s.hotbar = (s.hotbar - int(math.sign(input.wheel.y)) + slots) % slots
 	}
+	s.hotbar = min(s.hotbar, slots - 1)
 
 	s.edit_timer -= dt
 	breaking := .Left in input.mouse_down
@@ -639,8 +657,20 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	pressed := input.mouse_pressed & {.Left, .Right} != {}
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
+	if s.hotbar == LAUNCHER {
+		if breaking {session_fire(s)}
+		return
+	}
 	if breaking && !placing && session_attack(s) {return}
 	session_edit(s, placing && !breaking, HOTBAR[s.hotbar])
+}
+
+// session_fire launches a rocket where we look (the server makes it).
+session_fire :: proc(s: ^Session) -> bool {
+	if !session_can_cheat(s) {return false}
+	send_message(s, game.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
+	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1})
+	return true
 }
 
 // session_edit breaks the aimed block, or places block against its face:

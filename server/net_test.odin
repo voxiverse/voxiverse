@@ -16,24 +16,26 @@ import "../netcode"
 
 @(private)
 Net_Client :: struct {
-	link:     netcode.Link,
-	name:     string,
-	scratch:  ^game.Block_Array,
-	arrays:   game.Block_Arrays,
-	chunks:   map[game.Chunk_Pos]game.Chunk_Blocks,
-	welcome:  game.Welcome,
-	welcomed: bool,
-	rejected: string,
-	update:   game.Player_Update,
-	others:   map[u16]string, // joined, by player id
-	seen:     map[u16][3]f64, // last Players position, by player id
-	changed:  [dynamic]game.Block_Changed,
-	entities: map[u32][3]f64, // known entities, where last seen
-	hurt:     int, // Entity_Hurt messages
-	died:     int, // Entity_Despawn with died
-	results:  map[u32]game.Edit_Result,
-	seq:      u32,
-	messages: [dynamic][]u8,
+	link:        netcode.Link,
+	name:        string,
+	scratch:     ^game.Block_Array,
+	arrays:      game.Block_Arrays,
+	chunks:      map[game.Chunk_Pos]game.Chunk_Blocks,
+	welcome:     game.Welcome,
+	welcomed:    bool,
+	rejected:    string,
+	update:      game.Player_Update,
+	others:      map[u16]string, // joined, by player id
+	seen:        map[u16][3]f64, // last Players position, by player id
+	changed:     [dynamic]game.Block_Changed,
+	entities:    map[u32][3]f64, // known entities, where last seen
+	hurt:        int, // Entity_Hurt messages
+	bulk_begins: int,
+	explosions:  int,
+	died:        int, // Entity_Despawn with died
+	results:     map[u32]game.Edit_Result,
+	seq:         u32,
+	messages:    [dynamic][]u8,
 }
 
 @(private)
@@ -131,6 +133,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			if v.died {c.died += 1}
 		case game.Entity_Hurt:
 			c.hurt += 1
+		case game.Bulk_Begin:
+			c.bulk_begins += 1
+		case game.Explosion:
+			c.explosions += 1
 		}
 	}
 	clear(&c.messages)

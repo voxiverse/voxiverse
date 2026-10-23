@@ -82,6 +82,9 @@ jobs:
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
           # The sky through a day (screenshots uploaded below; validation must stay clean).
+          # Bulk edits (M9): rockets and explosions, each shown whole, and
+          # the client's chunks end up exactly the server's.
+          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; blast_test 12 quit"
           xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; time 0.8; wait 5; screenshot sky_night; wait 5; quit"
           # Multiplayer over real sockets: a dedicated server and a client
           # joining it, the server capturing every packet; the Wireshark

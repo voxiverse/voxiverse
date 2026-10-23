@@ -19,6 +19,8 @@ Sound_Kind :: enum u8 {
 	Land,
 	Entity_Hurt,
 	Entity_Die,
+	Launch,
+	Explosion,
 }
 
 Sound_Event :: struct {
@@ -32,6 +34,7 @@ Sound_Bank :: struct {
 	block:   [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
 	player:  [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
 	critter: [sfx.Critter_Sound][sfx.VARIANTS]audio.Sound_Id,
+	blast:   [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples: [dynamic][]f32, // owned
 }
 
@@ -57,6 +60,9 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for c in sfx.Critter_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.critter[c][v] = add(b, m, sfx.critter_sound(c, v))}
 	}
+	for x in sfx.Blast_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v))}
+	}
 }
 
 sounds_destroy :: proc(b: ^Sound_Bank) {
@@ -70,7 +76,8 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 	right := [3]f32{math.cos(view.yaw), 0, -math.sin(view.yaw)}
 	for e in events {
 		d := e.position - view.position
-		gain := audio.spatial_gain({f32(d.x), f32(d.y), f32(d.z)}, right, e.volume, SOUND_RANGE)
+		range: f32 = 4 * SOUND_RANGE if e.kind == .Explosion else SOUND_RANGE // explosions carry
+		gain := audio.spatial_gain({f32(d.x), f32(d.y), f32(d.z)}, right, e.volume, range)
 		if gain == {} {continue}
 		pitch := rand.float32_range(0.9, 1.1)
 		variant := rand.int_max(sfx.VARIANTS)
@@ -79,6 +86,10 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 			audio.play(m, {b.critter[.Hurt][variant], gain, pitch})
 		case .Entity_Die:
 			audio.play(m, {b.critter[.Die][variant], gain, pitch})
+		case .Launch:
+			audio.play(m, {b.blast[.Launch][variant], gain, pitch})
+		case .Explosion:
+			audio.play(m, {b.blast[.Boom][variant], gain, pitch * 0.9})
 		case .Land:
 			audio.play(m, {b.player[.Land][variant], gain, pitch})
 			if mat, ok := sfx.material_of(e.block); ok {
@@ -87,15 +98,9 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		case .Break, .Place, .Step:
 			mat, ok := sfx.material_of(e.block)
 			if !ok {continue}
-			action := [Sound_Kind]sfx.Action {
-				.Break       = .Break,
-				.Place       = .Place,
-				.Step        = .Step,
-				.Land        = .Step,
-				.Entity_Hurt = .Step,
-				.Entity_Die  = .Step,
-			}
-			audio.play(m, {b.block[mat][action[e.kind]][variant], gain, pitch})
+			action: sfx.Action =
+				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
+			audio.play(m, {b.block[mat][action][variant], gain, pitch})
 		}
 	}
 }

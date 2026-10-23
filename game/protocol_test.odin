@@ -122,6 +122,15 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	)
 	m, ok = decode_server(ents_bytes[:], scratch)
 	testing.expect(t, ok && m.(Entities) == ents)
+	m, ok = decode_server(encode_s(Bulk_Begin{9})[:], scratch)
+	testing.expect(t, ok && m.(Bulk_Begin).count == 9)
+	m, ok = decode_server(encode_s(Explosion{{1, 2, 3}, 6})[:], scratch)
+	testing.expect(t, ok && m.(Explosion) == Explosion{{1, 2, 3}, 6})
+	m, ok = decode_server(encode_s(Explosion{{1, 2, 3}, 1000})[:], scratch)
+	testing.expect(t, !ok, "an explosion of radius 1000 decoded")
+	fire: Client_Message
+	fire, ok = decode_client(encode_c(Fire{5, 1.5, -0.3})[:])
+	testing.expect(t, ok && fire.(Fire) == Fire{5, 1.5, -0.3})
 	at: Client_Message
 	at, ok = decode_client(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
@@ -191,6 +200,8 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Entity_Despawn{1, false}),
 		encode_s(Entities{tick = 1, count = 1}),
 		encode_s(Entity_Hurt{1}),
+		encode_s(Bulk_Begin{1}),
+		encode_s(Explosion{{}, 1}),
 		encode_s(Player_Update{1, {}, false, 0, 0}),
 		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Edit_Result{1, false, {}, .Stone}),

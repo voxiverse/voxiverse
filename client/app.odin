@@ -72,6 +72,7 @@ App :: struct {
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
+	blast_test:       Blast_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
 	script_failed:    bool, // an --exec script could not go on (fails the run)
 	console:          Console,
@@ -278,9 +279,13 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			w.mouse_captured,
 		)
 		fly_test_update(app)
+		blast_test_update(app)
 		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)
 		clear(&app.session.sounds)
-		for n in app.session.notices {console_print(&app.console, n)}
+		for n in app.session.notices {
+			console_print(&app.console, n)
+			delete(n)
+		}
 		clear(&app.session.notices)
 		if app.session.state == .Failed {
 			app.message = fmt.aprintf("Disconnected: %s", app.session.failure)
@@ -354,7 +359,7 @@ MENU_FPS :: 120
 // frame_cap: the shortest a frame may take now (0: no limit).
 frame_cap :: proc(app: ^App) -> time.Duration {
 	in_world := app.screen == .Game && !app.paused
-	if in_world || app.fly_test.phase != .Off {return 0}
+	if in_world || app.fly_test.phase != .Off || app.blast_test.phase != .Off {return 0}
 	return time.Second / MENU_FPS
 }
 

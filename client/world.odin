@@ -3,6 +3,7 @@ package client
 import "core:log"
 import "core:mem"
 import "core:slice"
+import "core:time"
 
 import "../base"
 import "../game"
@@ -26,11 +27,29 @@ Chunk_Handle :: distinct u32
 Client_Chunk :: struct {
 	pos:     game.Chunk_Pos,
 	blocks:  game.Chunk_Blocks,
-	version: u32, // bumped whenever blocks change
+	version: u32, // bumped whenever its mesh's inputs change: its blocks, or a neighbour's
 	mesh:    render.Mesh_Handle, // 0: no mesh (nothing visible, or not meshed yet)
 	dirty:   bool, // its mesh does not match its blocks
 	queued:  bool, // waiting in to_mesh or being meshed
+	group:   u32, // a bulk edit's mesh group it belongs to (0: none)
+	pending: render.Mesh_Handle, // its new mesh, uploaded hidden until its group is shown
+	waiting: bool, // a new mesh (pending, or none: empty) waits for its group
 }
+
+// Mesh_Group: the chunks a bulk edit touched, and their neighbours: their
+// new meshes are shown together, in one frame, so no face goes missing
+// between one mesh and the next (a see-through hole).
+@(private)
+Mesh_Group :: struct {
+	id:      u32,
+	members: [MAX_GROUP_MEMBERS]Chunk_Handle,
+	count:   int,
+	opened:  time.Tick,
+}
+
+MAX_GROUP_MEMBERS :: 512
+MAX_GROUPS :: 16
+GROUP_TIMEOUT :: 500 * time.Millisecond // a group that cannot finish (a neighbour missing) is shown anyway
 
 World :: struct {
 	chunks:        base.Pool(Client_Chunk, Chunk_Handle),
@@ -46,6 +65,11 @@ World :: struct {
 	mesh_removals: [dynamic]render.Mesh_Handle,
 	columns:       map[[2]i32]Client_Column,
 	next_version:  u32,
+	// Bulk edits (Mesh_Group):
+	batch_left:    int, // chunks of the bulk edit still to come
+	batch:         [dynamic]game.Chunk_Pos, // ... those come so far
+	groups:        [dynamic]Mesh_Group,
+	next_group:    u32,
 	stats:         World_Stats,
 }
 
@@ -53,6 +77,8 @@ World_Stats :: struct {
 	meshed:         int, // chunks meshed in total
 	stale_meshes:   int, // results dropped because the chunk changed or left
 	mesh_jobs_busy: int,
+	groups_shown:   int, // bulk edits shown whole
+	groups_late:    int, // ... shown on the timeout instead (could flash a hole)
 }
 
 @(private)
@@ -112,6 +138,8 @@ world_init :: proc(
 	w.free_tasks = make([dynamic]^Mesh_Task, 0, count, arena) or_return
 	w.urgent_tasks = make([dynamic]^Mesh_Task, 0, URGENT_TASKS, arena) or_return
 	w.uploads = make([dynamic]^Mesh_Task, 0, count + URGENT_TASKS, arena) or_return
+	w.batch = make([dynamic]game.Chunk_Pos, 0, MAX_GROUP_MEMBERS, arena) or_return
+	w.groups = make([dynamic]Mesh_Group, 0, MAX_GROUPS, arena) or_return
 	for &t, i in w.tasks {
 		t.world = w
 		t.vertices = make([dynamic]mesh.Vertex, heap)
@@ -193,6 +221,11 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 	c.version = w.next_version
 	w.next_version += 1
 	c.dirty = true
+	if w.batch_left > 0 {
+		append(&w.batch, m.pos)
+		w.batch_left -= 1
+		if w.batch_left == 0 {group_open(w)}
+	}
 	// It, and neighbours whose border it is, may now be complete. A changed
 	// chunk also makes its meshed neighbours stale.
 	for dz in i32(-1) ..= 1 {
@@ -200,7 +233,13 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 			for dx in i32(-1) ..= 1 {
 				n := world_get(w, m.pos + {dx, dy, dz})
 				if n == nil {continue}
-				if exists {n.dirty = true}
+				if exists {
+					// Its mesh was made from the old blocks here: a result still
+					// on its way is stale too (border faces, light).
+					n.dirty = true
+					n.version = w.next_version
+					w.next_version += 1
+				}
 				queue_if_complete(w, n)
 			}
 		}
@@ -322,6 +361,8 @@ remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos) {
 				n := world_get(w, {cx, cy, cz})
 				if n == nil {continue}
 				n.dirty = true
+				n.version = w.next_version // a mesh being made now is stale
+				w.next_version += 1
 				queue_if_complete(w, n)
 			}
 		}
@@ -333,6 +374,7 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	if !ok {return}
 	c := base.pool_get(&w.chunks, h)
 	if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
+	if c.pending != 0 {append(&w.mesh_removals, c.pending)}
 	game.chunk_release(&c.blocks, &w.arrays)
 	delete_key(&w.by_pos, pos)
 	column := &w.columns[[2]i32{pos.x, pos.z}]
@@ -382,8 +424,14 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 		if !c.dirty {continue} 	// meshed meanwhile (an edit, on the spot)
 		if !neighbours_present(w, c.pos) {continue} 	// a neighbour left; requeued when it returns
 		if trivially_empty(w, c) {
-			if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
-			c.mesh = 0
+			if c.group != 0 {
+				// Nothing to draw, once its group is shown.
+				if c.pending != 0 {append(&w.mesh_removals, c.pending)}
+				c.pending, c.waiting = 0, true
+			} else {
+				if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
+				c.mesh = 0
+			}
 			c.dirty = false
 			continue
 		}
@@ -397,6 +445,98 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 	w.stats.mesh_jobs_busy = len(w.tasks) - URGENT_TASKS - len(w.free_tasks)
 }
 
+// world_bulk_begin: the next count chunks are one bulk edit's.
+world_bulk_begin :: proc(w: ^World, count: int) {
+	clear(&w.batch)
+	w.batch_left = min(count, MAX_GROUP_MEMBERS)
+	if w.batch_left == 0 {return}
+}
+
+// group_open makes a group of the batch's chunks and their neighbours.
+@(private = "file")
+group_open :: proc(w: ^World) {
+	defer clear(&w.batch)
+	if len(w.groups) == MAX_GROUPS {return} 	// too many at once: shown as they come
+	w.next_group += 1
+	g := Mesh_Group {
+		id     = w.next_group,
+		opened = time.tick_now(),
+	}
+	for pos in w.batch {
+		for dz in i32(-1) ..= 1 {
+			for dy in i32(-1) ..= 1 {
+				for dx in i32(-1) ..= 1 {
+					h, ok := w.by_pos[pos + {dx, dy, dz}]
+					if !ok || g.count == MAX_GROUP_MEMBERS {continue}
+					c := base.pool_get(&w.chunks, h)
+					if c.group == g.id {continue}
+					c.group = g.id
+					g.members[g.count] = h
+					g.count += 1
+				}
+			}
+		}
+	}
+	append(&w.groups, g)
+}
+
+// groups_update shows each group whose chunks all have their new meshes
+// (uploaded hidden as they came), or that waited past the timeout: in one
+// frame, the new meshes replace the old.
+@(private = "file")
+groups_update :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
+	for i := 0; i < len(w.groups); {
+		grp := &w.groups[i]
+		ready := true
+		for h in grp.members[:grp.count] {
+			c := base.pool_get(&w.chunks, h)
+			if c == nil || c.group != grp.id {continue}
+			// One that cannot be meshed (a neighbour beyond the view) has
+			// nothing coming: not waited for.
+			if c.queued || (c.dirty && neighbours_present(w, c.pos)) {
+				ready = false
+				break
+			}
+		}
+		late := !ready && time.tick_since(grp.opened) > GROUP_TIMEOUT
+		if !ready && !late {
+			i += 1
+			continue
+		}
+		if late {w.stats.groups_late += 1} else {w.stats.groups_shown += 1}
+		for h in grp.members[:grp.count] {
+			c := base.pool_get(&w.chunks, h)
+			if c == nil || c.group != grp.id {continue}
+			c.group = 0
+			if !c.waiting {continue}
+			if c.mesh != 0 {render.world_remove_mesh(pass, g, c.mesh)}
+			c.mesh = c.pending
+			if c.mesh != 0 {render.world_show_mesh(pass, c.mesh)}
+			c.pending, c.waiting = 0, false
+		}
+		ordered_remove(&w.groups, i)
+	}
+}
+
+// replace_mesh puts a chunk's new mesh (0: none) in place, or, while its
+// group waits, beside the old one, hidden.
+@(private = "file")
+replace_mesh :: proc(
+	w: ^World,
+	pass: ^render.World_Pass,
+	g: ^gpu.Gpu,
+	c: ^Client_Chunk,
+	mesh: render.Mesh_Handle,
+) {
+	if c.group != 0 {
+		if c.pending != 0 {render.world_remove_mesh(pass, g, c.pending)}
+		c.pending, c.waiting = mesh, true
+		return
+	}
+	if c.mesh != 0 {render.world_remove_mesh(pass, g, c.mesh)}
+	c.mesh = mesh
+}
+
 // world_apply uploads finished meshes and removes old ones; call between
 // render.world_begin and world_draw. Meshes that don't fit in this frame's
 // staging wait for the next.
@@ -405,6 +545,7 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 	for h in w.mesh_removals {render.world_remove_mesh(pass, g, h)}
 	clear(&w.mesh_removals)
 	base.queue_drain(&w.done, &w.uploads)
+	defer groups_update(w, pass, g)
 	kept := 0
 	for task, i in w.uploads {
 		c := base.pool_get(&w.chunks, task.handle)
@@ -419,24 +560,21 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			continue
 		}
 		if len(task.vertices) == 0 {
-			if c.mesh != 0 {render.world_remove_mesh(pass, g, c.mesh)}
-			c.mesh, c.dirty, c.queued = 0, false, false
+			replace_mesh(w, pass, g, c, 0)
+			c.dirty, c.queued = false, false
 			w.stats.meshed += 1
 			task_free(w, task)
 			continue
 		}
 		bytes := slice.to_bytes(task.vertices[:])
-		h, result := render.world_add_mesh(pass, g, c.pos, bytes)
+		h, result := render.world_add_mesh(pass, g, c.pos, bytes, hidden = c.group != 0)
 		if result == .Busy {
 			// Keep this and everything after it for the next frame.
 			copy(w.uploads[kept:], w.uploads[i:])
 			kept += len(w.uploads) - i
 			break
 		}
-		if result == .Ok {
-			if c.mesh != 0 {render.world_remove_mesh(pass, g, c.mesh)}
-			c.mesh = h
-		}
+		if result == .Ok {replace_mesh(w, pass, g, c, h)}
 		c.dirty, c.queued = false, false
 		w.stats.meshed += 1
 		task_free(w, task)
@@ -449,7 +587,8 @@ world_remove_all_meshes :: proc(w: ^World) {
 	it: base.Pool_Iterator
 	for c in base.pool_next(&w.chunks, &it) {
 		if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
-		c.mesh = 0
+		if c.pending != 0 {append(&w.mesh_removals, c.pending)}
+		c.mesh, c.pending = 0, 0
 	}
 }
 

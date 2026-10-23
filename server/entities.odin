@@ -37,6 +37,8 @@ Entity :: struct {
 	health:  int,
 	natural: bool, // spawned by itself: may despawn
 	brain:   Brain,
+	owner:   int, // a rocket's: the client index that fired it (-1: none)
+	age:     int, // ticks
 }
 
 Brain_State :: enum u8 {
@@ -94,6 +96,7 @@ entity_spawn :: proc(
 			yaw = rand.float32_range(-math.PI, math.PI, rand.default_random_generator(&e.rng)),
 			health = game.ENTITY_INFO[kind].health,
 			natural = natural,
+			owner = -1,
 		},
 	)
 	e.next_id += 1
@@ -106,10 +109,22 @@ entities_tick :: proc(s: ^Server) {
 	e.budget = PATH_BUDGET_PER_TICK
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(s)}
 	query := game.Block_Query{&s.world, world_block}
+	blasts := make([dynamic]Sphere, context.temp_allocator)
 	for i := 0; i < len(e.list); {
 		ent := &e.list[i]
+		ent.age += 1
 		if ent.natural && !anyone_within(s, ent.body.position, DESPAWN_DISTANCE) {
 			unordered_remove(&e.list, i)
+			continue
+		}
+		if ent.kind == .Rocket {
+			if at, hit := rocket_step(s, ent); hit {
+				append(&blasts, Sphere{at, game.ROCKET_RADIUS})
+				gone_for_good(s, ent.id)
+				unordered_remove(&e.list, i)
+				continue
+			}
+			i += 1
 			continue
 		}
 		if !chunk_ready(s, ent.body.position) {
@@ -121,6 +136,130 @@ entities_tick :: proc(s: ^Server) {
 		game.body_step(&ent.body, ent.kind, wish, jump, &s.rules, query, game.TICK_SECONDS)
 		i += 1
 	}
+	// After the walk over the list: explosions change it.
+	for b in blasts {explode(s, b.center, b.radius)}
+}
+
+// fire launches a rocket from a player's eyes, aimed yaw/pitch.
+fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
+	dir := forward(yaw, pitch)
+	eye := game.player_eye(c.player)
+	start := eye + dir * 0.8 - {0, 0.15, 0} // the box's bottom centre
+	ent := entity_spawn(s, .Rocket, start, false)
+	if ent == nil {return false}
+	ent.yaw, ent.pitch = yaw, pitch
+	ent.body.velocity = {f32(dir.x), f32(dir.y), f32(dir.z)} * game.ROCKET_SPEED
+	ent.owner = int(player_id(s, c))
+	return true
+}
+
+// explode: a blast at center. Everyone near is shown it, the sphere is
+// carved (where loaded), and what is near is thrown (critters hurt).
+explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
+	for &c in s.clients {
+		if c.state != .Playing {continue}
+		d := c.player.position - center
+		if d.x * d.x + d.z * d.z <
+		   160 * 160 {send_message(s, &c, game.Explosion{center, f32(radius)})}
+	}
+	bulk_edit(s, {shape = Sphere{center, radius}, op = .Carve, partial = true})
+	reach := 2 * radius
+	push :: proc(at, center: [3]f64, reach: f64) -> (impulse: [3]f32, ok: bool) {
+		d := at - center
+		l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+		if l >= reach {return}
+		if l < 1e-6 {d, l = {0, 1, 0}, 1}
+		strength := f32(1 - l / reach) * 16
+		dir := d / l
+		return {f32(dir.x) * strength, f32(dir.y) * strength + 4, f32(dir.z) * strength}, true
+	}
+	for &c in s.clients {
+		if c.state != .Playing {continue}
+		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
+			c.player.velocity += impulse
+			c.player.on_ground = false
+		}
+	}
+	for i := 0; i < len(s.entities.list); {
+		ent := &s.entities.list[i]
+		impulse, near := push(ent.body.position + {0, 0.4, 0}, center, reach)
+		if !near || ent.kind == .Rocket {
+			i += 1
+			continue
+		}
+		ent.body.velocity += impulse
+		ent.body.on_ground = false
+		d := ent.body.position - center
+		ent.health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
+		if ent.health <= 0 {
+			entity_died(s, i)
+			continue
+		}
+		ent.brain = {
+			state = .Flee,
+			timer = FLEE_TICKS,
+			from  = center,
+			hurt  = HURT_TICKS,
+		}
+		entity_hurt_shown(s, ent.id)
+		i += 1
+	}
+}
+
+// rocket_step flies a rocket one tick; where it hit, if it did.
+@(private = "file")
+rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
+	if f32(ent.age) * game.TICK_SECONDS > game.ROCKET_LIFE {return ent.body.position, true}
+	ent.body.velocity.y -= game.ROCKET_GRAVITY * game.TICK_SECONDS
+	v := ent.body.velocity
+	speed := math.sqrt(f64(v.x * v.x + v.y * v.y + v.z * v.z))
+	if speed < 1e-6 {return ent.body.position, true}
+	dir := [3]f64{f64(v.x), f64(v.y), f64(v.z)} / speed
+	step := speed * f64(game.TICK_SECONDS)
+	from := ent.body.position + {0, 0.15, 0}
+	nearest := step
+	hit_at: [3]f64
+	query := game.Block_Query{&s.world, world_block}
+	if b, ok := game.raycast(query, from, dir, step); ok {
+		nearest, hit_at, hit = b.distance, from + dir * b.distance, true
+	} else if !chunk_ready(s, from) {
+		return from, true // flew out of the loaded world
+	}
+	for &other in s.entities.list {
+		if other.id == ent.id || other.kind == .Rocket {continue}
+		lo, hi := game.entity_box(other.kind, other.body.position)
+		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
+		   ok {nearest, hit_at, hit = d, from + dir * d, true}
+	}
+	for &c, i in s.clients {
+		if c.state != .Playing || (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
+		lo, hi := game.player_box(c.player.position)
+		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
+		   ok {nearest, hit_at, hit = d, from + dir * d, true}
+	}
+	if hit {return hit_at, true}
+	ent.body.position += dir * step
+	ent.yaw = f32(math.atan2(-dir.x, -dir.z))
+	ent.pitch = clamp(f32(math.asin(clamp(dir.y, -1, 1))), -1.5, 1.5) // within the protocol's limit
+	return {}, false
+}
+
+// gone_for_good: tell those who knew an entity that it died (no puff for
+// a rocket: its explosion is what they see).
+@(private = "file")
+gone_for_good :: proc(s: ^Server, id: u32) {
+	for &c in s.clients {
+		if c.state == .Playing && id in c.known {
+			delete_key(&c.known, id)
+			send_message(s, &c, game.Entity_Despawn{id, true})
+		}
+	}
+}
+
+@(private = "file")
+forward :: proc(yaw, pitch: f32) -> [3]f64 {
+	cp := math.cos(f64(pitch))
+	return {-math.sin(f64(yaw)) * cp, math.sin(f64(pitch)), -math.cos(f64(yaw)) * cp}
 }
 
 // entity_attack: a player hits an entity (the reach is checked by the

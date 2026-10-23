@@ -6,6 +6,7 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 import "core:net"
+import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -96,6 +97,10 @@ SEND_BUDGET :: 48
 // chunks until it catches up (the rest wait: streaming is nearest first).
 @(private)
 MAX_BACKLOG :: 512 * 1024
+// Ticks between one player's rockets, at least.
+@(private)
+FIRE_EVERY :: game.TICK_RATE / 4
+
 // A rejected remote client is told why and dropped this many ticks later.
 @(private)
 KICK_DELAY :: game.TICK_RATE
@@ -454,6 +459,16 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			return
 		}
 		attack(s, c, v)
+	case game.Fire:
+		// The rocket launcher is a creative tool: a cheat.
+		if !c.can_cheat || c.state != .Playing {
+			disconnect(s, c, "cheats are not allowed")
+			return
+		}
+		if s.tick >= c.fired_at + FIRE_EVERY {
+			c.fired_at = s.tick
+			fire(s, c, v.yaw, v.pitch)
+		}
 	}
 }
 
@@ -540,6 +555,22 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 			broadcast(s, game.Time{s.clock})
 			return
 		}
+	case strings.has_prefix(command, "fill "),
+	     strings.has_prefix(command, "replace "),
+	     strings.has_prefix(command, "sphere "),
+	     strings.has_prefix(command, "explode "):
+		bulk_command(s, c, command)
+		return
+	case command == "hash":
+		// The chunks this client has, as the server has them (blast_test).
+		sum: u64
+		for pos in c.has {
+			if chunk := world_get(&s.world, pos); chunk != nil && chunk.state == .Ready {
+				game.chunks_hash_add(&sum, pos, &chunk.blocks)
+			}
+		}
+		notice(s, c, fmt.tprintf("hash %d %x", len(c.has), sum))
+		return
 	case strings.has_prefix(command, "summon"):
 		if !summon(s, c, .Critter) {notice(s, c, "Nowhere to put it (look at open ground nearby)")}
 		return
@@ -680,6 +711,76 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		}
 	}
 	return result
+}
+
+// bulk_command runs a bulk edit command (block coordinates):
+//
+//	fill x1 y1 z1 x2 y2 z2 block
+//	replace x1 y1 z1 x2 y2 z2 from to
+//	sphere x y z radius block
+//	explode x y z radius
+@(private = "file")
+bulk_command :: proc(s: ^Server, c: ^Client, command: string) {
+	f := strings.fields(command, context.temp_allocator)
+	ints :: proc(words: []string, out: []i32) -> bool {
+		for w, i in words {
+			n, ok := strconv.parse_int(w)
+			if !ok || abs(n) >= game.WORLD_LIMIT {return false}
+			out[i] = i32(n)
+		}
+		return true
+	}
+	block_named :: proc(name: string) -> (game.Block, bool) {
+		for b in game.Block {if game.BLOCK_INFO[b].name == name && b != .Bedrock {return b, true}}
+		return .Air, false
+	}
+	e: Bulk_Edit
+	ok := false
+	switch f[0] {
+	case "fill", "replace":
+		n: [6]i32
+		want := 8 if f[0] == "fill" else 9
+		if len(f) == want && ints(f[1:7], n[:]) {
+			e.shape = Box{{n[0], n[1], n[2]}, {n[3], n[4], n[5]}}
+			if f[0] == "fill" {
+				e.op = .Set
+				e.block, ok = block_named(f[7])
+			} else {
+				from, ok1 := block_named(f[7])
+				to, ok2 := block_named(f[8])
+				e.op, e.from, e.block, ok = .Replace, from, to, ok1 && ok2
+			}
+		}
+	case "sphere", "explode":
+		n: [3]i32
+		r: f64
+		rok := false
+		if len(f) > 4 {r, rok = strconv.parse_f64(f[4])}
+		if rok && r > 0 && r <= 32 && ints(f[1:4], n[:]) {
+			center := [3]f64{f64(n[0]) + 0.5, f64(n[1]) + 0.5, f64(n[2]) + 0.5}
+			if f[0] == "explode" {
+				explode(s, center, r)
+				return
+			}
+			if len(f) == 6 {
+				e.shape, e.op = Sphere{center, r}, .Set
+				e.block, ok = block_named(f[5])
+			}
+		}
+	}
+	if !ok {
+		notice(s, c, fmt.tprintf("%s: bad arguments", f[0]))
+		return
+	}
+	changed, result := bulk_edit(s, e)
+	switch result {
+	case .Done:
+		notice(s, c, fmt.tprintf("%s: %d blocks changed", f[0], changed))
+	case .Too_Big:
+		notice(s, c, fmt.tprintf("%s: too big (at most %d blocks)", f[0], MAX_BULK_VOLUME))
+	case .Not_Loaded:
+		notice(s, c, fmt.tprintf("%s: part of it is not loaded", f[0]))
+	}
 }
 
 // attack: a player hits an entity, if it is within reach of where the
