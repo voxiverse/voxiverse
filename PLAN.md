@@ -196,11 +196,11 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M1b | macOS spike: Cocoa backend + MoltenVK showing the same triangle | Confirms MoltenVK covers the Vulkan features we use (needs a Mac) |
 | M2 | UI + text: `ui/`, generated font atlas, UI pass, title screen with mouse + keyboard navigation, console overlay | UI behaviour tests (hit-testing, focus, layers) + visual check |
 | M3 | World through the boundary: in-process server thread, handshake, worldgen with seed, chunk streaming and unloading, meshing jobs (face shading + ambient occlusion), chunk rendering, fly camera | Flying 1000+ blocks keeps memory flat (session arena stats) and frames within budget: `fly_test`, run in CI |
-| M3.5 | Developer tools: thread-tagged key=value logger; settings/rules/debug variables with descriptor tables, settings file, tuning panel; debug drawing; screenshots (uploaded by CI); shader hot reload; crash handler; network trace + `netdump`, network condition simulator, F3 net stats, replay of recorded client messages | Each tool used in a test or CI run |
+| M3.5 | Developer tools: thread-tagged key=value logger; settings/rules/debug variables with descriptor tables, settings file, tuning panel; debug drawing; screenshots (uploaded by CI); shader hot reload; crash handler; network trace + `netdump`, network condition simulator, F3 net stats, replay of recorded client messages | Each tool used in a test or CI run (done; loss/duplication/reordering simulation moved to M7 with the UDP reliability layer) |
 | M4 | Player + editing: shared physics, input commands, prediction/reconciliation, raycast, break/place with server confirmation, flood-fill block and sky light (add and removal) | Same results with artificial latency injected into the transport |
 | M5 | Persistence: region files, save/load/quit, saving modified chunks when the server unloads them | Save → quit → load round-trips exactly |
 | M6 | Audio + sky: mixer and voices, synthesized SFX, day/night, fog | — |
-| M7 | Remote multiplayer: UDP transport, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines |
+| M7 | Remote multiplayer: UDP transport with its reliability layer, simulated loss/duplication/reordering, Wireshark dissector, LAN join, dedicated server binary with clean shutdown | Two clients on separate machines; transfers survive 10% loss |
 | M8 | Entities: one mob, server AI, replication by handle with interest management | — |
 
 ## Worth re-typing from the old tree (ideas, not code)
