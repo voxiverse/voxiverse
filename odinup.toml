@@ -1,0 +1,9 @@
+# Toolchain pin for Voxiverse: `odinup install` builds exactly this.
+# https://github.com/voxiverse/odinup
+
+[toolchain]
+odin = "dev-2026-10"
+
+[tools.ols]
+git = "https://github.com/DanielGavin/ols"
+rev = "c96dea912cf8"
