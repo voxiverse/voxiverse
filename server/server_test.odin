@@ -68,8 +68,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		case game.Column:
 			if v.pos in c.columns {c.column_updates += 1}
 			c.columns[v.pos] = v
-		case game.Block_Changed:
-		case game.Pong:
+		case game.Block_Changed, game.Time, game.Pong: // not checked here
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)

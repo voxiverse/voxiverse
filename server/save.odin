@@ -12,7 +12,7 @@ import "core:time"
 import "../base"
 import "../game"
 
-// Saving: a world directory holds world.cfg (name, seed, player, rules) and
+// Saving: a world directory holds world.cfg (name, seed, time, player, rules) and
 // regions/ with the edited chunks (game/save.odin). The rest of the world
 // is regenerated from the seed.
 //
@@ -248,6 +248,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
 	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
+	fmt.sbprintfln(&b, "time = %.9f", s.clock)
 	if s.client.state == .Playing || s.store.player != nil {
 		p :=
 			Saved_Player{s.client.player, s.client.look[0], s.client.look[1]} if s.client.state == .Playing else s.store.player.?
@@ -290,6 +291,8 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			}
 		case key == "seed":
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
+		case key == "time":
+			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
 		case key == "player.x", key == "player.y", key == "player.z":
 			if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
 				player.state.position[int(key[len(key) - 1] - 'x')] = v

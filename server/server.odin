@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:mem/virtual"
+import "core:strings"
 import "core:sync"
 import "core:thread"
 import "core:time"
@@ -56,6 +57,7 @@ Server :: struct {
 	stats:       Stats,
 	log_tag:     base.Log_Tag,
 	rules:       game.Rules, // server thread only
+	clock:       f64, // world time (game/time.odin); server thread only after start
 	tops:        map[[2]i32]i32, // edited column tops (columns.odin)
 	store:       Store, // saving (save.odin)
 	// Server thread only, after start:
@@ -82,6 +84,7 @@ start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
 		config   = config,
 		endpoint = endpoint,
 		rules    = config.rules if config.rules != {} else game.RULES_DEFAULTS,
+		clock    = game.NEW_WORLD_TIME,
 	}
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
 		log.errorf("server cannot reserve its memory: %v", err)
@@ -194,7 +197,9 @@ tick :: proc(s: ^Server) {
 			return client_wants(&s.client, pos, s.config, game.SERVER_UNLOAD_MARGIN)
 		}, s)
 	receive_messages(s)
+	s.clock = game.advance_time(s.clock, f64(game.TICK_SECONDS), &s.rules)
 	if s.client.state == .Playing {
+		if s.tick % game.TICK_RATE == 0 {send_message(s, game.Time{s.clock})}
 		simulate_player(s)
 		if s.client.moved {
 			s.client.moved = false
@@ -249,6 +254,7 @@ receive_messages :: proc(s: ^Server) {
 					rules = s.rules,
 				},
 			)
+			send_message(s, game.Time{s.clock})
 			log.infof("server player joined name=%q", v.name)
 		case game.Input:
 			if s.client.state != .Playing {
@@ -292,12 +298,7 @@ receive_messages :: proc(s: ^Server) {
 				disconnect(s, "cheats are not allowed")
 				return
 			}
-			switch v.command {
-			case "save":
-				save(s)
-			case:
-				log.warnf("server unknown admin command command=%q", v.command)
-			}
+			admin(s, v.command)
 		case game.Edit:
 			if s.client.state != .Playing {
 				disconnect(s, "edit before hello")
@@ -306,6 +307,24 @@ receive_messages :: proc(s: ^Server) {
 			queue_edit(s, v)
 		}
 	}
+}
+
+// admin runs a server command: "save", or "time <0..1>" (time of day).
+@(private = "file")
+admin :: proc(s: ^Server, command: string) {
+	if command == "save" {
+		save(s)
+		return
+	}
+	if strings.has_prefix(command, "time ") {
+		if f, ok := game.parse_time_of_day(command[len("time "):]); ok {
+			s.clock = game.set_time_of_day(s.clock, f)
+			log.infof("server time set time=%.4f", s.clock)
+			send_message(s, game.Time{s.clock})
+			return
+		}
+	}
+	log.warnf("server unknown admin command command=%q", command)
 }
 
 // simulate_player applies this tick's inputs and tells the client where

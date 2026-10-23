@@ -85,6 +85,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Pong).id == 78)
 	m, ok = decode_server(encode_s(Unload_Chunk{{-5, CHUNK_MIN_Y, 1 << 20}})[:], scratch)
 	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, CHUNK_MIN_Y, 1 << 20})
+	m, ok = decode_server(encode_s(Time{12345.678})[:], scratch)
+	testing.expect(t, ok && m.(Time).time == 12345.678)
 }
 
 @(test)
@@ -145,6 +147,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
 		encode_s(Pong{1}),
+		encode_s(Time{0.5}),
 	}
 	for bytes in server {
 		for n in 0 ..< len(bytes) {
@@ -302,6 +305,19 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 			for _ in 1 ..< CHUNK_SIZE * CHUNK_SIZE {write_svarint(w, 0)}
 		},
 	)
+	bad_server(
+		t,
+		scratch,
+		"negative time",
+		proc(w: ^Writer) {
+			write_u8(w, 11) // Time
+			write_f64(w, -1)
+		},
+	)
+	bad_server(t, scratch, "time NaN", proc(w: ^Writer) {
+		write_u8(w, 11)
+		write_f64(w, transmute(f64)u64(0x7ff8000000000001))
+	})
 	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {
 		chunk_header(w)
 		write_u8(w, 0)

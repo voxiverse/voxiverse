@@ -214,6 +214,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			lo, hi := max(i32), min(i32)
 			for h in v.heights {lo, hi = min(lo, h), max(hi, h)}
 			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
+		case game.Time:
+			return fmt.tprintf("time time=%.6f", v.time), true
 		}
 	}
 	return "", true

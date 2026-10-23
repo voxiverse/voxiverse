@@ -10,7 +10,7 @@ import "core:time"
 import "../game"
 
 // M5's exit check: save -> quit -> load gives back exactly the world that
-// was left (edited blocks, the player, the seed), and edits survive their
+// was left (edited blocks, the player, the time, the seed), and edits survive their
 // chunks being unloaded and loaded again.
 
 @(private = "file")
@@ -25,6 +25,7 @@ Save_Client :: struct {
 	turned:   Maybe([2]f32), // yaw, pitch of the first teleported update
 	results:  map[u32]game.Edit_Result,
 	seq:      u32,
+	time:     Maybe(f64), // the last Time received
 }
 
 @(private = "file")
@@ -73,6 +74,8 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 		case game.Player_Update:
 			c.player = v
 			if v.teleported && c.turned == nil {c.turned = [2]f32{v.yaw, v.pitch}}
+		case game.Time:
+			c.time = v.time
 		case game.Edit_Result:
 			c.results[v.id] = v
 			if b, had := &c.chunks[game.chunk_of(v.pos)];
@@ -139,6 +142,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 	edits: [dynamic]Edit
 	defer delete(edits)
 	left_at: game.Player_State
+	left_time: f64
 
 	// Session 1: land, edit, walk a little, quit.
 	{
@@ -189,12 +193,16 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			r := c.results[u32(i + 1)]
 			if testing.expectf(t, r.accepted, "edit %d refused", i + 1) {append(&edits, e)}
 		}
+		send(&c, game.Admin{"time 0.9"}) // late evening
+		c.time = nil
 		for _ in 0 ..< 20 {tick(t, &c, {move = {0, 1}, yaw = 0.7, pitch = -0.3})} 	// walk a bit, looking that way
 		testing.expect(
 			t,
 			until(t, &c, proc(c: ^Save_Client) -> bool {return c.player.acked == c.seq}),
 		)
 		left_at = c.player.state
+		left_time = c.time.? or_else -1
+		testing.expectf(t, abs(left_time - 0.9) < 0.01, "time %v after setting 0.9", left_time)
 		testing.expect(t, stop(&srv), "the save failed")
 	}
 	testing.expect(
@@ -234,6 +242,17 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			"joined at %v, left at %v",
 			c.welcome.spawn,
 			left_at.position,
+		)
+		// The clock goes on from when they left (it ran up to a second
+		// after the last Time they saw).
+		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return c.time != nil}))
+		now := c.time.? or_else -1
+		testing.expectf(
+			t,
+			now >= left_time && now - left_time < 2.0 / f64(game.RULES_DEFAULTS.day_length),
+			"time %v after loading, %v before quitting",
+			now,
+			left_time,
 		)
 		// Looking where they looked when they left.
 		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return c.turned != nil}))

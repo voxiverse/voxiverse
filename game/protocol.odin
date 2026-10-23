@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 2
+PROTOCOL_VERSION :: 3
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 32
 
@@ -57,7 +57,7 @@ Set_Rule :: struct {
 	value: string,
 }
 
-// Admin runs a server command ("save"); a cheat, like Set_Rule.
+// Admin runs a server command ("save", "time <0..1>"); a cheat, like Set_Rule.
 Admin :: struct {
 	command: string,
 }
@@ -129,6 +129,12 @@ Rules_Changed :: struct {
 	rules: Rules,
 }
 
+// Time: the world time (time.odin), after Welcome, every second and when
+// it is set. Clients advance it themselves in between.
+Time :: struct {
+	time: f64,
+}
+
 // Column: the y of the highest solid block in each block column of a chunk
 // column (x fastest). Sky light needs it: the client cannot see above what
 // it has loaded. Sent before a column's first chunk, and again when an edit
@@ -164,6 +170,7 @@ Server_Message :: union {
 	Edit_Result,
 	Block_Changed,
 	Column,
+	Time,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -194,6 +201,7 @@ Server_Kind :: enum u8 {
 	Edit_Result,
 	Block_Changed,
 	Column,
+	Time,
 }
 
 // message_kind_name names a message kind (its first byte) sent by sender,
@@ -238,6 +246,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "block"
 		case u8(Server_Kind.Column):
 			return "column"
+		case u8(Server_Kind.Time):
+			return "time"
 		}
 	}
 	return ""
@@ -334,6 +344,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_svarint(w, h - previous)
 			previous = h
 		}
+	case Time:
+		write_u8(w, u8(Server_Kind.Time))
+		write_f64(w, v.time)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -469,6 +482,12 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			if h < WORLD_MIN_Y || h >= WORLD_MAX_Y {reader_fail(&r)}
 		}
 		m = c
+	case u8(Server_Kind.Time):
+		t := Time {
+			time = read_f64(&r),
+		}
+		if !time_valid(t.time) {reader_fail(&r)}
+		m = t
 	case:
 		return
 	}

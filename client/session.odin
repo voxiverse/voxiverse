@@ -50,6 +50,7 @@ Session :: struct {
 	teleport:   Maybe(game.Teleport), // requested before joining: sent on Welcome
 	prediction: game.Prediction,
 	rules:      game.Rules, // the server's, as last announced
+	clock:      f64, // world time: the server's last word, carried on since (game/time.odin)
 	tick_time:  f32, // seconds into the current client tick
 	toggle_fly: bool, // a double-tapped jump waits for the next tick
 	last_jump:  time.Tick, // for double-tap detection
@@ -164,6 +165,7 @@ session_update :: proc(
 	net_update(s, dt)
 	receive(s)
 	if s.state != .Playing {return}
+	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	if look {
 		look_update(&s.camera, input, settings)
 		if .Space in input.pressed {
@@ -278,6 +280,8 @@ receive :: proc(s: ^Session) {
 			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
 		case game.Rules_Changed:
 			s.rules = v.rules
+		case game.Time:
+			s.clock = v.time
 		case game.Edit_Result:
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.

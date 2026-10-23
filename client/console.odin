@@ -484,6 +484,40 @@ register_builtin_commands :: proc(c: ^Console) {
 			}
 			send_message(app.session, game.Admin{"save"})
 		}})
+	console_register(
+		c,
+		{
+			"time",
+			"time [sunrise|day|noon|sunset|night|midnight|0..1]: show or set the time of day",
+			proc(app: ^App, args: []string) {
+				if app.session == nil {return}
+				if len(args) == 0 {
+					f := game.time_of_day(app.session.clock)
+					minutes := int(f * 24 * 60)
+					console_print(
+						&app.console,
+						fmt.tprintf(
+							"day %d, %02d:%02d (%.3f)",
+							int(app.session.clock),
+							minutes / 60,
+							minutes % 60,
+							f,
+						),
+						.Info,
+					)
+					return
+				}
+				if _, ok := game.parse_time_of_day(args[0]); !ok {
+					console_print(&app.console, "time: not a time of day", .Warning)
+					return
+				}
+				send_message(
+					app.session,
+					game.Admin{strings.concatenate({"time ", args[0]}, context.temp_allocator)},
+				)
+			},
+		},
+	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
 			app.tuning = !app.tuning
 		}})

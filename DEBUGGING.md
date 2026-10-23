@@ -112,6 +112,7 @@ neighbours' edges.
 | `singleplayer` / `leave` | Enter a scratch world (never saved: for scripts and tests) / leave the world |
 | `world <name>`, `save` | Play a saved world (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
+| `time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Show the time of day, or set it (the server's clock; singleplayer). `set rules.daylight_cycle 0` stops it, `rules.day_length` is seconds per day |
 | `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
 | `break`, `place [block]` | Break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
