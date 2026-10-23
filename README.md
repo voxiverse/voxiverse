@@ -51,6 +51,11 @@ on automatically and which reports GPU API misuse in the log.
 Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with
 Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md](DEBUGGING.md).
 
+## Running
+
+`build run` opens the title screen. The console (the <kbd>`</kbd> key) shows the log and takes
+commands (`help` lists them); `run -- --exec "cmd; cmd"` runs commands at startup.
+
 ## Layout
 
 See [PLAN.md](PLAN.md#layout). Packages only depend downward: `base/` depends on nothing,

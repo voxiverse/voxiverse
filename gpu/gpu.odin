@@ -54,6 +54,9 @@ Gpu :: struct {
 	timestamp_period:  f32, // ns per tick
 	timestamp_mask:    u64,
 	gpu_frame_stats:   base.Frame_Stats,
+	// Bindless textures and the pipeline layout every pipeline shares.
+	bindless:          Bindless,
+	pipeline_layout:   vk.PipelineLayout,
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
 	validation_issues: int,
@@ -168,8 +171,17 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		queueCount       = 1,
 		pQueuePriorities = &priority,
 	}
+	features12 := vk.PhysicalDeviceVulkan12Features {
+		sType                                        = .PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		descriptorIndexing                           = true,
+		runtimeDescriptorArray                       = true,
+		descriptorBindingPartiallyBound              = true,
+		descriptorBindingSampledImageUpdateAfterBind = true,
+		shaderSampledImageArrayNonUniformIndexing    = true,
+	}
 	features13 := vk.PhysicalDeviceVulkan13Features {
 		sType            = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		pNext            = &features12,
 		dynamicRendering = true,
 		synchronization2 = true,
 	}
@@ -201,7 +213,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	for &f, i in g.frames {
 		if !create_frame_sync(g, &f, i) {return false}
 	}
-	return true
+	return bindless_init(g)
 }
 
 // destroy releases everything and returns the final count of validation
@@ -216,6 +228,7 @@ destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 		}
 		timing_log_summary(g)
 		for &f in g.frames {destroy_frame_sync(g, &f)}
+		bindless_destroy(g)
 		destroy_swapchain(g, &g.swapchain)
 		vk.DestroyDevice(g.device, nil)
 	}
@@ -277,7 +290,7 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 	}
 	if best_score < 0 {
 		log.error(
-			"gpu: no GPU with Vulkan 1.3, dynamic rendering, synchronization2 and presentation to this window",
+			"gpu: no GPU with Vulkan 1.3 (dynamic rendering, synchronization2, descriptor indexing) that can present to this window",
 		)
 		return false
 	}
@@ -302,15 +315,27 @@ usable_queue_family :: proc(g: ^Gpu, device: vk.PhysicalDevice) -> (u32, bool) {
 
 @(private)
 supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
+	features12 := vk.PhysicalDeviceVulkan12Features {
+		sType = .PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+	}
 	features13 := vk.PhysicalDeviceVulkan13Features {
 		sType = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		pNext = &features12,
 	}
 	features := vk.PhysicalDeviceFeatures2 {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		pNext = &features13,
 	}
 	vk.GetPhysicalDeviceFeatures2(device, &features)
-	return bool(features13.dynamicRendering && features13.synchronization2)
+	return bool(
+		features13.dynamicRendering &&
+		features13.synchronization2 &&
+		features12.descriptorIndexing &&
+		features12.runtimeDescriptorArray &&
+		features12.descriptorBindingPartiallyBound &&
+		features12.descriptorBindingSampledImageUpdateAfterBind &&
+		features12.shaderSampledImageArrayNonUniformIndexing,
+	)
 }
 
 @(private)

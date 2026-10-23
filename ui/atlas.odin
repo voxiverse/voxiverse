@@ -7,10 +7,10 @@ import "../font"
 
 // Glyph cache: glyphs are rasterized on first use at the exact pixel size
 // they are drawn at and shelf-packed into an R8 atlas. A 2x2 white block at
-// the origin serves solid rectangles. The rows changed since the last frame
-// are reported so the renderer uploads only those. If the atlas fills up it
-// is cleared and refilled (logged; text drawn earlier in that frame may show
-// wrong glyphs for one frame).
+// the origin serves solid rectangles. The rows changed since the last
+// end_frame are reported so the renderer uploads only those (everything, the
+// first time). If the atlas fills up it is cleared and refilled (logged; text
+// drawn earlier in that frame may show wrong glyphs for one frame).
 
 GLYPH_ATLAS_SIZE :: 1024
 
@@ -70,11 +70,6 @@ glyph_cache_clear :: proc(c: ^Glyph_Cache) {
 	for y in 0 ..< 2 do for x in 0 ..< 2 {c.pixels[y * c.size + x] = 255}
 	c.shelf_x, c.shelf_y, c.shelf_h = 4, 0, 4 // after the white block
 	c.dirty_y0, c.dirty_y1 = 0, c.size // everything changed
-}
-
-@(private)
-glyph_cache_begin_frame :: proc(c: ^Glyph_Cache) {
-	c.dirty_y0, c.dirty_y1 = 0, 0
 }
 
 // glyph_cache_white_uv is a texel inside the white block.

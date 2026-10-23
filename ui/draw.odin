@@ -76,6 +76,8 @@ output_end :: proc(out: ^Output, glyphs: ^Glyph_Cache) {
 	out.vertices, out.indices, out.commands = vertices[:], indices[:], commands[:]
 	out.atlas_pixels, out.atlas_size = glyphs.pixels, glyphs.size
 	out.atlas_dirty_rows = {glyphs.dirty_y0, glyphs.dirty_y1}
+	// Handed to the renderer: start collecting the next frame's changes.
+	glyphs.dirty_y0, glyphs.dirty_y1 = 0, 0
 }
 
 // ---------------------------------------------------------------------------

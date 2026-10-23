@@ -255,3 +255,9 @@ check :: proc(result: vk.Result, loc := #caller_location) -> bool {
 	log.errorf("gpu: Vulkan call failed: %v", result, location = loc)
 	return false
 }
+
+// frame_slot is the frame-in-flight index of the frame being recorded
+// (between begin_frame and end_frame), for per-slot resources.
+frame_slot :: proc(g: ^Gpu) -> int {
+	return g.frame_index
+}

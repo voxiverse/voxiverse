@@ -30,6 +30,7 @@ Validation needs the layer installed (see README); without it you get one warnin
 | `build debug [--lldb]` | Debug build started in gdb (or lldb) with the Odin printers loaded |
 | `run -- --frames N` | Run N frames and exit; fails on any validation finding or leak (what CI does) |
 | `run -- --capture-frame N` | Under RenderDoc: capture frame N (see GPU captures) |
+| `run -- --exec "cmd; cmd"` | Run console commands at startup, e.g. `--exec "screen options"` to reproduce a state |
 
 Options combine, e.g. `VX_VALIDATION=best,gpu`, `build run --release --profile`.
 

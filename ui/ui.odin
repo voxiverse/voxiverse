@@ -175,7 +175,6 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.activate_focus = false
 	ctx.focus_request = .None
 	output_begin(&ctx.output, ctx.frame_alloc)
-	glyph_cache_begin_frame(&ctx.glyphs)
 
 	keys := input.keys_pressed
 	if .Tab in keys {

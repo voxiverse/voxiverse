@@ -5,10 +5,15 @@ import vk "vendor:vulkan"
 
 // Graphics pipelines for dynamic rendering. Viewport and scissor are dynamic
 // state, so pipelines don't depend on the window size and survive resizes.
+// All pipelines use the shared layout (bindless set + push constants).
 
 Pipeline :: struct {
 	handle: vk.Pipeline,
-	layout: vk.PipelineLayout,
+}
+
+Vertex_Attribute :: struct {
+	format: vk.Format,
+	offset: u32,
 }
 
 Pipeline_Desc :: struct {
@@ -16,6 +21,11 @@ Pipeline_Desc :: struct {
 	vertex_spirv:   []byte,
 	fragment_spirv: []byte,
 	color_format:   vk.Format,
+	// One interleaved vertex buffer at binding 0; stride 0 = no vertex input
+	// (vertices generated in the shader).
+	vertex_stride:  u32,
+	attributes:     []Vertex_Attribute, // locations 0, 1, ...
+	alpha_blend:    bool, // standard "over" blending
 }
 
 create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool) {
@@ -38,8 +48,32 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 			pName = "main",
 		},
 	}
+	binding := vk.VertexInputBindingDescription {
+		binding   = 0,
+		stride    = desc.vertex_stride,
+		inputRate = .VERTEX,
+	}
+	attributes := make(
+		[]vk.VertexInputAttributeDescription,
+		len(desc.attributes),
+		context.temp_allocator,
+	)
+	for a, i in desc.attributes {
+		attributes[i] = {
+			location = u32(i),
+			binding  = 0,
+			format   = a.format,
+			offset   = a.offset,
+		}
+	}
 	vertex_input := vk.PipelineVertexInputStateCreateInfo {
 		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+	}
+	if desc.vertex_stride > 0 {
+		vertex_input.vertexBindingDescriptionCount = 1
+		vertex_input.pVertexBindingDescriptions = &binding
+		vertex_input.vertexAttributeDescriptionCount = u32(len(attributes))
+		vertex_input.pVertexAttributeDescriptions = raw_data(attributes)
 	}
 	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
 		sType    = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -64,6 +98,15 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 	blend_attachment := vk.PipelineColorBlendAttachmentState {
 		colorWriteMask = {.R, .G, .B, .A},
 	}
+	if desc.alpha_blend {
+		blend_attachment.blendEnable = true
+		blend_attachment.srcColorBlendFactor = .SRC_ALPHA
+		blend_attachment.dstColorBlendFactor = .ONE_MINUS_SRC_ALPHA
+		blend_attachment.colorBlendOp = .ADD
+		blend_attachment.srcAlphaBlendFactor = .ONE
+		blend_attachment.dstAlphaBlendFactor = .ONE_MINUS_SRC_ALPHA
+		blend_attachment.alphaBlendOp = .ADD
+	}
 	blend := vk.PipelineColorBlendStateCreateInfo {
 		sType           = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		attachmentCount = 1,
@@ -81,12 +124,6 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		colorAttachmentCount    = 1,
 		pColorAttachmentFormats = &color_format,
 	}
-
-	layout_info := vk.PipelineLayoutCreateInfo {
-		sType = .PIPELINE_LAYOUT_CREATE_INFO,
-	}
-	check(vk.CreatePipelineLayout(g.device, &layout_info, nil, &p.layout)) or_return
-
 	info := vk.GraphicsPipelineCreateInfo {
 		sType               = .GRAPHICS_PIPELINE_CREATE_INFO,
 		pNext               = &rendering,
@@ -99,20 +136,15 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		pMultisampleState   = &multisample,
 		pColorBlendState    = &blend,
 		pDynamicState       = &dynamic_state,
-		layout              = p.layout,
+		layout              = g.pipeline_layout,
 	}
-	if !check(vk.CreateGraphicsPipelines(g.device, 0, 1, &info, nil, &p.handle)) {
-		vk.DestroyPipelineLayout(g.device, p.layout, nil)
-		return {}, false
-	}
+	check(vk.CreateGraphicsPipelines(g.device, 0, 1, &info, nil, &p.handle)) or_return
 	set_name(g, .PIPELINE, u64(p.handle), desc.name)
-	set_name(g, .PIPELINE_LAYOUT, u64(p.layout), desc.name)
 	return p, true
 }
 
 destroy_pipeline :: proc(g: ^Gpu, p: ^Pipeline) {
 	if p.handle != 0 {vk.DestroyPipeline(g.device, p.handle, nil)}
-	if p.layout != 0 {vk.DestroyPipelineLayout(g.device, p.layout, nil)}
 	p^ = {}
 }
 
