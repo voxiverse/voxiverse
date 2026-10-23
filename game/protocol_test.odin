@@ -45,7 +45,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 @(test)
 test_chunk_round_trip :: proc(t: ^testing.T) {
 	arrays: Block_Arrays
-	block_arrays_init(&arrays)
+	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
 	defer block_arrays_destroy(&arrays)
 	scratch := new(Block_Array)
 	defer free(scratch)
@@ -82,7 +82,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	scratch := new(Block_Array)
 	defer free(scratch)
 	arrays: Block_Arrays
-	block_arrays_init(&arrays)
+	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
 	defer block_arrays_destroy(&arrays)
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)
@@ -289,7 +289,7 @@ test_decode_fuzz :: proc(t: ^testing.T) {
 	scratch := new(Block_Array)
 	defer free(scratch)
 	arrays: Block_Arrays
-	block_arrays_init(&arrays)
+	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
 	defer block_arrays_destroy(&arrays)
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)

@@ -1,6 +1,10 @@
 package game
 
+import "core:mem"
 import "core:testing"
+
+@(private = "file")
+Allocator_Error :: mem.Allocator_Error
 
 @(test)
 test_chunk_of_floors_negative :: proc(t: ^testing.T) {
@@ -38,7 +42,7 @@ test_block_valid :: proc(t: ^testing.T) {
 @(test)
 test_chunk_set_and_compact :: proc(t: ^testing.T) {
 	arrays: Block_Arrays
-	block_arrays_init(&arrays)
+	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
 	defer block_arrays_destroy(&arrays)
 
 	c := Chunk_Blocks {
@@ -120,4 +124,24 @@ test_generate_terrain_shape :: proc(t: ^testing.T) {
 		for b in arr {if b == .Air {air += 1}}
 	}
 	testing.expect(t, air > 0 && air < 4 * CHUNK_VOLUME / 4, "caves carve some but not most stone")
+}
+
+@(test)
+test_block_arrays_capacity :: proc(t: ^testing.T) {
+	arrays: Block_Arrays
+	testing.expect(t, block_arrays_init(&arrays, 100) == nil)
+	defer block_arrays_destroy(&arrays)
+	taken: [100]^Block_Array
+	for &p in taken {
+		err: Allocator_Error
+		p, err = block_arrays_take(&arrays)
+		testing.expect(t, err == nil)
+		p[CHUNK_VOLUME - 1] = .Stone // committed: writable to the end
+	}
+	_, err := block_arrays_take(&arrays)
+	testing.expect_value(t, err, Allocator_Error.Out_Of_Memory)
+	block_arrays_give(&arrays, taken[42])
+	p, err2 := block_arrays_take(&arrays)
+	testing.expect(t, err2 == nil && p == taken[42])
+	testing.expect_value(t, block_arrays_in_use(&arrays), 100)
 }

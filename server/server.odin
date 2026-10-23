@@ -1,0 +1,277 @@
+package server
+
+import "base:runtime"
+import "core:fmt"
+import "core:log"
+import "core:mem"
+import "core:mem/virtual"
+import "core:sync"
+import "core:thread"
+import "core:time"
+
+import "../base"
+import "../game"
+
+// The authoritative side of a world, on its own thread at game.TICK_RATE.
+// Everything it owns lives in its session arena and is freed at once by
+// stop. The rest of the program talks to it only through its Endpoint (and
+// reads published Stats).
+//
+//	server.start(&srv, {seed = 1, view_radius = 12, view_height = 6, workers = 2}, {&pipe, .Server})
+//	...
+//	ok := server.stop(&srv) // false if it stopped on an error
+
+Config :: struct {
+	seed:        i64,
+	view_radius: i32, // chunks, horizontally
+	view_height: i32, // chunks above and below
+	workers:     int,
+}
+
+// Stats is a snapshot, published at the end of every tick.
+Stats :: struct {
+	tick:              u64,
+	tick_ms:           f32,
+	chunks_loaded:     int,
+	chunks_generating: int,
+	arrays_allocated:  int,
+	arrays_in_use:     int,
+	arrays_bytes:      int, // committed for chunk arrays
+	arena_used:        uint,
+	arena_reserved:    uint,
+	clients:           int,
+}
+
+Server :: struct {
+	config:      Config,
+	capacity:    int, // chunks
+	endpoint:    game.Endpoint,
+	thread:      ^thread.Thread,
+	stopping:    bool, // (atomic)
+	failed:      bool, // (atomic)
+	stats_mutex: sync.Mutex,
+	stats:       Stats,
+
+	// Server thread only, after start:
+	arena:       virtual.Arena,
+	world:       World,
+	client:      Client,
+	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
+	writer:      game.Writer,
+	tick:        u64,
+}
+
+// Chunks sent to a client per tick (at 30 Hz: 1440 per second).
+@(private)
+SEND_BUDGET :: 48
+
+// start sets up the session and starts the server thread. s must stay at
+// its address until stop.
+start :: proc(s: ^Server, config: Config, endpoint: game.Endpoint) -> bool {
+	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
+	assert(config.view_height > 0 && config.workers > 0)
+	s^ = {
+		config   = config,
+		endpoint = endpoint,
+	}
+	if err := virtual.arena_init_growing(&s.arena); err != nil {
+		log.errorf("server: cannot reserve its memory: %v", err)
+		return false
+	}
+	arena := virtual.arena_allocator(&s.arena)
+	s.offsets = interest_offsets(config.view_radius, config.view_height, arena)
+	// Loaded chunks stay within the unload distance of a client, plus
+	// chunks still generating that were requested before it moved.
+	capacity := count_offsets(
+		config.view_radius + UNLOAD_MARGIN,
+		config.view_height + UNLOAD_MARGIN,
+	)
+	capacity += config.workers * MAX_IN_FLIGHT_PER_WORKER
+	s.capacity = capacity
+	if err := world_init(&s.world, config.seed, capacity, config.workers, arena); err != nil {
+		log.errorf("server: cannot allocate the world: %v", err)
+		virtual.arena_destroy(&s.arena)
+		return false
+	}
+	client_init(&s.client, len(s.offsets), arena)
+	game.writer_init(&s.writer, arena)
+
+	s.thread = thread.create(server_main)
+	s.thread.data = s
+	s.thread.init_context = context
+	thread.start(s.thread)
+	log.infof(
+		"server: started (seed %d, view %d x %d chunks, %d worldgen workers, room for %d chunks)",
+		config.seed,
+		config.view_radius,
+		config.view_height,
+		config.workers,
+		capacity,
+	)
+	return true
+}
+
+// stop finishes the current tick, stops the thread and frees the session.
+// False if the server stopped because of an error.
+stop :: proc(s: ^Server) -> bool {
+	sync.atomic_store(&s.stopping, true)
+	thread.join(s.thread)
+	thread.destroy(s.thread)
+	world_destroy(&s.world)
+	used := s.arena.total_used
+	virtual.arena_destroy(&s.arena)
+	log.infof("server: stopped after %d ticks (session arena: %v)", s.tick, base_bytes(used))
+	failed := sync.atomic_load(&s.failed)
+	s^ = {}
+	return !failed
+}
+
+// block_capacity is the most chunk arrays the server can ever hold.
+block_capacity :: proc(s: ^Server) -> int {
+	return s.capacity
+}
+
+stats :: proc(s: ^Server) -> Stats {
+	sync.guard(&s.stats_mutex)
+	return s.stats
+}
+
+@(private = "file")
+server_main :: proc(t: ^thread.Thread) {
+	s := (^Server)(t.data)
+	base.profile_thread_start("server")
+	next := time.tick_now()
+	for !sync.atomic_load(&s.stopping) {
+		start := time.tick_now()
+		tick(s)
+		free_all(context.temp_allocator)
+		publish_stats(s, f32(time.duration_milliseconds(time.tick_since(start))))
+
+		next = time.tick_add(next, game.TICK_DURATION)
+		left := time.tick_diff(time.tick_now(), next)
+		if left < -5 * game.TICK_DURATION {
+			log.debugf("server: %v behind, skipping ticks", -left)
+			next = time.tick_now()
+		} else if left > 0 {
+			time.sleep(left)
+		}
+	}
+	base.profile_thread_stop()
+	runtime.default_temp_allocator_destroy(&runtime.global_default_temp_allocator_data)
+}
+
+@(private = "file")
+tick :: proc(s: ^Server) {
+	base.profile_scope("server tick")
+	s.tick += 1
+	world_collect(&s.world, proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
+			s := (^Server)(data)
+			return client_wants(&s.client, pos, s.config, UNLOAD_MARGIN)
+		}, s)
+	receive_messages(s)
+	if s.client.state == .Playing {
+		if s.client.moved {
+			s.client.moved = false
+			unload_far(s)
+		}
+		stream(s)
+	}
+}
+
+@(private = "file")
+receive_messages :: proc(s: ^Server) {
+	packets := make([dynamic]game.Packet, context.temp_allocator)
+	game.receive(s.endpoint, &packets)
+	defer for p in packets {game.packet_free(s.endpoint, p)}
+	for p in packets {
+		if s.client.state == .Gone {return}
+		m, ok := game.decode_client(p)
+		if !ok {
+			disconnect(s, "invalid message")
+			return
+		}
+		switch v in m {
+		case game.Hello:
+			if s.client.state != .Connecting {
+				disconnect(s, "unexpected hello")
+				return
+			}
+			if v.protocol != game.PROTOCOL_VERSION {
+				disconnect(s, "protocol version mismatch")
+				return
+			}
+			s.client.state = .Playing
+			spawn := spawn_point(s.config.seed)
+			set_position(&s.client, spawn)
+			send_message(
+				s,
+				game.Welcome {
+					protocol = game.PROTOCOL_VERSION,
+					tick_rate = game.TICK_RATE,
+					spawn = spawn,
+					view_radius = u32(s.config.view_radius),
+				},
+			)
+			log.infof("server: %q joined", v.name)
+		case game.Move:
+			if s.client.state != .Playing {
+				disconnect(s, "move before hello")
+				return
+			}
+			set_position(&s.client, v.position)
+		}
+	}
+}
+
+// disconnect rejects the client and closes the connection (a protocol
+// error is the client's bug or an attack; either way it is logged).
+@(private = "file")
+disconnect :: proc(s: ^Server, reason: string) {
+	log.warnf("server: disconnecting the client: %s", reason)
+	send_message(s, game.Reject{reason})
+	game.close(s.endpoint)
+	s.client.state = .Gone
+}
+
+@(private)
+send_message :: proc(s: ^Server, m: game.Server_Message, blocks: ^game.Chunk_Blocks = nil) {
+	clear(&s.writer.buf)
+	game.encode_server(&s.writer, m, blocks)
+	game.send(s.endpoint, s.writer.buf[:])
+}
+
+// spawn_point is above the terrain at the origin.
+@(private = "file")
+spawn_point :: proc(seed: i64) -> [3]f64 {
+	h := game.column_height(seed, 0, 0)
+	return {0.5, f64(h) + 3, 0.5}
+}
+
+@(private = "file")
+publish_stats :: proc(s: ^Server, tick_ms: f32) {
+	st := Stats {
+		tick              = s.tick,
+		tick_ms           = tick_ms,
+		chunks_loaded     = s.world.chunks.count,
+		chunks_generating = s.world.in_flight,
+		arrays_allocated  = s.world.arrays.allocated,
+		arrays_in_use     = game.block_arrays_in_use(&s.world.arrays),
+		arrays_bytes      = s.world.arrays.committed,
+		arena_used        = s.arena.total_used,
+		arena_reserved    = s.arena.total_reserved,
+		clients           = 1 if s.client.state == .Playing else 0,
+	}
+	sync.guard(&s.stats_mutex)
+	s.stats = st
+}
+
+@(private = "file")
+base_bytes :: proc(n: uint) -> string {
+	switch {
+	case n >= mem.Megabyte:
+		return fmt.tprintf("%.1f MiB", f64(n) / mem.Megabyte)
+	case n >= mem.Kilobyte:
+		return fmt.tprintf("%.1f KiB", f64(n) / mem.Kilobyte)
+	}
+	return fmt.tprintf("%d B", n)
+}

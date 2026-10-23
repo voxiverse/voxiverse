@@ -1,6 +1,7 @@
 package game
 
 import "core:mem"
+import "core:mem/virtual"
 
 // Chunk_Blocks holds one chunk's blocks: either one block for all of them
 // (all air, all stone: most chunks) or a 16³ array taken from a Block_Arrays
@@ -51,49 +52,72 @@ chunk_release :: proc(c: ^Chunk_Blocks, arrays: ^Block_Arrays) {
 	c^ = {}
 }
 
-// Block_Arrays recycles chunk arrays: memory grows to the most chunks with
-// arrays ever loaded at once, then stays flat as chunks load and unload.
+// Block_Arrays hands out chunk arrays from one region of address space
+// reserved for capacity arrays and committed as first used; returned arrays
+// are reused. Memory therefore grows to the most arrays ever in use at once
+// and can never pass capacity * 8 KiB, however far players travel.
 // Not thread-safe; one per owner (server world, client world).
 Block_Arrays :: struct {
-	free:      [dynamic]^Block_Array,
-	allocated: int, // arrays ever allocated (in use + free)
+	region:    []u8, // reserved
+	committed: int, // bytes committed from the start of region
+	allocated: int, // arrays handed out at least once
+	free:      []^Block_Array,
+	free_len:  int,
 	allocator: mem.Allocator,
 }
 
-block_arrays_init :: proc(a: ^Block_Arrays, allocator := context.allocator) {
+@(private = "file")
+COMMIT_STEP :: 64 * size_of(Block_Array)
+
+block_arrays_init :: proc(
+	a: ^Block_Arrays,
+	capacity: int,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> mem.Allocator_Error {
 	a^ = {
-		free      = make([dynamic]^Block_Array, allocator),
 		allocator = allocator,
 	}
+	a.region = virtual.reserve(uint(capacity * size_of(Block_Array))) or_return
+	a.free = make([]^Block_Array, capacity, allocator, loc) or_return
+	return nil
 }
 
-// block_arrays_destroy frees every array; those still in chunks must have
-// been given back first (or the whole allocator is being freed).
 block_arrays_destroy :: proc(a: ^Block_Arrays) {
-	assert(len(a.free) == a.allocated, "chunk arrays still in use")
-	for p in a.free {free(p, a.allocator)}
-	delete(a.free)
+	virtual.release(raw_data(a.region), len(a.region))
+	delete(a.free, a.allocator)
 	a^ = {}
 }
 
-block_arrays_in_use :: proc(a: ^Block_Arrays) -> int {
-	return a.allocated - len(a.free)
+block_arrays_capacity :: proc(a: ^Block_Arrays) -> int {
+	return len(a.free)
 }
 
-// block_arrays_take returns an array with unspecified contents.
-block_arrays_take :: proc(
-	a: ^Block_Arrays,
-	loc := #caller_location,
-) -> (
-	^Block_Array,
-	mem.Allocator_Error,
-) {
-	if p, ok := pop_safe(&a.free); ok {return p, nil}
-	p, err := new(Block_Array, a.allocator, loc)
-	if err == nil {a.allocated += 1}
-	return p, err
+block_arrays_in_use :: proc(a: ^Block_Arrays) -> int {
+	return a.allocated - a.free_len
+}
+
+// block_arrays_take returns an array with unspecified contents, or
+// .Out_Of_Memory when capacity arrays are in use.
+block_arrays_take :: proc(a: ^Block_Arrays) -> (array: ^Block_Array, err: mem.Allocator_Error) {
+	if a.free_len > 0 {
+		a.free_len -= 1
+		return a.free[a.free_len], nil
+	}
+	if a.allocated == len(a.free) {return nil, .Out_Of_Memory}
+	end := (a.allocated + 1) * size_of(Block_Array)
+	if end > a.committed {
+		step := min(COMMIT_STEP, len(a.region) - a.committed)
+		virtual.commit(&a.region[a.committed], uint(step)) or_return
+		a.committed += step
+	}
+	p := (^Block_Array)(&a.region[a.allocated * size_of(Block_Array)])
+	a.allocated += 1
+	return p, nil
 }
 
 block_arrays_give :: proc(a: ^Block_Arrays, p: ^Block_Array) {
-	append(&a.free, p)
+	assert(a.free_len < len(a.free), "array given back twice")
+	a.free[a.free_len] = p
+	a.free_len += 1
 }
