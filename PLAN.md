@@ -207,6 +207,8 @@ the milestone that changes it is named.
 | Universe seed, world seed | The universe's seed; a world's own, derived from the universe seed and its id unless set | M17 |
 | Chunk, column, region | 16x16x16 blocks; a chunk column (x, z) with its column tops; a region file of 16x16 chunk columns | `game.Chunk_Pos`, `game.Column`, `game.Region_Pos` |
 | Block, block position | A cell's content (`game.Block`); its integer position in a world | `game.Block`, `game.Block_Pos` |
+| Address | A world's name in a universe: seven different symbols out of 36, in order (36·35·…·30 ≈ 4·10¹⁰ of them). The address alone decides what kind of world it is (generator, palette, climate, sky, astronomy); the universe seed adds the exact terrain. Shareable: the same address is the same kind of world in any universe | M17 |
+| Gate | A structure that dials addresses and carries characters to the gate of the world dialed. "Stargate" is not a name we use | M18 |
 | Spawn | Where a world receives arrivals with no place of their own; the universe's default world's spawn receives new characters | `World_Spawn` |
 | Landing | The step every arrival goes through: held still until the blocks are loaded, then stood where it fits | `land`, `game.landing_spot` |
 
@@ -227,7 +229,8 @@ the milestone that changes it is named.
 |---|---|
 | Join / leave | A client connects to a universe as a character, or disconnects |
 | Arrive / depart | A character enters or leaves a world: on joining, on leaving, and travelling |
-| Travel | Moving a character from one world to another in the same universe, by an act in the world (M17); never between universes |
+| Travel | Moving a character from one world to another in the same universe: through a gate (M18), or `travel` (M17); never between universes |
+| Dial | Entering an address on a gate, symbol by symbol, in order |
 | Teleport | Moving within one world (tp, home, warp, spawn, back) |
 | Tick, frame | The server's fixed step (30 per second); the client's drawn frame |
 
@@ -275,9 +278,12 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M14 | Items and player data: item kinds as data, stacks, server-owned containers (the player's inventory, hotbar, cursor), an inventory overlay with drag and drop, dropped items as entities, give/clear commands, one JSON file per player for everything kept about them | Two players over UDP move, split, drop and pick up stacks and agree with the server; a refused move rolls back; inventories survive save and load exactly; old worlds' players move to the new files; drag-and-drop UI tests (done: `game/inventory_test.odin` covers every action; `server/items_test.odin` drops, picks up, places and breaks between two players over UDP, refuses a request and the catalog, and keeps inventories through a restart; `test_players_move_to_their_files` migrates world.cfg players; `client/items_test.odin` rolls back refused predictions; `client/inventory_ui_test.odin` drags, splits, shift-clicks and drops) |
 | M15 | Polish: biome transitions without hard edges, the screen kept awake while playing, a five-slot hotbar over a 5x5 inventory | Biome borders blend (a band of mixed surface and features) in worldgen tests and screenshots; the platform keep-awake call is made in game and undone in menus on every OS; inventory tests at the new size; old inventories fit (done: `test_biome_borders_blend` and new golden hashes, the old ones kept for `biome_blend 0`, which worlds made before load with; `platform.set_keep_awake` logged on and off in game; inventory and overlay tests at 5 + 25; `test_old_inventory_fits`) |
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
-| M17 | Many worlds in a universe: each world has its own generator parameters, rules, chunks, entities and save; only loaded worlds run; characters travel between worlds by an act in the world | Two players in different worlds of one universe, one travels to the other's with their inventory; an unloaded world costs no tick time; memory stays flat across travel; each world's save stays its own |
-| M18 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
-| M19 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
+| M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own |
+| M18 | Gates: natural structures in every world (one by the spawn), dialed symbol by symbol on an overlay, open for a while, travelled through to the gate of the world dialed | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused |
+| M19 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
+| M20 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
+| M21 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
+| M22 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
 ## M9-M12: making and changing the world
 
@@ -485,36 +491,117 @@ uses one up are data and permissions a server or content sets.
   name in use by another account; a character's data survives a restart; old player
   files migrate; the challenge refuses replays.
 
-## M17: many worlds in a universe
+## M17: many worlds, named by addresses
 
 A universe (one server) hosts many worlds and loads them in and out. Grounded: worlds are
-flat voxel spaces (a world border can make them finite), not spheres; travel is an act in
-the world with a short transition while the destination streams in, not flying through
-rendered space.
+flat voxel spaces (a world border can make them finite), not spheres; travel is a short
+transition while the destination streams in, not flying through rendered space.
 
-- **Worlds:** each has its own generator kind and parameters (sea level, terrain, biome
-  mix, block palette), rules (gravity, day length), sky, chunks, entities, liquids,
-  spawn and save (`worlds/<id>/`). A world is derived on demand from the universe seed and
-  its id, so an unvisited one costs nothing but its entry; it gets a directory once
-  visited or edited.
+- **Addresses:** seven different symbols out of 36, in order. An address is a world's id
+  in its universe and its directory (`worlds/<address>/`). The address alone decides the
+  world's kind: its generator and parameters (sea level, terrain, climate offsets, biome
+  mix, block palette), rules (gravity, day length) and sky (M20's astronomy too), so an
+  address shared between players means the same kind of world in any universe; the world
+  seed is the universe seed and the address hashed, so the terrain itself differs. The
+  universe's home world keeps today's Earth parameters exactly; its address is derived
+  from the universe seed. Whether every address leads somewhere is a universe setting
+  (default: all; a fraction makes discovery matter).
+- **Worlds:** each has its own generator, parameters, rules, sky, chunks, entities,
+  liquids, spawn and save. An unvisited world costs nothing but its address; it gets a
+  directory once visited or edited.
 - **Loading:** a world is loaded while someone is in it (and briefly after); unloaded, it
   is only its save. Workers and the chunk memory pool are shared, sized by players as
   today. Cost scales with loaded worlds and their loaded chunks, never with how many
   worlds exist.
 - **Players:** in one world at a time; the client holds only that world's chunks. A
   travel message tells it the new world's rules, sky and spawn; it drops its chunks, plays
-  the transition, and M13's landing holds the player until the destination's blocks are
-  there. Characters (M16) are the universe's, so inventories travel with them; homes,
+  a short transition, and M13's landing holds the player until the destination's blocks
+  are there. Characters (M16) are the universe's, so inventories travel with them; homes,
   warps and back remember their world.
-- **Travel:** an in-world act starts it (a portal block at first; launch pads or ships are
-  content later); admin commands `worlds` (list them, loaded or not) and
-  `travel <world> [character]`.
+- **Commands:** `travel <address> [character]` (until M18's gates), `worlds` (the loaded
+  and saved ones), `address` (this world's).
 - **Exit check:** two players over UDP in different worlds of one universe; one travels to
-  the other's carrying their inventory and lands safely; an unloaded world takes no tick
+  the other's carrying their inventory and lands safely; one address gives the same
+  parameters in two universes and different terrain; an unloaded world takes no tick
   time; memory flat over repeated travel; each world's save stays its own; the client
   never holds two worlds' chunks.
 
-## M18: statistics
+## M18: gates
+
+- **Gates:** a structure on M12's placement API (programmatic, like towers): a ring with
+  seven chevrons and the 36 symbols around it (glyphs drawn by code). Every world has one
+  by its spawn (where travellers arrive) and rare others; a gate shows its own address.
+- **Dialing:** using a gate opens an overlay of the 36 symbols; choosing seven in order
+  locks the chevrons one by one (seen and heard by everyone near). The gate then opens
+  for a while (the destination's gate opens too); walking in travels (M17) to the
+  destination's gate. Misdials (this world's address, a gate already open) are refused
+  with a word.
+- **Exit check:** over UDP, dialing opens the gate and carries a player to the dialed
+  world's gate and back; gate placements match on every platform (worldgen hashes); a
+  misdial is refused; the dialing overlay in UI tests.
+
+## M19: polish II
+
+- **Inventory mouse tweaks** (after the Mouse Tweaks mod): shift-drag quick-moves every
+  slot passed; right-drag puts one in each slot passed; left-drag shares the cursor's
+  stack evenly over the slots passed; double-click gathers every stack of that item onto
+  the cursor; the wheel over a slot moves one at a time between the hotbar and the rest.
+- **Middle click picks the block aimed at:** the hotbar slot holding its item is selected;
+  with `items.catalog` a stack of it goes into the hand when none is there. In the
+  inventory, middle click on a slot gives a full stack of it (catalog).
+- **Square slots, item icons, a smaller hotbar:** names do not fit square slots, so items
+  get icons generated at start-up (a block's item: a small three-face cube from its
+  textures; tools: pixel sprites by code), in a UI icon atlas; names in tooltips; counts
+  in the corner.
+- **Landing dust:** falling three blocks or more and landing kicks up puffs of the block
+  landed on, more for a harder landing; for every player in view (seen from their
+  snapshots). Visual only until there is fall damage.
+- **Title screen:** a black-and-white starfield streaking past (a warp), drawn as UI quads;
+  the build's commit in grey in the lower left (the build driver passes it in).
+- **Native Windows behaviour** (what SDL3 and GLFW do that we do not yet; per-monitor DPI,
+  raw mouse input, cursor clipping and UTF-16 pairs are done):
+  - `WM_DPICHANGED`: take the suggested rectangle when moved to a monitor of another scale.
+  - `WM_SYSCOMMAND`/`SC_KEYMENU`: Alt and F10 must not open the window menu (which
+    freezes the loop until a key).
+  - Moving and resizing: Windows runs a modal loop while the frame is dragged and the
+    game stops; keep it rendering through it (a timer during the move, as SDL3 does) or
+    run the game loop off the window's thread.
+  - A dark title bar (`DwmSetWindowAttribute`, `DWMWA_USE_IMMERSIVE_DARK_MODE`).
+  - Precise frame pacing: a high-resolution waitable timer
+    (`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`) for the menu frame cap, not `Sleep`'s 15 ms.
+  - Not slowed in the background: power throttling off for the process
+    (`SetProcessInformation`, `ProcessPowerThrottling`); the render thread registered
+    with MMCSS as "Games".
+  - A window and taskbar icon (generated by code), an AppUserModelID.
+  - No system error dialogs (`SetErrorMode`); started from a console, logs to it
+    (`AttachConsole(ATTACH_PARENT_PROCESS)`).
+  - Each checked on a Windows machine (some only show there).
+- **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
+  (none blank); a title screen screenshot; the Windows list ticked off on Windows.
+
+## M20: sky and time
+
+Cheap, deterministic astronomy, so a world implies a sky worth observing (one could keep a
+lunar calendar by watching): a few trigonometric terms per frame from the world clock.
+
+- **Each world's astronomy** (from its address; the home world Earth-like): day length,
+  days in a year, axial tilt, one or more moons with their periods, and a star catalogue.
+- **The sun's path:** its height and bearing from the time of day, the day of the year
+  (declination from the tilt) and the latitude (from z): longer days in summer, a lower
+  sun in winter. Light follows the sun's height as today.
+- **Moons:** each at its own period; the phase from the sun and moon's angle, drawn as a
+  pixel disc with its lit part; rising and setting at their own times.
+- **Stars:** fixed per world (its seed), on a sphere that turns once per sidereal day
+  (slightly shorter than a solar day), so the night sky shifts through the year.
+- **The calendar:** `calendar` reads the day, month (by the first moon), year and moon
+  phases; the server's clock is the only input, so every client sees the same sky.
+- **Not here:** seasons changing the land (snow cover, leaves) would mean block updates
+  across the world: later, if ever.
+- **Exit check:** golden values for the sun, moons and calendar at chosen moments on every
+  platform; a moon's phase repeats on its period; star positions drift by the sidereal
+  difference night to night; sky screenshots at a few dates.
+
+## M21: statistics
 
 Counters for nearly everything a player does, so later systems (anything that rewards
 play) have data to work with; nothing here rewards anything.
@@ -543,7 +630,7 @@ play) have data to work with; nothing here rewards anything.
   test of many players with thousands of counters each within a save and load budget; UI
   tests for search and scrolling; the overlay over UDP shows the server's numbers.
 
-## M19: analytics
+## M22: analytics
 
 Measuring play to improve the game: a timed stream of meaningful interactions. Always on
 (a server can switch it off: `analytics 0`); nothing leaves the server by itself.
@@ -568,12 +655,38 @@ Measuring play to improve the game: a timed stream of meaningful interactions. A
   the cap; malformed, oversized and too frequent client reports are refused; the tool
   summarizes a recorded run.
 
-### After M19 (not planned in detail yet)
+### After M22 (not planned in detail yet), in this order
 
-Tools (a pickaxe for soil and stone, an axe for wood; whether hands can break and whether
-breaking takes time is decided then), entity attributes (health and the like, as data),
-lava as a second liquid, greedy meshing and low-detail far terrain for long view
-distances, and M1b (macOS) when a Mac is at hand.
+- **Entities, properly:** attributes as data (health, speed, anything content adds);
+  behaviour as data-driven state machines per kind instead of a switch; an interaction
+  hook (use on an entity). Proven by two kinds, not built for imagined ones: today's
+  critter moved onto it, and a villager.
+- **Villages and traders:** villages as M12 structures; villagers (a big crooked nose,
+  beady eyes) who wander their village; using one opens a trade overlay of offers, the
+  server checking and swapping the items; gold as the currency (an item, found as ore).
+  No professions, no sleeping.
+- **Tools:** a pickaxe for soil and stone, an axe for wood (whether hands can break and
+  whether breaking takes time is decided then).
+- **Itemization (Diablo II style, not enchantments):** items that can be unique get an
+  instance of their own (rarity, affixes and suffixes rolled from a seed, flavour text),
+  which means stacks carry data (the wire, the player files) and such items stack one. The
+  data is there from the first drop but shown only once the character has learned of it
+  (a knowledge flag a later mechanic sets). Needs tools and equipment worth rolling;
+  the stack data change goes in with tools.
+- Lava as a second liquid; greedy meshing and low-detail far terrain for long view
+  distances; M1b (macOS) when a Mac is at hand.
+
+### From notes, changed or not taken
+
+- Gates are dialed, not built (no portal frames to light), and they are found, one by
+  every spawn: discovery is reading and sharing addresses, which needs the address to
+  mean something, hence an address decides a world's kind.
+- Square slots needed icons more than a new shape: names do not fit squares.
+- Landing dust before fall damage is decoration; kept small.
+- Real stars and calendars are kept, but computed, not simulated: no orbits integrated,
+  no seasons in the blocks.
+- Villagers and itemized loot wait for the systems they stand on (attributes, tools); a
+  trader without things worth trading would be a stub.
 
 ## Worth re-typing from the old tree (ideas, not code)
 
