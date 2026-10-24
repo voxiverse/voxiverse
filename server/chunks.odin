@@ -28,6 +28,7 @@ Chunk :: struct {
 	state:    Chunk_State,
 	blocks:   game.Chunk_Blocks,
 	modified: bool, // edited since generated (saved when unloaded: save.odin)
+	water:    bool, // may hold water (set when it does, never cleared): liquids skip it if not
 }
 
 Chunk_Store :: struct {
@@ -41,12 +42,14 @@ Chunk_Store :: struct {
 	free_tasks:    [dynamic]^Gen_Task,
 	in_flight:     int,
 	max_in_flight: int,
+	caches:        []worldgen.Column_Cache, // one per worker (by context.user_index)
+	tops_done:     [dynamic]Tops_Done, // collected, for the world to take (heap)
 }
 
 // Jobs queued per worker: enough that results collected once a tick keep the
 // workers busy (a chunk takes ~0.1-1 ms), few enough that a client moving
 // away does not leave much stale work.
-MAX_IN_FLIGHT_PER_WORKER :: 16
+MAX_IN_FLIGHT_PER_WORKER :: 64
 
 @(private)
 Gen_Task :: struct {
@@ -57,8 +60,21 @@ Gen_Task :: struct {
 	array:      ^game.Block_Array,
 	uniform:    game.Block,
 	is_uniform: bool,
+	water:      bool, // it holds water
 	skipped:    bool, // shutting down: not generated
 	ms:         f32, // how long generating took
+	// Or a column's natural tops instead of a chunk (chunks_request_tops):
+	tops_only:  bool,
+	column:     [2]i32,
+	tops:       worldgen.Tops,
+}
+
+// Tops_Done: a column's natural tops worked out by a worker; fresh unless
+// the generator changed meanwhile (then only the request is over).
+Tops_Done :: struct {
+	column: [2]i32,
+	fresh:  bool,
+	tops:   worldgen.Tops,
 }
 
 // chunks_init sizes the world for capacity chunks. Long-lived storage comes
@@ -82,6 +98,8 @@ chunks_init :: proc(
 	tasks := make([]Gen_Task, w.max_in_flight, arena) or_return
 	for &task in tasks {append(&w.free_tasks, &task)}
 	base.queue_init(&w.done, heap)
+	w.tops_done = make([dynamic]Tops_Done, heap)
+	w.caches = make([]worldgen.Column_Cache, workers, arena) or_return
 	base.jobs_init(&w.jobs, "worldgen", workers, heap)
 	return nil
 }
@@ -92,6 +110,7 @@ chunks_destroy :: proc(w: ^Chunk_Store) {
 	base.jobs_destroy(&w.jobs)
 	base.queue_destroy(&w.done)
 	game.block_arrays_destroy(&w.arrays)
+	delete(w.tops_done)
 	w^ = {}
 }
 
@@ -110,6 +129,7 @@ chunks_set_block :: proc(w: ^Chunk_Store, p: game.Block_Pos, b: game.Block) -> b
 	if c == nil || c.state != .Ready {return false}
 	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
 	c.modified = true
+	if _, water := game.water_level(b); water {c.water = true}
 	return true
 }
 
@@ -143,6 +163,23 @@ chunks_request :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> bool {
 	return true
 }
 
+// chunks_request_tops starts working out a column's natural tops on a
+// worker (they cost about as much as a chunk: never on the tick); false
+// when the workers are busy. The result arrives in tops_done.
+chunks_request_tops :: proc(w: ^Chunk_Store, column: [2]i32) -> bool {
+	if w.in_flight >= w.max_in_flight {return false}
+	task := pop(&w.free_tasks)
+	task^ = {
+		world     = w,
+		gen       = w.gen,
+		tops_only = true,
+		column    = column,
+	}
+	w.in_flight += 1
+	base.jobs_submit(&w.jobs, generate_job, task)
+	return true
+}
+
 // chunks_insert adds a ready chunk from a save (blocks: uniform, or the
 // contents of array copied into one of the world's).
 chunks_insert :: proc(
@@ -168,6 +205,7 @@ chunks_insert :: proc(
 			array = dst,
 		}
 	}
+	chunk.water = has_water(&chunk.blocks)
 	w.by_pos[pos] = handle
 	return chunk
 }
@@ -184,10 +222,19 @@ chunks_collect :: proc(
 	base.queue_drain(&w.done, &done)
 	for task in done {
 		w.in_flight -= 1
+		if task.tops_only {
+			append(
+				&w.tops_done,
+				Tops_Done{task.column, !task.skipped && task.gen == w.gen, task.tops},
+			)
+			append(&w.free_tasks, task)
+			continue
+		}
 		if !task.skipped {base.frame_stats_add(&w.gen_times, task.ms)}
 		chunk := base.pool_get(&w.chunks, task.handle)
 		assert(chunk != nil && chunk.state == .Generating, "generating chunks are never unloaded")
 		chunk.state = .Ready
+		chunk.water = task.water
 		chunk.blocks = {
 			array = task.array,
 		}
@@ -219,11 +266,39 @@ generate_job :: proc(data: rawptr) {
 	w := task.world
 	if base.jobs_stopping(&w.jobs) {
 		task.skipped = true
+	} else if task.tops_only {
+		base.profile_scope("column tops")
+		worldgen.column_tops(&task.gen, task.column, &task.tops, &w.caches[context.user_index])
 	} else {
 		base.profile_scope("generate chunk")
 		start := time.tick_now()
-		task.uniform, task.is_uniform = worldgen.generate(&task.gen, task.pos, task.array)
+		task.uniform, task.is_uniform = worldgen.generate(
+			&task.gen,
+			task.pos,
+			task.array,
+			&w.caches[context.user_index],
+		)
+		made := game.Chunk_Blocks {
+			uniform = task.uniform,
+		}
+		if !task.is_uniform {made = {
+				array = task.array,
+			}}
+		task.water = has_water(&made)
 		task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
 	}
 	base.queue_push(&w.done, task)
+}
+
+// has_water: whether any of blocks is water.
+@(private)
+has_water :: proc(blocks: ^game.Chunk_Blocks) -> bool {
+	if blocks.array == nil {
+		_, water := game.water_level(blocks.uniform)
+		return water
+	}
+	for b in blocks.array {
+		if _, water := game.water_level(b); water {return true}
+	}
+	return false
 }

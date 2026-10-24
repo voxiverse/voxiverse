@@ -31,10 +31,10 @@ Overhang_Grid :: struct {
 @(private = "file")
 MARGIN :: 8
 
-@(private = "file")
+@(private)
 Columns :: [game.CHUNK_SIZE][game.CHUNK_SIZE]Column // [z][x]
 
-@(private = "file")
+@(private)
 columns_fill :: proc(p: ^Params, seed: i64, column: [2]i32, cols: ^Columns) {
 	origin := column * game.CHUNK_SIZE
 	for z in i32(0) ..< game.CHUNK_SIZE {
@@ -119,10 +119,15 @@ terrain_top :: proc(c: ^Column, g: ^Overhang_Grid, x, z: i32) -> i32 {
 // earth_tops: the natural tops of a chunk column (the highest blocks that
 // shade): the land, the sea, the trees standing on it (theirs and their
 // neighbours' crowns).
-earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops) {
+earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_Cache = nil) {
 	p := &gen.params
-	cols := new(Columns, context.temp_allocator)
-	columns_fill(p, gen.seed, column, cols)
+	// Trees from here and next door (first: the climate's entry is valid
+	// until the cache is used again).
+	trees := make([dynamic]Tree, context.temp_allocator)
+	for dz in i32(-1) ..= 1 {
+		for dx in i32(-1) ..= 1 {cached_trees(cache, gen, column + {dx, dz}, &trees)}
+	}
+	cols := cached_columns(cache, gen, column)
 	grid := new(Overhang_Grid, context.temp_allocator)
 	lo, hi := max(i32), min(i32)
 	for &row in cols {
@@ -141,12 +146,8 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops) {
 			out[x + z * game.CHUNK_SIZE] = top
 		}
 	}
-	trees := make([dynamic]Tree, context.temp_allocator)
-	for dz in i32(-1) ..= 1 {
-		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
-	}
 	origin := column * game.CHUNK_SIZE
-	// Trees from here and next door: their trunks and crowns.
+	// The trees' trunks and crowns.
 	Tops_Put :: struct {
 		origin: [2]i32,
 		out:    ^Tops,
@@ -175,6 +176,7 @@ earth_generate :: proc(
 	gen: ^Generator,
 	c: game.Chunk_Pos,
 	dst: ^game.Block_Array,
+	cache: ^Column_Cache,
 ) -> (
 	uniform: game.Block,
 	is_uniform: bool,
@@ -183,19 +185,19 @@ earth_generate :: proc(
 	seed := gen.seed
 	origin := game.chunk_origin(c)
 	column := [2]i32{c.x, c.z}
-	cols := new(Columns, context.temp_allocator)
-	{
-		base.profile_scope("worldgen climate")
-		columns_fill(p, seed, column, cols)
-	}
-
-	// Trees from this chunk column and its neighbours may reach in.
+	// Trees from this chunk column and its neighbours may reach in. (The
+	// climate after: an entry stays valid until the cache is used again.)
 	trees := make([dynamic]Tree, context.temp_allocator)
 	{
 		base.profile_scope("worldgen place trees")
 		for dz in i32(-1) ..= 1 {
-			for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+			for dx in i32(-1) ..= 1 {cached_trees(cache, gen, column + {dx, dz}, &trees)}
 		}
+	}
+	cols: ^Columns
+	{
+		base.profile_scope("worldgen climate")
+		cols = cached_columns(cache, gen, column)
 	}
 	pieces := make([dynamic]Piece, context.temp_allocator)
 	pieces_in(gen, {origin.x, origin.z}, &pieces)

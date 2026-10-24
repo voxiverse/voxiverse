@@ -36,7 +36,7 @@ subsystem (`gpu`, `server`, `session`, ...) and put values in `key=value` form.
 | Switch | Effect |
 |---|---|
 | `VX_LOG=debug` | Show debug-level messages on the console too |
-| `VX_VALIDATION=0` / `1` | Validation off (debug builds) / on (also in release builds) |
+| `VX_VALIDATION=0` / `1` | Validation off (development builds) / on (also in release builds) |
 | `VX_VALIDATION=best` | Plus best-practices advice (logged as "vulkan advice", does not fail runs) |
 | `VX_VALIDATION=gpu` | Plus GPU-assisted validation: checks inside shaders (slow) |
 | `VX_BREAK=1` | Stop in the attached debugger on validation errors and wherever `base.debug_break()` is called |
@@ -408,6 +408,17 @@ labels show up in RenderDoc's event browser. (The game only talks to RenderDoc w
 from it; it never loads RenderDoc itself.)
 
 ## Profiling
+
+Measure with optimized code: the default development build is lightly optimized (3-8x slower
+than release in the chunk pipeline), `--debug` is not optimized at all (7-15x slower). Four
+tools, from narrow to wide:
+
+| Command | What it shows |
+|---|---|
+| `build bench [-radius:6 -seed:1]` | Generation, light, snapshot and mesh times per chunk for a fixed region on one thread, vertices per chunk. The same work every run: the first thing to run before and after changing the chunk pipeline |
+| `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where it has them) and prints the hottest functions per thread; `perf report -i build/game.perf` for call graphs, `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`) |
+| `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes; `trace` prints each scope's calls and percentiles per thread, a per-second timeline and the slowest frames and server ticks broken down |
+| The `session mesher` log line | At the end of a session: chunks meshed, re-meshed (and why: resent, edits, column tops), mesh times |
 
 `build run --release --profile` writes `build/voxiverse.spall`, a trace for
 [Spall](https://gravitymoth.com/spall/) (open it in the web viewer or the native app):

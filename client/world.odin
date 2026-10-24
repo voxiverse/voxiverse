@@ -34,6 +34,7 @@ Client_Chunk :: struct {
 	group:   u32, // a bulk edit's mesh group it belongs to (0: none)
 	pending: render.Mesh_Handle, // its new mesh, uploaded hidden until its group is shown
 	waiting: bool, // a new mesh (pending, or none: empty) waits for its group
+	meshes:  u32, // times meshed (started), for World_Stats.remeshed
 }
 
 // Mesh_Group: the chunks a bulk edit touched, and their neighbours: their
@@ -77,6 +78,13 @@ World :: struct {
 
 World_Stats :: struct {
 	meshed:         int, // chunks meshed in total
+	remeshed:       int, // ... of chunks meshed before (a change, or churn)
+	// Why chunks went dirty again after being complete: the server sent a
+	// chunk we had, an edit (or prediction) changed light or blocks near,
+	// a column's top moved.
+	dirtied_resent: int,
+	dirtied_edit:   int,
+	dirtied_column: int,
 	stale_meshes:   int, // results dropped because the chunk changed or left
 	mesh_jobs_busy: int,
 	groups_shown:   int, // bulk edits shown whole
@@ -241,6 +249,7 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 				if exists {
 					// Its mesh was made from the old blocks here: a result still
 					// on its way is stale too (border faces, light).
+					if n.meshes > 0 {w.stats.dirtied_resent += 1}
 					n.dirty = true
 					n.version = w.next_version
 					w.next_version += 1
@@ -268,7 +277,7 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 	c.version = w.next_version
 	w.next_version += 1
 	// Light reaches 15 blocks: everything that close may look different.
-	remesh_box(w, p - game.LIGHT_MAX, p + game.LIGHT_MAX)
+	remesh_box(w, p - game.LIGHT_MAX, p + game.LIGHT_MAX, &w.stats.dirtied_edit)
 	predict_column_top(w, p, b)
 	// Geometry changes only within a block of it: mesh those now, so faces
 	// the edit uncovers appear in the same frame (no seeing through the
@@ -291,6 +300,8 @@ mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) {
 	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return}
 	c := base.pool_get(&w.chunks, h)
 	task := pop(&w.urgent_tasks)
+	if c.meshes > 0 {w.stats.remeshed += 1}
+	c.meshes += 1
 	task.handle, task.version, task.pos = h, c.version, pos
 	task_fill(w, task, pos)
 	mesh_task_run(task)
@@ -318,7 +329,12 @@ world_set_column :: proc(w: ^World, m: game.Column) {
 		if old == h {continue}
 		x := m.pos.x * game.CHUNK_SIZE + i32(i % game.CHUNK_SIZE)
 		z := m.pos.y * game.CHUNK_SIZE + i32(i / game.CHUNK_SIZE)
-		remesh_box(w, {x, min(old, h), z} - game.LIGHT_MAX, {x, max(old, h), z} + game.LIGHT_MAX)
+		remesh_box(
+			w,
+			{x, min(old, h), z} - game.LIGHT_MAX,
+			{x, max(old, h), z} + game.LIGHT_MAX,
+			&w.stats.dirtied_column,
+		)
 	}
 	column.heights = m.heights
 }
@@ -338,6 +354,7 @@ predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 		w,
 		{p.x, min(old, top), p.z} - game.LIGHT_MAX,
 		{p.x, max(old, top), p.z} + game.LIGHT_MAX,
+		&w.stats.dirtied_edit,
 	)
 }
 
@@ -354,7 +371,7 @@ world_clear :: proc(w: ^World) {
 
 // remesh_box re-meshes every loaded chunk that overlaps the box.
 @(private = "file")
-remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos) {
+remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos, counter: ^int) {
 	a, b := game.chunk_of(lo), game.chunk_of(hi)
 	b.y = min(b.y, game.CHUNK_MAX_Y - 1)
 	a.y = max(a.y, game.CHUNK_MIN_Y)
@@ -363,6 +380,7 @@ remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos) {
 			for cx in a.x ..= b.x {
 				n := world_get(w, {cx, cy, cz})
 				if n == nil {continue}
+				if n.meshes > 0 && !n.dirty {counter^ += 1}
 				n.dirty = true
 				n.version = w.next_version // a mesh being made now is stale
 				w.next_version += 1
@@ -442,6 +460,8 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 			continue
 		}
 		c.queued = true
+		if c.meshes > 0 {w.stats.remeshed += 1}
+		c.meshes += 1
 		task := pop(&w.free_tasks)
 		task.handle, task.version, task.pos = h, c.version, c.pos
 		task_fill(w, task, c.pos)

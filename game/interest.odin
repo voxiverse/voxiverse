@@ -29,7 +29,11 @@ interest_count :: proc(radius, height: i32) -> int {
 	return n * int(2 * height + 1)
 }
 
-// interest_offsets lists the area's chunk offsets, nearest first.
+// interest_offsets lists the area's chunk offsets, nearest column first
+// (each column from the client's height outwards). Whole columns one after
+// another let generation share a column's climate between its chunks
+// (worldgen.Column_Cache); in spherical shells every column came round
+// again only after hundreds of others.
 interest_offsets :: proc(radius, height: i32, allocator := context.allocator) -> []Chunk_Pos {
 	out := make([dynamic]Chunk_Pos, 0, interest_count(radius, height), allocator)
 	for y in -height ..= height {
@@ -39,9 +43,17 @@ interest_offsets :: proc(radius, height: i32, allocator := context.allocator) ->
 			}
 		}
 	}
-	slice.sort_by(out[:], proc(a, b: Chunk_Pos) -> bool {
-		return a.x * a.x + a.y * a.y + a.z * a.z < b.x * b.x + b.y * b.y + b.z * b.z
-	})
+	slice.sort_by(
+		out[:],
+		proc(a, b: Chunk_Pos) -> bool {
+			ha, hb := a.x * a.x + a.z * a.z, b.x * b.x + b.z * b.z
+			if ha != hb {return ha < hb}
+			if a.x != b.x {return a.x < b.x} 	// columns at the same distance: one at a time
+			if a.z != b.z {return a.z < b.z}
+			if abs(a.y) != abs(b.y) {return abs(a.y) < abs(b.y)}
+			return a.y > b.y // above before below
+		},
+	)
 	return out[:]
 }
 

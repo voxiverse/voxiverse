@@ -453,12 +453,12 @@ ui_scale :: proc(app: ^App) -> f32 {
 	return clamp(math.round(h / 720 * 4) / 4, 1, 3)
 }
 
-// validation_options reads VX_VALIDATION: unset = on in debug builds only,
+// validation_options reads VX_VALIDATION: unset = on in development builds only,
 // "0" = off, otherwise a comma list of "1"/"on", "best" (best-practices
 // advice) and "gpu" (GPU-assisted shader checks).
 validation_options :: proc() -> gpu.Validation {
 	value, set := os.lookup_env("VX_VALIDATION", context.temp_allocator)
-	if !set {return {enabled = ODIN_DEBUG}}
+	if !set {return {enabled = base.DEV}}
 	v: gpu.Validation
 	for word in split_commas(value) {
 		switch word {

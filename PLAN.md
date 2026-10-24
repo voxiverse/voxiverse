@@ -282,10 +282,12 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own (done: `server/worlds_test.odin` travels an admin away and back over UDP with her inventory while another player stays home, saves her edit in the other world's directory, unloads it when empty, keeps memory flat over repeated travel, and checks an address's kind across two universes; `game/address_test.odin`; old world directories migrate) |
 | M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
-| M19 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
-| M20 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
-| M21 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
-| M22 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
+| M19 | Performance: a single-thread benchmark of the chunk pipeline (`build bench`) and counters for the mesher's work, then the costs it finds: the workers' queue, the column cache, the light fill, the load order, the send budget, water wake-ups at chunk borders, caves; per-direction draws and greedy meshing on the GPU side; the sky's clouds | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) |
+| M20 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows, Linux and macOS made by CI on every push and published as a GitHub Release for each version tag | A version tag gives a Release with the three packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
+| M21 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
+| M22 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
+| M23 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
+| M24 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
 ## M9-M12: making and changing the world
 
@@ -486,7 +488,7 @@ uses one up are data and permissions a server or content sets.
   last one played by default); the universe keeps them. Chat, the player list, permissions and community data
   name characters; permissions can also grant to an account (all its characters).
 - **Data:** everything kept about a player (M14's player files: where they are, their
-  inventory; M18's statistics) becomes the character's, kept by the universe:
+  inventory; M23's statistics) becomes the character's, kept by the universe:
   `characters/<account>/<character>.json`. Existing player files become characters of a
   placeholder account, claimed by the first key that joins with that name.
 - **Exit check:** over UDP, a client can't join with another's key or take a character
@@ -554,7 +556,7 @@ area, not scripts.
   universe and its directory (`worlds/<address>/`, the symbols' indices in hex: file
   systems need not know the script). The address alone decides the
   world's kind: its generator and parameters (sea level, terrain, climate offsets, biome
-  mix, block palette), rules (gravity, day length) and sky (M20's astronomy too), so an
+  mix, block palette), rules (gravity, day length) and sky (M22's astronomy too), so an
   address shared between players means the same kind of world in any universe; the world
   seed is the universe seed and the address hashed, so the terrain itself differs. The
   universe's home world keeps today's Earth parameters exactly; its address is derived
@@ -604,7 +606,98 @@ area, not scripts.
   world's gate and back; gate placements match on every platform (worldgen hashes); a
   misdial is refused; the dialing overlay in UI tests.
 
-## M19: polish II
+## M19: performance
+
+Profiled from first principles (times below are from one 4-core machine with integrated
+graphics: compare them with each other, not across machines): `build bench` runs generate, light and mesh on one thread for a fixed region
+(optimized, with line tables for `perf`); release traces (`build build --release --profile`)
+show the game's threads; the client logs the mesher's work at the end of a session (`session
+mesher`: meshed, re-meshed and why). Numbers are per chunk unless said.
+
+- **Found and done:**
+  - Light filled its 48³ region block by block with index arithmetic: row copies, light
+    0.389 → 0.163 ms.
+  - Worldgen worked out each chunk column's climate and trees again for every chunk of it
+    (~24): a per-worker `Column_Cache`, generate 0.333 → 0.188 ms on one thread (same blocks:
+    `test_column_cache`).
+  - Only 16 chunks per worker were queued and the queue refilled once a tick, so the workers
+    idled most of each tick (960 chunks/s at most): 64 per worker, the spawn's 5733 chunks
+    load in 4.0 s instead of 6.0.
+- **Found, to do (in order):**
+  - Load whole columns nearest first instead of spherical shells (the column cache misses in
+    game: climate still 0.18 ms a chunk), and a send budget in bytes rather than 48 chunks a
+    tick (now the cap: 4.0 s is exactly 5733 / 1440).
+  - `wake_water_box` looks up ~1700 border cells per chunk collected (8 ms ticks while
+    loading): a per-chunk "has water" flag skips nearly all.
+  - Caves: trilinear interpolation of 8 corners per solid block (15% of the benchmark): along
+    rows instead.
+  - GPU (idle at the spawn: world 1.8 ms, sky 0.54 ms of a 2.4 ms frame): meshes split by
+    face direction, drawing only the directions that can face the camera (about half the
+    triangles); then greedy meshing (merging faces with the same texture, AO and light); the
+    clouds' march (up to 160 steps a sky pixel) cheaper or at a lower resolution.
+  - A CI step running `build bench`, failing on a regression beyond a margin.
+- **Debug builds** are 7-15x slower in these loops (light 6 ms a chunk): the mesher's queue
+  takes tens of seconds to drain, which is what looked like churn on F3. M20 makes the
+  everyday build optimized.
+
+## M20: builds and releases
+
+**What a release needs to carry.** Fonts and structure templates are compiled in (`#load`),
+textures and sounds are generated at start-up; the only files the game reads besides the
+player's settings and saves are its 14 compiled shaders (116 KB, `shaders/` beside the
+executable). So no asset archive format: a release build compiles the SPIR-V in too, and
+the game is one self-contained executable (the server another). Development builds keep
+reading `build/shaders` for hot reload. An archive format earns its keep only with large
+authored assets (music, resource packs, mods); our assets are made by code, so it waits
+until something needs it. The package itself is compressed (zip, tar.gz): compressing
+inside it again would buy nothing.
+
+- **Profiles** (done early, in M19): the default development build is `-o:minimal` with
+  debug info and the dev aids (`base.DEV`: the tracking allocator, validation, hot reload):
+  it compiles in about the time of an unoptimized one and runs 3-5x faster; `--debug` is
+  unoptimized for stepping through code; `--release` is `-o:speed` without the dev aids
+  (half a minute to compile); `--release --symbols` adds line tables with the dev aids
+  still off, for profilers (`build perf`). Still to do: the shaders compiled into
+  `--release`, and the game a windowed program on Windows (no console; it logs to its
+  file).
+- **Windows icon and version info:** Odin's `-resource:<file.rc>` compiles a resource script
+  with the Windows SDK's `rc.exe` (found as it finds the linker) and links it in. The build
+  writes `build/voxiverse.rc`: `1 ICON "voxiverse.ico"` and a `VERSIONINFO` block (product,
+  version, commit: the file's Details tab). The icon is drawn by code (`build icon`: a 16 x 16
+  grass block, scaled texel for texel to 16, 32, 48 and 256 pixels, PNG images in an .ico;
+  a first version, to be redrawn). The window class loads it too (`LoadIconW(module, 1)` for
+  `hIcon` and `hIconSm`), or the title bar and taskbar keep the default. Checked in CI by
+  reading the resources out of the Windows executable.
+- **Versions:** `0.<milestone>.<patch>` (`v0.20.0` when this lands), from the git tag, and
+  the commit, passed in with `-define`; shown by `--version`, in the log's first line, on the
+  title screen (M21) and in the server's status. The protocol version stays its own.
+- **Packages** (`build package`: a release build, then the archive in `build/dist/`):
+  - Windows x64: `voxiverse-0.20.0-windows-x64.zip`: `voxiverse.exe`, `voxiverse-server.exe`.
+    `vulkan-1.dll` comes with every GPU driver. Unsigned: SmartScreen warns about an unknown
+    publisher until we pay for code signing (later, documented in the README).
+  - Linux x64: `voxiverse-0.20.0-linux-x64.tar.gz` (keeps the executable bit), built on the
+    oldest supported runner (Ubuntu 22.04, glibc 2.35) so it runs on older distributions;
+    `libvulkan.so.1` comes from the system.
+  - macOS universal (arm64 + x86_64, `lipo`): `Voxiverse.app` in a zip, with the server
+    beside it. macOS has no Vulkan of its own: the bundle carries MoltenVK
+    (`Contents/Frameworks/libMoltenVK.dylib`, Apache 2.0), loaded directly in place of a
+    loader: the one library we ship beside an executable, because there is no other way.
+    Ad-hoc signed (Apple Silicon needs a signature); not notarized, so the first launch
+    needs right-click Open until we join Apple's developer program (later, documented).
+  - Every package: `README.txt` (running, where saves and settings live, the server's
+    options), `LICENSE`, and the fonts' and MoltenVK's licences. Debug symbols go in a
+    separate archive per platform (for crash reports), not in the player's package.
+- **CI:** every push to main builds the three packages and keeps them as workflow artifacts
+  (for testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
+  `SHA256SUMS`, and publishes a GitHub Release with `gh release create` (no third-party
+  actions), its notes from the milestone's row. Each package is unpacked on its own OS and
+  run from there: Linux reaches a world on the CPU driver; Windows and macOS answer
+  `--version` and start the server; that proves it needs nothing beside it.
+- **Saves and settings** already live in the user's data directory, so upgrading is
+  replacing the folder; a client and server of different protocols say so on joining.
+- **Exit check:** as in the table.
+
+## M21: polish II
 
 - **Inventory mouse tweaks** (after the Mouse Tweaks mod): shift-drag quick-moves every
   slot passed; right-drag puts one in each slot passed; left-drag shares the cursor's
@@ -643,7 +736,7 @@ area, not scripts.
 - **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
   (none blank); a title screen screenshot; the Windows list ticked off on Windows.
 
-## M20: sky and time
+## M22: sky and time
 
 Cheap, deterministic astronomy, so a world implies a sky worth observing (one could keep a
 lunar calendar by watching): a few trigonometric terms per frame from the world clock.
@@ -665,7 +758,7 @@ lunar calendar by watching): a few trigonometric terms per frame from the world 
   platform; a moon's phase repeats on its period; star positions drift by the sidereal
   difference night to night; sky screenshots at a few dates.
 
-## M21: statistics
+## M23: statistics
 
 Counters for nearly everything a player does, so later systems (anything that rewards
 play) have data to work with; nothing here rewards anything.
@@ -694,7 +787,7 @@ play) have data to work with; nothing here rewards anything.
   test of many players with thousands of counters each within a save and load budget; UI
   tests for search and scrolling; the overlay over UDP shows the server's numbers.
 
-## M22: analytics
+## M24: analytics
 
 Measuring play to improve the game: a timed stream of meaningful interactions. Always on
 (a server can switch it off: `analytics 0`); nothing leaves the server by itself.
@@ -719,7 +812,7 @@ Measuring play to improve the game: a timed stream of meaningful interactions. A
   the cap; malformed, oversized and too frequent client reports are refused; the tool
   summarizes a recorded run.
 
-### After M22 (not planned in detail yet), in this order
+### After M24 (not planned in detail yet), in this order
 
 - **Entities, properly:** attributes as data (health, speed, anything content adds);
   behaviour as data-driven state machines per kind instead of a switch; an interaction

@@ -494,7 +494,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 	)
-	when ODIN_DEBUG {
+	when base.DEV {
 		console_register(
 			c,
 			{"crash", "crash the game (tests the crash handler)", proc(app: ^App, args: []string) {

@@ -7,6 +7,8 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
+import "../base"
+
 
 // Shader hot reload (development builds, `debug.hot_reload_shaders`): when a
 // file in assets/shaders changes, run the build driver's `shaders` command
@@ -30,7 +32,7 @@ WATCH_INTERVAL :: 0.5 // seconds
 // folder; without them (a shipped game) it stays off.
 shader_watch_init :: proc(w: ^Shader_Watch) {
 	w^ = {}
-	when !ODIN_DEBUG {return}
+	when !base.DEV {return}
 	exe_dir, err := os.get_executable_directory(context.temp_allocator)
 	if err != nil {return}
 	repo := filepath.dir(exe_dir)

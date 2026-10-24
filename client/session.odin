@@ -246,6 +246,19 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	delete(s.notices)
 	netcode.capture_close(&s.capture)
 	if s.world_init {
+		st := &s.world.stats
+		times := base.frame_stats_summary(&st.mesh_times)
+		log.infof(
+			"session mesher meshed=%d remeshed=%d stale=%d dirtied_resent=%d dirtied_edit=%d dirtied_column=%d mesh_ms_p50=%.2f p99=%.2f",
+			st.meshed,
+			st.remeshed,
+			st.stale_meshes,
+			st.dirtied_resent,
+			st.dirtied_edit,
+			st.dirtied_column,
+			times.p50,
+			times.p99,
+		)
 		world_remove_all_meshes(&s.world)
 		for h in s.world.mesh_removals {render.world_remove_mesh(pass, g, h)}
 		world_destroy(&s.world)

@@ -136,6 +136,7 @@ edit_chunk :: proc(w: ^World, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return
 				}
+				if _, water := game.water_level(new); water {c.water = true}
 				changed += 1
 			}
 		}

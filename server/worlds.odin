@@ -16,27 +16,28 @@ import "../worldgen"
 // when it unloads.
 
 World :: struct {
-	server:     ^Server,
-	address:    game.Address,
-	arena:      virtual.Arena,
-	dir:        string, // its save directory ("": not saved)
-	generator:  worldgen.Kind,
-	seed:       i64,
-	params:     worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
-	rules:      game.Rules,
-	clock:      f64, // world time (game/time.odin)
-	spawn:      World_Spawn, // where arrivals land (spawn.odin)
-	chunks:     Chunk_Store,
-	tops:       map[[2]i32]i32, // edited column tops (columns.odin)
-	natural:    []Natural_Slot, // natural column tops (columns.odin)
-	entities:   Entities, // (entities.odin)
-	changes:    Changes, // blocks changed this tick (changes.odin)
-	updates:    Updates, // scheduled block updates: flowing water (liquids.odin)
-	saved:      map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
-	regions:    map[game.Region_Pos]bool, // read from disk; true = changed since written
-	started:    bool, // world_start ran (its chunks and the rest exist)
-	idle_since: u64, // the last tick someone was in it
-	gates:      [dynamic]Gate, // active: dialing or open (gates.odin)
+	server:       ^Server,
+	address:      game.Address,
+	arena:        virtual.Arena,
+	dir:          string, // its save directory ("": not saved)
+	generator:    worldgen.Kind,
+	seed:         i64,
+	params:       worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
+	rules:        game.Rules,
+	clock:        f64, // world time (game/time.odin)
+	spawn:        World_Spawn, // where arrivals land (spawn.odin)
+	chunks:       Chunk_Store,
+	tops:         map[[2]i32]i32, // edited column tops (columns.odin)
+	natural:      []Natural_Slot, // natural column tops (columns.odin)
+	entities:     Entities, // (entities.odin)
+	changes:      Changes, // blocks changed this tick (changes.odin)
+	updates:      Updates, // scheduled block updates: flowing water (liquids.odin)
+	saved:        map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
+	regions:      map[game.Region_Pos]bool, // read from disk; true = changed since written
+	started:      bool, // world_start ran (its chunks and the rest exist)
+	idle_since:   u64, // the last tick someone was in it
+	gates:        [dynamic]Gate, // active: dialing or open (gates.odin)
+	tops_pending: map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -93,6 +94,7 @@ world_close :: proc(w: ^World) {
 	}
 	delete(w.tops)
 	delete(w.gates)
+	delete(w.tops_pending)
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)
 	delete(w.regions)

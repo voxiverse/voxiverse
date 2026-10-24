@@ -33,6 +33,7 @@ PACKAGES :: []string {
 	"tools/replay",
 	"tools/sfx",
 	"tools/worldmap",
+	"tools/bench",
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
@@ -104,6 +105,8 @@ main :: proc() {
 		ok = format_sources()
 	case "shaders":
 		ok = shaders()
+	case "icon":
+		ok = write_icon()
 	case "build":
 		_, ok = build_game(args[1:])
 	case "run":
@@ -112,8 +115,12 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay", "sfx", "worldmap":
+	case "netdump", "replay", "sfx", "worldmap", "bench":
 		ok = run_tool(args[0], args[1:])
+	case "trace":
+		ok = trace(args[1:])
+	case "perf":
+		ok = perf_record(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		ok = true
@@ -136,9 +143,20 @@ usage :: proc() {
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
-	fmt.println("  build     build the game and the dedicated server into build/ (debug), with:")
-	fmt.println("              --release    optimized")
-	fmt.println("              --sanitize   with AddressSanitizer")
+	fmt.println(
+		"  bench     time worldgen, light and meshing on one thread (-seed:N -radius:6 -repeat:1)",
+	)
+	fmt.println(
+		"  trace     summarize a profile trace (build/voxiverse.spall; scopes for its timeline)",
+	)
+	fmt.println("  perf      record game, server or bench under Linux perf (-- program arguments)")
+	fmt.println("  icon      draw the game's icon to build/voxiverse.ico and build/icon.png")
+	fmt.println("  build     build the game and the dedicated server into build/: by default a")
+	fmt.println("            development build (lightly optimized, debug info, the dev aids), or:")
+	fmt.println("              --debug      unoptimized, for stepping through in a debugger")
+	fmt.println("              --release    fully optimized, no dev aids (slow to compile)")
+	fmt.println("              --symbols    with --release: line tables too, for perf")
+	fmt.println("              --sanitize   unoptimized with AddressSanitizer")
 	fmt.println(
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
@@ -149,34 +167,62 @@ usage :: proc() {
 	)
 }
 
-// build_game compiles shaders and the game. Debug builds keep symbols and
-// turn on Vulkan validation; --release optimizes; --sanitize adds
-// AddressSanitizer (use-after-free, overflows; best on Linux/macOS);
-// --profile writes a Spall trace (combine with --release for real numbers).
+// Build profiles. Compile times (the client, on one machine):
+// unoptimized 1.4 s, -o:minimal 1.8 s, -o:speed 30 s; run times in the
+// chunk pipeline: unoptimized 7-15x slower than -o:speed, -o:minimal 3-8x.
+// So the everyday build is -o:minimal with debug info and the dev aids
+// (base.DEV); --debug drops the optimizing for stepping through code;
+// --release is -o:speed without the dev aids, and --symbols adds line
+// tables to it (Odin's -debug, with VX_DEV forced off) for profilers.
+Profile :: enum {
+	Dev,
+	Debug,
+	Release,
+}
+
+// build_game compiles shaders, the game and the dedicated server.
 build_game :: proc(args: []string) -> (exe: string, ok: bool) {
-	release, sanitize, profile := false, false, false
+	profile := Profile.Dev
+	symbols, sanitize, trace := false, false, false
 	for arg in args {
 		switch arg {
+		case "--debug":
+			profile = .Debug
 		case "--release":
-			release = true
+			profile = .Release
+		case "--symbols":
+			symbols = true
 		case "--sanitize":
 			sanitize = true
 		case "--profile":
-			profile = true
+			trace = true
 		case:
 			fmt.eprintfln("build: unknown option '%s'", arg)
 			return "", false
 		}
 	}
-	if release && sanitize {
-		fmt.eprintln("build: --sanitize is a debug build; drop --release")
+	if sanitize && profile == .Release {
+		fmt.eprintln("build: --sanitize is unoptimized; drop --release")
 		return "", false
 	}
+	if sanitize {profile = .Debug}
+	if symbols && profile != .Release {
+		fmt.eprintln("build: --symbols is for --release (the others have them)")
+		return "", false
+	}
+	mode := make([dynamic]string)
+	switch profile {
+	case .Dev:
+		append(&mode, "-o:minimal", "-debug")
+	case .Debug:
+		append(&mode, "-debug")
+	case .Release:
+		append(&mode, "-o:speed")
+		if symbols {append(&mode, "-debug", "-define:VX_DEV=false")}
+	}
+	if trace {append(&mode, "-define:VX_PROFILE=true")}
 	shaders() or_return
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
-	mode := make([dynamic]string)
-	append(&mode, "-o:speed" if release else "-debug")
-	if profile {append(&mode, "-define:VX_PROFILE=true")}
 	if sanitize {
 		append(&mode, "-sanitize:address")
 		// Leaks are the tracking allocator's job; LSan would also report
@@ -205,12 +251,13 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 	)
 	run(server_cmd) or_return
 	fmt.printfln(
-		"built  %s, %s (%s%s%s)",
+		"built  %s, %s (%s%s%s%s)",
 		exe,
 		server_exe,
-		"release" if release else "debug",
+		PROFILE_NAMES[profile],
+		" + symbols" if symbols else "",
 		" + sanitizer" if sanitize else "",
-		" + profiling" if profile else "",
+		" + profiling" if trace else "",
 	)
 	return exe, true
 }
@@ -234,7 +281,7 @@ debug_game :: proc(args: []string) -> bool {
 			return false
 		}
 	}
-	exe, ok := build_game({})
+	exe, ok := build_game({"--debug"})
 	if !ok {return false}
 	when ODIN_OS == .Windows {
 		// PDB debug info; RAD Debugger understands Odin types natively.
@@ -436,17 +483,118 @@ run :: proc(cmd: []string) -> bool {
 
 // run_tool builds and runs tools/<name> with args (netdump, replay, sfx).
 run_tool :: proc(name: string, args: []string) -> bool {
-	exe := path_join({"build", strings.concatenate({name, exe_suffix()})})
+	exe := build_tool(name) or_return
+	return run(slice.concatenate([][]string{{exe}, args}))
+}
+
+// build_tool builds tools/<name> into build/.
+build_tool :: proc(name: string) -> (exe: string, ok: bool) {
+	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
 	cmd := slice.concatenate(
 	[][]string {
 		{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
 		ODIN_FLAGS,
-		// The map generates millions of columns: optimized.
-		{"-o:speed"} if name == "worldmap" else {},
+		// The map generates millions of columns: optimized. The benchmark
+		// as a release build, with line tables for perf.
+		{"-o:speed"} if name == "worldmap" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
 	},
 	)
-	run(cmd) or_return
-	return run(slice.concatenate([][]string{{exe}, args}))
+	return exe, run(cmd)
+}
+
+// trace summarizes a Spall trace (default build/voxiverse.spall); further
+// arguments name the scopes for its timeline.
+trace :: proc(args: []string) -> bool {
+	path := "build/voxiverse.spall"
+	scopes := args
+	if len(args) > 0 && strings.has_suffix(args[0], ".spall") {path, scopes = args[0], args[1:]}
+	python := "python" when ODIN_OS == .Windows else "python3"
+	return run(
+		slice.concatenate([][]string{{python, "tools/debugger/spall_summary.py", path}, scopes}),
+	)
+}
+
+// perf_record runs the game (or `bench`, or `server`) under Linux perf,
+// sampling with call stacks, and prints where the time went per thread;
+// build/<name>.perf stays for `perf report` (call graphs; --sort srcline
+// for source lines). Arguments after -- go to the program. The game and
+// server are release builds with line tables (--release --symbols).
+perf_record :: proc(args: []string) -> bool {
+	when ODIN_OS != .Linux {
+		fmt.eprintln(
+			"build: perf is Linux's (on Windows: a sampling profiler such as Superluminal or VTune on a --release --symbols build)",
+		)
+		return false
+	} else {
+		opts, program_args := args, []string{}
+		if i, found := slice.linear_search(args, "--"); found {
+			opts, program_args = args[:i], args[i + 1:]
+		}
+		target := opts[0] if len(opts) > 0 else "game"
+		exe: string
+		switch target {
+		case "game", "server":
+			game := build_game({"--release", "--symbols"}) or_return
+			exe = game
+			if target ==
+			   "server" {exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})}
+		case "bench":
+			exe = build_tool("bench") or_return
+		case:
+			fmt.eprintfln("build: perf records game, server or bench, not '%s'", target)
+			return false
+		}
+		// Last-branch records where the CPU has them (Intel): small and
+		// cheap; else unwinding copies of the stack (large files).
+		graph := "dwarf,16384"
+		if _, lbr := capture(
+			{"perf", "record", "-q", "--call-graph", "lbr", "-o", "/dev/null", "--", "true"},
+		); lbr {
+			graph = "lbr"
+		}
+		out := path_join({"build", strings.concatenate({target, ".perf"})})
+		record := slice.concatenate(
+			[][]string {
+				{
+					"perf",
+					"record",
+					"-q",
+					"-F",
+					"1000",
+					"--call-graph",
+					graph,
+					"-o",
+					out,
+					"--",
+					exe,
+				},
+				program_args,
+			},
+		)
+		ran := run(record)
+		run(
+			{
+				"perf",
+				"report",
+				"-i",
+				out,
+				"--no-children",
+				"--stdio",
+				"--sort",
+				"comm,symbol",
+				"-g",
+				"none",
+				"--percent-limit",
+				"1",
+			},
+		) or_return
+		fmt.printfln(
+			"perf   %s (call graphs: perf report -i %s; lines: add --sort srcline)",
+			out,
+			out,
+		)
+		return ran
+	}
 }
 
 // capture executes cmd and returns its stdout; ok is false if it failed or
@@ -465,4 +613,10 @@ exe_suffix :: proc() -> string {
 path_join :: proc(elems: []string) -> string {
 	p, _ := filepath.join(elems)
 	return p
+}
+
+PROFILE_NAMES := [Profile]string {
+	.Dev     = "development",
+	.Debug   = "debug",
+	.Release = "release",
 }

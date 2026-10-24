@@ -40,18 +40,19 @@ kind_by_name :: proc(name: string) -> (Kind, bool) {
 
 // generate fills dst with the chunk at c and reports whether every block is
 // the same (then the caller can store just that block). Safe to call from
-// any thread.
+// any thread; cache (optional) is the calling thread's own.
 generate :: proc(
 	g: ^Generator,
 	c: game.Chunk_Pos,
 	dst: ^game.Block_Array,
+	cache: ^Column_Cache = nil,
 ) -> (
 	uniform: game.Block,
 	is_uniform: bool,
 ) {
 	switch g.kind {
 	case .Earth:
-		return earth_generate(g, c, dst)
+		return earth_generate(g, c, dst, cache)
 	case .Classic:
 		return classic_generate(g.seed, c, dst)
 	}
@@ -64,9 +65,9 @@ COLUMN_AREA :: game.CHUNK_SIZE * game.CHUNK_SIZE
 Tops :: [COLUMN_AREA]i32
 
 // column_tops: the tops of the chunk column at column (chunk x, z).
-column_tops :: proc(g: ^Generator, column: [2]i32, out: ^Tops) {
+column_tops :: proc(g: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_Cache = nil) {
 	if g.kind == .Earth {
-		earth_tops(g, column, out)
+		earth_tops(g, column, out, cache)
 		return
 	}
 	origin := column * game.CHUNK_SIZE

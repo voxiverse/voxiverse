@@ -166,7 +166,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 
-	s.thread = thread.create(server_main)
+	s.thread = thread.create(server_main, name = "server")
 	s.thread.data = s
 	s.thread.init_context = context
 	thread.start(s.thread)
@@ -304,8 +304,12 @@ tick :: proc(s: ^Server) {
 			},
 			w,
 		)
+		naturals_take(w)
 	}
-	receive_messages(s)
+	{
+		base.profile_scope("receive")
+		receive_messages(s)
+	}
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
 	if !frozen {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
@@ -316,6 +320,7 @@ tick :: proc(s: ^Server) {
 		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
 		simulate_player(s, &c)
 		if c.moved {
+			base.profile_scope("drop far")
 			c.moved = false
 			moved = true
 			drop_far(s, &c)
@@ -323,12 +328,16 @@ tick :: proc(s: ^Server) {
 	}
 	worlds_unload_idle(s)
 	for w in s.worlds {
-		if moved {unload_unwanted(w)}
+		if moved {
+			base.profile_scope("unload unwanted")
+			unload_unwanted(w)
+		}
 		if !frozen {
 			updates_run(w)
 			entities_tick(w)
 		}
 		gates_tick(w)
+		base.profile_scope("changes flush")
 		changes_flush(w)
 	}
 	for &c in s.clients {
@@ -339,11 +348,13 @@ tick :: proc(s: ^Server) {
 			send_message(s, &c, game.Inventory_Update{c.inv_acked, c.inventory})
 			c.inv_changed = false
 		}
+		base.profile_scope("stream")
 		stream(s, &c)
 	}
 	kick_due(s)
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}
+		base.profile_scope("network flush")
 		netcode.host_flush(&s.host, time.tick_now())
 	}
 }
@@ -570,6 +581,8 @@ send_message :: proc(
 	m: game.Server_Message,
 	blocks: ^game.Chunk_Blocks = nil,
 	reliable := false,
+) -> (
+	bytes: int,
 ) {
 	if c.link == nil {return}
 	clear(&s.writer.buf)
@@ -581,6 +594,7 @@ send_message :: proc(
 	case netcode.Peer_Id:
 		netcode.host_send(&s.host, l, data, reliable || game.message_reliable(.Server, data[0]))
 	}
+	return len(data)
 }
 
 // broadcast sends m to every player (in world, if given: its news).

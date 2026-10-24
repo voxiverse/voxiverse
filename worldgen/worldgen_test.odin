@@ -494,3 +494,48 @@ test_gates :: proc(t: ^testing.T) {
 	testing.expect_value(t, n, 16)
 	testing.expect_value(t, sum, [3]i64{19264, 131, -31347})
 }
+
+// A worker's Column_Cache changes nothing: chunks come out the same with it
+// as without, in any order, and after the generator changes (live tuning).
+@(test)
+test_column_cache :: proc(t: ^testing.T) {
+	cache := new(Column_Cache)
+	defer free(cache)
+	a, b := new(game.Block_Array), new(game.Block_Array)
+	defer free(a)
+	defer free(b)
+	g := generator_make(.Earth, 24301)
+	check :: proc(
+		t: ^testing.T,
+		g: ^Generator,
+		cache: ^Column_Cache,
+		a, b: ^game.Block_Array,
+		c: game.Chunk_Pos,
+	) {
+		ua, sa := generate(g, c, a)
+		ub, sb := generate(g, c, b, cache)
+		testing.expectf(
+			t,
+			sa == sb && (sa ? ua == ub : a^ == b^),
+			"chunk %v differs with the cache",
+			c,
+		)
+	}
+	// Scrambled: columns and heights interleaved, revisited, colliding.
+	n := u32(12345)
+	for _ in 0 ..< 400 {
+		n = n * 1664525 + 1013904223
+		c := game.Chunk_Pos{i32(n >> 8 % 24) - 12, i32(n >> 16 % 10) - 4, i32(n >> 24 % 24) - 12}
+		check(t, &g, cache, a, b, c)
+		if n >> 4 % 4 == 0 {
+			// The column's tops too.
+			plain, cached: Tops
+			column_tops(&g, {c.x, c.z}, &plain)
+			column_tops(&g, {c.x, c.z}, &cached, cache)
+			testing.expectf(t, plain == cached, "column %v's tops differ with the cache", c.xz)
+		}
+	}
+	g.params.tree_density = 2
+	g.params.sea_level = 9
+	for x in i32(-3) ..= 3 {check(t, &g, cache, a, b, {x, 0, 1})}
+}

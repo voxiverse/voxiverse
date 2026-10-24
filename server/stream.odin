@@ -70,9 +70,13 @@ Client :: struct {
 	inv_changed:  bool, // since the last Inventory_Update sent
 }
 
-// Chunks sent to a client per tick (at 30 Hz: 1440 per second).
+// What may be sent to a client per tick: bytes of chunks (at 30 Hz about
+// 1.9 MiB/s: an empty or buried chunk is a few bytes, a surface one a few
+// hundred), and chunks at most (each costs encoding on the tick).
 @(private)
-SEND_BUDGET :: 48
+SEND_BUDGET_BYTES :: 64 * 1024
+@(private)
+SEND_BUDGET_CHUNKS :: 256
 // A remote client with this much unacknowledged reliable data gets no more
 // chunks until it catches up (the rest wait: streaming is nearest first).
 @(private)
@@ -157,7 +161,7 @@ anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 @(private)
 stream :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	budget := SEND_BUDGET
+	budget, bytes := SEND_BUDGET_CHUNKS, SEND_BUDGET_BYTES
 	if p, ok := c.link.(netcode.Peer_Id); ok && netcode.host_backlog(&s.host, p) > MAX_BACKLOG {
 		budget = 0
 	}
@@ -170,19 +174,36 @@ stream :: proc(s: ^Server, c: ^Client) {
 			continue
 		}
 		all_sent = false
+		// A column's first chunk goes with its Column (its tops): those
+		// are worked out by the workers too, asked for when first met.
+		column := [2]i32{pos.x, pos.z}
+		column_ready := c.columns[column] > 0 || natural_known(w, column)
+		if !column_ready && requesting && column not_in w.tops_pending {
+			requesting = chunks_request_tops(&w.chunks, column)
+			if requesting {w.tops_pending[column] = {}}
+		}
 		chunk := chunks_get(&w.chunks, pos)
 		if chunk == nil {
-			if requesting {requesting = request_chunk(w, pos)}
-			if !requesting && budget == 0 {break}
+			if requesting {
+				base.profile_scope("request chunk")
+				requesting = request_chunk(w, pos)
+			}
+			// Requests go in order: once the workers are full, what lies
+			// beyond is not generating (unless loaded for another client:
+			// sent once the walk gets there).
+			if !requesting {break}
 			continue
 		}
-		if chunk.state != .Ready || budget == 0 {continue}
-		column := [2]i32{pos.x, pos.z}
-		if c.columns[column] == 0 {send_message(s, c, column_message(w, column))}
+		if chunk.state != .Ready || budget == 0 || !column_ready {continue}
+		if c.columns[column] == 0 {bytes -= send_message(s, c, column_message(w, column))}
 		c.columns[column] += 1
-		send_message(s, c, game.Chunk_Message{pos = pos}, &chunk.blocks)
+		{
+			base.profile_scope("send chunk")
+			bytes -= send_message(s, c, game.Chunk_Message{pos = pos}, &chunk.blocks)
+		}
 		c.has[pos] = {}
 		budget -= 1
+		if bytes <= 0 {budget = 0}
 		if budget == 0 && !requesting {break}
 	}
 }

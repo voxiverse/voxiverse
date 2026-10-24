@@ -73,13 +73,40 @@ wake_water :: proc(w: ^World, p: game.Block_Pos) {
 // change (after a bulk edit, a saved chunk loading, a new chunk next to
 // water that was waiting for it: only_border, its faces' neighbours).
 wake_water_box :: proc(w: ^World, lo, hi: game.Block_Pos, only_border := false) {
-	for y in lo.y - 1 ..= hi.y + 1 {
-		for z in lo.z - 1 ..= hi.z + 1 {
-			for x in lo.x - 1 ..= hi.x + 1 {
-				inside :=
-					x >= lo.x && x <= hi.x && y >= lo.y && y <= hi.y && z >= lo.z && z <= hi.z
-				if only_border && inside {continue}
-				if restless(w, {x, y, z}) {schedule(w, {x, y, z}, WATER_DELAY)}
+	// Chunk by chunk, only those that may hold water (only water is
+	// restless): a chunk arriving among dry ones looks at nothing.
+	a, z := game.chunk_of(lo - 1), game.chunk_of(hi + 1)
+	for cy in a.y ..= z.y {
+		for cz in a.z ..= z.z {
+			for cx in a.x ..= z.x {
+				c := chunks_get(&w.chunks, {cx, cy, cz})
+				if c == nil || c.state != .Ready || !c.water {continue}
+				origin := game.chunk_origin({cx, cy, cz})
+				from := [3]i32 {
+					max(lo.x - 1, origin.x),
+					max(lo.y - 1, origin.y),
+					max(lo.z - 1, origin.z),
+				}
+				to := [3]i32 {
+					min(hi.x + 1, origin.x + game.CHUNK_SIZE - 1),
+					min(hi.y + 1, origin.y + game.CHUNK_SIZE - 1),
+					min(hi.z + 1, origin.z + game.CHUNK_SIZE - 1),
+				}
+				for y in from.y ..= to.y {
+					for z in from.z ..= to.z {
+						for x in from.x ..= to.x {
+							inside :=
+								x >= lo.x &&
+								x <= hi.x &&
+								y >= lo.y &&
+								y <= hi.y &&
+								z >= lo.z &&
+								z <= hi.z
+							if only_border && inside {continue}
+							if restless(w, {x, y, z}) {schedule(w, {x, y, z}, WATER_DELAY)}
+						}
+					}
+				}
 			}
 		}
 	}

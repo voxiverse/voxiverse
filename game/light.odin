@@ -1,5 +1,7 @@
 package game
 
+import "core:slice"
+
 // Light: sky light (from above) and block light (from lamps), 0..15 each,
 // packed in a u8 (sky << 4 | block). Light falls by one per block it
 // travels, around corners too, and opaque blocks stop it; under open sky
@@ -54,26 +56,34 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 	for ci in 0 ..< 27 {
 		c := input.chunks[ci]
 		base := [3]i32{i32(ci % 3), i32(ci / 3 % 3), i32(ci / 9)} * CHUNK_SIZE
+		// Row by row: x runs along both layouts (the chunk's and the region's).
 		if c.array == nil {
 			solid, light := block_opaque(c.uniform), block_light(c.uniform)
 			for y in i32(0) ..< CHUNK_SIZE {
 				for z in i32(0) ..< CHUNK_SIZE {
 					row := region_index(base + {0, y, z})
-					for x in 0 ..< CHUNK_SIZE {
-						s.solid[row + x] = solid
-						s.light[row + x] = light
-						if light > 0 {append(&s.queue, u32(row + x))}
+					slice.fill(s.solid[row:][:CHUNK_SIZE], solid)
+					slice.fill(s.light[row:][:CHUNK_SIZE], light)
+					if light > 0 {
+						for x in 0 ..< CHUNK_SIZE {append(&s.queue, u32(row + x))}
 					}
 				}
 			}
 			continue
 		}
-		for j in 0 ..< CHUNK_VOLUME {
-			i := region_index(base + local_from_index(j))
-			b := c.array[j]
-			s.solid[i] = block_opaque(b)
-			s.light[i] = block_light(b)
-			if s.light[i] > 0 {append(&s.queue, u32(i))}
+		for y in i32(0) ..< CHUNK_SIZE {
+			for z in i32(0) ..< CHUNK_SIZE {
+				row := region_index(base + {0, y, z})
+				src := c.array[local_index({0, y, z}):][:CHUNK_SIZE]
+				solid := s.solid[row:][:CHUNK_SIZE]
+				light := s.light[row:][:CHUNK_SIZE]
+				for b, x in src {
+					info := &BLOCK_INFO[b]
+					solid[x] = info.opaque
+					light[x] = info.light
+					if info.light > 0 {append(&s.queue, u32(row + x))}
+				}
+			}
 		}
 	}
 	// Open sky: everything above a column's top is air at full sky light.

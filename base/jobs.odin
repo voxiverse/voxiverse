@@ -65,7 +65,7 @@ jobs_init :: proc(
 	ctx.allocator = allocator
 	for i in 0 ..< count {
 		j.names[i] = fmt.aprintf("%s %d", name, i + 1, allocator = allocator)
-		t := thread.create(worker_main)
+		t := thread.create(worker_main, name = j.names[i]) // (the OS's name too: perf, gdb, top)
 		t.data = j
 		t.user_index = i
 		t.init_context = ctx
@@ -115,6 +115,7 @@ jobs_worker_count :: proc(j: ^Jobs) -> int {
 worker_main :: proc(t: ^thread.Thread) {
 	j := (^Jobs)(t.data)
 	context.logger = log_retag(&j.tags[t.user_index], context.logger, j.names[t.user_index])
+	context.user_index = t.user_index // jobs may keep per-worker state by it
 	profile_thread_start(j.names[t.user_index])
 	for job in queue_pop(&j.queue) {
 		job.procedure(job.data)

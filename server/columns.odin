@@ -37,6 +37,30 @@ natural_top :: proc(w: ^World, x, z: i32) -> i32 {
 	return slot.tops[(x & game.CHUNK_MASK) + (z & game.CHUNK_MASK) * game.CHUNK_SIZE]
 }
 
+// natural_known: whether column's natural tops are at hand (a column
+// message for it costs nothing on the tick).
+natural_known :: proc(w: ^World, column: [2]i32) -> bool {
+	h := u32(column.x) * 0x9e37_79b1 ~ u32(column.y) * 0x85eb_ca6b
+	slot := &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+	return slot.valid && slot.column == column
+}
+
+// naturals_take stores the tops the workers worked out (chunks_request_tops).
+naturals_take :: proc(w: ^World) {
+	for &done in w.chunks.tops_done {
+		delete_key(&w.tops_pending, done.column)
+		if !done.fresh {continue}
+		h := u32(done.column.x) * 0x9e37_79b1 ~ u32(done.column.y) * 0x85eb_ca6b
+		slot := &w.natural[(h ~ h >> 15) % NATURAL_CACHE]
+		slot^ = {
+			column = done.column,
+			valid  = true,
+			tops   = done.tops,
+		}
+	}
+	clear(&w.chunks.tops_done)
+}
+
 // column_message has the heights of a chunk column.
 column_message :: proc(w: ^World, column: [2]i32) -> game.Column {
 	m := game.Column {

@@ -4,6 +4,7 @@ import "core:log"
 import "core:math"
 import "core:math/rand"
 
+import "../base"
 import "../game"
 
 // Entities on the server: critters and rockets. What each kind is lies in
@@ -108,6 +109,7 @@ entity_spawn :: proc(
 
 // entities_tick: spawning, despawning, thinking and moving, every tick.
 entities_tick :: proc(w: ^World) {
+	base.profile_scope("entities")
 	s := w.server
 	e := &w.entities
 	e.budget = PATH_BUDGET_PER_TICK

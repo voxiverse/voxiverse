@@ -37,10 +37,12 @@ Tour_Test :: struct {
 }
 
 TOUR_FRAME_BUDGET_MS :: 100 // p99 (software Vulkan in CI included)
-// p99 per chunk, on a worker thread: an optimized build's, ten times that
-// unoptimized (about the difference measured).
-TOUR_GENERATE_BUDGET_MS :: 50 when ODIN_DEBUG else 5
-TOUR_MESH_BUDGET_MS :: 100 when ODIN_DEBUG else 10
+// p99 per chunk, on a worker thread: a fully optimized build's, ten times
+// that otherwise (unoptimized is 7-15x slower, -o:minimal 3-8x).
+@(private = "file")
+FULLY_OPTIMIZED :: ODIN_OPTIMIZATION_MODE >= .Size
+TOUR_GENERATE_BUDGET_MS :: 5 when FULLY_OPTIMIZED else 50
+TOUR_MESH_BUDGET_MS :: 10 when FULLY_OPTIMIZED else 100
 TOUR_TIMEOUT :: 90 * time.Second // per biome
 
 @(private)

@@ -62,13 +62,17 @@ on automatically and which reports GPU API misuse in the log.
 | `test` | Run the unit tests |
 | `fmt` | Format all sources in place |
 | `shaders` | Compile `assets/shaders` to SPIR-V (only what changed) |
-| `build` | Build the game into `build/` (debug; `--release`, `--sanitize`, `--profile`) |
+| `build` | Build the game into `build/`: a development build (lightly optimized, debug info, the dev aids), or `--debug` (unoptimized, for stepping), `--release` (fully optimized; slow to compile), `--release --symbols` (for profilers), `--sanitize`, `--profile` |
 | `run` | Build and run; arguments after `--` go to the game, e.g. `run -- --frames 120` |
 | `serve` | Build and run the dedicated server; arguments after `--` go to it |
 | `debug` | Build and start in gdb/lldb (RAD Debugger on Windows) with Odin pretty-printers |
 | `netdump`, `replay` | Print a network trace / replay its client messages against a fresh server (DEBUGGING.md) |
 | `sfx` | Write every sound effect to `build/sounds/*.wav` |
 | `worldmap` | Draw a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation) |
+| `bench` | Time generation, lighting and meshing of a fixed region on one thread (`-radius:6`) |
+| `trace` | Summarize a profile trace (`build/voxiverse.spall`) |
+| `perf` | Record the game, `server` or `bench` under Linux perf and print where the time went (`perf -- --exec "..."`) |
+| `icon` | Draw the game's icon to `build/voxiverse.ico` |
 | `help` | List the commands and their flags |
 
 Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with

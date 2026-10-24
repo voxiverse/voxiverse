@@ -9,6 +9,13 @@ import "core:os"
 import "core:strings"
 import "core:sync"
 
+// DEV: the development aids are in: the tracking allocator, Vulkan
+// validation by default, shader hot reload, developer commands. On in every
+// -debug build unless the build turns it off (`build build --release
+// --symbols`: release behaviour with line tables, for profilers); the build
+// driver sets it. ODIN_DEBUG itself only says there are debug symbols.
+DEV :: #config(VX_DEV, ODIN_DEBUG)
+
 // Debug support for every program, set up at the top of main:
 //
 //	main :: proc() {
@@ -69,7 +76,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	ctx.assertion_failure_proc = assertion_failure
 	when ODIN_SANITIZER_FLAGS == {} {crash_handler_install()} 	// sanitizers have their own
 
-	when ODIN_DEBUG {
+	when DEV {
 		mem.tracking_allocator_init(&d.tracking, d.backing, d.backing)
 		ctx.allocator = mem.tracking_allocator(&d.tracking)
 		d.tracked = true

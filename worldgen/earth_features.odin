@@ -32,7 +32,7 @@ TREE_TRIES := #partial [Biome]i32 {
 	.Mountains = 4,
 	.Desert    = 4,
 }
-@(private = "file")
+@(private)
 MOST_TREE_TRIES :: 12 // TREE_TRIES' largest
 
 @(private = "file", rodata)
