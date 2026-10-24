@@ -137,6 +137,21 @@ register_world_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"regen",
+			"regen [radius]: make the land near you again (after `set worldgen.*`; edits stay)",
+			proc(app: ^App, args: []string) {
+				send_message(
+					app.session,
+					game.Admin{fmt.tprintf("regen %s", args[0] if len(args) > 0 else "4")},
+				)
+			},
+		},
+		args = {0, 1},
+		needs = cheat,
+	)
+	console_register(
+		c,
+		{
 			"locate",
 			"locate <biome>: fly to the nearest place of a biome",
 			proc(app: ^App, args: []string) {

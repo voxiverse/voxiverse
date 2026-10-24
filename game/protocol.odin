@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 6
+PROTOCOL_VERSION :: 7
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -233,6 +233,13 @@ Explosion :: struct {
 	radius:   f32,
 }
 
+// Variables: some of the server's variables (worldgen.*), as `name = value`
+// lines: sent when a player joins and when they change. As text, so this
+// package needs no knowledge of what they are.
+Variables :: struct {
+	text: string, // view into the message
+}
+
 // Column: the y of the highest solid block in each block column of a chunk
 // column (x fastest). Sky light needs it: the client cannot see above what
 // it has loaded. Sent before a column's first chunk, and again when an edit
@@ -279,9 +286,11 @@ Server_Message :: union {
 	Entity_Hurt,
 	Bulk_Begin,
 	Explosion,
+	Variables,
 }
 
 MAX_VIEW_RADIUS :: 32
+MAX_VARIABLES_TEXT :: 4096
 MAX_REASON_LENGTH :: 256
 MAX_RULE_TEXT :: 64
 MAX_ADMIN_TEXT :: 256
@@ -323,6 +332,7 @@ Server_Kind :: enum u8 {
 	Entity_Hurt,
 	Bulk_Begin,
 	Explosion,
+	Variables,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -424,6 +434,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "bulk"
 		case u8(Server_Kind.Explosion):
 			return "explosion"
+		case u8(Server_Kind.Variables):
+			return "variables"
 		}
 	}
 	return ""
@@ -587,6 +599,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(Server_Kind.Explosion))
 		write_position(w, v.position)
 		write_f32(w, v.radius)
+	case Variables:
+		write_u8(w, u8(Server_Kind.Variables))
+		write_string(w, v.text)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -822,6 +837,10 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		if !(x.radius >= 0 && x.radius <= 64) {reader_fail(&r)}
 		m = x
+	case u8(Server_Kind.Variables):
+		m = Variables {
+			text = read_string(&r, MAX_VARIABLES_TEXT),
+		}
 	case:
 		return
 	}

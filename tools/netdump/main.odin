@@ -259,6 +259,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("bulk count=%d", v.count), true
 		case game.Explosion:
 			return fmt.tprintf("explosion at=%v radius=%.1f", v.position, v.radius), true
+		case game.Variables:
+			return fmt.tprintf("variables text=%q", v.text), true
 		}
 	}
 	return "", true

@@ -142,6 +142,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	at: Client_Message
 	at, ok = decode_client(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
+	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
+	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
 	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
 	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
 	// Names: letters, digits, _ and -, 1..16 of them.

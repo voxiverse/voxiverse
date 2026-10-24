@@ -2,6 +2,7 @@ package client
 
 import "core:fmt"
 import "core:math"
+import "core:mem"
 import "core:net"
 import "core:strings"
 import "core:sync"
@@ -446,17 +447,19 @@ tuning_panel :: proc(app: ^App, ctx: ^ui.Context) {
 			.Left,
 			t.text_muted,
 		)
-		if v.table.type == game.Rules {
+		if _, servers := server_table(v.table.prefix); servers {
 			// The server's: edit a copy, ask for each change.
-			edited := app.session.rules
-			if var_widgets(ctx, v.table, &edited) {
+			size := type_info_of(v.table.type).size
+			edited := make([]u8, size, context.temp_allocator)
+			mem.copy(raw_data(edited), v.data, size)
+			if var_widgets(ctx, v.table, raw_data(edited)) {
 				for &var in v.table.vars {
-					if base.var_get_f64(v.table, &edited, &var) !=
+					if base.var_get_f64(v.table, raw_data(edited), &var) !=
 					   base.var_get_f64(v.table, v.data, &var) {
 						session_set_rule(
 							app.session,
 							base.var_name(v.table, &var),
-							base.var_format(v.table, &edited, &var),
+							base.var_format(v.table, raw_data(edited), &var),
 						)
 					}
 				}

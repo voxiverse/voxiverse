@@ -75,6 +75,7 @@ Server :: struct {
 	stats:       Stats,
 	log_tag:     base.Log_Tag,
 	rules:       game.Rules, // server thread only
+	params:      worldgen.Params, // the Earth generator's (worldgen.*; the world's generator has a copy)
 	clock:       f64, // world time (game/time.odin); server thread only after start
 	tops:        map[[2]i32]i32, // edited column tops (columns.odin)
 	store:       Store, // saving (save.odin)
@@ -109,6 +110,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config = config,
 		local  = local,
 		rules  = config.rules if config.rules != {} else game.RULES_DEFAULTS,
+		params = worldgen.PARAMS_DEFAULTS,
 		clock  = game.NEW_WORLD_TIME,
 	}
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
@@ -135,7 +137,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	)
 	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	gen := worldgen.generator_make(s.config.generator, s.config.seed)
+	gen := worldgen.Generator{s.config.generator, s.config.seed, s.params}
 	if err := world_init(&s.world, gen, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
 		teardown(s, world = false)
@@ -429,6 +431,10 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		c.teleport = {v.yaw, v.pitch}
 		c.teleported = true
 	case game.Set_Rule:
+		if strings.has_prefix(v.name, "worldgen.") {
+			set_worldgen(s, c, v.name, v.value)
+			return
+		}
 		switch err := base.var_set(game.rules_table(), &s.rules, v.name, v.value); err {
 		case .None, .Out_Of_Range:
 			if err ==

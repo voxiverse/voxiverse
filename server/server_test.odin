@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem"
+import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 import "core:time"
@@ -32,6 +34,7 @@ Fake_Client :: struct {
 	clock:          f64, // the last Time
 	notices:        [dynamic]string, // (temp allocator)
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
+	variables:      string, // the last Variables (temp allocator)
 }
 
 @(private = "file")
@@ -92,6 +95,8 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Entity_Despawn,
 		     game.Entities,
 		     game.Entity_Hurt: // not checked here
+		case game.Variables:
+			c.variables = strings.clone(v.text, context.temp_allocator)
 		case game.Notice:
 			if c.notices == nil {c.notices = make([dynamic]string, context.temp_allocator)}
 			append(&c.notices, strings.clone(v.text, context.temp_allocator))
@@ -595,4 +600,73 @@ test_server_start_fails_cleanly :: proc(t: ^testing.T) {
 		mem.check_zero(mem.ptr_to_bytes(&second)),
 		"a failed start left state behind",
 	)
+}
+
+// The generator's settings: a player is told them when joining and when
+// they change; they are saved with the world; regen remakes the land near.
+@(test)
+test_worldgen_settings :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "worldgen_settings"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := Config {
+		seed         = 11,
+		view_radius  = 2,
+		view_height  = 1,
+		workers      = 1,
+		allow_cheats = true,
+		save_dir     = dir,
+	}
+	{
+		pipe: game.Pipe
+		game.pipe_init(&pipe)
+		defer game.pipe_destroy(&pipe)
+		srv: Server
+		if !testing.expect(t, start(&srv, config, {&pipe, .Server})) {return}
+		c := Fake_Client {
+			endpoint = {&pipe, .Client},
+			scratch  = new(game.Block_Array),
+		}
+		defer free(c.scratch)
+		defer delete(c.has)
+		defer delete(c.columns)
+		fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tuner"})
+		testing.expect(
+			t,
+			wait_until(
+				t,
+				&c,
+				proc(c: ^Fake_Client) -> bool {return c.chunks > 20 && c.variables != ""},
+			),
+		)
+		testing.expect(t, strings.contains(c.variables, "worldgen.tree_density = 1"), c.variables)
+		fake_send(&c, game.Set_Rule{"worldgen.tree_density", "0"})
+		testing.expect(
+			t,
+			wait_until(
+				t,
+				&c,
+				proc(c: ^Fake_Client) -> bool {return strings.contains(
+						c.variables,
+						"worldgen.tree_density = 0",
+					)},
+			),
+		)
+		clear(&c.notices)
+		fake_send(&c, game.Admin{"regen 2"})
+		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
+				for n in c.notices {if strings.has_prefix(n, "regen: ") {return true}}
+				return false
+			}))
+		made := false
+		for n in c.notices {made ||= strings.has_prefix(n, "regen: ") && n != "regen: 0 chunks made again"}
+		testing.expect(t, made, "regen made nothing")
+		testing.expect(t, stop(&srv))
+	}
+	// Kept by the save.
+	srv: Server
+	if !testing.expect(t, start(&srv, config, {})) {return}
+	testing.expect_value(t, srv.params.tree_density, 0)
+	testing.expect_value(t, srv.world.gen.params.tree_density, 0)
+	testing.expect(t, stop(&srv))
 }

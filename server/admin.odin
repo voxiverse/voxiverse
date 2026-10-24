@@ -33,6 +33,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"open_lan", "", {0, 0}, admin_open_lan},
 	{"hash", "", {0, 0}, admin_hash},
 	{"locate", "<biome>", {1, 1}, admin_locate},
+	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen},
 }
 
 // admin runs a command from c.
@@ -148,6 +149,15 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	c.teleport = {c.look[0], -1.25} // looking down at it
 	c.teleported = true
 	notice(s, c, fmt.tprintf("%s at %d %d", args[0], at.x, at.y))
+	return true
+}
+
+@(private = "file")
+admin_regen :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	radius := 4
+	if len(args) > 0 {radius = strconv.parse_int(args[0]) or_return}
+	if radius < 1 || radius > 8 {return false}
+	notice(s, c, fmt.tprintf("regen: %d chunks made again", regen(s, c, i32(radius))))
 	return true
 }
 

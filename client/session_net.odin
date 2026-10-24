@@ -7,8 +7,10 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:time"
 
+import "../base"
 import "../game"
 import "../netcode"
+import "../worldgen"
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the
@@ -115,6 +117,11 @@ receive :: proc(s: ^Session) {
 			for i in 0 ..< v.count {
 				e := v.entries[i]
 				if o, known := &s.others[e.player]; known {other_snapshot(o, v.tick, e)}
+			}
+		case game.Variables:
+			s.has_worldgen = true
+			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {
+				log.warnf("session variable not applied problem=%v text=%q", p.error, p.text)
 			}
 		case game.Notice:
 			notice(s, v.text)

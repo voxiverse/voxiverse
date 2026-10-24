@@ -30,7 +30,7 @@ Chunk :: struct {
 }
 
 World :: struct {
-	gen:           worldgen.Generator, // read by the workers
+	gen:           worldgen.Generator, // (each job takes a copy)
 	chunks:        base.Pool(Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
@@ -49,6 +49,7 @@ MAX_IN_FLIGHT_PER_WORKER :: 16
 @(private)
 Gen_Task :: struct {
 	world:      ^World,
+	gen:        worldgen.Generator, // a copy: the world's may change while this runs
 	pos:        game.Chunk_Pos,
 	handle:     Chunk_Handle,
 	array:      ^game.Block_Array,
@@ -128,6 +129,7 @@ world_request :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	task := pop(&w.free_tasks) // one per job in flight
 	task^ = {
 		world  = w,
+		gen    = w.gen,
 		pos    = pos,
 		handle = handle,
 		array  = array,
@@ -215,7 +217,7 @@ generate_job :: proc(data: rawptr) {
 		task.skipped = true
 	} else {
 		base.profile_scope("generate chunk")
-		task.uniform, task.is_uniform = worldgen.generate(&w.gen, task.pos, task.array)
+		task.uniform, task.is_uniform = worldgen.generate(&task.gen, task.pos, task.array)
 	}
 	base.queue_push(&w.done, task)
 }

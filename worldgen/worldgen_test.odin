@@ -2,6 +2,7 @@ package worldgen
 
 import "core:testing"
 
+import "../base"
 import "../game"
 
 @(test)
@@ -100,8 +101,8 @@ test_earth :: proc(t: ^testing.T) {
 	// Chunk columns spread over a few kilometres: mountains, forests, sea.
 	seen: [Biome]bool
 	checked := 0
-	for i in i32(0) ..< 24 {
-		column := [2]i32{(i % 6) * 23 - 60, (i / 6) * 31 - 50}
+	for n in i32(0) ..< 24 {
+		column := [2]i32{(n % 6) * 23 - 60, (n / 6) * 31 - 50}
 		tops: Tops
 		column_tops(&g, column, &tops)
 		lo, hi := max(i32), min(i32)
@@ -148,4 +149,16 @@ test_earth :: proc(t: ^testing.T) {
 	spawn := spawn_point(&g)
 	below := i32(spawn.y) - 2
 	testing.expect(t, below > g.params.sea_level, "the spawn is under the sea")
+}
+
+@(test)
+test_params_table :: proc(t: ^testing.T) {
+	testing.expect(t, base.var_table_check(params_table()))
+	p := PARAMS_DEFAULTS
+	testing.expect_value(
+		t,
+		base.var_set(params_table(), &p, "worldgen.sea_level", "12"),
+		base.Var_Error.None,
+	)
+	testing.expect_value(t, p.sea_level, 12)
 }

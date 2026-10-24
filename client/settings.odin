@@ -7,6 +7,7 @@ import "core:strings"
 
 import "../base"
 import "../game"
+import "../worldgen"
 
 // The player's settings (saved) and the debug switches (not saved), each a
 // plain struct described once by a variable table (see base/vars.odin and
@@ -191,8 +192,21 @@ app_variables :: proc(app: ^App) -> []Variables {
 	append(&out, Variables{settings_table(), &app.settings}, Variables{debug_table(), &app.debug})
 	if app.session != nil && app.session.state == .Playing {
 		append(&out, Variables{game.rules_table(), &app.session.rules})
+		if app.session.has_worldgen {append(&out, Variables{worldgen.params_table(), &app.session.worldgen})}
 	}
 	return out[:]
+}
+
+// server_table: the table of a variable the server owns (rules.*,
+// worldgen.*): changing one asks the server.
+server_table :: proc(name: string) -> (base.Var_Table, bool) {
+	switch {
+	case strings.has_prefix(name, "rules."):
+		return game.rules_table(), true
+	case strings.has_prefix(name, "worldgen."):
+		return worldgen.params_table(), true
+	}
+	return {}, false
 }
 
 // settings_path: VX_SETTINGS, else voxiverse/settings.cfg in the user's

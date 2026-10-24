@@ -373,25 +373,29 @@ register_builtin_commands :: proc(c: ^Console) {
 			"set",
 			"set <name> <value>: change a variable (vars lists them)",
 			proc(app: ^App, args: []string) {
-				if strings.has_prefix(args[0], "rules.") {
+				if table, servers := server_table(args[0]); servers {
 					// The server's: ask it (it announces the result).
 					if app.session == nil {
 						console_print(
 							&app.console,
-							"set: rules belong to a world's server; enter one first",
+							"set: that belongs to a world's server; enter one first",
 							.Warning,
 						)
 						return
 					}
-					if _, ok := base.var_find(game.rules_table(), args[0]); !ok {
+					if _, ok := base.var_find(table, args[0]); !ok {
 						console_print(
 							&app.console,
-							fmt.tprintf("set: no rule '%s' (try: vars rules)", args[0]),
+							fmt.tprintf(
+								"set: no variable '%s' (try: vars %s)",
+								args[0],
+								strings.trim_suffix(table.prefix, "."),
+							),
 							.Warning,
 						)
 						return
 					}
-					if !cheats_allowed(app, "set rules") {return}
+					if !cheats_allowed(app, "set") {return}
 					session_set_rule(app.session, args[0], args[1])
 					return
 				}

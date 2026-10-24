@@ -41,6 +41,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		},
 	)
 	send_message(s, c, game.Time{s.clock})
+	if m, ok := worldgen_variables(s); ok {send_message(s, c, m)}
 	for &other in s.clients {
 		if &other == c || other.state != .Playing {continue}
 		send_message(s, c, game.Player_Joined{player_id(s, &other), client_name(&other)})

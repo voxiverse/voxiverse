@@ -34,7 +34,7 @@ local SERVER_KINDS = {
 	[9] = "block", [10] = "column", [11] = "time", [12] = "joined",
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
-	[21] = "explosion",
+	[21] = "explosion", [22] = "variables",
 }
 
 local f = vx.fields
@@ -113,7 +113,7 @@ local function describe(tvb, from_server)
 				return string.format("welcome protocol=%d player=%d cheats=%d spawn=[%.1f %.1f %.1f]",
 					u32(tvb, 1), tvb(9, 2):le_uint(), tvb(11, 1):uint(),
 					f64(tvb, 12), f64(tvb, 20), f64(tvb, 28))
-			elseif kind == 2 or kind == 15 then
+			elseif kind == 2 or kind == 15 or kind == 22 then
 				return string.format("%s %q", name, gstring(tvb, 1) or "?")
 			elseif kind == 3 or kind == 4 then
 				return string.format("%s pos=[%d %d %d]", name, i32(tvb, 1), i32(tvb, 5), i32(tvb, 9))

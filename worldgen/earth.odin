@@ -34,7 +34,8 @@ Params :: struct {
 	plant_density:   f32,
 }
 
-PARAMS_DEFAULTS :: Params {
+@(rodata)
+PARAMS_DEFAULTS := Params {
 	sea_level       = 0,
 	continent_scale = 2000,
 	climate_scale   = 2400,

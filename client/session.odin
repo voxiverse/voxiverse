@@ -15,6 +15,7 @@ import "../gpu"
 import "../netcode"
 import "../render"
 import "../server"
+import "../worldgen"
 import "mesh"
 
 // A Session is one visit to a world: from choosing Singleplayer until
@@ -50,54 +51,56 @@ Session_State :: enum u8 {
 }
 
 Session :: struct {
-	state:       Session_State,
-	failure:     string, // why it failed (in the arena)
-	arena:       virtual.Arena,
-	pipe:        game.Pipe, // to our own server (hosting)
-	endpoint:    game.Endpoint,
-	server:      server.Server,
-	remote:      bool, // playing on someone else's server, through link
-	link:        netcode.Link,
-	capture:     netcode.Capture,
-	last_flush:  time.Tick,
-	traffic:     [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
-	others:      map[u16]Other_Player, // the other players, by player id (players.odin)
-	entities:    map[u32]Other_Entity, // near us, by id (entities.odin)
-	puffs:       [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
-	texels:      [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
-	newest_tick: u32, // of the newest Players or Entities message
-	newest_at:   time.Tick, // when it came
-	notices:     [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
-	welcome:     game.Welcome,
-	world:       World, // set up from Welcome
-	world_init:  bool,
-	camera:      View, // the eyes, from the prediction; looking turns it every frame
-	teleport:    Maybe(game.Teleport), // requested before joining: sent on Welcome
-	prediction:  game.Prediction,
-	rules:       game.Rules, // the server's, as last announced
-	clock:       f64, // world time: the server's last word, carried on since (game/time.odin)
-	cloud_drift: f64, // blocks the clouds have moved
-	tick_time:   f32, // seconds into the current client tick
-	toggle_fly:  bool, // a double-tapped jump waits for the next tick
-	last_jump:   time.Tick, // for double-tap detection
-	autopilot:   Maybe(game.Player_Input), // overrides the controls (fly_test)
-	aim:         Maybe(game.Ray_Hit), // the block under the crosshair, within reach
-	aim_entity:  Maybe(u32), // an entity under the crosshair, nearer than that block
-	edits:       [dynamic]game.Edit, // predicted, waiting for Edit_Result
-	next_edit:   u32,
-	edit_timer:  f32, // seconds until a held button edits again
-	sounds:      [dynamic]Sound_Event, // this frame's; the App plays and clears them
-	walked:      f32, // blocks on the ground since the last footstep
-	hotbar:      int, // index into hotbar_items
-	writer:      game.Writer,
-	scratch:     ^game.Block_Array, // decoding target for chunk messages
-	received:    [dynamic]game.Packet,
-	last_acked:  u32, // the newest Player_Update applied
-	frozen:      bool, // paused, the world standing still (session_freeze)
-	selection:   [2]Maybe(game.Block_Pos), // pos1, pos2 (bulk edit commands)
-	stats:       Session_Stats,
-	config:      Session_Config,
-	net:         Net_Stats,
+	state:        Session_State,
+	failure:      string, // why it failed (in the arena)
+	arena:        virtual.Arena,
+	pipe:         game.Pipe, // to our own server (hosting)
+	endpoint:     game.Endpoint,
+	server:       server.Server,
+	remote:       bool, // playing on someone else's server, through link
+	link:         netcode.Link,
+	capture:      netcode.Capture,
+	last_flush:   time.Tick,
+	traffic:      [game.Side]game.Traffic, // counted here when remote (the pipe counts its own)
+	others:       map[u16]Other_Player, // the other players, by player id (players.odin)
+	entities:     map[u32]Other_Entity, // near us, by id (entities.odin)
+	puffs:        [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
+	worldgen:     worldgen.Params, // the server's generator settings (Variables), if it has any
+	has_worldgen: bool,
+	texels:       [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
+	newest_tick:  u32, // of the newest Players or Entities message
+	newest_at:    time.Tick, // when it came
+	notices:      [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
+	welcome:      game.Welcome,
+	world:        World, // set up from Welcome
+	world_init:   bool,
+	camera:       View, // the eyes, from the prediction; looking turns it every frame
+	teleport:     Maybe(game.Teleport), // requested before joining: sent on Welcome
+	prediction:   game.Prediction,
+	rules:        game.Rules, // the server's, as last announced
+	clock:        f64, // world time: the server's last word, carried on since (game/time.odin)
+	cloud_drift:  f64, // blocks the clouds have moved
+	tick_time:    f32, // seconds into the current client tick
+	toggle_fly:   bool, // a double-tapped jump waits for the next tick
+	last_jump:    time.Tick, // for double-tap detection
+	autopilot:    Maybe(game.Player_Input), // overrides the controls (fly_test)
+	aim:          Maybe(game.Ray_Hit), // the block under the crosshair, within reach
+	aim_entity:   Maybe(u32), // an entity under the crosshair, nearer than that block
+	edits:        [dynamic]game.Edit, // predicted, waiting for Edit_Result
+	next_edit:    u32,
+	edit_timer:   f32, // seconds until a held button edits again
+	sounds:       [dynamic]Sound_Event, // this frame's; the App plays and clears them
+	walked:       f32, // blocks on the ground since the last footstep
+	hotbar:       int, // index into hotbar_items
+	writer:       game.Writer,
+	scratch:      ^game.Block_Array, // decoding target for chunk messages
+	received:     [dynamic]game.Packet,
+	last_acked:   u32, // the newest Player_Update applied
+	frozen:       bool, // paused, the world standing still (session_freeze)
+	selection:    [2]Maybe(game.Block_Pos), // pos1, pos2 (bulk edit commands)
+	stats:        Session_Stats,
+	config:       Session_Config,
+	net:          Net_Stats,
 }
 
 // Net_Stats: what the F3 overlay shows about the connection.

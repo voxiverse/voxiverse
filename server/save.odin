@@ -286,6 +286,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 	}
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &s.rules, &b)
+	base.vars_write(worldgen.params_table(), &s.params, &b)
 	return write_atomically(
 		filepath.join({s.store.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE,
 		b.buf[:],
@@ -359,11 +360,21 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				p.player.state.flying = value == "true"
 			}
 			players[name] = p
-		case strings.has_prefix(key, "rules."):
+		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}
 	}
+	for p in base.vars_read(worldgen.params_table(), &s.params, strings.to_string(rules_text)) {
+		if p.error == .Unknown_Name && strings.has_prefix(p.text, "rules.") {continue}
+		log.warnf(
+			"server world generator setting ignored or clamped path=%s problem=%v text=%q",
+			path,
+			p.error,
+			p.text,
+		)
+	}
 	for p in base.vars_read(game.rules_table(), &s.rules, strings.to_string(rules_text)) {
+		if p.error == .Unknown_Name && strings.has_prefix(p.text, "worldgen.") {continue}
 		log.warnf(
 			"server world rule ignored or clamped path=%s problem=%v text=%q",
 			path,
