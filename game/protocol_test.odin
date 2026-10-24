@@ -142,6 +142,14 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	at: Client_Message
 	at, ok = decode_client(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
+	batch := Blocks_Changed {
+		chunk = {-2, 3, 4},
+		count = 2,
+	}
+	batch.entries[0] = {7, .Water_3}
+	batch.entries[1] = {4095, .Air}
+	m, ok = decode_server(encode_s(batch)[:], scratch)
+	testing.expect(t, ok && m.(Blocks_Changed) == batch)
 	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
 	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
 	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)

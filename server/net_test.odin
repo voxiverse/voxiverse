@@ -128,6 +128,13 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			}
 		case game.Notice:
 			append(&c.notices, strings.clone(v.text))
+		case game.Blocks_Changed:
+			if blocks, have := &c.chunks[v.chunk]; have {
+				for i in 0 ..< v.count {
+					e := v.entries[i]
+					game.chunk_set(blocks, &c.arrays, game.local_from_index(int(e.index)), e.block)
+				}
+			}
 		case game.Edit_Result:
 			c.results[v.id] = v
 		case game.Entity_Spawn:

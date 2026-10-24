@@ -118,6 +118,13 @@ receive :: proc(s: ^Session) {
 				e := v.entries[i]
 				if o, known := &s.others[e.player]; known {other_snapshot(o, v.tick, e)}
 			}
+		case game.Blocks_Changed:
+			// The world's own changes (flowing water): quietly.
+			origin := game.chunk_origin(v.chunk)
+			for i in 0 ..< v.count {
+				e := v.entries[i]
+				world_set_block(&s.world, origin + game.local_from_index(int(e.index)), e.block)
+			}
 		case game.Variables:
 			s.has_worldgen = true
 			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {

@@ -34,7 +34,7 @@ local SERVER_KINDS = {
 	[9] = "block", [10] = "column", [11] = "time", [12] = "joined",
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
-	[21] = "explosion", [22] = "variables",
+	[21] = "explosion", [22] = "variables", [23] = "blocks",
 }
 
 local f = vx.fields
@@ -129,6 +129,8 @@ local function describe(tvb, from_server)
 					i32(tvb, 9), tvb(13, 2):le_uint())
 			elseif kind == 10 then
 				return string.format("column pos=[%d %d]", i32(tvb, 1), i32(tvb, 5))
+			elseif kind == 23 then
+				return string.format("blocks chunk=[%d %d %d] count=%d", i32(tvb, 1), i32(tvb, 5), i32(tvb, 9), tvb(13, 1):uint())
 			elseif kind == 11 then
 				return string.format("time %.4f", f64(tvb, 1))
 			elseif kind == 12 then

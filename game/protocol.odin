@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 7
+PROTOCOL_VERSION :: 8
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -233,6 +233,21 @@ Explosion :: struct {
 	radius:   f32,
 }
 
+// Blocks_Changed: blocks the world changed in a chunk this tick (flowing
+// water; players' edits come as Block_Changed, heard), by local index.
+Blocks_Changed :: struct {
+	chunk:   Chunk_Pos,
+	count:   int,
+	entries: [MAX_BLOCKS_CHANGED]Changed_Entry,
+}
+
+Changed_Entry :: struct {
+	index: u16, // game.local_index in the chunk
+	block: Block,
+}
+
+MAX_BLOCKS_CHANGED :: 64 // in one message (a chunk with more is sent whole)
+
 // Variables: some of the server's variables (worldgen.*), as `name = value`
 // lines: sent when a player joins and when they change. As text, so this
 // package needs no knowledge of what they are.
@@ -287,6 +302,7 @@ Server_Message :: union {
 	Bulk_Begin,
 	Explosion,
 	Variables,
+	Blocks_Changed,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -333,6 +349,7 @@ Server_Kind :: enum u8 {
 	Bulk_Begin,
 	Explosion,
 	Variables,
+	Blocks_Changed,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -436,6 +453,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "explosion"
 		case u8(Server_Kind.Variables):
 			return "variables"
+		case u8(Server_Kind.Blocks_Changed):
+			return "blocks"
 		}
 	}
 	return ""
@@ -602,6 +621,15 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Variables:
 		write_u8(w, u8(Server_Kind.Variables))
 		write_string(w, v.text)
+	case Blocks_Changed:
+		write_u8(w, u8(Server_Kind.Blocks_Changed))
+		write_chunk_pos(w, v.chunk)
+		write_u8(w, u8(v.count))
+		for i in 0 ..< v.count {
+			e := v.entries[i]
+			write_u16(w, e.index)
+			write_u16(w, u16(e.block))
+		}
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -841,6 +869,19 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		m = Variables {
 			text = read_string(&r, MAX_VARIABLES_TEXT),
 		}
+	case u8(Server_Kind.Blocks_Changed):
+		c := Blocks_Changed {
+			chunk = read_chunk_pos(&r),
+			count = int(read_u8(&r)),
+		}
+		if c.count == 0 || c.count > MAX_BLOCKS_CHANGED {reader_fail(&r)}
+		for &e in c.entries[:min(c.count, MAX_BLOCKS_CHANGED)] {
+			e.index = read_u16(&r)
+			id := read_u16(&r)
+			if int(e.index) >= CHUNK_VOLUME || !block_valid(id) {reader_fail(&r)}
+			e.block = Block(id) if block_valid(id) else .Air
+		}
+		m = c
 	case:
 		return
 	}

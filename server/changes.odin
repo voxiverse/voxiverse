@@ -1,5 +1,7 @@
 package server
 
+import "core:slice"
+
 import "../game"
 
 // Block changes: every block the world changes in a tick (a player's edit,
@@ -21,7 +23,7 @@ Changes :: struct {
 
 // A chunk with more single changes than this in a tick is sent whole.
 @(private = "file")
-MAX_BLOCK_MESSAGES :: 64
+MAX_BLOCK_MESSAGES :: game.MAX_BLOCKS_CHANGED
 
 @(private = "file")
 changes_begin :: proc(s: ^Server) -> ^Changes {
@@ -81,11 +83,30 @@ changes_flush :: proc(s: ^Server) {
 			chunk := world_get(&s.world, pos)
 			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		}
+		// A player's edit, heard; the world's changes (flowing water), one
+		// batch per chunk.
+		batches := make(map[game.Chunk_Pos]game.Blocks_Changed, 16, context.temp_allocator)
 		for p, who in ch.blocks {
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk not_in c.has {continue}
 			b, _ := world_block(&s.world, p)
-			send_message(s, &c, game.Block_Changed{p, b})
+			if who >= 0 {
+				send_message(s, &c, game.Block_Changed{p, b})
+				continue
+			}
+			_, batch, _, _ := map_entry(&batches, chunk)
+			batch.chunk = chunk
+			batch.entries[batch.count] = {u16(game.local_index(game.local_of(p))), b}
+			batch.count += 1
 		}
+		// In order (map order varies): the same messages every run.
+		chunks := make([dynamic]game.Chunk_Pos, 0, len(batches), context.temp_allocator)
+		for chunk in batches {append(&chunks, chunk)}
+		slice.sort_by(chunks[:], proc(a, b: game.Chunk_Pos) -> bool {
+			if a.y != b.y {return a.y < b.y}
+			if a.z != b.z {return a.z < b.z}
+			return a.x < b.x
+		})
+		for chunk in chunks {send_message(s, &c, batches[chunk])}
 	}
 }
