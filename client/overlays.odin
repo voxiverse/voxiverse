@@ -15,6 +15,7 @@ Overlay :: enum u8 {
 	Options, // Options over the game (above the game menu)
 	Tuning, // F4: the tuning panel
 	Chat,
+	Inventory,
 	Console,
 	Quit_Dialog,
 }
@@ -37,6 +38,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Options = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Tuning = {takes = {.Mouse}, in_game = true}, // watching the game respond: it runs on
 	.Chat = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Inventory = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Console = {takes = {.Keyboard, .Mouse}},
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
 }
@@ -134,6 +136,9 @@ close_overlay :: proc(app: ^App, which: Overlay) {
 	case .Chat:
 		chat_close(app)
 		return
+	case .Inventory:
+		inventory_close(app)
+		return
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 	}
@@ -155,6 +160,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			tuning_panel(app, ctx)
 		case .Chat:
 			chat_ui(app, ctx, top)
+		case .Inventory:
+			inventory_ui(app, ctx, top)
 		case .Console:
 			console_ui(app, ctx, top)
 		case .Quit_Dialog:

@@ -10,6 +10,7 @@ import "core:math"
 Entity_Kind :: enum u8 {
 	Critter, // a passive, boxy animal: wanders, grazes, runs away when hit
 	Rocket, // the creative rocket launcher's: flies, then explodes
+	Item, // a dropped stack: falls, merges with its kind, picked up by walking over it
 }
 
 Entity_Info :: struct {
@@ -40,12 +41,19 @@ ENTITY_INFO := [Entity_Kind]Entity_Info {
 		hittable = true,
 	},
 	.Rocket = {name = "rocket", width = 0.3, height = 0.3, health = 1},
+	.Item = {name = "item", width = 0.25, height = 0.25, health = 1, saved = true},
 }
 
 ROCKET_SPEED :: 32 // blocks/s
 ROCKET_GRAVITY :: 3 // blocks/s²: a slight drop
 ROCKET_RADIUS :: 4 // blocks carved
 ROCKET_LIFE :: 6 // seconds: then it goes off where it is
+
+ITEM_PICKUP_DELAY :: 0.5 // seconds before a dropped stack can be picked up (by its dropper: 2)
+ITEM_PICKUP_RANGE :: 1.5 // blocks from a player's feet
+ITEM_MERGE_RANGE :: 1.0 // blocks: stacks of one item this near become one
+ITEM_LIFE :: 300 // seconds: then a dropped stack is gone
+ITEM_THROW :: 4 // blocks/s: a stack a player drops flies ahead
 
 entity_kind_valid :: proc(k: u8) -> bool {
 	return int(k) < len(Entity_Kind)

@@ -94,7 +94,9 @@ reloads all three (client/passes.odin lists the passes and what they include).
 
 ## Saves
 
-A world is a directory: `world.cfg` (text: format, seed, time, spawn, players, rules), `permissions.cfg` and `regions/` with
+A world is a directory: `world.cfg` (text: format, seed, time, spawn, starter kit, rules), `players/<name>.json` (each player:
+where they are and look, flying, their inventory by item name; written when it changed),
+`permissions.cfg`, `community.cfg`, `entities.cfg` and `regions/` with
 the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates from
 the seed). Files are replaced through a temporary file, so a crash mid-save keeps the previous
 save; a region file that fails its checksum is moved aside (`.damaged-<time>`) with an error,
@@ -178,6 +180,26 @@ server has no owner: stop it and edit that file (`player alice` then `role admin
 line) to make the first admin. A client asks only for what its grants allow (the console
 says "not allowed on this server"); the server checks again and answers a refusal with a
 notice, not a disconnect.
+
+## Items
+
+Items are data (`game/items.odin`): every block players may place has its item (its name is
+the block's), tools are items of their own (`rocket_launcher`). An inventory is 36 slots (the
+first nine the hotbar) and the stack on the cursor; the server owns it and applies requests
+with the same code the client predicts with (`game/inventory.odin`), answering each with the
+inventory (`Inventory_Update`, how far it got): a refused request is rolled back. Placing a
+block uses one from the hand (or the hotbar) unless the player has `items.infinite`; breaking
+leaves the block's item where `rules.drops` (not for `items.infinite`); `items.catalog` lets
+the inventory take any item. Dropped stacks are entities: they fall, merge with stacks of
+their item, are picked up by walking over them (half a second; two for the one who dropped
+it) and go after five minutes. A player new to a world gets `world.cfg`'s `kit`.
+
+| Command | |
+|---|---|
+| `inventory`, `drop [all]` | Open the inventory / drop from the hand (as E, Q do; scripts) |
+| `server give <player> <item> [count]` | `items.give`; what does not fit is dropped at their feet |
+| `server clear [player] [item]` | Empty an inventory, or of one item (`items.clear`; others' `items.clear.others`) |
+| `server item` | What you hold, its id and stack size |
 
 ## Chat
 

@@ -5,7 +5,6 @@ import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:time"
@@ -26,20 +25,16 @@ import "../worldgen"
 
 AUTOSAVE_SECONDS :: 60
 
-Saved_Player :: struct {
-	state:      game.Player_State,
-	yaw, pitch: f32, // where they were looking
-}
 WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
-WORLD_FORMAT :: 2 // 2: players by name (format 1's single player becomes LEGACY_PLAYER)
+WORLD_FORMAT :: 3 // 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3: players in players/ (player_data.odin)
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
 	dir:       string, // "" = this world is not saved
 	saved:     map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
 	regions:   map[game.Region_Pos]bool, // read from disk; true = changed since written
-	players:   map[string]Saved_Player, // by name: from world.cfg, and those who left
+	players:   map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
 	writer:    game.Writer,
 	last_save: time.Tick,
 }
@@ -112,18 +107,6 @@ keep_edits :: proc(s: ^Server, c: ^Chunk) {
 	s.store.saved[c.pos] = transmute([]u8)strings.clone(string(w.buf[:])) // an owned copy
 }
 
-// keep_player stores a playing client's player under its name (when it
-// leaves, and before each save).
-keep_player :: proc(s: ^Server, c: ^Client) {
-	name := client_name(c)
-	p := Saved_Player{c.player, c.look[0], c.look[1]}
-	if _, had := s.store.players[name]; had {
-		s.store.players[name] = p
-	} else {
-		s.store.players[strings.clone(name)] = p
-	}
-}
-
 // mark_edited notes that pos's region must be written at the next save.
 mark_edited :: proc(s: ^Server, pos: game.Chunk_Pos) {
 	s.store.regions[game.region_of(pos)] = true
@@ -139,6 +122,7 @@ save :: proc(s: ^Server) -> bool {
 	if !write_entities(s) {ok = false}
 	if !permissions_save(s) {ok = false}
 	if !community_save(s) {ok = false}
+	if !players_save(s) {ok = false}
 	regions := 0
 	for region, changed in st.regions {
 		if !changed {continue}
@@ -282,21 +266,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 		fmt.sbprintfln(&b, "spawn.pitch = %.6f", sp.look[1])
 		fmt.sbprintfln(&b, "spawn.exact = %v", sp.exact)
 	}
-	for &c in s.clients {
-		if c.state == .Playing {keep_player(s, &c)}
-	}
-	names := make([dynamic]string, context.temp_allocator)
-	for name in s.store.players {append(&names, name)}
-	slice.sort(names[:])
-	for name in names {
-		p := s.store.players[name]
-		fmt.sbprintfln(&b, "player.%s.x = %.6f", name, p.state.position.x)
-		fmt.sbprintfln(&b, "player.%s.y = %.6f", name, p.state.position.y)
-		fmt.sbprintfln(&b, "player.%s.z = %.6f", name, p.state.position.z)
-		fmt.sbprintfln(&b, "player.%s.yaw = %.6f", name, p.yaw)
-		fmt.sbprintfln(&b, "player.%s.pitch = %.6f", name, p.pitch)
-		fmt.sbprintfln(&b, "player.%s.flying = %v", name, p.state.flying)
-	}
+	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &s.rules, &b)
 	base.vars_write(worldgen.params_table(), &s.params, &b)
@@ -310,7 +280,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	rules_text := strings.builder_make(context.temp_allocator)
 	Partial :: struct {
-		player: Saved_Player,
+		player: Player_Record,
 		coords: int, // of x, y, z read
 	}
 	players := make(map[string]Partial, context.temp_allocator)
@@ -366,6 +336,13 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			case "exact":
 				s.spawn.exact = value == "true"
 			}
+		case key == "kit":
+			if kit, ok := kit_parse(value); ok {
+				clear(&s.kit)
+				append(&s.kit, ..kit)
+			} else {
+				log.warnf("server world kit not understood path=%s kit=%q", path, value)
+			}
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
 		case strings.has_prefix(key, "player."):
@@ -385,11 +362,13 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				}
 			case "yaw":
 				if v, ok := strconv.parse_f32(value);
-				   ok && !math.is_nan(v) && abs(v) < 1e6 {p.player.yaw = v}
+				   ok && !math.is_nan(v) && abs(v) < 1e6 {p.player.look[0] = v}
 			case "pitch":
 				if v, ok := strconv.parse_f32(value);
 				   ok &&
-				   !math.is_nan(v) {p.player.pitch = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
+				   !math.is_nan(
+						   v,
+					   ) {p.player.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
 			case "flying":
 				p.player.state.flying = value == "true"
 			}
@@ -418,7 +397,12 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	}
 	s.spawn.known = spawn_coords == 3 // (else the generator's, chosen at start)
 	for name, p in players {
-		if p.coords == 3 {s.store.players[strings.clone(name)] = p.player}
+		// (Before format 3: moved to their files at the next save.)
+		if p.coords == 3 {
+			rec := p.player
+			rec.dirty = true
+			s.store.players[strings.clone(name)] = rec
+		}
 	}
 	log.infof("server world loaded dir=%s seed=%d", s.store.dir, s.config.seed)
 	return true
@@ -430,11 +414,11 @@ write_entities :: proc(s: ^Server) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
-		"# Voxiverse entities (written by the server): kind x y z yaw health natural",
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count]",
 	)
 	for e in s.entities.list {
 		if !game.ENTITY_INFO[e.kind].saved {continue}
-		fmt.sbprintfln(
+		fmt.sbprintf(
 			&b,
 			"%s %.4f %.4f %.4f %.4f %d %v",
 			game.ENTITY_INFO[e.kind].name,
@@ -445,6 +429,9 @@ write_entities :: proc(s: ^Server) -> bool {
 			e.health,
 			e.natural,
 		)
+		if e.kind ==
+		   .Item {fmt.sbprintf(&b, " %s %d", game.item_name(e.stack.item), e.stack.count)}
+		strings.write_byte(&b, '\n')
 	}
 	return write_atomically(
 		filepath.join({s.store.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
@@ -466,7 +453,7 @@ load_entities :: proc(s: ^Server) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		f := strings.fields(l, context.temp_allocator)
-		ok := len(f) == 7
+		ok := len(f) == 7 || len(f) == 9
 		kind: game.Entity_Kind
 		found := false
 		if ok {
@@ -498,12 +485,21 @@ load_entities :: proc(s: ^Server) {
 				!math.is_nan(w)
 			pos, yaw, health = {x, y, z}, w, h
 		}
+		stack: game.Stack
+		if ok && found && kind == .Item {
+			// A dropped stack: what it is.
+			item, known := game.item_by_name(f[7] if len(f) == 9 else "")
+			n, counted := strconv.parse_int(f[8] if len(f) == 9 else "")
+			ok = known && counted && n > 0
+			stack = {item, min(n, game.item_stack_size(item))}
+		}
 		if !ok || !found {
 			skipped += 1
 			continue
 		}
 		if e := entity_spawn(s, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
+			e.stack = stack
 			loaded += 1
 		}
 	}

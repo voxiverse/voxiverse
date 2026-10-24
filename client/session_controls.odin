@@ -26,14 +26,20 @@ session_attack :: proc(s: ^Session) -> bool {
 @(private)
 edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
-	slots := len(hotbar_items(s))
-	for k, i in keys[:slots] {
-		if k in input.pressed {s.hotbar = i}
-	}
+	select := -1
+	for k, i in keys {if k in input.pressed {select = i}}
 	if input.wheel.y != 0 {
-		s.hotbar = (s.hotbar - int(math.sign(input.wheel.y)) + slots) % slots
+		n := game.HOTBAR_SLOTS
+		select = (s.inventory.selected - int(math.sign(input.wheel.y)) + n) % n
 	}
-	s.hotbar = min(s.hotbar, slots - 1)
+	if select >= 0 && select != s.inventory.selected {
+		session_inventory_do(s, {.Select, 0, select})
+	}
+	// Q drops one from the hand (Ctrl+Q: all of it).
+	if .Q in input.pressed {
+		all := input.held & {.Left_Control, .Right_Control} != {}
+		session_inventory_do(s, {.Drop, s.inventory.selected, 1 if all else 0})
+	}
 
 	s.edit_timer -= dt
 	breaking := .Left in input.mouse_down
@@ -41,7 +47,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	pressed := input.mouse_pressed & {.Left, .Right} != {}
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
-	item_use(s, held_item(s), breaking, placing)
+	item_use(s, held(s), breaking, placing)
 }
 
 // session_fire launches a rocket where we look (the server makes it).
@@ -70,6 +76,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		edit.pos = hit.block + hit.normal
 		current, loaded := world_block(&s.world, edit.pos)
 		if !loaded ||
+		   !can_place_from_hand(s, block) ||
 		   !game.can_place_at(current, block, edit.pos, s.prediction.state) {return false}
 		edit.block = block
 	}
@@ -78,6 +85,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	edit_sound(s, edit.pos, before, edit.block)
 	s.next_edit = edit.id
 	append(&s.edits, edit)
+	inventory_predict(s) // (one used up)
 	send_message(s, edit)
 	return true
 }

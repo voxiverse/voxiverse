@@ -138,6 +138,8 @@ receive :: proc(s: ^Session) {
 			append(&s.notices, strings.clone(game.format_strip(v.text)))
 		case game.Chat_Delete:
 			chat_delete(s, v.id)
+		case game.Inventory_Update:
+			inventory_reconcile(s, v)
 		case game.Variables:
 			s.has_worldgen = true
 			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {
@@ -152,6 +154,7 @@ receive :: proc(s: ^Session) {
 		case game.Entity_Spawn:
 			s.entities[v.entity] = {
 				kind      = v.kind,
+				stack     = v.stack,
 				last_seen = v.position,
 			}
 			e := &s.entities[v.entity]
@@ -186,6 +189,7 @@ receive :: proc(s: ^Session) {
 					break
 				}
 			}
+			inventory_predict(s) // (a refused block is ours again)
 		case game.Block_Changed:
 			// Someone else's edit: heard where it happened.
 			old, _ := world_block(&s.world, v.pos)

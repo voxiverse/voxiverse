@@ -39,7 +39,8 @@ Entity :: struct {
 	health:  int,
 	natural: bool, // spawned by itself: may despawn
 	brain:   Brain,
-	owner:   int, // a rocket's: the client index that fired it (-1: none)
+	owner:   int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
+	stack:   game.Stack, // a dropped item's
 	age:     int, // ticks
 }
 
@@ -130,6 +131,11 @@ entities_tick :: proc(s: ^Server) {
 			if at, hit := rocket_step(s, ent); hit {
 				append(&blasts, Sphere{at, game.ROCKET_RADIUS})
 				entity_died(s, i) // its explosion is what players see
+				continue
+			}
+		case .Item:
+			if item_tick(s, i) {
+				entity_gone(s, i)
 				continue
 			}
 		}
@@ -288,7 +294,11 @@ replicate :: proc(s: ^Server, c: ^Client) {
 		if ent.id not_in c.known {
 			if len(c.known) >= MAX_KNOWN_ENTITIES {continue}
 			c.known[ent.id] = {}
-			send_message(s, c, game.Entity_Spawn{ent.id, ent.kind, ent.body.position, ent.yaw})
+			send_message(
+				s,
+				c,
+				game.Entity_Spawn{ent.id, ent.kind, ent.body.position, ent.yaw, ent.stack},
+			)
 		}
 		visible[ent.id] = {}
 		batch.entries[batch.count] = {ent.id, ent.body.position, ent.yaw, ent.pitch}
@@ -307,13 +317,23 @@ replicate :: proc(s: ^Server, c: ^Client) {
 	}
 }
 
-// entity_died: tell everyone who knew it, then forget it.
+// entity_died: tell everyone who knew it (they show it die), then forget it.
 entity_died :: proc(s: ^Server, index: int) {
+	entity_remove(s, index, true)
+}
+
+// entity_gone: as entity_died, without a death to show (a stack picked up).
+entity_gone :: proc(s: ^Server, index: int) {
+	entity_remove(s, index, false)
+}
+
+@(private = "file")
+entity_remove :: proc(s: ^Server, index: int, died: bool) {
 	id := s.entities.list[index].id
 	for &c in s.clients {
 		if c.state == .Playing && id in c.known {
 			delete_key(&c.known, id)
-			send_message(s, &c, game.Entity_Despawn{id, true})
+			send_message(s, &c, game.Entity_Despawn{id, died})
 		}
 	}
 	unordered_remove(&s.entities.list, index)

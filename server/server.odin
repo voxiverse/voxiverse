@@ -95,6 +95,7 @@ Server :: struct {
 	spawn:       World_Spawn, // where new players arrive (spawn.odin; world.cfg)
 	community:   Community, // nicknames, mutes, homes, warps, bans (community.odin)
 	chat:        Chat_State, // (chat.odin)
+	kit:         [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
 	natural:     []Natural_Slot, // natural column tops (columns.odin)
 	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
@@ -131,6 +132,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.config.password = strings.clone(config.password, arena)
 	s.config.name = strings.clone(config.name, arena)
 	s.config.capture = strings.clone(config.capture, arena)
+	kit_default(&s.kit)
 	// A saved world's seed and rules replace the config's.
 	if !store_open(s, config.save_dir) {
 		teardown(s, world = false)
@@ -222,6 +224,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	store_close(s)
 	permissions_destroy(&s.perms)
 	community_destroy(&s.community)
+	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
 	if world {world_destroy(&s.world)}
 	entities_destroy(&s.entities)
@@ -341,6 +344,10 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		send_players(s, &c)
 		replicate(s, &c)
+		if c.inv_changed {
+			send_message(s, &c, game.Inventory_Update{c.inv_acked, c.inventory})
+			c.inv_changed = false
+		}
 		stream(s, &c)
 	}
 	kick_due(s)
@@ -499,6 +506,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		admin(s, c, v.command)
 	case game.Chat:
 		chat_say(s, c, v.text)
+	case game.Inventory_Request:
+		inventory_request(s, c, v)
 	case game.Edit:
 		queue_action(s, c, v)
 	case game.Attack:

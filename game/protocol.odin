@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 10
+PROTOCOL_VERSION :: 11
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -65,6 +65,14 @@ Command :: struct {
 	command: string,
 }
 
+// Inventory_Request: something done in the inventory (game/inventory.odin),
+// numbered so the client can replay what the server has not answered
+// (Inventory says how far it got).
+Inventory_Request :: struct {
+	sequence: u32,
+	action:   Inventory_Action,
+}
+
 // Chat: a line the player says (formatting codes kept only where they may:
 // the server decides).
 Chat :: struct {
@@ -108,6 +116,7 @@ Client_Message :: union {
 	Attack,
 	Fire,
 	Chat,
+	Inventory_Request,
 }
 
 // Server -> client.
@@ -220,6 +229,15 @@ Entity_Spawn :: struct {
 	kind:     Entity_Kind,
 	position: [3]f64,
 	yaw:      f32,
+	stack:    Stack, // a dropped item's (else empty)
+}
+
+// Inventory_Update: the player's inventory as the server has it, having
+// applied their Inventory_Requests up to `acked` (and whatever else changed
+// it: placing, picking up, commands). Sent when it changes.
+Inventory_Update :: struct {
+	acked:     u32,
+	inventory: Inventory,
 }
 
 // Entity_Despawn: forget it (out of your area, gone, or died: show it).
@@ -345,6 +363,7 @@ Server_Message :: union {
 	Grants,
 	Chat_Line,
 	Chat_Delete,
+	Inventory_Update,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -366,6 +385,7 @@ Client_Kind :: enum u8 {
 	Attack,
 	Fire,
 	Chat,
+	Inventory_Request,
 }
 
 @(private = "file")
@@ -396,6 +416,7 @@ Server_Kind :: enum u8 {
 	Grants,
 	Chat_Line,
 	Chat_Delete,
+	Inventory_Update,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -454,6 +475,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "fire"
 		case u8(Client_Kind.Chat):
 			return "chat"
+		case u8(Client_Kind.Inventory_Request):
+			return "inventory_request"
 		}
 	} else {
 		switch kind {
@@ -509,6 +532,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "chat_line"
 		case u8(Server_Kind.Chat_Delete):
 			return "chat_delete"
+		case u8(Server_Kind.Inventory_Update):
+			return "inventory"
 		}
 	}
 	return ""
@@ -549,6 +574,12 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Chat:
 		write_u8(w, u8(Client_Kind.Chat))
 		write_string(w, v.text)
+	case Inventory_Request:
+		write_u8(w, u8(Client_Kind.Inventory_Request))
+		write_u32(w, v.sequence)
+		write_u8(w, u8(v.action.kind))
+		write_u8(w, u8(i8(v.action.slot)))
+		write_u16(w, u16(v.action.arg))
 	case Attack:
 		write_u8(w, u8(Client_Kind.Attack))
 		write_u32(w, v.entity)
@@ -649,6 +680,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(v.kind))
 		write_position(w, v.position)
 		write_f32(w, v.yaw)
+		write_stack(w, v.stack)
 	case Entity_Despawn:
 		write_u8(w, u8(Server_Kind.Entity_Despawn))
 		write_u32(w, v.entity)
@@ -689,6 +721,13 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Chat_Delete:
 		write_u8(w, u8(Server_Kind.Chat_Delete))
 		write_u32(w, v.id)
+	case Inventory_Update:
+		write_u8(w, u8(Server_Kind.Inventory_Update))
+		write_u32(w, v.acked)
+		inv := v.inventory
+		for st in inv.slots {write_stack(w, st)}
+		write_stack(w, inv.cursor)
+		write_u8(w, u8(inv.selected))
 	case Blocks_Changed:
 		write_u8(w, u8(Server_Kind.Blocks_Changed))
 		write_chunk_pos(w, v.chunk)
@@ -750,6 +789,18 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = Chat {
 			text = read_string(&r, MAX_CHAT_TEXT),
 		}
+	case u8(Client_Kind.Inventory_Request):
+		q := Inventory_Request {
+			sequence = read_u32(&r),
+		}
+		kind := read_u8(&r)
+		if int(kind) >= len(Inventory_Action_Kind) {reader_fail(&r)}
+		q.action.kind =
+			Inventory_Action_Kind(kind) if int(kind) < len(Inventory_Action_Kind) else {}
+		q.action.slot = int(i8(read_u8(&r)))
+		q.action.arg = int(read_u16(&r))
+		if q.action.slot < CURSOR_SLOT || q.action.slot >= INVENTORY_SLOTS {reader_fail(&r)}
+		m = q
 	case u8(Client_Kind.Attack):
 		m = Attack {
 			entity = read_u32(&r),
@@ -896,6 +947,7 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		e.kind = Entity_Kind(kind) if entity_kind_valid(kind) else {}
 		e.position = read_position(&r)
 		e.yaw = read_f32(&r)
+		e.stack = read_stack(&r)
 		if !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
 		m = e
 	case u8(Server_Kind.Entity_Despawn):
@@ -953,6 +1005,15 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		m = Chat_Delete {
 			id = read_u32(&r),
 		}
+	case u8(Server_Kind.Inventory_Update):
+		u := Inventory_Update {
+			acked = read_u32(&r),
+		}
+		for &st in u.inventory.slots {st = read_stack(&r)}
+		u.inventory.cursor = read_stack(&r)
+		u.inventory.selected = int(read_u8(&r))
+		if !inventory_valid(&u.inventory) {reader_fail(&r)}
+		m = u
 	case u8(Server_Kind.Blocks_Changed):
 		c := Blocks_Changed {
 			chunk = read_chunk_pos(&r),
@@ -1150,3 +1211,26 @@ decode_server_info :: proc(data: []u8) -> (i: Server_Info, ok: bool) {
 }
 
 MAX_SERVER_NAME :: 48
+
+// A stack on the wire: its item (0: none) and count.
+@(private = "file")
+write_stack :: proc(w: ^Writer, st: Stack) {
+	if stack_empty(st) {
+		write_u16(w, 0)
+		return
+	}
+	write_u16(w, u16(st.item))
+	write_u16(w, u16(st.count))
+}
+
+@(private = "file")
+read_stack :: proc(r: ^Reader) -> Stack {
+	item := Item(read_u16(r))
+	if item == NO_ITEM {return {}}
+	count := int(read_u16(r))
+	if !item_valid(item) || count <= 0 || count > item_stack_size(item) {
+		reader_fail(r)
+		return {}
+	}
+	return {item, count}
+}

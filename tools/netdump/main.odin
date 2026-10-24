@@ -171,6 +171,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("command command=%q", v.command), true
 		case game.Chat:
 			return fmt.tprintf("chat text=%q", v.text), true
+		case game.Inventory_Request:
+			return fmt.tprintf("inventory_request seq=%d action=%v", v.sequence, v.action), true
 		case game.Attack:
 			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
 		case game.Fire:
@@ -271,6 +273,9 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("chat_line id=%d sender=%d text=%q", v.id, v.sender, v.text), true
 		case game.Chat_Delete:
 			return fmt.tprintf("chat_delete id=%d", v.id), true
+		case game.Inventory_Update:
+			return fmt.tprintf("inventory acked=%d selected=%d", v.acked, v.inventory.selected),
+				true
 		}
 	}
 	return "", true

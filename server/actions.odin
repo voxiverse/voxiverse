@@ -87,17 +87,26 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		e.pos,
 		f64(s.rules.reach) + game.EDIT_REACH_SLACK,
 	) {return result}
-	allowed := false
+	ok := false
+	slot := -1 // placing from (infinite: none)
+	infinite := allowed(s, c, "items.infinite")
 	if e.block == .Air {
-		allowed = game.can_break(current)
+		ok = game.can_break(current)
 	} else {
-		allowed =
+		if !infinite {slot = game.inventory_placing_slot(&c.inventory, e.block)}
+		ok =
+			(infinite || slot >= 0) &&
 			game.can_place(e.block) &&
 			game.can_place_at(current, e.block, e.pos, player) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
-	if !allowed || !set_block(s, e.pos, e.block, c) {return result}
+	if !ok || !set_block(s, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
+	if e.block == .Air {
+		broken_drop(s, c, e.pos, current)
+	} else if slot >= 0 {
+		used_to_place(s, c, slot)
+	}
 	return result
 }
 

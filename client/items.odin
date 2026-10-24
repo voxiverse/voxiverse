@@ -2,80 +2,86 @@ package client
 
 import "../game"
 
-// Items: what the hotbar holds and the mouse uses. A block is placed with
-// the right button (the left breaks, or hits a critter); a tool is used
-// with the left.
+// Items as the player uses them: the stack in hand (the selected hotbar
+// slot of the inventory, game/inventory.odin) and the mouse buttons. A
+// block's item places it with the right button (the left breaks, or hits a
+// critter); the rocket launcher fires with the left. The inventory is the
+// server's: what we do to it is predicted at once and sent
+// (session_inventory_do), and replayed over each Inventory_Update until
+// the server has answered it.
 
-Tool :: enum u8 {
-	Launcher, // fires rockets
+// held: the stack in hand.
+held :: proc(s: ^Session) -> game.Stack {
+	return game.inventory_held(&s.inventory)
 }
 
-Item :: union {
-	game.Block,
-	Tool,
-}
-
-Tool_Info :: struct {
-	name: string,
-	node: string, // the permission it needs to be on the hotbar ("": none)
-}
-
-@(rodata)
-TOOL_INFO := [Tool]Tool_Info {
-	.Launcher = {name = "rocket", node = "world.fire"},
-}
-
-// HOTBAR: everything a player can hold, in hotbar order (at most nine).
-HOTBAR := [?]Item {
-	game.Block.Stone,
-	game.Block.Dirt,
-	game.Block.Grass,
-	game.Block.Sand,
-	game.Block.Log,
-	game.Block.Leaves,
-	game.Block.Water,
-	game.Block.Lamp,
-	Tool.Launcher,
-}
-#assert(len(HOTBAR) <= 9) // number keys 1-9
-
-item_name :: proc(item: Item) -> string {
-	switch v in item {
-	case game.Block:
-		return game.BLOCK_INFO[v].name
-	case Tool:
-		return TOOL_INFO[v].name
-	}
-	return ""
-}
-
-// hotbar_items: the hotbar here (each item only where it is allowed).
-hotbar_items :: proc(s: ^Session) -> []Item {
-	items := make([dynamic]Item, 0, len(HOTBAR), context.temp_allocator)
-	for item in HOTBAR {
-		if t, tool := item.(Tool);
-		   tool && TOOL_INFO[t].node != "" && !session_allowed(s, TOOL_INFO[t].node) {continue}
-		append(&items, item)
-	}
-	return items[:]
-}
-
-// held_item: the selected hotbar item.
-held_item :: proc(s: ^Session) -> Item {
-	items := hotbar_items(s)
-	return items[clamp(s.hotbar, 0, len(items) - 1)]
-}
-
-// item_use: the mouse buttons with item held.
-item_use :: proc(s: ^Session, item: Item, breaking, placing: bool) {
-	switch v in item {
-	case game.Block:
-		if breaking && !placing && session_attack(s) {return}
-		session_edit(s, placing && !breaking, v)
-	case Tool:
-		switch v {
+// item_use: the mouse buttons with stack in hand.
+item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
+	info, _ := game.item_info(stack.item)
+	if t, tool := info.tool.?; tool {
+		switch t {
 		case .Launcher:
 			if breaking {session_fire(s)}
 		}
+		return
 	}
+	if breaking && !placing {
+		if session_attack(s) {return}
+		session_edit(s, false, .Air)
+		return
+	}
+	if placing && !breaking && info.block != .Air {session_edit(s, true, info.block)}
+}
+
+// Pending_Inventory: an inventory request sent, not yet answered.
+Pending_Inventory :: struct {
+	sequence: u32,
+	action:   game.Inventory_Action,
+}
+
+// session_inventory_do does a to our inventory (predicted) and asks the
+// server; false (and nothing sent) if it does nothing.
+session_inventory_do :: proc(s: ^Session, a: game.Inventory_Action) -> bool {
+	if s.state != .Playing {return false}
+	_, ok := game.inventory_apply(&s.inventory, a, session_allowed(s, "items.catalog"))
+	if !ok {return false}
+	s.inv_sequence += 1
+	append(&s.inv_pending, Pending_Inventory{s.inv_sequence, a})
+	send_message(s, game.Inventory_Request{s.inv_sequence, a})
+	return true
+}
+
+// inventory_reconcile: the server's inventory, then what it has not
+// answered yet over it (requests, and blocks placed and not yet confirmed).
+inventory_reconcile :: proc(s: ^Session, u: game.Inventory_Update) {
+	s.server_inventory = u.inventory
+	for len(s.inv_pending) > 0 && !game.sequence_before(u.acked, s.inv_pending[0].sequence) {
+		ordered_remove(&s.inv_pending, 0)
+	}
+	inventory_predict(s)
+}
+
+// inventory_predict: our inventory as it will be once the server has
+// answered everything we have done.
+inventory_predict :: proc(s: ^Session) {
+	s.inventory = s.server_inventory
+	catalog := session_allowed(s, "items.catalog")
+	for p in s.inv_pending {game.inventory_apply(&s.inventory, p.action, catalog)}
+	if session_allowed(s, "items.infinite") {return}
+	for e in s.edits {
+		if e.block == .Air {continue}
+		if slot := game.inventory_placing_slot(&s.inventory, e.block); slot >= 0 {
+			s.inventory.slots[slot].count -= 1
+			game.inventory_tidy(&s.inventory)
+		}
+	}
+}
+
+// can_place_from_hand: placing block would find it in the inventory (or
+// the player places without using anything up).
+can_place_from_hand :: proc(s: ^Session, block: game.Block) -> bool {
+	return(
+		session_allowed(s, "items.infinite") ||
+		game.inventory_placing_slot(&s.inventory, block) >= 0 \
+	)
 }

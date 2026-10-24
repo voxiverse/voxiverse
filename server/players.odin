@@ -16,11 +16,12 @@ import "../netcode"
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
 	c.name_len = copy(c.name_buf[:], name)
-	saved, has_saved := s.store.players[name]
+	saved, has_saved := player_record(s, name)
 	if has_saved {
-		// Where they left, looking where they looked.
+		// Where they left, looking where they looked, carrying what they carried.
 		c.player = saved.state
-		c.look = {saved.yaw, saved.pitch}
+		c.look = saved.look
+		c.inventory = saved.inventory
 		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
 		land_at_spawn(s, c, remember = false)
@@ -40,6 +41,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	)
 	send_message(s, c, game.Time{s.clock})
 	refresh_grants(s, c) // what they may do
+	if !has_saved {give_kit(s, c)} 	// (as their grants allow)
+	c.inv_changed = true
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
 	if m, ok := worldgen_variables(s); ok {send_message(s, c, m)}
 	for &other in s.clients {

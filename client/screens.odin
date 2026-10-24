@@ -35,6 +35,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	}
 	if app.input.escape {escape(app)}
 	chat_keys(app, input)
+	inventory_keys(app)
 }
 
 // Each screen and dialog draws in its own id scope, so equal labels in
@@ -164,22 +165,17 @@ net_line :: proc(s: ^Session) -> string {
 	)
 }
 
-// hotbar: the items along the bottom, the selected one framed.
+// hotbar: the inventory's first row along the bottom, the one in hand framed.
 @(private = "file")
 hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
 	t := &ctx.theme
-	SLOT :: 96
 	r := ctx.screen
-	row := ui.cut_bottom(&r, t.row_height + 24)
-	items := hotbar_items(s)
-	row = ui.rect_center(row, f32(len(items)) * (SLOT + t.spacing), t.row_height)
-	for item, i in items {
-		slot := ui.cut_left(&row, SLOT)
+	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
+	row = ui.rect_center(row, game.HOTBAR_SLOTS * (SLOT_SIZE.x + t.spacing), SLOT_SIZE.y)
+	for i in 0 ..< game.HOTBAR_SLOTS {
+		slot := ui.cut_left(&row, SLOT_SIZE.x)
 		ui.cut_left(&row, t.spacing)
-		ui.fill_rect(ctx, slot, {0, 0, 0, 150})
-		if i == s.hotbar {ui.stroke_rect(ctx, slot, 2, t.text)}
-		label := fmt.tprintf("%d %s", i + 1, item_name(item))
-		ui.label(ctx, label, slot, .Center, t.text if i == s.hotbar else t.text_muted)
+		stack_slot(ctx, slot, s.inventory.slots[i], i == s.inventory.selected, i + 1)
 	}
 }
 

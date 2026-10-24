@@ -67,6 +67,8 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 			critter(d, v, e.stride, hurt)
 		case .Rocket:
 			rocket(s, d, v)
+		case .Item:
+			dropped_item(s, d, v, e.stack)
 		}
 	}
 	for i := 0; i < len(s.puffs); {
@@ -274,6 +276,47 @@ entity_aimed :: proc(
 turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 	c, s := math.cos(yaw), math.sin(yaw)
 	return {f64(p.x * c + p.z * s), f64(p.y), f64(-p.x * s + p.z * c)}
+}
+
+// dropped_item: a small cube of the item's colour, turning and bobbing
+// (more of them stacked for a bigger stack).
+@(private = "file")
+dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: game.Stack) {
+	info, _ := game.item_info(stack.item)
+	colour := [4]u8{60, 60, 64, 255} // a tool
+	if info.block != .Air {colour = block_colour(s, info.block)}
+	t := f32(time.duration_seconds(time.tick_since({}))) // (any steady clock)
+	spin := t * 1.5
+	bob := f64(math.sin(t * 2.5) * 0.06 + 0.06)
+	cubes := 1 if stack.count < 8 else (2 if stack.count < 32 else 3)
+	for k in 0 ..< cubes {
+		offset := [3]f64{f64(k) * 0.07, f64(k) * 0.05, f64(k) * -0.06}
+		render.entity_box(
+			d,
+			v.position + {0, bob, 0} + offset,
+			spin,
+			0,
+			{-0.12, 0, -0.12},
+			{0.12, 0.24, 0.12},
+			colour,
+			.Body,
+		)
+	}
+}
+
+// block_colour: b's look in one colour (the average of its side).
+@(private = "file")
+block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
+	side, _, _ := mesh.block_faces(b)
+	sum: [3]u32
+	n: u32
+	for c in s.texels[side] {
+		if c.a == 0 {continue}
+		sum += {u32(c.r), u32(c.g), u32(c.b)}
+		n += 1
+	}
+	if n == 0 {return {128, 128, 128, 255}}
+	return {u8(sum.r / n), u8(sum.g / n), u8(sum.b / n), 255}
 }
 
 // debris_colour: a piece of b, broken up: one of the pixels of its side

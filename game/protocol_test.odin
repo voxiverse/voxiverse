@@ -117,8 +117,27 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false}
 	m, ok = decode_server(encode_s(players)[:], scratch)
 	testing.expect(t, ok && m.(Players) == players)
-	m, ok = decode_server(encode_s(Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5})[:], scratch)
-	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5})
+	m, ok = decode_server(encode_s(Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5, {}})[:], scratch)
+	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5, {}})
+	dropped := Entity_Spawn{78, .Item, {1, 2, 3}, 0, {item_of_block(.Sand), 12}}
+	m, ok = decode_server(encode_s(dropped)[:], scratch)
+	testing.expect(t, ok && m.(Entity_Spawn) == dropped)
+	inv: Inventory
+	inventory_add(&inv, {item_of_block(.Stone), 100})
+	inv.cursor = {item_of_tool(.Launcher), 1}
+	inv.selected = 3
+	m, ok = decode_server(encode_s(Inventory_Update{5, inv})[:], scratch)
+	testing.expect(t, ok && m.(Inventory_Update) == Inventory_Update{5, inv})
+	bad := inv
+	bad.slots[0].count = 65 // more than a stack
+	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
+	testing.expect(t, !ok)
+	req := Inventory_Request{9, {.Swap_Hotbar, 20, 3}}
+	asked: Client_Message
+	asked, ok = decode_client(encode_c(req)[:])
+	testing.expect(t, ok && asked.(Inventory_Request) == req)
+	_, ok = decode_client(encode_c(Inventory_Request{9, {.Click, 40, 0}})[:])
+	testing.expect(t, !ok)
 	m, ok = decode_server(encode_s(Entity_Despawn{77, true})[:], scratch)
 	testing.expect(t, ok && m.(Entity_Despawn) == Entity_Despawn{77, true})
 	m, ok = decode_server(encode_s(Entity_Hurt{9})[:], scratch)
@@ -232,7 +251,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Player_Left{2}),
 		encode_s(Players{tick = 9, count = 1}),
 		encode_s(Notice{"hello"}),
-		encode_s(Entity_Spawn{1, .Critter, {}, 0}),
+		encode_s(Entity_Spawn{1, .Critter, {}, 0, {}}),
 		encode_s(Entity_Despawn{1, false}),
 		encode_s(Entities{tick = 1, count = 1}),
 		encode_s(Entity_Hurt{1}),

@@ -79,6 +79,7 @@ App :: struct {
 	overlays:         Overlays, // what is open over the screen (overlays.odin)
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
+	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	last_frame_ms:    f32,

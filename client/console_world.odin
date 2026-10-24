@@ -300,6 +300,32 @@ register_world_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"drop",
+			"drop [all]: drop one of what you hold, or all of it (Q, Ctrl+Q)",
+			proc(app: ^App, args: []string) {
+				s := app.session
+				session_inventory_do(
+					s,
+					{.Drop, s.inventory.selected, 1 if len(args) > 0 && args[0] == "all" else 0},
+				)
+			},
+		},
+		args = {0, 1},
+		needs = {.World},
+	)
+	console_register(
+		c,
+		{"inventory", "inventory: open the inventory (E)", proc(app: ^App, args: []string) {
+				overlay_open(&app.overlays, .Inventory)
+				app.inventory_view = {
+					drag_from = -1,
+				}
+			}},
+		needs = {.World},
+	)
+	console_register(
+		c,
+		{
 			"chat",
 			"chat [text]: open the chat (T; / starts a command)",
 			proc(app: ^App, args: []string) {

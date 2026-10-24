@@ -22,6 +22,7 @@ Rules :: struct {
 	allow_flying:      bool,
 	day_length:        f32, // seconds from one midnight to the next (time.odin)
 	daylight_cycle:    bool, // time passes (false: it stands still)
+	drops:             bool, // a block a player breaks leaves its item
 }
 
 @(rodata)
@@ -40,6 +41,7 @@ RULES_DEFAULTS := Rules {
 	allow_flying      = true,
 	day_length        = 1200,
 	daylight_cycle    = true,
+	drops             = true,
 }
 
 @(rodata)
@@ -76,6 +78,7 @@ RULES_VARS := [?]base.Var {
 	{field = "allow_flying", help = "players may fly (double-tap jump)"},
 	{field = "day_length", help = "seconds per day and night", min = 10, max = 86400, step = 60},
 	{field = "daylight_cycle", help = "time passes (off: the sun stands still)"},
+	{field = "drops", help = "a block a player breaks leaves its item"},
 }
 
 rules_table :: proc() -> base.Var_Table {

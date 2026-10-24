@@ -22,6 +22,7 @@ Other_Player :: struct {
 // Other_Entity: an entity near us (entities.odin draws it).
 Other_Entity :: struct {
 	kind:      game.Entity_Kind,
+	stack:     game.Stack, // a dropped item's
 	track:     Track,
 	hurt_at:   time.Tick, // when it was last hit (flash)
 	stride:    f32, // blocks walked, for its legs

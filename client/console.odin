@@ -542,8 +542,8 @@ register_builtin_commands :: proc(c: ^Console) {
 			"place",
 			"place [block]: place against the aimed face (right click)",
 			proc(app: ^App, args: []string) {
-				block, holding := held_item(app.session).(game.Block)
-				if !holding {block = .Stone}
+				info, _ := game.item_info(held(app.session).item)
+				block := info.block if info.block != .Air else game.Block.Stone
 				if len(args) > 0 {
 					b, found := game.block_by_name(args[0])
 					if found && game.can_place(b) {block = b} else {

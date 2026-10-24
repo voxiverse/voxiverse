@@ -82,6 +82,10 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"seen", "<player>", {1, 1}, admin_seen, "info.seen"},
 	{"afk", "", {0, 0}, admin_afk, "chat.afk"},
 	{"status", "", {0, 0}, admin_status, "info.status"},
+	// Items (items.odin).
+	{"give", "<player> <item> [count]", {2, 3}, admin_give, "items.give"},
+	{"clear", "[player] [item]", {0, 2}, admin_clear, "items.clear"},
+	{"item", "", {0, 0}, admin_item, "info.item"},
 	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{

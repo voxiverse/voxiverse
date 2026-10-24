@@ -58,6 +58,9 @@ Client :: struct {
 	reply:        [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
 	reply_len:    int,
 	tpa:          Tpa, // a teleport request to it
+	inventory:    game.Inventory,
+	inv_acked:    u32, // its newest Inventory_Request applied
+	inv_changed:  bool, // since the last Inventory_Update sent
 }
 
 // Chunks sent to a client per tick (at 30 Hz: 1440 per second).

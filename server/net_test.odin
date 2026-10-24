@@ -41,6 +41,10 @@ Net_Client :: struct {
 	grants:      [dynamic]game.Grant, // (heap)
 	chat:        [dynamic]Net_Chat, // lines heard (heap)
 	deleted:     [dynamic]u32, // lines taken back
+	inventory:   game.Inventory, // the server's last word
+	inv_acked:   u32,
+	inv_updates: int,
+	look:        [2]f32, // yaw, pitch of its idle inputs
 }
 
 @(private)
@@ -147,6 +151,9 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			append(&c.chat, Net_Chat{v.id, v.sender, strings.clone(v.text)})
 		case game.Chat_Delete:
 			append(&c.deleted, v.id)
+		case game.Inventory_Update:
+			c.inventory, c.inv_acked = v.inventory, v.acked
+			c.inv_updates += 1
 		case game.Grants:
 			for g in c.grants {delete(g.pattern)}
 			clear(&c.grants)
@@ -181,7 +188,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	clear(&c.messages)
 	if c.welcomed {
 		c.seq += 1
-		net_send(c, game.Input{c.seq, {}})
+		net_send(c, game.Input{c.seq, {yaw = c.look[0], pitch = c.look[1]}})
 	}
 	netcode.link_flush(&c.link, now)
 }
