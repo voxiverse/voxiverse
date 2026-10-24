@@ -116,8 +116,9 @@ terrain_top :: proc(c: ^Column, g: ^Overhang_Grid, x, z: i32) -> i32 {
 	return i32(math.floor(c.height - c.rough))
 }
 
-// earth_tops: the natural tops of a chunk column: the land, the ice on a
-// frozen sea, the trunks and cacti standing on it.
+// earth_tops: the natural tops of a chunk column (the highest blocks that
+// shade): the land, the sea, the trees standing on it (theirs and their
+// neighbours' crowns).
 earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops) {
 	p := &gen.params
 	cols := new(Columns, context.temp_allocator)
@@ -136,16 +137,33 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops) {
 		for x in i32(0) ..< game.CHUNK_SIZE {
 			c := &cols[z][x]
 			top := terrain_top(c, grid, x, z)
-			if top < p.sea_level && frozen(c.biome) {top = p.sea_level}
+			top = max(top, p.sea_level) // the sea (or its ice) shades what is under it
 			out[x + z * game.CHUNK_SIZE] = top
 		}
 	}
 	trees := make([dynamic]Tree, context.temp_allocator)
-	place_trees(gen, column, &trees)
+	for dz in i32(-1) ..= 1 {
+		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+	}
 	origin := column * game.CHUNK_SIZE
+	// Trees from here and next door: their trunks and crowns.
+	Tops_Put :: struct {
+		origin: [2]i32,
+		out:    ^Tops,
+	}
+	put := Tops_Put{origin, out}
 	for t in trees {
-		i := (t.ground.x - origin.x) + (t.ground.z - origin.y) * game.CHUNK_SIZE
-		out[i] = max(out[i], t.ground.y + t.height) // its trunk (leaves let light through)
+		tree_shape(gen.seed, t, &put, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
+			tp := (^Tops_Put)(data)
+			x, z := p.x - tp.origin.x, p.z - tp.origin.y
+			if x < 0 ||
+			   z < 0 ||
+			   x >= game.CHUNK_SIZE ||
+			   z >= game.CHUNK_SIZE ||
+			   !game.block_shades(b) {return}
+			i := x + z * game.CHUNK_SIZE
+			tp.out[i] = max(tp.out[i], p.y)
+		})
 	}
 }
 

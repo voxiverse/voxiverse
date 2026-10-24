@@ -13,7 +13,7 @@ Block :: enum u16 {
 	Gravel,
 	Bedrock, // the world's floor; cannot be broken
 	Lamp, // gives light
-	Water, // still (flowing: M11)
+	Water, // a source: water stays here (liquids.odin)
 	Snow,
 	Ice,
 	Clay,
@@ -29,6 +29,16 @@ Block :: enum u16 {
 	Poppy,
 	Dandelion,
 	Cactus,
+	// Flowing water, 1 (next to a source) to 7 (as far as it goes), then
+	// water falling (from water above).
+	Water_1,
+	Water_2,
+	Water_3,
+	Water_4,
+	Water_5,
+	Water_6,
+	Water_7,
+	Water_Falling,
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -42,6 +52,7 @@ Block_Info :: struct {
 	breakable:   bool, // players (and explosions) may remove it
 	placeable:   bool, // players may place it
 	replaceable: bool, // placing a block there takes its place (air, water, tall grass)
+	shades:      bool, // stops sunlight from straight above (light still seeps in, dimming: water, leaves)
 	light:       u8, // light it gives, 0..15
 }
 
@@ -98,7 +109,7 @@ BLOCK_INFO := [Block]Block_Info {
 		placeable = true,
 		light = 15,
 	},
-	.Water = {name = "water", placeable = true, replaceable = true},
+	.Water = {name = "water", placeable = true, replaceable = true, shades = true},
 	.Snow = {
 		name = "snow",
 		collides = true,
@@ -145,6 +156,7 @@ BLOCK_INFO := [Block]Block_Info {
 		targetable = true,
 		breakable = true,
 		placeable = true,
+		shades = true,
 	},
 	.Spruce_Log = {
 		name = "spruce_log",
@@ -160,6 +172,7 @@ BLOCK_INFO := [Block]Block_Info {
 		targetable = true,
 		breakable = true,
 		placeable = true,
+		shades = true,
 	},
 	.Coal_Ore = {
 		name = "coal_ore",
@@ -202,6 +215,14 @@ BLOCK_INFO := [Block]Block_Info {
 		breakable = true,
 		placeable = true,
 	},
+	.Water_1 = {name = "water_1", replaceable = true, shades = true},
+	.Water_2 = {name = "water_2", replaceable = true, shades = true},
+	.Water_3 = {name = "water_3", replaceable = true, shades = true},
+	.Water_4 = {name = "water_4", replaceable = true, shades = true},
+	.Water_5 = {name = "water_5", replaceable = true, shades = true},
+	.Water_6 = {name = "water_6", replaceable = true, shades = true},
+	.Water_7 = {name = "water_7", replaceable = true, shades = true},
+	.Water_Falling = {name = "falling_water", replaceable = true, shades = true},
 }
 
 block_valid :: #force_inline proc(id: u16) -> bool {
@@ -224,6 +245,41 @@ block_opaque :: #force_inline proc(b: Block) -> bool {
 block_by_name :: proc(name: string) -> (Block, bool) {
 	for b in Block {if BLOCK_INFO[b].name == name {return b, true}}
 	return .Air, false
+}
+
+// block_shades: it stops sunlight from straight above (opaque blocks, and
+// water and leaves, which let it seep in dimmed): a column's top.
+block_shades :: #force_inline proc(b: Block) -> bool {
+	return BLOCK_INFO[b].opaque || BLOCK_INFO[b].shades
+}
+
+// WATER_FALLING_LEVEL: falling water's level, for the rules (it spreads
+// sideways as if fed from a source when it lands).
+WATER_FALLING_LEVEL :: 8
+
+// water_level: b's level if it is water: 0 a source, 1..7 flowing,
+// WATER_FALLING_LEVEL falling.
+water_level :: proc(b: Block) -> (level: i32, is_water: bool) {
+	#partial switch b {
+	case .Water:
+		return 0, true
+	case .Water_1 ..= .Water_7:
+		return i32(b - .Water_1) + 1, true
+	case .Water_Falling:
+		return WATER_FALLING_LEVEL, true
+	}
+	return 0, false
+}
+
+// water_block: the block for a water level (as water_level gives).
+water_block :: proc(level: i32) -> Block {
+	switch level {
+	case 0:
+		return .Water
+	case WATER_FALLING_LEVEL:
+		return .Water_Falling
+	}
+	return Block(i32(Block.Water_1) + level - 1)
 }
 
 block_light :: #force_inline proc(b: Block) -> u8 {

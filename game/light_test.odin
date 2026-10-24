@@ -13,7 +13,7 @@ World_Fn :: proc(p: Block_Pos) -> Block
 @(private = "file")
 column_top :: proc(f: World_Fn, x, z: i32) -> i32 {
 	for y := i32(TEST_TOP); y > -200; y -= 1 {
-		if block_opaque(f({x, y, z})) {return y}
+		if block_shades(f({x, y, z})) {return y}
 	}
 	return NO_GROUND
 }
@@ -159,6 +159,20 @@ sealed :: proc(p: Block_Pos) -> Block {
 	return .Stone
 }
 
+// A lake ten deep on stone, with a canopy of leaves over part of it.
+@(private = "file")
+lake :: proc(p: Block_Pos) -> Block {
+	switch {
+	case p.y <= 0:
+		return .Stone
+	case p.y <= 10:
+		return .Water
+	case p.y == 14 && p.x >= 0 && p.x <= 6 && p.z >= 0 && p.z <= 6:
+		return .Leaves
+	}
+	return .Air
+}
+
 @(test)
 test_light_matches_reference :: proc(t: ^testing.T) {
 	Case :: struct {
@@ -172,6 +186,7 @@ test_light_matches_reference :: proc(t: ^testing.T) {
 		{"lamps", lamps, {0, 1, 0}},
 		{"lamps", lamps, {0, 0, 0}},
 		{"sealed", sealed, {0, 0, 0}},
+		{"lake", lake, {0, 0, 0}},
 	}
 	out := new([LIGHT_OUT_VOLUME]u8)
 	defer free(out)
@@ -219,4 +234,21 @@ test_light_rules :: proc(t: ^testing.T) {
 	testing.expect_value(t, out_at(out, {4, 4, 7}) & 15, 9)
 	testing.expect_value(t, out_at(out, {7, 7, 7}) & 15, 15) // the lamp itself
 	testing.expect_value(t, out_at(out, {1, 7, 7}), 0) // in the wall
+}
+
+// Sunlight seeps into water from the open sky, one less per block down,
+// and leaves shade what is under them.
+@(test)
+test_light_through_water :: proc(t: ^testing.T) {
+	out := new([LIGHT_OUT_VOLUME]u8)
+	defer free(out)
+	light_of(lake, {0, 0, 0}, out)
+	at :: proc(out: ^[LIGHT_OUT_VOLUME]u8, p: [3]i32) -> u8 {
+		q := p + 1
+		return out[q.x + q.z * LIGHT_OUT + q.y * LIGHT_OUT * LIGHT_OUT] >> 4
+	}
+	testing.expect_value(t, at(out, {12, 11, 12}), 15) // the air over the lake
+	testing.expect_value(t, at(out, {12, 10, 12}), 14) // its surface
+	testing.expect_value(t, at(out, {12, 1, 12}), 5) // ten deep, on the bottom
+	testing.expect(t, at(out, {3, 13, 3}) < 15, "no shade under the leaves")
 }

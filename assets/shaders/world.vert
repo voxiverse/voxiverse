@@ -8,7 +8,7 @@
 // layer. Positions are relative to the camera's chunk, so floats stay exact
 // far from the origin.
 
-layout(location = 0) in uint in_packed; // x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24 | surface << 28
+layout(location = 0) in uint in_packed; // x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24 | surface << 28 | drop << 29
 layout(location = 1) in uint in_layer;
 
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
@@ -46,7 +46,8 @@ void main() {
 	// lengths divide the chunk's, so they meet across chunk borders.
 	if (((in_packed >> 28) & 1u) != 0u) {
 		float t = push.time;
-		local.y -= 0.14 + 0.04 * sin(t * 1.3 + local.x * PI / 4.0) * cos(t * 0.9 + local.z * PI / 8.0);
+		float drop = float(in_packed >> 29) / 8.0; // eighths below the block's top
+		local.y -= drop + 0.03 * sin(t * 1.3 + local.x * PI / 4.0) * cos(t * 0.9 + local.z * PI / 8.0);
 	}
 	vec3 pos = push.chunk_offset + local;
 	gl_Position = s.view_proj * vec4(pos, 1.0);

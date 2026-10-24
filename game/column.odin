@@ -1,6 +1,8 @@
 package game
 
-// A column's top: its highest opaque block, where sky light stops. The
+// A column's top: its highest block that shades (opaque, or water and
+// leaves), where sunlight from straight above stops; below it light only
+// seeps in, dimming block by block. The
 // server keeps the tops (sending them in Column messages); the client
 // predicts them for its own edits until the server's arrive. Both use these.
 
@@ -15,7 +17,7 @@ column_scan :: proc(query: Block_Query, x, z, from: i32, natural: Maybe(i32)) ->
 			top, known := natural.?
 			return min(top, y) if known else y
 		}
-		if block_opaque(block) {return y}
+		if block_shades(block) {return y}
 	}
 	return WORLD_MIN_Y
 }
@@ -29,7 +31,7 @@ column_top_after :: proc(
 	b: Block,
 	natural: Maybe(i32),
 ) -> i32 {
-	if block_opaque(b) {return max(old, p.y)}
+	if block_shades(b) {return max(old, p.y)}
 	if p.y == old {return column_scan(query, p.x, p.z, p.y - 1, natural)} 	// the top went
 	return old
 }

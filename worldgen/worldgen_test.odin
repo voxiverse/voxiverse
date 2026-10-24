@@ -84,8 +84,8 @@ test_generate_terrain_shape :: proc(t: ^testing.T) {
 }
 
 // Earth: the same chunk twice is the same; each column's natural top is
-// exactly its highest opaque block as generated (overhangs, trunks, ice
-// included), for columns across every kind of land near the spawn; the
+// exactly its highest block that shades as generated (overhangs, trees,
+// water included), for columns across every kind of land near the spawn; the
 // spawn is on dry land.
 @(test)
 test_earth :: proc(t: ^testing.T) {
@@ -120,7 +120,7 @@ test_earth :: proc(t: ^testing.T) {
 					if found[i] != game.WORLD_MIN_Y {continue}
 					for y := i32(game.CHUNK_SIZE - 1); y >= 0; y -= 1 {
 						bl := uniform if is_uniform else a[game.local_index({x, y, z})]
-						if game.block_opaque(bl) {
+						if game.block_shades(bl) {
 							found[i] = cy * game.CHUNK_SIZE + y
 							break
 						}
@@ -171,7 +171,7 @@ test_params_table :: proc(t: ^testing.T) {
 // call) and its worlds would not match a server's.
 @(test)
 test_earth_same_everywhere :: proc(t: ^testing.T) {
-	GOLDEN :: [2]u64{0xc842_6ef6_ba61_2406, 0x216c_0786_7aaf_4efd}
+	GOLDEN :: [2]u64{0x7c79_ad00_9b15_dbdf, 0x5fa6_19f7_68fc_9a8b}
 	seeds := [2]i64{1, 24301}
 	got: [2]u64
 	arr := new(game.Block_Array)

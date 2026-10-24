@@ -135,7 +135,7 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 		return .Cube, .Cutout
 	case .Tall_Grass, .Poppy, .Dandelion:
 		return .Cross, .Cutout
-	case .Water:
+	case .Water, .Water_1 ..= .Water_7, .Water_Falling:
 		return .Cube, .Translucent
 	}
 	return .None, .Opaque
@@ -146,8 +146,11 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 CROSS_A :: 6
 CROSS_B :: 7
 
-// SURFACE: a vertex on a liquid's open top (the shader lowers and moves it).
+// SURFACE: a vertex on a liquid's open top (the shader lowers and moves
+// it), DROP_SHIFT: how far below the block's top it sits, in eighths (3
+// bits: the levels of the water around that corner).
 SURFACE :: u32(1) << 28
+DROP_SHIFT :: 29
 
 // mesh_chunk writes the snapshot's visible faces to out (cleared first),
 // layer by layer; counts: each layer's vertices. light may be nil:
@@ -197,13 +200,43 @@ cube_faces :: proc(
 	for axes, face in FACE_AXES {
 		front := p + axes.normal
 		n := s[snapshot_index(front.x, front.y, front.z)]
-		if game.block_opaque(n) || (layer == .Translucent && n == b) {continue}
+		if game.block_opaque(n) {continue}
+		_, water := game.water_level(b)
+		_, water_beside := game.water_level(n)
+		if water && water_beside {continue} 	// inside the same body of water
 		first := len(out)
 		emit_face(s, light, out, p, face, axes, block_texture(b, face))
-		if layer == .Translucent && s[snapshot_index(p.x, p.y + 1, p.z)] != b {
-			for &v in out[first:] {if vertex_position(v).y == p.y + 1 {v.packed |= SURFACE}}
+		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);
+		   water && !under_water {
+			for &v in out[first:] {
+				at := vertex_position(v)
+				if at.y == p.y + 1 {v.packed |= SURFACE | water_drop(s, at) << DROP_SHIFT}
+			}
 		}
 	}
+}
+
+// water_drop: how far below its block's top a water surface corner at
+// chunk-local corner c sits, in eighths: the average over the water
+// blocks touching the corner (a source sits a ninth low, each flow level a
+// ninth lower; water with water above it stays full).
+@(private = "file")
+water_drop :: proc(s: ^Snapshot, c: [3]i32) -> u32 {
+	sum, n: f32
+	y := c.y - 1
+	for dz in i32(-1) ..= 0 {
+		for dx in i32(-1) ..= 0 {
+			level, water := game.water_level(s[snapshot_index(c.x + dx, y, c.z + dz)])
+			if !water {continue}
+			if _, fed := game.water_level(s[snapshot_index(c.x + dx, y + 1, c.z + dz)]);
+			   fed {return 0}
+			if level == game.WATER_FALLING_LEVEL {level = 0} 	// landed: as high as a source
+			sum += f32(1 + level) / 9
+			n += 1
+		}
+	}
+	if n == 0 {return 1}
+	return u32(clamp(sum / n * 8 + 0.5, 0, 7))
 }
 
 // cross_quads: a plant, two quads corner to corner, seen from both sides,

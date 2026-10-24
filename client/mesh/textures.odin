@@ -57,7 +57,7 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Bedrock, .Bedrock, .Bedrock
 	case .Lamp:
 		return .Lamp, .Lamp, .Lamp
-	case .Water:
+	case .Water, .Water_1 ..= .Water_7, .Water_Falling:
 		return .Water, .Water, .Water
 	case .Snow:
 		return .Snow, .Snow, .Snow

@@ -52,7 +52,7 @@ Critter_Sound :: enum u8 {
 // material_of: what a block sounds like; false for air.
 material_of :: proc(b: game.Block) -> (Material, bool) {
 	switch b {
-	case .Air, .Water:
+	case .Air, .Water, .Water_1 ..= .Water_7, .Water_Falling:
 		return {}, false
 	case .Stone, .Bedrock, .Sandstone, .Coal_Ore, .Iron_Ore, .Copper_Ore:
 		return .Stone, true

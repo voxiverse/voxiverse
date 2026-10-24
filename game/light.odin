@@ -2,8 +2,10 @@ package game
 
 // Light: sky light (from above) and block light (from lamps), 0..15 each,
 // packed in a u8 (sky << 4 | block). Light falls by one per block it
-// travels, around corners too, and solid blocks stop it; under open sky
-// (above the column's highest solid block) sky light is 15 at any depth.
+// travels, around corners too, and opaque blocks stop it; under open sky
+// (above the column's top: its highest block that shades) sky light is 15
+// at any depth. Water and leaves shade without stopping light: it seeps
+// into them from the open sky above, one less per block.
 //
 // A chunk's light is computed whole, never patched: light travels at most
 // 15 blocks, so the light of a chunk and the 1-block border its mesh needs
@@ -85,6 +87,10 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 				if !s.solid[i] {s.light[i] |= LIGHT_MAX << 4}
 			}
 			highest := first - 1
+			// Seeping down into the top itself when it lets light through.
+			if first - 1 >= 0 &&
+			   first - 1 < LIGHT_REGION &&
+			   !s.solid[region_index({x, first - 1, z})] {highest = max(highest, first)}
 			for d in ([4][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 				nx, nz := x + d[0], z + d[1]
 				if nx < 0 || nz < 0 || nx >= LIGHT_REGION || nz >= LIGHT_REGION {continue}

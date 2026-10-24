@@ -73,11 +73,20 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 	}
 }
 
+// Put: where a tree's blocks go (a chunk's array, or the column tops).
+Put :: proc(data: rawptr, p: game.Block_Pos, b: game.Block)
+
 // tree_write writes the parts of t inside the chunk at origin: trunks over
 // anything but the land, leaves only into air (and over plants).
 tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_Array) {
-	put :: proc(origin: game.Block_Pos, dst: ^game.Block_Array, p: game.Block_Pos, b: game.Block) {
-		l := p - origin
+	Chunk :: struct {
+		origin: game.Block_Pos,
+		dst:    ^game.Block_Array,
+	}
+	chunk := Chunk{origin, dst}
+	tree_shape(seed, t, &chunk, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
+		c := (^Chunk)(data)
+		l := p - c.origin
 		if l.x < 0 ||
 		   l.y < 0 ||
 		   l.z < 0 ||
@@ -85,18 +94,22 @@ tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_
 		   l.y >= game.CHUNK_SIZE ||
 		   l.z >= game.CHUNK_SIZE {return}
 		i := game.local_index(l)
-		current := dst[i]
+		current := c.dst[i]
 		ok :=
 			current == .Air || current == .Tall_Grass || current == .Poppy || current == .Dandelion
 		if b == .Log ||
 		   b == .Spruce_Log ||
 		   b == .Cactus {ok ||= current == .Leaves || current == .Spruce_Leaves}
-		if ok {dst[i] = b}
-	}
+		if ok {c.dst[i] = b}
+	})
+}
+
+// tree_shape gives every block of t to put.
+tree_shape :: proc(seed: i64, t: Tree, data: rawptr, put: Put) {
 	g := t.ground
 	switch t.kind {
 	case .Cactus:
-		for y in 1 ..= t.height {put(origin, dst, g + {0, y, 0}, .Cactus)}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Cactus)}
 	case .Oak:
 		// A rounded crown: two wide layers, two narrow, corners ragged.
 		top := g.y + t.height
@@ -107,11 +120,11 @@ tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_
 					corner := abs(dx) == r && abs(dz) == r
 					if corner &&
 					   (y == top + 1 || chance(hash(seed, g.x + dx, y, g.z + dz)) < 0.5) {continue}
-					put(origin, dst, {g.x + dx, y, g.z + dz}, .Leaves)
+					put(data, {g.x + dx, y, g.z + dz}, .Leaves)
 				}
 			}
 		}
-		for y in 1 ..= t.height {put(origin, dst, g + {0, y, 0}, .Log)}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}
 	case .Spruce:
 		// Tiers narrowing to a point: a single leaf on top, then rings
 		// of radius 1 and 2 by turns, the lowest widest.
@@ -130,11 +143,11 @@ tree_write :: proc(seed: i64, t: Tree, origin: game.Block_Pos, dst: ^game.Block_
 			for dz in -r ..= r {
 				for dx in -r ..= r {
 					if abs(dx) + abs(dz) > r {continue} 	// a diamond: corners cut
-					put(origin, dst, {g.x + dx, y, g.z + dz}, .Spruce_Leaves)
+					put(data, {g.x + dx, y, g.z + dz}, .Spruce_Leaves)
 				}
 			}
 		}
-		for y in 1 ..= t.height {put(origin, dst, g + {0, y, 0}, .Spruce_Log)}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Spruce_Log)}
 	}
 }
 
