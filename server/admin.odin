@@ -144,6 +144,31 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			notice(s, c, fmt.tprintf("No %s within 4096 blocks (or not an Earth world)", args[0]))
 			return true
 		}
+		if kind == .Dungeon {
+			// Under the land: inside its first room, on the floor.
+			pieces := make([dynamic]worldgen.Piece, context.temp_allocator)
+			worldgen.structure_pieces(st, &pieces)
+			room := pieces[0]
+			at := (room.lo + room.hi) / 2
+			c.player = {
+				position = {f64(at.x) + 0.5, f64(room.lo.y + 1), f64(at.z) + 0.5},
+				flying   = true,
+			}
+			c.teleport = {0, -0.2}
+			c.teleported = true
+			notice(
+				s,
+				c,
+				fmt.tprintf(
+					"%s at %d %d %d (you are in its first room)",
+					args[0],
+					st.lo.x,
+					st.lo.y,
+					st.lo.z,
+				),
+			)
+			return true
+		}
 		// South of it and above, facing north, looking down on it.
 		middle := (st.lo + st.hi) / 2
 		top := max(st.hi.y, worldgen.column_top(gen, middle.x, middle.z))
