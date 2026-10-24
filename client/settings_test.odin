@@ -87,26 +87,26 @@ test_console_completion :: proc(t: ^testing.T) {
 // History: typed lines (not twice in a row), walked with the draft kept.
 @(test)
 test_console_history :: proc(t: ^testing.T) {
-	c: Console
-	console_init(&c)
-	defer console_destroy(&c)
-	console_remember(&c, "time noon")
-	console_remember(&c, "time noon")
-	console_remember(&c, "  summon ")
-	console_remember(&c, "")
+	c: Line_Editor
+	line_editor_init(&c)
+	defer line_editor_destroy(&c)
+	line_remember(&c, "time noon")
+	line_remember(&c, "time noon")
+	line_remember(&c, "  summon ")
+	line_remember(&c, "")
 	testing.expect_value(t, len(c.history), 2)
-	append(&c.input, "half typed")
+	append(&c.text, "half typed")
 	e: ui.Text_Edit
 	walk_history(&c, -1, &e)
-	testing.expect_value(t, string(c.input[:]), "summon")
+	testing.expect_value(t, string(c.text[:]), "summon")
 	walk_history(&c, -1, &e)
 	walk_history(&c, -1, &e) // the oldest stays
-	testing.expect_value(t, string(c.input[:]), "time noon")
+	testing.expect_value(t, string(c.text[:]), "time noon")
 	testing.expect_value(t, e.cursor, len("time noon"))
 	walk_history(&c, 1, &e)
 	walk_history(&c, 1, &e) // past the newest: the draft again
-	testing.expect_value(t, string(c.input[:]), "half typed")
-	testing.expect_value(t, c.line.browsing, -1)
+	testing.expect_value(t, string(c.text[:]), "half typed")
+	testing.expect_value(t, c.browsing, -1)
 }
 
 // Commands run only when they can: the right number of arguments, in a

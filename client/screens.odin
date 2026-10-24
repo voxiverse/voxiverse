@@ -13,47 +13,27 @@ import "../game"
 import "../server"
 import "../ui"
 
-// Screens. Escape backs out one level: console, quit dialog, options; in a
-// world it toggles the pause menu; on the title it asks to quit.
+// Screens, with overlays over them (overlays.odin). Escape backs out one
+// level: the top overlay; else in a world it pauses, on the title it asks
+// to quit.
 
 handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
-	if app.input.console_toggle {
-		app.console.open = !app.console.open
-	}
+	if app.input.console_toggle {overlay_toggle(&app.overlays, .Console)}
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
-	if .F4 in app.input.pressed {
-		app.tuning = !app.tuning
+	if .F4 in app.input.pressed && app.screen == .Game {
+		overlay_toggle(&app.overlays, .Tuning)
 		// Tuning is watching the game respond: no pause menu in the way.
-		if app.tuning {app.paused, app.in_game_options = false, false}
+		if overlay_is_open(&app.overlays, .Tuning) {
+			overlay_close(&app.overlays, .Options)
+			overlay_close(&app.overlays, .Pause)
+		}
 	}
 	if .F2 in app.input.pressed {screenshot_request(app, "")}
 	if .F11 in app.input.pressed {
 		app.settings.fullscreen = !app.settings.fullscreen
 		settings_changed(app)
 	}
-	if app.input.escape {
-		switch {
-		case app.console.open && console_search_cancel(&app.console):
-		case app.console.open:
-			app.console.open = false
-		case app.tuning:
-			app.tuning = false
-		case app.quit_dialog:
-			app.quit_dialog = false
-		case app.screen == .Options, app.screen == .Worlds:
-			app.screen = .Title
-		case app.screen == .Multiplayer:
-			multiplayer_close(&app.multiplayer)
-			app.screen = .Title
-		case app.screen == .Game && app.in_game_options:
-			if app.settings_dirty {settings_save(app)}
-			app.in_game_options = false // back to the pause menu
-		case app.screen == .Game:
-			app.paused = !app.paused
-		case:
-			app.quit_dialog = true
-		}
-	}
+	if app.input.escape {escape(app)}
 }
 
 // Each screen and dialog draws in its own id scope, so equal labels in
@@ -75,10 +55,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		game_screen(app, ctx)
 	}
 	if app.debug.overlay {debug_overlay(app, ctx)}
-	if app.tuning {tuning_panel(app, ctx)}
-	if app.quit_dialog {quit_dialog(app, ctx)}
 	if app.settings.show_fps {fps_overlay(app, ctx)}
-	if app.console.open {console_ui(app, ctx)}
+	draw_overlays(app, ctx)
 }
 
 title_screen :: proc(app: ^App, ctx: ^ui.Context) {
@@ -96,7 +74,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	if ui.button(ctx, "Multiplayer", ui.next(ctx)) {multiplayer_open(app)}
 	if ui.button(ctx, "Options", ui.next(ctx)) {app.screen = .Options}
-	if ui.button(ctx, "Quit", ui.next(ctx)) {app.quit_dialog = true}
+	if ui.button(ctx, "Quit", ui.next(ctx)) {overlay_open(&app.overlays, .Quit_Dialog)}
 	if app.message != "" {
 		ui.label(ctx, app.message, ui.next(ctx), .Center, t.text_muted)
 	}
@@ -117,18 +95,20 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		return
 	}
 	name_tags(app, ctx)
-	if !app.paused {
-		// Crosshair.
-		c := ui.rect_center(ctx.screen, 0, 0)
-		ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
-		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
-		hotbar(ctx, s)
-		return
-	}
-	if app.in_game_options {
-		if options_panel(app, ctx, true) {app.in_game_options = false}
-		return
-	}
+	if world_paused(app) {return}
+	// Crosshair.
+	c := ui.rect_center(ctx.screen, 0, 0)
+	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
+	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
+	hotbar(ctx, s)
+}
+
+// pause_menu: the world paused (alone in our own world, it stands still).
+pause_menu :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "pause")
+	defer ui.pop_id(ctx)
+	s := app.session
+	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
@@ -136,8 +116,8 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.title(ctx, "Paused", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	if ui.button(ctx, "Resume", ui.next(ctx)) {app.paused = false}
-	if ui.button(ctx, "Options", ui.next(ctx)) {app.in_game_options = true}
+	if ui.button(ctx, "Resume", ui.next(ctx)) {overlay_close(&app.overlays, .Pause)}
+	if ui.button(ctx, "Options", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
 	if session_hosting(s) {
 		port := server.stats(&s.server).port
 		label := fmt.tprintf("Open to LAN: port %d", port) if port != 0 else "Open to LAN"
@@ -495,7 +475,7 @@ quit_dialog :: proc(app: ^App, ctx: ^ui.Context) {
 	no := ui.cut_right(&buttons, (buttons.w - t.spacing) / 2)
 	ui.cut_right(&buttons, t.spacing)
 	if ui.button(ctx, "Quit", buttons) {app.quit = true}
-	if ui.button(ctx, "Cancel", no) {app.quit_dialog = false}
+	if ui.button(ctx, "Cancel", no) {overlay_close(&app.overlays, .Quit_Dialog)}
 }
 
 // fps_overlay: frames per second, big enough to read at a glance, and

@@ -22,14 +22,11 @@ import "../ui"
 CONSOLE_MAX_LINES :: 1000
 
 Console :: struct {
-	open:      bool,
 	lines:     [CONSOLE_MAX_LINES]Console_Line, // ring buffer
 	first:     int,
 	count:     int,
 	mutex:     sync.Mutex,
-	input:     [dynamic]u8,
-	history:   [dynamic]string, // lines typed (oldest first; console_line.odin)
-	line:      Console_Line_State,
+	line:      Line_Editor, // (console_line.odin)
 	scroll:    f32, // lines scrolled up from the bottom
 	commands:  [dynamic]Command,
 	allocator: runtime.Allocator,
@@ -67,24 +64,13 @@ Completer :: proc(app: ^App, arg: int, args: []string) -> []string
 
 console_init :: proc(c: ^Console, allocator := context.allocator) {
 	c.allocator = allocator
-	c.input = make([dynamic]u8, allocator)
-	c.history = make([dynamic]string, allocator)
+	line_editor_init(&c.line, allocator)
 	c.commands = make([dynamic]Command, allocator)
-	c.line = {
-		browsing = -1,
-		found    = -1,
-		draft    = make([dynamic]u8, allocator),
-		query    = make([dynamic]u8, allocator),
-	}
 }
 
 console_destroy :: proc(c: ^Console) {
 	for i in 0 ..< c.count {delete(c.lines[(c.first + i) % CONSOLE_MAX_LINES].text, c.allocator)}
-	for h in c.history {delete(h, c.allocator)}
-	delete(c.input)
-	delete(c.history)
-	delete(c.line.draft)
-	delete(c.line.query)
+	line_editor_destroy(&c.line)
 	delete(c.commands)
 }
 
@@ -170,7 +156,7 @@ console_clear :: proc(c: ^Console) {
 }
 
 // console_ui draws the console over the top half of the screen.
-console_ui :: proc(app: ^App, ctx: ^ui.Context) {
+console_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	c := &app.console
 	t := &ctx.theme
 	prev := ui.begin_layer(ctx, .Popup)
@@ -183,31 +169,29 @@ console_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	inner := ui.rect_shrink(area, t.padding)
 	input_rect := ui.cut_bottom(&inner, t.row_height)
 	ui.cut_bottom(&inner, t.spacing)
-	console_line_keys(app, ctx)
-	if c.line.searching {
-		hint := ui.cut_bottom(&inner, t.row_height)
-		if line, run := console_search_ui(app, ctx, hint, input_rect); run {
-			console_remember(c, line)
-			console_execute(app, line)
-			clear(&c.input)
-			c.scroll = 0
-		}
-	} else {
-		if ui.text_input(
-			ctx,
-			"console input",
-			&c.input,
-			input_rect,
-			"command (help; Tab completes)",
-		) {
-			line := string(c.input[:])
-			console_remember(c, line)
-			console_execute(app, line)
-			clear(&c.input)
-			c.scroll = 0
-		}
-		// Keep the input focused while the console is open.
-		ctx.focused = ui.get_id(ctx, "console input")
+	if top && .Ctrl in ctx.input.modifiers && .L in ctx.input.keys_pressed {
+		console_clear(c)
+		ctx.input.keys_pressed -= {.L}
+	}
+	hint: ui.Rect
+	if c.line.searching {hint = ui.cut_bottom(&inner, t.row_height)}
+	r := line_edit(
+		app,
+		ctx,
+		&c.line,
+		"console input",
+		input_rect,
+		hint,
+		"command (help; Tab completes)",
+		top,
+		console_candidates,
+	)
+	if len(r.choices) > 0 {
+		console_print(c, strings.join(r.choices, "   ", context.temp_allocator), .Debug)
+	}
+	if r.submitted {
+		console_execute(app, r.line)
+		c.scroll = 0
 	}
 
 	line_h := t.font_size * 1.35
@@ -258,7 +242,8 @@ register_builtin_commands :: proc(c: ^Console) {
 					app.screen = .Title
 				case "options":
 					if app.session != nil {
-						app.paused, app.in_game_options = true, true // over the game
+						overlay_open(&app.overlays, .Pause) // over the game
+						overlay_open(&app.overlays, .Options)
 					} else {
 						app.screen = .Options
 					}
@@ -268,7 +253,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "multiplayer":
 					multiplayer_open(app)
 				case "quit":
-					app.quit_dialog = true
+					overlay_open(&app.overlays, .Quit_Dialog)
 				case:
 					console_print(
 						&app.console,
@@ -282,7 +267,7 @@ register_builtin_commands :: proc(c: ^Console) {
 		args = {1, 1},
 	)
 	console_register(c, {"console", "show the console", proc(app: ^App, args: []string) {
-			app.console.open = true
+			overlay_open(&app.overlays, .Console)
 		}})
 	console_register(c, {"help", "list commands", proc(app: ^App, args: []string) {
 				for cmd in app.console.commands {
@@ -664,7 +649,7 @@ register_builtin_commands :: proc(c: ^Console) {
 		needs = {.World},
 	)
 	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
-			app.tuning = !app.tuning
+			if app.screen == .Game {overlay_toggle(&app.overlays, .Tuning)}
 		}})
 }
 

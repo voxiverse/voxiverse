@@ -62,12 +62,9 @@ App :: struct {
 	worlds:           Worlds_Screen,
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
-	paused:           bool, // the pause menu is open (in a world)
-	in_game_options:  bool, // ... showing Options
 	debug:            Debug_Switches,
 	settings_dirty:   bool, // changed since loaded or saved
 	scripted:         bool, // running --exec commands: settings changes are not saved
-	tuning:           bool, // the tuning panel is open
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
@@ -79,7 +76,7 @@ App :: struct {
 	input:            Input_State,
 	settings:         Settings,
 	screen:           Screen,
-	quit_dialog:      bool,
+	overlays:         Overlays, // what is open over the screen (overlays.odin)
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	last_frame_ms:    f32,
@@ -233,13 +230,11 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		audio.set_volume(&app.mixer, app.settings.volume)
 		app.volume = app.settings.volume
 	}
-	if !app.paused {app.in_game_options = false}
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
-		session_freeze(app.session, app.paused)
-		playing := !app.paused && !app.console.open && !app.tuning
-		platform.set_mouse_captured(w, playing && w.focused)
+		session_freeze(app.session, world_paused(app))
+		platform.set_mouse_captured(w, game_controls(app) && w.focused)
 		conditions := game.Conditions {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
@@ -337,7 +332,7 @@ MENU_FPS :: 120
 
 // frame_cap: the shortest a frame may take now (0: no limit).
 frame_cap :: proc(app: ^App) -> time.Duration {
-	in_world := app.screen == .Game && !app.paused
+	in_world := app.screen == .Game && !world_paused(app)
 	if in_world ||
 	   app.fly_test.phase != .Off ||
 	   app.blast_test.phase != .Off ||
@@ -401,7 +396,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 		return
 	}
 	app.screen = .Game
-	app.paused = false
+	overlays_leave_game(&app.overlays)
 }
 
 // leave_world ends the session and returns to the title screen.
@@ -417,7 +412,7 @@ leave_world :: proc(app: ^App) {
 	free(app.session)
 	app.session = nil
 	app.screen = .Title
-	app.paused = false
+	overlays_leave_game(&app.overlays)
 	platform.set_mouse_captured(&app.window, false)
 }
 
