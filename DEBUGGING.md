@@ -167,7 +167,8 @@ files). In an Earth world each structure kind has a set: cells of its spacing ea
 a hash whether they hold one, where and turned how, so any chunk can work out the pieces
 reaching into it (`worldgen/structures.odin`); surface ones need flat land and get
 cobblestone foundations; trees keep clear; the column tops include them. Towers and dungeons
-(rooms and corridors) are procedural pieces through the same placement. `locate tower`
+(rooms and corridors, and a spiral stair in a shaft up to the land) are procedural pieces
+through the same placement. `locate tower`
 (ruin, well, dungeon) flies you to the nearest; `build worldmap` marks them.
 `worldgen_test.odin`'s `test_structures` checks every kind is placed, the same each time,
 built the same in any chunk order, under exact tops; `server_test.odin` saves, pastes and

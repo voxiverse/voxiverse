@@ -145,22 +145,19 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			return true
 		}
 		if kind == .Dungeon {
-			// Under the land: inside its first room, on the floor.
-			pieces := make([dynamic]worldgen.Piece, context.temp_allocator)
-			worldgen.structure_pieces(st, &pieces)
-			room := pieces[0]
-			at := (room.lo + room.hi) / 2
+			// Its way in, on the land: south of the stair shaft, looking on.
+			at := st.lo + {2, 0, 2}
 			c.player = {
-				position = {f64(at.x) + 0.5, f64(room.lo.y + 1), f64(at.z) + 0.5},
+				position = {f64(at.x) + 0.5, f64(st.top) + 5, f64(at.z) + 7.5},
 				flying   = true,
 			}
-			c.teleport = {0, -0.2}
+			c.teleport = {0, -0.55}
 			c.teleported = true
 			notice(
 				s,
 				c,
 				fmt.tprintf(
-					"%s at %d %d %d (you are in its first room)",
+					"%s at %d %d %d (its stairs down are in front of you)",
 					args[0],
 					st.lo.x,
 					st.lo.y,

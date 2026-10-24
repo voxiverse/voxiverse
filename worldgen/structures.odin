@@ -68,6 +68,7 @@ Structure :: struct {
 	lo, hi:   game.Block_Pos, // its box, inclusive
 	rotation: u8,
 	seed:     u32,
+	top:      i32, // a dungeon's: the land at its stair shaft
 }
 
 Piece_Kind :: enum u8 {
@@ -75,6 +76,7 @@ Piece_Kind :: enum u8 {
 	Tower,
 	Room,
 	Corridor,
+	Shaft, // a dungeon's way in: a spiral stair up to the land
 }
 
 Piece :: struct {
@@ -128,6 +130,14 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 	if set.kind == .Dungeon {y = i32(math.floor(lowest)) - 10 - size.y} 	// well under the surface
 	s.lo = {x, y, z}
 	s.hi = s.lo + size - 1
+	if set.kind == .Dungeon {
+		// Its stair shaft, in its first 5 x 5, up to the land (which must
+		// have no overhangs there).
+		shaft := column_at(p, gen.seed, x + 2, z + 2)
+		if shaft.rough > 0 || shaft.height < f32(p.sea_level) + 2 {return}
+		s.top = i32(math.floor(shaft.height))
+		s.hi.y = max(s.hi.y, s.top + 1)
+	}
 	return s, true
 }
 
@@ -219,14 +229,17 @@ dungeon_pieces :: proc(s: Structure, out: ^[dynamic]Piece) {
 		h^ ~= h^ >> 15
 		return h^
 	}
+	// The way in, then rooms, each joined to the one before (the first to
+	// the shaft's foot).
+	append(out, Piece{kind = .Shaft, lo = s.lo, hi = {s.lo.x + 4, s.top + 1, s.lo.z + 4}})
 	rooms := 3 + int(next(&h) % 4)
-	prev: [3]i32
-	for i in 0 ..< rooms {
+	prev := s.lo + {2, 0, 2}
+	for _ in 0 ..< rooms {
 		size := [3]i32{5 + i32(next(&h) % 5), 5 + i32(next(&h) % 2), 5 + i32(next(&h) % 5)}
 		at := s.lo + {i32(next(&h) % u32(40 - size.x)), 0, i32(next(&h) % u32(40 - size.z))}
 		append(out, Piece{kind = .Room, lo = at, hi = at + size - 1})
 		middle := at + {size.x / 2, 0, size.z / 2}
-		if i > 0 {
+		{
 			// An L of corridors, three wide inside (five with walls).
 			a, b := prev, middle
 			append(
@@ -252,7 +265,8 @@ dungeon_pieces :: proc(s: Structure, out: ^[dynamic]Piece) {
 
 // piece_block: what piece puts at p (inside its box), and how much it
 // counts: 0 nothing (void), 1 a wall or a block, 2 an inside cleared (an
-// inside wins over another piece's wall: corridors open into rooms).
+// inside wins over another piece's wall: corridors open into rooms), 3 a
+// stair step (no corridor clears it).
 piece_block :: proc(piece: ^Piece, p: game.Block_Pos) -> (b: game.Block, weight: int) {
 	l := p - piece.lo
 	size := piece.hi - piece.lo + 1
@@ -274,8 +288,37 @@ piece_block :: proc(piece: ^Piece, p: game.Block_Pos) -> (b: game.Block, weight:
 		return .Air, 2
 	case .Tower:
 		return tower_block(piece, l, size)
+	case .Shaft:
+		return shaft_block(l, size)
 	}
 	return .Air, 0
+}
+
+// shaft_block: a 5 x 5 shaft of stone bricks round a cobblestone pillar,
+// a step one higher every block round it (each a jump), corner posts on
+// the land.
+@(private = "file")
+shaft_block :: proc(l, size: [3]i32) -> (game.Block, int) {
+	RING :: [8][2]i32{{1, 1}, {2, 1}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {1, 3}, {1, 2}}
+	top := size.y - 1
+	edge := l.x == 0 || l.z == 0 || l.x == 4 || l.z == 4
+	if l.y == top {
+		// Above the land: posts at the corners, open between (a jump
+		// from the last step).
+		if (l.x == 0 || l.x == 4) && (l.z == 0 || l.z == 4) {return .Stone_Bricks, 1}
+		return .Air, 2
+	}
+	if edge {return .Stone_Bricks, 1}
+	if l.y == 0 {return .Cobblestone, 1}
+	if l.y == top {return .Air, 2} 	// the opening, inside the rim
+	if l.x == 2 && l.z == 2 {return .Cobblestone, 1}
+	for r, i in RING {
+		if l.x == r.x &&
+		   l.z == r.y &&
+		   (l.y - 1) % 8 == i32(i) &&
+		   l.y < top - 1 {return .Cobblestone, 3}
+	}
+	return .Air, 2
 }
 
 // tower_block: a square tower of stone bricks: floors every six blocks

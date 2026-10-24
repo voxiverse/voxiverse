@@ -116,7 +116,8 @@ and thinning; between two sources a new one forms. In water you swim: jump to ri
 against a ledge, to climb out), sneak to dive; under the surface the world turns blue and
 close. Sunlight fades with depth, and trees cast shade.
 
-Out in the world stand towers, ruins and wells, and dungeons lie under it (`locate tower`).
+Out in the world stand towers, ruins and wells; dungeons lie under it, a spiral stair in a
+stone shaft leading down (`locate tower`, `locate dungeon`).
 Build your own: select a box (`pos1`, `pos2`) and `structure save hut` keeps it with the world
 (its air leaves what is there when pasted; `structure save hut clear` clears it);
 `structure paste hut 1` puts it at the block you aim at, a quarter turned. `structure list`
