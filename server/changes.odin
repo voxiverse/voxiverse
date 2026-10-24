@@ -26,8 +26,8 @@ Changes :: struct {
 MAX_BLOCK_MESSAGES :: game.MAX_BLOCKS_CHANGED
 
 @(private = "file")
-changes_begin :: proc(s: ^Server) -> ^Changes {
-	ch := &s.changes
+changes_begin :: proc(w: ^World) -> ^Changes {
+	ch := &w.changes
 	if ch.blocks == nil {
 		ch.blocks = make(map[game.Block_Pos]int, 16, context.temp_allocator)
 		ch.chunks = make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
@@ -38,33 +38,35 @@ changes_begin :: proc(s: ^Server) -> ^Changes {
 
 // set_block changes one block (by a player, or nil: the world itself);
 // false if its chunk is not loaded.
-set_block :: proc(s: ^Server, p: game.Block_Pos, b: game.Block, by: ^Client = nil) -> bool {
-	if !chunks_set_block(&s.chunks, p, b) {return false}
-	mark_edited(s, game.chunk_of(p))
-	ch := changes_begin(s)
+set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block, by: ^Client = nil) -> bool {
+	s := w.server
+	if !chunks_set_block(&w.chunks, p, b) {return false}
+	mark_edited(w, game.chunk_of(p))
+	ch := changes_begin(w)
 	who := int(player_id(s, by)) if by != nil else -1
 	if before, seen := ch.blocks[p]; seen && before != who {who = -1}
 	ch.blocks[p] = who
-	if column_edited(s, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
-	wake_water(s, p)
+	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
+	wake_water(w, p)
 	return true
 }
 
 // changes_chunk: the chunk at pos was changed in bulk (its blocks written
 // directly), to be sent whole.
-changes_chunk :: proc(s: ^Server, pos: game.Chunk_Pos) {
-	mark_edited(s, pos)
-	changes_begin(s).chunks[pos] = {}
+changes_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
+	mark_edited(w, pos)
+	changes_begin(w).chunks[pos] = {}
 }
 
 // changes_column: the tops of a chunk column moved.
-changes_column :: proc(s: ^Server, column: [2]i32) {
-	changes_begin(s).columns[column] = {}
+changes_column :: proc(w: ^World, column: [2]i32) {
+	changes_begin(w).columns[column] = {}
 }
 
 // changes_flush tells every player what changed in the chunks it has.
-changes_flush :: proc(s: ^Server) {
-	ch := &s.changes
+changes_flush :: proc(w: ^World) {
+	s := w.server
+	ch := &w.changes
 	defer ch^ = {}
 	if ch.blocks == nil {return}
 	per_chunk := make(map[game.Chunk_Pos]int, len(ch.blocks), context.temp_allocator)
@@ -81,10 +83,10 @@ changes_flush :: proc(s: ^Server) {
 		   0 {send_message(s, &c, game.Bulk_Begin{u16(min(len(whole), int(max(u16))))})}
 		for pos in busy {if pos in c.has {append(&whole, pos)}} 	// after the group
 		for column in ch.columns {
-			if c.columns[column] > 0 {send_message(s, &c, column_message(s, column))}
+			if c.columns[column] > 0 {send_message(s, &c, column_message(w, column))}
 		}
 		for pos in whole {
-			chunk := chunks_get(&s.chunks, pos)
+			chunk := chunks_get(&w.chunks, pos)
 			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		}
 		// A player's edit, heard; the world's changes (flowing water), one
@@ -93,7 +95,7 @@ changes_flush :: proc(s: ^Server) {
 		for p, who in ch.blocks {
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk in busy || chunk not_in c.has {continue}
-			b, _ := chunks_block(&s.chunks, p)
+			b, _ := chunks_block(&w.chunks, p)
 			if who >= 0 {
 				send_message(s, &c, game.Block_Changed{p, b})
 				continue

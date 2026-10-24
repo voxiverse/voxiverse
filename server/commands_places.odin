@@ -245,7 +245,7 @@ admin_back :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private)
 admin_top :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	p := c.player.position
-	top := column_top(s, i32(math.floor(p.x)), i32(math.floor(p.z)))
+	top := column_top(c.world, i32(math.floor(p.x)), i32(math.floor(p.z)))
 	land(s, c, {p.x, f64(top + 1), p.z}, c.look, .Ground)
 	return true
 }

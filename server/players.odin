@@ -15,6 +15,8 @@ import "../netcode"
 @(private)
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
+	c.world = s.home
+	w := c.world
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
 	if has_saved {
@@ -25,7 +27,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		for st in saved.overflow {
 			if !game.stack_empty(
 				st,
-			) {spawn_item(s, saved.state.position + {0, 0.5, 0}, st, {}, -1)}
+			) {spawn_item(w, saved.state.position + {0, 0.5, 0}, st, {}, -1)}
 		}
 		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
@@ -41,15 +43,15 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			spawn = c.player.position,
 			view_radius = u32(s.config.view_radius),
 			view_height = u32(s.config.view_height),
-			rules = s.rules,
+			rules = w.rules,
 		},
 	)
-	send_message(s, c, game.Time{s.clock})
+	send_message(s, c, game.Time{w.clock})
 	refresh_grants(s, c) // what they may do
 	if !has_saved {give_kit(s, c)} 	// (as their grants allow)
 	c.inv_changed = true
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
-	if m, ok := worldgen_variables(s); ok {send_message(s, c, m)}
+	if m, ok := worldgen_variables(w); ok {send_message(s, c, m)}
 	for &other in s.clients {
 		if &other == c || other.state != .Playing {continue}
 		send_message(s, c, game.Player_Joined{player_id(s, &other), client_name(&other)})
@@ -98,13 +100,14 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 // its player is.
 @(private)
 simulate_player :: proc(s: ^Server, c: ^Client) {
+	w := c.world
 	buf: [game.INPUT_BUDGET_MAX]game.Input
-	query := game.Block_Query{&s.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
 	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
-		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+		game.player_step(&c.player, msg.input, &w.rules, query, game.TICK_SECONDS)
 		if c.afk && msg.input.move != {} {set_afk(s, c, false)} 	// back
 		if waiting {
 			// Held still until the blocks are there (a toggle still takes).

@@ -23,9 +23,10 @@ FIRE_EVERY :: game.TICK_RATE / 4
 // queue_action holds an action until the input it follows has been
 // applied (refusing it outright if too many are waiting).
 queue_action :: proc(s: ^Server, c: ^Client, a: Action) {
+	w := c.world
 	if c.action_count == MAX_QUEUED_ACTIONS {
 		if e, edit := a.(game.Edit); edit {
-			current, _ := chunks_block(&s.chunks, e.pos)
+			current, _ := chunks_block(&w.chunks, e.pos)
 			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
 		}
 		return
@@ -74,7 +75,8 @@ action_after :: proc(a: Action) -> u32 {
 // has the player, and applies it if it passes.
 @(private = "file")
 apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
-	current, loaded := chunks_block(&s.chunks, e.pos)
+	w := c.world
+	current, loaded := chunks_block(&w.chunks, e.pos)
 	result := game.Edit_Result {
 		id    = e.id,
 		pos   = e.pos,
@@ -85,7 +87,7 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	if !game.in_reach(
 		game.player_eye(player),
 		e.pos,
-		f64(s.rules.reach) + game.EDIT_REACH_SLACK,
+		f64(w.rules.reach) + game.EDIT_REACH_SLACK,
 	) {return result}
 	ok := false
 	slot := -1 // placing from (infinite: none)
@@ -100,7 +102,7 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 			game.can_place_at(current, e.block, e.pos, player) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
-	if !ok || !set_block(s, e.pos, e.block, c) {return result}
+	if !ok || !set_block(w, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
 	if e.block == .Air {
 		broken_drop(s, c, e.pos, current)
@@ -115,19 +117,20 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 // by its own ray; the server only checks it was possible.
 @(private = "file")
 attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
-	ent, index := entity_find(s, a.entity)
+	w := c.world
+	ent, index := entity_find(w, a.entity)
 	if ent == nil || !game.ENTITY_INFO[ent.kind].hittable {return} 	// gone already: a late click
 	eye := game.player_eye(c.player)
 	lo, hi := game.entity_box(ent.kind, ent.body.position)
 	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
 	d := closest - eye
-	reach := f64(s.rules.reach) + game.EDIT_REACH_SLACK
+	reach := f64(w.rules.reach) + game.EDIT_REACH_SLACK
 	if d.x * d.x + d.y * d.y + d.z * d.z > reach * reach {return}
-	if entity_attack(s, ent, c.player.position) {
+	if entity_attack(w, ent, c.player.position) {
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
-		entity_died(s, index)
+		entity_died(w, index)
 	} else {
-		entity_hurt_shown(s, a.entity)
+		entity_hurt_shown(w, a.entity)
 	}
 }
 

@@ -83,12 +83,12 @@ entities_destroy :: proc(e: ^Entities) {
 
 // entity_spawn adds an entity at position (bottom centre); nil if full.
 entity_spawn :: proc(
-	s: ^Server,
+	w: ^World,
 	kind: game.Entity_Kind,
 	position: [3]f64,
 	natural: bool,
 ) -> ^Entity {
-	e := &s.entities
+	e := &w.entities
 	if len(e.list) == MAX_ENTITIES {return nil}
 	append(
 		&e.list,
@@ -107,42 +107,43 @@ entity_spawn :: proc(
 }
 
 // entities_tick: spawning, despawning, thinking and moving, every tick.
-entities_tick :: proc(s: ^Server) {
-	e := &s.entities
+entities_tick :: proc(w: ^World) {
+	s := w.server
+	e := &w.entities
 	e.budget = PATH_BUDGET_PER_TICK
-	if s.tick % SPAWN_EVERY == 0 {spawn_natural(s)}
-	query := game.Block_Query{&s.chunks, chunks_block}
+	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
+	query := game.Block_Query{&w.chunks, chunks_block}
 	blasts := make([dynamic]Sphere, context.temp_allocator)
 	for i := 0; i < len(e.list); {
 		ent := &e.list[i]
 		ent.age += 1
-		if ent.natural && !anyone_within(s, ent.body.position, DESPAWN_DISTANCE) {
+		if ent.natural && !anyone_within(w, ent.body.position, DESPAWN_DISTANCE) {
 			unordered_remove(&e.list, i)
 			continue
 		}
 		switch ent.kind {
 		case .Critter:
-			if chunk_ready(s, ent.body.position) { 	// else its ground is not loaded (yet): it waits
-				think(s, ent)
-				wish, jump := steer(s, ent)
-				game.body_step(&ent.body, ent.kind, wish, jump, &s.rules, query, game.TICK_SECONDS)
+			if chunk_ready(w, ent.body.position) { 	// else its ground is not loaded (yet): it waits
+				think(w, ent)
+				wish, jump := steer(w, ent)
+				game.body_step(&ent.body, ent.kind, wish, jump, &w.rules, query, game.TICK_SECONDS)
 			}
 		case .Rocket:
-			if at, hit := rocket_step(s, ent); hit {
+			if at, hit := rocket_step(w, ent); hit {
 				append(&blasts, Sphere{at, game.ROCKET_RADIUS})
-				entity_died(s, i) // its explosion is what players see
+				entity_died(w, i) // its explosion is what players see
 				continue
 			}
 		case .Item:
-			if item_tick(s, i) {
-				entity_gone(s, i)
+			if item_tick(w, i) {
+				entity_gone(w, i)
 				continue
 			}
 		}
 		i += 1
 	}
 	// After the walk over the list: explosions change it.
-	for b in blasts {explode(s, b.center, b.radius)}
+	for b in blasts {explode(w, b.center, b.radius)}
 }
 
 // fire launches a rocket from a player's eyes, aimed yaw/pitch.
@@ -150,7 +151,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	dir := forward(yaw, pitch)
 	eye := game.player_eye(c.player)
 	start := eye + dir * 0.8 - {0, 0.15, 0} // the box's bottom centre
-	ent := entity_spawn(s, .Rocket, start, false)
+	ent := entity_spawn(c.world, .Rocket, start, false)
 	if ent == nil {return false}
 	ent.yaw, ent.pitch = yaw, pitch
 	ent.body.velocity = {f32(dir.x), f32(dir.y), f32(dir.z)} * game.ROCKET_SPEED
@@ -160,14 +161,15 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 
 // explode: a blast at center. Everyone near is shown it, the sphere is
 // carved (where loaded), and what is near is thrown (critters hurt).
-explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
+explode :: proc(w: ^World, center: [3]f64, radius: f64) {
+	s := w.server
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		d := c.player.position - center
 		if d.x * d.x + d.z * d.z <
 		   160 * 160 {send_message(s, &c, game.Explosion{center, f32(radius)})}
 	}
-	bulk_edit(s, {shape = Sphere{center, radius}, op = .Carve, partial = true})
+	bulk_edit(w, {shape = Sphere{center, radius}, op = .Carve, partial = true})
 	reach := 2 * radius
 	push :: proc(at, center: [3]f64, reach: f64) -> (impulse: [3]f32, ok: bool) {
 		d := at - center
@@ -185,8 +187,8 @@ explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
 			c.player.on_ground = false
 		}
 	}
-	for i := 0; i < len(s.entities.list); {
-		ent := &s.entities.list[i]
+	for i := 0; i < len(w.entities.list); {
+		ent := &w.entities.list[i]
 		impulse, near := push(ent.body.position + {0, 0.4, 0}, center, reach)
 		if !near || !game.ENTITY_INFO[ent.kind].hittable {
 			i += 1
@@ -197,7 +199,7 @@ explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
 		d := ent.body.position - center
 		ent.health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
 		if ent.health <= 0 {
-			entity_died(s, i)
+			entity_died(w, i)
 			continue
 		}
 		ent.brain = {
@@ -206,14 +208,15 @@ explode :: proc(s: ^Server, center: [3]f64, radius: f64) {
 			from  = center,
 			hurt  = HURT_TICKS,
 		}
-		entity_hurt_shown(s, ent.id)
+		entity_hurt_shown(w, ent.id)
 		i += 1
 	}
 }
 
 // rocket_step flies a rocket one tick; where it hit, if it did.
 @(private = "file")
-rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
+rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
+	s := w.server
 	if f32(ent.age) * game.TICK_SECONDS > game.ROCKET_LIFE {return ent.body.position, true}
 	ent.body.velocity.y -= game.ROCKET_GRAVITY * game.TICK_SECONDS
 	v := ent.body.velocity
@@ -224,13 +227,13 @@ rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	from := ent.body.position + {0, 0.15, 0}
 	nearest := step
 	hit_at: [3]f64
-	query := game.Block_Query{&s.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block}
 	if b, ok := game.raycast(query, from, dir, step); ok {
 		nearest, hit_at, hit = b.distance, from + dir * b.distance, true
-	} else if !chunk_ready(s, from) {
+	} else if !chunk_ready(w, from) {
 		return from, true // flew out of the loaded world
 	}
-	for &other in s.entities.list {
+	for &other in w.entities.list {
 		if other.id == ent.id || !game.ENTITY_INFO[other.kind].hittable {continue}
 		lo, hi := game.entity_box(other.kind, other.body.position)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
@@ -257,7 +260,7 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 
 // entity_attack: a player hits an entity (the reach is checked by the
 // caller). Knocked back, hurt (or dead), and scared.
-entity_attack :: proc(s: ^Server, ent: ^Entity, from: [3]f64) -> (died: bool) {
+entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 	ent.health -= 1
 	away := ent.body.position - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
@@ -274,8 +277,8 @@ entity_attack :: proc(s: ^Server, ent: ^Entity, from: [3]f64) -> (died: bool) {
 	return ent.health <= 0
 }
 
-entity_find :: proc(s: ^Server, id: u32) -> (^Entity, int) {
-	for &ent, i in s.entities.list {if ent.id == id {return &ent, i}}
+entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
+	for &ent, i in w.entities.list {if ent.id == id {return &ent, i}}
 	return nil, -1
 }
 
@@ -283,12 +286,13 @@ entity_find :: proc(s: ^Server, id: u32) -> (^Entity, int) {
 // ones, despawns for those gone from its area (or from the world), and a
 // batch of places every tick.
 replicate :: proc(s: ^Server, c: ^Client) {
+	w := c.world
 	near := f64(ENTITY_VIEW)
 	visible := make(map[u32]struct{}, 64, context.temp_allocator)
 	batch := game.Entities {
 		tick = u32(s.tick),
 	}
-	for &ent in s.entities.list {
+	for &ent in w.entities.list {
 		d := ent.body.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near {continue}
 		if ent.id not_in c.known {
@@ -318,29 +322,31 @@ replicate :: proc(s: ^Server, c: ^Client) {
 }
 
 // entity_died: tell everyone who knew it (they show it die), then forget it.
-entity_died :: proc(s: ^Server, index: int) {
-	entity_remove(s, index, true)
+entity_died :: proc(w: ^World, index: int) {
+	entity_remove(w, index, true)
 }
 
 // entity_gone: as entity_died, without a death to show (a stack picked up).
-entity_gone :: proc(s: ^Server, index: int) {
-	entity_remove(s, index, false)
+entity_gone :: proc(w: ^World, index: int) {
+	entity_remove(w, index, false)
 }
 
 @(private = "file")
-entity_remove :: proc(s: ^Server, index: int, died: bool) {
-	id := s.entities.list[index].id
+entity_remove :: proc(w: ^World, index: int, died: bool) {
+	s := w.server
+	id := w.entities.list[index].id
 	for &c in s.clients {
 		if c.state == .Playing && id in c.known {
 			delete_key(&c.known, id)
 			send_message(s, &c, game.Entity_Despawn{id, died})
 		}
 	}
-	unordered_remove(&s.entities.list, index)
+	unordered_remove(&w.entities.list, index)
 }
 
 // entity_hurt_shown: everyone who knows it sees it flinch.
-entity_hurt_shown :: proc(s: ^Server, id: u32) {
+entity_hurt_shown :: proc(w: ^World, id: u32) {
+	s := w.server
 	for &c in s.clients {
 		if c.state == .Playing && id in c.known {send_message(s, &c, game.Entity_Hurt{id})}
 	}
@@ -348,7 +354,8 @@ entity_hurt_shown :: proc(s: ^Server, id: u32) {
 
 // summon puts an entity in front of a player (cheats: Admin "summon").
 summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
-	query := game.Block_Query{&s.chunks, chunks_block}
+	w := c.world
+	query := game.Block_Query{&w.chunks, chunks_block}
 	yaw := c.look[0]
 	ahead := c.player.position + {-f64(math.sin(yaw)) * 3, 0, -f64(math.cos(yaw)) * 3}
 	at := game.Block_Pos {
@@ -359,7 +366,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 	for dy in ([]i32{0, 1, -1, 2, -2, 3, -3}) {
 		p := at + {0, dy, 0}
 		if standable(query, p) {
-			if ent := entity_spawn(s, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
+			if ent := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
 			   ent != nil {
 				log.infof(
 					"server summoned kind=%v id=%d at=%v by=%s",
@@ -380,9 +387,9 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 
 // think moves the brain from state to state.
 @(private = "file")
-think :: proc(s: ^Server, ent: ^Entity) {
+think :: proc(w: ^World, ent: ^Entity) {
 	b := &ent.brain
-	r := rand.default_random_generator(&s.entities.rng)
+	r := rand.default_random_generator(&w.entities.rng)
 	if b.hurt > 0 {b.hurt -= 1}
 	b.timer -= 1
 	pos := ent.body.position
@@ -398,10 +405,10 @@ think :: proc(s: ^Server, ent: ^Entity) {
 				pos +
 				away / l * 10 +
 				{rand.float64_range(-3, 3, r), 0, rand.float64_range(-3, 3, r)}
-			plan(s, ent, target)
+			plan(w, ent, target)
 		}
 	case .Idle, .Look:
-		if p, ok := nearest_player(s, pos, 6); ok && rand.float32(r) < 0.95 {
+		if p, ok := nearest_player(w, pos, 6); ok && rand.float32(r) < 0.95 {
 			b.state = .Look
 			b.look_at = p + {0, game.PLAYER_EYE, 0}
 		} else if b.state == .Look {
@@ -411,7 +418,7 @@ think :: proc(s: ^Server, ent: ^Entity) {
 			switch {
 			case rand.float32(r) < 0.55:
 				target := pos + {rand.float64_range(-8, 8, r), 0, rand.float64_range(-8, 8, r)}
-				if plan(s, ent, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
+				if plan(w, ent, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
 			case rand.float32(r) < 0.5:
 				b.state, b.timer = .Graze, rand.int_range(40, 120, r)
 			case:
@@ -444,10 +451,10 @@ think :: proc(s: ^Server, ent: ^Entity) {
 // plan finds a path to near target (from where the entity stands); false
 // if this tick's budget is spent or there is nowhere to go.
 @(private = "file")
-plan :: proc(s: ^Server, ent: ^Entity, target: [3]f64) -> bool {
-	e := &s.entities
+plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
+	e := &w.entities
 	if e.budget < PATH_BUDGET_EACH {return false}
-	query := game.Block_Query{&s.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block}
 	pos := ent.body.position
 	start := game.Block_Pos {
 		i32(math.floor(pos.x)),
@@ -473,7 +480,7 @@ plan :: proc(s: ^Server, ent: ^Entity, target: [3]f64) -> bool {
 
 // steer: the wished-for velocity and whether to jump, following the path.
 @(private = "file")
-steer :: proc(s: ^Server, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
+steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	b := &ent.brain
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
 	if b.state != .Wander && b.state != .Flee {return}
@@ -504,15 +511,16 @@ steer :: proc(s: ^Server, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 // spawn_natural: by day, critters appear on grass around players with
 // room for more, out of sight distance from everyone (but not far).
 @(private = "file")
-spawn_natural :: proc(s: ^Server) {
-	day := game.time_of_day(s.clock)
+spawn_natural :: proc(w: ^World) {
+	s := w.server
+	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
-	r := rand.default_random_generator(&s.entities.rng)
-	query := game.Block_Query{&s.chunks, chunks_block}
+	r := rand.default_random_generator(&w.entities.rng)
+	query := game.Block_Query{&w.chunks, chunks_block}
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		near := 0
-		for ent in s.entities.list {
+		for ent in w.entities.list {
 			d := ent.body.position - c.player.position
 			if d.x * d.x + d.z * d.z < SPAWN_NEAR * SPAWN_NEAR {near += 1}
 		}
@@ -521,30 +529,31 @@ spawn_natural :: proc(s: ^Server) {
 		distance := rand.float64_range(SPAWN_MIN, SPAWN_MAX, r)
 		x := i32(math.floor(c.player.position.x + math.cos(angle) * distance))
 		z := i32(math.floor(c.player.position.z + math.sin(angle) * distance))
-		top := column_top(s, x, z)
-		ground, loaded := chunks_block(&s.chunks, {x, top, z})
+		top := column_top(w, x, z)
+		ground, loaded := chunks_block(&w.chunks, {x, top, z})
 		at := game.Block_Pos{x, top + 1, z}
 		if !loaded || ground != .Grass || !standable(query, at) {continue}
 		center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
-		if anyone_within(s, center, SPAWN_MIN) {continue}
+		if anyone_within(w, center, SPAWN_MIN) {continue}
 		herd := rand.int_range(1, 4, r)
 		for _ in 0 ..< herd {
 			jitter := [3]f64{rand.float64_range(-1.5, 1.5, r), 0, rand.float64_range(-1.5, 1.5, r)}
 			p := center + jitter
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-			if standable(query, b) {entity_spawn(s, .Critter, p, true)}
+			if standable(query, b) {entity_spawn(w, .Critter, p, true)}
 		}
 	}
 }
 
 @(private = "file")
-anyone_within :: proc(s: ^Server, p: [3]f64, distance: f64) -> bool {
-	_, ok := nearest_player(s, p, distance)
+anyone_within :: proc(w: ^World, p: [3]f64, distance: f64) -> bool {
+	_, ok := nearest_player(w, p, distance)
 	return ok
 }
 
 @(private = "file")
-nearest_player :: proc(s: ^Server, p: [3]f64, within: f64) -> (at: [3]f64, ok: bool) {
+nearest_player :: proc(w: ^World, p: [3]f64, within: f64) -> (at: [3]f64, ok: bool) {
+	s := w.server
 	best := within * within
 	for &c in s.clients {
 		if c.state != .Playing {continue}
@@ -558,10 +567,10 @@ nearest_player :: proc(s: ^Server, p: [3]f64, within: f64) -> (at: [3]f64, ok: b
 
 // chunk_ready: the chunk at p and the one below are loaded (it can stand).
 @(private)
-chunk_ready :: proc(s: ^Server, p: [3]f64) -> bool {
+chunk_ready :: proc(w: ^World, p: [3]f64) -> bool {
 	b := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
-	c := chunks_get(&s.chunks, game.chunk_of(b))
-	below := chunks_get(&s.chunks, game.chunk_of(b - {0, game.CHUNK_SIZE, 0}))
+	c := chunks_get(&w.chunks, game.chunk_of(b))
+	below := chunks_get(&w.chunks, game.chunk_of(b - {0, game.CHUNK_SIZE, 0}))
 	return c != nil && c.state == .Ready && below != nil && below.state == .Ready
 }
 

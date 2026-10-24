@@ -45,8 +45,9 @@ updates_init :: proc(u: ^Updates, allocator := context.allocator) -> (err: mem.A
 }
 
 // schedule wakes the block at p in delay ticks (unless already waiting).
-schedule :: proc(s: ^Server, p: game.Block_Pos, delay: u64) {
-	u := &s.updates
+schedule :: proc(w: ^World, p: game.Block_Pos, delay: u64) {
+	s := w.server
+	u := &w.updates
 	if p in u.queued {return}
 	if u.count == MAX_UPDATES {
 		if u.dropped ==
@@ -61,24 +62,24 @@ schedule :: proc(s: ^Server, p: game.Block_Pos, delay: u64) {
 }
 
 // wake_water schedules p and its six neighbours if they are water.
-wake_water :: proc(s: ^Server, p: game.Block_Pos) {
+wake_water :: proc(w: ^World, p: game.Block_Pos) {
 	for d in ([7]game.Block_Pos{{0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		b, loaded := chunks_block(&s.chunks, p + d)
-		if _, water := game.water_level(b); loaded && water {schedule(s, p + d, WATER_DELAY)}
+		b, loaded := chunks_block(&w.chunks, p + d)
+		if _, water := game.water_level(b); loaded && water {schedule(w, p + d, WATER_DELAY)}
 	}
 }
 
 // wake_water_box schedules the water in lo..hi and around it that could
 // change (after a bulk edit, a saved chunk loading, a new chunk next to
 // water that was waiting for it: only_border, its faces' neighbours).
-wake_water_box :: proc(s: ^Server, lo, hi: game.Block_Pos, only_border := false) {
+wake_water_box :: proc(w: ^World, lo, hi: game.Block_Pos, only_border := false) {
 	for y in lo.y - 1 ..= hi.y + 1 {
 		for z in lo.z - 1 ..= hi.z + 1 {
 			for x in lo.x - 1 ..= hi.x + 1 {
 				inside :=
 					x >= lo.x && x <= hi.x && y >= lo.y && y <= hi.y && z >= lo.z && z <= hi.z
 				if only_border && inside {continue}
-				if restless(s, {x, y, z}) {schedule(s, {x, y, z}, WATER_DELAY)}
+				if restless(w, {x, y, z}) {schedule(w, {x, y, z}, WATER_DELAY)}
 			}
 		}
 	}
@@ -87,22 +88,23 @@ wake_water_box :: proc(s: ^Server, lo, hi: game.Block_Pos, only_border := false)
 // restless: water at p that could change: flowing, or a source next to
 // somewhere it could flow (still lakes and seas are left alone).
 @(private = "file")
-restless :: proc(s: ^Server, p: game.Block_Pos) -> bool {
-	b, loaded := chunks_block(&s.chunks, p)
+restless :: proc(w: ^World, p: game.Block_Pos) -> bool {
+	b, loaded := chunks_block(&w.chunks, p)
 	level, water := game.water_level(b)
 	if !loaded || !water {return false}
 	if level != 0 {return true}
 	for d in ([5]game.Block_Pos{{1, 0, 0}, {-1, 0, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		nb, n_loaded := chunks_block(&s.chunks, p + d)
+		nb, n_loaded := chunks_block(&w.chunks, p + d)
 		if n_loaded && takes_water(nb, 7) {return true}
 	}
 	return false
 }
 
 // updates_run runs the updates due this tick (up to the budget).
-updates_run :: proc(s: ^Server) {
+updates_run :: proc(w: ^World) {
+	s := w.server
 	base.profile_scope("block updates")
-	u := &s.updates
+	u := &w.updates
 	if u.dropped > 0 && u.count < MAX_UPDATES / 2 {u.dropped = 0}
 	for n := 0; n < UPDATE_BUDGET && u.count > 0 && u.heap[0].due <= s.tick; n += 1 {
 		p := u.heap[0].pos
@@ -111,34 +113,34 @@ updates_run :: proc(s: ^Server) {
 		sift_down(u.heap[:u.count], 0)
 		delete_key(&u.queued, p)
 		u.run += 1
-		water_update(s, p)
+		water_update(w, p)
 	}
 }
 
 // water_update: the water at p takes the state its neighbours give it,
 // then spreads.
 @(private = "file")
-water_update :: proc(s: ^Server, p: game.Block_Pos) {
-	b, loaded := chunks_block(&s.chunks, p)
+water_update :: proc(w: ^World, p: game.Block_Pos) {
+	b, loaded := chunks_block(&w.chunks, p)
 	level, water := game.water_level(b)
 	if !loaded || !water {return}
 	if level != 0 {
-		want, alive := fed_level(s, p)
+		want, alive := fed_level(w, p)
 		if !alive {
-			set_block(s, p, .Air)
+			set_block(w, p, .Air)
 			return
 		}
 		if want != level {
-			set_block(s, p, game.water_block(want))
+			set_block(w, p, game.water_block(want))
 			level = want
 		}
 	}
 	// Down first.
 	below := p + {0, -1, 0}
-	under, under_loaded := chunks_block(&s.chunks, below)
+	under, under_loaded := chunks_block(&w.chunks, below)
 	if !under_loaded {return}
 	if takes_water(under, game.WATER_FALLING_LEVEL) {
-		set_block(s, below, .Water_Falling)
+		set_block(w, below, .Water_Falling)
 		return
 	}
 	// On firm ground (or on water), sideways, a level weaker.
@@ -146,12 +148,12 @@ water_update :: proc(s: ^Server, p: game.Block_Pos) {
 	   on_water && level != 0 && level != game.WATER_FALLING_LEVEL {return}
 	next := i32(1) if level == 0 || level == game.WATER_FALLING_LEVEL else level + 1
 	if next > 7 {return}
-	ways := ways_down(s, p)
+	ways := ways_down(w, p)
 	for d, i in SIDES {
 		if !ways[i] {continue}
 		n := p + d
-		nb, n_loaded := chunks_block(&s.chunks, n)
-		if n_loaded && takes_water(nb, next) {set_block(s, n, game.water_block(next))}
+		nb, n_loaded := chunks_block(&w.chunks, n)
+		if n_loaded && takes_water(nb, next) {set_block(w, n, game.water_block(next))}
 	}
 }
 
@@ -161,13 +163,13 @@ SIDES := [4]game.Block_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}
 // fed_level: the level flowing water at p should have, from what feeds it
 // (false: nothing does; it dries up).
 @(private = "file")
-fed_level :: proc(s: ^Server, p: game.Block_Pos) -> (level: i32, alive: bool) {
-	above, _ := chunks_block(&s.chunks, p + {0, 1, 0})
+fed_level :: proc(w: ^World, p: game.Block_Pos) -> (level: i32, alive: bool) {
+	above, _ := chunks_block(&w.chunks, p + {0, 1, 0})
 	if _, water := game.water_level(above); water {return game.WATER_FALLING_LEVEL, true}
 	sources := 0
 	best := i32(game.WATER_FALLING_LEVEL)
 	for d in SIDES {
-		nb, _ := chunks_block(&s.chunks, p + d)
+		nb, _ := chunks_block(&w.chunks, p + d)
 		l, water := game.water_level(nb)
 		if !water {continue}
 		if l == 0 {sources += 1}
@@ -177,7 +179,7 @@ fed_level :: proc(s: ^Server, p: game.Block_Pos) -> (level: i32, alive: bool) {
 	}
 	if sources >= 2 {
 		// Between two sources over firm ground (or a source): a source.
-		under, _ := chunks_block(&s.chunks, p + {0, -1, 0})
+		under, _ := chunks_block(&w.chunks, p + {0, -1, 0})
 		if l, water := game.water_level(under);
 		   game.block_collides(under) || (water && l == 0) {return 0, true}
 	}
@@ -200,15 +202,15 @@ takes_water :: proc(b: game.Block, level: i32) -> bool {
 // ways_down: which sides lead to the nearest way down within WATER_REACH
 // (a block water can fall from); every side water can take when none do.
 @(private = "file")
-ways_down :: proc(s: ^Server, p: game.Block_Pos) -> (ways: [4]bool) {
+ways_down :: proc(w: ^World, p: game.Block_Pos) -> (ways: [4]bool) {
 	best := i32(WATER_REACH + 1)
 	dist: [4]i32
 	for d, i in SIDES {
-		dist[i] = distance_down(s, p + d, d, 1)
+		dist[i] = distance_down(w, p + d, d, 1)
 		best = min(best, dist[i])
 	}
 	for d, i in SIDES {
-		nb, _ := chunks_block(&s.chunks, p + d)
+		nb, _ := chunks_block(&w.chunks, p + d)
 		ways[i] = takes_water(nb, 7) && (best > WATER_REACH || dist[i] == best)
 	}
 	return
@@ -217,16 +219,16 @@ ways_down :: proc(s: ^Server, p: game.Block_Pos) -> (ways: [4]bool) {
 // distance_down: steps from p (reached in steps) to a block water could
 // fall from, going on in any direction but back (WATER_REACH + 1: none).
 @(private = "file")
-distance_down :: proc(s: ^Server, p, came: game.Block_Pos, steps: i32) -> i32 {
-	b, loaded := chunks_block(&s.chunks, p)
+distance_down :: proc(w: ^World, p, came: game.Block_Pos, steps: i32) -> i32 {
+	b, loaded := chunks_block(&w.chunks, p)
 	if !loaded || !takes_water(b, 7) {return WATER_REACH + 1}
-	under, _ := chunks_block(&s.chunks, p + {0, -1, 0})
+	under, _ := chunks_block(&w.chunks, p + {0, -1, 0})
 	if takes_water(under, game.WATER_FALLING_LEVEL) {return steps}
 	if steps >= WATER_REACH {return WATER_REACH + 1}
 	best := i32(WATER_REACH + 1)
 	for d in SIDES {
 		if d == -came {continue}
-		best = min(best, distance_down(s, p + d, d, steps + 1))
+		best = min(best, distance_down(w, p + d, d, steps + 1))
 	}
 	return best
 }

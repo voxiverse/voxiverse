@@ -139,7 +139,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect(t, stop(&srv))
 	stopped = true
 	saved, _ := os.read_entire_file_from_path(
-		filepath.join({dir, ENTITIES_FILE}, context.temp_allocator) or_else "",
+		filepath.join({home_dir(dir, 21), ENTITIES_FILE}, context.temp_allocator) or_else "",
 		context.temp_allocator,
 	)
 	testing.expect(t, strings.contains(string(saved), "critter"), "the critter was not saved")

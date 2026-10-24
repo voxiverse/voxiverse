@@ -13,70 +13,158 @@ import "../base"
 import "../game"
 import "../worldgen"
 
-// Saving: a world directory holds world.cfg (name, seed, time, spawn, players, rules) and
-// regions/ with the edited chunks (game/save.odin). The rest of the world
-// is regenerated from the seed.
+// Saving: a universe is a directory: universe.cfg (format, seed, the home
+// world's address, the kit), characters/ and players/ (player_data.odin),
+// permissions.cfg, community.cfg, and worlds/<address>/ for each world
+// visited or edited: its world.cfg (generator, seed, time, spawn, rules,
+// generator parameters), entities.cfg, and regions/ with its edited chunks
+// (game/save.odin). The rest of a world is regenerated from its seed.
 //
-// While running, the server keeps edited chunks it has unloaded in `saved`
+// While running, each world keeps edited chunks it has unloaded in `saved`
 // (encoded), reads a region's file the first time one of its chunks is
 // wanted, and rewrites the regions edits touched: every AUTOSAVE_SECONDS,
 // on `save`, and when it stops. Files are replaced whole through a
 // temporary file, so a crash mid-save leaves the previous save intact.
+//
+// A directory from before universes (a world.cfg at the top) becomes the
+// universe's home world when opened: its regions and entities move to
+// worlds/<home>/, its settings split between the two files.
 
 AUTOSAVE_SECONDS :: 60
 
+UNIVERSE_FILE :: "universe.cfg"
+WORLDS_DIR :: "worlds"
 WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
-WORLD_FORMAT :: 3 // 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3: players in players/ (player_data.odin)
+// 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3:
+// players in players/ (player_data.odin); 4: a universe of worlds.
+SAVE_FORMAT :: 4
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
-	dir:        string, // "" = this world is not saved
-	saved:      map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
-	regions:    map[game.Region_Pos]bool, // read from disk; true = changed since written
+	dir:        string, // the universe's ("" = not saved)
 	players:    map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
 	characters: map[string]game.Account, // every character's account, by name
 	writer:     game.Writer,
 	last_save:  time.Tick,
 }
 
-// store_open reads world.cfg if dir has one (the world's seed and rules win
-// over config); a new world gets one written now. False if the directory
-// cannot be used.
+// store_open reads the universe's files if dir has them (its seed and the
+// home world's settings win over config), turns a directory from before
+// universes into one, or starts a new universe there. False if the
+// directory cannot be used.
 store_open :: proc(s: ^Server, dir: string) -> bool {
 	st := &s.store
 	st.dir = strings.clone(dir)
 	st.last_save = time.tick_now()
 	game.writer_init(&st.writer)
-	if dir == "" {return true}
-	if err := os.make_directory_all(
-		filepath.join({dir, "regions"}, context.temp_allocator) or_else dir,
-	); err != nil && err != .Exist {
-		log.errorf("server cannot create the world directory dir=%s error=%v", dir, err)
+	home := s.home
+	if dir == "" {
+		home.address = game.address_derive(u64(s.config.seed))
+		return true
+	}
+	if err := os.make_directory_all(dir); err != nil && err != .Exist {
+		log.errorf("server cannot create the universe directory dir=%s error=%v", dir, err)
 		return false
 	}
-	path := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE
-	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
-	if err == .Not_Exist {
-		log.infof("server new world dir=%s seed=%d", dir, s.config.seed)
-		return write_world_file(s)
+	universe := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE
+	legacy := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE
+	switch {
+	case os.exists(universe):
+		data, err := os.read_entire_file_from_path(universe, context.temp_allocator)
+		if err != nil {
+			log.errorf("server cannot read path=%s error=%v", universe, err)
+			return false
+		}
+		read_universe_file(s, string(data), universe) or_return
+		home.seed, home.generator = s.config.seed, s.config.generator
+	case os.exists(legacy):
+		return migrate_world_dir(s, legacy)
+	case:
+		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
+		home.address = game.address_derive(u64(s.config.seed))
+		home.seed, home.generator = s.config.seed, s.config.generator
+		write_universe_file(s) or_return
 	}
+	return world_dir_open(home)
+}
+
+// world_dir_open: w's directory (made if new); its world.cfg read, or
+// written for a new world.
+world_dir_open :: proc(w: ^World) -> bool {
+	s := w.server
+	if s.store.dir == "" {return true}
+	w.dir = strings.clone(
+		filepath.join(
+			{s.store.dir, WORLDS_DIR, game.address_dir(w.address)},
+			context.temp_allocator,
+		) or_else "",
+	)
+	if err := os.make_directory_all(
+		filepath.join({w.dir, "regions"}, context.temp_allocator) or_else w.dir,
+	); err != nil && err != .Exist {
+		log.errorf("server cannot create the world directory dir=%s error=%v", w.dir, err)
+		return false
+	}
+	path := filepath.join({w.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err == .Not_Exist {return write_world_file(w)}
 	if err != nil {
 		log.errorf("server cannot read path=%s error=%v", path, err)
 		return false
 	}
-	return read_world_file(s, string(data), path)
+	return read_world_file(w, string(data), path)
+}
+
+// migrate_world_dir: a directory from before universes becomes one, its
+// world the home world.
+@(private = "file")
+migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
+	home := s.home
+	data, err := os.read_entire_file_from_path(legacy, context.temp_allocator)
+	if err != nil {
+		log.errorf("server cannot read path=%s error=%v", legacy, err)
+		return false
+	}
+	read_universe_file(s, string(data), legacy) or_return
+	read_world_file(home, string(data), legacy) or_return
+	s.config.seed, s.config.generator = home.seed, home.generator
+	home.address = game.address_derive(u64(s.config.seed))
+	dir := s.store.dir
+	world_dir :=
+		filepath.join(
+			{dir, WORLDS_DIR, game.address_dir(home.address)},
+			context.temp_allocator,
+		) or_else ""
+	if dir_err := os.make_directory_all(world_dir); dir_err != nil && dir_err != .Exist {
+		log.errorf("server cannot create the world directory dir=%s error=%v", world_dir, dir_err)
+		return false
+	}
+	for name in ([]string{"regions", ENTITIES_FILE}) {
+		from := filepath.join({dir, name}, context.temp_allocator) or_else name
+		to := filepath.join({world_dir, name}, context.temp_allocator) or_else name
+		if !os.exists(from) {continue}
+		if move_err := os.rename(from, to); move_err != nil {
+			log.errorf("server cannot move path=%s to=%s error=%v", from, to, move_err)
+			return false
+		}
+	}
+	home.dir = strings.clone(world_dir)
+	os.make_directory_all(
+		filepath.join({world_dir, "regions"}, context.temp_allocator) or_else world_dir,
+	)
+	if !write_universe_file(s) || !write_world_file(home) {return false}
+	os.remove(legacy)
+	log.infof("server world became a universe dir=%s home=%s", dir, game.address_dir(home.address))
+	return true
 }
 
 store_close :: proc(s: ^Server) {
 	st := &s.store
-	for _, bytes in st.saved {delete(bytes)}
-	delete(st.saved)
 	for name in st.players {delete(name)}
 	delete(st.players)
 	for name in st.characters {delete(name)}
 	delete(st.characters)
-	delete(st.regions)
 	game.writer_destroy(&st.writer)
 	delete(st.dir)
 	st^ = {}
@@ -84,59 +172,61 @@ store_close :: proc(s: ^Server) {
 
 // request_chunk makes pos loaded: from the save if it was edited (at once),
 // else generated (false while the workers are busy).
-request_chunk :: proc(s: ^Server, pos: game.Chunk_Pos) -> bool {
-	st := &s.store
-	if st.dir != "" {load_region(s, game.region_of(pos))}
-	bytes, edited := st.saved[pos]
-	if !edited {return chunks_request(&s.chunks, pos)}
+request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
+	if w.dir != "" {load_region(w, game.region_of(pos))}
+	bytes, edited := w.saved[pos]
+	if !edited {return chunks_request(&w.chunks, pos)}
 	scratch := new(game.Block_Array, context.temp_allocator)
 	r := game.reader_make(bytes)
 	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
-	chunks_insert(&s.chunks, pos, uniform, nil if is_uniform else scratch)
+	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch)
 	origin := game.chunk_origin(pos)
-	wake_water_box(s, origin, origin + game.CHUNK_SIZE - 1) // flowing again where it was
+	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1) // flowing again where it was
 	delete(bytes)
-	delete_key(&st.saved, pos)
+	delete_key(&w.saved, pos)
 	return true
 }
 
 // keep_edits stores an edited chunk that is being unloaded.
-keep_edits :: proc(s: ^Server, c: ^Chunk) {
+keep_edits :: proc(w: ^World, c: ^Chunk) {
 	if !c.modified {return}
-	w := &s.store.writer
-	clear(&w.buf)
-	game.write_chunk_blocks(w, &c.blocks)
-	if old, had := s.store.saved[c.pos]; had {delete(old)}
-	s.store.saved[c.pos] = transmute([]u8)strings.clone(string(w.buf[:])) // an owned copy
+	wr := &w.server.store.writer
+	clear(&wr.buf)
+	game.write_chunk_blocks(wr, &c.blocks)
+	if old, had := w.saved[c.pos]; had {delete(old)}
+	w.saved[c.pos] = transmute([]u8)strings.clone(string(wr.buf[:])) // an owned copy
 }
 
 // mark_edited notes that pos's region must be written at the next save.
-mark_edited :: proc(s: ^Server, pos: game.Chunk_Pos) {
-	s.store.regions[game.region_of(pos)] = true
+mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
+	w.regions[game.region_of(pos)] = true
 }
 
-// save writes every changed region and world.cfg; false if anything could
-// not be written (logged; the next save tries again).
+// save writes the universe's files and every loaded world's (its settings,
+// entities and changed regions); false if anything could not be written
+// (logged; the next save tries again).
 save :: proc(s: ^Server) -> bool {
 	st := &s.store
 	st.last_save = time.tick_now()
 	if st.dir == "" {return true}
-	ok := write_world_file(s)
-	if !write_entities(s) {ok = false}
+	ok := write_universe_file(s)
+	for w in s.worlds {if !world_save(w) {ok = false}}
 	if !permissions_save(s) {ok = false}
 	if !community_save(s) {ok = false}
 	if !players_save(s) {ok = false}
-	regions := 0
-	for region, changed in st.regions {
+	log.infof("server saved worlds=%d dir=%s", len(s.worlds), st.dir)
+	return ok
+}
+
+// world_save writes w's world.cfg, entities and changed regions.
+world_save :: proc(w: ^World) -> bool {
+	if w.dir == "" {return true}
+	ok := write_world_file(w)
+	if !write_entities(w) {ok = false}
+	for region, changed in w.regions {
 		if !changed {continue}
-		if write_region(s, region) {
-			st.regions[region] = false
-			regions += 1
-		} else {
-			ok = false
-		}
+		if write_region(w, region) {w.regions[region] = false} else {ok = false}
 	}
-	log.infof("server saved regions=%d dir=%s", regions, st.dir)
 	return ok
 }
 
@@ -147,13 +237,12 @@ region_path :: proc(dir: string, r: game.Region_Pos) -> string {
 }
 
 // load_region reads a region's file once (its edited chunks into saved,
-// its tops into s.tops). A damaged file is moved aside, never loaded.
+// its tops into tops). A damaged file is moved aside, never loaded.
 @(private = "file")
-load_region :: proc(s: ^Server, region: game.Region_Pos) {
-	st := &s.store
-	if region in st.regions {return}
-	st.regions[region] = false
-	path := region_path(st.dir, region)
+load_region :: proc(w: ^World, region: game.Region_Pos) {
+	if region in w.regions {return}
+	w.regions[region] = false
+	path := region_path(w.dir, region)
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err == .Not_Exist {return}
 	if err != nil {
@@ -165,27 +254,27 @@ load_region :: proc(s: ^Server, region: game.Region_Pos) {
 	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
 	ok := open_err == .None
 	loaded := make([dynamic]game.Chunk_Pos, context.temp_allocator)
+	wr := &w.server.store.writer
 	for ok {
 		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch)
 		if !got {
 			ok = r.reader.ok
 			break
 		}
-		w := &st.writer
-		clear(&w.buf)
+		clear(&wr.buf)
 		blocks := game.Chunk_Blocks {
 			uniform = uniform,
 			array   = nil if is_uniform else scratch,
 		}
-		game.write_chunk_blocks(w, &blocks)
-		st.saved[pos] = transmute([]u8)strings.clone(string(w.buf[:]))
+		game.write_chunk_blocks(wr, &blocks)
+		w.saved[pos] = transmute([]u8)strings.clone(string(wr.buf[:]))
 		append(&loaded, pos)
 	}
 	ok = ok && game.region_tops(&r, &tops)
 	if !ok {
 		for pos in loaded {
-			delete(st.saved[pos])
-			delete_key(&st.saved, pos)
+			delete(w.saved[pos])
+			delete_key(&w.saved, pos)
 		}
 		aside := fmt.tprintf("%s.damaged-%d", path, time.time_to_unix(time.now()))
 		os.rename(path, aside)
@@ -197,22 +286,21 @@ load_region :: proc(s: ^Server, region: game.Region_Pos) {
 		)
 		return
 	}
-	for t in tops {s.tops[{t.x, t.z}] = t.top}
+	for t in tops {w.tops[{t.x, t.z}] = t.top}
 }
 
 @(private = "file")
-write_region :: proc(s: ^Server, region: game.Region_Pos) -> bool {
-	st := &s.store
+write_region :: proc(w: ^World, region: game.Region_Pos) -> bool {
 	chunks := make([dynamic]game.Saved_Chunk, context.temp_allocator)
 	// Edited chunks that are loaded...
 	it: base.Pool_Iterator
-	for c in base.pool_next(&s.chunks.chunks, &it) {
+	for c in base.pool_next(&w.chunks.chunks, &it) {
 		if c.modified && c.state == .Ready && game.region_of(c.pos) == region {
 			append(&chunks, game.Saved_Chunk{c.pos, &c.blocks})
 		}
 	}
 	// ... and those that are not.
-	for pos, bytes in st.saved {
+	for pos, bytes in w.saved {
 		if game.region_of(pos) != region {continue}
 		r := game.reader_make(bytes)
 		blocks := new(game.Chunk_Blocks, context.temp_allocator)
@@ -225,15 +313,15 @@ write_region :: proc(s: ^Server, region: game.Region_Pos) -> bool {
 		append(&chunks, game.Saved_Chunk{pos, blocks})
 	}
 	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
-	for column, top in s.tops {
+	for column, top in w.tops {
 		if game.region_of({column.x >> game.CHUNK_SHIFT, 0, column.y >> game.CHUNK_SHIFT}) ==
 		   region {
 			append(&tops, game.Saved_Top{column.x, column.y, top})
 		}
 	}
-	w := &st.writer
-	game.region_encode(w, region, chunks[:], tops[:])
-	return write_atomically(region_path(st.dir, region), w.buf[:])
+	wr := &w.server.store.writer
+	game.region_encode(wr, region, chunks[:], tops[:])
+	return write_atomically(region_path(w.dir, region), wr.buf[:])
 }
 
 // write_atomically replaces path with data through a temporary file.
@@ -251,44 +339,30 @@ write_atomically :: proc(path: string, data: []u8) -> bool {
 	return true
 }
 
-// world.cfg: "key = value" lines, then the rules (rules.* variables).
+// universe.cfg: "key = value" lines.
 @(private = "file")
-write_world_file :: proc(s: ^Server) -> bool {
+write_universe_file :: proc(s: ^Server) -> bool {
 	b := strings.builder_make(context.temp_allocator)
-	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
+	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")
+	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
-	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[s.config.generator])
-	fmt.sbprintfln(&b, "time = %.17f", s.clock) // (exact: reloaded, it may not run back)
-	if s.spawn.known {
-		sp := s.spawn
-		fmt.sbprintfln(&b, "spawn.x = %.6f", sp.position.x)
-		fmt.sbprintfln(&b, "spawn.y = %.6f", sp.position.y)
-		fmt.sbprintfln(&b, "spawn.z = %.6f", sp.position.z)
-		fmt.sbprintfln(&b, "spawn.yaw = %.6f", sp.look[0])
-		fmt.sbprintfln(&b, "spawn.pitch = %.6f", sp.look[1])
-		fmt.sbprintfln(&b, "spawn.exact = %v", sp.exact)
-	}
+	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
-	strings.write_string(&b, "\n")
-	base.vars_write(game.rules_table(), &s.rules, &b)
-	base.vars_write(worldgen.params_table(), &s.params, &b)
 	return write_atomically(
-		filepath.join({s.store.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE,
+		filepath.join({s.store.dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE,
 		b.buf[:],
 	)
 }
 
+// read_universe_file: the universe's settings (and, from a world.cfg from
+// before universes, its players).
 @(private = "file")
-read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
-	rules_text := strings.builder_make(context.temp_allocator)
+read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 	Partial :: struct {
 		player: Player_Record,
 		coords: int, // of x, y, z read
 	}
 	players := make(map[string]Partial, context.temp_allocator)
-	spawn_coords := 0
-	s.config.generator = .Classic // a world from before generators were named
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
@@ -298,9 +372,9 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
 		switch {
 		case key == "format":
-			if n, ok := strconv.parse_int(value); !ok || n > WORLD_FORMAT {
+			if n, ok := strconv.parse_int(value); !ok || n > SAVE_FORMAT {
 				log.errorf(
-					"server world from a newer game, not loaded path=%s format=%s",
+					"server universe from a newer game, not loaded path=%s format=%s",
 					path,
 					value,
 				)
@@ -308,46 +382,24 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			}
 		case key == "seed":
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
-		case key == "generator":
-			kind, known := worldgen.kind_by_name(value)
-			if !known {
+		case key == "home":
+			a, ok := game.address_parse(value, {})
+			if !ok {
 				log.errorf(
-					"server world made by an unknown generator, not loaded path=%s generator=%s",
+					"server universe's home address not understood path=%s home=%q",
 					path,
 					value,
 				)
 				return false
 			}
-			s.config.generator = kind
-		case strings.has_prefix(key, "spawn."):
-			field := key[len("spawn."):]
-			switch field {
-			case "x", "y", "z":
-				if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
-					s.spawn.position[int(field[0] - 'x')] = v
-					spawn_coords += 1
-				}
-			case "yaw":
-				if v, ok := strconv.parse_f32(value);
-				   ok && !math.is_nan(v) && abs(v) < 1e6 {s.spawn.look[0] = v}
-			case "pitch":
-				if v, ok := strconv.parse_f32(value);
-				   ok &&
-				   !math.is_nan(
-						   v,
-					   ) {s.spawn.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
-			case "exact":
-				s.spawn.exact = value == "true"
-			}
+			s.home.address = a
 		case key == "kit":
 			if kit, ok := kit_parse(value); ok {
 				clear(&s.kit)
 				append(&s.kit, ..kit)
 			} else {
-				log.warnf("server world kit not understood path=%s kit=%q", path, value)
+				log.warnf("server universe kit not understood path=%s kit=%q", path, value)
 			}
-		case key == "time":
-			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
 		case strings.has_prefix(key, "player."):
 			// player.<name>.<field>; format 1 had one player: player.<field>.
 			after := key[len("player."):]
@@ -367,41 +419,15 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				if v, ok := strconv.parse_f32(value);
 				   ok && !math.is_nan(v) && abs(v) < 1e6 {p.player.look[0] = v}
 			case "pitch":
-				if v, ok := strconv.parse_f32(value);
-				   ok &&
-				   !math.is_nan(
-						   v,
-					   ) {p.player.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
+				if v, ok := strconv.parse_f32(value); ok && !math.is_nan(v) {
+					p.player.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)
+				}
 			case "flying":
 				p.player.state.flying = value == "true"
 			}
 			players[name] = p
-		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
-			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}
 	}
-	// A world made before biomes blended keeps its hard edges (its saved
-	// chunks were made that way; new ones must meet them).
-	if !strings.contains(text, "worldgen.biome_blend") {s.params.biome_blend = 0}
-	for p in base.vars_read(worldgen.params_table(), &s.params, strings.to_string(rules_text)) {
-		if p.error == .Unknown_Name && strings.has_prefix(p.text, "rules.") {continue}
-		log.warnf(
-			"server world generator setting ignored or clamped path=%s problem=%v text=%q",
-			path,
-			p.error,
-			p.text,
-		)
-	}
-	for p in base.vars_read(game.rules_table(), &s.rules, strings.to_string(rules_text)) {
-		if p.error == .Unknown_Name && strings.has_prefix(p.text, "worldgen.") {continue}
-		log.warnf(
-			"server world rule ignored or clamped path=%s problem=%v text=%q",
-			path,
-			p.error,
-			p.text,
-		)
-	}
-	s.spawn.known = spawn_coords == 3 // (else the generator's, chosen at start)
 	for name, p in players {
 		// (Before format 3: moved to their files at the next save.)
 		if p.coords == 3 {
@@ -410,19 +436,131 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			s.store.players[strings.clone(name)] = rec
 		}
 	}
-	log.infof("server world loaded dir=%s seed=%d", s.store.dir, s.config.seed)
+	return true
+}
+
+// world.cfg: "key = value" lines, then the rules and generator parameters.
+@(private = "file")
+write_world_file :: proc(w: ^World) -> bool {
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
+	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
+	fmt.sbprintfln(&b, "address = %s", game.address_dir(w.address))
+	fmt.sbprintfln(&b, "seed = %d", w.seed)
+	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])
+	fmt.sbprintfln(&b, "time = %.17f", w.clock) // (exact: reloaded, it may not run back)
+	if w.spawn.known {
+		sp := w.spawn
+		fmt.sbprintfln(&b, "spawn.x = %.6f", sp.position.x)
+		fmt.sbprintfln(&b, "spawn.y = %.6f", sp.position.y)
+		fmt.sbprintfln(&b, "spawn.z = %.6f", sp.position.z)
+		fmt.sbprintfln(&b, "spawn.yaw = %.6f", sp.look[0])
+		fmt.sbprintfln(&b, "spawn.pitch = %.6f", sp.look[1])
+		fmt.sbprintfln(&b, "spawn.exact = %v", sp.exact)
+	}
+	strings.write_string(&b, "\n")
+	base.vars_write(game.rules_table(), &w.rules, &b)
+	base.vars_write(worldgen.params_table(), &w.params, &b)
+	return write_atomically(
+		filepath.join({w.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE,
+		b.buf[:],
+	)
+}
+
+@(private = "file")
+read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
+	rules_text := strings.builder_make(context.temp_allocator)
+	spawn_coords := 0
+	w.generator = .Classic // a world from before generators were named
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		l := strings.trim_space(line)
+		if l == "" || l[0] == '#' {continue}
+		eq := strings.index_byte(l, '=')
+		if eq < 0 {continue}
+		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
+		switch {
+		case key == "format":
+			if n, ok := strconv.parse_int(value); !ok || n > SAVE_FORMAT {
+				log.errorf(
+					"server world from a newer game, not loaded path=%s format=%s",
+					path,
+					value,
+				)
+				return false
+			}
+		case key == "seed":
+			if n, ok := strconv.parse_i64(value); ok {w.seed = n}
+		case key == "generator":
+			kind, known := worldgen.kind_by_name(value)
+			if !known {
+				log.errorf(
+					"server world made by an unknown generator, not loaded path=%s generator=%s",
+					path,
+					value,
+				)
+				return false
+			}
+			w.generator = kind
+		case strings.has_prefix(key, "spawn."):
+			field := key[len("spawn."):]
+			switch field {
+			case "x", "y", "z":
+				if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
+					w.spawn.position[int(field[0] - 'x')] = v
+					spawn_coords += 1
+				}
+			case "yaw":
+				if v, ok := strconv.parse_f32(value);
+				   ok && !math.is_nan(v) && abs(v) < 1e6 {w.spawn.look[0] = v}
+			case "pitch":
+				if v, ok := strconv.parse_f32(value); ok && !math.is_nan(v) {
+					w.spawn.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)
+				}
+			case "exact":
+				w.spawn.exact = value == "true"
+			}
+		case key == "time":
+			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {w.clock = v}
+		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
+			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
+		}
+	}
+	// A world made before biomes blended keeps its hard edges (its saved
+	// chunks were made that way; new ones must meet them).
+	if !strings.contains(text, "worldgen.biome_blend") {w.params.biome_blend = 0}
+	for p in base.vars_read(worldgen.params_table(), &w.params, strings.to_string(rules_text)) {
+		if p.error == .Unknown_Name && strings.has_prefix(p.text, "rules.") {continue}
+		log.warnf(
+			"server world generator setting ignored or clamped path=%s problem=%v text=%q",
+			path,
+			p.error,
+			p.text,
+		)
+	}
+	for p in base.vars_read(game.rules_table(), &w.rules, strings.to_string(rules_text)) {
+		if p.error == .Unknown_Name && strings.has_prefix(p.text, "worldgen.") {continue}
+		log.warnf(
+			"server world rule ignored or clamped path=%s problem=%v text=%q",
+			path,
+			p.error,
+			p.text,
+		)
+	}
+	w.spawn.known = spawn_coords == 3 // (else the generator's, chosen at start)
+	log.infof("server world loaded path=%s seed=%d", path, w.seed)
 	return true
 }
 
 // entities.cfg: one line per entity: kind x y z yaw health natural.
 @(private = "file")
-write_entities :: proc(s: ^Server) -> bool {
+write_entities :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
 		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count]",
 	)
-	for e in s.entities.list {
+	for e in w.entities.list {
 		if !game.ENTITY_INFO[e.kind].saved {continue}
 		fmt.sbprintf(
 			&b,
@@ -440,17 +578,16 @@ write_entities :: proc(s: ^Server) -> bool {
 		strings.write_byte(&b, '\n')
 	}
 	return write_atomically(
-		filepath.join({s.store.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
+		filepath.join({w.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
 		b.buf[:],
 	)
 }
 
 // load_entities brings back a saved world's entities (they wait, frozen,
 // until their ground is loaded). Lines that do not read are skipped.
-load_entities :: proc(s: ^Server) {
-	if s.store.dir == "" {return}
-	path :=
-		filepath.join({s.store.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE
+load_entities :: proc(w: ^World) {
+	if w.dir == "" {return}
+	path := filepath.join({w.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return} 	// none saved (a new world, or an older one)
 	rest := string(data)
@@ -503,7 +640,7 @@ load_entities :: proc(s: ^Server) {
 			skipped += 1
 			continue
 		}
-		if e := entity_spawn(s, kind, pos, f[6] == "true"); e != nil {
+		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
 			e.stack = stack
 			loaded += 1

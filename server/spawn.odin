@@ -35,13 +35,14 @@ LANDING_TIMEOUT :: 10 * game.TICK_RATE
 
 // spawn_choose: a world without a spawn gets the generator's.
 @(private)
-spawn_choose :: proc(s: ^Server) {
-	if s.spawn.known {return}
-	s.spawn = {
-		position = s.config.spawn.? or_else worldgen.spawn_point(&s.chunks.gen),
+spawn_choose :: proc(w: ^World) {
+	s := w.server
+	if w.spawn.known {return}
+	w.spawn = {
+		position = s.config.spawn.? or_else worldgen.spawn_point(&w.chunks.gen),
 		known    = true,
 	}
-	log.infof("server world spawn chosen at=%v", s.spawn.position)
+	log.infof("server world spawn chosen at=%v", w.spawn.position)
 }
 
 // land moves c's player to position (looking look) and holds them until
@@ -70,21 +71,23 @@ land :: proc(
 // land_at_spawn: land at the world spawn.
 @(private)
 land_at_spawn :: proc(s: ^Server, c: ^Client, remember := true) {
-	land(s, c, s.spawn.position, s.spawn.look, .Exact if s.spawn.exact else .Ground, remember)
+	w := c.world
+	land(s, c, w.spawn.position, w.spawn.look, .Exact if w.spawn.exact else .Ground, remember)
 }
 
 // landing_tick: true while c's landing still waits (the player is then held
 // still).
 @(private)
 landing_tick :: proc(s: ^Server, c: ^Client) -> bool {
+	w := c.world
 	l, waiting := c.landing.?
 	if !waiting {return false}
-	query := game.Block_Query{&s.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block}
 	from := l.position
 	if l.mode == .Ground {
 		// From above everything the column has.
 		x, z := i32(math.floor(from.x)), i32(math.floor(from.z))
-		from.y = max(from.y, f64(column_top(s, x, z) + 1))
+		from.y = max(from.y, f64(column_top(w, x, z) + 1))
 	}
 	spot, found := game.landing_spot(query, from, l.mode)
 	if !found {
@@ -113,6 +116,7 @@ admin_spawn :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // the player looks.
 @(private)
 admin_setworldspawn :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
 	at := c.player.position
 	if len(args) == 3 {
 		for a, i in args {
@@ -121,7 +125,7 @@ admin_setworldspawn :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			at[i] = v
 		}
 	} else if len(args) != 0 {return false}
-	s.spawn = {
+	w.spawn = {
 		position = at,
 		look     = c.look,
 		exact    = true,

@@ -64,6 +64,7 @@ Stats :: struct {
 	port:              int, // listening on (0: not)
 	generate:          base.Frame_Summary, // ms per chunk, on the workers (updated each second)
 	updates_waiting:   int, // scheduled block updates (flowing water)
+	worlds:            int, // loaded
 }
 
 Server :: struct {
@@ -77,27 +78,19 @@ Server :: struct {
 	stats_mutex: sync.Mutex,
 	stats:       Stats,
 	log_tag:     base.Log_Tag,
-	rules:       game.Rules, // server thread only
-	params:      worldgen.Params, // the Earth generator's (worldgen.*; the world's generator has a copy)
-	clock:       f64, // world time (game/time.odin); server thread only after start
-	tops:        map[[2]i32]i32, // edited column tops (columns.odin)
 	store:       Store, // saving (save.odin)
 	// Server thread only, after start:
 	arena:       virtual.Arena,
-	chunks:      Chunk_Store,
+	home:        ^World, // the universe's first world (always loaded)
+	worlds:      [dynamic]^World, // loaded (home first)
 	clients:     []Client, // index = player id
 	host:        netcode.Host, // remote players (listening when host_open)
 	listening:   bool,
 	capture:     netcode.Capture, // (config.capture)
-	entities:    Entities, // (entities.odin)
-	changes:     Changes, // blocks changed this tick (changes.odin)
 	perms:       Permissions, // who may do what (permissions.odin)
-	spawn:       World_Spawn, // where new players arrive (spawn.odin; world.cfg)
 	community:   Community, // nicknames, mutes, homes, warps, bans (community.odin)
 	chat:        Chat_State, // (chat.odin)
 	kit:         [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
-	natural:     []Natural_Slot, // natural column tops (columns.odin)
-	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -118,9 +111,6 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s^ = {
 		config = config,
 		local  = local,
-		rules  = config.rules if config.rules != {} else game.RULES_DEFAULTS,
-		params = worldgen.PARAMS_DEFAULTS,
-		clock  = game.NEW_WORLD_TIME,
 	}
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
 	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
@@ -133,6 +123,8 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.config.name = strings.clone(config.name, arena)
 	s.config.capture = strings.clone(config.capture, arena)
 	kit_default(&s.kit)
+	s.home = world_make(s)
+	append(&s.worlds, s.home)
 	// A saved world's seed and rules replace the config's.
 	if !store_open(s, config.save_dir) {
 		teardown(s, world = false)
@@ -150,17 +142,8 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	)
 	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	gen := worldgen.Generator{s.config.generator, s.config.seed, s.params}
-	if err := chunks_init(&s.chunks, gen, capacity, config.workers, arena); err != nil {
-		log.errorf("server cannot allocate the world: %v", err)
+	if !world_start(s.home) {
 		teardown(s, world = false)
-		return false
-	}
-	s.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
-	spawn_choose(s)
-	if err := updates_init(&s.updates, arena); err != nil {
-		log.errorf("server cannot allocate block updates: %v", err)
-		teardown(s, world = true)
 		return false
 	}
 	s.clients = make([]Client, s.config.max_players, arena)
@@ -172,8 +155,6 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		}
 	}
 	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
-	entities_init(&s.entities, s.config.seed)
-	load_entities(s)
 	if local.pipe != nil {
 		s.clients[0].state = .Connecting
 		s.clients[0].link = Local{}
@@ -227,9 +208,8 @@ teardown :: proc(s: ^Server, world: bool) {
 	community_destroy(&s.community)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
-	if world {chunks_destroy(&s.chunks)}
-	entities_destroy(&s.entities)
-	delete(s.tops)
+	for w in s.worlds {world_close(w)}
+	delete(s.worlds)
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
 }
@@ -309,25 +289,29 @@ tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	s.tick += 1
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
-	chunks_collect(
-		&s.chunks,
-		proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
-			s := (^Server)(data)
-			if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {return false}
-			// Water next door that stopped at this chunk's edge flows on.
-			origin := game.chunk_origin(pos)
-			wake_water_box(s, origin, origin + game.CHUNK_SIZE - 1, only_border = true)
-			return true
-		},
-		s,
-	)
+	for w in s.worlds {
+		chunks_collect(
+			&w.chunks,
+			proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
+				w := (^World)(data)
+				if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {return false}
+				// Water next door that stopped at this chunk's edge flows on.
+				origin := game.chunk_origin(pos)
+				wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, only_border = true)
+				return true
+			},
+			w,
+		)
+	}
 	receive_messages(s)
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
-	if !frozen {s.clock = game.advance_time(s.clock, f64(game.TICK_SECONDS), &s.rules)}
+	if !frozen {
+		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
+	}
 	moved := false
 	for &c in s.clients {
 		if c.state != .Playing {continue}
-		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{s.clock})}
+		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
 		simulate_player(s, &c)
 		if c.moved {
 			c.moved = false
@@ -335,12 +319,14 @@ tick :: proc(s: ^Server) {
 			drop_far(s, &c)
 		}
 	}
-	if moved {unload_unwanted(s)}
-	if !frozen {
-		updates_run(s)
-		entities_tick(s)
+	for w in s.worlds {
+		if moved {unload_unwanted(w)}
+		if !frozen {
+			updates_run(w)
+			entities_tick(w)
+		}
+		changes_flush(w)
 	}
-	changes_flush(s)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		send_players(s, &c)
@@ -445,6 +431,7 @@ enter :: proc(s: ^Server, c: ^Client, name: string) {
 // handle one message from a client.
 @(private = "file")
 handle :: proc(s: ^Server, c: ^Client, p: []u8) {
+	w := c.world
 	if c.state == .Free || c.state == .Gone {return}
 	m, ok := game.decode_client(p)
 	if !ok {
@@ -479,7 +466,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	}
 	if node != "" && !allowed(s, c, node) {
 		if e, edit := m.(game.Edit); edit {
-			current, _ := chunks_block(&s.chunks, e.pos)
+			current, _ := chunks_block(&w.chunks, e.pos)
 			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
 		}
 		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
@@ -537,7 +524,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			set_worldgen(s, c, v.name, v.value)
 			return
 		}
-		switch err := base.var_set(game.rules_table(), &s.rules, v.name, v.value); err {
+		switch err := base.var_set(game.rules_table(), &w.rules, v.name, v.value); err {
 		case .None, .Out_Of_Range:
 			if err ==
 			   .Out_Of_Range {log.warnf("server rule clamped name=%q value=%q", v.name, v.value)}
@@ -547,7 +534,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 				v.value,
 				client_name(c),
 			)
-			broadcast(s, game.Rules_Changed{s.rules})
+			broadcast(s, game.Rules_Changed{w.rules})
 		case .Unknown_Name, .Bad_Value:
 			log.warnf("server rule not changed name=%q value=%q problem=%v", v.name, v.value, err)
 		}
@@ -641,23 +628,29 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 	playing := 0
 	for c in s.clients {if c.state == .Playing {playing += 1}}
 	st := Stats {
-		tick              = s.tick,
-		tick_ms           = tick_ms,
-		chunks_loaded     = s.chunks.chunks.count,
-		chunks_generating = s.chunks.in_flight,
-		arrays_allocated  = s.chunks.arrays.allocated,
-		arrays_in_use     = game.block_arrays_in_use(&s.chunks.arrays),
-		arrays_bytes      = s.chunks.arrays.committed,
-		arena_used        = s.arena.total_used,
-		arena_reserved    = s.arena.total_reserved,
-		clients           = playing,
-		port              = s.host.socket.port if s.listening else 0,
-		updates_waiting   = s.updates.count,
+		tick           = s.tick,
+		tick_ms        = tick_ms,
+		arena_used     = s.arena.total_used,
+		arena_reserved = s.arena.total_reserved,
+		clients        = playing,
+		port           = s.host.socket.port if s.listening else 0,
+		worlds         = len(s.worlds),
+	}
+	for w in s.worlds {
+		st.chunks_loaded += w.chunks.chunks.count
+		st.chunks_generating += w.chunks.in_flight
+		st.arrays_allocated += w.chunks.arrays.allocated
+		st.arrays_in_use += game.block_arrays_in_use(&w.chunks.arrays)
+		st.arrays_bytes += w.chunks.arrays.committed
+		st.arena_used += w.arena.total_used
+		st.arena_reserved += w.arena.total_reserved
+		st.updates_waiting += w.updates.count
 	}
 	sync.guard(&s.stats_mutex)
-	// Sorting the window for percentiles: once a second is enough.
+	// Sorting the window for percentiles: once a second is enough (the
+	// home world's: where the tests and the F3 numbers look).
 	st.generate =
-		base.frame_stats_summary(&s.chunks.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
+		base.frame_stats_summary(&s.home.chunks.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
 	s.stats = st
 }
 

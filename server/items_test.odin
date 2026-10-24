@@ -164,7 +164,7 @@ test_players_move_to_their_files :: proc(t: ^testing.T) {
 		t,
 		start(&srv, {seed = 1, view_radius = 2, view_height = 1, workers = 1, save_dir = dir}, {}),
 	) {return}
-	testing.expect_value(t, srv.params.biome_blend, 0) // (made before biomes blended)
+	testing.expect_value(t, srv.home.params.biome_blend, 0) // (made before biomes blended)
 	testing.expect(t, stop(&srv))
 	data, err := os.read_entire_file_from_path(
 		filepath.join({dir, PLAYERS_DIR, "bea.json"}, context.temp_allocator) or_else "",
@@ -176,9 +176,13 @@ test_players_move_to_their_files :: proc(t: ^testing.T) {
 		t,
 		ok && r.state.position == {10.5, 40, -3.5} && r.state.flying && r.look == {1, 0.5},
 	)
-	world, _ := os.read_entire_file_from_path(cfg, context.temp_allocator)
-	testing.expect(t, !strings.contains(string(world), "player."), "world.cfg still has players")
-	testing.expect(t, strings.contains(string(world), "kit = stone 64"), string(world))
+	testing.expect(t, !os.exists(cfg), "the world.cfg from before universes stayed")
+	universe, _ := os.read_entire_file_from_path(
+		filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else "",
+		context.temp_allocator,
+	)
+	testing.expect(t, !strings.contains(string(universe), "player."), "universe.cfg has players")
+	testing.expect(t, strings.contains(string(universe), "kit = stone 64"), string(universe))
 }
 
 // A player file from when inventories had 36 slots: what no longer fits

@@ -36,13 +36,14 @@ used_to_place :: proc(s: ^Server, c: ^Client, slot: int) {
 // broken_drop: what a player breaking block at pos leaves.
 @(private)
 broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) {
-	if !s.rules.drops || allowed(s, c, "items.infinite") {return}
+	w := c.world
+	if !w.rules.drops || allowed(s, c, "items.infinite") {return}
 	item := game.block_drop(block)
 	if item == game.NO_ITEM {return}
-	r := rand.default_random_generator(&s.entities.rng)
+	r := rand.default_random_generator(&w.entities.rng)
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
-	spawn_item(s, at, {item, 1}, v, -1)
+	spawn_item(w, at, {item, 1}, v, -1)
 }
 
 // drop_stack: c throws stack ahead of it.
@@ -53,19 +54,19 @@ drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
 	dir := [3]f32{-math.sin(yaw) * cp, math.sin(pitch), -math.cos(yaw) * cp}
 	eye := game.player_eye(c.player)
 	at := eye + {f64(dir.x), f64(dir.y), f64(dir.z)} * 0.4 - {0, 0.3, 0}
-	spawn_item(s, at, stack, dir * game.ITEM_THROW + {0, 1.5, 0}, int(player_id(s, c)))
+	spawn_item(c.world, at, stack, dir * game.ITEM_THROW + {0, 1.5, 0}, int(player_id(s, c)))
 }
 
 // spawn_item: a dropped stack at position (its bottom centre).
 @(private)
 spawn_item :: proc(
-	s: ^Server,
+	w: ^World,
 	position: [3]f64,
 	stack: game.Stack,
 	velocity: [3]f32,
 	owner: int,
 ) -> ^Entity {
-	ent := entity_spawn(s, .Item, position, false)
+	ent := entity_spawn(w, .Item, position, false)
 	if ent == nil {return nil}
 	ent.stack = stack
 	ent.body.velocity = velocity
@@ -77,18 +78,19 @@ spawn_item :: proc(
 // its item near it, and gives it to a player walking over it. True when it
 // is gone (picked up, or old).
 @(private)
-item_tick :: proc(s: ^Server, index: int) -> bool {
-	ent := &s.entities.list[index]
+item_tick :: proc(w: ^World, index: int) -> bool {
+	s := w.server
+	ent := &w.entities.list[index]
 	if f32(ent.age) * game.TICK_SECONDS > game.ITEM_LIFE {return true}
-	if !chunk_ready(s, ent.body.position) {return false} 	// its ground is not loaded: it waits
-	query := game.Block_Query{&s.chunks, chunks_block}
-	game.body_step(&ent.body, .Item, {}, false, &s.rules, query, game.TICK_SECONDS)
+	if !chunk_ready(w, ent.body.position) {return false} 	// its ground is not loaded: it waits
+	query := game.Block_Query{&w.chunks, chunks_block}
+	game.body_step(&ent.body, .Item, {}, false, &w.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(ent.stack.item)
 	if ent.age % 10 == 0 {
 		// Those after it in the list (not yet moved this tick) join it.
-		for j := len(s.entities.list) - 1; j > index; j -= 1 {
-			other := &s.entities.list[j]
+		for j := len(w.entities.list) - 1; j > index; j -= 1 {
+			other := &w.entities.list[j]
 			if other.kind != .Item || other.stack.item != ent.stack.item {continue}
 			if ent.stack.count + other.stack.count > size {continue}
 			d := other.body.position - ent.body.position
@@ -96,8 +98,8 @@ item_tick :: proc(s: ^Server, index: int) -> bool {
 			   game.ITEM_MERGE_RANGE * game.ITEM_MERGE_RANGE {continue}
 			ent.stack.count += other.stack.count
 			ent.age = min(ent.age, other.age)
-			entity_gone(s, j)
-			ent = &s.entities.list[index]
+			entity_gone(w, j)
+			ent = &w.entities.list[index]
 		}
 	}
 	for &c in s.clients {
@@ -141,7 +143,9 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	size := game.item_stack_size(item)
 	for left := count; left > 0; left -= size {
 		rest := game.inventory_add(&to.inventory, {item, min(left, size)})
-		if !game.stack_empty(rest) {spawn_item(s, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
+		if !game.stack_empty(
+			rest,
+		) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
 	}
 	to.inv_changed = true
 	notice(s, c, fmt.tprintf("Gave %d %s to %s", count, args[1], args[0]))

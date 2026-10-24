@@ -219,7 +219,10 @@ test_save_round_trip :: proc(t: ^testing.T) {
 	}
 	testing.expect(
 		t,
-		os.exists(filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else ""),
+		os.exists(filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else "") &&
+		os.exists(
+			filepath.join({home_dir(dir, 77), WORLD_FILE}, context.temp_allocator) or_else "",
+		),
 	)
 
 	// Session 2: same directory, another seed in the config: the saved world wins.
@@ -395,7 +398,7 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 		testing.expect(t, stop(&srv))
 	}
 	// Damage every region file.
-	regions := filepath.join({dir, "regions"}, context.temp_allocator) or_else dir
+	regions := filepath.join({home_dir(dir, 9), "regions"}, context.temp_allocator) or_else dir
 	entries, _ := os.read_all_directory_by_path(regions, context.temp_allocator)
 	damaged := 0
 	for e in entries {
@@ -459,15 +462,29 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 	write(path, "format = 2\nseed = 9\n")
 	srv: Server
 	if testing.expect(t, start(&srv, config, {})) {
-		testing.expect_value(t, srv.config.generator, worldgen.Kind.Classic)
+		testing.expect_value(t, srv.home.generator, worldgen.Kind.Classic)
 		testing.expect(t, stop(&srv))
 	}
-	saved, _ := os.read_entire_file_from_path(path, context.temp_allocator)
+	moved := filepath.join({home_dir(dir, 9), WORLD_FILE}, context.temp_allocator) or_else ""
+	saved, _ := os.read_entire_file_from_path(moved, context.temp_allocator)
 	testing.expect(t, strings.contains(string(saved), "generator = classic"), "not written back")
 
+	os.remove_all(dir)
+	os.make_directory_all(dir)
 	write(path, "format = 2\nseed = 9\ngenerator = moon\n")
 	{
 		context.logger = log.nil_logger() // its error is the point
 		testing.expect(t, !start(&srv, config, {}), "a world from an unknown generator loaded")
 	}
+}
+
+// home_dir: the home world's directory in a universe of seed.
+@(private)
+home_dir :: proc(dir: string, seed: i64) -> string {
+	return(
+		filepath.join(
+			{dir, WORLDS_DIR, game.address_dir(game.address_derive(u64(seed)))},
+			context.temp_allocator,
+		) or_else dir \
+	)
 }

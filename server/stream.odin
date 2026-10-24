@@ -32,6 +32,7 @@ Client :: struct {
 	state:        Client_State,
 	link:         Client_Link,
 	grants:       [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
+	world:        ^World, // where they are (Playing)
 	account:      game.Account, // (proved once Playing)
 	nonce:        game.Nonce, // the Challenge sent
 	wanted:       [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
@@ -143,7 +144,8 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 
 // anyone_wants: some playing client wants pos.
 @(private)
-anyone_wants :: proc(s: ^Server, pos: game.Chunk_Pos, margin: i32) -> bool {
+anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
+	s := w.server
 	for &c in s.clients {
 		if client_wants(&c, pos, s.config, margin) {return true}
 	}
@@ -154,6 +156,7 @@ anyone_wants :: proc(s: ^Server, pos: game.Chunk_Pos, margin: i32) -> bool {
 // tick's budgets (and, over the network, while the client keeps up).
 @(private)
 stream :: proc(s: ^Server, c: ^Client) {
+	w := c.world
 	budget := SEND_BUDGET
 	if p, ok := c.link.(netcode.Peer_Id); ok && netcode.host_backlog(&s.host, p) > MAX_BACKLOG {
 		budget = 0
@@ -167,15 +170,15 @@ stream :: proc(s: ^Server, c: ^Client) {
 			continue
 		}
 		all_sent = false
-		chunk := chunks_get(&s.chunks, pos)
+		chunk := chunks_get(&w.chunks, pos)
 		if chunk == nil {
-			if requesting {requesting = request_chunk(s, pos)}
+			if requesting {requesting = request_chunk(w, pos)}
 			if !requesting && budget == 0 {break}
 			continue
 		}
 		if chunk.state != .Ready || budget == 0 {continue}
 		column := [2]i32{pos.x, pos.z}
-		if c.columns[column] == 0 {send_message(s, c, column_message(s, column))}
+		if c.columns[column] == 0 {send_message(s, c, column_message(w, column))}
 		c.columns[column] += 1
 		send_message(s, c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		c.has[pos] = {}
@@ -203,15 +206,15 @@ drop_far :: proc(s: ^Server, c: ^Client) {
 // unload_unwanted frees the chunks no client needs (edited ones go to the
 // save, not away).
 @(private)
-unload_unwanted :: proc(s: ^Server) {
+unload_unwanted :: proc(w: ^World) {
 	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)
-	for pos in s.chunks.by_pos {
-		if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
+	for pos in w.chunks.by_pos {
+		if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
-		if chunk := chunks_get(&s.chunks, pos); chunk.state == .Ready {
-			keep_edits(s, chunk)
-			chunks_unload(&s.chunks, pos)
+		if chunk := chunks_get(&w.chunks, pos); chunk.state == .Ready {
+			keep_edits(w, chunk)
+			chunks_unload(&w.chunks, pos)
 		}
 	}
 }

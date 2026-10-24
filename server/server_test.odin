@@ -720,8 +720,8 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 	// Kept by the save.
 	srv: Server
 	if !testing.expect(t, start(&srv, config, {})) {return}
-	testing.expect_value(t, srv.params.tree_density, 0)
-	testing.expect_value(t, srv.chunks.gen.params.tree_density, 0)
+	testing.expect_value(t, srv.home.params.tree_density, 0)
+	testing.expect_value(t, srv.home.chunks.gen.params.tree_density, 0)
 	testing.expect(t, stop(&srv))
 }
 

@@ -53,7 +53,7 @@ Bulk_Result :: enum u8 {
 }
 
 // bulk_edit applies e; changed: how many blocks it changed.
-bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Result) {
+bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result) {
 	lo, hi := shape_box(e.shape)
 	lo.y, hi.y = max(lo.y, game.WORLD_MIN_Y), min(hi.y, game.WORLD_MAX_Y - 1)
 	if lo.x > hi.x || lo.y > hi.y || lo.z > hi.z {return 0, .Done}
@@ -64,7 +64,7 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 		for cy in clo.y ..= chi.y {
 			for cz in clo.z ..= chi.z {
 				for cx in clo.x ..= chi.x {
-					c := chunks_get(&s.chunks, {cx, cy, cz})
+					c := chunks_get(&w.chunks, {cx, cy, cz})
 					if c == nil || c.state != .Ready {return 0, .Not_Loaded}
 				}
 			}
@@ -75,24 +75,24 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 		for cz in clo.z ..= chi.z {
 			for cx in clo.x ..= chi.x {
 				pos := game.Chunk_Pos{cx, cy, cz}
-				c := chunks_get(&s.chunks, pos)
+				c := chunks_get(&w.chunks, pos)
 				if c == nil || c.state != .Ready {continue}
-				n := edit_chunk(s, c, e, lo, hi)
+				n := edit_chunk(w, c, e, lo, hi)
 				if n > 0 {
 					changed += n
 					c.modified = true
-					changes_chunk(s, pos)
+					changes_chunk(w, pos)
 				}
 			}
 		}
 	}
 	if changed == 0 {return 0, .Done}
 
-	wake_water_box(s, lo, hi)
+	wake_water_box(w, lo, hi)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
-			if column_rescan(s, x, z, hi.y) {
-				changes_column(s, {x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT})
+			if column_rescan(w, x, z, hi.y) {
+				changes_column(w, {x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT})
 			}
 		}
 	}
@@ -101,7 +101,7 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 
 // edit_chunk applies e to the part of chunk c inside lo..hi.
 @(private = "file")
-edit_chunk :: proc(s: ^Server, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -> (changed: int) {
+edit_chunk :: proc(w: ^World, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -> (changed: int) {
 	origin := game.chunk_origin(c.pos)
 	from := [3]i32{max(lo.x - origin.x, 0), max(lo.y - origin.y, 0), max(lo.z - origin.z, 0)}
 	to := [3]i32 {
@@ -132,7 +132,7 @@ edit_chunk :: proc(s: ^Server, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) 
 					new = game.Block(cell)
 				}
 				if new == old {continue}
-				if err := game.chunk_set(&c.blocks, &s.chunks.arrays, l, new); err != nil {
+				if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return
 				}

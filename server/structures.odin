@@ -28,7 +28,8 @@ structure_name_valid :: proc(name: string) -> bool {
 
 // structure_save keeps lo..hi of the world as template name: air as void
 // (pasting leaves what is there), or with clear, as air (pasting clears).
-structure_save :: proc(s: ^Server, name: string, lo, hi: game.Block_Pos, clear: bool) -> string {
+structure_save :: proc(w: ^World, name: string, lo, hi: game.Block_Pos, clear: bool) -> string {
+	s := w.server
 	if s.store.dir ==
 	   "" {return "structure save: a scratch world keeps nothing (play a saved world)"}
 	box := Box{lo, hi}
@@ -45,7 +46,7 @@ structure_save :: proc(s: ^Server, name: string, lo, hi: game.Block_Pos, clear: 
 	for y in i32(0) ..< size.y {
 		for z in i32(0) ..< size.z {
 			for x in i32(0) ..< size.x {
-				blk, loaded := chunks_block(&s.chunks, a + {x, y, z})
+				blk, loaded := chunks_block(&w.chunks, a + {x, y, z})
 				if !loaded {return "structure save: part of it is not loaded"}
 				cell := u16(blk)
 				if blk == .Air && !clear {cell = game.VOID}
@@ -92,7 +93,8 @@ structure_load :: proc(s: ^Server, name: string) -> (t: game.Template, ok: bool)
 }
 
 // structure_paste puts template name with its lowest corner at at.
-structure_paste :: proc(s: ^Server, name: string, at: game.Block_Pos, rotation: u8) -> string {
+structure_paste :: proc(w: ^World, name: string, at: game.Block_Pos, rotation: u8) -> string {
+	s := w.server
 	t, found := structure_load(s, name)
 	if !found {return fmt.tprintf("structure paste: no structure %s (structure list)", name)}
 	size := game.rotated_size(t.size, rotation)
@@ -102,7 +104,7 @@ structure_paste :: proc(s: ^Server, name: string, at: game.Block_Pos, rotation: 
 		template = &t,
 		rotation = rotation,
 	}
-	changed, result := bulk_edit(s, e)
+	changed, result := bulk_edit(w, e)
 	switch result {
 	case .Done:
 		return fmt.tprintf("structure %s pasted: %d blocks changed", name, changed)

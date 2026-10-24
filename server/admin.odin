@@ -151,10 +151,11 @@ admin_save :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
 	f := game.parse_time_of_day(args[0]) or_return
-	s.clock = game.set_time_of_day(s.clock, f)
-	log.infof("server time set time=%.4f by=%s", s.clock, client_name(c))
-	broadcast(s, game.Time{s.clock})
+	w.clock = game.set_time_of_day(w.clock, f)
+	log.infof("server time set time=%.4f by=%s", w.clock, client_name(c))
+	broadcast(s, game.Time{w.clock})
 	return true
 }
 
@@ -186,7 +187,7 @@ admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private = "file")
 admin_explode :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	center, radius := parse_ball(args) or_return
-	explode(s, center, radius)
+	explode(c.world, center, radius)
 	return true
 }
 
@@ -221,8 +222,9 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // worlds), high above it, flying.
 @(private = "file")
 admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
 	p := c.player.position
-	gen := &s.chunks.gen
+	gen := &w.chunks.gen
 	if kind, structure := worldgen.structure_by_name(args[0]); structure {
 		st, found := worldgen.locate_structure(gen, kind, i32(p.x), i32(p.z))
 		if !found {
@@ -293,7 +295,7 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		box := parse_box(args[2:8]) or_return
 		clear := len(args) == 9 && args[8] == "clear"
 		if len(args) == 9 && !clear {return false}
-		notice(s, c, structure_save(s, args[1], box.lo, box.hi, clear))
+		notice(s, c, structure_save(c.world, args[1], box.lo, box.hi, clear))
 	case "paste":
 		if len(args) != 5 && len(args) != 6 {return false}
 		if !structure_name_valid(args[1]) {return false}
@@ -302,7 +304,7 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		turns := 0
 		if len(args) == 6 {turns = strconv.parse_int(args[5]) or_return}
 		if turns < 0 || turns > 3 {return false}
-		notice(s, c, structure_paste(s, args[1], n, u8(turns)))
+		notice(s, c, structure_paste(c.world, args[1], n, u8(turns)))
 	case:
 		return false
 	}
@@ -314,7 +316,7 @@ admin_regen :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	radius := 4
 	if len(args) > 0 {radius = strconv.parse_int(args[0]) or_return}
 	if radius < 1 || radius > 8 {return false}
-	notice(s, c, fmt.tprintf("regen: %d chunks made again", regen(s, c, i32(radius))))
+	notice(s, c, fmt.tprintf("regen: %d chunks made again", regen(c.world, c, i32(radius))))
 	return true
 }
 
@@ -322,9 +324,10 @@ admin_regen :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // blast_test to compare with its own).
 @(private = "file")
 admin_hash :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
 	sum: u64
 	for pos in c.has {
-		if chunk := chunks_get(&s.chunks, pos); chunk != nil && chunk.state == .Ready {
+		if chunk := chunks_get(&w.chunks, pos); chunk != nil && chunk.state == .Ready {
 			game.chunks_hash_add(&sum, pos, &chunk.blocks)
 		}
 	}
@@ -335,7 +338,7 @@ admin_hash :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // bulk_notice applies a bulk edit and tells c how it went.
 @(private = "file")
 bulk_notice :: proc(s: ^Server, c: ^Client, name: string, e: Bulk_Edit) {
-	changed, result := bulk_edit(s, e)
+	changed, result := bulk_edit(c.world, e)
 	switch result {
 	case .Done:
 		notice(s, c, fmt.tprintf("%s: %d blocks changed", name, changed))
