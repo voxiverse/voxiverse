@@ -207,7 +207,9 @@ the milestone that changes it is named.
 | Universe seed, world seed | The universe's seed; a world's own, derived from the universe seed and its id unless set | M17 |
 | Chunk, column, region | 16x16x16 blocks; a chunk column (x, z) with its column tops; a region file of 16x16 chunk columns | `game.Chunk_Pos`, `game.Column`, `game.Region_Pos` |
 | Block, block position | A cell's content (`game.Block`); its integer position in a world | `game.Block`, `game.Block_Pos` |
-| Address | A world's name in a universe: seven different symbols out of 36, in order (36·35·…·30 ≈ 4·10¹⁰ of them). The address alone decides what kind of world it is (generator, palette, climate, sky, astronomy); the universe seed adds the exact terrain. Shareable: the same address is the same kind of world in any universe | M17 |
+| Symbol | One of the 40 letters addresses are written in: Old Turkic (Orkhon) characters, real Unicode (U+10C00–U+10C48), so addresses copy into chat and outside the game | M17 (`game/address.odin`) |
+| Address | A world's name in a universe: a galaxy (eight different symbols, in order) and a world in it (seven different symbols, in order). Written world first; the galaxy left out means the gate's own. The address alone decides what kind of world it is (generator, palette, climate, sky, astronomy); the universe seed adds the exact terrain. Shareable: the same address is the same kind of world in any universe. Sized after the observable universe: see "Addresses: how many worlds" | M17 |
+| Galaxy | The first part of an address: worlds sharing it are in the same galaxy, which everyday dialing stays within | M17 |
 | Gate | A structure that dials addresses and carries characters to the gate of the world dialed. "Stargate" is not a name we use | M18 |
 | Spawn | Where a world receives arrivals with no place of their own; the universe's default world's spawn receives new characters | `World_Spawn` |
 | Landing | The step every arrival goes through: held still until the blocks are loaded, then stood where it fits | `land`, `game.landing_spot` |
@@ -279,7 +281,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M15 | Polish: biome transitions without hard edges, the screen kept awake while playing, a five-slot hotbar over a 5x5 inventory | Biome borders blend (a band of mixed surface and features) in worldgen tests and screenshots; the platform keep-awake call is made in game and undone in menus on every OS; inventory tests at the new size; old inventories fit (done: `test_biome_borders_blend` and new golden hashes, the old ones kept for `biome_blend 0`, which worlds made before load with; `platform.set_keep_awake` logged on and off in game; inventory and overlay tests at 5 + 25; `test_old_inventory_fits`) |
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own |
-| M18 | Gates: natural structures in every world (one by the spawn), dialed symbol by symbol on an overlay, open for a while, travelled through to the gate of the world dialed | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused |
+| M18 | Gates: natural structures in every world (one by the spawn), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the gate of the world dialed | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused |
 | M19 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
 | M20 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M21 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
@@ -497,8 +499,60 @@ A universe (one server) hosts many worlds and loads them in and out. Grounded: w
 flat voxel spaces (a world border can make them finite), not spheres; travel is a short
 transition while the destination streams in, not flying through rendered space.
 
-- **Addresses:** seven different symbols out of 36, in order. An address is a world's id
-  in its universe and its directory (`worlds/<address>/`). The address alone decides the
+### Addresses: how many worlds
+
+The address space is sized after the observable universe, so "every planet has an
+address" is roughly true, and the numbers can be checked:
+
+- **Galaxies:** about 2·10¹¹ to 2·10¹² in the observable universe (Hubble deep-field
+  counts gave ~2·10¹¹; Conselice et al. 2016 extrapolated ~2·10¹² counting faint ones;
+  New Horizons background-light measurements (2021) point back toward a few 10¹¹).
+- **Stars per galaxy:** about 10¹¹ (the Milky Way: 1-4·10¹¹), so 10²² to 10²⁴ stars.
+- **Planets per star:** at least one on average (microlensing, Cassan et al. 2012: ~1.6
+  bound planets per Milky Way star; Kepler's occurrence rates agree in order).
+- **So:** ~10¹¹ planets per galaxy, ~10²³ to 10²⁴ in the observable universe.
+
+One flat address cannot match that and stay dialable (36 symbols would need 17 per
+address; 72 symbols, 13). The universe's own structure gives two levels instead:
+
+| Part | Symbols | How many | Matches |
+|---|---|---|---|
+| Galaxy | 8 of 40, ordered, none twice: 40·39·…·33 | 3.1·10¹² | ~10¹¹-10¹² galaxies |
+| World in its galaxy | 7 of 40, ordered, none twice: 40·39·…·34 | 9.4·10¹⁰ | ~10¹¹ planets per galaxy |
+| Both | 15 | 2.9·10²³ | ~10²³-10²⁴ planets |
+
+Everyday dialing is seven symbols within the gate's galaxy; another galaxy takes all 15
+(rarer, later). Every count is a permutation (order matters, no symbol twice), so the
+numbers above are exact: `math.perm(40, 8)`, `math.perm(40, 7)`. Should the estimates
+move, change the symbol count or lengths here, not the idea.
+
+### Symbols
+
+40 letters of Old Turkic (Orkhon, U+10C00-U+10C48): angular, runic, unreadable to nearly
+everyone (so they read as alien), and a historic script with no living community (unlike
+Tifinagh or the Canadian syllabics, which look alien but are people's writing today).
+Runic reads as Vikings, Glagolitic as Slavic ornament, Linear B is too pictographic to
+dial at a glance. The 40, by index (0-39):
+
+    10C00 10C01 10C04 10C05 10C07 10C09 10C0A 10C0B 10C0C 10C0D
+    10C0E 10C0F 10C10 10C12 10C14 10C15 10C18 10C1C 10C22 10C24
+    10C26 10C27 10C28 10C2B 10C2C 10C2D 10C31 10C32 10C36 10C38
+    10C39 10C3A 10C3C 10C3D 10C41 10C42 10C43 10C44 10C45 10C47
+
+A few pairs are close (indices 2/25, 11/23, 15/31, 29/30); M18 settles the final set on the
+dialing overlay at its real size. They are real Unicode, so addresses copy into chat and
+outside the game (Windows has the script in Segoe UI Historic, others in Noto). In the
+game they come from a fallback font: Noto Sans Old Turkic (15 KB, SIL Open Font License,
+its licence beside it as JetBrains Mono's), used for what JetBrains Mono lacks. JetBrains
+Mono has Latin, Greek, Cyrillic and symbols, none of these; no font has all of Unicode (a
+TrueType font holds at most 65,535 glyphs), and Nerd Fonts add icons in the private use
+area, not scripts.
+
+### The rest
+
+- **Addresses:** a galaxy and a world in it, as above. An address is a world's id in its
+  universe and its directory (`worlds/<address>/`, the symbols' indices in hex: file
+  systems need not know the script). The address alone decides the
   world's kind: its generator and parameters (sea level, terrain, climate offsets, biome
   mix, block palette), rules (gravity, day length) and sky (M20's astronomy too), so an
   address shared between players means the same kind of world in any universe; the world
@@ -529,9 +583,10 @@ transition while the destination streams in, not flying through rendered space.
 ## M18: gates
 
 - **Gates:** a structure on M12's placement API (programmatic, like towers): a ring with
-  seven chevrons and the 36 symbols around it (glyphs drawn by code). Every world has one
+  seven chevrons (and eight more, dark until a gate can reach other galaxies) and the 40
+  symbols around it. Every world has one
   by its spawn (where travellers arrive) and rare others; a gate shows its own address.
-- **Dialing:** using a gate opens an overlay of the 36 symbols; choosing seven in order
+- **Dialing:** using a gate opens an overlay of the 40 symbols; choosing seven in order
   locks the chevrons one by one (seen and heard by everyone near). The gate then opens
   for a while (the destination's gate opens too); walking in travels (M17) to the
   destination's gate. Misdials (this world's address, a gate already open) are refused
