@@ -1,6 +1,7 @@
 package server
 
 import "core:mem"
+import "core:time"
 
 import "../base"
 import "../game"
@@ -31,6 +32,7 @@ Chunk :: struct {
 
 World :: struct {
 	gen:           worldgen.Generator, // (each job takes a copy)
+	gen_times:     base.Frame_Stats, // ms per chunk generated
 	chunks:        base.Pool(Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
@@ -56,6 +58,7 @@ Gen_Task :: struct {
 	uniform:    game.Block,
 	is_uniform: bool,
 	skipped:    bool, // shutting down: not generated
+	ms:         f32, // how long generating took
 }
 
 // world_init sizes the world for capacity chunks. Long-lived storage comes
@@ -181,6 +184,7 @@ world_collect :: proc(
 	base.queue_drain(&w.done, &done)
 	for task in done {
 		w.in_flight -= 1
+		if !task.skipped {base.frame_stats_add(&w.gen_times, task.ms)}
 		chunk := base.pool_get(&w.chunks, task.handle)
 		assert(chunk != nil && chunk.state == .Generating, "generating chunks are never unloaded")
 		chunk.state = .Ready
@@ -217,7 +221,9 @@ generate_job :: proc(data: rawptr) {
 		task.skipped = true
 	} else {
 		base.profile_scope("generate chunk")
+		start := time.tick_now()
 		task.uniform, task.is_uniform = worldgen.generate(&task.gen, task.pos, task.array)
+		task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
 	}
 	base.queue_push(&w.done, task)
 }

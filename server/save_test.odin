@@ -28,6 +28,7 @@ Save_Client :: struct {
 	results:  map[u32]game.Edit_Result,
 	seq:      u32,
 	time:     Maybe(f64), // the last Time received
+	look:     [2]f32, // yaw, pitch of the last input sent (idle ones keep it)
 }
 
 @(private = "file")
@@ -105,18 +106,20 @@ block_at :: proc(c: ^Save_Client, p: game.Block_Pos) -> (game.Block, bool) {
 @(private = "file")
 tick :: proc(t: ^testing.T, c: ^Save_Client, input: game.Player_Input = {}) {
 	c.seq += 1
+	c.look = {input.yaw, input.pitch}
 	send(c, game.Input{c.seq, input})
 	time.sleep(game.TICK_DURATION)
 	pump(t, c)
 }
 
-// until ticks (sending idle inputs) until done or 15 seconds pass.
+// until ticks (sending idle inputs, looking the same way) until done or 15
+// seconds pass.
 @(private = "file")
 until :: proc(t: ^testing.T, c: ^Save_Client, done: proc(c: ^Save_Client) -> bool) -> bool {
 	deadline := time.tick_add(time.tick_now(), 15 * time.Second)
 	for !done(c) {
 		if time.tick_diff(time.tick_now(), deadline) < 0 {return false}
-		tick(t, c)
+		tick(t, c, {yaw = c.look[0], pitch = c.look[1]})
 	}
 	return true
 }

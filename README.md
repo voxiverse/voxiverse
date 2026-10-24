@@ -68,6 +68,7 @@ on automatically and which reports GPU API misuse in the log.
 | `debug` | Build and start in gdb/lldb (RAD Debugger on Windows) with Odin pretty-printers |
 | `netdump`, `replay` | Print a network trace / replay its client messages against a fresh server (DEBUGGING.md) |
 | `sfx` | Write every sound effect to `build/sounds/*.wav` |
+| `worldmap` | Draw a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation) |
 | `help` | List the commands and their flags |
 
 Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with
@@ -88,7 +89,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | <kbd>Shift</kbd> | Sneak (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
-| <kbd>1</kbd>–<kbd>7</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, gravel, lamp), or the rocket launcher (7, where cheats are allowed) |
+| <kbd>1</kbd>–<kbd>9</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, log, leaves, water, lamp), or the rocket launcher (9, where cheats are allowed); `place <block>` places any other |
 | <kbd>Esc</kbd> | Pause menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
@@ -102,7 +103,13 @@ can draw), fullscreen, field of view, view distance and volume.
 Where cheats are allowed (your own world, or a server with `--cheats`) the console also
 edits in bulk: `pos1` and `pos2` mark the corners of a box at the block you aim at, then
 `fill stone`, `replace dirt sand` or `clear`; `sphere 5 stone` and `explode 8` act on the
-aimed block. Hotbar slot 7 is a rocket launcher.
+aimed block. Hotbar slot 9 is a rocket launcher.
+
+New worlds are Earth-like: continents and oceans, rivers, mountains with cliffs and
+overhangs, caves and ores, forests, taiga, tundra, deserts, beaches (worlds saved before
+keep the land they were made with). `locate desert` flies you to the nearest desert, `fly`
+starts or stops flying. `set worldgen.mountain_height 180` (or F4) changes how the land is
+made from then on, and `regen` remakes the land around you that way (your edits stay).
 
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
 runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.

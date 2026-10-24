@@ -61,6 +61,7 @@ Stats :: struct {
 	arena_reserved:    uint,
 	clients:           int,
 	port:              int, // listening on (0: not)
+	generate:          base.Frame_Summary, // ms per chunk, on the workers (updated each second)
 }
 
 Server :: struct {
@@ -542,6 +543,9 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 		port              = s.host.socket.port if s.listening else 0,
 	}
 	sync.guard(&s.stats_mutex)
+	// Sorting the window for percentiles: once a second is enough.
+	st.generate =
+		base.frame_stats_summary(&s.world.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
 	s.stats = st
 }
 

@@ -1,6 +1,7 @@
 package client
 
 import "core:log"
+import "core:math"
 import "core:strconv"
 import "core:strings"
 import "core:time"
@@ -95,10 +96,21 @@ world_settled :: proc(app: ^App) -> bool {
 	if s == nil || s.state != .Playing {return false}
 	r, h := i32(s.welcome.view_radius), i32(s.welcome.view_height)
 	w := &s.world
-	return(
-		w.chunks.count >= game.interest_count_at(camera_chunk(&s.camera), r, h) &&
-		len(w.to_mesh) == 0 &&
-		len(w.uploads) == 0 &&
-		w.stats.mesh_jobs_busy == 0 \
-	)
+	if len(w.to_mesh) > 0 || len(w.uploads) > 0 || w.stats.mesh_jobs_busy > 0 {return false}
+	// Every chunk around the player here (counting them is not enough: just
+	// after a teleport, those left behind still count). Around the feet, as
+	// the server streams them.
+	f := s.prediction.state.position
+	centre := game.chunk_of({i32(math.floor(f.x)), i32(math.floor(f.y)), i32(math.floor(f.z))})
+	for y in -h ..= h {
+		for z in -r ..= r {
+			for x in -r ..= r {
+				p := centre + {x, y, z}
+				if game.in_interest({x, y, z}, r, h) &&
+				   game.in_world(p) &&
+				   world_get(w, p) == nil {return false}
+			}
+		}
+	}
+	return true
 }

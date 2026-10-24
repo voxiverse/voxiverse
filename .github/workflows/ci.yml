@@ -88,6 +88,12 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; blast_test 12 quit"
 
+      # Worldgen (M10): every biome visited, screenshotted (uploaded below),
+      # within frame, generation and meshing budgets, memory flat.
+      - name: Biome tour (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
+
       # The sky through a day (screenshots uploaded below).
       - name: Sky (Linux)
         if: runner.os == 'Linux'
@@ -133,6 +139,8 @@ jobs:
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 300 quit"
           python3 tools/debugger/check_spall.py build/voxiverse.spall
+          # The optimized build's chunk budgets (tighter than a debug build's).
+          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
 
       - name: Screenshots (Linux)
         if: always() && runner.os == 'Linux'

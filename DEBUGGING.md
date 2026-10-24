@@ -134,8 +134,28 @@ neighbours' edges.
 | `fill <block>`, `replace <from> <to>`, `clear` | Bulk edits of the selection (cheats; at most 64x64x64 blocks). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
 | `sphere <radius> [block]`, `explode [radius]` | A ball of block (default air) / an explosion (carves, knocks back, hurts critters) at the aimed block |
 | `fire` | Fire a rocket where you look, as the launcher (hotbar 7) does: it flies, falls a little and explodes on what it hits |
+| `fly` | Start or stop flying (as a double-tap of jump does) |
+| `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; cheats): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
+| `set worldgen.<name> <value>`, `vars worldgen` | The Earth generator's settings (the server's, like rules; F4 too), saved with the world; chunks already made keep their blocks until `regen` |
+| `regen [radius]` | Remake the unedited chunks within radius (chunks, 1-8) from the generator as it is now |
+| `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
 | `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
+
+F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
+and to light and mesh (ours), on average and the slowest 1%.
+
+## World generation
+
+Generators live in `worldgen/`; a world records its own (`generator = earth` in
+world.cfg; worlds from before M10 are `classic`). Everything is a pure function of the seed,
+the settings and the position, so `build worldmap -seed:N` draws a world from above without
+the game (biomes, water depth, hill shading; a 4096-block map in well under a second), and
+`-bench:64` generates whole chunk columns and reports the time per chunk.
+`worldgen/worldgen_test.odin` keeps hashes of two seeds' chunks: CI runs it on Windows,
+Linux and macOS, so a platform that rounds differently fails there, not in a player's world.
+The generator's stages show in the profiler as `worldgen climate`, `worldgen place trees`,
+`worldgen terrain`.
 
 `--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
 driver, with AddressSanitizer and with profiling. CI also runs `blast_test 12 quit`. F3

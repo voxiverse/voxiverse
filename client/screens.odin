@@ -241,6 +241,15 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 				f64(s.arena.total_used) / (1 << 20),
 			),
 		)
+		// Work on the worker threads: meshing here, generating on our own
+		// server (a remote one's is its own business).
+		mesh_ms := base.frame_stats_summary(&w.stats.mesh_times)
+		work := fmt.tprintf("mesh %.2f ms (p99 %.2f)", mesh_ms.avg, mesh_ms.p99)
+		if session_hosting(s) {
+			gen := server.stats(&s.server).generate
+			work = fmt.tprintf("generate %.2f ms (p99 %.2f), %s", gen.avg, gen.p99, work)
+		}
+		append(&lines, fmt.tprintf("chunks: %s", work))
 		ws := &app.world_pass.stats
 		append(
 			&lines,

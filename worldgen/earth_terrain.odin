@@ -3,6 +3,7 @@ package worldgen
 import "core:math"
 import "core:math/noise"
 
+import "../base"
 import "../game"
 
 // Overhang noise lives on a world-aligned grid (every 4 blocks across,
@@ -162,12 +163,18 @@ earth_generate :: proc(
 	origin := game.chunk_origin(c)
 	column := [2]i32{c.x, c.z}
 	cols := new(Columns, context.temp_allocator)
-	columns_fill(p, seed, column, cols)
+	{
+		base.profile_scope("worldgen climate")
+		columns_fill(p, seed, column, cols)
+	}
 
 	// Trees from this chunk column and its neighbours may reach in.
 	trees := make([dynamic]Tree, context.temp_allocator)
-	for dz in i32(-1) ..= 1 {
-		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+	{
+		base.profile_scope("worldgen place trees")
+		for dz in i32(-1) ..= 1 {
+			for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+		}
 	}
 	highest := p.sea_level
 	rough := false
@@ -183,6 +190,7 @@ earth_generate :: proc(
 		return .Air, true
 	}
 
+	base.profile_scope("worldgen terrain")
 	grid := new(Overhang_Grid, context.temp_allocator)
 	if rough {grid_fill(seed, column, origin.y, origin.y + game.CHUNK_SIZE + MARGIN, grid)}
 	caves := new(Cave_Grid, context.temp_allocator)

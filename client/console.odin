@@ -362,6 +362,14 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"tour_test",
+			"tour_test [quit]: visit every biome; check budgets and memory",
+			tour_test_command,
+		},
+	)
+	console_register(
+		c,
+		{
 			"blast_test",
 			"blast_test <shots> [quit]: blow up terrain and check budgets, meshes, memory, sync",
 			blast_test_command,

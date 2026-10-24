@@ -1,5 +1,6 @@
 package worldgen
 
+import "core:slice"
 import "core:testing"
 
 import "../base"
@@ -161,4 +162,42 @@ test_params_table :: proc(t: ^testing.T) {
 		base.Var_Error.None,
 	)
 	testing.expect_value(t, p.sea_level, 12)
+}
+
+// The same seed makes the same world on every OS: hashes of chunks and
+// column tops across a few kilometres, for two seeds, as recorded on
+// Linux. CI runs this on Windows, Linux and macOS: a different number
+// means a platform rounds differently (a fused multiply-add, a libm
+// call) and its worlds would not match a server's.
+@(test)
+test_earth_same_everywhere :: proc(t: ^testing.T) {
+	GOLDEN :: [2]u64{0xc842_6ef6_ba61_2406, 0x216c_0786_7aaf_4efd}
+	seeds := [2]i64{1, 24301}
+	got: [2]u64
+	arr := new(game.Block_Array)
+	defer free(arr)
+	for seed, i in seeds {
+		g := generator_make(.Earth, seed)
+		h := u64(0xcbf2_9ce4_8422_2325)
+		mix :: proc(h: ^u64, bytes: []u8) {
+			for b in bytes {h^ = (h^ ~ u64(b)) * 0x100_0000_01b3}
+		}
+		for k in i32(0) ..< 16 {
+			column := [2]i32{k * 37 - 300, k * -53 + 200}
+			tops: Tops
+			column_tops(&g, column, &tops)
+			mix(&h, slice.to_bytes(tops[:]))
+			for cy in ([]i32{-3, -1, 0, 1, 3}) {
+				uniform, is_uniform := generate(&g, {column.x, cy, column.y}, arr)
+				if is_uniform {
+					u := uniform
+					mix(&h, ([^]u8)(&u)[:size_of(u)])
+				} else {
+					mix(&h, slice.to_bytes(arr[:]))
+				}
+			}
+		}
+		got[i] = h
+	}
+	testing.expectf(t, got == GOLDEN, "worlds differ from Linux's: got %x", got)
 }

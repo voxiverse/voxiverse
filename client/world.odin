@@ -79,6 +79,7 @@ World_Stats :: struct {
 	mesh_jobs_busy: int,
 	groups_shown:   int, // bulk edits shown whole
 	groups_late:    int, // ... shown on the timeout instead (could flash a hole)
+	mesh_times:     base.Frame_Stats, // ms per chunk meshed (and lit), on the workers
 }
 
 @(private)
@@ -96,6 +97,7 @@ Mesh_Task :: struct {
 	snapshot: mesh.Snapshot,
 	light:    mesh.Light_Snapshot,
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
+	ms:       f32, // how long lighting and meshing took
 	counts:   [mesh.Layer]int, // vertices of each layer, in order
 	urgent:   bool, // one of the reserve for edits (mesh_now)
 }
@@ -531,7 +533,9 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 	base.profile_scope("apply meshes")
 	for h in w.mesh_removals {render.world_remove_mesh(pass, g, h)}
 	clear(&w.mesh_removals)
+	waiting := len(w.uploads)
 	base.queue_drain(&w.done, &w.uploads)
+	for task in w.uploads[waiting:] {base.frame_stats_add(&w.stats.mesh_times, task.ms)}
 	defer groups_update(w, pass, g)
 	kept := 0
 	for task, i in w.uploads {
@@ -671,6 +675,8 @@ mesh_job :: proc(data: rawptr) {
 @(private = "file")
 mesh_task_run :: proc(task: ^Mesh_Task) {
 	base.profile_scope("mesh chunk")
+	start := time.tick_now()
+	defer task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
 	game.light_chunk(&task.light_in, &task.scratch, &task.light)
 	n: mesh.Neighbourhood
 	for &c, i in task.chunks {n[i] = &c}

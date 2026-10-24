@@ -86,7 +86,7 @@ fly_test_update :: proc(app: ^App) {
 			   FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the teleport or rule change never arrived")}
 			return
 		}
-		s.toggle_fly = true
+		if !s.prediction.state.flying {s.toggle_fly = true} 	// (a teleport keeps a flyer flying)
 		s.autopilot = game.Player_Input {
 			move    = {0, 1},
 			yaw     = -math.PI / 2,
