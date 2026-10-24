@@ -160,6 +160,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 	config := Config {
 		seed            = 21,
+		generator       = .Classic, // grass near the spawn
 		view_radius     = 4,
 		view_height     = 2,
 		workers         = 2,

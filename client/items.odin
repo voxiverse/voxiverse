@@ -31,7 +31,9 @@ HOTBAR := [?]Item {
 	game.Block.Dirt,
 	game.Block.Grass,
 	game.Block.Sand,
-	game.Block.Gravel,
+	game.Block.Log,
+	game.Block.Leaves,
+	game.Block.Water,
 	game.Block.Lamp,
 	Tool.Launcher,
 }

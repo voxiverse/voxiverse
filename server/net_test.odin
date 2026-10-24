@@ -351,7 +351,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	for c in ([]^Net_Client{&a, &b}) {
 		damaged := 0
 		for pos, &blocks in c.chunks {
-			gen := worldgen.Generator{config.generator, config.seed}
+			gen := worldgen.generator_make(config.generator, config.seed)
 			worldgen.generate(&gen, pos, expected)
 			for i in 0 ..< len(expected) {
 				got := blocks.uniform if blocks.array == nil else blocks.array[i]

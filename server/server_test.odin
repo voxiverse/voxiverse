@@ -296,7 +296,11 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	srv: Server
 	testing.expect(
 		t,
-		start(&srv, {seed = 5, view_radius = 2, view_height = 2, workers = 2}, {&pipe, .Server}),
+		start(
+			&srv,
+			{seed = 5, generator = .Classic, view_radius = 2, view_height = 2, workers = 2},
+			{&pipe, .Server},
+		),
 	)
 	c := Fake_Client {
 		endpoint = {&pipe, .Client},

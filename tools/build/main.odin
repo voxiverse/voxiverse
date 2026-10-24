@@ -32,6 +32,7 @@ PACKAGES :: []string {
 	"tools/netdump",
 	"tools/replay",
 	"tools/sfx",
+	"tools/worldmap",
 	"tools/debugger/printer_test",
 }
 // TEST_PACKAGES contain @(test) procedures.
@@ -111,7 +112,7 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay", "sfx":
+	case "netdump", "replay", "sfx", "worldmap":
 		ok = run_tool(args[0], args[1:])
 	case "help", "-h", "--help":
 		usage()
@@ -132,6 +133,9 @@ usage :: proc() {
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
+	fmt.println(
+		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
+	)
 	fmt.println("  build     build the game and the dedicated server into build/ (debug), with:")
 	fmt.println("              --release    optimized")
 	fmt.println("              --sanitize   with AddressSanitizer")
@@ -434,10 +438,12 @@ run :: proc(cmd: []string) -> bool {
 run_tool :: proc(name: string, args: []string) -> bool {
 	exe := path_join({"build", strings.concatenate({name, exe_suffix()})})
 	cmd := slice.concatenate(
-		[][]string {
-			{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
-			ODIN_FLAGS,
-		},
+	[][]string {
+		{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
+		ODIN_FLAGS,
+		// The map generates millions of columns: optimized.
+		{"-o:speed"} if name == "worldmap" else {},
+	},
 	)
 	run(cmd) or_return
 	return run(slice.concatenate([][]string{{exe}, args}))

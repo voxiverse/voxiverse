@@ -137,7 +137,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	}
 	arena := virtual.arena_allocator(&s.arena)
 	s.scratch = new(game.Block_Array, arena)
-	game.writer_init(&s.writer, arena)
+	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)

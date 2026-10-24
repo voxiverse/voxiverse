@@ -13,16 +13,24 @@ import "../game"
 // generating the whole column, and where players first appear.
 
 Kind :: enum u8 {
+	Earth, // continents, biomes, rivers, mountains, caves, trees (M10)
 	Classic, // M3's heightmap hills (worlds made before M10)
 }
 
 KIND_NAMES := [Kind]string {
+	.Earth   = "earth",
 	.Classic = "classic",
 }
 
 Generator :: struct {
-	kind: Kind,
-	seed: i64,
+	kind:   Kind,
+	seed:   i64,
+	params: Params, // (Earth)
+}
+
+// generator_make: a generator with the default parameters.
+generator_make :: proc(kind: Kind, seed: i64) -> Generator {
+	return {kind, seed, PARAMS_DEFAULTS}
 }
 
 kind_by_name :: proc(name: string) -> (Kind, bool) {
@@ -42,6 +50,8 @@ generate :: proc(
 	is_uniform: bool,
 ) {
 	switch g.kind {
+	case .Earth:
+		return earth_generate(g, c, dst)
 	case .Classic:
 		return classic_generate(g.seed, c, dst)
 	}
@@ -55,6 +65,10 @@ Tops :: [COLUMN_AREA]i32
 
 // column_tops: the tops of the chunk column at column (chunk x, z).
 column_tops :: proc(g: ^Generator, column: [2]i32, out: ^Tops) {
+	if g.kind == .Earth {
+		earth_tops(g, column, out)
+		return
+	}
 	origin := column * game.CHUNK_SIZE
 	for z in i32(0) ..< game.CHUNK_SIZE {
 		for x in i32(0) ..< game.CHUNK_SIZE {
@@ -63,16 +77,66 @@ column_tops :: proc(g: ^Generator, column: [2]i32, out: ^Tops) {
 	}
 }
 
-// column_top: the natural top of the block column at (x, z).
+// column_top: the natural top of the block column at (x, z) (column_tops
+// is cheaper per column, for a whole chunk column).
 column_top :: proc(g: ^Generator, x, z: i32) -> i32 {
 	switch g.kind {
+	case .Earth:
+		tops: Tops
+		earth_tops(g, {x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}, &tops)
+		return tops[(x & game.CHUNK_MASK) + (z & game.CHUNK_MASK) * game.CHUNK_SIZE]
 	case .Classic:
 		return classic_height(g.seed, x, z)
 	}
 	return game.WORLD_MIN_Y
 }
 
+// locate: the nearest place to (x, z) of biome b (searching rings every
+// 32 blocks out to `within`), or false (or not an Earth world).
+locate :: proc(
+	g: ^Generator,
+	b: Biome,
+	x, z: i32,
+	within: i32 = 4096,
+) -> (
+	at: [2]i32,
+	found: bool,
+) {
+	if g.kind != .Earth {return}
+	STEP :: 32
+	for r in i32(0) ..= within / STEP {
+		for i in i32(0) ..< max(1, 8 * r) {
+			// Round the square ring of radius r, side by side.
+			side, t := i / max(1, 2 * r), i % max(1, 2 * r) - r
+			d: [2]i32
+			switch side {
+			case 0:
+				d = {t, -r}
+			case 1:
+				d = {r, t}
+			case 2:
+				d = {-t, r}
+			case:
+				d = {-r, -t}
+			}
+			p := [2]i32{x, z} + d * STEP
+			if earth_biome(g, p.x, p.y) == b {return p, true}
+		}
+	}
+	return
+}
+
+biome_by_name :: proc(name: string) -> (Biome, bool) {
+	for n, b in BIOME_NAMES {if n == name {return b, true}}
+	return {}, false
+}
+
 // spawn_point: where new players appear (feet), above the ground.
 spawn_point :: proc(g: ^Generator) -> [3]f64 {
+	switch g.kind {
+	case .Earth:
+		return earth_spawn(g)
+	case .Classic:
+	}
 	return {0.5, f64(column_top(g, 0, 0)) + 3, 0.5}
 }

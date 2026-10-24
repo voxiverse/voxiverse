@@ -12,8 +12,15 @@ Writer :: struct {
 	buf: [dynamic]u8,
 }
 
-writer_init :: proc(w: ^Writer, allocator := context.allocator, loc := #caller_location) {
-	w.buf = make([dynamic]u8, 0, 256, allocator, loc)
+// writer_init: capacity bytes to start with (MAX_MESSAGE_SIZE: it never
+// grows, for writers in an arena).
+writer_init :: proc(
+	w: ^Writer,
+	allocator := context.allocator,
+	capacity := 256,
+	loc := #caller_location,
+) {
+	w.buf = make([dynamic]u8, 0, capacity, allocator, loc)
 }
 
 writer_destroy :: proc(w: ^Writer) {

@@ -291,7 +291,14 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 		t,
 		start(
 			&srv,
-			{seed = 8, view_radius = 2, view_height = 2, workers = 2, allow_cheats = true},
+			{
+				seed = 8,
+				generator = .Classic,
+				view_radius = 2,
+				view_height = 2,
+				workers = 2,
+				allow_cheats = true,
+			},
 			{&pipe, .Server},
 		),
 	)

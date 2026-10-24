@@ -7,6 +7,7 @@ import "core:strings"
 
 import "../game"
 import "../netcode"
+import "../worldgen"
 
 // Admin commands: what a player who may cheat can ask of the server, as
 // text (game.Admin; the console's commands send them). Each one checks its
@@ -31,6 +32,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"summon", "[kind]", {0, 1}, admin_summon},
 	{"open_lan", "", {0, 0}, admin_open_lan},
 	{"hash", "", {0, 0}, admin_hash},
+	{"locate", "<biome>", {1, 1}, admin_locate},
 }
 
 // admin runs a command from c.
@@ -120,6 +122,32 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	} else {
 		notice(s, c, "Could not open to LAN: no free port (see the log)")
 	}
+	return true
+}
+
+// admin_locate takes the player to the nearest place of a biome (Earth
+// worlds), high above it, flying.
+@(private = "file")
+admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	biome := worldgen.biome_by_name(args[0]) or_return
+	p := c.player.position
+	at, found := worldgen.locate(&s.world.gen, biome, i32(p.x), i32(p.z))
+	if !found {
+		notice(s, c, fmt.tprintf("No %s within 4096 blocks (or not an Earth world)", args[0]))
+		return true
+	}
+	top := worldgen.column_top(&s.world.gen, at.x, at.y)
+	c.player = {
+		position = {
+			f64(at.x) + 0.5,
+			f64(max(top, s.world.gen.params.sea_level)) + 24,
+			f64(at.y) + 0.5,
+		},
+		flying   = true,
+	}
+	c.teleport = {c.look[0], -1.25} // looking down at it
+	c.teleported = true
+	notice(s, c, fmt.tprintf("%s at %d %d", args[0], at.x, at.y))
 	return true
 }
 

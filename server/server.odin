@@ -135,7 +135,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	)
 	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	gen := worldgen.Generator{s.config.generator, s.config.seed}
+	gen := worldgen.generator_make(s.config.generator, s.config.seed)
 	if err := world_init(&s.world, gen, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
 		teardown(s, world = false)
@@ -150,7 +150,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 			return false
 		}
 	}
-	game.writer_init(&s.writer, arena)
+	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
 	entities_init(&s.entities, s.config.seed)
 	load_entities(s)
 	if local.pipe != nil {
@@ -424,6 +424,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Teleport:
 		c.player = {
 			position = v.position,
+			flying   = c.player.flying, // a flyer arrives flying
 		}
 		c.teleport = {v.yaw, v.pitch}
 		c.teleported = true

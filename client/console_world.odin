@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:strings"
 
 import "../game"
+import "../worldgen"
 
 // Console commands that change the world: selections, bulk edits,
 // explosions, rockets, critters. They are cheats (the server's Admin
@@ -12,6 +13,14 @@ import "../game"
 @(private)
 register_world_commands :: proc(c: ^Console) {
 	cheat :: Command_Needs{.World, .Cheats}
+	console_register(
+		c,
+		{"fly", "fly: start or stop flying (double-tap jump)", proc(app: ^App, args: []string) {
+				app.session.toggle_fly = true
+			}},
+		args = {0, 0},
+		needs = {.World},
+	)
 	console_register(
 		c,
 		{"fire", "fire: a rocket where you look (the launcher)", proc(app: ^App, args: []string) {
@@ -123,6 +132,23 @@ register_world_commands :: proc(c: ^Console) {
 			},
 		},
 		args = {0, 1},
+		needs = cheat,
+	)
+	console_register(
+		c,
+		{
+			"locate",
+			"locate <biome>: fly to the nearest place of a biome",
+			proc(app: ^App, args: []string) {
+				send_message(app.session, game.Admin{fmt.tprintf("locate %s", args[0])})
+			},
+		},
+		proc(app: ^App, arg: int, args: []string) -> []string {
+			names := make([dynamic]string, context.temp_allocator)
+			if arg == 0 {for n in worldgen.BIOME_NAMES {append(&names, n)}}
+			return names[:]
+		},
+		args = {1, 1},
 		needs = cheat,
 	)
 	console_register(

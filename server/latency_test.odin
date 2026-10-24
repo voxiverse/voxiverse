@@ -119,9 +119,9 @@ run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Re
 	game.pipe_set_conditions(&pipe, {latency_ms = latency_ms, jitter_ms = jitter_ms})
 	srv: Server
 	if !start(
-		&srv,
-		{seed = 5, view_radius = 4, view_height = 2, workers = 2},
-		{&pipe, .Server},
+	&srv,
+	{seed = 5, generator = .Classic, view_radius = 4, view_height = 2, workers = 2}, // M4's gentle hills: corrections only from latency, not chunks still arriving under a forest
+	{&pipe, .Server},
 	) {return}
 	defer stop(&srv)
 
