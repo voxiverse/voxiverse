@@ -4,6 +4,7 @@ import "core:dynlib"
 import "core:log"
 import "core:reflect"
 import "core:strings"
+import "core:time"
 import vk "vendor:vulkan"
 import "vendor:x11/xlib"
 
@@ -29,6 +30,7 @@ Native_Window :: struct {
 	// pointer was before: ignore it.
 	awaiting_centre:  bool,
 	hidden_cursor:    xlib.Cursor,
+	awake_reset:      time.Tick, // when X's screensaver timer was last reset (keep_awake)
 }
 
 @(private)
@@ -50,6 +52,7 @@ X11 :: struct {
 		attributes: ^xlib.XSetWindowAttributes,
 	) -> xlib.Window,
 	DestroyWindow:             proc "c" (display: ^xlib.Display, window: xlib.Window) -> i32,
+	ResetScreenSaver:          proc "c" (display: ^xlib.Display) -> i32,
 	StoreName:                 proc "c" (
 		display: ^xlib.Display,
 		window: xlib.Window,
@@ -315,6 +318,12 @@ native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 }
 
 @(private)
+native_set_keep_awake :: proc(w: ^Window, on: bool) {
+	screensaver_inhibit(on)
+	w.native.awake_reset = {}
+}
+
+@(private)
 native_close :: proc(w: ^Window) {
 	n := &w.native
 	if n.display == nil {return}
@@ -379,6 +388,10 @@ warp_to_centre :: proc(w: ^Window) {
 @(private)
 native_poll :: proc(w: ^Window) {
 	n := &w.native
+	if w.keep_awake && time.tick_since(n.awake_reset) > KEEP_AWAKE_RESET {
+		x.ResetScreenSaver(n.display)
+		n.awake_reset = time.tick_now()
+	}
 	if n.grab_pending {native_set_mouse_captured(w, true)}
 	moved := false
 	defer if moved {

@@ -16,6 +16,7 @@ Window :: struct {
 	close_requested: bool,
 	mouse_captured:  bool, // wanted (set_mouse_captured); held only while focused
 	fullscreen:      bool, // borderless, covering the monitor (set_fullscreen)
+	keep_awake:      bool, // the screen kept on (set_keep_awake)
 	events:          [dynamic]Event, // this frame's events, refilled by poll_events
 	native:          Native_Window, // per-OS state
 }
@@ -178,6 +179,7 @@ window_open :: proc(
 }
 
 window_close :: proc(w: ^Window) {
+	set_keep_awake(w, false)
 	native_close(w)
 	delete(w.events)
 	w^ = {}
@@ -215,6 +217,15 @@ set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	if w.fullscreen == fullscreen {return}
 	w.fullscreen = fullscreen
 	native_set_fullscreen(w, fullscreen)
+}
+
+// set_keep_awake keeps the screen on (no screensaver, no display sleep)
+// while playing, or gives it back to the OS's idle rules. Best effort: where
+// the OS offers no way, it logs so and does nothing.
+set_keep_awake :: proc(w: ^Window, on: bool) {
+	if w.keep_awake == on {return}
+	w.keep_awake = on
+	native_set_keep_awake(w, on)
 }
 
 // vulkan_instance_extensions lists the instance extensions the surface needs.

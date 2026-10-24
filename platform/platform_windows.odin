@@ -74,6 +74,34 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	return true
 }
 
+// SetThreadExecutionState is not in core:sys/windows.
+foreign import kernel32 "system:Kernel32.lib"
+
+@(private = "file", default_calling_convention = "system")
+foreign kernel32 {
+	SetThreadExecutionState :: proc(flags: u32) -> u32 ---
+}
+
+@(private = "file")
+ES_CONTINUOUS :: 0x80000000
+@(private = "file")
+ES_SYSTEM_REQUIRED :: 0x00000001
+@(private = "file")
+ES_DISPLAY_REQUIRED :: 0x00000002
+
+// The display and the system stay on while this thread says so (until
+// it says ES_CONTINUOUS alone).
+@(private)
+native_set_keep_awake :: proc(w: ^Window, on: bool) {
+	flags := u32(ES_CONTINUOUS)
+	if on {flags |= ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED}
+	if SetThreadExecutionState(flags) == 0 {
+		log.warn("platform SetThreadExecutionState failed: the screen may sleep while playing")
+	} else {
+		log.infof("platform keep awake on=%v", on)
+	}
+}
+
 @(private)
 native_close :: proc(w: ^Window) {
 	n := &w.native

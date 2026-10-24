@@ -230,6 +230,9 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	handle_global_keys(app, &input)
 	if app.settings.fullscreen !=
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
+	// Playing (not in a menu, not paused): no screensaver, no display sleep.
+	playing := app.session != nil && app.session.state == .Playing && !world_paused(app)
+	platform.set_keep_awake(w, playing)
 	gpu.set_vsync(&app.g, app.settings.vsync)
 	if app.settings.volume != app.volume {
 		audio.set_volume(&app.mixer, app.settings.volume)

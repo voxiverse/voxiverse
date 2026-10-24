@@ -113,6 +113,15 @@ sounds played and dropped; the log's last `audio` line sums up the run. Without 
 player's volume. On Linux and macOS the build compiles Odin's miniaudio library once (into the
 Odin install; Windows ships it), which needs a C compiler.
 
+## Keeping the screen awake
+
+While playing (in a world, not paused, not in the game menu) the screen stays on, released
+otherwise and on exit (`platform.set_keep_awake`, logged as `platform keep awake`):
+Windows `SetThreadExecutionState`; Linux the freedesktop screensaver's `Inhibit` over D-Bus
+(libdbus loaded at run time), else the desktop portal's (Wayland desktops), plus
+`XResetScreenSaver` every 30 s for X's own blanking; macOS an IOKit power assertion (with
+M1b's window). Where none answers it says so in the log and does nothing.
+
 ## Debug drawing
 
 `render.debug_line` / `render.debug_box` draw world-space lines for one frame from anywhere on
