@@ -214,6 +214,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M10 | Worldgen framework: generators as staged pipelines (climate/biomes, terrain shape, surface, carvers, features) with live-tunable parameters; Earth-like biomes, caves, ores, trees, plants; still water; cutout and translucent rendering; `worldmap` preview tool | The same seed gives the same world on Windows, Linux and macOS (map hashes in CI); chunk generation and meshing within budget; a flight over every biome keeps memory flat; screenshots of each biome (done: `worldgen/worldgen_test.odin` hashes two seeds' chunks on all three CI platforms, `tour_test` visits and screenshots every biome within generation, meshing and frame budgets and flat memory (CI: debug and optimized builds), `fly_test` streams Earth terrain flat in memory. Still to come: ravines, boulders, light dimmed by water and leaves (M11), more biomes) |
 | M11 | Liquids: Minecraft-style water (sources, 7 flow levels, new sources between two), scheduled block updates on the server, swimming, underwater fog, light through water | A dam-break test ends in the same water on every run, on the server and on two clients; 10 000 flowing blocks stay within the tick budget (done: `server/liquids_test.odin`'s dam break settles the same twice with both UDP players matching the server; its flood keeps 10 000 flowing blocks within the tick budget, optimized in CI; swimming has physics tests; water and leaves shade sky light) |
 | M12 | Structures: templates built in-game (`structure save`), placed by worldgen (rotated, varied, fitted to the ground) across chunk borders, and procedural ones (dungeons, towers) on the same placement API | A structure comes out identical whichever order its chunks generate in; templates round-trip save/paste; placements are deterministic per seed (done: `test_structures` builds each kind's chunks in two orders and checks placements and the tops over them; `test_structures_round_trip` saves, pastes and saves again, also round four quarter turns; `worldmap` marks towers, ruins, wells and dungeons) |
+| M13 | Players together: a stored world spawn with safe landings, an overlay and focus stack for every in-game panel, chat, permissions (nodes and roles with metadata), formatted text, EssentialsX-style commands (places and teleports, messaging, moderation, who and status) | Permissions resolve as documented (wildcards, negation, inheritance) in tests; every server action is checked through one function; chat and its commands work over UDP between two players with roles, tags, colours, mutes and ignores; nobody spawns inside blocks; the focus stack routes keys correctly in UI tests |
 
 ## M9-M12: making and changing the world
 
@@ -307,6 +308,49 @@ structures somewhere to stand.
 - **Exit check:** a structure spanning several chunks is identical whichever order its
   chunks are generated in; save, paste and save again gives the same file; placements are
   the same for a seed on every run; `worldmap` marks them.
+
+## M13: players together
+
+Mechanisms, not gameplay: what servers and content will be built on. Each feature is a
+permission node from the start.
+
+- **World spawn:** chosen once when a world is made (the generator's search, now standing
+  clear of trees and structures) and stored in world.cfg; `setworldspawn` moves it. Joining
+  for the first time, `spawn`, and every teleport land through one safe-landing step: wait
+  until the column is loaded, then stand on the highest spot with ground under it and two
+  blocks of air above.
+- **Overlays and focus:** the pause menu, options, tuning panel, quit dialog, console and
+  chat become entries on one stack. Each declares whether it takes the keyboard, frees the
+  mouse or pauses the world; the top one gets the keys and Escape; game controls run only
+  when nothing takes the keyboard. The console's line editing (readline keys, history, Tab)
+  is a widget any overlay uses.
+- **Chat:** `t` opens it, `/` opens it with a command started. Lines fade over the game when
+  closed. The server checks each message (length, rate, mute), formats it (the sender's
+  tag, name and permitted codes) and sends it to everyone who does not ignore the sender;
+  it logs chat. Chat commands share the command table with the console's server commands.
+- **Permissions:** nodes are dotted names (`chat.format`, `chat.delete`, `world.edit.bulk`,
+  `server.stop`); grants may end in `*` (everything under) or start with `-` (denied).
+  Roles grant nodes and inherit other roles; players get roles and their own grants; the
+  most specific grant wins, a denial over an allow at the same depth. Roles and players
+  carry metadata (prefix, suffix, name colour, anything later). `permissions.cfg` in the
+  world directory; edited with `role` and `user` commands or by hand. The owner of a
+  singleplayer world and a dedicated server's `--admin` names get `*`. Every server action
+  asks one `allowed(player, node)`; today's cheats switch becomes nodes.
+- **Formatted text:** `&0`-`&f`, `&#rrggbb`, `&l` bold, `&o` italic, `&n` underline, `&m`
+  strikethrough, `&r` reset, parsed in one place (`game/format.odin`). Each part of a chat
+  line (tag, name, message) is formatted on its own, so a tag's colour never leaks into
+  the name. The UI draws it (bold: drawn twice a pixel apart; italic: slanted), the console
+  too.
+- **Commands (EssentialsX-style):** places and teleports (spawn, setworldspawn,
+  home/sethome/delhome/homes, warp/setwarp/delwarp/warps, tpa/tpahere/tpaccept/tpdeny,
+  back, top, tp); messaging (msg, r, me, broadcast, ignore, nick/realname, motd);
+  moderation (mute, kick, ban, tempban, unban, ban-ip, deleting chat messages); who and
+  status (list, whois, seen, afk, status: tick time, memory, chunks, players). Homes,
+  warps, bans and nicknames are kept with the world.
+- **Exit check:** permission resolution tests (wildcards, negation, inheritance,
+  specificity); focus routing tests (which overlay gets a key, Escape order); chat over UDP
+  between two players with roles, tags, colours, a mute and an ignore; spawn and teleport
+  landings never inside blocks (tests on worlds with trees and structures at the spot).
 
 ### After M12 (not planned in detail yet)
 
