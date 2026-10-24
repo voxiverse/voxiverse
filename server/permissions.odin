@@ -58,12 +58,14 @@ grant chat.send
 grant chat.msg
 grant chat.me
 grant chat.ignore
+grant chat.afk
 grant teleport.spawn
 grant teleport.home
 grant teleport.warp
 grant teleport.tpa
 grant teleport.back
 grant info.*
+meta max_homes 3
 role mod
 inherit default
 grant chat.*

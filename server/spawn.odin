@@ -45,9 +45,18 @@ spawn_choose :: proc(s: ^Server) {
 }
 
 // land moves c's player to position (looking look) and holds them until
-// the blocks there are loaded, then stands them where they fit.
+// the blocks there are loaded, then stands them where they fit. Where they
+// were is kept for back (not when they arrive in the world).
 @(private)
-land :: proc(s: ^Server, c: ^Client, position: [3]f64, look: [2]f32, mode: game.Landing_Mode) {
+land :: proc(
+	s: ^Server,
+	c: ^Client,
+	position: [3]f64,
+	look: [2]f32,
+	mode: game.Landing_Mode,
+	remember := true,
+) {
+	if remember {c.back = Place{c.player.position, c.look}}
 	c.player = {
 		position = position,
 		flying   = c.player.flying, // a flyer arrives flying
@@ -60,8 +69,8 @@ land :: proc(s: ^Server, c: ^Client, position: [3]f64, look: [2]f32, mode: game.
 
 // land_at_spawn: land at the world spawn.
 @(private)
-land_at_spawn :: proc(s: ^Server, c: ^Client) {
-	land(s, c, s.spawn.position, s.spawn.look, .Exact if s.spawn.exact else .Ground)
+land_at_spawn :: proc(s: ^Server, c: ^Client, remember := true) {
+	land(s, c, s.spawn.position, s.spawn.look, .Exact if s.spawn.exact else .Ground, remember)
 }
 
 // landing_tick: true while c's landing still waits (the player is then held

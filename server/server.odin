@@ -378,6 +378,9 @@ receive_messages :: proc(s: ^Server) {
 			c := &s.clients[slot]
 			c.state = .Connecting
 			c.link = v.peer
+			c.address = strings.clone(
+				net.address_to_string(v.address.address, context.temp_allocator),
+			)
 			log.infof(
 				"server connection player=%d from=%s",
 				slot,
@@ -459,6 +462,11 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 				disconnect(s, c, "someone with that name is playing")
 				return
 			}
+		}
+		if why, banned := banned(s, v.name, c.address); banned {
+			log.infof("server banned player refused name=%s address=%s", v.name, c.address)
+			disconnect(s, c, why)
+			return
 		}
 		join(s, c, v.name)
 	case game.Input:

@@ -33,33 +33,8 @@ Said :: struct {
 @(private)
 chat_say :: proc(s: ^Server, c: ^Client, text: string) {
 	name := client_name(c)
-	if e, ok := &s.community.members[name]; ok && e.muted_until != 0 {
-		if e.muted_until == FOREVER || e.muted_until > now_unix() {
-			left :=
-				"" if e.muted_until == FOREVER else fmt.tprintf(" (%s more)", duration_text(e.muted_until - now_unix()))
-			notice(s, c, fmt.tprintf("&cYou are muted%s", left))
-			return
-		}
-		e.muted_until = 0
-	}
-	// The rate: a bucket of CHAT_BURST lines, refilled one per CHAT_EVERY.
-	refill := int((s.tick - c.chat_tick) / CHAT_EVERY)
-	if refill > 0 {
-		c.chat_tokens = min(CHAT_BURST, c.chat_tokens + refill)
-		c.chat_tick += u64(refill) * CHAT_EVERY
-	}
-	if c.chat_tokens == 0 {
-		notice(s, c, "&cSlow down")
-		return
-	}
-	words := chat_clean(text)
-	if words == "" {return}
-	c.chat_tokens -= 1
-	allowed: game.Format_Kinds
-	if game.allowed(c.grants[:], "chat.format.color") {allowed += {.Color}}
-	if game.allowed(c.grants[:], "chat.format.rgb") {allowed += {.Rgb}}
-	if game.allowed(c.grants[:], "chat.format.style") {allowed += {.Style}}
-	words = game.format_filter(words, allowed)
+	words := words_of(s, c, text)
+	if words == "" || !may_speak(s, c) {return}
 	line := game.format_join({speaker(s, c), ": ", words})
 	log.infof("server chat name=%s text=%q", name, game.format_strip(line))
 	id := chat_next(s, name)

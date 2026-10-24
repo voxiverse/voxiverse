@@ -50,6 +50,7 @@ Member :: struct {
 
 // Community: on the heap, strings owned.
 Community :: struct {
+	motd:    string, // shown to each player joining (formatted)
 	members: map[string]Member,
 	warps:   map[string]Place,
 	bans:    map[string]Ban,
@@ -154,6 +155,7 @@ community_destroy :: proc(m: ^Community) {
 		ban_destroy(&b)
 	}
 	delete(m.ip_bans)
+	delete(m.motd)
 	m^ = {}
 }
 
@@ -184,6 +186,8 @@ community_parse :: proc(m: ^Community, text: string) {
 		_, _, tail := strings.partition(line, " ")
 		ok := true
 		switch f[0] {
+		case "motd":
+			set_string(&m.motd, strings.trim_space(tail))
 		case "player":
 			ok = len(f) == 2 && game.name_valid(f[1])
 			if ok {member = member_get(m, f[1])}
@@ -233,6 +237,7 @@ community_parse :: proc(m: ^Community, text: string) {
 community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(allocator)
 	strings.write_string(&b, "# Voxiverse community (written by the server; see DEBUGGING.md)\n")
+	if m.motd != "" {fmt.sbprintfln(&b, "motd %s", m.motd)}
 	place :: proc(b: ^strings.Builder, p: Place) {
 		fmt.sbprintf(
 			b,

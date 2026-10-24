@@ -197,7 +197,27 @@ strike, `&r` plain, `&&` an `&`; a colour clears the styles before it.
 | `mute <player> [30m\|2h\|7d]`, `unmute <player>` | For a while or for good (`moderation.mute`) |
 | `delmsg <player> [count]` | Take back their newest lines from everyone's chat (`chat.delete`) |
 
-Mutes, ignores (and later homes, warps, bans, nicknames) are kept in `<world>/community.cfg`.
+Server commands for people and places (after EssentialsX's; `/name` in chat, `server name` in
+the console; each needs the permission in brackets):
+
+| Command | |
+|---|---|
+| `home [name]`, `sethome [name]`, `delhome <name>`, `homes` | Your homes (`teleport.home`; at most your role's `max_homes` metadata, 3 for `default`) |
+| `warp [name]`, `warps` / `setwarp <name>`, `delwarp <name>` | The world's warps (`teleport.warp` / `teleport.warp.set`) |
+| `tpa <player>`, `tpahere <player>`, `tpaccept`, `tpdeny` | Ask to go to someone, or for them to come (`teleport.tpa`; two minutes to answer) |
+| `back`, `top`, `spawn` | Where you were before your last teleport / up onto the highest block / the world spawn |
+| `tp <player>`, `tp <x y z>`, `tp <player> <player>`, `tphere <player>` | `teleport.tp`; moving others `teleport.tp.others` |
+| `msg <player> <words>`, `r <words>`, `me <action>`, `broadcast <words>` | Whisper, answer the last whisper, an action, to everyone (`chat.msg`, `chat.me`, `chat.broadcast`) |
+| `nick <nickname\|off> [player]`, `realname <nickname>` | A nickname: a name's letters, formatted as you may format chat, nobody else's name (`chat.nick`, others' `chat.nick.others`) |
+| `motd [set <words>]` | The message of the day, shown on joining (setting it: `server.motd`) |
+| `kick <player> [reason]` | `moderation.kick` |
+| `ban <player> [reason]`, `tempban <player> <30m\|2h\|7d> [reason]`, `unban <player>` | `moderation.ban` |
+| `ban-ip <player\|address> [reason]`, `unban-ip <address>` | Everyone from that address (`moderation.ban_ip`) |
+| `list`, `whois <player>`, `seen <player>`, `afk`, `status` | Who is here; who someone is (their address with `moderation.address`); when they were last here; away (moving or speaking ends it); ticks, chunks, memory |
+
+Nobody may kick, ban or mute a player with `moderation.exempt` (admins, the host); the host
+cannot be kicked at all. Nicknames, mutes, ignores, homes, warps, bans, last seen and last
+address, and the message of the day are kept in `<world>/community.cfg`.
 
 Every in-game panel is an overlay on one stack (`client/overlays.odin`): the pause menu,
 Options, tuning, chat, console, the quit dialog. Each says whether it takes the keyboard,

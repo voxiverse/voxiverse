@@ -21,9 +21,9 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		// Where they left, looking where they looked.
 		c.player = saved.state
 		c.look = {saved.yaw, saved.pitch}
-		land(s, c, saved.state.position, c.look, .Exact)
+		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
-		land_at_spawn(s, c)
+		land_at_spawn(s, c, remember = false)
 	}
 	send_message(
 		s,
@@ -49,6 +49,10 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
 	chat_system(s, game.format_join({display_name(s, c), "&e joined"}))
+	m := member_get(&s.community, name)
+	m.seen = now_unix()
+	if c.address != "" {set_string(&m.ip, c.address)}
+	if s.community.motd != "" {notice(s, c, s.community.motd)}
 }
 
 // leave: a client is gone (left, timed out or was dropped): its player is
@@ -68,6 +72,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	if c.state != .Playing {return}
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
+	member_get(&s.community, client_name(c)).seen = now_unix()
 	for &other in s.clients {
 		if &other != c && other.state == .Playing {
 			send_message(s, &other, game.Player_Left{player_id(s, c)})
@@ -92,6 +97,7 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
 		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+		if c.afk && msg.input.move != {} {set_afk(s, c, false)} 	// back
 		if waiting {
 			// Held still until the blocks are there (a toggle still takes).
 			c.player.position, c.player.velocity = held.position, {}

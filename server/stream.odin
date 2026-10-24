@@ -52,6 +52,12 @@ Client :: struct {
 	fired_at:     u64, // tick of its last rocket (a rate limit)
 	chat_tokens:  int, // lines it may say now (chat.odin)
 	chat_tick:    u64, // the bucket refilled up to here
+	address:      string, // its IP address ("": the local player; owned)
+	back:         Maybe(Place), // where it was before its last teleport
+	afk:          bool,
+	reply:        [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
+	reply_len:    int,
+	tpa:          Tpa, // a teleport request to it
 }
 
 // Chunks sent to a client per tick (at 30 Hz: 1440 per second).
@@ -87,6 +93,7 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 client_reset :: proc(c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	delete(c.grants)
+	delete(c.address)
 	has, columns, known := c.has, c.columns, c.known
 	clear(&has)
 	clear(&columns)
