@@ -32,7 +32,13 @@ place_name_valid :: proc(name: string) -> bool {
 
 @(private)
 place_of :: proc(c: ^Client) -> Place {
-	return {c.player.position, c.look}
+	return {c.world.address, c.player.position, c.look}
+}
+
+// notice_if tells c why not, if there is a why.
+@(private)
+notice_if :: proc(s: ^Server, c: ^Client, why: string) {
+	if why != "" {notice(s, c, fmt.tprintf("&c%s", why))}
 }
 
 @(private)
@@ -83,7 +89,7 @@ admin_home :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		)
 		return true
 	}
-	land(s, c, p.position, p.look, .Exact)
+	notice_if(s, c, go_to(s, c, p))
 	return true
 }
 
@@ -119,7 +125,7 @@ admin_warp :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, fmt.tprintf("&cNo warp %s", args[0]))
 		return true
 	}
-	land(s, c, p.position, p.look, .Exact)
+	notice_if(s, c, go_to(s, c, p))
 	return true
 }
 
@@ -206,9 +212,9 @@ admin_tpaccept :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		return true
 	}
 	if c.tpa.here {
-		land(s, c, from.player.position, c.look, .Exact)
+		notice_if(s, c, go_to(s, c, {from.world.address, from.player.position, c.look}))
 	} else {
-		land(s, from, c.player.position, from.look, .Exact)
+		notice_if(s, from, go_to(s, from, {c.world.address, c.player.position, from.look}))
 	}
 	notice(s, from, fmt.tprintf("%s accepted", client_name(c)))
 	c.tpa = {}
@@ -237,7 +243,7 @@ admin_back :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, "&cNowhere to go back to")
 		return true
 	}
-	land(s, c, p.position, p.look, .Exact) // (and back again after)
+	notice_if(s, c, go_to(s, c, p)) // (and back again after)
 	return true
 }
 
@@ -261,7 +267,7 @@ admin_tp :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
 			return true
 		}
-		land(s, c, to.player.position, c.look, .Exact)
+		notice_if(s, c, go_to(s, c, {to.world.address, to.player.position, c.look}))
 	case 2:
 		if !allowed(s, c, "teleport.tp.others") {
 			notice(s, c, "You may not move others here (teleport.tp.others)")
@@ -272,7 +278,7 @@ admin_tp :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			notice(s, c, "&cBoth must be here")
 			return true
 		}
-		land(s, who, to.player.position, who.look, .Exact)
+		notice_if(s, c, go_to(s, who, {to.world.address, to.player.position, who.look}))
 		notice(s, c, fmt.tprintf("Moved %s to %s", args[0], args[1]))
 	case 3:
 		at: [3]f64
@@ -296,6 +302,6 @@ admin_tphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
 		return true
 	}
-	land(s, who, c.player.position, who.look, .Exact)
+	notice_if(s, c, go_to(s, who, {c.world.address, c.player.position, who.look}))
 	return true
 }

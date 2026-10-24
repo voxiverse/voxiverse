@@ -57,7 +57,7 @@ land :: proc(
 	mode: game.Landing_Mode,
 	remember := true,
 ) {
-	if remember {c.back = Place{c.player.position, c.look}}
+	if remember {c.back = Place{c.world.address, c.player.position, c.look}}
 	c.player = {
 		position = position,
 		flying   = c.player.flying, // a flyer arrives flying

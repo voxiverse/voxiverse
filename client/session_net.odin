@@ -74,6 +74,17 @@ receive :: proc(s: ^Session) {
 			s.state = .Choosing
 		case game.Welcome:
 			welcome(s, v)
+		case game.World_Changed:
+			// Travelled: nothing of the last world stays; the arrival (a
+			// teleport), the new world's chunks and entities follow.
+			world_clear(&s.world)
+			clear(&s.entities)
+			clear(&s.edits)
+			clear(&s.puffs)
+			s.welcome.address = v.address
+			s.rules = v.rules
+			inventory_predict(s) // (no placing waits now)
+			log.infof("session travelled to=%s", game.address_dir(v.address))
 		case game.Reject:
 			fail(
 				s,

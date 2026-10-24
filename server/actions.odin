@@ -139,6 +139,7 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) -> bool {
 	for &other in s.clients {
 		if &other != c &&
+		   other.world == c.world &&
 		   other.state == .Playing &&
 		   !game.can_place_at(.Air, block, pos, other.player) {
 			return true

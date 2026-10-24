@@ -164,7 +164,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 	s := w.server
 	for &c in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		d := c.player.position - center
 		if d.x * d.x + d.z * d.z <
 		   160 * 160 {send_message(s, &c, game.Explosion{center, f32(radius)})}
@@ -181,7 +181,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 		return {f32(dir.x) * strength, f32(dir.y) * strength + 4, f32(dir.z) * strength}, true
 	}
 	for &c in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
 			c.player.velocity += impulse
 			c.player.on_ground = false
@@ -240,7 +240,9 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
 	}
 	for &c, i in s.clients {
-		if c.state != .Playing || (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
+		if c.state != .Playing ||
+		   c.world != w ||
+		   (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
 		lo, hi := game.player_box(c.player.position)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
@@ -336,7 +338,7 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 	s := w.server
 	id := w.entities.list[index].id
 	for &c in s.clients {
-		if c.state == .Playing && id in c.known {
+		if c.state == .Playing && c.world == w && id in c.known {
 			delete_key(&c.known, id)
 			send_message(s, &c, game.Entity_Despawn{id, died})
 		}
@@ -348,7 +350,9 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 entity_hurt_shown :: proc(w: ^World, id: u32) {
 	s := w.server
 	for &c in s.clients {
-		if c.state == .Playing && id in c.known {send_message(s, &c, game.Entity_Hurt{id})}
+		if c.state == .Playing &&
+		   c.world == w &&
+		   id in c.known {send_message(s, &c, game.Entity_Hurt{id})}
 	}
 }
 
@@ -518,7 +522,7 @@ spawn_natural :: proc(w: ^World) {
 	r := rand.default_random_generator(&w.entities.rng)
 	query := game.Block_Query{&w.chunks, chunks_block}
 	for &c in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		near := 0
 		for ent in w.entities.list {
 			d := ent.body.position - c.player.position
@@ -556,7 +560,7 @@ nearest_player :: proc(w: ^World, p: [3]f64, within: f64) -> (at: [3]f64, ok: bo
 	s := w.server
 	best := within * within
 	for &c in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		d := c.player.position - p
 		if l := d.x * d.x + d.y * d.y + d.z * d.z; l < best {
 			best, at, ok = l, c.player.position, true

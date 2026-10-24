@@ -38,7 +38,7 @@ set_worldgen :: proc(s: ^Server, c: ^Client, name, value: string) {
 		w.chunks.gen.params = w.params
 		for &slot in w.natural {slot.valid = false} 	// the land's tops moved
 		log.infof("server worldgen changed name=%s value=%s by=%s", name, value, client_name(c))
-		if m, ok := worldgen_variables(w); ok {broadcast(s, m)}
+		if m, ok := worldgen_variables(w); ok {broadcast(s, m, w)}
 		notice(s, c, fmt.tprintf("%s changed: `regen` remakes the land near you", name))
 	case .Unknown_Name, .Bad_Value:
 		notice(s, c, fmt.tprintf("No setting %s, or not a value for it: %s", name, value))
@@ -61,7 +61,7 @@ regen :: proc(w: ^World, c: ^Client, radius: i32) -> (count: int) {
 		append(&drop, pos)
 	}
 	for &other in s.clients {
-		if other.state != .Playing {continue}
+		if other.state != .Playing || other.world != w {continue}
 		dropped := false
 		for pos in drop {
 			if pos not_in other.has {continue}
@@ -78,7 +78,7 @@ regen :: proc(w: ^World, c: ^Client, radius: i32) -> (count: int) {
 	for &slot in w.natural {slot.valid = false}
 	// The columns' tops, for those still holding chunks of them.
 	for &other in s.clients {
-		if other.state != .Playing {continue}
+		if other.state != .Playing || other.world != w {continue}
 		for column, n in other.columns {
 			d := column - [2]i32{centre.x, centre.z}
 			if n > 0 &&

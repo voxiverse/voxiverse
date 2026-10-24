@@ -103,7 +103,24 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	rc, ok = decode_server(encode_s(Rules_Changed{changed})[:], scratch)
 	testing.expect(t, ok && rc.(Rules_Changed).rules == changed)
 
-	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, 3, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
+	welcome := Welcome {
+		PROTOCOL_VERSION,
+		TICK_RATE,
+		3,
+		{0, 40.5, 0},
+		12,
+		6,
+		RULES_DEFAULTS,
+		address_derive(7),
+	}
+	moved: Server_Message
+	moved, ok = decode_server(
+		encode_s(World_Changed{address_derive(8), RULES_DEFAULTS})[:],
+		scratch,
+	)
+	testing.expect(t, ok && moved.(World_Changed).address == address_derive(8))
+	_, ok = decode_server(encode_s(World_Changed{{}, RULES_DEFAULTS})[:], scratch)
+	testing.expect(t, !ok, "an address with a symbol twice")
 	m: Server_Message
 	m, ok = decode_server(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
@@ -259,7 +276,9 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	test_terrain(9, terrain.array)
 
 	server := [][dynamic]u8 {
-		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, 1, {}, 8, 4, RULES_DEFAULTS}),
+		encode_s(
+			Welcome{PROTOCOL_VERSION, TICK_RATE, 1, {}, 8, 4, RULES_DEFAULTS, address_derive(1)},
+		),
 		encode_s(Player_Joined{2, "Alice"}),
 		encode_s(Player_Left{2}),
 		encode_s(Players{tick = 9, count = 1}),

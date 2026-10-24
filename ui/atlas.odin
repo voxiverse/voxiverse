@@ -27,6 +27,7 @@ Glyph_Entry :: struct {
 }
 
 Glyph_Cache :: struct {
+	fallback:           ^font.Font, // for what font lacks (nil: none)
 	font:               ^font.Font,
 	pixels:             []u8,
 	size:               int,
@@ -83,12 +84,12 @@ glyph_cache_get :: proc(c: ^Glyph_Cache, r: rune, size: u16) -> (entry: Glyph_En
 	key := Glyph_Key{r, size}
 	if e, found := c.entries[key]; found {return e, true}
 
-	g := font.glyph_index(c.font, r)
+	f, g := glyph_font(c, r)
 	if g == 0 && r != 0 {return {}, false} 	// let the caller substitute
-	scale := font.scale_for_size(c.font, f32(size))
-	bm, raster_ok := font.rasterize(c.font, g, scale, context.temp_allocator)
+	scale := font.scale_for_size(f, f32(size))
+	bm, raster_ok := font.rasterize(f, g, scale, context.temp_allocator)
 	if !raster_ok {return {}, false}
-	entry.advance = font.advance(c.font, g) * scale
+	entry.advance = font.advance(f, g) * scale
 	entry.offset = {f32(bm.x), f32(bm.y)}
 	entry.w, entry.h = u16(bm.width), u16(bm.height)
 	if bm.width > 0 && bm.height > 0 {
@@ -115,6 +116,16 @@ glyph_cache_get :: proc(c: ^Glyph_Cache, r: rune, size: u16) -> (entry: Glyph_En
 	}
 	c.entries[key] = entry
 	return entry, true
+}
+
+// glyph_font: the font that has r (the fallback when the font lacks it),
+// and its glyph (0: neither has it).
+glyph_font :: proc(c: ^Glyph_Cache, r: rune) -> (^font.Font, font.Glyph) {
+	g := font.glyph_index(c.font, r)
+	if g == 0 && c.fallback != nil {
+		if fg := font.glyph_index(c.fallback, r); fg != 0 {return c.fallback, fg}
+	}
+	return c.font, g
 }
 
 // shelf_place finds room for a w×h glyph, one pixel of padding around it

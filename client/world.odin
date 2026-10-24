@@ -341,6 +341,17 @@ predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	)
 }
 
+// world_clear drops every chunk and column (travelling: none of them is
+// in the next world); their meshes go with the next world_apply.
+world_clear :: proc(w: ^World) {
+	positions := make([dynamic]game.Chunk_Pos, 0, len(w.by_pos), context.temp_allocator)
+	for pos in w.by_pos {append(&positions, pos)}
+	for pos in positions {world_remove_chunk(w, pos)}
+	clear(&w.columns)
+	clear(&w.groups)
+	w.batch_left = 0
+}
+
 // remesh_box re-meshes every loaded chunk that overlaps the box.
 @(private = "file")
 remesh_box :: proc(w: ^World, lo, hi: game.Block_Pos) {

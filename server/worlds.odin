@@ -1,7 +1,11 @@
 package server
 
+import "core:fmt"
 import "core:log"
 import "core:mem/virtual"
+import "core:os"
+import "core:path/filepath"
+import "core:strings"
 
 import "../game"
 import "../worldgen"
@@ -12,25 +16,26 @@ import "../worldgen"
 // when it unloads.
 
 World :: struct {
-	server:    ^Server,
-	address:   game.Address,
-	arena:     virtual.Arena,
-	dir:       string, // its save directory ("": not saved)
-	generator: worldgen.Kind,
-	seed:      i64,
-	params:    worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
-	rules:     game.Rules,
-	clock:     f64, // world time (game/time.odin)
-	spawn:     World_Spawn, // where arrivals land (spawn.odin)
-	chunks:    Chunk_Store,
-	tops:      map[[2]i32]i32, // edited column tops (columns.odin)
-	natural:   []Natural_Slot, // natural column tops (columns.odin)
-	entities:  Entities, // (entities.odin)
-	changes:   Changes, // blocks changed this tick (changes.odin)
-	updates:   Updates, // scheduled block updates: flowing water (liquids.odin)
-	saved:     map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
-	regions:   map[game.Region_Pos]bool, // read from disk; true = changed since written
-	started:   bool, // world_start ran (its chunks and the rest exist)
+	server:     ^Server,
+	address:    game.Address,
+	arena:      virtual.Arena,
+	dir:        string, // its save directory ("": not saved)
+	generator:  worldgen.Kind,
+	seed:       i64,
+	params:     worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
+	rules:      game.Rules,
+	clock:      f64, // world time (game/time.odin)
+	spawn:      World_Spawn, // where arrivals land (spawn.odin)
+	chunks:     Chunk_Store,
+	tops:       map[[2]i32]i32, // edited column tops (columns.odin)
+	natural:    []Natural_Slot, // natural column tops (columns.odin)
+	entities:   Entities, // (entities.odin)
+	changes:    Changes, // blocks changed this tick (changes.odin)
+	updates:    Updates, // scheduled block updates: flowing water (liquids.odin)
+	saved:      map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
+	regions:    map[game.Region_Pos]bool, // read from disk; true = changed since written
+	started:    bool, // world_start ran (its chunks and the rest exist)
+	idle_since: u64, // the last tick someone was in it
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -91,4 +96,196 @@ world_close :: proc(w: ^World) {
 	delete(w.regions)
 	delete(w.dir)
 	free(w)
+}
+
+// WORLD_IDLE_SECONDS: how long a world (not the home world) stays loaded
+// with nobody in it (Config.world_idle overrides: tests).
+WORLD_IDLE_SECONDS :: 10
+
+// world_kind: what kind of world an address is: its generator parameters
+// and rules, from the address alone (so it is the same kind of world in any
+// universe), each within its range; the terrain's seed mixes in the
+// universe's. The home world is Earth's, unchanged.
+world_kind :: proc(w: ^World) {
+	s := w.server
+	a := w.address
+	if w == s.home {return}
+	h := game.address_hash(a)
+	w.seed = i64(u64(s.config.seed) ~ h * 0x9e37_79b9_7f4a_7c15)
+	w.generator = .Earth
+	n := h
+	pick :: proc(n: ^u64, lo, hi: f32) -> f32 {
+		n^ = n^ * 6364136223846793005 + 1442695040888963407
+		return lo + f32(n^ >> 40) / f32(1 << 24) * (hi - lo)
+	}
+	p := &w.params
+	p^ = worldgen.PARAMS_DEFAULTS
+	p.sea_level = i32(pick(&n, -16, 24))
+	p.continent_scale = pick(&n, 800, 4000)
+	p.climate_scale = pick(&n, 800, 4000)
+	p.mountain_height = pick(&n, 30, 200)
+	p.hill_height = pick(&n, 4, 30)
+	p.ocean_depth = pick(&n, 10, 80)
+	p.overhang = pick(&n, 0, 20)
+	p.river_width = pick(&n, 0, 0.12)
+	p.cave_size = pick(&n, 0.04, 0.2)
+	p.tree_density = pick(&n, 0, 2)
+	p.plant_density = pick(&n, 0, 2)
+	p.warmth = pick(&n, -1, 1)
+	p.wetness = pick(&n, -1, 1)
+	p.palette = f32(int(pick(&n, 0, f32(len(worldgen.PALETTES)) - 0.001)))
+	r := &w.rules
+	r^ = game.RULES_DEFAULTS
+	r.gravity = pick(&n, 16, 48)
+	r.day_length = f32(int(pick(&n, 600, 2400)) / 60 * 60)
+}
+
+// world_find: the loaded world at address, if any.
+world_find :: proc(s: ^Server, a: game.Address) -> ^World {
+	for w in s.worlds {if w.address == a {return w}}
+	return nil
+}
+
+// world_load: the world at address, loaded (from its save, or new) if it
+// was not; nil (logged) if it cannot be.
+world_load :: proc(s: ^Server, a: game.Address) -> ^World {
+	if w := world_find(s, a); w != nil {return w}
+	if !game.address_valid(a) {return nil}
+	w := world_make(s)
+	w.address = a
+	world_kind(w)
+	if !world_dir_open(w) || !world_start(w) {
+		world_close(w)
+		return nil
+	}
+	w.idle_since = s.tick
+	append(&s.worlds, w)
+	log.infof("server world loaded address=%s worlds=%d", game.address_dir(a), len(s.worlds))
+	return w
+}
+
+// worlds_unload_idle saves and frees the worlds nobody has been in for a
+// while (never the home world).
+worlds_unload_idle :: proc(s: ^Server) {
+	idle :=
+		u64(s.config.world_idle * game.TICK_RATE) if s.config.world_idle > 0 else WORLD_IDLE_SECONDS * game.TICK_RATE
+	for i := len(s.worlds) - 1; i >= 1; i -= 1 {
+		w := s.worlds[i]
+		occupied := false
+		for &c in s.clients {occupied ||= c.state == .Playing && c.world == w}
+		if occupied {w.idle_since = s.tick}
+		if s.tick - w.idle_since < idle {continue}
+		world_save(w)
+		log.infof("server world unloaded address=%s", game.address_dir(w.address))
+		world_close(w)
+		ordered_remove(&s.worlds, i)
+	}
+}
+
+// travel takes c to the world at address (its spawn, or there: a place in
+// it); "" or why not.
+travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = nil) -> string {
+	to := world_load(s, a)
+	if to == nil {return "that world cannot be reached"}
+	from := c.world
+	back := Place{from.address, c.player.position, c.look}
+	if to != from {
+		// The client drops everything of the world it leaves.
+		clear(&c.has)
+		clear(&c.columns)
+		clear(&c.known)
+		c.cursor = 0
+		c.landing = nil
+		c.action_count = 0 // (edits and shots were for the last world)
+		c.world = to
+		send_message(s, c, game.World_Changed{to.address, to.rules})
+		send_message(s, c, game.Time{to.clock})
+		if m, ok := worldgen_variables(to); ok {send_message(s, c, m)}
+		log.infof(
+			"server travel name=%s from=%s to=%s",
+			client_name(c),
+			game.address_dir(from.address),
+			game.address_dir(a),
+		)
+	}
+	if p, ok := there.?; ok {
+		land(s, c, p.position, p.look, .Exact)
+	} else {
+		land_at_spawn(s, c)
+	}
+	c.back = back
+	return ""
+}
+
+// go_to takes c to place, travelling first if it is in another world.
+go_to :: proc(s: ^Server, c: ^Client, p: Place, mode := game.Landing_Mode.Exact) -> string {
+	if p.world != c.world.address {return travel(s, c, p.world, p)}
+	land(s, c, p.position, p.look, mode)
+	return ""
+}
+
+// --- Commands ---
+
+// admin_travel: travel <address> [character] (another's: world.travel.others).
+@(private)
+admin_travel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	// The address may be two words (a world, its galaxy): all of them, else
+	// all but the last, which is then a character.
+	here := c.world.address.galaxy
+	a, ok := game.address_parse(strings.join(args, " ", context.temp_allocator), here)
+	who := c
+	if !ok && len(args) > 1 {
+		a, ok = game.address_parse(
+			strings.join(args[:len(args) - 1], " ", context.temp_allocator),
+			here,
+		)
+		if !ok {return false}
+		if !allowed(s, c, "world.travel.others") {
+			notice(s, c, "You may not send others here (world.travel.others)")
+			return true
+		}
+		who = client_by_name(s, args[len(args) - 1])
+		if who == nil {
+			notice(s, c, fmt.tprintf("&c%s is not here", args[len(args) - 1]))
+			return true
+		}
+	}
+	if !ok {
+		notice(
+			s,
+			c,
+			"&cNot an address: seven symbols (a world in this galaxy), fifteen, or the directory form",
+		)
+		return true
+	}
+	notice_if(s, c, travel(s, who, a))
+	return true
+}
+
+// admin_address: this world's address, as shared and as a directory.
+@(private)
+admin_address :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	a := c.world.address
+	home := " (the home world)" if c.world == s.home else ""
+	notice(s, c, fmt.tprintf("%s%s  %s", game.address_text(a), home, game.address_dir(a)))
+	return true
+}
+
+// admin_worlds: the loaded worlds and who is in each; how many are saved.
+@(private)
+admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	for w in s.worlds {
+		players := 0
+		for &other in s.clients {if other.state == .Playing && other.world == w {players += 1}}
+		home := " home" if w == s.home else ""
+		notice(s, c, fmt.tprintf("%s%s: %d here", game.address_text(w.address), home, players))
+	}
+	saved := 0
+	if s.store.dir != "" {
+		dir := filepath.join({s.store.dir, WORLDS_DIR}, context.temp_allocator) or_else WORLDS_DIR
+		entries, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
+		for e in entries {if e.type == .Directory {saved += 1}}
+	}
+	notice(s, c, fmt.tprintf("%d loaded, %d saved", len(s.worlds), saved))
+	return true
 }

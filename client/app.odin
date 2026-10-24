@@ -27,6 +27,9 @@ import "mesh"
 // lifetime inside the App's.
 
 FONT_DATA :: #load("../assets/fonts/jetbrains_mono_regular.ttf")
+// SYMBOL_FONT_DATA: the addresses' symbols (Old Turkic), which the UI font
+// lacks (game/address.odin).
+SYMBOL_FONT_DATA :: #load("../assets/fonts/noto_sans_old_turkic_regular.ttf")
 
 Screen :: enum u8 {
 	Title,
@@ -44,6 +47,7 @@ App :: struct {
 	window:           platform.Window,
 	g:                gpu.Gpu,
 	renderdoc:        gpu.Renderdoc,
+	symbol_font:      font.Font, // (SYMBOL_FONT_DATA)
 	font:             font.Font,
 	ui:               ui.Context,
 	ui_pass:          render.Ui_Pass,
@@ -125,7 +129,11 @@ app_init :: proc(app: ^App) -> bool {
 		log.error("could not load the UI font")
 		return false
 	}
-	if !ui.init(&app.ui, &app.font) {return false}
+	if app.symbol_font, ok = font.load(SYMBOL_FONT_DATA); !ok {
+		log.error("could not load the symbol font")
+		return false
+	}
+	if !ui.init(&app.ui, &app.font, fallback = &app.symbol_font) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}

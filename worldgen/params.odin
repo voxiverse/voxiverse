@@ -10,6 +10,27 @@ import "../base"
 PARAMS_VARS := [?]base.Var {
 	{field = "sea_level", help = "the sea's surface, y", min = -64, max = 64},
 	{
+		field = "warmth",
+		help = "added to the climate's temperature (-1 cold .. 1 hot)",
+		min = -1.5,
+		max = 1.5,
+		step = 0.1,
+	},
+	{
+		field = "wetness",
+		help = "added to the climate's humidity",
+		min = -1.5,
+		max = 1.5,
+		step = 0.1,
+	},
+	{
+		field = "palette",
+		help = "the surface's blocks: 0 Earth, 1 ash, 2 frost, 3 clay, 4 dunes",
+		min = 0,
+		max = 4,
+		step = 1,
+	},
+	{
 		field = "biome_blend",
 		help = "how wide the mixed band between biomes is, blocks each side (0: hard edges)",
 		min = 0,

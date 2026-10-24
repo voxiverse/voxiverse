@@ -33,6 +33,9 @@ Params :: struct {
 	tree_density:    f32, // 1: as designed; 0: none
 	plant_density:   f32,
 	biome_blend:     f32, // blocks: how far a column's climate is sampled away (borders dither over twice this); 0: hard edges (worlds made before it)
+	warmth:          f32, // added to the climate's temperature (-1 cold .. 1 hot); 0: Earth's
+	wetness:         f32, // added to its humidity
+	palette:         f32, // the surface's blocks (PALETTES); 0: Earth's
 }
 
 @(rodata)
@@ -169,6 +172,8 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 		max(0, height - f32(p.sea_level) - 50) / 90
 	c.humidity =
 		fbm2(seed ~ i64(Earth_Layer.Wet), climate_at / f64(p.climate_scale * 0.6), 3) * 1.6
+	c.temperature += p.warmth
+	c.humidity += p.wetness
 	c.biome = biome_of(p, &c, continent, mountainous)
 	return
 }
@@ -210,6 +215,39 @@ frozen :: proc(b: Biome) -> bool {
 // biome b, at height y (depth 0: the top).
 @(private)
 surface_block :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
+	block := earth_surface(p, b, depth, y)
+	if p.palette != 0 {block = palette_block(p, block)}
+	return block
+}
+
+// PALETTES: what another world's surface is made of instead of Earth's
+// (grass, dirt, sand): palette 0 is Earth's; trees grow on grass only, so
+// a palette without it is barren.
+@(rodata)
+PALETTES := [?][3]game.Block {
+	{.Grass, .Dirt, .Sand}, // Earth
+	{.Gravel, .Gravel, .Gravel}, // ash
+	{.Snow, .Dirt, .Ice}, // frost
+	{.Clay, .Clay, .Sandstone}, // clay
+	{.Sand, .Sandstone, .Sand}, // dunes
+}
+
+@(private = "file")
+palette_block :: proc(p: ^Params, b: game.Block) -> game.Block {
+	pal := PALETTES[clamp(int(p.palette), 0, len(PALETTES) - 1)]
+	#partial switch b {
+	case .Grass:
+		return pal[0]
+	case .Dirt:
+		return pal[1]
+	case .Sand:
+		return pal[2]
+	}
+	return b
+}
+
+@(private = "file")
+earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 	sea := p.sea_level
 	underwater := y < sea
 	switch b {

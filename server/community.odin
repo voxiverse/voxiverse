@@ -29,6 +29,7 @@ import "../game"
 COMMUNITY_FILE :: "community.cfg"
 
 Place :: struct {
+	world:    game.Address,
 	position: [3]f64,
 	look:     [2]f32, // yaw, pitch
 }
@@ -165,10 +166,13 @@ community_destroy :: proc(m: ^Community) {
 	m^ = {}
 }
 
-// place_parse: "x y z yaw pitch".
+// place_parse: "x y z yaw pitch [world]" (no world: the home world's,
+// from before worlds).
 @(private = "file")
-place_parse :: proc(f: []string) -> (p: Place, ok: bool) {
-	if len(f) != 5 {return}
+place_parse :: proc(f: []string, home: game.Address) -> (p: Place, ok: bool) {
+	if len(f) != 5 && len(f) != 6 {return}
+	p.world = home
+	if len(f) == 6 {p.world = game.address_parse(f[5], {}) or_return}
 	for i in 0 ..< 3 {
 		p.position[i] = strconv.parse_f64(f[i]) or_return
 		if abs(p.position[i]) >= game.WORLD_LIMIT {return}
@@ -180,7 +184,7 @@ place_parse :: proc(f: []string) -> (p: Place, ok: bool) {
 
 // community_parse reads community.cfg's text; problems are logged and the
 // line skipped.
-community_parse :: proc(m: ^Community, text: string) {
+community_parse :: proc(m: ^Community, text: string, home: game.Address) {
 	rest := text
 	member: ^Member
 	line_number := 0
@@ -198,10 +202,10 @@ community_parse :: proc(m: ^Community, text: string) {
 			ok = len(f) == 2 && game.name_valid(f[1])
 			if ok {member = member_get(m, f[1])}
 		case "warp":
-			ok = len(f) == 7
+			ok = len(f) == 7 || len(f) == 8
 			if !ok {break}
 			p: Place
-			p, ok = place_parse(f[2:])
+			p, ok = place_parse(f[2:], home)
 			if ok {place_set(&m.warps, f[1], p)}
 		case "ban", "ban_ip", "ban_account":
 			ok = len(f) >= 4
@@ -225,10 +229,10 @@ community_parse :: proc(m: ^Community, text: string) {
 			ok = member != nil && len(f) == 2 && game.name_valid(f[1])
 			if ok {list_set(&member.ignores, f[1], true)}
 		case "home":
-			ok = member != nil && len(f) == 7
+			ok = member != nil && (len(f) == 7 || len(f) == 8)
 			if !ok {break}
 			p: Place
-			p, ok = place_parse(f[2:])
+			p, ok = place_parse(f[2:], home)
 			if ok {place_set(&member.homes, f[1], p)}
 		case "seen":
 			ok = member != nil && len(f) == 2
@@ -250,12 +254,13 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 	place :: proc(b: ^strings.Builder, p: Place) {
 		fmt.sbprintf(
 			b,
-			"%.3f %.3f %.3f %.4f %.4f",
+			"%.3f %.3f %.3f %.4f %.4f %s",
 			p.position.x,
 			p.position.y,
 			p.position.z,
 			p.look[0],
 			p.look[1],
+			game.address_dir(p.world),
 		)
 	}
 	for name in sorted_names(m.warps) {
@@ -306,7 +311,7 @@ community_open :: proc(s: ^Server) {
 	path :=
 		filepath.join({s.store.dir, COMMUNITY_FILE}, context.temp_allocator) or_else COMMUNITY_FILE
 	if data, err := os.read_entire_file_from_path(path, context.temp_allocator); err == nil {
-		community_parse(&s.community, string(data))
+		community_parse(&s.community, string(data), s.home.address)
 	}
 }
 

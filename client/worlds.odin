@@ -120,7 +120,7 @@ worlds_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	w := &app.worlds
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 620, ctx.screen.h - 80)
-	ui.title(ctx, "Worlds", ui.cut_top(&column, 80))
+	ui.title(ctx, "Universes", ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 

@@ -285,6 +285,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("chat_delete id=%d", v.id), true
 		case game.Challenge:
 			return "challenge", true
+		case game.World_Changed:
+			return fmt.tprintf("world_changed address=%s", game.address_dir(v.address)), true
 		case game.Characters:
 			return fmt.tprintf("characters names=%q", v.names), true
 		case game.Inventory_Update:

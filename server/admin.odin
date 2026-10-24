@@ -86,6 +86,10 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"give", "<player> <item> [count]", {2, 3}, admin_give, "items.give"},
 	{"clear", "[player] [item]", {0, 2}, admin_clear, "items.clear"},
 	{"item", "", {0, 0}, admin_item, "info.item"},
+	// Worlds (worlds.odin).
+	{"travel", "<address> [character]", {1, 3}, admin_travel, "world.travel"},
+	{"address", "", {0, 0}, admin_address, "info.address"},
+	{"worlds", "", {0, 0}, admin_worlds, "info.worlds"},
 	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{
@@ -155,7 +159,7 @@ admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	f := game.parse_time_of_day(args[0]) or_return
 	w.clock = game.set_time_of_day(w.clock, f)
 	log.infof("server time set time=%.4f by=%s", w.clock, client_name(c))
-	broadcast(s, game.Time{w.clock})
+	broadcast(s, game.Time{w.clock}, w)
 	return true
 }
 

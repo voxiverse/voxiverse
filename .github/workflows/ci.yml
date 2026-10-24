@@ -105,7 +105,7 @@ jobs:
       - name: Multiplayer and Wireshark (Linux)
         if: runner.os == 'Linux'
         run: |
-          ./build/voxiverse-server --world build/ci-world --view-radius 3 --view-height 2 --capture build/server.pcap > build/server.log 2>&1 &
+          ./build/voxiverse-server --universe build/ci-universe --view-radius 3 --view-height 2 --capture build/server.pcap > build/server.log 2>&1 &
           SERVER=$!
           for _ in $(seq 100); do grep -q "server listening" build/server.log && break; sleep 0.1; done
           grep "server listening" build/server.log

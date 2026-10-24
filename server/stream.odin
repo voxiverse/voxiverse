@@ -147,7 +147,7 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 	s := w.server
 	for &c in s.clients {
-		if client_wants(&c, pos, s.config, margin) {return true}
+		if c.world == w && client_wants(&c, pos, s.config, margin) {return true}
 	}
 	return false
 }

@@ -76,7 +76,7 @@ changes_flush :: proc(w: ^World) {
 	busy := make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
 	for pos, n in per_chunk {if n > MAX_BLOCK_MESSAGES && pos not_in ch.chunks {busy[pos] = {}}}
 	for &c, i in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		whole := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 		for pos in ch.chunks {if pos in c.has {append(&whole, pos)}}
 		if len(whole) >

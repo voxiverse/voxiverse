@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 13
+PROTOCOL_VERSION :: 14
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -159,6 +159,15 @@ Welcome :: struct {
 	view_radius: u32, // the interest area, in chunks (see interest.odin)
 	view_height: u32,
 	rules:       Rules,
+	address:     Address, // the world the player is in
+}
+
+// World_Changed: the player travelled to another world (its address and
+// rules): drop everything of the last one. Its chunks, entities and the
+// player's arrival (a teleport) follow.
+World_Changed :: struct {
+	address: Address,
+	rules:   Rules,
 }
 
 // Reject ends the connection.
@@ -396,6 +405,7 @@ Server_Message :: union {
 	Inventory_Update,
 	Challenge,
 	Characters,
+	World_Changed,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -453,6 +463,7 @@ Server_Kind :: enum u8 {
 	Inventory_Update,
 	Challenge,
 	Characters,
+	World_Changed,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -578,6 +589,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "challenge"
 		case u8(Server_Kind.Characters):
 			return "characters"
+		case u8(Server_Kind.World_Changed):
+			return "world_changed"
 		}
 	}
 	return ""
@@ -657,6 +670,12 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_position(w, v.spawn)
 		write_u32(w, v.view_radius)
 		write_u32(w, v.view_height)
+		rules := v.rules
+		write_vars(w, rules_table(), &rules)
+		write_address(w, v.address)
+	case World_Changed:
+		write_u8(w, u8(Server_Kind.World_Changed))
+		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
 	case Reject:
@@ -906,6 +925,7 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		w.view_radius = read_u32(&r)
 		w.view_height = read_u32(&r)
 		read_vars(&r, rules_table(), &w.rules)
+		w.address = read_address(&r)
 		if w.view_radius == 0 ||
 		   w.view_radius > MAX_VIEW_RADIUS ||
 		   w.view_height == 0 ||
@@ -1078,6 +1098,12 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	case u8(Server_Kind.Challenge):
 		c: Challenge
 		for &b in c.nonce {b = read_u8(&r)}
+		m = c
+	case u8(Server_Kind.World_Changed):
+		c := World_Changed {
+			address = read_address(&r),
+		}
+		read_vars(&r, rules_table(), &c.rules)
 		m = c
 	case u8(Server_Kind.Characters):
 		m = Characters {
@@ -1311,4 +1337,19 @@ read_stack :: proc(r: ^Reader) -> Stack {
 		return {}
 	}
 	return {item, count}
+}
+
+@(private = "file")
+write_address :: proc(w: ^Writer, a: Address) {
+	g, wo := a.galaxy, a.world
+	for b in g {write_u8(w, b)}
+	for b in wo {write_u8(w, b)}
+}
+
+@(private = "file")
+read_address :: proc(r: ^Reader) -> (a: Address) {
+	for &b in a.galaxy {b = read_u8(r)}
+	for &b in a.world {b = read_u8(r)}
+	if !address_valid(a) {reader_fail(r)}
+	return
 }

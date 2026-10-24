@@ -45,6 +45,7 @@ Config :: struct {
 	capture:         string, // write every packet to this pcap file once listening ("": no)
 	conditions:      netcode.Conditions, // simulated loss etc. on what the server sends (tests)
 	spawn:           Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
+	world_idle:      f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -319,6 +320,7 @@ tick :: proc(s: ^Server) {
 			drop_far(s, &c)
 		}
 	}
+	worlds_unload_idle(s)
 	for w in s.worlds {
 		if moved {unload_unwanted(w)}
 		if !frozen {
@@ -534,7 +536,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 				v.value,
 				client_name(c),
 			)
-			broadcast(s, game.Rules_Changed{w.rules})
+			broadcast(s, game.Rules_Changed{w.rules}, w)
 		case .Unknown_Name, .Bad_Value:
 			log.warnf("server rule not changed name=%q value=%q problem=%v", v.name, v.value, err)
 		}
@@ -577,11 +579,11 @@ send_message :: proc(
 	}
 }
 
-// broadcast sends m to every player.
+// broadcast sends m to every player (in world, if given: its news).
 @(private)
-broadcast :: proc(s: ^Server, m: game.Server_Message) {
+broadcast :: proc(s: ^Server, m: game.Server_Message, world: ^World = nil) {
 	for &c in s.clients {
-		if c.state == .Playing {send_message(s, &c, m)}
+		if c.state == .Playing && (world == nil || c.world == world) {send_message(s, &c, m)}
 	}
 }
 

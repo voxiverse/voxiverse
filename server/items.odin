@@ -103,7 +103,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		}
 	}
 	for &c in s.clients {
-		if c.state != .Playing {continue}
+		if c.state != .Playing || c.world != w {continue}
 		delay := f32(2 if ent.owner == int(player_id(s, &c)) else game.ITEM_PICKUP_DELAY)
 		if f32(ent.age) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - ent.body.position

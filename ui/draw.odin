@@ -219,12 +219,12 @@ measure_text_styled :: proc(ctx: ^Context, text: string, size: f32, effects: Tex
 
 // measure_text is the width of text in UI units.
 measure_text :: proc(ctx: ^Context, text: string, size: f32) -> f32 {
-	f := ctx.glyphs.font
-	units: f32
+	width: f32
 	for r in text {
-		units += font.advance(f, font.glyph_index(f, r))
+		f, g := glyph_font(&ctx.glyphs, r)
+		width += font.advance(f, g) * size / f.units_per_em
 	}
-	return units * size / f.units_per_em
+	return width
 }
 
 // font_line_metrics: ascent (above baseline, positive) and descent (below,

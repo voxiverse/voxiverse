@@ -28,6 +28,7 @@ PLAYER_FILE_FORMAT :: 1
 
 Player_Record :: struct {
 	account:   Maybe(game.Account), // whose (none: from before accounts, unclaimed)
+	world:     Maybe(game.Address), // where they are (none: the home world)
 	state:     game.Player_State,
 	look:      [2]f32, // yaw, pitch
 	inventory: game.Inventory,
@@ -42,6 +43,7 @@ MAX_OVERFLOW :: 16
 @(private = "file")
 Player_File :: struct {
 	format:   int,
+	world:    string, // its address (directory form); "": the home world
 	position: [3]f64,
 	look:     [2]f32,
 	flying:   bool,
@@ -153,6 +155,9 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 		flying   = f.flying,
 	}
 	r.look = {f.look[0], clamp(f.look[1], -game.PITCH_LIMIT, game.PITCH_LIMIT)}
+	if f.world != "" {
+		if a, valid := game.address_parse(f.world, {}); valid {r.world = a}
+	}
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
@@ -193,8 +198,11 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 	if c := r.inventory.cursor; !game.stack_empty(c) {
 		append(&items, File_Stack{game.CURSOR_SLOT, game.item_name(c.item), c.count})
 	}
+	world := ""
+	if a, has := r.world.?; has {world = game.address_dir(a)}
 	f := Player_File {
 		format   = PLAYER_FILE_FORMAT,
+		world    = world,
 		position = r.state.position,
 		look     = r.look,
 		flying   = r.state.flying,
@@ -213,7 +221,7 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 // leaves, and before each save).
 keep_player :: proc(s: ^Server, c: ^Client) {
 	name := client_name(c)
-	r := Player_Record{c.account, c.player, c.look, c.inventory, true, {}}
+	r := Player_Record{c.account, c.world.address, c.player, c.look, c.inventory, true, {}}
 	if _, had := s.store.players[name]; had {
 		s.store.players[name] = r
 	} else {

@@ -571,8 +571,8 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
-			"world",
-			"world <name>: play the saved world name (created if new)",
+			"universe",
+			"universe <name>: play the saved universe name (created if new)",
 			proc(app: ^App, args: []string) {
 				name := strings.join(args, " ", context.temp_allocator)
 				path := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name

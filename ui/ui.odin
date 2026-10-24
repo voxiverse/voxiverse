@@ -166,13 +166,16 @@ init :: proc(
 	ctx: ^Context,
 	f: ^font.Font,
 	allocator := context.allocator,
+	fallback: ^font.Font = nil, // for what f lacks
 	loc := #caller_location,
 ) -> bool {
 	ctx^ = {}
 	ctx.theme = DEFAULT_THEME
 	if virtual.arena_init_growing(&ctx.frame_arena) != nil {return false}
 	ctx.frame_alloc = virtual.arena_allocator(&ctx.frame_arena)
-	return glyph_cache_init(&ctx.glyphs, f, allocator, loc)
+	ok := glyph_cache_init(&ctx.glyphs, f, allocator, loc)
+	ctx.glyphs.fallback = fallback
+	return ok
 }
 
 destroy :: proc(ctx: ^Context) {

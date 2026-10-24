@@ -94,14 +94,36 @@ reloads all three (client/passes.odin lists the passes and what they include).
 
 ## Saves
 
-A world is a directory: `world.cfg` (text: format, seed, time, spawn, starter kit, rules), `players/<name>.json` (each player:
-where they are and look, flying, their inventory by item name; written when it changed),
-`permissions.cfg`, `community.cfg`, `entities.cfg` and `regions/` with
-the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates from
-the seed). Files are replaced through a temporary file, so a crash mid-save keeps the previous
-save; a region file that fails its checksum is moved aside (`.damaged-<time>`) with an error,
-never loaded. `server/save_test.odin` covers save, quit and load, edits surviving unloading,
-and damaged files.
+A save is a universe, a directory: `universe.cfg` (format, seed, the home world's address, the
+starter kit), `characters/<account>/<name>.json` (each character: their world, where they are
+and look, flying, their inventory by item name; written when it changed), `permissions.cfg`,
+`community.cfg`, and `worlds/<address>/` for each world visited or edited: its `world.cfg`
+(generator, seed, time, spawn, rules, generator parameters), `entities.cfg` and `regions/`
+with the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates
+from the seed). A directory from before universes (a `world.cfg` at the top) becomes one when
+opened: its world is the home world. Files are replaced through a temporary file, so a crash
+mid-save keeps the previous save; a region file that fails its checksum is moved aside
+(`.damaged-<time>`) with an error, never loaded. `server/save_test.odin` covers save, quit and
+load, edits surviving unloading, and damaged files.
+
+## Worlds
+
+A universe has worlds, named by addresses (PLAN.md, M17): a galaxy of eight Old Turkic symbols
+and a world of seven, shared as `𐰀𐰁𐰄𐰅𐰇𐰉𐰊 𐰋𐰌𐰍𐰎𐰏𐰐𐰒𐰔` (world, then galaxy; seven alone
+mean this galaxy) or as a directory name, `0001020304050607-08090a0b0c0d0e` (two hex digits a
+symbol, galaxy first: that form types on any keyboard). The address alone sets the world's
+kind (generator parameters, palette, gravity, day length); the universe seed its terrain. The
+home world is Earth as before. A world loads when someone travels there and unloads (saved,
+its memory freed) after `WORLD_IDLE_SECONDS` empty; the home world stays.
+
+| Server command | |
+|---|---|
+| `travel <address> [character]` | Go there (its spawn), carrying the character (`world.travel`; another's: `world.travel.others`). Until M18's gates, the only way |
+| `address` | This world's address, both ways of writing it (`info.address`) |
+| `worlds` | The loaded worlds and who is in each; how many are saved (`info.worlds`) |
+
+Homes, warps, back and tp remember their world and travel when needed. The client's chat and
+console draw the symbols from a fallback font (`assets/fonts/noto_sans_old_turkic_regular.ttf`).
 
 ## Sound
 
@@ -134,7 +156,7 @@ neighbours' edges.
 | Command | |
 |---|---|
 | `singleplayer` / `leave` | Enter a scratch world (never saved: for scripts and tests) / leave the world |
-| `world <name>`, `save` | Play a saved world (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
+| `universe <name>`, `save` | Play a saved universe (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
 | `time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Show the time of day, or set it (the server's clock; singleplayer). `set rules.daylight_cycle 0` stops it, `rules.day_length` is seconds per day |
 | `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining). Like every arrival it lands: the player is held there until the blocks are loaded, then stands where they fit (out of blocks, upwards) |

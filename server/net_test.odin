@@ -49,6 +49,8 @@ Net_Client :: struct {
 	sign_name:   string, // whose test_key it signs with (default: key_name: an impostor if not)
 	ask:         bool, // Hello without a character: Characters, then Choose name
 	characters:  string, // the last Characters (temp: compared at once)
+	address:     game.Address, // the world it is in (Welcome, World_Changed)
+	travels:     int, // World_Changed messages
 }
 
 @(private)
@@ -125,6 +127,14 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			net_send(c, game.Choose{c.name})
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
+			c.address = v.address
+		case game.World_Changed:
+			// Nothing of the last world stays.
+			c.address = v.address
+			c.travels += 1
+			for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
+			clear(&c.chunks)
+			clear(&c.entities)
 		case game.Reject:
 			delete(c.rejected)
 			c.rejected = strings.clone(v.reason)

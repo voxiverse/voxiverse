@@ -15,10 +15,14 @@ import "../netcode"
 @(private)
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
-	c.world = s.home
-	w := c.world
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
+	// In the world they left (loaded again if it was not), else the home world.
+	c.world = s.home
+	if a, elsewhere := saved.world.?; has_saved && elsewhere {
+		if w := world_load(s, a); w != nil {c.world = w}
+	}
+	w := c.world
 	if has_saved {
 		// Where they left, looking where they looked, carrying what they carried.
 		c.player = saved.state
@@ -44,6 +48,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			view_radius = u32(s.config.view_radius),
 			view_height = u32(s.config.view_height),
 			rules = w.rules,
+			address = w.address,
 		},
 	)
 	send_message(s, c, game.Time{w.clock})
@@ -138,7 +143,7 @@ send_players :: proc(s: ^Server, c: ^Client) {
 	}
 	near := f64((s.config.view_radius + 1) * game.CHUNK_SIZE)
 	for &other in s.clients {
-		if &other == c || other.state != .Playing {continue}
+		if &other == c || other.state != .Playing || other.world != c.world {continue}
 		d := other.player.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near {continue}
 		m.entries[m.count] = {

@@ -20,7 +20,7 @@ import "../server"
 //	voxiverse-server --world worlds/home --password secret
 
 Options :: struct {
-	world:       string `usage:"the world's directory (created if new; default: world)"`,
+	universe:    string `usage:"the universe's directory (created if new; default: universe)"`,
 	port:        int `usage:"UDP port (default 27315)"`,
 	seed:        i64 `usage:"a new world's seed (default: random; a saved world keeps its own)"`,
 	password:    string `usage:"players must give it to join"`,
@@ -40,7 +40,7 @@ main :: proc() {
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "voxiverse-server.log", "main")
 	opts := Options {
-		world       = "world",
+		universe    = "universe",
 		port        = netcode.DEFAULT_PORT,
 		max_players = server.DEFAULT_MAX_PLAYERS,
 		view_radius = 12,
@@ -56,14 +56,14 @@ run :: proc(opts: Options) -> bool {
 	seed := opts.seed
 	if seed == 0 {crypto.rand_bytes(mem.ptr_to_bytes(&seed))}
 	name := opts.name
-	if name == "" {name = filepath.base(opts.world)}
+	if name == "" {name = filepath.base(opts.universe)}
 	config := server.Config {
 		seed            = seed,
 		view_radius     = i32(clamp(opts.view_radius, 2, 32)),
 		view_height     = i32(clamp(opts.view_height, 1, 16)),
 		workers         = max(1, os.get_processor_core_count() / 2),
 		everyone_cheats = opts.cheats,
-		save_dir        = opts.world,
+		save_dir        = opts.universe,
 		max_players     = opts.max_players,
 		listen          = true,
 		port            = opts.port,
@@ -77,7 +77,7 @@ run :: proc(opts: Options) -> bool {
 	catch_stop()
 	log.infof(
 		"server ready world=%s port=%d name=%q (Ctrl+C stops it)",
-		opts.world,
+		opts.universe,
 		srv.host.socket.port, // bound before the server thread started
 		name,
 	)
