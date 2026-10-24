@@ -24,7 +24,10 @@ Player_Record :: struct {
 	look:      [2]f32, // yaw, pitch
 	inventory: game.Inventory,
 	dirty:     bool, // changed since its file was written
+	overflow:  [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
 }
+
+MAX_OVERFLOW :: 16
 
 // Player_File: the JSON of players/<name>.json (items by name: their ids
 // are the wire's).
@@ -80,6 +83,7 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 	}
 	r.look = {f.look[0], clamp(f.look[1], -game.PITCH_LIMIT, game.PITCH_LIMIT)}
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
+	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
 		item, known := game.item_by_name(st.item)
 		if !known || st.count <= 0 {
@@ -92,6 +96,18 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 			r.inventory.slots[st.slot] = stack
 		case st.slot == game.CURSOR_SLOT:
 			r.inventory.cursor = stack
+		case:
+			append(&late, stack) // a slot the inventory no longer has
+		}
+	}
+	// What was in slots there are no more: wherever there is room, the rest
+	// to be dropped.
+	n := 0
+	for st in late {
+		left := game.inventory_add(&r.inventory, st)
+		if !game.stack_empty(left) && n < MAX_OVERFLOW {
+			r.overflow[n] = left
+			n += 1
 		}
 	}
 	return r, true
@@ -126,7 +142,7 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 // leaves, and before each save).
 keep_player :: proc(s: ^Server, c: ^Client) {
 	name := client_name(c)
-	r := Player_Record{c.player, c.look, c.inventory, true}
+	r := Player_Record{c.player, c.look, c.inventory, true, {}}
 	if _, had := s.store.players[name]; had {
 		s.store.players[name] = r
 	} else {

@@ -103,7 +103,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 
 	// Refused: a click on nothing, the catalog without items.catalog.
 	before := bob.inventory
-	net_send(&bob, game.Inventory_Request{1, {.Click, 30, 0}})
+	net_send(&bob, game.Inventory_Request{1, {.Click, 25, 0}})
 	net_send(&bob, game.Inventory_Request{2, {.Take, game.CURSOR_SLOT, int(dirt)}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].inv_acked == 2})
 	testing.expect(t, ok && bob.inventory == before, "a refused request changed the inventory")
@@ -173,4 +173,30 @@ test_players_move_to_their_files :: proc(t: ^testing.T) {
 	world, _ := os.read_entire_file_from_path(cfg, context.temp_allocator)
 	testing.expect(t, !strings.contains(string(world), "player."), "world.cfg still has players")
 	testing.expect(t, strings.contains(string(world), "kit = stone 64"), string(world))
+}
+
+// A player file from when inventories had 36 slots: what no longer fits
+// is kept to be dropped at their feet when they join.
+@(test)
+test_old_inventory_fits :: proc(t: ^testing.T) {
+	b := strings.builder_make(context.temp_allocator)
+	strings.write_string(
+		&b,
+		`{"format": 1, "position": [1, 2, 3], "look": [0, 0], "flying": false, "selected": 8, "items": [`,
+	)
+	for i in 0 ..< 36 {
+		if i > 0 {strings.write_string(&b, ", ")}
+		strings.write_string(&b, `{"slot": `)
+		strings.write_int(&b, i)
+		strings.write_string(&b, `, "item": "stone", "count": 64}`)
+	}
+	strings.write_string(&b, "]}")
+	r, ok := player_parse(transmute([]u8)strings.to_string(b))
+	testing.expect(t, ok)
+	stone := game.item_of_block(.Stone)
+	testing.expect_value(t, game.inventory_count(&r.inventory, stone), 64 * game.INVENTORY_SLOTS)
+	testing.expect_value(t, r.inventory.selected, game.HOTBAR_SLOTS - 1)
+	over := 0
+	for st in r.overflow {if st.item == stone {over += st.count}}
+	testing.expect_value(t, over, 64 * (36 - game.INVENTORY_SLOTS))
 }

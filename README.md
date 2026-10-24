@@ -89,7 +89,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | <kbd>Shift</kbd> | Sneak (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
-| <kbd>1</kbd>–<kbd>9</kbd>, mouse wheel | Choose what to hold from the hotbar (a new player starts with stone, dirt, grass, sand, logs, leaves, water and lamps, and the rocket launcher where they may fire it). Placing a block uses one up; breaking one drops it to pick up by walking over it |
+| <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose what to hold from the five-slot hotbar (a new player starts with stone, dirt, grass, sand, logs, leaves, water and lamps, and the rocket launcher where they may fire it). Placing a block uses one up; breaking one drops it to pick up by walking over it |
 | <kbd>E</kbd> | Inventory: drag stacks between slots, right-click to split, shift-click to move between the hotbar and the rest, a number key to swap with that hotbar slot; in your own world every item is there to take |
 | <kbd>Q</kbd> | Drop one of what you hold (<kbd>Ctrl</kbd>+<kbd>Q</kbd>: all of it) |
 | <kbd>T</kbd>, <kbd>/</kbd> | Chat / a server command (`/spawn`, `/mute bob 1h`; Tab completes). `&c` colours and `&l` bolds where your role allows; Up/Down walk what you sent |

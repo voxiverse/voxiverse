@@ -9,8 +9,11 @@ import "../ui"
 
 // Slots as the UI draws them: the hotbar's and the inventory overlay's.
 
-SLOT_SIZE :: ui.Vec2{96, 44} // the hotbar's
-INVENTORY_SLOT :: ui.Vec2{72, 40} // the overlay's
+SLOT_SIZE :: ui.Vec2{120, 48} // the hotbar's
+INVENTORY_SLOT :: ui.Vec2{88, 44} // the overlay's
+
+// HOTBAR_KEYS: the number keys, one per hotbar slot.
+HOTBAR_KEYS :: [game.HOTBAR_SLOTS]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5}
 
 // item_title: an item's name as players read it ("rocket launcher").
 item_title :: proc(item: game.Item) -> string {
@@ -55,7 +58,7 @@ stack_slot :: proc(ctx: ^ui.Context, r: ui.Rect, stack: game.Stack, selected: bo
 // (Ctrl+Q: all); a click outside drops what the cursor holds. Players with
 // items.catalog also see every item, to take a stack of.
 
-INVENTORY_COLUMNS :: 9
+INVENTORY_COLUMNS :: 5
 CATALOG_COLUMNS :: 5
 
 Inventory_View :: struct {
@@ -101,7 +104,8 @@ inventory_layout :: proc(ctx: ^ui.Context, catalog: bool) -> (l: Inventory_Layou
 	t := &ctx.theme
 	gap := t.spacing
 	grid_w := INVENTORY_COLUMNS * (INVENTORY_SLOT.x + gap) - gap
-	rows_h := 4 * (INVENTORY_SLOT.y + gap) + 2 * gap // three rows, a gap, the hotbar
+	rest_rows := (game.INVENTORY_SLOTS - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS
+	rows_h := f32(rest_rows + 1) * (INVENTORY_SLOT.y + gap) + 2 * gap // the rest, a gap, the hotbar
 	catalog_w := CATALOG_COLUMNS * (INVENTORY_SLOT.x + gap) if catalog else 0
 	w := grid_w + catalog_w + 2 * t.padding
 	h := rows_h + t.row_height + 2 * t.padding
@@ -112,7 +116,8 @@ inventory_layout :: proc(ctx: ^ui.Context, catalog: bool) -> (l: Inventory_Layou
 	for i in 0 ..< game.INVENTORY_SLOTS {
 		row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
 		y := inner.y + f32(row) * (INVENTORY_SLOT.y + gap)
-		if i < game.HOTBAR_SLOTS {y = inner.y + 3 * (INVENTORY_SLOT.y + gap) + 2 * gap}
+		if i <
+		   game.HOTBAR_SLOTS {y = inner.y + f32(rest_rows) * (INVENTORY_SLOT.y + gap) + 2 * gap}
 		l.slots[i] = {
 			inner.x + f32(col) * (INVENTORY_SLOT.x + gap),
 			y,
@@ -169,18 +174,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			do_(s, .Drop, game.CURSOR_SLOT, 1 if .Left in pressed else 0)
 		}
 		if hovered >= 0 {
-			keys := [?]platform.Key {
-				.Num_1,
-				.Num_2,
-				.Num_3,
-				.Num_4,
-				.Num_5,
-				.Num_6,
-				.Num_7,
-				.Num_8,
-				.Num_9,
-			}
-			for k, n in keys {if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}}
+			for k, n in HOTBAR_KEYS {if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}}
 			if .Q in app.input.pressed {
 				all := app.input.held & {.Left_Control, .Right_Control} != {}
 				do_(s, .Drop, hovered, 1 if all else 0)

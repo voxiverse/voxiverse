@@ -58,15 +58,15 @@ test_inventory_actions :: proc(t: ^testing.T) {
 	do_(&inv, .Click_Right, 21)
 	testing.expect(t, inv.slots[21] == {stone, 1} && inv.cursor == {stone, 17})
 	do_(&inv, .Click, 20)
-	_, ok = do_(&inv, .Click, 30)
+	_, ok = do_(&inv, .Click, 25)
 	testing.expect(t, !ok, "an empty click did something")
 	// Shift-click: from the rest to the hotbar (onto stone? full; an empty slot).
 	do_(&inv, .Quick_Move, 20)
 	testing.expect(t, inv.slots[1] == {stone, 35} && inv.slots[20] == {})
 	do_(&inv, .Quick_Move, 2) // the launcher, out of the hotbar
-	testing.expect(t, inv.slots[9] == {launcher, 1} && inv.slots[2] == {})
-	do_(&inv, .Swap_Hotbar, 9, 4)
-	testing.expect(t, inv.slots[4] == {launcher, 1} && inv.slots[9] == {})
+	testing.expect(t, inv.slots[5] == {launcher, 1} && inv.slots[2] == {})
+	do_(&inv, .Swap_Hotbar, 5, 4)
+	testing.expect(t, inv.slots[4] == {launcher, 1} && inv.slots[5] == {})
 	// Drops.
 	dropped, _ := do_(&inv, .Drop, 0)
 	testing.expect(t, dropped == {stone, 1} && inv.slots[0] == {stone, 63})
@@ -93,7 +93,7 @@ test_inventory_actions :: proc(t: ^testing.T) {
 	before := inventory_held(&inv)
 	inventory_use_held(&inv)
 	testing.expect_value(t, inventory_held(&inv).count, before.count - 1)
-	for bad in ([]Inventory_Action{{.Select, 0, 9}, {.Click, 36, 0}, {.Swap_Hotbar, 5, 12}, {.Drop, -2, 0}}) {
+	for bad in ([]Inventory_Action{{.Select, 0, 5}, {.Click, 30, 0}, {.Swap_Hotbar, 5, 12}, {.Drop, -2, 0}}) {
 		_, ok = inventory_apply(&inv, bad, false)
 		testing.expectf(t, !ok, "%v accepted", bad)
 	}

@@ -184,8 +184,8 @@ notice, not a disconnect.
 ## Items
 
 Items are data (`game/items.odin`): every block players may place has its item (its name is
-the block's), tools are items of their own (`rocket_launcher`). An inventory is 36 slots (the
-first nine the hotbar) and the stack on the cursor; the server owns it and applies requests
+the block's), tools are items of their own (`rocket_launcher`). An inventory is 30 slots (the
+first five the hotbar, then a 5x5 grid) and the stack on the cursor; the server owns it and applies requests
 with the same code the client predicts with (`game/inventory.odin`), answering each with the
 inventory (`Inventory_Update`, how far it got): a refused request is rolled back. Placing a
 block uses one from the hand (or the hotbar) unless the player has `items.infinite`; breaking

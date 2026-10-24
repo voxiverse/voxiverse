@@ -3,7 +3,6 @@ package client
 import "core:math"
 
 import "../game"
-import "../platform"
 
 // What the player does besides moving: the hotbar and the mouse buttons
 // (items.odin), edits predicted at once and confirmed by the server, hits,
@@ -25,9 +24,8 @@ session_attack :: proc(s: ^Session) -> bool {
 // rules allow them) and sent.
 @(private)
 edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
-	keys := [?]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5, .Num_6, .Num_7, .Num_8, .Num_9}
 	select := -1
-	for k, i in keys {if k in input.pressed {select = i}}
+	for k, i in HOTBAR_KEYS {if k in input.pressed {select = i}}
 	if input.wheel.y != 0 {
 		n := game.HOTBAR_SLOTS
 		select = (s.inventory.selected - int(math.sign(input.wheel.y)) + n) % n

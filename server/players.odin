@@ -22,6 +22,11 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.player = saved.state
 		c.look = saved.look
 		c.inventory = saved.inventory
+		for st in saved.overflow {
+			if !game.stack_empty(
+				st,
+			) {spawn_item(s, saved.state.position + {0, 0.5, 0}, st, {}, -1)}
+		}
 		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
 		land_at_spawn(s, c, remember = false)

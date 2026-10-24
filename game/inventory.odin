@@ -5,8 +5,8 @@ package game
 // same actions at once to predict, and replays the ones the server has not
 // answered yet over each Inventory it sends (client/session_items.odin).
 
-HOTBAR_SLOTS :: 9
-INVENTORY_SLOTS :: 36 // 0..8 the hotbar, 9..35 the rest
+HOTBAR_SLOTS :: 5
+INVENTORY_SLOTS :: 30 // 0..4 the hotbar, 5..29 the rest (a 5x5 grid)
 CURSOR_SLOT :: -1 // the stack on the mouse in the inventory overlay
 
 Inventory :: struct {

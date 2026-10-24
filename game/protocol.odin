@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 11
+PROTOCOL_VERSION :: 12
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
