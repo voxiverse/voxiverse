@@ -111,6 +111,11 @@ keep the land they were made with). `locate desert` flies you to the nearest des
 starts or stops flying. `set worldgen.mountain_height 180` (or F4) changes how the land is
 made from then on, and `regen` remakes the land around you that way (your edits stay).
 
+Water flows as in Minecraft: open a lake's side and it pours out, down first, then spreading
+and thinning; between two sources a new one forms. In water you swim: jump to rise (and,
+against a ledge, to climb out), sneak to dive; under the surface the world turns blue and
+close. Sunlight fades with depth, and trees cast shade.
+
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
 runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.
 

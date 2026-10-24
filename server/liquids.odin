@@ -21,7 +21,7 @@ import "../game"
 // dropped, and a saved chunk's water wakes again when it loads.
 
 MAX_UPDATES :: 1 << 16 // waiting at once (more are dropped, logged)
-UPDATE_BUDGET :: 16384 // run per tick
+UPDATE_BUDGET :: 4096 // run per tick (more wait: water slows under load rather than the server)
 WATER_DELAY :: game.TICK_RATE / 6 // ticks per step of flowing water
 WATER_REACH :: 4 // blocks: how far flowing water looks for a way down
 
@@ -171,13 +171,9 @@ fed_level :: proc(s: ^Server, p: game.Block_Pos) -> (level: i32, alive: bool) {
 		l, water := game.water_level(nb)
 		if !water {continue}
 		if l == 0 {sources += 1}
-		if l == game.WATER_FALLING_LEVEL {
-			// Falling water feeds what is beside it only where it lands.
-			under, _ := world_block(&s.world, p + d + {0, -1, 0})
-			if game.block_collides(under) {best = min(best, 0)}
-			continue
-		}
-		best = min(best, l)
+		// Falling water feeds what is beside it as a source would (it only
+		// spreads where it cannot fall, so no curtains form in the air).
+		best = min(best, 0 if l == game.WATER_FALLING_LEVEL else l)
 	}
 	if sources >= 2 {
 		// Between two sources over firm ground (or a source): a source.

@@ -118,6 +118,12 @@ jobs:
           test "$(wc -l < build/tshark.txt)" -gt 50
           test -z "$(tshark -X lua_script:tools/wireshark/voxiverse.lua -r build/server.pcap -Y '_ws.malformed || voxiverse.malformed')"
 
+      # Liquids (M11): 10 000 blocks of water flowing within the server's
+      # tick, optimized (the unit tests are unoptimized, with more slack).
+      - name: Water flood, optimized (Linux)
+        if: runner.os == 'Linux'
+        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_water_flood -out:build/flood_test
+
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler (Linux)
         if: runner.os == 'Linux'

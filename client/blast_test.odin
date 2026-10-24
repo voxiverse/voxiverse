@@ -135,6 +135,8 @@ blast_test_update :: proc(app: ^App) {
 		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
 		if time.tick_since(t.started) < 2 * time.Second || !world_settled(app) {return}
 		if len(s.world.groups) > 0 {return}
+		// Water the blasts let loose flows on a while: until it settles.
+		if server.stats(&s.server).updates_waiting > 0 {return}
 		send_message(s, game.Admin{"hash"})
 		next(t, .Comparing)
 	case .Comparing:

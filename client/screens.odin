@@ -282,10 +282,11 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 			append(
 				&lines,
 				fmt.tprintf(
-					"server: tick %.2f ms, %d chunks (%d generating), arrays %.1f MiB, arena %.1f MiB, %d players, %d entities near%s",
+					"server: tick %.2f ms, %d chunks (%d generating), %d block updates waiting, arrays %.1f MiB, arena %.1f MiB, %d players, %d entities near%s",
 					st.tick_ms,
 					st.chunks_loaded,
 					st.chunks_generating,
+					st.updates_waiting,
 					f64(st.arrays_bytes) / (1 << 20),
 					f64(st.arena_used) / (1 << 20),
 					st.clients,

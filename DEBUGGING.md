@@ -137,6 +137,7 @@ neighbours' edges.
 | `fly` | Start or stop flying (as a double-tap of jump does) |
 | `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; cheats): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
 | `set worldgen.<name> <value>`, `vars worldgen` | The Earth generator's settings (the server's, like rules; F4 too), saved with the world; chunks already made keep their blocks until `regen` |
+| `server <command...>` | Send a server command as is, with coordinates: `server fill 0 60 0 9 62 9 water` (scripts, tests; cheats) |
 | `regen [radius]` | Remake the unedited chunks within radius (chunks, 1-8) from the generator as it is now |
 | `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
 | `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
@@ -144,6 +145,17 @@ neighbours' edges.
 
 F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
 and to light and mesh (ours), on average and the slowest 1%.
+
+## Liquids
+
+Water levels are block ids (a source, flow levels 1-7, falling), so saves and the protocol
+need nothing new. The server runs scheduled block updates (`server/liquids.odin`): a queue
+ordered by tick and position, at most 4096 run a tick, so the same edits give the same water
+on every run. Any block change wakes the water next to it; seas and lakes are left alone
+until something opens them. Changes the world makes travel as one `Blocks_Changed` per chunk
+per tick. F3's server line shows the updates waiting. `server/liquids_test.odin`: the dam
+break (the same water twice, both players matching the server) and the flood (10 000 blocks
+flowing within the tick budget; CI runs it optimized too).
 
 ## World generation
 

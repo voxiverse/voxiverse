@@ -62,6 +62,7 @@ Stats :: struct {
 	clients:           int,
 	port:              int, // listening on (0: not)
 	generate:          base.Frame_Summary, // ms per chunk, on the workers (updated each second)
+	updates_waiting:   int, // scheduled block updates (flowing water)
 }
 
 Server :: struct {
@@ -559,6 +560,7 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 		arena_reserved    = s.arena.total_reserved,
 		clients           = playing,
 		port              = s.host.socket.port if s.listening else 0,
+		updates_waiting   = s.updates.count,
 	}
 	sync.guard(&s.stats_mutex)
 	// Sorting the window for percentiles: once a second is enough.
