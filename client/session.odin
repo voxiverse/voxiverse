@@ -36,6 +36,7 @@ Session_Config :: struct {
 	trace:       bool, // record every message to net.trace from the start (hosting only)
 	capture:     bool, // write every packet to net.pcap (joining only)
 	save_dir:    string, // the world's directory; "" = scratch, not saved
+	spawn:       Maybe([3]f64), // a new world's spawn (else the generator's)
 }
 
 // Join: a server to play on.
@@ -183,6 +184,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		workers      = worker_count(),
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
+		spawn        = config.spawn,
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},

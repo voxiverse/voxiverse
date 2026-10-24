@@ -299,10 +299,16 @@ earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
 	return {0.5, max(f64(c.height), f64(p.sea_level)) + 2, 0.5}
 }
 
-// spawn_clear: no tree within 3 blocks of (x, z), and no structure within 8
-// (players arrive on open ground).
+// spawn_clear: no tree within 5 blocks of (x, z) (crowns reach over), no structure within 8,
+// no sea or river within 12 (players arrive on open, dry ground).
 @(private = "file")
 spawn_clear :: proc(gen: ^Generator, x, z: i32) -> bool {
+	for dz := i32(-12); dz <= 12; dz += 4 {
+		for dx := i32(-12); dx <= 12; dx += 4 {
+			c := column_at(&gen.params, gen.seed, x + dx, z + dz)
+			if c.height < f32(gen.params.sea_level) + 1 || c.biome == .River {return false}
+		}
+	}
 	found := make([dynamic]Structure, context.temp_allocator)
 	structures_near(gen, {x - 8, z - 8}, {x + 8, z + 8}, &found)
 	if len(found) > 0 {return false}
@@ -312,7 +318,7 @@ spawn_clear :: proc(gen: ^Generator, x, z: i32) -> bool {
 		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
 	}
 	for t in trees {
-		if abs(t.ground.x - x) <= 3 && abs(t.ground.z - z) <= 3 {return false}
+		if abs(t.ground.x - x) <= 5 && abs(t.ground.z - z) <= 5 {return false}
 	}
 	return true
 }

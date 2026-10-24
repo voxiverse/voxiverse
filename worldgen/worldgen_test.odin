@@ -1,5 +1,6 @@
 package worldgen
 
+import "core:math"
 import "core:slice"
 import "core:testing"
 
@@ -297,8 +298,25 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 			}
 			return a[game.local_index(game.local_of(p))]
 		}
-		spawn := spawn_point(&g)
-		feet := game.Block_Pos{i32(spawn.x), i32(spawn.y), i32(spawn.z)}
+		// Where the server lands a newcomer: on the ground of the column.
+		Generated :: struct {
+			g:      ^Generator,
+			chunks: ^map[game.Chunk_Pos]^game.Block_Array,
+		}
+		data := Generated{&g, &chunks}
+		query := game.Block_Query {
+			&data,
+			proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+				d := (^Generated)(data)
+				return block(d.g, d.chunks, p), true
+			},
+		}
+		spawn, _ := game.landing_spot(query, spawn_point(&g) + {0, 1, 0}, .Ground)
+		feet := game.Block_Pos {
+			i32(math.floor(spawn.x)),
+			i32(math.floor(spawn.y)),
+			i32(math.floor(spawn.z)),
+		}
 		below := block(&g, &chunks, feet - {0, 1, 0})
 		testing.expectf(t, game.block_collides(below), "seed %d: standing on %v", seed, below)
 		for dy in i32(0) ..< 2 {

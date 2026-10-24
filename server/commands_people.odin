@@ -43,11 +43,11 @@ may_speak :: proc(s: ^Server, c: ^Client) -> bool {
 // words_of: what c wrote, cleaned, with the codes it may not use escaped.
 @(private)
 words_of :: proc(s: ^Server, c: ^Client, text: string) -> string {
-	allowed: game.Format_Kinds
-	if game.allowed(c.grants[:], "chat.format.color") {allowed += {.Color}}
-	if game.allowed(c.grants[:], "chat.format.rgb") {allowed += {.Rgb}}
-	if game.allowed(c.grants[:], "chat.format.style") {allowed += {.Style}}
-	return game.format_filter(chat_clean(text), allowed)
+	kinds: game.Format_Kinds
+	if allowed(s, c, "chat.format.color") {kinds += {.Color}}
+	if allowed(s, c, "chat.format.rgb") {kinds += {.Rgb}}
+	if allowed(s, c, "chat.format.style") {kinds += {.Style}}
+	return game.format_filter(chat_clean(text), kinds)
 }
 
 // --- Messaging ---

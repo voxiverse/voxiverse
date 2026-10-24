@@ -44,6 +44,7 @@ Config :: struct {
 	name:            string, // what LAN discovery shows
 	capture:         string, // write every packet to this pcap file once listening ("": no)
 	conditions:      netcode.Conditions, // simulated loss etc. on what the server sends (tests)
+	spawn:           Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
 }
 
 DEFAULT_MAX_PLAYERS :: 8

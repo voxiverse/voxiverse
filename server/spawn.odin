@@ -38,7 +38,7 @@ LANDING_TIMEOUT :: 10 * game.TICK_RATE
 spawn_choose :: proc(s: ^Server) {
 	if s.spawn.known {return}
 	s.spawn = {
-		position = worldgen.spawn_point(&s.world.gen),
+		position = s.config.spawn.? or_else worldgen.spawn_point(&s.world.gen),
 		known    = true,
 	}
 	log.infof("server world spawn chosen at=%v", s.spawn.position)

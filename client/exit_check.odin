@@ -39,7 +39,7 @@ exit_check_start :: proc(
 		console_print(&app.console, fmt.tprintf("usage: %s <amount> [quit]", name), .Warning)
 		return 0, false
 	}
-	if app.session == nil {enter_world(app, "", SCRATCH_SEED)}
+	if app.session == nil {enter_world(app, "", SCRATCH_SEED, SCRATCH_SPAWN)}
 	if app.session == nil {return 0, false}
 	if !session_hosting(app.session) {
 		console_print(&app.console, fmt.tprintf("%s runs in a world of your own", name), .Warning)

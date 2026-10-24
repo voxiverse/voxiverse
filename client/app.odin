@@ -344,6 +344,11 @@ frame_cap :: proc(app: ^App) -> time.Duration {
 	return time.Second / MENU_FPS
 }
 
+// SCRATCH_SPAWN: where exit checks start in the scratch world: fixed, so
+// their budgets keep meaning the same ground (the generator's spawn there
+// before M13 kept spawns off trees and the shore).
+SCRATCH_SPAWN :: [3]f64{24.5, 11, 8.5}
+
 // SCRATCH_SEED: the seed of the scratch world (singleplayer, exit checks).
 SCRATCH_SEED :: 0x5eed
 
@@ -351,13 +356,14 @@ SCRATCH_SEED :: 0x5eed
 // new, with seed), or with save_dir "" a scratch world nothing is saved of
 // (scripts and tests). The world runs here; others can join once it is
 // opened to the LAN.
-enter_world :: proc(app: ^App, save_dir: string, seed: i64) {
+enter_world :: proc(app: ^App, save_dir: string, seed: i64, spawn: Maybe([3]f64) = nil) {
 	start_session(
 		app,
 		{
 			name = player_name(&app.settings),
 			seed = seed,
 			save_dir = save_dir,
+			spawn = spawn,
 			view_radius = app.settings.view_radius,
 			view_height = app.settings.view_height,
 			trace = app.debug.net_trace,
