@@ -216,8 +216,11 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M12 | Structures: templates built in-game (`structure save`), placed by worldgen (rotated, varied, fitted to the ground) across chunk borders, and procedural ones (dungeons, towers) on the same placement API | A structure comes out identical whichever order its chunks generate in; templates round-trip save/paste; placements are deterministic per seed (done: `test_structures` builds each kind's chunks in two orders and checks placements and the tops over them; `test_structures_round_trip` saves, pastes and saves again, also round four quarter turns; `worldmap` marks towers, ruins, wells and dungeons) |
 | M13 | Players together: a stored world spawn with safe landings, an overlay and focus stack for every in-game panel, chat, permissions (nodes and roles with metadata), formatted text, EssentialsX-style commands (places and teleports, messaging, moderation, who and status) | Permissions resolve as documented (wildcards, negation, inheritance) in tests; every server action is checked through one function; chat and its commands work over UDP between two players with roles, tags, colours, mutes and ignores; nobody spawns inside blocks; the focus stack routes keys correctly in UI tests (done: `game/permissions_test.odin` and `server/permissions_test.odin` resolve and persist roles; every message and command goes through `allowed`; `server/chat_test.odin` and `server/commands_test.odin` run chat, tags, colours, an ignore, a mute, kicks and bans over UDP; `server/spawn_test.odin` lands out of a pillar at the spawn and `test_spawn_on_open_ground` keeps trees away; `client/overlays_test.odin` routes Escape and typing) |
 | M14 | Items and player data: item kinds as data, stacks, server-owned containers (the player's inventory, hotbar, cursor), an inventory overlay with drag and drop, dropped items as entities, give/clear commands, one JSON file per player for everything kept about them | Two players over UDP move, split, drop and pick up stacks and agree with the server; a refused move rolls back; inventories survive save and load exactly; old worlds' players move to the new files; drag-and-drop UI tests (done: `game/inventory_test.odin` covers every action; `server/items_test.odin` drops, picks up, places and breaks between two players over UDP, refuses a request and the catalog, and keeps inventories through a restart; `test_players_move_to_their_files` migrates world.cfg players; `client/items_test.odin` rolls back refused predictions; `client/inventory_ui_test.odin` drags, splits, shift-clicks and drops) |
-| M15 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept in the player files and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
-| M16 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
+| M15 | Polish: biome transitions without hard edges, the screen kept awake while playing, a five-slot hotbar over a 5x5 inventory | Biome borders blend (a band of mixed surface and features) in worldgen tests and screenshots; the platform keep-awake call is made in game and undone in menus on every OS; inventory tests at the new size; old inventories fit |
+| M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate |
+| M17 | The universe: a server hosts many worlds (planets), each with its own generator parameters, rules, chunks, entities and save; only occupied worlds run; players travel between them by an in-world act, carrying their character | Two players on different planets of one server, one travels to the other's with their inventory; an empty planet costs no tick time; memory stays flat across travel; saves keep each planet apart |
+| M18 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
+| M19 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
 ## M9-M12: making and changing the world
 
@@ -388,7 +391,70 @@ uses one up are data and permissions a server or content sets.
   back the prediction; inventories survive save and load exactly; a world with world.cfg
   players loads into player files; UI tests drag, split and shift-click.
 
-## M15: statistics
+## M15: polish
+
+- **Biome transitions:** biomes are hard thresholds on smooth climate, so surfaces and
+  features switch at a line. The thresholds are jittered per column by fine noise, so a
+  band of 6-12 blocks mixes both sides (dithered, as the pixel look wants), and tree and
+  plant densities blend across it instead of switching. New golden hashes.
+- **Keep the screen awake** while in a world, not in menus: Windows
+  `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)`; X11 `XScreenSaverSuspend`
+  (else the freedesktop `Inhibit` call); macOS an IOKit power assertion. In `platform/`,
+  released on leaving a world and on exit.
+- **Five hotbar slots over a 5x5 inventory:** 30 slots, every row five wide; the overlay is
+  one five-column grid with the hotbar as its bottom row; number keys 1-5. Inventories
+  saved at the old size keep their stacks (what no longer fits is given back in order, the
+  rest dropped at the player's feet on joining).
+- **Exit check:** worldgen tests that a border band mixes surfaces and features (and
+  screenshots of a few borders); the keep-awake call made and released (a platform test
+  where the OS allows it, else a logged check); inventory tests at the new size; an old
+  36-slot player file loads.
+
+## M16: accounts and characters
+
+- **Accounts:** the client makes an Ed25519 keypair on first launch (`core:crypto`), kept
+  beside the settings; the public key is the account. `Hello` carries it and the server
+  answers with a challenge the client signs, so nobody can join as someone else without a
+  central login service. A server's first sight of a key registers it.
+- **Characters:** an account has characters (a name, unique on the server; appearance
+  later). The client chooses one before joining (a small screen; the last one played by
+  default); the server keeps them. Chat, the player list, permissions and community data
+  name characters; permissions can also grant to an account (all its characters).
+- **Data:** everything kept about a player (M14's player files: where they are, their
+  inventory; M18's statistics) becomes the character's, kept by the server:
+  `characters/<account>/<character>.json`. Existing player files become characters of a
+  placeholder account, claimed by the first key that joins with that name.
+- **Exit check:** over UDP, a client can't join with another's key or take a character
+  name in use by another account; a character's data survives a restart; old player
+  files migrate; the challenge refuses replays.
+
+## M17: the universe
+
+One server hosts many worlds (planets). Grounded: planets are flat voxel worlds (a world
+border can make them finite), not spheres; travel is an act in the world with a short
+transition while the destination streams in, not flying through rendered space.
+
+- **Worlds:** each has its own generator kind and parameters (sea level, terrain, biome
+  mix, block palette), rules (gravity, day length), sky, chunks, entities, liquids,
+  spawn and save (`worlds/<id>/`). Planets are derived on demand from the universe seed
+  and an id, so an unvisited one costs nothing but its entry; it gets a directory once
+  visited or edited.
+- **Running:** a world ticks while someone is in it (and briefly after); workers and the
+  chunk memory pool are shared, sized by players as today. Cost scales with occupied
+  worlds and their loaded chunks, never with how many planets exist.
+- **Players:** in one world at a time; the client holds only that world's chunks. A
+  travel message tells it the new world's rules, sky and spawn; it drops its chunks, plays
+  the transition, and M13's landing holds the player until the destination's blocks are
+  there. Characters (M16) are the universe's, so inventories travel with them; homes,
+  warps and back remember their world.
+- **Travel:** an in-world act starts it (a portal block at first; launch pads or ships are
+  content later); commands for admins (`world list`, `world tp`).
+- **Exit check:** two players over UDP on different planets of one server; one travels to
+  the other's carrying their inventory and lands safely; an empty planet takes no tick
+  time; memory flat over repeated travel; each planet's save stays its own; the client
+  never holds two worlds' chunks.
+
+## M18: statistics
 
 Counters for nearly everything a player does, so later systems (anything that rewards
 play) have data to work with; nothing here rewards anything.
@@ -403,8 +469,8 @@ play) have data to work with; nothing here rewards anything.
 - **Recording:** on the server only (it is authoritative), through one `stat_add(player,
   name, amount)`; names interned once, counters `u64` in a per-player table; the hot
   paths (movement) accumulate per tick, not per call.
-- **Storage:** in the player's JSON file (`"stats": {...}`), written with the rest when
-  changed; the world's totals in `<world>/stats.json`. Thousands of counters per player
+- **Storage:** with the character (M16; `"stats": {...}`), written with the rest when
+  changed, broken down by world where it matters (M17); the world's totals in `<world>/stats.json`. Thousands of counters per player
   and thousands of players stay cheap: only online players in memory, files written only
   when dirty.
 - **Viewing:** a stats overlay (opened by the `stats` command and a key, not from the game
@@ -417,7 +483,7 @@ play) have data to work with; nothing here rewards anything.
   test of many players with thousands of counters each within a save and load budget; UI
   tests for search and scrolling; the overlay over UDP shows the server's numbers.
 
-## M16: analytics
+## M19: analytics
 
 Measuring play to improve the game: a timed stream of meaningful interactions. Always on
 (a server can switch it off: `analytics 0`); nothing leaves the server by itself.
@@ -442,10 +508,12 @@ Measuring play to improve the game: a timed stream of meaningful interactions. A
   the cap; malformed, oversized and too frequent client reports are refused; the tool
   summarizes a recorded run.
 
-### After M16 (not planned in detail yet)
+### After M19 (not planned in detail yet)
 
-Entity attributes (health and the like, as data), lava as a second liquid, greedy meshing
-and low-detail far terrain for long view distances, and M1b (macOS) when a Mac is at hand.
+Tools (a pickaxe for soil and stone, an axe for wood; whether hands can break and whether
+breaking takes time is decided then), entity attributes (health and the like, as data),
+lava as a second liquid, greedy meshing and low-detail far terrain for long view
+distances, and M1b (macOS) when a Mac is at hand.
 
 ## Worth re-typing from the old tree (ideas, not code)
 
