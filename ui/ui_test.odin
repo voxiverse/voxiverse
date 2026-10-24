@@ -478,3 +478,26 @@ expect_duplicate_id_errors :: proc(next: log.Logger) -> log.Logger {
 		options = next.options,
 	}
 }
+
+// Styled text: bold is wider by a pixel a letter, and draws each glyph
+// twice; italic leans; underline and strike add a line each.
+@(test)
+test_styled_text :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	begin_frame(ctx, {}, SCREEN, 1)
+	plain := measure_text(ctx, "Admin", 16)
+	testing.expect_value(t, measure_text_styled(ctx, "Admin", 16, {.Bold}), plain + 5)
+	quads :: proc(ctx: ^Context) -> int {return len(ctx.output.layers[ctx.layer].vertices) / 4}
+	before := quads(ctx)
+	w := draw_text_styled(ctx, {10, 40}, "Admin", 16, {255, 255, 255, 255}, {.Bold, .Underline})
+	testing.expect_value(t, w, plain + 5)
+	testing.expect_value(t, quads(ctx) - before, 5 * 2 + 1)
+	before = quads(ctx)
+	draw_text_styled(ctx, {10, 80}, "I", 16, {255, 255, 255, 255}, {.Italic, .Strike})
+	testing.expect_value(t, quads(ctx) - before, 2)
+	v := ctx.output.layers[ctx.layer].vertices[before * 4:]
+	testing.expect(t, v[0].pos.x > v[3].pos.x, "italic does not lean")
+	end_frame(ctx)
+}

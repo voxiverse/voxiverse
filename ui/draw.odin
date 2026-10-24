@@ -2,6 +2,7 @@ package ui
 
 import "core:math"
 import "core:mem"
+import "core:strings"
 
 import "../font"
 
@@ -133,10 +134,39 @@ draw_text :: proc(
 
 // draw_text_at draws text with its baseline starting at pos (UI units).
 draw_text_at :: proc(ctx: ^Context, pos: Vec2, text: string, size: f32, color: Color) {
+	draw_text_styled(ctx, pos, text, size, color, {})
+}
+
+// Text_Effect: how styled text is drawn: bold twice, a pixel apart (and a
+// pixel wider per letter); italic slanted; a line under or through.
+Text_Effect :: enum u8 {
+	Bold,
+	Italic,
+	Underline,
+	Strike,
+}
+Text_Effects :: bit_set[Text_Effect]
+
+// ITALIC_SLANT: how far italic leans (across per up).
+ITALIC_SLANT :: 0.2
+
+// draw_text_styled draws text with its baseline starting at pos (UI units)
+// with effects; returns its width (UI units, as measure_text_styled).
+draw_text_styled :: proc(
+	ctx: ^Context,
+	pos: Vec2,
+	text: string,
+	size: f32,
+	color: Color,
+	effects: Text_Effects,
+) -> f32 {
 	pixel_size := u16(math.round(size * ctx.scale))
-	if pixel_size == 0 {return}
+	if pixel_size == 0 {return 0}
 	// Snap the pen to whole pixels so glyph bitmaps map 1:1 (crisp text).
 	pen := [2]f32{math.round(pos.x * ctx.scale), math.round(pos.y * ctx.scale)}
+	start := pen.x
+	bold := f32(max(1, math.round(ctx.scale))) if .Bold in effects else 0
+	slant := f32(ITALIC_SLANT) if .Italic in effects else 0
 	clip := pixel_rect(ctx, current_clip(ctx))
 	for r in text {
 		g, ok := glyph_cache_get(&ctx.glyphs, r, pixel_size)
@@ -154,11 +184,37 @@ draw_text_at :: proc(ctx: ^Context, pos: Vec2, text: string, size: f32, color: C
 					{f32(g.x) * inv, f32(g.y) * inv},
 					{f32(g.x + g.w) * inv, f32(g.y + g.h) * inv},
 				}
-				push_quad(ctx, quad, uv, color)
+				push_quad(ctx, quad, uv, color, slant, pen.y)
+				if bold > 0 {
+					push_quad(ctx, quad + {bold, 0, 0, 0}, uv, color, slant, pen.y)
+				}
 			}
 		}
-		pen.x += g.advance
+		pen.x += g.advance + bold
 	}
+	if effects & {.Underline, .Strike} != {} {
+		u := glyph_cache_white_uv(&ctx.glyphs)
+		ascent, descent := font_line_metrics(ctx, size)
+		thick := max(1, math.round(f32(pixel_size) / 12))
+		if .Underline in effects {
+			y := pen.y + math.round(-descent * ctx.scale * 0.4)
+			push_quad(ctx, {start, y, pen.x - start, thick}, {u, u}, color)
+		}
+		if .Strike in effects {
+			y := pen.y - math.round(ascent * ctx.scale * 0.3)
+			push_quad(ctx, {start, y, pen.x - start, thick}, {u, u}, color)
+		}
+	}
+	return (pen.x - start) / ctx.scale
+}
+
+// measure_text_styled is the width of text drawn with effects (UI units).
+measure_text_styled :: proc(ctx: ^Context, text: string, size: f32, effects: Text_Effects) -> f32 {
+	width := measure_text(ctx, text, size)
+	if .Bold in effects {
+		width += f32(strings.rune_count(text)) * max(1, math.round(ctx.scale)) / ctx.scale
+	}
+	return width
 }
 
 // measure_text is the width of text in UI units.
@@ -188,7 +244,14 @@ pixel_rect :: proc(ctx: ^Context, r: Rect) -> [4]f32 {
 }
 
 @(private)
-push_quad :: proc(ctx: ^Context, q: [4]f32, uv: [2][2]f32, color: Color) {
+push_quad :: proc(
+	ctx: ^Context,
+	q: [4]f32,
+	uv: [2][2]f32,
+	color: Color,
+	slant: f32 = 0, // leaning right by this per pixel above baseline (italic)
+	baseline: f32 = 0,
+) {
 	if q[2] <= 0 || q[3] <= 0 {return}
 	l := &ctx.output.layers[ctx.layer]
 	clip := pixel_rect(ctx, current_clip(ctx))
@@ -201,12 +264,13 @@ push_quad :: proc(ctx: ^Context, q: [4]f32, uv: [2][2]f32, color: Color) {
 	}
 	base := u32(len(l.vertices))
 	x0, y0, x1, y1 := q[0], q[1], q[0] + q[2], q[1] + q[3]
+	top, bottom := slant * (baseline - y0), slant * (baseline - y1)
 	append(
 		&l.vertices,
-		Vertex{{x0, y0}, {uv[0].x, uv[0].y}, color},
-		Vertex{{x1, y0}, {uv[1].x, uv[0].y}, color},
-		Vertex{{x1, y1}, {uv[1].x, uv[1].y}, color},
-		Vertex{{x0, y1}, {uv[0].x, uv[1].y}, color},
+		Vertex{{x0 + top, y0}, {uv[0].x, uv[0].y}, color},
+		Vertex{{x1 + top, y0}, {uv[1].x, uv[0].y}, color},
+		Vertex{{x1 + bottom, y1}, {uv[1].x, uv[1].y}, color},
+		Vertex{{x0 + bottom, y1}, {uv[0].x, uv[1].y}, color},
 	)
 	append(&l.indices, base, base + 1, base + 2, base, base + 2, base + 3)
 	l.commands[len(l.commands) - 1].index_count += 6
