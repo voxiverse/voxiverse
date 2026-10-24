@@ -32,6 +32,9 @@ TREE_TRIES := #partial [Biome]i32 {
 	.Mountains = 4,
 	.Desert    = 4,
 }
+@(private = "file")
+MOST_TREE_TRIES :: 12 // TREE_TRIES' largest
+
 @(private = "file", rodata)
 TREE_ODDS := #partial [Biome]f32 {
 	.Plains    = 0.2,
@@ -47,18 +50,22 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 	p := &gen.params
 	if p.tree_density <= 0 {return}
 	origin := column * game.CHUNK_SIZE
-	// The column's middle sets how many tries (a forest's edge thins out
-	// tree by tree below: each needs its own ground to be forest).
-	middle := column_at(p, gen.seed, origin.x + 8, origin.y + 8)
-	tries := TREE_TRIES[middle.biome]
+	// Blending: every chunk column tries as often as a forest's, and each
+	// tree keeps itself by its own ground's biome (so densities blend at
+	// borders instead of changing at chunk lines). Before blending (old
+	// worlds): the column's middle sets how many tries.
+	blend := p.biome_blend > 0
+	tries := i32(MOST_TREE_TRIES)
+	if !blend {tries = TREE_TRIES[column_at(p, gen.seed, origin.x + 8, origin.y + 8).biome]}
 	pieces := make([dynamic]Piece, context.temp_allocator)
 	if tries > 0 {pieces_in(gen, origin, &pieces)}
 	for k in 0 ..< tries {
 		h := hash(gen.seed ~ i64(Earth_Layer.Tree), column.x, column.y, k)
 		x, z := origin.x + i32(h & 15), origin.y + i32(h >> 4 & 15)
 		c := column_at(p, gen.seed, x, z)
-		if chance(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >=
-		   TREE_ODDS[c.biome] * p.tree_density {continue}
+		odds := TREE_ODDS[c.biome] * p.tree_density
+		if blend {odds *= f32(TREE_TRIES[c.biome]) / MOST_TREE_TRIES}
+		if chance(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >= odds {continue}
 		if c.rough > 0 {continue}
 		ground := i32(math.floor(c.height))
 		if ground <= p.sea_level {continue}

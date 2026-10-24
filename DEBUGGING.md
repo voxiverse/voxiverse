@@ -297,6 +297,13 @@ The generator's stages show in the profiler as `worldgen climate`, `worldgen pla
 driver, with AddressSanitizer and with profiling. CI also runs `blast_test 12 quit`. F3
 shows how many bulk edits were shown whole and how many late (on a timeout).
 
+
+Biome borders blend: each column samples the climate up to `worldgen.biome_blend` blocks away
+(a different way per column), so where two climates meet the surfaces and trees mix over a
+band twice that wide instead of meeting at a line; tree density follows each tree's own spot,
+not its chunk's. Worlds made before (no `worldgen.biome_blend` in their world.cfg) load with 0,
+the old hard edges, so new chunks still meet their saved ones.
+
 ## Network
 
 Client and server only talk through messages, so the network is where to look when they

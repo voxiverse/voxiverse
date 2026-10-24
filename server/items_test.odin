@@ -159,6 +159,7 @@ test_players_move_to_their_files :: proc(t: ^testing.T) {
 		t,
 		start(&srv, {seed = 1, view_radius = 2, view_height = 1, workers = 1, save_dir = dir}, {}),
 	) {return}
+	testing.expect_value(t, srv.params.biome_blend, 0) // (made before biomes blended)
 	testing.expect(t, stop(&srv))
 	data, err := os.read_entire_file_from_path(
 		filepath.join({dir, PLAYERS_DIR, "bea.json"}, context.temp_allocator) or_else "",

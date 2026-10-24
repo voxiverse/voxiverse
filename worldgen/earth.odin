@@ -32,6 +32,7 @@ Params :: struct {
 	cave_size:       f32, // 0..1
 	tree_density:    f32, // 1: as designed; 0: none
 	plant_density:   f32,
+	biome_blend:     f32, // blocks: how far a column's climate is sampled away (borders dither over twice this); 0: hard edges (worlds made before it)
 }
 
 @(rodata)
@@ -47,6 +48,7 @@ PARAMS_DEFAULTS := Params {
 	cave_size       = 0.09,
 	tree_density    = 1,
 	plant_density   = 1,
+	biome_blend     = 8,
 }
 
 Biome :: enum u8 {
@@ -93,6 +95,7 @@ Earth_Layer :: enum i64 {
 	Tree      = 0x6e29,
 	Plant     = 0x1f87,
 	Structure = 0x5d3b,
+	Blend     = 0x2b49,
 }
 
 // Column: one block column's climate and shape.
@@ -152,10 +155,20 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	c.height = height
 	c.rough = p.overhang * mountainous * smooth(0.35, 0.85, ridge)
 
+	// The climate is sampled a few blocks away, a different way for each
+	// column: across a border the two sides mix, dithered, instead of
+	// meeting at a line.
+	climate_at := at
+	if p.biome_blend > 0 {
+		h := hash(seed ~ i64(Earth_Layer.Blend), x, z)
+		jitter := [2]f64{f64(h & 0xffff), f64(h >> 16 & 0xffff)} / 0xffff * 2 - 1
+		climate_at += jitter * f64(p.biome_blend)
+	}
 	c.temperature =
-		fbm2(seed ~ i64(Earth_Layer.Heat), at / f64(p.climate_scale), 3) * 1.6 -
+		fbm2(seed ~ i64(Earth_Layer.Heat), climate_at / f64(p.climate_scale), 3) * 1.6 -
 		max(0, height - f32(p.sea_level) - 50) / 90
-	c.humidity = fbm2(seed ~ i64(Earth_Layer.Wet), at / f64(p.climate_scale * 0.6), 3) * 1.6
+	c.humidity =
+		fbm2(seed ~ i64(Earth_Layer.Wet), climate_at / f64(p.climate_scale * 0.6), 3) * 1.6
 	c.biome = biome_of(p, &c, continent, mountainous)
 	return
 }

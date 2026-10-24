@@ -10,6 +10,13 @@ import "../base"
 PARAMS_VARS := [?]base.Var {
 	{field = "sea_level", help = "the sea's surface, y", min = -64, max = 64},
 	{
+		field = "biome_blend",
+		help = "how wide the mixed band between biomes is, blocks each side (0: hard edges)",
+		min = 0,
+		max = 32,
+		step = 1,
+	},
+	{
 		field = "continent_scale",
 		help = "size of continents and oceans, blocks",
 		min = 200,

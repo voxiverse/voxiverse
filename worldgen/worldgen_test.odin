@@ -172,13 +172,26 @@ test_params_table :: proc(t: ^testing.T) {
 // call) and its worlds would not match a server's.
 @(test)
 test_earth_same_everywhere :: proc(t: ^testing.T) {
-	GOLDEN :: [2]u64{0x7c79_ad00_9b15_dbdf, 0x5fa6_19f7_68fc_9a8b}
+	GOLDEN :: [2]u64{0x23f2_d1b1_db29_8716, 0x150f_68fb_7379_597e}
+	// Without blending, as worlds made before it (their saved chunks must
+	// still meet new ones).
+	GOLDEN_UNBLENDED :: [2]u64{0x7c79_ad00_9b15_dbdf, 0x5fa6_19f7_68fc_9a8b}
+	got := earth_hashes(PARAMS_DEFAULTS)
+	testing.expectf(t, got == GOLDEN, "worlds differ from Linux's: got %x", got)
+	unblended := PARAMS_DEFAULTS
+	unblended.biome_blend = 0
+	got = earth_hashes(unblended)
+	testing.expectf(t, got == GOLDEN_UNBLENDED, "unblended worlds changed: got %x", got)
+}
+
+@(private = "file")
+earth_hashes :: proc(params: Params) -> (got: [2]u64) {
 	seeds := [2]i64{1, 24301}
-	got: [2]u64
 	arr := new(game.Block_Array)
 	defer free(arr)
 	for seed, i in seeds {
 		g := generator_make(.Earth, seed)
+		g.params = params
 		h := u64(0xcbf2_9ce4_8422_2325)
 		mix :: proc(h: ^u64, bytes: []u8) {
 			for b in bytes {h^ = (h^ ~ u64(b)) * 0x100_0000_01b3}
@@ -200,8 +213,62 @@ test_earth_same_everywhere :: proc(t: ^testing.T) {
 		}
 		got[i] = h
 	}
-	testing.expectf(t, got == GOLDEN, "worlds differ from Linux's: got %x", got)
+	return
 }
+
+// Biome borders blend: every column's (blended) biome is one found
+// unblended within the blend around it, and where two climates meet along
+// a line the sides mix (the biome changes back and forth) instead of
+// meeting once. (Coasts and rivers follow the land, not the climate.)
+@(test)
+test_biome_borders_blend :: proc(t: ^testing.T) {
+	g := generator_make(.Earth, 24301)
+	hard := g.params
+	hard.biome_blend = 0
+	reach := i32(g.params.biome_blend) + 1
+	for x := i32(0); x < 1500; x += 3 {
+		s := column_at(&g.params, g.seed, x, 40).biome
+		found := false
+		for dz := -reach; dz <= reach && !found; dz += 1 {
+			for dx := -reach; dx <= reach && !found; dx += 1 {
+				found = column_at(&hard, g.seed, x + dx, 40 + dz).biome == s
+			}
+		}
+		testing.expectf(t, found, "at x=%d the blended %v is nowhere near unblended", x, s)
+	}
+	climate :: proc(b: Biome) -> bool {return(
+			b == .Plains ||
+			b == .Forest ||
+			b == .Taiga ||
+			b == .Tundra ||
+			b == .Desert \
+		)}
+	borders, mixed := 0, 0
+	prev := column_at(&hard, g.seed, 0, 40).biome
+	for x in i32(1) ..< 8000 {
+		cur := column_at(&hard, g.seed, x, 40).biome
+		defer prev = cur
+		if cur == prev || !climate(cur) || !climate(prev) {continue}
+		borders += 1
+		flips := 0
+		last := column_at(&g.params, g.seed, x - 16, 40).biome
+		for bx in x - 15 ..= x + 16 {
+			b := column_at(&g.params, g.seed, bx, 40).biome
+			if b != last {flips += 1}
+			last = b
+		}
+		if flips > 1 {mixed += 1}
+	}
+	testing.expectf(t, borders >= 3, "too few climate borders on the line (%d) to tell", borders)
+	testing.expectf(
+		t,
+		mixed * 4 >= borders * 3,
+		"only %d of %d climate borders mix",
+		mixed,
+		borders,
+	)
+}
+
 
 // Structures: each kind turns up near the spawn; placements are the same
 // every time; a structure's chunks come out the same whichever order they

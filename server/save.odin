@@ -377,6 +377,9 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}
 	}
+	// A world made before biomes blended keeps its hard edges (its saved
+	// chunks were made that way; new ones must meet them).
+	if !strings.contains(text, "worldgen.biome_blend") {s.params.biome_blend = 0}
 	for p in base.vars_read(worldgen.params_table(), &s.params, strings.to_string(rules_text)) {
 		if p.error == .Unknown_Name && strings.has_prefix(p.text, "rules.") {continue}
 		log.warnf(
