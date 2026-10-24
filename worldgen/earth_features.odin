@@ -51,6 +51,8 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 	// tree by tree below: each needs its own ground to be forest).
 	middle := column_at(p, gen.seed, origin.x + 8, origin.y + 8)
 	tries := TREE_TRIES[middle.biome]
+	pieces := make([dynamic]Piece, context.temp_allocator)
+	if tries > 0 {pieces_in(gen, origin, &pieces)}
 	for k in 0 ..< tries {
 		h := hash(gen.seed ~ i64(Earth_Layer.Tree), column.x, column.y, k)
 		x, z := origin.x + i32(h & 15), origin.y + i32(h >> 4 & 15)
@@ -60,6 +62,7 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		if c.rough > 0 {continue}
 		ground := i32(math.floor(c.height))
 		if ground <= p.sea_level {continue}
+		if near_piece(pieces[:], x, ground, z, 3) {continue} 	// clear of structures
 		top := surface_block(p, c.biome, 0, ground)
 		size := i32(h >> 12 & 3)
 		switch {

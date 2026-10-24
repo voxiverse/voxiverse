@@ -87,6 +87,37 @@ main :: proc() {
 		thread.destroy(t)
 		for n, b in jobs[i].counts {counts[b] += n}
 	}
+	// Structures, marked: a square of their colour (dungeons are under
+	// the land, marked all the same).
+	MARKS := [worldgen.Structure_Kind][3]u8 {
+		.Tower   = {220, 40, 40},
+		.Ruin    = {240, 140, 30},
+		.Well    = {40, 220, 230},
+		.Dungeon = {150, 60, 200},
+	}
+	structures := make([dynamic]worldgen.Structure)
+	half := opts.size / 2
+	worldgen.structures_near(
+		&gen,
+		{i32(opts.x - half), i32(opts.z - half)},
+		{i32(opts.x + half), i32(opts.z + half)},
+		&structures,
+	)
+	marked: [worldgen.Structure_Kind]int
+	for st in structures {
+		marked[st.kind] += 1
+		cx := (int(st.lo.x + st.hi.x) / 2 - (opts.x - half)) / opts.scale
+		cz := (int(st.lo.z + st.hi.z) / 2 - (opts.z - half)) / opts.scale
+		for dz in -2 ..= 2 {
+			for dx in -2 ..= 2 {
+				px, pz := cx + dx, cz + dz
+				if px < 0 || pz < 0 || px >= width || pz >= width {continue}
+				i := (pz * width + px) * 4
+				c := MARKS[st.kind] if abs(dx) < 2 && abs(dz) < 2 else [3]u8{0, 0, 0}
+				pixels[i], pixels[i + 1], pixels[i + 2] = c.r, c.g, c.b
+			}
+		}
+	}
 	seconds := time.duration_seconds(time.tick_since(start))
 
 	png, err := base.png_encode(width, width, pixels)
@@ -103,6 +134,9 @@ main :: proc() {
 		seconds,
 		opts.out,
 	)
+	for n, k in marked {
+		if n > 0 {fmt.printfln("  %-13s %5d", worldgen.STRUCTURE_NAMES[k], n)}
+	}
 	total := width * width
 	for n, b in counts {
 		if n >

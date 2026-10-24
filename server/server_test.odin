@@ -672,3 +672,94 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 	testing.expect_value(t, srv.world.gen.params.tree_density, 0)
 	testing.expect(t, stop(&srv))
 }
+
+// Structures: save a build, paste it elsewhere, save that: the same file;
+// turned a quarter and back: the same again.
+@(test)
+test_structures_round_trip :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "structures"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	config := Config {
+		seed         = 5,
+		generator    = .Classic,
+		view_radius  = 3,
+		view_height  = 2,
+		workers      = 1,
+		allow_cheats = true,
+		save_dir     = dir,
+	}
+	if !testing.expect(t, start(&srv, config, {&pipe, .Server})) {return}
+	defer stop(&srv)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "builder"})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 100}),
+	)
+	y := i32(c.welcome.spawn.y) + 6
+	@(static) answers: int
+	answers = 0
+	run :: proc(t: ^testing.T, c: ^Fake_Client, command: string) -> string {
+		clear(&c.notices)
+		fake_send(c, game.Admin{command})
+		got := wait_until(
+			t,
+			c,
+			proc(c: ^Fake_Client) -> bool {return len(c.notices) > 0},
+			5 * time.Second,
+		)
+		testing.expectf(t, got, "%q: no answer", command)
+		return c.notices[0] if got else ""
+	}
+	// A little build in the air: a stone base, a lamp and glass on it.
+	run(t, &c, fmt.tprintf("fill 0 %d 0 4 %d 2 stone", y, y))
+	run(t, &c, fmt.tprintf("fill 1 %d 1 1 %d 1 lamp", y + 1, y + 1))
+	run(t, &c, fmt.tprintf("fill 3 %d 0 3 %d 0 glass", y + 1, y + 2))
+	answer := run(t, &c, fmt.tprintf("structure save hut 0 %d 0 4 %d 2", y, y + 2))
+	testing.expectf(t, strings.has_prefix(answer, "structure hut saved: 5 x 3 x 3"), "%q", answer)
+	file :: proc(dir, name: string) -> string {
+		data, _ := os.read_entire_file_from_path(
+			filepath.join(
+				{dir, STRUCTURES_DIR, strings.concatenate({name, ".vxs"}, context.temp_allocator)},
+				context.temp_allocator,
+			) or_else "",
+			context.temp_allocator,
+		)
+		return string(data)
+	}
+	testing.expect(t, len(file(dir, "hut")) > 0, "no file")
+	// Pasted 10 east and saved again: the same file.
+	answer = run(t, &c, fmt.tprintf("structure paste hut 10 %d 0", y))
+	testing.expectf(t, strings.has_prefix(answer, "structure hut pasted"), "%q", answer)
+	run(t, &c, fmt.tprintf("structure save copy 10 %d 0 14 %d 2", y, y + 2))
+	testing.expect(t, file(dir, "copy") == file(dir, "hut"), "save, paste, save: a different file")
+	// A quarter turn (3 wide, 5 deep), saved, and three more: home again.
+	run(t, &c, fmt.tprintf("structure paste hut -10 %d 0 1", y))
+	run(t, &c, fmt.tprintf("structure save turned -10 %d 0 -8 %d 4", y, y + 2))
+	run(t, &c, fmt.tprintf("structure paste turned -20 %d 0 3", y))
+	run(t, &c, fmt.tprintf("structure save back -20 %d 0 -16 %d 2", y, y + 2))
+	testing.expect(
+		t,
+		file(dir, "back") == file(dir, "hut"),
+		"four quarter turns: a different file",
+	)
+	testing.expect(t, strings.contains(run(t, &c, "structure list"), "hut"))
+	testing.expect(
+		t,
+		strings.has_prefix(
+			run(t, &c, "structure paste nothing 0 0 0"),
+			"structure paste: no structure",
+		),
+	)
+}

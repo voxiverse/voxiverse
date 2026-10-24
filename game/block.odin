@@ -39,6 +39,11 @@ Block :: enum u16 {
 	Water_6,
 	Water_7,
 	Water_Falling,
+	// Built: for structures and players.
+	Cobblestone,
+	Stone_Bricks,
+	Planks,
+	Glass,
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -223,6 +228,37 @@ BLOCK_INFO := [Block]Block_Info {
 	.Water_6 = {name = "water_6", replaceable = true, shades = true},
 	.Water_7 = {name = "water_7", replaceable = true, shades = true},
 	.Water_Falling = {name = "falling_water", replaceable = true, shades = true},
+	.Cobblestone = {
+		name = "cobblestone",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
+	},
+	.Stone_Bricks = {
+		name = "stone_bricks",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
+	},
+	.Planks = {
+		name = "planks",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
+	},
+	.Glass = {
+		name = "glass",
+		collides = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
+	},
 }
 
 block_valid :: #force_inline proc(id: u16) -> bool {

@@ -92,6 +92,7 @@ Earth_Layer :: enum i64 {
 	Ore       = 0x4a3d,
 	Tree      = 0x6e29,
 	Plant     = 0x1f87,
+	Structure = 0x5d3b,
 }
 
 // Column: one block column's climate and shape.

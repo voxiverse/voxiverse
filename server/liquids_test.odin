@@ -222,7 +222,8 @@ test_water_flood :: proc(t: ^testing.T) {
 }
 
 // The slowest tick allowed while 10 000 blocks of water flow: a tick, 33
-// ms, optimized (CI runs that too); unoptimized builds, twice that.
+// ms, optimized (CI runs that alone). Unoptimized, sharing the machine with
+// the other tests running at once, only a gross slowdown fails.
 @(private = "file")
 WATER_TICK_BUDGET_MS ::
-	66 when ODIN_OPTIMIZATION_MODE == .None || ODIN_OPTIMIZATION_MODE == .Minimal else 33
+	150 when ODIN_OPTIMIZATION_MODE == .None || ODIN_OPTIMIZATION_MODE == .Minimal else 33

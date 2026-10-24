@@ -152,6 +152,9 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops) {
 		out:    ^Tops,
 	}
 	put := Tops_Put{origin, out}
+	pieces := make([dynamic]Piece, context.temp_allocator)
+	pieces_in(gen, origin, &pieces)
+	if len(pieces) > 0 {pieces_tops(p, pieces[:], cols, origin, out)}
 	for t in trees {
 		tree_shape(gen.seed, t, &put, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
 			tp := (^Tops_Put)(data)
@@ -194,7 +197,10 @@ earth_generate :: proc(
 			for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
 		}
 	}
+	pieces := make([dynamic]Piece, context.temp_allocator)
+	pieces_in(gen, {origin.x, origin.z}, &pieces)
 	highest := p.sea_level
+	for piece in pieces {highest = max(highest, piece.hi.y)}
 	rough := false
 	for &row in cols {
 		for &col in row {
@@ -254,6 +260,7 @@ earth_generate :: proc(
 			   plain >= p.sea_level {plant(p, seed, col, origin, dst, x, plain, z)}
 		}
 	}
+	if len(pieces) > 0 {pieces_write(pieces[:], cols, origin, dst)}
 	for t in trees {tree_write(seed, t, origin, dst)}
 
 	first := dst[0]
@@ -370,4 +377,73 @@ in_cave :: proc(g: ^Cave_Grid, l: [3]i32, size: f32) -> bool {
 floor_div :: proc(a, b: i32) -> i32 {
 	q := a / b
 	return q - 1 if (a % b != 0) && ((a < 0) != (b < 0)) else q
+}
+
+// pieces_write writes the structure pieces reaching the chunk at origin,
+// and their foundations: cobblestone under their solid bottom down to the
+// land (where it has no overhangs).
+@(private = "file")
+pieces_write :: proc(
+	pieces: []Piece,
+	cols: ^Columns,
+	origin: game.Block_Pos,
+	dst: ^game.Block_Array,
+) {
+	base.profile_scope("worldgen structures")
+	for z in i32(0) ..< game.CHUNK_SIZE {
+		for x in i32(0) ..< game.CHUNK_SIZE {
+			wx, wz := origin.x + x, origin.z + z
+			col := &cols[z][x]
+			bottom, under := foundation_under(pieces, wx, wz)
+			plain := i32(math.floor(col.height))
+			for y in i32(0) ..< game.CHUNK_SIZE {
+				p := game.Block_Pos{wx, origin.y + y, wz}
+				i := game.local_index({x, y, z})
+				if dst[i] == .Bedrock {continue}
+				if b, ok := piece_at(pieces, p); ok {
+					dst[i] = b
+				} else if under && col.rough == 0 && p.y < bottom && p.y > plain {
+					dst[i] = .Cobblestone
+				}
+			}
+		}
+	}
+}
+
+// pieces_tops: the tops of the chunk column at origin where structures
+// stand (out holds the land's): the highest block that shades, of the
+// structures, their foundations, the land and the sea under them.
+@(private = "file")
+pieces_tops :: proc(p: ^Params, pieces: []Piece, cols: ^Columns, origin: [2]i32, out: ^Tops) {
+	for z in i32(0) ..< game.CHUNK_SIZE {
+		for x in i32(0) ..< game.CHUNK_SIZE {
+			wx, wz := origin.x + x, origin.y + z
+			highest := min(i32)
+			for piece in pieces {
+				if wx >= piece.lo.x &&
+				   wx <= piece.hi.x &&
+				   wz >= piece.lo.z &&
+				   wz <= piece.hi.z {highest = max(highest, piece.hi.y)}
+			}
+			if highest == min(i32) {continue}
+			i := x + z * game.CHUNK_SIZE
+			land := out[i]
+			col := &cols[z][x]
+			plain := i32(math.floor(col.height))
+			bottom, under := foundation_under(pieces, wx, wz)
+			for y := max(highest, land); y > game.WORLD_MIN_Y; y -= 1 {
+				if b, ok := piece_at(pieces, {wx, y, wz}); ok {
+					if game.block_shades(b) {
+						out[i] = y
+						break
+					}
+					continue
+				}
+				if (under && col.rough == 0 && y < bottom && y > plain) || y <= land {
+					out[i] = y // a foundation, the land, or the sea over it
+					break
+				}
+			}
+		}
+	}
 }

@@ -167,15 +167,93 @@ register_world_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"structure",
+			"structure save <name> [clear] | paste <name> [turns] | list: keep the selection as a structure (air: leave what is there; clear: clear it), put one at the aimed block",
+			proc(app: ^App, args: []string) {
+				s := app.session
+				switch args[0] {
+				case "list":
+					send_message(s, game.Admin{"structure list"})
+				case "save":
+					a, ok_a := s.selection[0].?
+					b, ok_b := s.selection[1].?
+					if len(args) < 2 || !ok_a || !ok_b {
+						console_print(
+							&app.console,
+							"structure save <name> [clear]: select two corners first (pos1, pos2)",
+							.Warning,
+						)
+						return
+					}
+					clear := " clear" if len(args) > 2 && args[2] == "clear" else ""
+					send_message(
+						s,
+						game.Admin {
+							fmt.tprintf(
+								"structure save %s %d %d %d %d %d %d%s",
+								args[1],
+								a.x,
+								a.y,
+								a.z,
+								b.x,
+								b.y,
+								b.z,
+								clear,
+							),
+						},
+					)
+				case "paste":
+					hit, aimed := s.aim.?
+					if len(args) < 2 || !aimed {
+						console_print(
+							&app.console,
+							"structure paste <name> [turns]: aim at a block first",
+							.Warning,
+						)
+						return
+					}
+					p := hit.block + hit.normal
+					turns := args[2] if len(args) > 2 else "0"
+					send_message(
+						s,
+						game.Admin {
+							fmt.tprintf(
+								"structure paste %s %d %d %d %s",
+								args[1],
+								p.x,
+								p.y,
+								p.z,
+								turns,
+							),
+						},
+					)
+				case:
+					console_print(
+						&app.console,
+						"structure save <name> [clear] | paste <name> [turns] | list",
+						.Warning,
+					)
+				}
+			},
+		},
+		args = {1, 3},
+		needs = cheat,
+	)
+	console_register(
+		c,
+		{
 			"locate",
-			"locate <biome>: fly to the nearest place of a biome",
+			"locate <biome or structure>: fly to the nearest place of a biome, or a structure",
 			proc(app: ^App, args: []string) {
 				send_message(app.session, game.Admin{fmt.tprintf("locate %s", args[0])})
 			},
 		},
 		proc(app: ^App, arg: int, args: []string) -> []string {
 			names := make([dynamic]string, context.temp_allocator)
-			if arg == 0 {for n in worldgen.BIOME_NAMES {append(&names, n)}}
+			if arg == 0 {
+				for n in worldgen.BIOME_NAMES {append(&names, n)}
+				for n in worldgen.STRUCTURE_NAMES {append(&names, n)}
+			}
 			return names[:]
 		},
 		args = {1, 1},

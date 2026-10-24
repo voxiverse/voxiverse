@@ -54,7 +54,14 @@ material_of :: proc(b: game.Block) -> (Material, bool) {
 	switch b {
 	case .Air, .Water, .Water_1 ..= .Water_7, .Water_Falling:
 		return {}, false
-	case .Stone, .Bedrock, .Sandstone, .Coal_Ore, .Iron_Ore, .Copper_Ore:
+	case .Stone,
+	     .Bedrock,
+	     .Sandstone,
+	     .Coal_Ore,
+	     .Iron_Ore,
+	     .Copper_Ore,
+	     .Cobblestone,
+	     .Stone_Bricks:
 		return .Stone, true
 	case .Dirt, .Clay:
 		return .Dirt, true
@@ -64,9 +71,9 @@ material_of :: proc(b: game.Block) -> (Material, bool) {
 		return .Sand, true
 	case .Gravel:
 		return .Gravel, true
-	case .Lamp, .Ice:
+	case .Lamp, .Ice, .Glass:
 		return .Glass, true
-	case .Log, .Spruce_Log, .Cactus:
+	case .Log, .Spruce_Log, .Cactus, .Planks:
 		return .Wood, true
 	case .Snow:
 		return .Snow, true

@@ -116,6 +116,12 @@ and thinning; between two sources a new one forms. In water you swim: jump to ri
 against a ledge, to climb out), sneak to dive; under the surface the world turns blue and
 close. Sunlight fades with depth, and trees cast shade.
 
+Out in the world stand towers, ruins and wells, and dungeons lie under it (`locate tower`).
+Build your own: select a box (`pos1`, `pos2`) and `structure save hut` keeps it with the world
+(its air leaves what is there when pasted; `structure save hut clear` clears it);
+`structure paste hut 1` puts it at the block you aim at, a quarter turned. `structure list`
+shows them. Cobblestone, stone bricks, planks and glass are for building (`place glass`).
+
 The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
 runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.
 

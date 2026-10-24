@@ -138,6 +138,7 @@ neighbours' edges.
 | `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; cheats): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
 | `set worldgen.<name> <value>`, `vars worldgen` | The Earth generator's settings (the server's, like rules; F4 too), saved with the world; chunks already made keep their blocks until `regen` |
 | `server <command...>` | Send a server command as is, with coordinates: `server fill 0 60 0 9 62 9 water` (scripts, tests; cheats) |
+| `structure save <name> [clear]`, `structure paste <name> [turns]`, `structure list` | Keep the selection as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at the aimed block through the bulk edit pipeline, turned 0-3 quarters |
 | `regen [radius]` | Remake the unedited chunks within radius (chunks, 1-8) from the generator as it is now |
 | `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
 | `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
@@ -156,6 +157,21 @@ until something opens them. Changes the world makes travel as one `Blocks_Change
 per tick. F3's server line shows the updates waiting. `server/liquids_test.odin`: the dam
 break (the same water twice, both players matching the server) and the flood (10 000 blocks
 flowing within the tick budget; CI runs it optimized too).
+
+## Structures
+
+A template (`game/structure.odin`) is a box of cells, each a block or void (leave what is
+there); its .vxs file has a palette of block names and runs of cells. Shipped templates are
+`assets/structures/*.vxs`, built in-game and compiled into `worldgen` (generation reads no
+files). In an Earth world each structure kind has a set: cells of its spacing each decide by
+a hash whether they hold one, where and turned how, so any chunk can work out the pieces
+reaching into it (`worldgen/structures.odin`); surface ones need flat land and get
+cobblestone foundations; trees keep clear; the column tops include them. Towers and dungeons
+(rooms and corridors) are procedural pieces through the same placement. `locate tower`
+(ruin, well, dungeon) flies you to the nearest; `build worldmap` marks them.
+`worldgen_test.odin`'s `test_structures` checks every kind is placed, the same each time,
+built the same in any chunk order, under exact tops; `server_test.odin` saves, pastes and
+saves again (also via quarter turns) for the same file.
 
 ## World generation
 

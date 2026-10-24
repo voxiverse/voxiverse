@@ -31,14 +31,19 @@ Bulk_Op :: enum u8 {
 	Set, // every block becomes block
 	Replace, // blocks that are `from` become block
 	Carve, // everything becomes air (an explosion; bedrock stays)
+	Paste, // a template's cells (its void cells leave what is there)
 }
 
 Bulk_Edit :: struct {
-	shape:   Bulk_Shape,
-	op:      Bulk_Op,
-	block:   game.Block,
-	from:    game.Block, // Replace
-	partial: bool, // apply to the loaded part only (else: refuse unless all is loaded)
+	shape:    Bulk_Shape,
+	op:       Bulk_Op,
+	block:    game.Block,
+	from:     game.Block, // Replace
+	partial:  bool, // apply to the loaded part only (else: refuse unless all is loaded)
+	// Paste: the template, turned rotation quarter turns, its corner at the
+	// shape's (a Box of rotated_size).
+	template: ^game.Template,
+	rotation: u8,
 }
 
 Bulk_Result :: enum u8 {
@@ -120,6 +125,11 @@ edit_chunk :: proc(s: ^Server, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) 
 					if old == e.from {new = e.block}
 				case .Carve:
 					new = .Air
+				case .Paste:
+					corner, _ := shape_box(e.shape)
+					cell := game.template_cell(e.template, p - corner, e.rotation)
+					if cell == game.VOID {continue}
+					new = game.Block(cell)
 				}
 				if new == old {continue}
 				if err := game.chunk_set(&c.blocks, &s.world.arrays, l, new); err != nil {

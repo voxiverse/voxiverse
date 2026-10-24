@@ -129,9 +129,12 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 	     .Coal_Ore,
 	     .Iron_Ore,
 	     .Copper_Ore,
-	     .Cactus:
+	     .Cactus,
+	     .Cobblestone,
+	     .Stone_Bricks,
+	     .Planks:
 		return .Cube, .Opaque
-	case .Leaves, .Spruce_Leaves:
+	case .Leaves, .Spruce_Leaves, .Glass:
 		return .Cube, .Cutout
 	case .Tall_Grass, .Poppy, .Dandelion:
 		return .Cross, .Cutout
@@ -204,6 +207,7 @@ cube_faces :: proc(
 		_, water := game.water_level(b)
 		_, water_beside := game.water_level(n)
 		if water && water_beside {continue} 	// inside the same body of water
+		if b == .Glass && n == .Glass {continue} 	// one pane
 		first := len(out)
 		emit_face(s, light, out, p, face, axes, block_texture(b, face))
 		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);

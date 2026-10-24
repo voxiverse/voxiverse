@@ -35,6 +35,10 @@ Texture :: enum u32 {
 	Dandelion,
 	Cactus_Side,
 	Cactus_Top,
+	Cobblestone,
+	Stone_Bricks,
+	Planks,
+	Glass,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -89,6 +93,14 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Dandelion, .Dandelion, .Dandelion
 	case .Cactus:
 		return .Cactus_Side, .Cactus_Top, .Cactus_Top
+	case .Cobblestone:
+		return .Cobblestone, .Cobblestone, .Cobblestone
+	case .Stone_Bricks:
+		return .Stone_Bricks, .Stone_Bricks, .Stone_Bricks
+	case .Planks:
+		return .Planks, .Planks, .Planks
+	case .Glass:
+		return .Glass, .Glass, .Glass
 	}
 	return
 }
@@ -231,6 +243,38 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				c = shade(CACTUS, 0.25 + 0.3 * f32(x % 4 == 1 ? 1 : 0) + 0.25 * fine)
 				if x % 4 == 3 && y % 4 == 1 {c = SAND[4]}
 				if x == 0 || x == TEXTURE_SIZE - 1 {c = CACTUS[0]}
+			case .Cobblestone:
+				// Rounded stones of their own tones, dark mortar between.
+				cell := value_noise(seed ~ 59, x, y, 4)
+				v := 0.25 + 0.6 * hash01(seed ~ 61, int(cell * 7), 0) + 0.2 * fine
+				if cell > 0.45 && cell < 0.52 {v = 0}
+				c = shade(STONE, v)
+			case .Stone_Bricks:
+				// Courses of four rows, the joints staggered course to course.
+				course := y / 4
+				offset := 4 if course % 2 == 1 else 0
+				brick := (x + offset) / 8
+				v := 0.35 + 0.35 * hash01(seed ~ 67, brick, course) + 0.2 * fine
+				if y % 4 == 3 || (x + offset) % 8 == 7 {v = 0.05}
+				c = shade(STONE, v)
+			case .Planks:
+				// Boards four rows wide, end joints here and there.
+				board := y / 4
+				v :=
+					0.35 +
+					0.3 * hash01(seed ~ 71, 0, board) +
+					0.25 * value_noise(seed ~ 73, x, y, 2) +
+					0.1 * fine
+				if y % 4 == 3 {v = 0.05}
+				if x == int(hash01(seed ~ 79, board, 1) * 15) {v = 0.1}
+				c = shade(WOOD, v)
+			case .Glass:
+				// A pale frame and two streaks; clear between.
+				edge := x == 0 || y == 0 || x == TEXTURE_SIZE - 1 || y == TEXTURE_SIZE - 1
+				streak := (x + y == 9 || x + y == 10) && x > 2 && x < 9
+				c = {}
+				if edge {c = ICE[3]}
+				if streak {c = ICE[4]}
 			case .Cactus_Top:
 				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
 				if x == 0 ||

@@ -248,7 +248,7 @@ write_region :: proc(s: ^Server, region: game.Region_Pos) -> bool {
 }
 
 // write_atomically replaces path with data through a temporary file.
-@(private = "file")
+@(private)
 write_atomically :: proc(path: string, data: []u8) -> bool {
 	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
 	if err := os.write_entire_file(tmp, data); err != nil {

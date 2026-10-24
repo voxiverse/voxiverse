@@ -32,8 +32,14 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"summon", "[kind]", {0, 1}, admin_summon},
 	{"open_lan", "", {0, 0}, admin_open_lan},
 	{"hash", "", {0, 0}, admin_hash},
-	{"locate", "<biome>", {1, 1}, admin_locate},
+	{"locate", "<biome or structure>", {1, 1}, admin_locate},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen},
+	{
+		"structure",
+		"save <name> <x1 y1 z1 x2 y2 z2> [clear] | paste <name> <x y z> [quarter turns] | list",
+		{1, 9},
+		admin_structure,
+	},
 }
 
 // admin runs a command from c.
@@ -130,25 +136,69 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // worlds), high above it, flying.
 @(private = "file")
 admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	biome := worldgen.biome_by_name(args[0]) or_return
 	p := c.player.position
-	at, found := worldgen.locate(&s.world.gen, biome, i32(p.x), i32(p.z))
+	gen := &s.world.gen
+	if kind, structure := worldgen.structure_by_name(args[0]); structure {
+		st, found := worldgen.locate_structure(gen, kind, i32(p.x), i32(p.z))
+		if !found {
+			notice(s, c, fmt.tprintf("No %s within 4096 blocks (or not an Earth world)", args[0]))
+			return true
+		}
+		// South of it and above, facing north, looking down on it.
+		middle := (st.lo + st.hi) / 2
+		top := max(st.hi.y, worldgen.column_top(gen, middle.x, middle.z))
+		size := st.hi - st.lo + 1
+		back := f64(max(size.x, size.z)) + 8
+		c.player = {
+			position = {f64(middle.x) + 0.5, f64(top) + back * 0.8, f64(middle.z) + 0.5 + back},
+			flying   = true,
+		}
+		c.teleport = {0, -0.65}
+		c.teleported = true
+		notice(s, c, fmt.tprintf("%s at %d %d %d", args[0], st.lo.x, st.lo.y, st.lo.z))
+		return true
+	}
+	biome := worldgen.biome_by_name(args[0]) or_return
+	at, found := worldgen.locate(gen, biome, i32(p.x), i32(p.z))
 	if !found {
 		notice(s, c, fmt.tprintf("No %s within 4096 blocks (or not an Earth world)", args[0]))
 		return true
 	}
-	top := worldgen.column_top(&s.world.gen, at.x, at.y)
+	top := worldgen.column_top(gen, at.x, at.y)
 	c.player = {
-		position = {
-			f64(at.x) + 0.5,
-			f64(max(top, s.world.gen.params.sea_level)) + 24,
-			f64(at.y) + 0.5,
-		},
+		position = {f64(at.x) + 0.5, f64(max(top, gen.params.sea_level)) + 24, f64(at.y) + 0.5},
 		flying   = true,
 	}
 	c.teleport = {c.look[0], -1.25} // looking down at it
 	c.teleported = true
 	notice(s, c, fmt.tprintf("%s at %d %d", args[0], at.x, at.y))
+	return true
+}
+
+@(private = "file")
+admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	switch args[0] {
+	case "list":
+		notice(s, c, structure_list(s))
+	case "save":
+		if len(args) != 8 && len(args) != 9 {return false}
+		if !structure_name_valid(args[1]) {return false}
+		box := parse_box(args[2:8]) or_return
+		clear := len(args) == 9 && args[8] == "clear"
+		if len(args) == 9 && !clear {return false}
+		notice(s, c, structure_save(s, args[1], box.lo, box.hi, clear))
+	case "paste":
+		if len(args) != 5 && len(args) != 6 {return false}
+		if !structure_name_valid(args[1]) {return false}
+		n: [3]i32
+		parse_coords(args[2:5], n[:]) or_return
+		turns := 0
+		if len(args) == 6 {turns = strconv.parse_int(args[5]) or_return}
+		if turns < 0 || turns > 3 {return false}
+		notice(s, c, structure_paste(s, args[1], n, u8(turns)))
+	case:
+		return false
+	}
 	return true
 }
 

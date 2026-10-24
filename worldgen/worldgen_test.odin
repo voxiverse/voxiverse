@@ -201,3 +201,75 @@ test_earth_same_everywhere :: proc(t: ^testing.T) {
 	}
 	testing.expectf(t, got == GOLDEN, "worlds differ from Linux's: got %x", got)
 }
+
+// Structures: each kind turns up near the spawn; placements are the same
+// every time; a structure's chunks come out the same whichever order they
+// are made in; and the land's tops over them are exactly the highest
+// blocks that shade.
+@(test)
+test_structures :: proc(t: ^testing.T) {
+	g := generator_make(.Earth, 24301)
+	found := make([dynamic]Structure)
+	defer delete(found)
+	structures_near(&g, {-2048, -2048}, {2048, 2048}, &found)
+	again := make([dynamic]Structure)
+	defer delete(again)
+	structures_near(&g, {-2048, -2048}, {2048, 2048}, &again)
+	testing.expect(t, slice.equal(found[:], again[:]), "placements differ between two looks")
+	first: [Structure_Kind]Maybe(Structure)
+	for s in found {if first[s.kind] == nil {first[s.kind] = s}}
+	for kind in Structure_Kind {
+		s, ok := first[kind].?
+		if !testing.expectf(t, ok, "no %v within 2048 blocks", kind) {continue}
+		lo, hi := game.chunk_of(s.lo), game.chunk_of(s.hi)
+		// Every chunk of it, forwards and backwards.
+		chunks := make([dynamic]game.Chunk_Pos, context.temp_allocator)
+		for cy in lo.y - 1 ..= hi.y + 1 {
+			for cz in lo.z ..= hi.z {
+				for cx in lo.x ..= hi.x {append(&chunks, game.Chunk_Pos{cx, cy, cz})}
+			}
+		}
+		made := make(map[game.Chunk_Pos]^game.Block_Array, context.temp_allocator)
+		for c in chunks {
+			made[c] = new(game.Block_Array, context.temp_allocator)
+			generate(&g, c, made[c])
+		}
+		arr := new(game.Block_Array, context.temp_allocator)
+		#reverse for c in chunks {
+			generate(&g, c, arr)
+			testing.expectf(t, arr^ == made[c]^, "%v: chunk %v differs made later", kind, c)
+		}
+		// Tops over it, from the chunk columns' blocks (down to the land).
+		for cz in lo.z ..= hi.z {
+			for cx in lo.x ..= hi.x {
+				tops: Tops
+				column_tops(&g, {cx, cz}, &tops)
+				for z in i32(0) ..< game.CHUNK_SIZE {
+					for x in i32(0) ..< game.CHUNK_SIZE {
+						want := tops[x + z * game.CHUNK_SIZE]
+						got := i32(game.WORLD_MIN_Y)
+						for y := want + 40; y >= want - 40 && got == game.WORLD_MIN_Y; y -= 1 {
+							c := game.chunk_of({cx * 16 + x, y, cz * 16 + z})
+							if c not_in made {
+								made[c] = new(game.Block_Array, context.temp_allocator)
+								generate(&g, c, made[c])
+							}
+							if game.block_shades(
+								made[c][game.local_index(game.local_of({cx * 16 + x, y, cz * 16 + z}))],
+							) {got = y}
+						}
+						testing.expectf(
+							t,
+							got == want,
+							"%v at %v: top %d, built %d",
+							kind,
+							[2]i32{cx * 16 + x, cz * 16 + z},
+							want,
+							got,
+						)
+					}
+				}
+			}
+		}
+	}
+}
