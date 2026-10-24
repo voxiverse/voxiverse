@@ -330,7 +330,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 }
 
 // MENU_FPS: frames per second at most where nothing in a world moves (the
-// title, menus, the pause menu): drawing them thousands of times a second
+// title, menus, the game menu): drawing them thousands of times a second
 // with vsync off only heats the machine (and can make it whine).
 MENU_FPS :: 120
 

@@ -215,6 +215,9 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M11 | Liquids: Minecraft-style water (sources, 7 flow levels, new sources between two), scheduled block updates on the server, swimming, underwater fog, light through water | A dam-break test ends in the same water on every run, on the server and on two clients; 10 000 flowing blocks stay within the tick budget (done: `server/liquids_test.odin`'s dam break settles the same twice with both UDP players matching the server; its flood keeps 10 000 flowing blocks within the tick budget, optimized in CI; swimming has physics tests; water and leaves shade sky light) |
 | M12 | Structures: templates built in-game (`structure save`), placed by worldgen (rotated, varied, fitted to the ground) across chunk borders, and procedural ones (dungeons, towers) on the same placement API | A structure comes out identical whichever order its chunks generate in; templates round-trip save/paste; placements are deterministic per seed (done: `test_structures` builds each kind's chunks in two orders and checks placements and the tops over them; `test_structures_round_trip` saves, pastes and saves again, also round four quarter turns; `worldmap` marks towers, ruins, wells and dungeons) |
 | M13 | Players together: a stored world spawn with safe landings, an overlay and focus stack for every in-game panel, chat, permissions (nodes and roles with metadata), formatted text, EssentialsX-style commands (places and teleports, messaging, moderation, who and status) | Permissions resolve as documented (wildcards, negation, inheritance) in tests; every server action is checked through one function; chat and its commands work over UDP between two players with roles, tags, colours, mutes and ignores; nobody spawns inside blocks; the focus stack routes keys correctly in UI tests (done: `game/permissions_test.odin` and `server/permissions_test.odin` resolve and persist roles; every message and command goes through `allowed`; `server/chat_test.odin` and `server/commands_test.odin` run chat, tags, colours, an ignore, a mute, kicks and bans over UDP; `server/spawn_test.odin` lands out of a pillar at the spawn and `test_spawn_on_open_ground` keeps trees away; `client/overlays_test.odin` routes Escape and typing) |
+| M14 | Items and player data: item kinds as data, stacks, server-owned containers (the player's inventory, hotbar, cursor), an inventory overlay with drag and drop, dropped items as entities, give/clear commands, one JSON file per player for everything kept about them | Two players over UDP move, split, drop and pick up stacks and agree with the server; a refused move rolls back; inventories survive save and load exactly; old worlds' players move to the new files; drag-and-drop UI tests |
+| M15 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept in the player files and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
+| M16 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
 ## M9-M12: making and changing the world
 
@@ -352,11 +355,97 @@ permission node from the start.
   between two players with roles, tags, colours, a mute and an ignore; spawn and teleport
   landings never inside blocks (tests on worlds with trees and structures at the spot).
 
-### After M12 (not planned in detail yet)
+## M14: items and player data
 
-Survival (items and drops, inventory, health, a hostile mob at night), lava as a second
-liquid, greedy meshing and low-detail far terrain for long view distances, and M1b (macOS)
-when a Mac is at hand.
+Still mechanisms, not gameplay: what an item does, how many a stack holds, whether placing
+uses one up are data and permissions a server or content sets.
+
+- **Items:** kinds as a data table (`game/items.odin`: name, stack size, the block it
+  places, tool, tags); every placeable block has its item; today's hotbar items (blocks,
+  the launcher) become item kinds. A stack is a kind and a count (and room for data later).
+- **Containers:** server-owned slots: each player's inventory (main slots, the hotbar, the
+  stack on the cursor), the API any later container (chests) uses. Clients ask with
+  container actions (pick up, place, split, swap with a hotbar key, drop, quick-move);
+  the server applies them under the shared rules and confirms or corrects; the client
+  predicts as it does edits, and rolls back a refusal.
+- **Using items:** placing a block uses one from the held stack unless the player has
+  `items.infinite` (the owner of a world played here: creative by permission, not by
+  mode); breaking a block drops its item where the rule says (`rules.drops`).
+- **Dropped items:** entities that fall, merge with neighbours, and are picked up by players
+  walking over them (room permitting), despawning after a while.
+- **Inventory overlay:** `e` opens it over the game (an overlay: frees the mouse, does not
+  pause); drag and drop, right-click splits, shift-click moves, number keys swap with the
+  hotbar, tooltips with the item's name; the hotbar shows counts.
+- **Player data:** `<world>/players/<name>.json` holds everything kept about a player
+  (position, look, flying, inventory; M15 adds statistics): loaded on joining, written
+  atomically when changed, only online players in memory. Existing worlds' `player.*`
+  lines in world.cfg move there on load. Homes and the like stay in community.cfg (the
+  world's view of a player), the player file is the player's own state.
+- **Commands:** `give <player> <item> [count]`, `clear [player] [item]`, `item` (what you
+  hold), each a node.
+- **Exit check:** container action tests (every action, full stacks, refusals); two players
+  over UDP drop, pick up and move stacks and agree with the server; a refused action rolls
+  back the prediction; inventories survive save and load exactly; a world with world.cfg
+  players loads into player files; UI tests drag, split and shift-click.
+
+## M15: statistics
+
+Counters for nearly everything a player does, so later systems (anything that rewards
+play) have data to work with; nothing here rewards anything.
+
+- **Names:** dotted, like permission nodes: `blocks.mined.stone`, `blocks.placed.sand`,
+  `distance.walked` / `flown` / `swum` / `fallen` (cm), `jumps`, `items.picked.<item>`,
+  `items.dropped.<item>`, `items.used.<item>`, `entities.hit.<kind>`,
+  `entities.killed.<kind>`, `explosions`, `rockets.fired`, `chat.lines`,
+  `chat.whispers`, `commands.<name>`, `teleports.<how>`, `time.played`, `time.away`,
+  `time.flying`, `time.underwater` (seconds), `sessions`, `structures.found.<kind>`,
+  `biomes.visited.<biome>`. A parent's total is the sum of its children (asked, not stored).
+- **Recording:** on the server only (it is authoritative), through one `stat_add(player,
+  name, amount)`; names interned once, counters `u64` in a per-player table; the hot
+  paths (movement) accumulate per tick, not per call.
+- **Storage:** in the player's JSON file (`"stats": {...}`), written with the rest when
+  changed; the world's totals in `<world>/stats.json`. Thousands of counters per player
+  and thousands of players stay cheap: only online players in memory, files written only
+  when dirty.
+- **Viewing:** a stats overlay (opened by the `stats` command and a key, not from the game
+  menu): a scrollable, searchable tree, numbers formatted by unit (blocks, metres, time);
+  the server sends a player's stats on request (paged). `stats [player] [filter]` prints
+  them in chat; `stats top <name>` ranks the players the world knows. Others' stats need
+  `info.stats.others`.
+- **Exit check:** a scripted session (walk, swim, fly, mine, place, pick up, fight, chat,
+  teleport) gives exactly the expected counters, and the same after save and load; a load
+  test of many players with thousands of counters each within a save and load budget; UI
+  tests for search and scrolling; the overlay over UDP shows the server's numbers.
+
+## M16: analytics
+
+Measuring play to improve the game: a timed stream of meaningful interactions. Always on
+(a server can switch it off: `analytics 0`); nothing leaves the server by itself.
+
+- **Events:** one call, `analytics_event(kind, player, fields)`: wall time (ms), server
+  tick, session id, player, kind, and a few typed fields. Sessions (join and leave,
+  duration, client version, OS, GPU, view distance, frame-time and network summaries, the
+  address; a country field for a later lookup tool), gameplay (edits, items, commands,
+  chat counts, deaths later), performance (tick time, chunk wait, edit confirmation
+  latency).
+- **Client events:** UI interactions the server cannot see (overlays opened and how long,
+  buttons used, settings changed from what to what, time from launch to playing, chat
+  opened to sent, console commands) batched to the server it plays on in an `Analytics`
+  message: rate-capped, size-limited and validated; singleplayer goes the same way.
+- **Storage:** JSON lines, `<world or server dir>/analytics/YYYY-MM-DD.jsonl`, buffered and
+  written by its own thread so the tick never waits; daily files, a size cap per day.
+- **Tool:** `tools/analytics` reads the files: sessions and retention, events per kind and
+  per player, funnels (launch to playing), slowest moments; JSON out for a later dashboard
+  (out of scope, as are external services).
+- **Exit check:** a scripted two-player session writes the expected sequence of events
+  (kinds and fields); a burst of events never stalls the tick; files rotate and stop at
+  the cap; malformed, oversized and too frequent client reports are refused; the tool
+  summarizes a recorded run.
+
+### After M16 (not planned in detail yet)
+
+Entity attributes (health and the like, as data), lava as a second liquid, greedy meshing
+and low-detail far terrain for long view distances, and M1b (macOS) when a Mac is at hand.
 
 ## Worth re-typing from the old tree (ideas, not code)
 

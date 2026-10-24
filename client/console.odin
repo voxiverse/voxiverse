@@ -235,14 +235,16 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"screen",
-			"screen <title|options|worlds|multiplayer|quit>: switch screens (quit: the quit dialog)",
+			"screen <title|menu|options|worlds|multiplayer|quit>: switch screens (menu: the game menu; quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
 				switch args[0] {
 				case "title":
 					app.screen = .Title
+				case "menu":
+					if app.session != nil {overlay_open(&app.overlays, .Game_Menu)}
 				case "options":
 					if app.session != nil {
-						overlay_open(&app.overlays, .Pause) // over the game
+						overlay_open(&app.overlays, .Game_Menu) // over the game
 						overlay_open(&app.overlays, .Options)
 					} else {
 						app.screen = .Options
@@ -257,7 +259,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				case:
 					console_print(
 						&app.console,
-						"screen: title, options, worlds, multiplayer or quit",
+						"screen: title, menu, options, worlds, multiplayer or quit",
 						.Warning,
 					)
 				}

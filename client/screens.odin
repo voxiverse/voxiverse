@@ -22,10 +22,10 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
 	if .F4 in app.input.pressed && app.screen == .Game {
 		overlay_toggle(&app.overlays, .Tuning)
-		// Tuning is watching the game respond: no pause menu in the way.
+		// Tuning is watching the game respond: no game menu in the way.
 		if overlay_is_open(&app.overlays, .Tuning) {
 			overlay_close(&app.overlays, .Options)
-			overlay_close(&app.overlays, .Pause)
+			overlay_close(&app.overlays, .Game_Menu)
 		}
 	}
 	if .F2 in app.input.pressed {screenshot_request(app, "")}
@@ -105,9 +105,10 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	hotbar(ctx, s)
 }
 
-// pause_menu: the world paused (alone in our own world, it stands still).
-pause_menu :: proc(app: ^App, ctx: ^ui.Context) {
-	ui.push_id(ctx, "pause")
+// game_menu: over the game (alone in our own world, the world stands still
+// meanwhile, and it says so; anyone else could be playing otherwise).
+game_menu :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "game menu")
 	defer ui.pop_id(ctx)
 	s := app.session
 	t := &ctx.theme
@@ -115,10 +116,14 @@ pause_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
 	column := ui.rect_center(ctx.screen, 320, 4 * t.row_height + 3 * t.spacing + 80)
-	ui.title(ctx, "Paused", ui.cut_top(&column, 80))
+	heading := ui.cut_top(&column, 80)
+	if s.frozen {
+		ui.label(ctx, "Game Paused", ui.cut_bottom(&heading, t.row_height), .Center, t.text_muted)
+	}
+	ui.title(ctx, "Game Menu", heading)
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	if ui.button(ctx, "Resume", ui.next(ctx)) {overlay_close(&app.overlays, .Pause)}
+	if ui.button(ctx, "Resume", ui.next(ctx)) {overlay_close(&app.overlays, .Game_Menu)}
 	if ui.button(ctx, "Options", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
 	if session_hosting(s) {
 		port := server.stats(&s.server).port

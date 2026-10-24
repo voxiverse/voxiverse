@@ -11,8 +11,8 @@ import "../ui"
 // close_overlay case.
 
 Overlay :: enum u8 {
-	Pause, // the pause menu
-	Options, // Options over the game (above the pause menu)
+	Game_Menu, // Resume, Options, Open to LAN, Leave
+	Options, // Options over the game (above the game menu)
 	Tuning, // F4: the tuning panel
 	Chat,
 	Console,
@@ -33,7 +33,7 @@ Overlay_Info :: struct {
 
 @(rodata)
 OVERLAY_INFO := [Overlay]Overlay_Info {
-	.Pause = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
+	.Game_Menu = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Options = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Tuning = {takes = {.Mouse}, in_game = true}, // watching the game respond: it runs on
 	.Chat = {takes = {.Keyboard, .Mouse}, in_game = true},
@@ -90,7 +90,7 @@ overlays_leave_game :: proc(o: ^Overlays) {
 	}
 }
 
-// world_paused: an overlay pauses the world (the pause menu or Options).
+// world_paused: an overlay pauses the world (the game menu or Options).
 world_paused :: proc(app: ^App) -> bool {
 	return overlays_take(&app.overlays, .World)
 }
@@ -119,7 +119,7 @@ escape :: proc(app: ^App) {
 		multiplayer_close(&app.multiplayer)
 		app.screen = .Title
 	case .Game:
-		overlay_open(&app.overlays, .Pause)
+		overlay_open(&app.overlays, .Game_Menu)
 	case .Title:
 		overlay_open(&app.overlays, .Quit_Dialog)
 	}
@@ -137,7 +137,7 @@ close_overlay :: proc(app: ^App, which: Overlay) {
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 	}
-	overlay_close(&app.overlays, which) // (Options: back to the pause menu below)
+	overlay_close(&app.overlays, which) // (Options: back to the game menu below)
 }
 
 // draw_overlays draws the open overlays bottom to top (the top one drawn
@@ -147,8 +147,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 	for i in 0 ..< open.count {
 		top := i == open.count - 1
 		switch open.stack[i] {
-		case .Pause:
-			if !overlay_is_open(&app.overlays, .Options) {pause_menu(app, ctx)}
+		case .Game_Menu:
+			if !overlay_is_open(&app.overlays, .Options) {game_menu(app, ctx)}
 		case .Options:
 			if options_panel(app, ctx, true) {overlay_close(&app.overlays, .Options)}
 		case .Tuning:

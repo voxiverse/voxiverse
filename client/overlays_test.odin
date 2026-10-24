@@ -18,7 +18,7 @@ test_overlay_escape_order :: proc(t: ^testing.T) {
 	testing.expect(t, game_controls(app) && !world_paused(app))
 
 	escape(app) // pause
-	testing.expect(t, overlay_is_open(o, .Pause) && world_paused(app) && !game_controls(app))
+	testing.expect(t, overlay_is_open(o, .Game_Menu) && world_paused(app) && !game_controls(app))
 	overlay_open(o, .Options)
 	overlay_open(o, .Console)
 	app.console.line.searching = true
@@ -27,9 +27,9 @@ test_overlay_escape_order :: proc(t: ^testing.T) {
 	escape(app) // the console
 	top, _ := overlay_top(o)
 	testing.expect_value(t, top, Overlay.Options)
-	escape(app) // Options: back to the pause menu
+	escape(app) // Options: back to the game menu
 	top, _ = overlay_top(o)
-	testing.expect_value(t, top, Overlay.Pause)
+	testing.expect_value(t, top, Overlay.Game_Menu)
 	escape(app)
 	testing.expect(t, o.count == 0 && game_controls(app))
 

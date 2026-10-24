@@ -91,7 +91,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | Left / right click | Break / place a block (hold to repeat) |
 | <kbd>1</kbd>–<kbd>9</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, log, leaves, water, lamp), or the rocket launcher (9, where you may fire it); `place <block>` places any other |
 | <kbd>T</kbd>, <kbd>/</kbd> | Chat / a server command (`/spawn`, `/mute bob 1h`; Tab completes). `&c` colours and `&l` bolds where your role allows; Up/Down walk what you sent |
-| <kbd>Esc</kbd> | Close what is open (chat, console, a menu), else the pause menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
+| <kbd>Esc</kbd> | Close what is open (chat, console, a menu), else the game menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |

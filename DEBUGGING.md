@@ -219,7 +219,7 @@ Nobody may kick, ban or mute a player with `moderation.exempt` (admins, the host
 cannot be kicked at all. Nicknames, mutes, ignores, homes, warps, bans, last seen and last
 address, and the message of the day are kept in `<world>/community.cfg`.
 
-Every in-game panel is an overlay on one stack (`client/overlays.odin`): the pause menu,
+Every in-game panel is an overlay on one stack (`client/overlays.odin`): the game menu,
 Options, tuning, chat, console, the quit dialog. Each says whether it takes the keyboard,
 frees the mouse or pauses the world; the top one gets the keys, the focus and Escape.
 
