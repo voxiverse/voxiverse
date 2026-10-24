@@ -90,6 +90,7 @@ Server :: struct {
 	entities:    Entities, // (entities.odin)
 	changes:     Changes, // blocks changed this tick (changes.odin)
 	natural:     []Natural_Slot, // natural column tops (columns.odin)
+	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -145,6 +146,11 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 	s.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
+	if err := updates_init(&s.updates, arena); err != nil {
+		log.errorf("server cannot allocate block updates: %v", err)
+		teardown(s, world = true)
+		return false
+	}
 	s.clients = make([]Client, s.config.max_players, arena)
 	for &c in s.clients {
 		if err := client_init(&c, s.config, arena); err != nil {
@@ -288,9 +294,18 @@ tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	s.tick += 1
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
-	world_collect(&s.world, proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
-			return anyone_wants((^Server)(data), pos, game.SERVER_UNLOAD_MARGIN)
-		}, s)
+	world_collect(
+		&s.world,
+		proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
+			s := (^Server)(data)
+			if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {return false}
+			// Water next door that stopped at this chunk's edge flows on.
+			origin := game.chunk_origin(pos)
+			wake_water_box(s, origin, origin + game.CHUNK_SIZE - 1, only_border = true)
+			return true
+		},
+		s,
+	)
 	receive_messages(s)
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
 	if !frozen {s.clock = game.advance_time(s.clock, f64(game.TICK_SECONDS), &s.rules)}
@@ -306,7 +321,10 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	if moved {unload_unwanted(s)}
-	if !frozen {entities_tick(s)}
+	if !frozen {
+		updates_run(s)
+		entities_tick(s)
+	}
 	changes_flush(s)
 	for &c in s.clients {
 		if c.state != .Playing {continue}

@@ -95,6 +95,8 @@ request_chunk :: proc(s: ^Server, pos: game.Chunk_Pos) -> bool {
 	r := game.reader_make(bytes)
 	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
 	world_insert(&s.world, pos, uniform, nil if is_uniform else scratch)
+	origin := game.chunk_origin(pos)
+	wake_water_box(s, origin, origin + game.CHUNK_SIZE - 1) // flowing again where it was
 	delete(bytes)
 	delete_key(&st.saved, pos)
 	return true

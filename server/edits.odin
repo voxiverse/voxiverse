@@ -83,6 +83,7 @@ bulk_edit :: proc(s: ^Server, e: Bulk_Edit) -> (changed: int, result: Bulk_Resul
 	}
 	if changed == 0 {return 0, .Done}
 
+	wake_water_box(s, lo, hi)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
 			if column_rescan(s, x, z, hi.y) {

@@ -44,6 +44,7 @@ set_block :: proc(s: ^Server, p: game.Block_Pos, b: game.Block, by: ^Client = ni
 	if before, seen := ch.blocks[p]; seen && before != who {who = -1}
 	ch.blocks[p] = who
 	if column_edited(s, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
+	wake_water(s, p)
 	return true
 }
 

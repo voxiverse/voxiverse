@@ -152,6 +152,21 @@ register_world_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"server",
+			"server <command...>: run a server command as is (fill x1 y1 z1 x2 y2 z2 block, ...)",
+			proc(app: ^App, args: []string) {
+				send_message(
+					app.session,
+					game.Admin{strings.join(args, " ", context.temp_allocator)},
+				)
+			},
+		},
+		args = {1, -1},
+		needs = cheat,
+	)
+	console_register(
+		c,
+		{
 			"locate",
 			"locate <biome>: fly to the nearest place of a biome",
 			proc(app: ^App, args: []string) {

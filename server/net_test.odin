@@ -37,6 +37,7 @@ Net_Client :: struct {
 	results:     map[u32]game.Edit_Result,
 	seq:         u32,
 	messages:    [dynamic][]u8,
+	notices:     [dynamic]string, // (heap)
 }
 
 @(private)
@@ -58,6 +59,8 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.others)
 	delete(c.seen)
 	delete(c.changed)
+	for n in c.notices {delete(n)}
+	delete(c.notices)
 	delete(c.entities)
 	delete(c.results)
 	delete(c.messages)
@@ -120,6 +123,11 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			for i in 0 ..< v.count {c.seen[v.entries[i].player] = v.entries[i].position}
 		case game.Block_Changed:
 			append(&c.changed, v)
+			if blocks, have := &c.chunks[game.chunk_of(v.pos)]; have {
+				game.chunk_set(blocks, &c.arrays, game.local_of(v.pos), v.block)
+			}
+		case game.Notice:
+			append(&c.notices, strings.clone(v.text))
 		case game.Edit_Result:
 			c.results[v.id] = v
 		case game.Entity_Spawn:
