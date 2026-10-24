@@ -6,7 +6,8 @@ import "../render"
 
 // The render passes, in one table: what start-up (pipelines from their
 // shaders), shader hot reload and teardown go through. A pass's shaders are
-// <shader>.vert and <shader>.frag; some include scene.glsl.
+// <shader>.vert and <shader>.frag (and maybe more of its own, which it
+// reads itself); includes: the .glsl files they include.
 
 Pass :: enum u8 {
 	UI,
@@ -17,11 +18,12 @@ Pass :: enum u8 {
 }
 
 Pass_Info :: struct {
-	shader:  string,
-	scene:   bool, // its shaders include scene.glsl
-	init:    proc(app: ^App, vert, frag: []u8) -> bool,
-	reload:  proc(app: ^App, vert, frag: []u8) -> bool,
-	destroy: proc(app: ^App),
+	shader:   string,
+	others:   []string, // more shader files of its own (their names without extension)
+	includes: []string, // the .glsl files its shaders include (without extension)
+	init:     proc(app: ^App, vert, frag: []u8) -> bool,
+	reload:   proc(app: ^App, vert, frag: []u8) -> bool,
+	destroy:  proc(app: ^App),
 }
 
 PASSES := [Pass]Pass_Info {
@@ -59,7 +61,7 @@ PASSES := [Pass]Pass_Info {
 	},
 	.Sky = {
 		shader = "sky",
-		scene = true,
+		includes = {"scene"},
 		init = proc(app: ^App, vert, frag: []u8) -> bool {return render.sky_init(
 				&app.sky_pass,
 				&app.g,
@@ -76,7 +78,7 @@ PASSES := [Pass]Pass_Info {
 	},
 	.Entity = {
 		shader = "entity",
-		scene = true,
+		includes = {"scene"},
 		init = proc(app: ^App, vert, frag: []u8) -> bool {return render.entity_init(
 				&app.entity_pass,
 				&app.g,
@@ -93,14 +95,13 @@ PASSES := [Pass]Pass_Info {
 	},
 	.World = {
 		shader = "world",
-		scene = true,
+		others = {"world_cutout", "water"},
+		includes = {"scene", "world"},
 		init = world_pass_init,
-		reload = proc(app: ^App, vert, frag: []u8) -> bool {return render.world_reload(
-				&app.world_pass,
-				&app.g,
-				vert,
-				frag,
-			)},
+		reload = proc(app: ^App, vert, frag: []u8) -> bool {
+			shaders := world_shaders(vert, frag) or_return
+			return render.world_reload(&app.world_pass, &app.g, shaders)
+		},
 		destroy = proc(app: ^App) {render.world_destroy(&app.world_pass, &app.g)},
 	},
 }
@@ -129,4 +130,14 @@ pass_shaders :: proc(info: Pass_Info) -> (vert, frag: []u8, ok: bool) {
 		strings.concatenate({info.shader, ".frag.spv"}, context.temp_allocator),
 	) or_return
 	return vert, frag, true
+}
+
+// world_shaders: the world pass's vertex shader, its opaque fragment
+// shader (given) and the other layers' (read here).
+world_shaders :: proc(vert, frag: []u8) -> (shaders: render.World_Shaders, ok: bool) {
+	shaders.vertex = vert
+	shaders.fragment[.Opaque] = frag
+	shaders.fragment[.Cutout] = read_shader("world_cutout.frag.spv") or_return
+	shaders.fragment[.Translucent] = read_shader("water.frag.spv") or_return
+	return shaders, true
 }

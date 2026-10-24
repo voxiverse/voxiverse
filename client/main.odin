@@ -2,6 +2,7 @@ package client
 
 import "core:flags"
 import "core:log"
+import "core:math"
 import "core:os"
 import "core:time"
 
@@ -63,6 +64,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			}
 			now := time.tick_now()
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
+			app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
 			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
 			last = now

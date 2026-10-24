@@ -16,6 +16,25 @@ Texture :: enum u32 {
 	Gravel,
 	Bedrock,
 	Lamp,
+	Water,
+	Snow,
+	Ice,
+	Clay,
+	Sandstone_Side,
+	Sandstone_Top,
+	Log_Side,
+	Log_Top,
+	Leaves,
+	Spruce_Log_Side,
+	Spruce_Leaves,
+	Coal_Ore,
+	Iron_Ore,
+	Copper_Ore,
+	Tall_Grass,
+	Poppy,
+	Dandelion,
+	Cactus_Side,
+	Cactus_Top,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -38,6 +57,38 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Bedrock, .Bedrock, .Bedrock
 	case .Lamp:
 		return .Lamp, .Lamp, .Lamp
+	case .Water:
+		return .Water, .Water, .Water
+	case .Snow:
+		return .Snow, .Snow, .Snow
+	case .Ice:
+		return .Ice, .Ice, .Ice
+	case .Clay:
+		return .Clay, .Clay, .Clay
+	case .Sandstone:
+		return .Sandstone_Side, .Sandstone_Top, .Sandstone_Top
+	case .Log:
+		return .Log_Side, .Log_Top, .Log_Top
+	case .Leaves:
+		return .Leaves, .Leaves, .Leaves
+	case .Spruce_Log:
+		return .Spruce_Log_Side, .Log_Top, .Log_Top
+	case .Spruce_Leaves:
+		return .Spruce_Leaves, .Spruce_Leaves, .Spruce_Leaves
+	case .Coal_Ore:
+		return .Coal_Ore, .Coal_Ore, .Coal_Ore
+	case .Iron_Ore:
+		return .Iron_Ore, .Iron_Ore, .Iron_Ore
+	case .Copper_Ore:
+		return .Copper_Ore, .Copper_Ore, .Copper_Ore
+	case .Tall_Grass:
+		return .Tall_Grass, .Tall_Grass, .Tall_Grass
+	case .Poppy:
+		return .Poppy, .Poppy, .Poppy
+	case .Dandelion:
+		return .Dandelion, .Dandelion, .Dandelion
+	case .Cactus:
+		return .Cactus_Side, .Cactus_Top, .Cactus_Top
 	}
 	return
 }
@@ -122,6 +173,70 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				case:
 					c = shade(LAMP, 0.45 + 0.3 * fine)
 				}
+			case .Water:
+				// Ripples: soft horizontal bands; see-through (alpha).
+				band := value_noise(seed ~ 23, x + y / 3, y, 4)
+				c = shade(WATER, 0.25 + 0.5 * band + 0.25 * fine)
+			case .Snow:
+				c = shade(SNOW, 0.45 + 0.25 * coarse + 0.3 * fine)
+			case .Ice:
+				c = shade(ICE, 0.35 + 0.3 * coarse + 0.2 * fine)
+				if (x + y) % 7 == 0 && hash01(seed ~ 29, x / 3, y / 3) > 0.5 {c = ICE[4]} 	// cracks
+			case .Clay:
+				c = shade(CLAY, 0.3 + 0.35 * coarse + 0.3 * fine)
+			case .Sandstone_Side:
+				// Layers, a darker seam every few rows.
+				v := 0.35 + 0.25 * value_noise(seed ~ 31, 0, y, 2) + 0.25 * fine
+				if y % 5 == 4 {v = 0.1}
+				c = shade(SAND, v)
+			case .Sandstone_Top:
+				c = shade(SAND, 0.3 + 0.25 * coarse + 0.3 * fine)
+				if x == 0 || y == 0 {c = SAND[1]}
+			case .Log_Side, .Spruce_Log_Side:
+				// Bark: vertical ridges.
+				ridge := value_noise(seed ~ 37, x, y / 4, 2)
+				ramp := BARK if t == .Log_Side else SPRUCE_BARK
+				c = shade(ramp, 0.15 + 0.6 * ridge + 0.3 * fine)
+			case .Log_Top:
+				// Rings round the middle, bark at the rim.
+				dx, dy := f32(x) - 7.5, f32(y) - 7.5
+				r := int(math.sqrt(dx * dx + dy * dy))
+				c = shade(WOOD, 0.35 + 0.25 * f32(r % 2) + 0.2 * fine)
+				if r >= 7 {c = shade(BARK, 0.3 + 0.4 * fine)}
+			case .Leaves, .Spruce_Leaves:
+				ramp := LEAVES if t == .Leaves else SPRUCE_LEAVES
+				c = shade(ramp, 0.1 + 0.55 * coarse + 0.4 * fine)
+				if hash01(seed ~ 41, x, y) > 0.78 {c = {}} 	// gaps to see through
+			case .Coal_Ore, .Iron_Ore, .Copper_Ore:
+				c = shade(STONE, 0.25 + 0.45 * coarse + 0.30 * fine)
+				if value_noise(seed ~ 43, x, y, 3) > 0.62 {
+					ramp := COAL if t == .Coal_Ore else (IRON if t == .Iron_Ore else COPPER)
+					c = shade(ramp, 0.2 + 0.7 * fine)
+				}
+			case .Tall_Grass:
+				// Blades of different heights from the bottom edge.
+				height := int(6 + hash01(seed ~ 47, x, 0) * 10)
+				c = {}
+				if hash01(seed ~ 53, x, 0) > 0.2 && y >= TEXTURE_SIZE - height {
+					// Darker at the root, lighter towards the tip.
+					c = shade(
+						GRASS,
+						0.15 + 0.7 * f32(TEXTURE_SIZE - y) / f32(height) + 0.15 * fine,
+					)
+				}
+			case .Poppy, .Dandelion:
+				c = flower(t, x, y, fine)
+			case .Cactus_Side:
+				// Ribs with pale spines.
+				c = shade(CACTUS, 0.25 + 0.3 * f32(x % 4 == 1 ? 1 : 0) + 0.25 * fine)
+				if x % 4 == 3 && y % 4 == 1 {c = SAND[4]}
+				if x == 0 || x == TEXTURE_SIZE - 1 {c = CACTUS[0]}
+			case .Cactus_Top:
+				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
+				if x == 0 ||
+				   y == 0 ||
+				   x == TEXTURE_SIZE - 1 ||
+				   y == TEXTURE_SIZE - 1 {c = CACTUS[0]}
 			}
 			pixels[y * TEXTURE_SIZE + x] = c
 		}
@@ -186,6 +301,132 @@ LAMP := [5]Rgba {
 	{232, 176, 92, 255},
 	{250, 214, 140, 255},
 	{255, 246, 214, 255},
+}
+
+@(private = "file", rodata)
+WATER := [5]Rgba {
+	{28, 62, 128, 170},
+	{36, 78, 150, 170},
+	{46, 96, 170, 170},
+	{62, 116, 188, 170},
+	{96, 148, 210, 170},
+}
+@(private = "file", rodata)
+SNOW := [5]Rgba {
+	{196, 206, 220, 255},
+	{214, 222, 234, 255},
+	{228, 234, 242, 255},
+	{238, 242, 248, 255},
+	{250, 252, 255, 255},
+}
+@(private = "file", rodata)
+ICE := [5]Rgba {
+	{120, 160, 206, 255},
+	{140, 178, 220, 255},
+	{160, 194, 232, 255},
+	{182, 210, 240, 255},
+	{214, 232, 250, 255},
+}
+@(private = "file", rodata)
+CLAY := [5]Rgba {
+	{120, 124, 138, 255},
+	{136, 140, 154, 255},
+	{150, 154, 168, 255},
+	{164, 168, 180, 255},
+	{180, 184, 194, 255},
+}
+@(private = "file", rodata)
+BARK := [5]Rgba {
+	{52, 38, 24, 255},
+	{72, 54, 34, 255},
+	{92, 70, 44, 255},
+	{110, 86, 56, 255},
+	{130, 104, 70, 255},
+}
+@(private = "file", rodata)
+SPRUCE_BARK := [5]Rgba {
+	{38, 26, 18, 255},
+	{54, 38, 26, 255},
+	{70, 50, 34, 255},
+	{86, 62, 42, 255},
+	{102, 76, 52, 255},
+}
+@(private = "file", rodata)
+WOOD := [5]Rgba {
+	{120, 92, 54, 255},
+	{148, 116, 70, 255},
+	{170, 136, 86, 255},
+	{190, 156, 102, 255},
+	{208, 176, 120, 255},
+}
+@(private = "file", rodata)
+LEAVES := [5]Rgba {
+	{34, 74, 28, 255},
+	{46, 94, 34, 255},
+	{60, 114, 40, 255},
+	{76, 134, 48, 255},
+	{98, 154, 60, 255},
+}
+@(private = "file", rodata)
+SPRUCE_LEAVES := [5]Rgba {
+	{22, 50, 38, 255},
+	{30, 64, 48, 255},
+	{40, 80, 58, 255},
+	{52, 96, 68, 255},
+	{68, 112, 80, 255},
+}
+@(private = "file", rodata)
+COAL := [5]Rgba {
+	{16, 16, 18, 255},
+	{28, 28, 32, 255},
+	{40, 40, 44, 255},
+	{54, 54, 58, 255},
+	{70, 70, 74, 255},
+}
+@(private = "file", rodata)
+IRON := [5]Rgba {
+	{150, 110, 88, 255},
+	{176, 134, 108, 255},
+	{198, 156, 128, 255},
+	{216, 178, 150, 255},
+	{232, 200, 174, 255},
+}
+@(private = "file", rodata)
+COPPER := [5]Rgba {
+	{150, 80, 40, 255},
+	{182, 102, 52, 255},
+	{206, 124, 64, 255},
+	{96, 160, 120, 255}, // a little verdigris
+	{230, 150, 86, 255},
+}
+@(private = "file", rodata)
+CACTUS := [5]Rgba {
+	{30, 84, 40, 255},
+	{40, 104, 48, 255},
+	{52, 124, 58, 255},
+	{66, 142, 68, 255},
+	{86, 162, 82, 255},
+}
+
+// flower: a stem with leaves, and a head (poppy red, dandelion yellow) on
+// a transparent background.
+@(private = "file")
+flower :: proc(t: Texture, x, y: int, fine: f32) -> Rgba {
+	head: [3]Rgba = {{150, 24, 24, 255}, {204, 40, 36, 255}, {236, 70, 56, 255}}
+	if t == .Dandelion {head = {{196, 150, 20, 255}, {236, 196, 36, 255}, {252, 228, 90, 255}}}
+	dx, dy := f32(x) - 7.5, f32(y) - 5.5
+	r := dx * dx + dy * dy
+	switch {
+	case r < 1.5 && t == .Poppy:
+		return {30, 24, 20, 255} // the poppy's dark eye
+	case r < 9:
+		return head[clamp(int(fine * 3), 0, 2)]
+	case (x == 7 || x == 8) && y > 8:
+		return GRASS[1] // the stem
+	case y == 12 && (x == 6 || x == 9), y == 11 && (x == 5 || x == 10):
+		return GRASS[2] // two leaves
+	}
+	return {}
 }
 
 // shade picks the ramp entry for v in 0..1.

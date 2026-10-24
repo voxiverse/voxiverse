@@ -188,10 +188,12 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 		bufferDeviceAddress                          = true,
 	}
 	features13 := vk.PhysicalDeviceVulkan13Features {
-		sType            = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-		pNext            = &features12,
-		dynamicRendering = true,
-		synchronization2 = true,
+		sType                          = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		pNext                          = &features12,
+		dynamicRendering               = true,
+		synchronization2               = true,
+		// What `discard` compiles to for Vulkan 1.3 (cutout leaves, plants).
+		shaderDemoteToHelperInvocation = true,
 	}
 	supported: vk.PhysicalDeviceFeatures
 	vk.GetPhysicalDeviceFeatures(g.physical, &supported)
@@ -346,6 +348,7 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 	return bool(
 		features13.dynamicRendering &&
 		features13.synchronization2 &&
+		features13.shaderDemoteToHelperInvocation &&
 		features12.descriptorIndexing &&
 		features12.runtimeDescriptorArray &&
 		features12.descriptorBindingPartiallyBound &&

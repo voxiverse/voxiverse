@@ -276,9 +276,15 @@ turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 	return {f64(p.x * c + p.z * s), f64(p.y), f64(-p.x * s + p.z * c)}
 }
 
-// debris_colour: a piece of b, broken up: one of the pixels of its side.
+// debris_colour: a piece of b, broken up: one of the pixels of its side
+// (not a hole in it).
 @(private = "file")
 debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 	side, _, _ := mesh.block_faces(b)
-	return s.texels[side][rand.int_max(len(s.texels[side]))]
+	pixels := &s.texels[side]
+	for _ in 0 ..< 8 {
+		c := pixels[rand.int_max(len(pixels))]
+		if c.a != 0 {return {c.r, c.g, c.b, 255}}
+	}
+	return {128, 128, 128, 255}
 }

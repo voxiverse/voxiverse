@@ -20,15 +20,18 @@ can_place :: proc(b: Block) -> bool {
 	return BLOCK_INFO[b].placeable
 }
 
-// can_change: an edit (bulk, an explosion) may change it: air, or what
-// players may break.
+// can_change: an edit (bulk, an explosion) may change it: what players may
+// break, or what a placed block replaces (air, water).
 can_change :: proc(b: Block) -> bool {
-	return b == .Air || BLOCK_INFO[b].breakable
+	return BLOCK_INFO[b].breakable || BLOCK_INFO[b].replaceable
 }
 
-// can_place_at: the spot is free (air) and the player is not standing in it.
-can_place_at :: proc(current: Block, pos: Block_Pos, player: Player_State) -> bool {
-	if current != .Air {return false}
+// can_place_at: block may go at pos, where current is: current gives way
+// to it, and the player is not standing there (unless block lets them
+// through: a flower).
+can_place_at :: proc(current, block: Block, pos: Block_Pos, player: Player_State) -> bool {
+	if !BLOCK_INFO[current].replaceable || current == block {return false}
+	if !BLOCK_INFO[block].collides {return true}
 	lo, hi := player_box(player.position)
 	b := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)}
 	EPS :: 1e-6

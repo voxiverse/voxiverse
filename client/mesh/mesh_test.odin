@@ -193,17 +193,46 @@ test_snapshot_fill_uses_neighbours :: proc(t: ^testing.T) {
 
 @(test)
 test_textures :: proc(t: ^testing.T) {
+	// Each texture's alpha suits the layer of the blocks that use it:
+	// opaque, cutout (fully there or not at all), translucent.
+	layer_of: [Texture]Maybe(Layer)
+	for b in game.Block {
+		shape, layer := block_shape(b)
+		if shape == .None {continue}
+		side, top, bottom := block_faces(b)
+		for tex in ([3]Texture{side, top, bottom}) {
+			if l, seen := layer_of[tex].?; seen {
+				testing.expectf(t, l == layer, "%v is used in two layers", tex)
+			}
+			layer_of[tex] = layer
+		}
+	}
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
 	for tex in Texture {
 		generate_texture(tex, a[:])
 		generate_texture(tex, b[:])
 		testing.expect(t, a == b) // deterministic
+		layer, used := layer_of[tex].?
+		testing.expectf(t, used, "%v is used by no block", tex)
 		lo, hi := 255, 0
+		holes := 0
 		for p in a {
-			testing.expect_value(t, p.a, 255)
+			switch layer {
+			case .Opaque:
+				testing.expectf(t, p.a == 255, "%v: alpha %d", tex, p.a)
+			case .Cutout:
+				testing.expectf(t, p.a == 0 || p.a == 255, "%v: alpha %d", tex, p.a)
+			case .Translucent:
+				testing.expectf(t, p.a > 0 && p.a < 255, "%v: alpha %d", tex, p.a)
+			}
+			if p.a == 0 {
+				holes += 1
+				continue
+			}
 			lo, hi = min(lo, int(p.g)), max(hi, int(p.g))
 		}
 		testing.expectf(t, hi - lo > 10, "%v has no detail", tex) // not flat
+		if layer == .Cutout {testing.expectf(t, holes > 0, "%v has no holes", tex)}
 	}
 	// Every block face has a texture of its own kind.
 	testing.expect_value(t, block_texture(.Grass, .Pos_Y), u32(Texture.Grass_Top))
@@ -247,4 +276,42 @@ test_smooth_light :: proc(t: ^testing.T) {
 	mesh_chunk(s, nil, &out)
 	sky, block := vertex_light(out[0])
 	testing.expect(t, sky == 15 && block == 0)
+}
+
+// Layers: stone, then a plant's crossed quads (both sides) in the cutout
+// layer, then two water blocks side by side: no face between them, and
+// their open tops marked as a surface; stone faces show through water.
+@(test)
+test_layers :: proc(t: ^testing.T) {
+	s := new(Snapshot)
+	defer free(s)
+	out: [dynamic]Vertex
+	defer delete(out)
+	s[snapshot_index(1, 1, 1)] = .Stone
+	s[snapshot_index(8, 8, 8)] = .Poppy
+	s[snapshot_index(4, 1, 1)] = .Water
+	s[snapshot_index(5, 1, 1)] = .Water
+	s[snapshot_index(5, 0, 1)] = .Stone // under the second water block
+	counts := mesh_chunk(s, nil, &out)
+	testing.expect_value(t, counts[.Opaque], 2 * 24) // two stones (the one under water shows through it)
+	testing.expect_value(t, counts[.Cutout], 16) // 2 planes x 2 sides x 4 corners
+	testing.expect_value(t, counts[.Translucent], 4 * (10 - 1)) // 10 faces of two cubes, less the bottom on stone
+	testing.expect_value(t, len(out), counts[.Opaque] + counts[.Cutout] + counts[.Translucent])
+	plant := out[counts[.Opaque]:][:counts[.Cutout]]
+	for v in plant {
+		face := v.packed >> 15 & 7
+		testing.expect(t, face == CROSS_A || face == CROSS_B)
+		testing.expect_value(t, v.layer, u32(Texture.Poppy))
+	}
+	water := out[counts[.Opaque] + counts[.Cutout]:]
+	for v in water {
+		p := vertex_position(v)
+		testing.expectf(t, (v.packed & SURFACE != 0) == (p.y == 2), "surface flag at %v", p)
+	}
+	// Water between the two: neither +x of the first nor -x of the second.
+	for i := 0; i < len(water); i += 4 {
+		face := vertex_face(water[i])
+		x := vertex_position(water[i]).x
+		testing.expect(t, !(face == .Pos_X && x == 5) && !(face == .Neg_X && x == 5))
+	}
 }

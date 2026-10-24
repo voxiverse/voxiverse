@@ -93,8 +93,8 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	} else {
 		allowed =
 			game.can_place(e.block) &&
-			game.can_place_at(current, e.pos, player) &&
-			!anyone_else_in(s, c, e.pos)
+			game.can_place_at(current, e.block, e.pos, player) &&
+			!anyone_else_in(s, c, e.pos, e.block)
 	}
 	if !allowed || !set_block(s, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
@@ -122,11 +122,13 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	}
 }
 
-// anyone_else_in: a block at pos would be inside another player.
+// anyone_else_in: block at pos would be inside another player.
 @(private = "file")
-anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos) -> bool {
+anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) -> bool {
 	for &other in s.clients {
-		if &other != c && other.state == .Playing && !game.can_place_at(.Air, pos, other.player) {
+		if &other != c &&
+		   other.state == .Playing &&
+		   !game.can_place_at(.Air, block, pos, other.player) {
 			return true
 		}
 	}

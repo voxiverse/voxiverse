@@ -82,6 +82,7 @@ App :: struct {
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	last_frame_ms:    f32,
+	seconds:          f32, // since start, wrapped every 1000 (moving water)
 	fps:              Fps,
 }
 
@@ -155,12 +156,12 @@ world_pass_init :: proc(app: ^App, vert, frag: []u8) -> bool {
 		}
 	}
 	#assert(size_of(mesh.Vertex) == render.WORLD_VERTEX_SIZE)
+	shaders := world_shaders(vert, frag) or_return
 	return render.world_init(
 		&app.world_pass,
 		&app.g,
 		{vertex_capacity = CHUNK_VERTEX_CAPACITY, staging_size = 8 * 1024 * 1024},
-		vert,
-		frag,
+		shaders,
 		pixels[:],
 		mesh.TEXTURE_SIZE,
 		mesh.TEXTURE_MIPS,
@@ -317,6 +318,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			render.world_draw(&app.world_pass, g, frame, camera, scene)
 			render.entity_draw(&app.entity_pass, g, frame, scene)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
+			render.world_draw_translucent(&app.world_pass, g, frame, camera, scene, app.seconds)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)

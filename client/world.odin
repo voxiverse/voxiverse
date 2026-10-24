@@ -96,6 +96,7 @@ Mesh_Task :: struct {
 	snapshot: mesh.Snapshot,
 	light:    mesh.Light_Snapshot,
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
+	counts:   [mesh.Layer]int, // vertices of each layer, in order
 	urgent:   bool, // one of the reserve for edits (mesh_now)
 }
 
@@ -553,7 +554,9 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			continue
 		}
 		bytes := slice.to_bytes(task.vertices[:])
-		h, result := render.world_add_mesh(pass, g, c.pos, bytes, hidden = c.group != 0)
+		counts: [render.Mesh_Layer]u32
+		for n, l in task.counts {counts[render.Mesh_Layer(l)] = u32(n)}
+		h, result := render.world_add_mesh(pass, g, c.pos, bytes, counts, hidden = c.group != 0)
 		if result == .Busy {
 			// Keep this and everything after it for the next frame.
 			copy(w.uploads[kept:], w.uploads[i:])
@@ -672,5 +675,5 @@ mesh_task_run :: proc(task: ^Mesh_Task) {
 	n: mesh.Neighbourhood
 	for &c, i in task.chunks {n[i] = &c}
 	mesh.snapshot_fill(&task.snapshot, &n)
-	mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
+	task.counts = mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
 }

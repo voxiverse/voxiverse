@@ -25,6 +25,8 @@ Material :: enum u8 {
 	Sand,
 	Gravel,
 	Glass,
+	Wood,
+	Snow,
 }
 
 Action :: enum u8 {
@@ -50,20 +52,24 @@ Critter_Sound :: enum u8 {
 // material_of: what a block sounds like; false for air.
 material_of :: proc(b: game.Block) -> (Material, bool) {
 	switch b {
-	case .Air:
+	case .Air, .Water:
 		return {}, false
-	case .Stone, .Bedrock:
+	case .Stone, .Bedrock, .Sandstone, .Coal_Ore, .Iron_Ore, .Copper_Ore:
 		return .Stone, true
-	case .Dirt:
+	case .Dirt, .Clay:
 		return .Dirt, true
-	case .Grass:
+	case .Grass, .Leaves, .Spruce_Leaves, .Tall_Grass, .Poppy, .Dandelion:
 		return .Grass, true
 	case .Sand:
 		return .Sand, true
 	case .Gravel:
 		return .Gravel, true
-	case .Lamp:
+	case .Lamp, .Ice:
 		return .Glass, true
+	case .Log, .Spruce_Log, .Cactus:
+		return .Wood, true
+	case .Snow:
+		return .Snow, true
 	}
 	return {}, false
 }
@@ -193,6 +199,39 @@ block_sound :: proc(
 			7000,
 			0.25,
 			0.5,
+		)
+	case .Wood:
+		// A hollow knock: two body resonances, a tap, then a splinter or two.
+		tone(&s, 310 * r, 0.060 * size, 1)
+		tone(&s, 740 * r, 0.035 * size, 0.55)
+		burst(
+			&s,
+			{start = 0, tau = 0.012 * size, filter = .Band, freq = 1200 * r, q = 2, gain = 0.6},
+		)
+		scatter(
+			&s,
+			int(3 * grains),
+			0.01,
+			0.10 * size,
+			{tau = 0.006, filter = .Band, q = 4},
+			1800,
+			3200,
+			0.15,
+			0.3,
+		)
+	case .Snow:
+		// A muffled crunch: soft grains under a low thump, no highs.
+		burst(&s, {start = 0, tau = 0.045 * size, filter = .Low, freq = 500 * r, gain = 0.7})
+		scatter(
+			&s,
+			int(22 * grains + 1),
+			0.0,
+			0.18 * size,
+			{tau = 0.010, filter = .Low},
+			600,
+			1400,
+			0.2,
+			0.4,
 		)
 	}
 	return finish(&s, peak, allocator)

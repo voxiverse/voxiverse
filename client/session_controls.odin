@@ -69,7 +69,8 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		if hit.normal == {} {return false}
 		edit.pos = hit.block + hit.normal
 		current, loaded := world_block(&s.world, edit.pos)
-		if !loaded || !game.can_place_at(current, edit.pos, s.prediction.state) {return false}
+		if !loaded ||
+		   !game.can_place_at(current, block, edit.pos, s.prediction.state) {return false}
 		edit.block = block
 	}
 	before, _ := world_block(&s.world, edit.pos)

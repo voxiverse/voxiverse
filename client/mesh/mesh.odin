@@ -91,22 +91,156 @@ FACE_AXES := [Face]Face_Axes {
 @(private = "file", rodata)
 CORNERS := [4][2]i32{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
 
-// mesh_chunk appends the snapshot's visible faces to out (cleared first).
-// light may be nil: everything fully lit by the sky (tests).
-mesh_chunk :: proc(s: ^Snapshot, light: ^Light_Snapshot, out: ^[dynamic]Vertex) {
+// Layer: how a block's faces are drawn. Each chunk's mesh holds the three
+// in this order: opaque (depth-written), cutout (alpha-tested: leaves,
+// plants) and translucent (blended, after everything else: water).
+Layer :: enum u8 {
+	Opaque,
+	Cutout,
+	Translucent,
+}
+
+// Shape: a full cube's faces, or a plant's two crossed quads.
+Shape :: enum u8 {
+	None,
+	Cube,
+	Cross,
+}
+
+// block_shape: how a block is drawn (a switch, so a new block does not
+// compile until it says).
+block_shape :: proc(b: game.Block) -> (Shape, Layer) {
+	switch b {
+	case .Air:
+		return .None, .Opaque
+	case .Stone,
+	     .Dirt,
+	     .Grass,
+	     .Sand,
+	     .Gravel,
+	     .Bedrock,
+	     .Lamp,
+	     .Snow,
+	     .Ice,
+	     .Clay,
+	     .Sandstone,
+	     .Log,
+	     .Spruce_Log,
+	     .Coal_Ore,
+	     .Iron_Ore,
+	     .Copper_Ore,
+	     .Cactus:
+		return .Cube, .Opaque
+	case .Leaves, .Spruce_Leaves:
+		return .Cube, .Cutout
+	case .Tall_Grass, .Poppy, .Dandelion:
+		return .Cross, .Cutout
+	case .Water:
+		return .Cube, .Translucent
+	}
+	return .None, .Opaque
+}
+
+// The two diagonal planes of a Cross, as face codes after the six cube
+// faces (the shader shades and textures them).
+CROSS_A :: 6
+CROSS_B :: 7
+
+// SURFACE: a vertex on a liquid's open top (the shader lowers and moves it).
+SURFACE :: u32(1) << 28
+
+// mesh_chunk writes the snapshot's visible faces to out (cleared first),
+// layer by layer; counts: each layer's vertices. light may be nil:
+// everything fully lit by the sky (tests).
+mesh_chunk :: proc(
+	s: ^Snapshot,
+	light: ^Light_Snapshot,
+	out: ^[dynamic]Vertex,
+) -> (
+	counts: [Layer]int,
+) {
 	clear(out)
-	for y in i32(0) ..< game.CHUNK_SIZE {
-		for z in i32(0) ..< game.CHUNK_SIZE {
-			for x in i32(0) ..< game.CHUNK_SIZE {
-				b := s[snapshot_index(x, y, z)]
-				if !game.block_opaque(b) {continue} 	// see-through blocks: M10's cutout and translucent layers
-				for axes, face in FACE_AXES {
-					front := [3]i32{x, y, z} + axes.normal
-					if game.block_opaque(s[snapshot_index(front.x, front.y, front.z)]) {continue}
-					emit_face(s, light, out, {x, y, z}, face, axes, block_texture(b, face))
+	for layer in Layer {
+		before := len(out)
+		for y in i32(0) ..< game.CHUNK_SIZE {
+			for z in i32(0) ..< game.CHUNK_SIZE {
+				for x in i32(0) ..< game.CHUNK_SIZE {
+					b := s[snapshot_index(x, y, z)]
+					shape, l := block_shape(b)
+					if l != layer {continue}
+					switch shape {
+					case .None:
+					case .Cube:
+						cube_faces(s, light, out, {x, y, z}, b, layer)
+					case .Cross:
+						cross_quads(s, light, out, {x, y, z}, b)
+					}
 				}
 			}
 		}
+		counts[layer] = len(out) - before
+	}
+	return
+}
+
+// cube_faces: a cube's faces that can be seen: those not against an
+// opaque block (nor, for a liquid, against more of it).
+@(private = "file")
+cube_faces :: proc(
+	s: ^Snapshot,
+	light: ^Light_Snapshot,
+	out: ^[dynamic]Vertex,
+	p: [3]i32,
+	b: game.Block,
+	layer: Layer,
+) {
+	for axes, face in FACE_AXES {
+		front := p + axes.normal
+		n := s[snapshot_index(front.x, front.y, front.z)]
+		if game.block_opaque(n) || (layer == .Translucent && n == b) {continue}
+		first := len(out)
+		emit_face(s, light, out, p, face, axes, block_texture(b, face))
+		if layer == .Translucent && s[snapshot_index(p.x, p.y + 1, p.z)] != b {
+			for &v in out[first:] {if vertex_position(v).y == p.y + 1 {v.packed |= SURFACE}}
+		}
+	}
+}
+
+// cross_quads: a plant, two quads corner to corner, seen from both sides,
+// lit by its own cell.
+@(private = "file")
+cross_quads :: proc(
+	s: ^Snapshot,
+	light: ^Light_Snapshot,
+	out: ^[dynamic]Vertex,
+	p: [3]i32,
+	b: game.Block,
+) {
+	sky, block := u32(15), u32(0)
+	if light != nil {
+		l := light[snapshot_index(p.x, p.y, p.z)]
+		sky, block = u32(l >> 4), u32(l & 15)
+	}
+	block = max(block, u32(game.block_light(b)))
+	layer := block_texture(b, .Pos_X)
+	PLANES :: [2][4][3]i32 {
+		{{0, 0, 0}, {1, 0, 1}, {1, 1, 1}, {0, 1, 0}},
+		{{1, 0, 0}, {0, 0, 1}, {0, 1, 1}, {1, 1, 0}},
+	}
+	for plane, i in PLANES {
+		face := u32(CROSS_A + i)
+		quad: [4]Vertex
+		for c, k in plane {
+			v := p + c
+			quad[k] = {
+				packed = u32(
+					v.x,
+				) | u32(v.y) << 5 | u32(v.z) << 10 | face << 15 | 3 << 18 | sky << 20 | block << 24,
+				layer  = layer,
+			}
+		}
+		append(out, ..quad[:])
+		append(out, quad[3], quad[2], quad[1], quad[0]) // the back
 	}
 }
 

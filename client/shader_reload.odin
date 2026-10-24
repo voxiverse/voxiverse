@@ -3,6 +3,7 @@ package client
 import "core:log"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 import "core:time"
 
@@ -94,8 +95,10 @@ shader_watch_update :: proc(app: ^App, dt: f32) {
 	reload: bit_set[Pass]
 	for name in changed {
 		for info, p in PASSES {
-			if filepath.stem(name) == info.shader ||
-			   (filepath.ext(name) == ".glsl" && info.scene) {
+			stem := filepath.stem(name)
+			mine := stem == info.shader || slice.contains(info.others, stem)
+			if filepath.ext(name) == ".glsl" {mine = slice.contains(info.includes, stem)}
+			if mine {
 				reload += {p}
 			}
 		}
