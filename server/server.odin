@@ -91,6 +91,7 @@ Server :: struct {
 	entities:    Entities, // (entities.odin)
 	changes:     Changes, // blocks changed this tick (changes.odin)
 	perms:       Permissions, // who may do what (permissions.odin)
+	spawn:       World_Spawn, // where new players arrive (spawn.odin; world.cfg)
 	natural:     []Natural_Slot, // natural column tops (columns.odin)
 	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
@@ -149,6 +150,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 	s.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
+	spawn_choose(s)
 	if err := updates_init(&s.updates, arena); err != nil {
 		log.errorf("server cannot allocate block updates: %v", err)
 		teardown(s, world = true)
@@ -456,12 +458,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Input:
 		game.input_queue_push(&c.inputs, v)
 	case game.Teleport:
-		c.player = {
-			position = v.position,
-			flying   = c.player.flying, // a flyer arrives flying
-		}
-		c.teleport = {v.yaw, v.pitch}
-		c.teleported = true
+		land(s, c, v.position, {v.yaw, v.pitch}, .Exact)
 	case game.Set_Rule:
 		if strings.has_prefix(v.name, "worldgen.") {
 			set_worldgen(s, c, v.name, v.value)

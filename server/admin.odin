@@ -41,6 +41,8 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
 	{"hash", "", {0, 0}, admin_hash, "debug.hash"},
 	{"locate", "<biome or structure>", {1, 1}, admin_locate, "teleport.locate"},
+	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
+	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{
 		"structure",
@@ -174,12 +176,8 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		if kind == .Dungeon {
 			// Its way in, on the land: south of the stair shaft, looking on.
 			at := st.lo + {2, 0, 2}
-			c.player = {
-				position = {f64(at.x) + 0.5, f64(st.top) + 5, f64(at.z) + 7.5},
-				flying   = true,
-			}
-			c.teleport = {0, -0.55}
-			c.teleported = true
+			c.player.flying = true // looking on from above
+			land(s, c, {f64(at.x) + 0.5, f64(st.top) + 5, f64(at.z) + 7.5}, {0, -0.55}, .Exact)
 			notice(
 				s,
 				c,
@@ -198,12 +196,14 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		top := max(st.hi.y, worldgen.column_top(gen, middle.x, middle.z))
 		size := st.hi - st.lo + 1
 		back := f64(max(size.x, size.z)) + 8
-		c.player = {
-			position = {f64(middle.x) + 0.5, f64(top) + back * 0.8, f64(middle.z) + 0.5 + back},
-			flying   = true,
-		}
-		c.teleport = {0, -0.65}
-		c.teleported = true
+		c.player.flying = true // looking on from above
+		land(
+			s,
+			c,
+			{f64(middle.x) + 0.5, f64(top) + back * 0.8, f64(middle.z) + 0.5 + back},
+			{0, -0.65},
+			.Exact,
+		)
 		notice(s, c, fmt.tprintf("%s at %d %d %d", args[0], st.lo.x, st.lo.y, st.lo.z))
 		return true
 	}
@@ -214,12 +214,14 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		return true
 	}
 	top := worldgen.column_top(gen, at.x, at.y)
-	c.player = {
-		position = {f64(at.x) + 0.5, f64(max(top, gen.params.sea_level)) + 24, f64(at.y) + 0.5},
-		flying   = true,
-	}
-	c.teleport = {c.look[0], -1.25} // looking down at it
-	c.teleported = true
+	c.player.flying = true // looking on from above
+	land(
+		s,
+		c,
+		{f64(at.x) + 0.5, f64(max(top, gen.params.sea_level)) + 24, f64(at.y) + 0.5},
+		{c.look[0], -1.25},
+		.Exact,
+	) // looking down at it
 	notice(s, c, fmt.tprintf("%s at %d %d", args[0], at.x, at.y))
 	return true
 }

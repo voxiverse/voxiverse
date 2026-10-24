@@ -5,27 +5,26 @@ import "core:time"
 
 import "../game"
 import "../netcode"
-import "../worldgen"
 
 // Players: joining (welcomed where they left off), simulating their inputs
 // each tick, telling them about each other, and leaving or being sent away.
 
 // join: a client said hello with a free name. It is welcomed where it left
-// off (in a saved world) or above the terrain, introduced to the others and
+// off (in a saved world) or at the world spawn, introduced to the others and
 // they to it.
 @(private)
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := s.store.players[name]
-	c.player = saved.state if has_saved else {position = worldgen.spawn_point(&s.world.gen)}
 	if has_saved {
-		// Look where they looked: sent like a teleport's direction.
+		// Where they left, looking where they looked.
+		c.player = saved.state
 		c.look = {saved.yaw, saved.pitch}
-		c.teleport = c.look
-		c.teleported = true
+		land(s, c, saved.state.position, c.look, .Exact)
+	} else {
+		land_at_spawn(s, c)
 	}
-	set_position(c, c.player.position)
 	send_message(
 		s,
 		c,
@@ -86,8 +85,14 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	buf: [game.INPUT_BUDGET_MAX]game.Input
 	query := game.Block_Query{&s.world, world_block}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
+	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
+		held := c.player
 		game.player_step(&c.player, msg.input, &s.rules, query, game.TICK_SECONDS)
+		if waiting {
+			// Held still until the blocks are there (a toggle still takes).
+			c.player.position, c.player.velocity = held.position, {}
+		}
 		c.look = {msg.input.yaw, msg.input.pitch}
 		run_due_actions(s, c)
 	}

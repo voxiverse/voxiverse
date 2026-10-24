@@ -177,14 +177,17 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	for step in 1 ..= 1500 / STEP {
 		pos.x += STEP
 		fake_send(&c, game.Teleport{pos, 0, 0})
-		center := game.chunk_of({i32(pos.x), i32(pos.y), i32(pos.z)})
-		@(static) step_center: game.Chunk_Pos
-		step_center = center
+		@(static) step_x: f64
+		step_x = pos.x
 		ok := wait_until(
 		t,
 		&c,
 		proc(c: ^Fake_Client) -> bool {
-			// Everything within the area of the new center has arrived.
+			// Everything within the area of the new center (where the
+			// player landed: out of the ground) has arrived.
+			p := c.player.state.position
+			if abs(p.x - step_x) > 0.01 {return false}
+			step_center := game.chunk_of({i32(p.x), i32(p.y), i32(p.z)})
 			for z in i32(-RADIUS) ..= RADIUS {
 				for y in i32(-HEIGHT) ..= HEIGHT {
 					for x in i32(-RADIUS) ..= RADIUS {

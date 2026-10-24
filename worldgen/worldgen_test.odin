@@ -273,3 +273,51 @@ test_structures :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+// The spawn is on open ground: something to stand on, room to stand, and
+// no tree there.
+@(test)
+test_spawn_on_open_ground :: proc(t: ^testing.T) {
+	chunks := make(map[game.Chunk_Pos]^game.Block_Array, context.temp_allocator)
+	for seed in i64(1) ..= 8 {
+		g := generator_make(.Earth, seed)
+		clear(&chunks)
+		block :: proc(
+			g: ^Generator,
+			chunks: ^map[game.Chunk_Pos]^game.Block_Array,
+			p: game.Block_Pos,
+		) -> game.Block {
+			pos := game.chunk_of(p)
+			a, ok := chunks[pos]
+			if !ok {
+				a = new(game.Block_Array, context.temp_allocator)
+				uniform, is_uniform := generate(g, pos, a)
+				if is_uniform {for &b in a {b = uniform}}
+				chunks[pos] = a
+			}
+			return a[game.local_index(game.local_of(p))]
+		}
+		spawn := spawn_point(&g)
+		feet := game.Block_Pos{i32(spawn.x), i32(spawn.y), i32(spawn.z)}
+		below := block(&g, &chunks, feet - {0, 1, 0})
+		testing.expectf(t, game.block_collides(below), "seed %d: standing on %v", seed, below)
+		for dy in i32(0) ..< 2 {
+			b := block(&g, &chunks, feet + {0, dy, 0})
+			testing.expectf(t, !game.block_collides(b), "seed %d: %v at the spawn", seed, b)
+		}
+		for dz in i32(-2) ..= 2 {
+			for dx in i32(-2) ..= 2 {
+				for dy in i32(-1) ..< 8 {
+					b := block(&g, &chunks, feet + {dx, dy, dz})
+					testing.expectf(
+						t,
+						b != .Log && b != .Leaves && b != .Spruce_Log && b != .Spruce_Leaves,
+						"seed %d: a tree at the spawn (%v)",
+						seed,
+						b,
+					)
+				}
+			}
+		}
+	}
+}

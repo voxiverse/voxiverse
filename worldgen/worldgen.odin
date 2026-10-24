@@ -131,12 +131,13 @@ biome_by_name :: proc(name: string) -> (Biome, bool) {
 	return {}, false
 }
 
-// spawn_point: where new players appear (feet), above the ground.
+// spawn_point: where new players appear (feet, just above the ground: the
+// server lands them on what is really there), on open ground.
 spawn_point :: proc(g: ^Generator) -> [3]f64 {
 	switch g.kind {
 	case .Earth:
 		return earth_spawn(g)
 	case .Classic:
 	}
-	return {0.5, f64(column_top(g, 0, 0)) + 3, 0.5}
+	return {0.5, f64(column_top(g, 0, 0)) + 1, 0.5}
 }

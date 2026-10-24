@@ -281,6 +281,37 @@ register_world_commands :: proc(c: ^Console) {
 		needs = {.World},
 		node = "world.summon",
 	)
+	console_register(
+		c,
+		{"spawn", "spawn: back to the world spawn", proc(app: ^App, args: []string) {
+				send_message(app.session, game.Command{"spawn"})
+			}},
+		args = {0, 0},
+		needs = {.World},
+		node = "teleport.spawn",
+	)
+	console_register(
+		c,
+		{
+			"setworldspawn",
+			"setworldspawn [x y z]: new players arrive here (or there), looking as you look",
+			proc(app: ^App, args: []string) {
+				send_message(
+					app.session,
+					game.Command {
+						strings.join(
+							{"setworldspawn", strings.join(args, " ", context.temp_allocator)},
+							" ",
+							context.temp_allocator,
+						),
+					},
+				)
+			},
+		},
+		args = {0, 3},
+		needs = {.World},
+		node = "world.spawn",
+	)
 }
 
 // select_corner sets corner i of the selection to the aimed block.

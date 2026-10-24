@@ -44,6 +44,7 @@ Client :: struct {
 	player:       game.Player_State,
 	inputs:       game.Input_Queue,
 	teleported:   bool, // since the last Player_Update
+	landing:      Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
 	actions:      [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
 	action_count: int,
 	teleport:     [2]f32, // yaw, pitch to look after it

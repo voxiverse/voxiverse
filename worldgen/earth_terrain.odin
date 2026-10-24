@@ -291,11 +291,30 @@ earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
 			c := column_at(p, gen.seed, x, z)
 			if c.rough > 0 || c.height < f32(p.sea_level) + 2 {continue}
 			if c.biome == .Mountains || c.biome == .Beach || c.biome == .River {continue}
-			return {f64(x) + 0.5, math.floor(f64(c.height)) + 2, f64(z) + 0.5}
+			if !spawn_clear(gen, x, z) {continue}
+			return {f64(x) + 0.5, f64(column_top(gen, x, z)) + 1, f64(z) + 0.5}
 		}
 	}
 	c := column_at(p, gen.seed, 0, 0)
 	return {0.5, max(f64(c.height), f64(p.sea_level)) + 2, 0.5}
+}
+
+// spawn_clear: no tree within 3 blocks of (x, z), and no structure within 8
+// (players arrive on open ground).
+@(private = "file")
+spawn_clear :: proc(gen: ^Generator, x, z: i32) -> bool {
+	found := make([dynamic]Structure, context.temp_allocator)
+	structures_near(gen, {x - 8, z - 8}, {x + 8, z + 8}, &found)
+	if len(found) > 0 {return false}
+	trees := make([dynamic]Tree, context.temp_allocator)
+	column := [2]i32{x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}
+	for dz in i32(-1) ..= 1 {
+		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+	}
+	for t in trees {
+		if abs(t.ground.x - x) <= 3 && abs(t.ground.z - z) <= 3 {return false}
+	}
+	return true
 }
 
 // earth_biome: the biome at (x, z).

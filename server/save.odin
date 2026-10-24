@@ -14,7 +14,7 @@ import "../base"
 import "../game"
 import "../worldgen"
 
-// Saving: a world directory holds world.cfg (name, seed, time, player, rules) and
+// Saving: a world directory holds world.cfg (name, seed, time, spawn, players, rules) and
 // regions/ with the edited chunks (game/save.odin). The rest of the world
 // is regenerated from the seed.
 //
@@ -272,6 +272,15 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[s.config.generator])
 	fmt.sbprintfln(&b, "time = %.9f", s.clock)
+	if s.spawn.known {
+		sp := s.spawn
+		fmt.sbprintfln(&b, "spawn.x = %.6f", sp.position.x)
+		fmt.sbprintfln(&b, "spawn.y = %.6f", sp.position.y)
+		fmt.sbprintfln(&b, "spawn.z = %.6f", sp.position.z)
+		fmt.sbprintfln(&b, "spawn.yaw = %.6f", sp.look[0])
+		fmt.sbprintfln(&b, "spawn.pitch = %.6f", sp.look[1])
+		fmt.sbprintfln(&b, "spawn.exact = %v", sp.exact)
+	}
 	for &c in s.clients {
 		if c.state == .Playing {keep_player(s, &c)}
 	}
@@ -304,6 +313,7 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		coords: int, // of x, y, z read
 	}
 	players := make(map[string]Partial, context.temp_allocator)
+	spawn_coords := 0
 	s.config.generator = .Classic // a world from before generators were named
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
@@ -335,6 +345,26 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				return false
 			}
 			s.config.generator = kind
+		case strings.has_prefix(key, "spawn."):
+			field := key[len("spawn."):]
+			switch field {
+			case "x", "y", "z":
+				if v, ok := strconv.parse_f64(value); ok && abs(v) < game.WORLD_LIMIT {
+					s.spawn.position[int(field[0] - 'x')] = v
+					spawn_coords += 1
+				}
+			case "yaw":
+				if v, ok := strconv.parse_f32(value);
+				   ok && !math.is_nan(v) && abs(v) < 1e6 {s.spawn.look[0] = v}
+			case "pitch":
+				if v, ok := strconv.parse_f32(value);
+				   ok &&
+				   !math.is_nan(
+						   v,
+					   ) {s.spawn.look[1] = clamp(v, -game.PITCH_LIMIT, game.PITCH_LIMIT)}
+			case "exact":
+				s.spawn.exact = value == "true"
+			}
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
 		case strings.has_prefix(key, "player."):
@@ -385,6 +415,7 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			p.text,
 		)
 	}
+	s.spawn.known = spawn_coords == 3 // (else the generator's, chosen at start)
 	for name, p in players {
 		if p.coords == 3 {s.store.players[strings.clone(name)] = p.player}
 	}

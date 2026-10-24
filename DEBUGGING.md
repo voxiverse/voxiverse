@@ -94,7 +94,7 @@ reloads all three (client/passes.odin lists the passes and what they include).
 
 ## Saves
 
-A world is a directory: `world.cfg` (text: format, seed, time, player, rules) and `regions/` with
+A world is a directory: `world.cfg` (text: format, seed, time, spawn, players, rules), `permissions.cfg` and `regions/` with
 the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates from
 the seed). Files are replaced through a temporary file, so a crash mid-save keeps the previous
 save; a region file that fails its checksum is moved aside (`.damaged-<time>`) with an error,
@@ -126,7 +126,8 @@ neighbours' edges.
 | `world <name>`, `save` | Play a saved world (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
 | `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
 | `time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Show the time of day, or set it (the server's clock; singleplayer). `set rules.daylight_cycle 0` stops it, `rules.day_length` is seconds per day |
-| `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
+| `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining). Like every arrival it lands: the player is held there until the blocks are loaded, then stands where they fit (out of blocks, upwards) |
+| `spawn`, `setworldspawn [x y z]` | Back to the world spawn (landing on the ground of its column: on whatever stands there now) / new players arrive here (or there), exactly, looking as you look. A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
 | `break`, `place [block]` | Hit the aimed critter, else break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
 | `summon` | A critter three blocks in front of you (`world.summon`). Critters also come by themselves in daylight, on grass 16-40 blocks from a player, at most 6 near one; they go when nobody is within 80 blocks. The server's `entities.cfg` keeps them with the world. F3 counts the entities near you |
