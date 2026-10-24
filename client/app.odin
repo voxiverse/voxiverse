@@ -72,6 +72,7 @@ App :: struct {
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
+	view_test:        View_Test,
 	blast_test:       Blast_Test,
 	tour_test:        Tour_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
@@ -89,6 +90,7 @@ App :: struct {
 	dial:             Dial_View, // the dial overlay's (dial.odin)
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
+	triangle_stats:   base.Frame_Stats, // thousands drawn a frame, in a world
 	last_frame_ms:    f32,
 	seconds:          f32, // since start, wrapped every 1000 (moving water)
 	fps:              Fps,
@@ -272,6 +274,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			w.mouse_captured,
 		)
 		fly_test_update(app)
+		view_test_update(app)
 		blast_test_update(app)
 		tour_test_update(app)
 		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)

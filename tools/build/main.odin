@@ -144,7 +144,7 @@ usage :: proc() {
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
 	fmt.println(
-		"  bench     time worldgen, light and meshing on one thread (-seed:N -radius:6 -repeat:1)",
+		"  bench     time worldgen, light and meshing on one thread (-seed:N -radius:3 -repeat:1 -check)",
 	)
 	fmt.println(
 		"  trace     summarize a profile trace (build/voxiverse.spall; scopes for its timeline)",
@@ -221,6 +221,7 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 		if symbols {append(&mode, "-debug", "-define:VX_DEV=false")}
 	}
 	if trace {append(&mode, "-define:VX_PROFILE=true")}
+	append(&mode, commit_define())
 	shaders() or_return
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
 	if sanitize {
@@ -497,9 +498,23 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		// The map generates millions of columns: optimized. The benchmark
 		// as a release build, with line tables for perf.
 		{"-o:speed"} if name == "worldmap" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
+		{commit_define()},
 	},
 	)
 	return exe, run(cmd)
+}
+
+// commit_define stamps the commit into a build (base.COMMIT): its short
+// hash, "-dirty" with uncommitted changes, "unknown" outside git.
+commit_define :: proc() -> string {
+	hash, ok := capture({"git", "rev-parse", "--short=12", "HEAD"})
+	if !ok {return "-define:VX_COMMIT=unknown"}
+	commit := strings.trim_space(hash)
+	if status, _ := capture({"git", "status", "--porcelain", "--untracked-files=no"});
+	   strings.trim_space(status) != "" {
+		commit = strings.concatenate({commit, "-dirty"})
+	}
+	return strings.concatenate({"-define:VX_COMMIT=", commit})
 }
 
 // trace summarizes a Spall trace (default build/voxiverse.spall); further

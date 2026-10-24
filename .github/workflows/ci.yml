@@ -60,6 +60,10 @@ jobs:
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
+      # The chunk pipeline (M19): exact counts, and every stage within a
+      # generous budget (an optimized build, one thread).
+      - name: Benchmark check
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench -check
 
       # Real frames on Mesa's CPU Vulkan driver under the validation layer:
       # any validation finding, leak, sanitizer report or failed check fails
@@ -93,6 +97,12 @@ jobs:
       - name: Biome tour (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
+
+      # The GPU check's views (M19); its times mean little on the CPU
+      # driver: this keeps the check itself working.
+      - name: Views (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; view_test 12 quit"
 
       # The sky through a day (screenshots uploaded below).
       - name: Sky (Linux)

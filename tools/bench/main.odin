@@ -6,6 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:time"
 
+import "../../base"
 import "../../client/mesh"
 import "../../game"
 import "../../worldgen"
@@ -18,15 +19,35 @@ import "../../worldgen"
 // every run, so a change shows as time alone. Built optimized with line
 // tables, for perf:
 //
-//	build bench -seed:1 -radius:6
-//	perf record -g build/bench -radius:6 && perf report
+//	build bench -seed:1 -radius:3
+//	build perf bench && perf report
 
 Options :: struct {
 	seed:   i64 `usage:"world seed (default 1)"`,
-	radius: int `usage:"chunk columns each way from the centre (default 6)"`,
+	radius: int `usage:"chunk columns each way from the centre (default 3)"`,
 	x:      int `usage:"the centre, x (blocks)"`,
 	z:      int `usage:"the centre, z (blocks)"`,
 	repeat: int `usage:"light and mesh every chunk this many times (default 1)"`,
+	check:  bool `usage:"fail unless the counts are CHECK's and every stage's mean is within its budget (CI)"`,
+}
+
+// CHECK: what the default region (seed 1, radius 3, centre 0 0) gives.
+// The counts are exact on every platform (worldgen's golden hashes; the
+// mesher is integer work): a change to them is a change to generation or
+// meshing, so update them knowingly. The budgets are mean ms per call,
+// several times a fast desktop's, to catch real regressions on slow CI
+// machines without flaking.
+Check :: struct {
+	chunks, meshed, vertices: int,
+	budget_ms:                [Stage]f64,
+}
+
+@(rodata)
+CHECK := Check {
+	chunks = 2592,
+	meshed = 844,
+	vertices = 906448,
+	budget_ms = {.Generate = 1.5, .Tops = 1.5, .Light = 1.0, .Snapshot = 0.1, .Mesh = 1.0},
 }
 
 Stage :: enum {
@@ -42,10 +63,15 @@ Times :: [Stage][dynamic]f64 // ms per call
 main :: proc() {
 	opts := Options {
 		seed   = 1,
-		radius = 6,
+		radius = 3,
 		repeat = 1,
 	}
 	flags.parse_or_exit(&opts, os.args, .Odin)
+	if opts.check &&
+	   (opts.seed != 1 || opts.radius != 3 || opts.x != 0 || opts.z != 0 || opts.repeat != 1) {
+		fmt.eprintln("bench: -check is for the default region (-radius:3, no other options)")
+		os.exit(2)
+	}
 	gen := worldgen.generator_make(.Earth, opts.seed)
 	times: Times
 	r := i32(opts.radius)
@@ -161,6 +187,27 @@ main :: proc() {
 		f64(counts[.Translucent]) / f64(meshed),
 		f64(total_vertices * size_of(mesh.Vertex)) / f64(meshed) / 1024,
 	)
+	history := make([dynamic]base.Perf_Field, context.temp_allocator)
+	append(
+		&history,
+		base.Perf_Field{"radius", f64(opts.radius)},
+		base.Perf_Field{"seed", f64(opts.seed)},
+		base.Perf_Field{"chunks", f64(len(times[.Generate]))},
+		base.Perf_Field{"meshed", f64(meshed / opts.repeat)},
+		base.Perf_Field{"vertices", f64(total_vertices / opts.repeat)},
+	)
+	defer base.perf_history_append("bench", history[:])
+	failures := make([dynamic]string, context.temp_allocator)
+	if opts.check {
+		got := [3]int{len(times[.Generate]), meshed, total_vertices}
+		want := [3]int{CHECK.chunks, CHECK.meshed, CHECK.vertices}
+		if got != want {
+			append(
+				&failures,
+				fmt.tprintf("counts (chunks, meshed, vertices) %v, not %v", got, want),
+			)
+		}
+	}
 	fmt.printfln(
 		"%-9s %8s %10s %8s %8s %8s %8s",
 		"stage",
@@ -186,8 +233,33 @@ main :: proc() {
 			ms(t[min(len(t) - 1, len(t) * 99 / 100)]),
 			ms(t[len(t) - 1]),
 		)
+		if opts.check && total / f64(len(t)) > CHECK.budget_ms[stage] {
+			append(
+				&failures,
+				fmt.tprintf(
+					"%v %.3f ms a call, over its %.3f",
+					stage,
+					total / f64(len(t)),
+					CHECK.budget_ms[stage],
+				),
+			)
+		}
+		name := fmt.tprint(stage)
+		append(
+			&history,
+			base.Perf_Field{fmt.tprintf("%s_mean_ms", name), total / f64(len(t))},
+			base.Perf_Field{fmt.tprintf("%s_p99_ms", name), t[min(len(t) - 1, len(t) * 99 / 100)]},
+		)
 		// (Odin pads numbers given a width with zeros: strings are padded with spaces.)
 		ms :: proc(v: f64) -> string {return fmt.tprintf("%.3f", v)}
+	}
+	if opts.check {
+		for f in failures {fmt.eprintfln("bench check failed: %s", f)}
+		if len(failures) > 0 {
+			base.perf_history_append("bench", history[:])
+			os.exit(1)
+		}
+		fmt.println("bench check passed")
 	}
 }
 

@@ -415,7 +415,7 @@ tools, from narrow to wide:
 
 | Command | What it shows |
 |---|---|
-| `build bench [-radius:6 -seed:1]` | Generation, light, snapshot and mesh times per chunk for a fixed region on one thread, vertices per chunk. The same work every run: the first thing to run before and after changing the chunk pipeline |
+| `build bench [-radius:3 -seed:1 -check]` | Generation, light, snapshot and mesh times per chunk for a fixed region on one thread, vertices per chunk. The same work every run: the first thing to run before and after changing the chunk pipeline |
 | `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where it has them) and prints the hottest functions per thread; `perf report -i build/game.perf` for call graphs, `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`) |
 | `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes; `trace` prints each scope's calls and percentiles per thread, a per-second timeline and the slowest frames and server ticks broken down |
 | The `session mesher` log line | At the end of a session: chunks meshed, re-meshed (and why: resent, edits, column tops), mesh times |

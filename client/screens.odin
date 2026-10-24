@@ -243,9 +243,10 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"render: %d meshes, %d drawn, vertices %.1f%% of %d M",
+				"render: %d meshes, %d drawn, %dk triangles, vertices %.1f%% of %d M",
 				ws.meshes,
 				ws.drawn,
+				ws.triangles / 1000,
 				100 * f64(ws.vertices_used) / f64(CHUNK_VERTEX_CAPACITY),
 				CHUNK_VERTEX_CAPACITY >> 20,
 			),

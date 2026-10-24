@@ -66,10 +66,26 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
 			app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
+			if app.screen == .Game {
+				base.frame_stats_add(
+					&app.triangle_stats,
+					f32(app.world_pass.stats.triangles) / 1000,
+				)
+			}
 			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
 			last = now
 		}
 		log_frame_stats(&app.frame_stats)
+		if t := base.frame_stats_summary(&app.triangle_stats); t.count > 0 {
+			log.infof(
+				"render triangles_k frames=%d avg=%.0f p50=%.0f p99=%.0f max=%.0f",
+				t.count,
+				t.avg,
+				t.p50,
+				t.p99,
+				t.max,
+			)
+		}
 		if app.ui.errors > 0 {
 			log.errorf("%d UI error(s) during this run (see above)", app.ui.errors)
 			ok = false
@@ -77,6 +93,11 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		if app.fly_test.failed || app.fly_test.phase != .Off {
 			if app.fly_test.phase !=
 			   .Off {log.error("fly_test the run ended before the test finished")}
+			ok = false
+		}
+		if app.view_test.failed || app.view_test.phase != .Off {
+			if app.view_test.phase !=
+			   .Off {log.error("view_test the run ended before the test finished")}
 			ok = false
 		}
 		if app.tour_test.failed || app.tour_test.phase != .Off {

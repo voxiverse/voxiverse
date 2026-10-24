@@ -88,6 +88,7 @@ World_Pass :: struct {
 
 World_Stats :: struct {
 	meshes, drawn:  int,
+	triangles:      int, // drawn this frame, every layer
 	vertices_used:  u32,
 	uploaded_bytes: int, // this frame
 }
@@ -447,6 +448,7 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 	p.stats.meshes = p.meshes.count
 	p.stats.vertices_used = p.ranges.used
 	p.stats.drawn = 0
+	p.stats.triangles = 0
 	if p.meshes.count == 0 {return}
 	cmd := frame.cmd
 	gpu.begin_label(g, cmd, "world")
@@ -461,6 +463,7 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 			lo, visible := mesh_visible(m, camera, &planes)
 			if !visible {continue}
 			draw_layer(g, cmd, m, layer, lo, &push)
+			p.stats.triangles += int(m.counts[layer] / 2)
 			if layer == .Opaque {p.stats.drawn += 1}
 		}
 	}
@@ -500,7 +503,10 @@ world_draw_translucent :: proc(
 	defer gpu.end_label(g, cmd)
 	draw_begin(p, g, cmd, .Translucent)
 	push := world_push(p, scene, time)
-	for v in visible {draw_layer(g, cmd, v.mesh, .Translucent, v.lo, &push)}
+	for v in visible {
+		draw_layer(g, cmd, v.mesh, .Translucent, v.lo, &push)
+		p.stats.triangles += int(v.mesh.counts[.Translucent] / 2)
+	}
 }
 
 @(private = "file")

@@ -69,7 +69,7 @@ on automatically and which reports GPU API misuse in the log.
 | `netdump`, `replay` | Print a network trace / replay its client messages against a fresh server (DEBUGGING.md) |
 | `sfx` | Write every sound effect to `build/sounds/*.wav` |
 | `worldmap` | Draw a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation) |
-| `bench` | Time generation, lighting and meshing of a fixed region on one thread (`-radius:6`) |
+| `bench` | Time generation, lighting and meshing of a fixed region on one thread (`-radius:3`; `-check` fails on changed counts or blown budgets, as CI does) |
 | `trace` | Summarize a profile trace (`build/voxiverse.spall`) |
 | `perf` | Record the game, `server` or `bench` under Linux perf and print where the time went (`perf -- --exec "..."`) |
 | `icon` | Draw the game's icon to `build/voxiverse.ico` |
