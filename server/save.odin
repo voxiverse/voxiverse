@@ -272,7 +272,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[s.config.generator])
-	fmt.sbprintfln(&b, "time = %.9f", s.clock)
+	fmt.sbprintfln(&b, "time = %.17f", s.clock) // (exact: reloaded, it may not run back)
 	if s.spawn.known {
 		sp := s.spawn
 		fmt.sbprintfln(&b, "spawn.x = %.6f", sp.position.x)
