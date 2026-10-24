@@ -69,13 +69,17 @@ changes_flush :: proc(s: ^Server) {
 	if ch.blocks == nil {return}
 	per_chunk := make(map[game.Chunk_Pos]int, len(ch.blocks), context.temp_allocator)
 	for p in ch.blocks {per_chunk[game.chunk_of(p)] += 1}
-	for pos, n in per_chunk {if n > MAX_BLOCK_MESSAGES {ch.chunks[pos] = {}}}
+	// Chunks with many single changes go whole too, but not as part of a
+	// bulk edit's group (flowing water need not appear all at once).
+	busy := make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
+	for pos, n in per_chunk {if n > MAX_BLOCK_MESSAGES && pos not_in ch.chunks {busy[pos] = {}}}
 	for &c, i in s.clients {
 		if c.state != .Playing {continue}
 		whole := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 		for pos in ch.chunks {if pos in c.has {append(&whole, pos)}}
 		if len(whole) >
 		   0 {send_message(s, &c, game.Bulk_Begin{u16(min(len(whole), int(max(u16))))})}
+		for pos in busy {if pos in c.has {append(&whole, pos)}} 	// after the group
 		for column in ch.columns {
 			if c.columns[column] > 0 {send_message(s, &c, column_message(s, column))}
 		}
@@ -88,7 +92,7 @@ changes_flush :: proc(s: ^Server) {
 		batches := make(map[game.Chunk_Pos]game.Blocks_Changed, 16, context.temp_allocator)
 		for p, who in ch.blocks {
 			chunk := game.chunk_of(p)
-			if who == i || chunk in ch.chunks || chunk not_in c.has {continue}
+			if who == i || chunk in ch.chunks || chunk in busy || chunk not_in c.has {continue}
 			b, _ := world_block(&s.world, p)
 			if who >= 0 {
 				send_message(s, &c, game.Block_Changed{p, b})
