@@ -192,6 +192,63 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
 Region files (e.g. 32×32 chunk columns per file), palette + RLE per chunk, versioned, written
 only by the server.
 
+## Nomenclature
+
+One word per thing, in code, docs and UI alike. Where today's code still says otherwise,
+the milestone that changes it is named.
+
+**Where things are**
+
+| Term | Is | In code |
+|---|---|---|
+| Universe | One game instance: a running server and everything it keeps. A dedicated server is one universe; singleplayer runs one inside the client. Its save directory holds `universe.cfg` (name, seed, the worlds it has, the default world), accounts, characters, permissions, community data, and `worlds/` | `server.Server` and its save directory (M17: today's save is one world) |
+| World | One voxel space in a universe: an id, a seed, a generator with its parameters, rules, sky, chunks, entities, liquids, a spawn, and `worlds/<id>/`. There is no "planet" in code; content may present worlds as planets | today `server.World` is the chunk store; M17 makes a world own all of the above |
+| Loaded / unloaded world | Loaded: in memory and ticking (someone is in it, or was a moment ago). Unloaded: only on disk, or only an id (never visited: derived from the universe seed when first needed) | M17 |
+| Universe seed, world seed | The universe's seed; a world's own, derived from the universe seed and its id unless set | M17 |
+| Chunk, column, region | 16x16x16 blocks; a chunk column (x, z) with its column tops; a region file of 16x16 chunk columns | `game.Chunk_Pos`, `game.Column`, `game.Region_Pos` |
+| Block, block position | A cell's content (`game.Block`); its integer position in a world | `game.Block`, `game.Block_Pos` |
+| Spawn | Where a world receives arrivals with no place of their own; the universe's default world's spawn receives new characters | `World_Spawn` |
+| Landing | The step every arrival goes through: held still until the blocks are loaded, then stood where it fits | `land`, `game.landing_spot` |
+
+**Who is there**
+
+| Term | Is | In code |
+|---|---|---|
+| Account | An identity: a keypair made by the client; the public key is the account. Not tied to a universe | M16 (today: none; a name is typed) |
+| Character | A persona of an account in one universe: a name (unique in the universe), their inventory, statistics, where they are. Kept by the universe, so it goes with them across its worlds; it does not leave the universe | M16 (today: the per-world player file, `players/<name>.json`) |
+| Player | A character being played right now by a connected client | `server.Client`, `client.Session` |
+| Owner | An account with every permission in a universe: the host in singleplayer, `--cheats` on a dedicated server | `is_owner` |
+| Host | A player whose client runs the universe (singleplayer, LAN) | `session_hosting` |
+| Entity | Anything in a world besides blocks and players: critters, rockets, dropped stacks | `game.Entity_Kind` |
+
+**What happens**
+
+| Term | Is |
+|---|---|
+| Join / leave | A client connects to a universe as a character, or disconnects |
+| Arrive / depart | A character enters or leaves a world: on joining, on leaving, and travelling |
+| Travel | Moving a character from one world to another in the same universe, by an act in the world (M17); never between universes |
+| Teleport | Moving within one world (tp, home, warp, spawn, back) |
+| Tick, frame | The server's fixed step (30 per second); the client's drawn frame |
+
+**What is set**
+
+| Term | Is | In code |
+|---|---|---|
+| Rules | Per world, shared by server and client physics (`rules.*`) | `game.Rules` |
+| Generator parameters | Per world (`worldgen.*`) | `worldgen.Params` |
+| Settings | The player's own preferences on their machine | `client.Settings` |
+| Config | A server process's start-up flags and limits | `server.Config` |
+| Variables | The mechanism all of the above are read, set and saved through | `base.Var` |
+| Permissions | Nodes, roles and grants, per universe | `Permissions` |
+
+**Renames these imply:** M16 turns player files into characters
+(`characters/<account>/<character>.json`). M17 renames the client's Worlds screen and
+`world <name>` command to universes (the singleplayer list is a list of universes), moves
+`world.cfg`'s universe-wide parts to `universe.cfg`, and gives each world its own
+`worlds/<id>/world.cfg`, regions and entities. `server.World` (the chunk store) becomes
+part of a per-world struct.
+
 ## Milestones
 
 Each one is a vertical slice with an exit check; nothing moves on with failing checks.
@@ -218,7 +275,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M14 | Items and player data: item kinds as data, stacks, server-owned containers (the player's inventory, hotbar, cursor), an inventory overlay with drag and drop, dropped items as entities, give/clear commands, one JSON file per player for everything kept about them | Two players over UDP move, split, drop and pick up stacks and agree with the server; a refused move rolls back; inventories survive save and load exactly; old worlds' players move to the new files; drag-and-drop UI tests (done: `game/inventory_test.odin` covers every action; `server/items_test.odin` drops, picks up, places and breaks between two players over UDP, refuses a request and the catalog, and keeps inventories through a restart; `test_players_move_to_their_files` migrates world.cfg players; `client/items_test.odin` rolls back refused predictions; `client/inventory_ui_test.odin` drags, splits, shift-clicks and drops) |
 | M15 | Polish: biome transitions without hard edges, the screen kept awake while playing, a five-slot hotbar over a 5x5 inventory | Biome borders blend (a band of mixed surface and features) in worldgen tests and screenshots; the platform keep-awake call is made in game and undone in menus on every OS; inventory tests at the new size; old inventories fit |
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate |
-| M17 | The universe: a server hosts many worlds (planets), each with its own generator parameters, rules, chunks, entities and save; only occupied worlds run; players travel between them by an in-world act, carrying their character | Two players on different planets of one server, one travels to the other's with their inventory; an empty planet costs no tick time; memory stays flat across travel; saves keep each planet apart |
+| M17 | Many worlds in a universe: each world has its own generator parameters, rules, chunks, entities and save; only loaded worlds run; characters travel between worlds by an act in the world | Two players in different worlds of one universe, one travels to the other's with their inventory; an unloaded world costs no tick time; memory stays flat across travel; each world's save stays its own |
 | M18 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
 | M19 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
@@ -415,43 +472,46 @@ uses one up are data and permissions a server or content sets.
 - **Accounts:** the client makes an Ed25519 keypair on first launch (`core:crypto`), kept
   beside the settings; the public key is the account. `Hello` carries it and the server
   answers with a challenge the client signs, so nobody can join as someone else without a
-  central login service. A server's first sight of a key registers it.
-- **Characters:** an account has characters (a name, unique on the server; appearance
-  later). The client chooses one before joining (a small screen; the last one played by
-  default); the server keeps them. Chat, the player list, permissions and community data
+  central login service. A universe's first sight of a key registers it there.
+- **Characters:** an account has characters in each universe (a name, unique in that
+  universe; appearance later). The client chooses one before joining (a small screen; the
+  last one played by default); the universe keeps them. Chat, the player list, permissions and community data
   name characters; permissions can also grant to an account (all its characters).
 - **Data:** everything kept about a player (M14's player files: where they are, their
-  inventory; M18's statistics) becomes the character's, kept by the server:
+  inventory; M18's statistics) becomes the character's, kept by the universe:
   `characters/<account>/<character>.json`. Existing player files become characters of a
   placeholder account, claimed by the first key that joins with that name.
 - **Exit check:** over UDP, a client can't join with another's key or take a character
   name in use by another account; a character's data survives a restart; old player
   files migrate; the challenge refuses replays.
 
-## M17: the universe
+## M17: many worlds in a universe
 
-One server hosts many worlds (planets). Grounded: planets are flat voxel worlds (a world
-border can make them finite), not spheres; travel is an act in the world with a short
-transition while the destination streams in, not flying through rendered space.
+A universe (one server) hosts many worlds and loads them in and out. Grounded: worlds are
+flat voxel spaces (a world border can make them finite), not spheres; travel is an act in
+the world with a short transition while the destination streams in, not flying through
+rendered space.
 
 - **Worlds:** each has its own generator kind and parameters (sea level, terrain, biome
   mix, block palette), rules (gravity, day length), sky, chunks, entities, liquids,
-  spawn and save (`worlds/<id>/`). Planets are derived on demand from the universe seed
-  and an id, so an unvisited one costs nothing but its entry; it gets a directory once
+  spawn and save (`worlds/<id>/`). A world is derived on demand from the universe seed and
+  its id, so an unvisited one costs nothing but its entry; it gets a directory once
   visited or edited.
-- **Running:** a world ticks while someone is in it (and briefly after); workers and the
-  chunk memory pool are shared, sized by players as today. Cost scales with occupied
-  worlds and their loaded chunks, never with how many planets exist.
+- **Loading:** a world is loaded while someone is in it (and briefly after); unloaded, it
+  is only its save. Workers and the chunk memory pool are shared, sized by players as
+  today. Cost scales with loaded worlds and their loaded chunks, never with how many
+  worlds exist.
 - **Players:** in one world at a time; the client holds only that world's chunks. A
   travel message tells it the new world's rules, sky and spawn; it drops its chunks, plays
   the transition, and M13's landing holds the player until the destination's blocks are
   there. Characters (M16) are the universe's, so inventories travel with them; homes,
   warps and back remember their world.
 - **Travel:** an in-world act starts it (a portal block at first; launch pads or ships are
-  content later); commands for admins (`world list`, `world tp`).
-- **Exit check:** two players over UDP on different planets of one server; one travels to
-  the other's carrying their inventory and lands safely; an empty planet takes no tick
-  time; memory flat over repeated travel; each planet's save stays its own; the client
+  content later); admin commands `worlds` (list them, loaded or not) and
+  `travel <world> [character]`.
+- **Exit check:** two players over UDP in different worlds of one universe; one travels to
+  the other's carrying their inventory and lands safely; an unloaded world takes no tick
+  time; memory flat over repeated travel; each world's save stays its own; the client
   never holds two worlds' chunks.
 
 ## M18: statistics
