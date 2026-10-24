@@ -167,7 +167,7 @@ stream :: proc(s: ^Server, c: ^Client) {
 			continue
 		}
 		all_sent = false
-		chunk := world_get(&s.world, pos)
+		chunk := chunks_get(&s.chunks, pos)
 		if chunk == nil {
 			if requesting {requesting = request_chunk(s, pos)}
 			if !requesting && budget == 0 {break}
@@ -205,13 +205,13 @@ drop_far :: proc(s: ^Server, c: ^Client) {
 @(private)
 unload_unwanted :: proc(s: ^Server) {
 	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)
-	for pos in s.world.by_pos {
+	for pos in s.chunks.by_pos {
 		if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
 	for pos in drop {
-		if chunk := world_get(&s.world, pos); chunk.state == .Ready {
+		if chunk := chunks_get(&s.chunks, pos); chunk.state == .Ready {
 			keep_edits(s, chunk)
-			world_unload(&s.world, pos)
+			chunks_unload(&s.chunks, pos)
 		}
 	}
 }

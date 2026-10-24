@@ -38,7 +38,7 @@ LANDING_TIMEOUT :: 10 * game.TICK_RATE
 spawn_choose :: proc(s: ^Server) {
 	if s.spawn.known {return}
 	s.spawn = {
-		position = s.config.spawn.? or_else worldgen.spawn_point(&s.world.gen),
+		position = s.config.spawn.? or_else worldgen.spawn_point(&s.chunks.gen),
 		known    = true,
 	}
 	log.infof("server world spawn chosen at=%v", s.spawn.position)
@@ -79,7 +79,7 @@ land_at_spawn :: proc(s: ^Server, c: ^Client, remember := true) {
 landing_tick :: proc(s: ^Server, c: ^Client) -> bool {
 	l, waiting := c.landing.?
 	if !waiting {return false}
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	from := l.position
 	if l.mode == .Ground {
 		// From above everything the column has.

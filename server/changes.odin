@@ -39,7 +39,7 @@ changes_begin :: proc(s: ^Server) -> ^Changes {
 // set_block changes one block (by a player, or nil: the world itself);
 // false if its chunk is not loaded.
 set_block :: proc(s: ^Server, p: game.Block_Pos, b: game.Block, by: ^Client = nil) -> bool {
-	if !world_set_block(&s.world, p, b) {return false}
+	if !chunks_set_block(&s.chunks, p, b) {return false}
 	mark_edited(s, game.chunk_of(p))
 	ch := changes_begin(s)
 	who := int(player_id(s, by)) if by != nil else -1
@@ -84,7 +84,7 @@ changes_flush :: proc(s: ^Server) {
 			if c.columns[column] > 0 {send_message(s, &c, column_message(s, column))}
 		}
 		for pos in whole {
-			chunk := world_get(&s.world, pos)
+			chunk := chunks_get(&s.chunks, pos)
 			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		}
 		// A player's edit, heard; the world's changes (flowing water), one
@@ -93,7 +93,7 @@ changes_flush :: proc(s: ^Server) {
 		for p, who in ch.blocks {
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk in busy || chunk not_in c.has {continue}
-			b, _ := world_block(&s.world, p)
+			b, _ := chunks_block(&s.chunks, p)
 			if who >= 0 {
 				send_message(s, &c, game.Block_Changed{p, b})
 				continue

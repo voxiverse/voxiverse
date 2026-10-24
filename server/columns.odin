@@ -31,7 +31,7 @@ natural_top :: proc(s: ^Server, x, z: i32) -> i32 {
 	h := u32(column.x) * 0x9e37_79b1 ~ u32(column.y) * 0x85eb_ca6b
 	slot := &s.natural[(h ~ h >> 15) % NATURAL_CACHE]
 	if !slot.valid || slot.column != column {
-		worldgen.column_tops(&s.world.gen, column, &slot.tops)
+		worldgen.column_tops(&s.chunks.gen, column, &slot.tops)
 		slot.column, slot.valid = column, true
 	}
 	return slot.tops[(x & game.CHUNK_MASK) + (z & game.CHUNK_MASK) * game.CHUNK_SIZE]
@@ -57,7 +57,7 @@ column_message :: proc(s: ^Server, column: [2]i32) -> game.Column {
 // column_edited updates the top of p's column after the block at p changed
 // to b; true if it changed.
 column_edited :: proc(s: ^Server, p: game.Block_Pos, b: game.Block) -> bool {
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	old := column_top(s, p.x, p.z)
 	return column_set(
 		s,
@@ -72,7 +72,7 @@ column_edited :: proc(s: ^Server, p: game.Block_Pos, b: game.Block) -> bool {
 // reached up to y = from (anything above the old top and from is air);
 // true if it changed.
 column_rescan :: proc(s: ^Server, x, z: i32, from: i32) -> bool {
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	old := column_top(s, x, z)
 	return column_set(
 		s,

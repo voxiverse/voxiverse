@@ -84,7 +84,7 @@ Server :: struct {
 	store:       Store, // saving (save.odin)
 	// Server thread only, after start:
 	arena:       virtual.Arena,
-	world:       World,
+	chunks:      Chunk_Store,
 	clients:     []Client, // index = player id
 	host:        netcode.Host, // remote players (listening when host_open)
 	listening:   bool,
@@ -151,7 +151,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
 	gen := worldgen.Generator{s.config.generator, s.config.seed, s.params}
-	if err := world_init(&s.world, gen, capacity, config.workers, arena); err != nil {
+	if err := chunks_init(&s.chunks, gen, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
 		teardown(s, world = false)
 		return false
@@ -227,7 +227,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	community_destroy(&s.community)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
-	if world {world_destroy(&s.world)}
+	if world {chunks_destroy(&s.chunks)}
 	entities_destroy(&s.entities)
 	delete(s.tops)
 	virtual.arena_destroy(&s.arena)
@@ -309,8 +309,8 @@ tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	s.tick += 1
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
-	world_collect(
-		&s.world,
+	chunks_collect(
+		&s.chunks,
 		proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
 			s := (^Server)(data)
 			if !anyone_wants(s, pos, game.SERVER_UNLOAD_MARGIN) {return false}
@@ -479,7 +479,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	}
 	if node != "" && !allowed(s, c, node) {
 		if e, edit := m.(game.Edit); edit {
-			current, _ := world_block(&s.world, e.pos)
+			current, _ := chunks_block(&s.chunks, e.pos)
 			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
 		}
 		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
@@ -643,11 +643,11 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 	st := Stats {
 		tick              = s.tick,
 		tick_ms           = tick_ms,
-		chunks_loaded     = s.world.chunks.count,
-		chunks_generating = s.world.in_flight,
-		arrays_allocated  = s.world.arrays.allocated,
-		arrays_in_use     = game.block_arrays_in_use(&s.world.arrays),
-		arrays_bytes      = s.world.arrays.committed,
+		chunks_loaded     = s.chunks.chunks.count,
+		chunks_generating = s.chunks.in_flight,
+		arrays_allocated  = s.chunks.arrays.allocated,
+		arrays_in_use     = game.block_arrays_in_use(&s.chunks.arrays),
+		arrays_bytes      = s.chunks.arrays.committed,
 		arena_used        = s.arena.total_used,
 		arena_reserved    = s.arena.total_reserved,
 		clients           = playing,
@@ -657,7 +657,7 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 	sync.guard(&s.stats_mutex)
 	// Sorting the window for percentiles: once a second is enough.
 	st.generate =
-		base.frame_stats_summary(&s.world.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
+		base.frame_stats_summary(&s.chunks.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
 	s.stats = st
 }
 

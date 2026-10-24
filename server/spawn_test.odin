@@ -47,7 +47,7 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 			wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 10}),
 		)
 		top = i32(c.welcome.spawn.y) - 1 // (the generator's: on the ground)
-		testing.expect_value(t, top, worldgen.column_top(&srv.world.gen, 0, 0))
+		testing.expect_value(t, top, worldgen.column_top(&srv.chunks.gen, 0, 0))
 
 		// A pillar where the spawn is: spawn lands on it.
 		fake_send(&c, game.Command{fmt.tprintf("fill 0 %d 0 0 %d 0 stone", top + 1, top + 6)})

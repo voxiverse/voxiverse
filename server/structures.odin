@@ -45,7 +45,7 @@ structure_save :: proc(s: ^Server, name: string, lo, hi: game.Block_Pos, clear: 
 	for y in i32(0) ..< size.y {
 		for z in i32(0) ..< size.z {
 			for x in i32(0) ..< size.x {
-				blk, loaded := world_block(&s.world, a + {x, y, z})
+				blk, loaded := chunks_block(&s.chunks, a + {x, y, z})
 				if !loaded {return "structure save: part of it is not loaded"}
 				cell := u16(blk)
 				if blk == .Air && !clear {cell = game.VOID}

@@ -30,7 +30,7 @@ Chunk :: struct {
 	modified: bool, // edited since generated (saved when unloaded: save.odin)
 }
 
-World :: struct {
+Chunk_Store :: struct {
 	gen:           worldgen.Generator, // (each job takes a copy)
 	gen_times:     base.Frame_Stats, // ms per chunk generated
 	chunks:        base.Pool(Chunk, Chunk_Handle),
@@ -50,7 +50,7 @@ MAX_IN_FLIGHT_PER_WORKER :: 16
 
 @(private)
 Gen_Task :: struct {
-	world:      ^World,
+	world:      ^Chunk_Store,
 	gen:        worldgen.Generator, // a copy: the world's may change while this runs
 	pos:        game.Chunk_Pos,
 	handle:     Chunk_Handle,
@@ -61,10 +61,10 @@ Gen_Task :: struct {
 	ms:         f32, // how long generating took
 }
 
-// world_init sizes the world for capacity chunks. Long-lived storage comes
+// chunks_init sizes the world for capacity chunks. Long-lived storage comes
 // from arena; queues shared with workers from heap (thread-safe).
-world_init :: proc(
-	w: ^World,
+chunks_init :: proc(
+	w: ^Chunk_Store,
 	gen: worldgen.Generator,
 	capacity: int,
 	workers: int,
@@ -86,43 +86,43 @@ world_init :: proc(
 	return nil
 }
 
-// world_destroy stops the workers (finishing queued jobs) and frees what is
+// chunks_destroy stops the workers (finishing queued jobs) and frees what is
 // not in the arena; the arena itself goes with the session.
-world_destroy :: proc(w: ^World) {
+chunks_destroy :: proc(w: ^Chunk_Store) {
 	base.jobs_destroy(&w.jobs)
 	base.queue_destroy(&w.done)
 	game.block_arrays_destroy(&w.arrays)
 	w^ = {}
 }
 
-// world_block reads one block for physics (game.Block_Query); not loaded
+// chunks_block reads one block for physics (game.Block_Query); not loaded
 // while the chunk is missing or still generating.
-world_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
-	c := world_get((^World)(data), game.chunk_of(p))
+chunks_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+	c := chunks_get((^Chunk_Store)(data), game.chunk_of(p))
 	if c == nil || c.state != .Ready {return .Air, false}
 	return game.chunk_get(&c.blocks, game.local_of(p)), true
 }
 
-// world_set_block changes one block of a ready chunk; false if the chunk is
+// chunks_set_block changes one block of a ready chunk; false if the chunk is
 // not ready (or, impossibly, out of arrays).
-world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
-	c := world_get(w, game.chunk_of(p))
+chunks_set_block :: proc(w: ^Chunk_Store, p: game.Block_Pos, b: game.Block) -> bool {
+	c := chunks_get(w, game.chunk_of(p))
 	if c == nil || c.state != .Ready {return false}
 	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
 	c.modified = true
 	return true
 }
 
-world_get :: proc(w: ^World, pos: game.Chunk_Pos) -> ^Chunk {
+chunks_get :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> ^Chunk {
 	h, ok := w.by_pos[pos]
 	if !ok {return nil}
 	return base.pool_get(&w.chunks, h)
 }
 
-// world_request starts generating the chunk at pos; false when the workers
+// chunks_request starts generating the chunk at pos; false when the workers
 // are busy enough (try again next tick). Running out of chunk slots is a
 // sizing bug: the pool is sized for everything interest can load.
-world_request :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
+chunks_request :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> bool {
 	if w.in_flight >= w.max_in_flight {return false}
 	assert(pos not_in w.by_pos)
 	handle, _, ok := base.pool_add(&w.chunks, Chunk{pos = pos, state = .Generating})
@@ -143,10 +143,10 @@ world_request :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	return true
 }
 
-// world_insert adds a ready chunk from a save (blocks: uniform, or the
+// chunks_insert adds a ready chunk from a save (blocks: uniform, or the
 // contents of array copied into one of the world's).
-world_insert :: proc(
-	w: ^World,
+chunks_insert :: proc(
+	w: ^Chunk_Store,
 	pos: game.Chunk_Pos,
 	uniform: game.Block,
 	array: ^game.Block_Array,
@@ -172,10 +172,10 @@ world_insert :: proc(
 	return chunk
 }
 
-// world_collect stores finished chunks; keep decides whether a chunk is
+// chunks_collect stores finished chunks; keep decides whether a chunk is
 // still wanted (it may have left every client's interest meanwhile).
-world_collect :: proc(
-	w: ^World,
+chunks_collect :: proc(
+	w: ^Chunk_Store,
 	keep: proc(pos: game.Chunk_Pos, data: rawptr) -> bool,
 	data: rawptr,
 ) {
@@ -198,12 +198,12 @@ world_collect :: proc(
 			}
 		}
 		append(&w.free_tasks, task)
-		if !keep(chunk.pos, data) {world_unload(w, chunk.pos)}
+		if !keep(chunk.pos, data) {chunks_unload(w, chunk.pos)}
 	}
 }
 
-// world_unload frees a ready chunk.
-world_unload :: proc(w: ^World, pos: game.Chunk_Pos) {
+// chunks_unload frees a ready chunk.
+chunks_unload :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) {
 	h, ok := w.by_pos[pos]
 	if !ok {return}
 	chunk := base.pool_get(&w.chunks, h)

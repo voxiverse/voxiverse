@@ -25,7 +25,7 @@ FIRE_EVERY :: game.TICK_RATE / 4
 queue_action :: proc(s: ^Server, c: ^Client, a: Action) {
 	if c.action_count == MAX_QUEUED_ACTIONS {
 		if e, edit := a.(game.Edit); edit {
-			current, _ := world_block(&s.world, e.pos)
+			current, _ := chunks_block(&s.chunks, e.pos)
 			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
 		}
 		return
@@ -74,7 +74,7 @@ action_after :: proc(a: Action) -> u32 {
 // has the player, and applies it if it passes.
 @(private = "file")
 apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
-	current, loaded := world_block(&s.world, e.pos)
+	current, loaded := chunks_block(&s.chunks, e.pos)
 	result := game.Edit_Result {
 		id    = e.id,
 		pos   = e.pos,

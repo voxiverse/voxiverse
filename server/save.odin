@@ -88,11 +88,11 @@ request_chunk :: proc(s: ^Server, pos: game.Chunk_Pos) -> bool {
 	st := &s.store
 	if st.dir != "" {load_region(s, game.region_of(pos))}
 	bytes, edited := st.saved[pos]
-	if !edited {return world_request(&s.world, pos)}
+	if !edited {return chunks_request(&s.chunks, pos)}
 	scratch := new(game.Block_Array, context.temp_allocator)
 	r := game.reader_make(bytes)
 	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
-	world_insert(&s.world, pos, uniform, nil if is_uniform else scratch)
+	chunks_insert(&s.chunks, pos, uniform, nil if is_uniform else scratch)
 	origin := game.chunk_origin(pos)
 	wake_water_box(s, origin, origin + game.CHUNK_SIZE - 1) // flowing again where it was
 	delete(bytes)
@@ -206,7 +206,7 @@ write_region :: proc(s: ^Server, region: game.Region_Pos) -> bool {
 	chunks := make([dynamic]game.Saved_Chunk, context.temp_allocator)
 	// Edited chunks that are loaded...
 	it: base.Pool_Iterator
-	for c in base.pool_next(&s.world.chunks, &it) {
+	for c in base.pool_next(&s.chunks.chunks, &it) {
 		if c.modified && c.state == .Ready && game.region_of(c.pos) == region {
 			append(&chunks, game.Saved_Chunk{c.pos, &c.blocks})
 		}

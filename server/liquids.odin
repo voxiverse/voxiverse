@@ -63,7 +63,7 @@ schedule :: proc(s: ^Server, p: game.Block_Pos, delay: u64) {
 // wake_water schedules p and its six neighbours if they are water.
 wake_water :: proc(s: ^Server, p: game.Block_Pos) {
 	for d in ([7]game.Block_Pos{{0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		b, loaded := world_block(&s.world, p + d)
+		b, loaded := chunks_block(&s.chunks, p + d)
 		if _, water := game.water_level(b); loaded && water {schedule(s, p + d, WATER_DELAY)}
 	}
 }
@@ -88,12 +88,12 @@ wake_water_box :: proc(s: ^Server, lo, hi: game.Block_Pos, only_border := false)
 // somewhere it could flow (still lakes and seas are left alone).
 @(private = "file")
 restless :: proc(s: ^Server, p: game.Block_Pos) -> bool {
-	b, loaded := world_block(&s.world, p)
+	b, loaded := chunks_block(&s.chunks, p)
 	level, water := game.water_level(b)
 	if !loaded || !water {return false}
 	if level != 0 {return true}
 	for d in ([5]game.Block_Pos{{1, 0, 0}, {-1, 0, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
-		nb, n_loaded := world_block(&s.world, p + d)
+		nb, n_loaded := chunks_block(&s.chunks, p + d)
 		if n_loaded && takes_water(nb, 7) {return true}
 	}
 	return false
@@ -119,7 +119,7 @@ updates_run :: proc(s: ^Server) {
 // then spreads.
 @(private = "file")
 water_update :: proc(s: ^Server, p: game.Block_Pos) {
-	b, loaded := world_block(&s.world, p)
+	b, loaded := chunks_block(&s.chunks, p)
 	level, water := game.water_level(b)
 	if !loaded || !water {return}
 	if level != 0 {
@@ -135,7 +135,7 @@ water_update :: proc(s: ^Server, p: game.Block_Pos) {
 	}
 	// Down first.
 	below := p + {0, -1, 0}
-	under, under_loaded := world_block(&s.world, below)
+	under, under_loaded := chunks_block(&s.chunks, below)
 	if !under_loaded {return}
 	if takes_water(under, game.WATER_FALLING_LEVEL) {
 		set_block(s, below, .Water_Falling)
@@ -150,7 +150,7 @@ water_update :: proc(s: ^Server, p: game.Block_Pos) {
 	for d, i in SIDES {
 		if !ways[i] {continue}
 		n := p + d
-		nb, n_loaded := world_block(&s.world, n)
+		nb, n_loaded := chunks_block(&s.chunks, n)
 		if n_loaded && takes_water(nb, next) {set_block(s, n, game.water_block(next))}
 	}
 }
@@ -162,12 +162,12 @@ SIDES := [4]game.Block_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}
 // (false: nothing does; it dries up).
 @(private = "file")
 fed_level :: proc(s: ^Server, p: game.Block_Pos) -> (level: i32, alive: bool) {
-	above, _ := world_block(&s.world, p + {0, 1, 0})
+	above, _ := chunks_block(&s.chunks, p + {0, 1, 0})
 	if _, water := game.water_level(above); water {return game.WATER_FALLING_LEVEL, true}
 	sources := 0
 	best := i32(game.WATER_FALLING_LEVEL)
 	for d in SIDES {
-		nb, _ := world_block(&s.world, p + d)
+		nb, _ := chunks_block(&s.chunks, p + d)
 		l, water := game.water_level(nb)
 		if !water {continue}
 		if l == 0 {sources += 1}
@@ -177,7 +177,7 @@ fed_level :: proc(s: ^Server, p: game.Block_Pos) -> (level: i32, alive: bool) {
 	}
 	if sources >= 2 {
 		// Between two sources over firm ground (or a source): a source.
-		under, _ := world_block(&s.world, p + {0, -1, 0})
+		under, _ := chunks_block(&s.chunks, p + {0, -1, 0})
 		if l, water := game.water_level(under);
 		   game.block_collides(under) || (water && l == 0) {return 0, true}
 	}
@@ -208,7 +208,7 @@ ways_down :: proc(s: ^Server, p: game.Block_Pos) -> (ways: [4]bool) {
 		best = min(best, dist[i])
 	}
 	for d, i in SIDES {
-		nb, _ := world_block(&s.world, p + d)
+		nb, _ := chunks_block(&s.chunks, p + d)
 		ways[i] = takes_water(nb, 7) && (best > WATER_REACH || dist[i] == best)
 	}
 	return
@@ -218,9 +218,9 @@ ways_down :: proc(s: ^Server, p: game.Block_Pos) -> (ways: [4]bool) {
 // fall from, going on in any direction but back (WATER_REACH + 1: none).
 @(private = "file")
 distance_down :: proc(s: ^Server, p, came: game.Block_Pos, steps: i32) -> i32 {
-	b, loaded := world_block(&s.world, p)
+	b, loaded := chunks_block(&s.chunks, p)
 	if !loaded || !takes_water(b, 7) {return WATER_REACH + 1}
-	under, _ := world_block(&s.world, p + {0, -1, 0})
+	under, _ := chunks_block(&s.chunks, p + {0, -1, 0})
 	if takes_water(under, game.WATER_FALLING_LEVEL) {return steps}
 	if steps >= WATER_REACH {return WATER_REACH + 1}
 	best := i32(WATER_REACH + 1)

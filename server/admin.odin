@@ -222,7 +222,7 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private = "file")
 admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	p := c.player.position
-	gen := &s.world.gen
+	gen := &s.chunks.gen
 	if kind, structure := worldgen.structure_by_name(args[0]); structure {
 		st, found := worldgen.locate_structure(gen, kind, i32(p.x), i32(p.z))
 		if !found {
@@ -324,7 +324,7 @@ admin_regen :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 admin_hash :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	sum: u64
 	for pos in c.has {
-		if chunk := world_get(&s.world, pos); chunk != nil && chunk.state == .Ready {
+		if chunk := chunks_get(&s.chunks, pos); chunk != nil && chunk.state == .Ready {
 			game.chunks_hash_add(&sum, pos, &chunk.blocks)
 		}
 	}

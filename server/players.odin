@@ -99,7 +99,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 @(private)
 simulate_player :: proc(s: ^Server, c: ^Client) {
 	buf: [game.INPUT_BUDGET_MAX]game.Input
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
 	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {

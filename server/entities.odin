@@ -111,7 +111,7 @@ entities_tick :: proc(s: ^Server) {
 	e := &s.entities
 	e.budget = PATH_BUDGET_PER_TICK
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(s)}
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	blasts := make([dynamic]Sphere, context.temp_allocator)
 	for i := 0; i < len(e.list); {
 		ent := &e.list[i]
@@ -224,7 +224,7 @@ rocket_step :: proc(s: ^Server, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	from := ent.body.position + {0, 0.15, 0}
 	nearest := step
 	hit_at: [3]f64
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	if b, ok := game.raycast(query, from, dir, step); ok {
 		nearest, hit_at, hit = b.distance, from + dir * b.distance, true
 	} else if !chunk_ready(s, from) {
@@ -348,7 +348,7 @@ entity_hurt_shown :: proc(s: ^Server, id: u32) {
 
 // summon puts an entity in front of a player (cheats: Admin "summon").
 summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	yaw := c.look[0]
 	ahead := c.player.position + {-f64(math.sin(yaw)) * 3, 0, -f64(math.cos(yaw)) * 3}
 	at := game.Block_Pos {
@@ -447,7 +447,7 @@ think :: proc(s: ^Server, ent: ^Entity) {
 plan :: proc(s: ^Server, ent: ^Entity, target: [3]f64) -> bool {
 	e := &s.entities
 	if e.budget < PATH_BUDGET_EACH {return false}
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	pos := ent.body.position
 	start := game.Block_Pos {
 		i32(math.floor(pos.x)),
@@ -508,7 +508,7 @@ spawn_natural :: proc(s: ^Server) {
 	day := game.time_of_day(s.clock)
 	if day < 0.27 || day > 0.73 {return}
 	r := rand.default_random_generator(&s.entities.rng)
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		near := 0
@@ -522,7 +522,7 @@ spawn_natural :: proc(s: ^Server) {
 		x := i32(math.floor(c.player.position.x + math.cos(angle) * distance))
 		z := i32(math.floor(c.player.position.z + math.sin(angle) * distance))
 		top := column_top(s, x, z)
-		ground, loaded := world_block(&s.world, {x, top, z})
+		ground, loaded := chunks_block(&s.chunks, {x, top, z})
 		at := game.Block_Pos{x, top + 1, z}
 		if !loaded || ground != .Grass || !standable(query, at) {continue}
 		center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
@@ -560,8 +560,8 @@ nearest_player :: proc(s: ^Server, p: [3]f64, within: f64) -> (at: [3]f64, ok: b
 @(private)
 chunk_ready :: proc(s: ^Server, p: [3]f64) -> bool {
 	b := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
-	c := world_get(&s.world, game.chunk_of(b))
-	below := world_get(&s.world, game.chunk_of(b - {0, game.CHUNK_SIZE, 0}))
+	c := chunks_get(&s.chunks, game.chunk_of(b))
+	below := chunks_get(&s.chunks, game.chunk_of(b - {0, game.CHUNK_SIZE, 0}))
 	return c != nil && c.state == .Ready && below != nil && below.state == .Ready
 }
 

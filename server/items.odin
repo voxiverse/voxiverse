@@ -81,7 +81,7 @@ item_tick :: proc(s: ^Server, index: int) -> bool {
 	ent := &s.entities.list[index]
 	if f32(ent.age) * game.TICK_SECONDS > game.ITEM_LIFE {return true}
 	if !chunk_ready(s, ent.body.position) {return false} 	// its ground is not loaded: it waits
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.chunks, chunks_block}
 	game.body_step(&ent.body, .Item, {}, false, &s.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(ent.stack.item)
