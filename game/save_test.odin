@@ -12,7 +12,7 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	region := Region_Pos{-1, 2}
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)
-	generate(4, {-3, 0, 40}, terrain.array)
+	test_terrain(4, terrain.array)
 	terrain.array[17] = .Lamp
 	air := Chunk_Blocks {
 		uniform = .Air,

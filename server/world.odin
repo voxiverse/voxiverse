@@ -4,6 +4,7 @@ import "core:mem"
 
 import "../base"
 import "../game"
+import "../worldgen"
 
 // The server's chunks: a fixed pool, a position -> handle map and recycled
 // block arrays, all in the session arena and sized once, so memory stops
@@ -29,7 +30,7 @@ Chunk :: struct {
 }
 
 World :: struct {
-	seed:          i64,
+	gen:           worldgen.Generator, // read by the workers
 	chunks:        base.Pool(Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
@@ -60,14 +61,14 @@ Gen_Task :: struct {
 // from arena; queues shared with workers from heap (thread-safe).
 world_init :: proc(
 	w: ^World,
-	seed: i64,
+	gen: worldgen.Generator,
 	capacity: int,
 	workers: int,
 	arena: mem.Allocator,
 	heap := context.allocator,
 ) -> mem.Allocator_Error {
 	w^ = {
-		seed          = seed,
+		gen           = gen,
 		max_in_flight = workers * MAX_IN_FLIGHT_PER_WORKER,
 	}
 	base.pool_init(&w.chunks, capacity, arena) or_return
@@ -214,7 +215,7 @@ generate_job :: proc(data: rawptr) {
 		task.skipped = true
 	} else {
 		base.profile_scope("generate chunk")
-		task.uniform, task.is_uniform = game.generate(w.seed, task.pos, task.array)
+		task.uniform, task.is_uniform = worldgen.generate(&w.gen, task.pos, task.array)
 	}
 	base.queue_push(&w.done, task)
 }

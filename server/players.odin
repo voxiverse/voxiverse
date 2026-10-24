@@ -5,6 +5,7 @@ import "core:time"
 
 import "../game"
 import "../netcode"
+import "../worldgen"
 
 // Players: joining (welcomed where they left off), simulating their inputs
 // each tick, telling them about each other, and leaving or being sent away.
@@ -17,7 +18,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := s.store.players[name]
-	c.player = saved.state if has_saved else {position = spawn_point(s.config.seed)}
+	c.player = saved.state if has_saved else {position = worldgen.spawn_point(&s.world.gen)}
 	if has_saved {
 		// Look where they looked: sent like a teleport's direction.
 		c.look = {saved.yaw, saved.pitch}
@@ -154,11 +155,4 @@ kick_due :: proc(s: ^Server) {
 			leave(s, &c, c.kick_reason)
 		}
 	}
-}
-
-// spawn_point is above the terrain at the origin.
-@(private = "file")
-spawn_point :: proc(seed: i64) -> [3]f64 {
-	h := game.column_height(seed, 0, 0)
-	return {0.5, f64(h) + 3, 0.5}
 }

@@ -10,6 +10,7 @@ import "core:time"
 
 import "../game"
 import "../netcode"
+import "../worldgen"
 
 // Players over the network: remote clients (netcode links on loopback) on a
 // server without a local player, as a dedicated server runs.
@@ -350,7 +351,8 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	for c in ([]^Net_Client{&a, &b}) {
 		damaged := 0
 		for pos, &blocks in c.chunks {
-			game.generate(config.seed, pos, expected)
+			gen := worldgen.Generator{config.generator, config.seed}
+			worldgen.generate(&gen, pos, expected)
 			for i in 0 ..< len(expected) {
 				got := blocks.uniform if blocks.array == nil else blocks.array[i]
 				if got != expected[i] {

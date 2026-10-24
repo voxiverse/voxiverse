@@ -170,7 +170,7 @@ test_chunk_round_trip :: proc(t: ^testing.T) {
 	// Real terrain, and the worst case: every block differs from the last.
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)
-	generate(9, {0, 0, 0}, terrain.array)
+	test_terrain(9, terrain.array)
 	worst := Chunk_Blocks{}
 	worst.array, _ = block_arrays_take(&arrays)
 	for &b, i in worst.array {b = Block(1 + i % (len(Block) - 1))}
@@ -196,7 +196,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)
 	defer chunk_release(&terrain, &arrays)
-	generate(9, {0, 0, 0}, terrain.array)
+	test_terrain(9, terrain.array)
 
 	server := [][dynamic]u8 {
 		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, 1, false, {}, 8, 4, RULES_DEFAULTS}),
@@ -589,7 +589,7 @@ test_decode_fuzz :: proc(t: ^testing.T) {
 	terrain := Chunk_Blocks{}
 	terrain.array, _ = block_arrays_take(&arrays)
 	defer chunk_release(&terrain, &arrays)
-	generate(3, {0, -1, 0}, terrain.array)
+	test_terrain(3, terrain.array)
 	valid := encode_s(Chunk_Message{}, &terrain)
 
 	buf: [512]u8

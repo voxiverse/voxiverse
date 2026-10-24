@@ -43,8 +43,8 @@ test_column_tops :: proc(t: ^testing.T) {
 	// loaded height, the server (knowing the seed) the natural terrain.
 	w.blocks[2] = .Air
 	testing.expect_value(t, column_top_after(q, 2, {0, 2, 0}, .Air, nil), -1)
-	natural := column_height(7, 0, 0)
-	testing.expect_value(t, column_scan(q, 0, 0, 1, i64(7)), min(natural, -1))
+	testing.expect_value(t, column_scan(q, 0, 0, 1, i32(-9)), -9)
+	testing.expect_value(t, column_scan(q, 0, 0, 1, i32(30)), -1) // never above where it was cut
 	// Nothing anywhere: the bottom of the world.
 	w.loaded_from = WORLD_MIN_Y
 	testing.expect_value(t, column_scan(q, 0, 0, 10, nil), WORLD_MIN_Y)

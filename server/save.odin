@@ -12,6 +12,7 @@ import "core:time"
 
 import "../base"
 import "../game"
+import "../worldgen"
 
 // Saving: a world directory holds world.cfg (name, seed, time, player, rules) and
 // regions/ with the edited chunks (game/save.odin). The rest of the world
@@ -266,6 +267,7 @@ write_world_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
 	fmt.sbprintfln(&b, "format = %d", WORLD_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
+	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[s.config.generator])
 	fmt.sbprintfln(&b, "time = %.9f", s.clock)
 	for &c in s.clients {
 		if c.state == .Playing {keep_player(s, &c)}
@@ -298,6 +300,7 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		coords: int, // of x, y, z read
 	}
 	players := make(map[string]Partial, context.temp_allocator)
+	s.config.generator = .Classic // a world from before generators were named
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
@@ -317,6 +320,17 @@ read_world_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			}
 		case key == "seed":
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
+		case key == "generator":
+			kind, known := worldgen.kind_by_name(value)
+			if !known {
+				log.errorf(
+					"server world made by an unknown generator, not loaded path=%s generator=%s",
+					path,
+					value,
+				)
+				return false
+			}
+			s.config.generator = kind
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {s.clock = v}
 		case strings.has_prefix(key, "player."):

@@ -1,5 +1,6 @@
 package server
 
+import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
@@ -8,6 +9,7 @@ import "core:testing"
 import "core:time"
 
 import "../game"
+import "../worldgen"
 
 // M5's exit check: save -> quit -> load gives back exactly the world that
 // was left (edited blocks, the player, the time, the seed), and edits survive their
@@ -409,4 +411,38 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 	aside := 0
 	for e in entries {if strings.contains(e.name, ".damaged-") {aside += 1}}
 	testing.expect_value(t, aside, damaged)
+}
+
+// A world keeps its generator: one saved before generators had names is
+// classic; one made by a generator this game lacks is not loaded.
+@(test)
+test_world_generator_kept :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "generator"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.make_directory_all(dir)
+	path := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else ""
+	config := Config {
+		seed        = 5,
+		view_radius = 2,
+		view_height = 1,
+		workers     = 1,
+		save_dir    = dir,
+	}
+	write :: proc(path, text: string) {_ = os.write_entire_file(path, transmute([]u8)text)}
+
+	write(path, "format = 2\nseed = 9\n")
+	srv: Server
+	if testing.expect(t, start(&srv, config, {})) {
+		testing.expect_value(t, srv.config.generator, worldgen.Kind.Classic)
+		testing.expect(t, stop(&srv))
+	}
+	saved, _ := os.read_entire_file_from_path(path, context.temp_allocator)
+	testing.expect(t, strings.contains(string(saved), "generator = classic"), "not written back")
+
+	write(path, "format = 2\nseed = 9\ngenerator = moon\n")
+	{
+		context.logger = log.nil_logger() // its error is the point
+		testing.expect(t, !start(&srv, config, {}), "a world from an unknown generator loaded")
+	}
 }

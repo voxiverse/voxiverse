@@ -1,11 +1,11 @@
-package game
+package worldgen
 
 import "core:math"
 import "core:math/noise"
 
-// Worldgen is a pure function of (seed, chunk position): the same seed gives
-// the same world on any machine and in any generation order, so chunks can be
-// generated on worker threads and regenerated instead of saved.
+import "../game"
+
+// The classic generator (M3; worlds made before M10 keep it).
 //
 // Terrain: a heightmap from two noise layers (broad continents, local hills),
 // grass over dirt over stone, sand and gravel in the lowlands, and tunnels
@@ -13,12 +13,12 @@ import "core:math/noise"
 // noise is sampled every 4 blocks on a world-aligned grid and interpolated,
 // which is 30x cheaper than per block and matches across chunk borders.
 
-SEA_LEVEL :: 0
+CLASSIC_SEA_LEVEL :: 0
 
 @(private = "file")
 CAVE_STEP :: 4
 @(private = "file")
-CAVE_SAMPLES :: CHUNK_SIZE / CAVE_STEP + 1
+CAVE_SAMPLES :: game.CHUNK_SIZE / CAVE_STEP + 1
 
 // Per-layer seeds, so layers are uncorrelated.
 @(private = "file")
@@ -31,8 +31,8 @@ Layer :: enum i64 {
 	Bedrock   = 0x3c11,
 }
 
-// column_height is the y of the topmost terrain block at (x, z).
-column_height :: proc(seed: i64, x, z: i32) -> i32 {
+// classic_height is the y of the topmost terrain block at (x, z).
+classic_height :: proc(seed: i64, x, z: i32) -> i32 {
 	p := [2]f64{f64(x), f64(z)}
 	continent := fbm2(seed ~ i64(Layer.Continent), p / 600, 4)
 	hills := fbm2(seed ~ i64(Layer.Hills), p / 90, 4)
@@ -41,22 +41,21 @@ column_height :: proc(seed: i64, x, z: i32) -> i32 {
 	return i32(math.floor(h))
 }
 
-// generate fills dst with the chunk at c and reports whether every block is
-// the same (then the caller can store just that block).
-generate :: proc(
+// classic_generate fills dst with the chunk at c.
+classic_generate :: proc(
 	seed: i64,
-	c: Chunk_Pos,
-	dst: ^Block_Array,
+	c: game.Chunk_Pos,
+	dst: ^game.Block_Array,
 ) -> (
-	uniform: Block,
+	uniform: game.Block,
 	is_uniform: bool,
 ) {
-	origin := chunk_origin(c)
-	heights: [CHUNK_SIZE][CHUNK_SIZE]i32 // [z][x]
+	origin := game.chunk_origin(c)
+	heights: [game.CHUNK_SIZE][game.CHUNK_SIZE]i32 // [z][x]
 	highest := min(i32)
-	for z in 0 ..< i32(CHUNK_SIZE) {
-		for x in 0 ..< i32(CHUNK_SIZE) {
-			h := column_height(seed, origin.x + x, origin.z + z)
+	for z in 0 ..< i32(game.CHUNK_SIZE) {
+		for x in 0 ..< i32(game.CHUNK_SIZE) {
+			h := classic_height(seed, origin.x + x, origin.z + z)
 			heights[z][x] = h
 			highest = max(highest, h)
 		}
@@ -71,17 +70,17 @@ generate :: proc(
 	caves: Cave_Grid
 	has_caves := origin.y < highest - 3
 	if has_caves {cave_samples(seed, origin, &caves)}
-	for i in 0 ..< CHUNK_VOLUME {
-		l := local_from_index(i)
+	for i in 0 ..< game.CHUNK_VOLUME {
+		l := game.local_from_index(i)
 		y := origin.y + l.y
 		h := heights[l.z][l.x]
 		b := surface_block(seed, origin.x + l.x, origin.z + l.z, y, h)
 		if b != .Air &&
 		   y < h - 3 &&
-		   y > WORLD_MIN_Y + 4 &&
+		   y > game.WORLD_MIN_Y + 4 &&
 		   has_caves &&
 		   in_cave(&caves, l) {b = .Air}
-		if y < WORLD_MIN_Y + 3 &&
+		if y < game.WORLD_MIN_Y + 3 &&
 		   is_bedrock(seed, origin.x + l.x, origin.z + l.z, y) {b = .Bedrock}
 		dst[i] = b
 	}
@@ -93,7 +92,7 @@ generate :: proc(
 // is_bedrock: the bottom layer, and a ragged two layers above it.
 @(private = "file")
 is_bedrock :: proc(seed: i64, x, z, y: i32) -> bool {
-	layer := y - WORLD_MIN_Y
+	layer := y - game.WORLD_MIN_Y
 	if layer == 0 {return true}
 	return f32(layer) < 3 * noise.noise_2d(seed ~ i64(Layer.Bedrock), {f64(x) * 0.7, f64(z) * 0.7})
 }
@@ -101,10 +100,10 @@ is_bedrock :: proc(seed: i64, x, z, y: i32) -> bool {
 // surface_block is the block at height y in a column whose top is h, before
 // caves are carved.
 @(private = "file")
-surface_block :: proc(seed: i64, x, z, y, h: i32) -> Block {
+surface_block :: proc(seed: i64, x, z, y, h: i32) -> game.Block {
 	if y > h {return .Air}
 	depth := h - y // 0 at the surface
-	if h <= SEA_LEVEL + 2 {
+	if h <= CLASSIC_SEA_LEVEL + 2 {
 		// Lowlands: sand, with gravel patches.
 		if depth < 4 {
 			patch := noise.noise_2d(seed ~ i64(Layer.Lowland), {f64(x) / 24, f64(z) / 24})
@@ -126,7 +125,7 @@ Cave_Grid :: [CAVE_SAMPLES][CAVE_SAMPLES][CAVE_SAMPLES][2]f32 // [y][z][x]
 
 // cave_samples evaluates both cave fields on the chunk's grid.
 @(private = "file")
-cave_samples :: proc(seed: i64, origin: Block_Pos, grid: ^Cave_Grid) {
+cave_samples :: proc(seed: i64, origin: game.Block_Pos, grid: ^Cave_Grid) {
 	for y in 0 ..< CAVE_SAMPLES {
 		for z in 0 ..< CAVE_SAMPLES {
 			for x in 0 ..< CAVE_SAMPLES {

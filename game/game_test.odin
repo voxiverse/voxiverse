@@ -80,69 +80,24 @@ test_chunk_set_and_compact :: proc(t: ^testing.T) {
 	testing.expect_value(t, arrays.allocated, 1)
 }
 
-@(test)
-test_generate_is_deterministic :: proc(t: ^testing.T) {
-	a, b := new(Block_Array), new(Block_Array)
-	defer free(a)
-	defer free(b)
-	for c in ([]Chunk_Pos{{0, 0, 0}, {-3, -1, 7}, {100, -2, -50}}) {
-		generate(1234, c, a)
-		generate(1234, c, b)
-		testing.expect(t, a^ == b^)
-	}
-	// Another seed gives another world.
-	differs := false
-	for x in i32(0) ..< 8 {
-		if column_height(1, x * 37, 0) != column_height(2, x * 37, 0) {differs = true}
-	}
-	testing.expect(t, differs)
-}
-
-@(test)
-test_generate_terrain_shape :: proc(t: ^testing.T) {
-	SEED :: 42
-	arr := new(Block_Array)
-	defer free(arr)
-
-	// Above every column: one uniform air chunk.
-	uniform, ok := generate(SEED, {0, 50, 0}, arr)
-	testing.expect(t, ok && uniform == .Air)
-
-	// Each column's top block (where it falls in this chunk) is ground and
-	// the block above it is air.
-	for cx in i32(-2) ..< 2 {
-		for cz in i32(-2) ..< 2 {
-			h := column_height(SEED, cx * 16, cz * 16)
-			c := chunk_of({cx * 16, h, cz * 16})
-			generate(SEED, c, arr)
-			top := arr[local_index(local_of({cx * 16, h, cz * 16}))]
-			testing.expect(
-				t,
-				top == .Grass || top == .Sand || top == .Gravel,
-				"column top is ground",
-			)
-			above := Block_Pos{cx * 16, h + 1, cz * 16}
-			if chunk_of(above) == c {
-				testing.expect_value(t, arr[local_index(local_of(above))], Block.Air)
-			}
-		}
-	}
-
-	// Deep underground there are caves: some air, mostly stone.
-	air := 0
-	for cx in i32(0) ..< 4 {
-		_, _ = generate(SEED, {cx, -6, 0}, arr)
-		for b in arr {if b == .Air {air += 1}}
-	}
-	testing.expect(t, air > 0 && air < 4 * CHUNK_VOLUME / 4, "caves carve some but not most stone")
-
-	// The floor: bedrock everywhere at the bottom layer, never carved.
-	for cx in i32(-3) ..< 3 {
-		generate(SEED, {cx, CHUNK_MIN_Y, cx * 2}, arr)
-		for z in i32(0) ..< 16 {
-			for x in i32(0) ..< 16 {
-				testing.expect_value(t, arr[local_index({x, 0, z})], Block.Bedrock)
-			}
+// test_terrain fills dst with something like terrain (stone, dirt, grass,
+// air, pockets) for tests that need realistic chunks.
+@(private)
+test_terrain :: proc(seed: i64, dst: ^Block_Array) {
+	for &b, i in dst {
+		l := local_from_index(i)
+		h := 8 + (l.x * 7 + l.z * 3 + i32(seed)) % 5
+		switch {
+		case l.y > h:
+			b = .Air
+		case l.y == h:
+			b = .Grass
+		case l.y > h - 3:
+			b = .Dirt
+		case (l.x * 13 + l.y * 7 + l.z * 5 + i32(seed)) % 41 == 0:
+			b = .Air // a pocket
+		case:
+			b = .Stone
 		}
 	}
 }

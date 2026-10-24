@@ -14,6 +14,7 @@ import "core:time"
 import "../base"
 import "../game"
 import "../netcode"
+import "../worldgen"
 
 // The authoritative side of a world, on its own thread at game.TICK_RATE.
 // Everything it owns lives in its session arena and is freed at once by
@@ -28,6 +29,7 @@ import "../netcode"
 
 Config :: struct {
 	seed:            i64,
+	generator:       worldgen.Kind, // for a new world (a saved one keeps its own)
 	view_radius:     i32, // chunks, horizontally
 	view_height:     i32, // chunks above and below
 	workers:         int,
@@ -85,6 +87,7 @@ Server :: struct {
 	capture:     netcode.Capture, // (config.capture)
 	entities:    Entities, // (entities.odin)
 	changes:     Changes, // blocks changed this tick (changes.odin)
+	natural:     []Natural_Slot, // natural column tops (columns.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
 	writer:      game.Writer,
 	tick:        u64,
@@ -132,11 +135,13 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	)
 	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	if err := world_init(&s.world, s.config.seed, capacity, config.workers, arena); err != nil {
+	gen := worldgen.Generator{s.config.generator, s.config.seed}
+	if err := world_init(&s.world, gen, capacity, config.workers, arena); err != nil {
 		log.errorf("server cannot allocate the world: %v", err)
 		teardown(s, world = false)
 		return false
 	}
+	s.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
 	s.clients = make([]Client, s.config.max_players, arena)
 	for &c in s.clients {
 		if err := client_init(&c, s.config, arena); err != nil {
@@ -163,8 +168,9 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.thread.init_context = context
 	thread.start(s.thread)
 	log.infof(
-		"server started seed=%d view=%dx%d workers=%d capacity=%d seats=%d",
+		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d",
 		s.config.seed,
+		worldgen.KIND_NAMES[s.config.generator],
 		config.view_radius,
 		config.view_height,
 		config.workers,
