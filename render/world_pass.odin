@@ -93,11 +93,20 @@ World_Stats :: struct {
 	uploaded_bytes: int, // this frame
 }
 
+// Within a layer a mesh's quads come by face group (client/mesh): +x, -x,
+// +y, -y, +z, -z, then both ways (plants). Opaque and cutout layers draw
+// only the groups that can face the camera.
+FACE_GROUPS :: 7
+
+// Mesh_Counts: vertices of each layer's face groups, in order in a range.
+Mesh_Counts :: [Mesh_Layer][FACE_GROUPS]u32
+
 @(private)
 Mesh :: struct {
 	chunk:  [3]i32,
 	range:  base.Range,
-	counts: [Mesh_Layer]u32, // vertices of each layer, in order in range
+	counts: Mesh_Counts,
+	layers: [Mesh_Layer]u32, // each layer's vertices (the sums)
 	hidden: bool, // uploaded, not drawn yet (world_show_mesh)
 }
 
@@ -274,7 +283,7 @@ world_add_mesh :: proc(
 	g: ^gpu.Gpu,
 	chunk: [3]i32,
 	vertices: []u8,
-	counts: [Mesh_Layer]u32,
+	counts: Mesh_Counts,
 	hidden := false,
 ) -> (
 	handle: Mesh_Handle,
@@ -282,8 +291,15 @@ world_add_mesh :: proc(
 ) {
 	count := u32(len(vertices) / WORLD_VERTEX_SIZE)
 	assert(len(vertices) % (4 * WORLD_VERTEX_SIZE) == 0 && count > 0)
-	assert(counts[.Opaque] + counts[.Cutout] + counts[.Translucent] == count)
-	for n in counts {assert(n % 4 == 0 && n / 4 <= MAX_QUADS_PER_LAYER)}
+	layers: [Mesh_Layer]u32
+	for groups, l in counts {
+		for n in groups {
+			assert(n % 4 == 0)
+			layers[l] += n
+		}
+		assert(layers[l] / 4 <= MAX_QUADS_PER_LAYER)
+	}
+	assert(layers[.Opaque] + layers[.Cutout] + layers[.Translucent] == count)
 	f := &p.frames[gpu.frame_slot(g)]
 	if f.staging_used + len(vertices) > f.staging.size {return 0, .Busy}
 	r, ok := base.range_alloc(&p.ranges, count)
@@ -298,7 +314,7 @@ world_add_mesh :: proc(
 		}
 		return 0, .Full
 	}
-	h, _, added := base.pool_add(&p.meshes, Mesh{chunk, r, counts, hidden})
+	h, _, added := base.pool_add(&p.meshes, Mesh{chunk, r, counts, layers, hidden})
 	if !added {
 		base.range_free(&p.ranges, r)
 		log.error("render too many chunk meshes")
@@ -459,11 +475,10 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 		push := world_push(p, scene, 0)
 		it: base.Pool_Iterator
 		for m in base.pool_next(&p.meshes, &it) {
-			if m.hidden || m.counts[layer] == 0 {continue}
+			if m.hidden || m.layers[layer] == 0 {continue}
 			lo, visible := mesh_visible(m, camera, &planes)
 			if !visible {continue}
-			draw_layer(g, cmd, m, layer, lo, &push)
-			p.stats.triangles += int(m.counts[layer] / 2)
+			p.stats.triangles += draw_layer(g, cmd, m, layer, lo, camera.position, &push)
 			if layer == .Opaque {p.stats.drawn += 1}
 		}
 	}
@@ -490,7 +505,7 @@ world_draw_translucent :: proc(
 	visible := make([dynamic]Visible, context.temp_allocator)
 	it: base.Pool_Iterator
 	for m in base.pool_next(&p.meshes, &it) {
-		if m.hidden || m.counts[.Translucent] == 0 {continue}
+		if m.hidden || m.layers[.Translucent] == 0 {continue}
 		lo, seen := mesh_visible(m, camera, &planes)
 		if !seen {continue}
 		d := lo + CHUNK_EXTENT / 2 - camera.position
@@ -504,8 +519,7 @@ world_draw_translucent :: proc(
 	draw_begin(p, g, cmd, .Translucent)
 	push := world_push(p, scene, time)
 	for v in visible {
-		draw_layer(g, cmd, v.mesh, .Translucent, v.lo, &push)
-		p.stats.triangles += int(v.mesh.counts[.Translucent] / 2)
+		p.stats.triangles += draw_layer(g, cmd, v.mesh, .Translucent, v.lo, camera.position, &push)
 	}
 }
 
@@ -537,23 +551,61 @@ mesh_visible :: proc(m: ^Mesh, camera: Camera, planes: ^Planes) -> (lo: [3]f32, 
 	return lo, box_visible(planes, lo, lo + CHUNK_EXTENT)
 }
 
+// draw_layer draws a mesh's layer: for opaque and cutout, only the face
+// groups that can face the camera (a group's faces lie within the chunk's
+// box: +x faces can face the camera only when it is past the box's low x
+// side, and so on), adjacent groups in one draw. Returns the triangles.
 @(private = "file")
 draw_layer :: proc(
 	g: ^gpu.Gpu,
 	cmd: vk.CommandBuffer,
 	m: ^Mesh,
 	layer: Mesh_Layer,
-	lo: [3]f32,
+	lo, eye: [3]f32,
 	push: ^World_Push,
+) -> (
+	triangles: int,
 ) {
 	first := m.range.offset
 	for l in Mesh_Layer {
 		if l == layer {break}
-		first += m.counts[l]
+		first += m.layers[l]
 	}
 	push.chunk_offset = lo
 	gpu.push_constants(g, cmd, push)
-	vk.CmdDrawIndexed(cmd, m.counts[layer] / 4 * 6, 1, 0, i32(first), 0)
+	if layer == .Translucent {
+		vk.CmdDrawIndexed(cmd, m.layers[layer] / 4 * 6, 1, 0, i32(first), 0)
+		return int(m.layers[layer] / 2)
+	}
+	hi := lo + CHUNK_EXTENT
+	faces := [FACE_GROUPS]bool {
+		eye.x > lo.x,
+		eye.x < hi.x,
+		eye.y > lo.y,
+		eye.y < hi.y,
+		eye.z > lo.z,
+		eye.z < hi.z,
+		true,
+	}
+	// Runs of visible groups, one draw each.
+	run_start, run_count := first, u32(0)
+	at := first
+	for n, group in m.counts[layer] {
+		if faces[group] {
+			if run_count == 0 {run_start = at}
+			run_count += n
+		} else if run_count > 0 {
+			vk.CmdDrawIndexed(cmd, run_count / 4 * 6, 1, 0, i32(run_start), 0)
+			triangles += int(run_count / 2)
+			run_count = 0
+		}
+		at += n
+	}
+	if run_count > 0 {
+		vk.CmdDrawIndexed(cmd, run_count / 4 * 6, 1, 0, i32(run_start), 0)
+		triangles += int(run_count / 2)
+	}
+	return
 }
 
 // Frustum planes (a, b, c, d) with a·x + b·y + c·z + d >= 0 inside: left,

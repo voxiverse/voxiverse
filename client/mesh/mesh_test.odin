@@ -10,6 +10,35 @@ count_faces :: proc(out: []Vertex) -> (faces: [Face]int) {
 	return
 }
 
+// quad_box: the low and high corners of a quad.
+@(private = "file")
+quad_box :: proc(q: []Vertex) -> (lo, hi: [3]i32) {
+	lo, hi = vertex_position(q[0]), vertex_position(q[0])
+	for v in q {
+		p := vertex_position(v)
+		lo = {min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z)}
+		hi = {max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z)}
+	}
+	return
+}
+
+// face_area: block faces covered, by direction (a merged quad covers many).
+@(private = "file")
+face_area :: proc(out: []Vertex) -> (area: [Face]int) {
+	for i := 0; i < len(out); i += 4 {
+		lo, hi := quad_box(out[i:][:4])
+		d := hi - lo
+		area[vertex_face(out[i])] += int(max(d.x, 1) * max(d.y, 1) * max(d.z, 1))
+	}
+	return
+}
+
+@(private = "file")
+total :: proc(a: [Face]int) -> (n: int) {
+	for x in a {n += x}
+	return
+}
+
 @(test)
 test_single_block :: proc(t: ^testing.T) {
 	s := new(Snapshot)
@@ -47,13 +76,13 @@ test_hidden_faces_and_border :: proc(t: ^testing.T) {
 	s[snapshot_index(0, 0, 0)] = .Dirt
 	s[snapshot_index(1, 0, 0)] = .Dirt
 	mesh_chunk(s, nil, &out)
-	testing.expect_value(t, len(out), 10 * 4)
+	testing.expect_value(t, total(face_area(out[:])), 10)
 
 	// A block in the neighbour's border hides the face towards it, but is
 	// not meshed itself.
 	s[snapshot_index(-1, 0, 0)] = .Stone
 	mesh_chunk(s, nil, &out)
-	testing.expect_value(t, len(out), 9 * 4)
+	testing.expect_value(t, total(face_area(out[:])), 9)
 
 	// All solid: nothing visible.
 	for &b in s {b = .Stone}
@@ -64,8 +93,92 @@ test_hidden_faces_and_border :: proc(t: ^testing.T) {
 		for x in i32(-1) ..= 16 {s[snapshot_index(x, 16, z)] = .Air}
 	}
 	mesh_chunk(s, nil, &out)
-	testing.expect_value(t, count_faces(out[:])[.Pos_Y], 256)
+	testing.expect_value(t, face_area(out[:])[.Pos_Y], 256)
+	testing.expect_value(t, total(face_area(out[:])), 256)
+	testing.expect_value(t, len(out), 4) // evenly lit: greedy meshing makes it one quad
+	mesh_chunk(s, nil, &out, merge = false)
 	testing.expect_value(t, len(out), 256 * 4)
+}
+
+// Greedy meshing changes nothing on screen: every block face of the merged
+// mesh is in the unmerged one, drawn with the same texture, light and AO,
+// and the other way round (merged quads are evenly lit: each block face
+// in one is too). Over uneven ground, overhangs, plants and a lamp, lit.
+@(test)
+test_greedy_meshing_is_exact :: proc(t: ^testing.T) {
+	s := new(Snapshot)
+	defer free(s)
+	light := new(Light_Snapshot)
+	defer free(light)
+	merged, plain: [dynamic]Vertex
+	defer delete(merged)
+	defer delete(plain)
+	n := u32(7)
+	for y in i32(-1) ..= 16 {
+		for z in i32(-1) ..= 16 {
+			for x in i32(-1) ..= 16 {
+				n = n * 1664525 + 1013904223
+				ground := 4 + (x / 5 + z / 3) % 4
+				b := game.Block.Air
+				if y <= ground {b = .Stone if y < ground else .Grass}
+				if y == ground + 3 && n >> 28 == 0 {b = .Planks} 	// overhangs
+				if y == ground + 1 && n >> 27 == 3 {b = .Tall_Grass}
+				s[snapshot_index(x, y, z)] = b
+				// Open sky above, dimmer below; a little lamp light here and there.
+				sky := u8(15) if y > ground + 3 else u8(max(0, 12 - int(ground + 3 - y)))
+				light[snapshot_index(x, y, z)] = sky << 4 | u8(n >> 30)
+			}
+		}
+	}
+	s[snapshot_index(8, 9, 8)] = .Lamp
+	mesh_chunk(s, light, &merged)
+	mesh_chunk(s, light, &plain, merge = false)
+	testing.expect(t, len(merged) < len(plain), "nothing merged")
+	Cell :: struct {
+		face:   Face,
+		at:     [3]i32,
+		packed: u32, // with the position left out when evenly lit
+		layer:  u32,
+	}
+	POSITION :: u32(1 << 15 - 1)
+	cells :: proc(out: []Vertex, set: ^map[Cell]int) {
+		for i := 0; i < len(out); i += 4 {
+			q := out[i:][:4]
+			face := vertex_face(q[0])
+			alike := true
+			for v in q {alike &&= v.packed &~ POSITION == q[0].packed &~ POSITION && v.layer == q[0].layer}
+			if !alike || int(face) >= len(Face) {
+				// Never merged: its corners as they are.
+				for v in q {set[{face, vertex_position(v), v.packed, v.layer}] += 1}
+				continue
+			}
+			// Evenly lit: one cell per block face it covers.
+			lo, hi := quad_box(q)
+			for y in lo.y ..= max(hi.y - 1, lo.y) {
+				for z in lo.z ..= max(hi.z - 1, lo.z) {
+					for x in lo.x ..= max(hi.x - 1, lo.x) {
+						set[{face, {x, y, z}, q[0].packed &~ POSITION, q[0].layer}] += 1
+					}
+				}
+			}
+		}
+	}
+	a, b := make(map[Cell]int), make(map[Cell]int)
+	defer delete(a)
+	defer delete(b)
+	cells(merged[:], &a)
+	cells(plain[:], &b)
+	testing.expect_value(t, len(a), len(b))
+	for k, v in b {
+		got, ok := a[k]
+		if !testing.expectf(
+			t,
+			ok && got == v,
+			"face %v at %v drawn differently once merged",
+			k.face,
+			k.at,
+		) {break}
+	}
 }
 
 @(test)
@@ -292,11 +405,21 @@ test_layers :: proc(t: ^testing.T) {
 	s[snapshot_index(4, 1, 1)] = .Water
 	s[snapshot_index(5, 1, 1)] = .Water
 	s[snapshot_index(5, 0, 1)] = .Stone // under the second water block
-	counts := mesh_chunk(s, nil, &out)
+	grouped := mesh_chunk(s, nil, &out)
+	counts: [Layer]int
+	for l in Layer {counts[l] = counts_layer(grouped, l)}
 	testing.expect_value(t, counts[.Opaque], 2 * 24) // two stones (the one under water shows through it)
 	testing.expect_value(t, counts[.Cutout], 16) // 2 planes x 2 sides x 4 corners
 	testing.expect_value(t, counts[.Translucent], 4 * (10 - 1)) // 10 faces of two cubes, less the bottom on stone
 	testing.expect_value(t, len(out), counts[.Opaque] + counts[.Cutout] + counts[.Translucent])
+	// Quads by face group: the stones' faces in Face order, the plant's all crossed.
+	testing.expect_value(t, grouped[.Opaque], [FACE_GROUPS]int{8, 8, 8, 8, 8, 8, 0})
+	testing.expect_value(t, grouped[.Cutout][CROSS_GROUP], 16)
+	at := 0
+	for n, g in grouped[.Opaque] {
+		for v in out[at:][:n] {testing.expect_value(t, int(vertex_face(v)), g)}
+		at += n
+	}
 	plant := out[counts[.Opaque]:][:counts[.Cutout]]
 	for v in plant {
 		face := v.packed >> 15 & 7

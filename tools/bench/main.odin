@@ -46,7 +46,7 @@ Check :: struct {
 CHECK := Check {
 	chunks = 2592,
 	meshed = 844,
-	vertices = 906448,
+	vertices = 786488, // greedy meshing (906448 without)
 	budget_ms = {.Generate = 1.5, .Tops = 1.5, .Light = 1.0, .Snapshot = 0.1, .Mesh = 1.0},
 }
 
@@ -117,7 +117,7 @@ main :: proc() {
 	light := new(mesh.Light_Snapshot)
 	snapshot := new(mesh.Snapshot)
 	vertices: [dynamic]mesh.Vertex
-	counts: [mesh.Layer]int
+	counts: [mesh.Layer]int // vertices of each layer, every chunk
 	meshed, skipped := 0, 0
 	for _ in 0 ..< opts.repeat {
 		for cz in centre.y - r ..= centre.y + r {
@@ -157,7 +157,7 @@ main :: proc() {
 					start = time.tick_now()
 					c := mesh.mesh_chunk(snapshot, light, &vertices)
 					append(&times[.Mesh], ms_since(start))
-					for k, layer in c {counts[layer] += k}
+					for _, layer in c {counts[layer] += mesh.counts_layer(c, layer)}
 					meshed += 1
 				}
 			}

@@ -1,5 +1,7 @@
 package mesh
 
+import "core:slice"
+
 import "../../game"
 
 // Chunk meshing: visible block faces with per-vertex ambient occlusion and
@@ -158,15 +160,32 @@ CROSS_B :: 7
 SURFACE :: u32(1) << 28
 DROP_SHIFT :: 29
 
+// Face groups: within a layer, quads come grouped by the way they face
+// (Face order), then the plants' crossed quads (seen from both sides), so
+// the renderer can leave out the directions that face away from the
+// camera (a chunk wholly on one side of it shows at most three).
+FACE_GROUPS :: 7
+CROSS_GROUP :: 6
+
+// Counts: vertices of each layer's face groups, in order.
+Counts :: [Layer][FACE_GROUPS]int
+
+// counts_layer: all of a layer's vertices.
+counts_layer :: proc(c: Counts, layer: Layer) -> (n: int) {
+	for g in c[layer] {n += g}
+	return
+}
+
 // mesh_chunk writes the snapshot's visible faces to out (cleared first),
-// layer by layer; counts: each layer's vertices. light may be nil:
+// layer by layer, each layer's quads by face group. light may be nil:
 // everything fully lit by the sky (tests).
 mesh_chunk :: proc(
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
+	merge := true, // greedy meshing (off: one quad a face, for tests)
 ) -> (
-	counts: [Layer]int,
+	counts: Counts,
 ) {
 	clear(out)
 	for layer in Layer {
@@ -187,8 +206,140 @@ mesh_chunk :: proc(
 				}
 			}
 		}
-		counts[layer] = len(out) - before
+		if merge && layer != .Translucent {merge_faces(out, before)}
+		counts[layer] = group_faces(out[before:])
 	}
+	return
+}
+
+// merge_faces: greedy meshing of the quads from before on. A quad whose
+// four corners are alike (AO, light, texture: lit and shaded evenly) is
+// mergeable; mergeable quads facing the same way in the same plane with
+// the same corners join into rectangles (rows first, then down), drawn
+// exactly as before: the corners' values interpolate to the same, and
+// textures repeat with the world grid (the shader's uv is the position).
+// Other quads are kept as they are. (Not water: its surface corners
+// differ.)
+@(private = "file")
+merge_faces :: proc(out: ^[dynamic]Vertex, before: int) {
+	POSITION_BITS :: u32(1 << 15 - 1)
+	Mergeable :: struct {
+		face:  int,
+		plane: i32, // position along the face's axis
+		attrs: u64, // the corners' shared bits (layer, light, AO), and the face
+		u, v:  i32, // the quad's low corner, in the face's in-plane axes
+	}
+	quads := out[before:]
+	found := make([dynamic]Mergeable, 0, len(quads) / 4, context.temp_allocator)
+	kept := before
+	for i := 0; i < len(quads); i += 4 {
+		q := quads[i:][:4]
+		attrs := q[0].packed &~ POSITION_BITS
+		alike := true
+		for v in q[1:] {alike &&= v.packed &~ POSITION_BITS == attrs && v.layer == q[0].layer}
+		face := int(attrs >> 15 & 7)
+		if !alike || face >= len(Face) {
+			// Kept: moved down over the mergeable ones taken out.
+			copy(out[kept:][:4], q)
+			kept += 4
+			continue
+		}
+		axes := FACE_AXES[Face(face)]
+		lo := vertex_position(q[0])
+		for v in q[1:] {lo = {min(lo.x, vertex_position(v).x), min(lo.y, vertex_position(v).y), min(lo.z, vertex_position(v).z)}}
+		normal_axis := [3]i32{abs(axes.normal.x), abs(axes.normal.y), abs(axes.normal.z)}
+		append(
+			&found,
+			Mergeable {
+				face,
+				dot(lo, normal_axis),
+				u64(q[0].layer) << 32 | u64(attrs),
+				dot(lo, axes.u),
+				dot(lo, axes.v),
+			},
+		)
+	}
+	resize(out, kept)
+	if len(found) == 0 {return}
+	slice.sort_by(found[:], proc(a, b: Mergeable) -> bool {
+		if a.face != b.face {return a.face < b.face}
+		if a.plane != b.plane {return a.plane < b.plane}
+		if a.attrs != b.attrs {return a.attrs < b.attrs}
+		if a.v != b.v {return a.v < b.v}
+		return a.u < b.u
+	})
+	// Each run of one face, plane and corners: a 16 x 16 grid to cover.
+	for start := 0; start < len(found); {
+		first := found[start]
+		end := start
+		grid: [game.CHUNK_SIZE][game.CHUNK_SIZE]bool // [v][u]
+		for end < len(found) &&
+		    found[end].face == first.face &&
+		    found[end].plane == first.plane &&
+		    found[end].attrs == first.attrs {
+			grid[found[end].v][found[end].u] = true
+			end += 1
+		}
+		for v in i32(0) ..< game.CHUNK_SIZE {
+			for u in i32(0) ..< game.CHUNK_SIZE {
+				if !grid[v][u] {continue}
+				w := i32(1)
+				for u + w < game.CHUNK_SIZE && grid[v][u + w] {w += 1}
+				h := i32(1)
+				grow: for v + h < game.CHUNK_SIZE {
+					for k in u ..< u + w {if !grid[v + h][k] {break grow}}
+					h += 1
+				}
+				for dv in v ..< v + h {
+					for du in u ..< u + w {grid[dv][du] = false}
+				}
+				emit_merged(out, first, u, v, w, h)
+			}
+		}
+		start = end
+	}
+
+	dot :: #force_inline proc(a, b: [3]i32) -> i32 {return a.x * b.x + a.y * b.y + a.z * b.z}
+}
+
+// emit_merged writes the rectangle u..u+w, v..v+h of a mergeable quad's
+// plane, its corners in emit_face's order.
+@(private = "file")
+emit_merged :: proc(out: ^[dynamic]Vertex, m: $T, u, v, w, h: i32) {
+	axes := FACE_AXES[Face(m.face)]
+	normal_axis := [3]i32{abs(axes.normal.x), abs(axes.normal.y), abs(axes.normal.z)}
+	base := normal_axis * m.plane
+	attrs := u32(m.attrs)
+	layer := u32(m.attrs >> 32)
+	quad: [4]Vertex
+	for corner, i in CORNERS {
+		p := base + (u + corner[0] * w) * axes.u + (v + corner[1] * h) * axes.v
+		quad[i] = {
+			packed = attrs | u32(p.x) | u32(p.y) << 5 | u32(p.z) << 10,
+			layer  = layer,
+		}
+	}
+	append(out, ..quad[:])
+}
+
+// group_faces orders a layer's quads by face group (a counting sort, each
+// group keeping its order) and counts each group's vertices.
+@(private = "file")
+group_faces :: proc(quads: []Vertex) -> (counts: [FACE_GROUPS]int) {
+	group :: #force_inline proc(v: Vertex) -> int {return min(
+			int(v.packed >> 15 & 7),
+			CROSS_GROUP,
+		)}
+	for i := 0; i < len(quads); i += 4 {counts[group(quads[i])] += 4}
+	sorted := make([]Vertex, len(quads), context.temp_allocator)
+	at: [FACE_GROUPS]int
+	for g in 1 ..< FACE_GROUPS {at[g] = at[g - 1] + counts[g - 1]}
+	for i := 0; i < len(quads); i += 4 {
+		g := group(quads[i])
+		copy(sorted[at[g]:][:4], quads[i:][:4])
+		at[g] += 4
+	}
+	copy(quads, sorted)
 	return
 }
 

@@ -24,6 +24,8 @@ import "mesh"
 
 Chunk_Handle :: distinct u32
 
+#assert(mesh.FACE_GROUPS == render.FACE_GROUPS)
+
 Client_Chunk :: struct {
 	pos:     game.Chunk_Pos,
 	blocks:  game.Chunk_Blocks,
@@ -108,7 +110,7 @@ Mesh_Task :: struct {
 	light:    mesh.Light_Snapshot,
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
 	ms:       f32, // how long lighting and meshing took
-	counts:   [mesh.Layer]int, // vertices of each layer, in order
+	counts:   mesh.Counts, // vertices of each layer's face groups, in order
 	urgent:   bool, // one of the reserve for edits (mesh_now)
 }
 
@@ -615,8 +617,10 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			continue
 		}
 		bytes := slice.to_bytes(task.vertices[:])
-		counts: [render.Mesh_Layer]u32
-		for n, l in task.counts {counts[render.Mesh_Layer(l)] = u32(n)}
+		counts: render.Mesh_Counts
+		for groups, l in task.counts {
+			for n, group in groups {counts[render.Mesh_Layer(l)][group] = u32(n)}
+		}
 		h, result := render.world_add_mesh(pass, g, c.pos, bytes, counts, hidden = c.group != 0)
 		if result == .Busy {
 			// Keep this and everything after it for the next frame.
