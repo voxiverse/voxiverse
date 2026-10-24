@@ -45,11 +45,12 @@ Mesh_Group :: struct {
 	members: [MAX_GROUP_MEMBERS]Chunk_Handle,
 	count:   int,
 	opened:  time.Tick,
+	since:   u32, // chunk versions from the bulk edit on: meshes of those may be shown with it
 }
 
 MAX_GROUP_MEMBERS :: 512
 MAX_GROUPS :: 16
-GROUP_TIMEOUT :: 500 * time.Millisecond // a group that cannot finish (a neighbour missing) is shown anyway
+GROUP_TIMEOUT :: 1500 * time.Millisecond // a group that cannot finish is shown anyway (on a starved machine, a moment late beats a hole)
 
 World :: struct {
 	chunks:        base.Pool(Client_Chunk, Chunk_Handle),
@@ -67,6 +68,7 @@ World :: struct {
 	next_version:  u32,
 	// Bulk edits (Mesh_Group):
 	batch_left:    int, // chunks of the bulk edit still to come
+	batch_since:   u32, // the first chunk version of the bulk edit
 	batch:         [dynamic]game.Chunk_Pos, // ... those come so far
 	groups:        [dynamic]Mesh_Group,
 	next_group:    u32,
@@ -385,7 +387,7 @@ queue_if_complete :: proc(w: ^World, c: ^Client_Chunk) {
 world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 	base.profile_scope("start meshing")
 	if len(w.to_mesh) > len(w.free_tasks) {
-		// More waiting than can start: start the nearest.
+		// More waiting than can start: a bulk edit's first, then the nearest.
 		Sort :: struct {
 			w:      ^World,
 			camera: game.Chunk_Pos,
@@ -397,6 +399,9 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 				s := (^Sort)(context.user_ptr)
 				ca, cb := base.pool_get(&s.w.chunks, a), base.pool_get(&s.w.chunks, b)
 				if ca == nil || cb == nil {return ca == nil && cb != nil} 	// stale first: dropped right away
+				// A bulk edit's chunks next (it is shown when all are done),
+				// then the nearest.
+				if (ca.group != 0) != (cb.group != 0) {return ca.group != 0}
 				return(
 					game.chunk_distance_sq(ca.pos, s.camera) <
 					game.chunk_distance_sq(cb.pos, s.camera) \
@@ -439,6 +444,14 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 world_bulk_begin :: proc(w: ^World, count: int) {
 	clear(&w.batch)
 	w.batch_left = min(count, MAX_GROUP_MEMBERS)
+	w.batch_since = w.next_version
+}
+
+// group_since: the first chunk version of group id's bulk edit.
+@(private = "file")
+group_since :: proc(w: ^World, id: u32) -> u32 {
+	for &g in w.groups {if g.id == id {return g.since}}
+	return max(u32)
 }
 
 // group_open makes a group of the batch's chunks and their neighbours.
@@ -450,6 +463,7 @@ group_open :: proc(w: ^World) {
 	g := Mesh_Group {
 		id     = w.next_group,
 		opened = time.tick_now(),
+		since  = w.batch_since,
 	}
 	for pos in w.batch {
 		for dz in i32(-1) ..= 1 {
@@ -480,6 +494,7 @@ groups_update :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 		for h in grp.members[:grp.count] {
 			c := base.pool_get(&w.chunks, h)
 			if c == nil || c.group != grp.id {continue}
+			if c.waiting {continue} 	// its new mesh is here
 			// One that cannot be meshed (a neighbour beyond the view) has
 			// nothing coming: not waited for.
 			if c.queued || (c.dirty && neighbours_present(w, c.pos)) {
@@ -540,7 +555,17 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 	kept := 0
 	for task, i in w.uploads {
 		c := base.pool_get(&w.chunks, task.handle)
-		if c == nil || c.version != task.version {
+		// Changed again while being meshed (flowing water into a crater):
+		// for a bulk edit's chunk still without its new mesh, one made
+		// since the edit is shown with it all the same (and it is meshed
+		// again after); otherwise it is dropped.
+		for_group :=
+			c != nil &&
+			c.version != task.version &&
+			c.group != 0 &&
+			!c.waiting &&
+			task.version >= group_since(w, c.group)
+		if c == nil || (c.version != task.version && !for_group) {
 			// Unloaded, or changed while being meshed: mesh it again.
 			w.stats.stale_meshes += 1
 			task_free(w, task)
@@ -552,7 +577,8 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 		}
 		if len(task.vertices) == 0 {
 			replace_mesh(w, pass, g, c, 0)
-			c.dirty, c.queued = false, false
+			c.dirty, c.queued = for_group, false
+			if for_group {queue_if_complete(w, c)}
 			w.stats.meshed += 1
 			task_free(w, task)
 			continue
@@ -568,7 +594,8 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			break
 		}
 		if result == .Ok {replace_mesh(w, pass, g, c, h)}
-		c.dirty, c.queued = false, false
+		c.dirty, c.queued = for_group, false
+		if for_group {queue_if_complete(w, c)}
 		w.stats.meshed += 1
 		task_free(w, task)
 	}
