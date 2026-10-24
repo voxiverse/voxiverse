@@ -179,6 +179,30 @@ line) to make the first admin. A client asks only for what its grants allow (the
 says "not allowed on this server"); the server checks again and answers a refusal with a
 notice, not a disconnect.
 
+## Chat
+
+`t` opens the chat, `/` opens it with a command started (`/spawn`; the server runs it, as the
+console's `server spawn` does); `say <words>` and `chat [text]` do the same from the console
+and scripts. The server numbers each line, adds the speaker's tag (their role's `prefix`
+metadata, and `suffix`) and nickname, keeps codes only where the speaker has
+`chat.format.color`, `chat.format.rgb`, `chat.format.style` (else they show as written),
+drops control characters, allows 5 lines at once then one a second, and logs every line
+(`server chat`). Each part (tag, name, words) is formatted on its own: no explicit `&r`.
+Formatting codes: `&0`-`&f` colours, `&#rrggbb`, `&l` bold, `&o` italic, `&n` underline, `&m`
+strike, `&r` plain, `&&` an `&`; a colour clears the styles before it.
+
+| Server command | |
+|---|---|
+| `ignore <player>` | Stop (or start again) hearing them (`chat.ignore`) |
+| `mute <player> [30m\|2h\|7d]`, `unmute <player>` | For a while or for good (`moderation.mute`) |
+| `delmsg <player> [count]` | Take back their newest lines from everyone's chat (`chat.delete`) |
+
+Mutes, ignores (and later homes, warps, bans, nicknames) are kept in `<world>/community.cfg`.
+
+Every in-game panel is an overlay on one stack (`client/overlays.odin`): the pause menu,
+Options, tuning, chat, console, the quit dialog. Each says whether it takes the keyboard,
+frees the mouse or pauses the world; the top one gets the keys, the focus and Escape.
+
 ## Liquids
 
 Water levels are block ids (a source, flow levels 1-7, falling), so saves and the protocol

@@ -96,7 +96,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Entities,
 		     game.Entity_Hurt,
 		     game.Blocks_Changed,
-		     game.Grants: // not checked here
+		     game.Grants,
+		     game.Chat_Line,
+		     game.Chat_Delete: // not checked here
 		case game.Variables:
 			c.variables = strings.clone(v.text, context.temp_allocator)
 		case game.Notice:

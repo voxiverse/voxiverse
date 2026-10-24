@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire",
+	[9] = "fire", [10] = "chat",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -35,6 +35,7 @@ local SERVER_KINDS = {
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
 	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
+	[25] = "chat_line", [26] = "chat_delete",
 }
 
 local f = vx.fields
@@ -107,6 +108,8 @@ local function describe(tvb, from_server)
 					u32(tvb, 5), i32(tvb, 9), i32(tvb, 13), i32(tvb, 17), tvb(21, 2):le_uint())
 			elseif kind == 7 then
 				return string.format("command %q", gstring(tvb, 1) or "?")
+			elseif kind == 10 then
+				return string.format("chat %q", gstring(tvb, 1) or "?")
 			end
 		else
 			if kind == 1 then
@@ -132,6 +135,11 @@ local function describe(tvb, from_server)
 				return string.format("blocks chunk=[%d %d %d] count=%d", i32(tvb, 1), i32(tvb, 5), i32(tvb, 9), tvb(13, 1):uint())
 			elseif kind == 11 then
 				return string.format("time %.4f", f64(tvb, 1))
+			elseif kind == 25 then
+				return string.format("chat_line id=%d sender=%d %q", u32(tvb, 1), tvb(5, 2):le_uint(),
+					gstring(tvb, 7) or "?")
+			elseif kind == 26 then
+				return string.format("chat_delete id=%d", u32(tvb, 1))
 			elseif kind == 12 then
 				return string.format("joined player=%d name=%q", tvb(1, 2):le_uint(),
 					gstring(tvb, 3) or "?")

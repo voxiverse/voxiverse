@@ -39,6 +39,15 @@ Net_Client :: struct {
 	messages:    [dynamic][]u8,
 	notices:     [dynamic]string, // (heap)
 	grants:      [dynamic]game.Grant, // (heap)
+	chat:        [dynamic]Net_Chat, // lines heard (heap)
+	deleted:     [dynamic]u32, // lines taken back
+}
+
+@(private)
+Net_Chat :: struct {
+	id:     u32,
+	sender: u16,
+	text:   string, // (heap)
 }
 
 @(private)
@@ -64,6 +73,9 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.notices)
 	for g in c.grants {delete(g.pattern)}
 	delete(c.grants)
+	for l in c.chat {delete(l.text)}
+	delete(c.chat)
+	delete(c.deleted)
 	delete(c.entities)
 	delete(c.results)
 	delete(c.messages)
@@ -131,6 +143,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			}
 		case game.Notice:
 			append(&c.notices, strings.clone(v.text))
+		case game.Chat_Line:
+			append(&c.chat, Net_Chat{v.id, v.sender, strings.clone(v.text)})
+		case game.Chat_Delete:
+			append(&c.deleted, v.id)
 		case game.Grants:
 			for g in c.grants {delete(g.pattern)}
 			clear(&c.grants)

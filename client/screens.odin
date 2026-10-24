@@ -34,6 +34,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 		settings_changed(app)
 	}
 	if app.input.escape {escape(app)}
+	chat_keys(app, input)
 }
 
 // Each screen and dialog draws in its own id scope, so equal labels in
@@ -96,6 +97,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	name_tags(app, ctx)
 	if world_paused(app) {return}
+	chat_feed(app, ctx)
 	// Crosshair.
 	c := ui.rect_center(ctx.screen, 0, 0)
 	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})

@@ -73,6 +73,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	too_long := strings.repeat("x", MAX_ADMIN_TEXT + 1, context.temp_allocator)
 	_, ok = decode_client(encode_c(Command{too_long})[:])
 	testing.expect(t, !ok)
+	said: Client_Message
+	said, ok = decode_client(encode_c(Chat{"&chello"})[:])
+	testing.expect(t, ok && said.(Chat).text == "&chello")
+	_, ok = decode_client(
+		encode_c(Chat{strings.repeat("x", MAX_CHAT_TEXT + 1, context.temp_allocator)})[:],
+	)
+	testing.expect(t, !ok)
 	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false}
 	upd: Server_Message
 	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
@@ -152,8 +159,17 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Blocks_Changed) == batch)
 	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
 	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
-	m, ok = decode_server(encode_s(Grants{"1 chat.*\n0 -chat.format\n"})[:], scratch)
-	testing.expect(t, ok && m.(Grants).text == "1 chat.*\n0 -chat.format\n")
+	m, ok = decode_server(encode_s(Grants{"1 chat.*\n0 -chat.format\n", "spawn mute"})[:], scratch)
+	testing.expect(
+		t,
+		ok &&
+		m.(Grants).text == "1 chat.*\n0 -chat.format\n" &&
+		m.(Grants).commands == "spawn mute",
+	)
+	m, ok = decode_server(encode_s(Chat_Line{7, NO_PLAYER, "&eBea joined"})[:], scratch)
+	testing.expect(t, ok && m.(Chat_Line).id == 7 && m.(Chat_Line).text == "&eBea joined")
+	m, ok = decode_server(encode_s(Chat_Delete{7})[:], scratch)
+	testing.expect(t, ok && m.(Chat_Delete).id == 7)
 	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
 	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
 	// Names: letters, digits, _ and -, 1..16 of them.

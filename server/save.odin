@@ -138,6 +138,7 @@ save :: proc(s: ^Server) -> bool {
 	ok := write_world_file(s)
 	if !write_entities(s) {ok = false}
 	if !permissions_save(s) {ok = false}
+	if !community_save(s) {ok = false}
 	regions := 0
 	for region, changed in st.regions {
 		if !changed {continue}

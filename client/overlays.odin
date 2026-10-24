@@ -14,6 +14,7 @@ Overlay :: enum u8 {
 	Pause, // the pause menu
 	Options, // Options over the game (above the pause menu)
 	Tuning, // F4: the tuning panel
+	Chat,
 	Console,
 	Quit_Dialog,
 }
@@ -35,6 +36,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Pause = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Options = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Tuning = {takes = {.Mouse}, in_game = true}, // watching the game respond: it runs on
+	.Chat = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Console = {takes = {.Keyboard, .Mouse}},
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
 }
@@ -129,6 +131,9 @@ close_overlay :: proc(app: ^App, which: Overlay) {
 	#partial switch which {
 	case .Console:
 		if line_search_cancel(&app.console.line) {return}
+	case .Chat:
+		chat_close(app)
+		return
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 	}
@@ -148,6 +153,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			if options_panel(app, ctx, true) {overlay_close(&app.overlays, .Options)}
 		case .Tuning:
 			tuning_panel(app, ctx)
+		case .Chat:
+			chat_ui(app, ctx, top)
 		case .Console:
 			console_ui(app, ctx, top)
 		case .Quit_Dialog:

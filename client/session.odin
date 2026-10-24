@@ -68,6 +68,8 @@ Session :: struct {
 	worldgen:     worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen: bool,
 	grants:       [dynamic]game.Grant, // what the server lets this player do (heap)
+	commands:     [dynamic]string, // the server commands it may use (heap, for Tab)
+	chat:         [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
 	texels:       [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
 	newest_tick:  u32, // of the newest Players or Entities message
 	newest_at:    time.Tick, // when it came
@@ -223,6 +225,10 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	delete(s.entities) // the heap: entities come and go
 	for g in s.grants {delete(g.pattern)}
 	delete(s.grants)
+	for c in s.commands {delete(c)}
+	delete(s.commands)
+	for e in s.chat {delete(e.text)}
+	delete(s.chat)
 	for _, o in s.others {delete(o.name)}
 	delete(s.others)
 	for n in s.notices {delete(n)}

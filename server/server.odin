@@ -92,6 +92,8 @@ Server :: struct {
 	changes:     Changes, // blocks changed this tick (changes.odin)
 	perms:       Permissions, // who may do what (permissions.odin)
 	spawn:       World_Spawn, // where new players arrive (spawn.odin; world.cfg)
+	community:   Community, // nicknames, mutes, homes, warps, bans (community.odin)
+	chat:        Chat_State, // (chat.odin)
 	natural:     []Natural_Slot, // natural column tops (columns.odin)
 	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
@@ -134,6 +136,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 	permissions_open(s)
+	community_open(s)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
 	// Loaded chunks stay within the unload distance of some player, plus
 	// chunks still generating that were requested before they moved.
@@ -217,6 +220,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	netcode.capture_close(&s.capture)
 	store_close(s)
 	permissions_destroy(&s.perms)
+	community_destroy(&s.community)
 	for &c in s.clients {client_reset(&c)}
 	if world {world_destroy(&s.world)}
 	entities_destroy(&s.entities)
@@ -425,6 +429,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		node = "world.fire"
 	case game.Edit:
 		node = "world.edit"
+	case game.Chat:
+		node = "chat.send"
 	}
 	if node != "" && !allowed(s, c, node) {
 		if e, edit := m.(game.Edit); edit {
@@ -482,6 +488,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		send_message(s, c, game.Pong{v.id})
 	case game.Command:
 		admin(s, c, v.command)
+	case game.Chat:
+		chat_say(s, c, v.text)
 	case game.Edit:
 		queue_action(s, c, v)
 	case game.Attack:
@@ -524,6 +532,12 @@ broadcast :: proc(s: ^Server, m: game.Server_Message) {
 @(private)
 notice :: proc(s: ^Server, c: ^Client, text: string) {
 	log.info("server notice ", text)
+	text := text
+	if len(text) > game.MAX_NOTICE_TEXT {
+		cut := game.MAX_NOTICE_TEXT
+		for cut > 0 && text[cut] & 0xc0 == 0x80 {cut -= 1} 	// (a whole letter)
+		text = text[:cut]
+	}
 	send_message(s, c, game.Notice{text})
 }
 

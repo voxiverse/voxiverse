@@ -50,6 +50,8 @@ Client :: struct {
 	teleport:     [2]f32, // yaw, pitch to look after it
 	look:         [2]f32, // yaw, pitch of the last input applied (saved with the player)
 	fired_at:     u64, // tick of its last rocket (a rate limit)
+	chat_tokens:  int, // lines it may say now (chat.odin)
+	chat_tick:    u64, // the bucket refilled up to here
 }
 
 // Chunks sent to a client per tick (at 30 Hz: 1440 per second).

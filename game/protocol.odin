@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 9
+PROTOCOL_VERSION :: 10
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -65,6 +65,14 @@ Command :: struct {
 	command: string,
 }
 
+// Chat: a line the player says (formatting codes kept only where they may:
+// the server decides).
+Chat :: struct {
+	text: string,
+}
+
+MAX_CHAT_TEXT :: 256
+
 // Edit asks to put block at pos (Air: break). The client has already
 // applied it (predicted); Edit_Result says what became of it. The server
 // applies it right after input `after`, where the client was when it made
@@ -99,6 +107,7 @@ Client_Message :: union {
 	Command,
 	Attack,
 	Fire,
+	Chat,
 }
 
 // Server -> client.
@@ -180,9 +189,28 @@ Player_Entry :: struct {
 	flying:     bool,
 }
 
-// Notice: something the server wants the player to read (console).
+// Notice: something the server wants the player to read (chat and the
+// console), formatted (game/format.odin).
 Notice :: struct {
 	text: string, // view into the message
+}
+
+MAX_NOTICE_TEXT :: 1024
+
+// Chat_Line: a line of chat, as everyone sees it (the sender's tag, name
+// and words, formatted), numbered so a moderator can take it back.
+Chat_Line :: struct {
+	id:     u32,
+	sender: u16, // the player who said it; NO_PLAYER: the server
+	text:   string, // view into the message
+}
+
+NO_PLAYER :: 0xffff
+MAX_CHAT_LINE :: 1024
+
+// Chat_Delete: a moderator took line id back.
+Chat_Delete :: struct {
+	id: u32,
 }
 
 // Entity_Spawn: an entity is near you now (it came into your area, or into
@@ -235,9 +263,11 @@ Explosion :: struct {
 }
 
 // Grants: what this player may do (game/permissions.odin), as
-// grants_text's lines: when they join and whenever it changes.
+// grants_text's lines, and the server commands they may use (names, space
+// apart: for Tab): when they join and whenever it changes.
 Grants :: struct {
-	text: string, // view into the message
+	text:     string, // view into the message
+	commands: string, // view into the message
 }
 
 MAX_GRANTS_TEXT :: 16384
@@ -313,6 +343,8 @@ Server_Message :: union {
 	Variables,
 	Blocks_Changed,
 	Grants,
+	Chat_Line,
+	Chat_Delete,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -333,6 +365,7 @@ Client_Kind :: enum u8 {
 	Command,
 	Attack,
 	Fire,
+	Chat,
 }
 
 @(private = "file")
@@ -361,6 +394,8 @@ Server_Kind :: enum u8 {
 	Variables,
 	Blocks_Changed,
 	Grants,
+	Chat_Line,
+	Chat_Delete,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -417,6 +452,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "attack"
 		case u8(Client_Kind.Fire):
 			return "fire"
+		case u8(Client_Kind.Chat):
+			return "chat"
 		}
 	} else {
 		switch kind {
@@ -468,6 +505,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "blocks"
 		case u8(Server_Kind.Grants):
 			return "grants"
+		case u8(Server_Kind.Chat_Line):
+			return "chat_line"
+		case u8(Server_Kind.Chat_Delete):
+			return "chat_delete"
 		}
 	}
 	return ""
@@ -505,6 +546,9 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Command:
 		write_u8(w, u8(Client_Kind.Command))
 		write_string(w, v.command)
+	case Chat:
+		write_u8(w, u8(Client_Kind.Chat))
+		write_string(w, v.text)
 	case Attack:
 		write_u8(w, u8(Client_Kind.Attack))
 		write_u32(w, v.entity)
@@ -636,6 +680,15 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Grants:
 		write_u8(w, u8(Server_Kind.Grants))
 		write_string(w, v.text)
+		write_string(w, v.commands)
+	case Chat_Line:
+		write_u8(w, u8(Server_Kind.Chat_Line))
+		write_u32(w, v.id)
+		write_u16(w, v.sender)
+		write_string(w, v.text)
+	case Chat_Delete:
+		write_u8(w, u8(Server_Kind.Chat_Delete))
+		write_u32(w, v.id)
 	case Blocks_Changed:
 		write_u8(w, u8(Server_Kind.Blocks_Changed))
 		write_chunk_pos(w, v.chunk)
@@ -692,6 +745,10 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 	case u8(Client_Kind.Command):
 		m = Command {
 			command = read_string(&r, MAX_ADMIN_TEXT),
+		}
+	case u8(Client_Kind.Chat):
+		m = Chat {
+			text = read_string(&r, MAX_CHAT_TEXT),
 		}
 	case u8(Client_Kind.Attack):
 		m = Attack {
@@ -828,7 +885,7 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		m = p
 	case u8(Server_Kind.Notice):
 		m = Notice {
-			text = read_string(&r, MAX_REASON_LENGTH),
+			text = read_string(&r, MAX_NOTICE_TEXT),
 		}
 	case u8(Server_Kind.Entity_Spawn):
 		e := Entity_Spawn {
@@ -883,7 +940,18 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 	case u8(Server_Kind.Grants):
 		m = Grants {
-			text = read_string(&r, MAX_GRANTS_TEXT),
+			text     = read_string(&r, MAX_GRANTS_TEXT),
+			commands = read_string(&r, MAX_GRANTS_TEXT),
+		}
+	case u8(Server_Kind.Chat_Line):
+		m = Chat_Line {
+			id     = read_u32(&r),
+			sender = read_u16(&r),
+			text   = read_string(&r, MAX_CHAT_LINE),
+		}
+	case u8(Server_Kind.Chat_Delete):
+		m = Chat_Delete {
+			id = read_u32(&r),
 		}
 	case u8(Server_Kind.Blocks_Changed):
 		c := Blocks_Changed {

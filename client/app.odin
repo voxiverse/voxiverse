@@ -77,6 +77,8 @@ App :: struct {
 	settings:         Settings,
 	screen:           Screen,
 	overlays:         Overlays, // what is open over the screen (overlays.odin)
+	chat:             Line_Editor, // the chat's line (chat.odin)
+	chat_scroll:      f32, // lines scrolled up in the open chat
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	last_frame_ms:    f32,
@@ -88,6 +90,7 @@ App :: struct {
 // app_destroy, which handles partially initialised apps.
 app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
+	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
 	settings_load(app)
 	console_history_load(&app.console)
@@ -204,6 +207,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	platform.window_close(&app.window)
 	input_destroy(&app.input)
 	console_destroy(&app.console)
+	line_editor_destroy(&app.chat)
 	return
 }
 

@@ -103,10 +103,8 @@ receive :: proc(s: ^Session) {
 			s.others[v.player] = {
 				name = strings.clone(v.name),
 			}
-			notice(s, fmt.tprintf("%s joined", v.name))
 		case game.Player_Left:
 			if o, known := s.others[v.player]; known {
-				notice(s, fmt.tprintf("%s left", o.name))
 				delete(o.name)
 			}
 			delete_key(&s.others, v.player)
@@ -129,6 +127,17 @@ receive :: proc(s: ^Session) {
 			for g in s.grants {delete(g.pattern)}
 			clear(&s.grants)
 			if !game.grants_parse(v.text, &s.grants) {log.warn("session grants not understood")}
+			for c in s.commands {delete(c)}
+			clear(&s.commands)
+			for name in strings.fields(v.commands, context.temp_allocator) {
+				append(&s.commands, strings.clone(name))
+			}
+		case game.Chat_Line:
+			chat_add(s, v.id, v.text)
+			log.info("session chat ", game.format_strip(v.text))
+			append(&s.notices, strings.clone(game.format_strip(v.text)))
+		case game.Chat_Delete:
+			chat_delete(s, v.id)
 		case game.Variables:
 			s.has_worldgen = true
 			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {
@@ -230,8 +239,10 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 // notice keeps a message from the server for the console.
 @(private)
 notice :: proc(s: ^Session, text: string) {
-	log.info("session ", text)
-	append(&s.notices, strings.clone(text))
+	plain := game.format_strip(text)
+	log.info("session ", plain)
+	append(&s.notices, strings.clone(plain))
+	chat_add(s, 0, text)
 }
 
 // flush sends what is due over the network (about once per display frame

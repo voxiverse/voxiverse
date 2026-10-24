@@ -40,6 +40,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	)
 	send_message(s, c, game.Time{s.clock})
 	refresh_grants(s, c) // what they may do
+	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
 	if m, ok := worldgen_variables(s); ok {send_message(s, c, m)}
 	for &other in s.clients {
 		if &other == c || other.state != .Playing {continue}
@@ -47,6 +48,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		send_message(s, &other, game.Player_Joined{player_id(s, c), name})
 	}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
+	chat_system(s, game.format_join({display_name(s, c), "&e joined"}))
 }
 
 // leave: a client is gone (left, timed out or was dropped): its player is
@@ -65,6 +67,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	if c.state != .Playing {return}
 	keep_player(s, c)
+	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
 	for &other in s.clients {
 		if &other != c && other.state == .Playing {
 			send_message(s, &other, game.Player_Left{player_id(s, c)})

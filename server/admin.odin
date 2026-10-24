@@ -42,6 +42,10 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"hash", "", {0, 0}, admin_hash, "debug.hash"},
 	{"locate", "<biome or structure>", {1, 1}, admin_locate, "teleport.locate"},
 	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
+	{"delmsg", "<player> [count]", {1, 2}, admin_delmsg, "chat.delete"},
+	{"mute", "<player> [30m|2h|7d]", {1, 2}, admin_mute, "moderation.mute"},
+	{"unmute", "<player>", {1, 1}, admin_unmute, "moderation.mute"},
+	{"ignore", "<player>", {1, 1}, admin_ignore, "chat.ignore"},
 	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{
@@ -85,6 +89,18 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 	}
 	log.warnf("server unknown admin command command=%q by=%s", command, client_name(c))
 	notice(s, c, fmt.tprintf("Unknown server command: %s", f[0]))
+}
+
+// commands_allowed: the names of the commands c may use, space apart.
+@(private)
+commands_allowed :: proc(s: ^Server, c: ^Client) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for &cmd in ADMIN_COMMANDS {
+		if !allowed(s, c, cmd.node) {continue}
+		if strings.builder_len(b) > 0 {strings.write_byte(&b, ' ')}
+		strings.write_string(&b, cmd.name)
+	}
+	return strings.to_string(b)
 }
 
 @(private = "file")

@@ -283,6 +283,33 @@ register_world_commands :: proc(c: ^Console) {
 	)
 	console_register(
 		c,
+		{
+			"say",
+			"say <words>: say it in the chat (& codes where allowed)",
+			proc(app: ^App, args: []string) {
+				send_message(
+					app.session,
+					game.Chat{strings.join(args, " ", context.temp_allocator)},
+				)
+			},
+		},
+		args = {1, -1},
+		needs = {.World},
+		node = "chat.send",
+	)
+	console_register(
+		c,
+		{
+			"chat",
+			"chat [text]: open the chat (T; / starts a command)",
+			proc(app: ^App, args: []string) {
+				chat_open(app, strings.join(args, " ", context.temp_allocator))
+			},
+		},
+		needs = {.World},
+	)
+	console_register(
+		c,
 		{"spawn", "spawn: back to the world spawn", proc(app: ^App, args: []string) {
 				send_message(app.session, game.Command{"spawn"})
 			}},
