@@ -7,7 +7,6 @@ import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
-import "core:strconv"
 import "core:strings"
 import "core:time"
 
@@ -54,7 +53,7 @@ App :: struct {
 	debug_pass:       render.Debug_Pass,
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	entity_pass:      render.Entity_Pass,
-	entity_draw:      render.Entity_Draw, // this frame's boxes (other players)
+	entity_draw:      render.Entity_Draw, // this frame's boxes (players, entities, particles)
 	mixer:            audio.Mixer, // fed to the sound card by audio_device
 	audio_device:     audio.Device,
 	sounds:           Sound_Bank,
@@ -464,11 +463,6 @@ path_next_to_exe :: proc(name: string) -> string {
 	if err != nil {return name}
 	path, _ := filepath.join({dir, name}, context.temp_allocator)
 	return path
-}
-
-parse_f32 :: proc(s: string) -> (f32, bool) {
-	v, ok := strconv.parse_f32(s)
-	return v, ok
 }
 
 @(private)

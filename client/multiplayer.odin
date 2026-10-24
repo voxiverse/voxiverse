@@ -67,7 +67,7 @@ multiplayer_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	typed := string(m.name[:])
 	if typed != base.var_text(&app.settings.name) && (typed == "" || game.name_valid(typed)) {
 		base.var_text_set(&app.settings.name, typed)
-		app.settings_dirty = true
+		settings_changed(app)
 	}
 	if typed != "" && !game.name_valid(typed) {
 		ui.label(

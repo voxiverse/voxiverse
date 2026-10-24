@@ -28,7 +28,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	if .F2 in app.input.pressed {screenshot_request(app, "")}
 	if .F11 in app.input.pressed {
 		app.settings.fullscreen = !app.settings.fullscreen
-		if !app.scripted {app.settings_dirty = true}
+		settings_changed(app)
 	}
 	if app.input.escape {
 		switch {

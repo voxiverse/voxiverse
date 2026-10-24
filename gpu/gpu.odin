@@ -110,9 +110,14 @@ create_instance :: proc(
 			"gpu validation requested but VK_LAYER_KHRONOS_validation is not installed (Linux: vulkan-validation-layers package; Windows/macOS: Vulkan SDK)",
 		)
 	}
+	// Object names and command labels (RenderDoc, validation messages)
+	// wherever the driver offers them, not only with validation.
+	use_debug_utils := has_instance_extension("VK_EXT_debug_utils")
+	if use_debug_utils {append(&exts, "VK_EXT_debug_utils")}
 	if use_validation {
 		append(&layers, "VK_LAYER_KHRONOS_validation")
-		append(&exts, "VK_EXT_debug_utils", "VK_EXT_validation_features")
+		append(&exts, "VK_EXT_validation_features")
+		if !use_debug_utils {append(&exts, "VK_EXT_debug_utils")} 	// the layer provides it
 	}
 	enabled_features := make([dynamic]vk.ValidationFeatureEnableEXT, context.temp_allocator)
 	append(&enabled_features, vk.ValidationFeatureEnableEXT.SYNCHRONIZATION_VALIDATION)
@@ -147,9 +152,9 @@ create_instance :: proc(
 		return false
 	}
 	vk.load_proc_addresses_instance(g.instance)
+	g.debug_utils = use_debug_utils || use_validation
 	if use_validation {
 		vk.CreateDebugUtilsMessengerEXT(g.instance, &messenger_info, nil, &g.messenger)
-		g.debug_utils = true
 		log.infof(
 			"gpu validation on best_practices=%v gpu_assisted=%v",
 			validation.best_practices,
@@ -369,6 +374,18 @@ queue_timestamp_bits :: proc(g: ^Gpu) -> u32 {
 	families := make([]vk.QueueFamilyProperties, count, context.temp_allocator)
 	vk.GetPhysicalDeviceQueueFamilyProperties(g.physical, &count, raw_data(families))
 	return families[g.queue_family].timestampValidBits
+}
+
+@(private)
+has_instance_extension :: proc(name: string) -> bool {
+	count: u32
+	vk.EnumerateInstanceExtensionProperties(nil, &count, nil)
+	exts := make([]vk.ExtensionProperties, count, context.temp_allocator)
+	vk.EnumerateInstanceExtensionProperties(nil, &count, raw_data(exts))
+	for &e in exts {
+		if string(cstring(&e.extensionName[0])) == name {return true}
+	}
+	return false
 }
 
 @(private)

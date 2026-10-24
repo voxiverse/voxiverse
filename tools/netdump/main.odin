@@ -20,7 +20,7 @@ import "../../game"
 Options :: struct {
 	file:    string `args:"pos=0" usage:"trace file (default build/net.trace)"`,
 	summary: bool `usage:"counts and bytes per message kind instead of messages"`,
-	kind:    string `usage:"only this kind (hello, input, ping, teleport, set_rule, edit, admin, welcome, reject, chunk, unload, pong, player, rules, edit_result, block, column)"`,
+	kind:    string `usage:"only this kind (-kind:list lists them)"`,
 	sender:  string `usage:"only messages from client or server"`,
 	from:    f64 `usage:"only from this many seconds into the session"`,
 	to:      f64 `usage:"only up to this many seconds into the session"`,
@@ -32,6 +32,18 @@ main :: proc() {
 		file = "build/net.trace",
 	}
 	flags.parse_or_exit(&opts, os.args, .Odin)
+	if opts.kind != "" && !kind_known(opts.kind) {
+		if opts.kind != "list" {fmt.eprintfln("netdump: no message kind %q", opts.kind)}
+		for sender in game.Side {
+			fmt.printf("%v:", sender)
+			for k in 0 ..< 256 {
+				if name := game.message_kind_name(sender, u8(k));
+				   name != "" {fmt.printf(" %s", name)}
+			}
+			fmt.println()
+		}
+		os.exit(0 if opts.kind == "list" else 1)
+	}
 	data, err := os.read_entire_file_from_path(opts.file, context.allocator)
 	if err != nil {
 		fmt.eprintfln("netdump: cannot read %s: %v", opts.file, err)
@@ -108,6 +120,13 @@ main :: proc() {
 		fmt.eprintfln("netdump: %d message(s) did not decode", invalid)
 		os.exit(1)
 	}
+}
+
+kind_known :: proc(name: string) -> bool {
+	for sender in game.Side {
+		for k in 0 ..< 256 {if game.message_kind_name(sender, u8(k)) == name {return true}}
+	}
+	return false
 }
 
 // describe decodes one message into "kind field=value ...".

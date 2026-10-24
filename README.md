@@ -64,7 +64,11 @@ on automatically and which reports GPU API misuse in the log.
 | `shaders` | Compile `assets/shaders` to SPIR-V (only what changed) |
 | `build` | Build the game into `build/` (debug; `--release`, `--sanitize`, `--profile`) |
 | `run` | Build and run; arguments after `--` go to the game, e.g. `run -- --frames 120` |
+| `serve` | Build and run the dedicated server; arguments after `--` go to it |
 | `debug` | Build and start in gdb/lldb (RAD Debugger on Windows) with Odin pretty-printers |
+| `netdump`, `replay` | Print a network trace / replay its client messages against a fresh server (DEBUGGING.md) |
+| `sfx` | Write every sound effect to `build/sounds/*.wav` |
+| `help` | List the commands and their flags |
 
 Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with
 Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md](DEBUGGING.md).

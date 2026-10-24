@@ -3,9 +3,9 @@ package gpu
 import "core:log"
 import vk "vendor:vulkan"
 
-// Buffers and images. One memory allocation per resource for now; few
-// resources exist yet. A sub-allocator comes with the world renderer, which
-// creates many.
+// Buffers and images, one memory allocation each: there are few. What
+// needs many small pieces sub-allocates one big buffer instead (the world
+// pass's vertices: base/range_alloc.odin).
 
 Buffer :: struct {
 	handle: vk.Buffer,
@@ -60,14 +60,12 @@ create_buffer :: proc(
 		sharingMode = .EXCLUSIVE,
 	}
 	check(vk.CreateBuffer(g.device, &info, nil, &b.handle)) or_return
+	defer if !ok {destroy_buffer(g, &b)} 	// whatever was made before a failure
 	reqs: vk.MemoryRequirements
 	vk.GetBufferMemoryRequirements(g.device, b.handle, &reqs)
 	props: vk.MemoryPropertyFlags =
 		{.HOST_VISIBLE, .HOST_COHERENT} if host_visible else {.DEVICE_LOCAL}
-	if b.memory, ok = allocate(g, reqs, props, .SHADER_DEVICE_ADDRESS in usage); !ok {
-		vk.DestroyBuffer(g.device, b.handle, nil)
-		return {}, false
-	}
+	b.memory = allocate(g, reqs, props, .SHADER_DEVICE_ADDRESS in usage) or_return
 	check(vk.BindBufferMemory(g.device, b.handle, b.memory, 0)) or_return
 	if host_visible {
 		mapped: rawptr
@@ -114,12 +112,10 @@ create_image :: proc(
 		initialLayout = .UNDEFINED,
 	}
 	check(vk.CreateImage(g.device, &info, nil, &img.handle)) or_return
+	defer if !ok {destroy_image(g, &img)} 	// whatever was made before a failure
 	reqs: vk.MemoryRequirements
 	vk.GetImageMemoryRequirements(g.device, img.handle, &reqs)
-	if img.memory, ok = allocate(g, reqs, {.DEVICE_LOCAL}); !ok {
-		vk.DestroyImage(g.device, img.handle, nil)
-		return {}, false
-	}
+	img.memory = allocate(g, reqs, {.DEVICE_LOCAL}) or_return
 	check(vk.BindImageMemory(g.device, img.handle, img.memory, 0)) or_return
 	img.format, img.width, img.height, img.mips, img.layers = format, width, height, mips, layers
 	view_info := vk.ImageViewCreateInfo {

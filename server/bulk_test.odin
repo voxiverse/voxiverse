@@ -144,3 +144,27 @@ net_block :: proc(c: ^Net_Client, p: game.Block_Pos) -> (game.Block, bool) {
 	if !ok {return .Air, false}
 	return game.chunk_get(blocks, game.local_of(p)), true
 }
+
+// Shapes: a sphere holds the blocks whose centres are inside it; a box its
+// corners and everything between, whichever way round they are given.
+@(test)
+test_bulk_shapes :: proc(t: ^testing.T) {
+	ball := Sphere{{0.5, 0.5, 0.5}, 1.5}
+	lo, hi := shape_box(ball)
+	testing.expect(t, lo == {-1, -1, -1} && hi == {2, 2, 2})
+	inside := 0
+	for y in lo.y ..= hi.y {
+		for z in lo.z ..= hi.z {
+			for x in lo.x ..= hi.x {if shape_has(ball, {x, y, z}) {inside += 1}}
+		}
+	}
+	testing.expect_value(t, inside, 19) // the centre, 6 faces, 12 edges (not the 8 corners)
+	box := Box{{3, 0, -2}, {1, 2, 0}}
+	lo, hi = shape_box(box)
+	testing.expect(t, lo == {1, 0, -2} && hi == {3, 2, 0})
+	testing.expect(
+		t,
+		shape_has(box, {1, 0, -2}) && shape_has(box, {3, 2, 0}) && shape_has(box, {2, 1, -1}),
+	)
+	testing.expect(t, !shape_has(box, {0, 0, 0}) && !shape_has(box, {2, 3, -1}))
+}

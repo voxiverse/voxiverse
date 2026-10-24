@@ -11,7 +11,7 @@ import "../game"
 // The player's settings (saved) and the debug switches (not saved), each a
 // plain struct described once by a variable table (see base/vars.odin and
 // PLAN.md, "Console and variables"). Code reads the fields; the console
-// (`set`, `get`, `vars`, `reset`), the tuning panel and the settings file go
+// (`set`, `vars`, `reset`), the tuning panel and the settings file go
 // through the tables.
 
 Settings :: struct {
@@ -177,7 +177,7 @@ debug_table :: proc() -> base.Var_Table {
 	return {"debug.", Debug_Switches, DEBUG_VARS[:], &DEBUG_DEFAULTS}
 }
 
-// Variable is a table and the struct it describes.
+// Variables: a table and the struct it describes.
 Variables :: struct {
 	table: base.Var_Table,
 	data:  rawptr,

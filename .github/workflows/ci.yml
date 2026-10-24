@@ -58,41 +58,51 @@ jobs:
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
-      - name: Shaders
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} shaders
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
 
-      # Runs real frames on Mesa's CPU Vulkan driver under the validation
-      # layer, then with AddressSanitizer, then with profiling (checking the
-      # trace): any validation finding, leak, sanitizer report or bad trace
-      # fails the run. The world runs fly through streamed terrain and fail
-      # if memory grows (fly_test, the M3 exit check).
-      - name: Render test (Linux, CPU Vulkan + validation)
+      # Real frames on Mesa's CPU Vulkan driver under the validation layer:
+      # any validation finding, leak, sanitizer report or failed check fails
+      # the run.
+      - name: Linux test packages (CPU Vulkan, xvfb, debuggers, tshark)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb
-          VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)"
-          export VK_DRIVER_FILES
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
+          echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
+
+      # The world streams through a flight and memory stays flat (fly_test,
+      # M3's check), recorded: every message decodes, and replaying the
+      # client's messages against a fresh server goes cleanly.
+      - name: Flight, trace and replay (Linux)
+        if: runner.os == 'Linux'
+        run: |
           xvfb-run -a ./build/voxiverse --frames 120
           xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30; set view_radius 6; set view_height 3; fly_test 600 quit"
-          # The flight's network trace: every message decodes, and replaying
-          # the client's messages against a fresh server goes cleanly.
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
-          # The sky through a day (screenshots uploaded below; validation must stay clean).
-          # Bulk edits (M9): rockets and explosions, each shown whole, and
-          # the client's chunks end up exactly the server's.
-          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; blast_test 12 quit"
-          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; time 0.8; wait 5; screenshot sky_night; wait 5; quit"
-          # Multiplayer over real sockets: a dedicated server and a client
-          # joining it, the server capturing every packet; the Wireshark
-          # dissector must decode them all (our harness, then tshark itself).
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tshark lua5.4
-          ./build/voxiverse-server --world build/ci-world --view-radius 3 --view-height 2 --capture build/server.pcap &
+
+      # Bulk edits (M9): rockets and explosions, each shown whole, and the
+      # client's chunks end up exactly the server's.
+      - name: Blast test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; blast_test 12 quit"
+
+      # The sky through a day (screenshots uploaded below).
+      - name: Sky (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; time 0.8; wait 5; screenshot sky_night; wait 5; quit"
+
+      # Over real sockets: a dedicated server and a client joining it, the
+      # server capturing every packet; the Wireshark dissector must decode
+      # them all (our harness, then tshark itself).
+      - name: Multiplayer and Wireshark (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./build/voxiverse-server --world build/ci-world --view-radius 3 --view-height 2 --capture build/server.pcap > build/server.log 2>&1 &
           SERVER=$!
-          sleep 2
+          for _ in $(seq 100); do grep -q "server listening" build/server.log && break; sleep 0.1; done
+          grep "server listening" build/server.log
           xvfb-run -a ./build/voxiverse --exec "set name ci; set view_radius 3; set view_height 2; join 127.0.0.1; wait_world; wait 30; screenshot multiplayer; wait 5; quit"
           kill -INT $SERVER
           wait $SERVER
@@ -101,12 +111,25 @@ jobs:
           head -n 20 build/tshark.txt
           test "$(wc -l < build/tshark.txt)" -gt 50
           test -z "$(tshark -X lua_script:tools/wireshark/voxiverse.lua -r build/server.pcap -Y '_ws.malformed || voxiverse.malformed')"
-          # A crash must be reported with our stack, then still kill the run.
+
+      # A crash is reported with our stack, and still fails the run.
+      - name: Crash handler (Linux)
+        if: runner.os == 'Linux'
+        run: |
           if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt
+
+      - name: AddressSanitizer (Linux)
+        if: runner.os == 'Linux'
+        run: |
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; fly_test 200 quit"
+
+      # A release build's flight, profiled: the trace must be well formed.
+      - name: Profiling (Linux)
+        if: runner.os == 'Linux'
+        run: |
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 300 quit"
           python3 tools/debugger/check_spall.py build/voxiverse.spall

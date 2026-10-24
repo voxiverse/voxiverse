@@ -25,7 +25,7 @@ Chunk :: struct {
 	pos:      game.Chunk_Pos,
 	state:    Chunk_State,
 	blocks:   game.Chunk_Blocks,
-	modified: bool, // edited since generated (M5 saves these instead of forgetting them)
+	modified: bool, // edited since generated (saved when unloaded: save.odin)
 }
 
 World :: struct {

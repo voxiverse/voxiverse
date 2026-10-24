@@ -6,18 +6,9 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-// The Voxiverse build driver. build.sh / build.bat hand every argument to it:
-//
-//	build check                type-check every package and verify formatting
-//	build test                 run the unit tests
-//	build fmt                  format all sources in place
-//	build shaders              compile assets/shaders to SPIR-V (fetches the pinned glslang once)
-//	build build [--release | --sanitize]    build the game and the dedicated server into build/
-//	build run [--release | --sanitize] [-- game args...]
-//	build serve [--release] [-- server args...]   run the dedicated server
-//	build debug [--lldb] [-- game args...]   debug build under gdb/lldb with Odin printers
-//
-// It runs from the repository root (the wrapper scripts cd there).
+// The Voxiverse build driver. build.sh / build.bat hand every argument to
+// it; its commands are listed by usage (`build help`). It runs from the
+// repository root (the wrapper scripts cd there).
 
 // PACKAGES are type-checked by `check`, each on its own so one broken
 // package doesn't hide errors in the others.
@@ -138,13 +129,16 @@ usage :: proc() {
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
+	fmt.println("  build     build the game and the dedicated server into build/ (debug), with:")
+	fmt.println("              --release    optimized")
+	fmt.println("              --sanitize   with AddressSanitizer")
 	fmt.println(
-		"  build     build the game into build/ (debug; --release optimized, --sanitize with AddressSanitizer)",
+		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
-		"  debug     build, then run it in the debugger (gdb, --lldb, RAD Debugger on Windows)",
+		"  debug     build, then run it in the debugger (gdb; --lldb, --gdb; RAD Debugger on Windows)",
 	)
 }
 

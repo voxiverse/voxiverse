@@ -19,7 +19,7 @@ import "../gpu"
 //	render.world_add_mesh(...) / world_remove_mesh(...)  // add returns .Busy when staging is full
 //	render.world_upload(&pass, &g, frame)                // before begin_rendering
 //	... begin_rendering ...
-//	render.world_draw(&pass, &g, frame, camera)
+//	render.world_draw(&pass, &g, frame, camera, scene)
 //
 // Vertices are 8 bytes (client/mesh.Vertex): positions relative to the
 // chunk, which is drawn relative to the camera's chunk, so precision does

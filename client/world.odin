@@ -436,7 +436,6 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 world_bulk_begin :: proc(w: ^World, count: int) {
 	clear(&w.batch)
 	w.batch_left = min(count, MAX_GROUP_MEMBERS)
-	if w.batch_left == 0 {return}
 }
 
 // group_open makes a group of the batch's chunks and their neighbours.

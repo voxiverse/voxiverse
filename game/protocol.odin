@@ -46,8 +46,8 @@ Ping :: struct {
 	id: u32,
 }
 
-// Teleport and Set_Rule are cheats: honoured only by servers that allow
-// them (singleplayer).
+// Teleport and Set_Rule are cheats: honoured only from players the server
+// lets cheat (Welcome.cheats: in your own world, or with --cheats).
 Teleport :: struct {
 	position:   [3]f64,
 	yaw, pitch: f32,
