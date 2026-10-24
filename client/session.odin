@@ -28,7 +28,8 @@ import "mesh"
 // Player_Updates have the last word.
 
 Session_Config :: struct {
-	name:        string, // the player's
+	name:        string, // the character to play ("": ask for the account's)
+	key:         game.Account_Key, // the account
 	join:        Maybe(Join), // play on that server; otherwise host the world here
 	seed:        i64,
 	view_radius: i32,
@@ -47,6 +48,7 @@ Join :: struct {
 
 Session_State :: enum u8 {
 	Connecting, // Hello sent, waiting for Welcome
+	Choosing, // the account's characters arrived: pick one (or make one)
 	Playing,
 	Failed, // see failure; the caller ends the session
 }
@@ -69,6 +71,7 @@ Session :: struct {
 	worldgen:         worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen:     bool,
 	grants:           [dynamic]game.Grant, // what the server lets this player do (heap)
+	characters:       [dynamic]string, // the account's, to choose from (heap; Choosing)
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
 	texels:           [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
@@ -196,7 +199,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		return false
 	}
 	if config.trace {session_trace(s)}
-	send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.name})
+	send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name})
 	return true
 }
 
@@ -232,6 +235,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	delete(s.grants)
 	for c in s.commands {delete(c)}
 	delete(s.commands)
+	for c in s.characters {delete(c)}
+	delete(s.characters)
 	delete(s.inv_pending)
 	for e in s.chat {delete(e.text)}
 	delete(s.chat)

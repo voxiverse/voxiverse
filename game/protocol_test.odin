@@ -30,9 +30,22 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	scratch := new(Block_Array)
 	defer free(scratch)
 
-	hello, ok := decode_client(encode_c(Hello{PROTOCOL_VERSION, "Ünïcode name"})[:])
+	account: Account
+	account[0], account[31] = 7, 9
+	hello, ok := decode_client(encode_c(Hello{PROTOCOL_VERSION, account, "Ünïcode name"})[:])
 	testing.expect(t, ok)
-	testing.expect_value(t, hello.(Hello).name, "Ünïcode name")
+	testing.expect_value(t, hello.(Hello).character, "Ünïcode name")
+	testing.expect(t, hello.(Hello).account == account)
+	sig: Signature
+	sig[63] = 1
+	proof: Client_Message
+	proof, ok = decode_client(encode_c(Proof{sig})[:])
+	testing.expect(t, ok && proof.(Proof).signature == sig)
+	nonce: Nonce
+	nonce[5] = 3
+	challenge: Server_Message
+	challenge, ok = decode_server(encode_s(Challenge{nonce})[:], scratch)
+	testing.expect(t, ok && challenge.(Challenge).nonce == nonce)
 	move: Client_Message
 	input := Player_Input{{0.5, -1}, 1.25, -0.5, {.Jump, .Sprint}}
 	move, ok = decode_client(encode_c(Input{42, input})[:])
@@ -280,7 +293,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)

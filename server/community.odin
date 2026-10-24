@@ -50,11 +50,12 @@ Member :: struct {
 
 // Community: on the heap, strings owned.
 Community :: struct {
-	motd:    string, // shown to each player joining (formatted)
-	members: map[string]Member,
-	warps:   map[string]Place,
-	bans:    map[string]Ban,
-	ip_bans: map[string]Ban,
+	motd:         string, // shown to each player joining (formatted)
+	members:      map[string]Member,
+	warps:        map[string]Place,
+	bans:         map[string]Ban, // by character name
+	account_bans: map[string]Ban, // by account (hex)
+	ip_bans:      map[string]Ban,
 }
 
 FOREVER :: max(i64)
@@ -155,6 +156,11 @@ community_destroy :: proc(m: ^Community) {
 		ban_destroy(&b)
 	}
 	delete(m.ip_bans)
+	for k, &b in m.account_bans {
+		delete(k)
+		ban_destroy(&b)
+	}
+	delete(m.account_bans)
 	delete(m.motd)
 	m^ = {}
 }
@@ -197,7 +203,7 @@ community_parse :: proc(m: ^Community, text: string) {
 			p: Place
 			p, ok = place_parse(f[2:])
 			if ok {place_set(&m.warps, f[1], p)}
-		case "ban", "ban_ip":
+		case "ban", "ban_ip", "ban_account":
 			ok = len(f) >= 4
 			if !ok {break}
 			until, is_int := strconv.parse_i64(f[2])
@@ -205,7 +211,10 @@ community_parse :: proc(m: ^Community, text: string) {
 			if !ok {break}
 			reason := ""
 			if len(f) > 4 {reason = strings.join(f[4:], " ", context.temp_allocator)}
-			ban_set(&m.bans if f[0] == "ban" else &m.ip_bans, f[1], until, f[3], reason)
+			bans := &m.bans
+			if f[0] == "ban_ip" {bans = &m.ip_bans}
+			if f[0] == "ban_account" {bans = &m.account_bans}
+			ban_set(bans, f[1], until, f[3], reason)
 		case "nick":
 			ok = member != nil && len(f) >= 2
 			if ok {set_string(&member.nick, strings.trim_space(tail))}
@@ -261,6 +270,10 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 	for name in sorted_names(m.ip_bans) {
 		ban := m.ip_bans[name]
 		fmt.sbprintfln(&b, "ban_ip %s %d %s %s", name, ban.until, ban.by, ban.reason)
+	}
+	for name in sorted_names(m.account_bans) {
+		ban := m.account_bans[name]
+		fmt.sbprintfln(&b, "ban_account %s %d %s %s", name, ban.until, ban.by, ban.reason)
 	}
 	for name in sorted_names(m.members) {
 		e := &m.members[name]

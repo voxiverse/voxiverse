@@ -1,5 +1,7 @@
 package client
 
+import "core:mem/virtual"
+import "core:strings"
 import "core:testing"
 
 import "../font"
@@ -94,5 +96,65 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	before := len(s.inv_pending)
 	testing.expect(t, !session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(dirt)}))
 	testing.expect_value(t, len(s.inv_pending), before)
+	free_all(context.temp_allocator)
+}
+
+// The characters screen: the account's characters to choose from; a click
+// on one chooses it (the session joins as it).
+@(test)
+test_characters_screen :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	ok: bool
+	app.font, ok = font.load(FONT_DATA)
+	testing.expect(t, ok)
+	testing.expect(t, ui.init(&app.ui, &app.font))
+	defer ui.destroy(&app.ui)
+	defer delete(app.new_character)
+	s := new(Session)
+	defer free(s)
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	s.endpoint = {&pipe, .Client}
+	game.writer_init(&s.writer)
+	defer game.writer_destroy(&s.writer)
+	defer {for c in s.characters {delete(c)}; delete(s.characters)}
+	defer {for n in s.notices {delete(n)}; delete(s.notices)}
+	defer {for e in s.chat {delete(e.text)}; delete(s.chat)}
+	defer virtual.arena_destroy(&s.arena)
+	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
+	s.state = .Choosing
+	app.session = s
+	defer app.session = nil
+	app.screen = .Game
+	SCREEN :: ui.Vec2{1280, 720}
+	th := &app.ui.theme
+	rows := len(s.characters) + 3
+	column := ui.rect_center(
+		{0, 0, SCREEN.x, SCREEN.y},
+		360,
+		f32(rows) * (th.row_height + th.spacing) + 80,
+	)
+	bob := ui.Vec2 {
+		column.x + 180,
+		column.y + 80 + (th.row_height + th.spacing) + th.row_height / 2,
+	}
+	ui.begin_frame(&app.ui, {mouse = bob}, SCREEN, 1)
+	app_ui(app, &app.ui)
+	ui.end_frame(&app.ui)
+	ui.begin_frame(
+		&app.ui,
+		{mouse = bob, mouse_pressed = {.Left}, mouse_down = {.Left}},
+		SCREEN,
+		1,
+	)
+	app_ui(app, &app.ui)
+	ui.end_frame(&app.ui)
+	ui.begin_frame(&app.ui, {mouse = bob, mouse_released = {.Left}}, SCREEN, 1)
+	app_ui(app, &app.ui)
+	ui.end_frame(&app.ui)
+	testing.expect_value(t, s.state, Session_State.Connecting)
+	testing.expect_value(t, s.config.name, "bob")
 	free_all(context.temp_allocator)
 }

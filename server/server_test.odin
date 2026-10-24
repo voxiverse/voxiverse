@@ -19,6 +19,7 @@ import "../game"
 @(private)
 Fake_Client :: struct {
 	endpoint:       game.Endpoint,
+	key:            game.Account_Key, // (fake_hello)
 	has:            map[game.Chunk_Pos]struct{},
 	welcome:        game.Welcome,
 	welcomed:       bool,
@@ -35,6 +36,15 @@ Fake_Client :: struct {
 	notices:        [dynamic]string, // (temp allocator)
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 	variables:      string, // the last Variables (temp allocator)
+}
+
+// fake_hello: c joins as the character name (of the account test_key(name)),
+// waiting until it is welcomed (as a real client sends nothing before).
+@(private)
+fake_hello :: proc(t: ^testing.T, c: ^Fake_Client, name: string) -> bool {
+	c.key = test_key(name)
+	fake_send(c, test_hello(name))
+	return wait_until(t, c, proc(c: ^Fake_Client) -> bool {return c.welcomed || c.rejected != ""})
 }
 
 @(private)
@@ -54,6 +64,9 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		m, ok := game.decode_server(p, c.scratch)
 		if !testing.expect(t, ok, "server sent an invalid message") {continue}
 		switch v in m {
+		case game.Challenge:
+			fake_send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
+		case game.Characters: // (tests name their character in Hello)
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
 		case game.Reject:
@@ -160,7 +173,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	defer delete(c.has)
 	defer delete(c.columns)
 
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	fake_hello(t, &c, "test")
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	testing.expect_value(t, c.welcome.tick_rate, game.TICK_RATE)
 	testing.expect(t, c.welcome.view_radius == RADIUS && c.welcome.view_height == HEIGHT)
@@ -246,7 +259,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{
-			first = game.Hello{game.PROTOCOL_VERSION + 1, "old"},
+			first = game.Hello{game.PROTOCOL_VERSION + 1, test_key("old").account, "old"},
 			reason = "protocol version mismatch",
 		},
 		{first = game.Input{}, reason = "message before hello"},
@@ -280,7 +293,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		if tc.raw != nil {
 			game.send(c.endpoint, tc.raw)
 		} else {
-			if tc.hello {fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tester"})}
+			if tc.hello {fake_hello(t, &c, "tester")}
 			fake_send(&c, tc.first)
 		}
 		testing.expect(
@@ -315,7 +328,7 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	defer free(c.scratch)
 	defer delete(c.has)
 	defer delete(c.columns)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tester"})
+	fake_hello(t, &c, "tester")
 	fake_send(&c, game.Command{"explode 0 0 0 8"})
 	fake_send(&c, game.Fire{})
 	testing.expect(
@@ -354,7 +367,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	defer free(c.scratch)
 	defer delete(c.has)
 	defer delete(c.columns)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	fake_hello(t, &c, "test")
 	// Joined, and standing on the ground once its chunks exist.
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	for i in 1 ..= 60 { 	// a second of standing still lets it fall and land
@@ -448,7 +461,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	defer delete(c.has)
 	defer delete(c.columns)
 	defer delete(c.results)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	fake_hello(t, &c, "test")
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 
 	// Hover in open air at y 100 (flying), where the chunks are all air.
@@ -516,7 +529,7 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 	defer delete(c.has)
 	defer delete(c.columns)
 	defer delete(c.results)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "solo"})
+	fake_hello(t, &c, "solo")
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.clock > 0}),
@@ -576,7 +589,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 	defer free(c.scratch)
 	defer delete(c.has)
 	defer delete(c.columns)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "admin"})
+	fake_hello(t, &c, "admin")
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 10}),
@@ -671,7 +684,7 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 		defer free(c.scratch)
 		defer delete(c.has)
 		defer delete(c.columns)
-		fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tuner"})
+		fake_hello(t, &c, "tuner")
 		testing.expect(
 			t,
 			wait_until(
@@ -741,7 +754,7 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 	defer free(c.scratch)
 	defer delete(c.has)
 	defer delete(c.columns)
-	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "builder"})
+	fake_hello(t, &c, "builder")
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 100}),

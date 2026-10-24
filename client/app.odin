@@ -77,6 +77,8 @@ App :: struct {
 	settings:         Settings,
 	screen:           Screen,
 	overlays:         Overlays, // what is open over the screen (overlays.odin)
+	account:          game.Account_Key, // who we are to servers (account.odin)
+	new_character:    [dynamic]u8, // the name typed on the characters screen
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
@@ -94,6 +96,7 @@ app_init :: proc(app: ^App) -> bool {
 	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
 	settings_load(app)
+	account_load(app)
 	console_history_load(&app.console)
 	app.debug = DEBUG_DEFAULTS
 	shader_watch_init(&app.shader_watch)
@@ -204,6 +207,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)
+	delete(app.new_character)
 	validation_issues = gpu.destroy(&app.g)
 	platform.window_close(&app.window)
 	input_destroy(&app.input)
@@ -365,6 +369,7 @@ enter_world :: proc(app: ^App, save_dir: string, seed: i64, spawn: Maybe([3]f64)
 		app,
 		{
 			name = player_name(&app.settings),
+			key = app.account,
 			seed = seed,
 			save_dir = save_dir,
 			spawn = spawn,
@@ -377,7 +382,7 @@ enter_world :: proc(app: ^App, save_dir: string, seed: i64, spawn: Maybe([3]f64)
 
 // join_server plays on the server at address ("host" or "host:port"; the
 // default port if none).
-join_server :: proc(app: ^App, address: string, password: string) {
+join_server :: proc(app: ^App, address: string, password: string, choose := false) {
 	ep, err := net.resolve_ip4(address)
 	if err != nil {
 		delete(app.message)
@@ -389,9 +394,10 @@ join_server :: proc(app: ^App, address: string, password: string) {
 	start_session(
 		app,
 		{
-			name = player_name(&app.settings),
-			join = Join{ep, password},
-			capture = app.debug.net_capture,
+			name        = "" if choose else player_name(&app.settings), // "": the server's list
+			key         = app.account,
+			join        = Join{ep, password},
+			capture     = app.debug.net_capture,
 			view_radius = app.settings.view_radius,
 			view_height = app.settings.view_height,
 		},

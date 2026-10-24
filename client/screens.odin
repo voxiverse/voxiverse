@@ -87,7 +87,8 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	defer ui.pop_id(ctx)
 	s := app.session
 	t := &ctx.theme
-	if s.state == .Connecting {
+	switch s.state {
+	case .Connecting:
 		ui.label(
 			ctx,
 			"Joining the world...",
@@ -95,6 +96,10 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 			.Center,
 		)
 		return
+	case .Choosing:
+		characters_screen(app, ctx)
+		return
+	case .Playing, .Failed:
 	}
 	name_tags(app, ctx)
 	if world_paused(app) {return}

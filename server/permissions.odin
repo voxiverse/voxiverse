@@ -167,6 +167,13 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 				role = nil
 				player = player_perms(p, value)
 			}
+		case "account":
+			a, parsed := game.account_parse(value)
+			ok = parsed
+			if ok {
+				role = nil
+				player = player_perms(p, account_key(a))
+			}
 		case "inherit":
 			ok = role != nil && role_name_valid(value)
 			if ok {append(&role.inherits, strings.clone(value))}
@@ -199,7 +206,11 @@ permissions_text :: proc(p: ^Permissions, allocator := context.temp_allocator) -
 	}
 	for name in sorted_keys(p.players) {
 		pl := &p.players[name]
-		fmt.sbprintfln(&b, "player %s", name)
+		if strings.has_prefix(name, ACCOUNT_PREFIX) {
+			fmt.sbprintfln(&b, "account %s", name[len(ACCOUNT_PREFIX):])
+		} else {
+			fmt.sbprintfln(&b, "player %s", name)
+		}
 		for x in pl.roles {fmt.sbprintfln(&b, "role %s", x)}
 		for x in pl.grants {fmt.sbprintfln(&b, "grant %s", x)}
 		for k in sorted_keys(pl.meta) {fmt.sbprintfln(&b, "meta %s %s", k, pl.meta[k])}
@@ -264,6 +275,7 @@ map_entry_of :: proc(m: ^map[string]string, key: string) -> (k, v: string, ok: b
 resolve :: proc(
 	p: ^Permissions,
 	name: string,
+	account: Maybe(game.Account),
 	owner: bool,
 	out: ^[dynamic]game.Grant,
 	allocator := context.allocator,
@@ -278,9 +290,12 @@ resolve :: proc(
 		}
 	}
 	level := make([dynamic]string, context.temp_allocator)
-	if pl, ok := &p.players[name]; ok {
-		add(out, pl.grants[:], 0, allocator)
-		append(&level, ..pl.roles[:])
+	// The character's own, and their account's (every character of it).
+	for key in ([2]string{name, account_key(account)}) {
+		if pl, ok := &p.players[key]; ok && key != "" {
+			add(out, pl.grants[:], 0, allocator)
+			append(&level, ..pl.roles[:])
+		}
 	}
 	append(&level, "default")
 	seen := make(map[string]struct{}, 16, context.temp_allocator)
@@ -296,6 +311,16 @@ resolve :: proc(
 		}
 		level = next
 	}
+}
+
+// Permissions for an account (all its characters) are kept as a player
+// called ACCOUNT_PREFIX + its hex (`account <hex>` in permissions.cfg).
+ACCOUNT_PREFIX :: "account:"
+
+account_key :: proc(account: Maybe(game.Account)) -> string {
+	a, ok := account.?
+	if !ok {return ""}
+	return strings.concatenate({ACCOUNT_PREFIX, game.account_text(a)}, context.temp_allocator)
 }
 
 // meta_of: player name's metadata key: their own, else the nearest role's.
@@ -361,7 +386,7 @@ is_owner :: proc(s: ^Server, c: ^Client) -> bool {
 refresh_grants :: proc(s: ^Server, c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	clear(&c.grants)
-	resolve(&s.perms, client_name(c), is_owner(s, c), &c.grants)
+	resolve(&s.perms, client_name(c), c.account, is_owner(s, c), &c.grants)
 	send_message(s, c, game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)})
 }
 

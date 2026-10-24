@@ -41,7 +41,7 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 		defer free(c.scratch)
 		defer delete(c.has)
 		defer delete(c.columns)
-		fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "lander"})
+		fake_hello(t, &c, "lander")
 		testing.expect(
 			t,
 			wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.chunks > 10}),
@@ -86,7 +86,7 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 		defer free(c.scratch)
 		defer delete(c.has)
 		defer delete(c.columns)
-		fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "newcomer"})
+		fake_hello(t, &c, "newcomer")
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 		testing.expect_value(t, c.welcome.spawn, [3]f64{5.5, f64(top + 20), 5.5})
 		testing.expect(t, stop(&srv))

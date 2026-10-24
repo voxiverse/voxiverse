@@ -136,7 +136,17 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 		if !ok {return "INVALID client message", false}
 		switch v in m {
 		case game.Hello:
-			return fmt.tprintf("hello protocol=%d name=%q", v.protocol, v.name), true
+			return fmt.tprintf(
+					"hello protocol=%d account=%s character=%q",
+					v.protocol,
+					game.account_text(v.account)[:16],
+					v.character,
+				),
+				true
+		case game.Proof:
+			return "proof", true
+		case game.Choose:
+			return fmt.tprintf("choose character=%q", v.character), true
 		case game.Input:
 			text := fmt.tprintf(
 				"input seq=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
@@ -273,6 +283,10 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("chat_line id=%d sender=%d text=%q", v.id, v.sender, v.text), true
 		case game.Chat_Delete:
 			return fmt.tprintf("chat_delete id=%d", v.id), true
+		case game.Challenge:
+			return "challenge", true
+		case game.Characters:
+			return fmt.tprintf("characters names=%q", v.names), true
 		case game.Inventory_Update:
 			return fmt.tprintf("inventory acked=%d selected=%d", v.acked, v.inventory.selected),
 				true

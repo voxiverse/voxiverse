@@ -14,6 +14,8 @@ import "../netcode"
 Client_State :: enum u8 {
 	Free, // an empty seat
 	Connecting, // connected, waiting for Hello
+	Proving, // Challenge sent, waiting for the Proof
+	Choosing, // proved; Characters sent, waiting for Choose
 	Playing,
 	Gone, // refused; dropped soon (kick_at), or the local pipe closed
 }
@@ -30,6 +32,10 @@ Client :: struct {
 	state:        Client_State,
 	link:         Client_Link,
 	grants:       [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
+	account:      game.Account, // (proved once Playing)
+	nonce:        game.Nonce, // the Challenge sent
+	wanted:       [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
+	wanted_len:   int,
 	name_buf:     [game.MAX_NAME_LENGTH]u8,
 	name_len:     int,
 	kick_at:      u64, // tick to drop a refused client

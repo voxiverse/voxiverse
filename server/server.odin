@@ -140,6 +140,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	}
 	permissions_open(s)
 	community_open(s)
+	characters_open(s)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
 	// Loaded chunks stay within the unload distance of some player, plus
 	// chunks still generating that were requested before they moved.
@@ -413,6 +414,34 @@ client_of_peer :: proc(s: ^Server, peer: netcode.Peer_Id) -> ^Client {
 	return nil
 }
 
+// enter: a proved account plays its character name (a new one if the name
+// is free), or is told why not.
+@(private = "file")
+enter :: proc(s: ^Server, c: ^Client, name: string) {
+	if owner, taken := s.store.characters[name]; taken && owner != c.account {
+		disconnect(s, c, "that name is another account's")
+		return
+	}
+	for &other in s.clients {
+		if other.state == .Playing && client_name(&other) == name {
+			disconnect(s, c, "someone with that name is playing")
+			return
+		}
+	}
+	if _, mine := s.store.characters[name];
+	   !mine && len(characters_of(s, c.account)) >= game.MAX_CHARACTERS {
+		disconnect(s, c, "this account has as many characters as it may here")
+		return
+	}
+	if why, banned := banned(s, name, c.address, c.account); banned {
+		log.infof("server banned player refused name=%s address=%s", name, c.address)
+		disconnect(s, c, why)
+		return
+	}
+	character_claim(s, name, c.account)
+	join(s, c, name)
+}
+
 // handle one message from a client.
 @(private = "file")
 handle :: proc(s: ^Server, c: ^Client, p: []u8) {
@@ -422,12 +451,17 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		disconnect(s, c, "invalid message")
 		return
 	}
-	// Before hello only a hello (or a ping) makes sense.
-	_, hello := m.(game.Hello)
-	_, ping := m.(game.Ping)
-	if c.state != .Playing && !hello && !ping {
-		disconnect(s, c, "message before hello")
-		return
+	// Before playing only the handshake (or a ping) makes sense.
+	if c.state != .Playing {
+		handshake: bool
+		#partial switch _ in m {
+		case game.Hello, game.Proof, game.Choose, game.Ping:
+			handshake = true
+		}
+		if !handshake {
+			disconnect(s, c, "message before hello")
+			return
+		}
 	}
 	// What needs permission (refused with a word; commands check their own).
 	node := ""
@@ -461,22 +495,39 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			disconnect(s, c, "protocol version mismatch")
 			return
 		}
-		if !game.name_valid(v.name) {
+		if v.character != "" && !game.name_valid(v.character) {
 			disconnect(s, c, "names are 1 to 16 letters, digits, _ or -")
 			return
 		}
-		for &other in s.clients {
-			if other.state == .Playing && client_name(&other) == v.name {
-				disconnect(s, c, "someone with that name is playing")
-				return
-			}
-		}
-		if why, banned := banned(s, v.name, c.address); banned {
-			log.infof("server banned player refused name=%s address=%s", v.name, c.address)
-			disconnect(s, c, why)
+		c.account = v.account
+		c.wanted_len = copy(c.wanted[:], v.character)
+		c.nonce = game.nonce_make()
+		c.state = .Proving
+		send_message(s, c, game.Challenge{c.nonce})
+	case game.Proof:
+		if c.state != .Proving {
+			disconnect(s, c, "unexpected proof")
 			return
 		}
-		join(s, c, v.name)
+		if !game.account_verify(c.account, c.nonce, v.signature) {
+			log.warnf("server account proof failed account=%s", game.account_text(c.account))
+			disconnect(s, c, "the account's proof is wrong")
+			return
+		}
+		c.nonce = {} // (used: a proof is for one nonce)
+		if c.wanted_len == 0 {
+			c.state = .Choosing
+			names := characters_of(s, c.account)
+			send_message(s, c, game.Characters{strings.join(names, " ", context.temp_allocator)})
+			return
+		}
+		enter(s, c, string(c.wanted[:c.wanted_len]))
+	case game.Choose:
+		if c.state != .Choosing || !game.name_valid(v.character) {
+			disconnect(s, c, "unexpected choice")
+			return
+		}
+		enter(s, c, v.character)
 	case game.Input:
 		game.input_queue_push(&c.inputs, v)
 	case game.Teleport:

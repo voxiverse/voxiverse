@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -35,7 +35,7 @@ local SERVER_KINDS = {
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
 	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
-	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory",
+	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters",
 }
 
 local f = vx.fields
@@ -97,8 +97,8 @@ local function describe(tvb, from_server)
 	local ok, text = pcall(function()
 		if not from_server then
 			if kind == 1 then
-				local name_s = gstring(tvb, 5)
-				return string.format("hello protocol=%d name=%q", u32(tvb, 1), name_s or "?")
+				local name_s = gstring(tvb, 37)
+				return string.format("hello protocol=%d character=%q", u32(tvb, 1), name_s or "?")
 			elseif kind == 2 then
 				return string.format("input seq=%d", u32(tvb, 1))
 			elseif kind == 3 then

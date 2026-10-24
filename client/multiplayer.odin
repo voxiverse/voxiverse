@@ -148,6 +148,6 @@ multiplayer_screen :: proc(app: ^App, ctx: ^ui.Context) {
 join_from_screen :: proc(app: ^App, address: string) {
 	m := &app.multiplayer
 	multiplayer_close(m)
-	join_server(app, address, string(m.password[:]))
+	join_server(app, address, string(m.password[:]), choose = true)
 	if app.session == nil {multiplayer_open(app)} 	// failed at once: stay (message shown)
 }

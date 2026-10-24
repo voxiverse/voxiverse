@@ -27,7 +27,7 @@ receive :: proc(s: ^Session) {
 		}
 		if was != .Connected && s.link.state == .Connected {
 			log.info("session connected")
-			send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.name})
+			send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name})
 		}
 		netcode.link_receive(&s.link, &s.received)
 		for p in s.received {
@@ -53,7 +53,7 @@ receive :: proc(s: ^Session) {
 		}
 		if s.state != .Playing {
 			#partial switch _ in m {
-			case game.Welcome, game.Reject, game.Pong:
+			case game.Welcome, game.Reject, game.Pong, game.Challenge, game.Characters:
 			case game.Player_Update, game.Players, game.Entities, game.Time:
 				continue // unreliable: it overtook the welcome (newer ones follow)
 			case:
@@ -63,6 +63,15 @@ receive :: proc(s: ^Session) {
 			}
 		}
 		switch v in m {
+		case game.Challenge:
+			send_message(s, game.Proof{game.account_sign(&s.config.key, v.nonce)})
+		case game.Characters:
+			for c in s.characters {delete(c)}
+			clear(&s.characters)
+			for name in strings.fields(v.names, context.temp_allocator) {
+				append(&s.characters, strings.clone(name))
+			}
+			s.state = .Choosing
 		case game.Welcome:
 			welcome(s, v)
 		case game.Reject:

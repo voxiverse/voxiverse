@@ -15,9 +15,10 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 12
+PROTOCOL_VERSION :: 13
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
+MAX_CHARACTERS :: 8 // an account's in one universe
 MAX_PLAYERS :: 32 // a server's seats at most
 
 // Positions and chunk coordinates are kept far from integer overflow: block
@@ -27,9 +28,25 @@ CHUNK_LIMIT :: WORLD_LIMIT >> CHUNK_SHIFT
 
 // Client -> server.
 
+// Hello: the account joining (game/account.odin), and as which character
+// ("": send the list to choose from). The server answers with a
+// Challenge, the client with a Proof; then the character joins (or
+// Characters, and a Choose).
 Hello :: struct {
-	protocol: u32,
-	name:     string, // view into the message; name_valid
+	protocol:  u32,
+	account:   Account,
+	character: string, // view into the message; name_valid, or ""
+}
+
+// Proof: the Challenge's nonce signed with the account's key.
+Proof :: struct {
+	signature: Signature,
+}
+
+// Choose: the character to play (an existing one of the account's, or a
+// new name), after Characters.
+Choose :: struct {
+	character: string, // view into the message; name_valid
 }
 
 // Input is one tick of the player's controls, numbered so the server can
@@ -117,9 +134,22 @@ Client_Message :: union {
 	Fire,
 	Chat,
 	Inventory_Request,
+	Proof,
+	Choose,
 }
 
 // Server -> client.
+
+// Challenge: sign this (a Proof) to show the account is yours.
+Challenge :: struct {
+	nonce: Nonce,
+}
+
+// Characters: the account's characters here, to choose from (names, space
+// apart; maybe none).
+Characters :: struct {
+	names: string, // view into the message
+}
 
 Welcome :: struct {
 	protocol:    u32,
@@ -364,6 +394,8 @@ Server_Message :: union {
 	Chat_Line,
 	Chat_Delete,
 	Inventory_Update,
+	Challenge,
+	Characters,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -386,6 +418,8 @@ Client_Kind :: enum u8 {
 	Fire,
 	Chat,
 	Inventory_Request,
+	Proof,
+	Choose,
 }
 
 @(private = "file")
@@ -417,6 +451,8 @@ Server_Kind :: enum u8 {
 	Chat_Line,
 	Chat_Delete,
 	Inventory_Update,
+	Challenge,
+	Characters,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -477,6 +513,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "chat"
 		case u8(Client_Kind.Inventory_Request):
 			return "inventory_request"
+		case u8(Client_Kind.Proof):
+			return "proof"
+		case u8(Client_Kind.Choose):
+			return "choose"
 		}
 	} else {
 		switch kind {
@@ -534,6 +574,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "chat_delete"
 		case u8(Server_Kind.Inventory_Update):
 			return "inventory"
+		case u8(Server_Kind.Challenge):
+			return "challenge"
+		case u8(Server_Kind.Characters):
+			return "characters"
 		}
 	}
 	return ""
@@ -545,7 +589,16 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Hello:
 		write_u8(w, u8(Client_Kind.Hello))
 		write_u32(w, v.protocol)
-		write_string(w, v.name)
+		a := v.account
+		for b in a {write_u8(w, b)}
+		write_string(w, v.character)
+	case Proof:
+		write_u8(w, u8(Client_Kind.Proof))
+		sig := v.signature
+		for b in sig {write_u8(w, b)}
+	case Choose:
+		write_u8(w, u8(Client_Kind.Choose))
+		write_string(w, v.character)
 	case Input:
 		write_u8(w, u8(Client_Kind.Input))
 		write_u32(w, v.sequence)
@@ -721,6 +774,13 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Chat_Delete:
 		write_u8(w, u8(Server_Kind.Chat_Delete))
 		write_u32(w, v.id)
+	case Challenge:
+		write_u8(w, u8(Server_Kind.Challenge))
+		n := v.nonce
+		for b in n {write_u8(w, b)}
+	case Characters:
+		write_u8(w, u8(Server_Kind.Characters))
+		write_string(w, v.names)
 	case Inventory_Update:
 		write_u8(w, u8(Server_Kind.Inventory_Update))
 		write_u32(w, v.acked)
@@ -748,9 +808,19 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 	r := reader_make(data)
 	switch read_u8(&r) {
 	case u8(Client_Kind.Hello):
-		m = Hello {
+		h := Hello {
 			protocol = read_u32(&r),
-			name     = read_string(&r, MAX_NAME_LENGTH),
+		}
+		for &b in h.account {b = read_u8(&r)}
+		h.character = read_string(&r, MAX_NAME_LENGTH)
+		m = h
+	case u8(Client_Kind.Proof):
+		p: Proof
+		for &b in p.signature {b = read_u8(&r)}
+		m = p
+	case u8(Client_Kind.Choose):
+		m = Choose {
+			character = read_string(&r, MAX_NAME_LENGTH),
 		}
 	case u8(Client_Kind.Input):
 		m = Input {
@@ -1004,6 +1074,14 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	case u8(Server_Kind.Chat_Delete):
 		m = Chat_Delete {
 			id = read_u32(&r),
+		}
+	case u8(Server_Kind.Challenge):
+		c: Challenge
+		for &b in c.nonce {b = read_u8(&r)}
+		m = c
+	case u8(Server_Kind.Characters):
+		m = Characters {
+			names = read_string(&r, MAX_CHARACTERS * (MAX_NAME_LENGTH + 1)),
 		}
 	case u8(Server_Kind.Inventory_Update):
 		u := Inventory_Update {

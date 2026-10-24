@@ -45,6 +45,10 @@ Net_Client :: struct {
 	inv_acked:   u32,
 	inv_updates: int,
 	look:        [2]f32, // yaw, pitch of its idle inputs
+	key_name:    string, // whose test_key it says it is (default: name)
+	sign_name:   string, // whose test_key it signs with (default: key_name: an impostor if not)
+	ask:         bool, // Hello without a character: Characters, then Choose name
+	characters:  string, // the last Characters (temp: compared at once)
 }
 
 @(private)
@@ -102,7 +106,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	was := c.link.state
 	netcode.link_update(&c.link, now)
 	if was != .Connected && c.link.state == .Connected {
-		net_send(c, game.Hello{game.PROTOCOL_VERSION, c.name})
+		k := test_key(c.key_name if c.key_name != "" else c.name)
+		net_send(c, game.Hello{game.PROTOCOL_VERSION, k.account, "" if c.ask else c.name})
 	}
 	netcode.link_receive(&c.link, &c.messages)
 	for p in c.messages {
@@ -110,6 +115,14 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		m, ok := game.decode_server(p, c.scratch)
 		if !testing.expect(t, ok, "invalid message from the server") {continue}
 		#partial switch v in m {
+		case game.Challenge:
+			signer := c.sign_name
+			if signer == "" {signer = c.key_name if c.key_name != "" else c.name}
+			k := test_key(signer)
+			net_send(c, game.Proof{game.account_sign(&k, v.nonce)})
+		case game.Characters:
+			c.characters = strings.clone(v.names, context.temp_allocator)
+			net_send(c, game.Choose{c.name})
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
 		case game.Reject:

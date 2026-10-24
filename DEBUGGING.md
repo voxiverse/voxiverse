@@ -190,6 +190,21 @@ line) to make the first admin. A client asks only for what its grants allow (the
 says "not allowed on this server"); the server checks again and answers a refusal with a
 notice, not a disconnect.
 
+## Accounts and characters
+
+The game makes an account on first launch: an Ed25519 key, `account.key` beside the settings
+(whoever has that file is the account; back it up). Joining, the client sends the account
+and a character name (`Hello`), the server a random nonce (`Challenge`), the client its
+signature over it (`Proof`): a wrong one is refused, and a proof is good for one nonce
+only. A character name belongs to the first account that plays it in that universe
+(`that name is another account's`); an account has at most 8 there. From the Multiplayer
+screen the client asks for its characters (`Characters`) and chooses one, or makes one;
+singleplayer, `join` and scripts play the settings' `name`. Each character is kept in
+`characters/<account>/<name>.json`; a `players/<name>.json` from before accounts goes to
+the first account that plays that name. `ban` bans the character's account too
+(`ban_account` in community.cfg); `account <hex>` in permissions.cfg grants to every
+character of an account; `whois` shows a character's account (`moderation.address`).
+
 ## Items
 
 Items are data (`game/items.odin`): every block players may place has its item (its name is

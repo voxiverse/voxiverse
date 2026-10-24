@@ -17,6 +17,7 @@ import "../worldgen"
 
 @(private = "file")
 Save_Client :: struct {
+	key:      game.Account_Key,
 	endpoint: game.Endpoint,
 	scratch:  ^game.Block_Array,
 	arrays:   game.Block_Arrays,
@@ -57,6 +58,8 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 		m, ok := game.decode_server(p, c.scratch)
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
+		case game.Challenge:
+			send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
 		case game.Chunk_Message:
@@ -105,9 +108,11 @@ block_at :: proc(c: ^Save_Client, p: game.Block_Pos) -> (game.Block, bool) {
 // tick sends one input and waits a tick, pumping messages.
 @(private = "file")
 tick :: proc(t: ^testing.T, c: ^Save_Client, input: game.Player_Input = {}) {
-	c.seq += 1
-	c.look = {input.yaw, input.pitch}
-	send(c, game.Input{c.seq, input})
+	if c.welcomed { 	// (nothing before: the handshake)
+		c.seq += 1
+		c.look = {input.yaw, input.pitch}
+		send(c, game.Input{c.seq, input})
+	}
 	time.sleep(game.TICK_DURATION)
 	pump(t, c)
 }
@@ -167,7 +172,9 @@ test_save_round_trip :: proc(t: ^testing.T) {
 		c: Save_Client
 		client_open(&c, &pipe)
 		defer client_close(&c)
-		send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+		c.key = test_key("test")
+		send(&c, test_hello("test"))
+		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		if !testing.expect(t, until(t, &c, landed), "never landed") {
 			stop(&srv)
 			return
@@ -235,7 +242,9 @@ test_save_round_trip :: proc(t: ^testing.T) {
 		c: Save_Client
 		client_open(&c, &pipe)
 		defer client_close(&c)
-		send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+		c.key = test_key("test")
+		send(&c, test_hello("test"))
+		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		testing.expect(
 			t,
 			until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed && len(c.chunks) > 100}),
@@ -309,7 +318,9 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 	c: Save_Client
 	client_open(&c, &pipe)
 	defer client_close(&c)
-	send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+	c.key = test_key("test")
+	send(&c, test_hello("test"))
+	until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 	testing.expect(t, until(t, &c, landed))
 	feet := c.player.state.position
 	target := game.Block_Pos {
@@ -366,7 +377,9 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 		c: Save_Client
 		client_open(&c, &pipe)
 		defer client_close(&c)
-		send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+		c.key = test_key("test")
+		send(&c, test_hello("test"))
+		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		testing.expect(t, until(t, &c, landed))
 		feet := c.player.state.position
 		send(
@@ -413,7 +426,9 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 		c: Save_Client
 		client_open(&c, &pipe)
 		defer client_close(&c)
-		send(&c, game.Hello{game.PROTOCOL_VERSION, "test"})
+		c.key = test_key("test")
+		send(&c, test_hello("test"))
+		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		testing.expect(t, until(t, &c, landed), "the world did not load past the damaged file")
 		testing.expect(t, stop(&srv))
 	}

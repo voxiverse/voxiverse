@@ -118,7 +118,12 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	for name in ([]string{"alice", "bob"}) {
 		path :=
 			filepath.join(
-				{dir, PLAYERS_DIR, strings.concatenate({name, ".json"}, context.temp_allocator)},
+				{
+					dir,
+					CHARACTERS_DIR,
+					game.account_text(test_key(name).account),
+					strings.concatenate({name, ".json"}, context.temp_allocator),
+				},
 				context.temp_allocator,
 			) or_else ""
 		testing.expectf(t, os.exists(path), "%s not written", path)

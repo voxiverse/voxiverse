@@ -5,21 +5,29 @@ import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 
 import "../game"
 
-// What is kept about each player: their own file in the world,
-// players/<name>.json (where they are, where they look, whether they fly,
-// what they carry; statistics later). Loaded when they join; written,
-// whole and atomically, at the next save after it changed; only players
-// online (or not yet written) are in memory. The world's view of a player
-// (homes, bans, nickname) is community.cfg's.
+// What is kept about each character: their own file in the universe,
+// characters/<account>/<name>.json (where they are, where they look,
+// whether they fly, what they carry; statistics later). Loaded when they
+// join; written, whole and atomically, at the next save after it changed;
+// only characters online (or not yet written) are in memory. Names are the
+// universe's: one account each (Store.characters, read from the
+// directories at start). The universe's view of a character (homes, bans,
+// nickname) is community.cfg's.
+//
+// Before accounts, players' files were players/<name>.json: such a name is
+// free for the first account that joins with it, which takes its file.
 
+CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
 PLAYER_FILE_FORMAT :: 1
 
 Player_Record :: struct {
+	account:   Maybe(game.Account), // whose (none: from before accounts, unclaimed)
 	state:     game.Player_State,
 	look:      [2]f32, // yaw, pitch
 	inventory: game.Inventory,
@@ -48,26 +56,89 @@ File_Stack :: struct {
 	count: int,
 }
 
+// character_path: where name's file is (its account's directory, or
+// before accounts players/).
 @(private = "file")
-player_path :: proc(s: ^Server, name: string) -> string {
+character_path :: proc(s: ^Server, name: string, account: Maybe(game.Account)) -> string {
 	file := strings.concatenate({name, ".json"}, context.temp_allocator)
+	if a, ok := account.?; ok {
+		return(
+			filepath.join(
+				{s.store.dir, CHARACTERS_DIR, game.account_text(a), file},
+				context.temp_allocator,
+			) or_else file \
+		)
+	}
 	return filepath.join({s.store.dir, PLAYERS_DIR, file}, context.temp_allocator) or_else file
 }
 
-// player_record: what is kept about name (from memory, else their file);
-// false for someone new.
+// characters_open reads which account each character name belongs to
+// (characters/<account>/<name>.json).
+characters_open :: proc(s: ^Server) {
+	if s.store.dir == "" {return}
+	root :=
+		filepath.join({s.store.dir, CHARACTERS_DIR}, context.temp_allocator) or_else CHARACTERS_DIR
+	accounts, err := os.read_all_directory_by_path(root, context.temp_allocator)
+	if err != nil {return} 	// none yet
+	for a in accounts {
+		account, ok := game.account_parse(a.name)
+		if a.type != .Directory || !ok {continue}
+		files, _ := os.read_all_directory_by_path(
+			filepath.join({root, a.name}, context.temp_allocator) or_else root,
+			context.temp_allocator,
+		)
+		for f in files {
+			name := strings.trim_suffix(f.name, ".json")
+			if f.type == .Regular && len(name) < len(f.name) && game.name_valid(name) {
+				s.store.characters[strings.clone(name)] = account
+			}
+		}
+	}
+	log.infof("server characters known=%d", len(s.store.characters))
+}
+
+// characters_of: account's character names here, sorted.
+characters_of :: proc(s: ^Server, account: game.Account) -> []string {
+	names := make([dynamic]string, context.temp_allocator)
+	for name, a in s.store.characters {if a == account {append(&names, name)}}
+	slice.sort(names[:])
+	return names[:]
+}
+
+// character_claim: name is account's from now on.
+character_claim :: proc(s: ^Server, name: string, account: game.Account) {
+	if _, known := s.store.characters[name]; known {return}
+	s.store.characters[strings.clone(name)] = account
+	log.infof("server character made name=%s account=%s", name, game.account_text(account))
+}
+
+// player_record: what is kept about the character name (from memory, else
+// its file, else its file from before accounts); false for a new one.
 player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 	if r, ok := s.store.players[name]; ok {return r, true}
 	if s.store.dir == "" {return {}, false}
-	path := player_path(s, name)
-	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
-	if err != nil {
-		if err != .Not_Exist {log.errorf("server cannot read path=%s error=%v", path, err)}
-		return {}, false
+	account, claimed := s.store.characters[name]
+	paths := [2]string {
+		character_path(s, name, account) if claimed else "",
+		character_path(s, name, nil),
 	}
-	r, ok := player_parse(data)
-	if !ok {log.errorf("server player file not understood, starting afresh path=%s", path)}
-	return r, ok
+	for path in paths {
+		if path == "" {continue}
+		data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+		if err != nil {
+			if err != .Not_Exist {log.errorf("server cannot read path=%s error=%v", path, err)}
+			continue
+		}
+		r, ok := player_parse(data)
+		if !ok {
+			log.errorf("server character file not understood, starting afresh path=%s", path)
+			return {}, false
+		}
+		if claimed {r.account = account}
+		r.dirty = path != paths[0] // (from players/: to be written where it belongs)
+		return r, true
+	}
+	return {}, false
 }
 
 // player_parse reads a player file's JSON.
@@ -142,7 +213,7 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 // leaves, and before each save).
 keep_player :: proc(s: ^Server, c: ^Client) {
 	name := client_name(c)
-	r := Player_Record{c.player, c.look, c.inventory, true, {}}
+	r := Player_Record{c.account, c.player, c.look, c.inventory, true, {}}
 	if _, had := s.store.players[name]; had {
 		s.store.players[name] = r
 	} else {
@@ -155,21 +226,28 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 players_save :: proc(s: ^Server) -> bool {
 	for &c in s.clients {if c.state == .Playing {keep_player(s, &c)}}
 	if s.store.dir == "" {return true}
-	dir := filepath.join({s.store.dir, PLAYERS_DIR}, context.temp_allocator) or_else PLAYERS_DIR
-	if err := os.make_directory_all(dir); err != nil && err != .Exist {
-		log.errorf("server cannot create path=%s error=%v", dir, err)
-		return false
-	}
 	ok := true
 	gone := make([dynamic]string, context.temp_allocator)
 	for name, &r in s.store.players {
 		if r.dirty {
-			if write_atomically(
-				player_path(s, name),
-				player_json(&r),
-			) {r.dirty = false} else {ok = false}
+			path := character_path(s, name, r.account)
+			if err := os.make_directory_all(filepath.dir(path)); err != nil && err != .Exist {
+				log.errorf("server cannot create the directory of path=%s error=%v", path, err)
+				ok = false
+				continue
+			}
+			if !write_atomically(path, player_json(&r)) {
+				ok = false
+				continue
+			}
+			r.dirty = false
+			if _, claimed := r.account.?; claimed {
+				// Its file from before accounts is this one now.
+				old := character_path(s, name, nil)
+				if os.exists(old) {os.remove(old)}
+			}
 		}
-		if !r.dirty && client_by_name(s, name) == nil {append(&gone, name)}
+		if client_by_name(s, name) == nil {append(&gone, name)}
 	}
 	for name in gone {
 		key, _ := delete_key(&s.store.players, name)

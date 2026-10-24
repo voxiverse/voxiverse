@@ -21,6 +21,7 @@ Run_Result :: struct {
 
 @(private = "file")
 Predicting_Client :: struct {
+	key:         game.Account_Key,
 	endpoint:    game.Endpoint,
 	scratch:     ^game.Block_Array,
 	arrays:      game.Block_Arrays,
@@ -55,6 +56,8 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 		m, ok := game.decode_server(p, c.scratch)
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
+		case game.Challenge:
+			send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Welcome:
 			c.welcome, c.welcomed, c.rules = v, true, v.rules
 			game.prediction_init(&c.prediction, {position = v.spawn})
@@ -135,7 +138,8 @@ run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Re
 	defer delete(c.chunks)
 	defer delete(c.results)
 
-	send(&c, game.Hello{game.PROTOCOL_VERSION, "latency_test"})
+	c.key = test_key("latency_test")
+	send(&c, test_hello("latency_test"))
 	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
 	tick_wait :: proc() {time.sleep(game.TICK_DURATION)}
 

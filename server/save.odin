@@ -31,12 +31,13 @@ WORLD_FORMAT :: 3 // 2: players by name (format 1's single player becomes LEGACY
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
-	dir:       string, // "" = this world is not saved
-	saved:     map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
-	regions:   map[game.Region_Pos]bool, // read from disk; true = changed since written
-	players:   map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
-	writer:    game.Writer,
-	last_save: time.Tick,
+	dir:        string, // "" = this world is not saved
+	saved:      map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks
+	regions:    map[game.Region_Pos]bool, // read from disk; true = changed since written
+	players:    map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
+	characters: map[string]game.Account, // every character's account, by name
+	writer:     game.Writer,
+	last_save:  time.Tick,
 }
 
 // store_open reads world.cfg if dir has one (the world's seed and rules win
@@ -73,6 +74,8 @@ store_close :: proc(s: ^Server) {
 	delete(st.saved)
 	for name in st.players {delete(name)}
 	delete(st.players)
+	for name in st.characters {delete(name)}
+	delete(st.characters)
 	delete(st.regions)
 	game.writer_destroy(&st.writer)
 	delete(st.dir)

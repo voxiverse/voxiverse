@@ -19,7 +19,7 @@ test_permissions_resolve :: proc(t: ^testing.T) {
 	meta_set(&player_perms(&p, "grump").meta, "prefix", "&7Grump")
 	grants :: proc(p: ^Permissions, name: string, owner := false) -> []game.Grant {
 		out := make([dynamic]game.Grant, context.temp_allocator)
-		resolve(p, name, owner, &out, context.temp_allocator)
+		resolve(p, name, nil, owner, &out, context.temp_allocator)
 		return out[:]
 	}
 	anyone := grants(&p, "anyone")
@@ -38,6 +38,21 @@ test_permissions_resolve :: proc(t: ^testing.T) {
 	// An inheritance loop ends.
 	append(&role_get(&p, "default").inherits, strings.clone("admin"))
 	testing.expect(t, game.allowed(grants(&p, "anyone"), "server.stop"))
+	// An account's grants reach every character of it.
+	acc := test_key("someone").account
+	append(&player_perms(&p, account_key(acc)).grants, strings.clone("world.edit.bulk"))
+	via := make([dynamic]game.Grant, context.temp_allocator)
+	resolve(&p, "alt", acc, false, &via, context.temp_allocator)
+	testing.expect(
+		t,
+		game.allowed(via[:], "world.edit.bulk"),
+		"the account's grant did not reach its character",
+	)
+	testing.expect(
+		t,
+		strings.contains(permissions_text(&p), "account "),
+		"accounts are not written",
+	)
 	// Round trip through text.
 	again: Permissions
 	defer permissions_destroy(&again)
@@ -73,7 +88,7 @@ test_permissions_commands :: proc(t: ^testing.T) {
 		defer free(c.scratch)
 		defer delete(c.has)
 		defer delete(c.columns)
-		fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "owner"})
+		fake_hello(t, &c, "owner")
 		for command in ([]string{"role grant builder world.edit.bulk", "role inherit builder default", "role meta builder prefix &a Builder", "user role add bea builder", "user grant bea -world.explode", "role grant bad Not-A-Node"}) {
 			fake_send(&c, game.Command{command})
 		}
@@ -95,7 +110,7 @@ test_permissions_commands :: proc(t: ^testing.T) {
 	permissions_open(&s)
 	defer permissions_destroy(&s.perms)
 	bea := make([dynamic]game.Grant, context.temp_allocator)
-	resolve(&s.perms, "bea", false, &bea, context.temp_allocator)
+	resolve(&s.perms, "bea", nil, false, &bea, context.temp_allocator)
 	testing.expect(t, game.allowed(bea[:], "world.edit.bulk") && game.allowed(bea[:], "chat.send"))
 	testing.expect(t, !game.allowed(bea[:], "world.explode"))
 	testing.expect_value(t, meta_of(&s.perms, "bea", "prefix"), "&a Builder")
