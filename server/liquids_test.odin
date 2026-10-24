@@ -80,9 +80,9 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 		fmt.tprintf("fill 6 %d -6 11 %d -1 stone", y + 1, y + 3),
 		fmt.tprintf("fill 7 %d -5 10 %d -2 water", y + 1, y + 2),
 	}
-	for c in commands {net_send(&a, game.Admin{c})}
+	for c in commands {net_send(&a, game.Command{c})}
 	settle(t, &a, &b, 2 * time.Second)
-	net_send(&a, game.Admin{fmt.tprintf("fill 11 %d -5 11 %d -2 air", y + 1, y + 3)}) // the dam breaks
+	net_send(&a, game.Command{fmt.tprintf("fill 11 %d -5 11 %d -2 air", y + 1, y + 3)}) // the dam breaks
 	settle(t, &a, &b, 6 * time.Second)
 
 	// Settled: the hash no longer moves; both players have the server's.
@@ -125,7 +125,7 @@ settle :: proc(t: ^testing.T, a, b: ^Net_Client, d: time.Duration) {
 server_hash :: proc(t: ^testing.T, c: ^Net_Client) -> (sum: u64, count: int) {
 	for n in c.notices {delete(n)}
 	clear(&c.notices)
-	net_send(c, game.Admin{"hash"})
+	net_send(c, game.Command{"hash"})
 	for _ in 0 ..< 100 {
 		net_pump(t, c)
 		for n in c.notices {
@@ -186,7 +186,7 @@ test_water_flood :: proc(t: ^testing.T) {
 		fmt.tprintf("fill %d %d %d %d %d %d air", x0, y + 1, z0, x0 + 99, y + 1, z0 + 99),
 		fmt.tprintf("fill %d %d %d %d %d %d water", x0, y + 8, z0, x0 + 99, y + 8, z0 + 99),
 	}
-	for c in commands {net_send(&a, game.Admin{c})}
+	for c in commands {net_send(&a, game.Command{c})}
 	// The fills' own ticks are bulk edits, not flowing water: from their
 	// answers on.
 	if !testing.expect(

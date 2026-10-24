@@ -89,7 +89,7 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | <kbd>Shift</kbd> | Sneak (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
-| <kbd>1</kbd>–<kbd>9</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, log, leaves, water, lamp), or the rocket launcher (9, where cheats are allowed); `place <block>` places any other |
+| <kbd>1</kbd>–<kbd>9</kbd>, mouse wheel | Choose the block to place (stone, dirt, grass, sand, log, leaves, water, lamp), or the rocket launcher (9, where you may fire it); `place <block>` places any other |
 | <kbd>Esc</kbd> | Pause menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
@@ -100,8 +100,8 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 Options has the FPS counter (**Show FPS**), **VSync** (off: as many frames as the machine
 can draw), fullscreen, field of view, view distance and volume.
 
-Where cheats are allowed (your own world, or a server with `--cheats`) the console also
-edits in bulk: `pos1` and `pos2` mark the corners of a box at the block you aim at, then
+In your own world you may do anything; on a server, what its roles let you (see
+[DEBUGGING.md](DEBUGGING.md#permissions)). Then the console also edits in bulk: `pos1` and `pos2` mark the corners of a box at the block you aim at, then
 `fill stone`, `replace dirt sand` or `clear`; `sphere 5 stone` and `explode 8` act on the
 aimed block. Hotbar slot 9 is a rocket launcher.
 
@@ -131,7 +131,7 @@ runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; si
 - **From your own world:** pause, then **Open to LAN**. Others on your network see it under
   **Multiplayer** (or join `your-address:27315`).
 - **A dedicated server:** `./build.sh serve -- --world worlds/home --password secret` (or run
-  `build/voxiverse-server --help` for every flag: port, name, seats, view distance, cheats).
+  `build/voxiverse-server --help` for every flag: port, name, seats, view distance, permissions).
   Ctrl+C saves and stops it.
 - **Over the internet:** forward UDP port 27315 on the host's router to the host, then join its
   public address. There is no relay or hole punching (yet).

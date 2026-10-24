@@ -38,6 +38,7 @@ Net_Client :: struct {
 	seq:         u32,
 	messages:    [dynamic][]u8,
 	notices:     [dynamic]string, // (heap)
+	grants:      [dynamic]game.Grant, // (heap)
 }
 
 @(private)
@@ -61,6 +62,8 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.changed)
 	for n in c.notices {delete(n)}
 	delete(c.notices)
+	for g in c.grants {delete(g.pattern)}
+	delete(c.grants)
 	delete(c.entities)
 	delete(c.results)
 	delete(c.messages)
@@ -128,6 +131,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			}
 		case game.Notice:
 			append(&c.notices, strings.clone(v.text))
+		case game.Grants:
+			for g in c.grants {delete(g.pattern)}
+			clear(&c.grants)
+			game.grants_parse(v.text, &c.grants)
 		case game.Blocks_Changed:
 			if blocks, have := &c.chunks[v.chunk]; have {
 				for i in 0 ..< v.count {
@@ -228,12 +235,24 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	})
 	if !testing.expect(t, ok, "the two players never landed") {return}
 	testing.expect(t, alice.welcome.player != bob.welcome.player)
-	testing.expect(t, !alice.welcome.cheats, "a remote player was given cheats")
+	// A remote player has the role default: they may build, not bulk edit.
+	ok = net_wait(
+		t,
+		{&alice, &bob},
+		proc(cs: []^Net_Client) -> bool {return len(cs[0].grants) > 0},
+	)
+	testing.expect(t, ok, "no grants")
+	testing.expect(t, game.allowed(alice.grants[:], "world.edit"), "a player may not build")
+	testing.expect(
+		t,
+		!game.allowed(alice.grants[:], "world.edit.bulk"),
+		"a remote player may bulk edit",
+	)
 
 	// They know each other, and see each other (both spawn at the origin).
 	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
-		return len(cs[0].seen) == 1 && len(cs[1].seen) == 1
-	})
+			return len(cs[0].seen) == 1 && len(cs[1].seen) == 1
+		})
 	testing.expect(t, ok, "the players do not see each other")
 	testing.expect_value(t, alice.others[bob.welcome.player], "bob")
 	testing.expect_value(t, bob.others[alice.welcome.player], "alice")

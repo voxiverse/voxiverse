@@ -90,6 +90,7 @@ Server :: struct {
 	capture:     netcode.Capture, // (config.capture)
 	entities:    Entities, // (entities.odin)
 	changes:     Changes, // blocks changed this tick (changes.odin)
+	perms:       Permissions, // who may do what (permissions.odin)
 	natural:     []Natural_Slot, // natural column tops (columns.odin)
 	updates:     Updates, // scheduled block updates: flowing water (liquids.odin)
 	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
@@ -131,6 +132,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		teardown(s, world = false)
 		return false
 	}
+	permissions_open(s)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
 	// Loaded chunks stay within the unload distance of some player, plus
 	// chunks still generating that were requested before they moved.
@@ -166,7 +168,6 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	if local.pipe != nil {
 		s.clients[0].state = .Connecting
 		s.clients[0].link = Local{}
-		s.clients[0].can_cheat = config.allow_cheats
 	}
 	if config.listen && !listen(s, config.port, config.port) {
 		teardown(s, world = true)
@@ -213,6 +214,8 @@ stop :: proc(s: ^Server) -> bool {
 teardown :: proc(s: ^Server, world: bool) {
 	netcode.capture_close(&s.capture)
 	store_close(s)
+	permissions_destroy(&s.perms)
+	for &c in s.clients {client_reset(&c)}
 	if world {world_destroy(&s.world)}
 	entities_destroy(&s.entities)
 	delete(s.tops)
@@ -369,7 +372,6 @@ receive_messages :: proc(s: ^Server) {
 			c := &s.clients[slot]
 			c.state = .Connecting
 			c.link = v.peer
-			c.can_cheat = s.config.everyone_cheats
 			log.infof(
 				"server connection player=%d from=%s",
 				slot,
@@ -403,21 +405,31 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		disconnect(s, c, "invalid message")
 		return
 	}
-	// Before hello only a hello (or a ping) makes sense; after it, cheats
-	// need the permission.
+	// Before hello only a hello (or a ping) makes sense.
 	_, hello := m.(game.Hello)
 	_, ping := m.(game.Ping)
 	if c.state != .Playing && !hello && !ping {
 		disconnect(s, c, "message before hello")
 		return
 	}
-	cheat: bool
-	#partial switch _ in m {
-	case game.Teleport, game.Set_Rule, game.Admin, game.Fire:
-		cheat = true // the rocket launcher is a creative tool: a cheat
+	// What needs permission (refused with a word; commands check their own).
+	node := ""
+	#partial switch v in m {
+	case game.Teleport:
+		node = "teleport.tp"
+	case game.Set_Rule:
+		node = "world.gen" if strings.has_prefix(v.name, "worldgen.") else "world.rules"
+	case game.Fire:
+		node = "world.fire"
+	case game.Edit:
+		node = "world.edit"
 	}
-	if cheat && !c.can_cheat {
-		disconnect(s, c, "cheats are not allowed")
+	if node != "" && !allowed(s, c, node) {
+		if e, edit := m.(game.Edit); edit {
+			current, _ := world_block(&s.world, e.pos)
+			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
+		}
+		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
 		return
 	}
 	switch v in m {
@@ -471,7 +483,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		}
 	case game.Ping:
 		send_message(s, c, game.Pong{v.id})
-	case game.Admin:
+	case game.Command:
 		admin(s, c, v.command)
 	case game.Edit:
 		queue_action(s, c, v)

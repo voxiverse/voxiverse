@@ -68,10 +68,10 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	// A long command (bulk edits with far coordinates) fits; longer is invalid.
 	long := "replace -2147483000 -2147483000 -2147483000 2147483000 2147483000 2147483000 gravel sand"
 	admin: Client_Message
-	admin, ok = decode_client(encode_c(Admin{long})[:])
-	testing.expect(t, ok && admin.(Admin).command == long)
+	admin, ok = decode_client(encode_c(Command{long})[:])
+	testing.expect(t, ok && admin.(Command).command == long)
 	too_long := strings.repeat("x", MAX_ADMIN_TEXT + 1, context.temp_allocator)
-	_, ok = decode_client(encode_c(Admin{too_long})[:])
+	_, ok = decode_client(encode_c(Command{too_long})[:])
 	testing.expect(t, !ok)
 	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false}
 	upd: Server_Message
@@ -83,7 +83,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	rc, ok = decode_server(encode_s(Rules_Changed{changed})[:], scratch)
 	testing.expect(t, ok && rc.(Rules_Changed).rules == changed)
 
-	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, 3, true, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
+	welcome := Welcome{PROTOCOL_VERSION, TICK_RATE, 3, {0, 40.5, 0}, 12, 6, RULES_DEFAULTS}
 	m: Server_Message
 	m, ok = decode_server(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
@@ -152,6 +152,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Blocks_Changed) == batch)
 	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
 	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
+	m, ok = decode_server(encode_s(Grants{"1 chat.*\n0 -chat.format\n"})[:], scratch)
+	testing.expect(t, ok && m.(Grants).text == "1 chat.*\n0 -chat.format\n")
 	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
 	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
 	// Names: letters, digits, _ and -, 1..16 of them.
@@ -209,7 +211,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 	test_terrain(9, terrain.array)
 
 	server := [][dynamic]u8 {
-		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, 1, false, {}, 8, 4, RULES_DEFAULTS}),
+		encode_s(Welcome{PROTOCOL_VERSION, TICK_RATE, 1, {}, 8, 4, RULES_DEFAULTS}),
 		encode_s(Player_Joined{2, "Alice"}),
 		encode_s(Player_Left{2}),
 		encode_s(Players{tick = 9, count = 1}),

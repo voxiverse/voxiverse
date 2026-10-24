@@ -198,7 +198,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			r := c.results[u32(i + 1)]
 			if testing.expectf(t, r.accepted, "edit %d refused", i + 1) {append(&edits, e)}
 		}
-		send(&c, game.Admin{"time 0.9"}) // late evening
+		send(&c, game.Command{"time 0.9"}) // late evening
 		c.time = nil
 		for _ in 0 ..< 20 {tick(t, &c, {move = {0, 1}, yaw = 0.7, pitch = -0.3})} 	// walk a bit, looking that way
 		testing.expect(

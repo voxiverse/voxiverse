@@ -46,6 +46,7 @@ Command :: struct {
 	complete:   Completer,
 	args:       [2]int, // how many arguments: at least, at most (-1: any); {}: not checked
 	needs:      Command_Needs,
+	node:       string, // the permission it needs ("": none)
 }
 
 // Command_Spec: what console_register is given (the rest apart).
@@ -57,7 +58,6 @@ Command_Spec :: struct {
 
 Command_Need :: enum u8 {
 	World, // in a world (playing)
-	Cheats, // the server lets this player cheat (asking anyway would end the connection)
 	Host, // the world runs here
 }
 Command_Needs :: bit_set[Command_Need]
@@ -96,8 +96,9 @@ console_register :: proc(
 	complete: Completer = nil,
 	args := [2]int{},
 	needs := Command_Needs{},
+	node := "",
 ) {
-	append(&c.commands, Command{cmd, complete, args, needs})
+	append(&c.commands, Command{cmd, complete, args, needs, node})
 }
 
 console_print :: proc(c: ^Console, text: string, level := log.Level.Info) {
@@ -152,7 +153,7 @@ command_refused :: proc(app: ^App, cmd: ^Command, n: int) -> string {
 	}
 	s := app.session
 	if .World in cmd.needs && (s == nil || s.state != .Playing) {return "not in a world"}
-	if .Cheats in cmd.needs && (s == nil || !session_can_cheat(s)) {
+	if cmd.node != "" && (s == nil || !session_allowed(s, cmd.node)) {
 		return "not allowed on this server"
 	}
 	if .Host in cmd.needs && (s == nil || !session_hosting(s)) {
@@ -345,7 +346,8 @@ register_builtin_commands :: proc(c: ^Console) {
 				} else {
 					t.yaw, t.pitch = app.session.camera.yaw, app.session.camera.pitch
 				}
-				if app.session.state == .Playing && !cheats_allowed(app, "tp") {return}
+				if app.session.state == .Playing &&
+				   !allowed_here(app, "tp", "teleport.tp") {return}
 				session_teleport(app.session, t)
 			},
 		},
@@ -403,7 +405,11 @@ register_builtin_commands :: proc(c: ^Console) {
 						)
 						return
 					}
-					if !cheats_allowed(app, "set") {return}
+					if !allowed_here(
+						app,
+						"set",
+						"world.gen" if table.prefix == "worldgen." else "world.rules",
+					) {return}
 					session_set_rule(app.session, args[0], args[1])
 					return
 				}
@@ -594,8 +600,8 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, "save: not in a saved world", .Warning)
 					return
 				}
-				send_message(app.session, game.Admin{"save"})
-			}}, args = {0, 0}, needs = {.World, .Cheats})
+				send_message(app.session, game.Command{"save"})
+			}}, args = {0, 0}, needs = {.World}, node = "server.save")
 	console_register(
 		c,
 		{
@@ -646,10 +652,10 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, "time: not a time of day", .Warning)
 					return
 				}
-				if !cheats_allowed(app, "time") {return}
+				if !allowed_here(app, "time", "world.time") {return}
 				send_message(
 					app.session,
-					game.Admin{strings.concatenate({"time ", args[0]}, context.temp_allocator)},
+					game.Command{strings.concatenate({"time ", args[0]}, context.temp_allocator)},
 				)
 			},
 		},
@@ -662,11 +668,11 @@ register_builtin_commands :: proc(c: ^Console) {
 		}})
 }
 
-// cheats_allowed: the server lets this player run cheat commands (asking
+// allowed_here: the server lets this player do node (asking
 // anyway would end the connection); else says so.
 @(private = "file")
-cheats_allowed :: proc(app: ^App, command: string) -> bool {
-	if app.session != nil && session_can_cheat(app.session) {return true}
+allowed_here :: proc(app: ^App, command, node: string) -> bool {
+	if app.session != nil && session_allowed(app.session, node) {return true}
 	console_print(&app.console, fmt.tprintf("%s: not allowed on this server", command), .Warning)
 	return false
 }
@@ -679,6 +685,6 @@ session_open_lan :: proc(app: ^App) {
 	case !session_hosting(app.session):
 		console_print(&app.console, "open_lan: only the host can open the world", .Warning)
 	case:
-		send_message(app.session, game.Admin{"open_lan"})
+		send_message(app.session, game.Command{"open_lan"})
 	}
 }

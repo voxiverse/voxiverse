@@ -129,15 +129,15 @@ neighbours' edges.
 | `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining) |
 | `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
 | `break`, `place [block]` | Hit the aimed critter, else break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
-| `summon` | A critter three blocks in front of you (cheats). Critters also come by themselves in daylight, on grass 16-40 blocks from a player, at most 6 near one; they go when nobody is within 80 blocks. The server's `entities.cfg` keeps them with the world. F3 counts the entities near you |
+| `summon` | A critter three blocks in front of you (`world.summon`). Critters also come by themselves in daylight, on grass 16-40 blocks from a player, at most 6 near one; they go when nobody is within 80 blocks. The server's `entities.cfg` keeps them with the world. F3 counts the entities near you |
 | `pos1`, `pos2`, `sel` | The aimed block becomes the selection's first / second corner (drawn as a box) / forget the selection |
-| `fill <block>`, `replace <from> <to>`, `clear` | Bulk edits of the selection (cheats; at most 64x64x64 blocks). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
+| `fill <block>`, `replace <from> <to>`, `clear` | Bulk edits of the selection (`world.edit.bulk`; at most 64x64x64 blocks). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
 | `sphere <radius> [block]`, `explode [radius]` | A ball of block (default air) / an explosion (carves, knocks back, hurts critters) at the aimed block |
 | `fire` | Fire a rocket where you look, as the launcher (hotbar 7) does: it flies, falls a little and explodes on what it hits |
 | `fly` | Start or stop flying (as a double-tap of jump does) |
-| `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; cheats): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
+| `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; `teleport.locate`): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
 | `set worldgen.<name> <value>`, `vars worldgen` | The Earth generator's settings (the server's, like rules; F4 too), saved with the world; chunks already made keep their blocks until `regen` |
-| `server <command...>` | Send a server command as is, with coordinates: `server fill 0 60 0 9 62 9 water` (scripts, tests; cheats) |
+| `server <command...>` | Send a server command as is, with coordinates: `server fill 0 60 0 9 62 9 water` (scripts, tests; the server checks each command's permission) |
 | `structure save <name> [clear]`, `structure paste <name> [turns]`, `structure list` | Keep the selection as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at the aimed block through the bulk edit pipeline, turned 0-3 quarters |
 | `regen [radius]` | Remake the unedited chunks within radius (chunks, 1-8) from the generator as it is now |
 | `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
@@ -146,6 +146,37 @@ neighbours' edges.
 
 F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
 and to light and mesh (ours), on average and the slowest 1%.
+
+## Permissions
+
+What a player may do is a set of nodes: `world.edit` (build), `world.edit.bulk`, `world.fire`,
+`world.explode`, `world.summon`, `world.structure`, `world.time`, `world.rules`, `world.gen`,
+`teleport.tp`, `teleport.locate`, `server.save`, `server.open_lan`, `permissions.edit`,
+`debug.hash`, and the `chat.*`, `moderation.*`, `teleport.*` and `info.*` nodes the commands
+use. A grant is a node, `x.*` (x and everything under it), `*` (everything), or `-x` (not x).
+The most specific grant wins; at the same specificity the player's own grant beats their
+role's, which beats an inherited one; a tie is a denial.
+
+Roles grant nodes, inherit other roles and carry metadata (`prefix`, a chat tag such as
+`&c&lAdmin`). Everyone has the role `default`; a new world has `default` (build, chat,
+travel), `mod` (inherits default; all of chat and moderation, `teleport.tp`) and `admin`
+(inherits mod; `*`). The local player of a world played here, and every player of a server
+started with `--cheats`, has `*`.
+
+| Server command | |
+|---|---|
+| `role list`, `role info <role>` | The roles / one role's inherits, grants and metadata |
+| `role grant\|revoke <role> <node>` | Grant or take back (`-x` denies); the first grant makes the role |
+| `role inherit\|uninherit <role> <role>`, `role meta <role> <key> [value]`, `role delete <role>` | |
+| `user info <player>`, `user role add\|remove <player> <role>` | A player's roles and grants |
+| `user grant\|revoke <player> <node>`, `user meta <player> <key> [value]` | Their own grants (nearest) and metadata |
+
+(From the console: `server role grant mod world.fire`.) They need `permissions.edit`; each
+change is sent to the players it affects and saved in `<world>/permissions.cfg`. A dedicated
+server has no owner: stop it and edit that file (`player alice` then `role admin` on the next
+line) to make the first admin. A client asks only for what its grants allow (the console
+says "not allowed on this server"); the server checks again and answers a refusal with a
+notice, not a disconnect.
 
 ## Liquids
 

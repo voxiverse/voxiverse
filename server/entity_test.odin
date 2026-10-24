@@ -46,7 +46,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "never landed") {return}
 	// Night: no critters of their own accord, only ours. Far goes away.
-	net_send(&near, game.Admin{"time midnight"})
+	net_send(&near, game.Command{"time midnight"})
 	net_send(&far, game.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
 		t,
@@ -55,7 +55,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "far never moved away")
 
-	net_send(&near, game.Admin{"summon critter"})
+	net_send(&near, game.Command{"summon critter"})
 	ok = net_wait(
 		t,
 		{&near, &far},
@@ -126,7 +126,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect_value(t, near.died, 1)
 
 	// Saved: another one, then quit and load.
-	net_send(&near, game.Admin{"summon critter"})
+	net_send(&near, game.Command{"summon critter"})
 	ok = net_wait(t, {&near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok)
 	// A rocket straight up, still flying when the server stops: not saved.
@@ -180,7 +180,7 @@ test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && len(cs[0].chunks) > 200},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(&c, game.Admin{"time noon"})
+	net_send(&c, game.Command{"time noon"})
 	most := 0
 	deadline := time.tick_add(time.tick_now(), 40 * time.Second)
 	for time.tick_diff(time.tick_now(), deadline) > 0 && len(c.entities) < 3 {
@@ -203,7 +203,7 @@ test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 	)
 
 	// Night, and away: they go, and the watcher is told.
-	net_send(&c, game.Admin{"time midnight"})
+	net_send(&c, game.Command{"time midnight"})
 	net_send(&c, game.Teleport{position = {0.5, 140, 400.5}})
 	ok = net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 0}, 20)
 	testing.expect(t, ok, "critters stayed known after the watcher left")

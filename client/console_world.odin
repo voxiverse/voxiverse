@@ -8,11 +8,10 @@ import "../worldgen"
 
 // Console commands that change the world: selections, bulk edits,
 // explosions, rockets, critters. They are cheats (the server's Admin
-// commands, game.Admin): console_register checks that before they run.
+// commands, game.Command): console_register checks that before they run.
 
 @(private)
 register_world_commands :: proc(c: ^Console) {
-	cheat :: Command_Needs{.World, .Cheats}
 	console_register(
 		c,
 		{"fly", "fly: start or stop flying (double-tap jump)", proc(app: ^App, args: []string) {
@@ -27,7 +26,8 @@ register_world_commands :: proc(c: ^Console) {
 				session_fire(app.session)
 			}},
 		args = {0, 0},
-		needs = cheat,
+		needs = {.World},
+		node = "world.fire",
 	)
 	console_register(
 		c,
@@ -63,7 +63,8 @@ register_world_commands :: proc(c: ^Console) {
 			}},
 		complete_block_or_air,
 		args = {1, 1},
-		needs = cheat,
+		needs = {.World},
+		node = "world.edit.bulk",
 	)
 	console_register(
 		c,
@@ -72,7 +73,8 @@ register_world_commands :: proc(c: ^Console) {
 			}},
 		complete_block_or_air,
 		args = {2, 2},
-		needs = cheat,
+		needs = {.World},
+		node = "world.edit.bulk",
 	)
 	// Not a cheat, without a selection: the console's own clear.
 	console_register(
@@ -83,7 +85,7 @@ register_world_commands :: proc(c: ^Console) {
 			proc(app: ^App, args: []string) {
 				s := app.session
 				if s != nil && s.selection[0] != nil && s.selection[1] != nil {
-					if !session_can_cheat(s) {
+					if !session_allowed(s, "world.edit.bulk") {
 						console_print(&app.console, "clear: not allowed on this server", .Warning)
 						return
 					}
@@ -106,7 +108,7 @@ register_world_commands :: proc(c: ^Console) {
 				block := args[1] if len(args) > 1 else "air"
 				send_message(
 					app.session,
-					game.Admin {
+					game.Command {
 						fmt.tprintf("sphere %d %d %d %s %s", p.x, p.y, p.z, args[0], block),
 					},
 				)
@@ -114,7 +116,8 @@ register_world_commands :: proc(c: ^Console) {
 		},
 		complete_sphere,
 		args = {1, 2},
-		needs = cheat,
+		needs = {.World},
+		node = "world.edit.bulk",
 	)
 	console_register(
 		c,
@@ -127,12 +130,13 @@ register_world_commands :: proc(c: ^Console) {
 				radius := args[0] if len(args) > 0 else "4"
 				send_message(
 					app.session,
-					game.Admin{fmt.tprintf("explode %d %d %d %s", p.x, p.y, p.z, radius)},
+					game.Command{fmt.tprintf("explode %d %d %d %s", p.x, p.y, p.z, radius)},
 				)
 			},
 		},
 		args = {0, 1},
-		needs = cheat,
+		needs = {.World},
+		node = "world.explode",
 	)
 	console_register(
 		c,
@@ -142,12 +146,13 @@ register_world_commands :: proc(c: ^Console) {
 			proc(app: ^App, args: []string) {
 				send_message(
 					app.session,
-					game.Admin{fmt.tprintf("regen %s", args[0] if len(args) > 0 else "4")},
+					game.Command{fmt.tprintf("regen %s", args[0] if len(args) > 0 else "4")},
 				)
 			},
 		},
 		args = {0, 1},
-		needs = cheat,
+		needs = {.World},
+		node = "world.gen",
 	)
 	console_register(
 		c,
@@ -157,12 +162,12 @@ register_world_commands :: proc(c: ^Console) {
 			proc(app: ^App, args: []string) {
 				send_message(
 					app.session,
-					game.Admin{strings.join(args, " ", context.temp_allocator)},
+					game.Command{strings.join(args, " ", context.temp_allocator)},
 				)
 			},
 		},
 		args = {1, -1},
-		needs = cheat,
+		needs = {.World}, // the server checks each command
 	)
 	console_register(
 		c,
@@ -173,7 +178,7 @@ register_world_commands :: proc(c: ^Console) {
 				s := app.session
 				switch args[0] {
 				case "list":
-					send_message(s, game.Admin{"structure list"})
+					send_message(s, game.Command{"structure list"})
 				case "save":
 					a, ok_a := s.selection[0].?
 					b, ok_b := s.selection[1].?
@@ -188,7 +193,7 @@ register_world_commands :: proc(c: ^Console) {
 					clear := " clear" if len(args) > 2 && args[2] == "clear" else ""
 					send_message(
 						s,
-						game.Admin {
+						game.Command {
 							fmt.tprintf(
 								"structure save %s %d %d %d %d %d %d%s",
 								args[1],
@@ -216,7 +221,7 @@ register_world_commands :: proc(c: ^Console) {
 					turns := args[2] if len(args) > 2 else "0"
 					send_message(
 						s,
-						game.Admin {
+						game.Command {
 							fmt.tprintf(
 								"structure paste %s %d %d %d %s",
 								args[1],
@@ -237,7 +242,8 @@ register_world_commands :: proc(c: ^Console) {
 			},
 		},
 		args = {1, 3},
-		needs = cheat,
+		needs = {.World},
+		node = "world.structure",
 	)
 	console_register(
 		c,
@@ -245,7 +251,7 @@ register_world_commands :: proc(c: ^Console) {
 			"locate",
 			"locate <biome or structure>: fly to the nearest place of a biome, or a structure",
 			proc(app: ^App, args: []string) {
-				send_message(app.session, game.Admin{fmt.tprintf("locate %s", args[0])})
+				send_message(app.session, game.Command{fmt.tprintf("locate %s", args[0])})
 			},
 		},
 		proc(app: ^App, arg: int, args: []string) -> []string {
@@ -257,19 +263,23 @@ register_world_commands :: proc(c: ^Console) {
 			return names[:]
 		},
 		args = {1, 1},
-		needs = cheat,
+		needs = {.World},
+		node = "teleport.locate",
 	)
 	console_register(
 		c,
 		{"summon", "summon [kind]: an entity in front of you", proc(app: ^App, args: []string) {
 				send_message(
 					app.session,
-					game.Admin{fmt.tprintf("summon %s", args[0] if len(args) > 0 else "critter")},
+					game.Command {
+						fmt.tprintf("summon %s", args[0] if len(args) > 0 else "critter"),
+					},
 				)
 			}},
 		complete_summon,
 		args = {0, 1},
-		needs = cheat,
+		needs = {.World},
+		node = "world.summon",
 	)
 }
 
@@ -302,7 +312,7 @@ selection_command :: proc(app: ^App, what: string, rest: string) {
 	}
 	send_message(
 		s,
-		game.Admin {
+		game.Command {
 			fmt.tprintf("%s %d %d %d %d %d %d %s", what, a.x, a.y, a.z, b.x, b.y, b.z, rest),
 		},
 	)

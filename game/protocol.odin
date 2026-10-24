@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 8
+PROTOCOL_VERSION :: 9
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_PLAYERS :: 32 // a server's seats at most
@@ -46,8 +46,9 @@ Ping :: struct {
 	id: u32,
 }
 
-// Teleport and Set_Rule are cheats: honoured only from players the server
-// lets cheat (Welcome.cheats: in your own world, or with --cheats).
+// Teleport and Set_Rule need permission (teleport.tp; world.rules,
+// world.gen): the server refuses them otherwise (Grants says what a player
+// may do).
 Teleport :: struct {
 	position:   [3]f64,
 	yaw, pitch: f32,
@@ -58,8 +59,9 @@ Set_Rule :: struct {
 	value: string,
 }
 
-// Admin runs a server command (see server/admin.odin); a cheat, like Set_Rule.
-Admin :: struct {
+// Command runs a server command (server/admin.odin), each needing its own
+// permission.
+Command :: struct {
 	command: string,
 }
 
@@ -94,7 +96,7 @@ Client_Message :: union {
 	Teleport,
 	Set_Rule,
 	Edit,
-	Admin,
+	Command,
 	Attack,
 	Fire,
 }
@@ -105,7 +107,6 @@ Welcome :: struct {
 	protocol:    u32,
 	tick_rate:   u32,
 	player:      u16, // this client's player id
-	cheats:      bool, // may send Teleport, Set_Rule and Admin (else they end the connection)
 	spawn:       [3]f64,
 	view_radius: u32, // the interest area, in chunks (see interest.odin)
 	view_height: u32,
@@ -233,6 +234,14 @@ Explosion :: struct {
 	radius:   f32,
 }
 
+// Grants: what this player may do (game/permissions.odin), as
+// grants_text's lines: when they join and whenever it changes.
+Grants :: struct {
+	text: string, // view into the message
+}
+
+MAX_GRANTS_TEXT :: 16384
+
 // Blocks_Changed: blocks the world changed in a chunk this tick (flowing
 // water; players' edits come as Block_Changed, heard), by local index.
 Blocks_Changed :: struct {
@@ -303,6 +312,7 @@ Server_Message :: union {
 	Explosion,
 	Variables,
 	Blocks_Changed,
+	Grants,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -320,7 +330,7 @@ Client_Kind :: enum u8 {
 	Teleport,
 	Set_Rule,
 	Edit,
-	Admin,
+	Command,
 	Attack,
 	Fire,
 }
@@ -350,6 +360,7 @@ Server_Kind :: enum u8 {
 	Explosion,
 	Variables,
 	Blocks_Changed,
+	Grants,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -400,8 +411,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "set_rule"
 		case u8(Client_Kind.Edit):
 			return "edit"
-		case u8(Client_Kind.Admin):
-			return "admin"
+		case u8(Client_Kind.Command):
+			return "command"
 		case u8(Client_Kind.Attack):
 			return "attack"
 		case u8(Client_Kind.Fire):
@@ -455,6 +466,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "variables"
 		case u8(Server_Kind.Blocks_Changed):
 			return "blocks"
+		case u8(Server_Kind.Grants):
+			return "grants"
 		}
 	}
 	return ""
@@ -489,8 +502,8 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u32(w, v.after)
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
-	case Admin:
-		write_u8(w, u8(Client_Kind.Admin))
+	case Command:
+		write_u8(w, u8(Client_Kind.Command))
 		write_string(w, v.command)
 	case Attack:
 		write_u8(w, u8(Client_Kind.Attack))
@@ -513,7 +526,6 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u32(w, v.protocol)
 		write_u32(w, v.tick_rate)
 		write_u16(w, v.player)
-		write_u8(w, 1 if v.cheats else 0)
 		write_position(w, v.spawn)
 		write_u32(w, v.view_radius)
 		write_u32(w, v.view_height)
@@ -621,6 +633,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Variables:
 		write_u8(w, u8(Server_Kind.Variables))
 		write_string(w, v.text)
+	case Grants:
+		write_u8(w, u8(Server_Kind.Grants))
+		write_string(w, v.text)
 	case Blocks_Changed:
 		write_u8(w, u8(Server_Kind.Blocks_Changed))
 		write_chunk_pos(w, v.chunk)
@@ -674,8 +689,8 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			pos   = read_block_pos(&r),
 			block = read_block(&r),
 		}
-	case u8(Client_Kind.Admin):
-		m = Admin {
+	case u8(Client_Kind.Command):
+		m = Command {
 			command = read_string(&r, MAX_ADMIN_TEXT),
 		}
 	case u8(Client_Kind.Attack):
@@ -709,9 +724,6 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			tick_rate = read_u32(&r),
 			player    = read_u16(&r),
 		}
-		cheats := read_u8(&r)
-		if cheats > 1 {reader_fail(&r)}
-		w.cheats = cheats == 1
 		w.spawn = read_position(&r)
 		w.view_radius = read_u32(&r)
 		w.view_height = read_u32(&r)
@@ -868,6 +880,10 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 	case u8(Server_Kind.Variables):
 		m = Variables {
 			text = read_string(&r, MAX_VARIABLES_TEXT),
+		}
+	case u8(Server_Kind.Grants):
+		m = Grants {
+			text = read_string(&r, MAX_GRANTS_TEXT),
 		}
 	case u8(Server_Kind.Blocks_Changed):
 		c := Blocks_Changed {

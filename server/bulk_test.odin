@@ -60,7 +60,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// Fill: a stone box, seen by both.
 	net_send(
 		&a,
-		game.Admin {
+		game.Command {
 			fmt.tprintf(
 				"fill %d %d %d %d %d %d stone",
 				box_lo.x,
@@ -81,17 +81,20 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// A sphere of air inside it.
 	@(static) center: game.Block_Pos
 	center = {7, base_y + 7, 0}
-	net_send(&a, game.Admin{fmt.tprintf("sphere %d %d %d 1.5 air", center.x, center.y, center.z)})
+	net_send(
+		&a,
+		game.Command{fmt.tprintf("sphere %d %d %d 1.5 air", center.x, center.y, center.z)},
+	)
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
-		b0, _ := net_block(cs[0], center)
-		b1, _ := net_block(cs[1], center)
-		return b0 == .Air && b1 == .Air
-	})
+			b0, _ := net_block(cs[0], center)
+			b1, _ := net_block(cs[1], center)
+			return b0 == .Air && b1 == .Air
+		})
 	testing.expect(t, ok, "the sphere was not carved for both")
 
 	// Too big: refused, nothing changes.
 	before := a.bulk_begins
-	net_send(&a, game.Admin{"fill -100 0 -100 100 60 100 dirt"})
+	net_send(&a, game.Command{"fill -100 0 -100 100 60 100 dirt"})
 	time.sleep(300 * time.Millisecond)
 	net_pump(t, &a)
 	testing.expect_value(t, a.bulk_begins, before)
@@ -100,7 +103,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// around it.
 	@(static) blast: game.Block_Pos
 	blast = {-6, base_y - 2, 6}
-	net_send(&a, game.Admin{fmt.tprintf("explode %d %d %d 4", blast.x, blast.y, blast.z)})
+	net_send(&a, game.Command{fmt.tprintf("explode %d %d %d 4", blast.x, blast.y, blast.z)})
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 		x0, _ := net_block(cs[0], blast)
 		x1, _ := net_block(cs[1], blast)

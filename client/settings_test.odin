@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import "../base"
+import "../game"
 import "../ui"
 
 // Every variable table names real fields of supported types, with defaults
@@ -120,7 +121,7 @@ test_console_command_needs :: proc(t: ^testing.T) {
 	ran = 0
 	console_register(&app.console, {"poke", "poke <what>: test", proc(app: ^App, args: []string) {
 				ran += 1
-			}}, args = {1, 1}, needs = {.World, .Cheats})
+			}}, args = {1, 1}, needs = {.World}, node = "world.poke")
 	last :: proc(c: ^Console) -> string {return(
 			c.lines[(c.first + c.count - 1) % CONSOLE_MAX_LINES].text \
 		)}
@@ -135,7 +136,8 @@ test_console_command_needs :: proc(t: ^testing.T) {
 	s.state = .Playing
 	console_execute(app, "poke it")
 	testing.expect_value(t, last(&app.console), "poke: not allowed on this server")
-	s.welcome.cheats = true
+	append(&s.grants, game.Grant{pattern = "world.*", allow = true})
+	defer delete(s.grants)
 	console_execute(app, "poke it")
 	testing.expect_value(t, ran, 1)
 	app.session = nil

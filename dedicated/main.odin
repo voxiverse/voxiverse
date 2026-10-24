@@ -28,7 +28,7 @@ Options :: struct {
 	max_players: int `usage:"seats (default 8, at most 32)"`,
 	view_radius: int `usage:"view distance across, chunks (default 12)"`,
 	view_height: int `usage:"view distance up and down, chunks (default 6)"`,
-	cheats:      bool `usage:"let every player teleport, change rules and run server commands"`,
+	cheats:      bool `usage:"give every player every permission (testing; see permissions.cfg)"`,
 	seconds:     int `usage:"stop after this many seconds (0: run until stopped)"`,
 	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
 }

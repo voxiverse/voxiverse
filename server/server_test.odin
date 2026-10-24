@@ -16,7 +16,7 @@ import "../game"
 // chunks it is sent (and dropping those it is told to), as the real client
 // does. Checks the protocol flow and that memory on both sides stays bounded.
 
-@(private = "file")
+@(private)
 Fake_Client :: struct {
 	endpoint:       game.Endpoint,
 	has:            map[game.Chunk_Pos]struct{},
@@ -37,7 +37,7 @@ Fake_Client :: struct {
 	variables:      string, // the last Variables (temp allocator)
 }
 
-@(private = "file")
+@(private)
 fake_send :: proc(c: ^Fake_Client, m: game.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
@@ -95,7 +95,8 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Entity_Despawn,
 		     game.Entities,
 		     game.Entity_Hurt,
-		     game.Blocks_Changed: // not checked here
+		     game.Blocks_Changed,
+		     game.Grants: // not checked here
 		case game.Variables:
 			c.variables = strings.clone(v.text, context.temp_allocator)
 		case game.Notice:
@@ -109,7 +110,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 	}
 }
 
-@(private = "file")
+@(private)
 wait_until :: proc(
 	t: ^testing.T,
 	c: ^Fake_Client,
@@ -244,10 +245,8 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		},
 		{first = game.Input{}, reason = "message before hello"},
 		{first = game.Teleport{}, reason = "message before hello"},
-		// Cheats are for players: not before hello, even where allowed.
-		{first = game.Admin{"explode 0 0 0 8"}, reason = "message before hello", cheats = true},
-		{first = game.Admin{"explode 0 0 0 8"}, reason = "cheats are not allowed", hello = true},
-		{first = game.Fire{}, reason = "cheats are not allowed", hello = true},
+		// Commands are for players: not before hello, even where allowed.
+		{first = game.Command{"explode 0 0 0 8"}, reason = "message before hello", cheats = true},
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
@@ -290,6 +289,40 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		delete(c.columns)
 		game.pipe_destroy(&pipe)
 	}
+}
+
+// A player without the permission is told no, and stays.
+@(test)
+test_server_refuses_without_permission :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	srv: Server
+	testing.expect(
+		t,
+		start(&srv, {seed = 1, view_radius = 2, view_height = 1, workers = 1}, {&pipe, .Server}),
+	)
+	c := Fake_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	defer delete(c.has)
+	defer delete(c.columns)
+	fake_send(&c, game.Hello{game.PROTOCOL_VERSION, "tester"})
+	fake_send(&c, game.Command{"explode 0 0 0 8"})
+	fake_send(&c, game.Fire{})
+	testing.expect(
+		t,
+		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.notices) >= 2}),
+	)
+	if len(c.notices) >= 2 {
+		testing.expect_value(t, c.notices[0], "You may not use explode here (world.explode)")
+		testing.expect_value(t, c.notices[1], "You may not do that here (world.fire)")
+	}
+	testing.expect_value(t, c.rejected, "")
+	testing.expect(t, !game.is_closed(c.endpoint))
+	testing.expect(t, stop(&srv))
 }
 
 // The server moves the player from inputs, at most one per tick however
@@ -504,7 +537,7 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 	)
 
 	// Open to the LAN: freezing does nothing.
-	fake_send(&c, game.Admin{"open_lan"})
+	fake_send(&c, game.Command{"open_lan"})
 	time.sleep(100 * time.Millisecond)
 	freeze(&srv, true)
 	time.sleep(1100 * time.Millisecond)
@@ -563,7 +596,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 	}
 	for tc in cases {
 		clear(&c.notices)
-		fake_send(&c, game.Admin{tc.command})
+		fake_send(&c, game.Command{tc.command})
 		@(static) want: string
 		want = tc.answer
 		got := wait_until(
@@ -655,7 +688,7 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 			),
 		)
 		clear(&c.notices)
-		fake_send(&c, game.Admin{"regen 2"})
+		fake_send(&c, game.Command{"regen 2"})
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {
 				for n in c.notices {if strings.has_prefix(n, "regen: ") {return true}}
 				return false
@@ -712,7 +745,7 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 	answers = 0
 	run :: proc(t: ^testing.T, c: ^Fake_Client, command: string) -> string {
 		clear(&c.notices)
-		fake_send(c, game.Admin{command})
+		fake_send(c, game.Command{command})
 		got := wait_until(
 			t,
 			c,

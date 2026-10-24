@@ -67,6 +67,7 @@ Session :: struct {
 	puffs:        [dynamic]Puff, // particles: debris, smoke, a dying entity's puff
 	worldgen:     worldgen.Params, // the server's generator settings (Variables), if it has any
 	has_worldgen: bool,
+	grants:       [dynamic]game.Grant, // what the server lets this player do (heap)
 	texels:       [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
 	newest_tick:  u32, // of the newest Players or Entities message
 	newest_at:    time.Tick, // when it came
@@ -207,10 +208,10 @@ session_freeze :: proc(s: ^Session, paused: bool) {
 	server.freeze(&s.server, want)
 }
 
-// session_can_cheat: the server lets this player teleport, change rules and
-// run admin commands (sending one otherwise ends the connection).
-session_can_cheat :: proc(s: ^Session) -> bool {
-	return s.state == .Playing && s.welcome.cheats
+// session_allowed: the server lets this player do node (its Grants; it
+// checks again).
+session_allowed :: proc(s: ^Session, node: string) -> bool {
+	return s.state == .Playing && game.allowed(s.grants[:], node)
 }
 
 // session_end stops everything and frees the session; false if the server
@@ -220,6 +221,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	delete(s.entities) // the heap: entities come and go
+	for g in s.grants {delete(g.pattern)}
+	delete(s.grants)
 	for _, o in s.others {delete(o.name)}
 	delete(s.others)
 	for n in s.notices {delete(n)}

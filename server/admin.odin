@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:log"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -10,7 +11,7 @@ import "../netcode"
 import "../worldgen"
 
 // Admin commands: what a player who may cheat can ask of the server, as
-// text (game.Admin; the console's commands send them). Each one checks its
+// text (game.Command; the console's commands send them). Each one checks its
 // own arguments; bad ones and unknown commands are answered with a notice.
 
 @(private = "file")
@@ -19,26 +20,48 @@ Admin_Command :: struct {
 	usage: string, // its arguments
 	args:  [2]int, // how many: at least, at most
 	run:   proc(s: ^Server, c: ^Client, args: []string) -> bool, // false: bad arguments
+	node:  string, // the permission it needs
 }
 
 @(private = "file", rodata)
 ADMIN_COMMANDS := [?]Admin_Command {
-	{"save", "", {0, 0}, admin_save},
-	{"time", "<0..1 | sunrise | day | noon | sunset | night | midnight>", {1, 1}, admin_time},
-	{"fill", "<x1 y1 z1 x2 y2 z2> <block>", {7, 7}, admin_fill},
-	{"replace", "<x1 y1 z1 x2 y2 z2> <from> <to>", {8, 8}, admin_replace},
-	{"sphere", "<x y z> <radius> <block>", {5, 5}, admin_sphere},
-	{"explode", "<x y z> <radius>", {4, 4}, admin_explode},
-	{"summon", "[kind]", {0, 1}, admin_summon},
-	{"open_lan", "", {0, 0}, admin_open_lan},
-	{"hash", "", {0, 0}, admin_hash},
-	{"locate", "<biome or structure>", {1, 1}, admin_locate},
-	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen},
+	{"save", "", {0, 0}, admin_save, "server.save"},
+	{
+		"time",
+		"<0..1 | sunrise | day | noon | sunset | night | midnight>",
+		{1, 1},
+		admin_time,
+		"world.time",
+	},
+	{"fill", "<x1 y1 z1 x2 y2 z2> <block>", {7, 7}, admin_fill, "world.edit.bulk"},
+	{"replace", "<x1 y1 z1 x2 y2 z2> <from> <to>", {8, 8}, admin_replace, "world.edit.bulk"},
+	{"sphere", "<x y z> <radius> <block>", {5, 5}, admin_sphere, "world.edit.bulk"},
+	{"explode", "<x y z> <radius>", {4, 4}, admin_explode, "world.explode"},
+	{"summon", "[kind]", {0, 1}, admin_summon, "world.summon"},
+	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
+	{"hash", "", {0, 0}, admin_hash, "debug.hash"},
+	{"locate", "<biome or structure>", {1, 1}, admin_locate, "teleport.locate"},
+	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{
 		"structure",
 		"save <name> <x1 y1 z1 x2 y2 z2> [clear] | paste <name> <x y z> [quarter turns] | list",
 		{1, 9},
 		admin_structure,
+		"world.structure",
+	},
+	{
+		"role",
+		"list | info <role> | grant|revoke <role> <node> | inherit|uninherit <role> <role> | meta <role> <key> [value] | delete <role>",
+		{1, 64}, // (a meta value has spaces)
+		admin_role,
+		"permissions.edit",
+	},
+	{
+		"user",
+		"info <player> | role add|remove <player> <role> | grant|revoke <player> <node> | meta <player> <key> [value]",
+		{2, 64},
+		admin_user,
+		"permissions.edit",
 	},
 }
 
@@ -49,6 +72,10 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 	for &cmd in ADMIN_COMMANDS {
 		if cmd.name != f[0] {continue}
 		args := f[1:]
+		if !allowed(s, c, cmd.node) {
+			notice(s, c, fmt.tprintf("You may not use %s here (%s)", cmd.name, cmd.node))
+			return
+		}
 		if len(args) < cmd.args[0] || len(args) > cmd.args[1] || !cmd.run(s, c, args) {
 			notice(s, c, fmt.tprintf("Usage: %s %s", cmd.name, cmd.usage))
 		}
@@ -293,4 +320,109 @@ parse_ball :: proc(words: []string) -> (center: [3]f64, radius: f64, ok: bool) {
 parse_block :: proc(name: string) -> (game.Block, bool) {
 	b, ok := game.block_by_name(name)
 	return b, ok && (b == .Air || game.can_place(b))
+}
+
+// admin_role edits a role (it is made by its first grant, inherit or meta).
+@(private = "file")
+admin_role :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	p := &s.perms
+	switch args[0] {
+	case "list":
+		names := make([dynamic]string, context.temp_allocator)
+		for name in p.roles {append(&names, name)}
+		slice.sort(names[:])
+		notice(
+			s,
+			c,
+			fmt.tprintf("Roles: %s", strings.join(names[:], ", ", context.temp_allocator)),
+		)
+		return true
+	case "info":
+		if len(args) != 2 {return false}
+		r, ok := &p.roles[args[1]]
+		if !ok {
+			notice(s, c, fmt.tprintf("No role %s", args[1]))
+			return true
+		}
+		meta := make([dynamic]string, context.temp_allocator)
+		for k, v in r.meta {append(&meta, fmt.tprintf("%s=%q", k, v))}
+		notice(
+			s,
+			c,
+			fmt.tprintf(
+				"%s: inherits %v; grants %v; meta %v",
+				args[1],
+				r.inherits[:],
+				r.grants[:],
+				meta[:],
+			),
+		)
+		return true
+	}
+	if len(args) < 2 || !role_name_valid(args[1]) {return false}
+	switch args[0] {
+	case "delete":
+		if len(args) != 2 {return false}
+		if key, r, ok := map_entry_role(p, args[1]); ok {
+			role_free(&r)
+			delete_key(&p.roles, args[1])
+			delete(key)
+		}
+	case "grant", "revoke":
+		if len(args) != 3 {return false}
+		game.grant_parse(args[2], 0) or_return
+		r := role_get(p, args[1])
+		list_set(&r.grants, args[2], args[0] == "grant")
+	case "inherit", "uninherit":
+		if len(args) != 3 || !role_name_valid(args[2]) || args[1] == args[2] {return false}
+		r := role_get(p, args[1])
+		list_set(&r.inherits, args[2], args[0] == "inherit")
+	case "meta":
+		if len(args) < 3 {return false}
+		r := role_get(p, args[1])
+		meta_set(&r.meta, args[2], strings.join(args[3:], " ", context.temp_allocator))
+	case:
+		return false
+	}
+	permissions_changed(s)
+	notice(s, c, fmt.tprintf("role %s: done", args[1]))
+	return true
+}
+
+// admin_user edits a player's roles, grants and metadata.
+@(private = "file")
+admin_user :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	p := &s.perms
+	switch args[0] {
+	case "info":
+		if len(args) != 2 || !game.name_valid(args[1]) {return false}
+		pl, ok := &p.players[args[1]]
+		if !ok {
+			notice(s, c, fmt.tprintf("%s: the role default only", args[1]))
+			return true
+		}
+		notice(s, c, fmt.tprintf("%s: roles %v; grants %v", args[1], pl.roles[:], pl.grants[:]))
+	case "role":
+		if len(args) != 4 || !game.name_valid(args[2]) || !role_name_valid(args[3]) {return false}
+		if args[1] != "add" && args[1] != "remove" {return false}
+		list_set(&player_perms(p, args[2]).roles, args[3], args[1] == "add")
+	case "grant", "revoke":
+		if len(args) != 3 || !game.name_valid(args[1]) {return false}
+		game.grant_parse(args[2], 0) or_return
+		list_set(&player_perms(p, args[1]).grants, args[2], args[0] == "grant")
+	case "meta":
+		if len(args) < 3 || !game.name_valid(args[1]) {return false}
+		meta_set(
+			&player_perms(p, args[1]).meta,
+			args[2],
+			strings.join(args[3:], " ", context.temp_allocator),
+		)
+	case:
+		return false
+	}
+	if args[0] != "info" {
+		permissions_changed(s)
+		notice(s, c, "user: done")
+	}
+	return true
 }

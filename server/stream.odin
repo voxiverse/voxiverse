@@ -29,7 +29,7 @@ Local :: struct {}
 Client :: struct {
 	state:        Client_State,
 	link:         Client_Link,
-	can_cheat:    bool,
+	grants:       [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
 	name_buf:     [game.MAX_NAME_LENGTH]u8,
 	name_len:     int,
 	kick_at:      u64, // tick to drop a refused client
@@ -82,6 +82,8 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 // client_reset frees the seat (keeping its maps' memory for the next).
 @(private)
 client_reset :: proc(c: ^Client) {
+	for g in c.grants {delete(g.pattern)}
+	delete(c.grants)
 	has, columns, known := c.has, c.columns, c.known
 	clear(&has)
 	clear(&columns)

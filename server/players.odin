@@ -33,7 +33,6 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			protocol = game.PROTOCOL_VERSION,
 			tick_rate = game.TICK_RATE,
 			player = player_id(s, c),
-			cheats = c.can_cheat,
 			spawn = c.player.position,
 			view_radius = u32(s.config.view_radius),
 			view_height = u32(s.config.view_height),
@@ -41,6 +40,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		},
 	)
 	send_message(s, c, game.Time{s.clock})
+	refresh_grants(s, c) // what they may do
 	if m, ok := worldgen_variables(s); ok {send_message(s, c, m)}
 	for &other in s.clients {
 		if &other == c || other.state != .Playing {continue}

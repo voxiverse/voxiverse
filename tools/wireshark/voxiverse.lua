@@ -25,7 +25,7 @@ local PACKET_KINDS = {
 }
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
-	[5] = "set_rule", [6] = "edit", [7] = "admin", [8] = "attack",
+	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
 	[9] = "fire",
 }
 local SERVER_KINDS = {
@@ -34,7 +34,7 @@ local SERVER_KINDS = {
 	[9] = "block", [10] = "column", [11] = "time", [12] = "joined",
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
-	[21] = "explosion", [22] = "variables", [23] = "blocks",
+	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
 }
 
 local f = vx.fields
@@ -106,14 +106,13 @@ local function describe(tvb, from_server)
 				return string.format("edit id=%d after=%d pos=[%d %d %d] block=%d", u32(tvb, 1),
 					u32(tvb, 5), i32(tvb, 9), i32(tvb, 13), i32(tvb, 17), tvb(21, 2):le_uint())
 			elseif kind == 7 then
-				return string.format("admin %q", gstring(tvb, 1) or "?")
+				return string.format("command %q", gstring(tvb, 1) or "?")
 			end
 		else
 			if kind == 1 then
-				return string.format("welcome protocol=%d player=%d cheats=%d spawn=[%.1f %.1f %.1f]",
-					u32(tvb, 1), tvb(9, 2):le_uint(), tvb(11, 1):uint(),
-					f64(tvb, 12), f64(tvb, 20), f64(tvb, 28))
-			elseif kind == 2 or kind == 15 or kind == 22 then
+				return string.format("welcome protocol=%d player=%d spawn=[%.1f %.1f %.1f]",
+					u32(tvb, 1), tvb(9, 2):le_uint(), f64(tvb, 11), f64(tvb, 19), f64(tvb, 27))
+			elseif kind == 2 or kind == 15 or kind == 22 or kind == 24 then
 				return string.format("%s %q", name, gstring(tvb, 1) or "?")
 			elseif kind == 3 or kind == 4 then
 				return string.format("%s pos=[%d %d %d]", name, i32(tvb, 1), i32(tvb, 5), i32(tvb, 9))

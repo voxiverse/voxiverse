@@ -16,13 +16,13 @@ Item :: union {
 }
 
 Tool_Info :: struct {
-	name:  string,
-	cheat: bool, // only where the server allows cheats (creative tools)
+	name: string,
+	node: string, // the permission it needs to be on the hotbar ("": none)
 }
 
 @(rodata)
 TOOL_INFO := [Tool]Tool_Info {
-	.Launcher = {name = "rocket", cheat = true},
+	.Launcher = {name = "rocket", node = "world.fire"},
 }
 
 // HOTBAR: everything a player can hold, in hotbar order (at most nine).
@@ -49,12 +49,12 @@ item_name :: proc(item: Item) -> string {
 	return ""
 }
 
-// hotbar_items: the hotbar here (cheat items only where cheats are allowed).
+// hotbar_items: the hotbar here (each item only where it is allowed).
 hotbar_items :: proc(s: ^Session) -> []Item {
 	items := make([dynamic]Item, 0, len(HOTBAR), context.temp_allocator)
-	cheats := session_can_cheat(s)
 	for item in HOTBAR {
-		if t, tool := item.(Tool); tool && TOOL_INFO[t].cheat && !cheats {continue}
+		if t, tool := item.(Tool);
+		   tool && TOOL_INFO[t].node != "" && !session_allowed(s, TOOL_INFO[t].node) {continue}
 		append(&items, item)
 	}
 	return items[:]

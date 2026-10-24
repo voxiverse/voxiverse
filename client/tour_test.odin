@@ -106,7 +106,7 @@ tour_test_update :: proc(app: ^App) {
 
 @(private = "file")
 tour_locate :: proc(t: ^Tour_Test, s: ^Session) {
-	send_message(s, game.Admin{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])})
+	send_message(s, game.Command{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])})
 	t.phase, t.started = .Locating, time.tick_now()
 }
 

@@ -46,7 +46,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 
 // session_fire launches a rocket where we look (the server makes it).
 session_fire :: proc(s: ^Session) -> bool {
-	if !session_can_cheat(s) {return false}
+	if !session_allowed(s, "world.fire") {return false}
 	send_message(s, game.Fire{s.prediction.next_sequence - 1, s.camera.yaw, s.camera.pitch})
 	append(&s.sounds, Sound_Event{.Launch, .Air, s.camera.position, 1})
 	return true

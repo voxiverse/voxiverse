@@ -125,6 +125,10 @@ receive :: proc(s: ^Session) {
 				e := v.entries[i]
 				world_set_block(&s.world, origin + game.local_from_index(int(e.index)), e.block)
 			}
+		case game.Grants:
+			for g in s.grants {delete(g.pattern)}
+			clear(&s.grants)
+			if !game.grants_parse(v.text, &s.grants) {log.warn("session grants not understood")}
 		case game.Variables:
 			s.has_worldgen = true
 			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {
@@ -219,7 +223,7 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		position = w.spawn + {0, game.PLAYER_EYE, 0},
 	}
 	s.state = .Playing
-	if t, ok := s.teleport.?; ok && w.cheats {send_message(s, t)}
+	if t, ok := s.teleport.?; ok {send_message(s, t)} 	// (the server says no if it may not)
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
 }
 
@@ -309,7 +313,7 @@ fail :: proc(s: ^Session, reason: string) {
 send_message :: proc(s: ^Session, m: game.Client_Message) {
 	// Text the server would refuse to decode (ending the connection).
 	#partial switch v in m {
-	case game.Admin:
+	case game.Command:
 		if len(v.command) > game.MAX_ADMIN_TEXT {
 			append(&s.notices, strings.clone("Command too long"))
 			return
