@@ -184,6 +184,7 @@ neighbours' edges.
 | `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
 | `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
+| `view_test <frames> [quit]` | The GPU check: waits for the world to load and mesh, turns through sixteen views (eight directions, at the horizon and down onto the land) holding each <frames> frames, and logs the GPU's frame time and the triangles drawn (and a line in `build/perf-history.jsonl`). Run with `set vsync 0` |
 
 F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
 and to light and mesh (ours), on average and the slowest 1%.

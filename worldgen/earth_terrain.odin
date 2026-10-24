@@ -221,7 +221,11 @@ earth_generate :: proc(
 	if rough {grid_fill(seed, column, origin.y, origin.y + game.CHUNK_SIZE + MARGIN, grid)}
 	caves := new(Cave_Grid, context.temp_allocator)
 	has_caves := origin.y < highest - 4 && p.cave_size > 0
-	if has_caves {cave_samples(seed, origin, caves)}
+	cave_cells: Cave_Cells
+	if has_caves {
+		cave_samples(seed, origin, caves)
+		has_caves = cave_cells_fill(caves, p.cave_size, &cave_cells)
+	}
 
 	for z in i32(0) ..< game.CHUNK_SIZE {
 		for x in i32(0) ..< game.CHUNK_SIZE {
@@ -249,7 +253,9 @@ earth_generate :: proc(
 					b = surface_block(p, col.biome, d, y)
 					if has_caves && d >= 5 && y > game.WORLD_MIN_Y + 4 {
 						l := [3]i32{x, y - origin.y, z}
-						if in_cave(caves, l, p.cave_size) {b = .Air}
+						cell := l / CAVE_STEP
+						if cave_cells[cell.y][cell.z][cell.x] &&
+						   in_cave(caves, l, p.cave_size) {b = .Air}
 					}
 					if b == .Stone {b = ore_at(seed, wx, y, wz)}
 				} else if y <= p.sea_level {
@@ -384,6 +390,40 @@ cave_samples :: proc(seed: i64, origin: game.Block_Pos, grid: ^Cave_Grid) {
 			}
 		}
 	}
+}
+
+// Cave_Cells: whether each 4-block cell of the chunk may hold cave. Within
+// a cell a block's values are a weighted mean of the cell's 8 corners, so
+// they lie between the corners' least and greatest: a cell where either
+// field stays clear of the cave's band at every corner has none (no need
+// to interpolate its blocks). The margin is far beyond float rounding, so
+// what is left out is exactly what in_cave would refuse.
+@(private = "file")
+Cave_Cells :: [CAVE_SAMPLES - 1][CAVE_SAMPLES - 1][CAVE_SAMPLES - 1]bool // [y][z][x]
+
+// cave_cells_fill: false if no cell may hold cave.
+@(private = "file")
+cave_cells_fill :: proc(g: ^Cave_Grid, size: f32, out: ^Cave_Cells) -> (any: bool) {
+	MARGIN :: 1e-3
+	for y in 0 ..< CAVE_SAMPLES - 1 {
+		for z in 0 ..< CAVE_SAMPLES - 1 {
+			for x in 0 ..< CAVE_SAMPLES - 1 {
+				lo, hi := [2]f32{max(f32), max(f32)}, [2]f32{min(f32), min(f32)}
+				for corner in 0 ..< 8 {
+					v := g[y + (corner >> 1 & 1)][z + (corner >> 2 & 1)][x + (corner & 1)]
+					lo, hi =
+						{min(lo[0], v[0]), min(lo[1], v[1])}, {max(hi[0], v[0]), max(hi[1], v[1])}
+				}
+				clear_of := proc(lo, hi, size: f32) -> bool {return(
+						lo > size + MARGIN ||
+						hi < -size - MARGIN \
+					)}
+				out[y][z][x] = !clear_of(lo[0], hi[0], size) && !clear_of(lo[1], hi[1], size)
+				any ||= out[y][z][x]
+			}
+		}
+	}
+	return
 }
 
 @(private = "file")

@@ -469,16 +469,30 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 	cmd := frame.cmd
 	gpu.begin_label(g, cmd, "world")
 	defer gpu.end_label(g, cmd)
+	// The meshes in view, nearest first: what is nearer is drawn before what
+	// it hides, so the depth test spares the hidden fragments their shading.
+	Visible :: struct {
+		mesh:     ^Mesh,
+		lo:       [3]f32,
+		distance: f32,
+	}
 	planes := frustum_planes(camera.view_proj)
+	visible := make([dynamic]Visible, 0, p.meshes.count, context.temp_allocator)
+	it: base.Pool_Iterator
+	for m in base.pool_next(&p.meshes, &it) {
+		if m.hidden || m.layers[.Opaque] + m.layers[.Cutout] == 0 {continue}
+		lo, seen := mesh_visible(m, camera, &planes)
+		if !seen {continue}
+		d := lo + CHUNK_EXTENT / 2 - camera.position
+		append(&visible, Visible{m, lo, d.x * d.x + d.y * d.y + d.z * d.z})
+	}
+	slice.sort_by(visible[:], proc(a, b: Visible) -> bool {return a.distance < b.distance})
 	for layer in ([2]Mesh_Layer{.Opaque, .Cutout}) {
 		draw_begin(p, g, cmd, layer)
 		push := world_push(p, scene, 0)
-		it: base.Pool_Iterator
-		for m in base.pool_next(&p.meshes, &it) {
-			if m.hidden || m.layers[layer] == 0 {continue}
-			lo, visible := mesh_visible(m, camera, &planes)
-			if !visible {continue}
-			p.stats.triangles += draw_layer(g, cmd, m, layer, lo, camera.position, &push)
+		for v in visible {
+			if v.mesh.layers[layer] == 0 {continue}
+			p.stats.triangles += draw_layer(g, cmd, v.mesh, layer, v.lo, camera.position, &push)
 			if layer == .Opaque {p.stats.drawn += 1}
 		}
 	}

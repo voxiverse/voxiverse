@@ -282,7 +282,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own (done: `server/worlds_test.odin` travels an admin away and back over UDP with her inventory while another player stays home, saves her edit in the other world's directory, unloads it when empty, keeps memory flat over repeated travel, and checks an address's kind across two universes; `game/address_test.odin`; old world directories migrate) |
 | M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
-| M19 | Performance: a single-thread benchmark of the chunk pipeline (`build bench`) and counters for the mesher's work, then the costs it finds: the workers' queue, the column cache, the light fill, the load order, the send budget, water wake-ups at chunk borders, caves; per-direction draws and greedy meshing on the GPU side; the sky's clouds | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) |
+| M19 | Performance: tools to measure (`build bench`, `build perf`, `build trace`, `view_test`, a history of runs), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) |
 | M20 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows, Linux and macOS made by CI on every push and published as a GitHub Release for each version tag | A version tag gives a Release with the three packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
 | M21 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
 | M22 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
@@ -608,37 +608,47 @@ area, not scripts.
 
 ## M19: performance
 
-Profiled from first principles (times below are from one 4-core machine with integrated
-graphics: compare them with each other, not across machines): `build bench` runs generate, light and mesh on one thread for a fixed region
-(optimized, with line tables for `perf`); release traces (`build build --release --profile`)
-show the game's threads; the client logs the mesher's work at the end of a session (`session
-mesher`: meshed, re-meshed and why). Numbers are per chunk unless said.
+Profiled from first principles. Times are from one 4-core machine with integrated graphics:
+compare them with each other, not across machines. Numbers are per chunk unless said.
 
-- **Found and done:**
-  - Light filled its 48³ region block by block with index arithmetic: row copies, light
-    0.389 → 0.163 ms.
-  - Worldgen worked out each chunk column's climate and trees again for every chunk of it
-    (~24): a per-worker `Column_Cache`, generate 0.333 → 0.188 ms on one thread (same blocks:
-    `test_column_cache`).
-  - Only 16 chunks per worker were queued and the queue refilled once a tick, so the workers
-    idled most of each tick (960 chunks/s at most): 64 per worker, the spawn's 5733 chunks
-    load in 4.0 s instead of 6.0.
-- **Found, to do (in order):**
-  - Load whole columns nearest first instead of spherical shells (the column cache misses in
-    game: climate still 0.18 ms a chunk), and a send budget in bytes rather than 48 chunks a
-    tick (now the cap: 4.0 s is exactly 5733 / 1440).
-  - `wake_water_box` looks up ~1700 border cells per chunk collected (8 ms ticks while
-    loading): a per-chunk "has water" flag skips nearly all.
-  - Caves: trilinear interpolation of 8 corners per solid block (15% of the benchmark): along
-    rows instead.
-  - GPU (idle at the spawn: world 1.8 ms, sky 0.54 ms of a 2.4 ms frame): meshes split by
-    face direction, drawing only the directions that can face the camera (about half the
-    triangles); then greedy meshing (merging faces with the same texture, AO and light); the
-    clouds' march (up to 160 steps a sky pixel) cheaper or at a lower resolution.
-  - A CI step running `build bench`, failing on a regression beyond a margin.
-- **Debug builds** are 7-15x slower in these loops (light 6 ms a chunk): the mesher's queue
-  takes tens of seconds to drain, which is what looked like churn on F3. M20 makes the
-  everyday build optimized.
+- **Tools** (DEBUGGING.md, Profiling): `build bench` (generate, light and mesh of a fixed
+  region on one thread, deterministic; `-check` in CI pins its counts and budgets),
+  `build perf` (Linux perf on a `--release --symbols` build, per named thread), `build
+  trace` (a Spall trace summarized), `view_test` (sixteen views from the spawn: GPU time
+  and triangles), the `session mesher` log line, and `build/perf-history.jsonl` (one line
+  per benchmark or exit check run, with the commit). Build profiles: an optimized
+  development build by default (debug builds are 7-15x slower in these loops, which is
+  what looked like the mesher churning).
+- **Loading** (the spawn's 5733 chunks: 6.0 s → 1.7 s; server tick time over a flight
+  1430 → 330 ms):
+  - workers idled most of each tick (16 chunks queued per worker, refilled once a tick):
+    64 per worker;
+  - a column's climate and trees worked out again for each of its ~24 chunks: a per-worker
+    `Column_Cache`, and chunks requested whole columns at a time so it hits (generate
+    0.333 → 0.188 ms on one thread);
+  - 48 chunks a tick sent at most (the cap once the workers kept up): a byte budget;
+  - water wake-ups looked up ~1700 cells per chunk collected: a per-chunk water flag;
+  - the server thread worked out each column's tops itself (most of `stream`): tops jobs
+    on the workers, a column's chunks sent once its tops are known.
+- **Chunk work:** light filled its region block by block (0.389 → 0.163 ms: rows); caves
+  interpolated every solid block (generate 0.200 → 0.169 ms: cells that cannot hold cave
+  skipped, bit for bit the same blocks).
+- **GPU** (`view_test`: 2.34 → 1.70 ms a frame; triangles 517k → 291k):
+  - meshes grouped by face direction, only the groups that can face the camera drawn (517k
+    → 331k triangles, 2.34 → 1.85 ms);
+  - greedy meshing of evenly lit faces (331k → 291k, 1.85 → 1.73 ms; exact:
+    `test_greedy_meshing_is_exact`);
+  - chunks drawn nearest first, so the depth test spares hidden fragments (the worst views
+    most: the world pass's p99 2.9 → 1.8 ms).
+- **Left, measured, not done yet:**
+  - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame (a two-level
+    grid, or the map as a texture);
+  - light is worked out for a chunk's whole 48³ neighbourhood each time it is meshed (27x
+    the work if light were kept per chunk); in game a chunk's light and mesh take ~0.7 ms
+    against the benchmark's 0.3 (four busy pools on four cores);
+  - `drop far` walks every chunk a client has when it crosses a chunk border (5 ms);
+  - occlusion culling (chunks hidden behind the land): count how many drawn chunks are
+    hidden before building it.
 
 ## M20: builds and releases
 
