@@ -357,14 +357,15 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 		testing.expect(t, c.results[1].block == .Air) // the actual block, to undo a prediction
 	}
 
-	// 90 inputs walking +x, all at once: no faster than one per tick.
-	sent_at := time.tick_now()
+	// 90 inputs walking +x, all at once: no faster than one per tick (the
+	// server's ticks: a busy machine's server runs late ticks back to back).
+	sent_at := stats(&srv).tick
 	for i in 61 ..= 150 {
 		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}})
 	}
 	time.sleep(time.Second)
 	fake_receive(t, &c)
-	ticks := time.duration_seconds(time.tick_since(sent_at)) * game.TICK_RATE
+	ticks := f64(stats(&srv).tick - sent_at)
 	applied := f64(c.player.acked - 60)
 	testing.expectf(
 		t,
