@@ -20,6 +20,7 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	vec4 sky_light;     // rgb: sky light level 15, now
 	vec4 cloud;         // rgb: lit cloud colour
 	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern
+	vec4 water;         // rgb: water seen from inside; w: 1 with the camera under water
 	Cloud_Map cloud_map;
 };
 
@@ -104,4 +105,17 @@ vec3 with_clouds(Scene s, vec3 dir, float far, vec3 color) {
 	float near = 2.0 * s.zenith.w; // clouds fade out from twice the fog distance
 	float fade = clamp((d - near) / (CLOUD_FAR - near), 0.0, 1.0);
 	return mix(cloud, color, fade * fade);
+}
+
+const float UNDERWATER_FOG = 18.0; // blocks: how far you see under water
+
+// fog_mix: color at `to` (from the camera) seen through the air's fog into
+// the sky, or under water through the water.
+vec3 fog_mix(Scene s, vec3 color, vec3 to) {
+	if (s.water.w > 0.5) {
+		float f = clamp(length(to) / UNDERWATER_FOG, 0.0, 1.0);
+		return mix(color * vec3(0.55, 0.75, 1.0), s.water.rgb, f * (2.0 - f));
+	}
+	float fog = fog_amount(s, length(to.xz));
+	return fog > 0.0 ? mix(color, sky_color(s, normalize(to)), fog) : color;
 }

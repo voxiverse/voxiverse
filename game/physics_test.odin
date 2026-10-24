@@ -10,6 +10,7 @@ import "../base"
 @(private = "file")
 Test_World :: struct {
 	solid:          map[Block_Pos]bool,
+	water:          map[Block_Pos]bool,
 	unloaded_below: Maybe(i32),
 }
 
@@ -18,6 +19,7 @@ query :: proc(w: ^Test_World) -> Block_Query {
 	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
 			w := (^Test_World)(data)
 			if limit, ok := w.unloaded_below.?; ok && p.y < limit {return .Air, false}
+			if p in w.water {return .Water, true}
 			return .Stone if p in w.solid else .Air, true
 		}}
 }
@@ -195,4 +197,73 @@ test_flying :: proc(t: ^testing.T) {
 @(test)
 test_rules_table :: proc(t: ^testing.T) {
 	testing.expect(t, base.var_table_check(rules_table()))
+}
+
+// A pool: water from y -6 to 0 (its surface at 1) over a stone floor at
+// -7, x and z -6..6; stone around it up to y 1 (a ledge one above the
+// water) from x 7 on.
+@(private = "file")
+pool :: proc(w: ^Test_World) {
+	floor(w, -7, 12)
+	for y in i32(-6) ..= 0 {
+		for z in i32(-6) ..= 6 {
+			for x in i32(-6) ..= 6 {w.water[{x, y, z}] = true}
+		}
+	}
+	for y in i32(-6) ..= 1 {
+		for z in i32(-12) ..= 12 {
+			for x in i32(7) ..= 12 {w.solid[{x, y, z}] = true}
+		}
+	}
+}
+
+@(test)
+test_swimming :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	defer delete(w.water)
+	pool(&w)
+
+	// Sinks slowly: far less than a fall.
+	s := Player_State {
+		position = {0.5, -2, 0.5},
+	}
+	run(&s, {}, &w, TICK_RATE, RULES_DEFAULTS)
+	testing.expectf(
+		t,
+		s.position.y > -3.5 && s.position.y < -2.5,
+		"sank to %v in a second",
+		s.position.y,
+	)
+	testing.expectf(t, abs(s.velocity.y + SWIM_SINK) < 0.1, "sinking at %v", s.velocity.y)
+
+	// Jump swims up, and it floats at the surface (feet in the water).
+	run(&s, {buttons = {.Jump}}, &w, 3 * TICK_RATE, RULES_DEFAULTS)
+	testing.expectf(t, s.position.y > -0.5 && s.position.y < 1.0, "swam up to %v", s.position.y)
+
+	// Across: slower than walking.
+	start := s.position
+	run(&s, {move = {0, 1}, yaw = math.PI / 2, buttons = {.Jump}}, &w, TICK_RATE, RULES_DEFAULTS) // west
+	across := start.x - s.position.x
+	testing.expectf(
+		t,
+		across > 1.2 && across < SWIM_SPEED * 1.05,
+		"swam %v blocks in a second",
+		across,
+	)
+
+	// Out onto the ledge at x 7 (its top at y 2): forward and jump.
+	s = {
+		position = {4.5, 0, 0.5},
+	}
+	for tick := 0; tick < 3 * TICK_RATE && s.position.x < 7.5; tick += 1 {
+		run(&s, {move = {0, 1}, yaw = -math.PI / 2, buttons = {.Jump}}, &w, 1, RULES_DEFAULTS) // east
+	}
+	run(&s, {}, &w, TICK_RATE, RULES_DEFAULTS) // and stand
+	testing.expectf(
+		t,
+		s.position.x > 7 && abs(s.position.y - 2) < 1e-6 && s.on_ground,
+		"did not climb out: at %v",
+		s.position,
+	)
 }

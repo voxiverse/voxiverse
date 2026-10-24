@@ -12,11 +12,22 @@ import "core:math"
 // where the box is and where it would go, so no speed tunnels through a
 // wall. Chunks that are not loaded count as solid: nobody falls out of the
 // world they have.
+//
+// In water (at the feet or the chest) players swim: slower and more
+// sluggish across, sinking slowly unless jump swims them up (or sneak
+// down); at the surface beside a ledge, jump lifts them out.
 
 PLAYER_WIDTH :: 0.6
 PLAYER_HEIGHT :: 1.8
 PLAYER_EYE :: 1.62
 PITCH_LIMIT :: 1.56 // radians: looking straight up or down is not allowed
+
+SWIM_SPEED :: 2.6 // blocks/s across (sprinting: 1.5 times)
+SWIM_CONTROL :: 4 // 1/s: how quickly swimming follows input
+SWIM_UP :: 3.2 // blocks/s holding jump
+SWIM_SINK :: 1.2 // blocks/s holding nothing
+SWIM_DOWN :: 3 // blocks/s holding sneak
+SWIM_CLIMB :: 1.2 // blocks above the water a swimmer against a wall can rise (a ledge one high)
 
 Button :: enum u8 {
 	Jump,
@@ -67,8 +78,12 @@ player_step :: proc(
 
 	sprint, sneak, jump :=
 		.Sprint in input.buttons, .Sneak in input.buttons, .Jump in input.buttons
+	feet_wet, chest_wet := in_water(q, s.position, 0.2), in_water(q, s.position, 1.2)
+	swimming := !s.flying && (feet_wet || chest_wet)
 	speed: f32
 	switch {
+	case swimming:
+		speed = SWIM_SPEED * (1.5 if sprint else 1)
 	case s.flying:
 		speed = rules.fly_sprint_speed if sprint else rules.fly_speed
 	case sneak:
@@ -79,12 +94,24 @@ player_step :: proc(
 		speed = rules.walk_speed
 	}
 	control := rules.ground_control if s.flying || s.on_ground else rules.air_control
+	if swimming {control = SWIM_CONTROL}
 	follow := 1 - math.exp(-control * dt)
 	target := wish * speed
 	s.velocity.x += (target.x - s.velocity.x) * follow
 	s.velocity.z += (target.y - s.velocity.z) * follow
 	vy_before: f32
-	if s.flying {
+	if swimming {
+		// Buoyant: the vertical speed eases towards the swim's, no gravity.
+		target_vy: f32 = -SWIM_SINK
+		if jump {target_vy = SWIM_UP} else if sneak {target_vy = -SWIM_DOWN}
+		s.velocity.y += (target_vy - s.velocity.y) * (1 - math.exp(-SWIM_CONTROL * 2 * dt))
+		if jump && against_wall(q, s.position, wish) {
+			// Against a wall: up it, fast enough to rise SWIM_CLIMB out of
+			// the water onto a ledge.
+			s.velocity.y = math.sqrt(2 * rules.gravity * SWIM_CLIMB)
+		}
+		vy_before = s.velocity.y
+	} else if s.flying {
 		up: f32 = (1 if jump else 0) - (1 if sneak else 0)
 		s.velocity.y += (up * speed - s.velocity.y) * follow
 		vy_before = s.velocity.y
@@ -114,6 +141,37 @@ player_step :: proc(
 player_box :: proc(position: [3]f64) -> (lo, hi: [3]f64) {
 	half :: PLAYER_WIDTH / 2
 	return position - {half, 0, half}, position + {half, PLAYER_HEIGHT, half}
+}
+
+// in_water: the block at height above the feet is water.
+in_water :: proc(q: Block_Query, position: [3]f64, height: f64) -> bool {
+	p := Block_Pos {
+		i32(math.floor(position.x)),
+		i32(math.floor(position.y + height)),
+		i32(math.floor(position.z)),
+	}
+	b, loaded := q.get(q.data, p)
+	_, water := water_level(b)
+	return loaded && water
+}
+
+// against_wall: a block stands just ahead of the player (the way they move)
+// at their feet: a ledge to climb out onto.
+@(private = "file")
+against_wall :: proc(q: Block_Query, position: [3]f64, wish: [2]f32) -> bool {
+	l := math.sqrt(wish.x * wish.x + wish.y * wish.y)
+	if l < 1e-3 {return false}
+	ahead :=
+		position +
+		{
+				f64(wish.x / l) * (PLAYER_WIDTH / 2 + 0.2),
+				0.2,
+				f64(wish.y / l) * (PLAYER_WIDTH / 2 + 0.2),
+			}
+	return solid_at(
+		q,
+		{i32(math.floor(ahead.x)), i32(math.floor(ahead.y)), i32(math.floor(ahead.z))},
+	)
 }
 
 // solid_at: a block that stops movement (unloaded chunks too; above the

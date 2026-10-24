@@ -27,6 +27,7 @@ Scene :: struct {
 	sky_light:     [4]f32, // rgb: what sky light level 15 looks like now
 	cloud:         [4]f32, // rgb cloud colour (lit side)
 	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD)
+	water:         [4]f32, // rgb: the colour of water seen from inside it; w: 1 with the camera under water
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
 	_:             u64,
 }
@@ -141,7 +142,17 @@ sky_at :: proc(f: f64) -> (s: Sky) {
 
 // scene_make puts a camera, the sky and the fog together. drift: how far
 // the clouds have moved (blocks).
-scene_make :: proc(camera: Camera, sky: Sky, fog_distance: f32, drift: f64) -> Scene {
+// UNDERWATER: the colour of deep water around a camera in it, in daylight
+// (dimmed with the sky's light).
+UNDERWATER :: [3]f32{0.05, 0.14, 0.30}
+
+scene_make :: proc(
+	camera: Camera,
+	sky: Sky,
+	fog_distance: f32,
+	drift: f64,
+	underwater := false,
+) -> Scene {
 	absolute := [3]f64 {
 		f64(camera.chunk.x) * CHUNK_EXTENT + f64(camera.position.x),
 		f64(camera.chunk.y) * CHUNK_EXTENT + f64(camera.position.y),
@@ -162,6 +173,12 @@ scene_make :: proc(camera: Camera, sky: Sky, fog_distance: f32, drift: f64) -> S
 		sky_light = {sky.sky_light.r, sky.sky_light.g, sky.sky_light.b, 0},
 		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 0},
 		cloud_origin = {wrap(absolute.x + drift), 0, wrap(absolute.z), 0},
+		water = {
+			UNDERWATER.r * sky.sky_light.r,
+			UNDERWATER.g * sky.sky_light.g,
+			UNDERWATER.b * sky.sky_light.b,
+			1 if underwater else 0,
+		},
 	}
 }
 

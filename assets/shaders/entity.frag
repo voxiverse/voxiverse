@@ -33,8 +33,6 @@ void main() {
 	if (in_part == FACE && t.y == 3u && (t.x == 2u || t.x == 5u)) albedo = vec3(0.02);
 	vec3 light = max(s.sky_light.rgb, vec3(0.06)) * in_shade;
 	vec3 color = albedo * light;
-	vec3 to = in_pos - s.camera.xyz;
-	float fog = fog_amount(s, length(to.xz));
-	if (fog > 0.0) color = mix(color, sky_color(s, normalize(to)), fog);
+	color = fog_mix(s, color, in_pos - s.camera.xyz);
 	out_color = vec4(color, 1.0);
 }

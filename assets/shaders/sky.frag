@@ -98,6 +98,11 @@ float stars(Scene s, vec3 dir) {
 void main() {
 	Scene s = push.scene;
 	vec3 dir = normalize(in_ray);
+	if (s.water.w > 0.5) {
+		// Under water: no sky, only more water.
+		out_color = vec4(s.water.rgb, 1.0);
+		return;
+	}
 	vec3 color = sky_color(s, dir);
 
 	// Stars, then the sun and moon over them.

@@ -13,9 +13,7 @@ layout(push_constant) uniform Push {
 // lit, fogged into the sky with distance, and behind any cloud between.
 vec3 world_shade(Scene s, vec3 albedo, vec3 light, vec3 pos) {
 	vec3 to = pos - s.camera.xyz;
-	float fog = fog_amount(s, length(to.xz));
-	vec3 color = albedo * light;
-	if (fog > 0.0) color = mix(color, sky_color(s, normalize(to)), fog);
+	vec3 color = fog_mix(s, albedo * light, to);
 	// A cloud between us: only when the way here crosses the cloud slab
 	// (never, on the ground below them).
 	float y0 = s.camera.w, y1 = s.camera.w + to.y;

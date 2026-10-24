@@ -307,7 +307,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			scene = render.scene_upload(
 				&app.scenes,
 				g,
-				render.scene_make(camera, sky, fog, s.cloud_drift),
+				render.scene_make(camera, sky, fog, s.cloud_drift, eye_in_water(s)),
 			)
 			world_debug_lines(app)
 			avatars_draw(s, &app.entity_draw)
@@ -483,4 +483,16 @@ split_commas :: proc(s: string) -> []string {
 		}
 	}
 	return out[:]
+}
+
+// eye_in_water: the camera is inside water.
+@(private = "file")
+eye_in_water :: proc(s: ^Session) -> bool {
+	e := s.camera.position
+	b, _ := world_block(
+		&s.world,
+		{i32(math.floor(e.x)), i32(math.floor(e.y)), i32(math.floor(e.z))},
+	)
+	_, water := game.water_level(b)
+	return water
 }

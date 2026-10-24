@@ -114,10 +114,11 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 	}
 }
 
-// scene.glsl's Scene: two mat4, nine vec4, the cloud map's address (std430).
-#assert(size_of(Scene) == 2 * 64 + 9 * 16 + 16)
+// scene.glsl's Scene: two mat4, ten vec4, the cloud map's address (std430).
+#assert(size_of(Scene) == 2 * 64 + 10 * 16 + 16)
 #assert(offset_of(Scene, camera) == 128)
-#assert(offset_of(Scene, cloud_map) == 272)
+#assert(offset_of(Scene, water) == 272)
+#assert(offset_of(Scene, cloud_map) == 288)
 
 // The cloud map: blobs, not noise; it tiles; some sky stays clear.
 @(test)
