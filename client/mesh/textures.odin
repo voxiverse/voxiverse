@@ -39,6 +39,10 @@ Texture :: enum u32 {
 	Stone_Bricks,
 	Planks,
 	Glass,
+	Gate_Ring,
+	Gate_Chevron,
+	Gate_Chevron_Lit,
+	Gate_Horizon,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -101,6 +105,14 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Planks, .Planks, .Planks
 	case .Glass:
 		return .Glass, .Glass, .Glass
+	case .Gate_Ring:
+		return .Gate_Ring, .Gate_Ring, .Gate_Ring
+	case .Gate_Chevron:
+		return .Gate_Chevron, .Gate_Ring, .Gate_Ring
+	case .Gate_Chevron_Lit:
+		return .Gate_Chevron_Lit, .Gate_Ring, .Gate_Ring
+	case .Gate_Horizon:
+		return .Gate_Horizon, .Gate_Horizon, .Gate_Horizon
 	}
 	return
 }
@@ -275,6 +287,23 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				c = {}
 				if edge {c = ICE[3]}
 				if streak {c = ICE[4]}
+			case .Gate_Ring:
+				// Dark metal plates, grooves between, a few engraved strokes.
+				seam := x % 8 == 0 || y % 8 == 0
+				v := 0.3 + 0.3 * coarse + 0.2 * fine
+				if seam {v = 0}
+				if hash01(seed ~ 29, x / 2, y) > 0.93 {v = 1}
+				c = shade(GATE, v)
+			case .Gate_Chevron, .Gate_Chevron_Lit:
+				// A V on the ring's metal: dim, or glowing.
+				ramp := CHEVRON_LIT if t == .Gate_Chevron_Lit else CHEVRON
+				dx := abs(x - TEXTURE_SIZE / 2)
+				in_v := y >= 3 + dx / 2 && y <= 6 + dx / 2 && dx < 7
+				c = shade(ramp, 0.5 + 0.4 * fine) if in_v else shade(GATE, 0.2 + 0.3 * coarse)
+			case .Gate_Horizon:
+				// Rippling blue light; see-through.
+				ripple := value_noise(seed ~ 31, x + y / 2, y + x / 3, 3)
+				c = shade(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
 			case .Cactus_Top:
 				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
 				if x == 0 ||
@@ -362,6 +391,38 @@ SNOW := [5]Rgba {
 	{228, 234, 242, 255},
 	{238, 242, 248, 255},
 	{250, 252, 255, 255},
+}
+@(private = "file", rodata)
+GATE := [5]Rgba {
+	{22, 24, 30, 255},
+	{40, 43, 52, 255},
+	{58, 62, 72, 255},
+	{78, 82, 94, 255},
+	{120, 126, 140, 255},
+}
+@(private = "file", rodata)
+CHEVRON := [5]Rgba {
+	{60, 30, 18, 255},
+	{84, 42, 22, 255},
+	{104, 54, 26, 255},
+	{126, 66, 30, 255},
+	{150, 80, 36, 255},
+}
+@(private = "file", rodata)
+CHEVRON_LIT := [5]Rgba {
+	{220, 110, 30, 255},
+	{240, 140, 40, 255},
+	{255, 170, 60, 255},
+	{255, 200, 100, 255},
+	{255, 230, 170, 255},
+}
+@(private = "file", rodata)
+HORIZON := [5]Rgba {
+	{40, 90, 200, 150},
+	{60, 120, 230, 150},
+	{90, 150, 245, 160},
+	{140, 190, 255, 170},
+	{210, 235, 255, 180},
 }
 @(private = "file", rodata)
 ICE := [5]Rgba {

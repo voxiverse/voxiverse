@@ -29,8 +29,8 @@ Generator :: struct {
 }
 
 // generator_make: a generator with the default parameters.
-generator_make :: proc(kind: Kind, seed: i64) -> Generator {
-	return {kind, seed, PARAMS_DEFAULTS}
+generator_make :: proc(kind: Kind, seed: i64, params := PARAMS_DEFAULTS) -> Generator {
+	return {kind, seed, params}
 }
 
 kind_by_name :: proc(name: string) -> (Kind, bool) {

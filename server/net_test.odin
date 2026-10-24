@@ -45,6 +45,7 @@ Net_Client :: struct {
 	inv_acked:   u32,
 	inv_updates: int,
 	look:        [2]f32, // yaw, pitch of its idle inputs
+	move:        [2]f32, // and their move (right, forward)
 	key_name:    string, // whose test_key it says it is (default: name)
 	sign_name:   string, // whose test_key it signs with (default: key_name: an impostor if not)
 	ask:         bool, // Hello without a character: Characters, then Choose name
@@ -211,7 +212,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	clear(&c.messages)
 	if c.welcomed {
 		c.seq += 1
-		net_send(c, game.Input{c.seq, {yaw = c.look[0], pitch = c.look[1]}})
+		net_send(c, game.Input{c.seq, {move = c.move, yaw = c.look[0], pitch = c.look[1]}})
 	}
 	netcode.link_flush(&c.link, now)
 }

@@ -1,6 +1,8 @@
 package client
 
 import "core:fmt"
+import "core:math"
+import "core:strconv"
 import "core:strings"
 
 import "../game"
@@ -18,6 +20,25 @@ register_world_commands :: proc(c: ^Console) {
 				app.session.toggle_fly = true
 			}},
 		args = {0, 0},
+		needs = {.World},
+	)
+	console_register(
+		c,
+		{
+			"look",
+			"look <yaw> <pitch>: turn to (degrees; yaw left from north, pitch up)",
+			proc(app: ^App, args: []string) {
+				yaw, y_ok := strconv.parse_f32(args[0])
+				pitch, p_ok := strconv.parse_f32(args[1])
+				if !y_ok || !p_ok {
+					console_print(&app.console, "look <yaw> <pitch>: two numbers", .Warning)
+					return
+				}
+				app.session.camera.yaw = math.to_radians(yaw)
+				app.session.camera.pitch = math.to_radians(clamp(pitch, -89, 89))
+			},
+		},
+		args = {2, 2},
 		needs = {.World},
 	)
 	console_register(
@@ -321,6 +342,37 @@ register_world_commands :: proc(c: ^Console) {
 					drag_from = -1,
 				}
 			}},
+		needs = {.World},
+	)
+	console_register(
+		c,
+		{
+			"dial",
+			"dial [address]: dial the gate you aim at (none: pick its symbols, as right-click)",
+			proc(app: ^App, args: []string) {
+				s := app.session
+				hit, aimed := s.aim.?
+				b, known := world_block(&s.world, hit.block)
+				if !aimed || !known || !is_gate_block(b) {
+					console_print(&app.console, "aim at a gate's ring", .Warning)
+					return
+				}
+				if len(args) == 0 {
+					dial_open(app, hit.block)
+					return
+				}
+				to, ok := game.address_parse(
+					strings.join(args, " ", context.temp_allocator),
+					s.welcome.address.galaxy,
+				)
+				if !ok {
+					console_print(&app.console, "not an address", .Warning)
+					return
+				}
+				send_message(s, game.Dial{hit.block, to})
+			},
+		},
+		args = {0, 2}, // (world symbols, a space, the galaxy's)
 		needs = {.World},
 	)
 	console_register(

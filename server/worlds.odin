@@ -36,6 +36,7 @@ World :: struct {
 	regions:    map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:    bool, // world_start ran (its chunks and the rest exist)
 	idle_since: u64, // the last tick someone was in it
+	gates:      [dynamic]Gate, // active: dialing or open (gates.odin)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -62,7 +63,7 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&w.arena)
-	gen := worldgen.Generator{w.generator, w.seed, w.params}
+	gen := worldgen.generator_make(w.generator, w.seed, w.params)
 	if err := chunks_init(&w.chunks, gen, s.capacity, s.config.workers, arena); err != nil {
 		log.errorf("server cannot allocate a world: %v", err)
 		virtual.arena_destroy(&w.arena)
@@ -91,6 +92,7 @@ world_close :: proc(w: ^World) {
 		virtual.arena_destroy(&w.arena)
 	}
 	delete(w.tops)
+	delete(w.gates)
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)
 	delete(w.regions)
@@ -173,8 +175,8 @@ worlds_unload_idle :: proc(s: ^Server) {
 		w := s.worlds[i]
 		occupied := false
 		for &c in s.clients {occupied ||= c.state == .Playing && c.world == w}
-		if occupied {w.idle_since = s.tick}
-		if s.tick - w.idle_since < idle {continue}
+		if occupied || len(w.gates) > 0 {w.idle_since = max(w.idle_since, s.tick)}
+		if s.tick < w.idle_since + idle {continue}
 		world_save(w)
 		log.infof("server world unloaded address=%s", game.address_dir(w.address))
 		world_close(w)

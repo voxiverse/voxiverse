@@ -180,6 +180,7 @@ test_earth_same_everywhere :: proc(t: ^testing.T) {
 	testing.expectf(t, got == GOLDEN, "worlds differ from Linux's: got %x", got)
 	unblended := PARAMS_DEFAULTS
 	unblended.biome_blend = 0
+	unblended.gates = 0 // (as worlds made before them)
 	got = earth_hashes(unblended)
 	testing.expectf(t, got == GOLDEN_UNBLENDED, "unblended worlds changed: got %x", got)
 }
@@ -270,7 +271,8 @@ test_biome_borders_blend :: proc(t: ^testing.T) {
 }
 
 
-// Structures: each kind turns up near the spawn; placements are the same
+// Structures: each kind turns up within 4096 blocks of the middle (gates
+// not nearer than 2000); placements are the same
 // every time; a structure's chunks come out the same whichever order they
 // are made in; and the land's tops over them are exactly the highest
 // blocks that shade.
@@ -279,16 +281,16 @@ test_structures :: proc(t: ^testing.T) {
 	g := generator_make(.Earth, 24301)
 	found := make([dynamic]Structure)
 	defer delete(found)
-	structures_near(&g, {-2048, -2048}, {2048, 2048}, &found)
+	structures_near(&g, {-4096, -4096}, {4096, 4096}, &found)
 	again := make([dynamic]Structure)
 	defer delete(again)
-	structures_near(&g, {-2048, -2048}, {2048, 2048}, &again)
+	structures_near(&g, {-4096, -4096}, {4096, 4096}, &again)
 	testing.expect(t, slice.equal(found[:], again[:]), "placements differ between two looks")
 	first: [Structure_Kind]Maybe(Structure)
 	for s in found {if first[s.kind] == nil {first[s.kind] = s}}
 	for kind in Structure_Kind {
 		s, ok := first[kind].?
-		if !testing.expectf(t, ok, "no %v within 2048 blocks", kind) {continue}
+		if !testing.expectf(t, ok, "no %v within 4096 blocks", kind) {continue}
 		lo, hi := game.chunk_of(s.lo), game.chunk_of(s.hi)
 		// Every chunk of it, forwards and backwards.
 		chunks := make([dynamic]game.Chunk_Pos, context.temp_allocator)
@@ -405,4 +407,90 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 			}
 		}
 	}
+}
+
+// Every Earth world has gates, none near its middle: their chevrons and
+// ring where gates.odin says, inside the ring clear, a traveller's spot in
+// front free; a block of one finds it; worlds made before gates have none.
+@(test)
+test_gates :: proc(t: ^testing.T) {
+	arr := new(game.Block_Array)
+	defer free(arr)
+	block_at :: proc(g: ^Generator, arr: ^game.Block_Array, p: game.Block_Pos) -> game.Block {
+		uniform, is_uniform := generate(g, game.chunk_of(p), arr)
+		if is_uniform {return uniform}
+		return arr[game.local_index(game.local_of(p))]
+	}
+	for seed in i64(1) ..= 6 {
+		g := generator_make(.Earth, seed)
+		s, ok := arrival_gate(&g)
+		if !testing.expectf(t, ok, "seed %d: no gate", seed) {continue}
+		d := math.sqrt(f64(s.lo.x) * f64(s.lo.x) + f64(s.lo.z) * f64(s.lo.z))
+		testing.expectf(
+			t,
+			d >= f64(g.params.gate_distance),
+			"seed %d: a gate %.0f from the middle",
+			seed,
+			d,
+		)
+		for c in gate_chevrons(s) {
+			testing.expectf(
+				t,
+				block_at(&g, arr, c) == .Gate_Chevron,
+				"seed %d: no chevron at %v",
+				seed,
+				c,
+			)
+		}
+		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 0)), game.Block.Stone_Bricks)
+		testing.expect_value(t, block_at(&g, arr, gate_at(s, 5, 0)), game.Block.Gate_Ring)
+		testing.expect_value(t, block_at(&g, arr, gate_at(s, 0, 5)), game.Block.Gate_Ring)
+		inside := make([dynamic]game.Block_Pos, context.temp_allocator)
+		gate_inside(s, &inside)
+		testing.expect(t, len(inside) > 30)
+		for p in inside {testing.expectf(t, block_at(&g, arr, p) == .Air, "seed %d: %v inside the ring", seed, p)}
+		front, _ := gate_front(s)
+		feet := game.Block_Pos {
+			i32(math.floor(front.x)),
+			i32(math.floor(front.y)),
+			i32(math.floor(front.z)),
+		}
+		testing.expect(
+			t,
+			game.block_collides(block_at(&g, arr, feet - {0, 1, 0})),
+			"nothing to arrive on",
+		)
+		testing.expect(
+			t,
+			!game.block_collides(block_at(&g, arr, feet)),
+			"the arrival spot is in a block",
+		)
+		testing.expect(
+			t,
+			!game.block_collides(block_at(&g, arr, feet + {0, 1, 0})),
+			"the arrival spot is in a block",
+		)
+		found, has := gate_containing(&g, gate_chevrons(s)[3])
+		testing.expect(t, has && found.lo == s.lo, "a chevron does not find its gate")
+		old := g
+		old.params.gates = 0
+		_, has = arrival_gate(&old)
+		testing.expect(t, !has, "a world from before gates has one")
+	}
+
+	// The same places on every machine (as the terrain's golden hashes).
+	g := generator_make(.Earth, 1)
+	found := make([dynamic]Structure, context.temp_allocator)
+	structures_near(&g, {-8192, -8192}, {8192, 8192}, &found)
+	sum: [3]i64
+	n := 0
+	for f in found {
+		if f.kind != .Gate {continue}
+		n += 1
+		sum += {i64(f.lo.x), i64(f.lo.y), i64(f.lo.z)}
+	}
+	arrival, _ := arrival_gate(&g)
+	testing.expect_value(t, arrival.lo, game.Block_Pos{-151, 12, -2470})
+	testing.expect_value(t, n, 16)
+	testing.expect_value(t, sum, [3]i64{19264, 131, -31347})
 }

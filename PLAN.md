@@ -281,7 +281,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M15 | Polish: biome transitions without hard edges, the screen kept awake while playing, a five-slot hotbar over a 5x5 inventory | Biome borders blend (a band of mixed surface and features) in worldgen tests and screenshots; the platform keep-awake call is made in game and undone in menus on every OS; inventory tests at the new size; old inventories fit (done: `test_biome_borders_blend` and new golden hashes, the old ones kept for `biome_blend 0`, which worlds made before load with; `platform.set_keep_awake` logged on and off in game; inventory and overlay tests at 5 + 25; `test_old_inventory_fits`) |
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own (done: `server/worlds_test.odin` travels an admin away and back over UDP with her inventory while another player stays home, saves her edit in the other world's directory, unloads it when empty, keeps memory flat over repeated travel, and checks an address's kind across two universes; `game/address_test.odin`; old world directories migrate) |
-| M18 | Gates: natural structures in every world (one by the spawn), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the gate of the world dialed | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused |
+| M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
 | M19 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
 | M20 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M21 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
@@ -583,14 +583,23 @@ area, not scripts.
 ## M18: gates
 
 - **Gates:** a structure on M12's placement API (programmatic, like towers): a ring with
-  seven chevrons (and eight more, dark until a gate can reach other galaxies) and the 40
-  symbols around it. Every world has one
-  by its spawn (where travellers arrive) and rare others; a gate shows its own address.
+  seven chevrons (and eight more, dark until a gate can reach other galaxies), its lowest
+  row set in its platform so one walks in level. Rare (one 1024-block cell in three or so,
+  on flat dry plains, forest, taiga, tundra or desert), and none within `gate_distance`
+  (2000 blocks) of the world's middle, where players begin: finding one is late-game
+  (`locate gate` puts an admin in front of the nearest). Travellers arrive at the dialed
+  world's gate nearest its middle. Worlds made before gates have none
+  (`worldgen.gates 0`).
 - **Dialing:** using a gate opens an overlay of the 40 symbols; choosing seven in order
   locks the chevrons one by one (seen and heard by everyone near). The gate then opens
   for a while (the destination's gate opens too); walking in travels (M17) to the
-  destination's gate. Misdials (this world's address, a gate already open) are refused
-  with a word.
+  destination's gate. Misdials (this world's address, another galaxy, a gate already
+  open at either end, a world without gates) are refused with a word. Arriving, one
+  faces away from the far gate, which does not send back.
+- **Done:** chevrons lock every 0.4 s, the gates stay open 30 s (`Config.gate_open` for
+  tests); `Dial` (protocol 15) names the gate's block and the address; the server sets
+  the lit chevrons and horizon blocks wherever the chunks are loaded and puts them back
+  on closing. Right-click a ring (or the console's `dial [address]`) to dial.
 - **Exit check:** over UDP, dialing opens the gate and carries a player to the dialed
   world's gate and back; gate placements match on every platform (worldgen hashes); a
   misdial is refused; the dialing overlay in UI tests.

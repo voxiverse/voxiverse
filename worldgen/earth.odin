@@ -36,6 +36,8 @@ Params :: struct {
 	warmth:          f32, // added to the climate's temperature (-1 cold .. 1 hot); 0: Earth's
 	wetness:         f32, // added to its humidity
 	palette:         f32, // the surface's blocks (PALETTES); 0: Earth's
+	gates:           f32, // 1: gates stand (worldgen/gates.odin); 0: none (worlds made before them)
+	gate_distance:   f32, // blocks: none nearer the world's middle (where the spawn is sought)
 }
 
 @(rodata)
@@ -52,6 +54,8 @@ PARAMS_DEFAULTS := Params {
 	tree_density    = 1,
 	plant_density   = 1,
 	biome_blend     = 8,
+	gates           = 1,
+	gate_distance   = 2000,
 }
 
 Biome :: enum u8 {

@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 14
+PROTOCOL_VERSION :: 15
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -41,6 +41,13 @@ Hello :: struct {
 // Proof: the Challenge's nonce signed with the account's key.
 Proof :: struct {
 	signature: Signature,
+}
+
+// Dial: dial the gate a block of which is at gate, to address (its galaxy
+// the gate's own, for now).
+Dial :: struct {
+	gate:    Block_Pos,
+	address: Address,
 }
 
 // Choose: the character to play (an existing one of the account's, or a
@@ -136,6 +143,7 @@ Client_Message :: union {
 	Inventory_Request,
 	Proof,
 	Choose,
+	Dial,
 }
 
 // Server -> client.
@@ -430,6 +438,7 @@ Client_Kind :: enum u8 {
 	Inventory_Request,
 	Proof,
 	Choose,
+	Dial,
 }
 
 @(private = "file")
@@ -528,6 +537,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "proof"
 		case u8(Client_Kind.Choose):
 			return "choose"
+		case u8(Client_Kind.Dial):
+			return "dial"
 		}
 	} else {
 		switch kind {
@@ -612,6 +623,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Choose:
 		write_u8(w, u8(Client_Kind.Choose))
 		write_string(w, v.character)
+	case Dial:
+		write_u8(w, u8(Client_Kind.Dial))
+		write_block_pos(w, v.gate)
+		write_address(w, v.address)
 	case Input:
 		write_u8(w, u8(Client_Kind.Input))
 		write_u32(w, v.sequence)
@@ -841,6 +856,12 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = Choose {
 			character = read_string(&r, MAX_NAME_LENGTH),
 		}
+	case u8(Client_Kind.Dial):
+		d := Dial {
+			gate = read_block_pos(&r),
+		}
+		d.address = read_address(&r)
+		m = d
 	case u8(Client_Kind.Input):
 		m = Input {
 			sequence = read_u32(&r),

@@ -24,6 +24,20 @@ PARAMS_VARS := [?]base.Var {
 		step = 0.1,
 	},
 	{
+		field = "gates",
+		help = "gates stand in the world (1) or not (0)",
+		min = 0,
+		max = 1,
+		step = 1,
+	},
+	{
+		field = "gate_distance",
+		help = "blocks: no gate stands nearer the world's middle",
+		min = 0,
+		max = 100000,
+		step = 100,
+	},
+	{
 		field = "palette",
 		help = "the surface's blocks: 0 Earth, 1 ash, 2 frost, 3 clay, 4 dunes",
 		min = 0,

@@ -44,6 +44,11 @@ Block :: enum u16 {
 	Stone_Bricks,
 	Planks,
 	Glass,
+	// Gates (M18): found, never made or broken.
+	Gate_Ring,
+	Gate_Chevron, // dark
+	Gate_Chevron_Lit, // locked while dialing, and while open
+	Gate_Horizon, // the open gate's surface: walking in travels
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -259,6 +264,16 @@ BLOCK_INFO := [Block]Block_Info {
 		breakable = true,
 		placeable = true,
 	},
+	.Gate_Ring = {name = "gate_ring", collides = true, opaque = true, targetable = true},
+	.Gate_Chevron = {name = "gate_chevron", collides = true, opaque = true, targetable = true},
+	.Gate_Chevron_Lit = {
+		name = "gate_chevron_lit",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		light = 12,
+	},
+	.Gate_Horizon = {name = "gate_horizon", light = 14},
 }
 
 block_valid :: #force_inline proc(id: u16) -> bool {

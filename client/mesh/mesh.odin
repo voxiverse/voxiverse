@@ -132,13 +132,16 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 	     .Cactus,
 	     .Cobblestone,
 	     .Stone_Bricks,
-	     .Planks:
+	     .Planks,
+	     .Gate_Ring,
+	     .Gate_Chevron,
+	     .Gate_Chevron_Lit:
 		return .Cube, .Opaque
 	case .Leaves, .Spruce_Leaves, .Glass:
 		return .Cube, .Cutout
 	case .Tall_Grass, .Poppy, .Dandelion:
 		return .Cross, .Cutout
-	case .Water, .Water_1 ..= .Water_7, .Water_Falling:
+	case .Water, .Water_1 ..= .Water_7, .Water_Falling, .Gate_Horizon:
 		return .Cube, .Translucent
 	}
 	return .None, .Opaque

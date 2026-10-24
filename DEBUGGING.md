@@ -118,9 +118,16 @@ its memory freed) after `WORLD_IDLE_SECONDS` empty; the home world stays.
 
 | Server command | |
 |---|---|
-| `travel <address> [character]` | Go there (its spawn), carrying the character (`world.travel`; another's: `world.travel.others`). Until M18's gates, the only way |
+| `travel <address> [character]` | Go there (its spawn), carrying the character (`world.travel`; another's: `world.travel.others`); players use gates |
 | `address` | This world's address, both ways of writing it (`info.address`) |
 | `worlds` | The loaded worlds and who is in each; how many are saved (`info.worlds`) |
+
+Gates (M18) travel between the worlds of a galaxy: rare structures, none within
+`worldgen.gate_distance` (2000) blocks of a world's middle; `locate gate` stands an admin in
+front of the nearest. Right-click its ring (or the console's `dial [address]`; `look <yaw>
+<pitch>` turns for scripted screenshots), pick seven symbols; the chevrons lock, both ends open
+for 30 s, and walking into the horizon arrives at the dialed world's gate nearest its middle.
+Refusals come back as notices; the server logs `gate dialed`.
 
 Homes, warps, back and tp remember their world and travel when needed. The client's chat and
 console draw the symbols from a fallback font (`assets/fonts/noto_sans_old_turkic_regular.ttf`).

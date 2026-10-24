@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:log"
+import "core:math"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
@@ -246,6 +247,24 @@ admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 				fmt.tprintf(
 					"%s at %d %d %d (its stairs down are in front of you)",
 					args[0],
+					st.lo.x,
+					st.lo.y,
+					st.lo.z,
+				),
+			)
+			return true
+		}
+		if kind == .Gate {
+			// In front of it, on its platform, looking at its ring's foot
+			// (right-click dials).
+			front, yaw := worldgen.gate_front(st)
+			c.player.flying = false
+			land(s, c, front, {yaw + math.PI, GATE_LOOK_PITCH}, .Exact)
+			notice(
+				s,
+				c,
+				fmt.tprintf(
+					"gate at %d %d %d (right-click it to dial)",
 					st.lo.x,
 					st.lo.y,
 					st.lo.z,

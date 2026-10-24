@@ -22,6 +22,7 @@ Structure_Kind :: enum u8 {
 	Ruin,
 	Well,
 	Dungeon,
+	Gate, // (gates.odin)
 }
 
 STRUCTURE_NAMES := [Structure_Kind]string {
@@ -29,6 +30,7 @@ STRUCTURE_NAMES := [Structure_Kind]string {
 	.Ruin    = "ruin",
 	.Well    = "well",
 	.Dungeon = "dungeon",
+	.Gate    = "gate",
 }
 
 @(private = "file")
@@ -49,6 +51,7 @@ SETS := [?]Structure_Set {
 	{.Ruin, 288, 0.6, {.Plains, .Forest, .Taiga, .Desert}},
 	{.Well, 352, 0.5, {.Plains, .Desert}},
 	{.Dungeon, 224, 0.7, LAND},
+	{.Gate, 1024, 0.35, {.Plains, .Forest, .Taiga, .Tundra, .Desert}},
 }
 
 // SINK: how far below the ground a kind's bottom is (a well's shaft).
@@ -58,6 +61,7 @@ SINK := [Structure_Kind]i32 {
 	.Ruin    = 0,
 	.Well    = 4,
 	.Dungeon = 0,
+	.Gate    = 0,
 }
 
 // MAX_STRUCTURE: no structure is wider than this (cells look this far).
@@ -77,6 +81,7 @@ Piece_Kind :: enum u8 {
 	Room,
 	Corridor,
 	Shaft, // a dungeon's way in: a spiral stair up to the land
+	Gate, // (gates.odin)
 }
 
 Piece :: struct {
@@ -108,6 +113,11 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 		size = game.rotated_size(t.size, s.rotation)
 	case .Dungeon:
 		size = {40, 7, 40}
+	case .Gate:
+		// Far from where players begin: what one finds late.
+		if p.gates == 0 ||
+		   i64(x) * i64(x) + i64(z) * i64(z) < i64(p.gate_distance) * i64(p.gate_distance) {return}
+		size = gate_size(s.rotation)
 	}
 	// The land under it: its biome, and (on the surface) flat and dry.
 	corners := [5][2]i32 {
@@ -215,6 +225,11 @@ structure_pieces :: proc(s: Structure, out: ^[dynamic]Piece) {
 		)
 	case .Dungeon:
 		dungeon_pieces(s, out)
+	case .Gate:
+		append(
+			out,
+			Piece{kind = .Gate, lo = s.lo, hi = s.hi, rotation = s.rotation, foundation = true},
+		)
 	}
 }
 
@@ -290,6 +305,8 @@ piece_block :: proc(piece: ^Piece, p: game.Block_Pos) -> (b: game.Block, weight:
 		return tower_block(piece, l, size)
 	case .Shaft:
 		return shaft_block(l, size)
+	case .Gate:
+		return gate_block(piece, l, size)
 	}
 	return .Air, 0
 }

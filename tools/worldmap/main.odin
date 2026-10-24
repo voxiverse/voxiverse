@@ -94,6 +94,7 @@ main :: proc() {
 		.Ruin    = {240, 140, 30},
 		.Well    = {40, 220, 230},
 		.Dungeon = {150, 60, 200},
+		.Gate    = {80, 160, 255},
 	}
 	structures := make([dynamic]worldgen.Structure)
 	half := opts.size / 2

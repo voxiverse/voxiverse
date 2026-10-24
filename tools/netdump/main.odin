@@ -145,6 +145,9 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 				true
 		case game.Proof:
 			return "proof", true
+		case game.Dial:
+			return fmt.tprintf("dial gate=%v address=%s", v.gate, game.address_dir(v.address)),
+				true
 		case game.Choose:
 			return fmt.tprintf("choose character=%q", v.character), true
 		case game.Input:
