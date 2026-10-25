@@ -135,7 +135,8 @@ bench_result_write :: proc(r: ^Bench_Result) -> string {
 	path := filepath.join({dir, name}, context.temp_allocator) or_else name
 	if os.write_entire_file(path, transmute([]u8)strings.to_string(b)) != nil {return ""}
 
-	// The history line: each metric's median over the repetitions.
+	// The history line: each metric's value (metric_value), the median over
+	// the repetitions.
 	h := strings.builder_make(context.temp_allocator)
 	strings.write_string(&h, "{")
 	strings.write_string(&h, strings.to_string(head))
@@ -143,7 +144,7 @@ bench_result_write :: proc(r: ^Bench_Result) -> string {
 	first := true
 	for m in Metric {
 		medians := make([dynamic]f64, context.temp_allocator)
-		for rep in r.repetitions {if rep[m].count > 0 {append(&medians, rep[m].median)}}
+		for rep in r.repetitions {if rep[m].count > 0 {append(&medians, metric_value(m, rep[m]))}}
 		if len(medians) == 0 {continue}
 		fmt.sbprintf(
 			&h,
@@ -172,10 +173,11 @@ write_metrics :: proc(b: ^strings.Builder, rep: [Metric]Metric_Summary) {
 		if s.count == 0 {continue}
 		fmt.sbprintf(
 			b,
-			`%s%q:{{"unit":%q,"count":%d,"mean":%.6g,"median":%.6g,"p10":%.6g,"p90":%.6g,"p99":%.6g}}`,
+			`%s%q:{{"unit":%q,"value":%.6g,"count":%d,"mean":%.6g,"median":%.6g,"p10":%.6g,"p90":%.6g,"p99":%.6g}}`,
 			"" if first else ",",
 			METRIC_INFO[m].name,
 			METRIC_INFO[m].unit,
+			metric_value(m, s),
 			s.count,
 			s.mean,
 			s.median,

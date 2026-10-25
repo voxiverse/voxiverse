@@ -9,6 +9,7 @@ import "core:time"
 import "../base"
 import "../game"
 import "../gpu"
+import "../server"
 
 // Benchmarks (PLAN.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
@@ -23,6 +24,7 @@ Bench_Kind :: enum u8 {
 	Load, // joining until the world around is loaded and meshed
 	Views, // still views all round: the GPU's work
 	Flight, // flying over the land: streaming while drawing
+	Edits, // explosions round the spawn: bulk edits re-meshed, water let loose
 }
 
 Scenario :: struct {
@@ -49,6 +51,13 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"fly 600 blocks over the land at 40 blocks/s, looking ahead and down",
+	},
+	{
+		"edits",
+		.Edits,
+		1,
+		3,
+		"12 explosions round the spawn, until re-meshed and the water is still",
 	},
 }
 
@@ -81,6 +90,11 @@ BENCH_FLIGHT_HEIGHT :: 70.0
 BENCH_FLIGHT_SPEED :: 40
 BENCH_FLIGHT_BLOCKS :: 600.0
 BENCH_FLIGHT_PITCH :: -0.35
+BENCH_EDITS :: 12 // explosions, on a ring round the spawn
+BENCH_EDIT_RING :: 24.0 // blocks from the spawn
+BENCH_EDIT_RADIUS :: 6
+BENCH_EDIT_EVERY :: 250 * time.Millisecond
+BENCH_EDIT_TIMEOUT :: 60 // seconds for it all to settle
 
 Bench_Phase :: enum u8 {
 	Off,
@@ -91,16 +105,20 @@ Bench_Phase :: enum u8 {
 }
 
 Bench :: struct {
-	scenario: Scenario,
-	phase:    Bench_Phase,
-	rep:      int,
-	frames:   int, // in this phase
-	started:  time.Tick, // this phase's start
-	view:     int,
-	start_x:  f64, // (flight)
-	result:   base.Bench_Result,
-	failed:   bool,
-	done:     bool,
+	scenario:  Scenario,
+	phase:     Bench_Phase,
+	rep:       int,
+	frames:    int, // in this phase
+	started:   time.Tick, // this phase's start
+	view:      int,
+	start_x:   f64, // (flight)
+	targets:   [BENCH_EDITS]game.Block_Pos, // (edits) where the explosions go
+	fired:     int,
+	next_shot: time.Tick,
+	first:     time.Tick, // the first explosion
+	result:    base.Bench_Result,
+	failed:    bool,
+	done:      bool,
 }
 
 // scenario_find: the scenario called name.
@@ -188,6 +206,31 @@ bench_update :: proc(app: ^App) {
 			b.phase, b.frames, b.started = .Lifting, 0, time.tick_now()
 			return
 		}
+		if b.scenario.kind == .Edits {
+			// The ground at fixed places round the spawn (the world is fixed).
+			query := game.Block_Query{&s.world, world_block}
+			for &t, k in b.targets {
+				angle := f64(k) * 2 * math.PI / BENCH_EDITS
+				x := SCRATCH_SPAWN.x + BENCH_EDIT_RING * math.cos(angle)
+				z := SCRATCH_SPAWN.z + BENCH_EDIT_RING * math.sin(angle)
+				from := [3]f64 {
+					math.floor(x) + 0.5,
+					s.prediction.state.position.y + 80,
+					math.floor(z) + 0.5,
+				}
+				hit, found := game.raycast(query, from, {0, -1, 0}, 200)
+				if !found {
+					bench_fail(app, "no ground where an explosion goes")
+					return
+				}
+				t = hit.block
+			}
+			s.camera.yaw, s.camera.pitch = 0, -0.5
+			b.phase, b.frames, b.fired = .Measuring, 0, 0
+			b.first, b.next_shot = time.tick_now(), time.tick_now()
+			base.metrics_start()
+			return
+		}
 		b.phase, b.frames, b.view = .Measuring, 0, 0
 		base.metrics_start()
 		base.metrics_stop() // (the first view's settle)
@@ -220,6 +263,32 @@ bench_update :: proc(app: ^App) {
 			base.metrics_stop()
 			b.view, b.frames = b.view + 1, 0
 			if b.view == BENCH_VIEW_YAWS * len(BENCH_VIEW_PITCHES) {bench_repetition_done(app)}
+		case .Edits:
+			if b.fired < BENCH_EDITS {
+				if time.tick_diff(time.tick_now(), b.next_shot) > 0 {return}
+				t := b.targets[b.fired]
+				send_message(
+					s,
+					game.Command {
+						fmt.tprintf("explode %d %d %d %d", t.x, t.y, t.z, BENCH_EDIT_RADIUS),
+					},
+				)
+				b.fired += 1
+				b.next_shot = time.tick_add(b.next_shot, BENCH_EDIT_EVERY)
+				return
+			}
+			// Settled: everything re-meshed and shown, the water still (how long
+			// that takes is mostly the water's ticks: not a measure of speed;
+			// edit_shown is).
+			since := time.duration_seconds(time.tick_since(b.first))
+			if since > BENCH_EDIT_TIMEOUT {
+				bench_fail(app, "the explosions never settled")
+				return
+			}
+			if time.tick_diff(b.next_shot, time.tick_now()) < 500 * time.Millisecond {return}
+			if !world_settled(app) || len(s.world.groups) > 0 {return}
+			if server.stats(&s.server).updates_waiting > 0 {return}
+			bench_repetition_done(app)
 		case .Flight:
 			p := s.prediction.state
 			if !p.flying && p.position.x - b.start_x > 2 {
@@ -268,13 +337,13 @@ bench_finish :: proc(app: ^App) {
 	// The log: each metric's median over the repetitions.
 	for m in base.Metric {
 		medians := make([dynamic]f64, context.temp_allocator)
-		for rep in b.result.repetitions {if rep[m].count > 0 {append(&medians, rep[m].median)}}
+		for rep in b.result.repetitions {if rep[m].count > 0 {append(&medians, base.metric_value(m, rep[m]))}}
 		if len(medians) == 0 {continue}
 		info := base.METRIC_INFO[m]
 		lo, hi := medians[0], medians[0]
 		for v in medians {lo, hi = min(lo, v), max(hi, v)}
 		log.infof(
-			"bench %s %s median=%.3f %s (repetitions %.3f..%.3f)",
+			"bench %s %s %.3f %s (repetitions %.3f..%.3f)",
 			b.scenario.name,
 			info.name,
 			base.median_of(medians[:]),

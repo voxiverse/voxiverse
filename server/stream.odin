@@ -159,7 +159,7 @@ anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 // stream requests and sends the nearest chunks the client lacks, within the
 // tick's budgets (and, over the network, while the client keeps up).
 @(private)
-stream :: proc(s: ^Server, c: ^Client) {
+stream :: proc(s: ^Server, c: ^Client) -> (sent: int) {
 	w := c.world
 	budget, bytes := SEND_BUDGET_CHUNKS, SEND_BUDGET_BYTES
 	if p, ok := c.link.(netcode.Peer_Id); ok && netcode.host_backlog(&s.host, p) > MAX_BACKLOG {
@@ -206,6 +206,7 @@ stream :: proc(s: ^Server, c: ^Client) {
 		if bytes <= 0 {budget = 0}
 		if budget == 0 && !requesting {break}
 	}
+	return SEND_BUDGET_BYTES - bytes // (chunks and their columns)
 }
 
 // drop_far tells the client to drop chunks it no longer needs.

@@ -418,6 +418,8 @@ anyone (PLAN.md, M19):
 | `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks |
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame |
 | `flight` | 600 blocks of flight at 40 blocks/s: frames while streaming, generation and meshing, ticks |
+| `edits` | 12 explosions round the spawn: `edit_shown` (a bulk edit's chunks arriving to all their new meshes shown), meshing, frames, ticks; it waits for the water they let loose to settle |
+| `server` | The dedicated server alone (`voxiverse-server --benchmark server`): 8 simulated players join over UDP and fly out in 8 directions; ticks, streaming, generation, bytes sent |
 
 The game's scenarios run a release build with `--benchmark <scenario>`: fixed settings
 (`BENCHMARK_SETTINGS` in client/benchmark.odin: no vsync; the player's settings file is
@@ -428,7 +430,9 @@ of day stopped at late morning, still clouds, no critters, no sound device. Each
 runs three repetitions, each a session of its own after a warm-up, and writes
 `build/benchmarks/<scenario>/<time>-<commit>.json` (every metric of every repetition, the
 exact counts, the resolution, the machine) and a line in `build/benchmarks/history.jsonl`
-(each metric's median). Results compare only on one machine (its fingerprint) and one
+(each metric's value). A metric's value is its median, except for the server's load (ticks,
+streaming, collecting, bytes sent), where it is the mean: half its ticks may do nothing
+while the workers catch up, and the heavy ones are the point. Results compare only on one machine (its fingerprint) and one
 scenario version. The metrics are `base.Metric` (base/metrics.odin): recorded in any build,
 only while a benchmark measures. `--profile` adds a Spall trace of the run.
 

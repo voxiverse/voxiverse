@@ -38,38 +38,49 @@ Metric :: enum u8 {
 	Server_Tick,
 	Server_Stream,
 	Server_Collect,
+	Server_Sent_KiB, // chunks streamed to every player this tick
 	// One value per run.
 	Load_Seconds, // joining to the world loaded and meshed, s
+	Edit_Shown, // a bulk edit's chunks arriving to all their new meshes shown at once, ms
 }
 
 Metric_Info :: struct {
-	name: string, // in result files
-	unit: string,
+	name:     string, // in result files
+	unit:     string,
+	use_mean: bool, // its value is the mean, not the median: load, where the heavy samples are the point (a tick that sends nothing and one that sends much)
+}
+
+// metric_value: the number m is judged by in a repetition (its `value` in
+// result files: what the history and `build bench compare` use).
+metric_value :: proc(m: Metric, s: Metric_Summary) -> f64 {
+	return s.mean if METRIC_INFO[m].use_mean else s.median
 }
 
 @(rodata)
 METRIC_INFO := [Metric]Metric_Info {
-	.Frame            = {"frame", "ms"},
-	.Frame_Record     = {"frame_record", "ms"},
-	.Frame_Session    = {"frame_session", "ms"},
-	.Triangles        = {"triangles", "k"},
-	.Draws            = {"draws", "meshes"},
-	.Gpu_Frame        = {"gpu_frame", "ms"},
-	.Gpu_World        = {"gpu_world", "ms"},
-	.Gpu_Water        = {"gpu_water", "ms"},
-	.Gpu_Sky          = {"gpu_sky", "ms"},
-	.Gpu_Entities     = {"gpu_entities", "ms"},
-	.Gpu_UI           = {"gpu_ui", "ms"},
-	.Gpu_Present_Copy = {"gpu_present_copy", "ms"},
-	.Generate_Chunk   = {"generate_chunk", "ms"},
-	.Column_Tops      = {"column_tops", "ms"},
-	.Light_Chunk      = {"light_chunk", "ms"},
-	.Mesh_Faces       = {"mesh_faces", "ms"},
-	.Mesh_Chunk       = {"mesh_chunk", "ms"},
-	.Server_Tick      = {"server_tick", "ms"},
-	.Server_Stream    = {"server_stream", "ms"},
-	.Server_Collect   = {"server_collect", "ms"},
-	.Load_Seconds     = {"load", "s"},
+	.Frame            = {"frame", "ms", false},
+	.Frame_Record     = {"frame_record", "ms", false},
+	.Frame_Session    = {"frame_session", "ms", false},
+	.Triangles        = {"triangles", "k", false},
+	.Draws            = {"draws", "meshes", false},
+	.Gpu_Frame        = {"gpu_frame", "ms", false},
+	.Gpu_World        = {"gpu_world", "ms", false},
+	.Gpu_Water        = {"gpu_water", "ms", false},
+	.Gpu_Sky          = {"gpu_sky", "ms", false},
+	.Gpu_Entities     = {"gpu_entities", "ms", false},
+	.Gpu_UI           = {"gpu_ui", "ms", false},
+	.Gpu_Present_Copy = {"gpu_present_copy", "ms", false},
+	.Generate_Chunk   = {"generate_chunk", "ms", false},
+	.Column_Tops      = {"column_tops", "ms", false},
+	.Light_Chunk      = {"light_chunk", "ms", false},
+	.Mesh_Faces       = {"mesh_faces", "ms", false},
+	.Mesh_Chunk       = {"mesh_chunk", "ms", false},
+	.Server_Tick      = {"server_tick", "ms", true},
+	.Server_Stream    = {"server_stream", "ms", true},
+	.Server_Collect   = {"server_collect", "ms", true},
+	.Server_Sent_KiB  = {"server_sent", "KiB", true},
+	.Load_Seconds     = {"load", "s", false},
+	.Edit_Shown       = {"edit_shown", "ms", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)

@@ -31,6 +31,7 @@ Options :: struct {
 	cheats:      bool `usage:"give every player every permission (testing; see permissions.cfg)"`,
 	seconds:     int `usage:"stop after this many seconds (0: run until stopped)"`,
 	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
+	benchmark:   string `usage:"run the server benchmark scenario (server) and quit: simulated players, nothing saved"`,
 }
 
 // stop_requested is set by the Ctrl+C / SIGTERM handler (stop_*.odin).
@@ -47,7 +48,7 @@ main :: proc() {
 		view_height = 6,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix)
-	ok := run(opts)
+	ok := run_benchmark(opts.benchmark) if opts.benchmark != "" else run(opts)
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
 }

@@ -150,7 +150,10 @@ usage :: proc() {
 		"  bench     run a benchmark scenario (PLAN.md, M19; results in build/benchmarks/):",
 	)
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
-	fmt.println("              load, views, flight  the game (a release build, fixed settings;")
+	fmt.println(
+		"              load, views, flight, edits  the game (a release build, fixed settings;",
+	)
+	fmt.println("                           server: the server alone, simulated players;")
 	fmt.println("                           --profile: traced too)")
 	fmt.println(
 		"              compare <ref> <scenario> [-runs:N]  the working tree against a commit,",
@@ -533,7 +536,7 @@ commit_define :: proc() -> string {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, load, views or flight (client/benchmark.odin)",
+			"build: bench <scenario>: chunks, load, views, flight, edits (client/benchmark.odin), server (dedicated/bench.odin), or compare",
 		)
 		return false
 	}
@@ -551,6 +554,10 @@ bench :: proc(args: []string) -> bool {
 		}
 	}
 	exe := build_game(build_args) or_return
+	if scenario == "server" {
+		// The server alone (dedicated/bench.odin).
+		exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
+	}
 	return run({exe, "--benchmark", scenario})
 }
 

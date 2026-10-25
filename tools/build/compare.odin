@@ -14,7 +14,7 @@ import "core:strings"
 // build/worktrees/, kept for next time), then run alternately, <ref> and
 // the working tree in turn N times (default 5), so heat and whatever else
 // the machine is doing fall on both alike. Each run is one number per
-// metric (the median of its repetitions); a metric's change is called only
+// metric (the median of its repetitions' values: base.metric_value); a metric's change is called only
 // when the two sets of runs differ beyond chance (Mann-Whitney U, two
 // sided, p < 0.05). Exact counts that differ are shown first: then the two
 // did different work. <ref> must have the benchmark system (results in
@@ -136,7 +136,10 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 		for name, m in rep.(json.Object) {
 			fields := m.(json.Object)
 			if name not_in medians {medians[name] = {}}
-			append(&medians[name], number(fields["median"]))
+			// Its value (base.metric_value: a median, or a mean for load);
+			// results from before values were written have medians.
+			chosen, has := fields["value"]
+			append(&medians[name], number(chosen if has else fields["median"]))
 			side.units[name] = fields["unit"].(json.String)
 		}
 	}

@@ -281,7 +281,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		fly_test_update(app)
 		blast_test_update(app)
 		tour_test_update(app)
-		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)
+		if !app.benchmark {sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
 		for n in app.session.notices {
 			console_print(&app.console, n)

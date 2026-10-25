@@ -19,7 +19,7 @@ Options :: struct {
 	frames:        int `usage:"exit after this many frames (0: run until closed)"`,
 	capture_frame: int `usage:"when started from RenderDoc, capture this frame (1 = first)"`,
 	exec:          string `usage:"console commands to run at startup, separated by ';'"`,
-	benchmark:     string `usage:"run a benchmark scenario (load, views, flight) with fixed settings, write its result, quit"`,
+	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
 }
 
 main :: proc() {

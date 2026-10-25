@@ -342,6 +342,7 @@ tick :: proc(s: ^Server) {
 		base.profile_scope("changes flush")
 		changes_flush(w)
 	}
+	sent := 0
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		send_players(s, &c)
@@ -352,8 +353,9 @@ tick :: proc(s: ^Server) {
 		}
 		base.profile_scope("stream")
 		base.metric_scope(.Server_Stream)
-		stream(s, &c)
+		sent += stream(s, &c)
 	}
+	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
 	kick_due(s)
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}

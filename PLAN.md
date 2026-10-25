@@ -693,7 +693,10 @@ compare them with each other, not across machines. Numbers are per chunk unless 
     first use turned down the clouds' skipping); (3) the
     offscreen target (done: gpu/offscreen.odin; `views` in a 1280 x 720 and a 640 x 360
     window: the same GPU frame within 0.5%, only the copy onto the window differs); (4)
-    `edits` and `server` with simulated players; (5) CI and a "how to benchmark a change"
+    `edits` and `server` with simulated players (done: `edits` measures `edit_shown`, a
+    bulk edit's re-meshing latency, not the settling, which is the water's ticks;
+    dedicated/bench.odin's 8 bots over UDP; the server's load metrics are means, the
+    rest medians: half its ticks send nothing while generation catches up); (5) CI and a "how to benchmark a change"
     procedure in DEBUGGING.md.
 - **Left, measured, not done yet:**
   - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame. Tried and

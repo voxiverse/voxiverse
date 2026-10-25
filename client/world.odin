@@ -541,6 +541,7 @@ groups_update :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 			continue
 		}
 		if late {w.stats.groups_late += 1} else {w.stats.groups_shown += 1}
+		base.metric_add(.Edit_Shown, f32(time.duration_milliseconds(time.tick_since(grp.opened))))
 		for h in grp.members[:grp.count] {
 			c := base.pool_get(&w.chunks, h)
 			if c == nil || c.group != grp.id {continue}
