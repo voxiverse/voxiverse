@@ -127,6 +127,7 @@ every_item :: proc(allocator := context.temp_allocator) -> []Item {
 // block_drop: the item breaking b leaves (none for what players may not
 // place: ores, plants, ice are data to give drops of their own later).
 block_drop :: proc(b: Block) -> Item {
+	if b == .Tall_Grass {return NO_ITEM} 	// (seeds, later)
 	return item_of_block(b)
 }
 

@@ -270,10 +270,25 @@ earth_generate :: proc(
 	}
 	if len(pieces) > 0 {pieces_write(pieces[:], cols, origin, dst)}
 	for t in trees {tree_write(seed, t, origin, dst)}
+	if len(pieces) > 0 {clear_unsupported_plants(dst)}
 
 	first := dst[0]
 	for b in dst {if b != first {return {}, false}}
 	return first, true
+}
+
+// clear_unsupported_plants removes the plants a structure's floor was laid
+// under (the server would break them at the first change beside them).
+clear_unsupported_plants :: proc(dst: ^game.Block_Array) {
+	for z in i32(0) ..< game.CHUNK_SIZE {
+		for x in i32(0) ..< game.CHUNK_SIZE {
+			for y in i32(1) ..< game.CHUNK_SIZE {
+				i := game.local_index({x, y, z})
+				if game.block_is_plant(dst[i]) &&
+				   !game.plant_supported(dst[game.local_index({x, y - 1, z})]) {dst[i] = .Air}
+			}
+		}
+	}
 }
 
 // earth_spawn: near the origin, on dry, flat-ish land.

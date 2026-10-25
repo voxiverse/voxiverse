@@ -36,8 +36,15 @@ used_to_place :: proc(s: ^Server, c: ^Client, slot: int) {
 // broken_drop: what a player breaking block at pos leaves.
 @(private)
 broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) {
-	w := c.world
-	if !w.rules.drops || allowed(s, c, "items.infinite") {return}
+	if allowed(s, c, "items.infinite") {return}
+	block_drop(c.world, pos, block)
+}
+
+// block_drop: what block, gone from pos (broken by hand, or losing its
+// support), leaves: its item, hopping out (nothing if the world has no drops).
+@(private)
+block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
+	if !w.rules.drops {return}
 	item := game.block_drop(block)
 	if item == game.NO_ITEM {return}
 	r := rand.default_random_generator(&w.entities.rng)

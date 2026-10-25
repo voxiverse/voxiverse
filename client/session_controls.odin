@@ -113,6 +113,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		current, loaded := world_block(&s.world, edit.pos)
 		if !loaded ||
 		   !can_place_from_hand(s, block) ||
+		   (game.block_is_plant(block) && !plant_stands(s, edit.pos)) ||
 		   !game.can_place_at(current, block, edit.pos, s.prediction.state) {return false}
 		edit.block = block
 	}
@@ -135,4 +136,11 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 	} else {
 		append(&s.sounds, Sound_Event{.Place, new, centre, 1})
 	}
+}
+
+// plant_stands: the block under pos holds a plant (loaded and fit).
+@(private = "file")
+plant_stands :: proc(s: ^Session, pos: game.Block_Pos) -> bool {
+	below, loaded := world_block(&s.world, pos + {0, -1, 0})
+	return loaded && game.plant_supported(below)
 }

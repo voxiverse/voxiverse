@@ -336,3 +336,21 @@ water_block :: proc(level: i32) -> Block {
 block_light :: #force_inline proc(b: Block) -> u8 {
 	return BLOCK_INFO[b].light
 }
+
+// block_is_plant: a block that stands on the ground and goes when it does.
+block_is_plant :: proc(b: Block) -> bool {
+	#partial switch b {
+	case .Tall_Grass, .Poppy, .Dandelion:
+		return true
+	}
+	return false
+}
+
+// plant_supported: whether a plant may stand on below.
+plant_supported :: proc(below: Block) -> bool {
+	#partial switch below {
+	case .Grass, .Dirt, .Sand:
+		return true
+	}
+	return false
+}

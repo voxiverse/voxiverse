@@ -539,3 +539,52 @@ test_column_cache :: proc(t: ^testing.T) {
 	g.params.sea_level = 9
 	for x in i32(-3) ..= 3 {check(t, &g, cache, a, b, {x, 0, 1})}
 }
+
+// No plant is generated standing on something that would not hold it (the
+// server breaks such plants as soon as a block next to them changes).
+@(test)
+test_no_floating_plants :: proc(t: ^testing.T) {
+	a, below := new(game.Block_Array), new(game.Block_Array)
+	defer free(a)
+	defer free(below)
+	for kind in ([]Kind{.Classic, .Earth}) {
+		g := generator_make(kind, 24301)
+		plants := 0
+		for cz in i32(-6) ..= 6 {
+			for cx in i32(-6) ..= 6 {
+				for cy in i32(-1) ..= 3 {
+					generate(&g, {cx, cy, cz}, a)
+					generate(&g, {cx, cy - 1, cz}, below)
+					for y in i32(0) ..< game.CHUNK_SIZE {
+						for z in i32(0) ..< game.CHUNK_SIZE {
+							for x in i32(0) ..< game.CHUNK_SIZE {
+								b := a[game.local_index({x, y, z})]
+								if !game.block_is_plant(b) {continue}
+								plants += 1
+								under :=
+									a[game.local_index({x, y - 1, z})] if y > 0 else below[game.local_index({x, game.CHUNK_SIZE - 1, z})]
+								testing.expectf(
+									t,
+									game.plant_supported(under),
+									"%v: a %v over %v at chunk %v %v",
+									kind,
+									b,
+									under,
+									[3]i32{cx, cy, cz},
+									[3]i32{x, y, z},
+								)
+							}
+						}
+					}
+				}
+			}
+		}
+		testing.expectf(
+			t,
+			kind == .Classic || plants > 20,
+			"%v made only %d plants to look at",
+			kind,
+			plants,
+		)
+	}
+}

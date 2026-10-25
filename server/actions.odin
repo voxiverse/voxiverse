@@ -100,6 +100,7 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 			(infinite || slot >= 0) &&
 			game.can_place(e.block) &&
 			game.can_place_at(current, e.block, e.pos, player) &&
+			plant_placeable(w, e.pos, e.block) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
 	if !ok || !set_block(w, e.pos, e.block, c) {return result}
@@ -146,4 +147,12 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 		}
 	}
 	return false
+}
+
+// plant_placeable: block may be placed at pos: a plant only on what holds it.
+@(private)
+plant_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
+	if !game.block_is_plant(block) {return true}
+	below, loaded := chunks_block(&w.chunks, pos + {0, -1, 0})
+	return loaded && game.plant_supported(below)
 }

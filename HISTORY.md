@@ -654,3 +654,16 @@ inside it again would buy nothing.
 - **Built as:** `Equip_Slot` (Head..Offhand) and `Armor` (cap, tunic, trousers, boots; item ids from `ARMOR_ITEMS`); `Inventory.equipment`, addressed as slots `EQUIP_BASE ..< TOTAL_SLOTS` by the same actions (a slot takes only what fits it; shift-click equips and unequips); kept in the player file under slots 100+; `Player_Worn` (server kind 32) tells the others, on change and on joining; `avatar_draw` is shared by other players' avatars and the preview; `gpu.Target` is a colour image in the swapchain's format plus depth, drawn into before the frame's own rendering and sampled by the UI as `ui.Image` (`draw_image`); the entity pass takes the world's pipeline for a second set of buffers. `wear` puts on all armor carried.
 - **Not here:** protection values, durability, a second preview angle, rings and hands.
 - **Exit check:** as in the table.
+
+## M22c: plants need support
+
+- A plant (`Tall_Grass`, `Poppy`, `Dandelion`) needs a block that holds it (grass, dirt, sand
+  as today's worldgen puts them on) directly below. When a block changes the server checks
+  the block above it (the same place water already reacts to changes), breaks a plant that
+  lost its support, and drops its item (tall grass: nothing until M24's seeds). Cactus keeps
+  its own rule.
+- Drops from a broken plant use the existing dropped-stack path (`spawn_item` with the
+  small random hop), so breaking by hand and by losing support give the same result.
+- Bulk edits (explosions, selections) go through the same check, batched.
+- **Built as:** `game.block_is_plant` / `plant_supported` (grass, dirt, sand); `server/plants.odin`: `plant_check` runs from `set_block` on the block above and `plants_check_box` after a bulk edit; one `block_drop` for hand-breaking and lost support; tall grass has no item drop; placing a plant is refused (server and the client's prediction) where nothing holds it; Earth worldgen clears plants under a structure's floor.
+- **Exit check:** as in the table.

@@ -48,6 +48,7 @@ set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block, by: ^Client = nil
 	ch.blocks[p] = who
 	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
 	wake_water(w, p)
+	plant_check(w, p + {0, 1, 0}) // (a plant above lost its footing, perhaps)
 	return true
 }
 

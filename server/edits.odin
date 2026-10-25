@@ -89,6 +89,7 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result
 	if changed == 0 {return 0, .Done}
 
 	wake_water_box(w, lo, hi)
+	plants_check_box(w, lo, hi)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
 			if column_rescan(w, x, z, hi.y) {
