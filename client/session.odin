@@ -58,6 +58,7 @@ Session_State :: enum u8 {
 
 Session :: struct {
 	state:            Session_State,
+	loading:          Maybe(Loading), // the loading screen is up (loading.odin)
 	failure:          string, // why it failed (in the arena)
 	arena:            virtual.Arena,
 	pipe:             game.Pipe, // to our own server (hosting)
@@ -149,6 +150,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s^ = {
 		config = config,
 	}
+	loading_begin(s, false)
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
 		log.errorf("session cannot reserve memory: %v", err)
 		return false

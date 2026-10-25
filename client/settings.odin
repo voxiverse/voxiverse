@@ -17,6 +17,7 @@ import "../worldgen"
 
 Settings :: struct {
 	name:              base.Var_Text, // the player's name ("": DEFAULT_NAME)
+	last_server:       base.Var_Text, // Direct Connection's last address
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
 	vsync:             bool, // wait for the display (off: up to max_fps)
@@ -63,6 +64,7 @@ SETTINGS_VARS := [?]base.Var {
 		check = proc(s: string) -> bool {return s == "" || game.name_valid(s)},
 		hint = DEFAULT_NAME,
 	},
+	{field = "last_server", help = "the address Direct Connection last joined"},
 	{
 		field = "fullscreen",
 		label = "Display",

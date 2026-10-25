@@ -37,6 +37,7 @@ Screen :: enum u8 {
 	Worlds,
 	Multiplayer,
 	Game, // a session exists
+	Failed, // the session ended against our will: why (app.failed)
 }
 
 // CHUNK_VERTEX_CAPACITY: vertices of all chunk meshes together (8 bytes
@@ -72,6 +73,7 @@ App :: struct {
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
 	bench:            Bench, // the scenario running (benchmark.odin)
 	stars:            Starfield, // the menus' background (starfield.odin)
+	failed:           Failed, // the Failed screen's (loading.odin)
 	options:          Options_View, // the Options screen's tab and state (options.odin)
 	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
 	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved
@@ -292,9 +294,14 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			delete(n)
 		}
 		clear(&app.session.notices)
-		if app.session.state == .Failed {
-			app.message = fmt.aprintf("Disconnected: %s", app.session.failure)
+		loading_update(app.session)
+		if s := app.session; s.state == .Failed {
+			// Why, on a screen of its own; Back to where we came from.
+			title := "Connection Lost" if s.welcome.view_radius != 0 else "Could Not Join"
+			failed := Failed{title, sentence(s.failure), .Multiplayer if s.remote else .Title}
 			leave_world(app)
+			app.failed = failed
+			app.screen = .Failed
 		}
 	} else {
 		platform.set_mouse_captured(w, false)
@@ -326,7 +333,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		if app.session != nil {session_apply(app.session, &app.world_pass, g)}
 		render.world_upload(&app.world_pass, g, frame)
 		render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
-		in_world := app.session != nil && app.session.state == .Playing
+		in_world :=
+			app.session != nil && app.session.state == .Playing && app.session.loading == nil
 		camera: render.Camera
 		scene: u64
 		if in_world {

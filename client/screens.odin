@@ -66,6 +66,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		multiplayer_screen(app, ctx)
 	case .Game:
 		game_screen(app, ctx)
+	case .Failed:
+		failed_screen(app, ctx)
 	}
 	if app.debug.overlay {debug_overlay(app, ctx)}
 	if app.settings.show_fps {fps_overlay(app, ctx)}
@@ -119,20 +121,18 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "game")
 	defer ui.pop_id(ctx)
 	s := app.session
-	t := &ctx.theme
 	switch s.state {
 	case .Connecting:
-		ui.label(
-			ctx,
-			"Joining the world...",
-			ui.rect_center(ctx.screen, 400, t.row_height),
-			.Center,
-		)
+		loading_screen(app, ctx)
 		return
 	case .Choosing:
 		characters_screen(app, ctx)
 		return
 	case .Playing, .Failed:
+		if s.loading != nil {
+			loading_screen(app, ctx)
+			return
+		}
 	}
 	name_tags(app, ctx)
 	if world_paused(app) {return}

@@ -80,6 +80,7 @@ receive :: proc(s: ^Session) {
 			// Travelled: nothing of the last world stays; the arrival (a
 			// teleport), the new world's chunks and entities follow.
 			world_clear(&s.world)
+			loading_begin(s, true)
 			clear(&s.entities)
 			clear(&s.edits)
 			clear(&s.puffs)

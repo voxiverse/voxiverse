@@ -104,6 +104,7 @@ world_paused :: proc(app: ^App) -> bool {
 game_controls :: proc(app: ^App) -> bool {
 	return(
 		app.screen == .Game &&
+		(app.session == nil || app.session.loading == nil) &&
 		!overlays_take(&app.overlays, .Keyboard) &&
 		!overlays_take(&app.overlays, .Mouse) \
 	)
@@ -125,10 +126,14 @@ escape :: proc(app: ^App) {
 		if app.settings_dirty {settings_save(app)}
 		app.screen = .Title
 	case .Multiplayer:
-		multiplayer_close(&app.multiplayer)
-		app.screen = .Title
+		multiplayer_back(app)
 	case .Game:
-		overlay_open(&app.overlays, .Game_Menu)
+		// (Loading: nothing to pause; Cancel is on the screen.)
+		if app.session == nil || app.session.loading == nil {
+			overlay_open(&app.overlays, .Game_Menu)
+		}
+	case .Failed:
+		failed_back(app)
 	case .Title:
 		overlay_open(&app.overlays, .Quit_Dialog)
 	}
