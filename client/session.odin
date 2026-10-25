@@ -202,6 +202,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		save_dir     = config.save_dir,
 		spawn        = config.spawn,
 		no_sheep     = config.no_sheep,
+		rules        = still_rules() if config.no_sheep else {},
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},
@@ -418,4 +419,12 @@ server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 			e := (^Explosion)(data)
 			server.explode_by(srv, "", e.at, e.radius)
 		}, &e)
+}
+
+// still_rules: the defaults with nothing changing by itself (random ticks
+// off), for benchmarks and exit checks.
+still_rules :: proc() -> game.Rules {
+	r := game.RULES_DEFAULTS
+	r.random_tick_speed = 0
+	return r
 }

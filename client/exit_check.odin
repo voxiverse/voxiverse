@@ -25,7 +25,10 @@ Exit_Check :: struct {
 // exit_check_start enters a world of our own for check c (its memory
 // checks need the server here); false (said why) if it cannot run.
 exit_check_start :: proc(app: ^App, c: ^Exit_Check, name: string) -> bool {
-	if app.session == nil {enter_world(app, "", SCRATCH_SEED, SCRATCH_SPAWN)}
+	if app.session == nil {
+		// A still world (no sheep of their own, nothing growing or spreading): the checks measure what they do.
+		enter_world(app, "", SCRATCH_SEED, SCRATCH_SPAWN, benchmark = true)
+	}
 	if app.session == nil || !session_hosting(app.session) {
 		log.errorf("%s runs in a world of our own", name)
 		return false
