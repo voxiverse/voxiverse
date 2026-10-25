@@ -868,6 +868,9 @@ inside it again would buy nothing.
     loader: the one library we ship beside an executable, because there is no other way.
     Ad-hoc signed (Apple Silicon needs a signature); not notarized, so the first launch
     needs right-click Open until we join Apple's developer program (later, documented).
+  - Every package holds one folder of its own name (unpacking never scatters files). A
+    development build's name carries its commit (`voxiverse-0.21.0-dev.5-1a2b3c4d5e6f-
+    windows-x64.zip`), so builds between releases are told apart.
   - Every package: `README.txt` (running, where saves and settings live, the server's
     options), `LICENSE`, and the fonts' and MoltenVK's licences. Debug symbols go in a
     separate archive per platform (for crash reports), not in the player's package (later:
@@ -876,12 +879,16 @@ inside it again would buy nothing.
   by the jobs: the Odin release odinup.toml pins, downloaded prebuilt by
   `laytan/setup-odin` (pinned to a commit) rather than odinup's build from source, whose
   LLVM comes from the system and is not in a cache; odinfmt built from the pinned ols
-  revision, cached. Every push builds the packages and keeps them as workflow artifacts
-  (for testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
-  `SHA256SUMS`, and makes a **draft** GitHub Release with `gh release create --draft` (no
-  third-party actions), its notes from the milestone's row: nothing is public until it is
+  revision, cached. Jobs are named for what they do and the platform they do it for
+  ("Test · Windows x64", "Package · Linux x64"). Every push builds the packages and keeps
+  them 30 days as workflow artifacts, each the package file itself, not zipped again (for
+  testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
+  `SHA256SUMS`, and makes a **draft** GitHub Release with `gh release create --draft`, its
+  notes from the milestone's row: nothing is public until it is
   looked at and published by hand, so a tag pushed by mistake never ships. Each package is unpacked on its own OS and
-  run from there: Linux reaches a world on the CPU driver; Windows answers `--version`
+  run from there: Linux reaches a world on the CPU driver; Windows' zip is read as
+  Explorer reads it (one folder; no `./` paths, which Explorer shows as an empty zip that
+  will not extract), then answers `--version`
   (and its version information is read back) and starts the server; that proves it needs
   nothing beside it.
 - **Later, if the repository goes private:** a private repository's release files are not

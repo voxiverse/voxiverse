@@ -149,10 +149,11 @@ PACKAGE_README :: #load("package_readme.txt", string)
 
 // package_game makes the release package for this platform in build/dist/:
 // a release build (shaders carried inside; on Windows a windowed program,
-// no console), the server, README.txt and the licences, archived as
-// voxiverse-<version>-<os>-<arch>.zip on Windows (files at the top: Windows
-// unpacks into a folder of the zip's name) or .tar.gz elsewhere (in a
-// folder of that name; tar keeps the executable bit).
+// no console), the server, README.txt and the licences, in a folder of the
+// package's name (unpacking never scatters files), archived as
+// voxiverse-<version>-<os>-<arch>.zip on Windows or .tar.gz elsewhere (tar
+// keeps the executable bit). A development build's name carries its commit
+// too: builds between releases are told apart by name.
 package_game :: proc() -> bool {
 	when ODIN_OS == .Darwin {
 		fmt.eprintln("build: no macOS package until the macOS backend (PLAN.md, M1b)")
@@ -162,7 +163,9 @@ package_game :: proc() -> bool {
 	build_game({"--release"}, windowed = true) or_return
 	os_name := "windows" when ODIN_OS == .Windows else "linux"
 	arch := "arm64" when ODIN_ARCH == .arm64 else "x64"
-	name := fmt.tprintf("voxiverse-%s-%s-%s", v.version, os_name, arch)
+	label := v.version
+	if strings.contains(v.version, "-") {label = fmt.tprintf("%s-%s", v.version, v.commit)}
+	name := fmt.tprintf("voxiverse-%s-%s-%s", label, os_name, arch)
 	dist := path_join({"build", "dist"})
 	stage := path_join({dist, name})
 	os.remove_all(stage)
@@ -202,7 +205,9 @@ package_game :: proc() -> bool {
 		archive = path_join({dist, strings.concatenate({name, ".zip"})})
 		os.remove(archive)
 		abs_archive, _ := filepath.abs(archive)
-		run({tar, "-a", "-c", "-f", abs_archive, "-C", stage, "."}) or_return
+		// The folder by name: archiving "." would store "./" paths, which
+		// Explorer shows as an empty zip that will not extract.
+		run({tar, "-a", "-c", "-f", abs_archive, "-C", dist, name}) or_return
 	} else {
 		archive = path_join({dist, strings.concatenate({name, ".tar.gz"})})
 		// (Owned by nobody in particular: not the builder's account.)

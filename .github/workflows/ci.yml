@@ -10,14 +10,18 @@ on:
 
 jobs:
   build:
+    name: Test · ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { os: ubuntu-latest, name: Linux x64 }
+          - { os: macos-latest, name: macOS arm64 }
+          - { os: windows-latest, name: Windows x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup
         with:
@@ -146,7 +150,7 @@ jobs:
 
       - name: Screenshots (Linux)
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots
           path: build/screenshots/
@@ -162,14 +166,17 @@ jobs:
   # (M1b). Linux builds on the oldest supported Ubuntu, so the game runs on
   # older distributions (glibc).
   package:
+    name: Package · ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        include:
+          - { os: ubuntu-22.04, name: Linux x64 }
+          - { os: windows-latest, name: Windows x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the tags: the version comes from them
       # Checkout fetches a pushed tag as a plain ref; its message (the
@@ -202,9 +209,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $dir = "$env:RUNNER_TEMP\package"
-          Expand-Archive (Get-Item build\dist\*.zip) -DestinationPath $dir
-          Set-Location $dir
+          $zip = (Get-Item build\dist\*.zip).FullName
+          $top = [IO.Path]::GetFileNameWithoutExtension($zip)
+          # The paths as stored: all in the one folder of the zip's name;
+          # never "./" (Explorer then shows an empty zip that will not
+          # extract), "/" or "..".
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          $entries = $archive.Entries.FullName
+          $archive.Dispose()
+          $entries
+          $bad = $entries | Where-Object { -not $_.StartsWith("$top/") -or $_ -match '(^|/)\.\.?(/|$)' }
+          if ($bad) { "bad paths: $bad"; exit 1 }
+          # As Explorer sees it (its own zip support): that one folder.
+          $items = (New-Object -ComObject Shell.Application).NameSpace($zip).Items()
+          if ($items.Count -ne 1 -or $items.Item(0).Name -ne $top) { "Explorer sees $($items.Count) items"; exit 1 }
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\package"
+          Set-Location "$env:RUNNER_TEMP\package\$top"
           .\voxiverse-server.exe --version
           if ($LASTEXITCODE -ne 0) { exit 1 }
           .\voxiverse-server.exe --universe "$env:RUNNER_TEMP\universe" --seconds 5
@@ -217,31 +238,33 @@ jobs:
           $info | Format-List ProductName, ProductVersion, FileDescription, FileVersion
           if ($info.ProductName -ne "Voxiverse") { exit 1 }
 
+      # The package itself, not zipped again: the artifact is the file, by
+      # its own name.
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: package-${{ runner.os }}
-          path: |
-            build/dist/*.zip
-            build/dist/*.tar.gz
+          path: build/dist/voxiverse-*.${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }}
+          archive: false
+          retention-days: 30
           if-no-files-found: error
 
   # A version tag (v0.21.0) makes a draft GitHub Release with the packages
   # and their checksums: nothing is public until it is looked at and
   # published by hand. The tag's message is the release's name.
   release:
+    name: Draft release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tags
         run: git fetch --force --tags origin
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
-          pattern: package-*
+          pattern: voxiverse-*
           path: dist
           merge-multiple: true
       - name: Draft release

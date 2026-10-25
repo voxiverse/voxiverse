@@ -25,7 +25,7 @@ runs:
         release: ${{ steps.pins.outputs.odin }}
 
     - name: Cache shader compiler
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: build/tools
         key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin') }}
@@ -33,7 +33,7 @@ runs:
     - name: Cache odinfmt
       if: inputs.dev == 'true'
       id: odinfmt
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/odinfmt
         key: odinfmt-${{ steps.pins.outputs.image }}-${{ steps.pins.outputs.odin }}-${{ steps.pins.outputs.ols }}
