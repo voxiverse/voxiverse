@@ -218,6 +218,7 @@ chunks_collect :: proc(
 	data: rawptr,
 ) {
 	base.profile_scope("collect chunks")
+	base.metric_scope(.Server_Collect)
 	done := make([dynamic]^Gen_Task, context.temp_allocator)
 	base.queue_drain(&w.done, &done)
 	for task in done {
@@ -268,9 +269,11 @@ generate_job :: proc(data: rawptr) {
 		task.skipped = true
 	} else if task.tops_only {
 		base.profile_scope("column tops")
+		base.metric_scope(.Column_Tops)
 		worldgen.column_tops(&task.gen, task.column, &task.tops, &w.caches[context.user_index])
 	} else {
 		base.profile_scope("generate chunk")
+		base.metric_scope(.Generate_Chunk)
 		start := time.tick_now()
 		task.uniform, task.is_uniform = worldgen.generate(
 			&task.gen,

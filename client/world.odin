@@ -737,9 +737,14 @@ mesh_job :: proc(data: rawptr) {
 @(private = "file")
 mesh_task_run :: proc(task: ^Mesh_Task) {
 	base.profile_scope("mesh chunk")
+	base.metric_scope(.Mesh_Chunk)
 	start := time.tick_now()
 	defer task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
-	game.light_chunk(&task.light_in, &task.scratch, &task.light)
+	{
+		base.metric_scope(.Light_Chunk)
+		game.light_chunk(&task.light_in, &task.scratch, &task.light)
+	}
+	base.metric_scope(.Mesh_Faces)
 	n: mesh.Neighbourhood
 	for &c, i in task.chunks {n[i] = &c}
 	mesh.snapshot_fill(&task.snapshot, &n)

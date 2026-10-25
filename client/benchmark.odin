@@ -1,0 +1,290 @@
+package client
+
+import "core:fmt"
+import "core:log"
+import "core:math"
+import "core:strings"
+import "core:time"
+
+import "../base"
+import "../game"
+
+// Benchmarks (PLAN.md, M19): `voxiverse --benchmark <scenario>` runs a
+// scenario by itself and writes its result (base.bench_result_write); `build
+// bench <scenario>` does that with a release build. Everything that changes
+// the numbers is fixed here, not taken from the player: the settings
+// (BENCHMARK_SETTINGS; the settings file is neither read nor written), the
+// world (the scratch world, its fixed spawn), the time of day (stopped), the
+// clouds (still), no critters appearing, no sound device. Each repetition
+// is a session of its own: join, load, warm up, measure, leave.
+
+Bench_Kind :: enum u8 {
+	Load, // joining until the world around is loaded and meshed
+	Views, // still views all round: the GPU's work
+	Flight, // flying over the land: streaming while drawing
+}
+
+Scenario :: struct {
+	name:        string,
+	kind:        Bench_Kind,
+	version:     int, // bump when what it does changes: results of other versions never compare
+	repetitions: int,
+	description: string,
+}
+
+@(rodata)
+SCENARIOS := [?]Scenario {
+	{"load", .Load, 1, 3, "join the scratch world until it is loaded and meshed"},
+	{
+		"views",
+		.Views,
+		1,
+		3,
+		"sixteen still views from the spawn (eight ways, at the horizon and down)",
+	},
+	{
+		"flight",
+		.Flight,
+		1,
+		3,
+		"fly 600 blocks over the land at 40 blocks/s, looking ahead and down",
+	},
+}
+
+// BENCHMARK_SETTINGS: what benchmarks run with instead of the player's
+// settings: a 1280 x 720 window (asked for at start), no vsync, nothing
+// extra on screen, the default view. Never saved.
+@(rodata)
+BENCHMARK_SETTINGS := Settings {
+	ui_scale          = 1,
+	mouse_sensitivity = 1,
+	fov               = 70,
+	view_radius       = 12,
+	view_height       = 6,
+	vsync             = false,
+	volume            = 0,
+}
+
+BENCH_TIME_OF_DAY :: "0.45" // late morning: the sun up, the sky lit
+BENCH_WARMUP_FRAMES :: 120
+BENCH_LOAD_TIMEOUT :: 120 // seconds
+BENCH_VIEW_YAWS :: 8
+BENCH_VIEW_PITCHES :: [2]f32{-0.1, -0.6}
+BENCH_VIEW_FRAMES :: 60 // each view held
+BENCH_VIEW_SETTLE :: 10 // of those, not measured: GPU times arrive a few frames late
+BENCH_FLIGHT_HEIGHT :: 70.0
+BENCH_FLIGHT_SPEED :: 40
+BENCH_FLIGHT_BLOCKS :: 600.0
+BENCH_FLIGHT_PITCH :: -0.35
+
+Bench_Phase :: enum u8 {
+	Off,
+	Joining, // entering the world, waiting for it to load and mesh
+	Warming,
+	Lifting, // (flight) up and the flying rules, waiting for the server
+	Measuring,
+}
+
+Bench :: struct {
+	scenario: Scenario,
+	phase:    Bench_Phase,
+	rep:      int,
+	frames:   int, // in this phase
+	started:  time.Tick, // this phase's start
+	view:     int,
+	start_x:  f64, // (flight)
+	result:   base.Bench_Result,
+	failed:   bool,
+	done:     bool,
+}
+
+// scenario_find: the scenario called name.
+scenario_find :: proc(name: string) -> (Scenario, bool) {
+	for s in SCENARIOS {if s.name == name {return s, true}}
+	return {}, false
+}
+
+scenario_names :: proc() -> string {
+	names := make([dynamic]string, context.temp_allocator)
+	for s in SCENARIOS {append(&names, s.name)}
+	return strings.join(names[:], ", ", context.temp_allocator)
+}
+
+// bench_begin starts the scenario (after app_init).
+bench_begin :: proc(app: ^App, scenario: Scenario) {
+	b := &app.bench
+	b^ = {
+		scenario = scenario,
+		result = {
+			scenario = scenario.name,
+			version = scenario.version,
+			gpu = app.g.device_name,
+			driver = app.g.driver,
+		},
+	}
+	log.infof(
+		"bench %s: %s (%d repetitions)",
+		scenario.name,
+		scenario.description,
+		scenario.repetitions,
+	)
+	bench_join(app)
+}
+
+@(private = "file")
+bench_join :: proc(app: ^App) {
+	b := &app.bench
+	enter_world(app, "", SCRATCH_SEED, SCRATCH_SPAWN, benchmark = true)
+	b.phase, b.frames, b.started = .Joining, 0, time.tick_now()
+	if b.scenario.kind == .Load {base.metrics_start()}
+}
+
+// bench_update drives the scenario; once a frame.
+bench_update :: proc(app: ^App) {
+	b := &app.bench
+	if b.phase == .Off {return}
+	s := app.session
+	if s == nil || s.state == .Failed {
+		bench_fail(app, "the session ended")
+		return
+	}
+	b.frames += 1
+	seconds := time.duration_seconds(time.tick_since(b.started))
+	switch b.phase {
+	case .Off:
+	case .Joining:
+		if !world_settled(app) {
+			if seconds > BENCH_LOAD_TIMEOUT {bench_fail(app, "the world did not load")}
+			return
+		}
+		if b.scenario.kind == .Load {
+			base.metric_add(.Load_Seconds, f32(seconds))
+			bench_repetition_done(app)
+			return
+		}
+		// The conditions: the time of day stopped where it is set.
+		session_set_rule(s, "rules.daylight_cycle", "0")
+		send_message(s, game.Command{"time " + BENCH_TIME_OF_DAY})
+		b.phase, b.frames, b.started = .Warming, 0, time.tick_now()
+	case .Warming:
+		if b.frames < BENCH_WARMUP_FRAMES {return}
+		if b.scenario.kind == .Flight {
+			p := s.prediction.state.position
+			session_teleport(
+				s,
+				{{p.x, BENCH_FLIGHT_HEIGHT, p.z}, -math.PI / 2, BENCH_FLIGHT_PITCH},
+			)
+			session_set_rule(s, "rules.fly_sprint_speed", fmt.tprint(BENCH_FLIGHT_SPEED))
+			b.phase, b.frames, b.started = .Lifting, 0, time.tick_now()
+			return
+		}
+		b.phase, b.frames, b.view = .Measuring, 0, 0
+		base.metrics_start()
+		base.metrics_stop() // (the first view's settle)
+	case .Lifting:
+		if s.prediction.state.position.y < BENCH_FLIGHT_HEIGHT - 1 ||
+		   s.rules.fly_sprint_speed != BENCH_FLIGHT_SPEED {
+			if seconds >
+			   BENCH_LOAD_TIMEOUT {bench_fail(app, "the teleport or rule change never arrived")}
+			return
+		}
+		if !s.prediction.state.flying {s.toggle_fly = true}
+		s.autopilot = game.Player_Input {
+			move    = {0, 1},
+			yaw     = -math.PI / 2,
+			pitch   = BENCH_FLIGHT_PITCH,
+			buttons = {.Sprint},
+		}
+		b.start_x = s.prediction.state.position.x
+		b.phase, b.frames = .Measuring, 0
+		base.metrics_start()
+	case .Measuring:
+		switch b.scenario.kind {
+		case .Load:
+		case .Views:
+			pitches := BENCH_VIEW_PITCHES
+			s.camera.yaw = f32(b.view % BENCH_VIEW_YAWS) * 2 * math.PI / BENCH_VIEW_YAWS
+			s.camera.pitch = pitches[b.view / BENCH_VIEW_YAWS]
+			if b.frames == BENCH_VIEW_SETTLE {base.metrics_resume()}
+			if b.frames < BENCH_VIEW_FRAMES {return}
+			base.metrics_stop()
+			b.view, b.frames = b.view + 1, 0
+			if b.view == BENCH_VIEW_YAWS * len(BENCH_VIEW_PITCHES) {bench_repetition_done(app)}
+		case .Flight:
+			p := s.prediction.state
+			if !p.flying && p.position.x - b.start_x > 2 {
+				bench_fail(app, "stopped flying")
+				return
+			}
+			if p.position.x - b.start_x >= BENCH_FLIGHT_BLOCKS {bench_repetition_done(app)}
+		}
+	}
+}
+
+// bench_repetition_done keeps this repetition's metrics and goes on: the
+// next repetition in a new session, or the result.
+@(private = "file")
+bench_repetition_done :: proc(app: ^App) {
+	b := &app.bench
+	base.bench_repetition_end(&b.result)
+	if len(b.result.repetitions) == 1 {
+		// Exact counts: the same world gives the same, or the work changed.
+		s := app.session
+		append(
+			&b.result.counts,
+			base.Bench_Count{"chunks", s.world.chunks.count},
+			base.Bench_Count{"meshes", app.world_pass.stats.meshes},
+		)
+		extent := app.g.swapchain.extent
+		b.result.resolution = {int(extent.width), int(extent.height)}
+	}
+	if app.session != nil {app.session.autopilot = nil}
+	leave_world(app)
+	b.rep += 1
+	if b.rep < b.scenario.repetitions {
+		bench_join(app)
+		return
+	}
+	bench_finish(app)
+}
+
+@(private = "file")
+bench_finish :: proc(app: ^App) {
+	b := &app.bench
+	b.phase = .Off
+	path := base.bench_result_write(&b.result)
+	if path == "" {
+		bench_fail(app, "could not write the result (run from the repository: build/ must exist)")
+		return
+	}
+	// The log: each metric's median over the repetitions.
+	for m in base.Metric {
+		medians := make([dynamic]f64, context.temp_allocator)
+		for rep in b.result.repetitions {if rep[m].count > 0 {append(&medians, rep[m].median)}}
+		if len(medians) == 0 {continue}
+		info := base.METRIC_INFO[m]
+		lo, hi := medians[0], medians[0]
+		for v in medians {lo, hi = min(lo, v), max(hi, v)}
+		log.infof(
+			"bench %s %s median=%.3f %s (repetitions %.3f..%.3f)",
+			b.scenario.name,
+			info.name,
+			base.median_of(medians[:]),
+			info.unit,
+			lo,
+			hi,
+		)
+	}
+	log.infof("bench %s result=%s", b.scenario.name, path)
+	b.done = true
+	app.quit = true
+}
+
+@(private = "file")
+bench_fail :: proc(app: ^App, why: string) {
+	b := &app.bench
+	log.errorf("bench %s failed: %s", b.scenario.name, why)
+	base.metrics_stop()
+	b.phase, b.failed, b.done = .Off, true, true
+	app.quit = true
+}

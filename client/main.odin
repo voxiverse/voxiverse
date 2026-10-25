@@ -12,12 +12,14 @@ import "../base"
 // `--frames N` exits after N frames and fails the run on any validation
 // finding or leak (CI and quick checks); `--capture-frame N` captures that
 // frame when started from RenderDoc; `--exec "cmd; cmd"` runs console
-// commands at startup (scripted checks, screenshots, reproducing bugs).
+// commands at startup (scripted checks, screenshots, reproducing bugs);
+// `--benchmark <scenario>` runs a benchmark (benchmark.odin) and quits.
 
 Options :: struct {
 	frames:        int `usage:"exit after this many frames (0: run until closed)"`,
 	capture_frame: int `usage:"when started from RenderDoc, capture this frame (1 = first)"`,
 	exec:          string `usage:"console commands to run at startup, separated by ';'"`,
+	benchmark:     string `usage:"run a benchmark scenario (load, views, flight) with fixed settings, write its result, quit"`,
 }
 
 main :: proc() {
@@ -41,6 +43,19 @@ main :: proc() {
 run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 	app := new(App)
 	defer free(app)
+	scenario: Scenario
+	if opts.benchmark != "" {
+		found: bool
+		if scenario, found = scenario_find(opts.benchmark); !found {
+			log.errorf(
+				"no benchmark scenario %q (there are: %s)",
+				opts.benchmark,
+				scenario_names(),
+			)
+			return false
+		}
+		app.benchmark = true
+	}
 
 	// The console shows the log too (from here on).
 	base.log_set_listener(sink, console_listener, &app.console)
@@ -48,6 +63,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 
 	ok := app_init(app)
 	if ok {
+		if app.benchmark {bench_begin(app, scenario)}
 		script: Script
 		script_init(&script, opts.exec)
 		defer script_destroy(&script)
@@ -58,6 +74,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			script_run(app, &script)
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture) {break}
+			bench_update(app) // between frames: it may leave and join worlds
 			frames += 1
 			if cap := frame_cap(app); cap > 0 {
 				if spent := time.tick_since(last); spent < cap {time.sleep(cap - spent)}
@@ -71,7 +88,10 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 					&app.triangle_stats,
 					f32(app.world_pass.stats.triangles) / 1000,
 				)
+				base.metric_add(.Triangles, f32(app.world_pass.stats.triangles) / 1000)
+				base.metric_add(.Draws, f32(app.world_pass.stats.drawn))
 			}
+			base.metric_add(.Frame, app.last_frame_ms)
 			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
 			last = now
 		}
@@ -90,14 +110,13 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			log.errorf("%d UI error(s) during this run (see above)", app.ui.errors)
 			ok = false
 		}
+		if app.benchmark && (app.bench.failed || !app.bench.done) {
+			if !app.bench.done {log.error("bench the run ended before the scenario finished")}
+			ok = false
+		}
 		if app.fly_test.failed || app.fly_test.phase != .Off {
 			if app.fly_test.phase !=
 			   .Off {log.error("fly_test the run ended before the test finished")}
-			ok = false
-		}
-		if app.view_test.failed || app.view_test.phase != .Off {
-			if app.view_test.phase !=
-			   .Off {log.error("view_test the run ended before the test finished")}
 			ok = false
 		}
 		if app.tour_test.failed || app.tour_test.phase != .Off {

@@ -42,6 +42,7 @@ Gpu :: struct {
 	queue_family:         u32,
 	queue:                vk.Queue,
 	device_name:          string,
+	driver:               string, // its driver's name and version (benchmark results)
 	swapchain:            Swapchain,
 	frames:               [FRAMES_IN_FLIGHT]Frame_Sync,
 	frame_index:          int,
@@ -258,6 +259,7 @@ destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 	validation_issues = sync.atomic_load(&g.validation_issues)
 	if g.loader != nil {dynlib.unload_library(g.loader)}
 	delete(g.device_name)
+	delete(g.driver)
 	g^ = {}
 	return
 }
@@ -312,7 +314,8 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 		)
 		return false
 	}
-	log.infof("gpu device name=%q", g.device_name)
+	g.driver = driver_describe(g.physical)
+	log.infof("gpu device name=%q driver=%q", g.device_name, g.driver)
 	return true
 }
 
@@ -501,4 +504,24 @@ end_label :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
 	timing_section_end(g, &g.frames[g.frame_index].timing, cmd)
 	if !g.debug_utils {return}
 	vk.CmdEndDebugUtilsLabelEXT(cmd)
+}
+
+// driver_describe: the device's driver name and version, as it says them
+// (Vulkan 1.2 core), for benchmark results.
+@(private = "file")
+driver_describe :: proc(physical: vk.PhysicalDevice) -> string {
+	driver := vk.PhysicalDeviceDriverProperties {
+		sType = .PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+	}
+	props := vk.PhysicalDeviceProperties2 {
+		sType = .PHYSICAL_DEVICE_PROPERTIES_2,
+		pNext = &driver,
+	}
+	vk.GetPhysicalDeviceProperties2(physical, &props)
+	name, info := driver.driverName, driver.driverInfo
+	both := strings.concatenate(
+		{string(cstring(&name[0])), " ", string(cstring(&info[0]))},
+		context.temp_allocator,
+	)
+	return strings.clone(strings.trim_space(both))
 }

@@ -28,16 +28,18 @@ import "mesh"
 // Player_Updates have the last word.
 
 Session_Config :: struct {
-	name:        string, // the character to play ("": ask for the account's)
-	key:         game.Account_Key, // the account
-	join:        Maybe(Join), // play on that server; otherwise host the world here
-	seed:        i64,
-	view_radius: i32,
-	view_height: i32,
-	trace:       bool, // record every message to net.trace from the start (hosting only)
-	capture:     bool, // write every packet to net.pcap (joining only)
-	save_dir:    string, // the world's directory; "" = scratch, not saved
-	spawn:       Maybe([3]f64), // a new world's spawn (else the generator's)
+	name:         string, // the character to play ("": ask for the account's)
+	key:          game.Account_Key, // the account
+	join:         Maybe(Join), // play on that server; otherwise host the world here
+	seed:         i64,
+	view_radius:  i32,
+	view_height:  i32,
+	trace:        bool, // record every message to net.trace from the start (hosting only)
+	capture:      bool, // write every packet to net.pcap (joining only)
+	save_dir:     string, // the world's directory; "" = scratch, not saved
+	spawn:        Maybe([3]f64), // a new world's spawn (else the generator's)
+	no_critters:  bool, // (hosting) none appear by themselves: benchmarks
+	still_clouds: bool, // the clouds stay where they start: benchmarks
 }
 
 // Join: a server to play on.
@@ -191,6 +193,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
 		spawn        = config.spawn,
+		no_critters  = config.no_critters,
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},
@@ -289,6 +292,7 @@ session_update :: proc(
 	look: bool,
 ) {
 	base.profile_scope("session")
+	base.metric_scope(.Frame_Session)
 	if s.remote {
 		s.link.socket.conditions = {
 			loss       = conditions.loss_percent / 100,
@@ -309,7 +313,7 @@ session_update :: proc(
 		return
 	}
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
-	s.cloud_drift += f64(dt) * render.CLOUD_SPEED
+	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	if look {
 		look_update(&s.camera, input, settings)
 		if .Space in input.pressed {

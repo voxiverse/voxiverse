@@ -69,10 +69,11 @@ App :: struct {
 	debug:            Debug_Switches,
 	settings_dirty:   bool, // changed since loaded or saved
 	scripted:         bool, // running --exec commands: settings changes are not saved
+	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
+	bench:            Bench, // the scenario running (benchmark.odin)
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
-	view_test:        View_Test,
 	blast_test:       Blast_Test,
 	tour_test:        Tour_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
@@ -102,7 +103,11 @@ app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
 	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
-	settings_load(app)
+	if app.benchmark {
+		app.settings = BENCHMARK_SETTINGS // (the player's are not read)
+	} else {
+		settings_load(app)
+	}
 	account_load(app)
 	console_history_load(&app.console)
 	app.debug = DEBUG_DEFAULTS
@@ -140,7 +145,7 @@ app_init :: proc(app: ^App) -> bool {
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
-	audio_init(app)
+	if !app.benchmark {audio_init(app)} 	// (a benchmark has no sound device: its mixer would vary the work)
 	return passes_init(app)
 }
 
@@ -274,7 +279,6 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			w.mouse_captured,
 		)
 		fly_test_update(app)
-		view_test_update(app)
 		blast_test_update(app)
 		tour_test_update(app)
 		sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)
@@ -310,6 +314,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	if !ok {return true}
 	{
 		base.profile_scope("record")
+		base.metric_scope(.Frame_Record)
 		g := &app.g
 		render.world_begin(&app.world_pass, g)
 		if app.session != nil {session_apply(app.session, &app.world_pass, g)}
@@ -376,10 +381,18 @@ SCRATCH_SEED :: 0x5eed
 // new, with seed), or with save_dir "" a scratch world nothing is saved of
 // (scripts and tests). The world runs here; others can join once it is
 // opened to the LAN.
-enter_world :: proc(app: ^App, save_dir: string, seed: i64, spawn: Maybe([3]f64) = nil) {
+enter_world :: proc(
+	app: ^App,
+	save_dir: string,
+	seed: i64,
+	spawn: Maybe([3]f64) = nil,
+	benchmark := false, // the same work every run: no critters, still clouds
+) {
 	start_session(
 		app,
 		{
+			no_critters = benchmark,
+			still_clouds = benchmark,
 			name = player_name(&app.settings),
 			key = app.account,
 			seed = seed,

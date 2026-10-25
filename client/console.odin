@@ -351,14 +351,6 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
-			"view_test",
-			"view_test <frames> [quit]: turn through 16 views; record GPU time and triangles",
-			view_test_command,
-		},
-	)
-	console_register(
-		c,
-		{
 			"tour_test",
 			"tour_test [quit]: visit every biome; check budgets and memory",
 			tour_test_command,

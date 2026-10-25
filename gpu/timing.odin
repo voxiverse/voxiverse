@@ -164,6 +164,23 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 		base.frame_stats_add(&g.gpu_frame_stats, f32(f64(ticks) * f64(g.timestamp_period) / 1e6))
 	}
 
+	// A benchmark's metrics: each pass's time this frame (the render
+	// package's labels, by name).
+	if base.metrics_recording() {
+		ms: [base.Metric]f32
+		seen: bit_set[base.Metric]
+		for &s in t.sections[:t.section_count] {
+			if s.end_query == NO_QUERY {continue}
+			for entry in GPU_SECTION_METRICS {
+				if entry.name != string(s.name[:s.name_len]) {continue}
+				ticks := (results[s.end_query] - results[s.begin_query]) & g.timestamp_mask
+				ms[entry.metric] += f32(f64(ticks) * f64(g.timestamp_period) / 1e6)
+				seen += {entry.metric}
+			}
+		}
+		for m in seen {base.metric_add(m, ms[m])}
+	}
+
 	if !base.profiling_enabled() {return}
 	// Emit begins and ends in query order, which is recording order, so
 	// nested sections come out nested.
@@ -184,6 +201,20 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 			base.profile_gpu_end(ns)
 		}
 	}
+}
+
+// GPU_SECTION_METRICS: the sections (begin_label names) that are metrics.
+@(private, rodata)
+GPU_SECTION_METRICS := [?]struct {
+	name:   string,
+	metric: base.Metric,
+} {
+	{"frame", .Gpu_Frame},
+	{"world", .Gpu_World},
+	{"water", .Gpu_Water},
+	{"sky", .Gpu_Sky},
+	{"entities", .Gpu_Entities},
+	{"ui", .Gpu_UI},
 }
 
 // timing_setup decides at device creation whether timestamps work on this

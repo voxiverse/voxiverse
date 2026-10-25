@@ -154,16 +154,6 @@ tour_test_finish :: proc(app: ^App, failure: string) {
 			mesh.p99,
 			mesh.count,
 		)
-		base.perf_history_append(
-			"tour_test",
-			{
-				{"frame_p99_ms", f64(frames.p99)},
-				{"generate_mean_ms", f64(generate.avg)},
-				{"generate_p99_ms", f64(generate.p99)},
-				{"mesh_mean_ms", f64(mesh.avg)},
-				{"mesh_p99_ms", f64(mesh.p99)},
-			},
-		)
 	}
 	t.phase = .Off
 	exit_check_finish(app, &t.check, failures[:])

@@ -162,25 +162,6 @@ fly_test_finish :: proc(app: ^App, error: string) {
 			s.prediction.corrections,
 			s.prediction.count,
 		)
-		gpu_sum := base.frame_stats_summary(&app.g.gpu_frame_stats)
-		triangles := base.frame_stats_summary(&app.triangle_stats)
-		mesh_sum := base.frame_stats_summary(&w.stats.mesh_times)
-		base.perf_history_append(
-			"fly_test",
-			{
-				{"blocks", t.distance},
-				{"load_s", f64(t.waited)},
-				{"frame_p50_ms", f64(sum.p50)},
-				{"frame_p99_ms", f64(sum.p99)},
-				{"gpu_p50_ms", f64(gpu_sum.p50)},
-				{"gpu_p99_ms", f64(gpu_sum.p99)},
-				{"triangles_k_p50", f64(triangles.p50)},
-				{"generate_p50_ms", f64(st.generate.p50)},
-				{"mesh_p50_ms", f64(mesh_sum.p50)},
-				{"remeshed", f64(w.stats.remeshed)},
-				{"server_arena_mib", f64(st.arena_used) / (1 << 20)},
-			},
-		)
 	}
 	t.phase = .Off
 	exit_check_finish(app, &t.check, failures[:])

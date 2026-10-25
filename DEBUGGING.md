@@ -184,7 +184,6 @@ neighbours' edges.
 | `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
 | `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
 | `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
-| `view_test <frames> [quit]` | The GPU check: waits for the world to load and mesh, turns through sixteen views (eight directions, at the horizon and down onto the land) holding each <frames> frames, and logs the GPU's frame time and the triangles drawn (and a line in `build/perf-history.jsonl`). Run with `set vsync 0` |
 
 F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
 and to light and mesh (ours), on average and the slowest 1%.
@@ -408,6 +407,29 @@ pipeline state. Start the game from RenderDoc (Launch Application, or
 labels show up in RenderDoc's event browser. (The game only talks to RenderDoc when started
 from it; it never loads RenderDoc itself.)
 
+## Benchmarking
+
+`build bench <scenario>` measures one thing the same way every time, on any machine, for
+anyone (PLAN.md, M19):
+
+| Scenario | What it measures |
+|---|---|
+| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (tools/bench). `-check` (CI) also fails if the chunk, mesh or vertex counts changed or a stage blew a generous budget |
+| `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks |
+| `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame |
+| `flight` | 600 blocks of flight at 40 blocks/s: frames while streaming, generation and meshing, ticks |
+
+The game's scenarios run a release build with `--benchmark <scenario>`: fixed settings
+(`BENCHMARK_SETTINGS` in client/benchmark.odin: a 1280 x 720 window, no vsync; the player's
+settings file is neither read nor written), the scratch world and its fixed spawn, the time
+of day stopped at late morning, still clouds, no critters, no sound device. Each scenario
+runs three repetitions, each a session of its own after a warm-up, and writes
+`build/benchmarks/<scenario>/<time>-<commit>.json` (every metric of every repetition, the
+exact counts, the resolution, the machine) and a line in `build/benchmarks/history.jsonl`
+(each metric's median). Results compare only on one machine (its fingerprint) and one
+scenario version. The metrics are `base.Metric` (base/metrics.odin): recorded in any build,
+only while a benchmark measures. `--profile` adds a Spall trace of the run.
+
 ## Profiling
 
 Measure with optimized code: the default development build is lightly optimized (3-8x slower
@@ -416,7 +438,7 @@ tools, from narrow to wide:
 
 | Command | What it shows |
 |---|---|
-| `build bench [-radius:3 -seed:1 -check]` | Generation, light, snapshot and mesh times per chunk for a fixed region on one thread, vertices per chunk. The same work every run: the first thing to run before and after changing the chunk pipeline |
+| `build bench <scenario>` | A benchmark scenario, under fixed conditions (see Benchmarking): the first thing to run before and after a change for speed |
 | `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where it has them) and prints the hottest functions per thread; `perf report -i build/game.perf` for call graphs, `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`) |
 | `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes; `trace` prints each scope's calls and percentiles per thread, a per-second timeline and the slowest frames and server ticks broken down |
 | The `session mesher` log line | At the end of a session: chunks meshed, re-meshed (and why: resent, edits, column tops), mesh times |

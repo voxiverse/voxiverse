@@ -115,8 +115,10 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay", "sfx", "worldmap", "bench":
+	case "netdump", "replay", "sfx", "worldmap":
 		ok = run_tool(args[0], args[1:])
+	case "bench":
+		ok = bench(args[1:])
 	case "trace":
 		ok = trace(args[1:])
 	case "perf":
@@ -144,8 +146,11 @@ usage :: proc() {
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
 	fmt.println(
-		"  bench     time worldgen, light and meshing on one thread (-seed:N -radius:3 -repeat:1 -check)",
+		"  bench     run a benchmark scenario (PLAN.md, M19; results in build/benchmarks/):",
 	)
+	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
+	fmt.println("              load, views, flight  the game (a release build, fixed settings;")
+	fmt.println("                           --profile: traced too)")
 	fmt.println(
 		"  trace     summarize a profile trace (build/voxiverse.spall; scopes for its timeline)",
 	)
@@ -515,6 +520,32 @@ commit_define :: proc() -> string {
 		commit = strings.concatenate({commit, "-dirty"})
 	}
 	return strings.concatenate({"-define:VX_COMMIT=", commit})
+}
+
+// bench runs a benchmark scenario the one way: `chunks` is tools/bench
+// (no game), the others a release build of the game with --benchmark
+// (client/benchmark.odin has them and their fixed conditions).
+bench :: proc(args: []string) -> bool {
+	if len(args) == 0 {
+		fmt.eprintln(
+			"build: bench <scenario>: chunks, load, views or flight (client/benchmark.odin)",
+		)
+		return false
+	}
+	scenario := args[0]
+	if scenario == "chunks" {return run_tool("bench", args[1:])}
+	build_args := []string{"--release"}
+	for arg in args[1:] {
+		switch arg {
+		case "--profile":
+			build_args = {"--release", "--profile"}
+		case:
+			fmt.eprintfln("build: bench %s takes --profile, not '%s'", scenario, arg)
+			return false
+		}
+	}
+	exe := build_game(build_args) or_return
+	return run({exe, "--benchmark", scenario})
 }
 
 // trace summarizes a Spall trace (default build/voxiverse.spall); further

@@ -47,6 +47,7 @@ Config :: struct {
 	spawn:           Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
 	world_idle:      f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 	gate_open:       f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
+	no_critters:     bool, // none appear by themselves (benchmarks: the same work every run)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -289,6 +290,7 @@ server_main :: proc(t: ^thread.Thread) {
 @(private = "file")
 tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
+	base.metric_scope(.Server_Tick)
 	s.tick += 1
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
 	for w in s.worlds {
@@ -349,6 +351,7 @@ tick :: proc(s: ^Server) {
 			c.inv_changed = false
 		}
 		base.profile_scope("stream")
+		base.metric_scope(.Server_Stream)
 		stream(s, &c)
 	}
 	kick_due(s)

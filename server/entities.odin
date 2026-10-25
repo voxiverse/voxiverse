@@ -519,6 +519,7 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 @(private = "file")
 spawn_natural :: proc(w: ^World) {
 	s := w.server
+	if s.config.no_critters {return}
 	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
 	r := rand.default_random_generator(&w.entities.rng)
