@@ -22,20 +22,27 @@ Farm :: struct {
 }
 
 @(private = "file")
-farm_server :: proc(t: ^testing.T, srv: ^Server, a: ^Net_Client, dir := "") -> bool {
-	config := Config {
-		seed            = 24,
-		generator       = .Classic,
-		view_radius     = 3,
-		view_height     = 2,
-		workers         = 2,
-		max_players     = 2,
-		listen          = true,
+farm_config :: proc(dir: string) -> Config {
+	still := game.RULES_DEFAULTS
+	still.random_tick_speed = 0 // (only the ticks a case calls: nothing changes behind its back)
+	return {
+		seed = 24,
+		generator = .Classic,
+		rules = still,
+		view_radius = 3,
+		view_height = 2,
+		workers = 2,
+		max_players = 2,
+		listen = true,
 		everyone_cheats = true,
-		save_dir        = dir,
-		no_sheep        = true,
+		save_dir = dir,
+		no_sheep = true,
 	}
-	if !testing.expect(t, start(srv, config, {})) {return false}
+}
+
+@(private = "file")
+farm_server :: proc(t: ^testing.T, srv: ^Server, a: ^Net_Client, dir := "") -> bool {
+	if !testing.expect(t, start(srv, farm_config(dir), {})) {return false}
 	net_connect(a, srv.host.socket.port, "a")
 	return testing.expect(t, net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) > 100
@@ -413,25 +420,7 @@ test_farming_saved :: proc(t: ^testing.T) {
 	time.sleep(100 * time.Millisecond)
 	testing.expect(t, stop(&srv))
 	stopped = true
-	if !testing.expect(
-		t,
-		start(
-			&srv,
-			Config {
-				seed = 24,
-				generator = .Classic,
-				view_radius = 3,
-				view_height = 2,
-				workers = 2,
-				max_players = 2,
-				listen = true,
-				everyone_cheats = true,
-				save_dir = dir,
-				no_sheep = true,
-			},
-			{},
-		),
-	) {return}
+	if !testing.expect(t, start(&srv, farm_config(dir), {})) {return}
 	stopped = false
 	again: Net_Client
 	net_connect(&again, srv.host.socket.port, "a")
