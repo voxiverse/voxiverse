@@ -256,52 +256,14 @@ admin_top :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
-// admin_tp: to a player, a player to another (teleport.tp.others), or to
-// x y z.
-@(private)
-admin_tp :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	switch len(args) {
-	case 1:
-		to := client_by_name(s, args[0])
-		if to == nil {
-			notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
-			return true
-		}
-		notice_if(s, c, go_to(s, c, {to.world.address, to.player.position, c.look}))
-	case 2:
-		if !allowed(s, c, "teleport.tp.others") {
-			notice(s, c, "You may not move others here (teleport.tp.others)")
-			return true
-		}
-		who, to := client_by_name(s, args[0]), client_by_name(s, args[1])
-		if who == nil || to == nil {
-			notice(s, c, "&cBoth must be here")
-			return true
-		}
-		notice_if(s, c, go_to(s, who, {to.world.address, to.player.position, who.look}))
-		notice(s, c, fmt.tprintf("Moved %s to %s", args[0], args[1]))
-	case 3:
-		at: [3]f64
-		for a, i in args {
-			v, ok := strconv.parse_f64(a)
-			if !ok || abs(v) >= game.WORLD_LIMIT {return false}
-			at[i] = v
-		}
-		land(s, c, at, c.look, .Exact)
-	case:
-		return false
-	}
-	return true
-}
-
 // admin_tphere: bring a player here (teleport.tp.others).
 @(private)
 admin_tphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	who := client_by_name(s, args[0])
-	if who == nil {
+	who := players_matching(s, c, args[0])
+	if len(who) == 0 {
 		notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
 		return true
 	}
-	notice_if(s, c, go_to(s, who, {c.world.address, c.player.position, who.look}))
+	for w in who {notice_if(s, c, go_to(s, w, {c.world.address, c.player.position, w.look}))}
 	return true
 }

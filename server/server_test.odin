@@ -613,10 +613,16 @@ test_admin_commands :: proc(t: ^testing.T) {
 		},
 		{"fill 0 60 0 1 61 1 bedrock", "Usage: fill [x1 y1 z1 x2 y2 z2] <block>"},
 		{"sphere 0 0 0 99 air", "Usage: sphere [x y z] <radius> <block> (no x y z: at pos1)"},
-		{"time", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
-		{"time teatime", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
+		{
+			"time",
+			"Usage: time set <0..1 | sunrise | day | noon | sunset | night | midnight> | add <hours> | query",
+		},
+		{
+			"time teatime",
+			"Usage: time set <0..1 | sunrise | day | noon | sunset | night | midnight> | add <hours> | query",
+		},
 		{"summonx", "Unknown server command: summonx"},
-		{"summon rocket", "Usage: summon [kind]"},
+		{"summon rocket", "Usage: summon [kind] [count]"},
 		{"fill -100 0 -100 100 60 100 dirt", "fill: too big (at most 262144 blocks)"},
 		// World editing on the selection, kept by the server.
 		{"sel", "Selection cleared"},

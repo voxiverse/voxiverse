@@ -18,6 +18,20 @@ import "../game"
 @(private)
 console_candidates :: proc(app: ^App, before: []string) -> []string {
 	c := &app.console
+	// A slash line: server commands (the names the server sent), then players.
+	if line := string(c.line.text[:]); strings.has_prefix(line, "/") {
+		names := make([dynamic]string, context.temp_allocator)
+		s := app.session
+		if s == nil {return nil}
+		if len(before) == 0 {
+			for name in s.commands {append(&names, strings.concatenate({"/", name}, context.temp_allocator))}
+		} else {
+			append(&names, s.config.name)
+			for _, o in s.others {append(&names, o.name)}
+			append(&names, "@s", "@p", "@a", "@r")
+		}
+		return names[:]
+	}
 	if len(before) == 0 {
 		names := make([dynamic]string, context.temp_allocator)
 		for cmd in c.commands {append(&names, cmd.name)}

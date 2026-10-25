@@ -160,28 +160,41 @@ neighbours' edges.
 
 ## Commands
 
-Three surfaces, each with one job (PLAN.md, M19): server commands act on the world, the
-developer console holds primitives, and checks and benchmarks are command-line modes.
+Three surfaces, each with one job: **server commands** act on the world and the players
+(they start with a slash, in the chat and in the console alike); the **developer console**'s plain
+words are the client's own (nothing about the world); checks and benchmarks are command-line modes.
 
-**Server commands** (`/command` in the chat; from the console, `server <command>`): every
-change to the world is the server's, and permissions decide who may run what (see
-Permissions). The ones that matter when debugging a world:
+**Server commands** (`/command` in the chat, `/command` in the console): every change to the
+world is the server's, and permissions decide who may run what (see Permissions). Wherever a
+command takes a player, `@s` is you, `@p` the nearest other player, `@r` anyone and `@a`
+everyone (where that makes sense: `/give @a`, `/tp @a @s`); coordinates may be relative
+(`~`, `~5`, `~-2`: the first of a run is x, then y, then z). `/help` lists what you may use,
+`/help <command>` its usage and permission. The ones that matter when debugging a world:
 
 | Command | |
 |---|---|
-| `/time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Set the time of day (`world.time`). `set rules.daylight_cycle 0` stops the clock, `rules.day_length` is seconds per day |
-| `/tp <x y z> \| <player>`, `/spawn`, `/setworldspawn [x y z]` | Move; back to the world spawn (landing on its column's ground) / new players arrive here (or there). A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
-| `/summon [kind]`, `/locate <biome or structure>`, `/regen [radius]` | A sheep in front of you (`world.summon`; sheep also come by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one, and go when nobody is within 80); fly to the nearest biome or structure (`teleport.locate`); remake the unedited chunks within radius (1-8 chunks) from the generator as it is now (`world.gen`) |
+| `/time set <t>`, `/time add <hours>`, `/time query` (and `/time <t>`) | The time of day: `sunrise day noon sunset night midnight` or `0..1` (`world.time`). `/rule daylight_cycle false` stops the clock, `day_length` is seconds per day |
+| `/rule [name] [value]` (`/gamerule`) | List the world's rules, show one, set one (`world.rules`): `random_tick_speed`, `drops`, `reach`, ... |
+| `/tp <x y z> [yaw pitch]`, `/tp <player>`, `/tp <who> <player>`, `/spawn`, `/setworldspawn [x y z]` | Move (angles in degrees; `/tp ~ ~10 ~` goes up ten); back to the world spawn; new players arrive there. A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
+| `/setblock <x y z> <block>` | One block, through the bulk edit pipeline (`world.edit.bulk`) |
+| `/summon [kind] [count]`, `/kill <kind\|all> [radius]` | Sheep in front of you (`world.summon`; they also come by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one, and go when nobody is within 80); remove the entities of a kind within a radius (`world.kill`) |
+| `/locate [biome\|structure] <name>` | Fly to the nearest biome or structure (`teleport.locate`): `village`, `dungeon`, `gate`, ... |
+| `/give <player\|@a> <item> [count]`, `/clear [player] [item]`, `/wear`, `/seed` | Items (`items.give`; what does not fit is dropped at their feet); put on all the armor carried; the world's seed |
+| `/regen [radius]` | Remake the unedited chunks within a radius (1-8 chunks) from the generator as it is now (`world.gen`) |
 | `/pos1 [x y z]`, `/pos2 [x y z]`, `/sel` | The selection's corners (the block you look at, within 128, or coordinates), kept by the server and drawn as a box / forget it |
-| `/fill [box] <block>`, `/replace [box] <from> <to>`, `/sphere [x y z] <radius> <block>` | Bulk edits (`world.edit.bulk`; at most 64x64x64 blocks) of the selection, or of a box `x1 y1 z1 x2 y2 z2` given (a sphere without a centre: at pos1). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
-| `/structure save <name> [box] [clear]`, `/structure paste <name> [x y z] [turns]`, `/structure list` | Keep the selection (or a box) as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at pos1 (or x y z) through the bulk edit pipeline, turned 0-3 quarters (`world.structure`) |
+| `/fill [box] <block>`, `/replace [box] <from> <to>`, `/sphere [x y z] <radius> <block>` | Bulk edits (`world.edit.bulk`; at most 64x64x64 blocks) of the selection, or of a box `x1 y1 z1 x2 y2 z2` given. The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow |
+| `/structure save <name> [box] [clear]`, `/structure paste <name> [x y z] [turns]`, `/structure list` | Keep the selection (or a box) as `<world>/structures/<name>.vxs` / put one at pos1 (or x y z) through the bulk edit pipeline, turned 0-3 quarters (`world.structure`) |
+| `/stats [player] [filter]` | Counters (see Statistics and events) |
 
-**The developer console** (`~`): `singleplayer` (a scratch world, never saved) and `universe
-<name>` (a saved one; saves go to `VX_SAVES` if set), `join`, `leave`, `quit`, `screen`;
-`set`, `vars`, `reset` (settings, `debug.*`, `rules.*` and `worldgen.*`: the last two are the
-server's, which announces changes); `screenshot`, `net_trace`, `crash`; `tp <x> <y> <z> [yaw
-pitch]` and `look <yaw> <pitch>` to place the camera for a picture; `server <command>`;
-`clear`, `help`. Nothing in it duplicates a key, the UI or a server command.
+Minecraft's names work where we have the thing: `/tell`, `/w`, `/say`, `/gamerule`, `/teleport`.
+
+**The developer console** (`~`; the chat's `/` commands work in it too): `singleplayer` (a
+scratch world, never saved) and `universe <name>` (a saved one; saves go to `VX_SAVES` if set),
+`join`, `leave`, `quit`, `screen`; `set`, `vars`, `reset` (settings, `debug.*`, `rules.*` and
+`worldgen.*`: the last two are the server's, which announces changes); `screenshot`,
+`net_trace`, `crash`; `look <yaw> <pitch>` to place the camera for a picture; `clear`, `help`.
+A plain word that is a server command says to use the slash. Nothing in it duplicates a key,
+the UI or a server command.
 
 **Scripts** (`--exec "cmd; cmd"`) are console input typed at startup, with `wait <frames>`,
 `sleep <seconds>` and `wait_world`: for reproducing a state and taking its picture. Checks
@@ -262,7 +275,7 @@ it) and go after five minutes. A player new to a world gets `world.cfg`'s `kit`.
 | Command | |
 |---|---|
 | `inventory`, `drop [all]` | Open the inventory / drop from the hand (as E, Q do; scripts) |
-| `server give <player> <item> [count]` | `items.give`; what does not fit is dropped at their feet |
+| `/give <player> <item> [count]` | `items.give`; what does not fit is dropped at their feet |
 | `server clear [player] [item]` | Empty an inventory, or of one item (`items.clear`; others' `items.clear.others`) |
 | `server item` | What you hold, its id and stack size |
 

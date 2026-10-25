@@ -2,15 +2,12 @@ package client
 
 import "core:math"
 import "core:strconv"
-import "core:strings"
 
-import "../game"
 
 // The developer console's world primitives (PLAN.md M19, commands): placing
-// the camera for a picture, and `server <command>`, any server command sent
-// as the chat sends it, with our permissions (everything that changes the
-// world is the server's). Nothing that duplicates a key, the UI or a server
-// command.
+// the camera for a picture. Everything that changes the world is a server
+// command, typed with a slash (as in the chat); nothing here duplicates a key,
+// the UI or a server command.
 
 @(private)
 register_world_commands :: proc(c: ^Console) {
@@ -31,21 +28,6 @@ register_world_commands :: proc(c: ^Console) {
 			},
 		},
 		args = {2, 2},
-		needs = {.World},
-	)
-	console_register(
-		c,
-		{
-			"server",
-			"server <command...>: run a server command, as /command in the chat does (the server checks it)",
-			proc(app: ^App, args: []string) {
-				send_message(
-					app.session,
-					game.Command{strings.join(args, " ", context.temp_allocator)},
-				)
-			},
-		},
-		args = {1, -1},
 		needs = {.World},
 	)
 }

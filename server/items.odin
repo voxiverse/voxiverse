@@ -154,8 +154,8 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 // at their feet.
 @(private)
 admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	to := client_by_name(s, args[0])
-	if to == nil {
+	targets := players_matching(s, c, args[0])
+	if len(targets) == 0 {
 		notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
 		return true
 	}
@@ -171,13 +171,15 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		count = n
 	}
 	size := game.item_stack_size(item)
-	for left := count; left > 0; left -= size {
-		rest := game.inventory_add(&to.inventory, {item, min(left, size)})
-		if !game.stack_empty(
-			rest,
-		) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
+	for to in targets {
+		for left := count; left > 0; left -= size {
+			rest := game.inventory_add(&to.inventory, {item, min(left, size)})
+			if !game.stack_empty(
+				rest,
+			) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
+		}
+		to.inv_changed = true
 	}
-	to.inv_changed = true
 	notice(s, c, fmt.tprintf("Gave %d %s to %s", count, args[1], args[0]))
 	return true
 }
@@ -190,7 +192,7 @@ admin_clear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	for a in args {
 		if i, ok := game.item_by_name(a); ok {
 			item = i
-		} else if other := client_by_name(s, a); other != nil {
+		} else if other := find_player(s, c, a); other != nil {
 			who = other
 		} else {
 			return false

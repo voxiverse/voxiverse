@@ -4,10 +4,8 @@ import "base:intrinsics"
 import "base:runtime"
 import "core:fmt"
 import "core:log"
-import "core:math"
 import "core:os"
 import "core:path/filepath"
-import "core:strconv"
 import "core:strings"
 import "core:sync"
 
@@ -116,6 +114,16 @@ console_execute :: proc(app: ^App, line: string) {
 	text := strings.trim_space(line)
 	if text == "" {return}
 	console_print(c, fmt.tprintf("> %s", text))
+	// A slash is a server command (as in the chat); plain words are the client's own.
+	if text[0] == '/' {
+		session := app.session
+		if session == nil || session.state != .Playing {
+			console_print(c, "server commands need a world (join or start one)", .Warning)
+		} else if len(text) > 1 {
+			send_message(session, game.Command{text[1:]})
+		}
+		return
+	}
 	args := strings.fields(text, context.temp_allocator)
 	for &cmd in c.commands {
 		if cmd.name != args[0] {continue}
@@ -126,7 +134,23 @@ console_execute :: proc(app: ^App, line: string) {
 		}
 		return
 	}
-	console_print(c, fmt.tprintf("unknown command '%s' (try: help)", args[0]), .Warning)
+	if session := app.session; session != nil {
+		for name in session.commands {
+			if name == args[0] {
+				console_print(
+					c,
+					fmt.tprintf("'%s' is a server command: type /%s", args[0], text),
+					.Warning,
+				)
+				return
+			}
+		}
+	}
+	console_print(
+		c,
+		fmt.tprintf("unknown command '%s' (try: help; server commands start with /)", args[0]),
+		.Warning,
+	)
 }
 
 // command_refused: why cmd cannot run now with n arguments ("": it can).
@@ -299,6 +323,10 @@ register_builtin_commands :: proc(c: ^Console) {
 				for cmd in app.console.commands {
 					console_print(&app.console, fmt.tprintf("  %-10s %s", cmd.name, cmd.help))
 				}
+				console_print(
+					&app.console,
+					"  /<command>  a server command (the world and the players): /help lists them",
+				)
 			}}, complete_command)
 	console_register(c, {"clear", "clear the console", proc(app: ^App, args: []string) {
 			console_clear(&app.console)
@@ -319,48 +347,6 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(c, {"leave", "leave the world", proc(app: ^App, args: []string) {
 			leave_world(app)
 		}})
-	console_register(
-		c,
-		{
-			"tp",
-			"tp <x> <y> <z> [yaw pitch]: move the player (feet; angles in degrees)",
-			proc(app: ^App, args: []string) {
-				if app.session == nil {
-					console_print(&app.console, "tp: not in a world", .Warning)
-					return
-				}
-				values: [5]f64
-				if len(args) == 4 {
-					console_print(&app.console, "tp: usage: tp <x> <y> <z> [yaw pitch]", .Warning)
-					return
-				}
-				for a, i in args {
-					ok: bool
-					if values[i], ok = strconv.parse_f64(a); !ok {
-						console_print(&app.console, "tp: numbers please", .Warning)
-						return
-					}
-				}
-				t := game.Teleport {
-					position = {values[0], values[1], values[2]},
-				}
-				if len(args) == 5 {
-					t.yaw = f32(values[3]) * math.RAD_PER_DEG
-					t.pitch = clamp(
-						f32(values[4]) * math.RAD_PER_DEG,
-						-game.PITCH_LIMIT,
-						game.PITCH_LIMIT,
-					)
-				} else {
-					t.yaw, t.pitch = app.session.camera.yaw, app.session.camera.pitch
-				}
-				if app.session.state == .Playing &&
-				   !allowed_here(app, "tp", "teleport.tp") {return}
-				session_teleport(app.session, t)
-			},
-		},
-		args = {3, 5},
-	)
 	console_register(
 		c,
 		{
@@ -480,16 +466,6 @@ register_builtin_commands :: proc(c: ^Console) {
 			}},
 		complete_variables,
 		args = {1, 1},
-	)
-	console_register(
-		c,
-		{
-			"wear",
-			"wear: put on every piece of armor in the inventory",
-			proc(app: ^App, args: []string) {
-				if s := app.session; s != nil {session_wear(s)}
-			},
-		},
 	)
 	console_register(
 		c,

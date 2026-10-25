@@ -810,3 +810,25 @@ Counter names (from the old M29): `blocks.mined.<block>`, `blocks.placed.<block>
 `teleports.<how>`, `time.played`, `time.away`, `time.flying`, `time.underwater` (seconds),
 `sessions`, `structures.found.<kind>`, `biomes.visited.<biome>`, `sheep.fed`, `sheep.sheared`,
 `sheep.born`.
+
+## M26b: commands, cleaned
+
+Asked for by the player: a slash command is executed on the server, the console's plain words
+are client commands; almost every command is a server command; the useful ones of Minecraft
+adapted.
+
+- **Console:** a line starting with `/` is sent as the chat sends it (a world is needed); the
+  plain commands are the client's own (`screen`, `screenshot`, `singleplayer`, `universe`,
+  `join`, `leave`, `quit`, `set`, `vars`, `look`, `net_trace`, ...); a plain word that is a server
+  command answers "use /name"; Tab completes slash commands from the names the server sent.
+  Gone: `server <command>`, the client's `tp` (now `/tp`), `wear` (now `/wear`).
+- **Server (`server/commands_world.odin`):** selectors `@s @p @r` (one) and `@a` (everyone) wherever
+  a command takes a player (give, clear, tp, tphere, stats); `~` coordinates (the first of a run
+  is x, then y, then z); `/tp <x y z> [yaw pitch]`; `/setblock`; `/time set|add|query`; `/rule`
+  (list, show, set); `/kill <kind|all> [radius]`; `/seed`; `/summon [kind] [count]`; `/wear`;
+  `/help [command]`; `/locate [biome|structure] <name>` (it was never removed from the server:
+  the console's `server locate` was what went); aliases `/tell /w /say /gamerule /teleport`.
+- **Not taken from Minecraft, on purpose:** `/gamemode` (permissions and rules say what a player
+  may do), `/weather`, `/difficulty`, `/enchant`, `/execute`, `/data`, `/title`, `/playsound`;
+  `/clone` and `/xp` and `/effect` wait for what they need (a copy op in the bulk edits;
+  M28's progression).

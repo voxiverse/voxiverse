@@ -26,14 +26,27 @@ Admin_Command :: struct {
 
 @(private = "file", rodata)
 ADMIN_COMMANDS := [?]Admin_Command {
+	// Minecraft's names for what we already have.
+	{"tell", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
+	{"w", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
+	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
+	{"say", "<words>", {1, 64}, admin_broadcast, "chat.broadcast"},
+	{"teleport", "(as tp)", {1, 5}, admin_tp, "teleport.tp"},
 	{"save", "", {0, 0}, admin_save, "server.save"},
 	{
 		"time",
-		"<0..1 | sunrise | day | noon | sunset | night | midnight>",
-		{1, 1},
+		"set <0..1 | sunrise | day | noon | sunset | night | midnight> | add <hours> | query",
+		{1, 2},
 		admin_time,
 		"world.time",
 	},
+	{"setblock", "<x y z> <block>", {4, 4}, admin_setblock, "world.edit.bulk"},
+	{"rule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
+	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
+	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
+	{"seed", "", {0, 0}, admin_seed, "info.seed"},
+	{"wear", "", {0, 0}, admin_wear, "items.wear"},
+	{"help", "[command]", {0, 1}, admin_help, "info.help"},
 	// World editing: on the selection (selection.odin), or coordinates given.
 	{
 		"pos1",
@@ -59,9 +72,9 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_sphere,
 		"world.edit.bulk",
 	},
-	{"summon", "[kind]", {0, 1}, admin_summon, "world.summon"},
+	{"summon", "[kind] [count]", {0, 2}, admin_summon, "world.summon"},
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
-	{"locate", "<biome or structure>", {1, 1}, admin_locate, "teleport.locate"},
+	{"locate", "[biome|structure] <name>", {1, 2}, admin_locate, "teleport.locate"},
 	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
 	{"delmsg", "<player> [count]", {1, 2}, admin_delmsg, "chat.delete"},
 	{"mute", "<player> [30m|2h|7d]", {1, 2}, admin_mute, "moderation.mute"},
@@ -82,13 +95,22 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"tpdeny", "", {0, 0}, admin_tpdeny, "teleport.tpa"},
 	{"back", "", {0, 0}, admin_back, "teleport.back"},
 	{"top", "", {0, 0}, admin_top, "teleport.top"},
-	{"tp", "<player> | <player> <player> | <x y z>", {1, 3}, admin_tp, "teleport.tp"},
+	{
+		"tp",
+		"<player> | <who> <player> | <x y z> [yaw pitch]  (~ is relative)",
+		{1, 5},
+		admin_tp,
+		"teleport.tp",
+	},
 	{"tphere", "<player>", {1, 1}, admin_tphere, "teleport.tp.others"},
 	// Messaging, moderation, who and status (commands_people.odin).
 	{"msg", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
+	{"tell", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
+	{"w", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
 	{"r", "<words>", {1, 64}, admin_r, "chat.msg"},
 	{"me", "<action>", {1, 64}, admin_me, "chat.me"},
 	{"broadcast", "<words>", {1, 64}, admin_broadcast, "chat.broadcast"},
+	{"say", "<words>", {1, 64}, admin_broadcast, "chat.broadcast"},
 	{"nick", "<nickname|off> [player]", {1, 2}, admin_nick, "chat.nick"},
 	{"realname", "<nickname>", {1, 1}, admin_realname, "info.realname"},
 	{"motd", "[set <words>]", {0, 64}, admin_motd, "info.motd"},
@@ -137,13 +159,21 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	},
 }
 
+// command_usage: a command's usage text and the permission it needs.
+command_usage :: proc(name: string) -> (usage, node: string, found: bool) {
+	for &cmd in ADMIN_COMMANDS {
+		if cmd.name == name {return cmd.usage, cmd.node, true}
+	}
+	return
+}
+
 // admin runs a command from c.
 admin :: proc(s: ^Server, c: ^Client, command: string) {
 	f := strings.fields(command, context.temp_allocator)
 	if len(f) == 0 {return}
 	for &cmd in ADMIN_COMMANDS {
 		if cmd.name != f[0] {continue}
-		args := f[1:]
+		args := expand_relative(c, f[1:])
 		if !allowed(s, c, cmd.node) {
 			notice(s, c, fmt.tprintf("You may not use %s here (%s)", cmd.name, cmd.node))
 			return
@@ -183,17 +213,7 @@ admin_save :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
-@(private = "file")
-admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	w := c.world
-	f := game.parse_time_of_day(args[0]) or_return
-	w.clock = game.set_time_of_day(w.clock, f)
-	log.infof("server time set time=%.4f by=%s", w.clock, client_name(c))
-	broadcast(s, game.Time{w.clock}, w)
-	return true
-}
-
-@(private = "file")
+@(private)
 admin_fill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	box, ok, said := edit_box(s, c, args, 1)
 	if said {return true}
@@ -250,7 +270,18 @@ admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 		if !found {return false}
 	}
-	if !summon(s, c, kind) {notice(s, c, "Nowhere to put it (look at open ground nearby)")}
+	count := 1
+	if len(args) == 2 {
+		n, ok := parse_count(args[1])
+		if !ok || n > 20 {return false}
+		count = n
+	}
+	for _ in 0 ..< count {
+		if !summon(s, c, kind) {
+			notice(s, c, "Nowhere to put it (look at open ground nearby)")
+			break
+		}
+	}
 	return true
 }
 
@@ -269,7 +300,10 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // admin_locate takes the player to the nearest place of a biome (Earth
 // worlds), high above it, flying.
 @(private = "file")
-admin_locate :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+admin_locate :: proc(s: ^Server, c: ^Client, args_in: []string) -> bool {
+	args := args_in
+	if len(args) == 2 && (args[0] == "biome" || args[0] == "structure") {args = args[1:]}
+	if len(args) != 1 {return false}
 	w := c.world
 	p := c.player.position
 	gen := &w.chunks.gen

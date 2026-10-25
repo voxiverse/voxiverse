@@ -154,7 +154,7 @@ shows them. Cobblestone, stone bricks, planks and glass are for building.
 The console (`` ` ``) is for developers: it shows the log and takes developer commands
 (`help` lists them; `server <command>` sends a server command). `run -- --exec "cmd; cmd"`
 types console commands at startup to reproduce a state, e.g. `--exec "set render_distance 8;
-singleplayer; tp 0 80 0 45 -20"`.
+singleplayer; /tp 0 80 0 45 -20"`.
 
 ## Playing together
 

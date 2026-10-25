@@ -252,9 +252,9 @@ tick_summary :: proc(s: ^Server) {
 // stats_target: whose counters c may see by name ("": their own).
 @(private)
 stats_target :: proc(s: ^Server, c: ^Client, of: string) -> ^Client {
-	if of == "" || of == client_name(c) {return c}
+	if of == "" || of == client_name(c) || of == "@s" {return c}
 	if !allowed(s, c, "info.stats.others") {return nil}
-	return client_by_name(s, of)
+	return find_player(s, c, of)
 }
 
 // stats_request answers a Stats_Request with a page of the counters.
@@ -279,7 +279,7 @@ admin_stats :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	switch len(args) {
 	case 1:
 		// A name of a player here, else a filter.
-		if client_by_name(s, args[0]) != nil {who = args[0]} else {filter = args[0]}
+		if find_player(s, c, args[0]) != nil {who = args[0]} else {filter = args[0]}
 	case 2:
 		who, filter = args[0], args[1]
 	}
