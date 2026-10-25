@@ -17,7 +17,7 @@ can_break :: proc(b: Block) -> bool {
 
 // can_place: players may place it.
 can_place :: proc(b: Block) -> bool {
-	return BLOCK_INFO[b].placeable
+	return BLOCK_INFO[b].placeable || b == .Wheat_0 // (seeds)
 }
 
 // can_change: an edit (bulk, an explosion) may change it: what players may

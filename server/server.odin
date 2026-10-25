@@ -358,6 +358,7 @@ tick :: proc(s: ^Server) {
 		}
 		if !frozen {
 			updates_run(w)
+			random_ticks(w)
 			entities_tick(w)
 		}
 		gates_tick(w)

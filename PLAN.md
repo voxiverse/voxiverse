@@ -305,6 +305,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M22b | 158 | 37 | 1 | equipment, avatar armor, render-to-texture preview (the same session as M22's follow-ups: counted from M22's line) |
 | M22c | 58 | 20 | 1 | plants and support: one rule for single blocks and bulk edits (counted from M22b's line) |
 | M23 | 75 | 30 | 1 | sheep: rename, use entity, shearing, grazing, wool (counted from M22c's line) |
+| M24 | 103 | 51 | 1 | random ticks, grass, hoe, farmland, seeds, wheat (counted from M23's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -337,41 +338,13 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M22b | Equipment: five slots (head, chest, legs, feet, offhand) in the inventory overlay beside a preview of the player, rendered to a texture by the entity pass, turning to look where the cursor is; a few armor items (cap, boots, ...) that show on the avatar, yours and other players' | Server tests: equipping and unequipping through the overlay's actions, saved and loaded, refused in the wrong slot; over UDP another client sees the worn items; a UI test drives the slots; the preview looked at once in a screenshot; no stats yet (done: `test_equipment_actions` (game rules), `test_messages_round_trip` (equipment in the inventory, `Player_Worn`), `test_equipment_over_the_network` (UDP: cap on, wrong slot refused, boots on, the other player told, quick-equip, kept through a restart, a late joiner told), `test_equipment_slots` (the overlay's slots, shift-click, the preview asked for and turning toward the mouse); the preview looked at once in a screenshot, zero validation messages) |
 | M22c | Plants need support: a plant (grass, flowers) breaks, and drops its item, when the block under it goes or stops holding it; broken plants and block-breaking drops go through one rule | Server tests: break the block under a flower, it is gone and its item dropped; water or a placed block replacing the support does the same; chunk loading and worldgen leave no floating plants (golden hashes unchanged) (done: `server/plants_test.odin` (a flower, a dandelion on sand and tall grass lose their ground by a single block, and the poppy and dandelion drop themselves, tall grass nothing, nothing with `rules.drops` off; a plant is not placed on what would not hold it; a bulk edit under a row of poppies drops all six), `test_no_floating_plants` (Earth worlds: structures no longer leave plants over their floors); worldgen golden hashes and the whole suite unchanged) |
 | M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep (done: `server/sheep_test.odin` (over UDP: using a sheep shears it and drops 1-3 wool, a second player sees it shorn, using it again does nothing; shorn is kept through a restart; grazing turns the grass in front to dirt and regrows the wool, a sheep over stone stays bare; a save written with `critter` loads sheep); `test_right_click_uses_the_aimed_entity`; protocol round trips (`Use_Entity`, the shorn flag); the sheep seen once in a screenshot, the shorn model not) |
-| M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load |
+| M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load (done: `server/farming_test.odin`: grass spreads into lit dirt and not dark, dies under stone; farmland moist by water and dry without, dry bare reverts, wheat keeps it; wheat ripens in 21 / 42 ticks on average on moist / dry farmland (160 plants each, bounded); drops by stage and seeds 1 in 8 from tall grass; random ticks run by themselves and not at speed 0; the hoe and seeds over UDP; farmland and all eight stages kept through save and load; `test_farmland_is_low` for the mesh; a field in every stage seen once in a screenshot) |
 | M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load |
 | M26 | Blocks that hold things: data kept with a block (saved with its chunk), shown by a chest of 25 slots that players open together | Contents survive save, quit, load and chunk unload; breaking a chest drops all; two players over UDP see each other's moves; a lone record without its block is dropped on load |
 | M27 | Windows behaviour and the new icon: the Windows list (DPI moves, Alt menu, dragging without stopping, dark title bar, frame pacing, background throttling, no error dialogs, a console when started from one), a black cube with a question mark as the icon, landing dust | The Windows list ticked off on a Windows machine; the icon at every size in CI's artifacts; landing dust seen for every player in view |
 | M28 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M29 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
 | M30 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
-
-## M24: random ticks and farming
-
-Blocks that change on their own, with Minecraft's rules, and the first crop on them.
-
-- **Random ticks:** every server tick, each loaded chunk has 3 blocks picked at random
-  (Minecraft's default; the rule `rules.random_tick_speed`, 0 turns it off); a picked
-  block whose kind has a random tick runs it. Changes go through the one path for block
-  changes (edits, light, column tops, sending).
-- **Grass:** spreads to dirt next to it (a 3 x 5 x 3 neighbourhood, as Minecraft) when the
-  dirt has light 9 or more above it; turns to dirt when an opaque block is on top.
-- **A hoe:** the second tool (no durability yet); using it on grass or dirt with air above
-  makes farmland.
-- **Farmland:** a block a little lower than a full block (15/16); moist when water is within
-  4 blocks across on its level or one above, shown darker; dry farmland with nothing
-  planted turns back to dirt on a random tick, moist farmland never does. No trampling.
-- **Seeds and wheat:** breaking tall grass drops seeds 1 time in 8. Seeds are used on
-  farmland to plant wheat: a cross-shaped cutout plant in 8 stages (block states, as water
-  keeps its levels), textures generated per stage. On a random tick wheat may grow one
-  stage: more likely on moist farmland (Minecraft's chance, simplified to 1 in 3 moist,
-  1 in 6 dry). Ripe wheat breaks into 1 wheat and 1-3 seeds; unripe into 1 seed. Wheat on
-  a block that is no longer farmland breaks.
-- **Not here:** bone meal, other crops, trampling, light needed by crops.
-- **Exit check:** server tests with a fixed seed: grass spreads into lit dirt and not into
-  dark dirt, and dies under stone; farmland is moist by water and dry without, and dry bare
-  farmland reverts; wheat ripens within the time its chances imply (a statistical bound
-  over many plants); drops by stage; stages and farmland kept through save and load. One
-  screenshot of a field in every stage.
 
 ## M25: breeding
 

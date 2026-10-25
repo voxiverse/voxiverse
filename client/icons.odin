@@ -23,7 +23,9 @@ item_icons_init :: proc(icons: ^Item_Icons, ctx: ^ui.Context) -> bool {
 	pixels: [ICON_SIZE * ICON_SIZE][4]u8
 	for item in game.every_item() {
 		info, _ := game.item_info(item)
-		if tool, is_tool := info.tool.?; is_tool {
+		if item >= game.MATERIAL_ITEMS && item < game.ARMOR_ITEMS {
+			material_sprite(game.Material(item - game.MATERIAL_ITEMS), &pixels)
+		} else if tool, is_tool := info.tool.?; is_tool {
 			tool_sprite(tool, &pixels)
 		} else if armor, is_armor := info.armor.?; is_armor {
 			armor_sprite(armor, &pixels)
@@ -155,6 +157,8 @@ tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 	switch tool {
 	case .Launcher:
 		art = LAUNCHER_ART
+	case .Hoe:
+		art = HOE_ART
 	}
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
@@ -282,6 +286,96 @@ armor_sprite :: proc(armor: game.Armor, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 				c = shade(main, 1.3)
 			case 'm':
 				c = shade(main, 0.7)
+			}
+			pixels[y * ICON_SIZE + x] = c
+		}
+	}
+}
+
+@(private = "file")
+HOE_ART := [16]string {
+	"................",
+	"...........ooo..",
+	"..........oGGGo.",
+	".........oGGGGo.",
+	"........oBoooGo.",
+	".......oBo..ooo.",
+	"......oBo.......",
+	".....oBo........",
+	"....oBo.........",
+	"...oBo..........",
+	"..oBo...........",
+	".oBo............",
+	".oo.............",
+	"................",
+	"................",
+	"................",
+}
+
+@(private = "file")
+SEEDS_ART := [16]string {
+	"................",
+	"................",
+	"................",
+	"....oo....oo....",
+	"...oSSo..oSSo...",
+	"...oSSo..oSSo...",
+	"....oo....oo....",
+	"......oo........",
+	".....oSSo.......",
+	".....oSSo..oo...",
+	"......oo..oSSo..",
+	"..........oSSo..",
+	"...........oo...",
+	"................",
+	"................",
+	"................",
+}
+
+@(private = "file")
+WHEAT_ART := [16]string {
+	"................",
+	"....oo...oo.....",
+	"...oWWo.oWWo....",
+	"...oWWo.oWWo.oo.",
+	"...oWWooWWWooWWo",
+	"....oWWWWWoWWWo.",
+	".....oGoGoGoGo..",
+	"......oGGGGo....",
+	".......oGGo.....",
+	".......oRRo.....",
+	".......oRRo.....",
+	"........oo......",
+	"................",
+	"................",
+	"................",
+	"................",
+}
+
+// material_sprite draws a crop's item: 16 x 16 art, each pixel ICON_SIZE / 16 times as large.
+@(private = "file")
+material_sprite :: proc(m: game.Material, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
+	art: [16]string
+	switch m {
+	case .Seeds:
+		art = SEEDS_ART
+	case .Wheat:
+		art = WHEAT_ART
+	}
+	for y in 0 ..< ICON_SIZE {
+		for x in 0 ..< ICON_SIZE {
+			c: [4]u8
+			switch art[y * 16 / ICON_SIZE][x * 16 / ICON_SIZE] {
+			case 'o':
+				c = {28, 28, 34, 255}
+			case 'S':
+				c = {196, 164, 96, 255}
+			case 'W':
+				c = {226, 188, 84, 255}
+			case 'G':
+				c = {92, 140, 52, 255}
+			case 'R':
+				c = {170, 60, 50, 255}
 			}
 			pixels[y * ICON_SIZE + x] = c
 		}

@@ -66,9 +66,9 @@ material_of :: proc(b: game.Block) -> (Material, bool) {
 	     .Gate_Chevron,
 	     .Gate_Chevron_Lit:
 		return .Stone, true
-	case .Dirt, .Clay:
+	case .Dirt, .Clay, .Farmland, .Farmland_Moist:
 		return .Dirt, true
-	case .Grass, .Leaves, .Spruce_Leaves, .Tall_Grass, .Poppy, .Dandelion:
+	case .Grass, .Leaves, .Spruce_Leaves, .Tall_Grass, .Poppy, .Dandelion, .Wheat_0 ..= .Wheat_7:
 		return .Grass, true
 	case .Sand:
 		return .Sand, true

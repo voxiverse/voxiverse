@@ -44,6 +44,16 @@ Texture :: enum u32 {
 	Gate_Chevron_Lit,
 	Gate_Horizon,
 	Wool,
+	Farmland_Top,
+	Farmland_Moist_Top,
+	Wheat_0,
+	Wheat_1,
+	Wheat_2,
+	Wheat_3,
+	Wheat_4,
+	Wheat_5,
+	Wheat_6,
+	Wheat_7,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -116,6 +126,26 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Gate_Horizon, .Gate_Horizon, .Gate_Horizon
 	case .Wool:
 		return .Wool, .Wool, .Wool
+	case .Farmland:
+		return .Dirt, .Farmland_Top, .Dirt
+	case .Farmland_Moist:
+		return .Dirt, .Farmland_Moist_Top, .Dirt
+	case .Wheat_0:
+		return .Wheat_0, .Wheat_0, .Wheat_0
+	case .Wheat_1:
+		return .Wheat_1, .Wheat_1, .Wheat_1
+	case .Wheat_2:
+		return .Wheat_2, .Wheat_2, .Wheat_2
+	case .Wheat_3:
+		return .Wheat_3, .Wheat_3, .Wheat_3
+	case .Wheat_4:
+		return .Wheat_4, .Wheat_4, .Wheat_4
+	case .Wheat_5:
+		return .Wheat_5, .Wheat_5, .Wheat_5
+	case .Wheat_6:
+		return .Wheat_6, .Wheat_6, .Wheat_6
+	case .Wheat_7:
+		return .Wheat_7, .Wheat_7, .Wheat_7
 	}
 	return
 }
@@ -307,6 +337,15 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				// Rippling blue light; see-through.
 				ripple := value_noise(seed ~ 31, x + y / 2, y + x / 3, 3)
 				c = shade(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
+			case .Farmland_Top, .Farmland_Moist_Top:
+				// Furrows: rows of tilled earth, darker where it is wet.
+				ramp := FARMLAND_WET if t == .Farmland_Moist_Top else FARMLAND
+				v := 0.45 + 0.25 * coarse + 0.2 * fine
+				if y % 4 == 0 {v -= 0.3}
+				if y % 4 == 1 {v += 0.1}
+				c = shade(ramp, clamp(v, 0, 1))
+			case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
+				c = wheat_pixel(int(t) - int(Texture.Wheat_0), seed, x, y)
 			case .Wool:
 				// Woven: soft cream tufts in rows, a thread's shadow between.
 				v := 0.45 + 0.3 * coarse + 0.25 * fine
@@ -522,6 +561,38 @@ WOOL := [5]Rgba {
 	{248, 246, 240, 255},
 }
 @(private = "file", rodata)
+FARMLAND := [5]Rgba {
+	{58, 38, 26, 255},
+	{78, 52, 34, 255},
+	{96, 64, 42, 255},
+	{114, 78, 52, 255},
+	{134, 94, 62, 255},
+}
+@(private = "file", rodata)
+FARMLAND_WET := [5]Rgba {
+	{36, 24, 18, 255},
+	{50, 33, 24, 255},
+	{62, 42, 30, 255},
+	{76, 52, 36, 255},
+	{90, 62, 44, 255},
+}
+@(private = "file", rodata)
+WHEAT_GREEN := [5]Rgba {
+	{40, 96, 36, 255},
+	{56, 124, 44, 255},
+	{78, 150, 52, 255},
+	{104, 172, 62, 255},
+	{132, 192, 76, 255},
+}
+@(private = "file", rodata)
+WHEAT_GOLD := [5]Rgba {
+	{150, 110, 40, 255},
+	{184, 140, 52, 255},
+	{208, 166, 64, 255},
+	{226, 188, 84, 255},
+	{240, 208, 112, 255},
+}
+@(private = "file", rodata)
 CACTUS := [5]Rgba {
 	{30, 84, 40, 255},
 	{40, 104, 48, 255},
@@ -632,4 +703,29 @@ srgb_to_linear :: proc(c: u8) -> f32 {
 linear_to_srgb :: proc(v: f32) -> u8 {
 	s := v * 12.92 if v <= 0.0031308 else 1.055 * math.pow(v, 1 / 2.4) - 0.055
 	return to_u8(s)
+}
+
+// wheat_pixel: stage 0..7 of wheat on a crossed plane: rows of stalks that
+// grow taller (2 pixels of sprout, up to 14), turn from green to gold, and
+// carry a head of grain at the end.
+@(private = "file")
+wheat_pixel :: proc(stage: int, seed: u32, x, y: int) -> (c: Rgba) {
+	height := 2 + stage * 12 / 7 // pixels tall
+	if y < TEXTURE_SIZE - height {return}
+	// Stalks stand every other column, a column of grain beside some.
+	stalk := x % 4 == 1 || (x % 4 == 3 && stage >= 3)
+	if !stalk {return}
+	top := TEXTURE_SIZE - height
+	ripeness := f32(stage) / 7
+	fine := hash01(seed, x, y)
+	if stage >= 4 && y < top + 3 + int(stage) / 3 && (x % 4 == 3 || y > top) {
+		// The head of grain: gold once ripe.
+		return(
+			shade(WHEAT_GOLD, 0.3 + 0.5 * ripeness + 0.2 * fine) if stage >= 6 else shade(WHEAT_GREEN, 0.5 + 0.3 * fine) \
+		)
+	}
+	if stage == 7 {return shade(WHEAT_GOLD, 0.2 + 0.4 * fine)}
+	if stage >=
+	   5 {return shade(WHEAT_GREEN, 0.3 + 0.3 * ripeness) if fine < 0.5 else shade(WHEAT_GOLD, 0.2 + 0.3 * fine)}
+	return shade(WHEAT_GREEN, 0.25 + 0.5 * f32(y - top) / f32(max(height, 1)) + 0.2 * fine)
 }

@@ -252,7 +252,7 @@ inventory_use_held :: proc(inv: ^Inventory) {
 // in hand if it is that block's item, else the first hotbar stack of it
 // (the hand may have moved on since the edit was made); -1 if none.
 inventory_placing_slot :: proc(inv: ^Inventory, block: Block) -> int {
-	item := item_of_block(block)
+	item := placing_item(block)
 	if item == NO_ITEM {return -1}
 	if inv.slots[inv.selected].item == item {return inv.selected}
 	for st, i in inv.slots[:HOTBAR_SLOTS] {if st.item == item {return i}}

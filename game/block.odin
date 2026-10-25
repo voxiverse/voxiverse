@@ -50,6 +50,18 @@ Block :: enum u16 {
 	Gate_Chevron_Lit, // locked while dialing, and while open
 	Gate_Horizon, // the open gate's surface: walking in travels
 	Wool, // white; from a sheep
+	// Farming (M24): tilled ground, and wheat in eight stages (block states,
+	// as water has its levels).
+	Farmland, // dry
+	Farmland_Moist, // water is near
+	Wheat_0, // just planted
+	Wheat_1,
+	Wheat_2,
+	Wheat_3,
+	Wheat_4,
+	Wheat_5,
+	Wheat_6,
+	Wheat_7, // ripe
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -226,6 +238,30 @@ BLOCK_INFO := [Block]Block_Info {
 		breakable = true,
 		placeable = true,
 	},
+	.Farmland = {
+		name       = "farmland",
+		collides   = true,
+		shades     = true,
+		targetable = true,
+		breakable  = true,
+		// (drawn a sixteenth low, so it does not hide its neighbours' faces:
+		// not opaque; it breaks into dirt)
+	},
+	.Farmland_Moist = {
+		name = "farmland_moist",
+		collides = true,
+		shades = true,
+		targetable = true,
+		breakable = true,
+	},
+	.Wheat_0 = {name = "wheat_0", targetable = true, breakable = true},
+	.Wheat_1 = {name = "wheat_1", targetable = true, breakable = true},
+	.Wheat_2 = {name = "wheat_2", targetable = true, breakable = true},
+	.Wheat_3 = {name = "wheat_3", targetable = true, breakable = true},
+	.Wheat_4 = {name = "wheat_4", targetable = true, breakable = true},
+	.Wheat_5 = {name = "wheat_5", targetable = true, breakable = true},
+	.Wheat_6 = {name = "wheat_6", targetable = true, breakable = true},
+	.Wheat_7 = {name = "wheat_7", targetable = true, breakable = true},
 	.Cactus = {
 		name = "cactus",
 		collides = true,
@@ -346,8 +382,26 @@ block_light :: #force_inline proc(b: Block) -> u8 {
 	return BLOCK_INFO[b].light
 }
 
+// WHEAT_STAGES: wheat is Wheat_0 .. Wheat_7; the last is ripe.
+WHEAT_STAGES :: 8
+
+// wheat_stage: which stage b is, if it is wheat.
+wheat_stage :: proc(b: Block) -> (stage: int, is_wheat: bool) {
+	if b >= .Wheat_0 && b <= .Wheat_7 {return int(b - .Wheat_0), true}
+	return 0, false
+}
+
+wheat_block :: proc(stage: int) -> Block {
+	return Block(int(Block.Wheat_0) + clamp(stage, 0, WHEAT_STAGES - 1))
+}
+
+block_is_farmland :: proc(b: Block) -> bool {
+	return b == .Farmland || b == .Farmland_Moist
+}
+
 // block_is_plant: a block that stands on the ground and goes when it does.
 block_is_plant :: proc(b: Block) -> bool {
+	if _, wheat := wheat_stage(b); wheat {return true}
 	#partial switch b {
 	case .Tall_Grass, .Poppy, .Dandelion:
 		return true
@@ -355,11 +409,18 @@ block_is_plant :: proc(b: Block) -> bool {
 	return false
 }
 
-// plant_supported: whether a plant may stand on below.
-plant_supported :: proc(below: Block) -> bool {
+// plant_supported: whether plant may stand on below: wild plants on grass,
+// dirt or sand, wheat on farmland.
+plant_supported :: proc(plant: Block, below: Block) -> bool {
+	if _, wheat := wheat_stage(plant); wheat {return block_is_farmland(below)}
 	#partial switch below {
 	case .Grass, .Dirt, .Sand:
 		return true
 	}
 	return false
+}
+
+// can_till: a hoe makes farmland of current when only air is above it.
+can_till :: proc(current, above: Block) -> bool {
+	return (current == .Grass || current == .Dirt) && above == .Air
 }

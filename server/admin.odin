@@ -469,7 +469,8 @@ parse_ball :: proc(words: []string) -> (center: [3]f64, radius: f64, ok: bool) {
 @(private = "file")
 parse_block :: proc(name: string) -> (game.Block, bool) {
 	b, ok := game.block_by_name(name)
-	return b, ok && (b == .Air || game.can_place(b))
+	_, wheat := game.wheat_stage(b)
+	return b, ok && (b == .Air || game.can_place(b) || game.block_is_farmland(b) || wheat)
 }
 
 // admin_role edits a role (it is made by its first grant, inherit or meta).

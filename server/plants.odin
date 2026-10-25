@@ -14,7 +14,7 @@ plant_check :: proc(w: ^World, p: game.Block_Pos) -> bool {
 	b, loaded := chunks_block(&w.chunks, p)
 	if !loaded || !game.block_is_plant(b) {return false}
 	below, below_loaded := chunks_block(&w.chunks, p + {0, -1, 0})
-	if !below_loaded || game.plant_supported(below) {return false}
+	if !below_loaded || game.plant_supported(b, below) {return false}
 	if !set_block(w, p, .Air) {return false}
 	block_drop(w, p, b)
 	return true

@@ -46,7 +46,9 @@ void main() {
 	if (face < 2u) uv = vec2(local.z, -local.y);
 	else if (face < 4u) uv = vec2(local.x, local.z);
 	else uv = vec2(local.x, -local.y);
-	out_uvw = vec3(uv, float(in_layer));
+	out_uvw = vec3(uv, float(in_layer & 0xffffu));
+	// Tilled soil's top sits a sixteenth low.
+	if ((in_layer & 0x10000u) != 0u) local.y -= 1.0 / 16.0;
 
 	// A liquid's open top sits a little low and swells slowly. The waves'
 	// lengths divide the chunk's, so they meet across chunk borders.

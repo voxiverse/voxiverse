@@ -285,7 +285,10 @@ clear_unsupported_plants :: proc(dst: ^game.Block_Array) {
 			for y in i32(1) ..< game.CHUNK_SIZE {
 				i := game.local_index({x, y, z})
 				if game.block_is_plant(dst[i]) &&
-				   !game.plant_supported(dst[game.local_index({x, y - 1, z})]) {dst[i] = .Air}
+				   !game.plant_supported(
+						   dst[i],
+						   dst[game.local_index({x, y - 1, z})],
+					   ) {dst[i] = .Air}
 			}
 		}
 	}

@@ -33,7 +33,15 @@ Armor :: enum u8 {
 
 Tool :: enum u8 {
 	Launcher, // fires rockets (world.fire)
+	Hoe, // tills grass and dirt into farmland (no durability yet)
 }
+
+// Material: items that are not blocks and not worn: what crops give.
+Material :: enum u8 {
+	Seeds, // plant wheat on farmland
+	Wheat,
+}
+MATERIAL_ITEMS :: Item(0xA000)
 
 Item_Info :: struct {
 	name:  string,
@@ -59,6 +67,24 @@ item_of_armor :: proc(a: Armor) -> Item {
 @(rodata)
 TOOL_INFO := [Tool]Item_Info {
 	.Launcher = {name = "rocket_launcher", stack = 1, tool = .Launcher},
+	.Hoe = {name = "hoe", stack = 1, tool = .Hoe},
+}
+
+@(rodata)
+MATERIAL_INFO := [Material]Item_Info {
+	.Seeds = {name = "seeds", stack = 64, block = .Wheat_0}, // (placed with the right button, like a block)
+	.Wheat = {name = "wheat", stack = 64},
+}
+
+item_of_material :: proc(m: Material) -> Item {
+	return MATERIAL_ITEMS + Item(m)
+}
+
+// placing_item: the item a placed block uses up (a block's own, seeds for
+// the first stage of wheat; none for the rest).
+placing_item :: proc(b: Block) -> Item {
+	if b == .Wheat_0 {return item_of_material(.Seeds)}
+	return item_of_block(b)
 }
 
 BLOCK_STACK :: 64
@@ -81,6 +107,10 @@ item_info :: proc(i: Item) -> (Item_Info, bool) {
 		a := int(i - ARMOR_ITEMS)
 		if a >= len(Armor) {return {}, false}
 		return ARMOR_INFO[Armor(a)], true
+	case i >= MATERIAL_ITEMS:
+		m := int(i - MATERIAL_ITEMS)
+		if m >= len(Material) {return {}, false}
+		return MATERIAL_INFO[Material(m)], true
 	case i >= TOOL_ITEMS:
 		t := int(i - TOOL_ITEMS)
 		if t >= len(Tool) {return {}, false}
@@ -110,6 +140,7 @@ item_stack_size :: proc(i: Item) -> int {
 // item_by_name: the item called name ("stone", "rocket_launcher").
 item_by_name :: proc(name: string) -> (Item, bool) {
 	for t in Tool {if TOOL_INFO[t].name == name {return item_of_tool(t), true}}
+	for m in Material {if MATERIAL_INFO[m].name == name {return item_of_material(m), true}}
 	for a in Armor {if ARMOR_INFO[a].name == name {return item_of_armor(a), true}}
 	if b, ok := block_by_name(name); ok && BLOCK_INFO[b].placeable {return item_of_block(b), true}
 	return NO_ITEM, false
@@ -120,6 +151,7 @@ every_item :: proc(allocator := context.temp_allocator) -> []Item {
 	items := make([dynamic]Item, allocator)
 	for b in Block {if i := item_of_block(b); i != NO_ITEM {append(&items, i)}}
 	for t in Tool {append(&items, item_of_tool(t))}
+	for m in Material {append(&items, item_of_material(m))}
 	for a in Armor {append(&items, item_of_armor(a))}
 	return items[:]
 }
@@ -127,7 +159,13 @@ every_item :: proc(allocator := context.temp_allocator) -> []Item {
 // block_drop: the item breaking b leaves (none for what players may not
 // place: ores, plants, ice are data to give drops of their own later).
 block_drop :: proc(b: Block) -> Item {
-	if b == .Tall_Grass {return NO_ITEM} 	// (seeds, later)
+	switch {
+	case b == .Tall_Grass:
+		return NO_ITEM // (seeds, by chance: the server's)
+	case block_is_farmland(b):
+		return item_of_block(.Dirt)
+	}
+	if _, wheat := wheat_stage(b); wheat {return NO_ITEM} 	// (by stage: the server's)
 	return item_of_block(b)
 }
 

@@ -565,7 +565,7 @@ test_no_floating_plants :: proc(t: ^testing.T) {
 									a[game.local_index({x, y - 1, z})] if y > 0 else below[game.local_index({x, game.CHUNK_SIZE - 1, z})]
 								testing.expectf(
 									t,
-									game.plant_supported(under),
+									game.plant_supported(b, under),
 									"%v: a %v over %v at chunk %v %v",
 									kind,
 									b,

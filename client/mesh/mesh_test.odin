@@ -438,3 +438,55 @@ test_layers :: proc(t: ^testing.T) {
 		testing.expect(t, !(face == .Pos_X && x == 5) && !(face == .Neg_X && x == 5))
 	}
 }
+
+// Farmland sits a sixteenth low: its top face's vertices and the upper two
+// of each side's are marked LOWERED (the shader moves them), the bottom's are
+// not; merged quads keep their corners alike; the texture layer is intact;
+// beside stone, the stone's face is drawn (farmland does not hide it) but
+// two farmlands hide each other's.
+@(test)
+test_farmland_is_low :: proc(t: ^testing.T) {
+	s := new(Snapshot)
+	defer free(s)
+	out: [dynamic]Vertex
+	defer delete(out)
+	for x in i32(3) ..= 5 {s[snapshot_index(x, 4, 5)] = .Farmland}
+	s[snapshot_index(6, 4, 5)] = .Stone
+	mesh_chunk(s, nil, &out)
+	tops := 0
+	for i := 0; i < len(out); i += 4 {
+		q := out[i:][:4]
+		lo, hi := quad_box(q)
+		face := vertex_face(q[0])
+		is_farm := q[0].layer & 0xffff == block_texture(.Farmland, face)
+		for v in q {testing.expect(t, v.layer & TILLED == 0, "TILLED left on")}
+		if !is_farm {continue}
+		for v in q {
+			low := v.layer & LOWERED != 0
+			switch face {
+			case .Pos_Y:
+				testing.expect(t, low, "the top is not lowered")
+			case .Neg_Y:
+				testing.expect(t, !low, "the bottom is lowered")
+			case .Pos_X, .Neg_X, .Pos_Z, .Neg_Z:
+				testing.expect_value(t, low, vertex_position(v).y == hi.y)
+			}
+		}
+		if face == .Pos_Y {
+			tops += 1
+			testing.expect_value(t, hi.x - lo.x, 3) // one merged quad over the row
+		}
+	}
+	testing.expect_value(t, tops, 1)
+	// The stone's side towards the farmland is drawn; the farmlands' sides towards each other are not.
+	stone_west, farm_east := 0, 0
+	for i := 0; i < len(out); i += 4 {
+		q := out[i:][:4]
+		lo, _ := quad_box(q)
+		is_stone := q[0].layer & 0xffff == block_texture(.Stone, .Neg_X)
+		if is_stone && vertex_face(q[0]) == .Neg_X && lo.x == 6 {stone_west += 1}
+		if !is_stone && vertex_face(q[0]) == .Pos_X && lo.x == 6 {farm_east += 1}
+	}
+	testing.expect_value(t, stone_west, 1)
+	testing.expect_value(t, farm_east, 0) // (the end of the row: hidden by the stone)
+}

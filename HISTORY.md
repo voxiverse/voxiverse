@@ -696,3 +696,32 @@ otherwise.
   shorn after save and load; grazing regrows the wool and turns the grass to dirt; using a
   shorn sheep does nothing. Over UDP, a second client sees the sheep shorn. A save written
   before this milestone loads with sheep where its critters were.
+
+## M24: random ticks and farming
+
+Blocks that change on their own, with Minecraft's rules, and the first crop on them.
+
+- **Random ticks:** every server tick, each loaded chunk has 3 blocks picked at random
+  (Minecraft's default; the rule `rules.random_tick_speed`, 0 turns it off); a picked
+  block whose kind has a random tick runs it. Changes go through the one path for block
+  changes (edits, light, column tops, sending).
+- **Grass:** spreads to dirt next to it (a 3 x 5 x 3 neighbourhood, as Minecraft) when the
+  dirt has light 9 or more above it; turns to dirt when an opaque block is on top.
+- **A hoe:** the second tool (no durability yet); using it on grass or dirt with air above
+  makes farmland.
+- **Farmland:** a block a little lower than a full block (15/16); moist when water is within
+  4 blocks across on its level or one above, shown darker; dry farmland with nothing
+  planted turns back to dirt on a random tick, moist farmland never does. No trampling.
+- **Seeds and wheat:** breaking tall grass drops seeds 1 time in 8. Seeds are used on
+  farmland to plant wheat: a cross-shaped cutout plant in 8 stages (block states, as water
+  keeps its levels), textures generated per stage. On a random tick wheat may grow one
+  stage: more likely on moist farmland (Minecraft's chance, simplified to 1 in 3 moist,
+  1 in 6 dry). Ripe wheat breaks into 1 wheat and 1-3 seeds; unripe into 1 seed. Wheat on
+  a block that is no longer farmland breaks.
+- **Not here:** bone meal, other crops, trampling, light needed by crops.
+- **Built as:** `rules.random_tick_speed` (3); `server/random_ticks.odin` (picks in each ready, non-uniform chunk; `random_tick` per block; no stored light on the server, so "lit" is open sky above the column's top or a lamp within 6); blocks `Farmland`, `Farmland_Moist`, `Wheat_0..7` (wheat needs farmland: `plant_supported(plant, below)`); items: the `Hoe` tool and `Seeds`/`Wheat` materials (ids from `MATERIAL_ITEMS`; seeds place `Wheat_0`); tilling is an `Edit` of `Farmland` the server checks for a hoe in hand; farmland is not opaque (so neighbours' faces show) and drawn a sixteenth low by a vertex flag in the layer word (`TILLED`/`LOWERED`, `world.vert`); collision stays a full block; `fill` takes farmland and wheat blocks.
+- **Exit check:** server tests with a fixed seed: grass spreads into lit dirt and not into
+  dark dirt, and dies under stone; farmland is moist by water and dry without, and dry bare
+  farmland reverts; wheat ripens within the time its chances imply (a statistical bound
+  over many plants); drops by stage; stages and farmland kept through save and load. One
+  screenshot of a field in every stage.

@@ -64,8 +64,14 @@ item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 		switch t {
 		case .Launcher:
 			if breaking {session_fire(s)}
+			return
+		case .Hoe:
+			// Tills with the right button; the left still breaks and hits.
+			if placing && !breaking {
+				session_till(s)
+				return
+			}
 		}
-		return
 	}
 	if breaking && !placing {
 		if session_attack(s) {return}

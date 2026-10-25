@@ -136,13 +136,15 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 	     .Stone_Bricks,
 	     .Planks,
 	     .Wool,
+	     .Farmland,
+	     .Farmland_Moist,
 	     .Gate_Ring,
 	     .Gate_Chevron,
 	     .Gate_Chevron_Lit:
 		return .Cube, .Opaque
 	case .Leaves, .Spruce_Leaves, .Glass:
 		return .Cube, .Cutout
-	case .Tall_Grass, .Poppy, .Dandelion:
+	case .Tall_Grass, .Poppy, .Dandelion, .Wheat_0 ..= .Wheat_7:
 		return .Cross, .Cutout
 	case .Water, .Water_1 ..= .Water_7, .Water_Falling, .Gate_Horizon:
 		return .Cube, .Translucent
@@ -208,6 +210,7 @@ mesh_chunk :: proc(
 			}
 		}
 		if merge && layer != .Translucent {merge_faces(out, before)}
+		lower_tilled(out[before:])
 		counts[layer] = group_faces(out[before:])
 	}
 	return
@@ -344,6 +347,36 @@ group_faces :: proc(quads: []Vertex) -> (counts: [FACE_GROUPS]int) {
 	return
 }
 
+// TILLED: set on every vertex of farmland's quads; LOWERED (read by the
+// shader, as the texture layer's bit 16) on the vertices of them that are
+// at the block's top, a sixteenth down: set after merging, which keeps a
+// merged quad's four corners alike.
+TILLED :: u32(1) << 17
+LOWERED :: u32(1) << 16
+
+// lower_tilled turns TILLED into LOWERED for the vertices at the top of
+// each quad (every vertex of a top face, the upper two of a side, none of a
+// bottom face).
+@(private = "file")
+lower_tilled :: proc(quads: []Vertex) {
+	for i := 0; i + 3 < len(quads); i += 4 {
+		q := quads[i:][:4]
+		if q[0].layer & TILLED == 0 {continue}
+		top := max(
+			vertex_position(q[0]).y,
+			vertex_position(q[1]).y,
+			vertex_position(q[2]).y,
+			vertex_position(q[3]).y,
+		)
+		face := vertex_face(q[0])
+		for &v in q {
+			v.layer &= ~TILLED
+			if face == .Pos_Y ||
+			   (face != .Neg_Y && vertex_position(v).y == top) {v.layer |= LOWERED}
+		}
+	}
+}
+
 // cube_faces: a cube's faces that can be seen: those not against an
 // opaque block (nor, for a liquid, against more of it).
 @(private = "file")
@@ -363,8 +396,11 @@ cube_faces :: proc(
 		_, water_beside := game.water_level(n)
 		if water && water_beside {continue} 	// inside the same body of water
 		if b == .Glass && n == .Glass {continue} 	// one pane
+		tilled := game.block_is_farmland(b)
+		if tilled && game.block_is_farmland(n) {continue} 	// (not opaque, but as good as)
 		first := len(out)
 		emit_face(s, light, out, p, face, axes, block_texture(b, face))
+		if tilled {for &v in out[first:] {v.layer |= TILLED}}
 		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);
 		   water && !under_water {
 			for &v in out[first:] {

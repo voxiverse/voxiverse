@@ -121,7 +121,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		current, loaded := world_block(&s.world, edit.pos)
 		if !loaded ||
 		   !can_place_from_hand(s, block) ||
-		   (game.block_is_plant(block) && !plant_stands(s, edit.pos)) ||
+		   (game.block_is_plant(block) && !plant_stands(s, edit.pos, block)) ||
 		   !game.can_place_at(current, block, edit.pos, s.prediction.state) {return false}
 		edit.block = block
 	}
@@ -131,6 +131,28 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	s.next_edit = edit.id
 	append(&s.edits, edit)
 	inventory_predict(s) // (one used up)
+	send_message(s, edit)
+	return true
+}
+
+// session_till makes farmland of the aimed grass or dirt (the hoe, right
+// button): predicted now, then sent like a placed block. False if it cannot.
+session_till :: proc(s: ^Session) -> bool {
+	hit, aimed := s.aim.?
+	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
+	current, _ := world_block(&s.world, hit.block)
+	above, loaded := world_block(&s.world, hit.block + {0, 1, 0})
+	if !loaded || !game.can_till(current, above) {return false}
+	edit := game.Edit {
+		id    = s.next_edit + 1,
+		after = s.prediction.next_sequence - 1,
+		pos   = hit.block,
+		block = .Farmland,
+	}
+	if !world_set_block(&s.world, edit.pos, .Farmland) {return false}
+	edit_sound(s, edit.pos, current, .Farmland)
+	s.next_edit = edit.id
+	append(&s.edits, edit)
 	send_message(s, edit)
 	return true
 }
@@ -148,7 +170,7 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 
 // plant_stands: the block under pos holds a plant (loaded and fit).
 @(private = "file")
-plant_stands :: proc(s: ^Session, pos: game.Block_Pos) -> bool {
+plant_stands :: proc(s: ^Session, pos: game.Block_Pos, plant: game.Block) -> bool {
 	below, loaded := world_block(&s.world, pos + {0, -1, 0})
-	return loaded && game.plant_supported(below)
+	return loaded && game.plant_supported(plant, below)
 }

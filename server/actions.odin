@@ -97,8 +97,14 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	ok := false
 	slot := -1 // placing from (infinite: none)
 	infinite := allowed(s, c, "items.infinite")
+	tilling := e.block == .Farmland
 	if e.block == .Air {
 		ok = game.can_break(current)
+	} else if tilling {
+		// The hoe: farmland out of grass or dirt with air above.
+		above, _ := chunks_block(&w.chunks, e.pos + {0, 1, 0})
+		hoe := game.inventory_held(&c.inventory).item == game.item_of_tool(.Hoe)
+		ok = hoe && game.can_till(current, above)
 	} else {
 		if !infinite {slot = game.inventory_placing_slot(&c.inventory, e.block)}
 		ok =
@@ -110,6 +116,7 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	}
 	if !ok || !set_block(w, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
+	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist)} 	// (everyone is told, the tiller too)
 	if e.block == .Air {
 		broken_drop(s, c, e.pos, current)
 	} else if slot >= 0 {
@@ -154,5 +161,5 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 plant_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
 	if !game.block_is_plant(block) {return true}
 	below, loaded := chunks_block(&w.chunks, pos + {0, -1, 0})
-	return loaded && game.plant_supported(below)
+	return loaded && game.plant_supported(block, below)
 }

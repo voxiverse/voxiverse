@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:log"
+import "core:math/rand"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
@@ -31,6 +32,7 @@ World :: struct {
 	natural:      []Natural_Slot, // natural column tops (columns.odin)
 	entities:     Entities, // (entities.odin)
 	changes:      Changes, // blocks changed this tick (changes.odin)
+	tick_rng:     rand.Default_Random_State, // which blocks get random ticks (random_ticks.odin)
 	updates:      Updates, // scheduled block updates: flowing water (liquids.odin)
 	saved:        map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:      map[game.Region_Pos]bool, // read from disk; true = changed since written
@@ -78,6 +80,7 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	entities_init(&w.entities, w.seed)
+	w.tick_rng = rand.create(u64(w.seed) ~ 0x71c4_0001)
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)

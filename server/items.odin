@@ -41,16 +41,31 @@ broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Blo
 }
 
 // block_drop: what block, gone from pos (broken by hand, or losing its
-// support), leaves: its item, hopping out (nothing if the world has no drops).
+// support), leaves: its item, hopping out; nothing if the world has no
+// drops. Tall grass gives seeds 1 time in 8; wheat gives seeds, and once ripe
+// wheat as well.
 @(private)
 block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 	if !w.rules.drops {return}
-	item := game.block_drop(block)
-	if item == game.NO_ITEM {return}
 	r := rand.default_random_generator(&w.entities.rng)
+	seeds, wheat := game.item_of_material(.Seeds), game.item_of_material(.Wheat)
+	drops := make([dynamic]game.Stack, context.temp_allocator)
+	if stage, is_wheat := game.wheat_stage(block); is_wheat {
+		if stage == game.WHEAT_STAGES - 1 {
+			append(&drops, game.Stack{wheat, 1}, game.Stack{seeds, rand.int_range(1, 4, r)})
+		} else {
+			append(&drops, game.Stack{seeds, 1})
+		}
+	} else if block == .Tall_Grass {
+		if rand.int_max(8, r) == 0 {append(&drops, game.Stack{seeds, 1})}
+	} else if item := game.block_drop(block); item != game.NO_ITEM {
+		append(&drops, game.Stack{item, 1})
+	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
-	v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
-	spawn_item(w, at, {item, 1}, v, -1)
+	for st in drops {
+		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+		spawn_item(w, at, st, v, -1)
+	}
 }
 
 // drop_stack: c throws stack ahead of it.
