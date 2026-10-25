@@ -4,8 +4,9 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Every OS sets up the way a developer does: odinup for the pinned toolchain,
-# then the build driver (which fetches the pinned shader compiler itself).
+# Every job sets up with .github/actions/setup: the Odin release odinup.toml
+# pins (prebuilt, by setup-odin), then the build driver (which fetches the
+# pinned shader compiler itself).
 
 jobs:
   build:

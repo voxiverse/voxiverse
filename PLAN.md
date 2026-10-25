@@ -873,7 +873,10 @@ inside it again would buy nothing.
     separate archive per platform (for crash reports), not in the player's package (later:
     a release build has no symbols yet).
 - **CI:** the toolchain setup is a local composite action (`.github/actions/setup`), shared
-  by the jobs. Every push builds the packages and keeps them as workflow artifacts
+  by the jobs: the Odin release odinup.toml pins, downloaded prebuilt by
+  `laytan/setup-odin` (pinned to a commit) rather than odinup's build from source, whose
+  LLVM comes from the system and is not in a cache; odinfmt built from the pinned ols
+  revision, cached. Every push builds the packages and keeps them as workflow artifacts
   (for testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
   `SHA256SUMS`, and makes a **draft** GitHub Release with `gh release create --draft` (no
   third-party actions), its notes from the milestone's row: nothing is public until it is

@@ -1,58 +1,53 @@
 name: setup
-description: The toolchain as a developer sets it up (odinup, the pinned Odin), cached; with dev, ols and odinfmt too.
+description: The pinned Odin (an official prebuilt release, by setup-odin), with dev odinfmt too, and the shader compiler's cache.
 inputs:
   dev:
-    description: also the project tools (ols, odinfmt) that `build check` needs
+    description: also odinfmt (at the ols revision odinup.toml pins), which `build check` needs
     default: "false"
 runs:
   using: composite
   steps:
-    # Per runner image, not just per OS: a toolchain built on a newer
-    # Ubuntu may not run on the older one the Linux package is built on.
-    - name: Runner image
-      id: image
+    # The versions developers use (odinup.toml, which odinup installs from
+    # on their machines); CI downloads the same release prebuilt instead of
+    # building Odin from source.
+    - name: Pins
+      id: pins
       shell: bash
-      run: echo "name=${ImageOS:-${{ runner.os }}}" >> "$GITHUB_OUTPUT"
+      run: |
+        echo "odin=$(sed -n 's/^odin = "\(.*\)"/\1/p' odinup.toml)" >> "$GITHUB_OUTPUT"
+        echo "ols=$(sed -n '/^\[tools.ols\]/,/^\[/s/^rev = "\(.*\)"/\1/p' odinup.toml)" >> "$GITHUB_OUTPUT"
+        echo "image=${ImageOS:-${{ runner.os }}}" >> "$GITHUB_OUTPUT"
 
-    - name: Cache toolchain
-      uses: actions/cache@v4
+    - name: Odin
+      uses: laytan/setup-odin@8536d8fa450ec6f1bd9ddc84bbaaf16296c0051d # v2.12.2
       with:
-        path: ~/.odinup
-        key: odinup-${{ steps.image.outputs.name }}-${{ hashFiles('odinup.toml') }}
+        token: ${{ github.token }}
+        release: ${{ steps.pins.outputs.odin }}
 
     - name: Cache shader compiler
       uses: actions/cache@v4
       with:
         path: build/tools
-        key: glslang-${{ steps.image.outputs.name }}-${{ hashFiles('tools/build/glslang.odin') }}
+        key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin') }}
 
-    - name: Toolchain (Linux, macOS)
-      if: runner.os != 'Windows'
-      shell: bash
-      run: |
-        # The cache holds the toolchain, not what it needs from the system
-        # (Linux: LLVM from apt): a fresh runner may lack it. Then it is
-        # installed from scratch, which installs that too.
-        if ! "$HOME/.odinup/odin/odin" version >/dev/null 2>&1; then
-          rm -rf "$HOME/.odinup"
-          ODIN="$(sed -n 's/^odin = "\(.*\)"/\1/p' odinup.toml)"
-          curl -sSfL https://raw.githubusercontent.com/voxiverse/odinup/main/install.sh | ODINUP_ODIN_VERSION="$ODIN" sh
-        fi
-        echo "$HOME/.odinup/bin" >> "$GITHUB_PATH"
+    - name: Cache odinfmt
+      if: inputs.dev == 'true'
+      id: odinfmt
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/odinfmt
+        key: odinfmt-${{ steps.pins.outputs.image }}-${{ steps.pins.outputs.odin }}-${{ steps.pins.outputs.ols }}
 
-    - name: Toolchain (Windows)
-      if: runner.os == 'Windows'
-      shell: powershell
-      run: |
-        if (-not (Test-Path "$env:USERPROFILE\.odinup\bin\odinup.exe")) {
-          $env:ODINUP_ODIN_VERSION = (Select-String -Path odinup.toml -Pattern '^odin = "(.*)"').Matches[0].Groups[1].Value
-          irm https://raw.githubusercontent.com/voxiverse/odinup/main/install.ps1 | iex
-        }
-        "$env:USERPROFILE\.odinup\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-
-    - name: Project tools (ols, odinfmt)
+    - name: odinfmt
       if: inputs.dev == 'true'
       shell: bash
       run: |
-        odinup install --dev
-        odinup check --dev
+        out="$RUNNER_TEMP/odinfmt"
+        if [ "${{ steps.odinfmt.outputs.cache-hit }}" != "true" ]; then
+          git clone -q https://github.com/DanielGavin/ols "$RUNNER_TEMP/ols"
+          git -C "$RUNNER_TEMP/ols" checkout -q "${{ steps.pins.outputs.ols }}"
+          mkdir -p "$out"
+          exe="$out/odinfmt${{ runner.os == 'Windows' && '.exe' || '' }}"
+          (cd "$RUNNER_TEMP/ols" && odin build tools/odinfmt/main.odin -file -collection:src=src -o:speed "-out:$exe")
+        fi
+        echo "$out" >> "$GITHUB_PATH"
