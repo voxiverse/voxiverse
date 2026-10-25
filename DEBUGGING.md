@@ -430,6 +430,14 @@ exact counts, the resolution, the machine) and a line in `build/benchmarks/histo
 scenario version. The metrics are `base.Metric` (base/metrics.odin): recorded in any build,
 only while a benchmark measures. `--profile` adds a Spall trace of the run.
 
+`build bench compare <ref> <scenario> [-runs:N]` answers "is this change faster?": it builds
+`<ref>` in a git worktree (`build/worktrees/`, kept), runs it and the working tree
+alternately N times (default 5), and prints each metric for both with its change and a
+Mann-Whitney p; a change is called only at p < 0.05 (with 5 runs each, the smallest p
+possible is 0.008; with 3, never below 0.1: use at least 4). Exact counts that differ are
+shown first: then the two did different work. Judge a change by `compare`, never by two
+runs at different times: this machine's medians move several percent from run to run.
+
 ## Profiling
 
 Measure with optimized code: the default development build is lightly optimized (3-8x slower

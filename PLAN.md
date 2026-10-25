@@ -688,14 +688,18 @@ compare them with each other, not across machines. Numbers are per chunk unless 
   - **Phases:** (1) scenarios with fixed conditions, the metrics registry, the result
     format, `views`, `load` and `flight` (done: client/benchmark.odin, base/metrics.odin,
     base/bench_result.odin; `chunks` writes the same results; `view_test` and the old
-    history file gone); (2) repetitions, statistics, `compare`; (3) the
+    history file gone); (2) repetitions, statistics, `compare` (done: tools/build/compare.odin;
+    comparing the code with itself calls nothing though single medians move up to 6%; its
+    first use turned down the clouds' skipping); (3) the
     offscreen target; (4) `edits` and `server` with simulated players; (5) CI and a
-    "how to benchmark a change" procedure in DEBUGGING.md. Held until (2): the clouds'
-    empty-space skipping (pixel for pixel the same sky, checked; its speed to be measured
-    with `compare`).
+    "how to benchmark a change" procedure in DEBUGGING.md.
 - **Left, measured, not done yet:**
-  - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame (a two-level
-    grid, or the map as a texture);
+  - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame. Tried and
+    dropped: empty-space skipping (each cell's distance to the nearest cloud, rays
+    leaping across clear squares): the same sky pixel for pixel, but slower by `build
+    bench compare` (sky +20%, world +7.6%, frame +7.1%; p 0.008 each): the gaps here are
+    small, the byte map caches worse than the bitmap, and the world shader carries the
+    bigger code. A map in a texture, or a lower resolution, would be the next tries;
   - light is worked out for a chunk's whole 48³ neighbourhood each time it is meshed (27x
     the work if light were kept per chunk); in game a chunk's light and mesh take ~0.7 ms
     against the benchmark's 0.3 (four busy pools on four cores);
