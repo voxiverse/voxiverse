@@ -752,3 +752,61 @@ with a common dominant form and a rare recessive one.
   than random pairing; mutation at its rate. A server test: two fed sheep make a lamb whose
   genes come from them; it grows up on time; genes, age and wait times through save and
   load. Over UDP, a second client sees the lamb small and the colours right.
+
+## M26: events and counters (the foundation for stats, analytics and an RPG)
+
+Re-planned after M25 (see "Why the plan changed" below). One pipeline; everything that
+measures play hangs off it, so nothing is counted twice or in a different way.
+
+- **One call:** `event(kind, actor, fields)` in a new package `telemetry/` (depends on
+  `base` only). `Event_Kind` is an enum with a table (name, field names and types, version),
+  so a kind cannot be emitted with the wrong fields and every kind is documented in one
+  place. An event carries: wall time (ms), server tick, session id, actor (the player's id
+  in the world, mapped to an anonymous `pid` on the way out), world address, position (block
+  coordinates, when it has one), and up to four typed fields (i64, f64, a short string).
+  Emitting is a ring-buffer push; nothing blocks the tick. A burst drops the oldest and
+  counts what it dropped (itself an event).
+- **Consumers** (each a procedure on the drained batch, in the writer thread, never the
+  tick): (1) **counters**: a table maps event kinds to dotted counters (`blocks.mined.stone`,
+  `distance.walked`, `items.picked.<item>` ... the list in M29's old text, kept below), a
+  parent's total is the sum of its children (asked, not stored); (2) **the local log**:
+  JSON lines in `<world or server dir>/telemetry/YYYY-MM-DD.jsonl`, a size cap per day;
+  (3) M27's upload spool.
+- **What is emitted** (server side; it is authoritative): sessions (join, leave, duration,
+  client version/OS/GPU/view distance as told by the client's hello, frame-time and network
+  summaries), gameplay (edits with block and position, item picked/dropped/used/**crafted
+  later**, entities hit/killed, chat counts, commands, teleports and travel, gate dials,
+  explosions, sheep fed/sheared/born), progression hooks (nothing yet, but the kind
+  table has room: `xp`, `level`, `death` with cause and place), performance (tick time
+  p50/p99 and players online each minute, chunk wait, edit confirmation latency, bytes
+  sent), and **position samples** (every 10 s per player: where, in which world, doing
+  what: heat maps and "where do players die or leave"). Client events the server cannot see
+  (overlays opened and how long, settings changed from what to what, launch to playing,
+  menu path) ride in a `Telemetry` client message, rate-capped, size-limited and validated;
+  singleplayer takes the same path.
+- **Counters stored** with the character (`"stats": {...}`, M16) and the world's totals in
+  `<world>/stats.json`, written when dirty; only online players in memory.
+- **Seeing it:** `stats [player] [filter]` in chat, and a stats overlay (a command and a
+  key): scrollable, searchable tree, numbers by unit; the server sends a player's stats
+  on request, paged. Others' stats need `info.stats.others`.
+- **What an MMO RPG needs from this** (so the kinds are chosen on purpose): item sources and
+  sinks (what enters and leaves the economy, from where), time to progress, deaths by cause
+  and place, who plays with whom, session length and return rate, content use (which
+  structures, biomes, gates are visited), server health (tick, bandwidth, players).
+- **Built as:** `telemetry/` (`Kind` + `KIND_INFO`, `Event` with two short strings and three numbers, a 16k ring, a writer thread, `sink_flush` for tests); `server/stats.odin` (`record`, `record_world`, `stat_add`, `stats_tick`, `tick_summary`, `stats_request`, `telemetry_report`); counters kept in the character file (`stats`) and `<world>/stats.json`; protocol 19: `Stats_Request`/`Stats_Page`, `Telemetry_Report`; `client/stats_ui.odin` (key K, `screen stats`), `client/telemetry.odin`. Rules `info.stats` (everyone) and `info.stats.others` (not the default role).
+- **Left for later** (not needed to start measuring): `distance.swum`, `time.underwater`, `biomes.visited`, `structures.found`, `stats top`, per-world breakdown inside a character's counters, the sheep-size and settings-changed client events, queueing client reports across a leave.
+- **Exit check:** a scripted session (walk, swim, fly, mine, place, pick up, fight, chat,
+  teleport, shear, feed) gives exactly the expected counters and the same after save and
+  load; the local log has the expected kinds and fields in order; a burst of 100k events
+  never stalls the tick (tick p99 within budget) and the drop counter says what was lost;
+  the day cap holds; malformed or oversized client reports are refused; many players with
+  thousands of counters save and load within budget; UI tests for the overlay's search and
+  scrolling; the overlay over UDP shows the server's numbers.
+
+Counter names (from the old M29): `blocks.mined.<block>`, `blocks.placed.<block>`,
+`distance.walked` / `flown` / `swum` / `fallen` (cm), `jumps`, `items.picked.<item>`,
+`items.dropped.<item>`, `items.used.<item>`, `entities.hit.<kind>`, `entities.killed.<kind>`,
+`explosions`, `rockets.fired`, `chat.lines`, `chat.whispers`, `commands.<name>`,
+`teleports.<how>`, `time.played`, `time.away`, `time.flying`, `time.underwater` (seconds),
+`sessions`, `structures.found.<kind>`, `biomes.visited.<biome>`, `sheep.fed`, `sheep.sheared`,
+`sheep.born`.

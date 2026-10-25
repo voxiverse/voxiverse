@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 18
+PROTOCOL_VERSION :: 19
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -105,6 +105,34 @@ Chat :: struct {
 
 MAX_CHAT_TEXT :: 256
 
+// Stats_Request asks for the player's counters (those whose names contain
+// filter), a page of them; the answer is a Stats_Page.
+Stats_Request :: struct {
+	filter: string, // view into the message
+	page:   u16,
+	of:     string, // whose (a player's name; "": the asker's)
+}
+
+MAX_STATS_FILTER :: 32
+STATS_PAGE_LINES :: 120
+
+// Telemetry_Report: what the client saw that the server cannot (telemetry.Kind
+// with `client` set: info at joining, overlays opened, frame times): at most
+// MAX_TELEMETRY_ENTRIES, validated by the server and rate-capped.
+Telemetry_Entry :: struct {
+	kind: u8, // telemetry.Kind
+	text: string, // view into the message
+	n:    [3]u32,
+}
+
+Telemetry_Report :: struct {
+	count:   int,
+	entries: [MAX_TELEMETRY_ENTRIES]Telemetry_Entry,
+}
+
+MAX_TELEMETRY_ENTRIES :: 8
+MAX_TELEMETRY_TEXT :: 31
+
 // Edit asks to put block at pos (Air: break). The client has already
 // applied it (predicted); Edit_Result says what became of it. The server
 // applies it right after input `after`, where the client was when it made
@@ -152,6 +180,8 @@ Client_Message :: union {
 	Choose,
 	Dial,
 	Use_Entity,
+	Stats_Request,
+	Telemetry_Report,
 }
 
 // Server -> client.
@@ -243,6 +273,15 @@ Player_Joined :: struct {
 Player_Left :: struct {
 	player: u16,
 }
+
+// Stats_Page: a page of counters: "name value" lines, newline apart.
+Stats_Page :: struct {
+	page:  u16,
+	pages: u16,
+	text:  string, // view into the message
+}
+
+MAX_STATS_TEXT :: 16 * 1024
 
 // Player_Worn: what a player wears (head to feet; NO_ITEM: nothing), sent
 // when it changes and for everyone already there after Welcome.
@@ -439,6 +478,7 @@ Server_Message :: union {
 	World_Changed,
 	Selection,
 	Player_Worn,
+	Stats_Page,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -465,6 +505,8 @@ Client_Kind :: enum u8 {
 	Choose,
 	Dial,
 	Use_Entity,
+	Stats_Request,
+	Telemetry_Report,
 }
 
 @(private = "file")
@@ -501,6 +543,7 @@ Server_Kind :: enum u8 {
 	World_Changed,
 	Selection,
 	Player_Worn,
+	Stats_Page,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -557,6 +600,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "attack"
 		case u8(Client_Kind.Use_Entity):
 			return "use_entity"
+		case u8(Client_Kind.Stats_Request):
+			return "stats_request"
+		case u8(Client_Kind.Telemetry_Report):
+			return "telemetry"
 		case u8(Client_Kind.Fire):
 			return "fire"
 		case u8(Client_Kind.Chat):
@@ -636,6 +683,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "selection"
 		case u8(Server_Kind.Player_Worn):
 			return "worn"
+		case u8(Server_Kind.Stats_Page):
+			return "stats_page"
 		}
 	}
 	return ""
@@ -703,6 +752,20 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Use_Entity))
 		write_u32(w, v.entity)
 		write_u32(w, v.after)
+	case Stats_Request:
+		write_u8(w, u8(Client_Kind.Stats_Request))
+		write_string(w, v.filter)
+		write_u16(w, v.page)
+		write_string(w, v.of)
+	case Telemetry_Report:
+		write_u8(w, u8(Client_Kind.Telemetry_Report))
+		write_u8(w, u8(v.count))
+		for i in 0 ..< min(v.count, MAX_TELEMETRY_ENTRIES) {
+			e := v.entries[i]
+			write_u8(w, e.kind)
+			write_string(w, e.text)
+			for n in e.n {write_u32(w, n)}
+		}
 	case Fire:
 		write_u8(w, u8(Client_Kind.Fire))
 		write_u32(w, v.after)
@@ -731,6 +794,11 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Stats_Page:
+		write_u8(w, u8(Server_Kind.Stats_Page))
+		write_u16(w, v.page)
+		write_u16(w, v.pages)
+		write_string(w, v.text)
 	case Player_Worn:
 		write_u8(w, u8(Server_Kind.Player_Worn))
 		write_u16(w, v.player)
@@ -972,6 +1040,22 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			entity = read_u32(&r),
 			after  = read_u32(&r),
 		}
+	case u8(Client_Kind.Stats_Request):
+		m = Stats_Request {
+			filter = read_string(&r, MAX_STATS_FILTER),
+			page   = read_u16(&r),
+			of     = read_string(&r, MAX_NAME_LENGTH),
+		}
+	case u8(Client_Kind.Telemetry_Report):
+		rep: Telemetry_Report
+		rep.count = int(read_u8(&r))
+		if rep.count > MAX_TELEMETRY_ENTRIES {reader_fail(&r)}
+		for &e in rep.entries[:min(rep.count, MAX_TELEMETRY_ENTRIES)] {
+			e.kind = read_u8(&r)
+			e.text = read_string(&r, MAX_TELEMETRY_TEXT)
+			for &n in e.n {n = read_u32(&r)}
+		}
+		m = rep
 	case u8(Client_Kind.Fire):
 		f := Fire {
 			after = read_u32(&r),
@@ -1184,6 +1268,12 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Stats_Page):
+		m = Stats_Page {
+			page  = read_u16(&r),
+			pages = read_u16(&r),
+			text  = read_string(&r, MAX_STATS_TEXT),
+		}
 	case u8(Server_Kind.Player_Worn):
 		worn := Player_Worn {
 			player = read_u16(&r),

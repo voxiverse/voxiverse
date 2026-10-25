@@ -33,6 +33,7 @@ Player_Record :: struct {
 	look:      [2]f32, // yaw, pitch
 	inventory: game.Inventory,
 	dirty:     bool, // changed since its file was written
+	stats:     Counters, // its counters (heap; stats.odin)
 	overflow:  [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
 }
 
@@ -49,6 +50,7 @@ Player_File :: struct {
 	flying:   bool,
 	selected: int,
 	items:    []File_Stack,
+	stats:    map[string]u64, // counters (stats.odin)
 }
 
 @(private = "file")
@@ -163,6 +165,7 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 		if a, valid := game.address_parse(f.world, {}); valid {r.world = a}
 	}
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
+	r.stats = counters_clone(f.stats)
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
 		item, known := game.item_by_name(st.item)
@@ -227,6 +230,7 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 		flying   = r.state.flying,
 		selected = r.inventory.selected,
 		items    = items[:],
+		stats    = r.stats,
 	}
 	data, _ := json.marshal(
 		f,
@@ -240,9 +244,18 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 // leaves, and before each save).
 keep_player :: proc(s: ^Server, c: ^Client) {
 	name := client_name(c)
-	r := Player_Record{c.account, c.world.address, c.player, c.look, c.inventory, true, {}}
-	if _, had := s.store.players[name]; had {
-		s.store.players[name] = r
+	r := Player_Record {
+		account   = c.account,
+		world     = c.world.address,
+		state     = c.player,
+		look      = c.look,
+		inventory = c.inventory,
+		dirty     = true,
+		stats     = counters_clone(c.stats),
+	}
+	if old, had := &s.store.players[name]; had {
+		counters_free(&old.stats)
+		old^ = r
 	} else {
 		s.store.players[strings.clone(name)] = r
 	}
@@ -277,6 +290,7 @@ players_save :: proc(s: ^Server) -> bool {
 		if client_by_name(s, name) == nil {append(&gone, name)}
 	}
 	for name in gone {
+		if r, present := &s.store.players[name]; present {counters_free(&r.stats)}
 		key, _ := delete_key(&s.store.players, name)
 		delete(key)
 	}

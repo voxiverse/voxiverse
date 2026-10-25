@@ -212,6 +212,31 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
 	at, ok = decode_client(encode_c(Use_Entity{12, 35})[:])
 	testing.expect(t, ok && at.(Use_Entity) == Use_Entity{12, 35})
+	at, ok = decode_client(encode_c(Stats_Request{"blocks", 2, "bob"})[:])
+	testing.expect(t, ok && at.(Stats_Request) == Stats_Request{"blocks", 2, "bob"})
+	_, ok = decode_client(
+		encode_c(Stats_Request{"a very long filter that is more than thirty-two bytes", 0, ""})[:],
+	)
+	testing.expect(t, !ok, "an overlong filter decoded")
+	report := Telemetry_Report {
+		count = 2,
+	}
+	report.entries[0] = {7, "linux", {16, 70, 4000}}
+	report.entries[1] = {8, "inventory", {5000, 0, 0}}
+	at, ok = decode_client(encode_c(report)[:])
+	testing.expect(t, ok && at.(Telemetry_Report) == report)
+	report.count = MAX_TELEMETRY_ENTRIES + 1
+	_, ok = decode_client(encode_c(report)[:])
+	testing.expect(t, !ok, "too many entries decoded")
+	page: Server_Message
+	page, ok = decode_server(
+		encode_s(Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"})[:],
+		scratch,
+	)
+	testing.expect(
+		t,
+		ok && page.(Stats_Page) == Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"},
+	)
 	batch := Blocks_Changed {
 		chunk = {-2, 3, 4},
 		count = 2,

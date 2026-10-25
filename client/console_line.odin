@@ -101,7 +101,17 @@ complete_time :: proc(app: ^App, arg: int, args: []string) -> []string {
 complete_screen :: proc(app: ^App, arg: int, args: []string) -> []string {
 	return complete_first(
 		arg,
-		{"title", "game", "menu", "inventory", "options", "worlds", "multiplayer", "quit"},
+		{
+			"title",
+			"game",
+			"menu",
+			"inventory",
+			"stats",
+			"options",
+			"worlds",
+			"multiplayer",
+			"quit",
+		},
 	)
 }
 

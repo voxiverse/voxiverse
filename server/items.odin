@@ -71,6 +71,7 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 // drop_stack: c throws stack ahead of it.
 @(private)
 drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
+	record(s, c, .Item_Dropped, game.item_name(stack.item), i64(stack.count))
 	yaw, pitch := c.look[0], c.look[1]
 	cp := math.cos(pitch)
 	dir := [3]f32{-math.sin(yaw) * cp, math.sin(pitch), -math.cos(yaw) * cp}
@@ -133,6 +134,13 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		   game.ITEM_PICKUP_RANGE * game.ITEM_PICKUP_RANGE {continue}
 		left := game.inventory_add(&c.inventory, ent.stack)
 		if left.count == ent.stack.count {continue} 	// no room
+		record(
+			s,
+			&c,
+			.Item_Picked,
+			game.item_name(ent.stack.item),
+			i64(ent.stack.count - left.count),
+		)
 		ent.stack = left
 		c.inv_changed = true
 		if game.stack_empty(left) {return true}

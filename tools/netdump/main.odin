@@ -188,6 +188,11 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("inventory_request seq=%d action=%v", v.sequence, v.action), true
 		case game.Attack:
 			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
+		case game.Stats_Request:
+			return fmt.tprintf("stats_request filter=%q page=%d of=%q", v.filter, v.page, v.of),
+				true
+		case game.Telemetry_Report:
+			return fmt.tprintf("telemetry entries=%d", v.count), true
 		case game.Use_Entity:
 			return fmt.tprintf("use_entity entity=%d after=%d", v.entity, v.after), true
 		case game.Fire:
@@ -262,6 +267,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("joined player=%d name=%q", v.player, v.name), true
 		case game.Player_Left:
 			return fmt.tprintf("left player=%d", v.player), true
+		case game.Stats_Page:
+			return fmt.tprintf("stats_page %d of %d bytes=%d", v.page, v.pages, len(v.text)), true
 		case game.Player_Worn:
 			return fmt.tprintf("worn player=%d items=%v", v.player, v.worn), true
 		case game.Players:

@@ -161,7 +161,10 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 
 store_close :: proc(s: ^Server) {
 	st := &s.store
-	for name in st.players {delete(name)}
+	for name, &r in st.players {
+		counters_free(&r.stats)
+		delete(name)
+	}
 	delete(st.players)
 	for name in st.characters {delete(name)}
 	delete(st.characters)
@@ -223,6 +226,7 @@ world_save :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
 	ok := write_world_file(w)
 	if !write_entities(w) {ok = false}
+	if !write_stats(w) {ok = false}
 	for region, changed in w.regions {
 		if !changed {continue}
 		if write_region(w, region) {w.regions[region] = false} else {ok = false}

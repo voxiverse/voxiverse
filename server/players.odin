@@ -17,6 +17,12 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
+	c.joined_tick = s.tick
+	if has_saved {
+		c.stats = counters_clone(saved.stats)
+		// (read from its file just now, not kept in the store: ours to free)
+		if _, kept := s.store.players[name]; !kept {counters_free(&saved.stats)}
+	}
 	// In the world they left (loaded again if it was not), else the home world.
 	c.world = s.home
 	if a, elsewhere := saved.world.?; has_saved && elsewhere {
@@ -66,6 +72,9 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		}
 	}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
+	online := 0
+	for &other in s.clients {if other.state == .Playing {online += 1}}
+	record(s, c, .Session_Start, n0 = i64(online))
 	chat_system(s, game.format_join({display_name(s, c), "&e joined"}))
 	m := member_get(&s.community, name)
 	m.seen = now_unix()
@@ -88,6 +97,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 @(private)
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	if c.state != .Playing {return}
+	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
 	member_get(&s.community, client_name(c)).seen = now_unix()

@@ -65,6 +65,7 @@ grant teleport.warp
 grant teleport.tpa
 grant teleport.back
 grant info.*
+grant -info.stats.others
 meta max_homes 3
 role mod
 inherit default

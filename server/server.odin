@@ -6,6 +6,7 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 import "core:net"
+import "core:path/filepath"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -14,6 +15,7 @@ import "core:time"
 import "../base"
 import "../game"
 import "../netcode"
+import "../telemetry"
 import "../worldgen"
 
 // The authoritative side of a world, on its own thread at game.TICK_RATE.
@@ -103,6 +105,8 @@ Server :: struct {
 	calls:          base.Queue(^Server_Call), // from beside an in-process server (call.odin)
 	writer:         game.Writer,
 	tick:           u64,
+	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
+	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
 // A rejected remote client is told why and dropped this many ticks later.
@@ -141,6 +145,11 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	}
 	permissions_open(s)
 	community_open(s)
+	telemetry.sink_start(
+		&s.sink,
+		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
+		u32(telemetry.now_ms()),
+	)
 	characters_open(s)
 	base.queue_init(&s.calls)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
@@ -217,6 +226,7 @@ stop :: proc(s: ^Server) -> bool {
 // failed: what was not set up yet is zero; world: whether it was).
 @(private = "file")
 teardown :: proc(s: ^Server, world: bool) {
+	telemetry.sink_stop(&s.sink) // (the events written; safe if it never started)
 	netcode.capture_close(&s.capture)
 	store_close(s)
 	permissions_destroy(&s.perms)
@@ -285,7 +295,9 @@ server_main :: proc(t: ^thread.Thread) {
 		start := time.tick_now()
 		tick(s)
 		free_all(context.temp_allocator)
-		publish_stats(s, f32(time.duration_milliseconds(time.tick_since(start))))
+		took := time.tick_since(start)
+		s.tick_us[s.tick % TICK_SUMMARY_TICKS] = u32(time.duration_microseconds(took))
+		publish_stats(s, f32(time.duration_milliseconds(took)))
 
 		next = time.tick_add(next, game.TICK_DURATION)
 		left := time.tick_diff(time.tick_now(), next)
@@ -306,6 +318,7 @@ tick :: proc(s: ^Server) {
 	base.metric_scope(.Server_Tick)
 	s.tick += 1
 	calls_run(s)
+	if s.tick % TICK_SUMMARY_TICKS == 0 {tick_summary(s)}
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
 	for w in s.worlds {
 		chunks_collect(
@@ -339,6 +352,7 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
 		simulate_player(s, &c)
+		stats_tick(s, &c)
 		if c.moved {
 			base.profile_scope("drop far")
 			c.moved = false
@@ -607,6 +621,10 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case game.Fire:
 		queue_action(s, c, v)
+	case game.Stats_Request:
+		stats_request(s, c, v)
+	case game.Telemetry_Report:
+		telemetry_report(s, c, v)
 	}
 }
 

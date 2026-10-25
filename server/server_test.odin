@@ -107,6 +107,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Player_Joined,
 		     game.Player_Left,
 		     game.Player_Worn,
+		     game.Stats_Page,
 		     game.Players,
 		     game.Entity_Spawn,
 		     game.Entity_Despawn,

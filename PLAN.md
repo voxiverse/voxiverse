@@ -307,6 +307,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M23 | 75 | 30 | 1 | sheep: rename, use entity, shearing, grazing, wool (counted from M22c's line) |
 | M24 | 103 | 51 | 1 | random ticks, grass, hoe, farmland, seeds, wheat (counted from M23's line) |
 | M25 | 124 | 73 | 1 | genetics, breeding, lambs, black wool (counted from M24's line; includes the CI flake fixes) |
+| M26 | 111 | 77 | 2 | events, counters, local log, stats command and screen, client reports (counted from M25's line; includes the re-plan) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -341,66 +342,10 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep (done: `server/sheep_test.odin` (over UDP: using a sheep shears it and drops 1-3 wool, a second player sees it shorn, using it again does nothing; shorn is kept through a restart; grazing turns the grass in front to dirt and regrows the wool, a sheep over stone stays bare; a save written with `critter` loads sheep); `test_right_click_uses_the_aimed_entity`; protocol round trips (`Use_Entity`, the shorn flag); the sheep seen once in a screenshot, the shorn model not) |
 | M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load (done: `server/farming_test.odin`: grass spreads into lit dirt and not dark, dies under stone; farmland moist by water and dry without, dry bare reverts, wheat keeps it; wheat ripens in 21 / 42 ticks on average on moist / dry farmland (160 plants each, bounded); drops by stage and seeds 1 in 8 from tall grass; random ticks run by themselves and not at speed 0; the hoe and seeds over UDP; farmland and all eight stages kept through save and load; `test_farmland_is_low` for the mesh; a field in every stage seen once in a screenshot) |
 | M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load (done: `game/genetics_test.odin` (carriers give a quarter black, a spotted quarter independently, mutation 1 copy in 1000, wild 1 in 100, inbred lines several times the wild rate); `server/breeding_test.odin`: wheat feeds two sheep, a lamb of their genes appears, parents wait, a lamb is small, not shorn, grows a tenth with wheat and up on time, a second player sees lamb and black, black sheep drop black wool, genes/growth/love/wait kept through save and load; lambs, spots, hearts not seen on screen) |
-| M26 | Events and counters: one `event()` pipeline (kinds table, ring buffer, writer thread) feeding per-character counters, the local JSON-lines log and (M27) the upload spool; position samples, item flows, sessions, performance; `stats` command and overlay | A scripted session gives exactly the expected counters and events, kept through save and load; a burst of events never stalls the tick; day cap; client reports validated; stats overlay over UDP |
+| M26 | Events and counters: one `event()` pipeline (kinds table, ring buffer, writer thread) feeding per-character counters, the local JSON-lines log and (M27) the upload spool; position samples, item flows, sessions, performance; `stats` command and overlay | A scripted session gives exactly the expected counters and events, kept through save and load; a burst of events never stalls the tick; day cap; client reports validated; stats overlay over UDP (done: `telemetry/telemetry_test.odin` (JSON lines by UTC day in order, a 200k burst never blocks and its losses are counted and written, the day cap holds); `server/stats_test.odin`: a scripted session (chat, commands, teleport, place and break, shear and hit a sheep, drop, walk) gives exactly the expected counters and the events in order, kept through save and load, shown over UDP; others' stats need `info.stats.others`; client reports validated and rate-capped; 200 players x 3000 counters save and load in budget; `client/stats_test.odin`: the tree, units, the overlay's search and click, the client's reports; the overlay seen once in a screenshot) |
 | M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips |
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI |
-
-## M26: events and counters (the foundation for stats, analytics and an RPG)
-
-Re-planned after M25 (see "Why the plan changed" below). One pipeline; everything that
-measures play hangs off it, so nothing is counted twice or in a different way.
-
-- **One call:** `event(kind, actor, fields)` in a new package `telemetry/` (depends on
-  `base` only). `Event_Kind` is an enum with a table (name, field names and types, version),
-  so a kind cannot be emitted with the wrong fields and every kind is documented in one
-  place. An event carries: wall time (ms), server tick, session id, actor (the player's id
-  in the world, mapped to an anonymous `pid` on the way out), world address, position (block
-  coordinates, when it has one), and up to four typed fields (i64, f64, a short string).
-  Emitting is a ring-buffer push; nothing blocks the tick. A burst drops the oldest and
-  counts what it dropped (itself an event).
-- **Consumers** (each a procedure on the drained batch, in the writer thread, never the
-  tick): (1) **counters**: a table maps event kinds to dotted counters (`blocks.mined.stone`,
-  `distance.walked`, `items.picked.<item>` ... the list in M29's old text, kept below), a
-  parent's total is the sum of its children (asked, not stored); (2) **the local log**:
-  JSON lines in `<world or server dir>/telemetry/YYYY-MM-DD.jsonl`, a size cap per day;
-  (3) M27's upload spool.
-- **What is emitted** (server side; it is authoritative): sessions (join, leave, duration,
-  client version/OS/GPU/view distance as told by the client's hello, frame-time and network
-  summaries), gameplay (edits with block and position, item picked/dropped/used/**crafted
-  later**, entities hit/killed, chat counts, commands, teleports and travel, gate dials,
-  explosions, sheep fed/sheared/born), progression hooks (nothing yet, but the kind
-  table has room: `xp`, `level`, `death` with cause and place), performance (tick time
-  p50/p99 and players online each minute, chunk wait, edit confirmation latency, bytes
-  sent), and **position samples** (every 10 s per player: where, in which world, doing
-  what: heat maps and "where do players die or leave"). Client events the server cannot see
-  (overlays opened and how long, settings changed from what to what, launch to playing,
-  menu path) ride in a `Telemetry` client message, rate-capped, size-limited and validated;
-  singleplayer takes the same path.
-- **Counters stored** with the character (`"stats": {...}`, M16) and the world's totals in
-  `<world>/stats.json`, written when dirty; only online players in memory.
-- **Seeing it:** `stats [player] [filter]` in chat, and a stats overlay (a command and a
-  key): scrollable, searchable tree, numbers by unit; the server sends a player's stats
-  on request, paged. Others' stats need `info.stats.others`.
-- **What an MMO RPG needs from this** (so the kinds are chosen on purpose): item sources and
-  sinks (what enters and leaves the economy, from where), time to progress, deaths by cause
-  and place, who plays with whom, session length and return rate, content use (which
-  structures, biomes, gates are visited), server health (tick, bandwidth, players).
-- **Exit check:** a scripted session (walk, swim, fly, mine, place, pick up, fight, chat,
-  teleport, shear, feed) gives exactly the expected counters and the same after save and
-  load; the local log has the expected kinds and fields in order; a burst of 100k events
-  never stalls the tick (tick p99 within budget) and the drop counter says what was lost;
-  the day cap holds; malformed or oversized client reports are refused; many players with
-  thousands of counters save and load within budget; UI tests for the overlay's search and
-  scrolling; the overlay over UDP shows the server's numbers.
-
-Counter names (from the old M29): `blocks.mined.<block>`, `blocks.placed.<block>`,
-`distance.walked` / `flown` / `swum` / `fallen` (cm), `jumps`, `items.picked.<item>`,
-`items.dropped.<item>`, `items.used.<item>`, `entities.hit.<kind>`, `entities.killed.<kind>`,
-`explosions`, `rockets.fired`, `chat.lines`, `chat.whispers`, `commands.<name>`,
-`teleports.<how>`, `time.played`, `time.away`, `time.flying`, `time.underwater` (seconds),
-`sessions`, `structures.found.<kind>`, `biomes.visited.<biome>`, `sheep.fed`, `sheep.sheared`,
-`sheep.born`.
 
 ## M27: remote telemetry (a collector and the lake)
 

@@ -33,6 +33,8 @@ Net_Client :: struct {
 	entities:    map[u32][3]f64, // known entities, where last seen
 	shorn:       map[u32]bool, // sheep as last told shorn or not
 	sheep:       map[u32]game.Sheep_Flags, // and what else about their looks
+	stats_text:  string, // the last Stats_Page's lines (heap)
+	stats_pages: int,
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
@@ -96,6 +98,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.entities)
 	delete(c.shorn)
 	delete(c.sheep)
+	delete(c.stats_text)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
@@ -166,6 +169,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			c.update = v
 		case game.Player_Joined:
 			c.others[v.player] = strings.clone(v.name)
+		case game.Stats_Page:
+			delete(c.stats_text)
+			c.stats_text = strings.clone(v.text)
+			c.stats_pages = int(v.pages)
 		case game.Player_Worn:
 			c.worn[v.player] = v.worn
 		case game.Player_Left:

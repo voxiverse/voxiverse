@@ -32,6 +32,7 @@ Said :: struct {
 // chat_say: c says text (a Chat message).
 @(private)
 chat_say :: proc(s: ^Server, c: ^Client, text: string) {
+	record(s, c, .Chat_Line)
 	name := client_name(c)
 	words := words_of(s, c, text)
 	if words == "" || !may_speak(s, c) {return}

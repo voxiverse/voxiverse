@@ -94,6 +94,9 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
+	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
+	launched:         time.Tick, // when the program started
+	stats_view:       Stats_View, // the statistics overlay's (stats_ui.odin)
 	preview:          Preview, // the player in the inventory (preview.odin)
 	inventory_search: [dynamic]u8, // the Creative tab's search text
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
@@ -109,6 +112,7 @@ App :: struct {
 // app_init brings everything up; on failure the caller still calls
 // app_destroy, which handles partially initialised apps.
 app_init :: proc(app: ^App) -> bool {
+	app.launched = time.tick_now()
 	console_init(&app.console)
 	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
@@ -228,6 +232,8 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	console_history_save(&app.console)
 	delete(app.item_icons)
 	delete(app.inventory_search)
+	stats_view_destroy(&app.stats_view)
+	reporter_destroy(&app.reporter)
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)
@@ -260,6 +266,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	if w.close_requested || app.quit {return false}
 
 	shader_watch_update(app, app.last_frame_ms / 1000)
+	telemetry_update(app)
 	scale := ui_scale(app)
 	input := ui_input(&app.input, scale)
 	handle_global_keys(app, &input)

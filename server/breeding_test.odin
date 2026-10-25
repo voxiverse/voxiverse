@@ -20,7 +20,7 @@ Sheep_Info :: struct {
 // sheep_list: every sheep in client a's world (read on the server's thread).
 @(private = "file")
 sheep_list :: proc(srv: ^Server) -> []Sheep_Info {
-	out: [dynamic]Sheep_Info
+	out := make([dynamic]Sheep_Info, context.temp_allocator)
 	call(srv, proc(s: ^Server, data: rawptr) {
 			out := (^[dynamic]Sheep_Info)(data)
 			w := client_by_name(s, "a").world

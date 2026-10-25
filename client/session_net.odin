@@ -126,6 +126,8 @@ receive :: proc(s: ^Session) {
 			s.others[v.player] = {
 				name = strings.clone(v.name),
 			}
+		case game.Stats_Page:
+			stats_data_take(&s.player_stats, v)
 		case game.Player_Worn:
 			if o, known := &s.others[v.player]; known {o.worn = v.worn}
 		case game.Player_Left:

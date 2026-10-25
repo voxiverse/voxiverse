@@ -32,6 +32,7 @@ World :: struct {
 	natural:      []Natural_Slot, // natural column tops (columns.odin)
 	entities:     Entities, // (entities.odin)
 	changes:      Changes, // blocks changed this tick (changes.odin)
+	stats:        Counters, // the world's totals (stats.odin; <world>/stats.json)
 	tick_rng:     rand.Default_Random_State, // which blocks get random ticks (random_ticks.odin)
 	updates:      Updates, // scheduled block updates: flowing water (liquids.odin)
 	saved:        map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
@@ -84,6 +85,7 @@ world_start :: proc(w: ^World) -> bool {
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
+	load_stats(w)
 	return true
 }
 
@@ -101,6 +103,7 @@ world_close :: proc(w: ^World) {
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)
 	delete(w.regions)
+	counters_free(&w.stats)
 	delete(w.dir)
 	free(w)
 }

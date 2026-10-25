@@ -118,6 +118,7 @@ Session :: struct {
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
 	stats:            Session_Stats,
+	player_stats:     Stats_Data, // the counters the server last sent (stats_ui.odin)
 	config:           Session_Config,
 	net:              Net_Stats,
 }
@@ -256,6 +257,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	delete(s.others)
 	for n in s.notices {delete(n)}
 	delete(s.notices)
+	stats_data_clear(&s.player_stats)
+	delete(s.player_stats.lines)
 	netcode.capture_close(&s.capture)
 	if s.world_init {
 		st := &s.world.stats

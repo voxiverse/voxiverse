@@ -25,6 +25,7 @@ Bindings :: struct {
 	use:        platform.Key, // place, use the held item, dial a gate
 	pick:       platform.Key, // pick the aimed block into the hand
 	inventory:  platform.Key,
+	stats:      platform.Key, // open the statistics
 	drop:       platform.Key, // with Ctrl: the whole stack
 	chat:       platform.Key,
 	command:    platform.Key, // the chat, starting with /
@@ -49,6 +50,7 @@ DEFAULT_BINDINGS :: Bindings {
 	use        = .Mouse_Right,
 	pick       = .Mouse_Middle,
 	inventory  = .E,
+	stats      = .K,
 	drop       = .Q,
 	chat       = .T,
 	command    = .Slash,
@@ -77,6 +79,7 @@ BINDING_VARS := [?]base.Var {
 	{field = "use", label = "Use / Place", help = "key: place, use the held item"},
 	{field = "pick", label = "Pick Block", help = "key: pick the aimed block into the hand"},
 	{field = "inventory", help = "key: open the inventory"},
+	{field = "stats", label = "Statistics", help = "key: open the statistics"},
 	{field = "drop", label = "Drop item", help = "key: drop one of the held item (Ctrl: all)"},
 	{field = "chat", label = "Open chat", help = "key: open the chat"},
 	{field = "command", label = "Open command", help = "key: open the chat with /"},

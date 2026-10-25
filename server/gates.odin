@@ -72,6 +72,7 @@ gate_dial :: proc(s: ^Server, c: ^Client, d: game.Dial) -> string {
 		game.address_dir(w.address),
 		game.address_dir(d.address),
 	)
+	record(s, c, .Gate_Dial, "opened")
 	return ""
 }
 
@@ -107,6 +108,7 @@ gates_tick :: proc(w: ^World) {
 			if c.state != .Playing || c.world != w || !in_horizon(g, c.player.position) {continue}
 			front, yaw := worldgen.gate_front(g.far)
 			notice_if(s, &c, travel(s, &c, g.to, Place{g.to, front, {yaw, 0}}))
+			record(s, &c, .Teleport, "gate")
 		}
 	}
 }

@@ -197,6 +197,8 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 		case:
 			return false
 		}
+		record(s, c, .Item_Used, "wheat")
+		if !lamb {record(s, c, .Sheep_Fed)}
 		if !allowed(s, c, "items.infinite") {
 			c.inventory.slots[c.inventory.selected].count -= 1
 			game.inventory_tidy(&c.inventory)
@@ -206,6 +208,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 	}
 	if ent.shorn || lamb {return false}
 	ent.shorn = true
+	record(s, c, .Sheep_Sheared)
 	r := rand.default_random_generator(&w.entities.rng)
 	wool := game.item_of_block(.Wool_Black if game.genes_black(ent.genes) else .Wool)
 	for _ in 0 ..< rand.int_range(1, 4, r) {
@@ -249,6 +252,7 @@ breed :: proc(w: ^World, a, b: ^Entity) {
 	a.wait, b.wait = game.BREED_WAIT_TICKS, game.BREED_WAIT_TICKS
 	if lamb := entity_spawn(w, .Sheep, at, false); lamb != nil {
 		lamb.genes, lamb.growth = genes, 0
+		record_world(w.server, w, .Sheep_Born)
 	}
 }
 
@@ -280,6 +284,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	ent.yaw, ent.pitch = yaw, pitch
 	ent.body.velocity = {f32(dir.x), f32(dir.y), f32(dir.z)} * game.ROCKET_SPEED
 	ent.owner = int(player_id(s, c))
+	record(s, c, .Rocket_Fired)
 	return true
 }
 
@@ -287,6 +292,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 // carved (where loaded), and what is near is thrown (sheep hurt).
 explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 	s := w.server
+	record_world(s, w, .Explosion, n0 = i64(radius))
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
 		d := c.player.position - center

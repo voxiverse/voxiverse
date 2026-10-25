@@ -117,6 +117,14 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	if !ok || !set_block(w, e.pos, e.block, c) {return result}
 	result.accepted, result.block = true, e.block
 	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist)} 	// (everyone is told, the tiller too)
+	switch {
+	case e.block == .Air:
+		record(s, c, .Block_Mined, game.BLOCK_INFO[current].name, at = e.pos)
+	case tilling:
+		record(s, c, .Item_Used, "hoe", at = e.pos)
+	case:
+		record(s, c, .Block_Placed, game.BLOCK_INFO[e.block].name, at = e.pos)
+	}
 	if e.block == .Air {
 		broken_drop(s, c, e.pos, current)
 	} else if slot >= 0 {
@@ -134,7 +142,9 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	ent, index := entity_find(w, a.entity)
 	if ent == nil || !game.ENTITY_INFO[ent.kind].hittable {return} 	// gone already: a late click
 	if !entity_reachable(c, ent) {return}
+	record(s, c, .Entity_Hit, game.ENTITY_INFO[ent.kind].name)
 	if entity_attack(w, ent, c.player.position) {
+		record(s, c, .Entity_Killed, game.ENTITY_INFO[ent.kind].name)
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
 		entity_died(w, index)
 	} else {

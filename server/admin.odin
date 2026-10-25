@@ -102,6 +102,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"whois", "<player>", {1, 1}, admin_whois, "info.whois"},
 	{"seen", "<player>", {1, 1}, admin_seen, "info.seen"},
 	{"afk", "", {0, 0}, admin_afk, "chat.afk"},
+	{"stats", "[player] [filter]", {0, 2}, admin_stats, "info.stats"},
 	{"status", "", {0, 0}, admin_status, "info.status"},
 	// Items (items.odin).
 	{"give", "<player> <item> [count]", {2, 3}, admin_give, "items.give"},
@@ -149,6 +150,14 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 		}
 		if len(args) < cmd.args[0] || len(args) > cmd.args[1] || !cmd.run(s, c, args) {
 			notice(s, c, fmt.tprintf("Usage: %s %s", cmd.name, cmd.usage))
+			return
+		}
+		record(s, c, .Command, cmd.name)
+		switch cmd.name {
+		case "tp", "home", "warp", "spawn", "back", "travel":
+			record(s, c, .Teleport, cmd.name)
+		case "msg", "r":
+			record(s, c, .Chat_Whisper)
 		}
 		return
 	}

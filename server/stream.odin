@@ -29,48 +29,55 @@ Client_Link :: union {
 Local :: struct {}
 
 Client :: struct {
-	state:        Client_State,
-	link:         Client_Link,
-	grants:       [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
-	world:        ^World, // where they are (Playing)
-	account:      game.Account, // (proved once Playing)
-	nonce:        game.Nonce, // the Challenge sent
-	wanted:       [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
-	wanted_len:   int,
-	name_buf:     [game.MAX_NAME_LENGTH]u8,
-	name_len:     int,
-	kick_at:      u64, // tick to drop a refused client
-	kick_reason:  string, // (a constant)
-	position:     [3]f64,
-	center:       game.Chunk_Pos, // the chunk the client is in
-	moved:        bool, // center changed since the last unload pass
-	moved_from:   game.Chunk_Pos, // ... from there (unload_left)
-	has:          map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
-	columns:      map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
-	known:        map[u32]struct{}, // entities it has been told about (entities.odin)
-	cursor:       int, // offsets before this are all sent
-	player:       game.Player_State,
-	inputs:       game.Input_Queue,
-	teleported:   bool, // since the last Player_Update
-	landing:      Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
-	actions:      [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
-	action_count: int,
-	teleport:     [2]f32, // yaw, pitch to look after it
-	look:         [2]f32, // yaw, pitch of the last input applied (saved with the player)
-	fired_at:     u64, // tick of its last rocket (a rate limit)
-	chat_tokens:  int, // lines it may say now (chat.odin)
-	chat_tick:    u64, // the bucket refilled up to here
-	address:      string, // its IP address ("": the local player; owned)
-	back:         Maybe(Place), // where it was before its last teleport
-	afk:          bool,
-	reply:        [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
-	reply_len:    int,
-	tpa:          Tpa, // a teleport request to it
-	inventory:    game.Inventory,
-	inv_acked:    u32, // its newest Inventory_Request applied
-	worn_sent:    [game.WORN_SLOTS]game.Item, // what the others were last told it wears
-	inv_changed:  bool, // since the last Inventory_Update sent
-	selection:    [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
+	state:         Client_State,
+	link:          Client_Link,
+	grants:        [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
+	world:         ^World, // where they are (Playing)
+	account:       game.Account, // (proved once Playing)
+	nonce:         game.Nonce, // the Challenge sent
+	wanted:        [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
+	wanted_len:    int,
+	name_buf:      [game.MAX_NAME_LENGTH]u8,
+	name_len:      int,
+	kick_at:       u64, // tick to drop a refused client
+	kick_reason:   string, // (a constant)
+	position:      [3]f64,
+	center:        game.Chunk_Pos, // the chunk the client is in
+	moved:         bool, // center changed since the last unload pass
+	moved_from:    game.Chunk_Pos, // ... from there (unload_left)
+	has:           map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	columns:       map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
+	known:         map[u32]struct{}, // entities it has been told about (entities.odin)
+	cursor:        int, // offsets before this are all sent
+	player:        game.Player_State,
+	inputs:        game.Input_Queue,
+	teleported:    bool, // since the last Player_Update
+	landing:       Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
+	actions:       [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
+	action_count:  int,
+	teleport:      [2]f32, // yaw, pitch to look after it
+	look:          [2]f32, // yaw, pitch of the last input applied (saved with the player)
+	fired_at:      u64, // tick of its last rocket (a rate limit)
+	chat_tokens:   int, // lines it may say now (chat.odin)
+	chat_tick:     u64, // the bucket refilled up to here
+	address:       string, // its IP address ("": the local player; owned)
+	back:          Maybe(Place), // where it was before its last teleport
+	afk:           bool,
+	reply:         [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
+	reply_len:     int,
+	tpa:           Tpa, // a teleport request to it
+	inventory:     game.Inventory,
+	stats:         Counters, // its character's counters (stats.odin; heap, keys owned)
+	joined_tick:   u64, // when it joined (session length)
+	last_position: [3]f64, // for distance counters
+	dist_acc:      [3]f64, // centimetres walked, flown, fallen not yet counted
+	was_grounded:  bool,
+	report_window: u64, // the tick the current window of telemetry reports began
+	report_count:  int,
+	inv_acked:     u32, // its newest Inventory_Request applied
+	worn_sent:     [game.WORN_SLOTS]game.Item, // what the others were last told it wears
+	inv_changed:   bool, // since the last Inventory_Update sent
+	selection:     [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about
@@ -111,6 +118,7 @@ client_reset :: proc(c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	delete(c.grants)
 	delete(c.address)
+	counters_free(&c.stats)
 	has, columns, known := c.has, c.columns, c.known
 	clear(&has)
 	clear(&columns)

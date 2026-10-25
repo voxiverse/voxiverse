@@ -266,6 +266,26 @@ it) and go after five minutes. A player new to a world gets `world.cfg`'s `kit`.
 | `server clear [player] [item]` | Empty an inventory, or of one item (`items.clear`; others' `items.clear.others`) |
 | `server item` | What you hold, its id and stack size |
 
+## Statistics and events
+
+Everything the server counts or measures is an *event* (`telemetry/`: one kind per row of
+`KIND_INFO`, which says what its fields mean). `record` (server/stats.odin) emits the event
+and adds to the counters the kind names, the player's and the world's.
+
+- **Counters** are dotted names (`blocks.mined.stone`, `distance.walked` in cm, `time.played`
+  in seconds, `commands.time` ...); a parent is the sum of what is below it. They live in the
+  character's file (`"stats"`) and in `<world>/stats.json`. In game: the `stats [player] [filter]`
+  command (30 lines in chat; another player's needs `info.stats.others`), and the statistics
+  screen (key `K`, or `screen stats`).
+- **The log** is `<universe dir>/telemetry/YYYY-MM-DD.jsonl`, one JSON object per line (time in
+  ms, tick, session, actor = the player's id, kind, world, position, the kind's fields), written
+  by a thread of its own; a full buffer drops events and says so in an `events_dropped` line; a
+  day stops at 64 MiB. A scratch world (no save directory) writes nothing.
+- **Client reports** (`Client_Info`, `Client_Overlay`, `Client_Perf`) arrive in a `Telemetry_Report`
+  message, at most six a minute, validated; refusals count in the world's `telemetry.refused`.
+- Looking at a log: `jq -c 'select(.k=="block_mined")' telemetry/*.jsonl`, or DuckDB:
+  `select k, count(*) from read_json_auto('telemetry/*.jsonl') group by 1 order by 2 desc`.
+
 ## Chat
 
 `t` opens the chat, `/` opens it with a command started (`/spawn`; the server runs it, as the

@@ -19,6 +19,7 @@ Overlay :: enum u8 {
 	Console,
 	Quit_Dialog,
 	Dial, // a gate's symbols (dial.odin)
+	Stats, // the statistics (stats_ui.odin)
 }
 
 Overlay_Take :: enum u8 {
@@ -43,6 +44,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Console = {takes = {.Keyboard, .Mouse}},
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
 	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Stats = {takes = {.Keyboard, .Mouse}, in_game = true},
 }
 
 Overlays :: struct {
@@ -180,6 +182,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			quit_dialog(app, ctx)
 		case .Dial:
 			dial_ui(app, ctx, top)
+		case .Stats:
+			stats_ui(app, ctx, top)
 		}
 	}
 }

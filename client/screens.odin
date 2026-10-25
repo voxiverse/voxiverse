@@ -41,6 +41,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	if app.input.escape {escape(app)}
 	chat_keys(app, input)
 	inventory_keys(app)
+	stats_keys(app)
 	dial_keys(app)
 }
 
