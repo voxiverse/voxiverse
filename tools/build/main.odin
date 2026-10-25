@@ -50,6 +50,7 @@ TEST_PACKAGES :: []string {
 	"client/mesh",
 	"client/sfx",
 	"client",
+	"tools/build",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
@@ -151,6 +152,10 @@ usage :: proc() {
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
 	fmt.println("              load, views, flight  the game (a release build, fixed settings;")
 	fmt.println("                           --profile: traced too)")
+	fmt.println(
+		"              compare <ref> <scenario> [-runs:N]  the working tree against a commit,",
+	)
+	fmt.println("                           alternating runs; changes called beyond the noise")
 	fmt.println(
 		"  trace     summarize a profile trace (build/voxiverse.spall; scopes for its timeline)",
 	)
@@ -533,6 +538,7 @@ bench :: proc(args: []string) -> bool {
 		return false
 	}
 	scenario := args[0]
+	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
 	build_args := []string{"--release"}
 	for arg in args[1:] {
