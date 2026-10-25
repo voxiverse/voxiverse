@@ -101,12 +101,14 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 		testing.expect_value(t, alice.deleted[0], alice.chat[len(alice.chat) - 1].id)
 	}
 
-	// Bob may not mute; alice mutes him.
-	for n in bob.notices {delete(n)}
-	clear(&bob.notices)
+	// Bob may not mute; alice mutes him. (Among his notices: the answer to
+	// his second ignore may still be on its way.)
 	net_send(&bob, game.Command{"mute alice"})
-	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[1].notices) > 0})
-	testing.expect(t, ok && strings.has_prefix(bob.notices[0], "You may not use mute"))
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
+		for n in cs[1].notices {if strings.has_prefix(n, "You may not use mute") {return true}}
+		return false
+	})
+	testing.expectf(t, ok, "bob was not refused: %v", bob.notices[:])
 	net_send(&alice, game.Command{"mute bob 5m"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[1].notices {if strings.contains(n, "You were muted") {return true}}

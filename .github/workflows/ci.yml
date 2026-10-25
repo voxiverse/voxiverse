@@ -262,11 +262,13 @@ jobs:
       - uses: actions/checkout@v7
       - name: Tags
         run: git fetch --force --tags origin
+      # The packages as files (a zip is not unpacked).
       - uses: actions/download-artifact@v8
         with:
           pattern: voxiverse-*
           path: dist
           merge-multiple: true
+          skip-decompress: true
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -279,6 +281,11 @@ jobs:
             *) TITLE="Voxiverse ${NAME#tag } ($VERSION)" ;;
           esac
           cd dist
+          ls -l
+          # Exactly the two packages, as files, for this version.
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 2
+          test -f "voxiverse-$VERSION-windows-x64.zip"
+          test -f "voxiverse-$VERSION-linux-x64.tar.gz"
           sha256sum * > SHA256SUMS
           # The notes: the milestone's goal from PLAN.md, to be edited.
           MILESTONE="$(echo "$VERSION" | cut -d. -f2)"
