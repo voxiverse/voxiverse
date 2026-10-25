@@ -32,6 +32,7 @@ Net_Client :: struct {
 	changed:     [dynamic]game.Block_Changed,
 	entities:    map[u32][3]f64, // known entities, where last seen
 	shorn:       map[u32]bool, // sheep as last told shorn or not
+	sheep:       map[u32]game.Sheep_Flags, // and what else about their looks
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
@@ -94,6 +95,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.deleted)
 	delete(c.entities)
 	delete(c.shorn)
+	delete(c.sheep)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
@@ -206,7 +208,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				e := v.entries[i]
 				if e.entity in c.entities {
 					c.entities[e.entity] = e.position
-					c.shorn[e.entity] = e.shorn
+					c.shorn[e.entity] = .Shorn in e.flags
+					c.sheep[e.entity] = e.flags
 				}
 			}
 		case game.Entity_Despawn:

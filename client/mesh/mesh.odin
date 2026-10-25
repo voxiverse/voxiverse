@@ -136,6 +136,7 @@ block_shape :: proc(b: game.Block) -> (Shape, Layer) {
 	     .Stone_Bricks,
 	     .Planks,
 	     .Wool,
+	     .Wool_Black,
 	     .Farmland,
 	     .Farmland_Moist,
 	     .Gate_Ring,

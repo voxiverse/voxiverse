@@ -62,6 +62,7 @@ Block :: enum u16 {
 	Wheat_5,
 	Wheat_6,
 	Wheat_7, // ripe
+	Wool_Black, // from a sheep with the recessive wool gene (M25)
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -253,6 +254,14 @@ BLOCK_INFO := [Block]Block_Info {
 		shades = true,
 		targetable = true,
 		breakable = true,
+	},
+	.Wool_Black = {
+		name = "black_wool",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
 	},
 	.Wheat_0 = {name = "wheat_0", targetable = true, breakable = true},
 	.Wheat_1 = {name = "wheat_1", targetable = true, breakable = true},

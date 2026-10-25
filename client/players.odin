@@ -24,7 +24,7 @@ Other_Player :: struct {
 Other_Entity :: struct {
 	kind:      game.Entity_Kind,
 	stack:     game.Stack, // a dropped item's
-	shorn:     bool, // a sheep without its wool
+	flags:     game.Sheep_Flags, // a sheep's looks
 	track:     Track,
 	hurt_at:   time.Tick, // when it was last hit (flash)
 	stride:    f32, // blocks walked, for its legs

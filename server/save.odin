@@ -560,7 +560,7 @@ write_entities :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
-		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count | shorn]",
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count | shorn genes growth love wait]",
 	)
 	for e in w.entities.list {
 		if !game.ENTITY_INFO[e.kind].saved {continue}
@@ -577,7 +577,17 @@ write_entities :: proc(w: ^World) -> bool {
 		)
 		if e.kind ==
 		   .Item {fmt.sbprintf(&b, " %s %d", game.item_name(e.stack.item), e.stack.count)}
-		if e.kind == .Sheep {fmt.sbprintf(&b, " %v", e.shorn)}
+		if e.kind == .Sheep {
+			fmt.sbprintf(
+				&b,
+				" %v %d %d %d %d",
+				e.shorn,
+				transmute(u8)e.genes,
+				e.growth,
+				e.love,
+				e.wait,
+			)
+		}
 		strings.write_byte(&b, '\n')
 	}
 	return write_atomically(
@@ -599,7 +609,7 @@ load_entities :: proc(w: ^World) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		f := strings.fields(l, context.temp_allocator)
-		ok := len(f) >= 7 && len(f) <= 9
+		ok := len(f) >= 7 && len(f) <= 12
 		kind: game.Entity_Kind
 		found := false
 		if ok {
@@ -609,9 +619,11 @@ load_entities :: proc(w: ^World) {
 			}
 			if f[0] == "critter" {kind, found = .Sheep, true} 	// (before it was a sheep)
 			// An item has its stack after, a sheep whether it is shorn; no other has more.
-			if found && ((kind == .Item) != (len(f) == 9)) {ok = false}
+			// An item has its stack after; a sheep whether it is shorn (and, from
+			// M25, its genes, growth, love and wait); no other has more.
+			if found && kind == .Item && len(f) != 9 {ok = false}
+			if found && kind == .Sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
 			if found && kind != .Item && kind != .Sheep && len(f) != 7 {ok = false}
-			if found && kind == .Sheep && len(f) == 9 {ok = false}
 		}
 		pos: [3]f64
 		yaw: f32
@@ -651,7 +663,20 @@ load_entities :: proc(w: ^World) {
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
 			e.stack = stack
-			e.shorn = kind == .Sheep && len(f) == 8 && f[7] == "true"
+			if kind == .Sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
+			if kind == .Sheep && len(f) == 12 {
+				genes, ok1 := strconv.parse_int(f[8])
+				growth, ok2 := strconv.parse_int(f[9])
+				love, ok3 := strconv.parse_int(f[10])
+				wait, ok4 := strconv.parse_int(f[11])
+				if ok1 && ok2 && ok3 && ok4 && genes >= 0 && genes < 16 {
+					e.genes = transmute(game.Genes)u8(genes)
+					e.growth = clamp(growth, 0, game.LAMB_TICKS)
+					e.love, e.wait =
+						clamp(love, 0, game.BREED_READY_TICKS),
+						clamp(wait, 0, game.BREED_WAIT_TICKS)
+				}
+			}
 			loaded += 1
 		}
 	}

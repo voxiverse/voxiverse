@@ -43,6 +43,10 @@ Entity :: struct {
 	owner:   int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
 	stack:   game.Stack, // a dropped item's
 	shorn:   bool, // a sheep without its wool, until it grazes
+	genes:   game.Genes, // a sheep's (genetics.odin)
+	growth:  int, // a lamb's ticks of growing up (an adult's: LAMB_TICKS)
+	love:    int, // ticks left that it is ready to breed (fed)
+	wait:    int, // ticks left before it can breed again
 	age:     int, // ticks
 }
 
@@ -52,6 +56,7 @@ Brain_State :: enum u8 {
 	Wander, // walking a path somewhere nearby
 	Graze, // head down for a while
 	Flee, // hit: running away
+	Mate, // ready to breed: walking to another that is
 }
 
 Brain :: struct {
@@ -100,6 +105,7 @@ entity_spawn :: proc(
 			body = {position = position},
 			yaw = rand.float32_range(-math.PI, math.PI, rand.default_random_generator(&e.rng)),
 			health = game.ENTITY_INFO[kind].health,
+			growth = game.LAMB_TICKS, // (adult; a lamb is made lower)
 			natural = natural,
 			owner = -1,
 		},
@@ -127,6 +133,7 @@ entities_tick :: proc(w: ^World) {
 		switch ent.kind {
 		case .Sheep:
 			if chunk_ready(w, ent.body.position) { 	// else its ground is not loaded (yet): it waits
+				sheep_life(ent)
 				think(w, ent)
 				wish, jump := steer(w, ent)
 				game.body_step(&ent.body, ent.kind, wish, jump, &w.rules, query, game.TICK_SECONDS)
@@ -149,6 +156,17 @@ entities_tick :: proc(w: ^World) {
 	for b in blasts {explode(w, b.center, b.radius)}
 }
 
+// sheep_flags: what clients are told about a sheep.
+sheep_flags :: proc(ent: ^Entity) -> (f: game.Sheep_Flags) {
+	if ent.kind != .Sheep {return}
+	if ent.shorn {f += {.Shorn}}
+	if ent.growth < game.LAMB_TICKS {f += {.Lamb}}
+	if game.genes_black(ent.genes) {f += {.Black}}
+	if game.genes_spotted(ent.genes) {f += {.Spotted}}
+	if ent.love > 0 {f += {.In_Love}}
+	return
+}
+
 // Entity_Behaviour: what a kind does besides the physics every kind shares
 // (the table the next kinds fill in).
 Entity_Behaviour :: struct {
@@ -163,19 +181,75 @@ ENTITY_BEHAVIOUR := [game.Entity_Kind]Entity_Behaviour {
 	.Item = {},
 }
 
-// sheep_use: shearing by hand: 1 to 3 wool fall, and the sheep is shorn
-// until it eats grass.
-@(private = "file")
+// sheep_use: wheat feeds it (an adult becomes ready to breed; a lamb grows
+// up a tenth sooner), anything else shears an adult by hand: 1 to 3 wool
+// (white or black by its genes) fall, and it is shorn until it eats grass.
 sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
-	if ent.shorn {return false}
 	w := c.world
+	lamb := ent.growth < game.LAMB_TICKS
+	held := game.inventory_held(&c.inventory)
+	if !game.stack_empty(held) && held.item == game.item_of_material(.Wheat) {
+		switch {
+		case lamb:
+			ent.growth = min(ent.growth + game.LAMB_TICKS / 10, game.LAMB_TICKS)
+		case ent.love == 0 && ent.wait == 0:
+			ent.love = game.BREED_READY_TICKS
+		case:
+			return false
+		}
+		if !allowed(s, c, "items.infinite") {
+			c.inventory.slots[c.inventory.selected].count -= 1
+			game.inventory_tidy(&c.inventory)
+			c.inv_changed = true
+		}
+		return true
+	}
+	if ent.shorn || lamb {return false}
 	ent.shorn = true
 	r := rand.default_random_generator(&w.entities.rng)
+	wool := game.item_of_block(.Wool_Black if game.genes_black(ent.genes) else .Wool)
 	for _ in 0 ..< rand.int_range(1, 4, r) {
 		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
-		spawn_item(w, ent.body.position + {0, 0.6, 0}, {game.item_of_block(.Wool), 1}, v, -1)
+		spawn_item(w, ent.body.position + {0, 0.6, 0}, {wool, 1}, v, -1)
 	}
 	return true
+}
+
+// sheep_life: a sheep's clocks, one tick: a lamb grows, love and the wait
+// after a lamb run down.
+@(private = "file")
+sheep_life :: proc(ent: ^Entity) {
+	if ent.growth < game.LAMB_TICKS {ent.growth += 1}
+	if ent.love > 0 {ent.love -= 1}
+	if ent.wait > 0 {ent.wait -= 1}
+}
+
+// mate_for: the nearest other sheep that is ready to breed within range of
+// ent (an adult in love), if any.
+@(private = "file")
+mate_for :: proc(w: ^World, ent: ^Entity) -> ^Entity {
+	best: ^Entity
+	best_d := f64(game.BREED_RANGE * game.BREED_RANGE)
+	for &other in w.entities.list {
+		if other.id == ent.id || other.kind != .Sheep || other.love <= 0 {continue}
+		if other.growth < game.LAMB_TICKS {continue}
+		d := other.body.position - ent.body.position
+		if dd := d.x * d.x + d.y * d.y + d.z * d.z; dd < best_d {best, best_d = &other, dd}
+	}
+	return best
+}
+
+// breed: a and b have met: a lamb between them, of both, and each waits.
+@(private = "file")
+breed :: proc(w: ^World, a, b: ^Entity) {
+	r := rand.default_random_generator(&w.entities.rng)
+	at := (a.body.position + b.body.position) / 2
+	genes := game.genes_child(a.genes, b.genes, r)
+	a.love, b.love = 0, 0
+	a.wait, b.wait = game.BREED_WAIT_TICKS, game.BREED_WAIT_TICKS
+	if lamb := entity_spawn(w, .Sheep, at, false); lamb != nil {
+		lamb.genes, lamb.growth = genes, 0
+	}
 }
 
 // use_entity: a player uses an entity, if it is within reach.
@@ -357,7 +431,13 @@ replicate :: proc(s: ^Server, c: ^Client) {
 			)
 		}
 		visible[ent.id] = {}
-		batch.entries[batch.count] = {ent.id, ent.body.position, ent.yaw, ent.pitch, ent.shorn}
+		batch.entries[batch.count] = {
+			ent.id,
+			ent.body.position,
+			ent.yaw,
+			ent.pitch,
+			sheep_flags(&ent),
+		}
 		batch.count += 1
 		if batch.count == game.ENTITIES_PER_MESSAGE {
 			send_message(s, c, batch)
@@ -422,6 +502,9 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 		if standable(query, p) {
 			if ent := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
 			   ent != nil {
+				if kind == .Sheep {
+					ent.genes = game.genes_wild(rand.default_random_generator(&w.entities.rng))
+				}
 				log.infof(
 					"server summoned kind=%v id=%d at=%v by=%s",
 					kind,
@@ -447,7 +530,23 @@ think :: proc(w: ^World, ent: ^Entity) {
 	if b.hurt > 0 {b.hurt -= 1}
 	b.timer -= 1
 	pos := ent.body.position
+	// Ready to breed: toward another that is; else as before.
+	if ent.love > 0 && ent.growth >= game.LAMB_TICKS && b.state != .Flee {
+		if m := mate_for(w, ent); m != nil {
+			b.state, b.look_at = .Mate, m.body.position
+		} else if b.state == .Mate {
+			b.state, b.timer = .Idle, 20
+		}
+	} else if b.state == .Mate {
+		b.state, b.timer = .Idle, 20
+	}
 	switch b.state {
+	case .Mate:
+		// Close enough: the one with the lower id has the lamb.
+		if m := mate_for(w, ent); m != nil {
+			d := m.body.position - pos
+			if d.x * d.x + d.z * d.z < 1.6 * 1.6 && ent.id < m.id {breed(w, ent, m)}
+		}
 	case .Flee:
 		if b.timer <= 0 {b.state, b.timer = .Idle, 20}
 		if b.path.count == 0 || b.step >= b.path.count {
@@ -504,7 +603,7 @@ think :: proc(w: ^World, ent: ^Entity) {
 		flat := math.sqrt(d.x * d.x + d.z * d.z)
 		want_pitch = clamp(f32(math.atan2(d.y, flat)), -1, 1)
 		ent.yaw = turn_towards(ent.yaw, f32(math.atan2(-d.x, -d.z)), 0.15)
-	case .Idle, .Wander, .Flee:
+	case .Idle, .Wander, .Flee, .Mate:
 	}
 	ent.pitch += (want_pitch - ent.pitch) * 0.2
 }
@@ -566,10 +665,23 @@ plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
 steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	b := &ent.brain
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
-	if b.state != .Wander && b.state != .Flee {return}
-	if b.step >= b.path.count {return}
 	info := game.ENTITY_INFO[ent.kind]
 	pos := ent.body.position
+	if b.state == .Mate {
+		// Straight at the one it wants (they are close, on open ground).
+		to := [2]f64{b.look_at.x - pos.x, b.look_at.z - pos.z}
+		dist := math.sqrt(to.x * to.x + to.y * to.y)
+		if dist < 1 {return}
+		wish = {f32(to.x / dist), f32(to.y / dist)} * info.walk_speed
+		ent.yaw = turn_towards(ent.yaw, f32(math.atan2(-to.x, -to.y)), 0.3)
+		stuck :=
+			ent.body.on_ground &&
+			abs(ent.body.velocity.x) + abs(ent.body.velocity.z) < 0.1 * info.walk_speed
+		jump = stuck
+		return
+	}
+	if b.state != .Wander && b.state != .Flee {return}
+	if b.step >= b.path.count {return}
 	target := b.path.steps[b.step]
 	to := [2]f64{f64(target.x) + 0.5 - pos.x, f64(target.z) + 0.5 - pos.z}
 	dist := math.sqrt(to.x * to.x + to.y * to.y)
@@ -624,7 +736,10 @@ spawn_natural :: proc(w: ^World) {
 			jitter := [3]f64{rand.float64_range(-1.5, 1.5, r), 0, rand.float64_range(-1.5, 1.5, r)}
 			p := center + jitter
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-			if standable(query, b) {entity_spawn(w, .Sheep, p, true)}
+			if standable(query, b) {
+				if sheep := entity_spawn(w, .Sheep, p, true);
+				   sheep != nil {sheep.genes = game.genes_wild(r)}
+			}
 		}
 	}
 }

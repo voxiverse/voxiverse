@@ -78,7 +78,7 @@ material_of :: proc(b: game.Block) -> (Material, bool) {
 		return .Glass, true
 	case .Log, .Spruce_Log, .Cactus, .Planks:
 		return .Wood, true
-	case .Snow, .Wool:
+	case .Snow, .Wool, .Wool_Black:
 		return .Snow, true
 	}
 	return {}, false

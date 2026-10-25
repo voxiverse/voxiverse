@@ -192,7 +192,7 @@ receive :: proc(s: ^Session) {
 				x := v.entries[i]
 				if e, known := &s.entities[x.entity]; known {
 					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false, false})
-					e.shorn = x.shorn
+					e.flags = x.flags
 				}
 			}
 		case game.Entity_Despawn:

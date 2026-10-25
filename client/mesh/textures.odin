@@ -54,6 +54,7 @@ Texture :: enum u32 {
 	Wheat_5,
 	Wheat_6,
 	Wheat_7,
+	Wool_Black,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -146,6 +147,8 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Wheat_6, .Wheat_6, .Wheat_6
 	case .Wheat_7:
 		return .Wheat_7, .Wheat_7, .Wheat_7
+	case .Wool_Black:
+		return .Wool_Black, .Wool_Black, .Wool_Black
 	}
 	return
 }
@@ -346,6 +349,11 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				c = shade(ramp, clamp(v, 0, 1))
 			case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
 				c = wheat_pixel(int(t) - int(Texture.Wheat_0), seed, x, y)
+			case .Wool_Black:
+				v := 0.45 + 0.3 * coarse + 0.25 * fine
+				if y % 4 == 3 {v -= 0.2}
+				if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
+				c = shade(WOOL_BLACK, clamp(v, 0, 1))
 			case .Wool:
 				// Woven: soft cream tufts in rows, a thread's shadow between.
 				v := 0.45 + 0.3 * coarse + 0.25 * fine
@@ -559,6 +567,14 @@ WOOL := [5]Rgba {
 	{220, 216, 208, 255},
 	{236, 233, 226, 255},
 	{248, 246, 240, 255},
+}
+@(private = "file", rodata)
+WOOL_BLACK := [5]Rgba {
+	{14, 14, 18, 255},
+	{26, 26, 32, 255},
+	{40, 40, 48, 255},
+	{56, 56, 66, 255},
+	{74, 74, 86, 255},
 }
 @(private = "file", rodata)
 FARMLAND := [5]Rgba {

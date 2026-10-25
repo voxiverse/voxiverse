@@ -188,7 +188,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		tick  = 5,
 		count = ENTITIES_PER_MESSAGE,
 	}
-	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2, i % 2 == 0}}
+	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2, {.Shorn} if i % 2 == 0 else {.Lamb, .Black}}}
 	ents_bytes := encode_s(ents)
 	testing.expectf(
 		t,

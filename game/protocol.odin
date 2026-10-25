@@ -329,7 +329,7 @@ Entity_Entry :: struct {
 	entity:     u32,
 	position:   [3]f64,
 	yaw, pitch: f32, // body turn; head up/down
-	shorn:      bool, // a sheep without its wool
+	flags:      Sheep_Flags, // a sheep's looks (genetics.odin)
 }
 
 // Entity_Hurt: it was hit (flash, sound).
@@ -831,7 +831,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_position(w, e.position)
 			write_f32(w, e.yaw)
 			write_f32(w, e.pitch)
-			write_u8(w, 1 if e.shorn else 0)
+			write_u8(w, transmute(u8)e.flags)
 		}
 	case Entity_Hurt:
 		write_u8(w, u8(Server_Kind.Entity_Hurt))
@@ -1135,7 +1135,8 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			x.entity = read_u32(&r)
 			x.position = read_position(&r)
 			x.yaw, x.pitch = read_f32(&r), read_f32(&r)
-			x.shorn = read_u8(&r) != 0
+			x.flags = transmute(Sheep_Flags)read_u8(&r)
+			if x.flags & ~{.Shorn, .Lamb, .Black, .Spotted, .In_Love} != {} {reader_fail(&r)}
 			if !(abs(x.yaw) <= 1e6) || abs(x.pitch) > PITCH_LIMIT {reader_fail(&r)}
 		}
 		m = e

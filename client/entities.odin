@@ -47,6 +47,14 @@ FLAME :: [4]u8{255, 170, 60, 255}
 @(private = "file")
 WOOL :: [4]u8{232, 222, 200, 255}
 @(private = "file")
+WOOL_BLACK :: [4]u8{36, 34, 40, 255}
+@(private = "file")
+WOOL_DARK :: [4]u8{70, 62, 60, 255}
+@(private = "file")
+WOOL_LIGHT :: [4]u8{200, 196, 190, 255}
+@(private = "file")
+HEART :: [4]u8{236, 84, 118, 255}
+@(private = "file")
 SHORN :: [4]u8{204, 160, 152, 255}
 @(private = "file")
 HIDE :: [4]u8{122, 92, 70, 255}
@@ -66,7 +74,10 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		hurt := e.hurt_at != {} && time.tick_since(e.hurt_at) < HURT_FLASH
 		switch e.kind {
 		case .Sheep:
-			sheep(d, v, e.stride, hurt, e.shorn)
+			sheep(d, v, e.stride, hurt, e.flags)
+			if .In_Love in e.flags &&
+			   rand.float32() <
+				   0.06 {hearts(s, v.position + {0, f64(1.2 * (0.5 if .Lamb in e.flags else 1)), 0})}
 		case .Rocket:
 			rocket(s, d, v)
 		case .Item:
@@ -89,40 +100,103 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 	}
 }
 
-// sheep: a body, a head on a neck that pitches, four legs that swing.
+// sheep: a body, a head on a neck that pitches, four legs that swing; black
+// wool, dark spots and a lamb's half size by its looks (flags).
 @(private = "file")
-sheep :: proc(d: ^render.Entity_Draw, v: Other_View, stride: f32, hurt: bool, shorn: bool) {
+sheep :: proc(
+	d: ^render.Entity_Draw,
+	v: Other_View,
+	stride: f32,
+	hurt: bool,
+	flags: game.Sheep_Flags,
+) {
 	wool, hide := WOOL, HIDE
+	if .Black in flags {wool = WOOL_BLACK}
 	if hurt {wool, hide = HURT, HURT}
+	k := f32(0.5) if .Lamb in flags else 1 // everything scaled about its feet
 	p := v.position
-	if shorn {
+	if .Shorn in flags {
 		// The bare body: smaller, pink-grey, inside where the wool was.
 		render.entity_box(
 			d,
 			p,
 			v.yaw,
 			0,
-			{-0.27, 0.4, -0.42},
-			{0.27, 0.78, 0.38},
+			{-0.27, 0.4, -0.42} * k,
+			{0.27, 0.78, 0.38} * k,
 			HURT if hurt else SHORN,
 			.Body,
 		)
 	} else {
-		render.entity_box(d, p, v.yaw, 0, {-0.35, 0.35, -0.5}, {0.35, 0.85, 0.45}, wool, .Body)
+		render.entity_box(
+			d,
+			p,
+			v.yaw,
+			0,
+			{-0.35, 0.35, -0.5} * k,
+			{0.35, 0.85, 0.45} * k,
+			wool,
+			.Body,
+		)
+		if .Spotted in flags && !hurt {
+			// Patches of the other colour a hair proud of the wool (on its sides and back).
+			patch := WOOL_DARK if .Black not_in flags else WOOL_LIGHT
+			for at in ([3][2]f32{{-0.1, 0.2}, {0.15, -0.3}, {-0.05, -0.45}}) {
+				render.entity_box(
+					d,
+					p,
+					v.yaw,
+					0,
+					{at.x - 0.12, 0.6, at.y - 0.1} * k,
+					{at.x + 0.12, 0.87, at.y + 0.1} * k,
+					patch,
+					.Body,
+				)
+			}
+			render.entity_box(
+				d,
+				p,
+				v.yaw,
+				0,
+				{0.34, 0.5, -0.3} * k,
+				{0.37, 0.8, 0.05} * k,
+				patch,
+				.Body,
+			)
+			render.entity_box(
+				d,
+				p,
+				v.yaw,
+				0,
+				{-0.37, 0.4, 0.0} * k,
+				{-0.34, 0.7, 0.3} * k,
+				patch,
+				.Body,
+			)
+		}
 	}
-	neck := p + turn_yaw({0, 0.72, -0.45}, v.yaw)
-	render.entity_box(d, neck, v.yaw, v.pitch, {-0.2, -0.2, -0.38}, {0.2, 0.2, 0.02}, hide, .Head)
+	neck := p + turn_yaw(k * [3]f32{0, 0.72, -0.45}, v.yaw)
+	render.entity_box(
+		d,
+		neck,
+		v.yaw,
+		v.pitch,
+		{-0.2, -0.2, -0.38} * k,
+		{0.2, 0.2, 0.02} * k,
+		hide,
+		.Head,
+	)
 	swing := math.sin(stride * 5) * 0.6 // radians, as it walks
 	for leg in ([4][3]f32{{-0.22, 0.38, -0.32}, {0.22, 0.38, -0.32}, {-0.22, 0.38, 0.3}, {0.22, 0.38, 0.3}}) {
-		hip := p + turn_yaw(leg, v.yaw)
+		hip := p + turn_yaw(leg * k, v.yaw)
 		phase := swing if (leg.x < 0) == (leg.z < 0) else -swing
 		render.entity_box(
 			d,
 			hip,
 			v.yaw,
 			phase,
-			{-0.08, -0.38, -0.08},
-			{0.08, 0, 0.08},
+			{-0.08, -0.38, -0.08} * k,
+			{0.08, 0, 0.08} * k,
 			hide,
 			.Legs,
 		)
@@ -346,4 +420,20 @@ debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 		if c.a != 0 {return {c.r, c.g, c.b, 255}}
 	}
 	return {128, 128, 128, 255}
+}
+
+// hearts: a sheep in love lets a heart (a pink puff) float up.
+@(private = "file")
+hearts :: proc(s: ^Session, at: [3]f64) {
+	puff_add(
+		s,
+		Puff {
+			position = at + {rand.float64_range(-0.3, 0.3), 0, rand.float64_range(-0.3, 0.3)},
+			velocity = {0, 0.9, 0},
+			life = 1.1,
+			size = 0.09,
+			drag = 0.5,
+			color = HEART,
+		},
+	)
 }

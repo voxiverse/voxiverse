@@ -725,3 +725,30 @@ Blocks that change on their own, with Minecraft's rules, and the first crop on t
   farmland reverts; wheat ripens within the time its chances imply (a statistical bound
   over many plants); drops by stage; stages and farmland kept through save and load. One
   screenshot of a field in every stage.
+
+## M25: breeding
+
+Sheep have lambs, and lambs inherit. The rule is real genetics kept tiny: two genes, each
+with a common dominant form and a rare recessive one.
+
+- **Feeding:** using wheat on an adult sheep uses one wheat and makes it ready to breed for
+  30 seconds (hearts over it). Two ready sheep within 8 blocks walk to each other and a
+  lamb appears between them; each parent then waits 5 minutes before it can breed again.
+- **Lambs:** half size, grow up in 10 minutes (game time while the world is loaded); a lamb
+  cannot be shorn or bred; feeding one wheat brings its growing up forward by a tenth.
+- **Genes:** each sheep carries two copies of two genes, saved with it:
+  - wool: white (dominant) or black (recessive): a black sheep has two black copies and
+    drops black wool (a new block, as white);
+  - coat: plain (dominant) or spotted (recessive): spotted sheep have dark patches on
+    their wool (drawn; their wool drops white or black as their wool gene says).
+  A lamb takes one copy of each gene from each parent at random; one copy in a thousand
+  flips (a mutation). Sheep found in the wild carry each recessive copy 1 time in 10, so
+  about 1 in 100 shows each trait. Related sheep share copies, so breeding within a family
+  shows recessive traits more often: nothing extra is coded for that; it follows.
+- **Seeing it:** none of the genes is shown in words; only the wool and the spots.
+- **Built as:** `game/genetics.odin` (`Genes` as four copies in a bit set; `genes_child`, `genes_wild`); sheep flags (`Shorn, Lamb, Black, Spotted, In_Love`) replace the shorn flag in `Entity_Entry`; sheep have genes, growth, love and wait (saved as four more fields; old lines load); `Use_Entity` with wheat feeds (not used up with items.infinite); ready sheep within 8 blocks walk straight at each other (state `Mate`) and the lower id has the lamb; `Wool_Black` block.
+- **Exit check:** genetics tests: two carriers give black lambs 25% of the time (within a
+  tolerance over many draws); over generations, sibling lines show more recessive traits
+  than random pairing; mutation at its rate. A server test: two fed sheep make a lamb whose
+  genes come from them; it grows up on time; genes, age and wait times through save and
+  load. Over UDP, a second client sees the lamb small and the colours right.
