@@ -284,7 +284,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own (done: `server/worlds_test.odin` travels an admin away and back over UDP with her inventory while another player stays home, saves her edit in the other world's directory, unloads it when empty, keeps memory flat over repeated travel, and checks an address's kind across two universes; `game/address_test.odin`; old world directories migrate) |
 | M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
 | M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) (done: the tools, the benchmarking system (six scenarios under fixed conditions, `compare`, CI smoke runs), and the costs they found: load 6.0 -> 1.7 s, server tick time over a flight 1430 -> 330 ms, GPU frame at the spawn 2.34 -> 1.70 ms, triangles 517k -> 291k; commands, console and scripts separated) |
-| M20 | The first public build's experience: the title screen (a calm warp starfield, the version), Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect, and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver |
+| M20 | The first public build's experience: the title screen (a calm warp starfield, the version), a loading screen into worlds, Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect (tabs, key bindings), and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver |
 | M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows, Linux and macOS made by CI on every push and published as a GitHub Release for each version tag | A version tag gives a Release with the three packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
 | M22 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; the Windows list checked on a Windows machine |
 | M23 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
@@ -773,20 +773,33 @@ as a player meets it.
     clearly looking; found servers listed as they answer;
   - **Direct Connect** opens a small dialog (address, password if needed, Join); a kept
     server list with Add Server comes later.
-- **Options** (research first): today one list of every setting variable, raw. Survey what
-  players expect from current games (Minecraft and its kin, Luanti, Terraria, a typical PC
-  game) and keep only what earns its place. A starting point, to be settled by that survey:
-  - **Video:** display mode (windowed, fullscreen), VSync, a frame limit when it is off,
-    field of view, render distance (one slider in chunks; height follows), GUI scale
-    (Auto, 1-4), brightness, show FPS;
+- **Loading screen:** joining a world (singleplayer, a server, a gate's or `/travel`'s
+  arrival) shows a screen until the world around the player is there and drawn, instead of
+  a world building itself in view: what is happening in words ("Connecting", "Joining",
+  "Generating the world", "Arriving"), a bar for the chunks around the player loaded and
+  meshed (the same test as `wait_world`), and Cancel back to where one came from. A failure
+  (a refused join, a lost connection) says why in plain words, with Back.
+- **Options**, from research (Minecraft Java's options; the Game Accessibility Guidelines'
+  basic list, whose most complained-of issues are remapping, text size, colour and
+  subtitles; Luanti's settings, keys bound by their place on the keyboard). Today it is one
+  list of every setting variable, raw. Kept: what this game has and a player can use; left
+  out: knobs for things the game does not have (particles, music, resource packs, mipmaps,
+  graphics APIs, languages while there is one). Tabs, the same from the title and in game:
+  - **Video:** display mode (windowed, fullscreen), VSync, max frame rate when VSync is off
+    (30, 60, 120, 144, 240, unlimited), field of view (degrees), render distance (one slider
+    in chunks; the height follows it), GUI scale (Auto, 1-4), brightness (lifts the darkest
+    light levels: caves at night), clouds (on, off: a cost on weak GPUs), show FPS;
   - **Sound:** master volume (more sliders when there is music and more kinds of sound);
-  - **Controls:** mouse sensitivity, invert Y, sneak and sprint as hold or toggle, key
-    bindings (remapping: layouts other than QWERTY need it);
-  - **Accessibility:** reduce motion, chat text size;
+  - **Controls:** mouse sensitivity, invert Y, sneak and sprint each hold or toggle, key
+    bindings: every action remappable, bound by physical key position (layouts other than
+    QWERTY work), with Reset;
+  - **Accessibility:** reduce motion (stills the title's stars, and later camera bob and
+    shake), chat text size;
   - **Profile:** your name.
   Plain labels, real units, discrete choices where a slider would only confuse; changes
   apply at once and are saved on leaving. Debug and tuning switches stay in F4 and the
-  console, never in Options.
+  console, never in Options. Later, when the game has them: subtitles for sounds (the
+  guidelines' fourth complaint), sound categories, languages.
 - **Sneaking** (Minecraft's): holding sneak lowers the eyes and the body (1.8 -> 1.5 blocks
   tall: under a 1.5-block gap), slows walking (as now), and on the ground keeps the player on
   the block: a move that would step off an edge is cut, axis by axis, so one can lean over a
