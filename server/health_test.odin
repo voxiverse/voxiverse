@@ -106,7 +106,12 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		c.player.on_ground = false
 		c.player.velocity = {}
 	})
-	pause(t, {&a}, 1.5)
+	// (a slow runner takes a while to land: wait for the hurt, then for it to settle)
+	for _ in 0 ..< 40 {
+		pause(t, {&a}, 0.25)
+		if probe(&srv, "a").health < game.BASE_HEALTH {break}
+	}
+	pause(t, {&a}, 0.5)
 	after := probe(&srv, "a")
 	testing.expectf(
 		t,
