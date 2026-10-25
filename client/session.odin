@@ -205,7 +205,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	},
 	{&s.pipe, .Server},
 	) {
-		fail(s, "the server did not start")
+		fail(s, "the world could not start (the log says why)")
 		return false
 	}
 	if config.trace {session_trace(s)}

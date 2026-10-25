@@ -104,7 +104,7 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	s := app.session
 	t := &ctx.theme
 	starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
-	starfield_draw(ctx, &app.stars)
+	starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
 
 	words := "Loading the world"
 	switch {
@@ -148,7 +148,7 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	ui.label(
 		ctx,
-		fmt.tprintf("%d of %d chunks", ready, total) if s.state == .Playing else "",
+		fmt.tprintf("%d%%", 100 * ready / max(total, 1)) if s.state == .Playing else "",
 		ui.cut_top(&column, t.row_height),
 		.Center,
 		t.text_muted,

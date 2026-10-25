@@ -80,8 +80,10 @@ Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md]
 
 ## Running
 
-`build run` opens the title screen. Singleplayer lists your worlds: create one (any text works
-as a seed, or leave it empty for a random one), play, or delete. Worlds save every minute and
+`build run` opens the title screen. Singleplayer lists your saves, the last played first:
+play one (or double-click it), create one (its seed under More options: any text works, or
+leave it empty for a random one), rename it or open its folder (Edit), or delete it. Saves
+save every minute and
 when you leave; they live in `voxiverse/saves` in your user data directory
 (`~/.local/share` on Linux, `%APPDATA%` on Windows, `~/Library/Application Support` on macOS).
 
@@ -90,22 +92,26 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 | Mouse | Look |
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Walk |
 | <kbd>Space</kbd> | Jump; double-tap to fly or stop flying (flying: up) |
-| <kbd>Shift</kbd> | Sneak (flying: down) |
+| <kbd>Shift</kbd> | Sneak: crouch, and keep to the edge of a ledge (flying: down) |
 | <kbd>Ctrl</kbd> | Sprint |
 | Left / right click | Break / place a block (hold to repeat) |
 | <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose what to hold from the five-slot hotbar (a new player starts with stone, dirt, grass, sand, logs, leaves, water and lamps, and the rocket launcher where they may fire it). Placing a block uses one up; breaking one drops it to pick up by walking over it |
 | <kbd>E</kbd> | Inventory: drag stacks between slots, right-click to split, shift-click to move between the hotbar and the rest, a number key to swap with that hotbar slot; in your own world every item is there to take |
 | <kbd>Q</kbd> | Drop one of what you hold (<kbd>Ctrl</kbd>+<kbd>Q</kbd>: all of it) |
 | <kbd>T</kbd>, <kbd>/</kbd> | Chat / a server command (`/spawn`, `/mute bob 1h`; Tab completes). `&c` colours and `&l` bolds where your role allows; Up/Down walk what you sent |
-| <kbd>Esc</kbd> | Close what is open (chat, console, a menu), else the game menu (Resume, Options, Open to LAN, Leave World). Alone in your own world, pausing stops it |
+| <kbd>Esc</kbd> | Close what is open (chat, console, a menu), else the game menu (Back to Game, Options, Open to LAN, Save and Quit to Title). Alone in your own world, pausing stops it |
 | <kbd>F11</kbd> | Fullscreen |
 | <kbd>F2</kbd> | Screenshot |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick |
 | <kbd>F4</kbd> | Tuning panel: every setting and debug switch, live |
 | <kbd>`</kbd> | Console |
 
-Options has the FPS counter (**Show FPS**), **VSync** (off: as many frames as the machine
-can draw), fullscreen, field of view, view distance and volume.
+These are the default keys: every one can be changed in Options > Controls, where keys are
+bound by their place on the keyboard (WASD stays together on any layout) and named as yours
+prints them. Options also has, in tabs: display, VSync, a frame rate limit, field of view,
+render distance, GUI scale, brightness, clouds, the FPS counter (Video); volume (Sound);
+mouse, hold or toggle for sneak and sprint (Controls); reduce motion, chat text size
+(Accessibility); your name (Profile).
 
 Commands go in the chat, starting with `/` (Tab completes the ones you may use). In your own
 world you may do anything; on a server, what its roles let you (see
@@ -134,20 +140,21 @@ shows them. Cobblestone, stone bricks, planks and glass are for building.
 
 The console (`` ` ``) is for developers: it shows the log and takes developer commands
 (`help` lists them; `server <command>` sends a server command). `run -- --exec "cmd; cmd"`
-types console commands at startup to reproduce a state, e.g. `--exec "set view_radius 8; set
-view_height 4; singleplayer; tp 0 80 0 45 -20"`.
+types console commands at startup to reproduce a state, e.g. `--exec "set render_distance 8;
+singleplayer; tp 0 80 0 45 -20"`.
 
 ## Playing together
 
-- **From your own world:** pause, then **Open to LAN**. Others on your network see it under
-  **Multiplayer** (or join `your-address:27315`).
+- **From your own world:** pause, then **Open to LAN**. Others on your network see it listed
+  under **Multiplayer** (or join `your-address:27315` by **Direct Connection**).
 - **A dedicated server:** `./build.sh serve -- --universe universes/home --password secret` (or run
   `build/voxiverse-server --help` for every flag: port, name, seats, view distance, permissions).
   Ctrl+C saves and stops it.
 - **Over the internet:** forward UDP port 27315 on the host's router to the host, then join its
   public address. There is no relay or hole punching (yet).
 
-Your name is set in **Multiplayer** or Options. Worlds keep each player's place by name.
+Multiplayer asks for your name the first time; it is in Options > Profile after. Worlds keep
+each player's place by name.
 
 ## Layout
 

@@ -95,7 +95,7 @@ receive :: proc(s: ^Session) {
 			)
 		case game.Chunk_Message:
 			if !world_set_chunk(&s.world, v, s.scratch) {
-				fail(s, "too many chunks: the server sent more than its interest area")
+				fail(s, "the server sent more of the world than was asked for")
 				return
 			}
 			s.stats.chunks_received += 1

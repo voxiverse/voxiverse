@@ -53,7 +53,7 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	if app.screen != .Game {
 		// Every menu screen over the stars.
 		starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
-		starfield_draw(ctx, &app.stars)
+		starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
 	}
 	switch app.screen {
 	case .Title:
@@ -78,31 +78,21 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
-	column := ui.rect_center(ctx.screen, 400, 5 * t.row_height + 4 * t.spacing + 120)
+	column := ui.rect_center(ctx.screen, 400, 4 * t.row_height + 3 * t.spacing + 120)
 	ui.title(ctx, "Voxiverse", ui.cut_top(&column, 80))
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	// Minecraft's order: the two ways to play, then Options and Quit side
-	// by side; Accessibility under them, straight to its tab.
 	if ui.button(ctx, "Singleplayer", ui.next(ctx)) {
 		worlds_refresh(&app.worlds)
 		app.screen = .Worlds
 	}
 	if ui.button(ctx, "Multiplayer", ui.next(ctx)) {multiplayer_open(app)}
-	row := ui.next(ctx)
-	half := (row.w - t.spacing) / 2
-	if ui.button(ctx, "Options...", ui.cut_left(&row, half)) {
+	if ui.button(ctx, "Options", ui.next(ctx)) {
 		app.options.tab = .Video
 		app.screen = .Options
 	}
-	if ui.button(ctx, "Quit Game", ui.cut_right(&row, half)) {
-		overlay_open(&app.overlays, .Quit_Dialog)
-	}
-	if ui.button(ctx, "Accessibility", ui.rect_center(ui.next(ctx), 200, t.row_height)) {
-		app.options.tab = .Accessibility
-		app.screen = .Options
-	}
+	if ui.button(ctx, "Quit Game", ui.next(ctx)) {overlay_open(&app.overlays, .Quit_Dialog)}
 	if app.message != "" {
 		ui.label(ctx, app.message, ui.next(ctx), .Center, t.text_muted)
 	}
@@ -163,7 +153,7 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
 	if ui.button(ctx, "Back to Game", ui.next(ctx)) {overlay_close(&app.overlays, .Game_Menu)}
-	if ui.button(ctx, "Options...", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
+	if ui.button(ctx, "Options", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
 	if session_hosting(s) {
 		port := server.stats(&s.server).port
 		label := fmt.tprintf("Open to LAN: port %d", port) if port != 0 else "Open to LAN"
