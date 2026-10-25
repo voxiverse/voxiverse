@@ -36,6 +36,7 @@ Fake_Client :: struct {
 	notices:        [dynamic]string, // (temp allocator)
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 	variables:      string, // the last Variables (temp allocator)
+	selection:      [2]Maybe(game.Block_Pos), // the last Selection
 }
 
 // fake_hello: c joins as the character name (of the account test_key(name)),
@@ -67,6 +68,8 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		case game.Challenge:
 			fake_send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Characters: // (tests name their character in Hello)
+		case game.Selection:
+			c.selection = v.corners
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
 		case game.Reject:
@@ -266,7 +269,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		{first = game.Input{}, reason = "message before hello"},
 		{first = game.Teleport{}, reason = "message before hello"},
 		// Commands are for players: not before hello, even where allowed.
-		{first = game.Command{"explode 0 0 0 8"}, reason = "message before hello", cheats = true},
+		{first = game.Command{"summon"}, reason = "message before hello", cheats = true},
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
@@ -330,14 +333,14 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	defer delete(c.has)
 	defer delete(c.columns)
 	fake_hello(t, &c, "tester")
-	fake_send(&c, game.Command{"explode 0 0 0 8"})
+	fake_send(&c, game.Command{"summon"})
 	fake_send(&c, game.Fire{})
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.notices) >= 2}),
 	)
 	if len(c.notices) >= 2 {
-		testing.expect_value(t, c.notices[0], "You may not use explode here (world.explode)")
+		testing.expect_value(t, c.notices[0], "You may not use summon here (world.summon)")
 		testing.expect_value(t, c.notices[1], "You may not do that here (world.fire)")
 	}
 	testing.expect_value(t, c.rejected, "")
@@ -606,13 +609,24 @@ test_admin_commands :: proc(t: ^testing.T) {
 			fmt.tprintf("fill %d %d %d %d %d %d lamp", x, y, z, x + 1, y + 1, z + 1),
 			"fill: 8 blocks changed",
 		},
-		{"fill 0 60 0 1 61 1 bedrock", "Usage: fill <x1 y1 z1 x2 y2 z2> <block>"},
-		{"sphere 0 0 0 99 air", "Usage: sphere <x y z> <radius> <block>"},
+		{"fill 0 60 0 1 61 1 bedrock", "Usage: fill [x1 y1 z1 x2 y2 z2] <block>"},
+		{"sphere 0 0 0 99 air", "Usage: sphere [x y z] <radius> <block> (no x y z: at pos1)"},
 		{"time", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
 		{"time teatime", "Usage: time <0..1 | sunrise | day | noon | sunset | night | midnight>"},
 		{"summonx", "Unknown server command: summonx"},
 		{"summon rocket", "Usage: summon [kind]"},
 		{"fill -100 0 -100 100 60 100 dirt", "fill: too big (at most 262144 blocks)"},
+		// World editing on the selection, kept by the server.
+		{"sel", "Selection cleared"},
+		{"fill stone", "&cSelect a box first (/pos1, /pos2), or give its corners"},
+		{fmt.tprintf("pos1 %d %d %d", x, y, z), fmt.tprintf("pos1 %d %d %d", x, y, z)},
+		{
+			fmt.tprintf("pos2 %d %d %d", x + 1, y + 1, z + 1),
+			fmt.tprintf("pos2 %d %d %d", x + 1, y + 1, z + 1),
+		},
+		{"fill glass", "fill: 8 blocks changed"},
+		{"replace glass stone", "replace: 8 blocks changed"},
+		{"sphere 1 air", "sphere: 4 blocks changed"}, // (a ball of 7 at a corner of the cube: 3 of it already air)
 	}
 	for tc in cases {
 		clear(&c.notices)
@@ -628,6 +642,20 @@ test_admin_commands :: proc(t: ^testing.T) {
 		testing.expectf(t, got, "%q: no answer", tc.command)
 		if got {testing.expectf(t, c.notices[0] == tc.answer, "%q: %q", tc.command, c.notices[0])}
 	}
+	// The client was told the selection (to draw it), and told it cleared.
+	want_selection := [2]Maybe(game.Block_Pos) {
+		game.Block_Pos{x, y, z},
+		game.Block_Pos{x + 1, y + 1, z + 1},
+	}
+	testing.expect_value(t, c.selection, want_selection)
+	fake_send(&c, game.Command{"sel"})
+	cleared := wait_until(
+		t,
+		&c,
+		proc(c: ^Fake_Client) -> bool {return c.selection == {}},
+		2 * time.Second,
+	)
+	testing.expect(t, cleared, "the selection was not cleared")
 }
 
 // A server that cannot listen (the port is taken) fails to start, cleanly:

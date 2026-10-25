@@ -2,12 +2,11 @@ package client
 
 import "core:fmt"
 import "core:log"
-import "core:strconv"
 
 import "../base"
 import "../server"
 
-// Exit checks (fly_test, blast_test): console commands that drive the game
+// Exit checks (fly, tour, blast: `--check <name>`): they drive the game
 // and check how it holds up. What they share lives here: starting in a
 // world of our own (their memory checks need the server here), the memory
 // baseline and its check, and finishing: the verdict logged, a screenshot,
@@ -23,36 +22,64 @@ Exit_Check :: struct {
 	server_arena: uint,
 }
 
-// exit_check_start reads `<amount> [quit]` and makes sure we are in a world
-// of our own; false (said why) if the check cannot run.
-exit_check_start :: proc(
-	app: ^App,
-	c: ^Exit_Check,
-	name: string,
-	args: []string,
-) -> (
-	amount: f64,
-	ok: bool,
-) {
-	amount, ok = strconv.parse_f64(args[0] if len(args) > 0 else "")
-	if !ok || amount <= 0 {
-		console_print(&app.console, fmt.tprintf("usage: %s <amount> [quit]", name), .Warning)
-		return 0, false
-	}
+// exit_check_start enters a world of our own for check c (its memory
+// checks need the server here); false (said why) if it cannot run.
+exit_check_start :: proc(app: ^App, c: ^Exit_Check, name: string) -> bool {
 	if app.session == nil {enter_world(app, "", SCRATCH_SEED, SCRATCH_SPAWN)}
-	if app.session == nil {return 0, false}
-	if !session_hosting(app.session) {
-		console_print(&app.console, fmt.tprintf("%s runs in a world of your own", name), .Warning)
-		return 0, false
+	if app.session == nil || !session_hosting(app.session) {
+		log.errorf("%s runs in a world of our own", name)
+		return false
 	}
 	frames := c.frames // keep the (large) stats buffer's storage
 	c^ = {
 		name   = name,
-		quit   = len(args) > 1 && args[1] == "quit",
+		quit   = true,
 		frames = frames,
 	}
 	c.frames.count = 0
-	return amount, true
+	return true
+}
+
+// Check_Info: an exit check run by `--check <name>` (main.odin), in a fixed
+// view (its settings are BENCHMARK_SETTINGS', with this view: the same run
+// anywhere), after any --exec script (which may set things up first: a
+// network trace).
+Check_Info :: struct {
+	name:        string,
+	description: string,
+	view_radius: i32,
+	view_height: i32,
+	start:       proc(app: ^App),
+}
+
+@(rodata)
+CHECKS := [?]Check_Info {
+	{
+		"fly",
+		"fly 400 blocks: memory stays flat while the world streams",
+		6,
+		3,
+		proc(app: ^App) {fly_test_begin(app, 400)},
+	},
+	{
+		"tour",
+		"visit every biome: frame, generation and meshing budgets, memory",
+		4,
+		3,
+		proc(app: ^App) {tour_test_begin(app)},
+	},
+	{
+		"blast",
+		"12 rockets and explosions: budgets, meshes shown whole, memory, the client's chunks the server's",
+		4,
+		2,
+		proc(app: ^App) {blast_test_begin(app, 12)},
+	},
+}
+
+check_find :: proc(name: string) -> (Check_Info, bool) {
+	for c in CHECKS {if c.name == name {return c, true}}
+	return {}, false
 }
 
 // exit_check_baseline: memory now, which must not grow until the end.

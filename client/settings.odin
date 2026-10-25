@@ -244,7 +244,7 @@ settings_load :: proc(app: ^App) {
 // settings_save writes the settings file (through a temporary file, so a
 // crash mid-write cannot leave half a file).
 settings_save :: proc(app: ^App) {
-	if app.benchmark {return} 	// (never the benchmark's settings)
+	if app.benchmark || app.checking {return} 	// (never a benchmark's or a check's settings)
 	path, ok := settings_path()
 	if !ok {return}
 	b := strings.builder_make(context.temp_allocator)

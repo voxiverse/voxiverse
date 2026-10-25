@@ -52,6 +52,10 @@ Config :: struct {
 
 DEFAULT_MAX_PLAYERS :: 8
 
+// UNLOAD_SWEEP_TICKS: how often every loaded chunk is looked at for whether
+// anyone wants it (a client's moves free what it left as it goes).
+UNLOAD_SWEEP_TICKS :: game.TICK_RATE * 10
+
 // Stats is a snapshot, published at the end of every tick.
 Stats :: struct {
 	tick:              u64,
@@ -71,32 +75,34 @@ Stats :: struct {
 }
 
 Server :: struct {
-	config:      Config,
-	capacity:    int, // chunks
-	local:       game.Endpoint, // the in-process player's pipe (none: a dedicated server)
-	thread:      ^thread.Thread,
-	stopping:    bool, // (atomic)
-	frozen:      bool, // (atomic) the local player paused: time and entities stand still
-	failed:      bool, // (atomic)
-	stats_mutex: sync.Mutex,
-	stats:       Stats,
-	log_tag:     base.Log_Tag,
-	store:       Store, // saving (save.odin)
+	config:         Config,
+	capacity:       int, // chunks
+	local:          game.Endpoint, // the in-process player's pipe (none: a dedicated server)
+	thread:         ^thread.Thread,
+	stopping:       bool, // (atomic)
+	frozen:         bool, // (atomic) the local player paused: time and entities stand still
+	failed:         bool, // (atomic)
+	stats_mutex:    sync.Mutex,
+	stats:          Stats,
+	log_tag:        base.Log_Tag,
+	store:          Store, // saving (save.odin)
 	// Server thread only, after start:
-	arena:       virtual.Arena,
-	home:        ^World, // the universe's first world (always loaded)
-	worlds:      [dynamic]^World, // loaded (home first)
-	clients:     []Client, // index = player id
-	host:        netcode.Host, // remote players (listening when host_open)
-	listening:   bool,
-	capture:     netcode.Capture, // (config.capture)
-	perms:       Permissions, // who may do what (permissions.odin)
-	community:   Community, // nicknames, mutes, homes, warps, bans (community.odin)
-	chat:        Chat_State, // (chat.odin)
-	kit:         [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
-	offsets:     []game.Chunk_Pos, // the interest area around a client, nearest first
-	writer:      game.Writer,
-	tick:        u64,
+	arena:          virtual.Arena,
+	home:           ^World, // the universe's first world (always loaded)
+	worlds:         [dynamic]^World, // loaded (home first)
+	clients:        []Client, // index = player id
+	host:           netcode.Host, // remote players (listening when host_open)
+	listening:      bool,
+	capture:        netcode.Capture, // (config.capture)
+	perms:          Permissions, // who may do what (permissions.odin)
+	community:      Community, // nicknames, mutes, homes, warps, bans (community.odin)
+	chat:           Chat_State, // (chat.odin)
+	kit:            [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
+	offsets:        []game.Chunk_Pos, // the interest area around a client, nearest first
+	unload_offsets: []game.Chunk_Pos, // ... with SERVER_UNLOAD_MARGIN (unload_left)
+	calls:          base.Queue(^Server_Call), // from beside an in-process server (call.odin)
+	writer:         game.Writer,
+	tick:           u64,
 }
 
 // A rejected remote client is told why and dropped this many ticks later.
@@ -136,7 +142,13 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	permissions_open(s)
 	community_open(s)
 	characters_open(s)
+	base.queue_init(&s.calls)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
+	s.unload_offsets = game.interest_offsets(
+		config.view_radius + game.SERVER_UNLOAD_MARGIN,
+		config.view_height + game.SERVER_UNLOAD_MARGIN,
+		arena,
+	)
 	// Loaded chunks stay within the unload distance of some player, plus
 	// chunks still generating that were requested before they moved.
 	per_player := game.interest_count(
@@ -213,6 +225,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	for &c in s.clients {client_reset(&c)}
 	for w in s.worlds {world_close(w)}
 	delete(s.worlds)
+	base.queue_destroy(&s.calls)
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
 }
@@ -292,6 +305,7 @@ tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	base.metric_scope(.Server_Tick)
 	s.tick += 1
+	calls_run(s)
 	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
 	for w in s.worlds {
 		chunks_collect(
@@ -316,7 +330,11 @@ tick :: proc(s: ^Server) {
 	if !frozen {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
-	moved := false
+	Move :: struct {
+		world:    ^World,
+		from, to: game.Chunk_Pos,
+	}
+	moves := make([dynamic]Move, context.temp_allocator)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
 		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
@@ -324,13 +342,17 @@ tick :: proc(s: ^Server) {
 		if c.moved {
 			base.profile_scope("drop far")
 			c.moved = false
-			moved = true
+			append(&moves, Move{c.world, c.moved_from, c.center})
 			drop_far(s, &c)
 		}
 	}
 	worlds_unload_idle(s)
+	for m in moves {
+		base.profile_scope("unload left")
+		unload_left(m.world, m.from, m.to)
+	}
 	for w in s.worlds {
-		if moved {
+		if s.tick % UNLOAD_SWEEP_TICKS == 0 {
 			base.profile_scope("unload unwanted")
 			unload_unwanted(w)
 		}

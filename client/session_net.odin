@@ -74,6 +74,8 @@ receive :: proc(s: ^Session) {
 			s.state = .Choosing
 		case game.Welcome:
 			welcome(s, v)
+		case game.Selection:
+			s.selection = v.corners // (drawn: camera.odin)
 		case game.World_Changed:
 			// Travelled: nothing of the last world stays; the arrival (a
 			// teleport), the new world's chunks and entities follow.

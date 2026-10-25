@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 15
+PROTOCOL_VERSION :: 16
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -176,6 +176,12 @@ Welcome :: struct {
 World_Changed :: struct {
 	address: Address,
 	rules:   Rules,
+}
+
+// Selection: the player's world-editing selection (server commands /pos1,
+// /pos2, /sel), for the client to draw its box; a corner not set is none.
+Selection :: struct {
+	corners: [2]Maybe(Block_Pos),
 }
 
 // Reject ends the connection.
@@ -414,6 +420,7 @@ Server_Message :: union {
 	Challenge,
 	Characters,
 	World_Changed,
+	Selection,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -473,6 +480,7 @@ Server_Kind :: enum u8 {
 	Challenge,
 	Characters,
 	World_Changed,
+	Selection,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -602,6 +610,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "characters"
 		case u8(Server_Kind.World_Changed):
 			return "world_changed"
+		case u8(Server_Kind.Selection):
+			return "selection"
 		}
 	}
 	return ""
@@ -693,6 +703,13 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Selection:
+		write_u8(w, u8(Server_Kind.Selection))
+		for corner in v.corners {
+			p, set := corner.?
+			write_u8(w, 1 if set else 0)
+			if set {write_block_pos(w, p)}
+		}
 	case Reject:
 		write_u8(w, u8(Server_Kind.Reject))
 		write_string(w, v.reason)
@@ -1126,6 +1143,18 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Selection):
+		sel: Selection
+		for &corner in sel.corners {
+			switch read_u8(&r) {
+			case 0:
+			case 1:
+				corner = read_block_pos(&r)
+			case:
+				reader_fail(&r)
+			}
+		}
+		m = sel
 	case u8(Server_Kind.Characters):
 		m = Characters {
 			names = read_string(&r, MAX_CHARACTERS * (MAX_NAME_LENGTH + 1)),

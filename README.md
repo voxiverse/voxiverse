@@ -107,16 +107,18 @@ when you leave; they live in `voxiverse/saves` in your user data directory
 Options has the FPS counter (**Show FPS**), **VSync** (off: as many frames as the machine
 can draw), fullscreen, field of view, view distance and volume.
 
-In your own world you may do anything; on a server, what its roles let you (see
-[DEBUGGING.md](DEBUGGING.md#permissions)). Then the console also edits in bulk: `pos1` and `pos2` mark the corners of a box at the block you aim at, then
-`fill stone`, `replace dirt sand` or `clear`; `sphere 5 stone` and `explode 8` act on the
-aimed block. Hotbar slot 9 is a rocket launcher.
+Commands go in the chat, starting with `/` (Tab completes the ones you may use). In your own
+world you may do anything; on a server, what its roles let you (see
+[DEBUGGING.md](DEBUGGING.md#permissions)). Builders edit in bulk: `/pos1` and `/pos2` mark the
+corners of a box at the block you look at, then `/fill stone`, `/replace dirt sand`, or
+`/sphere 5 stone` at the first corner. Hotbar slot 9 is a rocket launcher.
 
 New worlds are Earth-like: continents and oceans, rivers, mountains with cliffs and
 overhangs, caves and ores, forests, taiga, tundra, deserts, beaches (worlds saved before
-keep the land they were made with). `locate desert` flies you to the nearest desert, `fly`
-starts or stops flying. `set worldgen.mountain_height 180` (or F4) changes how the land is
-made from then on, and `regen` remakes the land around you that way (your edits stay).
+keep the land they were made with). `/locate desert` flies you to the nearest desert; a
+double tap of jump starts or stops flying. `set worldgen.mountain_height 180` in the console
+(or F4) changes how the land is made from then on, and `/regen` remakes the land around you
+that way (your edits stay).
 
 Water flows as in Minecraft: open a lake's side and it pours out, down first, then spreading
 and thinning; between two sources a new one forms. In water you swim: jump to rise (and,
@@ -124,14 +126,16 @@ against a ledge, to climb out), sneak to dive; under the surface the world turns
 close. Sunlight fades with depth, and trees cast shade.
 
 Out in the world stand towers, ruins and wells; dungeons lie under it, a spiral stair in a
-stone shaft leading down (`locate tower`, `locate dungeon`).
-Build your own: select a box (`pos1`, `pos2`) and `structure save hut` keeps it with the world
-(its air leaves what is there when pasted; `structure save hut clear` clears it);
-`structure paste hut 1` puts it at the block you aim at, a quarter turned. `structure list`
-shows them. Cobblestone, stone bricks, planks and glass are for building (`place glass`).
+stone shaft leading down (`/locate tower`, `/locate dungeon`).
+Build your own: select a box (`/pos1`, `/pos2`) and `/structure save hut` keeps it with the
+world (its air leaves what is there when pasted; `/structure save hut clear` clears it);
+`/structure paste hut 1` puts it at the first corner, a quarter turned. `/structure list`
+shows them. Cobblestone, stone bricks, planks and glass are for building.
 
-The console shows the log and takes commands (`help` lists them); `run -- --exec "cmd; cmd"`
-runs commands at startup, e.g. `--exec "set view_radius 8; set view_height 4; singleplayer; tp 0 80 0 45 -20"`.
+The console (`` ` ``) is for developers: it shows the log and takes developer commands
+(`help` lists them; `server <command>` sends a server command). `run -- --exec "cmd; cmd"`
+types console commands at startup to reproduce a state, e.g. `--exec "set view_radius 8; set
+view_height 4; singleplayer; tp 0 80 0 45 -20"`.
 
 ## Playing together
 

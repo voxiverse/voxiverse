@@ -103,7 +103,15 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// around it.
 	@(static) blast: game.Block_Pos
 	blast = {-6, base_y - 2, 6}
-	net_send(&a, game.Command{fmt.tprintf("explode %d %d %d 4", blast.x, blast.y, blast.z)})
+	Blast :: struct {
+		at: game.Block_Pos,
+	}
+	blast_at := Blast{blast}
+	call(
+		&srv,
+		proc(s: ^Server, data: rawptr) {explode_by(s, "a", (^Blast)(data).at, 4)},
+		&blast_at,
+	)
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 		x0, _ := net_block(cs[0], blast)
 		x1, _ := net_block(cs[1], blast)

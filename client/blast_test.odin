@@ -3,8 +3,6 @@ package client
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:strconv"
-import "core:strings"
 import "core:time"
 
 import "../base"
@@ -12,16 +10,16 @@ import "../game"
 import "../render"
 import "../server"
 
-// M9's exit check, as a console command: `blast_test <shots> [quit]` waits
+// M9's exit check (`--check blast`, exit_check.odin's CHECKS): it waits
 // for the world, hovers above the spawn and fires: rockets and radius-6
 // explosions in turn, a little further round each time. Then it checks the
 // frames and server ticks kept within budget, no bulk edit's meshes had to
 // be shown before all of them were ready (when a hole could show), memory
 // did not grow, and the client's chunks are exactly the server's (a hash of
-// every chunk the server has sent us, from each side). With `quit` it ends
-// the program, failing the run if a check failed.
+// every chunk the server has sent us, from each side). Then it ends the
+// program, failing the run if a check failed.
 //
-//	voxiverse --exec "singleplayer; blast_test 20 quit"
+//	voxiverse --check blast
 
 Blast_Test_Phase :: enum u8 {
 	Off,
@@ -40,6 +38,8 @@ Blast_Test :: struct {
 	started:      time.Tick, // of the phase
 	next_shot:    time.Tick,
 	tick_max:     f32, // the server's slowest tick seen while firing
+	server_count: int, // the server's hash of the chunks it sent us
+	server_sum:   u64,
 	late_before:  int,
 	shown_before: int,
 }
@@ -50,10 +50,13 @@ BLAST_TICK_BUDGET_MS :: 100 // the slowest server tick
 BLAST_TIMEOUT :: 60 * time.Second // per phase
 
 @(private)
-blast_test_command :: proc(app: ^App, args: []string) {
+blast_test_begin :: proc(app: ^App, shots: int) {
 	t := &app.blast_test
-	shots, ok := exit_check_start(app, &t.check, "blast_test", args)
-	if !ok {return}
+	if !exit_check_start(app, &t.check, "blast_test") {
+		t.check.failed = true
+		app.quit = true
+		return
+	}
 	t.phase, t.shots, t.fired, t.started, t.tick_max = .Loading, int(shots), 0, time.tick_now(), 0
 	log.infof("blast_test waiting for the world shots=%d", t.shots)
 }
@@ -125,8 +128,7 @@ blast_test_update :: proc(app: ^App) {
 				blast_test_finish(app, "no ground in view to blow up")
 				return
 			}
-			p := hit.block
-			send_message(s, game.Command{fmt.tprintf("explode %d %d %d 6", p.x, p.y, p.z)})
+			server_explode(s, hit.block, 6)
 		}
 		t.fired += 1
 		if t.fired == t.shots {next(t, .Settling)}
@@ -137,17 +139,24 @@ blast_test_update :: proc(app: ^App) {
 		if len(s.world.groups) > 0 {return}
 		// Water the blasts let loose flows on a while: until it settles.
 		if server.stats(&s.server).updates_waiting > 0 {return}
-		send_message(s, game.Command{"hash"})
+		// The server's hash of what it sent us; compared once what it sent
+		// before has arrived (the pipe delivers it all at the next receive).
+		hashed := struct {
+			count: int,
+			sum:   u64,
+		}{}
+		server.call(&s.server, proc(srv: ^server.Server, data: rawptr) {
+				h := (^struct {
+						count: int,
+						sum:   u64,
+					})(data)
+				h.count, h.sum = server.chunks_hash_of(srv, "")
+			}, &hashed)
+		t.server_count, t.server_sum = hashed.count, hashed.sum
 		next(t, .Comparing)
 	case .Comparing:
-		for n in s.notices {
-			if !strings.has_prefix(n, "hash ") {continue}
-			f := strings.fields(n, context.temp_allocator)
-			count, _ := strconv.parse_int(f[1])
-			want, _ := strconv.parse_u64_of_base(f[2], 16)
-			blast_test_compare(app, count, want)
-			return
-		}
+		if time.tick_since(t.started) < 100 * time.Millisecond {return}
+		blast_test_compare(app, t.server_count, t.server_sum)
 	}
 }
 

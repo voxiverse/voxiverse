@@ -8,15 +8,15 @@ import "../base"
 import "../game"
 import "../server"
 
-// The M3 exit check, as a console command: `fly_test <blocks> [quit]` waits
+// The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
 // for the world around the spawn to load, then flies the camera in a
 // straight line and checks that memory stays put while it streams in new
 // terrain and drops the old: the session arenas must not grow at all, and
 // chunk storage must stay within the sizes fixed at join. It logs frame
-// times for the flight and, with `quit`, ends the program (failing the run
-// if a check failed).
+// times for the flight, then ends the program (failing the run if a check
+// failed).
 //
-//	voxiverse --exec "singleplayer; fly_test 1500 quit"
+//	voxiverse --check fly
 
 Fly_Test_Phase :: enum u8 {
 	Off,
@@ -39,10 +39,13 @@ FLY_TEST_HEIGHT :: 100 // above the highest terrain
 FLY_TEST_LOAD_TIMEOUT :: 60 // seconds
 
 @(private)
-fly_test_command :: proc(app: ^App, args: []string) {
+fly_test_begin :: proc(app: ^App, distance: f64) {
 	t := &app.fly_test
-	distance, ok := exit_check_start(app, &t.check, "fly_test", args)
-	if !ok {return}
+	if !exit_check_start(app, &t.check, "fly_test") {
+		t.check.failed = true
+		app.quit = true
+		return
+	}
 	t.phase, t.distance, t.start, t.waited = .Loading, distance, {}, 0
 	log.infof("fly_test waiting for the world to load blocks=%.0f", distance)
 }

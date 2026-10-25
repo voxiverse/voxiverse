@@ -14,7 +14,8 @@ import "core:strings"
 // build/worktrees/, kept for next time), then run alternately, <ref> and
 // the working tree in turn N times (default 5), so heat and whatever else
 // the machine is doing fall on both alike. Each run is one number per
-// metric (the median of its repetitions' values: base.metric_value); a metric's change is called only
+// metric (the median of its repetitions' values: base.metric_value), and
+// for times their p99 too; a metric's change is called only
 // when the two sets of runs differ beyond chance (Mann-Whitney U, two
 // sided, p < 0.05). Exact counts that differ are shown first: then the two
 // did different work. <ref> must have the benchmark system (results in
@@ -107,11 +108,29 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 	cmd := []string{exe, "--benchmark", scenario}
 	if scenario ==
 	   "chunks" {cmd = {path_join({"build", strings.concatenate({"bench", exe_suffix()})})}}
-	if _, ok := capture(cmd); !ok {
+	if scenario == "server" {
+		// The server alone (dedicated/bench.odin).
+		cmd = {
+			path_join({"build", strings.concatenate({"voxiverse-server", exe_suffix()})}),
+			"--benchmark",
+			scenario,
+		}
+	}
+	state, stdout, stderr, run_err := os.process_exec(
+		os.Process_Desc{command = cmd},
+		context.allocator,
+	)
+	if run_err != nil || !state.exited || state.exit_code != 0 {
+		// Its last words: why.
+		out := strings.concatenate({string(stdout), string(stderr)})
+		lines := strings.split_lines(strings.trim_space(out))
 		fmt.eprintfln(
-			"build: bench compare: the run failed in %s (see its build/voxiverse.log)",
+			"build: bench compare: the run failed in %s (%v, exit %d); its last lines:",
 			side.root,
+			run_err,
+			state.exit_code,
 		)
+		for l in lines[max(0, len(lines) - 12):] {fmt.eprintln("  ", l)}
 		return false
 	}
 	// Its result: the newest file of the scenario's.
@@ -140,6 +159,14 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 			// results from before values were written have medians.
 			chosen, has := fields["value"]
 			append(&medians[name], number(chosen if has else fields["median"]))
+			// Times also by their worst 1%: hitches and spikes matter as much
+			// as the middle (a fix to those may not move it at all).
+			if fields["unit"].(json.String) == "ms" {
+				tail := strings.concatenate({name, " p99"})
+				if tail not_in medians {medians[tail] = {}}
+				append(&medians[tail], number(fields["p99"]))
+				side.units[tail] = "ms"
+			}
 			side.units[name] = fields["unit"].(json.String)
 		}
 	}

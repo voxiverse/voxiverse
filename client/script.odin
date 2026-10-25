@@ -38,6 +38,11 @@ script_destroy :: proc(s: ^Script) {
 }
 
 // script_run runs commands until the script waits or ends; once per frame.
+// script_done: every command has run and nothing is waited for.
+script_done :: proc(s: ^Script) -> bool {
+	return s.next >= len(s.commands) && s.wait == 0 && s.until == {} && !s.wait_world
+}
+
 script_run :: proc(app: ^App, s: ^Script) {
 	if s.wait > 0 {
 		s.wait -= 1

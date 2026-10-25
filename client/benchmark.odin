@@ -290,12 +290,7 @@ bench_update :: proc(app: ^App) {
 			if b.fired < BENCH_EDITS {
 				if time.tick_diff(time.tick_now(), b.next_shot) > 0 {return}
 				t := b.targets[b.fired]
-				send_message(
-					s,
-					game.Command {
-						fmt.tprintf("explode %d %d %d %d", t.x, t.y, t.z, BENCH_EDIT_RADIUS),
-					},
-				)
+				server_explode(s, t, BENCH_EDIT_RADIUS)
 				b.fired += 1
 				b.next_shot = time.tick_add(b.next_shot, BENCH_EDIT_EVERY)
 				return

@@ -34,13 +34,33 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_time,
 		"world.time",
 	},
-	{"fill", "<x1 y1 z1 x2 y2 z2> <block>", {7, 7}, admin_fill, "world.edit.bulk"},
-	{"replace", "<x1 y1 z1 x2 y2 z2> <from> <to>", {8, 8}, admin_replace, "world.edit.bulk"},
-	{"sphere", "<x y z> <radius> <block>", {5, 5}, admin_sphere, "world.edit.bulk"},
-	{"explode", "<x y z> <radius>", {4, 4}, admin_explode, "world.explode"},
+	// World editing: on the selection (selection.odin), or coordinates given.
+	{
+		"pos1",
+		"[x y z]",
+		{0, 3},
+		proc(s: ^Server, c: ^Client, args: []string) -> bool {return admin_corner(s, c, args, 0)},
+		"world.edit.bulk",
+	},
+	{
+		"pos2",
+		"[x y z]",
+		{0, 3},
+		proc(s: ^Server, c: ^Client, args: []string) -> bool {return admin_corner(s, c, args, 1)},
+		"world.edit.bulk",
+	},
+	{"sel", "", {0, 0}, admin_sel, "world.edit.bulk"},
+	{"fill", "[x1 y1 z1 x2 y2 z2] <block>", {1, 7}, admin_fill, "world.edit.bulk"},
+	{"replace", "[x1 y1 z1 x2 y2 z2] <from> <to>", {2, 8}, admin_replace, "world.edit.bulk"},
+	{
+		"sphere",
+		"[x y z] <radius> <block> (no x y z: at pos1)",
+		{2, 5},
+		admin_sphere,
+		"world.edit.bulk",
+	},
 	{"summon", "[kind]", {0, 1}, admin_summon, "world.summon"},
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
-	{"hash", "", {0, 0}, admin_hash, "debug.hash"},
 	{"locate", "<biome or structure>", {1, 1}, admin_locate, "teleport.locate"},
 	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
 	{"delmsg", "<player> [count]", {1, 2}, admin_delmsg, "chat.delete"},
@@ -95,7 +115,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
 	{
 		"structure",
-		"save <name> <x1 y1 z1 x2 y2 z2> [clear] | paste <name> <x y z> [quarter turns] | list",
+		"save <name> [x1 y1 z1 x2 y2 z2] [clear] | paste <name> [x y z] [quarter turns] | list (no coordinates: the selection, pos1)",
 		{1, 9},
 		admin_structure,
 		"world.structure",
@@ -166,33 +186,47 @@ admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_fill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	box := parse_box(args[:6]) or_return
-	block := parse_block(args[6]) or_return
+	box, ok, said := edit_box(s, c, args, 1)
+	if said {return true}
+	if !ok {return false}
+	block := parse_block(args[len(args) - 1]) or_return
 	bulk_notice(s, c, "fill", {shape = box, op = .Set, block = block})
 	return true
 }
 
 @(private = "file")
 admin_replace :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	box := parse_box(args[:6]) or_return
-	from := parse_block(args[6]) or_return
-	to := parse_block(args[7]) or_return
+	box, ok, said := edit_box(s, c, args, 2)
+	if said {return true}
+	if !ok {return false}
+	from := parse_block(args[len(args) - 2]) or_return
+	to := parse_block(args[len(args) - 1]) or_return
 	bulk_notice(s, c, "replace", {shape = box, op = .Replace, from = from, block = to})
 	return true
 }
 
 @(private = "file")
 admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	center, radius := parse_ball(args[:4]) or_return
-	block := parse_block(args[4]) or_return
+	center: [3]f64
+	radius: f64
+	switch len(args) {
+	case 2:
+		// At pos1.
+		p, set := c.selection[0].?
+		if !set {
+			notice(s, c, "&cSet pos1 first (/pos1)")
+			return true
+		}
+		center = {f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5}
+		radius = strconv.parse_f64(args[0]) or_return
+		if !(radius > 0 && radius <= 32) {return false}
+	case 5:
+		center, radius = parse_ball(args[:4]) or_return
+	case:
+		return false
+	}
+	block := parse_block(args[len(args) - 1]) or_return
 	bulk_notice(s, c, "sphere", {shape = Sphere{center, radius}, op = .Set, block = block})
-	return true
-}
-
-@(private = "file")
-admin_explode :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	center, radius := parse_ball(args) or_return
-	explode(c.world, center, radius)
 	return true
 }
 
@@ -313,20 +347,39 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	case "list":
 		notice(s, c, structure_list(s))
 	case "save":
-		if len(args) != 8 && len(args) != 9 {return false}
-		if !structure_name_valid(args[1]) {return false}
-		box := parse_box(args[2:8]) or_return
-		clear := len(args) == 9 && args[8] == "clear"
-		if len(args) == 9 && !clear {return false}
+		// save <name> [x1 y1 z1 x2 y2 z2] [clear]
+		if len(args) < 2 || !structure_name_valid(args[1]) {return false}
+		rest := args[2:]
+		clear := len(rest) > 0 && rest[len(rest) - 1] == "clear"
+		if clear {rest = rest[:len(rest) - 1]}
+		box, ok, said := edit_box(s, c, rest, 0)
+		if said {return true}
+		if !ok {return false}
 		notice(s, c, structure_save(c.world, args[1], box.lo, box.hi, clear))
 	case "paste":
-		if len(args) != 5 && len(args) != 6 {return false}
-		if !structure_name_valid(args[1]) {return false}
-		n: [3]i32
-		parse_coords(args[2:5], n[:]) or_return
+		// paste <name> [x y z] [turns]
+		if len(args) < 2 || !structure_name_valid(args[1]) {return false}
+		rest := args[2:]
 		turns := 0
-		if len(args) == 6 {turns = strconv.parse_int(args[5]) or_return}
+		if len(rest) == 1 || len(rest) == 4 {
+			turns = strconv.parse_int(rest[len(rest) - 1]) or_return
+			rest = rest[:len(rest) - 1]
+		}
 		if turns < 0 || turns > 3 {return false}
+		n: [3]i32
+		switch len(rest) {
+		case 3:
+			parse_coords(rest, n[:]) or_return
+		case 0:
+			p, set := c.selection[0].?
+			if !set {
+				notice(s, c, "&cSet pos1 first (/pos1), or give where")
+				return true
+			}
+			n = p
+		case:
+			return false
+		}
 		notice(s, c, structure_paste(c.world, args[1], n, u8(turns)))
 	case:
 		return false
@@ -345,16 +398,29 @@ admin_regen :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 // admin_hash: the chunks this client has, as the server has them (for
 // blast_test to compare with its own).
+// edit_box: the box a world-editing command acts on: the six coordinates
+// before its last `rest` words, or with none, c's selection. said: there
+// is none, and c was told (the command is done); else !ok is a usage error.
 @(private = "file")
-admin_hash :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	w := c.world
-	sum: u64
-	for pos in c.has {
-		if chunk := chunks_get(&w.chunks, pos); chunk != nil && chunk.state == .Ready {
-			game.chunks_hash_add(&sum, pos, &chunk.blocks)
+edit_box :: proc(s: ^Server, c: ^Client, args: []string, rest: int) -> (box: Box, ok, said: bool) {
+	switch len(args) - rest {
+	case 6:
+		box, ok = parse_box(args[:6])
+		return
+	case 0:
+		if box, ok = selection_box(c); !ok {
+			notice(s, c, "&cSelect a box first (/pos1, /pos2), or give its corners")
+			return {}, false, true
 		}
+		return
 	}
-	notice(s, c, fmt.tprintf("hash %d %x", len(c.has), sum))
+	return
+}
+
+@(private = "file")
+admin_sel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	selection_set(s, c, {})
+	notice(s, c, "Selection cleared")
 	return true
 }
 

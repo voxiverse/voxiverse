@@ -2,8 +2,6 @@ package server
 
 import "core:fmt"
 import "core:math"
-import "core:strconv"
-import "core:strings"
 import "core:testing"
 import "core:time"
 
@@ -88,9 +86,9 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 	// Settled: the hash no longer moves; both players have the server's.
 	last: u64
 	for _ in 0 ..< 10 {
-		h, count := server_hash(t, &a)
+		h, count := server_hash(t, &srv, &a)
 		if h == last && h == client_hash(&a) && stats(&srv).updates_waiting == 0 {
-			hb, _ := server_hash(t, &b)
+			hb, _ := server_hash(t, &srv, &b)
 			testing.expectf(t, hb == client_hash(&b), "b's chunks differ from the server's")
 			testing.expect(t, count == len(a.chunks))
 			result.hash = h
@@ -120,24 +118,27 @@ settle :: proc(t: ^testing.T, a, b: ^Net_Client, d: time.Duration) {
 	}
 }
 
-// server_hash: the server's hash of the chunks c has (admin "hash").
+// server_hash: the server's hash of the chunks c has (server.call), then c
+// given a moment to take in what was on its way.
 @(private = "file")
-server_hash :: proc(t: ^testing.T, c: ^Net_Client) -> (sum: u64, count: int) {
-	for n in c.notices {delete(n)}
-	clear(&c.notices)
-	net_send(c, game.Command{"hash"})
-	for _ in 0 ..< 100 {
+server_hash :: proc(t: ^testing.T, srv: ^Server, c: ^Net_Client) -> (sum: u64, count: int) {
+	Hash :: struct {
+		name:  string,
+		count: int,
+		sum:   u64,
+	}
+	h := Hash {
+		name = c.name,
+	}
+	call(srv, proc(s: ^Server, data: rawptr) {
+			h := (^Hash)(data)
+			h.count, h.sum = chunks_hash_of(s, h.name)
+		}, &h)
+	for _ in 0 ..< 5 {
 		net_pump(t, c)
-		for n in c.notices {
-			if !strings.has_prefix(n, "hash ") {continue}
-			f := strings.fields(n, context.temp_allocator)
-			count, _ = strconv.parse_int(f[1])
-			sum, _ = strconv.parse_u64_of_base(f[2], 16)
-			return
-		}
 		time.sleep(game.TICK_DURATION)
 	}
-	return
+	return h.sum, h.count
 }
 
 @(private = "file")

@@ -4,6 +4,7 @@ import "core:flags"
 import "core:log"
 import "core:math"
 import "core:os"
+import "core:strings"
 import "core:time"
 
 import "../base"
@@ -13,7 +14,8 @@ import "../base"
 // finding or leak (CI and quick checks); `--capture-frame N` captures that
 // frame when started from RenderDoc; `--exec "cmd; cmd"` runs console
 // commands at startup (scripted checks, screenshots, reproducing bugs);
-// `--benchmark <scenario>` runs a benchmark (benchmark.odin) and quits.
+// `--benchmark <scenario>` runs a benchmark (benchmark.odin) and quits;
+// `--check <name>` an exit check (exit_check.odin).
 
 Options :: struct {
 	frames:        int `usage:"exit after this many frames (0: run until closed)"`,
@@ -21,6 +23,7 @@ Options :: struct {
 	exec:          string `usage:"console commands to run at startup, separated by ';'"`,
 	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
 	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
+	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
 }
 
 main :: proc() {
@@ -57,6 +60,22 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		}
 		app.benchmark = true
 	}
+	check: Check_Info
+	if opts.check != "" {
+		found: bool
+		if check, found = check_find(opts.check); !found {
+			names := make([dynamic]string, context.temp_allocator)
+			for c in CHECKS {append(&names, c.name)}
+			log.errorf(
+				"no check %q (there are: %s)",
+				opts.check,
+				strings.join(names[:], ", ", context.temp_allocator),
+			)
+			return false
+		}
+		app.checking = true
+	}
+	check_pending := opts.check != ""
 
 	// The console shows the log too (from here on).
 	base.log_set_listener(sink, console_listener, &app.console)
@@ -73,6 +92,14 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		for opts.frames == 0 || frames < opts.frames {
 			free_all(context.temp_allocator)
 			script_run(app, &script)
+			if check_pending && script_done(&script) {
+				// The check's view (its settings are the benchmarks' otherwise).
+				check_pending = false
+				app.settings.view_radius, app.settings.view_height =
+					check.view_radius, check.view_height
+				log.infof("check %s: %s", check.name, check.description)
+				check.start(app)
+			}
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture) {break}
 			bench_update(app) // between frames: it may leave and join worlds

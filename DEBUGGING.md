@@ -158,32 +158,44 @@ the main thread (hidden behind terrain, never hiding it); see `world_debug_lines
 `client/camera.odin`. `set debug.chunk_borders 1` outlines the camera's chunk and its
 neighbours' edges.
 
-## World commands
+## Commands
+
+Three surfaces, each with one job (PLAN.md, M19): server commands act on the world, the
+developer console holds primitives, and checks and benchmarks are command-line modes.
+
+**Server commands** (`/command` in the chat; from the console, `server <command>`): every
+change to the world is the server's, and permissions decide who may run what (see
+Permissions). The ones that matter when debugging a world:
 
 | Command | |
 |---|---|
-| `singleplayer` / `leave` | Enter a scratch world (never saved: for scripts and tests) / leave the world |
-| `universe <name>`, `save` | Play a saved universe (created if new) / save now (the server also autosaves every minute and when you leave). Saves go to `VX_SAVES` if set |
-| `set view_radius 6; set view_height 3` | View distance in chunks for the next world (default 12 x 6) |
-| `time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Show the time of day, or set it (the server's clock; singleplayer). `set rules.daylight_cycle 0` stops it, `rules.day_length` is seconds per day |
-| `tp <x> <y> <z> [yaw pitch]` | Move the player (feet position; a request to the server, which allows it in singleplayer; also before joining). Like every arrival it lands: the player is held there until the blocks are loaded, then stands where they fit (out of blocks, upwards) |
-| `spawn`, `setworldspawn [x y z]` | Back to the world spawn (landing on the ground of its column: on whatever stands there now) / new players arrive here (or there), exactly, looking as you look. A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
-| `set rules.<name> <value>`, `vars rules` | Game rules (gravity, speeds, jump height, reach, flying): the server's, so `set` asks it and it announces the change to the client's prediction |
-| `break`, `place [block]` | Hit the aimed critter, else break the aimed block / place one against its face, as the mouse buttons do (scripts: `tp ... ; wait 30; break`) |
-| `summon` | A critter three blocks in front of you (`world.summon`). Critters also come by themselves in daylight, on grass 16-40 blocks from a player, at most 6 near one; they go when nobody is within 80 blocks. The server's `entities.cfg` keeps them with the world. F3 counts the entities near you |
-| `pos1`, `pos2`, `sel` | The aimed block becomes the selection's first / second corner (drawn as a box) / forget the selection |
-| `fill <block>`, `replace <from> <to>`, `clear` | Bulk edits of the selection (`world.edit.bulk`; at most 64x64x64 blocks). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
-| `sphere <radius> [block]`, `explode [radius]` | A ball of block (default air) / an explosion (carves, knocks back, hurts critters) at the aimed block |
-| `fire` | Fire a rocket where you look, as the launcher (hotbar 7) does: it flies, falls a little and explodes on what it hits |
-| `fly` | Start or stop flying (as a double-tap of jump does) |
-| `locate <biome>` | Fly to the nearest place of a biome (Earth worlds; `teleport.locate`): ocean, frozen_ocean, beach, river, plains, forest, taiga, tundra, desert, mountains |
-| `set worldgen.<name> <value>`, `vars worldgen` | The Earth generator's settings (the server's, like rules; F4 too), saved with the world; chunks already made keep their blocks until `regen` |
-| `server <command...>` | Send a server command as is, with coordinates: `server fill 0 60 0 9 62 9 water` (scripts, tests; the server checks each command's permission) |
-| `structure save <name> [clear]`, `structure paste <name> [turns]`, `structure list` | Keep the selection as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at the aimed block through the bulk edit pipeline, turned 0-3 quarters |
-| `regen [radius]` | Remake the unedited chunks within radius (chunks, 1-8) from the generator as it is now |
-| `tour_test [quit]` | The M10 check: visits every biome (`locate`), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that unoptimized), or memory growth after the first biome |
-| `blast_test <shots> [quit]` | The M9 check: waits for the world, hovers above it and fires rockets and radius-6 explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
-| `fly_test <blocks> [quit]` | The memory check: waits for the world to load, flies straight at 40 blocks/s, then fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory. With `quit` it exits, failing the run on a failed check. |
+| `/time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Set the time of day (`world.time`). `set rules.daylight_cycle 0` stops the clock, `rules.day_length` is seconds per day |
+| `/tp <x y z> \| <player>`, `/spawn`, `/setworldspawn [x y z]` | Move; back to the world spawn (landing on its column's ground) / new players arrive here (or there). A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
+| `/summon [kind]`, `/locate <biome or structure>`, `/regen [radius]` | A critter in front of you (`world.summon`; critters also come by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one, and go when nobody is within 80); fly to the nearest biome or structure (`teleport.locate`); remake the unedited chunks within radius (1-8 chunks) from the generator as it is now (`world.gen`) |
+| `/pos1 [x y z]`, `/pos2 [x y z]`, `/sel` | The selection's corners (the block you look at, within 128, or coordinates), kept by the server and drawn as a box / forget it |
+| `/fill [box] <block>`, `/replace [box] <from> <to>`, `/sphere [x y z] <radius> <block>` | Bulk edits (`world.edit.bulk`; at most 64x64x64 blocks) of the selection, or of a box `x1 y1 z1 x2 y2 z2` given (a sphere without a centre: at pos1). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
+| `/structure save <name> [box] [clear]`, `/structure paste <name> [x y z] [turns]`, `/structure list` | Keep the selection (or a box) as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at pos1 (or x y z) through the bulk edit pipeline, turned 0-3 quarters (`world.structure`) |
+
+**The developer console** (`~`): `singleplayer` (a scratch world, never saved) and `universe
+<name>` (a saved one; saves go to `VX_SAVES` if set), `join`, `leave`, `quit`, `screen`;
+`set`, `vars`, `reset` (settings, `debug.*`, `rules.*` and `worldgen.*`: the last two are the
+server's, which announces changes); `screenshot`, `net_trace`, `crash`; `tp <x> <y> <z> [yaw
+pitch]` and `look <yaw> <pitch>` to place the camera for a picture; `server <command>`;
+`clear`, `help`. Nothing in it duplicates a key, the UI or a server command.
+
+**Scripts** (`--exec "cmd; cmd"`) are console input typed at startup, with `wait <frames>`,
+`sleep <seconds>` and `wait_world`: for reproducing a state and taking its picture. Checks
+and measurements are code:
+
+| Check (`--check <name>`) | |
+|---|---|
+| `fly` | The memory check: flies 400 blocks at 40 blocks/s (view 6 x 3); fails if either session arena grew or chunk storage passed its fixed size. Logs frame times and resident memory |
+| `tour` | The M10 check: visits every biome (view 4 x 3), screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that otherwise), or memory growth after the first biome |
+| `blast` | The M9 check: hovers above the spawn (view 4 x 2) and sets off 12 rockets and explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them) |
+
+A check runs with the benchmarks' fixed settings (its own view), after any `--exec` script
+(which may set things up: `--exec "set debug.net_trace 1" --check fly`), and quits, failing
+the run if it failed.
 
 F3's `chunks:` line shows how long chunks take to generate (on our own server's workers)
 and to light and mesh (ours), on average and the slowest 1%.
@@ -191,9 +203,9 @@ and to light and mesh (ours), on average and the slowest 1%.
 ## Permissions
 
 What a player may do is a set of nodes: `world.edit` (build), `world.edit.bulk`, `world.fire`,
-`world.explode`, `world.summon`, `world.structure`, `world.time`, `world.rules`, `world.gen`,
+`world.summon`, `world.structure`, `world.time`, `world.rules`, `world.gen`,
 `teleport.tp`, `teleport.locate`, `server.save`, `server.open_lan`, `permissions.edit`,
-`debug.hash`, and the `chat.*`, `moderation.*`, `teleport.*` and `info.*` nodes the commands
+and the `chat.*`, `moderation.*`, `teleport.*` and `info.*` nodes the commands
 use. A grant is a node, `x.*` (x and everything under it), `*` (everything), or `-x` (not x).
 The most specific grant wins; at the same specificity the player's own grant beats their
 role's, which beats an inherited one; a tie is a denial.
@@ -337,8 +349,8 @@ Linux and macOS, so a platform that rounds differently fails there, not in a pla
 The generator's stages show in the profiler as `worldgen climate`, `worldgen place trees`,
 `worldgen terrain`.
 
-`--exec "fly_test 1500 quit"` is the M3 exit check; CI runs smaller versions on the CPU
-driver, with AddressSanitizer and with profiling. CI also runs `blast_test 12 quit`. F3
+`--check fly` is the M3 exit check; CI runs it on the CPU driver, with AddressSanitizer and
+with profiling. CI also runs `--check blast`. F3
 shows how many bulk edits were shown whole and how many late (on a timeout).
 
 

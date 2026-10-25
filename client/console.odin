@@ -276,6 +276,9 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, fmt.tprintf("  %-10s %s", cmd.name, cmd.help))
 				}
 			}}, complete_command)
+	console_register(c, {"clear", "clear the console", proc(app: ^App, args: []string) {
+			console_clear(&app.console)
+		}})
 	console_register(c, {"quit", "quit the game", proc(app: ^App, args: []string) {
 			app.quit = true
 		}})
@@ -288,12 +291,6 @@ register_builtin_commands :: proc(c: ^Console) {
 				enter_world(app, "", SCRATCH_SEED) // a scratch world: nothing saved
 			},
 		},
-	)
-	console_register(
-		c,
-		{"debug", "toggle the debug overlay (F3)", proc(app: ^App, args: []string) {
-				app.debug.overlay = !app.debug.overlay
-			}},
 	)
 	console_register(c, {"leave", "leave the world", proc(app: ^App, args: []string) {
 			leave_world(app)
@@ -339,30 +336,6 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		args = {3, 5},
-	)
-	console_register(
-		c,
-		{
-			"fly_test",
-			"fly_test <blocks> [quit]: fly and check memory stays flat",
-			fly_test_command,
-		},
-	)
-	console_register(
-		c,
-		{
-			"tour_test",
-			"tour_test [quit]: visit every biome; check budgets and memory",
-			tour_test_command,
-		},
-	)
-	console_register(
-		c,
-		{
-			"blast_test",
-			"blast_test <shots> [quit]: blow up terrain and check budgets, meshes, memory, sync",
-			blast_test_command,
-		},
 	)
 	console_register(
 		c,
@@ -524,53 +497,6 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
-			"break",
-			"hit the aimed entity, or break the aimed block (left click)",
-			proc(app: ^App, args: []string) {
-				if session_attack(app.session) {return}
-				if !session_edit(app.session, false, .Air) {
-					console_print(&app.console, "break: nothing breakable aimed at", .Warning)
-				}
-			},
-		},
-		args = {0, 0},
-		needs = {.World},
-	)
-	console_register(
-		c,
-		{
-			"place",
-			"place [block]: place against the aimed face (right click)",
-			proc(app: ^App, args: []string) {
-				info, _ := game.item_info(held(app.session).item)
-				block := info.block if info.block != .Air else game.Block.Stone
-				if len(args) > 0 {
-					b, found := game.block_by_name(args[0])
-					if found && game.can_place(b) {block = b} else {
-						console_print(
-							&app.console,
-							fmt.tprintf("place: no placeable block '%s'", args[0]),
-							.Warning,
-						)
-						return
-					}
-				}
-				if !session_edit(app.session, true, block) {
-					console_print(
-						&app.console,
-						"place: nowhere to place (aim at a face in reach, not into yourself)",
-						.Warning,
-					)
-				}
-			},
-		},
-		complete_block,
-		args = {0, 1},
-		needs = {.World},
-	)
-	console_register(
-		c,
-		{
 			"universe",
 			"universe <name>: play the saved universe name (created if new)",
 			proc(app: ^App, args: []string) {
@@ -582,13 +508,6 @@ register_builtin_commands :: proc(c: ^Console) {
 		complete_world,
 		args = {1, -1},
 	)
-	console_register(c, {"save", "save the world now", proc(app: ^App, args: []string) {
-				if app.session.config.save_dir == "" {
-					console_print(&app.console, "save: not in a saved world", .Warning)
-					return
-				}
-				send_message(app.session, game.Command{"save"})
-			}}, args = {0, 0}, needs = {.World}, node = "server.save")
 	console_register(
 		c,
 		{
@@ -602,57 +521,6 @@ register_builtin_commands :: proc(c: ^Console) {
 		args = {1, 2},
 	)
 	register_world_commands(c)
-	console_register(
-		c,
-		{
-			"open_lan",
-			"open_lan: let others on the LAN join this world",
-			proc(app: ^App, args: []string) {
-				session_open_lan(app)
-			},
-		},
-		args = {0, 0},
-	)
-	console_register(
-		c,
-		{
-			"time",
-			"time [sunrise|day|noon|sunset|night|midnight|0..1]: show or set the time of day",
-			proc(app: ^App, args: []string) {
-				if len(args) == 0 {
-					f := game.time_of_day(app.session.clock)
-					minutes := int(f * 24 * 60)
-					console_print(
-						&app.console,
-						fmt.tprintf(
-							"day %d, %02d:%02d (%.3f)",
-							int(app.session.clock),
-							minutes / 60,
-							minutes % 60,
-							f,
-						),
-						.Info,
-					)
-					return
-				}
-				if _, ok := game.parse_time_of_day(args[0]); !ok {
-					console_print(&app.console, "time: not a time of day", .Warning)
-					return
-				}
-				if !allowed_here(app, "time", "world.time") {return}
-				send_message(
-					app.session,
-					game.Command{strings.concatenate({"time ", args[0]}, context.temp_allocator)},
-				)
-			},
-		},
-		complete_time,
-		args = {0, 1},
-		needs = {.World},
-	)
-	console_register(c, {"tune", "toggle the tuning panel (F4)", proc(app: ^App, args: []string) {
-			if app.screen == .Game {overlay_toggle(&app.overlays, .Tuning)}
-		}})
 }
 
 // allowed_here: the server lets this player do node (asking

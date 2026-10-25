@@ -44,6 +44,7 @@ Client :: struct {
 	position:     [3]f64,
 	center:       game.Chunk_Pos, // the chunk the client is in
 	moved:        bool, // center changed since the last unload pass
+	moved_from:   game.Chunk_Pos, // ... from there (unload_left)
 	has:          map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
 	columns:      map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
 	known:        map[u32]struct{}, // entities it has been told about (entities.odin)
@@ -68,6 +69,7 @@ Client :: struct {
 	inventory:    game.Inventory,
 	inv_acked:    u32, // its newest Inventory_Request applied
 	inv_changed:  bool, // since the last Inventory_Update sent
+	selection:    [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about
@@ -129,6 +131,7 @@ set_position :: proc(c: ^Client, p: [3]f64) {
 	c.position = p
 	center := game.chunk_of({i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))})
 	if center != c.center {
+		if !c.moved {c.moved_from = c.center}
 		c.center = center
 		c.moved = true
 		c.cursor = 0
@@ -225,8 +228,31 @@ drop_far :: proc(s: ^Server, c: ^Client) {
 	}
 }
 
-// unload_unwanted frees the chunks no client needs (edited ones go to the
-// save, not away).
+// unload_left frees the chunks no client needs any more after a client's
+// centre moved from `from` to `to` (in w); edited ones go to the save, not
+// away.
+@(private)
+unload_left :: proc(w: ^World, from, to: game.Chunk_Pos) {
+	// Only chunks in the area left can have become unwanted: the old area
+	// (with the margin) less the new; the rest is arithmetic, not lookups.
+	s := w.server
+	radius := s.config.view_radius + game.SERVER_UNLOAD_MARGIN
+	height := s.config.view_height + game.SERVER_UNLOAD_MARGIN
+	for d in s.unload_offsets {
+		pos := from + d
+		if game.in_interest(pos - to, radius, height) || !game.in_world(pos) {continue}
+		chunk := chunks_get(&w.chunks, pos)
+		if chunk == nil || chunk.state != .Ready {continue} 	// (a chunk still generating: chunks_collect asks then)
+		if anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {continue}
+		keep_edits(w, chunk)
+		chunks_unload(&w.chunks, pos)
+	}
+}
+
+// unload_unwanted frees every chunk no client needs (edited ones to the
+// save): the whole world's, looked at one by one. unload_left does it as
+// clients move; this sweeps up the rest now and then (a world left, a
+// client gone).
 @(private)
 unload_unwanted :: proc(w: ^World) {
 	drop := make([dynamic]game.Chunk_Pos, context.temp_allocator)

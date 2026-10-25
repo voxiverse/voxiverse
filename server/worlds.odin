@@ -198,6 +198,7 @@ travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = ni
 		clear(&c.has)
 		clear(&c.columns)
 		clear(&c.known)
+		selection_set(s, c, {}) // (it was in the last world)
 		c.cursor = 0
 		c.landing = nil
 		c.action_count = 0 // (edits and shots were for the last world)

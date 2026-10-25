@@ -35,7 +35,7 @@ local SERVER_KINDS = {
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
 	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
-	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters", [30] = "world_changed",
+	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters", [30] = "world_changed", [31] = "selection",
 }
 
 local f = vx.fields

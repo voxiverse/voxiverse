@@ -10,7 +10,7 @@ import "../game"
 import "../server"
 import "../worldgen"
 
-// M10's exit check, as a console command: `tour_test [quit]` visits every
+// M10's exit check (`--check tour`, exit_check.odin's CHECKS): it visits every
 // biome of an Earth world in turn (`locate`, then waiting for the land to
 // load and mesh) and screenshots each (biome_<name>). Then it checks that
 // frames, and chunk generation and meshing on the workers, kept within
@@ -18,7 +18,7 @@ import "../worldgen"
 // biome was found. With `quit` it ends the program, failing the run if a
 // check failed.
 //
-//	voxiverse --exec "tour_test quit"
+//	voxiverse --check tour
 
 Tour_Test_Phase :: enum u8 {
 	Off,
@@ -46,12 +46,13 @@ TOUR_MESH_BUDGET_MS :: 10 when FULLY_OPTIMIZED else 100
 TOUR_TIMEOUT :: 90 * time.Second // per biome
 
 @(private)
-tour_test_command :: proc(app: ^App, args: []string) {
+tour_test_begin :: proc(app: ^App) {
 	t := &app.tour_test
-	ok: bool
-	// Exit_Check wants an amount first: there is none here.
-	_, ok = exit_check_start(app, &t.check, "tour_test", {"1", args[0] if len(args) > 0 else ""})
-	if !ok {return}
+	if !exit_check_start(app, &t.check, "tour_test") {
+		t.check.failed = true
+		app.quit = true
+		return
+	}
 	t.phase, t.biome, t.started, t.measuring, t.missing =
 		.Loading, worldgen.Biome(0), time.tick_now(), false, {}
 	log.info("tour_test waiting for the world")

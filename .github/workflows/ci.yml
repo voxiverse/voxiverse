@@ -86,7 +86,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run -a ./build/voxiverse --frames 120
-          xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30; set view_radius 6; set view_height 3; fly_test 600 quit"
+          xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30" --check fly
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
 
@@ -94,13 +94,13 @@ jobs:
       # client's chunks end up exactly the server's.
       - name: Blast test (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; blast_test 12 quit"
+        run: xvfb-run -a ./build/voxiverse --check blast
 
       # Worldgen (M10): every biome visited, screenshotted (uploaded below),
       # within frame, generation and meshing budgets, memory flat.
       - name: Biome tour (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
+        run: xvfb-run -a ./build/voxiverse --check tour
 
       # The game's benchmark scenarios, short (M19): each still runs to its
       # end (fixed conditions, offscreen drawing, its result written) on the
@@ -115,7 +115,7 @@ jobs:
       # The sky through a day (screenshots uploaded below).
       - name: Sky (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; time 0.8; wait 5; screenshot sky_night; wait 5; quit"
+        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; server time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; server time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; server time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; server time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
       # Over real sockets: a dedicated server and a client joining it, the
       # server capturing every packet; the Wireshark dissector must decode
@@ -154,17 +154,17 @@ jobs:
         run: |
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
-          ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; fly_test 200 quit"
+          ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --check fly
 
       # A release build's flight, profiled: the trace must be well formed.
       - name: Profiling (Linux)
         if: runner.os == 'Linux'
         run: |
           ./build.sh build --release --profile
-          xvfb-run -a ./build/voxiverse --exec "set view_radius 6; set view_height 3; fly_test 300 quit"
+          xvfb-run -a ./build/voxiverse --check fly
           python3 tools/debugger/check_spall.py build/voxiverse.spall
           # The optimized build's chunk budgets (tighter than a debug build's).
-          xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
+          xvfb-run -a ./build/voxiverse --check tour
 
       - name: Screenshots (Linux)
         if: always() && runner.os == 'Linux'

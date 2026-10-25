@@ -700,6 +700,37 @@ compare them with each other, not across machines. Numbers are per chunk unless 
     "how to benchmark a change" procedure in DEBUGGING.md (done: `--smoke` runs each
     scenario once, short, with a small view; CI runs the server's on every platform and
     the game's on Linux's CPU driver, a few seconds each).
+- **Commands, the console and scripts (designed at M19's close; done with it).** They had
+  blurred: the developer console mirrored a dozen server commands (fill, explode, time,
+  spawn ...), duplicated keys (fire, drop, inventory, dial, break, place), and carried
+  the exit checks; players' commands sat beside test-only ones (explode, hash). Three
+  surfaces, each with one job:
+  - **Server commands** (`/` in the chat): everything that acts on the world or the
+    server, one registry (server/admin.odin), each command a permission node; roles
+    (player, moderator, admin, from permissions.cfg) decide who may run what. All changes
+    to the world are the server's: there is no separate developer registry, only
+    permissions. Personal (/ignore: muting someone for yourself; /msg, /r, /me, /afk,
+    /nick, /realname, /motd, /list, /whois, /seen, /status, /address, /worlds), getting
+    about (/home, /warp, /tpa ..., /back, /spawn, /top), moderation (/mute: muting someone
+    for everyone, a moderator's job; /unmute, /delmsg, /kick, /ban ...), administration
+    (/give, /clear, /tp, /tphere, /travel, /setworldspawn, /setwarp, /time, /save,
+    /open_lan, /summon, /locate, /regen), and world editing for builders and admins:
+    /pos1 and /pos2 (the aimed block, worked out by the server) keep each player's
+    selection on the server, which tells the client its box to draw; /fill, /replace,
+    /clear, /sphere and /structure act on it. One-offs made for tests go: /explode,
+    /hash (the checks reach the server directly).
+  - **The developer console** (the `~` key) is the developers' and holds primitives:
+    the session (singleplayer, join, leave, quit, screen), variables (set, vars,
+    reset: settings, debug.*, rules.*, worldgen.*), capture and diagnostics (screenshot,
+    net_trace, crash), placing the camera for a picture (tp, look), and `server
+    <command>`: any server command, sent as the chat sends it, with the developer's
+    permissions. Nothing that duplicates a key or the UI, no mirrors of server commands,
+    no tests.
+  - **Scripts** (`--exec`) are console input typed at startup, with `wait` and
+    `wait_world`: for reproducing a state and taking its picture (CI's sky through a
+    day, a bug's setup). Nothing that checks or measures: that is code. **Checks** (the
+    exit checks: flight, tour, blast) become `--check <name>` like `--benchmark
+    <scenario>`, no longer console commands.
 - **Left, measured, not done yet:**
   - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame. Tried and
     dropped: empty-space skipping (each cell's distance to the nearest cloud, rays

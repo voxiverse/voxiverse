@@ -71,6 +71,7 @@ App :: struct {
 	scripted:         bool, // running --exec commands: settings changes are not saved
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
 	bench:            Bench, // the scenario running (benchmark.odin)
+	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
@@ -103,7 +104,7 @@ app_init :: proc(app: ^App) -> bool {
 	console_init(&app.console)
 	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
-	if app.benchmark {
+	if app.benchmark || app.checking {
 		app.settings = BENCHMARK_SETTINGS // (the player's are not read)
 	} else {
 		settings_load(app)

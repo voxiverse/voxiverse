@@ -109,7 +109,7 @@ Session :: struct {
 	received:         [dynamic]game.Packet,
 	last_acked:       u32, // the newest Player_Update applied
 	frozen:           bool, // paused, the world standing still (session_freeze)
-	selection:        [2]Maybe(game.Block_Pos), // pos1, pos2 (bulk edit commands)
+	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
 	stats:            Session_Stats,
 	config:           Session_Config,
 	net:              Net_Stats,
@@ -388,3 +388,17 @@ session_others_now :: proc(s: ^Session) -> f64 {
 }
 
 FLUSH_INTERVAL :: 8 * time.Millisecond
+
+// server_explode: an explosion at block p of radius blocks, done by our own
+// in-process server (server.call): checks and benchmarks, not a command.
+server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
+	Explosion :: struct {
+		at:     game.Block_Pos,
+		radius: f64,
+	}
+	e := Explosion{p, radius}
+	server.call(&s.server, proc(srv: ^server.Server, data: rawptr) {
+			e := (^Explosion)(data)
+			server.explode_by(srv, "", e.at, e.radius)
+		}, &e)
+}

@@ -49,7 +49,18 @@ main :: proc() {
 		view_height = 6,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix)
+	if base.PROFILE {
+		// A profiling build (`build build --profile`): the trace beside the executable.
+		dir, _ := os.get_executable_directory(context.temp_allocator)
+		path :=
+			filepath.join(
+				{dir, "voxiverse-server.spall"},
+				context.temp_allocator,
+			) or_else "voxiverse-server.spall"
+		if base.profile_start(path) {log.infof("profiling to %s", path)}
+	}
 	ok := run_benchmark(opts.benchmark, opts.smoke) if opts.benchmark != "" else run(opts)
+	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
 }
