@@ -42,6 +42,12 @@ jobs:
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
+      # The same suite again with another random seed (M29): a test that
+      # passes once and fails once is a flake or a nondeterminism, and fails
+      # the run (the tests' worlds are still: game.rules_still).
+      - name: Test again, other seed (Linux)
+        if: runner.os == 'Linux'
+        run: ODIN_TEST_RANDOM_SEED=29 ./build.sh test
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
       # The chunk pipeline (M19): exact counts, and every stage within a
@@ -134,6 +140,12 @@ jobs:
       - name: Water flood, optimized (Linux)
         if: runner.os == 'Linux'
         run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_water_flood -out:build/flood_test
+
+      # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
+      # writer keeps up; optimized, with budgets for a slow runner.
+      - name: Event cost, optimized (Linux)
+        if: runner.os == 'Linux'
+        run: odin test telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
 
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler (Linux)

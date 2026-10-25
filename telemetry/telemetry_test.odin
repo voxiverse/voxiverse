@@ -3,6 +3,7 @@ package telemetry
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "core:sync"
 import "core:testing"
 import "core:time"
 
@@ -150,4 +151,56 @@ test_day_names :: proc(t: ^testing.T) {
 	testing.expect_value(t, day_name(11_016), "2000-02-29")
 	for info, k in KIND_INFO {testing.expectf(t, info.name != "", "kind %v has no name", k)}
 	free_all(context.temp_allocator)
+}
+
+// The cost of an event, as the server pays it on its tick: emitting is a lock
+// and a copy, and the writer keeps up with a busy server. The budgets are
+// generous (CI runs this optimized too, tests are unoptimized with more slack)
+// and catch a regression to something like a syscall or an allocation per event.
+@(test)
+test_event_cost :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "telemetry_cost"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	s: Sink
+	sink_start(&s, dir, 9)
+	defer sink_stop(&s)
+	N :: 50_000
+	e := Event {
+		actor = 1,
+		kind  = .Block_Mined,
+		world = short("w"),
+		text  = short("stone"),
+		n     = {1, 2, 3},
+	}
+	emitting: time.Duration
+	start := time.now()
+	for _ in 0 ..< N {
+		for sync.atomic_load(&s.head) - sync.atomic_load(&s.tail) > RING_SIZE / 2 {
+			time.sleep(time.Millisecond) // (a server's writer drains as it goes)
+		}
+		t0 := time.tick_now()
+		emit(&s, e)
+		emitting += time.tick_since(t0)
+	}
+	sink_flush(&s)
+	total := time.since(start)
+	emit_ns := f64(time.duration_nanoseconds(emitting)) / N
+	write_ns := f64(time.duration_nanoseconds(total)) / N
+	stats := sink_stats(&s)
+	testing.expectf(
+		t,
+		stats.written == N && stats.dropped == 0,
+		"wrote %d of %d, dropped %d",
+		stats.written,
+		N,
+		stats.dropped,
+	)
+	testing.expectf(t, emit_ns < 5_000, "emitting an event costs %.0f ns (budget 5000)", emit_ns)
+	testing.expectf(
+		t,
+		write_ns < 50_000,
+		"writing an event costs %.0f ns (budget 50000)",
+		write_ns,
+	)
 }

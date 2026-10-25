@@ -311,6 +311,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M26b | 72 | 57 | 1 | commands (counted from M26's line) |
 | M27 | 73 | 65 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
 | M28 | 46 | 461 | 1 | mods, health, damage, death, xp (counted from M27's line; re-read figure is the session total) |
+| M29 | 14 | 0 | 1 | still rules, second-seed CI run, event cost test (counted from M28's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -350,18 +351,6 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips (done: `collector/collector_test.odin` (a log reaches the lake whole and once, with an anonymous pid and no account; sent again after a lost cursor or a collector restart it is written once; the spool survives a collector that is down and sends only the new lines; forged proofs, batches before a proof, non-event lines, unknown kinds, bad days and floods refused; a report round-trips), `server/upload_test.odin` (a server told to upload ends up in the lake, no name or chat text; one not told to never talks to the collector), `client` consent question test, `tools/analytics` tests on a recorded run; not done: crash reports sent by themselves) |
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded (done: `game/mods.odin` (`derive_mods` from worn items' modifiers, shared by server and the client's prediction; speed, jump, air jumps, max health as data on items), `game/physics_test.odin` (modifiers change movement; prediction agrees tick by tick with a speed modifier and a double jump), `server/health_test.odin` (fall and explosion damage by the rules' numbers, death, respawn and dropped items, xp and level from events, worn armor raises and removal lowers max health), protocol 21 with a Health message, a health bar by the hotbar; not done: timed effects, reach, xp rewards) |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI |
-
-## M29: hardening
-
-Cheap insurance before more is built on the foundation.
-
-- A "still world" test harness (random ticks, wandering sheep and the weather of a world
-  off by one switch) used by every test that compares worlds, replacing the per-test rules
-  patches, and a repeat-run job in CI that runs the suite twice and fails on a difference
-  between runs.
-- Benchmark scenarios record the telemetry events' cost (emit, drain, write) and fail on a
-  regression, as the other costs do.
-- The Windows pass (below) when a Windows machine is at hand.
 
 ## Why the plan changed (after M25)
 

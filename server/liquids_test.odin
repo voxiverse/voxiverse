@@ -39,8 +39,7 @@ Dam_Result :: struct {
 
 @(private = "file")
 dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
-	still := game.RULES_DEFAULTS
-	still.random_tick_speed = 0 // (grass spreading would make two runs differ)
+	still := game.rules_still() // (grass spreading would make two runs differ)
 	config := Config {
 		seed            = 21,
 		generator       = .Classic,

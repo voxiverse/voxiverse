@@ -437,10 +437,7 @@ server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 		}, &e)
 }
 
-// still_rules: the defaults with nothing changing by itself (random ticks
-// off), for benchmarks and exit checks.
+// still_rules: nothing changing by itself, for benchmarks and exit checks.
 still_rules :: proc() -> game.Rules {
-	r := game.RULES_DEFAULTS
-	r.random_tick_speed = 0
-	return r
+	return game.rules_still()
 }

@@ -497,11 +497,9 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	testing.expect(t, a.results[1].accepted, "alpha's edit was refused")
 }
 
-// quiet_rules: the defaults, with nothing changing by itself (random ticks
-// off), for tests that compare what clients hold with the world's blocks.
+// quiet_rules: nothing changing by itself, for tests that compare what clients
+// hold with the world's blocks.
 @(private)
 quiet_rules :: proc() -> game.Rules {
-	r := game.RULES_DEFAULTS
-	r.random_tick_speed = 0
-	return r
+	return game.rules_still()
 }

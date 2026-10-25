@@ -901,3 +901,15 @@ The part an RPG stands on, and what the equipment slots (M22b) were waiting for.
   double jump (prediction tests, both ways); fall and explosion damage by the rules' numbers;
   death, respawn and the dropped items; xp and level from a scripted session, kept through
   save and load; the events carry the right causes.
+
+## M29: hardening
+
+Cheap insurance before more is built on the foundation.
+
+- A "still world" test harness (random ticks, wandering sheep and the weather of a world
+  off by one switch) used by every test that compares worlds, replacing the per-test rules
+  patches, and a repeat-run job in CI that runs the suite twice and fails on a difference
+  between runs.
+- Benchmark scenarios record the telemetry events' cost (emit, drain, write) and fail on a
+  regression, as the other costs do.
+- The Windows pass (below) when a Windows machine is at hand.

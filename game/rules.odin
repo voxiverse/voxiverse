@@ -98,3 +98,12 @@ RULES_VARS := [?]base.Var {
 rules_table :: proc() -> base.Var_Table {
 	return {"rules.", Rules, RULES_VARS[:], &RULES_DEFAULTS}
 }
+
+// rules_still: the defaults with nothing changing by itself (random ticks
+// off): the world of every test that compares worlds, and of the benchmarks
+// and exit checks. One switch here, so a new self-changing thing joins it once.
+rules_still :: proc() -> Rules {
+	r := RULES_DEFAULTS
+	r.random_tick_speed = 0
+	return r
+}
