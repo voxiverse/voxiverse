@@ -311,7 +311,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M26b | 72 | 57 | 1 | commands (counted from M26's line) |
 | M27 | 73 | 65 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
 | M28 | 46 | 461 | 1 | mods, health, damage, death, xp (counted from M27's line; re-read figure is the session total) |
-| M29 | 14 | 0 | 1 | still rules, second-seed CI run, event cost test (counted from M28's line) |
+| M29 | 31 | 1 | 1 | still rules, second-seed CI run, event cost test (counted from M28's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
