@@ -640,6 +640,58 @@ compare them with each other, not across machines. Numbers are per chunk unless 
     `test_greedy_meshing_is_exact`);
   - chunks drawn nearest first, so the depth test spares hidden fragments (the worst views
     most: the world pass's p99 2.9 → 1.8 ms).
+- **Benchmarking (designed after the first round showed its gaps; built next).** What the
+  first round had (the chunk benchmark, exit checks printing numbers, Spall, perf, a
+  history file) did not hold together: the player's settings, window size, time of day,
+  drifting clouds and random critters leaked into results; single runs with no warm-up
+  or noise estimate; correctness checks doubling as measurements; most timings only in
+  profiling builds; no way to compare two versions under the same conditions.
+  - **Scenarios, in code, in the game binary.** A scenario fixes everything that changes
+    the numbers: the world (the scratch world's seed and generator), the settings
+    (resolution, vsync off, field of view, view distance, UI scale; the player's settings
+    file is never read nor written), the conditions (a fixed time of day with the cycle
+    stopped, the clouds at a fixed place, no natural critters or a seeded random source,
+    no sound device), a camera script, a warm-up, and the metrics it reports. It runs by
+    itself: `voxiverse --benchmark <scenario>`, wrapped as `build bench <scenario>` (a
+    release build). A scenario has a version, bumped when its script changes; results of
+    different versions are never compared.
+  - **The scenarios:** `chunks` (generate, light and mesh per chunk on one thread: the
+    present tool, same result format), `load` (join to a fully meshed world: workers,
+    ticks, streaming), `views` (fixed views: GPU time per pass, triangles, the CPU's
+    recording), `flight` (streaming while moving: frames, generation and meshing
+    throughput, ticks, memory), `edits` (bulk edits and explosions: re-meshing), `server`
+    (a headless server, simulated players moving, liquids and entities: tick time as
+    players grow).
+  - **Metrics in release builds.** A registry of named timers and counters (an enum in
+    `base`), cheap enough to leave in (two clock reads and an atomic index into a
+    fixed ring of samples per metric), recorded only while a benchmark runs. The GPU's
+    per-pass timestamps, read back every frame already, feed it too. Spall stays for
+    looking inside a frame.
+  - **Fixed resolution.** GPU scenarios draw into an offscreen 1280 x 720 target whatever
+    the window is (then copied to it, timed apart), so the window manager, fullscreen or
+    the screen cannot change the work measured.
+  - **Method.** Warm-up first (discarded); several repetitions; each metric reported as
+    the median of the repetitions' medians with its spread. A result file per run in
+    `build/bench/` (never committed): the scenario and its version, the commit, the build
+    profile, the resolution obtained, the machine (CPU, cores, GPU, driver, OS; a
+    fingerprint to group by), and every metric per repetition. Results compare only
+    within one machine.
+  - **Comparison.** `build bench compare <ref> [scenarios] [-runs:N]` builds `<ref>` in a
+    git worktree under `build/worktrees/`, then runs the reference and the working tree
+    alternately (A B A B ...: heat and background load fall on both alike) and prints each
+    metric's change, flagged when the two sets of runs differ beyond chance (a
+    Mann-Whitney test). `<ref>` must have the benchmark system (from the commit that
+    adds it on).
+  - **Checks stay checks.** Exit checks (fly_test, tour_test, blast_test) stay pass/fail
+    gates and lose their side numbers to the scenarios. In CI: the deterministic counts
+    exactly (as `bench -check` does now), timing only within coarse budgets (shared
+    runners are too noisy for more), the result files kept as artifacts.
+  - **Phases:** (1) scenarios with fixed conditions, the metrics registry, the result
+    format, `views`, `load` and `flight`; (2) repetitions, statistics, `compare`; (3) the
+    offscreen target; (4) `edits` and `server` with simulated players; (5) CI and a
+    "how to benchmark a change" procedure in DEBUGGING.md. Held until (2): the clouds'
+    empty-space skipping (pixel for pixel the same sky, checked; its speed to be measured
+    with `compare`).
 - **Left, measured, not done yet:**
   - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame (a two-level
     grid, or the map as a texture);
