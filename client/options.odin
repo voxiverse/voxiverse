@@ -39,7 +39,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 	.Sound         = {"volume"},
 	.Controls      = {"mouse_sensitivity", "invert_mouse", "sneak_toggle", "sprint_toggle"},
 	.Accessibility = {"reduce_motion", "chat_text_size"},
-	.Profile       = {"name"},
+	.Profile       = {"name", "share_data"},
 }
 
 Options_View :: struct {

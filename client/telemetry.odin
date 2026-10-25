@@ -7,6 +7,7 @@ import "core:time"
 
 import "../game"
 import "../telemetry"
+import "../ui"
 
 // What the client reports about itself: the server cannot see how a client
 // runs or what it opens. Three kinds (telemetry.Kind with `client` set):
@@ -36,6 +37,7 @@ Reporter :: struct {
 	frames:    [PERF_FRAMES]u32, // frame times of the last minute, microseconds
 	frame_n:   int,
 	told:      ^Session, // the session Client_Info went out for
+	asked:     bool, // the consent dialog was shown this run
 }
 
 reporter_destroy :: proc(r: ^Reporter) {
@@ -57,6 +59,15 @@ queue_report :: proc(r: ^Reporter, kind: telemetry.Kind, text: string, a, b, c: 
 // telemetry_update: once a frame while playing.
 telemetry_update :: proc(app: ^App) {
 	r := &app.reporter
+	// The one question, the first time (not in scripts, benchmarks or checks).
+	if !r.asked &&
+	   !app.settings.share_asked &&
+	   app.screen == .Title &&
+	   !app.scripted &&
+	   !app.benchmark {
+		r.asked = true
+		overlay_open(&app.overlays, .Consent)
+	}
 	s := app.session
 	if s == nil || s.state != .Playing || s.loading != nil {
 		r.told = nil
@@ -130,4 +141,36 @@ telemetry_send :: proc(s: ^Session, r: ^Reporter) {
 	}
 	send_message(s, report)
 	remove_range(&r.queue, 0, n)
+}
+
+// consent_dialog: the question, once: share anonymous play data?
+consent_dialog :: proc(app: ^App, ctx: ^ui.Context) {
+	ui.push_id(ctx, "consent dialog")
+	defer ui.pop_id(ctx)
+	t := &ctx.theme
+	prev := ui.begin_layer(ctx, .Modal)
+	defer ui.end_layer(ctx, prev)
+	ui.backdrop(ctx)
+	box := ui.rect_center(ctx.screen, 520, 260)
+	ui.panel(ctx, box)
+	inner := ui.rect_shrink(box, 2 * t.padding)
+	ui.label(ctx, "Help improve Voxiverse?", ui.cut_top(&inner, t.row_height), .Center)
+	ui.cut_top(&inner, t.spacing)
+	lines := [?]string {
+		"Share anonymous play data: what is built, broken and found,",
+		"and how the game runs. Never your name, your chat or your address.",
+		"You can change this any time in Options, under Profile.",
+	}
+	for line in lines {ui.label(ctx, line, ui.cut_top(&inner, t.row_height), .Center)}
+	buttons := ui.cut_bottom(&inner, t.row_height)
+	no := ui.cut_right(&buttons, (buttons.w - t.spacing) / 2)
+	ui.cut_right(&buttons, t.spacing)
+	answer := -1
+	if ui.button(ctx, "Share", buttons) {answer = 1}
+	if ui.button(ctx, "No thanks", no) {answer = 0}
+	if answer >= 0 {
+		app.settings.share_data, app.settings.share_asked = answer == 1, true
+		settings_changed(app)
+		overlay_close(&app.overlays, .Consent)
+	}
 }

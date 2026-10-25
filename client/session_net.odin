@@ -126,6 +126,7 @@ receive :: proc(s: ^Session) {
 			s.others[v.player] = {
 				name = strings.clone(v.name),
 			}
+		case game.Telemetry_Ack:
 		case game.Stats_Page:
 			stats_data_take(&s.player_stats, v)
 		case game.Player_Worn:

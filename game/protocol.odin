@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 19
+PROTOCOL_VERSION :: 20
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -113,6 +113,31 @@ Stats_Request :: struct {
 	of:     string, // whose (a player's name; "": the asker's)
 }
 
+// Telemetry_Batch: to a collector (collector/): lines of a server's event log
+// (kind Events: `day` the log's date, `offset` where in that day's file the
+// text begins), or a report (kind Report: text a player sent on purpose, or a
+// crash). After a Hello and a Proof, as joining.
+Telemetry_Batch :: struct {
+	kind:   Batch_Kind,
+	day:    string, // YYYY-MM-DD (events); "" (a report)
+	offset: u64, // events: bytes of that day's file before text
+	text:   string, // view into the message
+}
+
+Batch_Kind :: enum u8 {
+	Events,
+	Report,
+}
+
+MAX_BATCH_TEXT :: 32 * 1024
+
+// Telemetry_Ack: a batch was taken: its day and the offset after it (a report:
+// "" and its text's length).
+Telemetry_Ack :: struct {
+	day: string,
+	end: u64,
+}
+
 MAX_STATS_FILTER :: 32
 STATS_PAGE_LINES :: 120
 
@@ -182,6 +207,7 @@ Client_Message :: union {
 	Use_Entity,
 	Stats_Request,
 	Telemetry_Report,
+	Telemetry_Batch,
 }
 
 // Server -> client.
@@ -479,6 +505,7 @@ Server_Message :: union {
 	Selection,
 	Player_Worn,
 	Stats_Page,
+	Telemetry_Ack,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -507,6 +534,7 @@ Client_Kind :: enum u8 {
 	Use_Entity,
 	Stats_Request,
 	Telemetry_Report,
+	Telemetry_Batch,
 }
 
 @(private = "file")
@@ -544,6 +572,7 @@ Server_Kind :: enum u8 {
 	Selection,
 	Player_Worn,
 	Stats_Page,
+	Telemetry_Ack,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -604,6 +633,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "stats_request"
 		case u8(Client_Kind.Telemetry_Report):
 			return "telemetry"
+		case u8(Client_Kind.Telemetry_Batch):
+			return "telemetry_batch"
 		case u8(Client_Kind.Fire):
 			return "fire"
 		case u8(Client_Kind.Chat):
@@ -685,6 +716,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "worn"
 		case u8(Server_Kind.Stats_Page):
 			return "stats_page"
+		case u8(Server_Kind.Telemetry_Ack):
+			return "telemetry_ack"
 		}
 	}
 	return ""
@@ -757,6 +790,13 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_string(w, v.filter)
 		write_u16(w, v.page)
 		write_string(w, v.of)
+	case Telemetry_Batch:
+		write_u8(w, u8(Client_Kind.Telemetry_Batch))
+		write_u8(w, u8(v.kind))
+		write_string(w, v.day)
+		write_u32(w, u32(v.offset >> 32))
+		write_u32(w, u32(v.offset))
+		write_string(w, v.text)
 	case Telemetry_Report:
 		write_u8(w, u8(Client_Kind.Telemetry_Report))
 		write_u8(w, u8(v.count))
@@ -794,6 +834,11 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Telemetry_Ack:
+		write_u8(w, u8(Server_Kind.Telemetry_Ack))
+		write_string(w, v.day)
+		write_u32(w, u32(v.end >> 32))
+		write_u32(w, u32(v.end))
 	case Stats_Page:
 		write_u8(w, u8(Server_Kind.Stats_Page))
 		write_u16(w, v.page)
@@ -1046,6 +1091,16 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			page   = read_u16(&r),
 			of     = read_string(&r, MAX_NAME_LENGTH),
 		}
+	case u8(Client_Kind.Telemetry_Batch):
+		b: Telemetry_Batch
+		kind := read_u8(&r)
+		if kind > u8(Batch_Kind.Report) {reader_fail(&r)}
+		b.kind = Batch_Kind(kind)
+		b.day = read_string(&r, 10)
+		hi, lo := read_u32(&r), read_u32(&r)
+		b.offset = u64(hi) << 32 | u64(lo)
+		b.text = read_string(&r, MAX_BATCH_TEXT)
+		m = b
 	case u8(Client_Kind.Telemetry_Report):
 		rep: Telemetry_Report
 		rep.count = int(read_u8(&r))
@@ -1268,6 +1323,13 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Telemetry_Ack):
+		ack := Telemetry_Ack {
+			day = read_string(&r, 10),
+		}
+		hi, lo := read_u32(&r), read_u32(&r)
+		ack.end = u64(hi) << 32 | u64(lo)
+		m = ack
 	case u8(Server_Kind.Stats_Page):
 		m = Stats_Page {
 			page  = read_u16(&r),

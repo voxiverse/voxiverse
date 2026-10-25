@@ -10,6 +10,7 @@ import "core:strings"
 import "core:sync"
 
 import "../base"
+import "../collector"
 import "../game"
 import "../ui"
 
@@ -470,6 +471,42 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"report",
+			"report <note>: send the developer a note with the version and the last console lines (needs Share play data on, in a saved universe)",
+			proc(app: ^App, args: []string) {
+				text := report_text(app, strings.join(args, " ", context.temp_allocator))
+				s := app.session
+				switch {
+				case !app.settings.share_data:
+					console_print(
+						&app.console,
+						"report: turn on Share play data (Options, Profile) first",
+						.Warning,
+					)
+				case s == nil || !session_hosting(s) || s.config.save_dir == "":
+					console_print(
+						&app.console,
+						"report: play a saved universe (reports go with its play data)",
+						.Warning,
+					)
+				case collector.report_write(
+					     filepath.join(
+						     {s.config.save_dir, "telemetry"},
+						     context.temp_allocator,
+					     ) or_else "",
+					     text,
+				     ):
+					console_print(&app.console, "report: queued; it goes with the next upload")
+				case:
+					console_print(&app.console, "report: could not write it", .Warning)
+				}
+			},
+		},
+		args = {1, -1},
+	)
+	console_register(
+		c,
+		{
 			"screenshot",
 			"screenshot [name]: save the next frame as a PNG (F2)",
 			proc(app: ^App, args: []string) {
@@ -552,4 +589,20 @@ session_open_lan :: proc(app: ^App) {
 	case:
 		send_message(app.session, game.Command{"open_lan"})
 	}
+}
+
+// report_text: a note, with what helps to read it: the version, the system,
+// the last console lines.
+report_text :: proc(app: ^App, note: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintfln(&b, "note: %s", note)
+	fmt.sbprintfln(&b, "version: %s (%s build)", base.version_text(), base.build_name())
+	fmt.sbprintfln(&b, "os: %v", ODIN_OS)
+	c := &app.console
+	sync.guard(&c.mutex)
+	first := max(0, c.count - 100)
+	for i in first ..< c.count {
+		fmt.sbprintln(&b, c.lines[(c.first + i) % CONSOLE_MAX_LINES].text)
+	}
+	return strings.to_string(b)
 }

@@ -13,6 +13,7 @@ import "core:thread"
 import "core:time"
 
 import "../base"
+import "../collector"
 import "../game"
 import "../netcode"
 import "../telemetry"
@@ -29,7 +30,16 @@ import "../worldgen"
 //	...
 //	ok := server.stop(&srv) // false if it stopped on an error
 
+// Upload: send the event log to a collector (collector/) every interval
+// (default 30 s) and at stop, as this account.
+Upload :: struct {
+	address:  net.Endpoint,
+	key:      game.Account_Key,
+	interval: time.Duration,
+}
+
 Config :: struct {
+	upload:          Maybe(Upload), // (needs save_dir: a scratch world has no log)
 	seed:            i64,
 	generator:       worldgen.Kind, // for a new world (a saved one keeps its own)
 	view_radius:     i32, // chunks, horizontally
@@ -106,6 +116,8 @@ Server :: struct {
 	writer:         game.Writer,
 	tick:           u64,
 	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
+	uploader:       collector.Uploader, // sends its log to a collector
+	uploading:      bool,
 	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
@@ -150,6 +162,17 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
 		u32(telemetry.now_ms()),
 	)
+	if up, ok := config.upload.?; ok && s.store.dir != "" {
+		interval := up.interval if up.interval > 0 else 30 * time.Second
+		collector.uploader_start(
+			&s.uploader,
+			filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "",
+			up.address,
+			up.key,
+			interval,
+		)
+		s.uploading = true
+	}
 	characters_open(s)
 	base.queue_init(&s.calls)
 	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
@@ -227,6 +250,7 @@ stop :: proc(s: ^Server) -> bool {
 @(private = "file")
 teardown :: proc(s: ^Server, world: bool) {
 	telemetry.sink_stop(&s.sink) // (the events written; safe if it never started)
+	if s.uploading {collector.uploader_stop(&s.uploader)} 	// (a last pass: what was written)
 	netcode.capture_close(&s.capture)
 	store_close(s)
 	permissions_destroy(&s.perms)
@@ -621,6 +645,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case game.Fire:
 		queue_action(s, c, v)
+	case game.Telemetry_Batch:
+		disconnect(s, c, "this is not a telemetry collector")
 	case game.Stats_Request:
 		stats_request(s, c, v)
 	case game.Telemetry_Report:

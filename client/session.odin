@@ -42,6 +42,7 @@ Session_Config :: struct {
 	spawn:        Maybe([3]f64), // a new world's spawn (else the generator's)
 	no_sheep:     bool, // (hosting) none appear by themselves: benchmarks
 	still_clouds: bool, // the clouds stay where they start: benchmarks
+	upload:       Maybe(server.Upload), // (hosting) send its event log to a collector
 }
 
 // Join: a server to play on.
@@ -203,6 +204,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		save_dir     = config.save_dir,
 		spawn        = config.spawn,
 		no_sheep     = config.no_sheep,
+		upload       = config.upload,
 		rules        = still_rules() if config.no_sheep else {},
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},

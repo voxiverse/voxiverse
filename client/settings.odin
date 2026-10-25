@@ -18,6 +18,9 @@ import "../worldgen"
 Settings :: struct {
 	name:              base.Var_Text, // the player's name ("": DEFAULT_NAME)
 	last_server:       base.Var_Text, // Direct Connection's last address
+	share_data:        bool, // send anonymous play data to the collector (asked once)
+	share_asked:       bool, // the question was answered
+	collector:         base.Var_Text, // the collector's address ("": DEFAULT_COLLECTOR)
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
 	vsync:             bool, // wait for the display (off: up to max_fps)
@@ -65,6 +68,14 @@ SETTINGS_VARS := [?]base.Var {
 		hint = DEFAULT_NAME,
 	},
 	{field = "last_server", help = "the address Direct Connection last joined"},
+	{
+		field = "share_data",
+		label = "Share play data",
+		help = "send anonymous play data (no name, no chat) to help improve Voxiverse",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{field = "share_asked", help = "the question about sharing play data was answered"},
+	{field = "collector", help = "where play data goes (host:port); empty: the default"},
 	{
 		field = "fullscreen",
 		label = "Display",
@@ -169,6 +180,7 @@ SETTINGS_VARS := [?]base.Var {
 	},
 }
 
+DEFAULT_COLLECTOR :: "collector.voxiverse.net:27316"
 DEFAULT_NAME :: "Player" // also the one player of format-1 saves (server.LEGACY_PLAYER)
 
 // player_name: the name to play under.

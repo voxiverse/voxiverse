@@ -5,12 +5,15 @@ import "core:flags"
 import "core:fmt"
 import "core:log"
 import "core:mem"
+import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:sync"
 import "core:time"
 
 import "../base"
+import "../collector"
+import "../game"
 import "../netcode"
 import "../server"
 
@@ -34,6 +37,8 @@ Options :: struct {
 	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
 	benchmark:   string `usage:"run the server benchmark scenario (server) and quit: simulated players, nothing saved"`,
 	smoke:       bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
+	telemetry:   string `usage:"send this server's event log to the collector at host:port (anonymous: see PLAN.md, M27)"`,
+	collector:   bool `usage:"run a telemetry collector instead of a world: --universe is its directory, --port its port (default 27316)"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -66,7 +71,15 @@ main :: proc() {
 			) or_else "voxiverse-server.spall"
 		if base.profile_start(path) {log.infof("profiling to %s", path)}
 	}
-	ok := run_benchmark(opts.benchmark, opts.smoke) if opts.benchmark != "" else run(opts)
+	ok: bool
+	switch {
+	case opts.benchmark != "":
+		ok = run_benchmark(opts.benchmark, opts.smoke)
+	case opts.collector:
+		ok = run_collector(opts)
+	case:
+		ok = run(opts)
+	}
 	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
@@ -90,6 +103,15 @@ run :: proc(opts: Options) -> bool {
 		password        = opts.password,
 		name            = name,
 		capture         = opts.capture,
+	}
+	if opts.telemetry != "" {
+		ep, err := net.resolve_ip4(opts.telemetry)
+		if err != nil {
+			log.errorf("cannot find the collector %s (%v)", opts.telemetry, err)
+			return false
+		}
+		if ep.port == 0 {ep.port = COLLECTOR_PORT}
+		config.upload = server.Upload{ep, server_key(opts.universe), 0}
 	}
 	srv := new(server.Server)
 	defer free(srv)
@@ -123,4 +145,48 @@ run :: proc(opts: Options) -> bool {
 	}
 	log.info("server stopping")
 	return server.stop(srv)
+}
+
+COLLECTOR_PORT :: 27316
+
+// run_collector: a telemetry collector (collector/) until stopped.
+run_collector :: proc(opts: Options) -> bool {
+	port := opts.port if opts.port != netcode.DEFAULT_PORT else COLLECTOR_PORT
+	c := new(collector.Collector)
+	defer free(c)
+	if !collector.collector_start(c, opts.universe, port) {return false}
+	catch_stop()
+	log.infof("collector ready dir=%s port=%d (Ctrl+C stops it)", opts.universe, c.port)
+	started := time.tick_now()
+	for !sync.atomic_load(&stop_requested) {
+		time.sleep(100 * time.Millisecond)
+		if opts.seconds > 0 &&
+		   time.duration_seconds(time.tick_since(started)) >= f64(opts.seconds) {break}
+	}
+	st := collector.collector_stats(c)
+	collector.collector_stop(c)
+	log.infof(
+		"collector stopped batches=%d lines=%d duplicates=%d refused=%d forged=%d reports=%d",
+		st.accepted_batches,
+		st.accepted_lines,
+		st.duplicates,
+		st.refused,
+		st.forged,
+		st.reports,
+	)
+	return true
+}
+
+// server_key: this server's account, kept in its universe (made the first time).
+server_key :: proc(dir: string) -> (key: game.Account_Key) {
+	path := filepath.join({dir, "server.key"}, context.temp_allocator) or_else "server.key"
+	if data, err := os.read_entire_file_from_path(path, context.temp_allocator);
+	   err == nil && len(data) == 32 {
+		if game.account_key_set(&key, data) {return}
+	}
+	key = game.account_key_make()
+	seed := game.account_key_seed(&key)
+	os.make_directory_all(dir)
+	_ = os.write_entire_file(path, seed[:])
+	return
 }

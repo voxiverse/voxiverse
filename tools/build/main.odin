@@ -17,6 +17,7 @@ PACKAGES :: []string {
 	"audio",
 	"netcode",
 	"telemetry",
+	"collector",
 	"font",
 	"ui",
 	"game",
@@ -31,6 +32,7 @@ PACKAGES :: []string {
 	"dedicated",
 	"tools/build",
 	"tools/netdump",
+	"tools/analytics",
 	"tools/replay",
 	"tools/sfx",
 	"tools/worldmap",
@@ -43,6 +45,7 @@ TEST_PACKAGES :: []string {
 	"audio",
 	"netcode",
 	"telemetry",
+	"collector",
 	"font",
 	"ui",
 	"game",
@@ -52,6 +55,7 @@ TEST_PACKAGES :: []string {
 	"client/mesh",
 	"client/sfx",
 	"client",
+	"tools/analytics",
 	"tools/build",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
@@ -61,6 +65,7 @@ SOURCE_DIRS :: []string {
 	"audio",
 	"netcode",
 	"telemetry",
+	"collector",
 	"font",
 	"ui",
 	"game",
@@ -121,7 +126,7 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay", "sfx", "worldmap":
+	case "netdump", "replay", "sfx", "worldmap", "analytics":
 		ok = run_tool(args[0], args[1:])
 	case "bench":
 		ok = bench(args[1:])

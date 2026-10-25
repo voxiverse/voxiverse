@@ -309,6 +309,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M25 | 124 | 73 | 1 | genetics, breeding, lambs, black wool (counted from M24's line; includes the CI flake fixes) |
 | M26 | 111 | 77 | 2 | events, counters, local log, stats command and screen, client reports (counted from M25's line; includes the re-plan) |
 | M26b | 72 | 57 | 1 | commands (counted from M26's line) |
+| M27 | 90 | 80 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -345,52 +346,9 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load (done: `game/genetics_test.odin` (carriers give a quarter black, a spotted quarter independently, mutation 1 copy in 1000, wild 1 in 100, inbred lines several times the wild rate); `server/breeding_test.odin`: wheat feeds two sheep, a lamb of their genes appears, parents wait, a lamb is small, not shorn, grows a tenth with wheat and up on time, a second player sees lamb and black, black sheep drop black wool, genes/growth/love/wait kept through save and load; lambs, spots, hearts not seen on screen) |
 | M26 | Events and counters: one `event()` pipeline (kinds table, ring buffer, writer thread) feeding per-character counters, the local JSON-lines log and (M27) the upload spool; position samples, item flows, sessions, performance; `stats` command and overlay | A scripted session gives exactly the expected counters and events, kept through save and load; a burst of events never stalls the tick; day cap; client reports validated; stats overlay over UDP (done: `telemetry/telemetry_test.odin` (JSON lines by UTC day in order, a 200k burst never blocks and its losses are counted and written, the day cap holds); `server/stats_test.odin`: a scripted session (chat, commands, teleport, place and break, shear and hit a sheep, drop, walk) gives exactly the expected counters and the events in order, kept through save and load, shown over UDP; others' stats need `info.stats.others`; client reports validated and rate-capped; 200 players x 3000 counters save and load in budget; `client/stats_test.odin`: the tree, units, the overlay's search and click, the client's reports; the overlay seen once in a screenshot) |
 | M26b | Commands, cleaned: a slash is a server command everywhere (chat and console), plain console words are the client's; `server`, the client `tp` and `wear` gone; selectors (`@s @p @a @r`), relative coordinates, `/tp` with angles, `/setblock`, `/time set\|add\|query`, `/rule`, `/kill`, `/seed`, `/summon` with a count, `/wear`, `/help`, `/locate [biome\|structure]`, Minecraft's aliases | `test_world_commands` (UDP, an Earth world: every one of them, `/locate gate` finds its gate), `test_console_slash_is_the_servers`; the old command tests updated (done) |
-| M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips |
+| M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips (done: `collector/collector_test.odin` (a log reaches the lake whole and once, with an anonymous pid and no account; sent again after a lost cursor or a collector restart it is written once; the spool survives a collector that is down and sends only the new lines; forged proofs, batches before a proof, non-event lines, unknown kinds, bad days and floods refused; a report round-trips), `server/upload_test.odin` (a server told to upload ends up in the lake, no name or chat text; one not told to never talks to the collector), `client` consent question test, `tools/analytics` tests on a recorded run; not done: crash reports sent by themselves) |
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI |
-
-## M27: remote telemetry (a collector and the lake)
-
-So that play data and crash reports reach the developer without anyone copying files.
-
-- **Transport: our own netcode, not HTTP.** TLS from a native-Odin game with no shipped
-  libraries is the expensive part of "send data to a server"; the game already has a
-  reliable authenticated UDP protocol with account keys. A **collector** is the dedicated
-  server binary in another mode (`voxiverse-server --collector`) that accepts only
-  `Telemetry_Batch` messages (a signed batch of M26 events, or a report) and writes them;
-  it keeps no worlds and does not log source addresses. The data is not secret (no names,
-  no chat text, no addresses: players are an anonymous `pid`, a salted hash of the account
-  key), so lack of encryption on the wire is accepted for now; if that changes, the cost is
-  in the netcode, once, for everything.
-- **Uploading:** the client and any server queue events in M26's spool (`telemetry/spool/*.jsonl`
-  beside the settings, size and age capped: 50 MB / 14 days), and send batches of at most
-  32 KiB every 30 s and at exit, resending until acknowledged; the collector's address is a
-  setting with a default; singleplayer and dedicated servers upload too (their own server
-  events as `source=server`).
-- **Consent:** off until the player has been asked once, on first launch, in the game's own
-  words ("Share anonymous play data to help improve Voxiverse?" Yes / No, changeable in
-  Options > Profile); No means nothing is queued, nothing is sent (tested). Reports a player
-  sends on purpose (below) are always theirs to send.
-- **Crashes and reports:** the crash handler writes a report file (version, OS, GPU, the
-  last 200 log lines, the stack); the next launch offers to send it (consent or not: it asks
-  that once) as a `report` batch; a `report <text>` command and a menu button send the
-  current log tail with the player's note.
-- **The lake:** the collector writes `lake/dt=YYYY-MM-DD/source=<client|server|report>/<hour>.jsonl`
-  (append-only, rotated hourly, never rewritten). That directory *is* the data lake: files in
-  partitioned folders, queried in place with DuckDB (`select ... from read_json_auto('lake/**/*.jsonl')`).
-  `tools/analytics` is a thin CLI over it with the questions asked most (sessions and
-  retention, funnels from launch to playing, events per kind, slowest moments, economy flow,
-  deaths and positions as a heat-map PNG) and `tools/lake-sync` pulls a collector's lake to a
-  local directory, so the assistant can be told "sync and summarize" instead of being handed
-  files.
-- **Operations** (documented in `docs/telemetry.md`, not code): run the collector on a small
-  VPS under a service manager, rsync or object-store sync of `lake/` for backup, retention
-  policy (raw 180 days, then aggregated), how to delete a `pid`'s data on request.
-- **Exit check:** a test with a collector, two clients and a server: batches arrive, verified
-  and written to the right partitions; the collector down for a while, the spool keeps and
-  resends everything exactly once; a forged signature, an oversized batch, a flood and an
-  unknown kind are refused; consent off sends no packets at all; a crash report round-trips;
-  `tools/analytics` summarizes a recorded run.
 
 ## M28: character attributes, modifiers and health
 

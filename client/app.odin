@@ -18,6 +18,7 @@ import "../gpu"
 import "../netcode"
 import "../platform"
 import "../render"
+import "../server"
 import "../ui"
 import "mesh"
 
@@ -453,8 +454,21 @@ enter_world :: proc(
 			view_radius = view_radius,
 			view_height = view_height,
 			trace = app.debug.net_trace,
+			upload = upload_target(app),
 		},
 	)
+}
+
+// upload_target: where this world's events go: the collector, if the player
+// said yes (and the world is saved: a scratch world keeps no log); else nowhere.
+upload_target :: proc(app: ^App) -> Maybe(server.Upload) {
+	if !app.settings.share_data {return nil}
+	address := base.var_text(&app.settings.collector)
+	if address == "" {address = DEFAULT_COLLECTOR}
+	ep, err := net.resolve_ip4(address)
+	if err != nil {return nil}
+	if ep.port == 0 {ep.port = netcode.DEFAULT_PORT}
+	return server.Upload{ep, app.account, 0}
 }
 
 // join_server plays on the server at address ("host" or "host:port"; the

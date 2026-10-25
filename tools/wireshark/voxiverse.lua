@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -35,7 +35,7 @@ local SERVER_KINDS = {
 	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
 	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
 	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
-	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters", [30] = "world_changed", [31] = "selection", [32] = "worn", [33] = "stats_page",
+	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters", [30] = "world_changed", [31] = "selection", [32] = "worn", [33] = "stats_page", [34] = "telemetry_ack",
 }
 
 local f = vx.fields

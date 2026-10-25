@@ -149,3 +149,69 @@ test_client_reports :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(f.app.reporter.queue), 0)
 	free_all(context.temp_allocator)
 }
+
+// The question about sharing play data: asked once, on the title screen (not
+// in scripts); each answer is kept and closes it; nothing is shared until yes.
+@(test)
+test_the_consent_question :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	defer reporter_destroy(&f.app.reporter)
+	inventory_close(f.app)
+	f.app.session = nil
+	f.app.screen = .Title
+	testing.expect(
+		t,
+		!f.app.settings.share_data && !f.app.settings.share_asked,
+		"sharing starts off, unasked",
+	)
+	// A script does not get asked.
+	f.app.scripted = true
+	telemetry_update(f.app)
+	testing.expect(t, !overlay_is_open(&f.app.overlays, .Consent))
+	f.app.scripted = false
+	telemetry_update(f.app)
+	testing.expect(t, overlay_is_open(&f.app.overlays, .Consent), "not asked")
+	// "Share" is the left button, "No thanks" the right.
+	buttons :: proc(f: ^Overlay_Fixture) -> (share, no: ui.Vec2) {
+		th := &f.app.ui.theme
+		box := ui.rect_center(f.app.ui.screen, 520, 260)
+		inner := ui.rect_shrink(box, 2 * th.padding)
+		row := ui.cut_bottom(&inner, th.row_height)
+		right := ui.cut_right(&row, (row.w - th.spacing) / 2)
+		return {
+			row.x + row.w / 2,
+			row.y + row.h / 2,
+		}, {right.x + right.w / 2, right.y + right.h / 2}
+	}
+	click :: proc(f: ^Overlay_Fixture, at: ui.Vec2) {
+		overlay_frame(f, {mouse = at})
+		overlay_frame(f, {mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}})
+		overlay_frame(f, {mouse = at, mouse_released = {.Left}})
+	}
+	overlay_frame(&f, {})
+	share, no := buttons(&f)
+	click(&f, no)
+	testing.expect(
+		t,
+		f.app.settings.share_asked && !f.app.settings.share_data,
+		"no thanks was not kept",
+	)
+	testing.expect(t, !overlay_is_open(&f.app.overlays, .Consent), "the question stayed")
+	// Not asked again; and a yes, when it is (the settings reset), is kept.
+	f.app.reporter.asked = false
+	telemetry_update(f.app)
+	testing.expect(t, !overlay_is_open(&f.app.overlays, .Consent), "asked twice")
+	f.app.settings.share_asked = false
+	f.app.reporter.asked = false
+	telemetry_update(f.app)
+	overlay_frame(&f, {})
+	click(&f, share)
+	testing.expect(
+		t,
+		f.app.settings.share_data && f.app.settings.share_asked,
+		"share was not kept",
+	)
+	free_all(context.temp_allocator)
+}

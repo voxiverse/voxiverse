@@ -218,6 +218,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		encode_c(Stats_Request{"a very long filter that is more than thirty-two bytes", 0, ""})[:],
 	)
 	testing.expect(t, !ok, "an overlong filter decoded")
+	batch := Telemetry_Batch{.Events, "2026-10-25", 1 << 33 | 5, "{\"t\":1}\n"}
+	at, ok = decode_client(encode_c(batch)[:])
+	testing.expect(t, ok && at.(Telemetry_Batch) == batch, "a batch did not round trip")
+	_, ok = decode_client(
+		encode_c(Telemetry_Batch{.Events, "a day that is far too long", 0, ""})[:],
+	)
+	testing.expect(t, !ok, "an overlong day decoded")
 	report := Telemetry_Report {
 		count = 2,
 	}
@@ -228,6 +235,9 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	report.count = MAX_TELEMETRY_ENTRIES + 1
 	_, ok = decode_client(encode_c(report)[:])
 	testing.expect(t, !ok, "too many entries decoded")
+	ack: Server_Message
+	ack, ok = decode_server(encode_s(Telemetry_Ack{"2026-10-25", 1 << 34 | 9})[:], scratch)
+	testing.expect(t, ok && ack.(Telemetry_Ack) == Telemetry_Ack{"2026-10-25", 1 << 34 | 9})
 	page: Server_Message
 	page, ok = decode_server(
 		encode_s(Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"})[:],
@@ -237,14 +247,14 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		t,
 		ok && page.(Stats_Page) == Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"},
 	)
-	batch := Blocks_Changed {
+	tbatch := Blocks_Changed {
 		chunk = {-2, 3, 4},
 		count = 2,
 	}
-	batch.entries[0] = {7, .Water_3}
-	batch.entries[1] = {4095, .Air}
-	m, ok = decode_server(encode_s(batch)[:], scratch)
-	testing.expect(t, ok && m.(Blocks_Changed) == batch)
+	tbatch.entries[0] = {7, .Water_3}
+	tbatch.entries[1] = {4095, .Air}
+	m, ok = decode_server(encode_s(tbatch)[:], scratch)
+	testing.expect(t, ok && m.(Blocks_Changed) == tbatch)
 	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
 	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
 	m, ok = decode_server(encode_s(Grants{"1 chat.*\n0 -chat.format\n", "spawn mute"})[:], scratch)

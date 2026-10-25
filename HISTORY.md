@@ -832,3 +832,48 @@ adapted.
   may do), `/weather`, `/difficulty`, `/enchant`, `/execute`, `/data`, `/title`, `/playsound`;
   `/clone` and `/xp` and `/effect` wait for what they need (a copy op in the bulk edits;
   M28's progression).
+
+## M27: remote telemetry (a collector and the lake)
+
+So that play data and crash reports reach the developer without anyone copying files.
+
+- **Transport: our own netcode, not HTTP.** TLS from a native-Odin game with no shipped
+  libraries is the expensive part of "send data to a server"; the game already has a
+  reliable authenticated UDP protocol with account keys. A **collector** is the dedicated
+  server binary in another mode (`voxiverse-server --collector`) that accepts only
+  `Telemetry_Batch` messages (a signed batch of M26 events, or a report) and writes them;
+  it keeps no worlds and does not log source addresses. The data is not secret (no names,
+  no chat text, no addresses: players are an anonymous `pid`, a salted hash of the account
+  key), so lack of encryption on the wire is accepted for now; if that changes, the cost is
+  in the netcode, once, for everything.
+- **Uploading:** the client and any server queue events in M26's spool (`telemetry/spool/*.jsonl`
+  beside the settings, size and age capped: 50 MB / 14 days), and send batches of at most
+  32 KiB every 30 s and at exit, resending until acknowledged; the collector's address is a
+  setting with a default; singleplayer and dedicated servers upload too (their own server
+  events as `source=server`).
+- **Consent:** off until the player has been asked once, on first launch, in the game's own
+  words ("Share anonymous play data to help improve Voxiverse?" Yes / No, changeable in
+  Options > Profile); No means nothing is queued, nothing is sent (tested). Reports a player
+  sends on purpose (below) are always theirs to send.
+- **Crashes and reports:** the crash handler writes a report file (version, OS, GPU, the
+  last 200 log lines, the stack); the next launch offers to send it (consent or not: it asks
+  that once) as a `report` batch; a `report <text>` command and a menu button send the
+  current log tail with the player's note.
+- **The lake:** the collector writes `lake/dt=YYYY-MM-DD/source=<client|server|report>/<hour>.jsonl`
+  (append-only, rotated hourly, never rewritten). That directory *is* the data lake: files in
+  partitioned folders, queried in place with DuckDB (`select ... from read_json_auto('lake/**/*.jsonl')`).
+  `tools/analytics` is a thin CLI over it with the questions asked most (sessions and
+  retention, funnels from launch to playing, events per kind, slowest moments, economy flow,
+  deaths and positions as a heat-map PNG) and `tools/lake-sync` pulls a collector's lake to a
+  local directory, so the assistant can be told "sync and summarize" instead of being handed
+  files.
+- **Operations** (documented in `docs/telemetry.md`, not code): run the collector on a small
+  VPS under a service manager, rsync or object-store sync of `lake/` for backup, retention
+  policy (raw 180 days, then aggregated), how to delete a `pid`'s data on request.
+- **Built as:** `collector/` (`collector.odin`: the collector, `upload.odin`: the uploader); protocol 20: `Telemetry_Batch` and `Telemetry_Ack`, spoken after the usual Hello/Challenge/Proof; the uploader reads the server's own day files past a cursor (`upload.cursor`) instead of keeping a second spool, so the log on disk is the spool; the collector's `cursors.txt` makes a batch idempotent across restarts; `server.Config.upload`; settings `share_data`, `share_asked`, `collector`; the consent dialog on the title screen; `report <note>`; `voxiverse-server --collector` and `--telemetry host:port`; `tools/analytics`, `tools/lake-sync.sh`, `docs/telemetry.md`.
+- **Left for later:** crash reports sent by themselves (the crash handler already logs; the report is a command today), a client's events when it plays on another's server, encryption on the wire.
+- **Exit check:** a test with a collector, two clients and a server: batches arrive, verified
+  and written to the right partitions; the collector down for a while, the spool keeps and
+  resends everything exactly once; a forged signature, an oversized batch, a flood and an
+  unknown kind are refused; consent off sends no packets at all; a crash report round-trips;
+  `tools/analytics` summarizes a recorded run.
