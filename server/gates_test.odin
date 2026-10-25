@@ -76,12 +76,16 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	walk_up :: proc(t: ^testing.T, c: ^Net_Client, g: worldgen.Structure) -> bool {
 		// Still first: inputs sent before a teleport still move one after it.
 		c.move = {}
-		if !net_wait(
-			t,
-			{c},
-			proc(cs: []^Net_Client) -> bool {return at_rest(cs[0])},
-			10,
-		) {return false}
+		if !net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {return at_rest(cs[0])}, 10) {
+			st := c.update.state
+			log.errorf(
+				"walk_up: never at rest: at %v, on ground %v, velocity %v",
+				st.position,
+				st.on_ground,
+				st.velocity,
+			)
+			return false
+		}
 		front, yaw := worldgen.gate_front(g)
 		net_send(c, game.Command{fmt.tprintf("tp %.1f %.1f %.1f", front.x, front.y, front.z)})
 		c.look = {yaw + 3.14159265, 0}

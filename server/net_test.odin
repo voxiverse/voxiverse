@@ -42,6 +42,8 @@ Net_Client :: struct {
 	chat:        [dynamic]Net_Chat, // lines heard (heap)
 	deleted:     [dynamic]u32, // lines taken back
 	inventory:   game.Inventory, // the server's last word
+	rest_last:   [3]f64, // at_rest: where it was last update, and for how many
+	rest_still:  int,
 	inv_acked:   u32,
 	inv_updates: int,
 	look:        [2]f32, // yaw, pitch of its idle inputs
@@ -236,12 +238,12 @@ net_wait :: proc(
 // at_rest: on the ground and still, as of the server's last word.
 @(private)
 at_rest :: proc(c: ^Net_Client) -> bool {
-	@(static) last: [3]f64
-	@(static) still: int
+	// (Counted per client: tests run side by side on threads; a count kept
+	// in statics was one test's and another's at once.)
 	s := c.update.state
-	if s.on_ground && s.position == last {still += 1} else {still = 0}
-	last = s.position
-	return still >= 5
+	if s.on_ground && s.position == c.rest_last {c.rest_still += 1} else {c.rest_still = 0}
+	c.rest_last = s.position
+	return c.rest_still >= 5
 }
 
 @(private)
