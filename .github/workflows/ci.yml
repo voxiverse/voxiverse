@@ -112,10 +112,19 @@ jobs:
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
           done
 
+      # Every screen a player meets (M20), screenshotted (uploaded below):
+      # the menus and Options' tabs, the loading screen, a failed join.
+      - name: Screens (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a ./build/voxiverse --exec "set name ci; sleep 2; screenshot screen_title; wait 3; screen worlds; wait 3; screenshot screen_saves; wait 3; screen worlds create; wait 3; screenshot screen_create_save; wait 3; screen multiplayer; sleep 1; screenshot screen_multiplayer; wait 3; screen multiplayer direct; wait 3; screenshot screen_direct_connection; wait 3; screen options video; wait 3; screenshot screen_options_video; wait 3; screen options sound; wait 3; screenshot screen_options_sound; wait 3; screen options controls; wait 3; screenshot screen_options_controls; wait 3; screen options accessibility; wait 3; screenshot screen_options_accessibility; wait 3; screen options profile; wait 3; screenshot screen_options_profile; wait 3; screen title; screen quit; wait 3; screenshot screen_quit; wait 3; quit"
+          xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait 20; screenshot screen_loading; wait_world; screen menu; wait 3; screenshot screen_game_menu; wait 3; quit"
+          xvfb-run -a ./build/voxiverse --exec "set name ci; join 127.0.0.1:1; sleep 12; screenshot screen_failed; wait 3; quit"
+
       # The sky through a day (screenshots uploaded below).
       - name: Sky (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 2; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; server time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; server time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; server time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; server time 0.8; wait 5; screenshot sky_night; wait 5; quit"
+        run: xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait_world; set rules.daylight_cycle 0; tp 0 12 0 -90 8; wait 30; server time 0.26; wait 5; screenshot sky_sunrise; tp 0 12 0 -90 50; server time 0.4; wait 5; screenshot sky_day; tp 0 12 0 90 8; server time 0.77; wait 5; screenshot sky_dusk; tp 0 12 0 -90 20; server time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
       # Over real sockets: a dedicated server and a client joining it, the
       # server capturing every packet; the Wireshark dissector must decode
@@ -127,7 +136,7 @@ jobs:
           SERVER=$!
           for _ in $(seq 100); do grep -q "server listening" build/server.log && break; sleep 0.1; done
           grep "server listening" build/server.log
-          xvfb-run -a ./build/voxiverse --exec "set name ci; set view_radius 3; set view_height 2; join 127.0.0.1; wait_world; wait 30; screenshot multiplayer; wait 5; quit"
+          xvfb-run -a ./build/voxiverse --exec "set name ci; set render_distance 3; join 127.0.0.1; wait_world; wait 30; screenshot multiplayer; wait 5; quit"
           kill -INT $SERVER
           wait $SERVER
           lua5.4 tools/wireshark/check.lua build/server.pcap

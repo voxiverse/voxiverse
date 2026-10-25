@@ -139,6 +139,7 @@ Context :: struct {
 	layouts:        [MAX_LAYOUT_DEPTH]Layout,
 	layout_depth:   int,
 	widgets:        [dynamic]Widget, // every interactive widget this frame
+	texts:          [dynamic]string, // every text drawn this frame (tests: what a player reads)
 	modal_drawn:    bool,
 	focus_request:  Focus_Move,
 	activate_focus: bool,
@@ -196,6 +197,7 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.layer = .Base
 	ctx.id_depth, ctx.clip_depth, ctx.layout_depth = 0, 0, 0
 	ctx.widgets = make([dynamic]Widget, 0, 64, ctx.frame_alloc)
+	ctx.texts = make([dynamic]string, 0, 64, ctx.frame_alloc)
 	ctx.modal_drawn = false
 	ctx.activate_focus = false
 	ctx.focus_request = .None

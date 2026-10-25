@@ -1,8 +1,11 @@
 package client
 
+import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 import "core:testing"
+import "core:time"
 
 import "../font"
 import "../platform"
@@ -32,10 +35,16 @@ ui_app_free :: proc(app: ^App) {
 ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	#partial switch app.screen {
+	case .Title:
+		title_screen(app, &app.ui)
 	case .Options:
 		options_screen(app, &app.ui)
 	case .Worlds:
 		worlds_screen(app, &app.ui)
+	case .Multiplayer:
+		multiplayer_screen(app, &app.ui)
+	case .Failed:
+		failed_screen(app, &app.ui)
 	}
 	ui.end_frame(&app.ui)
 	app.input.pressed = {}
@@ -172,5 +181,88 @@ test_saves_screen :: proc(t: ^testing.T) {
 	click(t, app, "Delete") // the dialog's
 	testing.expect(t, !os.exists("build/test/saves/Fort"))
 	testing.expect_value(t, len(app.worlds.entries), 1)
+	free_all(context.temp_allocator)
+}
+
+// Multiplayer: the first visit asks for a name (kept in the settings);
+// Direct Connection opens and cancels back to the list.
+@(test)
+test_multiplayer_screen :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer multiplayer_destroy(&app.multiplayer)
+	multiplayer_open(app)
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.Name)
+	ui_frame(app)
+	append(&app.multiplayer.name, "no spaces")
+	ui_frame(app)
+	_, enabled := ui.find_widget(&app.ui, "Done") // not a valid name: Done is off
+	testing.expect(t, !enabled)
+	clear(&app.multiplayer.name)
+	append(&app.multiplayer.name, "alice")
+	ui_frame(app)
+	click(t, app, "Done")
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.List)
+	testing.expect_value(t, player_name(&app.settings), "alice")
+
+	click(t, app, "Direct Connection")
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.Direct)
+	click(t, app, "Cancel")
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.List)
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, Screen.Title)
+	free_all(context.temp_allocator)
+}
+
+// No developer word on a player's screen: every menu screen and Options
+// tab drawn, what it says read back.
+@(test)
+test_screens_speak_plainly :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer worlds_destroy(&app.worlds)
+	defer multiplayer_destroy(&app.multiplayer)
+
+	WORDS :: []string{"universe", "scratch", "chunk", "session", "mesh", "interest", "var", "null"}
+	check :: proc(t: ^testing.T, app: ^App, what: string) {
+		ui_frame(app)
+		testing.expectf(t, len(app.ui.texts) > 2, "%s says nothing", what)
+		for text in app.ui.texts {
+			lower := strings.to_lower(text, context.temp_allocator)
+			for w in WORDS {
+				testing.expectf(t, !strings.contains(lower, w), "%s says %q", what, text)
+			}
+		}
+	}
+	app.screen = .Title
+	check(t, app, "the title")
+	// (A save of its own: VX_SAVES is the saves test's, running alongside.)
+	append(
+		&app.worlds.entries,
+		Save_Entry{strings.clone("Home"), strings.clone("Home"), time.now()},
+	)
+	app.screen = .Worlds
+	check(t, app, "Singleplayer")
+	app.worlds.selected = 0
+	for mode in Saves_Mode {
+		app.worlds.mode, app.worlds.more = mode, true
+		check(t, app, fmt.tprint("Singleplayer", mode))
+	}
+	multiplayer_open(app)
+	for mode in Multiplayer_Mode {
+		app.multiplayer.mode = mode
+		check(t, app, fmt.tprint("Multiplayer", mode))
+	}
+	multiplayer_close(&app.multiplayer)
+	app.screen = .Options
+	for tab in Options_Tab {
+		app.options.tab = tab
+		check(t, app, fmt.tprint("Options", tab))
+	}
+	app.failed = {"Could Not Join", strings.clone("No answer from the server."), .Title}
+	app.screen = .Failed
+	check(t, app, "the failure screen")
+	click(t, app, "Back to Title Screen")
+	testing.expect_value(t, app.screen, Screen.Title)
 	free_all(context.temp_allocator)
 }

@@ -226,6 +226,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	shader_watch_destroy(&app.shader_watch)
 	worlds_destroy(&app.worlds)
 	multiplayer_destroy(&app.multiplayer)
+	delete(app.failed.reason)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
 	delete(app.screenshot_names)

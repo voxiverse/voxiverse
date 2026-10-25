@@ -160,6 +160,7 @@ draw_text_styled :: proc(
 	color: Color,
 	effects: Text_Effects,
 ) -> f32 {
+	append(&ctx.texts, text) // (what the frame says: tests read it)
 	pixel_size := u16(math.round(size * ctx.scale))
 	if pixel_size == 0 {return 0}
 	// Snap the pen to whole pixels so glyph bitmaps map 1:1 (crisp text).

@@ -235,14 +235,19 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"screen",
-			"screen <title|menu|options|worlds|multiplayer|quit>: switch screens (menu: the game menu; quit: the quit dialog)",
+			"screen <title|menu|options [tab]|worlds [create]|multiplayer [direct]|quit>: switch screens (menu: the game menu; quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
+				then := args[1] if len(args) > 1 else ""
 				switch args[0] {
 				case "title":
 					app.screen = .Title
 				case "menu":
 					if app.session != nil {overlay_open(&app.overlays, .Game_Menu)}
 				case "options":
+					app.options.tab, app.options.scroll, app.options.listening = .Video, 0, 0
+					for tab in Options_Tab {
+						if strings.equal_fold(fmt.tprint(tab), then) {app.options.tab = tab}
+					}
 					if app.session != nil {
 						overlay_open(&app.overlays, .Game_Menu) // over the game
 						overlay_open(&app.overlays, .Options)
@@ -252,8 +257,15 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "worlds":
 					worlds_refresh(&app.worlds)
 					app.screen = .Worlds
+					if then == "create" {
+						clear(&app.worlds.name)
+						append(&app.worlds.name, "New Save")
+						app.worlds.mode = .Create
+					}
 				case "multiplayer":
 					multiplayer_open(app)
+					if then == "direct" &&
+					   app.multiplayer.mode == .List {app.multiplayer.mode = .Direct}
 				case "quit":
 					overlay_open(&app.overlays, .Quit_Dialog)
 				case:
@@ -266,7 +278,7 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 		complete_screen,
-		args = {1, 1},
+		args = {1, 2},
 	)
 	console_register(c, {"console", "show the console", proc(app: ^App, args: []string) {
 			overlay_open(&app.overlays, .Console)
