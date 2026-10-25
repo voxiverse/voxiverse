@@ -444,6 +444,33 @@ possible is 0.008; with 3, never below 0.1: use at least 4). Exact counts that d
 shown first: then the two did different work. Judge a change by `compare`, never by two
 runs at different times: this machine's medians move several percent from run to run.
 
+### How to benchmark a change
+
+1. **Pick the scenarios the change can move**: `chunks` for generation, light and meshing;
+   `load` for streaming; `views` for drawing; `flight` for drawing while streaming; `edits`
+   for re-meshing; `server` for the server under players. When unsure, run several.
+2. **Keep the machine otherwise idle and its power steady**: plugged in, nothing else
+   compiling or playing, the same power profile for both sides. `compare` alternates the
+   two versions, so slow drift (heat) falls on both alike, but noise still widens the
+   spread and hides small changes.
+3. **Compare against the commit before the change**:
+   `build bench compare main <scenario>` (or the commit hash), with the change in the
+   working tree. Use the default 5 runs, or `-runs:8` to see changes of a few percent;
+   fewer than 4 can never call a change.
+4. **Read the counts first.** "COUNTS DIFFER" means the two did different work (more
+   chunks, fewer vertices): a change of work, which may be the point (greedy meshing) or a
+   bug; the times then compare different things.
+5. **Trust only the called changes** (p < 0.05). A difference of a few percent without a
+   call is the noise; repeat with more runs if it matters.
+6. **Write the result into the commit message**: the scenario, the metrics that changed,
+   A and B, and p, e.g. "views: gpu_world 1.098 -> 1.181 ms (+7.6%, p 0.008)".
+7. **Exact counts in `bench chunks -check`** (CI) are pinned: a change that alters chunks,
+   meshed chunks or vertices on purpose updates them in tools/bench in the same commit.
+
+`--smoke` (`build bench <scenario> --smoke`, and the game's and server's `--smoke`) runs a
+scenario once, short, with a small view: what CI runs to keep every scenario working.
+Its results go to `<scenario>-smoke` and compare with nothing.
+
 ## Profiling
 
 Measure with optimized code: the default development build is lightly optimized (3-8x slower

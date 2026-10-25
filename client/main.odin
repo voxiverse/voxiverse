@@ -20,6 +20,7 @@ Options :: struct {
 	capture_frame: int `usage:"when started from RenderDoc, capture this frame (1 = first)"`,
 	exec:          string `usage:"console commands to run at startup, separated by ';'"`,
 	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
+	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
 }
 
 main :: proc() {
@@ -63,7 +64,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 
 	ok := app_init(app)
 	if ok {
-		if app.benchmark {bench_begin(app, scenario)}
+		if app.benchmark {bench_begin(app, scenario, opts.smoke)}
 		script: Script
 		script_init(&script, opts.exec)
 		defer script_destroy(&script)

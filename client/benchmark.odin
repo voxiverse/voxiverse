@@ -89,6 +89,13 @@ BENCH_VIEW_SETTLE :: 10 // of those, not measured: GPU times arrive a few frames
 BENCH_FLIGHT_HEIGHT :: 70.0
 BENCH_FLIGHT_SPEED :: 40
 BENCH_FLIGHT_BLOCKS :: 600.0
+// Smoke runs (CI): the same scripts, shorter.
+BENCH_SMOKE_WARMUP :: 10
+BENCH_SMOKE_VIEW_FRAMES :: 4
+BENCH_SMOKE_VIEW_SETTLE :: 2
+BENCH_SMOKE_FLIGHT_BLOCKS :: 64.0
+BENCH_SMOKE_VIEW_RADIUS :: 4
+BENCH_SMOKE_VIEW_HEIGHT :: 2
 BENCH_FLIGHT_PITCH :: -0.35
 BENCH_EDITS :: 12 // explosions, on a ring round the spawn
 BENCH_EDIT_RING :: 24.0 // blocks from the spawn
@@ -106,6 +113,7 @@ Bench_Phase :: enum u8 {
 
 Bench :: struct {
 	scenario:  Scenario,
+	smoke:     bool, // one short repetition (CI)
 	phase:     Bench_Phase,
 	rep:       int,
 	frames:    int, // in this phase
@@ -134,10 +142,21 @@ scenario_names :: proc() -> string {
 }
 
 // bench_begin starts the scenario (after app_init).
-bench_begin :: proc(app: ^App, scenario: Scenario) {
+// smoke: one short repetition, written as "<scenario>-smoke" (never
+// compared with the real thing): CI keeps every scenario working with it.
+bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 	b := &app.bench
+	scenario := scenario
+	if smoke {
+		// Short, and a small world around: a smoke run only shows the
+		// scenario still works (its numbers compare with nothing).
+		scenario.repetitions = 1
+		app.settings.view_radius, app.settings.view_height =
+			BENCH_SMOKE_VIEW_RADIUS, BENCH_SMOKE_VIEW_HEIGHT
+	}
 	b^ = {
 		scenario = scenario,
+		smoke = smoke,
 		result = {
 			scenario = scenario.name,
 			version = scenario.version,
@@ -195,7 +214,7 @@ bench_update :: proc(app: ^App) {
 		send_message(s, game.Command{"time " + BENCH_TIME_OF_DAY})
 		b.phase, b.frames, b.started = .Warming, 0, time.tick_now()
 	case .Warming:
-		if b.frames < BENCH_WARMUP_FRAMES {return}
+		if b.frames < (BENCH_SMOKE_WARMUP if b.smoke else BENCH_WARMUP_FRAMES) {return}
 		if b.scenario.kind == .Flight {
 			p := s.prediction.state.position
 			session_teleport(
@@ -213,9 +232,12 @@ bench_update :: proc(app: ^App) {
 				angle := f64(k) * 2 * math.PI / BENCH_EDITS
 				x := SCRATCH_SPAWN.x + BENCH_EDIT_RING * math.cos(angle)
 				z := SCRATCH_SPAWN.z + BENCH_EDIT_RING * math.sin(angle)
+				// Down from 80 blocks up, or the top of what is loaded if lower
+				// (a smoke run's small view).
+				up := min(80, f64(s.welcome.view_height) * game.CHUNK_SIZE - 8)
 				from := [3]f64 {
 					math.floor(x) + 0.5,
-					s.prediction.state.position.y + 80,
+					s.prediction.state.position.y + up,
 					math.floor(z) + 0.5,
 				}
 				hit, found := game.raycast(query, from, {0, -1, 0}, 200)
@@ -258,8 +280,9 @@ bench_update :: proc(app: ^App) {
 			pitches := BENCH_VIEW_PITCHES
 			s.camera.yaw = f32(b.view % BENCH_VIEW_YAWS) * 2 * math.PI / BENCH_VIEW_YAWS
 			s.camera.pitch = pitches[b.view / BENCH_VIEW_YAWS]
-			if b.frames == BENCH_VIEW_SETTLE {base.metrics_resume()}
-			if b.frames < BENCH_VIEW_FRAMES {return}
+			if b.frames ==
+			   (BENCH_SMOKE_VIEW_SETTLE if b.smoke else BENCH_VIEW_SETTLE) {base.metrics_resume()}
+			if b.frames < (BENCH_SMOKE_VIEW_FRAMES if b.smoke else BENCH_VIEW_FRAMES) {return}
 			base.metrics_stop()
 			b.view, b.frames = b.view + 1, 0
 			if b.view == BENCH_VIEW_YAWS * len(BENCH_VIEW_PITCHES) {bench_repetition_done(app)}
@@ -295,7 +318,8 @@ bench_update :: proc(app: ^App) {
 				bench_fail(app, "stopped flying")
 				return
 			}
-			if p.position.x - b.start_x >= BENCH_FLIGHT_BLOCKS {bench_repetition_done(app)}
+			blocks := BENCH_SMOKE_FLIGHT_BLOCKS if b.smoke else BENCH_FLIGHT_BLOCKS
+			if p.position.x - b.start_x >= blocks {bench_repetition_done(app)}
 		}
 	}
 }
@@ -329,6 +353,7 @@ bench_repetition_done :: proc(app: ^App) {
 bench_finish :: proc(app: ^App) {
 	b := &app.bench
 	b.phase = .Off
+	if b.smoke {b.result.scenario = fmt.tprintf("%s-smoke", b.scenario.name)}
 	path := base.bench_result_write(&b.result)
 	if path == "" {
 		bench_fail(app, "could not write the result (run from the repository: build/ must exist)")

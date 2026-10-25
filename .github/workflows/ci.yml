@@ -64,6 +64,10 @@ jobs:
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench chunks -check
+      # The server's benchmark scenario, short (M19): simulated players over
+      # UDP on every platform; its numbers compare with nothing.
+      - name: Server benchmark (smoke)
+        run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
 
       # Real frames on Mesa's CPU Vulkan driver under the validation layer:
       # any validation finding, leak, sanitizer report or failed check fails
@@ -97,6 +101,16 @@ jobs:
       - name: Biome tour (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a ./build/voxiverse --exec "set view_radius 4; set view_height 3; tour_test quit"
+
+      # The game's benchmark scenarios, short (M19): each still runs to its
+      # end (fixed conditions, offscreen drawing, its result written) on the
+      # CPU driver under validation; timing here means nothing.
+      - name: Benchmark scenarios (smoke, Linux)
+        if: runner.os == 'Linux'
+        run: |
+          for scenario in load views flight edits; do
+            xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
+          done
 
       # The sky through a day (screenshots uploaded below).
       - name: Sky (Linux)

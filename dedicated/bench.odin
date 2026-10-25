@@ -58,7 +58,8 @@ Bot :: struct {
 }
 
 // run_benchmark runs the server scenario and writes its result.
-run_benchmark :: proc(scenario: string) -> bool {
+// smoke: one short repetition, written as "server-smoke" (CI).
+run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 	if scenario != BENCH_SCENARIO {
 		log.errorf(
 			"no benchmark scenario %q in the server (it has: %s; the game has the others)",
@@ -78,9 +79,11 @@ run_benchmark :: proc(scenario: string) -> bool {
 		BENCH_BOTS,
 		BENCH_REPETITIONS,
 	)
-	for rep in 0 ..< BENCH_REPETITIONS {
-		bench_repetition(&result) or_return
-		log.infof("bench %s repetition %d of %d done", BENCH_SCENARIO, rep + 1, BENCH_REPETITIONS)
+	repetitions := 1 if smoke else BENCH_REPETITIONS
+	if smoke {result.scenario = "server-smoke"}
+	for rep in 0 ..< repetitions {
+		bench_repetition(&result, smoke) or_return
+		log.infof("bench %s repetition %d of %d done", BENCH_SCENARIO, rep + 1, repetitions)
 	}
 	append(&result.counts, base.Bench_Count{"players", BENCH_BOTS})
 	path := base.bench_result_write(&result)
@@ -111,7 +114,7 @@ run_benchmark :: proc(scenario: string) -> bool {
 
 // bench_repetition: one server, its players joining, warming up, measured.
 @(private = "file")
-bench_repetition :: proc(result: ^base.Bench_Result) -> bool {
+bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 	config := server.Config {
 		seed            = BENCH_SEED,
 		view_radius     = 12,
@@ -166,13 +169,15 @@ bench_repetition :: proc(result: ^base.Bench_Result) -> bool {
 	}
 	// Warm-up, then the measured part.
 	phase := time.tick_now()
-	for time.duration_seconds(time.tick_since(phase)) < BENCH_WARMUP_SECONDS {
+	warmup := 1.0 if smoke else f64(BENCH_WARMUP_SECONDS)
+	measure := 3.0 if smoke else f64(BENCH_MEASURE_SECONDS)
+	for time.duration_seconds(time.tick_since(phase)) < warmup {
 		pump(bots[:])
 		time.sleep(2 * time.Millisecond)
 	}
 	base.metrics_start()
 	phase = time.tick_now()
-	for time.duration_seconds(time.tick_since(phase)) < BENCH_MEASURE_SECONDS {
+	for time.duration_seconds(time.tick_since(phase)) < measure {
 		pump(bots[:])
 		time.sleep(2 * time.Millisecond)
 	}

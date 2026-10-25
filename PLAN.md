@@ -696,8 +696,10 @@ compare them with each other, not across machines. Numbers are per chunk unless 
     `edits` and `server` with simulated players (done: `edits` measures `edit_shown`, a
     bulk edit's re-meshing latency, not the settling, which is the water's ticks;
     dedicated/bench.odin's 8 bots over UDP; the server's load metrics are means, the
-    rest medians: half its ticks send nothing while generation catches up); (5) CI and a "how to benchmark a change"
-    procedure in DEBUGGING.md.
+    rest medians: half its ticks send nothing while generation catches up); (5) CI and a
+    "how to benchmark a change" procedure in DEBUGGING.md (done: `--smoke` runs each
+    scenario once, short, with a small view; CI runs the server's on every platform and
+    the game's on Linux's CPU driver, a few seconds each).
 - **Left, measured, not done yet:**
   - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame. Tried and
     dropped: empty-space skipping (each cell's distance to the nearest cloud, rays

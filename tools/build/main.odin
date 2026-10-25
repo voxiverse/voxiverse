@@ -154,6 +154,7 @@ usage :: proc() {
 		"              load, views, flight, edits  the game (a release build, fixed settings;",
 	)
 	fmt.println("                           server: the server alone, simulated players;")
+	fmt.println("                           --smoke: one short run, as CI does)")
 	fmt.println("                           --profile: traced too)")
 	fmt.println(
 		"              compare <ref> <scenario> [-runs:N]  the working tree against a commit,",
@@ -544,12 +545,15 @@ bench :: proc(args: []string) -> bool {
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
 	build_args := []string{"--release"}
+	smoke := false
 	for arg in args[1:] {
 		switch arg {
 		case "--profile":
 			build_args = {"--release", "--profile"}
+		case "--smoke":
+			smoke = true
 		case:
-			fmt.eprintfln("build: bench %s takes --profile, not '%s'", scenario, arg)
+			fmt.eprintfln("build: bench %s takes --profile or --smoke, not '%s'", scenario, arg)
 			return false
 		}
 	}
@@ -558,6 +562,7 @@ bench :: proc(args: []string) -> bool {
 		// The server alone (dedicated/bench.odin).
 		exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	}
+	if smoke {return run({exe, "--benchmark", scenario, "--smoke"})}
 	return run({exe, "--benchmark", scenario})
 }
 
