@@ -71,6 +71,9 @@ App :: struct {
 	scripted:         bool, // running --exec commands: settings changes are not saved
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
 	bench:            Bench, // the scenario running (benchmark.odin)
+	stars:            Starfield, // the menus' background (starfield.odin)
+	options:          Options_View, // the Options screen's tab and state (options.odin)
+	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
 	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
 	message:          string, // shown on the title screen (why a session ended)
@@ -335,7 +338,15 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			scene = render.scene_upload(
 				&app.scenes,
 				g,
-				render.scene_make(camera, sky, fog, s.cloud_drift, eye_in_water(s)),
+				render.scene_make(
+					camera,
+					sky,
+					fog,
+					s.cloud_drift,
+					eye_in_water(s),
+					app.settings.brightness,
+					app.settings.clouds,
+				),
 			)
 			world_debug_lines(app)
 			avatars_draw(s, &app.entity_draw)
@@ -376,7 +387,11 @@ frame_cap :: proc(app: ^App) -> time.Duration {
 	if in_world ||
 	   app.fly_test.phase != .Off ||
 	   app.blast_test.phase != .Off ||
-	   app.tour_test.phase != .Off {return 0}
+	   app.tour_test.phase != .Off {
+		if app.settings.max_fps > 0 &&
+		   !app.benchmark {return time.Second / time.Duration(app.settings.max_fps)}
+		return 0
+	}
 	return time.Second / MENU_FPS
 }
 
@@ -399,6 +414,7 @@ enter_world :: proc(
 	spawn: Maybe([3]f64) = nil,
 	benchmark := false, // the same work every run: no critters, still clouds
 ) {
+	view_radius, view_height := view_size(app)
 	start_session(
 		app,
 		{
@@ -409,8 +425,8 @@ enter_world :: proc(
 			seed = seed,
 			save_dir = save_dir,
 			spawn = spawn,
-			view_radius = app.settings.view_radius,
-			view_height = app.settings.view_height,
+			view_radius = view_radius,
+			view_height = view_height,
 			trace = app.debug.net_trace,
 		},
 	)
@@ -427,6 +443,7 @@ join_server :: proc(app: ^App, address: string, password: string, choose := fals
 		return
 	}
 	if ep.port == 0 {ep.port = netcode.DEFAULT_PORT}
+	view_radius, view_height := view_size(app)
 	start_session(
 		app,
 		{
@@ -434,8 +451,8 @@ join_server :: proc(app: ^App, address: string, password: string, choose := fals
 			key         = app.account,
 			join        = Join{ep, password},
 			capture     = app.debug.net_capture,
-			view_radius = app.settings.view_radius,
-			view_height = app.settings.view_height,
+			view_radius = view_radius,
+			view_height = view_height,
 		},
 	)
 }
@@ -472,10 +489,18 @@ leave_world :: proc(app: ^App) {
 	platform.set_mouse_captured(&app.window, false)
 }
 
+// view_size: the view to join a world with: the render distance around
+// and half of it up and down, or the fixed view of a benchmark or a check.
+view_size :: proc(app: ^App) -> (radius, height: i32) {
+	if app.fixed_view != {} {return app.fixed_view.x, app.fixed_view.y}
+	r := app.settings.render_distance
+	return r, clamp(r / 2, 2, 16)
+}
+
 // ui_scale: the user's setting, or one derived from the window height
 // (1.0 at 720 px, in quarter steps) so the UI keeps its proportions.
 ui_scale :: proc(app: ^App) -> f32 {
-	if app.settings.ui_scale > 0 {return app.settings.ui_scale}
+	if app.settings.gui_scale > 0 {return f32(app.settings.gui_scale)}
 	h := f32(max(app.window.height, 1))
 	return clamp(math.round(h / 720 * 4) / 4, 1, 3)
 }

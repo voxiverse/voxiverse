@@ -17,47 +17,79 @@ import "../worldgen"
 
 Settings :: struct {
 	name:              base.Var_Text, // the player's name ("": DEFAULT_NAME)
-	ui_scale:          f32, // 0 = automatic
+	// Video
+	fullscreen:        bool, // borderless, covering the monitor
+	vsync:             bool, // wait for the display (off: up to max_fps)
+	max_fps:           i32, // frames a second at most (0: no limit)
+	fov:               f32, // degrees, vertical
+	render_distance:   i32, // chunks around (the height follows: view_size)
+	gui_scale:         i32, // 0 = automatic
+	brightness:        f32, // 0..1: lifts the darkest light levels
+	clouds:            bool,
+	show_fps:          bool, // the FPS counter in the corner
+	// Sound
+	volume:            f32, // 0..1, all sound
+	// Controls
 	mouse_sensitivity: f32,
 	invert_mouse:      bool,
-	fov:               f32, // degrees, vertical
-	view_radius:       i32, // chunks
-	view_height:       i32,
-	show_fps:          bool, // the FPS counter in the corner
-	vsync:             bool, // wait for the display (off: as many frames as possible)
-	fullscreen:        bool, // borderless, covering the monitor (F11)
-	volume:            f32, // 0..1, all sound
+	sneak_toggle:      bool, // a press sneaks until the next (else: while held)
+	sprint_toggle:     bool,
+	keys:              Bindings, // (their own table: bindings_table)
+	// Accessibility
+	reduce_motion:     bool, // still the menus' stars (and later camera bob and shake)
+	chat_text_size:    f32, // times the UI's text size
 }
 
 @(rodata)
 SETTINGS_DEFAULTS := Settings {
-	ui_scale          = 0,
-	mouse_sensitivity = 1,
-	fov               = 70,
-	view_radius       = 12,
-	view_height       = 6,
 	vsync             = true,
+	max_fps           = 0,
+	fov               = 70,
+	render_distance   = 12,
+	gui_scale         = 0,
+	clouds            = true,
 	volume            = 0.8,
+	mouse_sensitivity = 1,
+	keys              = DEFAULT_BINDINGS,
+	chat_text_size    = 1,
 }
 
 @(rodata)
 SETTINGS_VARS := [?]base.Var {
 	{
 		field = "name",
+		label = "Your name",
 		help = "your name in multiplayer: letters, digits, _ or -",
 		check = proc(s: string) -> bool {return s == "" || game.name_valid(s)},
 		hint = DEFAULT_NAME,
 	},
 	{
-		field = "ui_scale",
-		label = "UI scale (0 = automatic)",
-		help = "UI scale; 0 = automatic",
-		min = 0,
-		max = 3,
-		step = 0.25,
+		field = "fullscreen",
+		label = "Display",
+		help = "cover the whole screen",
+		choices = {{0, "Windowed"}, {1, "Fullscreen"}},
 	},
-	{field = "mouse_sensitivity", help = "mouse look speed", min = 0.1, max = 5, step = 0.05},
-	{field = "invert_mouse", help = "mouse up looks down"},
+	{
+		field = "vsync",
+		label = "VSync",
+		help = "wait for the display: no tearing, frame rate capped at its refresh rate",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "max_fps",
+		label = "Max frame rate",
+		help = "frames per second at most; 0 = unlimited",
+		min = 0,
+		max = 240,
+		choices = {
+			{30, "30"},
+			{60, "60"},
+			{120, "120"},
+			{144, "144"},
+			{240, "240"},
+			{0, "Unlimited"},
+		},
+	},
 	{
 		field = "fov",
 		label = "Field of view",
@@ -67,27 +99,72 @@ SETTINGS_VARS := [?]base.Var {
 		step = 1,
 	},
 	{
-		field = "view_radius",
-		label = "View radius (next world)",
-		help = "view distance across, chunks (next world)",
+		field = "render_distance",
+		help = "how far the world is drawn, chunks (from the next world joined)",
 		min = 2,
 		max = 32,
 	},
 	{
-		field = "view_height",
-		label = "View height (next world)",
-		help = "view distance up and down, chunks (next world)",
-		min = 1,
-		max = 16,
+		field = "gui_scale",
+		label = "GUI scale",
+		help = "size of menus and text; 0 = automatic",
+		min = 0,
+		max = 4,
+		choices = {{0, "Auto"}, {1, "1"}, {2, "2"}, {3, "3"}, {4, "4"}},
 	},
-	{field = "show_fps", label = "Show FPS", help = "show frames per second in the corner"},
 	{
-		field = "vsync",
-		label = "VSync",
-		help = "wait for the display: no tearing, frame rate capped at its refresh rate (off: uncapped, may tear)",
+		field = "brightness",
+		help = "lifts the darkest places (caves, nights); 0 = moody, 1 = bright",
+		min = 0,
+		max = 1,
+		step = 0.05,
 	},
-	{field = "fullscreen", help = "cover the whole screen (F11)"},
-	{field = "volume", help = "sound volume", min = 0, max = 1, step = 0.05},
+	{field = "clouds", help = "draw the clouds", choices = {{0, "Off"}, {1, "On"}}},
+	{
+		field = "show_fps",
+		label = "Show FPS",
+		help = "show frames per second in the corner",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "volume",
+		label = "Master volume",
+		help = "sound volume",
+		min = 0,
+		max = 1,
+		step = 0.05,
+	},
+	{field = "mouse_sensitivity", help = "mouse look speed", min = 0.1, max = 5, step = 0.05},
+	{
+		field = "invert_mouse",
+		label = "Invert mouse",
+		help = "mouse up looks down",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "sneak_toggle",
+		label = "Sneak",
+		help = "sneak while the key is held, or from one press to the next",
+		choices = {{0, "Hold"}, {1, "Toggle"}},
+	},
+	{
+		field = "sprint_toggle",
+		label = "Sprint",
+		help = "sprint while the key is held, or from one press to the next",
+		choices = {{0, "Hold"}, {1, "Toggle"}},
+	},
+	{
+		field = "reduce_motion",
+		help = "still the moving backgrounds (and later camera bob and shake)",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "chat_text_size",
+		help = "the chat's text size, times the menus'",
+		min = 0.5,
+		max = 2,
+		step = 0.25,
+	},
 }
 
 DEFAULT_NAME :: "Player" // also the one player of format-1 saves (server.LEGACY_PLAYER)
@@ -194,7 +271,12 @@ Variables :: struct {
 // through session_set_rule).
 app_variables :: proc(app: ^App) -> []Variables {
 	out := make([dynamic]Variables, context.temp_allocator)
-	append(&out, Variables{settings_table(), &app.settings}, Variables{debug_table(), &app.debug})
+	append(
+		&out,
+		Variables{settings_table(), &app.settings},
+		Variables{bindings_table(), &app.settings.keys},
+		Variables{debug_table(), &app.debug},
+	)
 	if app.session != nil && app.session.state == .Playing {
 		append(&out, Variables{game.rules_table(), &app.session.rules})
 		if app.session.has_worldgen {append(&out, Variables{worldgen.params_table(), &app.session.worldgen})}
@@ -234,7 +316,16 @@ settings_load :: proc(app: ^App) {
 		if err != .Not_Exist {log.warnf("settings cannot read path=%s error=%v", path, err)}
 		return
 	}
+	// Two tables in one file: "key." lines are the bindings', the rest the
+	// settings'; each reports only its own lines.
+	problems := make([dynamic]base.Var_File_Problem, context.temp_allocator)
 	for p in base.vars_read(settings_table(), &app.settings, string(data)) {
+		if !is_binding_line(p.text) {append(&problems, p)}
+	}
+	for p in base.vars_read(bindings_table(), &app.settings.keys, string(data)) {
+		if is_binding_line(p.text) {append(&problems, p)}
+	}
+	for p in problems {
 		log.warnf(
 			"settings line ignored or clamped path=%s line=%d problem=%v text=%q",
 			path,
@@ -244,6 +335,11 @@ settings_load :: proc(app: ^App) {
 		)
 	}
 	log.infof("settings loaded path=%s", path)
+}
+
+@(private = "file")
+is_binding_line :: proc(line: string) -> bool {
+	return strings.has_prefix(strings.trim_space(line), "key.")
 }
 
 // settings_save writes the settings file (through a temporary file, so a
@@ -258,6 +354,8 @@ settings_save :: proc(app: ^App) {
 		"# Voxiverse settings (written by the game; edit freely while it is closed)\n\n",
 	)
 	base.vars_write(settings_table(), &app.settings, &b)
+	strings.write_string(&b, "\n# Controls: keys by their place on a US keyboard\n\n")
+	base.vars_write(bindings_table(), &app.settings.keys, &b)
 	os.make_directory_all(filepath.dir(path))
 	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
 	if err := os.write_entire_file(tmp, b.buf[:]); err != nil {

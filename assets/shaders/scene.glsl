@@ -17,8 +17,8 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	vec4 zenith;        // rgb; w: fog distance (blocks)
 	vec4 horizon;       // rgb
 	vec4 glow;          // rgb sunrise/sunset glow; w: its strength
-	vec4 sky_light;     // rgb: sky light level 15, now
-	vec4 cloud;         // rgb: lit cloud colour
+	vec4 sky_light;     // rgb: sky light level 15, now; w: brightness setting (0..1)
+	vec4 cloud;         // rgb: lit cloud colour; w: 1 drawn, 0 not (the setting)
 	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern
 	vec4 water;         // rgb: water seen from inside; w: 1 with the camera under water
 	Cloud_Map cloud_map;
@@ -97,6 +97,7 @@ float cloud_hit(Scene s, vec3 dir, float far, out int face) {
 
 // with_clouds: color, unless a cloud is in direction dir within far blocks.
 vec3 with_clouds(Scene s, vec3 dir, float far, vec3 color) {
+	if (s.cloud.w == 0.0) return color; // turned off (Options)
 	int face;
 	float d = cloud_hit(s, dir, far, face);
 	if (d < 0.0) return color;

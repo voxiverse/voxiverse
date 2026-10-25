@@ -10,6 +10,7 @@ import "../ui"
 @(test)
 test_overlay_escape_order :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	console_init(&app.console)
 	defer console_destroy(&app.console)
@@ -59,6 +60,7 @@ test_overlay_escape_order :: proc(t: ^testing.T) {
 @(test)
 test_overlay_keys_go_to_the_top :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	ok: bool
 	app.font, ok = font.load(FONT_DATA)

@@ -4,16 +4,12 @@ import "core:fmt"
 import "core:strings"
 
 import "../game"
-import "../platform"
 import "../ui"
 
 // Slots as the UI draws them: the hotbar's and the inventory overlay's.
 
 SLOT_SIZE :: ui.Vec2{120, 48} // the hotbar's
 INVENTORY_SLOT :: ui.Vec2{88, 44} // the overlay's
-
-// HOTBAR_KEYS: the number keys, one per hotbar slot.
-HOTBAR_KEYS :: [game.HOTBAR_SLOTS]platform.Key{.Num_1, .Num_2, .Num_3, .Num_4, .Num_5}
 
 // item_title: an item's name as players read it ("rocket launcher").
 item_title :: proc(item: game.Item) -> string {
@@ -66,10 +62,12 @@ Inventory_View :: struct {
 	scroll:    f32, // catalog rows scrolled
 }
 
-// inventory_keys: `e` over the game opens the inventory, and closes it.
+// inventory_keys: the inventory key over the game opens the inventory, and closes it.
 inventory_keys :: proc(app: ^App) {
 	s := app.session
-	if s == nil || s.state != .Playing || .E not_in app.input.pressed {return}
+	if s == nil ||
+	   s.state != .Playing ||
+	   app.settings.keys.inventory not_in app.input.pressed {return}
 	if overlay_is_open(&app.overlays, .Inventory) {
 		top, _ := overlay_top(&app.overlays)
 		if top == .Inventory {inventory_close(app)}
@@ -174,8 +172,10 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			do_(s, .Drop, game.CURSOR_SLOT, 1 if .Left in pressed else 0)
 		}
 		if hovered >= 0 {
-			for k, n in HOTBAR_KEYS {if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}}
-			if .Q in app.input.pressed {
+			for k, n in hotbar_keys(app.settings.keys) {
+				if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}
+			}
+			if app.settings.keys.drop in app.input.pressed {
 				all := app.input.held & {.Left_Control, .Right_Control} != {}
 				do_(s, .Drop, hovered, 1 if all else 0)
 			}

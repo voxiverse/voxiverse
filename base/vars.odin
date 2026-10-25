@@ -21,7 +21,8 @@ import "core:strings"
 //	table := base.Var_Table{"", Settings, SETTINGS_VARS[:], &defaults}
 //	base.var_set(table, &settings, "fov", "90")
 //
-// Supported field types: bool, i32, int, f32, Var_Text.
+// Supported field types: bool, i32, int, f32, Var_Text, and enums (named by
+// their values' names, in lower case).
 
 Var :: struct {
 	field:    string, // struct field name; also the console name
@@ -31,6 +32,13 @@ Var :: struct {
 	step:     f64, // numbers: slider step (0 = continuous, ints use 1)
 	check:    proc(text: string) -> bool, // text: what is allowed (nil: anything that fits)
 	hint:     string, // text: shown in an empty field
+	choices:  []Var_Choice, // menus: the values offered, in order (none: a slider or a box)
+}
+
+// Var_Choice: one value a menu offers, and what it calls it.
+Var_Choice :: struct {
+	value: f64,
+	label: string,
 }
 
 // Var_Text: a text variable's value, stored in place (settings stay plain
@@ -65,6 +73,7 @@ Var_Kind :: enum u8 {
 	Int,
 	F32,
 	Text,
+	Enum,
 }
 
 Var_Error :: enum u8 {
@@ -104,7 +113,8 @@ var_kind :: proc(t: Var_Table, v: ^Var) -> (kind: Var_Kind, offset: uintptr) {
 	case Var_Text:
 		kind = .Text
 	case:
-		panic("unsupported variable type")
+		if !reflect.is_enum(f.type) {panic("unsupported variable type")}
+		kind = .Enum
 	}
 	return kind, f.offset
 }
@@ -122,6 +132,9 @@ var_get_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var) -> f64 {
 		return f64((^int)(p)^)
 	case .F32:
 		return f64((^f32)(p)^)
+	case .Enum:
+		value, _ := reflect.as_i64(any{p, f.type.id})
+		return f64(value)
 	case .Text:
 	}
 	return 0
@@ -134,6 +147,21 @@ var_set_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var, value: f64) -> Var_Erro
 	value := value
 	err := Var_Error.None
 	if kind == .Text {return .Bad_Value}
+	if kind == .Enum {
+		f := reflect.struct_field_by_name(t.type, v.field)
+		if _, named := enum_name(f.type, value); !named {return .Bad_Value}
+		switch f.type.size {
+		case 1:
+			(^u8)(p)^ = u8(i64(value))
+		case 2:
+			(^u16)(p)^ = u16(i64(value))
+		case 4:
+			(^u32)(p)^ = u32(i64(value))
+		case:
+			(^u64)(p)^ = u64(i64(value))
+		}
+		return .None
+	}
 	if kind != .Bool && (value < v.min || value > v.max) {
 		value = clamp(value, v.min, v.max)
 		err = .Out_Of_Range
@@ -149,7 +177,7 @@ var_set_f64 :: proc(t: Var_Table, data: rawptr, v: ^Var, value: f64) -> Var_Erro
 		}
 	case .F32:
 		(^f32)(p)^ = f32(value)
-	case .Text:
+	case .Text, .Enum:
 	}
 	return err
 }
@@ -180,6 +208,17 @@ var_set :: proc(t: Var_Table, data: rawptr, name: string, value_text: string) ->
 		if value, ok = strconv.parse_f64(text); !ok || math.is_nan(value) || math.is_inf(value) {
 			return .Bad_Value
 		}
+	case .Enum:
+		f := reflect.struct_field_by_name(t.type, v.field)
+		info := reflect.type_info_base(f.type).variant.(reflect.Type_Info_Enum)
+		named := false
+		for n, i in info.names {
+			if strings.equal_fold(n, text) {
+				value, named = f64(info.values[i]), true
+				break
+			}
+		}
+		if !named {return .Bad_Value}
 	}
 	return var_set_f64(t, data, v, value)
 }
@@ -202,8 +241,32 @@ var_format :: proc(
 		return fmt.aprintf("%d", i64(value), allocator = allocator)
 	case .F32:
 		return fmt.aprintf("%g", f32(value), allocator = allocator)
+	case .Enum:
+		name, _ := enum_name(reflect.struct_field_by_name(t.type, v.field).type, value)
+		return strings.to_lower(name, allocator)
 	}
 	return ""
+}
+
+// enum_name: the name of an enum type's value (false: it has none).
+@(private = "file")
+enum_name :: proc(type: ^reflect.Type_Info, value: f64) -> (string, bool) {
+	info := reflect.type_info_base(type).variant.(reflect.Type_Info_Enum)
+	for v, i in info.values {
+		if f64(v) == value {return info.names[i], true}
+	}
+	return "", false
+}
+
+// var_choice: the choice nearest the variable's value (menus); false if it
+// offers none.
+var_choice :: proc(t: Var_Table, data: rawptr, v: ^Var) -> (index: int, ok: bool) {
+	if len(v.choices) == 0 {return 0, false}
+	value := var_get_f64(t, data, v)
+	for c, i in v.choices {
+		if abs(c.value - value) < abs(v.choices[index].value - value) {index = i}
+	}
+	return index, true
 }
 
 var_reset :: proc(t: Var_Table, data: rawptr, v: ^Var) {

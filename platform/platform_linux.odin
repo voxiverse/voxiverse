@@ -75,6 +75,11 @@ X11 :: struct {
 	PeekEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
 	Flush:                     proc "c" (display: ^xlib.Display) -> i32,
 	LookupKeysym:              proc "c" (event: ^xlib.XKeyEvent, index: i32) -> xlib.KeySym,
+	KeycodeToKeysym:           proc "c" (
+		display: ^xlib.Display,
+		keycode: xlib.KeyCode,
+		index: i32,
+	) -> xlib.KeySym,
 	LookupString:              proc "c" (
 		event: ^xlib.XKeyEvent,
 		buffer: [^]u8,
@@ -415,10 +420,12 @@ native_poll :: proc(w: ^Window) {
 			push_event(w, Focus_Event{e.type == .FocusIn})
 		case .KeyPress, .KeyRelease:
 			pressed := e.type == .KeyPress
-			key := key_from_keysym(x.LookupKeysym(&e.xkey, 0))
+			symbol := key_from_keysym(x.LookupKeysym(&e.xkey, 0))
+			key := key_from_evdev(e.xkey.keycode - 8)
+			if key == .Unknown {key = symbol}
 			repeat := pressed && n.keys_down[key]
 			n.keys_down[key] = pressed
-			push_event(w, Key_Event{key, pressed, repeat})
+			push_event(w, Key_Event{key, symbol, pressed, repeat})
 			if pressed {
 				// Latin-1 text for now; full Unicode input (XIM) comes with the UI.
 				buf: [8]u8
@@ -515,6 +522,43 @@ native_vulkan_create_surface :: proc(
 	return surface, true
 }
 
+// key_from_evdev: X keycodes are Linux's evdev codes + 8, which are scan
+// codes for the main block; the extended keys have codes of their own.
+@(private)
+key_from_evdev :: proc(code: u32) -> Key {
+	switch code {
+	case 96:
+		return .Enter
+	case 97:
+		return .Right_Control
+	case 100:
+		return .Right_Alt
+	case 102 ..= 111:
+		NAV := [?]Key {
+			.Home,
+			.Up,
+			.Page_Up,
+			.Left,
+			.Right,
+			.End,
+			.Down,
+			.Page_Down,
+			.Insert,
+			.Delete,
+		}
+		return NAV[code - 102]
+	}
+	return key_from_scancode(code, false)
+}
+
+// native_key_symbol: the layout's key at key's keycode.
+@(private)
+native_key_symbol :: proc(w: ^Window, key: Key) -> Key {
+	if w.native.display == nil {return .Unknown}
+	code := u32(SCANCODES[key]) + 8
+	return key_from_keysym(x.KeycodeToKeysym(w.native.display, xlib.KeyCode(code), 0))
+}
+
 @(private)
 key_from_keysym :: proc(sym: xlib.KeySym) -> Key {
 	#partial switch sym {
@@ -536,6 +580,28 @@ key_from_keysym :: proc(sym: xlib.KeySym) -> Key {
 		return .Space
 	case .XK_grave:
 		return .Grave
+	case .XK_minus:
+		return .Minus
+	case .XK_equal:
+		return .Equals
+	case .XK_bracketleft:
+		return .Left_Bracket
+	case .XK_bracketright:
+		return .Right_Bracket
+	case .XK_backslash:
+		return .Backslash
+	case .XK_semicolon:
+		return .Semicolon
+	case .XK_apostrophe:
+		return .Apostrophe
+	case .XK_comma:
+		return .Comma
+	case .XK_period:
+		return .Period
+	case .XK_slash:
+		return .Slash
+	case .XK_Caps_Lock:
+		return .Caps_Lock
 	case .XK_Left:
 		return .Left
 	case .XK_Right:

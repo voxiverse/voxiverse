@@ -14,6 +14,7 @@ import "../ui"
 @(test)
 test_inventory_overlay :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	ok: bool
 	app.font, ok = font.load(FONT_DATA)
@@ -104,6 +105,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 @(test)
 test_characters_screen :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	ok: bool
 	app.font, ok = font.load(FONT_DATA)

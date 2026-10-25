@@ -70,13 +70,15 @@ BENCH_SIZE :: [2]u32{1280, 720}
 // saved.
 @(rodata)
 BENCHMARK_SETTINGS := Settings {
-	ui_scale          = 1,
+	gui_scale         = 1,
 	mouse_sensitivity = 1,
 	fov               = 70,
-	view_radius       = 12,
-	view_height       = 6,
+	render_distance   = 12, // 12 x 6 chunks (view_size)
+	clouds            = true,
 	vsync             = false,
 	volume            = 0,
+	keys              = DEFAULT_BINDINGS,
+	chat_text_size    = 1,
 }
 
 BENCH_TIME_OF_DAY :: "0.45" // late morning: the sun up, the sky lit
@@ -151,8 +153,7 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 		// Short, and a small world around: a smoke run only shows the
 		// scenario still works (its numbers compare with nothing).
 		scenario.repetitions = 1
-		app.settings.view_radius, app.settings.view_height =
-			BENCH_SMOKE_VIEW_RADIUS, BENCH_SMOKE_VIEW_HEIGHT
+		app.fixed_view = {BENCH_SMOKE_VIEW_RADIUS, BENCH_SMOKE_VIEW_HEIGHT}
 	}
 	b^ = {
 		scenario = scenario,

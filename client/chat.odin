@@ -58,14 +58,13 @@ chat_close :: proc(app: ^App) {
 	clear(&app.chat.text)
 }
 
-// chat_keys: `t` or `/` over the game opens the chat (the key types
-// nothing into it).
+// chat_keys: the chat key, or the command key (the chat starting with /),
+// over the game opens the chat (the key types nothing into it).
 chat_keys :: proc(app: ^App, input: ^ui.Input) {
 	s := app.session
 	if s == nil || s.state != .Playing || !game_controls(app) {return}
-	slash := false
-	for r in input.text {slash ||= r == '/'}
-	if .T in app.input.pressed || slash {
+	slash := app.settings.keys.command in app.input.pressed
+	if app.settings.keys.chat in app.input.pressed || slash {
 		chat_open(app, "/" if slash else "")
 		input.text = nil
 	}
@@ -138,7 +137,7 @@ chat_feed :: proc(app: ^App, ctx: ^ui.Context) {
 chat_lines :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, open: bool) {
 	s := app.session
 	t := &ctx.theme
-	size := t.font_size
+	size := t.font_size * app.settings.chat_text_size
 	line_h := size * 1.35
 	width := min(area.w, CHAT_WIDTH)
 	ascent, descent := ui.font_line_metrics(ctx, size)

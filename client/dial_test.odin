@@ -12,6 +12,7 @@ import "../ui"
 @(test)
 test_dial_overlay :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	ok: bool
 	app.font, ok = font.load(FONT_DATA)

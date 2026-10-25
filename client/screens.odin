@@ -18,6 +18,11 @@ import "../ui"
 // to quit.
 
 handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
+	if app.options.listening != 0 {
+		// The key pressed is being bound: only Escape (leave it) counts.
+		if app.input.escape {escape(app)}
+		return
+	}
 	if app.input.console_toggle {overlay_toggle(&app.overlays, .Console)}
 	if .F3 in app.input.pressed {app.debug.overlay = !app.debug.overlay}
 	if .F4 in app.input.pressed && app.screen == .Game {
@@ -28,8 +33,8 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 			overlay_close(&app.overlays, .Game_Menu)
 		}
 	}
-	if .F2 in app.input.pressed {screenshot_request(app, "")}
-	if .F11 in app.input.pressed {
+	if app.settings.keys.screenshot in app.input.pressed {screenshot_request(app, "")}
+	if app.settings.keys.fullscreen in app.input.pressed {
 		app.settings.fullscreen = !app.settings.fullscreen
 		settings_changed(app)
 	}
@@ -45,6 +50,11 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "screen")
 	defer ui.pop_id(ctx)
+	if app.screen != .Game {
+		// Every menu screen over the stars.
+		starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
+		starfield_draw(ctx, &app.stars)
+	}
 	switch app.screen {
 	case .Title:
 		title_screen(app, ctx)
@@ -66,21 +76,43 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
-	column := ui.rect_center(ctx.screen, 320, 5 * t.row_height + 4 * t.spacing + 120)
+	column := ui.rect_center(ctx.screen, 400, 5 * t.row_height + 4 * t.spacing + 120)
 	ui.title(ctx, "Voxiverse", ui.cut_top(&column, 80))
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
+	// Minecraft's order: the two ways to play, then Options and Quit side
+	// by side; Accessibility under them, straight to its tab.
 	if ui.button(ctx, "Singleplayer", ui.next(ctx)) {
 		worlds_refresh(&app.worlds)
 		app.screen = .Worlds
 	}
 	if ui.button(ctx, "Multiplayer", ui.next(ctx)) {multiplayer_open(app)}
-	if ui.button(ctx, "Options", ui.next(ctx)) {app.screen = .Options}
-	if ui.button(ctx, "Quit", ui.next(ctx)) {overlay_open(&app.overlays, .Quit_Dialog)}
+	row := ui.next(ctx)
+	half := (row.w - t.spacing) / 2
+	if ui.button(ctx, "Options...", ui.cut_left(&row, half)) {
+		app.options.tab = .Video
+		app.screen = .Options
+	}
+	if ui.button(ctx, "Quit Game", ui.cut_right(&row, half)) {
+		overlay_open(&app.overlays, .Quit_Dialog)
+	}
+	if ui.button(ctx, "Accessibility", ui.rect_center(ui.next(ctx), 200, t.row_height)) {
+		app.options.tab = .Accessibility
+		app.screen = .Options
+	}
 	if app.message != "" {
 		ui.label(ctx, app.message, ui.next(ctx), .Center, t.text_muted)
 	}
+	// The version, small and grey in the lower left (Minecraft's place for it).
+	small := t.font_size * 0.75
+	ui.draw_text(
+		ctx,
+		{ctx.screen.x + 8, ctx.screen.y + ctx.screen.h - small - 6, ctx.screen.w / 2, small},
+		fmt.tprintf("Voxiverse %s", base.COMMIT),
+		small,
+		t.text_muted,
+	)
 }
 
 game_screen :: proc(app: ^App, ctx: ^ui.Context) {
@@ -122,7 +154,7 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	column := ui.rect_center(ctx.screen, 320, 4 * t.row_height + 3 * t.spacing + 80)
+	column := ui.rect_center(ctx.screen, 400, 4 * t.row_height + 3 * t.spacing + 80)
 	heading := ui.cut_top(&column, 80)
 	if s.frozen {
 		ui.label(ctx, "Game Paused", ui.cut_bottom(&heading, t.row_height), .Center, t.text_muted)
@@ -130,20 +162,20 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.title(ctx, "Game Menu", heading)
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	if ui.button(ctx, "Resume", ui.next(ctx)) {overlay_close(&app.overlays, .Game_Menu)}
-	if ui.button(ctx, "Options", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
+	if ui.button(ctx, "Back to Game", ui.next(ctx)) {overlay_close(&app.overlays, .Game_Menu)}
+	if ui.button(ctx, "Options...", ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
 	if session_hosting(s) {
 		port := server.stats(&s.server).port
 		label := fmt.tprintf("Open to LAN: port %d", port) if port != 0 else "Open to LAN"
 		if ui.button(ctx, label, ui.next(ctx), disabled = port != 0) {session_open_lan(app)}
 	}
-	if ui.button(
-		ctx,
-		"Save and Leave" if app.session.config.save_dir != "" else "Leave World",
-		ui.next(ctx),
-	) {
-		leave_world(app)
+	// Ours: saved on the way out (a scratch world has nothing to save);
+	// someone else's server: we only go.
+	leave := "Disconnect"
+	if session_hosting(s) {
+		leave = "Save and Quit to Title" if s.config.save_dir != "" else "Quit to Title"
 	}
+	if ui.button(ctx, leave, ui.next(ctx)) {leave_world(app)}
 }
 
 // net_line: round trip, traffic per second each way, the busiest kind.
@@ -318,109 +350,6 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.fill_rect(ctx, r, {0, 0, 0, 170})
 	r = ui.rect_shrink(r, 4)
 	for line in lines {ui.label(ctx, line, ui.cut_top(&r, t.row_height), .Left)}
-}
-
-options_screen :: proc(app: ^App, ctx: ^ui.Context) {
-	if options_panel(app, ctx, false) {app.screen = .Title}
-}
-
-// options_panel: the settings, with Back (true when pressed). In a game it
-// sits on a panel without dimming the world, so changes show as they are
-// made.
-options_panel :: proc(app: ^App, ctx: ^ui.Context, in_game: bool) -> (back: bool) {
-	ui.push_id(ctx, "options")
-	defer ui.pop_id(ctx)
-	t := &ctx.theme
-	rows := f32(len(SETTINGS_VARS) + 1)
-	height := rows * (t.row_height + t.spacing) + 90
-	if in_game {
-		// Docked left, the game in view to the right: changes show as made.
-		prev := ui.begin_layer(ctx, .Modal)
-		defer ui.end_layer(ctx, prev)
-		r := ctx.screen
-		panel := ui.cut_left(&r, 560 + 4 * t.padding)
-		ui.panel(ctx, panel)
-		column := ui.rect_shrink(panel, 2 * t.padding)
-		column.h = min(column.h, height)
-		return options_body(app, ctx, column)
-	}
-	return options_body(app, ctx, ui.rect_center(ctx.screen, 560, height))
-}
-
-@(private = "file")
-options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (back: bool) {
-	column := area
-	ui.title(ctx, "Options", ui.cut_top(&column, 80))
-	ui.layout_begin(ctx, column)
-	defer ui.layout_end(ctx)
-	if var_widgets(ctx, settings_table(), &app.settings) {settings_changed(app)}
-	ui.next(ctx, 10)
-	if ui.button(ctx, "Back", ui.next(ctx)) {
-		if app.settings_dirty {settings_save(app)}
-		return true
-	}
-	return false
-}
-
-// var_widgets draws a checkbox or slider per variable of the table, in the
-// current layout; true if any changed.
-var_widgets :: proc(ctx: ^ui.Context, table: base.Var_Table, data: rawptr) -> (changed: bool) {
-	ui.push_id(ctx, table.prefix)
-	defer ui.pop_id(ctx)
-	for &v in table.vars {
-		label := var_label(table, &v)
-		kind, _ := base.var_kind(table, &v)
-		switch kind {
-		case .Bool:
-			value := base.var_get_f64(table, data, &v) != 0
-			if ui.checkbox(ctx, label, &value, ui.next(ctx)) {
-				base.var_set_f64(table, data, &v, 1 if value else 0)
-				changed = true
-			}
-		case .Int, .F32:
-			value := f32(base.var_get_f64(table, data, &v))
-			step := f32(v.step)
-			if kind == .Int {step = max(step, 1)}
-			format := "%.0f" if kind == .Int || step >= 1 else "%.2f"
-			if ui.slider(
-				ctx,
-				label,
-				&value,
-				f32(v.min),
-				f32(v.max),
-				ui.next(ctx),
-				step = step,
-				format = format,
-			) {
-				if step > 0 {value = f32(math.round(f64(value) / f64(step)) * f64(step))}
-				base.var_set_f64(table, data, &v, f64(value))
-				changed = true
-			}
-		case .Text:
-			// Edited in place; a keystroke that makes it invalid is refused.
-			r := ui.next(ctx)
-			ui.label(ctx, label, ui.cut_left(&r, r.w * 0.45))
-			_, offset := base.var_kind(table, &v)
-			value := (^base.Var_Text)(uintptr(data) + offset)
-			text := make([dynamic]u8, context.temp_allocator)
-			append(&text, base.var_text(value))
-			ui.text_input(ctx, v.field, &text, r, placeholder = v.hint)
-			if string(text[:]) != base.var_text(value) &&
-			   base.var_set(table, data, base.var_name(table, &v), string(text[:])) == .None {
-				changed = true
-			}
-		}
-	}
-	return
-}
-
-// var_label: "mouse_sensitivity" -> "Mouse sensitivity".
-@(private = "file")
-var_label :: proc(table: base.Var_Table, v: ^base.Var) -> string {
-	if v.label != "" {return v.label}
-	s := strings.to_upper(v.field[:1], context.temp_allocator)
-	rest, _ := strings.replace_all(v.field[1:], "_", " ", context.temp_allocator)
-	return strings.concatenate({s, rest}, context.temp_allocator)
 }
 
 // tuning_panel (F4): every variable, live; for tuning by feel.

@@ -13,6 +13,7 @@ import "../base"
 import "../game"
 import "../gpu"
 import "../netcode"
+import "../platform"
 import "../render"
 import "../server"
 import "../worldgen"
@@ -92,6 +93,8 @@ Session :: struct {
 	tick_time:        f32, // seconds into the current client tick
 	toggle_fly:       bool, // a double-tapped jump waits for the next tick
 	last_jump:        time.Tick, // for double-tap detection
+	sneak_on:         bool, // toggled sneaking and sprinting (Options: Toggle)
+	sprint_on:        bool,
 	autopilot:        Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:              Maybe(game.Ray_Hit), // the block under the crosshair, within reach
 	aim_entity:       Maybe(u32), // an entity under the crosshair, nearer than that block
@@ -316,7 +319,12 @@ session_update :: proc(
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	if look {
 		look_update(&s.camera, input, settings)
-		if .Space in input.pressed {
+		toggle :: proc(input: ^Input_State, key: platform.Key, toggles: bool, on: ^bool) {
+			if !toggles {on^ = false} else if key in input.pressed {on^ = !on^}
+		}
+		toggle(input, settings.keys.sneak, settings.sneak_toggle, &s.sneak_on)
+		toggle(input, settings.keys.sprint, settings.sprint_toggle, &s.sprint_on)
+		if settings.keys.jump in input.pressed {
 			if time.duration_seconds(time.tick_since(s.last_jump)) <
 			   DOUBLE_TAP_SECONDS {s.toggle_fly = true}
 			s.last_jump = time.tick_now()
@@ -329,7 +337,7 @@ session_update :: proc(
 	for s.tick_time >= game.TICK_SECONDS {
 		s.tick_time -= game.TICK_SECONDS
 		in_ :=
-			s.autopilot.? or_else (player_input(input, s.camera) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
+			s.autopilot.? or_else (player_input(input, s, settings.keys) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
 		if s.toggle_fly {
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false
@@ -337,7 +345,7 @@ session_update :: proc(
 		send_message(s, game.prediction_tick(&s.prediction, in_, &s.rules, query))
 		movement_sounds(s)
 	}
-	if look {edit_controls(s, input, dt)}
+	if look {edit_controls(s, input, settings.keys, dt)}
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	s.camera.position = eyes + {0, game.PLAYER_EYE, 0}

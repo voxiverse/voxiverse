@@ -1255,7 +1255,7 @@ write_vars :: proc(w: ^Writer, t: base.Var_Table, data: rawptr) {
 			write_i32(w, i32(value))
 		case .F32:
 			write_f32(w, f32(value))
-		case .Text:
+		case .Text, .Enum:
 			panic("game rules are numbers")
 		}
 	}
@@ -1275,7 +1275,7 @@ read_vars :: proc(r: ^Reader, t: base.Var_Table, data: rawptr) {
 			value = f64(read_i32(r))
 		case .F32:
 			value = f64(read_f32(r))
-		case .Text:
+		case .Text, .Enum:
 			panic("game rules are numbers")
 		}
 		if !r.ok {return}

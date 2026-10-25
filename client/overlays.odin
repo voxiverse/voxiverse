@@ -112,12 +112,17 @@ game_controls :: proc(app: ^App) -> bool {
 // escape: the top overlay backs out (closing, or a step within it); with
 // none, the screen does (in a world: pause; on the title: ask to quit).
 escape :: proc(app: ^App) {
+	if options_cancel_listening(app) {return}
 	if top, ok := overlay_top(&app.overlays); ok {
 		close_overlay(app, top)
 		return
 	}
 	switch app.screen {
-	case .Options, .Worlds:
+	case .Worlds:
+		// A save's screen (create, edit, delete) back to the list first.
+		if app.worlds.mode != .List {app.worlds.mode = .List} else {app.screen = .Title}
+	case .Options:
+		if app.settings_dirty {settings_save(app)}
 		app.screen = .Title
 	case .Multiplayer:
 		multiplayer_close(&app.multiplayer)

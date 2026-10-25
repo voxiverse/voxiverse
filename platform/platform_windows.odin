@@ -278,7 +278,9 @@ window_proc :: proc "system" (
 	case win.WM_KEYDOWN, win.WM_SYSKEYDOWN, win.WM_KEYUP, win.WM_SYSKEYUP:
 		pressed := msg == win.WM_KEYDOWN || msg == win.WM_SYSKEYDOWN
 		repeat := pressed && (lparam & (1 << 30)) != 0
-		push_event(w, Key_Event{key_from_vk(wparam, lparam), pressed, repeat})
+		symbol := key_from_vk(wparam, lparam)
+		key := key_from_scancode(u32((lparam >> 16) & 0xff), lparam & (1 << 24) != 0)
+		push_event(w, Key_Event{key if key != .Unknown else symbol, symbol, pressed, repeat})
 		if msg == win.WM_SYSKEYDOWN || msg == win.WM_SYSKEYUP {
 			// Let Alt+F4 and friends work.
 			return win.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -357,6 +359,15 @@ native_vulkan_create_surface :: proc(
 	return surface, true
 }
 
+// native_key_symbol: the layout's key at key's scan code.
+@(private)
+native_key_symbol :: proc(w: ^Window, key: Key) -> Key {
+	code := u32(SCANCODES[key])
+	vk_code := win.MapVirtualKeyW(code, win.MAPVK_VSC_TO_VK_EX)
+	if vk_code == 0 {return .Unknown}
+	return key_from_vk(win.WPARAM(vk_code), win.LPARAM((code & 0xff) << 16))
+}
+
 @(private)
 key_from_vk :: proc(wparam: win.WPARAM, lparam: win.LPARAM) -> Key {
 	vk_code := u32(wparam)
@@ -380,6 +391,28 @@ key_from_vk :: proc(wparam: win.WPARAM, lparam: win.LPARAM) -> Key {
 		return .Space
 	case win.VK_OEM_3:
 		return .Grave
+	case win.VK_OEM_MINUS:
+		return .Minus
+	case win.VK_OEM_PLUS:
+		return .Equals
+	case win.VK_OEM_4:
+		return .Left_Bracket
+	case win.VK_OEM_6:
+		return .Right_Bracket
+	case win.VK_OEM_5:
+		return .Backslash
+	case win.VK_OEM_1:
+		return .Semicolon
+	case win.VK_OEM_7:
+		return .Apostrophe
+	case win.VK_OEM_COMMA:
+		return .Comma
+	case win.VK_OEM_PERIOD:
+		return .Period
+	case win.VK_OEM_2:
+		return .Slash
+	case win.VK_CAPITAL:
+		return .Caps_Lock
 	case win.VK_LEFT:
 		return .Left
 	case win.VK_RIGHT:

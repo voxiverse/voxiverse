@@ -20,6 +20,9 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 @(private)
 native_close :: proc(w: ^Window) {}
 
+@(private)
+native_key_symbol :: proc(w: ^Window, key: Key) -> Key {return .Unknown}
+
 // An IOKit power assertion keeps the display awake while held.
 foreign import iokit "system:IOKit.framework"
 foreign import corefoundation "system:CoreFoundation.framework"

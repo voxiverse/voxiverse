@@ -24,8 +24,8 @@ Scene :: struct {
 	zenith:        [4]f32, // rgb (linear); w: fog distance in blocks (fully fogged)
 	horizon:       [4]f32, // rgb
 	glow:          [4]f32, // rgb sunrise/sunset glow towards the sun; w: its strength
-	sky_light:     [4]f32, // rgb: what sky light level 15 looks like now
-	cloud:         [4]f32, // rgb cloud colour (lit side)
+	sky_light:     [4]f32, // rgb: what sky light level 15 looks like now; w: brightness (0..1)
+	cloud:         [4]f32, // rgb cloud colour (lit side); w: 1 drawn, 0 not
 	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD)
 	water:         [4]f32, // rgb: the colour of water seen from inside it; w: 1 with the camera under water
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
@@ -152,6 +152,8 @@ scene_make :: proc(
 	fog_distance: f32,
 	drift: f64,
 	underwater := false,
+	brightness: f32 = 0,
+	clouds := true,
 ) -> Scene {
 	absolute := [3]f64 {
 		f64(camera.chunk.x) * CHUNK_EXTENT + f64(camera.position.x),
@@ -170,8 +172,8 @@ scene_make :: proc(
 		zenith = {sky.zenith.r, sky.zenith.g, sky.zenith.b, fog_distance},
 		horizon = {sky.horizon.r, sky.horizon.g, sky.horizon.b, 0},
 		glow = {sky.glow.r, sky.glow.g, sky.glow.b, sky.glow_k},
-		sky_light = {sky.sky_light.r, sky.sky_light.g, sky.sky_light.b, 0},
-		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 0},
+		sky_light = {sky.sky_light.r, sky.sky_light.g, sky.sky_light.b, brightness},
+		cloud = {sky.cloud.r, sky.cloud.g, sky.cloud.b, 1 if clouds else 0},
 		cloud_origin = {wrap(absolute.x + drift), 0, wrap(absolute.z), 0},
 		water = {
 			UNDERWATER.r * sky.sky_light.r,

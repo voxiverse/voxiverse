@@ -95,8 +95,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			if check_pending && script_done(&script) {
 				// The check's view (its settings are the benchmarks' otherwise).
 				check_pending = false
-				app.settings.view_radius, app.settings.view_height =
-					check.view_radius, check.view_height
+				app.fixed_view = {check.view_radius, check.view_height}
 				log.infof("check %s: %s", check.name, check.description)
 				check.start(app)
 			}

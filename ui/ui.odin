@@ -153,6 +153,7 @@ Widget :: struct {
 	rect:      Rect, // clipped to its scissor
 	layer:     Layer,
 	focusable: bool,
+	label:     string, // what it says (find_widget)
 }
 
 @(private)
@@ -361,6 +362,7 @@ interact :: proc(
 	id: Id,
 	r: Rect,
 	focusable := true,
+	label := "",
 	loc := #caller_location,
 ) -> (
 	it: Interaction,
@@ -381,7 +383,10 @@ interact :: proc(
 		}
 	}
 	visible := rect_intersect(r, current_clip(ctx))
-	append(&ctx.widgets, Widget{id = id, rect = visible, layer = ctx.layer, focusable = focusable})
+	append(
+		&ctx.widgets,
+		Widget{id = id, rect = visible, layer = ctx.layer, focusable = focusable, label = label},
+	)
 	// Under a modal: drawn, but no hover, clicks or focus, and it must not
 	// touch the shared interaction state either.
 	if ctx.modal_open && ctx.layer < .Modal {return}
@@ -398,6 +403,18 @@ interact :: proc(
 	it.pressed = ctx.active == id && .Left in ctx.input.mouse_down
 	it.focused = ctx.focused == id
 	if it.focused && ctx.activate_focus {it.clicked = true}
+	return
+}
+
+// find_widget: where the last frame drew the widget saying label, the
+// topmost if several do (tests click by what a player reads).
+find_widget :: proc(ctx: ^Context, label: string) -> (r: Rect, found: bool) {
+	top: Layer
+	for w in ctx.widgets {
+		if w.label == label && (!found || w.layer >= top) {
+			r, found, top = w.rect, true, w.layer
+		}
+	}
 	return
 }
 

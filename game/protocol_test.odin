@@ -423,7 +423,7 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 					write_i32(w, i32(value))
 				case .F32:
 					write_f32(w, f32(value))
-				case .Text:
+				case .Text, .Enum:
 				}
 			}
 		},

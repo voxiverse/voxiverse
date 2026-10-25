@@ -45,7 +45,7 @@ button :: proc(
 		draw_text(ctx, r, shown, t.font_size, with_alpha(t.text, t.disabled_alpha), .Center)
 		return false
 	}
-	it := interact(ctx, get_id(ctx, text), r, loc = loc)
+	it := interact(ctx, get_id(ctx, text), r, label = display_label(text), loc = loc)
 	fill, ink := t.background, t.text
 	if it.pressed {
 		fill, ink = t.pressed, t.hover_text
@@ -68,7 +68,7 @@ checkbox :: proc(
 	loc := #caller_location,
 ) -> bool {
 	t := &ctx.theme
-	it := interact(ctx, get_id(ctx, text), r, loc = loc)
+	it := interact(ctx, get_id(ctx, text), r, label = display_label(text), loc = loc)
 	if it.clicked {value^ = !value^}
 	box_size := r.h - 2 * t.padding
 	row := r
@@ -96,7 +96,7 @@ slider :: proc(
 ) -> bool {
 	t := &ctx.theme
 	id := get_id(ctx, text)
-	it := interact(ctx, id, r, loc = loc)
+	it := interact(ctx, id, r, label = display_label(text), loc = loc)
 	old := value^
 	row := r
 	label_rect := cut_left(&row, r.w * 0.4)
@@ -145,7 +145,7 @@ text_input :: proc(
 ) {
 	t := &ctx.theme
 	id := get_id(ctx, id_label)
-	it := interact(ctx, id, r, loc = loc)
+	it := interact(ctx, id, r, label = display_label(id_label), loc = loc)
 	e := &ctx.edit
 	if it.focused {
 		if e.id != id {

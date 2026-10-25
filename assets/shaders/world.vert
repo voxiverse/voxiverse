@@ -28,6 +28,12 @@ float brightness(uint l) {
 	return 0.03 + 0.97 * x * x * (3.0 - 2.0 * x) * x;
 }
 
+// lifted: light bent up by the brightness setting (lift, 0..1), most where it
+// is darkest (as Minecraft's: a cave or a night is dim, not black).
+vec3 lifted(vec3 light, float lift) {
+	return mix(light, 1.0 - pow(1.0 - min(light, vec3(1.0)), vec3(4.0)), lift);
+}
+
 void main() {
 	Scene s = push.scene;
 	vec3 local = vec3(in_packed & 31u, (in_packed >> 5) & 31u, (in_packed >> 10) & 31u);
@@ -56,6 +62,7 @@ void main() {
 	uint block = (in_packed >> 24) & 15u;
 	// Sky light takes the colour of the time of day; lamps stay warm.
 	vec3 light = max(s.sky_light.rgb * brightness(sky), LAMP_COLOR * brightness(block));
+	light = lifted(light, s.sky_light.w);
 	out_light = FACE_LIGHT[face] * AO_LIGHT[ao] * light;
 	out_pos = pos;
 }

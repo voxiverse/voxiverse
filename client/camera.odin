@@ -28,20 +28,21 @@ look_update :: proc(v: ^View, input: ^Input_State, settings: Settings) {
 	v.yaw = math.mod(v.yaw, math.TAU)
 }
 
-// player_input reads the controls for one tick.
-player_input :: proc(input: ^Input_State, v: View) -> game.Player_Input {
+// player_input reads the controls for one tick (sneak and sprint held, or
+// toggled on: session_update).
+player_input :: proc(input: ^Input_State, s: ^Session, keys: Bindings) -> game.Player_Input {
 	held := input.held
 	in_ := game.Player_Input {
-		yaw   = v.yaw,
-		pitch = v.pitch,
+		yaw   = s.camera.yaw,
+		pitch = s.camera.pitch,
 	}
-	if .W in held {in_.move.y += 1}
-	if .S in held {in_.move.y -= 1}
-	if .D in held {in_.move.x += 1}
-	if .A in held {in_.move.x -= 1}
-	if .Space in held {in_.buttons += {.Jump}}
-	if held & {.Left_Shift, .Right_Shift} != {} {in_.buttons += {.Sneak}}
-	if held & {.Left_Control, .Right_Control} != {} {in_.buttons += {.Sprint}}
+	if keys.forward in held {in_.move.y += 1}
+	if keys.back in held {in_.move.y -= 1}
+	if keys.right in held {in_.move.x += 1}
+	if keys.left in held {in_.move.x -= 1}
+	if keys.jump in held {in_.buttons += {.Jump}}
+	if keys.sneak in held || s.sneak_on {in_.buttons += {.Sneak}}
+	if keys.sprint in held || s.sprint_on {in_.buttons += {.Sprint}}
 	return in_
 }
 

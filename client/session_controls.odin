@@ -23,9 +23,9 @@ session_attack :: proc(s: ^Session) -> bool {
 // buttons use it (item_use). Edits are predicted at once (if the shared
 // rules allow them) and sent.
 @(private)
-edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
+edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32) {
 	select := -1
-	for k, i in HOTBAR_KEYS {if k in input.pressed {select = i}}
+	for k, i in hotbar_keys(keys) {if k in input.pressed {select = i}}
 	if input.wheel.y != 0 {
 		n := game.HOTBAR_SLOTS
 		select = (s.inventory.selected - int(math.sign(input.wheel.y)) + n) % n
@@ -33,16 +33,16 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, dt: f32) {
 	if select >= 0 && select != s.inventory.selected {
 		session_inventory_do(s, {.Select, 0, select})
 	}
-	// Q drops one from the hand (Ctrl+Q: all of it).
-	if .Q in input.pressed {
+	// Drop: one from the hand (with Ctrl: all of it).
+	if keys.drop in input.pressed {
 		all := input.held & {.Left_Control, .Right_Control} != {}
 		session_inventory_do(s, {.Drop, s.inventory.selected, 1 if all else 0})
 	}
 
 	s.edit_timer -= dt
-	breaking := .Left in input.mouse_down
-	placing := .Right in input.mouse_down
-	pressed := input.mouse_pressed & {.Left, .Right} != {}
+	breaking := keys.attack in input.held
+	placing := keys.use in input.held
+	pressed := keys.attack in input.pressed || keys.use in input.pressed
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
 	item_use(s, held(s), breaking, placing)

@@ -33,7 +33,8 @@ test_settings_round_trip :: proc(t: ^testing.T) {
 	a: App
 	settings_load(&a) // no file yet: defaults
 	testing.expect(t, a.settings == SETTINGS_DEFAULTS)
-	a.settings.fov, a.settings.view_radius, a.settings.invert_mouse = 95, 20, true
+	a.settings.fov, a.settings.render_distance, a.settings.invert_mouse = 95, 20, true
+	a.settings.keys.jump, a.settings.keys.attack = .G, .Mouse_5
 	settings_save(&a)
 
 	b: App
@@ -114,6 +115,7 @@ test_console_history :: proc(t: ^testing.T) {
 @(test)
 test_console_command_needs :: proc(t: ^testing.T) {
 	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
 	defer free(app)
 	console_init(&app.console)
 	defer console_destroy(&app.console)

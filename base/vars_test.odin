@@ -10,6 +10,15 @@ Test_Settings :: struct {
 	count:       int,
 	show_things: bool,
 	not_a_var:   f32,
+	weather:     Test_Weather,
+	level:       i32,
+}
+
+@(private = "file")
+Test_Weather :: enum u8 {
+	Clear,
+	Light_Rain,
+	Storm = 7,
 }
 
 @(private = "file")
@@ -26,6 +35,14 @@ TEST_VARS := [?]Var {
 	{field = "view", help = "view distance", min = 2, max = 32},
 	{field = "count", help = "a count", min = 0, max = 10},
 	{field = "show_things", help = "show things"},
+	{field = "weather", help = "the weather"},
+	{
+		field = "level",
+		help = "a level, offered as choices",
+		min = 0,
+		max = 10,
+		choices = {{0, "None"}, {5, "Some"}, {10, "Lots"}},
+	},
 }
 
 @(private = "file")
@@ -62,6 +79,25 @@ test_vars_set_and_format :: proc(t: ^testing.T) {
 	testing.expect_value(t, var_format(table, &s, v), "110")
 	var_reset(table, &s, v)
 	testing.expect_value(t, s.fov, 70)
+
+	// Enums by their values' names, any case; written in lower case.
+	testing.expect_value(t, var_set(table, &s, "test.weather", "STORM"), Var_Error.None)
+	testing.expect_value(t, s.weather, Test_Weather.Storm)
+	w, _ := var_find(table, "test.weather")
+	testing.expect_value(t, var_format(table, &s, w), "storm")
+	testing.expect_value(t, var_set(table, &s, "test.weather", "light_rain"), Var_Error.None)
+	testing.expect_value(t, var_get_f64(table, &s, w), 1)
+	testing.expect_value(t, var_set(table, &s, "test.weather", "hail"), Var_Error.Bad_Value)
+	testing.expect_value(t, var_set_f64(table, &s, w, 3), Var_Error.Bad_Value) // no such value
+	testing.expect_value(t, s.weather, Test_Weather.Light_Rain)
+
+	// Choices: the nearest one to the value.
+	c, _ := var_find(table, "test.level")
+	s.level = 4
+	i, offered := var_choice(table, &s, c)
+	testing.expect(t, offered && c.choices[i].label == "Some")
+	_, offered = var_choice(table, &s, w)
+	testing.expect(t, !offered)
 }
 
 @(test)

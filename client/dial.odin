@@ -25,12 +25,12 @@ is_gate_block :: proc(b: game.Block) -> bool {
 	return b == .Gate_Ring || b == .Gate_Chevron || b == .Gate_Chevron_Lit
 }
 
-// dial_keys: right-click on an aimed gate opens the dial overlay.
+// dial_keys: Use on an aimed gate opens the dial overlay.
 dial_keys :: proc(app: ^App) {
 	s := app.session
 	if s == nil ||
 	   s.state != .Playing ||
-	   .Right not_in app.input.mouse_pressed ||
+	   app.settings.keys.use not_in app.input.pressed ||
 	   !game_controls(app) {return}
 	hit, aimed := s.aim.?
 	if !aimed {return}

@@ -4,7 +4,9 @@ import "../platform"
 import "../ui"
 
 // Turns a frame's platform events into ui.Input and game controls. The
-// platform reports key presses and releases; held keys are tracked here.
+// platform reports key presses and releases; held keys are tracked here,
+// by their place on the keyboard, with the mouse buttons among them
+// (bindings, controls.odin); the UI's shortcuts go by the layout's letters.
 
 Input_State :: struct {
 	mouse:          [2]f32, // pixels
@@ -14,8 +16,8 @@ Input_State :: struct {
 	wheel:          [2]f32,
 	look:           [2]f32, // mouse motion while captured, pixels
 	keys_pressed:   bit_set[ui.Key],
-	pressed:        bit_set[platform.Key], // this frame, not auto-repeat
-	held:           bit_set[platform.Key], // keys currently down
+	pressed:        bit_set[platform.Key], // this frame, not auto-repeat (mouse buttons too)
+	held:           bit_set[platform.Key], // keys and mouse buttons currently down
 	text:           [dynamic]rune,
 	escape:         bool, // pressed this frame
 	console_toggle: bool,
@@ -29,18 +31,26 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 	for e in events {
 		switch v in e {
 		case platform.Key_Event:
+			if v.key == .Unknown {continue} 	// (an unbound action's key)
 			if v.pressed {s.held += {v.key}} else {s.held -= {v.key}}
 			if !v.pressed {continue}
 			if !v.repeat {s.pressed += {v.key}}
 			if v.key == .Escape && !v.repeat {s.escape = true}
 			if v.key == .Grave && !v.repeat {s.console_toggle = true}
-			if k, ok := ui_key(v.key); ok {s.keys_pressed += {k}}
+			if k, ok := ui_key(v.symbol); ok {s.keys_pressed += {k}}
 		case platform.Text_Event:
 			if v.char != '`' {append(&s.text, v.char)} 	// the console key types nothing
 		case platform.Mouse_Move_Event:
 			s.mouse = {v.x, v.y}
 		case platform.Mouse_Button_Event:
 			s.mouse = {v.x, v.y}
+			key := platform.MOUSE_KEYS[v.button]
+			if v.pressed {
+				s.held += {key}
+				s.pressed += {key}
+			} else {
+				s.held -= {key}
+			}
 			b: ui.Mouse_Button
 			switch v.button {
 			case .Left:
