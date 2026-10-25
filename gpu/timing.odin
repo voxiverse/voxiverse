@@ -178,6 +178,8 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 				seen += {entry.metric}
 			}
 		}
+		// The frame's time without the offscreen copy: the same work at any window size.
+		ms[.Gpu_Frame] -= ms[.Gpu_Present_Copy]
 		for m in seen {base.metric_add(m, ms[m])}
 	}
 
@@ -215,6 +217,7 @@ GPU_SECTION_METRICS := [?]struct {
 	{"sky", .Gpu_Sky},
 	{"entities", .Gpu_Entities},
 	{"ui", .Gpu_UI},
+	{"present copy", .Gpu_Present_Copy},
 }
 
 // timing_setup decides at device creation whether timestamps work on this

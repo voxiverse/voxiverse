@@ -59,6 +59,8 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	image_count = min(image_count, MAX_SWAPCHAIN_IMAGES)
 
 	old := sc.handle
+	usage := vk.ImageUsageFlags{.COLOR_ATTACHMENT, .TRANSFER_SRC}
+	if g.offscreen.size != {} {usage += {.TRANSFER_DST}}
 	info := vk.SwapchainCreateInfoKHR {
 		sType            = .SWAPCHAIN_CREATE_INFO_KHR,
 		surface          = g.surface,
@@ -67,7 +69,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 		imageColorSpace  = sc.color_space,
 		imageExtent      = extent,
 		imageArrayLayers = 1,
-		imageUsage       = {.COLOR_ATTACHMENT, .TRANSFER_SRC}, // TRANSFER_SRC: screenshots
+		imageUsage       = usage, // TRANSFER_SRC: screenshots; TRANSFER_DST: the offscreen copy
 		imageSharingMode = .EXCLUSIVE,
 		preTransform     = caps.currentTransform,
 		compositeAlpha   = {.OPAQUE},

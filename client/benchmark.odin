@@ -8,6 +8,7 @@ import "core:time"
 
 import "../base"
 import "../game"
+import "../gpu"
 
 // Benchmarks (PLAN.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
@@ -51,9 +52,13 @@ SCENARIOS := [?]Scenario {
 	},
 }
 
+// BENCH_SIZE: what benchmarks draw at, offscreen (gpu.set_offscreen),
+// whatever the window is.
+BENCH_SIZE :: [2]u32{1280, 720}
+
 // BENCHMARK_SETTINGS: what benchmarks run with instead of the player's
-// settings: a 1280 x 720 window (asked for at start), no vsync, nothing
-// extra on screen, the default view. Never saved.
+// settings: no vsync, nothing extra on screen, the default view. Never
+// saved.
 @(rodata)
 BENCHMARK_SETTINGS := Settings {
 	ui_scale          = 1,
@@ -128,6 +133,11 @@ bench_begin :: proc(app: ^App, scenario: Scenario) {
 		scenario.description,
 		scenario.repetitions,
 	)
+	if !gpu.set_offscreen(&app.g, BENCH_SIZE.x, BENCH_SIZE.y) {
+		bench_fail(app, "cannot draw offscreen at a fixed size here")
+		return
+	}
+	b.result.resolution = {int(BENCH_SIZE.x), int(BENCH_SIZE.y)}
 	bench_join(app)
 }
 
@@ -235,8 +245,6 @@ bench_repetition_done :: proc(app: ^App) {
 			base.Bench_Count{"chunks", s.world.chunks.count},
 			base.Bench_Count{"meshes", app.world_pass.stats.meshes},
 		)
-		extent := app.g.swapchain.extent
-		b.result.resolution = {int(extent.width), int(extent.height)}
 	}
 	if app.session != nil {app.session.autopilot = nil}
 	leave_world(app)
@@ -276,6 +284,7 @@ bench_finish :: proc(app: ^App) {
 		)
 	}
 	log.infof("bench %s result=%s", b.scenario.name, path)
+	base.bench_result_destroy(&b.result)
 	b.done = true
 	app.quit = true
 }
@@ -285,6 +294,7 @@ bench_fail :: proc(app: ^App, why: string) {
 	b := &app.bench
 	log.errorf("bench %s failed: %s", b.scenario.name, why)
 	base.metrics_stop()
+	base.bench_result_destroy(&b.result)
 	b.phase, b.failed, b.done = .Off, true, true
 	app.quit = true
 }

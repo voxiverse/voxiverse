@@ -43,6 +43,7 @@ Gpu :: struct {
 	queue:                vk.Queue,
 	device_name:          string,
 	driver:               string, // its driver's name and version (benchmark results)
+	offscreen:            Offscreen, // frames drawn at a fixed size (set_offscreen)
 	swapchain:            Swapchain,
 	frames:               [FRAMES_IN_FLIGHT]Frame_Sync,
 	frame_index:          int,
@@ -248,6 +249,7 @@ destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 		timing_log_summary(g)
 		for &f in g.frames {destroy_frame_sync(g, &f)}
 		bindless_destroy(g)
+		offscreen_destroy(g)
 		destroy_swapchain(g, &g.swapchain)
 		vk.DestroyDevice(g.device, nil)
 	}

@@ -297,7 +297,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	}
 	{
 		base.profile_scope("ui")
-		ui.begin_frame(&app.ui, input, {f32(w.width), f32(w.height)}, scale)
+		width, height := render_size(app)
+		ui.begin_frame(&app.ui, input, {f32(width), f32(height)}, scale)
 		app_ui(app, &app.ui)
 		ui.end_frame(&app.ui)
 	}
@@ -325,7 +326,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		scene: u64
 		if in_world {
 			s := app.session
-			camera = camera_render(&s.camera, w.width, w.height, app.settings.fov)
+			width, height := render_size(app)
+			camera = camera_render(&s.camera, width, height, app.settings.fov)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
 			sky := render.sky_at(game.time_of_day(s.clock))
 			scene = render.scene_upload(
@@ -352,6 +354,13 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		gpu.end_frame(g, frame)
 	}
 	return true
+}
+
+// render_size: what frames are drawn at: a benchmark's fixed offscreen
+// size (gpu.set_offscreen), else the window's.
+render_size :: proc(app: ^App) -> (width, height: i32) {
+	if s := app.g.offscreen.size; s != {} {return i32(s.x), i32(s.y)}
+	return app.window.width, app.window.height
 }
 
 // MENU_FPS: frames per second at most where nothing in a world moves (the

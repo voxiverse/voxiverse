@@ -109,6 +109,11 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		image_index = index,
 		depth       = sc.depth,
 	}
+	if o := &g.offscreen; o.size != {} {
+		// Drawn at a fixed size, copied onto the swapchain image at the end.
+		frame.image, frame.view, frame.depth = o.color.handle, o.color.view, o.depth
+		frame.extent = {o.size.x, o.size.y}
+	}
 	image_barrier(f.cmd, frame.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
 	// The depth image is cleared every frame; wait only for the previous
 	// frame's depth tests to finish with it.
@@ -120,8 +125,8 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		dstAccessMask    = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE},
 		oldLayout        = .UNDEFINED,
 		newLayout        = .DEPTH_ATTACHMENT_OPTIMAL,
-		image            = sc.depth.handle,
-		subresourceRange = whole_image(sc.depth),
+		image            = frame.depth.handle,
+		subresourceRange = whole_image(frame.depth),
 	}
 	dependency := vk.DependencyInfo {
 		sType                   = .DEPENDENCY_INFO,
@@ -136,7 +141,13 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 end_frame :: proc(g: ^Gpu, frame: Frame) {
 	f := &g.frames[g.frame_index]
 	sc := &g.swapchain
-	screenshot_record(g, f, frame) // also transitions the image for presenting
+	shown := frame
+	if g.offscreen.size != {} {
+		offscreen_copy(g, f, frame)
+		shown.image, shown.view = sc.images[frame.image_index], sc.views[frame.image_index]
+		shown.extent = sc.extent
+	}
+	screenshot_record(g, f, shown) // also transitions the image for presenting
 	timing_frame_end(g, &f.timing, frame.cmd)
 	if !check(vk.EndCommandBuffer(frame.cmd)) {return}
 

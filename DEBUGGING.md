@@ -420,8 +420,10 @@ anyone (PLAN.md, M19):
 | `flight` | 600 blocks of flight at 40 blocks/s: frames while streaming, generation and meshing, ticks |
 
 The game's scenarios run a release build with `--benchmark <scenario>`: fixed settings
-(`BENCHMARK_SETTINGS` in client/benchmark.odin: a 1280 x 720 window, no vsync; the player's
-settings file is neither read nor written), the scratch world and its fixed spawn, the time
+(`BENCHMARK_SETTINGS` in client/benchmark.odin: no vsync; the player's settings file is
+neither read nor written), frames drawn offscreen at 1280 x 720 whatever the window is
+(`gpu.set_offscreen`; the copy onto the window is `gpu_present_copy`, left out of
+`gpu_frame`), the scratch world and its fixed spawn, the time
 of day stopped at late morning, still clouds, no critters, no sound device. Each scenario
 runs three repetitions, each a session of its own after a warm-up, and writes
 `build/benchmarks/<scenario>/<time>-<commit>.json` (every metric of every repetition, the
