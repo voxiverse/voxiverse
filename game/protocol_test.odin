@@ -147,8 +147,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false, false}
 	m, ok = decode_server(encode_s(players)[:], scratch)
 	testing.expect(t, ok && m.(Players) == players)
-	m, ok = decode_server(encode_s(Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5, {}})[:], scratch)
-	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5, {}})
+	m, ok = decode_server(encode_s(Entity_Spawn{77, .Sheep, {1, 2, 3}, 0.5, {}})[:], scratch)
+	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Sheep, {1, 2, 3}, 0.5, {}})
 	dropped := Entity_Spawn{78, .Item, {1, 2, 3}, 0, {item_of_block(.Sand), 12}}
 	m, ok = decode_server(encode_s(dropped)[:], scratch)
 	testing.expect(t, ok && m.(Entity_Spawn) == dropped)
@@ -188,7 +188,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		tick  = 5,
 		count = ENTITIES_PER_MESSAGE,
 	}
-	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2}}
+	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2, i % 2 == 0}}
 	ents_bytes := encode_s(ents)
 	testing.expectf(
 		t,
@@ -210,6 +210,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	at: Client_Message
 	at, ok = decode_client(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
+	at, ok = decode_client(encode_c(Use_Entity{12, 35})[:])
+	testing.expect(t, ok && at.(Use_Entity) == Use_Entity{12, 35})
 	batch := Blocks_Changed {
 		chunk = {-2, 3, 4},
 		count = 2,
@@ -295,7 +297,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(Player_Left{2}),
 		encode_s(Players{tick = 9, count = 1}),
 		encode_s(Notice{"hello"}),
-		encode_s(Entity_Spawn{1, .Critter, {}, 0, {}}),
+		encode_s(Entity_Spawn{1, .Sheep, {}, 0, {}}),
 		encode_s(Entity_Despawn{1, false}),
 		encode_s(Entities{tick = 1, count = 1}),
 		encode_s(Entity_Hurt{1}),

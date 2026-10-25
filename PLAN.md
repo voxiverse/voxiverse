@@ -224,7 +224,7 @@ the milestone that changes it is named.
 | Player | A character being played right now by a connected client | `server.Client`, `client.Session` |
 | Owner | An account with every permission in a universe: the host in singleplayer, `--cheats` on a dedicated server | `is_owner` |
 | Host | A player whose client runs the universe (singleplayer, LAN) | `session_hosting` |
-| Entity | Anything in a world besides blocks and players: critters, rockets, dropped stacks | `game.Entity_Kind` |
+| Entity | Anything in a world besides blocks and players: sheep, rockets, dropped stacks | `game.Entity_Kind` |
 
 **What happens**
 
@@ -304,6 +304,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M22 | 98 | 11 | 1 | inventory tweaks, pick block, icons; the UI atlas became RGBA8 |
 | M22b | 158 | 37 | 1 | equipment, avatar armor, render-to-texture preview (the same session as M22's follow-ups: counted from M22's line) |
 | M22c | 58 | 20 | 1 | plants and support: one rule for single blocks and bulk edits (counted from M22b's line) |
+| M23 | 75 | 30 | 1 | sheep: rename, use entity, shearing, grazing, wool (counted from M22c's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -335,7 +336,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M22 | Inventory and item icons: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with an icon generated for every item, a smaller hotbar | UI tests for each mouse tweak and pick block; an icon for every item, none blank (done: `game/inventory_test.odin` pins the new actions (`Put`, `Gather`, `Move_One`); `client/inventory_tweaks_test.odin` drives each mouse tweak through the overlay, pick block (hotbar slot, catalog stack, full hotbar, no catalog, no item) and checks every item's icon is in the atlas and not blank; the inventory screenshot (`screen inventory`, a new step in CI) was looked at once; the catalog is a separate Creative tab (with a search) beside Inventory, the hotbar under both (`test_creative_tab`); icons are 32 px, in the UI atlas, now RGBA8) |
 | M22b | Equipment: five slots (head, chest, legs, feet, offhand) in the inventory overlay beside a preview of the player, rendered to a texture by the entity pass, turning to look where the cursor is; a few armor items (cap, boots, ...) that show on the avatar, yours and other players' | Server tests: equipping and unequipping through the overlay's actions, saved and loaded, refused in the wrong slot; over UDP another client sees the worn items; a UI test drives the slots; the preview looked at once in a screenshot; no stats yet (done: `test_equipment_actions` (game rules), `test_messages_round_trip` (equipment in the inventory, `Player_Worn`), `test_equipment_over_the_network` (UDP: cap on, wrong slot refused, boots on, the other player told, quick-equip, kept through a restart, a late joiner told), `test_equipment_slots` (the overlay's slots, shift-click, the preview asked for and turning toward the mouse); the preview looked at once in a screenshot, zero validation messages) |
 | M22c | Plants need support: a plant (grass, flowers) breaks, and drops its item, when the block under it goes or stops holding it; broken plants and block-breaking drops go through one rule | Server tests: break the block under a flower, it is gone and its item dropped; water or a placed block replacing the support does the same; chunk loading and worldgen leave no floating plants (golden hashes unchanged) (done: `server/plants_test.odin` (a flower, a dandelion on sand and tall grass lose their ground by a single block, and the poppy and dandelion drop themselves, tall grass nothing, nothing with `rules.drops` off; a plant is not placed on what would not hold it; a bulk edit under a row of poppies drops all six), `test_no_floating_plants` (Earth worlds: structures no longer leave plants over their floors); worldgen golden hashes and the whole suite unchanged) |
-| M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep |
+| M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep (done: `server/sheep_test.odin` (over UDP: using a sheep shears it and drops 1-3 wool, a second player sees it shorn, using it again does nothing; shorn is kept through a restart; grazing turns the grass in front to dirt and regrows the wool, a sheep over stone stays bare; a save written with `critter` loads sheep); `test_right_click_uses_the_aimed_entity`; protocol round trips (`Use_Entity`, the shorn flag); the sheep seen once in a screenshot, the shorn model not) |
 | M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load |
 | M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load |
 | M26 | Blocks that hold things: data kept with a block (saved with its chunk), shown by a chest of 25 slots that players open together | Contents survive save, quit, load and chunk unload; breaking a chest drops all; two players over UDP see each other's moves; a lone record without its block is dropped on load |
@@ -343,34 +344,6 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M28 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M29 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
 | M30 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
-
-## M23: sheep
-
-The one animal is a sheep, so it is called one, and it is the first thing a player does
-something to rather than at. Minecraft's sheep is the reference where nothing here says
-otherwise.
-
-- **The name:** `Critter` becomes `Sheep` everywhere (code, `summon sheep`, the entities
-  file); a save's `critter` is read as `sheep`.
-- **Using an entity:** right click on an aimed entity (the client already aims at entities
-  for hitting) sends `Use_Entity{id}`; the server checks reach (as for hitting) and calls
-  the kind's use procedure. Entity kinds get a table of procedures (think, use) in place of
-  the switch in `think`, for the next kinds to fill in. Using an entity takes precedence
-  over placing a block behind it.
-- **Shearing by hand:** using a sheep with wool drops 1-3 white wool (dropped items, as a
-  broken block's) and leaves it shorn. No shears: no tools have durability yet.
-- **Regrowing:** a shorn sheep that grazes on grass eats it (the block becomes dirt, as in
-  Minecraft) and has its wool back. Grazing is the critter's existing idle behaviour, now
-  aimed at a grass block in front of it.
-- **The model:** wool is the body's outer box; shorn, the body is the smaller pink-grey
-  inner box. The shorn flag goes in the entity's replicated state (protocol bump).
-- **White wool:** a block (opaque, breakable, placeable; its own generated texture) and
-  its item.
-- **Not here:** dyes, colours other than white (M25 brings black), shears.
-- **Exit check:** server tests: using a sheep drops wool and shears it; a shorn sheep is
-  shorn after save and load; grazing regrows the wool and turns the grass to dirt; using a
-  shorn sheep does nothing. Over UDP, a second client sees the sheep shorn. A save written
-  before this milestone loads with sheep where its critters were.
 
 ## M24: random ticks and farming
 

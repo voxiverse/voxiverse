@@ -47,7 +47,7 @@ Config :: struct {
 	spawn:           Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
 	world_idle:      f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 	gate_open:       f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
-	no_critters:     bool, // none appear by themselves (benchmarks: the same work every run)
+	no_sheep:        bool, // none appear by themselves (benchmarks: the same work every run)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -601,6 +601,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Edit:
 		queue_action(s, c, v)
 	case game.Attack:
+		queue_action(s, c, v)
+	case game.Use_Entity:
 		queue_action(s, c, v)
 	case game.Fire:
 		queue_action(s, c, v)

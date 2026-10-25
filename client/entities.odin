@@ -9,7 +9,7 @@ import "../render"
 import "mesh"
 
 // Entities as the client shows them: interpolated like the other players
-// (players.odin), drawn as boxes in the entity pass. A critter has a body,
+// (players.odin), drawn as boxes in the entity pass. A sheep has a body,
 // a head that grazes and looks about (the server's pitch), and four legs
 // that swing as fast as it walks; it flashes red when hit and bursts into a
 // puff of pixels when it dies.
@@ -47,6 +47,8 @@ FLAME :: [4]u8{255, 170, 60, 255}
 @(private = "file")
 WOOL :: [4]u8{232, 222, 200, 255}
 @(private = "file")
+SHORN :: [4]u8{204, 160, 152, 255}
+@(private = "file")
 HIDE :: [4]u8{122, 92, 70, 255}
 @(private = "file")
 HURT :: [4]u8{236, 84, 72, 255}
@@ -63,8 +65,8 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		e.last_seen = v.position
 		hurt := e.hurt_at != {} && time.tick_since(e.hurt_at) < HURT_FLASH
 		switch e.kind {
-		case .Critter:
-			critter(d, v, e.stride, hurt)
+		case .Sheep:
+			sheep(d, v, e.stride, hurt, e.shorn)
 		case .Rocket:
 			rocket(s, d, v)
 		case .Item:
@@ -87,13 +89,27 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 	}
 }
 
-// critter: a body, a head on a neck that pitches, four legs that swing.
+// sheep: a body, a head on a neck that pitches, four legs that swing.
 @(private = "file")
-critter :: proc(d: ^render.Entity_Draw, v: Other_View, stride: f32, hurt: bool) {
+sheep :: proc(d: ^render.Entity_Draw, v: Other_View, stride: f32, hurt: bool, shorn: bool) {
 	wool, hide := WOOL, HIDE
 	if hurt {wool, hide = HURT, HURT}
 	p := v.position
-	render.entity_box(d, p, v.yaw, 0, {-0.35, 0.35, -0.5}, {0.35, 0.85, 0.45}, wool, .Body)
+	if shorn {
+		// The bare body: smaller, pink-grey, inside where the wool was.
+		render.entity_box(
+			d,
+			p,
+			v.yaw,
+			0,
+			{-0.27, 0.4, -0.42},
+			{0.27, 0.78, 0.38},
+			HURT if hurt else SHORN,
+			.Body,
+		)
+	} else {
+		render.entity_box(d, p, v.yaw, 0, {-0.35, 0.35, -0.5}, {0.35, 0.85, 0.45}, wool, .Body)
+	}
 	neck := p + turn_yaw({0, 0.72, -0.45}, v.yaw)
 	render.entity_box(d, neck, v.yaw, v.pitch, {-0.2, -0.2, -0.38}, {0.2, 0.2, 0.02}, hide, .Head)
 	swing := math.sin(stride * 5) * 0.6 // radians, as it walks

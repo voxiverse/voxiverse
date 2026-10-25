@@ -3,12 +3,12 @@ package game
 import "core:math"
 
 // Entities: things in the world other than blocks and players (for now one
-// kind, the critter). The server simulates them (server/entities.odin) and
+// kind, the sheep). The server simulates them (server/entities.odin) and
 // tells each client about the ones near it; both sides share these
 // definitions and the physics.
 
 Entity_Kind :: enum u8 {
-	Critter, // a passive, boxy animal: wanders, grazes, runs away when hit
+	Sheep, // a passive, boxy animal: wanders, grazes, runs away when hit
 	Rocket, // the creative rocket launcher's: flies, then explodes
 	Item, // a dropped stack: falls, merges with its kind, picked up by walking over it
 }
@@ -28,8 +28,8 @@ Entity_Info :: struct {
 
 @(rodata)
 ENTITY_INFO := [Entity_Kind]Entity_Info {
-	.Critter = {
-		name = "critter",
+	.Sheep = {
+		name = "sheep",
 		width = 0.8,
 		height = 0.9,
 		health = 4,

@@ -31,6 +31,7 @@ Net_Client :: struct {
 	worn:        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
 	changed:     [dynamic]game.Block_Changed,
 	entities:    map[u32][3]f64, // known entities, where last seen
+	shorn:       map[u32]bool, // sheep as last told shorn or not
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
@@ -92,6 +93,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.chat)
 	delete(c.deleted)
 	delete(c.entities)
+	delete(c.shorn)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
@@ -202,7 +204,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		case game.Entities:
 			for i in 0 ..< v.count {
 				e := v.entries[i]
-				if e.entity in c.entities {c.entities[e.entity] = e.position}
+				if e.entity in c.entities {
+					c.entities[e.entity] = e.position
+					c.shorn[e.entity] = e.shorn
+				}
 			}
 		case game.Entity_Despawn:
 			delete_key(&c.entities, v.entity)

@@ -33,7 +33,7 @@ Sound_Event :: struct {
 Sound_Bank :: struct {
 	block:   [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
 	player:  [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
-	critter: [sfx.Critter_Sound][sfx.VARIANTS]audio.Sound_Id,
+	sheep:   [sfx.Sheep_Sound][sfx.VARIANTS]audio.Sound_Id,
 	blast:   [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples: [dynamic][]f32, // owned
 }
@@ -57,8 +57,8 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for p in sfx.Player_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v))}
 	}
-	for c in sfx.Critter_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.critter[c][v] = add(b, m, sfx.critter_sound(c, v))}
+	for c in sfx.Sheep_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.sheep[c][v] = add(b, m, sfx.sheep_sound(c, v))}
 	}
 	for x in sfx.Blast_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v))}
@@ -83,9 +83,9 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		variant := rand.int_max(sfx.VARIANTS)
 		switch e.kind {
 		case .Entity_Hurt:
-			audio.play(m, {b.critter[.Hurt][variant], gain, pitch})
+			audio.play(m, {b.sheep[.Hurt][variant], gain, pitch})
 		case .Entity_Die:
-			audio.play(m, {b.critter[.Die][variant], gain, pitch})
+			audio.play(m, {b.sheep[.Die][variant], gain, pitch})
 		case .Launch:
 			audio.play(m, {b.blast[.Launch][variant], gain, pitch})
 		case .Explosion:

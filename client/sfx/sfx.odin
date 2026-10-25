@@ -44,7 +44,7 @@ Blast_Sound :: enum u8 {
 	Boom, // an explosion: a deep thump, a rumble, crackle
 }
 
-Critter_Sound :: enum u8 {
+Sheep_Sound :: enum u8 {
 	Hurt, // a short bleat
 	Die, // a long, falling one, and a puff
 }
@@ -78,7 +78,7 @@ material_of :: proc(b: game.Block) -> (Material, bool) {
 		return .Glass, true
 	case .Log, .Spruce_Log, .Cactus, .Planks:
 		return .Wood, true
-	case .Snow:
+	case .Snow, .Wool:
 		return .Snow, true
 	}
 	return {}, false
@@ -265,10 +265,10 @@ player_sound :: proc(p: Player_Sound, variant: int, allocator := context.allocat
 	return nil
 }
 
-// critter_sound: a critter's voice, a bleat: a sliding pitch with vibrato
+// sheep_sound: a sheep's voice, a bleat: a sliding pitch with vibrato
 // whose harmonics are shaped by two formants (no filters: each harmonic's
 // loudness is the formants' at its frequency).
-critter_sound :: proc(c: Critter_Sound, variant: int, allocator := context.allocator) -> []f32 {
+sheep_sound :: proc(c: Sheep_Sound, variant: int, allocator := context.allocator) -> []f32 {
 	s := Synth {
 		rng = seed(7777 + u32(c) * 131 + u32(variant) * 7),
 	}

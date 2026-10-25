@@ -8,7 +8,7 @@ import "../game"
 // Items as the player uses them: the stack in hand (the selected hotbar
 // slot of the inventory, game/inventory.odin) and the mouse buttons. A
 // block's item places it with the right button (the left breaks, or hits a
-// critter); the rocket launcher fires with the left. The inventory is the
+// sheep); the rocket launcher fires with the left. The inventory is the
 // server's: what we do to it is predicted at once and sent
 // (session_inventory_do), and replayed over each Inventory_Update until
 // the server has answered it.
@@ -57,6 +57,8 @@ held :: proc(s: ^Session) -> game.Stack {
 
 // item_use: the mouse buttons with stack in hand.
 item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
+	// Using what is aimed at comes before placing a block behind it.
+	if placing && !breaking && session_use_entity(s) {return}
 	info, _ := game.item_info(stack.item)
 	if t, tool := info.tool.?; tool {
 		switch t {

@@ -171,7 +171,7 @@ Permissions). The ones that matter when debugging a world:
 |---|---|
 | `/time [sunrise\|day\|noon\|sunset\|night\|midnight\|0..1]` | Set the time of day (`world.time`). `set rules.daylight_cycle 0` stops the clock, `rules.day_length` is seconds per day |
 | `/tp <x y z> \| <player>`, `/spawn`, `/setworldspawn [x y z]` | Move; back to the world spawn (landing on its column's ground) / new players arrive here (or there). A new world's spawn is the generator's search (dry open land, no tree or structure near), chosen once and kept in `world.cfg` |
-| `/summon [kind]`, `/locate <biome or structure>`, `/regen [radius]` | A critter in front of you (`world.summon`; critters also come by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one, and go when nobody is within 80); fly to the nearest biome or structure (`teleport.locate`); remake the unedited chunks within radius (1-8 chunks) from the generator as it is now (`world.gen`) |
+| `/summon [kind]`, `/locate <biome or structure>`, `/regen [radius]` | A sheep in front of you (`world.summon`; sheep also come by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one, and go when nobody is within 80); fly to the nearest biome or structure (`teleport.locate`); remake the unedited chunks within radius (1-8 chunks) from the generator as it is now (`world.gen`) |
 | `/pos1 [x y z]`, `/pos2 [x y z]`, `/sel` | The selection's corners (the block you look at, within 128, or coordinates), kept by the server and drawn as a box / forget it |
 | `/fill [box] <block>`, `/replace [box] <from> <to>`, `/sphere [x y z] <radius> <block>` | Bulk edits (`world.edit.bulk`; at most 64x64x64 blocks) of the selection, or of a box `x1 y1 z1 x2 y2 z2` given (a sphere without a centre: at pos1). The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` saying how many follow; the client shows them all in one frame once all are meshed |
 | `/structure save <name> [box] [clear]`, `/structure paste <name> [x y z] [turns]`, `/structure list` | Keep the selection (or a box) as `<world>/structures/<name>.vxs` (air as void, or with `clear` as air) / put one (the world's, else a shipped one) at pos1 (or x y z) through the bulk edit pipeline, turned 0-3 quarters (`world.structure`) |
@@ -438,7 +438,7 @@ The game's scenarios run a release build with `--benchmark <scenario>`: fixed se
 neither read nor written), frames drawn offscreen at 1280 x 720 whatever the window is
 (`gpu.set_offscreen`; the copy onto the window is `gpu_present_copy`, left out of
 `gpu_frame`), the scratch world and its fixed spawn, the time
-of day stopped at late morning, still clouds, no critters, no sound device. Each scenario
+of day stopped at late morning, still clouds, no sheep, no sound device. Each scenario
 runs three repetitions, each a session of its own after a warm-up, and writes
 `build/benchmarks/<scenario>/<time>-<commit>.json` (every metric of every repetition, the
 exact counts, the resolution, the machine) and a line in `build/benchmarks/history.jsonl`

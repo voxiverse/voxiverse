@@ -232,7 +232,7 @@ admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	kind := game.Entity_Kind.Critter
+	kind := game.Entity_Kind.Sheep
 	if len(args) > 0 {
 		found := false
 		for k in game.Entity_Kind {

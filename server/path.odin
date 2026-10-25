@@ -7,7 +7,7 @@ import "../game"
 
 // Pathfinding for walking entities: A* over the block grid. A walker
 // stands in a block of air on a solid block (one block tall is enough for
-// a critter); from there it can walk to any of the 8 neighbours (diagonals
+// a sheep); from there it can walk to any of the 8 neighbours (diagonals
 // only past two open sides: no cutting corners), step up one block (with
 // room overhead) or drop down at most MAX_DROP. Unloaded chunks count as
 // walls. A search expands at most `budget` blocks; if the goal is not

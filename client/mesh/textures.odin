@@ -43,6 +43,7 @@ Texture :: enum u32 {
 	Gate_Chevron,
 	Gate_Chevron_Lit,
 	Gate_Horizon,
+	Wool,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -113,6 +114,8 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Gate_Chevron_Lit, .Gate_Ring, .Gate_Ring
 	case .Gate_Horizon:
 		return .Gate_Horizon, .Gate_Horizon, .Gate_Horizon
+	case .Wool:
+		return .Wool, .Wool, .Wool
 	}
 	return
 }
@@ -304,6 +307,12 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				// Rippling blue light; see-through.
 				ripple := value_noise(seed ~ 31, x + y / 2, y + x / 3, 3)
 				c = shade(HORIZON, 0.3 + 0.5 * ripple + 0.2 * fine)
+			case .Wool:
+				// Woven: soft cream tufts in rows, a thread's shadow between.
+				v := 0.45 + 0.3 * coarse + 0.25 * fine
+				if y % 4 == 3 {v -= 0.2}
+				if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
+				c = shade(WOOL, clamp(v, 0, 1))
 			case .Cactus_Top:
 				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
 				if x == 0 ||
@@ -503,6 +512,14 @@ COPPER := [5]Rgba {
 	{206, 124, 64, 255},
 	{96, 160, 120, 255}, // a little verdigris
 	{230, 150, 86, 255},
+}
+@(private = "file", rodata)
+WOOL := [5]Rgba {
+	{176, 170, 160, 255},
+	{200, 195, 186, 255},
+	{220, 216, 208, 255},
+	{236, 233, 226, 255},
+	{248, 246, 240, 255},
 }
 @(private = "file", rodata)
 CACTUS := [5]Rgba {

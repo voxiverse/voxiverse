@@ -38,8 +38,8 @@ test_every_sound_is_well_formed :: proc(t: ^testing.T) {
 	for x in Blast_Sound {
 		for v in 0 ..< VARIANTS {check(t, "blast sound", blast_sound(x, v, context.temp_allocator), levels)}
 	}
-	for c in Critter_Sound {
-		for v in 0 ..< VARIANTS {check(t, "critter sound", critter_sound(c, v, context.temp_allocator), levels)}
+	for c in Sheep_Sound {
+		for v in 0 ..< VARIANTS {check(t, "sheep sound", sheep_sound(c, v, context.temp_allocator), levels)}
 	}
 }
 

@@ -40,7 +40,7 @@ Session_Config :: struct {
 	capture:      bool, // write every packet to net.pcap (joining only)
 	save_dir:     string, // the world's directory; "" = scratch, not saved
 	spawn:        Maybe([3]f64), // a new world's spawn (else the generator's)
-	no_critters:  bool, // (hosting) none appear by themselves: benchmarks
+	no_sheep:     bool, // (hosting) none appear by themselves: benchmarks
 	still_clouds: bool, // the clouds stay where they start: benchmarks
 }
 
@@ -201,7 +201,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
 		spawn        = config.spawn,
-		no_critters  = config.no_critters,
+		no_sheep     = config.no_sheep,
 		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},

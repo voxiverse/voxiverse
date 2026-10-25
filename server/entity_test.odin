@@ -45,7 +45,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	// Night: no critters of their own accord, only ours. Far goes away.
+	// Night: no sheep of their own accord, only ours. Far goes away.
 	net_send(&near, game.Command{"time midnight"})
 	net_send(&far, game.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
@@ -55,13 +55,13 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "far never moved away")
 
-	net_send(&near, game.Command{"summon critter"})
+	net_send(&near, game.Command{"summon sheep"})
 	ok = net_wait(
 		t,
 		{&near, &far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1},
 	)
-	if !testing.expect(t, ok, "the summoned critter never showed up") {return}
+	if !testing.expect(t, ok, "the summoned sheep never showed up") {return}
 	testing.expect_value(t, len(far.entities), 0) // too far to be told
 
 	// It lives: it moves about over the next seconds, on the ground.
@@ -79,7 +79,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		if math.sqrt(d.x * d.x + d.z * d.z) > 1 {moved = true}
 		testing.expectf(t, abs(p.y - start_at.y) < 4, "fell or flew: %v from %v", p, start_at)
 	}
-	testing.expect(t, moved, "the critter never wandered")
+	testing.expect(t, moved, "the sheep never wandered")
 
 	// Far comes over: now it is told; goes again: told it is gone.
 	at := near.entities[id]
@@ -89,14 +89,14 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		{&near, &far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[1].entities) == 1},
 	)
-	testing.expect(t, ok, "far never saw the critter it walked up to")
+	testing.expect(t, ok, "far never saw the sheep it walked up to")
 	net_send(&far, game.Teleport{position = {600.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		{&near, &far},
 		proc(cs: []^Net_Client) -> bool {return len(cs[1].entities) == 0},
 	)
-	testing.expect(t, ok, "far was not told the critter left its area")
+	testing.expect(t, ok, "far was not told the sheep left its area")
 
 	// Out of reach: nothing happens.
 	net_send(&far, game.Attack{id, far.seq})
@@ -108,7 +108,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	// and it is gone for good.
 	for hit in 0 ..< 4 {
 		p, known := near.entities[id]
-		if !testing.expectf(t, known, "lost sight of the critter before hit %d", hit + 1) {break}
+		if !testing.expectf(t, known, "lost sight of the sheep before hit %d", hit + 1) {break}
 		// Next to it (it runs once hit); the server takes the teleport
 		// first: the same ordered stream.
 		net_send(&near, game.Teleport{position = p + {1.2, 0, 0}})
@@ -126,7 +126,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect_value(t, near.died, 1)
 
 	// Saved: another one, then quit and load.
-	net_send(&near, game.Command{"summon critter"})
+	net_send(&near, game.Command{"summon sheep"})
 	ok = net_wait(t, {&near}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok)
 	// A rocket straight up, still flying when the server stops: not saved.
@@ -142,22 +142,22 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		filepath.join({home_dir(dir, 21), ENTITIES_FILE}, context.temp_allocator) or_else "",
 		context.temp_allocator,
 	)
-	testing.expect(t, strings.contains(string(saved), "critter"), "the critter was not saved")
+	testing.expect(t, strings.contains(string(saved), "sheep"), "the sheep was not saved")
 	testing.expect(t, !strings.contains(string(saved), "rocket"), "a rocket in flight was saved")
 	if !testing.expect(t, start(&srv, config, {})) {return}
 	stopped = false
-	// Near comes back where it left, beside the saved critter.
+	// Near comes back where it left, beside the saved sheep.
 	again: Net_Client
 	net_connect(&again, srv.host.socket.port, "near")
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
-	testing.expect(t, ok, "the saved critter did not come back")
+	testing.expect(t, ok, "the saved sheep did not come back")
 }
 
-// Critters come by themselves in daylight (no more than the cap), and go
+// Sheep come by themselves in daylight (no more than the cap), and go
 // once nobody is near.
 @(test)
-test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
+test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 	config := Config {
 		seed            = 21,
 		generator       = .Classic, // grass near the spawn
@@ -188,7 +188,7 @@ test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 		most = max(most, len(c.entities))
 		time.sleep(game.TICK_DURATION)
 	}
-	testing.expectf(t, len(c.entities) >= 1, "no critter came in daylight (most seen %d)", most)
+	testing.expectf(t, len(c.entities) >= 1, "no sheep came in daylight (most seen %d)", most)
 	for _ in 0 ..< 60 {
 		net_pump(t, &c)
 		most = max(most, len(c.entities))
@@ -197,7 +197,7 @@ test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 	testing.expectf(
 		t,
 		most <= SPAWN_CAP + 2,
-		"%d critters: the cap is %d (a herd may top it by 2)",
+		"%d sheep: the cap is %d (a herd may top it by 2)",
 		most,
 		SPAWN_CAP,
 	)
@@ -206,5 +206,5 @@ test_critters_spawn_and_despawn :: proc(t: ^testing.T) {
 	net_send(&c, game.Command{"time midnight"})
 	net_send(&c, game.Teleport{position = {0.5, 140, 400.5}})
 	ok = net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 0}, 20)
-	testing.expect(t, ok, "critters stayed known after the watcher left")
+	testing.expect(t, ok, "sheep stayed known after the watcher left")
 }

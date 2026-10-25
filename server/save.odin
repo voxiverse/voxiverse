@@ -560,7 +560,7 @@ write_entities :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintln(
 		&b,
-		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count]",
+		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count | shorn]",
 	)
 	for e in w.entities.list {
 		if !game.ENTITY_INFO[e.kind].saved {continue}
@@ -577,6 +577,7 @@ write_entities :: proc(w: ^World) -> bool {
 		)
 		if e.kind ==
 		   .Item {fmt.sbprintf(&b, " %s %d", game.item_name(e.stack.item), e.stack.count)}
+		if e.kind == .Sheep {fmt.sbprintf(&b, " %v", e.shorn)}
 		strings.write_byte(&b, '\n')
 	}
 	return write_atomically(
@@ -598,7 +599,7 @@ load_entities :: proc(w: ^World) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		f := strings.fields(l, context.temp_allocator)
-		ok := len(f) == 7 || len(f) == 9
+		ok := len(f) >= 7 && len(f) <= 9
 		kind: game.Entity_Kind
 		found := false
 		if ok {
@@ -606,6 +607,11 @@ load_entities :: proc(w: ^World) {
 				info := &game.ENTITY_INFO[k]
 				if info.saved && info.name == f[0] {kind, found = k, true}
 			}
+			if f[0] == "critter" {kind, found = .Sheep, true} 	// (before it was a sheep)
+			// An item has its stack after, a sheep whether it is shorn; no other has more.
+			if found && ((kind == .Item) != (len(f) == 9)) {ok = false}
+			if found && kind != .Item && kind != .Sheep && len(f) != 7 {ok = false}
+			if found && kind == .Sheep && len(f) == 9 {ok = false}
 		}
 		pos: [3]f64
 		yaw: f32
@@ -645,6 +651,7 @@ load_entities :: proc(w: ^World) {
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
 			e.stack = stack
+			e.shorn = kind == .Sheep && len(f) == 8 && f[7] == "true"
 			loaded += 1
 		}
 	}

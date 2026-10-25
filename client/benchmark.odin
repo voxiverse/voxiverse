@@ -17,7 +17,7 @@ import "../server"
 // the numbers is fixed here, not taken from the player: the settings
 // (BENCHMARK_SETTINGS; the settings file is neither read nor written), the
 // world (the scratch world, its fixed spawn), the time of day (stopped), the
-// clouds (still), no critters appearing, no sound device. Each repetition
+// clouds (still), no sheep appearing, no sound device. Each repetition
 // is a session of its own: join, load, warm up, measure, leave.
 
 Bench_Kind :: enum u8 {

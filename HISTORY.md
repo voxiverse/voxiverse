@@ -667,3 +667,32 @@ inside it again would buy nothing.
 - Bulk edits (explosions, selections) go through the same check, batched.
 - **Built as:** `game.block_is_plant` / `plant_supported` (grass, dirt, sand); `server/plants.odin`: `plant_check` runs from `set_block` on the block above and `plants_check_box` after a bulk edit; one `block_drop` for hand-breaking and lost support; tall grass has no item drop; placing a plant is refused (server and the client's prediction) where nothing holds it; Earth worldgen clears plants under a structure's floor.
 - **Exit check:** as in the table.
+
+## M23: sheep
+
+The one animal is a sheep, so it is called one, and it is the first thing a player does
+something to rather than at. Minecraft's sheep is the reference where nothing here says
+otherwise.
+
+- **The name:** `Critter` becomes `Sheep` everywhere (code, `summon sheep`, the entities
+  file); a save's `critter` is read as `sheep`.
+- **Using an entity:** right click on an aimed entity (the client already aims at entities
+  for hitting) sends `Use_Entity{id}`; the server checks reach (as for hitting) and calls
+  the kind's use procedure. Entity kinds get a table of procedures (think, use) in place of
+  the switch in `think`, for the next kinds to fill in. Using an entity takes precedence
+  over placing a block behind it.
+- **Shearing by hand:** using a sheep with wool drops 1-3 white wool (dropped items, as a
+  broken block's) and leaves it shorn. No shears: no tools have durability yet.
+- **Regrowing:** a shorn sheep that grazes on grass eats it (the block becomes dirt, as in
+  Minecraft) and has its wool back. Grazing is the critter's existing idle behaviour, now
+  aimed at a grass block in front of it.
+- **The model:** wool is the body's outer box; shorn, the body is the smaller pink-grey
+  inner box. The shorn flag goes in the entity's replicated state (protocol bump).
+- **White wool:** a block (opaque, breakable, placeable; its own generated texture) and
+  its item.
+- **Not here:** dyes, colours other than white (M25 brings black), shears.
+- **Built as:** `Entity_Kind.Sheep` (was Critter; `summon sheep`, `critter` still read from old saves); client message `Use_Entity` (kind 15) queued like `Attack`, protocol 18; `Entity_Entry.shorn` replicated every tick; `ENTITY_BEHAVIOUR` table of procedures per kind (just `use` so far; the brain stays the sheep's own `think`); shorn is the 8th field of a sheep's line in entities.cfg; a shorn sheep with grass ahead grazes more, and eats it with its head down (10 ticks before the graze ends); `Wool` block, texture, icon, soft sound.
+- **Exit check:** server tests: using a sheep drops wool and shears it; a shorn sheep is
+  shorn after save and load; grazing regrows the wool and turns the grass to dirt; using a
+  shorn sheep does nothing. Over UDP, a second client sees the sheep shorn. A save written
+  before this milestone loads with sheep where its critters were.

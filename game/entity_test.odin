@@ -19,7 +19,7 @@ flat_query :: proc(f: ^Flat) -> Block_Query {
 		}}
 }
 
-// A critter falls, lands, walks, stops at a step it does not jump, and
+// A sheep falls, lands, walks, stops at a step it does not jump, and
 // gets over it when it jumps.
 @(test)
 test_entity_body :: proc(t: ^testing.T) {
@@ -31,26 +31,26 @@ test_entity_body :: proc(t: ^testing.T) {
 	b := Entity_Body {
 		position = {0.5, 15, 0.5},
 	}
-	for _ in 0 ..< 60 {body_step(&b, .Critter, {}, false, &rules, q, TICK_SECONDS)}
+	for _ in 0 ..< 60 {body_step(&b, .Sheep, {}, false, &rules, q, TICK_SECONDS)}
 	testing.expect(t, b.on_ground && abs(b.position.y - 11) < 1e-9, "landed on the ground")
 
 	f.wall_x = 3
-	for _ in 0 ..< 90 {body_step(&b, .Critter, {2, 0}, false, &rules, q, TICK_SECONDS)}
-	half := ENTITY_INFO[.Critter].width / 2
+	for _ in 0 ..< 90 {body_step(&b, .Sheep, {2, 0}, false, &rules, q, TICK_SECONDS)}
+	half := ENTITY_INFO[.Sheep].width / 2
 	testing.expectf(
 		t,
 		abs(b.position.x - (3 - half)) < 1e-6,
 		"stopped at the wall: x %v",
 		b.position.x,
 	)
-	for i in 0 ..< 60 {body_step(&b, .Critter, {2, 0}, i == 0, &rules, q, TICK_SECONDS)}
+	for i in 0 ..< 60 {body_step(&b, .Sheep, {2, 0}, i == 0, &rules, q, TICK_SECONDS)}
 	// Over the one-block wall and down the far side.
 	testing.expectf(t, b.position.x > 4 + half, "did not get over the step: %v", b.position)
 }
 
 @(test)
 test_ray_box :: proc(t: ^testing.T) {
-	lo, hi := entity_box(.Critter, {5.5, 0, 0.5})
+	lo, hi := entity_box(.Sheep, {5.5, 0, 0.5})
 	d, hit := ray_box({0.5, 0.5, 0.5}, {1, 0, 0}, lo, hi, 10)
 	testing.expectf(t, hit && abs(d - (5.5 - 0.4 - 0.5)) < 1e-9, "hit at %v", d)
 	_, hit = ray_box({0.5, 0.5, 0.5}, {1, 0, 0}, lo, hi, 4)

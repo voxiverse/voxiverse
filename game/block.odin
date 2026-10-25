@@ -49,6 +49,7 @@ Block :: enum u16 {
 	Gate_Chevron, // dark
 	Gate_Chevron_Lit, // locked while dialing, and while open
 	Gate_Horizon, // the open gate's surface: walking in travels
+	Wool, // white; from a sheep
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -217,6 +218,14 @@ BLOCK_INFO := [Block]Block_Info {
 	},
 	.Poppy = {name = "poppy", targetable = true, breakable = true, placeable = true},
 	.Dandelion = {name = "dandelion", targetable = true, breakable = true, placeable = true},
+	.Wool = {
+		name = "wool",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
+	},
 	.Cactus = {
 		name = "cactus",
 		collides = true,

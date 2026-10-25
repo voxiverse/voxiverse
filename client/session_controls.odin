@@ -19,6 +19,14 @@ session_attack :: proc(s: ^Session) -> bool {
 	return true
 }
 
+// session_use_entity uses the aimed entity (right click); false if none is aimed at.
+session_use_entity :: proc(s: ^Session) -> bool {
+	id, ok := s.aim_entity.?
+	if !ok {return false}
+	send_message(s, game.Use_Entity{id, s.prediction.next_sequence - 1})
+	return true
+}
+
 // edit_controls: number keys and the wheel pick the hotbar item; the mouse
 // buttons use it (item_use). Edits are predicted at once (if the shared
 // rules allow them) and sent.

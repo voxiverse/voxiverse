@@ -21,7 +21,7 @@ import "../server"
 // arrives is decoded and dropped: nothing is drawn or meshed, so the times
 // are the server's. After a warm-up, BENCH_MEASURE_SECONDS are measured: its
 // ticks, streaming, chunk generation and column tops, bytes sent. Each of
-// BENCH_REPETITIONS is a server of its own. No critters (the same work every
+// BENCH_REPETITIONS is a server of its own. No sheep (the same work every
 // run). The worker count follows the machine (as a dedicated server's
 // does): results compare on one machine.
 
@@ -125,7 +125,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		listen          = true,
 		port            = 0, // any free one
 		name            = "benchmark",
-		no_critters     = true,
+		no_sheep        = true,
 	}
 	srv := new(server.Server)
 	defer free(srv)

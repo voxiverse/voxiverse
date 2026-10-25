@@ -7,14 +7,14 @@ import "core:math/rand"
 import "../base"
 import "../game"
 
-// Entities on the server: critters and rockets. What each kind is lies in
+// Entities on the server: sheep and rockets. What each kind is lies in
 // game.ENTITY_INFO; what it does each tick, in entities_tick's switch. A
-// critter thinks (a small state machine), walks its path (A*, path.odin,
+// sheep thinks (a small state machine), walks its path (A*, path.odin,
 // within a shared node budget) and moves by the shared body physics; a
 // rocket flies until it hits something and explodes. Each client is told
 // about the ones near it: Entity_Spawn when one comes near (or into
 // being), its place in an Entities batch every tick, Entity_Despawn when it
-// leaves (or dies). Critters appear by day on grass around players and go
+// leaves (or dies). Sheep appear by day on grass around players and go
 // when nobody is near; one whose ground is not loaded waits, frozen, until
 // it is. Saved kinds are kept with the world (save.odin: entities.cfg).
 
@@ -22,10 +22,10 @@ MAX_ENTITIES :: 512
 MAX_KNOWN_ENTITIES :: 256 // per client
 ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizontally)
 SPAWN_EVERY :: game.TICK_RATE * 2 // ticks between spawning attempts
-SPAWN_CAP :: 6 // critters near one player, at most
+SPAWN_CAP :: 6 // sheep near one player, at most
 SPAWN_NEAR :: 48 // blocks: what counts as near a player, for the cap
-SPAWN_MIN, SPAWN_MAX :: 16, 40 // blocks from a player where critters appear
-DESPAWN_DISTANCE :: 80 // natural critters this far from everyone go
+SPAWN_MIN, SPAWN_MAX :: 16, 40 // blocks from a player where sheep appear
+DESPAWN_DISTANCE :: 80 // natural sheep this far from everyone go
 PATH_BUDGET_PER_TICK :: 1500 // A* nodes for all entities in one tick
 PATH_BUDGET_EACH :: 400
 HURT_TICKS :: game.TICK_RATE / 3 // how long a hit stuns (no steering)
@@ -42,6 +42,7 @@ Entity :: struct {
 	brain:   Brain,
 	owner:   int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
 	stack:   game.Stack, // a dropped item's
+	shorn:   bool, // a sheep without its wool, until it grazes
 	age:     int, // ticks
 }
 
@@ -124,7 +125,7 @@ entities_tick :: proc(w: ^World) {
 			continue
 		}
 		switch ent.kind {
-		case .Critter:
+		case .Sheep:
 			if chunk_ready(w, ent.body.position) { 	// else its ground is not loaded (yet): it waits
 				think(w, ent)
 				wish, jump := steer(w, ent)
@@ -148,6 +149,53 @@ entities_tick :: proc(w: ^World) {
 	for b in blasts {explode(w, b.center, b.radius)}
 }
 
+// Entity_Behaviour: what a kind does besides the physics every kind shares
+// (the table the next kinds fill in).
+Entity_Behaviour :: struct {
+	// use: a player used it (right click); true if that did something.
+	use: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool,
+}
+
+@(rodata)
+ENTITY_BEHAVIOUR := [game.Entity_Kind]Entity_Behaviour {
+	.Sheep = {use = sheep_use},
+	.Rocket = {},
+	.Item = {},
+}
+
+// sheep_use: shearing by hand: 1 to 3 wool fall, and the sheep is shorn
+// until it eats grass.
+@(private = "file")
+sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
+	if ent.shorn {return false}
+	w := c.world
+	ent.shorn = true
+	r := rand.default_random_generator(&w.entities.rng)
+	for _ in 0 ..< rand.int_range(1, 4, r) {
+		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+		spawn_item(w, ent.body.position + {0, 0.6, 0}, {game.item_of_block(.Wool), 1}, v, -1)
+	}
+	return true
+}
+
+// use_entity: a player uses an entity, if it is within reach.
+use_entity :: proc(s: ^Server, c: ^Client, id: u32) {
+	ent, _ := entity_find(c.world, id)
+	if ent == nil || !entity_reachable(c, ent) {return}
+	if use := ENTITY_BEHAVIOUR[ent.kind].use; use != nil {use(s, c, ent)}
+}
+
+// entity_reachable: ent is within a player's reach from where the server
+// has them (with the slack edits have).
+entity_reachable :: proc(c: ^Client, ent: ^Entity) -> bool {
+	eye := game.player_eye(c.player)
+	lo, hi := game.entity_box(ent.kind, ent.body.position)
+	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
+	d := closest - eye
+	reach := f64(c.world.rules.reach) + game.EDIT_REACH_SLACK
+	return d.x * d.x + d.y * d.y + d.z * d.z <= reach * reach
+}
+
 // fire launches a rocket from a player's eyes, aimed yaw/pitch.
 fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	dir := forward(yaw, pitch)
@@ -162,7 +210,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 }
 
 // explode: a blast at center. Everyone near is shown it, the sphere is
-// carved (where loaded), and what is near is thrown (critters hurt).
+// carved (where loaded), and what is near is thrown (sheep hurt).
 explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 	s := w.server
 	for &c in s.clients {
@@ -309,7 +357,7 @@ replicate :: proc(s: ^Server, c: ^Client) {
 			)
 		}
 		visible[ent.id] = {}
-		batch.entries[batch.count] = {ent.id, ent.body.position, ent.yaw, ent.pitch}
+		batch.entries[batch.count] = {ent.id, ent.body.position, ent.yaw, ent.pitch, ent.shorn}
 		batch.count += 1
 		if batch.count == game.ENTITIES_PER_MESSAGE {
 			send_message(s, c, batch)
@@ -420,7 +468,13 @@ think :: proc(w: ^World, ent: ^Entity) {
 		} else if b.state == .Look {
 			b.state = .Idle
 		}
-		if b.timer <= 0 {
+		// A shorn sheep with grass in front of it wants to eat.
+		if ent.shorn && b.timer <= 0 && rand.float32(r) < 0.6 {
+			if _, ahead := grass_ahead(w, ent); ahead {
+				b.state, b.timer = .Graze, rand.int_range(GRAZE_EAT_TICKS + 10, 120, r)
+			}
+		}
+		if b.state != .Graze && b.timer <= 0 {
 			switch {
 			case rand.float32(r) < 0.55:
 				target := pos + {rand.float64_range(-8, 8, r), 0, rand.float64_range(-8, 8, r)}
@@ -437,6 +491,7 @@ think :: proc(w: ^World, ent: ^Entity) {
 			b.path.count = 0
 		}
 	case .Graze:
+		if b.timer == GRAZE_EAT_TICKS {graze_eat(w, ent)}
 		if b.timer <= 0 {b.state, b.timer = .Idle, rand.int_range(20, 60, r)}
 	}
 	// The head: down when grazing, at the player when looking, level else.
@@ -452,6 +507,28 @@ think :: proc(w: ^World, ent: ^Entity) {
 	case .Idle, .Wander, .Flee:
 	}
 	ent.pitch += (want_pitch - ent.pitch) * 0.2
+}
+
+GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the grass goes
+
+// grass_ahead: the grass block in front of ent's feet, if there is one.
+@(private = "file")
+grass_ahead :: proc(w: ^World, ent: ^Entity) -> (p: game.Block_Pos, ok: bool) {
+	pos := ent.body.position
+	front := pos + {-f64(math.sin(ent.yaw)) * 0.8, 0, -f64(math.cos(ent.yaw)) * 0.8}
+	p = {i32(math.floor(front.x)), i32(math.floor(pos.y + 0.01)) - 1, i32(math.floor(front.z))}
+	b, loaded := chunks_block(&w.chunks, p)
+	return p, loaded && b == .Grass
+}
+
+// graze_eat: a sheep with its head down eats the grass in front of it: the
+// block becomes dirt, and a shorn sheep has its wool back.
+@(private = "file")
+graze_eat :: proc(w: ^World, ent: ^Entity) {
+	p, ok := grass_ahead(w, ent)
+	if !ok || !ent.shorn {return}
+	set_block(w, p, .Dirt)
+	ent.shorn = false
 }
 
 // plan finds a path to near target (from where the entity stands); false
@@ -514,12 +591,12 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	return
 }
 
-// spawn_natural: by day, critters appear on grass around players with
+// spawn_natural: by day, sheep appear on grass around players with
 // room for more, out of sight distance from everyone (but not far).
 @(private = "file")
 spawn_natural :: proc(w: ^World) {
 	s := w.server
-	if s.config.no_critters {return}
+	if s.config.no_sheep {return}
 	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
 	r := rand.default_random_generator(&w.entities.rng)
@@ -547,7 +624,7 @@ spawn_natural :: proc(w: ^World) {
 			jitter := [3]f64{rand.float64_range(-1.5, 1.5, r), 0, rand.float64_range(-1.5, 1.5, r)}
 			p := center + jitter
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
-			if standable(query, b) {entity_spawn(w, .Critter, p, true)}
+			if standable(query, b) {entity_spawn(w, .Sheep, p, true)}
 		}
 	}
 }

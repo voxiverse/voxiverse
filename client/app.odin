@@ -430,13 +430,13 @@ enter_world :: proc(
 	save_dir: string,
 	seed: i64,
 	spawn: Maybe([3]f64) = nil,
-	benchmark := false, // the same work every run: no critters, still clouds
+	benchmark := false, // the same work every run: no sheep, still clouds
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
 		app,
 		{
-			no_critters = benchmark,
+			no_sheep = benchmark,
 			still_clouds = benchmark,
 			name = player_name(&app.settings),
 			key = app.account,

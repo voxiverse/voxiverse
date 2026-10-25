@@ -13,6 +13,7 @@ import "../game"
 Action :: union {
 	game.Edit,
 	game.Attack,
+	game.Use_Entity,
 	game.Fire,
 }
 
@@ -47,6 +48,8 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 			send_message(s, c, apply_edit(s, c, v))
 		case game.Attack:
 			attack(s, c, v)
+		case game.Use_Entity:
+			use_entity(s, c, v.entity)
 		case game.Fire:
 			if s.tick >= c.fired_at + FIRE_EVERY {
 				c.fired_at = s.tick
@@ -64,6 +67,8 @@ action_after :: proc(a: Action) -> u32 {
 	case game.Edit:
 		return v.after
 	case game.Attack:
+		return v.after
+	case game.Use_Entity:
 		return v.after
 	case game.Fire:
 		return v.after
@@ -121,12 +126,7 @@ attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	w := c.world
 	ent, index := entity_find(w, a.entity)
 	if ent == nil || !game.ENTITY_INFO[ent.kind].hittable {return} 	// gone already: a late click
-	eye := game.player_eye(c.player)
-	lo, hi := game.entity_box(ent.kind, ent.body.position)
-	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
-	d := closest - eye
-	reach := f64(w.rules.reach) + game.EDIT_REACH_SLACK
-	if d.x * d.x + d.y * d.y + d.z * d.z > reach * reach {return}
+	if !entity_reachable(c, ent) {return}
 	if entity_attack(w, ent, c.player.position) {
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
 		entity_died(w, index)

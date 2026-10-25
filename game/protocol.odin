@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 17
+PROTOCOL_VERSION :: 18
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -123,6 +123,13 @@ Attack :: struct {
 	after:  u32,
 }
 
+// Use_Entity uses an entity (right click on it: shear a sheep). Like an
+// Attack it follows input `after`.
+Use_Entity :: struct {
+	entity: u32,
+	after:  u32,
+}
+
 // Fire: the creative rocket launcher, aimed yaw/pitch, after input `after`.
 Fire :: struct {
 	after:      u32,
@@ -144,6 +151,7 @@ Client_Message :: union {
 	Proof,
 	Choose,
 	Dial,
+	Use_Entity,
 }
 
 // Server -> client.
@@ -321,6 +329,7 @@ Entity_Entry :: struct {
 	entity:     u32,
 	position:   [3]f64,
 	yaw, pitch: f32, // body turn; head up/down
+	shorn:      bool, // a sheep without its wool
 }
 
 // Entity_Hurt: it was hit (flash, sound).
@@ -455,6 +464,7 @@ Client_Kind :: enum u8 {
 	Proof,
 	Choose,
 	Dial,
+	Use_Entity,
 }
 
 @(private = "file")
@@ -545,6 +555,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "command"
 		case u8(Client_Kind.Attack):
 			return "attack"
+		case u8(Client_Kind.Use_Entity):
+			return "use_entity"
 		case u8(Client_Kind.Fire):
 			return "fire"
 		case u8(Client_Kind.Chat):
@@ -687,6 +699,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Attack))
 		write_u32(w, v.entity)
 		write_u32(w, v.after)
+	case Use_Entity:
+		write_u8(w, u8(Client_Kind.Use_Entity))
+		write_u32(w, v.entity)
+		write_u32(w, v.after)
 	case Fire:
 		write_u8(w, u8(Client_Kind.Fire))
 		write_u32(w, v.after)
@@ -815,6 +831,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_position(w, e.position)
 			write_f32(w, e.yaw)
 			write_f32(w, e.pitch)
+			write_u8(w, 1 if e.shorn else 0)
 		}
 	case Entity_Hurt:
 		write_u8(w, u8(Server_Kind.Entity_Hurt))
@@ -947,6 +964,11 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = q
 	case u8(Client_Kind.Attack):
 		m = Attack {
+			entity = read_u32(&r),
+			after  = read_u32(&r),
+		}
+	case u8(Client_Kind.Use_Entity):
+		m = Use_Entity {
 			entity = read_u32(&r),
 			after  = read_u32(&r),
 		}
@@ -1113,6 +1135,7 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			x.entity = read_u32(&r)
 			x.position = read_position(&r)
 			x.yaw, x.pitch = read_f32(&r), read_f32(&r)
+			x.shorn = read_u8(&r) != 0
 			if !(abs(x.yaw) <= 1e6) || abs(x.pitch) > PITCH_LIMIT {reader_fail(&r)}
 		}
 		m = e
