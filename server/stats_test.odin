@@ -167,10 +167,11 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		`"k":"teleport"`,
 		`"k":"block_placed"`,
 		`"k":"block_mined"`,
-		`"k":"item_dropped"`, // (an inventory request is handled at once; shearing waits for its input)
-		`"k":"sheep_sheared"`,
-		`"k":"entity_hit"`,
 	}
+	for what in ([]string{`"k":"item_dropped"`, `"k":"sheep_sheared"`, `"k":"entity_hit"`}) {
+		testing.expectf(t, strings.contains(text, what), "the log lacks %s", what)
+	}
+	// (shearing and the hit wait for their inputs, the drop does not: their order is not fixed)
 	at := 0
 	for what in order {
 		i := strings.index(text[at:], what)
