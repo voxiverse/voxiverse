@@ -258,6 +258,49 @@ part of a per-world struct.
 ## Milestones
 
 Each one is a vertical slice with an exit check; nothing moves on with failing checks.
+Sections of finished milestones are in [HISTORY.md](HISTORY.md).
+
+**How a milestone is sized (from M22).** The work is done by an AI assistant on a plan
+with a usage limit. Measured over M19-M21: nearly all of the usage was the assistant
+re-reading its own conversation on every step (a session that ran for days, about half a
+million tokens re-read per step), not the code it wrote. So:
+
+- **One milestone, one fresh session.** "On to M<n>" starts a new conversation that reads
+  this file's section for M<n> and the code it names. A section therefore carries every
+  decision: what to build, where, the numbers, what is left out, and the exit check. A
+  milestone with an open design question is not ready; the question is settled first, in
+  conversation.
+- **Small enough to finish in one sitting:** one new system, or one system and the content
+  that proves it. Bigger ideas are split (M20, done the old way, would be three).
+- **Checked locally first,** with the tests the milestone touches (`odin test <package>
+  -define:ODIN_TEST_NAMES=...`), then the whole suite once; pushed once at the end, and CI
+  waited on once (a blocking `gh run watch`), not polled.
+- **Windows-only code is kept together** (one milestone of it, checked on a Windows
+  machine), because each mistake there costs a round trip through CI.
+- **Done means:** the exit check passes, the table row says what was done, a line is
+  added to the cost table below, committed and pushed; then the session ends. The next
+  milestone is the next session. A finished milestone's section moves to HISTORY.md.
+- **The model:** a milestone whose section is complete is implemented with a faster,
+  cheaper model (Sonnet); planning sessions, design questions and debugging that has
+  stalled use the strongest (Opus), whose usage counts several times as much.
+- **A milestone that outgrows one usage window stops:** what works is committed, the rest
+  becomes a milestone of its own. A long session is the costliest kind.
+- **The week:** a planning session first (Opus, about an hour, no code) that settles one
+  open question into a milestone section and checks the order; then a milestone a session;
+  at the end, a Windows check if anything needs one and a release tag. About a fifth of
+  the budget is left free for what players report.
+- **The mix:** at least one milestone a week is something only this game has (from the
+  open questions: worlds, their peoples and histories). Something Minecraft already has is
+  built only when one of those needs it, never for completeness.
+- **No more infrastructure** (CI, benchmarks, tooling) unless something breaks or measurably
+  slows the work.
+
+**What each milestone cost** (from the session's log: the assistant's steps, the tokens it
+re-read, CI round trips), so the next week is planned from numbers:
+
+| # | Steps | Re-read (M tokens) | CI runs | Notes |
+|---|---|---|---|---|
+| M19-M21 | 8677 | 4233 | many | one session over several days, before these rules |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -286,621 +329,17 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) (done: the tools, the benchmarking system (six scenarios under fixed conditions, `compare`, CI smoke runs), and the costs they found: load 6.0 -> 1.7 s, server tick time over a flight 1430 -> 330 ms, GPU frame at the spawn 2.34 -> 1.70 ms, triangles 517k -> 291k; commands, console and scripts separated) |
 | M20 | The first public build's experience: the title screen (a calm warp starfield, the version), a loading screen into worlds, Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect (tabs, key bindings), and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver (done: `client/menus_test.odin` drives the title, Singleplayer's saves (select, rename, delete asked), Multiplayer (the name asked, Direct Connection), Options (tabs, choices, keys bound by key or mouse button, Escape, Reset Keys) and the failure screen, and reads every menu screen and tab for developer words; CI's Screens step screenshots each, the loading screen and a failed join; `test_settings_round_trip` carries bindings; `test_sneaking` in the shared physics both sides run; the moving starfield adds about 2 ms a frame on the CPU driver, under the menus' 120 fps cap) |
 | M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows and Linux (macOS after M1b) made by CI on every push and drafted as a GitHub Release for each version tag | A version tag gives a draft Release with the packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
-| M22 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; the Windows list checked on a Windows machine |
-| M23 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
-| M24 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
-| M25 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
+| M22 | Inventory and item icons: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with an icon generated for every item, a smaller hotbar | UI tests for each mouse tweak and pick block; an icon for every item, none blank |
+| M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep |
+| M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load |
+| M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load |
+| M26 | Blocks that hold things: data kept with a block (saved with its chunk), shown by a chest of 25 slots that players open together | Contents survive save, quit, load and chunk unload; breaking a chest drops all; two players over UDP see each other's moves; a lone record without its block is dropped on load |
+| M27 | Windows behaviour and the new icon: the Windows list (DPI moves, Alt menu, dragging without stopping, dark title bar, frame pacing, background throttling, no error dialogs, a console when started from one), a black cube with a question mark as the icon, landing dust | The Windows list ticked off on a Windows machine; the icon at every size in CI's artifacts; landing dust seen for every player in view |
+| M28 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
+| M29 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
+| M30 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
 
-## M9-M12: making and changing the world
-
-The world after M8 is grassy hills, one cave noise and a critter; edits are one block at a
-time. These four milestones make it worth exploring and easy to reshape, in this order
-because each needs the one before: bulk edits are how worldgen is debugged, water is
-filled and structures are pasted; worldgen gives water somewhere to be (oceans, lakes) and
-structures somewhere to stand.
-
-### M9: bulk edits and explosions
-
-- **One edit pipeline** on the server: a shape (sphere, box) and an operation (set, replace
-  A with B, carve: air sparing bedrock). Applied chunk by chunk; each touched chunk is
-  marked edited (saved), column tops are recomputed once per touched column, and every
-  client that has a touched chunk is sent the whole chunk again (under the network backlog
-  budget) instead of thousands of single-block messages.
-- **No prediction** for bulk edits: the result arrives as chunks one round trip later. What
-  must feel instant (the flash, debris, sound of an explosion) comes from an `Explosion`
-  message played on arrival, and locally at once for the one who fired.
-- **Client side:** relight and remesh the touched chunks and their neighbours, the visible
-  ones urgently (M4's no-x-ray rule), the rest within a per-frame budget.
-- **Limits:** a largest edit volume and an edit rate per player; commands are cheats.
-- **Selections:** two corners (`pos1`/`pos2` from the aimed block), drawn as a box;
-  `fill`, `replace`, `sphere`, `clear` act on them. M12's `structure save` uses them too.
-- **The rocket launcher:** a creative hotbar item. The rocket is an M8 entity (ballistic,
-  no AI), simulated on the server; on hitting a block or entity it explodes: a sphere is
-  carved, entities and players nearby are knocked back (players stay invulnerable), debris
-  particles and a synthesized boom play where it happened.
-- **Exit check, `blast_test`:** like `fly_test`, a console command that fires a volley of
-  radius-6 rockets along a path and fails on a server tick or client frame over budget, a
-  see-through hole, memory growth, or a chunk that differs between the server and two
-  clients (chunk hashes compared).
-
-### M10: the worldgen framework
-
-- **Generators are pipelines** in their own package (`worldgen/`), chosen per world
-  (`world.cfg: generator = earth`), deterministic per chunk from the seed. Stages, each with
-  its own seed: climate (temperature, humidity, continentalness, erosion noise) and biome
-  lookup; terrain shape (a 3D density: base height from splines over the climate, plus 3D
-  noise for cliffs and overhangs); surface rules per biome (grass, sand, snow, stone
-  layers); carvers (caves, ravines); features (ores, trees, boulders, plants).
-- **Crossing chunk borders without seams:** features are placed from a per-chunk RNG and
-  every chunk also runs the placements of its 8 neighbours, writing only its own blocks;
-  a feature fits within one chunk's margin (trees, boulders). Bigger things are M12's.
-- **Parameters are a variable table** (`worldgen.*`): tunable live from the console or F4,
-  saved with the world, and `regen` regenerates the chunks around you after a change.
-- **Column tops for sky light** come from the generator (including trees), replacing
-  M3's analytic `column_height`: with overhangs, the top is no longer a formula.
-- **Noise library:** OpenSimplex2-style gradient noise, fractal sums, domain warping,
-  written in integer-friendly ways so every OS gives bit-identical worlds.
-- **New blocks:** water (still), snow, ice, clay, log, leaves, coal/iron/copper ore, tall
-  grass and flowers (cross-shaped models), cactus. Textures generated, as before.
-- **Renderer:** a cutout pass (alpha-tested: leaves, plants) and a translucent pass (water:
-  drawn after the opaque world, back to front per chunk, its surface gently moving).
-- **Tools:** `build worldmap -seed N -size 4096` renders a top-down map (biomes, heights,
-  water) to a PNG in seconds, without the game; per-stage timings in the profiler and F3.
-- **Exit check:** map hashes per seed equal on all three CI platforms; chunk generation and
-  meshing p99 within budget on worker threads; `fly_test` across every biome stays flat in
-  memory and within frame budget; a CI screenshot per biome.
-
-### M11: liquids
-
-- **Water states are block ids:** a source and flow levels 1-7 (and falling), so palettes,
-  saves and the protocol need no block metadata.
-- **Scheduled block updates** on the server: a queue of (due tick, position), so only what
-  changes is looked at; a per-tick budget; updates in unloaded chunks wait with them.
-- **Minecraft's rules:** down first, then sideways losing a level per block and preferring
-  the nearest way down within 4 blocks; a new source between two sources over solid
-  ground; placing or breaking next to water schedules its neighbours.
-- **Network:** water changes travel as per-chunk batches of changed blocks each tick, not
-  one message per block.
-- **Players:** swimming in the shared physics (buoyancy, drag, jump to rise), so
-  prediction stays exact; underwater fog and tint; sky light falls off through water.
-- **Exit check:** a dam-break test (a filled pool, a wall removed) ends in the same water
-  every run and on the server and two clients; 10 000 flowing blocks stay within the tick
-  budget; swimming has physics tests like walking's.
-
-### M12: structures
-
-- **Templates:** select a box in-game and `structure save <name>`: a `.vxs` file (palette and
-  runs, like region files, plus size, origin and which air should stay air). `structure
-  paste <name> [rotation]` goes through M9's pipeline. Templates that ship with the game
-  live in `assets/structures` (our own builds: within the assets rule).
-- **Placement:** each generator lists structure sets with a spacing; the world is cut into
-  cells, each cell picks deterministically whether and where its structure goes, so its box
-  is known before any of its chunks is generated. A chunk applies every structure piece
-  that overlaps it, after terrain and before features; foundations fill down to the
-  ground, and the space inside is cleared.
-- **Procedural structures** (dungeons as rooms joined by corridors, towers of any height)
-  produce the same pieces through the same placement API.
-- **Exit check:** a structure spanning several chunks is identical whichever order its
-  chunks are generated in; save, paste and save again gives the same file; placements are
-  the same for a seed on every run; `worldmap` marks them.
-
-## M13: players together
-
-Mechanisms, not gameplay: what servers and content will be built on. Each feature is a
-permission node from the start.
-
-- **World spawn:** chosen once when a world is made (the generator's search, now standing
-  clear of trees and structures) and stored in world.cfg; `setworldspawn` moves it. Joining
-  for the first time, `spawn`, and every teleport land through one safe-landing step: wait
-  until the column is loaded, then stand on the highest spot with ground under it and two
-  blocks of air above.
-- **Overlays and focus:** the pause menu, options, tuning panel, quit dialog, console and
-  chat become entries on one stack. Each declares whether it takes the keyboard, frees the
-  mouse or pauses the world; the top one gets the keys and Escape; game controls run only
-  when nothing takes the keyboard. The console's line editing (readline keys, history, Tab)
-  is a widget any overlay uses.
-- **Chat:** `t` opens it, `/` opens it with a command started. Lines fade over the game when
-  closed. The server checks each message (length, rate, mute), formats it (the sender's
-  tag, name and permitted codes) and sends it to everyone who does not ignore the sender;
-  it logs chat. Chat commands share the command table with the console's server commands.
-- **Permissions:** nodes are dotted names (`chat.format`, `chat.delete`, `world.edit.bulk`,
-  `server.stop`); grants may end in `*` (everything under) or start with `-` (denied).
-  Roles grant nodes and inherit other roles; players get roles and their own grants; the
-  most specific grant wins, a denial over an allow at the same depth. Roles and players
-  carry metadata (prefix, suffix, name colour, anything later). `permissions.cfg` in the
-  world directory; edited with `role` and `user` commands or by hand. The owner of a
-  singleplayer world and a dedicated server's `--admin` names get `*`. Every server action
-  asks one `allowed(player, node)`; today's cheats switch becomes nodes.
-- **Formatted text:** `&0`-`&f`, `&#rrggbb`, `&l` bold, `&o` italic, `&n` underline, `&m`
-  strikethrough, `&r` reset, parsed in one place (`game/format.odin`). Each part of a chat
-  line (tag, name, message) is formatted on its own, so a tag's colour never leaks into
-  the name. The UI draws it (bold: drawn twice a pixel apart; italic: slanted), the console
-  too.
-- **Commands (EssentialsX-style):** places and teleports (spawn, setworldspawn,
-  home/sethome/delhome/homes, warp/setwarp/delwarp/warps, tpa/tpahere/tpaccept/tpdeny,
-  back, top, tp); messaging (msg, r, me, broadcast, ignore, nick/realname, motd);
-  moderation (mute, kick, ban, tempban, unban, ban-ip, deleting chat messages); who and
-  status (list, whois, seen, afk, status: tick time, memory, chunks, players). Homes,
-  warps, bans and nicknames are kept with the world.
-- **Exit check:** permission resolution tests (wildcards, negation, inheritance,
-  specificity); focus routing tests (which overlay gets a key, Escape order); chat over UDP
-  between two players with roles, tags, colours, a mute and an ignore; spawn and teleport
-  landings never inside blocks (tests on worlds with trees and structures at the spot).
-
-## M14: items and player data
-
-Still mechanisms, not gameplay: what an item does, how many a stack holds, whether placing
-uses one up are data and permissions a server or content sets.
-
-- **Items:** kinds as a data table (`game/items.odin`: name, stack size, the block it
-  places, tool, tags); every placeable block has its item; today's hotbar items (blocks,
-  the launcher) become item kinds. A stack is a kind and a count (and room for data later).
-- **Containers:** server-owned slots: each player's inventory (main slots, the hotbar, the
-  stack on the cursor), the API any later container (chests) uses. Clients ask with
-  container actions (pick up, place, split, swap with a hotbar key, drop, quick-move);
-  the server applies them under the shared rules and confirms or corrects; the client
-  predicts as it does edits, and rolls back a refusal.
-- **Using items:** placing a block uses one from the held stack unless the player has
-  `items.infinite` (the owner of a world played here: creative by permission, not by
-  mode); breaking a block drops its item where the rule says (`rules.drops`).
-- **Dropped items:** entities that fall, merge with neighbours, and are picked up by players
-  walking over them (room permitting), despawning after a while.
-- **Inventory overlay:** `e` opens it over the game (an overlay: frees the mouse, does not
-  pause); drag and drop, right-click splits, shift-click moves, number keys swap with the
-  hotbar, tooltips with the item's name; the hotbar shows counts.
-- **Player data:** `<world>/players/<name>.json` holds everything kept about a player
-  (position, look, flying, inventory; M15 adds statistics): loaded on joining, written
-  atomically when changed, only online players in memory. Existing worlds' `player.*`
-  lines in world.cfg move there on load. Homes and the like stay in community.cfg (the
-  world's view of a player), the player file is the player's own state.
-- **Commands:** `give <player> <item> [count]`, `clear [player] [item]`, `item` (what you
-  hold), each a node.
-- **Exit check:** container action tests (every action, full stacks, refusals); two players
-  over UDP drop, pick up and move stacks and agree with the server; a refused action rolls
-  back the prediction; inventories survive save and load exactly; a world with world.cfg
-  players loads into player files; UI tests drag, split and shift-click.
-
-## M15: polish
-
-- **Biome transitions:** biomes are hard thresholds on smooth climate, so surfaces and
-  features switch at a line. The thresholds are jittered per column by fine noise, so a
-  band of 6-12 blocks mixes both sides (dithered, as the pixel look wants), and tree and
-  plant densities blend across it instead of switching. New golden hashes.
-- **Keep the screen awake** while in a world, not in menus: Windows
-  `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)`; X11 `XScreenSaverSuspend`
-  (else the freedesktop `Inhibit` call); macOS an IOKit power assertion. In `platform/`,
-  released on leaving a world and on exit.
-- **Five hotbar slots over a 5x5 inventory:** 30 slots, every row five wide; the overlay is
-  one five-column grid with the hotbar as its bottom row; number keys 1-5. Inventories
-  saved at the old size keep their stacks (what no longer fits is given back in order, the
-  rest dropped at the player's feet on joining).
-- **Exit check:** worldgen tests that a border band mixes surfaces and features (and
-  screenshots of a few borders); the keep-awake call made and released (a platform test
-  where the OS allows it, else a logged check); inventory tests at the new size; an old
-  36-slot player file loads.
-
-## M16: accounts and characters
-
-- **Accounts:** the client makes an Ed25519 keypair on first launch (`core:crypto`), kept
-  beside the settings; the public key is the account. `Hello` carries it and the server
-  answers with a challenge the client signs, so nobody can join as someone else without a
-  central login service. A universe's first sight of a key registers it there.
-- **Characters:** an account has characters in each universe (a name, unique in that
-  universe; appearance later). The client chooses one before joining (a small screen; the
-  last one played by default); the universe keeps them. Chat, the player list, permissions and community data
-  name characters; permissions can also grant to an account (all its characters).
-- **Data:** everything kept about a player (M14's player files: where they are, their
-  inventory; M24's statistics) becomes the character's, kept by the universe:
-  `characters/<account>/<character>.json`. Existing player files become characters of a
-  placeholder account, claimed by the first key that joins with that name.
-- **Exit check:** over UDP, a client can't join with another's key or take a character
-  name in use by another account; a character's data survives a restart; old player
-  files migrate; the challenge refuses replays.
-
-## M17: many worlds, named by addresses
-
-A universe (one server) hosts many worlds and loads them in and out. Grounded: worlds are
-flat voxel spaces (a world border can make them finite), not spheres; travel is a short
-transition while the destination streams in, not flying through rendered space.
-
-### Addresses: how many worlds
-
-The address space is sized after the observable universe, so "every planet has an
-address" is roughly true, and the numbers can be checked:
-
-- **Galaxies:** about 2·10¹¹ to 2·10¹² in the observable universe (Hubble deep-field
-  counts gave ~2·10¹¹; Conselice et al. 2016 extrapolated ~2·10¹² counting faint ones;
-  New Horizons background-light measurements (2021) point back toward a few 10¹¹).
-- **Stars per galaxy:** about 10¹¹ (the Milky Way: 1-4·10¹¹), so 10²² to 10²⁴ stars.
-- **Planets per star:** at least one on average (microlensing, Cassan et al. 2012: ~1.6
-  bound planets per Milky Way star; Kepler's occurrence rates agree in order).
-- **So:** ~10¹¹ planets per galaxy, ~10²³ to 10²⁴ in the observable universe.
-
-One flat address cannot match that and stay dialable (36 symbols would need 17 per
-address; 72 symbols, 13). The universe's own structure gives two levels instead:
-
-| Part | Symbols | How many | Matches |
-|---|---|---|---|
-| Galaxy | 8 of 40, ordered, none twice: 40·39·…·33 | 3.1·10¹² | ~10¹¹-10¹² galaxies |
-| World in its galaxy | 7 of 40, ordered, none twice: 40·39·…·34 | 9.4·10¹⁰ | ~10¹¹ planets per galaxy |
-| Both | 15 | 2.9·10²³ | ~10²³-10²⁴ planets |
-
-Everyday dialing is seven symbols within the gate's galaxy; another galaxy takes all 15
-(rarer, later). Every count is a permutation (order matters, no symbol twice), so the
-numbers above are exact: `math.perm(40, 8)`, `math.perm(40, 7)`. Should the estimates
-move, change the symbol count or lengths here, not the idea.
-
-### Symbols
-
-40 letters of Old Turkic (Orkhon, U+10C00-U+10C48): angular, runic, unreadable to nearly
-everyone (so they read as alien), and a historic script with no living community (unlike
-Tifinagh or the Canadian syllabics, which look alien but are people's writing today).
-Runic reads as Vikings, Glagolitic as Slavic ornament, Linear B is too pictographic to
-dial at a glance. The 40, by index (0-39):
-
-    10C00 10C01 10C04 10C05 10C07 10C09 10C0A 10C0B 10C0C 10C0D
-    10C0E 10C0F 10C10 10C12 10C14 10C15 10C18 10C1C 10C22 10C24
-    10C26 10C27 10C28 10C2B 10C2C 10C2D 10C31 10C32 10C36 10C38
-    10C39 10C3A 10C3C 10C3D 10C41 10C42 10C43 10C44 10C45 10C47
-
-A few pairs are close (indices 2/25, 11/23, 15/31, 29/30); M18 settles the final set on the
-dialing overlay at its real size. They are real Unicode, so addresses copy into chat and
-outside the game (Windows has the script in Segoe UI Historic, others in Noto). In the
-game they come from a fallback font: Noto Sans Old Turkic (15 KB, SIL Open Font License,
-its licence beside it as JetBrains Mono's), used for what JetBrains Mono lacks. JetBrains
-Mono has Latin, Greek, Cyrillic and symbols, none of these; no font has all of Unicode (a
-TrueType font holds at most 65,535 glyphs), and Nerd Fonts add icons in the private use
-area, not scripts.
-
-### The rest
-
-- **Addresses:** a galaxy and a world in it, as above. An address is a world's id in its
-  universe and its directory (`worlds/<address>/`, the symbols' indices in hex: file
-  systems need not know the script). The address alone decides the
-  world's kind: its generator and parameters (sea level, terrain, climate offsets, biome
-  mix, block palette), rules (gravity, day length) and sky (M23's astronomy too), so an
-  address shared between players means the same kind of world in any universe; the world
-  seed is the universe seed and the address hashed, so the terrain itself differs. The
-  universe's home world keeps today's Earth parameters exactly; its address is derived
-  from the universe seed. Whether every address leads somewhere is a universe setting
-  (default: all; a fraction makes discovery matter).
-- **Worlds:** each has its own generator, parameters, rules, sky, chunks, entities,
-  liquids, spawn and save. An unvisited world costs nothing but its address; it gets a
-  directory once visited or edited.
-- **Loading:** a world is loaded while someone is in it (and briefly after); unloaded, it
-  is only its save. Workers and the chunk memory pool are shared, sized by players as
-  today. Cost scales with loaded worlds and their loaded chunks, never with how many
-  worlds exist.
-- **Players:** in one world at a time; the client holds only that world's chunks. A
-  travel message tells it the new world's rules, sky and spawn; it drops its chunks, plays
-  a short transition, and M13's landing holds the player until the destination's blocks
-  are there. Characters (M16) are the universe's, so inventories travel with them; homes,
-  warps and back remember their world.
-- **Commands:** `travel <address> [character]` (until M18's gates), `worlds` (the loaded
-  and saved ones), `address` (this world's).
-- **Exit check:** two players over UDP in different worlds of one universe; one travels to
-  the other's carrying their inventory and lands safely; one address gives the same
-  parameters in two universes and different terrain; an unloaded world takes no tick
-  time; memory flat over repeated travel; each world's save stays its own; the client
-  never holds two worlds' chunks.
-
-## M18: gates
-
-- **Gates:** a structure on M12's placement API (programmatic, like towers): a ring with
-  seven chevrons (and eight more, dark until a gate can reach other galaxies), its lowest
-  row set in its platform so one walks in level. Rare (one 1024-block cell in three or so,
-  on flat dry plains, forest, taiga, tundra or desert), and none within `gate_distance`
-  (2000 blocks) of the world's middle, where players begin: finding one is late-game
-  (`locate gate` puts an admin in front of the nearest). Travellers arrive at the dialed
-  world's gate nearest its middle. Worlds made before gates have none
-  (`worldgen.gates 0`).
-- **Dialing:** using a gate opens an overlay of the 40 symbols; choosing seven in order
-  locks the chevrons one by one (seen and heard by everyone near). The gate then opens
-  for a while (the destination's gate opens too); walking in travels (M17) to the
-  destination's gate. Misdials (this world's address, another galaxy, a gate already
-  open at either end, a world without gates) are refused with a word. Arriving, one
-  faces away from the far gate, which does not send back.
-- **Done:** chevrons lock every 0.4 s, the gates stay open 30 s (`Config.gate_open` for
-  tests); `Dial` (protocol 15) names the gate's block and the address; the server sets
-  the lit chevrons and horizon blocks wherever the chunks are loaded and puts them back
-  on closing. Right-click a ring (or the console's `dial [address]`) to dial.
-- **Exit check:** over UDP, dialing opens the gate and carries a player to the dialed
-  world's gate and back; gate placements match on every platform (worldgen hashes); a
-  misdial is refused; the dialing overlay in UI tests.
-
-## M19: performance
-
-Profiled from first principles. Times are from one 4-core machine with integrated graphics:
-compare them with each other, not across machines. Numbers are per chunk unless said.
-
-- **Tools** (DEBUGGING.md, Profiling): `build bench` (generate, light and mesh of a fixed
-  region on one thread, deterministic; `-check` in CI pins its counts and budgets),
-  `build perf` (Linux perf on a `--release --symbols` build, per named thread), `build
-  trace` (a Spall trace summarized), the `session mesher` log line; the benchmarking
-  system below replaced a first `view_test` and history file. Build profiles: an optimized
-  development build by default (debug builds are 7-15x slower in these loops, which is
-  what looked like the mesher churning).
-- **Loading** (the spawn's 5733 chunks: 6.0 s → 1.7 s; server tick time over a flight
-  1430 → 330 ms):
-  - workers idled most of each tick (16 chunks queued per worker, refilled once a tick):
-    64 per worker;
-  - a column's climate and trees worked out again for each of its ~24 chunks: a per-worker
-    `Column_Cache`, and chunks requested whole columns at a time so it hits (generate
-    0.333 → 0.188 ms on one thread);
-  - 48 chunks a tick sent at most (the cap once the workers kept up): a byte budget;
-  - water wake-ups looked up ~1700 cells per chunk collected: a per-chunk water flag;
-  - the server thread worked out each column's tops itself (most of `stream`): tops jobs
-    on the workers, a column's chunks sent once its tops are known.
-- **Chunk work:** light filled its region block by block (0.389 → 0.163 ms: rows); caves
-  interpolated every solid block (generate 0.200 → 0.169 ms: cells that cannot hold cave
-  skipped, bit for bit the same blocks).
-- **GPU** (sixteen views from the spawn: 2.34 → 1.70 ms a frame; triangles 517k → 291k):
-  - meshes grouped by face direction, only the groups that can face the camera drawn (517k
-    → 331k triangles, 2.34 → 1.85 ms);
-  - greedy meshing of evenly lit faces (331k → 291k, 1.85 → 1.73 ms; exact:
-    `test_greedy_meshing_is_exact`);
-  - chunks drawn nearest first, so the depth test spares hidden fragments (the worst views
-    most: the world pass's p99 2.9 → 1.8 ms).
-- **Benchmarking (designed after the first round showed its gaps; built next).** What the
-  first round had (the chunk benchmark, exit checks printing numbers, Spall, perf, a
-  history file) did not hold together: the player's settings, window size, time of day,
-  drifting clouds and random critters leaked into results; single runs with no warm-up
-  or noise estimate; correctness checks doubling as measurements; most timings only in
-  profiling builds; no way to compare two versions under the same conditions.
-  - **Scenarios, in code, in the game binary.** A scenario fixes everything that changes
-    the numbers: the world (the scratch world's seed and generator), the settings
-    (resolution, vsync off, field of view, view distance, UI scale; the player's settings
-    file is never read nor written), the conditions (a fixed time of day with the cycle
-    stopped, the clouds at a fixed place, no natural critters or a seeded random source,
-    no sound device), a camera script, a warm-up, and the metrics it reports. It runs by
-    itself: `voxiverse --benchmark <scenario>`, wrapped as `build bench <scenario>` (a
-    release build). A scenario has a version, bumped when its script changes; results of
-    different versions are never compared.
-  - **The scenarios:** `chunks` (generate, light and mesh per chunk on one thread: the
-    present tool, same result format), `load` (join to a fully meshed world: workers,
-    ticks, streaming), `views` (fixed views: GPU time per pass, triangles, the CPU's
-    recording), `flight` (streaming while moving: frames, generation and meshing
-    throughput, ticks, memory), `edits` (bulk edits and explosions: re-meshing), `server`
-    (a headless server, simulated players moving, liquids and entities: tick time as
-    players grow).
-  - **Metrics in release builds.** A registry of named timers and counters (an enum in
-    `base`), cheap enough to leave in (two clock reads and an atomic index into a
-    fixed ring of samples per metric), recorded only while a benchmark runs. The GPU's
-    per-pass timestamps, read back every frame already, feed it too. Spall stays for
-    looking inside a frame.
-  - **Fixed resolution.** GPU scenarios draw into an offscreen 1280 x 720 target whatever
-    the window is (then copied to it, timed apart), so the window manager, fullscreen or
-    the screen cannot change the work measured.
-  - **Method.** Warm-up first (discarded); several repetitions; each metric reported as
-    the median of the repetitions' medians with its spread. A result file per run in
-    `build/benchmarks/` (never committed): the scenario and its version, the commit, the build
-    profile, the resolution obtained, the machine (CPU, cores, GPU, driver, OS; a
-    fingerprint to group by), and every metric per repetition. Results compare only
-    within one machine.
-  - **Comparison.** `build bench compare <ref> [scenarios] [-runs:N]` builds `<ref>` in a
-    git worktree under `build/worktrees/`, then runs the reference and the working tree
-    alternately (A B A B ...: heat and background load fall on both alike) and prints each
-    metric's change, flagged when the two sets of runs differ beyond chance (a
-    Mann-Whitney test). `<ref>` must have the benchmark system (from the commit that
-    adds it on).
-  - **Checks stay checks.** Exit checks (fly_test, tour_test, blast_test) stay pass/fail
-    gates and lose their side numbers to the scenarios. In CI: the deterministic counts
-    exactly (as `bench -check` does now), timing only within coarse budgets (shared
-    runners are too noisy for more), the result files kept as artifacts.
-  - **Phases:** (1) scenarios with fixed conditions, the metrics registry, the result
-    format, `views`, `load` and `flight` (done: client/benchmark.odin, base/metrics.odin,
-    base/bench_result.odin; `chunks` writes the same results; `view_test` and the old
-    history file gone); (2) repetitions, statistics, `compare` (done: tools/build/compare.odin;
-    comparing the code with itself calls nothing though single medians move up to 6%; its
-    first use turned down the clouds' skipping); (3) the
-    offscreen target (done: gpu/offscreen.odin; `views` in a 1280 x 720 and a 640 x 360
-    window: the same GPU frame within 0.5%, only the copy onto the window differs); (4)
-    `edits` and `server` with simulated players (done: `edits` measures `edit_shown`, a
-    bulk edit's re-meshing latency, not the settling, which is the water's ticks;
-    dedicated/bench.odin's 8 bots over UDP; the server's load metrics are means, the
-    rest medians: half its ticks send nothing while generation catches up); (5) CI and a
-    "how to benchmark a change" procedure in DEBUGGING.md (done: `--smoke` runs each
-    scenario once, short, with a small view; CI runs the server's on every platform and
-    the game's on Linux's CPU driver, a few seconds each).
-- **Commands, the console and scripts (designed at M19's close; done with it).** They had
-  blurred: the developer console mirrored a dozen server commands (fill, explode, time,
-  spawn ...), duplicated keys (fire, drop, inventory, dial, break, place), and carried
-  the exit checks; players' commands sat beside test-only ones (explode, hash). Three
-  surfaces, each with one job:
-  - **Server commands** (`/` in the chat): everything that acts on the world or the
-    server, one registry (server/admin.odin), each command a permission node; roles
-    (player, moderator, admin, from permissions.cfg) decide who may run what. All changes
-    to the world are the server's: there is no separate developer registry, only
-    permissions. Personal (/ignore: muting someone for yourself; /msg, /r, /me, /afk,
-    /nick, /realname, /motd, /list, /whois, /seen, /status, /address, /worlds), getting
-    about (/home, /warp, /tpa ..., /back, /spawn, /top), moderation (/mute: muting someone
-    for everyone, a moderator's job; /unmute, /delmsg, /kick, /ban ...), administration
-    (/give, /clear, /tp, /tphere, /travel, /setworldspawn, /setwarp, /time, /save,
-    /open_lan, /summon, /locate, /regen), and world editing for builders and admins:
-    /pos1 and /pos2 (the aimed block, worked out by the server) keep each player's
-    selection on the server, which tells the client its box to draw; /fill, /replace,
-    /clear, /sphere and /structure act on it. One-offs made for tests go: /explode,
-    /hash (the checks reach the server directly).
-  - **The developer console** (the `~` key) is the developers' and holds primitives:
-    the session (singleplayer, join, leave, quit, screen), variables (set, vars,
-    reset: settings, debug.*, rules.*, worldgen.*), capture and diagnostics (screenshot,
-    net_trace, crash), placing the camera for a picture (tp, look), and `server
-    <command>`: any server command, sent as the chat sends it, with the developer's
-    permissions. Nothing that duplicates a key or the UI, no mirrors of server commands,
-    no tests.
-  - **Scripts** (`--exec`) are console input typed at startup, with `wait` and
-    `wait_world`: for reproducing a state and taking its picture (CI's sky through a
-    day, a bug's setup). Nothing that checks or measures: that is code. **Checks** (the
-    exit checks: flight, tour, blast) become `--check <name>` like `--benchmark
-    <scenario>`, no longer console commands.
-- **Also done at the close:** the server frees the chunks a moving player left (the old
-  area less the new) instead of looking at every loaded chunk whenever anyone moves: that
-  pass took up to 13 ms a tick with 8 players flying (`build bench server --profile`); a full
-  sweep stays every 10 s. `debug.occlusion_stats` counts chunks drawn that pass no pixel.
-- **Left, measured, for later:**
-  - occlusion culling (chunks' faces connected through open space, a search from the
-    camera's chunk): 72% of the chunks drawn at the spawn's views pass no pixel (under the
-    ground, behind hills), 39% in flight: the next step for the GPU;
-  - clouds: ~0.2 ms of a 1.7 ms frame; empty-space skipping tried and dropped (slower);
-  - light is worked out for a chunk's whole 48³ neighbourhood each time it is meshed (27x
-    the work if light were kept per chunk): the biggest CPU cost left in meshing, worth it
-    only when meshing is a bottleneck again.
-
-## M20: the first public build's experience
-
-The release builds (M21) put the game in front of players who are not its developers: what
-they see first has to make sense without knowing how it is made. Every screen is looked at
-as a player meets it.
-
-- **Game menu:** Back to Game, Options, Open to LAN, and Save and Quit to Title (or
-  Disconnect on someone else's server); "Game Paused" under the title only when it is.
-- **Words.** Nothing on a player's screen speaks the code's language: no universe, scratch
-  world, chunk or seed where a player did not ask for it. The nomenclature table keeps the
-  code's words; the screens say save, world, server. A reviewed list of every player-facing
-  string is the check.
-- **Reference: Minecraft Java's screens**, which most players already know (minecraft.wiki:
-  Title Screen, Select World, Loading world screen; its Options): where a screen of ours has
-  a counterpart, it works like it unless there is a reason not to.
-- **Title screen:**
-  - four buttons, one above the other: Singleplayer, Multiplayer, Options, Quit Game
-    (Minecraft's order);
-  - a starfield streaming towards the viewer, a warp, unhurried: streaks of whole pixels,
-    mostly white with a hint of colour (pale blue, gold, violet), never flashing; drawn as
-    UI quads (no new pass); Options' **Reduce motion** holds it still;
-  - the version in grey in the lower left (the commit until M21 stamps versions).
-- **Singleplayer** (was "Universes"; Minecraft's Select World): its saves, newest played
-  first, each showing its name and when it was last played; select one and Play (or
-  double-click it); **Create New Save** (a screen: the name; the seed under "More
-  options"); **Edit** (a screen: rename, **Open Folder**: the save's directory in the
-  system's file manager, `explorer`, `open` or `xdg-open` started by the platform layer);
-  **Delete** (confirmed); Back. A "save" is what the code calls a universe (nomenclature).
-- **Multiplayer:**
-  - no name field: the name lives in Options (and is asked for the first time a player
-    goes to Multiplayer without one);
-  - "Looking for servers on your network" with its dots counting up (. .. ...), so it is
-    clearly looking; found servers listed as they answer;
-  - **Direct Connection** (Minecraft's name) opens its screen: the address (the last one
-    remembered), a password if the server asks, Join, Cancel; a kept server list with Add
-    Server, Edit and Delete comes later.
-- **Loading screen:** joining a world (singleplayer, a server, a gate's or `/travel`'s
-  arrival) shows a screen until the world around the player is there and drawn, instead of
-  a world building itself in view: what is happening in words ("Connecting to the server",
-  "Starting the world", "Loading the world", "Arriving"), a bar (with its percentage) for
-  the chunks around the player loaded and meshed (the same test as `wait_world`), a small map of the columns around filling in
-  (as Minecraft's chunk map, in our pixels), and Cancel back to where one came from. A failure
-  (a refused join, a lost connection) says why in plain words, with Back.
-- **Options**, from research (Minecraft Java's options; the Game Accessibility Guidelines'
-  basic list, whose most complained-of issues are remapping, text size, colour and
-  subtitles; Luanti's settings, keys bound by their place on the keyboard). Today it is one
-  list of every setting variable, raw. Kept: what this game has and a player can use; left
-  out: knobs for things the game does not have (particles, music, resource packs, mipmaps,
-  graphics APIs, languages while there is one). Tabs, the same from the title and in game:
-  - **Video:** display mode (windowed, fullscreen), VSync, max frame rate when VSync is off
-    (30, 60, 120, 144, 240, unlimited), field of view (degrees), render distance (one slider
-    in chunks; the height follows it), GUI scale (Auto, 1-4), brightness (lifts the darkest
-    light levels: caves at night), clouds (on, off: a cost on weak GPUs), show FPS;
-  - **Sound:** master volume (more sliders when there is music and more kinds of sound);
-  - **Controls:** mouse sensitivity, invert Y, sneak and sprint each hold or toggle, key
-    bindings: every action remappable, bound by physical key position (layouts other than
-    QWERTY work), with Reset;
-  - **Accessibility:** reduce motion (stills the title's stars, and later camera bob and
-    shake), chat text size;
-  - **Profile:** your name.
-  Plain labels, real units, discrete choices where a slider would only confuse; changes
-  apply at once and are saved on leaving. Debug and tuning switches stay in F4 and the
-  console, never in Options. Later, when the game has them: subtitles for sounds (the
-  guidelines' fourth complaint), sound categories, languages.
-- **Sneaking** (Minecraft's): holding sneak lowers the eyes and the body (1.8 -> 1.5 blocks
-  tall: under a 1.5-block gap), slows walking (as now), and on the ground keeps the player on
-  the block: a move that would step off an edge is cut, axis by axis, so one can lean over a
-  ledge to build. Shared physics (game/physics.odin), so the server and the client's
-  prediction agree; other players see the lower body and name tag.
-- **Exit check:** as in the table.
-
-## M21: builds and releases
-
-**What a release needs to carry.** Fonts and structure templates are compiled in (`#load`),
-textures and sounds are generated at start-up; the only files the game reads besides the
-player's settings and saves are its 14 compiled shaders (116 KB, `shaders/` beside the
-executable). So no asset archive format: a release build compiles the SPIR-V in too, and
-the game is one self-contained executable (the server another). Development builds keep
-reading `build/shaders` for hot reload. An archive format earns its keep only with large
-authored assets (music, resource packs, mods); our assets are made by code, so it waits
-until something needs it. The package itself is compressed (zip, tar.gz): compressing
-inside it again would buy nothing.
-
-- **Profiles** (done early, in M19): the default development build is `-o:minimal` with
-  debug info and the dev aids (`base.DEV`: the tracking allocator, validation, hot reload):
-  it compiles in about the time of an unoptimized one and runs 3-5x faster; `--debug` is
-  unoptimized for stepping through code; `--release` is `-o:speed` without the dev aids
-  (half a minute to compile); `--release --symbols` adds line tables with the dev aids
-  still off, for profilers (`build perf`). M21 adds: `--release` carries its shaders
-  (`#load_directory` of `build/shaders`, `VX_EMBED_SHADERS`), and the packaged game is a
-  windowed program on Windows (no console; it logs to its file).
-- **Windows icon and version info:** Odin's `-resource:<file.rc>` compiles a resource script
-  with the Windows SDK's `rc.exe` (found as it finds the linker) and links it in. The build
-  writes `build/voxiverse.rc`: `1 ICON "voxiverse.ico"` and a `VERSIONINFO` block (product,
-  version, commit: the file's Details tab). The icon is drawn by code (`build icon`: a 16 x 16
-  grass block, scaled texel for texel to 16, 32, 48 and 256 pixels, PNG images in an .ico;
-  a first version, to be redrawn). The window class loads it too (`LoadIconW(module, 1)` for
-  `hIcon` and `hIconSm`), or the title bar and taskbar keep the default. Checked in CI by
-  reading the resources out of the Windows executable.
-- **Versions:** `0.<milestone>.<patch>` (`v0.21.0` when this lands), from git, and the
-  commit, passed in with `-define` (`base/version.odin`): on a tagged commit with nothing
-  uncommitted, the tag's version; after it, `0.21.0+<commits since>` (semver's build metadata:
-  after 0.21.0, where `0.21.0-dev` would sort before it; `0.0.0-dev` before
-  any tag). Shown by `--version`, in the log's first line, on the title screen and in the
-  server's `status`. The protocol version stays its own.
-- **Release names:** a release can have a name for players ("Pre-Alpha 1"): the version
-  tag's message (`git tag -a v0.21.0 -m "Pre-Alpha 1"`; a lightweight tag has none). It is
-  stamped in too: the title screen says "Voxiverse Pre-Alpha 1 (0.21.0)", and so does the
-  Release's title. Files keep the version (sortable, no spaces).
-- **Packages** (`build package`: a release build, then the archive in `build/dist/`):
-  - Windows x64: `voxiverse-0.21.0-windows-x64.zip`: `voxiverse.exe`, `voxiverse-server.exe`.
-    `vulkan-1.dll` comes with every GPU driver. Unsigned: SmartScreen warns about an unknown
-    publisher until we pay for code signing (later, documented in the README).
-  - Linux x64: `voxiverse-0.21.0-linux-x64.tar.gz` (keeps the executable bit), built on the
-    oldest supported runner (Ubuntu 22.04, glibc 2.35) so it runs on older distributions;
-    `libvulkan.so.1` comes from the system.
-  - macOS (after M1b: the game has no macOS window yet, so no package until then)
-    universal (arm64 + x86_64, `lipo`): `Voxiverse.app` in a zip, with the server
-    beside it. macOS has no Vulkan of its own: the bundle carries MoltenVK
-    (`Contents/Frameworks/libMoltenVK.dylib`, Apache 2.0), loaded directly in place of a
-    loader: the one library we ship beside an executable, because there is no other way.
-    Ad-hoc signed (Apple Silicon needs a signature); not notarized, so the first launch
-    needs right-click Open until we join Apple's developer program (later, documented).
-  - Every package holds one folder of its own name (unpacking never scatters files). A
-    development build's name carries its commit (`voxiverse-0.21.0+5-1a2b3c4d5e6f-windows-x64.zip`), so builds between releases are told apart.
-  - Every package: `README.txt` (running, where saves and settings live, the server's
-    options), `LICENSE`, and the fonts' and MoltenVK's licences. Debug symbols go in a
-    separate archive per platform (for crash reports), not in the player's package (later:
-    a release build has no symbols yet).
-- **CI:** the toolchain setup is a local composite action (`.github/actions/setup`), shared
-  by the jobs: the Odin release odinup.toml pins, downloaded prebuilt by
-  `laytan/setup-odin` (pinned to a commit) rather than odinup's build from source, whose
-  LLVM comes from the system and is not in a cache; odinfmt built from the pinned ols
-  revision, cached. Jobs are named for what they do and the platform they do it for
-  ("Test · Windows x64", "Package · Linux x64"). Every push builds the packages and keeps
-  them 30 days as workflow artifacts, each the package file itself, not zipped again (for
-  testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
-  `SHA256SUMS`, and makes a **draft** GitHub Release with `gh release create --draft`, its
-  notes from the milestone's row: nothing is public until it is
-  looked at and published by hand, so a tag pushed by mistake never ships. Each package is unpacked on its own OS and
-  run from there: Linux reaches a world on the CPU driver; Windows' zip is read as
-  Explorer reads it (one folder; no `./` paths, which Explorer shows as an empty zip that
-  will not extract), then answers `--version`
-  (and its version information is read back) and starts the server; that proves it needs
-  nothing beside it.
-- **Later, if the repository goes private:** a private repository's release files are not
-  downloadable by the public. The packages then go to Cloudflare R2 (S3's API: the `aws`
-  command the runners have), `releases/<version>/`, and a manual "publish" workflow writes
-  `releases/latest.json`, which a static site's Download button reads. Packaging stays as
-  it is; only the publishing step changes.
-- **Saves and settings** already live in the user's data directory, so upgrading is
-  replacing the folder; a client and server of different protocols say so on joining.
-- **Exit check:** as in the table.
-
-## M22: polish II
+## M22: inventory and item icons
 
 - **Inventory mouse tweaks** (after the Mouse Tweaks mod): shift-drag quick-moves every
   slot passed; right-drag puts one in each slot passed; left-drag shares the cursor's
@@ -913,6 +352,124 @@ inside it again would buy nothing.
   get icons generated at start-up (a block's item: a small three-face cube from its
   textures; tools: pixel sprites by code), in a UI icon atlas; names in tooltips; counts
   in the corner.
+- **Not here:** landing dust and the Windows list (M27).
+- **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
+  (none blank), looked at once in a screenshot of the inventory.
+
+## M23: sheep
+
+The one animal is a sheep, so it is called one, and it is the first thing a player does
+something to rather than at. Minecraft's sheep is the reference where nothing here says
+otherwise.
+
+- **The name:** `Critter` becomes `Sheep` everywhere (code, `summon sheep`, the entities
+  file); a save's `critter` is read as `sheep`.
+- **Using an entity:** right click on an aimed entity (the client already aims at entities
+  for hitting) sends `Use_Entity{id}`; the server checks reach (as for hitting) and calls
+  the kind's use procedure. Entity kinds get a table of procedures (think, use) in place of
+  the switch in `think`, for the next kinds to fill in. Using an entity takes precedence
+  over placing a block behind it.
+- **Shearing by hand:** using a sheep with wool drops 1-3 white wool (dropped items, as a
+  broken block's) and leaves it shorn. No shears: no tools have durability yet.
+- **Regrowing:** a shorn sheep that grazes on grass eats it (the block becomes dirt, as in
+  Minecraft) and has its wool back. Grazing is the critter's existing idle behaviour, now
+  aimed at a grass block in front of it.
+- **The model:** wool is the body's outer box; shorn, the body is the smaller pink-grey
+  inner box. The shorn flag goes in the entity's replicated state (protocol bump).
+- **White wool:** a block (opaque, breakable, placeable; its own generated texture) and
+  its item.
+- **Not here:** dyes, colours other than white (M25 brings black), shears.
+- **Exit check:** server tests: using a sheep drops wool and shears it; a shorn sheep is
+  shorn after save and load; grazing regrows the wool and turns the grass to dirt; using a
+  shorn sheep does nothing. Over UDP, a second client sees the sheep shorn. A save written
+  before this milestone loads with sheep where its critters were.
+
+## M24: random ticks and farming
+
+Blocks that change on their own, with Minecraft's rules, and the first crop on them.
+
+- **Random ticks:** every server tick, each loaded chunk has 3 blocks picked at random
+  (Minecraft's default; the rule `rules.random_tick_speed`, 0 turns it off); a picked
+  block whose kind has a random tick runs it. Changes go through the one path for block
+  changes (edits, light, column tops, sending).
+- **Grass:** spreads to dirt next to it (a 3 x 5 x 3 neighbourhood, as Minecraft) when the
+  dirt has light 9 or more above it; turns to dirt when an opaque block is on top.
+- **A hoe:** the second tool (no durability yet); using it on grass or dirt with air above
+  makes farmland.
+- **Farmland:** a block a little lower than a full block (15/16); moist when water is within
+  4 blocks across on its level or one above, shown darker; dry farmland with nothing
+  planted turns back to dirt on a random tick, moist farmland never does. No trampling.
+- **Seeds and wheat:** breaking tall grass drops seeds 1 time in 8. Seeds are used on
+  farmland to plant wheat: a cross-shaped cutout plant in 8 stages (block states, as water
+  keeps its levels), textures generated per stage. On a random tick wheat may grow one
+  stage: more likely on moist farmland (Minecraft's chance, simplified to 1 in 3 moist,
+  1 in 6 dry). Ripe wheat breaks into 1 wheat and 1-3 seeds; unripe into 1 seed. Wheat on
+  a block that is no longer farmland breaks.
+- **Not here:** bone meal, other crops, trampling, light needed by crops.
+- **Exit check:** server tests with a fixed seed: grass spreads into lit dirt and not into
+  dark dirt, and dies under stone; farmland is moist by water and dry without, and dry bare
+  farmland reverts; wheat ripens within the time its chances imply (a statistical bound
+  over many plants); drops by stage; stages and farmland kept through save and load. One
+  screenshot of a field in every stage.
+
+## M25: breeding
+
+Sheep have lambs, and lambs inherit. The rule is real genetics kept tiny: two genes, each
+with a common dominant form and a rare recessive one.
+
+- **Feeding:** using wheat on an adult sheep uses one wheat and makes it ready to breed for
+  30 seconds (hearts over it). Two ready sheep within 8 blocks walk to each other and a
+  lamb appears between them; each parent then waits 5 minutes before it can breed again.
+- **Lambs:** half size, grow up in 10 minutes (game time while the world is loaded); a lamb
+  cannot be shorn or bred; feeding one wheat brings its growing up forward by a tenth.
+- **Genes:** each sheep carries two copies of two genes, saved with it:
+  - wool: white (dominant) or black (recessive): a black sheep has two black copies and
+    drops black wool (a new block, as white);
+  - coat: plain (dominant) or spotted (recessive): spotted sheep have dark patches on
+    their wool (drawn; their wool drops white or black as their wool gene says).
+  A lamb takes one copy of each gene from each parent at random; one copy in a thousand
+  flips (a mutation). Sheep found in the wild carry each recessive copy 1 time in 10, so
+  about 1 in 100 shows each trait. Related sheep share copies, so breeding within a family
+  shows recessive traits more often: nothing extra is coded for that; it follows.
+- **Seeing it:** none of the genes is shown in words; only the wool and the spots.
+- **Exit check:** genetics tests: two carriers give black lambs 25% of the time (within a
+  tolerance over many draws); over generations, sibling lines show more recessive traits
+  than random pairing; mutation at its rate. A server test: two fed sheep make a lamb whose
+  genes come from them; it grows up on time; genes, age and wait times through save and
+  load. Over UDP, a second client sees the lamb small and the colours right.
+
+## M26: blocks that hold things
+
+Some blocks need data of their own (a chest's contents, later a sign's text or a
+teleporter's name). Minecraft calls these block entities; here they are records kept with
+a block.
+
+- **The record:** keyed by the block's position, owned by the server, stored per chunk and
+  saved with it (a new section in the region format, versioned). Made when its block is
+  placed, removed when it is broken; on load, a record whose block is not there is dropped
+  (and logged).
+- **To clients:** sent only when needed (a chest's contents when it is opened, then its
+  changes while it is open), never with the chunk.
+- **The chest:** a block (generated texture; a real chest model later) whose record is a
+  server-owned container of 25 slots, the size of the inventory, moved with the existing
+  container messages (M14). Using it opens an overlay with the chest above the player's
+  inventory. Several players may have it open: each sees the others' moves. Breaking it
+  drops everything in it. From the creative catalog for now (there is no crafting).
+- **Not here:** double chests, hoppers, locks, signs.
+- **Exit check:** a chest filled, saved, quit and loaded holds the same; unloaded and
+  reloaded with its chunk, the same; broken, it drops every stack; two players over UDP
+  moving items in one chest see each other's moves and end up agreeing with the server; a
+  record without its block is dropped on load.
+
+## M27: Windows behaviour and the new icon
+
+Everything that needs a Windows machine, together, checked there once at the end.
+
+- **The icon:** a black cube with a question mark: the same three-faced 16 x 16 cube drawn
+  by code (`build icon`), its faces near-black in three shades, a light grey question mark
+  (5 x 7 texels) on its left face; scaled texel for texel to each size. It replaces the
+  grass block in the executable, the window and the taskbar. If the mark is too busy at
+  16 x 16, that size drops it (decided on seeing it).
 - **Landing dust:** falling three blocks or more and landing kicks up puffs of the block
   landed on, more for a harder landing; for every player in view (seen from their
   snapshots). Visual only until there is fall damage.
@@ -930,14 +487,14 @@ inside it again would buy nothing.
   - Not slowed in the background: power throttling off for the process
     (`SetProcessInformation`, `ProcessPowerThrottling`); the render thread registered
     with MMCSS as "Games".
-  - A window and taskbar icon (generated by code), an AppUserModelID.
+  - An AppUserModelID (the taskbar groups the game's windows under its icon).
   - No system error dialogs (`SetErrorMode`); started from a console, logs to it
     (`AttachConsole(ATTACH_PARENT_PROCESS)`).
   - Each checked on a Windows machine (some only show there).
-- **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
-  (none blank); the Windows list ticked off on Windows.
+- **Exit check:** the Windows list ticked off on a Windows machine; the icon at every size
+  in CI's artifacts; landing dust seen for every player in view.
 
-## M23: sky and time
+## M28: sky and time
 
 Cheap, deterministic astronomy, so a world implies a sky worth observing (one could keep a
 lunar calendar by watching): a few trigonometric terms per frame from the world clock.
@@ -959,7 +516,7 @@ lunar calendar by watching): a few trigonometric terms per frame from the world 
   platform; a moon's phase repeats on its period; star positions drift by the sidereal
   difference night to night; sky screenshots at a few dates.
 
-## M24: statistics
+## M29: statistics
 
 Counters for nearly everything a player does, so later systems (anything that rewards
 play) have data to work with; nothing here rewards anything.
@@ -988,7 +545,7 @@ play) have data to work with; nothing here rewards anything.
   test of many players with thousands of counters each within a save and load budget; UI
   tests for search and scrolling; the overlay over UDP shows the server's numbers.
 
-## M25: analytics
+## M30: analytics
 
 Measuring play to improve the game: a timed stream of meaningful interactions. Always on
 (a server can switch it off: `analytics 0`); nothing leaves the server by itself.
@@ -1013,16 +570,27 @@ Measuring play to improve the game: a timed stream of meaningful interactions. A
   the cap; malformed, oversized and too frequent client reports are refused; the tool
   summarizes a recorded run.
 
-### After M25 (not planned in detail yet), in this order
+### After M30 (not planned in detail yet), in this order
 
-- **Entities, properly:** attributes as data (health, speed, anything content adds);
-  behaviour as data-driven state machines per kind instead of a switch; an interaction
-  hook (use on an entity). Proven by two kinds, not built for imagined ones: today's
-  critter moved onto it, and a villager.
+Each becomes a milestone section, sized as above, before it starts.
+
+- **A minimap:** the map in a corner as Xaero's minimap draws it (the tops of the columns
+  around, shaded by height, players and animals as marks), but drawn as part of the game:
+  its own frame and pixels, no settings wall; a full map on a key. From the columns the
+  client already has.
+- **Throwables:** dynamite (thrown, a fuse, the rocket's explosion) and a glowing stone
+  that lights where it lands (a light block that crumbles after a while); then a bow.
+- **Teleporter blocks:** placed by a player, named, they are the only places the full map
+  can send one to (fast travel from block to block, not from anywhere). Built on M26's
+  blocks that hold things and the minimap.
 - **Villages and traders:** villages as M12 structures; villagers (a big crooked nose,
-  beady eyes) who wander their village; using one opens a trade overlay of offers, the
-  server checking and swapping the items; gold as the currency (an item, found as ore).
-  No professions, no sleeping.
+  beady eyes) who wander their village; using one (M23) opens a trade overlay of offers,
+  the server checking and swapping the items; gold as the currency (an item, found as
+  ore). No professions, no sleeping.
+- **Flying animals:** a flock of birds steering by the three boids rules (separation,
+  alignment, cohesion) with the terrain as an obstacle; server-simulated, cheap per bird.
+- **Sound, again:** the generated effects reworked for character, not technique (each
+  sound designed against a reference recording's shape, then synthesized).
 - **Tools:** a pickaxe for soil and stone, an axe for wood (whether hands can break and
   whether breaking takes time is decided then).
 - **Itemization (Diablo II style, not enchantments):** items that can be unique get an
@@ -1031,8 +599,35 @@ Measuring play to improve the game: a timed stream of meaningful interactions. A
   data is there from the first drop but shown only once the character has learned of it
   (a knowledge flag a later mechanic sets). Needs tools and equipment worth rolling;
   the stack data change goes in with tools.
+- A dungeon's boss: a boss bar across the top, and its loot thrown out in a burst when it
+  dies.
 - Lava as a second liquid; greedy meshing and low-detail far terrain for long view
   distances; M1b (macOS) when a Mac is at hand.
+
+### Open questions (to settle in conversation before they become milestones)
+
+- **Music:** composed as notes (MIDI-like: exact pitches and timings a real instrument could
+  play) and rendered by our synthesizer at start-up, or written out and recorded? What
+  does each world sound like?
+- **Worlds that change while you are away:** what happens in a world over the time a
+  player spends elsewhere (wars, growth, ruin), how it is computed cheaply when the world
+  is loaded again, and whether worlds have histories generated from their seed.
+- **Peoples between worlds:** factions and a player's standing with each, per world or
+  across worlds; whether worlds near each other by address can be neighbours a people
+  spans ("the next world over").
+- **A lesson per world:** each world with its own puzzle to solve.
+- **Kinds of world:** more generators, and what they are called (scientific names, or
+  invented ones).
+- **Moving faster:** dash, double jump, a grappling hook: from items, or from something a
+  character learns.
+- **Items and slots:** how many slots, how that changes as a character goes on, and how
+  items stay simple to use as there are more of them.
+- **Learning the game in the game:** everything a player needs to know found in the world
+  itself (no tutorial, no wiki).
+- **Machines:** something to build working machines from (as Minecraft's redstone with its
+  slime-block flying machines), but fewer, denser parts.
+- **The download site:** voxiverse.net with one Download button that picks the visitor's
+  system (M21 has the way there), and the project going private with it.
 
 ### From notes, changed or not taken
 
