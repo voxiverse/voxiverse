@@ -5,7 +5,6 @@ import "core:hash"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
-import si "core:sys/info"
 import "core:time"
 
 // Benchmark results (PLAN.md, M19): one JSON file per run in
@@ -70,10 +69,10 @@ Machine :: struct {
 }
 
 machine_info :: proc(gpu, driver: string, allocator := context.temp_allocator) -> (m: Machine) {
-	m.cpu = strings.trim_space(si.cpu_name())
+	cpu: string
+	cpu, m.cores, m.threads, m.os = machine_facts(allocator)
+	m.cpu = strings.trim_space(cpu)
 	if m.cpu == "" {m.cpu = "unknown"}
-	if physical, logical, ok := si.cpu_core_count(); ok {m.cores, m.threads = physical, logical}
-	if v, ok := si.os_version(allocator); ok {m.os = v.full} else {m.os = fmt.tprint(ODIN_OS)}
 	key := fmt.tprintf("%s|%d|%d|%s|%s|%s", m.cpu, m.cores, m.threads, m.os, gpu, driver)
 	m.fingerprint = fmt.aprintf("%08x", hash.fnv32a(transmute([]u8)key), allocator = allocator)
 	return
