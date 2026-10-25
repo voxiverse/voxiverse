@@ -23,6 +23,7 @@ Bindings :: struct {
 	sprint:     platform.Key,
 	attack:     platform.Key, // break the aimed block, hit
 	use:        platform.Key, // place, use the held item, dial a gate
+	pick:       platform.Key, // pick the aimed block into the hand
 	inventory:  platform.Key,
 	drop:       platform.Key, // with Ctrl: the whole stack
 	chat:       platform.Key,
@@ -46,6 +47,7 @@ DEFAULT_BINDINGS :: Bindings {
 	sprint     = .Left_Control,
 	attack     = .Mouse_Left,
 	use        = .Mouse_Right,
+	pick       = .Mouse_Middle,
 	inventory  = .E,
 	drop       = .Q,
 	chat       = .T,
@@ -73,6 +75,7 @@ BINDING_VARS := [?]base.Var {
 	{field = "sprint", help = "key: sprint"},
 	{field = "attack", label = "Attack / Break", help = "key: break the aimed block, hit"},
 	{field = "use", label = "Use / Place", help = "key: place, use the held item"},
+	{field = "pick", label = "Pick Block", help = "key: pick the aimed block into the hand"},
 	{field = "inventory", help = "key: open the inventory"},
 	{field = "drop", label = "Drop item", help = "key: drop one of the held item (Ctrl: all)"},
 	{field = "chat", label = "Open chat", help = "key: open the chat"},

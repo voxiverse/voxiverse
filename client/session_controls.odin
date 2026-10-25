@@ -39,6 +39,8 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32)
 		session_inventory_do(s, {.Drop, s.inventory.selected, 1 if all else 0})
 	}
 
+	if keys.pick in input.pressed {session_pick(s)}
+
 	s.edit_timer -= dt
 	breaking := keys.attack in input.held
 	placing := keys.use in input.held
@@ -46,6 +48,40 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32)
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
 	item_use(s, held(s), breaking, placing)
+}
+
+// session_pick puts the aimed block's item in hand: the hotbar slot holding
+// it is selected; failing that, with items.catalog, a stack of it goes into
+// the hand (the selected slot if empty, else the first empty one, else the
+// selected one: what was there goes back into the inventory). False if
+// nothing was done.
+session_pick :: proc(s: ^Session) -> bool {
+	hit, aimed := s.aim.?
+	if !aimed {return false}
+	block, _ := world_block(&s.world, hit.block)
+	item := game.item_of_block(block)
+	if item == game.NO_ITEM {return false}
+	inv := &s.inventory
+	for st, i in inv.slots[:game.HOTBAR_SLOTS] {
+		if st.item != item || game.stack_empty(st) {continue}
+		if i != inv.selected {session_inventory_do(s, {.Select, 0, i})}
+		return true
+	}
+	if !session_allowed(s, "items.catalog") {return false}
+	target := inv.selected
+	if !game.stack_empty(inv.slots[target]) {
+		for st, i in inv.slots[:game.HOTBAR_SLOTS] {
+			if game.stack_empty(st) {
+				target = i
+				break
+			}
+		}
+	}
+	session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(item)})
+	session_inventory_do(s, {.Click, target, 0}) // (what was there is on the cursor now)
+	session_inventory_do(s, {.Close, game.CURSOR_SLOT, 0})
+	if target != inv.selected {session_inventory_do(s, {.Select, 0, target})}
+	return true
 }
 
 // session_fire launches a rocket where we look (the server makes it).

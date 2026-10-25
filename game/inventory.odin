@@ -24,6 +24,9 @@ Inventory_Action_Kind :: enum u8 {
 	Drop, // one from the slot (CURSOR_SLOT: the cursor), all if `arg` is 1
 	Take, // a full stack of item `arg` on the cursor (from the catalog)
 	Close, // the overlay closed: the cursor's stack back in (what does not fit dropped)
+	Put, // up to `arg` of the cursor's stack into the slot, if empty or of the same item (a drag spreading a stack)
+	Gather, // every stack of the cursor's item onto the cursor, as far as it fits (a double-click)
+	Move_One, // one between the hotbar and the rest: from the slot (arg 0), or into it (arg 1) (the wheel)
 }
 
 Inventory_Action :: struct {
@@ -105,6 +108,49 @@ inventory_apply :: proc(
 		item := Item(a.arg)
 		if !catalog || !item_valid(item) {return}
 		inv.cursor = {item, item_stack_size(item)}
+	case .Put:
+		if !in_slots || stack_empty(inv.cursor) {return}
+		slot := &inv.slots[a.slot]
+		if !stack_empty(slot^) && slot.item != inv.cursor.item {return}
+		moved := min(a.arg, inv.cursor.count, item_stack_size(inv.cursor.item) - slot.count)
+		if moved <= 0 {return}
+		slot^ = {inv.cursor.item, slot.count + moved}
+		inv.cursor.count -= moved
+	case .Gather:
+		cur := &inv.cursor
+		if stack_empty(cur^) {return}
+		size := item_stack_size(cur.item)
+		before := cur.count
+		// Stacks that are not full first, then the full ones.
+		for full in ([2]bool{false, true}) {
+			for &slot in inv.slots {
+				if cur.count >= size {break}
+				if slot.item != cur.item || stack_empty(slot) {continue}
+				if (slot.count >= size) != full {continue}
+				moved := min(slot.count, size - cur.count)
+				slot.count -= moved
+				cur.count += moved
+			}
+		}
+		if cur.count == before {return}
+	case .Move_One:
+		if !in_slots {return}
+		slot := &inv.slots[a.slot]
+		lo, hi := HOTBAR_SLOTS, INVENTORY_SLOTS // the other section
+		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
+		if a.arg == 0 {
+			if stack_empty(slot^) {return}
+			if left := slots_add(inv.slots[lo:hi], {slot.item, 1}); left.count != 0 {return}
+			slot.count -= 1
+		} else {
+			if stack_empty(slot^) || slot.count >= item_stack_size(slot.item) {return}
+			// From the last slot of the other section holding it.
+			from := -1
+			for i in lo ..< hi {if inv.slots[i].item == slot.item && !stack_empty(inv.slots[i]) {from = i}}
+			if from < 0 {return}
+			inv.slots[from].count -= 1
+			slot.count += 1
+		}
 	case .Close:
 		if stack_empty(inv.cursor) {return}
 		dropped = inventory_add(inv, inv.cursor)

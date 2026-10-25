@@ -44,9 +44,9 @@ ui_init :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) 
 		g,
 		size,
 		size,
-		.R8_UNORM,
+		.R8G8B8A8_UNORM,
 		{.SAMPLED, .TRANSFER_DST},
-		"ui glyph atlas",
+		"ui atlas",
 	) or_return
 	p.atlas_id = gpu.register_texture(g, p.atlas.view) or_return
 	return true
@@ -97,7 +97,7 @@ ui_upload :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, frame: gpu.Frame, out: ^ui.Output) -
 	rows := out.atlas_dirty_rows
 	if !p.atlas_uploaded {rows = {0, out.atlas_size}}
 	if rows[1] > rows[0] {
-		start, end := rows[0] * out.atlas_size, rows[1] * out.atlas_size
+		start, end := rows[0] * out.atlas_size * 4, rows[1] * out.atlas_size * 4
 		ensure_buffer(g, &f.staging, end - start, {.TRANSFER_SRC}, "ui atlas staging") or_return
 		copy(f.staging.mapped[:end - start], out.atlas_pixels[start:end])
 		from: vk.ImageLayout = .SHADER_READ_ONLY_OPTIMAL if p.atlas_uploaded else .UNDEFINED

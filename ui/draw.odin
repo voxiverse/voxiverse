@@ -14,7 +14,7 @@ Color :: [4]u8
 
 Vertex :: struct {
 	pos:   [2]f32, // pixels
-	uv:    [2]f32, // glyph atlas (rects sample its white texel)
+	uv:    [2]f32, // atlas (rects sample its white texel)
 	color: Color,
 }
 
@@ -36,7 +36,7 @@ Output :: struct {
 	vertices:         []Vertex,
 	indices:          []u32,
 	commands:         []Draw_Command, // draw in order
-	atlas_pixels:     []u8, // R8, atlas_size x atlas_size
+	atlas_pixels:     []u8, // RGBA8, atlas_size x atlas_size
 	atlas_size:       int,
 	atlas_dirty_rows: [2]int, // [first, end) rows changed this frame; empty if equal
 	layers:           [Layer]Layer_List,
@@ -99,6 +99,24 @@ stroke_rect :: proc(ctx: ^Context, r: Rect, thickness: f32, color: Color) {
 	fill_rect(ctx, {r.x, r.y + r.h - t, r.w, t}, color)
 	fill_rect(ctx, {r.x, r.y + t, t, r.h - 2 * t}, color)
 	fill_rect(ctx, {r.x + r.w - t, r.y + t, t, r.h - 2 * t}, color)
+}
+
+// add_icon keeps an image (size x size, sRGB RGBA) to draw with draw_icon.
+add_icon :: proc(ctx: ^Context, size: int, pixels: [][4]u8) -> (Icon, bool) {
+	return icon_add(&ctx.glyphs, size, pixels)
+}
+
+// draw_icon draws icon filling r, multiplied by tint (white: as it is).
+draw_icon :: proc(ctx: ^Context, r: Rect, icon: Icon, tint := Color{255, 255, 255, 255}) {
+	g := &ctx.glyphs
+	if int(icon) < 0 || int(icon) >= len(g.icons) {return}
+	img := g.icons[icon]
+	inv := 1 / f32(g.size)
+	uv := [2][2]f32 {
+		{f32(img.at.x) * inv, f32(img.at.y) * inv},
+		{f32(img.at.x + img.size) * inv, f32(img.at.y + img.size) * inv},
+	}
+	push_quad(ctx, pixel_rect(ctx, r), uv, tint)
 }
 
 Align :: enum u8 {

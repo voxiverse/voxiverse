@@ -14,7 +14,7 @@ import "../font"
 //	ui.end_frame(&ctx)   // ctx.output: draw lists + glyph atlas changes
 //
 // The output is plain data (vertices, indices, draw commands with scissor
-// rects, an R8 glyph atlas with a dirty region); this package knows nothing
+// rects, an RGBA8 atlas of glyphs and icons with a dirty region); this package knows nothing
 // about the GPU. Coordinates are UI units; `scale` turns them into pixels
 // (output vertices are in pixels).
 //

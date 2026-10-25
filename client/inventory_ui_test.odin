@@ -69,13 +69,16 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 		game.stack_empty(inv.cursor),
 	)
 	// Right-click: half up; a click puts them in slot 21.
-	frame(app, {mouse = at(app, 20), mouse_pressed = {.Right}})
+	frame(app, {mouse = at(app, 20), mouse_pressed = {.Right}, mouse_down = {.Right}})
 	testing.expect(t, inv.cursor == {stone, 32} && inv.slots[20] == {stone, 32})
-	frame(app, {mouse = at(app, 21), mouse_pressed = {.Left}})
+	frame(app, {mouse = at(app, 21), mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at(app, 21), mouse_released = {.Left}})
 	testing.expect(t, inv.slots[21] == {stone, 32} && game.stack_empty(inv.cursor))
 	// Shift-click: into the hotbar (slot 0 holds dirt: the next free one).
-	frame(app, {mouse = at(app, 21), mouse_pressed = {.Left}, modifiers = {.Shift}})
+	frame(
+		app,
+		{mouse = at(app, 21), mouse_pressed = {.Left}, mouse_down = {.Left}, modifiers = {.Shift}},
+	)
 	testing.expect(t, inv.slots[1] == {stone, 32} && game.stack_empty(inv.slots[21]))
 	// A number key over a slot swaps it with that hotbar slot.
 	app.input.pressed = {.Num_3}
@@ -83,13 +86,13 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	app.input.pressed = {}
 	testing.expect(t, inv.slots[2] == {stone, 32} && game.stack_empty(inv.slots[20]))
 	// Pick up the dirt; a click outside the panel drops it all.
-	frame(app, {mouse = at(app, 0), mouse_pressed = {.Left}})
+	frame(app, {mouse = at(app, 0), mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at(app, 0), mouse_released = {.Left}})
-	frame(app, {mouse = {5, 5}, mouse_pressed = {.Left}})
+	frame(app, {mouse = {5, 5}, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, dirt) == 0)
 	testing.expect_value(t, len(s.inv_pending), 8) // each click, the swap, the drop
 	// Closing with a stack on the cursor puts it back.
-	frame(app, {mouse = at(app, 1), mouse_pressed = {.Right}})
+	frame(app, {mouse = at(app, 1), mouse_pressed = {.Right}, mouse_down = {.Right}})
 	escape(app)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, stone) == 64)

@@ -94,6 +94,7 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
+	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
@@ -148,6 +149,7 @@ app_init :: proc(app: ^App) -> bool {
 		return false
 	}
 	if !ui.init(&app.ui, &app.font, fallback = &app.symbol_font) {return false}
+	if !item_icons_init(&app.item_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
@@ -220,6 +222,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	sounds_destroy(&app.sounds)
 	if app.settings_dirty {settings_save(app)}
 	console_history_save(&app.console)
+	delete(app.item_icons)
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)

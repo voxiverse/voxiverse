@@ -612,3 +612,21 @@ inside it again would buy nothing.
 - **Saves and settings** already live in the user's data directory, so upgrading is
   replacing the folder; a client and server of different protocols say so on joining.
 - **Exit check:** as in the table.
+
+## M22: inventory and item icons
+
+- **Inventory mouse tweaks** (after the Mouse Tweaks mod): shift-drag quick-moves every
+  slot passed; right-drag puts one in each slot passed; left-drag shares the cursor's
+  stack evenly over the slots passed; double-click gathers every stack of that item onto
+  the cursor; the wheel over a slot moves one at a time between the hotbar and the rest.
+- **Middle click picks the block aimed at:** the hotbar slot holding its item is selected;
+  with `items.catalog` a stack of it goes into the hand when none is there. In the
+  inventory, middle click on a slot gives a full stack of it (catalog).
+- **Square slots, item icons, a smaller hotbar:** names do not fit square slots, so items
+  get icons generated at start-up (a block's item: a small three-face cube from its
+  textures; tools: pixel sprites by code), in a UI icon atlas; names in tooltips; counts
+  in the corner.
+- **Built as:** the UI atlas is RGBA8 (glyphs white with coverage as alpha; `ui.add_icon` keeps images that survive an atlas clear); `client/icons.odin` makes 32 px icons (blocks: a cube from the textures, plants flat, the launcher a sprite); new inventory actions `Put`, `Gather`, `Move_One` (shared code, so the server and the prediction agree); `pick` is a binding (middle button); `screen inventory` and `screen game` console commands.
+- **Not here:** landing dust and the Windows list (M27).
+- **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
+  (none blank), looked at once in a screenshot of the inventory.

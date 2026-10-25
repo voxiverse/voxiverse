@@ -131,7 +131,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	c := ui.rect_center(ctx.screen, 0, 0)
 	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
 	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
-	hotbar(ctx, s)
+	hotbar(ctx, s, &app.item_icons)
 }
 
 // game_menu: over the game (alone in our own world, the world stands still
@@ -195,7 +195,7 @@ net_line :: proc(s: ^Session) -> string {
 
 // hotbar: the inventory's first row along the bottom, the one in hand framed.
 @(private = "file")
-hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
+hotbar :: proc(ctx: ^ui.Context, s: ^Session, icons: ^Item_Icons) {
 	t := &ctx.theme
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
@@ -203,7 +203,7 @@ hotbar :: proc(ctx: ^ui.Context, s: ^Session) {
 	for i in 0 ..< game.HOTBAR_SLOTS {
 		slot := ui.cut_left(&row, SLOT_SIZE.x)
 		ui.cut_left(&row, t.spacing)
-		stack_slot(ctx, slot, s.inventory.slots[i], i == s.inventory.selected, i + 1)
+		stack_slot(ctx, icons, slot, s.inventory.slots[i], i == s.inventory.selected, i + 1)
 	}
 }
 

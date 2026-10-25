@@ -301,6 +301,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | # | Steps | Re-read (M tokens) | CI runs | Notes |
 |---|---|---|---|---|
 | M19-M21 | 8677 | 4233 | many | one session over several days, before these rules |
+| M22 | 98 | 11 | 1 | inventory tweaks, pick block, icons; the UI atlas became RGBA8 |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -329,7 +330,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) (done: the tools, the benchmarking system (six scenarios under fixed conditions, `compare`, CI smoke runs), and the costs they found: load 6.0 -> 1.7 s, server tick time over a flight 1430 -> 330 ms, GPU frame at the spawn 2.34 -> 1.70 ms, triangles 517k -> 291k; commands, console and scripts separated) |
 | M20 | The first public build's experience: the title screen (a calm warp starfield, the version), a loading screen into worlds, Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect (tabs, key bindings), and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver (done: `client/menus_test.odin` drives the title, Singleplayer's saves (select, rename, delete asked), Multiplayer (the name asked, Direct Connection), Options (tabs, choices, keys bound by key or mouse button, Escape, Reset Keys) and the failure screen, and reads every menu screen and tab for developer words; CI's Screens step screenshots each, the loading screen and a failed join; `test_settings_round_trip` carries bindings; `test_sneaking` in the shared physics both sides run; the moving starfield adds about 2 ms a frame on the CPU driver, under the menus' 120 fps cap) |
 | M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows and Linux (macOS after M1b) made by CI on every push and drafted as a GitHub Release for each version tag | A version tag gives a draft Release with the packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
-| M22 | Inventory and item icons: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with an icon generated for every item, a smaller hotbar | UI tests for each mouse tweak and pick block; an icon for every item, none blank |
+| M22 | Inventory and item icons: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with an icon generated for every item, a smaller hotbar | UI tests for each mouse tweak and pick block; an icon for every item, none blank (done: `game/inventory_test.odin` pins the new actions (`Put`, `Gather`, `Move_One`); `client/inventory_tweaks_test.odin` drives each mouse tweak through the overlay, pick block (hotbar slot, catalog stack, full hotbar, no catalog, no item) and checks every item's icon is in the atlas and not blank; the inventory screenshot (`screen inventory`, a new step in CI) was looked at once; icons are 32 px, in the UI atlas, now RGBA8) |
 | M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep |
 | M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load |
 | M25 | Breeding: sheep fed wheat pair up and have a lamb that grows up; two inherited traits (black wool, spots), recessive, rare in the wild and commoner among relatives | Genetics tests (a 3:1 ratio from two carriers; more recessives among inbred lines than random ones); a server test from feeding to lamb to adult; genes and age through save and load |
@@ -338,23 +339,6 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M28 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M29 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
 | M30 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
-
-## M22: inventory and item icons
-
-- **Inventory mouse tweaks** (after the Mouse Tweaks mod): shift-drag quick-moves every
-  slot passed; right-drag puts one in each slot passed; left-drag shares the cursor's
-  stack evenly over the slots passed; double-click gathers every stack of that item onto
-  the cursor; the wheel over a slot moves one at a time between the hotbar and the rest.
-- **Middle click picks the block aimed at:** the hotbar slot holding its item is selected;
-  with `items.catalog` a stack of it goes into the hand when none is there. In the
-  inventory, middle click on a slot gives a full stack of it (catalog).
-- **Square slots, item icons, a smaller hotbar:** names do not fit square slots, so items
-  get icons generated at start-up (a block's item: a small three-face cube from its
-  textures; tools: pixel sprites by code), in a UI icon atlas; names in tooltips; counts
-  in the corner.
-- **Not here:** landing dust and the Windows list (M27).
-- **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
-  (none blank), looked at once in a screenshot of the inventory.
 
 ## M23: sheep
 

@@ -100,3 +100,67 @@ test_inventory_actions :: proc(t: ^testing.T) {
 	testing.expect(t, inventory_valid(&inv))
 	testing.expect_value(t, inventory_remove(&inv, stone, 1000), inventory_count(&inv, stone) + 35)
 }
+
+// The mouse tweaks' actions: Put (a drag spreading a stack), Gather (a
+// double-click), Move_One (the wheel).
+@(test)
+test_inventory_tweak_actions :: proc(t: ^testing.T) {
+	stone, dirt := item_of_block(.Stone), item_of_block(.Dirt)
+	inv: Inventory
+	do_ :: proc(inv: ^Inventory, kind: Inventory_Action_Kind, slot: int, arg := 0) -> bool {
+		_, ok := inventory_apply(inv, {kind, slot, arg}, false)
+		return ok
+	}
+	// Put: up to arg; onto the same item or an empty slot only, and no more than fits.
+	inv.cursor = {stone, 10}
+	inv.slots[6] = {dirt, 1}
+	inv.slots[7] = {stone, 62}
+	testing.expect(t, !do_(&inv, .Put, 6, 3), "another item's slot refuses")
+	testing.expect(
+		t,
+		do_(&inv, .Put, 7, 5) && inv.slots[7] == {stone, 64} && inv.cursor.count == 8,
+	)
+	testing.expect(t, !do_(&inv, .Put, 7, 1), "a full slot refuses")
+	testing.expect(t, do_(&inv, .Put, 8, 3) && inv.slots[8] == {stone, 3} && inv.cursor.count == 5)
+	testing.expect(
+		t,
+		do_(&inv, .Put, 9, 50) && inv.slots[9] == {stone, 5} && stack_empty(inv.cursor),
+	)
+	testing.expect(t, !do_(&inv, .Put, 10, 1), "an empty cursor puts nothing")
+
+	// Gather: every stack of the cursor's item, not-full ones first, up to a full stack.
+	inv = {}
+	inv.cursor = {stone, 10}
+	inv.slots[0] = {stone, 64}
+	inv.slots[5] = {stone, 20}
+	inv.slots[6] = {dirt, 5}
+	inv.slots[7] = {stone, 50}
+	testing.expect(t, do_(&inv, .Gather, CURSOR_SLOT))
+	testing.expect(t, inv.cursor == {stone, 64} && stack_empty(inv.slots[5]))
+	testing.expect(t, inv.slots[7] == {stone, 16}, "the not-full stacks went first")
+	testing.expect(
+		t,
+		inv.slots[0] == {stone, 64} && inv.slots[6] == {dirt, 5},
+		"the full one was not needed",
+	)
+	testing.expect(t, !do_(&inv, .Gather, CURSOR_SLOT), "a full cursor gathers nothing")
+
+	// Move_One: out of a slot to the other section; into one from it.
+	inv = {}
+	inv.slots[2] = {stone, 3}
+	testing.expect(t, do_(&inv, .Move_One, 2, 0))
+	testing.expect(t, inv.slots[2].count == 2 && inv.slots[5] == {stone, 1})
+	testing.expect(t, do_(&inv, .Move_One, 5, 0) && inv.slots[2].count == 3, "back onto its stack")
+	testing.expect(t, do_(&inv, .Move_One, 2, 1) == false, "nothing of it in the rest now")
+	inv.slots[9] = {stone, 4}
+	testing.expect(
+		t,
+		do_(&inv, .Move_One, 2, 1) && inv.slots[2].count == 4 && inv.slots[9].count == 3,
+	)
+	inv.slots[3] = {dirt, 1}
+	testing.expect(
+		t,
+		!do_(&inv, .Move_One, 3, 1) && !do_(&inv, .Move_One, 4, 0),
+		"no item: nothing",
+	)
+}
