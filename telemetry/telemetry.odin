@@ -47,6 +47,9 @@ Kind :: enum u16 {
 	Client_Info, // from a client at join: text: OS; n0: view distance, n1: fov, n2: ms from launch to playing
 	Client_Overlay, // from a client: text: overlay; n0: ms it was open
 	Client_Perf, // from a client every minute: n0: frame p50 us, n1: p99 us, n2: frames
+	Damage, // text: cause (fall, explosion); n0: tenths of a health point; n1: health left in tenths
+	Death, // text: cause
+	Level_Up, // n0: the new level; n1: total xp
 }
 
 Kind_Info :: struct {
@@ -110,6 +113,15 @@ KIND_INFO := [Kind]Kind_Info {
 		n_names = {"open_ms", "", ""},
 		client = true,
 	},
+	.Damage = {
+		name = "damage",
+		text_name = "cause",
+		n_names = {"tenths", "left", ""},
+		counter = "damage.%t",
+		amount = true,
+	},
+	.Death = {name = "death", text_name = "cause", counter = "deaths.%t"},
+	.Level_Up = {name = "level_up", n_names = {"level", "xp", ""}},
 	.Client_Perf = {name = "client_perf", n_names = {"p50_us", "p99_us", "frames"}, client = true},
 }
 

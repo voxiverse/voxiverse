@@ -877,3 +877,27 @@ So that play data and crash reports reach the developer without anyone copying f
   resends everything exactly once; a forged signature, an oversized batch, a flood and an
   unknown kind are refused; consent off sends no packets at all; a crash report round-trips;
   `tools/analytics` summarizes a recorded run.
+
+## M28: character attributes, modifiers and health
+
+The part an RPG stands on, and what the equipment slots (M22b) were waiting for.
+
+- **Derived stats:** one function `derive(character) -> Derived` from base attributes,
+  worn and held items' modifiers and timed effects, producing the numbers physics and rules
+  read (walk, sprint and jump multipliers, extra jumps, max health, reach); the server and
+  the client's prediction call it with the same inputs (the equipment is already replicated
+  in the inventory), so prediction stays exact.
+- **Item modifiers:** `Item_Info.modifiers` (a short list of kind + amount), so boots can
+  make you faster and a charm give a double jump, with no code per item (the backlog's
+  "item systems" note, done as data).
+- **Health, damage, death:** health and a max, fall damage (from the shared physics),
+  explosion damage, death and respawn at the world's spawn (what is dropped is a rule); each
+  emits M26 events with cause and place. Health shown as a bar by the hotbar.
+- **Progression hook:** a table maps M26 events to experience (`xp` per kind, a level curve
+  as data), the level and xp are character state, shown in the stats overlay; no rewards
+  yet beyond a number, but the pipeline from "something happened" to "the character grew" is
+  there and tested.
+- **Exit check:** server and client agree on a tick-by-tick run with a speed modifier and a
+  double jump (prediction tests, both ways); fall and explosion damage by the rules' numbers;
+  death, respawn and the dropped items; xp and level from a scripted session, kept through
+  save and load; the events carry the right causes.

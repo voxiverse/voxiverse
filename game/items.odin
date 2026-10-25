@@ -40,24 +40,50 @@ Tool :: enum u8 {
 Material :: enum u8 {
 	Seeds, // plant wheat on farmland
 	Wheat,
+	Feather_Charm, // held in the offhand: one more jump in the air
 }
 MATERIAL_ITEMS :: Item(0xA000)
 
 Item_Info :: struct {
-	name:  string,
-	stack: int, // how many one slot holds
-	block: Block, // what it places (Air: nothing)
-	tool:  Maybe(Tool),
-	armor: Maybe(Armor),
-	equip: Maybe(Equip_Slot), // where it can be worn (armor)
+	name:      string,
+	stack:     int, // how many one slot holds
+	block:     Block, // what it places (Air: nothing)
+	tool:      Maybe(Tool),
+	armor:     Maybe(Armor),
+	modifiers: [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
+	equip:     Maybe(Equip_Slot), // where it can be worn (armor)
 }
 
 @(rodata)
 ARMOR_INFO := [Armor]Item_Info {
-	.Cap = {name = "cap", stack = 1, armor = .Cap, equip = .Head},
-	.Tunic = {name = "tunic", stack = 1, armor = .Tunic, equip = .Chest},
-	.Trousers = {name = "trousers", stack = 1, armor = .Trousers, equip = .Legs},
-	.Boots = {name = "boots", stack = 1, armor = .Boots, equip = .Feet},
+	.Cap = {
+		name = "cap",
+		stack = 1,
+		armor = .Cap,
+		equip = .Head,
+		modifiers = {{.Max_Health, 2}, {}},
+	},
+	.Tunic = {
+		name = "tunic",
+		stack = 1,
+		armor = .Tunic,
+		equip = .Chest,
+		modifiers = {{.Max_Health, 4}, {}},
+	},
+	.Trousers = {
+		name = "trousers",
+		stack = 1,
+		armor = .Trousers,
+		equip = .Legs,
+		modifiers = {{.Max_Health, 2}, {}},
+	},
+	.Boots = {
+		name = "boots",
+		stack = 1,
+		armor = .Boots,
+		equip = .Feet,
+		modifiers = {{.Speed, 0.1}, {.Jump, 0.1}},
+	},
 }
 
 item_of_armor :: proc(a: Armor) -> Item {
@@ -74,6 +100,7 @@ TOOL_INFO := [Tool]Item_Info {
 MATERIAL_INFO := [Material]Item_Info {
 	.Seeds = {name = "seeds", stack = 64, block = .Wheat_0}, // (placed with the right button, like a block)
 	.Wheat = {name = "wheat", stack = 64},
+	.Feather_Charm = {name = "feather_charm", stack = 1, modifiers = {{.Air_Jumps, 1}, {}}},
 }
 
 item_of_material :: proc(m: Material) -> Item {

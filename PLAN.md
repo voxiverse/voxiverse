@@ -309,7 +309,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M25 | 124 | 73 | 1 | genetics, breeding, lambs, black wool (counted from M24's line; includes the CI flake fixes) |
 | M26 | 111 | 77 | 2 | events, counters, local log, stats command and screen, client reports (counted from M25's line; includes the re-plan) |
 | M26b | 72 | 57 | 1 | commands (counted from M26's line) |
-| M27 | 90 | 80 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
+| M27 | 73 | 65 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
+| M28 | 46 | 461 | 1 | mods, health, damage, death, xp (counted from M27's line; re-read figure is the session total) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -347,32 +348,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M26 | Events and counters: one `event()` pipeline (kinds table, ring buffer, writer thread) feeding per-character counters, the local JSON-lines log and (M27) the upload spool; position samples, item flows, sessions, performance; `stats` command and overlay | A scripted session gives exactly the expected counters and events, kept through save and load; a burst of events never stalls the tick; day cap; client reports validated; stats overlay over UDP (done: `telemetry/telemetry_test.odin` (JSON lines by UTC day in order, a 200k burst never blocks and its losses are counted and written, the day cap holds); `server/stats_test.odin`: a scripted session (chat, commands, teleport, place and break, shear and hit a sheep, drop, walk) gives exactly the expected counters and the events in order, kept through save and load, shown over UDP; others' stats need `info.stats.others`; client reports validated and rate-capped; 200 players x 3000 counters save and load in budget; `client/stats_test.odin`: the tree, units, the overlay's search and click, the client's reports; the overlay seen once in a screenshot) |
 | M26b | Commands, cleaned: a slash is a server command everywhere (chat and console), plain console words are the client's; `server`, the client `tp` and `wear` gone; selectors (`@s @p @a @r`), relative coordinates, `/tp` with angles, `/setblock`, `/time set\|add\|query`, `/rule`, `/kill`, `/seed`, `/summon` with a count, `/wear`, `/help`, `/locate [biome\|structure]`, Minecraft's aliases | `test_world_commands` (UDP, an Earth world: every one of them, `/locate gate` finds its gate), `test_console_slash_is_the_servers`; the old command tests updated (done) |
 | M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips (done: `collector/collector_test.odin` (a log reaches the lake whole and once, with an anonymous pid and no account; sent again after a lost cursor or a collector restart it is written once; the spool survives a collector that is down and sends only the new lines; forged proofs, batches before a proof, non-event lines, unknown kinds, bad days and floods refused; a report round-trips), `server/upload_test.odin` (a server told to upload ends up in the lake, no name or chat text; one not told to never talks to the collector), `client` consent question test, `tools/analytics` tests on a recorded run; not done: crash reports sent by themselves) |
-| M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded |
+| M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded (done: `game/mods.odin` (`derive_mods` from worn items' modifiers, shared by server and the client's prediction; speed, jump, air jumps, max health as data on items), `game/physics_test.odin` (modifiers change movement; prediction agrees tick by tick with a speed modifier and a double jump), `server/health_test.odin` (fall and explosion damage by the rules' numbers, death, respawn and dropped items, xp and level from events, worn armor raises and removal lowers max health), protocol 21 with a Health message, a health bar by the hotbar; not done: timed effects, reach, xp rewards) |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI |
-
-## M28: character attributes, modifiers and health
-
-The part an RPG stands on, and what the equipment slots (M22b) were waiting for.
-
-- **Derived stats:** one function `derive(character) -> Derived` from base attributes,
-  worn and held items' modifiers and timed effects, producing the numbers physics and rules
-  read (walk, sprint and jump multipliers, extra jumps, max health, reach); the server and
-  the client's prediction call it with the same inputs (the equipment is already replicated
-  in the inventory), so prediction stays exact.
-- **Item modifiers:** `Item_Info.modifiers` (a short list of kind + amount), so boots can
-  make you faster and a charm give a double jump, with no code per item (the backlog's
-  "item systems" note, done as data).
-- **Health, damage, death:** health and a max, fall damage (from the shared physics),
-  explosion damage, death and respawn at the world's spawn (what is dropped is a rule); each
-  emits M26 events with cause and place. Health shown as a bar by the hotbar.
-- **Progression hook:** a table maps M26 events to experience (`xp` per kind, a level curve
-  as data), the level and xp are character state, shown in the stats overlay; no rewards
-  yet beyond a number, but the pipeline from "something happened" to "the character grew" is
-  there and tested.
-- **Exit check:** server and client agree on a tick-by-tick run with a speed modifier and a
-  double jump (prediction tests, both ways); fall and explosion damage by the rules' numbers;
-  death, respawn and the dropped items; xp and level from a scripted session, kept through
-  save and load; the events carry the right causes.
 
 ## M29: hardening
 

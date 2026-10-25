@@ -109,6 +109,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		     game.Player_Worn,
 		     game.Stats_Page,
 		     game.Telemetry_Ack,
+		     game.Health,
 		     game.Players,
 		     game.Entity_Spawn,
 		     game.Entity_Despawn,

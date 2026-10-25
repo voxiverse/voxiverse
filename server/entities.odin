@@ -315,6 +315,9 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
 			c.player.velocity += impulse
 			c.player.on_ground = false
+			d := c.player.position + {0, 0.9, 0} - center
+			distance := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+			damage_player(s, &c, f32(1 - distance / reach) * 12, "explosion")
 		}
 	}
 	for i := 0; i < len(w.entities.list); {

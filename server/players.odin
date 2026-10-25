@@ -125,7 +125,14 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
-		game.player_step(&c.player, msg.input, &w.rules, query, game.TICK_SECONDS)
+		game.player_step(
+			&c.player,
+			msg.input,
+			&w.rules,
+			query,
+			game.TICK_SECONDS,
+			game.derive_mods(&c.inventory),
+		)
 		if c.afk && msg.input.move != {} {set_afk(s, c, false)} 	// back
 		if waiting {
 			// Held still until the blocks are there (a toggle still takes).

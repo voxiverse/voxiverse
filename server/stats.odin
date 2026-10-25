@@ -35,6 +35,15 @@ counter_add :: proc(m: ^Counters, name: string, amount: u64) {
 	}
 }
 
+// counter_set sets a counter to value (a level is not a sum).
+counter_set :: proc(m: ^Counters, name: string, value: u64) {
+	if v, ok := &m[name]; ok {
+		v^ = value
+	} else {
+		m[strings.clone(name)] = value
+	}
+}
+
 counters_free :: proc(m: ^Counters) {
 	for k in m {delete(k)}
 	delete(m^)
@@ -121,6 +130,7 @@ record :: proc(
 	e.has_pos, e.pos = true, {p.x, p.y, p.z}
 	telemetry.emit(&s.sink, e)
 	count_event(c, kind, text, n0)
+	award_xp(s, c, kind)
 }
 
 // record_world: something happened in w with no player to credit.

@@ -35,6 +35,7 @@ Net_Client :: struct {
 	sheep:       map[u32]game.Sheep_Flags, // and what else about their looks
 	stats_text:  string, // the last Stats_Page's lines (heap)
 	stats_pages: int,
+	health:      game.Health, // the last Health message
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
@@ -169,6 +170,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			c.update = v
 		case game.Player_Joined:
 			c.others[v.player] = strings.clone(v.name)
+		case game.Health:
+			c.health = v
 		case game.Stats_Page:
 			delete(c.stats_text)
 			c.stats_text = strings.clone(v.text)

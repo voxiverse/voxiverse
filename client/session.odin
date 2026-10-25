@@ -119,6 +119,8 @@ Session :: struct {
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
 	stats:            Session_Stats,
+	health:           f32, // as the server last said (Health)
+	max_health:       f32,
 	player_stats:     Stats_Data, // the counters the server last sent (stats_ui.odin)
 	config:           Session_Config,
 	net:              Net_Stats,
@@ -353,7 +355,16 @@ session_update :: proc(
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false
 		}
-		send_message(s, game.prediction_tick(&s.prediction, in_, &s.rules, query))
+		send_message(
+			s,
+			game.prediction_tick(
+				&s.prediction,
+				in_,
+				&s.rules,
+				query,
+				game.derive_mods(&s.inventory),
+			),
+		)
 		movement_sounds(s)
 	}
 	if look {edit_controls(s, input, settings.keys, dt)}

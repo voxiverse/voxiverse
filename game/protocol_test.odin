@@ -93,7 +93,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		encode_c(Chat{strings.repeat("x", MAX_CHAT_TEXT + 1, context.temp_allocator)})[:],
 	)
 	testing.expect(t, !ok)
-	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false, true}
+	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false, true, true, 2}
 	upd: Server_Message
 	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
 	testing.expect(t, ok && upd.(Player_Update) == Player_Update{9, state, true, 1, -1})
@@ -236,6 +236,10 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	_, ok = decode_client(encode_c(report)[:])
 	testing.expect(t, !ok, "too many entries decoded")
 	ack: Server_Message
+	ack, ok = decode_server(encode_s(Health{13.5, 24})[:], scratch)
+	testing.expect(t, ok && ack.(Health) == Health{13.5, 24})
+	_, ok = decode_server(encode_s(Health{30, 24})[:], scratch)
+	testing.expect(t, !ok, "health above the maximum decoded")
 	ack, ok = decode_server(encode_s(Telemetry_Ack{"2026-10-25", 1 << 34 | 9})[:], scratch)
 	testing.expect(t, ok && ack.(Telemetry_Ack) == Telemetry_Ack{"2026-10-25", 1 << 34 | 9})
 	page: Server_Message

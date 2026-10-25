@@ -23,6 +23,8 @@ Rules :: struct {
 	day_length:        f32, // seconds from one midnight to the next (time.odin)
 	daylight_cycle:    bool, // time passes (false: it stands still)
 	drops:             bool, // a block a player breaks leaves its item
+	damage:            bool, // players take damage (falls, explosions) and can die
+	death_drops:       bool, // a player who dies drops their inventory where they fell (else keeps it)
 	random_tick_speed: i32, // blocks picked in each chunk each tick to change by themselves (0: none)
 }
 
@@ -43,6 +45,7 @@ RULES_DEFAULTS := Rules {
 	day_length        = 1200,
 	daylight_cycle    = true,
 	drops             = true,
+	damage            = true,
 	random_tick_speed = 3,
 }
 
@@ -81,6 +84,8 @@ RULES_VARS := [?]base.Var {
 	{field = "day_length", help = "seconds per day and night", min = 10, max = 86400, step = 60},
 	{field = "daylight_cycle", help = "time passes (off: the sun stands still)"},
 	{field = "drops", help = "a block a player breaks leaves its item"},
+	{field = "damage", help = "players take damage (falls, explosions) and can die"},
+	{field = "death_drops", help = "a player who dies drops their inventory where they fell"},
 	{
 		field = "random_tick_speed",
 		help = "blocks picked in each chunk each tick: grass spreads, crops grow (0: none)",

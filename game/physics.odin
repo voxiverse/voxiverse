@@ -59,6 +59,8 @@ Player_State :: struct {
 	on_ground: bool,
 	flying:    bool,
 	crouched:  bool, // sneaking: the lower box (player_height)
+	jump_held: bool, // the jump button was down last tick (an air jump needs a new press)
+	air_jumps: u8, // jumps in the air left (mods.air_jumps, given back on the ground)
 }
 
 // player_height: the player's box's height (crouched: lower).
@@ -85,6 +87,7 @@ player_step :: proc(
 	rules: ^Rules,
 	q: Block_Query,
 	dt: f32,
+	mods := MODS_NONE,
 ) {
 	if !rules.allow_flying {
 		s.flying = false
@@ -120,11 +123,11 @@ player_step :: proc(
 	case s.flying:
 		speed = rules.fly_sprint_speed if sprint else rules.fly_speed
 	case sneak:
-		speed = rules.sneak_speed
+		speed = rules.sneak_speed * mods.speed
 	case sprint:
-		speed = rules.sprint_speed
+		speed = rules.sprint_speed * mods.speed
 	case:
-		speed = rules.walk_speed
+		speed = rules.walk_speed * mods.speed
 	}
 	control := rules.ground_control if s.flying || s.on_ground else rules.air_control
 	if swimming {control = SWIM_CONTROL}
@@ -149,7 +152,14 @@ player_step :: proc(
 		s.velocity.y += (up * speed - s.velocity.y) * follow
 		vy_before = s.velocity.y
 	} else {
-		if s.on_ground && jump {s.velocity.y = math.sqrt(2 * rules.gravity * rules.jump_height)}
+		jump_speed := math.sqrt(2 * rules.gravity * rules.jump_height * mods.jump)
+		if s.on_ground {s.air_jumps = mods.air_jumps}
+		if s.on_ground && jump {
+			s.velocity.y = jump_speed
+		} else if jump && !s.jump_held && !s.on_ground && s.air_jumps > 0 {
+			s.velocity.y = jump_speed // a new press in the air
+			s.air_jumps -= 1
+		}
 		vy_before = s.velocity.y
 		s.velocity.y = max(s.velocity.y - rules.gravity * dt, -rules.terminal_velocity)
 	}
@@ -181,6 +191,7 @@ player_step :: proc(
 		}
 	}
 	if s.flying && s.on_ground {s.flying = false} 	// landing ends flight
+	s.jump_held = jump
 }
 
 // player_box is the player's box (feet centre at its position).

@@ -133,6 +133,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
 	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
 	hotbar(ctx, s, &app.item_icons)
+	health_bar(ctx, s)
 }
 
 // game_menu: over the game (alone in our own world, the world stands still
@@ -424,4 +425,34 @@ fps_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	detail :=
 		fmt.tprintf("%.2f ms, GPU %.2f ms", f.frame_ms, f.gpu_ms) if f.gpu_ms > 0 else fmt.tprintf("%.2f ms", f.frame_ms)
 	ui.label(ctx, detail, ui.cut_top(&inner, t.row_height), .Right, t.text_muted)
+}
+
+@(private = "file", rodata)
+HEART := [6]string{".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."}
+
+// health_bar: a heart for every two health points, over the hotbar's left
+// end: full, half or empty.
+@(private = "file")
+health_bar :: proc(ctx: ^ui.Context, s: ^Session) {
+	if s.max_health <= 0 {return}
+	t := &ctx.theme
+	r := ctx.screen
+	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
+	row = ui.rect_center(row, game.HOTBAR_SLOTS * (SLOT_SIZE.x + t.spacing), SLOT_SIZE.y)
+	PIXEL :: f32(2)
+	hearts := int(math.ceil(s.max_health / 2))
+	for i in 0 ..< hearts {
+		x := row.x + f32(i) * (7 * PIXEL + 2)
+		y := row.y - 6 * PIXEL - 6
+		full := s.health >= f32(2 * i + 2)
+		half := !full && s.health > f32(2 * i)
+		for line, ry in HEART {
+			for ch, rx in line {
+				if ch != 'X' {continue}
+				c := ui.Color{70, 24, 28, 255}
+				if full || (half && rx < 4) {c = {226, 56, 66, 255}}
+				ui.fill_rect(ctx, {x + f32(rx) * PIXEL, y + f32(ry) * PIXEL, PIXEL, PIXEL}, c)
+			}
+		}
+	}
 }

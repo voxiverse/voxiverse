@@ -47,6 +47,7 @@ prediction_tick :: proc(
 	input: Player_Input,
 	rules: ^Rules,
 	q: Block_Query,
+	mods := MODS_NONE,
 ) -> Input {
 	msg := Input{p.next_sequence, quantize_input(input)}
 	p.next_sequence += 1
@@ -57,19 +58,32 @@ prediction_tick :: proc(
 	p.pending[(p.head + p.count) % PREDICTION_PENDING] = msg
 	p.count += 1
 	p.previous = p.state
-	player_step(&p.state, msg.input, rules, q, TICK_SECONDS)
+	player_step(&p.state, msg.input, rules, q, TICK_SECONDS, mods)
 	return msg
 }
 
 // prediction_reconcile applies the server's word on the player.
-prediction_reconcile :: proc(p: ^Prediction, u: Player_Update, rules: ^Rules, q: Block_Query) {
+prediction_reconcile :: proc(
+	p: ^Prediction,
+	u: Player_Update,
+	rules: ^Rules,
+	q: Block_Query,
+	mods := MODS_NONE,
+) {
 	for p.count > 0 && sequence_before_or_at(p.pending[p.head].sequence, u.acked) {
 		p.head = (p.head + 1) % PREDICTION_PENDING
 		p.count -= 1
 	}
 	s := u.state
 	for i in 0 ..< p.count {
-		player_step(&s, p.pending[(p.head + i) % PREDICTION_PENDING].input, rules, q, TICK_SECONDS)
+		player_step(
+			&s,
+			p.pending[(p.head + i) % PREDICTION_PENDING].input,
+			rules,
+			q,
+			TICK_SECONDS,
+			mods,
+		)
 	}
 	moved := p.state.position - s.position
 	if u.teleported || abs(moved.x) + abs(moved.y) + abs(moved.z) > 4 {

@@ -352,6 +352,26 @@ WHEAT_ART := [16]string {
 	"................",
 }
 
+@(private = "file")
+CHARM_ART := [16]string {
+	"................",
+	"...........oo...",
+	"..........oSSo..",
+	".........oSSSo..",
+	"........oSSSo...",
+	".......oSSSSo...",
+	"......oSSSSo....",
+	".....oSSSSSo....",
+	"....oSSSSSo.....",
+	"...oSSSSSo......",
+	"..oSSSSSo.......",
+	".oSSoSSo........",
+	"oSo..oo.........",
+	"oo..............",
+	"................",
+	"................",
+}
+
 // material_sprite draws a crop's item: 16 x 16 art, each pixel ICON_SIZE / 16 times as large.
 @(private = "file")
 material_sprite :: proc(m: game.Material, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
@@ -361,6 +381,8 @@ material_sprite :: proc(m: game.Material, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8)
 		art = SEEDS_ART
 	case .Wheat:
 		art = WHEAT_ART
+	case .Feather_Charm:
+		art = CHARM_ART
 	}
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
@@ -369,7 +391,7 @@ material_sprite :: proc(m: game.Material, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8)
 			case 'o':
 				c = {28, 28, 34, 255}
 			case 'S':
-				c = {196, 164, 96, 255}
+				c = {196, 164, 96, 255} if m != .Feather_Charm else {236, 232, 220, 255}
 			case 'W':
 				c = {226, 188, 84, 255}
 			case 'G':

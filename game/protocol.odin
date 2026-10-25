@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 20
+PROTOCOL_VERSION :: 21
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -130,6 +130,13 @@ Batch_Kind :: enum u8 {
 }
 
 MAX_BATCH_TEXT :: 32 * 1024
+
+// Health: the player's health points and the most they can have (worn items
+// change it), sent when either changes.
+Health :: struct {
+	health: f32,
+	max:    f32,
+}
 
 // Telemetry_Ack: a batch was taken: its day and the offset after it (a report:
 // "" and its text's length).
@@ -506,6 +513,7 @@ Server_Message :: union {
 	Player_Worn,
 	Stats_Page,
 	Telemetry_Ack,
+	Health,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -573,6 +581,7 @@ Server_Kind :: enum u8 {
 	Player_Worn,
 	Stats_Page,
 	Telemetry_Ack,
+	Health,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -718,6 +727,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "stats_page"
 		case u8(Server_Kind.Telemetry_Ack):
 			return "telemetry_ack"
+		case u8(Server_Kind.Health):
+			return "health"
 		}
 	}
 	return ""
@@ -834,6 +845,10 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Health:
+		write_u8(w, u8(Server_Kind.Health))
+		write_f32(w, v.health)
+		write_f32(w, v.max)
 	case Telemetry_Ack:
 		write_u8(w, u8(Server_Kind.Telemetry_Ack))
 		write_string(w, v.day)
@@ -1323,6 +1338,13 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Health):
+		h := Health {
+			health = read_f32(&r),
+			max    = read_f32(&r),
+		}
+		if !(h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max) {reader_fail(&r)}
+		m = h
 	case u8(Server_Kind.Telemetry_Ack):
 		ack := Telemetry_Ack {
 			day = read_string(&r, 10),
@@ -1428,7 +1450,14 @@ quantize_input :: proc(in_: Player_Input) -> Player_Input {
 write_player_state :: proc(w: ^Writer, s: Player_State) {
 	write_position(w, s.position)
 	for v in s.velocity {write_f32(w, v)}
-	write_u8(w, (1 if s.on_ground else 0) | (2 if s.flying else 0) | (4 if s.crouched else 0))
+	write_u8(
+		w,
+		(1 if s.on_ground else 0) |
+		(2 if s.flying else 0) |
+		(4 if s.crouched else 0) |
+		(8 if s.jump_held else 0),
+	)
+	write_u8(w, s.air_jumps)
 }
 
 @(private = "file")
@@ -1439,8 +1468,11 @@ read_player_state :: proc(r: ^Reader) -> (s: Player_State) {
 		if abs(v) > MAX_SPEED {reader_fail(r)}
 	}
 	flags := read_u8(r)
-	if flags > 7 {reader_fail(r)}
+	if flags > 15 {reader_fail(r)}
 	s.on_ground, s.flying, s.crouched = flags & 1 != 0, flags & 2 != 0, flags & 4 != 0
+	s.jump_held = flags & 8 != 0
+	s.air_jumps = read_u8(r)
+	if s.air_jumps > 3 {reader_fail(r)}
 	return
 }
 

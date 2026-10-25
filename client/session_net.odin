@@ -115,7 +115,13 @@ receive :: proc(s: ^Session) {
 				continue
 			}
 			s.last_acked = v.acked
-			game.prediction_reconcile(&s.prediction, v, &s.rules, {&s.world, world_block})
+			game.prediction_reconcile(
+				&s.prediction,
+				v,
+				&s.rules,
+				{&s.world, world_block},
+				game.derive_mods(&s.inventory),
+			)
 			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
 		case game.Rules_Changed:
 			s.rules = v.rules
@@ -126,6 +132,8 @@ receive :: proc(s: ^Session) {
 			s.others[v.player] = {
 				name = strings.clone(v.name),
 			}
+		case game.Health:
+			s.health, s.max_health = v.health, v.max
 		case game.Telemetry_Ack:
 		case game.Stats_Page:
 			stats_data_take(&s.player_stats, v)

@@ -306,3 +306,135 @@ test_sneaking :: proc(t: ^testing.T) {
 	run(&walker, {move = {0, 1}}, &w, 3 * TICK_RATE)
 	testing.expectf(t, walker.position.y < 0, "walked on air: %v", walker.position)
 }
+
+// What items change: speed and jump height by their factors; a jump in the
+// air needs a new press, one per charm, given back on the ground; derive_mods
+// reads only the equipment.
+@(test)
+test_mods_change_movement :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	rules := RULES_DEFAULTS
+	walk :: proc(w: ^Test_World, rules: ^Rules, mods: Mods) -> f64 {
+		s := Player_State {
+			position  = {0.5, 1, 0.5},
+			on_ground = true,
+		}
+		for _ in 0 ..< 60 {player_step(&s, {move = {0, 1}}, rules, query(w), DT, mods)}
+		return abs(s.position.z - 0.5)
+	}
+	plain, fast := walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH})
+	testing.expectf(
+		t,
+		fast / plain > 1.09 && fast / plain < 1.11,
+		"ten percent faster walked %.3f against %.3f",
+		fast,
+		plain,
+	)
+
+	apex :: proc(w: ^Test_World, rules: ^Rules, mods: Mods) -> f64 {
+		s := Player_State {
+			position  = {0.5, 1, 0.5},
+			on_ground = true,
+		}
+		peak := f64(1)
+		player_step(&s, {buttons = {.Jump}}, rules, query(w), DT, mods)
+		for _ in 0 ..< 40 {
+			player_step(&s, {}, rules, query(w), DT, mods)
+			peak = max(peak, s.position.y)
+		}
+		return peak - 1
+	}
+	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH})
+	testing.expectf(
+		t,
+		high > 1.25 * 1.2 - 0.03 && high < 1.25 * 1.2 + 0.01,
+		"jumped %.3f, want %.3f",
+		high,
+		1.25 * 1.2,
+	)
+
+	// Air jumps: one charm, one more jump in the air, on a new press only.
+	mods := Mods{1, 1, 1, BASE_HEALTH}
+	s := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
+	for _ in 0 ..< 5 {player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)} 	// held: no second jump
+	before := s.velocity.y
+	testing.expect(t, before < 7, "holding jump jumped again")
+	player_step(&s, {}, &rules, query(&w), DT, mods) // released
+	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods) // pressed: the air jump
+	testing.expectf(t, s.velocity.y > 7.5, "no air jump (vy %.2f)", s.velocity.y)
+	testing.expect_value(t, s.air_jumps, 0)
+	player_step(&s, {}, &rules, query(&w), DT, mods)
+	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
+	testing.expect(t, s.velocity.y < 7.5, "a second air jump with one charm")
+	for _ in 0 ..< 120 {player_step(&s, {}, &rules, query(&w), DT, mods)}
+	testing.expect(t, s.on_ground, "did not land")
+	player_step(&s, {}, &rules, query(&w), DT, mods)
+	testing.expect_value(t, s.air_jumps, 1) // given back
+
+	// derive_mods: worn boots and a charm in the offhand; the pocket's do not count.
+	inv: Inventory
+	inv.equipment[.Feet] = {item_of_armor(.Boots), 1}
+	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1}
+	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
+	inv.slots[3] = {item_of_armor(.Tunic), 1}
+	m := derive_mods(&inv)
+	testing.expectf(
+		t,
+		abs(m.speed - 1.1) < 1e-5 &&
+		abs(m.jump - 1.1) < 1e-5 &&
+		m.air_jumps == 1 &&
+		m.max_health == BASE_HEALTH + 2,
+		"%v",
+		m,
+	)
+	testing.expect_value(t, derive_mods(&Inventory{}), MODS_NONE)
+}
+
+// Prediction and the server agree with mods, tick for tick, including an air jump.
+@(test)
+test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	rules := RULES_DEFAULTS
+	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4}
+	start := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	predicted: Prediction
+	prediction_init(&predicted, start)
+	server := start
+	for tick in 0 ..< 200 {
+		in_ := Player_Input {
+			move    = {0.3, 1},
+			buttons = {.Jump} if tick % 25 < 2 || tick % 25 == 8 else {},
+		}
+		msg := prediction_tick(&predicted, in_, &rules, query(&w), mods)
+		player_step(&server, msg.input, &rules, query(&w), TICK_SECONDS, mods)
+		testing.expectf(
+			t,
+			predicted.state == server,
+			"tick %d: predicted %v, the server %v",
+			tick,
+			predicted.state,
+			server,
+		)
+		if predicted.state != server {break}
+	}
+	// Reconciling with the server's state and the pending inputs gives the same again.
+	prediction_reconcile(
+		&predicted,
+		{acked = predicted.next_sequence - 1, state = server},
+		&rules,
+		query(&w),
+		mods,
+	)
+	testing.expect(t, predicted.state == server)
+}

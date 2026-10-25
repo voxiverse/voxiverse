@@ -72,6 +72,11 @@ Client :: struct {
 	last_position: [3]f64, // for distance counters
 	dist_acc:      [3]f64, // centimetres walked, flown, fallen not yet counted
 	was_grounded:  bool,
+	health:        f32, // health points (health.odin)
+	max_health:    f32,
+	health_told:   [2]f32, // what the client was last told
+	airborne:      bool,
+	fall_peak:     f64, // the highest y of the present fall
 	report_window: u64, // the tick the current window of telemetry reports began
 	report_count:  int,
 	inv_acked:     u32, // its newest Inventory_Request applied

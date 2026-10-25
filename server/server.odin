@@ -376,6 +376,7 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
 		simulate_player(s, &c)
+		health_tick(s, &c)
 		stats_tick(s, &c)
 		if c.moved {
 			base.profile_scope("drop far")
