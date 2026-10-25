@@ -847,7 +847,8 @@ inside it again would buy nothing.
   reading the resources out of the Windows executable.
 - **Versions:** `0.<milestone>.<patch>` (`v0.21.0` when this lands), from git, and the
   commit, passed in with `-define` (`base/version.odin`): on a tagged commit with nothing
-  uncommitted, the tag's version; after it, `0.21.0-dev.<commits since>` (`0.0.0-dev` before
+  uncommitted, the tag's version; after it, `0.21.0+<commits since>` (semver's build metadata:
+  after 0.21.0, where `0.21.0-dev` would sort before it; `0.0.0-dev` before
   any tag). Shown by `--version`, in the log's first line, on the title screen and in the
   server's `status`. The protocol version stays its own.
 - **Release names:** a release can have a name for players ("Pre-Alpha 1"): the version
@@ -869,8 +870,7 @@ inside it again would buy nothing.
     Ad-hoc signed (Apple Silicon needs a signature); not notarized, so the first launch
     needs right-click Open until we join Apple's developer program (later, documented).
   - Every package holds one folder of its own name (unpacking never scatters files). A
-    development build's name carries its commit (`voxiverse-0.21.0-dev.5-1a2b3c4d5e6f-
-    windows-x64.zip`), so builds between releases are told apart.
+    development build's name carries its commit (`voxiverse-0.21.0+5-1a2b3c4d5e6f-windows-x64.zip`), so builds between releases are told apart.
   - Every package: `README.txt` (running, where saves and settings live, the server's
     options), `LICENSE`, and the fonts' and MoltenVK's licences. Debug symbols go in a
     separate archive per platform (for crash reports), not in the player's package (later:

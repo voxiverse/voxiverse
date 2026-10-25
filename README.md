@@ -84,7 +84,7 @@ on automatically and which reports GPU API misuse in the log.
 | `help` | List the commands and their flags |
 
 Versions are `0.<milestone>.<patch>`, from git: a commit tagged `v0.21.0` builds as
-0.21.0, the commits after it as `0.21.0-dev.N`. To release, tag with the release's name as
+0.21.0, the commits after it as `0.21.0+N`. To release, tag with the release's name as
 the message, `git tag -a v0.21.0 -m "Pre-Alpha 1"`, and push the tag: CI builds the
 packages and makes a **draft** release, to be looked at and published by hand.
 

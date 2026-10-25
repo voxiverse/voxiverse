@@ -11,7 +11,7 @@ import "core:strings"
 // Version: what a build is, from git (base/version.odin says how players
 // see it).
 Version :: struct {
-	version: string, // "0.21.0" on a version tag, else "0.21.0-dev.5"
+	version: string, // "0.21.0" on a version tag, "0.21.0+5" after it
 	name:    string, // a release's name, from its tag's message; or empty
 	commit:  string, // short hash, "-dirty" with uncommitted changes
 }
@@ -19,7 +19,9 @@ Version :: struct {
 // version_of: on a commit tagged v<major>.<minor>.<patch> with nothing
 // uncommitted, that version, and the tag's message (an annotated tag:
 // `git tag -a v0.21.0 -m "Pre-Alpha 1"`) as its name. Elsewhere the last
-// such tag's version with the commits since; "0.0.0-dev" before any.
+// such tag's version plus the commits since ("0.21.0+5": semver's build
+// metadata, after 0.21.0, where "-dev" would mean before it); "0.0.0-dev"
+// before any tag.
 version_of :: proc() -> (v: Version) {
 	v.version = "0.0.0-dev"
 	v.commit = "unknown"
@@ -59,7 +61,7 @@ version_of :: proc() -> (v: Version) {
 		d = strings.trim_space(d)
 		rest := d[:strings.last_index_byte(d, '-')]
 		i := strings.last_index_byte(rest, '-')
-		v.version = fmt.tprintf("%s-dev.%s", rest[1:i], rest[i + 1:])
+		v.version = fmt.tprintf("%s+%s", rest[1:i], rest[i + 1:])
 	}
 	return
 }
@@ -76,10 +78,15 @@ version_defines :: proc(v: Version) -> []string {
 	return defines[:]
 }
 
+// version_is_dev: not a release (as base.version_is_dev).
+version_is_dev :: proc(v: Version) -> bool {
+	return strings.contains_any(v.version, "-+")
+}
+
 // version_text as base.version_text has it.
 version_text :: proc(v: Version) -> string {
 	if v.name != "" {return fmt.tprintf("%s (%s)", v.name, v.version)}
-	if !strings.contains(v.version, "-") {return v.version}
+	if !version_is_dev(v) {return v.version}
 	return fmt.tprintf("%s (%s)", v.version, v.commit)
 }
 
@@ -90,7 +97,8 @@ windows_resource :: proc(v: Version, exe_name, description: string) -> (path: st
 	write_icon() or_return
 	// FILEVERSION wants four numbers: major, minor, patch, 0.
 	numbers: [3]int
-	head, _, _ := strings.partition(v.version, "-")
+	head := v.version
+	if i := strings.index_any(head, "-+"); i >= 0 {head = head[:i]}
 	for part, i in strings.split(head, ".") {
 		if i < 3 {numbers[i], _ = strconv.parse_int(part)}
 	}
@@ -164,7 +172,7 @@ package_game :: proc() -> bool {
 	os_name := "windows" when ODIN_OS == .Windows else "linux"
 	arch := "arm64" when ODIN_ARCH == .arm64 else "x64"
 	label := v.version
-	if strings.contains(v.version, "-") {label = fmt.tprintf("%s-%s", v.version, v.commit)}
+	if version_is_dev(v) {label = fmt.tprintf("%s-%s", v.version, v.commit)}
 	name := fmt.tprintf("voxiverse-%s-%s-%s", label, os_name, arch)
 	dist := path_join({"build", "dist"})
 	stage := path_join({dist, name})
