@@ -482,6 +482,16 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"wear",
+			"wear: put on every piece of armor in the inventory",
+			proc(app: ^App, args: []string) {
+				if s := app.session; s != nil {session_wear(s)}
+			},
+		},
+	)
+	console_register(
+		c,
+		{
 			"screenshot",
 			"screenshot [name]: save the next frame as a PNG (F2)",
 			proc(app: ^App, args: []string) {

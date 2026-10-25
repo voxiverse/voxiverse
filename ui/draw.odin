@@ -18,7 +18,12 @@ Vertex :: struct {
 	color: Color,
 }
 
+// Image: a picture the renderer owns (the player's preview), drawn whole by
+// draw_image; 0 is the atlas.
+Image :: distinct u32
+
 Draw_Command :: struct {
+	image:       Image, // what it samples (0: the atlas)
 	scissor:     [4]i32, // x, y, w, h in pixels
 	first_index: u32,
 	index_count: u32,
@@ -118,6 +123,18 @@ draw_icon :: proc(ctx: ^Context, r: Rect, icon: Icon, tint := Color{255, 255, 25
 		{f32(img.at.x + img.size) * inv, f32(img.at.y + img.size) * inv},
 	}
 	push_quad(ctx, pixel_rect(ctx, r), uv, tint, smooth = true)
+}
+
+// draw_image draws a renderer-owned picture filling r, smoothly.
+draw_image :: proc(ctx: ^Context, r: Rect, image: Image) {
+	push_quad(
+		ctx,
+		pixel_rect(ctx, r),
+		{{0, 0}, {1, 1}},
+		{255, 255, 255, 255},
+		smooth = true,
+		image = image,
+	)
 }
 
 Align :: enum u8 {
@@ -272,6 +289,7 @@ push_quad :: proc(
 	slant: f32 = 0, // leaning right by this per pixel above baseline (italic)
 	baseline: f32 = 0,
 	smooth := false,
+	image: Image = 0,
 ) {
 	if q[2] <= 0 || q[3] <= 0 {return}
 	l := &ctx.output.layers[ctx.layer]
@@ -281,10 +299,18 @@ push_quad :: proc(
 
 	// Extend the last command when the scissor is unchanged.
 	if n := len(l.commands);
-	   n == 0 || l.commands[n - 1].scissor != scissor || l.commands[n - 1].smooth != smooth {
+	   n == 0 ||
+	   l.commands[n - 1].scissor != scissor ||
+	   l.commands[n - 1].smooth != smooth ||
+	   l.commands[n - 1].image != image {
 		append(
 			&l.commands,
-			Draw_Command{scissor = scissor, first_index = u32(len(l.indices)), smooth = smooth},
+			Draw_Command {
+				scissor = scissor,
+				first_index = u32(len(l.indices)),
+				smooth = smooth,
+				image = image,
+			},
 		)
 	}
 	base := u32(len(l.vertices))

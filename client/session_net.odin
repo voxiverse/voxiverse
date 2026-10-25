@@ -126,6 +126,8 @@ receive :: proc(s: ^Session) {
 			s.others[v.player] = {
 				name = strings.clone(v.name),
 			}
+		case game.Player_Worn:
+			if o, known := &s.others[v.player]; known {o.worn = v.worn}
 		case game.Player_Left:
 			if o, known := s.others[v.player]; known {
 				delete(o.name)

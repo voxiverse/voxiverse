@@ -372,6 +372,14 @@ tick :: proc(s: ^Server) {
 		if c.inv_changed {
 			send_message(s, &c, game.Inventory_Update{c.inv_acked, c.inventory})
 			c.inv_changed = false
+			if worn := game.worn_of(&c.inventory); worn != c.worn_sent {
+				c.worn_sent = worn
+				for &other in s.clients {
+					if &other != &c && other.state == .Playing {
+						send_message(s, &other, game.Player_Worn{player_id(s, &c), worn})
+					}
+				}
+			}
 		}
 		base.profile_scope("stream")
 		base.metric_scope(.Server_Stream)

@@ -52,6 +52,10 @@ Player_File :: struct {
 }
 
 @(private = "file")
+// EQUIPMENT_FILE_SLOT: the slot number equipment is kept under in a file
+// (Head, then the rest), clear of any inventory's.
+EQUIPMENT_FILE_SLOT :: 100
+
 File_Stack :: struct {
 	slot:  int, // CURSOR_SLOT: on the cursor when saved
 	item:  string,
@@ -170,6 +174,13 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 		switch {
 		case st.slot >= 0 && st.slot < game.INVENTORY_SLOTS:
 			r.inventory.slots[st.slot] = stack
+		case st.slot >= EQUIPMENT_FILE_SLOT &&
+		     st.slot < EQUIPMENT_FILE_SLOT + game.EQUIP_SLOTS &&
+		     game.item_fits(stack, game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)) &&
+		     game.stack_empty(
+			     r.inventory.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)],
+		     ):
+			r.inventory.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)] = stack
 		case st.slot == game.CURSOR_SLOT:
 			r.inventory.cursor = stack
 		case:
@@ -194,6 +205,14 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 	items := make([dynamic]File_Stack, context.temp_allocator)
 	for st, i in r.inventory.slots {
 		if !game.stack_empty(st) {append(&items, File_Stack{i, game.item_name(st.item), st.count})}
+	}
+	for st, e in r.inventory.equipment {
+		if !game.stack_empty(st) {
+			append(
+				&items,
+				File_Stack{EQUIPMENT_FILE_SLOT + int(e), game.item_name(st.item), st.count},
+			)
+		}
 	}
 	if c := r.inventory.cursor; !game.stack_empty(c) {
 		append(&items, File_Stack{game.CURSOR_SLOT, game.item_name(c.item), c.count})

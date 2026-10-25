@@ -163,13 +163,21 @@ entity_upload :: proc(p: ^Entity_Pass, g: ^gpu.Gpu, d: ^Entity_Draw, camera: Cam
 	return true
 }
 
-entity_draw :: proc(p: ^Entity_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64) {
+// entity_draw records the pass; pipeline: another pass's (a second pass for
+// a second picture shares the first's pipeline, its own vertex buffers).
+entity_draw :: proc(
+	p: ^Entity_Pass,
+	g: ^gpu.Gpu,
+	frame: gpu.Frame,
+	scene: u64,
+	pipeline: ^Entity_Pass = nil,
+) {
 	slot := gpu.frame_slot(g)
 	if p.counts[slot] == 0 {return}
 	cmd := frame.cmd
 	gpu.begin_label(g, cmd, "entities")
 	defer gpu.end_label(g, cmd)
-	vk.CmdBindPipeline(cmd, .GRAPHICS, p.pipeline.handle)
+	vk.CmdBindPipeline(cmd, .GRAPHICS, (pipeline if pipeline != nil else p).pipeline.handle)
 	gpu.bind_globals(g, cmd)
 	push := Entity_Push{scene}
 	gpu.push_constants(g, cmd, &push)

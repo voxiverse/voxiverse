@@ -109,7 +109,8 @@ tooltip :: proc(ctx: ^ui.Context, name: string) {
 // the hotbar and the rest (up: out of the slot, down: into it).
 
 INVENTORY_COLUMNS :: 5
-CATALOG_COLUMNS :: 8
+CATALOG_COLUMNS :: 9 // (as wide as the Inventory tab: equipment, preview, grid)
+PREVIEW_COLUMNS :: 3 // the player's preview, as wide as this many slots
 DOUBLE_CLICK_SECONDS :: 0.3
 
 Drag_Mode :: enum u8 {
@@ -134,7 +135,7 @@ Inventory_View :: struct {
 	drag_from:   int, // the slot a drag began on (-1: none)
 	scroll:      f32, // catalog rows scrolled
 	mode:        Drag_Mode,
-	visited:     [game.INVENTORY_SLOTS]bool, // the slots the drag has passed
+	visited:     [game.TOTAL_SLOTS]bool, // the slots the drag has passed
 	first:       int, // where the drag began
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
@@ -181,7 +182,8 @@ inventory_close :: proc(app: ^App) {
 Inventory_Layout :: struct {
 	panel:   ui.Rect,
 	title:   ui.Rect, // the title, or the tabs
-	slots:   [game.INVENTORY_SLOTS]ui.Rect, // (empty: not shown on this tab)
+	slots:   [game.TOTAL_SLOTS]ui.Rect, // the inventory's, then the equipment's (empty: not shown on this tab)
+	preview: ui.Rect, // the player (Inventory only)
 	search:  ui.Rect, // Creative only
 	catalog: ui.Rect, // Creative only
 }
@@ -206,7 +208,22 @@ inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_
 	}
 	switch tab {
 	case .Inventory:
-		grid_x := content.x + (content.w - (INVENTORY_COLUMNS * step.x - gap)) / 2
+		// Equipment down the left, the player beside it, the grid right.
+		for e in 0 ..< game.EQUIP_SLOTS {
+			l.slots[game.EQUIP_BASE + e] = {
+				content.x,
+				content.y + f32(e) * step.y,
+				INVENTORY_SLOT.x,
+				INVENTORY_SLOT.y,
+			}
+		}
+		l.preview = {
+			content.x + step.x,
+			content.y,
+			PREVIEW_COLUMNS * step.x - gap,
+			f32(rest_rows) * step.y - gap,
+		}
+		grid_x := content.x + content.w - (INVENTORY_COLUMNS * step.x - gap)
 		for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
 			row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
 			l.slots[i] = {
@@ -247,8 +264,20 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	for r, i in l.slots {
 		if r.w == 0 {continue}
 		if ui.rect_contains(r, mouse) {hovered = i}
-		stack_slot(ctx, &app.item_icons, r, inv.slots[i], i == hovered)
+		stack_slot(ctx, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
+		if i >= game.EQUIP_BASE && game.stack_empty(game.slot_at(inv, i)^) {
+			small := ctx.theme.font_size * 0.6
+			ui.draw_text(
+				ctx,
+				r,
+				EQUIP_LABELS[game.Equip_Slot(i - game.EQUIP_BASE)],
+				small,
+				ctx.theme.text_muted,
+				.Center,
+			)
+		}
 	}
+	if v.tab == .Inventory {player_preview(app, ctx, l.preview)}
 	do_ :: proc(s: ^Session, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 		session_inventory_do(s, {kind, slot, arg})
 	}
@@ -275,8 +304,10 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	}
 	if v.tab == .Creative {catalog_ui(app, ctx, l, top)}
 	// What is hovered, and what the cursor holds.
-	if hovered >= 0 && !game.stack_empty(inv.slots[hovered]) && game.stack_empty(inv.cursor) {
-		tooltip(ctx, item_title(inv.slots[hovered].item))
+	if hovered >= 0 &&
+	   !game.stack_empty(game.slot_at(inv, hovered)^) &&
+	   game.stack_empty(inv.cursor) {
+		tooltip(ctx, item_title(game.slot_at(inv, hovered).item))
 	}
 	if !game.stack_empty(inv.cursor) {
 		stack_slot(
@@ -362,8 +393,11 @@ catalog_ui :: proc(app: ^App, ctx: ^ui.Context, l: Inventory_Layout, top: bool) 
 // holding the cursor's item.
 @(private = "file")
 slot_takes :: proc(inv: ^game.Inventory, slot: int) -> bool {
-	st := inv.slots[slot]
-	return game.stack_empty(st) || st.item == inv.cursor.item
+	st := game.slot_at(inv, slot)^
+	return(
+		game.slot_accepts(slot, inv.cursor) &&
+		(game.stack_empty(st) || st.item == inv.cursor.item) \
+	)
 }
 
 // inventory_mouse: the mouse over the slots (hovered: -1 for none): clicks
@@ -411,8 +445,10 @@ inventory_mouse :: proc(app: ^App, ctx: ^ui.Context, panel: ui.Rect, hovered: in
 		if !game.stack_empty(inv.cursor) {begin(v, .One_Each, hovered)}
 		do_(s, .Click_Right, hovered)
 	case hovered >= 0 && .Middle in pressed:
-		if catalog && game.stack_empty(inv.cursor) && !game.stack_empty(inv.slots[hovered]) {
-			do_(s, .Take, game.CURSOR_SLOT, int(inv.slots[hovered].item))
+		if catalog &&
+		   game.stack_empty(inv.cursor) &&
+		   !game.stack_empty(game.slot_at(inv, hovered)^) {
+			do_(s, .Take, game.CURSOR_SLOT, int(game.slot_at(inv, hovered).item))
 		}
 	case hovered < 0 && (.Left in pressed || .Right in pressed) && !ui.rect_contains(panel, mouse):
 		do_(s, .Drop, game.CURSOR_SLOT, 1 if .Left in pressed else 0)
@@ -456,7 +492,7 @@ spread_stack :: proc(s: ^Session, v: ^Inventory_View) {
 	inv := &s.inventory
 	slots := make([dynamic]int, context.temp_allocator)
 	visited := 0
-	for i in 0 ..< game.INVENTORY_SLOTS {
+	for i in 0 ..< game.TOTAL_SLOTS {
 		if !v.visited[i] {continue}
 		visited += 1
 		if slot_takes(inv, i) {append(&slots, i)}
@@ -488,4 +524,33 @@ matching_items :: proc(query: string) -> []game.Item {
 		if strings.contains(name, q) {append(&found, item)}
 	}
 	return found[:]
+}
+
+@(private = "file", rodata)
+EQUIP_LABELS := [game.Equip_Slot]string {
+	.Head    = "Head",
+	.Chest   = "Chest",
+	.Legs    = "Legs",
+	.Feet    = "Feet",
+	.Offhand = "Offhand",
+}
+
+// PREVIEW_IMAGE: the ui image the player's preview is (the renderer maps it).
+PREVIEW_IMAGE :: ui.Image(1)
+
+// player_preview shows the player (drawn to a texture by the renderer,
+// app.preview) turned toward the mouse.
+@(private = "file")
+player_preview :: proc(app: ^App, ctx: ^ui.Context, r: ui.Rect) {
+	ui.fill_rect(ctx, r, {10, 12, 18, 255})
+	ui.stroke_rect(ctx, r, 1, {255, 255, 255, 60})
+	// Where the mouse is from the middle of the player's chest: turn and look
+	// that way, within limits.
+	mouse := ctx.input.mouse
+	dx := (mouse.x - (r.x + r.w / 2)) / (r.w * 2)
+	dy := ((r.y + r.h * 0.3) - mouse.y) / (r.h * 2)
+	app.preview.active = true
+	app.preview.target_yaw = clamp(dx * 1.6, -0.9, 0.9)
+	app.preview.target_pitch = clamp(dy * 1.4, -0.6, 0.6)
+	ui.draw_image(ctx, r, PREVIEW_IMAGE)
 }

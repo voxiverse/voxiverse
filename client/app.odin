@@ -94,6 +94,7 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
+	preview:          Preview, // the player in the inventory (preview.odin)
 	inventory_search: [dynamic]u8, // the Creative tab's search text
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
@@ -155,7 +156,8 @@ app_init :: proc(app: ^App) -> bool {
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
 	if !app.benchmark {audio_init(app)} 	// (a benchmark has no sound device: its mixer would vary the work)
-	return passes_init(app)
+	if !passes_init(app) {return false}
+	return preview_init(app)
 }
 
 // audio_init makes the sounds and opens the sound card; without one the
@@ -208,6 +210,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		if app.session != nil {leave_world(app)}
 		screenshots_save(app) // the last frames' screenshots are done now
 		gpu.renderdoc_log_captures(&app.renderdoc)
+		preview_destroy(app)
 		passes_destroy(app)
 		render.scene_destroy(&app.scenes, &app.g)
 	}
@@ -339,6 +342,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		if app.session != nil {session_apply(app.session, &app.world_pass, g)}
 		render.world_upload(&app.world_pass, g, frame)
 		render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
+		preview_record(app, frame)
 		in_world :=
 			app.session != nil && app.session.state == .Playing && app.session.loading == nil
 		camera: render.Camera

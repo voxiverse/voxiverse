@@ -28,6 +28,7 @@ Net_Client :: struct {
 	update:      game.Player_Update,
 	others:      map[u16]string, // joined, by player id
 	seen:        map[u16][3]f64, // last Players position, by player id
+	worn:        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
 	changed:     [dynamic]game.Block_Changed,
 	entities:    map[u32][3]f64, // known entities, where last seen
 	hurt:        int, // Entity_Hurt messages
@@ -81,6 +82,7 @@ net_close :: proc(c: ^Net_Client) {
 	for _, n in c.others {delete(n)}
 	delete(c.others)
 	delete(c.seen)
+	delete(c.worn)
 	delete(c.changed)
 	for n in c.notices {delete(n)}
 	delete(c.notices)
@@ -160,6 +162,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			c.update = v
 		case game.Player_Joined:
 			c.others[v.player] = strings.clone(v.name)
+		case game.Player_Worn:
+			c.worn[v.player] = v.worn
 		case game.Player_Left:
 			if n, had := c.others[v.player]; had {delete(n)}
 			delete_key(&c.others, v.player)

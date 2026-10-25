@@ -236,6 +236,13 @@ Player_Left :: struct {
 	player: u16,
 }
 
+// Player_Worn: what a player wears (head to feet; NO_ITEM: nothing), sent
+// when it changes and for everyone already there after Welcome.
+Player_Worn :: struct {
+	player: u16,
+	worn:   [WORN_SLOTS]Item,
+}
+
 // Players: where the other players near you are, every tick (the newest
 // wins; tick orders them for interpolation).
 Players :: struct {
@@ -422,6 +429,7 @@ Server_Message :: union {
 	Characters,
 	World_Changed,
 	Selection,
+	Player_Worn,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -482,6 +490,7 @@ Server_Kind :: enum u8 {
 	Characters,
 	World_Changed,
 	Selection,
+	Player_Worn,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -613,6 +622,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "world_changed"
 		case u8(Server_Kind.Selection):
 			return "selection"
+		case u8(Server_Kind.Player_Worn):
+			return "worn"
 		}
 	}
 	return ""
@@ -704,6 +715,10 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
+	case Player_Worn:
+		write_u8(w, u8(Server_Kind.Player_Worn))
+		write_u16(w, v.player)
+		for item in v.worn {write_u16(w, u16(item))}
 	case Selection:
 		write_u8(w, u8(Server_Kind.Selection))
 		for corner in v.corners {
@@ -838,6 +853,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u32(w, v.acked)
 		inv := v.inventory
 		for st in inv.slots {write_stack(w, st)}
+		for st in inv.equipment {write_stack(w, st)}
 		write_stack(w, inv.cursor)
 		write_u8(w, u8(inv.selected))
 	case Blocks_Changed:
@@ -927,7 +943,7 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			Inventory_Action_Kind(kind) if int(kind) < len(Inventory_Action_Kind) else {}
 		q.action.slot = int(i8(read_u8(&r)))
 		q.action.arg = int(read_u16(&r))
-		if q.action.slot < CURSOR_SLOT || q.action.slot >= INVENTORY_SLOTS {reader_fail(&r)}
+		if q.action.slot < CURSOR_SLOT || q.action.slot >= TOTAL_SLOTS {reader_fail(&r)}
 		m = q
 	case u8(Client_Kind.Attack):
 		m = Attack {
@@ -1144,6 +1160,15 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
+	case u8(Server_Kind.Player_Worn):
+		worn := Player_Worn {
+			player = read_u16(&r),
+		}
+		for &item in worn.worn {
+			item = Item(read_u16(&r))
+			if item != NO_ITEM && !item_valid(item) {reader_fail(&r)}
+		}
+		m = worn
 	case u8(Server_Kind.Selection):
 		sel: Selection
 		for &corner in sel.corners {
@@ -1165,6 +1190,7 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			acked = read_u32(&r),
 		}
 		for &st in u.inventory.slots {st = read_stack(&r)}
+		for &st in u.inventory.equipment {st = read_stack(&r)}
 		u.inventory.cursor = read_stack(&r)
 		u.inventory.selected = int(read_u8(&r))
 		if !inventory_valid(&u.inventory) {reader_fail(&r)}

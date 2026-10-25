@@ -302,6 +302,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 |---|---|---|---|---|
 | M19-M21 | 8677 | 4233 | many | one session over several days, before these rules |
 | M22 | 98 | 11 | 1 | inventory tweaks, pick block, icons; the UI atlas became RGBA8 |
+| M22b | 158 | 37 | 1 | equipment, avatar armor, render-to-texture preview (the same session as M22's follow-ups: counted from M22's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -331,7 +332,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M20 | The first public build's experience: the title screen (a calm warp starfield, the version), a loading screen into worlds, Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect (tabs, key bindings), and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver (done: `client/menus_test.odin` drives the title, Singleplayer's saves (select, rename, delete asked), Multiplayer (the name asked, Direct Connection), Options (tabs, choices, keys bound by key or mouse button, Escape, Reset Keys) and the failure screen, and reads every menu screen and tab for developer words; CI's Screens step screenshots each, the loading screen and a failed join; `test_settings_round_trip` carries bindings; `test_sneaking` in the shared physics both sides run; the moving starfield adds about 2 ms a frame on the CPU driver, under the menus' 120 fps cap) |
 | M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows and Linux (macOS after M1b) made by CI on every push and drafted as a GitHub Release for each version tag | A version tag gives a draft Release with the packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
 | M22 | Inventory and item icons: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with an icon generated for every item, a smaller hotbar | UI tests for each mouse tweak and pick block; an icon for every item, none blank (done: `game/inventory_test.odin` pins the new actions (`Put`, `Gather`, `Move_One`); `client/inventory_tweaks_test.odin` drives each mouse tweak through the overlay, pick block (hotbar slot, catalog stack, full hotbar, no catalog, no item) and checks every item's icon is in the atlas and not blank; the inventory screenshot (`screen inventory`, a new step in CI) was looked at once; the catalog is a separate Creative tab (with a search) beside Inventory, the hotbar under both (`test_creative_tab`); icons are 32 px, in the UI atlas, now RGBA8) |
-| M22b | Equipment: five slots (head, chest, legs, feet, offhand) in the inventory overlay beside a preview of the player, rendered to a texture by the entity pass, turning to look where the cursor is; a few armor items (cap, boots, ...) that show on the avatar, yours and other players' | Server tests: equipping and unequipping through the overlay's actions, saved and loaded, refused in the wrong slot; over UDP another client sees the worn items; a UI test drives the slots; the preview looked at once in a screenshot; no stats yet |
+| M22b | Equipment: five slots (head, chest, legs, feet, offhand) in the inventory overlay beside a preview of the player, rendered to a texture by the entity pass, turning to look where the cursor is; a few armor items (cap, boots, ...) that show on the avatar, yours and other players' | Server tests: equipping and unequipping through the overlay's actions, saved and loaded, refused in the wrong slot; over UDP another client sees the worn items; a UI test drives the slots; the preview looked at once in a screenshot; no stats yet (done: `test_equipment_actions` (game rules), `test_messages_round_trip` (equipment in the inventory, `Player_Worn`), `test_equipment_over_the_network` (UDP: cap on, wrong slot refused, boots on, the other player told, quick-equip, kept through a restart, a late joiner told), `test_equipment_slots` (the overlay's slots, shift-click, the preview asked for and turning toward the mouse); the preview looked at once in a screenshot, zero validation messages) |
 | M22c | Plants need support: a plant (grass, flowers) breaks, and drops its item, when the block under it goes or stops holding it; broken plants and block-breaking drops go through one rule | Server tests: break the block under a flower, it is gone and its item dropped; water or a placed block replacing the support does the same; chunk loading and worldgen leave no floating plants (golden hashes unchanged) |
 | M23 | Sheep: the critter becomes a sheep; using an entity (right click); a sheep used drops wool and is shorn until it eats grass; white wool, a block | Server tests: use drops wool, shorn is saved and loaded, grazing regrows it and turns grass to dirt; over UDP the client sees it shorn; an old save's critters load as sheep |
 | M24 | Random ticks and farming: blocks that change on their own (grass spreads, crops grow), a hoe, farmland watered from nearby water, seeds from tall grass, wheat in eight stages | Server tests: grass spreads into lit dirt and dies under a block; wheat grows to ripe within its expected time; moist and dry farmland; drops; stages kept through save and load |
@@ -341,26 +342,6 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M28 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M29 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
 | M30 | Analytics: a timed event stream of meaningful interactions from the server and the client (sessions, gameplay, UI, performance), JSON lines on disk written off the tick thread, and a summarizing tool | A scripted two-player session writes the expected events; a burst never stalls the tick; files rotate; abusive client reports are refused; the tool summarizes sessions and counts |
-
-## M22b: equipment
-
-- **Slots:** `Equipment` beside the inventory: head, chest, legs, feet, offhand (an enum
-  `Equip_Slot`; `[Equip_Slot]Stack` in `game.Inventory`, saved with it, in the inventory
-  update). Items say which slot they fit (`Item_Info.equip: Maybe(Equip_Slot)`); the
-  offhand takes any item. New actions on the same pipeline (shared code, predicted):
-  `Equip` (click a slot with the cursor: swaps if the item fits, else refused) and shift-click
-  quick-equips an armor item from any slot.
-- **Items:** a cap, a tunic, trousers and boots, pixel sprites by code like the launcher.
-  No stats, no recipes: the catalog gives them. Worn items show on the avatar (boxes
-  coloured in the entity pass, the same for yours and others', sent in the player's
-  snapshot so UDP clients see them).
-- **The preview:** the real avatar drawn by the entity pass into an off-screen image
-  (new `gpu` render-to-texture: a colour image used as target, then sampled like the UI
-  atlas, one per frame slot), shown in the overlay's left column, its head and body turning
-  toward the cursor within limits. Shown on the Inventory tab only. Needs a validated
-  layout transition (validation stays at zero messages).
-- **Not here:** protection values, durability, a second preview angle, rings and hands.
-- **Exit check:** as in the table.
 
 ## M22c: plants need support
 

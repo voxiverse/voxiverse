@@ -8,6 +8,7 @@ layout(push_constant) uniform Push {
 	vec2 screen_size;
 	uint atlas;
 	uint sampler_id;
+	uint linear; // 1: the texels are already linear (a rendered picture)
 } push;
 
 layout(location = 0) in vec2 in_uv;
@@ -22,5 +23,6 @@ void main() {
 	// The atlas is RGBA8 (sRGB): glyphs are white with their coverage as alpha,
 	// a white texel serves rects, icons are coloured; times the vertex colour.
 	vec4 texel = texture(sampler2D(textures[push.atlas], samplers[push.sampler_id]), in_uv);
-	out_color = vec4(in_color.rgb * srgb_to_linear(texel.rgb), in_color.a * texel.a);
+	vec3 rgb = push.linear == 1u ? texel.rgb : srgb_to_linear(texel.rgb);
+	out_color = vec4(in_color.rgb * rgb, in_color.a * texel.a);
 }

@@ -25,6 +25,8 @@ item_icons_init :: proc(icons: ^Item_Icons, ctx: ^ui.Context) -> bool {
 		info, _ := game.item_info(item)
 		if tool, is_tool := info.tool.?; is_tool {
 			tool_sprite(tool, &pixels)
+		} else if armor, is_armor := info.armor.?; is_armor {
+			armor_sprite(armor, &pixels)
 		} else if info.block == .Poppy || info.block == .Dandelion || info.block == .Tall_Grass {
 			block_flat(info.block, &layers, &pixels) // (plants are crossed planes, not cubes)
 		} else {
@@ -170,6 +172,116 @@ tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 				c = {204, 56, 44, 255}
 			case 'B':
 				c = {120, 78, 44, 255}
+			}
+			pixels[y * ICON_SIZE + x] = c
+		}
+	}
+}
+
+// ARMOR_ART: 16 x 16 sprites in the armor's colour: M main, h lighter, m
+// darker, o outline.
+@(private = "file")
+ARMOR_ART := [game.Armor][16]string {
+	.Cap      = {
+		"................",
+		"................",
+		"................",
+		".....oooooo.....",
+		"....ohhhhMmo....",
+		"...ohhhMMMMmo...",
+		"...ohMMMMMMmo...",
+		"..ohMMMMMMMMmo..",
+		"..oMMMMMMMMMmo..",
+		"..ommmmmmmmmmo..",
+		"..oooooooooooo..",
+		"..oMMMMMMMMMMo..",
+		"...oooooooooo...",
+		"................",
+		"................",
+		"................",
+	},
+	.Tunic    = {
+		"................",
+		"..oooo....oooo..",
+		".ohhMMo..oMMmmo.",
+		".ohMMMoooMMMMmo.",
+		".oMMMMMMMMMMMmo.",
+		".oMMMMMMMMMMMmo.",
+		"..ooMMMMMMMMoo..",
+		"....oMMMMMMmo...",
+		"....oMMMMMMmo...",
+		"....ohMMMMMmo...",
+		"....oMMMMMMmo...",
+		"....oMMMMMMmo...",
+		"....ommmmmmmo...",
+		".....oooooooo...",
+		"................",
+		"................",
+	},
+	.Trousers = {
+		"................",
+		"................",
+		"...oooooooooo...",
+		"...ohMMMMMMmo...",
+		"...ohMMMMMMmo...",
+		"...ohMMMMMMmo...",
+		"...ohMMooMMmo...",
+		"...ohMMo.oMmo...",
+		"...ohMMo.oMmo...",
+		"...ohMMo.oMmo...",
+		"...ohMMo.oMmo...",
+		"...ommmo.ommo...",
+		"...oooo...ooo...",
+		"................",
+		"................",
+		"................",
+	},
+	.Boots    = {
+		"................",
+		"................",
+		"................",
+		"................",
+		"..ooooo..ooooo..",
+		"..ohMMo..ohMMo..",
+		"..ohMMo..ohMMo..",
+		"..ohMMo..ohMMo..",
+		"..ohMMo..ohMMo..",
+		".ohMMMoo.ohMMMoo",
+		".ohMMMMo.ohMMMMo",
+		".ommmmmo.ommmmmo",
+		".ooooooo.ooooooo",
+		"................",
+		"................",
+		"................",
+	},
+}
+
+// armor_sprite draws armor's 16 x 16 art, each pixel ICON_SIZE / 16 times as large.
+@(private = "file")
+armor_sprite :: proc(armor: game.Armor, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
+	main := ARMOR_COLORS[armor]
+	shade :: proc(c: [4]u8, k: f32) -> (out: [4]u8) {
+		out = {
+			u8(min(f32(c[0]) * k, 255)),
+			u8(min(f32(c[1]) * k, 255)),
+			u8(min(f32(c[2]) * k, 255)),
+			255,
+		}
+		return
+	}
+	art := ARMOR_ART[armor]
+	for y in 0 ..< ICON_SIZE {
+		for x in 0 ..< ICON_SIZE {
+			c: [4]u8
+			switch art[y * 16 / ICON_SIZE][x * 16 / ICON_SIZE] {
+			case 'o':
+				c = {28, 28, 34, 255}
+			case 'M':
+				c = main
+			case 'h':
+				c = shade(main, 1.3)
+			case 'm':
+				c = shade(main, 0.7)
 			}
 			pixels[y * ICON_SIZE + x] = c
 		}

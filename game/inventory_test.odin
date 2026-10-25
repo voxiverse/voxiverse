@@ -164,3 +164,81 @@ test_inventory_tweak_actions :: proc(t: ^testing.T) {
 		"no item: nothing",
 	)
 }
+
+// Equipment: a slot takes only what fits it (the offhand anything); a click
+// swaps; shift-click puts armor on when its slot is free and takes it off
+// into the inventory; the other actions leave the equipment slots alone.
+@(test)
+test_equipment_actions :: proc(t: ^testing.T) {
+	cap_, boots, stone := item_of_armor(.Cap), item_of_armor(.Boots), item_of_block(.Stone)
+	head, feet, off :=
+		EQUIP_BASE +
+		int(Equip_Slot.Head),
+		EQUIP_BASE +
+		int(Equip_Slot.Feet),
+		EQUIP_BASE +
+		int(Equip_Slot.Offhand)
+	inv: Inventory
+	do_ :: proc(inv: ^Inventory, kind: Inventory_Action_Kind, slot: int, arg := 0) -> bool {
+		_, ok := inventory_apply(inv, {kind, slot, arg}, true)
+		return ok
+	}
+	testing.expect(t, item_fits({cap_, 1}, .Head) && !item_fits({cap_, 1}, .Feet))
+	testing.expect(t, item_fits({stone, 5}, .Offhand) && !item_fits({stone, 5}, .Head))
+	testing.expect(t, item_fits({}, .Head), "empty fits anywhere")
+
+	do_(&inv, .Take, CURSOR_SLOT, int(cap_))
+	testing.expect(t, !do_(&inv, .Click, feet), "a cap does not go on the feet")
+	testing.expect(t, !do_(&inv, .Click_Right, feet))
+	testing.expect(
+		t,
+		do_(&inv, .Click, head) && inv.equipment[.Head] == {cap_, 1} && stack_empty(inv.cursor),
+	)
+	// Swapping with another cap: the first comes back.
+	do_(&inv, .Take, CURSOR_SLOT, int(cap_))
+	testing.expect(
+		t,
+		do_(&inv, .Click, head) && inv.equipment[.Head] == {cap_, 1} && inv.cursor == {cap_, 1},
+	)
+	// A stack onto the offhand; the others cannot reach equipment.
+	inv.cursor = {stone, 20}
+	testing.expect(t, do_(&inv, .Click, off) && inv.equipment[.Offhand] == {stone, 20})
+	testing.expect(t, do_(&inv, .Put, off, 5) == false, "an empty cursor puts nothing")
+	inv.slots[7] = {stone, 3}
+	testing.expect(
+		t,
+		!do_(&inv, .Move_One, off, 1) && !do_(&inv, .Swap_Hotbar, off, 1),
+		"not for equipment",
+	)
+	// Shift-click: off into the inventory, and on again.
+	inv = {}
+	inv.equipment[.Feet] = {boots, 1}
+	testing.expect(
+		t,
+		do_(&inv, .Quick_Move, feet) &&
+		stack_empty(inv.equipment[.Feet]) &&
+		inv.slots[0] == {boots, 1},
+	)
+	testing.expect(
+		t,
+		do_(&inv, .Quick_Move, 0) &&
+		inv.equipment[.Feet] == {boots, 1} &&
+		stack_empty(inv.slots[0]),
+	)
+	// A second pair while the feet are taken: stays in the inventory (moves hotbar <-> rest).
+	inv.slots[0] = {boots, 1}
+	testing.expect(
+		t,
+		do_(&inv, .Quick_Move, 0) &&
+		inv.slots[5] == {boots, 1} &&
+		inv.equipment[.Feet] == {boots, 1},
+	)
+	// Valid inventories are those whose equipment fits.
+	testing.expect(t, inventory_valid(&inv))
+	inv.equipment[.Head] = {boots, 1}
+	testing.expect(t, !inventory_valid(&inv))
+	// What the avatar shows.
+	inv.equipment[.Head] = {cap_, 1}
+	inv.equipment[.Offhand] = {stone, 1}
+	testing.expect_value(t, worn_of(&inv), [WORN_SLOTS]Item{cap_, 0, 0, boots})
+}

@@ -68,6 +68,7 @@ Client :: struct {
 	tpa:          Tpa, // a teleport request to it
 	inventory:    game.Inventory,
 	inv_acked:    u32, // its newest Inventory_Request applied
+	worn_sent:    [game.WORN_SLOTS]game.Item, // what the others were last told it wears
 	inv_changed:  bool, // since the last Inventory_Update sent
 	selection:    [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 }

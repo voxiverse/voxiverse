@@ -260,6 +260,8 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("joined player=%d name=%q", v.player, v.name), true
 		case game.Player_Left:
 			return fmt.tprintf("left player=%d", v.player), true
+		case game.Player_Worn:
+			return fmt.tprintf("worn player=%d items=%v", v.player, v.worn), true
 		case game.Players:
 			return fmt.tprintf("players tick=%d count=%d", v.tick, v.count), true
 		case game.Notice:

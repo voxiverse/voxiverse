@@ -633,3 +633,24 @@ inside it again would buy nothing.
 - **Revised after review:** the catalog is a **Creative tab** (only with `items.catalog`), not a column beside the inventory: tabs in the title row, the Inventory tab the 5x5 grid over the hotbar, the Creative tab a search field (`matching_items`: names containing the text) and the catalog grid over the same hotbar, so a stack goes straight into a hotbar slot. While the search has focus, the inventory key and the number and drop keys type instead. `screen inventory creative` opens it.
 - **After the first playtest:** icons are 128 px, each pixel the average of 4 x 4 samples (smooth silhouette, each texel still a flat patch), drawn smaller with a linear filter (`Draw_Command.smooth`; the UI atlas is 2048 square); a dropped stack is thrown at 9 blocks/s (was 4).
 - **Holding the drop key** (in the game and over an inventory slot) drops one, then repeats after 0.35 s, each gap 0.8 of the last from 0.25 s down to 0.04 s (`drop_repeat`); with Ctrl it still drops the whole stack once.
+
+## M22b: equipment
+
+- **Slots:** `Equipment` beside the inventory: head, chest, legs, feet, offhand (an enum
+  `Equip_Slot`; `[Equip_Slot]Stack` in `game.Inventory`, saved with it, in the inventory
+  update). Items say which slot they fit (`Item_Info.equip: Maybe(Equip_Slot)`); the
+  offhand takes any item. New actions on the same pipeline (shared code, predicted):
+  `Equip` (click a slot with the cursor: swaps if the item fits, else refused) and shift-click
+  quick-equips an armor item from any slot.
+- **Items:** a cap, a tunic, trousers and boots, pixel sprites by code like the launcher.
+  No stats, no recipes: the catalog gives them. Worn items show on the avatar (boxes
+  coloured in the entity pass, the same for yours and others', sent in the player's
+  snapshot so UDP clients see them).
+- **The preview:** the real avatar drawn by the entity pass into an off-screen image
+  (new `gpu` render-to-texture: a colour image used as target, then sampled like the UI
+  atlas, one per frame slot), shown in the overlay's left column, its head and body turning
+  toward the cursor within limits. Shown on the Inventory tab only. Needs a validated
+  layout transition (validation stays at zero messages).
+- **Built as:** `Equip_Slot` (Head..Offhand) and `Armor` (cap, tunic, trousers, boots; item ids from `ARMOR_ITEMS`); `Inventory.equipment`, addressed as slots `EQUIP_BASE ..< TOTAL_SLOTS` by the same actions (a slot takes only what fits it; shift-click equips and unequips); kept in the player file under slots 100+; `Player_Worn` (server kind 32) tells the others, on change and on joining; `avatar_draw` is shared by other players' avatars and the preview; `gpu.Target` is a colour image in the swapchain's format plus depth, drawn into before the frame's own rendering and sampled by the UI as `ui.Image` (`draw_image`); the entity pass takes the world's pipeline for a second set of buffers. `wear` puts on all armor carried.
+- **Not here:** protection values, durability, a second preview angle, rings and hands.
+- **Exit check:** as in the table.

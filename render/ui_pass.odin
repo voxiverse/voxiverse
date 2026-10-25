@@ -20,6 +20,7 @@ Ui_Pass :: struct {
 	atlas:          gpu.Image,
 	atlas_id:       gpu.Texture_Id,
 	atlas_uploaded: bool,
+	images:         [8]gpu.Texture_Id, // by ui.Image (0 unused: the atlas); set by the owner of each picture
 	frames:         [gpu.FRAMES_IN_FLIGHT]Ui_Frame,
 }
 
@@ -33,6 +34,7 @@ Ui_Push :: struct {
 	screen_size: [2]f32,
 	atlas:       u32,
 	sampler_id:  u32,
+	linear:      u32, // 1: the texels are already linear light (a rendered picture)
 }
 
 ui_init :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, vertex_spirv, fragment_spirv: []byte) -> bool {
@@ -141,6 +143,14 @@ ui_draw :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, frame: gpu.Frame, out: ^ui.Output) {
 		if x1 <= x0 || y1 <= y0 {continue}
 		scissor := vk.Rect2D{{x0, y0}, {u32(x1 - x0), u32(y1 - y0)}}
 		vk.CmdSetScissor(cmd, 0, 1, &scissor)
+		atlas, linear := u32(p.atlas_id), u32(0)
+		if c.image != 0 && int(c.image) < len(p.images) && p.images[c.image] != 0 {
+			atlas, linear = u32(p.images[c.image]), 1
+		}
+		if atlas != push.atlas || linear != push.linear {
+			push.atlas, push.linear = atlas, linear
+			gpu.push_constants(g, cmd, &push)
+		}
 		sampler := gpu.Sampler.Linear if c.smooth else gpu.Sampler.Nearest
 		if u32(sampler) != push.sampler_id {
 			push.sampler_id = u32(sampler)

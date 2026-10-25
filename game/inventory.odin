@@ -8,11 +8,35 @@ package game
 HOTBAR_SLOTS :: 5
 INVENTORY_SLOTS :: 30 // 0..4 the hotbar, 5..29 the rest (a 5x5 grid)
 CURSOR_SLOT :: -1 // the stack on the mouse in the inventory overlay
+EQUIP_BASE :: INVENTORY_SLOTS // slots INVENTORY_SLOTS ..< TOTAL_SLOTS are the equipment slots, in Equip_Slot order
+TOTAL_SLOTS :: INVENTORY_SLOTS + EQUIP_SLOTS
 
 Inventory :: struct {
-	slots:    [INVENTORY_SLOTS]Stack,
-	cursor:   Stack,
-	selected: int, // the hotbar slot in hand
+	slots:     [INVENTORY_SLOTS]Stack,
+	equipment: [Equip_Slot]Stack, // worn and held (slot index EQUIP_BASE + the slot)
+	cursor:    Stack,
+	selected:  int, // the hotbar slot in hand
+}
+
+// slot_at: slot i's stack (a regular slot, or an equipment slot).
+slot_at :: proc(inv: ^Inventory, i: int) -> ^Stack {
+	if i >= EQUIP_BASE {return &inv.equipment[Equip_Slot(i - EQUIP_BASE)]}
+	return &inv.slots[i]
+}
+
+// slot_accepts: whether stack may be put into slot i (equipment slots take
+// only what fits them).
+slot_accepts :: proc(i: int, stack: Stack) -> bool {
+	return i < EQUIP_BASE || item_fits(stack, Equip_Slot(i - EQUIP_BASE))
+}
+
+// worn_of: the items the avatar shows (head to feet).
+worn_of :: proc(inv: ^Inventory) -> (worn: [WORN_SLOTS]Item) {
+	for i in 0 ..< WORN_SLOTS {
+		st := inv.equipment[Equip_Slot(i)]
+		if !stack_empty(st) {worn[i] = st.item}
+	}
+	return
 }
 
 Inventory_Action_Kind :: enum u8 {
@@ -31,7 +55,7 @@ Inventory_Action_Kind :: enum u8 {
 
 Inventory_Action :: struct {
 	kind: Inventory_Action_Kind,
-	slot: int, // CURSOR_SLOT ..< INVENTORY_SLOTS
+	slot: int, // CURSOR_SLOT ..< TOTAL_SLOTS
 	arg:  int, // 0 ..< 65536
 }
 
@@ -46,15 +70,17 @@ inventory_apply :: proc(
 	dropped: Stack,
 	ok: bool,
 ) {
-	in_slots := a.slot >= 0 && a.slot < INVENTORY_SLOTS
+	in_slots := a.slot >= 0 && a.slot < TOTAL_SLOTS
+	regular := a.slot >= 0 && a.slot < INVENTORY_SLOTS
 	switch a.kind {
 	case .Select:
 		if a.arg < 0 || a.arg >= HOTBAR_SLOTS {return}
 		inv.selected = a.arg
 	case .Click:
 		if !in_slots {return}
-		slot := &inv.slots[a.slot]
+		slot := slot_at(inv, a.slot)
 		cur := &inv.cursor
+		if !slot_accepts(a.slot, cur^) {return} 	// (and what comes back is what was there)
 		switch {
 		case stack_empty(cur^) && stack_empty(slot^):
 			return
@@ -69,8 +95,9 @@ inventory_apply :: proc(
 		}
 	case .Click_Right:
 		if !in_slots {return}
-		slot := &inv.slots[a.slot]
+		slot := slot_at(inv, a.slot)
 		cur := &inv.cursor
+		if !stack_empty(cur^) && !slot_accepts(a.slot, cur^) {return}
 		switch {
 		case stack_empty(cur^):
 			if stack_empty(slot^) {return}
@@ -88,18 +115,34 @@ inventory_apply :: proc(
 			cur^, slot^ = slot^, cur^
 		}
 	case .Quick_Move:
-		if !in_slots || stack_empty(inv.slots[a.slot]) {return}
+		if !in_slots || stack_empty(slot_at(inv, a.slot)^) {return}
+		slot := slot_at(inv, a.slot)
+		if !regular {
+			// Out of an equipment slot: into the inventory.
+			left := slots_add(inv.slots[:], slot^)
+			if left.count == slot.count {return}
+			slot^ = left
+			break
+		}
+		// Armor goes on, if its slot is free.
+		if info, _ := item_info(slot.item); info.equip != nil {
+			e := info.equip.?
+			if stack_empty(inv.equipment[e]) {
+				inv.equipment[e], slot^ = slot^, {}
+				break
+			}
+		}
 		lo, hi := HOTBAR_SLOTS, INVENTORY_SLOTS
 		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
-		slot := &inv.slots[a.slot]
 		left := slots_add(inv.slots[lo:hi], slot^)
 		if left.count == slot.count {return}
 		slot^ = left
 	case .Swap_Hotbar:
-		if !in_slots || a.arg < 0 || a.arg >= HOTBAR_SLOTS || a.arg == a.slot {return}
+		if !regular || a.arg < 0 || a.arg >= HOTBAR_SLOTS || a.arg == a.slot {return}
 		inv.slots[a.slot], inv.slots[a.arg] = inv.slots[a.arg], inv.slots[a.slot]
 	case .Drop:
-		from := &inv.cursor if a.slot == CURSOR_SLOT else (&inv.slots[a.slot] if in_slots else nil)
+		from :=
+			&inv.cursor if a.slot == CURSOR_SLOT else (slot_at(inv, a.slot) if in_slots else nil)
 		if from == nil || stack_empty(from^) {return}
 		n := from.count if a.arg == 1 else 1
 		dropped = {from.item, n}
@@ -109,8 +152,8 @@ inventory_apply :: proc(
 		if !catalog || !item_valid(item) {return}
 		inv.cursor = {item, item_stack_size(item)}
 	case .Put:
-		if !in_slots || stack_empty(inv.cursor) {return}
-		slot := &inv.slots[a.slot]
+		if !in_slots || stack_empty(inv.cursor) || !slot_accepts(a.slot, inv.cursor) {return}
+		slot := slot_at(inv, a.slot)
 		if !stack_empty(slot^) && slot.item != inv.cursor.item {return}
 		moved := min(a.arg, inv.cursor.count, item_stack_size(inv.cursor.item) - slot.count)
 		if moved <= 0 {return}
@@ -134,7 +177,7 @@ inventory_apply :: proc(
 		}
 		if cur.count == before {return}
 	case .Move_One:
-		if !in_slots {return}
+		if !regular {return}
 		slot := &inv.slots[a.slot]
 		lo, hi := HOTBAR_SLOTS, INVENTORY_SLOTS // the other section
 		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
@@ -220,6 +263,7 @@ inventory_placing_slot :: proc(inv: ^Inventory, block: Block) -> int {
 inventory_count :: proc(inv: ^Inventory, item: Item) -> int {
 	n := 0
 	for s in inv.slots {if s.item == item {n += s.count}}
+	for s in inv.equipment {if s.item == item {n += s.count}}
 	if inv.cursor.item == item {n += inv.cursor.count}
 	return n
 }
@@ -242,6 +286,7 @@ inventory_remove :: proc(inv: ^Inventory, item: Item, count: int) -> int {
 // inventory_tidy: empty stacks are {} (so equal inventories compare equal).
 inventory_tidy :: proc(inv: ^Inventory) {
 	for &s in inv.slots {if stack_empty(s) {s = {}}}
+	for &s in inv.equipment {if stack_empty(s) {s = {}}}
 	if stack_empty(inv.cursor) {inv.cursor = {}}
 }
 
@@ -253,5 +298,6 @@ inventory_valid :: proc(inv: ^Inventory) -> bool {
 		return stack_empty(s) || (item_valid(s.item) && s.count <= item_stack_size(s.item))
 	}
 	for s in inv.slots {if !check(s) {return false}}
+	for s, e in inv.equipment {if !check(s) || !item_fits(s, e) {return false}}
 	return check(inv.cursor)
 }

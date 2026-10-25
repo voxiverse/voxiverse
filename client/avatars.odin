@@ -3,6 +3,7 @@ package client
 import "core:hash"
 import "core:math/linalg"
 
+import "../game"
 import "../render"
 import "../ui"
 
@@ -33,38 +34,95 @@ shirt_of :: proc(name: string) -> [4]u8 {
 	return SHIRTS[hash.fnv32a(transmute([]u8)name) % len(SHIRTS)]
 }
 
+// ARMOR_COLORS: what each piece of armor looks like on an avatar (and in
+// its icon).
+ARMOR_COLORS := [game.Armor][4]u8 {
+	.Cap      = {176, 52, 44, 255},
+	.Tunic    = {70, 110, 170, 255},
+	.Trousers = {96, 74, 54, 255},
+	.Boots    = {58, 42, 34, 255},
+}
+
 // avatars_draw adds every visible other player to the entity pass.
 avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 	now := session_others_now(s)
 	for _, &o in s.others {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
-		p := v.position
-		// Sneaking: shorter legs and body, the head lower (1.5 tall).
-		hip, neck_y: f32 = 0.75, 1.4
-		if v.crouched {hip, neck_y = 0.6, 1.1}
-		render.entity_box(d, p, v.yaw, 0, {-0.25, 0, -0.125}, {0.25, hip, 0.125}, LEGS, .Legs)
-		render.entity_box(
-			d,
-			p,
-			v.yaw,
-			0,
-			{-0.3, hip, -0.15},
-			{0.3, neck_y, 0.15},
-			shirt_of(o.name),
-			.Body,
-		)
-		neck := p + {0, f64(neck_y), 0}
-		render.entity_box(
-			d,
-			neck,
-			v.yaw,
-			v.pitch,
-			{-0.24, 0, -0.24},
-			{0.24, 0.48, 0.24},
-			SKIN,
-			.Head,
-		)
+		avatar_draw(d, v.position, v.yaw, v.pitch, v.crouched, shirt_of(o.name), o.worn)
+	}
+}
+
+// avatar_draw adds one avatar standing at p (feet): legs, a body that turns
+// with it, a head that also looks up and down, and what it wears.
+avatar_draw :: proc(
+	d: ^render.Entity_Draw,
+	p: [3]f64,
+	yaw, pitch: f32,
+	crouched: bool,
+	shirt: [4]u8,
+	worn: [game.WORN_SLOTS]game.Item,
+) {
+	// Sneaking: shorter legs and body, the head lower (1.5 tall).
+	hip, neck_y: f32 = 0.75, 1.4
+	if crouched {hip, neck_y = 0.6, 1.1}
+	render.entity_box(d, p, yaw, 0, {-0.25, 0, -0.125}, {0.25, hip, 0.125}, LEGS, .Legs)
+	render.entity_box(d, p, yaw, 0, {-0.3, hip, -0.15}, {0.3, neck_y, 0.15}, shirt, .Body)
+	neck := p + {0, f64(neck_y), 0}
+	render.entity_box(d, neck, yaw, pitch, {-0.24, 0, -0.24}, {0.24, 0.48, 0.24}, SKIN, .Head)
+	// Armor: slightly larger boxes over the parts.
+	G :: f32(0.03)
+	for item in worn {
+		info, known := game.item_info(item)
+		armor, is_armor := info.armor.?
+		if !known || !is_armor {continue}
+		c := ARMOR_COLORS[armor]
+		switch armor {
+		case .Cap:
+			render.entity_box(
+				d,
+				neck,
+				yaw,
+				pitch,
+				{-0.24 - G, 0.3, -0.24 - G},
+				{0.24 + G, 0.48 + G, 0.24 + G},
+				c,
+				.Body,
+			)
+		case .Tunic:
+			render.entity_box(
+				d,
+				p,
+				yaw,
+				0,
+				{-0.3 - G, hip + 0.05, -0.15 - G},
+				{0.3 + G, neck_y + 0.0, 0.15 + G},
+				c,
+				.Body,
+			)
+		case .Trousers:
+			render.entity_box(
+				d,
+				p,
+				yaw,
+				0,
+				{-0.25 - G, 0.2, -0.125 - G},
+				{0.25 + G, hip + 0.08, 0.125 + G},
+				c,
+				.Legs,
+			)
+		case .Boots:
+			render.entity_box(
+				d,
+				p,
+				yaw,
+				0,
+				{-0.25 - G, 0, -0.125 - G},
+				{0.25 + G, 0.22, 0.125 + G},
+				c,
+				.Legs,
+			)
+		}
 	}
 }
 

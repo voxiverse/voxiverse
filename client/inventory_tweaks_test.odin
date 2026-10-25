@@ -302,3 +302,68 @@ test_creative_tab :: proc(t: ^testing.T) {
 	overlay_frame(&f, {})
 	testing.expect_value(t, v.tab, Inventory_Tab.Inventory)
 }
+
+// The equipment slots beside the preview: a click puts armor on (only into
+// the slot it fits), shift-click moves it between the slots and the
+// inventory; the preview asks to be drawn and turns toward the mouse.
+@(test)
+test_equipment_slots :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	inv := &f.s.inventory
+	cap_, boots := game.item_of_armor(.Cap), game.item_of_armor(.Boots)
+	head := game.EQUIP_BASE + int(game.Equip_Slot.Head)
+	feet := game.EQUIP_BASE + int(game.Equip_Slot.Feet)
+	click :: proc(f: ^Overlay_Fixture, slot: int, modifiers: bit_set[ui.Modifier] = {}) {
+		at := overlay_slot_at(f, slot)
+		overlay_frame(
+			f,
+			{mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}, modifiers = modifiers},
+		)
+		overlay_frame(f, {mouse = at, mouse_released = {.Left}})
+	}
+
+	overlay_frame(&f, {}) // (sets the screen's size)
+	l := inventory_layout(&f.app.ui, .Inventory)
+	testing.expect(t, l.slots[head].w > 0 && l.slots[feet].w > 0 && l.preview.w > 0)
+	for e in 0 ..< game.EQUIP_SLOTS {
+		r := l.slots[game.EQUIP_BASE + e]
+		testing.expect(t, r.x + r.w <= l.preview.x, "the slots are left of the player")
+	}
+
+	// A cap on the cursor: the feet refuse it, the head takes it.
+	inv.cursor = {cap_, 1}
+	click(&f, feet)
+	testing.expect(t, inv.cursor == {cap_, 1} && game.stack_empty(inv.equipment[.Feet]))
+	click(&f, head)
+	testing.expect(t, inv.equipment[.Head] == {cap_, 1} && game.stack_empty(inv.cursor))
+	// Boots in the inventory: shift-click puts them on.
+	inv.slots[8] = {boots, 1}
+	click(&f, 8, {.Shift})
+	testing.expect(t, inv.equipment[.Feet] == {boots, 1} && game.stack_empty(inv.slots[8]))
+	// Shift-click on a worn cap takes it off.
+	click(&f, head, {.Shift})
+	testing.expect(
+		t,
+		game.stack_empty(inv.equipment[.Head]) && game.inventory_count(inv, cap_) == 1,
+	)
+
+	// The preview: asked for each frame, turning toward the mouse.
+	f.app.preview.active = false
+	left := ui.Vec2{l.preview.x - 20, l.preview.y + l.preview.h / 2}
+	overlay_frame(&f, {mouse = left})
+	testing.expect(t, f.app.preview.active)
+	testing.expect(t, f.app.preview.target_yaw < 0, "the mouse is left of the player")
+	right := ui.Vec2{l.preview.x + l.preview.w + 200, l.preview.y + l.preview.h / 2}
+	overlay_frame(&f, {mouse = right})
+	testing.expect(t, f.app.preview.target_yaw > 0)
+	above := ui.Vec2{l.preview.x + l.preview.w / 2, l.preview.y - 100}
+	overlay_frame(&f, {mouse = above})
+	testing.expect(t, f.app.preview.target_pitch > 0, "looks up at a mouse above")
+	// Not drawn on the other tab.
+	f.app.preview.active = false
+	f.app.inventory_view.tab = .Creative
+	overlay_frame(&f, {})
+	testing.expect(t, !f.app.preview.active)
+}

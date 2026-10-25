@@ -156,11 +156,23 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	inventory_add(&inv, {item_of_block(.Stone), 100})
 	inv.cursor = {item_of_tool(.Launcher), 1}
 	inv.selected = 3
+	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
+	inv.equipment[.Offhand] = {item_of_block(.Dirt), 12}
 	m, ok = decode_server(encode_s(Inventory_Update{5, inv})[:], scratch)
 	testing.expect(t, ok && m.(Inventory_Update) == Inventory_Update{5, inv})
 	bad := inv
 	bad.slots[0].count = 65 // more than a stack
 	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
+	testing.expect(t, !ok)
+	bad = inv
+	bad.equipment[.Feet] = {item_of_armor(.Cap), 1} // a cap on the feet
+	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
+	testing.expect(t, !ok)
+	worn := Player_Worn{3, {item_of_armor(.Cap), NO_ITEM, NO_ITEM, item_of_armor(.Boots)}}
+	m, ok = decode_server(encode_s(worn)[:], scratch)
+	testing.expect(t, ok && m.(Player_Worn) == worn)
+	worn.worn[1] = Item(0x7fff) // not an item
+	_, ok = decode_server(encode_s(worn)[:], scratch)
 	testing.expect(t, !ok)
 	req := Inventory_Request{9, {.Swap_Hotbar, 20, 3}}
 	asked: Client_Message

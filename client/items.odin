@@ -125,3 +125,13 @@ can_place_from_hand :: proc(s: ^Session, block: game.Block) -> bool {
 		game.inventory_placing_slot(&s.inventory, block) >= 0 \
 	)
 }
+
+// session_wear puts on every piece of armor in the inventory whose slot is
+// free (a shift-click on each).
+session_wear :: proc(s: ^Session) {
+	for st, i in s.inventory.slots {
+		if info, _ := game.item_info(st.item); info.equip != nil {
+			session_inventory_do(s, {.Quick_Move, i, 0})
+		}
+	}
+}

@@ -61,6 +61,9 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		if &other == c || other.state != .Playing {continue}
 		send_message(s, c, game.Player_Joined{player_id(s, &other), client_name(&other)})
 		send_message(s, &other, game.Player_Joined{player_id(s, c), name})
+		if other.worn_sent != {} {
+			send_message(s, c, game.Player_Worn{player_id(s, &other), other.worn_sent})
+		}
 	}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
 	chat_system(s, game.format_join({display_name(s, c), "&e joined"}))

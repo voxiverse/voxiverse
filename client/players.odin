@@ -16,6 +16,7 @@ STALE_TICKS :: 2 * game.TICK_RATE // no news this long: out of sight
 
 Other_Player :: struct {
 	name:  string,
+	worn:  [game.WORN_SLOTS]game.Item, // head to feet (Player_Worn)
 	track: Track,
 }
 
