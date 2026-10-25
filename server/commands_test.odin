@@ -172,7 +172,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	net_send(&bob, game.Command{"seen carol"})
 	expect_told(t, &bob, {&alice}, "carol has never been here")
 	net_send(&alice, game.Command{"status"})
-	expect_told(t, &alice, {&bob}, "Up ")
+	expect_told(t, &alice, {&bob}, "Voxiverse ")
 
 	// Kicks: bob may not; alice may not be kicked; bob is.
 	net_send(&bob, game.Command{"kick alice"})

@@ -1,6 +1,7 @@
 package client
 
 import "core:flags"
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:os"
@@ -24,14 +25,19 @@ Options :: struct {
 	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
 	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
 	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
+	version:       bool `usage:"print the version and quit"`,
 }
 
 main :: proc() {
+	opts: Options
+	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
+	if opts.version {
+		fmt.printfln("Voxiverse %s (%s build)", base.version_text(), base.build_name())
+		os.exit(0)
+	}
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "voxiverse.log", "main")
-
-	opts: Options
-	flags.parse_or_exit(&opts, os.args, .Unix)
+	log.infof("Voxiverse %s (%s build)", base.version_text(), base.build_name())
 	if base.PROFILE {
 		path := path_next_to_exe("voxiverse.spall")
 		if base.profile_start(path) {

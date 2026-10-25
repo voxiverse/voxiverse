@@ -285,7 +285,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
 | M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) (done: the tools, the benchmarking system (six scenarios under fixed conditions, `compare`, CI smoke runs), and the costs they found: load 6.0 -> 1.7 s, server tick time over a flight 1430 -> 330 ms, GPU frame at the spawn 2.34 -> 1.70 ms, triangles 517k -> 291k; commands, console and scripts separated) |
 | M20 | The first public build's experience: the title screen (a calm warp starfield, the version), a loading screen into worlds, Singleplayer's saves (named so, each with a menu: open its folder, rename, delete), a simpler Multiplayer (LAN search that shows it is searching, Direct Connect behind a button, the name moved to Options), Options rebuilt from research into what players expect (tabs, key bindings), and sneaking that keeps you on a block's edge | UI tests drive every screen and dialog; each screen screenshotted in CI; no developer word on a player's screen (a reviewed list); options round-trip through the settings file; sneaking cannot step off an edge on the server or in the client's prediction (physics tests, both agreeing); the starfield within its frame budget on the CPU driver (done: `client/menus_test.odin` drives the title, Singleplayer's saves (select, rename, delete asked), Multiplayer (the name asked, Direct Connection), Options (tabs, choices, keys bound by key or mouse button, Escape, Reset Keys) and the failure screen, and reads every menu screen and tab for developer words; CI's Screens step screenshots each, the loading screen and a failed join; `test_settings_round_trip` carries bindings; `test_sneaking` in the shared physics both sides run; the moving starfield adds about 2 ms a frame on the CPU driver, under the menus' 120 fps cap) |
-| M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows, Linux and macOS made by CI on every push and published as a GitHub Release for each version tag | A version tag gives a Release with the three packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
+| M21 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows and Linux (macOS after M1b) made by CI on every push and drafted as a GitHub Release for each version tag | A version tag gives a draft Release with the packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
 | M22 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; the Windows list checked on a Windows machine |
 | M23 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
 | M24 | Statistics: hierarchical counters for nearly everything a player does, recorded on the server through one call, kept with each character and as world totals; a scrollable, searchable stats overlay and a `stats` command | A scripted session gives exactly the expected counters, through save and load; many players with thousands of counters each save and load within budget; the overlay's search and scrolling in UI tests and over UDP |
@@ -834,9 +834,9 @@ inside it again would buy nothing.
   it compiles in about the time of an unoptimized one and runs 3-5x faster; `--debug` is
   unoptimized for stepping through code; `--release` is `-o:speed` without the dev aids
   (half a minute to compile); `--release --symbols` adds line tables with the dev aids
-  still off, for profilers (`build perf`). Still to do: the shaders compiled into
-  `--release`, and the game a windowed program on Windows (no console; it logs to its
-  file).
+  still off, for profilers (`build perf`). M21 adds: `--release` carries its shaders
+  (`#load_directory` of `build/shaders`, `VX_EMBED_SHADERS`), and the packaged game is a
+  windowed program on Windows (no console; it logs to its file).
 - **Windows icon and version info:** Odin's `-resource:<file.rc>` compiles a resource script
   with the Windows SDK's `rc.exe` (found as it finds the linker) and links it in. The build
   writes `build/voxiverse.rc`: `1 ICON "voxiverse.ico"` and a `VERSIONINFO` block (product,
@@ -845,10 +845,15 @@ inside it again would buy nothing.
   a first version, to be redrawn). The window class loads it too (`LoadIconW(module, 1)` for
   `hIcon` and `hIconSm`), or the title bar and taskbar keep the default. Checked in CI by
   reading the resources out of the Windows executable.
-- **Versions:** `0.<milestone>.<patch>` (`v0.21.0` when this lands), from the git tag, and
-  the commit, passed in with `-define`; shown by `--version`, in the log's first line, on the
-  title screen (M20 shows the commit until then) and in the server's status. The protocol
-  version stays its own.
+- **Versions:** `0.<milestone>.<patch>` (`v0.21.0` when this lands), from git, and the
+  commit, passed in with `-define` (`base/version.odin`): on a tagged commit with nothing
+  uncommitted, the tag's version; after it, `0.21.0-dev.<commits since>` (`0.0.0-dev` before
+  any tag). Shown by `--version`, in the log's first line, on the title screen and in the
+  server's `status`. The protocol version stays its own.
+- **Release names:** a release can have a name for players ("Pre-Alpha 1"): the version
+  tag's message (`git tag -a v0.21.0 -m "Pre-Alpha 1"`; a lightweight tag has none). It is
+  stamped in too: the title screen says "Voxiverse Pre-Alpha 1 (0.21.0)", and so does the
+  Release's title. Files keep the version (sortable, no spaces).
 - **Packages** (`build package`: a release build, then the archive in `build/dist/`):
   - Windows x64: `voxiverse-0.21.0-windows-x64.zip`: `voxiverse.exe`, `voxiverse-server.exe`.
     `vulkan-1.dll` comes with every GPU driver. Unsigned: SmartScreen warns about an unknown
@@ -856,7 +861,8 @@ inside it again would buy nothing.
   - Linux x64: `voxiverse-0.21.0-linux-x64.tar.gz` (keeps the executable bit), built on the
     oldest supported runner (Ubuntu 22.04, glibc 2.35) so it runs on older distributions;
     `libvulkan.so.1` comes from the system.
-  - macOS universal (arm64 + x86_64, `lipo`): `Voxiverse.app` in a zip, with the server
+  - macOS (after M1b: the game has no macOS window yet, so no package until then)
+    universal (arm64 + x86_64, `lipo`): `Voxiverse.app` in a zip, with the server
     beside it. macOS has no Vulkan of its own: the bundle carries MoltenVK
     (`Contents/Frameworks/libMoltenVK.dylib`, Apache 2.0), loaded directly in place of a
     loader: the one library we ship beside an executable, because there is no other way.
@@ -864,13 +870,22 @@ inside it again would buy nothing.
     needs right-click Open until we join Apple's developer program (later, documented).
   - Every package: `README.txt` (running, where saves and settings live, the server's
     options), `LICENSE`, and the fonts' and MoltenVK's licences. Debug symbols go in a
-    separate archive per platform (for crash reports), not in the player's package.
-- **CI:** every push to main builds the three packages and keeps them as workflow artifacts
+    separate archive per platform (for crash reports), not in the player's package (later:
+    a release build has no symbols yet).
+- **CI:** the toolchain setup is a local composite action (`.github/actions/setup`), shared
+  by the jobs. Every push builds the packages and keeps them as workflow artifacts
   (for testers: downloading them needs a GitHub login); a `v*` tag builds them, writes
-  `SHA256SUMS`, and publishes a GitHub Release with `gh release create` (no third-party
-  actions), its notes from the milestone's row. Each package is unpacked on its own OS and
-  run from there: Linux reaches a world on the CPU driver; Windows and macOS answer
-  `--version` and start the server; that proves it needs nothing beside it.
+  `SHA256SUMS`, and makes a **draft** GitHub Release with `gh release create --draft` (no
+  third-party actions), its notes from the milestone's row: nothing is public until it is
+  looked at and published by hand, so a tag pushed by mistake never ships. Each package is unpacked on its own OS and
+  run from there: Linux reaches a world on the CPU driver; Windows answers `--version`
+  (and its version information is read back) and starts the server; that proves it needs
+  nothing beside it.
+- **Later, if the repository goes private:** a private repository's release files are not
+  downloadable by the public. The packages then go to Cloudflare R2 (S3's API: the `aws`
+  command the runners have), `releases/<version>/`, and a manual "publish" workflow writes
+  `releases/latest.json`, which a static site's Download button reads. Packaging stays as
+  it is; only the publishing step changes.
 - **Saves and settings** already live in the user's data directory, so upgrading is
   replacing the folder; a client and server of different protocols say so on joining.
 - **Exit check:** as in the table.

@@ -18,41 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache toolchain
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup
         with:
-          path: ~/.odinup
-          key: odinup-${{ runner.os }}-${{ hashFiles('odinup.toml') }}
-
-      - name: Cache shader compiler
-        uses: actions/cache@v4
-        with:
-          path: build/tools
-          key: glslang-${{ runner.os }}-${{ hashFiles('tools/build/glslang.odin') }}
-
-      - name: Toolchain (Linux, macOS)
-        if: runner.os != 'Windows'
-        run: |
-          if [ ! -x "$HOME/.odinup/bin/odinup" ]; then
-            ODIN="$(sed -n 's/^odin = "\(.*\)"/\1/p' odinup.toml)"
-            curl -sSfL https://raw.githubusercontent.com/voxiverse/odinup/main/install.sh | ODINUP_ODIN_VERSION="$ODIN" sh
-          fi
-          echo "$HOME/.odinup/bin" >> "$GITHUB_PATH"
-
-      - name: Toolchain (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          if (-not (Test-Path "$env:USERPROFILE\.odinup\bin\odinup.exe")) {
-            $env:ODINUP_ODIN_VERSION = (Select-String -Path odinup.toml -Pattern '^odin = "(.*)"').Matches[0].Groups[1].Value
-            irm https://raw.githubusercontent.com/voxiverse/odinup/main/install.ps1 | iex
-          }
-          "$env:USERPROFILE\.odinup\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-
-      - name: Project tools (ols, odinfmt)
-        run: |
-          odinup install --dev
-          odinup check --dev
+          dev: true
 
       - name: Check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
@@ -186,3 +154,122 @@ jobs:
       - name: Debugger printers (Linux)
         if: runner.os == 'Linux'
         run: tools/debugger/test_printers.sh
+
+  # Release packages (PLAN.md, M21): one per platform, from every push (kept
+  # as workflow artifacts, for testers), each unpacked on its own and run
+  # from there: nothing beside it is needed. macOS waits for its backend
+  # (M1b). Linux builds on the oldest supported Ubuntu, so the game runs on
+  # older distributions (glibc).
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tags: the version comes from them
+      # Checkout fetches a pushed tag as a plain ref; its message (the
+      # release's name) needs the tag object itself.
+      - name: Tags
+        shell: bash
+        run: git fetch --force --tags origin
+
+      - uses: ./.github/actions/setup
+
+      - name: Package
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} package
+
+      - name: Run the package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers
+          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)"
+          export VX_SAVES="$RUNNER_TEMP/saves" VX_SETTINGS="$RUNNER_TEMP/settings.cfg"
+          tar -xzf build/dist/*.tar.gz -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"/voxiverse-*-linux-x64
+          ./voxiverse --version
+          ./voxiverse-server --version
+          ./voxiverse-server --universe "$RUNNER_TEMP/universe" --seconds 5
+          timeout 600 xvfb-run -a ./voxiverse --exec "set render_distance 4; singleplayer; wait_world; screenshot package; wait 3; quit"
+          ls screenshots/package.png
+
+      - name: Run the package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\package"
+          Expand-Archive (Get-Item build\dist\*.zip) -DestinationPath $dir
+          Set-Location $dir
+          .\voxiverse-server.exe --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          .\voxiverse-server.exe --universe "$env:RUNNER_TEMP\universe" --seconds 5
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # The game is a windowed program: PowerShell would not wait for it.
+          $game = Start-Process .\voxiverse.exe -ArgumentList "--version" -Wait -PassThru
+          if ($game.ExitCode -ne 0) { exit 1 }
+          # The version information linked in (the file's Details tab).
+          $info = (Get-Item .\voxiverse.exe).VersionInfo
+          $info | Format-List ProductName, ProductVersion, FileDescription, FileVersion
+          if ($info.ProductName -ne "Voxiverse") { exit 1 }
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ runner.os }}
+          path: |
+            build/dist/*.zip
+            build/dist/*.tar.gz
+          if-no-files-found: error
+
+  # A version tag (v0.21.0) makes a draft GitHub Release with the packages
+  # and their checksums: nothing is public until it is looked at and
+  # published by hand. The tag's message is the release's name.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tags
+        run: git fetch --force --tags origin
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          NAME="$(git for-each-ref --format='%(objecttype) %(contents:subject)' "refs/tags/$TAG")"
+          case "$NAME" in
+            "tag $TAG" | "tag $VERSION" | "commit "*) TITLE="Voxiverse $VERSION" ;;
+            *) TITLE="Voxiverse ${NAME#tag } ($VERSION)" ;;
+          esac
+          cd dist
+          sha256sum * > SHA256SUMS
+          # The notes: the milestone's goal from PLAN.md, to be edited.
+          MILESTONE="$(echo "$VERSION" | cut -d. -f2)"
+          GOAL="$(awk -F' [|] ' -v m="| M$MILESTONE" '$1 == m {print $2}' ../PLAN.md)"
+          {
+            echo "## What's in it"
+            echo
+            echo "$GOAL"
+            echo
+            echo "## Downloads"
+            echo
+            echo "- Windows (64-bit): the .zip. Windows may warn about an unknown publisher (not code-signed yet): More info, Run anyway."
+            echo "- Linux (64-bit): the .tar.gz. Needs a Vulkan 1.3 driver."
+            echo "- macOS: not yet."
+            echo
+            echo "README.txt inside says where settings and saves are kept. SHA256SUMS lists each file's checksum."
+          } > ../notes.md
+          gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file ../notes.md *

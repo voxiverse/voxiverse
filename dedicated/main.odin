@@ -2,6 +2,7 @@ package dedicated
 
 import "core:crypto"
 import "core:flags"
+import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:os"
@@ -33,14 +34,13 @@ Options :: struct {
 	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
 	benchmark:   string `usage:"run the server benchmark scenario (server) and quit: simulated players, nothing saved"`,
 	smoke:       bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
+	version:     bool `usage:"print the version and quit"`,
 }
 
 // stop_requested is set by the Ctrl+C / SIGTERM handler (stop_*.odin).
 stop_requested: bool
 
 main :: proc() {
-	dbg: base.Debug
-	context = base.debug_begin(&dbg, "voxiverse-server.log", "main")
 	opts := Options {
 		universe    = "universe",
 		port        = netcode.DEFAULT_PORT,
@@ -48,7 +48,14 @@ main :: proc() {
 		view_radius = 12,
 		view_height = 6,
 	}
-	flags.parse_or_exit(&opts, os.args, .Unix)
+	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
+	if opts.version {
+		fmt.printfln("Voxiverse server %s (%s build)", base.version_text(), base.build_name())
+		os.exit(0)
+	}
+	dbg: base.Debug
+	context = base.debug_begin(&dbg, "voxiverse-server.log", "main")
+	log.infof("Voxiverse server %s (%s build)", base.version_text(), base.build_name())
 	if base.PROFILE {
 		// A profiling build (`build build --profile`): the trace beside the executable.
 		dir, _ := os.get_executable_directory(context.temp_allocator)

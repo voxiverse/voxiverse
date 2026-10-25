@@ -101,7 +101,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.draw_text(
 		ctx,
 		{ctx.screen.x + 8, ctx.screen.y + ctx.screen.h - small - 6, ctx.screen.w / 2, small},
-		fmt.tprintf("Voxiverse %s", base.COMMIT),
+		fmt.tprintf("Voxiverse %s", base.version_text()),
 		small,
 		t.text_muted,
 	)

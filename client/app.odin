@@ -537,9 +537,24 @@ validation_options :: proc() -> gpu.Validation {
 	return v
 }
 
-// read_shader loads compiled SPIR-V from the shaders/ folder next to the
-// executable (build/shaders in a dev build).
+// EMBED_SHADERS: the compiled shaders are carried in the executable (a
+// release package: one file, nothing beside it); otherwise they are read
+// from the shaders/ folder beside it, so hot reload can replace them.
+EMBED_SHADERS :: #config(VX_EMBED_SHADERS, false)
+when EMBED_SHADERS {
+	SHADERS := #load_directory("../build/shaders")
+}
+
+// read_shader loads compiled SPIR-V: carried in the executable, or from the
+// shaders/ folder next to it (build/shaders in a dev build).
 read_shader :: proc(name: string) -> ([]byte, bool) {
+	when EMBED_SHADERS {
+		for f in SHADERS {
+			if f.name == name {return f.data, true}
+		}
+		log.errorf("shader %s is not in this build", name)
+		return nil, false
+	}
 	path := path_next_to_exe(filepath.join({"shaders", name}, context.temp_allocator) or_else name)
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {

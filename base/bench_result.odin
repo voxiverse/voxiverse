@@ -14,10 +14,6 @@ import "core:time"
 // carry the machine: they compare only within one (its fingerprint).
 // Nothing here is committed: build/ is the developer's.
 
-// The commit a build was made from (the build driver stamps it in with
-// -define:VX_COMMIT; "-dirty" with uncommitted changes).
-COMMIT :: #config(VX_COMMIT, "unknown")
-
 // build_name: the build profile this program was made with (`build build`).
 build_name :: proc() -> string {
 	when DEV {

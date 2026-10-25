@@ -93,7 +93,7 @@ main :: proc() {
 	}
 	ok: bool
 	switch args[0] {
-	case "check", "test", "build", "run", "serve", "debug":
+	case "check", "test", "build", "run", "serve", "debug", "package":
 		// The game's packages link miniaudio; even type-checking wants it.
 		if !ensure_miniaudio() {os.exit(1)}
 	}
@@ -110,6 +110,8 @@ main :: proc() {
 		ok = write_icon()
 	case "build":
 		_, ok = build_game(args[1:])
+	case "package":
+		ok = package_game()
 	case "run":
 		ok = run_game(args[1:])
 	case "serve":
@@ -174,6 +176,7 @@ usage :: proc() {
 	fmt.println(
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
+	fmt.println("  package   a release package for this platform in build/dist/ (PLAN.md, M21)")
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
@@ -194,8 +197,9 @@ Profile :: enum {
 	Release,
 }
 
-// build_game compiles shaders, the game and the dedicated server.
-build_game :: proc(args: []string) -> (exe: string, ok: bool) {
+// build_game compiles shaders, the game and the dedicated server; windowed:
+// the game is a windowed program on Windows (no console: a player's).
+build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool) {
 	profile := Profile.Dev
 	symbols, sanitize, trace := false, false, false
 	for arg in args {
@@ -235,7 +239,8 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 		if symbols {append(&mode, "-debug", "-define:VX_DEV=false")}
 	}
 	if trace {append(&mode, "-define:VX_PROFILE=true")}
-	append(&mode, commit_define())
+	v := version_of()
+	append(&mode, ..version_defines(v))
 	shaders() or_return
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
 	if sanitize {
@@ -246,11 +251,23 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 			os.set_env("ASAN_OPTIONS", "detect_leaks=0")
 		}
 	}
+	game_extra, server_extra: [dynamic]string
+	// One file: the shaders inside (no hot reload without the dev aids).
+	if profile == .Release {append(&game_extra, "-define:VX_EMBED_SHADERS=true")}
+	// Windows: the icon and version information linked in.
+	when ODIN_OS == .Windows {
+		rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
+		append(&game_extra, strings.concatenate({"-resource:", rc}))
+		if windowed {append(&game_extra, "-subsystem:windows")}
+		rc = windows_resource(v, SERVER_NAME, "Voxiverse server") or_return
+		append(&server_extra, strings.concatenate({"-resource:", rc}))
+	}
 	cmd := slice.concatenate(
 		[][]string {
 			{"odin", "build", GAME_PACKAGE},
 			ODIN_FLAGS,
 			mode[:],
+			game_extra[:],
 			{strings.concatenate({"-out:", exe})},
 		},
 	)
@@ -261,14 +278,16 @@ build_game :: proc(args: []string) -> (exe: string, ok: bool) {
 			{"odin", "build", SERVER_PACKAGE},
 			ODIN_FLAGS,
 			mode[:],
+			server_extra[:],
 			{strings.concatenate({"-out:", server_exe})},
 		},
 	)
 	run(server_cmd) or_return
 	fmt.printfln(
-		"built  %s, %s (%s%s%s%s)",
+		"built  %s, %s %s (%s%s%s%s)",
 		exe,
 		server_exe,
+		version_text(v),
 		PROFILE_NAMES[profile],
 		" + symbols" if symbols else "",
 		" + sanitizer" if sanitize else "",
@@ -512,23 +531,10 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		// The map generates millions of columns: optimized. The benchmark
 		// as a release build, with line tables for perf.
 		{"-o:speed"} if name == "worldmap" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
-		{commit_define()},
+		version_defines(version_of()),
 	},
 	)
 	return exe, run(cmd)
-}
-
-// commit_define stamps the commit into a build (base.COMMIT): its short
-// hash, "-dirty" with uncommitted changes, "unknown" outside git.
-commit_define :: proc() -> string {
-	hash, ok := capture({"git", "rev-parse", "--short=12", "HEAD"})
-	if !ok {return "-define:VX_COMMIT=unknown"}
-	commit := strings.trim_space(hash)
-	if status, _ := capture({"git", "status", "--porcelain", "--untracked-files=no"});
-	   strings.trim_space(status) != "" {
-		commit = strings.concatenate({commit, "-dirty"})
-	}
-	return strings.concatenate({"-define:VX_COMMIT=", commit})
 }
 
 // bench runs a benchmark scenario the one way: `chunks` is tools/bench

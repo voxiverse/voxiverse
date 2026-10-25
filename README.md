@@ -10,6 +10,14 @@ wander the grass, play together over the LAN or the internet, and everything is 
 on **Windows and Linux**; macOS is planned.
 [PLAN.md](PLAN.md) has the design and the milestones.
 
+## Download
+
+Builds for Windows and Linux (64-bit) are on the
+[Releases](https://github.com/voxiverse/voxiverse/releases) page once one is out: unpack
+and run, nothing to install. Every push to main also builds them, kept with its
+[CI run](https://github.com/voxiverse/voxiverse/actions) (downloading those needs a
+GitHub login). To build it yourself, read on.
+
 ## Quick start
 
 You need a GPU driver with Vulkan 1.3 (any recent NVIDIA, AMD or Intel driver; on Linux,
@@ -72,8 +80,14 @@ on automatically and which reports GPU API misuse in the log.
 | `bench <scenario>` | Benchmark under fixed conditions: `chunks` (generation, light and meshing on one thread; `-check` as CI), `load`, `views`, `flight` (the game); results in `build/benchmarks/` |
 | `trace` | Summarize a profile trace (`build/voxiverse.spall`) |
 | `perf` | Record the game, `server` or `bench` under Linux perf and print where the time went (`perf -- --exec "..."`) |
+| `package` | A release package for this platform in `build/dist/` (one executable each for the game and the server, README.txt, licences) |
 | `icon` | Draw the game's icon to `build/voxiverse.ico` |
 | `help` | List the commands and their flags |
+
+Versions are `0.<milestone>.<patch>`, from git: a commit tagged `v0.21.0` builds as
+0.21.0, the commits after it as `0.21.0-dev.N`. To release, tag with the release's name as
+the message, `git tag -a v0.21.0 -m "Pre-Alpha 1"`, and push the tag: CI builds the
+packages and makes a **draft** release, to be looked at and published by hand.
 
 Debugging and profiling (validation, leak tracking, stack traces, sanitizer, debuggers with
 Odin pretty-printers, RenderDoc captures, CPU/GPU profiling): see [DEBUGGING.md](DEBUGGING.md).

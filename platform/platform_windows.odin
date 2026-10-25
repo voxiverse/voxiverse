@@ -37,6 +37,11 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 		hCursor       = win.LoadCursorW(nil, win.wstring(win._IDC_ARROW)),
 		lpszClassName = win.L(CLASS_NAME),
 	}
+	// The icon the build links in (resource 1: `build icon`) for the title
+	// bar and taskbar; without it, Windows' default.
+	icon_id := rawptr(uintptr(1)) // (MAKEINTRESOURCE, as _IDC_ARROW)
+	class.hIcon = win.LoadIconW(n.instance, win.wstring(icon_id))
+	class.hIconSm = class.hIcon
 	if win.RegisterClassExW(&class) == 0 {
 		log.errorf("platform RegisterClassExW failed (%d)", win.GetLastError())
 		return false

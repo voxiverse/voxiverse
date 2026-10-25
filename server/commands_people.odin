@@ -5,6 +5,7 @@ import "core:log"
 import "core:slice"
 import "core:strings"
 
+import "../base"
 import "../game"
 
 // Server commands about people (after EssentialsX's): whispering, actions,
@@ -480,7 +481,8 @@ admin_status :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		s,
 		c,
 		fmt.tprintf(
-			"Up %s; tick %.1f ms (of %.1f); %d chunks loaded, %d generating; %d block updates waiting; memory %.0f MiB; %d of %d players",
+			"Voxiverse %s; up %s; tick %.1f ms (of %.1f); %d chunks loaded, %d generating; %d block updates waiting; memory %.0f MiB; %d of %d players",
+			base.version_text(),
 			duration_text(uptime) if uptime >= 60 else fmt.tprintf("%ds", uptime),
 			st.tick_ms,
 			1000.0 / f32(game.TICK_RATE),
