@@ -66,6 +66,28 @@ offscreen_destroy :: proc(g: ^Gpu) {
 	g.offscreen = {}
 }
 
+// offscreen_begin readies the offscreen image to draw on: after the last
+// frame's copy has finished reading it (one image serves every frame).
+@(private)
+offscreen_begin :: proc(cmd: vk.CommandBuffer, image: vk.Image) {
+	barrier := vk.ImageMemoryBarrier2 {
+		sType = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask = {.BLIT, .COLOR_ATTACHMENT_OUTPUT},
+		dstStageMask = {.COLOR_ATTACHMENT_OUTPUT},
+		dstAccessMask = {.COLOR_ATTACHMENT_WRITE, .COLOR_ATTACHMENT_READ},
+		oldLayout = .UNDEFINED,
+		newLayout = .COLOR_ATTACHMENT_OPTIMAL,
+		image = image,
+		subresourceRange = {aspectMask = {.COLOR}, levelCount = 1, layerCount = 1},
+	}
+	dependency := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &barrier,
+	}
+	vk.CmdPipelineBarrier2(cmd, &dependency)
+}
+
 // offscreen_copy records the copy of the frame's image onto the swapchain
 // image index, leaving that ready to draw on (COLOR_ATTACHMENT_OPTIMAL), as
 // a frame drawn there directly would be.
@@ -92,13 +114,13 @@ offscreen_copy :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 			subresourceRange = range,
 		},
 		{
-			sType = .IMAGE_MEMORY_BARRIER_2,
-			srcStageMask = {.COLOR_ATTACHMENT_OUTPUT},
-			dstStageMask = {.BLIT},
-			dstAccessMask = {.TRANSFER_WRITE},
-			oldLayout = .UNDEFINED,
-			newLayout = .TRANSFER_DST_OPTIMAL,
-			image = target,
+			sType            = .IMAGE_MEMORY_BARRIER_2,
+			srcStageMask     = {.COLOR_ATTACHMENT_OUTPUT, .BLIT}, // (the acquire semaphore's wait stages)
+			dstStageMask     = {.BLIT},
+			dstAccessMask    = {.TRANSFER_WRITE},
+			oldLayout        = .UNDEFINED,
+			newLayout        = .TRANSFER_DST_OPTIMAL,
+			image            = target,
 			subresourceRange = range,
 		},
 	}

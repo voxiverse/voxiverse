@@ -114,7 +114,11 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		frame.image, frame.view, frame.depth = o.color.handle, o.color.view, o.depth
 		frame.extent = {o.size.x, o.size.y}
 	}
-	image_barrier(f.cmd, frame.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
+	if g.offscreen.size != {} {
+		offscreen_begin(f.cmd, frame.image) // (after the last frame's copy read it)
+	} else {
+		image_barrier(f.cmd, frame.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
+	}
 	// The depth image is cleared every frame; wait only for the previous
 	// frame's depth tests to finish with it.
 	depth_barrier := vk.ImageMemoryBarrier2 {
@@ -154,7 +158,8 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 	wait := vk.SemaphoreSubmitInfo {
 		sType     = .SEMAPHORE_SUBMIT_INFO,
 		semaphore = f.image_acquired,
-		stageMask = {.COLOR_ATTACHMENT_OUTPUT},
+		// Drawing waits for the image; so does the offscreen copy onto it.
+		stageMask = {.COLOR_ATTACHMENT_OUTPUT, .BLIT} if g.offscreen.size != {} else {.COLOR_ATTACHMENT_OUTPUT},
 	}
 	signal := vk.SemaphoreSubmitInfo {
 		sType     = .SEMAPHORE_SUBMIT_INFO,
