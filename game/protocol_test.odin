@@ -93,7 +93,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		encode_c(Chat{strings.repeat("x", MAX_CHAT_TEXT + 1, context.temp_allocator)})[:],
 	)
 	testing.expect(t, !ok)
-	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false}
+	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false, true}
 	upd: Server_Message
 	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
 	testing.expect(t, ok && upd.(Player_Update) == Player_Update{9, state, true, 1, -1})
@@ -143,8 +143,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		tick  = 123,
 		count = 2,
 	}
-	players.entries[0] = {4, {1.5, -60, 2e6}, 1, -0.5, true}
-	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false}
+	players.entries[0] = {4, {1.5, -60, 2e6}, 1, -0.5, true, true}
+	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false, false}
 	m, ok = decode_server(encode_s(players)[:], scratch)
 	testing.expect(t, ok && m.(Players) == players)
 	m, ok = decode_server(encode_s(Entity_Spawn{77, .Critter, {1, 2, 3}, 0.5, {}})[:], scratch)

@@ -40,18 +40,21 @@ avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
 		p := v.position
-		render.entity_box(d, p, v.yaw, 0, {-0.25, 0, -0.125}, {0.25, 0.75, 0.125}, LEGS, .Legs)
+		// Sneaking: shorter legs and body, the head lower (1.5 tall).
+		hip, neck_y: f32 = 0.75, 1.4
+		if v.crouched {hip, neck_y = 0.6, 1.1}
+		render.entity_box(d, p, v.yaw, 0, {-0.25, 0, -0.125}, {0.25, hip, 0.125}, LEGS, .Legs)
 		render.entity_box(
 			d,
 			p,
 			v.yaw,
 			0,
-			{-0.3, 0.75, -0.15},
-			{0.3, 1.4, 0.15},
+			{-0.3, hip, -0.15},
+			{0.3, neck_y, 0.15},
 			shirt_of(o.name),
 			.Body,
 		)
-		neck := p + {0, 1.4, 0}
+		neck := p + {0, f64(neck_y), 0}
 		render.entity_box(
 			d,
 			neck,
@@ -78,7 +81,7 @@ name_tags :: proc(app: ^App, ctx: ^ui.Context) {
 		if !ok {continue}
 		d := v.position - s.camera.position
 		if linalg.length(d) > NAME_TAG_DISTANCE {continue}
-		above := v.position + {0, 2.15, 0} - origin
+		above := v.position + {0, 1.85 if v.crouched else 2.15, 0} - origin
 		clip := camera.view_proj * [4]f32{f32(above.x), f32(above.y), f32(above.z), 1}
 		if clip.w <= 0.05 {continue} 	// behind the camera
 		x := (clip.x / clip.w * 0.5 + 0.5) * f32(w.width) / ctx.scale

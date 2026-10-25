@@ -189,7 +189,7 @@ receive :: proc(s: ^Session) {
 			for i in 0 ..< v.count {
 				x := v.entries[i]
 				if e, known := &s.entities[x.entity]; known {
-					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false})
+					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false, false})
 				}
 			}
 		case game.Entity_Despawn:

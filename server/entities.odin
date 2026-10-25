@@ -245,7 +245,7 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		if c.state != .Playing ||
 		   c.world != w ||
 		   (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
-		lo, hi := game.player_box(c.player.position)
+		lo, hi := game.player_box(c.player)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
 	}

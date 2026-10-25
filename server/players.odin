@@ -152,6 +152,7 @@ send_players :: proc(s: ^Server, c: ^Client) {
 			yaw      = other.look[0],
 			pitch    = other.look[1],
 			flying   = other.player.flying,
+			crouched = other.player.crouched,
 		}
 		m.count += 1
 	}

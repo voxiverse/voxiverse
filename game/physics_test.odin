@@ -267,3 +267,42 @@ test_swimming :: proc(t: ^testing.T) {
 		s.position,
 	)
 }
+
+// Sneaking: crouched (lower box and eyes), and on a ledge's edge the feet
+// stay over the ground however long one walks at it; without it, one
+// walks off and falls. Released with room overhead: standing again.
+@(test)
+test_sneaking :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 1) // a 3 x 3 platform, its top at y = 1
+	s := Player_State {
+		position = {0.5, 1, 0.5},
+	}
+	run(&s, {}, &w, 2) // settle
+	sneak := Player_Input {
+		move    = {0, 1}, // forward: -z, towards the edge at z = -1
+		buttons = {.Sneak},
+	}
+	run(&s, sneak, &w, 3 * TICK_RATE)
+	testing.expect(t, s.crouched)
+	testing.expect_value(t, player_height(s), PLAYER_SNEAK_HEIGHT)
+	testing.expect_value(t, player_eye_height(s), PLAYER_SNEAK_EYE)
+	testing.expectf(t, s.on_ground && abs(s.position.y - 1) < 1e-6, "fell off: %v", s.position)
+	// Leaning out: the box's back edge still over the platform (z > -1.3).
+	testing.expectf(t, s.position.z < -0.9 && s.position.z > -1.3, "stopped at %v", s.position)
+
+	// Sideways along the edge is still allowed.
+	before := s.position.x
+	run(&s, {move = {1, 0}, buttons = {.Sneak}}, &w, TICK_RATE / 4)
+	testing.expectf(t, s.position.x > before + 0.1, "no sideways step: %v", s.position)
+
+	run(&s, {}, &w, 2) // released: up again
+	testing.expect(t, !s.crouched)
+
+	walker := Player_State {
+		position = {0.5, 1, 0.5},
+	}
+	run(&walker, {move = {0, 1}}, &w, 3 * TICK_RATE)
+	testing.expectf(t, walker.position.y < 0, "walked on air: %v", walker.position)
+}

@@ -16,10 +16,20 @@ import "core:math"
 // In water (at the feet or the chest) players swim: slower and more
 // sluggish across, sinking slowly unless jump swims them up (or sneak
 // down); at the surface beside a ledge, jump lifts them out.
+//
+// Sneaking (Minecraft's) crouches: the box is PLAYER_SNEAK_HEIGHT tall
+// (under a gap a standing player does not fit), the eyes lower, walking
+// slows, and on the ground a move that would step off an edge is cut back,
+// axis by axis, so one can lean out over a ledge to build. Released, the
+// player stands up once there is room.
 
 PLAYER_WIDTH :: 0.6
 PLAYER_HEIGHT :: 1.8
 PLAYER_EYE :: 1.62
+PLAYER_SNEAK_HEIGHT :: 1.5
+PLAYER_SNEAK_EYE :: 1.27
+EDGE_DROP :: 0.6 // sneaking: ground at most this far below the feet is ground to stay on
+EDGE_STEP :: 0.05 // sneaking: a move off an edge is cut back in steps of this
 PITCH_LIMIT :: 1.56 // radians: looking straight up or down is not allowed
 
 SWIM_SPEED :: 2.6 // blocks/s across (sprinting: 1.5 times)
@@ -48,6 +58,17 @@ Player_State :: struct {
 	velocity:  [3]f32,
 	on_ground: bool,
 	flying:    bool,
+	crouched:  bool, // sneaking: the lower box (player_height)
+}
+
+// player_height: the player's box's height (crouched: lower).
+player_height :: proc(s: Player_State) -> f64 {
+	return PLAYER_SNEAK_HEIGHT if s.crouched else PLAYER_HEIGHT
+}
+
+// player_eye_height: how far above the feet the eyes are.
+player_eye_height :: proc(s: Player_State) -> f64 {
+	return PLAYER_SNEAK_EYE if s.crouched else PLAYER_EYE
 }
 
 // Block_Query reads the world for physics: loaded is false where the chunk
@@ -80,6 +101,18 @@ player_step :: proc(
 		.Sprint in input.buttons, .Sneak in input.buttons, .Jump in input.buttons
 	feet_wet, chest_wet := in_water(q, s.position, 0.2), in_water(q, s.position, 1.2)
 	swimming := !s.flying && (feet_wet || chest_wet)
+	// Crouched while sneaking on foot; up again once a standing box fits.
+	if sneak && !s.flying && !swimming {
+		s.crouched = true
+	} else if s.crouched &&
+	   !box_blocked(
+			   q,
+			   s.position + {0, PLAYER_SNEAK_HEIGHT, 0},
+			   PLAYER_WIDTH,
+			   PLAYER_HEIGHT - PLAYER_SNEAK_HEIGHT,
+		   ) {
+		s.crouched = false
+	}
 	speed: f32
 	switch {
 	case swimming:
@@ -125,9 +158,22 @@ player_step :: proc(
 	// exact parabola, so jumps reach jump_height whatever the tick rate.
 	vy := (vy_before + s.velocity.y) / 2
 	delta := [3]f64{f64(s.velocity.x * dt), f64(vy * dt), f64(s.velocity.z * dt)}
+	edge_guard := s.on_ground && s.crouched && !swimming
 	s.on_ground = false
 	for axis in ([3]int{1, 0, 2}) {
-		moved, hit := sweep(s.position, PLAYER_WIDTH, PLAYER_HEIGHT, axis, delta[axis], q)
+		if axis != 1 && edge_guard && supported(q, s.position) {
+			// Not off the edge: back off until the feet stay over ground.
+			d := delta[axis]
+			for d != 0 {
+				p := s.position
+				p[axis] += d
+				if supported(q, p) {break}
+				d = 0 if abs(d) <= EDGE_STEP else d - math.sign(d) * EDGE_STEP
+			}
+			if d != delta[axis] {s.velocity[axis] = 0}
+			delta[axis] = d
+		}
+		moved, hit := sweep(s.position, PLAYER_WIDTH, player_height(s^), axis, delta[axis], q)
 		s.position[axis] += moved
 		if hit {
 			if axis == 1 && delta.y < 0 {s.on_ground = true}
@@ -137,10 +183,34 @@ player_step :: proc(
 	if s.flying && s.on_ground {s.flying = false} 	// landing ends flight
 }
 
-// player_box is the player's box at position (feet centre).
-player_box :: proc(position: [3]f64) -> (lo, hi: [3]f64) {
+// player_box is the player's box (feet centre at its position).
+player_box :: proc(s: Player_State) -> (lo, hi: [3]f64) {
 	half :: PLAYER_WIDTH / 2
-	return position - {half, 0, half}, position + {half, PLAYER_HEIGHT, half}
+	return s.position - {half, 0, half}, s.position + {half, player_height(s), half}
+}
+
+// supported: ground under a player's feet at position, within EDGE_DROP.
+@(private = "file")
+supported :: proc(q: Block_Query, position: [3]f64) -> bool {
+	return box_blocked(q, position - {0, EDGE_DROP, 0}, PLAYER_WIDTH, EDGE_DROP)
+}
+
+// box_blocked: a block that stops movement overlaps the box (width across,
+// height up from position, the centre of its bottom).
+@(private = "file")
+box_blocked :: proc(q: Block_Query, position: [3]f64, width, height: f64) -> bool {
+	EPS :: 1e-7 // touching is not overlapping
+	half := width / 2
+	lo := [3]f64{position.x - half, position.y, position.z - half} + EPS
+	hi := [3]f64{position.x + half, position.y + height, position.z + half} - EPS
+	for y in i32(math.floor(lo.y)) ..= i32(math.floor(hi.y)) {
+		for z in i32(math.floor(lo.z)) ..= i32(math.floor(hi.z)) {
+			for x in i32(math.floor(lo.x)) ..= i32(math.floor(hi.x)) {
+				if solid_at(q, {x, y, z}) {return true}
+			}
+		}
+	}
+	return false
 }
 
 // in_water: the block at height above the feet is water.

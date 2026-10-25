@@ -30,7 +30,7 @@ selection_box :: proc(c: ^Client) -> (box: Box, ok: bool) {
 // aimed_block: the block c looks at, within reach (worked out here, from
 // the player's eye and look, as the client's crosshair does).
 aimed_block :: proc(c: ^Client, reach: f64) -> (game.Block_Pos, bool) {
-	eye := c.player.position + {0, game.PLAYER_EYE, 0}
+	eye := game.player_eye(c.player)
 	yaw, pitch := f64(c.look[0]), f64(c.look[1])
 	dir := [3]f64 {
 		-math.sin(yaw) * math.cos(pitch),

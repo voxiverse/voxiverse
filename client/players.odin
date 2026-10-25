@@ -39,6 +39,7 @@ Snapshot :: struct {
 	position:   [3]f64, // feet
 	yaw, pitch: f32,
 	flying:     bool,
+	crouched:   bool,
 }
 
 // Other_View: where to draw another player now.
@@ -46,6 +47,7 @@ Other_View :: struct {
 	position:   [3]f64,
 	yaw, pitch: f32,
 	flying:     bool,
+	crouched:   bool,
 }
 
 // track_add adds a snapshot (older or repeated ticks are ignored: the
@@ -63,7 +65,7 @@ track_add :: proc(o: ^Track, snapshot: Snapshot) {
 
 // other_snapshot adds what a Players message said about a player.
 other_snapshot :: proc(o: ^Other_Player, tick: u32, e: game.Player_Entry) {
-	track_add(&o.track, {tick, e.position, e.yaw, e.pitch, e.flying})
+	track_add(&o.track, {tick, e.position, e.yaw, e.pitch, e.flying, e.crouched})
 }
 
 // other_view: the player at server time `at` (in ticks, fractional),
@@ -88,6 +90,7 @@ track_view :: proc(o: ^Track, at: f64) -> (v: Other_View, ok: bool) {
 				yaw = lerp_angle(a.yaw, b.yaw, f32(t)),
 				pitch = a.pitch + (b.pitch - a.pitch) * f32(t),
 				flying = b.flying,
+				crouched = b.crouched,
 			},
 			true
 	}
@@ -102,7 +105,7 @@ render_tick :: proc(newest_tick: u32, seconds_since: f32) -> f64 {
 
 @(private = "file")
 view_of :: proc(s: Snapshot) -> Other_View {
-	return {s.position, s.yaw, s.pitch, s.flying}
+	return {s.position, s.yaw, s.pitch, s.flying, s.crouched}
 }
 
 // lerp_angle turns the short way round.

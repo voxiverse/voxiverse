@@ -32,7 +32,7 @@ can_change :: proc(b: Block) -> bool {
 can_place_at :: proc(current, block: Block, pos: Block_Pos, player: Player_State) -> bool {
 	if !BLOCK_INFO[current].replaceable || current == block {return false}
 	if !BLOCK_INFO[block].collides {return true}
-	lo, hi := player_box(player.position)
+	lo, hi := player_box(player)
 	b := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)}
 	EPS :: 1e-6
 	overlaps :=
@@ -57,5 +57,5 @@ in_reach :: proc(eye: [3]f64, pos: Block_Pos, reach: f64) -> bool {
 }
 
 player_eye :: proc(s: Player_State) -> [3]f64 {
-	return s.position + {0, PLAYER_EYE, 0}
+	return s.position + {0, player_eye_height(s), 0}
 }

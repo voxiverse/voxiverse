@@ -2,6 +2,7 @@ package client
 
 import "core:fmt"
 import "core:log"
+import "core:math"
 import "core:mem/virtual"
 import "core:net"
 import "core:os"
@@ -94,7 +95,8 @@ Session :: struct {
 	tick_time:        f32, // seconds into the current client tick
 	toggle_fly:       bool, // a double-tapped jump waits for the next tick
 	last_jump:        time.Tick, // for double-tap detection
-	sneak_on:         bool, // toggled sneaking and sprinting (Options: Toggle)
+	sneak_on:         bool,
+	eye_height:       f64, // the camera above the feet: easing to player_eye_height // toggled sneaking and sprinting (Options: Toggle)
 	sprint_on:        bool,
 	autopilot:        Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:              Maybe(game.Ray_Hit), // the block under the crosshair, within reach
@@ -350,7 +352,11 @@ session_update :: proc(
 	if look {edit_controls(s, input, settings.keys, dt)}
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
-	s.camera.position = eyes + {0, game.PLAYER_EYE, 0}
+	// The eyes ease down when crouching and back up (not a jump cut).
+	eye := game.player_eye_height(s.prediction.state)
+	s.eye_height += (eye - s.eye_height) * f64(1 - math.exp(-15 * dt))
+	if s.eye_height == 0 {s.eye_height = eye}
+	s.camera.position = eyes + {0, s.eye_height, 0}
 	s.aim = nil
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	if hit, ok := game.raycast(

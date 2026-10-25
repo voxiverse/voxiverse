@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 16
+PROTOCOL_VERSION :: 17
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -249,6 +249,7 @@ Player_Entry :: struct {
 	position:   [3]f64, // feet
 	yaw, pitch: f32,
 	flying:     bool,
+	crouched:   bool, // sneaking: drawn lower
 }
 
 // Notice: something the server wants the player to read (chat and the
@@ -773,7 +774,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_position(w, e.position)
 			write_f32(w, e.yaw)
 			write_f32(w, e.pitch)
-			write_u8(w, 1 if e.flying else 0)
+			write_u8(w, (1 if e.flying else 0) | (2 if e.crouched else 0))
 		}
 	case Notice:
 		write_u8(w, u8(Server_Kind.Notice))
@@ -1058,8 +1059,8 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			e.position = read_position(&r)
 			e.yaw, e.pitch = read_f32(&r), read_f32(&r)
 			flags := read_u8(&r)
-			if flags > 1 || abs(e.pitch) > PITCH_LIMIT || !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
-			e.flying = flags == 1
+			if flags > 3 || abs(e.pitch) > PITCH_LIMIT || !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
+			e.flying, e.crouched = flags & 1 != 0, flags & 2 != 0
 		}
 		m = p
 	case u8(Server_Kind.Notice):
@@ -1225,7 +1226,7 @@ quantize_input :: proc(in_: Player_Input) -> Player_Input {
 write_player_state :: proc(w: ^Writer, s: Player_State) {
 	write_position(w, s.position)
 	for v in s.velocity {write_f32(w, v)}
-	write_u8(w, (1 if s.on_ground else 0) | (2 if s.flying else 0))
+	write_u8(w, (1 if s.on_ground else 0) | (2 if s.flying else 0) | (4 if s.crouched else 0))
 }
 
 @(private = "file")
@@ -1236,8 +1237,8 @@ read_player_state :: proc(r: ^Reader) -> (s: Player_State) {
 		if abs(v) > MAX_SPEED {reader_fail(r)}
 	}
 	flags := read_u8(r)
-	if flags > 3 {reader_fail(r)}
-	s.on_ground, s.flying = flags & 1 != 0, flags & 2 != 0
+	if flags > 7 {reader_fail(r)}
+	s.on_ground, s.flying, s.crouched = flags & 1 != 0, flags & 2 != 0, flags & 4 != 0
 	return
 }
 
