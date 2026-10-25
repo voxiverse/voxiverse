@@ -1,5 +1,8 @@
 package client
 
+import "core:math"
+import "core:time"
+
 import "../game"
 
 // Items as the player uses them: the stack in hand (the selected hotbar
@@ -9,6 +12,43 @@ import "../game"
 // server's: what we do to it is predicted at once and sent
 // (session_inventory_do), and replayed over each Inventory_Update until
 // the server has answered it.
+
+// Drop_Repeat: holding the drop key drops again and again, slowly at first,
+// then faster (after the utility mods of other games).
+DROP_FIRST_REPEAT :: 0.35 // seconds held before the second drop
+DROP_START_INTERVAL :: 0.25 // seconds between the next ones, shrinking
+DROP_SHRINK :: 0.8 // each interval is this much of the last
+DROP_MIN_INTERVAL :: 0.04
+
+Drop_Repeat :: struct {
+	next:  f64, // when the held key drops next (seconds)
+	count: int, // drops since it went down
+}
+
+// drop_repeat: true when a drop is due. now in seconds; pressed: the key
+// went down this frame; down: it is held.
+drop_repeat :: proc(r: ^Drop_Repeat, pressed, down: bool, now: f64) -> bool {
+	switch {
+	case pressed:
+		r^ = {now + DROP_FIRST_REPEAT, 1}
+		return true
+	case down && r.count > 0 && now >= r.next:
+		interval := max(
+			DROP_MIN_INTERVAL,
+			DROP_START_INTERVAL * math.pow(DROP_SHRINK, f64(r.count - 1)),
+		)
+		r.next, r.count = now + interval, r.count + 1
+		return true
+	case !down:
+		r.count = 0
+	}
+	return false
+}
+
+// seconds_now: a clock for drop_repeat.
+seconds_now :: proc() -> f64 {
+	return f64(time.tick_now()._nsec) / 1e9
+}
 
 // held: the stack in hand.
 held :: proc(s: ^Session) -> game.Stack {

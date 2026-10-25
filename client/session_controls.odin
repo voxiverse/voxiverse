@@ -34,8 +34,10 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32)
 		session_inventory_do(s, {.Select, 0, select})
 	}
 	// Drop: one from the hand (with Ctrl: all of it).
-	if keys.drop in input.pressed {
-		all := input.held & {.Left_Control, .Right_Control} != {}
+	all := input.held & {.Left_Control, .Right_Control} != {}
+	pressed_drop := keys.drop in input.pressed
+	if drop_repeat(&s.drop_repeat, pressed_drop, keys.drop in input.held && !all, seconds_now()) ||
+	   (pressed_drop && all) {
 		session_inventory_do(s, {.Drop, s.inventory.selected, 1 if all else 0})
 	}
 

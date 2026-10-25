@@ -59,3 +59,33 @@ test_inventory_prediction :: proc(t: ^testing.T) {
 	inventory_predict(s)
 	testing.expect(t, s.inventory == server)
 }
+
+// Holding the drop key: one at once, then slowly, then faster, never
+// faster than the floor; letting go starts over.
+@(test)
+test_drop_repeat :: proc(t: ^testing.T) {
+	r: Drop_Repeat
+	testing.expect(t, drop_repeat(&r, true, true, 10), "the press drops")
+	testing.expect(t, !drop_repeat(&r, false, true, 10.2), "not yet")
+	now := 10 + DROP_FIRST_REPEAT
+	testing.expect(t, drop_repeat(&r, false, true, now), "held: the second")
+	gaps: [dynamic]f64
+	defer delete(gaps)
+	last := now
+	for step := 0; step < 4000 && len(gaps) < 14; step += 1 {
+		now += 0.005
+		if drop_repeat(&r, false, true, now) {
+			append(&gaps, now - last)
+			last = now
+		}
+	}
+	testing.expect(t, gaps[0] > gaps[5] && gaps[5] > gaps[10], "it speeds up")
+	testing.expect(t, gaps[13] >= DROP_MIN_INTERVAL - 0.006, "not past the floor")
+	testing.expect(t, !drop_repeat(&r, false, false, now + 1), "released: nothing")
+	testing.expect(
+		t,
+		!drop_repeat(&r, false, true, now + 2),
+		"and a held key it was not pressed with does nothing",
+	)
+	testing.expect(t, drop_repeat(&r, true, true, now + 3), "pressed again: starts over")
+}

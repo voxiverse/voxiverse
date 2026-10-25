@@ -106,6 +106,7 @@ Session :: struct {
 	edit_timer:       f32, // seconds until a held button edits again
 	sounds:           [dynamic]Sound_Event, // this frame's; the App plays and clears them
 	walked:           f32, // blocks on the ground since the last footstep
+	drop_repeat:      Drop_Repeat, // the drop key held (items.odin)
 	inventory:        game.Inventory, // as we predict it (items.odin)
 	server_inventory: game.Inventory, // as the server last said
 	inv_pending:      [dynamic]Pending_Inventory, // sent, not yet answered (heap)

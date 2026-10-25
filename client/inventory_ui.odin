@@ -128,14 +128,16 @@ Inventory_Tab :: enum u8 {
 }
 
 Inventory_View :: struct {
-	tab:        Inventory_Tab,
-	drag_from:  int, // the slot a drag began on (-1: none)
-	scroll:     f32, // catalog rows scrolled
-	mode:       Drag_Mode,
-	visited:    [game.INVENTORY_SLOTS]bool, // the slots the drag has passed
-	first:      int, // where the drag began
-	click_slot: int, // the last left press (-1: none), for double-clicks
-	click_time: time.Tick,
+	tab:         Inventory_Tab,
+	drop_repeat: Drop_Repeat, // the drop key held over a slot
+	drop_slot:   int, // the slot it was held over
+	drag_from:   int, // the slot a drag began on (-1: none)
+	scroll:      f32, // catalog rows scrolled
+	mode:        Drag_Mode,
+	visited:     [game.INVENTORY_SLOTS]bool, // the slots the drag has passed
+	first:       int, // where the drag began
+	click_slot:  int, // the last left press (-1: none), for double-clicks
+	click_time:  time.Tick,
 }
 
 // inventory_keys: the inventory key over the game opens the inventory, and closes it.
@@ -256,8 +258,17 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			for k, n in hotbar_keys(app.settings.keys) {
 				if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}
 			}
-			if app.settings.keys.drop in app.input.pressed {
-				all := app.input.held & {.Left_Control, .Right_Control} != {}
+			key := app.settings.keys.drop
+			all := app.input.held & {.Left_Control, .Right_Control} != {}
+			if hovered != v.drop_slot {v.drop_repeat, v.drop_slot = {}, hovered}
+			went_down := key in app.input.pressed
+			if drop_repeat(
+				   &v.drop_repeat,
+				   went_down,
+				   key in app.input.held && !all,
+				   seconds_now(),
+			   ) ||
+			   (went_down && all) {
 				do_(s, .Drop, hovered, 1 if all else 0)
 			}
 		}
