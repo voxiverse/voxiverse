@@ -40,6 +40,7 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
+		rules           = quiet_rules(),
 		seed            = 23,
 		view_radius     = 3,
 		view_height     = 2,
@@ -140,6 +141,7 @@ netcode_close_both :: proc(a, b: ^Net_Client) {
 @(test)
 test_grazing_regrows_wool :: proc(t: ^testing.T) {
 	config := Config {
+		rules           = quiet_rules(),
 		seed            = 23,
 		generator       = .Classic,
 		view_radius     = 3,
@@ -242,6 +244,7 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
+		rules       = quiet_rules(),
 		seed        = 24,
 		view_radius = 3,
 		view_height = 2,

@@ -664,6 +664,7 @@ test_admin_commands :: proc(t: ^testing.T) {
 @(test)
 test_server_start_fails_cleanly :: proc(t: ^testing.T) {
 	config := Config {
+		rules       = quiet_rules(),
 		seed        = 3,
 		view_radius = 2,
 		view_height = 1,
@@ -694,6 +695,7 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
+		rules        = quiet_rules(),
 		seed         = 11,
 		view_radius  = 2,
 		view_height  = 1,
@@ -767,6 +769,7 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 	defer game.pipe_destroy(&pipe)
 	srv: Server
 	config := Config {
+		rules        = quiet_rules(),
 		seed         = 5,
 		generator    = .Classic,
 		view_radius  = 3,

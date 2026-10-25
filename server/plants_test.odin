@@ -13,6 +13,7 @@ import "../game"
 @(test)
 test_plants_need_support :: proc(t: ^testing.T) {
 	config := Config {
+		rules           = quiet_rules(),
 		seed            = 22,
 		generator       = .Classic,
 		view_radius     = 3,

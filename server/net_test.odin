@@ -266,6 +266,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
+		rules       = quiet_rules(),
 		seed        = 21,
 		view_radius = 3,
 		view_height = 2,
@@ -398,6 +399,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		jitter_ms  = 25,
 	}
 	config := Config {
+		rules       = quiet_rules(),
 		seed        = 31,
 		view_radius = 3,
 		view_height = 2,
@@ -480,4 +482,13 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		}, 30)
 	testing.expect(t, ok, "beta never heard of alpha's edit (or alpha of its result)")
 	testing.expect(t, a.results[1].accepted, "alpha's edit was refused")
+}
+
+// quiet_rules: the defaults, with nothing changing by itself (random ticks
+// off), for tests that compare what clients hold with the world's blocks.
+@(private)
+quiet_rules :: proc() -> game.Rules {
+	r := game.RULES_DEFAULTS
+	r.random_tick_speed = 0
+	return r
 }

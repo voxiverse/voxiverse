@@ -12,6 +12,7 @@ import "../game"
 @(test)
 test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	config := Config {
+		rules           = quiet_rules(),
 		seed            = 21,
 		generator       = .Classic, // flat-ish M3 terrain: this tests the server, not the land
 		view_radius     = 3,

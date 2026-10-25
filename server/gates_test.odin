@@ -32,6 +32,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		nil,
 	)
 	config := Config {
+		rules       = quiet_rules(),
 		seed        = 1,
 		view_radius = 2,
 		view_height = 1,
