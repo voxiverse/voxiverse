@@ -752,32 +752,42 @@ The release builds (M21) put the game in front of players who are not its develo
 they see first has to make sense without knowing how it is made. Every screen is looked at
 as a player meets it.
 
+- **Game menu:** Back to Game, Options..., Open to LAN, and Save and Quit to Title (or
+  Disconnect on someone else's server); "Game Paused" under the title only when it is.
 - **Words.** Nothing on a player's screen speaks the code's language: no universe, scratch
   world, chunk or seed where a player did not ask for it. The nomenclature table keeps the
   code's words; the screens say save, world, server. A reviewed list of every player-facing
   string is the check.
+- **Reference: Minecraft Java's screens**, which most players already know (minecraft.wiki:
+  Title Screen, Select World, Loading world screen; its Options): where a screen of ours has
+  a counterpart, it works like it unless there is a reason not to.
 - **Title screen:**
+  - Singleplayer, Multiplayer, Options..., Quit Game (Minecraft's order), and a small
+    Accessibility button beside Options (straight to that tab);
   - a starfield drifting towards the viewer, warp-like but slow and sparse, low contrast,
     never flashing: wonder, not anxiety; drawn as UI quads (no new pass); Options' **Reduce
     motion** stills it;
   - the version in grey in the lower left (the commit until M21 stamps versions).
-- **Singleplayer** (was "Universes"): its saves, newest played first, each showing its name
-  and when it was last played; **Create New Save** (a name; the seed under "More options");
-  each save's **...** menu: Play, **Open Folder** (the save's directory in the system's file
-  manager: `explorer`, `open`, `xdg-open`, started by the platform layer), Rename, Delete
-  (confirmed). A "save" is what the code calls a universe (nomenclature).
+- **Singleplayer** (was "Universes"; Minecraft's Select World): its saves, newest played
+  first, each showing its name and when it was last played; select one and Play (or
+  double-click it); **Create New Save** (a screen: the name; the seed under "More
+  options"); **Edit** (a screen: rename, **Open Folder**: the save's directory in the
+  system's file manager, `explorer`, `open` or `xdg-open` started by the platform layer);
+  **Delete** (confirmed); Back. A "save" is what the code calls a universe (nomenclature).
 - **Multiplayer:**
   - no name field: the name lives in Options (and is asked for the first time a player
     goes to Multiplayer without one);
   - "Looking for servers on your network" with its dots counting up (. .. ...), so it is
     clearly looking; found servers listed as they answer;
-  - **Direct Connect** opens a small dialog (address, password if needed, Join); a kept
-    server list with Add Server comes later.
+  - **Direct Connection** (Minecraft's name) opens its screen: the address (the last one
+    remembered), a password if the server asks, Join, Cancel; a kept server list with Add
+    Server, Edit and Delete comes later.
 - **Loading screen:** joining a world (singleplayer, a server, a gate's or `/travel`'s
   arrival) shows a screen until the world around the player is there and drawn, instead of
   a world building itself in view: what is happening in words ("Connecting", "Joining",
   "Generating the world", "Arriving"), a bar for the chunks around the player loaded and
-  meshed (the same test as `wait_world`), and Cancel back to where one came from. A failure
+  meshed (the same test as `wait_world`), a small map of the columns around filling in
+  (as Minecraft's chunk map, in our pixels), and Cancel back to where one came from. A failure
   (a refused join, a lost connection) says why in plain words, with Back.
 - **Options**, from research (Minecraft Java's options; the Game Accessibility Guidelines'
   basic list, whose most complained-of issues are remapping, text size, colour and
