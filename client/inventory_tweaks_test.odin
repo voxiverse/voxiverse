@@ -46,6 +46,7 @@ overlay_fixture_destroy :: proc(f: ^Overlay_Fixture) {
 	game.pipe_destroy(&f.pipe)
 	free(f.s)
 	delete(f.app.item_icons)
+	delete(f.app.inventory_search)
 	ui.destroy(&f.app.ui)
 	free(f.app)
 	free_all(context.temp_allocator)
@@ -59,7 +60,7 @@ overlay_frame :: proc(f: ^Overlay_Fixture, in_: ui.Input) {
 
 overlay_slot_at :: proc(f: ^Overlay_Fixture, slot: int) -> ui.Vec2 {
 	ui.begin_frame(&f.app.ui, {}, SCREEN, 1)
-	l := inventory_layout(&f.app.ui, session_allowed(f.s, "items.catalog"))
+	l := inventory_layout(&f.app.ui, f.app.inventory_view.tab)
 	ui.end_frame(&f.app.ui)
 	r := l.slots[slot]
 	return {r.x + r.w / 2, r.y + r.h / 2}
@@ -254,4 +255,50 @@ test_item_icons :: proc(t: ^testing.T) {
 		at := (img.at.y * atlas.size + img.at.x) * 4
 		testing.expect(t, atlas.pixels[at + 3] == img.pixels[0][3])
 	}
+}
+
+// The Creative tab: only with items.catalog; the catalog and a search to
+// narrow it, a click takes a full stack, and the hotbar stays under it.
+@(test)
+test_creative_tab :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	inv := &f.s.inventory
+	v := &f.app.inventory_view
+	dirt := game.item_of_block(.Dirt)
+
+	// The tab button switches; the rest of the inventory is not shown on it.
+	overlay_frame(&f, {})
+	l := inventory_layout(&f.app.ui, .Inventory)
+	creative := ui.Vec2{l.title.x + 140 + f.app.ui.theme.spacing + 70, l.title.y + l.title.h / 2}
+	overlay_frame(&f, {mouse = creative})
+	overlay_frame(&f, {mouse = creative, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	overlay_frame(&f, {mouse = creative, mouse_released = {.Left}})
+	testing.expect_value(t, v.tab, Inventory_Tab.Creative)
+	c := inventory_layout(&f.app.ui, .Creative)
+	testing.expect(t, c.slots[10].w == 0 && c.slots[0].w > 0 && c.catalog.w > 0)
+	testing.expect(t, c.slots[0] == l.slots[0], "the hotbar does not move between tabs")
+
+	// A search narrows the catalog.
+	testing.expect_value(t, len(matching_items("")), len(game.every_item()))
+	found := matching_items("DIR")
+	testing.expect(t, len(found) == 1 && found[0] == dirt)
+	testing.expect_value(t, len(matching_items("no such item")), 0)
+
+	// Clicking the first catalog item takes a stack; a click on a hotbar slot puts it there.
+	first := game.every_item()[0]
+	cell := ui.Vec2{c.catalog.x + INVENTORY_SLOT.x / 2, c.catalog.y + INVENTORY_SLOT.y / 2}
+	overlay_frame(&f, {mouse = cell, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	testing.expect_value(t, inv.cursor, game.Stack{first, 64})
+	slot := ui.Vec2{c.slots[4].x + 5, c.slots[4].y + 5}
+	overlay_frame(&f, {mouse = slot, mouse_released = {.Left}})
+	overlay_frame(&f, {mouse = slot, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	overlay_frame(&f, {mouse = slot, mouse_released = {.Left}})
+	testing.expect_value(t, inv.slots[4], game.Stack{first, 64})
+
+	// Without items.catalog there is no Creative tab to be on.
+	clear(&f.s.grants)
+	overlay_frame(&f, {})
+	testing.expect_value(t, v.tab, Inventory_Tab.Inventory)
 }

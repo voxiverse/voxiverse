@@ -94,6 +94,7 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
+	inventory_search: [dynamic]u8, // the Creative tab's search text
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
 	quit:             bool,
@@ -223,6 +224,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.settings_dirty {settings_save(app)}
 	console_history_save(&app.console)
 	delete(app.item_icons)
+	delete(app.inventory_search)
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)

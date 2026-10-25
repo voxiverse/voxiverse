@@ -30,6 +30,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	defer delete(s.inv_pending)
+	defer delete(app.inventory_search)
 	s.state = .Playing
 	app.session = s
 	defer app.session = nil
@@ -51,7 +52,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	}
 	at :: proc(app: ^App, slot: int) -> ui.Vec2 {
 		ui.begin_frame(&app.ui, {}, SCREEN, 1)
-		l := inventory_layout(&app.ui, false)
+		l := inventory_layout(&app.ui, .Inventory)
 		ui.end_frame(&app.ui)
 		r := l.slots[slot]
 		return {r.x + r.w / 2, r.y + r.h / 2}

@@ -102,7 +102,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run -a ./build/voxiverse --exec "set name ci; sleep 2; screenshot screen_title; wait 3; screen worlds; wait 3; screenshot screen_saves; wait 3; screen worlds create; wait 3; screenshot screen_create_save; wait 3; screen multiplayer; sleep 1; screenshot screen_multiplayer; wait 3; screen multiplayer direct; wait 3; screenshot screen_direct_connection; wait 3; screen options video; wait 3; screenshot screen_options_video; wait 3; screen options sound; wait 3; screenshot screen_options_sound; wait 3; screen options controls; wait 3; screenshot screen_options_controls; wait 3; screen options accessibility; wait 3; screenshot screen_options_accessibility; wait 3; screen options profile; wait 3; screenshot screen_options_profile; wait 3; screen title; screen quit; wait 3; screenshot screen_quit; wait 3; quit"
-          xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait 20; screenshot screen_loading; wait_world; screen menu; wait 3; screenshot screen_game_menu; wait 3; screen game; screen inventory; wait 3; screenshot screen_inventory; wait 3; quit"
+          xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait 20; screenshot screen_loading; wait_world; screen menu; wait 3; screenshot screen_game_menu; wait 3; screen game; screen inventory; wait 3; screenshot screen_inventory; wait 3; screen game; screen inventory creative; wait 3; screenshot screen_creative; wait 3; quit"
           xvfb-run -a ./build/voxiverse --exec "set name ci; join 127.0.0.1:1; sleep 12; screenshot screen_failed; wait 3; quit"
 
       # The sky through a day (screenshots uploaded below).
