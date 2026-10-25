@@ -54,7 +54,7 @@ drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
 	dir := [3]f32{-math.sin(yaw) * cp, math.sin(pitch), -math.cos(yaw) * cp}
 	eye := game.player_eye(c.player)
 	at := eye + {f64(dir.x), f64(dir.y), f64(dir.z)} * 0.4 - {0, 0.3, 0}
-	spawn_item(c.world, at, stack, dir * game.ITEM_THROW + {0, 1.5, 0}, int(player_id(s, c)))
+	spawn_item(c.world, at, stack, dir * game.ITEM_THROW + {0, 2, 0}, int(player_id(s, c)))
 }
 
 // spawn_item: a dropped stack at position (its bottom centre).

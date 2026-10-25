@@ -22,6 +22,7 @@ Draw_Command :: struct {
 	scissor:     [4]i32, // x, y, w, h in pixels
 	first_index: u32,
 	index_count: u32,
+	smooth:      bool, // sampled with a linear filter (icons), else pixel-exact
 }
 
 @(private)
@@ -116,7 +117,7 @@ draw_icon :: proc(ctx: ^Context, r: Rect, icon: Icon, tint := Color{255, 255, 25
 		{f32(img.at.x) * inv, f32(img.at.y) * inv},
 		{f32(img.at.x + img.size) * inv, f32(img.at.y + img.size) * inv},
 	}
-	push_quad(ctx, pixel_rect(ctx, r), uv, tint)
+	push_quad(ctx, pixel_rect(ctx, r), uv, tint, smooth = true)
 }
 
 Align :: enum u8 {
@@ -270,6 +271,7 @@ push_quad :: proc(
 	color: Color,
 	slant: f32 = 0, // leaning right by this per pixel above baseline (italic)
 	baseline: f32 = 0,
+	smooth := false,
 ) {
 	if q[2] <= 0 || q[3] <= 0 {return}
 	l := &ctx.output.layers[ctx.layer]
@@ -278,8 +280,12 @@ push_quad :: proc(
 	scissor := [4]i32{i32(clip[0]), i32(clip[1]), i32(clip[2]), i32(clip[3])}
 
 	// Extend the last command when the scissor is unchanged.
-	if n := len(l.commands); n == 0 || l.commands[n - 1].scissor != scissor {
-		append(&l.commands, Draw_Command{scissor = scissor, first_index = u32(len(l.indices))})
+	if n := len(l.commands);
+	   n == 0 || l.commands[n - 1].scissor != scissor || l.commands[n - 1].smooth != smooth {
+		append(
+			&l.commands,
+			Draw_Command{scissor = scissor, first_index = u32(len(l.indices)), smooth = smooth},
+		)
 	}
 	base := u32(len(l.vertices))
 	x0, y0, x1, y1 := q[0], q[1], q[0] + q[2], q[1] + q[3]

@@ -14,7 +14,7 @@ import "../font"
 // first time). If the atlas fills up it is cleared and refilled (logged; text
 // drawn earlier in that frame may show wrong glyphs for one frame).
 
-GLYPH_ATLAS_SIZE :: 1024
+GLYPH_ATLAS_SIZE :: 2048 // (icons are large)
 
 @(private)
 Glyph_Key :: struct {

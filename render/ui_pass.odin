@@ -141,6 +141,11 @@ ui_draw :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, frame: gpu.Frame, out: ^ui.Output) {
 		if x1 <= x0 || y1 <= y0 {continue}
 		scissor := vk.Rect2D{{x0, y0}, {u32(x1 - x0), u32(y1 - y0)}}
 		vk.CmdSetScissor(cmd, 0, 1, &scissor)
+		sampler := gpu.Sampler.Linear if c.smooth else gpu.Sampler.Nearest
+		if u32(sampler) != push.sampler_id {
+			push.sampler_id = u32(sampler)
+			gpu.push_constants(g, cmd, &push)
+		}
 		vk.CmdDrawIndexed(cmd, c.index_count, 1, c.first_index, 0, 0)
 	}
 	full := vk.Rect2D {

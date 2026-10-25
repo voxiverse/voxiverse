@@ -5,10 +5,13 @@ import "../ui"
 import "./mesh"
 
 // Item icons, made by code at start-up into the UI's atlas: a block's item is
-// a small cube seen from a corner (its top and two sides from the block's own
-// textures, the sides shaded), a tool a pixel sprite drawn here.
+// a cube seen from a corner (its top and two sides from the block's own
+// textures, the sides shaded; rendered once here, a bitmap like any other
+// image, not drawn live), a tool a pixel sprite drawn here. Icons are large
+// and drawn smaller with a smooth filter, so they read clean.
 
-ICON_SIZE :: 32
+ICON_SIZE :: 128 // (drawn at a fraction of this, smoothed: a clean bitmap, not crunchy)
+ICON_SAMPLES :: 4 // per pixel, each way: the silhouette and edges are smooth, each texel stays a flat patch
 
 Item_Icons :: map[game.Item]ui.Icon
 
@@ -32,6 +35,25 @@ item_icons_init :: proc(icons: ^Item_Icons, ctx: ^ui.Context) -> bool {
 	return true
 }
 
+@(private = "file")
+R :: f32(ICON_SIZE) / 2 - 2 // from the centre to the top corner
+
+@(private = "file")
+texel :: proc(
+	face: [mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
+	u, v: f32,
+	shade: f32,
+) -> (
+	c: [4]u8,
+	ok: bool,
+) {
+	N :: mesh.TEXTURE_SIZE
+	if u < 0 || u >= 1 || v < 0 || v >= 1 {return}
+	c = face[int(v * N) * N + int(u * N)]
+	for i in 0 ..< 3 {c[i] = u8(f32(c[i]) * shade)}
+	return c, true
+}
+
 // block_cube draws b as a cube seen from a corner: the hexagon of a cube
 // whose top face is a rhombus; each pixel is the face it falls in and the
 // texel of that face under it.
@@ -41,43 +63,54 @@ block_cube :: proc(
 	layers: ^[mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
 	pixels: ^[ICON_SIZE * ICON_SIZE][4]u8,
 ) {
-	R :: f32(ICON_SIZE) / 2 - 1 // from the centre to the top corner
-	K :: f32(0.8660254) // cos 30 degrees
 	N :: mesh.TEXTURE_SIZE
 	top := layers[mesh.Texture(mesh.block_texture(b, .Pos_Y))]
 	left := layers[mesh.Texture(mesh.block_texture(b, .Pos_Z))]
 	right := layers[mesh.Texture(mesh.block_texture(b, .Pos_X))]
-	texel :: proc(face: [N * N]mesh.Rgba, u, v: f32, shade: f32) -> (c: [4]u8, ok: bool) {
-		if u < 0 || u >= 1 || v < 0 || v >= 1 {return}
-		c = face[int(v * N) * N + int(u * N)]
-		for i in 0 ..< 3 {c[i] = u8(f32(c[i]) * shade)}
-		return c, true
-	}
 	centre := f32(ICON_SIZE) / 2
+	sample :: proc(top, left, right: [N * N]mesh.Rgba, px, py: f32) -> (c: [4]u8, ok: bool) {
+		K :: f32(0.8660254)
+		// Top: from the top corner, a along (K, 1/2) R, b along (-K, 1/2) R.
+		dx, dy := px / (K * R), (py + R) / (0.5 * R)
+		if c, ok = texel(top, (dx + dy) / 2, (dy - dx) / 2, 1); ok {return}
+		// Left side: from the left corner, along (K, 1/2) R, down R.
+		u := (px + K * R) / (K * R)
+		v := (py + 0.5 * R - u * 0.5 * R) / R
+		if c, ok = texel(left, u, v, 0.78); ok {return}
+		// Right side: from the centre, along (K, -1/2) R, down R.
+		u = px / (K * R)
+		v = (py + u * 0.5 * R) / R
+		return texel(right, u, v, 0.58)
+	}
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
-			px, py := f32(x) + 0.5 - centre, f32(y) + 0.5 - centre
-			c: [4]u8
-			ok: bool
-			// Top: from the top corner, a along (K, 1/2) R, b along (-K, 1/2) R.
-			dx, dy := px / (K * R), (py + R) / (0.5 * R)
-			if c, ok = texel(top, (dx + dy) / 2, (dy - dx) / 2, 1); !ok {
-				// Left side: from the left corner, along (K, 1/2) R, down R.
-				u := (px + K * R) / (K * R)
-				v := (py + 0.5 * R - u * 0.5 * R) / R
-				if c, ok = texel(left, u, v, 0.78); !ok {
-					// Right side: from the centre, along (K, -1/2) R, down R.
-					u = px / (K * R)
-					v = (py + u * 0.5 * R) / R
-					c, ok = texel(right, u, v, 0.58)
+			// Average the samples of the pixel (colour weighted by coverage).
+			sum: [4]f32
+			for sy in 0 ..< ICON_SAMPLES {
+				for sx in 0 ..< ICON_SAMPLES {
+					px := f32(x) + (f32(sx) + 0.5) / ICON_SAMPLES - centre
+					py := f32(y) + (f32(sy) + 0.5) / ICON_SAMPLES - centre
+					c, ok := sample(top, left, right, px, py)
+					if !ok {continue}
+					a := f32(c[3])
+					sum += {f32(c[0]) * a, f32(c[1]) * a, f32(c[2]) * a, a}
 				}
 			}
-			pixels[y * ICON_SIZE + x] = c if ok else {}
+			out: [4]u8
+			if sum.a > 0 {
+				out = {
+					u8(sum.r / sum.a + 0.5),
+					u8(sum.g / sum.a + 0.5),
+					u8(sum.b / sum.a + 0.5),
+					u8(sum.a / (ICON_SAMPLES * ICON_SAMPLES) + 0.5),
+				}
+			}
+			pixels[y * ICON_SIZE + x] = out
 		}
 	}
 }
 
-// block_flat draws b's side texture as it is, each texel twice as large.
+// block_flat draws b's side texture as it is, each texel ICON_SIZE / 16 times as large.
 @(private = "file")
 block_flat :: proc(
 	b: game.Block,
@@ -113,7 +146,7 @@ LAUNCHER_ART := [16]string {
 	"................",
 }
 
-// tool_sprite draws tool's 16 x 16 art, each pixel twice as large.
+// tool_sprite draws tool's 16 x 16 art, each pixel ICON_SIZE / 16 times as large.
 @(private = "file")
 tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 	art: [16]string
@@ -124,7 +157,7 @@ tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
 			c: [4]u8
-			switch art[y / 2][x / 2] {
+			switch art[y * 16 / ICON_SIZE][x * 16 / ICON_SIZE] {
 			case 'o':
 				c = {28, 28, 34, 255}
 			case 'L':

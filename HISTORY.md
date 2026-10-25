@@ -631,3 +631,4 @@ inside it again would buy nothing.
 - **Exit check:** UI tests for each mouse tweak and for pick block; an icon for every item
   (none blank), looked at once in a screenshot of the inventory.
 - **Revised after review:** the catalog is a **Creative tab** (only with `items.catalog`), not a column beside the inventory: tabs in the title row, the Inventory tab the 5x5 grid over the hotbar, the Creative tab a search field (`matching_items`: names containing the text) and the catalog grid over the same hotbar, so a stack goes straight into a hotbar slot. While the search has focus, the inventory key and the number and drop keys type instead. `screen inventory creative` opens it.
+- **After the first playtest:** icons are 128 px, each pixel the average of 4 x 4 samples (smooth silhouette, each texel still a flat patch), drawn smaller with a linear filter (`Draw_Command.smooth`; the UI atlas is 2048 square); a dropped stack is thrown at 9 blocks/s (was 4).
