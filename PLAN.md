@@ -282,7 +282,7 @@ Each one is a vertical slice with an exit check; nothing moves on with failing c
 | M16 | Accounts and characters: an account is a keypair the client makes (the server checks it), characters belong to accounts and are chosen before joining; everything kept about a player becomes the character's | Two clients over UDP can't take each other's account or character; a name stays with its account; character data survives restarts; old player files migrate (done: `server/account_test.odin` refuses a forged proof and another account's name over UDP, offers and chooses characters, moves a pre-account player file to the first account to play it, and keeps a ban on the account; proofs are per nonce; the items test keeps inventories in character files through a restart; `test_characters_screen` chooses) |
 | M17 | Many worlds in a universe, named by addresses: each world's kind (generator parameters, palette, climate, rules, sky) comes from its address, its terrain from the universe seed too; only loaded worlds run; `travel <address>` carries a character | Two players in different worlds of one universe, one travels to the other's with their inventory; an address gives the same kind of world in two universes and different terrain; an unloaded world costs no tick time; memory flat over repeated travel; each world's save its own (done: `server/worlds_test.odin` travels an admin away and back over UDP with her inventory while another player stays home, saves her edit in the other world's directory, unloads it when empty, keeps memory flat over repeated travel, and checks an address's kind across two universes; `game/address_test.odin`; old world directories migrate) |
 | M18 | Gates: rare natural structures in every world, none near its middle (late-game finds: `locate gate`), dialed symbol by symbol (seven within the galaxy) on an overlay, open for a while, travelled through to the dialed world's gate nearest its middle | A dialed gate opens and carries a player to the destination's gate and back, over UDP; gates are where worldgen says on every platform; a misdial (an address already dialing, or this world's) is refused (done: `server/gates_test.odin` refuses misdials, then dials, walks through and dials back over UDP; `test_gates` pins placements and checks every gate's blocks; `client/dial_test.odin` drives the overlay) |
-| M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) |
+| M19 | Performance: tools to measure (benchmark scenarios under fixed conditions, `build perf`, `build trace`), build profiles, then the costs they find: the load path (workers' queue, column cache, load order, send budget, water wake-ups, column tops), light and caves, per-direction draws, greedy meshing, front-to-back drawing | `build bench` and in-game traces before and after each change, recorded in this file; worldgen golden hashes and light tests unchanged; a CI step fails on a benchmark regression beyond a margin; frame, load and tick numbers recorded as the baseline for later milestones (one machine's: relative, not absolute) (done: the tools, the benchmarking system (six scenarios under fixed conditions, `compare`, CI smoke runs), and the costs they found: load 6.0 -> 1.7 s, server tick time over a flight 1430 -> 330 ms, GPU frame at the spawn 2.34 -> 1.70 ms, triangles 517k -> 291k; commands, console and scripts separated) |
 | M20 | Builds and releases: build profiles (an optimized development build by default), release executables that need no files beside them, versions stamped in, packages for Windows, Linux and macOS made by CI on every push and published as a GitHub Release for each version tag | A version tag gives a Release with the three packages and checksums; each package, unpacked on its own OS in CI, starts and reaches a world (Linux: on the CPU driver) or answers `--version` and serves; the release game reads nothing but the player's settings and saves |
 | M21 | Polish II: inventory mouse tweaks (drags, double-click, wheel), middle-click pick block, square slots with generated item icons and a smaller hotbar, landing dust, the title screen (warp starfield, build's commit), native Windows behaviour | UI tests for each mouse tweak and pick block; icons generated for every item; title screen screenshot; the Windows list checked on a Windows machine |
 | M22 | Sky and time: a calendar from each world's astronomy (day, year, tilt, moons), seasons in the sun's path, moon phases, stars fixed per world turning with the sky | The same moment gives the same sky on every platform (golden values); a moon's phase repeats on its period; stars keep their places night to night but for the sidereal drift; `calendar` reads it out |
@@ -731,19 +731,18 @@ compare them with each other, not across machines. Numbers are per chunk unless 
     day, a bug's setup). Nothing that checks or measures: that is code. **Checks** (the
     exit checks: flight, tour, blast) become `--check <name>` like `--benchmark
     <scenario>`, no longer console commands.
-- **Left, measured, not done yet:**
-  - clouds: the sky's march over the cloud grid is ~0.2 ms of a 1.7 ms frame. Tried and
-    dropped: empty-space skipping (each cell's distance to the nearest cloud, rays
-    leaping across clear squares): the same sky pixel for pixel, but slower by `build
-    bench compare` (sky +20%, world +7.6%, frame +7.1%; p 0.008 each): the gaps here are
-    small, the byte map caches worse than the bitmap, and the world shader carries the
-    bigger code. A map in a texture, or a lower resolution, would be the next tries;
+- **Also done at the close:** the server frees the chunks a moving player left (the old
+  area less the new) instead of looking at every loaded chunk whenever anyone moves: that
+  pass took up to 13 ms a tick with 8 players flying (`build bench server --profile`); a full
+  sweep stays every 10 s. `debug.occlusion_stats` counts chunks drawn that pass no pixel.
+- **Left, measured, for later:**
+  - occlusion culling (chunks' faces connected through open space, a search from the
+    camera's chunk): 72% of the chunks drawn at the spawn's views pass no pixel (under the
+    ground, behind hills), 39% in flight: the next step for the GPU;
+  - clouds: ~0.2 ms of a 1.7 ms frame; empty-space skipping tried and dropped (slower);
   - light is worked out for a chunk's whole 48³ neighbourhood each time it is meshed (27x
-    the work if light were kept per chunk); in game a chunk's light and mesh take ~0.7 ms
-    against the benchmark's 0.3 (four busy pools on four cores);
-  - `drop far` walks every chunk a client has when it crosses a chunk border (5 ms);
-  - occlusion culling (chunks hidden behind the land): count how many drawn chunks are
-    hidden before building it.
+    the work if light were kept per chunk): the biggest CPU cost left in meshing, worth it
+    only when meshing is a bottleneck again.
 
 ## M20: builds and releases
 

@@ -124,6 +124,15 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			last = now
 		}
 		log_frame_stats(&app.frame_stats)
+		if o := app.world_pass.occlusion_stats; o.frames > 0 {
+			log.infof(
+				"render occlusion frames=%d chunks_drawn=%.0f hidden=%.0f (%.0f%% of them passed no pixel)",
+				o.frames,
+				f64(o.queried) / f64(o.frames),
+				f64(o.hidden) / f64(o.frames),
+				100 * f64(o.hidden) / f64(max(o.queried, 1)),
+			)
+		}
 		if t := base.frame_stats_summary(&app.triangle_stats); t.count > 0 {
 			log.infof(
 				"render triangles_k frames=%d avg=%.0f p50=%.0f p99=%.0f max=%.0f",

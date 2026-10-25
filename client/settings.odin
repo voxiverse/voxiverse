@@ -102,6 +102,7 @@ player_name :: proc(s: ^Settings) -> string {
 Debug_Switches :: struct {
 	overlay:            bool, // F3
 	chunk_borders:      bool,
+	occlusion_stats:    bool, // count chunks drawn but hidden (a query each; logged at exit)
 	hot_reload_shaders: bool,
 	net_trace:          bool,
 	net_capture:        bool,
@@ -121,6 +122,10 @@ DEBUG_DEFAULTS := Debug_Switches {
 DEBUG_VARS := [?]base.Var {
 	{field = "overlay", help = "debug overlay (F3)"},
 	{field = "chunk_borders", help = "outline the camera's chunk and its neighbours' edges"},
+	{
+		field = "occlusion_stats",
+		help = "count chunks drawn but hidden behind nearer ones (logged at exit)",
+	},
 	{
 		field = "hot_reload_shaders",
 		help = "recompile and reload shaders when assets/shaders changes (development builds)",

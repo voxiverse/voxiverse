@@ -71,20 +71,31 @@ Upload_Result :: enum {
 }
 
 World_Pass :: struct {
-	settings:       World_Settings,
-	pipelines:      [Mesh_Layer]gpu.Pipeline,
-	vertices:       gpu.Buffer,
-	ranges:         base.Range_Allocator, // in vertices
-	indices:        gpu.Buffer,
-	textures:       gpu.Image,
-	textures_id:    gpu.Texture_Id,
-	meshes:         base.Pool(Mesh, Mesh_Handle),
-	frames:         [gpu.FRAMES_IN_FLIGHT]World_Frame,
-	setup_pending:  []u8, // index and texture data for the first frame
-	texture_layers: u32,
-	stats:          World_Stats,
-	full_reported:  bool,
+	settings:        World_Settings,
+	pipelines:       [Mesh_Layer]gpu.Pipeline,
+	vertices:        gpu.Buffer,
+	ranges:          base.Range_Allocator, // in vertices
+	indices:         gpu.Buffer,
+	textures:        gpu.Image,
+	textures_id:     gpu.Texture_Id,
+	meshes:          base.Pool(Mesh, Mesh_Handle),
+	frames:          [gpu.FRAMES_IN_FLIGHT]World_Frame,
+	setup_pending:   []u8, // index and texture data for the first frame
+	texture_layers:  u32,
+	stats:           World_Stats,
+	full_reported:   bool,
+	// Occlusion statistics (a debug switch: a query a chunk costs): how many
+	// chunks drawn passed no pixel, hidden behind nearer ones (drawn first):
+	// what occlusion culling could leave out.
+	occlusion:       bool,
+	occlusion_stats: Occlusion_Stats,
 }
+
+Occlusion_Stats :: struct {
+	frames, queried, hidden: int, // summed over the frames read
+}
+
+OCCLUSION_QUERIES :: 4096 // chunks queried a frame, at most
 
 World_Stats :: struct {
 	meshes, drawn:  int,
@@ -116,6 +127,8 @@ World_Frame :: struct {
 	staging_used: int,
 	copies:       [dynamic]vk.BufferCopy,
 	freed:        [dynamic]base.Range, // reusable once this slot comes round again
+	queries:      vk.QueryPool, // occlusion (made when first wanted)
+	queried:      u32, // queries recorded in this slot's last frame
 }
 
 // World_Push matches world.vert's push constants.
@@ -248,6 +261,7 @@ world_reload :: proc(p: ^World_Pass, g: ^gpu.Gpu, shaders: World_Shaders) -> boo
 // world_destroy releases everything; call after gpu.wait_idle.
 world_destroy :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	for &f in p.frames {
+		if f.queries != 0 {vk.DestroyQueryPool(g.device, f.queries, nil)}
 		gpu.destroy_buffer(g, &f.staging)
 		delete(f.copies)
 		delete(f.freed)
@@ -272,6 +286,27 @@ world_begin :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	for r in f.freed {base.range_free(&p.ranges, r)}
 	clear(&f.freed)
 	p.stats.uploaded_bytes = 0
+	// This slot's last occlusion queries are done (its fence was waited on).
+	if f.queried > 0 {
+		results: [OCCLUSION_QUERIES]u64
+		if vk.GetQueryPoolResults(
+			   g.device,
+			   f.queries,
+			   0,
+			   f.queried,
+			   int(f.queried) * size_of(u64),
+			   &results[0],
+			   size_of(u64),
+			   {._64},
+		   ) ==
+		   .SUCCESS {
+			o := &p.occlusion_stats
+			o.frames += 1
+			o.queried += int(f.queried)
+			for r in results[:f.queried] {if r == 0 {o.hidden += 1}}
+		}
+		f.queried = 0
+	}
 }
 
 // world_add_mesh uploads a chunk's vertices, counts[layer] of each layer in
@@ -354,6 +389,19 @@ world_upload :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame) -> bool {
 	cmd := frame.cmd
 	if p.setup_pending != nil {
 		upload_setup(p, f, cmd) or_return
+	}
+	if p.occlusion {
+		// Reset before rendering (a reset cannot go inside it).
+		if f.queries == 0 {
+			info := vk.QueryPoolCreateInfo {
+				sType      = .QUERY_POOL_CREATE_INFO,
+				queryType  = .OCCLUSION,
+				queryCount = OCCLUSION_QUERIES,
+			}
+			if vk.CreateQueryPool(g.device, &info, nil, &f.queries) !=
+			   .SUCCESS {p.occlusion = false}
+		}
+		if f.queries != 0 {vk.CmdResetQueryPool(cmd, f.queries, 0, OCCLUSION_QUERIES)}
 	}
 	if len(f.copies) == 0 {return true}
 	gpu.begin_label(g, cmd, "upload chunk meshes")
@@ -487,12 +535,20 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 		append(&visible, Visible{m, lo, d.x * d.x + d.y * d.y + d.z * d.z})
 	}
 	slice.sort_by(visible[:], proc(a, b: Visible) -> bool {return a.distance < b.distance})
+	slot := &p.frames[gpu.frame_slot(g)]
+	query := p.occlusion && slot.queries != 0
 	for layer in ([2]Mesh_Layer{.Opaque, .Cutout}) {
 		draw_begin(p, g, cmd, layer)
 		push := world_push(p, scene, 0)
 		for v in visible {
 			if v.mesh.layers[layer] == 0 {continue}
+			counted := query && layer == .Opaque && slot.queried < OCCLUSION_QUERIES
+			if counted {vk.CmdBeginQuery(cmd, slot.queries, slot.queried, {})}
 			p.stats.triangles += draw_layer(g, cmd, v.mesh, layer, v.lo, camera.position, &push)
+			if counted {
+				vk.CmdEndQuery(cmd, slot.queries, slot.queried)
+				slot.queried += 1
+			}
 			if layer == .Opaque {p.stats.drawn += 1}
 		}
 	}

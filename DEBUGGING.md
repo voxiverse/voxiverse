@@ -495,6 +495,7 @@ tools, from narrow to wide:
 | `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where it has them) and prints the hottest functions per thread; `perf report -i build/game.perf` for call graphs, `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`) |
 | `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes; `trace` prints each scope's calls and percentiles per thread, a per-second timeline and the slowest frames and server ticks broken down |
 | The `session mesher` log line | At the end of a session: chunks meshed, re-meshed (and why: resent, edits, column tops), mesh times |
+| `set debug.occlusion_stats 1` | Counts the chunks drawn that pass no pixel (hidden behind nearer ones: what occlusion culling would leave out); logged at exit as `render occlusion` |
 
 `build run --release --profile` writes `build/voxiverse.spall`, a trace for
 [Spall](https://gravitymoth.com/spall/) (open it in the web viewer or the native app):

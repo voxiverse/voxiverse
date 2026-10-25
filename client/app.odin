@@ -318,6 +318,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		base.profile_scope("record")
 		base.metric_scope(.Frame_Record)
 		g := &app.g
+		app.world_pass.occlusion = app.debug.occlusion_stats
 		render.world_begin(&app.world_pass, g)
 		if app.session != nil {session_apply(app.session, &app.world_pass, g)}
 		render.world_upload(&app.world_pass, g, frame)
