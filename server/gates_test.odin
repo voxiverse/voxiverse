@@ -1,6 +1,7 @@
 package server
 
 import "core:fmt"
+import "core:log"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -86,7 +87,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		c.look = {yaw + 3.14159265, 0}
 		@(static) want: [3]f64
 		want = front
-		return net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {
+		ok := net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {
 				p := cs[0].update.state.position
 				return(
 					abs(p.x - want.x) < 0.6 &&
@@ -97,6 +98,19 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 					len(cs[0].chunks) > 20 \
 				)
 			}, 30)
+		if !ok {
+			st := c.update.state
+			log.errorf(
+				"walk_up: at %v (want %v), on ground %v, velocity %v, %d chunks; notices %v",
+				st.position,
+				want,
+				st.on_ground,
+				st.velocity,
+				len(c.chunks),
+				c.notices[:],
+			)
+		}
+		return ok
 	}
 	if !testing.expect(t, walk_up(t, &alice, here), "alice never reached the gate") {return}
 
