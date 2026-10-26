@@ -406,12 +406,16 @@ world_upload :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame) -> bool {
 	if len(f.copies) == 0 {return true}
 	gpu.begin_label(g, cmd, "upload chunk meshes")
 	defer gpu.end_label(g, cmd)
-	// Ranges being written were last drawn by finished frames; still order
-	// the copies after vertex fetches, for the validation layer's sake.
+	// Ranges being written were last drawn (and copied) by finished frames;
+	// still order the copies after vertex fetches and earlier copies, for the
+	// validation layer's sake (without the write, a range copied again is a
+	// write-after-write hazard).
 	before := vk.MemoryBarrier2 {
-		sType        = .MEMORY_BARRIER_2,
-		srcStageMask = {.VERTEX_ATTRIBUTE_INPUT},
-		dstStageMask = {.COPY},
+		sType         = .MEMORY_BARRIER_2,
+		srcStageMask  = {.VERTEX_ATTRIBUTE_INPUT, .COPY},
+		srcAccessMask = {.TRANSFER_WRITE},
+		dstStageMask  = {.COPY},
+		dstAccessMask = {.TRANSFER_WRITE},
 	}
 	after := vk.MemoryBarrier2 {
 		sType         = .MEMORY_BARRIER_2,

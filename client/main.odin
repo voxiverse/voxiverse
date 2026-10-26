@@ -180,6 +180,8 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		}
 	}
 	server_failed := app.server_failed
+	// app_destroy frees the console: later lines must not reach it.
+	base.log_set_listener(sink, nil, nil)
 	issues := app_destroy(app) // leaves any world, so server failures are known after
 	if app.server_failed || server_failed || app.script_failed {ok = false}
 	if issues > 0 {
