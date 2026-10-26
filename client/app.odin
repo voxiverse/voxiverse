@@ -60,10 +60,10 @@ App :: struct {
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	entity_pass:      render.Entity_Pass,
 	entity_draw:      render.Entity_Draw, // this frame's boxes (players, entities, particles)
-	mixer:            audio.Mixer, // fed to the sound card by audio_device
+	mixer:            ^audio.Mixer, // heap (it is large); fed to the sound card by audio_device
 	audio_device:     audio.Device,
 	sounds:           Sound_Bank,
-	volume:           f32, // as last told to the mixer
+	volumes:          [audio.Bus]f32, // as last told to the mixer
 	shader_watch:     Shader_Watch,
 	worlds:           Worlds_Screen,
 	multiplayer:      Multiplayer_Screen,
@@ -160,6 +160,8 @@ app_init :: proc(app: ^App) -> bool {
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
+	app.mixer = new(audio.Mixer)
+	audio.mixer_init(app.mixer, audio.DEVICE_RATE)
 	if !app.benchmark {audio_init(app)} 	// (a benchmark has no sound device: its mixer would vary the work)
 	if !passes_init(app) {return false}
 	return preview_init(app)
@@ -169,11 +171,26 @@ app_init :: proc(app: ^App) -> bool {
 // game runs silent.
 @(private = "file")
 audio_init :: proc(app: ^App) {
-	audio.mixer_init(&app.mixer, audio.DEVICE_RATE)
-	sounds_init(&app.sounds, &app.mixer)
-	audio.set_volume(&app.mixer, app.settings.volume)
-	app.volume = app.settings.volume
-	audio.device_open(&app.audio_device, &app.mixer)
+	sounds_init(&app.sounds, app.mixer)
+	audio_volumes(app, true)
+	audio.device_open(&app.audio_device, app.mixer)
+}
+
+// audio_volumes tells the mixer the volume sliders that changed (all, first).
+audio_volumes :: proc(app: ^App, all: bool) {
+	s := &app.settings
+	want := #partial [audio.Bus]f32 {
+		.Master   = s.volume,
+		.Music    = s.music_volume,
+		.Ambience = s.ambience_volume,
+		.Effects  = s.effects_volume,
+	}
+	for b in ([]audio.Bus{.Master, .Music, .Ambience, .Effects}) {
+		if all || want[b] != app.volumes[b] {
+			audio.set_bus_gain(app.mixer, b, want[b])
+			app.volumes[b] = want[b]
+		}
+	}
 }
 
 // world_pass_init sets up chunk rendering with the generated block textures.
@@ -219,7 +236,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		passes_destroy(app)
 		render.scene_destroy(&app.scenes, &app.g)
 	}
-	a := audio.stats(&app.mixer)
+	a := audio.stats(app.mixer)
 	log.infof(
 		"audio device=%v played=%d mixed_seconds=%.1f dropped=%d",
 		app.audio_device.open,
@@ -229,6 +246,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	)
 	audio.device_close(&app.audio_device) // before the sounds it plays go
 	sounds_destroy(&app.sounds)
+	free(app.mixer)
 	if app.settings_dirty {settings_save(app)}
 	console_history_save(&app.console)
 	delete(app.item_icons)
@@ -277,10 +295,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	playing := app.session != nil && app.session.state == .Playing && !world_paused(app)
 	platform.set_keep_awake(w, playing)
 	gpu.set_vsync(&app.g, app.settings.vsync)
-	if app.settings.volume != app.volume {
-		audio.set_volume(&app.mixer, app.settings.volume)
-		app.volume = app.settings.volume
-	}
+	audio_volumes(app, false)
+	audio.drain(app.mixer)
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
@@ -304,7 +320,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		fly_test_update(app)
 		blast_test_update(app)
 		tour_test_update(app)
-		if !app.benchmark {sounds_play(&app.sounds, &app.mixer, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
+		if !app.benchmark {sounds_play(&app.sounds, app.mixer, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
 		for n in app.session.notices {
 			console_print(&app.console, n)

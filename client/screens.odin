@@ -326,15 +326,17 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 			),
 		)
 	}
-	a := audio.stats(&app.mixer)
+	a := audio.stats(app.mixer)
 	append(
 		&lines,
 		fmt.tprintf(
-			"audio: %s, %d voices, %d sounds played, %d dropped",
+			"audio: %s, %d voices (%d real), %d sounds played, %d dropped, %.1f LUFS",
 			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "no device (silent)",
 			a.voices,
+			a.real,
 			a.played,
 			sync.atomic_load(&app.mixer.dropped),
+			a.momentary,
 		),
 	)
 	t := &ctx.theme

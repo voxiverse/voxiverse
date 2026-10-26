@@ -1031,3 +1031,32 @@ fields are in range (the decoder disconnects the client for any other, which is 
 own check); slots and arguments out of range are fuzzed at the game level, where
 `inventory_apply` is conserved or refuses. The fuzz found no bug. Not done: persisting
 the ledger, per-character ledgers, a `faucets` view per period.
+
+## M32: the audio engine, first half
+
+The original M32 section was the whole engine core; it outgrew one session, so what is
+built is here and the rest is M32a in PLAN.md.
+
+- **Voices.** `audio.play` returns a `Voice_Id` (generation in the high 24 bits, slot in the
+  low 8), allocated from a game-thread table; the audio thread reports ends on a return ring
+  (`poll`, `drain`) and a slot is reused only after its end was read, so a stale handle does
+  nothing. Commands: stop (with a fade), fade, gain, pitch and cutoff per voice, all smoothed
+  per block. 128 voices, 64 real: ranked each block by priority then audibility, the rest
+  virtual (position, fades and loops go on; they resume at the right sample).
+- **Sources.** Memory sounds, cubic (Catmull-Rom) resampling, loops with loop points that
+  wrap the interpolator's taps (seamless), fade in.
+- **Buses.** World, Player, UI under Effects; Effects, Ambience, Music under Master. Gain,
+  mute, low-pass, up to four duck rules (trigger bus, threshold, amount, attack, release),
+  snapshots crossfaded over a time. `audio/bus.odin`.
+- **DSP.** `audio/dsp.odin`: a zero-delay state-variable filter (its response is tested
+  against the analytic one), a look-ahead limiter (window minimum averaged over the window,
+  program-dependent release; sample peaks stay under -1 dBFS), a BS.1770 K-weighted meter
+  with a histogram for integrated loudness (a 997 Hz sine at -20 dBFS reads -20.0 LUFS).
+  A NaN or infinity from a sound or the filters never reaches the device; counted.
+- **Game.** `client/sounds.odin` plays on the World and Player buses; Options Sound has
+  Master, Music, Ambience and Effects; the mixer is on the heap (280 KB); the F3 audio line
+  shows real voices and the momentary loudness.
+- **Tests.** `audio/mixer_test.odin`, `audio/dsp_test.odin`: plays once, ring flood, handles
+  and table, gapless loop (100 loops, and no click when pitched), virtual voices and resume,
+  priority, fades, ducking, snapshot, bus gain/mute/cutoff, voice cutoff sweep, NaN guard,
+  digital silence, determinism, filter response and stability, limiter, meter.

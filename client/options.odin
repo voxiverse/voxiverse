@@ -36,7 +36,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"clouds",
 		"show_fps",
 	},
-	.Sound         = {"volume"},
+	.Sound         = {"volume", "music_volume", "ambience_volume", "effects_volume"},
 	.Controls      = {"mouse_sensitivity", "invert_mouse", "sneak_toggle", "sprint_toggle"},
 	.Accessibility = {"reduce_motion", "chat_text_size"},
 	.Profile       = {"name", "share_data"},

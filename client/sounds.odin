@@ -83,24 +83,50 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 		variant := rand.int_max(sfx.VARIANTS)
 		switch e.kind {
 		case .Entity_Hurt:
-			audio.play(m, {b.sheep[.Hurt][variant], gain, pitch})
+			audio.play(
+				m,
+				{sound = b.sheep[.Hurt][variant], gain = gain, pitch = pitch, bus = .World},
+			)
 		case .Entity_Die:
-			audio.play(m, {b.sheep[.Die][variant], gain, pitch})
+			audio.play(
+				m,
+				{sound = b.sheep[.Die][variant], gain = gain, pitch = pitch, bus = .World},
+			)
 		case .Launch:
-			audio.play(m, {b.blast[.Launch][variant], gain, pitch})
+			audio.play(
+				m,
+				{sound = b.blast[.Launch][variant], gain = gain, pitch = pitch, bus = .World},
+			)
 		case .Explosion:
-			audio.play(m, {b.blast[.Boom][variant], gain, pitch * 0.9})
+			audio.play(
+				m,
+				{sound = b.blast[.Boom][variant], gain = gain, pitch = pitch * 0.9, bus = .World},
+			)
 		case .Land:
-			audio.play(m, {b.player[.Land][variant], gain, pitch})
+			audio.play(
+				m,
+				{sound = b.player[.Land][variant], gain = gain, pitch = pitch, bus = .Player},
+			)
 			if mat, ok := sfx.material_of(e.block); ok {
-				audio.play(m, {b.block[mat][.Step][variant], gain, pitch})
+				audio.play(
+					m,
+					{
+						sound = b.block[mat][.Step][variant],
+						gain = gain,
+						pitch = pitch,
+						bus = .World,
+					},
+				)
 			}
 		case .Break, .Place, .Step:
 			mat, ok := sfx.material_of(e.block)
 			if !ok {continue}
 			action: sfx.Action =
 				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
-			audio.play(m, {b.block[mat][action][variant], gain, pitch})
+			audio.play(
+				m,
+				{sound = b.block[mat][action][variant], gain = gain, pitch = pitch, bus = .World},
+			)
 		}
 	}
 }

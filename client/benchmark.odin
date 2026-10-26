@@ -77,6 +77,9 @@ BENCHMARK_SETTINGS := Settings {
 	clouds            = true,
 	vsync             = false,
 	volume            = 0,
+	music_volume      = 1,
+	ambience_volume   = 1,
+	effects_volume    = 1,
 	keys              = DEFAULT_BINDINGS,
 	chat_text_size    = 1,
 }

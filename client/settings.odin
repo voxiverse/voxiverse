@@ -32,7 +32,10 @@ Settings :: struct {
 	clouds:            bool,
 	show_fps:          bool, // the FPS counter in the corner
 	// Sound
-	volume:            f32, // 0..1, all sound
+	volume:            f32, // 0..1, all sound (the Master bus)
+	music_volume:      f32, // 0..1
+	ambience_volume:   f32, // 0..1
+	effects_volume:    f32, // 0..1
 	// Controls
 	mouse_sensitivity: f32,
 	invert_mouse:      bool,
@@ -53,6 +56,9 @@ SETTINGS_DEFAULTS := Settings {
 	gui_scale         = 0,
 	clouds            = true,
 	volume            = 0.8,
+	music_volume      = 1,
+	ambience_volume   = 1,
+	effects_volume    = 1,
 	mouse_sensitivity = 1,
 	keys              = DEFAULT_BINDINGS,
 	chat_text_size    = 1,
@@ -143,6 +149,30 @@ SETTINGS_VARS := [?]base.Var {
 		field = "volume",
 		label = "Master volume",
 		help = "sound volume",
+		min = 0,
+		max = 1,
+		step = 0.05,
+	},
+	{
+		field = "music_volume",
+		label = "Music",
+		help = "music volume",
+		min = 0,
+		max = 1,
+		step = 0.05,
+	},
+	{
+		field = "ambience_volume",
+		label = "Ambience",
+		help = "ambient sound volume",
+		min = 0,
+		max = 1,
+		step = 0.05,
+	},
+	{
+		field = "effects_volume",
+		label = "Effects",
+		help = "volume of sounds in the world and of the interface",
 		min = 0,
 		max = 1,
 		step = 0.05,
