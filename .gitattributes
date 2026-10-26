@@ -1,1 +1,4 @@
-* text=auto eol=lf
+# Native line endings everywhere (CRLF on Windows: odinfmt writes it there),
+# except files a test or generator compares byte for byte.
+* text=auto
+tools/wireshark/*.lua text eol=lf
