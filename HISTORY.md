@@ -1328,3 +1328,39 @@ What M32b left, less the inspector and the crash and checksum parts (M32e).
 - **Not done (M32e):** the freeze-and-solo inspector, the crash report and `report`
   attachments of the ring, the macOS and Windows checksums (they need those CI runs).
 
+## M32e: audio tools, what is left (inspector, crash and report attachment)
+
+- **The inspector** (`audio/inspect.odin`, `client/audio_inspector.odin`; F8, dev builds,
+  the `Audio_Inspector` overlay: takes the mouse, the game runs on). A freeze takes the
+  ring's *newest* window (`capture_ring_bytes(m, newest = true)`: at most one state interval,
+  15 s, so a replay costs a fraction of a second, not the 75 s the oldest state may cover),
+  replays it through a mixer of its own with the live mixer's sounds, and keeps the voices
+  (from the window's plays and state) with the engine's last decision about each, every
+  bus's peak, a spectrum of Master and the last half second of Master. The live mixer's
+  output is replaced by that loop through a `Monitor` (an atomic pointer read at the end of
+  `mix`; the live mix goes on and the ring goes on recording): not muting buses, which
+  would have muted the loop too. The panel: device counters (latency, callback, underruns,
+  late, drift), the buses with a level bar and a button, the spectrum, the frozen voices
+  newest first with a button each. The button cycles solo, mute, off; a pick rewrites the
+  window's commands (plays and voice commands of what is not kept, the state's voices) and
+  replays it. Streams are never replayed (their plays and voices are dropped; a second
+  mixer must not pull from the live mixer's streams). Buses form a tree (World feeds
+  Effects), so soloing World also shows level on Effects: that is right, not a bug.
+  Pitfalls met: a `defer` in an `if` block runs at its end (a freed state, a hung replay);
+  `--check audio` opens the inspector 12 s in, solos World, screenshots it as
+  `audio_inspector` and fails if nothing froze, the window has no voices or the replay fails.
+  Tests in `audio/inspect_test.odin`.
+- **A crash leaves the window beside its report.** While any voice plays, the game saves the
+  ring every 30 s to `captures/audio-last.vxac` (`audio_ring_autosave`) and tells the crash
+  handler (`base.debug_attach`: a path in a fixed buffer, since the handler may not
+  allocate); the crash log then says `crash attached file=... age_s=N`. Seen with a
+  deliberate `crash` in a dev build: the file is there and `build audiodump` reads it.
+- **`report`** names the last ring file written (`audio window:` line) and copies it beside
+  the report, in `telemetry/reports/` (at most 4 MB; a larger one is only named). Decision
+  that departs from the plan's: the uploader sends text only (`MAX_BATCH_TEXT`), so the
+  `.vxac` waits there and is not uploaded; sending binaries needs a protocol change and is
+  not worth one for this.
+- **Checksums:** `test_audio_baselines` now logs `audio baseline <scenario> checksum <key>
+  <value>` for each scenario, so CI's macOS and Windows test logs carry them. Committing
+  them needs a CI run of this commit: the milestone M32f.
+

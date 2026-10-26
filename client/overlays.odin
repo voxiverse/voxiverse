@@ -20,6 +20,7 @@ Overlay :: enum u8 {
 	Quit_Dialog,
 	Dial, // a gate's symbols (dial.odin)
 	Stats, // the statistics (stats_ui.odin)
+	Audio_Inspector, // F8, dev builds: the audio freeze and solo (audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 }
 
@@ -46,6 +47,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
 	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Stats = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
 }
 
@@ -186,6 +188,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			dial_ui(app, ctx, top)
 		case .Stats:
 			stats_ui(app, ctx, top)
+		case .Audio_Inspector:
+			audio_inspector_ui(app, ctx)
 		case .Consent:
 			consent_dialog(app, ctx)
 		}

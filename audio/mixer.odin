@@ -112,6 +112,7 @@ Mixer :: struct {
 	held:       [MAX_HELD]Queued,
 	held_n:     int,
 	capture:    ^Capture, // (atomic) the recorder, when on
+	monitor:    ^Monitor, // (atomic) audio that takes the place of the output, when set (inspect.odin)
 	probe:      proc "contextless" (m: ^Mixer, user: rawptr, n: int), // offline analysis: called after each block (analyze.odin); nil in the game
 	probe_user: rawptr,
 	stage:      [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
@@ -154,6 +155,12 @@ Stats :: struct {
 	momentary:   f32, // LUFS of the last 400 ms (f32 bits)
 	reduction:   f32, // the limiter's lowest gain since the last read
 	bus_peak:    [Bus]f32, // peak of each bus in the last mix
+}
+
+// stats_drift_ppm: the device clock's drift alone (stats resets the callback's
+// worst case, which a second reader would take from the first).
+stats_drift_ppm :: proc(m: ^Mixer) -> f32 {
+	return load_f32(&m.stats.drift_ppm)
 }
 
 // stats reads the mixer's statistics from any thread.
@@ -490,6 +497,7 @@ mix :: proc "contextless" (m: ^Mixer, out: []f32) {
 		m.clock += u64(n)
 		done += n
 	}
+	if mon := sync.atomic_load(&m.monitor); mon != nil {monitor_fill(mon, out)}
 	report_ends(m)
 	real, total: u32
 	for v in m.voices {

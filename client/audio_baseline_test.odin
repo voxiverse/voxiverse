@@ -272,6 +272,11 @@ test_audio_baselines :: proc(t: ^testing.T) {
 			)
 			continue
 		}
+		// (CI's logs carry every OS's checksums: a run's lines are committed
+		// into the baselines as `checksum <key> <value>`)
+		for c in got.checksums {
+			log.infof("audio baseline %s checksum %s %016x", name, c.key, c.value)
+		}
 		problems := audio.baseline_compare(old, got)
 		for p in problems {
 			testing.expectf(

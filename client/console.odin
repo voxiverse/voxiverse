@@ -496,7 +496,21 @@ register_builtin_commands :: proc(c: ^Console) {
 					     ) or_else "",
 					     text,
 				     ):
-					console_print(&app.console, "report: queued; it goes with the next upload")
+					extra := audio_report_copy(
+						app,
+						filepath.join(
+							{s.config.save_dir, "telemetry"},
+							context.temp_allocator,
+						) or_else "",
+					)
+					console_print(
+						&app.console,
+						fmt.tprintf(
+							"report: queued; it goes with the next upload%s%s",
+							"; " if extra != "" else "",
+							extra,
+						),
+					)
 				case:
 					console_print(&app.console, "report: could not write it", .Warning)
 				}
@@ -612,6 +626,7 @@ report_text :: proc(app: ^App, note: string) -> string {
 	fmt.sbprintfln(&b, "note: %s", note)
 	fmt.sbprintfln(&b, "version: %s (%s build)", base.version_text(), base.build_name())
 	fmt.sbprintfln(&b, "os: %v", ODIN_OS)
+	fmt.sbprint(&b, audio_report_lines(app))
 	c := &app.console
 	sync.guard(&c.mutex)
 	first := max(0, c.count - 100)

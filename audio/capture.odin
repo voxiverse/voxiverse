@@ -171,6 +171,24 @@ capture_ring_save :: proc(m: ^Mixer, path: string) -> bool {
 	return ok
 }
 
+// capture_ring_bytes is capture_ring_save into memory: the file's bytes (nil
+// if there is nothing to write yet), in `allocator`. newest: from the newest
+// state (see capture_encode).
+capture_ring_bytes :: proc(m: ^Mixer, newest := false, allocator := context.allocator) -> []byte {
+	c := sync.atomic_exchange(&m.capture, nil)
+	if c == nil {return nil}
+	if !c.ring {
+		sync.atomic_store(&m.capture, c)
+		return nil
+	}
+	time.sleep(5 * time.Millisecond)
+	data := capture_encode(m, c, allocator, newest)
+	c.next_snap = 0
+	c.valid_from = sync.atomic_load(&c.snaps)
+	sync.atomic_store(&m.capture, c)
+	return data
+}
+
 // capture_stop ends recording and hands the capture over (nil if none). The
 // audio thread may be inside a mix: the count is read once, after the
 // pointer is gone, so every record counted was written whole.
@@ -293,7 +311,14 @@ sound_checksum :: proc(s: Sound, st: ^Stream) -> Capture_Sound {
 // (as it is now). A ring writes its last window from the oldest state still
 // covered; nil if it has none yet. Not while the audio thread may be writing
 // to c (capture_stop first, or capture_ring_save).
-capture_encode :: proc(m: ^Mixer, c: ^Capture, allocator := context.allocator) -> []byte {
+// With `newest`, from the newest state instead (the shortest window: the
+// inspector's freeze).
+capture_encode :: proc(
+	m: ^Mixer,
+	c: ^Capture,
+	allocator := context.allocator,
+	newest := false,
+) -> []byte {
 	first, n := u32(0), int(sync.atomic_load(&c.count))
 	state: ^Mixer_State
 	h := Capture_Header {
@@ -312,7 +337,8 @@ capture_encode :: proc(m: ^Mixer, c: ^Capture, allocator := context.allocator) -
 		snaps := sync.atomic_load(&c.snaps)
 		// (the slot a mix would write next is the oldest: not one to use)
 		from := max(c.valid_from, snaps - min(snaps, CAPTURE_RING_SNAPS - 1))
-		for j in from ..< snaps {
+		for k in 0 ..< snaps - min(snaps, from) {
+			j := snaps - 1 - k if newest else from + k
 			at := c.snap_at[int(j) % CAPTURE_RING_SNAPS]
 			if int(u32(n) - at) + CAPTURE_RING_MARGIN <= len(c.records) {
 				first, state = at, &c.states[int(j) % CAPTURE_RING_SNAPS]

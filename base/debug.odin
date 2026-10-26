@@ -8,6 +8,7 @@ import "core:mem"
 import "core:os"
 import "core:strings"
 import "core:sync"
+import "core:time"
 
 // DEV: the development aids are in: the tracking allocator, Vulkan
 // validation by default, shader hot reload, developer commands. On in every
@@ -48,6 +49,16 @@ Debug :: struct {
 	sink:       Log_Sink,
 	logger:     log.Logger,
 	break_mode: bool,
+	attached:   Crash_Attachment,
+}
+
+// A file the crash report names (M32e: the audio ring's last window): the
+// path in a fixed buffer, since the handler may not allocate, and when it was
+// written.
+Crash_Attachment :: struct {
+	path:     [256]u8,
+	path_len: int,
+	written:  time.Tick,
 }
 
 // The active Debug, for the assertion handler (which gets no user data).
@@ -144,6 +155,15 @@ log_stack_trace :: proc(level: log.Level = .Error, skip := 0) -> (found: bool) {
 	return
 }
 
+// debug_attach names a file that the crash report will point at, with its
+// age (call again after each write). A path that does not fit is not named.
+debug_attach :: proc(path: string) {
+	if active == nil || len(path) > len(active.attached.path) {return}
+	a := &active.attached
+	a.path_len = copy(a.path[:], path)
+	a.written = time.tick_now()
+}
+
 // crash_report logs a crash and the stack (from a signal handler or
 // exception filter: best effort, the process is going down anyway).
 @(private)
@@ -157,6 +177,13 @@ crash_report :: proc(what: string) {
 	sync.atomic_store(&active.sink.crashing, true)
 	log.fatalf("crash %s", what)
 	if !log_stack_trace(.Fatal, 2) {log.fatal("  (no frames of ours on this thread's stack)")}
+	if a := &active.attached; a.path_len > 0 {
+		log.fatalf(
+			"crash attached file=%s age_s=%.0f",
+			string(a.path[:a.path_len]),
+			time.duration_seconds(time.tick_since(a.written)),
+		)
+	}
 	if active.log_file != nil {
 		log.fatalf("crash full log: %s", active.log_path)
 		os.flush(active.log_file)

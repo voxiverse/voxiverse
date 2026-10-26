@@ -6,6 +6,7 @@ import "core:math"
 import "core:time"
 
 import "../audio"
+import "../base"
 
 // M32d's real-time check (`--check audio`, exit_check.odin's CHECKS): the
 // game mixes into the null device (audio.device_open_null: the real callback
@@ -32,9 +33,13 @@ Audio_Check :: struct {
 	events:      int,
 	frames0:     u64,
 	cb_max_ns:   u32, // the worst callback seen (each look at the stats resets it)
+	shot:        u8, // the inspector's turn: 0 not yet, 1 open (waiting to draw), 2 drawn, 3 done
+	shot_frames: int,
+	shot_error:  string, // what went wrong with the inspector, for the verdict
 }
 
 AUDIO_CHECK_SECONDS :: 30
+AUDIO_CHECK_INSPECT_AT :: 12 // seconds in: the inspector is opened, soloed, screenshotted
 AUDIO_CHECK_EVERY :: 60 * time.Millisecond
 AUDIO_CHECK_TIMEOUT :: 90 * time.Second // loading, in the slowest runner
 // The callback's worst case may not pass three blocks (30 ms): a card buffers
@@ -106,9 +111,52 @@ audio_check_update :: proc(app: ^App) {
 			)
 			t.events += 1
 		}
+		audio_check_inspector(app)
 		if time.tick_since(t.started) >= AUDIO_CHECK_SECONDS * time.Second {
 			audio_check_finish(app, "")
 		}
+	}
+}
+
+// audio_check_inspector: once, partway: open the inspector (it freezes the
+// ring's newest window), solo a bus (a replay with the commands rewritten),
+// let a frame or two draw it, take its screenshot, close it.
+@(private)
+audio_check_inspector :: proc(app: ^App) {
+	t := &app.audio_check
+	switch t.shot {
+	case 0:
+		if time.tick_since(t.started) < AUDIO_CHECK_INSPECT_AT * time.Second {return}
+		if !base.DEV {t.shot = 3; return}
+		overlay_open(&app.overlays, .Audio_Inspector)
+		t.shot = 1
+	case 1:
+		// (the freeze is taken by the next audio_debug_update)
+		fz := app.audio_debug.frozen
+		if fz == nil {
+			if t.shot_frames > 5 {
+				t.shot_error = "the inspector froze nothing"
+				t.shot = 3
+			}
+			t.shot_frames += 1
+			return
+		}
+		if len(fz.voices) == 0 {
+			t.shot_error = "the frozen window has no voices"
+		}
+		if !audio.inspect_pick(fz, {mode = .Solo, bus = .World}) {
+			t.shot_error = "the solo did not replay"
+		}
+		log.infof("audio_check inspector voices=%d peaks=%v", len(fz.voices), fz.an.peak)
+		t.shot, t.shot_frames = 2, 0
+	case 2:
+		t.shot_frames += 1
+		if t.shot_frames == 3 {screenshot_request(app, "audio_inspector")}
+		if t.shot_frames == 8 {
+			overlay_close(&app.overlays, .Audio_Inspector)
+			t.shot = 3
+		}
+	case:
 	}
 }
 
@@ -119,6 +167,7 @@ audio_check_finish :: proc(app: ^App, failure: string) {
 	t.phase = .Off
 	failures := make([dynamic]string, context.temp_allocator)
 	if failure != "" {append(&failures, failure)}
+	if t.shot_error != "" {append(&failures, t.shot_error)}
 	if was_running {
 		a := audio.stats(app.mixer)
 		seconds := time.duration_seconds(time.tick_since(t.started))
