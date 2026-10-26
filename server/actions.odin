@@ -14,6 +14,7 @@ Action :: union {
 	game.Edit,
 	game.Attack,
 	game.Use_Entity,
+	game.Use_Block,
 	game.Fire,
 }
 
@@ -50,6 +51,8 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 			attack(s, c, v)
 		case game.Use_Entity:
 			use_entity(s, c, v.entity)
+		case game.Use_Block:
+			use_block(s, c, v.pos)
 		case game.Fire:
 			if s.tick >= c.fired_at + FIRE_EVERY {
 				c.fired_at = s.tick
@@ -69,6 +72,8 @@ action_after :: proc(a: Action) -> u32 {
 	case game.Attack:
 		return v.after
 	case game.Use_Entity:
+		return v.after
+	case game.Use_Block:
 		return v.after
 	case game.Fire:
 		return v.after

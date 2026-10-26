@@ -913,3 +913,34 @@ Cheap insurance before more is built on the foundation.
 - Benchmark scenarios record the telemetry events' cost (emit, drain, write) and fail on a
   regression, as the other costs do.
 - The Windows pass (below) when a Windows machine is at hand.
+
+## M30: blocks that hold things (the chest)
+
+Some blocks need data of their own (a chest's contents, later a sign's text or a
+teleporter's name). Minecraft calls these block entities; here they are records kept with
+a block.
+
+- **The record:** keyed by the block's position, owned by the server, stored per chunk and
+  saved with it (a new section in the region format, versioned). Made when its block is
+  placed, removed when it is broken; on load, a record whose block is not there is dropped
+  (and logged).
+- **To clients:** sent only when needed (a chest's contents when it is opened, then its
+  changes while it is open), never with the chunk.
+- **The chest:** a block (generated texture; a real chest model later) whose record is a
+  server-owned container of 25 slots, the size of the inventory, moved with the existing
+  container messages (M14). Using it opens an overlay with the chest above the player's
+  inventory. Several players may have it open: each sees the others' moves. Breaking it
+  drops everything in it. From the creative catalog for now (there is no crafting).
+- **Not here:** double chests, hoppers, locks, signs.
+- **Exit check:** a chest filled, saved, quit and loaded holds the same; unloaded and
+  reloaded with its chunk, the same; broken, it drops every stack; two players over UDP
+  moving items in one chest see each other's moves and end up agreeing with the server; a
+  record without its block is dropped on load.
+
+- **As built:** the records are one file per world (`containers.cfg`), not a section of
+  the region format, so a record is kept while its chunk is unloaded and checked against its
+  block (within half a second) once the chunk loads; the open chest's slots travel inside the
+  `Inventory_Update` and requests name them as slots after the equipment (`CHEST_BASE`), so
+  the client predicts them with the same code; a block removed by a bulk edit or an explosion
+  is found by the sweep, not by the edit. Right-clicking a chest sends `Use_Block` (protocol
+  22); the console has `use` for scripts. No permission node yet (anyone may open a chest).

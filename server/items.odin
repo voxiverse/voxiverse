@@ -18,7 +18,9 @@ import "../game"
 // refused or not, so a refused prediction is rolled back.
 @(private)
 inventory_request :: proc(s: ^Server, c: ^Client, q: game.Inventory_Request) {
+	chest_refresh(s, c)
 	dropped, ok := game.inventory_apply(&c.inventory, q.action, allowed(s, c, "items.catalog"))
+	chest_keep(s, c)
 	c.inv_acked = q.sequence
 	c.inv_changed = true
 	if ok && !game.stack_empty(dropped) {drop_stack(s, c, dropped)}

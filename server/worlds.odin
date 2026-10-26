@@ -40,6 +40,7 @@ World :: struct {
 	started:      bool, // world_start ran (its chunks and the rest exist)
 	idle_since:   u64, // the last tick someone was in it
 	gates:        [dynamic]Gate, // active: dialing or open (gates.odin)
+	containers:   map[game.Block_Pos]Container, // chests' contents, by position (containers.odin; heap)
 	tops_pending: map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 }
 
@@ -85,6 +86,7 @@ world_start :: proc(w: ^World) -> bool {
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
+	load_containers(w)
 	load_stats(w)
 	return true
 }
@@ -99,6 +101,7 @@ world_close :: proc(w: ^World) {
 	}
 	delete(w.tops)
 	delete(w.gates)
+	delete(w.containers)
 	delete(w.tops_pending)
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)

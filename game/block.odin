@@ -63,6 +63,7 @@ Block :: enum u16 {
 	Wheat_6,
 	Wheat_7, // ripe
 	Wool_Black, // from a sheep with the recessive wool gene (M25)
+	Chest, // holds 25 stacks (M30): a block with a record of its own (server/containers.odin)
 }
 
 // Block_Info: everything about a block that client and server agree on
@@ -254,6 +255,14 @@ BLOCK_INFO := [Block]Block_Info {
 		shades = true,
 		targetable = true,
 		breakable = true,
+	},
+	.Chest = {
+		name = "chest",
+		collides = true,
+		opaque = true,
+		targetable = true,
+		breakable = true,
+		placeable = true,
 	},
 	.Wool_Black = {
 		name = "black_wool",

@@ -399,6 +399,7 @@ tick :: proc(s: ^Server) {
 			updates_run(w)
 			random_ticks(w)
 			entities_tick(w)
+			containers_tick(w)
 		}
 		gates_tick(w)
 		base.profile_scope("changes flush")
@@ -643,6 +644,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Attack:
 		queue_action(s, c, v)
 	case game.Use_Entity:
+		queue_action(s, c, v)
+	case game.Use_Block:
 		queue_action(s, c, v)
 	case game.Fire:
 		queue_action(s, c, v)

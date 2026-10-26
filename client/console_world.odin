@@ -30,4 +30,18 @@ register_world_commands :: proc(c: ^Console) {
 		args = {2, 2},
 		needs = {.World},
 	)
+	console_register(
+		c,
+		{
+			"use",
+			"use: the right button once on what is aimed at (a chest opens, a sheep is sheared)",
+			proc(app: ^App, args: []string) {
+				s := app.session
+				if !(session_use_entity(s) || session_use_block(s)) {
+					console_print(&app.console, "nothing aimed at that can be used", .Warning)
+				}
+			},
+		},
+		needs = {.World},
+	)
 }

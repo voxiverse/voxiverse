@@ -10,16 +10,24 @@ INVENTORY_SLOTS :: 30 // 0..4 the hotbar, 5..29 the rest (a 5x5 grid)
 CURSOR_SLOT :: -1 // the stack on the mouse in the inventory overlay
 EQUIP_BASE :: INVENTORY_SLOTS // slots INVENTORY_SLOTS ..< TOTAL_SLOTS are the equipment slots, in Equip_Slot order
 TOTAL_SLOTS :: INVENTORY_SLOTS + EQUIP_SLOTS
+CHEST_SLOTS :: 25 // an open chest's (a 5x5 grid), slot indexes CHEST_BASE ..< ALL_SLOTS
+CHEST_BASE :: TOTAL_SLOTS
+ALL_SLOTS :: TOTAL_SLOTS + CHEST_SLOTS
 
 Inventory :: struct {
-	slots:     [INVENTORY_SLOTS]Stack,
-	equipment: [Equip_Slot]Stack, // worn and held (slot index EQUIP_BASE + the slot)
-	cursor:    Stack,
-	selected:  int, // the hotbar slot in hand
+	slots:      [INVENTORY_SLOTS]Stack,
+	equipment:  [Equip_Slot]Stack, // worn and held (slot index EQUIP_BASE + the slot)
+	cursor:     Stack,
+	selected:   int, // the hotbar slot in hand
+	// The chest being looked into (not the inventory's own: never saved, and the
+	// server fills it from the chest's record): requests may name its slots.
+	chest:      [CHEST_SLOTS]Stack,
+	chest_open: bool,
 }
 
 // slot_at: slot i's stack (a regular slot, or an equipment slot).
 slot_at :: proc(inv: ^Inventory, i: int) -> ^Stack {
+	if i >= CHEST_BASE {return &inv.chest[i - CHEST_BASE]}
 	if i >= EQUIP_BASE {return &inv.equipment[Equip_Slot(i - EQUIP_BASE)]}
 	return &inv.slots[i]
 }
@@ -27,7 +35,7 @@ slot_at :: proc(inv: ^Inventory, i: int) -> ^Stack {
 // slot_accepts: whether stack may be put into slot i (equipment slots take
 // only what fits them).
 slot_accepts :: proc(i: int, stack: Stack) -> bool {
-	return i < EQUIP_BASE || item_fits(stack, Equip_Slot(i - EQUIP_BASE))
+	return i < EQUIP_BASE || i >= CHEST_BASE || item_fits(stack, Equip_Slot(i - EQUIP_BASE))
 }
 
 // worn_of: the items the avatar shows (head to feet).
@@ -55,7 +63,7 @@ Inventory_Action_Kind :: enum u8 {
 
 Inventory_Action :: struct {
 	kind: Inventory_Action_Kind,
-	slot: int, // CURSOR_SLOT ..< TOTAL_SLOTS
+	slot: int, // CURSOR_SLOT ..< ALL_SLOTS
 	arg:  int, // 0 ..< 65536
 }
 
@@ -70,7 +78,7 @@ inventory_apply :: proc(
 	dropped: Stack,
 	ok: bool,
 ) {
-	in_slots := a.slot >= 0 && a.slot < TOTAL_SLOTS
+	in_slots := a.slot >= 0 && a.slot < (ALL_SLOTS if inv.chest_open else TOTAL_SLOTS)
 	regular := a.slot >= 0 && a.slot < INVENTORY_SLOTS
 	switch a.kind {
 	case .Select:
@@ -117,6 +125,20 @@ inventory_apply :: proc(
 	case .Quick_Move:
 		if !in_slots || stack_empty(slot_at(inv, a.slot)^) {return}
 		slot := slot_at(inv, a.slot)
+		if a.slot >= CHEST_BASE {
+			// Out of the chest: into the inventory.
+			left := slots_add(inv.slots[:], slot^)
+			if left.count == slot.count {return}
+			slot^ = left
+			break
+		}
+		if regular && inv.chest_open {
+			// Into the chest.
+			left := slots_add(inv.chest[:], slot^)
+			if left.count == slot.count {return}
+			slot^ = left
+			break
+		}
 		if !regular {
 			// Out of an equipment slot: into the inventory.
 			left := slots_add(inv.slots[:], slot^)
@@ -195,7 +217,8 @@ inventory_apply :: proc(
 			slot.count += 1
 		}
 	case .Close:
-		if stack_empty(inv.cursor) {return}
+		if stack_empty(inv.cursor) && !inv.chest_open {return}
+		inv.chest, inv.chest_open = {}, false
 		dropped = inventory_add(inv, inv.cursor)
 		inv.cursor = {}
 	}
@@ -287,6 +310,7 @@ inventory_remove :: proc(inv: ^Inventory, item: Item, count: int) -> int {
 inventory_tidy :: proc(inv: ^Inventory) {
 	for &s in inv.slots {if stack_empty(s) {s = {}}}
 	for &s in inv.equipment {if stack_empty(s) {s = {}}}
+	for &s in inv.chest {if stack_empty(s) {s = {}}}
 	if stack_empty(inv.cursor) {inv.cursor = {}}
 }
 
@@ -298,6 +322,7 @@ inventory_valid :: proc(inv: ^Inventory) -> bool {
 		return stack_empty(s) || (item_valid(s.item) && s.count <= item_stack_size(s.item))
 	}
 	for s in inv.slots {if !check(s) {return false}}
+	for s in inv.chest {if !check(s) {return false}}
 	for s, e in inv.equipment {if !check(s) || !item_fits(s, e) {return false}}
 	return check(inv.cursor)
 }

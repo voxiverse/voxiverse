@@ -58,7 +58,7 @@ held :: proc(s: ^Session) -> game.Stack {
 // item_use: the mouse buttons with stack in hand.
 item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 	// Using what is aimed at comes before placing a block behind it.
-	if placing && !breaking && session_use_entity(s) {return}
+	if placing && !breaking && (session_use_entity(s) || session_use_block(s)) {return}
 	info, _ := game.item_info(stack.item)
 	if t, tool := info.tool.?; tool {
 		switch t {

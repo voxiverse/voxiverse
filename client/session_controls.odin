@@ -27,6 +27,18 @@ session_use_entity :: proc(s: ^Session) -> bool {
 	return true
 }
 
+// session_use_block uses the aimed block if it is one that is used (a chest
+// opens: the server answers with its contents); false if it is not.
+session_use_block :: proc(s: ^Session) -> bool {
+	hit, aimed := s.aim.?
+	if !aimed {return false}
+	if b, _ := world_block(&s.world, hit.block); b != .Chest {return false}
+	if !s.inventory.chest_open {
+		send_message(s, game.Use_Block{hit.block, s.prediction.next_sequence - 1})
+	}
+	return true
+}
+
 // edit_controls: number keys and the wheel pick the hotbar item; the mouse
 // buttons use it (item_use). Edits are predicted at once (if the shared
 // rules allow them) and sent.

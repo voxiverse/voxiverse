@@ -140,7 +140,7 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 		log.errorf("server cannot create the world directory dir=%s error=%v", world_dir, dir_err)
 		return false
 	}
-	for name in ([]string{"regions", ENTITIES_FILE}) {
+	for name in ([]string{"regions", ENTITIES_FILE, CONTAINERS_FILE}) {
 		from := filepath.join({dir, name}, context.temp_allocator) or_else name
 		to := filepath.join({world_dir, name}, context.temp_allocator) or_else name
 		if !os.exists(from) {continue}
@@ -226,6 +226,7 @@ world_save :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
 	ok := write_world_file(w)
 	if !write_entities(w) {ok = false}
+	if !write_containers(w) {ok = false}
 	if !write_stats(w) {ok = false}
 	for region, changed in w.regions {
 		if !changed {continue}

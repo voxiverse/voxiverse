@@ -40,7 +40,9 @@ changes_begin :: proc(w: ^World) -> ^Changes {
 // false if its chunk is not loaded.
 set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block, by: ^Client = nil) -> bool {
 	s := w.server
+	old, _ := chunks_block(&w.chunks, p)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
+	if old == .Chest && b != .Chest {chest_gone(w, p)}
 	mark_edited(w, game.chunk_of(p))
 	ch := changes_begin(w)
 	who := int(player_id(s, by)) if by != nil else -1

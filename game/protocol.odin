@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 21
+PROTOCOL_VERSION :: 22
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -190,6 +190,13 @@ Use_Entity :: struct {
 	after:  u32,
 }
 
+// Use_Block uses the block at pos (right click on a chest: open it). Like an
+// Edit it follows input `after`, so reach is judged from where the player was.
+Use_Block :: struct {
+	pos:   Block_Pos,
+	after: u32,
+}
+
 // Fire: the creative rocket launcher, aimed yaw/pitch, after input `after`.
 Fire :: struct {
 	after:      u32,
@@ -215,6 +222,7 @@ Client_Message :: union {
 	Stats_Request,
 	Telemetry_Report,
 	Telemetry_Batch,
+	Use_Block,
 }
 
 // Server -> client.
@@ -543,6 +551,7 @@ Client_Kind :: enum u8 {
 	Stats_Request,
 	Telemetry_Report,
 	Telemetry_Batch,
+	Use_Block,
 }
 
 @(private = "file")
@@ -638,6 +647,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "attack"
 		case u8(Client_Kind.Use_Entity):
 			return "use_entity"
+		case u8(Client_Kind.Use_Block):
+			return "use_block"
 		case u8(Client_Kind.Stats_Request):
 			return "stats_request"
 		case u8(Client_Kind.Telemetry_Report):
@@ -795,6 +806,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 	case Use_Entity:
 		write_u8(w, u8(Client_Kind.Use_Entity))
 		write_u32(w, v.entity)
+		write_u32(w, v.after)
+	case Use_Block:
+		write_u8(w, u8(Client_Kind.Use_Block))
+		write_block_pos(w, v.pos)
 		write_u32(w, v.after)
 	case Stats_Request:
 		write_u8(w, u8(Client_Kind.Stats_Request))
@@ -1001,6 +1016,8 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		for st in inv.equipment {write_stack(w, st)}
 		write_stack(w, inv.cursor)
 		write_u8(w, u8(inv.selected))
+		write_u8(w, 1 if inv.chest_open else 0)
+		if inv.chest_open {for st in inv.chest {write_stack(w, st)}}
 	case Blocks_Changed:
 		write_u8(w, u8(Server_Kind.Blocks_Changed))
 		write_chunk_pos(w, v.chunk)
@@ -1088,7 +1105,7 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			Inventory_Action_Kind(kind) if int(kind) < len(Inventory_Action_Kind) else {}
 		q.action.slot = int(i8(read_u8(&r)))
 		q.action.arg = int(read_u16(&r))
-		if q.action.slot < CURSOR_SLOT || q.action.slot >= TOTAL_SLOTS {reader_fail(&r)}
+		if q.action.slot < CURSOR_SLOT || q.action.slot >= ALL_SLOTS {reader_fail(&r)}
 		m = q
 	case u8(Client_Kind.Attack):
 		m = Attack {
@@ -1099,6 +1116,11 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = Use_Entity {
 			entity = read_u32(&r),
 			after  = read_u32(&r),
+		}
+	case u8(Client_Kind.Use_Block):
+		m = Use_Block {
+			pos   = read_block_pos(&r),
+			after = read_u32(&r),
 		}
 	case u8(Client_Kind.Stats_Request):
 		m = Stats_Request {
@@ -1391,6 +1413,8 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		for &st in u.inventory.equipment {st = read_stack(&r)}
 		u.inventory.cursor = read_stack(&r)
 		u.inventory.selected = int(read_u8(&r))
+		u.inventory.chest_open = read_u8(&r) == 1
+		if u.inventory.chest_open {for &st in u.inventory.chest {st = read_stack(&r)}}
 		if !inventory_valid(&u.inventory) {reader_fail(&r)}
 		m = u
 	case u8(Server_Kind.Blocks_Changed):

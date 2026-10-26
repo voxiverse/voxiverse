@@ -312,6 +312,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M27 | 73 | 65 | 1 | collector, uploader, consent, report command, analytics tool, lake-sync (counted from M26b's line) |
 | M28 | 46 | 461 | 1 | mods, health, damage, death, xp (counted from M27's line; re-read figure is the session total) |
 | M29 | 31 | 1 | 1 | still rules, second-seed CI run, event cost test (counted from M28's line) |
+| M30 | 158 | 22 | 1 | chest block, records, overlay, Use_Block (counted from M29's line) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -351,6 +352,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M27 | Remote telemetry: a collector (the server binary in another mode) over our own netcode, a consent prompt, a disk spool with resend, crash and manual reports, a partitioned JSONL lake queried with DuckDB, `tools/analytics` and `tools/lake-sync` | Test with a collector, two clients and a server: batches arrive verified in the right partitions; the spool survives the collector being down, exactly once; forged, oversized, flooding and unknown batches refused; consent off sends no packets; a crash report round-trips (done: `collector/collector_test.odin` (a log reaches the lake whole and once, with an anonymous pid and no account; sent again after a lost cursor or a collector restart it is written once; the spool survives a collector that is down and sends only the new lines; forged proofs, batches before a proof, non-event lines, unknown kinds, bad days and floods refused; a report round-trips), `server/upload_test.odin` (a server told to upload ends up in the lake, no name or chat text; one not told to never talks to the collector), `client` consent question test, `tools/analytics` tests on a recorded run; not done: crash reports sent by themselves) |
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded (done: `game/mods.odin` (`derive_mods` from worn items' modifiers, shared by server and the client's prediction; speed, jump, air jumps, max health as data on items), `game/physics_test.odin` (modifiers change movement; prediction agrees tick by tick with a speed modifier and a double jump), `server/health_test.odin` (fall and explosion damage by the rules' numbers, death, respawn and dropped items, xp and level from events, worn armor raises and removal lowers max health), protocol 21 with a Health message, a health bar by the hotbar; not done: timed effects, reach, xp rewards) |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI |
+| M30 | Blocks that hold things: a chest block with a server-owned record of 25 stacks, saved with the world, opened with the right button, moved with the inventory requests, shared by everyone looking, spilled when broken | A chest filled, saved, quit and loaded holds the same; broken, it drops every stack; two players over UDP moving items in one chest agree with the server; a record without its block is dropped (done: `server/containers.odin` (records by position, saved in `containers.cfg`, copied in and out around every inventory request, others looking told, spilled when the block is gone), `game/inventory.odin` chest slots (`test_chest_actions`), `Use_Block` and the chest in `Inventory_Update` (protocol 22, round-trip tests), `client` chest overlay (`test_chest_overlay`), `server/containers_test.odin` (a chest filled, saved, quit and loaded holds the same and spills 128 items when broken; two players over UDP see each other's moves and agree with the server; a record without its block is dropped and spills); not done: a permission node, locks, signs) |
 
 ## Why the plan changed (after M25)
 
@@ -369,29 +371,6 @@ re-read, CI round trips), so the next week is planned from numbers:
   signs: infrastructure for teleporter blocks and shops), the Windows pass (needs a Windows
   machine), sky and time. Then, as before, the list after M30 (minimap, throwables, ...) and
   nothing from it before the foundation above is done.
-
-## Deferred: blocks that hold things (was M26)
-
-Some blocks need data of their own (a chest's contents, later a sign's text or a
-teleporter's name). Minecraft calls these block entities; here they are records kept with
-a block.
-
-- **The record:** keyed by the block's position, owned by the server, stored per chunk and
-  saved with it (a new section in the region format, versioned). Made when its block is
-  placed, removed when it is broken; on load, a record whose block is not there is dropped
-  (and logged).
-- **To clients:** sent only when needed (a chest's contents when it is opened, then its
-  changes while it is open), never with the chunk.
-- **The chest:** a block (generated texture; a real chest model later) whose record is a
-  server-owned container of 25 slots, the size of the inventory, moved with the existing
-  container messages (M14). Using it opens an overlay with the chest above the player's
-  inventory. Several players may have it open: each sees the others' moves. Breaking it
-  drops everything in it. From the creative catalog for now (there is no crafting).
-- **Not here:** double chests, hoppers, locks, signs.
-- **Exit check:** a chest filled, saved, quit and loaded holds the same; unloaded and
-  reloaded with its chunk, the same; broken, it drops every stack; two players over UDP
-  moving items in one chest see each other's moves and end up agreeing with the server; a
-  record without its block is dropped on load.
 
 ## Deferred until a Windows machine is at hand: Windows behaviour and the new icon (was M27)
 

@@ -164,3 +164,88 @@ test_characters_screen :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.config.name, "bob")
 	free_all(context.temp_allocator)
 }
+
+// A chest the server opened shows the overlay with the chest beside the
+// inventory; a stack shift-clicked goes in (predicted, a request sent); the
+// overlay closing sends the Close, and a chest that closes by itself takes
+// the overlay down.
+@(test)
+test_chest_overlay :: proc(t: ^testing.T) {
+	app := new(App)
+	app.settings = SETTINGS_DEFAULTS
+	defer free(app)
+	ok: bool
+	app.font, ok = font.load(FONT_DATA)
+	testing.expect(t, ok)
+	testing.expect(t, ui.init(&app.ui, &app.font))
+	defer ui.destroy(&app.ui)
+	s := new(Session)
+	defer free(s)
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	s.endpoint = {&pipe, .Client}
+	game.writer_init(&s.writer)
+	defer game.writer_destroy(&s.writer)
+	defer delete(s.inv_pending)
+	defer delete(app.inventory_search)
+	s.state = .Playing
+	app.session = s
+	defer app.session = nil
+	app.screen = .Game
+	stone := game.item_of_block(.Stone)
+	s.inventory.slots[9] = {stone, 64}
+
+	chest_sync(app)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory), "opened with no chest")
+	s.inventory.chest_open = true
+	chest_sync(app)
+	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Chest)
+
+	SCREEN :: ui.Vec2{1280, 720}
+	frame :: proc(app: ^App, in_: ui.Input) {
+		ui.begin_frame(&app.ui, in_, SCREEN, 1)
+		draw_overlays(app, &app.ui)
+		ui.end_frame(&app.ui)
+	}
+	ui.begin_frame(&app.ui, {}, SCREEN, 1)
+	l := inventory_layout(&app.ui, .Chest)
+	ui.end_frame(&app.ui)
+	for i in 0 ..< game.CHEST_SLOTS {
+		testing.expectf(t, l.slots[game.CHEST_BASE + i].w > 0, "chest slot %d has no place", i)
+	}
+	testing.expect(t, l.slots[game.EQUIP_BASE].w == 0, "equipment shown beside a chest")
+	for a in 0 ..< game.ALL_SLOTS {
+		for b in a + 1 ..< game.ALL_SLOTS {
+			ra, rb := l.slots[a], l.slots[b]
+			if ra.w == 0 || rb.w == 0 {continue}
+			overlap :=
+				ra.x < rb.x + rb.w &&
+				rb.x < ra.x + ra.w &&
+				ra.y < rb.y + rb.h &&
+				rb.y < ra.y + ra.h
+			testing.expectf(t, !overlap, "slots %d and %d overlap", a, b)
+		}
+	}
+	r := l.slots[9]
+	frame(
+		app,
+		{
+			mouse = {r.x + r.w / 2, r.y + r.h / 2},
+			mouse_pressed = {.Left},
+			mouse_down = {.Left},
+			modifiers = {.Shift},
+		},
+	)
+	testing.expect(
+		t,
+		s.inventory.chest[0] == {stone, 64} && game.stack_empty(s.inventory.slots[9]),
+		"shift-click did not move it in",
+	)
+	testing.expect_value(t, len(s.inv_pending), 1)
+	// The chest closes by itself (walked away): the overlay goes.
+	s.inventory.chest_open = false
+	chest_sync(app)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+}

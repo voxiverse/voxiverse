@@ -160,6 +160,16 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	inv.equipment[.Offhand] = {item_of_block(.Dirt), 12}
 	m, ok = decode_server(encode_s(Inventory_Update{5, inv})[:], scratch)
 	testing.expect(t, ok && m.(Inventory_Update) == Inventory_Update{5, inv})
+	looking := inv
+	looking.chest_open = true
+	looking.chest[0] = {item_of_block(.Stone), 7}
+	looking.chest[24] = {item_of_block(.Dirt), 64}
+	m, ok = decode_server(encode_s(Inventory_Update{6, looking})[:], scratch)
+	testing.expect(
+		t,
+		ok && m.(Inventory_Update) == Inventory_Update{6, looking},
+		"a chest's slots did not round-trip",
+	)
 	bad := inv
 	bad.slots[0].count = 65 // more than a stack
 	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
@@ -178,7 +188,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	asked: Client_Message
 	asked, ok = decode_client(encode_c(req)[:])
 	testing.expect(t, ok && asked.(Inventory_Request) == req)
-	_, ok = decode_client(encode_c(Inventory_Request{9, {.Click, 40, 0}})[:])
+	_, ok = decode_client(encode_c(Inventory_Request{9, {.Click, ALL_SLOTS, 0}})[:])
 	testing.expect(t, !ok)
 	m, ok = decode_server(encode_s(Entity_Despawn{77, true})[:], scratch)
 	testing.expect(t, ok && m.(Entity_Despawn) == Entity_Despawn{77, true})
@@ -210,6 +220,12 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	at: Client_Message
 	at, ok = decode_client(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
+	at, ok = decode_client(encode_c(Use_Block{{-4, 70, 9}, 41})[:])
+	testing.expect(t, ok && at.(Use_Block) == Use_Block{{-4, 70, 9}, 41})
+	at, ok = decode_client(encode_c(Inventory_Request{3, {.Click, ALL_SLOTS - 1, 0}})[:])
+	testing.expect(t, ok, "the last chest slot did not decode")
+	_, ok = decode_client(encode_c(Inventory_Request{3, {.Click, ALL_SLOTS, 0}})[:])
+	testing.expect(t, !ok, "a slot past the chest decoded")
 	at, ok = decode_client(encode_c(Use_Entity{12, 35})[:])
 	testing.expect(t, ok && at.(Use_Entity) == Use_Entity{12, 35})
 	at, ok = decode_client(encode_c(Stats_Request{"blocks", 2, "bob"})[:])

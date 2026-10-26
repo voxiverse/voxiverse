@@ -126,6 +126,7 @@ Drag_Mode :: enum u8 {
 Inventory_Tab :: enum u8 {
 	Inventory,
 	Creative,
+	Chest, // looking into a chest (not chosen: the server opened it)
 }
 
 Inventory_View :: struct {
@@ -135,7 +136,7 @@ Inventory_View :: struct {
 	drag_from:   int, // the slot a drag began on (-1: none)
 	scroll:      f32, // catalog rows scrolled
 	mode:        Drag_Mode,
-	visited:     [game.TOTAL_SLOTS]bool, // the slots the drag has passed
+	visited:     [game.ALL_SLOTS]bool, // the slots the drag has passed
 	first:       int, // where the drag began
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
@@ -156,6 +157,21 @@ inventory_keys :: proc(app: ^App) {
 	}
 }
 
+// chest_sync: a chest the server opened shows its overlay (the inventory
+// with the chest beside it); one that closed (walked away from, broken)
+// takes it down.
+chest_sync :: proc(app: ^App) {
+	s := app.session
+	if s == nil || s.state != .Playing {return}
+	open := overlay_is_open(&app.overlays, .Inventory)
+	if s.inventory.chest_open && !open {
+		inventory_open(app)
+		app.inventory_view.tab = .Chest
+	} else if !s.inventory.chest_open && open && app.inventory_view.tab == .Chest {
+		inventory_close(app)
+	}
+}
+
 // inventory_open shows the overlay, fresh.
 inventory_open :: proc(app: ^App) {
 	overlay_open(&app.overlays, .Inventory)
@@ -170,7 +186,8 @@ inventory_open :: proc(app: ^App) {
 // not fit).
 inventory_close :: proc(app: ^App) {
 	overlay_close(&app.overlays, .Inventory)
-	if s := app.session; s != nil && !game.stack_empty(s.inventory.cursor) {
+	if s := app.session;
+	   s != nil && (!game.stack_empty(s.inventory.cursor) || s.inventory.chest_open) {
 		session_inventory_do(s, {.Close, game.CURSOR_SLOT, 0})
 	}
 }
@@ -182,7 +199,7 @@ inventory_close :: proc(app: ^App) {
 Inventory_Layout :: struct {
 	panel:   ui.Rect,
 	title:   ui.Rect, // the title, or the tabs
-	slots:   [game.TOTAL_SLOTS]ui.Rect, // the inventory's, then the equipment's (empty: not shown on this tab)
+	slots:   [game.ALL_SLOTS]ui.Rect, // the inventory's, the equipment's, then the chest's (empty: not shown on this tab)
 	preview: ui.Rect, // the player (Inventory only)
 	search:  ui.Rect, // Creative only
 	catalog: ui.Rect, // Creative only
@@ -195,7 +212,8 @@ inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_
 	step := INVENTORY_SLOT + gap
 	rest_rows := (game.INVENTORY_SLOTS - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS
 	content_h := f32(rest_rows) * step.y + t.row_height + gap // (the same on both tabs)
-	w := CATALOG_COLUMNS * step.x - gap + 2 * t.padding
+	columns := 2 * INVENTORY_COLUMNS + 1 if tab == .Chest else CATALOG_COLUMNS // (the chest and the inventory side by side)
+	w := f32(columns) * step.x - gap + 2 * t.padding
 	h := t.row_height + 2 * gap + content_h + 2 * gap + step.y - gap + 2 * t.padding
 	l.panel = ui.rect_center(ctx.screen, w, h)
 	inner := ui.rect_shrink(l.panel, t.padding)
@@ -233,6 +251,26 @@ inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_
 				INVENTORY_SLOT.y,
 			}
 		}
+	case .Chest:
+		for i in 0 ..< game.CHEST_SLOTS {
+			row, col := i / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
+			l.slots[game.CHEST_BASE + i] = {
+				content.x + f32(col) * step.x,
+				content.y + f32(row) * step.y,
+				INVENTORY_SLOT.x,
+				INVENTORY_SLOT.y,
+			}
+		}
+		grid_x := content.x + content.w - (INVENTORY_COLUMNS * step.x - gap)
+		for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
+			row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
+			l.slots[i] = {
+				grid_x + f32(col) * step.x,
+				content.y + f32(row) * step.y,
+				INVENTORY_SLOT.x,
+				INVENTORY_SLOT.y,
+			}
+		}
 	case .Creative:
 		l.search = ui.cut_top(&content, t.row_height)
 		ui.cut_top(&content, gap)
@@ -248,13 +286,15 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	inv := &s.inventory
 	catalog := session_allowed(s, "items.catalog")
 	v := &app.inventory_view
-	if !catalog {v.tab = .Inventory}
+	if inv.chest_open {v.tab = .Chest} else if v.tab == .Chest || !catalog {v.tab = .Inventory}
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
 	l := inventory_layout(ctx, v.tab)
 	ui.panel(ctx, l.panel)
-	if catalog {
+	if v.tab == .Chest {
+		ui.title(ctx, "Chest", l.title, .Left)
+	} else if catalog {
 		if inventory_tabs(ctx, l.title, v) {l = inventory_layout(ctx, v.tab)}
 	} else {
 		ui.title(ctx, "Inventory", l.title, .Left)
@@ -265,7 +305,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		if r.w == 0 {continue}
 		if ui.rect_contains(r, mouse) {hovered = i}
 		stack_slot(ctx, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
-		if i >= game.EQUIP_BASE && game.stack_empty(game.slot_at(inv, i)^) {
+		if i >= game.EQUIP_BASE && i < game.CHEST_BASE && game.stack_empty(game.slot_at(inv, i)^) {
 			small := ctx.theme.font_size * 0.6
 			ui.draw_text(
 				ctx,
@@ -331,7 +371,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 inventory_tabs :: proc(ctx: ^ui.Context, r: ui.Rect, v: ^Inventory_View) -> (changed: bool) {
 	t := &ctx.theme
 	row := r
-	for tab in Inventory_Tab {
+	for tab in ([]Inventory_Tab{.Inventory, .Creative}) {
 		b := ui.cut_left(&row, 140)
 		ui.cut_left(&row, t.spacing)
 		name := "Inventory" if tab == .Inventory else "Creative"
@@ -492,7 +532,7 @@ spread_stack :: proc(s: ^Session, v: ^Inventory_View) {
 	inv := &s.inventory
 	slots := make([dynamic]int, context.temp_allocator)
 	visited := 0
-	for i in 0 ..< game.TOTAL_SLOTS {
+	for i in 0 ..< game.ALL_SLOTS {
 		if !v.visited[i] {continue}
 		visited += 1
 		if slot_takes(inv, i) {append(&slots, i)}

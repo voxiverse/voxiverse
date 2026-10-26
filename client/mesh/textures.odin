@@ -55,6 +55,8 @@ Texture :: enum u32 {
 	Wheat_6,
 	Wheat_7,
 	Wool_Black,
+	Chest_Side,
+	Chest_Top,
 }
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
@@ -149,6 +151,8 @@ block_faces :: proc(b: game.Block) -> (side, top, bottom: Texture) {
 		return .Wheat_7, .Wheat_7, .Wheat_7
 	case .Wool_Black:
 		return .Wool_Black, .Wool_Black, .Wool_Black
+	case .Chest:
+		return .Chest_Side, .Chest_Top, .Chest_Top
 	}
 	return
 }
@@ -349,6 +353,15 @@ generate_texture :: proc(t: Texture, pixels: []Rgba) {
 				c = shade(ramp, clamp(v, 0, 1))
 			case .Wheat_0, .Wheat_1, .Wheat_2, .Wheat_3, .Wheat_4, .Wheat_5, .Wheat_6, .Wheat_7:
 				c = wheat_pixel(int(t) - int(Texture.Wheat_0), seed, x, y)
+			case .Chest_Side, .Chest_Top:
+				// Boards, banded with iron at the rim; the side has a latch.
+				board := y / 4
+				v := 0.3 + 0.25 * hash01(seed ~ 83, 0, board) + 0.2 * fine
+				if y % 4 == 3 {v = 0.05}
+				c = shade(WOOD, v)
+				rim := x < 2 || x >= TEXTURE_SIZE - 2 || y < 2 || y >= TEXTURE_SIZE - 2
+				latch := t == .Chest_Side && abs(x - TEXTURE_SIZE / 2) < 2 && y >= 5 && y < 9
+				if rim || latch {c = shade(IRON, 0.3 + 0.4 * fine)}
 			case .Wool_Black:
 				v := 0.45 + 0.3 * coarse + 0.25 * fine
 				if y % 4 == 3 {v -= 0.2}

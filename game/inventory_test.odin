@@ -242,3 +242,43 @@ test_equipment_actions :: proc(t: ^testing.T) {
 	inv.equipment[.Offhand] = {stone, 1}
 	testing.expect_value(t, worn_of(&inv), [WORN_SLOTS]Item{cap_, 0, 0, boots})
 }
+
+// An open chest's slots are named by requests like the inventory's own;
+// shut, they refuse; shift-click moves between the two; closing clears it.
+@(test)
+test_chest_actions :: proc(t: ^testing.T) {
+	stone, dirt := item_of_block(.Stone), item_of_block(.Dirt)
+	inv: Inventory
+	inv.slots[6] = {stone, 40}
+	inv.slots[0] = {dirt, 5}
+	_, ok := inventory_apply(&inv, {.Click, CHEST_BASE, 0}, false)
+	testing.expect(t, !ok, "a shut chest took a request")
+	inv.chest_open = true
+	// Shift-click: into the chest, and back out.
+	_, ok = inventory_apply(&inv, {.Quick_Move, 6, 0}, false)
+	testing.expect(
+		t,
+		ok && inv.chest[0] == {stone, 40} && stack_empty(inv.slots[6]),
+		"not into the chest",
+	)
+	_, ok = inventory_apply(&inv, {.Quick_Move, CHEST_BASE, 0}, false)
+	testing.expect(
+		t,
+		ok && stack_empty(inv.chest[0]) && inv.slots[1] == {stone, 40},
+		"not back out",
+	)
+	// A click picks up from a chest slot, puts down in another, right-click halves.
+	inv.chest[3] = {stone, 10}
+	inventory_apply(&inv, {.Click, CHEST_BASE + 3, 0}, false)
+	testing.expect_value(t, inv.cursor, Stack{stone, 10})
+	inventory_apply(&inv, {.Click, CHEST_BASE + 24, 0}, false)
+	testing.expect(t, inv.chest[24] == {stone, 10} && stack_empty(inv.cursor))
+	inventory_apply(&inv, {.Click_Right, CHEST_BASE + 24, 0}, false)
+	testing.expect(t, inv.cursor == {stone, 5} && inv.chest[24] == {stone, 5})
+	// Dropping from a chest slot gives the stack.
+	dropped, _ := inventory_apply(&inv, {.Drop, CHEST_BASE + 24, 1}, false)
+	testing.expect_value(t, dropped, Stack{stone, 5})
+	// Closing puts the cursor away and empties the view.
+	_, ok = inventory_apply(&inv, {.Close, CURSOR_SLOT, 0}, false)
+	testing.expect(t, ok && !inv.chest_open && inv.chest == {} && stack_empty(inv.cursor))
+}
