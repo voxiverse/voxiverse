@@ -442,6 +442,15 @@ format_sources :: proc() -> bool {
 	for dir in SOURCE_DIRS {
 		ok = run({"odinfmt", "-w", dir}) && ok
 	}
+	// odinfmt writes CRLF on Windows; the tree is LF everywhere (.gitattributes).
+	for path in odin_files() {
+		data, err := os.read_entire_file_from_path(path, context.allocator)
+		if err != nil {continue}
+		text, _ := strings.replace_all(string(data), "\r\n", "\n")
+		if text != string(data) {
+			ok = os.write_entire_file(path, transmute([]byte)text) == nil && ok
+		}
+	}
 	return ok
 }
 
