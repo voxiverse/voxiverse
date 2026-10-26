@@ -29,7 +29,6 @@ Divergence :: struct {
 
 // Mirror: the client on the pipe. latency_test's predicting client grown up: it
 // answers the challenge, keeps the chunks it is sent, predicts and reconciles.
-@(private = "file")
 Mirror :: struct {
 	key:         game.Account_Key,
 	endpoint:    game.Endpoint,
@@ -49,7 +48,6 @@ Mirror :: struct {
 	first_fix:   u64, // the server tick of the first
 }
 
-@(private = "file")
 Session :: struct {
 	srv:        Server,
 	started:    bool,
@@ -84,7 +82,6 @@ mirror_set :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
 	}
 }
 
-@(private = "file")
 mirror_send :: proc(m: ^Mirror, msg: game.Client_Message) {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
@@ -156,8 +153,12 @@ mirror_pump :: proc(sess: ^Session) {
 	}
 }
 
-@(private = "file")
-session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool) -> bool {
+session_start :: proc(
+	sess: ^Session,
+	perturb: Perturb,
+	logging: bool,
+	no_sheep := false,
+) -> bool {
 	game.pipe_init(&sess.pipe)
 	config := Config {
 		seed         = DETERMINISM_SEED,
@@ -168,6 +169,7 @@ session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool) -> bool {
 		allow_cheats = true,
 		max_players  = 1,
 		perturb      = perturb,
+		no_sheep     = no_sheep,
 	}
 	if !start(&sess.srv, config, {&sess.pipe, .Server}) {return false}
 	sess.started = true
@@ -194,7 +196,6 @@ session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool) -> bool {
 	return true
 }
 
-@(private = "file")
 session_stop :: proc(sess: ^Session) {
 	stop(&sess.srv)
 	m := &sess.mirror
@@ -212,7 +213,6 @@ session_stop :: proc(sess: ^Session) {
 	if sess.logging {strings.builder_destroy(&sess.log)}
 }
 
-@(private = "file")
 ticks_of :: proc(sess: ^Session) -> u64 {
 	return sess.srv.tick - sess.script_at
 }
@@ -305,7 +305,6 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 
 // session_step: the mirror takes what the last tick sent, plays its part of
 // this tick, and the server runs it.
-@(private = "file")
 session_step :: proc(sess: ^Session, scripted: bool) -> State_Hash {
 	m := &sess.mirror
 	mirror_pump(sess)
@@ -335,7 +334,6 @@ log_tick :: proc(sess: ^Session, h: State_Hash) {
 }
 
 // ready: joined, the world is there and the player has landed.
-@(private = "file")
 ready :: proc(sess: ^Session) -> bool {
 	m := &sess.mirror
 	st := m.last_update.state
