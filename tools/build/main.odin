@@ -452,6 +452,8 @@ check_format :: proc() -> bool {
 	for path in odin_files() {
 		formatted, ok := capture({"odinfmt", path})
 		current, err := os.read_entire_file_from_path(path, context.allocator)
+		// odinfmt writes CRLF on Windows; the tree is LF everywhere (.gitattributes).
+		formatted, _ = strings.replace_all(formatted, "\r\n", "\n")
 		if !ok || err != nil || formatted != string(current) {
 			fmt.eprintfln("fmt    %s needs formatting", path)
 			dirty += 1
