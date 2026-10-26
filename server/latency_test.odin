@@ -168,7 +168,11 @@ run_script :: proc(
 
 	c.key = test_key("latency_test")
 	send(&c, test_hello("latency_test"))
-	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
+	// Each phase gets its own budget: the script alone is `ticks` sleeps long,
+	// and sleeps overshoot on a loaded runner, so one deadline for the whole
+	// run would be a race against the machine's speed.
+	PHASE_BUDGET :: 20 * time.Second
+	deadline := time.tick_add(time.tick_now(), PHASE_BUDGET)
 	tick_wait :: proc() {time.sleep(game.TICK_DURATION)}
 
 	// Join, and stand still until the world is there and the player has
@@ -189,6 +193,7 @@ run_script :: proc(
 		if time.tick_diff(time.tick_now(), deadline) < 0 {return}
 	}
 
+	deadline = time.tick_add(time.tick_now(), PHASE_BUDGET)
 	// The script: 150 ticks of walking and jumping, three edits.
 	EDIT_TICKS :: [3]int{40, 80, 120}
 	corrections_before := c.prediction.corrections
@@ -227,6 +232,7 @@ run_script :: proc(
 		tick_wait()
 	}
 	// Everything acknowledged and answered.
+	deadline = time.tick_add(time.tick_now(), PHASE_BUDGET)
 	last := c.prediction.next_sequence - 1
 	for c.last_update.acked != last || len(c.results) < 3 || c.prediction.count > 0 {
 		pump(t, &c)
