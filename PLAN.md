@@ -459,6 +459,8 @@ differ from run to run on one OS, that is a finding: record it in the section in
 leave that OS compared by numbers only. Exit check: the next CI run passes with the
 checksums in.
 
+**Blocked (unattended run, 2026-10-26):** M32d and M32e are committed locally but not pushed (origin/main is at M32b), so no CI run has logged the `audio baseline ... checksum` lines, and the macOS and Windows values cannot be known from here. Pushing is the person's call; once `main` is pushed and CI has run, do the steps above from the Test step logs (`gh run view <id> --log`). Nothing else in this milestone can be done without those logs.
+
 ### M33: the music pipeline (`tools/music`)
 
 - **Build:** the score format (tempo and meter changes, notes with velocity, rests, ties,
