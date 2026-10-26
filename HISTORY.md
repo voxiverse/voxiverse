@@ -944,3 +944,90 @@ a block.
   the client predicts them with the same code; a block removed by a bulk edit or an explosion
   is found by the sweep, not by the edit. Right-clicking a chest sends `Use_Block` (protocol
   22); the console has `use` for scripts. No permission node yet (anyone may open a chest).
+
+## M31: item ledger and audit
+
+**Why this, now.** The game is heading to an economy (traders, gold, shops, teleporter
+fees) and to strangers sharing a server. Both stand on one fact: the number of each item
+in the world is never wrong. Today items are made and unmade in about fifteen places
+(`block_drop`, `admin_give`, `give_kit`, shearing, death drops, `used_to_place`, wheat
+fed, `item_tick` expiry and merging, chests, `players.odin`'s spill on arrival) and
+nothing checks that they agree: a duplication bug would show up first as a ruined
+economy. M26 measures play, M28 gave characters state; this makes items trustworthy
+before anything is priced.
+
+**Design decided.**
+
+- **`server/ledger.odin`**: `Ledger` is a field of `Server` (one per universe, in memory;
+  not saved: the audit is relative to a baseline, below). It holds, per item and per
+  `Reason`, a `[Item][Reason]i64` count. One call changes it:
+  `ledger(s, reason, item, count)`; `count` is positive for a faucet and negative for a
+  sink. `Reason` is an enum, append-only, in two groups:
+  - Faucets: `Drop_Block` (what a broken block leaves, `block_drop`), `Drop_Mob` (wool),
+    `Give` (`admin_give`), `Kit` (`give_kit`), `Catalog` (taking from the creative
+    catalog with `items.catalog`), `Spill_Old` (items found with no owner on load).
+  - Sinks: `Place` (`used_to_place`), `Use` (fed, planted, tilled), `Clear`
+    (`admin_clear`), `Expire` (`item_tick`'s age), `Catalog_Return` (a stack put back
+    in the catalog), `Void` (anything the world refuses, e.g. a world with no room).
+  - Moves are not ledger entries: pick up, drop, merge, chest in and out, equip, death
+    spill and travel only change where an item is, never how many exist. They are
+    checked by the audit.
+- **Scope entries.** The audit looks at what is in memory: online players' inventories
+  (slots, cursor, worn, a chest being looked at), the containers and the item entities
+  of loaded worlds. Items entering that scope (a player joins, a world loads) and
+  leaving it (leave, unload) are recorded as `Scope_In` / `Scope_Out` by the one
+  function each already goes through (`player_joined`/`player_left`,
+  `world_loaded`/`world_unloaded`), with the sum they carry. So the balance
+  `held_now - held_at_baseline == sum of all entries` holds for any interval.
+- **`audit(s) -> Audit_Report`**: sums every holding above, per item; with a baseline
+  (`audit_baseline(s)` stores the sums and zeroes the ledger) returns for each item the
+  difference between what is held and what the ledger says should be. An empty report is
+  a balanced one. Dedicated servers run it every five minutes and on `/audit`
+  (permission `admin.audit`), logging a line per unbalanced item at `error` and an
+  `Audit_Failed` event; it never fixes anything (a fix would hide the bug).
+  Cost is bounded: it walks inventories, container records and the entity list, which
+  are all counts already held; a test budgets it at 200 players and 3000 item entities.
+- **Telemetry.** Two kinds, `Item_Created` and `Item_Destroyed` (text: item; n0: count;
+  n1: the reason's number; counters `items.created.%t` and `items.destroyed.%t`),
+  emitted by the one `ledger` call, so faucets and sinks are measured by the same
+  stream the economy will be read from. `tools/analytics` gets a `faucets` report:
+  per item, created and destroyed by reason over a period.
+- **Multiplayer safety, the fuzz.** The audit is only worth what tries to break it. A
+  test drives `game.inventory_apply` with random actions (every action kind, indices
+  in and out of range, counts negative and huge, cursor held and empty) and checks the
+  items conserved or the action refused, and the inventory valid (`inventory_valid`
+  already exists). Then two clients over UDP send 2000 random inventory requests each,
+  drop, pick up, shift-click into a chest both look at, die mid-way, and travel; the
+  audit is balanced throughout. Anything the fuzz finds is fixed in this milestone with
+  its own test.
+- **Left out:** offline characters on disk (they are out of the scope, so a character
+  save/load pair is a `Scope_Out`/`Scope_In` that the test checks matches); persisting
+  the ledger across restarts; per-character ledgers; prices; a trade log (trades come
+  with traders); `items.infinite` places and breaks without items, so it records
+  nothing.
+
+**Order of work.** The ledger and `Reason` with the audit on the existing tests'
+scenarios (every one that touches items asserts a balanced audit at its end: this
+finds the missing call sites); the telemetry kinds and `faucets`; the `/audit` command
+and the periodic run; the fuzz and what it finds.
+
+**Exit check.** `server/ledger_test.odin`: a scripted session through every faucet and
+every sink in the lists above ends with a balanced audit and the expected per-reason
+counts; a stack duplicated by the test through a hook compiled only into tests is
+reported by item and amount, and a stack deleted likewise; travel, a chest, death,
+disconnecting with a full inventory and reconnecting, and an unload and reload of a
+world leave the audit balanced; the fuzz above (game level, then two clients over
+UDP) ends balanced; the audit stays within its budget at 200 players and 3000 item
+entities; `telemetry` tests for the two new kinds; the whole suite twice (M29's
+repeat run). The table row is filled in with what was done and a line added to the cost
+table.
+
+**Done, and where it differs from the design.** `Reason` lives in `game/reason.odin`
+(not the server) so the analytics tool names the reasons from the event's number.
+`Catalog_Return` is what a second `Take` does to the stack already on the cursor
+(the catalog replaces it). A saved character's overflow, spilled on joining, is
+`Spill_Old`; the inventory carried in is `Scope_In`. The UDP fuzz sends requests whose
+fields are in range (the decoder disconnects the client for any other, which is its
+own check); slots and arguments out of range are fuzzed at the game level, where
+`inventory_apply` is conserved or refuses. The fuzz found no bug. Not done: persisting
+the ledger, per-character ledgers, a `faucets` view per period.
