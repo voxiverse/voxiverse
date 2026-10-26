@@ -353,6 +353,84 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded (done: `game/mods.odin` (`derive_mods` from worn items' modifiers, shared by server and the client's prediction; speed, jump, air jumps, max health as data on items), `game/physics_test.odin` (modifiers change movement; prediction agrees tick by tick with a speed modifier and a double jump), `server/health_test.odin` (fall and explosion damage by the rules' numbers, death, respawn and dropped items, xp and level from events, worn armor raises and removal lowers max health), protocol 21 with a Health message, a health bar by the hotbar; not done: timed effects, reach, xp rewards) |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI (done: `game.rules_still()` is the one world-off-by-a-switch used by the tests, benchmarks and exit checks (random ticks are the only self-changing thing with a switch; sheep and weather have none yet); CI runs the suite again with another random seed on Linux; `telemetry.test_event_cost` budgets emit and write per event, run optimized in CI; not done: the Windows pass, no Windows machine) |
 | M30 | Blocks that hold things: a chest block with a server-owned record of 25 stacks, saved with the world, opened with the right button, moved with the inventory requests, shared by everyone looking, spilled when broken | A chest filled, saved, quit and loaded holds the same; broken, it drops every stack; two players over UDP moving items in one chest agree with the server; a record without its block is dropped (done: `server/containers.odin` (records by position, saved in `containers.cfg`, copied in and out around every inventory request, others looking told, spilled when the block is gone), `game/inventory.odin` chest slots (`test_chest_actions`), `Use_Block` and the chest in `Inventory_Update` (protocol 22, round-trip tests), `client` chest overlay (`test_chest_overlay`), `server/containers_test.odin` (a chest filled, saved, quit and loaded holds the same and spills 128 items when broken; two players over UDP see each other's moves and agree with the server; a record without its block is dropped and spills); not done: a permission node, locks, signs) |
+| M31 | Item ledger and audit: every item that enters or leaves the game's holdings goes through one `ledger` call with a reason (faucets and sinks), telemetry kinds for both, an `audit` that sums everything held and checks it against the ledger, and a fuzz of hostile inventory traffic | A scripted session through every faucet and sink balances exactly; a deliberately duplicated stack is caught; 2000 random (and invalid) inventory requests from two players over UDP leave the audit balanced |
+
+## M31: item ledger and audit
+
+**Why this, now.** The game is heading to an economy (traders, gold, shops, teleporter
+fees) and to strangers sharing a server. Both stand on one fact: the number of each item
+in the world is never wrong. Today items are made and unmade in about fifteen places
+(`block_drop`, `admin_give`, `give_kit`, shearing, death drops, `used_to_place`, wheat
+fed, `item_tick` expiry and merging, chests, `players.odin`'s spill on arrival) and
+nothing checks that they agree: a duplication bug would show up first as a ruined
+economy. M26 measures play, M28 gave characters state; this makes items trustworthy
+before anything is priced.
+
+**Design decided.**
+
+- **`server/ledger.odin`**: `Ledger` is a field of `Server` (one per universe, in memory;
+  not saved: the audit is relative to a baseline, below). It holds, per item and per
+  `Reason`, a `[Item][Reason]i64` count. One call changes it:
+  `ledger(s, reason, item, count)`; `count` is positive for a faucet and negative for a
+  sink. `Reason` is an enum, append-only, in two groups:
+  - Faucets: `Drop_Block` (what a broken block leaves, `block_drop`), `Drop_Mob` (wool),
+    `Give` (`admin_give`), `Kit` (`give_kit`), `Catalog` (taking from the creative
+    catalog with `items.catalog`), `Spill_Old` (items found with no owner on load).
+  - Sinks: `Place` (`used_to_place`), `Use` (fed, planted, tilled), `Clear`
+    (`admin_clear`), `Expire` (`item_tick`'s age), `Catalog_Return` (a stack put back
+    in the catalog), `Void` (anything the world refuses, e.g. a world with no room).
+  - Moves are not ledger entries: pick up, drop, merge, chest in and out, equip, death
+    spill and travel only change where an item is, never how many exist. They are
+    checked by the audit.
+- **Scope entries.** The audit looks at what is in memory: online players' inventories
+  (slots, cursor, worn, a chest being looked at), the containers and the item entities
+  of loaded worlds. Items entering that scope (a player joins, a world loads) and
+  leaving it (leave, unload) are recorded as `Scope_In` / `Scope_Out` by the one
+  function each already goes through (`player_joined`/`player_left`,
+  `world_loaded`/`world_unloaded`), with the sum they carry. So the balance
+  `held_now - held_at_baseline == sum of all entries` holds for any interval.
+- **`audit(s) -> Audit_Report`**: sums every holding above, per item; with a baseline
+  (`audit_baseline(s)` stores the sums and zeroes the ledger) returns for each item the
+  difference between what is held and what the ledger says should be. An empty report is
+  a balanced one. Dedicated servers run it every five minutes and on `/audit`
+  (permission `admin.audit`), logging a line per unbalanced item at `error` and an
+  `Audit_Failed` event; it never fixes anything (a fix would hide the bug).
+  Cost is bounded: it walks inventories, container records and the entity list, which
+  are all counts already held; a test budgets it at 200 players and 3000 item entities.
+- **Telemetry.** Two kinds, `Item_Created` and `Item_Destroyed` (text: item; n0: count;
+  n1: the reason's number; counters `items.created.%t` and `items.destroyed.%t`),
+  emitted by the one `ledger` call, so faucets and sinks are measured by the same
+  stream the economy will be read from. `tools/analytics` gets a `faucets` report:
+  per item, created and destroyed by reason over a period.
+- **Multiplayer safety, the fuzz.** The audit is only worth what tries to break it. A
+  test drives `game.inventory_apply` with random actions (every action kind, indices
+  in and out of range, counts negative and huge, cursor held and empty) and checks the
+  items conserved or the action refused, and the inventory valid (`inventory_valid`
+  already exists). Then two clients over UDP send 2000 random inventory requests each,
+  drop, pick up, shift-click into a chest both look at, die mid-way, and travel; the
+  audit is balanced throughout. Anything the fuzz finds is fixed in this milestone with
+  its own test.
+- **Left out:** offline characters on disk (they are out of the scope, so a character
+  save/load pair is a `Scope_Out`/`Scope_In` that the test checks matches); persisting
+  the ledger across restarts; per-character ledgers; prices; a trade log (trades come
+  with traders); `items.infinite` places and breaks without items, so it records
+  nothing.
+
+**Order of work.** The ledger and `Reason` with the audit on the existing tests'
+scenarios (every one that touches items asserts a balanced audit at its end: this
+finds the missing call sites); the telemetry kinds and `faucets`; the `/audit` command
+and the periodic run; the fuzz and what it finds.
+
+**Exit check.** `server/ledger_test.odin`: a scripted session through every faucet and
+every sink in the lists above ends with a balanced audit and the expected per-reason
+counts; a stack duplicated by the test through a hook compiled only into tests is
+reported by item and amount, and a stack deleted likewise; travel, a chest, death,
+disconnecting with a full inventory and reconnecting, and an unload and reload of a
+world leave the audit balanced; the fuzz above (game level, then two clients over
+UDP) ends balanced; the audit stays within its budget at 200 players and 3000 item
+entities; `telemetry` tests for the two new kinds; the whole suite twice (M29's
+repeat run). The table row is filled in with what was done and a line added to the cost
+table.
 
 ## Why the plan changed (after M25)
 
