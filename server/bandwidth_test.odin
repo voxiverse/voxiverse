@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 
 import "../game"
+import "../netcode"
 
 // M39's bandwidth benchmark. A stepped session is deterministic, so the bytes
 // it moves are too, on every OS: the numbers are exact, not statistical. Two
@@ -74,11 +75,7 @@ bandwidth_run :: proc(t: ^testing.T, name: string) -> (b: Bandwidth, ok: bool) {
 			label := game.message_kind_name(side, u8(kind))
 			append(
 				&b.kinds,
-				Kind_Bytes {
-					fmt.aprintf("%s:%s", "s" if side == .Server else "c", label),
-					n,
-					bytes,
-				},
+				Kind_Bytes{fmt.aprintf("%s:%s", "s" if side == .Server else "c", label), n, bytes},
 			)
 			if side == .Client && label == "input" {b.inputs = n}
 		}
@@ -139,7 +136,12 @@ compare :: proc(t: ^testing.T, name: string) {
 	if !ok {return}
 	defer bandwidth_destroy(&run)
 	data, err := os.read_entire_file_from_path(BANDWIDTH_FILE, context.temp_allocator)
-	if !testing.expectf(t, err == nil, "%s is missing: run with -define:VX_BANDWIDTH_ACCEPT=true", BANDWIDTH_FILE) {return}
+	if !testing.expectf(
+		t,
+		err == nil,
+		"%s is missing: run with -define:VX_BANDWIDTH_ACCEPT=true",
+		BANDWIDTH_FILE,
+	) {return}
 	want, found := bandwidth_parse(string(data), name)
 	if !testing.expectf(t, found, "no scenario %s in %s", name, BANDWIDTH_FILE) {return}
 	testing.expectf(
@@ -197,4 +199,15 @@ test_bandwidth_accept :: proc(t: ^testing.T) {
 			testing.expectf(t, false, "cannot write %s: %v", BANDWIDTH_FILE, err)
 		}
 	}
+}
+
+// A snapshot part is one unreliable packet: it must fit one netcode record.
+@(test)
+test_snapshot_part_fits :: proc(t: ^testing.T) {
+	testing.expect(
+		t,
+		game.SNAPSHOT_PART_BYTES <= netcode.FRAGMENT_SIZE,
+		"a snapshot part is longer than a netcode fragment",
+	)
+	testing.expect(t, game.SNAPSHOT_PARTS * game.SNAPSHOT_PART_BYTES <= 9500)
 }

@@ -65,9 +65,9 @@ track_add :: proc(o: ^Track, snapshot: Snapshot) {
 	o.count += 1
 }
 
-// other_snapshot adds what a Players message said about a player.
-other_snapshot :: proc(o: ^Other_Player, tick: u32, e: game.Player_Entry) {
-	track_add(&o.track, {tick, e.position, e.yaw, e.pitch, e.flying, e.crouched})
+// other_snapshot adds what a Player_Motion record said about a player.
+other_snapshot :: proc(o: ^Other_Player, tick: u32, m: game.Player_Motion) {
+	track_add(&o.track, {tick, m.position, m.yaw, m.pitch, m.flying, m.crouched})
 }
 
 // other_view: the player at server time `at` (in ticks, fractional),

@@ -1,5 +1,6 @@
 package server
 
+import "core:fmt"
 import "core:math"
 import "core:net"
 import "core:os"
@@ -25,11 +26,14 @@ Net_Client :: struct {
 	welcome:     game.Welcome,
 	welcomed:    bool,
 	rejected:    string,
-	update:      game.Player_Update,
+	update:      game.Own_Player,
+	schema:      game.Schema,
+	rx:          game.Receiver,
+	teleports:   int, // Own_Player.teleports changes seen
 	others:      map[u16]string, // joined, by player id
 	seen:        map[u16][3]f64, // last Players position, by player id
 	worn:        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
-	changed:     [dynamic]game.Block_Changed,
+	changed:     [dynamic]Net_Block,
 	entities:    map[u32][3]f64, // known entities, where last seen
 	shorn:       map[u32]bool, // sheep as last told shorn or not
 	sheep:       map[u32]game.Sheep_Flags, // and what else about their looks
@@ -60,6 +64,14 @@ Net_Client :: struct {
 	characters:  string, // the last Characters (temp: compared at once)
 	address:     game.Address, // the world it is in (Welcome, World_Changed)
 	travels:     int, // World_Changed messages
+	capture:     netcode.Capture, // (net_capture: every packet it sends and receives)
+}
+
+@(private)
+Net_Block :: struct {
+	pos:   game.Block_Pos,
+	block: game.Block,
+	heard: bool,
 }
 
 @(private)
@@ -70,17 +82,29 @@ Net_Chat :: struct {
 }
 
 @(private)
-net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "") {
+net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "", capture := "") {
 	c.name = name
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
+	c.schema = game.game_schema()
+	game.receiver_init(&c.rx, &c.schema)
 	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, time.tick_now())
+	if capture != "" {net_capture(c, capture)}
+}
+
+// net_capture records c's packets to a pcap file (tools/wireshark/check.lua reads it).
+@(private)
+net_capture :: proc(c: ^Net_Client, path: string) {
+	if netcode.capture_open(&c.capture, path) {c.link.socket.capture = &c.capture}
 }
 
 @(private)
 net_close :: proc(c: ^Net_Client) {
 	netcode.link_close(&c.link, "test over")
+	netcode.capture_close(&c.capture)
 	free(c.scratch)
+	game.receiver_destroy(&c.rx)
+	game.schema_destroy(&c.schema)
 	for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
 	game.block_arrays_destroy(&c.arrays)
 	delete(c.chunks)
@@ -113,6 +137,91 @@ net_send :: proc(c: ^Net_Client, m: game.Client_Message) {
 	netcode.link_send(&c.link, w.buf[:], game.message_reliable(.Client, w.buf[0]))
 }
 
+// net_apply keeps what the receiver yielded as the client's fields.
+@(private)
+net_apply :: proc(c: ^Net_Client, got: []game.Received) {
+	for g in got {
+		switch game.State_Kind(g.kind) {
+		case .Own_Player:
+			if v := (^game.Own_Player)(g.value)^; v.teleports != u8(c.teleports) {
+				c.teleports = int(v.teleports)
+			}
+			c.update = (^game.Own_Player)(g.value)^
+		case .Health:
+			c.health = (^game.Health)(g.value)^
+		case .Inventory:
+			v := (^game.Inventory_State)(g.value)
+			c.inventory, c.inv_acked = v.inventory, v.acked
+			c.inv_updates += 1
+		case .Rules, .Clock, .Variables, .Selection:
+		case .Grants:
+			v := (^game.Grants)(g.value)
+			for gr in c.grants {delete(gr.pattern)}
+			clear(&c.grants)
+			game.grants_parse(v.text, &c.grants)
+		case .Player:
+			id := u16(g.key.a)
+			if g.op == .Remove {
+				if n, had := c.others[id]; had {delete(n)}
+				delete_key(&c.others, id)
+				delete_key(&c.worn, id)
+			} else {
+				v := (^game.Player_Record)(g.value)
+				if n, had := c.others[id]; had {delete(n)}
+				c.others[id] = strings.clone(v.name)
+				c.worn[id] = v.worn
+			}
+		case .Player_Motion:
+			id := u16(g.key.a)
+			if g.op == .Remove {
+				delete_key(&c.seen, id)
+			} else {
+				c.seen[id] = (^game.Player_Motion)(g.value).position
+			}
+		case .Entity:
+			// (an entity is known once it has a place too: Entity_Motion)
+			if g.op == .Remove {
+				id := u32(g.key.a)
+				delete_key(&c.entities, id)
+				delete_key(&c.shorn, id)
+				delete_key(&c.sheep, id)
+			}
+		case .Entity_Motion:
+			id := u32(g.key.a)
+			if g.op == .Remove {continue}
+			v := (^game.Entity_Motion)(g.value)
+			if game.replica_get(&c.rx.live, int(game.State_Kind.Entity), g.key) != nil {
+				c.entities[id] = v.position
+				c.shorn[id] = .Shorn in v.flags
+				c.sheep[id] = v.flags
+			}
+		case .Block:
+			v := (^game.Block_Record)(g.value)
+			p := game.key_block(g.key)
+			append(&c.changed, Net_Block{p, v.block, v.heard})
+			if blocks, have := &c.chunks[game.chunk_of(p)]; have {
+				game.chunk_set(blocks, &c.arrays, game.local_of(p), v.block)
+			}
+		}
+		if g.op != .Event {continue}
+		switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+		case .Notice:
+			append(&c.notices, strings.clone((^game.Notice)(g.value).text))
+		case .Chat_Line:
+			v := (^game.Chat_Line)(g.value)
+			append(&c.chat, Net_Chat{v.id, v.sender, strings.clone(v.text)})
+		case .Chat_Delete:
+			append(&c.deleted, (^game.Chat_Delete)(g.value).id)
+		case .Entity_Hurt:
+			c.hurt += 1
+		case .Entity_Died:
+			c.died += 1
+		case .Explosion:
+			c.explosions += 1
+		}
+	}
+}
+
 // net_pump: network in, messages handled, an idle input sent (once
 // welcomed, as a real client sends one every tick), network out.
 @(private)
@@ -122,7 +231,10 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	netcode.link_update(&c.link, now)
 	if was != .Connected && c.link.state == .Connected {
 		k := test_key(c.key_name if c.key_name != "" else c.name)
-		net_send(c, game.Hello{game.PROTOCOL_VERSION, k.account, "" if c.ask else c.name})
+		net_send(
+			c,
+			game.Hello{game.PROTOCOL_VERSION, k.account, "" if c.ask else c.name, c.schema.hash},
+		)
 	}
 	netcode.link_receive(&c.link, &c.messages)
 	for p in c.messages {
@@ -141,9 +253,12 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
 			c.address = v.address
+			rules := v.rules
+			game.receiver_seed(&c.rx, int(game.State_Kind.Rules), &rules)
 		case game.World_Changed:
 			// Nothing of the last world stays.
 			c.address = v.address
+			game.receiver_reset(&c.rx)
 			c.travels += 1
 			for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
 			clear(&c.chunks)
@@ -166,77 +281,35 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.Player_Update:
-			c.update = v
-		case game.Player_Joined:
-			c.others[v.player] = strings.clone(v.name)
-		case game.Health:
-			c.health = v
+		case game.State_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			testing.expect(t, game.receive_state(&c.rx, v.data, &got), "invalid State message")
+			net_apply(c, got[:])
+		case game.Snapshot_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			testing.expect(
+				t,
+				game.receive_snapshot(&c.rx, v.data, &got),
+				"invalid Snapshot message",
+			)
+			net_apply(c, got[:])
 		case game.Stats_Page:
 			delete(c.stats_text)
 			c.stats_text = strings.clone(v.text)
 			c.stats_pages = int(v.pages)
-		case game.Player_Worn:
-			c.worn[v.player] = v.worn
-		case game.Player_Left:
-			if n, had := c.others[v.player]; had {delete(n)}
-			delete_key(&c.others, v.player)
-			delete_key(&c.seen, v.player)
-		case game.Players:
-			for i in 0 ..< v.count {c.seen[v.entries[i].player] = v.entries[i].position}
-		case game.Block_Changed:
-			append(&c.changed, v)
-			if blocks, have := &c.chunks[game.chunk_of(v.pos)]; have {
-				game.chunk_set(blocks, &c.arrays, game.local_of(v.pos), v.block)
-			}
-		case game.Notice:
-			append(&c.notices, strings.clone(v.text))
-		case game.Chat_Line:
-			append(&c.chat, Net_Chat{v.id, v.sender, strings.clone(v.text)})
-		case game.Chat_Delete:
-			append(&c.deleted, v.id)
-		case game.Inventory_Update:
-			c.inventory, c.inv_acked = v.inventory, v.acked
-			c.inv_updates += 1
-		case game.Grants:
-			for g in c.grants {delete(g.pattern)}
-			clear(&c.grants)
-			game.grants_parse(v.text, &c.grants)
-		case game.Blocks_Changed:
-			if blocks, have := &c.chunks[v.chunk]; have {
-				for i in 0 ..< v.count {
-					e := v.entries[i]
-					game.chunk_set(blocks, &c.arrays, game.local_from_index(int(e.index)), e.block)
-				}
-			}
 		case game.Edit_Result:
 			c.results[v.id] = v
-		case game.Entity_Spawn:
-			c.entities[v.entity] = v.position
-		case game.Entities:
-			for i in 0 ..< v.count {
-				e := v.entries[i]
-				if e.entity in c.entities {
-					c.entities[e.entity] = e.position
-					c.shorn[e.entity] = .Shorn in e.flags
-					c.sheep[e.entity] = e.flags
-				}
-			}
-		case game.Entity_Despawn:
-			delete_key(&c.entities, v.entity)
-			if v.died {c.died += 1}
-		case game.Entity_Hurt:
-			c.hurt += 1
 		case game.Bulk_Begin:
 			c.bulk_begins += 1
-		case game.Explosion:
-			c.explosions += 1
 		}
 	}
 	clear(&c.messages)
 	if c.welcomed {
 		c.seq += 1
-		net_send(c, game.Input{c.seq, {move = c.move, yaw = c.look[0], pitch = c.look[1]}})
+		net_send(
+			c,
+			game.Input{c.seq, {move = c.move, yaw = c.look[0], pitch = c.look[1]}, c.rx.ack},
+		)
 	}
 	netcode.link_flush(&c.link, now)
 }
@@ -298,7 +371,9 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	port := srv.host.socket.port
 
 	alice, bob, impostor: Net_Client
-	net_connect(&alice, port, "alice")
+	net_connect(&alice, port, "alice", capture = "build/net_players.pcap")
+	// (for tools/wireshark/check.lua: VX_SERVER_PORT=$(cat build/net_players.port))
+	_ = os.write_entire_file("build/net_players.port", fmt.tprintf("%d", port))
 	net_connect(&bob, port, "bob")
 	defer net_close(&alice)
 	defer net_close(&bob)
@@ -412,14 +487,15 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		jitter_ms  = 25,
 	}
 	config := Config {
-		rules       = quiet_rules(),
-		seed        = 31,
-		view_radius = 3,
-		view_height = 2,
-		workers     = 2,
-		max_players = 4,
-		listen      = true,
-		conditions  = bad,
+		rules           = quiet_rules(),
+		seed            = 31,
+		view_radius     = 3,
+		view_height     = 2,
+		workers         = 2,
+		max_players     = 4,
+		listen          = true,
+		conditions      = bad,
+		everyone_cheats = true,
 	}
 	srv: Server
 	if !testing.expect(t, start(&srv, config, {})) {return}
@@ -495,6 +571,89 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		}, 30)
 	testing.expect(t, ok, "beta never heard of alpha's edit (or alpha of its result)")
 	testing.expect(t, a.results[1].accepted, "alpha's edit was refused")
+
+	// The state model through the loss: once the loss stops, within 30 ticks
+	// each client holds exactly the server's values of the other player and of
+	// a summoned sheep (snapshots that were lost are sent again against the
+	// newest the client acknowledged).
+	net_send(&a, game.Command{"summon sheep"})
+	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+			return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
+		}, 30)
+	if !testing.expect(t, ok, "the summoned sheep never reached both clients") {return}
+	call(&srv, proc(s: ^Server, data: rawptr) {s.host.socket.conditions = {}}, nil)
+	a.link.socket.conditions = {}
+	b.link.socket.conditions = {}
+	deadline := time.tick_add(time.tick_now(), 30 * game.TICK_DURATION + 5 * time.Second)
+	exact := false
+	for !exact && time.tick_diff(time.tick_now(), deadline) > 0 {
+		net_pump(t, &a)
+		net_pump(t, &b)
+		time.sleep(game.TICK_DURATION)
+		Truth :: struct {
+			a, b:  [3]f64, // the two players' positions
+			sheep: [3]f64,
+			flags: game.Sheep_Flags,
+			n:     int,
+		}
+		truth: Truth
+		call(&srv, proc(s: ^Server, data: rawptr) {
+				truth := (^Truth)(data)
+				truth.a = s.clients[0].player.position
+				truth.b = s.clients[1].player.position
+				for &ent in s.home.entities.list {
+					truth.sheep, truth.flags = ent.body.position, sheep_flags(&ent)
+					truth.n += 1
+				}
+			}, &truth)
+		if truth.n != 1 {continue}
+		id_a, id_b := a.welcome.player, b.welcome.player
+		sheep_a, sheep_b: [3]f64
+		for _, p in a.entities {sheep_a = p}
+		for _, p in b.entities {sheep_b = p}
+		exact =
+			a.seen[id_b] == truth.b &&
+			b.seen[id_a] == truth.a &&
+			sheep_a == truth.sheep &&
+			sheep_b == truth.sheep
+	}
+	testing.expect(
+		t,
+		exact,
+		"the clients' views of the other player and the sheep never matched the server's",
+	)
+}
+
+// A client that knows another set of state kinds is refused, with both hashes
+// in the reason.
+@(test)
+test_schema_mismatch_refused :: proc(t: ^testing.T) {
+	config := Config {
+		rules       = quiet_rules(),
+		seed        = 32,
+		view_radius = 2,
+		view_height = 1,
+		workers     = 1,
+		max_players = 2,
+		listen      = true,
+	}
+	srv: Server
+	if !testing.expect(t, start(&srv, config, {})) {return}
+	defer stop(&srv)
+	c: Net_Client
+	net_connect(&c, srv.host.socket.port, "stranger")
+	defer net_close(&c)
+	c.schema.hash += 1
+	ok := net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
+	testing.expect(t, ok, "a client with another schema was not refused")
+	testing.expect(
+		t,
+		strings.has_prefix(
+			c.rejected,
+			"this server runs a different version of the game (state schema ",
+		),
+		c.rejected,
+	)
 }
 
 // quiet_rules: nothing changing by itself, for tests that compare what clients

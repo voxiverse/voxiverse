@@ -47,6 +47,8 @@ Bot :: struct {
 	key:      game.Account_Key,
 	yaw:      f32, // its direction out
 	scratch:  ^game.Block_Array,
+	schema:   game.Schema,
+	rx:       game.Receiver, // what the server says (its own player: Own_Player)
 	messages: [dynamic][]u8,
 	stage:    Bot_Stage,
 	welcomed: bool,
@@ -144,6 +146,8 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		game.account_key_set(&b.key, seed[:])
 		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
 		b.scratch = new(game.Block_Array)
+		b.schema = game.game_schema()
+		game.receiver_init(&b.rx, &b.schema)
 		netcode.link_connect(&b.link, {net.IP4_Loopback, port}, "", time.tick_now())
 	}
 	defer for &b in bots {
@@ -151,6 +155,8 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		for p in b.messages {netcode.link_free(&b.link, p)}
 		delete(b.messages)
 		free(b.scratch)
+		game.receiver_destroy(&b.rx)
+		game.schema_destroy(&b.schema)
 		delete(b.name)
 	}
 
@@ -195,7 +201,7 @@ pump :: proc(bots: []Bot) {
 		was := b.link.state
 		netcode.link_update(&b.link, now)
 		if was != .Connected && b.link.state == .Connected {
-			send(&b, game.Hello{game.PROTOCOL_VERSION, b.key.account, b.name})
+			send(&b, game.Hello{game.PROTOCOL_VERSION, b.key.account, b.name, b.schema.hash})
 		}
 		netcode.link_receive(&b.link, &b.messages)
 		for p in b.messages {
@@ -209,8 +215,22 @@ pump :: proc(bots: []Bot) {
 				send(&b, game.Choose{b.name})
 			case game.Welcome:
 				b.welcomed = true
-			case game.Player_Update:
-				b.position, b.flying = v.state.position, v.state.flying
+				rules := v.rules
+				game.receiver_seed(&b.rx, int(game.State_Kind.Rules), &rules)
+			case game.State_Message, game.Snapshot_Message:
+				got := make([dynamic]game.Received, context.temp_allocator)
+				#partial switch s in m {
+				case game.State_Message:
+					game.receive_state(&b.rx, s.data, &got)
+				case game.Snapshot_Message:
+					game.receive_snapshot(&b.rx, s.data, &got)
+				}
+				for g in got {
+					if g.op != .Event && game.State_Kind(g.kind) == .Own_Player {
+						own := (^game.Own_Player)(g.value)
+						b.position, b.flying = own.state.position, own.state.flying
+					}
+				}
 			case game.Reject:
 				log.errorf("bench %s refused: %s", b.name, v.reason)
 			}
@@ -246,7 +266,7 @@ bot_input :: proc(b: ^Bot) {
 		input.buttons = {.Sprint}
 	}
 	b.seq += 1
-	send(b, game.Input{b.seq, input})
+	send(b, game.Input{b.seq, input, b.rx.ack})
 }
 
 @(private = "file")

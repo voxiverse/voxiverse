@@ -212,15 +212,17 @@ travel :: proc(s: ^Server, c: ^Client, a: game.Address, there: Maybe(Place) = ni
 		// The client drops everything of the world it leaves.
 		clear(&c.has)
 		clear(&c.columns)
-		clear(&c.known)
-		selection_set(s, c, {}) // (it was in the last world)
+		replica_flush(s, c) // (what the last world said, before it is dropped)
 		c.cursor = 0
 		c.landing = nil
 		c.action_count = 0 // (edits and shots were for the last world)
 		c.world = to
 		send_message(s, c, game.World_Changed{to.address, to.rules})
-		send_message(s, c, game.Time{to.clock})
-		if m, ok := worldgen_variables(to); ok {send_message(s, c, m)}
+		game.sender_reset(&c.tx) // (the client drops its keyed records and snapshots)
+		replica_seed(s, c)
+		c.clock_pending = true
+		selection_set(s, c, {}) // (it was in the last world)
+		if m, ok := worldgen_variables(to); ok {state_put(s, c, .Variables, &m)}
 		log.infof(
 			"server travel name=%s from=%s to=%s",
 			client_name(c),

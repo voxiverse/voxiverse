@@ -34,7 +34,9 @@ Predicting_Client :: struct {
 	rules:       game.Rules,
 	welcome:     game.Welcome,
 	welcomed:    bool,
-	last_update: game.Player_Update,
+	last_update: game.Own_Player,
+	rx:          State_Rx,
+	teleports:   u8,
 	results:     map[u32]game.Edit_Result,
 }
 
@@ -65,6 +67,8 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 		case game.Welcome:
 			c.welcome, c.welcomed, c.rules = v, true, v.rules
 			game.prediction_init(&c.prediction, {position = v.spawn})
+			rules := v.rules
+			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
 		case game.Chunk_Message:
 			blocks := game.Chunk_Blocks {
 				uniform = v.uniform,
@@ -80,14 +84,27 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.Player_Update:
-			c.last_update = v
-			game.prediction_reconcile(&c.prediction, v, &c.rules, query(c))
+		case game.State_Message, game.Snapshot_Message:
+			for g in state_rx_take(t, &c.rx, m) {
+				#partial switch game.State_Kind(g.kind) {
+				case .Own_Player:
+					c.last_update = (^game.Own_Player)(g.value)^
+					teleported := c.last_update.teleports != c.teleports
+					c.teleports = c.last_update.teleports
+					game.prediction_reconcile(
+						&c.prediction,
+						c.last_update,
+						&c.rules,
+						query(c),
+						teleported = teleported,
+					)
+				case .Rules:
+					c.rules = (^game.Rules)(g.value)^
+				}
+			}
 		case game.Edit_Result:
 			c.results[v.id] = v
 			set_block(c, v.pos, v.block)
-		case game.Rules_Changed:
-			c.rules = v.rules
 		}
 	}
 }
@@ -162,6 +179,8 @@ run_script :: proc(
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
+	state_rx_init(&c.rx)
+	defer state_rx_destroy(&c.rx)
 	game.block_arrays_init(&c.arrays, 2048)
 	defer game.block_arrays_destroy(&c.arrays)
 	defer delete(c.chunks)
@@ -186,6 +205,7 @@ run_script :: proc(
 	for {
 		pump(t, &c)
 		msg := game.prediction_tick(&c.prediction, {pitch = -0.7}, &c.rules, query(&c))
+		msg.snapshot = c.rx.rx.ack
 		send(&c, msg)
 		tick_wait()
 		s := c.last_update.state
@@ -202,6 +222,7 @@ run_script :: proc(
 		pump(t, &c)
 		in_ := script_input(tick) if tick < ticks else game.Player_Input{pitch = -0.7}
 		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c))
+		msg.snapshot = c.rx.rx.ack
 		if nudge {
 			v := &c.prediction.state.velocity.x
 			v^ = transmute(f32)(transmute(u32)v^ + 1)

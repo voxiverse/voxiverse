@@ -107,3 +107,15 @@ rules_still :: proc() -> Rules {
 	r.random_tick_speed = 0
 	return r
 }
+
+// rules_valid: every rule within its table range (rules from the wire).
+rules_valid :: proc(r: ^Rules) -> bool {
+	t := rules_table()
+	for &v in t.vars {
+		kind, _ := base.var_kind(t, &v)
+		if kind == .Bool {continue}
+		value := base.var_get_f64(t, r, &v)
+		if !(value >= v.min && value <= v.max) {return false}
+	}
+	return true
+}

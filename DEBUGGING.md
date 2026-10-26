@@ -265,7 +265,7 @@ Items are data (`game/items.odin`): every block players may place has its item (
 the block's), tools are items of their own (`rocket_launcher`). An inventory is 30 slots (the
 first five the hotbar, then a 5x5 grid) and the stack on the cursor; the server owns it and applies requests
 with the same code the client predicts with (`game/inventory.odin`), answering each with the
-inventory (`Inventory_Update`, how far it got): a refused request is rolled back. Placing a
+inventory (the `inventory` record: its `acked` says how far it got): a refused request is rolled back. Placing a
 block uses one from the hand (or the hotbar) unless the player has `items.infinite`; breaking
 leaves the block's item where `rules.drops` (not for `items.infinite`); `items.catalog` lets
 the inventory take any item. Dropped stacks are entities: they fall, merge with stacks of
@@ -360,8 +360,8 @@ Water levels are block ids (a source, flow levels 1-7, falling), so saves and th
 need nothing new. The server runs scheduled block updates (`server/liquids.odin`): a queue
 ordered by tick and position, at most 4096 run a tick, so the same edits give the same water
 on every run. Any block change wakes the water next to it; seas and lakes are left alone
-until something opens them. Changes the world makes travel as one `Blocks_Changed` per chunk
-per tick. F3's server line shows the updates waiting. `server/liquids_test.odin`: the dam
+until something opens them. Changes the world makes travel as `block` records (not `heard`),
+sorted by chunk, in the tick's `state` message. F3's server line shows the updates waiting. `server/liquids_test.odin`: the dam
 break (the same water twice, both players matching the server) and the flood (10 000 blocks
 flowing within the tick budget; CI runs it optimized too).
 
@@ -418,8 +418,22 @@ disagree.
 | F3 `server:` line, remote | The link: address, round trip, packets each way, reliable records resent, duplicates received |
 | `set debug.net_capture 1` (next remote game), `voxiverse-server --capture file.pcap` | Write every UDP packet to a pcap file. Open it in Wireshark with `tools/wireshark/voxiverse.lua` (copy it to your Lua plugins folder, or `wireshark -X lua_script:tools/wireshark/voxiverse.lua build/net.pcap`): handshakes, acks, records and the game messages in them. `lua tools/wireshark/check.lua file.pcap` decodes a capture without Wireshark (CI does both) |
 | `set debug.net_trace 1` (next world) / `net_trace` (now) | Record every message both ways to `build/net.trace` |
-| `build netdump [file]` | Print a trace, decoded by the game's own decoders: `-kind:chunk`, `-sender:client`, `-from:2 -to:3`, `-limit:20`, or `-summary` for counts and bytes per kind. Fails if any message does not decode. |
+| `build netdump [file]` | Print a trace, decoded by the game's own decoders: `-kind:chunk`, `-sender:client`, `-from:2 -to:3`, `-limit:20`, or `-summary` for counts and bytes per kind (`state` and `snapshot` split by the state and event kinds they carry). Fails if any message does not decode. |
 | `build replay [file]` | Feed the trace's client messages to a fresh server with the same seed, view distance and timing (`-speed:4` for faster). Whatever the server did with them (assert, crash, disconnect) happens again outside the game; its answers go to `build/replay.trace`. Exits non-zero if the server failed or disconnected the client. |
+
+What the server says about the world besides chunks (the player, other players, entities,
+the inventory, rules, health, the clock, chat, notices, blocks that changed) is the **state
+model** (`game/state_kinds.odin`): *records* of typed kinds under a key, and one-off
+*events*, encoded by one codec derived from the value types (`game/schema.odin`). Records
+are deltas against what the client was last sent (`state` messages, reliable) or against the
+newest snapshot it acknowledged (`snapshot` messages, unreliable: the player's motion and
+other players' and entities' places). A new replicated value is a struct and an entry in
+`state_kinds.odin`; then `./build.sh schema` regenerates the Wireshark dissector's table
+(the test `test_dissector_schema_current` fails while it is stale). A client whose schema
+hash differs is refused when joining. `server/bandwidth_test.odin` measures the bytes of a
+scripted session and of a crowd of 100 sheep exactly; `assets/baselines/net/bandwidth.txt`
+holds the numbers, rewritten with `-define:VX_BANDWIDTH_ACCEPT=true`
+(`odin test server -define:ODIN_TEST_NAMES=server.test_bandwidth_accept`).
 
 Replays repeat the server's *inputs*, not its exact output: chunk generation runs on worker
 threads, so chunks can arrive in a slightly different order.

@@ -52,7 +52,7 @@ local function tree() return setmetatable({}, Tree) end
 function Tree:add() return tree() end
 function Tree:add_le() return tree() end
 function Tree:add_proto_expert_info(_, why) errors[#errors + 1] = why end
-function Tree:set_text() end
+function Tree:set_text(text) if os.getenv("VX_CHECK_VERBOSE") then print("   ", text) end end
 
 dofile((arg[0]:match("^(.*)/") or ".") .. "/voxiverse.lua")
 assert(proto and proto.heuristic, "the dissector did not register")
@@ -64,18 +64,24 @@ f:close()
 local magic, _, _, _, _, _, linktype = string.unpack("<I4I2I2i4I4I4I4", all)
 assert(magic == 0xa1b2c3d4 and linktype == 228, "not a LINKTYPE_IPV4 pcap")
 local pos, packets, ours, counts = 25, 0, 0, {}
+local server_port = tonumber(os.getenv("VX_SERVER_PORT") or "")
 while pos <= #all do
 	local _, _, incl = string.unpack("<I4I4I4I4", all, pos)
 	local frame = all:sub(pos + 16, pos + 16 + incl - 1)
 	pos = pos + 16 + incl
 	packets = packets + 1
-	local src_port = string.unpack(">I2", frame, 21)
+	local src_port, dst_port = string.unpack(">I2I2", frame, 21)
 	local payload = frame:sub(29)
-	local pinfo = {cols = {}, src_port = src_port}
+	-- (a server on a port outside the default range: the one the first
+	-- connect packet went to, or VX_SERVER_PORT=<port>)
+	if not server_port and frame:byte(34) == 2 and frame:sub(29, 32) == "VXV1" then server_port = dst_port end
+	if server_port and src_port == server_port then src_port = 27315 end
+	local pinfo = {cols = {}, src_port = src_port, dst_port = dst_port}
 	local before = #errors
 	if proto.heuristic(make_tvb(payload), pinfo, tree()) then
 		ours = ours + 1
 		local info = tostring(pinfo.cols.info or "?")
+		if os.getenv("VX_CHECK_VERBOSE") then print(packets, info) end
 		for word in info:gmatch("[%a_]+") do counts[word] = (counts[word] or 0) + 1 end
 		if #errors > before then print(string.format("packet %d malformed: %s (%s)", packets, errors[#errors], info)) end
 	end

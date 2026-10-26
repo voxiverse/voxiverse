@@ -38,7 +38,10 @@ Mirror :: struct {
 	prediction:  game.Prediction,
 	rules:       game.Rules,
 	welcomed:    bool,
-	last_update: game.Player_Update,
+	last_update: game.Own_Player,
+	schema:      game.Schema,
+	rx:          game.Receiver,
+	teleports:   u8,
 	entities:    [dynamic]u32, // ids told, in the order told
 	inv_seq:     u32,
 	edit_id:     u32,
@@ -107,6 +110,8 @@ mirror_pump :: proc(sess: ^Session) {
 		case game.Welcome:
 			m.rules, m.welcomed = v.rules, true
 			game.prediction_init(&m.prediction, {position = v.spawn})
+			rules := v.rules
+			game.receiver_seed(&m.rx, int(game.State_Kind.Rules), &rules)
 		case game.Chunk_Message:
 			blocks := game.Chunk_Blocks {
 				uniform = v.uniform,
@@ -122,18 +127,46 @@ mirror_pump :: proc(sess: ^Session) {
 				game.chunk_release(old, &m.arrays)
 				delete_key(&m.chunks, v.pos)
 			}
-		case game.Block_Changed:
-			mirror_set(m, v.pos, v.block)
-		case game.Blocks_Changed:
-			origin := game.chunk_origin(v.chunk)
-			entries := v.entries
-			for e in entries[:v.count] {
-				mirror_set(m, origin + game.local_from_index(int(e.index)), e.block)
+		case game.State_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			if !game.receive_state(&m.rx, v.data, &got) {
+				append(&sess.failures, "the mirror could not decode a State message")
 			}
-		case game.Player_Update:
+			mirror_apply(sess, got[:])
+		case game.Snapshot_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			if !game.receive_snapshot(&m.rx, v.data, &got) {
+				append(&sess.failures, "the mirror could not decode a Snapshot message")
+			}
+			mirror_apply(sess, got[:])
+		case game.Edit_Result:
+			mirror_set(m, v.pos, v.block)
+		}
+	}
+}
+
+// mirror_apply: what the receiver yielded, as the mirror keeps it.
+mirror_apply :: proc(sess: ^Session, got: []game.Received) {
+	m := &sess.mirror
+	for g in got {
+		if g.op == .Event {continue}
+		switch game.State_Kind(g.kind) {
+		case .Block:
+			v := (^game.Block_Record)(g.value)
+			mirror_set(m, game.key_block(g.key), v.block)
+		case .Own_Player:
+			v := (^game.Own_Player)(g.value)^
 			m.last_update = v
 			before := m.prediction.corrections
-			game.prediction_reconcile(&m.prediction, v, &m.rules, query(m))
+			teleported := v.teleports != m.teleports
+			m.teleports = v.teleports
+			game.prediction_reconcile(
+				&m.prediction,
+				v,
+				&m.rules,
+				query(m),
+				teleported = teleported,
+			)
 			m.updates += 1
 			knockback := sess.srv.tick - sess.script_at
 			if m.prediction.corrections != before && !(knockback >= 6000 && knockback < 6030) { 	// (the rocket's blast moves the player: a correction by design)
@@ -143,22 +176,24 @@ mirror_pump :: proc(sess: ^Session) {
 			if v.acked == m.prediction.next_sequence - 1 && m.prediction.state != v.state {
 				m.mismatches += 1
 			}
-		case game.Edit_Result:
-			mirror_set(m, v.pos, v.block)
-		case game.Rules_Changed:
-			m.rules = v.rules
-		case game.Entity_Spawn:
-			append(&m.entities, v.entity)
+		case .Rules:
+			m.rules = (^game.Rules)(g.value)^
+		case .Entity:
+			if g.op == .Create {append(&m.entities, u32(g.key.a))}
+		case .Health,
+		     .Inventory,
+		     .Clock,
+		     .Grants,
+		     .Variables,
+		     .Selection,
+		     .Player,
+		     .Player_Motion,
+		     .Entity_Motion:
 		}
 	}
 }
 
-session_start :: proc(
-	sess: ^Session,
-	perturb: Perturb,
-	logging: bool,
-	no_sheep := false,
-) -> bool {
+session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool, no_sheep := false) -> bool {
 	game.pipe_init(&sess.pipe)
 	config := Config {
 		seed         = DETERMINISM_SEED,
@@ -178,6 +213,8 @@ session_start :: proc(
 	m.scratch = new(game.Block_Array)
 	game.block_arrays_init(&m.arrays, 2048)
 	m.key = test_key("determinism")
+	m.schema = game.game_schema()
+	game.receiver_init(&m.rx, &m.schema)
 	for sec in Hash_Section {sess.seen[sec] = make(map[u64]struct{})}
 	sess.logging = logging
 	if logging {
@@ -202,6 +239,8 @@ session_stop :: proc(sess: ^Session) {
 	for _, &c in m.chunks {game.chunk_release(&c, &m.arrays)}
 	delete(m.chunks)
 	delete(m.entities)
+	game.receiver_destroy(&m.rx)
+	game.schema_destroy(&m.schema)
 	game.block_arrays_destroy(&m.arrays)
 	free(m.scratch)
 	game.pipe_destroy(&sess.pipe)
@@ -315,6 +354,7 @@ session_step :: proc(sess: ^Session, scripted: bool) -> State_Hash {
 		}
 		if scripted {in_ = script_input(tick)}
 		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m))
+		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
 		if scripted {act(m, tick, msg, in_)}
 	}

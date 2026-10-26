@@ -17,19 +17,21 @@ import "../worldgen"
 
 @(private = "file")
 Save_Client :: struct {
-	key:      game.Account_Key,
-	endpoint: game.Endpoint,
-	scratch:  ^game.Block_Array,
-	arrays:   game.Block_Arrays,
-	chunks:   map[game.Chunk_Pos]game.Chunk_Blocks,
-	welcome:  game.Welcome,
-	welcomed: bool,
-	player:   game.Player_Update,
-	turned:   Maybe([2]f32), // yaw, pitch of the first teleported update
-	results:  map[u32]game.Edit_Result,
-	seq:      u32,
-	time:     Maybe(f64), // the last Time received
-	look:     [2]f32, // yaw, pitch of the last input sent (idle ones keep it)
+	key:       game.Account_Key,
+	endpoint:  game.Endpoint,
+	scratch:   ^game.Block_Array,
+	arrays:    game.Block_Arrays,
+	chunks:    map[game.Chunk_Pos]game.Chunk_Blocks,
+	welcome:   game.Welcome,
+	welcomed:  bool,
+	player:    game.Own_Player,
+	rx:        State_Rx,
+	teleports: u8,
+	turned:    Maybe([2]f32), // yaw, pitch of the first teleported record
+	results:   map[u32]game.Edit_Result,
+	seq:       u32,
+	time:      Maybe(f64), // the last Clock received
+	look:      [2]f32, // yaw, pitch of the last input sent (idle ones keep it)
 }
 
 @(private = "file")
@@ -39,11 +41,13 @@ client_open :: proc(c: ^Save_Client, pipe: ^game.Pipe) {
 		scratch  = new(game.Block_Array),
 	}
 	game.block_arrays_init(&c.arrays, 4096)
+	state_rx_init(&c.rx)
 }
 
 @(private = "file")
 client_close :: proc(c: ^Save_Client) {
 	free(c.scratch)
+	state_rx_destroy(&c.rx)
 	game.block_arrays_destroy(&c.arrays)
 	delete(c.chunks)
 	delete(c.results)
@@ -62,6 +66,8 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 			send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Welcome:
 			c.welcome, c.welcomed = v, true
+			rules := v.rules
+			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
 		case game.Chunk_Message:
 			b := game.Chunk_Blocks {
 				uniform = v.uniform,
@@ -77,11 +83,19 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)
 			}
-		case game.Player_Update:
-			c.player = v
-			if v.teleported && c.turned == nil {c.turned = [2]f32{v.yaw, v.pitch}}
-		case game.Time:
-			c.time = v.time
+		case game.State_Message, game.Snapshot_Message:
+			for g in state_rx_take(t, &c.rx, m) {
+				#partial switch game.State_Kind(g.kind) {
+				case .Own_Player:
+					c.player = (^game.Own_Player)(g.value)^
+					if c.player.teleports != c.teleports && c.turned == nil {
+						c.turned = [2]f32{c.player.yaw, c.player.pitch}
+					}
+					c.teleports = c.player.teleports
+				case .Clock:
+					c.time = (^game.Clock)(g.value).time
+				}
+			}
 		case game.Edit_Result:
 			c.results[v.id] = v
 			if b, had := &c.chunks[game.chunk_of(v.pos)];
@@ -111,7 +125,7 @@ tick :: proc(t: ^testing.T, c: ^Save_Client, input: game.Player_Input = {}) {
 	if c.welcomed { 	// (nothing before: the handshake)
 		c.seq += 1
 		c.look = {input.yaw, input.pitch}
-		send(c, game.Input{c.seq, input})
+		send(c, game.Input{c.seq, input, c.rx.rx.ack})
 	}
 	time.sleep(game.TICK_DURATION)
 	pump(t, c)

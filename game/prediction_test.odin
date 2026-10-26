@@ -64,7 +64,7 @@ simulate :: proc(
 		}, context.temp_allocator)
 	to_client := make([dynamic]struct {
 			due: int,
-			msg: Player_Update,
+			msg: Own_Player,
 		}, context.temp_allocator)
 	for tick in 0 ..< ticks + 4 * delay + 8 {
 		// Client: deliver due updates, then this tick's input (until the script ends).
@@ -88,8 +88,8 @@ simulate :: proc(
 		for msg in input_queue_tick(&queue, &buf) {player_step(&server, msg.input, &rules, query(server_world), TICK_SECONDS)}
 		append(&to_client, struct {
 			due: int,
-			msg: Player_Update,
-		}{tick + delay, Player_Update{acked = queue.last, state = server}})
+			msg: Own_Player,
+		}{tick + delay, Own_Player{acked = queue.last, state = server}})
 	}
 	return
 }

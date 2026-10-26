@@ -10,7 +10,7 @@ import "../game"
 // block's item places it with the right button (the left breaks, or hits a
 // sheep); the rocket launcher fires with the left. The inventory is the
 // server's: what we do to it is predicted at once and sent
-// (session_inventory_do), and replayed over each Inventory_Update until
+// (session_inventory_do), and replayed over each inventory record until
 // the server has answered it.
 
 // Drop_Repeat: holding the drop key drops again and again, slowly at first,
@@ -101,7 +101,7 @@ session_inventory_do :: proc(s: ^Session, a: game.Inventory_Action) -> bool {
 
 // inventory_reconcile: the server's inventory, then what it has not
 // answered yet over it (requests, and blocks placed and not yet confirmed).
-inventory_reconcile :: proc(s: ^Session, u: game.Inventory_Update) {
+inventory_reconcile :: proc(s: ^Session, u: game.Inventory_State) {
 	s.server_inventory = u.inventory
 	for len(s.inv_pending) > 0 && !game.sequence_before(u.acked, s.inv_pending[0].sequence) {
 		ordered_remove(&s.inv_pending, 0)

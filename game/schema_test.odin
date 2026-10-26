@@ -37,14 +37,7 @@ Sch_All :: struct {
 }
 
 @(private = "file")
-one :: proc(
-	value: typeid,
-	lane := Lane.Reliable,
-	key := Key_Type.None,
-) -> (
-	Schema,
-	Schema_Error,
-) {
+one :: proc(value: typeid, lane := Lane.Reliable, key := Key_Type.None) -> (Schema, Schema_Error) {
 	max_records := 1 if key == .None else 8
 	states := []State_Kind_Info {
 		{name = "thing", value = value, lane = lane, key = key, max_records = max_records},
@@ -169,12 +162,24 @@ test_schema_refusals :: proc(t: ^testing.T) {
 	}
 	for c in cases {
 		_, err := one(c.value, c.lane)
-		testing.expectf(t, err.reason == c.reason, "%v: reason %q, wanted %q", c.value, err.reason, c.reason)
+		testing.expectf(
+			t,
+			err.reason == c.reason,
+			"%v: reason %q, wanted %q",
+			c.value,
+			err.reason,
+			c.reason,
+		)
 		testing.expectf(t, err.path == c.path, "%v: path %q, wanted %q", c.value, err.path, c.path)
 		testing.expect_value(t, err.kind, "thing")
 	}
 	_, err := one(Bad_Many)
-	testing.expectf(t, strings.contains(err.reason, "64 fields, at most 62"), "reason %q", err.reason)
+	testing.expectf(
+		t,
+		strings.contains(err.reason, "64 fields, at most 62"),
+		"reason %q",
+		err.reason,
+	)
 }
 
 Sch_A :: struct {
@@ -278,7 +283,14 @@ test_schema_text_golden :: proc(t: ^testing.T) {
 		seq:  u32 `net:"acked"`,
 	}
 	states := []State_Kind_Info {
-		{name = "thing", value = Golden, lane = .Reliable, key = .Entity, max_records = 4, version = 2},
+		{
+			name = "thing",
+			value = Golden,
+			lane = .Reliable,
+			key = .Entity,
+			max_records = 4,
+			version = 2,
+		},
 	}
 	events := []Event_Kind_Info{{name = "flash", value = Sch_Inner}}
 	s, err := schema_make(states, events, context.temp_allocator)

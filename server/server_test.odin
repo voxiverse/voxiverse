@@ -27,12 +27,14 @@ Fake_Client :: struct {
 	scratch:        ^game.Block_Array,
 	chunks:         int, // chunk messages received
 	unloads:        int,
-	player:         game.Player_Update, // the latest
+	player:         game.Own_Player, // the latest
+	rx:             State_Rx, // (made when first needed, in the temp allocator)
 	rules:          game.Rules,
 	results:        [dynamic]game.Edit_Result,
 	columns:        map[[2]i32]game.Column,
 	column_updates: int,
-	clock:          f64, // the last Time
+	clock:          f64, // the world time, derived from the Clock record and the newest tick
+	anchor:         Maybe(game.Clock), // the last Clock record
 	notices:        [dynamic]string, // (temp allocator)
 	bulk_left:      int, // chunks a bulk edit sends again (after Bulk_Begin)
 	variables:      string, // the last Variables (temp allocator)
@@ -64,14 +66,15 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 		defer game.packet_free(c.endpoint, p)
 		m, ok := game.decode_server(p, c.scratch)
 		if !testing.expect(t, ok, "server sent an invalid message") {continue}
+		if c.rx.schema.kinds == nil {state_rx_init(&c.rx, context.temp_allocator)}
 		switch v in m {
 		case game.Challenge:
 			fake_send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Characters: // (tests name their character in Hello)
-		case game.Selection:
-			c.selection = v.corners
 		case game.Welcome:
-			c.welcome, c.welcomed = v, true
+			c.welcome, c.welcomed, c.rules = v, true, v.rules
+			rules := v.rules
+			game.receiver_seed(&c.rx.rx, int(game.State_Kind.Rules), &rules)
 		case game.Reject:
 			c.rejected = v.reason
 		case game.Chunk_Message:
@@ -88,44 +91,48 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			}
 			c.has[v.pos] = {}
 			c.chunks += 1
-		case game.Player_Update:
-			c.player = v
-		case game.Rules_Changed:
-			c.rules = v.rules
+		case game.State_Message, game.Snapshot_Message:
+			for g in state_rx_take(t, &c.rx, m) {
+				if g.op == .Event {
+					#partial switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+					case .Notice:
+						if c.notices ==
+						   nil {c.notices = make([dynamic]string, context.temp_allocator)}
+						append(
+							&c.notices,
+							strings.clone((^game.Notice)(g.value).text, context.temp_allocator),
+						)
+					}
+					continue
+				}
+				#partial switch game.State_Kind(g.kind) {
+				case .Own_Player:
+					c.player = (^game.Own_Player)(g.value)^
+				case .Rules:
+					c.rules = (^game.Rules)(g.value)^
+				case .Clock:
+					c.anchor = (^game.Clock)(g.value)^
+				case .Variables:
+					c.variables = strings.clone(
+						(^game.Variables)(g.value).text,
+						context.temp_allocator,
+					)
+				case .Selection:
+					c.selection = (^game.Selection)(g.value).corners
+				}
+			}
+			if a, anchored := c.anchor.?; anchored {
+				behind := f64(c.rx.rx.tick - a.tick) * f64(game.TICK_SECONDS)
+				c.clock = game.advance_time(a.time, max(behind, 0), &c.rules)
+			}
 		case game.Edit_Result:
 			append(&c.results, v)
 		case game.Column:
 			if v.pos in c.columns {c.column_updates += 1}
 			c.columns[v.pos] = v
-		case game.Time:
-			c.clock = v.time
 		case game.Bulk_Begin:
 			c.bulk_left = int(v.count)
-		case game.Explosion,
-		     game.Block_Changed,
-		     game.Pong,
-		     game.Player_Joined,
-		     game.Player_Left,
-		     game.Player_Worn,
-		     game.Stats_Page,
-		     game.Telemetry_Ack,
-		     game.Health,
-		     game.Players,
-		     game.Entity_Spawn,
-		     game.Entity_Despawn,
-		     game.Entities,
-		     game.Entity_Hurt,
-		     game.Blocks_Changed,
-		     game.Grants,
-		     game.Chat_Line,
-		     game.Chat_Delete,
-		     game.Inventory_Update,
-		     game.World_Changed: // not checked here
-		case game.Variables:
-			c.variables = strings.clone(v.text, context.temp_allocator)
-		case game.Notice:
-			if c.notices == nil {c.notices = make([dynamic]string, context.temp_allocator)}
-			append(&c.notices, strings.clone(v.text, context.temp_allocator))
+		case game.Pong, game.Stats_Page, game.Telemetry_Ack, game.World_Changed: // not checked here
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)
@@ -267,7 +274,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{
-			first = game.Hello{game.PROTOCOL_VERSION + 1, test_key("old").account, "old"},
+			first = game.Hello{game.PROTOCOL_VERSION + 1, test_key("old").account, "old", 0},
 			reason = "protocol version mismatch",
 		},
 		{first = game.Input{}, reason = "message before hello"},
@@ -379,7 +386,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	// Joined, and standing on the ground once its chunks exist.
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	for i in 1 ..= 60 { 	// a second of standing still lets it fall and land
-		fake_send(&c, game.Input{u32(i), {}})
+		fake_send(&c, game.Input{u32(i), {}, 0})
 		time.sleep(game.TICK_DURATION)
 		fake_receive(t, &c)
 	}
@@ -422,7 +429,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	// server's ticks: a busy machine's server runs late ticks back to back).
 	sent_at := stats(&srv).tick
 	for i in 61 ..= 150 {
-		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}})
+		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}, 0})
 	}
 	time.sleep(time.Second)
 	fake_receive(t, &c)
@@ -477,7 +484,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	seq: u32 = 0
 	for i in 0 ..< 45 {
 		seq += 1
-		fake_send(&c, game.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}})
+		fake_send(&c, game.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}, 0})
 		time.sleep(game.TICK_DURATION)
 		fake_receive(t, &c)
 	}
@@ -496,7 +503,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	fake_send(&c, game.Edit{id = 1, after = seq + 30, pos = target, block = .Stone})
 	for _ in 0 ..< 30 {
 		seq += 1
-		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}})
+		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}, 0})
 		time.sleep(game.TICK_DURATION)
 		fake_receive(t, &c)
 	}
@@ -543,35 +550,37 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed && c.clock > 0}),
 	)
 	@(static) before: f64
+	// (a client that sends no inputs gets no snapshots: its time is carried on
+	// from the newest tick it has heard, so each look pokes the server with one)
+	seq: u32
+	look :: proc(t: ^testing.T, c: ^Fake_Client, seq: ^u32) {
+		seq^ += 1
+		fake_send(c, game.Input{seq^, {}, 0})
+		time.sleep(2 * game.TICK_DURATION)
+		fake_receive(t, c)
+	}
 	freeze(&srv, true)
-	time.sleep(1100 * time.Millisecond) // a Time sent after the freeze
-	fake_receive(t, &c)
+	time.sleep(1100 * time.Millisecond)
+	look(t, &c, &seq)
 	before = c.clock
-	time.sleep(2100 * time.Millisecond) // two more Time messages
-	fake_receive(t, &c)
+	time.sleep(2100 * time.Millisecond)
+	look(t, &c, &seq)
 	testing.expectf(t, c.clock == before, "time went on while frozen: %v -> %v", before, c.clock)
 
 	freeze(&srv, false)
-	testing.expect(
-		t,
-		wait_until(
-			t,
-			&c,
-			proc(c: ^Fake_Client) -> bool {return c.clock > before},
-			3 * time.Second,
-		),
-		"time did not go on after the freeze",
-	)
+	deadline := time.tick_add(time.tick_now(), 3 * time.Second)
+	for c.clock <= before && time.tick_diff(time.tick_now(), deadline) > 0 {look(t, &c, &seq)}
+	testing.expect(t, c.clock > before, "time did not go on after the freeze")
 
 	// Open to the LAN: freezing does nothing.
 	fake_send(&c, game.Command{"open_lan"})
 	time.sleep(100 * time.Millisecond)
 	freeze(&srv, true)
 	time.sleep(1100 * time.Millisecond)
-	fake_receive(t, &c)
+	look(t, &c, &seq)
 	before = c.clock
 	time.sleep(2100 * time.Millisecond)
-	fake_receive(t, &c)
+	look(t, &c, &seq)
 	testing.expectf(t, c.clock > before, "a world open to the LAN froze at %v", before)
 }
 

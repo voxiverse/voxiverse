@@ -15,6 +15,7 @@ import "../netcode"
 @(private)
 join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.state = .Playing
+	game.sender_init(&c.tx, &s.schema)
 	c.name_len = copy(c.name_buf[:], name)
 	saved, has_saved := player_record(s, name)
 	c.joined_tick = s.tick
@@ -60,20 +61,13 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			address = w.address,
 		},
 	)
-	send_message(s, c, game.Time{w.clock})
+	replica_seed(s, c) // (the rules came with the Welcome)
+	c.clock_pending = true
 	refresh_grants(s, c) // what they may do
 	if !has_saved {give_kit(s, c)} 	// (as their grants allow)
 	c.inv_changed = true
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
-	if m, ok := worldgen_variables(w); ok {send_message(s, c, m)}
-	for &other in s.clients {
-		if &other == c || other.state != .Playing {continue}
-		send_message(s, c, game.Player_Joined{player_id(s, &other), client_name(&other)})
-		send_message(s, &other, game.Player_Joined{player_id(s, c), name})
-		if other.worn_sent != {} {
-			send_message(s, c, game.Player_Worn{player_id(s, &other), other.worn_sent})
-		}
-	}
+	if m, ok := worldgen_variables(w); ok {state_put(s, c, .Variables, &m)}
 	log.infof("server player joined player=%d name=%q", player_id(s, c), name)
 	online := 0
 	for &other in s.clients {if other.state == .Playing {online += 1}}
@@ -105,11 +99,6 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
 	member_get(&s.community, client_name(c)).seen = now_unix()
-	for &other in s.clients {
-		if &other != c && other.state == .Playing {
-			send_message(s, &other, game.Player_Left{player_id(s, c)})
-		}
-	}
 	log.infof(
 		"server player left player=%d name=%q reason=%s",
 		player_id(s, c),
@@ -149,41 +138,44 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 		run_due_actions(s, c)
 	}
 	set_position(c, c.player.position)
-	update := game.Player_Update {
-		acked      = c.inputs.last,
-		state      = c.player,
-		teleported = c.teleported,
-		yaw        = c.teleport[0],
-		pitch      = c.teleport[1],
+	if c.teleported {c.teleports += 1}
+	own := game.Own_Player {
+		acked     = c.inputs.last,
+		state     = c.player,
+		teleports = c.teleports,
+		yaw       = c.teleport[0],
+		pitch     = c.teleport[1],
 	}
-	// A teleport must arrive (the player is told where to look); the rest
-	// are states, the newest of which wins.
-	send_message(s, c, update, reliable = c.teleported)
+	// (a snapshot record keeps being sent until one holding it is acknowledged:
+	// a teleport arrives, and the newest state wins)
+	state_put(s, c, .Own_Player, &own)
 	c.teleported = false
 }
 
-// send_players tells a client where the other players near it are.
+// players_put tells a client who else is in its world (their names and what
+// they wear) and where the ones near it are.
 @(private)
-send_players :: proc(s: ^Server, c: ^Client) {
-	m := game.Players {
-		tick = u32(s.tick),
-	}
+players_put :: proc(s: ^Server, c: ^Client) {
 	near := f64((s.config.view_radius + 1) * game.CHUNK_SIZE)
 	for &other in s.clients {
 		if &other == c || other.state != .Playing || other.world != c.world {continue}
+		id := player_id(s, &other)
+		record := game.Player_Record {
+			name = client_name(&other),
+			worn = game.worn_of(&other.inventory),
+		}
+		state_put(s, c, .Player, &record, game.key_player(id))
 		d := other.player.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near {continue}
-		m.entries[m.count] = {
-			player   = player_id(s, &other),
+		motion := game.Player_Motion {
 			position = other.player.position,
 			yaw      = other.look[0],
 			pitch    = other.look[1],
 			flying   = other.player.flying,
 			crouched = other.player.crouched,
 		}
-		m.count += 1
+		state_put(s, c, .Player_Motion, &motion, game.key_player(id))
 	}
-	if m.count > 0 {send_message(s, c, m)}
 }
 
 // disconnect refuses a client (a protocol error is the client's bug or an
@@ -191,6 +183,7 @@ send_players :: proc(s: ^Server, c: ^Client) {
 @(private)
 disconnect :: proc(s: ^Server, c: ^Client, reason: string) {
 	log.warnf("server disconnecting client player=%d reason=%q", player_id(s, c), reason)
+	replica_flush(s, c) // (what was said before, a notice of why, still arrives)
 	send_message(s, c, game.Reject{reason})
 	switch l in c.link {
 	case Local:

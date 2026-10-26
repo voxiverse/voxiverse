@@ -7,10 +7,8 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:time"
 
-import "../base"
 import "../game"
 import "../netcode"
-import "../worldgen"
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the
@@ -27,7 +25,15 @@ receive :: proc(s: ^Session) {
 		}
 		if was != .Connected && s.link.state == .Connected {
 			log.info("session connected")
-			send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name})
+			send_message(
+				s,
+				game.Hello {
+					game.PROTOCOL_VERSION,
+					s.config.key.account,
+					s.config.name,
+					s.schema.hash,
+				},
+			)
 		}
 		netcode.link_receive(&s.link, &s.received)
 		for p in s.received {
@@ -54,7 +60,7 @@ receive :: proc(s: ^Session) {
 		if s.state != .Playing {
 			#partial switch _ in m {
 			case game.Welcome, game.Reject, game.Pong, game.Challenge, game.Characters:
-			case game.Player_Update, game.Players, game.Entities, game.Time:
+			case game.Snapshot_Message:
 				continue // unreliable: it overtook the welcome (newer ones follow)
 			case:
 				kind := game.message_kind_name(.Server, p[0])
@@ -74,8 +80,6 @@ receive :: proc(s: ^Session) {
 			s.state = .Choosing
 		case game.Welcome:
 			welcome(s, v)
-		case game.Selection:
-			s.selection = v.corners // (drawn: camera.odin)
 		case game.World_Changed:
 			// Travelled: nothing of the last world stays; the arrival (a
 			// teleport), the new world's chunks and entities follow.
@@ -86,6 +90,9 @@ receive :: proc(s: ^Session) {
 			clear(&s.puffs)
 			s.welcome.address = v.address
 			s.rules = v.rules
+			game.receiver_reset(&s.rx)
+			rules := v.rules
+			game.receiver_seed(&s.rx, int(game.State_Kind.Rules), &rules)
 			inventory_predict(s) // (no placing waits now)
 			log.infof("session travelled to=%s", game.address_dir(v.address))
 		case game.Reject:
@@ -107,115 +114,28 @@ receive :: proc(s: ^Session) {
 		case game.Unload_Chunk:
 			world_remove_chunk(&s.world, v.pos)
 			s.stats.unloads += 1
-		case game.Player_Update:
-			// Over the network a teleport (sent reliably) may arrive after a
-			// newer update: then only its direction still matters.
-			if v.acked != 0 && game.sequence_before(v.acked, s.last_acked) {
-				if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
-				continue
+		case game.State_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			if !game.receive_state(&s.rx, v.data, &got) {
+				fail(s, "the server sent an invalid State message")
+				return
 			}
-			s.last_acked = v.acked
-			game.prediction_reconcile(
-				&s.prediction,
-				v,
-				&s.rules,
-				{&s.world, world_block},
-				game.derive_mods(&s.inventory),
-			)
-			if v.teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
-		case game.Rules_Changed:
-			s.rules = v.rules
-		case game.Time:
-			s.clock = v.time
-		case game.Player_Joined:
-			if o, known := s.others[v.player]; known {delete(o.name)} 	// a seat taken again
-			s.others[v.player] = {
-				name = strings.clone(v.name),
+			apply_received(s, got[:])
+		case game.Snapshot_Message:
+			got := make([dynamic]game.Received, context.temp_allocator)
+			if !game.receive_snapshot(&s.rx, v.data, &got) {
+				fail(s, "the server sent an invalid Snapshot message")
+				return
 			}
-		case game.Health:
-			s.health, s.max_health = v.health, v.max
+			if s.newest_at == {} || game.sequence_before(s.newest_tick, s.rx.tick) {
+				s.newest_tick, s.newest_at = s.rx.tick, time.tick_now()
+			}
+			apply_received(s, got[:])
 		case game.Telemetry_Ack:
 		case game.Stats_Page:
 			stats_data_take(&s.player_stats, v)
-		case game.Player_Worn:
-			if o, known := &s.others[v.player]; known {o.worn = v.worn}
-		case game.Player_Left:
-			if o, known := s.others[v.player]; known {
-				delete(o.name)
-			}
-			delete_key(&s.others, v.player)
-		case game.Players:
-			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
-				s.newest_tick, s.newest_at = v.tick, time.tick_now()
-			}
-			for i in 0 ..< v.count {
-				e := v.entries[i]
-				if o, known := &s.others[e.player]; known {other_snapshot(o, v.tick, e)}
-			}
-		case game.Blocks_Changed:
-			// The world's own changes (flowing water): quietly.
-			origin := game.chunk_origin(v.chunk)
-			for i in 0 ..< v.count {
-				e := v.entries[i]
-				world_set_block(&s.world, origin + game.local_from_index(int(e.index)), e.block)
-			}
-		case game.Grants:
-			for g in s.grants {delete(g.pattern)}
-			clear(&s.grants)
-			if !game.grants_parse(v.text, &s.grants) {log.warn("session grants not understood")}
-			for c in s.commands {delete(c)}
-			clear(&s.commands)
-			for name in strings.fields(v.commands, context.temp_allocator) {
-				append(&s.commands, strings.clone(name))
-			}
-		case game.Chat_Line:
-			chat_add(s, v.id, v.text)
-			log.info("session chat ", game.format_strip(v.text))
-			append(&s.notices, strings.clone(game.format_strip(v.text)))
-		case game.Chat_Delete:
-			chat_delete(s, v.id)
-		case game.Inventory_Update:
-			inventory_reconcile(s, v)
-		case game.Variables:
-			s.has_worldgen = true
-			for p in base.vars_read(worldgen.params_table(), &s.worldgen, v.text) {
-				log.warnf("session variable not applied problem=%v text=%q", p.error, p.text)
-			}
-		case game.Notice:
-			notice(s, v.text)
 		case game.Bulk_Begin:
 			world_bulk_begin(&s.world, int(v.count))
-		case game.Explosion:
-			explosion_effects(s, v.position, f64(v.radius))
-		case game.Entity_Spawn:
-			s.entities[v.entity] = {
-				kind      = v.kind,
-				stack     = v.stack,
-				last_seen = v.position,
-			}
-			e := &s.entities[v.entity]
-			track_add(&e.track, {tick = s.newest_tick, position = v.position, yaw = v.yaw})
-		case game.Entities:
-			if s.newest_at == {} || game.sequence_before(s.newest_tick, v.tick) {
-				s.newest_tick, s.newest_at = v.tick, time.tick_now()
-			}
-			for i in 0 ..< v.count {
-				x := v.entries[i]
-				if e, known := &s.entities[x.entity]; known {
-					track_add(&e.track, {v.tick, x.position, x.yaw, x.pitch, false, false})
-					e.flags = x.flags
-				}
-			}
-		case game.Entity_Despawn:
-			if e, known := &s.entities[v.entity]; known && v.died {
-				entity_died(s, e)
-			}
-			delete_key(&s.entities, v.entity)
-		case game.Entity_Hurt:
-			if e, known := &s.entities[v.entity]; known {
-				e.hurt_at = time.tick_now()
-				append(&s.sounds, Sound_Event{.Entity_Hurt, .Air, e.last_seen + {0, 0.5, 0}, 1})
-			}
 		case game.Edit_Result:
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.
@@ -227,12 +147,6 @@ receive :: proc(s: ^Session) {
 				}
 			}
 			inventory_predict(s) // (a refused block is ours again)
-		case game.Block_Changed:
-			// Someone else's edit: heard where it happened.
-			old, _ := world_block(&s.world, v.pos)
-			if world_set_block(&s.world, v.pos, v.block) && old != v.block {
-				edit_sound(s, v.pos, old, v.block)
-			}
 		case game.Column:
 			world_set_column(&s.world, v)
 		}
@@ -268,6 +182,8 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	}
 	s.world_init = true
 	s.rules = w.rules
+	rules := w.rules
+	game.receiver_seed(&s.rx, int(game.State_Kind.Rules), &rules)
 	game.prediction_init(&s.prediction, {position = w.spawn})
 	s.camera = {
 		position = w.spawn + {0, game.PLAYER_EYE, 0},

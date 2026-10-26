@@ -21,7 +21,8 @@ test_key :: proc(name: string) -> (k: game.Account_Key) {
 
 @(private)
 test_hello :: proc(name: string) -> game.Hello {
-	return {game.PROTOCOL_VERSION, test_key(name).account, name}
+	schema := game.game_schema(context.temp_allocator)
+	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.hash}
 }
 
 // A proof is good for its nonce and account only.

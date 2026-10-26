@@ -7,7 +7,6 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../base"
 
 @(private = "file")
 encode_s :: proc(m: Server_Message, blocks: ^Chunk_Blocks = nil) -> [dynamic]u8 {
@@ -32,10 +31,13 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 
 	account: Account
 	account[0], account[31] = 7, 9
-	hello, ok := decode_client(encode_c(Hello{PROTOCOL_VERSION, account, "Ünïcode name"})[:])
+	hello, ok := decode_client(
+		encode_c(Hello{PROTOCOL_VERSION, account, "Ünïcode name", 0xfeed_beef_0123_4567})[:],
+	)
 	testing.expect(t, ok)
 	testing.expect_value(t, hello.(Hello).character, "Ünïcode name")
 	testing.expect(t, hello.(Hello).account == account)
+	testing.expect_value(t, hello.(Hello).schema, u64(0xfeed_beef_0123_4567))
 	sig: Signature
 	sig[63] = 1
 	proof: Client_Message
@@ -48,9 +50,10 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && challenge.(Challenge).nonce == nonce)
 	move: Client_Message
 	input := Player_Input{{0.5, -1}, 1.25, -0.5, {.Jump, .Sprint}}
-	move, ok = decode_client(encode_c(Input{42, input})[:])
+	move, ok = decode_client(encode_c(Input{42, input, 1 << 20})[:])
 	got := move.(Input)
 	testing.expect(t, ok && got.sequence == 42 && got.input == quantize_input(input))
+	testing.expect_value(t, got.snapshot, u32(1 << 20))
 	tp: Client_Message
 	tp, ok = decode_client(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
 	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
@@ -60,9 +63,6 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	result: Server_Message
 	result, ok = decode_server(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air})[:], scratch)
 	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air})
-	changed_block: Server_Message
-	changed_block, ok = decode_server(encode_s(Block_Changed{{1, 2, 3}, .Gravel})[:], scratch)
-	testing.expect(t, ok && changed_block.(Block_Changed) == Block_Changed{{1, 2, 3}, .Gravel})
 	column := Column {
 		pos = {-7, 12},
 	}
@@ -93,16 +93,6 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		encode_c(Chat{strings.repeat("x", MAX_CHAT_TEXT + 1, context.temp_allocator)})[:],
 	)
 	testing.expect(t, !ok)
-	state := Player_State{{1, 2, 3}, {4, -5, 6}, true, false, true, true, 2}
-	upd: Server_Message
-	upd, ok = decode_server(encode_s(Player_Update{9, state, true, 1, -1})[:], scratch)
-	testing.expect(t, ok && upd.(Player_Update) == Player_Update{9, state, true, 1, -1})
-	changed := RULES_DEFAULTS
-	changed.gravity, changed.allow_flying = 12.5, false
-	rc: Server_Message
-	rc, ok = decode_server(encode_s(Rules_Changed{changed})[:], scratch)
-	testing.expect(t, ok && rc.(Rules_Changed).rules == changed)
-
 	welcome := Welcome {
 		PROTOCOL_VERSION,
 		TICK_RATE,
@@ -133,87 +123,14 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok && m.(Pong).id == 78)
 	m, ok = decode_server(encode_s(Unload_Chunk{{-5, CHUNK_MIN_Y, 1 << 20}})[:], scratch)
 	testing.expect(t, ok && m.(Unload_Chunk).pos == {-5, CHUNK_MIN_Y, 1 << 20})
-	m, ok = decode_server(encode_s(Time{12345.678})[:], scratch)
-	testing.expect(t, ok && m.(Time).time == 12345.678)
-	m, ok = decode_server(encode_s(Player_Joined{7, "bob_the-builder"})[:], scratch)
-	testing.expect(t, ok && m.(Player_Joined) == Player_Joined{7, "bob_the-builder"})
-	m, ok = decode_server(encode_s(Player_Left{7})[:], scratch)
-	testing.expect(t, ok && m.(Player_Left).player == 7)
-	players := Players {
-		tick  = 123,
-		count = 2,
-	}
-	players.entries[0] = {4, {1.5, -60, 2e6}, 1, -0.5, true, true}
-	players.entries[1] = {9, {0, 0, 0}, -3, 1.2, false, false}
-	m, ok = decode_server(encode_s(players)[:], scratch)
-	testing.expect(t, ok && m.(Players) == players)
-	m, ok = decode_server(encode_s(Entity_Spawn{77, .Sheep, {1, 2, 3}, 0.5, {}})[:], scratch)
-	testing.expect(t, ok && m.(Entity_Spawn) == Entity_Spawn{77, .Sheep, {1, 2, 3}, 0.5, {}})
-	dropped := Entity_Spawn{78, .Item, {1, 2, 3}, 0, {item_of_block(.Sand), 12}}
-	m, ok = decode_server(encode_s(dropped)[:], scratch)
-	testing.expect(t, ok && m.(Entity_Spawn) == dropped)
-	inv: Inventory
-	inventory_add(&inv, {item_of_block(.Stone), 100})
-	inv.cursor = {item_of_tool(.Launcher), 1}
-	inv.selected = 3
-	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
-	inv.equipment[.Offhand] = {item_of_block(.Dirt), 12}
-	m, ok = decode_server(encode_s(Inventory_Update{5, inv})[:], scratch)
-	testing.expect(t, ok && m.(Inventory_Update) == Inventory_Update{5, inv})
-	looking := inv
-	looking.chest_open = true
-	looking.chest[0] = {item_of_block(.Stone), 7}
-	looking.chest[24] = {item_of_block(.Dirt), 64}
-	m, ok = decode_server(encode_s(Inventory_Update{6, looking})[:], scratch)
-	testing.expect(
-		t,
-		ok && m.(Inventory_Update) == Inventory_Update{6, looking},
-		"a chest's slots did not round-trip",
-	)
-	bad := inv
-	bad.slots[0].count = 65 // more than a stack
-	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
-	testing.expect(t, !ok)
-	bad = inv
-	bad.equipment[.Feet] = {item_of_armor(.Cap), 1} // a cap on the feet
-	_, ok = decode_server(encode_s(Inventory_Update{5, bad})[:], scratch)
-	testing.expect(t, !ok)
-	worn := Player_Worn{3, {item_of_armor(.Cap), NO_ITEM, NO_ITEM, item_of_armor(.Boots)}}
-	m, ok = decode_server(encode_s(worn)[:], scratch)
-	testing.expect(t, ok && m.(Player_Worn) == worn)
-	worn.worn[1] = Item(0x7fff) // not an item
-	_, ok = decode_server(encode_s(worn)[:], scratch)
-	testing.expect(t, !ok)
 	req := Inventory_Request{9, {.Swap_Hotbar, 20, 3}}
 	asked: Client_Message
 	asked, ok = decode_client(encode_c(req)[:])
 	testing.expect(t, ok && asked.(Inventory_Request) == req)
 	_, ok = decode_client(encode_c(Inventory_Request{9, {.Click, ALL_SLOTS, 0}})[:])
 	testing.expect(t, !ok)
-	m, ok = decode_server(encode_s(Entity_Despawn{77, true})[:], scratch)
-	testing.expect(t, ok && m.(Entity_Despawn) == Entity_Despawn{77, true})
-	m, ok = decode_server(encode_s(Entity_Hurt{9})[:], scratch)
-	testing.expect(t, ok && m.(Entity_Hurt).entity == 9)
-	ents := Entities {
-		tick  = 5,
-		count = ENTITIES_PER_MESSAGE,
-	}
-	for &e, i in ents.entries {e = {u32(i), {f64(i), 64, -f64(i)}, f32(i) * 0.1, -0.2, {.Shorn} if i % 2 == 0 else {.Lamb, .Black}}}
-	ents_bytes := encode_s(ents)
-	testing.expectf(
-		t,
-		len(ents_bytes) <= 1150,
-		"a full Entities is %d bytes: too big for a packet",
-		len(ents_bytes),
-	)
-	m, ok = decode_server(ents_bytes[:], scratch)
-	testing.expect(t, ok && m.(Entities) == ents)
 	m, ok = decode_server(encode_s(Bulk_Begin{9})[:], scratch)
 	testing.expect(t, ok && m.(Bulk_Begin).count == 9)
-	m, ok = decode_server(encode_s(Explosion{{1, 2, 3}, 6})[:], scratch)
-	testing.expect(t, ok && m.(Explosion) == Explosion{{1, 2, 3}, 6})
-	m, ok = decode_server(encode_s(Explosion{{1, 2, 3}, 1000})[:], scratch)
-	testing.expect(t, !ok, "an explosion of radius 1000 decoded")
 	fire: Client_Message
 	fire, ok = decode_client(encode_c(Fire{5, 1.5, -0.3})[:])
 	testing.expect(t, ok && fire.(Fire) == Fire{5, 1.5, -0.3})
@@ -260,10 +177,6 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	_, ok = decode_client(encode_c(report)[:])
 	testing.expect(t, !ok, "too many entries decoded")
 	ack: Server_Message
-	ack, ok = decode_server(encode_s(Health{13.5, 24})[:], scratch)
-	testing.expect(t, ok && ack.(Health) == Health{13.5, 24})
-	_, ok = decode_server(encode_s(Health{30, 24})[:], scratch)
-	testing.expect(t, !ok, "health above the maximum decoded")
 	ack, ok = decode_server(encode_s(Telemetry_Ack{"2026-10-25", 1 << 34 | 9})[:], scratch)
 	testing.expect(t, ok && ack.(Telemetry_Ack) == Telemetry_Ack{"2026-10-25", 1 << 34 | 9})
 	page: Server_Message
@@ -275,32 +188,7 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		t,
 		ok && page.(Stats_Page) == Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"},
 	)
-	tbatch := Blocks_Changed {
-		chunk = {-2, 3, 4},
-		count = 2,
-	}
-	tbatch.entries[0] = {7, .Water_3}
-	tbatch.entries[1] = {4095, .Air}
-	m, ok = decode_server(encode_s(tbatch)[:], scratch)
-	testing.expect(t, ok && m.(Blocks_Changed) == tbatch)
-	m, ok = decode_server(encode_s(Variables{"worldgen.sea_level = 4\n"})[:], scratch)
-	testing.expect(t, ok && m.(Variables).text == "worldgen.sea_level = 4\n")
-	m, ok = decode_server(encode_s(Grants{"1 chat.*\n0 -chat.format\n", "spawn mute"})[:], scratch)
-	testing.expect(
-		t,
-		ok &&
-		m.(Grants).text == "1 chat.*\n0 -chat.format\n" &&
-		m.(Grants).commands == "spawn mute",
-	)
-	m, ok = decode_server(encode_s(Chat_Line{7, NO_PLAYER, "&eBea joined"})[:], scratch)
-	testing.expect(t, ok && m.(Chat_Line).id == 7 && m.(Chat_Line).text == "&eBea joined")
-	m, ok = decode_server(encode_s(Chat_Delete{7})[:], scratch)
-	testing.expect(t, ok && m.(Chat_Delete).id == 7)
-	m, ok = decode_server(encode_s(Notice{"Open to LAN on port 27315"})[:], scratch)
-	testing.expect(t, ok && m.(Notice).text == "Open to LAN on port 27315")
 	// Names: letters, digits, _ and -, 1..16 of them.
-	m, ok = decode_server(encode_s(Player_Joined{1, "bad name"})[:], scratch)
-	testing.expect(t, !ok, "a name with a space decoded")
 	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
 	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}
 }
@@ -356,26 +244,13 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		encode_s(
 			Welcome{PROTOCOL_VERSION, TICK_RATE, 1, {}, 8, 4, RULES_DEFAULTS, address_derive(1)},
 		),
-		encode_s(Player_Joined{2, "Alice"}),
-		encode_s(Player_Left{2}),
-		encode_s(Players{tick = 9, count = 1}),
-		encode_s(Notice{"hello"}),
-		encode_s(Entity_Spawn{1, .Sheep, {}, 0, {}}),
-		encode_s(Entity_Despawn{1, false}),
-		encode_s(Entities{tick = 1, count = 1}),
-		encode_s(Entity_Hurt{1}),
 		encode_s(Bulk_Begin{1}),
-		encode_s(Explosion{{}, 1}),
-		encode_s(Player_Update{1, {}, false, 0, 0}),
-		encode_s(Rules_Changed{RULES_DEFAULTS}),
 		encode_s(Edit_Result{1, false, {}, .Stone}),
-		encode_s(Block_Changed{{}, .Dirt}),
 		encode_s(Column{}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),
 		encode_s(Unload_Chunk{}),
 		encode_s(Pong{1}),
-		encode_s(Time{0.5}),
 	}
 	for bytes in server {
 		for n in 0 ..< len(bytes) {
@@ -389,7 +264,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc"}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc", 0}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client(bytes[:n])
 			testing.expect(t, !ok)
@@ -485,46 +360,6 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 	bad_server(
 		t,
 		scratch,
-		"rules out of range",
-		proc(w: ^Writer) {
-			write_u8(w, 7) // Rules_Changed
-			rules := RULES_DEFAULTS
-			rules.gravity = 1e6
-			for &v in RULES_VARS {
-				kind, _ := base.var_kind(rules_table(), &v)
-				value := base.var_get_f64(rules_table(), &rules, &v)
-				switch kind {
-				case .Bool:
-					write_u8(w, 1 if value != 0 else 0)
-				case .Int:
-					write_i32(w, i32(value))
-				case .F32:
-					write_f32(w, f32(value))
-				case .Text, .Enum:
-				}
-			}
-		},
-	)
-	bad_server(
-		t,
-		scratch,
-		"player speed absurd",
-		proc(w: ^Writer) {
-			write_u8(w, 6) // Player_Update
-			write_u32(w, 1)
-			for _ in 0 ..< 3 {write_f64(w, 0)}
-			write_f32(w, 0)
-			write_f32(w, MAX_SPEED * 2)
-			write_f32(w, 0)
-			write_u8(w, 0)
-			write_u8(w, 0)
-			write_f32(w, 0)
-			write_f32(w, 0)
-		},
-	)
-	bad_server(
-		t,
-		scratch,
 		"column height above the world",
 		proc(w: ^Writer) {
 			write_u8(w, 10) // Column
@@ -534,19 +369,6 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 			for _ in 1 ..< CHUNK_SIZE * CHUNK_SIZE {write_svarint(w, 0)}
 		},
 	)
-	bad_server(
-		t,
-		scratch,
-		"negative time",
-		proc(w: ^Writer) {
-			write_u8(w, 11) // Time
-			write_f64(w, -1)
-		},
-	)
-	bad_server(t, scratch, "time NaN", proc(w: ^Writer) {
-		write_u8(w, 11)
-		write_f64(w, transmute(f64)u64(0x7ff8000000000001))
-	})
 	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {
 		chunk_header(w)
 		write_u8(w, 0)
@@ -764,6 +586,26 @@ test_decode_fuzz :: proc(t: ^testing.T) {
 		decode_server(corrupt, scratch)
 	}
 	testing.expect(t, accepted < 40_000)
+}
+
+// The dissector's generated schema block is the game's schema as it is now.
+@(test)
+test_dissector_schema_current :: proc(t: ^testing.T) {
+	data, err := os.read_entire_file_from_path(
+		"tools/wireshark/voxiverse.lua",
+		context.temp_allocator,
+	)
+	if !testing.expectf(t, err == nil, "cannot read the dissector: %v", err) {return}
+	s := game_schema(context.temp_allocator)
+	b := strings.builder_make(context.temp_allocator)
+	schema_lua(&s, &b)
+	spliced, ok := schema_lua_splice(string(data), strings.to_string(b))
+	if !testing.expect(t, ok, "tools/wireshark/voxiverse.lua has no schema block") {return}
+	testing.expect(
+		t,
+		spliced == string(data),
+		"tools/wireshark/voxiverse.lua's schema is stale: run ./build.sh schema",
+	)
 }
 
 // The Wireshark dissector names message kinds as the game does (and knows

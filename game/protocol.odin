@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 23
+PROTOCOL_VERSION :: 24
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -36,6 +36,7 @@ Hello :: struct {
 	protocol:  u32,
 	account:   Account,
 	character: string, // view into the message; name_valid, or ""
+	schema:    u64, // schema_hash of the state kinds the client knows (schema.odin)
 }
 
 // Proof: the Challenge's nonce signed with the account's key.
@@ -62,6 +63,7 @@ Choose :: struct {
 Input :: struct {
 	sequence: u32,
 	input:    Player_Input,
+	snapshot: u32, // the newest complete snapshot the client holds (0: none): the next is a delta against it
 }
 
 // Ping asks the server to answer with a Pong carrying the same id (round
@@ -297,37 +299,6 @@ Pong :: struct {
 	id: u32,
 }
 
-// Player_Update is the player's authoritative state after the server
-// applied inputs up to and including acked (every tick). teleported: the
-// state did not come from inputs; the client should not smooth towards it.
-Player_Update :: struct {
-	acked:      u32,
-	state:      Player_State,
-	teleported: bool,
-	yaw, pitch: f32, // after a teleport: where to look
-}
-
-Rules_Changed :: struct {
-	rules: Rules,
-}
-
-// Time: the world time (time.odin), after Welcome, every second and when
-// it is set. Clients advance it themselves in between.
-Time :: struct {
-	time: f64,
-}
-
-// Player_Joined: someone is in the world (sent for everyone already there
-// after Welcome, and for each newcomer).
-Player_Joined :: struct {
-	player: u16,
-	name:   string, // view into the message
-}
-
-Player_Left :: struct {
-	player: u16,
-}
-
 // Stats_Page: a page of counters: "name value" lines, newline apart.
 Stats_Page :: struct {
 	page:  u16,
@@ -337,33 +308,10 @@ Stats_Page :: struct {
 
 MAX_STATS_TEXT :: 16 * 1024
 
-// Player_Worn: what a player wears (head to feet; NO_ITEM: nothing), sent
-// when it changes and for everyone already there after Welcome.
-Player_Worn :: struct {
-	player: u16,
-	worn:   [WORN_SLOTS]Item,
-}
-
-// Players: where the other players near you are, every tick (the newest
-// wins; tick orders them for interpolation).
-Players :: struct {
-	tick:    u32,
-	count:   int,
-	entries: [MAX_PLAYERS]Player_Entry,
-}
-
-Player_Entry :: struct {
-	player:     u16,
-	position:   [3]f64, // feet
-	yaw, pitch: f32,
-	flying:     bool,
-	crouched:   bool, // sneaking: drawn lower
-}
-
 // Notice: something the server wants the player to read (chat and the
 // console), formatted (game/format.odin).
 Notice :: struct {
-	text: string, // view into the message
+	text: string `net:"max=1024"`,
 }
 
 MAX_NOTICE_TEXT :: 1024
@@ -373,7 +321,7 @@ MAX_NOTICE_TEXT :: 1024
 Chat_Line :: struct {
 	id:     u32,
 	sender: u16, // the player who said it; NO_PLAYER: the server
-	text:   string, // view into the message
+	text:   string `net:"max=1024"`,
 }
 
 NO_PLAYER :: 0xffff
@@ -382,47 +330,6 @@ MAX_CHAT_LINE :: 1024
 // Chat_Delete: a moderator took line id back.
 Chat_Delete :: struct {
 	id: u32,
-}
-
-// Entity_Spawn: an entity is near you now (it came into your area, or into
-// being). Entities say where they are every tick after (Entities).
-Entity_Spawn :: struct {
-	entity:   u32,
-	kind:     Entity_Kind,
-	position: [3]f64,
-	yaw:      f32,
-	stack:    Stack, // a dropped item's (else empty)
-}
-
-// Inventory_Update: the player's inventory as the server has it, having
-// applied their Inventory_Requests up to `acked` (and whatever else changed
-// it: placing, picking up, commands). Sent when it changes.
-Inventory_Update :: struct {
-	acked:     u32,
-	inventory: Inventory,
-}
-
-// Entity_Despawn: forget it (out of your area, gone, or died: show it).
-Entity_Despawn :: struct {
-	entity: u32,
-	died:   bool,
-}
-
-// Entities: where the entities near you are, every tick (the newest wins),
-// a batch of at most ENTITIES_PER_MESSAGE (more go in more messages).
-Entities :: struct {
-	tick:    u32,
-	count:   int,
-	entries: [ENTITIES_PER_MESSAGE]Entity_Entry,
-}
-
-ENTITIES_PER_MESSAGE :: 28 // fits one packet
-
-Entity_Entry :: struct {
-	entity:     u32,
-	position:   [3]f64,
-	yaw, pitch: f32, // body turn; head up/down
-	flags:      Sheep_Flags, // a sheep's looks (genetics.odin)
 }
 
 // Entity_Hurt: it was hit (flash, sound).
@@ -447,32 +354,19 @@ Explosion :: struct {
 // grants_text's lines, and the server commands they may use (names, space
 // apart: for Tab): when they join and whenever it changes.
 Grants :: struct {
-	text:     string, // view into the message
-	commands: string, // view into the message
+	text:     string `net:"max=16384"`,
+	commands: string `net:"max=16384"`,
 }
 
 MAX_GRANTS_TEXT :: 16384
 
-// Blocks_Changed: blocks the world changed in a chunk this tick (flowing
-// water; players' edits come as Block_Changed, heard), by local index.
-Blocks_Changed :: struct {
-	chunk:   Chunk_Pos,
-	count:   int,
-	entries: [MAX_BLOCKS_CHANGED]Changed_Entry,
-}
-
-Changed_Entry :: struct {
-	index: u16, // game.local_index in the chunk
-	block: Block,
-}
-
-MAX_BLOCKS_CHANGED :: 64 // in one message (a chunk with more is sent whole)
+MAX_BLOCKS_CHANGED :: 64 // single changes in a chunk in one tick (a chunk with more is sent whole)
 
 // Variables: some of the server's variables (worldgen.*), as `name = value`
 // lines: sent when a player joins and when they change. As text, so this
 // package needs no knowledge of what they are.
 Variables :: struct {
-	text: string, // view into the message
+	text: string `net:"max=4096"`,
 }
 
 // Column: the y of the highest solid block in each block column of a chunk
@@ -493,10 +387,15 @@ Edit_Result :: struct {
 	block:    Block,
 }
 
-// Block_Changed: a block changed for some other reason (another player).
-Block_Changed :: struct {
-	pos:   Block_Pos,
-	block: Block,
+// State_Message and Snapshot_Message carry the bytes of a State or Snapshot
+// message (replica.odin: a Receiver decodes them against what the client
+// holds); decode_server checks the kind only.
+State_Message :: struct {
+	data: []u8,
+}
+
+Snapshot_Message :: struct {
+	data: []u8,
 }
 
 Server_Message :: union {
@@ -505,36 +404,16 @@ Server_Message :: union {
 	Chunk_Message,
 	Unload_Chunk,
 	Pong,
-	Player_Update,
-	Rules_Changed,
 	Edit_Result,
-	Block_Changed,
 	Column,
-	Time,
-	Player_Joined,
-	Player_Left,
-	Players,
-	Notice,
-	Entity_Spawn,
-	Entity_Despawn,
-	Entities,
-	Entity_Hurt,
 	Bulk_Begin,
-	Explosion,
-	Variables,
-	Blocks_Changed,
-	Grants,
-	Chat_Line,
-	Chat_Delete,
-	Inventory_Update,
 	Challenge,
 	Characters,
 	World_Changed,
-	Selection,
-	Player_Worn,
 	Stats_Page,
 	Telemetry_Ack,
-	Health,
+	State_Message,
+	Snapshot_Message,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -570,41 +449,29 @@ Client_Kind :: enum u8 {
 
 @(private = "file")
 Server_Kind :: enum u8 {
-	Welcome = 1,
-	Reject,
-	Chunk,
-	Unload_Chunk,
-	Pong,
-	Player_Update,
-	Rules_Changed,
-	Edit_Result,
-	Block_Changed,
-	Column,
-	Time,
-	Player_Joined,
-	Player_Left,
-	Players,
-	Notice,
-	Entity_Spawn,
-	Entity_Despawn,
-	Entities,
-	Entity_Hurt,
-	Bulk_Begin,
-	Explosion,
-	Variables,
-	Blocks_Changed,
-	Grants,
-	Chat_Line,
-	Chat_Delete,
-	Inventory_Update,
-	Challenge,
-	Characters,
-	World_Changed,
-	Selection,
-	Player_Worn,
-	Stats_Page,
-	Telemetry_Ack,
-	Health,
+	Welcome       = 1,
+	Reject        = 2,
+	Chunk         = 3,
+	Unload_Chunk  = 4,
+	Pong          = 5,
+	// 6, 7: retired (Player_Update, Rules_Changed)
+	Edit_Result   = 8,
+	// 9: retired (Block_Changed)
+	Column        = 10,
+	// 11-19: retired (Time, Player_Joined, Player_Left, Players, Notice,
+	// Entity_Spawn, Entity_Despawn, Entities, Entity_Hurt)
+	Bulk_Begin    = 20,
+	// 21-27: retired (Explosion, Variables, Blocks_Changed, Grants, Chat_Line,
+	// Chat_Delete, Inventory_Update)
+	Challenge     = 28,
+	Characters    = 29,
+	World_Changed = 30,
+	// 31, 32: retired (Selection, Player_Worn)
+	Stats_Page    = 33,
+	Telemetry_Ack = 34,
+	// 35: retired (Health)
+	State         = 36,
+	Snapshot      = 37,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -615,11 +482,7 @@ message_reliable :: proc(sender: Side, kind: u8) -> bool {
 		return kind != u8(Client_Kind.Ping)
 	}
 	switch kind {
-	case u8(Server_Kind.Player_Update),
-	     u8(Server_Kind.Players),
-	     u8(Server_Kind.Pong),
-	     u8(Server_Kind.Time),
-	     u8(Server_Kind.Entities):
+	case u8(Server_Kind.Snapshot), u8(Server_Kind.Pong):
 		return false
 	}
 	return true
@@ -696,66 +559,26 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "unload"
 		case u8(Server_Kind.Pong):
 			return "pong"
-		case u8(Server_Kind.Player_Update):
-			return "player"
-		case u8(Server_Kind.Rules_Changed):
-			return "rules"
 		case u8(Server_Kind.Edit_Result):
 			return "edit_result"
-		case u8(Server_Kind.Block_Changed):
-			return "block"
 		case u8(Server_Kind.Column):
 			return "column"
-		case u8(Server_Kind.Time):
-			return "time"
-		case u8(Server_Kind.Player_Joined):
-			return "joined"
-		case u8(Server_Kind.Player_Left):
-			return "left"
-		case u8(Server_Kind.Players):
-			return "players"
-		case u8(Server_Kind.Notice):
-			return "notice"
-		case u8(Server_Kind.Entity_Spawn):
-			return "spawn"
-		case u8(Server_Kind.Entity_Despawn):
-			return "despawn"
-		case u8(Server_Kind.Entities):
-			return "entities"
-		case u8(Server_Kind.Entity_Hurt):
-			return "hurt"
 		case u8(Server_Kind.Bulk_Begin):
 			return "bulk"
-		case u8(Server_Kind.Explosion):
-			return "explosion"
-		case u8(Server_Kind.Variables):
-			return "variables"
-		case u8(Server_Kind.Blocks_Changed):
-			return "blocks"
-		case u8(Server_Kind.Grants):
-			return "grants"
-		case u8(Server_Kind.Chat_Line):
-			return "chat_line"
-		case u8(Server_Kind.Chat_Delete):
-			return "chat_delete"
-		case u8(Server_Kind.Inventory_Update):
-			return "inventory"
 		case u8(Server_Kind.Challenge):
 			return "challenge"
 		case u8(Server_Kind.Characters):
 			return "characters"
 		case u8(Server_Kind.World_Changed):
 			return "world_changed"
-		case u8(Server_Kind.Selection):
-			return "selection"
-		case u8(Server_Kind.Player_Worn):
-			return "worn"
 		case u8(Server_Kind.Stats_Page):
 			return "stats_page"
 		case u8(Server_Kind.Telemetry_Ack):
 			return "telemetry_ack"
-		case u8(Server_Kind.Health):
-			return "health"
+		case u8(Server_Kind.State):
+			return "state"
+		case u8(Server_Kind.Snapshot):
+			return "snapshot"
 		}
 	}
 	return ""
@@ -770,6 +593,8 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		a := v.account
 		for b in a {write_u8(w, b)}
 		write_string(w, v.character)
+		write_u32(w, u32(v.schema >> 32))
+		write_u32(w, u32(v.schema))
 	case Proof:
 		write_u8(w, u8(Client_Kind.Proof))
 		sig := v.signature
@@ -785,6 +610,7 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Input))
 		write_u32(w, v.sequence)
 		write_player_input(w, v.input)
+		write_varint(w, v.snapshot)
 	case Ping:
 		write_u8(w, u8(Client_Kind.Ping))
 		write_u32(w, v.id)
@@ -880,10 +706,6 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
-	case Health:
-		write_u8(w, u8(Server_Kind.Health))
-		write_f32(w, v.health)
-		write_f32(w, v.max)
 	case Telemetry_Ack:
 		write_u8(w, u8(Server_Kind.Telemetry_Ack))
 		write_string(w, v.day)
@@ -894,17 +716,6 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u16(w, v.page)
 		write_u16(w, v.pages)
 		write_string(w, v.text)
-	case Player_Worn:
-		write_u8(w, u8(Server_Kind.Player_Worn))
-		write_u16(w, v.player)
-		for item in v.worn {write_u16(w, u16(item))}
-	case Selection:
-		write_u8(w, u8(Server_Kind.Selection))
-		for corner in v.corners {
-			p, set := corner.?
-			write_u8(w, 1 if set else 0)
-			if set {write_block_pos(w, p)}
-		}
 	case Reject:
 		write_u8(w, u8(Server_Kind.Reject))
 		write_string(w, v.reason)
@@ -918,25 +729,10 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Pong:
 		write_u8(w, u8(Server_Kind.Pong))
 		write_u32(w, v.id)
-	case Player_Update:
-		write_u8(w, u8(Server_Kind.Player_Update))
-		write_u32(w, v.acked)
-		write_player_state(w, v.state)
-		write_u8(w, 1 if v.teleported else 0)
-		write_f32(w, v.yaw)
-		write_f32(w, v.pitch)
-	case Rules_Changed:
-		write_u8(w, u8(Server_Kind.Rules_Changed))
-		rules := v.rules
-		write_vars(w, rules_table(), &rules)
 	case Edit_Result:
 		write_u8(w, u8(Server_Kind.Edit_Result))
 		write_u32(w, v.id)
 		write_u8(w, 1 if v.accepted else 0)
-		write_block_pos(w, v.pos)
-		write_u16(w, u16(v.block))
-	case Block_Changed:
-		write_u8(w, u8(Server_Kind.Block_Changed))
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
 	case Column:
@@ -948,79 +744,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_svarint(w, h - previous)
 			previous = h
 		}
-	case Time:
-		write_u8(w, u8(Server_Kind.Time))
-		write_f64(w, v.time)
-	case Player_Joined:
-		write_u8(w, u8(Server_Kind.Player_Joined))
-		write_u16(w, v.player)
-		write_string(w, v.name)
-	case Player_Left:
-		write_u8(w, u8(Server_Kind.Player_Left))
-		write_u16(w, v.player)
-	case Players:
-		write_u8(w, u8(Server_Kind.Players))
-		write_u32(w, v.tick)
-		write_u8(w, u8(v.count))
-		for i in 0 ..< v.count {
-			e := v.entries[i]
-			write_u16(w, e.player)
-			write_position(w, e.position)
-			write_f32(w, e.yaw)
-			write_f32(w, e.pitch)
-			write_u8(w, (1 if e.flying else 0) | (2 if e.crouched else 0))
-		}
-	case Notice:
-		write_u8(w, u8(Server_Kind.Notice))
-		write_string(w, v.text)
-	case Entity_Spawn:
-		write_u8(w, u8(Server_Kind.Entity_Spawn))
-		write_u32(w, v.entity)
-		write_u8(w, u8(v.kind))
-		write_position(w, v.position)
-		write_f32(w, v.yaw)
-		write_stack(w, v.stack)
-	case Entity_Despawn:
-		write_u8(w, u8(Server_Kind.Entity_Despawn))
-		write_u32(w, v.entity)
-		write_u8(w, 1 if v.died else 0)
-	case Entities:
-		write_u8(w, u8(Server_Kind.Entities))
-		write_u32(w, v.tick)
-		write_u8(w, u8(v.count))
-		for i in 0 ..< v.count {
-			e := v.entries[i]
-			write_u32(w, e.entity)
-			write_position(w, e.position)
-			write_f32(w, e.yaw)
-			write_f32(w, e.pitch)
-			write_u8(w, transmute(u8)e.flags)
-		}
-	case Entity_Hurt:
-		write_u8(w, u8(Server_Kind.Entity_Hurt))
-		write_u32(w, v.entity)
 	case Bulk_Begin:
 		write_u8(w, u8(Server_Kind.Bulk_Begin))
 		write_u16(w, v.count)
-	case Explosion:
-		write_u8(w, u8(Server_Kind.Explosion))
-		write_position(w, v.position)
-		write_f32(w, v.radius)
-	case Variables:
-		write_u8(w, u8(Server_Kind.Variables))
-		write_string(w, v.text)
-	case Grants:
-		write_u8(w, u8(Server_Kind.Grants))
-		write_string(w, v.text)
-		write_string(w, v.commands)
-	case Chat_Line:
-		write_u8(w, u8(Server_Kind.Chat_Line))
-		write_u32(w, v.id)
-		write_u16(w, v.sender)
-		write_string(w, v.text)
-	case Chat_Delete:
-		write_u8(w, u8(Server_Kind.Chat_Delete))
-		write_u32(w, v.id)
 	case Challenge:
 		write_u8(w, u8(Server_Kind.Challenge))
 		n := v.nonce
@@ -1028,25 +754,10 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Characters:
 		write_u8(w, u8(Server_Kind.Characters))
 		write_string(w, v.names)
-	case Inventory_Update:
-		write_u8(w, u8(Server_Kind.Inventory_Update))
-		write_u32(w, v.acked)
-		inv := v.inventory
-		for st in inv.slots {write_stack(w, st)}
-		for st in inv.equipment {write_stack(w, st)}
-		write_stack(w, inv.cursor)
-		write_u8(w, u8(inv.selected))
-		write_u8(w, 1 if inv.chest_open else 0)
-		if inv.chest_open {for st in inv.chest {write_stack(w, st)}}
-	case Blocks_Changed:
-		write_u8(w, u8(Server_Kind.Blocks_Changed))
-		write_chunk_pos(w, v.chunk)
-		write_u8(w, u8(v.count))
-		for i in 0 ..< v.count {
-			e := v.entries[i]
-			write_u16(w, e.index)
-			write_u16(w, u16(e.block))
-		}
+	case State_Message:
+		append(&w.buf, ..v.data)
+	case Snapshot_Message:
+		append(&w.buf, ..v.data)
 	}
 	assert(len(w.buf) <= MAX_MESSAGE_SIZE)
 }
@@ -1063,6 +774,8 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		}
 		for &b in h.account {b = read_u8(&r)}
 		h.character = read_string(&r, MAX_NAME_LENGTH)
+		hi, lo := read_u32(&r), read_u32(&r)
+		h.schema = u64(hi) << 32 | u64(lo)
 		m = h
 	case u8(Client_Kind.Proof):
 		p: Proof
@@ -1082,6 +795,7 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 		m = Input {
 			sequence = read_u32(&r),
 			input    = read_player_input(&r),
+			snapshot = read_varint(&r),
 		}
 	case u8(Client_Kind.Ping):
 		m = Ping {
@@ -1230,21 +944,6 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		m = Pong {
 			id = read_u32(&r),
 		}
-	case u8(Server_Kind.Player_Update):
-		u := Player_Update {
-			acked = read_u32(&r),
-			state = read_player_state(&r),
-		}
-		flag := read_u8(&r)
-		if flag > 1 {reader_fail(&r)}
-		u.teleported = flag == 1
-		u.yaw, u.pitch = read_f32(&r), read_f32(&r)
-		if abs(u.pitch) > PITCH_LIMIT {reader_fail(&r)}
-		m = u
-	case u8(Server_Kind.Rules_Changed):
-		c: Rules_Changed
-		read_vars(&r, rules_table(), &c.rules)
-		m = c
 	case u8(Server_Kind.Edit_Result):
 		e := Edit_Result {
 			id = read_u32(&r),
@@ -1255,11 +954,6 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		e.pos = read_block_pos(&r)
 		e.block = read_block(&r)
 		m = e
-	case u8(Server_Kind.Block_Changed):
-		m = Block_Changed {
-			pos   = read_block_pos(&r),
-			block = read_block(&r),
-		}
 	case u8(Server_Kind.Column):
 		c: Column
 		c.pos = {read_i32(&r), read_i32(&r)}
@@ -1271,111 +965,14 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			if h < WORLD_MIN_Y || h >= WORLD_MAX_Y {reader_fail(&r)}
 		}
 		m = c
-	case u8(Server_Kind.Time):
-		t := Time {
-			time = read_f64(&r),
-		}
-		if !time_valid(t.time) {reader_fail(&r)}
-		m = t
-	case u8(Server_Kind.Player_Joined):
-		j := Player_Joined {
-			player = read_u16(&r),
-			name   = read_string(&r, MAX_NAME_LENGTH),
-		}
-		if r.ok && !name_valid(j.name) {reader_fail(&r)}
-		m = j
-	case u8(Server_Kind.Player_Left):
-		m = Player_Left {
-			player = read_u16(&r),
-		}
-	case u8(Server_Kind.Players):
-		p := Players {
-			tick  = read_u32(&r),
-			count = int(read_u8(&r)),
-		}
-		if p.count > MAX_PLAYERS {reader_fail(&r)}
-		for &e in p.entries[:min(p.count, MAX_PLAYERS)] {
-			e.player = read_u16(&r)
-			e.position = read_position(&r)
-			e.yaw, e.pitch = read_f32(&r), read_f32(&r)
-			flags := read_u8(&r)
-			if flags > 3 || abs(e.pitch) > PITCH_LIMIT || !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
-			e.flying, e.crouched = flags & 1 != 0, flags & 2 != 0
-		}
-		m = p
-	case u8(Server_Kind.Notice):
-		m = Notice {
-			text = read_string(&r, MAX_NOTICE_TEXT),
-		}
-	case u8(Server_Kind.Entity_Spawn):
-		e := Entity_Spawn {
-			entity = read_u32(&r),
-		}
-		kind := read_u8(&r)
-		if !entity_kind_valid(kind) {reader_fail(&r)}
-		e.kind = Entity_Kind(kind) if entity_kind_valid(kind) else {}
-		e.position = read_position(&r)
-		e.yaw = read_f32(&r)
-		e.stack = read_stack(&r)
-		if !(abs(e.yaw) <= 1e6) {reader_fail(&r)}
-		m = e
-	case u8(Server_Kind.Entity_Despawn):
-		d := Entity_Despawn {
-			entity = read_u32(&r),
-		}
-		flag := read_u8(&r)
-		if flag > 1 {reader_fail(&r)}
-		d.died = flag == 1
-		m = d
-	case u8(Server_Kind.Entities):
-		e := Entities {
-			tick  = read_u32(&r),
-			count = int(read_u8(&r)),
-		}
-		if e.count > ENTITIES_PER_MESSAGE {reader_fail(&r)}
-		for &x in e.entries[:min(e.count, ENTITIES_PER_MESSAGE)] {
-			x.entity = read_u32(&r)
-			x.position = read_position(&r)
-			x.yaw, x.pitch = read_f32(&r), read_f32(&r)
-			x.flags = transmute(Sheep_Flags)read_u8(&r)
-			if x.flags & ~{.Shorn, .Lamb, .Black, .Spotted, .In_Love} != {} {reader_fail(&r)}
-			if !(abs(x.yaw) <= 1e6) || abs(x.pitch) > PITCH_LIMIT {reader_fail(&r)}
-		}
-		m = e
-	case u8(Server_Kind.Entity_Hurt):
-		m = Entity_Hurt {
-			entity = read_u32(&r),
-		}
 	case u8(Server_Kind.Bulk_Begin):
 		m = Bulk_Begin {
 			count = read_u16(&r),
 		}
-	case u8(Server_Kind.Explosion):
-		x := Explosion {
-			position = read_position(&r),
-			radius   = read_f32(&r),
-		}
-		if !(x.radius >= 0 && x.radius <= 64) {reader_fail(&r)}
-		m = x
-	case u8(Server_Kind.Variables):
-		m = Variables {
-			text = read_string(&r, MAX_VARIABLES_TEXT),
-		}
-	case u8(Server_Kind.Grants):
-		m = Grants {
-			text     = read_string(&r, MAX_GRANTS_TEXT),
-			commands = read_string(&r, MAX_GRANTS_TEXT),
-		}
-	case u8(Server_Kind.Chat_Line):
-		m = Chat_Line {
-			id     = read_u32(&r),
-			sender = read_u16(&r),
-			text   = read_string(&r, MAX_CHAT_LINE),
-		}
-	case u8(Server_Kind.Chat_Delete):
-		m = Chat_Delete {
-			id = read_u32(&r),
-		}
+	case u8(Server_Kind.State):
+		return State_Message{data}, true
+	case u8(Server_Kind.Snapshot):
+		return Snapshot_Message{data}, true
 	case u8(Server_Kind.Challenge):
 		c: Challenge
 		for &b in c.nonce {b = read_u8(&r)}
@@ -1386,13 +983,6 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		}
 		read_vars(&r, rules_table(), &c.rules)
 		m = c
-	case u8(Server_Kind.Health):
-		h := Health {
-			health = read_f32(&r),
-			max    = read_f32(&r),
-		}
-		if !(h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max) {reader_fail(&r)}
-		m = h
 	case u8(Server_Kind.Telemetry_Ack):
 		ack := Telemetry_Ack {
 			day = read_string(&r, 10),
@@ -1406,56 +996,10 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 			pages = read_u16(&r),
 			text  = read_string(&r, MAX_STATS_TEXT),
 		}
-	case u8(Server_Kind.Player_Worn):
-		worn := Player_Worn {
-			player = read_u16(&r),
-		}
-		for &item in worn.worn {
-			item = Item(read_u16(&r))
-			if item != NO_ITEM && !item_valid(item) {reader_fail(&r)}
-		}
-		m = worn
-	case u8(Server_Kind.Selection):
-		sel: Selection
-		for &corner in sel.corners {
-			switch read_u8(&r) {
-			case 0:
-			case 1:
-				corner = read_block_pos(&r)
-			case:
-				reader_fail(&r)
-			}
-		}
-		m = sel
 	case u8(Server_Kind.Characters):
 		m = Characters {
 			names = read_string(&r, MAX_CHARACTERS * (MAX_NAME_LENGTH + 1)),
 		}
-	case u8(Server_Kind.Inventory_Update):
-		u := Inventory_Update {
-			acked = read_u32(&r),
-		}
-		for &st in u.inventory.slots {st = read_stack(&r)}
-		for &st in u.inventory.equipment {st = read_stack(&r)}
-		u.inventory.cursor = read_stack(&r)
-		u.inventory.selected = int(read_u8(&r))
-		u.inventory.chest_open = read_u8(&r) == 1
-		if u.inventory.chest_open {for &st in u.inventory.chest {st = read_stack(&r)}}
-		if !inventory_valid(&u.inventory) {reader_fail(&r)}
-		m = u
-	case u8(Server_Kind.Blocks_Changed):
-		c := Blocks_Changed {
-			chunk = read_chunk_pos(&r),
-			count = int(read_u8(&r)),
-		}
-		if c.count == 0 || c.count > MAX_BLOCKS_CHANGED {reader_fail(&r)}
-		for &e in c.entries[:min(c.count, MAX_BLOCKS_CHANGED)] {
-			e.index = read_u16(&r)
-			id := read_u16(&r)
-			if int(e.index) >= CHUNK_VOLUME || !block_valid(id) {reader_fail(&r)}
-			e.block = Block(id) if block_valid(id) else .Air
-		}
-		m = c
 	case:
 		return
 	}

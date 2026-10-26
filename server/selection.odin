@@ -17,7 +17,8 @@ SELECTION_REACH :: 128 // blocks: how far /pos1 and /pos2 see
 // selection_set sets c's selection and tells c.
 selection_set :: proc(s: ^Server, c: ^Client, corners: [2]Maybe(game.Block_Pos)) {
 	c.selection = corners
-	send_message(s, c, game.Selection{corners})
+	selection := game.Selection{corners}
+	state_put(s, c, .Selection, &selection)
 }
 
 // selection_box: c's selection, if both corners are set.

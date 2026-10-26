@@ -389,7 +389,8 @@ refresh_grants :: proc(s: ^Server, c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	clear(&c.grants)
 	resolve(&s.perms, client_name(c), c.account, is_owner(s, c), &c.grants)
-	send_message(s, c, game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)})
+	grants := game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)}
+	state_put(s, c, .Grants, &grants)
 }
 
 // permissions_changed: after an edit, everyone's grants again, and saved.

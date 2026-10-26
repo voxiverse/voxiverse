@@ -48,11 +48,11 @@ Client :: struct {
 	moved_from:    game.Chunk_Pos, // ... from there (unload_left)
 	has:           map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
 	columns:       map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
-	known:         map[u32]struct{}, // entities it has been told about (entities.odin)
 	cursor:        int, // offsets before this are all sent
 	player:        game.Player_State,
 	inputs:        game.Input_Queue,
-	teleported:    bool, // since the last Player_Update
+	teleported:    bool, // since the last Own_Player record
+	teleports:     u8, // teleports told (it wraps; Own_Player.teleports)
 	landing:       Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
 	actions:       [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
 	action_count:  int,
@@ -75,14 +75,14 @@ Client :: struct {
 	was_grounded:  bool,
 	health:        f32, // health points (health.odin)
 	max_health:    f32,
-	health_told:   [2]f32, // what the client was last told
 	airborne:      bool,
 	fall_peak:     f64, // the highest y of the present fall
 	report_window: u64, // the tick the current window of telemetry reports began
 	report_count:  int,
 	inv_acked:     u32, // its newest Inventory_Request applied
-	worn_sent:     [game.WORN_SLOTS]game.Item, // what the others were last told it wears
-	inv_changed:   bool, // since the last Inventory_Update sent
+	tx:            game.Sender, // what it has been told (replica.odin; made when it joins)
+	clock_pending: bool, // the Clock record is due (join, travel)
+	inv_changed:   bool, // since the end of the last tick
 	open_chest:    Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
 	disturbed:     u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
 	check:         Maybe(game.Prediction_Check), // its newest, until that input is applied
@@ -117,7 +117,6 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 	// Its columns: the interest area's columns plus the margin.
 	columns := game.interest_count(config.view_radius + game.CLIENT_DROP_MARGIN, 0)
 	c.columns = base.map_make_fixed(map[[2]i32]int, columns, arena) or_return
-	c.known = base.map_make_fixed(map[u32]struct{}, MAX_KNOWN_ENTITIES, arena) or_return
 	return nil
 }
 
@@ -128,14 +127,13 @@ client_reset :: proc(c: ^Client) {
 	delete(c.grants)
 	delete(c.address)
 	counters_free(&c.stats)
-	has, columns, known := c.has, c.columns, c.known
+	game.sender_destroy(&c.tx)
+	has, columns := c.has, c.columns
 	clear(&has)
 	clear(&columns)
-	clear(&known)
 	c^ = {
 		has     = has,
 		columns = columns,
-		known   = known,
 	}
 }
 

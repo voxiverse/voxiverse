@@ -172,7 +172,7 @@ connect :: proc(u: ^Uploader) -> bool {
 		}
 		time.sleep(2 * time.Millisecond)
 	}
-	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, ""})
+	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, "", 0})
 	msg, ok := wait_message(u)
 	challenge, is_challenge := msg.(game.Challenge)
 	if !ok || !is_challenge {

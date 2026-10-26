@@ -39,7 +39,12 @@ set_worldgen :: proc(s: ^Server, c: ^Client, name, value: string) {
 		w.chunks.gen.params = w.params
 		for &slot in w.natural {slot.valid = false} 	// the land's tops moved
 		log.infof("server worldgen changed name=%s value=%s by=%s", name, value, client_name(c))
-		if m, ok := worldgen_variables(w); ok {broadcast(s, m, w)}
+		if m, ok := worldgen_variables(w); ok {
+			for &other in s.clients {
+				if other.state == .Playing &&
+				   other.world == w {state_put(s, &other, .Variables, &m)}
+			}
+		}
 		notice(s, c, fmt.tprintf("%s changed: `regen` remakes the land near you", name))
 	case .Unknown_Name, .Bad_Value:
 		notice(s, c, fmt.tprintf("No setting %s, or not a value for it: %s", name, value))

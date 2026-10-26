@@ -168,7 +168,8 @@ read_whole :: proc(r: ^Reader, ti: ^runtime.Type_Info, data: rawptr) -> bool {
 	case runtime.Type_Info_Enum:
 		bits := read_int(r, runtime.type_info_base(v.base), data)
 		if r.ok {
-			value := sign_extend(bits, base.size) if int_signed(runtime.type_info_base(v.base)) else i64(bits)
+			value :=
+				sign_extend(bits, base.size) if int_signed(runtime.type_info_base(v.base)) else i64(bits)
 			found := false
 			for x in v.values {if i64(x) == value {found = true}}
 			if !found {r.ok = false}
@@ -179,11 +180,19 @@ read_whole :: proc(r: ^Reader, ti: ^runtime.Type_Info, data: rawptr) -> bool {
 		if r.ok {store_bits(data, base.size, bits)}
 	case runtime.Type_Info_Array:
 		for i in 0 ..< v.count {
-			if !read_whole(r, v.elem, rawptr(uintptr(data) + uintptr(i * v.elem_size))) {return false}
+			if !read_whole(
+				r,
+				v.elem,
+				rawptr(uintptr(data) + uintptr(i * v.elem_size)),
+			) {return false}
 		}
 	case runtime.Type_Info_Enumerated_Array:
 		for i in 0 ..< v.count {
-			if !read_whole(r, v.elem, rawptr(uintptr(data) + uintptr(i * v.elem_size))) {return false}
+			if !read_whole(
+				r,
+				v.elem,
+				rawptr(uintptr(data) + uintptr(i * v.elem_size)),
+			) {return false}
 		}
 	case runtime.Type_Info_Struct:
 		for i in 0 ..< int(v.field_count) {
@@ -195,6 +204,7 @@ read_whole :: proc(r: ^Reader, ti: ^runtime.Type_Info, data: rawptr) -> bool {
 		index := int(tag) - (0 if v.no_nil else 1)
 		if index >= len(v.variants) {r.ok = false}
 		if !r.ok {return false}
+		mem.zero(data, base.size) // (no stale variant: values compare as they were sent)
 		store_bits(rawptr(uintptr(data) + v.tag_offset), v.tag_type.size, u64(tag))
 		if index >= 0 {read_whole(r, v.variants[index], data)}
 	case:
@@ -211,20 +221,32 @@ whole_equal :: proc(ti: ^runtime.Type_Info, a, b: rawptr) -> bool {
 	case runtime.Type_Info_Array:
 		for i in 0 ..< v.count {
 			off := uintptr(i * v.elem_size)
-			if !whole_equal(v.elem, rawptr(uintptr(a) + off), rawptr(uintptr(b) + off)) {return false}
+			if !whole_equal(
+				v.elem,
+				rawptr(uintptr(a) + off),
+				rawptr(uintptr(b) + off),
+			) {return false}
 		}
 		return true
 	case runtime.Type_Info_Enumerated_Array:
 		for i in 0 ..< v.count {
 			off := uintptr(i * v.elem_size)
-			if !whole_equal(v.elem, rawptr(uintptr(a) + off), rawptr(uintptr(b) + off)) {return false}
+			if !whole_equal(
+				v.elem,
+				rawptr(uintptr(a) + off),
+				rawptr(uintptr(b) + off),
+			) {return false}
 		}
 		return true
 	case runtime.Type_Info_Struct:
 		for i in 0 ..< int(v.field_count) {
 			if v.names[i] == "_" {continue}
 			off := v.offsets[i]
-			if !whole_equal(v.types[i], rawptr(uintptr(a) + off), rawptr(uintptr(b) + off)) {return false}
+			if !whole_equal(
+				v.types[i],
+				rawptr(uintptr(a) + off),
+				rawptr(uintptr(b) + off),
+			) {return false}
 		}
 		return true
 	case runtime.Type_Info_Union:

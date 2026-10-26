@@ -59,7 +59,15 @@ motion_at :: proc(v: rawptr) -> [3]i32 {
 dt_schema :: proc() -> Schema {
 	states := []State_Kind_Info {
 		{name = "all", value = Sch_All, key = .Entity, max_records = 16},
-		{name = "motion", value = Dt_Motion, key = .Entity, lane = .Snapshot, max_records = 600, priority = 2, locate = motion_at},
+		{
+			name = "motion",
+			value = Dt_Motion,
+			key = .Entity,
+			lane = .Snapshot,
+			max_records = 600,
+			priority = 2,
+			locate = motion_at,
+		},
 		{name = "me", value = Dt_Me, lane = .Snapshot},
 		{name = "single", value = Dt_Single},
 		{name = "block", value = Dt_Block, key = .Block, write_through = true},
@@ -90,7 +98,7 @@ Link :: struct {
 	budget:   int, // (unused)
 }
 
-@(private = "file")
+
 link_init :: proc(l: ^Link, schema: ^Schema, loss := 0, seed := u64(7)) {
 	l.schema = schema
 	sender_init(&l.tx, schema)
@@ -102,7 +110,7 @@ link_init :: proc(l: ^Link, schema: ^Schema, loss := 0, seed := u64(7)) {
 	l.messages = make([dynamic]Outgoing)
 }
 
-@(private = "file")
+
 link_destroy :: proc(l: ^Link) {
 	sender_destroy(&l.tx)
 	receiver_destroy(&l.rx)
@@ -112,12 +120,15 @@ link_destroy :: proc(l: ^Link) {
 }
 
 // apply: the application's side of what the receiver yielded.
-@(private = "file")
-apply :: proc(l: ^Link, got: []Received) {
+
+link_apply :: proc(l: ^Link, got: []Received) {
 	for g in got {
 		switch g.op {
 		case .Create, .Change:
-			if l.schema.kinds[g.kind].write_through {continue}
+			if l.schema.kinds[g.kind].write_through {
+				append(&l.events, g)
+				continue
+			}
 			replica_upsert(&l.view, g.kind, g.key, g.value)
 		case .Remove:
 			if i, found := replica_find(&l.view, g.kind, g.key); found {
@@ -132,7 +143,7 @@ apply :: proc(l: ^Link, got: []Received) {
 // step: one tick. What was put is flushed and delivered (reliable messages
 // always, snapshot parts but for the lost ones), and the receiver's
 // acknowledgement goes back.
-@(private = "file")
+
 link_step :: proc(l: ^Link, origin := [3]i32{}) -> (reliable_bytes, snapshot_bytes: int) {
 	l.tick += 1
 	clear(&l.messages)
@@ -151,7 +162,7 @@ link_step :: proc(l: ^Link, origin := [3]i32{}) -> (reliable_bytes, snapshot_byt
 			reliable_bytes += len(m.data)
 			if !receive_state(&l.rx, m.data, &got) {l.failed = true}
 		}
-		apply(l, got[:])
+		link_apply(l, got[:])
 		// (events are kept for the test; records' values are views, so copy before the next receive)
 		clear(&got)
 	}
@@ -159,12 +170,12 @@ link_step :: proc(l: ^Link, origin := [3]i32{}) -> (reliable_bytes, snapshot_byt
 	return
 }
 
-@(private = "file")
-put :: proc(l: ^Link, kind: int, key: u32, value: ^$T) {
+
+link_put :: proc(l: ^Link, kind: int, key: u32, value: ^$T) {
 	sender_put(&l.tx, kind, Key{a = i32(key)}, value)
 }
 
-@(private = "file")
+
 kinds_equal :: proc(a, b: ^Replica, kind: int) -> bool {
 	ta, tb := a.tables[kind].records, b.tables[kind].records
 	if len(ta) != len(tb) {return false}
@@ -196,7 +207,12 @@ Gauge2 :: struct {
 }
 
 @(private = "file")
-gauge_round_trip :: proc(t: ^testing.T, value: typeid, first, second, third: rawptr, mode_alone: bool) {
+gauge_round_trip :: proc(
+	t: ^testing.T,
+	value: typeid,
+	first, second, third: rawptr,
+	mode_alone: bool,
+) {
 	states := []State_Kind_Info{{name = "gauge", value = value}}
 	s, err := schema_make(states, nil, context.temp_allocator)
 	if !testing.expect(t, err.reason == "", schema_error_text(err)) {return}
@@ -226,7 +242,11 @@ gauge_round_trip :: proc(t: ^testing.T, value: typeid, first, second, third: raw
 	sender_put(&l.tx, 0, {}, third)
 	link_step(&l)
 	got = replica_get(&l.rx.live, 0, {})
-	testing.expect(t, !l.failed && got != nil && value_diff(k, got, third) == 0, "the third value differs")
+	testing.expect(
+		t,
+		!l.failed && got != nil && value_diff(k, got, third) == 0,
+		"the third value differs",
+	)
 
 	sender_remove(&l.tx, 0, {})
 	link_step(&l)
@@ -267,11 +287,13 @@ random_all :: proc(rng: ^base.Rng, v: ^Sch_All, names: []string) {
 	case 3:
 		v.c = base.rng_u32(rng) if base.rng_int_max(rng, 2) == 0 else v.c + 3
 	case 4:
-		v.d = base.rng_u64(rng) if base.rng_int_max(rng, 2) == 0 else max(u64) - u64(base.rng_int_max(rng, 5))
+		v.d =
+			base.rng_u64(rng) if base.rng_int_max(rng, 2) == 0 else max(u64) - u64(base.rng_int_max(rng, 5))
 	case 5:
 		v.e = i32(base.rng_u32(rng))
 	case 6:
-		v.f = int(i64(base.rng_u64(rng))) if base.rng_int_max(rng, 3) == 0 else base.rng_int_range(rng, -50, 50)
+		v.f =
+			int(i64(base.rng_u64(rng))) if base.rng_int_max(rng, 3) == 0 else base.rng_int_range(rng, -50, 50)
 	case 7:
 		v.g = base.rng_f32_range(rng, -1000, 1000)
 	case 8:
@@ -284,15 +306,22 @@ random_all :: proc(rng: ^base.Rng, v: ^Sch_All, names: []string) {
 	case 11:
 		v.pos[base.rng_int_max(rng, 3)] = base.rng_f64_range(rng, -100, 100)
 	case 12:
-		v.stack[base.rng_int_max(rng, 4)] = {Item(base.rng_int_max(rng, 300)), base.rng_int_range(rng, 0, 99)}
+		v.stack[base.rng_int_max(rng, 4)] = {
+			Item(base.rng_int_max(rng, 300)),
+			base.rng_int_range(rng, 0, 99),
+		}
 	case 13:
-		v.worn[Equip_Slot(base.rng_int_max(rng, len(Equip_Slot)))] = {Item(base.rng_int_max(rng, 300)), base.rng_int_range(rng, 0, 99)}
+		v.worn[Equip_Slot(base.rng_int_max(rng, len(Equip_Slot)))] = {
+			Item(base.rng_int_max(rng, 300)),
+			base.rng_int_range(rng, 0, 99),
+		}
 	case 14:
 		v.inner = {i32(base.rng_u32(rng)), base.rng_f32(rng)}
 	case 15:
 		v.name = names[base.rng_int_max(rng, len(names))]
 	case 16:
-		v.spot = nil if base.rng_int_max(rng, 3) == 0 else Block_Pos{i32(base.rng_int_range(rng, -50, 50)), 3, 4}
+		v.spot =
+			nil if base.rng_int_max(rng, 3) == 0 else Block_Pos{i32(base.rng_int_range(rng, -50, 50)), 3, 4}
 	}
 }
 
@@ -308,13 +337,18 @@ test_every_field_type_round_trips :: proc(t: ^testing.T) {
 	for tick in 0 ..< 1000 {
 		for &v, i in values {
 			if base.rng_int_max(&rng, 3) == 0 {random_all(&rng, &v, names)}
-			if tick > 400 && i == 3 {continue} // (this one stops being put: removed)
-			put(&l, DT_ALL, u32(i + 1), &v)
+			if tick > 400 && i == 3 {continue} 	// (this one stops being put: removed)
+			link_put(&l, DT_ALL, u32(i + 1), &v)
 		}
 		link_step(&l)
 		if !testing.expectf(t, !l.failed, "tick %d: the receiver refused a message", tick) {return}
 		if !kinds_equal(&l.tx.sent, &l.rx.live, DT_ALL) {
-			testing.expectf(t, false, "tick %d: the receiver's records differ from the sender's", tick)
+			testing.expectf(
+				t,
+				false,
+				"tick %d: the receiver's records differ from the sender's",
+				tick,
+			)
 			return
 		}
 	}
@@ -359,7 +393,11 @@ test_costs :: proc(t: ^testing.T) {
 	defer link_destroy(&l)
 
 	// `acked` one input on is one byte
-	me := Dt_Me{acked = 100, x = 1.5, n = 3}
+	me := Dt_Me {
+		acked = 100,
+		x     = 1.5,
+		n     = 3,
+	}
 	sender_put(&l.tx, DT_ME, {}, &me)
 	link_step(&l)
 	me.acked = 101
@@ -369,7 +407,9 @@ test_costs :: proc(t: ^testing.T) {
 	testing.expect_value(t, snap, 9)
 
 	// one stack that changed is under 8 bytes
-	inv := Dt_Inv{acked = 1}
+	inv := Dt_Inv {
+		acked = 1,
+	}
 	inv.inventory.slots[3] = {5, 20}
 	sender_put(&l.tx, DT_INV, {}, &inv)
 	link_step(&l)
@@ -412,18 +452,22 @@ test_reliable_lane_rules :: proc(t: ^testing.T) {
 	testing.expect(t, replica_get(&l.rx.live, DT_SINGLE, {}) != nil, "a singleton must persist")
 
 	// keyed kinds are views: not put, removed
-	a := Sch_All{a = 1}
-	put(&l, DT_ALL, 5, &a)
-	put(&l, DT_ALL, 9, &a)
+	a := Sch_All {
+		a = 1,
+	}
+	link_put(&l, DT_ALL, 5, &a)
+	link_put(&l, DT_ALL, 9, &a)
 	link_step(&l)
 	testing.expect_value(t, len(l.rx.live.tables[DT_ALL].records), 2)
-	put(&l, DT_ALL, 9, &a)
+	link_put(&l, DT_ALL, 9, &a)
 	link_step(&l)
 	testing.expect_value(t, len(l.rx.live.tables[DT_ALL].records), 1)
 
 	// the order: creates and changes, then events, then removals
-	b := Sch_All{a = 2}
-	put(&l, DT_ALL, 12, &b) // created, 9 removed
+	b := Sch_All {
+		a = 2,
+	}
+	link_put(&l, DT_ALL, 12, &b) // created, 9 removed
 	ping := Dt_Ping{"x", 1}
 	sender_event(&l.tx, DT_PING, &ping)
 	clear(&l.messages)
@@ -433,7 +477,11 @@ test_reliable_lane_rules :: proc(t: ^testing.T) {
 	ops: [dynamic]Op
 	defer delete(ops)
 	for g in got_all {append(&ops, g.op)}
-	testing.expect(t, slice.equal(ops[:], []Op{.Create, .Event, .Remove}), "creates, events, removals in that order")
+	testing.expect(
+		t,
+		slice.equal(ops[:], []Op{.Create, .Event, .Remove}),
+		"creates, events, removals in that order",
+	)
 }
 
 // ---- snapshot lane ----
@@ -465,7 +513,7 @@ test_snapshot_lane_survives_loss :: proc(t: ^testing.T) {
 		sender_put(&l.tx, DT_ME, {}, &me)
 		for &m, i in motions {
 			walk_motion(&rng, &m)
-			put(&l, DT_MOTION, u32(i + 1), &m)
+			link_put(&l, DT_MOTION, u32(i + 1), &m)
 		}
 		before := l.lost
 		link_step(&l)
@@ -476,7 +524,7 @@ test_snapshot_lane_survives_loss :: proc(t: ^testing.T) {
 	// after the loss stops, the view converges within a couple of ticks
 	for _ in 0 ..< 3 {
 		sender_put(&l.tx, DT_ME, {}, &me)
-		for &m, i in motions {put(&l, DT_MOTION, u32(i + 1), &m)}
+		for &m, i in motions {link_put(&l, DT_MOTION, u32(i + 1), &m)}
 		link_step(&l)
 	}
 	testing.expect(t, l.lost > 5, "the link lost nothing")
@@ -497,16 +545,17 @@ test_snapshot_part_lost_applies_in_part :: proc(t: ^testing.T) {
 	tick :: proc(l: ^Link, motions: []Dt_Motion, drop_part: int) -> bool {
 		for &m, i in motions {
 			m.position.x += 0.5
-			put(l, DT_MOTION, u32(i + 1), &m)
+			link_put(l, DT_MOTION, u32(i + 1), &m)
 		}
 		l.tick += 1
 		out := make([dynamic]Outgoing, context.temp_allocator)
 		sender_flush(&l.tx, l.tick, {}, &out)
 		got := make([dynamic]Received, context.temp_allocator)
 		for m, i in out {
+			if len(m.data) > SNAPSHOT_PART_BYTES {return false}
 			if i == drop_part {continue}
 			if !receive_snapshot(&l.rx, m.data, &got) {return false}
-			apply(l, got[:])
+			link_apply(l, got[:])
 			clear(&got)
 		}
 		sender_ack(&l.tx, l.rx.ack)
@@ -537,21 +586,23 @@ test_snapshot_baseline_gone :: proc(t: ^testing.T) {
 	l: Link
 	link_init(&l, &s)
 	defer link_destroy(&l)
-	m := Dt_Motion{position = {1, 2, 3}}
-	put(&l, DT_MOTION, 1, &m)
+	m := Dt_Motion {
+		position = {1, 2, 3},
+	}
+	link_put(&l, DT_MOTION, 1, &m)
 	link_step(&l)
 	acked := l.rx.ack
 	testing.expect(t, acked != 0)
 	// an acknowledgement older than the ring: the next snapshot has no baseline
 	for _ in 0 ..< SNAPSHOT_RING + 4 {
 		m.position.x += 1
-		put(&l, DT_MOTION, 1, &m)
+		link_put(&l, DT_MOTION, 1, &m)
 		l.tick += 1
 		out := make([dynamic]Outgoing, context.temp_allocator)
 		sender_flush(&l.tx, l.tick, {}, &out) // (never delivered, never acknowledged)
 	}
 	m.position.x += 1
-	put(&l, DT_MOTION, 1, &m)
+	link_put(&l, DT_MOTION, 1, &m)
 	l.tick += 1
 	out := make([dynamic]Outgoing, context.temp_allocator)
 	sender_flush(&l.tx, l.tick, {}, &out)
@@ -571,10 +622,10 @@ test_snapshot_priority :: proc(t: ^testing.T) {
 	// 400 records far too many for one snapshot, all changing every tick
 	motions := make([]Dt_Motion, 400, context.temp_allocator)
 	for &m, i in motions {m.position = {f64(i), 0, 0}}
-	for tick in 1 ..= 40 {
+	for _ in 1 ..= 40 {
 		for &m, i in motions {
 			m.position.y += 1
-			put(&l, DT_MOTION, u32(i + 1), &m)
+			link_put(&l, DT_MOTION, u32(i + 1), &m)
 		}
 		link_step(&l, {0, 0, 0})
 	}
@@ -590,7 +641,7 @@ test_snapshot_priority :: proc(t: ^testing.T) {
 	l2: Link
 	link_init(&l2, &s)
 	defer link_destroy(&l2)
-	for &m, i in motions {put(&l2, DT_MOTION, u32(i + 1), &m)}
+	for &m, i in motions {link_put(&l2, DT_MOTION, u32(i + 1), &m)}
 	link_step(&l2, {0, 0, 0})
 	nearest, farthest := 0, 0
 	for rec in l2.view.tables[DT_MOTION].records {
@@ -609,10 +660,13 @@ valid_messages :: proc(l: ^Link) -> (state, snapshot: []u8) {
 		name = "abc",
 		spot = Block_Pos{1, 2, 3},
 	}
-	put(l, DT_ALL, 3, &a)
-	put(l, DT_ALL, 4, &a)
-	m := Dt_Motion{position = {1, 2, 3}, yaw = 2}
-	put(l, DT_MOTION, 7, &m)
+	link_put(l, DT_ALL, 3, &a)
+	link_put(l, DT_ALL, 4, &a)
+	m := Dt_Motion {
+		position = {1, 2, 3},
+		yaw      = 2,
+	}
+	link_put(l, DT_MOTION, 7, &m)
 	ping := Dt_Ping{"p", 3}
 	sender_event(&l.tx, DT_PING, &ping)
 	b := Dt_Block{.Stone, true}
@@ -649,7 +703,11 @@ test_state_prefixes_fail :: proc(t: ^testing.T) {
 	{
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		testing.expect(t, receive_snapshot(&rx, snapshot, &got), "the valid Snapshot message was refused")
+		testing.expect(
+			t,
+			receive_snapshot(&rx, snapshot, &got),
+			"the valid Snapshot message was refused",
+		)
 	}
 	for n in 0 ..< len(state) {
 		rx := fresh_rx(&s)
@@ -749,7 +807,11 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 		write_varint(&w, 0)
 		write_varint(&w, 1) // stone
 		write_u8(&w, 0)
-		testing.expect(t, !receive_state(&rx, w.buf[:], &got), "a block outside the world was accepted")
+		testing.expect(
+			t,
+			!receive_state(&rx, w.buf[:], &got),
+			"a block outside the world was accepted",
+		)
 	}
 }
 

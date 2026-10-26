@@ -1,14 +1,12 @@
 package server
 
-import "core:slice"
-
 import "../base"
 import "../game"
 
 // Block changes: every block the world changes in a tick (a player's edit,
 // a bulk edit, an explosion; flowing water next) goes through set_block or
 // changes_chunk, and changes_flush tells the players at the end of the
-// tick, once: single blocks as Block_Changed, chunks changed in bulk sent
+// tick, once: single blocks as Block records, chunks changed in bulk sent
 // whole (after a Bulk_Begin, so the client can show them all at once), and
 // the column tops that moved.
 //
@@ -103,28 +101,15 @@ changes_flush :: proc(w: ^World) {
 			chunk := chunks_get(&w.chunks, pos)
 			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
 		}
-		// A player's edit, heard; the world's changes (flowing water), one
-		// batch per chunk.
-		batches := make(map[game.Chunk_Pos]game.Blocks_Changed, 16, context.temp_allocator)
+		// A player's edit, heard; the world's changes (flowing water), quietly.
 		for p in edits {
 			who := ch.blocks[p]
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
 			b, _ := chunks_block(&w.chunks, p)
-			if who >= 0 {
-				send_message(s, &c, game.Block_Changed{p, b})
-				continue
-			}
-			_, batch, _, _ := map_entry(&batches, chunk)
-			batch.chunk = chunk
-			batch.entries[batch.count] = {u16(game.local_index(game.local_of(p))), b}
-			batch.count += 1
+			record := game.Block_Record{b, who >= 0}
+			state_put(s, &c, .Block, &record, game.key_of_block(p))
 		}
-		// In order (map order varies): the same messages every run.
-		chunks := make([dynamic]game.Chunk_Pos, 0, len(batches), context.temp_allocator)
-		for chunk in batches {append(&chunks, chunk)}
-		slice.sort_by(chunks[:], game.chunk_pos_less)
-		for chunk in chunks {send_message(s, &c, batches[chunk])}
 	}
 }
 

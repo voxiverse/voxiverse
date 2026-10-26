@@ -2,7 +2,6 @@ package server
 
 import "core:log"
 import "core:math"
-import "core:slice"
 
 import "../base"
 import "../game"
@@ -12,14 +11,13 @@ import "../game"
 // sheep thinks (a small state machine), walks its path (A*, path.odin,
 // within a shared node budget) and moves by the shared body physics; a
 // rocket flies until it hits something and explodes. Each client is told
-// about the ones near it: Entity_Spawn when one comes near (or into
-// being), its place in an Entities batch every tick, Entity_Despawn when it
-// leaves (or dies). Sheep appear by day on grass around players and go
+// about the ones near it: an Entity record (what it is) and an Entity_Motion
+// record (where) while it is near (the records go when it leaves), and an
+// Entity_Died event when it dies. Sheep appear by day on grass around players and go
 // when nobody is near; one whose ground is not loaded waits, frozen, until
 // it is. Saved kinds are kept with the world (save.odin: entities.cfg).
 
 MAX_ENTITIES :: 512
-MAX_KNOWN_ENTITIES :: 256 // per client
 ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizontally)
 SPAWN_EVERY :: game.TICK_RATE * 2 // ticks between spawning attempts
 SPAWN_CAP :: 6 // sheep near one player, at most
@@ -298,8 +296,10 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
 		d := c.player.position - center
-		if d.x * d.x + d.z * d.z <
-		   160 * 160 {send_message(s, &c, game.Explosion{center, f32(radius)})}
+		if d.x * d.x + d.z * d.z < 160 * 160 {
+			blast := game.Explosion{center, f32(radius)}
+			event_send(s, &c, .Explosion, &blast)
+		}
 	}
 	bulk_edit(w, {shape = Sphere{center, radius}, op = .Carve, partial = true})
 	reach := 2 * radius
@@ -420,50 +420,32 @@ entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
 	return nil, -1
 }
 
-// replicate tells a client about the entities near it: spawns for new
-// ones, despawns for those gone from its area (or from the world), and a
-// batch of places every tick.
-replicate :: proc(s: ^Server, c: ^Client) {
+// entities_put tells a client about the entities near it: what each is and
+// where (a view: an entity out of its area, or gone from the world, is removed
+// by not being put).
+entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	near := f64(ENTITY_VIEW)
-	visible := make(map[u32]struct{}, 64, context.temp_allocator)
-	batch := game.Entities {
-		tick = u32(s.tick),
-	}
+	told := 0
 	for &ent in w.entities.list {
 		d := ent.body.position - c.player.position
 		if d.x * d.x + d.z * d.z > near * near {continue}
-		if ent.id not_in c.known {
-			if len(c.known) >= MAX_KNOWN_ENTITIES {continue}
-			c.known[ent.id] = {}
-			send_message(
-				s,
-				c,
-				game.Entity_Spawn{ent.id, ent.kind, ent.body.position, ent.yaw, ent.stack},
-			)
-		}
-		visible[ent.id] = {}
-		batch.entries[batch.count] = {
-			ent.id,
-			ent.body.position,
-			ent.yaw,
-			ent.pitch,
-			sheep_flags(&ent),
-		}
-		batch.count += 1
-		if batch.count == game.ENTITIES_PER_MESSAGE {
-			send_message(s, c, batch)
-			batch.count = 0
-		}
+		if told == game.MAX_KNOWN_ENTITIES {break}
+		told += 1
+		key := game.key_entity(ent.id)
+		record := game.Entity_Record{ent.kind, ent.stack}
+		state_put(s, c, .Entity, &record, key)
+		motion := game.Entity_Motion{ent.body.position, ent.yaw, ent.pitch, sheep_flags(&ent)}
+		state_put(s, c, .Entity_Motion, &motion, key)
 	}
-	if batch.count > 0 {send_message(s, c, batch)}
-	gone := make([dynamic]u32, context.temp_allocator)
-	for id in c.known {if id not_in visible {append(&gone, id)}}
-	slice.sort(gone[:]) // (map order varies)
-	for id in gone {
-		delete_key(&c.known, id)
-		send_message(s, c, game.Entity_Despawn{id, false})
-	}
+}
+
+// entity_known: c has been told about entity id (it is in its view).
+entity_known :: proc(c: ^Client, id: u32) -> bool {
+	return(
+		c.tx.schema != nil &&
+		game.replica_get(&c.tx.sent, int(game.State_Kind.Entity), game.key_entity(id)) != nil \
+	)
 }
 
 // entity_died: tell everyone who knew it (they show it die), then forget it.
@@ -480,10 +462,12 @@ entity_gone :: proc(w: ^World, index: int) {
 entity_remove :: proc(w: ^World, index: int, died: bool) {
 	s := w.server
 	id := w.entities.list[index].id
-	for &c in s.clients {
-		if c.state == .Playing && c.world == w && id in c.known {
-			delete_key(&c.known, id)
-			send_message(s, &c, game.Entity_Despawn{id, died})
+	if died {
+		for &c in s.clients {
+			if c.state == .Playing && c.world == w && entity_known(&c, id) {
+				death := game.Entity_Died{id}
+				event_send(s, &c, .Entity_Died, &death)
+			}
 		}
 	}
 	unordered_remove(&w.entities.list, index)
@@ -493,9 +477,10 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 entity_hurt_shown :: proc(w: ^World, id: u32) {
 	s := w.server
 	for &c in s.clients {
-		if c.state == .Playing &&
-		   c.world == w &&
-		   id in c.known {send_message(s, &c, game.Entity_Hurt{id})}
+		if c.state == .Playing && c.world == w && entity_known(&c, id) {
+			hurt := game.Entity_Hurt{id}
+			event_send(s, &c, .Entity_Hurt, &hurt)
+		}
 	}
 }
 

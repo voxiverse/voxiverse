@@ -91,24 +91,20 @@ whisper :: proc(s: ^Server, c: ^Client, name, text: string) -> bool {
 	)
 	id := chat_next(s, client_name(c))
 	sender := player_id(s, c)
-	send_message(
+	chat_line_send(
 		s,
 		c,
-		game.Chat_Line {
-			id,
-			sender,
-			game.format_join({"&7[me -> ", display_name(s, to), "&7]", " ", words}),
-		},
+		id,
+		sender,
+		game.format_join({"&7[me -> ", display_name(s, to), "&7]", " ", words}),
 	)
 	if !ignores(s, to, client_name(c)) {
-		send_message(
+		chat_line_send(
 			s,
 			to,
-			game.Chat_Line {
-				id,
-				sender,
-				game.format_join({"&7[", speaker(s, c), "&7 -> me]", " ", words}),
-			},
+			id,
+			sender,
+			game.format_join({"&7[", speaker(s, c), "&7 -> me]", " ", words}),
 		)
 		to.reply_len = copy(to.reply[:], client_name(c))
 	}
@@ -126,7 +122,7 @@ admin_me :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	id := chat_next(s, client_name(c))
 	for &other in s.clients {
 		if other.state != .Playing || ignores(s, &other, client_name(c)) {continue}
-		send_message(s, &other, game.Chat_Line{id, player_id(s, c), line})
+		chat_line_send(s, &other, id, player_id(s, c), line)
 	}
 	return true
 }

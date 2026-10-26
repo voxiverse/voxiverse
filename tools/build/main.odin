@@ -32,6 +32,7 @@ PACKAGES :: []string {
 	"dedicated",
 	"tools/build",
 	"tools/netdump",
+	"tools/schema",
 	"tools/audiodump",
 	"tools/analytics",
 	"tools/replay",
@@ -139,7 +140,7 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "audiodump", "replay", "sfx", "worldmap", "analytics":
+	case "netdump", "audiodump", "replay", "sfx", "worldmap", "analytics", "schema":
 		ok = run_tool(args[0], args[1:])
 	case "audio":
 		ok = audio_baselines(args[1:])
@@ -175,6 +176,9 @@ usage :: proc() {
 		"  audiodump dump an audio capture: timeline, voice decisions, loudness, a bus as WAV (-report, -bus:, -wav:)",
 	)
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
+	fmt.println(
+		"  schema    rewrite the Wireshark dissector's generated schema block from the game's state kinds",
+	)
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
 	fmt.println(

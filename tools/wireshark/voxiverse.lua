@@ -30,13 +30,127 @@ local CLIENT_KINDS = {
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
-	[5] = "pong", [6] = "player", [7] = "rules", [8] = "edit_result",
-	[9] = "block", [10] = "column", [11] = "time", [12] = "joined",
-	[13] = "left", [14] = "players", [15] = "notice", [16] = "spawn",
-	[17] = "despawn", [18] = "entities", [19] = "hurt", [20] = "bulk",
-	[21] = "explosion", [22] = "variables", [23] = "blocks", [24] = "grants",
-	[25] = "chat_line", [26] = "chat_delete", [27] = "inventory", [28] = "challenge", [29] = "characters", [30] = "world_changed", [31] = "selection", [32] = "worn", [33] = "stats_page", [34] = "telemetry_ack", [35] = "health",
+	[5] = "pong", [8] = "edit_result", [10] = "column", [20] = "bulk",
+	[28] = "challenge", [29] = "characters", [30] = "world_changed",
+	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot",
 }
+local STATE, SNAPSHOT = 36, 37
+
+-- The state model's kinds (game/state_kinds.odin), generated from the game's
+-- types: `./build.sh schema` rewrites this block; game's
+-- test_dissector_schema_current fails when it is stale.
+-- schema begin (generated: ./build.sh schema)
+local SCHEMA = {
+  { id = 0, name = "own_player", key = "none", lane = "snapshot", fields = {
+    { name = "acked", t = "u32" },
+    { name = "state.position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+    { name = "state.velocity", t = "array", scalar = true, count = 3, elem = { t = "f32" } },
+    { name = "state.on_ground", t = "bool" },
+    { name = "state.flying", t = "bool" },
+    { name = "state.crouched", t = "bool" },
+    { name = "state.jump_held", t = "bool" },
+    { name = "state.air_jumps", t = "u8" },
+    { name = "teleports", t = "u8" },
+    { name = "yaw", t = "f32" },
+    { name = "pitch", t = "f32" },
+  } },
+  { id = 1, name = "health", key = "none", lane = "reliable", fields = {
+    { name = "health", t = "f32" },
+    { name = "max", t = "f32" },
+  } },
+  { id = 2, name = "inventory", key = "none", lane = "reliable", fields = {
+    { name = "acked", t = "u32" },
+    { name = "inventory.slots", t = "array", scalar = false, count = 30, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
+    { name = "inventory.equipment", t = "array", scalar = false, count = 5, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
+    { name = "inventory.cursor.item", t = "u16" },
+    { name = "inventory.cursor.count", t = "i64" },
+    { name = "inventory.selected", t = "i64" },
+    { name = "inventory.chest", t = "array", scalar = false, count = 25, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
+    { name = "inventory.chest_open", t = "bool" },
+  } },
+  { id = 3, name = "rules", key = "none", lane = "reliable", fields = {
+    { name = "gravity", t = "f32" },
+    { name = "terminal_velocity", t = "f32" },
+    { name = "walk_speed", t = "f32" },
+    { name = "sprint_speed", t = "f32" },
+    { name = "sneak_speed", t = "f32" },
+    { name = "jump_height", t = "f32" },
+    { name = "fly_speed", t = "f32" },
+    { name = "fly_sprint_speed", t = "f32" },
+    { name = "ground_control", t = "f32" },
+    { name = "air_control", t = "f32" },
+    { name = "reach", t = "f32" },
+    { name = "allow_flying", t = "bool" },
+    { name = "day_length", t = "f32" },
+    { name = "daylight_cycle", t = "bool" },
+    { name = "drops", t = "bool" },
+    { name = "damage", t = "bool" },
+    { name = "death_drops", t = "bool" },
+    { name = "random_tick_speed", t = "i32" },
+  } },
+  { id = 4, name = "clock", key = "none", lane = "reliable", fields = {
+    { name = "time", t = "f64" },
+    { name = "tick", t = "u32" },
+  } },
+  { id = 5, name = "grants", key = "none", lane = "reliable", fields = {
+    { name = "text", t = "string", max = 16384 },
+    { name = "commands", t = "string", max = 16384 },
+  } },
+  { id = 6, name = "variables", key = "none", lane = "reliable", fields = {
+    { name = "text", t = "string", max = 4096 },
+  } },
+  { id = 7, name = "selection", key = "none", lane = "reliable", fields = {
+    { name = "corners", t = "array", scalar = false, count = 2, elem = { t = "union", variants = { { t = "array", scalar = true, count = 3, elem = { t = "i32" } }, } } },
+  } },
+  { id = 8, name = "player", key = "player", lane = "reliable", fields = {
+    { name = "name", t = "string", max = 16 },
+    { name = "worn", t = "array", scalar = true, count = 4, elem = { t = "u16" } },
+  } },
+  { id = 9, name = "player_motion", key = "player", lane = "snapshot", fields = {
+    { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+    { name = "yaw", t = "f32" },
+    { name = "pitch", t = "f32" },
+    { name = "flying", t = "bool" },
+    { name = "crouched", t = "bool" },
+  } },
+  { id = 10, name = "entity", key = "entity", lane = "reliable", fields = {
+    { name = "kind", t = "enum", signed = false },
+    { name = "stack.item", t = "u16" },
+    { name = "stack.count", t = "i64" },
+  } },
+  { id = 11, name = "entity_motion", key = "entity", lane = "snapshot", fields = {
+    { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+    { name = "yaw", t = "f32" },
+    { name = "pitch", t = "f32" },
+    { name = "flags", t = "bits" },
+  } },
+  { id = 12, name = "block", key = "block", lane = "reliable", fields = {
+    { name = "block", t = "enum", signed = false },
+    { name = "heard", t = "bool" },
+  } },
+  { id = 13, name = "notice", key = "none", lane = "event", fields = {
+    { name = "text", t = "string", max = 1024 },
+  } },
+  { id = 14, name = "chat_line", key = "none", lane = "event", fields = {
+    { name = "id", t = "u32" },
+    { name = "sender", t = "u16" },
+    { name = "text", t = "string", max = 1024 },
+  } },
+  { id = 15, name = "chat_delete", key = "none", lane = "event", fields = {
+    { name = "id", t = "u32" },
+  } },
+  { id = 16, name = "entity_hurt", key = "none", lane = "event", fields = {
+    { name = "entity", t = "u32" },
+  } },
+  { id = 17, name = "entity_died", key = "none", lane = "event", fields = {
+    { name = "entity", t = "u32" },
+  } },
+  { id = 18, name = "explosion", key = "none", lane = "event", fields = {
+    { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+    { name = "radius", t = "f32" },
+  } },
+}
+-- schema end
 
 local f = vx.fields
 f.kind = ProtoField.uint8("voxiverse.kind", "Packet", base.DEC, PACKET_KINDS)
@@ -87,6 +201,173 @@ local function i32(tvb, off) return tvb(off, 4):le_int() end
 local function f32(tvb, off) return tvb(off, 4):le_float() end
 local function f64(tvb, off) return tvb(off, 8):le_float() end
 
+-- The state model's wire (game/replica.odin), decoded from SCHEMA. Numbers
+-- are Lua doubles: exact to 2^53, which no field reaches. A change carries
+-- only the fields its mask names, as deltas: shown as "+n" (the dissector has
+-- no baseline).
+local function varint64(tvb, off)
+	local v, shift = 0, 0
+	for i = 0, 9 do
+		if off + i >= tvb:len() then error("short varint") end
+		local b = tvb(off + i, 1):uint()
+		v = v + (b % 128) * (2 ^ shift)
+		if b < 128 then return v, off + i + 1 end
+		shift = shift + 7
+	end
+	error("varint too long")
+end
+
+local function unzigzag(v)
+	if v % 2 == 0 then return v / 2 end
+	return -(v + 1) / 2
+end
+
+local function whole(tvb, off, ty)
+	local t = ty.t
+	if t == "bool" then
+		return tvb(off, 1):uint() ~= 0 and "true" or "false", off + 1
+	elseif t:match("^u%d+$") or t == "bits" or (t == "enum" and not ty.signed) then
+		local v, o = varint64(tvb, off)
+		return string.format("%.0f", v), o
+	elseif t:match("^i%d+$") or t == "enum" then
+		local v, o = varint64(tvb, off)
+		return string.format("%.0f", unzigzag(v)), o
+	elseif t == "f32" then
+		return string.format("%g", f32(tvb, off)), off + 4
+	elseif t == "f64" then
+		return string.format("%g", f64(tvb, off)), off + 8
+	elseif t == "array" then
+		local parts = {}
+		for i = 1, ty.count do parts[i], off = whole(tvb, off, ty.elem) end
+		return "[" .. table.concat(parts, " ") .. "]", off
+	elseif t == "struct" then
+		local parts = {}
+		for i, fd in ipairs(ty.fields) do
+			local text
+			text, off = whole(tvb, off, fd)
+			parts[i] = fd.name .. "=" .. text
+		end
+		return "{" .. table.concat(parts, " ") .. "}", off
+	elseif t == "union" then
+		local tag = tvb(off, 1):uint()
+		off = off + 1
+		if tag == 0 then return "nil", off end
+		local variant = ty.variants[tag]
+		if not variant then error("bad union tag") end
+		return whole(tvb, off, variant)
+	elseif t == "string" then
+		local n, o = varint64(tvb, off)
+		if o + n > tvb:len() then error("short string") end
+		return string.format("%q", tvb(o, n):string()), o + n
+	end
+	error("unknown type " .. t)
+end
+
+local function delta(tvb, off, ty)
+	local t = ty.t
+	if t:match("^[ui]%d+$") then
+		local v, o = varint64(tvb, off)
+		return string.format("%+.0f", unzigzag(v)), o
+	elseif t == "array" and not ty.scalar then
+		local n, o = varint64(tvb, off)
+		local parts = {}
+		for i = 1, n do
+			local index
+			index, o = varint64(tvb, o)
+			local text
+			text, o = whole(tvb, o, ty.elem)
+			parts[i] = string.format("%.0f:%s", index, text)
+		end
+		return "[" .. table.concat(parts, " ") .. "]", o
+	end
+	return whole(tvb, off, ty)
+end
+
+local function key_text(tvb, off, key, prev)
+	if key == "none" then return "", off, prev end
+	if key == "player" or key == "entity" then
+		local d, o = varint64(tvb, off)
+		local id = (prev or 0) + d
+		return string.format("#%.0f", id), o, id
+	end
+	-- block: (local index + 1) in the chunk of the last, else 0, chunk, index
+	local head, o = varint64(tvb, off)
+	if head ~= 0 then return string.format("@%.0f", head - 1), o, prev end
+	local cx, cy, cz, index
+	cx, o = varint64(tvb, o); cy, o = varint64(tvb, o); cz, o = varint64(tvb, o)
+	index, o = varint64(tvb, o)
+	return string.format("@[%d %d %d]+%.0f", unzigzag(cx), unzigzag(cy), unzigzag(cz), index), o, prev
+end
+
+local OPS = {[0] = "change", [1] = "create", [2] = "remove"}
+
+-- describe_state: "state tick=N kind#key op{field=value ...} ..." (or the
+-- snapshot's, with its baseline and part); errors if it does not decode.
+function describe_state(tvb, snapshot)
+	local off = 1
+	local tick, back, part, parts
+	tick, off = varint64(tvb, off)
+	local head = string.format("%s tick=%.0f", snapshot and "snapshot" or "state", tick)
+	if snapshot then
+		back, off = varint64(tvb, off)
+		part, parts = tvb(off, 1):uint(), tvb(off + 1, 1):uint()
+		off = off + 2
+		if parts < 1 or parts > 8 or part >= parts then error("bad snapshot part") end
+		head = head .. string.format(" back=%.0f part=%d/%d", back, part + 1, parts)
+	end
+	local out = {head}
+	local len = tvb:len()
+	while off < len do
+		local id, count
+		id, off = varint64(tvb, off)
+		count, off = varint64(tvb, off)
+		local kind = SCHEMA[id + 1]
+		if not kind then error("unknown kind id") end
+		if count < 1 or count > len - off then error("bad count") end
+		local prev
+		for _ = 1, count do
+			local fields = {}
+			if kind.lane == "event" then
+				for _, fd in ipairs(kind.fields) do
+					local text
+					text, off = whole(tvb, off, fd)
+					fields[#fields + 1] = fd.name .. "=" .. text
+				end
+				out[#out + 1] = string.format("%s{%s}", kind.name, table.concat(fields, " "))
+			else
+				local h
+				h, off = varint64(tvb, off)
+				local op = h % 4
+				local mask = math.floor(h / 4)
+				if op == 3 then error("bad op") end
+				local key
+				key, off, prev = key_text(tvb, off, kind.key, prev)
+				if op == 1 then
+					for _, fd in ipairs(kind.fields) do
+						local text
+						text, off = whole(tvb, off, fd)
+						fields[#fields + 1] = fd.name .. "=" .. text
+					end
+				elseif op == 0 then
+					for i, fd in ipairs(kind.fields) do
+						if math.floor(mask / 2 ^ (i - 1)) % 2 == 1 then
+							local text
+							text, off = delta(tvb, off, fd)
+							fields[#fields + 1] = fd.name .. "=" .. text
+						end
+					end
+					if mask >= 2 ^ #kind.fields then error("mask past the fields") end
+				end
+				out[#out + 1] = string.format("%s%s %s{%s}", kind.name, key, OPS[op], table.concat(fields, " "))
+			end
+		end
+	end
+	if off ~= len then error("trailing bytes") end
+	local text = table.concat(out, " ")
+	if #text > 300 then text = text:sub(1, 297) .. "..." end
+	return text
+end
+
 -- describe: a one-line summary of a game message (the first bytes of a
 -- record's payload). Returns nil if it does not decode.
 local function describe(tvb, from_server)
@@ -121,47 +402,31 @@ local function describe(tvb, from_server)
 			if kind == 1 then
 				return string.format("welcome protocol=%d player=%d spawn=[%.1f %.1f %.1f]",
 					u32(tvb, 1), tvb(9, 2):le_uint(), f64(tvb, 11), f64(tvb, 19), f64(tvb, 27))
-			elseif kind == 2 or kind == 15 or kind == 22 or kind == 24 then
+			elseif kind == 2 then
 				return string.format("%s %q", name, gstring(tvb, 1) or "?")
 			elseif kind == 3 or kind == 4 then
 				return string.format("%s pos=[%d %d %d]", name, i32(tvb, 1), i32(tvb, 5), i32(tvb, 9))
 			elseif kind == 5 then
 				return string.format("pong id=%d", u32(tvb, 1))
-			elseif kind == 6 then
-				return string.format("player acked=%d at=[%.2f %.2f %.2f]", u32(tvb, 1),
-					f64(tvb, 5), f64(tvb, 13), f64(tvb, 21))
 			elseif kind == 8 then
 				return string.format("edit_result id=%d accepted=%d", u32(tvb, 1), tvb(5, 1):uint())
-			elseif kind == 9 then
-				return string.format("block pos=[%d %d %d] block=%d", i32(tvb, 1), i32(tvb, 5),
-					i32(tvb, 9), tvb(13, 2):le_uint())
 			elseif kind == 10 then
 				return string.format("column pos=[%d %d]", i32(tvb, 1), i32(tvb, 5))
-			elseif kind == 23 then
-				return string.format("blocks chunk=[%d %d %d] count=%d", i32(tvb, 1), i32(tvb, 5), i32(tvb, 9), tvb(13, 1):uint())
-			elseif kind == 11 then
-				return string.format("time %.4f", f64(tvb, 1))
-			elseif kind == 25 then
-				return string.format("chat_line id=%d sender=%d %q", u32(tvb, 1), tvb(5, 2):le_uint(),
-					gstring(tvb, 7) or "?")
-			elseif kind == 26 then
-				return string.format("chat_delete id=%d", u32(tvb, 1))
-			elseif kind == 27 then
-				return string.format("inventory acked=%d", u32(tvb, 1))
-			elseif kind == 12 then
-				return string.format("joined player=%d name=%q", tvb(1, 2):le_uint(),
-					gstring(tvb, 3) or "?")
-			elseif kind == 13 then
-				return string.format("left player=%d", tvb(1, 2):le_uint())
-			elseif kind == 14 then
-				return string.format("players tick=%d count=%d", u32(tvb, 1), tvb(5, 1):uint())
+			elseif kind == STATE or kind == SNAPSHOT then
+				return describe_state(tvb, kind == SNAPSHOT)
 			end
 		end
 		return name
 	end)
-	if not ok then return nil end
+	if not ok then
+		if (kind == STATE or kind == SNAPSHOT) and from_server then return nil, text end
+		return nil
+	end
 	return text
 end
+
+-- Per direction of a flow: whether the last record had more fragments to come.
+local pending_fragment = {}
 
 local function from_server(pinfo)
 	return pinfo.src_port >= SERVER_PORT_FIRST and pinfo.src_port <= SERVER_PORT_LAST
@@ -192,6 +457,7 @@ function vx.dissector(tvb, pinfo, root)
 		tree:add_le(f.before, tvb(17, 2))
 		local off = 19
 		local summary = {}
+		local flow = tostring(pinfo.src_port) .. ">" .. tostring(pinfo.dst_port)
 		while off < len do
 			local flags = tvb(off, 1):uint()
 			local reliable = flags % 2 == 1
@@ -210,9 +476,16 @@ function vx.dissector(tvb, pinfo, root)
 			if reliable then rec:add_le(f.id, tvb(id_off, 2)) end
 			rec:add_le(f.length, tvb(n_off, 2))
 			-- A message starts where the previous record had no MORE flag;
-			-- only the first fragment of a split message carries its kind.
-			local text = describe(payload:tvb(), server)
+			-- only the first fragment of a split message carries its kind
+			-- (the records that follow it, up to one without MORE, are labelled).
+			local continuing = pending_fragment[flow]
+			local text, why
+			if not continuing then text, why = describe(payload:tvb(), server) end
+			pending_fragment[flow] = more
 			if more then text = (text and (text .. " (first fragment)")) or "fragment" end
+			if why and not more and not continuing then
+				tree:add_proto_expert_info(e_malformed, "does not decode: " .. why)
+			end
 			rec:add(f.message, payload, text or "fragment / unknown")
 			rec:set_text((reliable and "reliable " or "unreliable ") .. (text or "fragment"))
 			summary[#summary + 1] = text and text:match("^(%S+)") or "fragment"

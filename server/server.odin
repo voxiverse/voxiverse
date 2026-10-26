@@ -97,6 +97,8 @@ Server :: struct {
 	local:          game.Endpoint, // the in-process player's pipe (none: a dedicated server)
 	thread:         ^thread.Thread,
 	stopping:       bool, // (atomic)
+	schema:         game.Schema, // what is replicated to clients (state_kinds.odin)
+	time_stopped:   bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
 	frozen:         bool, // (atomic) the local player paused: time and entities stand still
 	failed:         bool, // (atomic)
 	stats_mutex:    sync.Mutex,
@@ -150,6 +152,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config = config,
 		local  = local,
 	}
+	s.schema = game.game_schema()
 	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
 	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
@@ -276,6 +279,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	community_destroy(&s.community)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
+	game.schema_destroy(&s.schema)
 	for w in s.worlds {world_close(w)}
 	delete(s.worlds)
 	ledger_destroy(&s.ledger)
@@ -384,6 +388,7 @@ tick :: proc(s: ^Server) {
 		receive_messages(s)
 	}
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
+	s.time_stopped = frozen
 	if !frozen {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
@@ -394,7 +399,6 @@ tick :: proc(s: ^Server) {
 	moves := make([dynamic]Move, context.temp_allocator)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
-		if s.tick % game.TICK_RATE == 0 {send_message(s, &c, game.Time{c.world.clock})}
 		simulate_player(s, &c)
 		health_tick(s, &c)
 		stats_tick(s, &c)
@@ -429,23 +433,11 @@ tick :: proc(s: ^Server) {
 	sent := 0
 	for &c in s.clients {
 		if c.state != .Playing {continue}
-		send_players(s, &c)
-		replicate(s, &c)
-		if c.inv_changed {
-			send_message(s, &c, game.Inventory_Update{c.inv_acked, c.inventory})
-			c.inv_changed = false
-			if worn := game.worn_of(&c.inventory); worn != c.worn_sent {
-				c.worn_sent = worn
-				for &other in s.clients {
-					if &other != &c && other.state == .Playing {
-						send_message(s, &other, game.Player_Worn{player_id(s, &c), worn})
-					}
-				}
-			}
-		}
+		replicate_tick(s, &c)
 		base.profile_scope("stream")
 		base.metric_scope(.Server_Stream)
 		sent += stream(s, &c)
+		replica_flush(s, &c)
 	}
 	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
 	kick_due(s)
@@ -594,6 +586,18 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			disconnect(s, c, "protocol version mismatch")
 			return
 		}
+		if v.schema != s.schema.hash {
+			disconnect(
+				s,
+				c,
+				fmt.tprintf(
+					"this server runs a different version of the game (state schema %016x vs %016x)",
+					s.schema.hash,
+					v.schema,
+				),
+			)
+			return
+		}
 		if v.character != "" && !game.name_valid(v.character) {
 			disconnect(s, c, "names are 1 to 16 letters, digits, _ or -")
 			return
@@ -628,6 +632,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		}
 		enter(s, c, v.character)
 	case game.Input:
+		if v.snapshot <= u32(s.tick) {game.sender_ack(&c.tx, v.snapshot)} 	// (a client cannot hold a snapshot not sent yet)
 		if !game.input_queue_push(&c.inputs, v) {disturb(s, c)} 	// (refused: it was predicted, not applied)
 	case game.Prediction_Check:
 		c.check = v
@@ -648,7 +653,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 				v.value,
 				client_name(c),
 			)
-			broadcast(s, game.Rules_Changed{w.rules}, w)
+			clock_resend(s, w)
 			disturb_world(s, w)
 		case .Unknown_Name, .Bad_Value:
 			log.warnf("server rule not changed name=%q value=%q problem=%v", v.name, v.value, err)
@@ -724,7 +729,8 @@ notice :: proc(s: ^Server, c: ^Client, text: string) {
 		for cut > 0 && text[cut] & 0xc0 == 0x80 {cut -= 1} 	// (a whole letter)
 		text = text[:cut]
 	}
-	send_message(s, c, game.Notice{text})
+	shown := game.Notice{text}
+	event_send(s, c, .Notice, &shown)
 }
 
 @(private)

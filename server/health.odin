@@ -48,10 +48,8 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	} else {
 		c.fall_peak = max(c.fall_peak, p.position.y)
 	}
-	if c.health != c.health_told[0] || c.max_health != c.health_told[1] {
-		c.health_told = {c.health, c.max_health}
-		send_message(s, c, game.Health{c.health, c.max_health})
-	}
+	health := game.Health{c.health, c.max_health}
+	state_put(s, c, .Health, &health) // (nothing is sent while it is unchanged)
 }
 
 // damage_player hurts c by amount health points from cause; at nought they die.

@@ -69,6 +69,7 @@ main :: proc() {
 	if !ok {fmt.eprintln("netdump: the trace is damaged or cut short; showing what precedes it")}
 
 	scratch := new(game.Block_Array)
+	schema := game.game_schema()
 	Total :: struct {
 		messages, bytes: int,
 	}
@@ -92,9 +93,22 @@ main :: proc() {
 			)
 			t := totals[key]
 			totals[key] = {t.messages + 1, t.bytes + len(r.data)}
+			if r.sender == .Server && (kind == "state" || kind == "snapshot") {
+				// State and Snapshot split by the kinds they carry
+				bytes := make([]int, len(schema.kinds), context.temp_allocator)
+				entries := make([]int, len(schema.kinds), context.temp_allocator)
+				if game.scan_state(&schema, r.data, bytes, entries) {
+					for k in schema.kinds {
+						if entries[k.id] == 0 {continue}
+						sub := fmt.aprintf("server->client   %s: %s", kind, k.name)
+						st := totals[sub]
+						totals[sub] = {st.messages + entries[k.id], st.bytes + bytes[k.id]}
+					}
+				}
+			}
 			continue
 		}
-		text, valid := describe(r, scratch)
+		text, valid := describe(r, scratch, &schema)
 		if !valid {invalid += 1}
 		fmt.printfln(
 			"% 10.4f  %s  % 6d B  %s",
@@ -110,16 +124,30 @@ main :: proc() {
 		keys, _ := slice.map_keys(totals)
 		slice.sort(keys)
 		secs := max(time.duration_seconds(last), 0.001)
-		fmt.printfln("%-24s %9s %12s %12s", "", "messages", "bytes", "bytes/s")
+		fmt.printfln("%-40s %9s %12s %12s", "", "messages", "bytes", "bytes/s")
 		for k in keys {
 			t := totals[k]
-			fmt.printfln("%-24s % 9d % 12d % 12.0f", k, t.messages, t.bytes, f64(t.bytes) / secs)
+			fmt.printfln("%-40s % 9d % 12d % 12.0f", k, t.messages, t.bytes, f64(t.bytes) / secs)
 		}
 	}
 	if invalid > 0 {
 		fmt.eprintfln("netdump: %d message(s) did not decode", invalid)
 		os.exit(1)
 	}
+}
+
+// describe_state names the kinds a State or Snapshot message carries and
+// their sizes (game.scan_state: no baseline is needed).
+describe_state :: proc(schema: ^game.Schema, name: string, data: []u8) -> string {
+	bytes := make([]int, len(schema.kinds), context.temp_allocator)
+	entries := make([]int, len(schema.kinds), context.temp_allocator)
+	if !game.scan_state(schema, data, bytes, entries) {return fmt.tprintf("INVALID %s", name)}
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprint(&b, name)
+	for k in schema.kinds {
+		if entries[k.id] > 0 {fmt.sbprintf(&b, " %s*%d(%dB)", k.name, entries[k.id], bytes[k.id])}
+	}
+	return strings.to_string(b)
 }
 
 kind_known :: proc(name: string) -> bool {
@@ -130,17 +158,25 @@ kind_known :: proc(name: string) -> bool {
 }
 
 // describe decodes one message into "kind field=value ...".
-describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, bool) {
+describe :: proc(
+	r: game.Trace_Record,
+	scratch: ^game.Block_Array,
+	schema: ^game.Schema,
+) -> (
+	string,
+	bool,
+) {
 	if r.sender == .Client {
 		m, ok := game.decode_client(r.data)
 		if !ok {return "INVALID client message", false}
 		switch v in m {
 		case game.Hello:
 			return fmt.tprintf(
-					"hello protocol=%d account=%s character=%q",
+					"hello protocol=%d account=%s character=%q schema=%016x",
 					v.protocol,
 					game.account_text(v.account)[:16],
 					v.character,
+					v.schema,
 				),
 				true
 		case game.Proof:
@@ -152,8 +188,9 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("choose character=%q", v.character), true
 		case game.Input:
 			text := fmt.tprintf(
-				"input seq=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
+				"input seq=%d snapshot=%d move=[%.2f, %.2f] yaw=%.3f pitch=%.3f buttons=%v",
 				v.sequence,
+				v.snapshot,
 				v.input.move.x,
 				v.input.move.y,
 				v.input.yaw,
@@ -245,21 +282,6 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("unload pos=%v", v.pos), true
 		case game.Pong:
 			return fmt.tprintf("pong id=%d", v.id), true
-		case game.Player_Update:
-			p := v.state.position
-			text := fmt.tprintf(
-				"player acked=%d position=[%.3f, %.3f, %.3f] on_ground=%v flying=%v%s",
-				v.acked,
-				p.x,
-				p.y,
-				p.z,
-				v.state.on_ground,
-				v.state.flying,
-				" teleported" if v.teleported else "",
-			)
-			return text, true
-		case game.Rules_Changed:
-			return "rules", true
 		case game.Edit_Result:
 			return fmt.tprintf(
 					"edit_result id=%d accepted=%v pos=%v block=%v",
@@ -269,63 +291,26 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 					v.block,
 				),
 				true
-		case game.Block_Changed:
-			return fmt.tprintf("block pos=%v block=%v", v.pos, v.block), true
 		case game.Column:
 			lo, hi := max(i32), min(i32)
 			for h in v.heights {lo, hi = min(lo, h), max(hi, h)}
 			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
-		case game.Time:
-			return fmt.tprintf("time time=%.6f", v.time), true
-		case game.Player_Joined:
-			return fmt.tprintf("joined player=%d name=%q", v.player, v.name), true
-		case game.Player_Left:
-			return fmt.tprintf("left player=%d", v.player), true
-		case game.Health:
-			return fmt.tprintf("health %.1f of %.1f", v.health, v.max), true
 		case game.Telemetry_Ack:
 			return fmt.tprintf("telemetry_ack day=%q end=%d", v.day, v.end), true
 		case game.Stats_Page:
 			return fmt.tprintf("stats_page %d of %d bytes=%d", v.page, v.pages, len(v.text)), true
-		case game.Player_Worn:
-			return fmt.tprintf("worn player=%d items=%v", v.player, v.worn), true
-		case game.Players:
-			return fmt.tprintf("players tick=%d count=%d", v.tick, v.count), true
-		case game.Notice:
-			return fmt.tprintf("notice text=%q", v.text), true
-		case game.Entity_Spawn:
-			return fmt.tprintf("spawn entity=%d kind=%v at=%v", v.entity, v.kind, v.position), true
-		case game.Entity_Despawn:
-			return fmt.tprintf("despawn entity=%d died=%v", v.entity, v.died), true
-		case game.Entities:
-			return fmt.tprintf("entities tick=%d count=%d", v.tick, v.count), true
-		case game.Entity_Hurt:
-			return fmt.tprintf("hurt entity=%d", v.entity), true
 		case game.Bulk_Begin:
 			return fmt.tprintf("bulk count=%d", v.count), true
-		case game.Explosion:
-			return fmt.tprintf("explosion at=%v radius=%.1f", v.position, v.radius), true
-		case game.Blocks_Changed:
-			return fmt.tprintf("blocks chunk=%v count=%d", v.chunk, v.count), true
-		case game.Variables:
-			return fmt.tprintf("variables text=%q", v.text), true
-		case game.Grants:
-			return fmt.tprintf("grants text=%q", v.text), true
-		case game.Chat_Line:
-			return fmt.tprintf("chat_line id=%d sender=%d text=%q", v.id, v.sender, v.text), true
-		case game.Chat_Delete:
-			return fmt.tprintf("chat_delete id=%d", v.id), true
 		case game.Challenge:
 			return "challenge", true
 		case game.World_Changed:
 			return fmt.tprintf("world_changed address=%s", game.address_dir(v.address)), true
-		case game.Selection:
-			return fmt.tprintf("selection corners=%v", v.corners), true
+		case game.State_Message:
+			return describe_state(schema, "state", v.data), true
+		case game.Snapshot_Message:
+			return describe_state(schema, "snapshot", v.data), true
 		case game.Characters:
 			return fmt.tprintf("characters names=%q", v.names), true
-		case game.Inventory_Update:
-			return fmt.tprintf("inventory acked=%d selected=%d", v.acked, v.inventory.selected),
-				true
 		}
 	}
 	return "", true

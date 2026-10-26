@@ -287,7 +287,8 @@ write_entry :: proc(
 		for &f in k.fields {leaf_write(w, &f, leaf_at(&f, value))}
 	case .Change:
 		for &f, i in k.fields {
-			if mask & (1 << uint(i)) != 0 {leaf_write_delta(w, &f, leaf_at(&f, value), leaf_at(&f, base))}
+			if mask & (1 << uint(i)) !=
+			   0 {leaf_write_delta(w, &f, leaf_at(&f, value), leaf_at(&f, base))}
 		}
 	case .Remove, .Event:
 	}
@@ -444,11 +445,15 @@ event_free :: proc(schema: ^Schema, e: Pending_Event) {
 	mem.free(e.value)
 }
 
-// sender_reset forgets what the receiver holds (a new world: entity ids are
-// per world): no removals are sent, and the next snapshot has no baseline.
+// sender_reset forgets the keyed records the receiver holds (a new world:
+// entity ids are per world): no removals are sent, and the next snapshot has no
+// baseline. Singletons stay.
 sender_reset :: proc(s: ^Sender) {
-	replica_clear(&s.sent)
-	replica_clear(&s.cur)
+	for kind in 0 ..< s.schema.n_states {
+		if s.schema.kinds[kind].key == .None {continue} 	// (a singleton persists)
+		replica_clear_kind(&s.sent, kind)
+		replica_clear_kind(&s.cur, kind)
+	}
 	clear(&s.removes)
 	ring_destroy(&s.ring)
 	s.acked = 0
@@ -477,6 +482,17 @@ sender_event :: proc(s: ^Sender, kind: int, value: rawptr) {
 	v := value_alloc(k, context.allocator)
 	value_copy(k, v, value)
 	append(&s.events, Pending_Event{kind, v})
+}
+
+// sender_seed gives the sender's copy of a reliable singleton a value the
+// receiver already has by other means (so only changes travel).
+sender_seed :: proc(s: ^Sender, kind: int, value: rawptr) {
+	replica_upsert(&s.sent, kind, {}, value)
+}
+
+// receiver_seed gives the receiver's record the same value.
+receiver_seed :: proc(rx: ^Receiver, kind: int, value: rawptr) {
+	replica_upsert(&rx.live, kind, {}, value)
 }
 
 // sender_ack: the receiver holds snapshot tick (the highest wins).
@@ -670,7 +686,8 @@ flush_snapshot :: proc(
 	schema := s.schema
 	for rm in s.removes {
 		if schema.kinds[rm.kind].lane != .Snapshot {continue}
-		if i, found := replica_find(&s.cur, rm.kind, rm.key); found {replica_remove_at(&s.cur, rm.kind, i)}
+		if i, found := replica_find(&s.cur, rm.kind, rm.key);
+		   found {replica_remove_at(&s.cur, rm.kind, i)}
 	}
 	clear(&s.removes)
 	for kind in 0 ..< schema.n_states {
@@ -875,10 +892,12 @@ receiver_destroy :: proc(rx: ^Receiver) {
 	rx^ = {}
 }
 
-// receiver_reset drops everything held (a new world).
+// receiver_reset drops the keyed records held and the snapshots (a new world).
 receiver_reset :: proc(rx: ^Receiver) {
 	blobs_free(rx)
-	replica_clear(&rx.live)
+	for kind in 0 ..< rx.schema.n_states {
+		if rx.schema.kinds[kind].key != .None {replica_clear_kind(&rx.live, kind)}
+	}
 	replica_destroy(&rx.gather.work)
 	rx.gather = {}
 	ring_destroy(&rx.ring)
@@ -956,7 +975,10 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 	for r.ok && r.pos < len(data) {
 		id := int(read_varint(&r))
 		count := int(read_varint(&r))
-		if !r.ok || id >= len(rx.schema.kinds) || count < 1 || count > len(data) - r.pos {return false}
+		if !r.ok ||
+		   id >= len(rx.schema.kinds) ||
+		   count < 1 ||
+		   count > len(data) - r.pos {return false}
 		k := &rx.schema.kinds[id]
 		if k.lane == .Snapshot && !k.is_event {return false}
 		prev_key: Key
@@ -977,7 +999,10 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 				if op != .Create {return false}
 				v := blob_make(rx, k)
 				if !read_fields(&r, k, v, false) || !valid_value(k, v) {return false}
-				append(out, Received{kind = id, op = .Create, key = key, value = v, mask = value_all(k)})
+				append(
+					out,
+					Received{kind = id, op = .Create, key = key, value = v, mask = value_all(k)},
+				)
 				continue
 			}
 			i, found := replica_find(&rx.live, id, key)
@@ -989,12 +1014,25 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 					replica_remove_at(&rx.live, id, i)
 					return false
 				}
-				append(out, Received{kind = id, op = .Create, key = key, value = rec.value, mask = value_all(k)})
+				append(
+					out,
+					Received {
+						kind = id,
+						op = .Create,
+						key = key,
+						value = rec.value,
+						mask = value_all(k),
+					},
+				)
 			case .Change:
 				if !found {return false}
 				rec := &rx.live.tables[id].records[i]
-				if !read_changes(&r, k, mask, rec.value, true) || !valid_value(k, rec.value) {return false}
-				append(out, Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask})
+				if !read_changes(&r, k, mask, rec.value, true) ||
+				   !valid_value(k, rec.value) {return false}
+				append(
+					out,
+					Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask},
+				)
 			case .Remove:
 				if !found {return false}
 				replica_remove_at(&rx.live, id, i)
@@ -1050,7 +1088,10 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 	for r.ok && r.pos < len(data) {
 		id := int(read_varint(&r))
 		count := int(read_varint(&r))
-		if !r.ok || id >= rx.schema.n_states || count < 1 || count > len(data) - r.pos {return false}
+		if !r.ok ||
+		   id >= rx.schema.n_states ||
+		   count < 1 ||
+		   count > len(data) - r.pos {return false}
 		k := &rx.schema.kinds[id]
 		if k.lane != .Snapshot {return false}
 		prev_key: Key
@@ -1070,12 +1111,25 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 					replica_remove_at(&g.work, id, i)
 					return false
 				}
-				append(out, Received{kind = id, op = .Create, key = key, value = rec.value, mask = value_all(k)})
+				append(
+					out,
+					Received {
+						kind = id,
+						op = .Create,
+						key = key,
+						value = rec.value,
+						mask = value_all(k),
+					},
+				)
 			case .Change:
 				if !found {return false}
 				rec := &g.work.tables[id].records[i]
-				if !read_changes(&r, k, mask, rec.value, true) || !valid_value(k, rec.value) {return false}
-				append(out, Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask})
+				if !read_changes(&r, k, mask, rec.value, true) ||
+				   !valid_value(k, rec.value) {return false}
+				append(
+					out,
+					Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask},
+				)
 			case .Remove:
 				if !found {return false}
 				replica_remove_at(&g.work, id, i)
@@ -1104,6 +1158,16 @@ popcnt8 :: proc(x: u8) -> int {
 	return n
 }
 
+// receiver_snapshot_get: the value of a snapshot-lane record as the newest
+// snapshot (part-applied, or the last complete one) holds it, or nil.
+receiver_snapshot_get :: proc(rx: ^Receiver, kind: int, key: Key) -> rawptr {
+	if rx.gather.active {
+		if v := replica_get(&rx.gather.work, kind, key); v != nil {return v}
+	}
+	if e := ring_find(&rx.ring, rx.ack); e != nil {return replica_get(&e.data, kind, key)}
+	return nil
+}
+
 // scan_state sizes every entry of a State or Snapshot message without a
 // replica: masks say which fields are present, so no baseline is needed to
 // skip them. bytes and entries are per schema kind id.
@@ -1121,7 +1185,10 @@ scan_state :: proc(schema: ^Schema, data: []u8, bytes, entries: []int) -> bool {
 		start := r.pos
 		id := int(read_varint(&r))
 		count := int(read_varint(&r))
-		if !r.ok || id >= len(schema.kinds) || count < 1 || count > len(data) - r.pos {return false}
+		if !r.ok ||
+		   id >= len(schema.kinds) ||
+		   count < 1 ||
+		   count > len(data) - r.pos {return false}
 		k := &schema.kinds[id]
 		prev_key: Key
 		have := false

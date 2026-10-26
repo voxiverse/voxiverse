@@ -196,7 +196,7 @@ admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		f := game.parse_time_of_day(args[0]) or_return
 		w.clock = game.set_time_of_day(w.clock, f)
 	}
-	broadcast(s, game.Time{w.clock}, w)
+	clock_resend(s, w)
 	return true
 }
 
@@ -225,7 +225,7 @@ admin_rule :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 		switch err := base.var_set(table, &w.rules, rule_name(args[0]), args[1]); err {
 		case .None, .Out_Of_Range:
-			broadcast(s, game.Rules_Changed{w.rules}, w)
+			clock_resend(s, w) // (day_length and daylight_cycle change what the clock means)
 			disturb_world(s, w)
 			v, _ := base.var_find(table, rule_name(args[0]))
 			notice(s, c, fmt.tprintf("%s = %s", args[0], base.var_format(table, &w.rules, v)))

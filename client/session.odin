@@ -81,7 +81,7 @@ Session :: struct {
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
 	texels:           [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
-	newest_tick:      u32, // of the newest Players or Entities message
+	newest_tick:      u32, // of the newest Snapshot message
 	newest_at:        time.Tick, // when it came
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          game.Welcome,
@@ -115,7 +115,10 @@ Session :: struct {
 	writer:           game.Writer,
 	scratch:          ^game.Block_Array, // decoding target for chunk messages
 	received:         [dynamic]game.Packet,
-	last_acked:       u32, // the newest Player_Update applied
+	last_acked:       u32, // the acked of the newest Own_Player applied
+	schema:           game.Schema, // what the server replicates (state_kinds.odin)
+	rx:               game.Receiver, // what it has told us (State and Snapshot messages)
+	teleports:        u8, // Own_Player.teleports as last seen
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
 	stats:            Session_Stats,
@@ -165,6 +168,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	arena := virtual.arena_allocator(&s.arena)
 	s.scratch = new(game.Block_Array, arena)
 	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
+	s.schema = game.game_schema()
+	game.receiver_init(&s.rx, &s.schema)
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
@@ -216,7 +221,10 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		return false
 	}
 	if config.trace {session_trace(s)}
-	send_message(s, game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name})
+	send_message(
+		s,
+		game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name, s.schema.hash},
+	)
 	return true
 }
 
@@ -248,6 +256,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	delete(s.entities) // the heap: entities come and go
+	game.receiver_destroy(&s.rx)
+	game.schema_destroy(&s.schema)
 	for g in s.grants {delete(g.pattern)}
 	delete(s.grants)
 	for c in s.commands {delete(c)}
@@ -362,6 +372,7 @@ session_update :: proc(
 			query,
 			game.derive_mods(&s.inventory),
 		)
+		sent.snapshot = s.rx.ack
 		send_message(s, sent)
 		send_prediction_check(s, sent.sequence)
 		movement_sounds(s)

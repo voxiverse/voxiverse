@@ -6,7 +6,7 @@ import "core:math"
 //
 // Client (Prediction): every tick, the input is numbered, sent and applied
 // at once to the predicted state, and kept until the server acknowledges
-// it. A Player_Update gives the server's state after input `acked`; the
+// it. An Own_Player record gives the server's state after input `acked`; the
 // client starts from it and re-applies the inputs still in flight. When the
 // two worlds agree that lands exactly where the client already was; when
 // they don't (a block the client didn't know about), the difference becomes
@@ -49,7 +49,10 @@ prediction_tick :: proc(
 	q: Block_Query,
 	mods := MODS_NONE,
 ) -> Input {
-	msg := Input{p.next_sequence, quantize_input(input)}
+	msg := Input {
+		sequence = p.next_sequence,
+		input    = quantize_input(input),
+	}
 	p.next_sequence += 1
 	if p.count == PREDICTION_PENDING { 	// the server is very far behind: forget the oldest
 		p.head = (p.head + 1) % PREDICTION_PENDING
@@ -65,10 +68,11 @@ prediction_tick :: proc(
 // prediction_reconcile applies the server's word on the player.
 prediction_reconcile :: proc(
 	p: ^Prediction,
-	u: Player_Update,
+	u: Own_Player,
 	rules: ^Rules,
 	q: Block_Query,
 	mods := MODS_NONE,
+	teleported := false, // the state did not come from inputs: no smoothing
 ) {
 	for p.count > 0 && sequence_before_or_at(p.pending[p.head].sequence, u.acked) {
 		p.head = (p.head + 1) % PREDICTION_PENDING
@@ -86,7 +90,7 @@ prediction_reconcile :: proc(
 		)
 	}
 	moved := p.state.position - s.position
-	if u.teleported || abs(moved.x) + abs(moved.y) + abs(moved.z) > 4 {
+	if teleported || abs(moved.x) + abs(moved.y) + abs(moved.z) > 4 {
 		p.error = {} // a jump this big is not a correction to smooth
 		p.previous = s
 	} else if moved != {} {
@@ -125,7 +129,7 @@ Input_Queue :: struct {
 	head:    int,
 	count:   int,
 	budget:  int,
-	last:    u32, // the last sequence applied (acknowledged in Player_Update)
+	last:    u32, // the last sequence applied (acknowledged in Own_Player)
 	dropped: int, // inputs refused: queue full, or out of order
 }
 

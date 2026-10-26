@@ -41,7 +41,7 @@ chat_say :: proc(s: ^Server, c: ^Client, text: string) {
 	id := chat_next(s, name)
 	for &other in s.clients {
 		if other.state != .Playing || ignores(s, &other, name) {continue}
-		send_message(s, &other, game.Chat_Line{id, player_id(s, c), line})
+		chat_line_send(s, &other, id, player_id(s, c), line)
 	}
 }
 
@@ -89,13 +89,20 @@ chat_next :: proc(s: ^Server, name: string) -> u32 {
 	return id
 }
 
+// chat_line_send: one line of chat for c (an event).
+@(private)
+chat_line_send :: proc(s: ^Server, c: ^Client, id: u32, sender: u16, text: string) {
+	line := game.Chat_Line{id, sender, text}
+	event_send(s, c, .Chat_Line, &line)
+}
+
 // chat_system: a line from the server to everyone (who joined, left...).
 @(private)
 chat_system :: proc(s: ^Server, text: string) {
 	log.infof("server chat system text=%q", game.format_strip(text))
 	id := chat_next(s, "")
 	for &c in s.clients {
-		if c.state == .Playing {send_message(s, &c, game.Chat_Line{id, game.NO_PLAYER, text})}
+		if c.state == .Playing {chat_line_send(s, &c, id, game.NO_PLAYER, text)}
 	}
 }
 
@@ -111,7 +118,10 @@ chat_take_back :: proc(s: ^Server, name: string, count: int) -> int {
 		if said.id != id || string(said.name[:said.name_len]) != name {continue}
 		said.id = 0
 		for &c in s.clients {
-			if c.state == .Playing {send_message(s, &c, game.Chat_Delete{id})}
+			if c.state == .Playing {
+				deleted := game.Chat_Delete{id}
+				event_send(s, &c, .Chat_Delete, &deleted)
+			}
 		}
 		taken += 1
 	}

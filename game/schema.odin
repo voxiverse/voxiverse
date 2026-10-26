@@ -297,7 +297,13 @@ flatten :: proc(b: ^Builder, ti: ^runtime.Type_Info, offset: int, path: string, 
 		for i in 0 ..< int(v.field_count) {
 			name := v.names[i]
 			if name == "_" {continue}
-			flatten(b, v.types[i], offset + int(v.offsets[i]), join_path(path, name, context.temp_allocator), v.tags[i])
+			flatten(
+				b,
+				v.types[i],
+				offset + int(v.offsets[i]),
+				join_path(path, name, context.temp_allocator),
+				v.tags[i],
+			)
 		}
 		return
 	case runtime.Type_Info_Boolean:
@@ -322,7 +328,8 @@ flatten :: proc(b: ^Builder, ti: ^runtime.Type_Info, offset: int, path: string, 
 	case runtime.Type_Info_Bit_Set:
 		field.type = .Bit_Set
 		if ti.size > 8 {refuse(b, path, "bit_set wider than 64 bits"); return}
-		if en, is_enum := runtime.type_info_base(v.elem).variant.(runtime.Type_Info_Enum); is_enum {
+		if en, is_enum := runtime.type_info_base(v.elem).variant.(runtime.Type_Info_Enum);
+		   is_enum {
 			for x in en.values {field.valid_bits |= 1 << uint(i64(x) - i64(v.lower))}
 		} else {
 			for bit in v.lower ..= v.upper {field.valid_bits |= 1 << uint(bit - v.lower)}
@@ -537,7 +544,7 @@ schema_lua :: proc(s: ^Schema, sb: ^strings.Builder) {
 			strings.to_lower(lane, context.temp_allocator),
 		)
 		for f in k.fields {
-			fmt.sbprintf(sb, "    { name = %q, ", f.path)
+			fmt.sbprintf(sb, "    {{ name = %q, ", f.path)
 			lua_type(sb, f.ti, f.max)
 			fmt.sbprintln(sb, " },")
 		}
@@ -557,15 +564,25 @@ lua_type :: proc(sb: ^strings.Builder, ti: ^runtime.Type_Info, max: int) {
 	case runtime.Type_Info_Float:
 		fmt.sbprintf(sb, `t = "f%d"`, base.size * 8)
 	case runtime.Type_Info_Enum:
-		fmt.sbprint(sb, `t = "enum"`)
+		fmt.sbprintf(sb, `t = "enum", signed = %v`, int_signed(base))
 	case runtime.Type_Info_Bit_Set:
 		fmt.sbprint(sb, `t = "bits"`)
 	case runtime.Type_Info_Array:
-		fmt.sbprintf(sb, `t = "array", count = %d, elem = {{ `, v.count)
+		fmt.sbprintf(
+			sb,
+			`t = "array", scalar = %v, count = %d, elem = {{ `,
+			scalar_type(runtime.type_info_base(v.elem)),
+			v.count,
+		)
 		lua_type(sb, v.elem, 0)
 		fmt.sbprint(sb, " }")
 	case runtime.Type_Info_Enumerated_Array:
-		fmt.sbprintf(sb, `t = "array", count = %d, elem = {{ `, v.count)
+		fmt.sbprintf(
+			sb,
+			`t = "array", scalar = %v, count = %d, elem = {{ `,
+			scalar_type(runtime.type_info_base(v.elem)),
+			v.count,
+		)
 		lua_type(sb, v.elem, 0)
 		fmt.sbprint(sb, " }")
 	case runtime.Type_Info_Struct:
@@ -590,4 +607,25 @@ lua_type :: proc(sb: ^strings.Builder, ti: ^runtime.Type_Info, max: int) {
 	case:
 		fmt.sbprint(sb, `t = "?"`)
 	}
+}
+
+SCHEMA_LUA_BEGIN :: "-- schema begin (generated: ./build.sh schema)\n"
+SCHEMA_LUA_END :: "-- schema end\n"
+
+// schema_lua_splice puts block (schema_lua's output) between the markers of a
+// Lua source; false if the markers are missing.
+schema_lua_splice :: proc(
+	source, block: string,
+	allocator := context.temp_allocator,
+) -> (
+	result: string,
+	ok: bool,
+) {
+	begin := strings.index(source, "-- schema begin")
+	if begin < 0 {return}
+	after_begin := strings.index_byte(source[begin:], '\n')
+	end := strings.index(source, SCHEMA_LUA_END)
+	if after_begin < 0 || end < 0 || end < begin {return}
+	return strings.concatenate({source[:begin], SCHEMA_LUA_BEGIN, block, source[end:]}, allocator),
+		true
 }
