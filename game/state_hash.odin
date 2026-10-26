@@ -61,6 +61,22 @@ hash_value :: proc(h: ^Hasher, v: any, name := "value") {
 	walk(&w, v.data, runtime.type_info_base(type_info_of(v.id)), type_info_of(v.id))
 }
 
+// hash_refusal walks v without hashing and returns the message hash_value
+// would panic with, or "" if v is hashable. It exists so a test can see the
+// refusal without catching a panic (the runner's assert capture does not
+// survive on every OS).
+hash_refusal :: proc(v: any, name := "value") -> string {
+	refused: string
+	w := Walker {
+		h       = &Hasher{},
+		path    = make([dynamic]u8, context.temp_allocator),
+		refused = &refused,
+	}
+	append(&w.path, ..transmute([]u8)name)
+	walk(&w, v.data, runtime.type_info_base(type_info_of(v.id)), type_info_of(v.id))
+	return refused
+}
+
 // dump_value writes one line per leaf of v, named from path.
 dump_value :: proc(b: ^strings.Builder, path: string, v: any) {
 	w := Walker {
@@ -73,9 +89,10 @@ dump_value :: proc(b: ^strings.Builder, path: string, v: any) {
 
 @(private = "file")
 Walker :: struct {
-	h:    ^Hasher,
-	b:    ^strings.Builder,
-	path: [dynamic]u8,
+	h:       ^Hasher,
+	b:       ^strings.Builder,
+	path:    [dynamic]u8,
+	refused: ^string, // set: the first refusal is recorded here, not panicked
 }
 
 @(private = "file")
@@ -101,13 +118,16 @@ length :: proc(w: ^Walker, n: int) {
 
 @(private = "file")
 refuse :: proc(w: ^Walker, what: string) {
-	panic(
-		fmt.tprintf(
-			"state hash: %s is %s: hash it by hand, in sorted order",
-			string(w.path[:]),
-			what,
-		),
+	msg := fmt.tprintf(
+		"state hash: %s is %s: hash it by hand, in sorted order",
+		string(w.path[:]),
+		what,
 	)
+	if w.refused != nil {
+		if w.refused^ == "" {w.refused^ = msg}
+		return
+	}
+	panic(msg)
 }
 
 @(private = "file")

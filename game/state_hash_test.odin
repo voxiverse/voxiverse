@@ -73,19 +73,19 @@ test_hash_ignores_padding :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_hash_map_panics_with_path :: proc(t: ^testing.T) {
+test_hash_map_is_refused_with_path :: proc(t: ^testing.T) {
 	Holder :: struct {
 		inner: struct {
 			table: map[int]int,
 		},
 	}
-	testing.expect_assert_message(
+	// (not testing.expect_assert_message: its capture kills the runner on Windows)
+	testing.expect_value(
 		t,
+		hash_refusal(Holder{}, "root"),
 		"state hash: root.inner.table is a map: hash it by hand, in sorted order",
 	)
-	h := Holder{}
-	hs := hasher_make()
-	hash_value(&hs, h, "root")
+	testing.expect_value(t, hash_refusal(Sample{}), "")
 }
 
 @(test)

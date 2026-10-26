@@ -277,6 +277,9 @@ million tokens re-read per step), not the code it wrote. So:
   waited on once (a blocking `gh run watch`), not polled.
 - **Windows-only code is kept together** (one milestone of it, checked on a Windows
   machine), because each mistake there costs a round trip through CI.
+- **No `testing.expect_assert*` in tests.** Its panic capture killed the Windows test
+  runner silently (CI run 40361408335: the `game` package printed no result, exit 1). A
+  refusal a test must see is returned as a value (`game.hash_refusal`), not caught.
 - **Done means:** the exit check passes, the table row says what was done, a line is
   added to the cost table below, committed and pushed; then the session ends. The next
   milestone is the next session. A finished milestone's section moves to HISTORY.md.
