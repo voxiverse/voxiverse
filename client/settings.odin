@@ -336,12 +336,31 @@ DEBUG_VARS := [?]base.Var {
 	},
 }
 
+// Telemetry switches: not saved. `ask` puts the one-time question about
+// sharing play data back on the title screen (off: it is never asked and,
+// unanswered, nothing is sent).
+Telemetry_Switches :: struct {
+	ask: bool,
+}
+
+@(rodata)
+TELEMETRY_DEFAULTS := Telemetry_Switches{}
+
+@(rodata)
+TELEMETRY_VARS := [?]base.Var {
+	{field = "ask", help = "ask once, on the title screen, whether to share anonymous play data"},
+}
+
 settings_table :: proc() -> base.Var_Table {
 	return {"", Settings, SETTINGS_VARS[:], &SETTINGS_DEFAULTS}
 }
 
 debug_table :: proc() -> base.Var_Table {
 	return {"debug.", Debug_Switches, DEBUG_VARS[:], &DEBUG_DEFAULTS}
+}
+
+telemetry_table :: proc() -> base.Var_Table {
+	return {"telemetry.", Telemetry_Switches, TELEMETRY_VARS[:], &TELEMETRY_DEFAULTS}
 }
 
 // Variables: a table and the struct it describes.
@@ -360,6 +379,7 @@ app_variables :: proc(app: ^App) -> []Variables {
 		Variables{settings_table(), &app.settings},
 		Variables{bindings_table(), &app.settings.keys},
 		Variables{debug_table(), &app.debug},
+		Variables{telemetry_table(), &app.telemetry},
 	)
 	if app.session != nil && app.session.state == .Playing {
 		append(&out, Variables{game.rules_table(), &app.session.rules})

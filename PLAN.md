@@ -677,6 +677,9 @@ a milestone below:
 - **Journal and replay.** Every script effect carries its cause (M40); a bad script's
   changes are undone, and a bug replays deterministically (M38).
 - **Telemetry is the agent's eyes** (M26-M27): it reads aggregate behaviour, not raw chat.
+  The consent question (M27) is off by default (issue #2): `telemetry.ask` (0) turns it back
+  on, all its code is kept, and while it is off nothing is sent (unanswered = no). It stays
+  off until it is redesigned.
 - **Fuzzing from the first VM:** the VM, the packs' parsers and the protocol are fuzzed in
   CI from M42 on, not at the end.
 

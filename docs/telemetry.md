@@ -5,7 +5,7 @@ players are every 10 s, how long a tick took, which overlays a client opens, fra
 `<universe>/telemetry/YYYY-MM-DD.jsonl` (see DEBUGGING.md, "Statistics and events"). Never a
 name, never chat text, never an address: an event names its player by a number in the world.
 
-**Consent.** Nothing leaves the machine unless the player said yes to "Share anonymous play
+**Consent.** (The question is not asked unless `telemetry.ask` is set to 1; until then, nothing is sent.) Nothing leaves the machine unless the player said yes to "Share anonymous play
 data?" (asked once on the title screen, changeable in Options > Profile) or a server operator
 started the server with `--telemetry host:port`. No consent: no connection at all.
 

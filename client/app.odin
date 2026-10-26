@@ -72,6 +72,7 @@ App :: struct {
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	debug:            Debug_Switches,
+	telemetry:        Telemetry_Switches,
 	settings_dirty:   bool, // changed since loaded or saved
 	scripted:         bool, // running --exec commands: settings changes are not saved
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
@@ -129,6 +130,7 @@ app_init :: proc(app: ^App) -> bool {
 	account_load(app)
 	console_history_load(&app.console)
 	app.debug = DEBUG_DEFAULTS
+	app.telemetry = TELEMETRY_DEFAULTS
 	shader_watch_init(&app.shader_watch)
 
 	if !platform.window_open(&app.window, "Voxiverse", 1280, 720) {return false}

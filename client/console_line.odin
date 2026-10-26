@@ -131,7 +131,7 @@ complete_screen :: proc(app: ^App, arg: int, args: []string) -> []string {
 
 @(private)
 complete_vars :: proc(app: ^App, arg: int, args: []string) -> []string {
-	return complete_first(arg, {"rules.", "debug."})
+	return complete_first(arg, {"rules.", "debug.", "telemetry."})
 }
 
 @(private)

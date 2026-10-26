@@ -166,6 +166,11 @@ test_the_consent_question :: proc(t: ^testing.T) {
 		!f.app.settings.share_data && !f.app.settings.share_asked,
 		"sharing starts off, unasked",
 	)
+	// Off by default: not asked.
+	telemetry_update(f.app)
+	testing.expect(t, !overlay_is_open(&f.app.overlays, .Consent), "asked with telemetry.ask off")
+	testing.expect(t, !f.app.settings.share_data, "sharing is off while unasked")
+	f.app.telemetry.ask = true
 	// A script does not get asked.
 	f.app.scripted = true
 	telemetry_update(f.app)
