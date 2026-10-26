@@ -1,12 +1,11 @@
 package audio
 
-import "core:c"
 import "core:log"
 import "core:math"
 import "core:sync"
 import "core:thread"
 import "core:time"
-import vorbis "vendor:stb/vorbis"
+import ma "vendor:miniaudio"
 
 // Streams: sounds too long to keep decoded (music, ambience beds), read from
 // an Ogg Vorbis file in memory by a decoder thread and played by the same
@@ -33,7 +32,6 @@ STREAM_CHUNK :: 2048 // frames decoded at a time
 STREAM_REACH :: SINC_HALF * SINC_MAX_STEP // samples the widest kernel reads each side
 STREAM_HISTORY :: STREAM_REACH + 8 // samples kept behind the voice
 STREAM_STAGE :: MAX_BLOCK * SINC_MAX_STEP + 2 * STREAM_REACH + 8 // one block's window of the ring
-STREAM_MAX_CHANNELS :: 8
 
 Stream :: struct {
 	data:      []byte, // the whole file; owned by the caller, unchanged while registered
@@ -41,7 +39,6 @@ Stream :: struct {
 	crossfade: int, // frames of the loop's equal-power crossfade
 	rate:      u32, // the file's
 	length:    int, // frames in the file
-	channels:  int,
 	inline:    bool, // decoded by the mixer, in `mix`, not by a thread
 	ring:      [STREAM_RING]f32,
 	// Decoder to mixer (atomic):
@@ -65,7 +62,8 @@ Stream :: struct {
 
 @(private)
 Decoder :: struct {
-	f:       ^vorbis.vorbis,
+	d:       ma.decoder, // miniaudio's, which carries its own stb_vorbis: nothing else is linked
+	open:    bool,
 	epoch:   u32,
 	pos:     int, // frames of the file consumed this pass
 	since:   int, // frames produced since the file was last rewound
@@ -73,7 +71,6 @@ Decoder :: struct {
 	tail:    []f32, // the blend, being handed out
 	tail_at: int,
 	broken:  bool, // the file stopped giving samples: treated as ended
-	scratch: [STREAM_CHUNK * STREAM_MAX_CHANNELS]f32,
 }
 
 // add_stream registers an Ogg Vorbis file (the whole file, in memory) as a
@@ -175,32 +172,26 @@ stream_pump :: proc "contextless" (st: ^Stream) -> bool {
 
 @(private)
 dec_open :: proc(st: ^Stream, crossfade: f32) -> bool {
-	err: vorbis.Error
-	f := vorbis.open_memory(raw_data(st.data), c.int(len(st.data)), &err, nil)
-	if f == nil {
-		log.warnf("audio stream: not an Ogg Vorbis file (error %v)", err)
+	// One channel out (the file's averaged) at the file's own rate.
+	cfg := ma.decoder_config_init(.f32, 1, 0)
+	if r := ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d);
+	   r != .SUCCESS {
+		log.warnf("audio stream: not a file miniaudio can decode (result %v)", r)
 		return false
 	}
-	info := vorbis.get_info(f)
-	length := int(vorbis.stream_length_in_samples(f))
-	if info.channels < 1 ||
-	   int(info.channels) > STREAM_MAX_CHANNELS ||
-	   info.sample_rate < 8000 ||
-	   info.sample_rate > 192000 ||
-	   length < 2 {
-		log.warnf(
-			"audio stream: unusable (channels=%d rate=%d length=%d)",
-			info.channels,
-			info.sample_rate,
-			length,
-		)
-		vorbis.close(f)
+	st.dec.open = true
+	d := &st.dec.d
+	length: u64
+	ma.decoder_get_length_in_pcm_frames(d, &length)
+	rate := d.outputSampleRate
+	if rate < 8000 || rate > 192000 || length < 2 || length > 1 << 36 {
+		log.warnf("audio stream: unusable (rate=%d length=%d)", rate, length)
+		dec_close(st)
 		return false
 	}
-	st.dec.f = f
-	st.channels, st.rate, st.length = int(info.channels), info.sample_rate, length
+	st.rate, st.length = rate, int(length)
 	if st.loop {
-		st.crossfade = clamp(int(f64(crossfade) * f64(st.rate)), 0, length / 4)
+		st.crossfade = clamp(int(f64(crossfade) * f64(st.rate)), 0, st.length / 4)
 		if st.crossfade > 0 {
 			st.dec.head = make([]f32, st.crossfade)
 			st.dec.tail = make([]f32, st.crossfade)
@@ -215,35 +206,25 @@ dec_open :: proc(st: ^Stream, crossfade: f32) -> bool {
 @(private)
 dec_close :: proc(st: ^Stream) {
 	d := &st.dec
-	if d.f != nil {vorbis.close(d.f)}
+	if d.open {ma.decoder_uninit(&d.d)}
 	delete(d.head)
 	delete(d.tail)
-	d.f = nil
+	d.open = false
 }
 
 @(private)
 dec_rewind :: proc "contextless" (st: ^Stream) {
 	d := &st.dec
-	vorbis.seek_start(d.f)
+	ma.decoder_seek_to_pcm_frame(&d.d, 0)
 	d.pos, d.since, d.tail_at = 0, 0, len(d.tail)
 }
 
-// dec_read: up to len(out) frames of the file, the channels averaged.
+// dec_read: up to len(out) frames of the file (mono).
 @(private)
 dec_read :: proc "contextless" (st: ^Stream, out: []f32) -> int {
-	d := &st.dec
-	ch := st.channels
-	want := min(len(out), STREAM_CHUNK)
-	got := int(
-		vorbis.get_samples_float_interleaved(d.f, c.int(ch), &d.scratch[0], c.int(want * ch)),
-	)
-	inv := 1 / f32(ch)
-	for i in 0 ..< got {
-		sum: f32
-		for k in 0 ..< ch {sum += d.scratch[i * ch + k]}
-		out[i] = sum * inv
-	}
-	return got
+	got: u64
+	ma.decoder_read_pcm_frames(&st.dec.d, raw_data(out), u64(len(out)), &got)
+	return int(got)
 }
 
 // produce: the stream's next samples (endless for a loop, so fewer than

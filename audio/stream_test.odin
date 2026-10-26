@@ -1,10 +1,9 @@
 package audio
 
-import "core:c"
 import "core:math"
 import "core:testing"
 import "core:time"
-import vorbis "vendor:stb/vorbis"
+import ma "vendor:miniaudio"
 
 // Tests for M32c's streams: what comes out of a stream voice is the file's
 // decode, loops have no seam, a starved decoder is counted and never skipped
@@ -29,22 +28,19 @@ mix_frames :: proc(m: ^Mixer, frames: int, block := 480) -> []f32 {
 	return out
 }
 
-// reference: the file decoded with its own handle, the channels averaged.
+// reference: the file decoded in one go by a decoder of its own (mono).
 @(private = "file")
 reference :: proc() -> []f32 {
-	err: vorbis.Error
-	f := vorbis.open_memory(raw_data(TONE), c.int(len(TONE)), &err, nil)
-	defer vorbis.close(f)
-	ch := int(vorbis.get_info(f).channels)
-	n := int(vorbis.stream_length_in_samples(f))
-	raw := make([]f32, n * ch)
-	defer delete(raw)
-	got := int(vorbis.get_samples_float_interleaved(f, c.int(ch), &raw[0], c.int(n * ch)))
-	out := make([]f32, got)
-	for i in 0 ..< got {
-		for k in 0 ..< ch {out[i] += raw[i * ch + k] / f32(ch)}
-	}
-	return out
+	cfg := ma.decoder_config_init(.f32, 1, 0)
+	d: ma.decoder
+	assert(ma.decoder_init_memory(raw_data(TONE), uint(len(TONE)), &cfg, &d) == .SUCCESS)
+	defer ma.decoder_uninit(&d)
+	n: u64
+	ma.decoder_get_length_in_pcm_frames(&d, &n)
+	out := make([]f32, n)
+	got: u64
+	ma.decoder_read_pcm_frames(&d, raw_data(out), n, &got)
+	return out[:got]
 }
 
 @(private = "file")

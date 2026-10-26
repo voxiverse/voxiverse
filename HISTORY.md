@@ -1109,8 +1109,10 @@ listener's options and the audio benchmark. The engine core is done; what is lef
 is M32b (tools) and the milestones on top.
 
 - **Streams.** `audio/stream.odin`. `add_stream(m, ogg_bytes, loop, crossfade, inline)` registers
-  an Ogg in memory as a sound id (`vendor:stb/vorbis` has libraries for Windows, Linux and
-  macOS in the toolchain, no C of ours). A stream has one voice at a time (a second `play`
+  an Ogg in memory as a sound id, decoded by miniaudio's `ma_decoder` (it carries its own
+  stb_vorbis, so nothing else is linked: `vendor:stb/vorbis` has no library on a
+  source-built Odin, as on Linux CI, and its symbols collide with miniaudio's on macOS;
+  the first push found both). A stream has one voice at a time (a second `play`
   is dropped and counted in `dropped`). The decoder writes mono samples (the channels
   averaged) at the file's rate into a 65 536-sample ring; the voice reads a window of it
   copied to a stage, through the same cubic or sinc as any sound (pitch, cut-off, buses,
