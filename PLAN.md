@@ -405,6 +405,508 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M36 | Sound design: a synth library (modal, granular, formant, layered recipes) and every effect remade through it at 48 kHz, with measurable targets per sound class and an audition tool | Tests on every sound (no clipping or DC, loudness and decay per class, spectral bands, variants really different, deterministic, generated within the startup budget); `build sfx` writes WAVs, spectrograms and a report; listened to by the person |
 | M37 | The sound of the world: parameterized events for everything audible (other players, liquids, UI), ambience by biome, time, altitude and depth, the audio overlay | Every event defined and sounded; ambience golden table; borders crossfade; a world of another address sounds different; a tour rendered within loudness and cost bounds |
 
+## M39: the state model (typed records and events, one codec, two lanes)
+
+**Why.** M43's scripts subscribe to "the events M39 defines", M46 replicates its new voxel
+channels "via M39", M48 replicates pack-defined entity components through it, and M44's
+quests, dialogue and per-character objectives all need to reach the client. Each of
+those would be a hand-written message today. The survey for this section found:
+
+- 35 server messages in `game/protocol.odin` (1690 lines), each with a struct, a kind
+  number, a name in `message_kind_name`, an encoder case, a decoder case with its own
+  validation, a test block in `protocol_test.odin`, a table entry in
+  `tools/wireshark/voxiverse.lua` (field layouts written by hand, for some kinds only)
+  and a case in the client's switch (`client/session_net.odin`). A new replicated value
+  touches all eight.
+- Change tracking is ad hoc and different per feature: `health_told` (a last-sent copy),
+  `worn_sent` (compared only when `inv_changed` is set), `inv_changed` (a dirty flag, then
+  the whole inventory, 80 to 160 bytes, for one moved stack), `known` (a set diffed into
+  `Entity_Spawn`/`Entity_Despawn`), `teleported` (a flag consumed once).
+- The per-tick traffic is sent whole every tick with no delta at all: `Entities` is 37
+  bytes per entity per tick whether it moved or not (a field of 100 grazing sheep is
+  110 KB/s to each player), `Players` 37 bytes per player, `Player_Update` 52 bytes.
+- Nothing measures bandwidth: the `server` bench scenario's `server_sent` counts streamed
+  chunk bytes only, `game.Traffic` counts per message kind but nothing records it, and
+  no baseline exists to be "no worse" than.
+- The rules already travel through a reflective table (`write_vars` over
+  `rules_table()`), and M38's `game/state_hash.odin` walks any value by its type info:
+  the two pieces a schema-derived codec is built from.
+
+**Design.**
+
+*What moves and what stays.* The state model is the server-to-client direction only.
+
+- **Moves** (22 messages): `Player_Update`, `Players`, `Entities`, `Entity_Spawn`,
+  `Entity_Despawn`, `Entity_Hurt`, `Explosion`, `Health`, `Inventory_Update`,
+  `Player_Worn`, `Player_Joined`, `Player_Left`, `Rules_Changed`, `Time`, `Grants`,
+  `Variables`, `Selection`, `Notice`, `Chat_Line`, `Chat_Delete`, `Block_Changed`,
+  `Blocks_Changed`.
+- **Stays a message** (13), by rule:
+  - the handshake and the connection: `Welcome`, `Reject`, `Challenge`, `Characters`,
+    `World_Changed`;
+  - answers to one client's request: `Pong`, `Edit_Result`, `Stats_Page`,
+    `Telemetry_Ack`;
+  - bulk streams with their own encodings: `Chunk_Message`, `Unload_Chunk`, `Column`,
+    `Bulk_Begin` (M46 moves chunk data onto layers).
+
+  The client-to-server messages (inputs and requests) are not state and stay as they
+  are, except two fields below.
+
+*Records, events and lanes.* A **state kind** is a replicated value type with a key; a
+**record** is one value of a state kind under one key. An **event kind** is a one-off
+value with no key and no history. Every state kind is on one of two **lanes**:
+
+- **Reliable lane**: a `State` message (`Server_Kind.State`, 36), reliable and ordered.
+  A changed record is sent as a delta against the value last sent to that client: the
+  ordered stream guarantees the client holds it. Events go here too.
+- **Snapshot lane**: a `Snapshot` message (`Server_Kind.Snapshot`, 37), unreliable,
+  for values that change nearly every tick. A record is sent as a delta against the
+  newest snapshot the client has acknowledged (Quake 3's model). A value that changed
+  keeps being sent until a snapshot holding it is acknowledged, so the newest value
+  always arrives without a reliable channel.
+
+The game's kinds, in `game/state_kinds.odin` (`State_Kind` and `Event_Kind` enums, one
+table `@(rodata) STATE_KINDS := [State_Kind]State_Kind_Info{...}` and `EVENT_KINDS`):
+
+| State kind | Key | Lane | Value (fields) | Replaces |
+|---|---|---|---|---|
+| `Own_Player` | none | snapshot | `acked: u32` (tag `acked`), `state: Player_State`, `teleports: u8`, `yaw, pitch: f32` | `Player_Update` |
+| `Health` | none | reliable | `health, max: f32` | `Health` |
+| `Inventory` | none | reliable | `Inventory_State {acked: u32` (tag `acked`), `inventory: Inventory}` | `Inventory_Update` |
+| `Rules` | none | reliable | `game.Rules` (check: the var table's ranges) | `Rules_Changed` |
+| `Clock` | none | reliable | `time: f64, tick: u32`: the world time at that server tick | `Time` |
+| `Grants` | none | reliable | `text` (max 16384), `commands` (max 16384) | `Grants` |
+| `Variables` | none | reliable | `text` (max 4096) | `Variables` |
+| `Selection` | none | reliable | `corners: [2]Maybe(Block_Pos)` | `Selection` |
+| `Player` | `u16` player | reliable | `Player_Record {name` (max 16, check `name_valid`), `worn: [WORN_SLOTS]Item}` | `Player_Joined`, `Player_Left`, `Player_Worn` |
+| `Player_Motion` | `u16` player | snapshot | `position: [3]f64, yaw, pitch: f32, flying, crouched: bool` | `Players` |
+| `Entity` | `u32` entity | reliable | `Entity_Record {kind: Entity_Kind, stack: Stack}` | `Entity_Spawn`, `Entity_Despawn` |
+| `Entity_Motion` | `u32` entity | snapshot | `position: [3]f64, yaw, pitch: f32, flags: Sheep_Flags` | `Entities` |
+| `Block` | `Block_Pos` | reliable, write-through | `Block_Record {block: Block, heard: bool}` | `Block_Changed` (heard), `Blocks_Changed` (quiet) |
+
+| Event kind | Fields | Replaces |
+|---|---|---|
+| `Notice` | `text` (max 1024) | `Notice` |
+| `Chat_Line` | `id: u32, sender: u16, text` (max 1024) | `Chat_Line` |
+| `Chat_Delete` | `id: u32` | `Chat_Delete` |
+| `Entity_Hurt` | `entity: u32` | `Entity_Hurt` |
+| `Entity_Died` | `entity: u32` (sent before the `Entity` record's removal) | `Entity_Despawn {died = true}` |
+| `Explosion` | `position: [3]f64, radius: f32` | `Explosion` |
+
+Notes on the kinds:
+
+- `teleports` is a counter that wraps, replacing `Player_Update.teleported`: the client
+  snaps (no smoothing, and takes `yaw`/`pitch`) when it changes. The server keeps its
+  `teleported` flag as it is (it is hashed state); the counter is a new `Client` field,
+  not hashed.
+- An entity's existence is reliable (`Entity`: what it is) and its motion is on the
+  snapshot lane (`Entity_Motion`: where it is). The client draws an entity once it holds
+  both. The same split holds for players.
+- `Clock` is an anchor, not the time: the server puts it at join, on travel, when the
+  time is set and when `day_length` or `daylight_cycle` change. The client computes the
+  time at a snapshot's tick with `advance_time(time, (tick - anchor tick) / TICK_RATE,
+  rules)`. The once-a-second `Time` (8 bytes a second to every client) goes away. Client
+  time is the free tier (`docs/determinism.md`), so the client's sum need not equal the
+  server's bit for bit.
+- `Welcome` and `World_Changed` keep their `rules`: the client predicts from the first
+  input on. The server seeds that client's `Rules` copy with the same value
+  (`replica_seed`), so the record travels only when a rule changes.
+- `Block` is **write-through**: the server keeps no per-client copy (it cannot keep
+  every block per client). Every `Block` record is a whole value. `changes_flush` keeps
+  its rule that a chunk with more than 64 changes in a tick goes whole as a `Chunk`.
+
+*The schema* (`game/schema.odin`). `schema_make(states: []State_Kind_Info, events:
+[]Event_Kind_Info, allocator) -> (Schema, Schema_Error)` walks each value type's
+`runtime.Type_Info`, as `state_hash.odin` does, and builds a flat field list per kind.
+
+- **Fields are leaves.** Nested structs are flattened into their fields: `Own_Player`
+  has `acked`, `state.position`, `state.velocity`, `state.on_ground`, ... as separate
+  fields. Arrays of scalars (`[3]f64`) are one field. Fixed and enumerated arrays of
+  structs (`[INVENTORY_SLOTS]Stack`, `[Equip_Slot]Stack`) are one field whose changes are
+  sent element by element. At most 62 fields a kind.
+- **Supported types** (after `distinct` and base types):
+  - `bool`: u8 0 or 1;
+  - unsigned integers (`u8`, `u16`, `u32`, `u64`): a varint;
+  - signed integers (`i32`, `int`, `i64`): a zigzag varint;
+  - `f32`, `f64`: their bits (4 and 8 bytes), finite only (`read_f32`/`read_f64`);
+  - enums: a varint, checked against the enum's declared values;
+  - `bit_set`: the underlying integer, bits outside the set refused;
+  - fixed and enumerated arrays, as above;
+  - `Maybe(T)` and other unions: a tag byte, then the variant;
+  - `string`: a varint length, then UTF-8. A string field must carry a tag
+    `` `net:"max=N"` ``, or `schema_make` refuses it (ground rule 6: every length is
+    capped).
+
+  `codec.odin` gains `write_varint64`, `read_varint64`, `write_svarint64` and
+  `read_svarint64`, with the same one-encoding rule as the 32-bit ones.
+- **Tags** (Odin struct field tags): `net:"max=N"` for strings; `net:"acked"` marks the
+  field holding the sequence of the input or request the value reflects (prediction
+  below).
+- **Refused, as a value** (no panics a test must catch, per the sizing rules): pointers,
+  slices, dynamic arrays, maps, procedures, `any`, untagged strings, more than 62
+  fields. `Schema_Error {kind, path, reason}` names the field
+  (`inventory.slots[].count: int is fine; inventory.note: string has no net:"max"`).
+- **Each kind** in the table has: `name` (lower case, the wire and tool name), `value:
+  typeid`, `key: Key_Type {None, Player, Entity, Block}`, `lane: Lane {Reliable,
+  Snapshot}`, `write_through: bool`, `priority: u8` (snapshot lane: lower goes first),
+  `max_records: int` (`Player` `MAX_PLAYERS`, `Entity` and `Entity_Motion`
+  `MAX_KNOWN_ENTITIES` (moved from `server/entities.odin` to `game`), singletons 1),
+  `version: u8` (bumped when a value keeps its type but changes meaning), and `check:
+  proc(value: rawptr) -> bool` (validation the types cannot say: block ids, rule ranges,
+  names; nil if none).
+- `schema_text(schema, b)` writes the schema, one line per kind and per field, e.g.
+  `state own_player 1 key=none lane=snapshot` and
+  `  field state.position [3]f64`. `schema_hash` is `game.Hasher` over that text.
+  `SCHEMA` (the game's schema) is built once per process. The server builds it in
+  `server_init`, the client in `App` init, tools where they decode, from the constant
+  tables; it is not a global.
+
+*The wire.* A `State` message:
+
+```
+u8 kind (State)  varint tick
+then groups until the message ends:
+  varint id      (state kinds 0..n-1 in enum order, then event kinds n..)
+  varint count   (1..remaining bytes)
+  count entries
+```
+
+A record entry is `varint64 head` (bits 0-1 the op: 0 change, 1 create, 2 remove; bits
+2.. the field mask of a change), then the key, then the fields:
+
+- **create**: every field, absolute;
+- **change**: the masked fields only, as deltas;
+- **remove**: nothing.
+
+An event entry is every field, absolute. Field encodings in a change:
+
+- integers: the zigzag difference from the baseline, in the field's width with
+  wrapping (an `acked` one input on is one byte);
+- floats, bools, enums, bit_sets, strings, unions and arrays of scalars: the new value
+  whole;
+- arrays of structs: a varint count of changed elements, then for each a varint index
+  and the element whole.
+
+Keys, within a group (entries sorted by key):
+
+- player and entity ids: a varint difference from the previous key (the first from 0);
+- `Block_Pos`: `varint (local index + 1)` when in the same chunk as the previous key,
+  else `0` followed by the chunk position (three svarints) and the local index. A
+  chunk's water batch costs 4 bytes a block, as `Blocks_Changed` does.
+
+The decoder (`read_state`) checks:
+
+- every id is known;
+- op 3 is refused;
+- mask bits name fields of the kind;
+- a change or remove names a key the receiver holds; a create names one it does not;
+- records per kind stay within `max_records`;
+- keys are in range (`MAX_PLAYERS`; `Block_Pos` inside the world, as
+  `read_block_pos`);
+- every value passes its type's rules and the kind's `check`;
+- the message ends exactly at the last entry.
+
+Order inside one tick's `State` message: creates and changes first (by kind order, then
+key), then the events in the order they were raised (consecutive events of one kind make
+one group), then removals. So an `Entity_Hurt` for an entity made this tick finds it,
+and `Entity_Died` comes before its `Entity` removal.
+
+A `Snapshot` message:
+
+```
+u8 kind (Snapshot)  varint tick  varint back  u8 part  u8 parts
+groups as above (snapshot-lane kinds only)
+```
+
+- `back` is how many ticks before `tick` the baseline is (0: none, every record a
+  create).
+- A snapshot is split at record boundaries into parts of at most `SNAPSHOT_PART_BYTES
+  :: 1150` (each one unreliable record: a test in `server/` asserts it is at most
+  `netcode.FRAGMENT_SIZE`, 1176), at most `SNAPSHOT_PARTS :: 8` parts (9.2 KB a tick,
+  276 KB/s, well under the connection's 2 MiB/s).
+- Removal is explicit (op 2). A record absent from a snapshot keeps its baseline value.
+
+*Replicas and the ring* (`game/replica.odin`, shared by the server, the client, test
+clients and tools):
+
+- **`Replica`**: per kind, the records a receiver holds. Per kind an array sorted by key
+  (binary search; no map, so no map order reaches the wire) of `{key, value}`, the
+  values in a per-kind byte array of the value type's size. Strings in kept values are
+  owned copies, freed on replace and removal. Per record it also keeps `waiting: u32`
+  (the server's snapshot priority, below). Keys are `Key :: struct {a, b, c: i32}` (an id
+  in `a`, or a `Block_Pos`).
+- **`Snapshot_Ring`**: the last `SNAPSHOT_RING :: 32` snapshots (just over a second at
+  30 Hz), each a tick and the full set of snapshot-lane records as of that tick.
+- **`Receiver`**: a `Replica`, a `Snapshot_Ring`, the newest complete snapshot tick (the
+  ack), and parts being gathered.
+  - `receive_state(rx, data) -> iterator` and `receive_snapshot(rx, data) -> iterator`
+    decode a message and yield `Received {kind, op, key, value: rawptr, mask}` (events
+    yield their value). Values are views valid until the next receive.
+  - A snapshot whose baseline is not in the ring is dropped and counted
+    (`rx.dropped`).
+  - Parts are applied as they arrive, each against the same baseline.
+  - A snapshot becomes a baseline (stored in the ring and acknowledged) only once all its
+    parts have arrived.
+
+*The server side* (`server/replica.odin`; `Client` gains `replica: game.Replica`, `ring:
+game.Snapshot_Ring`, `acked_snapshot: u32`, `pending` events, and `teleports`):
+
+- `state_put(s, c, kind, key, value)` sets the record's value for this tick. Several
+  puts in a tick coalesce: the last wins.
+- `state_remove(s, c, kind, key)` removes it.
+- `event_send(s, c, value)` and `event_broadcast(s, value, world)` queue an event (the
+  value's type names its kind, through the table).
+- **Keyed kinds are views**, rebuilt every tick. `Player`, `Player_Motion`, `Entity` and
+  `Entity_Motion` records not put in a tick are removed at the flush, so the server code
+  says only what the client should see now. Singletons persist until put again.
+- `replica_flush(s, c)`, once per client at the end of the tick (after `stream`, before
+  `host_flush`):
+  - reliable lane: compares each put record with the client's copy field by field
+    (bits, so -0 differs from 0), writes creates, changes with their masks, the events
+    and removals into `State` messages (split at entry boundaries under
+    `MAX_MESSAGE_SIZE`), and updates the copy;
+  - snapshot lane: builds snapshot `tick` from the newest acknowledged baseline still in
+    the ring (or none), takes the records that differ from it by priority until
+    `SNAPSHOT_PARTS` is full, writes them, and stores in the ring what the client will
+    hold if it all arrives: the sent records' new values, the rest their baseline values.
+- **Snapshot priority**, integers only so it is deterministic: records waiting longest
+  first (`waiting`, the ticks a changed record has gone unsent), then kind `priority`
+  (`Own_Player` 0, `Player_Motion` 1, `Entity_Motion` 2), then the squared distance
+  from the player in whole blocks, then the key. What is taken is then written grouped
+  by kind and sorted by key.
+- `Input` gains `snapshot: u32`, the client's newest complete snapshot (a varint, 0:
+  none). The server keeps the highest it has seen.
+- **Travel**: the pending `State` is flushed, then `World_Changed` is sent. Then both
+  sides drop their keyed records (no removals sent; entity ids are per world) and the
+  ring, so the next snapshot has no baseline. `disconnect` flushes the pending `State`
+  before `Reject`, so a last `Notice` arrives.
+- **Joining**: `Hello` gains `schema: u64`. A server whose `schema_hash` differs refuses
+  with `Reject "this server runs a different version of the game (state schema
+  <server's> vs <yours>)"`, checked after the protocol version. `PROTOCOL_VERSION`
+  becomes 24.
+- **Send sites move.** Each `send_message`/`broadcast` of a moved message becomes a put
+  or an event at the same place:
+  - `simulate_player` puts `Own_Player`;
+  - `health_tick` puts `Health` (`health_told` goes);
+  - the end of the tick puts `Inventory` (`inv_changed` goes);
+  - `replicate` (`server/entities.odin`, renamed `entities_put`) puts `Entity` and
+    `Entity_Motion` for every entity in view (`known` goes; the 256 cap stays as
+    `max_records`);
+  - `send_players` becomes `players_put`: `Player` (name, `worn_of` the inventory) and
+    `Player_Motion` for every other player in the world (`worn_sent` goes);
+  - `changes_flush` puts `Block`;
+  - `refresh_grants`, `selection_set`, the worldgen variables, the clock and the rules
+    put theirs;
+  - `notice`, chat, `entity_hurt_shown`, `entity_remove` (died) and `explode` send
+    events.
+
+  The stepped server (M38) flushes in `step` the same way.
+
+*The client side* (`client/state_apply.odin`): the session owns a `game.Receiver`.
+`session_net.odin`'s switch loses the 22 cases and gains `State` and `Snapshot`, which
+iterate the received entries through one table, `APPLY := [State_Kind]Apply_Proc`, plus
+a switch on event kinds. Each apply proc does what the old case did, with the same procs.
+
+*Prediction hooks.* A kind with an `acked` field is predicted. The apply proc is where
+prediction meets the record, and the table names three modes (`Prediction :: enum
+{None, Inputs, Requests}`) so a new predicted kind says which it is:
+
+- **`Inputs`** (`Own_Player`): `prediction_reconcile` from `acked`, as `Player_Update`
+  did. A record older than the newest applied is ignored, judged by snapshot tick,
+  which replaces `sequence_before(acked, last_acked)`. A changed `teleports` snaps.
+- **`Requests`** (`Inventory`): `inventory_reconcile` from `acked`, then
+  `inventory_predict`.
+- **`None`**: everything else.
+
+`Block` is not predicted by the record: a pending edit's prediction stays until its
+`Edit_Result`, as today.
+
+*The tools.*
+
+- `message_kind_name` names `state` and `snapshot`. Moved kinds' numbers are retired
+  (left as gaps in `Server_Kind`, marked so) so kept kinds keep theirs.
+- `tools/netdump -summary` splits `state` and `snapshot` bytes by state and event kind.
+  It uses `game.scan_state`, a walk that sizes every entry without a replica: masks say
+  which fields are present, so no baseline is needed to skip them.
+- The F3 traffic panel shows `state` and `snapshot` as two kinds.
+- `tools/replay`, `dedicated/bench.odin`'s bots and `collector/upload.odin` decode with a
+  `Receiver` where they read moved messages (the bench bots read their `Own_Player`).
+- The test clients migrate the same way: the determinism mirror, `latency_test`'s
+  `Predicting_Client`, `save_test`'s client and `net_test`'s clients.
+
+*The dissector reads the schema.* `tools/wireshark/voxiverse.lua` gets a generated block
+between `-- schema begin` and `-- schema end`: a Lua table of every kind with its id,
+key type, lane and fields (name, type, max), written by `game.schema_lua(schema, b)`.
+
+- `build schema` (`tools/build/main.odin`) rewrites the block in place. The file stays
+  one file to load into Wireshark.
+- `game/protocol_test.odin`'s `test_dissector_schema_current` fails when the block
+  differs from `schema_lua(SCHEMA)`, with "tools/wireshark/voxiverse.lua's schema is
+  stale: run ./build.sh schema". It sits beside `test_dissector_knows_every_kind`.
+- The dissector decodes `State` and `Snapshot` generically from the table: groups,
+  heads, masks, keys and fields. Changes show only the fields present: deltas, labelled
+  `+n` for integers, since the dissector has no baseline.
+- Integers beyond 2^53 show approximately in Lua 5.2 Wireshark builds; none of today's
+  fields reach that.
+- `check.lua`'s fake API grows what the generic decoder calls. The CI step (a server
+  capture through `check.lua` and `tshark`, nothing malformed) is unchanged.
+
+*The bandwidth benchmark* (`server/bandwidth_test.odin`). Exact, not statistical:
+stepped sessions are deterministic, so the bytes are too, on every OS. Two scenarios on
+M38's stepped server and mirror client, counted by the pipe's `game.Traffic` in both
+directions:
+
+- `session`: M38's scripted session for `BANDWIDTH_TICKS :: 6500` ticks (past the
+  water at 2500, the farm at 3000, the flight at 4000 and the rocket at 6000).
+- `crowd`: the same world with natural sheep off. `/summon sheep 25` four times on ticks
+  1-4, then 900 ticks with the player standing still, so 100 sheep wander and graze.
+
+`assets/baselines/net/bandwidth.txt`:
+
+```
+bandwidth 1
+scenario session ticks=6500 root=<M38 root at the last tick>
+server_to_client <bytes>
+client_to_server <bytes>
+kind <name> <messages> <bytes>     (one line per message kind seen, both directions)
+scenario crowd ticks=904 root=<root>
+...
+```
+
+- It is written by the test when built with `-define:VX_BANDWIDTH_ACCEPT=true`, and
+  committed in step 1 with today's protocol, before anything else changes.
+- After that the tests compare, and fail with the numbers:
+  - `server_to_client` at most the baseline's;
+  - `client_to_server` at most the baseline's plus 5 bytes per `Input` (the ack) plus 8
+    (the schema hash);
+  - the root identical: the protocol does not touch simulated state, so M39 must leave
+    M38's hashes exactly as they were.
+- The `kind` lines are for reading, not compared: the commit message of the last step
+  quotes the before and after totals and the moved kinds' bytes against `state` and
+  `snapshot`.
+
+**The order of the steps** (each leaves the suite passing):
+
+1. The bandwidth tests and the baseline file, on today's protocol. Commit.
+2. `write/read_varint64` and `svarint64`; `game/schema.odin` with `schema_text`,
+   `schema_hash` and `schema_lua`; its tests.
+3. `game/replica.odin` (`Replica`, `Snapshot_Ring`, `Receiver`) and the `State` and
+   `Snapshot` encoders and decoders, `scan_state`; their tests, with a test schema of the
+   test's own (step 2's and 3's tests never touch the game's kinds).
+4. `game/state_kinds.odin` with the game's kinds and events; `Server_Kind.State` and
+   `Snapshot`, `Hello.schema`, `Input.snapshot`, `PROTOCOL_VERSION` 24; the round-trip
+   test of every moved message.
+5. The reliable lane end to end: `server/replica.odin`'s puts, events and
+   `replica_flush`; the client's `Receiver` and apply table; every reliable kind and
+   event moved, its old message deleted, the test clients and tools along.
+6. The snapshot lane end to end: `Own_Player`, `Player_Motion`, `Entity_Motion`, the
+   ring, acks, priority and parts; `Players`, `Entities` and `Player_Update` deleted.
+   Then the bandwidth tests must pass against the baseline.
+7. The dissector's generated block, `build schema`, `check.lua`, netdump's split, the
+   F3 names.
+
+If the session must split, the remainder is **M39b: step 7**, with
+`test_dissector_schema_current` and CI's Wireshark step (both new message kinds decoded
+field by field, nothing malformed) as its exit check. M39 itself then still adds `state`
+and `snapshot` to the dissector's kind tables (names only), so
+`test_dissector_knows_every_kind` passes.
+
+**Left out:**
+
+- Client-to-server messages as state: inputs and requests stay messages.
+- Chunks, columns, unloads and bulk edits as records (M46's layers).
+- Quantized or compressed positions, interpolation and a jitter buffer (M48). Values
+  travel exactly: the mirror's chunks and prediction must equal the server's.
+- Budgets and priorities on the reliable lane, per-client bandwidth limits and rate
+  limits (M50). Only the snapshot lane has a budget.
+- Interest beyond today's: entities within `ENTITY_VIEW`, all players of a world.
+- Event subscriptions for scripts (M43; the event kinds are its vocabulary).
+- Saves through the schema (M49).
+- Compatible schema differences (a client with an older schema joining): a mismatch
+  refuses.
+- A per-state-kind breakdown in the F3 panel (netdump has it).
+
+**Tests:**
+
+- `game/codec` (in `protocol_test.odin`): 64-bit varints round-trip at the edges
+  (0, 2^63, 2^64 - 1, the most negative `i64`); overlong and over-wide encodings fail.
+- `game/schema_test.odin`:
+  - a test struct with every supported type (bool, `u8`, `u16`, `u32`, `u64`, `i32`,
+    `int`, `f32`, `f64`, an enum with gaps, a `bit_set`, `[3]f64`, `[4]Stack`,
+    `[Equip_Slot]Stack`, a nested struct, a tagged string, `Maybe(Block_Pos)`) gets the
+    leaf list expected, by path;
+  - each refused type returns its `Schema_Error` with the path;
+  - the hash changes with a field's name, type or order, a kind's version, lane or key,
+    and the order of kinds;
+  - `schema_text` of the test schema equals a golden text.
+- `game/delta_test.odin`:
+  - **`test_new_field_needs_no_code`** (the exit check): a test schema with a kind
+    `Gauge` (`a: i32, b: f32`) and a second schema where `Gauge` has two more fields
+    (`c: [3]f64, mode: Gauge_Mode`). Each round-trips create, change and remove through
+    `replica_flush`'s encoder and a `Receiver`, with no code written for `Gauge`. A change
+    of `mode` alone costs head, key and one byte. The two schemas' hashes differ.
+  - Every field type round-trips as create, as change and inside events; the decoded
+    replica equals the sender's copy after 1 000 random changes.
+  - Costs: `acked` one on is 1 byte; one moved inventory stack is under 8 bytes; 64
+    blocks in one chunk cost at most 4 bytes each plus the group header.
+  - Reliable lane: puts coalesce within a tick; an unchanged put sends nothing; keyed
+    kinds not put are removed; the order of creates, events and removals.
+  - Snapshot lane, over a simulated link (dropped parts chosen by a seeded `base.Rng`):
+    - with 20% of parts lost over 300 ticks, the receiver's records equal the server's
+      within 2 ticks of the last loss;
+    - a snapshot with one part lost is applied in part, not acknowledged, and the next
+      deltas still decode against the older baseline;
+    - an acknowledgement older than the ring gives a snapshot with no baseline;
+    - a baseline the receiver lacks is dropped and counted.
+  - Priority: with a budget of one part and 200 changing records, nearer ones go first,
+    and every record is sent within 10 ticks (the starved go first).
+  - Malformed input fails, every case its own message: every prefix of a `State` and a
+    `Snapshot` message; an unknown id; op 3; a mask bit past the kind's fields; a change
+    to an unheld key; a create of a held one; a record past `max_records`; a `Block_Pos`
+    outside the world; a NaN; an enum gap; an out-of-set bit; an over-long string; a
+    failing `check`; trailing bytes. `test_decode_fuzz` covers both messages.
+- `game/protocol_test.odin`:
+  - **`test_every_moved_message_round_trips`**: for each of the 22 moved messages, the
+    values its test block uses today, put through the new mechanism (records or events),
+    decode to the same values;
+  - the kept messages' tests stay; `Hello.schema` and `Input.snapshot` round-trip;
+  - `test_dissector_knows_every_kind` and `test_dissector_schema_current`.
+- `server/bandwidth_test.odin`: `test_bandwidth_session` and `test_bandwidth_crowd`
+  against the baseline, as above; `test_snapshot_part_fits` (`SNAPSHOT_PART_BYTES <=
+  netcode.FRAGMENT_SIZE`).
+- `server/net_test.odin`, extended: in `test_players_through_ten_percent_loss`, after the
+  loss stops, within 30 ticks each client's `Player_Motion` of the other and its
+  `Entity_Motion` of a summoned sheep equal the server's values exactly. A client with
+  another schema hash is refused with the message above.
+- Unchanged and passing: `server/determinism_test.odin` (its mirror on the `Receiver`),
+  `server/latency_test.odin` (prediction and the desync tests through `Own_Player`),
+  `netcode/host_test.odin`, and the rest of the suite.
+
+**Exit check:**
+
+- `test_new_field_needs_no_code` passes: a new replicated field needs no protocol code.
+- `test_every_moved_message_round_trips` passes, with the kept messages' round trips.
+- Both bandwidth tests pass: server-to-client bytes no more than the committed baseline
+  for `session` and `crowd`, and M38's root unchanged.
+- The UDP tests pass: `netcode/host_test.odin` and `server/net_test.odin`, with the
+  extended loss test.
+- `build determinism`, `build check` and the whole suite pass.
+- The CI run of the commit is green, including the Wireshark step (in M39b if split).
+
+**Check by hand:**
+
+- Host a LAN game and join it from a second client (on one machine: `./build.sh run`
+  twice, the second through Multiplayer). Expect:
+  - the other player and a dozen summoned sheep move as smoothly as before;
+  - moving stacks in the inventory and wearing armour shows on the other client;
+  - chat and its deletion, `/time set noon` (the sky changes at once on both), an
+    explosion (flash and debris) and water flowing all behave as before;
+  - F3's traffic panel shows `snapshot` near zero per second while everything stands
+    still.
+- Open a capture (`voxiverse-server --capture build/server.pcap`, a session joined) in
+  Wireshark with `tools/wireshark/voxiverse.lua`. Expect `State` and `Snapshot` packets
+  listing their kinds, keys and fields by name, and no malformed packets.
+
 ## The audio milestones (M32-M37, with M32b): an engine that stands next to FMOD and Wwise
 
 Today's `audio/` is 403 lines: one mono one-shot per voice, 32 voices, linear resampling,
@@ -699,6 +1201,7 @@ a milestone below:
 | Hosting, payments | Out of the engine's scope (the credit ledger, billing, age gates and legal review belong to the service). The engine provides pack signing, metering and the ledger hooks |
 | Numbers (M38) | Three tiers, written in `docs/determinism.md`: **state** (server simulation, prediction, worldgen, light, rules, RNG) is bit-identical on every OS and optimization level; **replayable** (the audio mixer and its capture, client visuals) is bit-identical on one OS and optimization level, which is why the audio baselines keep a checksum per OS; **free** (rendering, UI, timing). State uses `base.sin`, `base.cos`, `base.exp` (ours), never `core:math`'s sin, cos, tan, pow, exp or fmuladd (LLVM intrinsics: each OS's libm, folded differently by `-o:speed`), and `base.Rng` (ours, xoshiro256**), never `core:math/rand` (ChaCha8, 1 KiB of state, its stream the toolchain's to change) |
 | What determinism means (M38) | The simulation is a function of what reaches it at each tick boundary. A live server is not lockstep: inputs and chunk jobs arrive when they arrive. A stepped server (no thread, inline chunk jobs, inputs given per tick) is the reproducible form, used by tests and the cross-OS job now, and by replay and the journal later (M40). No map iteration order and no thread completion order reaches state or the wire |
+| State model (M39) | Server-to-client state is **records** of typed **state kinds** (a value type, a key, a lane) and one-off **events**, encoded by one codec derived by reflection from the value types (field tags give string limits and the `acked` field), with a schema hash checked on joining. Two lanes: reliable records are deltas against the last value sent; snapshot records (motion) are deltas against the client's last acknowledged snapshot (a ring of 32). Values travel exactly (quantization waits for M48). The handshake, answers to one client's requests and the bulk chunk streams stay messages; client-to-server messages are not state |
 
 ### The milestones (steps and exit checks; full sections are written before each session)
 
