@@ -37,6 +37,7 @@ The rules below exist to make those mistakes structurally hard to repeat.
 | Movement | Minecraft-like baseline (1.8-block player, walk 4.3 b/s, jump 1.25 blocks), every number a console variable. |
 | Shaders | GLSL compiled to SPIR-V by a pinned `glslangValidator`, provisioned by the build driver (see Tooling). |
 | License | MIT. |
+| Line endings | LF everywhere, pinned by `.gitattributes` (`* text=auto eol=lf`). Tests and generators read tracked files and match them byte for byte (the dissector's schema block); a Windows checkout with CRLF broke that in CI. |
 
 ## Ground rules
 
