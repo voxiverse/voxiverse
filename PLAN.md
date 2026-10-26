@@ -140,6 +140,8 @@ per frame) → build the UI → each pass records its draws from the session and
 - Input is a generic event stream (keys, text, pointer, and navigation: up, down, left, right,
   confirm, back, previous and next tab, from a pad or the keyboard: M53), not game actions.
 - Output is vertices + texture ids; the renderer draws them.
+- One look (the `Theme`), no player-chosen themes; a call site overrides it for the widgets it
+  draws with a scoped `theme_scope` (colours, metrics, an `opacity` for everything inside: M51).
 
 ### Input
 Platform events (keyboard, mouse, gamepads: M52) → action map (rebindable, per context: in the
@@ -395,7 +397,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M32f | The checksums of macOS and Windows in the audio baselines | `build audio` on the three OSes passes with a checksum each | | (done: `checksum Darwin.Minimal` and `Windows.Minimal` lines added to the four baselines from the Test logs of two CI runs, identical across both runs on each OS; `build audio` passes on Linux; burst and cave_walk are the same on all three OSes, title_to_world and stress differ per OS; the next CI run is the exit check) |
 | M38 | Determinism: one numbers policy for shared code, a per-tick state hash, a desync detector, a cross-OS hash job | The same 10 000-tick scripted session hashes identically on three OSes and both optimization levels; an introduced nondeterminism is caught by name (done: `docs/determinism.md`; `base.sin/cos/exp` and `base.Rng`, the numbers lint in `build check`, map order fixed, the stepped server, the reflective state hash with dumps, `Prediction_Check` and the desync detector (protocol 23). Checked on Linux: `build determinism` gives identical logs of the 10 000-tick session at `-o:minimal` and `-o:speed`, `test_divergence_named` names `entities[0].yaw` and `players[0].player.velocity.x` at tick 500, both desync tests pass, `check` and `test` pass; the three-OS comparison is the `determinism` CI job, run on this commit) |
 | M39 | The state model: typed deltas and events through one mechanism; the protocol's per-feature messages migrate onto it | A new replicated field needs no protocol code; every old message round-trips; bandwidth no worse; UDP tests pass | (done: `game/schema.odin` + `delta.odin` + `replica.odin` (the schema derived from the value types by reflection, one codec, `Sender`/`Receiver`, reliable deltas and snapshot deltas against the newest acknowledged of a ring of 32), `game/state_kinds.odin` (13 state kinds, 6 events), `server/replica.odin` (puts, events, `replica_flush`), `client/state_apply.odin` (one apply table), 22 messages deleted, protocol 24 with `Hello.schema` and `Input.snapshot`, the dissector decoding State and Snapshot from a generated schema block (`./build.sh schema`), `netdump -summary` split by kind; `test_new_field_needs_no_code`, `test_every_moved_message_round_trips`, snapshot loss/priority/malformed tests in `game/delta_test.odin`, `server/bandwidth_test.odin` (session 2.39 -> 1.41 MB and crowd 3.50 -> 2.12 MB server to client, M38's root unchanged), the loss test extended; no split; not done by me: the real tshark run (CI) and the by-hand checks) |
-| M51 | Playtest fixes: the Audio tab, tooltips, Q/E between tabs, an honest Off, keep-awake for the whole run, a loading screen that waits only for the ground, health off by default, the new icon, the lake script folded into the build | The section's tests; the UI test walks every tab with Q/E and finds a tooltip on every option; the icon's sizes are sharp |
+| M51 | Playtest fixes: theme overrides at the call site (a see-through hotbar), the Audio tab, tooltips, Q/E between tabs, an honest Off, keep-awake for the whole run, a loading screen that waits only for the ground, health off by default, the new icon, the lake script folded into the build | The section's tests; the UI test walks every tab with Q/E and finds a tooltip on every option; the icon's sizes are sharp |
 | M52 | Input actions and gamepads: one actions layer (bindings, analog, dead zones) over keyboard, mouse and gamepads; backends for XInput (Windows), evdev (Linux, the Steam Deck) and GameController (macOS); hot-plug | Every action bound for keyboard and gamepad; a synthetic gamepad plays the flight scenario; backends cross-compile on all three OSes; hot-plug tested on Linux |
 | M53 | Menus with a controller: focus navigation on every screen, button prompts that follow the last device used, text entry with a pad | The UI test drives every screen with gamepad events only; prompts switch between keyboard and pad glyphs |
 | M33 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
@@ -460,6 +462,19 @@ From the owner's first playtest (2026-10-26). All small, all decided; one sessio
   64, 128, 256), never scaled down from a big one; anti-aliased, no palette quantization (the
   crunchy-pixel rule is for the world, not the brand). `build icon` writes the ICO and PNGs;
   the window icon and the packages use it. Checked by eye once (a screenshot of each size).
+- **Theme overrides at the call site.** One look, no theme setting for players; but a
+  call site changes the look of the widgets it draws in one line, and the change ends with
+  its scope: `ui.theme_scope(ctx, t)` (pushes a modified copy of the current `Theme`, popped
+  by `@(deferred_out)`), so `t := ctx.theme; t.opacity = 0.6; ui.theme_scope(ctx, t)`
+  before the hotbar makes it see-through and nothing else. `Theme` gains `opacity` (0..1),
+  multiplied into every vertex's alpha at emit time, images and icons included (their
+  tint), so it composes with the colours' own alpha and with nested scopes. Fixed colour
+  literals in `client/` screens (76 today) move into the theme or into named theme fields,
+  so overrides reach them; colours that mean something (a team colour, a block's tint)
+  stay data, not theme. Tests: a nested scope restores the outer theme exactly; opacity
+  0.5 halves the alpha of a panel's, a text's and an image's vertices; the HUD's hotbar
+  draws with its own opacity (the default stays opaque, as today, until tuned by eye:
+  a check by hand).
 - **The lake script.** `tools/lake-sync.sh` (rsync of a telemetry collector's lake for the
   analytics tool; the name collides with Lean's `lake`) becomes `build analytics --pull
   <host:path> [dir]` and the script goes.
