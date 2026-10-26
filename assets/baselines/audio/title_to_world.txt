@@ -11,3 +11,5 @@ bands Music -105.46 -104.43 -103.31 -102.18 -100.98 -99.57 -97.92 -95.71 -91.92 
 bus Master integrated -29.6 true_peak -7.3 range 13.7
 bands Master -58.49 -58.23 -53.73 -49.94 -47.55 -49.61 -50.78 -48.73 -49.53 -42.84 -49.65 -43.66 -49.19 -51.58 -54.91 -56.60 -58.82 -61.03 -62.88 -61.80 -62.73 -62.07 -75.24 -82.32
 checksum Linux.Minimal e4fa14e1bde316c2
+checksum Darwin.Minimal 95e86af043764c80
+checksum Windows.Minimal 14808713ac959acb

@@ -9,3 +9,5 @@ bands Ambience -84.49 -76.37 -75.67 -69.82 -69.21 -67.31 -72.60 -67.63 -67.97 -7
 bus Master integrated -36.0 true_peak -15.3 range 15.5
 bands Master -63.78 -60.18 -60.57 -59.37 -58.91 -58.57 -57.76 -57.01 -57.21 -58.23 -54.96 -55.54 -58.48 -59.94 -61.06 -56.29 -55.96 -59.90 -56.52 -58.08 -57.56 -56.99 -72.25 -126.06
 checksum Linux.Minimal 15ae6b42d5e7f62b
+checksum Darwin.Minimal 15ae6b42d5e7f62b
+checksum Windows.Minimal 15ae6b42d5e7f62b

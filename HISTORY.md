@@ -1364,3 +1364,15 @@ What M32b left, less the inspector and the crash and checksum parts (M32e).
   <value>` for each scenario, so CI's macOS and Windows test logs carry them. Committing
   them needs a CI run of this commit: the milestone M32f.
 
+### M32f: the checksums of macOS and Windows
+
+M32e makes `test_audio_baselines` log every scenario's checksum (`audio baseline <scenario>
+checksum <key> <value>`). After this commit's CI run (the Test step's log, macOS and Windows
+jobs): add each line as `checksum <key> <value>` to `assets/baselines/audio/<scenario>.txt`
+(keys `Darwin.Minimal` and `Windows.Minimal`; the text format is the existing one), run
+`build audio` to see it pass on Linux, and commit. If the macOS or Windows run's samples
+differ from run to run on one OS, that is a finding: record it in the section instead and
+leave that OS compared by numbers only. Exit check: the next CI run passes with the
+checksums in.
+
+- **Result:** the checksums were stable over two CI runs on each OS and are in the four baselines. burst and cave_walk match on all three OSes; title_to_world and stress differ per OS (different libm/float paths), so each OS keeps its own checksum.
