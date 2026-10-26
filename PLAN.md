@@ -388,7 +388,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M41 | Registries and data packs: namespaced ids, name palettes in saves, the base game as a data pack, overrides, hot reload, pack hashes on joining, packs with assets | The game loads from data with identical worldgen hashes; a test pack adds a block, item and recipe with no code; broken packs fail with exact messages |
 | M42 | The script VM: our own Lua-like language, compiler, register VM, incremental GC, metering, serializable state, fuzzers | A conformance suite; infinite loops, allocation bombs and deep recursion end at budget; snapshot and restore continue identically; fuzzers clean for a budget |
 | M43 | The sandbox: capabilities per pack and world, quotas, events at fixed tick points, isolation from other worlds and the host, all effects through the journal | A hostile script suite refused and logged; 100 allowed scripts inside the tick budget; the ledger audit balances |
-| M44 | The declarative gameplay layer: triggers, quests, spawners, dialogue and loot as data | A quest chain, spawner, loot table and dialogue in data play through between two players over UDP; malformed packs refused usefully |
+| M44 | The declarative gameplay layer: triggers, quests, spawners, dialogue and loot as data; death messages and the death screen as data; game modes as rule presets | A quest chain, spawner, loot table and dialogue in data play through between two players over UDP; a test pack adds a death cause with messages and a game mode with no code; malformed packs refused usefully |
 | M45 | Packs, signing, validation and the agent surface: Ed25519 trust, static validator, a headless dry run with bots, JSON schemas and docs for agents, moderation hooks, staged rollout and revert | An example pack passes end to end; forged or altered packs refused; an infinite quest loop or item faucet caught by the dry run; a revert restores the world hash |
 | M46 | Voxel layers and the simulation framework: extra channels per cell and an active-cell simulation that liquids, random ticks, fire and growth run on | M11's tests unchanged on it; a pack defines a new spreading substance with no engine code; 10 000 active cells in the tick budget |
 | M47 | Block states and shapes: typed states, shapes for collision, selection and render, block entities, placement rules, pack-defined | Stairs, slabs, doors, ladders collide, mesh, light and raycast right with client and server agreeing; old saves load |
@@ -691,7 +691,7 @@ a milestone below:
 | Live adaptation | Left open until play-testing shows what agents can do. Kept possible, not built: script state is serializable (snapshot and restore) and packs are versioned and hot-swappable at a tick boundary, so a revision can arrive between visits or, later, during one |
 | Scale | Minecraft's architecture: one server process per universe, worlds on their own threads; scaling beyond is the owner's problem later. No distributed universe now (the handoff protocol is not designed here) |
 | Authoring surface | Mostly declarative data interpreted by the engine (quests, objectives, spawners, triggers, dialogue, loot: M44); scripts only for logic data cannot say. The engine API is small, typed, versioned, with machine-readable schemas and errors written for a model to act on |
-| Content vs foundation | No gameplay decisions (survival, crafting, combat, economy numbers) are made in M38-M50. Anything that needs one waits for the content waves |
+| Content vs foundation | No gameplay decisions (survival, crafting, combat, economy numbers) are made in M38-M50. Anything that needs one waits for the content waves. No new gameplay mechanics, and no polish of existing ones (health and death, M28, stay as they are), before the foundation arc is done: gameplay is rewritten on the script VM and the declarative layer, so polishing it now is done twice |
 | Hosting, payments | Out of the engine's scope (the credit ledger, billing, age gates and legal review belong to the service). The engine provides pack signing, metering and the ledger hooks |
 
 ### The milestones (steps and exit checks; full sections are written before each session)
@@ -767,9 +767,23 @@ code. (1) Triggers (region, item, block, time, kill, command), conditions and ac
 data. (2) Objectives and quests with state saved per character. (3) Spawners and encounters
 (on M42-era entity data; the AI framework comes later). (4) Dialogue and prompts (with the
 UI tree M47 will render). (5) Loot tables with budgets. (6) Per-world rules as variables
-(already `rules.*`) reachable from packs. *Exit:* a quest chain, a spawner, a loot table
+(already `rules.*`) reachable from packs. (7) Death messages by cause, as data: the base
+data pack has a table of messages per cause (fall, drowning, lava, explosion, a mob, a
+player, the void, starving, a script), several per cause, picked without repeating. Some are
+funny and name the cause playfully ("{player} forgot the floor was optional", "{player}
+tried to hug a creeper's cousin", "{player} discovered lava is not a hot tub", "{player}
+lost an argument with gravity"). New causes come from packs. (8) The death screen as data:
+the cause's message, the time and place, Respawn and Title buttons, built from this
+milestone's UI and dialogue data, not hand-written screen code. (9) Game modes, using M41's
+packs: a mode is a named preset of world rules (`rules.*`: damage, hunger, flying, instant
+break, keep inventory, ...) shipped in a data pack. Today's creative and survival switches
+become the base pack's two modes, `creative` and `survival`; a pack can add more (e.g.
+`adventure`). A world records its mode, `/gamemode <name>` switches it where the rules
+allow, and the server announces it. *Exit:* a quest chain, a spawner, a loot table
 and a dialogue written only in data play through in a UDP test between two players; a
-malformed pack is refused with a useful message.
+malformed pack is refused with a useful message; a test pack adds a death cause with its own
+messages and a game mode, no code; dying from each base cause shows a message for that
+cause; switching modes changes exactly the rules its preset lists.
 
 **M45: packs, signing, validation and the agent surface.** (1) Pack signing (Ed25519) and
 a server's trust list. (2) The static validator (capabilities used equal declared, schema
