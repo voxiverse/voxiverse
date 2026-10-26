@@ -40,20 +40,6 @@ jobs:
 
       - name: Check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
-      - name: Bisect audio tests (Windows, temporary)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        timeout-minutes: 15
-        shell: pwsh
-        run: |
-          $names = 'test_denormals_flushed','test_stream_rejects_garbage','test_stream_equals_decode','test_stream_loop_seamless','test_stream_is_a_voice','test_stream_one_voice','test_stream_starved_decoder','test_capture_replays_bit_identical','test_capture_refuses_what_does_not_match','test_capture_overflow_is_counted','test_command_lands_on_its_frame','test_many_held_commands'
-          foreach ($n in $names) {
-            $out = "build\bisect_$n.txt"
-            $p = Start-Process -FilePath odin -ArgumentList 'test','audio','-define:ODIN_TEST_THREADS=1',"-define:ODIN_TEST_NAMES=audio.$n" -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError "$out.err"
-            if (-not $p.WaitForExit(90000)) { $p.Kill($true); "TEST $n HUNG" } else { "TEST $n exit=$($p.ExitCode)" }
-            Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 3
-            Get-Content "$out.err" -ErrorAction SilentlyContinue | Select-Object -Last 3
-          }
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
       # The same suite again with another random seed (M29): a test that

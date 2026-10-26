@@ -1,5 +1,6 @@
 package audio
 
+import "base:intrinsics"
 import "core:math"
 import "core:sync"
 
@@ -280,9 +281,10 @@ Fade_Cmd :: struct {
 }
 
 mixer_init :: proc(m: ^Mixer, rate: u32) {
-	m^ = {
-		rate = rate,
-	}
+	// Zeroed in place: the mixer is most of a megabyte, and `m^ = {...}` may
+	// build it on the stack first (a Windows thread has 1 MB).
+	intrinsics.mem_zero(m, size_of(Mixer))
+	m.rate = rate
 	for &b in m.buses {bus_defaults(&b, f32(rate))}
 	limiter_init(&m.limiter, f64(rate), 0.002, -1, 0.15)
 	sinc_table_init(&m.sinc)

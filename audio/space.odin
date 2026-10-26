@@ -1,5 +1,6 @@
 package audio
 
+import "base:intrinsics"
 import "core:math"
 
 // The compressor (Night mode, and anything that wants its dynamics tamed) and
@@ -110,9 +111,8 @@ Reverb :: struct {
 }
 
 reverb_init :: proc "contextless" (r: ^Reverb, rate: f64) {
-	r^ = {
-		rate = rate,
-	}
+	intrinsics.mem_zero(r, size_of(Reverb)) // (in place: it is 300 KB)
+	r.rate = rate
 	for i in 0 ..< REVERB_LINES {r.len[i] = clamp(int(REVERB_MS[i] * 0.001 * rate), 16, REVERB_MAX - 1)}
 	for i in 0 ..< REVERB_EARLY {r.early_at[i] = clamp(int(EARLY_MS[i] * 0.001 * rate), 1, REVERB_MAX - 1)}
 	reverb_set(r, 1.5, 0.3, 0.25, 0.5)

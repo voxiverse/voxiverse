@@ -1194,4 +1194,9 @@ is M32b (tools) and the milestones on top.
   on the audio thread's side. The golden checksum of the test scene is held only on Linux
   x86-64 (the maths library is part of it); elsewhere the test compares live with replay.
   The latency in the overlay is M32b's (the numbers are in `Stats` and `output_latency`).
+- **Found by CI.** The mixer (843 KB with the phase table) was built by `m^ = {rate = rate}`,
+  which made a temporary on the stack: a Windows thread has 1 MB, so every audio test died
+  without a word there (Linux threads have 8 MB). `mixer_init` and `reverb_init` now zero in
+  place. Checked locally with `ulimit -s 1024`: the previous commit's tests die, these pass.
+  Keep structs of this size off the stack.
 
