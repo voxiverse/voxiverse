@@ -294,6 +294,21 @@ million tokens re-read per step), not the code it wrote. So:
   built only when one of those needs it, never for completeness.
 - **No more infrastructure** (CI, benchmarks, tooling) unless something breaks or measurably
   slows the work.
+- **Unattended sessions (decided 2026-10-26).** Milestones also run back to back with nobody
+  watching, a fresh session each. Then:
+  - **The order:** the foundation arc (M38-M50) runs before the rest of the audio milestones
+    (M33-M37), whose exit checks need someone listening; their rows sit after M50.
+  - **Checks by hand do not block:** a milestone is done when its tests pass and CI is green
+    on the three OSes. What only a person can check (listening, looking, a real Windows or
+    macOS machine) is listed under "Check by hand" in the report and collected in one standing
+    issue; what the person reports back becomes work of its own.
+  - **Finish rather than split:** a session works on to the exit check (up to four hours).
+    It splits a milestone at most once, and the remainder gets an exit check of its own,
+    not "the rest". A milestone that is already a remainder (a letter after its number) is
+    finished, not split again.
+  - **Who pushes:** the session commits; the loop pushes, waits for CI on that commit and
+    hands any failure to a fix session. A failure that passes on a re-run is a bug, written down.
+  - **Models:** as above (Opus writes a missing section, Sonnet builds).
 
 **What each milestone cost** (from the session's log: the assistant's steps, the tokens it
 re-read, CI round trips), so the next week is planned from numbers:
@@ -366,11 +381,6 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M32d | Audio tools, the rest: the rolling capture with a mixer snapshot, spectrograms, the null and file devices, the real-time smoke run in CI | A capture begun mid-session replays to bit-identical audio; the 30 s smoke run holds zero underruns, NaN and dropped commands | (done: `audio/capture.odin` (`capture_start_ring`: a ring of 2^16 records and six `Mixer_State`s taken every 15 s at a mix call's start, `capture_ring_save` writes the window from the oldest state the records still cover and goes on, file version 3 carrying the state with its hash, drop records so the dump names a ring-full drop, replay restoring the state), `audio/device.odin` (`device_open_null`: a thread pulling 10 ms blocks by the wall clock; `device_open_file` + `device_render`: mixes as many frames as told, as fast as it can, a WAV at close), `audio/spectrogram.odin` and `audiodump -spectrogram:`, `audio/wav.odin`, `client/audio_debug.odin` (the ring runs in the game; F9, the `audio_capture` command and an underrun write `captures/audio-<n>.vxac`), `--check audio` / `--null-audio` (`client/audio_check.odin`: 30 s of a busy session into the null device, CI step on Linux); tests in `audio/capture_test.odin`, `audio/device_test.odin`, `audio/analyze_test.odin`; not done: moved to M32e)
 | M32e | Audio tools, what is left: the freeze-and-solo inspector (F8: a frozen newest window replayed through a mixer of its own, looped in place of the output, solo and mute by rewriting commands), the ring saved to `audio-last.vxac` for the crash report and `report`, checksum logging | The inspector seen in a screenshot; a deliberate crash leaves `audio-last.vxac` that `build audiodump` reads | (done: see HISTORY.md; the checksums of macOS and Windows are M32f; not uploaded with a report, text only)
 | M32f | The checksums of macOS and Windows in the audio baselines | `build audio` on the three OSes passes with a checksum each | |
-| M33 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
-| M34 | Music director: title music, loading, a Minecraft-like wait-play-wait in worlds picked by place and time, pause, stingers, Music and Ambience sliders | Director tests with an injected clock and random source (gaps, no overlap, no repeats, tags, pause, ducking); a scripted hour rendered and checked |
-| M35 | Space: listener and emitters, attenuation, Doppler, a head model, occlusion by voxel rays through materials, a reverb from the room around the listener, underwater and lava | Occlusion and reverb tests in built cases (wall, doorway, cave, field, water); ray cost in budget; a walk rendered with monotone reverb and brightness curves |
-| M36 | Sound design: a synth library (modal, granular, formant, layered recipes) and every effect remade through it at 48 kHz, with measurable targets per sound class and an audition tool | Tests on every sound (no clipping or DC, loudness and decay per class, spectral bands, variants really different, deterministic, generated within the startup budget); `build sfx` writes WAVs, spectrograms and a report; listened to by the person |
-| M37 | The sound of the world: parameterized events for everything audible (other players, liquids, UI), ambience by biome, time, altitude and depth, the audio overlay | Every event defined and sounded; ambience golden table; borders crossfade; a world of another address sounds different; a tour rendered within loudness and cost bounds |
 | M38 | Determinism: one numbers policy for shared code, a per-tick state hash, a desync detector, a cross-OS hash job | The same 10 000-tick scripted session hashes identically on three OSes and both optimization levels; an introduced nondeterminism is caught by name |
 | M39 | The state model: typed deltas and events through one mechanism; the protocol's per-feature messages migrate onto it | A new replicated field needs no protocol code; every old message round-trips; bandwidth no worse; UDP tests pass |
 | M40 | The edit journal with provenance: every world mutation through one pipeline with its cause; undo, rollback by region, time and cause; replay onto a snapshot | A scripted grief is rolled back to the exact pre-grief hash; journal replay equals the live world; cost under a share of the tick |
@@ -384,6 +394,11 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M48 | Entity framework v2: components, pack-defined kinds, delta replication with interpolation, swept collision on shapes, persistence, the spatial query service | 2 000 entities in view within budgets; smooth under 10% loss; memory flat over churn |
 | M49 | Persistence v2: journaled atomic writes, versioned schemas and migrations, backups, compaction, sliced autosave, universe export and import | Killing the process at 1 000 random points leaves every save loadable; old saves migrate; a 200-character save in budget |
 | M50 | Scale and security of one server: encrypted transport, bandwidth budgets, lag compensation, a thread per world, rate limits, a validation framework, a bot harness | 200 bots hold tick time and bandwidth for ten minutes; tampered or replayed packets refused; a hostile client refused and logged |
+| M33 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
+| M34 | Music director: title music, loading, a Minecraft-like wait-play-wait in worlds picked by place and time, pause, stingers, Music and Ambience sliders | Director tests with an injected clock and random source (gaps, no overlap, no repeats, tags, pause, ducking); a scripted hour rendered and checked |
+| M35 | Space: listener and emitters, attenuation, Doppler, a head model, occlusion by voxel rays through materials, a reverb from the room around the listener, underwater and lava | Occlusion and reverb tests in built cases (wall, doorway, cave, field, water); ray cost in budget; a walk rendered with monotone reverb and brightness curves |
+| M36 | Sound design: a synth library (modal, granular, formant, layered recipes) and every effect remade through it at 48 kHz, with measurable targets per sound class and an audition tool | Tests on every sound (no clipping or DC, loudness and decay per class, spectral bands, variants really different, deterministic, generated within the startup budget); `build sfx` writes WAVs, spectrograms and a report; listened to by the person |
+| M37 | The sound of the world: parameterized events for everything audible (other players, liquids, UI), ambience by biome, time, altitude and depth, the audio overlay | Every event defined and sounded; ambience golden table; borders crossfade; a world of another address sounds different; a tour rendered within loudness and cost bounds |
 
 ## The audio milestones (M32-M37, with M32b): an engine that stands next to FMOD and Wwise
 
@@ -458,8 +473,6 @@ jobs): add each line as `checksum <key> <value>` to `assets/baselines/audio/<sce
 differ from run to run on one OS, that is a finding: record it in the section instead and
 leave that OS compared by numbers only. Exit check: the next CI run passes with the
 checksums in.
-
-**Blocked (unattended run, 2026-10-26):** M32d and M32e are committed locally but not pushed (origin/main is at M32b), so no CI run has logged the `audio baseline ... checksum` lines, and the macOS and Windows values cannot be known from here. Pushing is the person's call; once `main` is pushed and CI has run, do the steps above from the Test step logs (`gh run view <id> --log`). Nothing else in this milestone can be done without those logs.
 
 ### M33: the music pipeline (`tools/music`)
 
