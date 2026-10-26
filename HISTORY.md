@@ -1200,3 +1200,86 @@ is M32b (tools) and the milestones on top.
   place. Checked locally with `ulimit -s 1024`: the previous commit's tests die, these pass.
   Keep structs of this size off the stack.
 
+## M32b: audio tools (capture, dump, baselines)
+
+The audio side of what the network has in `netdump`, `replay` and the Wireshark
+dissector, the GPU has in RenderDoc and the validation layers, and everything has in
+`build bench`: so a bug is a file to open, and quality cannot drift without a test
+failing.
+
+- **`build audiodump <capture>`** (`tools/audiodump`, reading M32's capture): prints a
+  timeline (frame, time, command, sound name, bus, gain, pitch, priority) and the engine's
+  decisions: which voices were virtualized, stolen or dropped and why (priority, audibility,
+  ring full, instance limit); summaries per sound and per bus (plays, peak voices);
+  `--bus <name> --wav out.wav` writes any bus's audio (or the master) to a file;
+  `--spectrogram <bus>` writes a PNG; `--report` prints per-bus integrated and short-term
+  loudness (BS.1770), loudness range, true peak, correlation, clipping and limiter
+  activity, and the real-time counters. Filters: `--from/--to` seconds, `--sound`, `--bus`.
+  Like `netdump`, it works on a capture from a player's machine (a `report` command's
+  attachment can include the last capture ring).
+- **A rolling capture** (M32c built the recorder, `audio/capture.odin`, on the audio
+  thread's side; a capture begun mid-session cannot replay bit for bit because the voices
+  then playing are state the file lacks, so this adds a snapshot of the mixer's state at
+  the ring's start): the recorder can keep the last 60 seconds in memory (a ring) and
+  write it on a key press, on an underrun or with a crash report, so the moment before a
+  glitch is saved without having asked for it.
+- **The freeze-and-solo inspector (dev builds, overlay):** a key freezes the last half
+  second of mixing; the overlay lists the voices then (sound, bus, gain, pitch, state,
+  priority) with per-bus meters and spectrum; clicking a voice or bus solos or mutes it
+  and loops the frozen block through the real mix so it can be listened to alone (the
+  RenderDoc event list, for ears). Occlusion rays and the reverb's room are drawn as debug
+  lines when M35 lands (the hooks are here). Off in release builds. The overlay also shows
+  `output_latency`, the callback's `cb_last_ns`/`cb_max_ns`, `underruns`, `late` and the
+  clock's `drift_ppm` (all in `audio.Stats` since M32c).
+- **Quality baselines** (`tools/audio_baseline`, files in `assets/baselines/audio/`):
+  scenarios rendered offline from scripted event lists with fixed seeds: a block-break
+  burst (many materials at once), a walk from a field into a cave and out, a title to
+  world transition with music, a 64-voice stress. Each stores per-bus numbers: integrated
+  loudness, true peak, loudness range, energy in third-octave bands, decay times of marked
+  sounds, and a checksum of the samples. CI renders them and compares: loudness within
+  0.5 LU, peaks and bands within 1 dB, checksums exact on the same OS and optimization level
+  (the numbers are what holds across OSes). `build audio --accept <scenario>` rewrites a
+  baseline on purpose and the diff is reviewed like code; a sound retuned without
+  accepting its baseline fails CI. Later milestones add their scenarios (M34's music,
+  M35's space, M36's effects, M37's tour).
+- **Cost baselines:** the `audio` scenario in `build bench` (M19's system): mix time per
+  block (average, p50, p99, max), voices real and virtual, stream decode time, underruns
+  and late callbacks, under the fixed conditions of the 64-voice stress with music and the
+  reverb on; results in `build/benchmarks/`; `compare` and the CI step fail past a margin
+  like the other scenarios. A Spall trace of the audio thread (`build trace` exists)
+  shows the blocks.
+- **Real-time health in CI:** a smoke run of the game on the CPU driver mixing into the
+  null device for 30 seconds asserts zero underruns, zero NaN, zero dropped commands and
+  the callback's worst case under its budget.
+- **The null device and a file device:** `audio.device_open` can open a device that pulls
+  blocks at real rate without a sound card, and one that writes a WAV as fast as it can
+  (what `build audio` and the baselines use), so no test depends on hardware.
+- **Tests:** a capture round-trips (written, read, replayed, identical); the dump's
+  timeline names a voice stolen in a built case and a ring-full drop; the loudness report
+  matches M32's meter on a known signal; a changed gain in a baseline scenario fails the
+  comparison and the accept command makes it pass; the rolling capture holds exactly the
+  last N seconds; the cost scenario runs and its comparison fails for a deliberately slowed
+  mix.
+- **Exit check:** the four baselines and the cost scenario pass in CI on all three OSes
+  (checksums per OS); a built-in bug (a mis-scaled gain) shows as a failed baseline with
+  the dump naming the sound; the inspector seen once in a screenshot.
+
+**What was built.** `audio/analyze.odin`: an `Analysis` that the mixer calls after every
+block through `Mixer.probe` (nil in the game; the hook is called from the audio thread's
+`mix_block`, so analysis allocates only when attached). It keeps the audio of the buses asked
+for, runs a BS.1770 meter on every bus, and notes each voice's story (started, virtualized by
+rank or inaudible, restored, ended, stopped, dropped: a play that did nothing, found by a Done
+voice that never had a step). Loudness range is taken from the histogram of 400 ms blocks,
+not 3 s ones, and the loudest figure is the momentary one (no short-term meter yet). True peak
+uses the limiter's own 8x filter, run only where a neighbourhood could beat the sample peak.
+Capture version 2 adds each sound's name (`set_sound_name`, 24 bytes; the game's sounds are
+`Stone.Break.0` and so on) and the live mixer's dropped count. `tools/audiodump` replays a
+capture through a fresh mixer with `client.sounds_init`; a capture whose sound table differs
+(streams, another build) still prints its timeline and says why the rest is missing.
+`audio/baseline.odin` and `client/audio_baseline_test.odin`: four scripted scenarios
+(burst, cave_walk, title_to_world, stress), numbers per bus compared within 0.5 LU, 1 dB and
+25% (decay), and a checksum per OS and optimization level (`Linux.Minimal` is what
+`build test` produces); `build audio --accept <scenario|all>` rewrites, `--wav <dir>` writes a
+WAV and a capture per scenario. The cost baseline is M32c's `audio` bench scenario, which
+`bench compare` already runs. Not built (M32d): the rolling capture, the inspector,
+spectrograms, the null and file devices, the 30 s smoke run.

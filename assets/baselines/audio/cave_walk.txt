@@ -1,0 +1,11 @@
+# audio baseline: rewritten by `build audio --accept cave_walk`
+scenario cave_walk
+rate 48000
+frames 436800
+bus Effects integrated -35.8 true_peak -15.3 range 5.6
+bands Effects -63.84 -60.33 -60.73 -59.81 -59.59 -59.29 -57.94 -57.34 -57.64 -58.63 -55.40 -56.01 -58.66 -60.28 -61.45 -56.38 -56.04 -60.16 -56.86 -58.55 -57.92 -57.20 -72.46 -132.36
+bus Ambience integrated -48.5 true_peak -29.8 range 10.6
+bands Ambience -84.49 -76.37 -75.67 -69.82 -69.21 -67.31 -72.60 -67.63 -67.97 -70.33 -65.16 -65.83 -70.66 -70.68 -72.71 -73.92 -73.38 -72.65 -67.58 -68.16 -68.77 -70.49 -86.35 -122.78
+bus Master integrated -36.0 true_peak -15.3 range 15.5
+bands Master -63.78 -60.18 -60.57 -59.37 -58.91 -58.57 -57.76 -57.01 -57.21 -58.23 -54.96 -55.54 -58.48 -59.94 -61.06 -56.29 -55.96 -59.90 -56.52 -58.08 -57.56 -56.99 -72.25 -126.06
+checksum Linux.Minimal 15ae6b42d5e7f62b

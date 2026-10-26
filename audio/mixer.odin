@@ -1,6 +1,7 @@
 package audio
 
 import "base:intrinsics"
+import "core:fmt"
 import "core:math"
 import "core:sync"
 
@@ -35,6 +36,7 @@ MAX_BLOCK :: 512 // frames mixed at a time; parameters move once per block
 COMMAND_RING :: 512 // power of two
 EVENT_RING :: 256 // power of two
 MAX_DUCKS :: 4
+SOUND_NAME_LEN :: 24
 MAX_HELD :: 128 // commands waiting for their frame
 
 Sound_Id :: distinct u16
@@ -78,43 +80,46 @@ Voice_Event :: struct {
 }
 
 Mixer :: struct {
-	rate:      u32, // output frames per second
-	sounds:    [MAX_SOUNDS]Sound,
-	streams:   [MAX_SOUNDS]^Stream, // of a sound registered with add_stream (which has no samples)
-	bandwidth: [MAX_SOUNDS]f32, // Hz of the highest content of a sound, 0 if unknown (see set_bandwidth)
-	count:     int,
+	rate:       u32, // output frames per second
+	sounds:     [MAX_SOUNDS]Sound,
+	streams:    [MAX_SOUNDS]^Stream, // of a sound registered with add_stream (which has no samples)
+	names:      [MAX_SOUNDS][SOUND_NAME_LEN]u8, // for captures and the dump (set_sound_name)
+	bandwidth:  [MAX_SOUNDS]f32, // Hz of the highest content of a sound, 0 if unknown (see set_bandwidth)
+	count:      int,
 	// Game thread only: the handle table.
-	handles:   [MAX_VOICES]Handle_Slot,
+	handles:    [MAX_VOICES]Handle_Slot,
 	// Audio thread only:
-	voices:    [MAX_VOICES]Voice,
-	buses:     [Bus]Bus_State,
-	ducks:     [MAX_DUCKS]Duck,
-	bus_buf:   [Bus][2 * MAX_BLOCK]f32,
-	limiter:   Limiter,
-	meter:     Meter,
-	sinc:      Sinc_Table,
-	reverb:    Reverb,
-	rev_in:    [2 * MAX_BLOCK]f32, // what the buses send to the reverb, this block
-	night:     Compressor, // the compressor on Master (Night mode)
-	listener:  Listener,
-	cross:     [2]f32, // headphone cross-feed filter state
-	clock:     u64, // frames mixed; the audio thread's time, which scheduled plays use
-	order:     [MAX_VOICES]u8, // scratch: voices by rank
+	voices:     [MAX_VOICES]Voice,
+	buses:      [Bus]Bus_State,
+	ducks:      [MAX_DUCKS]Duck,
+	bus_buf:    [Bus][2 * MAX_BLOCK]f32,
+	limiter:    Limiter,
+	meter:      Meter,
+	sinc:       Sinc_Table,
+	reverb:     Reverb,
+	rev_in:     [2 * MAX_BLOCK]f32, // what the buses send to the reverb, this block
+	night:      Compressor, // the compressor on Master (Night mode)
+	listener:   Listener,
+	cross:      [2]f32, // headphone cross-feed filter state
+	clock:      u64, // frames mixed; the audio thread's time, which scheduled plays use
+	order:      [MAX_VOICES]u8, // scratch: voices by rank
 	// The command ring: written by the game thread, read by the audio thread.
-	commands:  [COMMAND_RING]Queued,
-	written:   u32, // (atomic) commands written ever
-	read:      u32, // (atomic) commands read ever
-	dropped:   u32, // (atomic) commands that found the ring full (or no free handle), plays of a busy stream
+	commands:   [COMMAND_RING]Queued,
+	written:    u32, // (atomic) commands written ever
+	read:       u32, // (atomic) commands read ever
+	dropped:    u32, // (atomic) commands that found the ring full (or no free handle), plays of a busy stream
 	// Audio thread only: commands taken off the ring that wait for their frame.
-	held:      [MAX_HELD]Queued,
-	held_n:    int,
-	capture:   ^Capture, // (atomic) the recorder, when on
-	stage:     [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
+	held:       [MAX_HELD]Queued,
+	held_n:     int,
+	capture:    ^Capture, // (atomic) the recorder, when on
+	probe:      proc "contextless" (m: ^Mixer, user: rawptr, n: int), // offline analysis: called after each block (analyze.odin); nil in the game
+	probe_user: rawptr,
+	stage:      [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
 	// The return ring: the other way round.
-	events:    [EVENT_RING]Voice_Event,
-	ev_write:  u32, // (atomic)
-	ev_read:   u32, // (atomic)
-	stats:     Stats, // (atomic fields) written by the audio thread
+	events:     [EVENT_RING]Voice_Event,
+	ev_write:   u32, // (atomic)
+	ev_read:    u32, // (atomic)
+	stats:      Stats, // (atomic fields) written by the audio thread
 }
 
 // Queued: a command and the mixer frame it takes effect on (0: the next block
@@ -301,6 +306,21 @@ add_sound :: proc(m: ^Mixer, s: Sound) -> Sound_Id {
 	m.sounds[m.count] = s
 	m.count += 1
 	return Sound_Id(m.count - 1)
+}
+
+// set_sound_name gives a sound a name for captures and the dump (cut to
+// SOUND_NAME_LEN bytes).
+set_sound_name :: proc(m: ^Mixer, id: Sound_Id, name: string) {
+	n := copy(m.names[id][:], name)
+	for i in n ..< SOUND_NAME_LEN {m.names[id][i] = 0}
+}
+
+// sound_name: what set_sound_name gave, or "sound N".
+sound_name :: proc(name: ^[SOUND_NAME_LEN]u8, id: int, buf: []u8) -> string {
+	n := 0
+	for n < SOUND_NAME_LEN && name[n] != 0 {n += 1}
+	if n == 0 {return fmt.bprintf(buf, "sound %d", id)}
+	return string(name[:n])
 }
 
 // set_bandwidth declares that a sound has nothing above `hz` (a sound made at
@@ -530,6 +550,7 @@ mix_block :: proc "contextless" (m: ^Mixer, out: []f32, n: int) -> (guarded: u32
 		out[i] = x
 	}
 	meter_push(&m.meter, out)
+	if m.probe != nil {m.probe(m, m.probe_user, n)}
 	for &v in m.voices {if v.state == .Playing {svf_flush(&v.filter)}}
 	return
 }

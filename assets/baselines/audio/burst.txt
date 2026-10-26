@@ -1,0 +1,10 @@
+# audio baseline: rewritten by `build audio --accept burst`
+scenario burst
+rate 48000
+frames 148800
+bus Effects integrated -10.7 true_peak 2.7 range 11.7
+bands Effects -43.14 -43.31 -43.03 -42.23 -39.01 -39.56 -40.10 -35.38 -31.92 -37.05 -37.50 -35.73 -36.60 -37.45 -37.30 -35.22 -33.50 -35.27 -35.26 -35.96 -37.92 -41.19 -53.96 -75.47
+bus Master integrated -11.5 true_peak -1.0 range 10.6
+bands Master -43.56 -43.86 -43.40 -42.72 -39.28 -39.76 -40.54 -36.00 -32.44 -37.29 -37.74 -36.18 -37.02 -37.94 -38.08 -36.30 -34.49 -36.45 -36.06 -36.94 -38.76 -41.86 -54.46 -76.42
+decay glass_break 190
+checksum Linux.Minimal fcf303460477bbef

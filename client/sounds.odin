@@ -1,5 +1,6 @@
 package client
 
+import "core:fmt"
 import "core:math"
 import "core:math/rand"
 
@@ -48,27 +49,28 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	// Sounds are made at sfx.RATE; the mixer's rate is converted to at load,
 	// so a voice at its own pitch takes the cheap path, and the content
 	// (under half sfx.RATE) is declared so pitching up costs no more.
-	add :: proc(b: ^Sound_Bank, m: ^audio.Mixer, samples: []f32) -> audio.Sound_Id {
+	add :: proc(b: ^Sound_Bank, m: ^audio.Mixer, samples: []f32, name: string) -> audio.Sound_Id {
 		made := audio.resample_sound({samples, sfx.RATE}, m.rate)
 		delete(samples)
 		append(&b.samples, made.samples)
 		id := audio.add_sound(m, made)
 		audio.set_bandwidth(m, id, sfx.RATE / 2)
+		audio.set_sound_name(m, id, name)
 		return id
 	}
 	for mat in sfx.Material {
 		for a in sfx.Action {
-			for v in 0 ..< sfx.VARIANTS {b.block[mat][a][v] = add(b, m, sfx.block_sound(mat, a, v))}
+			for v in 0 ..< sfx.VARIANTS {b.block[mat][a][v] = add(b, m, sfx.block_sound(mat, a, v), fmt.tprintf("%v.%v.%d", mat, a, v))}
 		}
 	}
 	for p in sfx.Player_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v))}
+		for v in 0 ..< sfx.VARIANTS {b.player[p][v] = add(b, m, sfx.player_sound(p, v), fmt.tprintf("player.%v.%d", p, v))}
 	}
 	for c in sfx.Sheep_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.sheep[c][v] = add(b, m, sfx.sheep_sound(c, v))}
+		for v in 0 ..< sfx.VARIANTS {b.sheep[c][v] = add(b, m, sfx.sheep_sound(c, v), fmt.tprintf("sheep.%v.%d", c, v))}
 	}
 	for x in sfx.Blast_Sound {
-		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v))}
+		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v), fmt.tprintf("blast.%v.%d", x, v))}
 	}
 }
 

@@ -32,6 +32,7 @@ PACKAGES :: []string {
 	"dedicated",
 	"tools/build",
 	"tools/netdump",
+	"tools/audiodump",
 	"tools/analytics",
 	"tools/replay",
 	"tools/sfx",
@@ -101,7 +102,7 @@ main :: proc() {
 	}
 	ok: bool
 	switch args[0] {
-	case "check", "test", "build", "run", "serve", "debug", "package":
+	case "check", "test", "build", "run", "serve", "debug", "package", "audiodump", "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
 		if !ensure_miniaudio() {os.exit(1)}
 	}
@@ -126,8 +127,10 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "replay", "sfx", "worldmap", "analytics":
+	case "netdump", "audiodump", "replay", "sfx", "worldmap", "analytics":
 		ok = run_tool(args[0], args[1:])
+	case "audio":
+		ok = audio_baselines(args[1:])
 	case "bench":
 		ok = bench(args[1:])
 	case "trace":
@@ -150,6 +153,12 @@ usage :: proc() {
 	fmt.println("  test      run the unit tests")
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
+	fmt.println(
+		"  audio     run the audio baselines (--accept <scenario|all> rewrites them, --wav <dir> renders each to a WAV)",
+	)
+	fmt.println(
+		"  audiodump dump an audio capture: timeline, voice decisions, loudness, a bus as WAV (-report, -bus:, -wav:)",
+	)
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
@@ -521,6 +530,59 @@ run :: proc(cmd: []string) -> bool {
 	}
 	state, werr := os.process_wait(child)
 	return werr == nil && state.exited && state.exit_code == 0
+}
+
+// audio_baselines runs the audio quality baselines (client/audio_baseline_test.odin,
+// files in assets/baselines/audio/): `--accept <scenario|all>` rewrites the
+// named baseline from what the scenario sounds like now (review the diff),
+// `--wav <dir>` also writes every scenario's master as a WAV to listen to.
+audio_baselines :: proc(args: []string) -> bool {
+	defines := make([dynamic]string)
+	for i := 0; i < len(args); i += 1 {
+		switch args[i] {
+		case "--accept":
+			if i + 1 >= len(args) {
+				fmt.eprintln("build: audio --accept <burst|cave_walk|title_to_world|stress|all>")
+				return false
+			}
+			i += 1
+			if !slice.contains(
+				[]string{"burst", "cave_walk", "title_to_world", "stress", "all"},
+				args[i],
+			) {
+				fmt.eprintfln("build: audio --accept: no scenario '%s'", args[i])
+				return false
+			}
+			append(&defines, strings.concatenate({"-define:VX_AUDIO_ACCEPT=", args[i]}))
+		case "--wav":
+			if i + 1 >= len(args) {
+				fmt.eprintln("build: audio --wav <directory>")
+				return false
+			}
+			i += 1
+			append(&defines, strings.concatenate({"-define:VX_AUDIO_WAV_DIR=", args[i]}))
+		case:
+			fmt.eprintfln(
+				"build: audio takes --accept <scenario|all> and --wav <dir>, not '%s'",
+				args[i],
+			)
+			return false
+		}
+	}
+	out := path_join({"build", "test", strings.concatenate({"audio-baselines", exe_suffix()})})
+	os.make_directory_all(filepath.dir(out))
+	cmd := slice.concatenate(
+		[][]string {
+			{"odin", "test", GAME_PACKAGE},
+			ODIN_FLAGS,
+			{
+				strings.concatenate({"-out:", out}),
+				"-define:ODIN_TEST_NAMES=client.test_audio_baselines",
+			},
+			defines[:],
+		},
+	)
+	return run(cmd)
 }
 
 // run_tool builds and runs tools/<name> with args (netdump, replay, sfx).

@@ -34,7 +34,7 @@ import "core:sync"
 // debugging artifact, not a save format.
 
 CAPTURE_MAGIC :: [4]u8{'V', 'X', 'A', 'C'}
-CAPTURE_VERSION :: 1
+CAPTURE_VERSION :: 2
 CAPTURE_MAX_RECORDS :: 1 << 24
 
 Capture :: struct {
@@ -64,6 +64,7 @@ Capture_Header :: struct #packed {
 	sound_count:  u32,
 	record_count: u32,
 	overflow:     u32,
+	dropped:      u32, // commands the live mixer dropped, ever (ring full, no free handle, busy stream)
 }
 
 Capture_Sound :: struct #packed {
@@ -71,6 +72,7 @@ Capture_Sound :: struct #packed {
 	rate:     u32,
 	stream:   u32,
 	checksum: u64,
+	name:     [SOUND_NAME_LEN]u8,
 }
 
 // Capture_File: a parsed capture.
@@ -135,9 +137,9 @@ capture_command :: proc "contextless" (c: ^Capture, frame: u64, cmd: Command) {
 @(private)
 sound_checksum :: proc(s: Sound, st: ^Stream) -> Capture_Sound {
 	if st != nil {
-		return {u64(len(st.data)), st.rate, 1, hash.fnv64a(st.data)}
+		return {u64(len(st.data)), st.rate, 1, hash.fnv64a(st.data), {}}
 	}
-	return {u64(len(s.samples)), s.rate, 0, hash.fnv64a(slice.to_bytes(s.samples))}
+	return {u64(len(s.samples)), s.rate, 0, hash.fnv64a(slice.to_bytes(s.samples)), {}}
 }
 
 // capture_encode: the file's bytes for what c holds, with the sound table of m
@@ -156,10 +158,12 @@ capture_encode :: proc(m: ^Mixer, c: ^Capture, allocator := context.allocator) -
 		sound_count  = u32(m.count),
 		record_count = u32(n),
 		overflow     = sync.atomic_load(&c.overflow),
+		dropped      = sync.atomic_load(&m.dropped),
 	}
 	append(&out, ..mem.ptr_to_bytes(&h))
 	for s, i in m.sounds[:m.count] {
 		cs := sound_checksum(s, m.streams[i])
+		cs.name = m.names[i]
 		append(&out, ..mem.ptr_to_bytes(&cs))
 	}
 	for r in c.records[:n] {
@@ -260,7 +264,10 @@ capture_replay :: proc(m: ^Mixer, f: ^Capture_File, out: []f32) -> bool {
 		return false
 	}
 	for s, i in m.sounds[:m.count] {
-		if sound_checksum(s, m.streams[i]) != f.sounds[i] {
+		// (the name is not part of the sound)
+		got, want := sound_checksum(s, m.streams[i]), f.sounds[i]
+		want.name = {}
+		if got != want {
 			log.warnf("audio replay: sound %d is not the one captured", i)
 			return false
 		}
