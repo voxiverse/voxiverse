@@ -802,3 +802,38 @@ test_dissector_knows_every_kind :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+// 64-bit varints: the edges round-trip, overlong and over-wide encodings fail.
+@(test)
+test_varint64_edges :: proc(t: ^testing.T) {
+	unsigned := [?]u64{0, 1, 127, 128, 1 << 32, 1 << 63, max(u64)}
+	for v in unsigned {
+		w: Writer
+		writer_init(&w, context.temp_allocator)
+		write_varint64(&w, v)
+		r := reader_make(w.buf[:])
+		testing.expect_value(t, read_varint64(&r), v)
+		testing.expect(t, reader_finish(&r))
+	}
+	signed := [?]i64{0, -1, 1, min(i64), max(i64), -(1 << 40)}
+	for v in signed {
+		w: Writer
+		writer_init(&w, context.temp_allocator)
+		write_svarint64(&w, v)
+		r := reader_make(w.buf[:])
+		testing.expect_value(t, read_svarint64(&r), v)
+		testing.expect(t, reader_finish(&r))
+	}
+	bad := [][]u8 {
+		{0x80, 0x00}, // overlong zero
+		{0x81, 0x80, 0x00}, // overlong one
+		{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02}, // 65 bits
+		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}, // 11 bytes
+		{0x80}, // ends inside
+	}
+	for b, i in bad {
+		r := reader_make(b)
+		read_varint64(&r)
+		testing.expectf(t, !r.ok, "bad encoding %d was accepted", i)
+	}
+}

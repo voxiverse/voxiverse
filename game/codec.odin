@@ -61,6 +61,20 @@ write_svarint :: proc(w: ^Writer, v: i32) {
 	write_varint(w, u32((v << 1) ~ (v >> 31)))
 }
 
+write_varint64 :: proc(w: ^Writer, v: u64) {
+	v := v
+	for v >= 0x80 {
+		append(&w.buf, u8(v) | 0x80)
+		v >>= 7
+	}
+	append(&w.buf, u8(v))
+}
+
+// write_svarint64: zigzag, as write_svarint.
+write_svarint64 :: proc(w: ^Writer, v: i64) {
+	write_varint64(w, u64((v << 1) ~ (v >> 63)))
+}
+
 write_string :: proc(w: ^Writer, s: string) {
 	write_varint(w, u32(len(s)))
 	append(&w.buf, s)
@@ -154,6 +168,28 @@ read_varint :: proc(r: ^Reader) -> u32 {
 	}
 	r.ok = false
 	return 0
+}
+
+// read_varint64: the same one-encoding rule, up to 64 bits.
+read_varint64 :: proc(r: ^Reader) -> u64 {
+	v: u64
+	for i in 0 ..< 10 {
+		b := read_u8(r)
+		if !r.ok {return 0}
+		if i == 9 && b > 0x01 {break} 	// more than 64 bits
+		v |= u64(b & 0x7f) << uint(7 * i)
+		if b & 0x80 == 0 {
+			if b == 0 && i > 0 {break} 	// overlong: a trailing zero group
+			return v
+		}
+	}
+	r.ok = false
+	return 0
+}
+
+read_svarint64 :: proc(r: ^Reader) -> i64 {
+	u := read_varint64(r)
+	return i64(u >> 1) ~ -i64(u & 1)
 }
 
 read_svarint :: proc(r: ^Reader) -> i32 {
