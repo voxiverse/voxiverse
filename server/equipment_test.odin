@@ -105,6 +105,7 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	net_close(&alice)
 	net_close(&bob)
 	alice, bob = {}, {}
+	expect_items_balanced(t, &srv)
 	testing.expect(t, stop(&srv))
 	stopped = true
 	if !testing.expect(t, start(&srv, config, {})) {return}

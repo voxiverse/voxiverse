@@ -118,6 +118,7 @@ Server :: struct {
 	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
 	uploader:       collector.Uploader, // sends its log to a collector
 	uploading:      bool,
+	ledger:         Ledger, // every item made or unmade (ledger.odin)
 	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
@@ -259,6 +260,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	for &c in s.clients {client_reset(&c)}
 	for w in s.worlds {world_close(w)}
 	delete(s.worlds)
+	ledger_destroy(&s.ledger)
 	base.queue_destroy(&s.calls)
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
@@ -386,6 +388,7 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	worlds_unload_idle(s)
+	audit_tick(s)
 	for m in moves {
 		base.profile_scope("unload left")
 		unload_left(m.world, m.from, m.to)

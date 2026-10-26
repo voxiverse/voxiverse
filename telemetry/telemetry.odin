@@ -50,6 +50,9 @@ Kind :: enum u16 {
 	Damage, // text: cause (fall, explosion); n0: tenths of a health point; n1: health left in tenths
 	Death, // text: cause
 	Level_Up, // n0: the new level; n1: total xp
+	Item_Created, // text: item; n0: count; n1: the reason (server/ledger.odin)
+	Item_Destroyed, // text: item; n0: count; n1: the reason
+	Audit_Failed, // text: item; n0: held; n1: the ledger says; n2: difference
 }
 
 Kind_Info :: struct {
@@ -122,6 +125,17 @@ KIND_INFO := [Kind]Kind_Info {
 	},
 	.Death = {name = "death", text_name = "cause", counter = "deaths.%t"},
 	.Level_Up = {name = "level_up", n_names = {"level", "xp", ""}},
+	.Item_Created = {name = "item_created", text_name = "item", n_names = {"count", "reason", ""}},
+	.Item_Destroyed = {
+		name = "item_destroyed",
+		text_name = "item",
+		n_names = {"count", "reason", ""},
+	},
+	.Audit_Failed = {
+		name = "audit_failed",
+		text_name = "item",
+		n_names = {"held", "expected", "difference"},
+	},
 	.Client_Perf = {name = "client_perf", n_names = {"p50_us", "p99_us", "frames"}, client = true},
 }
 

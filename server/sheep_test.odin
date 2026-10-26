@@ -105,6 +105,7 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 
 	// Kept: stop, read the file, start again.
 	netcode_close_both(&a, &b)
+	expect_items_balanced(t, &srv)
 	testing.expect(t, stop(&srv))
 	stopped = true
 	saved, _ := os.read_entire_file_from_path(

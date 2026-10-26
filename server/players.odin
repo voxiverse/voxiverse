@@ -34,10 +34,12 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		c.player = saved.state
 		c.look = saved.look
 		c.inventory = saved.inventory
+		ledger_inventory(s, w, .Scope_In, &c.inventory)
 		for st in saved.overflow {
-			if !game.stack_empty(
-				st,
-			) {spawn_item(w, saved.state.position + {0, 0.5, 0}, st, {}, -1)}
+			if !game.stack_empty(st) {
+				ledger_stack(s, w, .Spill_Old, st)
+				spawn_item(w, saved.state.position + {0, 0.5, 0}, st, {}, -1)
+			}
 		}
 		land(s, c, saved.state.position, c.look, .Exact, remember = false)
 	} else {
@@ -98,6 +100,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	if c.state != .Playing {return}
 	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))
+	ledger_inventory(s, c.world, .Scope_Out, &c.inventory)
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
 	member_get(&s.community, client_name(c)).seen = now_unix()

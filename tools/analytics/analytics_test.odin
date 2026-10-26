@@ -3,6 +3,7 @@ package analytics
 import "core:strings"
 import "core:testing"
 
+import "../../game"
 import "../../telemetry"
 
 // A small recorded run: two senders, a few days, the kinds the questions use.
@@ -30,6 +31,28 @@ recorded :: proc() -> string {
 			actor = 0,
 			text = telemetry.short("linux"),
 			n = {16, 70, 3000},
+		},
+	)
+	add(
+		&b,
+		"aaaa",
+		{
+			time_ms = T0 + 35,
+			kind = .Item_Created,
+			actor = 0,
+			text = telemetry.short("stone"),
+			n = {64, i64(game.Reason.Give), 0},
+		},
+	)
+	add(
+		&b,
+		"aaaa",
+		{
+			time_ms = T0 + 36,
+			kind = .Item_Destroyed,
+			actor = 0,
+			text = telemetry.short("stone"),
+			n = {1, i64(game.Reason.Place), 0},
 		},
 	)
 	add(
@@ -129,9 +152,9 @@ recorded :: proc() -> string {
 @(test)
 test_the_questions_asked_most :: proc(t: ^testing.T) {
 	events := parse_events(recorded())
-	testing.expect_value(t, len(events), 17) // (two lines that are no events skipped)
+	testing.expect_value(t, len(events), 19) // (two lines that are no events skipped)
 	s := summary(events)
-	testing.expect(t, strings.contains(s, "events 17 from 2 senders"), s)
+	testing.expect(t, strings.contains(s, "events 19 from 2 senders"), s)
 	testing.expect(t, strings.contains(s, "block_mined") && strings.contains(s, "tick_summary"))
 
 	rows, returning := sessions(events)
@@ -144,6 +167,10 @@ test_the_questions_asked_most :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(e, "stone"), e)
 	testing.expect(t, strings.contains(e, "mined:\n  stone            2"), e)
 	testing.expect(t, strings.contains(e, "placed:\n  dirt             1"), e)
+
+	f := faucets(events)
+	testing.expect(t, strings.contains(f, "stone            created   give             64"), f)
+	testing.expect(t, strings.contains(f, "stone            destroyed place            1"), f)
 
 	slow := slowest(events)
 	testing.expect(

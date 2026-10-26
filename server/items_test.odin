@@ -114,6 +114,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	net_close(&alice)
 	net_close(&bob)
 	alice, bob = {}, {}
+	expect_items_balanced(t, &srv)
 	testing.expect(t, stop(&srv))
 	stopped = true
 	for name in ([]string{"alice", "bob"}) {

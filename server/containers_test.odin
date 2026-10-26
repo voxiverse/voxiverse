@@ -141,6 +141,7 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 	pause(t, {&a}, 0.3)
 	testing.expect(t, game.stack_empty(a.inventory.cursor), "a closed chest's slot was taken")
 
+	expect_items_balanced(t, &srv)
 	stop(&srv)
 	stopped = true
 

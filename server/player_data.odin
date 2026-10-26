@@ -363,6 +363,7 @@ give_kit :: proc(s: ^Server, c: ^Client) {
 		info, _ := game.item_info(st.item)
 		if t, tool := info.tool.?;
 		   tool && t == .Launcher && !allowed(s, c, "world.fire") {continue}
-		game.inventory_add(&c.inventory, st)
+		left := game.inventory_add(&c.inventory, st)
+		ledger(s, c.world, .Kit, st.item, st.count - left.count)
 	}
 }

@@ -418,6 +418,7 @@ test_farming_saved :: proc(t: ^testing.T) {
 	net_close(&a)
 	a = {}
 	time.sleep(100 * time.Millisecond)
+	expect_items_balanced(t, &srv)
 	testing.expect(t, stop(&srv))
 	stopped = true
 	if !testing.expect(t, start(&srv, farm_config(dir), {})) {return}

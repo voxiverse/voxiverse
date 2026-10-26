@@ -88,6 +88,7 @@ world_start :: proc(w: ^World) -> bool {
 	load_entities(w)
 	load_containers(w)
 	load_stats(w)
+	ledger_world_scope(w, .Scope_In)
 	return true
 }
 
@@ -95,6 +96,7 @@ world_start :: proc(w: ^World) -> bool {
 // the caller).
 world_close :: proc(w: ^World) {
 	if w.started {
+		ledger_world_scope(w, .Scope_Out)
 		chunks_destroy(&w.chunks)
 		entities_destroy(&w.entities)
 		virtual.arena_destroy(&w.arena)

@@ -10,7 +10,7 @@ import "../../base"
 // Reads a lake (the collector's `lake/` directory, or a server's own
 // telemetry directory of day files) and answers the questions asked most:
 //
-//	build analytics <dir> summary | sessions | economy | slow | launch | heat [out.png]
+//	build analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]
 //
 // JSON lines in, text out; for anything else, DuckDB reads the same files:
 //
@@ -19,7 +19,7 @@ main :: proc() {
 	args := os.args[1:]
 	if len(args) < 2 {
 		fmt.eprintln(
-			"usage: analytics <dir> summary | sessions | economy | slow | launch | heat [out.png]",
+			"usage: analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]",
 		)
 		os.exit(2)
 	}
@@ -33,6 +33,8 @@ main :: proc() {
 		for r in rows[:min(len(rows), 20)] {fmt.printfln("  %s  %3d sessions  %6d s", r.pid, r.sessions, r.seconds)}
 	case "economy":
 		fmt.print(economy(events))
+	case "faucets":
+		fmt.print(faucets(events))
 	case "slow":
 		fmt.print(slowest(events))
 	case "launch":

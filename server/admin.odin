@@ -130,6 +130,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"give", "<player> <item> [count]", {2, 3}, admin_give, "items.give"},
 	{"clear", "[player] [item]", {0, 2}, admin_clear, "items.clear"},
 	{"item", "", {0, 0}, admin_item, "info.item"},
+	{"audit", "", {0, 0}, admin_audit, "admin.audit"},
 	// Worlds (worlds.odin).
 	{"travel", "<address> [character]", {1, 3}, admin_travel, "world.travel"},
 	{"address", "", {0, 0}, admin_address, "info.address"},

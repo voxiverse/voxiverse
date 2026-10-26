@@ -200,6 +200,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 		record(s, c, .Item_Used, "wheat")
 		if !lamb {record(s, c, .Sheep_Fed)}
 		if !allowed(s, c, "items.infinite") {
+			ledger(s, w, .Use, held.item, -1)
 			c.inventory.slots[c.inventory.selected].count -= 1
 			game.inventory_tidy(&c.inventory)
 			c.inv_changed = true
@@ -213,6 +214,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 	wool := game.item_of_block(.Wool_Black if game.genes_black(ent.genes) else .Wool)
 	for _ in 0 ..< rand.int_range(1, 4, r) {
 		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+		ledger(s, w, .Drop_Mob, wool, 1)
 		spawn_item(w, ent.body.position + {0, 0.6, 0}, {wool, 1}, v, -1)
 	}
 	return true

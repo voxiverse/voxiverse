@@ -5,6 +5,8 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 
+import "../../game"
+
 // Analysis of a lake of event lines (collector/): each function takes the
 // lines (JSON objects, one per line, as the sink wrote them with a "pid"
 // added) and answers one of the questions asked most. The tool (main.odin)
@@ -157,6 +159,44 @@ economy :: proc(events: []Event) -> string {
 	table(&b, "dropped", dropped)
 	table(&b, "mined", mined)
 	table(&b, "placed", placed)
+	return strings.to_string(b)
+}
+
+// faucets: per item, what was made and what was unmade, by reason (the
+// server's ledger: item_created and item_destroyed).
+faucets :: proc(events: []Event) -> string {
+	Key :: struct {
+		item:   string,
+		reason: string,
+		made:   bool,
+	}
+	totals := make(map[Key]int, allocator = context.temp_allocator)
+	for e in events {
+		if e.kind != "item_created" && e.kind != "item_destroyed" {continue}
+		n := int(number(e, "count"))
+		why := int(number(e, "reason"))
+		name := "?"
+		if why >= 0 && why < len(game.Reason) {name = game.reason_name(game.Reason(why))}
+		totals[{text(e, "item"), name, e.kind == "item_created"}] += n
+	}
+	keys := make([dynamic]Key, context.temp_allocator)
+	for k in totals {append(&keys, k)}
+	slice.sort_by(keys[:], proc(a, b: Key) -> bool {
+		if a.item != b.item {return a.item < b.item}
+		if a.made != b.made {return a.made}
+		return a.reason < b.reason
+	})
+	b := strings.builder_make(context.temp_allocator)
+	for k in keys {
+		fmt.sbprintfln(
+			&b,
+			"%-16s %-9s %-16s %d",
+			k.item,
+			"created" if k.made else "destroyed",
+			k.reason,
+			totals[k],
+		)
+	}
 	return strings.to_string(b)
 }
 
