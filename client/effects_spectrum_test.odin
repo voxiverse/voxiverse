@@ -138,7 +138,9 @@ third_octaves :: proc(x: []f32) -> (bands: [SPECTRUM_BANDS]f64) {
 
 @(test)
 test_effects_heard_as_before :: proc(t: ^testing.T) {
-	bands := third_octaves(effects_scene())
+	scene := effects_scene()
+	defer delete(scene)
+	bands := third_octaves(scene)
 	top := bands[0]
 	for b in bands {top = max(top, b)}
 	if EFFECTS_BANDS[0] == 0 && EFFECTS_BANDS[10] == 0 {
