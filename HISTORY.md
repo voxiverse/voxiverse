@@ -1060,3 +1060,44 @@ built is here and the rest is M32a in PLAN.md.
   and table, gapless loop (100 loops, and no click when pitched), virtual voices and resume,
   priority, fades, ducking, snapshot, bus gain/mute/cutoff, voice cutoff sweep, NaN guard,
   digital silence, determinism, filter response and stability, limiter, meter.
+
+## M32a: the audio engine, second part
+
+M32a was cut at the session's size: the DSP, the resampler and scheduling are done; the
+streams, the capture, the real-time thread and the cost scenario are M32c in PLAN.md.
+
+- **Resampling.** `audio/sinc.odin`: a Kaiser-windowed sinc (beta 10.06, 100 dB, 32 taps a
+  side, cut-off at 0.45 of the rate) in a 1024-points-a-sample table read with linear
+  interpolation. A step above 1 stretches the kernel by the step (up to 8), so pitched-up
+  sounds and sources at a higher rate are filtered before they alias. A voice uses it
+  unless its sound is at the mixer's rate and its step is within a semitone of 1 (cubic
+  stays there). `resample_sound` converts a sound offline. The sound effects (16 kHz) now
+  go through it. Measured: pass-band error under 0.1 dB to 0.38 of the rate, image and
+  alias residual under -90 dB.
+- **True-peak limiter.** The detector sees seven interpolated points between samples (a
+  32-tap Kaiser sinc, beta 6) and treats the highest as the peak, 16 frames after the
+  point happened, so `limiter_delay` is the look-ahead plus 16. 16 taps and 4x left
+  0.1-0.2 dB over at 0.3-0.4 of the rate; the test measures with an independent 8x, 129-tap
+  reconstruction and holds -1 dBTP within 0.05 dB. A step in a sound's start now makes
+  the limiter act earlier than a sample-peak one did (an overshoot is a peak).
+  `limiter_set_ceiling` backs the listener's safety ceiling.
+- **Compressor.** Feed-forward, linked, soft knee, a peak follower (5 ms) ahead of attack
+  and release on the gain reduction in dB. Night mode is -24 dB, 4:1, 6 dB knee, +3 dB,
+  5 ms and 200 ms. Switching it off sets ratio 1 and lets the reduction release.
+- **Reverb.** `audio/space.odin`: 8 lines (29.7-67.3 ms) mixed by a Hadamard matrix scaled to be
+  orthogonal, per-line gain from the RT60, a one-pole damping in the loop, six early
+  reflections, two decorrelated outputs. RT60 is within 10% at 0.5, 1.5 and 3 s (Schroeder
+  integration, -5 to -25 dB); it is exactly linear. `set_reverb`, `set_bus_reverb` (a send
+  per bus, ramped per block), the return joins Master before the listener's stage; the
+  mixer stops running it when the tail is inaudible and clears it.
+- **Scheduling.** `Play.start_frame` is a mixer frame (`clock(m)` reads the frames mixed);
+  a voice waits, unmixed and uncounted as virtual, then renders from the exact frame in
+  its block, in any block size, also an hour in; a frame already past starts at once and
+  counts in `Stats.late`. Commands other than play still take effect at the next mix
+  (M32c's capture stamps them).
+- **Listener.** `set_listener(Listener{mono, swap, crossfeed, night, ceiling_db})`, applied
+  to Master ahead of the limiter, so the ceiling holds for all of it.
+- **Tests.** `audio/engine_test.odin`; `test_bus_mute_and_gain` uses quieter tones (its sum
+  of two 0.4 steps crossed the true-peak ceiling). The suite passes at both optimization levels.
+- **Differs from the design.** No THD+N figure for the reverb: it is linear, the test
+  asserts that exactly. 8x instead of 4x oversampling. Not done: moved to M32c.

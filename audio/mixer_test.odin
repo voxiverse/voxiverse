@@ -370,7 +370,7 @@ test_snapshot :: proc(t: ^testing.T) {
 test_bus_mute_and_gain :: proc(t: ^testing.T) {
 	m := new_mixer(48000)
 	defer free(m)
-	tone := constant(480_000, 0.4)
+	tone := constant(480_000, 0.2)
 	defer delete(tone)
 	id := add_sound(m, {tone, 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music, loop = true})
@@ -382,14 +382,14 @@ test_bus_mute_and_gain :: proc(t: ^testing.T) {
 	late := latency(m)
 	testing.expectf(
 		t,
-		abs(out[2 * (4000 + late)] - 0.2) < 1e-5,
+		abs(out[2 * (4000 + late)] - 0.1) < 1e-5,
 		"music at half, ui muted: %v",
 		out[2 * (4000 + late)],
 	)
 	set_bus_gain(m, .Master, 0.5)
 	out2 := mix_frames(m, 4800)
 	defer delete(out2)
-	testing.expectf(t, abs(out2[2 * 4000] - 0.1) < 1e-5, "master half: %v", out2[2 * 4000])
+	testing.expectf(t, abs(out2[2 * 4000] - 0.05) < 1e-5, "master half: %v", out2[2 * 4000])
 }
 
 // A bus low-pass dulls a high tone and leaves a low one.

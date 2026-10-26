@@ -314,6 +314,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M29 | 31 | 1 | 1 | still rules, second-seed CI run, event cost test (counted from M28's line) |
 | M30 | 158 | 22 | 1 | chest block, records, overlay, Use_Block (counted from M29's line) |
 | M31 | - | - | 1 | item ledger, audit, fuzz (an unattended session: not measured) |
+| M32a | - | - | 1 | true-peak limiter, compressor, reverb, sinc resampler, scheduled starts, listener options (an unattended session: not measured) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -356,7 +357,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M30 | Blocks that hold things: a chest block with a server-owned record of 25 stacks, saved with the world, opened with the right button, moved with the inventory requests, shared by everyone looking, spilled when broken | A chest filled, saved, quit and loaded holds the same; broken, it drops every stack; two players over UDP moving items in one chest agree with the server; a record without its block is dropped (done: `server/containers.odin` (records by position, saved in `containers.cfg`, copied in and out around every inventory request, others looking told, spilled when the block is gone), `game/inventory.odin` chest slots (`test_chest_actions`), `Use_Block` and the chest in `Inventory_Update` (protocol 22, round-trip tests), `client` chest overlay (`test_chest_overlay`), `server/containers_test.odin` (a chest filled, saved, quit and loaded holds the same and spills 128 items when broken; two players over UDP see each other's moves and agree with the server; a record without its block is dropped and spills); not done: a permission node, locks, signs) |
 | M31 | Item ledger and audit: every item that enters or leaves the game's holdings goes through one `ledger` call with a reason (faucets and sinks), telemetry kinds for both, an `audit` that sums everything held and checks it against the ledger, and a fuzz of hostile inventory traffic | A scripted session through every faucet and sink balances exactly; a deliberately duplicated stack is caught; 2000 random (and invalid) inventory requests from two players over UDP leave the audit balanced (done: `server/ledger.odin` (`ledger`, `audit`, `audit_baseline`, the `/audit` command with `admin.audit`, a run every five minutes on a dedicated server), `game/reason.odin` (`Reason`, shared so `tools/analytics` can name it), telemetry `Item_Created`, `Item_Destroyed` and `Audit_Failed`, `analytics faucets`, `server/ledger_test.odin` (the scripted session, a duplicated and a deleted stack reported by item and amount, travel, chest, death, leaving and returning with an overflowed character, a world unloaded and loaded again, a game-level fuzz of 20 000 actions, 4 000 requests over UDP, the audit budget at 200 players and 3 000 item entities), and every item-touching existing test ends with a balanced audit; not done: see HISTORY.md) |
 | M32 | Audio engine core: voices as handles, virtual voices, loops, streams (Ogg), buses with ducking and snapshots, DSP (filters, reverb, compressor, limiter, loudness meter), a command ring in both directions | Offline tests: gapless loops, handles, voice virtualization, fades, ducking, filter and reverb responses, limiter, loudness, streaming under starvation; a mixer cost scenario in CI; the old effects unchanged (done: `audio/` rewritten: handles with generations and a return ring (`play` gives a `Voice_Id`; `stop`, `fade_voice`, `set_voice_*`, `poll`/`drain`), 128 voices of which the 64 best by priority then audibility are real and the rest virtual, loops with loop points, fade in and out, cubic resampling, per-voice and per-bus low-pass (`Svf`), the bus tree World/Player/UI < Effects, Ambience, Music < Master with gain, mute, ducking and snapshots, the look-ahead limiter at -1 dBFS and a BS.1770 meter in `dsp.odin`, a NaN guard, Options sliders Music/Ambience/Effects; tests in `mixer_test.odin` and `dsp_test.odin`; not done: moved to M32a) |
-| M32a | Audio engine core, the rest: streams (Ogg through `vendor:stb/vorbis`, decoder thread, rings), the reverb and compressor, a windowed-sinc resampler, a 4x-oversampled true-peak limiter, the capture hook (every command stamped with its frame, a recorder, replay through `mix`), sample-accurate scheduling, the listener's safety and comfort options, the mixer cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; reverb RT60 within 10% and THD+N under figure; resampler alias under -90 dB and passband flat within 0.1 dB; true peak under -1 dBTP on inter-sample test signals; a capture replays to bit-identical samples at both optimization levels; scheduled sounds start on the exact frame over a simulated hour; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) |
+| M32a | Audio engine core, the rest: streams (Ogg through `vendor:stb/vorbis`, decoder thread, rings), the reverb and compressor, a windowed-sinc resampler, a true-peak limiter, the capture hook (every command stamped with its frame, a recorder, replay through `mix`), sample-accurate scheduling, the listener's safety and comfort options, the mixer cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; reverb RT60 within 10% and THD+N under figure; resampler alias under -90 dB and passband flat within 0.1 dB; true peak under -1 dBTP on inter-sample test signals; a capture replays to bit-identical samples at both optimization levels; scheduled sounds start on the exact frame over a simulated hour; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `audio/sinc.odin` (Kaiser-sinc kernel, beta 10, tabulated at 1024 points a sample and stretched when the step is above 1, so pitched-up sounds are filtered before they alias; used for every voice at another rate than the mixer's or pitched by more than a semitone, cubic stays for the rest; `resample_sound` converts at load), `audio/space.odin` (an 8-line FDN reverb with live RT60, damping, early reflections, a send per bus and a return into Master; a compressor, also Night mode), the limiter detects the 8x-oversampled true peak (32-tap FIR; latency is now `limiter_delay` = look-ahead + 16 frames), `Play.start_frame` schedules a sound on an exact mixer frame (`clock`, `Stats.late`), `set_listener` takes Mono, Swap, cross-feed, Night and a safety ceiling; tests in `audio/engine_test.odin`; not done: moved to M32c) |
+| M32c | Audio engine core, the last part: streams, the capture hook, the real-time thread, the cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; a capture replays to bit-identical samples at both optimization levels; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) |
 | M32b | Audio tools: capture files, `build audiodump` (timeline, per-bus spectrograms, loudness, WAV out), an in-game freeze-and-solo inspector, quality and cost baselines that fail CI on drift | A capture replays to bit-identical audio; the dump names every voice dropped or virtualized; baselines for four scenarios (burst, cave walk, title to world, 64-voice stress) hold in CI and a deliberately changed sound fails them; the `audio` bench scenario is in `compare` |
 | M33 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
 | M34 | Music director: title music, loading, a Minecraft-like wait-play-wait in worlds picked by place and time, pause, stingers, Music and Ambience sliders | Director tests with an injected clock and random source (gaps, no overlap, no repeats, tags, pause, ducking); a scripted hour rendered and checked |
@@ -440,34 +442,38 @@ only a voxel world can do: sound that hears the blocks.
   meters and LUFS, the reverb's room, occlusion rays drawn as debug lines); a benchmark
   scenario for the mixer's cost.
 
-### M32a: the engine core, the rest
+### M32c: the engine core, the last part
 
-M32 (HISTORY.md) built the mixer, voices, buses, ducking, snapshots, the limiter and the
-meter. What the quality bar in the original M32 text asked for and is still owed:
+M32 and M32a (HISTORY.md) built the mixer, the DSP and the scheduling. Still owed from the
+original M32 text:
 
 - **Streams:** `audio/stream`: a decoder thread fills ring buffers from an Ogg in memory
   (`vendor:stb/vorbis`; first check the library exists for all three CI OSes, else compile
   `stb_vorbis.c` ourselves); an underrun is counted, never silent; loops with a crossfade;
-  streams are voices (the same handle).
-- **DSP:** the feedback-delay-network reverb (8 lines, damping, early reflections, RT60
-  live) on a send per bus; the compressor (also the Night mode); denormals flushed on the
-  audio thread by FTZ/DAZ; a 4x-oversampled true-peak stage for the limiter.
-- **Resampling:** windowed-sinc polyphase (100 dB stop-band) for pitched voices and rate
-  conversion at load; cubic stays for short sounds pitched under a semitone.
-- **Capture:** every command carries the frame it takes effect on (sample-accurate
-  scheduling, `Play.start_frame`), a recorder on the game thread's side (`audio.capture`)
-  writing a versioned file (header with the sound table's ids and checksums and the bus
-  tree, then length-prefixed records); any capture replays through `mix` to the same samples.
-- **Listener's side:** a hearing-safety ceiling, Night mode, Mono and left-right swap,
-  headphone cross-feed (in Options); the real-time thread priority (MMCSS on Windows, the
-  OS call elsewhere); drift of scheduled sounds measured over an hour; latency in the overlay.
-- **Tests and cost:** those named in the exit check of the row above that M32's tests do
-  not already cover, and a `bench` scenario `audio` (64 voices, 4 buses, the reverb) in CI.
+  streams are voices (the same handle). A stream's source is a `Sound`-like id registered
+  with `add_stream`; the mixer reads its ring where a memory voice reads samples (through
+  the same sinc), so pitch, filters, buses and fades are shared.
+- **Capture:** every command carries the frame it takes effect on (`Command` gains a
+  `frame: u64`, taken from `clock(m)` plus the latency slack when the game sends it; the
+  audio thread holds a command until its frame, as it already does for `start_frame`), a
+  recorder on the game thread's side (`audio.capture`) writing a versioned file (header
+  with the sound table's ids and checksums, the bus tree and the mixer's rate, then
+  length-prefixed records); any capture replays through `mix` to the same samples.
+- **The real-time thread:** denormals flushed on the audio thread by FTZ/DAZ (MXCSR on
+  x86-64, FPCR on arm64; the code already flushes the filters' and reverb's states), the
+  real-time priority (MMCSS on Windows, the OS call elsewhere), the callback's own
+  duration measured (`Stats`) and the drift of scheduled sounds measured over an hour on
+  the real device clock; latency in the overlay.
+- **The game's side of M32a's options:** Options gets Mono, Swap, Night, cross-feed and a
+  safety ceiling (`client/options` into `audio.set_listener`); nothing else of the game
+  changes.
+- **Tests and cost:** those named in the exit check of the row above, and a `bench`
+  scenario `audio` (64 voices, 4 buses, the reverb) in CI.
 - **Settled in M32:** `Bus` is `World, Player, UI, Effects, Ambience, Music, Master` in
   processing order (a duck's trigger comes before its target); the limiter's look-ahead is
-  2 ms, so everything arrives `latency(m)` frames late; `Play` is named fields now, zero
-  meaning World bus, no loop, no filter; the game calls `audio.drain` each frame to free
-  handles; the settings keep `volume` as Master.
+  2 ms plus the true-peak lag, so everything arrives `latency(m)` frames late; `Play` is
+  named fields now, zero meaning World bus, no loop, no filter; the game calls
+  `audio.drain` each frame to free handles; the settings keep `volume` as Master.
 
 ### M32b: audio tools (capture, dump, inspector, baselines)
 

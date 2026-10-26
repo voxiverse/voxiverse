@@ -51,16 +51,17 @@ Sound :: struct {
 // Play: one sound. gain: left and right (spatial position and loudness, see
 // spatial_gain); pitch: playback speed (1 = as made, 0 = 1).
 Play :: struct {
-	sound:      Sound_Id,
-	gain:       [2]f32,
-	pitch:      f32,
-	bus:        Bus, // World unless said
-	priority:   u8, // higher is kept over lower when voices run out
-	loop:       bool, // plays until stopped
-	loop_start: int, // samples; the loop is [loop_start, loop_end)
-	loop_end:   int, // 0: the sound's end
-	fade_in:    f32, // seconds
-	cutoff:     f32, // Hz of a low-pass on this voice, 0 for none
+	sound:       Sound_Id,
+	gain:        [2]f32,
+	pitch:       f32,
+	bus:         Bus, // World unless said
+	priority:    u8, // higher is kept over lower when voices run out
+	loop:        bool, // plays until stopped
+	loop_start:  int, // samples; the loop is [loop_start, loop_end)
+	loop_end:    int, // 0: the sound's end
+	fade_in:     f32, // seconds
+	cutoff:      f32, // Hz of a low-pass on this voice, 0 for none
+	start_frame: u64, // the mixer frame (see `clock`) the sound starts on; 0 or past: at once
 }
 
 End_Reason :: enum u8 {
@@ -87,6 +88,13 @@ Mixer :: struct {
 	bus_buf:  [Bus][2 * MAX_BLOCK]f32,
 	limiter:  Limiter,
 	meter:    Meter,
+	sinc:     Sinc_Table,
+	reverb:   Reverb,
+	rev_in:   [2 * MAX_BLOCK]f32, // what the buses send to the reverb, this block
+	night:    Compressor, // the compressor on Master (Night mode)
+	listener: Listener,
+	cross:    [2]f32, // headphone cross-feed filter state
+	clock:    u64, // frames mixed; the audio thread's time, which scheduled plays use
 	order:    [MAX_VOICES]u8, // scratch: voices by rank
 	// The command ring: written by the game thread, read by the audio thread.
 	commands: [COMMAND_RING]Command,
@@ -114,6 +122,7 @@ Stats :: struct {
 	played:      u32, // sounds started, ever
 	virtualized: u32, // voice-blocks spent virtual, ever
 	nan_guarded: u32, // samples zeroed because they were not finite, ever
+	late:        u32, // scheduled sounds that started late (their frame had passed), ever
 	frames:      u64, // frames mixed, ever
 	momentary:   f32, // LUFS of the last 400 ms (f32 bits)
 	reduction:   f32, // the limiter's lowest gain since the last read
@@ -128,6 +137,7 @@ stats :: proc(m: ^Mixer) -> Stats {
 		played      = sync.atomic_load(&m.stats.played),
 		virtualized = sync.atomic_load(&m.stats.virtualized),
 		nan_guarded = sync.atomic_load(&m.stats.nan_guarded),
+		late        = sync.atomic_load(&m.stats.late),
 		frames      = sync.atomic_load(&m.stats.frames),
 		momentary   = load_f32(&m.stats.momentary),
 		reduction   = load_f32(&m.stats.reduction),
@@ -158,6 +168,7 @@ Voice :: struct {
 	state:      Voice_State,
 	reason:     End_Reason, // when Done
 	virtual:    bool,
+	start_at:   u64, // first frame of the sound (0: already started)
 	sound:      Sound_Id,
 	bus:        Bus,
 	priority:   u8,
@@ -187,6 +198,28 @@ Command :: union {
 	Bus_Cmd,
 	Duck_Cmd,
 	Snapshot_Cmd,
+	Reverb_Cmd,
+	Listener_Cmd,
+}
+
+@(private)
+Reverb_Cmd :: struct {
+	rt60, damping, wet, early: f32,
+}
+
+@(private)
+Listener_Cmd :: struct {
+	options: Listener,
+}
+
+// Listener: what the player chose about how they hear (Options). Applied to
+// Master before the limiter, so the ceiling holds for all of it.
+Listener :: struct {
+	mono:       bool, // both ears the same
+	swap:       bool, // left and right exchanged
+	crossfeed:  f32, // 0..0.6: headphone cross-feed, the other ear's lows
+	night:      bool, // the compressor: loud things down, so nothing wakes the house
+	ceiling_db: f32, // hearing-safety ceiling, dBFS, 0 for the default (-1); at most -0.1
 }
 
 @(private)
@@ -226,6 +259,9 @@ mixer_init :: proc(m: ^Mixer, rate: u32) {
 	}
 	for &b in m.buses {bus_defaults(&b, f32(rate))}
 	limiter_init(&m.limiter, f64(rate), 0.002, -1, 0.15)
+	sinc_table_init(&m.sinc)
+	reverb_init(&m.reverb, f64(rate))
+	compressor_init(&m.night, f64(rate), 0, 1, 0, 0, 0.005, 0.15)
 	meter_init(&m.meter, f64(rate))
 	store_f32(&m.stats.momentary, -math.INF_F32)
 	store_f32(&m.stats.reduction, 1)
@@ -282,6 +318,23 @@ set_voice_pitch :: proc(m: ^Mixer, id: Voice_Id, pitch: f32) {
 // set_voice_cutoff: Hz of the voice's low-pass; 0 opens it.
 set_voice_cutoff :: proc(m: ^Mixer, id: Voice_Id, hz: f32) {
 	if id != 0 {push(m, Voice_Param{id, .Cutoff, {hz, 0}})}
+}
+
+// set_reverb: the room (see reverb_set); buses send to it with set_bus_reverb.
+set_reverb :: proc(m: ^Mixer, rt60, damping, wet, early: f32) {
+	push(m, Reverb_Cmd{rt60, damping, wet, early})
+}
+
+// set_listener sets the listener's options.
+set_listener :: proc(m: ^Mixer, o: Listener) {
+	push(m, Listener_Cmd{o})
+}
+
+// clock: the mixer's time in frames, as of the last mix (game thread). A sound
+// scheduled with Play.start_frame = clock(m) + k + latency-sized slack starts
+// on exactly that frame; its sound leaves the mixer `latency(m)` frames later.
+clock :: proc(m: ^Mixer) -> u64 {
+	return sync.atomic_load(&m.stats.frames)
 }
 
 // set_volume sets the master volume (0..1) from the next mix on.
@@ -368,6 +421,7 @@ mix :: proc "contextless" (m: ^Mixer, out: []f32) {
 	for done := 0; done < frames; {
 		n := min(MAX_BLOCK, frames - done)
 		guarded += mix_block(m, out[2 * done:][:2 * n], n)
+		m.clock += u64(n)
 		done += n
 	}
 	report_ends(m)
@@ -395,17 +449,25 @@ mix_block :: proc "contextless" (m: ^Mixer, out: []f32, n: int) -> (guarded: u32
 	for &buf in m.bus_buf {
 		for i in 0 ..< 2 * n {buf[i] = 0}
 	}
-	rank_voices(m)
+	for i in 0 ..< 2 * n {m.rev_in[i] = 0}
+	rank_voices(m, n)
 	for &v in m.voices {
-		if v.state != .Playing {continue}
+		if v.state != .Playing || v.start_at >= m.clock + u64(n) {continue}
+		off := 0
+		if v.start_at > m.clock {off = int(v.start_at - m.clock)}
+		v.start_at = 0
 		if v.virtual {
-			skip_voice(m, &v, n)
+			skip_voice(m, &v, n - off)
 		} else {
-			guarded += render_voice(m, &v, m.bus_buf[v.bus][:2 * n], n)
+			guarded += render_voice(m, &v, m.bus_buf[v.bus][:2 * n], n, off)
 		}
 	}
-	for b in Bus {process_bus(m, b, n)}
+	for b in Bus {
+		if b == .Master {run_reverb(m, n)}
+		process_bus(m, b, n)
+	}
 	master := m.bus_buf[.Master][:2 * n]
+	apply_listener(m, master)
 	limiter_run(&m.limiter, master)
 	for i in 0 ..< 2 * n {
 		x := master[i]
@@ -421,13 +483,63 @@ mix_block :: proc "contextless" (m: ^Mixer, out: []f32, n: int) -> (guarded: u32
 	return
 }
 
+// run_reverb adds the reverb's return to Master while there is input or a
+// tail left to hear.
+@(private)
+run_reverb :: proc "contextless" (m: ^Mixer, n: int) {
+	r := &m.reverb
+	sending := false
+	for b in m.buses {if b.send > 0 || b.send_now > 0 {sending = true}}
+	if !sending && r.tail < 1e-7 {
+		if r.tail != 0 {reverb_clear(r)}
+		return
+	}
+	reverb_run(r, m.rev_in[:2 * n], m.bus_buf[.Master][:2 * n])
+}
+
+// apply_listener: the listener's options on the finished mix, before the
+// limiter.
+@(private)
+apply_listener :: proc "contextless" (m: ^Mixer, buf: []f32) {
+	o := &m.listener
+	if compressor_active(&m.night) {compressor_run(&m.night, buf)}
+	frames := len(buf) / 2
+	if o.mono {
+		for f in 0 ..< frames {
+			x := (buf[2 * f] + buf[2 * f + 1]) * 0.5
+			buf[2 * f], buf[2 * f + 1] = x, x
+		}
+	}
+	if o.swap {
+		for f in 0 ..< frames {buf[2 * f], buf[2 * f + 1] = buf[2 * f + 1], buf[2 * f]}
+	}
+	if o.crossfeed > 0 {
+		// The other ear gets the lows (700 Hz one-pole), the sum scaled back so
+		// a centered signal keeps its level.
+		k := f32(1 - math.exp(-2 * math.PI * 700 / f64(m.rate)))
+		scale := 1 / (1 + o.crossfeed)
+		for f in 0 ..< frames {
+			l, r := buf[2 * f], buf[2 * f + 1]
+			m.cross[0] += (l - m.cross[0]) * k
+			m.cross[1] += (r - m.cross[1]) * k
+			buf[2 * f] = (l + o.crossfeed * m.cross[1]) * scale
+			buf[2 * f + 1] = (r + o.crossfeed * m.cross[0]) * scale
+		}
+		for i in 0 ..< 2 {if abs(m.cross[i]) < 1e-25 {m.cross[i] = 0}}
+	}
+}
+
 // rank_voices decides which voices are real this block: by priority, then by
 // audibility; REAL_VOICES of them, and none that cannot be heard.
 @(private)
-rank_voices :: proc "contextless" (m: ^Mixer) {
+rank_voices :: proc "contextless" (m: ^Mixer, n: int) {
 	count := 0
 	for &v, i in m.voices {
 		if v.state != .Playing {continue}
+		if v.start_at >= m.clock + u64(n) {
+			v.virtual = false // waiting, not mixed and not counted as virtual
+			continue
+		}
 		chain := bus_level(m, v.bus)
 		v.key =
 			(max(v.gain[0], v.gain_now[0]) + max(v.gain[1], v.gain_now[1])) *
@@ -477,7 +589,15 @@ cubic :: #force_inline proc "contextless" (p0, p1, p2, p3, t: f32) -> f32 {
 
 // render_voice adds one voice into buf (interleaved stereo) for n frames.
 @(private)
-render_voice :: proc "contextless" (m: ^Mixer, v: ^Voice, buf: []f32, n: int) -> (guarded: u32) {
+render_voice :: proc "contextless" (
+	m: ^Mixer,
+	v: ^Voice,
+	buf: []f32,
+	n: int,
+	off: int,
+) -> (
+	guarded: u32,
+) {
 	s := m.sounds[v.sound].samples
 	last := len(s) - 1
 	looping := v.loop
@@ -488,8 +608,13 @@ render_voice :: proc "contextless" (m: ^Mixer, v: ^Voice, buf: []f32, n: int) ->
 	g1 := v.gain
 	step0 := v.step
 	step1 := v.step_to
-	dg := (g1 - g0) / f32(n)
-	dstep := (step1 - step0) / f64(n)
+	span := n - off
+	dg := (g1 - g0) / f32(span)
+	dstep := (step1 - step0) / f64(span)
+	// Cubic only where it is as good as a sinc: the mixer's own rate and a
+	// pitch within a semitone; everything else gets the windowed sinc.
+	rate_ratio := f64(m.sounds[v.sound].rate) / f64(m.rate)
+	cheap := rate_ratio == 1 && abs(math.ln(step0)) < 0.0578 && abs(math.ln(step1)) < 0.0578
 	filtering := false
 	if v.cutoff != v.cutoff_now {
 		v.cutoff_now = glide(v.cutoff_now, v.cutoff, n, f32(m.rate))
@@ -498,7 +623,7 @@ render_voice :: proc "contextless" (m: ^Mixer, v: ^Voice, buf: []f32, n: int) ->
 		svf_set(&v.filter, f64(v.cutoff_now), 0.7071, f64(m.rate))
 		filtering = true
 	}
-	for f in 0 ..< n {
+	for f in off ..< n {
 		if !looping && v.pos >= f64(last) {
 			end_voice(v, .Ended)
 			break
@@ -506,7 +631,18 @@ render_voice :: proc "contextless" (m: ^Mixer, v: ^Voice, buf: []f32, n: int) ->
 		i := int(v.pos)
 		t := f32(v.pos - f64(i))
 		x: f32
-		if looping {
+		k := f - off
+		if !cheap {
+			x = sinc_read(
+				&m.sinc,
+				s,
+				v.pos,
+				step0 + dstep * f64(k),
+				int(v.loop_start),
+				int(v.loop_end),
+				looping,
+			)
+		} else if looping {
 			x = cubic(
 				s[wrap(i - 1, last, v)],
 				s[wrap(i, last, v)],
@@ -535,9 +671,9 @@ render_voice :: proc "contextless" (m: ^Mixer, v: ^Voice, buf: []f32, n: int) ->
 			}
 		}
 		x *= v.fade
-		buf[2 * f] += x * (g0[0] + dg[0] * f32(f))
-		buf[2 * f + 1] += x * (g0[1] + dg[1] * f32(f))
-		v.pos += step0 + dstep * f64(f)
+		buf[2 * f] += x * (g0[0] + dg[0] * f32(k))
+		buf[2 * f + 1] += x * (g0[1] + dg[1] * f32(k))
+		v.pos += step0 + dstep * f64(k)
 		if looping && v.pos >= v.loop_end {
 			for v.pos >= v.loop_end {v.pos -= loop_len}
 		}
@@ -670,6 +806,10 @@ take_commands :: proc "contextless" (m: ^Mixer) {
 			m.ducks[c.index].held = 1
 		case Snapshot_Cmd:
 			apply_snapshot(m, c)
+		case Reverb_Cmd:
+			reverb_set(&m.reverb, c.rt60, c.damping, c.wet, c.early)
+		case Listener_Cmd:
+			apply_options(m, c.options)
 		}
 	}
 	sync.atomic_store_explicit(&m.read, r, .Release)
@@ -678,6 +818,20 @@ take_commands :: proc "contextless" (m: ^Mixer) {
 @(private)
 open_cutoff :: proc "contextless" (m: ^Mixer) -> f32 {
 	return f32(m.rate) / 2.2
+}
+
+// apply_options takes a listener's options: the ceiling goes to the limiter,
+// Night mode to the compressor (off lets a reduction in progress release).
+@(private)
+apply_options :: proc "contextless" (m: ^Mixer, o: Listener) {
+	m.listener = o
+	ceiling := o.ceiling_db if o.ceiling_db != 0 else -1
+	limiter_set_ceiling(&m.limiter, f64(min(ceiling, -0.1)))
+	if o.night {
+		compressor_init(&m.night, f64(m.rate), -24, 4, 6, 3, 0.005, 0.2)
+	} else {
+		m.night.ratio, m.night.makeup, m.night.knee = 1, 0, 0
+	}
 }
 
 // start puts a sound on its voice (the handle names the slot).
@@ -709,8 +863,14 @@ start :: proc "contextless" (m: ^Mixer, c: Play_Cmd) {
 		fade = 0
 		fade_step = 1 / (p.fade_in * f32(m.rate))
 	}
+	start_at := p.start_frame
+	if start_at != 0 && start_at < m.clock {
+		sync.atomic_add(&m.stats.late, 1) // its frame passed; it starts at once
+		start_at = 0
+	}
 	m.voices[slot] = {
 		id         = c.id,
+		start_at   = start_at,
 		state      = .Playing,
 		sound      = p.sound,
 		bus        = p.bus,

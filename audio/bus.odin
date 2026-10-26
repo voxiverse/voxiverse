@@ -47,6 +47,8 @@ Bus_State :: struct {
 	open:       f32,
 	filter:     [2]Svf,
 	peak:       f32, // of the last block, after the gain
+	send:       f32, // wanted level of this bus into the reverb
+	send_now:   f32,
 }
 
 // Duck: while the trigger bus is louder than the threshold (linear peak) the
@@ -83,6 +85,7 @@ Bus_Cmd :: struct {
 		Gain,
 		Mute,
 		Cutoff,
+		Send,
 	},
 	value:  f32,
 	frames: u32,
@@ -134,6 +137,12 @@ set_bus_cutoff :: proc(m: ^Mixer, bus: Bus, hz: f32) {
 	push(m, Bus_Cmd{bus, .Cutoff, hz, 0})
 }
 
+// set_bus_reverb: how much of the bus goes to the reverb (0 none, 1 as loud
+// as the bus). The reverb's return joins Master.
+set_bus_reverb :: proc(m: ^Mixer, bus: Bus, send: f32) {
+	push(m, Bus_Cmd{bus, .Send, clamp(send, 0, 4), 0})
+}
+
 // set_duck defines duck rule `index` (0 ..< MAX_DUCKS).
 set_duck :: proc(m: ^Mixer, index: int, d: Duck) {
 	assert(index >= 0 && index < MAX_DUCKS && d.trigger < d.target)
@@ -156,6 +165,8 @@ bus_command :: proc "contextless" (m: ^Mixer, c: Bus_Cmd) {
 	case .Cutoff:
 		b.cutoff = c.value if c.value > 0 else b.open
 		b.cut_tau = 0.005
+	case .Send:
+		b.send = c.value
 	}
 }
 
@@ -225,6 +236,16 @@ process_bus :: proc "contextless" (m: ^Mixer, which: Bus, n: int) {
 		svf_flush(&b.filter[1])
 	}
 	b.peak = peak
+	if b.send > 0 || b.send_now > 0 {
+		s0 := b.send_now
+		b.send_now = approach(b.send_now, b.send, frames / (QUICK * rate))
+		ds := (b.send_now - s0) / frames
+		for f in 0 ..< n {
+			g := s0 + ds * f32(f)
+			m.rev_in[2 * f] += buf[2 * f] * g
+			m.rev_in[2 * f + 1] += buf[2 * f + 1] * g
+		}
+	}
 	if which != .Master {
 		parent := m.bus_buf[BUS_PARENT[which]][:2 * n]
 		for i in 0 ..< 2 * n {parent[i] += buf[i]}

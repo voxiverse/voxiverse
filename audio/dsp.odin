@@ -53,9 +53,15 @@ svf_flush :: proc "contextless" (f: ^Svf) {
 // Limiter: look-ahead peak limiter on a stereo pair. The gain is the
 // running minimum of the wanted gain over the look-ahead window, averaged
 // over the same window (so it is already down when the peak arrives and
-// never steps), and recovers with a release time. The output is delayed by
-// `delay` frames; no sample passes `ceiling`.
+// never steps), and recovers with a release time. The peak it watches is the
+// true peak: the signal 8x oversampled by a windowed-sinc FIR (seven
+// interpolated points between samples), so what a DAC reconstructs between
+// samples stays under `ceiling` too. The output is delayed by `limiter_delay`
+// frames.
 LIMITER_MAX :: 256
+TP_POINTS :: 7 // between two samples
+TP_TAPS :: 32 // per interpolated point
+TP_LAG :: 16 // the detector sees a point this many frames after it happened
 
 Limiter :: struct {
 	n:       int, // window, frames
@@ -63,7 +69,9 @@ Limiter :: struct {
 	release: f32, // per-frame recovery of the gap to 1
 	g:       f32, // gain applied last
 	t:       u64, // frames seen
-	delay:   [LIMITER_MAX][2]f32,
+	delay:   [LIMITER_MAX + TP_LAG][2]f32,
+	hist:    [2][64]f32, // the last input samples, per channel
+	tp:      [TP_POINTS][TP_TAPS]f32, // FIR for the points at 1/8 .. 7/8
 	ring:    [LIMITER_MAX]f32, // the window-minimum history, for the average
 	sum:     f64,
 	dq_t:    [LIMITER_MAX]u64, // monotonic deque of (frame, wanted gain)
@@ -88,19 +96,43 @@ limiter_init :: proc "contextless" (
 	l.lowest = 1
 	for i in 0 ..< l.n {l.ring[i] = 1}
 	l.sum = f64(l.n)
+	for p in 0 ..< TP_POINTS {
+		frac := f64(p + 1) / (TP_POINTS + 1)
+		for k in 0 ..< TP_TAPS {
+			u := f64(k - TP_TAPS / 2 + 1) - frac // taps are samples a-15 .. a+16
+			x := math.PI * u
+			l.tp[p][k] = f32(math.sin(x) / x * kaiser(u / (TP_TAPS / 2), 6))
+		}
+	}
+}
+
+// limiter_set_ceiling changes the ceiling (dBFS) while running.
+limiter_set_ceiling :: proc "contextless" (l: ^Limiter, ceiling_db: f64) {
+	l.ceiling = f32(math.pow(10, ceiling_db / 20))
 }
 
 // limiter_delay: how many frames later the input comes out.
 limiter_delay :: proc "contextless" (l: ^Limiter) -> int {
-	return l.n - 1
+	return l.n - 1 + TP_LAG
 }
 
 // limiter_run limits interleaved stereo in place.
 limiter_run :: proc "contextless" (l: ^Limiter, buf: []f32) {
 	n := u64(l.n)
+	span := u64(l.n + TP_LAG)
 	for f in 0 ..< len(buf) / 2 {
 		x := [2]f32{buf[2 * f], buf[2 * f + 1]}
-		peak := max(abs(x[0]), abs(x[1]))
+		peak: f32
+		for c in 0 ..< 2 {
+			h := &l.hist[c]
+			h[l.t & 63] = x[c]
+			peak = max(peak, abs(h[(l.t - TP_LAG) & 63]))
+			for p in 0 ..< TP_POINTS {
+				acc: f32
+				for k in 0 ..< TP_TAPS {acc += l.tp[p][k] * h[(l.t - (TP_TAPS - 1) + u64(k)) & 63]}
+				peak = max(peak, abs(acc))
+			}
+		}
 		want: f32 = 1
 		if peak > l.ceiling {want = l.ceiling / peak}
 		// The window minimum.
@@ -117,8 +149,8 @@ limiter_run :: proc "contextless" (l: ^Limiter, buf: []f32) {
 		l.ring[slot] = low
 		average := f32(l.sum / f64(n))
 		l.g = min(average, l.g + (1 - l.g) * l.release)
-		l.delay[slot] = x
-		out := l.delay[(l.t + 1) % n]
+		l.delay[l.t % span] = x
+		out := l.delay[(l.t + 1) % span]
 		buf[2 * f] = out[0] * l.g
 		buf[2 * f + 1] = out[1] * l.g
 		l.lowest = min(l.lowest, l.g)
