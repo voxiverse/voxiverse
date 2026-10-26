@@ -1,6 +1,8 @@
 package audio
 
+import "base:intrinsics"
 import "core:math"
+import "core:simd"
 
 // Windowed-sinc resampling: a Kaiser-windowed sinc (beta 10, 100 dB
 // stop-band) tabulated at SINC_RES points per source sample and read with
@@ -16,7 +18,12 @@ SINC_CUTOFF :: 0.9 // of Nyquist: the pass-band ends near 0.4 of the rate, the s
 SINC_MAX_STEP :: 8 // the widest stretch (a step above this is clamped)
 
 Sinc_Table :: struct {
-	k: [SINC_HALF * SINC_RES + 2]f32, // kernel for u in [0, SINC_HALF], in source samples
+	k:    [SINC_HALF * SINC_RES + 2]f32, // kernel for u in [0, SINC_HALF], in source samples
+	// The same kernel by phase, for reading at a step of 1 or less: row p holds
+	// the 2 * SINC_HALF taps for a position p / SINC_RES past a sample, taps
+	// from sample - (SINC_HALF - 1) on, so a read is a dot product over one
+	// run of samples and two rows.
+	poly: [SINC_RES + 1][2 * SINC_HALF]f32,
 }
 
 // bessel_i0: the modified Bessel function of order 0 (series).
@@ -44,6 +51,35 @@ sinc_table_init :: proc "contextless" (t: ^Sinc_Table) {
 		s := 1.0 if u == 0 else math.sin(x) / x
 		t.k[i] = f32(SINC_CUTOFF * s * kaiser(u / SINC_HALF, SINC_BETA))
 	}
+	for p in 0 ..= SINC_RES {
+		for j in 0 ..< 2 * SINC_HALF {
+			m := j - (SINC_HALF - 1)
+			at := abs(m * SINC_RES - p)
+			t.poly[p][j] = t.k[at] if at < SINC_HALF * SINC_RES else 0
+		}
+	}
+}
+
+// sinc_fast: sinc_read at a step of 1 or less, for a position whose taps all
+// lie inside `s` (SINC_HALF - 1 <= int(pos) and int(pos) + SINC_HALF <
+// len(s)): the phase rows on either side of pos, summed in 8 lanes.
+sinc_fast :: proc "contextless" (t: ^Sinc_Table, s: []f32, pos: f64) -> f32 {
+	i := int(pos)
+	fp := (pos - f64(i)) * SINC_RES
+	p := int(fp)
+	w := f32(fp - f64(p))
+	x := ([^]f32)(&s[i - (SINC_HALF - 1)])
+	a := &t.poly[p]
+	b := &t.poly[p + 1]
+	sa, sb: #simd[8]f32
+	for j := 0; j < 2 * SINC_HALF; j += 8 {
+		v := intrinsics.unaligned_load((^#simd[8]f32)(&x[j]))
+		sa += v * intrinsics.unaligned_load((^#simd[8]f32)(&a[j]))
+		sb += v * intrinsics.unaligned_load((^#simd[8]f32)(&b[j]))
+	}
+	ra := simd.reduce_add_pairs(sa)
+	rb := simd.reduce_add_pairs(sb)
+	return ra + w * (rb - ra)
 }
 
 // sinc_read: the sound `s` at fractional position `pos`, `step` source

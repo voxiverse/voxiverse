@@ -6,6 +6,7 @@ import "core:math"
 import "core:strings"
 import "core:time"
 
+import "../audio"
 import "../base"
 import "../game"
 import "../gpu"
@@ -25,6 +26,7 @@ Bench_Kind :: enum u8 {
 	Views, // still views all round: the GPU's work
 	Flight, // flying over the land: streaming while drawing
 	Edits, // explosions round the spawn: bulk edits re-meshed, water let loose
+	Audio, // the mixer alone: 64 voices on 4 buses, the reverb and a stream (no world, no GPU)
 }
 
 Scenario :: struct {
@@ -58,6 +60,13 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"12 explosions round the spawn, until re-meshed and the water is still",
+	},
+	{
+		"audio",
+		.Audio,
+		1,
+		3,
+		"the mixer offline: 64 looping voices on 4 buses, the reverb, a music stream; 10 s of blocks",
 	},
 }
 
@@ -174,6 +183,10 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 		scenario.description,
 		scenario.repetitions,
 	)
+	if scenario.kind == .Audio {
+		bench_audio(app) // (nothing here draws, so nothing is set up for it)
+		return
+	}
 	if !gpu.set_offscreen(&app.g, BENCH_SIZE.x, BENCH_SIZE.y) {
 		bench_fail(app, "cannot draw offscreen at a fixed size here")
 		return
@@ -279,7 +292,7 @@ bench_update :: proc(app: ^App) {
 		base.metrics_start()
 	case .Measuring:
 		switch b.scenario.kind {
-		case .Load:
+		case .Load, .Audio:
 		case .Views:
 			pitches := BENCH_VIEW_PITCHES
 			s.camera.yaw = f32(b.view % BENCH_VIEW_YAWS) * 2 * math.PI / BENCH_VIEW_YAWS
@@ -390,4 +403,130 @@ bench_fail :: proc(app: ^App, why: string) {
 	base.bench_result_destroy(&b.result)
 	b.phase, b.failed, b.done = .Off, true, true
 	app.quit = true
+}
+
+BENCH_AUDIO_VOICES :: 64
+BENCH_AUDIO_BLOCK :: 480 // frames: 10 ms at 48 kHz, a device callback's size
+BENCH_AUDIO_BLOCKS :: 1000
+BENCH_AUDIO_SMOKE_BLOCKS :: 100
+BENCH_AUDIO_WARMUP :: 50
+BENCH_AUDIO_STREAM :: #load("../audio/testdata/tone.ogg")
+// BENCH_AUDIO_BUDGET: a core's share the mix may take (PLAN.md, M32c: 5%),
+// judged on the median block of a release build.
+BENCH_AUDIO_BUDGET :: 0.05
+
+// bench_audio runs the audio scenario: the mixer alone, offline, in the same
+// conditions every time: sixty-four looping voices (sounds made at 16 kHz as
+// the effects are, converted at load, a quarter of the voices pitched about),
+// spread over four buses with the reverb on for
+// two of them, and a looping stream on Music, all mixed in blocks the size of
+// a device callback. Each block's time is a sample.
+@(private = "file")
+bench_audio :: proc(app: ^App) {
+	b := &app.bench
+	blocks := BENCH_AUDIO_SMOKE_BLOCKS if b.smoke else BENCH_AUDIO_BLOCKS
+	voices, real, underruns, late: u32
+	for _ in 0 ..< b.scenario.repetitions {
+		m := new(audio.Mixer)
+		audio.mixer_init(m, audio.DEVICE_RATE)
+		// Sounds: noise-and-tone bursts from a fixed generator.
+		seed: u32 = 12345
+		sounds: [16]audio.Sound_Id
+		samples: [16][]f32
+		for &id, k in sounds {
+			samples[k] = make([]f32, 8000 + 500 * k)
+			for &x, i in samples[k] {
+				seed = seed * 1664525 + 1013904223
+				noise := f32(seed >> 8) / f32(1 << 24) - 0.5
+				x = 0.12 * (noise + f32(math.sin(f64(i) * (0.05 + 0.01 * f64(k)))))
+			}
+			// As the game does at load: at the mixer's rate, so a voice at its own
+			// pitch takes the cheap path.
+			converted := audio.resample_sound({samples[k], 16000}, audio.DEVICE_RATE)
+			delete(samples[k])
+			samples[k] = converted.samples
+			id = audio.add_sound(m, converted)
+			audio.set_bandwidth(m, id, 8000)
+		}
+		music, _ := audio.add_stream(
+			m,
+			BENCH_AUDIO_STREAM,
+			loop = true,
+			crossfade = 0.1,
+			inline = true,
+		)
+		audio.set_reverb(m, 1.4, 0.5, 0.25, 0.2)
+		audio.set_bus_reverb(m, .World, 0.3)
+		audio.set_bus_reverb(m, .Ambience, 0.5)
+		audio.set_duck(
+			m,
+			0,
+			{
+				active = true,
+				trigger = .Effects,
+				target = .Music,
+				threshold = 0.05,
+				amount = 0.5,
+				attack = 0.01,
+				release = 0.3,
+			},
+		)
+		buses := [4]audio.Bus{.World, .Player, .Ambience, .UI}
+		for i in 0 ..< BENCH_AUDIO_VOICES {
+			audio.play(
+				m,
+				{
+					sound  = sounds[i % len(sounds)],
+					gain   = {0.02, 0.02},
+					// A quarter of them pitched about as effects are (the windowed
+					// sinc), the rest within a semitone (the cubic).
+					pitch  = 0.8 + 0.45 * f32(i % 7) / 6 if i % 4 == 0 else 0.97 + 0.06 * f32(i % 5) / 4,
+					bus    = buses[i % len(buses)],
+					loop   = true,
+					cutoff = 6000 if i % 5 == 0 else 0,
+				},
+			)
+		}
+		audio.play(m, {sound = music, gain = {0.5, 0.5}, bus = .Music})
+		out: [2 * BENCH_AUDIO_BLOCK]f32
+		base.metrics_start()
+		for blk in 0 ..< blocks + BENCH_AUDIO_WARMUP {
+			start := time.tick_now()
+			audio.mix(m, out[:])
+			spent := time.tick_since(start)
+			audio.drain(m)
+			if blk >= BENCH_AUDIO_WARMUP {
+				base.metric_add(.Audio_Mix, f32(time.duration_milliseconds(spent)))
+			}
+		}
+		base.bench_repetition_end(&b.result)
+		st := audio.stats(m)
+		voices, real, underruns, late = st.voices, st.real, st.underruns, st.late
+		audio.streams_close(m)
+		for s in samples {delete(s)}
+		free(m)
+	}
+	append(
+		&b.result.counts,
+		base.Bench_Count{"voices", int(voices)},
+		base.Bench_Count{"real_voices", int(real)},
+		base.Bench_Count{"underruns", int(underruns)},
+		base.Bench_Count{"late", int(late)},
+	)
+	// The budget: the median block, against the 10 ms it has (release builds:
+	// the others are slower on purpose).
+	if base.build_name() == "release" {
+		first := b.result.repetitions[0][.Audio_Mix].median
+		share := first / (1000 * f64(BENCH_AUDIO_BLOCK) / audio.DEVICE_RATE)
+		log.infof(
+			"bench audio: a block takes %.1f%% of a core (budget %.0f%%)",
+			100 * share,
+			100 * BENCH_AUDIO_BUDGET,
+		)
+		if share > BENCH_AUDIO_BUDGET {
+			bench_fail(app, "the 64-voice mix takes more than its share of a core")
+			return
+		}
+	}
+	bench_finish(app)
 }

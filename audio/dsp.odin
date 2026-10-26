@@ -71,6 +71,9 @@ Limiter :: struct {
 	t:       u64, // frames seen
 	delay:   [LIMITER_MAX + TP_LAG][2]f32,
 	hist:    [2][64]f32, // the last input samples, per channel
+	l1:      f32, // the largest sum of |taps| of any row of tp: a point is at most this times the largest sample
+	recent:  [8]f32, // largest |sample| in each of the last 8 groups of 8 frames (both channels)
+	group:   int, // frames into the current group
 	tp:      [TP_POINTS][TP_TAPS]f32, // FIR for the points at 1/8 .. 7/8
 	ring:    [LIMITER_MAX]f32, // the window-minimum history, for the average
 	sum:     f64,
@@ -103,6 +106,9 @@ limiter_init :: proc "contextless" (
 			x := math.PI * u
 			l.tp[p][k] = f32(math.sin(x) / x * kaiser(u / (TP_TAPS / 2), 6))
 		}
+		sum: f32
+		for k in 0 ..< TP_TAPS {sum += abs(l.tp[p][k])}
+		l.l1 = max(l.l1, sum)
 	}
 }
 
@@ -123,10 +129,24 @@ limiter_run :: proc "contextless" (l: ^Limiter, buf: []f32) {
 	for f in 0 ..< len(buf) / 2 {
 		x := [2]f32{buf[2 * f], buf[2 * f + 1]}
 		peak: f32
+		// The points between samples cannot pass the ceiling when the largest of
+		// the last 32..39 samples times the FIR's largest gain does not: then
+		// only the lagged sample itself is looked at (the same answer, without
+		// the FIR; the loudest mixes are the only ones that need it).
+		l.recent[(l.t / 8) & 7] = max(
+			l.recent[(l.t / 8) & 7] if l.group != 0 else 0,
+			abs(x[0]),
+			abs(x[1]),
+		)
+		l.group = (l.group + 1) & 7
+		bound: f32
+		for r in l.recent {bound = max(bound, r)}
+		interpolate := bound * l.l1 > l.ceiling
 		for c in 0 ..< 2 {
 			h := &l.hist[c]
 			h[l.t & 63] = x[c]
 			peak = max(peak, abs(h[(l.t - TP_LAG) & 63]))
+			if !interpolate {continue}
 			for p in 0 ..< TP_POINTS {
 				acc: f32
 				for k in 0 ..< TP_TAPS {acc += l.tp[p][k] * h[(l.t - (TP_TAPS - 1) + u64(k)) & 63]}

@@ -161,7 +161,7 @@ usage :: proc() {
 	)
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
 	fmt.println(
-		"              load, views, flight, edits  the game (a release build, fixed settings;",
+		"              load, views, flight, edits, audio  the game (a release build, fixed settings;",
 	)
 	fmt.println("                           server: the server alone, simulated players;")
 	fmt.println("                           --smoke: one short run, as CI does)")
@@ -551,7 +551,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, load, views, flight, edits (client/benchmark.odin), server (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, load, views, flight, edits, audio (client/benchmark.odin), server (dedicated/bench.odin), or compare",
 		)
 		return false
 	}

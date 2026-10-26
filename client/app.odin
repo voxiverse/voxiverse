@@ -64,6 +64,7 @@ App :: struct {
 	audio_device:     audio.Device,
 	sounds:           Sound_Bank,
 	volumes:          [audio.Bus]f32, // as last told to the mixer
+	listener:         audio.Listener, // ... and the listener's options
 	shader_watch:     Shader_Watch,
 	worlds:           Worlds_Screen,
 	multiplayer:      Multiplayer_Screen,
@@ -173,6 +174,7 @@ app_init :: proc(app: ^App) -> bool {
 audio_init :: proc(app: ^App) {
 	sounds_init(&app.sounds, app.mixer)
 	audio_volumes(app, true)
+	audio_listener(app, true)
 	audio.device_open(&app.audio_device, app.mixer)
 }
 
@@ -190,6 +192,23 @@ audio_volumes :: proc(app: ^App, all: bool) {
 			audio.set_bus_gain(app.mixer, b, want[b])
 			app.volumes[b] = want[b]
 		}
+	}
+}
+
+// audio_listener tells the mixer the listener's options when they changed
+// (all: whatever they are, first).
+audio_listener :: proc(app: ^App, all: bool) {
+	s := &app.settings
+	want := audio.Listener {
+		mono       = s.mono_audio,
+		swap       = s.swap_channels,
+		night      = s.night_mode,
+		crossfeed  = clamp(s.crossfeed, 0, 0.6),
+		ceiling_db = clamp(s.ceiling_db, -24, -0.1) if s.ceiling_db != 0 else 0,
+	}
+	if all || want != app.listener {
+		audio.set_listener(app.mixer, want)
+		app.listener = want
 	}
 }
 
@@ -238,13 +257,18 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	}
 	a := audio.stats(app.mixer)
 	log.infof(
-		"audio device=%v played=%d mixed_seconds=%.1f dropped=%d",
+		"audio device=%v played=%d mixed_seconds=%.1f dropped=%d underruns=%d late=%d callback_max_us=%d drift_ppm=%.1f",
 		app.audio_device.open,
 		a.played,
 		f64(a.frames) / f64(max(app.mixer.rate, 1)),
 		app.mixer.dropped,
+		a.underruns,
+		a.late,
+		a.cb_max_ns / 1000,
+		a.drift_ppm,
 	)
 	audio.device_close(&app.audio_device) // before the sounds it plays go
+	audio.streams_close(app.mixer)
 	sounds_destroy(&app.sounds)
 	free(app.mixer)
 	if app.settings_dirty {settings_save(app)}
@@ -296,6 +320,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	platform.set_keep_awake(w, playing)
 	gpu.set_vsync(&app.g, app.settings.vsync)
 	audio_volumes(app, false)
+	audio_listener(app, false)
 	audio.drain(app.mixer)
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could

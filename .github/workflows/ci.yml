@@ -98,7 +98,7 @@ jobs:
       - name: Benchmark scenarios (smoke, Linux)
         if: runner.os == 'Linux'
         run: |
-          for scenario in load views flight edits; do
+          for scenario in load views flight edits audio; do
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
           done
 

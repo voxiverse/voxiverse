@@ -36,6 +36,11 @@ Settings :: struct {
 	music_volume:      f32, // 0..1
 	ambience_volume:   f32, // 0..1
 	effects_volume:    f32, // 0..1
+	mono_audio:        bool, // both ears hear the same (one-sided hearing)
+	swap_channels:     bool, // left and right exchanged
+	night_mode:        bool, // loud sounds down so nothing wakes the house
+	crossfeed:         f32, // 0..0.6: headphones: the other ear hears the lows (0: off)
+	ceiling_db:        f32, // hearing-safety ceiling for the whole mix, dBFS
 	// Controls
 	mouse_sensitivity: f32,
 	invert_mouse:      bool,
@@ -59,6 +64,7 @@ SETTINGS_DEFAULTS := Settings {
 	music_volume      = 1,
 	ambience_volume   = 1,
 	effects_volume    = 1,
+	ceiling_db        = -1,
 	mouse_sensitivity = 1,
 	keys              = DEFAULT_BINDINGS,
 	chat_text_size    = 1,
@@ -176,6 +182,40 @@ SETTINGS_VARS := [?]base.Var {
 		min = 0,
 		max = 1,
 		step = 0.05,
+	},
+	{
+		field = "mono_audio",
+		label = "Mono sound",
+		help = "play the same sound in both ears",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "swap_channels",
+		label = "Swap ears",
+		help = "exchange left and right",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "night_mode",
+		label = "Night mode",
+		help = "loud sounds are brought down, quiet ones up a little: nothing wakes the house",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "crossfeed",
+		label = "Headphone cross-feed",
+		help = "each ear hears a little of the other's low sounds, as with speakers; 0 = off",
+		min = 0,
+		max = 0.6,
+		step = 0.05,
+	},
+	{
+		field = "ceiling_db",
+		label = "Loudest sound",
+		help = "the mix never goes above this many decibels under full scale",
+		min = -24,
+		max = -1,
+		step = 1,
 	},
 	{field = "mouse_sensitivity", help = "mouse look speed", min = 0.1, max = 5, step = 0.05},
 	{

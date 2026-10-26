@@ -1101,3 +1101,95 @@ streams, the capture, the real-time thread and the cost scenario are M32c in PLA
   of two 0.4 steps crossed the true-peak ceiling). The suite passes at both optimization levels.
 - **Differs from the design.** No THD+N figure for the reverb: it is linear, the test
   asserts that exactly. 8x instead of 4x oversampling. Not done: moved to M32c.
+
+## M32c: the audio engine, last part
+
+Streams, capture and replay, held commands, the real-time thread, the game's side of the
+listener's options and the audio benchmark. The engine core is done; what is left of audio
+is M32b (tools) and the milestones on top.
+
+- **Streams.** `audio/stream.odin`. `add_stream(m, ogg_bytes, loop, crossfade, inline)` registers
+  an Ogg in memory as a sound id (`vendor:stb/vorbis` has libraries for Windows, Linux and
+  macOS in the toolchain, no C of ours). A stream has one voice at a time (a second `play`
+  is dropped and counted in `dropped`). The decoder writes mono samples (the channels
+  averaged) at the file's rate into a 65 536-sample ring; the voice reads a window of it
+  copied to a stage, through the same cubic or sinc as any sound (pitch, cut-off, buses,
+  fades, priority and virtualization all work; a virtual stream voice keeps its place in
+  time and lets the ring move on). A loop is the decoder's: the end of the file is
+  crossfaded (equal power, at most a quarter of the file) into its start and the ring is
+  endless. An underrun (the ring has not what the voice needs) is counted (`Stats.underruns`,
+  `stream_underruns`), never skipped over: the voice holds its place, silent for that block.
+  When a voice ends the stream restarts for the next (an epoch counter: the decoder resets,
+  and the mixer reads nothing until it says so). `inline` streams have no thread: `mix` decodes
+  them itself each block, so tests and replays do not depend on timing. A decoder thread
+  starved for 200 ms (`stream_pause`) costs nothing (the ring holds 1.3 s); starved for more,
+  the underrun is counted and the voice goes on from where it was. `streams_close` joins
+  and frees.
+- **Capture.** `audio/capture.odin`. The recorder is on the audio thread's side (the game
+  preallocates: `capture_start(m, capacity)`), not the game thread's as first written: the
+  facts a replay needs, the size of each `mix` call and the frame each command was applied
+  on, are the audio thread's. Records are appended without allocating; a full recorder
+  counts what it lost (`overflow`) and stops. The file is a header (rate, start clock, bus
+  and voice counts, the size of `Play`), a checksum per sound (or per stream's file), then
+  the records with each command's raw bytes (good for the build that wrote it, a debugging
+  artifact, not a save format). `capture_parse` checks sizes, counts, enums, bus and sound
+  indices and handle slots before anything is trusted. `capture_replay` pushes the commands
+  with their recorded frames and calls `mix` with the recorded sizes into a fresh mixer with
+  the same sounds (streams inline): the samples are bit-identical, tested live against
+  replay, through a file, and (checked by hand: the checksum of the test scene is the same)
+  from -o:none to -o:aggressive. A capture begun mid-session cannot replay bit for bit (the
+  voices playing are state the file lacks): M32b's rolling capture adds a snapshot.
+- **Commands on frames.** Every setter takes `at: u64 = 0`, a mixer frame (`clock(m)` plus
+  slack). The audio thread moves commands from the ring to a table of 128 waiting ones
+  (`held`) and applies, in arrival order, those whose frame has come; a block is cut at the
+  next waiting frame, so a command lands on its frame exactly in the middle of a call. One
+  that comes after its frame is applied at once and counted in `Stats.late`. A table full of
+  waiting commands leaves the rest in the ring until room is made. The mixer now takes commands
+  at every block, not only at the start of a call.
+- **The real-time thread.** `audio/device.odin`. miniaudio's context is opened with the
+  real-time thread priority (its WASAPI backend joins MMCSS's Pro Audio itself); each
+  callback flushes denormals (FTZ/DAZ through `_mm_setcsr`, x86-64 only: this toolchain's
+  inline assembly is amd64-only, so arm64 relies on the filters' and reverb's own flushing,
+  which Apple's chips do not need), times itself (`cb_last_ns`, `cb_max_ns`), and the device's
+  clock is compared with the system's over a span that starts five seconds in
+  (`drift_ppm`, +17 ppm here over ten seconds); `output_latency` gives the milliseconds from a
+  command to the card. The hour-long drift run is for a person to watch (the log line at
+  exit carries all of these); the simulated hour of scheduling is M32a's test.
+- **The game's side.** Options > Sound gets Mono sound, Swap ears, Night mode, Headphone
+  cross-feed and Loudest sound (`ceiling_db`, default -1); `audio_listener` sends them when
+  they change. The log line at exit has underruns, late, the callback maximum and the drift.
+  The sound effects are converted to the mixer's rate at load (`resample_sound`, as M32a
+  said; the device may then differ from 48 kHz, which only costs the cheap path) and
+  declared as having nothing above 8 kHz.
+- **Speed.** The 64-voice scenario cost 94% of a core at first. Now: `sinc_fast` reads the
+  kernel by phase (a 1025-row table, two rows, 8 lanes) for a step of 1 or less; the new
+  `set_bandwidth(sound, hz)` declares a sound's highest content, and when
+  `bandwidth * step <= 0.4 * the sound's rate` a pitch-up uses the unstretched kernel too
+  (a 16 kHz effect pitched to 1.25 has no content near the new Nyquist, so the stretch only
+  cost time); a sound with no declared bandwidth keeps the stretch. The true-peak limiter
+  skips its FIR while the last 32-39 samples times the FIR's largest gain are under the
+  ceiling (the same output: only a loud mix needs it). The voice loop keeps its state in
+  locals and runs without bounds checks (every index there is derived from the position
+  checks above it). The scenario is 4.4% of this machine's core.
+- **`build bench audio`** (`client/benchmark.odin`, `Bench_Kind.Audio`, metric `audio_mix`): no
+  world and no GPU work, the mixer offline: 64 looping voices (16 kHz noise-and-tone
+  sounds converted at load; a quarter pitched 0.8-1.25, the rest within 3%, a fifth
+  low-passed) on World, Player, Ambience and UI, the reverb on two of them, a duck and a looping
+  stream on Music; 1000 blocks of 480 frames a repetition, three repetitions. Counts
+  (voices, real voices, underruns, late) must not change. A release build fails past 5% of
+  a core on the median block; the CI smoke step runs it with the others.
+- **Tests.** `audio/stream_test.odin` (equals its decode, inline and threaded; a seamless
+  loop and the same period every pass; pitch and stop; one voice; garbage; a starved
+  decoder; denormals), `audio/capture_test.odin` (bit-identical replay, damaged and
+  mismatched files refused, overflow counted, a command on its frame, many waiting
+  commands), `client/effects_spectrum_test.odin` (the break/place/step scene's third-octave
+  bands within 1 dB of what M32a's mixer made; the numbers were taken before any of M32c
+  changed, and the effects now go through the converted path). The suite passes at
+  -o:none and -o:speed; `audio/testdata/tone.ogg` is a 14 KB fixture made with ffmpeg
+  (3 s, 440 Hz left and 660 Hz right).
+- **Differs from the design.** Streams are mono (the channels averaged): a stereo stream is
+  M33's if music needs it (two mono streams started on one frame would do). The recorder is
+  on the audio thread's side. The golden checksum of the test scene is held only on Linux
+  x86-64 (the maths library is part of it); elsewhere the test compares live with replay.
+  The latency in the overlay is M32b's (the numbers are in `Stats` and `output_latency`).
+

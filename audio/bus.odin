@@ -124,34 +124,34 @@ bus_defaults :: proc "contextless" (b: ^Bus_State, rate: f32) {
 	}
 }
 
-set_bus_gain :: proc(m: ^Mixer, bus: Bus, gain: f32) {
-	push(m, Bus_Cmd{bus, .Gain, clamp(gain, 0, 4), 0})
+set_bus_gain :: proc(m: ^Mixer, bus: Bus, gain: f32, at: u64 = 0) {
+	push(m, Bus_Cmd{bus, .Gain, clamp(gain, 0, 4), 0}, at)
 }
 
-set_bus_mute :: proc(m: ^Mixer, bus: Bus, mute: bool) {
-	push(m, Bus_Cmd{bus, .Mute, 1 if mute else 0, 0})
+set_bus_mute :: proc(m: ^Mixer, bus: Bus, mute: bool, at: u64 = 0) {
+	push(m, Bus_Cmd{bus, .Mute, 1 if mute else 0, 0}, at)
 }
 
 // set_bus_cutoff: Hz of the bus's low-pass; 0 opens it.
-set_bus_cutoff :: proc(m: ^Mixer, bus: Bus, hz: f32) {
-	push(m, Bus_Cmd{bus, .Cutoff, hz, 0})
+set_bus_cutoff :: proc(m: ^Mixer, bus: Bus, hz: f32, at: u64 = 0) {
+	push(m, Bus_Cmd{bus, .Cutoff, hz, 0}, at)
 }
 
 // set_bus_reverb: how much of the bus goes to the reverb (0 none, 1 as loud
 // as the bus). The reverb's return joins Master.
-set_bus_reverb :: proc(m: ^Mixer, bus: Bus, send: f32) {
-	push(m, Bus_Cmd{bus, .Send, clamp(send, 0, 4), 0})
+set_bus_reverb :: proc(m: ^Mixer, bus: Bus, send: f32, at: u64 = 0) {
+	push(m, Bus_Cmd{bus, .Send, clamp(send, 0, 4), 0}, at)
 }
 
 // set_duck defines duck rule `index` (0 ..< MAX_DUCKS).
-set_duck :: proc(m: ^Mixer, index: int, d: Duck) {
+set_duck :: proc(m: ^Mixer, index: int, d: Duck, at: u64 = 0) {
 	assert(index >= 0 && index < MAX_DUCKS && d.trigger < d.target)
-	push(m, Duck_Cmd{index, d})
+	push(m, Duck_Cmd{index, d}, at)
 }
 
 // set_snapshot crossfades the buses to a snapshot over `over` seconds.
-set_snapshot :: proc(m: ^Mixer, s: Snapshot, over: f32) {
-	push(m, Snapshot_Cmd{s, seconds(m, over)})
+set_snapshot :: proc(m: ^Mixer, s: Snapshot, over: f32, at: u64 = 0) {
+	push(m, Snapshot_Cmd{s, seconds(m, over)}, at)
 }
 
 @(private)

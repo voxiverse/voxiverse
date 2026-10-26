@@ -45,9 +45,16 @@ LAND_LOUD_SPEED :: 20 // ... and this hard is as loud as it gets
 
 // sounds_init makes every sound and registers it with m.
 sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
+	// Sounds are made at sfx.RATE; the mixer's rate is converted to at load,
+	// so a voice at its own pitch takes the cheap path, and the content
+	// (under half sfx.RATE) is declared so pitching up costs no more.
 	add :: proc(b: ^Sound_Bank, m: ^audio.Mixer, samples: []f32) -> audio.Sound_Id {
-		append(&b.samples, samples)
-		return audio.add_sound(m, {samples, sfx.RATE})
+		made := audio.resample_sound({samples, sfx.RATE}, m.rate)
+		delete(samples)
+		append(&b.samples, made.samples)
+		id := audio.add_sound(m, made)
+		audio.set_bandwidth(m, id, sfx.RATE / 2)
+		return id
 	}
 	for mat in sfx.Material {
 		for a in sfx.Action {
