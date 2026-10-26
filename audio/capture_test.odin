@@ -5,6 +5,8 @@ import "core:log"
 import "core:math"
 import "core:os"
 import "core:slice"
+import "core:strings"
+import "core:sync"
 import "core:testing"
 
 // Tests for M32c's capture and the frames commands carry.
@@ -303,4 +305,154 @@ test_many_held_commands :: proc(t: ^testing.T) {
 	mix(m, out)
 	testing.expect_value(t, m.held_n, 0)
 	testing.expect_value(t, m.dropped, 0)
+}
+
+// ring_run: the game's side for `seconds`, in calls of uneven sizes, with
+// something told to the mixer about every 40th call (no stream voices: the
+// state a ring keeps has none of a decoder's).
+@(private = "file")
+ring_run :: proc(s: Scene, out: []f32, at: ^int, seconds: int) {
+	m := s.m
+	sizes := [?]int{100, 480, 777, 512, 1023, 64, 960, 333}
+	end := at^ + 48000 * seconds
+	for call := 0; at^ < end; call += 1 {
+		n := min(sizes[call % len(sizes)], end - at^)
+		if call % 40 == 0 {
+			k := call / 40
+			play(
+				m,
+				{
+					sound = s.bell,
+					gain = {0.3 + 0.1 * f32(k % 5), 0.5},
+					pitch = 0.8 + 0.1 * f32(k % 7),
+					bus = Bus(k % 4),
+				},
+			)
+			if k % 9 == 0 {set_reverb(m, 0.8 + 0.1 * f32(k % 5), 0.4, 0.3, 0.2)}
+			if k % 11 == 0 {set_bus_gain(m, .World, 0.5 + 0.1 * f32(k % 4))}
+		}
+		if call == 0 {
+			play(
+				m,
+				{sound = s.tone, gain = {0.3, 0.2}, loop = true, bus = .Ambience, cutoff = 1500},
+			)
+			set_listener(m, {crossfeed = 0.2, night = true})
+		}
+		mix(m, out[2 * at^:][:2 * n])
+		at^ += n
+		drain(m)
+	}
+}
+
+// A rolling capture, written long after it began, replays from the middle of
+// the session to the very samples that were played: the state it carries is
+// the voices, buses, reverb, limiter and the rest at its first call.
+@(test)
+test_ring_capture_replays_from_the_middle :: proc(t: ^testing.T) {
+	live := scene_new(48000)
+	defer scene_free(live)
+	testing.expect(t, capture_start_ring(live.m, 4096))
+	defer capture_destroy(sync.atomic_exchange(&live.m.capture, nil))
+	seconds := 50
+	played := make([]f32, 2 * 48000 * (seconds + 3))
+	defer delete(played)
+	at := 0
+	ring_run(live, played, &at, seconds)
+
+	path := "build/test_ring.vxac"
+	os.make_directory("build")
+	testing.expect(t, capture_ring_save(live.m, path))
+	defer os.remove(path)
+	data, err := os.read_entire_file(path, context.allocator)
+	defer delete(data)
+	testing.expect(t, err == nil)
+	file, ok := capture_parse(data)
+	testing.expect(t, ok)
+	defer capture_file_destroy(&file)
+	testing.expect(t, file.state != nil, "carries a state")
+	from := int(file.header.start_clock)
+	testing.expectf(t, from > 0 && from % 480 != 12345, "begins mid-session (frame %d)", from)
+	// 4 to 5 snapshot intervals back would be the window of a big ring; this
+	// one is small, so what is covered is what its records reach.
+	testing.expectf(
+		t,
+		capture_frames(&file) + from >= at - 48000 * 2 * CAPTURE_SNAP_SECONDS,
+		"window %d + %d of %d",
+		from,
+		capture_frames(&file),
+		at,
+	)
+	testing.expect(t, capture_frames(&file) + from == at, "reaches the present")
+
+	fresh := scene_new(48000)
+	defer scene_free(fresh)
+	got := make([]f32, 2 * capture_frames(&file))
+	defer delete(got)
+	testing.expect(t, capture_replay(fresh.m, &file, got))
+	testing.expect(
+		t,
+		slice.equal(got, played[2 * from:2 * at]),
+		"replay from the state is not bit-identical",
+	)
+
+	// Recording goes on after a save, from a state of its own.
+	ring_run(live, played, &at, 2)
+	testing.expect(t, capture_ring_save(live.m, path))
+	data2, _ := os.read_entire_file(path, context.allocator)
+	defer delete(data2)
+	file2, ok2 := capture_parse(data2)
+	testing.expect(t, ok2)
+	defer capture_file_destroy(&file2)
+	testing.expect(t, file2.state != nil && int(file2.header.start_clock) > from)
+	fresh2 := scene_new(48000)
+	defer scene_free(fresh2)
+	got2 := make([]f32, 2 * capture_frames(&file2))
+	defer delete(got2)
+	testing.expect(t, capture_replay(fresh2.m, &file2, got2))
+	to := int(file2.header.start_clock) + capture_frames(&file2)
+	testing.expect(
+		t,
+		slice.equal(got2, played[2 * int(file2.header.start_clock):2 * to]),
+		"second window not bit-identical",
+	)
+
+	// A damaged state is refused.
+	bad := slice.clone(data)
+	defer delete(bad)
+	bad[size_of(Capture_Header) + int(file.header.sound_count) * size_of(Capture_Sound) + 100] ~= 0x55
+	_, bok := capture_parse(bad)
+	testing.expect(t, !bok, "state hash")
+}
+
+// A ring that has not been going for one interval has nothing to write from;
+// a mixer that drops commands has them recorded where it did.
+@(test)
+test_ring_capture_edges :: proc(t: ^testing.T) {
+	s := scene_new(48000)
+	defer scene_free(s)
+	testing.expect(t, !capture_ring_save(s.m, "build/none.vxac"), "no recorder")
+	testing.expect(t, capture_start_ring(s.m, 4096))
+	defer capture_destroy(sync.atomic_exchange(&s.m.capture, nil))
+	for _ in 0 ..< COMMAND_RING + 40 {set_bus_gain(s.m, .Music, 0.5)} 	// some find the ring full
+	out := make([]f32, 2 * 960)
+	defer delete(out)
+	mix(s.m, out)
+	cap := sync.atomic_exchange(&s.m.capture, nil)
+	data := capture_encode(s.m, cap)
+	defer delete(data)
+	file, ok := capture_parse(data)
+	testing.expect(t, ok)
+	defer capture_file_destroy(&file)
+	drops := 0
+	for r in file.records {drops += int(r.drops)}
+	testing.expect_value(t, drops, 40)
+	rows := capture_rows(&file)
+	defer {
+		for r in rows {delete(r.text)}
+		delete(rows)
+	}
+	found := false
+	for r in rows {if strings.has_prefix(r.text, "DROPPED 40") {found = true}}
+	testing.expect(t, found, "the dump names the drop")
+	sync.atomic_store(&s.m.capture, cap)
 }

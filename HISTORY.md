@@ -1283,3 +1283,48 @@ capture through a fresh mixer with `client.sounds_init`; a capture whose sound t
 WAV and a capture per scenario. The cost baseline is M32c's `audio` bench scenario, which
 `bench compare` already runs. Not built (M32d): the rolling capture, the inspector,
 spectrograms, the null and file devices, the 30 s smoke run.
+
+## M32d: audio tools, the rest (rolling capture, devices, smoke run)
+
+What M32b left, less the inspector and the crash and checksum parts (M32e).
+
+- **The rolling capture** (`audio/capture.odin`). `capture_start_ring` keeps the last 2^16
+  records in a ring and, every 15 s (`CAPTURE_SNAP_SECONDS`), a `Mixer_State` taken on the
+  audio thread at the start of a mix call: voices, buses, ducks, limiter, meter, reverb,
+  compressor, listener, cross-feed, clock. Six slots, used in turn; a dump starts from the
+  oldest state whose records the ring still holds (with a margin the audio thread may be
+  overwriting) and is not the slot the next one would take. `capture_ring_save` detaches the
+  recorder for 5 ms, writes, and reattaches with the next state forced (the mixes of the
+  gap are not in the file, so older states are not used again). File version 3: the header
+  names the state's size, hash and the stream voices it had (a decoder's ring is not part
+  of it: those replay silent, with a warning); `capture_parse` checks the hash and the
+  indices a replay would use; `capture_replay` restores the state, then pushes the records.
+  Commands held for their frame are not in the state: each is recorded when applied. Drops
+  are records of their own (`DROPPED n commands` in the timeline: written on the call after
+  the ring found itself full, not the instant). Tested: a ring that wrapped many times,
+  begun long before the dump, replays from the middle to the very samples played; a second
+  save after the first does too; a damaged state is refused.
+- **Devices without a card** (`audio/device.odin`). `device_open_null` is a thread that asks
+  for a 10 ms block by the wall clock through the same `pump` the card's callback uses (so
+  the stats, timing and drift are measured the same way); `device_open_file` mixes nothing
+  by itself: `device_render(frames)` mixes that many as fast as it can into memory (at most
+  300 s) and the WAV is written at close. (Decision: as fast as it can means the caller's
+  clock, not a free-running thread: a thread would race ahead of the game it listens to.)
+  `audio/wav.odin`'s `wav_write` replaces `audiodump`'s own.
+- **Spectrograms** (`audio/spectrogram.odin`): 4096-point Hann windows, a log frequency axis
+  from 40 Hz to 20 kHz, dB below full scale as colour; `build audiodump <capture>
+  -bus:Music -spectrogram:out.png`.
+- **In the game** (`client/audio_debug.odin`): the ring runs from the start (not in a
+  benchmark); F9 and the `audio_capture` command write `captures/audio-<n>.vxac`, and so
+  does an underrun (once in 30 s, at most 8 files a run).
+- **`--check audio`** (`client/audio_check.odin`; `--null-audio` is the flag under it): the
+  game mixes into the null device for 30 s while sound events are played round the camera
+  every 60 ms; fails on an underrun, non-finite sample, dropped or late command, a callback
+  over 30 ms (three blocks: a card buffers two or three periods; one preempted callback on
+  a software-rasterizer runner was seen at 9.5 ms, so one block would flake), a mix that is
+  not the wall clock's length, or a ring that writes nothing. A Linux CI step runs it. The
+  checks' settings are silent: the check sets the volume itself, or every voice is virtual
+  (this was seen in the first run and is why).
+- **Not done (M32e):** the freeze-and-solo inspector, the crash report and `report`
+  attachments of the ring, the macOS and Windows checksums (they need those CI runs).
+

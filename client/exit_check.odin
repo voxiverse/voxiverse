@@ -78,6 +78,13 @@ CHECKS := [?]Check_Info {
 		2,
 		proc(app: ^App) {blast_test_begin(app, 12)},
 	},
+	{
+		"audio",
+		"30 s of a busy session into the null device: no underruns, NaN, dropped or late commands, the callback in its block",
+		3,
+		2,
+		proc(app: ^App) {audio_check_begin(app)},
+	},
 }
 
 check_find :: proc(name: string) -> (Check_Info, bool) {

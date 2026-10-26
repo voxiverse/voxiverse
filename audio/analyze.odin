@@ -406,6 +406,15 @@ capture_rows :: proc(f: ^Capture_File, allocator := context.allocator) -> []Row 
 			frame = r.frame,
 			sound = -1,
 		}
+		if r.drops > 0 {
+			row.text = fmt.aprintf(
+				"DROPPED %d commands (ring full, no free handle or a busy stream)",
+				r.drops,
+				allocator = allocator,
+			)
+			append(&rows, row)
+			continue
+		}
 		switch c in r.cmd {
 		case Play_Cmd:
 			p := c.play

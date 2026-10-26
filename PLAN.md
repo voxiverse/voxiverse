@@ -317,6 +317,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M32a | - | - | 1 | true-peak limiter, compressor, reverb, sinc resampler, scheduled starts, listener options (an unattended session: not measured) |
 | M32c | - | - | 1 | streams, capture and replay, held commands, real-time thread, the audio bench (an unattended session: not measured) |
 | M32b | - | - | 1 | audio analysis, the dump, baselines, `build audio` (an unattended session: not measured) |
+| M32d | - | - | 1 | rolling capture with a mixer state, null and file devices, spectrograms, the audio smoke check (an unattended session: not measured) |
 
 | # | Slice | Exit check |
 |---|---|---|
@@ -362,7 +363,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M32a | Audio engine core, the rest: streams (Ogg through `vendor:stb/vorbis`, decoder thread, rings), the reverb and compressor, a windowed-sinc resampler, a true-peak limiter, the capture hook (every command stamped with its frame, a recorder, replay through `mix`), sample-accurate scheduling, the listener's safety and comfort options, the mixer cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; reverb RT60 within 10% and THD+N under figure; resampler alias under -90 dB and passband flat within 0.1 dB; true peak under -1 dBTP on inter-sample test signals; a capture replays to bit-identical samples at both optimization levels; scheduled sounds start on the exact frame over a simulated hour; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `audio/sinc.odin` (Kaiser-sinc kernel, beta 10, tabulated at 1024 points a sample and stretched when the step is above 1, so pitched-up sounds are filtered before they alias; used for every voice at another rate than the mixer's or pitched by more than a semitone, cubic stays for the rest; `resample_sound` converts at load), `audio/space.odin` (an 8-line FDN reverb with live RT60, damping, early reflections, a send per bus and a return into Master; a compressor, also Night mode), the limiter detects the 8x-oversampled true peak (32-tap FIR; latency is now `limiter_delay` = look-ahead + 16 frames), `Play.start_frame` schedules a sound on an exact mixer frame (`clock`, `Stats.late`), `set_listener` takes Mono, Swap, cross-feed, Night and a safety ceiling; tests in `audio/engine_test.odin`; not done: moved to M32c) |
 | M32c | Audio engine core, the last part: streams, the capture hook, the real-time thread, the cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; a capture replays to bit-identical samples at both optimization levels; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `audio/stream.odin` (`add_stream`: an Ogg in memory, a decoder thread (or `inline`, decoded by `mix`, for offline work) writing a 64k-sample ring of mono samples, read by the voice through the same cubic/sinc, an epoch counter restarting it for the next voice, loops crossfaded equal-power by the decoder, an underrun counted and the voice holding its place; `stream_underruns`), `audio/capture.odin` (the recorder on the audio thread's side, versioned file with the sound table's checksums, `capture_parse` validating everything, `capture_replay`), every command takes an `at` frame and is held until it, the block cut there (`Stats.late` counts a late one), `audio/device.odin` (real-time context priority, FTZ/DAZ on x86-64, the callback's duration and the device clock's drift in `Stats`, `output_latency`), Options: Mono, Swap ears, Night mode, cross-feed and the loudest sound (`audio_listener`), `bench audio` (64 voices, 4.4% of a core here) and `Sound` bandwidth (`set_bandwidth`), the sfx converted to the mixer's rate at load; tests in `audio/stream_test.odin`, `audio/capture_test.odin`, `client/effects_spectrum_test.odin`; not done: see HISTORY.md) |
 | M32b | Audio tools: capture files, `build audiodump` (timeline, per-bus spectrograms, loudness, WAV out), an in-game freeze-and-solo inspector, quality and cost baselines that fail CI on drift | A capture replays to bit-identical audio; the dump names every voice dropped or virtualized; baselines for four scenarios (burst, cave walk, title to world, 64-voice stress) hold in CI and a deliberately changed sound fails them; the `audio` bench scenario is in `compare` | (done: `audio/analyze.odin` (an `Analysis` the mixer calls after every block through its `probe` hook, which the game never sets: each bus's audio kept, a BS.1770 meter per bus, integrated and loudest-400-ms loudness, loudness range of the 400 ms blocks, true peak by the limiter's 8x filter, correlation, limiter activity, and a decision for every voice - started, virtualized by rank or as inaudible, restored, ended, stopped, dropped - and `capture_rows` for the timeline), capture file version 2 (sound names, the live mixer's dropped count), `audio/baseline.odin` (numbers per bus, third-octave bands, decay of marked sounds, a checksum per OS and optimization level; text files in `assets/baselines/audio/`; `baseline_compare` with the plan's tolerances), `tools/audiodump` (`build audiodump <capture>`: timeline, decisions, summaries, `-report`, `-bus: -wav:`, `-from -to -sound`), `build audio [--accept <scenario|all>] [--wav <dir>]`, four scenarios in `client/audio_baseline_test.odin` (burst, cave_walk, title_to_world, stress) whose baselines are committed (checksums for Linux only); tests in `audio/analyze_test.odin` and `client/audio_baseline_test.odin`; the `audio` bench scenario already runs under `bench compare`; not done: moved to M32d)
-| M32d | Audio tools, the rest: the rolling capture with a mixer snapshot, the freeze-and-solo inspector, spectrograms, the null and file devices, the real-time smoke run in CI | A capture begun mid-session replays to bit-identical audio; the 30 s smoke run holds zero underruns, NaN and dropped commands; the inspector seen once in a screenshot; the baselines' checksums for macOS and Windows taken from CI |
+| M32d | Audio tools, the rest: the rolling capture with a mixer snapshot, spectrograms, the null and file devices, the real-time smoke run in CI | A capture begun mid-session replays to bit-identical audio; the 30 s smoke run holds zero underruns, NaN and dropped commands | (done: `audio/capture.odin` (`capture_start_ring`: a ring of 2^16 records and six `Mixer_State`s taken every 15 s at a mix call's start, `capture_ring_save` writes the window from the oldest state the records still cover and goes on, file version 3 carrying the state with its hash, drop records so the dump names a ring-full drop, replay restoring the state), `audio/device.odin` (`device_open_null`: a thread pulling 10 ms blocks by the wall clock; `device_open_file` + `device_render`: mixes as many frames as told, as fast as it can, a WAV at close), `audio/spectrogram.odin` and `audiodump -spectrogram:`, `audio/wav.odin`, `client/audio_debug.odin` (the ring runs in the game; F9, the `audio_capture` command and an underrun write `captures/audio-<n>.vxac`), `--check audio` / `--null-audio` (`client/audio_check.odin`: 30 s of a busy session into the null device, CI step on Linux); tests in `audio/capture_test.odin`, `audio/device_test.odin`, `audio/analyze_test.odin`; not done: moved to M32e)
+| M32e | Audio tools, what is left: the freeze-and-solo inspector, the ring with a crash report and the `report` command, the checksums of macOS and Windows | The inspector seen once in a screenshot; a crash leaves the last window beside its report; the checksums for the three OSes are in the baselines |
 | M33 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
 | M34 | Music director: title music, loading, a Minecraft-like wait-play-wait in worlds picked by place and time, pause, stingers, Music and Ambience sliders | Director tests with an injected clock and random source (gaps, no overlap, no repeats, tags, pause, ducking); a scripted hour rendered and checked |
 | M35 | Space: listener and emitters, attenuation, Doppler, a head model, occlusion by voxel rays through materials, a reverb from the room around the listener, underwater and lava | Occlusion and reverb tests in built cases (wall, doorway, cave, field, water); ray cost in budget; a walk rendered with monotone reverb and brightness curves |
@@ -445,40 +447,39 @@ only a voxel world can do: sound that hears the blocks.
   meters and LUFS, the reverb's room, occlusion rays drawn as debug lines); a benchmark
   scenario for the mixer's cost.
 
-### M32d: audio tools, the rest (rolling capture, inspector, devices, smoke run)
+### M32e: audio tools, what is left (inspector, crash and report attachment, checksums)
 
-What M32b left (its dump, analysis and baselines are in HISTORY.md).
+What M32d left (its ring, devices, spectrograms and smoke run are in HISTORY.md).
+Decisions taken so the section can be worked unattended:
 
-- **A rolling capture.** The recorder keeps the last 60 seconds in a ring and writes it on
-  a key press, on an underrun or with a crash report. A capture begun mid-session cannot
-  replay bit for bit, because the voices then playing are state the file lacks: so the
-  ring also keeps a snapshot of the mixer's state (voices, buses, ducks, limiter,
-  reverb, compressor, meter, clock) taken at its start, and the file carries it
-  (version 3). Replay starts from it. The ring drops its oldest records as it wraps;
-  the snapshot moves forward with it (taken every few seconds, the oldest one still
-  covered kept). The `report` command's attachment can include the last ring.
-- **The freeze-and-solo inspector (dev builds, overlay)**, as M32b's design had it: a key
-  freezes the last half second of mixing, the overlay lists the voices (sound, bus, gain,
-  pitch, state, priority) with per-bus meters and spectrum, clicking a voice or bus solos
-  or mutes it and loops the frozen block through the real mix. It also shows
-  `output_latency`, `cb_last_ns`/`cb_max_ns`, `underruns`, `late` and `drift_ppm`. Off in
-  release builds.
-- **`audiodump -spectrogram <bus>`** writes a PNG (the audiodump of M32b has no image
-  output); its decisions also name a ring-full drop (the capture records a drop where it
-  happens, not only the live mixer's count in the header).
-- **The null device and a file device:** `audio.device_open` can open one that pulls blocks
-  at real rate without a sound card, and one that writes a WAV as fast as it can.
-- **Real-time health in CI:** a smoke run of the game on the CPU driver mixing into the null
-  device for 30 seconds asserts zero underruns, zero NaN, zero dropped commands and the
-  callback's worst case under its budget.
-- **Baselines on the other OSes:** CI's macOS and Windows runs print their checksums
-  (`build audio --accept` there, or taken from the log) so they are committed beside
-  Linux's; until then only the numbers are compared there. The music scenario
-  (`title_to_world`) uses the test tone stream; M34 replaces it with the real music,
-  and the capture of a scenario with a stream replays in `audiodump` once the game's
-  stream table can be rebuilt there.
-- **Exit check:** a capture begun mid-session replays bit for bit; the smoke run passes on
-  all three OSes; the inspector seen once in a screenshot; the checksums for the three OSes
+- **The freeze-and-solo inspector (dev builds, overlay).** A key (F8) freezes the last half
+  second: the game takes the ring's window (`capture_ring_save` into memory, not a file:
+  a variant that returns the bytes) and replays it through a second mixer of its own
+  (`audio.Mixer`, the sounds shared, streams not), whose output the real device plays,
+  looped, while the live mixer is muted (`set_bus_gain(.Master, 0)` on the live one, restored
+  on thaw). The overlay lists the frozen voices (sound, bus, gain, pitch, state, priority:
+  from the replay's `Analysis` decisions and the state), per-bus meters and a spectrum of
+  Master; a click on a voice or bus solos it, a second click mutes it, by rewriting the
+  recorded commands' buses (a solo drops the plays of every other voice and the
+  state's other voices) and replaying again. It also shows `output_latency`,
+  `cb_last_ns`/`cb_max_ns`, `underruns`, `late` and `drift_ppm`. Off in release builds.
+  A screenshot of it (`screenshot audio_inspector`, taken in `--check audio`'s run, uploaded
+  with the others) is the exit check.
+- **A crash leaves the window beside its report.** The crash handler cannot write a
+  capture itself (it runs in a signal handler); so the game saves the ring every 30
+  seconds to `captures/audio-last.vxac` while the log says the mixer is busy (any voice
+  playing), and the crash report's text names that file and its age. The `report` command's
+  text names the last ring file written, and a report written with a saved universe copies
+  it beside the report (it goes with the next upload, at most 4 MB: a larger one is named
+  only).
+- **Baselines on the other OSes.** CI's macOS and Windows runs print their checksums
+  (`build audio` there); a run that took them is committed from the log, beside Linux's.
+  Until then only the numbers are compared there.
+- **Not in this milestone:** the music scenario (`title_to_world`) still uses the test tone
+  stream until M34, and the capture of a scenario with a stream replays in `audiodump`
+  once the game's stream table can be rebuilt there.
+- **Exit check:** the inspector seen once in a screenshot; a deliberate crash in a dev build
+  leaves `audio-last.vxac` that `build audiodump` reads; the checksums for the three OSes
   are in the baselines.
 
 ### M33: the music pipeline (`tools/music`)

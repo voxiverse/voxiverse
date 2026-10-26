@@ -479,7 +479,7 @@ push :: proc(m: ^Mixer, c: Command, at: u64 = 0) -> bool {
 mix :: proc "contextless" (m: ^Mixer, out: []f32) {
 	frames := len(out) / 2
 	if rec := sync.atomic_load(&m.capture); rec != nil && frames > 0 {
-		capture_call(rec, m.clock, frames)
+		capture_call(m, rec, frames)
 	}
 	guarded: u32
 	for done := 0; done < frames; {

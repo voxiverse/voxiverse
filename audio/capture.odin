@@ -6,6 +6,7 @@ import "core:mem"
 import "core:os"
 import "core:slice"
 import "core:sync"
+import "core:time"
 
 // Capture: everything the audio thread was told, so any mix can be made again.
 //
@@ -24,25 +25,60 @@ import "core:sync"
 // A capture starts when the mixer does (clock 0) with the same sounds
 // registered in the same order; the file says which (a checksum of each) and
 // replay refuses a different table. One begun mid-session cannot be replayed
-// bit for bit (the voices playing then are state the file does not hold):
-// that is what M32b's rolling capture adds.
+// from nothing (the voices playing then are state the records do not hold):
+// so the rolling capture (capture_start_ring) keeps, besides the last records,
+// a Mixer_State taken at the start of a mix call every CAPTURE_SNAP_SECONDS,
+// and a file written from it carries the oldest one still covered by the
+// records; replay restores it and goes on from there. The state is the audio
+// thread's (voices, buses, ducks, limiter, meter, reverb, compressor, listener,
+// clock); not a stream's decoder and ring, so a window with a stream voice
+// playing replays without it (`streams` in the header says how many there were).
 //
 // File: `Capture_Header`, `sound_count` x `Capture_Sound`, `record_count`
 // records (frame u64, frames u32, kind u8, size u8, the command's raw bytes:
-// kind 0 is a mix call, k + 1 the Command variant k). The raw bytes make a file
+// kind 0 is a mix call, k + 1 the Command variant k, 10 commands the live
+// mixer dropped since the last call: the count in 4 bytes), then, if
+// `state_size` is not 0, the state. The raw bytes make a file
 // good for the build that wrote it (the header's sizes say so); it is a
 // debugging artifact, not a save format.
 
 CAPTURE_MAGIC :: [4]u8{'V', 'X', 'A', 'C'}
-CAPTURE_VERSION :: 2
+CAPTURE_VERSION :: 3
 CAPTURE_MAX_RECORDS :: 1 << 24
+CAPTURE_RING_SNAPS :: 6 // states kept by a rolling capture
+CAPTURE_SNAP_SECONDS :: 15 // between two of them: the window a dump covers is 4 to 5 times this
+CAPTURE_RING_MARGIN :: 256 // records of the ring's oldest end a dump does not trust (a mix may be writing them)
+CAPTURE_KIND_DROP :: 10
+
+// Mixer_State: what the audio thread holds that a replay from the middle of
+// a session needs (the sounds, the handle table and the rings are not it).
+Mixer_State :: struct {
+	voices:   [MAX_VOICES]Voice,
+	buses:    [Bus]Bus_State,
+	ducks:    [MAX_DUCKS]Duck,
+	limiter:  Limiter,
+	meter:    Meter,
+	reverb:   Reverb,
+	night:    Compressor,
+	listener: Listener,
+	cross:    [2]f32,
+	clock:    u64,
+}
 
 Capture :: struct {
-	records:     []Record,
-	count:       u32, // (atomic) records kept
+	records:     []Record, // a ring's length is a power of two
+	count:       u32, // (atomic) records kept (a ring: ever)
 	overflow:    u32, // (atomic) records that did not fit
 	start_clock: u64,
 	rate:        u32,
+	// A rolling capture (capture_start_ring):
+	ring:        bool,
+	states:      []Mixer_State, // CAPTURE_RING_SNAPS slots, used in turn
+	snap_at:     [CAPTURE_RING_SNAPS]u32, // the record count each was taken at
+	snaps:       u32, // (atomic) states taken, ever
+	valid_from:  u32, // the first state a dump may start from (the ones before a gap are not)
+	next_snap:   u64, // the clock the next is due at (audio thread)
+	seen_drops:  u32, // the mixer's `dropped` as of the last call (audio thread)
 }
 
 // Record: one mix call (frames > 0) or one command applied at `frame`.
@@ -50,6 +86,7 @@ Capture :: struct {
 Record :: struct {
 	frame:  u64,
 	frames: u32,
+	drops:  u32, // commands the mixer dropped since the last call (a record of its own)
 	cmd:    Command,
 }
 
@@ -65,6 +102,9 @@ Capture_Header :: struct #packed {
 	record_count: u32,
 	overflow:     u32,
 	dropped:      u32, // commands the live mixer dropped, ever (ring full, no free handle, busy stream)
+	state_size:   u32, // bytes of the Mixer_State after the sound table, 0 if the capture began at clock 0
+	state_hash:   u64, // fnv-1a of them
+	streams:      u32, // stream voices the state had playing (replayed without)
 }
 
 Capture_Sound :: struct #packed {
@@ -80,6 +120,7 @@ Capture_File :: struct {
 	header:  Capture_Header,
 	sounds:  []Capture_Sound,
 	records: []Record,
+	state:   ^Mixer_State, // nil: begins at clock 0
 }
 
 // capture_start begins recording at the next mix, room for `capacity` records
@@ -94,6 +135,42 @@ capture_start :: proc(m: ^Mixer, capacity: int, allocator := context.allocator) 
 	return true
 }
 
+// capture_start_ring begins a rolling capture: the last `capacity` records
+// (a power of two) and the states that make them replayable. It never fills;
+// capture_ring_save writes what it holds now. False if one is running.
+capture_start_ring :: proc(m: ^Mixer, capacity: int, allocator := context.allocator) -> bool {
+	assert(capacity > 2 * CAPTURE_RING_MARGIN && capacity & (capacity - 1) == 0)
+	if sync.atomic_load(&m.capture) != nil {return false}
+	c := new(Capture, allocator)
+	c.records = make([]Record, capacity, allocator)
+	c.states = make([]Mixer_State, CAPTURE_RING_SNAPS, allocator)
+	c.ring = true
+	c.rate = m.rate
+	sync.atomic_store(&m.capture, c)
+	return true
+}
+
+// capture_ring_save writes the ring's last window to path and goes on
+// recording. The recorder is off for a few milliseconds meanwhile (the mixes
+// of that time are not in it), so the states from before are not used again:
+// the next window starts at the first state taken after. False if no ring is
+// running or it holds nothing a file can start from yet (less than one state
+// interval of audio).
+capture_ring_save :: proc(m: ^Mixer, path: string) -> bool {
+	c := sync.atomic_exchange(&m.capture, nil)
+	if c == nil {return false}
+	if !c.ring {
+		sync.atomic_store(&m.capture, c)
+		return false
+	}
+	time.sleep(5 * time.Millisecond) // (a mix that has the pointer finishes)
+	ok := capture_save(m, c, path)
+	c.next_snap = 0
+	c.valid_from = sync.atomic_load(&c.snaps)
+	sync.atomic_store(&m.capture, c)
+	return ok
+}
+
 // capture_stop ends recording and hands the capture over (nil if none). The
 // audio thread may be inside a mix: the count is read once, after the
 // pointer is gone, so every record counted was written whole.
@@ -105,6 +182,7 @@ capture_stop :: proc(m: ^Mixer) -> ^Capture {
 capture_destroy :: proc(c: ^Capture, allocator := context.allocator) {
 	if c == nil {return}
 	delete(c.records, allocator)
+	delete(c.states, allocator)
 	free(c, allocator)
 }
 
@@ -116,6 +194,11 @@ capture_records :: proc(c: ^Capture) -> (kept, lost: u32) {
 @(private)
 capture_add :: proc "contextless" (c: ^Capture, r: Record) {
 	i := sync.atomic_load_explicit(&c.count, .Relaxed)
+	if c.ring {
+		c.records[int(i) & (len(c.records) - 1)] = r
+		sync.atomic_store_explicit(&c.count, i + 1, .Release)
+		return
+	}
 	if int(i) >= len(c.records) {
 		sync.atomic_add(&c.overflow, 1)
 		return
@@ -125,8 +208,72 @@ capture_add :: proc "contextless" (c: ^Capture, r: Record) {
 }
 
 @(private)
-capture_call :: proc "contextless" (c: ^Capture, frame: u64, frames: int) {
-	capture_add(c, {frame = frame, frames = u32(frames)})
+capture_call :: proc "contextless" (m: ^Mixer, c: ^Capture, frames: int) {
+	if c.ring && m.clock >= c.next_snap {
+		// The state at the start of this call, which is the record's place.
+		n := sync.atomic_load_explicit(&c.snaps, .Relaxed)
+		slot := int(n) % CAPTURE_RING_SNAPS
+		state_take(m, &c.states[slot])
+		c.snap_at[slot] = sync.atomic_load_explicit(&c.count, .Relaxed)
+		sync.atomic_store_explicit(&c.snaps, n + 1, .Release)
+		c.next_snap = m.clock + u64(CAPTURE_SNAP_SECONDS) * u64(m.rate)
+	}
+	if d := sync.atomic_load(&m.dropped); d != c.seen_drops {
+		capture_add(c, {frame = m.clock, drops = d - c.seen_drops})
+		c.seen_drops = d
+	}
+	capture_add(c, {frame = m.clock, frames = u32(frames)})
+}
+
+@(private)
+state_take :: proc "contextless" (m: ^Mixer, s: ^Mixer_State) {
+	s.voices = m.voices
+	s.buses = m.buses
+	s.ducks = m.ducks
+	s.limiter = m.limiter
+	s.meter = m.meter
+	s.reverb = m.reverb
+	s.night = m.night
+	s.listener = m.listener
+	s.cross = m.cross
+	s.clock = m.clock
+}
+
+@(private)
+state_restore :: proc(m: ^Mixer, s: ^Mixer_State) {
+	m.voices = s.voices
+	m.buses = s.buses
+	m.ducks = s.ducks
+	m.limiter = s.limiter
+	m.meter = s.meter
+	m.reverb = s.reverb
+	m.night = s.night
+	m.listener = s.listener
+	m.cross = s.cross
+	m.clock = s.clock
+}
+
+// state_valid: what replay would index or switch on, in range (a state is
+// a debugging artifact, and its hash guards a damaged file, but a replay
+// must not crash on one from another build).
+@(private)
+state_valid :: proc(s: ^Mixer_State, sounds: int) -> bool {
+	for v in s.voices {
+		if u8(v.state) > u8(max(Voice_State)) || u8(v.bus) >= len(Bus) {return false}
+		if v.state == .Playing && int(v.sound) >= sounds {return false}
+	}
+	r := &s.reverb
+	if r.pos < 0 || r.pos >= REVERB_MAX || r.pre_pos < 0 || r.pre_pos >= REVERB_MAX {return false}
+	for l in r.len {if l < 1 || l >= REVERB_MAX {return false}}
+	for e in r.early_at {if e < 1 || e >= REVERB_MAX {return false}}
+	li := &s.limiter
+	return(
+		li.n >= 1 &&
+		li.n <= LIMITER_MAX &&
+		li.group >= 0 &&
+		li.group < 8 &&
+		li.tail - li.head <= LIMITER_MAX \
+	)
 }
 
 @(private)
@@ -143,35 +290,65 @@ sound_checksum :: proc(s: Sound, st: ^Stream) -> Capture_Sound {
 }
 
 // capture_encode: the file's bytes for what c holds, with the sound table of m
-// (as it is now).
+// (as it is now). A ring writes its last window from the oldest state still
+// covered; nil if it has none yet. Not while the audio thread may be writing
+// to c (capture_stop first, or capture_ring_save).
 capture_encode :: proc(m: ^Mixer, c: ^Capture, allocator := context.allocator) -> []byte {
-	n := int(sync.atomic_load(&c.count))
-	out := make([dynamic]byte, 0, 4096 + n * 48, allocator)
+	first, n := u32(0), int(sync.atomic_load(&c.count))
+	state: ^Mixer_State
 	h := Capture_Header {
-		magic        = CAPTURE_MAGIC,
-		version      = CAPTURE_VERSION,
-		rate         = c.rate,
-		start_clock  = c.start_clock,
-		buses        = len(Bus),
-		max_voices   = MAX_VOICES,
-		play_size    = size_of(Play),
-		sound_count  = u32(m.count),
-		record_count = u32(n),
-		overflow     = sync.atomic_load(&c.overflow),
-		dropped      = sync.atomic_load(&m.dropped),
+		magic       = CAPTURE_MAGIC,
+		version     = CAPTURE_VERSION,
+		rate        = c.rate,
+		start_clock = c.start_clock,
+		buses       = len(Bus),
+		max_voices  = MAX_VOICES,
+		play_size   = size_of(Play),
+		sound_count = u32(m.count),
+		overflow    = sync.atomic_load(&c.overflow),
+		dropped     = sync.atomic_load(&m.dropped),
 	}
+	if c.ring {
+		snaps := sync.atomic_load(&c.snaps)
+		// (the slot a mix would write next is the oldest: not one to use)
+		from := max(c.valid_from, snaps - min(snaps, CAPTURE_RING_SNAPS - 1))
+		for j in from ..< snaps {
+			at := c.snap_at[int(j) % CAPTURE_RING_SNAPS]
+			if int(u32(n) - at) + CAPTURE_RING_MARGIN <= len(c.records) {
+				first, state = at, &c.states[int(j) % CAPTURE_RING_SNAPS]
+				break
+			}
+		}
+		if state == nil {return nil}
+		h.start_clock = state.clock
+		h.state_size = size_of(Mixer_State)
+		h.state_hash = hash.fnv64a(mem.ptr_to_bytes(state))
+		for v in state.voices {
+			if v.state == .Playing && m.streams[v.sound] != nil {h.streams += 1}
+		}
+	}
+	kept := n - int(first)
+	h.record_count = u32(kept)
+	out := make([dynamic]byte, 0, 4096 + kept * 48 + int(h.state_size), allocator)
 	append(&out, ..mem.ptr_to_bytes(&h))
 	for s, i in m.sounds[:m.count] {
 		cs := sound_checksum(s, m.streams[i])
 		cs.name = m.names[i]
 		append(&out, ..mem.ptr_to_bytes(&cs))
 	}
-	for r in c.records[:n] {
+	if state != nil {append(&out, ..mem.ptr_to_bytes(state))}
+	mask := len(c.records) - 1
+	for k in 0 ..< kept {
+		r := c.records[(int(first) + k) & mask if c.ring else k]
 		frame, frames := r.frame, r.frames
 		append(&out, ..mem.ptr_to_bytes(&frame))
 		append(&out, ..mem.ptr_to_bytes(&frames))
 		kind, raw := command_raw(r.cmd)
 		if frames > 0 {kind = 0}
+		if r.drops > 0 {
+			drops := r.drops
+			kind, raw = CAPTURE_KIND_DROP, mem.ptr_to_bytes(&drops)
+		}
 		append(&out, kind, u8(len(raw)))
 		append(&out, ..raw)
 	}
@@ -181,6 +358,10 @@ capture_encode :: proc(m: ^Mixer, c: ^Capture, allocator := context.allocator) -
 // capture_save writes the file.
 capture_save :: proc(m: ^Mixer, c: ^Capture, path: string) -> bool {
 	data := capture_encode(m, c, context.temp_allocator)
+	if data == nil {
+		log.warnf("audio capture: nothing to write yet (%s)", path)
+		return false
+	}
 	if err := os.write_entire_file(path, data); err != nil {
 		log.warnf("audio capture: cannot write %s: %v", path, err)
 		return false
@@ -213,7 +394,17 @@ capture_parse :: proc(
 	defer if !ok {
 		delete(f.sounds, allocator)
 		delete(records)
-		f.sounds, f.records = nil, nil
+		free(f.state, allocator)
+		f.sounds, f.records, f.state = nil, nil, nil
+	}
+	if h.state_size != 0 {
+		if h.state_size != size_of(Mixer_State) || len(data) - at < size_of(Mixer_State) {return}
+		f.state = new(Mixer_State, allocator)
+		mem.copy(f.state, raw_data(data[at:]), size_of(Mixer_State))
+		at += size_of(Mixer_State)
+		if hash.fnv64a(mem.ptr_to_bytes(f.state)) != h.state_hash ||
+		   f.state.clock != h.start_clock ||
+		   !state_valid(f.state, int(h.sound_count)) {return}
 	}
 	for _ in 0 ..< h.record_count {
 		if len(data) - at < 14 {return}
@@ -225,6 +416,10 @@ capture_parse :: proc(
 		if len(data) - at < size {return}
 		if kind == 0 {
 			if r.frames == 0 || size != 0 {return}
+		} else if kind == CAPTURE_KIND_DROP {
+			if r.frames != 0 || size != 4 {return}
+			mem.copy(&r.drops, raw_data(data[at:]), 4)
+			if r.drops == 0 {return}
 		} else {
 			cmd := command_from(kind, data[at:][:size], int(h.sound_count)) or_return
 			if r.frames != 0 {return}
@@ -240,6 +435,7 @@ capture_parse :: proc(
 capture_file_destroy :: proc(f: ^Capture_File, allocator := context.allocator) {
 	delete(f.sounds, allocator)
 	delete(f.records, allocator)
+	free(f.state, allocator)
 	f^ = {}
 }
 
@@ -255,9 +451,18 @@ capture_frames :: proc(f: ^Capture_File) -> (frames: int) {
 // out takes 2 * capture_frames samples. False, with the reason logged, if m
 // does not match or the capture asks for more than the mixer holds.
 capture_replay :: proc(m: ^Mixer, f: ^Capture_File, out: []f32) -> bool {
-	if m.rate != f.header.rate || m.clock != 0 || f.header.start_clock != 0 {
+	if m.rate != f.header.rate || m.clock != 0 || (f.state == nil && f.header.start_clock != 0) {
 		log.warnf("audio replay: the mixer is not the capture's (rate, clock)")
 		return false
+	}
+	if f.state != nil {
+		state_restore(m, f.state)
+		if f.header.streams > 0 {
+			log.warnf(
+				"audio replay: %d stream voices were playing at the start; replayed without",
+				f.header.streams,
+			)
+		}
 	}
 	if m.count != len(f.sounds) {
 		log.warnf("audio replay: %d sounds registered, capture has %d", m.count, len(f.sounds))
@@ -287,6 +492,8 @@ capture_replay :: proc(m: ^Mixer, f: ^Capture_File, out: []f32) -> bool {
 			flush(m, out, at, pending)
 			at += pending
 			pending = int(r.frames)
+		} else if r.drops > 0 {
+			// (only a note for the dump)
 		} else if !push(m, r.cmd, r.frame) {
 			log.warnf("audio replay: more commands in one call than the ring holds")
 			return false

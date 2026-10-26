@@ -62,6 +62,8 @@ App :: struct {
 	entity_draw:      render.Entity_Draw, // this frame's boxes (players, entities, particles)
 	mixer:            ^audio.Mixer, // heap (it is large); fed to the sound card by audio_device
 	audio_device:     audio.Device,
+	null_audio:       bool, // mix into the null device, whatever the sound card (--null-audio, --check audio)
+	audio_debug:      Audio_Debug,
 	sounds:           Sound_Bank,
 	volumes:          [audio.Bus]f32, // as last told to the mixer
 	listener:         audio.Listener, // ... and the listener's options
@@ -83,6 +85,7 @@ App :: struct {
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
 	blast_test:       Blast_Test,
+	audio_check:      Audio_Check,
 	tour_test:        Tour_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
 	script_failed:    bool, // an --exec script could not go on (fails the run)
@@ -175,7 +178,12 @@ audio_init :: proc(app: ^App) {
 	sounds_init(&app.sounds, app.mixer)
 	audio_volumes(app, true)
 	audio_listener(app, true)
-	audio.device_open(&app.audio_device, app.mixer)
+	if app.null_audio {
+		audio.device_open_null(&app.audio_device, app.mixer)
+	} else {
+		audio.device_open(&app.audio_device, app.mixer)
+	}
+	audio_ring_start(app)
 }
 
 // audio_volumes tells the mixer the volume sliders that changed (all, first).
@@ -268,6 +276,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 		a.drift_ppm,
 	)
 	audio.device_close(&app.audio_device) // before the sounds it plays go
+	audio_ring_stop(app)
 	audio.streams_close(app.mixer)
 	sounds_destroy(&app.sounds)
 	free(app.mixer)
@@ -322,6 +331,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	audio_volumes(app, false)
 	audio_listener(app, false)
 	audio.drain(app.mixer)
+	audio_debug_update(app)
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
@@ -344,6 +354,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		)
 		fly_test_update(app)
 		blast_test_update(app)
+		audio_check_update(app)
 		tour_test_update(app)
 		if !app.benchmark {sounds_play(&app.sounds, app.mixer, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
@@ -454,6 +465,7 @@ frame_cap :: proc(app: ^App) -> time.Duration {
 	if in_world ||
 	   app.fly_test.phase != .Off ||
 	   app.blast_test.phase != .Off ||
+	   app.audio_check.phase != .Off ||
 	   app.tour_test.phase != .Off {
 		if app.settings.max_fps > 0 &&
 		   !app.benchmark {return time.Second / time.Duration(app.settings.max_fps)}

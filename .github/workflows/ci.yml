@@ -102,6 +102,13 @@ jobs:
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
           done
 
+      # Real-time audio (M32d): 30 s of a busy session mixed into the null
+      # device; no underruns, non-finite samples, dropped or late commands,
+      # the callback within its budget, the rolling capture written.
+      - name: Audio smoke run (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --check audio
+
       # Every screen a player meets (M20), screenshotted (uploaded below):
       # the menus and Options' tabs, the loading screen, a failed join.
       - name: Screens (Linux)

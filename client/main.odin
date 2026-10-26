@@ -23,6 +23,7 @@ Options :: struct {
 	capture_frame: int `usage:"when started from RenderDoc, capture this frame (1 = first)"`,
 	exec:          string `usage:"console commands to run at startup, separated by ';'"`,
 	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
+	null_audio:    bool `usage:"mix into the null device (real time, no sound card) instead of the card"`,
 	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
 	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
 	version:       bool `usage:"print the version and quit"`,
@@ -87,6 +88,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 	base.log_set_listener(sink, console_listener, &app.console)
 	defer base.log_set_listener(sink, nil, nil)
 
+	app.null_audio = opts.null_audio || opts.check == "audio"
 	ok := app_init(app)
 	if ok {
 		if app.benchmark {bench_begin(app, scenario, opts.smoke)}
@@ -164,6 +166,11 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		if app.tour_test.failed || app.tour_test.phase != .Off {
 			if app.tour_test.phase !=
 			   .Off {log.error("tour_test the run ended before the test finished")}
+			ok = false
+		}
+		if app.audio_check.failed || app.audio_check.phase != .Off {
+			if app.audio_check.phase !=
+			   .Off {log.error("audio_check the run ended before the test finished")}
 			ok = false
 		}
 		if app.blast_test.failed || app.blast_test.phase != .Off {

@@ -177,3 +177,47 @@ test_baseline_roundtrip_and_compare :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, !junk)
 }
+
+// A sweep draws a rising line in the spectrogram, a silent bus a dark image:
+// the brightest row of each column climbs with time and sits at the sweep's
+// frequency.
+@(test)
+test_spectrogram_follows_a_sweep :: proc(t: ^testing.T) {
+	rate := u32(48000)
+	frames := 48000 * 3
+	x := make([]f32, 2 * frames)
+	defer delete(x)
+	phase := 0.0
+	for i in 0 ..< frames {
+		hz := 200.0 * math.pow(40.0, f64(i) / f64(frames)) // 200 Hz to 8 kHz
+		phase += 2 * math.PI * hz / 48000
+		v := 0.5 * f32(math.sin(phase))
+		x[2 * i], x[2 * i + 1] = v, v
+	}
+	pixels, w, h := spectrogram_rgba(x, rate, 300)
+	defer delete(pixels)
+	testing.expect(t, w > 50 && w <= 301 && h == SPEC_HEIGHT, "size")
+	row_of :: proc(pixels: []u8, w, h, col: int) -> (best: int) {
+		most := -1
+		for row in 0 ..< h {
+			p := (row * w + col) * 4
+			lum := int(pixels[p]) + int(pixels[p + 1]) + int(pixels[p + 2])
+			if lum > most {most, best = lum, row}
+		}
+		return
+	}
+	early, late := row_of(pixels, w, h, w / 10), row_of(pixels, w, h, 9 * w / 10)
+	testing.expectf(t, late < early - 40, "the line climbs (rows %d, %d)", early, late)
+	// At 10% of 3 s the sweep is at 200 * 40^0.1 = 290 Hz: where the log axis puts it.
+	top := 20000.0
+	want := f64(h) * math.ln(290.0 / SPEC_LOW_HZ) / math.ln(top / SPEC_LOW_HZ)
+	got := f64(h - 1 - early)
+	testing.expectf(t, abs(got - want) < 14, "row %.0f, wanted %.0f", got, want)
+	silent := make([]f32, 2 * 20000)
+	defer delete(silent)
+	dark, dw, dh := spectrogram_rgba(silent, rate, 100)
+	defer delete(dark)
+	for v, i in dark {if i % 4 != 3 && v > 3 {testing.fail_now(t, "silence is not dark")}}
+	_ = dw
+	_ = dh
+}

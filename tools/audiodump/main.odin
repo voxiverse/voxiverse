@@ -7,6 +7,7 @@ import "core:os"
 import "core:strings"
 
 import "../../audio"
+import "../../base"
 import "../../client"
 
 // audiodump prints what a capture file holds (the game's audio recorder, see
@@ -16,6 +17,7 @@ import "../../client"
 //	build audiodump <capture>                     timeline, decisions, summaries
 //	build audiodump <capture> -report             loudness, peaks, correlation per bus
 //	build audiodump <capture> -bus:Music -wav:out.wav     one bus (or Master) as a WAV
+//	build audiodump <capture> -bus:Music -spectrogram:out.png     ... or as a spectrogram
 //	build audiodump <capture> -from:2 -to:5 -sound:Stone  a part, one sound
 //
 // The replay needs the game's own sounds (client.sounds_init) to match the
@@ -23,14 +25,15 @@ import "../../client"
 // still prints, and what needs the audio says why it cannot.
 
 Options :: struct {
-	file:   string `args:"pos=0" usage:"capture file"`,
-	report: bool `usage:"per-bus loudness (BS.1770), true peak, range, correlation, real-time counters"`,
-	bus:    string `usage:"the bus a -wav takes, or the only one the decisions and report cover (default Master)"`,
-	wav:    string `usage:"write the bus's audio to this 32-bit float WAV"`,
-	from:   f64 `usage:"only from this many seconds into the capture"`,
-	to:     f64 `usage:"only up to this many seconds into the capture"`,
-	sound:  string `usage:"only sounds whose name contains this"`,
-	quiet:  bool `usage:"no timeline: the decisions and summaries only"`,
+	file:        string `args:"pos=0" usage:"capture file"`,
+	report:      bool `usage:"per-bus loudness (BS.1770), true peak, range, correlation, real-time counters"`,
+	bus:         string `usage:"the bus a -wav takes, or the only one the decisions and report cover (default Master)"`,
+	wav:         string `usage:"write the bus's audio to this 32-bit float WAV"`,
+	spectrogram: string `usage:"write the bus's spectrogram (log frequency, time across) to this PNG"`,
+	from:        f64 `usage:"only from this many seconds into the capture"`,
+	to:          f64 `usage:"only up to this many seconds into the capture"`,
+	sound:       string `usage:"only sounds whose name contains this"`,
+	quiet:       bool `usage:"no timeline: the decisions and summaries only"`,
 }
 
 main :: proc() {
@@ -85,8 +88,16 @@ main :: proc() {
 			h.dropped,
 		)
 	}
-	if h.start_clock != 0 {
-		fmt.println("  (begun mid-session: the audio cannot be remade, only the timeline read)")
+	if f.state != nil {
+		fmt.printfln(
+			"  (a rolling capture: begins from the mixer's state at frame %d%s)",
+			h.start_clock,
+			", stream voices replayed without" if h.streams > 0 else "",
+		)
+	} else if h.start_clock != 0 {
+		fmt.println(
+			"  (begun mid-session without a state: the audio cannot be remade, only the timeline read)",
+		)
 	}
 
 	rows := audio.capture_rows(&f)
@@ -139,7 +150,8 @@ main :: proc() {
 	bank := new(client.Sound_Bank)
 	client.sounds_init(bank, m)
 	an: audio.Analysis
-	if h.start_clock != 0 || !audio.analyze_replay(m, &f, {.Master} | {bus}, &an) {
+	if (h.start_clock != 0 && f.state == nil) ||
+	   !audio.analyze_replay(m, &f, {.Master} | {bus}, &an) {
 		fmt.println(
 			"\nno replay: the capture's sounds are not this build's (or it began mid-session);",
 			"decisions, reports and WAVs need the same sounds",
@@ -218,8 +230,18 @@ main :: proc() {
 			"  (the real-time counters - underruns, late, callback time - live in the running game's audio overlay and log, not in a capture)",
 		)
 	}
+	if opts.spectrogram != "" {
+		pixels, w, h := audio.spectrogram_rgba(an.audio[bus][:], h.rate, 4096)
+		defer delete(pixels)
+		png, perr := base.png_encode(w, h, pixels)
+		if perr != nil || os.write_entire_file(opts.spectrogram, png) != nil {
+			fmt.eprintfln("audiodump: cannot write %s", opts.spectrogram)
+			os.exit(1)
+		}
+		fmt.printfln("\nwrote %s: %v, %d x %d", opts.spectrogram, bus, w, h)
+	}
 	if opts.wav != "" {
-		if !write_wav(opts.wav, an.audio[bus][:], h.rate) {os.exit(1)}
+		if !audio.wav_write(opts.wav, an.audio[bus][:], h.rate) {os.exit(1)}
 		fmt.printfln("\nwrote %s: %v, %.2f s", opts.wav, bus, f64(len(an.audio[bus])) / 2 / rate)
 	}
 }
@@ -229,41 +251,11 @@ secs :: proc(frame: u64, rate: f64) -> string {
 }
 
 mix_calls :: proc(f: ^audio.Capture_File) -> (n: int) {
-	for r in f.records {if r.frames > 0 {n += 1}}
+	for r in f.records {if r.frames > 0 || r.drops > 0 {n += 1}}
 	return
 }
 
 lu :: proc(x: f32) -> string {
 	if math.is_inf(x) {return "-inf"}
 	return fmt.tprintf("%.1f", x)
-}
-
-// write_wav writes interleaved stereo as a 32-bit float WAV.
-write_wav :: proc(path: string, x: []f32, rate: u32) -> bool {
-	bytes := len(x) * 4
-	out := make([dynamic]byte, 0, 44 + bytes)
-	u32le :: proc(out: ^[dynamic]byte, v: u32) {
-		for i in 0 ..< 4 {append(out, byte(v >> (8 * u32(i))))}
-	}
-	u16le :: proc(out: ^[dynamic]byte, v: u16) {
-		append(out, byte(v), byte(v >> 8))
-	}
-	append(&out, "RIFF")
-	u32le(&out, u32(36 + bytes))
-	append(&out, "WAVEfmt ")
-	u32le(&out, 16)
-	u16le(&out, 3) // IEEE float
-	u16le(&out, 2)
-	u32le(&out, rate)
-	u32le(&out, rate * 8)
-	u16le(&out, 8)
-	u16le(&out, 32)
-	append(&out, "data")
-	u32le(&out, u32(bytes))
-	for v in x {u32le(&out, transmute(u32)v)}
-	if err := os.write_entire_file(path, out[:]); err != nil {
-		fmt.eprintfln("audiodump: cannot write %s: %v", path, err)
-		return false
-	}
-	return true
 }

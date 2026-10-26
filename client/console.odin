@@ -514,6 +514,20 @@ register_builtin_commands :: proc(c: ^Console) {
 			},
 		},
 	)
+	console_register(
+		c,
+		{
+			"audio_capture",
+			"write the audio recorder's last minute to captures/audio-<n>.vxac (F9); read it with build audiodump",
+			proc(app: ^App, args: []string) {
+				if audio_ring_save(app, "console") {
+					console_print(&app.console, "audio capture written (see the log for its path)")
+				} else {
+					console_print(&app.console, "audio_capture: nothing to write yet", .Warning)
+				}
+			},
+		},
+	)
 	when base.DEV {
 		console_register(
 			c,
