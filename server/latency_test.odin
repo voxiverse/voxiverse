@@ -17,6 +17,10 @@ Run_Result :: struct {
 	predicted:    game.Player_State,
 	edits:        [3]game.Edit_Result,
 	corrections:  int,
+	desyncs:      int, // checks the server found different
+	judged:       int,
+	skipped:      int,
+	velocity:     int, // ... of them in the velocity
 }
 
 @(private = "file")
@@ -103,6 +107,22 @@ send :: proc(c: ^Predicting_Client, m: game.Client_Message) {
 	game.send(c.endpoint, w.buf[:])
 }
 
+// check sends the Prediction_Check a client sends every DESYNC_CHECK_INPUTS inputs.
+@(private = "file")
+check :: proc(c: ^Predicting_Client, sequence: u32) {
+	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	p := c.prediction.state.position
+	centre := game.chunk_of({i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))})
+	for dy in i32(-1) ..= 1 {
+		for dz in i32(-1) ..= 1 {
+			for dx in i32(-1) ..= 1 {
+				if centre + {dx, dy, dz} not_in c.chunks {return}
+			}
+		}
+	}
+	send(c, game.Prediction_Check{sequence, game.player_fields(c.prediction.state)})
+}
+
 @(private = "file")
 script_input :: proc(tick: int) -> game.Player_Input {
 	in_ := game.Player_Input {
@@ -115,7 +135,15 @@ script_input :: proc(tick: int) -> game.Player_Input {
 }
 
 @(private = "file")
-run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Result, ok: bool) {
+run_script :: proc(
+	t: ^testing.T,
+	latency_ms, jitter_ms: f32,
+	ticks := 150,
+	nudge := false, // the client puts one ulp into its predicted velocity.x after every prediction
+) -> (
+	result: Run_Result,
+	ok: bool,
+) {
 	pipe: game.Pipe
 	game.pipe_init(&pipe)
 	defer game.pipe_destroy(&pipe)
@@ -164,10 +192,15 @@ run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Re
 	// The script: 150 ticks of walking and jumping, three edits.
 	EDIT_TICKS :: [3]int{40, 80, 120}
 	corrections_before := c.prediction.corrections
-	for tick in 0 ..< 150 {
+	for tick in 0 ..< ticks {
 		pump(t, &c)
 		msg := game.prediction_tick(&c.prediction, script_input(tick), &c.rules, query(&c))
+		if nudge {
+			v := &c.prediction.state.velocity.x
+			v^ = transmute(f32)(transmute(u32)v^ + 1)
+		}
 		send(&c, msg)
+		check(&c, msg.sequence)
 		for edit_tick, i in EDIT_TICKS {
 			if tick != edit_tick {continue}
 			in_ := script_input(tick)
@@ -204,6 +237,9 @@ run_script :: proc(t: ^testing.T, latency_ms, jitter_ms: f32) -> (result: Run_Re
 	result.predicted = c.prediction.state
 	for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}
 	result.corrections = c.prediction.corrections - corrections_before
+	result.desyncs, result.judged, result.skipped =
+		srv.desyncs, srv.checks_judged, srv.checks_skipped
+	result.velocity = srv.desync_fields[.Velocity]
 	return result, true
 }
 
@@ -233,4 +269,36 @@ test_same_results_with_latency :: proc(t: ^testing.T) {
 		slow.corrections,
 	)
 	testing.expect(t, fast.server_state.position != {}, "nobody moved")
+}
+
+// The detector is quiet when nothing is wrong, 200 ms of latency and all, and
+// judges enough checks not to be vacuous.
+@(test)
+test_no_desync_with_latency :: proc(t: ^testing.T) {
+	r, ok := run_script(t, 200, 60, ticks = 450)
+	if !testing.expect(t, ok, "the run did not finish") {return}
+	testing.expectf(t, r.desyncs == 0, "%d desyncs", r.desyncs)
+	total := r.judged + r.skipped
+	testing.expectf(
+		t,
+		total > 8 && r.judged * 2 >= total,
+		"judged %d of %d checks",
+		r.judged,
+		total,
+	)
+}
+
+// A client whose prediction is one ulp off is told so, by field.
+@(test)
+test_desync_caught :: proc(t: ^testing.T) {
+	r, ok := run_script(t, 200, 60, ticks = 450, nudge = true)
+	if !testing.expect(t, ok, "the run did not finish") {return}
+	testing.expectf(t, r.desyncs > 0, "no desync found (%d judged)", r.judged)
+	testing.expectf(
+		t,
+		r.velocity == r.desyncs,
+		"%d desyncs, %d in the velocity",
+		r.desyncs,
+		r.velocity,
+	)
 }

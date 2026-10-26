@@ -64,6 +64,7 @@ land :: proc(
 	}
 	c.teleport = look
 	c.teleported = true
+	disturb(s, c)
 	c.landing = Landing{position, mode, s.tick}
 	set_position(c, position)
 }
@@ -100,6 +101,7 @@ landing_tick :: proc(s: ^Server, c: ^Client) -> bool {
 		c.player.position = spot
 		c.player.velocity = {}
 		c.teleported = true
+		disturb(s, c)
 		set_position(c, spot)
 	}
 	return false

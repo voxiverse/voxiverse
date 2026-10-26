@@ -1,9 +1,9 @@
 package server
 
 import "core:fmt"
-import "core:math"
 import "core:strconv"
 
+import "../base"
 import "../game"
 
 // World editing's selection (PLAN.md M19, commands): each player's two
@@ -33,9 +33,9 @@ aimed_block :: proc(c: ^Client, reach: f64) -> (game.Block_Pos, bool) {
 	eye := game.player_eye(c.player)
 	yaw, pitch := f64(c.look[0]), f64(c.look[1])
 	dir := [3]f64 {
-		-math.sin(yaw) * math.cos(pitch),
-		math.sin(pitch),
-		-math.cos(yaw) * math.cos(pitch),
+		-base.sin(yaw) * base.cos(pitch),
+		base.sin(pitch),
+		-base.cos(yaw) * base.cos(pitch),
 	}
 	hit, found := game.raycast(game.Block_Query{&c.world.chunks, chunks_block}, eye, dir, reach)
 	return hit.block, found

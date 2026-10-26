@@ -206,6 +206,9 @@ describe :: proc(r: game.Trace_Record, scratch: ^game.Block_Array) -> (string, b
 			return fmt.tprintf("use_entity entity=%d after=%d", v.entity, v.after), true
 		case game.Use_Block:
 			return fmt.tprintf("use_block pos=%v after=%d", v.pos, v.after), true
+		case game.Prediction_Check:
+			return fmt.tprintf("prediction_check sequence=%d fields=%v", v.sequence, v.fields),
+				true
 		case game.Fire:
 			return fmt.tprintf("fire after=%d yaw=%.2f pitch=%.2f", v.after, v.yaw, v.pitch), true
 		case game.Ping:

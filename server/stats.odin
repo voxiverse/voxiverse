@@ -248,6 +248,15 @@ tick_summary :: proc(s: ^Server) {
 	slice.sort(samples)
 	online := 0
 	for &c in s.clients {if c.state == .Playing {online += 1}}
+	log.infof(
+		"server tick summary online=%d p50_us=%d worst_us=%d desyncs=%d checks_judged=%d checks_skipped=%d",
+		online,
+		samples[len(samples) / 2],
+		samples[len(samples) - 1],
+		s.desyncs,
+		s.checks_judged,
+		s.checks_skipped,
+	)
 	telemetry.emit(
 		&s.sink,
 		{

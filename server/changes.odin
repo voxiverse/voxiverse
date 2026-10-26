@@ -2,6 +2,7 @@ package server
 
 import "core:slice"
 
+import "../base"
 import "../game"
 
 // Block changes: every block the world changes in a tick (a player's edit,
@@ -72,20 +73,30 @@ changes_flush :: proc(w: ^World) {
 	ch := &w.changes
 	defer ch^ = {}
 	if ch.blocks == nil {return}
+	if s.config.stepped {
+		for p in ch.blocks {append(&w.touched, game.chunk_of(p))}
+		for pos in ch.chunks {append(&w.touched, pos)}
+	}
 	per_chunk := make(map[game.Chunk_Pos]int, len(ch.blocks), context.temp_allocator)
 	for p in ch.blocks {per_chunk[game.chunk_of(p)] += 1}
 	// Chunks with many single changes go whole too, but not as part of a
 	// bulk edit's group (flowing water need not appear all at once).
-	busy := make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
-	for pos, n in per_chunk {if n > MAX_BLOCK_MESSAGES && pos not_in ch.chunks {busy[pos] = {}}}
+	busy_set := make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
+	for pos, n in per_chunk {if n > MAX_BLOCK_MESSAGES && pos not_in ch.chunks {busy_set[pos] = {}}}
+	// In order (map order varies): the same messages every run.
+	busy := base.keys_sorted(busy_set, game.chunk_pos_less, context.temp_allocator)
+	bulk := base.keys_sorted(ch.chunks, game.chunk_pos_less, context.temp_allocator)
+	columns := base.keys_sorted(ch.columns, column_less, context.temp_allocator)
+	edits := base.keys_sorted(ch.blocks, game.block_pos_less, context.temp_allocator)
 	for &c, i in s.clients {
 		if c.state != .Playing || c.world != w {continue}
+		disturb_near_changes(s, &c, edits, bulk)
 		whole := make([dynamic]game.Chunk_Pos, context.temp_allocator)
-		for pos in ch.chunks {if pos in c.has {append(&whole, pos)}}
+		for pos in bulk {if pos in c.has {append(&whole, pos)}}
 		if len(whole) >
 		   0 {send_message(s, &c, game.Bulk_Begin{u16(min(len(whole), int(max(u16))))})}
 		for pos in busy {if pos in c.has {append(&whole, pos)}} 	// after the group
-		for column in ch.columns {
+		for column in columns {
 			if c.columns[column] > 0 {send_message(s, &c, column_message(w, column))}
 		}
 		for pos in whole {
@@ -95,9 +106,10 @@ changes_flush :: proc(w: ^World) {
 		// A player's edit, heard; the world's changes (flowing water), one
 		// batch per chunk.
 		batches := make(map[game.Chunk_Pos]game.Blocks_Changed, 16, context.temp_allocator)
-		for p, who in ch.blocks {
+		for p in edits {
+			who := ch.blocks[p]
 			chunk := game.chunk_of(p)
-			if who == i || chunk in ch.chunks || chunk in busy || chunk not_in c.has {continue}
+			if who == i || chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
 			b, _ := chunks_block(&w.chunks, p)
 			if who >= 0 {
 				send_message(s, &c, game.Block_Changed{p, b})
@@ -111,11 +123,13 @@ changes_flush :: proc(w: ^World) {
 		// In order (map order varies): the same messages every run.
 		chunks := make([dynamic]game.Chunk_Pos, 0, len(batches), context.temp_allocator)
 		for chunk in batches {append(&chunks, chunk)}
-		slice.sort_by(chunks[:], proc(a, b: game.Chunk_Pos) -> bool {
-			if a.y != b.y {return a.y < b.y}
-			if a.z != b.z {return a.z < b.z}
-			return a.x < b.x
-		})
+		slice.sort_by(chunks[:], game.chunk_pos_less)
 		for chunk in chunks {send_message(s, &c, batches[chunk])}
 	}
+}
+
+@(private = "file")
+column_less :: proc(a, b: [2]i32) -> bool {
+	if a.y != b.y {return a.y < b.y}
+	return a.x < b.x
 }

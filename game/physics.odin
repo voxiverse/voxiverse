@@ -2,6 +2,8 @@ package game
 
 import "core:math"
 
+import "../base"
+
 // Player movement: one procedure both sides run each tick (the server for
 // every player, the client to predict its own), so the same inputs on the
 // same world give the same result.
@@ -96,8 +98,8 @@ player_step :: proc(
 	}
 	move := input.move
 	if l := math.sqrt(move.x * move.x + move.y * move.y); l > 1 {move /= l}
-	forward := [2]f32{-math.sin(input.yaw), -math.cos(input.yaw)}
-	right := [2]f32{math.cos(input.yaw), -math.sin(input.yaw)}
+	forward := [2]f32{-base.sin(input.yaw), -base.cos(input.yaw)}
+	right := [2]f32{base.cos(input.yaw), -base.sin(input.yaw)}
 	wish := right * move.x + forward * move.y
 
 	sprint, sneak, jump :=
@@ -131,7 +133,7 @@ player_step :: proc(
 	}
 	control := rules.ground_control if s.flying || s.on_ground else rules.air_control
 	if swimming {control = SWIM_CONTROL}
-	follow := 1 - math.exp(-control * dt)
+	follow := 1 - base.exp(-control * dt)
 	target := wish * speed
 	s.velocity.x += (target.x - s.velocity.x) * follow
 	s.velocity.z += (target.y - s.velocity.z) * follow
@@ -140,7 +142,7 @@ player_step :: proc(
 		// Buoyant: the vertical speed eases towards the swim's, no gravity.
 		target_vy: f32 = -SWIM_SINK
 		if jump {target_vy = SWIM_UP} else if sneak {target_vy = -SWIM_DOWN}
-		s.velocity.y += (target_vy - s.velocity.y) * (1 - math.exp(-SWIM_CONTROL * 2 * dt))
+		s.velocity.y += (target_vy - s.velocity.y) * (1 - base.exp(-SWIM_CONTROL * 2 * dt))
 		if jump && against_wall(q, s.position, wish) {
 			// Against a wall: up it, fast enough to rise SWIM_CLIMB out of
 			// the water onto a ledge.

@@ -355,16 +355,15 @@ session_update :: proc(
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false
 		}
-		send_message(
-			s,
-			game.prediction_tick(
-				&s.prediction,
-				in_,
-				&s.rules,
-				query,
-				game.derive_mods(&s.inventory),
-			),
+		sent := game.prediction_tick(
+			&s.prediction,
+			in_,
+			&s.rules,
+			query,
+			game.derive_mods(&s.inventory),
 		)
+		send_message(s, sent)
+		send_prediction_check(s, sent.sequence)
 		movement_sounds(s)
 	}
 	if look {edit_controls(s, input, settings.keys, dt)}

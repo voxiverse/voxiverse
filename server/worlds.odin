@@ -2,12 +2,12 @@ package server
 
 import "core:fmt"
 import "core:log"
-import "core:math/rand"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
+import "../base"
 import "../game"
 import "../worldgen"
 
@@ -33,12 +33,14 @@ World :: struct {
 	entities:     Entities, // (entities.odin)
 	changes:      Changes, // blocks changed this tick (changes.odin)
 	stats:        Counters, // the world's totals (stats.odin; <world>/stats.json)
-	tick_rng:     rand.Default_Random_State, // which blocks get random ticks (random_ticks.odin)
+	tick_rng:     base.Rng, // which blocks get random ticks (random_ticks.odin)
+	command_rng:  base.Rng, // @r (commands_world.odin)
 	updates:      Updates, // scheduled block updates: flowing water (liquids.odin)
 	saved:        map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
 	regions:      map[game.Region_Pos]bool, // read from disk; true = changed since written
 	started:      bool, // world_start ran (its chunks and the rest exist)
 	idle_since:   u64, // the last tick someone was in it
+	touched:      [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
 	gates:        [dynamic]Gate, // active: dialing or open (gates.odin)
 	containers:   map[game.Block_Pos]Container, // chests' contents, by position (containers.odin; heap)
 	tops_pending: map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
@@ -82,7 +84,8 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	entities_init(&w.entities, w.seed)
-	w.tick_rng = rand.create(u64(w.seed) ~ 0x71c4_0001)
+	w.tick_rng = base.rng_make(u64(w.seed) ~ 0x71c4_0001)
+	w.command_rng = base.rng_make(u64(w.seed) ~ 0xc0de_0001)
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
@@ -103,6 +106,7 @@ world_close :: proc(w: ^World) {
 	}
 	delete(w.tops)
 	delete(w.gates)
+	delete(w.touched)
 	delete(w.containers)
 	delete(w.tops_pending)
 	for _, bytes in w.saved {delete(bytes)}

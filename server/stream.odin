@@ -2,6 +2,7 @@ package server
 
 import "core:math"
 import "core:mem"
+import "core:slice"
 
 import "../base"
 import "../game"
@@ -83,6 +84,8 @@ Client :: struct {
 	worn_sent:     [game.WORN_SLOTS]game.Item, // what the others were last told it wears
 	inv_changed:   bool, // since the last Inventory_Update sent
 	open_chest:    Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
+	disturbed:     u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
+	check:         Maybe(game.Prediction_Check), // its newest, until that input is applied
 	selection:     [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 }
 
@@ -274,6 +277,7 @@ unload_unwanted :: proc(w: ^World) {
 	for pos in w.chunks.by_pos {
 		if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {append(&drop, pos)}
 	}
+	slice.sort_by(drop[:], game.chunk_pos_less) // (map order would decide pool slot reuse)
 	for pos in drop {
 		if chunk := chunks_get(&w.chunks, pos); chunk.state == .Ready {
 			keep_edits(w, chunk)

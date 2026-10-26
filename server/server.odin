@@ -60,6 +60,8 @@ Config :: struct {
 	world_idle:      f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 	gate_open:       f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
 	no_sheep:        bool, // none appear by themselves (benchmarks: the same work every run)
+	stepped:         bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
+	perturb:         Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -84,6 +86,9 @@ Stats :: struct {
 	generate:          base.Frame_Summary, // ms per chunk, on the workers (updated each second)
 	updates_waiting:   int, // scheduled block updates (flowing water)
 	worlds:            int, // loaded
+	desyncs:           int, // prediction checks that differed
+	checks_judged:     int, // prediction checks compared
+	checks_skipped:    int, // ... and skipped (not quiet)
 }
 
 Server :: struct {
@@ -119,6 +124,11 @@ Server :: struct {
 	uploader:       collector.Uploader, // sends its log to a collector
 	uploading:      bool,
 	ledger:         Ledger, // every item made or unmade (ledger.odin)
+	desyncs:        int, // checks that differed (desync.odin)
+	desync_fields:  [game.Player_Field]int, // ... and in which fields
+	checks_judged:  int, // checks compared
+	checks_skipped: int, // checks not compared: the player was not quiet
+	hash_root:      u64, // a stepped server's chain of tick hashes (state_hash.odin)
 	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
@@ -132,12 +142,15 @@ KICK_DELAY :: game.TICK_RATE
 start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
 	assert(
-		config.view_height > 0 && config.view_height <= game.MAX_VIEW_HEIGHT && config.workers > 0,
+		config.view_height > 0 &&
+		config.view_height <= game.MAX_VIEW_HEIGHT &&
+		(config.workers > 0 || config.stepped),
 	)
 	s^ = {
 		config = config,
 		local  = local,
 	}
+	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
 	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
@@ -188,7 +201,8 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config.view_radius + game.SERVER_UNLOAD_MARGIN,
 		config.view_height + game.SERVER_UNLOAD_MARGIN,
 	)
-	capacity := per_player * s.config.max_players + config.workers * MAX_IN_FLIGHT_PER_WORKER
+	capacity :=
+		per_player * s.config.max_players + max(config.workers, 1) * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
 	if !world_start(s.home) {
 		teardown(s, world = false)
@@ -212,10 +226,12 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 
-	s.thread = thread.create(server_main, name = "server")
-	s.thread.data = s
-	s.thread.init_context = context
-	thread.start(s.thread)
+	if !config.stepped {
+		s.thread = thread.create(server_main, name = "server")
+		s.thread.data = s
+		s.thread.init_context = context
+		thread.start(s.thread)
+	}
 	log.infof(
 		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d",
 		s.config.seed,
@@ -234,8 +250,10 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 // because of an error (or the last save failed).
 stop :: proc(s: ^Server) -> bool {
 	sync.atomic_store(&s.stopping, true)
-	thread.join(s.thread)
-	thread.destroy(s.thread)
+	if s.thread != nil {
+		thread.join(s.thread)
+		thread.destroy(s.thread)
+	}
 	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
 	if s.listening {netcode.host_close(&s.host, "the server stopped")}
 	used := s.arena.total_used
@@ -338,14 +356,14 @@ server_main :: proc(t: ^thread.Thread) {
 	runtime.default_temp_allocator_destroy(&runtime.global_default_temp_allocator_data)
 }
 
-@(private = "file")
+@(private)
 tick :: proc(s: ^Server) {
 	base.profile_scope("server tick")
 	base.metric_scope(.Server_Tick)
 	s.tick += 1
 	calls_run(s)
 	if s.tick % TICK_SUMMARY_TICKS == 0 {tick_summary(s)}
-	if time.duration_seconds(time.tick_since(s.store.last_save)) >= AUTOSAVE_SECONDS {save(s)}
+	if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s)}
 	for w in s.worlds {
 		chunks_collect(
 			&w.chunks,
@@ -610,7 +628,9 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		}
 		enter(s, c, v.character)
 	case game.Input:
-		game.input_queue_push(&c.inputs, v)
+		if !game.input_queue_push(&c.inputs, v) {disturb(s, c)} 	// (refused: it was predicted, not applied)
+	case game.Prediction_Check:
+		c.check = v
 	case game.Teleport:
 		land(s, c, v.position, {v.yaw, v.pitch}, .Exact)
 	case game.Set_Rule:
@@ -629,6 +649,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 				client_name(c),
 			)
 			broadcast(s, game.Rules_Changed{w.rules}, w)
+			disturb_world(s, w)
 		case .Unknown_Name, .Bad_Value:
 			log.warnf("server rule not changed name=%q value=%q problem=%v", v.name, v.value, err)
 		}
@@ -744,6 +765,9 @@ publish_stats :: proc(s: ^Server, tick_ms: f32) {
 		clients        = playing,
 		port           = s.host.socket.port if s.listening else 0,
 		worlds         = len(s.worlds),
+		desyncs        = s.desyncs,
+		checks_judged  = s.checks_judged,
+		checks_skipped = s.checks_skipped,
 	}
 	for w in s.worlds {
 		st.chunks_loaded += w.chunks.chunks.count

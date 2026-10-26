@@ -1,6 +1,6 @@
 package game
 
-import "core:math/rand"
+import "../base"
 
 // Sheep genetics, real and tiny: two genes, each with a common dominant
 // form and a rare recessive one; a sheep carries two copies of each. Wool:
@@ -29,25 +29,25 @@ genes_black :: proc(g: Genes) -> bool {return WOOL_BLACK <= g}
 genes_spotted :: proc(g: Genes) -> bool {return COAT_SPOTTED <= g}
 
 // genes_wild: the genes of a sheep found in the wild.
-genes_wild :: proc(r: rand.Generator) -> (g: Genes) {
+genes_wild :: proc(r: ^base.Rng) -> (g: Genes) {
 	for c in Gene_Copy {
-		if rand.int31_max(WILD_RECESSIVE, r) == 0 {g += {c}}
+		if base.rng_int_max(r, WILD_RECESSIVE) == 0 {g += {c}}
 	}
 	return
 }
 
 // genes_child: a lamb of a and b: one copy of each gene from each, chosen at
 // random, then the mutations.
-genes_child :: proc(a, b: Genes, r: rand.Generator) -> (g: Genes) {
-	pick :: proc(parent: Genes, first, second: Gene_Copy, r: rand.Generator) -> bool {
-		return (first in parent) if rand.int31_max(2, r) == 0 else (second in parent)
+genes_child :: proc(a, b: Genes, r: ^base.Rng) -> (g: Genes) {
+	pick :: proc(parent: Genes, first, second: Gene_Copy, r: ^base.Rng) -> bool {
+		return (first in parent) if base.rng_int_max(r, 2) == 0 else (second in parent)
 	}
 	if pick(a, .Wool_A, .Wool_B, r) {g += {.Wool_A}}
 	if pick(b, .Wool_A, .Wool_B, r) {g += {.Wool_B}}
 	if pick(a, .Coat_A, .Coat_B, r) {g += {.Coat_A}}
 	if pick(b, .Coat_A, .Coat_B, r) {g += {.Coat_B}}
 	for c in Gene_Copy {
-		if rand.int31_max(MUTATION_RATE, r) == 0 {g ~= {c}}
+		if base.rng_int_max(r, MUTATION_RATE) == 0 {g ~= {c}}
 	}
 	return
 }

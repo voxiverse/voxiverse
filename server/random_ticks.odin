@@ -1,7 +1,6 @@
 package server
 
-import "core:math/rand"
-
+import "../base"
 import "../game"
 
 // Random ticks (Minecraft's): every tick, in each loaded chunk, a few blocks
@@ -19,14 +18,12 @@ import "../game"
 random_ticks :: proc(w: ^World) {
 	speed := int(w.rules.random_tick_speed)
 	if speed <= 0 {return}
-	for pos in w.chunks.by_pos {
-		c := chunks_get(&w.chunks, pos)
-		if c == nil || c.state != .Ready || c.blocks.array == nil {continue} 	// (uniform: nothing grows)
-		origin := game.chunk_origin(pos)
+	it: base.Pool_Iterator
+	for c in base.pool_next(&w.chunks.chunks, &it) { 	// (slot order: map order would change what grows)
+		if c.state != .Ready || c.blocks.array == nil {continue} 	// (uniform: nothing grows)
+		origin := game.chunk_origin(c.pos)
 		for _ in 0 ..< speed {
-			i :=
-				int(rand.uint32(rand.default_random_generator(&w.tick_rng))) &
-				(game.CHUNK_VOLUME - 1)
+			i := int(base.rng_u32(&w.tick_rng)) & (game.CHUNK_VOLUME - 1)
 			b := c.blocks.array[i]
 			if !has_random_tick(b) {continue}
 			random_tick(w, origin + game.local_from_index(i), b)
@@ -42,7 +39,7 @@ has_random_tick :: proc(b: game.Block) -> bool {
 
 // random_tick runs the random tick of block b at p.
 random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
-	r := rand.default_random_generator(&w.tick_rng)
+	r := &w.tick_rng
 	up := p + {0, 1, 0}
 	above, loaded := chunks_block(&w.chunks, up)
 	if !loaded {return}
@@ -54,7 +51,13 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 		}
 		// Spread: a few tries at dirt in the 3 x 5 x 3 around (lit, nothing solid on it).
 		for _ in 0 ..< 4 {
-			t := p + {rand.int31_max(3, r) - 1, rand.int31_max(5, r) - 3, rand.int31_max(3, r) - 1}
+			t :=
+				p +
+				{
+						i32(base.rng_int_max(r, 3)) - 1,
+						i32(base.rng_int_max(r, 5)) - 3,
+						i32(base.rng_int_max(r, 3)) - 1,
+					}
 			tb, t_loaded := chunks_block(&w.chunks, t)
 			if !t_loaded || tb != .Dirt {continue}
 			over, over_loaded := chunks_block(&w.chunks, t + {0, 1, 0})
@@ -79,7 +82,8 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 		if stage >= game.WHEAT_STAGES - 1 {return}
 		below, _ := chunks_block(&w.chunks, p + {0, -1, 0})
 		chance := i32(3) if below == .Farmland_Moist else 6
-		if rand.int31_max(chance, r) == 0 {set_block(w, p, game.wheat_block(stage + 1))}
+		if i32(base.rng_int_max(r, int(chance))) ==
+		   0 {set_block(w, p, game.wheat_block(stage + 1))}
 	}
 }
 

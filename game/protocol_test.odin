@@ -226,6 +226,14 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "the last chest slot did not decode")
 	_, ok = decode_client(encode_c(Inventory_Request{3, {.Click, ALL_SLOTS, 0}})[:])
 	testing.expect(t, !ok, "a slot past the chest decoded")
+	check := Prediction_Check {
+		sequence = 90,
+		fields   = player_fields(
+			{position = {1, 2, 3}, velocity = {0.5, 0, 0}, on_ground = true, air_jumps = 1},
+		),
+	}
+	at, ok = decode_client(encode_c(check)[:])
+	testing.expect(t, ok && at.(Prediction_Check) == check, "Prediction_Check did not round-trip")
 	at, ok = decode_client(encode_c(Use_Entity{12, 35})[:])
 	testing.expect(t, ok && at.(Use_Entity) == Use_Entity{12, 35})
 	at, ok = decode_client(encode_c(Stats_Request{"blocks", 2, "bob"})[:])

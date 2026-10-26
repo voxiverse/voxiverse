@@ -106,7 +106,7 @@ prediction_view :: proc(p: ^Prediction, alpha: f32) -> [3]f64 {
 // prediction_decay fades the correction offset (call once per frame).
 prediction_decay :: proc(p: ^Prediction, dt: f32) {
 	CORRECTION_RATE :: 15 // 1/s: mostly gone in about 0.2 s
-	p.error *= f64(math.exp(-CORRECTION_RATE * dt))
+	p.error *= f64(math.exp(-CORRECTION_RATE * dt)) // numbers: a visual offset, never state
 	if abs(p.error.x) + abs(p.error.y) + abs(p.error.z) < 1e-4 {p.error = {}}
 }
 
@@ -157,4 +157,46 @@ input_queue_tick :: proc(q: ^Input_Queue, out: ^[INPUT_BUDGET_MAX]Input) -> []In
 		n += 1
 	}
 	return out[:n]
+}
+
+// Player_Field names a field of Player_State a Prediction_Check hashes
+// separately, so a desync names what differs.
+Player_Field :: enum u8 {
+	Position,
+	Velocity,
+	On_Ground,
+	Flying,
+	Crouched,
+	Jump_Held,
+	Air_Jumps,
+}
+
+@(rodata)
+PLAYER_FIELD_NAMES := [Player_Field]string {
+	.Position  = "position",
+	.Velocity  = "velocity",
+	.On_Ground = "on_ground",
+	.Flying    = "flying",
+	.Crouched  = "crouched",
+	.Jump_Held = "jump_held",
+	.Air_Jumps = "air_jumps",
+}
+
+// player_fields hashes each field of s to 32 bits (hash_value's walk).
+player_fields :: proc(s: Player_State) -> (fields: [Player_Field]u32) {
+	fold :: proc(v: any) -> u32 {
+		h := hasher_make()
+		hash_value(&h, v)
+		x := hasher_finish(h)
+		return u32(x) ~ u32(x >> 32)
+	}
+	s := s
+	fields[.Position] = fold(s.position)
+	fields[.Velocity] = fold(s.velocity)
+	fields[.On_Ground] = fold(s.on_ground)
+	fields[.Flying] = fold(s.flying)
+	fields[.Crouched] = fold(s.crouched)
+	fields[.Jump_Held] = fold(s.jump_held)
+	fields[.Air_Jumps] = fold(s.air_jumps)
+	return
 }

@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -110,6 +110,9 @@ local function describe(tvb, from_server)
 				return string.format("command %q", gstring(tvb, 1) or "?")
 			elseif kind == 10 then
 				return string.format("chat %q", gstring(tvb, 1) or "?")
+			elseif kind == 20 then
+				return string.format("prediction_check seq=%d position=%08x velocity=%08x on_ground=%08x flying=%08x crouched=%08x jump_held=%08x air_jumps=%08x",
+					u32(tvb, 1), u32(tvb, 5), u32(tvb, 9), u32(tvb, 13), u32(tvb, 17), u32(tvb, 21), u32(tvb, 25), u32(tvb, 29))
 			elseif kind == 11 then
 				return string.format("inventory_request seq=%d action=%d slot=%d arg=%d", u32(tvb, 1),
 					tvb(5, 1):uint(), tvb(6, 1):int(), tvb(7, 2):le_uint())

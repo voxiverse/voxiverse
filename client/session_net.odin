@@ -387,3 +387,21 @@ send_message :: proc(s: ^Session, m: game.Client_Message) {
 		game.send(s.endpoint, data)
 	}
 }
+
+// send_prediction_check tells the server what the client predicted after input
+// `sequence`, every DESYNC_CHECK_INPUTS inputs, so it can name a desync
+// (docs/determinism.md). Nothing while a chunk around the player is missing:
+// the prediction is then not on the world the server has.
+send_prediction_check :: proc(s: ^Session, sequence: u32) {
+	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	p := s.prediction.state.position
+	centre := game.chunk_of({i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))})
+	for dy in i32(-1) ..= 1 {
+		for dz in i32(-1) ..= 1 {
+			for dx in i32(-1) ..= 1 {
+				if world_get(&s.world, centre + {dx, dy, dz}) == nil {return}
+			}
+		}
+	}
+	send_message(s, game.Prediction_Check{sequence, game.player_fields(s.prediction.state)})
+}

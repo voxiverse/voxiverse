@@ -3,6 +3,7 @@ package server
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:slice"
 import "core:strings"
 
 import "../base"
@@ -60,6 +61,7 @@ regen :: proc(w: ^World, c: ^Client, radius: i32) -> (count: int) {
 		if chunk.state != .Ready || chunk.modified {continue}
 		append(&drop, pos)
 	}
+	slice.sort_by(drop[:], game.chunk_pos_less) // (map order would decide pool slot reuse)
 	for &other in s.clients {
 		if other.state != .Playing || other.world != w {continue}
 		dropped := false

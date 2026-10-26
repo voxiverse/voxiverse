@@ -68,7 +68,8 @@ Gate_Cell :: enum u8 {
 
 gate_cell :: proc(u, v: i32) -> (Gate_Cell, int) {
 	for c, k in GATE_CHEVRONS {if c == {u, v} {return .Chevron, k}}
-	d := math.sqrt(math.pow(f32(u) - GATE_CENTRE.x, 2) + math.pow(f32(v) - GATE_CENTRE.y, 2))
+	du, dv := f32(u) - GATE_CENTRE.x, f32(v) - GATE_CENTRE.y
+	d := math.sqrt(du * du + dv * dv)
 	switch {
 	case d < GATE_RADIUS - 0.6:
 		return .Inside, 0

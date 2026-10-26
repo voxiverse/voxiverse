@@ -48,6 +48,16 @@ jobs:
       - name: Test again, other seed (Linux)
         if: runner.os == 'Linux'
         run: ODIN_TEST_RANDOM_SEED=29 ./build.sh test
+      # The scripted 10 000-tick session at both optimization levels (M38):
+      # the logs go to the determinism job below, which compares all six.
+      - name: Determinism
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
+      - name: Determinism logs
+        uses: actions/upload-artifact@v7
+        with:
+          name: determinism-${{ matrix.os }}
+          path: build/determinism/
+          if-no-files-found: error
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
       # The chunk pipeline (M19): exact counts, and every stage within a
@@ -189,6 +199,24 @@ jobs:
       - name: Debugger printers (Linux)
         if: runner.os == 'Linux'
         run: tools/debugger/test_printers.sh
+
+  # The same session's state hashes, from every OS at both optimization levels
+  # (M38), must agree line by line: a divergence is named by tick and section.
+  determinism:
+    name: Determinism · all OSes
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: determinism-*
+          path: build/determinism
+          merge-multiple: true
+      - name: Compare
+        run: ./build.sh determinism --compare build/determinism
 
   # Release packages (PLAN.md, M21): one per platform, from every push (kept
   # as workflow artifacts, for testers), each unpacked on its own and run

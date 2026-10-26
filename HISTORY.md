@@ -1376,3 +1376,306 @@ leave that OS compared by numbers only. Exit check: the next CI run passes with 
 checksums in.
 
 - **Result:** the checksums were stable over two CI runs on each OS and are in the four baselines. burst and cave_walk match on all three OSes; title_to_world and stress differ per OS (different libm/float paths), so each OS keeps its own checksum.
+
+### M38: determinism (one numbers policy, a state hash, a desync detector, a cross-OS job)
+
+**Why.** Everything in the foundation arc stands on the simulation being a function of
+its inputs: the journal replays onto a snapshot (M40), a rollback must land on an exact
+hash (M40), script state is snapshotted and restored (M42), a dry run judges a pack by
+running it (M45), and a client on macOS must predict what a Linux server decides. Today
+that holds by luck, and the survey for this section found where it does not:
+
+- `game/physics.odin` moves the player with `math.sin`, `math.cos` and `math.exp`, and
+  `game/entity.odin` with `math.exp`. In Odin's `core:math` these four (with `pow`, `tan`
+  and `fmuladd`) are LLVM intrinsics: calls into each OS's libm (glibc, Apple's, the UCRT),
+  which round differently, and which `-o:speed` may fold at compile time with yet another
+  result. Prediction and the server run the same code on different machines. The server's
+  own uses (`server/entities.odin`, `items.odin`, `selection.odin`) decide sheep turns,
+  thrown drops and spawn places. `worldgen/gates.odin` squares with `math.pow`.
+- State randomness is `core:math/rand`'s default generator: ChaCha8 with 1 KiB of state
+  per stream (`World.tick_rng`, `Entities.rng`), a stream that is the toolchain's to
+  change, and `@r` in `server/commands_world.odin` draws from the unseeded
+  `context.random_generator`.
+- Odin seeds each map's hash from the address of its table
+  (`base:runtime map_seed_from_map_data`), so iteration order differs from run to run and
+  between OSes. `random_ticks` walks `w.chunks.by_pos` and draws the RNG chunk by chunk:
+  which blocks grow depends on where the map was allocated. `unload_unwanted` and `regen`
+  free chunks in map order, which decides pool slot reuse. `changes_flush` sends
+  `Block_Changed`, whole chunks and columns in map order, and `replicate` sends
+  `Entity_Despawn` in the order of `c.known`.
+- Chunk jobs finish in thread order and arrive a timing-dependent number of ticks later,
+  the server is paced by the wall clock, and nothing hashes or compares state at all.
+  The one cross-OS check is worldgen's golden (`test_earth_same_everywhere`), at one
+  optimization level.
+
+**Design.**
+
+*The policy* is `docs/determinism.md` (the decisions above in full, with the reason for
+each rule), short enough to read before touching shared code:
+
+1. State floats are IEEE `f32`/`f64` with default rounding. No `math.fmuladd`, no
+   fast-math. Odin does not contract `a*b + c` (checked while writing this section: an
+   arm64 `-o:speed` build emits no `fmadd`); the cross-OS job is what guards it.
+2. Transcendentals in state come from `base/numbers.odin`: `sin`, `cos`, `sincos` (on
+   `core:math.sincos_f64`, Odin code ported from Cephes, no intrinsic) and `exp` (our own
+   port of FreeBSD's `e_exp.c`, the same source `core:math.ln` came from), each for `f32`
+   (computed in `f64`, rounded once) and `f64`. Allowed from `core:math`: `sqrt`, `abs`,
+   `min`, `max`, `clamp`, `floor`, `ceil`, `trunc`, `round`, `mod`, `atan2`, `asin`, `acos`,
+   `ln`, `smoothstep`, `lerp` (correctly rounded, or plain Odin code). Integer powers are
+   multiplications.
+3. Randomness in state is `base.Rng` (`base/rng.odin`): xoshiro256** seeded through
+   splitmix64, 32 bytes of state; `rng_make(seed: u64)`, `rng_u64`, `rng_u32`,
+   `rng_int_max(n)` and `rng_int_range(lo, hi)` (Lemire's multiply-shift with rejection),
+   `rng_f32` (top 24 bits × 2^-24), `rng_f64` (top 53 bits × 2^-53), `rng_f32_range`,
+   `rng_f64_range` (`lo + (hi - lo) * u`, that order). Each stream is seeded from its
+   world's seed XOR a named constant (the ones in use today stay). `crypto` randomness
+   (nonces, keys) is never state.
+4. Nothing that reaches state or the wire depends on map iteration order: walk a pool in
+   slot order, or the keys sorted (`base.keys_sorted(m, less, allocator)`, with
+   `game.chunk_pos_less` and `game.block_pos_less`: y, then z, then x, as `changes_flush`
+   already sorts its batches). Maps stay for lookup.
+5. No wall clock in state: time is ticks. The wall clock paces the live server and times
+   stats and telemetry. Real-time bans and the damaged-file suffix are not state.
+6. A float is cast to an integer only when it is known to be in range (positions are,
+   inside the world's bounds). Out-of-range and NaN casts differ between x64 and arm64.
+7. A toolchain bump (`odinup.toml`) can change `core:math`'s Odin code. The cross-OS job
+   and worldgen's golden run on every commit, so a bump that changes state fails CI on
+   the bump itself.
+
+*The lint*, in `build check` (`tools/build/determinism.odin`): every non-test `.odin`
+file in `game/`, `server/` and `worldgen/` is searched for `math.sin`, `math.cos`,
+`math.tan`, `math.pow`, `math.exp`, `math.fmuladd`, `math.sinh`, `math.cosh`, `math.tanh`,
+`math.gamma`, `math.lgamma`, `math.erf`, `math.erfc` and `rand.`. A hit fails with
+`file:line: <call> in shared code: use base.<name> (docs/determinism.md)`. A line that is
+not state says so with a trailing `// numbers: <why>`, and the lint takes that as the
+exception: `prediction_decay`'s visual offset, the pipe's simulated jitter in
+`game/transport.odin`. Map order cannot be linted by text. It is caught by the
+side-by-side run below, whose two servers' maps sit at different addresses.
+
+*The fixes* (step 2): `random_ticks` walks the chunk pool in slot order. `unload_unwanted`
+and `regen` sort their drop lists before unloading. `changes_flush` sorts
+`ch.blocks`, `ch.chunks`, `busy` and `ch.columns` before sending. `replicate` sorts `gone`.
+`@r` draws from a world stream (`World.command_rng`, seed XOR `0xc0de_0001`). Physics, entity
+movement, sheep, thrown drops, selection rays and gates use the policy's functions.
+Every `rand.` in `server/` and `game/genetics.odin` (`genes_wild` takes `^base.Rng`) moves
+to `base.Rng`. Tests that pinned a number from the old stream or the old libm (sheep,
+breeding, drops, physics) get their expected values derived again from the new code, not
+loosened. Worldgen's golden must not move (gates' `pow(x, 2)` becomes `x * x`, exact either
+way).
+
+*The stepped server* (`server/stepped.odin`): `Config.stepped` starts no thread.
+`step(s) -> State_Hash` runs one tick on the caller's thread, frees the temp allocator and
+returns the tick's hash. `base.Jobs` with zero workers runs each job inside `jobs_submit`
+(today it asserts a worker), and a stepped server makes its chunk jobs that way: a
+requested chunk is generated during the tick that asked for it and collected at the
+start of the next, in request order. Autosave counts ticks
+(`AUTOSAVE_SECONDS * TICK_RATE` since the last save) on every server, live or stepped.
+In-process input comes through the local pipe with no simulated conditions, so what the
+harness sends before `step` is handled in that tick. One local player: the server takes
+one pipe, and several deterministic players wait for M50's bot harness.
+
+*The state hash* has two halves.
+
+- `game/state_hash.odin`, shared: a `Hasher` (u64 words, little-endian, each mixed as
+  `h = (h ~ w) * 0x0000_0100_0000_01b3`, finished with splitmix64's finalizer) and one
+  reflective walker over `core:reflect` with two outputs. `hash_value(h, v: any)` folds a
+  value in. `dump_value(b, path, v: any)` writes one line per leaf:
+  `entities[3].body.velocity.x = 0x3f8ccccd (1.1)`. Integers, enums, bools and bit_sets are
+  their bytes. Floats are their bits (so -0 is not 0). Arrays, structs and unions (tag,
+  then value) are walked. Slices, dynamic arrays and strings are a length, then their
+  elements. Arrays of plain integers (chunk blocks) are hashed as bytes in one go. A map, a
+  pointer or a procedure panics with the field's path: keyed state is hashed by hand, in
+  sorted order. A field added later is hashed without anyone remembering to.
+- `server/state_hash.odin`: `Hash_Section :: enum u8 {Clock, Rules, Players, Inventories,
+  Entities, Chunks, Liquids, Containers, Gates, Random, Ledger}` and `State_Hash :: struct
+  {tick: u64, root: u64, sections: [Hash_Section]u64}`. Per world, in `s.worlds` order:
+  Clock is the clock and tick. Rules is `w.rules`. Players is each playing client in index
+  order (world address, `player`, `look`, `health`, `max_health`, `teleported`). Inventories
+  is each one's `inventory`. Entities is `next_id` and `entities.list` in order. Chunks is
+  each chunk changed this tick, sorted, as position and blocks. Liquids is the update heap
+  as stored. Containers is sorted by position. Gates is the `gates` list. Random is the RNG
+  states. Ledger is entries and baseline, sorted by item and reason. The root chains:
+  `root(t) = mix(root(t-1), t, sections(t))`, so a divergence stays visible from its first
+  tick on. `world_hash(w)` hashes every loaded chunk, sorted, for checkpoints.
+  `state_dump(s, sections, b)` writes the dump lines of the sections asked for. Chunks are
+  dumped as one line per chunk, `chunks[(x, y, z)] = <hash>`, so a dump names the chunk.
+  Hashing runs only on stepped servers: a live tick costs nothing more.
+- `Config.perturb: Perturb {tick: u64, what: enum {None, Entity_Yaw, Player_Velocity}}`
+  (tests only, refused unless `stepped`). At that tick's start it adds one ulp to the first
+  entity's `yaw` or the first player's `velocity.x`. This is the deliberately introduced
+  nondeterminism.
+
+*The scripted session* (`server/determinism_test.odin`). A stepped server: seed 38, the
+Earth generator, view radius 4, height 2, no save directory, default rules, natural sheep
+on. A mirror client sits on the pipe. It is latency_test's predicting client grown up: it
+answers the challenge with a fixed key seed, keeps the chunks it is sent, predicts with
+`game.prediction_tick` and reconciles. The script is a pure function of the tick:
+
+- every tick: a sine-steered walk with a jump every 35 ticks;
+- sprinting over ticks 1000-2000, sneaking over 2000-2300, flying over 4000-5000;
+- breaking the block looked at and placing stone, every 40 ticks over 300-3900;
+- `/summon` four sheep at 600, `/give` shears at 1200 and shearing the nearest at 1300;
+- a water source by `/setblock` at 2500;
+- a `/fill`ed field of farmland and wheat at 3000, for random ticks;
+- a rocket into the ground ahead at 6000 (bulk edit, drops, knockback);
+- `/time` at 7000, a `/gamerule` change at 7500;
+- a stack dropped at 8000, a chest placed and filled at 9000.
+
+`DETERMINISM_TICKS :: #config(VX_DETERMINISM_TICKS, 2000)`: the everyday suite runs 2 000
+ticks, `build determinism` runs 10 000. The script stops at the tick count. The test runs
+two such sessions **side by side**, A and B, each with its own mirror, stepped A then B
+each tick. It asserts that their maps' tables sit at different addresses (so map order
+would differ) and compares roots every tick. At the first difference it dumps the
+differing sections of both and returns a `Divergence {tick, section, a, b: string}` with
+the first differing dump line. The run fails with
+`diverged at tick 5000: entities: entities[0].yaw = 0x3f8ccccd (1.1) vs 0x3f8ccccc (1.1)`.
+Across the run the test also checks:
+
+- every section except Containers and Gates took more than one value (the script really
+  exercises them);
+- the mirror's predicted state equals the server's at every `Player_Update`, with no
+  corrections (no latency);
+- at each checkpoint (every 1 000 ticks and the last), `world_hash` of the chunks the
+  mirror holds, hashed by the mirror from its own copies, equals the server's for the same
+  chunks.
+
+*The log and the cross-OS job.* With `-define:VX_DETERMINISM_LOG=<path>`, session A writes
+`build/determinism/<ODIN_OS>.<optimization>.txt`:
+
+- a header: `determinism 1 seed=38 ticks=10000 os=Linux opt=Minimal odin=<ODIN_VERSION>`;
+- a line per tick: `<tick> <root> clock=<h> rules=<h> ...`;
+- at each checkpoint, `dump <tick>`, the full dump, and `world <hash>`;
+- `end <root>`.
+
+That is about 2.5 MB of text. `build determinism` (`tools/build/main.odin`) runs the test at
+`-o:minimal` and at `-o:speed` with `VX_DETERMINISM_TICKS=10000` and a log each, then
+compares the two. `build determinism --compare <dir>` compares every log in a directory
+against the first in name order. It checks that the headers agree except for os and opt,
+then names, per file, the first differing tick, its differing sections, and the first
+differing line of the next checkpoint's dump. It exits non-zero on any difference. In CI,
+each Test job gets a step `build determinism` and uploads `build/determinism/` as
+`determinism-<os>`. A new job, `determinism` (ubuntu, `needs: build`, the setup action
+without dev), downloads the three, runs `build determinism --compare`, and is green only
+when all six logs agree.
+
+*The desync detector.* `Prediction_Check {sequence: u32, fields: [Player_Field]u32}` is
+`Client_Kind.Prediction_Check` (20), `PROTOCOL_VERSION` 23. `Player_Field` names `position`,
+`velocity`, `on_ground`, `flying`, `crouched`, `jump_held` and `air_jumps`, each a 32-bit fold
+of `hash_value` over that field.
+
+- The client (`client/session.odin`): every `DESYNC_CHECK_INPUTS` (30) inputs, it hashes
+  the state it just predicted, by field, and sends the check after that input. It sends
+  nothing while any of the 27 chunks around the player is missing.
+- The server (`server/players.odin`): it keeps a client's check until it applies that
+  input, then hashes its own state the same way. It judges the check only if the player
+  has been **quiet** for `DESYNC_QUIET_TICKS` (60, two seconds, longer than any round trip
+  it should judge). Quiet means `c.disturbed` (the last tick something besides the
+  player's own inputs could have changed its movement) is that far back.
+- `c.disturbed` is set by `disturb(c)`. It is called by every write to `c.player` outside
+  `simulate_player`: landing, spawn, saved state, knockback in `entities.odin`, the
+  admin's spectating. It is also called by a teleport, by a rules or mods change, by an
+  input refused or dropped, and by `changes_flush` for any changed block within 4 blocks of
+  the player's box.
+- A mismatch is logged as
+  `desync player=<name> sequence=<n> fields=velocity,position`. It is counted in
+  `Stats.desyncs`, judged and skipped checks in `Stats.checks_judged` and
+  `Stats.checks_skipped`, and all three go in the minute's tick summary.
+- The Wireshark dissector learns the message, and `check.lua` keeps decoding every packet.
+
+**The order of the steps** (each leaves the suite passing):
+
+1. `docs/determinism.md`, `base/numbers.odin`, `base/rng.odin` and their tests. Then the
+   lint, which fails on today's code, and the replacements until it passes.
+2. The order fixes (sorted keys, pool order, `@r`).
+3. Zero-worker jobs, the stepped server, the state hash and dump, `Perturb`.
+4. The scripted session and its tests, the log, `build determinism` and `--compare`.
+5. The CI step and job.
+6. The desync detector, its message and the dissector.
+
+If the session must split, the remainder is M38b: step 6, with its two tests as the exit
+check.
+
+**Left out:**
+
+- Saving and loading mid-session with the hash intact (RNG state is not saved yet: M49
+  migrates saves).
+- More than one deterministic player (M50's bots).
+- Replay of recorded traces by tick (`tools/replay` stays timed; replay by tick comes with
+  M40's journal).
+- A hash log on live servers.
+- Desync dumps sent back to the client, and desyncs shown in F3.
+- Lockstep determinism of the live server.
+- Cross-OS identity of audio, which stays in the replayable tier.
+- Linting map iteration by type.
+
+**Tests:**
+
+- `base/numbers_test.odin`: `sin`, `cos` and `exp` within 1 ulp of correctly rounded values
+  over a table of 64 inputs (including large arguments, ±0, subnormals, ±Inf and NaN). A
+  golden table of their exact bits, recorded on Linux, runs on all three OSes as an
+  ordinary test.
+- `base/rng_test.odin`:
+  - the first eight `rng_u64` of seed 1 against fixed values;
+  - `rng_int_max` uniform within chi-square bounds over 10^5 draws;
+  - ranges inclusive and exclusive as named;
+  - a state copy continues the same stream.
+- `tools/build/determinism_test.odin`, the lint: a file with `math.sin` fails with its line,
+  the same line with `// numbers:` passes, and the shared tree passes.
+- `game/state_hash_test.odin`:
+  - a struct's hash changes with any one field;
+  - -0 and 0 differ;
+  - padding never enters (two values equal field by field, with different padding bytes,
+    hash alike);
+  - a map field panics with its path;
+  - the dump lines name nested paths.
+- `server/determinism_test.odin`:
+  - `test_determinism_session`: the side-by-side run and its checks above;
+  - `test_divergence_named`: 600 ticks with B perturbed at tick 500, once per kind. The
+    report names tick 500, the right section and the field path (`entities[0].yaw`,
+    `players[0].player.velocity.x`).
+  - `test_stepped_jobs_in_order`: two stepped servers hold the same pool slots for the
+    same chunks after streaming and unloading.
+- `server/latency_test.odin`, extended:
+  - `test_no_desync_with_latency`: the M4 script at 200 ms and jitter, with checks. Zero
+    desyncs, and at least half the checks judged, so the quiet rule is not vacuous.
+  - `test_desync_caught`: the same run, with the client nudging its predicted
+    `velocity.x` by one ulp after every prediction. Desyncs are reported, naming
+    `velocity`.
+- `game/protocol_test.odin`: `Prediction_Check` round-trips.
+
+**Exit check:**
+
+- `build determinism` passes on Linux: both optimization levels give identical logs of the
+  10 000-tick session.
+- `test_divergence_named` names the perturbed field for both kinds.
+- The two desync tests pass.
+- The whole suite and `build check`, including the lint, pass.
+- The CI run of the commit has the `determinism` job green: the six logs, three OSes by two
+  optimization levels, agree.
+
+**Check by hand:**
+
+- A LAN game between a Linux host and a Windows or macOS client: walk, swim, fly and build
+  for ten minutes. Expect no `desync` line in the host's log, and `checks_judged` above zero
+  in its tick summary.
+
+- **Result** (what differs from the section, and what was found):
+  - The numbers golden is one FNV hash over the bits of `sin`, `cos`, `exp` of 64 inputs
+    (recorded on Linux), not a table of bits; accuracy is checked against libm (2 ulp for
+    sine and cosine, 1 for exp).
+  - `Config.perturb` puts its ulp into the state the tick *leaves* (not its start): a one-ulp
+    velocity is otherwise absorbed by the next tick's arithmetic. Section paths of 2-4 element
+    arrays read `.x .y .z .w` (`players[0].player.velocity.x`).
+  - `base.keys_sorted` is generic and `core:slice`'s `sort_by` is aliased in `base` so
+    `-vet` does not call the import unused (a generic body is checked only when used).
+  - The mirror counts a correction as a failure except in the 30 ticks after the rocket
+    (6000): its blast moves the player, a correction by design.
+  - `containers_tick`'s drop list, `entity_gone`'s despawn list and `regen`/`unload_unwanted`
+    are sorted too (the section named only some).
+  - Desync counts go in the minute's tick summary *log line* (the telemetry event has three
+    numbers only): `desyncs`, `checks_judged`, `checks_skipped`; `Stats` carries them too.
+  - `PROTOCOL_VERSION` is 23 (it was 22 when the section was written: the section's 23
+    assumed one more bump).
+  - A `Test` flake seen once while the suite ran in parallel: `test_breeding_lamb_to_adult`
+    (a wall-clock window on a live server); it passed on every re-run alone. Not touched.
+

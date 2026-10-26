@@ -1,9 +1,8 @@
 package server
 
 import "core:fmt"
-import "core:math"
-import "core:math/rand"
 
+import "../base"
 import "../game"
 
 // Items on the server: inventory requests (applied by the shared rules,
@@ -56,23 +55,23 @@ broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Blo
 @(private)
 block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 	if !w.rules.drops {return}
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	seeds, wheat := game.item_of_material(.Seeds), game.item_of_material(.Wheat)
 	drops := make([dynamic]game.Stack, context.temp_allocator)
 	if stage, is_wheat := game.wheat_stage(block); is_wheat {
 		if stage == game.WHEAT_STAGES - 1 {
-			append(&drops, game.Stack{wheat, 1}, game.Stack{seeds, rand.int_range(1, 4, r)})
+			append(&drops, game.Stack{wheat, 1}, game.Stack{seeds, base.rng_int_range(r, 1, 4)})
 		} else {
 			append(&drops, game.Stack{seeds, 1})
 		}
 	} else if block == .Tall_Grass {
-		if rand.int_max(8, r) == 0 {append(&drops, game.Stack{seeds, 1})}
+		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1})}
 	} else if item := game.block_drop(block); item != game.NO_ITEM {
 		append(&drops, game.Stack{item, 1})
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in drops {
-		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger_stack(w.server, w, .Drop_Block, st)
 		spawn_item(w, at, st, v, -1)
 	}
@@ -83,8 +82,8 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
 	record(s, c, .Item_Dropped, game.item_name(stack.item), i64(stack.count))
 	yaw, pitch := c.look[0], c.look[1]
-	cp := math.cos(pitch)
-	dir := [3]f32{-math.sin(yaw) * cp, math.sin(pitch), -math.cos(yaw) * cp}
+	cp := base.cos(pitch)
+	dir := [3]f32{-base.sin(yaw) * cp, base.sin(pitch), -base.cos(yaw) * cp}
 	eye := game.player_eye(c.player)
 	at := eye + {f64(dir.x), f64(dir.y), f64(dir.z)} * 0.4 - {0, 0.3, 0}
 	spawn_item(c.world, at, stack, dir * game.ITEM_THROW + {0, 2, 0}, int(player_id(s, c)))

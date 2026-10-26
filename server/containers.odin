@@ -2,12 +2,13 @@ package server
 
 import "core:fmt"
 import "core:log"
-import "core:math/rand"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+import "../base"
 import "../game"
 
 // Blocks that hold things (M30): a chest's contents are a record kept with
@@ -122,11 +123,11 @@ chest_gone :: proc(w: ^World, pos: game.Block_Pos) {
 		if c.world != w {continue}
 		if p, looking := c.open_chest.?; looking && p == pos {chest_close(&c)}
 	}
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in rec.slots {
 		if game.stack_empty(st) {continue}
-		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		spawn_item(w, at, st, v, -1)
 	}
 }
@@ -144,6 +145,7 @@ containers_tick :: proc(w: ^World) {
 			block, loaded := chunks_block(&w.chunks, pos)
 			if loaded && block != .Chest {append(&gone, pos)}
 		}
+		slice.sort_by(gone[:], game.block_pos_less)
 		for pos in gone {
 			log.infof("server chest without its block dropped pos=%v", pos)
 			chest_gone(w, pos)

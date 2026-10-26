@@ -56,3 +56,17 @@ chunk_distance_sq :: #force_inline proc(a, b: Chunk_Pos) -> i64 {
 	d := [3]i64{i64(a.x - b.x), i64(a.y - b.y), i64(a.z - b.z)}
 	return d.x * d.x + d.y * d.y + d.z * d.z
 }
+
+// chunk_pos_less and block_pos_less order positions y, then z, then x: the order
+// anything that reaches state or the wire walks a map in (docs/determinism.md).
+chunk_pos_less :: proc(a, b: Chunk_Pos) -> bool {
+	if a.y != b.y {return a.y < b.y}
+	if a.z != b.z {return a.z < b.z}
+	return a.x < b.x
+}
+
+block_pos_less :: proc(a, b: Block_Pos) -> bool {
+	if a.y != b.y {return a.y < b.y}
+	if a.z != b.z {return a.z < b.z}
+	return a.x < b.x
+}

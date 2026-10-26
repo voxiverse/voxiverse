@@ -45,7 +45,9 @@ Worker :: struct {
 	name: string,
 }
 
-// jobs_init starts count workers named "<name> 1", "<name> 2", ...
+// jobs_init starts count workers named "<name> 1", "<name> 2", ... With zero
+// workers each job runs inside jobs_submit, on the caller's thread: the
+// reproducible form a stepped server uses (docs/determinism.md).
 jobs_init :: proc(
 	j: ^Jobs,
 	name: string,
@@ -53,7 +55,7 @@ jobs_init :: proc(
 	allocator := context.allocator,
 	loc := #caller_location,
 ) {
-	assert(count > 0, "a job pool needs a worker", loc)
+	assert(count >= 0, "a job pool cannot have fewer than no workers", loc)
 	j^ = {
 		allocator = allocator,
 	}
@@ -93,6 +95,10 @@ jobs_destroy :: proc(j: ^Jobs) {
 }
 
 jobs_submit :: proc(j: ^Jobs, procedure: Job_Proc, data: rawptr) {
+	if len(j.threads) == 0 {
+		procedure(data) // (its temp allocations are the caller's to free)
+		return
+	}
 	sync.atomic_add(&j.pending, 1)
 	ok := queue_push(&j.queue, Job{procedure, data})
 	assert(ok, "job submitted after jobs_destroy started")

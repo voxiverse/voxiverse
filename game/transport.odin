@@ -123,7 +123,7 @@ send :: proc(e: Endpoint, data: []u8) -> bool {
 	{
 		sync.guard(&p.mutex)
 		c := p.conditions
-		delay := c.latency_ms + c.jitter_ms * rand.float32()
+		delay := c.latency_ms + c.jitter_ms * rand.float32() // numbers: the pipe's simulated jitter
 		due = time.tick_add(due, time.Duration(f64(delay) * f64(time.Millisecond)))
 		// Bandwidth: a packet cannot arrive before the previous one plus its
 		// own transmission time. Never earlier than the previous: in order.

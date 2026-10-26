@@ -29,6 +29,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 		if w := world_load(s, a); w != nil {c.world = w}
 	}
 	w := c.world
+	disturb(s, c)
 	if has_saved {
 		// Where they left, looking where they looked, carrying what they carried.
 		c.player = saved.state
@@ -125,6 +126,7 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	buf: [game.INPUT_BUDGET_MAX]game.Input
 	query := game.Block_Query{&w.chunks, chunks_block}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
+	if c.inv_changed {disturb(s, c)} 	// (the mods its gear gives)
 	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
@@ -142,6 +144,8 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 			c.player.position, c.player.velocity = held.position, {}
 		}
 		c.look = {msg.input.yaw, msg.input.pitch}
+		if waiting {disturb(s, c)}
+		check_judge(s, c, msg.sequence)
 		run_due_actions(s, c)
 	}
 	set_position(c, c.player.position)

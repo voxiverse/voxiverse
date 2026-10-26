@@ -89,7 +89,7 @@ chunks_init :: proc(
 ) -> mem.Allocator_Error {
 	w^ = {
 		gen           = gen,
-		max_in_flight = workers * MAX_IN_FLIGHT_PER_WORKER,
+		max_in_flight = max(workers, 1) * MAX_IN_FLIGHT_PER_WORKER, // (no workers: jobs run inline)
 	}
 	base.pool_init(&w.chunks, capacity, arena) or_return
 	w.by_pos = base.map_make_fixed(map[game.Chunk_Pos]Chunk_Handle, capacity, arena) or_return
@@ -99,7 +99,7 @@ chunks_init :: proc(
 	for &task in tasks {append(&w.free_tasks, &task)}
 	base.queue_init(&w.done, heap)
 	w.tops_done = make([dynamic]Tops_Done, heap)
-	w.caches = make([]worldgen.Column_Cache, workers, arena) or_return
+	w.caches = make([]worldgen.Column_Cache, max(workers, 1), arena) or_return
 	base.jobs_init(&w.jobs, "worldgen", workers, heap)
 	return nil
 }

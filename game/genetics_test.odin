@@ -1,21 +1,16 @@
 package game
 
-import "core:math/rand"
 import "core:testing"
 
-@(private = "file")
-rng :: proc(state: ^rand.Default_Random_State, seed: u64) -> rand.Generator {
-	state^ = rand.create(seed)
-	return rand.default_random_generator(state)
-}
+import "../base"
 
 // Two carriers (one recessive copy each) have black lambs a quarter of the
 // time, spotted ones likewise and independently; a black parent gives its
 // recessive copy to every lamb.
 @(test)
 test_carriers_make_a_quarter_black :: proc(t: ^testing.T) {
-	state: rand.Default_Random_State
-	r := rng(&state, 1)
+	state := base.rng_make(1)
+	r := &state
 	carrier := Genes{.Wool_A, .Coat_B}
 	N :: 40000
 	black, spotted, both := 0, 0, 0
@@ -63,8 +58,8 @@ test_carriers_make_a_quarter_black :: proc(t: ^testing.T) {
 // recessive copies show about that many.
 @(test)
 test_mutation_rate :: proc(t: ^testing.T) {
-	state: rand.Default_Random_State
-	r := rng(&state, 2)
+	state := base.rng_make(2)
+	r := &state
 	N :: 200000
 	copies := 0
 	for _ in 0 ..< N {
@@ -85,8 +80,8 @@ test_mutation_rate :: proc(t: ^testing.T) {
 // Wild sheep carry each recessive copy 1 time in 10: about 1 in 100 show a trait.
 @(test)
 test_wild_sheep :: proc(t: ^testing.T) {
-	state: rand.Default_Random_State
-	r := rng(&state, 3)
+	state := base.rng_make(3)
+	r := &state
 	N :: 100000
 	black, copies := 0, 0
 	for _ in 0 ..< N {
@@ -116,8 +111,8 @@ test_wild_sheep :: proc(t: ^testing.T) {
 // times as often as the wild does.
 @(test)
 test_inbred_lines_show_more :: proc(t: ^testing.T) {
-	state: rand.Default_Random_State
-	r := rng(&state, 4)
+	state := base.rng_make(4)
+	r := &state
 	LINES :: 4000
 	FAMILY :: 6
 	inbred, inbred_total, wild := 0, 0, 0
@@ -127,8 +122,8 @@ test_inbred_lines_show_more :: proc(t: ^testing.T) {
 			// A family from the pair; two of its children are the next pair.
 			family: [FAMILY]Genes
 			for &c in family {c = genes_child(a, b, r)}
-			i := int(rand.int31_max(FAMILY, r))
-			j := (i + 1 + int(rand.int31_max(FAMILY - 1, r))) % FAMILY
+			i := base.rng_int_max(r, FAMILY)
+			j := (i + 1 + base.rng_int_max(r, FAMILY - 1)) % FAMILY
 			a, b = family[i], family[j]
 		}
 		for _ in 0 ..< FAMILY {

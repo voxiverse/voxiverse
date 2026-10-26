@@ -2,7 +2,7 @@ package server
 
 import "core:log"
 import "core:math"
-import "core:math/rand"
+import "core:slice"
 
 import "../base"
 import "../game"
@@ -75,13 +75,13 @@ Entities :: struct {
 	list:    [dynamic]Entity, // awake (in loaded chunks)
 	next_id: u32,
 	budget:  int, // A* nodes left this tick
-	rng:     rand.Default_Random_State,
+	rng:     base.Rng,
 }
 
 entities_init :: proc(e: ^Entities, seed: i64) {
 	e.list = make([dynamic]Entity, 0, MAX_ENTITIES)
 	e.next_id = 1
-	e.rng = rand.create(u64(seed) ~ 0x0e7e_0e7e)
+	e.rng = base.rng_make(u64(seed) ~ 0x0e7e_0e7e)
 }
 
 entities_destroy :: proc(e: ^Entities) {
@@ -103,7 +103,7 @@ entity_spawn :: proc(
 			id = e.next_id,
 			kind = kind,
 			body = {position = position},
-			yaw = rand.float32_range(-math.PI, math.PI, rand.default_random_generator(&e.rng)),
+			yaw = base.rng_f32_range(&e.rng, -math.PI, math.PI),
 			health = game.ENTITY_INFO[kind].health,
 			growth = game.LAMB_TICKS, // (adult; a lamb is made lower)
 			natural = natural,
@@ -210,10 +210,10 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 	if ent.shorn || lamb {return false}
 	ent.shorn = true
 	record(s, c, .Sheep_Sheared)
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	wool := game.item_of_block(.Wool_Black if game.genes_black(ent.genes) else .Wool)
-	for _ in 0 ..< rand.int_range(1, 4, r) {
-		v := [3]f32{rand.float32_range(-1, 1, r), 2.5, rand.float32_range(-1, 1, r)}
+	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
+		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger(s, w, .Drop_Mob, wool, 1)
 		spawn_item(w, ent.body.position + {0, 0.6, 0}, {wool, 1}, v, -1)
 	}
@@ -247,7 +247,7 @@ mate_for :: proc(w: ^World, ent: ^Entity) -> ^Entity {
 // breed: a and b have met: a lamb between them, of both, and each waits.
 @(private = "file")
 breed :: proc(w: ^World, a, b: ^Entity) {
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	at := (a.body.position + b.body.position) / 2
 	genes := game.genes_child(a.genes, b.genes, r)
 	a.love, b.love = 0, 0
@@ -316,6 +316,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 		if c.state != .Playing || c.world != w {continue}
 		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
 			c.player.velocity += impulse
+			disturb(s, &c)
 			c.player.on_ground = false
 			d := c.player.position + {0, 0.9, 0} - center
 			distance := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
@@ -391,8 +392,8 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 
 @(private = "file")
 forward :: proc(yaw, pitch: f32) -> [3]f64 {
-	cp := math.cos(f64(pitch))
-	return {-math.sin(f64(yaw)) * cp, math.sin(f64(pitch)), -math.cos(f64(yaw)) * cp}
+	cp := base.cos(f64(pitch))
+	return {-base.sin(f64(yaw)) * cp, base.sin(f64(pitch)), -base.cos(f64(yaw)) * cp}
 }
 
 // entity_attack: a player hits an entity (the reach is checked by the
@@ -458,6 +459,7 @@ replicate :: proc(s: ^Server, c: ^Client) {
 	if batch.count > 0 {send_message(s, c, batch)}
 	gone := make([dynamic]u32, context.temp_allocator)
 	for id in c.known {if id not_in visible {append(&gone, id)}}
+	slice.sort(gone[:]) // (map order varies)
 	for id in gone {
 		delete_key(&c.known, id)
 		send_message(s, c, game.Entity_Despawn{id, false})
@@ -502,7 +504,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 	w := c.world
 	query := game.Block_Query{&w.chunks, chunks_block}
 	yaw := c.look[0]
-	ahead := c.player.position + {-f64(math.sin(yaw)) * 3, 0, -f64(math.cos(yaw)) * 3}
+	ahead := c.player.position + {-f64(base.sin(yaw)) * 3, 0, -f64(base.cos(yaw)) * 3}
 	at := game.Block_Pos {
 		i32(math.floor(ahead.x)),
 		i32(math.floor(ahead.y)),
@@ -514,7 +516,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 			if ent := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
 			   ent != nil {
 				if kind == .Sheep {
-					ent.genes = game.genes_wild(rand.default_random_generator(&w.entities.rng))
+					ent.genes = game.genes_wild(&w.entities.rng)
 				}
 				log.infof(
 					"server summoned kind=%v id=%d at=%v by=%s",
@@ -537,7 +539,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 @(private = "file")
 think :: proc(w: ^World, ent: ^Entity) {
 	b := &ent.brain
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	if b.hurt > 0 {b.hurt -= 1}
 	b.timer -= 1
 	pos := ent.body.position
@@ -568,41 +570,41 @@ think :: proc(w: ^World, ent: ^Entity) {
 			target :=
 				pos +
 				away / l * 10 +
-				{rand.float64_range(-3, 3, r), 0, rand.float64_range(-3, 3, r)}
+				{base.rng_f64_range(r, -3, 3), 0, base.rng_f64_range(r, -3, 3)}
 			plan(w, ent, target)
 		}
 	case .Idle, .Look:
-		if p, ok := nearest_player(w, pos, 6); ok && rand.float32(r) < 0.95 {
+		if p, ok := nearest_player(w, pos, 6); ok && base.rng_f32(r) < 0.95 {
 			b.state = .Look
 			b.look_at = p + {0, game.PLAYER_EYE, 0}
 		} else if b.state == .Look {
 			b.state = .Idle
 		}
 		// A shorn sheep with grass in front of it wants to eat.
-		if ent.shorn && b.timer <= 0 && rand.float32(r) < 0.6 {
+		if ent.shorn && b.timer <= 0 && base.rng_f32(r) < 0.6 {
 			if _, ahead := grass_ahead(w, ent); ahead {
-				b.state, b.timer = .Graze, rand.int_range(GRAZE_EAT_TICKS + 10, 120, r)
+				b.state, b.timer = .Graze, base.rng_int_range(r, GRAZE_EAT_TICKS + 10, 120)
 			}
 		}
 		if b.state != .Graze && b.timer <= 0 {
 			switch {
-			case rand.float32(r) < 0.55:
-				target := pos + {rand.float64_range(-8, 8, r), 0, rand.float64_range(-8, 8, r)}
+			case base.rng_f32(r) < 0.55:
+				target := pos + {base.rng_f64_range(r, -8, 8), 0, base.rng_f64_range(r, -8, 8)}
 				if plan(w, ent, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
-			case rand.float32(r) < 0.5:
-				b.state, b.timer = .Graze, rand.int_range(40, 120, r)
+			case base.rng_f32(r) < 0.5:
+				b.state, b.timer = .Graze, base.rng_int_range(r, 40, 120)
 			case:
-				b.timer = rand.int_range(30, 90, r)
+				b.timer = base.rng_int_range(r, 30, 90)
 			}
 		}
 	case .Wander:
 		if b.step >= b.path.count || b.timer <= 0 || b.stuck > game.TICK_RATE * 2 {
-			b.state, b.timer = .Idle, rand.int_range(30, 120, r)
+			b.state, b.timer = .Idle, base.rng_int_range(r, 30, 120)
 			b.path.count = 0
 		}
 	case .Graze:
 		if b.timer == GRAZE_EAT_TICKS {graze_eat(w, ent)}
-		if b.timer <= 0 {b.state, b.timer = .Idle, rand.int_range(20, 60, r)}
+		if b.timer <= 0 {b.state, b.timer = .Idle, base.rng_int_range(r, 20, 60)}
 	}
 	// The head: down when grazing, at the player when looking, level else.
 	want_pitch: f32 = 0
@@ -625,7 +627,7 @@ GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the gra
 @(private = "file")
 grass_ahead :: proc(w: ^World, ent: ^Entity) -> (p: game.Block_Pos, ok: bool) {
 	pos := ent.body.position
-	front := pos + {-f64(math.sin(ent.yaw)) * 0.8, 0, -f64(math.cos(ent.yaw)) * 0.8}
+	front := pos + {-f64(base.sin(ent.yaw)) * 0.8, 0, -f64(base.cos(ent.yaw)) * 0.8}
 	p = {i32(math.floor(front.x)), i32(math.floor(pos.y + 0.01)) - 1, i32(math.floor(front.z))}
 	b, loaded := chunks_block(&w.chunks, p)
 	return p, loaded && b == .Grass
@@ -722,7 +724,7 @@ spawn_natural :: proc(w: ^World) {
 	if s.config.no_sheep {return}
 	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
-	r := rand.default_random_generator(&w.entities.rng)
+	r := &w.entities.rng
 	query := game.Block_Query{&w.chunks, chunks_block}
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
@@ -731,20 +733,20 @@ spawn_natural :: proc(w: ^World) {
 			d := ent.body.position - c.player.position
 			if d.x * d.x + d.z * d.z < SPAWN_NEAR * SPAWN_NEAR {near += 1}
 		}
-		if near >= SPAWN_CAP || rand.float32(r) > 0.5 {continue}
-		angle := rand.float64_range(0, math.TAU, r)
-		distance := rand.float64_range(SPAWN_MIN, SPAWN_MAX, r)
-		x := i32(math.floor(c.player.position.x + math.cos(angle) * distance))
-		z := i32(math.floor(c.player.position.z + math.sin(angle) * distance))
+		if near >= SPAWN_CAP || base.rng_f32(r) > 0.5 {continue}
+		angle := base.rng_f64_range(r, 0, math.TAU)
+		distance := base.rng_f64_range(r, SPAWN_MIN, SPAWN_MAX)
+		x := i32(math.floor(c.player.position.x + base.cos(angle) * distance))
+		z := i32(math.floor(c.player.position.z + base.sin(angle) * distance))
 		top := column_top(w, x, z)
 		ground, loaded := chunks_block(&w.chunks, {x, top, z})
 		at := game.Block_Pos{x, top + 1, z}
 		if !loaded || ground != .Grass || !standable(query, at) {continue}
 		center := [3]f64{f64(x) + 0.5, f64(at.y), f64(z) + 0.5}
 		if anyone_within(w, center, SPAWN_MIN) {continue}
-		herd := rand.int_range(1, 4, r)
+		herd := base.rng_int_range(r, 1, 4)
 		for _ in 0 ..< herd {
-			jitter := [3]f64{rand.float64_range(-1.5, 1.5, r), 0, rand.float64_range(-1.5, 1.5, r)}
+			jitter := [3]f64{base.rng_f64_range(r, -1.5, 1.5), 0, base.rng_f64_range(r, -1.5, 1.5)}
 			p := center + jitter
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
 			if standable(query, b) {

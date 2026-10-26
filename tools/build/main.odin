@@ -102,15 +102,27 @@ main :: proc() {
 	}
 	ok: bool
 	switch args[0] {
-	case "check", "test", "build", "run", "serve", "debug", "package", "audiodump", "audio":
+	case "check",
+	     "test",
+	     "build",
+	     "determinism",
+	     "run",
+	     "serve",
+	     "debug",
+	     "package",
+	     "audiodump",
+	     "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
-		if !ensure_miniaudio() {os.exit(1)}
+		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
+		if !compare_only && !ensure_miniaudio() {os.exit(1)}
 	}
 	switch args[0] {
 	case "check":
 		ok = check()
 	case "test":
 		ok = test()
+	case "determinism":
+		ok = determinism(args[1:])
 	case "fmt":
 		ok = format_sources()
 	case "shaders":
@@ -151,6 +163,9 @@ usage :: proc() {
 	fmt.println("usage: build <command>")
 	fmt.println("  check     type-check every package (-vet -strict-style) and verify formatting")
 	fmt.println("  test      run the unit tests")
+	fmt.println(
+		"  determinism  run the scripted session at -o:minimal and -o:speed and compare the logs (--compare <dir>: every log in a directory)",
+	)
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println(
@@ -395,7 +410,7 @@ check :: proc() -> bool {
 			ok = false
 		}
 	}
-	return check_format() && ok
+	return determinism_lint() && check_format() && ok
 }
 
 test :: proc() -> bool {

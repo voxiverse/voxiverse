@@ -2,7 +2,6 @@ package server
 
 import "core:fmt"
 import "core:math"
-import "core:math/rand"
 import "core:strconv"
 import "core:strings"
 
@@ -36,7 +35,7 @@ find_player :: proc(s: ^Server, c: ^Client, text: string) -> ^Client {
 		playing := make([dynamic]^Client, context.temp_allocator)
 		for &other in s.clients {if other.state == .Playing {append(&playing, &other)}}
 		if len(playing) == 0 {return nil}
-		return playing[rand.int_max(len(playing))]
+		return playing[base.rng_int_max(&c.world.command_rng, len(playing))]
 	case "@a":
 		return nil
 	}
@@ -227,6 +226,7 @@ admin_rule :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		switch err := base.var_set(table, &w.rules, rule_name(args[0]), args[1]); err {
 		case .None, .Out_Of_Range:
 			broadcast(s, game.Rules_Changed{w.rules}, w)
+			disturb_world(s, w)
 			v, _ := base.var_find(table, rule_name(args[0]))
 			notice(s, c, fmt.tprintf("%s = %s", args[0], base.var_format(table, &w.rules, v)))
 		case .Unknown_Name:

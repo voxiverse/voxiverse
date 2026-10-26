@@ -15,7 +15,7 @@ import "../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 22
+PROTOCOL_VERSION :: 23
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -203,6 +203,18 @@ Fire :: struct {
 	yaw, pitch: f32,
 }
 
+// Prediction_Check: a hash, by field, of the state the client predicted after
+// input `sequence`, sent every DESYNC_CHECK_INPUTS inputs. The server hashes
+// its own state after the same input and, if the player has been quiet, names
+// any field that differs (docs/determinism.md). A check never changes state.
+Prediction_Check :: struct {
+	sequence: u32,
+	fields:   [Player_Field]u32,
+}
+
+DESYNC_CHECK_INPUTS :: 30 // inputs between checks (one a second)
+DESYNC_QUIET_TICKS :: 60 // ticks without a disturbance before a check is judged
+
 Client_Message :: union {
 	Hello,
 	Input,
@@ -223,6 +235,7 @@ Client_Message :: union {
 	Telemetry_Report,
 	Telemetry_Batch,
 	Use_Block,
+	Prediction_Check,
 }
 
 // Server -> client.
@@ -552,6 +565,7 @@ Client_Kind :: enum u8 {
 	Telemetry_Report,
 	Telemetry_Batch,
 	Use_Block,
+	Prediction_Check,
 }
 
 @(private = "file")
@@ -649,6 +663,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "use_entity"
 		case u8(Client_Kind.Use_Block):
 			return "use_block"
+		case u8(Client_Kind.Prediction_Check):
+			return "prediction_check"
 		case u8(Client_Kind.Stats_Request):
 			return "stats_request"
 		case u8(Client_Kind.Telemetry_Report):
@@ -811,6 +827,10 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Use_Block))
 		write_block_pos(w, v.pos)
 		write_u32(w, v.after)
+	case Prediction_Check:
+		write_u8(w, u8(Client_Kind.Prediction_Check))
+		write_u32(w, v.sequence)
+		for f in v.fields {write_u32(w, f)}
 	case Stats_Request:
 		write_u8(w, u8(Client_Kind.Stats_Request))
 		write_string(w, v.filter)
@@ -1122,6 +1142,12 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 			pos   = read_block_pos(&r),
 			after = read_u32(&r),
 		}
+	case u8(Client_Kind.Prediction_Check):
+		c := Prediction_Check {
+			sequence = read_u32(&r),
+		}
+		for &f in c.fields {f = read_u32(&r)}
+		m = c
 	case u8(Client_Kind.Stats_Request):
 		m = Stats_Request {
 			filter = read_string(&r, MAX_STATS_FILTER),

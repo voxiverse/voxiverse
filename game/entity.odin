@@ -2,6 +2,8 @@ package game
 
 import "core:math"
 
+import "../base"
+
 // Entities: things in the world other than blocks and players (for now one
 // kind, the sheep). The server simulates them (server/entities.odin) and
 // tells each client about the ones near it; both sides share these
@@ -80,7 +82,7 @@ body_step :: proc(
 ) {
 	info := ENTITY_INFO[kind]
 	control := rules.ground_control if b.on_ground else rules.air_control
-	follow := 1 - math.exp(-control * dt)
+	follow := 1 - base.exp(-control * dt)
 	b.velocity.x += (wish.x - b.velocity.x) * follow
 	b.velocity.z += (wish.y - b.velocity.z) * follow
 	if b.on_ground && jump {b.velocity.y = math.sqrt(2 * rules.gravity * info.jump)}

@@ -46,7 +46,7 @@ Store :: struct {
 	players:    map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
 	characters: map[string]game.Account, // every character's account, by name
 	writer:     game.Writer,
-	last_save:  time.Tick,
+	last_save:  u64, // the tick of the last save
 }
 
 // store_open reads the universe's files if dir has them (its seed and the
@@ -56,7 +56,7 @@ Store :: struct {
 store_open :: proc(s: ^Server, dir: string) -> bool {
 	st := &s.store
 	st.dir = strings.clone(dir)
-	st.last_save = time.tick_now()
+	st.last_save = s.tick
 	game.writer_init(&st.writer)
 	home := s.home
 	if dir == "" {
@@ -210,7 +210,7 @@ mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
 // (logged; the next save tries again).
 save :: proc(s: ^Server) -> bool {
 	st := &s.store
-	st.last_save = time.tick_now()
+	st.last_save = s.tick
 	if st.dir == "" {return true}
 	ok := write_universe_file(s)
 	for w in s.worlds {if !world_save(w) {ok = false}}
