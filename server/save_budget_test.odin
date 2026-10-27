@@ -99,9 +99,11 @@ test_save_200_characters :: proc(t: ^testing.T) {
 	generation := st.generation
 
 	// Capture.
-	start := time.tick_now()
+	// (the thread's CPU time: the suite runs other tests on other threads, and
+	// a core taken from this one is not the capture's cost)
+	start := base.thread_cpu_us()
 	testing.expect(t, save_begin(s), "the capture failed")
-	capture := i64(time.duration_microseconds(time.tick_since(start)))
+	capture := base.thread_cpu_us() - start
 	testing.expectf(
 		t,
 		capture <= CAPTURE_BUDGET_US * budget_scale(),

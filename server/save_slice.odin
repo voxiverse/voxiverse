@@ -185,10 +185,9 @@ save_slice :: proc(s: ^Server, unlimited := false) -> bool {
 	job := st.job
 	if job == nil || (st.slice_hold && !unlimited) {return true}
 	start := time.tick_now()
-	defer st.slice_worst_us = max(
-		st.slice_worst_us,
-		i64(time.duration_microseconds(time.tick_since(start))),
-	)
+	// (the thread's CPU time, so a core taken by another thread is not the slice's cost)
+	cpu := base.thread_cpu_us()
+	defer st.slice_worst_us = max(st.slice_worst_us, base.thread_cpu_us() - cpu)
 	for !job_encoded(job) {
 		job_step(s, job)
 		if !unlimited && time.duration_microseconds(time.tick_since(start)) >= SAVE_SLICE_US {

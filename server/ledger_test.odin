@@ -6,6 +6,7 @@ import "core:path/filepath"
 import "core:testing"
 import "core:time"
 
+import "../base"
 import "../common/game"
 import "../common/telemetry"
 
@@ -611,11 +612,12 @@ test_audit_budget :: proc(t: ^testing.T) {
 		append(&w.entities.list, Entity{kind = .Item, stack = st})
 		given(s, st)
 	}
-	start := time.tick_now()
+	// (the thread's CPU time: other tests run on other threads)
+	start := base.thread_cpu_us()
 	lines := audit(s)
-	took := time.tick_since(start)
+	took := base.thread_cpu_us() - start
 	testing.expect_value(t, len(lines), 0)
-	testing.expectf(t, took < 10 * time.Millisecond, "the audit took %v", took)
+	testing.expectf(t, took < 10_000, "the audit took %d us", took)
 	free_all(context.temp_allocator)
 }
 
