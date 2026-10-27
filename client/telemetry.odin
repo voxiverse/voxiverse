@@ -169,6 +169,7 @@ consent_dialog :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.cut_right(&buttons, t.spacing)
 	answer := -1
 	if ui.button(ctx, "Share", buttons) {answer = 1}
+	ui.default_focus(ctx) // (mashing A never opts in)
 	if ui.button(ctx, "No thanks", no) {answer = 0}
 	if answer >= 0 {
 		app.settings.share_data, app.settings.share_asked = answer == 1, true

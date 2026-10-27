@@ -66,6 +66,7 @@ chat_keys :: proc(app: ^App, input: ^ui.Input) {
 	slash := action_pressed(&app.actions, .Command)
 	if action_pressed(&app.actions, .Chat) || slash {
 		chat_open(app, "/" if slash else "")
+		app.chat_osk = app.actions.device == .Pad // (a pad types on the on-screen keyboard)
 		input.text = nil
 	}
 }
@@ -99,6 +100,10 @@ chat_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	ui.cut_bottom(&area, t.spacing)
 	hint: ui.Rect
 	if app.chat.searching {hint = ui.cut_bottom(&area, t.row_height)}
+	if app.chat_osk && !app.chat.searching {
+		app.chat_osk = false
+		ui.osk_open(ctx, ui.get_id(ctx, "chat input"))
+	}
 	r := line_edit(
 		app,
 		ctx,

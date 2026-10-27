@@ -110,7 +110,10 @@ world_paused :: proc(app: ^App) -> bool {
 game_controls :: proc(app: ^App) -> bool {
 	return(
 		app.screen == .Game &&
-		(app.session == nil || app.session.loading == nil) &&
+		(app.session == nil ||
+				(app.session.loading == nil &&
+						app.session.state != .Connecting &&
+						app.session.state != .Choosing)) &&
 		!overlays_take(&app.overlays, .Keyboard) &&
 		!overlays_take(&app.overlays, .Mouse) \
 	)
@@ -120,6 +123,7 @@ game_controls :: proc(app: ^App) -> bool {
 // none, the screen does (in a world: pause; on the title: ask to quit).
 escape :: proc(app: ^App) {
 	if options_cancel_listening(app) {return}
+	if ui.osk_cancel(&app.ui) {return} 	// (B and Escape close the keyboard before the screen)
 	if top, ok := overlay_top(&app.overlays); ok {
 		close_overlay(app, top)
 		return

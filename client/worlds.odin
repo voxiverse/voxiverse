@@ -212,17 +212,21 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 		ui.label(ctx, "No saves yet: Create New Save to start one", area, .Center, t.text_muted)
 	}
 	visible := int(area.h / SAVE_ROW)
-	if ui.rect_contains(area, ctx.input.mouse) && ctx.input.wheel.y != 0 {
-		w.scroll -= ctx.input.wheel.y
-	}
-	w.scroll = clamp(w.scroll, 0, f32(max(0, len(w.entries) - visible)))
-	ui.push_clip_rect(ctx, area)
+	// One focusable widget for a pad or keyboard: Up and Down move the
+	// selection, Confirm plays it; the rows below are for the mouse.
 	first := int(w.scroll)
+	list := ui.list_nav(ctx, "saves", area, len(w.entries), &w.selected, &first, visible, SAVE_ROW)
+	w.scroll = f32(first)
+	if list.clicked && w.selected >= 0 {
+		save_play(app, w.selected)
+		return
+	}
+	ui.push_clip_rect(ctx, area)
 	for i in first ..< min(len(w.entries), first + visible + 1) {
 		e := w.entries[i]
 		row := ui.Rect{area.x, area.y + f32(i - first) * SAVE_ROW, area.w, SAVE_ROW}
 		ui.push_id_int(ctx, i)
-		it := ui.interact(ctx, ui.get_id(ctx, "row"), row, label = e.name)
+		it := ui.interact(ctx, ui.get_id(ctx, "row"), row, focusable = false, label = e.name)
 		ui.pop_id(ctx)
 		if it.clicked {
 			if w.last_row == i && time.tick_since(w.last_click) < DOUBLE_CLICK {
@@ -397,5 +401,6 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 		worlds_refresh(w)
 		return
 	}
+	ui.default_focus(ctx)
 	if ui.button(ctx, "Cancel", cancel) {w.mode = .List}
 }

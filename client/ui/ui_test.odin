@@ -8,19 +8,15 @@ import "../font"
 
 // Behaviour tests: real frames with scripted input, no window or GPU.
 
-@(private = "file")
 FONT_DATA := #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
-@(private = "file")
 SCREEN :: Vec2{800, 600}
 
-@(private = "file")
 Fixture :: struct {
 	font: font.Font,
 	ctx:  Context,
 }
 
-@(private = "file")
 setup :: proc(t: ^testing.T) -> ^Fixture {
 	fx := new(Fixture)
 	ok: bool
@@ -30,48 +26,37 @@ setup :: proc(t: ^testing.T) -> ^Fixture {
 	return fx
 }
 
-@(private = "file")
 teardown :: proc(fx: ^Fixture) {
 	destroy(&fx.ctx)
 	free(fx)
 }
 
-@(private = "file")
 at :: proc(p: Vec2) -> Input {
 	return {mouse = p}
 }
 
-@(private = "file")
 press :: proc(p: Vec2) -> Input {
 	return {mouse = p, mouse_down = {.Left}, mouse_pressed = {.Left}}
 }
 
-@(private = "file")
 hold :: proc(p: Vec2) -> Input {
 	return {mouse = p, mouse_down = {.Left}}
 }
 
-@(private = "file")
 release :: proc(p: Vec2) -> Input {
 	return {mouse = p, mouse_released = {.Left}}
 }
 
-@(private = "file")
 keys :: proc(k: bit_set[Key], mods: bit_set[Modifier] = {}) -> Input {
 	return {mouse = {-100, -100}, keys_pressed = k, modifiers = mods}
 }
 
-@(private = "file")
 BUTTON_A :: Rect{100, 100, 200, 40}
-@(private = "file")
 BUTTON_B :: Rect{100, 160, 200, 40}
-@(private = "file")
 INSIDE_A :: Vec2{150, 120}
-@(private = "file")
 OUTSIDE :: Vec2{600, 500}
 
 // two_buttons runs one frame with buttons A and B; returns which clicked.
-@(private = "file")
 two_buttons :: proc(ctx: ^Context, input: Input) -> (a, b: bool) {
 	begin_frame(ctx, input, SCREEN, 1)
 	a = button(ctx, "A", BUTTON_A)
@@ -115,10 +100,8 @@ test_dragging_off_cancels_click :: proc(t: ^testing.T) {
 
 // modal_frame: a base button covering the screen and a modal dialog with
 // one button.
-@(private = "file")
 MODAL_BUTTON :: Rect{300, 250, 200, 40}
 
-@(private = "file")
 modal_frame :: proc(
 	ctx: ^Context,
 	input: Input,
@@ -229,7 +212,6 @@ test_focus_stays_in_modal :: proc(t: ^testing.T) {
 	}
 }
 
-@(private = "file")
 text_frame :: proc(ctx: ^Context, input: Input, text: ^[dynamic]u8) -> (submitted: bool) {
 	begin_frame(ctx, input, SCREEN, 1)
 	submitted = text_input(ctx, "name", text, {100, 100, 300, 36})
@@ -411,7 +393,6 @@ test_layout_cuts :: proc(t: ^testing.T) {
 // The bug found by hand in M2: the title screen's "Quit" and the quit
 // dialog's "Quit" shared an id; the inert one under the modal consumed the
 // mouse release, so the dialog's button never clicked.
-@(private = "file")
 quit_frames :: proc(ctx: ^Context, input: Input, scope_dialog: bool) -> (dialog_quit: bool) {
 	begin_frame(ctx, input, SCREEN, 1)
 	button(ctx, "Quit", {100, 400, 200, 40}) // title screen
@@ -459,7 +440,6 @@ test_modal_button_clicks_despite_same_label_below :: proc(t: ^testing.T) {
 // expect_duplicate_id_errors drops the (deliberately triggered) duplicate-id
 // error and forwards everything else: the test runner learns of failed
 // expectations through the logger, so swallowing all of it would hide them.
-@(private = "file")
 expect_duplicate_id_errors :: proc(next: log.Logger) -> log.Logger {
 	@(static) forward: log.Logger
 	forward = next
@@ -597,4 +577,265 @@ test_tooltip_waits_then_shows :: proc(t: ^testing.T) {
 	testing.expect(t, frame(ctx, 1.1, {150, 180}))
 	testing.expect(t, !frame(ctx, 1.2, OUTSIDE))
 	testing.expect(t, !frame(ctx, 1.3, INSIDE_A), "leaving resets")
+}
+
+// ---------------------------------------------------------------------------
+// Directional navigation (M42)
+// ---------------------------------------------------------------------------
+
+nav :: proc(n: bit_set[Nav], pad := true) -> Input {
+	return {mouse = {-100, -100}, nav = n, pad = pad}
+}
+
+grid_frame :: proc(ctx: ^Context, input: Input) {
+	begin_frame(ctx, input, SCREEN, 1)
+	for row in 0 ..< 3 {
+		for col in 0 ..< 3 {
+			label := strings.clone(string([]u8{u8('a' + row), u8('1' + col)}), ctx.frame_alloc)
+			button(ctx, label, {100 + f32(col) * 60, 100 + f32(row) * 50, 50, 40})
+		}
+	}
+	end_frame(ctx)
+}
+
+@(test)
+test_directions_move_over_a_grid :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	grid_frame(ctx, nav({}))
+	testing.expect_value(t, focused_label(ctx), "a1") // a pad user always sees a focus
+	step :: proc(fx: ^Fixture, t: ^testing.T, n: Nav, want: string) {
+		grid_frame(&fx.ctx, nav({n}))
+		testing.expect_value(t, focused_label(&fx.ctx), want)
+	}
+	step(fx, t, .Right, "a2")
+	step(fx, t, .Down, "b2")
+	step(fx, t, .Right, "b3")
+	step(fx, t, .Right, "b3") // the edge: no wrapping
+	step(fx, t, .Down, "c3")
+	step(fx, t, .Down, "c3")
+	step(fx, t, .Left, "c2")
+	step(fx, t, .Up, "b2")
+	step(fx, t, .Up, "a2")
+	step(fx, t, .Up, "a2")
+	// The keyboard's arrows do the same.
+	grid_frame(ctx, keys({.Left}))
+	testing.expect_value(t, focused_label(ctx), "a1")
+}
+
+@(test)
+test_a_column_beside_a_wide_button_picks_the_overlapping_one :: proc(t: ^testing.T) {
+	from := Rect{0, 0, 100, 40}
+	candidates := []Rect {
+		{0, 60, 40, 40}, // below, overlapping spans: gap 20
+		{150, 50, 40, 40}, // below but to the right: farther across
+		{0, 200, 300, 40}, // wide and low
+	}
+	testing.expect_value(t, nav_pick(from, candidates, .Down), 0)
+	testing.expect_value(t, nav_pick(from, candidates, .Up), -1)
+	testing.expect_value(t, nav_pick({0, 100, 40, 40}, candidates[:1], .Down), -1)
+	// Right of a tall button: the one level with it beats one lower.
+	tall := Rect{0, 0, 50, 200}
+	side := []Rect{{100, 150, 50, 40}, {100, 20, 50, 40}}
+	testing.expect_value(t, nav_pick(tall, side, .Right), 1)
+}
+
+@(test)
+test_first_nav_only_focuses :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	two_buttons(ctx, keys({}))
+	a, b := two_buttons(ctx, keys({.Enter}))
+	testing.expect(t, !a && !b, "the first event only shows the focus")
+	testing.expect_value(t, ctx.focused, get_id(ctx, "A"))
+	a, b = two_buttons(ctx, keys({.Enter}))
+	testing.expect(t, a)
+	// A screen's default wins.
+	ctx.focused = 0
+	for _ in 0 ..< 2 {
+		begin_frame(ctx, nav({}), SCREEN, 1)
+		button(ctx, "A", BUTTON_A)
+		default_focus(ctx)
+		button(ctx, "B", BUTTON_B)
+		end_frame(ctx)
+	}
+	testing.expect_value(t, focused_label(ctx), "B")
+}
+
+@(test)
+test_slider_consumes_left_right :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	value: f32 = 0.5
+	frame :: proc(ctx: ^Context, in_: Input, v: ^f32) {
+		begin_frame(ctx, in_, SCREEN, 1)
+		slider(ctx, "vol", v, 0, 1, {100, 100, 300, 30}, step = 0.1)
+		button(ctx, "below", {100, 140, 300, 30})
+		button(ctx, "above", {100, 60, 300, 30})
+		end_frame(ctx)
+	}
+	frame(ctx, nav({.Down}), &value)
+	frame(ctx, nav({.Down}), &value) // above, vol: the slider is the second drawn
+	ctx.focused = get_id(ctx, "vol")
+	frame(ctx, nav({.Right}), &value)
+	testing.expect(t, abs(value - 0.6) < 0.001)
+	testing.expect_value(t, focused_label(ctx), "vol")
+	frame(ctx, nav({.Left}), &value)
+	frame(ctx, nav({.Left}), &value)
+	testing.expect(t, abs(value - 0.4) < 0.001)
+	frame(ctx, nav({.Up}), &value)
+	testing.expect_value(t, focused_label(ctx), "above")
+}
+
+@(test)
+test_choice_cycles_both_ways :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	i := 0
+	names := []string{"Low", "Medium", "High"}
+	frame :: proc(ctx: ^Context, in_: Input, i: ^int, names: []string) {
+		begin_frame(ctx, in_, SCREEN, 1)
+		choice(ctx, "Quality", i, names, {100, 100, 300, 30})
+		end_frame(ctx)
+	}
+	frame(ctx, nav({}), &i, names)
+	testing.expect_value(t, focused_label(ctx), "Quality: Low")
+	frame(ctx, nav({.Right}), &i, names)
+	testing.expect_value(t, i, 1)
+	frame(ctx, nav({.Left}), &i, names)
+	frame(ctx, nav({.Left}), &i, names)
+	testing.expect_value(t, i, 2) // wrapped
+	frame(ctx, nav({.Confirm}), &i, names)
+	testing.expect_value(t, i, 0)
+	frame(ctx, press({150, 110}), &i, names)
+	frame(ctx, release({150, 110}), &i, names)
+	frame(ctx, release({150, 110}), &i, names)
+	testing.expect_value(t, i, 1)
+}
+
+@(test)
+test_modal_takes_focus_and_gives_it_back :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	for _ in 0 ..< 2 {modal_frame(ctx, nav({}), false)}
+	testing.expect_value(t, ctx.focused, get_id(ctx, "background"))
+	modal_frame(ctx, nav({}), true)
+	modal_frame(ctx, nav({}), true)
+	testing.expect_value(t, focused_label(ctx), "OK")
+	modal_frame(ctx, nav({}), false)
+	modal_frame(ctx, nav({}), false)
+	testing.expect_value(t, ctx.focused, get_id(ctx, "background"))
+}
+
+@(test)
+test_pointer_idles_after_nav :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	two_buttons(ctx, at(INSIDE_A))
+	two_buttons(ctx, at(INSIDE_A))
+	testing.expect_value(t, ctx.hot, get_id(ctx, "A"))
+	two_buttons(ctx, {mouse = INSIDE_A, nav = {.Down}, pad = true})
+	two_buttons(ctx, {mouse = INSIDE_A, pad = true})
+	testing.expect_value(t, ctx.hot, Id(0))
+	two_buttons(ctx, {mouse = INSIDE_A + {1, 0}, pad = true})
+	testing.expect_value(t, ctx.hot, Id(0)) // 1 unit is a tremor
+	two_buttons(ctx, {mouse = INSIDE_A + {10, 0}, pad = true})
+	testing.expect_value(t, ctx.hot, get_id(ctx, "A"))
+}
+
+@(test)
+test_list_nav :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	selected, first := 0, 0
+	frame :: proc(ctx: ^Context, in_: Input, selected, first: ^int) -> Interaction {
+		begin_frame(ctx, in_, SCREEN, 1)
+		it := list_nav(ctx, "rows", {100, 100, 300, 160}, 50, selected, first, 8)
+		button(ctx, "after", {100, 300, 100, 30})
+		end_frame(ctx)
+		return it
+	}
+	frame(ctx, nav({}), &selected, &first)
+	testing.expect_value(t, focused_label(ctx), "rows")
+	for _ in 0 ..< 20 {frame(ctx, nav({.Down}), &selected, &first)}
+	testing.expect_value(t, selected, 20)
+	testing.expect_value(t, first, 13)
+	testing.expect_value(t, focused_label(ctx), "rows")
+	it := frame(ctx, nav({.Confirm}), &selected, &first)
+	testing.expect(t, it.clicked)
+	for _ in 0 ..< 30 {frame(ctx, nav({.Down}), &selected, &first)}
+	testing.expect_value(t, selected, 49)
+	frame(ctx, nav({.Down}), &selected, &first) // the last row: leaves the list
+	testing.expect_value(t, focused_label(ctx), "after")
+	frame(ctx, nav({.Up}), &selected, &first)
+	selected, first = 0, 0
+	frame(ctx, nav({.Up}), &selected, &first) // the first row: leaves the list (nothing above)
+	testing.expect_value(t, selected, 0)
+	// The stick scrolls without moving the selection.
+	frame(ctx, {mouse = {-100, -100}, pad = true, nav_scroll = 3}, &selected, &first)
+	testing.expect_value(t, first, 3)
+	testing.expect_value(t, selected, 0) // (the selection stays where it was)
+}
+
+@(test)
+test_keep_focus_visible :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	scroll: f32
+	view := Rect{100, 100, 300, 100}
+	frame :: proc(ctx: ^Context, in_: Input, scroll: ^f32, view: Rect) {
+		begin_frame(ctx, in_, SCREEN, 1)
+		push_clip_rect(ctx, view)
+		for i in 0 ..< 10 {
+			label := strings.clone(string([]u8{u8('0' + i)}), ctx.frame_alloc)
+			button(ctx, label, {view.x, view.y + f32(i) * 40 - scroll^, 300, 30})
+		}
+		pop_clip_rect(ctx)
+		keep_focus_visible(ctx, view, scroll)
+		end_frame(ctx)
+	}
+	frame(ctx, nav({}), &scroll, view)
+	for _ in 0 ..< 5 {frame(ctx, nav({.Down}), &scroll, view)}
+	frame(ctx, nav({}), &scroll, view)
+	testing.expect_value(t, focused_label(ctx), "5")
+	testing.expect(t, scroll > 0 && scroll <= 130, "scrolled to the row below the view")
+	for _ in 0 ..< 5 {frame(ctx, nav({.Up}), &scroll, view)}
+	frame(ctx, nav({}), &scroll, view)
+	testing.expect_value(t, scroll, 0)
+}
+
+@(test)
+test_pad_confirm_opens_the_keyboard_enter_submits :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	text := make([dynamic]u8)
+	defer delete(text)
+	submitted := false
+	frame :: proc(ctx: ^Context, in_: Input, text: ^[dynamic]u8, submitted: ^bool) {
+		begin_frame(ctx, in_, SCREEN, 1)
+		if text_input(ctx, "name", text, {100, 100, 300, 36}) {submitted^ = true}
+		end_frame(ctx)
+	}
+	frame(ctx, nav({}), &text, &submitted) // focused (the first event only shows it)
+	testing.expect(t, !osk_is_open(ctx))
+	frame(ctx, nav({.Confirm}), &text, &submitted)
+	testing.expect(t, osk_is_open(ctx))
+	testing.expect(t, !submitted)
+	// A real Enter in the open keyboard's field submits.
+	frame(ctx, keys({.Enter}), &text, &submitted)
+	testing.expect(t, submitted)
+	osk_cancel(ctx)
+	submitted = false
+	for _ in 0 ..< 4 {frame(ctx, nav({}), &text, &submitted)}
+	frame(ctx, keys({.Enter}), &text, &submitted)
+	testing.expect(t, submitted && !osk_is_open(ctx), "keyboard Enter submits, no keyboard")
 }

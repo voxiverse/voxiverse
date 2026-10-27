@@ -6,6 +6,7 @@ import "core:strings"
 import "../base"
 import "../common/game"
 import "platform"
+import "ui"
 
 // Controls (Options > Controls): every action is bound to a key or a mouse
 // button by its place on the keyboard (platform.Key), so WASD stays a
@@ -138,7 +139,7 @@ BINDING_VARS := [?]base.Var {
 // a Q into a text field, or choosing a key for a binding, is not a step.
 // over_slot: a slot is under the mouse, where the drop key drops instead.
 menu_tab_step :: proc(app: ^App, over_slot := false) -> int {
-	if app.ui.edit.active || app.options.listening != .None {return 0}
+	if app.ui.edit.active || app.options.listening != .None || ui.osk_is_open(&app.ui) {return 0}
 	a := &app.actions
 	step := 0
 	prev_is_drop := app.settings.keys.tab_prev == app.settings.keys.drop

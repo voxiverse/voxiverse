@@ -57,6 +57,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"stick_dead_zone",
 		"stick_response",
 		"stick_swap",
+		"button_prompts",
 	},
 	.Accessibility = {"reduce_motion", "chat_text_size"},
 	.Profile       = {"name", "share_data"},
@@ -127,10 +128,25 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 		text_w[tab] = ui.measure_text(ctx, tab_name(tab), t.font_size) + 2 * t.padding
 		total += text_w[tab] + gap
 	}
-	hint := fmt.tprintf("%s / %s", action_label(app, .Tab_Prev), action_label(app, .Tab_Next))
-	hint_w := ui.measure_text(ctx, hint, t.font_size) + t.spacing
-	hint_rect := ui.cut_right(&tabs, hint_w)
-	ui.draw_text(ctx, hint_rect, hint, t.font_size, t.text_muted, .Right)
+	// The two tab keys' glyphs beside the tabs.
+	prev_glyph, next_glyph := prompt_glyph(app, .Tab_Prev), prompt_glyph(app, .Tab_Next)
+	prev_w, next_w := prompt_glyph_width(ctx, prev_glyph), prompt_glyph_width(ctx, next_glyph)
+	hint_rect := ui.cut_right(&tabs, prev_w + next_w + 4 + t.spacing)
+	hint_rect = ui.rect_center(hint_rect, hint_rect.w, PROMPT_BAR_HEIGHT)
+	prompt_glyph_draw(
+		app,
+		ctx,
+		prev_glyph,
+		{hint_rect.x, hint_rect.y, prev_w, hint_rect.h},
+		t.text_muted,
+	)
+	prompt_glyph_draw(
+		app,
+		ctx,
+		next_glyph,
+		{hint_rect.x + prev_w + 4, hint_rect.y, next_w, hint_rect.h},
+		t.text_muted,
+	)
 	extra := max(0, tabs.w - total) / f32(len(Options_Tab))
 	for tab in Options_Tab {
 		r := ui.cut_left(&tabs, text_w[tab] + extra + gap)
@@ -187,6 +203,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 			settings_changed(app)
 		}
 	}
+	ui.keep_focus_visible(ctx, column, &o.scroll)
 	return false
 }
 
@@ -294,7 +311,10 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 				text := key_label(&app.window, k^)
 				if o.listening == a && !o.listening_pad {text = fmt.tprintf("> %s <", text)}
 				if v := find_var(BINDING_VARS[:], field); v != nil {ui.tooltip(ctx, kr, v.help)}
-				if ui.button(ctx, text, kr) {o.listening, o.listening_pad = a, false}
+				// (the id is not the label: the cell stays focused as its button changes)
+				if ui.button(ctx, text, kr, id = "key cell") {
+					o.listening, o.listening_pad = a, false
+				}
 				if a in key_clash {ui.stroke_rect(ctx, ui.rect_shrink(kr, 3), 2, t.warning)}
 			} else {
 				fixed := ACTION_INFO[a].fixed_keys[0]
@@ -305,7 +325,9 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 				text := pad_button_name(app.actions.pad_family, app.actions.pad_product, b^)
 				if o.listening == a && o.listening_pad {text = fmt.tprintf("> %s <", text)}
 				if v := find_var(PAD_BINDING_VARS[:], field); v != nil {ui.tooltip(ctx, r, v.help)}
-				if ui.button(ctx, text, r) {o.listening, o.listening_pad = a, true}
+				if ui.button(ctx, text, r, id = "pad cell") {
+					o.listening, o.listening_pad = a, true
+				}
 				if a in pad_clash {ui.stroke_rect(ctx, ui.rect_shrink(r, 3), 2, t.warning)}
 			} else {
 				fixed := ACTION_INFO[a].fixed_pad[0]
@@ -360,8 +382,11 @@ var_widget :: proc(
 	if i, ok := base.var_choice(table, data, v); ok {
 		r := ui.next(ctx)
 		ui.tooltip(ctx, r, v.help)
-		if ui.button(ctx, fmt.tprintf("%s: %s", label, v.choices[i].label), r) {
-			base.var_set_f64(table, data, v, v.choices[(i + 1) % len(v.choices)].value)
+		names := make([]string, len(v.choices), context.temp_allocator)
+		for c, k in v.choices {names[k] = c.label}
+		index := i
+		if ui.choice(ctx, label, &index, names, r) {
+			base.var_set_f64(table, data, v, v.choices[index].value)
 			changed = true
 		}
 		return

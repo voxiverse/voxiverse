@@ -108,61 +108,74 @@ servers_list :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.fill_rect(ctx, area, t.list_fill)
 	ui.stroke_rect(ctx, area, 1, t.list_border)
 
-	// The servers found, as they answer.
+	// The servers found, as they answer: one focusable list for a pad or
+	// keyboard (Up and Down select, Confirm joins), rows for the mouse.
 	chosen: Maybe(Found) = nil
-	y := area.y
-	ui.push_clip_rect(ctx, area)
+	valid := make([dynamic]int, context.temp_allocator)
 	if m.searching {
-		for f in m.discovery.found {
+		for f, i in m.discovery.found {
 			info, ok := game.decode_server_info(f.info)
-			if !ok || info.protocol != game.PROTOCOL_VERSION {continue}
-			row := ui.Rect{area.x, y, area.w, SERVER_ROW}
-			y += SERVER_ROW
-			ui.push_id(ctx, fmt.tprint(f.instance))
-			it := ui.interact(ctx, ui.get_id(ctx, "row"), row, label = info.name)
-			ui.pop_id(ctx)
-			found := Found{net.endpoint_to_string(f.address), info.password}
-			if it.clicked {
-				if m.selected == f.instance && time.tick_since(m.last_click) < DOUBLE_CLICK {
-					ui.pop_clip_rect(ctx)
-					server_join(app, found)
-					return
-				}
-				m.selected, m.last_click = f.instance, time.tick_now()
-			}
-			if m.selected == f.instance {
-				chosen = found
-				ui.fill_rect(ctx, row, t.row_hover)
-				ui.stroke_rect(ctx, ui.rect_shrink(row, 1), 1, t.text)
-			} else if it.hovered {
-				ui.fill_rect(ctx, row, t.row_selected)
-			}
-			text := ui.rect_shrink(row, 10)
-			ui.draw_text(
-				ctx,
-				ui.cut_top(&text, t.font_size),
-				info.name,
-				t.font_size,
-				t.text,
-				.Left,
-			)
-			small := t.font_size * 0.8
-			ui.draw_text(
-				ctx,
-				ui.cut_bottom(&text, small),
-				fmt.tprintf(
-					"%d of %d players%s",
-					info.players,
-					info.max_players,
-					" - password" if info.password else "",
-				),
-				small,
-				t.text_muted,
-				.Left,
-			)
+			if ok && info.protocol == game.PROTOCOL_VERSION {append(&valid, i)}
 		}
 	}
+	selected := -1
+	for i, k in valid {
+		if m.discovery.found[i].instance == m.selected {selected = k}
+	}
+	visible := max(int(area.h / SERVER_ROW), 1)
+	first := 0
+	list := ui.list_nav(ctx, "servers", area, len(valid), &selected, &first, visible, SERVER_ROW)
+	if selected >= 0 && selected < len(valid) {
+		m.selected = m.discovery.found[valid[selected]].instance
+	}
+	y := area.y
+	ui.push_clip_rect(ctx, area)
+	for i in valid[min(first, len(valid)):] {
+		f := m.discovery.found[i]
+		info, _ := game.decode_server_info(f.info)
+		row := ui.Rect{area.x, y, area.w, SERVER_ROW}
+		y += SERVER_ROW
+		ui.push_id(ctx, fmt.tprint(f.instance))
+		it := ui.interact(ctx, ui.get_id(ctx, "row"), row, focusable = false, label = info.name)
+		ui.pop_id(ctx)
+		found := Found{net.endpoint_to_string(f.address), info.password}
+		if it.clicked {
+			if m.selected == f.instance && time.tick_since(m.last_click) < DOUBLE_CLICK {
+				ui.pop_clip_rect(ctx)
+				server_join(app, found)
+				return
+			}
+			m.selected, m.last_click = f.instance, time.tick_now()
+		}
+		if m.selected == f.instance {
+			chosen = found
+			ui.fill_rect(ctx, row, t.row_hover)
+			ui.stroke_rect(ctx, ui.rect_shrink(row, 1), 1, t.text)
+		} else if it.hovered {
+			ui.fill_rect(ctx, row, t.row_selected)
+		}
+		text := ui.rect_shrink(row, 10)
+		ui.draw_text(ctx, ui.cut_top(&text, t.font_size), info.name, t.font_size, t.text, .Left)
+		small := t.font_size * 0.8
+		ui.draw_text(
+			ctx,
+			ui.cut_bottom(&text, small),
+			fmt.tprintf(
+				"%d of %d players%s",
+				info.players,
+				info.max_players,
+				" - password" if info.password else "",
+			),
+			small,
+			t.text_muted,
+			.Left,
+		)
+	}
 	ui.pop_clip_rect(ctx)
+	if list.clicked && chosen != nil {
+		server_join(app, chosen.?)
+		return
+	}
 	if y == area.y {
 		// None yet: still looking, and visibly so (the dots count up).
 		text := "Cannot look for servers on your network"

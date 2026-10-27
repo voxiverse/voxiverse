@@ -207,6 +207,7 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		t.text_muted,
 	)
 	ui.cut_top(&column, t.spacing)
+	ui.default_focus(ctx)
 	if ui.button(
 		ctx,
 		"Cancel",

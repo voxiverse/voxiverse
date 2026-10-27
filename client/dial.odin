@@ -15,6 +15,7 @@ Dial_View :: struct {
 	gate:    game.Block_Pos, // the block of the gate clicked
 	symbols: [game.WORLD_LENGTH]u8,
 	count:   int,
+	last:    int, // the symbol pressed last: where a pad's focus goes on
 }
 
 DIAL_COLUMNS :: 8
@@ -111,7 +112,12 @@ dial_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	d := &app.dial
 	s := app.session
 	if s == nil {return}
-	if top && .Backspace in ctx.input.keys_pressed && d.count > 0 {d.count -= 1}
+	// Backspace on a keyboard, X (the second action) on a pad: the last symbol back.
+	if top &&
+	   (.Backspace in ctx.input.keys_pressed || .Secondary in ctx.input.nav) &&
+	   d.count > 0 {
+		d.count -= 1
+	}
 	l := dial_layout(ctx)
 	ui.panel(ctx, l.panel)
 	inner := ui.rect_shrink(l.panel, t.padding)
@@ -137,11 +143,26 @@ dial_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		ui.stroke_rect(ctx, r, 2 if lit else 1, t.text if lit else t.faint_border)
 		if lit {ui.draw_text(ctx, r, symbol_text(d.symbols[k]), t.font_size * 1.5, t.text, .Center)}
 	}
+	taken :: proc(d: ^Dial_View, i: int) -> bool {
+		for k in d.symbols[:d.count] {if int(k) == i {return true}}
+		return false
+	}
+	// A pad's focus starts on, and after a symbol is taken goes to, the next free one.
+	start := 0
+	for k in 0 ..< game.SYMBOLS {
+		if !taken(d, (d.last + k) % game.SYMBOLS) {
+			start = (d.last + k) % game.SYMBOLS
+			break
+		}
+	}
 	for i in 0 ..< game.SYMBOLS {
-		used := false
-		for k in d.symbols[:d.count] {if int(k) == i {used = true}}
+		used := taken(d, i)
 		ui.push_id_int(ctx, i)
-		if ui.button(ctx, symbol_text(u8(i)), l.symbols[i], disabled = used) {dial_add(app, u8(i))}
+		if i == start {ui.default_focus(ctx)}
+		if ui.button(ctx, symbol_text(u8(i)), l.symbols[i], disabled = used) {
+			d.last = i
+			dial_add(app, u8(i))
+		}
 		ui.pop_id(ctx)
 	}
 	if ui.button(ctx, "Erase", l.erase, disabled = d.count == 0) {d.count -= 1}

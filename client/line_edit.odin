@@ -94,7 +94,7 @@ line_edit :: proc(
 		line_remember(le, r.line)
 		clear(&le.text)
 	}
-	if top {ctx.focused = ui.get_id(ctx, id)}
+	if top && !ui.osk_is_open(ctx) {ctx.focused = ui.get_id(ctx, id)}
 	return
 }
 

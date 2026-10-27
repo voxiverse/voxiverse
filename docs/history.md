@@ -2843,3 +2843,288 @@ before hid-playstation, menus with a pad (M42), on-screen text entry (M42).
   rule are as the spec wrote them and unproven.
 - The macOS backend is compiled and its name mapping tested; the framework calls are written
   from the header names and have not run (no macOS window until M1b).
+
+# M42: menus with a controller
+
+The UI moves by navigation events, every menu screen and overlay works with a pad alone,
+button prompts follow the device used last, and text is entered on an on-screen keyboard.
+This is more than one sitting: it is split here, before it starts, into **M42** (navigation,
+prompts, the on-screen keyboard, every menu screen and dialog) and **M42b** (the inventory
+overlays and the statistics, which need a slot cursor rather than widget focus). Each has
+its own exit check.
+
+**What exists.** `client/ui/ui.odin`: `hot`, `active`, `focused` are separate; `begin_frame` turns
+Tab/Shift+Tab and Down/Up into a cyclic `Next`/`Previous` over the top interactive layer's
+focusable widgets in drawing order, and Enter/Space into `activate_focus`, unless a text
+field is being edited (`ctx.edit.active`); `focus_visible` shows rings once the keyboard is
+used; widgets register `Widget{id, rect (clipped), layer, focusable, label}`; `.Modal`
+makes lower layers inert. `slider` steps with Left/Right while focused. M41 gives
+`app.actions` with `nav` (directions with repeat), `menu_confirm`, `menu_back` (already
+wired to `escape`), `menu_secondary`, `menu_tertiary`, `tab_prev`/`tab_next` (wired to
+M40's tabs), `pause` (Start: `pause_toggle`), and `device`/`pad_family`/`pad_product`. As M41
+built them, the `Action` members are `Menu_Confirm`, `Menu_Back`, `Menu_Secondary`,
+`Menu_Tertiary`, `Tab_Prev`, `Tab_Next`, the nav set holds `Menu_Up`..`Menu_Right`, and
+`action_pressed(&app.actions, .Menu_Confirm)` is the test; `actions_sync(app)` runs the
+update for tests; `key_action_pressed` reads the keyboard alone in any context.
+
+**The navigation model (`ui/`)**
+
+- `ui.Nav :: enum u8 {Up, Down, Left, Right, Confirm, Back, Secondary, Tertiary, Start}`;
+  `ui.Input` gains `nav: bit_set[Nav]` (from the pad only: the client fills it from
+  `app.actions` in `ui_input`), `nav_scroll: f32` (rows this frame from the right stick in a
+  menu: 10 rows a second at full deflection, after the dead zone) and `pad: bool` (the pad
+  is the device used last). Keyboard arrows keep arriving as `keys_pressed`; when no text is
+  being edited, `begin_frame` adds them to the frame's directions, and Enter/Space to
+  Confirm, exactly where today's `Next`/`Previous`/`activate_focus` are made. Tab and
+  Shift+Tab keep the cyclic reading order.
+- Directional moves (`move_focus` with `Nav` directions): candidates are the focusable
+  widgets of the top interactive layer drawn this frame, by their unclipped rects
+  (`Widget.full`, new beside the clipped `rect`), so rows of a scrolled panel below its view
+  are reachable. For Down, a candidate qualifies when its centre is more than 1 unit below
+  the focused one's; its score is the gap from the focused rect's bottom to its top (0 if
+  they overlap) plus 2 times the horizontal gap between the two rects (0 if their spans
+  overlap) plus 0.05 times the distance between their centres across; the lowest wins, ties
+  to the earlier drawn. The same for the other three. No wrapping. `nav_pick(from: Rect,
+  candidates: []Rect, dir: Nav) -> int` is that rule alone, exported (the dial grid uses it
+  through ordinary widgets; M42b's slot cursor directly).
+- Nothing focused on the top layer and a direction or Confirm comes: the first focusable
+  widget of that layer is focused (or the one a screen named with `ui.default_focus(ctx)`
+  called just before drawing it), and that event does nothing else. With `input.pad` set
+  and nothing focused at `end_frame`, the same happens without an event, so a pad user
+  always sees a highlighted widget. `focus_visible` turns on with any `nav` and off with a
+  mouse press, as now.
+- Layers: `ctx.focus_by_layer: [Layer]Id` remembers each layer's focus; when a higher layer
+  appears, focus goes to its first widget; when it goes, the lower layer's remembered focus
+  comes back if it is still drawn.
+- The pointer: after a nav event the mouse is idle (`ctx.pointer_idle`): no `hot`, no hover
+  highlight, until the mouse moves more than 2 units or a button is pressed. A stale cursor
+  never fights the focus.
+- Widgets consume what they use: `ui.consume_nav(ctx, set)` during the frame stops
+  `end_frame` moving focus for those directions.
+  - `button`: Confirm clicks.
+  - `checkbox`: Confirm toggles.
+  - `slider`: Left/Right step (from nav or keys) and are consumed while focused; the step
+    as now (`step`, or a twentieth of the range).
+  - `choice` (new): `ui.choice(ctx, text, index: ^int, names: []string, r) -> bool`, drawn
+    "Label: Value" with `<` and `>` marks while focused; a click or Confirm goes to the next
+    (wrapping), Left/Right to the previous/next (consumed). `var_widget` uses it for every
+    variable with choices (the cycling button today), so Options' choices work by Left and
+    Right.
+  - `text_input`: pad Confirm (Confirm in `nav`, from the pad) opens the on-screen keyboard
+    on it; keyboard typing as now; pad directions move focus away (never consumed by
+    editing). Keyboard arrows still edit while it is being edited.
+  - `ui.list_nav(ctx, label, area: Rect, count: int, selected: ^int, first: ^int, visible:
+    int) -> Interaction` (new): a virtualized list (only its visible rows are drawn) is one
+    focusable widget over its area. Focused, Up/Down move `selected` (consumed, except Up
+    at row 0 and Down at the last row, which leave the list), `first` follows so the
+    selected row is in view, `nav_scroll` and the wheel scroll it, Confirm reports
+    `clicked`. The caller draws the rows as now, registering them with `focusable = false`
+    for the mouse, and draws the selection; the list draws the focus ring round the
+    selected row.
+  - `ui.keep_focus_visible(ctx, view: Rect, scroll: ^f32)`: for a panel that draws all its
+    rows and clips them (Options' tab body): if the focused widget was drawn inside `view`'s
+    clip and its full rect is outside `view`, `scroll` moves by the overflow (seen next
+    frame).
+- `ui.focused_label(ctx) -> string` (the label of the focused widget; tests navigate by
+  it).
+
+**The on-screen keyboard (`client/ui/keyboard.odin`)**
+
+- State in `Context`: `osk: struct {open: bool, target: Id, symbols: bool, shift: bool}`.
+  It draws on a new layer `Layer.Keyboard` between `.Modal` and `.Tooltip`; while it was
+  drawn last frame every lower layer is inert, as below a modal (`ctx.keyboard_open`
+  beside `modal_open`, checked the same way in `interact` and `move_focus`).
+- `text_input` whose id is `osk.target` draws it (after itself) and applies its keys to its
+  own buffer and `ctx.edit` cursor, whether or not the field has focus (focus is on the
+  keys). Above the keys, the text being edited with its cursor, in a panel along the bottom
+  of the screen, 10 keys wide, keys 44 units square with the theme's spacing.
+- Letters page: `1 2 3 4 5 6 7 8 9 0` / `q w e r t y u i o p` / `a s d f g h j k l -` /
+  `z x c v b n m _ . :` / a bottom row Shift, `&123`, Space (four keys wide), Backspace
+  (two), Done (two). Symbols page: `! @ # $ % ^ & * ( )` / `- _ = + [ ] { } ; '` /
+  `/ \ | ~ < > ? , " #` / `` ` `` then the same bottom row with `abc` for `&123`. Shift
+  changes letters to capitals until pressed again. Every character typed is one the font
+  has.
+- Keys are buttons in the keyboard's id scope, so directional navigation moves between
+  them (the bottom row's wide keys too). It opens with the key used last focused (`h` the
+  first time). A (Confirm) types the focused key; X (Secondary) is Backspace; Y (Tertiary)
+  a space; LB/RB move the text cursor (while `ui.osk_is_open(ctx)`, `menu_actions` sends
+  `tab_prev`/`tab_next` to the keyboard as `Nav.Left`/`Nav.Right` with
+  `ctx.osk_cursor_move` set, instead of changing tabs); the pad's Left_Stick press is Shift
+  while it is open; Start (`Nav.Start`, from `pause` in a menu while it is open) is Done; B
+  closes it, the text kept. Done closes it and makes `text_input` return `submitted` (as
+  Enter does). Typing on a real keyboard while it is open works (text, Backspace, Enter as
+  Done).
+- `ui.osk_cancel(ctx) -> bool` closes it (true if it was open); `escape(app)` calls it
+  first, after `options_cancel_listening`, so B and Escape close the keyboard before the
+  screen.
+
+**Button prompts (`client/prompts.odin`)**
+
+- Glyphs are drawn by code into the UI atlas at start (as item icons are): `Prompt_Shape ::
+  enum {Disc, Ring, Cross, Square, Triangle, Bumper_Left, Bumper_Right, Trigger_Left,
+  Trigger_Right, Stick, Dpad, Dpad_Up, Dpad_Down, Dpad_Left, Dpad_Right, Menu, View,
+  Keycap, Mouse_Left, Mouse_Right, Mouse_Middle}`, each a 64-pixel white shape with
+  anti-aliased edges (analytic coverage with 4x4 samples per pixel: discs and rings by
+  distance to a centre, the PlayStation symbols as strokes of 5 px, rounded rects for
+  bumpers, triggers and keycaps), added with `ui.add_icon` into `App.prompt_icons:
+  [Prompt_Shape]ui.Icon` and drawn smoothly with `ui.draw_icon` and the theme's colours as
+  tint. Text inside a glyph (A, B, LB, L2, a key's name) is drawn with the font over it.
+  Clean, not pixel art (the crunchy rule is for the world).
+- `Prompt_Glyph :: struct {shape: Prompt_Shape, text: string}`;
+  `prompt_glyph_for(device: Prompt_Device, family: platform.Pad_Family, action: Action,
+  settings: ^Settings) -> Prompt_Glyph` from the action's binding (keyboard: a keycap with
+  `key_label`, mouse buttons their mouse glyphs; Xbox, Generic and Steam Deck: a disc with
+  the letter, LB/RB/LT/RT shapes with their names, LS/RS a stick with L or R, View and Menu
+  their shapes, the D-pad its arms; PlayStation: a disc with the cross, circle, square or
+  triangle, L1/R1/L2/R2 shapes with their names, Options as Menu's shape, Create/Share as
+  View's; Switch: Xbox's shapes with Switch's letters from `pad_button_name`).
+- `Prompt_Device :: enum {Keyboard, Xbox, PlayStation}` from the setting `button_prompts`
+  (Controls: choices Auto, Keyboard, Xbox, PlayStation; default Auto; tooltip "which
+  buttons the hints show: Auto follows whatever you used last"): Auto is Keyboard while
+  `actions.device` is Keyboard, else PlayStation for a PlayStation family and Xbox for the
+  rest.
+- `prompt_bar(app, ctx, items: []Prompt_Item)` (`Prompt_Item :: struct {action: Action,
+  text: string}`): glyph and word pairs right-aligned along the bottom edge of the screen,
+  20 units high, in the theme's muted text. Every menu screen and overlay listed below calls
+  it with its actions (at least Confirm "Select" and Back "Back"; "Tabs" with
+  tab_prev/next where there are tabs; the keyboard's extra keys while it is open: X
+  "Delete", Y "Space", Start "Done"). M40's Q/E hint beside the tabs becomes the two tab
+  glyphs. Each glyph drawn is appended to `app.prompts_shown` (frame-temporary) for tests.
+
+**Every screen (from `client/`), and what it needs beyond the model**
+
+- Title: default focus Singleplayer.
+- Singleplayer (`worlds.odin`): the saves list through `list_nav` (focusing it selects the
+  row; Confirm on a row plays it, as a double-click does); Play Selected, Create, Edit,
+  Delete, Back by direction below it. Create: the name and seed fields (the keyboard),
+  Create Save, Cancel. Edit: the name, Open Folder, Save, Cancel. Delete's dialog: default
+  focus Cancel.
+- Multiplayer (`multiplayer.odin`): the name prompt (keyboard; Done), the servers list
+  through `list_nav` (Confirm joins), Join, Direct Connection, Back; Direct Connection: the
+  address and password fields, Join, Cancel.
+- Options (title and in game): tabs by LB/RB and as focusable buttons; the body by
+  direction with `keep_focus_visible` on its scroll; sliders, choices, toggles, text fields
+  as above; the bindings table: a row's two cells are buttons side by side (Left/Right
+  between them), each listens as M41 made it; Done.
+- Characters (`account.odin`): a button per character, the new character's field
+  (keyboard), New Character.
+- Loading: Cancel focused. Failed: Back focused.
+- Game menu (Start opens it, Start or B closes it): Back to Game focused.
+- Quit dialog: Cancel focused. Consent dialog: No thanks focused (mashing A never opts in).
+- Dial (`dial.odin`): the 40 symbols and Erase and Cancel by direction (they are buttons
+  already); X is Erase.
+- Chat (`chat.odin`): opened by the pad (chat's D-pad Up), it opens with the keyboard on its
+  line; Done sends; B closes the keyboard, B again the chat. The command action on a
+  keyboard is unchanged; with a pad, `/` is on the symbols page.
+- Not with a pad (developer tools, keyboard and mouse): the console, the F4 tuning panel,
+  the F8 audio inspector. M42b: the inventory, creative catalog and chest, and statistics.
+
+**How the UI test drives screens with a pad**
+
+- `client/menus_test.odin` gains a pad harness: `pad_frame(app, events: ..platform.Event)`
+  runs the same input path as `app_frame` without GPU or window: `input_update`,
+  `actions_update` (context from `game_controls`), `menu_actions(app)` (new, split out of
+  `handle_global_keys`: back, pause, tabs, the keyboard's mappings; `app_frame` calls it
+  too), `ui_input`, then the screen or overlays as `ui_frame` draws them. Helpers:
+  `pad_tap(app, button)` (a press frame and a release frame), `pad_go(app, dir)` (a D-pad
+  tap), `pad_focus(t, app, label)` (taps Down, then Up, at most 30 times each, until
+  `ui.focused_label` is `label`; fails with what it passed), `pad_type(t, app, text)` (on
+  an open keyboard, moves to each key with `nav_pick` over the keys' rects and taps A).
+  Every screen test below uses only these: no mouse, no keys, no direct calls to `escape`.
+- Pad events come from a connected synthetic pad (a `Pad_Connect_Event` first), family
+  Xbox, and once PlayStation for the prompts test.
+
+**Steps, in order**
+
+1. `ui/`: `Nav`, `Widget.full`, directional `move_focus`, default and remembered focus,
+   pointer idle, `consume_nav`, `choice`, `list_nav`, `keep_focus_visible`,
+   `focused_label`; `client/ui/ui_test.odin` tests. Today's `test_keyboard_focus` changes where it
+   relied on Down cycling (Tab still cycles).
+2. `client/ui/keyboard.odin` and its tests.
+3. `client/`: `ui_input` fills `nav`, `nav_scroll`, `pad`; `menu_actions`; `var_widget` on
+   `choice`; each screen's default focus, lists, keep-visible, the chat's keyboard.
+4. `client/prompts.odin`, the glyph icons, `button_prompts`, prompt bars on every screen.
+5. The pad harness and the screen tests; the CI screenshots below; the suite; commit.
+
+**Tests**
+
+- `client/ui/ui_test.odin`: in a 3x3 grid of buttons, Down/Right/Up/Left land where expected and
+  stop at the edges; a column beside a wide button below picks the overlapping one; a
+  slider consumes Left/Right and steps, Up still leaves it; a choice cycles both ways; the
+  first nav focuses the first widget and does nothing else; `default_focus` wins; a modal
+  takes focus and gives it back when closed; pointer idle hides hover until the mouse
+  moves; `list_nav` over 50 rows with 8 visible: Down to row 20 scrolls `first` to 13, Up at
+  row 0 leaves the list; `keep_focus_visible` scrolls to a row below the view; pad Confirm
+  on a text field opens the keyboard, keyboard Enter submits instead.
+- `client/ui/keyboard_test.odin`: typing "Pad_1" by nav and A, Backspace by X, Shift, the symbols
+  page, Done submits, B closes keeping the text, real typing while open, lower layers inert.
+- `client/menus_test.odin`, `test_menus_with_a_pad`: from the title, Singleplayer; the saves
+  list (two saves, as the saves test makes them) selected by Down; Create New Save, the name
+  typed "Pad" on the keyboard and seen in the field, Cancel; B back to the title;
+  Multiplayer: the name typed, Done, Direct Connection, an address "127.0.0.1:1" typed,
+  Cancel, B; Options: RB through every tab and LB back, a slider moved by Right, a choice
+  changed by Left, the pad cell of jump rebound to X and back; Done; Quit Game, the dialog's
+  Cancel by A. With a test session (as the inventory test makes one): Start opens the game
+  menu, Options from it and B back, Back to Game; the characters screen chooses a character
+  by A and types a new one; the loading screen's Cancel; the failed screen's Back; the
+  consent dialog answered No thanks by A; the dial: seven symbols by direction and A, one
+  erased by X; the chat opened by D-pad Up, "hi" typed and sent by Start. Each step asserts
+  the state the screen tests already assert (screen, mode, settings).
+- `test_prompts_follow_device`: on the title, a key press then a frame shows keycap glyphs
+  ("Enter", "Esc" in `app.prompts_shown`); a pad press shows the Xbox disc with "A"; a
+  PlayStation pad shows the cross; `button_prompts = Keyboard` keeps keycaps after a pad
+  press; the glyph icons are all made (none zero-sized).
+- CI's Screens step gains one run with the M41 `pad` command: `--exec "pad connect xbox;
+  pad dpad_down down; pad dpad_down up; wait 3; screenshot screen_title_pad; screen options
+  controls; wait 3; screenshot screen_options_pad; screen worlds create; pad a down; pad a
+  up; wait 3; screenshot screen_keyboard; quit"` (screenshots looked at by hand).
+
+Exit check (M42): the suite and CI green; `test_menus_with_a_pad` drives every screen and
+dialog listed above with pad events only; `test_prompts_follow_device` switches between
+keycap and pad glyphs.
+
+Check by hand: the glyphs' look at GUI scales 1-4 (screenshots); navigating every screen
+with a real pad and on the Steam Deck; the keyboard's layout and feel; that the pointer
+hides its hover after pad use and comes back with the mouse.
+
+**What differed from this spec (M42, built):**
+- The on-screen keyboard's bumper and stick keys are `ui.Input.osk_cursor` (steps) and
+  `osk_shift`, filled by `menu_actions` while `ui.osk_is_open`, not `Nav.Left`/`Nav.Right`
+  with an `osk_cursor_move` flag (the D-pad's Left and Right stay plain directions between
+  the keys). Start is `Nav.Start`, as specced.
+- `Actions` gained `nav_pad` (the directions from the pad alone: `nav` also holds the
+  keyboard's arrows, which reach the UI as keys) and `pad_acts` (actions pressed by a pad
+  button this frame). `menu_actions(app, input)` takes the `ui.Input` and is called from
+  `handle_global_keys` (which `app_frame` calls), not beside it.
+- `ui`: `Widget.full` and `Widget.clip`; `Layer.Keyboard`; `button(..., id = "")` keeps a
+  button's focus as its text changes (the bindings' cells; `choice` does the same by its label);
+  `list_nav` takes a `row_h` and reads the wheel over its whole area (the rows over it take
+  the mouse's hover); the right stick scrolls without moving the selection; `Nav.Back` is
+  produced but nothing reads it (B is `escape`).
+- A layer that appears takes focus to its first widget only while the keyboard or a pad is in
+  use (a mouse user gets no hidden focus); focus a screen put on the layer itself is kept.
+  `keep_focus_visible` acts once for each widget focused and only while the focus is visible,
+  so the wheel is not undone.
+- `game_controls` is false while the session is Connecting or Choosing: a pad could not
+  navigate the characters screen (it was in the World context). The dial's focus goes on to
+  the next free symbol when one is taken (a taken symbol's button is disabled, which dropped
+  the focus to the first).
+- Prompts: `prompt_glyph_for` takes the window first (`key_label` needs it); `Prompt_Item` has
+  `also` for the tabs' second glyph; one `prompt_items(app)` decides the bar for whatever is on
+  screen and `app_ui` draws it, instead of every screen calling `prompt_bar`; the bar shows
+  over the title, Options, saves, multiplayer, failed, characters, loading and over the game
+  menu, Options, quit, consent, dial and chat overlays, and while the keyboard is open.
+  `prompts_shown` is a fixed array read through `prompts_seen`. The PlayStation face buttons
+  are `Cross`/`Ring`/`Square`/`Triangle` drawn over a disc.
+- The harness is package-level in `menus_test.odin` (for M42b): `pad_frame` draws the
+  overlays only for a playing session (the world needs a GPU), `pad_focus` taps up to 80 times
+  each way and a test uses `pad_go` Left/Right where a target is beside the focus (Create
+  beside Play Selected), `pad_type` steers by the keys' positions (the same rule `nav_pick`
+  gives) and taps the stick press for capitals. The loading screen's Cancel is checked
+  focused, not pressed (ending the session needs the GPU). The Start-pressed "Done" on the
+  multiplayer name submits it, so there is no separate Done press in the test.
+- CI's pad screenshots are in the Linux Screens step (one more run).
+
+Not done: the by-hand checks (the glyphs at GUI scales 1-4, a real pad and the Steam Deck, the
+keyboard's feel, the hover hiding after pad use), a Windows or macOS run (CI covers the
+build).

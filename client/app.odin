@@ -101,12 +101,16 @@ App :: struct {
 	new_character:    [dynamic]u8, // the name typed on the characters screen
 	chat:             Line_Editor, // the chat's line (chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
+	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
 	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
 	launched:         time.Tick, // when the program started
 	stats_view:       Stats_View, // the statistics overlay's (stats_ui.odin)
 	preview:          Preview, // the player in the inventory (preview.odin)
 	inventory_search: [dynamic]u8, // the Creative tab's search text
+	prompt_icons:     Prompt_Icons, // the button glyphs (prompts.odin)
+	prompts_shown:    [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
+	prompts_count:    int,
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
 	quit:             bool,
@@ -173,6 +177,7 @@ app_init :: proc(app: ^App) -> bool {
 		platform.set_window_icon(&app.window, images[:])
 	}
 	if !item_icons_init(&app.item_icons, &app.ui) {return false}
+	if !prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	if !render.scene_init(&app.scenes, g) {return false}

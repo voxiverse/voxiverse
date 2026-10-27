@@ -347,6 +347,8 @@ Actions :: struct {
 	move:         [2]f32, // World: length at most 1
 	look:         [2]f32, // World: the pad's turning, radians a second (yaw, pitch)
 	nav:          bit_set[Action], // Menu: up, down, left, right this frame, with repeat
+	nav_pad:      bit_set[Action], // the same from the pad alone (the arrows reach the UI as keys)
+	pad_acts:     bit_set[Action], // actions pressed by a pad button this frame (usable ones)
 	trigger_down: [2]bool, // left, right
 	device:       Device, // the last used
 	pad_family:   platform.Pad_Family, // of the pad used last
@@ -427,7 +429,7 @@ actions_update :: proc(
 	a.pad_pressed = pressed_pad
 
 	// Every action's sources, whatever the context.
-	raw_down, raw_pressed: bit_set[Action]
+	raw_down, raw_pressed, pad_raw_pressed: bit_set[Action]
 	a.key_down, a.key_pressed = {}, {}
 	for act in Action {
 		if act == .None {continue}
@@ -442,7 +444,8 @@ actions_update :: proc(
 		for b in pads {
 			if b == .None {continue}
 			if b in held_pad {raw_down += {act}}
-			if b in pressed_pad {raw_pressed += {act}}
+			if b in
+			   pressed_pad {raw_pressed, pad_raw_pressed = raw_pressed + {act}, pad_raw_pressed + {act}}
 		}
 	}
 
@@ -464,6 +467,7 @@ actions_update :: proc(
 	usable := in_ctx - a.latched
 	a.down = raw_down & usable
 	a.pressed = raw_pressed & usable
+	a.pad_acts = pad_raw_pressed & usable
 	a.released = a.prev_down - a.down
 	a.prev_down = a.down
 
@@ -491,7 +495,7 @@ actions_update :: proc(
 	}
 
 	// Movement and looking.
-	a.move, a.look, a.nav = {}, {}, {}
+	a.move, a.look, a.nav, a.nav_pad = {}, {}, {}, {}
 	if ctx == .World {
 		left := [2]f32{a.pad_axes[.Left_X], a.pad_axes[.Left_Y]}
 		right := [2]f32{a.pad_axes[.Right_X], a.pad_axes[.Right_Y]}
@@ -545,12 +549,12 @@ nav_update :: proc(a: ^Actions, input: ^Input_State, settings: ^Settings, dt: f3
 		stick := larger && (axis > 0.5 || (on && axis > 0.35))
 		held := dpad[i] in a.pad_buttons || stick
 		if held && !a.nav_held[i] {
-			a.nav += {dirs[i]}
+			a.nav, a.nav_pad = a.nav + {dirs[i]}, a.nav_pad + {dirs[i]}
 			a.nav_timer[i] = NAV_REPEAT_DELAY
 		} else if held {
 			a.nav_timer[i] -= dt
 			if a.nav_timer[i] <= 0 {
-				a.nav += {dirs[i]}
+				a.nav, a.nav_pad = a.nav + {dirs[i]}, a.nav_pad + {dirs[i]}
 				a.nav_timer[i] = NAV_REPEAT_INTERVAL
 			}
 		}

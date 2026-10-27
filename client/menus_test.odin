@@ -1,6 +1,7 @@
 package client
 
 import "core:fmt"
+import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -8,6 +9,7 @@ import "core:testing"
 import "core:time"
 
 import "../base"
+import "../common/game"
 import "font"
 import "platform"
 import "ui"
@@ -427,4 +429,481 @@ test_keep_awake_on_title :: proc(t: ^testing.T) {
 	keep_awake_update(app)
 	testing.expect(t, app.window.keep_awake)
 	platform.set_keep_awake(&app.window, false) // (let the screensaver be again)
+}
+
+// ---------------------------------------------------------------------------
+// Menus with a pad (M42): every screen and dialog driven by pad events alone:
+// no mouse, no keys, no direct calls to escape.
+// ---------------------------------------------------------------------------
+
+// pad_frame: one frame as app_frame makes it, without window or GPU: the
+// events, the actions, the menus' own actions (back, pause, the pad's
+// navigation), the chat and dial keys, then what is on the screen.
+pad_frame :: proc(app: ^App, events: ..platform.Event) {
+	input_update(&app.input, events)
+	actions_sync(app, 1.0 / 60)
+	input := ui_input(&app.input, 1)
+	menu_actions(app, &input)
+	chat_keys(app, &input)
+	dial_keys(app)
+	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
+	s := app.session
+	if app.screen == .Game && s != nil && s.state == .Playing && s.loading == nil {
+		draw_overlays(app, &app.ui) // (the world itself needs a GPU)
+		prompt_bar(app, &app.ui, prompt_items(app))
+	} else {
+		app_ui(app, &app.ui)
+	}
+	ui.end_frame(&app.ui)
+}
+
+// pad_tap: a button pressed and let go.
+pad_tap :: proc(app: ^App, button: platform.Pad_Button) {
+	pad_frame(app, platform.Pad_Button_Event{pad = 0, button = button, pressed = true})
+	pad_frame(app, platform.Pad_Button_Event{pad = 0, button = button, pressed = false})
+}
+
+// pad_go: a D-pad tap in direction dir.
+pad_go :: proc(app: ^App, dir: ui.Nav) {
+	#partial switch dir {
+	case .Up:
+		pad_tap(app, .Dpad_Up)
+	case .Down:
+		pad_tap(app, .Dpad_Down)
+	case .Left:
+		pad_tap(app, .Dpad_Left)
+	case .Right:
+		pad_tap(app, .Dpad_Right)
+	}
+}
+
+// pad_focus: Down, then Up, until the focused widget says label.
+pad_focus :: proc(t: ^testing.T, app: ^App, label: string, loc := #caller_location) -> bool {
+	passed := make([dynamic]string, context.temp_allocator)
+	if ui.focused_label(&app.ui) == label {return true}
+	for dir in ([2]ui.Nav{.Down, .Up}) {
+		for _ in 0 ..< PAD_FOCUS_TAPS {
+			pad_go(app, dir)
+			now := ui.focused_label(&app.ui)
+			if now == label {return true}
+			append(&passed, now)
+		}
+	}
+	testing.expectf(
+		t,
+		false,
+		"the focus never reached %q; it passed %v",
+		label,
+		passed[:],
+		loc = loc,
+	)
+	return false
+}
+
+PAD_FOCUS_TAPS :: 80 // (the Controls tab is a long column)
+
+// pad_type: on an open keyboard, to each key by directions and Confirm; the
+// stick press for capitals.
+pad_type :: proc(t: ^testing.T, app: ^App, text: string, loc := #caller_location) {
+	ctx := &app.ui
+	testing.expectf(t, ui.osk_is_open(ctx), "no keyboard open", loc = loc)
+	for i in 0 ..< len(text) {
+		ch := text[i]
+		upper := ch >= 'A' && ch <= 'Z'
+		if upper != ctx.osk.shift {pad_tap(app, .Left_Stick)}
+		label := text[i:i + 1]
+		for _ in 0 ..< 40 {
+			if ui.focused_label(ctx) == label {break}
+			target, found := ui.find_widget(ctx, label)
+			if !testing.expectf(t, found, "no key %q", label, loc = loc) {return}
+			from, _ := ui.find_widget(ctx, ui.focused_label(ctx))
+			dir: ui.Nav
+			switch {
+			case target.y > from.y + 1:
+				dir = .Down
+			case target.y < from.y - 1:
+				dir = .Up
+			case target.x > from.x:
+				dir = .Right
+			case:
+				dir = .Left
+			}
+			pad_go(app, dir)
+		}
+		testing.expectf(t, ui.focused_label(ctx) == label, "could not reach %q", label, loc = loc)
+		pad_tap(app, .A)
+	}
+}
+
+pad_connect :: proc(app: ^App, family: platform.Pad_Family) {
+	pad_frame(app, platform.Pad_Connect_Event{pad = 0, connected = true, family = family})
+	pad_tap(app, .Right_Stick) // (the first press makes it the device in use)
+}
+
+// Rig: an app with a session of its own, as the inventory test makes one.
+Rig :: struct {
+	app:  ^App,
+	s:    ^Session,
+	pipe: game.Pipe,
+}
+
+rig_make :: proc(t: ^testing.T) -> ^Rig {
+	r := new(Rig)
+	r.app = ui_app(t)
+	app := r.app
+	ok: bool
+	app.symbol_font, ok = font.load(SYMBOL_FONT_DATA)
+	testing.expect(t, ok)
+	app.ui.glyphs.fallback = &app.symbol_font
+	testing.expect(t, prompt_icons_init(&app.prompt_icons, &app.ui))
+	console_init(&app.console)
+	line_editor_init(&app.chat)
+	game.pipe_init(&r.pipe)
+	r.s = new(Session)
+	r.s.endpoint = {&r.pipe, .Client}
+	game.writer_init(&r.s.writer)
+	r.s.welcome.address = game.address_derive(3)
+	return r
+}
+
+rig_free :: proc(r: ^Rig) {
+	s := r.s
+	r.app.session = nil
+	for c in s.characters {delete(c)}
+	delete(s.characters)
+	for n in s.notices {delete(n)}
+	delete(s.notices)
+	for e in s.chat {delete(e.text)}
+	delete(s.chat)
+	virtual.arena_destroy(&s.arena)
+	game.writer_destroy(&s.writer)
+	game.pipe_destroy(&r.pipe)
+	free(s)
+	delete(r.app.new_character)
+	line_editor_destroy(&r.app.chat)
+	console_destroy(&r.app.console)
+	worlds_destroy(&r.app.worlds)
+	multiplayer_destroy(&r.app.multiplayer)
+	ui_app_free(r.app)
+	free(r)
+}
+
+@(test)
+test_menus_with_a_pad :: proc(t: ^testing.T) {
+	dir := "build/test/pad_saves"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.set_env("VX_SAVES", dir)
+	defer os.unset_env("VX_SAVES")
+	for name in ([]string{"Old", "Castle"}) {
+		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
+		os.make_directory_all(save)
+		cfg := filepath.join({save, "universe.cfg"}, context.temp_allocator) or_else ""
+		testing.expect(t, os.write_entire_file(cfg, []u8{}) == nil)
+	}
+	r := rig_make(t)
+	defer rig_free(r)
+	app := r.app
+	pad_connect(app, .Xbox)
+	testing.expect_value(t, app.actions.device, Device.Pad)
+
+	// The title: Singleplayer is lit at once; A opens the saves.
+	testing.expect_value(t, ui.focused_label(&app.ui), "Singleplayer")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, Screen.Worlds)
+	testing.expect_value(t, len(app.worlds.entries), 2)
+	// The list: Down selects, and leaves at its last row.
+	testing.expect_value(t, ui.focused_label(&app.ui), "saves")
+	pad_go(app, .Down)
+	pad_go(app, .Down)
+	testing.expect_value(t, app.worlds.selected, 1)
+	pad_go(app, .Down)
+	testing.expect(t, ui.focused_label(&app.ui) != "saves", "Down at the last row leaves the list")
+
+	// Create: the name on the keyboard, B closes it (text kept), Cancel.
+	pad_focus(t, app, "Play Selected Save")
+	pad_go(app, .Right)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Create New Save")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.worlds.mode, Saves_Mode.Create)
+	testing.expect_value(t, ui.focused_label(&app.ui), "name")
+	pad_tap(app, .A) // Confirm on a text field: the keyboard
+	testing.expect(t, ui.osk_is_open(&app.ui))
+	for _ in 0 ..< len("New Save") {pad_tap(app, .X)} 	// X is Backspace
+	testing.expect_value(t, len(app.worlds.name), 0)
+	pad_type(t, app, "Pad")
+	testing.expect_value(t, string(app.worlds.name[:]), "Pad")
+	pad_tap(app, .B)
+	testing.expect(t, !ui.osk_is_open(&app.ui))
+	testing.expect_value(t, app.worlds.mode, Saves_Mode.Create) // (B closed the keyboard first)
+	pad_frame(app)
+	found := false
+	for text in app.ui.texts {if text == "Pad" {found = true}}
+	testing.expect(t, found, "the name is seen in the field")
+	pad_focus(t, app, "Create Save")
+	pad_go(app, .Right)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.worlds.mode, Saves_Mode.List)
+	pad_tap(app, .B)
+	testing.expect_value(t, app.screen, Screen.Title)
+
+	// Multiplayer: the name asked for, typed, Done; Direct Connection: an
+	// address, Cancel; B.
+	pad_focus(t, app, "Multiplayer")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, Screen.Multiplayer)
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.Name)
+	testing.expect_value(t, ui.focused_label(&app.ui), "name")
+	pad_tap(app, .A)
+	pad_type(t, app, "pad_1")
+	pad_tap(app, .Start) // Done: the name is given
+	testing.expect(t, !ui.osk_is_open(&app.ui))
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.List)
+	testing.expect_value(t, player_name(&app.settings), "pad_1")
+	pad_focus(t, app, "Direct Connection")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.Direct)
+	testing.expect_value(t, ui.focused_label(&app.ui), "address")
+	clear(&app.multiplayer.address)
+	pad_tap(app, .A)
+	pad_type(t, app, "127.0.0.1:1")
+	testing.expect_value(t, string(app.multiplayer.address[:]), "127.0.0.1:1")
+	pad_tap(app, .B)
+	pad_focus(t, app, "Join Server")
+	pad_go(app, .Right)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.multiplayer.mode, Multiplayer_Mode.List)
+	pad_tap(app, .B)
+	testing.expect_value(t, app.screen, Screen.Title)
+
+	// Options: RB through every tab and LB back, a slider by Right, a choice
+	// by Left, jump's pad button rebound to X and back, Done.
+	pad_focus(t, app, "Options")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, Screen.Options)
+	for tab in 1 ..< len(Options_Tab) {
+		pad_tap(app, .Right_Bumper)
+		testing.expect_value(t, app.options.tab, Options_Tab(tab))
+	}
+	for tab := len(Options_Tab) - 2; tab >= 0; tab -= 1 {
+		pad_tap(app, .Left_Bumper)
+		testing.expect_value(t, app.options.tab, Options_Tab(tab))
+	}
+	pad_tap(app, .Right_Bumper) // Audio
+	pad_focus(t, app, "Master volume")
+	pad_go(app, .Right)
+	testing.expect(t, abs(app.settings.volume - 0.85) < 0.001)
+	pad_tap(app, .Left_Bumper) // Video
+	pad_focus(t, app, "Clouds: On")
+	pad_go(app, .Left)
+	testing.expect(t, !app.settings.clouds)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Clouds: Off")
+	pad_tap(app, .Right_Bumper)
+	pad_tap(app, .Right_Bumper) // Controls
+	testing.expect_value(t, app.options.tab, Options_Tab.Controls)
+	pad_focus(t, app, "Space") // jump's key
+	testing.expect(t, app.options.scroll > 0, "the body scrolled to keep the focus in view")
+	pad_go(app, .Right) // its pad cell
+	testing.expect_value(t, ui.focused_label(&app.ui), "A")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.options.listening, Action.Jump)
+	pad_tap(app, .X)
+	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.X)
+	testing.expect_value(t, ui.focused_label(&app.ui), "X") // the cell is focused again
+	pad_tap(app, .A)
+	pad_tap(app, .A)
+	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.A)
+	pad_focus(t, app, "Done")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, Screen.Title)
+
+	// Quit Game: the dialog's Cancel is lit; A keeps playing.
+	pad_focus(t, app, "Quit Game")
+	pad_tap(app, .A)
+	testing.expect(t, overlay_is_open(&app.overlays, .Quit_Dialog))
+	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
+	pad_tap(app, .A)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Quit_Dialog) && !app.quit)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Quit Game") // (back where it was)
+
+	// The consent question: No thanks is lit, so mashing A never opts in.
+	overlay_open(&app.overlays, .Consent)
+	pad_frame(app)
+	testing.expect_value(t, ui.focused_label(&app.ui), "No thanks")
+	pad_tap(app, .A)
+	testing.expect(t, app.settings.share_asked && !app.settings.share_data)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Consent))
+
+	// The failed screen: Back is lit.
+	app.failed = {
+		title  = "Cannot join",
+		reason = strings.clone("the server said no"),
+		back   = .Title,
+	}
+	app.screen = .Failed
+	pad_frame(app)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Back to Title Screen")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.screen, Screen.Title)
+
+	// With a session: the characters, the loading screen, the game menu, the
+	// dial and the chat.
+	s := r.s
+	app.session = s
+	app.screen = .Game
+	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
+	s.state = .Choosing
+	pad_frame(app)
+	testing.expect_value(t, ui.focused_label(&app.ui), "alice")
+	pad_focus(t, app, "bob")
+	pad_tap(app, .A)
+	testing.expect_value(t, s.state, Session_State.Connecting)
+	testing.expect_value(t, s.config.name, "bob")
+	// Loading: Cancel is lit (pressing it ends the session, which needs the GPU).
+	s.loading = Loading{}
+	pad_frame(app)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
+	s.loading = nil
+	// A new character, typed.
+	s.state = .Choosing
+	pad_frame(app)
+	pad_focus(t, app, "new character")
+	pad_tap(app, .A)
+	pad_type(t, app, "cy")
+	pad_tap(app, .Start) // Done: chosen
+	testing.expect_value(t, s.state, Session_State.Connecting)
+	testing.expect_value(t, s.config.name, "cy")
+
+	s.state = .Playing
+	pad_frame(app)
+	testing.expect(t, game_controls(app))
+	pad_tap(app, .Start) // the game menu
+	testing.expect(t, overlay_is_open(&app.overlays, .Game_Menu))
+	testing.expect_value(t, ui.focused_label(&app.ui), "Back to Game")
+	pad_focus(t, app, "Options")
+	pad_tap(app, .A)
+	testing.expect(t, overlay_is_open(&app.overlays, .Options))
+	pad_tap(app, .B)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Options))
+	testing.expect(t, overlay_is_open(&app.overlays, .Game_Menu))
+	pad_focus(t, app, "Back to Game")
+	pad_tap(app, .A)
+	testing.expect_value(t, app.overlays.count, 0)
+	pad_tap(app, .Start) // Start opens it and closes it
+	testing.expect(t, overlay_is_open(&app.overlays, .Game_Menu))
+	pad_tap(app, .Start)
+	testing.expect_value(t, app.overlays.count, 0)
+
+	// The dial: seven symbols by directions and A, one erased by X.
+	dial_open(app, {10, 20, 30})
+	pad_frame(app)
+	d := &app.dial
+	pad_tap(app, .A) // 0
+	pad_go(app, .Down)
+	pad_tap(app, .A) // one row down
+	pad_go(app, .Right)
+	pad_tap(app, .A)
+	testing.expect_value(t, d.count, 3)
+	pad_tap(app, .X) // erased
+	testing.expect_value(t, d.count, 2)
+	for _ in 0 ..< 4 {pad_tap(app, .A)}
+	testing.expect_value(t, d.count, 6)
+	testing.expect(t, overlay_is_open(&app.overlays, .Dial))
+	pad_tap(app, .A)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Dial))
+	m, decoded := game.decode_client(s.writer.buf[:])
+	_, is_dial := m.(game.Dial)
+	testing.expect(t, decoded && is_dial, "no Dial sent")
+	clear(&s.writer.buf)
+
+	// The chat: opened by D-pad Up, "hi" typed, sent by Start.
+	pad_tap(app, .Dpad_Up)
+	testing.expect(t, overlay_is_open(&app.overlays, .Chat))
+	pad_frame(app)
+	testing.expect(t, ui.osk_is_open(&app.ui), "the chat opens with the keyboard")
+	pad_type(t, app, "hi")
+	testing.expect_value(t, string(app.chat.text[:]), "hi")
+	pad_tap(app, .Start)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Chat))
+	m, decoded = game.decode_client(s.writer.buf[:])
+	said, is_chat := m.(game.Chat)
+	testing.expect(t, decoded && is_chat, "no chat line sent")
+	testing.expect_value(t, said.text, "hi")
+	// B closes the keyboard, B again the chat.
+	pad_tap(app, .Dpad_Up)
+	pad_frame(app)
+	testing.expect(t, ui.osk_is_open(&app.ui))
+	pad_tap(app, .B)
+	testing.expect(t, !ui.osk_is_open(&app.ui) && overlay_is_open(&app.overlays, .Chat))
+	pad_tap(app, .B)
+	testing.expect_value(t, app.overlays.count, 0)
+	free_all(context.temp_allocator)
+}
+
+// The hints follow the device: keycaps while the keyboard is used last, the
+// disc and letter of an Xbox pad, the PlayStation's symbols; the setting can
+// pin them.
+@(test)
+test_prompts_follow_device :: proc(t: ^testing.T) {
+	r := rig_make(t)
+	defer rig_free(r)
+	app := r.app
+	has :: proc(app: ^App, g: Prompt_Glyph) -> bool {
+		for seen in prompts_seen(app) {if seen == g {return true}}
+		return false
+	}
+	key :: proc(k: platform.Key) -> platform.Event {
+		return platform.Key_Event{key = k, symbol = k, pressed = true}
+	}
+	// The title, after a key.
+	pad_frame(app, key(.G))
+	pad_frame(app)
+	testing.expect_value(t, app.actions.device, Device.Keyboard)
+	testing.expect(t, has(app, {.Keycap, "Enter"}), "Enter's keycap")
+	testing.expect(t, has(app, {.Keycap, "Esc"}), "Esc's keycap")
+	// An Xbox pad.
+	pad_connect(app, .Xbox)
+	pad_tap(app, .Left_Bumper)
+	testing.expect_value(t, app.actions.device, Device.Pad)
+	pad_frame(app)
+	testing.expect(t, has(app, {.Disc, "A"}) && has(app, {.Disc, "B"}), "the Xbox discs")
+	testing.expect(t, !has(app, {.Keycap, "Enter"}))
+	// A PlayStation pad: the cross and the circle.
+	pad_connect(app, .PlayStation)
+	pad_tap(app, .Left_Bumper)
+	pad_frame(app)
+	testing.expect(t, has(app, {.Cross, ""}) && has(app, {.Ring, ""}), "the PlayStation symbols")
+	// Pinned to the keyboard: still keycaps after a pad press.
+	app.settings.button_prompts = 1
+	pad_tap(app, .Left_Bumper)
+	pad_frame(app)
+	testing.expect(t, has(app, {.Keycap, "Enter"}), "pinned to the keyboard")
+	app.settings.button_prompts = 2 // pinned to Xbox on a PlayStation pad
+	pad_frame(app)
+	testing.expect(t, has(app, {.Disc, "A"}), "pinned to Xbox")
+	// A Switch pad's letters are its own; the Deck's are the Xbox's.
+	app.settings.button_prompts = 0
+	pad_connect(app, .Switch)
+	pad_tap(app, .Left_Bumper)
+	pad_frame(app)
+	testing.expect(t, has(app, {.Disc, "B"}) && has(app, {.Disc, "A"}), "Switch letters")
+
+	// The glyphs are all made: drawn, none empty, edges anti-aliased.
+	pixels := make([][4]u8, PROMPT_ICON_SIZE * PROMPT_ICON_SIZE, context.temp_allocator)
+	seen_icons := make(map[ui.Icon]bool, 32, context.temp_allocator)
+	for shape in Prompt_Shape {
+		prompt_shape_pixels(shape, pixels)
+		covered, partial := 0, 0
+		for p in pixels {
+			if p.a > 0 {covered += 1}
+			if p.a > 0 && p.a < 255 {partial += 1}
+		}
+		testing.expectf(t, covered > 0, "%v is empty", shape)
+		testing.expectf(t, partial > 0 || shape == .Dpad, "%v has no smooth edge", shape)
+		seen_icons[app.prompt_icons[shape]] = true
+	}
+	testing.expect_value(t, len(seen_icons), len(Prompt_Shape))
+	free_all(context.temp_allocator)
 }

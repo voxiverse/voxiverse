@@ -51,6 +51,7 @@ Settings :: struct {
 	stick_dead_zone:   f32, // how far a stick moves before it counts
 	stick_response:    int, // 1 linear, 2 curved, 3 steep
 	stick_swap:        bool, // move with the right stick, look with the left
+	button_prompts:    int, // 0 Auto, 1 Keyboard, 2 Xbox, 3 PlayStation: whose buttons the hints show
 	keys:              Bindings, // (their own table: bindings_table)
 	pad:               Pad_Bindings, // gamepad buttons (pad_bindings_table)
 	// Accessibility
@@ -290,6 +291,14 @@ SETTINGS_VARS := [?]base.Var {
 		label = "Swap sticks",
 		help = "Move with the right stick, look with the left.",
 		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "button_prompts",
+		label = "Button prompts",
+		help = "Which buttons the hints show: Auto follows whatever you used last.",
+		min = 0,
+		max = 3,
+		choices = {{0, "Auto"}, {1, "Keyboard"}, {2, "Xbox"}, {3, "PlayStation"}},
 	},
 	{
 		field = "reduce_motion",

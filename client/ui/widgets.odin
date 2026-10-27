@@ -36,6 +36,7 @@ button :: proc(
 	text: string,
 	r: Rect,
 	disabled := false,
+	id := "", // what the id is made of when the text changes (the focus stays)
 	loc := #caller_location,
 ) -> bool {
 	t := &ctx.theme
@@ -45,7 +46,13 @@ button :: proc(
 		draw_text(ctx, r, shown, t.font_size, with_alpha(t.text, t.disabled_alpha), .Center)
 		return false
 	}
-	it := interact(ctx, get_id(ctx, text), r, label = display_label(text), loc = loc)
+	it := interact(
+		ctx,
+		get_id(ctx, id if id != "" else text),
+		r,
+		label = display_label(text),
+		loc = loc,
+	)
 	fill, ink := t.background, t.text
 	if it.pressed {
 		fill, ink = t.pressed, t.hover_text
@@ -109,8 +116,9 @@ slider :: proc(
 	}
 	if it.focused {
 		s := step if step > 0 else (hi - lo) / 20
-		if .Left in ctx.input.keys_pressed {value^ -= s}
-		if .Right in ctx.input.keys_pressed {value^ += s}
+		if .Left in ctx.nav {value^ -= s}
+		if .Right in ctx.nav {value^ += s}
+		consume_nav(ctx, {.Left, .Right})
 	}
 	value^ = clamp(value^, lo, hi)
 
@@ -123,6 +131,128 @@ slider :: proc(
 	draw_text(ctx, value_rect, shown, t.font_size, t.text, .Right)
 	focus_ring(ctx, r, it)
 	return value^ != old
+}
+
+// choice shows "Label: Value" for names[index^]; a click or Confirm goes to
+// the next (wrapping), Left and Right while focused to the previous and next.
+// Returns true when index changed. The id is the label's, not the value's, so
+// focus stays on it as the value changes.
+choice :: proc(
+	ctx: ^Context,
+	text: string,
+	index: ^int,
+	names: []string,
+	r: Rect,
+	loc := #caller_location,
+) -> bool {
+	t := &ctx.theme
+	n := len(names)
+	if n == 0 {return false}
+	index^ = clamp(index^, 0, n - 1)
+	shown := fmt.tprintf("%s: %s", display_label(text), names[index^])
+	it := interact(ctx, get_id(ctx, text), r, label = shown, loc = loc)
+	old := index^
+	if it.clicked {index^ = (index^ + 1) % n}
+	if it.focused {
+		if .Left in ctx.nav {index^ = (index^ + n - 1) % n}
+		if .Right in ctx.nav {index^ = (index^ + 1) % n}
+		consume_nav(ctx, {.Left, .Right})
+	}
+	if index^ != old {shown = fmt.tprintf("%s: %s", display_label(text), names[index^])}
+	fill, ink := t.background, t.text
+	if it.pressed {
+		fill, ink = t.pressed, t.hover_text
+	} else if it.hovered || (it.focused && ctx.focus_visible) {
+		fill, ink = t.hover, t.hover_text
+	}
+	fill_rect(ctx, r, fill)
+	stroke_rect(ctx, r, t.border_width, t.border)
+	draw_text(ctx, r, shown, t.font_size, ink, .Center)
+	if it.focused && ctx.focus_visible {
+		draw_text(ctx, rect_shrink(r, t.padding), "<", t.font_size, ink, .Left)
+		draw_text(ctx, rect_shrink(r, t.padding), ">", t.font_size, ink, .Right)
+	}
+	focus_ring(ctx, r, it)
+	return index^ != old
+}
+
+// list_nav makes a virtualized list (the caller draws only its visible rows)
+// one focusable widget over area. Focused, Up and Down move selected
+// (consumed, except Up at the first row and Down at the last, which leave the
+// list), first follows so the selected row is in view, the wheel and the
+// right stick scroll it, and Confirm reports clicked. The caller draws the
+// rows as before (focusable = false: the mouse only) and the selection; the
+// ring goes round the selected row (row_h: the rows' height).
+list_nav :: proc(
+	ctx: ^Context,
+	text: string,
+	area: Rect,
+	count: int,
+	selected: ^int,
+	first: ^int,
+	visible: int,
+	row_h: f32 = 0,
+	loc := #caller_location,
+) -> (
+	it: Interaction,
+) {
+	it = interact(ctx, get_id(ctx, text), area, label = display_label(text), loc = loc)
+	it.clicked = it.focused && ctx.activate_focus
+	most := max(count - visible, 0)
+	if it.hovered && ctx.input.wheel.y != 0 {first^ -= int(ctx.input.wheel.y)}
+	if it.focused {
+		moved := false
+		if .Up in ctx.nav && selected^ > 0 {
+			selected^ -= 1
+			moved = true
+			consume_nav(ctx, {.Up})
+		}
+		if .Down in ctx.nav && selected^ < count - 1 {
+			selected^ += 1
+			moved = true
+			consume_nav(ctx, {.Down})
+		}
+		ctx.nav_accum += ctx.input.nav_scroll
+		rows := int(ctx.nav_accum)
+		first^ += rows
+		ctx.nav_accum -= f32(rows)
+		if moved {
+			selected^ = clamp(selected^, 0, count - 1)
+			if selected^ < first^ {first^ = selected^}
+			if selected^ >= first^ + visible {first^ = selected^ - visible + 1}
+		}
+	}
+	first^ = clamp(first^, 0, most)
+	if it.focused && ctx.focus_visible && selected^ >= first^ && selected^ < first^ + visible {
+		h := row_h if row_h > 0 else area.h / f32(max(visible, 1))
+		row := Rect{area.x, area.y + f32(selected^ - first^) * h, area.w, h}
+		stroke_rect(ctx, rect_expand(row, -1), 1, ctx.theme.focus_ring)
+	}
+	return
+}
+
+// keep_focus_visible scrolls a panel that draws all its rows and clips them to
+// view: if the focused widget was drawn in that clip and lies outside view,
+// scroll moves by the overflow (seen next frame), once for each widget focused,
+// while the keyboard or pad is in use.
+// Call after drawing the rows.
+keep_focus_visible :: proc(ctx: ^Context, view: Rect, scroll: ^f32) {
+	if !ctx.focus_visible {return} 	// (the mouse picks what it sees)
+	for w in ctx.widgets {
+		if w.id != ctx.focused {continue}
+		c := w.clip
+		if c.x < view.x - 0.5 || c.y < view.y - 0.5 {break}
+		if c.x + c.w > view.x + view.w + 0.5 || c.y + c.h > view.y + view.h + 0.5 {break}
+		if ctx.kfv_id == w.id {return} 	// (once per focus: the wheel may scroll it away again)
+		ctx.kfv_id = w.id
+		if w.full.y < view.y {
+			scroll^ -= view.y - w.full.y
+		} else if w.full.y + w.full.h > view.y + view.h {
+			scroll^ += w.full.y + w.full.h - (view.y + view.h)
+		}
+		return
+	}
+	ctx.kfv_id = 0 // the focus is elsewhere
 }
 
 // Text_Edit is the editing state of the focused text field (one at a time).
@@ -149,7 +279,13 @@ text_input :: proc(
 	id := get_id(ctx, id_label)
 	it := interact(ctx, id, r, label = display_label(id_label), loc = loc)
 	e := &ctx.edit
-	if it.focused {
+	if ctx.osk.open && ctx.osk.target == id {
+		// The on-screen keyboard has the focus, and types into this field.
+		e.id, e.active = id, true
+		e.cursor, e.anchor = clamp(e.cursor, 0, len(text)), clamp(e.anchor, 0, len(text))
+		submitted = edit_text(ctx, e, text)
+		if osk_draw(ctx, e, text, r) {submitted = true}
+	} else if it.focused {
 		if e.id != id {
 			// Gained focus: cursor to the end.
 			e^ = {
@@ -160,6 +296,8 @@ text_input :: proc(
 		}
 		e.active = true
 		submitted = edit_text(ctx, e, text)
+		// The pad's Confirm opens the on-screen keyboard (a keyboard's Enter submits).
+		if .Confirm in ctx.input.nav {osk_open(ctx, id)}
 	} else if e.id == id {
 		e.active = false
 	}
@@ -373,7 +511,7 @@ TOOLTIP_WIDTH :: 360
 // another tooltip's area restarts the delay.
 tooltip :: proc(ctx: ^Context, r: Rect, text: string) {
 	if len(text) == 0 {return}
-	if ctx.modal_open && ctx.layer < .Modal {return}
+	if ctx.layer < inert_below(ctx) || ctx.pointer_idle {return}
 	mouse := ctx.input.mouse
 	if !rect_contains(r, mouse) || !rect_contains(current_clip(ctx), mouse) {return}
 	id := get_id(ctx, text)

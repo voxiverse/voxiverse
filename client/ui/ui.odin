@@ -24,8 +24,11 @@ import "../font"
 //            modal never get it. (Decided at end_frame, used next frame.)
 // - active:  the widget the mouse button went down on; a click is a release
 //            over the same widget, so dragging off cancels.
-// - focused: keyboard focus, moved by Tab / arrows and by clicking; Enter or
-//            Space activates it. The focus ring shows once the keyboard is used.
+// - focused: keyboard and pad focus, moved by Tab, by directions (the arrows,
+//            the pad: the nearest widget that way, nav_pick) and by clicking;
+//            Enter, Space or the pad's Confirm activates it. The focus ring
+//            shows once the keyboard or pad is used, and the mouse's hover
+//            is idle until it moves.
 
 Id :: distinct u64
 
@@ -41,8 +44,25 @@ Layer :: enum u8 {
 	Base,
 	Popup,
 	Modal,
+	Keyboard, // the on-screen keyboard (keyboard.odin): over a modal, under tooltips
 	Tooltip,
 }
+
+// Nav is a navigation event: from the pad (Input.nav) or the keyboard's
+// arrows, Enter and Space (made in begin_frame).
+Nav :: enum u8 {
+	Up,
+	Down,
+	Left,
+	Right,
+	Confirm,
+	Back,
+	Secondary,
+	Tertiary,
+	Start,
+}
+
+DIRECTIONS :: bit_set[Nav]{.Up, .Down, .Left, .Right}
 
 Mouse_Button :: enum u8 {
 	Left,
@@ -103,6 +123,15 @@ Input :: struct {
 	modifiers:      bit_set[Modifier],
 	text:           []rune, // typed text this frame
 	time:           f64, // seconds, monotonic (tooltip delays)
+	// From the pad (the client fills these from its actions; the keyboard's
+	// arrows, Enter and Space arrive as keys_pressed).
+	nav:            bit_set[Nav],
+	nav_scroll:     f32, // rows this frame from the right stick
+	pad:            bool, // the pad is the device used last
+	// While the on-screen keyboard is open: the bumpers' cursor steps and the
+	// stick press (Shift).
+	osk_cursor:     int,
+	osk_shift:      bool,
 }
 
 KILL_SIZE :: 1024
@@ -123,6 +152,16 @@ Context :: struct {
 	focused:        Id,
 	focus_visible:  bool, // keyboard navigation in use: draw focus rings
 	modal_open:     bool, // a modal was drawn last frame: lower layers are inert
+	keyboard_open:  bool, // the on-screen keyboard was drawn last frame: so are all below it
+	osk:            Osk,
+	focus_by_layer: [Layer]Id, // each layer's focus, for when the layer above goes
+	top_layer:      Layer, // the layer that was interactive last frame
+	default_id:     Id, // the widget a screen named with default_focus this frame
+	default_next:   bool,
+	pointer_idle:   bool, // a nav event came: no hover until the mouse moves
+	idle_mouse:     Vec2,
+	nav_accum:      f32, // fractions of rows scrolled by the stick
+	kfv_id:         Id, // the focus keep_focus_visible last scrolled to
 	edit:           Text_Edit, // state of the focused text field
 	kill:           [KILL_SIZE]u8, // the last text killed (Ctrl+W, Ctrl+K, ...), for Ctrl+Y
 	kill_len:       int,
@@ -148,6 +187,9 @@ Context :: struct {
 	widgets:        [dynamic]Widget, // every interactive widget this frame
 	texts:          [dynamic]string, // every text drawn this frame (tests: what a player reads)
 	modal_drawn:    bool,
+	keyboard_drawn: bool,
+	nav:            bit_set[Nav], // this frame's: the pad's and the keyboard's
+	consumed:       bit_set[Nav], // taken by a widget: focus does not move for them
 	focus_request:  Focus_Move,
 	activate_focus: bool,
 	output:         Output,
@@ -159,6 +201,8 @@ Context :: struct {
 Widget :: struct {
 	id:        Id,
 	rect:      Rect, // clipped to its scissor
+	full:      Rect, // as asked for, unclipped (a scrolled row below its view)
+	clip:      Rect, // the scissor it was drawn in
 	layer:     Layer,
 	focusable: bool,
 	label:     string, // what it says (find_widget)
@@ -196,6 +240,15 @@ destroy :: proc(ctx: ^Context) {
 // begin_frame starts a frame. screen_pixels is the framebuffer size; scale
 // is pixels per UI unit (display scale).
 begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32) {
+	// The pointer comes back when the mouse moves or a button goes down (hover
+	// is decided from the widgets of the frame before, before they are freed).
+	if ctx.pointer_idle {
+		d := input.mouse - ctx.idle_mouse
+		if abs(d.x) + abs(d.y) > 2 || input.mouse_pressed != {} {
+			ctx.pointer_idle = false
+			resolve_hot(ctx, input.mouse)
+		}
+	}
 	free_all(ctx.frame_alloc)
 	ctx.input = input
 	ctx.input.text = clone_slice(input.text, ctx.frame_alloc)
@@ -206,22 +259,36 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.widgets = make([dynamic]Widget, 0, 64, ctx.frame_alloc)
 	ctx.texts = make([dynamic]string, 0, 64, ctx.frame_alloc)
 	ctx.modal_drawn = false
+	ctx.keyboard_drawn = false
 	ctx.tip_hit = false
 	ctx.activate_focus = false
 	ctx.focus_request = .None
+	ctx.consumed = {}
+	ctx.default_next = false
+	ctx.default_id = 0
 	output_begin(&ctx.output, ctx.frame_alloc)
 
 	keys := input.keys_pressed
 	if .Tab in keys {
 		ctx.focus_request = .Previous if .Shift in input.modifiers else .Next
 	}
-	// Arrows navigate unless a text field has focus (it uses them itself).
+	// The keyboard's arrows, Enter and Space navigate like the pad unless a
+	// text field has focus (it uses them itself).
+	ctx.nav = input.nav
 	if !ctx.edit.active {
-		if .Down in keys {ctx.focus_request = .Next}
-		if .Up in keys {ctx.focus_request = .Previous}
-		if .Enter in keys || .Space in keys {ctx.activate_focus = true}
+		if .Down in keys {ctx.nav += {.Down}}
+		if .Up in keys {ctx.nav += {.Up}}
+		if .Left in keys {ctx.nav += {.Left}}
+		if .Right in keys {ctx.nav += {.Right}}
+		if .Enter in keys || .Space in keys {ctx.nav += {.Confirm}}
 	}
-	if ctx.focus_request != .None {ctx.focus_visible = true}
+	if .Confirm in ctx.nav {ctx.activate_focus = true}
+	if ctx.focus_request != .None || ctx.nav != {} {
+		ctx.focus_visible = true
+		if !ctx.pointer_idle {
+			ctx.pointer_idle, ctx.idle_mouse = true, input.mouse
+		}
+	}
 	if input.mouse_pressed != {} {ctx.focus_visible = false}
 	if .Left not_in input.mouse_down && .Left not_in input.mouse_released {
 		ctx.active = 0
@@ -232,23 +299,77 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 // end_frame resolves hover for the next frame, applies keyboard navigation
 // and finalises the output.
 end_frame :: proc(ctx: ^Context) {
-	// Hover: topmost widget under the mouse; later widgets win within a layer.
-	ctx.hot = 0
 	ctx.modal_open = ctx.modal_drawn
-	best_layer := -1
-	for w in ctx.widgets {
-		if ctx.modal_open && w.layer < .Modal {continue}
-		if int(w.layer) >= best_layer && rect_contains(w.rect, ctx.input.mouse) {
-			ctx.hot, ctx.hot_layer, best_layer = w.id, w.layer, int(w.layer)
+	ctx.keyboard_open = ctx.keyboard_drawn
+	if !ctx.pointer_idle {resolve_hot(ctx, ctx.input.mouse)} else {ctx.hot = 0}
+	if ctx.focused != 0 && !widget_drawn(ctx, ctx.focused) {ctx.focused = 0}
+
+	// Focus belongs to the top interactive layer: a layer that appears takes
+	// focus to its first widget (the pad and keyboard users see it), the one
+	// that goes gives the lower layer's focus back.
+	top := top_layer(ctx)
+	if top != ctx.top_layer {
+		remembered := ctx.focus_by_layer[top]
+		if ctx.focused != 0 && widget_on_layer(ctx, ctx.focused, top) {
+			// (a screen put the focus there itself)
+		} else if remembered != 0 && widget_on_layer(ctx, remembered, top) {
+			ctx.focused = remembered
+		} else if ctx.focus_visible || ctx.input.pad {
+			ctx.focused = first_focus(ctx, top)
+		} else {
+			ctx.focused = 0
 		}
+		ctx.top_layer = top
 	}
 	// Keyboard focus moves among focusable widgets of the top interactive layer.
-	if ctx.focus_request != .None {move_focus(ctx)}
-	// Focus on a widget that wasn't drawn this frame is dropped.
-	if ctx.focused != 0 && !widget_drawn(ctx, ctx.focused) {ctx.focused = 0}
+	if ctx.focus_request != .None {move_focus(ctx, top)}
+	if ctx.focused != 0 && !widget_on_layer(ctx, ctx.focused, top) {ctx.focused = 0}
+	pad_or_key := ctx.nav & (DIRECTIONS + {.Confirm})
+	if pad_or_key != {} || ctx.input.pad {
+		if ctx.focused == 0 {
+			// The first event only shows where the focus is.
+			ctx.focused = first_focus(ctx, top)
+		} else {
+			for dir in Nav.Up ..= Nav.Right {
+				if dir in ctx.nav && dir not_in ctx.consumed {move_focus_dir(ctx, top, dir)}
+			}
+		}
+	}
+	ctx.focus_by_layer[top] = ctx.focused
 	if !widget_drawn(ctx, ctx.edit.id) {ctx.edit.active = false}
 	if !ctx.tip_hit {ctx.tip_id = 0}
 	output_end(&ctx.output, &ctx.glyphs)
+}
+
+// resolve_hot: the topmost widget under the mouse; later widgets win within a layer.
+@(private)
+resolve_hot :: proc(ctx: ^Context, mouse: Vec2) {
+	ctx.hot = 0
+	floor := inert_below(ctx)
+	best_layer := -1
+	for w in ctx.widgets {
+		if w.layer < floor {continue}
+		if int(w.layer) >= best_layer && rect_contains(w.rect, mouse) {
+			ctx.hot, ctx.hot_layer, best_layer = w.id, w.layer, int(w.layer)
+		}
+	}
+}
+
+// inert_below: widgets on layers under this one are drawn but do nothing
+// (a modal or the on-screen keyboard was drawn last frame).
+@(private)
+inert_below :: proc(ctx: ^Context) -> Layer {
+	if ctx.keyboard_open {return .Keyboard}
+	if ctx.modal_open {return .Modal}
+	return .Base
+}
+
+// top_layer: the layer whose focusable widgets navigation moves among.
+@(private)
+top_layer :: proc(ctx: ^Context) -> Layer {
+	top := inert_below(ctx)
+	for w in ctx.widgets {if w.focusable && w.layer > top {top = w.layer}}
+	return top
 }
 
 @(private)
@@ -258,10 +379,43 @@ widget_drawn :: proc(ctx: ^Context, id: Id) -> bool {
 }
 
 @(private)
-move_focus :: proc(ctx: ^Context) {
-	top := Layer.Base
-	for w in ctx.widgets {if w.focusable && w.layer > top {top = w.layer}}
-	if ctx.modal_open {top = max(top, Layer.Modal)}
+widget_on_layer :: proc(ctx: ^Context, id: Id, layer: Layer) -> bool {
+	for w in ctx.widgets {if w.id == id {return w.focusable && w.layer == layer}}
+	return false
+}
+
+// first_focus: the widget a screen named with default_focus, else the first
+// focusable one drawn, on layer (0 if none).
+@(private)
+first_focus :: proc(ctx: ^Context, layer: Layer) -> Id {
+	if ctx.default_id != 0 && widget_on_layer(ctx, ctx.default_id, layer) {return ctx.default_id}
+	for w in ctx.widgets {
+		if w.focusable && w.layer == layer {return w.id}
+	}
+	return 0
+}
+
+// default_focus: the next focusable widget drawn is where focus starts when
+// its screen or dialog appears (and with nothing focused).
+default_focus :: proc(ctx: ^Context) {
+	ctx.default_next = true
+}
+
+// consume_nav: a widget used these directions this frame: focus does not
+// move for them.
+consume_nav :: proc(ctx: ^Context, set: bit_set[Nav]) {
+	ctx.consumed += set
+}
+
+// focused_label: what the focused widget says ("" if none).
+focused_label :: proc(ctx: ^Context) -> string {
+	for w in ctx.widgets {if w.id == ctx.focused {return w.label}}
+	return ""
+}
+
+// move_focus: Tab and Shift+Tab, in drawing order, wrapping.
+@(private)
+move_focus :: proc(ctx: ^Context, top: Layer) {
 	candidates := make([dynamic]Id, 0, len(ctx.widgets), ctx.frame_alloc)
 	for w in ctx.widgets {
 		if w.focusable && w.layer == top {append(&candidates, w.id)}
@@ -278,6 +432,55 @@ move_focus :: proc(ctx: ^Context) {
 	case:
 		ctx.focused = candidates[(current - 1 + n) % n]
 	}
+}
+
+// move_focus_dir: the focus goes to the nearest focusable widget of the top
+// layer in direction dir (nav_pick), by their full rects. No wrapping.
+@(private)
+move_focus_dir :: proc(ctx: ^Context, top: Layer, dir: Nav) {
+	rects := make([dynamic]Rect, 0, len(ctx.widgets), ctx.frame_alloc)
+	ids := make([dynamic]Id, 0, len(ctx.widgets), ctx.frame_alloc)
+	from: Rect
+	for w in ctx.widgets {
+		if !w.focusable || w.layer != top {continue}
+		if w.id == ctx.focused {from = w.full; continue}
+		append(&rects, w.full)
+		append(&ids, w.id)
+	}
+	if i := nav_pick(from, rects[:], dir); i >= 0 {ctx.focused = ids[i]}
+}
+
+// nav_pick: which of candidates a move in direction dir from `from` lands on
+// (-1: none). A candidate qualifies when its centre is more than 1 unit past
+// from's centre in that direction; the lowest score wins, ties to the
+// earlier: the gap between the near edges (0 if they overlap) plus twice the
+// gap across (0 if the spans overlap) plus 0.05 times the centres' distance
+// across.
+nav_pick :: proc(from: Rect, candidates: []Rect, dir: Nav) -> int {
+	if dir > .Right {return -1}
+	vertical := dir == .Up || dir == .Down
+	fc := Vec2{from.x + from.w / 2, from.y + from.h / 2}
+	best, best_score := -1, f32(0)
+	for c, i in candidates {
+		cc := Vec2{c.x + c.w / 2, c.y + c.h / 2}
+		gap, across_gap, across: f32
+		if vertical {
+			sign: f32 = 1 if dir == .Down else -1
+			if (cc.y - fc.y) * sign <= 1 {continue}
+			gap = (c.y - (from.y + from.h)) if dir == .Down else (from.y - (c.y + c.h))
+			across_gap = max(c.x - (from.x + from.w), from.x - (c.x + c.w), 0)
+			across = abs(cc.x - fc.x)
+		} else {
+			sign: f32 = 1 if dir == .Right else -1
+			if (cc.x - fc.x) * sign <= 1 {continue}
+			gap = (c.x - (from.x + from.w)) if dir == .Right else (from.x - (c.x + c.w))
+			across_gap = max(c.y - (from.y + from.h), from.y - (c.y + c.h), 0)
+			across = abs(cc.y - fc.y)
+		}
+		score := max(gap, 0) + 2 * across_gap + 0.05 * across
+		if best < 0 || score < best_score {best, best_score = i, score}
+	}
+	return best
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +534,7 @@ begin_layer :: proc(ctx: ^Context, layer: Layer) -> (previous: Layer) {
 	previous = ctx.layer
 	ctx.layer = layer
 	if layer == .Modal {ctx.modal_drawn = true}
+	if layer == .Keyboard {ctx.keyboard_drawn = true}
 	return
 }
 
@@ -396,11 +600,22 @@ interact :: proc(
 	visible := rect_intersect(r, current_clip(ctx))
 	append(
 		&ctx.widgets,
-		Widget{id = id, rect = visible, layer = ctx.layer, focusable = focusable, label = label},
+		Widget {
+			id = id,
+			rect = visible,
+			full = r,
+			clip = current_clip(ctx),
+			layer = ctx.layer,
+			focusable = focusable,
+			label = label,
+		},
 	)
-	// Under a modal: drawn, but no hover, clicks or focus, and it must not
-	// touch the shared interaction state either.
-	if ctx.modal_open && ctx.layer < .Modal {return}
+	if ctx.default_next && focusable {
+		ctx.default_id, ctx.default_next = id, false
+	}
+	// Under a modal or the keyboard: drawn, but no hover, clicks or focus, and
+	// it must not touch the shared interaction state either.
+	if ctx.layer < inert_below(ctx) {return}
 
 	it.hovered = ctx.hot == id
 	if it.hovered && .Left in ctx.input.mouse_pressed {
