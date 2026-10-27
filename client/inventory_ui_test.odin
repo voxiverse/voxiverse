@@ -40,7 +40,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	s.inventory.slots[9] = {stone, 64}
 	s.inventory.slots[0] = {dirt, 10}
 
-	app.input.pressed = {.E}
+	app.input.pressed = {.Tab}
 
 	actions_sync(app)
 	inventory_keys(app)
@@ -257,8 +257,7 @@ test_chest_overlay :: proc(t: ^testing.T) {
 }
 
 // Q and E step the tabs: Inventory, Creative, then Statistics (its own
-// overlay; the inventory closes). E no longer closes the inventory, Escape
-// does. Over a slot Q still drops; off the slots it steps back.
+// overlay; the inventory closes). Tab and Escape close the inventory. Over a slot Q still drops; off the slots it steps back.
 @(test)
 test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	f: Overlay_Fixture
@@ -278,13 +277,24 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	overlay_frame(&f, {mouse = away}) // (drawn once: the key that opened it is spent)
 	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
 
-	// E does not close it: the inventory key only opens.
-	app.input.pressed = {.E}
-	actions_sync(app)
-	inventory_keys(app)
-	app.input.pressed = {}
-	actions_sync(app)
-	testing.expect(t, inventory_open_(app))
+	// Tab, the inventory key, closes it (and opens it again); typing in a
+	// text field does not close it.
+	tab :: proc(app: ^App) {
+		app.input.pressed = {.Tab}
+		actions_sync(app)
+		inventory_keys(app)
+		app.input.pressed = {}
+		actions_sync(app)
+	}
+	app.ui.edit.active = true
+	tab(app)
+	testing.expect(t, inventory_open_(app), "Tab typed in a field does not close")
+	app.ui.edit.active = false
+	tab(app)
+	testing.expect(t, !inventory_open_(app), "Tab closes")
+	tab(app)
+	testing.expect(t, inventory_open_(app), "Tab opens")
+	overlay_frame(&f, {mouse = away})
 
 	press(&f, .E, away)
 	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Creative)
@@ -316,11 +326,7 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	// Escape closes whichever is open.
 	escape(app)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
-	app.input.pressed = {.E}
-	actions_sync(app)
-	inventory_keys(app)
-	app.input.pressed = {}
-	actions_sync(app)
+	tab(app)
 	testing.expect(t, inventory_open_(app))
 	escape(app)
 	testing.expect(t, !inventory_open_(app))
@@ -415,7 +421,8 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, in_hotbar, 64)
 
-	// The prompts say what the buttons do here.
+	// The prompts say what the buttons do here (with the bar on).
+	app.settings.prompt_bar = true
 	pad_frame(app)
 	seen := prompts_seen(app)
 	testing.expect(t, len(seen) >= 5, "the inventory's prompt bar is drawn")

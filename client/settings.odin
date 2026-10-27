@@ -58,6 +58,7 @@ Settings :: struct {
 	// Accessibility
 	reduce_motion:     bool, // still the menus' stars (and later camera bob and shake)
 	chat_text_size:    f32, // times the UI's text size
+	prompt_bar:        bool, // the bar of button prompts along the bottom of menus (off by default)
 }
 
 @(rodata)
@@ -313,6 +314,12 @@ SETTINGS_VARS := [?]base.Var {
 	{
 		field = "reduce_motion",
 		help = "Keeps the moving backgrounds still.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "prompt_bar",
+		label = "Button prompt bar",
+		help = "Shows a bar of button hints (A Select, B Back) along the bottom of menus.",
 		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{

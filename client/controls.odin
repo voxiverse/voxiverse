@@ -54,7 +54,7 @@ DEFAULT_BINDINGS :: Bindings {
 	attack     = .Mouse_Left,
 	use        = .Mouse_Right,
 	pick       = .Mouse_Middle,
-	inventory  = .E,
+	inventory  = .Tab,
 	stats      = .K,
 	drop       = .Q,
 	chat       = .T,
@@ -93,7 +93,7 @@ BINDING_VARS := [?]base.Var {
 		help = "Place a block, use the item in your hand, or dial a gate.",
 	},
 	{field = "pick", label = "Pick Block", help = "Take the block you aim at into your hand."},
-	{field = "inventory", help = "Open the inventory."},
+	{field = "inventory", help = "Open the inventory; the same key closes it again."},
 	{field = "stats", label = "Statistics", help = "Open your statistics."},
 	{
 		field = "drop",

@@ -60,7 +60,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"stick_swap",
 		"button_prompts",
 	},
-	.Accessibility = {"reduce_motion", "chat_text_size"},
+	.Accessibility = {"reduce_motion", "prompt_bar", "chat_text_size"},
 	.Profile       = {"name", "share_data"},
 }
 
@@ -129,25 +129,15 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 		text_w[tab] = ui.measure_text(ctx, tab_name(tab), t.font_size) + 2 * t.padding
 		total += text_w[tab] + gap
 	}
-	// The two tab keys' glyphs beside the tabs.
+	// The two tab keys' glyphs at the ends of the tab row: previous left, next right.
 	prev_glyph, next_glyph := prompt_glyph(app, .Tab_Prev), prompt_glyph(app, .Tab_Next)
 	prev_w, next_w := prompt_glyph_width(ctx, prev_glyph), prompt_glyph_width(ctx, next_glyph)
-	hint_rect := ui.cut_right(&tabs, prev_w + next_w + 4 + t.spacing)
-	hint_rect = ui.rect_center(hint_rect, hint_rect.w, PROMPT_BAR_HEIGHT)
-	prompt_glyph_draw(
-		app,
-		ctx,
-		prev_glyph,
-		{hint_rect.x, hint_rect.y, prev_w, hint_rect.h},
-		t.text_muted,
-	)
-	prompt_glyph_draw(
-		app,
-		ctx,
-		next_glyph,
-		{hint_rect.x + prev_w + 4, hint_rect.y, next_w, hint_rect.h},
-		t.text_muted,
-	)
+	prev_rect := ui.cut_left(&tabs, prev_w + t.spacing)
+	next_rect := ui.cut_right(&tabs, next_w + t.spacing)
+	prev_rect = ui.rect_center(prev_rect, prev_w, PROMPT_BAR_HEIGHT)
+	next_rect = ui.rect_center(next_rect, next_w, PROMPT_BAR_HEIGHT)
+	prompt_glyph_draw(app, ctx, prev_glyph, prev_rect, t.text_muted)
+	prompt_glyph_draw(app, ctx, next_glyph, next_rect, t.text_muted)
 	extra := max(0, tabs.w - total) / f32(len(Options_Tab))
 	for tab in Options_Tab {
 		r := ui.cut_left(&tabs, text_w[tab] + extra + gap)

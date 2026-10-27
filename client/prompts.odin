@@ -360,10 +360,14 @@ prompt_glyph_draw :: proc(
 	}
 }
 
+// prompt_bar_wanted: whether the bar shows at all. One place to change the
+// rule (always; only while a pad is in use: app.actions.device == .Pad).
+prompt_bar_wanted :: proc(app: ^App) -> bool {return app.settings.prompt_bar}
+
 // prompt_bar draws items along the bottom edge of the screen, right-aligned:
 // each a glyph (two for the tabs) and its word, in the theme's muted ink.
 prompt_bar :: proc(app: ^App, ctx: ^ui.Context, items: []Prompt_Item) {
-	if len(items) == 0 {return}
+	if len(items) == 0 || !prompt_bar_wanted(app) {return}
 	t := &ctx.theme
 	gap := 2 * t.spacing
 	widths := make([]f32, len(items), context.temp_allocator)

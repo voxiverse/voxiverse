@@ -150,15 +150,23 @@ Inventory_View :: struct {
 	cursor:      int, // the pad's cursor: a slot, or CURSOR_CATALOG_BASE + a catalog cell (-1: not placed)
 }
 
-// inventory_keys: the inventory key over the game opens the inventory (it
-// closes with Escape; Q and E step its tabs).
+// inventory_keys: the inventory key (Tab) opens the inventory over the game
+// and closes it again; Escape closes it too, and Q and E step its tabs. The
+// pad's button only opens (in the menu it is the cursor's, and B closes). Typing
+// in a text field is not a close.
 inventory_keys :: proc(app: ^App) {
 	s := app.session
-	if s == nil ||
-	   s.state != .Playing ||
-	   !action_pressed(&app.actions, .Inventory) ||
-	   overlay_is_open(&app.overlays, .Inventory) {return}
-	if game_controls(app) {inventory_open(app)}
+	if s == nil || s.state != .Playing {return}
+	if overlay_is_open(&app.overlays, .Inventory) {
+		if top, _ := overlay_top(&app.overlays);
+		   top == .Inventory &&
+		   key_action_pressed(&app.actions, .Inventory) &&
+		   !app.ui.edit.active &&
+		   !ui.osk_is_open(&app.ui) &&
+		   app.options.listening == .None {inventory_close(app)}
+		return
+	}
+	if action_pressed(&app.actions, .Inventory) && game_controls(app) {inventory_open(app)}
 }
 
 // chest_sync: a chest the server opened shows its overlay (the inventory
@@ -437,7 +445,7 @@ ring_go :: proc(app: ^App, to: Ring_Tab) -> Ring_Tab {
 }
 
 // ring_tabs: the tab row in a title row, the open one lit, and the keys that
-// step it at the right end; the one chosen with the mouse, if any.
+// step it at the ends (previous left, next right); the one chosen with the mouse, if any.
 ring_tabs :: proc(
 	app: ^App,
 	ctx: ^ui.Context,
@@ -449,8 +457,11 @@ ring_tabs :: proc(
 ) {
 	t := &ctx.theme
 	row := r
-	hint := fmt.tprintf("%s / %s", action_label(app, .Tab_Prev), action_label(app, .Tab_Next))
-	ui.draw_text(ctx, row, hint, t.font_size, t.text_muted, .Right)
+	prev := action_label(app, .Tab_Prev)
+	next := action_label(app, .Tab_Next)
+	ui.draw_text(ctx, row, prev, t.font_size, t.text_muted, .Left)
+	ui.draw_text(ctx, row, next, t.font_size, t.text_muted, .Right)
+	ui.cut_left(&row, ui.measure_text(ctx, prev, t.font_size) + t.spacing)
 	for tab in Ring_Tab {
 		if !ring_has(app, tab) {continue}
 		b := ui.cut_left(&row, 140)

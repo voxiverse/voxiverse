@@ -859,6 +859,11 @@ test_prompts_follow_device :: proc(t: ^testing.T) {
 	r := rig_make(t)
 	defer rig_free(r)
 	app := r.app
+	// Off by default (an accessibility option): nothing is drawn until it is on.
+	testing.expect(t, !SETTINGS_DEFAULTS.prompt_bar, "the bar is off by default")
+	pad_frame(app)
+	testing.expect_value(t, len(prompts_seen(app)), 0)
+	app.settings.prompt_bar = true
 	has :: proc(app: ^App, g: Prompt_Glyph) -> bool {
 		for seen in prompts_seen(app) {if seen == g {return true}}
 		return false

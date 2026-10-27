@@ -32,7 +32,7 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	if catalog {append(&f.s.grants, game.Grant{pattern = "items.catalog", allow = true})}
 	f.app.session = f.s
 	f.app.screen = .Game
-	f.app.input.pressed = {.E}
+	f.app.input.pressed = {.Tab}
 	actions_sync(f.app)
 	inventory_keys(f.app)
 	f.app.input.pressed = {}
@@ -149,7 +149,7 @@ test_inventory_mouse_tweaks :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, inv.slots[12] == {dirt, 7})
 	inventory_close(f.app)
-	f.app.input.pressed = {.E}
+	f.app.input.pressed = {.Tab}
 	actions_sync(f.app)
 	inventory_keys(f.app) // open again
 	f.app.input.pressed = {}

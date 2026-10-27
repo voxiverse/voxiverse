@@ -18,9 +18,9 @@ Version :: struct {
 
 // version_of: on a commit tagged v<major>.<minor>.<patch> with nothing
 // uncommitted, that version, and the tag's message (an annotated tag:
-// `git tag -a v0.21.0 -m "Pre-Alpha 1"`) as its name. Elsewhere the last
-// such tag's version plus the commits since ("0.21.0+5": semver's build
-// metadata, after 0.21.0, where "-dev" would mean before it); "0.0.0-dev"
+// `git tag -a v0.1.0 -m "Alpha 1"`) as its name. Elsewhere the last
+// such tag's version plus the commits since ("0.1.0+5": semver's build
+// metadata, after 0.1.0, where "-dev" would mean before it); "0.0.0-dev"
 // before any tag.
 version_of :: proc() -> (v: Version) {
 	v.version = "0.0.0-dev"

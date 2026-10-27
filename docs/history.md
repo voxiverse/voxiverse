@@ -2316,9 +2316,11 @@ the end).
      Statistics) with the hint. The Chest tab is not in the ring (Q/E do nothing there).
    - Over a slot in the inventory, the drop key still drops one (Ctrl: all) as today; only a
      press with no slot hovered steps the tab. (Both are Q by default; the slot wins.)
-   - The inventory closes with Esc (and by the server closing a chest), no longer with the
-     inventory key: `inventory_keys` only opens it. In the world, Q drops and E opens as
-     before. The stats key (K) still toggles its overlay.
+   - (Replaced after the playtest: the inventory key, now Tab, opens the inventory and closes
+     it again; Esc still closes it, a chest closing from the server too, and Tab typed in a
+     text field (the creative search) does not close it. E is left for stepping tabs next to
+     Q; the pad's Y still only opens, B closes. The first rule here was Esc only, with
+     `inventory_keys` only opening.) The stats key (K) still toggles its overlay.
    - Tests (`client/menus_test.odin`, `client/inventory_ui_test.odin`):
      `test_options_tabs_by_keys` presses `tab_next` five times from Video and sees Audio,
      Controls, Accessibility, Profile, Video; on each tab every row of `OPTIONS_TABS[tab]`

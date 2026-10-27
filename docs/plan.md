@@ -37,7 +37,7 @@ The rules below exist to make those mistakes structurally hard to repeat.
 | Movement | Minecraft-like baseline (1.8-block player, walk 4.3 b/s, jump 1.25 blocks), every number a console variable. |
 | Shaders | GLSL compiled to SPIR-V by a pinned `glslangValidator`, provisioned by the build driver (see Tooling). |
 | License | MIT. |
-| Versions | Pre-alpha: releases are tagged by hand (`git tag -a v0.N.0`) when a build is worth naming; nothing tags automatically. Between tags a build is `<last tag>+<commits since>`. |
+| Versions | Alpha (owner's decision, 2026-10-27; the old v0.20.0, v0.21.0 and Pre-Alpha 1 are gone, versions restart at v0.1.0 "Alpha 1"). **Minor versions are named playtest builds** (v0.1.0 "Alpha 1", v0.2.0 "Alpha 2"...), tagged by hand (`git tag -a v0.N.0 -m "Alpha N"`) when the owner has played one; only an `x.y.0` tag makes the draft GitHub Release (its notes list the milestones done since the previous `x.y.0` tag, from the commit subjects, for the owner to edit). **Patch versions are daily tags** (v0.1.1, v0.1.2...) the loop script makes once a day when main has moved and CI is green; the tag's message lists the day's milestones; a patch tag makes no release. **Versions no longer map to milestones.** Between tags a build is `<last tag>+<commits since>`. |
 | Line endings | Native (`* text=auto`: CRLF in a Windows checkout, which is what odinfmt writes there). Files a test or generator compares byte for byte are pinned to LF in `.gitattributes` (the Wireshark dissector, whose schema block is spliced and compared; the audio baselines and the music director's `.decisions` file, which tests compare as text); add any new one there rather than normalizing in code. |
 
 ## Ground rules
