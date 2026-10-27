@@ -443,6 +443,26 @@ host_target :: proc() -> string {
 	return ODIN_OS_STRING + "_" + ODIN_ARCH_STRING
 }
 
+// ensure_foreign_miniaudio gives vendor:miniaudio the library file the host does
+// not use (an empty miniaudio.lib on Linux and macOS, miniaudio.a on Windows).
+// Odin refuses to compile the package for a target whose library file is missing,
+// and a release ships only the Windows one; object builds never read the file, and
+// the host's own never gets a placeholder (ensure_miniaudio builds the real one).
+ensure_foreign_miniaudio :: proc() -> bool {
+	name := "miniaudio.a" if ODIN_OS == .Windows else "miniaudio.lib"
+	lib := path_join({ODIN_ROOT, "vendor", "miniaudio", "lib", name})
+	if os.exists(lib) {return true}
+	if err := os.write_entire_file(lib, nil); err != nil {
+		fmt.eprintfln(
+			"cross: could not create the placeholder %s (is %s writable?)",
+			lib,
+			ODIN_ROOT,
+		)
+		return false
+	}
+	return true
+}
+
 // check_cross builds the game, the server and every test package as objects for
 // each Tier 1 target that is not the host, so code that only compiles on the host
 // (a variable used only inside `when ODIN_OS == .Linux`) fails here, not in CI.
@@ -453,6 +473,7 @@ host_target :: proc() -> string {
 // cross-built here.
 check_cross :: proc() -> bool {
 	ok := true
+	if !ensure_foreign_miniaudio() {return false}
 	host := host_target()
 	for target in TIER1_TARGETS {
 		if target == host {continue}
