@@ -11,7 +11,7 @@ import "core:strings"
 // first; a pack's namespace is its directory's name.
 
 Pack_File :: struct {
-	path: string, // within the pack: "blocks/stone.json"
+	path: string, // within the pack: "data/blocks/stone.json"
 	data: []u8,
 }
 
@@ -49,15 +49,20 @@ pack_error_text :: proc(e: Pack_Error, allocator := context.temp_allocator) -> s
 
 @(private)
 KIND_DIRS := [Content_Kind]string {
-	.Texture   = "textures",
-	.Sound     = "sounds",
-	.Block     = "blocks",
-	.Item      = "items",
-	.Block_Tag = "block_tags",
-	.Item_Tag  = "item_tags",
-	.Recipe    = "recipes",
-	.Structure = "structures",
+	.Texture   = "assets/textures",
+	.Sound     = "assets/sounds",
+	.Block     = "data/blocks",
+	.Item      = "data/items",
+	.Block_Tag = "data/block_tags",
+	.Item_Tag  = "data/item_tags",
+	.Recipe    = "data/recipes",
+	.Structure = "server/structures",
 }
+
+// What a pack holds, by side: assets/ is the client's alone, data/ is both
+// sides', server/ is the server's alone (the server sends assets/ and data/).
+@(private)
+PACK_LAYOUT_HELP :: "not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/ (both sides) and server/structures/ (server only)"
 
 @(private)
 KIND_NAMES := [Content_Kind]string {
@@ -378,11 +383,12 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 		}
 		parts := strings.split(f.path, "/")
 		matched := false
-		if len(parts) == 2 {
+		if len(parts) == 3 {
+			dir := f.path[:len(parts[0]) + 1 + len(parts[1])]
 			for kind in Content_Kind {
-				if parts[0] != KIND_DIRS[kind] {continue}
+				if dir != KIND_DIRS[kind] {continue}
 				want := ".vxs" if kind == .Structure else ".json"
-				if strings.has_suffix(parts[1], want) && len(parts[1]) > len(want) {
+				if strings.has_suffix(parts[2], want) && len(parts[2]) > len(want) {
 					append(&b.by_dir[pi][kind], f)
 					matched = true
 				} else {
@@ -392,43 +398,27 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 						f.path,
 						0,
 						0,
-						fmt.aprintf("not a pack file: %s/ holds %s files", parts[0], want),
+						fmt.aprintf("not a pack file: %s/ holds %s files", dir, want),
 					)
 					matched = true
 				}
 			}
 		}
 		if !matched {
-			if parts[0] == "loot_tables" {
+			if len(parts) > 1 && parts[0] == "server" && parts[1] == "loot_tables" {
 				if !loot_reported {
 					fail(
 						b,
 						pi,
-						"loot_tables/",
+						"server/loot_tables/",
 						0,
 						0,
 						"loot tables are read from M53 on; remove the directory",
 					)
 					loot_reported = true
 				}
-			} else if len(parts) == 1 {
-				fail(
-					b,
-					pi,
-					f.path,
-					0,
-					0,
-					"not a pack file; a pack holds pack.json and the directories blocks/, items/, textures/, sounds/, block_tags/, item_tags/, recipes/ and structures/",
-				)
 			} else {
-				fail(
-					b,
-					pi,
-					f.path,
-					0,
-					0,
-					"not a pack file; a pack holds pack.json and the directories blocks/, items/, textures/, sounds/, block_tags/, item_tags/, recipes/ and structures/",
-				)
+				fail(b, pi, f.path, 0, 0, PACK_LAYOUT_HELP)
 			}
 		}
 	}
@@ -617,7 +607,7 @@ seed_block_items :: proc(b: ^Reg_Build) {
 read_definitions :: proc(b: ^Reg_Build, pi: int, kind: Content_Kind, file: Pack_File) {
 	ns := b.sources[pi].namespace
 	if kind == .Structure {
-		name := strings.trim_suffix(file.path[len("structures/"):], ".vxs")
+		name := strings.trim_suffix(file.path[len("server/structures/"):], ".vxs")
 		if !id_part_valid(name, 48) {
 			fail(
 				b,

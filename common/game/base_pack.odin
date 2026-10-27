@@ -11,17 +11,17 @@ import "core:strings"
 @(private = "file")
 BASE_PACK_JSON := #load("../../assets/packs/voxiverse/pack.json")
 @(private = "file")
-BASE_BLOCKS := #load_directory("../../assets/packs/voxiverse/blocks")
+BASE_BLOCKS := #load_directory("../../assets/packs/voxiverse/data/blocks")
 @(private = "file")
-BASE_ITEMS := #load_directory("../../assets/packs/voxiverse/items")
+BASE_ITEMS := #load_directory("../../assets/packs/voxiverse/data/items")
 @(private = "file")
-BASE_TEXTURES := #load_directory("../../assets/packs/voxiverse/textures")
+BASE_TEXTURES := #load_directory("../../assets/packs/voxiverse/assets/textures")
 @(private = "file")
-BASE_SOUNDS := #load_directory("../../assets/packs/voxiverse/sounds")
+BASE_SOUNDS := #load_directory("../../assets/packs/voxiverse/assets/sounds")
 @(private = "file")
-BASE_BLOCK_TAGS := #load_directory("../../assets/packs/voxiverse/block_tags")
+BASE_BLOCK_TAGS := #load_directory("../../assets/packs/voxiverse/data/block_tags")
 @(private = "file")
-BASE_STRUCTURES := #load_directory("../../assets/packs/voxiverse/structures")
+BASE_STRUCTURES := #load_directory("../../assets/packs/voxiverse/server/structures")
 
 // base_pack_source: the base pack's files, for registry_build (and for
 // tools, which check other packs against it).
@@ -34,12 +34,12 @@ base_pack_source :: proc(allocator := context.allocator) -> Pack_Source {
 			append(files, Pack_File{join_path(dir, filepath.base(f.name)), f.data})
 		}
 	}
-	add(&files, "blocks", BASE_BLOCKS)
-	add(&files, "items", BASE_ITEMS)
-	add(&files, "textures", BASE_TEXTURES)
-	add(&files, "sounds", BASE_SOUNDS)
-	add(&files, "block_tags", BASE_BLOCK_TAGS)
-	add(&files, "structures", BASE_STRUCTURES)
+	add(&files, "data/blocks", BASE_BLOCKS)
+	add(&files, "data/items", BASE_ITEMS)
+	add(&files, "assets/textures", BASE_TEXTURES)
+	add(&files, "assets/sounds", BASE_SOUNDS)
+	add(&files, "data/block_tags", BASE_BLOCK_TAGS)
+	add(&files, "server/structures", BASE_STRUCTURES)
 	return {BASE_NAMESPACE, files[:]}
 }
 

@@ -171,12 +171,12 @@ errors_text :: proc(errs: []Pack_Error) -> string {
 
 TEST_PACK :: []File {
 	{
-		"blocks/marble.json",
+		"data/blocks/marble.json",
 		`{"marble": {"textures": {"all": "voxiverse:stone"}, "light": 7, "sound": "voxiverse:stone"}}`,
 	},
-	{"items/chisel.json", `{"chisel": {"stack": 1}}`},
+	{"data/items/chisel.json", `{"chisel": {"stack": 1}}`},
 	{
-		"recipes/chisel.json",
+		"data/recipes/chisel.json",
 		`{"chisel": {"type": "shaped", "pattern": ["#", "#"], "key": {"#": "testpack:marble"}, "output": {"item": "testpack:chisel"}}}`,
 	},
 }
@@ -273,282 +273,318 @@ too_many_packs :: proc() -> []Pack_Source {
 test_broken_packs :: proc(t: ^testing.T) {
 	big := strings.repeat(" ", 1 << 20 + 1, context.temp_allocator)
 	many_files := make([dynamic]File, context.temp_allocator)
-	for i in 0 ..< 1025 {append(&many_files, File{fmt.tprintf("blocks/f%d.json", i), "{}"})}
+	for i in 0 ..< 1025 {append(&many_files, File{fmt.tprintf("data/blocks/f%d.json", i), "{}"})}
 	cases := []Broken {
 		{
 			"unquoted key",
-			one({{"blocks/a.json", "{\n  rock: {}\n}"}}),
-			`testpack/blocks/a.json:2:3: keys are quoted: write "rock"`,
+			one({{"data/blocks/a.json", "{\n  rock: {}\n}"}}),
+			`testpack/data/blocks/a.json:2:3: keys are quoted: write "rock"`,
 		},
 		{
 			"single quotes",
-			one({{"blocks/a.json", `{"rock": {"sound": 'x'}}`}}),
-			`testpack/blocks/a.json:1:20: strings use double quotes`,
+			one({{"data/blocks/a.json", `{"rock": {"sound": 'x'}}`}}),
+			`testpack/data/blocks/a.json:1:20: strings use double quotes`,
 		},
 		{
 			"duplicate key",
-			one({{"blocks/a.json", "{\"rock\": {\"light\": 1,\n\"light\": 2}}"}}),
-			`testpack/blocks/a.json:2:1: "light" is given twice (first on line 1)`,
+			one({{"data/blocks/a.json", "{\"rock\": {\"light\": 1,\n\"light\": 2}}"}}),
+			`testpack/data/blocks/a.json:2:1: "light" is given twice (first on line 1)`,
 		},
 		{
 			"unknown field",
-			one({{"blocks/stone.json", `{"rock": {"textures": {"all": "stone"}, "ligth": 3}}`}}),
-			`testpack/blocks/stone.json:1:41: "ligth" is not a block field; did you mean "light"?`,
+			one(
+				{
+					{
+						"data/blocks/stone.json",
+						`{"rock": {"textures": {"all": "stone"}, "ligth": 3}}`,
+					},
+				},
+			),
+			`testpack/data/blocks/stone.json:1:41: "ligth" is not a block field; did you mean "light"?`,
 		},
 		{
 			"unknown field far",
 			one(
-				{{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "zzzzzzzzzzzz": 3}}`}},
+				{
+					{
+						"data/blocks/a.json",
+						`{"rock": {"textures": {"all": "stone"}, "zzzzzzzzzzzz": 3}}`,
+					},
+				},
 			),
-			`testpack/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "override"`,
 		},
 		{
 			"light out of range",
-			one({{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "light": 20}}`}}),
-			`testpack/blocks/a.json:1:50: light is 0..15, got 20`,
+			one({{"data/blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "light": 20}}`}}),
+			`testpack/data/blocks/a.json:1:50: light is 0..15, got 20`,
 		},
 		{
 			"light is a float",
-			one({{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "light": 1.5}}`}}),
-			`testpack/blocks/a.json:1:50: light is a whole number 0..15`,
+			one(
+				{{"data/blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "light": 1.5}}`}},
+			),
+			`testpack/data/blocks/a.json:1:50: light is a whole number 0..15`,
 		},
 		{
 			"bool is a string",
 			one(
-				{{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "collides": "yes"}}`}},
+				{
+					{
+						"data/blocks/a.json",
+						`{"rock": {"textures": {"all": "stone"}, "collides": "yes"}}`,
+					},
+				},
 			),
-			`testpack/blocks/a.json:1:53: collides is true or false`,
+			`testpack/data/blocks/a.json:1:53: collides is true or false`,
 		},
 		{
 			"bad render",
-			one({{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "render": "cub"}}`}}),
-			`testpack/blocks/a.json:1:51: render is one of "cube", "cross", "none"; got "cub"; did you mean "cube"?`,
+			one(
+				{
+					{
+						"data/blocks/a.json",
+						`{"rock": {"textures": {"all": "stone"}, "render": "cub"}}`,
+					},
+				},
+			),
+			`testpack/data/blocks/a.json:1:51: render is one of "cube", "cross", "none"; got "cub"; did you mean "cube"?`,
 		},
 		{
 			"opaque needs a cube",
 			one(
-				{{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "render": "cross"}}`}},
+				{
+					{
+						"data/blocks/a.json",
+						`{"rock": {"textures": {"all": "stone"}, "render": "cross"}}`,
+					},
+				},
 			),
-			`testpack/blocks/a.json:1:2: a block is opaque unless it says otherwise, which needs render "cube" and layer "opaque"; set "opaque": false`,
+			`testpack/data/blocks/a.json:1:2: a block is opaque unless it says otherwise, which needs render "cube" and layer "opaque"; set "opaque": false`,
 		},
 		{
 			"all and side",
 			one(
 				{
 					{
-						"blocks/a.json",
+						"data/blocks/a.json",
 						`{"rock": {"textures": {"all": "voxiverse:stone", "side": "voxiverse:dirt"}}}`,
 					},
 				},
 			),
-			`testpack/blocks/a.json:1:23: "all" cannot be combined with side, top or bottom; use one or the others`,
+			`testpack/data/blocks/a.json:1:23: "all" cannot be combined with side, top or bottom; use one or the others`,
 		},
 		{
 			"dangling texture",
-			one({{"blocks/a.json", `{"rock": {"textures": {"all": "voxiverse:stoen"}}}`}}),
-			`testpack/blocks/a.json:1:31: "voxiverse:stoen" is not a texture; did you mean "voxiverse:stone"?`,
+			one({{"data/blocks/a.json", `{"rock": {"textures": {"all": "voxiverse:stoen"}}}`}}),
+			`testpack/data/blocks/a.json:1:31: "voxiverse:stoen" is not a texture; did you mean "voxiverse:stone"?`,
 		},
 		{
 			"no texture of its own",
-			one({{"blocks/a.json", `{"rock": {}}`}}),
-			`testpack/blocks/a.json:1:2: no texture "testpack:rock" for this block; add "textures", or a texture with that id`,
+			one({{"data/blocks/a.json", `{"rock": {}}`}}),
+			`testpack/data/blocks/a.json:1:2: no texture "testpack:rock" for this block; add "textures", or a texture with that id`,
 		},
 		{
 			"dangling sound",
 			one(
-				{{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}, "sound": "rumble"}}`}},
+				{
+					{
+						"data/blocks/a.json",
+						`{"rock": {"textures": {"all": "stone"}, "sound": "rumble"}}`,
+					},
+				},
 			),
-			`testpack/blocks/a.json:1:50: "rumble" is not a sound set`,
+			`testpack/data/blocks/a.json:1:50: "rumble" is not a sound set`,
 		},
 		{
 			"dangling drop",
 			one(
 				{
 					{
-						"blocks/a.json",
+						"data/blocks/a.json",
 						`{"rock": {"textures": {"all": "stone"}, "drop": "voxiverse:rubble"}}`,
 					},
 				},
 			),
-			`testpack/blocks/a.json:1:49: "voxiverse:rubble" is not an item`,
+			`testpack/data/blocks/a.json:1:49: "voxiverse:rubble" is not an item`,
 		},
 		{
 			"dangling support tag",
 			one(
 				{
 					{
-						"blocks/a.json",
+						"data/blocks/a.json",
 						`{"rock": {"textures": {"all": "stone"}, "support": {"below": "nothing"}}}`,
 					},
 				},
 			),
-			`testpack/blocks/a.json:1:62: "nothing" is not a block tag`,
+			`testpack/data/blocks/a.json:1:62: "nothing" is not a block tag`,
 		},
 		{
 			"dangling recipe item",
 			one(
 				{
 					{
-						"recipes/a.json",
+						"data/recipes/a.json",
 						`{"r": {"type": "shapeless", "inputs": [{"item": "voxiverse:stoen"}], "output": {"item": "voxiverse:stone"}}}`,
 					},
 				},
 			),
-			`testpack/recipes/a.json:1:49: "voxiverse:stoen" is not an item; did you mean "voxiverse:stone"?`,
+			`testpack/data/recipes/a.json:1:49: "voxiverse:stoen" is not an item; did you mean "voxiverse:stone"?`,
 		},
 		{
 			"dangling tag value",
-			one({{"block_tags/a.json", `{"t": {"values": ["voxiverse:stoen"]}}`}}),
-			`testpack/block_tags/a.json:1:19: "voxiverse:stoen" is not a block; did you mean "voxiverse:stone"?`,
+			one({{"data/block_tags/a.json", `{"t": {"values": ["voxiverse:stoen"]}}`}}),
+			`testpack/data/block_tags/a.json:1:19: "voxiverse:stoen" is not a block; did you mean "voxiverse:stone"?`,
 		},
 		{
 			"duplicate id",
 			one(
 				{
-					{"blocks/a.json", `{"rock": {"textures": {"all": "stone"}}}`},
-					{"blocks/b.json", `{"rock": {"textures": {"all": "stone"}}}`},
+					{"data/blocks/a.json", `{"rock": {"textures": {"all": "stone"}}}`},
+					{"data/blocks/b.json", `{"rock": {"textures": {"all": "stone"}}}`},
 				},
 			),
-			`testpack/blocks/b.json:1:2: "rock" is defined twice (first at blocks/a.json:1:2); rename one, or set "override": true`,
+			`testpack/data/blocks/b.json:1:2: "rock" is defined twice (first at data/blocks/a.json:1:2); rename one, or set "override": true`,
 		},
 		{
 			"override without the flag",
-			one({{"blocks/a.json", `{"voxiverse:stone": {"light": 3}}`}}),
-			`testpack/blocks/a.json:1:2: "voxiverse:stone" is defined twice (first at voxiverse/blocks/terrain.json:2:2); rename one, or set "override": true`,
+			one({{"data/blocks/a.json", `{"voxiverse:stone": {"light": 3}}`}}),
+			`testpack/data/blocks/a.json:1:2: "voxiverse:stone" is defined twice (first at voxiverse/data/blocks/terrain.json:2:2); rename one, or set "override": true`,
 		},
 		{
 			"override of a missing id",
-			one({{"blocks/a.json", `{"voxiverse:stoen": {"light": 3, "override": true}}`}}),
-			`testpack/blocks/a.json:1:2: "voxiverse:stoen" does not exist, so it cannot be overridden; did you mean "voxiverse:stone"?`,
+			one({{"data/blocks/a.json", `{"voxiverse:stoen": {"light": 3, "override": true}}`}}),
+			`testpack/data/blocks/a.json:1:2: "voxiverse:stoen" does not exist, so it cannot be overridden; did you mean "voxiverse:stone"?`,
 		},
 		{
 			"tag cycle",
 			one(
 				{
 					{
-						"block_tags/a.json",
+						"data/block_tags/a.json",
 						`{"a": {"values": ["#testpack:b"]}, "b": {"values": ["#testpack:a"]}}`,
 					},
 				},
 			),
-			`testpack/block_tags/a.json:1:53: tag "testpack:b" includes itself through "testpack:a"; remove the loop`,
+			`testpack/data/block_tags/a.json:1:53: tag "testpack:b" includes itself through "testpack:a"; remove the loop`,
 		},
 		{
 			"tag names itself",
-			one({{"block_tags/a.json", `{"a": {"values": ["#testpack:a"]}}`}}),
-			`testpack/block_tags/a.json:1:19: tag "testpack:a" includes itself through "testpack:a"; remove the loop`,
+			one({{"data/block_tags/a.json", `{"a": {"values": ["#testpack:a"]}}`}}),
+			`testpack/data/block_tags/a.json:1:19: tag "testpack:a" includes itself through "testpack:a"; remove the loop`,
 		},
 		{
 			"stray file",
-			one({{"blocks/notes.txt", "hello"}}),
-			`testpack/blocks/notes.txt: not a pack file: blocks/ holds .json files`,
+			one({{"data/blocks/notes.txt", "hello"}}),
+			`testpack/data/blocks/notes.txt: not a pack file: data/blocks/ holds .json files`,
 		},
 		{
 			"stray directory",
-			one({{"blocks/sub/a.json", "{}"}}),
-			`testpack/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories blocks/, items/, textures/, sounds/, block_tags/, item_tags/, recipes/ and structures/`,
+			one({{"data/blocks/sub/a.json", "{}"}}),
+			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"stray top-level file",
 			one({{"readme.md", "hello"}}),
-			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories blocks/, items/, textures/, sounds/, block_tags/, item_tags/, recipes/ and structures/`,
+			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"loot tables",
-			one({{"loot_tables/a.json", "{}"}}),
-			`testpack/loot_tables/: loot tables are read from M53 on; remove the directory`,
+			one({{"server/loot_tables/a.json", "{}"}}),
+			`testpack/server/loot_tables/: loot tables are read from M53 on; remove the directory`,
 		},
 		{
 			"file over the limit",
-			one({{"blocks/a.json", big}}),
-			`testpack/blocks/a.json: file is 1048577 bytes; the limit is 1048576`,
+			one({{"data/blocks/a.json", big}}),
+			`testpack/data/blocks/a.json: file is 1048577 bytes; the limit is 1048576`,
 		},
 		{"too many files", one(many_files[:]), `testpack: 1026 files; the limit is 1024`},
 		{
 			"bad path",
-			one({{"blocks/A.json", "{}"}}),
-			`testpack/blocks/A.json: path is over 128 bytes or has a character outside a-z, 0-9 and _./-; rename it`,
+			one({{"data/blocks/A.json", "{}"}}),
+			`testpack/data/blocks/A.json: path is over 128 bytes or has a character outside a-z, 0-9 and _./-; rename it`,
 		},
 		{
 			"too many blocks",
 			one(
 				{
-					{"blocks/a.json", many_blocks(2500, "a")},
-					{"blocks/b.json", many_blocks(2500, "b")},
+					{"data/blocks/a.json", many_blocks(2500, "a")},
+					{"data/blocks/b.json", many_blocks(2500, "b")},
 				},
 			),
 			`5053 blocks; the limit is 4096`,
 		},
 		{
 			"stack out of range",
-			one({{"items/a.json", `{"x": {"stack": 1000}}`}}),
-			`testpack/items/a.json:1:17: stack is 1..999, got 1000`,
+			one({{"data/items/a.json", `{"x": {"stack": 1000}}`}}),
+			`testpack/data/items/a.json:1:17: stack is 1..999, got 1000`,
 		},
 		{
 			"too many modifiers",
 			one(
 				{
 					{
-						"items/a.json",
+						"data/items/a.json",
 						`{"x": {"modifiers": [{"stat": "speed", "amount": 1}, {"stat": "jump", "amount": 1}, {"stat": "speed", "amount": 2}]}}`,
 					},
 				},
 			),
-			`testpack/items/a.json:1:21: an item has at most 2 modifiers, got 3`,
+			`testpack/data/items/a.json:1:21: an item has at most 2 modifiers, got 3`,
 		},
 		{
 			"unknown modifier stat",
-			one({{"items/a.json", `{"x": {"modifiers": [{"stat": "spede", "amount": 1}]}}`}}),
-			`testpack/items/a.json:1:31: stat is one of "speed", "jump", "air_jumps", "max_health"; got "spede"; did you mean "speed"?`,
+			one({{"data/items/a.json", `{"x": {"modifiers": [{"stat": "spede", "amount": 1}]}}`}}),
+			`testpack/data/items/a.json:1:31: stat is one of "speed", "jump", "air_jumps", "max_health"; got "spede"; did you mean "speed"?`,
 		},
 		{
 			"unknown generator",
-			one({{"textures/a.json", `{"x": {"generator": "marbel"}}`}}),
-			"testpack/textures/a.json:1:21: generator is one of \"stone\"~",
+			one({{"assets/textures/a.json", `{"x": {"generator": "marbel"}}`}}),
+			"testpack/assets/textures/a.json:1:21: generator is one of \"stone\"~",
 		},
 		{
 			"pattern key missing",
 			one(
 				{
 					{
-						"recipes/a.json",
+						"data/recipes/a.json",
 						`{"r": {"type": "shaped", "pattern": ["#X"], "key": {"#": "voxiverse:stone"}, "output": {"item": "voxiverse:stone"}}}`,
 					},
 				},
 			),
-			`testpack/recipes/a.json:1:38: "X" is not in the key; add it`,
+			`testpack/data/recipes/a.json:1:38: "X" is not in the key; add it`,
 		},
 		{
 			"recipe without output",
 			one(
 				{
 					{
-						"recipes/a.json",
+						"data/recipes/a.json",
 						`{"r": {"type": "shapeless", "inputs": [{"item": "voxiverse:stone"}]}}`,
 					},
 				},
 			),
-			`testpack/recipes/a.json:1:2: "output" is missing; say what the recipe makes`,
+			`testpack/data/recipes/a.json:1:2: "output" is missing; say what the recipe makes`,
 		},
 		{
 			"damaged structure",
-			one({{"structures/a.vxs", "not a structure"}}),
-			`testpack/structures/a.vxs: cannot be read: it is damaged, or names a block no pack defines`,
+			one({{"server/structures/a.vxs", "not a structure"}}),
+			`testpack/server/structures/a.vxs: cannot be read: it is damaged, or names a block no pack defines`,
 		},
 		{
 			"bad id in a key",
-			one({{"blocks/a.json", `{"Rock": {}}`}}),
-			`testpack/blocks/a.json:1:2: "Rock" is not a name; use 1 to 48 of a-z, 0-9 and _`,
+			one({{"data/blocks/a.json", `{"Rock": {}}`}}),
+			`testpack/data/blocks/a.json:1:2: "Rock" is not a name; use 1 to 48 of a-z, 0-9 and _`,
 		},
 		{
 			"definition is not an object",
-			one({{"blocks/a.json", `{"rock": 3}`}}),
-			`testpack/blocks/a.json:1:10: "rock" must be an object of fields`,
+			one({{"data/blocks/a.json", `{"rock": 3}`}}),
+			`testpack/data/blocks/a.json:1:10: "rock" must be an object of fields`,
 		},
 		{
 			"not a structure name",
-			one({{"structures/A.vxs", "x"}}),
-			`testpack/structures/A.vxs: path is over 128 bytes or has a character outside a-z, 0-9 and _./-; rename it`,
+			one({{"server/structures/A.vxs", "x"}}),
+			`testpack/server/structures/A.vxs: path is over 128 bytes or has a character outside a-z, 0-9 and _./-; rename it`,
 		},
 		{
 			"namespace differs from the directory",
@@ -603,14 +639,24 @@ test_broken_packs :: proc(t: ^testing.T) {
 			{
 				pack_of(
 					"farmfix",
-					{{"blocks/a.json", `{"voxiverse:stone": {"light": 3, "override": true}}`}},
+					{
+						{
+							"data/blocks/a.json",
+							`{"voxiverse:stone": {"light": 3, "override": true}}`,
+						},
+					},
 				),
 				pack_of(
 					"moretrees",
-					{{"blocks/b.json", `{"voxiverse:stone": {"light": 5, "override": true}}`}},
+					{
+						{
+							"data/blocks/b.json",
+							`{"voxiverse:stone": {"light": 5, "override": true}}`,
+						},
+					},
 				),
 			},
-			`moretrees/blocks/b.json:1:22: voxiverse:stone.light is also set by farmfix (blocks/a.json:1:31); add "farmfix" to moretrees's requires to override it knowingly`,
+			`moretrees/data/blocks/b.json:1:22: voxiverse:stone.light is also set by farmfix (data/blocks/a.json:1:31); add "farmfix" to moretrees's requires to override it knowingly`,
 		},
 		{"too many packs", too_many_packs(), `33 packs; the limit is 32`},
 		{
@@ -618,12 +664,12 @@ test_broken_packs :: proc(t: ^testing.T) {
 			one(
 				{
 					{
-						"blocks/a.json",
+						"data/blocks/a.json",
 						`{"rock": {"textures": {"all": [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}}`,
 					},
 				},
 			),
-			`testpack/blocks/a.json:1:60: nested deeper than 32 levels; flatten it`,
+			`testpack/data/blocks/a.json:1:60: nested deeper than 32 levels; flatten it`,
 		},
 	}
 	for c in cases {
@@ -641,7 +687,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 test_missing_builtin_is_named :: proc(t: ^testing.T) {
 	src := pack_of(
 		"voxiverse",
-		{{"blocks/air.json", `{"air": {"render": "none"}}`}},
+		{{"data/blocks/air.json", `{"air": {"render": "none"}}`}},
 		`{"format": 1, "namespace": "voxiverse", "version": "1"}`,
 	)
 	reg, errs := registry_build({src}, context.temp_allocator)
@@ -658,11 +704,11 @@ test_missing_builtin_is_named :: proc(t: ^testing.T) {
 test_requires_lets_a_pack_build_on_another :: proc(t: ^testing.T) {
 	farmfix := pack_of(
 		"farmfix",
-		{{"blocks/a.json", `{"voxiverse:stone": {"light": 3, "override": true}}`}},
+		{{"data/blocks/a.json", `{"voxiverse:stone": {"light": 3, "override": true}}`}},
 	)
 	moretrees := pack_of(
 		"moretrees",
-		{{"blocks/b.json", `{"voxiverse:stone": {"light": 5, "override": true}}`}},
+		{{"data/blocks/b.json", `{"voxiverse:stone": {"light": 5, "override": true}}`}},
 		`{"format": 1, "namespace": "moretrees", "version": "1", "requires": ["voxiverse", "farmfix"]}`,
 	)
 	reg, errs := build_with(farmfix, moretrees)
@@ -678,14 +724,14 @@ test_requires_lets_a_pack_build_on_another :: proc(t: ^testing.T) {
 test_overrides_merge_by_field_and_tags_merge :: proc(t: ^testing.T) {
 	files := []File {
 		{
-			"blocks/a.json",
+			"data/blocks/a.json",
 			`{"voxiverse:lamp": {"light": 9, "override": true}, "voxiverse:glass": {"textures": {"all": "voxiverse:ice"}, "override": true}}`,
 		},
 		{
-			"block_tags/a.json",
+			"data/block_tags/a.json",
 			`{"voxiverse:tillable": {"values": ["voxiverse:sand"]}, "voxiverse:farmland": {"values": ["voxiverse:gravel"], "replace": true}}`,
 		},
-		{"items/a.json", `{"voxiverse:hoe": {"stack": 5, "override": true}}`},
+		{"data/items/a.json", `{"voxiverse:hoe": {"stack": 5, "override": true}}`},
 	}
 	reg, errs := build_with(pack_of("testpack", files))
 	testing.expect_value(t, errors_text(errs), "")
@@ -732,28 +778,28 @@ test_registry_hash :: proc(t: ^testing.T) {
 	testing.expect(t, base.hash != a.hash)
 	variants := []File {
 		{
-			"blocks/marble.json",
+			"data/blocks/marble.json",
 			`{"marble": {"textures": {"all": "voxiverse:stone"}, "light": 8, "sound": "voxiverse:stone"}}`,
 		},
 		{
-			"blocks/marble.json",
+			"data/blocks/marble.json",
 			`{"marble": {"textures": {"all": "voxiverse:dirt"}, "light": 7, "sound": "voxiverse:stone"}}`,
 		},
 		{
-			"blocks/marble.json",
+			"data/blocks/marble.json",
 			`{"marble": {"textures": {"all": "voxiverse:stone"}, "light": 7, "sound": "voxiverse:dirt"}}`,
 		},
 		{
-			"blocks/marble.json",
+			"data/blocks/marble.json",
 			`{"marble": {"textures": {"all": "voxiverse:stone"}, "light": 7, "sound": "voxiverse:stone", "collides": false}}`,
 		},
-		{"items/chisel.json", `{"chisel": {"stack": 2}}`},
+		{"data/items/chisel.json", `{"chisel": {"stack": 2}}`},
 		{
-			"recipes/chisel.json",
+			"data/recipes/chisel.json",
 			`{"chisel": {"type": "shaped", "pattern": ["#", "#"], "key": {"#": "testpack:marble"}, "output": {"item": "testpack:chisel", "count": 2}}}`,
 		},
-		{"block_tags/x.json", `{"x": {"values": []}}`},
-		{"textures/x.json", `{"x": {"generator": "stone"}}`},
+		{"data/block_tags/x.json", `{"x": {"values": []}}`},
+		{"assets/textures/x.json", `{"x": {"generator": "stone"}}`},
 	}
 	for v in variants {
 		changed := make([dynamic]File, context.temp_allocator)
