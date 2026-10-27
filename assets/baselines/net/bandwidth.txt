@@ -1,10 +1,10 @@
 bandwidth 1
-scenario session ticks=6500 root=f0a77fd717180561
-server_to_client 2392184
-client_to_server 106424
+scenario session ticks=6500 root=65eadc0b75be10f9
+server_to_client 1410892
+client_to_server 119316
 inputs 6505
-kind c:hello 1 49
-kind c:input 6505 104080
+kind c:hello 1 57
+kind c:input 6505 116964
 kind c:edit 90 2070
 kind c:command 6 138
 kind c:fire 1 13
@@ -13,43 +13,23 @@ kind c:use_entity 1 9
 kind s:welcome 1 115
 kind s:chunk 397 147953
 kind s:unload 25 325
-kind s:player 6506 338312
 kind s:edit_result 90 1800
 kind s:column 72 19080
-kind s:time 217 1953
-kind s:notice 4 94
-kind s:spawn 13 468
-kind s:despawn 5 30
-kind s:entities 6450 1878414
-kind s:hurt 1 5
 kind s:bulk 3 9
-kind s:explosion 1 29
-kind s:variables 1 437
-kind s:blocks 88 2204
-kind s:grants 1 679
-kind s:chat_line 1 30
-kind s:inventory 2 196
 kind s:challenge 1 33
-kind s:health 2 18
-scenario crowd ticks=905 root=7161e84cfec8fd63
-server_to_client 3504551
-client_to_server 14759
+kind s:state 103 3586
+kind s:snapshot 6506 1237991
+scenario crowd ticks=905 root=fba791159e1ca008
+server_to_client 2124643
+client_to_server 16461
 inputs 910
-kind c:hello 1 49
-kind c:input 910 14560
+kind c:hello 1 57
+kind c:input 910 16254
 kind c:command 5 85
 kind c:proof 1 65
 kind s:welcome 1 115
 kind s:chunk 245 79609
-kind s:player 911 47372
 kind s:column 49 12985
-kind s:time 31 279
-kind s:spawn 100 3600
-kind s:entities 3609 3359054
-kind s:variables 1 437
-kind s:blocks 14 252
-kind s:grants 1 679
-kind s:chat_line 1 30
-kind s:inventory 1 97
 kind s:challenge 1 33
-kind s:health 1 9
+kind s:state 20 2025
+kind s:snapshot 2399 2029876

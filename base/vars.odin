@@ -33,6 +33,7 @@ Var :: struct {
 	check:    proc(text: string) -> bool, // text: what is allowed (nil: anything that fits)
 	hint:     string, // text: shown in an empty field
 	choices:  []Var_Choice, // menus: the values offered, in order (none: a slider or a box)
+	special:  []Var_Choice, // sliders: values shown in words (-1 "Off"); the value is unchanged
 }
 
 // Var_Choice: one value a menu offers, and what it calls it.

@@ -186,3 +186,66 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.puffs), MAX_PUFFS)
 	testing.expect_value(t, cap(s.puffs), MAX_PUFFS)
 }
+
+// Loading waits for the ground around the player only: the 5x5 columns near,
+// from one chunk above down to one below (or to the lowest ground), each
+// here and meshed; far chunks do not matter.
+@(test)
+test_near_ready :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	w: World
+	testing.expect(t, world_init(&w, 512, 64, 1, virtual.arena_allocator(&arena)) == nil)
+	defer world_destroy(&w)
+	add_columns(&w, 2) // (the columns 3 away are not known: they must not matter)
+	set :: proc(t: ^testing.T, w: ^World, p: game.Chunk_Pos, scratch: ^game.Block_Array) {
+		testing.expect(
+			t,
+			world_set_chunk(w, {pos = p, uniform = .Stone, is_uniform = true}, scratch),
+		)
+		c := world_get(w, p)
+		c.dirty, c.queued = false, false // (meshed)
+	}
+	RADIUS, HEIGHT :: 6, 4
+	centre := game.Chunk_Pos{0, 0, 0}
+	for z in i32(-2) ..= 2 {
+		for x in i32(-2) ..= 2 {
+			for y in i32(-1) ..= 1 {set(t, &w, {x, y, z}, scratch)}
+		}
+	}
+	testing.expect(t, world_near_ready_at(&w, centre, RADIUS, HEIGHT), "everything near is meshed")
+	c := world_get(&w, {1, 0, 1})
+	c.queued = true
+	testing.expect(t, !world_near_ready_at(&w, centre, RADIUS, HEIGHT), "a queued chunk")
+	c.queued, c.waiting = false, true
+	testing.expect(
+		t,
+		!world_near_ready_at(&w, centre, RADIUS, HEIGHT),
+		"a chunk waiting for its group",
+	)
+	c.waiting, c.dirty = false, true
+	testing.expect(t, !world_near_ready_at(&w, centre, RADIUS, HEIGHT), "dirty and meshable")
+	c.dirty = false
+	edge := world_get(&w, {2, 0, 2})
+	edge.dirty = true // (its neighbours beyond never come: it cannot mesh)
+	testing.expect(t, world_near_ready_at(&w, centre, RADIUS, HEIGHT), "dirty, but cannot mesh")
+	edge.dirty = false
+	// A chunk of the column 3 away is missing: it does not matter.
+	testing.expect(t, world_get(&w, {3, 0, 0}) == nil)
+	// A missing column or chunk does.
+	delete_key(&w.columns, [2]i32{2, 2})
+	testing.expect(t, !world_near_ready_at(&w, centre, RADIUS, HEIGHT), "an unknown column")
+	add_columns(&w, 2)
+	// Ground 40 blocks below: the chunks down to it are needed.
+	column := w.columns[{0, 0}]
+	for &h in column.heights {h = -40}
+	w.columns[{0, 0}] = column
+	testing.expect(t, !world_near_ready_at(&w, centre, RADIUS, HEIGHT), "ground far below")
+	set(t, &w, {0, -2, 0}, scratch)
+	testing.expect(t, !world_near_ready_at(&w, centre, RADIUS, HEIGHT), "still not down to it")
+	set(t, &w, {0, -3, 0}, scratch)
+	testing.expect(t, world_near_ready_at(&w, centre, RADIUS, HEIGHT), "down to the ground")
+}

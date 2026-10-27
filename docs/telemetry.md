@@ -21,7 +21,7 @@ a salted hash of the account's public key; the salt is `<dir>/salt` and never le
 append-only. Run it under a service manager on a small machine; back up `lake/` (rsync, or any
 object store); to delete one player's data, find their `pid` and remove their lines.
 
-**Looking.** `tools/lake-sync.sh host:/path/lake ./lake` pulls the lake;
+**Looking.** `build analytics --pull host:/path/lake` pulls the lake into `./lake` (it needs rsync);
 `build analytics ./lake summary|sessions|economy|slow|launch|heat` answers the usual questions;
 and DuckDB reads the files in place:
 

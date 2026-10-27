@@ -648,7 +648,7 @@ world_remove_all_meshes :: proc(w: ^World) {
 	}
 }
 
-@(private = "file")
+// neighbours_present: every chunk around pos (the world's edges count) is here.
 neighbours_present :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	for dz in i32(-1) ..= 1 {
 		for dy in i32(-1) ..= 1 {

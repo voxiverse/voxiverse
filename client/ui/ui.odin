@@ -102,6 +102,7 @@ Input :: struct {
 	keys_pressed:   bit_set[Key], // includes auto-repeat
 	modifiers:      bit_set[Modifier],
 	text:           []rune, // typed text this frame
+	time:           f64, // seconds, monotonic (tooltip delays)
 }
 
 KILL_SIZE :: 1024
@@ -112,6 +113,9 @@ MAX_LAYOUT_DEPTH :: 32
 Context :: struct {
 	// Persistent
 	theme:          Theme,
+	theme_stack:    [8]Theme,
+	theme_depth:    int,
+	theme_over:     int, // scopes begun past the stack's depth (ignored)
 	glyphs:         Glyph_Cache,
 	hot:            Id,
 	hot_layer:      Layer,
@@ -122,6 +126,9 @@ Context :: struct {
 	edit:           Text_Edit, // state of the focused text field
 	kill:           [KILL_SIZE]u8, // the last text killed (Ctrl+W, Ctrl+K, ...), for Ctrl+Y
 	kill_len:       int,
+	tip_id:         Id, // the tooltip's widget: hovered since tip_since
+	tip_since:      f64,
+	tip_hit:        bool, // a tooltip's area was hovered this frame
 	errors:         int, // misuse so far (duplicate ids); checks fail on any
 	reported:       [16]Id, // each logged once, not every frame
 	frame_arena:    virtual.Arena,
@@ -199,6 +206,7 @@ begin_frame :: proc(ctx: ^Context, input: Input, screen_pixels: Vec2, scale: f32
 	ctx.widgets = make([dynamic]Widget, 0, 64, ctx.frame_alloc)
 	ctx.texts = make([dynamic]string, 0, 64, ctx.frame_alloc)
 	ctx.modal_drawn = false
+	ctx.tip_hit = false
 	ctx.activate_focus = false
 	ctx.focus_request = .None
 	output_begin(&ctx.output, ctx.frame_alloc)
@@ -239,6 +247,7 @@ end_frame :: proc(ctx: ^Context) {
 	// Focus on a widget that wasn't drawn this frame is dropped.
 	if ctx.focused != 0 && !widget_drawn(ctx, ctx.focused) {ctx.focused = 0}
 	if !widget_drawn(ctx, ctx.edit.id) {ctx.edit.active = false}
+	if !ctx.tip_hit {ctx.tip_id = 0}
 	output_end(&ctx.output, &ctx.glyphs)
 }
 

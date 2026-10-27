@@ -45,6 +45,13 @@ foreign iokit {
 @(private = "file")
 assertion: u32
 
+@(private = "file")
+keep_awake_warned: bool // a failure is told once per run
+
+// No window icon until the M1b backend has a window.
+@(private)
+native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {}
+
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {
 	UTF8 :: 0x08000100
@@ -55,9 +62,12 @@ native_set_keep_awake :: proc(w: ^Window, on: bool) {
 		defer CFRelease(kind)
 		defer CFRelease(name)
 		if IOPMAssertionCreateWithName(kind, ON, name, &assertion) != 0 {
-			log.warn(
-				"platform IOPMAssertionCreateWithName failed: the screen may sleep while playing",
-			)
+			if !keep_awake_warned {
+				keep_awake_warned = true
+				log.warn(
+					"platform IOPMAssertionCreateWithName failed: the screen may sleep while playing",
+				)
+			}
 			assertion = 0
 		}
 	} else if assertion != 0 {

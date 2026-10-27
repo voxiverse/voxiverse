@@ -293,6 +293,10 @@ push_quad :: proc(
 ) {
 	if q[2] <= 0 || q[3] <= 0 {return}
 	l := &ctx.output.layers[ctx.layer]
+	color := color
+	if ctx.theme.opacity < 1 {
+		color.a = u8(math.round(f32(color.a) * max(ctx.theme.opacity, 0)))
+	}
 	clip := pixel_rect(ctx, current_clip(ctx))
 	if clip[2] <= 0 || clip[3] <= 0 {return}
 	scissor := [4]i32{i32(clip[0]), i32(clip[1]), i32(clip[2]), i32(clip[3])}

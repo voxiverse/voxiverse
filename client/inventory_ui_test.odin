@@ -6,6 +6,7 @@ import "core:testing"
 
 import "../common/game"
 import "font"
+import "platform"
 import "ui"
 
 // The inventory overlay with the mouse: dragging a stack to another slot,
@@ -248,4 +249,68 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	s.inventory.chest_open = false
 	chest_sync(app)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+}
+
+// Q and E step the tabs: Inventory, Creative, then Statistics (its own
+// overlay; the inventory closes). E no longer closes the inventory, Escape
+// does. Over a slot Q still drops; off the slots it steps back.
+@(test)
+test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	defer stats_view_destroy(&f.app.stats_view)
+	app := f.app
+	away := ui.Vec2{-100, -100}
+	press :: proc(f: ^Overlay_Fixture, key: platform.Key, mouse: ui.Vec2) {
+		f.app.input.pressed = {key}
+		overlay_frame(f, {mouse = mouse})
+		f.app.input.pressed = {}
+	}
+	inventory_open_ := proc(app: ^App) -> bool {return overlay_is_open(&app.overlays, .Inventory)}
+	overlay_frame(&f, {mouse = away}) // (drawn once: the key that opened it is spent)
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
+
+	// E does not close it: the inventory key only opens.
+	app.input.pressed = {.E}
+	inventory_keys(app)
+	app.input.pressed = {}
+	testing.expect(t, inventory_open_(app))
+
+	press(&f, .E, away)
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Creative)
+	press(&f, .E, away)
+	testing.expect(t, !inventory_open_(app), "Statistics closes the inventory")
+	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+	overlay_frame(&f, {mouse = away}) // (the overlay drawn: its first frame spends the key that opened it)
+	press(&f, .Q, away)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	testing.expect(t, inventory_open_(app))
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Creative)
+	overlay_frame(&f, {mouse = away})
+	press(&f, .Q, away)
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
+
+	// Over a slot, Q drops (and does not step); E steps.
+	stone := game.item_of_block(.Stone)
+	f.s.inventory.slots[9] = {stone, 64}
+	before := len(f.s.inv_pending)
+	press(&f, .Q, overlay_slot_at(&f, 9))
+	testing.expect_value(t, len(f.s.inv_pending), before + 1)
+	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
+	// Off the slots, Q steps (around, to Statistics) and drops nothing.
+	before = len(f.s.inv_pending)
+	press(&f, .Q, away)
+	testing.expect_value(t, len(f.s.inv_pending), before)
+	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+
+	// Escape closes whichever is open.
+	escape(app)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	app.input.pressed = {.E}
+	inventory_keys(app)
+	app.input.pressed = {}
+	testing.expect(t, inventory_open_(app))
+	escape(app)
+	testing.expect(t, !inventory_open_(app))
 }

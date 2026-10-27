@@ -45,7 +45,7 @@ RULES_DEFAULTS := Rules {
 	day_length        = 1200,
 	daylight_cycle    = true,
 	drops             = true,
-	damage            = true,
+	damage            = false,
 	random_tick_speed = 3,
 }
 
@@ -84,7 +84,10 @@ RULES_VARS := [?]base.Var {
 	{field = "day_length", help = "seconds per day and night", min = 10, max = 86400, step = 60},
 	{field = "daylight_cycle", help = "time passes (off: the sun stands still)"},
 	{field = "drops", help = "a block a player breaks leaves its item"},
-	{field = "damage", help = "players take damage (falls, explosions) and can die"},
+	{
+		field = "damage",
+		help = "players take damage (falls, explosions) and can die; off in new worlds",
+	},
 	{field = "death_drops", help = "a player who dies drops their inventory where they fell"},
 	{
 		field = "random_tick_speed",

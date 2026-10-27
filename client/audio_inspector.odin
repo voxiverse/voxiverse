@@ -168,8 +168,8 @@ audio_inspector_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		ui.label(ctx, fmt.tprintf("%v", b), ui.cut_left(&row, 110), .Left)
 		bar := ui.cut_left(&row, 260)
 		fill := clamp((db + 60) / 60, 0, 1)
-		ui.fill_rect(ctx, bar, {40, 40, 40, 255})
-		ui.fill_rect(ctx, {bar.x, bar.y, bar.w * fill, bar.h}, {90, 170, 220, 255})
+		ui.fill_rect(ctx, bar, t.meter_back)
+		ui.fill_rect(ctx, {bar.x, bar.y, bar.w * fill, bar.h}, t.meter_fill)
 		ui.label(ctx, fmt.tprintf("%.0f dB", db) if peak > 0 else "silent", row, .Right)
 		if ui.button(ctx, fmt.tprintf("%s##bus%d", mode_text(mine), i), btn) {
 			audio.inspect_pick(fz, {mode = cycle_mode(mine), bus = b})
@@ -189,15 +189,11 @@ audio_inspector_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		t.text_muted,
 	)
 	spec := ui.next(ctx, SPECTRUM_ROWS * t.row_height)
-	ui.fill_rect(ctx, spec, {20, 20, 20, 255})
+	ui.fill_rect(ctx, spec, t.graph_back)
 	bw := spec.w / audio.INSPECT_BANDS
 	for v, i in fz.bands {
 		h := clamp((v - audio.SPEC_FLOOR_DB) / -audio.SPEC_FLOOR_DB, 0, 1) * spec.h
-		ui.fill_rect(
-			ctx,
-			{spec.x + f32(i) * bw, spec.y + spec.h - h, bw - 1, h},
-			{230, 160, 60, 255},
-		)
+		ui.fill_rect(ctx, {spec.x + f32(i) * bw, spec.y + spec.h - h, bw - 1, h}, t.graph_line)
 	}
 
 	ui.label(

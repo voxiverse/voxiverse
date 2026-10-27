@@ -12,14 +12,22 @@ import "../../base"
 //
 //	build analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]
 //
+// and pulls a collector's lake first (files are append-only: rsync is all it takes):
+//
+//	build analytics --pull <host:path> [dir]      (dir: lake)
+//
 // JSON lines in, text out; for anything else, DuckDB reads the same files:
 //
 //	select k, count(*) from read_json_auto('lake/**/*.jsonl') group by 1
 main :: proc() {
 	args := os.args[1:]
+	if len(args) >= 2 && args[0] == "--pull" {
+		pull(args[1], args[2] if len(args) > 2 else "lake")
+		return
+	}
 	if len(args) < 2 {
 		fmt.eprintln(
-			"usage: analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]",
+			"usage: analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]\n       analytics --pull <host:path> [dir]",
 		)
 		os.exit(2)
 	}
@@ -76,4 +84,23 @@ read_all :: proc(dir: string) -> string {
 	}
 	walk(dir, &b)
 	return strings.to_string(b)
+}
+
+// pull copies a collector's lake (host:path) into dir with rsync.
+pull :: proc(source, dir: string) {
+	os.make_directory_all(dir)
+	command := []string {
+		"rsync",
+		"-a",
+		"--partial",
+		strings.concatenate({strings.trim_right(source, "/"), "/"}),
+		strings.concatenate({dir, "/"}),
+	}
+	process, err := os.process_start({command = command})
+	if err != nil {
+		fmt.eprintln("analytics: --pull needs rsync on the PATH")
+		os.exit(1)
+	}
+	state, _ := os.process_wait(process)
+	os.exit(state.exit_code)
 }

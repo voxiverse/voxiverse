@@ -36,6 +36,8 @@ Bindings :: struct {
 	hotbar_5:   platform.Key,
 	screenshot: platform.Key,
 	fullscreen: platform.Key,
+	tab_prev:   platform.Key, // menus: the tab before
+	tab_next:   platform.Key, // menus: the tab after
 }
 
 DEFAULT_BINDINGS :: Bindings {
@@ -61,6 +63,8 @@ DEFAULT_BINDINGS :: Bindings {
 	hotbar_5   = .Num_5,
 	screenshot = .F2,
 	fullscreen = .F11,
+	tab_prev   = .Q,
+	tab_next   = .E,
 }
 
 @(rodata)
@@ -68,28 +72,86 @@ BINDINGS_DEFAULTS := DEFAULT_BINDINGS
 
 @(rodata)
 BINDING_VARS := [?]base.Var {
-	{field = "forward", label = "Walk forward", help = "key: walk forward"},
-	{field = "back", label = "Walk backward", help = "key: walk backward"},
-	{field = "left", label = "Strafe left", help = "key: step left"},
-	{field = "right", label = "Strafe right", help = "key: step right"},
-	{field = "jump", help = "key: jump (twice quickly: fly, where allowed)"},
-	{field = "sneak", help = "key: sneak"},
-	{field = "sprint", help = "key: sprint"},
-	{field = "attack", label = "Attack / Break", help = "key: break the aimed block, hit"},
-	{field = "use", label = "Use / Place", help = "key: place, use the held item"},
-	{field = "pick", label = "Pick Block", help = "key: pick the aimed block into the hand"},
-	{field = "inventory", help = "key: open the inventory"},
-	{field = "stats", label = "Statistics", help = "key: open the statistics"},
-	{field = "drop", label = "Drop item", help = "key: drop one of the held item (Ctrl: all)"},
-	{field = "chat", label = "Open chat", help = "key: open the chat"},
-	{field = "command", label = "Open command", help = "key: open the chat with /"},
-	{field = "hotbar_1", label = "Hotbar slot 1", help = "key: hotbar slot 1"},
-	{field = "hotbar_2", label = "Hotbar slot 2", help = "key: hotbar slot 2"},
-	{field = "hotbar_3", label = "Hotbar slot 3", help = "key: hotbar slot 3"},
-	{field = "hotbar_4", label = "Hotbar slot 4", help = "key: hotbar slot 4"},
-	{field = "hotbar_5", label = "Hotbar slot 5", help = "key: hotbar slot 5"},
-	{field = "screenshot", label = "Take screenshot", help = "key: save a screenshot"},
-	{field = "fullscreen", label = "Toggle fullscreen", help = "key: fullscreen on or off"},
+	{field = "forward", label = "Walk forward", help = "Walk forward."},
+	{field = "back", label = "Walk backward", help = "Walk backward."},
+	{field = "left", label = "Strafe left", help = "Step to the left."},
+	{field = "right", label = "Strafe right", help = "Step to the right."},
+	{field = "jump", help = "Jump. Press twice quickly to fly, where flying is allowed."},
+	{field = "sneak", help = "Sneak: slower, and you do not fall off edges."},
+	{field = "sprint", help = "Run faster while moving forward."},
+	{
+		field = "attack",
+		label = "Attack / Break",
+		help = "Break the block you aim at, or hit what you aim at.",
+	},
+	{
+		field = "use",
+		label = "Use / Place",
+		help = "Place a block, use the item in your hand, or dial a gate.",
+	},
+	{field = "pick", label = "Pick Block", help = "Take the block you aim at into your hand."},
+	{field = "inventory", help = "Open the inventory."},
+	{field = "stats", label = "Statistics", help = "Open your statistics."},
+	{
+		field = "drop",
+		label = "Drop item",
+		help = "Drop one of the item in your hand; with Ctrl, the whole stack.",
+	},
+	{field = "chat", label = "Open chat", help = "Open the chat to write a message."},
+	{
+		field = "command",
+		label = "Open command",
+		help = "Open the chat with a slash, ready for a command.",
+	},
+	{field = "hotbar_1", label = "Hotbar slot 1", help = "Hold the first item of your hotbar."},
+	{field = "hotbar_2", label = "Hotbar slot 2", help = "Hold the second item of your hotbar."},
+	{field = "hotbar_3", label = "Hotbar slot 3", help = "Hold the third item of your hotbar."},
+	{field = "hotbar_4", label = "Hotbar slot 4", help = "Hold the fourth item of your hotbar."},
+	{field = "hotbar_5", label = "Hotbar slot 5", help = "Hold the fifth item of your hotbar."},
+	{field = "screenshot", label = "Take screenshot", help = "Save a picture of the screen."},
+	{
+		field = "fullscreen",
+		label = "Toggle fullscreen",
+		help = "Switch between a window and the whole screen.",
+	},
+	{
+		field = "tab_prev",
+		label = "Previous tab",
+		help = "In menus with tabs, go to the tab before.",
+	},
+	{field = "tab_next", label = "Next tab", help = "In menus with tabs, go to the tab after."},
+}
+
+// Binding_Context: where a binding is read. Two bindings clash only when
+// their contexts overlap (Both overlaps either).
+Binding_Context :: enum u8 {
+	World,
+	Menu,
+	Both,
+}
+
+@(rodata)
+BINDING_CONTEXT := [len(BINDING_VARS)]Binding_Context {
+	20 = .Both, // screenshot
+	21 = .Both, // fullscreen
+	22 = .Menu, // tab_prev
+	23 = .Menu, // tab_next
+}
+
+bindings_overlap :: proc(a, b: Binding_Context) -> bool {
+	return a == b || a == .Both || b == .Both
+}
+
+// menu_tab_step: -1, +1 or 0 from the tab keys pressed this frame. Typing a
+// Q into a text field, or choosing a key for a binding, is not a step.
+// over_slot: a slot is under the mouse, where the drop key drops instead.
+menu_tab_step :: proc(app: ^App, over_slot := false) -> int {
+	if app.ui.edit.active || app.options.listening != 0 {return 0}
+	keys := app.settings.keys
+	step := 0
+	if keys.tab_prev in app.input.pressed && !(over_slot && keys.tab_prev == keys.drop) {step -= 1}
+	if keys.tab_next in app.input.pressed && !(over_slot && keys.tab_next == keys.drop) {step += 1}
+	return step
 }
 
 bindings_table :: proc() -> base.Var_Table {

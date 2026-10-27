@@ -131,8 +131,9 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	chat_feed(app, ctx)
 	// Crosshair.
 	c := ui.rect_center(ctx.screen, 0, 0)
-	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, {255, 255, 255, 200})
-	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, {255, 255, 255, 200})
+	t := &ctx.theme
+	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, t.crosshair)
+	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
 	hotbar(ctx, s, &app.item_icons)
 	health_bar(ctx, s)
 }
@@ -198,7 +199,13 @@ net_line :: proc(s: ^Session) -> string {
 
 // hotbar: the inventory's first row along the bottom, the one in hand framed.
 @(private = "file")
+// HOTBAR_OPACITY: how opaque the hotbar is (1: as the rest; tuned by eye).
+HOTBAR_OPACITY :: 1
+
 hotbar :: proc(ctx: ^ui.Context, s: ^Session, icons: ^Item_Icons) {
+	faded := ctx.theme
+	faded.opacity *= HOTBAR_OPACITY
+	ui.theme_scope(ctx, faded)
 	t := &ctx.theme
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
@@ -342,7 +349,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	t := &ctx.theme
 	r := ctx.screen
 	r = ui.cut_top(&r, f32(len(lines)) * t.row_height + 8)
-	ui.fill_rect(ctx, r, {0, 0, 0, 170})
+	ui.fill_rect(ctx, r, t.menu_fill)
 	r = ui.rect_shrink(r, 4)
 	for line in lines {ui.label(ctx, line, ui.cut_top(&r, t.row_height), .Left)}
 }
@@ -422,7 +429,7 @@ fps_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	r := ctx.screen
 	r = ui.cut_top(&r, 2 * t.row_height + 8)
 	r = ui.cut_right(&r, 260)
-	ui.fill_rect(ctx, r, {0, 0, 0, 235}) // nearly opaque: readable over bright clouds
+	ui.fill_rect(ctx, r, t.hud_fill) // nearly opaque: readable over bright clouds
 	inner := ui.rect_shrink(r, 4)
 	ui.label(ctx, fmt.tprintf("%.0f FPS", f.fps), ui.cut_top(&inner, t.row_height), .Right)
 	detail :=
@@ -437,7 +444,7 @@ HEART := [6]string{".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X.
 // end: full, half or empty.
 @(private = "file")
 health_bar :: proc(ctx: ^ui.Context, s: ^Session) {
-	if s.max_health <= 0 {return}
+	if s.max_health <= 0 || !s.rules.damage {return}
 	t := &ctx.theme
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
@@ -452,8 +459,8 @@ health_bar :: proc(ctx: ^ui.Context, s: ^Session) {
 		for line, ry in HEART {
 			for ch, rx in line {
 				if ch != 'X' {continue}
-				c := ui.Color{70, 24, 28, 255}
-				if full || (half && rx < 4) {c = {226, 56, 66, 255}}
+				c := t.health_empty
+				if full || (half && rx < 4) {c = t.health_full}
 				ui.fill_rect(ctx, {x + f32(rx) * PIXEL, y + f32(ry) * PIXEL, PIXEL, PIXEL}, c)
 			}
 		}

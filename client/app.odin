@@ -162,6 +162,14 @@ app_init :: proc(app: ^App) -> bool {
 		return false
 	}
 	if !ui.init(&app.ui, &app.font, fallback = &app.symbol_font) {return false}
+	{
+		sizes := [?]int{16, 32, 48, 64, 128}
+		images: [len(sizes)]platform.Icon_Image
+		for size, i in sizes {
+			images[i] = {size, ui.app_icon(&app.font, size, context.temp_allocator)}
+		}
+		platform.set_window_icon(&app.window, images[:])
+	}
 	if !item_icons_init(&app.item_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
@@ -308,6 +316,13 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 }
 
 // app_frame runs one frame: input, UI, render. Returns false to stop.
+// keep_awake_update: no screensaver and no display sleep for the whole run
+// (the title, the menus and a paused game included; the window's close lets
+// them be).
+keep_awake_update :: proc(app: ^App) {
+	platform.set_keep_awake(&app.window, true)
+}
+
 app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	base.profile_scope("frame")
 	w := &app.window
@@ -326,9 +341,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	handle_global_keys(app, &input)
 	if app.settings.fullscreen !=
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
-	// Playing (not in a menu, not paused): no screensaver, no display sleep.
-	playing := app.session != nil && app.session.state == .Playing && !world_paused(app)
-	platform.set_keep_awake(w, playing)
+	keep_awake_update(app)
 	gpu.set_vsync(&app.g, app.settings.vsync)
 	audio_volumes(app, false)
 	audio_listener(app, false)

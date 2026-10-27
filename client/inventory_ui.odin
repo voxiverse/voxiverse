@@ -30,8 +30,8 @@ stack_slot :: proc(
 	key := 0,
 ) {
 	t := &ctx.theme
-	ui.fill_rect(ctx, r, {0, 0, 0, 230}) // (blending is linear: lighter than it reads)
-	ui.stroke_rect(ctx, r, 2 if selected else 1, t.text if selected else {255, 255, 255, 60})
+	ui.fill_rect(ctx, r, t.slot_fill) // (blending is linear: lighter than it reads)
+	ui.stroke_rect(ctx, r, 2 if selected else 1, t.text if selected else t.faint_border)
 	inner := ui.rect_shrink(r, 4)
 	small := t.font_size * 0.75
 	if game.stack_empty(stack) {
@@ -62,7 +62,7 @@ stack_slot :: proc(
 			{inner.x + 1, inner.y + 1, inner.w, small},
 			fmt.tprint(key),
 			small,
-			{0, 0, 0, 255},
+			t.text_shadow,
 		)
 		ui.draw_text(ctx, {inner.x, inner.y, inner.w, small}, fmt.tprint(key), small, t.text_muted)
 	}
@@ -74,20 +74,20 @@ stack_slot :: proc(
 			{corner.x + 1, corner.y + 1, corner.w, corner.h},
 			count,
 			small,
-			{0, 0, 0, 255},
+			t.text_shadow,
 			.Right,
 		)
 		ui.draw_text(ctx, corner, count, small, t.text, .Right)
 	}
 }
 
-// tooltip: name in a box by the mouse.
-tooltip :: proc(ctx: ^ui.Context, name: string) {
+// item_tooltip: name in a box by the mouse.
+item_tooltip :: proc(ctx: ^ui.Context, name: string) {
 	t := &ctx.theme
 	mouse := ctx.input.mouse
 	w := ui.measure_text(ctx, name, t.font_size) + 2 * t.padding
 	tip := ui.Rect{mouse.x + 12, mouse.y + 12, w, t.row_height}
-	ui.fill_rect(ctx, tip, {0, 0, 0, 230})
+	ui.fill_rect(ctx, tip, t.slot_fill)
 	ui.draw_text(ctx, ui.rect_shrink(tip, t.padding), name, t.font_size, t.text)
 }
 
@@ -140,21 +140,18 @@ Inventory_View :: struct {
 	first:       int, // where the drag began
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
+	fresh:       bool, // opened this frame: its own key press is not a tab step
 }
 
-// inventory_keys: the inventory key over the game opens the inventory, and closes it.
+// inventory_keys: the inventory key over the game opens the inventory (it
+// closes with Escape; Q and E step its tabs).
 inventory_keys :: proc(app: ^App) {
 	s := app.session
 	if s == nil ||
 	   s.state != .Playing ||
 	   app.settings.keys.inventory not_in app.input.pressed ||
-	   (overlay_is_open(&app.overlays, .Inventory) && app.ui.edit.active) {return} 	// (typing a search)
-	if overlay_is_open(&app.overlays, .Inventory) {
-		top, _ := overlay_top(&app.overlays)
-		if top == .Inventory {inventory_close(app)}
-	} else if game_controls(app) {
-		inventory_open(app)
-	}
+	   overlay_is_open(&app.overlays, .Inventory) {return}
+	if game_controls(app) {inventory_open(app)}
 }
 
 // chest_sync: a chest the server opened shows its overlay (the inventory
@@ -178,6 +175,7 @@ inventory_open :: proc(app: ^App) {
 	app.inventory_view = {
 		drag_from  = -1,
 		click_slot = -1,
+		fresh      = true,
 	}
 	clear(&app.inventory_search)
 }
@@ -287,6 +285,8 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	catalog := session_allowed(s, "items.catalog")
 	v := &app.inventory_view
 	if inv.chest_open {v.tab = .Chest} else if v.tab == .Chest || !catalog {v.tab = .Inventory}
+	fresh := v.fresh
+	v.fresh = false
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
@@ -294,10 +294,13 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	ui.panel(ctx, l.panel)
 	if v.tab == .Chest {
 		ui.title(ctx, "Chest", l.title, .Left)
-	} else if catalog {
-		if inventory_tabs(ctx, l.title, v) {l = inventory_layout(ctx, v.tab)}
 	} else {
-		ui.title(ctx, "Inventory", l.title, .Left)
+		active := Ring_Tab.Inventory if v.tab == .Inventory else .Creative
+		if to, picked := ring_tabs(app, ctx, l.title, active); picked {
+			ring_go(app, to)
+			if to == .Statistics {return}
+			l = inventory_layout(ctx, v.tab)
+		}
 	}
 	mouse := ctx.input.mouse
 	hovered := -1
@@ -322,6 +325,10 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		session_inventory_do(s, {kind, slot, arg})
 	}
 	if top {
+		// Q and E step the tabs; over a slot, the drop key still drops.
+		if step := menu_tab_step(app, hovered >= 0); v.tab != .Chest && !fresh && step != 0 {
+			if ring_go(app, ring_step(app, active_ring(v.tab), step)) == .Statistics {return}
+		}
 		inventory_mouse(app, ctx, l.panel, hovered, catalog)
 		if hovered >= 0 && !ctx.edit.active {
 			for k, n in hotbar_keys(app.settings.keys) {
@@ -347,7 +354,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	if hovered >= 0 &&
 	   !game.stack_empty(game.slot_at(inv, hovered)^) &&
 	   game.stack_empty(inv.cursor) {
-		tooltip(ctx, item_title(game.slot_at(inv, hovered).item))
+		item_tooltip(ctx, item_title(game.slot_at(inv, hovered).item))
 	}
 	if !game.stack_empty(inv.cursor) {
 		stack_slot(
@@ -365,22 +372,86 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	}
 }
 
-// inventory_tabs: the tab buttons in the title row, the open one lit; true
-// if one was chosen.
+// Ring_Tab: the tabs Q and E step through, shared by the inventory and the
+// statistics overlays (the chest is not in the ring).
+Ring_Tab :: enum u8 {
+	Inventory,
+	Creative, // only with items.catalog
+	Statistics,
+}
+
 @(private = "file")
-inventory_tabs :: proc(ctx: ^ui.Context, r: ui.Rect, v: ^Inventory_View) -> (changed: bool) {
+active_ring :: proc(tab: Inventory_Tab) -> Ring_Tab {
+	return .Creative if tab == .Creative else .Inventory
+}
+
+@(private = "file")
+ring_has :: proc(app: ^App, tab: Ring_Tab) -> bool {
+	return(
+		tab != .Creative ||
+		(app.session != nil && session_allowed(app.session, "items.catalog")) \
+	)
+}
+
+// ring_step: the tab step places away from from (around, past missing ones).
+ring_step :: proc(app: ^App, from: Ring_Tab, step: int) -> Ring_Tab {
+	n := len(Ring_Tab)
+	to := from
+	for _ in 0 ..< n {
+		to = Ring_Tab((int(to) + step + n) % n)
+		if ring_has(app, to) {break}
+	}
+	return to
+}
+
+// ring_go shows a tab: the inventory's own are a switch within it; the
+// statistics are their own overlay, the other closed.
+ring_go :: proc(app: ^App, to: Ring_Tab) -> Ring_Tab {
+	inventory_open_now := overlay_is_open(&app.overlays, .Inventory)
+	switch to {
+	case .Inventory, .Creative:
+		if !inventory_open_now {
+			overlay_close(&app.overlays, .Stats)
+			inventory_open(app)
+		}
+		app.inventory_view.tab = .Inventory if to == .Inventory else .Creative
+	case .Statistics:
+		if inventory_open_now {inventory_close(app)}
+		if !overlay_is_open(&app.overlays, .Stats) {stats_open(app)}
+	}
+	return to
+}
+
+// ring_tabs: the tab row in a title row, the open one lit, and the keys that
+// step it at the right end; the one chosen with the mouse, if any.
+ring_tabs :: proc(
+	app: ^App,
+	ctx: ^ui.Context,
+	r: ui.Rect,
+	active: Ring_Tab,
+) -> (
+	chosen: Ring_Tab,
+	picked: bool,
+) {
 	t := &ctx.theme
 	row := r
-	for tab in ([]Inventory_Tab{.Inventory, .Creative}) {
+	hint := fmt.tprintf(
+		"%s / %s",
+		key_label(&app.window, app.settings.keys.tab_prev),
+		key_label(&app.window, app.settings.keys.tab_next),
+	)
+	ui.draw_text(ctx, row, hint, t.font_size, t.text_muted, .Right)
+	for tab in Ring_Tab {
+		if !ring_has(app, tab) {continue}
 		b := ui.cut_left(&row, 140)
 		ui.cut_left(&row, t.spacing)
-		name := "Inventory" if tab == .Inventory else "Creative"
-		if tab == v.tab {
+		name := fmt.tprint(tab)
+		if tab == active {
 			ui.fill_rect(ctx, b, t.hover)
 			ui.stroke_rect(ctx, b, t.border_width, t.border)
 			ui.draw_text(ctx, b, name, t.font_size, t.hover_text, .Center)
 		} else if ui.button(ctx, name, b) {
-			v.tab, changed = tab, true
+			chosen, picked = tab, true
 		}
 	}
 	return
@@ -407,7 +478,7 @@ catalog_ui :: proc(app: ^App, ctx: ^ui.Context, l: Inventory_Layout, top: bool) 
 	defer {
 		ui.pop_clip_rect(ctx)
 		if hovered != game.NO_ITEM && game.stack_empty(s.inventory.cursor) {
-			tooltip(ctx, item_title(hovered))
+			item_tooltip(ctx, item_title(hovered))
 		}
 	}
 	for k in first ..< len(items) {
@@ -582,8 +653,9 @@ PREVIEW_IMAGE :: ui.Image(1)
 // app.preview) turned toward the mouse.
 @(private = "file")
 player_preview :: proc(app: ^App, ctx: ^ui.Context, r: ui.Rect) {
-	ui.fill_rect(ctx, r, {10, 12, 18, 255})
-	ui.stroke_rect(ctx, r, 1, {255, 255, 255, 60})
+	t := &ctx.theme
+	ui.fill_rect(ctx, r, t.preview_fill)
+	ui.stroke_rect(ctx, r, 1, t.faint_border)
 	// Where the mouse is from the middle of the player's chest: turn and look
 	// that way, within limits.
 	mouse := ctx.input.mouse

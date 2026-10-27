@@ -105,8 +105,8 @@ servers_list :: proc(app: ^App, ctx: ^ui.Context) {
 		ui.label(ctx, app.message, ui.cut_bottom(&area, t.row_height), .Center, t.text_muted)
 		ui.cut_bottom(&area, t.spacing)
 	}
-	ui.fill_rect(ctx, area, {0, 0, 0, 140})
-	ui.stroke_rect(ctx, area, 1, {255, 255, 255, 50})
+	ui.fill_rect(ctx, area, t.list_fill)
+	ui.stroke_rect(ctx, area, 1, t.list_border)
 
 	// The servers found, as they answer.
 	chosen: Maybe(Found) = nil
@@ -132,10 +132,10 @@ servers_list :: proc(app: ^App, ctx: ^ui.Context) {
 			}
 			if m.selected == f.instance {
 				chosen = found
-				ui.fill_rect(ctx, row, {255, 255, 255, 40})
+				ui.fill_rect(ctx, row, t.row_hover)
 				ui.stroke_rect(ctx, ui.rect_shrink(row, 1), 1, t.text)
 			} else if it.hovered {
-				ui.fill_rect(ctx, row, {255, 255, 255, 18})
+				ui.fill_rect(ctx, row, t.row_selected)
 			}
 			text := ui.rect_shrink(row, 10)
 			ui.draw_text(

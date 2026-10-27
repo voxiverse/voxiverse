@@ -142,6 +142,14 @@ X11 :: struct {
 		detectable: b32,
 		supported: ^b32,
 	) -> b32,
+	ChangeProperty:            proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		property, type: xlib.Atom,
+		format, mode: i32,
+		data: rawptr,
+		count: i32,
+	) -> i32,
 	SendEvent:                 proc "c" (
 		display: ^xlib.Display,
 		window: xlib.Window,
@@ -297,6 +305,35 @@ setup_raw_motion :: proc(n: ^Native_Window) {
 		return
 	}
 	n.xi_opcode = opcode
+}
+
+// The window's icon: _NET_WM_ICON, CARDINAL/32 (width, height, then ARGB per
+// pixel, for each size). Format 32 is an array of C longs, 64 bits here.
+@(private)
+native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
+	n := &w.native
+	XA_CARDINAL :: 6
+	data := make([dynamic]int, context.temp_allocator)
+	for im in images {
+		if im.size <= 0 || len(im.rgba) != im.size * im.size * 4 {continue}
+		append(&data, im.size, im.size)
+		for i in 0 ..< im.size * im.size {
+			p := im.rgba[i * 4:][:4]
+			append(&data, int(u32(p[3]) << 24 | u32(p[0]) << 16 | u32(p[1]) << 8 | u32(p[2])))
+		}
+	}
+	if len(data) == 0 {return}
+	x.ChangeProperty(
+		n.display,
+		n.window,
+		x.InternAtom(n.display, "_NET_WM_ICON", false),
+		XA_CARDINAL,
+		32,
+		0, // PropModeReplace
+		raw_data(data),
+		i32(len(data)),
+	)
+	x.Flush(n.display)
 }
 
 // Fullscreen: asked of the window manager (EWMH _NET_WM_STATE_FULLSCREEN),

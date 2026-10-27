@@ -186,6 +186,17 @@ package_game :: proc() -> bool {
 			return false
 		}
 	}
+	when ODIN_OS != .Windows {
+		// The picture for a launcher or desktop entry (Windows has it in the .exe).
+		write_icon() or_return
+		if err := os.copy_file(
+			path_join({stage, "voxiverse.png"}),
+			path_join({"build", "icon.png"}),
+		); err != nil {
+			fmt.eprintfln("build: cannot copy the icon: %v", err)
+			return false
+		}
+	}
 	readme, _ := strings.replace_all(PACKAGE_README, "{version}", version_text(v))
 	when ODIN_OS == .Windows {readme, _ = strings.replace_all(readme, "\n", "\r\n")}
 	copies := [][2]string {

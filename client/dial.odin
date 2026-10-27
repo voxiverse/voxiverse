@@ -133,8 +133,8 @@ dial_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	for k in 0 ..< game.WORLD_LENGTH {
 		r := ui.Rect{slots.x + f32(k) * (slot_w + t.spacing), slots.y, slot_w, slots.h}
 		lit := k < d.count
-		ui.fill_rect(ctx, r, {0, 0, 0, 230})
-		ui.stroke_rect(ctx, r, 2 if lit else 1, t.text if lit else {255, 255, 255, 60})
+		ui.fill_rect(ctx, r, t.slot_fill)
+		ui.stroke_rect(ctx, r, 2 if lit else 1, t.text if lit else t.faint_border)
 		if lit {ui.draw_text(ctx, r, symbol_text(d.symbols[k]), t.font_size * 1.5, t.text, .Center)}
 	}
 	for i in 0 ..< game.SYMBOLS {

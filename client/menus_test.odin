@@ -7,6 +7,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "../base"
 import "font"
 import "platform"
 import "ui"
@@ -265,4 +266,100 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	click(t, app, "Back to Title Screen")
 	testing.expect_value(t, app.screen, Screen.Title)
 	free_all(context.temp_allocator)
+}
+
+// Q and E step the Options tabs, around; every option and every binding
+// shows its help after the mouse rests on it; a Q typed in a text field is
+// typing, not a step.
+@(test)
+test_options_tabs_by_keys :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	app.screen = .Options
+	ui_frame(app)
+	keys := app.settings.keys
+	step :: proc(app: ^App, key: platform.Key) {
+		app.input.pressed = {key}
+		ui_frame(app)
+		ui_frame(app) // (what the step changed, drawn)
+	}
+	want := [?]Options_Tab{.Audio, .Controls, .Accessibility, .Profile, .Video}
+	for tab in want {
+		step(app, keys.tab_next)
+		testing.expect_value(t, app.options.tab, tab)
+	}
+	step(app, keys.tab_prev)
+	testing.expect_value(t, app.options.tab, Options_Tab.Profile)
+	testing.expect_value(t, tab_name(.Audio), "Audio")
+
+	// Hovering a row, a half second on, shows its help (the first row's place
+	// is where the rest follow: one row and its gap apart).
+	table := settings_table()
+	rest :: proc(t: ^testing.T, app: ^App, at: ui.Vec2, help: string, what: string) {
+		time := app.ui.input.time
+		ui_frame(app, {mouse = at, time = time + 1})
+		ui_frame(app, {mouse = at, time = time + 1.5})
+		found := false
+		for text in app.ui.texts {found ||= text == help}
+		testing.expectf(t, found, "%s shows no help", what)
+		ui_frame(app, {mouse = {-100, -100}, time = time + 2}) // (moved away)
+	}
+	for tab in Options_Tab {
+		app.options.tab, app.options.scroll = tab, 0
+		ui_frame(app)
+		row_h := f32(36 + 10) // row height and gap
+		first: ui.Rect
+		for field, i in OPTIONS_TABS[tab] {
+			v, _ := base.var_find(table, field)
+			if i == 0 {
+				// The first row's rectangle, from its widget (the rows below it follow).
+				label := var_label(table, v)
+				if c, ok := base.var_choice(table, &app.settings, v); ok {
+					label = fmt.tprintf("%s: %s", label, v.choices[c].label)
+				}
+				if kind, _ := base.var_kind(table, v); kind == .Text {label = v.field}
+				r, found := ui.find_widget(&app.ui, label)
+				testing.expectf(t, found, "no row for %s", field)
+				first = r
+			}
+			at := ui.Vec2{first.x + 10, first.y + f32(i) * row_h + first.h / 2}
+			rest(t, app, at, v.help, field)
+		}
+		if tab != .Controls {continue}
+		// The bindings, each scrolled into view.
+		for &v, i in BINDING_VARS {
+			index := len(OPTIONS_TABS[tab]) + 2 + i
+			app.options.scroll = max(0, f32(index) * row_h - 200)
+			ui_frame(app)
+			at := ui.Vec2 {
+				first.x + first.w / 2,
+				first.y + f32(index) * row_h - app.options.scroll + first.h / 2,
+			}
+			rest(t, app, at, v.help, v.field)
+		}
+	}
+
+	// Typing Q into the name field changes the name, not the tab.
+	app.options.tab, app.options.scroll = .Profile, 0
+	ui_frame(app)
+	click(t, app, "name")
+	testing.expect(t, app.ui.edit.active)
+	app.input.pressed = {keys.tab_prev}
+	typed := []rune{'q'}
+	ui_frame(app, {text = typed, mouse = {-100, -100}})
+	testing.expect_value(t, app.options.tab, Options_Tab.Profile)
+	testing.expect(t, strings.contains(base.var_text(&app.settings.name), "q"))
+	free_all(context.temp_allocator)
+}
+
+// The screen is kept awake from the first frame, the title included.
+@(test)
+test_keep_awake_on_title :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	app.screen = .Title
+	testing.expect(t, !app.window.keep_awake)
+	keep_awake_update(app)
+	testing.expect(t, app.window.keep_awake)
+	platform.set_keep_awake(&app.window, false) // (let the screensaver be again)
 }

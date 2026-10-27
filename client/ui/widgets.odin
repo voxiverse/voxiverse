@@ -92,6 +92,7 @@ slider :: proc(
 	r: Rect,
 	step: f32 = 0,
 	format := "%.2f",
+	value_text := "", // drawn instead of the formatted value when not empty
 	loc := #caller_location,
 ) -> bool {
 	t := &ctx.theme
@@ -118,7 +119,8 @@ slider :: proc(
 	stroke_rect(ctx, track, t.border_width, t.border)
 	frac := (value^ - lo) / (hi - lo) if hi > lo else 0
 	fill_rect(ctx, {track.x, track.y, track.w * frac, track.h}, t.text)
-	draw_text(ctx, value_rect, fmt.tprintf(format, value^), t.font_size, t.text, .Right)
+	shown := value_text if value_text != "" else fmt.tprintf(format, value^)
+	draw_text(ctx, value_rect, shown, t.font_size, t.text, .Right)
 	focus_ring(ctx, r, it)
 	return value^ != old
 }
@@ -359,6 +361,71 @@ focus_ring :: proc(ctx: ^Context, r: Rect, it: Interaction) {
 	if it.focused && ctx.focus_visible {
 		stroke_rect(ctx, {r.x - 3, r.y - 3, r.w + 6, r.h + 6}, 1, ctx.theme.focus_ring)
 	}
+}
+
+// TOOLTIP_DELAY: seconds the mouse stays over something before its tooltip shows.
+TOOLTIP_DELAY :: 0.4
+// TOOLTIP_WIDTH: the widest a tooltip's text runs before it wraps (UI units).
+TOOLTIP_WIDTH :: 360
+
+// tooltip shows text by the mouse once it has stayed inside r (the part of
+// the widget that explains itself) for TOOLTIP_DELAY seconds. Moving to
+// another tooltip's area restarts the delay.
+tooltip :: proc(ctx: ^Context, r: Rect, text: string) {
+	if len(text) == 0 {return}
+	if ctx.modal_open && ctx.layer < .Modal {return}
+	mouse := ctx.input.mouse
+	if !rect_contains(r, mouse) || !rect_contains(current_clip(ctx), mouse) {return}
+	id := get_id(ctx, text)
+	ctx.tip_hit = true
+	if ctx.tip_id != id {
+		ctx.tip_id, ctx.tip_since = id, ctx.input.time
+	}
+	if ctx.input.time - ctx.tip_since < TOOLTIP_DELAY {return}
+	t := &ctx.theme
+	lines := wrap_words(ctx, text, t.font_size, TOOLTIP_WIDTH)
+	width: f32
+	for l in lines {width = max(width, measure_text(ctx, l, t.font_size))}
+	asc, desc := font_line_metrics(ctx, t.font_size)
+	line_h := asc - desc + 2
+	w, h := width + 2 * t.padding, f32(len(lines)) * line_h + 2 * t.padding
+	x := min(mouse.x + 12, ctx.screen.x + ctx.screen.w - w)
+	y := min(mouse.y + 12, ctx.screen.y + ctx.screen.h - h)
+	box := Rect{max(x, ctx.screen.x), max(y, ctx.screen.y), w, h}
+	prev := begin_layer(ctx, .Tooltip)
+	defer end_layer(ctx, prev)
+	append(&ctx.texts, text) // (what the frame says, whole: tests read it)
+	push_clip_rect(ctx, ctx.screen)
+	defer pop_clip_rect(ctx)
+	fill_rect(ctx, box, t.slot_fill)
+	stroke_rect(ctx, box, t.border_width, t.faint_border)
+	inner := rect_shrink(box, t.padding)
+	for l, i in lines {
+		draw_text(
+			ctx,
+			{inner.x, inner.y + f32(i) * line_h, inner.w, line_h},
+			l,
+			t.font_size,
+			t.text,
+		)
+	}
+}
+
+// wrap_words breaks text into lines at most width wide, at spaces (a word
+// too long for a line stays whole). Frame allocator.
+wrap_words :: proc(ctx: ^Context, text: string, size, width: f32) -> []string {
+	lines := make([dynamic]string, ctx.frame_alloc)
+	start, last_space := 0, -1
+	for i := 0; i <= len(text); i += 1 {
+		if i < len(text) && text[i] != ' ' {continue}
+		if last_space >= 0 && measure_text(ctx, text[start:i], size) > width {
+			append(&lines, text[start:last_space])
+			start = last_space + 1
+		}
+		last_space = i
+	}
+	if start < len(text) || len(lines) == 0 {append(&lines, text[start:])}
+	return lines[:]
 }
 
 with_alpha :: proc(c: Color, a: u8) -> Color {

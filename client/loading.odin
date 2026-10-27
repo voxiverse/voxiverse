@@ -16,6 +16,7 @@ import "ui"
 // fills in. Cancel goes back. A failure gets its own screen: why, in plain
 // words, and Back.
 
+LOADING_SHOW_AFTER :: 0.25 // seconds: a world ready sooner just appears, without the screen
 LOADING_LIMIT :: 60 * time.Second // never stuck behind it: the world shows anyway
 
 // Loading: where the session is (Session.loading while it is on).
@@ -33,15 +34,16 @@ loading_begin :: proc(s: ^Session, arrival: bool) {
 loading_update :: proc(s: ^Session) {
 	l, on := s.loading.?
 	if !on || s.state != .Playing {return}
-	ready, total := world_progress(s, nil)
-	if ready == total && world_meshing_done(&s.world) {
+	if world_near_ready(s) {
+		ready, _ := world_progress(s, nil)
 		log.infof(
-			"session loaded chunks=%d seconds=%.2f",
-			total,
+			"session loaded near=%d seconds=%.2f",
+			ready,
 			time.duration_seconds(time.tick_since(l.since)),
 		)
 		s.loading = nil
 	} else if time.tick_since(l.since) > LOADING_LIMIT {
+		ready, total := world_progress(s, nil)
 		log.warnf(
 			"session loading gave up waiting ready=%d of %d to_mesh=%d uploads=%d busy=%d (showing the world)",
 			ready,
@@ -52,6 +54,52 @@ loading_update :: proc(s: ^Session) {
 		)
 		s.loading = nil
 	}
+}
+
+// NEAR_RADIUS: the columns around the player (each way) loading waits for.
+NEAR_RADIUS :: 2
+
+// world_near_ready: the ground around the player is here. Loading waits for
+// this, not for the whole interest area (the far chunks arrive and mesh with
+// the game running).
+world_near_ready :: proc(s: ^Session) -> bool {
+	f := s.prediction.state.position
+	centre := game.chunk_of({i32(math.floor(f.x)), i32(math.floor(f.y)), i32(math.floor(f.z))})
+	return world_near_ready_at(
+		&s.world,
+		centre,
+		i32(s.welcome.view_radius),
+		i32(s.welcome.view_height),
+	)
+}
+
+// world_near_ready_at: for each column within NEAR_RADIUS of centre in the
+// interest area (radius, height): known, and every chunk from one above
+// centre down to one below it, or to its lowest ground if that is lower
+// (never below the interest area or the world), here and meshed (or empty,
+// or with a neighbour missing that keeps it from meshing).
+world_near_ready_at :: proc(w: ^World, centre: game.Chunk_Pos, radius, height: i32) -> bool {
+	for dz in i32(-NEAR_RADIUS) ..= NEAR_RADIUS {
+		for dx in i32(-NEAR_RADIUS) ..= NEAR_RADIUS {
+			if !game.in_interest({dx, 0, dz}, radius, height) {continue}
+			x, z := centre.x + dx, centre.z + dz
+			if !game.in_world({x, centre.y, z}) {continue}
+			column, known := w.columns[{x, z}]
+			if !known {return false}
+			lowest := column.heights[0]
+			for h in column.heights {lowest = min(lowest, h)}
+			lo := min(centre.y - 1, lowest >> game.CHUNK_SHIFT)
+			lo = max(lo, centre.y - height, game.CHUNK_MIN_Y)
+			for y in lo ..= centre.y + 1 {
+				p := game.Chunk_Pos{x, y, z}
+				if !game.in_world(p) {continue}
+				c := world_get(w, p)
+				if c == nil || c.queued || c.waiting {return false}
+				if c.dirty && neighbours_present(w, p) {return false}
+			}
+		}
+	}
+	return true
 }
 
 // world_settled: in a world whose interest area has arrived and been meshed.
@@ -105,6 +153,11 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	t := &ctx.theme
 	starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
 	starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
+	// A world that is ready within a moment just appears: only the stars till then.
+	if l, on := s.loading.?;
+	   on && time.duration_seconds(time.tick_since(l.since)) < LOADING_SHOW_AFTER {
+		return
+	}
 
 	words := "Loading the world"
 	switch {

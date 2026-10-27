@@ -84,13 +84,24 @@ SCREENSAVER :: cstring("org.freedesktop.ScreenSaver")
 @(private = "file")
 SCREENSAVER_PATH :: cstring("/org/freedesktop/ScreenSaver")
 
+// warned: a failure to hold the screensaver off is told once per run.
+@(private = "file")
+warned: bool
+
+@(private = "file")
+warn_once :: proc(text: string) {
+	if warned {return}
+	warned = true
+	log.info(text)
+}
+
 @(private = "file")
 dbus_ready :: proc() -> bool {
 	if !dbus_tried {
 		dbus_tried = true
 		count, ok := dynlib.initialize_symbols(&dbus, "libdbus-1.so.3")
 		if !ok || count != reflect.struct_field_count(DBus) - 1 {
-			log.info("platform libdbus not available: the screensaver is not held off")
+			warn_once("platform libdbus not available: the screensaver is not held off")
 			dbus.__handle = nil
 		}
 	}
@@ -108,7 +119,7 @@ screensaver_inhibit :: proc(on: bool) {
 	defer dbus.dbus_error_free(&err)
 	conn := dbus.dbus_bus_get(DBUS_BUS_SESSION, &err)
 	if conn == nil || dbus.dbus_error_is_set(&err) {
-		log.info("platform no D-Bus session: the screensaver is not held off")
+		warn_once("platform no D-Bus session: the screensaver is not held off")
 		return
 	}
 	if on {
@@ -139,7 +150,7 @@ screensaver_inhibit :: proc(on: bool) {
 		   dbus.dbus_message_iter_get_arg_type(&out) == TYPE_UINT32 {
 			dbus.dbus_message_iter_get_basic(&out, &inhibit_cookie)
 		}
-		log.infof("platform keep awake on (screensaver inhibited, cookie=%d)", inhibit_cookie)
+		log.debugf("platform keep awake on (screensaver inhibited, cookie=%d)", inhibit_cookie)
 	} else {
 		if portal_request[0] != 0 {
 			path := cstring(&portal_request[0])
@@ -154,7 +165,7 @@ screensaver_inhibit :: proc(on: bool) {
 				dbus.dbus_connection_flush(conn)
 				dbus.dbus_message_unref(msg)
 			}
-			log.infof("platform keep awake off (portal request %s closed)", path)
+			log.debugf("platform keep awake off (portal request %s closed)", path)
 			portal_request = {}
 		}
 		if inhibit_cookie == 0 {return}
@@ -171,7 +182,7 @@ screensaver_inhibit :: proc(on: bool) {
 		dbus.dbus_message_iter_append_basic(&iter, TYPE_UINT32, &inhibit_cookie)
 		dbus.dbus_connection_send(conn, msg, nil)
 		dbus.dbus_connection_flush(conn)
-		log.infof("platform keep awake off (cookie=%d released)", inhibit_cookie)
+		log.debugf("platform keep awake off (cookie=%d released)", inhibit_cookie)
 		inhibit_cookie = 0
 	}
 }
@@ -199,7 +210,7 @@ portal_inhibit :: proc(conn: rawptr, err: ^Opaque) {
 	dbus.dbus_message_iter_close_container(&iter, &options)
 	reply := dbus.dbus_connection_send_with_reply_and_block(conn, msg, 500, err)
 	if reply == nil || dbus.dbus_error_is_set(err) {
-		log.info("platform neither the screensaver nor the portal answered Inhibit: not held off")
+		warn_once("platform neither the screensaver nor the portal answered Inhibit: not held off")
 		return
 	}
 	defer dbus.dbus_message_unref(reply)
@@ -212,7 +223,7 @@ portal_inhibit :: proc(conn: rawptr, err: ^Opaque) {
 	if path == nil {return}
 	n := min(len(path), len(portal_request) - 1)
 	copy(portal_request[:n], (cast([^]u8)path)[:n])
-	log.infof("platform keep awake on (portal request %s)", path)
+	log.debugf("platform keep awake on (portal request %s)", path)
 }
 
 // KEEP_AWAKE_RESET: how often X's own screensaver timer is reset.

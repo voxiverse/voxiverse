@@ -206,8 +206,8 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 	buttons := ui.cut_bottom(&area, 2 * t.row_height + t.spacing)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	// The list, scrolled by the wheel.
-	ui.fill_rect(ctx, area, {0, 0, 0, 140})
-	ui.stroke_rect(ctx, area, 1, {255, 255, 255, 50})
+	ui.fill_rect(ctx, area, t.list_fill)
+	ui.stroke_rect(ctx, area, 1, t.list_border)
 	if len(w.entries) == 0 {
 		ui.label(ctx, "No saves yet: Create New Save to start one", area, .Center, t.text_muted)
 	}
@@ -233,10 +233,10 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 			w.selected, w.last_row, w.last_click = i, i, time.tick_now()
 		}
 		if w.selected == i {
-			ui.fill_rect(ctx, row, {255, 255, 255, 40})
+			ui.fill_rect(ctx, row, t.row_hover)
 			ui.stroke_rect(ctx, ui.rect_shrink(row, 1), 1, t.text)
 		} else if it.hovered {
-			ui.fill_rect(ctx, row, {255, 255, 255, 18})
+			ui.fill_rect(ctx, row, t.row_selected)
 		}
 		text := ui.rect_shrink(row, 10)
 		ui.draw_text(ctx, ui.cut_top(&text, t.font_size), e.name, t.font_size, t.text, .Left)

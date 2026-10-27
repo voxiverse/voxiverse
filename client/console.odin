@@ -188,7 +188,7 @@ console_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	defer ui.end_layer(ctx, prev)
 	area := ctx.screen
 	area.h *= 0.5
-	ui.fill_rect(ctx, area, {0, 0, 0, 255}) // opaque: blending is linear, so even 8% shows through
+	ui.fill_rect(ctx, area, t.console_fill) // opaque: blending is linear, so even 8% shows through
 	ui.fill_rect(ctx, {area.x, area.y + area.h - 1, area.w, 1}, t.border)
 
 	inner := ui.rect_shrink(area, t.padding)
@@ -244,9 +244,9 @@ console_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		color := t.text
 		#partial switch line.level {
 		case .Warning:
-			color = {255, 200, 80, 255}
+			color = t.log_warn
 		case .Error, .Fatal:
-			color = {255, 100, 100, 255}
+			color = t.log_error
 		case .Debug:
 			color = t.text_muted
 		}

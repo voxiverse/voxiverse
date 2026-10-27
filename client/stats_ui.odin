@@ -44,6 +44,7 @@ Stats_View :: struct {
 	page:     int,
 	scroll:   f32, // rows
 	expanded: map[string]bool, // heap, keys owned
+	fresh:    bool, // opened this frame: its own key press is not a tab step
 }
 
 stats_view_destroy :: proc(v: ^Stats_View) {
@@ -71,6 +72,7 @@ stats_open :: proc(app: ^App) {
 	v := &app.stats_view
 	clear(&v.filter)
 	v.page, v.scroll = 0, 0
+	v.fresh = true
 	delete(v.asked)
 	v.asked = ""
 	stats_ask(app)
@@ -183,7 +185,16 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	panel := ui.rect_center(ctx.screen, 560, 520)
 	ui.panel(ctx, panel)
 	inner := ui.rect_shrink(panel, t.padding)
-	ui.title(ctx, "Statistics", ui.cut_top(&inner, t.row_height), .Left)
+	fresh := v.fresh
+	v.fresh = false
+	if to, picked := ring_tabs(app, ctx, ui.cut_top(&inner, t.row_height), .Statistics); picked {
+		ring_go(app, to)
+		return
+	}
+	if step := menu_tab_step(app); top && !fresh && step != 0 {
+		ring_go(app, ring_step(app, .Statistics, step))
+		return
+	}
 	ui.cut_top(&inner, t.spacing)
 	search := ui.cut_top(&inner, t.row_height)
 	ui.text_input(ctx, "stats search", &v.filter, search, "search")

@@ -15,7 +15,7 @@ import "ui"
 
 Options_Tab :: enum u8 {
 	Video,
-	Sound,
+	Audio,
 	Controls,
 	Accessibility,
 	Profile,
@@ -36,7 +36,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"clouds",
 		"show_fps",
 	},
-	.Sound         = {
+	.Audio         = {
 		"volume",
 		"music_volume",
 		"ambience_volume",
@@ -99,6 +99,13 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	column := area
 	ui.title(ctx, "Options", ui.cut_top(&column, 64))
 
+	// Q and E (as bound) step through the tabs, around.
+	if step := menu_tab_step(app); step != 0 {
+		n := len(Options_Tab)
+		o.tab = Options_Tab((int(o.tab) + step + n) % n)
+		o.scroll, o.listening = 0, 0
+	}
+
 	// The tabs: the open one lit, the others buttons.
 	// Each as wide as its name, the room left shared out.
 	tabs := ui.cut_top(&column, t.row_height)
@@ -109,6 +116,14 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 		text_w[tab] = ui.measure_text(ctx, tab_name(tab), t.font_size) + 2 * t.padding
 		total += text_w[tab] + gap
 	}
+	hint := fmt.tprintf(
+		"%s / %s",
+		key_label(&app.window, app.settings.keys.tab_prev),
+		key_label(&app.window, app.settings.keys.tab_next),
+	)
+	hint_w := ui.measure_text(ctx, hint, t.font_size) + t.spacing
+	hint_rect := ui.cut_right(&tabs, hint_w)
+	ui.draw_text(ctx, hint_rect, hint, t.font_size, t.text_muted, .Right)
 	extra := max(0, tabs.w - total) / f32(len(Options_Tab))
 	for tab in Options_Tab {
 		r := ui.cut_left(&tabs, text_w[tab] + extra + gap)
@@ -163,13 +178,12 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	return false
 }
 
-@(private = "file")
 tab_name :: proc(tab: Options_Tab) -> string {
 	switch tab {
 	case .Video:
 		return "Video"
-	case .Sound:
-		return "Sound"
+	case .Audio:
+		return "Audio"
 	case .Controls:
 		return "Controls"
 	case .Accessibility:
@@ -208,14 +222,19 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 		text := key_label(&app.window, key)
 		if o.listening == i + 1 {text = fmt.tprintf("> %s <", text)}
 		ui.push_id_int(ctx, i)
+		ui.tooltip(ctx, r, v.help)
 		if ui.button(ctx, text, r) {o.listening = i + 1}
 		ui.pop_id(ctx)
 		twice := false
-		for &other in BINDING_VARS {
+		for &other, j in BINDING_VARS {
 			k := platform.Key(base.var_get_f64(table, keys, &other))
-			twice ||= &other != &v && k == key && key != .Unknown
+			twice ||=
+				i != j &&
+				k == key &&
+				key != .Unknown &&
+				bindings_overlap(BINDING_CONTEXT[i], BINDING_CONTEXT[j])
 		}
-		if twice {ui.stroke_rect(ctx, ui.rect_shrink(r, 3), 2, {220, 90, 70, 255})}
+		if twice {ui.stroke_rect(ctx, ui.rect_shrink(r, 3), 2, t.warning)}
 	}
 	if o.listening == 0 {return}
 
@@ -258,7 +277,9 @@ var_widget :: proc(
 ) {
 	label := var_label(table, v)
 	if i, ok := base.var_choice(table, data, v); ok {
-		if ui.button(ctx, fmt.tprintf("%s: %s", label, v.choices[i].label), ui.next(ctx)) {
+		r := ui.next(ctx)
+		ui.tooltip(ctx, r, v.help)
+		if ui.button(ctx, fmt.tprintf("%s: %s", label, v.choices[i].label), r) {
 			base.var_set_f64(table, data, v, v.choices[(i + 1) % len(v.choices)].value)
 			changed = true
 		}
@@ -268,7 +289,9 @@ var_widget :: proc(
 	switch kind {
 	case .Bool:
 		value := base.var_get_f64(table, data, v) != 0
-		if ui.checkbox(ctx, label, &value, ui.next(ctx)) {
+		r := ui.next(ctx)
+		ui.tooltip(ctx, r, v.help)
+		if ui.checkbox(ctx, label, &value, r) {
 			base.var_set_f64(table, data, v, 1 if value else 0)
 			changed = true
 		}
@@ -277,15 +300,23 @@ var_widget :: proc(
 		step := f32(v.step)
 		if kind == .Int {step = max(step, 1)}
 		format := "%.0f" if kind == .Int || step >= 1 else "%.2f"
+		r := ui.next(ctx)
+		name_part := r
+		ui.tooltip(ctx, ui.cut_left(&name_part, r.w * 0.4), v.help)
+		special := ""
+		for sp in v.special {
+			if f64(value) == sp.value {special = sp.label}
+		}
 		if ui.slider(
 			ctx,
 			label,
 			&value,
 			f32(v.min),
 			f32(v.max),
-			ui.next(ctx),
+			r,
 			step = step,
 			format = format,
+			value_text = special,
 		) {
 			if step > 0 {value = f32(math.round(f64(value) / f64(step)) * f64(step))}
 			base.var_set_f64(table, data, v, f64(value))
@@ -294,11 +325,13 @@ var_widget :: proc(
 	case .Enum:
 		// (Bindings have their own list; elsewhere, the value's name.)
 		r := ui.next(ctx)
+		ui.tooltip(ctx, r, v.help)
 		ui.label(ctx, label, ui.cut_left(&r, r.w * 0.45))
 		ui.label(ctx, base.var_format(table, data, v), r)
 	case .Text:
 		// Edited in place; a keystroke that makes it invalid is refused.
 		r := ui.next(ctx)
+		ui.tooltip(ctx, r, v.help)
 		ui.label(ctx, label, ui.cut_left(&r, r.w * 0.45))
 		_, offset := base.var_kind(table, v)
 		value := (^base.Var_Text)(uintptr(data) + offset)

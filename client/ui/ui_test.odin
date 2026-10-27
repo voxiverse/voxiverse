@@ -501,3 +501,100 @@ test_styled_text :: proc(t: ^testing.T) {
 	testing.expect(t, v[0].pos.x > v[3].pos.x, "italic does not lean")
 	end_frame(ctx)
 }
+
+@(test)
+test_theme_scope_nests :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	{
+		a := ctx.theme
+		a.opacity = 0.5
+		theme_scope(ctx, a)
+		testing.expect_value(t, ctx.theme.opacity, 0.5)
+		{
+			b := ctx.theme
+			b.opacity *= 0.5
+			b.text = {1, 2, 3, 4}
+			theme_scope(ctx, b)
+			testing.expect_value(t, ctx.theme.opacity, 0.25)
+		}
+		testing.expect_value(t, ctx.theme.opacity, 0.5)
+		testing.expect(t, ctx.theme.text == DEFAULT_THEME.text)
+	}
+	testing.expect(t, ctx.theme == DEFAULT_THEME, "scopes restore the theme exactly")
+	testing.expect_value(t, ctx.errors, 0)
+	// A ninth nested scope is an error and ignored, and unwinds cleanly.
+	nest :: proc(ctx: ^Context, n: int) {
+		if n == 0 {return}
+		x := ctx.theme
+		x.opacity *= 0.9
+		theme_scope(ctx, x)
+		nest(ctx, n - 1)
+	}
+	nest(ctx, 9)
+	testing.expect(t, ctx.theme == DEFAULT_THEME)
+	testing.expect_value(t, ctx.errors, 1)
+}
+
+@(test)
+test_opacity_halves_alpha :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	icon, ok := add_icon(
+		ctx,
+		2,
+		{{255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {9, 9, 9, 255}},
+	)
+	testing.expect(t, ok)
+	// Alphas of the vertices each kind of drawing makes, at an opacity.
+	alphas :: proc(ctx: ^Context, icon: Icon, opacity: f32) -> (panel_a, text_a, icon_a: u8) {
+		begin_frame(ctx, {}, SCREEN, 1)
+		th := ctx.theme
+		th.opacity = opacity
+		th.background = {0, 0, 0, 200}
+		theme_scope(ctx, th)
+		l := &ctx.output.layers[.Base]
+		n := len(l.vertices)
+		panel(ctx, {10, 10, 100, 40})
+		panel_a = l.vertices[n].color.a
+		n = len(l.vertices)
+		draw_text(ctx, {10, 60, 100, 20}, "Hi", 16, {255, 255, 255, 255})
+		text_a = l.vertices[n].color.a
+		n = len(l.vertices)
+		draw_icon(ctx, {10, 100, 32, 32}, icon)
+		icon_a = l.vertices[n].color.a
+		end_frame(ctx)
+		return
+	}
+	p1, t1, i1 := alphas(ctx, icon, 1)
+	p2, t2, i2 := alphas(ctx, icon, 0.5)
+	near :: proc(a, b: u8) -> bool {return abs(int(a) - int(b)) <= 1}
+	testing.expect_value(t, p1, 200)
+	testing.expect(t, near(p2, p1 / 2), "panel alpha")
+	testing.expect(t, near(t2, t1 / 2) && t1 == 255, "text alpha")
+	testing.expect(t, near(i2, i1 / 2) && i1 == 255, "icon alpha")
+}
+
+@(test)
+test_tooltip_waits_then_shows :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	frame :: proc(ctx: ^Context, time: f64, mouse: Vec2) -> bool {
+		begin_frame(ctx, {mouse = mouse, time = time}, SCREEN, 1)
+		tooltip(ctx, BUTTON_A, "A helpful sentence")
+		tooltip(ctx, BUTTON_B, "Another one")
+		shown := len(ctx.texts) > 0
+		end_frame(ctx)
+		return shown
+	}
+	testing.expect(t, !frame(ctx, 0, INSIDE_A))
+	testing.expect(t, !frame(ctx, 0.3, INSIDE_A), "not before the delay")
+	testing.expect(t, frame(ctx, 0.5, INSIDE_A), "after it")
+	testing.expect(t, !frame(ctx, 0.6, {150, 180}), "another widget restarts the delay")
+	testing.expect(t, frame(ctx, 1.1, {150, 180}))
+	testing.expect(t, !frame(ctx, 1.2, OUTSIDE))
+	testing.expect(t, !frame(ctx, 1.3, INSIDE_A), "leaving resets")
+}

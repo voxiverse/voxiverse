@@ -12,10 +12,12 @@ import "../common/telemetry"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {
+	rules := quiet_rules()
+	rules.damage = true // (off in new worlds; these tests are about it)
 	return {
 		seed = 28,
 		generator = .Classic,
-		rules = quiet_rules(),
+		rules = rules,
 		view_radius = 3,
 		view_height = 2,
 		workers = 2,

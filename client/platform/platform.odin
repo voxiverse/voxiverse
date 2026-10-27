@@ -362,6 +362,18 @@ set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	native_set_fullscreen(w, fullscreen)
 }
 
+// Icon_Image: the window's icon at one size (RGBA, straight alpha).
+Icon_Image :: struct {
+	size: int,
+	rgba: []u8,
+}
+
+// set_window_icon gives the window its icon, the sizes it is offered (X11:
+// _NET_WM_ICON; Windows has the executable's resource; macOS: not yet).
+set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
+	native_set_window_icon(w, images)
+}
+
 // set_keep_awake keeps the screen on (no screensaver, no display sleep)
 // while playing, or gives it back to the OS's idle rules. Best effort: where
 // the OS offers no way, it logs so and does nothing.

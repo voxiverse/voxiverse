@@ -202,7 +202,9 @@ usage :: proc() {
 		"  trace     summarize a profile trace (build/voxiverse.spall; scopes for its timeline)",
 	)
 	fmt.println("  perf      record game, server or bench under Linux perf (-- program arguments)")
-	fmt.println("  icon      draw the game's icon to build/voxiverse.ico and build/icon.png")
+	fmt.println(
+		"  icon      draw the game's icon to build/voxiverse.ico and build/icon-<size>.png",
+	)
 	fmt.println("  build     build the game and the dedicated server into build/: by default a")
 	fmt.println("            development build (lightly optimized, debug info, the dev aids), or:")
 	fmt.println("              --debug      unoptimized, for stepping through in a debugger")

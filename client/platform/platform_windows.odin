@@ -94,16 +94,26 @@ ES_SYSTEM_REQUIRED :: 0x00000001
 @(private = "file")
 ES_DISPLAY_REQUIRED :: 0x00000002
 
+@(private = "file")
+keep_awake_warned: bool // a failure is told once per run
+
 // The display and the system stay on while this thread says so (until
 // it says ES_CONTINUOUS alone).
+// The window's icon is the executable's resource.
+@(private)
+native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {}
+
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {
 	flags := u32(ES_CONTINUOUS)
 	if on {flags |= ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED}
 	if SetThreadExecutionState(flags) == 0 {
-		log.warn("platform SetThreadExecutionState failed: the screen may sleep while playing")
+		if !keep_awake_warned {
+			keep_awake_warned = true
+			log.warn("platform SetThreadExecutionState failed: the screen may sleep while playing")
+		}
 	} else {
-		log.infof("platform keep awake on=%v", on)
+		log.debugf("platform keep awake on=%v", on)
 	}
 }
 
