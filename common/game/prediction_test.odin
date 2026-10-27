@@ -271,3 +271,16 @@ test_input_buffer_stall :: proc(t: ^testing.T) {
 	testing.expect(t, q.count <= INPUT_STALL_BACKLOG)
 	testing.expect(t, q.last > 31) // acknowledged past what was discarded
 }
+
+// A client that falls silent with a buffer built up: what it sent last is
+// still applied (and acknowledged) within a few ticks, not held for good.
+@(test)
+test_input_buffer_drains_when_silent :: proc(t: ^testing.T) {
+	q: Input_Queue
+	buf: [INPUT_BUDGET_MAX]Input
+	q.target, q.window_end = INPUT_TARGET_MAX, 1000
+	for i in 1 ..= 2 {input_queue_push(&q, Input{sequence = u32(i)})}
+	for _ in 0 ..< 2 * INPUT_TARGET_MAX + 2 {input_queue_tick(&q, &buf)}
+	testing.expect_value(t, q.last, 2)
+	testing.expect_value(t, q.count, 0)
+}

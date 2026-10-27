@@ -17,8 +17,10 @@ import "core:math"
 //  - Depth: `target` inputs are kept waiting (0 to INPUT_TARGET_MAX), grown at
 //    once and shrunk one per window from the spread of the client's arrival
 //    delays; after the queue ran dry, play resumes once the queue is deeper
-//    than the target. A steady client has target 0: input n is applied in the
-//    tick it arrives, as the stepped server and the determinism tests expect.
+//    than the target (or has waited as many ticks as the target, so a client that
+//    falls silent is not left unapplied). A steady client has target 0: input n
+//    is applied in the tick it arrives, as the stepped server and the
+//    determinism tests expect.
 //  - Catch-up: a backlog deeper than target + INPUT_CATCHUP_AT is worked off
 //    one extra input per tick (two applied), and only from a budget that
 //    refills by one per tick (up to INPUT_BUDGET_MAX) and is spent by every
@@ -151,6 +153,7 @@ Input_Queue :: struct {
 	// The jitter buffer.
 	tick:          u32, // input_queue_tick calls (arrival times)
 	primed:        bool, // playing; cleared when the queue runs dry
+	waited:        int, // ticks spent waiting to prime with something queued
 	target:        int, // inputs kept waiting before play resumes
 	window_end:    u32,
 	delay_min:     i32, // this window's arrival delays (tick - sequence)
@@ -197,7 +200,14 @@ input_queue_tick :: proc(q: ^Input_Queue, out: ^[INPUT_BUDGET_MAX]Input) -> []In
 	}
 	q.budget = min(q.budget + 1, INPUT_BUDGET_MAX)
 	if q.count == 0 {q.primed = false}
-	if !q.primed && q.count > q.target {q.primed = true}
+	if !q.primed && q.count > 0 {
+		// Wait for the buffer to fill, but never longer than its depth: a
+		// client that fell silent (or stopped for good) must not leave its
+		// last inputs unapplied and unacknowledged.
+		q.waited += 1
+		if q.count > q.target || q.waited > q.target {q.primed = true}
+	}
+	if q.primed {q.waited = 0}
 	n := 0
 	pop :: proc(q: ^Input_Queue, out: ^[INPUT_BUDGET_MAX]Input, n: ^int) {
 		out[n^] = q.inputs[q.head]
