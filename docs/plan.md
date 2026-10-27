@@ -578,7 +578,9 @@ a milestone below:
   edits, spawns, messages, events. Over budget suspends that script and logs it; the tick
   never stalls (M51, M52).
 - **Economy containment.** Script-made items go through M31's ledger under their own reason
-  with per-world caps, tagged by origin; they leave their world only where a rule allows.
+  with per-world caps and the script as their cause (M52); tagging the items themselves with
+  their origin, and rules on where they may travel, wait for the economy's content wave (it
+  changes stacks, merging and the inventory protocol).
 - **Validation before anything runs:** static checks (capabilities used = declared,
   bounded loops, schemas), a headless dry run with bots measuring crashes, budgets, ledger
   balance and softlocks, moderation of generated text, then a staged rollout (M54).
