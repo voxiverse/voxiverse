@@ -3166,3 +3166,222 @@ inspector with a pad, haptics, a pad-specific layout of any screen (the layouts 
 are; navigation adapts to them), Steam's own keyboard.
 
 What differed: the Y on a catalog cell opens the keyboard after the search field is drawn, so the press is not the keyboard's first key (a space); a pad-mode inventory clears the UI focus each frame (the cursor is the focus: A is not a click on a tab); the statistics' list is one `ui.list_nav` focus (default focus), its scroll now `first`/`selected` ints; `pad_frame` also runs `chest_sync`, `inventory_keys`, `stats_keys`, and `rig_free` frees what the new tests fill. The catalog cursor is the matching list's position, clamped when the search changes.
+
+# M43: the music pipeline (`tools/music`): scores, MIDI, SF2 and the renderer
+
+Split from the old M43 (too big for one sitting): this is the tool and its tests, with a
+synthetic soundfont; M43b adds stereo streams to the engine, composes the pieces with the
+real piano and commits them. Nothing here is committed besides code and test fixtures.
+
+- **Package and command.** `tools/music/` (package `music_tool`): `score.odin` (parser),
+  `notes.odin` (the note list), `midi.odin` (reader and writer), `sf2.odin` (reader),
+  `render.odin` (the sampler), `master.odin` (normalize, tails, encode, metadata),
+  `main.odin`. `tools/build/main.odin`: `"music"` joins the `run_tool` case and the
+  `ensure_miniaudio` list (the tool links `audio/` for the meter, the sinc, the reverb and
+  the WAV writer). Usage line: "music  render assets/music/*.score|*.mid to Ogg (--force,
+  --wav <dir>, --audition <name>)".
+- **The note list** (`notes.odin`), what scores and MIDI both become:
+  `Note :: struct {start: u32, length: u32, key: u8, velocity: u8, part: u8}` in ticks at
+  `PPQ :: 480` per quarter; `Pedal :: struct {at: u32, part: u8, down: bool}`;
+  `Tempo :: struct {at: u32, bpm: f64}`; `Meter :: struct {at: u32, num, den: u8}`;
+  `Part :: struct {name: string, bank: u16, program: u8, volume_db: f32, pan: f32}`;
+  `Piece :: struct {title: string, parts: [dynamic]Part, notes: [dynamic]Note, pedals,
+  tempos, meters, key: string, mode: string, moods: [dynamic]string, place, time, depth,
+  worlds: [dynamic]string, loop: bool, seed: u64, humanize_ms: f32, humanize_vel: u8,
+  reverb_rt60, reverb_wet: f32, end: u32}`. Notes sorted by (start, part, key).
+- **The score format** (`assets/music/<name>.score`, UTF-8, line oriented; `#` starts a
+  comment to the end of the line). Grammar:
+
+  ```
+  file      = { header-line } { part-block }
+  header-line =
+      "title" quoted
+    | "tempo" number [ "at" position ]          ; quarter notes a minute; first one at 1
+    | "meter" int "/" int [ "at" position ]      ; den one of 1 2 4 8 16
+    | "key" pitch-class mode                     ; mode: major minor dorian phrygian lydian
+                                                 ;       mixolydian aeolian locrian
+    | "mood" word { word }                       ; free tags for the director
+    | "place" word { word }                      ; biome names or "any"
+    | "time" word { word }                       ; day night dawn dusk any
+    | "depth" word { word }                      ; surface cave any
+    | "worlds" word { word }                     ; home other any
+    | "loop" ( "yes" | "no" )                    ; the whole piece loops (no intro)
+    | "seed" int
+    | "humanize" "timing" number "ms" "velocity" int
+    | "reverb" number "s" number                 ; RT60 and wet level 0..1
+    | "instrument" word "preset" int ":" int     ; a name for bank:program
+  position  = int [ "." int ]                    ; bar, beat (1-based)
+  part-block = "part" word word { part-option } NL { music-line }
+  part-option = "volume" number "dB" | "pan" number   ; pan -1..1
+  music-line = { token } NL
+  token     = note | chord | rest | "|" | "|:" | ":|" [ "x" int ]
+              | dynamic | "ped" | "unped"
+  note      = pitch [ ":" duration ] [ "~" ] [ "!" int ]   ; ~ ties to the next same pitch
+  chord     = "[" pitch { pitch } "]" [ ":" duration ] [ "~" ] [ "!" int ]
+  rest      = "r" [ ":" duration ]
+  pitch     = letter [ "#" | "b" ] octave        ; letter a-g, octave 0-8, c4 = MIDI 60
+  duration  = base [ "." ] [ "3" ]               ; base w h q e s t (1/32); "." dotted;
+                                                 ; "3" a triplet (two thirds)
+  dynamic   = "pp" | "p" | "mp" | "mf" | "f" | "ff"   ; 33 49 64 80 96 112
+  ```
+
+  Rules: the second word of `part` is an `instrument` name declared in the header. A
+  duration is sticky (a note without one takes the last one in its part; the first
+  defaults to `q`); the velocity is the part's dynamic (default `mf`) unless `!n` is given.
+  Bar lines are checked: each bar must fill the meter in force exactly, else an error
+  `<file>:<line>:<col>: bar 12 has 3.5 beats, the meter 3/4 wants 3`. `|: ... :|` repeats
+  its bars once (`:|x3`: three plays in all); repeats do not nest. All parts start at bar 1
+  and must have the same length in bars. Errors name file, line and column and stop the
+  piece (other pieces still render). Unknown words are errors. Example
+  (`tools/music/testdata/phrase.score`, the test fixture):
+
+  ```
+  title "Test phrase"
+  tempo 80
+  meter 3/4
+  key d dorian
+  mood calm
+  place any
+  time any
+  loop yes
+  seed 7
+  humanize timing 6 ms velocity 5
+  reverb 1.8 s 0.25
+  instrument piano preset 0:0
+
+  part right piano pan 0.2
+    p | d4:q f4 a4 | [c4 e4 g4]:h. | ped d5:e c5 a4:q~ a4:q unped |
+  part left piano volume -3 dB pan -0.2
+    p | d3:h. | a2:h. | d3:h r:q |
+  ```
+- **MIDI** (`midi.odin`): `midi_read(data) -> (Piece, ok)` for format 0 and 1: note on/off
+  (velocity 0 is off), set tempo, time signature, key signature (metadata only), program
+  change, bank select (CC0), CC7 volume, CC10 pan, CC64 sustain (>= 64 down); other events
+  skipped; running status; division in ticks per quarter rescaled to `PPQ` (SMPTE division
+  refused). Channel 10 notes are refused with an error (no drum kits in this subset).
+  `midi_write(Piece) -> []u8` writes format 1, PPQ 480: track 0 the tempo, meter and key
+  map, then a track per part with its bank, program, volume (CC7 from dB), pan (CC10) and
+  pedal; unhumanized. `build music --midi <name>` writes `build/music/<name>.mid` so
+  MuseScore can open a score.
+- **SF2 subset** (`sf2.odin`, SoundFont 2.01): RIFF `sfbk` with `LIST INFO` (`ifil`,
+  `INAM` read; the rest skipped), `LIST sdta` (`smpl`, 16-bit; `sm24` ignored), `LIST pdta`
+  (`phdr pbag pmod pgen inst ibag imod igen shdr`, every record size checked; the
+  terminal records required; every index bounds-checked before use: a damaged file is an
+  error, never a crash). Generators read (others ignored): 0-4, 12, 45, 50 (sample address
+  offsets and coarse offsets), 8 initialFilterFc, 9 initialFilterQ, 17 pan, 33-38 the
+  volume envelope (delay, attack, hold, decay, sustain, release), 39-40
+  keynumToVolEnvHold/Decay, 41 instrument, 43 keyRange, 44 velRange, 46 keynum, 47
+  velocity, 48 initialAttenuation, 51 coarseTune, 52 fineTune, 53 sampleID, 54
+  sampleModes (0 and 2 no loop, 1 loop, 3 loop then release past it), 56 scaleTuning, 57
+  exclusiveClass, 58 overridingRootKey. Global zones (first zone without its terminal
+  generator) apply to the zones of their preset or instrument; preset generators add to
+  instrument ones as the spec says (ranges intersect). Modulators: the `pmod`/`imod`
+  lists are skipped; the spec's default velocity-to-attenuation modulator (concave, 960 cB)
+  and velocity-to-filter (-2400 cents below velocity 64 linearly, as SF2.01 8.4.2) are
+  built in. Units: seconds `= 2^(timecents/1200)`, gain `= 10^(-centibels/200)`, filter Hz
+  `= 8.176 * 2^(cents/1200)` (13500 or more: no filter). Stereo samples are two zones
+  (left and right links) and render as two mono voices with their pans.
+- **The renderer** (`render.odin`): `render(piece, sf, rate = 48000) -> (stereo: []f32)`.
+  Per note: find the zones of its part's preset for its key and velocity; per zone a
+  voice: the sample read through `audio.sinc_read` at pitch `2^((key - root) * scale/100 +
+  coarse + fine/100) / 12) * sample_rate / rate` (cents converted exactly), looping by
+  `sampleModes`, a DAHDSR volume envelope (attack linear in amplitude, decay and release
+  exponential in dB: -100 dB at the end of release), the zone's low-pass as
+  `audio.Svf` (Q from initialFilterQ in cB), pan by constant power, part volume and pan
+  applied after. The sustain pedal holds releases until it comes up; an exclusive class cuts
+  the other voices of its class (20 ms fade). A note's release ends its voice at -100 dB.
+  Humanization: `base.Rng` seeded by `piece.seed`, drawn in note order, moves each note's
+  start by uniform ±`humanize_ms` and its velocity by ±`humanize_vel` (clamped 1..127), so
+  two renders are identical. The render runs to the last voice's end. Then the engine's
+  reverb (`audio.Reverb`, `reverb_set(rt60, 0.3, wet, 0.3)`) is added. All of it is in
+  `f64` accumulators where order matters; no threads (determinism).
+- **Mastering** (`master.odin`):
+  - Loop-aware tail: a piece with `loop yes` is cut at `end` (the last bar's end, in
+    frames); everything rendered past it (release and reverb tail) is added onto the
+    start, so the file's end flows into its start. A piece with `loop no` keeps its tail
+    and is trimmed after the last sample above -70 dBFS, plus 50 ms.
+  - Loudness: `audio.Meter` over the stereo render; gain to `MUSIC_LUFS :: -20`
+    integrated. If the true peak (`audio.true_peak`) after gain is over -1 dBTP, the gain is
+    lowered until it is not and the shortfall is reported (`warning: <name> is 1.4 LU under
+    the target to keep its peaks under -1 dBTP`); music is never limited.
+  - Encode: `oggenc -Q -q 5 -o <out.ogg> <in.wav>` if `oggenc` is on the PATH, else `ffmpeg
+    -v error -y -i <in.wav> -c:a libvorbis -q:a 5 <out.ogg>`; neither: an error naming both.
+    The WAV is 24-bit stereo at 48 kHz in `build/music/`.
+  - Metadata: `assets/music/<name>.json` beside the Ogg:
+
+    ```json
+    {
+      "title": "Test phrase",
+      "source": "phrase.score",
+      "source_sha256": "<hex of the score or MIDI file>",
+      "soundfont_sha256": "<hex>",
+      "rate": 48000,
+      "channels": 2,
+      "frames": 172800,
+      "seconds": 3.6,
+      "loop": true,
+      "loop_start": 0,
+      "loop_end": 172800,
+      "lufs": -20.0,
+      "true_peak_db": -3.2,
+      "key": "d dorian",
+      "tempo": 80,
+      "mood": ["calm"],
+      "place": ["any"],
+      "time": ["any"],
+      "depth": ["any"],
+      "worlds": ["any"]
+    }
+    ```
+
+    Written with keys in this order, two-space indents, numbers with at most 3 decimals.
+    `frames` is the decoded length the CI test checks.
+- **`build music`** renders every `assets/music/*.score` and `*.mid` whose `.json` is
+  missing or whose `source_sha256` or `soundfont_sha256` differ (`--force`: all;
+  `build music <name>`: one). `--wav <dir>` keeps the float master as WAV. `--audition` is
+  M43b's (it needs stereo playback in the engine).
+- **The soundfont fetch** (`tools/music/soundfont.odin`), as `tools/build/glslang.odin`
+  does it: `SOUNDFONT_URL`, `SOUNDFONT_FILE`, `SOUNDFONT_SHA256` constants, fetched with
+  `curl` into `build/tools/soundfont/` once, its archive's SHA-256 checked before use. The
+  FreePats Upright Piano KW downloads are `.7z` only
+  (`https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-small-SF2-20190703.7z`,
+  5.8 MiB; the page says CC0 1.0); GNU tar cannot open 7z, so the tool unpacks with the
+  first of `7zz`, `7z`, `7za`, `bsdtar` on the PATH (Windows' and macOS' `tar` are bsdtar)
+  and names them when none is found: a dev-tool requirement like `oggenc`. M43 writes the
+  code with the URL and leaves `SOUNDFONT_SHA256` to be pinned in M43b after reading the
+  license on the page; until it is pinned the fetch refuses ("soundfont hash not pinned").
+  `VX_SOUNDFONT=/path/file.sf2` overrides (any SF2).
+- **Tests** (`tools/music/music_test.odin`, run by `build test`, which therefore lists
+  `tools/music`): a synthetic soundfont written by a test-only `sf2_write` (two
+  instruments: a 1-second 440 Hz sine sample looped, and a decaying noise sample; key and
+  velocity zones, an envelope, a filter, a stereo pair) so no download is needed.
+  - `test_score_parses`: `phrase.score` gives exactly the expected `Note`s (starts,
+    lengths in ticks, keys, velocities, the tie merged into one note, the pedal events)
+    and the repeat expands; each error case (a short bar, an unknown word, an undeclared
+    instrument, nested repeats) gives its message with the right line and column.
+  - `test_midi_round_trip`: score -> `midi_write` -> `midi_read` equals the score's note
+    list, pedals, tempos and meters exactly; a format-0 file written by hand (bytes in the
+    test) reads to its notes; a truncated file and SMPTE division are refused.
+  - `test_sf2_reads`: the synthetic font's presets, zones, generators and samples read as
+    written; every truncated prefix of it and 1 000 seeded byte flips are refused or read
+    without a crash.
+  - `test_render_deterministic`: two renders of `phrase.score` are bit-identical; their
+    64-bit FNV-1a hash equals `RENDER_GOLDEN :: 0x...` on Linux (the line is checked only
+    `when ODIN_OS == .Linux`, as the audio baselines do); on every OS the third-octave
+    bands (`audio.third_octaves`) are within 1 dB of `RENDER_BANDS` held in the test.
+  - `test_render_pitch_and_envelope`: a single note at the sine sample's root and an octave
+    up measure 440 and 880 Hz within 1 cent (zero crossings over 0.5 s); the envelope's
+    attack time and the release's -60 dB point are within 2 ms of the generators.
+  - `test_master_loops`: a looped render with a long reverb, mastered: the difference
+    between the last and first frame is no larger than 1.5 times the largest difference
+    between neighbouring frames within 10 ms of either end; integrated loudness -20.0
+    within 0.1 LU.
+  - `test_json_round_trip`: the metadata writer's output parses with `core:encoding/json`
+    to the same values.
+
+Exit check: the suite and CI green (CI runs the tests above; it needs no encoder or
+soundfont); locally `build music --wav build/music phrase` with `VX_SOUNDFONT` pointing at
+any SF2 writes a WAV and, with an encoder present, an Ogg and its `.json` (not committed);
+listening to it is a check by hand.
+
+What differed: `#` starts a comment only where a word would start (inside a word it is a sharp: `f#4`); a chord and a quoted title are one word; a bar line with nothing since the last one (a line's leading `|`) closes nothing; bars are numbered and metered as played (repeats expanded), so `meter ... at <bar>` counts played bars; the velocity-to-attenuation default is `40 log10(127/v)` dB (SF2.01's concave curve, 960 cB at most) and the velocity-to-filter default applies below velocity 64 as written; a left or right sample is hard-panned whatever its pan generator says; the part's pan is a balance (the louder side stays) applied to the zone's constant-power pan; decay and release fall 100 dB in their time (the release passes -60 dB at 0.6 of it, ends at -100 dB, floor 1 ms); the reverb runs 1.7 RT60 past the dry sound; the metadata writes numbers with one to three decimals (the tempo as an integer when whole); the usage line has `--midi` and not `--audition` (M43b's); a MIDI piece has the default header (no tags, `loop no`), MIDI gives no way to set them yet; the example's `frames` and `seconds` were illustrative (the fixture is 3 bars of 3/4 at 80: 6.75 s); the synthetic font's sine sample is 4410 frames at 4410 Hz (440 whole cycles) so the truncation sweep stays quick; `RENDER_BANDS` skips bands both under -60 dB (too faint to hold across OSes); `soundfont_path`, `find_on_path` and the 7z unpack are in `soundfont.odin` and `master.odin`.

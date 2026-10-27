@@ -38,6 +38,7 @@ PACKAGES :: []string {
 	"tools/analytics",
 	"tools/replay",
 	"tools/sfx",
+	"tools/music",
 	"tools/worldmap",
 	"tools/bench",
 	"tools/debugger/printer_test",
@@ -60,6 +61,7 @@ TEST_PACKAGES :: []string {
 	"client/platform",
 	"client",
 	"tools/analytics",
+	"tools/music",
 	"tools/build",
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
@@ -114,6 +116,7 @@ main :: proc() {
 	     "debug",
 	     "package",
 	     "audiodump",
+	     "music",
 	     "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
@@ -142,7 +145,7 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "audiodump", "replay", "sfx", "worldmap", "analytics", "schema":
+	case "netdump", "audiodump", "replay", "sfx", "music", "worldmap", "analytics", "schema":
 		ok = run_tool(args[0], args[1:])
 	case "audio":
 		ok = audio_baselines(args[1:])
@@ -183,6 +186,9 @@ usage :: proc() {
 	)
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
+	fmt.println(
+		"  music     render assets/music/*.score|*.mid to Ogg (--force, --wav <dir>, --midi)",
+	)
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)

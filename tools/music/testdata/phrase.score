@@ -1,0 +1,17 @@
+title "Test phrase"
+tempo 80
+meter 3/4
+key d dorian
+mood calm
+place any
+time any
+loop yes
+seed 7
+humanize timing 6 ms velocity 5
+reverb 1.8 s 0.25
+instrument piano preset 0:0
+
+part right piano pan 0.2
+  p | d4:q f4 a4 | [c4 e4 g4]:h. | ped d5:e c5 a4:q~ a4:q unped |
+part left piano volume -3 dB pan -0.2
+  p | d3:h. | a2:h. | d3:h r:q |
