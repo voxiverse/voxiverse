@@ -176,6 +176,12 @@ jobs:
         if: runner.os == 'Linux'
         run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_water_flood -out:build/flood_test
 
+      # The edit journal's cost (M45): a share of the ticks' time and a mean per tick,
+      # optimized.
+      - name: Journal cost, optimized (Linux)
+        if: runner.os == 'Linux'
+        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_journal_cost -out:build/journal_cost_test
+
       # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
       # writer keeps up; optimized, with budgets for a slow runner.
       - name: Event cost, optimized (Linux)

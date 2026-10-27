@@ -72,6 +72,16 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_sphere,
 		"world.edit.bulk",
 	},
+	{
+		"rollback",
+		"player <name> <time> [radius <n> | sel | world] | system <system> <time> [...] | area <time> [radius <n> | sel] | status | cancel  (time: 90s, 10m, 2h, 1d)",
+		{1, 6},
+		admin_rollback,
+		"world.rollback",
+	},
+	{"history", "<x y z>", {3, 3}, admin_history, "world.rollback"},
+	{"undo", "[n]", {0, 1}, admin_undo, "world.edit.undo"},
+	{"redo", "[n]", {0, 1}, admin_redo, "world.edit.undo"},
 	{"summon", "[kind] [count]", {0, 2}, admin_summon, "world.summon"},
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
 	{"locate", "[biome|structure] <name>", {1, 2}, admin_locate, "teleport.locate"},
@@ -179,7 +189,10 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 			notice(s, c, fmt.tprintf("You may not use %s here (%s)", cmd.name, cmd.node))
 			return
 		}
-		if len(args) < cmd.args[0] || len(args) > cmd.args[1] || !cmd.run(s, c, args) {
+		c.command = command
+		ran := len(args) >= cmd.args[0] && len(args) <= cmd.args[1] && cmd.run(s, c, args)
+		c.command = ""
+		if !ran {
 			notice(s, c, fmt.tprintf("Usage: %s %s", cmd.name, cmd.usage))
 			return
 		}
@@ -424,7 +437,8 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		case:
 			return false
 		}
-		notice(s, c, structure_paste(c.world, args[1], n, u8(turns)))
+		act := Act{action_begin(c.world, actor_of(s, c), .Structure, c.command), .Structure}
+		notice(s, c, structure_paste(c.world, args[1], n, u8(turns), act))
 	case:
 		return false
 	}
@@ -471,7 +485,8 @@ admin_sel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 // bulk_notice applies a bulk edit and tells c how it went.
 @(private = "file")
 bulk_notice :: proc(s: ^Server, c: ^Client, name: string, e: Bulk_Edit) {
-	changed, result := bulk_edit(c.world, e)
+	act := Act{action_begin(c.world, actor_of(s, c), .Command, c.command), .Command}
+	changed, result := bulk_edit(c.world, e, act)
 	switch result {
 	case .Done:
 		notice(s, c, fmt.tprintf("%s: %d blocks changed", name, changed))
@@ -482,7 +497,6 @@ bulk_notice :: proc(s: ^Server, c: ^Client, name: string, e: Bulk_Edit) {
 	}
 }
 
-@(private = "file")
 parse_coords :: proc(words: []string, out: []i32) -> bool {
 	for w, i in words {
 		n := strconv.parse_int(w) or_return

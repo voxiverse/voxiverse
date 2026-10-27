@@ -46,6 +46,7 @@ Entity :: struct {
 	love:    int, // ticks left that it is ready to breed (fed)
 	wait:    int, // ticks left before it can breed again
 	age:     int, // ticks
+	action:  u32, // a rocket's: the journal action that fired it (journal.odin)
 }
 
 Brain_State :: enum u8 {
@@ -120,7 +121,11 @@ entities_tick :: proc(w: ^World) {
 	e.budget = PATH_BUDGET_PER_TICK
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
 	query := game.Block_Query{&w.chunks, chunks_block}
-	blasts := make([dynamic]Sphere, context.temp_allocator)
+	Blast :: struct {
+		sphere: Sphere,
+		action: Action_Id,
+	}
+	blasts := make([dynamic]Blast, context.temp_allocator)
 	for i := 0; i < len(e.list); {
 		ent := &e.list[i]
 		ent.age += 1
@@ -138,7 +143,7 @@ entities_tick :: proc(w: ^World) {
 			}
 		case .Rocket:
 			if at, hit := rocket_step(w, ent); hit {
-				append(&blasts, Sphere{at, game.ROCKET_RADIUS})
+				append(&blasts, Blast{{at, game.ROCKET_RADIUS}, Action_Id(ent.action)})
 				entity_died(w, i) // its explosion is what players see
 				continue
 			}
@@ -151,7 +156,7 @@ entities_tick :: proc(w: ^World) {
 		i += 1
 	}
 	// After the walk over the list: explosions change it.
-	for b in blasts {explode(w, b.center, b.radius)}
+	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
 }
 
 // sheep_flags: what clients are told about a sheep.
@@ -284,13 +289,14 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	ent.yaw, ent.pitch = yaw, pitch
 	ent.body.velocity = {f32(dir.x), f32(dir.y), f32(dir.z)} * game.ROCKET_SPEED
 	ent.owner = int(player_id(s, c))
+	ent.action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
 	record(s, c, .Rocket_Fired)
 	return true
 }
 
 // explode: a blast at center. Everyone near is shown it, the sphere is
 // carved (where loaded), and what is near is thrown (sheep hurt).
-explode :: proc(w: ^World, center: [3]f64, radius: f64) {
+explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	s := w.server
 	record_world(s, w, .Explosion, n0 = i64(radius))
 	for &c in s.clients {
@@ -301,7 +307,11 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64) {
 			event_send(s, &c, .Explosion, &blast)
 		}
 	}
-	bulk_edit(w, {shape = Sphere{center, radius}, op = .Carve, partial = true})
+	bulk_edit(
+		w,
+		{shape = Sphere{center, radius}, op = .Carve, partial = true},
+		{action, .Explosion},
+	)
 	reach := 2 * radius
 	push :: proc(at, center: [3]f64, reach: f64) -> (impulse: [3]f32, ok: bool) {
 		d := at - center
@@ -624,7 +634,7 @@ grass_ahead :: proc(w: ^World, ent: ^Entity) -> (p: game.Block_Pos, ok: bool) {
 graze_eat :: proc(w: ^World, ent: ^Entity) {
 	p, ok := grass_ahead(w, ent)
 	if !ok || !ent.shorn {return}
-	set_block(w, p, .Dirt)
+	set_block(w, p, .Dirt, world_act(w, .Graze))
 	ent.shorn = false
 }
 

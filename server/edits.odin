@@ -52,8 +52,9 @@ Bulk_Result :: enum u8 {
 	Not_Loaded,
 }
 
-// bulk_edit applies e; changed: how many blocks it changed.
-bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result) {
+// bulk_edit applies e, by act; changed: how many blocks it changed.
+bulk_edit :: proc(w: ^World, e: Bulk_Edit, act: Act) -> (changed: int, result: Bulk_Result) {
+	cause := act_current(w, act)
 	lo, hi := shape_box(e.shape)
 	lo.y, hi.y = max(lo.y, game.WORLD_MIN_Y), min(hi.y, game.WORLD_MAX_Y - 1)
 	if lo.x > hi.x || lo.y > hi.y || lo.z > hi.z {return 0, .Done}
@@ -77,7 +78,7 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result
 				pos := game.Chunk_Pos{cx, cy, cz}
 				c := chunks_get(&w.chunks, pos)
 				if c == nil || c.state != .Ready {continue}
-				n := edit_chunk(w, c, e, lo, hi)
+				n := edit_chunk(w, c, e, lo, hi, cause)
 				if n > 0 {
 					changed += n
 					c.modified = true
@@ -88,8 +89,8 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result
 	}
 	if changed == 0 {return 0, .Done}
 
-	wake_water_box(w, lo, hi)
-	plants_check_box(w, lo, hi)
+	wake_water_box(w, lo, hi, cause.action)
+	plants_check_box(w, lo, hi, cause.action)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
 			if column_rescan(w, x, z, hi.y) {
@@ -102,7 +103,15 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit) -> (changed: int, result: Bulk_Result
 
 // edit_chunk applies e to the part of chunk c inside lo..hi.
 @(private = "file")
-edit_chunk :: proc(w: ^World, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -> (changed: int) {
+edit_chunk :: proc(
+	w: ^World,
+	c: ^Chunk,
+	e: Bulk_Edit,
+	lo, hi: game.Block_Pos,
+	act: Act,
+) -> (
+	changed: int,
+) {
 	origin := game.chunk_origin(c.pos)
 	from := [3]i32{max(lo.x - origin.x, 0), max(lo.y - origin.y, 0), max(lo.z - origin.z, 0)}
 	to := [3]i32 {
@@ -110,6 +119,8 @@ edit_chunk :: proc(w: ^World, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -
 		min(hi.y - origin.y, game.CHUNK_SIZE - 1),
 		min(hi.z - origin.z, game.CHUNK_SIZE - 1),
 	}
+	entries := make([dynamic]game.Journal_Entry, 0, 256, context.temp_allocator)
+	defer journal_batch(w, act, entries[:])
 	for y in from.y ..= to.y {
 		for z in from.z ..= to.z {
 			for x in from.x ..= to.x {
@@ -133,11 +144,13 @@ edit_chunk :: proc(w: ^World, c: ^Chunk, e: Bulk_Edit, lo, hi: game.Block_Pos) -
 					new = game.Block(cell)
 				}
 				if new == old {continue}
+				if admit(w, act, p) != .Yes {continue}
 				if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return
 				}
 				if _, water := game.water_level(new); water {c.water = true}
+				append(&entries, game.Journal_Entry{pos = p, old = old, new = new})
 				changed += 1
 			}
 		}

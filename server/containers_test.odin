@@ -63,7 +63,7 @@ put_block :: proc(srv: ^Server, pos: game.Block_Pos, block: game.Block) {
 	}
 	call(srv, proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
-			set_block(s.worlds[0], d.pos, d.block)
+			set_block(s.worlds[0], d.pos, d.block, test_act(s.worlds[0]))
 		}, &d)
 }
 

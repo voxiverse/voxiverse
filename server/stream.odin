@@ -87,6 +87,7 @@ Client :: struct {
 	disturbed:     u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
 	check:         Maybe(game.Prediction_Check), // its newest, until that input is applied
 	selection:     [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
+	command:       string, // the text of the command admin is running ("" otherwise; journal actions record it)
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about

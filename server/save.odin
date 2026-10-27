@@ -184,10 +184,19 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
 	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch)
 	origin := game.chunk_origin(pos)
-	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1) // flowing again where it was
+	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
 	delete(bytes)
 	delete_key(&w.saved, pos)
 	return true
+}
+
+// chunk_load_saved loads pos from the save if it was edited (false: it was
+// not, or is loaded already).
+chunk_load_saved :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
+	if w.dir == "" {return false}
+	load_region(w, game.region_of(pos))
+	if pos not_in w.saved {return false}
+	return request_chunk(w, pos)
 }
 
 // keep_edits stores an edited chunk that is being unloaded.
@@ -224,6 +233,7 @@ save :: proc(s: ^Server) -> bool {
 // world_save writes w's world.cfg, entities and changed regions.
 world_save :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
+	journal_save_point(w) // (what the world.cfg names as the journal's end)
 	ok := write_world_file(w)
 	if !write_entities(w) {ok = false}
 	if !write_containers(w) {ok = false}
@@ -353,6 +363,7 @@ write_universe_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
+	fmt.sbprintfln(&b, "age = %d", age_of(s)) // ticks of the universe, across runs
 	return write_atomically(
 		filepath.join({s.store.dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE,
 		b.buf[:],
@@ -398,6 +409,8 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				return false
 			}
 			s.home.address = a
+		case key == "age":
+			if n, ok := strconv.parse_u64(value, 10); ok {s.age_base = n}
 		case key == "kit":
 			if kit, ok := kit_parse(value); ok {
 				clear(&s.kit)
@@ -463,6 +476,9 @@ write_world_file :: proc(w: ^World) -> bool {
 		fmt.sbprintfln(&b, "spawn.pitch = %.6f", sp.look[1])
 		fmt.sbprintfln(&b, "spawn.exact = %v", sp.exact)
 	}
+	fmt.sbprintfln(&b, "journal.segment = %d", w.journal.seq)
+	fmt.sbprintfln(&b, "journal.offset = %d", w.journal.file_bytes)
+	fmt.sbprintfln(&b, "journal.next_action = %d", w.journal.next_action if w.started else 1)
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &w.rules, &b)
 	base.vars_write(worldgen.params_table(), &w.params, &b)
@@ -527,6 +543,14 @@ read_world_file :: proc(w: ^World, text: string, path: string) -> bool {
 			}
 		case key == "time":
 			if v, ok := strconv.parse_f64(value); ok && game.time_valid(v) {w.clock = v}
+		case key == "journal.segment":
+			if n, ok := strconv.parse_u64(value, 10); ok {
+				w.journal_resume.known, w.journal_resume.segment = true, u32(n)
+			}
+		case key == "journal.offset":
+			if n, ok := strconv.parse_u64(value, 10); ok {w.journal_resume.offset = n}
+		case key == "journal.next_action":
+			if n, ok := strconv.parse_u64(value, 10); ok {w.journal_resume.next_action = u32(n)}
 		case strings.has_prefix(key, "rules."), strings.has_prefix(key, "worldgen."):
 			fmt.sbprintfln(&rules_text, "%s = %s", key, value)
 		}

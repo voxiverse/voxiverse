@@ -83,7 +83,6 @@ action_after :: proc(a: Action) -> u32 {
 
 // apply_edit checks an edit against the shared rules, from where the server
 // has the player, and applies it if it passes.
-@(private = "file")
 apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	w := c.world
 	current, loaded := chunks_block(&w.chunks, e.pos)
@@ -119,9 +118,14 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 			plant_placeable(w, e.pos, e.block) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
-	if !ok || !set_block(w, e.pos, e.block, c) {return result}
+	if !ok {return result}
+	act := Act {
+		action_begin(w, actor_of(s, c), .Till if tilling else .Hand),
+		.Till if tilling else .Hand,
+	}
+	if !set_block(w, e.pos, e.block, act, c) {return result}
 	result.accepted, result.block = true, e.block
-	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist)} 	// (everyone is told, the tiller too)
+	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist, act)} 	// (everyone is told, the tiller too)
 	switch {
 	case e.block == .Air:
 		record(s, c, .Block_Mined, game.BLOCK_INFO[current].name, at = e.pos)

@@ -62,6 +62,36 @@ lint_numbers :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// The pipeline lint (docs/journal.md): a block of a server's chunks changes
+// only through set_block and bulk_edit, which take the cause, check admit and
+// journal the change. Only these files write blocks themselves.
+PIPELINE_FILES :: []string{"server/chunks.odin", "server/changes.odin", "server/edits.odin"}
+
+// lint_pipeline returns one message per line of a server file (not a test)
+// that writes a block itself.
+lint_pipeline :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	for allowed in PIPELINE_FILES {if path == allowed {return found[:]}}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		if strings.has_prefix(strings.trim_left_space(line), "//") {continue}
+		if strings.contains(line, "chunks_set_block(") ||
+		   strings.contains(line, "game.chunk_set(") {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: block write outside the edit pipeline: use set_block or bulk_edit with an Act (docs/journal.md)",
+					path,
+					line_no,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
 is_ident_char :: proc(c: u8) -> bool {
 	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
@@ -84,9 +114,17 @@ determinism_lint :: proc() -> bool {
 				fmt.eprintln(msg)
 				ok = false
 			}
+			if dir == "server" {
+				slash, _ := strings.replace_all(info.fullpath, "\\", "/", context.temp_allocator)
+				rel := slash[strings.last_index(slash, "/server/") + 1:]
+				for msg in lint_pipeline(rel, string(data)) {
+					fmt.eprintln(msg)
+					ok = false
+				}
+			}
 		}
 	}
-	if ok {fmt.println("lint   numbers clean")}
+	if ok {fmt.println("lint   numbers and block writes clean")}
 	return ok
 }
 

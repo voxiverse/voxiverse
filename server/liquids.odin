@@ -26,8 +26,9 @@ WATER_DELAY :: game.TICK_RATE / 6 // ticks per step of flowing water
 WATER_REACH :: 4 // blocks: how far flowing water looks for a way down
 
 Update :: struct {
-	due: u64,
-	pos: game.Block_Pos,
+	due:    u64,
+	pos:    game.Block_Pos,
+	action: u32, // the journal action whose water this is (0: the world's, made when it runs)
 }
 
 Updates :: struct {
@@ -45,7 +46,7 @@ updates_init :: proc(u: ^Updates, allocator := context.allocator) -> (err: mem.A
 }
 
 // schedule wakes the block at p in delay ticks (unless already waiting).
-schedule :: proc(w: ^World, p: game.Block_Pos, delay: u64) {
+schedule :: proc(w: ^World, p: game.Block_Pos, delay: u64, action: Action_Id) {
 	s := w.server
 	u := &w.updates
 	if p in u.queued {return}
@@ -56,23 +57,29 @@ schedule :: proc(w: ^World, p: game.Block_Pos, delay: u64) {
 		return
 	}
 	u.queued[p] = {}
-	u.heap[u.count] = {s.tick + delay, p}
+	u.heap[u.count] = {s.tick + delay, p, u32(action)}
 	u.count += 1
 	sift_up(u.heap[:u.count], u.count - 1)
 }
 
 // wake_water schedules p and its six neighbours if they are water.
-wake_water :: proc(w: ^World, p: game.Block_Pos) {
+wake_water :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
 	for d in ([7]game.Block_Pos{{0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		b, loaded := chunks_block(&w.chunks, p + d)
-		if _, water := game.water_level(b); loaded && water {schedule(w, p + d, WATER_DELAY)}
+		if _, water := game.water_level(b);
+		   loaded && water {schedule(w, p + d, WATER_DELAY, action)}
 	}
 }
 
 // wake_water_box schedules the water in lo..hi and around it that could
 // change (after a bulk edit, a saved chunk loading, a new chunk next to
 // water that was waiting for it: only_border, its faces' neighbours).
-wake_water_box :: proc(w: ^World, lo, hi: game.Block_Pos, only_border := false) {
+wake_water_box :: proc(
+	w: ^World,
+	lo, hi: game.Block_Pos,
+	action: Action_Id,
+	only_border := false,
+) {
 	// Chunk by chunk, only those that may hold water (only water is
 	// restless): a chunk arriving among dry ones looks at nothing.
 	a, z := game.chunk_of(lo - 1), game.chunk_of(hi + 1)
@@ -103,7 +110,7 @@ wake_water_box :: proc(w: ^World, lo, hi: game.Block_Pos, only_border := false) 
 								z >= lo.z &&
 								z <= hi.z
 							if only_border && inside {continue}
-							if restless(w, {x, y, z}) {schedule(w, {x, y, z}, WATER_DELAY)}
+							if restless(w, {x, y, z}) {schedule(w, {x, y, z}, WATER_DELAY, action)}
 						}
 					}
 				}
@@ -135,30 +142,55 @@ updates_run :: proc(w: ^World) {
 	if u.dropped > 0 && u.count < MAX_UPDATES / 2 {u.dropped = 0}
 	for n := 0; n < UPDATE_BUDGET && u.count > 0 && u.heap[0].due <= s.tick; n += 1 {
 		p := u.heap[0].pos
+		action := Action_Id(u.heap[0].action)
 		u.count -= 1
 		u.heap[0] = u.heap[u.count]
 		sift_down(u.heap[:u.count], 0)
 		delete_key(&u.queued, p)
 		u.run += 1
-		water_update(w, p)
+		water_update(w, p, action)
 	}
+}
+
+// updates_cancel drops the queued updates for which drop says yes
+// (a rollback stops the water its filter caused).
+updates_cancel :: proc(
+	w: ^World,
+	drop: proc(w: ^World, u: Update, data: rawptr) -> bool,
+	data: rawptr,
+) {
+	u := &w.updates
+	kept := 0
+	for i in 0 ..< u.count {
+		x := u.heap[i]
+		if drop(w, x, data) {
+			delete_key(&u.queued, x.pos)
+			continue
+		}
+		u.heap[kept] = x
+		kept += 1
+	}
+	u.count = kept
+	for i := kept / 2 - 1; i >= 0; i -= 1 {sift_down(u.heap[:kept], i)}
 }
 
 // water_update: the water at p takes the state its neighbours give it,
 // then spreads.
 @(private = "file")
-water_update :: proc(w: ^World, p: game.Block_Pos) {
+water_update :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
+	// (no action: woken by a chunk loading, it is the world's own)
+	act := Act{action, .Liquid} if action != 0 else world_act(w, .Liquid)
 	b, loaded := chunks_block(&w.chunks, p)
 	level, water := game.water_level(b)
 	if !loaded || !water {return}
 	if level != 0 {
 		want, alive := fed_level(w, p)
 		if !alive {
-			set_block(w, p, .Air)
+			set_block(w, p, .Air, act)
 			return
 		}
 		if want != level {
-			set_block(w, p, game.water_block(want))
+			set_block(w, p, game.water_block(want), act)
 			level = want
 		}
 	}
@@ -167,7 +199,7 @@ water_update :: proc(w: ^World, p: game.Block_Pos) {
 	under, under_loaded := chunks_block(&w.chunks, below)
 	if !under_loaded {return}
 	if takes_water(under, game.WATER_FALLING_LEVEL) {
-		set_block(w, below, .Water_Falling)
+		set_block(w, below, .Water_Falling, act)
 		return
 	}
 	// On firm ground (or on water), sideways, a level weaker.
@@ -180,7 +212,7 @@ water_update :: proc(w: ^World, p: game.Block_Pos) {
 		if !ways[i] {continue}
 		n := p + d
 		nb, n_loaded := chunks_block(&w.chunks, n)
-		if n_loaded && takes_water(nb, next) {set_block(w, n, game.water_block(next))}
+		if n_loaded && takes_water(nb, next) {set_block(w, n, game.water_block(next), act)}
 	}
 }
 

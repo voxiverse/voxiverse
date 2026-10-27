@@ -278,7 +278,7 @@ scenario_proc :: proc(s: ^Server, data: rawptr) {
 		damage_player(s, c, 1000, "test")
 	case 2:
 		// A chest placed and filled by hand through the requests.
-		set_block(c.world, d.pos, .Chest)
+		set_block(c.world, d.pos, .Chest, test_act(c.world))
 		use_block(s, c, d.pos)
 	case 3:
 		// A saved character with more than it can hold.
@@ -423,7 +423,7 @@ put_block_at :: proc(srv: ^Server, pos: game.Block_Pos, block: game.Block) {
 	}
 	call(srv, proc(s: ^Server, data: rawptr) {
 			d := (^Scenario)(data)
-			set_block(s.worlds[0], d.pos, game.Block(d.slot))
+			set_block(s.worlds[0], d.pos, game.Block(d.slot), test_act(s.worlds[0]))
 		}, &d)
 }
 

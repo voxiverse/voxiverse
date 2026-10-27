@@ -140,7 +140,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// An explosion 3 blocks away, blast reach 8: (1 - 3/8) * 12 = 7.5.
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
 		c.health = c.max_health
-		explode(c.world, c.player.position + {3, 0.9, 0}, 4)
+		explode(c.world, c.player.position + {3, 0.9, 0}, 4, world_act(c.world, .Explosion).action)
 	})
 	hit := probe(&srv, "a")
 	testing.expectf(

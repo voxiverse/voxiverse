@@ -35,12 +35,23 @@ changes_begin :: proc(w: ^World) -> ^Changes {
 	return ch
 }
 
-// set_block changes one block (by a player, or nil: the world itself);
-// false if its chunk is not loaded.
-set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block, by: ^Client = nil) -> bool {
+// set_block changes one block, by act (its cause: journal.odin), told to
+// everyone but the player it came from (by; nil: the world itself); false if
+// its chunk is not loaded or the change is refused (admit).
+set_block :: proc(
+	w: ^World,
+	p: game.Block_Pos,
+	b: game.Block,
+	act: Act,
+	by: ^Client = nil,
+) -> bool {
 	s := w.server
-	old, _ := chunks_block(&w.chunks, p)
+	old, loaded := chunks_block(&w.chunks, p)
+	if !loaded {return false}
+	cause := act_current(w, act)
+	if admit(w, cause, p) != .Yes {return false}
 	if !chunks_set_block(&w.chunks, p, b) {return false}
+	journal_entry(w, cause, p, old, b)
 	if old == .Chest && b != .Chest {chest_gone(w, p)}
 	mark_edited(w, game.chunk_of(p))
 	ch := changes_begin(w)
@@ -48,8 +59,8 @@ set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block, by: ^Client = nil
 	if before, seen := ch.blocks[p]; seen && before != who {who = -1}
 	ch.blocks[p] = who
 	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
-	wake_water(w, p)
-	plant_check(w, p + {0, 1, 0}) // (a plant above lost its footing, perhaps)
+	wake_water(w, p, cause.action)
+	plant_check(w, p + {0, 1, 0}, cause.action) // (a plant above lost its footing, perhaps)
 	return true
 }
 

@@ -97,23 +97,23 @@ test_grass_spreads_and_dies :: proc(t: ^testing.T) {
 			p := game.Block_Pos{f.x, f.y, f.z}
 			// A row at the platform's level: dark dirt, grass, lit dirt; the
 			// dark one under a stone roof two up (nothing on it: it is only dark).
-			for dx in i32(-3) ..= 3 {set_block(w, p + {dx, 0, 0}, .Dirt)}
-			set_block(w, p + {-1, 0, 0}, .Dirt)
-			set_block(w, p, .Grass)
-			set_block(w, p + {-1, 2, 0}, .Stone)
-			set_block(w, p + {-2, 2, 0}, .Stone)
+			for dx in i32(-3) ..= 3 {set_block(w, p + {dx, 0, 0}, .Dirt, test_act(w))}
+			set_block(w, p + {-1, 0, 0}, .Dirt, test_act(w))
+			set_block(w, p, .Grass, test_act(w))
+			set_block(w, p + {-1, 2, 0}, .Stone, test_act(w))
+			set_block(w, p + {-2, 2, 0}, .Stone, test_act(w))
 			for _ in 0 ..< 300 {random_tick(w, p, .Grass)}
 			if block_at(w, p + {1, 0, 0}) != .Grass {fail(f, "grass did not spread into lit dirt")}
 			if block_at(w, p + {-1, 0, 0}) != .Dirt {fail(f, "grass spread into dark dirt")}
 			// Under a block it dies.
 			q := p + {0, 0, 6}
-			set_block(w, q, .Grass)
-			set_block(w, q + {0, 1, 0}, .Stone)
+			set_block(w, q, .Grass, test_act(w))
+			set_block(w, q + {0, 1, 0}, .Stone, test_act(w))
 			random_tick(w, q, .Grass)
 			if block_at(w, q) != .Dirt {fail(f, "grass lived under stone")}
 			// Under a plant or air it does not.
-			set_block(w, q, .Grass)
-			set_block(w, q + {0, 1, 0}, .Poppy)
+			set_block(w, q, .Grass, test_act(w))
+			set_block(w, q + {0, 1, 0}, .Poppy, test_act(w))
 			random_tick(w, q, .Grass)
 			if block_at(w, q) != .Grass {fail(f, "grass died under a flower")}
 		},
@@ -138,12 +138,12 @@ test_farmland_moisture :: proc(t: ^testing.T) {
 			f := (^Farm)(data)
 			w := client_by_name(s, f.name).world
 			p := game.Block_Pos{f.x, f.y, f.z}
-			for dx in i32(-2) ..= 14 {set_block(w, p + {dx, 0, 0}, .Dirt)}
-			set_block(w, p + {0, 0, 0}, .Farmland) // 4 from the water
-			set_block(w, p + {4, 1, 0}, .Water) // on the level above is as good
-			set_block(w, p + {9, 0, 0}, .Farmland) // 5 away: dry
-			set_block(w, p + {11, 0, 0}, .Farmland) // dry, with wheat
-			set_block(w, p + {11, 1, 0}, .Wheat_0)
+			for dx in i32(-2) ..= 14 {set_block(w, p + {dx, 0, 0}, .Dirt, test_act(w))}
+			set_block(w, p + {0, 0, 0}, .Farmland, test_act(w)) // 4 from the water
+			set_block(w, p + {4, 1, 0}, .Water, test_act(w)) // on the level above is as good
+			set_block(w, p + {9, 0, 0}, .Farmland, test_act(w)) // 5 away: dry
+			set_block(w, p + {11, 0, 0}, .Farmland, test_act(w)) // dry, with wheat
+			set_block(w, p + {11, 1, 0}, .Wheat_0, test_act(w))
 			random_tick(w, p, .Farmland)
 			if block_at(w, p) != .Farmland_Moist {fail(f, "farmland by water is not moist")}
 			for _ in 0 ..< 20 {random_tick(w, p, block_at(w, p))}
@@ -153,7 +153,7 @@ test_farmland_moisture :: proc(t: ^testing.T) {
 			random_tick(w, p + {9, 0, 0}, .Farmland)
 			if block_at(w, p + {9, 0, 0}) != .Dirt {fail(f, "dry bare farmland did not revert")}
 			// The water goes: moist dries first, and only then, bare, reverts.
-			set_block(w, p + {4, 1, 0}, .Air)
+			set_block(w, p + {4, 1, 0}, .Air, test_act(w))
 			random_tick(w, p, .Farmland_Moist)
 			if block_at(w, p) != .Farmland {fail(f, "moist farmland stayed moist without water")}
 			random_tick(w, p, .Farmland)
@@ -180,9 +180,9 @@ test_wheat_ripens :: proc(t: ^testing.T) {
 			total := 0
 			for i in i32(0) ..< PLANTS {
 				p := game.Block_Pos{f.x + i % 16, f.y + i32(wet) * 4, f.z + i / 16 * 2}
-				set_block(w, p, .Farmland_Moist if wet == 1 else .Farmland)
+				set_block(w, p, .Farmland_Moist if wet == 1 else .Farmland, test_act(w))
 				up := p + {0, 1, 0}
-				set_block(w, up, .Wheat_0)
+				set_block(w, up, .Wheat_0, test_act(w))
 				ticks := 0
 				for block_at(w, up) != .Wheat_7 && ticks < 2000 {
 					random_tick(w, up, block_at(w, up))
@@ -284,9 +284,9 @@ test_random_ticks_run :: proc(t: ^testing.T) {
 			f := (^Farm)(data)
 			w := client_by_name(s, f.name).world
 			p := game.Block_Pos{f.x, f.y, f.z}
-			set_block(w, p, .Dirt)
-			set_block(w, p + {0, 1, 0}, .Farmland)
-			set_block(w, p + {0, 1, 0}, .Farmland) // (the ground the farmland stands on is dirt)
+			set_block(w, p, .Dirt, test_act(w))
+			set_block(w, p + {0, 1, 0}, .Farmland, test_act(w))
+			set_block(w, p + {0, 1, 0}, .Farmland, test_act(w)) // (the ground the farmland stands on is dirt)
 			w.rules.random_tick_speed = 0
 			for _ in 0 ..< 300 {random_ticks(w)}
 			if block_at(w, p + {0, 1, 0}) != .Farmland {fail(f, "random ticks ran at speed 0")}
@@ -324,9 +324,9 @@ test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
 	call(&srv, proc(s: ^Server, data: rawptr) {
 			d := (^Data)(data)
 			w := client_by_name(s, "a").world
-			set_block(w, d.ground, .Grass)
-			set_block(w, d.ground + {0, 1, 0}, .Air)
-			set_block(w, d.ground + {0, 2, 0}, .Air)
+			set_block(w, d.ground, .Grass, test_act(w))
+			set_block(w, d.ground + {0, 1, 0}, .Air, test_act(w))
+			set_block(w, d.ground + {0, 2, 0}, .Air, test_act(w))
 		}, &d)
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	hoe, seeds := game.item_of_tool(.Hoe), game.item_of_material(.Seeds)
@@ -408,8 +408,8 @@ test_farming_saved :: proc(t: ^testing.T) {
 			w.rules.random_tick_speed = 0 // (as set)
 			for stage in 0 ..< game.WHEAT_STAGES {
 				base := p + {i32(stage), 0, 0}
-				set_block(w, base, .Farmland_Moist if stage % 2 == 0 else .Farmland)
-				set_block(w, base + {0, 1, 0}, game.wheat_block(stage))
+				set_block(w, base, .Farmland_Moist if stage % 2 == 0 else .Farmland, test_act(w))
+				set_block(w, base + {0, 1, 0}, game.wheat_block(stage), test_act(w))
 			}
 		},
 		&f,

@@ -68,7 +68,7 @@ without anyone remembering to.
 
 `server/state_hash.odin` hashes what a tick left, in sections: `Clock`, `Rules`,
 `Players`, `Inventories`, `Entities`, `Chunks` (the chunks changed this tick),
-`Liquids`, `Containers`, `Gates`, `Random`, `Ledger`. The root chains
+`Liquids`, `Containers`, `Gates`, `Random`, `Ledger`, `Journal` (every entry and action of the tick, folded as made: both sides of the side-by-side run journal alike; docs/journal.md). The root chains
 (`root(t) = mix(root(t-1), t, sections(t))`), so a divergence stays visible from
 its first tick on. Hashing runs only on stepped servers. `Config.perturb` (tests)
 puts one ulp into the state a tick leaves, to prove a divergence is named.

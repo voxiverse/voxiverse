@@ -181,7 +181,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			for dx in i32(-3) ..= 3 {
 				for dz in i32(-6) ..= 6 {
 					b := game.Block.Grass if dx < 0 else game.Block.Stone
-					set_block(w, {c.x + 10 + dx, c.y, c.z + dz}, b)
+					set_block(w, {c.x + 10 + dx, c.y, c.z + dz}, b, test_act(w))
 				}
 			}
 			for dx in ([]f64{-1.5, 1.5}) {

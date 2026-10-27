@@ -93,7 +93,13 @@ structure_load :: proc(s: ^Server, name: string) -> (t: game.Template, ok: bool)
 }
 
 // structure_paste puts template name with its lowest corner at at.
-structure_paste :: proc(w: ^World, name: string, at: game.Block_Pos, rotation: u8) -> string {
+structure_paste :: proc(
+	w: ^World,
+	name: string,
+	at: game.Block_Pos,
+	rotation: u8,
+	act: Act,
+) -> string {
 	s := w.server
 	t, found := structure_load(s, name)
 	if !found {return fmt.tprintf("structure paste: no structure %s (structure list)", name)}
@@ -104,7 +110,7 @@ structure_paste :: proc(w: ^World, name: string, at: game.Block_Pos, rotation: u
 		template = &t,
 		rotation = rotation,
 	}
-	changed, result := bulk_edit(w, e)
+	changed, result := bulk_edit(w, e, act)
 	switch result {
 	case .Done:
 		return fmt.tprintf("structure %s pasted: %d blocks changed", name, changed)

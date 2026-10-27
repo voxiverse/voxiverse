@@ -65,28 +65,28 @@ test_plants_need_support :: proc(t: ^testing.T) {
 				return
 			}
 			// A flower on dirt, a dandelion on sand, tall grass on grass.
-			set_block(w, at(c, 0, 0, 0), .Dirt)
-			set_block(w, at(c, 0, 1, 0), .Poppy)
-			set_block(w, at(c, 2, 0, 0), .Sand)
-			set_block(w, at(c, 2, 1, 0), .Dandelion)
-			set_block(w, at(c, 4, 0, 0), .Grass)
-			set_block(w, at(c, 4, 1, 0), .Tall_Grass)
-			set_block(w, at(c, 6, 0, 0), .Stone) // a flower the stone does not hold
-			set_block(w, at(c, 6, 1, 0), .Poppy)
+			set_block(w, at(c, 0, 0, 0), .Dirt, test_act(w))
+			set_block(w, at(c, 0, 1, 0), .Poppy, test_act(w))
+			set_block(w, at(c, 2, 0, 0), .Sand, test_act(w))
+			set_block(w, at(c, 2, 1, 0), .Dandelion, test_act(w))
+			set_block(w, at(c, 4, 0, 0), .Grass, test_act(w))
+			set_block(w, at(c, 4, 1, 0), .Tall_Grass, test_act(w))
+			set_block(w, at(c, 6, 0, 0), .Stone, test_act(w)) // a flower the stone does not hold
+			set_block(w, at(c, 6, 1, 0), .Poppy, test_act(w))
 			if block(w, at(c, 0, 1, 0)) != .Poppy || block(w, at(c, 2, 1, 0)) != .Dandelion {
 				fail(c, "plants on what holds them were removed")
 			}
 			// The ground goes from under the poppy: it breaks and drops itself.
 			poppy := game.item_of_block(.Poppy)
 			before := drops(w, poppy)
-			set_block(w, at(c, 0, 0, 0), .Air)
+			set_block(w, at(c, 0, 0, 0), .Air, test_act(w))
 			if block(w, at(c, 0, 1, 0)) != .Air {fail(c, "the poppy stayed in the air")}
 			if drops(w, poppy) != before + 1 {fail(c, "the poppy dropped nothing")}
 			// Water or a placed stone in place of the dirt does the same.
-			set_block(w, at(c, 2, 0, 0), .Stone)
+			set_block(w, at(c, 2, 0, 0), .Stone, test_act(w))
 			if block(w, at(c, 2, 1, 0)) != .Air {fail(c, "the dandelion stayed on stone")}
 			// Tall grass drops nothing (until it has seeds), but goes.
-			set_block(w, at(c, 4, 0, 0), .Air)
+			set_block(w, at(c, 4, 0, 0), .Air, test_act(w))
 			if block(w, at(c, 4, 1, 0)) != .Air {fail(c, "the tall grass stayed")}
 			// Placed by hand where nothing holds it: the edit is refused.
 			if plant_placeable(
@@ -94,17 +94,17 @@ test_plants_need_support :: proc(t: ^testing.T) {
 				at(c, 6, 1, 0),
 				.Poppy,
 			) {fail(c, "a poppy may be placed on stone")}
-			set_block(w, at(c, 8, 0, 0), .Grass)
+			set_block(w, at(c, 8, 0, 0), .Grass, test_act(w))
 			if !plant_placeable(w, at(c, 8, 1, 0), .Poppy) ||
 			   !plant_placeable(w, at(c, 8, 1, 0), .Stone) {
 				fail(c, "placing is refused where it should not be")
 			}
 			// Drops off: nothing left behind.
 			w.rules.drops = false
-			set_block(w, at(c, 8, 1, 0), .Dandelion)
+			set_block(w, at(c, 8, 1, 0), .Dandelion, test_act(w))
 			dandelion := game.item_of_block(.Dandelion)
 			count := drops(w, dandelion)
-			set_block(w, at(c, 8, 0, 0), .Air)
+			set_block(w, at(c, 8, 0, 0), .Air, test_act(w))
 			if drops(w, dandelion) != count {fail(c, "a drop with rules.drops off")}
 			w.rules.drops = true
 		},

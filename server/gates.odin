@@ -126,14 +126,15 @@ gate_blocks :: proc(w: ^World, g: ^Gate, closed := false) {
 	for p in inside {
 		current, loaded := chunks_block(&w.chunks, p)
 		if !loaded {continue}
-		if open && current != .Gate_Horizon {set_block(w, p, .Gate_Horizon)}
-		if !open && current == .Gate_Horizon {set_block(w, p, .Air)}
+		if open && current != .Gate_Horizon {set_block(w, p, .Gate_Horizon, world_act(w, .Gate))}
+		if !open && current == .Gate_Horizon {set_block(w, p, .Air, world_act(w, .Gate))}
 	}
 }
 
 @(private = "file")
 set_if :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
-	if current, loaded := chunks_block(&w.chunks, p); loaded && current != b {set_block(w, p, b)}
+	if current, loaded := chunks_block(&w.chunks, p);
+	   loaded && current != b {set_block(w, p, b, world_act(w, .Gate))}
 }
 
 // in_horizon: a player at feet stands in g's ring (its plane, inside).

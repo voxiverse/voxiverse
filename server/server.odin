@@ -39,29 +39,32 @@ Upload :: struct {
 }
 
 Config :: struct {
-	upload:          Maybe(Upload), // (needs save_dir: a scratch world has no log)
-	seed:            i64,
-	generator:       worldgen.Kind, // for a new world (a saved one keeps its own)
-	view_radius:     i32, // chunks, horizontally
-	view_height:     i32, // chunks above and below
-	workers:         int,
-	allow_cheats:    bool, // the local player may Teleport, Set_Rule and Admin
-	everyone_cheats: bool, // ... and so may remote players
-	save_dir:        string, // the world's directory; "" = not saved (its seed and rules win over these)
-	rules:           game.Rules, // zero: the defaults
-	max_players:     int, // seats (0: DEFAULT_MAX_PLAYERS)
-	listen:          bool, // take remote players from the start (else only after Admin "open_lan")
-	port:            int, // ... on this UDP port (0: any free one)
-	password:        string, // remote players must know it ("": none)
-	name:            string, // what LAN discovery shows
-	capture:         string, // write every packet to this pcap file once listening ("": no)
-	conditions:      netcode.Conditions, // simulated loss etc. on what the server sends (tests)
-	spawn:           Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
-	world_idle:      f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
-	gate_open:       f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
-	no_sheep:        bool, // none appear by themselves (benchmarks: the same work every run)
-	stepped:         bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
-	perturb:         Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
+	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
+	seed:                  i64,
+	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
+	view_radius:           i32, // chunks, horizontally
+	view_height:           i32, // chunks above and below
+	workers:               int,
+	allow_cheats:          bool, // the local player may Teleport, Set_Rule and Admin
+	everyone_cheats:       bool, // ... and so may remote players
+	save_dir:              string, // the world's directory; "" = not saved (its seed and rules win over these)
+	rules:                 game.Rules, // zero: the defaults
+	max_players:           int, // seats (0: DEFAULT_MAX_PLAYERS)
+	listen:                bool, // take remote players from the start (else only after Admin "open_lan")
+	port:                  int, // ... on this UDP port (0: any free one)
+	password:              string, // remote players must know it ("": none)
+	name:                  string, // what LAN discovery shows
+	capture:               string, // write every packet to this pcap file once listening ("": no)
+	conditions:            netcode.Conditions, // simulated loss etc. on what the server sends (tests)
+	spawn:                 Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
+	world_idle:            f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
+	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
+	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
+	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
+	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
+	journal_memory:        int, // tests: entries in a world's journal ring (0: JOURNAL_MEMORY)
+	journal_segment_bytes: int, // tests: where a journal segment ends (0: JOURNAL_SEGMENT_BYTES)
+	journal_timed:         bool, // tests: time the journal (Journal.cost_ns)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -131,6 +134,7 @@ Server :: struct {
 	checks_judged:  int, // checks compared
 	checks_skipped: int, // checks not compared: the player was not quiet
 	hash_root:      u64, // a stepped server's chain of tick hashes (state_hash.odin)
+	age_base:       u64, // the universe's ticks before this run (universe.cfg; age_of)
 	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
@@ -376,7 +380,7 @@ tick :: proc(s: ^Server) {
 				if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {return false}
 				// Water next door that stopped at this chunk's edge flows on.
 				origin := game.chunk_origin(pos)
-				wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, only_border = true)
+				wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0, only_border = true)
 				return true
 			},
 			w,
@@ -428,8 +432,10 @@ tick :: proc(s: ^Server) {
 			containers_tick(w)
 		}
 		gates_tick(w)
+		rollback_tick(w)
 		base.profile_scope("changes flush")
 		changes_flush(w)
+		journal_tick(w)
 	}
 	sent := 0
 	for &c in s.clients {

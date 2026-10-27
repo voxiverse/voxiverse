@@ -42,7 +42,8 @@ calls_run :: proc(s: ^Server) {
 explode_by :: proc(s: ^Server, name: string, p: game.Block_Pos, radius: f64) {
 	c, playing := seat(s, name)
 	if !playing {return}
-	explode(c.world, {f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5}, radius)
+	action := action_begin(c.world, actor_of(s, c), .Explosion)
+	explode(c.world, {f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5}, radius, action)
 }
 
 // chunks_hash_of: a hash of every chunk the server has sent the player

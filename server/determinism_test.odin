@@ -194,7 +194,13 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 	}
 }
 
-session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool, no_sheep := false) -> bool {
+session_start :: proc(
+	sess: ^Session,
+	perturb: Perturb,
+	logging: bool,
+	no_sheep := false,
+	with: Maybe(Config) = nil,
+) -> bool {
 	game.pipe_init(&sess.pipe)
 	config := Config {
 		seed         = DETERMINISM_SEED,
@@ -207,6 +213,7 @@ session_start :: proc(sess: ^Session, perturb: Perturb, logging: bool, no_sheep 
 		perturb      = perturb,
 		no_sheep     = no_sheep,
 	}
+	if c, given := with.?; given {config = c}
 	if !start(&sess.srv, config, {&sess.pipe, .Server}) {return false}
 	sess.started = true
 	m := &sess.mirror
@@ -279,12 +286,10 @@ look_dir :: proc(yaw, pitch: f32) -> [3]f64 {
 	return {-base.sin(y) * base.cos(p), base.sin(p), -base.cos(y) * base.cos(p)}
 }
 
-@(private = "file")
 command :: proc(m: ^Mirror, text: string) {
 	mirror_send(m, game.Command{text})
 }
 
-@(private = "file")
 inventory :: proc(m: ^Mirror, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 	m.inv_seq += 1
 	mirror_send(m, game.Inventory_Request{m.inv_seq, {kind, slot, arg}})

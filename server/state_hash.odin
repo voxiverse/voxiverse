@@ -23,6 +23,7 @@ Hash_Section :: enum u8 {
 	Gates,
 	Random,
 	Ledger,
+	Journal,
 }
 
 Hash_Sections :: bit_set[Hash_Section]
@@ -135,6 +136,8 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 			fold(k, wpath(i, "command_rng"), w.command_rng)
 			fold(k, wpath(i, "entities.rng"), w.entities.rng)
 		}
+	case .Journal:
+		for w, i in s.worlds {fold(k, wpath(i, "journal"), journal_hash(w))}
 	case .Ledger:
 		item_less :: proc(a, b: game.Item) -> bool {return a < b}
 		for item in base.keys_sorted(s.ledger.entries, item_less, context.temp_allocator) {

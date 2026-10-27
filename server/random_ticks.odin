@@ -46,7 +46,7 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	switch {
 	case b == .Grass:
 		if game.block_opaque(above) {
-			set_block(w, p, .Dirt) // buried
+			set_block(w, p, .Dirt, world_act(w, .Random_Tick)) // buried
 			return
 		}
 		// Spread: a few tries at dirt in the 3 x 5 x 3 around (lit, nothing solid on it).
@@ -64,18 +64,19 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 			if !over_loaded ||
 			   game.block_opaque(over) ||
 			   light_above(w, t + {0, 1, 0}) < 9 {continue}
-			set_block(w, t, .Grass)
+			set_block(w, t, .Grass, world_act(w, .Random_Tick))
 		}
 	case game.block_is_farmland(b):
 		wet := farmland_wet(w, p)
 		switch {
 		case wet && b == .Farmland:
-			set_block(w, p, .Farmland_Moist)
+			set_block(w, p, .Farmland_Moist, world_act(w, .Random_Tick))
 		case !wet && b == .Farmland_Moist:
-			set_block(w, p, .Farmland)
+			set_block(w, p, .Farmland, world_act(w, .Random_Tick))
 		case !wet && b == .Farmland:
 			// Dry and nothing planted: back to dirt.
-			if _, planted := game.wheat_stage(above); !planted {set_block(w, p, .Dirt)}
+			if _, planted := game.wheat_stage(above);
+			   !planted {set_block(w, p, .Dirt, world_act(w, .Random_Tick))}
 		}
 	case:
 		stage, _ := game.wheat_stage(b)
@@ -83,7 +84,7 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 		below, _ := chunks_block(&w.chunks, p + {0, -1, 0})
 		chance := i32(3) if below == .Farmland_Moist else 6
 		if i32(base.rng_int_max(r, int(chance))) ==
-		   0 {set_block(w, p, game.wheat_block(stage + 1))}
+		   0 {set_block(w, p, game.wheat_block(stage + 1), world_act(w, .Random_Tick))}
 	}
 }
 
