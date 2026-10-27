@@ -538,8 +538,8 @@ test_render_deterministic :: proc(t: ^testing.T) {
 	a := render(&p, &sf)
 	b := render(&p, &sf)
 	testing.expect(t, slice.equal(a, b), "two renders differ")
-	hash := fnv1a(a)
 	when ODIN_OS == .Linux {
+		hash := fnv1a(a)
 		testing.expectf(t, hash == RENDER_GOLDEN, "RENDER_GOLDEN :: 0x%x", hash)
 	}
 	bands := audio.third_octaves(a, RATE)
