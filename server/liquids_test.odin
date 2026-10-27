@@ -225,7 +225,7 @@ test_water_flood :: proc(t: ^testing.T) {
 }
 
 // The slowest tick allowed while 10 000 blocks of water flow: a tick, 33
-// ms, optimized (CI runs that alone). Unoptimized, sharing the machine with
+// ms, optimized (CI runs the timed tests one at a time). Unoptimized, sharing the machine with
 // the other tests running at once, only a gross slowdown fails.
 @(private = "file")
 WATER_TICK_BUDGET_MS ::

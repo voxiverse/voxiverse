@@ -119,13 +119,14 @@ jobs:
       # cost, a share of the ticks' time and a mean per tick. (The unit
       # tests are unoptimized, with more slack.) The save budget (M46b: what
       # a save costs the tick with 200 characters, 512 edited chunks, 100
-      # chests and 400 entities; the budgets are the runner's) is a second
-      # run in the same step: after it, the flood's tick budget fails in the
-      # same process (3 seeds of 4, measured), so no merging it.
+      # chests and 400 entities; the budgets are the runner's) is in the same
+      # run. One test at a time, as a define (the runner reads no environment
+      # variable): by default it runs the tests on several threads at once,
+      # and a server saving 512 chunks next to one flooding 10 000 blocks
+      # of water costs the flood its tick budget (#26). Run one after the
+      # other, nothing outlives a test: no thread, the same memory.
       - name: Optimized tests
-        run: |
-          odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
-          odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_save_200_characters -out:build/save_budget_test
+        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost,server.test_save_200_characters -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
       # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
       # writer keeps up; optimized, with budgets for a slow runner.
       - name: Event cost, optimized
