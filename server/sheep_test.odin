@@ -49,6 +49,7 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		listen          = true,
 		everyone_cheats = true,
 		save_dir        = dir,
+		no_sheep        = true, // (only the summoned one: natural ones spawn by day)
 	}
 	srv: Server
 	if !testing.expect(t, start(&srv, config, {})) {return}
@@ -151,6 +152,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		max_players     = 2,
 		listen          = true,
 		everyone_cheats = true,
+		no_sheep        = true, // (the test counts its own two: natural ones spawn by day)
 	}
 	srv: Server
 	if !testing.expect(t, start(&srv, config, {})) {return}
