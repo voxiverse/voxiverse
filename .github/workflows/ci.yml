@@ -69,6 +69,11 @@ jobs:
       - name: Save crash points
         if: runner.os == 'Linux'
         run: odin test server -define:ODIN_TEST_NAMES=server.test_save_survives_crashes -define:VX_CRASH_POINTS=1000
+      # M46b: what a save costs the tick with 200 characters, 512 edited chunks,
+      # 100 chests and 400 entities, optimized (the budgets are the runner's).
+      - name: Save budget, optimized
+        if: runner.os == 'Linux'
+        run: odin test server -o:speed -define:ODIN_TEST_NAMES=server.test_save_200_characters
       - name: Determinism logs
         uses: actions/upload-artifact@v7
         with:

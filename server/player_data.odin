@@ -66,7 +66,7 @@ File_Stack :: struct {
 
 // character_path: where name's file is (its account's directory, or
 // before accounts players/).
-@(private = "file")
+@(private)
 character_path :: proc(s: ^Server, name: string, account: Maybe(game.Account)) -> string {
 	file := strings.concatenate({name, ".json"}, context.temp_allocator)
 	if a, ok := account.?; ok {

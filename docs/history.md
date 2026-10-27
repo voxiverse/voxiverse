@@ -4332,3 +4332,133 @@ autosave, and look in its folder: no `.new` or `.tmp` files, a backup present.
 
 **What differed (M46):** `Config.backups` is a `Maybe(int)` (nil: `BACKUP_KEEP`), not a plain int, so the zero value means the default. A rolling backup is decided at staging (`Save_Batch.backup` = how many to keep) and made by the worker after the apply. `save` was split into `save_collect` and `store_commit` so the crash harness can build a batch without running it. Each crash test has its own directories (tests run side by side). The migration, backup, restore and journal-tail runs are in `crash_test.odin` over every operation (or every n-th past 400) instead of a separate M46a. Rolling backups are the `g*` directories; a damaged region is only restored from those, never from a `pre-migration-*` backup (format 4 files).
 
+
+
+# M46b: saves without a hitch, compaction, export and import
+
+The second part of M46: its design, names and files are in [M46.md](M46.md); read it first.
+
+**Design.**
+
+*Capture in one tick, encode in slices.* A save must describe one tick (items move
+between inventories, chests and dropped stacks), yet encoding a large universe takes
+longer than a tick. So `save` captures at tick T and encodes over the following ticks,
+with copy-on-write for what can still change:
+
+- **At T** (`save_begin`): the small item-holding state is encoded at once: `universe.cfg`,
+  every loaded world's `world.cfg`, `entities.cfg`, `containers.cfg` and
+  `protections.cfg`, `permissions.cfg`, `community.cfg` (about 1 ms for 512 entities and
+  100 chests). Each dirty character's `Player_Record` is copied without its counters
+  (fixed size). Each changed region is captured: its `w.regions` flag cleared, and the
+  encoded bytes of its unloaded chunks (`w.saved`) and its edited tops copied. Its loaded
+  chunks are marked `capture = <generation>` (a new `Chunk` field).
+- **Copy-on-write in the pipeline.** Before `set_block` or `edit_chunk` changes a chunk
+  marked with a running capture, and before `keep_edits` or `chunks_unload` lets one go,
+  its blocks are copied into the job (`job.cow[pos]`) and the mark cleared. M45's pipeline
+  is the only writer, so this is the only hook needed.
+- **Slices.** Each following tick, `save_slice` encodes items (a region: from the copies,
+  the COW copies, or the unchanged live chunks; a character: the copied record with the
+  counters as they are at that tick, from the client or `st.players`) until
+  `SAVE_SLICE_US :: 2000` microseconds of that tick are used, and hands each encoded file
+  to the save worker (M46). Counters may be a few seconds newer than the inventory beside
+  them; that is the only part of a save not from T.
+- A world with a save running does not unload until it commits (`worlds_unload_idle`
+  skips it); `stop` runs the capture and every slice at once with no budget, then waits.
+- Timing is the wall clock's, so how many ticks a save takes varies, but not what it
+  writes, nor any hashed state (the marks and copies are not state).
+
+*Region compaction* (on the save worker, as each region is prepared):
+
+- A chunk that a rollback, an undo or a redo touched since its region was last written
+  (`Chunk.revisit`, set in the pipeline for those `how`s) is generated again with the
+  world's generator and its own `Column_Cache`, and dropped from the region if it is
+  identical: it becomes a natural chunk, and its `modified` flag is cleared on the server
+  thread when the batch commits.
+- Edited tops equal to the natural top are dropped.
+- A region left with no chunks and no tops is deleted in the transaction.
+
+*Export and import* (`server/export.odin`):
+
+- A `.vxu` file is one universe: `"VXUX" u32 format (1)  u32 save_format  u64 generation
+  u64 age  varint file count`, then per file `varint len  path  u64 size  u32 crc32  bytes`,
+  then `"VXUE" u32 crc32` over every path and file CRC. Files are stored, not compressed
+  (regions are already palette + runs). The set is a backup's, plus journal segments up
+  to their recorded end (`--no-journal` leaves them out: the journal names characters).
+  `packs/` is included when M47 makes it.
+- `universe_export(dir, out, disk)` exports a closed universe's committed generation.
+  On a running server, `/export` (node `server.export`) saves, and the worker writes
+  `exports/g<generation>.vxu` after that commit.
+- `universe_import(file, dest, disk)` refuses an existing `dest`, a file over 16 GiB in
+  total, over 100 000 files or one over 1 GiB, and any path that is absolute, has `..`,
+  `.`, an empty part, `\`, `:`, more than 8 parts, a part over 64 bytes, or a byte outside
+  `[A-Za-z0-9._-]`, naming the path. It writes into `<dest>.import/` with `disk_write`,
+  checking each CRC as it goes, then renames the directory to `dest`. A newer
+  `save_format` is refused (`made by a newer game`); an older one migrates when opened.
+- Entry points: the dedicated server's `--export <file>` and `--import <file>` (do it and
+  exit); the client's console words `export <save> [file]` (default `<saves>/<save>.vxu`)
+  and `import <file> [name]` (a new save directory; numbered if the name is taken).
+  No menu buttons yet.
+
+*The 200-character budget* (`server/save_budget_test.odin`, `-o:speed` in CI on Linux):
+a stepped server whose store holds 200 dirty characters (a full inventory each and 300
+counters), one world with 512 edited chunks of seeded mixed blocks over 16 regions (all
+loaded), 100 chests and 400 entities. Measured: the capture tick, the largest slice tick,
+the ticks until commit with the worker running, and a full blocking save. Budgets on the
+CI runner: capture at most 4 ms, every slice tick at most 3 ms of save work, committed
+within 150 ticks, the blocking save at most 1.5 s. Debug runs allow four times each.
+
+*One process per universe* (owner, 2026-10-26). Opening a universe takes a lock file,
+`<universe>/lock`, held while it is open: `flock(LOCK_EX | LOCK_NB)` on Linux and macOS,
+`CreateFileW` with no sharing on Windows (`base.file_lock`/`file_unlock`, one file per OS).
+A second process (a second client, or the dedicated server on a client's save) fails at
+open with `the universe is open in another process (<lock path>)`, before anything is
+read or written. The lock holds the owner's process id as text, for the message only; a
+lock left by a crashed process is free, because the OS releases it with the process. Test:
+two opens in one test process (the second sees the first's lock) and a child process that
+holds it.
+
+**The order of the steps:** the capture, the COW hook, slices and the unload rule; the
+budget test and its CI step; compaction; export and import with their entry points; the
+universe lock; `docs/saves.md` updated.
+
+**Left out (M46b):** export and import buttons in Singleplayer, compressed exports,
+exporting part of a universe (one world), streaming an export to another server.
+
+**Tests (M46b):**
+
+- `server/save_slice_test.odin`: a save whose chunks, chest and inventories are changed
+  between its capture and its last slice writes the capture tick's state (the digest equals
+  a blocking save's at T); a chunk unloaded mid-save is saved as at T; a world is not
+  unloaded while its save runs; `stop` during a slice writes everything.
+- **`test_save_200_characters`**: the budgets above.
+- `server/compact_test.odin`: a griefed and rolled-back chunk leaves its region; a region
+  emptied by it is deleted; tops equal to natural are dropped; the world hash is unchanged
+  by compaction.
+- `server/export_test.odin`: **`test_export_import_round_trip`** (export, import elsewhere,
+  open: `hash_chunks` of the edited chunks, the characters and the chests equal the
+  original's); every refused path and size case; a truncated or altered file refused;
+  importing the v4 fixture's export migrates it.
+
+**Exit check (M46b):**
+
+- `test_save_200_characters` within budget, optimized, as a CI step on Linux ("Save
+  budget, optimized").
+- `test_export_import_round_trip` and the slice tests pass.
+- M46's crash test still passes at 1000 points (the slices change what is prepared, not
+  how it is committed).
+- The whole suite, `build check` and `build determinism` pass; CI green on the commit.
+
+**What differed (M46b):**
+
+- `Chunk.revisit` is `World.revisit` (a set of chunk positions): the flag has to survive the chunk being unloaded, and a chunk in `w.saved` has no `Chunk` to carry it. It is set in `journal_append` for the Rollback, Undo and Redo hows.
+- The worker assembles every region file, not only the compacted ones: a slice encodes one chunk at a time to bytes (the unit of the 2 ms budget), the finished list goes to the worker as a `Region_Job`, and `region_encode_bytes` (new, beside `region_encode`, which is now built on it) writes the file. Tops are sorted before they are written, so a region file is the same bytes whenever it is written (map order varied between runs).
+- The journal's `fsync` moved from `journal_save_point` on the tick (5 ms on the budget scene's disk) to the worker, which syncs the segment the batch lists (`Save_Batch.syncs`, `disk_sync_path`) before the commit. `write_containers` no longer uses `fmt` (it was a third of the capture tick with 100 chests).
+- A character that was not playing at T leaves `Store.players` once it is encoded (not at T), so capture does not clone its counters; a rejoin meanwhile finds the record.
+- A file written outside a save (`permissions_changed`) while a save is being sliced also replaces its copy in the running save's batch, or the commit would put the older text back.
+- `Store.slice_hold` (tests: the ticks do not encode; `save_finish` does) and `Store.slice_worst_us` exist for the slice and budget tests. `save_collect` stays as the crash tests' way to hold one whole batch.
+- The lock is two files, `base/lock_posix.odin` (Linux and macOS: `flock`, opened close-on-exec, or a child process would keep the lock after the server let go: the first version of the child-process test found it) and `base/lock_windows.odin`. Windows cannot read the holder's pid from a file opened with no sharing, so its message has no pid. `lock` is skipped by `walk_files` (not in backups or exports).
+- `universe_import` takes `Import_Limits` (default: the spec's), because a file of the real size cannot be made in a test; the 16 GiB total is tested with a small one.
+- `/export` is `save_begin(export = true)`: the batch carries `export_to`, which the worker writes after the commit. The dedicated server's flags are `--export`, `--no-journal` and `--import` (the universe given by `--universe`).
+- Compaction clears `modified` on a loaded chunk only if its blocks still encode to the captured bytes (the capture marks are gone by then); an unloaded one leaves `w.saved` on the same test.
+- Save digests of two runs differ in `community.cfg` (when a player was last seen) and the journal (it stamps the wall clock); the slice test compares everything else, and the characters' inventories.
+- M46's spec, which this one says to read first, is in history.md.

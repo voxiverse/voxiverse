@@ -1,4 +1,4 @@
-# Saves (M46)
+# Saves (M46, M46b)
 
 A universe is a directory. Everything the server keeps is in it; nothing else is.
 
@@ -11,15 +11,41 @@ worlds/<address>/world.cfg, entities.cfg, containers.cfg, protections.cfg
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 2
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
+lock                                          held while the universe is open (never part of a save)
 telemetry/, exports/                          (never part of a save)
 ```
 
+## A save describes one tick, and does not stall it
+
+A save must describe one tick (items move between inventories, chests and dropped stacks),
+yet encoding a big universe takes longer than a tick. `save_begin` (`server/save_slice.odin`)
+**captures** at tick T and the following ticks **encode** what was captured:
+
+- At T, at once: the small state (`universe.cfg`, each world's `world.cfg`, entities,
+  containers, protections, stats, `permissions.cfg`, `community.cfg`), each dirty character's
+  record (without its counters), and for each changed region its unloaded chunks' bytes, its
+  tops, and a mark (`Chunk.capture`) on its loaded edited chunks.
+- A chunk that changes or unloads while marked is copied first (`chunk_cow`, called from
+  `chunks_set_block`, bulk edits and `chunks_unload`: the pipeline is the only writer), so the
+  save holds what T held.
+- Each tick, `save_slice` encodes chunks and characters until `SAVE_SLICE_US` (2 ms) of the
+  tick are used. A region's encoded chunks go to the worker as a `Region_Job`. A character's
+  counters are read when it is encoded, a few seconds newer than the inventory beside them:
+  the only part of a save not from T.
+- A world with a save running does not unload. `stop` (a `save` with wait) finishes the
+  running save at once and then saves again. Timing is the wall clock's: how many ticks a save
+  takes varies, never what it writes or any hashed state.
+- `test_save_200_characters` holds the numbers on the CI runner: capture at most 4 ms, a
+  slice tick at most 3 ms, committed within 150 ticks, a blocking save at most 1.5 s.
+
+The journal segment a save names is synced by the worker before the commit, not on the tick.
+
 ## One save is one transaction
 
-`save` encodes every file on the server thread and hands them as a `Save_Batch` to the
-save worker (`server/save_tx.odin`; a stepped server has no worker: the batch runs inside
-`save`). The worker:
+The batch (`Save_Batch`, `server/save_tx.odin`) goes to the save worker (a stepped server has
+no worker: the batch runs inside `save`). The worker:
 
+0. **Compacts and encodes the regions** (below), and syncs the journal segment.
 1. **Prepares:** every file is written as `<path>.new` and synced.
 2. **Commits:** `save.tx` (the list of renames and deletions, with the CRC of each `.new`)
    is written with `disk_replace`. This is the commit point.
@@ -42,6 +68,43 @@ All disk access goes through `base/disk.odin` (`disk_write`, `disk_replace`, `di
 write-through renames on Windows) and fault-injectable. `Disk_Faults` tears the Nth
 operation and refuses everything after, which `server/crash_test.odin` uses to kill a save
 at every operation.
+
+## Compaction
+
+A region file holds only what differs from the generator. On the worker, as each region is
+prepared: a chunk a rollback, undo or redo touched since the region was written
+(`World.revisit`) is generated again and dropped if it is identical (it is natural again; when
+the batch commits the server clears its `modified` flag, if it is still as captured); edited
+column tops equal to the natural top are dropped; a region left with nothing is deleted in the
+transaction. A region file is the same bytes whenever it is written (tops are sorted).
+
+## Export and import
+
+`.vxu` is one universe in one file (`server/export.odin`): a header, then each file with its
+path, size and CRC, then a seal over every path and CRC. The files are a backup's, plus the
+journal up to the end its `world.cfg` records (`--no-journal` leaves it out: it names
+characters). Not compressed (regions already are palette and runs).
+
+- `voxiverse-server --export <file>` (the universe closed), `--import <file>` (into
+  `--universe`, which must not exist); in the game's console `export <save> [file]` (default
+  `<saves>/<save>.vxu`) and `import <file> [name]` (a new save, numbered if the name is taken);
+  on a running server `/export` (node `server.export`) saves and the worker writes
+  `exports/g<generation>.vxu` after the commit.
+- Import never trusts the file. It refuses an existing destination, more than 100 000 files,
+  a file over 1 GiB, over 16 GiB in all, a universe from a newer game, and any path that is
+  absolute or has `..`, `.`, an empty part, `\`, `:`, more than 8 parts, a part over 64 bytes
+  or a byte outside `[A-Za-z0-9._-]`, naming the path. It writes `<dest>.import/`, checks every
+  CRC and the seal, and renames it to `<dest>`: the universe appears whole or not at all. An
+  older universe migrates when it is opened.
+
+## One process per universe
+
+An open universe holds `<universe>/lock` (`flock` on Linux and macOS, a file opened with no
+sharing on Windows; `base/lock_*.odin`). A second process (a second game, or the dedicated
+server on a save the game has open) fails at open with `the universe is open in another
+process (<path>)` before anything is read or written; an export or import-then-open of an
+open universe too. The lock holds the owner's process id as text, for that message only. The
+OS drops a lock with its process, so a crash leaves none.
 
 ## Formats
 

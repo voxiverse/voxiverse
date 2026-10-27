@@ -601,6 +601,48 @@ register_builtin_commands :: proc(c: ^Console) {
 	console_register(
 		c,
 		{
+			"export",
+			"export <save> [file]: write a save as one file (default: <name>.vxu beside the saves); close it first if it is being played",
+			proc(app: ^App, args: []string) {
+				path, why := save_export(args[0], args[1] if len(args) > 1 else "")
+				if why != "" {
+					console_print(&app.console, fmt.tprintf("export: %s", why), .Warning)
+					return
+				}
+				console_print(&app.console, fmt.tprintf("exported to %s", path))
+			},
+		},
+		complete_world,
+		args = {1, 2},
+	)
+	console_register(
+		c,
+		{
+			"import",
+			"import <file> [name]: make a new save from an exported file",
+			proc(app: ^App, args: []string) {
+				name := strings.join(args[1:], " ", context.temp_allocator)
+				path, why := save_import(args[0], name)
+				if why != "" {
+					console_print(&app.console, fmt.tprintf("import: %s", why), .Warning)
+					return
+				}
+				worlds_refresh(&app.worlds)
+				console_print(
+					&app.console,
+					fmt.tprintf(
+						"imported as %s (universe %s plays it)",
+						path,
+						filepath.base(path),
+					),
+				)
+			},
+		},
+		args = {1, -1},
+	)
+	console_register(
+		c,
+		{
 			"join",
 			"join <host[:port]> [password]: play on a server",
 			proc(app: ^App, args: []string) {

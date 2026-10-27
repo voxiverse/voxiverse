@@ -10,6 +10,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+import "../base"
+import "../server"
 import "platform"
 import "ui"
 
@@ -403,4 +405,35 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	ui.default_focus(ctx)
 	if ui.button(ctx, "Cancel", cancel) {w.mode = .List}
+}
+
+// save_export writes the save called name as one file (default <saves>/<name>.vxu)
+// and says where; "" and why if it could not (a save being played is open: close it
+// first).
+save_export :: proc(name, file: string) -> (path, problem: string) {
+	dir := filepath.join({saves_dir(), name}, context.temp_allocator) or_else name
+	if !os.exists(dir) {return "", fmt.tprintf("there is no save called %s", name)}
+	path = file
+	if path == "" {
+		path =
+			filepath.join(
+				{saves_dir(), fmt.tprintf("%s.vxu", name)},
+				context.temp_allocator,
+			) or_else name
+	}
+	if why := server.universe_export(dir, path, &base.Disk{}); why != "" {return "", why}
+	return path, ""
+}
+
+// save_import makes a new save from an export file (named name, or after the
+// file; numbered if the name is taken) and says where; "" and why if it could not.
+save_import :: proc(file, name: string) -> (path, problem: string) {
+	name := name
+	if name == "" {
+		name = save_dir_name(strings.trim_suffix(filepath.base(file), filepath.ext(file)))
+		if name == "" {name = "Imported"}
+	}
+	path = free_save_path(name)
+	if why := server.universe_import(file, path, &base.Disk{}); why != "" {return "", why}
+	return path, ""
 }

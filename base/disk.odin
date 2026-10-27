@@ -169,6 +169,18 @@ disk_sync_file :: proc(d: ^Disk, file: ^os.File, path: string) -> Disk_Error {
 	return .None
 }
 
+// disk_sync_path makes a file's data safe by its path (the save worker syncs the
+// journal segment the server thread has open).
+disk_sync_path :: proc(d: ^Disk, path: string) -> Disk_Error {
+	file, err := os.open(path, {.Write})
+	if err != nil {
+		disk_log("open", path, err)
+		return .Failed
+	}
+	defer os.close(file)
+	return disk_sync_file(d, file, path)
+}
+
 // disk_append opens path (made if missing) at its end, writes data, and syncs
 // if sync is set; for journal segments.
 disk_append :: proc(d: ^Disk, path: string, data: []u8, sync := false) -> Disk_Error {

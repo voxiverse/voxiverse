@@ -33,6 +33,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"say", "<words>", {1, 64}, admin_broadcast, "chat.broadcast"},
 	{"teleport", "(as tp)", {1, 5}, admin_tp, "teleport.tp"},
 	{"save", "", {0, 0}, admin_save, "server.save"},
+	{"export", "", {0, 0}, admin_export, "server.export"},
 	{
 		"time",
 		"set <0..1 | sunrise | day | noon | sunset | night | midnight> | add <hours> | query",
@@ -231,6 +232,32 @@ commands_allowed :: proc(s: ^Server, c: ^Client) -> string {
 @(private = "file")
 admin_save :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	notice(s, c, "Saved" if save(s) else "Could not save (see the server log)")
+	return true
+}
+
+// admin_export: a save, then the universe as one file in exports/ (the save
+// worker writes it after the commit).
+@(private = "file")
+admin_export :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if s.store.dir == "" {
+		notice(s, c, "This universe is not saved, so there is nothing to export")
+		return true
+	}
+	if s.store.job != nil {save_finish(s)}
+	s.store.last_save = s.tick
+	if !save_begin(s, nil, true) {
+		notice(s, c, "Could not export (see the server log)")
+		return true
+	}
+	notice(
+		s,
+		c,
+		fmt.tprintf(
+			"Exporting to %s/g%d.vxu (see the server log when it is written)",
+			EXPORTS_DIR,
+			s.store.generation + 1,
+		),
+	)
 	return true
 }
 

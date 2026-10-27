@@ -1,5 +1,6 @@
 package server
 
+import "base:runtime"
 import "core:mem"
 import "core:time"
 
@@ -29,6 +30,7 @@ Chunk :: struct {
 	blocks:   game.Chunk_Blocks,
 	modified: bool, // edited since generated (saved when unloaded: save.odin)
 	water:    bool, // may hold water (set when it does, never cleared): liquids skip it if not
+	capture:  u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
 }
 
 Chunk_Store :: struct {
@@ -44,6 +46,29 @@ Chunk_Store :: struct {
 	max_in_flight: int,
 	caches:        []worldgen.Column_Cache, // one per worker (by context.user_index)
 	tops_done:     [dynamic]Tops_Done, // collected, for the world to take (heap)
+	cow:           ^Cow, // the running save's copies of chunks changed since its capture (heap)
+}
+
+// Cow: copy-on-write for a save that encodes over several ticks (save_slice.odin):
+// before a chunk marked with the save's id changes or goes, its blocks are
+// copied here.
+Cow :: struct {
+	id:     u32,
+	copies: map[game.Chunk_Pos]game.Chunk_Blocks, // arrays owned (heap)
+}
+
+// chunk_cow copies c's blocks for the running save, if c is still marked for it.
+chunk_cow :: proc(w: ^Chunk_Store, c: ^Chunk) {
+	if c.capture == 0 {return}
+	defer c.capture = 0
+	if w.cow == nil || w.cow.id != c.capture {return}
+	copy_blocks := c.blocks
+	if c.blocks.array != nil {
+		a := new(game.Block_Array, runtime.heap_allocator())
+		a^ = c.blocks.array^
+		copy_blocks.array = a
+	}
+	w.cow.copies[c.pos] = copy_blocks
 }
 
 // Jobs queued per worker: enough that results collected once a tick keep the
@@ -127,6 +152,7 @@ chunks_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 chunks_set_block :: proc(w: ^Chunk_Store, p: game.Block_Pos, b: game.Block) -> bool {
 	c := chunks_get(w, game.chunk_of(p))
 	if c == nil || c.state != .Ready {return false}
+	chunk_cow(w, c)
 	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
 	c.modified = true
 	if _, water := game.water_level(b); water {c.water = true}
@@ -256,6 +282,7 @@ chunks_unload :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) {
 	if !ok {return}
 	chunk := base.pool_get(&w.chunks, h)
 	assert(chunk.state == .Ready)
+	chunk_cow(w, chunk)
 	game.chunk_release(&chunk.blocks, &w.arrays)
 	delete_key(&w.by_pos, pos)
 	base.pool_remove(&w.chunks, h)

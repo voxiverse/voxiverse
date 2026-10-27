@@ -166,11 +166,21 @@ write_containers :: proc(w: ^World) -> bool {
 		&b,
 		"# Voxiverse containers (written by the server): x y z [slot:item:count ...]",
 	)
+	// (written without fmt: a save holding many chests encodes them inside one tick)
 	for pos, rec in w.containers {
-		fmt.sbprintf(&b, "%d %d %d", pos.x, pos.y, pos.z)
+		strings.write_int(&b, int(pos.x))
+		strings.write_byte(&b, ' ')
+		strings.write_int(&b, int(pos.y))
+		strings.write_byte(&b, ' ')
+		strings.write_int(&b, int(pos.z))
 		for st, i in rec.slots {
 			if game.stack_empty(st) {continue}
-			fmt.sbprintf(&b, " %d:%s:%d", i, game.item_name(st.item), st.count)
+			strings.write_byte(&b, ' ')
+			strings.write_int(&b, i)
+			strings.write_byte(&b, ':')
+			strings.write_string(&b, game.item_name(st.item))
+			strings.write_byte(&b, ':')
+			strings.write_int(&b, st.count)
 		}
 		strings.write_byte(&b, '\n')
 	}

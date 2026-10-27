@@ -52,6 +52,9 @@ Save_Batch :: struct {
 	age:        u64,
 	files:      [dynamic]Prepared,
 	deletes:    [dynamic]string,
+	export_to:  string, // after the commit, the universe as a .vxu file here (export.odin)
+	syncs:      [dynamic]string, // files the worker makes safe before the commit (journal segments)
+	regions:    [dynamic]^Region_Job, // regions the worker compacts and encodes (compact.odin)
 	disk:       ^base.Disk,
 	backup:     int, // > 0: a rolling backup follows the commit, keeping this many
 	// The worker's result.
@@ -69,6 +72,8 @@ batch_make :: proc(dir: string, generation, age: u64, disk: ^base.Disk) -> ^Save
 	b.generation, b.age, b.disk = generation, age, disk
 	b.files = make([dynamic]Prepared, a)
 	b.deletes = make([dynamic]string, a)
+	b.regions = make([dynamic]^Region_Job, a)
+	b.syncs = make([dynamic]string, a)
 	return b
 }
 
@@ -79,10 +84,15 @@ batch_free :: proc(b: ^Save_Batch) {
 		delete(f.bytes, a)
 	}
 	for d in b.deletes {delete(d, a)}
+	for j in b.regions {region_job_free(j)}
+	delete(b.regions)
+	for p in b.syncs {delete(p, a)}
+	delete(b.syncs)
 	delete(b.files)
 	delete(b.deletes)
 	delete(b.dir, a)
 	delete(b.problem, a)
+	delete(b.export_to, a)
 	free(b, a)
 }
 
@@ -105,6 +115,17 @@ batch_stage :: proc(b: ^Save_Batch, rel: string, data: []u8) {
 			break
 		}
 	}
+}
+
+// batch_sync: the worker syncs this file (absolute path) before it commits.
+batch_sync :: proc(b: ^Save_Batch, path: string) {
+	for p in b.syncs {if p == path {return}}
+	append(&b.syncs, strings.clone(path, heap()))
+}
+
+batch_has :: proc(b: ^Save_Batch, rel: string) -> bool {
+	for f in b.files {if f.path == rel {return true}}
+	return false
 }
 
 batch_delete :: proc(b: ^Save_Batch, rel: string) {
@@ -153,6 +174,8 @@ disk_problem :: proc(what, path: string, err: base.Disk_Error) -> string {
 batch_run :: proc(b: ^Save_Batch) {
 	defer sync.atomic_store(&b.done, true)
 	d := b.disk
+	// 0. The regions: compacted and encoded here, off the server thread.
+	for j in b.regions {region_job_run(b, j)}
 	// 1. Prepare.
 	made := make(map[string]bool, 8, context.temp_allocator)
 	for f in b.files {
@@ -174,6 +197,12 @@ batch_run :: proc(b: ^Save_Batch) {
 			return
 		}
 	}
+	for path in b.syncs {
+		if err := base.disk_sync_path(d, path); err != .None {
+			b.problem = disk_problem("cannot sync", path, err)
+			return
+		}
+	}
 	// 2. Commit.
 	tx := tx_encode(b)
 	tx_path := full_path(b.dir, TX_FILE)
@@ -185,6 +214,11 @@ batch_run :: proc(b: ^Save_Batch) {
 	if problem := tx_apply(d, b.dir, tx); problem != "" {
 		b.problem = problem
 		return
+	}
+	if b.export_to != "" {
+		if why := export_write(b.dir, b.export_to, d); why != "" {
+			log.errorf("server export failed file=%s problem=%s", b.export_to, why)
+		}
 	}
 	// 4. A backup, if one is due (it never affects the save).
 	if b.backup > 0 {backup_run(b.dir, b.generation, b.backup, d)}
@@ -344,7 +378,7 @@ walk_files :: proc(dir, rel: string, out: ^[dynamic]string) {
 				continue
 			}
 			walk_files(dir, sub, out)
-		} else {
+		} else if rel != "" || e.name != UNIVERSE_LOCK {
 			append(out, sub)
 		}
 	}
@@ -395,6 +429,12 @@ store_write :: proc(s: ^Server, path: string, data: []u8) -> bool {
 		return true
 	}
 	save_wait(s) // (the worker may be renaming over it)
+	// A save still being sliced holds an older copy of this file: it must not win.
+	if st.job != nil {
+		if rel := relative_path(st.dir, path); batch_has(st.job.batch, rel) {
+			batch_stage(st.job.batch, rel, data)
+		}
+	}
 	if err := base.disk_replace(&st.disk, path, data); err != .None {
 		log.errorf("server cannot write path=%s error=%v", path, err)
 		return false
@@ -451,6 +491,7 @@ save_poll :: proc(s: ^Server) -> bool {
 	st.inflight = nil
 	defer batch_free(b)
 	if b.problem == "" {
+		compaction_apply(s, b)
 		st.generation = b.generation
 		st.saved_at = b.age
 		if b.backup > 0 {st.backed_up, st.backup_age = true, b.age}
@@ -470,6 +511,7 @@ save_poll :: proc(s: ^Server) -> bool {
 store_workers_stop :: proc(s: ^Server) {
 	st := &s.store
 	save_wait(s)
+	if st.job != nil {save_job_abandon(s)}
 	if st.staging != nil {batch_free(st.staging); st.staging = nil}
 	if st.jobs_ready {
 		base.jobs_destroy(&st.jobs)

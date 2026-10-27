@@ -286,6 +286,9 @@ journal_append :: proc(w: ^World, act: Act, entries: []game.Journal_Entry) {
 	}
 	hashing := s.config.stepped
 	size := u64(len(j.entries))
+	if w.dir != "" && (act.how == .Rollback || act.how == .Undo || act.how == .Redo) {
+		for e in entries {w.revisit[game.chunk_of(e.pos)] = {}}
+	}
 	for &e in entries {
 		e.action, e.how, e.age = u32(act.action), act.how, age
 		j.entries[j.head % size] = e
@@ -586,13 +589,16 @@ journal_write_out :: proc(w: ^World) {
 	clear(&j.out.buf)
 }
 
-// journal_save_point: at a save, everything is on disk and a Save record
-// ends it; the world.cfg written after names this end.
+// journal_save_point: at a save, everything is written and a Save record ends
+// it; the world.cfg written after names this end. The segment is synced by the
+// save worker before the commit (the save's batch lists it), not here.
 journal_save_point :: proc(w: ^World) {
 	if w.dir == "" {return}
 	journal_note(w, game.Journal_Save{age_of(w.server)})
 	journal_flush(w)
-	if w.journal.file != nil {base.file_sync(w.journal.file)} 	// (the save names this end)
+	if w.journal.file != nil && w.server.store.staging != nil {
+		batch_sync(w.server.store.staging, segment_path(w, w.journal.seq))
+	}
 }
 
 // Loaded_Segment: a segment read whole, entries in the order written, each

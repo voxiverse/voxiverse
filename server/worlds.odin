@@ -49,6 +49,7 @@ World :: struct {
 	rollback:          ^Rollback_Job, // the running rollback (rollback.odin; heap)
 	protections:       [dynamic]Protection, // regions only members edit (protect.odin; heap)
 	protections_dirty: bool, // protections.cfg could not be written
+	revisit:           map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -122,6 +123,7 @@ world_close :: proc(w: ^World) {
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)
 	delete(w.regions)
+	delete(w.revisit)
 	counters_free(&w.stats)
 	delete(w.dir)
 	free(w)
@@ -196,6 +198,7 @@ world_load :: proc(s: ^Server, a: game.Address) -> ^World {
 // worlds_unload_idle saves and frees the worlds nobody has been in for a
 // while (never the home world).
 worlds_unload_idle :: proc(s: ^Server) {
+	if s.store.job != nil {return} 	// (a world with a save running does not go until it commits)
 	idle :=
 		u64(s.config.world_idle * game.TICK_RATE) if s.config.world_idle > 0 else WORLD_IDLE_SECONDS * game.TICK_RATE
 	for i := len(s.worlds) - 1; i >= 1; i -= 1 {

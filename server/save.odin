@@ -47,23 +47,28 @@ LEGACY_FORMAT :: 4
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
-	dir:        string, // the universe's ("" = not saved)
-	players:    map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
-	characters: map[string]game.Account, // every character's account, by name
-	writer:     game.Writer,
-	last_save:  u64, // the tick of the last save
+	dir:            string, // the universe's ("" = not saved)
+	players:        map[string]Player_Record, // by name: online, or not yet written (player_data.odin)
+	characters:     map[string]game.Account, // every character's account, by name
+	writer:         game.Writer,
+	last_save:      u64, // the tick of the last save
 	// M46 (save_tx.odin): the disk, the save worker, and the save in flight.
-	disk:       base.Disk,
-	jobs:       base.Jobs,
-	jobs_ready: bool,
-	staging:    ^Save_Batch, // the save being collected
-	inflight:   ^Save_Batch, // handed to the worker
-	carry:      Carry, // what a failed save did not write
-	generation: u64, // the last committed save's
-	format:     int, // the format universe.cfg had when opened
-	saved_at:   u64, // its age
-	backed_up:  bool, // a rolling backup was made this run
-	backup_age: u64, // ... at this age
+	disk:           base.Disk,
+	jobs:           base.Jobs,
+	jobs_ready:     bool,
+	staging:        ^Save_Batch, // the save being collected
+	inflight:       ^Save_Batch, // handed to the worker
+	carry:          Carry, // what a failed save did not write
+	generation:     u64, // the last committed save's
+	format:         int, // the format universe.cfg had when opened
+	saved_at:       u64, // its age
+	backed_up:      bool, // a rolling backup was made this run
+	backup_age:     u64, // ... at this age
+	lock:           base.File_Lock, // held while the universe is open (UNIVERSE_LOCK)
+	job:            ^Save_Job, // the save being captured and sliced (save_slice.odin)
+	serial:         u32, // ids of saves, for copy-on-write marks
+	slice_worst_us: i64, // the largest slice of the last save (save_slice.odin)
+	slice_hold:     bool, // tests: the ticks do not encode (save_finish does)
 }
 
 // store_open reads the universe's files if dir has them (its seed and the
@@ -84,6 +89,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		log.errorf("server cannot create the universe directory dir=%s error=%v", dir, err)
 		return false
 	}
+	if !universe_lock(st, dir) {return false}
 	if problem := store_recover(dir, &st.disk); problem != "" {
 		log.errorf("server cannot open the save: %s", problem)
 		return false
@@ -111,6 +117,28 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	}
 	store_migrate(s) or_return
 	return world_dir_open(home)
+}
+
+// UNIVERSE_LOCK: the file an open universe holds a lock on (its text is the
+// owner's process id, for the message only).
+UNIVERSE_LOCK :: "lock"
+
+// universe_lock: one process has a universe open at a time. False (logged)
+// if another has it.
+universe_lock :: proc(st: ^Store, dir: string) -> bool {
+	path := filepath.join({dir, UNIVERSE_LOCK}, context.temp_allocator) or_else UNIVERSE_LOCK
+	lock, holder, ok := base.file_lock(path, fmt.tprintf("%d", os.get_pid()))
+	defer delete(holder)
+	if !ok {
+		log.errorf(
+			"server the universe is open in another process (%s)%s",
+			path,
+			fmt.tprintf(" pid %s", holder) if holder != "" else "",
+		)
+		return false
+	}
+	st.lock = lock
+	return true
 }
 
 // world_dir_open: w's directory (made if new); its world.cfg read, or
@@ -188,6 +216,7 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 store_close :: proc(s: ^Server) {
 	st := &s.store
 	store_workers_stop(s)
+	base.file_unlock(&st.lock)
 	delete(st.carry.files)
 	delete(st.carry.deletes)
 	for name, &r in st.players {
@@ -243,38 +272,32 @@ mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
 	w.regions[game.region_of(pos)] = true
 }
 
-// save_collect encodes every file of a save into the batch being staged (false
-// if one is being staged already).
-save_collect :: proc(s: ^Server) -> bool {
-	if !store_stage(s) {return false}
-	write_universe_file(s)
-	for w in s.worlds {world_stage(w)}
-	permissions_save(s)
-	community_save(s)
-	players_save(s)
-	return true
-}
-
 // save writes the universe's files and every loaded world's (its settings,
 // entities and changed regions) as one transaction (save_tx.odin), by the save
-// worker; with wait, returns when it is committed (false if it failed:
-// logged, and the next save writes the files again). An autosave does not
-// wait, and does nothing while the last one is still being written.
+// worker. The save describes this tick (save_slice.odin captures it at once and
+// encodes the big parts over the next ticks); with wait, returns when it is
+// committed (false if it failed: logged, and the next save writes the files
+// again). An autosave does not wait, and does nothing while the last one is
+// still being written.
 save :: proc(s: ^Server, wait := true) -> bool {
 	st := &s.store
 	if st.dir == "" {
 		st.last_save = s.tick
 		return true
 	}
+	if st.job != nil {
+		if !wait {return true}
+		save_finish(s) // (the save running is whole before the next begins)
+	}
 	if !wait {
 		save_poll(s)
 		if st.inflight != nil {return true}
 	}
 	st.last_save = s.tick
-	if !save_collect(s) {return false}
-	ok := store_commit(s, wait)
-	log.infof("server saved worlds=%d dir=%s", len(s.worlds), st.dir)
-	return ok
+	if !save_begin(s) {return false}
+	if wait {return save_finish(s)}
+	save_slice(s)
+	return true
 }
 
 // world_save writes w's files on their own (a world being unloaded): its own
@@ -282,14 +305,13 @@ save :: proc(s: ^Server, wait := true) -> bool {
 world_save :: proc(w: ^World) -> bool {
 	s := w.server
 	if w.dir == "" {return true}
-	own := store_stage(s)
-	ok := world_stage(w)
-	if own {ok = store_commit(s, true) && ok}
-	return ok
+	if s.store.job != nil {save_finish(s)}
+	if !save_begin(s, w) {return false}
+	return save_finish(s)
 }
 
-// world_stage adds w's world.cfg, entities and changed regions to the save
-// being collected.
+// world_stage adds w's world.cfg, entities and the rest of its small state
+// (not its regions: save_slice.odin) to the save being collected.
 world_stage :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
 	journal_save_point(w) // (what the world.cfg names as the journal's end)
@@ -299,14 +321,10 @@ world_stage :: proc(w: ^World) -> bool {
 	if !write_entities(w) {ok = false}
 	if !write_containers(w) {ok = false}
 	if !write_stats(w) {ok = false}
-	for region, changed in w.regions {
-		if !changed {continue}
-		if write_region(w, region) {w.regions[region] = false} else {ok = false}
-	}
 	return ok
 }
 
-@(private = "file")
+@(private)
 region_path :: proc(dir: string, r: game.Region_Pos) -> string {
 	name := fmt.tprintf("r.%d.%d.vxr", r.x, r.y)
 	return filepath.join({dir, "regions", name}, context.temp_allocator) or_else name
@@ -424,43 +442,8 @@ region_from_backup :: proc(w: ^World, region: game.Region_Pos, path: string) {
 	)
 }
 
-@(private = "file")
-write_region :: proc(w: ^World, region: game.Region_Pos) -> bool {
-	chunks := make([dynamic]game.Saved_Chunk, context.temp_allocator)
-	// Edited chunks that are loaded...
-	it: base.Pool_Iterator
-	for c in base.pool_next(&w.chunks.chunks, &it) {
-		if c.modified && c.state == .Ready && game.region_of(c.pos) == region {
-			append(&chunks, game.Saved_Chunk{c.pos, &c.blocks})
-		}
-	}
-	// ... and those that are not.
-	for pos, bytes in w.saved {
-		if game.region_of(pos) != region {continue}
-		r := game.reader_make(bytes)
-		blocks := new(game.Chunk_Blocks, context.temp_allocator)
-		array := new(game.Block_Array, context.temp_allocator)
-		uniform, is_uniform := game.read_chunk_blocks(&r, array)
-		blocks^ = {
-			uniform = uniform,
-			array   = nil if is_uniform else array,
-		}
-		append(&chunks, game.Saved_Chunk{pos, blocks})
-	}
-	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
-	for column, top in w.tops {
-		if game.region_of({column.x >> game.CHUNK_SHIFT, 0, column.y >> game.CHUNK_SHIFT}) ==
-		   region {
-			append(&tops, game.Saved_Top{column.x, column.y, top})
-		}
-	}
-	wr := &w.server.store.writer
-	game.region_encode(wr, region, chunks[:], tops[:], w.server.store.generation + 1)
-	return store_write(w.server, region_path(w.dir, region), wr.buf[:])
-}
-
 // universe.cfg: "key = value" lines.
-@(private = "file")
+@(private)
 write_universe_file :: proc(s: ^Server, format := SAVE_FORMAT) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")

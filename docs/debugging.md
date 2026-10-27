@@ -217,7 +217,7 @@ and to light and mesh (ours), on average and the slowest 1%.
 
 What a player may do is a set of nodes: `world.edit` (build), `world.edit.bulk`, `world.fire`,
 `world.summon`, `world.structure`, `world.time`, `world.rules`, `world.gen`,
-`teleport.tp`, `teleport.locate`, `server.save`, `server.open_lan`, `permissions.edit`,
+`teleport.tp`, `teleport.locate`, `server.save`, `server.export`, `server.open_lan`, `permissions.edit`,
 and the `chat.*`, `moderation.*`, `teleport.*` and `info.*` nodes the commands
 use. A grant is a node, `x.*` (x and everything under it), `*` (everything), or `-x` (not x).
 The most specific grant wins; at the same specificity the player's own grant beats their

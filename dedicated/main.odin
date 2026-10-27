@@ -42,6 +42,9 @@ Options :: struct {
 	backups:     int `usage:"rolling backups kept (default 5, 0: none)"`,
 	check:       bool `usage:"check the universe's files read whole, print what does not, and quit (exit 1 on a problem)"`,
 	restore:     string `usage:"put a backup (a directory of backups/, or latest) back as the universe and quit"`,
+	export:      string `usage:"write the universe as one file (a .vxu) and quit (exit 1 if it is open elsewhere or cannot be written)"`,
+	no_journal:  bool `args:"name=no-journal" usage:"with --export: leave the journal out (it names characters)"`,
+	import_file: string `args:"name=import" usage:"make the universe --universe (a directory that does not exist yet) from a .vxu file and quit"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -83,6 +86,10 @@ main :: proc() {
 		ok = run_check(opts.universe)
 	case opts.restore != "":
 		ok = run_restore(opts.universe, opts.restore)
+	case opts.export != "":
+		ok = run_export(opts.universe, opts.export, !opts.no_journal)
+	case opts.import_file != "":
+		ok = run_import(opts.import_file, opts.universe)
 	case opts.collector:
 		ok = run_collector(opts)
 	case:
@@ -222,5 +229,25 @@ run_restore :: proc(universe, name: string) -> bool {
 		return false
 	}
 	fmt.printfln("%s: restored from %s", universe, name)
+	return true
+}
+
+// run_export: --export.
+run_export :: proc(universe, file: string, journal: bool) -> bool {
+	if why := server.universe_export(universe, file, &base.Disk{}, journal); why != "" {
+		fmt.eprintfln("cannot export: %s", why)
+		return false
+	}
+	fmt.printfln("%s: exported to %s", universe, file)
+	return true
+}
+
+// run_import: --import.
+run_import :: proc(file, universe: string) -> bool {
+	if why := server.universe_import(file, universe, &base.Disk{}); why != "" {
+		fmt.eprintfln("cannot import: %s", why)
+		return false
+	}
+	fmt.printfln("%s: imported from %s", universe, file)
 	return true
 }

@@ -164,6 +164,7 @@ edit_chunk :: proc(
 						continue
 					}
 				}
+				chunk_cow(&w.chunks, c)
 				if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return

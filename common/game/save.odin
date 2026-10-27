@@ -48,9 +48,35 @@ region_encode :: proc(
 	tops: []Saved_Top,
 	generation: u64 = 0,
 ) {
-	sorted := make([]Saved_Chunk, len(chunks), context.temp_allocator)
+	encoded := make([]Encoded_Chunk, len(chunks), context.temp_allocator)
+	scratch: Writer
+	writer_init(&scratch, context.temp_allocator)
+	for c, i in chunks {
+		clear(&scratch.buf)
+		write_chunk_blocks(&scratch, c.blocks)
+		encoded[i] = {c.pos, slice.clone(scratch.buf[:], context.temp_allocator)}
+	}
+	region_encode_bytes(w, region, encoded, tops, generation)
+}
+
+// Encoded_Chunk: a chunk's blocks as write_chunk_blocks wrote them.
+Encoded_Chunk :: struct {
+	pos:   Chunk_Pos,
+	bytes: []u8,
+}
+
+// region_encode_bytes is region_encode for chunks already encoded (the save
+// slices encode them a few at a time, the worker assembles the file).
+region_encode_bytes :: proc(
+	w: ^Writer,
+	region: Region_Pos,
+	chunks: []Encoded_Chunk,
+	tops: []Saved_Top,
+	generation: u64 = 0,
+) {
+	sorted := make([]Encoded_Chunk, len(chunks), context.temp_allocator)
 	copy(sorted, chunks)
-	slice.sort_by(sorted, proc(a, b: Saved_Chunk) -> bool {return chunk_pos_less(a.pos, b.pos)})
+	slice.sort_by(sorted, proc(a, b: Encoded_Chunk) -> bool {return chunk_pos_less(a.pos, b.pos)})
 	payloads: Writer
 	writer_init(&payloads, context.temp_allocator)
 	Entry :: struct {
@@ -59,10 +85,8 @@ region_encode :: proc(
 	entries := make([]Entry, len(sorted), context.temp_allocator)
 	for c, i in sorted {
 		assert(region_of(c.pos) == region)
-		start := len(payloads.buf)
-		write_chunk_blocks(&payloads, c.blocks)
-		body := payloads.buf[start:]
-		entries[i] = {u32(start), u32(len(body)), hash.crc32(body)}
+		entries[i] = {u32(len(payloads.buf)), u32(len(c.bytes)), hash.crc32(c.bytes)}
+		append(&payloads.buf, ..c.bytes)
 	}
 	clear(&w.buf)
 	append(&w.buf, REGION_MAGIC)
