@@ -209,7 +209,7 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   check still runs on every push. The tests run once, with `ODIN_TEST_RANDOM_SEED` set to the
   run number (a re-run repeats it). `./build.sh test` turns `ODIN_TEST_RANDOM_SEED` and
   `ODIN_TEST_THREADS` from the environment into `-define:` flags (Odin reads them only as
-  defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh test` reproduces a CI failure. A budget a test asserts is read from `base.thread_cpu_us` (the thread's CPU time), not a wall clock: the suite runs tests on several threads, and a core taken from the measured one is not the work's cost (`test_save_200_characters` failed once on a 27 ms wall-clock capture of a few ms of work). Ubuntu packages come from a cache of their `.deb` files
+  defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh test` reproduces a CI failure. A budget a test asserts is read from `base.thread_cpu_us` (the thread's CPU time), not a wall clock: the suite runs tests on several threads, and a core taken from the measured one is not the work's cost (`test_save_200_characters` failed once on a 27 ms wall-clock capture of a few ms of work). On Windows it is the thread's cycle count over a rate measured against the wall clock: `GetThreadTimes` advances once per 15.6 ms scheduler tick, and read a 2 ms slice as 15625 us (CI run 40590622700). Ubuntu packages come from a cache of their `.deb` files
   (`.github/actions/apt`), because the package mirror twice took over 20 minutes.
 
 ### Saves
