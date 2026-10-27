@@ -20,13 +20,14 @@ concurrency:
 # pinned shader compiler itself).
 
 jobs:
+  # macOS and Windows: everything but the Linux-only checks, which the two
+  # Linux jobs below run in parallel (the Linux job alone was CI's length).
   build:
     name: Test · ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, name: Linux x64 }
           - { os: macos-latest, name: macOS arm64 }
           - { os: windows-latest, name: Windows x64 }
     runs-on: ${{ matrix.os }}
@@ -40,40 +41,12 @@ jobs:
 
       - name: Check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
-      # A virtual gamepad for the platform package's hot-plug test (M41): the
-      # uinput device writable, and the pad's event node readable by the
-      # runner user. VX_REQUIRE_UINPUT makes the test fail rather than skip.
-      - name: Virtual gamepad (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo modprobe uinput
-          sudo chmod 0666 /dev/uinput
-          echo 'SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/vendor}=="1209", ATTRS{id/product}=="0001", MODE="0666"' | sudo tee /etc/udev/rules.d/99-voxiverse-test.rules
-          sudo udevadm control --reload-rules
-          echo "VX_REQUIRE_UINPUT=1" >> "$GITHUB_ENV"
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
-      # The same suite again with another random seed (M29): a test that
-      # passes once and fails once is a flake or a nondeterminism, and fails
-      # the run (the tests' worlds are still: game.rules_still).
-      - name: Test again, other seed (Linux)
-        if: runner.os == 'Linux'
-        run: ODIN_TEST_RANDOM_SEED=29 ./build.sh test
       # The scripted 10 000-tick session at both optimization levels (M38):
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
-      # M46: the save killed at 1000 different operations (a faulty disk layer,
-      # not real kills): every point loads, and is exactly the old generation
-      # or the new one.
-      - name: Save crash points
-        if: runner.os == 'Linux'
-        run: odin test server -define:ODIN_TEST_NAMES=server.test_save_survives_crashes -define:VX_CRASH_POINTS=1000
-      # M46b: what a save costs the tick with 200 characters, 512 edited chunks,
-      # 100 chests and 400 entities, optimized (the budgets are the runner's).
-      - name: Save budget, optimized
-        if: runner.os == 'Linux'
-        run: odin test server -o:speed -define:ODIN_TEST_NAMES=server.test_save_200_characters
       - name: Determinism logs
         uses: actions/upload-artifact@v7
         with:
@@ -91,21 +64,107 @@ jobs:
       - name: Server benchmark (smoke)
         run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
 
-      # Real frames on Mesa's CPU Vulkan driver under the validation layer:
-      # any validation finding, leak, sanitizer report or failed check fails
-      # the run.
-      - name: Linux test packages (CPU Vulkan, xvfb, debuggers, tshark)
-        if: runner.os == 'Linux'
+  # Linux, the tests: no window, nothing but the compiler. Runs beside
+  # "Game · Linux x64", which needs the apt packages and a built game.
+  linux-tests:
+    name: Test · Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          dev: true
+
+      - name: Check
+        run: ./build.sh check
+      # A virtual gamepad for the platform package's hot-plug test (M41): the
+      # uinput device writable, and the pad's event node readable by the
+      # runner user. VX_REQUIRE_UINPUT makes the test fail rather than skip.
+      - name: Virtual gamepad
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
-          echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
+          sudo modprobe uinput
+          sudo chmod 0666 /dev/uinput
+          echo 'SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/vendor}=="1209", ATTRS{id/product}=="0001", MODE="0666"' | sudo tee /etc/udev/rules.d/99-voxiverse-test.rules
+          sudo udevadm control --reload-rules
+          echo "VX_REQUIRE_UINPUT=1" >> "$GITHUB_ENV"
+      # One run of the suite per push, with a random seed that changes with
+      # the push (M29: a test that passes under one seed and fails under
+      # another is a flake or a nondeterminism, and fails the run; the tests'
+      # worlds are still: game.rules_still). The seed is the run number: a
+      # re-run of the same run uses the same seed, so a failure that depends
+      # on it fails again rather than passing as a flake. It is printed
+      # first, and again if the tests fail (set it to reproduce).
+      - name: Test
+        env:
+          ODIN_TEST_RANDOM_SEED: ${{ github.run_number }}
+        run: |
+          echo "ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"
+          ./build.sh test || { echo "::error::tests failed with ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"; exit 1; }
+      # The scripted 10 000-tick session at both optimization levels (M38):
+      # the logs go to the determinism job below, which compares all six.
+      - name: Determinism
+        run: ./build.sh determinism
+      - name: Determinism logs
+        uses: actions/upload-artifact@v7
+        with:
+          name: determinism-ubuntu-latest
+          path: build/determinism/
+          if-no-files-found: error
+      # The optimized tests, one build: M46 the save killed at 1000 different
+      # operations (a faulty disk layer, not real kills: every point loads,
+      # and is exactly the old generation or the new one); M11 10 000 blocks
+      # of water flowing within the server's tick; M45 the edit journal's
+      # cost, a share of the ticks' time and a mean per tick. (The unit
+      # tests are unoptimized, with more slack.) The save budget (M46b: what
+      # a save costs the tick with 200 characters, 512 edited chunks, 100
+      # chests and 400 entities; the budgets are the runner's) is a second
+      # run in the same step: after it, the flood's tick budget fails in the
+      # same process (3 seeds of 4, measured), so no merging it.
+      - name: Optimized tests
+        run: |
+          odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
+          odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_save_200_characters -out:build/save_budget_test
+      # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
+      # writer keeps up; optimized, with budgets for a slow runner.
+      - name: Event cost, optimized
+        run: odin test common/telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
+
+  # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
+  # under the validation layer, any validation finding, leak, sanitizer
+  # report or failed check fails the run.
+  linux-game:
+    name: Game · Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: Linux test packages (CPU Vulkan, xvfb, debuggers, tshark)
+        uses: ./.github/actions/apt
+        with:
+          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
+      - name: CPU Vulkan driver
+        run: echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
+
+      - name: Build game
+        run: ./build.sh build
+      # The chunk pipeline (M19): exact counts, and every stage within a
+      # generous budget (an optimized build, one thread).
+      - name: Benchmark check
+        run: ./build.sh bench chunks -check
+      # The server's benchmark scenario, short (M19): simulated players over
+      # UDP; its numbers compare with nothing.
+      - name: Server benchmark (smoke)
+        run: ./build/voxiverse-server --benchmark server --smoke
 
       # The world streams through a flight and memory stays flat (fly_test,
       # M3's check), recorded: every message decodes, and replaying the
       # client's messages against a fresh server goes cleanly.
-      - name: Flight, trace and replay (Linux)
-        if: runner.os == 'Linux'
+      - name: Flight, trace and replay
         run: |
           xvfb-run -a ./build/voxiverse --frames 120
           xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30" --check fly
@@ -114,27 +173,23 @@ jobs:
 
       # The same flight on a synthetic gamepad (M41): events in, the actions,
       # the predicted inputs out.
-      - name: Gamepad flight (Linux)
-        if: runner.os == 'Linux'
+      - name: Gamepad flight
         run: xvfb-run -a ./build/voxiverse --check fly_pad
 
       # Bulk edits (M9): rockets and explosions, each shown whole, and the
       # client's chunks end up exactly the server's.
-      - name: Blast test (Linux)
-        if: runner.os == 'Linux'
+      - name: Blast test
         run: xvfb-run -a ./build/voxiverse --check blast
 
       # Worldgen (M10): every biome visited, screenshotted (uploaded below),
       # within frame, generation and meshing budgets, memory flat.
-      - name: Biome tour (Linux)
-        if: runner.os == 'Linux'
+      - name: Biome tour
         run: xvfb-run -a ./build/voxiverse --check tour
 
       # The game's benchmark scenarios, short (M19): each still runs to its
       # end (fixed conditions, offscreen drawing, its result written) on the
       # CPU driver under validation; timing here means nothing.
-      - name: Benchmark scenarios (smoke, Linux)
-        if: runner.os == 'Linux'
+      - name: Benchmark scenarios (smoke)
         run: |
           for scenario in load views flight edits audio; do
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
@@ -143,14 +198,12 @@ jobs:
       # Real-time audio (M32d): 30 s of a busy session mixed into the null
       # device; no underruns, non-finite samples, dropped or late commands,
       # the callback within its budget, the rolling capture written.
-      - name: Audio smoke run (Linux)
-        if: runner.os == 'Linux'
+      - name: Audio smoke run
         run: xvfb-run -a ./build/voxiverse --check audio
 
       # Every screen a player meets (M20), screenshotted (uploaded below):
       # the menus and Options' tabs, the loading screen, a failed join.
-      - name: Screens (Linux)
-        if: runner.os == 'Linux'
+      - name: Screens
         run: |
           xvfb-run -a ./build/voxiverse --exec "set name ci; sleep 2; screenshot screen_title; wait 3; screen worlds; wait 3; screenshot screen_saves; wait 3; screen worlds create; wait 3; screenshot screen_create_save; wait 3; screen multiplayer; sleep 1; screenshot screen_multiplayer; wait 3; screen multiplayer direct; wait 3; screenshot screen_direct_connection; wait 3; screen options video; wait 3; screenshot screen_options_video; wait 3; screen options sound; wait 3; screenshot screen_options_sound; wait 3; screen options controls; wait 3; screenshot screen_options_controls; wait 3; screen options accessibility; wait 3; screenshot screen_options_accessibility; wait 3; screen options profile; wait 3; screenshot screen_options_profile; wait 3; screen title; screen quit; wait 3; screenshot screen_quit; wait 3; quit"
           xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait 20; screenshot screen_loading; wait_world; screen menu; wait 3; screenshot screen_game_menu; wait 3; screen game; /give Player cap; /give Player tunic; /give Player trousers; /give Player boots; wait 5; /wear; wait 5; screen inventory; wait 3; screenshot screen_inventory; wait 3; screen game; screen inventory creative; wait 3; screenshot screen_creative; wait 3; screen game; screen stats; wait 3; screenshot screen_stats; wait 3; quit"
@@ -158,15 +211,13 @@ jobs:
           xvfb-run -a ./build/voxiverse --exec "set name ci; pad connect xbox; pad dpad_down down; pad dpad_down up; wait 3; screenshot screen_title_pad; screen options controls; wait 3; screenshot screen_options_pad; screen worlds create; pad a down; pad a up; wait 3; screenshot screen_keyboard; quit"
 
       # The sky through a day (screenshots uploaded below).
-      - name: Sky (Linux)
-        if: runner.os == 'Linux'
+      - name: Sky
         run: xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait_world; set rules.daylight_cycle 0; /tp 0 12 0 -90 8; wait 30; /time 0.26; wait 5; screenshot sky_sunrise; /tp 0 12 0 -90 50; /time 0.4; wait 5; screenshot sky_day; /tp 0 12 0 90 8; /time 0.77; wait 5; screenshot sky_dusk; /tp 0 12 0 -90 20; /time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
       # Over real sockets: a dedicated server and a client joining it, the
       # server capturing every packet; the Wireshark dissector must decode
       # them all (our harness, then tshark itself).
-      - name: Multiplayer and Wireshark (Linux)
-        if: runner.os == 'Linux'
+      - name: Multiplayer and Wireshark
         run: |
           ./build/voxiverse-server --universe build/ci-universe --view-radius 3 --view-height 2 --capture build/server.pcap > build/server.log 2>&1 &
           SERVER=$!
@@ -181,41 +232,20 @@ jobs:
           test "$(wc -l < build/tshark.txt)" -gt 50
           test -z "$(tshark -X lua_script:tools/wireshark/voxiverse.lua -r build/server.pcap -Y '_ws.malformed || voxiverse.malformed')"
 
-      # Liquids (M11): 10 000 blocks of water flowing within the server's
-      # tick, optimized (the unit tests are unoptimized, with more slack).
-      - name: Water flood, optimized (Linux)
-        if: runner.os == 'Linux'
-        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_water_flood -out:build/flood_test
-
-      # The edit journal's cost (M45): a share of the ticks' time and a mean per tick,
-      # optimized.
-      - name: Journal cost, optimized (Linux)
-        if: runner.os == 'Linux'
-        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=server.test_journal_cost -out:build/journal_cost_test
-
-      # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
-      # writer keeps up; optimized, with budgets for a slow runner.
-      - name: Event cost, optimized (Linux)
-        if: runner.os == 'Linux'
-        run: odin test common/telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
-
       # A crash is reported with our stack, and still fails the run.
-      - name: Crash handler (Linux)
-        if: runner.os == 'Linux'
+      - name: Crash handler
         run: |
           if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt
 
-      - name: AddressSanitizer (Linux)
-        if: runner.os == 'Linux'
+      - name: AddressSanitizer
         run: |
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --check fly
 
       # A release build's flight, profiled: the trace must be well formed.
-      - name: Profiling (Linux)
-        if: runner.os == 'Linux'
+      - name: Profiling
         run: |
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --check fly
@@ -223,23 +253,21 @@ jobs:
           # The optimized build's chunk budgets (tighter than a debug build's).
           xvfb-run -a ./build/voxiverse --check tour
 
-      - name: Screenshots (Linux)
-        if: always() && runner.os == 'Linux'
+      - name: Screenshots
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: screenshots
           path: build/screenshots/
           if-no-files-found: ignore
 
-      - name: Debugger printers (Linux)
-        if: runner.os == 'Linux'
+      - name: Debugger printers
         run: tools/debugger/test_printers.sh
-
   # The same session's state hashes, from every OS at both optimization levels
   # (M38), must agree line by line: a divergence is named by tick and section.
   determinism:
     name: Determinism · all OSes
-    needs: build
+    needs: [build, linux-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -283,11 +311,15 @@ jobs:
       - name: Package
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} package
 
+      - name: Packages to run it (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/apt
+        with:
+          packages: xvfb mesa-vulkan-drivers
+
       - name: Run the package (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)"
           export VX_SAVES="$RUNNER_TEMP/saves" VX_SETTINGS="$RUNNER_TEMP/settings.cfg"
           tar -xzf build/dist/*.tar.gz -C "$RUNNER_TEMP"
@@ -348,7 +380,7 @@ jobs:
   release:
     name: Draft release
     if: startsWith(github.ref, 'refs/tags/v') && endsWith(github.ref, '.0')
-    needs: [build, package]
+    needs: [build, linux-tests, linux-game, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write

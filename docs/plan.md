@@ -203,6 +203,12 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
 - Shaders recompile only when their source changes; compile errors point at the GLSL file
   and line.
 - CI uses exactly the same path, cached between runs.
+- CI's Linux checks are split into two parallel jobs, "Test · Linux x64" (check, tests, determinism,
+  the optimized tests) and "Game · Linux x64" (everything that runs the game or tools under
+  xvfb), because the one Linux job alone set CI's length (17 min median, 38 worst). Every
+  check still runs on every push. The tests run once, with `ODIN_TEST_RANDOM_SEED` set to the
+  run number (a re-run repeats it). Ubuntu packages come from a cache of their `.deb` files
+  (`.github/actions/apt`), because the package mirror twice took over 20 minutes.
 
 ### Saves
 Region files (e.g. 32×32 chunk columns per file), palette + RLE per chunk, versioned, written

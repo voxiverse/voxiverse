@@ -1,0 +1,49 @@
+name: apt
+description: Ubuntu packages from a cache of their .deb files, so a hit needs neither a download nor, usually, `apt-get update` (the package mirror is sometimes very slow).
+inputs:
+  packages:
+    description: space-separated package names
+    required: true
+runs:
+  using: composite
+  steps:
+    # Keyed by the package list and the runner image: a new image has new
+    # package versions, so the old files are not worth keeping.
+    - name: Key
+      id: key
+      shell: bash
+      run: |
+        echo "key=apt-${ImageOS:-linux}-${ImageVersion:-0}-$(echo '${{ inputs.packages }}' | tr ' ' '\n' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+    # The cache is read and written by the runner user; apt (root) writes
+    # into it all the same. The lock file and partial downloads stay out.
+    - name: Cache directory
+      shell: bash
+      run: |
+        sudo mkdir -p /var/cache/apt/archives/partial
+        sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
+        echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99-keep-debs
+        sudo rm -f /etc/apt/apt.conf.d/docker-clean
+
+    - name: Cache .deb files
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: |
+          /var/cache/apt/archives/*.deb
+        key: ${{ steps.key.outputs.key }}
+
+    # On a hit: install from the cached files alone, with the package lists
+    # the image has. If that does not work (the lists name other versions
+    # than the files), update and install as on a miss.
+    - name: Install
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ] &&
+          sudo apt-get install -y -qq --no-download ${{ inputs.packages }}; then
+          echo "installed from the cache, no download"
+        else
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ${{ inputs.packages }}
+        fi
