@@ -80,8 +80,7 @@ Session :: struct {
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
 	texels:           [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
-	newest_tick:      u32, // of the newest Snapshot message
-	newest_at:        time.Tick, // when it came
+	render_clock:     Render_Clock, // when to show the others (players.odin)
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          game.Welcome,
 	world:            World, // set up from Welcome
@@ -323,6 +322,7 @@ session_update :: proc(
 ) {
 	base.profile_scope("session")
 	base.metric_scope(.Frame_Session)
+	clock_advance(&s.render_clock, dt)
 	if s.remote {
 		s.link.socket.conditions = {
 			loss       = conditions.loss_percent / 100,
@@ -435,8 +435,7 @@ session_set_rule :: proc(s: ^Session, name, value: string) {
 // coming for STALE_SECONDS means what we know of them is old, so none is
 // shown. (A thing that stands still sends nothing, and is still there.)
 session_others_now :: proc(s: ^Session) -> (now: f64, live: bool) {
-	since := f32(time.duration_seconds(time.tick_since(s.newest_at)))
-	return render_tick(s.newest_tick, since), s.newest_at != {} && since <= STALE_SECONDS
+	return s.render_clock.time, clock_live(s.render_clock)
 }
 
 FLUSH_INTERVAL :: 8 * time.Millisecond

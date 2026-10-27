@@ -131,9 +131,7 @@ receive :: proc(s: ^Session) {
 				fail(s, "the server sent an invalid Snapshot message")
 				return
 			}
-			if s.newest_at == {} || game.sequence_before(s.newest_tick, s.rx.tick) {
-				s.newest_tick, s.newest_at = s.rx.tick, time.tick_now()
-			}
+			clock_heard(&s.render_clock, s.rx.tick)
 			apply_received(s, got[:])
 			// Everything still present and not in the delta is unchanged now.
 			for _, &o in s.others {track_hold(&o.track, s.rx.tick)}

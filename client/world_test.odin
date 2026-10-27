@@ -151,7 +151,46 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 	testing.expect(t, abs(v.position.x - 1.5) < 1e-9, "no glide across the time it stood")
 	for i in 0 ..< 20 {other_snapshot(&o, u32(502 + i), {position = {f64(i), 0, 0}})}
 	testing.expect_value(t, o.track.count, SNAPSHOTS)
-	testing.expect(t, abs(render_tick(100, 0.5) - (100 + 15 - INTERPOLATION_TICKS)) < 1e-9)
+}
+
+// The render clock never jumps: with snapshots late and bunched it moves by
+// about a frame's worth each frame, and it snaps only after a real stall.
+@(test)
+test_render_clock_smooth :: proc(t: ^testing.T) {
+	c: Render_Clock
+	clock_heard(&c, 100)
+	testing.expect(t, abs(c.time - (100 - INTERPOLATION_TICKS)) < 1e-9)
+	frame := f32(game.TICK_SECONDS)
+	max_step, last := 0.0, c.time
+	tick := u32(100)
+	// Frames at the tick rate; a snapshot each tick but arrivals late (held
+	// back 3 frames, then two together), bunched, and one 5 ticks late.
+	for f in 0 ..< 600 {
+		clock_advance(&c, frame)
+		late := f % 40 >= 10 && f % 40 < 13
+		if f % 97 == 50 {
+			// a burst: the held ticks arrive together
+			tick += 3
+			clock_heard(&c, tick)
+		} else if !late {
+			tick += 1
+			clock_heard(&c, tick)
+		}
+		max_step = max(max_step, c.time - last)
+		testing.expect(t, c.time >= last, "the clock ran backwards")
+		last = c.time
+	}
+	testing.expectf(t, max_step < 1.15, "stepped %v ticks in a frame", max_step)
+	// A stall: nothing for a second, then a snapshot far ahead: it snaps.
+	for _ in 0 ..< 60 {clock_advance(&c, frame)}
+	testing.expect(t, !clock_live(c) || c.since <= STALE_SECONDS)
+	clock_heard(&c, tick + 200)
+	clock_advance(&c, frame)
+	testing.expect(t, abs(c.time - clock_target(c)) < 1.2, "did not snap after a gap")
+	// Old (reordered) snapshots change nothing.
+	before := c
+	clock_heard(&c, tick)
+	testing.expect_value(t, c, before)
 }
 
 // A dying entity bursts into pieces that fly, are drawn, and are gone

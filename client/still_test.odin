@@ -33,13 +33,13 @@ tick_all :: proc(p: ^Pair) {
 	time.sleep(time.Millisecond) // (the loopback packets of this tick)
 }
 
-// seen: the watcher shows the thing at the time it renders at (ticks, not
-// the wall clock, which the test does not wait on).
+// seen: the watcher shows the thing at the time it renders at (its clock
+// runs on the frames' dt, which the test gives, not the wall clock).
 @(private = "file")
 seen :: proc(s: ^Session, t: ^Track) -> (v: Other_View, ok: bool) {
-	_, live := session_others_now(s)
+	now, live := session_others_now(s)
 	if !live {return}
-	return track_view(t, f64(s.newest_tick) - INTERPOLATION_TICKS)
+	return track_view(t, now)
 }
 
 @(private = "file")
@@ -129,8 +129,9 @@ test_still_player_stays_visible :: proc(t: ^testing.T) {
 			at,
 		)
 	}
-	// Then it walks off: smooth (a step is a tick or two of walking, two when
-	// a loopback packet came late; never a jump).
+	// Then it walks off: smooth (the render clock moves a tick per tick, so a
+	// step is the mover's own: the server applies inputs that came bunched in
+	// one tick, up to four ticks' walking, 0.58 blocks; never a jump).
 	for _, &o in p.watch.others {
 		before, _ := seen(p.watch, &o.track)
 		p.mover.autopilot = game.Player_Input {
@@ -139,13 +140,24 @@ test_still_player_stays_visible :: proc(t: ^testing.T) {
 		}
 		last := before.position
 		moved := 0.0
+		clock := p.watch.render_clock.time
 		for tick in 0 ..< 60 {
 			tick_all(&p)
+			// The render clock itself never jumps, however late a packet is.
+			now := p.watch.render_clock.time
+			testing.expectf(
+				t,
+				now - clock > 0.85 && now - clock < 1.15,
+				"the render clock stepped %v ticks at tick %d",
+				now - clock,
+				tick,
+			)
+			clock = now
 			v, ok := seen(p.watch, &o.track)
 			if !testing.expect(t, ok) {return}
 			d := v.position - last
 			step := math.sqrt(d.x * d.x + d.z * d.z)
-			testing.expectf(t, step < 1, "jerked %v blocks at tick %d walking off", step, tick)
+			testing.expectf(t, step < 0.6, "jerked %v blocks at tick %d walking off", step, tick)
 			last, moved = v.position, moved + step
 		}
 		testing.expectf(t, moved > 2, "never walked off: %v", moved)

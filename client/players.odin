@@ -109,10 +109,53 @@ track_view :: proc(o: ^Track, at: f64) -> (v: Other_View, ok: bool) {
 	return view_of(o.snapshots[0]), true
 }
 
-// render_tick: the server time to show the others at, from the newest tick
-// heard and the time since.
-render_tick :: proc(newest_tick: u32, seconds_since: f32) -> f64 {
-	return f64(newest_tick) + f64(seconds_since) * game.TICK_RATE - INTERPOLATION_TICKS
+// Render_Clock: the server time to show the others at (ticks). It is not
+// the newest tick heard plus the time since, minus INTERPOLATION_TICKS (the
+// target): a packet that comes late carries a newer tick and would move that
+// at once, and the others would skip. The clock runs at the tick rate and
+// only speeds up or slows down by a little to close the distance to the
+// target; it snaps only after a stall or a big gap.
+Render_Clock :: struct {
+	time:   f64, // ticks: what is shown
+	newest: u32, // the newest tick heard
+	since:  f32, // seconds since it was heard (the frames', not the wall clock)
+	heard:  bool,
+}
+
+CLOCK_CATCH_UP :: 0.1 // per tick of distance: speed change
+CLOCK_MAX_SKEW :: 0.1 // the most the speed differs from real time
+CLOCK_SNAP_TICKS :: 10 // further off than this (a stall, a jump): snap
+
+clock_target :: proc(c: Render_Clock) -> f64 {
+	return f64(c.newest) + f64(c.since) * game.TICK_RATE - INTERPOLATION_TICKS
+}
+
+// clock_heard: a snapshot of this tick came.
+clock_heard :: proc(c: ^Render_Clock, tick: u32) {
+	if c.heard && !game.sequence_before(c.newest, tick) {return}
+	c.newest, c.since = tick, 0
+	if !c.heard {
+		c.heard = true
+		c.time = clock_target(c^)
+	}
+}
+
+// clock_advance: a frame of dt seconds.
+clock_advance :: proc(c: ^Render_Clock, dt: f32) {
+	if !c.heard {return}
+	c.since += dt
+	err := clock_target(c^) - c.time
+	if abs(err) > CLOCK_SNAP_TICKS {
+		c.time += err
+		return
+	}
+	skew := clamp(err * CLOCK_CATCH_UP, -CLOCK_MAX_SKEW, CLOCK_MAX_SKEW)
+	c.time += f64(dt) * game.TICK_RATE * (1 + skew)
+}
+
+// clock_live: snapshots have come, and not stopped for STALE_SECONDS.
+clock_live :: proc(c: Render_Clock) -> bool {
+	return c.heard && c.since <= STALE_SECONDS
 }
 
 @(private = "file")
