@@ -149,7 +149,7 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 	testing.expect(t, ok && v.position.x == 1, "stood still: still there")
 	v, _ = other_view(&o, 500.5)
 	testing.expect(t, abs(v.position.x - 1.5) < 1e-9, "no glide across the time it stood")
-	for i in 0 ..< 20 {other_snapshot(&o, u32(12 + i), {position = {f64(i), 0, 0}})}
+	for i in 0 ..< 20 {other_snapshot(&o, u32(502 + i), {position = {f64(i), 0, 0}})}
 	testing.expect_value(t, o.track.count, SNAPSHOTS)
 	testing.expect(t, abs(render_tick(100, 0.5) - (100 + 15 - INTERPOLATION_TICKS)) < 1e-9)
 }

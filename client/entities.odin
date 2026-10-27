@@ -64,9 +64,10 @@ HURT :: [4]u8{236, 84, 72, 255}
 // entities_draw adds the entities and puffs to the entity pass and moves
 // the puffs on by dt.
 entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
+	// Puffs are local effects: they move on and fade whatever the connection.
 	now, live := session_others_now(s)
-	if !live {return}
 	for _, &e in s.entities {
+		if !live {break}
 		v, ok := track_view(&e.track, now)
 		if !ok {continue}
 		moved := v.position - e.last_seen
