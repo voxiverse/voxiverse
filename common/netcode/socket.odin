@@ -1,9 +1,10 @@
 package netcode
 
-import "core:math/rand"
 import "core:net"
 import "core:slice"
 import "core:time"
+
+import "../../base"
 
 // A non-blocking UDP socket, with bad network conditions simulated on the
 // way out (for tests and the debug variables): loss, duplication, delay
@@ -13,6 +14,8 @@ Socket :: struct {
 	socket:     net.UDP_Socket,
 	port:       int, // bound
 	conditions: Conditions,
+	rng:        base.Rng, // the simulation's draws (Conditions.seed)
+	rng_seed:   u64, // the seed rng was made from (0: not yet)
 	held:       [dynamic]Held, // delayed by the simulation, not yet sent
 	capture:    ^Capture, // records every packet sent and received (nil: none)
 	recv_buf:   [MTU + 1]u8, // one byte more: anything that fills it is too long
@@ -23,6 +26,7 @@ Conditions :: struct {
 	duplicate:  f32, // 0..1: chance it is sent twice
 	latency_ms: f32, // added on the way out
 	jitter_ms:  f32, // plus up to this much more at random (reorders)
+	seed:       u64, // the draws are a stream made from this: the same seed, the same losses (0: the clock's)
 }
 
 @(private)
@@ -72,10 +76,15 @@ socket_send :: proc(s: ^Socket, to: net.Endpoint, data: []u8, now: time.Tick) {
 		send_now(s, to, data) // a full buffer drops it: UDP may
 		return
 	}
-	if rand.float32() < c.loss {return}
-	copies := 2 if rand.float32() < c.duplicate else 1
+	seed := c.seed if c.seed != 0 else s.rng_seed
+	if seed == 0 {seed = u64(time.tick_now()._nsec) | 1} // (unseeded: whatever the clock says)
+	if s.rng_seed != seed {
+		s.rng, s.rng_seed = base.rng_make(seed), seed
+	}
+	if base.rng_f32(&s.rng) < c.loss {return}
+	copies := 2 if base.rng_f32(&s.rng) < c.duplicate else 1
 	for _ in 0 ..< copies {
-		delay := c.latency_ms + c.jitter_ms * rand.float32()
+		delay := c.latency_ms + c.jitter_ms * base.rng_f32(&s.rng)
 		due := time.tick_add(now, time.Duration(f64(delay) * f64(time.Millisecond)))
 		append(&s.held, Held{due, to, slice.clone(data)})
 	}

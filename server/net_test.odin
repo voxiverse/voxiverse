@@ -474,6 +474,12 @@ sync_listen :: proc(s: ^Server) {
 	for !s.listening {time.sleep(time.Millisecond)}
 }
 
+// The seed of the loss, duplication and jitter draws of the test below: the
+// same seed, the same drops on each socket (the timing of the threads still
+// varies). A failure prints it; run again with
+// `./build.sh test -define:VX_LOSS_SEED=<n>` (try others to hunt).
+LOSS_SEED :: u64(#config(VX_LOSS_SEED, 7))
+
 // M7's exit check (the half a machine can do alone): two players over real
 // sockets with 10% loss, 10% duplication and jitter on every socket, both
 // ways. Every chunk each receives is exactly what the world generator
@@ -485,6 +491,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		duplicate  = 0.1,
 		latency_ms = 15,
 		jitter_ms  = 25,
+		seed       = LOSS_SEED,
 	}
 	config := Config {
 		rules           = quiet_rules(),
@@ -496,6 +503,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		listen          = true,
 		conditions      = bad,
 		everyone_cheats = true,
+		no_sheep        = true, // (the summoned one is the only one: natural ones spawn by day, when the timing lets them)
 	}
 	srv: Server
 	if !testing.expect(t, start(&srv, config, {})) {return}
@@ -508,7 +516,9 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	defer net_close(&a)
 	defer net_close(&b)
 	a.link.socket.conditions = bad
+	a.link.socket.conditions.seed = LOSS_SEED + 1 // (each socket's own stream)
 	b.link.socket.conditions = bad
+	b.link.socket.conditions.seed = LOSS_SEED + 2
 	// The whole interest area, not just enough to land on.
 	@(static) want: int
 	want = game.interest_count(config.view_radius, config.view_height)
@@ -584,44 +594,86 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	call(&srv, proc(s: ^Server, data: rawptr) {s.host.socket.conditions = {}}, nil)
 	a.link.socket.conditions = {}
 	b.link.socket.conditions = {}
+	// Converged: a client's newest complete snapshot is recent, and what it
+	// holds is exactly what the server's sender recorded for that tick (the
+	// sender's ring is what the receiver holds if every part arrived), and what
+	// the client shows of the other player and the sheep is that. (Not the
+	// server's values of the moment: the sheep wanders, and the server ticks
+	// between a client's last packet and the test's look.)
+	Look :: struct {
+		cs:     [2]^Net_Client,
+		ids:    [2]u16,
+		recent: [2]bool, // the ack is within 10 ticks of the server's
+		same:   [2]bool, // the sender's and the receiver's snapshot at the ack are one
+		shown:  [2]bool, // and the client shows the other player and the sheep as it has them
+	}
+	look: Look
+	look.cs = {&a, &b}
+	look.ids = {a.welcome.player, b.welcome.player}
 	deadline := time.tick_add(time.tick_now(), 30 * game.TICK_DURATION + 5 * time.Second)
-	exact := false
-	for !exact && time.tick_diff(time.tick_now(), deadline) > 0 {
+	converged := false
+	for !converged && time.tick_diff(time.tick_now(), deadline) > 0 {
 		net_pump(t, &a)
 		net_pump(t, &b)
 		time.sleep(game.TICK_DURATION)
-		Truth :: struct {
-			a, b:  [3]f64, // the two players' positions
-			sheep: [3]f64,
-			flags: game.Sheep_Flags,
-			n:     int,
-		}
-		truth: Truth
 		call(&srv, proc(s: ^Server, data: rawptr) {
-				truth := (^Truth)(data)
-				truth.a = s.clients[0].player.position
-				truth.b = s.clients[1].player.position
-				for &ent in s.home.entities.list {
-					truth.sheep, truth.flags = ent.body.position, sheep_flags(&ent)
-					truth.n += 1
+				look := (^Look)(data)
+				for c, i in look.cs {
+					look.recent[i], look.same[i], look.shown[i] = false, false, false
+					ack := c.rx.ack
+					sent := game.ring_find(&s.clients[look.ids[i]].tx.ring, ack)
+					held := game.ring_find(&c.rx.ring, ack)
+					if ack == 0 || sent == nil || held == nil {continue}
+					look.recent[i] = s.tick - u64(ack) <= 10
+					look.same[i] = replicas_match(&c.schema, &sent.data, &held.data)
+					if c.rx.gather.active || c.rx.newest != ack {
+						look.shown[i] = true // (a newer snapshot is half applied: look again)
+						continue
+					}
+					other := look.ids[1 - i]
+					motion := (^game.Player_Motion)(
+						game.replica_get(&sent.data, int(game.State_Kind.Player_Motion), {a = i32(other)}),
+					)
+					sheep: ^game.Entity_Motion
+					for rec in sent.data.tables[game.State_Kind.Entity_Motion].records {
+						sheep = (^game.Entity_Motion)(rec.value)
+					}
+					look.shown[i] =
+						motion != nil &&
+						sheep != nil &&
+						c.seen[other] == motion.position &&
+						len(c.entities) == 1
+					for _, p in c.entities {look.shown[i] &&= p == sheep.position}
 				}
-			}, &truth)
-		if truth.n != 1 {continue}
-		id_a, id_b := a.welcome.player, b.welcome.player
-		sheep_a, sheep_b: [3]f64
-		for _, p in a.entities {sheep_a = p}
-		for _, p in b.entities {sheep_b = p}
-		exact =
-			a.seen[id_b] == truth.b &&
-			b.seen[id_a] == truth.a &&
-			sheep_a == truth.sheep &&
-			sheep_b == truth.sheep
+			}, &look)
+		converged = look.recent == {true, true} && look.same == {true, true} && look.shown == {true, true}
 	}
-	testing.expect(
+	testing.expectf(
 		t,
-		exact,
-		"the clients' views of the other player and the sheep never matched the server's",
+		converged,
+		"the clients never held what the server sent them (acks %d and %d; recent %v, same %v, shown %v; loss seed %d)",
+		a.rx.ack,
+		b.rx.ack,
+		look.recent,
+		look.same,
+		look.shown,
+		LOSS_SEED,
 	)
+}
+
+// replicas_match: two replicas hold the same records of every snapshot-lane kind.
+@(private = "file")
+replicas_match :: proc(schema: ^game.Schema, x, y: ^game.Replica) -> bool {
+	for kind in 0 ..< schema.n_states {
+		k := &schema.kinds[kind]
+		if k.lane != .Snapshot {continue}
+		xs, ys := x.tables[kind].records, y.tables[kind].records
+		if len(xs) != len(ys) {return false}
+		for rec, i in xs {
+			if rec.key != ys[i].key || game.value_diff(k, rec.value, ys[i].value) != 0 {return false}
+		}
+	}
+	return true
 }
 
 // A client that knows another set of state kinds is refused, with both hashes
