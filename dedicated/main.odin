@@ -39,6 +39,9 @@ Options :: struct {
 	smoke:       bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
 	telemetry:   string `usage:"send this server's event log to the collector at host:port (anonymous: see docs/plan.md, M27)"`,
 	collector:   bool `usage:"run a telemetry collector instead of a world: --universe is its directory, --port its port (default 27316)"`,
+	backups:     int `usage:"rolling backups kept (default 5, 0: none)"`,
+	check:       bool `usage:"check the universe's files read whole, print what does not, and quit (exit 1 on a problem)"`,
+	restore:     string `usage:"put a backup (a directory of backups/, or latest) back as the universe and quit"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -52,6 +55,7 @@ main :: proc() {
 		max_players = server.DEFAULT_MAX_PLAYERS,
 		view_radius = 12,
 		view_height = 6,
+		backups     = server.BACKUP_KEEP,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
 	if opts.version {
@@ -75,6 +79,10 @@ main :: proc() {
 	switch {
 	case opts.benchmark != "":
 		ok = run_benchmark(opts.benchmark, opts.smoke)
+	case opts.check:
+		ok = run_check(opts.universe)
+	case opts.restore != "":
+		ok = run_restore(opts.universe, opts.restore)
 	case opts.collector:
 		ok = run_collector(opts)
 	case:
@@ -103,6 +111,7 @@ run :: proc(opts: Options) -> bool {
 		password        = opts.password,
 		name            = name,
 		capture         = opts.capture,
+		backups         = max(0, opts.backups),
 	}
 	if opts.telemetry != "" {
 		ep, err := net.resolve_ip4(opts.telemetry)
@@ -189,4 +198,29 @@ server_key :: proc(dir: string) -> (key: game.Account_Key) {
 	os.make_directory_all(dir)
 	_ = os.write_entire_file(path, seed[:])
 	return
+}
+
+// run_check: --check. A save the server could open is whole.
+run_check :: proc(universe: string) -> bool {
+	if why := server.store_recover(universe, &base.Disk{}); why != "" {
+		fmt.eprintfln("%s", why)
+		return false
+	}
+	report := server.universe_check(universe)
+	if report.ok {
+		fmt.printfln("%s: ok (generation %d)", universe, report.generation)
+		return true
+	}
+	for p in report.problems {fmt.eprintfln("%s", p)}
+	return false
+}
+
+// run_restore: --restore.
+run_restore :: proc(universe, name: string) -> bool {
+	if why := server.universe_restore(universe, name, &base.Disk{}); why != "" {
+		fmt.eprintfln("cannot restore: %s", why)
+		return false
+	}
+	fmt.printfln("%s: restored from %s", universe, name)
+	return true
 }

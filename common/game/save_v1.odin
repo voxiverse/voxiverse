@@ -11,7 +11,12 @@ import "core:hash"
 // u32 CRC-32 of everything before it.
 
 // region_encode_v1 writes a region's edited chunks and tops into w.
-region_encode_v1 :: proc(w: ^Writer, region: Region_Pos, chunks: []Saved_Chunk, tops: []Saved_Top) {
+region_encode_v1 :: proc(
+	w: ^Writer,
+	region: Region_Pos,
+	chunks: []Saved_Chunk,
+	tops: []Saved_Top,
+) {
 	clear(&w.buf)
 	append(&w.buf, REGION_MAGIC)
 	write_u32(w, 1)
@@ -42,7 +47,13 @@ Region_Reader_V1 :: struct {
 
 
 // region_open_v1 checks a region file (magic, format, checksum, region).
-region_open_v1 :: proc(data: []u8, expect: Region_Pos) -> (r: Region_Reader_V1, err: Region_Error) {
+region_open_v1 :: proc(
+	data: []u8,
+	expect: Region_Pos,
+) -> (
+	r: Region_Reader_V1,
+	err: Region_Error,
+) {
 	if len(data) < 4 || string(data[:4]) != REGION_MAGIC {return {}, .Not_A_Region}
 	if len(data) < 8 + 4 {return {}, .Damaged}
 	body := data[:len(data) - 4]

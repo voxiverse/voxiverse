@@ -63,6 +63,12 @@ jobs:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
+      # M46: the save killed at 1000 different operations (a faulty disk layer,
+      # not real kills): every point loads, and is exactly the old generation
+      # or the new one.
+      - name: Save crash points
+        if: runner.os == 'Linux'
+        run: odin test server -define:ODIN_TEST_NAMES=server.test_save_survives_crashes -define:VX_CRASH_POINTS=1000
       - name: Determinism logs
         uses: actions/upload-artifact@v7
         with:

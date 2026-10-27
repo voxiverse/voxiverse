@@ -122,7 +122,11 @@ test_disk_counts_operations :: proc(t: ^testing.T) {
 	testing.expect_value(t, disk_read(link), "x")
 	testing.expect_value(t, disk_truncate(&d, link, 0), Disk_Error.None)
 	testing.expect_value(t, disk_read(link), "")
-	testing.expect_value(t, disk_append(&d, link, transmute([]u8)string("yz"), true), Disk_Error.None)
+	testing.expect_value(
+		t,
+		disk_append(&d, link, transmute([]u8)string("yz"), true),
+		Disk_Error.None,
+	)
 	testing.expect_value(t, disk_read(link), "yz")
 	disk_faults_destroy(&faults)
 }

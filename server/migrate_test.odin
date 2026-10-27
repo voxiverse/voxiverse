@@ -6,6 +6,7 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
+import "../base"
 import "../common/game"
 
 // The fixtures: a universe saved by an older format's code, committed under
@@ -100,11 +101,12 @@ copy_tree :: proc(from, to: string) {
 }
 
 // expect_lines: expect.txt's lines by key.
-fixture_lines :: proc(text: string) -> (lines: [dynamic]string) {
-	lines = make([dynamic]string) // (heap: the server frees the temp allocator every tick)
+fixture_lines :: proc(text: string, allocator := context.allocator) -> (lines: [dynamic]string) {
+	lines = make([dynamic]string, allocator) // (heap: the server frees the temp allocator every tick)
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
-		if strings.trim_space(line) != "" {append(&lines, strings.clone(strings.trim_space(line)))}
+		if strings.trim_space(line) !=
+		   "" {append(&lines, strings.clone(strings.trim_space(line), allocator))}
 	}
 	return
 }
@@ -121,7 +123,10 @@ open_fixture :: proc(
 ) {
 	os.remove_all(dir)
 	copy_tree(fixture, dir)
-	data, err := os.read_entire_file_from_path(fmt.tprintf("%s/expect.txt", fixture), context.allocator)
+	data, err := os.read_entire_file_from_path(
+		fmt.tprintf("%s/expect.txt", fixture),
+		context.allocator,
+	)
 	defer delete(data)
 	if !testing.expect(t, err == nil, "the fixture has no expect.txt") {return}
 	expect = fixture_lines(string(data))
@@ -153,7 +158,7 @@ fixture_matches :: proc(t: ^testing.T, g: ^Grief, expect: []string) {
 	rest := got
 	i := 0
 	for line in strings.split_lines_iterator(&rest) {
-		if i == 0 {i += 1; continue} // (the center: set from expect)
+		if i == 0 {i += 1; continue} 	// (the center: set from expect)
 		testing.expectf(
 			t,
 			i < len(expect) && strings.trim_space(line) == expect[i],
@@ -178,12 +183,61 @@ test_v4_save_migrates :: proc(t: ^testing.T) {
 	defer free_lines(expect)
 	testing.expect_value(t, g.sess.srv.store.format, SAVE_FORMAT)
 	fixture_matches(t, g, expect[:])
-	text, _ := os.read_entire_file_from_path(fmt.tprintf("%s/universe.cfg", dir), context.temp_allocator)
-	testing.expect(t, strings.contains(string(text), "format = 5"), "universe.cfg still says the old format")
-	testing.expect(t, os.exists(fmt.tprintf("%s/backups/pre-migration-4/universe.cfg", dir)), "no backup")
+	text, _ := os.read_entire_file_from_path(
+		fmt.tprintf("%s/universe.cfg", dir),
+		context.temp_allocator,
+	)
+	testing.expect(
+		t,
+		strings.contains(string(text), "format = 5"),
+		"universe.cfg still says the old format",
+	)
+	testing.expect(
+		t,
+		os.exists(fmt.tprintf("%s/backups/pre-migration-4/universe.cfg", dir)),
+		"no backup",
+	)
 }
 
 free_lines :: proc(lines: [dynamic]string) {
 	for l in lines {delete(l)}
 	delete(lines)
+}
+
+// The registry is a chain: sorted, contiguous from the first format it knows,
+// ending at the current one.
+@(test)
+test_migrations_are_a_chain :: proc(t: ^testing.T) {
+	testing.expect_value(t, MIGRATIONS[0].from, LEGACY_FORMAT)
+	for m, i in MIGRATIONS {
+		testing.expect_value(t, m.from, LEGACY_FORMAT + i)
+		testing.expect(t, m.name != "" && m.run != nil, "a migration needs a name and a run")
+	}
+	testing.expect_value(t, MIGRATIONS[len(MIGRATIONS) - 1].from + 1, SAVE_FORMAT)
+}
+
+// A migration that fails commits nothing, and the save opens afterwards.
+@(test)
+test_failed_migration_changes_nothing :: proc(t: ^testing.T) {
+	dir := "build/test_migrate_fail"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	copy_tree(FIXTURE_V4, dir)
+	before := state_digest(dir)
+	disk := base.Disk{}
+	failing := []Migration{{5, "fails", proc(m: ^Migrator) -> bool {
+				mig_write(m, "universe.cfg", transmute([]u8)string("garbage"))
+				m.why = "boom"
+				return false
+			}}}
+	res := migrate_universe(dir, &disk, 4, 0, failing)
+	testing.expect(t, !res.ok, "it should have failed")
+	testing.expect_value(t, res.why, "boom")
+	testing.expect_value(t, state_digest(dir), before)
+	os.remove(fmt.tprintf("%s/expect.txt", dir))
+	g, expect, ok := open_fixture(t, FIXTURE_V4, dir)
+	defer free_lines(expect)
+	if !ok {grief_close(g); return}
+	defer grief_close(g)
+	fixture_matches(t, g, expect[:])
 }

@@ -99,7 +99,13 @@ mig_deleted :: proc(m: ^Migrator, rel: string) -> bool {
 
 // migrate_universe brings the universe in dir from its format to SAVE_FORMAT
 // (a backup first).
-migrate_universe :: proc(dir: string, disk: ^base.Disk, from: int, generation: u64) -> Migrate_Result {
+migrate_universe :: proc(
+	dir: string,
+	disk: ^base.Disk,
+	from: int,
+	generation: u64,
+	extra: []Migration = nil, // (tests: a migration made to fail)
+) -> Migrate_Result {
 	res := Migrate_Result {
 		from = from,
 		to   = SAVE_FORMAT,
@@ -115,9 +121,17 @@ migrate_universe :: proc(dir: string, disk: ^base.Disk, from: int, generation: u
 		res.why = fmt.tprintf("the backup failed: %s", problem)
 		return res
 	}
-	for mig in MIGRATIONS {
+	chain := make([dynamic]Migration, context.temp_allocator)
+	append(&chain, ..MIGRATIONS[:])
+	append(&chain, ..extra)
+	for mig in chain {
 		if mig.from < from {continue}
-		log.infof("server migrating the save from=%d to=%d what=%q", mig.from, mig.from + 1, mig.name)
+		log.infof(
+			"server migrating the save from=%d to=%d what=%q",
+			mig.from,
+			mig.from + 1,
+			mig.name,
+		)
 		if !mig.run(&m) {
 			res.why = m.why
 			return res
@@ -217,7 +231,10 @@ migrate_regions_v2 :: proc(m: ^Migrator) -> bool {
 @(private = "file")
 world_dirs :: proc(m: ^Migrator) -> []string {
 	out := make([dynamic]string, context.temp_allocator)
-	entries, _ := os.read_all_directory_by_path(full_path(m.dir, WORLDS_DIR), context.temp_allocator)
+	entries, _ := os.read_all_directory_by_path(
+		full_path(m.dir, WORLDS_DIR),
+		context.temp_allocator,
+	)
 	for e in entries {
 		if e.type == .Directory {
 			append(&out, strings.concatenate({WORLDS_DIR, "/", e.name}, context.temp_allocator))

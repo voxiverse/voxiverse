@@ -62,6 +62,8 @@ Store :: struct {
 	generation: u64, // the last committed save's
 	format:     int, // the format universe.cfg had when opened
 	saved_at:   u64, // its age
+	backed_up:  bool, // a rolling backup was made this run
+	backup_age: u64, // ... at this age
 }
 
 // store_open reads the universe's files if dir has them (its seed and the
@@ -175,7 +177,8 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 	os.make_directory_all(
 		filepath.join({world_dir, "regions"}, context.temp_allocator) or_else world_dir,
 	)
-	if !write_universe_file(s, LEGACY_FORMAT) || !write_world_file(home, LEGACY_FORMAT) {return false}
+	if !write_universe_file(s, LEGACY_FORMAT) ||
+	   !write_world_file(home, LEGACY_FORMAT) {return false}
 	s.store.format = LEGACY_FORMAT
 	os.remove(legacy)
 	log.infof("server world became a universe dir=%s home=%s", dir, game.address_dir(home.address))
@@ -240,6 +243,18 @@ mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
 	w.regions[game.region_of(pos)] = true
 }
 
+// save_collect encodes every file of a save into the batch being staged (false
+// if one is being staged already).
+save_collect :: proc(s: ^Server) -> bool {
+	if !store_stage(s) {return false}
+	write_universe_file(s)
+	for w in s.worlds {world_stage(w)}
+	permissions_save(s)
+	community_save(s)
+	players_save(s)
+	return true
+}
+
 // save writes the universe's files and every loaded world's (its settings,
 // entities and changed regions) as one transaction (save_tx.odin), by the save
 // worker; with wait, returns when it is committed (false if it failed:
@@ -256,12 +271,7 @@ save :: proc(s: ^Server, wait := true) -> bool {
 		if st.inflight != nil {return true}
 	}
 	st.last_save = s.tick
-	if !store_stage(s) {return false}
-	write_universe_file(s)
-	for w in s.worlds {world_stage(w)}
-	permissions_save(s)
-	community_save(s)
-	players_save(s)
+	if !save_collect(s) {return false}
 	ok := store_commit(s, wait)
 	log.infof("server saved worlds=%d dir=%s", len(s.worlds), st.dir)
 	return ok
@@ -315,10 +325,38 @@ load_region :: proc(w: ^World, region: game.Region_Pos) {
 		log.errorf("server cannot read region path=%s error=%v", path, err)
 		return
 	}
-	r, open_err := game.region_open(data, region)
+	open_err, ok := region_ingest(w, data, region, path)
+	if !ok {
+		aside := fmt.tprintf("%s.damaged-%d", path, time.time_to_unix(time.now()))
+		os.rename(path, aside)
+		log.errorf(
+			"server region file damaged, moved aside path=%s problem=%v moved_to=%s",
+			path,
+			open_err,
+			aside,
+		)
+		region_from_backup(w, region, path)
+	}
+}
+
+// region_ingest: a region file's chunks into w.saved and its tops into w.tops.
+// False (nothing kept) if the file does not read whole; a chunk with a bad
+// checksum is only dropped (logged).
+@(private = "file")
+region_ingest :: proc(
+	w: ^World,
+	data: []u8,
+	region: game.Region_Pos,
+	path: string,
+) -> (
+	open_err: game.Region_Error,
+	ok: bool,
+) {
+	r: game.Region_Reader
+	r, open_err = game.region_open(data, region)
 	scratch := new(game.Block_Array, context.temp_allocator)
 	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
-	ok := open_err == .None
+	ok = open_err == .None
 	loaded := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	wr := &w.server.store.writer
 	for ok {
@@ -349,17 +387,41 @@ load_region :: proc(w: ^World, region: game.Region_Pos) {
 			delete(w.saved[pos])
 			delete_key(&w.saved, pos)
 		}
-		aside := fmt.tprintf("%s.damaged-%d", path, time.time_to_unix(time.now()))
-		os.rename(path, aside)
-		log.errorf(
-			"server region file damaged, moved aside (its edits are lost) path=%s problem=%v moved_to=%s",
-			path,
-			open_err,
-			aside,
-		)
 		return
 	}
 	for t in tops {w.tops[{t.x, t.z}] = t.top}
+	return
+}
+
+// region_from_backup: a damaged region's copy in the newest backup that has a
+// whole one; the region is saved again with the next save.
+@(private = "file")
+region_from_backup :: proc(w: ^World, region: game.Region_Pos, path: string) {
+	st := &w.server.store
+	rel := relative_path(st.dir, path)
+	names := backup_names(st.dir)
+	#reverse for name in names {
+		data, err := os.read_entire_file_from_path(
+			full_path(st.dir, fmt.tprintf("%s/%s/%s", BACKUPS_DIR, name, rel)),
+			context.temp_allocator,
+		)
+		if err != nil {continue}
+		if _, ok := region_ingest(w, data, region, path); ok {
+			w.regions[region] = true
+			log.errorf(
+				"server region %d.%d damaged: loaded from backup %s (its later edits are lost)",
+				region.x,
+				region.y,
+				name,
+			)
+			return
+		}
+	}
+	log.errorf(
+		"server region %d.%d damaged and no backup has it whole (its edits are lost)",
+		region.x,
+		region.y,
+	)
 }
 
 @(private = "file")

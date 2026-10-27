@@ -592,7 +592,7 @@ journal_save_point :: proc(w: ^World) {
 	if w.dir == "" {return}
 	journal_note(w, game.Journal_Save{age_of(w.server)})
 	journal_flush(w)
-	if w.journal.file != nil {base.file_sync(w.journal.file)} // (the save names this end)
+	if w.journal.file != nil {base.file_sync(w.journal.file)} 	// (the save names this end)
 }
 
 // Loaded_Segment: a segment read whole, entries in the order written, each

@@ -53,6 +53,7 @@ Save_Batch :: struct {
 	files:      [dynamic]Prepared,
 	deletes:    [dynamic]string,
 	disk:       ^base.Disk,
+	backup:     int, // > 0: a rolling backup follows the commit, keeping this many
 	// The worker's result.
 	problem:    string, // "" when it committed and applied
 	done:       bool, // (atomic)
@@ -156,8 +157,11 @@ batch_run :: proc(b: ^Save_Batch) {
 			}
 			made[parent] = true
 		}
-		if err := base.disk_write(d, strings.concatenate({path, ".new"}, context.temp_allocator), f.bytes);
-		   err != .None {
+		if err := base.disk_write(
+			d,
+			strings.concatenate({path, ".new"}, context.temp_allocator),
+			f.bytes,
+		); err != .None {
 			b.problem = disk_problem("cannot write", path, err)
 			return
 		}
@@ -170,7 +174,12 @@ batch_run :: proc(b: ^Save_Batch) {
 		return
 	}
 	// 3. Apply.
-	if problem := tx_apply(d, b.dir, tx); problem != "" {b.problem = problem}
+	if problem := tx_apply(d, b.dir, tx); problem != "" {
+		b.problem = problem
+		return
+	}
+	// 4. A backup, if one is due (it never affects the save).
+	if b.backup > 0 {backup_run(b.dir, b.generation, b.backup, d)}
 }
 
 @(private = "file")
@@ -228,7 +237,10 @@ tx_decode :: proc(data: []u8) -> (ops: [dynamic]Tx_Op, generation, age: u64, ok:
 // tx_path_safe: a relative path that stays inside the universe.
 @(private = "file")
 tx_path_safe :: proc(p: string) -> bool {
-	if p == "" || p[0] == '/' || strings.contains(p, "\\") || strings.contains(p, ":") {return false}
+	if p == "" ||
+	   p[0] == '/' ||
+	   strings.contains(p, "\\") ||
+	   strings.contains(p, ":") {return false}
 	for part in strings.split(p, "/", context.temp_allocator) {
 		if part == "" || part == ".." || part == "." {return false}
 	}
@@ -317,7 +329,8 @@ walk_files :: proc(dir, rel: string, out: ^[dynamic]string) {
 	entries, err := os.read_all_directory_by_path(full_path(dir, rel), context.temp_allocator)
 	if err != nil {return}
 	for e in entries {
-		sub := e.name if rel == "" else strings.concatenate({rel, "/", e.name}, context.temp_allocator)
+		sub :=
+			e.name if rel == "" else strings.concatenate({rel, "/", e.name}, context.temp_allocator)
 		if e.type == .Directory {
 			if rel == "" && (e.name == "backups" || e.name == "telemetry" || e.name == "exports") {
 				continue
@@ -355,6 +368,10 @@ store_stage :: proc(s: ^Server) -> (started: bool) {
 	if st.dir == "" || st.staging != nil {return false}
 	save_wait(s)
 	st.staging = batch_make(st.dir, st.generation + 1, age_of(s), &st.disk)
+	if keep := backups_kept(s);
+	   keep > 0 && (!st.backed_up || age_of(s) - st.backup_age >= BACKUP_EVERY) {
+		st.staging.backup = keep
+	}
 	// What a failed save carried comes first (anything staged since replaces it).
 	for f in st.carry.files {batch_stage(st.staging, f.path, f.bytes)}
 	for p in st.carry.deletes {batch_delete(st.staging, p)}
@@ -428,6 +445,7 @@ save_poll :: proc(s: ^Server) -> bool {
 	if b.problem == "" {
 		st.generation = b.generation
 		st.saved_at = b.age
+		if b.backup > 0 {st.backed_up, st.backup_age = true, b.age}
 		return true
 	}
 	log.errorf("server save failed generation=%d problem=%s", b.generation, b.problem)
@@ -450,4 +468,10 @@ store_workers_stop :: proc(s: ^Server) {
 		st.jobs_ready = false
 	}
 	carry_clear(&st.carry)
+}
+
+// backups_kept: how many rolling backups the server keeps (0: none).
+backups_kept :: proc(s: ^Server) -> int {
+	if n, ok := s.config.backups.?; ok {return n}
+	return BACKUP_KEEP
 }

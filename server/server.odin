@@ -62,6 +62,7 @@ Config :: struct {
 	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
 	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
 	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
+	backups:               Maybe(int), // rolling backups kept (nil: BACKUP_KEEP; 0: none)
 	journal_memory:        int, // tests: entries in a world's journal ring (0: JOURNAL_MEMORY)
 	journal_segment_bytes: int, // tests: where a journal segment ends (0: JOURNAL_SEGMENT_BYTES)
 	journal_timed:         bool, // tests: time the journal (Journal.cost_ns)
