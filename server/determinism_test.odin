@@ -43,6 +43,7 @@ Mirror :: struct {
 	rx:          game.Receiver,
 	teleports:   u8,
 	entities:    [dynamic]u32, // ids told, in the order told
+	notices:     [dynamic]string, // the text of every Notice told (heap)
 	inv_seq:     u32,
 	edit_id:     u32,
 	mismatches:  int, // updates where the mirror's prediction was not the server's
@@ -149,7 +150,12 @@ mirror_pump :: proc(sess: ^Session) {
 mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 	m := &sess.mirror
 	for g in got {
-		if g.op == .Event {continue}
+		if g.op == .Event {
+			if game.Event_Kind(g.kind - len(game.State_Kind)) == .Notice {
+				append(&m.notices, strings.clone((^game.Notice)(g.value).text))
+			}
+			continue
+		}
 		switch game.State_Kind(g.kind) {
 		case .Block:
 			v := (^game.Block_Record)(g.value)
@@ -247,6 +253,8 @@ session_stop :: proc(sess: ^Session) {
 	for _, &c in m.chunks {game.chunk_release(&c, &m.arrays)}
 	delete(m.chunks)
 	delete(m.entities)
+	for n in m.notices {delete(n)}
+	delete(m.notices)
 	game.receiver_destroy(&m.rx)
 	game.schema_destroy(&m.schema)
 	game.block_arrays_destroy(&m.arrays)

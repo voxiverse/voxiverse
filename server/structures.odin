@@ -110,9 +110,17 @@ structure_paste :: proc(
 		template = &t,
 		rotation = rotation,
 	}
-	changed, result := bulk_edit(w, e, act)
+	changed, result, protected := bulk_edit(w, e, act)
 	switch result {
 	case .Done:
+		if protected > 0 {
+			return fmt.tprintf(
+				"structure %s pasted: %d blocks changed, %d protected",
+				name,
+				changed,
+				protected,
+			)
+		}
 		return fmt.tprintf("structure %s pasted: %d blocks changed", name, changed)
 	case .Too_Big:
 		return "structure paste: too big"

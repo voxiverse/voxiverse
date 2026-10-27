@@ -52,33 +52,44 @@ Bulk_Result :: enum u8 {
 	Not_Loaded,
 }
 
-// bulk_edit applies e, by act; changed: how many blocks it changed.
-bulk_edit :: proc(w: ^World, e: Bulk_Edit, act: Act) -> (changed: int, result: Bulk_Result) {
+// bulk_edit applies e, by act; changed: how many blocks it changed,
+// protected: how many more it skipped for being in a protected region.
+bulk_edit :: proc(
+	w: ^World,
+	e: Bulk_Edit,
+	act: Act,
+) -> (
+	changed: int,
+	result: Bulk_Result,
+	protected: int,
+) {
 	cause := act_current(w, act)
 	lo, hi := shape_box(e.shape)
 	lo.y, hi.y = max(lo.y, game.WORLD_MIN_Y), min(hi.y, game.WORLD_MAX_Y - 1)
-	if lo.x > hi.x || lo.y > hi.y || lo.z > hi.z {return 0, .Done}
+	if lo.x > hi.x || lo.y > hi.y || lo.z > hi.z {return 0, .Done, 0}
 	size := hi - lo + 1
-	if i64(size.x) * i64(size.y) * i64(size.z) > MAX_BULK_VOLUME {return 0, .Too_Big}
+	if i64(size.x) * i64(size.y) * i64(size.z) > MAX_BULK_VOLUME {return 0, .Too_Big, 0}
 	clo, chi := game.chunk_of(lo), game.chunk_of(hi)
 	if !e.partial {
 		for cy in clo.y ..= chi.y {
 			for cz in clo.z ..= chi.z {
 				for cx in clo.x ..= chi.x {
 					c := chunks_get(&w.chunks, {cx, cy, cz})
-					if c == nil || c.state != .Ready {return 0, .Not_Loaded}
+					if c == nil || c.state != .Ready {return 0, .Not_Loaded, 0}
 				}
 			}
 		}
 	}
 
+	refused := admit_box(w, cause, lo, hi)
 	for cy in clo.y ..= chi.y {
 		for cz in clo.z ..= chi.z {
 			for cx in clo.x ..= chi.x {
 				pos := game.Chunk_Pos{cx, cy, cz}
 				c := chunks_get(&w.chunks, pos)
 				if c == nil || c.state != .Ready {continue}
-				n := edit_chunk(w, c, e, lo, hi, cause)
+				n, skipped := edit_chunk(w, c, e, lo, hi, cause, refused)
+				protected += skipped
 				if n > 0 {
 					changed += n
 					c.modified = true
@@ -87,7 +98,7 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit, act: Act) -> (changed: int, result: B
 			}
 		}
 	}
-	if changed == 0 {return 0, .Done}
+	if changed == 0 {return 0, .Done, protected}
 
 	wake_water_box(w, lo, hi, cause.action)
 	plants_check_box(w, lo, hi, cause.action)
@@ -98,7 +109,7 @@ bulk_edit :: proc(w: ^World, e: Bulk_Edit, act: Act) -> (changed: int, result: B
 			}
 		}
 	}
-	return changed, .Done
+	return changed, .Done, protected
 }
 
 // edit_chunk applies e to the part of chunk c inside lo..hi.
@@ -109,8 +120,9 @@ edit_chunk :: proc(
 	e: Bulk_Edit,
 	lo, hi: game.Block_Pos,
 	act: Act,
+	refused: []Box, // protected boxes the actor may not edit
 ) -> (
-	changed: int,
+	changed, protected: int,
 ) {
 	origin := game.chunk_origin(c.pos)
 	from := [3]i32{max(lo.x - origin.x, 0), max(lo.y - origin.y, 0), max(lo.z - origin.z, 0)}
@@ -144,7 +156,14 @@ edit_chunk :: proc(
 					new = game.Block(cell)
 				}
 				if new == old {continue}
-				if admit(w, act, p) != .Yes {continue}
+				if len(refused) > 0 {
+					blocked := false
+					for b in refused {if box_has(b, p) {blocked = true}}
+					if blocked {
+						protected += 1
+						continue
+					}
+				}
 				if err := game.chunk_set(&c.blocks, &w.chunks.arrays, l, new); err != nil {
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return

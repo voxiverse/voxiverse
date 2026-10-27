@@ -3974,3 +3974,69 @@ always-`Yes` hook in M45).
   `/history` a block: the build is back and the history reads sensibly.
 
 What differed: split once, as the spec allows: steps 7 and 8 (region protection with `admit` refusing, `protections.cfg` and `/protect`; compaction and retention) are M45b (`milestones/M45b.md`, its tests `test_protection_refuses` and `test_journal_compacts`); `admit` stays the always-`Yes` hook. Names: the shared types are `game.Edit_System` (the spec's `System`), `game.Journal_Action`, `game.Journal_Entry`, `game.Journal_Tick|Actor|Changes|Save|Params` and `game.Journal_Record` (`Record`, `Action`, `Entry` were taken in `game`); `age_of(s)` is the spec's `age(s)`; `rules_still()` is in `journal_test.odin`. Beyond the spec: `journal_batch` records a bulk edit's chunk at once; `Update.action` and `Entity.action` are hashed as said, but `Client.command` is set around the whole `admin` run; `journal_note`/`journal_save_point` write the `Save` record; `chunk_load_saved` lets a rollback load an edited chunk from the save. The disk groups a tick's entries by chunk, so a segment's order within a tick is by chunk, not by append (`test_journal_matches_disk` compares sorted). A `Tick` record is written per age, and an entry carries the age it was made at (a command run between two ticks is in the next tick's, with its own age). `kept` also counts a position whose newest entry is the filter's but whose block is not what the run left, and positions where water woken by someone else's change flows (its cause is theirs): `test_rollback_keeps_others` asserts at least 1, not exactly 1. The grief test uses the session's own character (the mirror's) rather than a player called mallory, and times the rollback to start at the grief (seconds computed from the ages), not a fixed 45 s. Undo of an action over 4096 entries runs as a rollback job and stops the undo batch; redo pushes the `Redo` action on the undo stack so `/undo` undoes a redo. The cost is counted in cycles (`intrinsics.read_cycle_counter`; a clock read costs more than a journal call here): 0.5% of the ticks' time and 0.02 ms a tick, optimized. The bandwidth baseline's root lines changed as said; `s:state` grew by 27 bytes in both scenarios, not 0: the join record that lists the commands a player may use (`rollback history undo redo`). `/rollback` and `/history` are in node `world.rollback`, `/undo` and `/redo` in `world.edit.undo`. Added `docs/journal.md` and the `Journal` section in `docs/determinism.md`.
+
+# M45b: region protection and journal compaction
+
+The remainder of M45 (the edit journal, done: `docs/journal.md`, its spec in history.md).
+The pipeline already calls `admit(w, act, p)` for every block change; it returns `.Yes`
+always. This milestone makes it refuse, and keeps the journal's disk use bounded.
+
+**Admission.** `admit(w, act, p) -> Admit` with `Admit :: enum u8 {Yes, Protected}` is the
+only place a block change can be refused for who caused it. M45b checks region protection;
+M52 adds `Over_Budget` and `No_Capability` here and nowhere else (the action carries the
+actor, so the check needs nothing more). Bulk edits ask once per box: `admit_box(w, act, lo,
+hi)` returns the protections overlapping the box that the actor may not edit; none: every
+block is admitted without a per-block check (a world with no protections returns at once).
+`edit_chunk` uses it instead of calling `admit` per block when the box overlaps none. A
+refused change:
+
+- a hand edit: `Edit_Result` not accepted (the client rolls back its prediction) and the
+  notice `&cThis place is protected (<name>)`, at most once a second per player;
+- a bulk edit: the protected blocks are skipped; the notice says `fill: 120 blocks changed,
+  36 protected` (`bulk_edit` returns the count skipped);
+- a consequence (water, a plant, a blast): left as it is (water stops at the edge).
+
+The count of entries per tick and per action (`Live_Action.entries`) already exists for
+M52's quotas and `/history`.
+
+**Region protection.** `World.protections: [dynamic]Protection` (`{name: string, box: Box,
+members: [dynamic]string}`), at most `MAX_PROTECTIONS :: 256` per world, names 1-32 of
+`[a-z0-9_-]`. A change inside a protection is admitted if the action's actor is `World`, has
+`bypass` (`actor_of` resolves `allowed(s, c, "world.protect.bypass")` once per action), or is
+a member by character name. Saved in `worlds/<address>/protections.cfg` (`protect <name> <x1>
+<y1> <z1> <x2> <y2> <z2> [member ...]`, one per line), written through `write_atomically`
+when changed and at save. Hashed in the `Journal` hash section (sorted by name). Commands
+(node `world.protect`): `/protect add <name> [x1 y1 z1 x2 y2 z2]` (the selection if no
+coordinates), `/protect remove <name>`, `/protect list`, `/protect member add|remove <name>
+<character>`.
+
+**Compaction and retention** (in `world_save`, at most one segment per save):
+
+- A closed segment whose newest age is older than `JOURNAL_DETAIL :: 108_000` ticks (one
+  hour) is rewritten once as compacted (header flag `JOURNAL_COMPACTED`): per (position,
+  action), one entry with the first `old`, the last `new`, the last age and `how`; entries
+  whose `old == new` dropped; the declarations it still needs kept. Written to
+  `<seq>.vxj.tmp`, then renamed over. A rollback over compacted history gives the same net
+  result; only the time resolution within the segment's span is lost. The segment the
+  world.cfg records is not compacted while it is the newest.
+- Segments whose newest age is older than `JOURNAL_KEEP :: 7 * 24 * 108_000` ticks, then the
+  oldest while the directory is over `JOURNAL_MAX_BYTES :: 256 << 20`, are deleted.
+  `Config.journal_*` overrides for tests as needed.
+
+**Tests:**
+
+- `test_protection_refuses`: in a protection, a non-member's hand edit is refused (the
+  `Edit_Result` and the notice), a fill skips it and says how many, water poured outside does
+  not flow in, a member's and a bypassing owner's edits pass; protections survive save and
+  load; `/protect` commands round-trip.
+- `test_journal_compacts`: segments of 64 KiB aged past an hour compact; a rollback over them
+  restores the same blocks as over the detailed ones; retention deletes by age and size.
+- `server/determinism_test.odin` still passes with protections in the `Journal` section.
+
+**Exit check:** `test_protection_refuses` and `test_journal_compacts` pass; `build check`
+and the suite pass; the CI run of the commit is green.
+
+**Left out:** capabilities and budgets for scripts (M52, at `admit`); protections by claim
+tools or per-block owners; a UI for protections.
+
+What differed: `bulk_edit` returns the skipped count as a third result and `edit_chunk` takes the boxes `admit_box` returned instead of asking per block. Compaction merges a run of changes of a block by one action, not every change by that action: another action's change in between would break the old/new chain that replay checks. A segment's newest age is judged by the next segment's first age (a header read), so compaction and retention never touch the newest and are late, never early, in a quiet world. `Save` records are dropped by compaction; `Params` are kept. The test mirror records the notices it is told (`Mirror.notices`). The retention check is a helper `test_journal_compacts` calls, not a test of its own. The `/protect` command joined the commands list a join record carries: `s:state` grew by 8 bytes in both bandwidth scenarios (baseline accepted).

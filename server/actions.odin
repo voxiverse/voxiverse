@@ -123,7 +123,10 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		action_begin(w, actor_of(s, c), .Till if tilling else .Hand),
 		.Till if tilling else .Hand,
 	}
-	if !set_block(w, e.pos, e.block, act, c) {return result}
+	if !set_block(w, e.pos, e.block, act, c) {
+		protect_notice(s, c, act, e.pos)
+		return result
+	}
 	result.accepted, result.block = true, e.block
 	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist, act)} 	// (everyone is told, the tiller too)
 	switch {

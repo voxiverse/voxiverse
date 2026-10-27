@@ -41,6 +41,7 @@ Client :: struct {
 	name_buf:      [game.MAX_NAME_LENGTH]u8,
 	name_len:      int,
 	kick_at:       u64, // tick to drop a refused client
+	protect_told:  u64, // the tick a protected place was last said (protect.odin)
 	kick_reason:   string, // (a constant)
 	position:      [3]f64,
 	center:        game.Chunk_Pos, // the chunk the client is in

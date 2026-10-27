@@ -70,6 +70,43 @@ are deleted and the recorded one is cut to the offset, so the journal never desc
 edits the loaded regions do not have. A save from before M45 has no keys: it starts an
 empty journal.
 
+### Compaction and retention
+
+`world_save` (`journal_maintain`, `server/journal_compact.odin`) compacts at most one
+segment per save: a closed segment whose newest change is older than `JOURNAL_DETAIL`
+(108 000 ticks, an hour; judged by the next segment's first age, so a quiet world compacts
+late, never early) is rewritten once, with header flag `JOURNAL_COMPACTED`, through
+`<seq>.vxj.tmp` and a rename. A run of changes of one block by one action becomes one entry
+(the first `old`, the last `new`, the last age and `how`); entries that changed nothing are
+dropped; `Save` records go, the `Params` records and the actors and actions still named stay.
+Only a run is merged, never changes of other actions in between, so the chain of `old`/`new`
+per block still agrees and replay holds. A rollback over compacted history gives the same net
+result; what is lost is the time resolution inside the segment's span (a rollback that begins
+inside it restores the whole segment's net change). The newest segment, the one `world.cfg`
+records, is never touched.
+
+Retention, in the same place: segments whose next one began more than `JOURNAL_KEEP` (7 days)
+ago are deleted, then the oldest while the directory is over `JOURNAL_MAX_BYTES` (256 MiB);
+never the newest. After retention a replay from the generator is no longer possible; replay
+from a snapshot newer than the oldest segment still is. `Config.journal_detail`,
+`journal_keep` and `journal_max_bytes` override the three for tests.
+
+## Region protection
+
+`World.protections` (`server/protect.odin`), at most 256 per world, each a name (1-32 of
+`[a-z0-9_-]`), a box and member character names; saved in `worlds/<address>/protections.cfg`
+(`protect <name> x1 y1 z1 x2 y2 z2 [member ...]`, one per line; written when changed and
+retried at save) and hashed in the `Journal` section (by name). A change inside a protection
+is admitted when its actor is the world, has `world.protect.bypass` (resolved once per action
+by `actor_of`, kept in the action) or is a member (by character name, case folded).
+`admit` is the one check; a bulk edit asks once with `admit_box` and skips the blocks inside
+the boxes it may not edit (`bulk_edit` returns the count: `fill: 120 blocks changed, 36
+protected`). A refused hand edit is an unaccepted `Edit_Result` and the notice `This place is
+protected (<name>)`, at most once a second per player. Consequences carry their cause's
+action, so water poured outside stops at the edge. Commands (node `world.protect`):
+`/protect add <name> [x1 y1 z1 x2 y2 z2]` (the selection with no coordinates), `remove`,
+`list`, `member add|remove <name> <character>`.
+
 ## Rollback
 
 `/rollback player <name> <time> [radius <n> | sel | world]`, `system <system> <time>

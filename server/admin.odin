@@ -79,6 +79,13 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_rollback,
 		"world.rollback",
 	},
+	{
+		"protect",
+		"add <name> [x1 y1 z1 x2 y2 z2] | remove <name> | list | member add|remove <name> <character>  (no coordinates: the selection)",
+		{1, 8},
+		admin_protect,
+		"world.protect",
+	},
 	{"history", "<x y z>", {3, 3}, admin_history, "world.rollback"},
 	{"undo", "[n]", {0, 1}, admin_undo, "world.edit.undo"},
 	{"redo", "[n]", {0, 1}, admin_redo, "world.edit.undo"},
@@ -486,10 +493,18 @@ admin_sel :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private = "file")
 bulk_notice :: proc(s: ^Server, c: ^Client, name: string, e: Bulk_Edit) {
 	act := Act{action_begin(c.world, actor_of(s, c), .Command, c.command), .Command}
-	changed, result := bulk_edit(c.world, e, act)
+	changed, result, protected := bulk_edit(c.world, e, act)
 	switch result {
 	case .Done:
-		notice(s, c, fmt.tprintf("%s: %d blocks changed", name, changed))
+		if protected > 0 {
+			notice(
+				s,
+				c,
+				fmt.tprintf("%s: %d blocks changed, %d protected", name, changed, protected),
+			)
+		} else {
+			notice(s, c, fmt.tprintf("%s: %d blocks changed", name, changed))
+		}
 	case .Too_Big:
 		notice(s, c, fmt.tprintf("%s: too big (at most %d blocks)", name, MAX_BULK_VOLUME))
 	case .Not_Loaded:
@@ -506,7 +521,6 @@ parse_coords :: proc(words: []string, out: []i32) -> bool {
 	return true
 }
 
-@(private = "file")
 parse_box :: proc(words: []string) -> (box: Box, ok: bool) {
 	n: [6]i32
 	parse_coords(words, n[:]) or_return

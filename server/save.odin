@@ -235,6 +235,8 @@ world_save :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
 	journal_save_point(w) // (what the world.cfg names as the journal's end)
 	ok := write_world_file(w)
+	if w.protections_dirty && !protections_write(w) {ok = false}
+	journal_maintain(w)
 	if !write_entities(w) {ok = false}
 	if !write_containers(w) {ok = false}
 	if !write_stats(w) {ok = false}

@@ -242,6 +242,8 @@ act_current :: proc(w: ^World, act: Act) -> Act {
 // a change can be refused for who caused it (region protection, M45b;
 // capabilities and budgets, M52).
 admit :: proc(w: ^World, act: Act, p: game.Block_Pos) -> Admit {
+	if len(w.protections) == 0 {return .Yes}
+	if protection_refusing(w, act, p) != nil {return .Protected}
 	return .Yes
 }
 
@@ -684,6 +686,7 @@ journal_hash :: proc(w: ^World) -> u64 {
 	j := &w.journal
 	h := j.tick_hash
 	j.tick_hash = game.hasher_make()
+	protections_hash(w, &h)
 	return game.hasher_finish(h)
 }
 
