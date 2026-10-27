@@ -77,7 +77,7 @@ socket_send :: proc(s: ^Socket, to: net.Endpoint, data: []u8, now: time.Tick) {
 		return
 	}
 	seed := c.seed if c.seed != 0 else s.rng_seed
-	if seed == 0 {seed = u64(time.tick_now()._nsec) | 1} // (unseeded: whatever the clock says)
+	if seed == 0 {seed = u64(time.tick_now()._nsec) | 1} 	// (unseeded: whatever the clock says)
 	if s.rng_seed != seed {
 		s.rng, s.rng_seed = base.rng_make(seed), seed
 	}

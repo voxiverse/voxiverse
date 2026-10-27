@@ -616,7 +616,9 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		net_pump(t, &a)
 		net_pump(t, &b)
 		time.sleep(game.TICK_DURATION)
-		call(&srv, proc(s: ^Server, data: rawptr) {
+		call(
+			&srv,
+			proc(s: ^Server, data: rawptr) {
 				look := (^Look)(data)
 				for c, i in look.cs {
 					look.recent[i], look.same[i], look.shown[i] = false, false, false
@@ -632,7 +634,11 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 					}
 					other := look.ids[1 - i]
 					motion := (^game.Player_Motion)(
-						game.replica_get(&sent.data, int(game.State_Kind.Player_Motion), {a = i32(other)}),
+						game.replica_get(
+							&sent.data,
+							int(game.State_Kind.Player_Motion),
+							{a = i32(other)},
+						),
 					)
 					sheep: ^game.Entity_Motion
 					for rec in sent.data.tables[game.State_Kind.Entity_Motion].records {
@@ -645,8 +651,11 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 						len(c.entities) == 1
 					for _, p in c.entities {look.shown[i] &&= p == sheep.position}
 				}
-			}, &look)
-		converged = look.recent == {true, true} && look.same == {true, true} && look.shown == {true, true}
+			},
+			&look,
+		)
+		converged =
+			look.recent == {true, true} && look.same == {true, true} && look.shown == {true, true}
 	}
 	testing.expectf(
 		t,
@@ -670,7 +679,8 @@ replicas_match :: proc(schema: ^game.Schema, x, y: ^game.Replica) -> bool {
 		xs, ys := x.tables[kind].records, y.tables[kind].records
 		if len(xs) != len(ys) {return false}
 		for rec, i in xs {
-			if rec.key != ys[i].key || game.value_diff(k, rec.value, ys[i].value) != 0 {return false}
+			if rec.key != ys[i].key ||
+			   game.value_diff(k, rec.value, ys[i].value) != 0 {return false}
 		}
 	}
 	return true
