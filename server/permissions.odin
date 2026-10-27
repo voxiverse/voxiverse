@@ -377,7 +377,7 @@ permissions_save :: proc(s: ^Server) -> bool {
 			context.temp_allocator,
 		) or_else PERMISSIONS_FILE
 	text := permissions_text(&s.perms)
-	return write_atomically(path, transmute([]u8)text)
+	return store_write(s, path, transmute([]u8)text)
 }
 
 // is_owner: c has every node (the local player of a world played here;

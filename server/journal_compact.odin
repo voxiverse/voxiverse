@@ -4,6 +4,7 @@ import "core:log"
 import "core:os"
 import "core:slice"
 
+import "../base"
 import "../common/game"
 
 // Journal compaction and retention (docs/journal.md). A closed segment older
@@ -66,7 +67,7 @@ segment_compact :: proc(w: ^World, seq: u32) {
 		log.warnf("server cannot compact a journal segment seq=%d", seq)
 		return
 	}
-	if write_atomically(path, out) {
+	if base.disk_replace(&w.server.store.disk, path, out) == .None {
 		log.infof(
 			"server compacted a journal segment seq=%d before=%d after=%d",
 			seq,
@@ -239,7 +240,7 @@ journal_retain :: proc(w: ^World, segs: []u32) {
 			old = now - min(now, next.first_age) > keep
 		}
 		if !old && total <= limit {break}
-		if err := os.remove(segment_path(w, seq)); err != nil {
+		if err := base.disk_remove(&s.store.disk, segment_path(w, seq)); err != .None {
 			log.errorf("server cannot remove a journal segment seq=%d error=%v", seq, err)
 			break
 		}

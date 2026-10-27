@@ -323,7 +323,7 @@ community_save :: proc(s: ^Server) -> bool {
 	path :=
 		filepath.join({s.store.dir, COMMUNITY_FILE}, context.temp_allocator) or_else COMMUNITY_FILE
 	text := community_text(&s.community)
-	return write_atomically(path, transmute([]u8)text)
+	return store_write(s, path, transmute([]u8)text)
 }
 
 // display_name: how c is shown (their nickname, else name; formatted).

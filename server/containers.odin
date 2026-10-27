@@ -174,7 +174,8 @@ write_containers :: proc(w: ^World) -> bool {
 		}
 		strings.write_byte(&b, '\n')
 	}
-	return write_atomically(
+	return store_write(
+		w.server,
 		filepath.join({w.dir, CONTAINERS_FILE}, context.temp_allocator) or_else CONTAINERS_FILE,
 		b.buf[:],
 	)

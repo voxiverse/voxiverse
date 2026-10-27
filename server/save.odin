@@ -47,6 +47,15 @@ Store :: struct {
 	characters: map[string]game.Account, // every character's account, by name
 	writer:     game.Writer,
 	last_save:  u64, // the tick of the last save
+	// M46 (save_tx.odin): the disk, the save worker, and the save in flight.
+	disk:       base.Disk,
+	jobs:       base.Jobs,
+	jobs_ready: bool,
+	staging:    ^Save_Batch, // the save being collected
+	inflight:   ^Save_Batch, // handed to the worker
+	carry:      Carry, // what a failed save did not write
+	generation: u64, // the last committed save's
+	saved_at:   u64, // its age
 }
 
 // store_open reads the universe's files if dir has them (its seed and the
@@ -65,6 +74,10 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	}
 	if err := os.make_directory_all(dir); err != nil && err != .Exist {
 		log.errorf("server cannot create the universe directory dir=%s error=%v", dir, err)
+		return false
+	}
+	if problem := store_recover(dir, &st.disk); problem != "" {
+		log.errorf("server cannot open the save: %s", problem)
 		return false
 	}
 	universe := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE
@@ -161,6 +174,9 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 
 store_close :: proc(s: ^Server) {
 	st := &s.store
+	store_workers_stop(s)
+	delete(st.carry.files)
+	delete(st.carry.deletes)
 	for name, &r in st.players {
 		counters_free(&r.stats)
 		delete(name)
@@ -215,23 +231,46 @@ mark_edited :: proc(w: ^World, pos: game.Chunk_Pos) {
 }
 
 // save writes the universe's files and every loaded world's (its settings,
-// entities and changed regions); false if anything could not be written
-// (logged; the next save tries again).
-save :: proc(s: ^Server) -> bool {
+// entities and changed regions) as one transaction (save_tx.odin), by the save
+// worker; with wait, returns when it is committed (false if it failed:
+// logged, and the next save writes the files again). An autosave does not
+// wait, and does nothing while the last one is still being written.
+save :: proc(s: ^Server, wait := true) -> bool {
 	st := &s.store
+	if st.dir == "" {
+		st.last_save = s.tick
+		return true
+	}
+	if !wait {
+		save_poll(s)
+		if st.inflight != nil {return true}
+	}
 	st.last_save = s.tick
-	if st.dir == "" {return true}
-	ok := write_universe_file(s)
-	for w in s.worlds {if !world_save(w) {ok = false}}
-	if !permissions_save(s) {ok = false}
-	if !community_save(s) {ok = false}
-	if !players_save(s) {ok = false}
+	if !store_stage(s) {return false}
+	write_universe_file(s)
+	for w in s.worlds {world_stage(w)}
+	permissions_save(s)
+	community_save(s)
+	players_save(s)
+	ok := store_commit(s, wait)
 	log.infof("server saved worlds=%d dir=%s", len(s.worlds), st.dir)
 	return ok
 }
 
-// world_save writes w's world.cfg, entities and changed regions.
+// world_save writes w's files on their own (a world being unloaded): its own
+// transaction, finished when it returns.
 world_save :: proc(w: ^World) -> bool {
+	s := w.server
+	if w.dir == "" {return true}
+	own := store_stage(s)
+	ok := world_stage(w)
+	if own {ok = store_commit(s, true) && ok}
+	return ok
+}
+
+// world_stage adds w's world.cfg, entities and changed regions to the save
+// being collected.
+world_stage :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
 	journal_save_point(w) // (what the world.cfg names as the journal's end)
 	ok := write_world_file(w)
@@ -338,22 +377,7 @@ write_region :: proc(w: ^World, region: game.Region_Pos) -> bool {
 	}
 	wr := &w.server.store.writer
 	game.region_encode(wr, region, chunks[:], tops[:])
-	return write_atomically(region_path(w.dir, region), wr.buf[:])
-}
-
-// write_atomically replaces path with data through a temporary file.
-@(private)
-write_atomically :: proc(path: string, data: []u8) -> bool {
-	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
-	if err := os.write_entire_file(tmp, data); err != nil {
-		log.errorf("server cannot write path=%s error=%v", tmp, err)
-		return false
-	}
-	if err := os.rename(tmp, path); err != nil {
-		log.errorf("server cannot replace path=%s error=%v", path, err)
-		return false
-	}
-	return true
+	return store_write(w.server, region_path(w.dir, region), wr.buf[:])
 }
 
 // universe.cfg: "key = value" lines.
@@ -365,8 +389,10 @@ write_universe_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
+	fmt.sbprintfln(&b, "generation = %d", s.store.generation + 1) // (the save this file belongs to)
 	fmt.sbprintfln(&b, "age = %d", age_of(s)) // ticks of the universe, across runs
-	return write_atomically(
+	return store_write(
+		s,
 		filepath.join({s.store.dir, UNIVERSE_FILE}, context.temp_allocator) or_else UNIVERSE_FILE,
 		b.buf[:],
 	)
@@ -411,6 +437,8 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				return false
 			}
 			s.home.address = a
+		case key == "generation":
+			if n, ok := strconv.parse_u64(value, 10); ok {s.store.generation = n}
 		case key == "age":
 			if n, ok := strconv.parse_u64(value, 10); ok {s.age_base = n}
 		case key == "kit":
@@ -484,7 +512,8 @@ write_world_file :: proc(w: ^World) -> bool {
 	strings.write_string(&b, "\n")
 	base.vars_write(game.rules_table(), &w.rules, &b)
 	base.vars_write(worldgen.params_table(), &w.params, &b)
-	return write_atomically(
+	return store_write(
+		w.server,
 		filepath.join({w.dir, WORLD_FILE}, context.temp_allocator) or_else WORLD_FILE,
 		b.buf[:],
 	)
@@ -621,7 +650,8 @@ write_entities :: proc(w: ^World) -> bool {
 		}
 		strings.write_byte(&b, '\n')
 	}
-	return write_atomically(
+	return store_write(
+		w.server,
 		filepath.join({w.dir, ENTITIES_FILE}, context.temp_allocator) or_else ENTITIES_FILE,
 		b.buf[:],
 	)

@@ -374,7 +374,8 @@ tick :: proc(s: ^Server) {
 	s.tick += 1
 	calls_run(s)
 	if s.tick % TICK_SUMMARY_TICKS == 0 {tick_summary(s)}
-	if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s)}
+	save_poll(s)
+	if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
 	for w in s.worlds {
 		chunks_collect(
 			&w.chunks,

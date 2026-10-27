@@ -65,7 +65,8 @@ structure_save :: proc(w: ^World, name: string, lo, hi: game.Block_Pos, clear: b
 			{dir, strings.concatenate({name, ".vxs"}, context.temp_allocator)},
 			context.temp_allocator,
 		) or_else name
-	if !write_atomically(
+	if !store_write(
+		s,
 		path,
 		w.buf[:],
 	) {return "structure save: could not write it (see the server log)"}

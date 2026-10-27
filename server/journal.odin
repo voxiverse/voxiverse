@@ -11,6 +11,7 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+import "../base"
 import "../common/game"
 
 // The edit journal (docs/journal.md): every block a world's state changes,
@@ -395,7 +396,7 @@ journal_resume :: proc(w: ^World) {
 	for seq in journal_segments(w) {
 		path := segment_path(w, seq)
 		if !r.known || seq > r.segment {
-			if err := os.remove(path); err != nil {
+			if err := base.disk_remove(&w.server.store.disk, path); err != .None {
 				log.errorf("server cannot remove a journal segment path=%s error=%v", path, err)
 			}
 			continue
@@ -591,6 +592,7 @@ journal_save_point :: proc(w: ^World) {
 	if w.dir == "" {return}
 	journal_note(w, game.Journal_Save{age_of(w.server)})
 	journal_flush(w)
+	if w.journal.file != nil {base.file_sync(w.journal.file)} // (the save names this end)
 }
 
 // Loaded_Segment: a segment read whole, entries in the order written, each

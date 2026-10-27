@@ -276,7 +276,7 @@ players_save :: proc(s: ^Server) -> bool {
 				ok = false
 				continue
 			}
-			if !write_atomically(path, player_json(&r)) {
+			if !store_write(s, path, player_json(&r)) {
 				ok = false
 				continue
 			}
@@ -284,7 +284,7 @@ players_save :: proc(s: ^Server) -> bool {
 			if _, claimed := r.account.?; claimed {
 				// Its file from before accounts is this one now.
 				old := character_path(s, name, nil)
-				if os.exists(old) {os.remove(old)}
+				if os.exists(old) {store_delete(s, old)}
 			}
 		}
 		if client_by_name(s, name) == nil {append(&gone, name)}

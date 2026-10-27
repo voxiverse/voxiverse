@@ -151,7 +151,7 @@ protections_write :: proc(w: ^World) -> bool {
 		for m in pr.members {fmt.sbprintf(&b, " %s", m)}
 		fmt.sbprintln(&b)
 	}
-	ok := write_atomically(protections_path(w), b.buf[:])
+	ok := store_write(w.server, protections_path(w), b.buf[:])
 	w.protections_dirty = !ok
 	return ok
 }

@@ -180,7 +180,8 @@ write_stats :: proc(w: ^World) -> bool {
 		context.temp_allocator,
 	)
 	if err != nil {return false}
-	return write_atomically(
+	return store_write(
+		w.server,
 		filepath.join({w.dir, STATS_FILE}, context.temp_allocator) or_else STATS_FILE,
 		data,
 	)
