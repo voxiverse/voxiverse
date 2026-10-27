@@ -8,7 +8,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-// `build bench compare <ref> <scenario> [-runs:N]` (PLAN.md, M19): is the
+// `build bench compare <ref> <scenario> [-runs:N]` (docs/plan.md, M19): is the
 // working tree faster or slower than <ref> at a scenario? Both are built
 // alike (this driver's flags; <ref> in a git worktree under
 // build/worktrees/, kept for next time), then run alternately, <ref> and

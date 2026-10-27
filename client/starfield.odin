@@ -4,7 +4,7 @@ import "core:math"
 
 import "ui"
 
-// The menus' background (PLAN.md M20): a starfield streaming towards the
+// The menus' background (docs/plan.md M20): a starfield streaming towards the
 // viewer, a warp, unhurried. Each star is a point in a box ahead of the
 // camera coming nearer at STAR_SPEED; it is drawn as a streak of whole
 // pixels (crunchy, never smoothed) from where it was STAR_TRAIL ago to

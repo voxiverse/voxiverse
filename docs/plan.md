@@ -274,7 +274,7 @@ part of a per-world struct.
 ## Milestones
 
 Each one is a vertical slice with an exit check; nothing moves on with failing checks.
-Sections of finished milestones are in [HISTORY.md](HISTORY.md).
+Each open milestone has its spec in [milestones/](milestones/) (`M<n>.md`: why, the design decided, the steps in order, what is left out, the tests, the exit check); the table below links them. Specs of finished milestones are appended to [history.md](history.md).
 
 **How a milestone is sized (from M22; revised after M25: see "Why the plan changed").** The work is done by an AI assistant on a plan
 with a usage limit. Measured over M19-M21: nearly all of the usage was the assistant
@@ -282,7 +282,7 @@ re-reading its own conversation on every step (a session that ran for days, abou
 million tokens re-read per step), not the code it wrote. So:
 
 - **One milestone, one fresh session.** "On to M<n>" starts a new conversation that reads
-  this file's section for M<n> and the code it names. A section therefore carries every
+  its spec, `milestones/M<n>.md`, and the code it names. A spec therefore carries every
   decision: what to build, where, the numbers, what is left out, and the exit check. A
   milestone with an open design question is not ready; the question is settled first, in
   conversation.
@@ -298,14 +298,15 @@ million tokens re-read per step), not the code it wrote. So:
   refusal a test must see is returned as a value (`game.hash_refusal`), not caught.
 - **Done means:** the exit check passes, the table row says what was done, a line is
   added to the cost table below, committed and pushed; then the session ends. The next
-  milestone is the next session. A finished milestone's section moves to HISTORY.md.
-- **The model:** a milestone whose section is complete is implemented with a faster,
+  milestone is the next session. A finished milestone's spec is appended to history.md and
+  its file removed.
+- **The model:** a milestone whose spec is complete is implemented with a faster,
   cheaper model (Sonnet); planning sessions, design questions and debugging that has
   stalled use the strongest (Opus), whose usage counts several times as much.
 - **A milestone that outgrows one usage window stops:** what works is committed, the rest
   becomes a milestone of its own. A long session is the costliest kind.
 - **The week:** a planning session first (Opus, about an hour, no code) that settles one
-  open question into a milestone section and checks the order; then a milestone a session;
+  open question into a milestone spec and checks the order; then a milestone a session;
   at the end, a Windows check if anything needs one and a release tag. About a fifth of
   the budget is left free for what players report.
 - **The mix:** at least one milestone a week is something only this game has (from the
@@ -328,7 +329,7 @@ million tokens re-read per step), not the code it wrote. So:
     the world (M58). The table's order is the order.
   - **Renumbered (2026-10-26):** M51→M40, M52→M41, M53→M42, M33→M43, M34→M44, M40→M45,
     M49→M46, M41→M47, M47→M48, M46→M49, M48→M50, M42→M51, M43→M52, M44→M53, M45→M54,
-    M50→M55, M35→M56, M36→M57, M37→M58. HISTORY.md and older commits use the old numbers.
+    M50→M55, M35→M56, M36→M57, M37→M58. history.md and older commits use the old numbers.
   - **Checks by hand do not block:** a milestone is done when its tests pass and CI is green
     on the three OSes. What only a person can check (listening, looking, a real Windows or
     macOS machine) is listed under "Check by hand" in the report and collected in one standing
@@ -339,7 +340,12 @@ million tokens re-read per step), not the code it wrote. So:
     finished, not split again.
   - **Who pushes:** the session commits; the loop pushes, waits for CI on that commit and
     hands any failure to a fix session. A failure that passes on a re-run is a bug, written down.
-  - **Models:** as above (Opus writes a missing section, Sonnet builds).
+  - **Models:** as above (Opus writes a missing spec, Sonnet builds).
+  - **Specs written ahead (2026-10-26):** every open milestone's spec was written at once,
+    before the code it builds on exists. A session first checks its spec against the code
+    as it now is (names, files, what earlier milestones actually built) and corrects the
+    spec where they differ, in the same commit, saying so in its report; it does not
+    reopen a decision the spec records.
 
 **What each milestone cost** (from the session's log: the assistant's steps, the tokens it
 re-read, CI round trips), so the next week is planned from numbers:
@@ -406,131 +412,61 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M28 | Character attributes, modifiers and health: `derive()` shared by server and prediction, item modifiers as data (speed boots, double jump), health, fall and explosion damage, death and respawn, an event-to-xp table | Prediction tests with modifiers, both ways; damage by the rules' numbers; death, respawn and drops; xp and level from a scripted session, saved and loaded (done: `common/game/mods.odin` (`derive_mods` from worn items' modifiers, shared by server and the client's prediction; speed, jump, air jumps, max health as data on items), `common/game/physics_test.odin` (modifiers change movement; prediction agrees tick by tick with a speed modifier and a double jump), `server/health_test.odin` (fall and explosion damage by the rules' numbers, death, respawn and dropped items, xp and level from events, worn armor raises and removal lowers max health), protocol 21 with a Health message, a health bar by the hotbar; not done: timed effects, reach, xp rewards) |
 | M29 | Hardening: a still-world harness for tests, a repeat-run CI job that fails on differences, telemetry costs in the benchmarks; the Windows pass when possible | The suite passes twice with the same results; benchmark regressions fail CI (done: `game.rules_still()` is the one world-off-by-a-switch used by the tests, benchmarks and exit checks (random ticks are the only self-changing thing with a switch; sheep and weather have none yet); CI runs the suite again with another random seed on Linux; `telemetry.test_event_cost` budgets emit and write per event, run optimized in CI; not done: the Windows pass, no Windows machine) |
 | M30 | Blocks that hold things: a chest block with a server-owned record of 25 stacks, saved with the world, opened with the right button, moved with the inventory requests, shared by everyone looking, spilled when broken | A chest filled, saved, quit and loaded holds the same; broken, it drops every stack; two players over UDP moving items in one chest agree with the server; a record without its block is dropped (done: `server/containers.odin` (records by position, saved in `containers.cfg`, copied in and out around every inventory request, others looking told, spilled when the block is gone), `common/game/inventory.odin` chest slots (`test_chest_actions`), `Use_Block` and the chest in `Inventory_Update` (protocol 22, round-trip tests), `client` chest overlay (`test_chest_overlay`), `server/containers_test.odin` (a chest filled, saved, quit and loaded holds the same and spills 128 items when broken; two players over UDP see each other's moves and agree with the server; a record without its block is dropped and spills); not done: a permission node, locks, signs) |
-| M31 | Item ledger and audit: every item that enters or leaves the game's holdings goes through one `ledger` call with a reason (faucets and sinks), telemetry kinds for both, an `audit` that sums everything held and checks it against the ledger, and a fuzz of hostile inventory traffic | A scripted session through every faucet and sink balances exactly; a deliberately duplicated stack is caught; 2000 random (and invalid) inventory requests from two players over UDP leave the audit balanced (done: `server/ledger.odin` (`ledger`, `audit`, `audit_baseline`, the `/audit` command with `admin.audit`, a run every five minutes on a dedicated server), `common/game/reason.odin` (`Reason`, shared so `tools/analytics` can name it), telemetry `Item_Created`, `Item_Destroyed` and `Audit_Failed`, `analytics faucets`, `server/ledger_test.odin` (the scripted session, a duplicated and a deleted stack reported by item and amount, travel, chest, death, leaving and returning with an overflowed character, a world unloaded and loaded again, a game-level fuzz of 20 000 actions, 4 000 requests over UDP, the audit budget at 200 players and 3 000 item entities), and every item-touching existing test ends with a balanced audit; not done: see HISTORY.md) |
+| M31 | Item ledger and audit: every item that enters or leaves the game's holdings goes through one `ledger` call with a reason (faucets and sinks), telemetry kinds for both, an `audit` that sums everything held and checks it against the ledger, and a fuzz of hostile inventory traffic | A scripted session through every faucet and sink balances exactly; a deliberately duplicated stack is caught; 2000 random (and invalid) inventory requests from two players over UDP leave the audit balanced (done: `server/ledger.odin` (`ledger`, `audit`, `audit_baseline`, the `/audit` command with `admin.audit`, a run every five minutes on a dedicated server), `common/game/reason.odin` (`Reason`, shared so `tools/analytics` can name it), telemetry `Item_Created`, `Item_Destroyed` and `Audit_Failed`, `analytics faucets`, `server/ledger_test.odin` (the scripted session, a duplicated and a deleted stack reported by item and amount, travel, chest, death, leaving and returning with an overflowed character, a world unloaded and loaded again, a game-level fuzz of 20 000 actions, 4 000 requests over UDP, the audit budget at 200 players and 3 000 item entities), and every item-touching existing test ends with a balanced audit; not done: see history.md) |
 | M32 | Audio engine core: voices as handles, virtual voices, loops, streams (Ogg), buses with ducking and snapshots, DSP (filters, reverb, compressor, limiter, loudness meter), a command ring in both directions | Offline tests: gapless loops, handles, voice virtualization, fades, ducking, filter and reverb responses, limiter, loudness, streaming under starvation; a mixer cost scenario in CI; the old effects unchanged (done: `audio/` rewritten: handles with generations and a return ring (`play` gives a `Voice_Id`; `stop`, `fade_voice`, `set_voice_*`, `poll`/`drain`), 128 voices of which the 64 best by priority then audibility are real and the rest virtual, loops with loop points, fade in and out, cubic resampling, per-voice and per-bus low-pass (`Svf`), the bus tree World/Player/UI < Effects, Ambience, Music < Master with gain, mute, ducking and snapshots, the look-ahead limiter at -1 dBFS and a BS.1770 meter in `dsp.odin`, a NaN guard, Options sliders Music/Ambience/Effects; tests in `mixer_test.odin` and `dsp_test.odin`; not done: moved to M32a) |
 | M32a | Audio engine core, the rest: streams (Ogg through `vendor:stb/vorbis`, decoder thread, rings), the reverb and compressor, a windowed-sinc resampler, a true-peak limiter, the capture hook (every command stamped with its frame, a recorder, replay through `mix`), sample-accurate scheduling, the listener's safety and comfort options, the mixer cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; reverb RT60 within 10% and THD+N under figure; resampler alias under -90 dB and passband flat within 0.1 dB; true peak under -1 dBTP on inter-sample test signals; a capture replays to bit-identical samples at both optimization levels; scheduled sounds start on the exact frame over a simulated hour; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `client/audio/sinc.odin` (Kaiser-sinc kernel, beta 10, tabulated at 1024 points a sample and stretched when the step is above 1, so pitched-up sounds are filtered before they alias; used for every voice at another rate than the mixer's or pitched by more than a semitone, cubic stays for the rest; `resample_sound` converts at load), `client/audio/space.odin` (an 8-line FDN reverb with live RT60, damping, early reflections, a send per bus and a return into Master; a compressor, also Night mode), the limiter detects the 8x-oversampled true peak (32-tap FIR; latency is now `limiter_delay` = look-ahead + 16 frames), `Play.start_frame` schedules a sound on an exact mixer frame (`clock`, `Stats.late`), `set_listener` takes Mono, Swap, cross-feed, Night and a safety ceiling; tests in `client/audio/engine_test.odin`; not done: moved to M32c) |
-| M32c | Audio engine core, the last part: streams, the capture hook, the real-time thread, the cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; a capture replays to bit-identical samples at both optimization levels; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `client/audio/stream.odin` (`add_stream`: an Ogg in memory, a decoder thread (or `inline`, decoded by `mix`, for offline work) writing a 64k-sample ring of mono samples, read by the voice through the same cubic/sinc, an epoch counter restarting it for the next voice, loops crossfaded equal-power by the decoder, an underrun counted and the voice holding its place; `stream_underruns`), `client/audio/capture.odin` (the recorder on the audio thread's side, versioned file with the sound table's checksums, `capture_parse` validating everything, `capture_replay`), every command takes an `at` frame and is held until it, the block cut there (`Stats.late` counts a late one), `client/audio/device.odin` (real-time context priority, FTZ/DAZ on x86-64, the callback's duration and the device clock's drift in `Stats`, `output_latency`), Options: Mono, Swap ears, Night mode, cross-feed and the loudest sound (`audio_listener`), `bench audio` (64 voices, 4.4% of a core here) and `Sound` bandwidth (`set_bandwidth`), the sfx converted to the mixer's rate at load; tests in `client/audio/stream_test.odin`, `client/audio/capture_test.odin`, `client/effects_spectrum_test.odin`; not done: see HISTORY.md) |
+| M32c | Audio engine core, the last part: streams, the capture hook, the real-time thread, the cost scenario | Offline tests: a stream equals its decode, seamless, no underrun with the test thread starved 200 ms; a capture replays to bit-identical samples at both optimization levels; the 64-voice mix under 5% of a core (a `bench` scenario `audio`); old effects heard as before (spectrum of the break/place/step scenario) (done: `client/audio/stream.odin` (`add_stream`: an Ogg in memory, a decoder thread (or `inline`, decoded by `mix`, for offline work) writing a 64k-sample ring of mono samples, read by the voice through the same cubic/sinc, an epoch counter restarting it for the next voice, loops crossfaded equal-power by the decoder, an underrun counted and the voice holding its place; `stream_underruns`), `client/audio/capture.odin` (the recorder on the audio thread's side, versioned file with the sound table's checksums, `capture_parse` validating everything, `capture_replay`), every command takes an `at` frame and is held until it, the block cut there (`Stats.late` counts a late one), `client/audio/device.odin` (real-time context priority, FTZ/DAZ on x86-64, the callback's duration and the device clock's drift in `Stats`, `output_latency`), Options: Mono, Swap ears, Night mode, cross-feed and the loudest sound (`audio_listener`), `bench audio` (64 voices, 4.4% of a core here) and `Sound` bandwidth (`set_bandwidth`), the sfx converted to the mixer's rate at load; tests in `client/audio/stream_test.odin`, `client/audio/capture_test.odin`, `client/effects_spectrum_test.odin`; not done: see history.md) |
 | M32b | Audio tools: capture files, `build audiodump` (timeline, per-bus spectrograms, loudness, WAV out), an in-game freeze-and-solo inspector, quality and cost baselines that fail CI on drift | A capture replays to bit-identical audio; the dump names every voice dropped or virtualized; baselines for four scenarios (burst, cave walk, title to world, 64-voice stress) hold in CI and a deliberately changed sound fails them; the `audio` bench scenario is in `compare` | (done: `client/audio/analyze.odin` (an `Analysis` the mixer calls after every block through its `probe` hook, which the game never sets: each bus's audio kept, a BS.1770 meter per bus, integrated and loudest-400-ms loudness, loudness range of the 400 ms blocks, true peak by the limiter's 8x filter, correlation, limiter activity, and a decision for every voice - started, virtualized by rank or as inaudible, restored, ended, stopped, dropped - and `capture_rows` for the timeline), capture file version 2 (sound names, the live mixer's dropped count), `client/audio/baseline.odin` (numbers per bus, third-octave bands, decay of marked sounds, a checksum per OS and optimization level; text files in `assets/baselines/audio/`; `baseline_compare` with the plan's tolerances), `tools/audiodump` (`build audiodump <capture>`: timeline, decisions, summaries, `-report`, `-bus: -wav:`, `-from -to -sound`), `build audio [--accept <scenario|all>] [--wav <dir>]`, four scenarios in `client/audio_baseline_test.odin` (burst, cave_walk, title_to_world, stress) whose baselines are committed (checksums for Linux only); tests in `client/audio/analyze_test.odin` and `client/audio_baseline_test.odin`; the `audio` bench scenario already runs under `bench compare`; not done: moved to M32d)
 | M32d | Audio tools, the rest: the rolling capture with a mixer snapshot, spectrograms, the null and file devices, the real-time smoke run in CI | A capture begun mid-session replays to bit-identical audio; the 30 s smoke run holds zero underruns, NaN and dropped commands | (done: `client/audio/capture.odin` (`capture_start_ring`: a ring of 2^16 records and six `Mixer_State`s taken every 15 s at a mix call's start, `capture_ring_save` writes the window from the oldest state the records still cover and goes on, file version 3 carrying the state with its hash, drop records so the dump names a ring-full drop, replay restoring the state), `client/audio/device.odin` (`device_open_null`: a thread pulling 10 ms blocks by the wall clock; `device_open_file` + `device_render`: mixes as many frames as told, as fast as it can, a WAV at close), `client/audio/spectrogram.odin` and `audiodump -spectrogram:`, `client/audio/wav.odin`, `client/audio_debug.odin` (the ring runs in the game; F9, the `audio_capture` command and an underrun write `captures/audio-<n>.vxac`), `--check audio` / `--null-audio` (`client/audio_check.odin`: 30 s of a busy session into the null device, CI step on Linux); tests in `client/audio/capture_test.odin`, `client/audio/device_test.odin`, `client/audio/analyze_test.odin`; not done: moved to M32e)
 | M32f | - | - | 1 | the macOS and Windows checksums (an unattended session: not measured) |
-| M32e | Audio tools, what is left: the freeze-and-solo inspector (F8: a frozen newest window replayed through a mixer of its own, looped in place of the output, solo and mute by rewriting commands), the ring saved to `audio-last.vxac` for the crash report and `report`, checksum logging | The inspector seen in a screenshot; a deliberate crash leaves `audio-last.vxac` that `build audiodump` reads | (done: see HISTORY.md; the checksums of macOS and Windows are M32f; not uploaded with a report, text only)
+| M32e | Audio tools, what is left: the freeze-and-solo inspector (F8: a frozen newest window replayed through a mixer of its own, looped in place of the output, solo and mute by rewriting commands), the ring saved to `audio-last.vxac` for the crash report and `report`, checksum logging | The inspector seen in a screenshot; a deliberate crash leaves `audio-last.vxac` that `build audiodump` reads | (done: see history.md; the checksums of macOS and Windows are M32f; not uploaded with a report, text only)
 | M32f | The checksums of macOS and Windows in the audio baselines | `build audio` on the three OSes passes with a checksum each | | (done: `checksum Darwin.Minimal` and `Windows.Minimal` lines added to the four baselines from the Test logs of two CI runs, identical across both runs on each OS; `build audio` passes on Linux; burst and cave_walk are the same on all three OSes, title_to_world and stress differ per OS; the next CI run is the exit check) |
 | M38 | Determinism: one numbers policy for shared code, a per-tick state hash, a desync detector, a cross-OS hash job | The same 10 000-tick scripted session hashes identically on three OSes and both optimization levels; an introduced nondeterminism is caught by name (done: `docs/determinism.md`; `base.sin/cos/exp` and `base.Rng`, the numbers lint in `build check`, map order fixed, the stepped server, the reflective state hash with dumps, `Prediction_Check` and the desync detector (protocol 23). Checked on Linux: `build determinism` gives identical logs of the 10 000-tick session at `-o:minimal` and `-o:speed`, `test_divergence_named` names `entities[0].yaw` and `players[0].player.velocity.x` at tick 500, both desync tests pass, `check` and `test` pass; the three-OS comparison is the `determinism` CI job, run on this commit) |
 | M39 | The state model: typed deltas and events through one mechanism; the protocol's per-feature messages migrate onto it | A new replicated field needs no protocol code; every old message round-trips; bandwidth no worse; UDP tests pass | (done: `common/game/schema.odin` + `delta.odin` + `replica.odin` (the schema derived from the value types by reflection, one codec, `Sender`/`Receiver`, reliable deltas and snapshot deltas against the newest acknowledged of a ring of 32), `common/game/state_kinds.odin` (13 state kinds, 6 events), `server/replica.odin` (puts, events, `replica_flush`), `client/state_apply.odin` (one apply table), 22 messages deleted, protocol 24 with `Hello.schema` and `Input.snapshot`, the dissector decoding State and Snapshot from a generated schema block (`./build.sh schema`), `netdump -summary` split by kind; `test_new_field_needs_no_code`, `test_every_moved_message_round_trips`, snapshot loss/priority/malformed tests in `common/game/delta_test.odin`, `server/bandwidth_test.odin` (session 2.39 -> 1.41 MB and crowd 3.50 -> 2.12 MB server to client, M38's root unchanged), the loss test extended; no split; not done by me: the real tshark run (CI) and the by-hand checks) |
-| M40 | Playtest fixes: theme overrides at the call site (a see-through hotbar), the Audio tab, tooltips, Q/E between tabs, an honest Off, keep-awake for the whole run, a loading screen that waits only for the ground, health off by default, the new icon, the lake script folded into the build | The section's tests; the UI test walks every tab with Q/E and finds a tooltip on every option; the icon's sizes are sharp |
-| M41 | Input actions and gamepads: one actions layer (bindings, analog, dead zones) over keyboard, mouse and gamepads; backends for XInput (Windows), evdev (Linux, the Steam Deck) and GameController (macOS); hot-plug | Every action bound for keyboard and gamepad; a synthetic gamepad plays the flight scenario; backends cross-compile on all three OSes; hot-plug tested on Linux |
-| M42 | Menus with a controller: focus navigation on every screen, button prompts that follow the last device used, text entry with a pad | The UI test drives every screen with gamepad events only; prompts switch between keyboard and pad glyphs |
-| M43 | Music pipeline: score text and MIDI to Ogg through our own SF2 renderer (`build music`); the title theme and four ambient pieces written | Scores and MIDI parse and round-trip; renders are deterministic; every committed Ogg decodes, matches its length and loudness, loops without a click; under the size budget |
-| M44 | Music director: title music, loading, a Minecraft-like wait-play-wait in worlds picked by place and time, pause, stingers, Music and Ambience sliders | Director tests with an injected clock and random source (gaps, no overlap, no repeats, tags, pause, ducking); a scripted hour rendered and checked |
-| M45 | The edit journal with provenance: every world mutation through one pipeline with its cause; undo, rollback by region, time and cause; replay onto a snapshot | A scripted grief is rolled back to the exact pre-grief hash; journal replay equals the live world; cost under a share of the tick |
-| M46 | Persistence v2: journaled atomic writes, versioned schemas and migrations, backups, compaction, sliced autosave, universe export and import | Killing the process at 1 000 random points leaves every save loadable; old saves migrate; a 200-character save in budget |
-| M47 | Registries and data packs: namespaced ids, name palettes in saves, the base game as a data pack, overrides, hot reload, pack hashes on joining, packs with assets | The game loads from data with identical worldgen hashes; a test pack adds a block, item and recipe with no code; broken packs fail with exact messages |
-| M48 | Block states and shapes: typed states, shapes for collision, selection and render, block entities, placement rules, pack-defined | Stairs, slabs, doors, ladders collide, mesh, light and raycast right with client and server agreeing; old saves load |
-| M49 | Voxel layers and the simulation framework: extra channels per cell and an active-cell simulation that liquids, random ticks, fire and growth run on | M11's tests unchanged on it; a pack defines a new spreading substance with no engine code; 10 000 active cells in the tick budget |
-| M50 | Entity framework v2: components, pack-defined kinds, delta replication with interpolation, swept collision on shapes, persistence, the spatial query service | 2 000 entities in view within budgets; smooth under 10% loss; memory flat over churn |
-| M51 | The script VM: our own Lua-like language, compiler, register VM, incremental GC, metering, serializable state, fuzzers | A conformance suite; infinite loops, allocation bombs and deep recursion end at budget; snapshot and restore continue identically; fuzzers clean for a budget |
-| M52 | The sandbox: capabilities per pack and world, quotas, events at fixed tick points, isolation from other worlds and the host, all effects through the journal | A hostile script suite refused and logged; 100 allowed scripts inside the tick budget; the ledger audit balances |
-| M53 | The declarative gameplay layer: triggers, quests, spawners, dialogue and loot as data; death messages and the death screen as data; game modes as rule presets | A quest chain, spawner, loot table and dialogue in data play through between two players over UDP; a test pack adds a death cause with messages and a game mode with no code; malformed packs refused usefully |
-| M54 | Packs, signing, validation and the agent surface: Ed25519 trust, static validator, a headless dry run with bots, JSON schemas and docs for agents, moderation hooks, staged rollout and revert | An example pack passes end to end; forged or altered packs refused; an infinite quest loop or item faucet caught by the dry run; a revert restores the world hash |
-| M55 | Scale and security of one server: encrypted transport, bandwidth budgets, lag compensation, a thread per world, rate limits, a validation framework, a bot harness | 200 bots hold tick time and bandwidth for ten minutes; tampered or replayed packets refused; a hostile client refused and logged |
-| M56 | Space: listener and emitters, attenuation, Doppler, a head model, occlusion by voxel rays through materials, a reverb from the room around the listener, underwater and lava | Occlusion and reverb tests in built cases (wall, doorway, cave, field, water); ray cost in budget; a walk rendered with monotone reverb and brightness curves |
-| M57 | Sound design: a synth library (modal, granular, formant, layered recipes) and every effect remade through it at 48 kHz, with measurable targets per sound class and an audition tool | Tests on every sound (no clipping or DC, loudness and decay per class, spectral bands, variants really different, deterministic, generated within the startup budget); `build sfx` writes WAVs, spectrograms and a report; listened to by the person |
-| M58 | The sound of the world: parameterized events for everything audible (other players, liquids, UI), ambience by biome, time, altitude and depth, the audio overlay | Every event defined and sounded; ambience golden table; borders crossfade; a world of another address sounds different; a tour rendered within loudness and cost bounds |
+| M40 | [Playtest fixes](milestones/M40.md) | the suite green locally (`build test`) and CI green on the three OSes; `test_options_tabs_by_keys` and `test_inventory_tabs_by_keys` walk every tab with Q and E and find a tooltip for every option and binding; `test_keep_awake_on_title` passes; the icon test passes (see the spec) |
+| M41 | [Input actions and gamepads](milestones/M41.md) | the suite green on the three OSes in CI (with the platform package's tests and, on Linux, the uinput hot-plug test under `VX_REQUIRE_UINPUT=1`); `--check fly_pad` passes in CI's Linux job; the Windows and macOS backends build in CI on their OSes. |
+| M42 | [Menus with a controller](milestones/M42.md) | the suite and CI green; `test_menus_with_a_pad` drives every screen and dialog listed above with pad events only; `test_prompts_follow_device` switches between keycap and pad glyphs. |
+| M42b | [The inventory and statistics with a controller](milestones/M42b.md) | the suite and CI green; both tests drive their overlays with pad events only. Check by hand: the inventory with a real pad (reach, how the cursor's stack reads). |
+| M43 | [The music pipeline (`tools/music`): scores, MIDI, SF2 and the renderer](milestones/M43.md) | the suite and CI green (CI runs the tests above; it needs no encoder or soundfont); locally `build music --wav build/music phrase` with `VX_SOUNDFONT` pointing at any SF2 writes a WAV and, with an encoder present, an Ogg and its `.json` (not committed); listening to it is a check by hand. |
+| M43b | [Music in the engine and the first pieces](milestones/M43b.md) | CI green with the committed set; locally `build music --force` from a clean checkout (with an encoder and 7z or bsdtar) reproduces every `.json` exactly except the loudness fields within 0.1 LU and `frames` exactly (Vorbis bytes may differ by encoder version, so the Oggs are not compared byte for by (see the spec) |
+| M44 | [The music director](milestones/M44.md) | the tests and CI green; `build audio --wav build/audio music_session` writes the session's WAV (checked by hand: how it sounds; listed in the report); the title-screen screenshot step in CI is unchanged. |
+| M45 | [The edit journal with provenance](milestones/M45.md) | `test_grief_rolled_back`: the world hash after the rollback equals the pre-grief hash; `test_journal_replays`: replay of the journal onto the generator and onto a saved snapshot equals the live world; a bypassing write is caught (see the spec) |
+| M46 | [Persistence v2](milestones/M46.md) | `test_save_survives_crashes` with `VX_CRASH_POINTS=1000`, as a CI step on Linux ("Save crash points"): every point loads, and each is exactly the old or the new generation; `test_v4_save_migrates` and the legacy format tests pass; `test_backups_rotate` and `test_restore` pass (see the spec) |
+| M46b | [Saves without a hitch, compaction, export and import](milestones/M46b.md) | `test_save_200_characters` within budget, optimized, as a CI step on Linux ("Save budget, optimized"); `test_export_import_round_trip` and the slice tests pass; M46's crash test still passes at 1000 points (the slices change what is prepared, not how it is committed) (see the spec) |
+| M47 | [Registries and the base data pack](milestones/M47.md) | `test_base_matches_legacy`, `test_base_looks_the_same` and the sound test pass: the current game loads from data; Worldgen's golden hashes and M38's roots are unchanged; the suite passes; `test_pack_adds_block_item_recipe` passes with no code for the pack's content (see the spec) |
+| M47b | [Packs over the wire, pack assets and hot reload](milestones/M47b.md) | `test_pack_transfer` passes over UDP with loss; the asset tests pass; `test_hot_reload` passes; the export test passes; the suite and the CI run of the commit are green. |
+| M48 | [Block states and shapes](milestones/M48.md) | `test_shapes_agree` and the latency test's placements pass: stairs, slabs and ladders collide, light, mesh and raycast with server and client agreeing tick by tick; The equivalence tests (sweep, raycast, cube meshes) pass; worldgen's golden and M38's roots are unchanged (see the spec) |
+| M48b | [Doors, fences and block entities](milestones/M48b.md) | `test_doors_and_fences_agree` and the door latency test pass; M30's chest tests pass on block entities; `test_containers_migrate` passes; the rollback test restores the chest with its contents and the audit balances; the suite and the CI run of the commit are green. |
+| M49 | [Voxel layers and the simulation framework (channels, the scheduler, liquids as data)](milestones/M49.md) | `server/liquids_test.odin` passes and is byte-identical to before (`git diff --exit-code <M48's last commit> -- server/liquids_test.odin`, quoted in the report): M11's tests unchanged, on the new framework; `test_water_flood` keeps 10 000 flowing cells within its tick budget, optimized, in CI (see the spec) |
+| M49b | [Neighbour rules as data (random ticks, spreading, growth, fire)](milestones/M49b.md) | `farming_test.odin` and `liquids_test.odin` pass unchanged; the bandwidth roots are the baseline's: random ticks draw and decide exactly as before, now from data; `test_creep_spreads`: a pack defines a spreading substance, with a custom channel, with no engine code (see the spec) |
+| M50 | [Entity framework v2 (archetype storage, pack kinds, collision, persistence, the spatial query service)](milestones/M50.md) | Every listed behaviour test passes with its assertions unchanged; `test_memory_flat_over_churn` and `test_two_thousand_in_tick_budget` pass (optimized in CI); `test_pack_kind`: a pack defines an entity kind with no engine code; The persistence, handoff and migration tests pass (see the spec) |
+| M50b | [Entity replication v2 (quantized motion, rates by distance, the jitter buffer)](milestones/M50b.md) | `test_two_thousand_in_bandwidth` (2 000 entities in view within tick and bandwidth budgets), `test_smooth_under_loss` and the extended UDP loss test (smooth motion under 10% loss) and M50's churn test pass; the bandwidth tests pass against the re-recorded baseline with fewer bytes than before (see the spec) |
+| M51a | [The language and the core VM](milestones/M51a.md) | the suite and CI green; `build script run` runs a sample and `build script disasm` lists it; an infinite loop suspends at its slice, resumes and faults at `run_instructions`; an allocation bomb faults `.Memory` at the cap; unbounded recursion faults `.Call_Depth` through `pcall` (see the spec) |
+| M51b | [The collector, the libraries, coroutines and the host API](milestones/M51b.md) | the suite and CI green (with the `build bench script --smoke` step on Linux); memory stays flat under churn; every conformance file gives the same output under `gc_stress` (see the spec) |
+| M51c | [Snapshots, the verifier and the fuzzers](milestones/M51c.md) | the suite and CI green, with the fuzz step clean at its fixed seed and budget; snapshot, restore and continue equals running straight through on every conformance file; the golden snapshot hash holds on all three OSes; malformed snapshots are refused without a crash. |
+| M52 | [The sandbox (capabilities, quotas, events, isolation)](milestones/M52.md) | the hostile suite (all 29 rows) refused or contained as listed, each logged; `test_hundred_scripts` inside the budget with the ledger balanced; the section's other tests; the whole suite, `build determinism` and `build check`; the CI run of the commit green. |
+| M53 | [The declarative gameplay layer (triggers, quests, spawners, dialogue, loot, modes, death)](milestones/M53.md) | the tests above; `test_quest_chain_stepped` with loot; the malformed-pack table; a test pack adds a death cause and a game mode with no code; the whole suite, `build determinism`, `build check`; CI green. |
+| M53b | [Dialogue and prompts, the death screen, spawners and encounters, the UDP exit](milestones/M53b.md) | `test_quest_chain_two_players` passes over UDP (a quest chain, a spawner, a loot table and a dialogue in data only); dying from each base cause shows that cause's message on the death screen (`/damage` per cause); the section's tests; the whole suite, `build determinism`, `build check`; CI green. |
+| M54 | [Packs signed and checked (signing, trust list, the static validator, the agent API, moderation hooks)](milestones/M54.md) | A forged pack (signed by an untrusted key) and an altered one (one byte changed after signing) are refused, by `pack verify` and when the universe loads them, each with its code and the file named (see the spec) |
+| M54b | [Bots, the dry run and staged rollout](milestones/M54b.md) | `test_pack_pipeline_end_to_end` passes. An altered and a forged pack are refused at install; The `loop` and `faucet` dry runs fail with their codes. The `softlock` dry run names its quest; `test_revert_restores_hash` passes. The determinism and bandwidth tests are unchanged on the bot harness (see the spec) |
+| M55 | [Secure transport, rate limits, validation and lag compensation](milestones/M55.md) | Tampered, replayed and forged packets are refused and counted (the proxy tests); `test_account_proof_bound` passes; The hostile client is refused, logged and kicked (`hostile_test`). Honest play stays clean (`test_honest_play_clean`) (see the spec) |
+| M55b | [Scale of one server (a thread per world, bandwidth budgets, 200 bots)](milestones/M55b.md) | `build load --bots 200 --minutes 10` passes every threshold locally and in CI's `load` job; `test_parallel_worlds_same_hash` passes. The suite and `build check` pass; CI green on the three OSes |
+| M56 | [Space, part one (listener, emitters, attenuation, Doppler, the head model)](milestones/M56.md) | the tests and CI green; `build bench audio` within its budget. Check by hand: on headphones, a sheep walking round the player is heard round the head. |
+| M56b | [Space, part two (occlusion, the room, underwater)](milestones/M56b.md) | the tests and CI green; the tour scenario within its acoustics budget; `build audio --wav build/audio space_walk` writes the walk. Check by hand: listen to the walk; look once at the `audio_rays` lines (a screenshot in the report). |
+| M57 | [Sound design, part one (the synth library, recipes, every effect remade)](milestones/M57.md) | the tests and CI green; `build sfx` exits 0 with every sound inside its targets. |
+| M57b | [Sound design, part two (the new sounds, the listening tools, references)](milestones/M57b.md) | the tests and CI green; `build sfx` exits 0. Check by hand: `--listen` every class, `--abx` the ones in doubt, and send back which to retune (an assistant cannot hear: measurements keep the sounds correct, ears decide whether they are good). |
+| M58 | [Events (the event table and everything audible)](milestones/M58.md) | the tests and CI green; `build audio --wav build/audio events` (a new baseline scenario that fires every event once, 0.5 s apart, at fixed positions) is accepted and within its numbers. Check by hand: listen to `events.wav`. |
+| M58b | [Ambience (the sound of the world)](milestones/M58b.md) | the tests and CI green; a new audio baseline scenario `tour` (the tour scenario's path with ambience and steps, 120 s, rendered offline from a recorded list of places) is accepted: Ambience's integrated loudness within -30..-20 LUFS, Master's true peak under -1 dBTP, `build bench audio` within budge (see the spec) |
 
-## Playtest and controllers (M40-M42)
+## Playtest and controllers (M40-M42b)
 
 After the first playtest (2026-10-26): what a player meets first is fixed before more engine,
 and the game is designed around a controller from here on (PC: an Xbox pad, a PlayStation
 pad, a Steam Deck, a Steam Controller through Steam Input; plugged in, it works).
 
-### M40: playtest fixes
+Specs: [M40](milestones/M40.md), [M41](milestones/M41.md), [M42](milestones/M42.md), [M42b](milestones/M42b.md).
 
-From the owner's first playtest (2026-10-26). All small, all decided; one session.
-
-- **Audio tab.** Options' "Sound" tab is renamed "Audio" (the tab, its title, the settings
-  screen's id stays `sound` in saved settings so nothing migrates).
-- **Tooltips.** Every option has one line explaining it, shown after hovering ~0.4 s: over a
-  slider's label, over the whole of a toggle or choice. One table of option texts beside the
-  options (not strings scattered in screen code). The M32a listener options get plain
-  explanations: Mono (both ears hear the same mix), Swap ears, Night mode (quiet sounds up,
-  loud ones down: for low volume), Headphone cross-feed (a little of each ear in the other:
-  less tiring on headphones), Loudest sound (a ceiling no sound goes over).
-- **An honest Off.** "Loudest sound" shows "Off" instead of -1; any option whose value has a
-  special meaning shows it in words. Saved values are unchanged.
-- **Q and E** cycle tabs left and right wherever there are tabs: Options, and the inventory
-  screens (inventory, creative catalog, stats). Shown as a hint beside the tabs. This makes
-  bindings depend on where the player is (the first use of M41's contexts): in a menu, Q
-  and E are previous and next tab; in the world, Q still drops and E still opens the
-  inventory. The inventory therefore closes with Esc, no longer with E (owner's choice,
-  2026-10-26). Both menu keys are rebindable in Options > Controls. (M41 puts the same
-  actions on the bumpers, and B closes.)
-- **Keep awake for the whole run.** `set_keep_awake` on from the first frame to exit, menus
-  and title included (`client/app.odin`), not only while playing. Its log lines move to debug
-  level; only a failure to inhibit is logged at info, once.
-- **Loading.** No artificial delay exists; the screen waits for every chunk in view and its
-  meshes. It now waits only for what the player stands in: the chunks within 2 of the
-  player (columns down to the ground) present and meshed; the rest streams in behind. The
-  loading screen appears only if that takes longer than 0.25 s (otherwise the world just
-  appears). The existing "gave up waiting" timeout stays. Tests: the readiness rule in a unit
-  test; the CI flight and tour scenarios unchanged (they wait for their own conditions).
-- **Health off by default.** New worlds start with `rules.damage 0` (the plan's "creative
-  first"); health code stays and comes back as the `survival` preset in M53. The health bar
-  hides while damage is off. Existing saves keep what they have.
-- **The icon.** A clean (not pixel-art) black cube in three-quarter view, faces in three
-  near-blacks so the shape reads, with a crisp white question mark in JetBrains Mono on the
-  front face, drawn with our font rasterizer at each size the icon carries (16, 24, 32, 48,
-  64, 128, 256), never scaled down from a big one; anti-aliased, no palette quantization (the
-  crunchy-pixel rule is for the world, not the brand). `build icon` writes the ICO and PNGs;
-  the window icon and the packages use it. Checked by eye once (a screenshot of each size).
-- **Theme overrides at the call site.** One look, no theme setting for players; but a
-  call site changes the look of the widgets it draws in one line, and the change ends with
-  its scope: `ui.theme_scope(ctx, t)` (pushes a modified copy of the current `Theme`, popped
-  by `@(deferred_out)`), so `t := ctx.theme; t.opacity = 0.6; ui.theme_scope(ctx, t)`
-  before the hotbar makes it see-through and nothing else. `Theme` gains `opacity` (0..1),
-  multiplied into every vertex's alpha at emit time, images and icons included (their
-  tint), so it composes with the colours' own alpha and with nested scopes. Fixed colour
-  literals in `client/` screens (76 today) move into the theme or into named theme fields,
-  so overrides reach them; colours that mean something (a team colour, a block's tint)
-  stay data, not theme. Tests: a nested scope restores the outer theme exactly; opacity
-  0.5 halves the alpha of a panel's, a text's and an image's vertices; the HUD's hotbar
-  draws with its own opacity (the default stays opaque, as today, until tuned by eye:
-  a check by hand).
-- **The lake script.** `tools/lake-sync.sh` (rsync of a telemetry collector's lake for the
-  analytics tool; the name collides with Lean's `lake`) becomes `build analytics --pull
-  <host:path> [dir]` and the script goes.
-
-Exit check: the suite and CI green; the UI test walks every Options tab and the inventory
-tabs with Q and E and asserts a tooltip for every option; a test asserts keep-awake is
-requested on the title screen; the icon's sizes are listed under Check by hand.
-
-### Decided for M41, input actions and gamepads (its section is written before it starts)
-
-- Extends today's action map (`client/controls.odin`, rebindable in Options > Controls)
-  rather than adding a second one: actions gain contexts (in the world, in a menu), analog
-  values (move, look, triggers) and a binding per device kind.
-- Backends, ours (no SDL): Windows, XInput loaded at run time (`xinput1_4.dll`, part of
-  Windows: nothing beside the exe); Linux, evdev (`/dev/input/event*`, hot-plug by watching
-  the directory; the Steam Deck and Steam Input's virtual pad appear as standard evdev
-  pads); macOS, the GameController framework through the Objective-C runtime.
-- Pads are identified by vendor and product (Xbox, PlayStation, Switch Pro, Steam Deck,
-  generic) to name their buttons; layout as Xbox's (A, B, X, Y, bumpers, triggers).
-- Look: dead zones (radial), a response curve and sensitivity, all options with tooltips.
-- Not here: rumble, gyro, the Steam Controller without Steam, remapping per pad model.
-- Windows: the XInput backend is checked by cross-compiling and CI; a real pad on Windows is
-  a check by hand (and in the deferred Windows list). An exception to "Windows-only code is
-  kept together", because a controller milestone without Windows is no controller milestone.
-
-### Decided for M42, menus with a controller (its section is written before it starts)
-
-- The UI gains navigation events (M41's menu context): focus moves between widgets in
-  reading order or by direction, confirm and back, sliders by left and right, previous and
-  next tab on the bumpers (and on M40's keys).
-- Button prompts drawn by code (the font and simple shapes, no image files) for keyboard,
-  Xbox and PlayStation, following whichever device was used last.
-- Text entry with a pad: an on-screen keyboard for names and addresses.
-- Exit: the UI test drives every screen with pad events only.
-
-## The audio milestones (M32 to M32f done; music M43-M44; M56-M58): an engine that stands next to FMOD and Wwise
+## The audio milestones (M32 to M32f done; music M43-M44; M56-M58b): an engine that stands next to FMOD and Wwise
 
 Today's `audio/` is 403 lines: one mono one-shot per voice, 32 voices, linear resampling,
 a soft clip, one master volume, no loops, no streaming, no buses, no filters, no way to
@@ -593,165 +529,9 @@ only a voxel world can do: sound that hears the blocks.
   meters and LUFS, the reverb's room, occlusion rays drawn as debug lines); a benchmark
   scenario for the mixer's cost.
 
-### M43: the music pipeline (`tools/music`)
+### The milestones
 
-- **Build:** the score format (tempo and meter changes, notes with velocity, rests, ties,
-  repeats, several parts with instrument names, humanization as seeded, deterministic
-  timing and velocity jitter); a MIDI reader (format 0 and 1: notes, tempo, program, sustain
-  pedal); the SF2 reader and renderer; render to float, trim, normalize to the loudness target,
-  loop-aware tails (a piece meant to loop wraps its reverb tail around); encode through the
-  external tool; write `assets/music/<name>.ogg` and a `.json` beside it (length, loop
-  points, loudness, key, mood tags: what the director chooses by). `build music` renders
-  what changed; `build music --audition <name>` plays it. The soundfont fetch with its hash.
-  Credits file and screen entry.
-- **Compose:** the title theme (a calm, slow piano piece with a gentle shape, about 2
-  minutes, made to loop) and four ambient pieces (sparse, modal, minutes long) written as
-  scores. These are listened to by the person, not judged by tests (listening is a check by
-  hand: it does not block the milestone, and what the person says becomes work): the session ends with
-  them rendered and the credits written; a first pass is expected to be re-written after
-  listening.
-- **Tests:** a score parses to the expected notes; the MIDI reader round-trips a score
-  exported by our writer; the renderer is bit-identical across two runs and matches a
-  golden hash of a short phrase (same machine, `-0` tolerance) and a spectrum within a margin on
-  the others; every committed `.ogg` decodes, lasts what its `.json` says, is within
-  1 LU of the target, and loops without a click (the jump across the loop point is no
-  louder than neighbouring samples); the total is under the 24 MB budget.
-- **Exit check:** `build music` from a clean checkout (with oggenc or ffmpeg) reproduces the
-  committed set within the tolerances; CI, which has no encoder, runs the decode checks
-  only.
-
-### M44: the music director
-
-- **Build:** `client/music.odin`: the director, over M32's streams and buses. States: Title
-  (the theme, looped, no gaps), Loading (the music fades under the loading screen and
-  out), World (silence, then a track, then silence: a random wait between a minimum and
-  a maximum set by variables; one track at a time; picked by what the `.json` tags say
-  fit the biome, time of day, depth (caves quieter) and world's kind, never the same twice
-  in a row), Paused (a snapshot that lowers and dulls it, resumes where it was), Death and
-  Discovery stingers. Crossfades by set times. The Effects bus ducks music a little under
-  big sounds (an explosion). Music is never positioned. `Music` and `Ambience` sliders
-  live; a `music_gap` option (Minecraft's frequency: Rare, Normal, Often, Constant).
-  Layered music (stems that fade by a parameter) is in the director's API, unused yet.
-- **Tests:** with an injected clock and random source: the title loops and crossfades to
-  silence when a world loads; in a world, waits stay within the set range over 1000 draws,
-  no two tracks overlap, no repeat in a row, tracks chosen match the tags of the place; pause
-  and resume keep the position; ducking amount under an explosion; the director's decisions
-  for a scripted hour are golden; the UI test drives the sliders and the gap option and the
-  settings file keeps them.
-- **Exit check:** a session from title to a world and back through a scripted hour of game
-  time plays what the golden list says (rendered by `build audio` to a WAV with the music
-  and a few effects, loudness checked: music never louder than effects' bus by more than
-  the set margin); the title screen screenshot step in CI is unchanged.
-
-### M56: space (listener, emitters, occlusion, reverb)
-
-- **Build:** the listener and emitter API on top of voices (positions updated per frame,
-  velocity for Doppler), attenuation curves as data, air absorption, the head model; the
-  Speakers / Headphones option. `client/acoustics.odin`: the voxel queries on the game
-  thread against the client's chunks (reusing `game.raycast`): per emitter an occlusion ray
-  at 10 Hz round-robin with the material absorption table, the open-path search when
-  blocked; per listener, 32 rays a quarter second apart (round-robin) giving room size,
-  sky openness and wall material, smoothed into the reverb's settings and the
-  underwater/lava snapshots from the camera's block. Results go to the audio thread
-  through the command ring; the game thread's whole share is capped (variable, measured in a
-  benchmark with the tour scenario).
-- **Tests:** a sound behind one block of stone is quieter and duller by the table's amounts,
-  behind wool more, behind glass barely; the same through a doorway is found by the open
-  path; an emitter moving past gives Doppler within a cent of the formula; panning follows
-  the head model (a sound to the right is later and duller in the left ear by the model's
-  numbers) and elevation changes the spectrum; a cave's reverb time is several times a
-  field's, a field is nearly dry; the underwater snapshot dulls the master; ray queries are
-  deterministic and within budget; unloaded chunks count as open air (no stall).
-- **Exit check:** the above; a flight/walk through a cave mouth, a tunnel and a field
-  rendered by `build audio` to a WAV whose reverb time and brightness curves are plotted by
-  a test and monotone as expected; looked at once as a debug overlay screenshot.
-
-### M57: sound design (the effects, remade)
-
-Why the effects are poor now: `client/sfx` makes each sound from one noise burst and a
-few decaying tones, at 16 kHz and 8 bits, then varies it only by pitch. That is a
-placeholder, not a design. This milestone is the effects' pipeline, still generated by
-code (the plan's rule: no recorded files), but with the means of a sound designer.
-
-- **Decisions:** effects are synthesized at 48 kHz in float and kept as such. The
-  "retro" crush (lower rate, fewer bits) is a post stage a recipe may ask for, and
-  an Options choice, Sound character: Clean / Retro (default decided by ear in this
-  milestone; the pixel look does not have to mean muddy sound). Sounds are generated
-  at start-up on a worker thread (budget: all of them within 300 ms on the reference
-  machine, relative to the old `sounds_init`), never at run time on the audio thread.
-  Recordings are never committed; reference sounds a designer listens to or analyses stay
-  on their machine (copyright), only the numbers taken from them go into the repo.
-- **The synth library** (`client/audio/synth`, replacing `client/sfx`'s ad hoc helpers):
-  - *Modal synthesis*: banks of damped resonators (frequency, decay, gain per mode) with
-    a material table (stone, wood, gravel, dirt, sand, glass, metal, cloth/wool, leaves,
-    water) giving each material's modes, damping and brightness; an impact excites them
-    with a short shaped burst whose hardness sets the spectrum (soft: low-passed; hard: a
-    click).
-  - *Granular and stochastic*: scatter, crumble, rustle and pour from many tiny grains
-    with their own random size, pitch and gain (gravel, sand, leaves, a block breaking
-    into pieces), so a long sound is a texture, not a looped burst.
-  - *Formant voices*: a source (glottal-like pulse or noise) through moving formant
-    filters with pitch contour, vibrato, jitter and shimmer (the sheep's bleat, a hurt
-    cry, later villagers).
-  - *Layers*: a recipe is a list of layers (transient, body, tail, debris), each a synth,
-    envelope, filter and level, summed with a final EQ; one recipe makes a sound class.
-  - *Variation by design*: each variant draws its parameters (mode frequencies, grain
-    densities, hardness, contour) from ranges in the recipe, so variants differ the way
-    real repeats do; eight variants of every sound; the pitch shift at play time is small.
-  - Deterministic: seeded integer generators; the same recipe and seed give the same
-    samples on every OS (tests allow float tolerance).
-- **Recipes as data** (`assets/sounds/*.recipe` text, parsed at start-up and in dev builds
-  reloaded while the game runs): readable, diffable, tunable from the console
-  (`sound.tune stone.break hardness 0.7`). A designer iterates by ear without a rebuild.
-- **Targets per class**: each class (block break/place/step per material, landing, hurt,
-  die, launch, boom, UI click, wool, pick up, ...) has numbers: peak and loudness, duration,
-  decay (time to -30 dB), spectral centroid and band energies (low/mid/high) within a
-  range, taken from analysing references the designer chose. They are the tests below and
-  the brief the recipe is tuned to.
-- **Tools:** `build sfx` writes every sound (all variants) as WAV, a spectrogram PNG
-  per sound and a report (loudness, centroid, decay, band energies against the targets);
-  `build sfx --listen <class>` plays a class's variants in turn; `build sfx --compare <git
-  rev>` renders old and new side by side for A/B listening. `build sfx --abx <class>` runs a blind ABX test (old against new, level-matched, order hidden) and logs the answers, so a retune is judged by ear without bias. Each sound is the same one the
-  game plays.
-- **Rework:** every existing effect remade through the library (blocks by material,
-  steps, landings, the sheep's cries, launch, explosion with its low rumble and debris
-  tail), and the sounds M58 needs that do not exist yet (water, splash, eating, armor,
-  inventory and UI clicks, chest, wool) made in the same pass.
-- **Tests:** no sound clips or has DC offset; each class inside its loudness, duration,
-  decay and band targets; the variants of a class differ by at least a set spectral
-  distance and none is a copy; no sound starts or ends with a click (the first and last
-  samples near zero); every recipe parses and an unknown name or parameter is an error;
-  generation of all sounds within the startup budget; hashes of a few sounds fixed (the
-  same samples twice, and across the CI OSes within tolerance).
-- **Exit check:** the tests green; `build sfx`'s report with every class inside its
-  targets; then the person listens to every class (a check by hand, not blocking)
-  through `--listen` and `--compare` against the old set and said which to retune (an
-  assistant cannot hear: measurements keep the sounds correct, ears decide whether they
-  are good, and a first pass is expected to be retuned by the numbers the person
-  gives back).
-
-### M58: events, ambience and the sound of the world
-
-- **Build:** the event table (`game`-level kinds the client already receives, plus the missing
-  ones: other players' footsteps and edits, doors and chests, water, liquids and splashes,
-  swimming, eating, armor, damage, inventory clicks and UI sounds, the screens' clicks);
-  `Sound_Event`s become parameterized events as above, the old per-kind switch gone.
-  Ambience: beds as stream or loop voices by biome, time of day, altitude and depth (wind
-  rising with height, day birds, night crickets, running water near water, cave drone and
-  drips deep down), crossfaded as the listener crosses a biome border, plus random
-  one-shots placed around the listener (a distant bird, a creak). Worlds sound unlike one
-  another from their address: the climate and sky of M17 pick the beds. Weather has a slot
-  for rain and thunder for when weather exists. The audio overlay. (The effects themselves
-  are M57's.)
-- **Tests:** every event in the table has a definition and every definition's sounds exist
-  and are non-silent; no-repeat, cooldown and instance limits hold over thousands of
-  events; parameters drive gain, pitch and filter along their curves; the ambience for a
-  biome/time/depth is as listed (golden table); crossing a border crossfades with no
-  gap and no overlap over a set time; a world of another address has a different set;
-  UI clicks play for every screen's buttons (a test walks the screens).
-- **Exit check:** a scripted tour (the existing tour scenario) rendered by `build audio` to a
-  WAV: each biome's ambience present, loudness inside bounds, mixer cost inside budget;
-  the table's every event sounded once (listening to them is a check by hand).
+Specs: music [M43](milestones/M43.md), [M43b](milestones/M43b.md), [M44](milestones/M44.md); space, sound design and the world's sound [M56](milestones/M56.md), [M56b](milestones/M56b.md), [M57](milestones/M57.md), [M57b](milestones/M57b.md), [M58](milestones/M58.md), [M58b](milestones/M58b.md). Done: M32 to M32f (history.md).
 
 ### Not in these milestones
 
@@ -760,7 +540,7 @@ a visual authoring tool (the event table is text with hot reload), adaptive musi
 gameplay intensity beyond what layers allow, surround output (the layout is ready), platform
 audio-device hot-plug beyond reopening the default device, MIDI input and live instruments.
 
-## The foundation arc (M38-M39 done; M45-M55): an engine agents can write games for
+## The foundation arc (M38-M39 done; M45-M55b): an engine agents can write games for
 
 Direction (decided): Voxiverse's product is **gameplay written for each player by AI
 agents, as they play** (a world with its rules, content and scripts, adapted to what the
@@ -821,154 +601,15 @@ a milestone below:
 | Live adaptation | Left open until play-testing shows what agents can do. Kept possible, not built: script state is serializable (snapshot and restore) and packs are versioned and hot-swappable at a tick boundary, so a revision can arrive between visits or, later, during one |
 | Scale | Minecraft's architecture: one server process per universe, worlds on their own threads; scaling beyond is the owner's problem later. No distributed universe now (the handoff protocol is not designed here) |
 | Authoring surface | Mostly declarative data interpreted by the engine (quests, objectives, spawners, triggers, dialogue, loot: M53); scripts only for logic data cannot say. The engine API is small, typed, versioned, with machine-readable schemas and errors written for a model to act on |
-| Content vs foundation | No gameplay decisions (survival, crafting, combat, economy numbers) are made in the foundation arc (M38-M39, M45-M55). Anything that needs one waits for the content waves. No new gameplay mechanics, and no polish of existing ones (health and death, M28, stay as they are), before the foundation arc is done: gameplay is rewritten on the script VM and the declarative layer, so polishing it now is done twice Fixes from playtests to menus, comfort and defaults (M40) are not gameplay and are fine. |
+| Content vs foundation | No gameplay decisions (survival, crafting, combat, economy numbers) are made in the foundation arc (M38-M39, M45-M55b). Anything that needs one waits for the content waves. No new gameplay mechanics, and no polish of existing ones (health and death, M28, stay as they are), before the foundation arc is done: gameplay is rewritten on the script VM and the declarative layer, so polishing it now is done twice Fixes from playtests to menus, comfort and defaults (M40) are not gameplay and are fine. |
 | Hosting, payments | Out of the engine's scope (the credit ledger, billing, age gates and legal review belong to the service). The engine provides pack signing, metering and the ledger hooks |
 | Numbers (M38) | Three tiers, written in `docs/determinism.md`: **state** (server simulation, prediction, worldgen, light, rules, RNG) is bit-identical on every OS and optimization level; **replayable** (the audio mixer and its capture, client visuals) is bit-identical on one OS and optimization level, which is why the audio baselines keep a checksum per OS; **free** (rendering, UI, timing). State uses `base.sin`, `base.cos`, `base.exp` (ours), never `core:math`'s sin, cos, tan, pow, exp or fmuladd (LLVM intrinsics: each OS's libm, folded differently by `-o:speed`), and `base.Rng` (ours, xoshiro256**), never `core:math/rand` (ChaCha8, 1 KiB of state, its stream the toolchain's to change) |
 | What determinism means (M38) | The simulation is a function of what reaches it at each tick boundary. A live server is not lockstep: inputs and chunk jobs arrive when they arrive. A stepped server (no thread, inline chunk jobs, inputs given per tick) is the reproducible form, used by tests and the cross-OS job now, and by replay and the journal later (M45). No map iteration order and no thread completion order reaches state or the wire |
 | State model (M39) | Server-to-client state is **records** of typed **state kinds** (a value type, a key, a lane) and one-off **events**, encoded by one codec derived by reflection from the value types (field tags give string limits and the `acked` field), with a schema hash checked on joining. Two lanes: reliable records are deltas against the last value sent; snapshot records (motion) are deltas against the client's last acknowledged snapshot (a ring of 32). Values travel exactly (quantization waits for M50). The handshake, answers to one client's requests and the bulk chunk streams stay messages; client-to-server messages are not state |
 
-### The milestones (steps and exit checks; full sections are written before each session)
+### The milestones
 
-**M38: determinism.** One written policy for numbers shared by server, prediction, replay
-and the audio capture. (1) Audit every shared-code float path (physics, light, worldgen, mods,
-rules) for order of operations, fused multiply-add (disabled), `math` functions whose
-results differ by libm (our own sin, cos, pow, sqrt where results are state), and map or hash
-iteration order. (2) A per-tick state hash (chunks changed, entities, inventories) the server
-computes and a test client mirrors. (3) A desync detector: clients occasionally send
-the hash of their predicted state and the server reports mismatches. (4) A cross-OS CI job
-runs scripted ticks and compares hashes. *Exit:* a 10 000-tick scripted session gives the
-same hash on Windows, Linux and macOS and at both optimization levels; a deliberately
-introduced nondeterminism is caught by name.
-
-**M39: the state model.** Server state reaches clients as typed deltas and events through
-one mechanism, not a message per feature. (1) Define state kinds (block edits, entity
-components, inventory slots, world rules, scalars) with change tracking and
-versioned schemas; events (one-off: explosion, hit) separate from state. (2) The codec
-derives encoding from the schema, with delta compression and priority. (3) Prediction
-hooks per state kind. (4) Migrate the protocol's per-feature messages onto it
-(Block_Changed, Entity_Hurt, Explosion, Health, Inventory_Update ...), keeping the wire
-tested by round trips. (5) The Wireshark dissector reads the schemas. *Exit:* adding a
-new replicated field needs no protocol code (a test adds one); every old message
-round-trips; bandwidth no worse than before on the benchmark; UDP tests pass.
-
-**M45: the edit journal with provenance.** Every mutation of a world goes through one
-pipeline that records who, what, why and when. (1) Provenance on every edit (player,
-script id, system, command, tick). (2) A bounded in-memory journal plus an on-disk
-log per world, compacted. (3) Undo and redo, rollback by region, time and cause
-(`rollback player X 10m`), region protection hooks. (4) The pipeline enforces the budgets
-and capabilities of M52 at one point. (5) Replaying a journal onto a snapshot reproduces
-the world. *Exit:* a scripted griefing session is rolled back exactly (world hash equals
-the pre-grief hash); replay of journal onto snapshot equals the live world; the journal
-costs under a set share of the tick.
-
-**M46: persistence v2.** (1) Journaled, atomic writes. (2) A versioned schema and a migration
-registry. (3) Rolling backups. (4) Region compaction. (5) Autosave in slices (no hitch). (6) Universe
-export and import as one file (M47 adds the packs to it). *Exit:* killing the process at 1 000 random points
-leaves every save loadable; old saves migrate; a 200-character save within its time budget.
-
-**M47: registries and data packs.** (1) Namespaced ids for blocks, items, entities, recipes,
-loot tables, biomes, structures, sounds, tags. (2) Saves store palettes of names (a migration in M46's registry), so numeric ids can
-change. (3) The base game becomes a data pack of text files, validated at load with errors
-that give file, line and the fix. (4) Packs add and override content; load order and conflicts are
-explicit. (5) Hot reload in dev builds. (6) Server and client compare pack hashes on joining
-and the server sends what a client lacks; M46's universe export carries the packs. (7) Packs can carry assets (images through
-`vendor:stb/image`, sounds as Ogg) beside the procedural path. *Exit:* the current game
-loads from data with identical worldgen hashes and passing suites; a test pack adds a block,
-an item and a recipe with no code; broken packs fail with exact messages.
-
-**M48: block states and shapes.** (1) Blocks have typed states (facing, half, open,
-attached) in their stored value. (2) Each state has collision, selection and render shapes
-from one table (slab, stair, fence, door, ladder, farmland). (3) Collision, raycast, lighting
-and meshing read the shapes. (4) Block entities (per-block data with a lifecycle; chests move
-onto it). (5) Placement rules in shared code (the client predicts what the server
-decides). (6) The pack format describes states and shapes. *Exit:* stairs, slabs, doors and
-ladders collide, mesh, light and raycast correctly, with server and client agreeing tick by
-tick; old saves load unchanged.
-
-**M49: voxel layers and the simulation framework.** (1) Chunks carry extra channels beside
-the block (fluid level, light, custom fields from packs), palette-compressed. (2) An
-active-cell simulation with budgets and neighbour rules (as data here; scripts may define
-them once M51-M52 land) that M11's
-liquids, M24's random ticks, fire, spreading and growth run on. (3) Liquids move onto it with
-unchanged results. (4) Replication and saves of the new channels via M39's records and
-M46's save format. *Exit:* M11's tests unchanged on the new framework; a pack defines a new spreading
-substance with no engine code; 10 000 active cells stay within the tick budget.
-
-**M50: entity framework v2.** (1) Components in archetype storage; entity kinds defined by
-packs. (2) Replication through M39 with delta, priority and interpolation (jitter buffer) of
-remote entities. (3) General swept collision against shaped blocks. (4) Entity persistence
-and chunk-border handoff. (5) Sheep, dropped items, projectiles and players migrate. (6) The
-spatial query service (entities in a radius, blocks by tag, nearest of a kind) shared by
-audio, interest, triggers and later AI. *Exit:* 2 000 entities in view within tick and bandwidth
-budgets; smooth motion under 10% loss; memory flat over churn.
-
-**M51: the script VM.** (1) The language (a Lua-like grammar, integers and floats, tables,
-closures, string library subset, optional annotations), a lexer and parser with error
-messages for a model to act on. (2) A bytecode compiler and a register VM with an
-incremental garbage collector over an arena the VM owns. (3) Metering at the VM level:
-instruction, allocation and stack budgets, cooperative yields at a budget, a suspended
-script keeps its state. (4) Serializable state (heap snapshot and restore) and
-deterministic iteration. (5) A disassembler and a trace. (6) Fuzzers for the parser and the
-VM running in CI. *Exit:* a conformance suite of language tests; infinite loops, allocation
-bombs and deep recursion end at their budget, not by a crash; snapshot, restore and
-continue gives the same results as running straight through; the fuzzers run clean for a
-fixed budget.
-
-**M52: the sandbox.** (1) The engine API as capabilities: a manifest in each pack, grants
-per world in `universe.cfg`/the world's rules, bindings that check a capability and a
-budget on every call. (2) Per-world and per-script quotas (blocks per tick, spawns,
-messages, items by the ledger's faucet cap). (3) Event subscriptions (the events M39
-defines) delivered at fixed points of the tick. (4) Scripts cannot touch another world,
-the file system, the clock, the network, or other scripts' state except through events.
-(5) Every effect goes through M45's pipeline with the script as the cause. (6) A hostile test
-suite. *Exit:* a suite of hostile scripts (escape attempts, budget exhaustion, forged calls,
-reading outside their capability, item duplication, trying to affect another world)
-all refused and logged; a script that does everything allowed stays inside the tick budget
-with 100 running; the ledger audit balances after them.
-
-**M53: the declarative gameplay layer.** Data the engine interprets so agents write less
-code. (1) Triggers (region, item, block, time, kill, command), conditions and actions as
-data. (2) Objectives and quests with state saved per character. (3) Spawners and encounters
-(on M50's entity framework; the AI framework comes later). (4) Dialogue and prompts (drawn by
-today's UI, navigable with a pad since M42; UI v2 in the next tier restyles it). (5) Loot tables with budgets. (6) Per-world rules as variables
-(already `rules.*`) reachable from packs. (7) Death messages by cause, as data: the base
-data pack has a table of messages per cause (fall, drowning, lava, explosion, a mob, a
-player, the void, starving, a script), several per cause, picked without repeating. Some are
-funny and name the cause playfully ("{player} forgot the floor was optional", "{player}
-tried to hug a creeper's cousin", "{player} discovered lava is not a hot tub", "{player}
-lost an argument with gravity"). New causes come from packs. (8) The death screen as data:
-the cause's message, the time and place, Respawn and Title buttons, built from this
-milestone's UI and dialogue data, not hand-written screen code. (9) Game modes, using M47's
-packs: a mode is a named preset of world rules (`rules.*`: damage, hunger, flying, instant
-break, keep inventory, ...) shipped in a data pack. Today's creative and survival switches
-become the base pack's two modes, `creative` and `survival`; a pack can add more (e.g.
-`adventure`). A world records its mode, `/gamemode <name>` switches it where the rules
-allow, and the server announces it. *Exit:* a quest chain, a spawner, a loot table
-and a dialogue written only in data play through in a UDP test between two players; a
-malformed pack is refused with a useful message; a test pack adds a death cause with its own
-messages and a game mode, no code; dying from each base cause shows a message for that
-cause; switching modes changes exactly the rules its preset lists.
-
-**M54: packs, signing, validation and the agent surface.** (1) Pack signing (Ed25519) and
-a server's trust list. (2) The static validator (capabilities used equal declared, schema
-and reference checks, bounded constructs, size limits). (3) The dry-run harness: a headless
-server runs a candidate pack's world with scripted bots (the bot harness is built here: headless
-clients driving M38's scripted sessions; M55 scales it for load) and reports crashes, budget use,
-ledger balance and softlocks (can a bot still progress?), as machine-readable output. (4) The
-agent API: versioned JSON schemas for packs, a documentation set and examples shipped with
-the engine, and error messages meant for a model. (5) Moderation hooks: generated text
-passes a pluggable check before it reaches players. (6) Staged rollout: a pack is
-installed for one world, can be reverted, and records what changed. *Exit:* an example
-agent-style pack passes the pipeline end to end; a forged or altered pack is refused;
-a pack with an infinite quest loop or an item faucet is caught by the dry run; a revert
-restores the world hash.
-
-**M55: scale and security of one server.** (1) Encrypted, authenticated transport (X25519
-and ChaCha20-Poly1305 from `core:crypto`). (2) Per-client bandwidth budgets and message
-priorities. (3) Lag compensation for hits. (4) One thread per loaded world. (5) Rate limits per message
-kind. (6) A server-side validation framework for movement, reach and rate, with a reasons
-log. (7) M54's bot harness, scaled for load. *Exit:* 200 bots hold tick time and bandwidth for ten minutes;
-tampered or replayed packets are refused; a scripted hostile client is refused and logged.
+Done: M38 (determinism), M39 (the state model), in history.md. Specs, in build order: [M45](milestones/M45.md), [M46](milestones/M46.md), [M46b](milestones/M46b.md), [M47](milestones/M47.md), [M47b](milestones/M47b.md), [M48](milestones/M48.md), [M48b](milestones/M48b.md), [M49](milestones/M49.md), [M49b](milestones/M49b.md), [M50](milestones/M50.md), [M50b](milestones/M50b.md), [M51](milestones/M51.md), [M51a](milestones/M51a.md), [M51b](milestones/M51b.md), [M51c](milestones/M51c.md), [M52](milestones/M52.md), [M53](milestones/M53.md), [M53b](milestones/M53b.md), [M54](milestones/M54.md), [M54b](milestones/M54b.md), [M55](milestones/M55.md), [M55b](milestones/M55b.md) ([M51](milestones/M51.md) is the design M51a-c share).
 
 ### The next tier (after M55, in this order, each sized before it starts)
 
@@ -1056,10 +697,10 @@ lunar calendar by watching): a few trigonometric terms per frame from the world 
   difference night to night; sky screenshots at a few dates.
 ### After M29 (not planned in detail yet), in this order
 
-Content, not foundation: all of this waits for the foundation arc (M38-M39, M45-M55) and is then
+Content, not foundation: all of this waits for the foundation arc (M38-M39, M45-M55b) and is then
 built as data and scripts on it.
 
-Each becomes a milestone section, sized as above, before it starts.
+Each becomes a milestone spec, sized as above, before it starts.
 
 - **A minimap:** the map in a corner as Xaero's minimap draws it (the tops of the columns
   around, shaded by height, players and animals as marks), but drawn as part of the game:

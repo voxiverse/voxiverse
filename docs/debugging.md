@@ -69,7 +69,7 @@ vulkan [VUID-vkCmdDraw-renderpass]: vkCmdDraw(): This call must be issued inside
 ## Variables
 
 Settings (saved), debug switches (`debug.*`, never saved) and later game rules are plain
-struct fields described by variable tables; see PLAN.md, "Console and variables".
+struct fields described by variable tables; see plan.md, "Console and variables".
 
 | | |
 |---|---|
@@ -108,7 +108,7 @@ load, edits surviving unloading, and damaged files.
 
 ## Worlds
 
-A universe has worlds, named by addresses (PLAN.md, M17): a galaxy of eight Old Turkic symbols
+A universe has worlds, named by addresses (plan.md, M17): a galaxy of eight Old Turkic symbols
 and a world of seven, shared as `𐰀𐰁𐰄𐰅𐰇𐰉𐰊 𐰋𐰌𐰍𐰎𐰏𐰐𐰒𐰔` (world, then galaxy; seven alone
 mean this galaxy) or as a directory name, `0001020304050607-08090a0b0c0d0e` (two hex digits a
 symbol, galaxy first: that form types on any keyboard). The address alone sets the world's
@@ -480,7 +480,7 @@ from it; it never loads RenderDoc itself.)
 ## Benchmarking
 
 `build bench <scenario>` measures one thing the same way every time, on any machine, for
-anyone (PLAN.md, M19):
+anyone (plan.md, M19):
 
 | Scenario | What it measures |
 |---|---|

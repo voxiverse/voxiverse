@@ -4,7 +4,7 @@ import "../../base"
 
 // Game rules: the tunable numbers of the simulation. The server owns them
 // and sends them to clients (Welcome, and on change) so client prediction
-// runs on the same numbers; see PLAN.md, "Console and variables". The
+// runs on the same numbers; see docs/plan.md, "Console and variables". The
 // defaults follow Minecraft's feel (blocks, seconds).
 
 Rules :: struct {

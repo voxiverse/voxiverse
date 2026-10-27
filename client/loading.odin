@@ -9,7 +9,7 @@ import "core:time"
 import "../common/game"
 import "ui"
 
-// The loading screen (PLAN.md M20): joining a world, or arriving in one
+// The loading screen (docs/plan.md M20): joining a world, or arriving in one
 // through a gate, shows what is happening instead of a world building
 // itself in view, until every chunk around the player is there and meshed
 // (as wait_world waits). A bar counts them; a map of the columns around

@@ -2,7 +2,7 @@
 
 **What.** The server records events (what is built, broken, picked up, said as a *count*, where
 players are every 10 s, how long a tick took, which overlays a client opens, frame times) into
-`<universe>/telemetry/YYYY-MM-DD.jsonl` (see DEBUGGING.md, "Statistics and events"). Never a
+`<universe>/telemetry/YYYY-MM-DD.jsonl` (see debugging.md, "Statistics and events"). Never a
 name, never chat text, never an address: an event names its player by a number in the world.
 
 **Consent.** (The question is not asked unless `telemetry.ask` is set to 1; until then, nothing is sent.) Nothing leaves the machine unless the player said yes to "Share anonymous play

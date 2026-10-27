@@ -6,7 +6,7 @@ import "core:strconv"
 import "../base"
 import "../common/game"
 
-// World editing's selection (PLAN.md M19, commands): each player's two
+// World editing's selection (docs/plan.md M19, commands): each player's two
 // corners, kept here (all world changes are the server's), set with /pos1
 // and /pos2 (the block the player looks at, or coordinates) and cleared with
 // /sel; /fill, /replace, /sphere and /structure act on it when not given

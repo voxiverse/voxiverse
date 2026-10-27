@@ -17,7 +17,7 @@ import "core:sync"
 // ring is full a command is dropped (and counted), as one that late would be
 // wrong anyway.
 //
-// Voices are handles (PLAN.md ground rule 2). The game thread hands them out
+// Voices are handles (docs/plan.md ground rule 2). The game thread hands them out
 // from its own table (MAX_VOICES slots, a generation each) and a slot is free
 // again when its end has been read from the return ring, so a handle the game
 // holds is never reused under it, and a stale one does nothing. There are

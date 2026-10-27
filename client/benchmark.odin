@@ -12,7 +12,7 @@ import "../server"
 import "audio"
 import "gpu"
 
-// Benchmarks (PLAN.md, M19): `voxiverse --benchmark <scenario>` runs a
+// Benchmarks (docs/plan.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
 // bench <scenario>` does that with a release build. Everything that changes
 // the numbers is fixed here, not taken from the player: the settings
@@ -411,7 +411,7 @@ BENCH_AUDIO_BLOCKS :: 1000
 BENCH_AUDIO_SMOKE_BLOCKS :: 100
 BENCH_AUDIO_WARMUP :: 50
 BENCH_AUDIO_STREAM :: #load("audio/testdata/tone.ogg")
-// BENCH_AUDIO_BUDGET: a core's share the mix may take (PLAN.md, M32c: 5%),
+// BENCH_AUDIO_BUDGET: a core's share the mix may take (docs/plan.md, M32c: 5%),
 // judged on the median block of a release build.
 BENCH_AUDIO_BUDGET :: 0.05
 

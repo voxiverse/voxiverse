@@ -4,7 +4,7 @@ import "core:slice"
 import "core:sync"
 import "core:time"
 
-// Metrics: named measurements a benchmark reports (PLAN.md, M19), in every
+// Metrics: named measurements a benchmark reports (docs/plan.md, M19), in every
 // build. Each is a ring of samples (ms, or a count) written from any thread:
 // an atomic index, no lock. Recording happens only between metrics_start
 // and metrics_stop (a benchmark's measured part), so outside one a metric

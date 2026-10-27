@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 
-// Versions, Windows resources and release packages (PLAN.md, M21).
+// Versions, Windows resources and release packages (docs/plan.md, M21).
 
 // Version: what a build is, from git (base/version.odin says how players
 // see it).
@@ -164,7 +164,7 @@ PACKAGE_README :: #load("package_readme.txt", string)
 // too: builds between releases are told apart by name.
 package_game :: proc() -> bool {
 	when ODIN_OS == .Darwin {
-		fmt.eprintln("build: no macOS package until the macOS backend (PLAN.md, M1b)")
+		fmt.eprintln("build: no macOS package until the macOS backend (docs/plan.md, M1b)")
 		return false
 	}
 	v := version_of()

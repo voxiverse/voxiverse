@@ -3,7 +3,7 @@ package gpu
 import "core:log"
 import vk "vendor:vulkan"
 
-// Offscreen drawing (benchmarks, PLAN.md M19): with set_offscreen, every
+// Offscreen drawing (benchmarks, docs/plan.md M19): with set_offscreen, every
 // frame draws into an image of a fixed size (and its own depth buffer)
 // instead of the swapchain image, and end_frame copies it onto that, scaled
 // to the window texel for texel. So the work measured is the same whatever

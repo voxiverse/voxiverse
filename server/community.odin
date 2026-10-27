@@ -249,7 +249,10 @@ community_parse :: proc(m: ^Community, text: string, home: game.Address) {
 
 community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(allocator)
-	strings.write_string(&b, "# Voxiverse community (written by the server; see DEBUGGING.md)\n")
+	strings.write_string(
+		&b,
+		"# Voxiverse community (written by the server; see docs/debugging.md)\n",
+	)
 	if m.motd != "" {fmt.sbprintfln(&b, "motd %s", m.motd)}
 	place :: proc(b: ^strings.Builder, p: Place) {
 		fmt.sbprintf(

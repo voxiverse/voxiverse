@@ -9,7 +9,7 @@ import "../../client/mesh"
 import "../../common/game"
 import "../../common/worldgen"
 
-// The `chunks` benchmark scenario (PLAN.md, M19; `build bench chunks`):
+// The `chunks` benchmark scenario (docs/plan.md, M19; `build bench chunks`):
 // the chunk pipeline on one thread, without the game. An Earth world's
 // chunks are generated around a point (every chunk from the bedrock to the
 // sky), then each one the client would mesh is lit and meshed as the client

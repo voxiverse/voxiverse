@@ -13,7 +13,7 @@ import "../common/game"
 import "../common/netcode"
 import "../server"
 
-// The `server` benchmark scenario (PLAN.md, M19; `build bench server`): the
+// The `server` benchmark scenario (docs/plan.md, M19; `build bench server`): the
 // server alone, as players load it. A fresh scratch world (the client's
 // scratch seed), listening on the loopback; BENCH_BOTS simulated players
 // join over UDP (the real handshake, as a client does), go up, and fly

@@ -8,7 +8,7 @@ import "../base"
 import "platform"
 import "ui"
 
-// Options (PLAN.md M20): the player's settings in tabs, the same from the
+// Options (docs/plan.md M20): the player's settings in tabs, the same from the
 // title and in a game (there docked left, the world in view, so changes show
 // as they are made). Changes apply at once and are saved on leaving.
 // Developer switches stay in F4 and the console, never here.

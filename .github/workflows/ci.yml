@@ -218,7 +218,7 @@ jobs:
       - name: Compare
         run: ./build.sh determinism --compare build/determinism
 
-  # Release packages (PLAN.md, M21): one per platform, from every push (kept
+  # Release packages (docs/plan.md, M21): one per platform, from every push (kept
   # as workflow artifacts, for testers), each unpacked on its own and run
   # from there: nothing beside it is needed. macOS waits for its backend
   # (M1b). Linux builds on the oldest supported Ubuntu, so the game runs on
@@ -345,9 +345,9 @@ jobs:
           test -f "voxiverse-$VERSION-windows-x64.zip"
           test -f "voxiverse-$VERSION-linux-x64.tar.gz"
           sha256sum * > SHA256SUMS
-          # The notes: the milestone's goal from PLAN.md, to be edited.
+          # The notes: the milestone's goal from docs/plan.md, to be edited.
           MILESTONE="$(echo "$VERSION" | cut -d. -f2)"
-          GOAL="$(awk -F' [|] ' -v m="| M$MILESTONE" '$1 == m {print $2}' ../PLAN.md)"
+          GOAL="$(awk -F' [|] ' -v m="| M$MILESTONE" '$1 == m {print $2}' ../docs/plan.md)"
           {
             echo "## What's in it"
             echo

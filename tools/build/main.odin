@@ -185,7 +185,7 @@ usage :: proc() {
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
 	fmt.println(
-		"  bench     run a benchmark scenario (PLAN.md, M19; results in build/benchmarks/):",
+		"  bench     run a benchmark scenario (docs/plan.md, M19; results in build/benchmarks/):",
 	)
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
 	fmt.println(
@@ -212,7 +212,9 @@ usage :: proc() {
 	fmt.println(
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
-	fmt.println("  package   a release package for this platform in build/dist/ (PLAN.md, M21)")
+	fmt.println(
+		"  package   a release package for this platform in build/dist/ (docs/plan.md, M21)",
+	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
@@ -359,7 +361,7 @@ debug_game :: proc(args: []string) -> bool {
 			return run(slice.concatenate([][]string{{"raddbg", exe}, game_args}))
 		}
 		fmt.eprintln(
-			"build: open build\\voxiverse.exe in RAD Debugger, RemedyBG or Visual Studio (see DEBUGGING.md)",
+			"build: open build\\voxiverse.exe in RAD Debugger, RemedyBG or Visual Studio (see docs/debugging.md)",
 		)
 		return false
 	} else {

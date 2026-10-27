@@ -51,7 +51,7 @@ Permissions :: struct {
 @(private)
 DEFAULT_PERMISSIONS :: `# Voxiverse permissions: roles grant nodes ("chat.*": everything under chat,
 # "-chat.format": not that), inherit roles, and carry metadata; players get
-# roles and grants. Everyone has the role default. See DEBUGGING.md.
+# roles and grants. Everyone has the role default. See docs/debugging.md.
 role default
 grant world.edit
 grant chat.send
@@ -197,7 +197,10 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 
 permissions_text :: proc(p: ^Permissions, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(allocator)
-	strings.write_string(&b, "# Voxiverse permissions (written by the server; see DEBUGGING.md)\n")
+	strings.write_string(
+		&b,
+		"# Voxiverse permissions (written by the server; see docs/debugging.md)\n",
+	)
 	role_names := sorted_keys(p.roles)
 	for name in role_names {
 		r := &p.roles[name]

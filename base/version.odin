@@ -3,7 +3,7 @@ package base
 import "core:fmt"
 import "core:strings"
 
-// What build this is (PLAN.md, M21), stamped in by the build driver with
+// What build this is (docs/plan.md, M21), stamped in by the build driver with
 // -define. VERSION is 0.<milestone>.<patch>: the version tag's on a tagged
 // commit ("0.21.0"), else the last tag's with the commits since
 // ("0.21.0+5"; "0.0.0-dev" before any tag). RELEASE_NAME is a release's

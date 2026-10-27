@@ -13,7 +13,7 @@ import "core:time"
 import "platform"
 import "ui"
 
-// Singleplayer's saves (PLAN.md M20; Minecraft's Select World): one
+// Singleplayer's saves (docs/plan.md M20; Minecraft's Select World): one
 // directory each under saves/ in the user data directory (or VX_SAVES),
 // written by the server (server/save.odin): a universe (universe.cfg) or,
 // from before M17, a single world (world.cfg). The screen lists them, most

@@ -214,7 +214,7 @@ flush :: proc(s: ^Session) {
 }
 
 // session_trace starts recording every message to net.trace next to the
-// executable (see netdump and replay in DEBUGGING.md); our own world only
+// executable (see netdump and replay in docs/debugging.md); our own world only
 // (it records the pipe).
 session_trace :: proc(s: ^Session) -> bool {
 	if s.remote {

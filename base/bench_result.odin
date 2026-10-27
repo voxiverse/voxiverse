@@ -7,7 +7,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
-// Benchmark results (PLAN.md, M19): one JSON file per run in
+// Benchmark results (docs/plan.md, M19): one JSON file per run in
 // build/benchmarks/<scenario>/, a line per run in build/benchmarks/history.jsonl.
 // A run is a scenario's repetitions, each with every metric it recorded,
 // and the exact counts that must not change unless the work did. Results

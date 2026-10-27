@@ -4,7 +4,7 @@ import "core:testing"
 
 @(test)
 test_addresses :: proc(t: ^testing.T) {
-	// The counts PLAN.md sizes them by.
+	// The counts docs/plan.md sizes them by.
 	perm :: proc(n, k: int) -> (p: f64) {
 		p = 1
 		for i in 0 ..< k {p *= f64(n - i)}
