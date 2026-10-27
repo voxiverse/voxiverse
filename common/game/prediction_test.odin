@@ -154,14 +154,120 @@ test_input_budget :: proc(t: ^testing.T) {
 		applied += len(input_queue_tick(&q, &buf))
 	}
 	testing.expectf(t, applied <= 101, "applied %d inputs in 100 ticks", applied)
-	testing.expect(t, q.dropped > 0)
-	// After a silence it catches up a little (jitter), not a lot.
+	testing.expect(t, q.dropped > 0 || q.discarded > 0)
+	// After a silence it catches up a little (jitter): two a tick, not four.
 	q2: Input_Queue
 	buf: [INPUT_BUDGET_MAX]Input
 	for _ in 0 ..< 50 {input_queue_tick(&q2, &buf)}
 	for i in 1 ..= 10 {input_queue_push(&q2, Input{sequence = u32(i)})}
-	testing.expect_value(t, len(input_queue_tick(&q2, &buf)), INPUT_BUDGET_MAX)
+	testing.expect_value(t, len(input_queue_tick(&q2, &buf)), 2)
+	testing.expect(t, q2.catching_up)
 	// Old or repeated sequence numbers are refused.
 	testing.expect(t, !input_queue_push(&q2, Input{sequence = 3}))
 	testing.expect(t, sequence_before_or_at(max(u32), 2)) // wraparound
+}
+
+// Inputs of one client sent one per tick, delivered late, bunched and out of
+// order (seeded): the server applies one per tick, two only while it logs a
+// catch-up, and acknowledges every input it applied.
+@(test)
+test_input_jitter_buffer :: proc(t: ^testing.T) {
+	for seed in u64(1) ..= 20 {
+		state := seed * 0x9E3779B97F4A7C15
+		rnd :: proc(s: ^u64, n: u64) -> u64 {
+			s^ = s^ * 6364136223846793005 + 1442695040888963407
+			return (s^ >> 33) % n
+		}
+		Late :: struct {
+			due: int,
+			msg: Input,
+		}
+		inflight: [dynamic]Late
+		defer delete(inflight)
+		q: Input_Queue
+		applied, last_seq := 0, u32(0)
+		TICKS :: 600
+		for tick in 0 ..< TICKS + 60 {
+			if tick < TICKS {
+				delay := int(rnd(&state, 3)) // 0..2 ticks of jitter
+				if rnd(&state, 40) == 0 {delay += 6 + int(rnd(&state, 6))} 	// a hiccup
+				append(&inflight, Late{tick + delay, Input{sequence = u32(tick + 1)}})
+			}
+			// Everything due arrives, in a shuffled order.
+			for i := 0; i < len(inflight); {
+				if inflight[i].due <= tick {
+					j := int(rnd(&state, u64(len(inflight))))
+					if inflight[j].due > tick {j = i}
+					input_queue_push(&q, inflight[j].msg)
+					unordered_remove(&inflight, j)
+					i = 0
+				} else {
+					i += 1
+				}
+			}
+			buf: [INPUT_BUDGET_MAX]Input
+			got := input_queue_tick(&q, &buf)
+			testing.expectf(
+				t,
+				len(got) <= 1 || (len(got) == 2 && q.catching_up),
+				"seed %d tick %d: %d inputs applied, catching_up=%v",
+				seed,
+				tick,
+				len(got),
+				q.catching_up,
+			)
+			for m in got {
+				testing.expect(t, sequence_before(last_seq, m.sequence), "applied out of order")
+				last_seq = m.sequence
+			}
+			applied += len(got)
+			testing.expect_value(t, q.last, max(q.last, last_seq))
+			testing.expectf(
+				t,
+				applied + q.discarded <= tick + 1 + INPUT_BUDGET_MAX,
+				"faster than the tick rate",
+			)
+		}
+		testing.expectf(t, q.target <= INPUT_TARGET_MAX, "target %d", q.target)
+	}
+}
+
+// A steady client (one input a tick, no jitter) is applied in the tick it
+// arrives, with no buffering: what the stepped server relies on.
+@(test)
+test_input_buffer_steady_client :: proc(t: ^testing.T) {
+	q: Input_Queue
+	for tick in 1 ..= 200 {
+		input_queue_push(&q, Input{sequence = u32(tick)})
+		buf: [INPUT_BUDGET_MAX]Input
+		got := input_queue_tick(&q, &buf)
+		if !testing.expectf(
+			t,
+			len(got) == 1 && got[0].sequence == u32(tick),
+			"tick %d: %v",
+			tick,
+			got,
+		) {return}
+	}
+	testing.expect_value(t, q.target, 0)
+	testing.expect_value(t, q.catchups, 0)
+}
+
+// A real stall: the backlog past the limit is given up (and counted), the
+// acknowledgement jumps over it.
+@(test)
+test_input_buffer_stall :: proc(t: ^testing.T) {
+	q: Input_Queue
+	buf: [INPUT_BUDGET_MAX]Input
+	for tick in 1 ..= 30 {
+		input_queue_push(&q, Input{sequence = u32(tick)})
+		input_queue_tick(&q, &buf)
+	}
+	for _ in 0 ..< 20 {input_queue_tick(&q, &buf)} 	// silence
+	for i in 31 ..= 50 {input_queue_push(&q, Input{sequence = u32(i)})}
+	input_queue_tick(&q, &buf)
+	testing.expect_value(t, q.stalls, 1)
+	testing.expect(t, q.discarded > 0)
+	testing.expect(t, q.count <= INPUT_STALL_BACKLOG)
+	testing.expect(t, q.last > 31) // acknowledged past what was discarded
 }

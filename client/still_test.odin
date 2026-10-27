@@ -129,9 +129,9 @@ test_still_player_stays_visible :: proc(t: ^testing.T) {
 			at,
 		)
 	}
-	// Then it walks off: smooth (the render clock moves a tick per tick, so a
-	// step is the mover's own: the server applies inputs that came bunched in
-	// one tick, up to four ticks' walking, 0.58 blocks; never a jump).
+	// Then it walks off: smooth (the render clock moves a tick per tick and the
+	// server's jitter buffer feeds one input a tick: a step is a tick's walking,
+	// two in a logged catch-up; never a jump).
 	for _, &o in p.watch.others {
 		before, _ := seen(p.watch, &o.track)
 		p.mover.autopilot = game.Player_Input {
@@ -157,7 +157,7 @@ test_still_player_stays_visible :: proc(t: ^testing.T) {
 			if !testing.expect(t, ok) {return}
 			d := v.position - last
 			step := math.sqrt(d.x * d.x + d.z * d.z)
-			testing.expectf(t, step < 0.6, "jerked %v blocks at tick %d walking off", step, tick)
+			testing.expectf(t, step < 0.5, "jerked %v blocks at tick %d walking off", step, tick)
 			last, moved = v.position, moved + step
 		}
 		testing.expectf(t, moved > 2, "never walked off: %v", moved)

@@ -137,6 +137,22 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 		check_judge(s, c, msg.sequence)
 		run_due_actions(s, c)
 	}
+	if c.inputs.discarded_now > 0 {
+		log.warnf(
+			"server input stall player=%d discarded=%d acked=%d target=%d",
+			player_id(s, c),
+			c.inputs.discarded_now,
+			c.inputs.last,
+			c.inputs.target,
+		)
+	} else if c.inputs.catching_up {
+		log.debugf(
+			"server input catch-up player=%d acked=%d target=%d",
+			player_id(s, c),
+			c.inputs.last,
+			c.inputs.target,
+		)
+	}
 	set_position(c, c.player.position)
 	if c.teleported {c.teleports += 1}
 	own := game.Own_Player {
