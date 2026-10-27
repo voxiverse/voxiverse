@@ -1,8 +1,12 @@
 package sfx
 
+import "core:fmt"
 import "core:math"
 import "core:slice"
+import "core:strings"
 import "core:testing"
+
+import "../../common/game"
 
 // Every sound: audible, within -1..1, crushed to BITS bits, ending in
 // silence, under a second; the same each time it is made.
@@ -78,4 +82,29 @@ test_sounds_differ :: proc(t: ^testing.T) {
 	sand := crossings(block_sound(.Sand, .Break, 0, context.temp_allocator))
 	dirt := crossings(block_sound(.Dirt, .Break, 0, context.temp_allocator))
 	testing.expectf(t, sand > 2 * dirt, "sand %v vs dirt %v crossings/s", sand, dirt)
+}
+
+// The base pack's sound sets are the old materials: every builtin block's
+// set equals material_of, and the generators are the registry's names.
+@(test)
+test_base_sounds_match :: proc(t: ^testing.T) {
+	reg := game.registry_base()
+	defer game.registry_destroy(reg)
+	testing.expect_value(t, len(game.SOUND_GENERATOR_NAMES), len(Material))
+	for name, i in game.SOUND_GENERATOR_NAMES {
+		testing.expect_value(
+			t,
+			name,
+			strings.to_lower(fmt.tprintf("%v", Material(i)), context.temp_allocator),
+		)
+	}
+	for b in game.Block {
+		m, has := material_of(b)
+		set := reg.blocks.defs[b].sound
+		if has {
+			testing.expectf(t, set == i32(m), "%v sound %d vs %v", b, set, m)
+		} else {
+			testing.expectf(t, set == game.NO_SOUND, "%v is silent", b)
+		}
+	}
 }

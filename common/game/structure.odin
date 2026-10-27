@@ -70,6 +70,20 @@ template_encode :: proc(w: ^Writer, t: ^Template) {
 // template_decode reads a .vxs; false for a damaged file or an unknown
 // block name.
 template_decode :: proc(data: []u8, allocator := context.allocator) -> (t: Template, ok: bool) {
+	return template_decode_with(data, nil, nil, allocator)
+}
+
+// template_decode_with: as template_decode, the names resolved by resolve
+// (nil: the builtin blocks; a name without a colon is voxiverse:'s).
+template_decode_with :: proc(
+	data: []u8,
+	resolve: proc(user: rawptr, name: string) -> (u16, bool),
+	user: rawptr = nil,
+	allocator := context.allocator,
+) -> (
+	t: Template,
+	ok: bool,
+) {
 	r := reader_make(data)
 	if read_u32(&r) != TEMPLATE_MAGIC {return}
 	for &v in t.size {v = read_i32(&r)}
@@ -77,11 +91,17 @@ template_decode :: proc(data: []u8, allocator := context.allocator) -> (t: Templ
 	for v in t.size {if v < 1 || v > MAX_TEMPLATE_SIZE {return}}
 	palette := make([dynamic]u16, context.temp_allocator)
 	n := read_varint(&r)
-	if n > u32(len(Block)) + 1 {return}
+	if n > MAX_BLOCK_STATES + 1 {return}
 	for _ in 0 ..< n {
 		name := read_string(&r, 64)
 		if name == "void" {
 			append(&palette, VOID)
+			continue
+		}
+		if resolve != nil {
+			id, known := resolve(user, name)
+			if !known {return}
+			append(&palette, id)
 			continue
 		}
 		b, known := block_by_name(name)

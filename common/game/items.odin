@@ -44,6 +44,32 @@ Material :: enum u8 {
 }
 MATERIAL_ITEMS :: Item(0xA000)
 
+// PACK_ITEMS: the first number of the items packs add that are not blocks
+// (0x2000 of them): a block's item is its block + 1, whoever added it.
+PACK_ITEMS :: Item(0x6000)
+MAX_PACK_ITEMS :: 0x2000
+
+// The ids of the items engine code names: tools by id, materials and armor
+// by their member's name ("voxiverse:seeds").
+@(rodata)
+BUILTIN_TOOL_IDS := [Tool]string {
+	.Launcher = "voxiverse:rocket_launcher",
+	.Hoe      = "voxiverse:hoe",
+}
+@(rodata)
+BUILTIN_MATERIAL_IDS := [Material]string {
+	.Seeds         = "voxiverse:seeds",
+	.Wheat         = "voxiverse:wheat",
+	.Feather_Charm = "voxiverse:feather_charm",
+}
+@(rodata)
+BUILTIN_ARMOR_IDS := [Armor]string {
+	.Cap      = "voxiverse:cap",
+	.Tunic    = "voxiverse:tunic",
+	.Trousers = "voxiverse:trousers",
+	.Boots    = "voxiverse:boots",
+}
+
 Item_Info :: struct {
 	name:      string,
 	stack:     int, // how many one slot holds

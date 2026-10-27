@@ -1,0 +1,42 @@
+{
+	"tall_grass": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:wild_plant_soil"
+		},
+		"replaceable": true,
+		"drop": "none",
+		"sound": "voxiverse:grass"
+	},
+	"poppy": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:wild_plant_soil"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"dandelion": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:wild_plant_soil"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"cactus": {
+		"textures": {
+			"side": "voxiverse:cactus_side",
+			"top": "voxiverse:cactus_top",
+			"bottom": "voxiverse:cactus_top"
+		},
+		"sound": "voxiverse:wood"
+	}
+}

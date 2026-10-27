@@ -1,0 +1,53 @@
+{
+	"stone": {
+		"sound": "voxiverse:stone"
+	},
+	"dirt": {
+		"sound": "voxiverse:dirt"
+	},
+	"grass": {
+		"textures": {
+			"side": "voxiverse:grass_side",
+			"top": "voxiverse:grass_top",
+			"bottom": "voxiverse:dirt"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"sand": {
+		"sound": "voxiverse:sand"
+	},
+	"gravel": {
+		"sound": "voxiverse:gravel"
+	},
+	"bedrock": {
+		"breakable": false,
+		"placeable": false,
+		"sound": "voxiverse:stone"
+	},
+	"snow": {
+		"sound": "voxiverse:snow"
+	},
+	"ice": {
+		"sound": "voxiverse:glass"
+	},
+	"clay": {
+		"sound": "voxiverse:dirt"
+	},
+	"sandstone": {
+		"textures": {
+			"side": "voxiverse:sandstone_side",
+			"top": "voxiverse:sandstone_top",
+			"bottom": "voxiverse:sandstone_top"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"coal_ore": {
+		"sound": "voxiverse:stone"
+	},
+	"iron_ore": {
+		"sound": "voxiverse:stone"
+	},
+	"copper_ore": {
+		"sound": "voxiverse:stone"
+	}
+}

@@ -1,0 +1,149 @@
+{
+	"stone": {
+		"generator": "stone"
+	},
+	"dirt": {
+		"generator": "dirt"
+	},
+	"grass_top": {
+		"generator": "grass_top"
+	},
+	"grass_side": {
+		"generator": "grass_side"
+	},
+	"sand": {
+		"generator": "sand"
+	},
+	"gravel": {
+		"generator": "gravel"
+	},
+	"bedrock": {
+		"generator": "bedrock"
+	},
+	"lamp": {
+		"generator": "lamp"
+	},
+	"water": {
+		"generator": "water"
+	},
+	"snow": {
+		"generator": "snow"
+	},
+	"ice": {
+		"generator": "ice"
+	},
+	"clay": {
+		"generator": "clay"
+	},
+	"sandstone_side": {
+		"generator": "sandstone_side"
+	},
+	"sandstone_top": {
+		"generator": "sandstone_top"
+	},
+	"log_side": {
+		"generator": "log_side"
+	},
+	"log_top": {
+		"generator": "log_top"
+	},
+	"leaves": {
+		"generator": "leaves"
+	},
+	"spruce_log_side": {
+		"generator": "spruce_log_side"
+	},
+	"spruce_leaves": {
+		"generator": "spruce_leaves"
+	},
+	"coal_ore": {
+		"generator": "coal_ore"
+	},
+	"iron_ore": {
+		"generator": "iron_ore"
+	},
+	"copper_ore": {
+		"generator": "copper_ore"
+	},
+	"tall_grass": {
+		"generator": "tall_grass"
+	},
+	"poppy": {
+		"generator": "poppy"
+	},
+	"dandelion": {
+		"generator": "dandelion"
+	},
+	"cactus_side": {
+		"generator": "cactus_side"
+	},
+	"cactus_top": {
+		"generator": "cactus_top"
+	},
+	"cobblestone": {
+		"generator": "cobblestone"
+	},
+	"stone_bricks": {
+		"generator": "stone_bricks"
+	},
+	"planks": {
+		"generator": "planks"
+	},
+	"glass": {
+		"generator": "glass"
+	},
+	"gate_ring": {
+		"generator": "gate_ring"
+	},
+	"gate_chevron": {
+		"generator": "gate_chevron"
+	},
+	"gate_chevron_lit": {
+		"generator": "gate_chevron_lit"
+	},
+	"gate_horizon": {
+		"generator": "gate_horizon"
+	},
+	"wool": {
+		"generator": "wool"
+	},
+	"farmland_top": {
+		"generator": "farmland_top"
+	},
+	"farmland_moist_top": {
+		"generator": "farmland_moist_top"
+	},
+	"wheat_0": {
+		"generator": "wheat_0"
+	},
+	"wheat_1": {
+		"generator": "wheat_1"
+	},
+	"wheat_2": {
+		"generator": "wheat_2"
+	},
+	"wheat_3": {
+		"generator": "wheat_3"
+	},
+	"wheat_4": {
+		"generator": "wheat_4"
+	},
+	"wheat_5": {
+		"generator": "wheat_5"
+	},
+	"wheat_6": {
+		"generator": "wheat_6"
+	},
+	"wheat_7": {
+		"generator": "wheat_7"
+	},
+	"wool_black": {
+		"generator": "wool_black"
+	},
+	"chest_side": {
+		"generator": "chest_side"
+	},
+	"chest_top": {
+		"generator": "chest_top"
+	}
+}

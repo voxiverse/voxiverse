@@ -1,0 +1,21 @@
+{
+	"wild_plant_soil": {
+		"values": [
+			"voxiverse:grass",
+			"voxiverse:dirt",
+			"voxiverse:sand"
+		]
+	},
+	"tillable": {
+		"values": [
+			"voxiverse:grass",
+			"voxiverse:dirt"
+		]
+	},
+	"farmland": {
+		"values": [
+			"voxiverse:farmland",
+			"voxiverse:farmland_moist"
+		]
+	}
+}

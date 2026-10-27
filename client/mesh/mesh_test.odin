@@ -1,5 +1,7 @@
 package mesh
 
+import "core:fmt"
+import "core:strings"
 import "core:testing"
 
 import "../../common/game"
@@ -489,4 +491,46 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, stone_west, 1)
 	testing.expect_value(t, farm_east, 0) // (the end of the row: hidden by the stone)
+}
+
+// The base pack is the old look: every block's shape, layer and faces from
+// the registry equal the tables in this package (and the generators are the
+// registry's names).
+@(test)
+test_base_looks_the_same :: proc(t: ^testing.T) {
+	reg := game.registry_base()
+	defer game.registry_destroy(reg)
+	testing.expect_value(t, len(game.TEXTURE_GENERATOR_NAMES), len(Texture))
+	for name, i in game.TEXTURE_GENERATOR_NAMES {
+		testing.expect_value(
+			t,
+			name,
+			strings.to_lower(fmt.tprintf("%v", Texture(i)), context.temp_allocator),
+		)
+	}
+	for b in game.Block {
+		shape, layer := block_shape(b)
+		def := reg.blocks.defs[b]
+		want_render := game.Render_Kind.None
+		switch shape {
+		case .None:
+			want_render = .None
+		case .Cube:
+			want_render = .Cube
+		case .Cross:
+			want_render = .Cross
+		}
+		testing.expectf(t, def.render == want_render, "%v render", b)
+		if shape != .None {
+			testing.expectf(t, int(def.layer) == int(layer), "%v layer", b)
+			side, top, bottom := block_faces(b)
+			testing.expectf(
+				t,
+				def.faces == {u32(side), u32(top), u32(bottom)},
+				"%v faces %v",
+				b,
+				def.faces,
+			)
+		}
+	}
 }

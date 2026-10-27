@@ -1,0 +1,11 @@
+{
+	"air": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"render": "none"
+	}
+}

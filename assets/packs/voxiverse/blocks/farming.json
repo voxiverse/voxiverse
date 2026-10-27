@@ -1,0 +1,146 @@
+{
+	"farmland": {
+		"opaque": false,
+		"placeable": false,
+		"shades": true,
+		"drop": "voxiverse:dirt",
+		"textures": {
+			"side": "voxiverse:dirt",
+			"top": "voxiverse:farmland_top",
+			"bottom": "voxiverse:dirt"
+		},
+		"sound": "voxiverse:dirt"
+	},
+	"farmland_moist": {
+		"opaque": false,
+		"placeable": false,
+		"shades": true,
+		"drop": "voxiverse:dirt",
+		"textures": {
+			"side": "voxiverse:dirt",
+			"top": "voxiverse:farmland_moist_top",
+			"bottom": "voxiverse:dirt"
+		},
+		"sound": "voxiverse:dirt"
+	},
+	"wheat_0": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_0"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_1": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_1"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_2": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_2"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_3": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_3"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_4": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_4"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_5": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_5"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_6": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_6"
+		},
+		"sound": "voxiverse:grass"
+	},
+	"wheat_7": {
+		"collides": false,
+		"opaque": false,
+		"render": "cross",
+		"layer": "cutout",
+		"support": {
+			"below": "voxiverse:farmland"
+		},
+		"placeable": false,
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:wheat_7"
+		},
+		"sound": "voxiverse:grass"
+	}
+}

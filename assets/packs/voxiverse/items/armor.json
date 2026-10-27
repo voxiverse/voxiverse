@@ -1,0 +1,50 @@
+{
+	"cap": {
+		"stack": 1,
+		"armor": "cap",
+		"equip": "head",
+		"modifiers": [
+			{
+				"stat": "max_health",
+				"amount": 2
+			}
+		]
+	},
+	"tunic": {
+		"stack": 1,
+		"armor": "tunic",
+		"equip": "chest",
+		"modifiers": [
+			{
+				"stat": "max_health",
+				"amount": 4
+			}
+		]
+	},
+	"trousers": {
+		"stack": 1,
+		"armor": "trousers",
+		"equip": "legs",
+		"modifiers": [
+			{
+				"stat": "max_health",
+				"amount": 2
+			}
+		]
+	},
+	"boots": {
+		"stack": 1,
+		"armor": "boots",
+		"equip": "feet",
+		"modifiers": [
+			{
+				"stat": "speed",
+				"amount": 0.1
+			},
+			{
+				"stat": "jump",
+				"amount": 0.1
+			}
+		]
+	}
+}

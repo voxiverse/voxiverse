@@ -1,0 +1,10 @@
+{
+	"rocket_launcher": {
+		"stack": 1,
+		"tool": "launcher"
+	},
+	"hoe": {
+		"stack": 1,
+		"tool": "hoe"
+	}
+}

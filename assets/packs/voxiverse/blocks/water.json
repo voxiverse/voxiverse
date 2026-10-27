@@ -1,0 +1,136 @@
+{
+	"water": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": true,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_1": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_2": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_3": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_4": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_5": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_6": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"water_7": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	},
+	"falling_water": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"replaceable": true,
+		"shades": true,
+		"liquid": true,
+		"layer": "translucent",
+		"drop": "none",
+		"textures": {
+			"all": "voxiverse:water"
+		}
+	}
+}

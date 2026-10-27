@@ -339,31 +339,91 @@ BLOCK_INFO := [Block]Block_Info {
 	.Gate_Horizon = {name = "gate_horizon", light = 14},
 }
 
-block_valid :: #force_inline proc(id: u16) -> bool {
+// BUILTIN_BLOCK_IDS: the ids of the blocks engine code names (the members
+// of Block); the registry gives them these numbers, whatever the packs say
+// (common/game/registry.odin). Every pack set must define them.
+@(rodata)
+BUILTIN_BLOCK_IDS := [Block]string {
+	.Air              = "voxiverse:air",
+	.Stone            = "voxiverse:stone",
+	.Dirt             = "voxiverse:dirt",
+	.Grass            = "voxiverse:grass",
+	.Sand             = "voxiverse:sand",
+	.Gravel           = "voxiverse:gravel",
+	.Bedrock          = "voxiverse:bedrock",
+	.Lamp             = "voxiverse:lamp",
+	.Water            = "voxiverse:water",
+	.Snow             = "voxiverse:snow",
+	.Ice              = "voxiverse:ice",
+	.Clay             = "voxiverse:clay",
+	.Sandstone        = "voxiverse:sandstone",
+	.Log              = "voxiverse:log",
+	.Leaves           = "voxiverse:leaves",
+	.Spruce_Log       = "voxiverse:spruce_log",
+	.Spruce_Leaves    = "voxiverse:spruce_leaves",
+	.Coal_Ore         = "voxiverse:coal_ore",
+	.Iron_Ore         = "voxiverse:iron_ore",
+	.Copper_Ore       = "voxiverse:copper_ore",
+	.Tall_Grass       = "voxiverse:tall_grass",
+	.Poppy            = "voxiverse:poppy",
+	.Dandelion        = "voxiverse:dandelion",
+	.Cactus           = "voxiverse:cactus",
+	.Water_1          = "voxiverse:water_1",
+	.Water_2          = "voxiverse:water_2",
+	.Water_3          = "voxiverse:water_3",
+	.Water_4          = "voxiverse:water_4",
+	.Water_5          = "voxiverse:water_5",
+	.Water_6          = "voxiverse:water_6",
+	.Water_7          = "voxiverse:water_7",
+	.Water_Falling    = "voxiverse:falling_water",
+	.Cobblestone      = "voxiverse:cobblestone",
+	.Stone_Bricks     = "voxiverse:stone_bricks",
+	.Planks           = "voxiverse:planks",
+	.Glass            = "voxiverse:glass",
+	.Gate_Ring        = "voxiverse:gate_ring",
+	.Gate_Chevron     = "voxiverse:gate_chevron",
+	.Gate_Chevron_Lit = "voxiverse:gate_chevron_lit",
+	.Gate_Horizon     = "voxiverse:gate_horizon",
+	.Wool             = "voxiverse:wool",
+	.Farmland         = "voxiverse:farmland",
+	.Farmland_Moist   = "voxiverse:farmland_moist",
+	.Wheat_0          = "voxiverse:wheat_0",
+	.Wheat_1          = "voxiverse:wheat_1",
+	.Wheat_2          = "voxiverse:wheat_2",
+	.Wheat_3          = "voxiverse:wheat_3",
+	.Wheat_4          = "voxiverse:wheat_4",
+	.Wheat_5          = "voxiverse:wheat_5",
+	.Wheat_6          = "voxiverse:wheat_6",
+	.Wheat_7          = "voxiverse:wheat_7",
+	.Wool_Black       = "voxiverse:black_wool",
+	.Chest            = "voxiverse:chest",
+}
+
+block_valid_legacy :: #force_inline proc(id: u16) -> bool {
 	return id < len(Block)
 }
 
-block_targetable :: #force_inline proc(b: Block) -> bool {
+block_targetable_legacy :: #force_inline proc(b: Block) -> bool {
 	return BLOCK_INFO[b].targetable
 }
 
-block_collides :: #force_inline proc(b: Block) -> bool {
+block_collides_legacy :: #force_inline proc(b: Block) -> bool {
 	return BLOCK_INFO[b].collides
 }
 
-block_opaque :: #force_inline proc(b: Block) -> bool {
+block_opaque_legacy :: #force_inline proc(b: Block) -> bool {
 	return BLOCK_INFO[b].opaque
 }
 
 // block_by_name: the block called name ("stone").
-block_by_name :: proc(name: string) -> (Block, bool) {
+block_by_name_legacy :: proc(name: string) -> (Block, bool) {
 	for b in Block {if BLOCK_INFO[b].name == name {return b, true}}
 	return .Air, false
 }
 
 // block_shades: it stops sunlight from straight above (opaque blocks, and
 // water and leaves, which let it seep in dimmed): a column's top.
-block_shades :: #force_inline proc(b: Block) -> bool {
+block_shades_legacy :: #force_inline proc(b: Block) -> bool {
 	return BLOCK_INFO[b].opaque || BLOCK_INFO[b].shades
 }
 
@@ -396,7 +456,7 @@ water_block :: proc(level: i32) -> Block {
 	return Block(i32(Block.Water_1) + level - 1)
 }
 
-block_light :: #force_inline proc(b: Block) -> u8 {
+block_light_legacy :: #force_inline proc(b: Block) -> u8 {
 	return BLOCK_INFO[b].light
 }
 
@@ -441,4 +501,34 @@ plant_supported :: proc(plant: Block, below: Block) -> bool {
 // can_till: a hoe makes farmland of current when only air is above it.
 can_till :: proc(current, above: Block) -> bool {
 	return (current == .Grass || current == .Dirt) && above == .Air
+}
+
+// The lookups take the registry's table too (registry.odin); until the table
+// replaces BLOCK_INFO both forms exist.
+block_valid :: proc {
+	block_valid_legacy,
+	block_valid_table,
+}
+block_targetable :: proc {
+	block_targetable_legacy,
+	block_targetable_table,
+}
+block_collides :: proc {
+	block_collides_legacy,
+	block_collides_table,
+}
+block_opaque :: proc {
+	block_opaque_legacy,
+	block_opaque_table,
+}
+block_shades :: proc {
+	block_shades_legacy,
+	block_shades_table,
+}
+block_light :: proc {
+	block_light_legacy,
+	block_light_table,
+}
+block_by_name :: proc {
+	block_by_name_legacy,
 }

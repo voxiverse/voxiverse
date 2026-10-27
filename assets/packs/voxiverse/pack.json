@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "voxiverse",
+	"version": "1.0.0",
+	"title": "Voxiverse",
+	"description": "The base game: its blocks, items, textures and sounds.",
+	"requires": []
+}

@@ -1,0 +1,37 @@
+{
+	"gate_ring": {
+		"breakable": false,
+		"placeable": false,
+		"sound": "voxiverse:stone"
+	},
+	"gate_chevron": {
+		"breakable": false,
+		"placeable": false,
+		"textures": {
+			"side": "voxiverse:gate_chevron",
+			"top": "voxiverse:gate_ring",
+			"bottom": "voxiverse:gate_ring"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"gate_chevron_lit": {
+		"breakable": false,
+		"placeable": false,
+		"light": 12,
+		"textures": {
+			"side": "voxiverse:gate_chevron_lit",
+			"top": "voxiverse:gate_ring",
+			"bottom": "voxiverse:gate_ring"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"gate_horizon": {
+		"collides": false,
+		"opaque": false,
+		"targetable": false,
+		"breakable": false,
+		"placeable": false,
+		"light": 14,
+		"layer": "translucent"
+	}
+}

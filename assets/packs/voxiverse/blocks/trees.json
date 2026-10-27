@@ -1,0 +1,30 @@
+{
+	"log": {
+		"textures": {
+			"side": "voxiverse:log_side",
+			"top": "voxiverse:log_top",
+			"bottom": "voxiverse:log_top"
+		},
+		"sound": "voxiverse:wood"
+	},
+	"leaves": {
+		"opaque": false,
+		"shades": true,
+		"layer": "cutout",
+		"sound": "voxiverse:grass"
+	},
+	"spruce_log": {
+		"textures": {
+			"side": "voxiverse:spruce_log_side",
+			"top": "voxiverse:log_top",
+			"bottom": "voxiverse:log_top"
+		},
+		"sound": "voxiverse:wood"
+	},
+	"spruce_leaves": {
+		"opaque": false,
+		"shades": true,
+		"layer": "cutout",
+		"sound": "voxiverse:grass"
+	}
+}

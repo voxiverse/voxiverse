@@ -1,0 +1,15 @@
+{
+	"seeds": {
+		"places": "voxiverse:wheat_0"
+	},
+	"wheat": {},
+	"feather_charm": {
+		"stack": 1,
+		"modifiers": [
+			{
+				"stat": "air_jumps",
+				"amount": 1
+			}
+		]
+	}
+}

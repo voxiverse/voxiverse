@@ -1,0 +1,26 @@
+{
+	"stone": {
+		"generator": "stone"
+	},
+	"dirt": {
+		"generator": "dirt"
+	},
+	"grass": {
+		"generator": "grass"
+	},
+	"sand": {
+		"generator": "sand"
+	},
+	"gravel": {
+		"generator": "gravel"
+	},
+	"glass": {
+		"generator": "glass"
+	},
+	"wood": {
+		"generator": "wood"
+	},
+	"snow": {
+		"generator": "snow"
+	}
+}
