@@ -4,6 +4,7 @@ import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
 import "core:strings"
 import "core:testing"
 import "core:time"
@@ -167,6 +168,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 	defer delete(edits)
 	left_at: game.Player_State
 	left_time: f64
+	saved_time: f64 // the clock as the server wrote it
 
 	// Session 1: land, edit, walk a little, quit.
 	{
@@ -230,6 +232,16 @@ test_save_round_trip :: proc(t: ^testing.T) {
 		left_time = c.time.? or_else -1
 		testing.expectf(t, abs(left_time - 0.9) < 0.01, "time %v after setting 0.9", left_time)
 		testing.expect(t, stop(&srv), "the save failed")
+		// The clock kept running until the save: what the reload must continue
+		// from is the time the server wrote, not the last one the client saw.
+		saved_time = saved_clock(dir, 77)
+		testing.expectf(
+			t,
+			saved_time >= left_time && saved_time - left_time < 0.1,
+			"saved time %v, last seen %v",
+			saved_time,
+			left_time,
+		)
 	}
 	testing.expect(
 		t,
@@ -275,15 +287,15 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			left_at.position,
 		)
 		// The clock goes on from when they left (it ran up to a second
-		// after the last Time they saw).
+		// after the one saved).
 		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return c.time != nil}))
 		now := c.time.? or_else -1
 		testing.expectf(
 			t,
-			now >= left_time && now - left_time < 2.0 / f64(game.RULES_DEFAULTS.day_length),
-			"time %v after loading, %v before quitting",
+			now >= saved_time && now - saved_time < 2.0 / f64(game.RULES_DEFAULTS.day_length),
+			"time %v after loading, %v saved",
 			now,
-			left_time,
+			saved_time,
 		)
 		// Looking where they looked when they left.
 		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return c.turned != nil}))
@@ -501,4 +513,21 @@ home_dir :: proc(dir: string, seed: i64) -> string {
 			context.temp_allocator,
 		) or_else dir \
 	)
+}
+
+// saved_clock: the world time in the home world's world.cfg (-1 if unreadable).
+@(private = "file")
+saved_clock :: proc(dir: string, seed: i64) -> f64 {
+	path := filepath.join({home_dir(dir, seed), WORLD_FILE}, context.temp_allocator) or_else ""
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return -1}
+	text := string(data)
+	for line in strings.split_lines_iterator(&text) {
+		k, _, v := strings.partition(line, "=")
+		if strings.trim_space(k) == "time" {
+			f, ok := strconv.parse_f64(strings.trim_space(v))
+			return f if ok else -1
+		}
+	}
+	return -1
 }
