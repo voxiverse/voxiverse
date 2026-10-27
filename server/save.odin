@@ -37,8 +37,13 @@ WORLDS_DIR :: "worlds"
 WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
 // 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3:
-// players in players/ (player_data.odin); 4: a universe of worlds.
-SAVE_FORMAT :: 4
+// players in players/ (player_data.odin); 4: a universe of worlds; 5 (M46):
+// regions with a checksum per chunk, saves as transactions (save_tx.odin),
+// migrations in a registry (migrate.odin).
+SAVE_FORMAT :: 5
+// LEGACY_FORMAT: what a directory from before universes becomes first (and
+// the registry's first migration then takes it on).
+LEGACY_FORMAT :: 4
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
@@ -55,6 +60,7 @@ Store :: struct {
 	inflight:   ^Save_Batch, // handed to the worker
 	carry:      Carry, // what a failed save did not write
 	generation: u64, // the last committed save's
+	format:     int, // the format universe.cfg had when opened
 	saved_at:   u64, // its age
 }
 
@@ -92,13 +98,16 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		read_universe_file(s, string(data), universe) or_return
 		home.seed, home.generator = s.config.seed, s.config.generator
 	case os.exists(legacy):
-		return migrate_world_dir(s, legacy)
+		migrate_world_dir(s, legacy) or_return
+		return store_migrate(s)
 	case:
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
 		home.address = game.address_derive(u64(s.config.seed))
 		home.seed, home.generator = s.config.seed, s.config.generator
 		write_universe_file(s) or_return
+		st.format = SAVE_FORMAT
 	}
+	store_migrate(s) or_return
 	return world_dir_open(home)
 }
 
@@ -166,7 +175,8 @@ migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
 	os.make_directory_all(
 		filepath.join({world_dir, "regions"}, context.temp_allocator) or_else world_dir,
 	)
-	if !write_universe_file(s) || !write_world_file(home) {return false}
+	if !write_universe_file(s, LEGACY_FORMAT) || !write_world_file(home, LEGACY_FORMAT) {return false}
+	s.store.format = LEGACY_FORMAT
 	os.remove(legacy)
 	log.infof("server world became a universe dir=%s home=%s", dir, game.address_dir(home.address))
 	return true
@@ -327,6 +337,13 @@ load_region :: proc(w: ^World, region: game.Region_Pos) {
 		append(&loaded, pos)
 	}
 	ok = ok && game.region_tops(&r, &tops)
+	for pos in r.dropped {
+		log.errorf(
+			"server chunk damaged in its region file, not loaded (its edits are lost) path=%s chunk=%v",
+			path,
+			pos,
+		)
+	}
 	if !ok {
 		for pos in loaded {
 			delete(w.saved[pos])
@@ -376,16 +393,16 @@ write_region :: proc(w: ^World, region: game.Region_Pos) -> bool {
 		}
 	}
 	wr := &w.server.store.writer
-	game.region_encode(wr, region, chunks[:], tops[:])
+	game.region_encode(wr, region, chunks[:], tops[:], w.server.store.generation + 1)
 	return store_write(w.server, region_path(w.dir, region), wr.buf[:])
 }
 
 // universe.cfg: "key = value" lines.
 @(private = "file")
-write_universe_file :: proc(s: ^Server) -> bool {
+write_universe_file :: proc(s: ^Server, format := SAVE_FORMAT) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
+	fmt.sbprintfln(&b, "format = %d", format)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
@@ -416,7 +433,8 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 		key, value := strings.trim_space(l[:eq]), strings.trim_space(l[eq + 1:])
 		switch {
 		case key == "format":
-			if n, ok := strconv.parse_int(value); !ok || n > SAVE_FORMAT {
+			n, ok := strconv.parse_int(value)
+			if !ok || n > SAVE_FORMAT {
 				log.errorf(
 					"server universe from a newer game, not loaded path=%s format=%s",
 					path,
@@ -424,6 +442,7 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				)
 				return false
 			}
+			s.store.format = n
 		case key == "seed":
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
 		case key == "home":
@@ -489,10 +508,10 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 
 // world.cfg: "key = value" lines, then the rules and generator parameters.
 @(private = "file")
-write_world_file :: proc(w: ^World) -> bool {
+write_world_file :: proc(w: ^World, format := SAVE_FORMAT) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
+	fmt.sbprintfln(&b, "format = %d", format)
 	fmt.sbprintfln(&b, "address = %s", game.address_dir(w.address))
 	fmt.sbprintfln(&b, "seed = %d", w.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])

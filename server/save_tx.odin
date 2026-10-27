@@ -130,7 +130,6 @@ relative_path :: proc(dir, path: string) -> string {
 	return rel
 }
 
-@(private = "file")
 full_path :: proc(dir, rel: string) -> string {
 	return filepath.join({dir, rel}, context.temp_allocator) or_else rel
 }

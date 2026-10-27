@@ -1,6 +1,7 @@
 package game
 
 import "core:hash"
+import "core:slice"
 
 // Region files: the saved part of a world. A world is regenerated from its
 // seed, so only chunks that were edited are stored, grouped by region
@@ -9,12 +10,17 @@ import "core:hash"
 // runs). Files end in a CRC-32 of everything before it, so damage is
 // detected instead of loaded.
 //
-// File: "VXRG", u32 format, i32 region x, z, varint chunk count, per chunk
-// (i32 x, y, z, then the chunk's blocks), varint top count, per top (i32 x,
-// z, top), u32 CRC-32.
+// Format 2 (format 1 is in save_v1.odin): a header that indexes the chunks,
+// each with its own CRC-32, so that damage to one chunk loses only that chunk.
+//
+// "VXRG", u32 format (2), i32 region x, z, varint64 generation (the save that
+// wrote it), varint chunk count n, the index (n x { i32 x, y, z, u32 offset,
+// u32 length, u32 CRC-32 of the payload }, sorted by chunk_pos_less), varint
+// top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
+// the payloads (each chunk's blocks, offset counted from here).
 
 REGION_MAGIC :: "VXRG"
-REGION_FORMAT :: 1
+REGION_FORMAT :: 2
 REGION_SIZE :: 16 // chunk columns per side
 REGION_SHIFT :: 4
 
@@ -33,18 +39,43 @@ Saved_Top :: struct {
 	x, z, top: i32,
 }
 
-// region_encode writes a region's edited chunks and tops into w.
-region_encode :: proc(w: ^Writer, region: Region_Pos, chunks: []Saved_Chunk, tops: []Saved_Top) {
+// region_encode writes a region's edited chunks and tops into w, as the
+// save of generation.
+region_encode :: proc(
+	w: ^Writer,
+	region: Region_Pos,
+	chunks: []Saved_Chunk,
+	tops: []Saved_Top,
+	generation: u64 = 0,
+) {
+	sorted := make([]Saved_Chunk, len(chunks), context.temp_allocator)
+	copy(sorted, chunks)
+	slice.sort_by(sorted, proc(a, b: Saved_Chunk) -> bool {return chunk_pos_less(a.pos, b.pos)})
+	payloads: Writer
+	writer_init(&payloads, context.temp_allocator)
+	Entry :: struct {
+		offset, length, crc: u32,
+	}
+	entries := make([]Entry, len(sorted), context.temp_allocator)
+	for c, i in sorted {
+		assert(region_of(c.pos) == region)
+		start := len(payloads.buf)
+		write_chunk_blocks(&payloads, c.blocks)
+		body := payloads.buf[start:]
+		entries[i] = {u32(start), u32(len(body)), hash.crc32(body)}
+	}
 	clear(&w.buf)
 	append(&w.buf, REGION_MAGIC)
 	write_u32(w, REGION_FORMAT)
 	write_i32(w, region.x)
 	write_i32(w, region.y)
-	write_varint(w, u32(len(chunks)))
-	for c in chunks {
-		assert(region_of(c.pos) == region)
+	write_varint64(w, generation)
+	write_varint(w, u32(len(sorted)))
+	for c, i in sorted {
 		for v in c.pos {write_i32(w, v)}
-		write_chunk_blocks(w, c.blocks)
+		write_u32(w, entries[i].offset)
+		write_u32(w, entries[i].length)
+		write_u32(w, entries[i].crc)
 	}
 	write_varint(w, u32(len(tops)))
 	for t in tops {
@@ -53,46 +84,83 @@ region_encode :: proc(w: ^Writer, region: Region_Pos, chunks: []Saved_Chunk, top
 		write_i32(w, t.top)
 	}
 	write_u32(w, hash.crc32(w.buf[:]))
+	append(&w.buf, ..payloads.buf[:])
 }
 
-// Region_Reader walks a region file's contents after region_open checked it.
+// Region_Reader walks a region file's chunks after region_open checked its
+// header.
 Region_Reader :: struct {
-	reader: Reader,
-	region: Region_Pos,
-	chunks: int, // left to read
-	tops:   int,
+	reader:     Reader, // (its ok stays true: a damaged chunk is skipped, see dropped)
+	region:     Region_Pos,
+	generation: u64,
+	index:      []Region_Index,
+	next:       int,
+	payloads:   []u8,
+	tops:       [dynamic]Saved_Top, // (temp allocator)
+	dropped:    [dynamic]Chunk_Pos, // chunks whose payload failed its check (temp allocator)
+}
+
+Region_Index :: struct {
+	pos:                 Chunk_Pos,
+	offset, length, crc: u32,
 }
 
 Region_Error :: enum u8 {
 	None,
 	Not_A_Region, // wrong magic
 	Newer_Format, // written by a newer game
-	Damaged, // checksum, truncation, bad values
+	Older_Format, // format 1: the migration reads it (region_open_v1)
+	Damaged, // the header's checksum, truncation, bad values
 	Wrong_Region, // the file says it is another region
 }
 
-// region_open checks a region file (magic, format, checksum, region).
+// region_open checks a region file's header (magic, format, checksum, region,
+// index, tops). The chunks are checked as they are read.
 region_open :: proc(data: []u8, expect: Region_Pos) -> (r: Region_Reader, err: Region_Error) {
 	if len(data) < 4 || string(data[:4]) != REGION_MAGIC {return {}, .Not_A_Region}
-	if len(data) < 8 + 4 {return {}, .Damaged}
-	body := data[:len(data) - 4]
-	tail := reader_make(data[len(data) - 4:])
-	if read_u32(&tail) != hash.crc32(body) {return {}, .Damaged}
-	r.reader = reader_make(body[4:])
+	if len(data) < 8 {return {}, .Damaged}
+	r.reader = reader_make(data[4:])
 	format := read_u32(&r.reader)
 	if format > REGION_FORMAT {return {}, .Newer_Format}
+	if format < REGION_FORMAT {return {}, .Older_Format}
 	r.region = {read_i32(&r.reader), read_i32(&r.reader)}
-	if r.region != expect {return {}, .Wrong_Region}
+	r.generation = read_varint64(&r.reader)
 	n := read_varint(&r.reader)
-	if !r.reader.ok ||
-	   int(n) > REGION_SIZE * REGION_SIZE * (CHUNK_MAX_Y - CHUNK_MIN_Y) {return {}, .Damaged}
-	r.chunks = int(n)
+	max_chunks := REGION_SIZE * REGION_SIZE * (CHUNK_MAX_Y - CHUNK_MIN_Y)
+	if !r.reader.ok || int(n) > max_chunks {return {}, .Damaged}
+	r.index = make([]Region_Index, n, context.temp_allocator)
+	for &e in r.index {
+		for &v in e.pos {v = read_i32(&r.reader)}
+		e.offset, e.length, e.crc = read_u32(&r.reader), read_u32(&r.reader), read_u32(&r.reader)
+		if !in_world(e.pos) || region_of(e.pos) != r.region {reader_fail(&r.reader)}
+	}
+	t := read_varint(&r.reader)
+	if !r.reader.ok || int(t) > REGION_SIZE * REGION_SIZE * CHUNK_SIZE * CHUNK_SIZE {
+		return {}, .Damaged
+	}
+	r.tops = make([dynamic]Saved_Top, context.temp_allocator)
+	r.dropped = make([dynamic]Chunk_Pos, context.temp_allocator)
+	for _ in 0 ..< t {
+		top := Saved_Top{read_i32(&r.reader), read_i32(&r.reader), read_i32(&r.reader)}
+		if top.top < WORLD_MIN_Y ||
+		   top.top >= WORLD_MAX_Y ||
+		   region_of({top.x >> CHUNK_SHIFT, 0, top.z >> CHUNK_SHIFT}) != r.region {
+			reader_fail(&r.reader)
+		}
+		append(&r.tops, top)
+	}
+	crc_at := 4 + r.reader.pos // (the reader began after the magic)
+	crc := read_u32(&r.reader)
+	if !r.reader.ok || crc != hash.crc32(data[:crc_at]) {return {}, .Damaged}
+	r.payloads = data[crc_at + 4:]
+	if r.region != expect {return {}, .Wrong_Region}
+	r.reader.ok = true
 	return r, .None
 }
 
 // region_next_chunk reads the next chunk into dst (uniform chunks leave it
-// untouched); ok is false at the end or on damage (then r.reader.ok is
-// false too).
+// untouched). A chunk that fails its checksum or does not decode is skipped
+// (listed in r.dropped); got is false at the end.
 region_next_chunk :: proc(
 	r: ^Region_Reader,
 	dst: ^Block_Array,
@@ -100,30 +168,30 @@ region_next_chunk :: proc(
 	pos: Chunk_Pos,
 	uniform: Block,
 	is_uniform: bool,
-	ok: bool,
+	got: bool,
 ) {
-	if r.chunks == 0 {return}
-	r.chunks -= 1
-	for &v in pos {v = read_i32(&r.reader)}
-	if !in_world(pos) || region_of(pos) != r.region {reader_fail(&r.reader)}
-	uniform, is_uniform = read_chunk_blocks(&r.reader, dst)
-	return pos, uniform, is_uniform, r.reader.ok
+	for r.next < len(r.index) {
+		e := r.index[r.next]
+		r.next += 1
+		if int(e.offset) + int(e.length) > len(r.payloads) ||
+		   int(e.offset) < 0 ||
+		   hash.crc32(r.payloads[e.offset:][:e.length]) != e.crc {
+			append(&r.dropped, e.pos)
+			continue
+		}
+		cr := reader_make(r.payloads[e.offset:][:e.length])
+		uniform, is_uniform = read_chunk_blocks(&cr, dst)
+		if !reader_finish(&cr) {
+			append(&r.dropped, e.pos)
+			continue
+		}
+		return e.pos, uniform, is_uniform, true
+	}
+	return
 }
 
-// region_tops reads the column tops (after all chunks); false on damage.
+// region_tops appends the column tops.
 region_tops :: proc(r: ^Region_Reader, out: ^[dynamic]Saved_Top) -> bool {
-	if r.chunks != 0 {return false}
-	n := read_varint(&r.reader)
-	if !r.reader.ok || int(n) > REGION_SIZE * REGION_SIZE * CHUNK_SIZE * CHUNK_SIZE {return false}
-	for _ in 0 ..< n {
-		t := Saved_Top{read_i32(&r.reader), read_i32(&r.reader), read_i32(&r.reader)}
-		if t.top < WORLD_MIN_Y ||
-		   t.top >= WORLD_MAX_Y ||
-		   region_of({t.x >> CHUNK_SHIFT, 0, t.z >> CHUNK_SHIFT}) != r.region {
-			reader_fail(&r.reader)
-		}
-		if !r.reader.ok {return false}
-		append(out, t)
-	}
-	return reader_finish(&r.reader)
+	append(out, ..r.tops[:])
+	return true
 }

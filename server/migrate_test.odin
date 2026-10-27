@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 import "core:testing"
 
@@ -96,4 +97,93 @@ copy_tree :: proc(from, to: string) {
 			_ = os.write_entire_file(dst, data)
 		}
 	}
+}
+
+// expect_lines: expect.txt's lines by key.
+fixture_lines :: proc(text: string) -> (lines: [dynamic]string) {
+	lines = make([dynamic]string) // (heap: the server frees the temp allocator every tick)
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		if strings.trim_space(line) != "" {append(&lines, strings.clone(strings.trim_space(line)))}
+	}
+	return
+}
+
+// open_fixture: a copy of fixture (a committed save) in a scratch directory,
+// opened as a stepped session at the player's place; expect.txt's lines too.
+open_fixture :: proc(
+	t: ^testing.T,
+	fixture, dir: string,
+) -> (
+	g: ^Grief,
+	expect: [dynamic]string,
+	ok: bool,
+) {
+	os.remove_all(dir)
+	copy_tree(fixture, dir)
+	data, err := os.read_entire_file_from_path(fmt.tprintf("%s/expect.txt", fixture), context.allocator)
+	defer delete(data)
+	if !testing.expect(t, err == nil, "the fixture has no expect.txt") {return}
+	expect = fixture_lines(string(data))
+	os.remove(fmt.tprintf("%s/expect.txt", dir))
+	cfg := grief_config(dir)
+	cfg.no_sheep = false
+	g, ok = grief_open(t, dir, cfg)
+	if !ok {return}
+	// The chunks the fixture hashed: the 5 x 3 x 5 around its center.
+	center: [3]i32
+	f := strings.fields(expect[0], context.temp_allocator)
+	if !testing.expect(t, len(f) == 4 && f[0] == "center") {return}
+	for i in 0 ..< 3 {
+		v, _ := strconv.parse_int(f[i + 1])
+		center[i] = i32(v)
+	}
+	clear(&g.chunks)
+	for y in center.y - 1 ..= center.y + 1 {
+		for z in center.z - 2 ..= center.z + 2 {
+			for x in center.x - 2 ..= center.x + 2 {append(&g.chunks, game.Chunk_Pos{x, y, z})}
+		}
+	}
+	return g, expect, true
+}
+
+// The fixture's own expect.txt text again, from the opened session.
+fixture_matches :: proc(t: ^testing.T, g: ^Grief, expect: []string) {
+	got := fixture_expect(g)
+	rest := got
+	i := 0
+	for line in strings.split_lines_iterator(&rest) {
+		if i == 0 {i += 1; continue} // (the center: set from expect)
+		testing.expectf(
+			t,
+			i < len(expect) && strings.trim_space(line) == expect[i],
+			"line %d: got %q, want %q",
+			i,
+			line,
+			expect[i] if i < len(expect) else "<nothing>",
+		)
+		i += 1
+	}
+	testing.expect_value(t, i, len(expect))
+}
+
+@(test)
+test_v4_save_migrates :: proc(t: ^testing.T) {
+	dir := fmt.aprintf("build/test_migrate_v4")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	g, expect, ok := open_fixture(t, FIXTURE_V4, dir)
+	if !ok {grief_close(g); return}
+	defer grief_close(g)
+	defer free_lines(expect)
+	testing.expect_value(t, g.sess.srv.store.format, SAVE_FORMAT)
+	fixture_matches(t, g, expect[:])
+	text, _ := os.read_entire_file_from_path(fmt.tprintf("%s/universe.cfg", dir), context.temp_allocator)
+	testing.expect(t, strings.contains(string(text), "format = 5"), "universe.cfg still says the old format")
+	testing.expect(t, os.exists(fmt.tprintf("%s/backups/pre-migration-4/universe.cfg", dir)), "no backup")
+}
+
+free_lines :: proc(lines: [dynamic]string) {
+	for l in lines {delete(l)}
+	delete(lines)
 }
