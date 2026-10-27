@@ -207,7 +207,9 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   the optimized tests) and "Game · Linux x64" (everything that runs the game or tools under
   xvfb), because the one Linux job alone set CI's length (17 min median, 38 worst). Every
   check still runs on every push. The tests run once, with `ODIN_TEST_RANDOM_SEED` set to the
-  run number (a re-run repeats it). Ubuntu packages come from a cache of their `.deb` files
+  run number (a re-run repeats it). `./build.sh test` turns `ODIN_TEST_RANDOM_SEED` and
+  `ODIN_TEST_THREADS` from the environment into `-define:` flags (Odin reads them only as
+  defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh test` reproduces a CI failure. Ubuntu packages come from a cache of their `.deb` files
   (`.github/actions/apt`), because the package mirror twice took over 20 minutes.
 
 ### Saves

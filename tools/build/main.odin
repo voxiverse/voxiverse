@@ -462,6 +462,19 @@ check_no_binaries :: proc() -> bool {
 	return true
 }
 
+// test_env_defines turns the environment's ODIN_TEST_RANDOM_SEED and ODIN_TEST_THREADS into
+// -define flags: Odin's test runner reads both only as compile-time defines, so the variable
+// alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to reproduce a failure) is ignored.
+test_env_defines :: proc() -> []string {
+	defines := make([dynamic]string)
+	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS"}) {
+		if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
+			append(&defines, fmt.aprintf("-define:%s=%s", name, value))
+		}
+	}
+	return defines[:]
+}
+
 test :: proc() -> bool {
 	ok := true
 	for pkg in TEST_PACKAGES {
@@ -469,7 +482,12 @@ test :: proc() -> bool {
 			{"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})},
 		)
 		cmd := slice.concatenate(
-			[][]string{{"odin", "test", pkg}, ODIN_FLAGS, {strings.concatenate({"-out:", out})}},
+			[][]string {
+				{"odin", "test", pkg},
+				ODIN_FLAGS,
+				{strings.concatenate({"-out:", out})},
+				test_env_defines(),
+			},
 		)
 		os.make_directory_all(filepath.dir(out))
 		ok = run(cmd) && ok
@@ -657,6 +675,7 @@ audio_baselines :: proc(args: []string) -> bool {
 				"-define:ODIN_TEST_NAMES=client.test_audio_baselines,client.test_music_hour_golden",
 			},
 			defines[:],
+			test_env_defines(),
 		},
 	)
 	return run(cmd)

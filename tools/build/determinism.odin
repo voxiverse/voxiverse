@@ -163,6 +163,7 @@ determinism :: proc(args: []string) -> bool {
 					fmt.aprintf("-define:VX_DETERMINISM_TICKS=%d", DETERMINISM_TICKS),
 					strings.concatenate({"-define:VX_DETERMINISM_LOG=", log_path}),
 				},
+				test_env_defines(),
 			},
 		)
 		if !run(cmd) {return false}
