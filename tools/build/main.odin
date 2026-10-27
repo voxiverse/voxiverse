@@ -170,7 +170,9 @@ main :: proc() {
 
 usage :: proc() {
 	fmt.println("usage: build <command>")
-	fmt.println("  check     type-check every package (-vet -strict-style) and verify formatting")
+	fmt.println(
+		"  check     type-check every package (-vet -strict-style), build objects for the other Tier 1 targets, verify formatting",
+	)
 	fmt.println("  test      run the unit tests")
 	fmt.println(
 		"  determinism  run the scripted session at -o:minimal and -o:speed and compare the logs (--compare <dir>: every log in a directory)",
@@ -432,7 +434,63 @@ check :: proc() -> bool {
 			ok = false
 		}
 	}
+	ok = check_cross() && ok
 	return determinism_lint() && check_format() && check_no_binaries() && ok
+}
+
+// host_target is the Odin target this driver runs on, as -target: spells it.
+host_target :: proc() -> string {
+	return ODIN_OS_STRING + "_" + ODIN_ARCH_STRING
+}
+
+// check_cross builds the game, the server and every test package as objects for
+// each Tier 1 target that is not the host, so code that only compiles on the host
+// (a variable used only inside `when ODIN_OS == .Linux`) fails here, not in CI.
+// Objects only: nothing links or runs. Windows needs -windows-sdk-root to build
+// objects without the SDK (any existing directory will do). `odin test` takes no
+// such flag and refuses a Windows target without the real SDK, so Windows test
+// packages are checked natively on the Windows CI runner only; macOS ones are
+// cross-built here.
+check_cross :: proc() -> bool {
+	ok := true
+	host := host_target()
+	for target in TIER1_TARGETS {
+		if target == host {continue}
+		windows := strings.has_prefix(target, "windows")
+		cross_flags := slice.concatenate(
+			[][]string{{strings.concatenate({"-target:", target}), "-build-mode:obj"}, ODIN_FLAGS},
+		)
+		if windows {
+			cross_flags = slice.concatenate([][]string{cross_flags, {"-windows-sdk-root:."}})
+		}
+		jobs := make([dynamic][2]string)
+		for pkg in ([]string{GAME_PACKAGE, SERVER_PACKAGE}) {
+			append(&jobs, [2]string{"build", pkg})
+		}
+		if !windows {
+			for pkg in TEST_PACKAGES {
+				append(&jobs, [2]string{"test", pkg})
+			}
+		}
+		for job in jobs {
+			out := path_join({"build", "cross", target, job[0], filepath.base(job[1])})
+			os.make_directory_all(filepath.dir(out))
+			cmd := slice.concatenate(
+				[][]string {
+					{"odin", job[0], job[1]},
+					cross_flags,
+					{strings.concatenate({"-out:", out})},
+				},
+			)
+			if run(cmd) {
+				fmt.printfln("cross  %s %s %s", target, job[0], job[1])
+			} else {
+				fmt.eprintfln("cross  %s %s %s FAILED", target, job[0], job[1])
+				ok = false
+			}
+		}
+	}
+	return ok
 }
 
 // check_no_binaries fails if git tracks an executable (ELF, PE or Mach-O): build
