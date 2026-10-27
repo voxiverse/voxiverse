@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "world": "220f172523010706-0b1f190310221c",
+  "position": [
+    -40.0000000000000000,
+    4.0000000000000000,
+    40.0000000000000000
+  ],
+  "look": [
+    0.00000000,
+    -0.69999999
+  ],
+  "flying": false,
+  "selected": 0,
+  "items": [
+    {
+      "slot": 0,
+      "item": "stone",
+      "count": 64
+    },
+    {
+      "slot": 1,
+      "item": "dirt",
+      "count": 64
+    },
+    {
+      "slot": 2,
+      "item": "grass",
+      "count": 64
+    },
+    {
+      "slot": 3,
+      "item": "sand",
+      "count": 64
+    },
+    {
+      "slot": 4,
+      "item": "log",
+      "count": 64
+    },
+    {
+      "slot": 5,
+      "item": "leaves",
+      "count": 64
+    },
+    {
+      "slot": 6,
+      "item": "water",
+      "count": 64
+    },
+    {
+      "slot": 7,
+      "item": "lamp",
+      "count": 64
+    },
+    {
+      "slot": 8,
+      "item": "rocket_launcher",
+      "count": 1
+    },
+    {
+      "slot": 9,
+      "item": "hoe",
+      "count": 1
+    }
+  ],
+  "stats": {
+    "commands.protect": 1,
+    "xp": 2,
+    "items.used.chest": 1,
+    "distance.fallen": 1098,
+    "commands.give": 2,
+    "commands.tp": 3,
+    "teleports.tp": 3,
+    "time.played": 44,
+    "commands.setblock": 3,
+    "commands.fill": 9,
+    "sessions": 1
+  }
+}

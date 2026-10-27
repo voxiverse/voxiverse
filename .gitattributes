@@ -4,3 +4,4 @@
 tools/wireshark/*.lua text eol=lf
 assets/baselines/audio/*.decisions text eol=lf
 assets/baselines/audio/*.txt text eol=lf
+assets/fixtures/** -text
