@@ -7,6 +7,7 @@ import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 
 import "../common/game"
@@ -48,6 +49,84 @@ counters_free :: proc(m: ^Counters) {
 	for k in m {delete(k)}
 	delete(m^)
 	m^ = nil
+}
+
+// counters_write writes m as a JSON object, one counter a line indented by
+// indent (the object's own closing brace by indent less two spaces), the names
+// in order. Written by hand: the reflecting marshaller costs a
+// couple of microseconds a counter, and a character holds thousands.
+counters_write :: proc(b: ^strings.Builder, m: Counters, indent: string) {
+	strings.write_byte(b, '{')
+	names := make([]string, len(m), context.temp_allocator)
+	i := 0
+	for k in m {
+		names[i] = k
+		i += 1
+	}
+	slice.sort(names) // (a file is the same text whatever the map's order)
+	first := true
+	for k in names {
+		v := m[k]
+		strings.write_string(b, ",\n" if !first else "\n")
+		first = false
+		strings.write_string(b, indent)
+		strings.write_byte(b, '"')
+		for c in transmute([]u8)k {
+			switch {
+			case c == '"' || c == '\\':
+				strings.write_byte(b, '\\')
+				strings.write_byte(b, c)
+			case c < ' ':
+				fmt.sbprintf(b, "\\u%04x", c)
+			case:
+				strings.write_byte(b, c)
+			}
+		}
+		strings.write_string(b, `": `)
+		strings.write_u64(b, v)
+	}
+	if !first {
+		strings.write_byte(b, '\n')
+		strings.write_string(b, indent[:max(len(indent) - 2, 0)])
+	}
+	strings.write_byte(b, '}')
+}
+
+// counters_read reads the JSON object at the tokenizer (its opening brace
+// next) into heap counters; false, and nothing kept, when it is not one of
+// names and unsigned integers. end is where the object's last byte is.
+counters_read :: proc(t: ^json.Tokenizer) -> (m: Counters, end: int, ok: bool) {
+	if tok, err := json.get_token(t); err != .None || tok.kind != .Open_Brace {return}
+	defer if !ok {counters_free(&m)}
+	for first := true;; first = false {
+		tok, err := json.get_token(t)
+		if err != .None {return}
+		if tok.kind == .Close_Brace && first {return m, tok.offset + 1, true}
+		if !first {
+			if tok.kind == .Close_Brace {return m, tok.offset + 1, true}
+			if tok.kind != .Comma {return}
+			if tok, err = json.get_token(t); err != .None {return}
+		}
+		if tok.kind != .String {return}
+		key, kerr := json.unquote_string(tok, t.spec)
+		if kerr != .None {return}
+		if colon, cerr := json.get_token(t); cerr != .None || colon.kind != .Colon {
+			delete(key)
+			return
+		}
+		num, nerr := json.get_token(t)
+		n, parsed := strconv.parse_u64(num.text, 10)
+		if nerr != .None || num.kind != .Integer || !parsed {
+			delete(key)
+			return
+		}
+		if v, dup := &m[key]; dup {
+			v^ = n // (a name twice: the last stands)
+			delete(key)
+		} else {
+			m[key] = n
+		}
+	}
 }
 
 // counters_clone copies m (heap, keys owned).
@@ -174,16 +253,13 @@ STATS_FILE :: "stats.json"
 // write_stats keeps the world's totals (written atomically, with the rest of the save).
 write_stats :: proc(w: ^World) -> bool {
 	if w.dir == "" {return true}
-	data, err := json.marshal(
-		w.stats,
-		{pretty = true, use_spaces = true, spaces = 2, sort_maps_by_key = true},
-		context.temp_allocator,
-	)
-	if err != nil {return false}
+	b := strings.builder_make(context.temp_allocator)
+	counters_write(&b, w.stats, "  ")
+	strings.write_byte(&b, '\n')
 	return store_write(
 		w.server,
 		filepath.join({w.dir, STATS_FILE}, context.temp_allocator) or_else STATS_FILE,
-		data,
+		b.buf[:],
 	)
 }
 
@@ -193,12 +269,13 @@ load_stats :: proc(w: ^World) {
 	path := filepath.join({w.dir, STATS_FILE}, context.temp_allocator) or_else STATS_FILE
 	data, read_err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if read_err != nil {return}
-	loaded: map[string]u64
-	if err := json.unmarshal(data, &loaded, allocator = context.temp_allocator); err != nil {
+	t := json.make_tokenizer(string(data), parse_integers = true)
+	loaded, _, ok := counters_read(&t)
+	if !ok {
 		log.warnf("server world stats not understood path=%s", path)
 		return
 	}
-	w.stats = counters_clone(loaded)
+	w.stats = loaded
 }
 
 // stats_tick: what a player's tick adds up to: distance (centimetres,

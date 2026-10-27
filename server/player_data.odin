@@ -50,7 +50,6 @@ Player_File :: struct {
 	flying:   bool,
 	selected: int,
 	items:    []File_Stack,
-	stats:    map[string]u64, // counters (stats.odin)
 }
 
 @(private = "file")
@@ -151,8 +150,14 @@ player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 
 // player_parse reads a player file's JSON.
 player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
+	rest, stats, found, read := split_stats(data)
+	if !read {return}
 	f: Player_File
-	if err := json.unmarshal(data, &f, allocator = context.temp_allocator); err != nil {return}
+	if err := json.unmarshal(rest, &f, allocator = context.temp_allocator); err != nil {
+		if found {counters_free(&stats)}
+		return
+	}
+	defer if !ok {counters_free(&stats)}
 	if f.format < 1 || f.format > PLAYER_FILE_FORMAT {return}
 	for v in f.position {if !(abs(v) < game.WORLD_LIMIT) {return}}
 	if math.is_nan(f.look[0]) || math.is_nan(f.look[1]) {return}
@@ -165,7 +170,7 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 		if a, valid := game.address_parse(f.world, {}); valid {r.world = a}
 	}
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
-	r.stats = counters_clone(f.stats)
+	r.stats = stats
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
 		item, known := game.item_by_name(st.item)
@@ -230,14 +235,66 @@ player_json :: proc(r: ^Player_Record) -> []u8 {
 		flying   = r.state.flying,
 		selected = r.inventory.selected,
 		items    = items[:],
-		stats    = r.stats,
 	}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
 		context.temp_allocator,
 	)
-	return data
+	// The counters go in by hand, last (counters_write): thousands of them
+	// are too many for the reflecting marshaller.
+	b := strings.builder_make(0, len(data) + 64 * len(r.stats) + 32, context.temp_allocator)
+	strings.write_bytes(&b, data[:len(data) - 1]) // (without the closing brace)
+	strings.write_string(&b, ",\n  \"stats\": ")
+	counters_write(&b, r.stats, "    ")
+	strings.write_string(&b, "\n}")
+	return b.buf[:]
+}
+
+// split_stats takes the "stats" member out of a player file's JSON: the
+// counters, read by hand (counters_read), and the rest of the text, to be read
+// as the struct it is. found is false when there is no such member; read when
+// the file is JSON as far as it was looked at.
+split_stats :: proc(data: []u8) -> (rest: []u8, stats: Counters, found, read: bool) {
+	t := json.make_tokenizer(string(data), parse_integers = true)
+	depth := 0
+	prev := json.Token_Kind.Invalid
+	for {
+		tok, err := json.get_token(&t)
+		if tok.kind == .EOF {return data, {}, false, depth == 0}
+		if err != .None {return}
+		#partial switch tok.kind {
+		case .Open_Brace, .Open_Bracket:
+			depth += 1
+		case .Close_Brace, .Close_Bracket:
+			depth -= 1
+		case .String:
+			if depth == 1 && (prev == .Open_Brace || prev == .Comma) && tok.text == `"stats"` {
+				from := tok.offset
+				if colon, cerr := json.get_token(&t);
+				   cerr != .None || colon.kind != .Colon {return}
+				end: int
+				stats, end, read = counters_read(&t)
+				if !read {return}
+				// The text without the member, and the comma that went with it.
+				before := strings.trim_right_space(string(data[:from]))
+				after := strings.trim_left_space(string(data[end:]))
+				if strings.has_suffix(before, ",") && strings.has_prefix(after, "}") {
+					before = before[:len(before) - 1]
+				} else if strings.has_suffix(before, "{") && strings.has_prefix(after, ",") {
+					after = after[1:]
+				}
+				return transmute([]u8)strings.concatenate(
+						{before, " ", after},
+						context.temp_allocator,
+					),
+					stats,
+					true,
+					true
+			}
+		}
+		prev = tok.kind
+	}
 }
 
 // keep_player stores a playing client's player under its name (when it
