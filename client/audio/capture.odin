@@ -43,7 +43,7 @@ import "core:time"
 // debugging artifact, not a save format.
 
 CAPTURE_MAGIC :: [4]u8{'V', 'X', 'A', 'C'}
-CAPTURE_VERSION :: 3
+CAPTURE_VERSION :: 4
 CAPTURE_MAX_RECORDS :: 1 << 24
 CAPTURE_RING_SNAPS :: 6 // states kept by a rolling capture
 CAPTURE_SNAP_SECONDS :: 15 // between two of them: the window a dump covers is 4 to 5 times this
@@ -110,7 +110,8 @@ Capture_Header :: struct #packed {
 Capture_Sound :: struct #packed {
 	length:   u64, // samples, or bytes of a stream's file
 	rate:     u32,
-	stream:   u32,
+	stream:   u16, // 1: a stream (length: bytes of its file)
+	channels: u16, // 1 or 2 (a stream's, or a memory sound's: its right channel is in the checksum)
 	checksum: u64,
 	name:     [SOUND_NAME_LEN]u8,
 }
@@ -302,9 +303,13 @@ capture_command :: proc "contextless" (c: ^Capture, frame: u64, cmd: Command) {
 @(private)
 sound_checksum :: proc(s: Sound, st: ^Stream) -> Capture_Sound {
 	if st != nil {
-		return {u64(len(st.data)), st.rate, 1, hash.fnv64a(st.data), {}}
+		return {u64(len(st.data)), st.rate, 1, u16(st.channels), hash.fnv64a(st.data), {}}
 	}
-	return {u64(len(s.samples)), s.rate, 0, hash.fnv64a(slice.to_bytes(s.samples)), {}}
+	sum := hash.fnv64a(slice.to_bytes(s.samples))
+	if s.right != nil {
+		return {u64(len(s.samples)), s.rate, 0, 2, hash.fnv64a(slice.to_bytes(s.right), sum), {}}
+	}
+	return {u64(len(s.samples)), s.rate, 0, 1, sum, {}}
 }
 
 // capture_encode: the file's bytes for what c holds, with the sound table of m

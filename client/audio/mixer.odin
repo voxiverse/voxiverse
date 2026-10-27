@@ -45,11 +45,14 @@ Sound_Id :: distinct u16
 // dropped). Low 8 bits the slot, the rest its generation.
 Voice_Id :: distinct u32
 
-// Sound: mono samples (-1..1) at their own rate; owned by whoever
-// registered them, unchanged while the mixer may play them.
+// Sound: samples (-1..1) at their own rate; owned by whoever registered them,
+// unchanged while the mixer may play them. `right` (nil: mono) is the right
+// channel of a stereo sound (music), as long as `samples`, the left; a stereo
+// voice is never panned: its gain is the left's and the right's own.
 Sound :: struct {
 	samples: []f32,
 	rate:    u32,
+	right:   []f32,
 }
 
 // Play: one sound. gain: left and right (spatial position and loudness, see
@@ -116,6 +119,7 @@ Mixer :: struct {
 	probe:      proc "contextless" (m: ^Mixer, user: rawptr, n: int), // offline analysis: called after each block (analyze.odin); nil in the game
 	probe_user: rawptr,
 	stage:      [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
+	stage_r:    [STREAM_STAGE]f32, // ... the right channel of a two-channel stream
 	// The return ring: the other way round.
 	events:     [EVENT_RING]Voice_Event,
 	ev_write:   u32, // (atomic)
@@ -226,6 +230,7 @@ Voice :: struct {
 	cutoff:     f32, // Hz wanted (open = rate / 2.2)
 	cutoff_now: f32,
 	filter:     Svf,
+	filter_r:   Svf, // the right channel's, of a stereo sound
 	key:        f32, // scratch: audibility
 }
 
@@ -310,6 +315,7 @@ mixer_init :: proc(m: ^Mixer, rate: u32) {
 // add_sound registers a sound (before the device starts); its id plays it.
 add_sound :: proc(m: ^Mixer, s: Sound) -> Sound_Id {
 	assert(m.count < MAX_SOUNDS && s.rate > 0)
+	assert(s.right == nil || len(s.right) == len(s.samples))
 	m.sounds[m.count] = s
 	m.count += 1
 	return Sound_Id(m.count - 1)
@@ -559,7 +565,12 @@ mix_block :: proc "contextless" (m: ^Mixer, out: []f32, n: int) -> (guarded: u32
 	}
 	meter_push(&m.meter, out)
 	if m.probe != nil {m.probe(m, m.probe_user, n)}
-	for &v in m.voices {if v.state == .Playing {svf_flush(&v.filter)}}
+	for &v in m.voices {
+		if v.state == .Playing {
+			svf_flush(&v.filter)
+			svf_flush(&v.filter_r)
+		}
+	}
 	return
 }
 
@@ -679,6 +690,7 @@ render_voice :: proc "contextless" (
 	guarded: u32,
 ) {
 	s := m.sounds[v.sound].samples
+	sr := m.sounds[v.sound].right
 	last := len(s) - 1
 	looping := v.loop
 	// A stream voice reads a window of its ring copied into the stage: s is
@@ -690,6 +702,7 @@ render_voice :: proc "contextless" (
 	if st != nil {
 		avail, last, base = stream_window(m, st, v, n)
 		s = m.stage[:]
+		sr = m.stage_r[:] if st.channels == 2 else nil
 		looping = false
 		v.step = min(v.step, SINC_MAX_STEP)
 		v.step_to = min(v.step_to, SINC_MAX_STEP)
@@ -716,6 +729,7 @@ render_voice :: proc "contextless" (
 	}
 	if v.cutoff_now < f32(m.rate) / 2.4 {
 		svf_set(&v.filter, f64(v.cutoff_now), 0.7071, f64(m.rate))
+		if sr != nil {svf_set(&v.filter_r, f64(v.cutoff_now), 0.7071, f64(m.rate))}
 		filtering = true
 	}
 	// The voice's own state in locals for the loop (the compiler cannot keep
@@ -742,33 +756,51 @@ render_voice :: proc "contextless" (
 		}
 		rel := pos - base
 		i := int(rel)
-		x: f32
-		if !cheap {
-			if fast_sinc &&
-			   i >= SINC_HALF - 1 &&
-			   i + SINC_HALF <= (loop_end - 1 if looping else slast) {
-				x = sinc_fast(&m.sinc, s, rel)
-			} else {
-				x = sinc_read(&m.sinc, s, rel, step, loop_start, loop_end, looping)
-			}
-		} else if looping && (i < 1 || i + 2 >= loop_end) {
-			x = cubic(
-				s[wrap(i - 1, last, v)],
-				s[wrap(i, last, v)],
-				s[wrap(i + 1, last, v)],
-				s[wrap(i + 2, last, v)],
-				f32(rel - f64(i)),
+		x := voice_read(
+			m,
+			v,
+			s,
+			rel,
+			i,
+			step,
+			cheap,
+			fast_sinc,
+			looping,
+			loop_start,
+			loop_end,
+			slast,
+			last,
+		)
+		xr: f32
+		if sr != nil {
+			xr = voice_read(
+				m,
+				v,
+				sr,
+				rel,
+				i,
+				step,
+				cheap,
+				fast_sinc,
+				looping,
+				loop_start,
+				loop_end,
+				slast,
+				last,
 			)
-		} else if looping {
-			x = cubic(s[i - 1], s[i], s[i + 1], s[i + 2], f32(rel - f64(i)))
-		} else {
-			x = cubic(s[max(i - 1, 0)], s[i], s[i + 1], s[min(i + 2, slast)], f32(rel - f64(i)))
+			if !(abs(xr) <= 1e6) {
+				xr = 0
+				guarded += 1
+			}
 		}
 		if !(abs(x) <= 1e6) { 	// (also true for NaN)
 			x = 0
 			guarded += 1
 		}
-		if filtering {x = svf_lowpass(&v.filter, x)}
+		if filtering {
+			x = svf_lowpass(&v.filter, x)
+			if sr != nil {xr = svf_lowpass(&v.filter_r, xr)}
+		}
 		if fade_step != 0 {
 			fade += fade_step
 			if (fade_step > 0 && fade >= v.fade_to) || (fade_step < 0 && fade <= v.fade_to) {
@@ -781,8 +813,13 @@ render_voice :: proc "contextless" (
 			}
 		}
 		x *= fade
-		buf[2 * f] += x * gl
-		buf[2 * f + 1] += x * gr
+		if sr != nil {
+			buf[2 * f] += x * gl
+			buf[2 * f + 1] += xr * fade * gr
+		} else {
+			buf[2 * f] += x * gl
+			buf[2 * f + 1] += x * gr
+		}
 		gl += dg[0]
 		gr += dg[1]
 		pos += step
@@ -799,6 +836,45 @@ render_voice :: proc "contextless" (
 			sync.atomic_add(&st.underruns, 1)
 			sync.atomic_add(&m.stats.underruns, 1)
 		}
+	}
+	return
+}
+
+// voice_read: one channel of a voice at `rel` (its position less the
+// stage's base): the cubic where it is as good as the sinc, else the sinc.
+@(private)
+voice_read :: #force_inline proc "contextless" (
+	m: ^Mixer,
+	v: ^Voice,
+	s: []f32,
+	rel: f64,
+	i: int,
+	step: f64,
+	cheap, fast_sinc, looping: bool,
+	loop_start, loop_end, slast, last: int,
+) -> (
+	x: f32,
+) {
+	if !cheap {
+		if fast_sinc &&
+		   i >= SINC_HALF - 1 &&
+		   i + SINC_HALF <= (loop_end - 1 if looping else slast) {
+			x = sinc_fast(&m.sinc, s, rel)
+		} else {
+			x = sinc_read(&m.sinc, s, rel, step, loop_start, loop_end, looping)
+		}
+	} else if looping && (i < 1 || i + 2 >= loop_end) {
+		x = cubic(
+			s[wrap(i - 1, last, v)],
+			s[wrap(i, last, v)],
+			s[wrap(i + 1, last, v)],
+			s[wrap(i + 2, last, v)],
+			f32(rel - f64(i)),
+		)
+	} else if looping {
+		x = cubic(s[i - 1], s[i], s[i + 1], s[i + 2], f32(rel - f64(i)))
+	} else {
+		x = cubic(s[max(i - 1, 0)], s[i], s[i + 1], s[min(i + 2, slast)], f32(rel - f64(i)))
 	}
 	return
 }

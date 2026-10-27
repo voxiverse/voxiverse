@@ -6,10 +6,8 @@ bus Effects integrated -31.0 true_peak -12.3 range 0.9
 bands Effects -61.38 -56.05 -53.57 -53.21 -53.54 -55.01 -55.88 -49.66 -46.19 -48.37 -51.70 -50.79 -50.93 -52.27 -53.55 -53.37 -53.83 -54.96 -56.49 -58.20 -63.38 -71.11 -80.65 -93.08
 bus Ambience integrated -32.8 true_peak -23.1 range 0.6
 bands Ambience -65.46 -66.13 -67.66 -69.57 -69.30 -66.26 -64.11 -62.98 -59.68 -59.70 -59.74 -58.48 -58.09 -57.45 -56.39 -54.90 -53.19 -52.22 -51.49 -52.06 -54.07 -58.86 -67.38 -100.09
-bus Music integrated -35.6 true_peak -29.4 range 0.7
+bus Music integrated -32.5 true_peak -29.0 range 0.6
 bands Music -96.08 -94.93 -93.89 -92.74 -91.52 -90.12 -88.46 -86.28 -82.69 -46.41 -75.48 -46.40 -81.18 -89.92 -94.68 -98.58 -102.15 -105.46 -108.56 -111.63 -114.61 -117.49 -120.30 -122.90
-bus Master integrated -28.0 true_peak -12.7 range 0.7
+bus Master integrated -27.3 true_peak -12.2 range 0.5
 bands Master -59.93 -55.39 -53.53 -53.26 -53.49 -54.75 -55.68 -49.52 -46.02 -44.13 -50.97 -45.03 -50.19 -51.20 -52.03 -51.10 -50.63 -50.47 -50.18 -51.06 -53.63 -58.64 -67.20 -92.73
-checksum Linux.Minimal f2cdc5b679a0e823
-checksum Darwin.Minimal 85543f23c35e99c7
-checksum Windows.Minimal b7d957a88b3ffc62
+checksum Linux.Minimal 5d64f6bb7933c56f

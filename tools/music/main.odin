@@ -4,21 +4,25 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
 import "core:strings"
 
 import "../../client/audio"
 
 MUSIC_DIR :: "assets/music"
-WORK_DIR :: "build/music"
+WORK_DIR :: "build/music-out" // (build/music is the tool itself)
 
 // Renders the scores and MIDI files of assets/music to Ogg Vorbis through a
 // soundfont, with a metadata file beside each:
 //
 //	build music [<name>...] [--force] [--wav <dir>] [--midi]
+//	build music --audition <name> [--from <seconds>]
 //
 //	--force     render every piece, not only those whose source or soundfont changed
 //	--wav <dir> keep each piece's float master as a WAV
-//	--midi      write build/music/<name>.mid from each score, to open in a notation editor
+//	--midi      write build/music-out/<name>.mid from each score, to open in a notation editor
+//	--audition  play assets/music/<name>.ogg on the default device (looping if its .json says
+//	            so) until Enter is pressed; --from starts that many seconds in
 //
 // VX_SOUNDFONT=/path/file.sf2 renders with that soundfont.
 main :: proc() {
@@ -26,9 +30,25 @@ main :: proc() {
 	force, midi := false, false
 	wav_dir: string
 	names: [dynamic]string
+	audition: string
+	from: f32
 	args := os.args[1:]
 	for i := 0; i < len(args); i += 1 {
 		switch args[i] {
+		case "--audition", "--from":
+			i += 1
+			if i >= len(args) {
+				fmt.eprintfln("music: %s needs a value", args[i - 1])
+				os.exit(2)
+			}
+			if args[i - 1] == "--audition" {
+				audition = args[i]
+			} else if v, ok := strconv.parse_f32(args[i]); ok && v >= 0 {
+				from = v
+			} else {
+				fmt.eprintfln("music: --from wants seconds, not '%s'", args[i])
+				os.exit(2)
+			}
 		case "--force":
 			force = true
 		case "--midi":
@@ -47,6 +67,10 @@ main :: proc() {
 			}
 			append(&names, args[i])
 		}
+	}
+	if audition != "" {
+		if !play_audition(audition, from) {os.exit(1)}
+		return
 	}
 	if !run(names[:], force, midi, wav_dir) {os.exit(1)}
 }
@@ -205,4 +229,51 @@ up_to_date :: proc(json_path, ogg_path, src_sha, sf_sha: string) -> bool {
 	d: Done
 	if json.unmarshal(data, &d) != nil {return false}
 	return d.source_sha256 == src_sha && d.soundfont_sha256 == sf_sha
+}
+
+// play_audition plays a rendered piece on the default device, on the Music
+// bus, until Enter is pressed.
+play_audition :: proc(name: string, from: f32) -> bool {
+	ogg, err := os.read_entire_file_from_path(
+		strings.concatenate({MUSIC_DIR, "/", name, ".ogg"}),
+		context.allocator,
+	)
+	if err != nil {
+		fmt.eprintfln("music: no %s/%s.ogg (build music %s first)", MUSIC_DIR, name, name)
+		return false
+	}
+	Info :: struct {
+		loop: bool,
+	}
+	info: Info
+	if js, jerr := os.read_entire_file_from_path(
+		strings.concatenate({MUSIC_DIR, "/", name, ".json"}),
+		context.allocator,
+	); jerr == nil {
+		json.unmarshal(js, &info)
+	}
+	m := new(audio.Mixer)
+	audio.mixer_init(m, audio.DEVICE_RATE)
+	id, ok := audio.add_stream(m, ogg, loop = info.loop, start = from)
+	if !ok {
+		fmt.eprintfln("music: %s.ogg does not decode", name)
+		return false
+	}
+	dev: audio.Device
+	if !audio.device_open(&dev, m) {
+		fmt.eprintln("music: no audio device")
+		return false
+	}
+	audio.play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music})
+	fmt.printfln(
+		"music: playing %s%s from %.1f s; press Enter to stop",
+		name,
+		" (looping)" if info.loop else "",
+		from,
+	)
+	key: [1]u8
+	os.read(os.stdin, key[:])
+	audio.device_close(&dev)
+	audio.streams_close(m)
+	return true
 }

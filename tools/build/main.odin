@@ -187,7 +187,7 @@ usage :: proc() {
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
 	fmt.println(
-		"  music     render assets/music/*.score|*.mid to Ogg (--force, --wav <dir>, --midi)",
+		"  music     render assets/music/*.score|*.mid to Ogg (--force, --wav <dir>, --midi, --audition <name> [--from <s>])",
 	)
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",

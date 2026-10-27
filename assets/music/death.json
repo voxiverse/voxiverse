@@ -1,0 +1,22 @@
+{
+  "title": "Death",
+  "source": "death.score",
+  "source_sha256": "71a7a433e70cf2eda846b62cd472b56a145c81572ac036dfb8951135bcccace5",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 264610,
+  "seconds": 5.513,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.0,
+  "true_peak_db": -3.375,
+  "key": "a aeolian",
+  "tempo": 76,
+  "mood": ["stinger"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

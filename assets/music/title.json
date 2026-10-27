@@ -1,0 +1,22 @@
+{
+  "title": "Voxiverse",
+  "source": "title.score",
+  "source_sha256": "ed1722db02aff213fd266fb46afcb6620a2dbed595ed52cb30889bac59d67af1",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 5585455,
+  "seconds": 116.364,
+  "loop": true,
+  "loop_start": 0,
+  "loop_end": 5585455,
+  "lufs": -20.0,
+  "true_peak_db": -2.728,
+  "key": "f major",
+  "tempo": 66,
+  "mood": ["calm"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

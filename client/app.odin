@@ -35,6 +35,7 @@ SYMBOL_FONT_DATA :: #load("../assets/fonts/noto_sans_old_turkic_regular.ttf")
 Screen :: enum u8 {
 	Title,
 	Options,
+	Credits,
 	Worlds,
 	Multiplayer,
 	Game, // a session exists
@@ -79,6 +80,7 @@ App :: struct {
 	bench:            Bench, // the scenario running (benchmark.odin)
 	stars:            Starfield, // the menus' background (starfield.odin)
 	failed:           Failed, // the Failed screen's (loading.odin)
+	credits:          Credits_View, // the Credits screen's scroll (credits.odin)
 	options:          Options_View, // the Options screen's tab and state (options.odin)
 	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
 	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved

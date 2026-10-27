@@ -124,7 +124,7 @@ resample_sound :: proc(s: Sound, rate: u32, allocator := context.allocator) -> S
 	if s.rate == rate {
 		out := make([]f32, len(s.samples), allocator)
 		copy(out, s.samples)
-		return {out, rate}
+		return {samples = out, rate = rate}
 	}
 	table := new(Sinc_Table, context.temp_allocator)
 	sinc_table_init(table)
@@ -134,5 +134,5 @@ resample_sound :: proc(s: Sound, rate: u32, allocator := context.allocator) -> S
 	for i in 0 ..< n {
 		out[i] = sinc_read(table, s.samples, f64(i) * step, step, 0, 0, false)
 	}
-	return {out, rate}
+	return {samples = out, rate = rate}
 }

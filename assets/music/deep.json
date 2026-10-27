@@ -1,0 +1,22 @@
+{
+  "title": "Deep",
+  "source": "deep.score",
+  "source_sha256": "b77030eff0d61ecbbfcbf36b1de54e087cfd151528dae23ebb8302d4f72dac06",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 10548684,
+  "seconds": 219.764,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.693,
+  "true_peak_db": -1.0,
+  "key": "d phrygian",
+  "tempo": 44,
+  "mood": ["ambient", "dark"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["cave"],
+  "worlds": ["home"]
+}

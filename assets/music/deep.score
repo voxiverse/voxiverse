@@ -1,0 +1,48 @@
+title "Deep"
+tempo 44
+meter 4/4
+key d phrygian
+mood ambient dark
+place any
+time any
+depth cave
+worlds home
+loop no
+seed 37
+humanize timing 12 ms velocity 6
+reverb 5.5 s 0.65
+instrument piano preset 0:0
+
+part pad piano volume -4 dB pan -0.25
+  | pp ped r:q d2:q f2:q a2:q | r:w | r:q f2:q a2:q d3:q | r:w unped |
+  | ped r:q d#2:q g2:q a#2:q | r:w | r:q g2:q a#2:q d#3:q | r:w unped |
+  | ped r:q d2:q f2:q a2:q | r:w | r:q f2:q a2:q d3:q | r:w unped |
+  | ped r:q c3:q d#3:q g3:q | r:w | r:q d#3:q g3:q c4:q | r:w unped |
+  | ped r:q d2:q f2:q a2:q | r:w | r:q f2:q a2:q d3:q | r:w unped |
+  | ped r:q a2:q c3:q d#3:q | r:w | r:q c3:q d#3:q a3:q | r:w unped |
+  | ped r:q d#2:q g2:q a#2:q | r:w | r:q g2:q a#2:q d#3:q | r:w unped |
+  | ped r:q d2:q f2:q a2:q | r:w | r:q f2:q a2:q d3:q | r:w unped |
+  | ped r:q d2:q f2:q a2:q | r:w | r:q f2:q a2:q d3:q | r:w unped |
+  | ped r:q d#2:q g2:q a#2:q | r:w | r:q g2:q a#2:q d#3:q | r:w unped |
+part low piano volume -10 dB pan 0.0
+  | pp d2:w | r:w | r:w | r:w |
+  | d#2:w | r:w | r:w | r:w |
+  | d2:w | r:w | r:w | r:w |
+  | c3:w | r:w | r:w | r:w |
+  | d2:w | r:w | r:w | r:w |
+  | a2:w | r:w | r:w | r:w |
+  | d#2:w | r:w | r:w | r:w |
+  | d2:w | r:w | r:w | r:w |
+  | d2:w | r:w | r:w | r:w |
+  | d#2:w | r:w | r:w | r:w |
+part bells piano volume 0 dB pan 0.3
+  | p ped r:q a2:h. unped | ped r:w unped | ped r:w unped | ped r:q d3:h. unped |
+  | ped r:w unped | ped r:w unped | ped r:w unped | ped a#2:w unped |
+  | ped r:h. a3:q unped | ped r:h d#3:h unped | ped r:q g3:h. unped | ped r:q a3:h. unped |
+  | ped a#3:h. f4:q unped | ped r:h g4:h unped | ped r:q g4:h. unped | ped r:q c4:h. unped |
+  | ped r:w unped | ped g3:w unped | ped d#3:w unped | ped c3:h. r:q unped |
+  | ped r:h. a#3:q unped | ped r:h a3:h unped | ped r:q d#3:h. unped | ped r:w unped |
+  | ped a3:w unped | ped r:q a#2:h. unped | ped a3:w unped | ped r:q f3:h f3:q unped |
+  | ped r:w unped | ped r:q g3:h r:q unped | ped r:h. d3:q unped | ped r:h. g3:q unped |
+  | ped r:h. a2:q unped | ped r:q d#3:h. unped | ped r:h a3:h unped | ped r:q a3:h. unped |
+  | ped r:h a3:h unped | ped a#3:w unped | ped a3:h. r:q unped | ped a#3:h r:h unped |

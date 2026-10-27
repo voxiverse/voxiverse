@@ -23,8 +23,8 @@ test_analysis_names_decisions :: proc(t: ^testing.T) {
 	loud := tone_sound(1, 300, 0.05)
 	short := tone_sound(0.1, 500, 0.05)
 	defer {delete(loud); delete(short)}
-	a_id := add_sound(m, {loud, 48000})
-	b_id := add_sound(m, {short, 48000})
+	a_id := add_sound(m, {samples = loud, rate = 48000})
+	b_id := add_sound(m, {samples = short, rate = 48000})
 	set_sound_name(m, a_id, "loud")
 	stream, ok := add_stream(m, TONE, loop = true, crossfade = 0.1, inline = true)
 	defer streams_close(m)
@@ -56,8 +56,8 @@ test_analysis_names_decisions :: proc(t: ^testing.T) {
 	r := new(Mixer)
 	defer free(r)
 	mixer_init(r, 48000)
-	add_sound(r, {loud, 48000})
-	add_sound(r, {short, 48000})
+	add_sound(r, {samples = loud, rate = 48000})
+	add_sound(r, {samples = short, rate = 48000})
 	_, ok = add_stream(r, TONE, loop = true, crossfade = 0.1, inline = true)
 	defer streams_close(r)
 	an: Analysis
@@ -88,7 +88,7 @@ test_analysis_loudness_matches_meter :: proc(t: ^testing.T) {
 	mixer_init(m, 48000)
 	x := tone_sound(3, 997, 0.25)
 	defer delete(x)
-	id := add_sound(m, {x, 48000})
+	id := add_sound(m, {samples = x, rate = 48000})
 	an: Analysis
 	defer analysis_destroy(&an)
 	analysis_attach(m, &an, {.Master, .World})
@@ -134,7 +134,7 @@ test_baseline_roundtrip_and_compare :: proc(t: ^testing.T) {
 		mixer_init(m, 48000)
 		x := tone_sound(1, 700, 0.3)
 		defer delete(x)
-		id := add_sound(m, {x, 48000})
+		id := add_sound(m, {samples = x, rate = 48000})
 		an: Analysis
 		defer analysis_destroy(&an)
 		analysis_attach(m, &an, BASELINE_BUSES)

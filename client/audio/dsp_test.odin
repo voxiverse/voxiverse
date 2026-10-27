@@ -154,7 +154,7 @@ test_mixer_limits_and_meters :: proc(t: ^testing.T) {
 	hot := make([]f32, 48000)
 	defer delete(hot)
 	for &x, i in hot {x = 0.9 * f32(math.sin(2 * math.PI * 997 * f64(i) / 48000))}
-	id := add_sound(m, {hot, 48000})
+	id := add_sound(m, {samples = hot, rate = 48000})
 	for _ in 0 ..< 8 {play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music, loop = true})}
 	out := make([]f32, 2 * 480)
 	defer delete(out)

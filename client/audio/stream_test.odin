@@ -28,19 +28,24 @@ mix_frames :: proc(m: ^Mixer, frames: int, block := 480) -> []f32 {
 	return out
 }
 
-// reference: the file decoded in one go by a decoder of its own (mono).
+// reference: the file decoded in one go by a decoder of its own (two channels).
 @(private = "file")
-reference :: proc() -> []f32 {
-	cfg := ma.decoder_config_init(.f32, 1, 0)
+reference :: proc() -> (left, right: []f32) {
+	cfg := ma.decoder_config_init(.f32, 2, 0)
 	d: ma.decoder
 	assert(ma.decoder_init_memory(raw_data(TONE), uint(len(TONE)), &cfg, &d) == .SUCCESS)
 	defer ma.decoder_uninit(&d)
 	n: u64
 	ma.decoder_get_length_in_pcm_frames(&d, &n)
-	out := make([]f32, n)
+	both := make([]f32, 2 * n)
+	defer delete(both)
 	got: u64
-	ma.decoder_read_pcm_frames(&d, raw_data(out), n, &got)
-	return out[:got]
+	ma.decoder_read_pcm_frames(&d, raw_data(both), n, &got)
+	left, right = make([]f32, got), make([]f32, got)
+	for i in 0 ..< int(got) {
+		left[i], right[i] = both[2 * i], both[2 * i + 1]
+	}
+	return
 }
 
 @(private = "file")
@@ -54,8 +59,9 @@ max_diff :: proc(a, b: []f32) -> f32 {
 // where the file does; an inline stream (no thread) and a threaded one agree.
 @(test)
 test_stream_equals_decode :: proc(t: ^testing.T) {
-	ref := reference()
+	ref, ref_r := reference()
 	defer delete(ref)
+	defer delete(ref_r)
 	for inline in ([]bool{true, false}) {
 		m := new_mixer(44100)
 		defer free(m)
@@ -86,13 +92,19 @@ test_stream_equals_decode :: proc(t: ^testing.T) {
 		// (the last sample is not played, as with any sound)
 		left := make([]f32, len(ref) - 1)
 		defer delete(left)
-		for i in 0 ..< len(left) {left[i] = out[2 * (i + late)]}
+		right := make([]f32, len(left))
+		defer delete(right)
+		for i in 0 ..< len(left) {
+			left[i] = out[2 * (i + late)]
+			right[i] = out[2 * (i + late) + 1]
+		}
 		testing.expectf(
 			t,
-			max_diff(left, ref) < 1e-5,
-			"inline=%v: differs by %v",
+			max_diff(left, ref) < 1e-5 && max_diff(right, ref_r) < 1e-5,
+			"inline=%v: differs by %v, %v",
 			inline,
 			max_diff(left, ref),
+			max_diff(right, ref_r),
 		)
 		testing.expect_value(t, stream_underruns(m, id), 0)
 		e, got := poll(m)
@@ -211,8 +223,9 @@ test_stream_rejects_garbage :: proc(t: ^testing.T) {
 // counted, the voice holds its place and goes on from it.
 @(test)
 test_stream_starved_decoder :: proc(t: ^testing.T) {
-	ref := reference()
+	ref, ref_r := reference()
 	defer delete(ref)
+	defer delete(ref_r)
 	m := new_mixer(44100)
 	defer free(m)
 	id, ok := add_stream(m, TONE)
@@ -249,9 +262,10 @@ test_stream_starved_decoder :: proc(t: ^testing.T) {
 		time.sleep(2 * time.Millisecond)
 	}
 	testing.expect(t, !alive(m, v), "it finished")
-	// The mixed part, the dry part and the rest: the file's energy, in two ears, once.
+	// The mixed part, the dry part and the rest: the file's energy, once.
 	want: f64
-	for x in ref {want += 2 * f64(x) * f64(x)}
+	for x in ref {want += f64(x) * f64(x)}
+	for x in ref_r {want += f64(x) * f64(x)}
 	testing.expectf(t, abs(energy / want - 1) < 0.01, "energy %v of %v", energy, want)
 }
 
@@ -265,4 +279,93 @@ test_denormals_flushed :: proc(t: ^testing.T) {
 		testing.expect_value(t, x, 0)
 	}
 	_ = math.PI
+}
+
+// goertzel: the amplitude of `freq` in x[from:to] (a Hann window).
+@(private = "file")
+goertzel :: proc(x: []f32, stride, offset, from, to: int, freq, rate: f64) -> f64 {
+	re, im, wsum: f64
+	n := to - from
+	for i in 0 ..< n {
+		w := 0.5 - 0.5 * math.cos(2 * math.PI * f64(i) / f64(n))
+		a := 2 * math.PI * freq * f64(i) / rate
+		v := f64(x[(from + i) * stride + offset]) * w
+		re += v * math.cos(a)
+		im += v * math.sin(a)
+		wsum += w
+	}
+	return 2 * math.sqrt(re * re + im * im) / wsum
+}
+
+// A two-channel stream keeps its channels: 440 Hz stays on the left and
+// 660 Hz on the right, each other's tone at least 60 dB down.
+@(test)
+test_stream_stereo_channels :: proc(t: ^testing.T) {
+	for inline in ([]bool{true, false}) {
+		m := new_mixer(48000)
+		defer free(m)
+		id, ok := add_stream(m, TONE, inline = inline)
+		defer streams_close(m)
+		testing.expect(t, ok)
+		testing.expect_value(t, m.streams[id].channels, 2)
+		if !inline {
+			for i := 0;
+			    i < 500 && sync_written(m, id) < 20000;
+			    i += 1 {time.sleep(time.Millisecond)}
+		}
+		play(m, {sound = id, gain = {1, 1}, pitch = 1})
+		frames := 48000
+		out := make([]f32, 2 * frames)
+		defer delete(out)
+		for at := 0; at < frames; at += 480 {
+			mix(m, out[2 * at:][:2 * 480])
+			if !inline {time.sleep(2 * time.Millisecond)}
+		}
+		from, to := 24000, 48000 - 2400 // past the limiter's delay
+		l440 := goertzel(out, 2, 0, from, to, 440, 48000)
+		l660 := goertzel(out, 2, 0, from, to, 660, 48000)
+		r440 := goertzel(out, 2, 1, from, to, 440, 48000)
+		r660 := goertzel(out, 2, 1, from, to, 660, 48000)
+		testing.expectf(t, l440 > 0.01 && r660 > 0.01, "tones %v %v", l440, r660)
+		testing.expectf(t, 20 * math.log10(l440 / l660) > 60, "left: %v vs %v", l440, l660)
+		testing.expectf(t, 20 * math.log10(r660 / r440) > 60, "right: %v vs %v", r660, r440)
+		testing.expect_value(t, stream_underruns(m, id), 0)
+	}
+}
+
+// A stereo memory sound looped is seamless, and a stereo voice is not panned
+// by anything but its own gain: each channel keeps its own samples.
+@(test)
+test_stereo_sound_loop :: proc(t: ^testing.T) {
+	m := new_mixer(48000)
+	defer free(m)
+	n := 4800 // 10 whole cycles of 100 Hz and 200 Hz
+	l, r := make([]f32, n), make([]f32, n)
+	defer delete(l)
+	defer delete(r)
+	for i in 0 ..< n {
+		l[i] = 0.5 * f32(math.sin(2 * math.PI * 100 * f64(i) / 48000))
+		r[i] = 0.5 * f32(math.sin(2 * math.PI * 200 * f64(i) / 48000))
+	}
+	id := add_sound(m, {samples = l, rate = 48000, right = r})
+	play(m, {sound = id, gain = {1, 1}, pitch = 1, loop = true})
+	frames := 48000
+	out := mix_frames(m, frames)
+	defer delete(out)
+	from, to := 9600, 48000 - 2400
+	// Whole windows of the loop: the tone's amplitude through several wraps.
+	testing.expect(t, goertzel(out, 2, 0, from, to, 100, 48000) > 0.4)
+	testing.expect(t, goertzel(out, 2, 1, from, to, 200, 48000) > 0.4)
+	testing.expect(t, goertzel(out, 2, 0, from, to, 200, 48000) < 0.005)
+	testing.expect(t, goertzel(out, 2, 1, from, to, 100, 48000) < 0.005)
+	// No seam: no sample-to-sample step far past the tones' own (the loop wraps 10 times).
+	worst: f32
+	for i in from ..< to - 1 {
+		worst = max(
+			worst,
+			abs(out[2 * (i + 1)] - out[2 * i]),
+			abs(out[2 * (i + 1) + 1] - out[2 * i + 1]),
+		)
+	}
+	testing.expectf(t, worst < 0.03, "step %v", worst)
 }

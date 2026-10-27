@@ -12,8 +12,9 @@ import ma "vendor:miniaudio"
 // voices as everything else.
 //
 // A stream is registered like a sound (add_stream) and has one voice at a
-// time: the decoder writes mono samples (the channels averaged) at the file's
-// rate into a ring, the mixer reads them where a memory voice reads its
+// time: the decoder writes the file's samples (one channel, or two: a file of
+// more is mixed down to two) at its rate into a ring (a second ring for the
+// right channel), the mixer reads them where a memory voice reads its
 // samples (through the same sinc, so pitch, filters, buses and fades are
 // shared), and tells the decoder how far it has read so the ring refills.
 // When the voice ends the mixer asks the decoder to start over (an epoch
@@ -38,9 +39,11 @@ Stream :: struct {
 	loop:      bool,
 	crossfade: int, // frames of the loop's equal-power crossfade
 	rate:      u32, // the file's
+	channels:  u8, // 1 or 2
 	length:    int, // frames in the file
 	inline:    bool, // decoded by the mixer, in `mix`, not by a thread
 	ring:      [STREAM_RING]f32,
+	ring_r:    [STREAM_RING]f32, // the right channel (a two-channel stream)
 	// Decoder to mixer (atomic):
 	written:   u64, // samples written this epoch
 	have:      u32, // the epoch the ring holds
@@ -69,13 +72,16 @@ Decoder :: struct {
 	since:   int, // frames produced since the file was last rewound
 	head:    []f32, // the file's first `crossfade` frames
 	tail:    []f32, // the blend, being handed out
+	head_r:  []f32, // the same, right channel
+	tail_r:  []f32,
 	tail_at: int,
 	broken:  bool, // the file stopped giving samples: treated as ended
 }
 
 // add_stream registers an Ogg Vorbis file (the whole file, in memory) as a
 // sound: its id plays it, one voice at a time. A looping stream crossfades its
-// end into its start over `crossfade` seconds (at most a quarter of it).
+// end into its start over `crossfade` seconds (at most a quarter of it); `start`
+// seconds into the file is where the first pass begins (an audition).
 // Before the device starts; close with streams_close. ok is false (and the
 // reason logged) for a file that cannot be decoded.
 add_stream :: proc(
@@ -84,6 +90,7 @@ add_stream :: proc(
 	loop := false,
 	crossfade: f32 = 0,
 	inline := false,
+	start: f32 = 0,
 	allocator := context.allocator,
 ) -> (
 	id: Sound_Id,
@@ -92,11 +99,14 @@ add_stream :: proc(
 	assert(m.count < MAX_SOUNDS)
 	st := new(Stream, allocator)
 	st.data, st.loop, st.inline = data, loop, inline
-	if !dec_open(st, crossfade) {
+	if !dec_open(st, crossfade, start) {
 		free(st, allocator)
 		return 0, false
 	}
-	m.sounds[m.count] = {nil, st.rate}
+	m.sounds[m.count] = {
+		samples = nil,
+		rate    = st.rate,
+	}
 	m.streams[m.count] = st
 	m.count += 1
 	if !inline {st.thread = thread.create_and_start_with_data(st, decoder_main, context)}
@@ -159,9 +169,12 @@ stream_pump :: proc "contextless" (st: ^Stream) -> bool {
 	w := sync.atomic_load(&st.written)
 	used := w - sync.atomic_load(&st.read)
 	if used > STREAM_RING || STREAM_RING - used < STREAM_CHUNK {return false}
-	buf: [STREAM_CHUNK]f32
-	n := produce(st, buf[:])
+	buf, buf_r: [STREAM_CHUNK]f32
+	n := produce(st, buf[:], buf_r[:])
 	for i in 0 ..< n {st.ring[(w + u64(i)) & (STREAM_RING - 1)] = buf[i]}
+	if st.channels == 2 {
+		for i in 0 ..< n {st.ring_r[(w + u64(i)) & (STREAM_RING - 1)] = buf_r[i]}
+	}
 	if n > 0 {sync.atomic_store(&st.written, w + u64(n))}
 	if n < len(buf) {
 		sync.atomic_store(&st.total, w + u64(n))
@@ -171,20 +184,32 @@ stream_pump :: proc "contextless" (st: ^Stream) -> bool {
 }
 
 @(private)
-dec_open :: proc(st: ^Stream, crossfade: f32) -> bool {
-	// One channel out (the file's averaged) at the file's own rate.
-	cfg := ma.decoder_config_init(.f32, 1, 0)
-	if r := ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d);
-	   r != .SUCCESS {
+dec_open :: proc(st: ^Stream, crossfade: f32, start: f32) -> bool {
+	// The file's own channels (one or two) at its own rate; a file of more is
+	// opened again as two, which miniaudio mixes down.
+	cfg := ma.decoder_config_init(.f32, 0, 0)
+	r := ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d)
+	if r == .SUCCESS && st.dec.d.outputChannels > 2 {
+		ma.decoder_uninit(&st.dec.d)
+		cfg = ma.decoder_config_init(.f32, 2, 0)
+		r = ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d)
+	}
+	if r != .SUCCESS {
 		log.warnf("audio stream: not a file miniaudio can decode (result %v)", r)
 		return false
 	}
 	st.dec.open = true
 	d := &st.dec.d
+	st.channels = u8(d.outputChannels)
 	length: u64
 	ma.decoder_get_length_in_pcm_frames(d, &length)
 	rate := d.outputSampleRate
-	if rate < 8000 || rate > 192000 || length < 2 || length > 1 << 36 {
+	if st.channels < 1 ||
+	   st.channels > 2 ||
+	   rate < 8000 ||
+	   rate > 192000 ||
+	   length < 2 ||
+	   length > 1 << 36 {
 		log.warnf("audio stream: unusable (rate=%d length=%d)", rate, length)
 		dec_close(st)
 		return false
@@ -195,10 +220,20 @@ dec_open :: proc(st: ^Stream, crossfade: f32) -> bool {
 		if st.crossfade > 0 {
 			st.dec.head = make([]f32, st.crossfade)
 			st.dec.tail = make([]f32, st.crossfade)
-			n := dec_read(st, st.dec.head)
+			if st.channels == 2 {
+				st.dec.head_r = make([]f32, st.crossfade)
+				st.dec.tail_r = make([]f32, st.crossfade)
+			}
+			n := dec_read(st, st.dec.head, st.dec.head_r)
 			for i in n ..< len(st.dec.head) {st.dec.head[i] = 0}
+			for i in n ..< len(st.dec.head_r) {st.dec.head_r[i] = 0}
 			dec_rewind(st)
 		}
+	}
+	if start > 0 {
+		at := clamp(int(f64(start) * f64(st.rate)), 0, st.length - st.crossfade - 1)
+		ma.decoder_seek_to_pcm_frame(d, u64(at))
+		st.dec.pos = at
 	}
 	return true
 }
@@ -209,6 +244,8 @@ dec_close :: proc(st: ^Stream) {
 	if d.open {ma.decoder_uninit(&d.d)}
 	delete(d.head)
 	delete(d.tail)
+	delete(d.head_r)
+	delete(d.tail_r)
 	d.open = false
 }
 
@@ -219,31 +256,49 @@ dec_rewind :: proc "contextless" (st: ^Stream) {
 	d.pos, d.since, d.tail_at = 0, 0, len(d.tail)
 }
 
-// dec_read: up to len(out) frames of the file (mono).
+// dec_read: up to len(out) frames of the file; `right` (as long as `out`)
+// gets the second channel of a two-channel file.
 @(private)
-dec_read :: proc "contextless" (st: ^Stream, out: []f32) -> int {
-	got: u64
-	ma.decoder_read_pcm_frames(&st.dec.d, raw_data(out), u64(len(out)), &got)
-	return int(got)
+dec_read :: proc "contextless" (st: ^Stream, out, right: []f32) -> int {
+	if st.channels == 1 {
+		got: u64
+		ma.decoder_read_pcm_frames(&st.dec.d, raw_data(out), u64(len(out)), &got)
+		return int(got)
+	}
+	total := 0
+	tmp: [2 * STREAM_CHUNK]f32
+	for total < len(out) {
+		want := min(len(out) - total, STREAM_CHUNK)
+		got: u64
+		ma.decoder_read_pcm_frames(&st.dec.d, raw_data(tmp[:]), u64(want), &got)
+		for i in 0 ..< int(got) {
+			out[total + i] = tmp[2 * i]
+			right[total + i] = tmp[2 * i + 1]
+		}
+		total += int(got)
+		if int(got) < want {break}
+	}
+	return total
 }
 
 // produce: the stream's next samples (endless for a loop, so fewer than
 // asked only at the end of one that does not).
 @(private)
-produce :: proc "contextless" (st: ^Stream, out: []f32) -> int {
+produce :: proc "contextless" (st: ^Stream, out, out_r: []f32) -> int {
 	d := &st.dec
 	n := 0
 	for n < len(out) {
 		if d.tail_at < len(d.tail) {
 			k := min(len(out) - n, len(d.tail) - d.tail_at)
 			copy(out[n:n + k], d.tail[d.tail_at:][:k])
+			if st.channels == 2 {copy(out_r[n:n + k], d.tail_r[d.tail_at:][:k])}
 			d.tail_at += k
 			n += k
 			continue
 		}
 		if d.broken {break}
 		if !st.loop {
-			got := dec_read(st, out[n:])
+			got := dec_read(st, out[n:], out_r[n:])
 			if got == 0 {break}
 			n += got
 			continue
@@ -255,18 +310,22 @@ produce :: proc "contextless" (st: ^Stream, out: []f32) -> int {
 				break
 			}
 			if st.crossfade > 0 {
-				got := dec_read(st, d.tail)
+				got := dec_read(st, d.tail, d.tail_r)
 				for i in got ..< len(d.tail) {d.tail[i] = 0}
+				for i in got ..< len(d.tail_r) {d.tail_r[i] = 0}
 				for i in 0 ..< len(d.tail) {
 					x := (f64(i) + 0.5) / f64(len(d.tail)) * math.PI / 2
-					d.tail[i] = d.tail[i] * f32(math.cos(x)) + d.head[i] * f32(math.sin(x))
+					c, sn := f32(math.cos(x)), f32(math.sin(x))
+					d.tail[i] = d.tail[i] * c + d.head[i] * sn
+					if st.channels == 2 {d.tail_r[i] = d.tail_r[i] * c + d.head_r[i] * sn}
 				}
 				dec_rewind(st)
 				// The head was heard in the blend: go on after it.
 				skipped := 0
 				for skipped < st.crossfade {
-					junk: [STREAM_CHUNK]f32
-					k := dec_read(st, junk[:min(STREAM_CHUNK, st.crossfade - skipped)])
+					junk, junk_r: [STREAM_CHUNK]f32
+					k := min(STREAM_CHUNK, st.crossfade - skipped)
+					k = dec_read(st, junk[:k], junk_r[:k])
 					if k == 0 {break}
 					skipped += k
 				}
@@ -278,7 +337,8 @@ produce :: proc "contextless" (st: ^Stream, out: []f32) -> int {
 			}
 			continue
 		}
-		got := dec_read(st, out[n:][:min(len(out) - n, cut - d.pos)])
+		k := min(len(out) - n, cut - d.pos)
+		got := dec_read(st, out[n:][:k], out_r[n:][:k])
 		if got == 0 {
 			d.pos = cut // the file is shorter than it said
 			continue
@@ -321,6 +381,13 @@ stream_window :: proc "contextless" (
 	for k in 0 ..< need {
 		idx := lo + k
 		m.stage[k] = 0 if idx < 0 || u64(idx) >= w else st.ring[u64(idx) & (STREAM_RING - 1)]
+	}
+	if st.channels == 2 {
+		for k in 0 ..< need {
+			idx := lo + k
+			m.stage_r[k] =
+				0 if idx < 0 || u64(idx) >= w else st.ring_r[u64(idx) & (STREAM_RING - 1)]
+		}
 	}
 	return avail, last, f64(lo)
 }

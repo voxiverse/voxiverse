@@ -1,0 +1,22 @@
+{
+  "title": "Discovery",
+  "source": "discovery.score",
+  "source_sha256": "75a90ab9b0a49e5b0ff2b3255b92c0cdbad9ac1a08ae674162d82d63fc92e98b",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 411997,
+  "seconds": 8.583,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.0,
+  "true_peak_db": -2.535,
+  "key": "d lydian",
+  "tempo": 96,
+  "mood": ["stinger"],
+  "place": ["any"],
+  "time": ["any"],
+  "depth": ["any"],
+  "worlds": ["any"]
+}

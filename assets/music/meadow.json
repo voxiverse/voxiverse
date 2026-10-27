@@ -1,0 +1,22 @@
+{
+  "title": "Meadow",
+  "source": "meadow.score",
+  "source_sha256": "0c07336a2a5e598ce3798e5aef4c7b621d3b6cc0f907b4eda0a241560cbf26f0",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 10771986,
+  "seconds": 224.416,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.006,
+  "true_peak_db": -1.878,
+  "key": "g mixolydian",
+  "tempo": 56,
+  "mood": ["ambient", "bright"],
+  "place": ["plains", "forest"],
+  "time": ["day", "dawn"],
+  "depth": ["surface"],
+  "worlds": ["home"]
+}

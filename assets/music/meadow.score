@@ -1,0 +1,57 @@
+title "Meadow"
+tempo 56
+meter 4/4
+key g mixolydian
+mood ambient bright
+place plains forest
+time day dawn
+depth surface
+worlds home
+loop no
+seed 11
+humanize timing 12 ms velocity 6
+reverb 3.6 s 0.6
+instrument piano preset 0:0
+
+part pad piano volume -6 dB pan -0.25
+  | mp ped r:q g3:q b3:q d4:q | r:w | r:q b3:q d4:q g4:q | r:w unped |
+  | ped r:q c4:q e4:q g4:q | r:w | r:q e4:q g4:q c5:q | r:w unped |
+  | ped r:q d4:q f4:q a4:q | r:w | r:q f4:q a4:q d5:q | r:w unped |
+  | ped r:q c4:q e4:q g4:q | r:w | r:q e4:q g4:q c5:q | r:w unped |
+  | ped r:q g3:q b3:q d4:q | r:w | r:q b3:q d4:q g4:q | r:w unped |
+  | ped r:q e4:q g4:q b4:q | r:w | r:q g4:q b4:q e5:q | r:w unped |
+  | ped r:q c4:q e4:q g4:q | r:w | r:q e4:q g4:q c5:q | r:w unped |
+  | ped r:q d4:q f4:q a4:q | r:w | r:q f4:q a4:q d5:q | r:w unped |
+  | ped r:q g3:q b3:q d4:q | r:w | r:q b3:q d4:q g4:q | r:w unped |
+  | ped r:q c4:q e4:q g4:q | r:w | r:q e4:q g4:q c5:q | r:w unped |
+  | ped r:q d4:q f4:q a4:q | r:w | r:q f4:q a4:q d5:q | r:w unped |
+  | ped r:q c4:q e4:q g4:q | r:w | r:q e4:q g4:q c5:q | r:w unped |
+  | ped r:q g3:q b3:q d4:q | r:w | r:q b3:q d4:q g4:q | r:w unped |
+part low piano volume -14 dB pan 0.0
+  | mp g3:w | r:w | r:w | r:w |
+  | c4:w | r:w | r:w | r:w |
+  | d4:w | r:w | r:w | r:w |
+  | c4:w | r:w | r:w | r:w |
+  | g3:w | r:w | r:w | r:w |
+  | e4:w | r:w | r:w | r:w |
+  | c4:w | r:w | r:w | r:w |
+  | d4:w | r:w | r:w | r:w |
+  | g3:w | r:w | r:w | r:w |
+  | c4:w | r:w | r:w | r:w |
+  | d4:w | r:w | r:w | r:w |
+  | c4:w | r:w | r:w | r:w |
+  | g3:w | r:w | r:w | r:w |
+part bells piano volume -2 dB pan 0.3
+  | mp ped r:w unped | ped r:h b5:h unped | ped b5:h. f5:q unped | ped r:h. a5:q unped |
+  | ped g6:h r:h unped | ped g6:h r:h unped | ped r:h a6:h unped | ped a6:h b5:h unped |
+  | ped c6:h. d6:q unped | ped b5:h c6:h unped | ped b6:h d7:h unped | ped e6:w unped |
+  | ped c6:h e6:h unped | ped r:q e6:h r:q unped | ped b5:w unped | ped r:q c6:h. unped |
+  | ped a5:w unped | ped d6:h r:q e6:q unped | ped a5:h g5:h unped | ped r:q b5:h. unped |
+  | ped r:w unped | ped c7:h r:h unped | ped g6:h r:h unped | ped c6:w unped |
+  | ped r:h a6:h unped | ped a6:w unped | ped r:w unped | ped r:h d6:h unped |
+  | ped d6:h b5:h unped | ped f6:h e6:h unped | ped d7:w unped | ped r:h. d6:q unped |
+  | ped r:q g5:h. unped | ped e5:h g6:h unped | ped a5:h r:q b5:q unped | ped r:h a5:h unped |
+  | ped r:w unped | ped r:h d6:h unped | ped a6:h r:h unped | ped a5:w unped |
+  | ped r:w unped | ped b5:h b5:h unped | ped r:w unped | ped a6:h r:h unped |
+  | ped a5:w unped | ped r:q g6:h. unped | ped r:h. b5:q unped | ped g6:h. c7:q unped |
+  | ped r:w unped | ped a5:h r:q f5:q unped | ped g6:w unped | ped r:h. e6:q unped |

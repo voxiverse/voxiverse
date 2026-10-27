@@ -1,0 +1,54 @@
+title "Far"
+tempo 52
+meter 4/4
+key e lydian
+mood ambient strange
+place any
+time any
+depth any
+worlds other
+loop no
+seed 51
+humanize timing 12 ms velocity 6
+reverb 4.5 s 0.6
+instrument piano preset 0:0
+
+part pad piano volume -7 dB pan -0.25
+  | mp ped r:q e4:q g#4:q b4:q | r:w | r:q g#4:q b4:q e5:q | r:w unped |
+  | ped r:q f#4:q a#4:q c#5:q | r:w | r:q a#4:q c#5:q f#5:q | r:w unped |
+  | ped r:q b4:q d#5:q f#5:q | r:w | r:q d#5:q f#5:q b5:q | r:w unped |
+  | ped r:q f#4:q a#4:q c#5:q | r:w | r:q a#4:q c#5:q f#5:q | r:w unped |
+  | ped r:q e4:q g#4:q b4:q | r:w | r:q g#4:q b4:q e5:q | r:w unped |
+  | ped r:q c#5:q e5:q g#5:q | r:w | r:q e5:q g#5:q c#6:q | r:w unped |
+  | ped r:q f#4:q a#4:q c#5:q | r:w | r:q a#4:q c#5:q f#5:q | r:w unped |
+  | ped r:q a#4:q c#5:q e5:q | r:w | r:q c#5:q e5:q a#5:q | r:w unped |
+  | ped r:q e4:q g#4:q b4:q | r:w | r:q g#4:q b4:q e5:q | r:w unped |
+  | ped r:q f#4:q a#4:q c#5:q | r:w | r:q a#4:q c#5:q f#5:q | r:w unped |
+  | ped r:q b4:q d#5:q f#5:q | r:w | r:q d#5:q f#5:q b5:q | r:w unped |
+  | ped r:q f#4:q a#4:q c#5:q | r:w | r:q a#4:q c#5:q f#5:q | r:w unped |
+part low piano volume -14 dB pan 0.0
+  | mp e3:w | r:w | r:w | r:w |
+  | f#3:w | r:w | r:w | r:w |
+  | b3:w | r:w | r:w | r:w |
+  | f#3:w | r:w | r:w | r:w |
+  | e3:w | r:w | r:w | r:w |
+  | c#4:w | r:w | r:w | r:w |
+  | f#3:w | r:w | r:w | r:w |
+  | a#3:w | r:w | r:w | r:w |
+  | e3:w | r:w | r:w | r:w |
+  | f#3:w | r:w | r:w | r:w |
+  | b3:w | r:w | r:w | r:w |
+  | f#3:w | r:w | r:w | r:w |
+part bells piano volume -2 dB pan 0.3
+  | mp ped f#5:h. r:q unped | ped c#5:w unped | ped r:w unped | ped r:w unped |
+  | ped r:h. f#5:q unped | ped r:h b5:h unped | ped r:w unped | ped r:q c#6:h. unped |
+  | ped b5:h r:h unped | ped r:h b5:h unped | ped r:w unped | ped r:w unped |
+  | ped r:w unped | ped r:q d#5:h. unped | ped r:q e6:h. unped | ped r:w unped |
+  | ped r:h. d#6:q unped | ped d#6:w unped | ped r:q d#6:h. unped | ped r:h. d#6:q unped |
+  | ped r:h d#7:h unped | ped a#5:w unped | ped a#5:w unped | ped g#6:w unped |
+  | ped r:h. g#6:q unped | ped e6:w unped | ped r:w unped | ped g#5:w unped |
+  | ped r:w unped | ped r:h g#6:h unped | ped r:w unped | ped e6:h. r:q unped |
+  | ped a#5:w unped | ped c#5:w unped | ped e5:w unped | ped r:h e5:h unped |
+  | ped r:w unped | ped f#5:w unped | ped r:h. g#5:q unped | ped r:h e6:h unped |
+  | ped r:w unped | ped r:h f#6:h unped | ped g#5:h r:h unped | ped r:q a#6:h. unped |
+  | ped d#5:h. e6:q unped | ped r:q b5:h. unped | ped g#5:w unped | ped c#6:h r:q g#5:q unped |

@@ -135,6 +135,8 @@ escape :: proc(app: ^App) {
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 		app.screen = .Title
+	case .Credits:
+		credits_back(app)
 	case .Multiplayer:
 		multiplayer_back(app)
 	case .Game:

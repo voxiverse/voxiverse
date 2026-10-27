@@ -1,0 +1,42 @@
+title "Voxiverse"
+tempo 66
+meter 4/4
+key f major
+mood calm
+place any
+time any
+depth any
+worlds any
+loop yes
+seed 5
+humanize timing 10 ms velocity 5
+reverb 2.8 s 0.55
+instrument piano preset 0:0
+
+part melody piano volume -3 dB pan 0.2
+  | mp f5:h. a5:q | f5:h f5:h | f5:h. a#5:q | e6:h g5:h |
+  | g5:h. g5:q | d6:h d6:h | a5:h. c6:q | e6:h c6:h |
+  | c6:h. a5:q | f5:h a5:h | a#5:h. c6:q | e6:h g5:h |
+  | c6:h. f5:q | a#5:h e6:h | f5:h. a#5:q | e6:h d6:h |
+  | f5:h. c6:q | f5:h f5:h | f5:h. c6:q | e6:h g5:h |
+  | g5:h. g5:q | d6:h d6:h | a5:h. c6:q | e6:h g5:h |
+  | c6:h. g5:q | f5:h e6:h | a#5:h. a#5:q | e6:h c6:h |
+  | c6:h. g5:q | a#5:h e6:h | f5:h. c6:q | e6:h d6:h |
+part arp piano volume -8 dB pan 0.0
+  | mp ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
+part bass piano volume -12 dB pan -0.25
+  | mp f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |

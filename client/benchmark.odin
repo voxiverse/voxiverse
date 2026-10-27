@@ -446,7 +446,10 @@ bench_audio :: proc(app: ^App) {
 			}
 			// As the game does at load: at the mixer's rate, so a voice at its own
 			// pitch takes the cheap path.
-			converted := audio.resample_sound({samples[k], 16000}, audio.DEVICE_RATE)
+			converted := audio.resample_sound(
+				{samples = samples[k], rate = 16000},
+				audio.DEVICE_RATE,
+			)
 			delete(samples[k])
 			samples[k] = converted.samples
 			id = audio.add_sound(m, converted)

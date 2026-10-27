@@ -1,0 +1,22 @@
+{
+  "title": "Night",
+  "source": "night.score",
+  "source_sha256": "0066812a7e3f3a2ec9907c74783734294c730a67feeb8a0f3bb664dfa1faf846",
+  "soundfont_sha256": "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+  "rate": 48000,
+  "channels": 2,
+  "frames": 10637986,
+  "seconds": 221.625,
+  "loop": false,
+  "loop_start": 0,
+  "loop_end": 0,
+  "lufs": -20.477,
+  "true_peak_db": -1.0,
+  "key": "a aeolian",
+  "tempo": 48,
+  "mood": ["ambient", "quiet"],
+  "place": ["any"],
+  "time": ["night", "dusk"],
+  "depth": ["surface"],
+  "worlds": ["home"]
+}

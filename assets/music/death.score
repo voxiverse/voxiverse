@@ -1,0 +1,19 @@
+title "Death"
+tempo 76
+meter 3/4
+key a aeolian
+mood stinger
+place any
+time any
+depth any
+worlds any
+loop no
+seed 61
+humanize timing 8 ms velocity 4
+reverb 1.6 s 0.3
+instrument piano preset 0:0
+
+part right piano pan 0.15
+  | mp ped e5:q c5:q a4:q | [a3 e4]:h. unped |
+part left piano volume -3 dB pan -0.15
+  | a3:h. | [a1 a2]:h. |

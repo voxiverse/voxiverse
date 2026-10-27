@@ -44,7 +44,7 @@ test_mixer_plays_once :: proc(t: ^testing.T) {
 	defer free(m)
 	ones := constant(4800, 0.5) // 0.1 s at 48 kHz
 	defer delete(ones)
-	id := add_sound(m, {ones, 48000})
+	id := add_sound(m, {samples = ones, rate = 48000})
 	testing.expect(t, play(m, {sound = id, gain = {1, 0.25}, pitch = 1}) != 0)
 	late := latency(m)
 	out := mix_frames(m, 9600)
@@ -75,7 +75,7 @@ test_mixer_plays_once :: proc(t: ^testing.T) {
 test_mixer_command_ring :: proc(t: ^testing.T) {
 	m := new_mixer(1000)
 	defer free(m)
-	id := add_sound(m, {[]f32{1, 1, 1, 1}, 1000})
+	id := add_sound(m, {samples = []f32{1, 1, 1, 1}, rate = 1000})
 	for _ in 0 ..< COMMAND_RING + 10 {set_bus_gain(m, .Music, 0.5)}
 	testing.expect_value(t, m.dropped, 10)
 	out: [8]f32
@@ -95,7 +95,7 @@ test_voice_handles :: proc(t: ^testing.T) {
 	defer free(m)
 	long := constant(48000, 0.5)
 	defer delete(long)
-	id := add_sound(m, {long, 48000})
+	id := add_sound(m, {samples = long, rate = 48000})
 	a := play(m, {sound = id, gain = {1, 1}, pitch = 1})
 	testing.expect(t, alive(m, a))
 	out := mix_frames(m, 960)
@@ -136,7 +136,7 @@ test_voice_table_full :: proc(t: ^testing.T) {
 	defer free(m)
 	long := constant(10_000, 0.01)
 	defer delete(long)
-	id := add_sound(m, {long, 1000})
+	id := add_sound(m, {samples = long, rate = 1000})
 	ids: [MAX_VOICES]Voice_Id
 	for i in 0 ..< MAX_VOICES {
 		ids[i] = play(m, {sound = id, gain = {0.1, 0.1}, pitch = 1})
@@ -168,7 +168,7 @@ test_loop_gapless :: proc(t: ^testing.T) {
 	cycle := make([]f32, N)
 	defer delete(cycle)
 	for i in 0 ..< N {cycle[i] = 0.5 * f32(math.sin(2 * math.PI * 5 * f64(i) / N))}
-	id := add_sound(m, {cycle, 48000})
+	id := add_sound(m, {samples = cycle, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, loop = true})
 	frames := 100 * N
 	out := mix_frames(m, frames)
@@ -184,7 +184,7 @@ test_loop_gapless :: proc(t: ^testing.T) {
 	// between samples stays near the sine's own slope.
 	m2 := new_mixer(48000)
 	defer free(m2)
-	id2 := add_sound(m2, {cycle, 48000})
+	id2 := add_sound(m2, {samples = cycle, rate = 48000})
 	play(m2, {sound = id2, gain = {1, 1}, pitch = 1.0137, loop = true})
 	out2 := mix_frames(m2, frames)
 	defer delete(out2)
@@ -209,10 +209,10 @@ test_virtual_voices :: proc(t: ^testing.T) {
 	ramp := make([]f32, 100_000)
 	defer delete(ramp)
 	for &x, i in ramp {x = f32(i) / 100_000}
-	id := add_sound(m, {ramp, 1000})
+	id := add_sound(m, {samples = ramp, rate = 1000})
 	loud := constant(100_000, 0.001)
 	defer delete(loud)
-	lid := add_sound(m, {loud, 1000})
+	lid := add_sound(m, {samples = loud, rate = 1000})
 	// 64 loud voices fill the real ones; the ramp is quieter, so virtual.
 	for _ in 0 ..< REAL_VOICES {play(m, {sound = lid, gain = {1, 1}, pitch = 1})}
 	quiet := play(m, {sound = id, gain = {0.01, 0.01}, pitch = 1})
@@ -250,7 +250,7 @@ test_priority_keeps_important :: proc(t: ^testing.T) {
 	defer free(m)
 	long := constant(10_000, 0.01)
 	defer delete(long)
-	id := add_sound(m, {long, 1000})
+	id := add_sound(m, {samples = long, rate = 1000})
 	for _ in 0 ..< REAL_VOICES {play(m, {sound = id, gain = {1, 1}, pitch = 1})}
 	vip := play(m, {sound = id, gain = {0.05, 0.05}, pitch = 1, priority = 200})
 	out := mix_frames(m, 64)
@@ -267,7 +267,7 @@ test_fades :: proc(t: ^testing.T) {
 	defer free(m)
 	long := constant(96000, 0.5)
 	defer delete(long)
-	id := add_sound(m, {long, 48000})
+	id := add_sound(m, {samples = long, rate = 48000})
 	a := play(m, {sound = id, gain = {1, 1}, pitch = 1, fade_in = 0.1})
 	out := mix_frames(m, 9600)
 	defer delete(out)
@@ -304,8 +304,8 @@ test_ducking :: proc(t: ^testing.T) {
 	defer delete(music)
 	fx := constant(48_000, 0.3)
 	defer delete(fx)
-	mid := add_sound(m, {music, 48000})
-	fid := add_sound(m, {fx, 48000})
+	mid := add_sound(m, {samples = music, rate = 48000})
+	fid := add_sound(m, {samples = fx, rate = 48000})
 	set_duck(
 		m,
 		0,
@@ -345,7 +345,7 @@ test_snapshot :: proc(t: ^testing.T) {
 	defer free(m)
 	tone := constant(480_000, 0.4)
 	defer delete(tone)
-	id := add_sound(m, {tone, 48000})
+	id := add_sound(m, {samples = tone, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Ambience, loop = true})
 	out := mix_frames(m, 4800)
 	delete(out)
@@ -372,7 +372,7 @@ test_bus_mute_and_gain :: proc(t: ^testing.T) {
 	defer free(m)
 	tone := constant(480_000, 0.2)
 	defer delete(tone)
-	id := add_sound(m, {tone, 48000})
+	id := add_sound(m, {samples = tone, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music, loop = true})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .UI, loop = true})
 	set_bus_gain(m, .Music, 0.5)
@@ -411,7 +411,7 @@ test_bus_cutoff :: proc(t: ^testing.T) {
 		defer free(m)
 		s := tone(hz)
 		defer delete(s)
-		id := add_sound(m, {s, rate})
+		id := add_sound(m, {samples = s, rate = rate})
 		set_bus_cutoff(m, .Music, 1000)
 		play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music, loop = true})
 		out := mix_frames(m, rate)
@@ -433,7 +433,7 @@ test_voice_cutoff_sweep :: proc(t: ^testing.T) {
 	saw := make([]f32, 480)
 	defer delete(saw)
 	for &x, i in saw {x = 0.8 * (f32(i) / 240 - 1 if i < 480 else 0)}
-	id := add_sound(m, {saw, 48000})
+	id := add_sound(m, {samples = saw, rate = 48000})
 	v := play(m, {sound = id, gain = {1, 1}, pitch = 1, loop = true, cutoff = 100})
 	out := make([]f32, 2 * 48000)
 	defer delete(out)
@@ -457,7 +457,7 @@ test_nan_guard :: proc(t: ^testing.T) {
 	defer delete(bad)
 	bad[100] = math.nan_f32()
 	bad[200] = math.inf_f32(1)
-	id := add_sound(m, {bad, 48000})
+	id := add_sound(m, {samples = bad, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1})
 	out := mix_frames(m, 4800)
 	defer delete(out)
@@ -475,7 +475,7 @@ test_silence_is_zero :: proc(t: ^testing.T) {
 	for x in out {if x != 0 {testing.fail_now(t, "not exactly zero")}}
 	short := constant(100, 0.5)
 	defer delete(short)
-	id := add_sound(m, {short, 48000})
+	id := add_sound(m, {samples = short, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1})
 	out2 := mix_frames(m, 48000)
 	defer delete(out2)
@@ -491,7 +491,7 @@ test_mix_is_deterministic :: proc(t: ^testing.T) {
 		s := make([]f32, 3000)
 		defer delete(s)
 		for &x, i in s {x = 0.7 * f32(math.sin(f64(i) * 0.05)) * f32(math.sin(f64(i) * 0.0007))}
-		id := add_sound(m, {s, 44100})
+		id := add_sound(m, {samples = s, rate = 44100})
 		for k in 0 ..< 20 {
 			play(
 				m,

@@ -16,7 +16,7 @@ tone_mixer :: proc() -> (m: ^Mixer, id: Sound_Id, samples: []f32) {
 	for i in 0 ..< len(samples) {
 		samples[i] = 0.3 * f32(math.sin(2 * math.PI * 300 * f64(i) / 48000))
 	}
-	id = add_sound(m, {samples, 48000})
+	id = add_sound(m, {samples = samples, rate = 48000})
 	return
 }
 

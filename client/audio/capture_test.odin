@@ -32,8 +32,8 @@ scene_new :: proc(rate: u32) -> (s: Scene) {
 		bell[i] =
 			0.5 * f32(math.sin(2 * math.PI * 1100 * f64(i) / 48000) * math.exp(-f64(i) / 5000))
 	}
-	s.tone = add_sound(s.m, {tone, 48000})
-	s.bell = add_sound(s.m, {bell, 48000})
+	s.tone = add_sound(s.m, {samples = tone, rate = 48000})
+	s.bell = add_sound(s.m, {samples = bell, rate = 48000})
 	ok: bool
 	s.stream, ok = add_stream(s.m, TONE, loop = true, crossfade = 0.1, inline = true)
 	assert(ok)
@@ -151,7 +151,7 @@ test_capture_replays_bit_identical :: proc(t: ^testing.T) {
 	// Held as a number only where the maths library is the one it was taken with.
 	log.infof("capture scene checksum %x", checksum(got))
 	when ODIN_OS == .Linux && ODIN_ARCH == .amd64 {
-		testing.expect_value(t, checksum(got), 0xee19b6e7f8cded19)
+		testing.expect_value(t, checksum(got), 0xa3a802ad06ba86e0)
 	}
 	testing.expectf(
 		t,
@@ -269,7 +269,7 @@ test_command_lands_on_its_frame :: proc(t: ^testing.T) {
 	long := make([]f32, 48000)
 	defer delete(long)
 	for &x in long {x = 0.3}
-	id := add_sound(m, {long, 48000})
+	id := add_sound(m, {samples = long, rate = 48000})
 	v := play(m, {sound = id, gain = {1, 1}})
 	late := latency(m)
 	F :: 1234 // inside a call of 2000 frames

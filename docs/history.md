@@ -3385,3 +3385,70 @@ any SF2 writes a WAV and, with an encoder present, an Ogg and its `.json` (not c
 listening to it is a check by hand.
 
 What differed: `#` starts a comment only where a word would start (inside a word it is a sharp: `f#4`); a chord and a quoted title are one word; a bar line with nothing since the last one (a line's leading `|`) closes nothing; bars are numbered and metered as played (repeats expanded), so `meter ... at <bar>` counts played bars; the velocity-to-attenuation default is `40 log10(127/v)` dB (SF2.01's concave curve, 960 cB at most) and the velocity-to-filter default applies below velocity 64 as written; a left or right sample is hard-panned whatever its pan generator says; the part's pan is a balance (the louder side stays) applied to the zone's constant-power pan; decay and release fall 100 dB in their time (the release passes -60 dB at 0.6 of it, ends at -100 dB, floor 1 ms); the reverb runs 1.7 RT60 past the dry sound; the metadata writes numbers with one to three decimals (the tempo as an integer when whole); the usage line has `--midi` and not `--audition` (M43b's); a MIDI piece has the default header (no tags, `loop no`), MIDI gives no way to set them yet; the example's `frames` and `seconds` were illustrative (the fixture is 3 bars of 3/4 at 80: 6.75 s); the synthetic font's sine sample is 4410 frames at 4410 Hz (440 whole cycles) so the truncation sweep stays quick; `RENDER_BANDS` skips bands both under -60 dB (too faint to hold across OSes); `soundfont_path`, `find_on_path` and the 7z unpack are in `soundfont.odin` and `master.odin`.
+
+# M43b: music in the engine and the first pieces
+
+- **Stereo in the engine** (`audio/`). Music is clean stereo (the locked decisions), and
+  streams today average the channels (M32c).
+  - `Sound` gains `right: []f32` (nil: mono). `add_sound` accepts it (same length as
+    `samples`). `Stream` keeps the file's channels: `channels: u8` (1 or 2), a second ring
+    `ring_r` and the mixer's `stage_r`; the decoder de-interleaves into both. A stream with
+    one channel behaves exactly as today.
+  - `render_voice` reads the right channel through the same interpolation path (same
+    position, same step, same kernel choice) when the sound has two, into `buf[2f+1]` with
+    `gain[1]`, the left into `buf[2f]` with `gain[0]`; the voice's low-pass gains a second
+    `Svf` (`filter_r`). A stereo voice is never panned by `spatial_gain`; music sets
+    `gain = {g, g}`.
+  - `capture.odin`: `CAPTURE_VERSION :: 4` (the stream header records channels).
+  - Tests (`client/audio/stream_test.odin`): `client/audio/testdata/tone.ogg` (440 Hz left, 660 Hz right)
+    as a stereo stream gives 440 Hz in the left output and 660 Hz in the right (each other's
+    tone at least 60 dB down); a stereo memory sound looped is seamless; the four audio
+    baselines' checksums and numbers are unchanged (mono paths untouched); `build bench
+    audio` stays under its 5% (its stream becomes stereo).
+- **`build music --audition <name>`** opens the default device (`audio.device_open`) with a
+  mixer, registers `assets/music/<name>.ogg` as a stereo stream (looping if its `.json`
+  says so) and plays it on Music until Enter is pressed; `--from <seconds>` starts later
+  (the decoder seeks).
+- **The soundfont.** Read the license on
+  `https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html` itself (CC0 1.0 for Upright
+  Piano KW as of 2026-10-26), pin `SOUNDFONT_SHA256` of the small SF2 archive, and write
+  `assets/music/CREDITS.txt`: one block per sound source (`Upright Piano KW, by Gonzalo and
+  Roberto, FreePats project, CC0 1.0, https://freepats.zenvoid.org/`, adjusted to the page's
+  wording) and one per composer (`Music: Voxiverse, MIT`). Salamander Grand (CC BY 3.0) is
+  auditioned only if time is left; it is never committed without its credit line.
+- **Compose** (scores in `assets/music/`, written by the assistant: listening is the
+  owner's, a check by hand that never blocks, and a first pass is expected to be rewritten
+  after it):
+  - `title.score`: the title theme, a calm slow piano piece with a gentle arc, about 2
+    minutes, `loop yes`, `place any`, `worlds any`, `mood calm`.
+  - Four ambient pieces, sparse and modal, 3 to 5 minutes each, `loop no`, each with a
+    different mode and register: `meadow.score` (`place plains forest`, `time day dawn`),
+    `night.score` (`time night dusk`), `deep.score` (`depth cave`, quieter: `p` and `pp`
+    only), `far.score` (`worlds other`, `place any`).
+  - Two stingers, `loop no`: `death.score` (5 to 8 s, falling) and `discovery.score` (8 to
+    12 s, opening), `mood stinger` (the director never picks a stinger as a track).
+  - Rendered by `build music`, committed: each `.ogg`, its `.json` and the score.
+- **The credits screen.** The title screen gets a "Credits" button between Options and
+  Quit Game; `Screen.Credits` (`client/credits.odin`) shows `assets/music/CREDITS.txt`,
+  then the fonts' licence names (JetBrains Mono OFL, Noto Sans Old Turkic OFL), scrolled by
+  the wheel, and Back. The text is `#load`ed. `release` packages copy `CREDITS.txt` into
+  `licenses/`.
+- **The music in the executable.** `client/music_data.odin`: `MUSIC :: [?]Music_File{
+  {"title", #load("../assets/music/title.ogg"), #load("../assets/music/title.json",
+  string)}, ...}` in a fixed order (title first). Nothing plays it yet (M44).
+- **Tests** (`client/music_files_test.odin`, run in CI): every entry of `MUSIC` decodes
+  through `audio.add_stream(..., inline = true)` to exactly `frames` frames at `rate`
+  (pulling it through a mixer at 48 kHz with `pitch 1`: `alive` ends at `frames`
+  ±1 block); its integrated loudness (measured on the decode) is within 1 LU of -20 LUFS;
+  a looping one: the jump between its last and first decoded frame is no larger than 1.5
+  times the largest neighbour difference within 10 ms of either end; every `.json` parses
+  and names a source file that exists; the Oggs together are under `MUSIC_BUDGET :: 24 <<
+  20` bytes; every score in `assets/music/` has its Ogg and `.json`.
+
+Exit check: CI green with the committed set; locally `build music --force` from a clean
+checkout (with an encoder and 7z or bsdtar) reproduces every `.json` exactly except the
+loudness fields within 0.1 LU and `frames` exactly (Vorbis bytes may differ by encoder
+version, so the Oggs are not compared byte for byte). Check by hand: listen to every piece
+(`build music --audition <name>`) and say what to rewrite.
+
+What differed: the work was not split. `build music` kept its work files in `build/music`, which is the tool's own executable on Linux: they moved to `build/music-out/` (M43's spec and report name the old path). `Capture_Sound` swapped `stream: u32` for `stream: u16` and `channels: u16` (version 4); a stereo memory sound's checksum covers both channels. `add_stream` gained `start` (seconds into the file: the audition's `--from`). `client/audio/testdata/tone.ogg` already was the stereo file. The audio baselines `title_to_world` and `stress` changed (their stream is now stereo, so the Music bus is louder by about 3 LU): re-accepted, and their Darwin and Windows checksums dropped (a missing key is not compared) until CI's logs give the new values. Master loudness: a sparse piano's crest is about 20 dB, so the first renders sat 2 to 4 LU under -20 LUFS with their peaks at -1 dBTP; the scores were rewritten with flat dynamics (`mp`; `deep` `p` and `pp`), a quiet bass an octave higher, a 0.6 reverb wet, arpeggiated pads and denser bells to bring each inside 1 LU (the title's gentle arc is therefore in its melody and chords, not its dynamics). The scores were generated by a throwaway script and committed as scores; the pieces are a first pass. The size: the seven Oggs take 12.4 MB of the 24 MB budget. The soundfont's license was read on its download page: CC0 1.0, the small SF2 build of 2019-07-03, hash pinned. Salamander Grand was not auditioned.

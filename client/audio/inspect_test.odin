@@ -23,8 +23,8 @@ rig_new :: proc() -> (r: Rig) {
 		bell[i] =
 			0.5 * f32(math.sin(2 * math.PI * 1100 * f64(i) / 48000) * math.exp(-f64(i) / 9000))
 	}
-	r.tone = add_sound(r.m, {tone, 48000})
-	r.bell = add_sound(r.m, {bell, 48000})
+	r.tone = add_sound(r.m, {samples = tone, rate = 48000})
+	r.bell = add_sound(r.m, {samples = bell, rate = 48000})
 	capture_start_ring(r.m, 1 << 12)
 	return
 }

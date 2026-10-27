@@ -50,7 +50,7 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	// so a voice at its own pitch takes the cheap path, and the content
 	// (under half sfx.RATE) is declared so pitching up costs no more.
 	add :: proc(b: ^Sound_Bank, m: ^audio.Mixer, samples: []f32, name: string) -> audio.Sound_Id {
-		made := audio.resample_sound({samples, sfx.RATE}, m.rate)
+		made := audio.resample_sound({samples = samples, rate = sfx.RATE}, m.rate)
 		delete(samples)
 		append(&b.samples, made.samples)
 		id := audio.add_sound(m, made)

@@ -1,0 +1,19 @@
+title "Discovery"
+tempo 96
+meter 4/4
+key d lydian
+mood stinger
+place any
+time any
+depth any
+worlds any
+loop no
+seed 73
+humanize timing 8 ms velocity 4
+reverb 2.2 s 0.3
+instrument piano preset 0:0
+
+part right piano pan 0.2
+  | mp ped d4:e a4:e d5:e e5:e f#5:e a5:e b5:e d6:e | f#5:q a5:q b5:q d6:q | [d5 a5 e6]:w unped |
+part left piano volume -3 dB pan -0.2
+  | d3:h a3:h | e3:h b3:h | [d2 d3 a3]:w |

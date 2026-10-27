@@ -107,6 +107,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		title_screen(app, ctx)
 	case .Options:
 		options_screen(app, ctx)
+	case .Credits:
+		credits_screen(app, ctx)
 	case .Worlds:
 		worlds_screen(app, ctx)
 	case .Multiplayer:
@@ -126,7 +128,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
-	column := ui.rect_center(ctx.screen, 400, 4 * t.row_height + 3 * t.spacing + 120)
+	column := ui.rect_center(ctx.screen, 400, 5 * t.row_height + 4 * t.spacing + 120)
 	ui.title(ctx, "Voxiverse", ui.cut_top(&column, 80))
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)
@@ -140,6 +142,10 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	if ui.button(ctx, "Options", ui.next(ctx)) {
 		app.options.tab = .Video
 		app.screen = .Options
+	}
+	if ui.button(ctx, "Credits", ui.next(ctx)) {
+		app.credits = {}
+		app.screen = .Credits
 	}
 	if ui.button(ctx, "Quit Game", ui.next(ctx)) {overlay_open(&app.overlays, .Quit_Dialog)}
 	if app.message != "" {
