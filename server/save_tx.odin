@@ -123,12 +123,20 @@ batch_delete :: proc(b: ^Save_Batch, rel: string) {
 
 // relative_path: path (under dir) as the transaction names it.
 relative_path :: proc(dir, path: string) -> string {
-	rel := path
-	if strings.has_prefix(path, dir) {rel = strings.trim_left(path[len(dir):], "/\\")}
-	when ODIN_OS == .Windows {
-		rel, _ = strings.replace_all(rel, "\\", "/", context.temp_allocator)
+	// (Windows spells a joined path with '\\' and a configured one with '/':
+	// compare with one separator, or the prefix is missed and the file lands
+	// in a nested directory of its own path.)
+	slashed :: proc(s: string) -> string {
+		when ODIN_OS == .Windows {
+			r, _ := strings.replace_all(s, "\\", "/", context.temp_allocator)
+			return r
+		} else {
+			return s
+		}
 	}
-	return rel
+	d, p := slashed(dir), slashed(path)
+	if strings.has_prefix(p, d) {p = p[len(d):]}
+	return strings.trim_left(p, "/")
 }
 
 full_path :: proc(dir, rel: string) -> string {

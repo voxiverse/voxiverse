@@ -117,3 +117,16 @@ test_failed_save_is_retried :: proc(t: ^testing.T) {
 	if !ok2 {return}
 	testing.expect_value(t, block_at_pos(grief_world(g2), pos), game.Block.Stone)
 }
+
+@(test)
+test_relative_path_follows_full_path :: proc(t: ^testing.T) {
+	// Whatever separators the OS joins with, a path made by full_path comes
+	// back to the name it was made from (Windows missed this once).
+	for dir in ([]string{"build/test_rel", "build/test_rel/", "world"}) {
+		testing.expect_value(
+			t,
+			relative_path(dir, full_path(dir, "regions/r.0.0.vxr")),
+			"regions/r.0.0.vxr",
+		)
+	}
+}
