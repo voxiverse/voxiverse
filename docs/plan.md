@@ -38,7 +38,7 @@ The rules below exist to make those mistakes structurally hard to repeat.
 | Shaders | GLSL compiled to SPIR-V by a pinned `glslangValidator`, provisioned by the build driver (see Tooling). |
 | License | MIT. |
 | Versions | Pre-alpha: releases are tagged by hand (`git tag -a v0.N.0`) when a build is worth naming; nothing tags automatically. Between tags a build is `<last tag>+<commits since>`. |
-| Line endings | Native (`* text=auto`: CRLF in a Windows checkout, which is what odinfmt writes there). Files a test or generator compares byte for byte are pinned to LF in `.gitattributes` (the Wireshark dissector, whose schema block is spliced and compared); add any new one there rather than normalizing in code. |
+| Line endings | Native (`* text=auto`: CRLF in a Windows checkout, which is what odinfmt writes there). Files a test or generator compares byte for byte are pinned to LF in `.gitattributes` (the Wireshark dissector, whose schema block is spliced and compared; the audio baselines and the music director's `.decisions` file, which tests compare as text); add any new one there rather than normalizing in code. |
 
 ## Ground rules
 

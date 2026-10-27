@@ -2,3 +2,5 @@
 # except files a test or generator compares byte for byte.
 * text=auto
 tools/wireshark/*.lua text eol=lf
+assets/baselines/audio/*.decisions text eol=lf
+assets/baselines/audio/*.txt text eol=lf
