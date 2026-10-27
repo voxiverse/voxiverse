@@ -145,6 +145,25 @@ escape :: proc(app: ^App) {
 	}
 }
 
+// pause_toggle: the pad's Start. In a world with nothing open, the game
+// menu; with in-game overlays open, each closed through its own close path
+// (Options saving if dirty), back to playing; elsewhere nothing.
+pause_toggle :: proc(app: ^App) {
+	if app.screen != .Game {return}
+	if _, open := overlay_top(&app.overlays); !open {
+		if game_controls(app) {overlay_open(&app.overlays, .Game_Menu)}
+		return
+	}
+	for _ in 0 ..< 8 {
+		top, ok := overlay_top(&app.overlays)
+		if !ok {return}
+		close_overlay(app, top)
+		if again, still := overlay_top(&app.overlays); still && again == top {
+			overlay_close(&app.overlays, top) // a step back it kept: closed outright
+		}
+	}
+}
+
 // close_overlay: Escape on it (some take a step back first).
 @(private = "file")
 close_overlay :: proc(app: ^App, which: Overlay) {

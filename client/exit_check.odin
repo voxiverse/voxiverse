@@ -65,6 +65,13 @@ CHECKS := [?]Check_Info {
 		proc(app: ^App) {fly_test_begin(app, 400)},
 	},
 	{
+		"fly_pad",
+		"fly 400 blocks on a synthetic gamepad",
+		6,
+		3,
+		proc(app: ^App) {fly_test_begin(app, 400, pad = true)},
+	},
+	{
 		"tour",
 		"visit every biome: frame, generation and meshing budgets, memory",
 		4,

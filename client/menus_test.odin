@@ -34,6 +34,7 @@ ui_app_free :: proc(app: ^App) {
 // ui_frame draws one frame of the app's screen with input.
 @(private = "file")
 ui_frame :: proc(app: ^App, input: ui.Input = {}) {
+	actions_sync(app)
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	#partial switch app.screen {
 	case .Title:
@@ -48,7 +49,7 @@ ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 		failed_screen(app, &app.ui)
 	}
 	ui.end_frame(&app.ui)
-	app.input.pressed = {}
+	app.input.pressed, app.input.pad_pressed = {}, {}
 }
 
 // click: the widget saying label, as a player clicks it (over it, down, up).
@@ -86,34 +87,87 @@ test_options_screen :: proc(t: ^testing.T) {
 
 	click(t, app, "Controls")
 	testing.expect_value(t, app.options.tab, Options_Tab.Controls)
+	// Jump's row is below the settings: scrolled to.
+	app.options.scroll = 10 * (app.ui.theme.row_height + app.ui.theme.spacing)
+	ui_frame(app)
 	click(t, app, "Space") // jump's key
-	testing.expect(t, app.options.listening != 0)
+	testing.expect(t, app.options.listening != .None)
 	app.input.pressed = {.G}
 	ui_frame(app)
 	testing.expect_value(t, app.settings.keys.jump, platform.Key.G)
-	testing.expect_value(t, app.options.listening, 0)
+	testing.expect_value(t, app.options.listening, Action.None)
 
 	// A mouse button binds too, and clicks nothing beneath.
 	click(t, app, "G")
 	app.input.pressed = {.Mouse_4}
 	ui_frame(app)
 	testing.expect_value(t, app.settings.keys.jump, platform.Key.Mouse_4)
-	testing.expect_value(t, app.options.listening, 0)
+	testing.expect_value(t, app.options.listening, Action.None)
 
 	// Escape: as it was.
 	click(t, app, "Mouse Button 4")
 	escape(app)
 	ui_frame(app)
-	testing.expect(t, app.options.listening == 0 && app.settings.keys.jump == .Mouse_4)
+	testing.expect(t, app.options.listening == .None && app.settings.keys.jump == .Mouse_4)
 	testing.expect_value(t, app.screen, Screen.Options)
 
 	// Reset Keys, at the bottom: scrolled to.
 	ui_frame(app, {mouse = {640, 360}, wheel = {0, -100}})
 	click(t, app, "Reset Keys")
 	testing.expect(t, app.settings.keys == DEFAULT_BINDINGS)
+	testing.expect_value(t, app.screen, Screen.Options)
 
 	click(t, app, "Done")
 	testing.expect_value(t, app.screen, Screen.Title)
+	free_all(context.temp_allocator)
+}
+
+// The gamepad's column: a click on jump's pad cell listens, the next pad
+// button binds (and marks the clash with drop's X), Start leaves it as it
+// was, Reset Pad Buttons restores the defaults.
+@(test)
+test_options_pad_bindings :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	app.screen = .Options
+	app.options.tab = .Controls
+	app.options.scroll = 10 * (app.ui.theme.row_height + app.ui.theme.spacing)
+	ui_frame(app)
+	// Jump's pad cell is the next to the right of its key's ("Space").
+	pad_cell :: proc(t: ^testing.T, app: ^App) {
+		r, found := ui.find_widget(&app.ui, "Space")
+		testing.expect(t, found)
+		p := ui.Vec2{r.x + r.w * 1.5, r.y + r.h / 2}
+		ui_frame(app, {mouse = p})
+		ui_frame(app, {mouse = p, mouse_pressed = {.Left}, mouse_down = {.Left}})
+		ui_frame(app, {mouse = p, mouse_released = {.Left}})
+		ui_frame(app, {mouse = p})
+	}
+	pad_cell(t, app)
+	testing.expect_value(t, app.options.listening, Action.Jump)
+	testing.expect(t, app.options.listening_pad)
+	// Start leaves it as it is.
+	app.input.pad_pressed = {.Start}
+	ui_frame(app)
+	testing.expect_value(t, app.options.listening, Action.Jump)
+	in_: ui.Input
+	app.input.pad_pressed = {.Start}
+	actions_sync(app)
+	handle_global_keys(app, &in_)
+	testing.expect_value(t, app.options.listening, Action.None)
+	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.A)
+
+	pad_cell(t, app)
+	app.input.pad_pressed = {.X}
+	ui_frame(app)
+	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.X)
+	testing.expect_value(t, app.options.listening, Action.None)
+	_, clash := binding_conflicts(&app.settings.keys, &app.settings.pad)
+	testing.expect(t, .Jump in clash && .Drop in clash)
+
+	ui_frame(app, {mouse = {640, 360}, wheel = {0, -100}})
+	click(t, app, "Reset Pad Buttons")
+	testing.expect(t, app.settings.pad == DEFAULT_PAD_BINDINGS)
 	free_all(context.temp_allocator)
 }
 
@@ -326,16 +380,27 @@ test_options_tabs_by_keys :: proc(t: ^testing.T) {
 			rest(t, app, at, v.help, field)
 		}
 		if tab != .Controls {continue}
-		// The bindings, each scrolled into view.
-		for &v, i in BINDING_VARS {
-			index := len(OPTIONS_TABS[tab]) + 2 + i
-			app.options.scroll = max(0, f32(index) * row_h - 200)
-			ui_frame(app)
-			at := ui.Vec2 {
-				first.x + first.w / 2,
-				first.y + f32(index) * row_h - app.options.scroll + first.h / 2,
+		// The bindings, each scrolled into view: the key's cell, the pad's cell.
+		index := len(OPTIONS_TABS[tab]) + 2
+		for g in 0 ..< len(BINDING_GROUPS) {
+			index += 1 // the group's heading
+			for a in binding_rows(app, g) {
+				app.options.scroll = max(0, f32(index) * row_h - 200)
+				ui_frame(app)
+				y := first.y + f32(index) * row_h - app.options.scroll + first.h / 2
+				field := action_field(a)
+				if action_key(&app.settings.keys, a) != nil {
+					v := &BINDING_VARS[0]
+					for &x in BINDING_VARS {if x.field == field {v = &x}}
+					rest(t, app, {first.x + first.w * 0.55, y}, v.help, field)
+				}
+				if action_pad(&app.settings.pad, a) != nil {
+					v := &PAD_BINDING_VARS[0]
+					for &x in PAD_BINDING_VARS {if x.field == field {v = &x}}
+					rest(t, app, {first.x + first.w * 0.85, y}, v.help, field)
+				}
+				index += 1
 			}
-			rest(t, app, at, v.help, v.field)
 		}
 	}
 

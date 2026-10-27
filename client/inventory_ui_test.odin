@@ -41,8 +41,11 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	s.inventory.slots[0] = {dirt, 10}
 
 	app.input.pressed = {.E}
+
+	actions_sync(app)
 	inventory_keys(app)
 	app.input.pressed = {}
+	actions_sync(app)
 	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
 
 	SCREEN :: ui.Vec2{1280, 720}
@@ -84,8 +87,10 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	testing.expect(t, inv.slots[1] == {stone, 32} && game.stack_empty(inv.slots[21]))
 	// A number key over a slot swaps it with that hotbar slot.
 	app.input.pressed = {.Num_3}
+	actions_sync(app)
 	frame(app, {mouse = at(app, 20)})
 	app.input.pressed = {}
+	actions_sync(app)
 	testing.expect(t, inv.slots[2] == {stone, 32} && game.stack_empty(inv.slots[20]))
 	// Pick up the dirt; a click outside the panel drops it all.
 	frame(app, {mouse = at(app, 0), mouse_pressed = {.Left}, mouse_down = {.Left}})
@@ -264,8 +269,10 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	away := ui.Vec2{-100, -100}
 	press :: proc(f: ^Overlay_Fixture, key: platform.Key, mouse: ui.Vec2) {
 		f.app.input.pressed = {key}
+		actions_sync(f.app)
 		overlay_frame(f, {mouse = mouse})
 		f.app.input.pressed = {}
+		actions_sync(f.app)
 	}
 	inventory_open_ := proc(app: ^App) -> bool {return overlay_is_open(&app.overlays, .Inventory)}
 	overlay_frame(&f, {mouse = away}) // (drawn once: the key that opened it is spent)
@@ -273,8 +280,10 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 
 	// E does not close it: the inventory key only opens.
 	app.input.pressed = {.E}
+	actions_sync(app)
 	inventory_keys(app)
 	app.input.pressed = {}
+	actions_sync(app)
 	testing.expect(t, inventory_open_(app))
 
 	press(&f, .E, away)
@@ -308,8 +317,10 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	escape(app)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
 	app.input.pressed = {.E}
+	actions_sync(app)
 	inventory_keys(app)
 	app.input.pressed = {}
+	actions_sync(app)
 	testing.expect(t, inventory_open_(app))
 	escape(app)
 	testing.expect(t, !inventory_open_(app))

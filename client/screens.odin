@@ -18,9 +18,10 @@ import "ui"
 // to quit.
 
 handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
-	if app.options.listening != 0 {
-		// The key pressed is being bound: only Escape (leave it) counts.
-		if app.input.escape {escape(app)}
+	if app.options.listening != .None {
+		// The button pressed is being bound: only Escape or Start (leave
+		// it) counts.
+		if app.input.escape || .Start in app.input.pad_pressed {escape(app)}
 		return
 	}
 	if app.input.console_toggle {overlay_toggle(&app.overlays, .Console)}
@@ -33,12 +34,16 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 			overlay_close(&app.overlays, .Game_Menu)
 		}
 	}
-	if app.settings.keys.screenshot in app.input.pressed {screenshot_request(app, "")}
-	if app.settings.keys.fullscreen in app.input.pressed {
+	if action_pressed(&app.actions, .Screenshot) {screenshot_request(app, "")}
+	if action_pressed(&app.actions, .Fullscreen) {
 		app.settings.fullscreen = !app.settings.fullscreen
 		settings_changed(app)
 	}
-	if app.input.escape {escape(app)}
+	if app.input.escape || action_pressed(&app.actions, .Menu_Back) {
+		escape(app)
+	} else if action_pressed(&app.actions, .Pause) {
+		pause_toggle(app)
+	}
 	chat_keys(app, input)
 	chest_sync(app)
 	inventory_keys(app)

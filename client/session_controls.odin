@@ -43,9 +43,15 @@ session_use_block :: proc(s: ^Session) -> bool {
 // buttons use it (item_use). Edits are predicted at once (if the shared
 // rules allow them) and sent.
 @(private)
-edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32) {
+edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 	select := -1
-	for k, i in hotbar_keys(keys) {if k in input.pressed {select = i}}
+	for act, i in HOTBAR_ACTIONS {if action_pressed(a, act) {select = i}}
+	n_slots := game.HOTBAR_SLOTS
+	if action_pressed(a, .Hotbar_Next) {select = (s.inventory.selected + 1) % n_slots}
+	if action_pressed(
+		a,
+		.Hotbar_Previous,
+	) {select = (s.inventory.selected - 1 + n_slots) % n_slots}
 	if input.wheel.y != 0 {
 		n := game.HOTBAR_SLOTS
 		select = (s.inventory.selected - int(math.sign(input.wheel.y)) + n) % n
@@ -55,18 +61,18 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, keys: Bindings, dt: f32)
 	}
 	// Drop: one from the hand (with Ctrl: all of it).
 	all := input.held & {.Left_Control, .Right_Control} != {}
-	pressed_drop := keys.drop in input.pressed
-	if drop_repeat(&s.drop_repeat, pressed_drop, keys.drop in input.held && !all, seconds_now()) ||
+	pressed_drop := action_pressed(a, .Drop)
+	if drop_repeat(&s.drop_repeat, pressed_drop, action_down(a, .Drop) && !all, seconds_now()) ||
 	   (pressed_drop && all) {
 		session_inventory_do(s, {.Drop, s.inventory.selected, 1 if all else 0})
 	}
 
-	if keys.pick in input.pressed {session_pick(s)}
+	if action_pressed(a, .Pick) {session_pick(s)}
 
 	s.edit_timer -= dt
-	breaking := keys.attack in input.held
-	placing := keys.use in input.held
-	pressed := keys.attack in input.pressed || keys.use in input.pressed
+	breaking := action_down(a, .Attack)
+	placing := action_down(a, .Use)
+	pressed := action_pressed(a, .Attack) || action_pressed(a, .Use)
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
 	item_use(s, held(s), breaking, placing)

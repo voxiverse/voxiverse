@@ -47,15 +47,26 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"crossfeed",
 		"ceiling_db",
 	},
-	.Controls      = {"mouse_sensitivity", "invert_mouse", "sneak_toggle", "sprint_toggle"},
+	.Controls      = {
+		"mouse_sensitivity",
+		"invert_mouse",
+		"sneak_toggle",
+		"sprint_toggle",
+		"stick_look_speed",
+		"stick_invert",
+		"stick_dead_zone",
+		"stick_response",
+		"stick_swap",
+	},
 	.Accessibility = {"reduce_motion", "chat_text_size"},
 	.Profile       = {"name", "share_data"},
 }
 
 Options_View :: struct {
-	tab:       Options_Tab,
-	scroll:    f32, // pixels
-	listening: int, // the binding waiting for its key, plus one (0: none)
+	tab:           Options_Tab,
+	scroll:        f32, // pixels
+	listening:     Action, // the binding waiting for its button (None: none)
+	listening_pad: bool, // ... on the pad, not the keyboard
 }
 
 OPTIONS_WIDTH :: 600
@@ -87,8 +98,8 @@ options_panel :: proc(app: ^App, ctx: ^ui.Context, in_game: bool) -> (done: bool
 // options_cancel_listening: Escape while a binding waits for its key
 // leaves it as it was (true if one was waiting).
 options_cancel_listening :: proc(app: ^App) -> bool {
-	if app.options.listening == 0 {return false}
-	app.options.listening = 0
+	if app.options.listening == .None {return false}
+	app.options.listening = .None
 	return true
 }
 
@@ -103,7 +114,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	if step := menu_tab_step(app); step != 0 {
 		n := len(Options_Tab)
 		o.tab = Options_Tab((int(o.tab) + step + n) % n)
-		o.scroll, o.listening = 0, 0
+		o.scroll, o.listening = 0, .None
 	}
 
 	// The tabs: the open one lit, the others buttons.
@@ -116,11 +127,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 		text_w[tab] = ui.measure_text(ctx, tab_name(tab), t.font_size) + 2 * t.padding
 		total += text_w[tab] + gap
 	}
-	hint := fmt.tprintf(
-		"%s / %s",
-		key_label(&app.window, app.settings.keys.tab_prev),
-		key_label(&app.window, app.settings.keys.tab_next),
-	)
+	hint := fmt.tprintf("%s / %s", action_label(app, .Tab_Prev), action_label(app, .Tab_Next))
 	hint_w := ui.measure_text(ctx, hint, t.font_size) + t.spacing
 	hint_rect := ui.cut_right(&tabs, hint_w)
 	ui.draw_text(ctx, hint_rect, hint, t.font_size, t.text_muted, .Right)
@@ -134,7 +141,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 			ui.stroke_rect(ctx, r, t.border_width, t.border)
 			ui.draw_text(ctx, r, name, t.font_size, t.hover_text, .Center)
 		} else if ui.button(ctx, name, r) {
-			o.tab, o.scroll, o.listening = tab, 0, 0
+			o.tab, o.scroll, o.listening = tab, 0, .None
 		}
 	}
 	ui.cut_top(&column, 2 * t.spacing)
@@ -142,7 +149,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	bottom := ui.cut_bottom(&column, t.row_height)
 	ui.cut_bottom(&column, 2 * t.spacing)
 	if ui.button(ctx, "Done", ui.rect_center(bottom, 200, t.row_height)) {
-		o.listening = 0
+		o.listening = .None
 		if app.settings_dirty {settings_save(app)}
 		return true
 	}
@@ -150,7 +157,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	// The tab's rows, scrolled by the wheel when they do not fit.
 	step := t.row_height + t.spacing
 	rows := len(OPTIONS_TABS[o.tab])
-	if o.tab == .Controls {rows += 2 + len(BINDING_VARS) + 1} 	// a gap, a heading, the keys, Reset
+	if o.tab == .Controls {rows += 2 + binding_row_count(app) + 1} 	// a gap, a heading, the table, Reset
 	overflow := max(0, f32(rows) * step - column.h)
 	if ui.rect_contains(column, ctx.input.mouse) && ctx.input.wheel.y != 0 {
 		o.scroll -= ctx.input.wheel.y * step
@@ -168,10 +175,15 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 	}
 	if o.tab == .Controls {
 		ui.next(ctx)
-		ui.label(ctx, "Key Bindings", ui.next(ctx), .Center, t.text_muted)
+		ui.label(ctx, "Bindings: Keyboard and Gamepad", ui.next(ctx), .Center, t.text_muted)
 		if bindings_list(app, ctx) {settings_changed(app)}
-		if ui.button(ctx, "Reset Keys", ui.next(ctx)) {
+		reset := ui.next(ctx)
+		if ui.button(ctx, "Reset Keys", ui.cut_left(&reset, reset.w * 0.5)) {
 			app.settings.keys = DEFAULT_BINDINGS
+			settings_changed(app)
+		}
+		if ui.button(ctx, "Reset Pad Buttons", reset) {
+			app.settings.pad = DEFAULT_PAD_BINDINGS
 			settings_changed(app)
 		}
 	}
@@ -194,53 +206,118 @@ tab_name :: proc(tab: Options_Tab) -> string {
 	return ""
 }
 
-// bindings_list: a row per action, its key a button; pressed, the next key
-// or mouse button pressed is bound (Escape: unchanged). A key bound twice
-// is marked on both rows.
+// BINDING_GROUPS: the headings of the bindings table, and the contexts of
+// the actions under each.
+BINDING_GROUPS := [?]struct {
+	title:    string,
+	contexts: bit_set[Action_Context],
+}{{"In the world", {.World}}, {"In menus", {.Menu}}, {"Anywhere", {.World, .Menu}}}
+
+// binding_rows: the actions with a source to rebind, by group.
+binding_rows :: proc(app: ^App, group: int) -> (out: [dynamic]Action) {
+	out = make([dynamic]Action, context.temp_allocator)
+	for a in Action {
+		if a == .None || ACTION_INFO[a].contexts != BINDING_GROUPS[group].contexts {continue}
+		if action_key(&app.settings.keys, a) != nil || action_pad(&app.settings.pad, a) != nil {
+			append(&out, a)
+		}
+	}
+	return
+}
+
+@(private = "file")
+binding_row_count :: proc(app: ^App) -> int {
+	n := 0
+	for g in 0 ..< len(BINDING_GROUPS) {
+		n += 1 + len(binding_rows(app, g))
+	}
+	return n
+}
+
+@(private = "file")
+find_var :: proc(vars: []base.Var, field: string) -> ^base.Var {
+	for &v in vars {
+		if v.field == field {return &v}
+	}
+	return nil
+}
+
+// bindings_list: the bindings as a table under headings, a row per action:
+// its label, its key and its pad button. Pressing a cell listens: the next
+// key or mouse button, or the next pad button or trigger, is bound (Escape
+// or Start: unchanged). An action sharing a source with another in the same
+// context is framed on that cell.
 @(private = "file")
 bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 	t := &ctx.theme
 	o := &app.options
-	table := bindings_table()
-	keys := &app.settings.keys
+	keys, pad := &app.settings.keys, &app.settings.pad
+	key_table, pad_table := bindings_table(), pad_bindings_table()
+	key_clash, pad_clash := binding_conflicts(keys, pad)
 	ui.push_id(ctx, "keys")
 	defer ui.pop_id(ctx)
-	// Waiting for a key: the first pressed (Escape is escape's: unchanged).
-	if o.listening != 0 {
-		for k in platform.Key {
-			if k == .Unknown || k == .Escape || k not_in app.input.pressed {continue}
-			base.var_set_f64(table, keys, &BINDING_VARS[o.listening - 1], f64(k))
-			o.listening = 0
-			changed = true
-			break
+	// Waiting for a button: the first pressed.
+	if o.listening != .None {
+		field := action_field(o.listening)
+		if o.listening_pad {
+			for b in platform.Pad_Button {
+				if b == .None || b == .Start || b not_in app.actions.pad_pressed {continue}
+				if v := find_var(PAD_BINDING_VARS[:], field); v != nil {
+					base.var_set_f64(pad_table, pad, v, f64(b))
+					changed = true
+				}
+				o.listening = .None
+				break
+			}
+		} else {
+			for k in platform.Key {
+				if k == .Unknown || k == .Escape || k not_in app.input.pressed {continue}
+				if v := find_var(BINDING_VARS[:], field); v != nil {
+					base.var_set_f64(key_table, keys, v, f64(k))
+					changed = true
+				}
+				o.listening = .None
+				break
+			}
 		}
 	}
-	for &v, i in BINDING_VARS {
-		r := ui.next(ctx)
-		ui.label(ctx, var_label(table, &v), ui.cut_left(&r, r.w * 0.5))
-		key := platform.Key(base.var_get_f64(table, keys, &v))
-		text := key_label(&app.window, key)
-		if o.listening == i + 1 {text = fmt.tprintf("> %s <", text)}
-		ui.push_id_int(ctx, i)
-		ui.tooltip(ctx, r, v.help)
-		if ui.button(ctx, text, r) {o.listening = i + 1}
-		ui.pop_id(ctx)
-		twice := false
-		for &other, j in BINDING_VARS {
-			k := platform.Key(base.var_get_f64(table, keys, &other))
-			twice ||=
-				i != j &&
-				k == key &&
-				key != .Unknown &&
-				bindings_overlap(BINDING_CONTEXT[i], BINDING_CONTEXT[j])
+	for g in 0 ..< len(BINDING_GROUPS) {
+		ui.label(ctx, BINDING_GROUPS[g].title, ui.next(ctx), .Center, t.text_muted)
+		for a in binding_rows(app, g) {
+			r := ui.next(ctx)
+			ui.push_id_int(ctx, int(a))
+			defer ui.pop_id(ctx)
+			ui.label(ctx, ACTION_INFO[a].label, ui.cut_left(&r, r.w * 0.4))
+			kr := ui.cut_left(&r, r.w * 0.5)
+			field := action_field(a)
+			if k := action_key(keys, a); k != nil {
+				text := key_label(&app.window, k^)
+				if o.listening == a && !o.listening_pad {text = fmt.tprintf("> %s <", text)}
+				if v := find_var(BINDING_VARS[:], field); v != nil {ui.tooltip(ctx, kr, v.help)}
+				if ui.button(ctx, text, kr) {o.listening, o.listening_pad = a, false}
+				if a in key_clash {ui.stroke_rect(ctx, ui.rect_shrink(kr, 3), 2, t.warning)}
+			} else {
+				fixed := ACTION_INFO[a].fixed_keys[0]
+				text := key_label(&app.window, fixed) if fixed != .Unknown else "-"
+				ui.button(ctx, text, kr, disabled = true)
+			}
+			if b := action_pad(pad, a); b != nil {
+				text := pad_button_name(app.actions.pad_family, app.actions.pad_product, b^)
+				if o.listening == a && o.listening_pad {text = fmt.tprintf("> %s <", text)}
+				if v := find_var(PAD_BINDING_VARS[:], field); v != nil {ui.tooltip(ctx, r, v.help)}
+				if ui.button(ctx, text, r) {o.listening, o.listening_pad = a, true}
+				if a in pad_clash {ui.stroke_rect(ctx, ui.rect_shrink(r, 3), 2, t.warning)}
+			} else {
+				fixed := ACTION_INFO[a].fixed_pad[0]
+				text := pad_button_name(app.actions.pad_family, app.actions.pad_product, fixed)
+				ui.button(ctx, text, r, disabled = true)
+			}
 		}
-		if twice {ui.stroke_rect(ctx, ui.rect_shrink(r, 3), 2, t.warning)}
 	}
-	if o.listening == 0 {return}
+	if o.listening == .None {return}
 
 	// Waiting: a dialog over everything takes the clicks, so the button
 	// pressed binds and presses nothing.
-	v := &BINDING_VARS[o.listening - 1]
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
@@ -249,13 +326,17 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 	inner := ui.rect_shrink(box, 2 * t.padding)
 	ui.label(
 		ctx,
-		fmt.tprintf("Press a key for %s", var_label(table, v)),
+		fmt.tprintf(
+			"Press a %s for %s",
+			"button" if o.listening_pad else "key",
+			ACTION_INFO[o.listening].label,
+		),
 		ui.cut_top(&inner, t.row_height),
 		.Center,
 	)
 	ui.label(
 		ctx,
-		"Escape: leave it as it is",
+		"Start or Escape: leave it as it is",
 		ui.cut_top(&inner, t.row_height),
 		.Center,
 		t.text_muted,

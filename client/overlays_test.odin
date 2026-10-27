@@ -85,12 +85,14 @@ test_overlay_keys_go_to_the_top :: proc(t: ^testing.T) {
 	}
 	// `t` over the game opens the chat, typing nothing into it.
 	app.input.pressed = {.T}
+	actions_sync(app)
 	in_ := ui.Input {
 		text = []rune{'t'},
 	}
 	chat_keys(app, &in_)
 	testing.expect(t, overlay_is_open(&app.overlays, .Chat) && in_.text == nil)
 	app.input.pressed = {}
+	actions_sync(app)
 	frame(app, nil)
 	frame(app, {'h', 'i'})
 	testing.expect_value(t, string(app.chat.text[:]), "hi")
@@ -102,12 +104,14 @@ test_overlay_keys_go_to_the_top :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(app.chat.text[:]), "hi")
 	// Over the console, `t` is typing, not the chat.
 	app.input.pressed = {.T}
+	actions_sync(app)
 	in_ = {
 		text = []rune{'t'},
 	}
 	chat_keys(app, &in_)
 	testing.expect(t, in_.text != nil)
 	app.input.pressed = {}
+	actions_sync(app)
 
 	escape(app) // the console
 	frame(app, nil)

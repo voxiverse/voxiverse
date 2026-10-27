@@ -92,6 +92,8 @@ App :: struct {
 	script_failed:    bool, // an --exec script could not go on (fails the run)
 	console:          Console,
 	input:            Input_State,
+	actions:          Actions, // this frame's actions (actions.odin)
+	injected:         [dynamic]platform.Event, // events the pad command and checks add
 	settings:         Settings,
 	screen:           Screen,
 	overlays:         Overlays, // what is open over the screen (overlays.odin)
@@ -310,6 +312,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	validation_issues = gpu.destroy(&app.g)
 	platform.window_close(&app.window)
 	input_destroy(&app.input)
+	delete(app.injected)
 	console_destroy(&app.console)
 	line_editor_destroy(&app.chat)
 	return
@@ -330,7 +333,21 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		base.profile_scope("events")
 		minimized := w.width <= 0 || w.height <= 0
 		events := platform.wait_events(w) if minimized else platform.poll_events(w)
+		if len(app.injected) > 0 {
+			// Injected events come before the frame's own.
+			all := make(
+				[dynamic]platform.Event,
+				0,
+				len(app.injected) + len(events),
+				context.temp_allocator,
+			)
+			append(&all, ..app.injected[:])
+			append(&all, ..events)
+			clear(&app.injected)
+			events = all[:]
+		}
 		input_update(&app.input, events)
+		actions_sync(app, app.last_frame_ms / 1000)
 	}
 	if w.close_requested || app.quit {return false}
 
@@ -351,7 +368,8 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
 		session_freeze(app.session, world_paused(app))
-		platform.set_mouse_captured(w, game_controls(app) && w.focused)
+		// (The pad flight check runs on whatever desktop: focus is given.)
+		platform.set_mouse_captured(w, game_controls(app) && (w.focused || app.fly_test.pad))
 		conditions := game.Conditions {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
@@ -362,6 +380,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		session_update(
 			app.session,
 			&app.input,
+			&app.actions,
 			app.settings,
 			conditions,
 			app.last_frame_ms / 1000,

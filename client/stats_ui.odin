@@ -58,7 +58,7 @@ stats_view_destroy :: proc(v: ^Stats_View) {
 stats_keys :: proc(app: ^App) {
 	s := app.session
 	if s == nil || s.state != .Playing {return}
-	if app.settings.keys.stats not_in app.input.pressed {return}
+	if !action_pressed(&app.actions, .Stats) {return}
 	if overlay_is_open(&app.overlays, .Stats) {
 		if top, _ := overlay_top(&app.overlays);
 		   top == .Stats && !app.ui.edit.active {overlay_close(&app.overlays, .Stats)}

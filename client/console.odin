@@ -6,12 +6,14 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
 import "core:strings"
 import "core:sync"
 
 import "../base"
 import "../common/game"
 import "../server/collector"
+import "platform"
 import "ui"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
@@ -281,7 +283,7 @@ register_builtin_commands :: proc(c: ^Console) {
 						if then == "creative" {app.inventory_view.tab = .Creative}
 					}
 				case "options":
-					app.options.tab, app.options.scroll, app.options.listening = .Video, 0, 0
+					app.options.tab, app.options.scroll, app.options.listening = .Video, 0, .None
 					for tab in Options_Tab {
 						if strings.equal_fold(fmt.tprint(tab), then) {app.options.tab = tab}
 					}
@@ -545,6 +547,19 @@ register_builtin_commands :: proc(c: ^Console) {
 	when base.DEV {
 		console_register(
 			c,
+			{
+				"pad",
+				"pad <button> down|up, pad <axis> <value>, pad connect <family>, pad disconnect: a synthetic gamepad (slot 0), for scripts and trying without one",
+				proc(app: ^App, args: []string) {
+					if msg, ok := pad_inject(app, args); !ok {
+						console_print(&app.console, msg, .Warning)
+					}
+				},
+			},
+			args = {1, 2},
+		)
+		console_register(
+			c,
 			{"crash", "crash the game (tests the crash handler)", proc(app: ^App, args: []string) {
 					intrinsics.volatile_store((^int)(uintptr(8)), 1)
 				}},
@@ -634,4 +649,62 @@ report_text :: proc(app: ^App, note: string) -> string {
 		fmt.sbprintln(&b, c.lines[(c.first + i) % CONSOLE_MAX_LINES].text)
 	}
 	return strings.to_string(b)
+}
+
+// pad_inject: the `pad` command: appends the event for slot 0 to
+// app.injected (false and why if the words mean nothing).
+pad_inject :: proc(app: ^App, args: []string) -> (message: string, ok: bool) {
+	usage :: "pad: pad <button> down|up, pad <axis> <value>, pad connect <family>, pad disconnect"
+	if len(args) == 0 {return usage, false}
+	if args[0] == "disconnect" {
+		append(&app.injected, platform.Pad_Connect_Event{pad = 0, connected = false})
+		return "", true
+	}
+	if args[0] == "connect" {
+		family := platform.Pad_Family.Xbox
+		if len(args) > 1 {
+			found := false
+			for f in platform.Pad_Family {
+				if strings.equal_fold(fmt.tprint(f), args[1]) {family, found = f, true}
+			}
+			if !found {return "pad: the family is generic, xbox, playstation, switch or steam_deck", false}
+		}
+		append(
+			&app.injected,
+			platform.Pad_Connect_Event{pad = 0, connected = true, family = family},
+		)
+		return "", true
+	}
+	if len(args) < 2 {return usage, false}
+	for b in platform.Pad_Button {
+		if b != .None && strings.equal_fold(fmt.tprint(b), args[0]) {
+			switch args[1] {
+			case "down":
+				append(
+					&app.injected,
+					platform.Pad_Button_Event{pad = 0, button = b, pressed = true},
+				)
+			case "up":
+				append(
+					&app.injected,
+					platform.Pad_Button_Event{pad = 0, button = b, pressed = false},
+				)
+			case:
+				return "pad: say down or up", false
+			}
+			return "", true
+		}
+	}
+	for a in platform.Pad_Axis {
+		if strings.equal_fold(fmt.tprint(a), args[0]) {
+			value, number := strconv.parse_f32(args[1])
+			if !number {return "pad: the axis value is a number", false}
+			append(
+				&app.injected,
+				platform.Pad_Axis_Event{pad = 0, axis = a, value = clamp(value, -1, 1)},
+			)
+			return "", true
+		}
+	}
+	return usage, false
 }

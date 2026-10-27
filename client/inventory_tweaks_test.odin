@@ -33,8 +33,10 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.app.session = f.s
 	f.app.screen = .Game
 	f.app.input.pressed = {.E}
+	actions_sync(f.app)
 	inventory_keys(f.app)
 	f.app.input.pressed = {}
+	actions_sync(f.app)
 	testing.expect(t, overlay_is_open(&f.app.overlays, .Inventory))
 }
 
@@ -148,8 +150,10 @@ test_inventory_mouse_tweaks :: proc(t: ^testing.T) {
 	testing.expect(t, inv.slots[12] == {dirt, 7})
 	inventory_close(f.app)
 	f.app.input.pressed = {.E}
+	actions_sync(f.app)
 	inventory_keys(f.app) // open again
 	f.app.input.pressed = {}
+	actions_sync(f.app)
 
 	// The wheel over a slot: up moves one out of it to the other section, down one into it.
 	inv^ = {}

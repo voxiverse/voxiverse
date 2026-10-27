@@ -149,7 +149,7 @@ inventory_keys :: proc(app: ^App) {
 	s := app.session
 	if s == nil ||
 	   s.state != .Playing ||
-	   app.settings.keys.inventory not_in app.input.pressed ||
+	   !action_pressed(&app.actions, .Inventory) ||
 	   overlay_is_open(&app.overlays, .Inventory) {return}
 	if game_controls(app) {inventory_open(app)}
 }
@@ -331,17 +331,16 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		}
 		inventory_mouse(app, ctx, l.panel, hovered, catalog)
 		if hovered >= 0 && !ctx.edit.active {
-			for k, n in hotbar_keys(app.settings.keys) {
-				if k in app.input.pressed {do_(s, .Swap_Hotbar, hovered, n)}
+			for act, n in HOTBAR_ACTIONS {
+				if key_action_pressed(&app.actions, act) {do_(s, .Swap_Hotbar, hovered, n)}
 			}
-			key := app.settings.keys.drop
 			all := app.input.held & {.Left_Control, .Right_Control} != {}
 			if hovered != v.drop_slot {v.drop_repeat, v.drop_slot = {}, hovered}
-			went_down := key in app.input.pressed
+			went_down := key_action_pressed(&app.actions, .Drop)
 			if drop_repeat(
 				   &v.drop_repeat,
 				   went_down,
-				   key in app.input.held && !all,
+				   key_action_down(&app.actions, .Drop) && !all,
 				   seconds_now(),
 			   ) ||
 			   (went_down && all) {
@@ -435,11 +434,7 @@ ring_tabs :: proc(
 ) {
 	t := &ctx.theme
 	row := r
-	hint := fmt.tprintf(
-		"%s / %s",
-		key_label(&app.window, app.settings.keys.tab_prev),
-		key_label(&app.window, app.settings.keys.tab_next),
-	)
+	hint := fmt.tprintf("%s / %s", action_label(app, .Tab_Prev), action_label(app, .Tab_Next))
 	ui.draw_text(ctx, row, hint, t.font_size, t.text_muted, .Right)
 	for tab in Ring_Tab {
 		if !ring_has(app, tab) {continue}

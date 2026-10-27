@@ -30,7 +30,7 @@ dial_keys :: proc(app: ^App) {
 	s := app.session
 	if s == nil ||
 	   s.state != .Playing ||
-	   app.settings.keys.use not_in app.input.pressed ||
+	   !action_pressed(&app.actions, .Use) ||
 	   !game_controls(app) {return}
 	hit, aimed := s.aim.?
 	if !aimed {return}

@@ -89,7 +89,11 @@ BENCHMARK_SETTINGS := Settings {
 	music_volume      = 1,
 	ambience_volume   = 1,
 	effects_volume    = 1,
+	stick_look_speed  = 1,
+	stick_dead_zone   = 0.15,
+	stick_response    = 2,
 	keys              = DEFAULT_BINDINGS,
+	pad               = DEFAULT_PAD_BINDINGS,
 	chat_text_size    = 1,
 }
 

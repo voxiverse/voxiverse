@@ -1,5 +1,7 @@
 package client
 
+import "core:log"
+
 import "platform"
 import "ui"
 
@@ -21,12 +23,17 @@ Input_State :: struct {
 	text:           [dynamic]rune,
 	escape:         bool, // pressed this frame
 	console_toggle: bool,
+	pads:           [platform.MAX_PADS]platform.Pad_State, // kept from the events
+	pad_pressed:    bit_set[platform.Pad_Button], // any pad, this frame
+	pad_released:   bit_set[platform.Pad_Button],
+	pad_last:       int, // the slot that pressed or moved last
 }
 
 input_update :: proc(s: ^Input_State, events: []platform.Event) {
 	s.mouse_pressed, s.mouse_released, s.keys_pressed, s.pressed = {}, {}, {}, {}
 	s.wheel, s.look = {}, {}
 	s.escape, s.console_toggle = false, false
+	s.pad_pressed, s.pad_released = {}, {}
 	clear(&s.text)
 	for e in events {
 		switch v in e {
@@ -74,7 +81,47 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 		case platform.Mouse_Delta_Event:
 			s.look += {v.dx, v.dy}
 		case platform.Focus_Event:
-			if !v.focused {s.held, s.mouse_down = {}, {}} 	// releases happen elsewhere
+			if !v.focused {
+				s.held, s.mouse_down = {}, {} // releases happen elsewhere
+				for &p in s.pads {
+					p.buttons, p.axes = {}, {}
+				}
+			}
+		case platform.Pad_Connect_Event:
+			if int(v.pad) >= platform.MAX_PADS {continue}
+			if v.connected {
+				s.pads[v.pad] = {
+					connected = true,
+					family    = v.family,
+					vendor    = v.vendor,
+					product   = v.product,
+				}
+				s.pad_last = int(v.pad)
+				log.infof(
+					"input pad connected slot=%d family=%v vendor=%04x product=%04x",
+					v.pad,
+					v.family,
+					v.vendor,
+					v.product,
+				)
+			} else {
+				s.pads[v.pad] = {}
+				log.infof("input pad disconnected slot=%d", v.pad)
+			}
+		case platform.Pad_Button_Event:
+			if int(v.pad) >= platform.MAX_PADS {continue}
+			if v.pressed {
+				s.pads[v.pad].buttons += {v.button}
+				s.pad_pressed += {v.button}
+				s.pad_last = int(v.pad)
+			} else {
+				s.pads[v.pad].buttons -= {v.button}
+				s.pad_released += {v.button}
+			}
+		case platform.Pad_Axis_Event:
+			if int(v.pad) >= platform.MAX_PADS {continue}
+			s.pads[v.pad].axes[v.axis] = v.value
+			if abs(v.value) > 0.5 {s.pad_last = int(v.pad)}
 		case platform.Resize_Event:
 		}
 	}

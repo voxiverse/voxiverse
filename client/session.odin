@@ -17,7 +17,6 @@ import "../common/worldgen"
 import "../server"
 import "gpu"
 import "mesh"
-import "platform"
 import "render"
 
 // A Session is one visit to a world: from choosing Singleplayer until
@@ -312,6 +311,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 session_update :: proc(
 	s: ^Session,
 	input: ^Input_State,
+	actions: ^Actions,
 	settings: Settings,
 	conditions: game.Conditions,
 	dt: f32,
@@ -341,13 +341,13 @@ session_update :: proc(
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	if look {
-		look_update(&s.camera, input, settings)
-		toggle :: proc(input: ^Input_State, key: platform.Key, toggles: bool, on: ^bool) {
-			if !toggles {on^ = false} else if key in input.pressed {on^ = !on^}
+		look_update(&s.camera, input, actions, settings, dt)
+		toggle :: proc(a: ^Actions, action: Action, toggles: bool, on: ^bool) {
+			if !toggles {on^ = false} else if action_pressed(a, action) {on^ = !on^}
 		}
-		toggle(input, settings.keys.sneak, settings.sneak_toggle, &s.sneak_on)
-		toggle(input, settings.keys.sprint, settings.sprint_toggle, &s.sprint_on)
-		if settings.keys.jump in input.pressed {
+		toggle(actions, .Sneak, settings.sneak_toggle, &s.sneak_on)
+		toggle(actions, .Sprint, settings.sprint_toggle, &s.sprint_on)
+		if action_pressed(actions, .Jump) {
 			if time.duration_seconds(time.tick_since(s.last_jump)) <
 			   DOUBLE_TAP_SECONDS {s.toggle_fly = true}
 			s.last_jump = time.tick_now()
@@ -360,7 +360,7 @@ session_update :: proc(
 	for s.tick_time >= game.TICK_SECONDS {
 		s.tick_time -= game.TICK_SECONDS
 		in_ :=
-			s.autopilot.? or_else (player_input(input, s, settings.keys) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
+			s.autopilot.? or_else (player_input(actions, s) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
 		if s.toggle_fly {
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false
@@ -377,7 +377,7 @@ session_update :: proc(
 		send_prediction_check(s, sent.sequence)
 		movement_sounds(s)
 	}
-	if look {edit_controls(s, input, settings.keys, dt)}
+	if look {edit_controls(s, input, actions, dt)}
 	game.prediction_decay(&s.prediction, dt)
 	eyes := game.prediction_view(&s.prediction, s.tick_time / game.TICK_SECONDS)
 	// The eyes ease down when crouching and back up (not a jump cut).

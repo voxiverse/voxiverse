@@ -19,30 +19,29 @@ MOUSE_RADIANS_PER_PIXEL :: 0.0025 // at mouse_sensitivity 1
 NEAR_PLANE :: 0.05
 DOUBLE_TAP_SECONDS :: 0.3 // two jump presses this close toggle flying
 
-// look_update turns the view by this frame's mouse motion.
-look_update :: proc(v: ^View, input: ^Input_State, settings: Settings) {
+// look_update turns the view by this frame's mouse motion and the pad's
+// right stick.
+look_update :: proc(v: ^View, input: ^Input_State, a: ^Actions, settings: Settings, dt: f32) {
 	turn := MOUSE_RADIANS_PER_PIXEL * settings.mouse_sensitivity
 	v.yaw -= input.look.x * turn
 	v.pitch -= input.look.y * turn * (-1 if settings.invert_mouse else 1)
+	v.yaw += a.look.x * dt
+	v.pitch += a.look.y * dt
 	v.pitch = clamp(v.pitch, -game.PITCH_LIMIT, game.PITCH_LIMIT)
 	v.yaw = math.mod(v.yaw, math.TAU)
 }
 
 // player_input reads the controls for one tick (sneak and sprint held, or
-// toggled on: session_update).
-player_input :: proc(input: ^Input_State, s: ^Session, keys: Bindings) -> game.Player_Input {
-	held := input.held
+// toggled on: session_update). The move is analog (length at most 1).
+player_input :: proc(a: ^Actions, s: ^Session) -> game.Player_Input {
 	in_ := game.Player_Input {
 		yaw   = s.camera.yaw,
 		pitch = s.camera.pitch,
+		move  = a.move,
 	}
-	if keys.forward in held {in_.move.y += 1}
-	if keys.back in held {in_.move.y -= 1}
-	if keys.right in held {in_.move.x += 1}
-	if keys.left in held {in_.move.x -= 1}
-	if keys.jump in held {in_.buttons += {.Jump}}
-	if keys.sneak in held || s.sneak_on {in_.buttons += {.Sneak}}
-	if keys.sprint in held || s.sprint_on {in_.buttons += {.Sprint}}
+	if action_down(a, .Jump) {in_.buttons += {.Jump}}
+	if action_down(a, .Sneak) || s.sneak_on {in_.buttons += {.Sneak}}
+	if action_down(a, .Sprint) || s.sprint_on {in_.buttons += {.Sprint}}
 	return in_
 }
 

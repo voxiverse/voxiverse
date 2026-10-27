@@ -46,7 +46,13 @@ Settings :: struct {
 	invert_mouse:      bool,
 	sneak_toggle:      bool, // a press sneaks until the next (else: while held)
 	sprint_toggle:     bool,
+	stick_look_speed:  f32, // times the stick's turning rate
+	stick_invert:      bool, // pushing the right stick up looks down
+	stick_dead_zone:   f32, // how far a stick moves before it counts
+	stick_response:    int, // 1 linear, 2 curved, 3 steep
+	stick_swap:        bool, // move with the right stick, look with the left
 	keys:              Bindings, // (their own table: bindings_table)
+	pad:               Pad_Bindings, // gamepad buttons (pad_bindings_table)
 	// Accessibility
 	reduce_motion:     bool, // still the menus' stars (and later camera bob and shake)
 	chat_text_size:    f32, // times the UI's text size
@@ -66,7 +72,11 @@ SETTINGS_DEFAULTS := Settings {
 	effects_volume    = 1,
 	ceiling_db        = -1,
 	mouse_sensitivity = 1,
+	stick_look_speed  = 1,
+	stick_dead_zone   = 0.15,
+	stick_response    = 2,
 	keys              = DEFAULT_BINDINGS,
+	pad               = DEFAULT_PAD_BINDINGS,
 	chat_text_size    = 1,
 }
 
@@ -246,6 +256,42 @@ SETTINGS_VARS := [?]base.Var {
 		choices = {{0, "Hold"}, {1, "Toggle"}},
 	},
 	{
+		field = "stick_look_speed",
+		label = "Stick look speed",
+		help = "How fast the right stick turns the view.",
+		min = 0.25,
+		max = 3,
+		step = 0.05,
+	},
+	{
+		field = "stick_invert",
+		label = "Invert stick",
+		help = "Pushing the right stick up looks down.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "stick_dead_zone",
+		label = "Stick dead zone",
+		help = "How far a stick moves before it counts; raise it if the view drifts on its own.",
+		min = 0.05,
+		max = 0.4,
+		step = 0.01,
+	},
+	{
+		field = "stick_response",
+		label = "Stick response",
+		help = "Curved and steep turn slowly near the centre, for fine aiming, and fast at the edge.",
+		min = 1,
+		max = 3,
+		choices = {{1, "Linear"}, {2, "Curved"}, {3, "Steep"}},
+	},
+	{
+		field = "stick_swap",
+		label = "Swap sticks",
+		help = "Move with the right stick, look with the left.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
 		field = "reduce_motion",
 		help = "Keeps the moving backgrounds still.",
 		choices = {{0, "Off"}, {1, "On"}},
@@ -387,6 +433,7 @@ app_variables :: proc(app: ^App) -> []Variables {
 		&out,
 		Variables{settings_table(), &app.settings},
 		Variables{bindings_table(), &app.settings.keys},
+		Variables{pad_bindings_table(), &app.settings.pad},
 		Variables{debug_table(), &app.debug},
 		Variables{telemetry_table(), &app.telemetry},
 	)
@@ -429,14 +476,18 @@ settings_load :: proc(app: ^App) {
 		if err != .Not_Exist {log.warnf("settings cannot read path=%s error=%v", path, err)}
 		return
 	}
-	// Two tables in one file: "key." lines are the bindings', the rest the
-	// settings'; each reports only its own lines.
+	// Three tables in one file: "key." lines are the keys', "pad." lines the
+	// gamepad's, the rest the settings'; each reports only its own lines.
 	problems := make([dynamic]base.Var_File_Problem, context.temp_allocator)
 	for p in base.vars_read(settings_table(), &app.settings, string(data)) {
-		if !is_binding_line(p.text) {append(&problems, p)}
+		if !is_binding_line(p.text, "key.") &&
+		   !is_binding_line(p.text, "pad.") {append(&problems, p)}
 	}
 	for p in base.vars_read(bindings_table(), &app.settings.keys, string(data)) {
-		if is_binding_line(p.text) {append(&problems, p)}
+		if is_binding_line(p.text, "key.") {append(&problems, p)}
+	}
+	for p in base.vars_read(pad_bindings_table(), &app.settings.pad, string(data)) {
+		if is_binding_line(p.text, "pad.") {append(&problems, p)}
 	}
 	for p in problems {
 		log.warnf(
@@ -451,8 +502,8 @@ settings_load :: proc(app: ^App) {
 }
 
 @(private = "file")
-is_binding_line :: proc(line: string) -> bool {
-	return strings.has_prefix(strings.trim_space(line), "key.")
+is_binding_line :: proc(line: string, prefix: string) -> bool {
+	return strings.has_prefix(strings.trim_space(line), prefix)
 }
 
 // settings_save writes the settings file (through a temporary file, so a
@@ -469,6 +520,8 @@ settings_save :: proc(app: ^App) {
 	base.vars_write(settings_table(), &app.settings, &b)
 	strings.write_string(&b, "\n# Controls: keys by their place on a US keyboard\n\n")
 	base.vars_write(bindings_table(), &app.settings.keys, &b)
+	strings.write_string(&b, "\n# Gamepad: buttons by their place, named as on an Xbox pad\n\n")
+	base.vars_write(pad_bindings_table(), &app.settings.pad, &b)
 	os.make_directory_all(filepath.dir(path))
 	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
 	if err := os.write_entire_file(tmp, b.buf[:]); err != nil {

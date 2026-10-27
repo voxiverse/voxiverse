@@ -7,6 +7,7 @@ import "core:math"
 import "../base"
 import "../common/game"
 import "../server"
+import "platform"
 
 // The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
 // for the world around the spawn to load, then flies the camera in a
@@ -32,6 +33,9 @@ Fly_Test :: struct {
 	start:       [3]f64,
 	waited:      f32, // seconds spent loading
 	rss_start:   int,
+	pad:         bool, // the synthetic gamepad flies it, not the autopilot (fly_pad)
+	pad_step:    int, // the pad's script: connect, the double tap, the stick
+	pad_ticks:   int, // ticks flown on the pad
 }
 
 FLY_TEST_SPEED :: 40 // blocks per second (rules.fly_sprint_speed during the test)
@@ -39,7 +43,7 @@ FLY_TEST_HEIGHT :: 100 // above the highest terrain
 FLY_TEST_LOAD_TIMEOUT :: 60 // seconds
 
 @(private)
-fly_test_begin :: proc(app: ^App, distance: f64) {
+fly_test_begin :: proc(app: ^App, distance: f64, pad := false) {
 	t := &app.fly_test
 	if !exit_check_start(app, &t.check, "fly_test") {
 		t.check.failed = true
@@ -47,6 +51,7 @@ fly_test_begin :: proc(app: ^App, distance: f64) {
 		return
 	}
 	t.phase, t.distance, t.start, t.waited = .Loading, distance, {}, 0
+	t.pad, t.pad_step, t.pad_ticks = pad, 0, 0
 	log.infof("fly_test waiting for the world to load blocks=%.0f", distance)
 }
 
@@ -83,18 +88,27 @@ fly_test_update :: proc(app: ^App) {
 		log.infof("fly_test loaded seconds=%.1f chunks=%d", t.waited, s.world.chunks.count)
 	case .Lifting:
 		t.waited += dt
-		if s.prediction.state.position.y < FLY_TEST_HEIGHT - 1 ||
-		   s.rules.fly_sprint_speed != FLY_TEST_SPEED {
+		// (The pad's script starts once the teleport arrived; the player may fall meanwhile.)
+		if t.pad_step == 0 &&
+		   (s.prediction.state.position.y < FLY_TEST_HEIGHT - 1 ||
+				   s.rules.fly_sprint_speed != FLY_TEST_SPEED) {
 			if t.waited >
 			   FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the teleport or rule change never arrived")}
 			return
 		}
-		if !s.prediction.state.flying {s.toggle_fly = true} 	// (a teleport keeps a flyer flying)
-		s.autopilot = game.Player_Input {
-			move    = {0, 1},
-			yaw     = -math.PI / 2,
-			pitch   = -0.4,
-			buttons = {.Sprint},
+		if t.pad {
+			if !fly_test_pad_lift(app) {
+				if t.waited > FLY_TEST_LOAD_TIMEOUT {fly_test_finish(app, "the pad never flew it")}
+				return
+			}
+		} else {
+			if !s.prediction.state.flying {s.toggle_fly = true} 	// (a teleport keeps a flyer flying)
+			s.autopilot = game.Player_Input {
+				move    = {0, 1},
+				yaw     = -math.PI / 2,
+				pitch   = -0.4,
+				buttons = {.Sprint},
+			}
 		}
 		t.start = s.prediction.state.position
 		exit_check_baseline(&t.check, s)
@@ -108,6 +122,25 @@ fly_test_update :: proc(app: ^App) {
 			return
 		}
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
+		if t.pad {
+			// The pad's input must be what reaches the player.
+			t.pad_ticks += 1
+			if _, auto := s.autopilot.?; auto {
+				fly_test_finish(
+					app,
+					"the pad's input did not reach the player (an autopilot flew)",
+				)
+				return
+			}
+			pr := &s.prediction
+			if t.pad_ticks >= 10 && pr.count > 0 {
+				newest := pr.pending[(pr.head + pr.count - 1) % game.PREDICTION_PENDING].input
+				if newest.move != {0, 1} || .Sprint not_in newest.buttons {
+					fly_test_finish(app, "the pad's input did not reach the player")
+					return
+				}
+			}
+		}
 		p := s.prediction.state
 		if !p.flying && p.position.x - t.start.x > 2 {
 			fly_test_finish(app, "stopped flying (landed?)")
@@ -168,4 +201,37 @@ fly_test_finish :: proc(app: ^App, error: string) {
 	}
 	t.phase = .Off
 	exit_check_finish(app, &t.check, failures[:])
+}
+
+// fly_test_pad_lift: the pad's script from the lifting on, one step a frame:
+// a connect (an Xbox pad), then, if not flying, A pressed twice (the double
+// tap: two presses two frames apart), repeated until flying; then the left
+// stick pushed up and its button held. True once flying with the stick held.
+@(private = "file")
+fly_test_pad_lift :: proc(app: ^App) -> bool {
+	t := &app.fly_test
+	s := app.session
+	inject :: proc(app: ^App, e: platform.Event) {append(&app.injected, e)}
+	switch {
+	case t.pad_step == 0:
+		inject(app, platform.Pad_Connect_Event{pad = 0, connected = true, family = .Xbox})
+		t.pad_step = 1
+	case !s.prediction.state.flying:
+		// 1: down, 2: up, 3: down, 4: up, then six frames to see it take.
+		switch (t.pad_step - 1) % 10 {
+		case 0, 2:
+			inject(app, platform.Pad_Button_Event{pad = 0, button = .A, pressed = true})
+		case 1, 3:
+			inject(app, platform.Pad_Button_Event{pad = 0, button = .A, pressed = false})
+		}
+		t.pad_step += 1
+	case t.pad_step < 100000:
+		inject(app, platform.Pad_Axis_Event{pad = 0, axis = .Left_Y, value = 1})
+		inject(app, platform.Pad_Button_Event{pad = 0, button = .Left_Stick, pressed = true})
+		t.pad_step = 100000
+		return false // (the stick takes a frame to arrive)
+	case:
+		return true
+	}
+	return false
 }

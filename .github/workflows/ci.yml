@@ -40,6 +40,17 @@ jobs:
 
       - name: Check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
+      # A virtual gamepad for the platform package's hot-plug test (M41): the
+      # uinput device writable, and the pad's event node readable by the
+      # runner user. VX_REQUIRE_UINPUT makes the test fail rather than skip.
+      - name: Virtual gamepad (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo modprobe uinput
+          sudo chmod 0666 /dev/uinput
+          echo 'SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/vendor}=="1209", ATTRS{id/product}=="0001", MODE="0666"' | sudo tee /etc/udev/rules.d/99-voxiverse-test.rules
+          sudo udevadm control --reload-rules
+          echo "VX_REQUIRE_UINPUT=1" >> "$GITHUB_ENV"
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
       # The same suite again with another random seed (M29): a test that
@@ -89,6 +100,12 @@ jobs:
           xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30" --check fly
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
+
+      # The same flight on a synthetic gamepad (M41): events in, the actions,
+      # the predicted inputs out.
+      - name: Gamepad flight (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./build/voxiverse --check fly_pad
 
       # Bulk edits (M9): rockets and explosions, each shown whole, and the
       # client's chunks end up exactly the server's.

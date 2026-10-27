@@ -18,6 +18,7 @@ Window :: struct {
 	fullscreen:      bool, // borderless, covering the monitor (set_fullscreen)
 	keep_awake:      bool, // the screen kept on (set_keep_awake)
 	events:          [dynamic]Event, // this frame's events, refilled by poll_events
+	pads:            Pads, // gamepads (pad.odin)
 	native:          Native_Window, // per-OS state
 }
 
@@ -30,6 +31,9 @@ Event :: union {
 	Mouse_Button_Event,
 	Mouse_Wheel_Event,
 	Mouse_Delta_Event,
+	Pad_Connect_Event,
+	Pad_Button_Event,
+	Pad_Axis_Event,
 }
 
 Resize_Event :: struct {
@@ -318,11 +322,13 @@ window_open :: proc(
 		delete(w.events)
 		return false
 	}
+	pads_open(&w.pads)
 	return true
 }
 
 window_close :: proc(w: ^Window) {
 	set_keep_awake(w, false)
+	pads_close(&w.pads)
 	native_close(w)
 	delete(w.events)
 	w^ = {}
@@ -333,6 +339,7 @@ window_close :: proc(w: ^Window) {
 poll_events :: proc(w: ^Window) -> []Event {
 	clear(&w.events)
 	native_poll(w)
+	pads_poll(&w.pads, &w.events, w.focused)
 	return w.events[:]
 }
 
@@ -341,6 +348,7 @@ wait_events :: proc(w: ^Window) -> []Event {
 	clear(&w.events)
 	native_wait(w)
 	native_poll(w)
+	pads_poll(&w.pads, &w.events, w.focused)
 	return w.events[:]
 }
 

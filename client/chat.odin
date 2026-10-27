@@ -63,8 +63,8 @@ chat_close :: proc(app: ^App) {
 chat_keys :: proc(app: ^App, input: ^ui.Input) {
 	s := app.session
 	if s == nil || s.state != .Playing || !game_controls(app) {return}
-	slash := app.settings.keys.command in app.input.pressed
-	if app.settings.keys.chat in app.input.pressed || slash {
+	slash := action_pressed(&app.actions, .Command)
+	if action_pressed(&app.actions, .Chat) || slash {
 		chat_open(app, "/" if slash else "")
 		input.text = nil
 	}
