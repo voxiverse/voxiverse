@@ -401,6 +401,7 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		simulate_player(s, &c)
 		health_tick(s, &c)
+		place_tick(s, &c)
 		stats_tick(s, &c)
 		if c.moved {
 			base.profile_scope("drop far")

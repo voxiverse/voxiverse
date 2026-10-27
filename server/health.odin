@@ -63,6 +63,8 @@ damage_player :: proc(s: ^Server, c: ^Client, amount: f32, cause: string) {
 // die: c is dead: their things dropped (by the rule), and they stand at the spawn again.
 die :: proc(s: ^Server, c: ^Client, cause: string) {
 	record(s, c, .Death, cause)
+	died := game.Player_Died{cause}
+	event_send(s, c, .Player_Died, &died)
 	w := c.world
 	if w.rules.death_drops {
 		at := c.player.position + {0, 0.5, 0}

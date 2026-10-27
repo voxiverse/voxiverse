@@ -66,6 +66,8 @@ App :: struct {
 	null_audio:       bool, // mix into the null device, whatever the sound card (--null-audio, --check audio)
 	audio_debug:      Audio_Debug,
 	sounds:           Sound_Bank,
+	music:            Music_App, // the director and its voices (music_app.odin)
+	snapshots:        Snapshots, // what the mixer's snapshot holds (snapshots.odin)
 	volumes:          [audio.Bus]f32, // as last told to the mixer
 	listener:         audio.Listener, // ... and the listener's options
 	shader_watch:     Shader_Watch,
@@ -195,6 +197,21 @@ app_init :: proc(app: ^App) -> bool {
 @(private = "file")
 audio_init :: proc(app: ^App) {
 	sounds_init(&app.sounds, app.mixer)
+	music_init(app)
+	// Explosions and the like duck the music (duck 1 is M58's).
+	audio.set_duck(
+		app.mixer,
+		0,
+		{
+			active = true,
+			trigger = .Effects,
+			target = .Music,
+			threshold = 0.25,
+			amount = 0.6,
+			attack = 0.02,
+			release = 1,
+		},
+	)
 	audio_volumes(app, true)
 	audio_listener(app, true)
 	if app.null_audio {
@@ -298,6 +315,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	audio_ring_stop(app)
 	audio.streams_close(app.mixer)
 	sounds_destroy(&app.sounds)
+	music_destroy(app)
 	free(app.mixer)
 	if app.settings_dirty {settings_save(app)}
 	console_history_save(&app.console)
@@ -370,6 +388,10 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	audio_volumes(app, false)
 	audio_listener(app, false)
 	audio.drain(app.mixer)
+	if !app.benchmark {
+		music_update(app, app.last_frame_ms / 1000)
+		snapshots_update(app, app.last_frame_ms / 1000)
+	}
 	audio_debug_update(app)
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could

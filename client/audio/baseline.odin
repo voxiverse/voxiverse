@@ -119,7 +119,9 @@ baseline_destroy :: proc(b: ^Baseline, allocator := context.allocator) {
 }
 
 // baseline_format: the file's text. `old` (if any) lends the checksums of the
-// other OSes, which this machine cannot recompute.
+// other OSes, which this machine cannot recompute, but only while this OS's
+// own checksum is the same as before: a changed sound makes the other OSes'
+// lines stale, so they go (CI's log gives the new ones back).
 baseline_format :: proc(b: Baseline, old: Maybe(Baseline) = nil) -> string {
 	sb := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&sb, "# audio baseline: rewritten by `build audio --accept %s`", b.scenario)
@@ -144,7 +146,7 @@ baseline_format :: proc(b: Baseline, old: Maybe(Baseline) = nil) -> string {
 	for d in b.decays {fmt.sbprintfln(&sb, "decay %s %.0f", d.name, d.ms)}
 	sums := make([dynamic]Checksum, context.temp_allocator)
 	append(&sums, ..b.checksums[:])
-	if o, ok := old.?; ok {
+	if o, ok := old.?; ok && same_sound(b, o) {
 		for c in o.checksums {
 			found := false
 			for s in sums {if s.key == c.key {found = true}}
@@ -154,6 +156,17 @@ baseline_format :: proc(b: Baseline, old: Maybe(Baseline) = nil) -> string {
 	slice.sort_by(sums[:], proc(a, b: Checksum) -> bool {return a.key < b.key})
 	for c in sums {fmt.sbprintfln(&sb, "checksum %s %016x", c.key, c.value)}
 	return strings.to_string(sb)
+}
+
+// same_sound: this build's checksum is in old, and the same.
+@(private = "file")
+same_sound :: proc(b, old: Baseline) -> bool {
+	for mine in b.checksums {
+		for c in old.checksums {
+			if c.key == mine.key && c.value == mine.value {return true}
+		}
+	}
+	return false
 }
 
 @(private = "file")

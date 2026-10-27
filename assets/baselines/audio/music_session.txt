@@ -1,0 +1,11 @@
+# audio baseline: rewritten by `build audio --accept music_session`
+scenario music_session
+rate 48000
+frames 7204800
+bus Effects integrated -35.2 true_peak -7.4 range 11.4
+bands Effects -67.68 -67.04 -64.96 -61.35 -61.91 -61.74 -63.82 -60.80 -59.96 -61.44 -58.29 -58.52 -61.43 -62.87 -64.87 -66.91 -65.40 -62.75 -59.61 -57.81 -56.84 -56.02 -71.20 -94.36
+bus Music integrated -32.4 true_peak -14.1 range 20.2
+bands Music -78.28 -78.43 -81.70 -78.06 -70.87 -67.23 -58.93 -56.73 -52.90 -52.18 -48.98 -50.26 -47.60 -51.52 -53.27 -58.13 -64.05 -68.59 -70.16 -74.72 -80.50 -86.75 -92.04 -97.32
+bus Master integrated -31.8 true_peak -7.4 range 16.2
+bands Master -67.39 -66.80 -64.86 -61.26 -61.39 -60.64 -57.72 -55.32 -52.15 -51.69 -48.49 -49.64 -47.42 -51.21 -52.99 -57.59 -61.65 -61.73 -59.26 -57.72 -56.82 -56.02 -71.17 -92.59
+checksum Linux.Minimal 023456f8a389bfe2

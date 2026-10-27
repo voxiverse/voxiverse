@@ -35,6 +35,7 @@ Settings :: struct {
 	volume:            f32, // 0..1, all sound (the Master bus)
 	music_volume:      f32, // 0..1
 	ambience_volume:   f32, // 0..1
+	music_gap:         i32, // 0 Rare, 1 Normal, 2 Often, 3 Constant: how often music plays in a world
 	effects_volume:    f32, // 0..1
 	mono_audio:        bool, // both ears hear the same (one-sided hearing)
 	swap_channels:     bool, // left and right exchanged
@@ -68,8 +69,9 @@ SETTINGS_DEFAULTS := Settings {
 	gui_scale         = 0,
 	clouds            = true,
 	volume            = 0.8,
-	music_volume      = 1,
+	music_volume      = 0.25,
 	ambience_volume   = 1,
+	music_gap         = 1,
 	effects_volume    = 1,
 	ceiling_db        = -1,
 	mouse_sensitivity = 1,
@@ -186,6 +188,14 @@ SETTINGS_VARS := [?]base.Var {
 		min = 0,
 		max = 1,
 		step = 0.05,
+	},
+	{
+		field = "music_gap",
+		label = "Music gaps",
+		help = "How often music plays in a world: Rare, Normal, Often, or Constant (one piece after another).",
+		min = 0,
+		max = 3,
+		choices = {{0, "Rare"}, {1, "Normal"}, {2, "Often"}, {3, "Constant"}},
 	},
 	{
 		field = "effects_volume",

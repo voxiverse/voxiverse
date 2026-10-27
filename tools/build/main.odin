@@ -596,24 +596,34 @@ run :: proc(cmd: []string) -> bool {
 	return werr == nil && state.exited && state.exit_code == 0
 }
 
+AUDIO_SCENARIOS :: []string {
+	"burst",
+	"cave_walk",
+	"title_to_world",
+	"stress",
+	"music_session",
+	"music_hour",
+	"all",
+}
+
 // audio_baselines runs the audio quality baselines (client/audio_baseline_test.odin,
 // files in assets/baselines/audio/): `--accept <scenario|all>` rewrites the
 // named baseline from what the scenario sounds like now (review the diff),
-// `--wav <dir>` also writes every scenario's master as a WAV to listen to.
+// `--wav <dir>` also writes every scenario's master as a WAV to listen to,
+// and a scenario's name alone runs only that one.
 audio_baselines :: proc(args: []string) -> bool {
 	defines := make([dynamic]string)
 	for i := 0; i < len(args); i += 1 {
 		switch args[i] {
 		case "--accept":
 			if i + 1 >= len(args) {
-				fmt.eprintln("build: audio --accept <burst|cave_walk|title_to_world|stress|all>")
+				fmt.eprintln(
+					"build: audio --accept <burst|cave_walk|title_to_world|stress|music_session|music_hour|all>",
+				)
 				return false
 			}
 			i += 1
-			if !slice.contains(
-				[]string{"burst", "cave_walk", "title_to_world", "stress", "all"},
-				args[i],
-			) {
+			if !slice.contains(AUDIO_SCENARIOS, args[i]) {
 				fmt.eprintfln("build: audio --accept: no scenario '%s'", args[i])
 				return false
 			}
@@ -626,11 +636,14 @@ audio_baselines :: proc(args: []string) -> bool {
 			i += 1
 			append(&defines, strings.concatenate({"-define:VX_AUDIO_WAV_DIR=", args[i]}))
 		case:
-			fmt.eprintfln(
-				"build: audio takes --accept <scenario|all> and --wav <dir>, not '%s'",
-				args[i],
-			)
-			return false
+			if !slice.contains(AUDIO_SCENARIOS, args[i]) || args[i] == "all" {
+				fmt.eprintfln(
+					"build: audio takes --accept <scenario|all>, --wav <dir> and a scenario to run alone, not '%s'",
+					args[i],
+				)
+				return false
+			}
+			append(&defines, strings.concatenate({"-define:VX_AUDIO_ONLY=", args[i]}))
 		}
 	}
 	out := path_join({"build", "test", strings.concatenate({"audio-baselines", exe_suffix()})})
@@ -641,7 +654,7 @@ audio_baselines :: proc(args: []string) -> bool {
 			ODIN_FLAGS,
 			{
 				strings.concatenate({"-out:", out}),
-				"-define:ODIN_TEST_NAMES=client.test_audio_baselines",
+				"-define:ODIN_TEST_NAMES=client.test_audio_baselines,client.test_music_hour_golden",
 			},
 			defines[:],
 		},

@@ -123,6 +123,10 @@ Session :: struct {
 	stats:            Session_Stats,
 	health:           f32, // as the server last said (Health)
 	max_health:       f32,
+	place:            game.Place, // the server's word on where we are (the music's)
+	home:             game.Address, // the world we joined in (the music's "home")
+	died:             int, // Player_Died events seen (the music's death stinger)
+	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
 	player_stats:     Stats_Data, // the counters the server last sent (stats_ui.odin)
 	config:           Session_Config,
 	net:              Net_Stats,

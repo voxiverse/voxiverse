@@ -43,6 +43,9 @@ Net_Client :: struct {
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
+	place:       game.Place, // the last Place record
+	places:      int, // Place records received
+	deaths:      int, // Player_Died events
 	died:        int, // Entity_Despawn with died
 	results:     map[u32]game.Edit_Result,
 	seq:         u32,
@@ -154,6 +157,9 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.inventory, c.inv_acked = v.inventory, v.acked
 			c.inv_updates += 1
 		case .Rules, .Clock, .Variables, .Selection:
+		case .Place:
+			c.place = (^game.Place)(g.value)^
+			c.places += 1
 		case .Grants:
 			v := (^game.Grants)(g.value)
 			for gr in c.grants {delete(gr.pattern)}
@@ -218,6 +224,8 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.died += 1
 		case .Explosion:
 			c.explosions += 1
+		case .Player_Died:
+			c.deaths += 1
 		}
 	}
 }

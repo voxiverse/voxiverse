@@ -28,6 +28,7 @@ State_Kind :: enum u8 {
 	Entity,
 	Entity_Motion,
 	Block,
+	Place,
 }
 
 Event_Kind :: enum u8 {
@@ -37,6 +38,7 @@ Event_Kind :: enum u8 {
 	Entity_Hurt,
 	Entity_Died,
 	Explosion,
+	Player_Died,
 }
 
 // Own_Player: the player's authoritative state after the server applied
@@ -93,6 +95,25 @@ Entity_Motion :: struct {
 Block_Record :: struct {
 	block: Block,
 	heard: bool,
+}
+
+// MAX_BIOMES: the most biomes a generator may have (a Place's biome is below it).
+MAX_BIOMES :: 32
+
+NO_BIOME :: 255 // Place.biome: not an Earth world
+
+// Place: where the player is, for the music (M44): the biome under their feet
+// (the worldgen.Biome ordinal; NO_BIOME in a world that is not Earth's) and the
+// world's warmth and wetness, a hundred times the generator's parameters.
+Place :: struct {
+	biome:   u8,
+	warmth:  i8,
+	wetness: i8,
+}
+
+// Player_Died: the player died, of cause (sent before they land at the spawn).
+Player_Died :: struct {
+	cause: string `net:"max=32"`,
 }
 
 // Entity_Died: an entity the client knows died (sent before its record goes).
@@ -157,6 +178,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		check = check_entity_motion,
 	},
 	.Block = {name = "block", value = Block_Record, key = .Block, write_through = true},
+	.Place = {name = "place", value = Place, check = check_place},
 }
 
 @(rodata)
@@ -167,6 +189,7 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 	.Entity_Hurt = {name = "entity_hurt", value = Entity_Hurt},
 	.Entity_Died = {name = "entity_died", value = Entity_Died},
 	.Explosion = {name = "explosion", value = Explosion, check = check_explosion},
+	.Player_Died = {name = "player_died", value = Player_Died},
 }
 
 // game_schema builds the schema of the game's kinds. The server builds it when
@@ -269,6 +292,16 @@ check_entity_motion :: proc(v: rawptr) -> bool {
 check_explosion :: proc(v: rawptr) -> bool {
 	x := (^Explosion)(v)
 	return position_ok(x.position) && x.radius >= 0 && x.radius <= 64
+}
+
+@(private = "file")
+check_place :: proc(v: rawptr) -> bool {
+	p := (^Place)(v)
+	return(
+		(p.biome < MAX_BIOMES || p.biome == NO_BIOME) &&
+		abs(i32(p.warmth)) <= 100 &&
+		abs(i32(p.wetness)) <= 100 \
+	)
 }
 
 @(private = "file")

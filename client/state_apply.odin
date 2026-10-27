@@ -30,6 +30,7 @@ APPLY := [game.State_Kind]Apply_Proc {
 	.Entity        = apply_entity,
 	.Entity_Motion = apply_entity_motion,
 	.Block         = apply_block,
+	.Place         = apply_place,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -65,6 +66,11 @@ apply_own_player :: proc(s: ^Session, g: game.Received) {
 apply_health :: proc(s: ^Session, g: game.Received) {
 	h := (^game.Health)(g.value)
 	s.health, s.max_health = h.health, h.max
+}
+
+@(private)
+apply_place :: proc(s: ^Session, g: game.Received) {
+	s.place = (^game.Place)(g.value)^
 }
 
 @(private)
@@ -223,5 +229,7 @@ apply_event :: proc(s: ^Session, g: game.Received) {
 	case .Explosion:
 		x := (^game.Explosion)(g.value)
 		explosion_effects(s, x.position, f64(x.radius))
+	case .Player_Died:
+		s.died += 1
 	}
 }

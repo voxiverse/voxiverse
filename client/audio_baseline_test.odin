@@ -2,6 +2,7 @@ package client
 
 import "core:fmt"
 import "core:log"
+import "core:mem/virtual"
 import "core:os"
 import "core:strings"
 import "core:testing"
@@ -30,7 +31,15 @@ Audio_Scenario :: enum {
 	cave_walk, // a field, into a cave, and out
 	title_to_world, // the title's music, a click, the world fading in under it
 	stress, // more voices than can be mixed
+	music_session, // the real director and the committed music: title, loading, a world, a blast, a pause
 }
+
+// MUSIC_OVER_EFFECTS_LU: how much louder than the effects the music may be
+// in music_session (the Music bus against the Effects bus, integrated).
+MUSIC_OVER_EFFECTS_LU :: 3
+
+// Skip every scenario but this one (`build audio <scenario>`).
+ONLY :: #config(VX_AUDIO_ONLY, "")
 
 // scenario_run renders a scenario and measures it. `gain` scales the sounds
 // (1 as scripted: a test changes it to see the baseline notice).
@@ -44,6 +53,19 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 	// The streams come after the effects in the sound table; a scenario without
 	// music has only the effects, so `build audiodump` can replay its capture.
 	music: audio.Sound_Id
+	tracks: []Music_Track
+	arena: virtual.Arena
+	player: Music_Player
+	director: Music_Director
+	defer {
+		music_player_destroy(&player)
+		virtual.arena_destroy(&arena)
+	}
+	if which == .music_session {
+		tracks = music_tracks(&arena)
+		assert(music_streams(&player, m, tracks, inline = true))
+		director_init(&director, tracks, 44)
+	}
 	if which == .title_to_world || which == .stress {
 		ok: bool
 		music, ok = audio.add_stream(
@@ -163,6 +185,58 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 				},
 			)
 		}
+	case .music_session:
+		seconds = 150
+		audio.set_reverb(m, 0.5, 0.5, 0.05, 0.1)
+		audio.set_duck(
+			m,
+			0,
+			{
+				active = true,
+				trigger = .Effects,
+				target = .Music,
+				threshold = 0.25,
+				amount = 0.6,
+				attack = 0.02,
+				release = 1,
+			},
+		)
+		// A click in the menu, then (in the world) footsteps every half
+		// second and the blast at 100 s.
+		audio.play(
+			m,
+			{sound = bank.player[.Land][0], gain = g, bus = .UI, pitch = 2, start_frame = at(20)},
+		)
+		for i in 0 ..< 200 {
+			when_s := 47 + 0.5 * f64(i)
+			if when_s >= 150 {break}
+			audio.play(
+				m,
+				{
+					sound = bank.block[.Grass][.Step][i % sfx.VARIANTS],
+					gain = g * 0.7,
+					bus = .Player,
+					start_frame = at(when_s),
+				},
+			)
+		}
+		for i in 0 ..< 60 {
+			audio.play(
+				m,
+				{
+					sound = bank.block[.Stone][.Break][i % sfx.VARIANTS],
+					gain = g,
+					bus = .World,
+					start_frame = at(48 + 1.7 * f64(i)),
+				},
+			)
+		}
+		audio.play(
+			m,
+			{sound = bank.blast[.Boom][0], gain = {1, 1}, bus = .World, start_frame = at(100)},
+		)
+		// The music at the level a new player has it.
+		audio.set_bus_gain(m, .Music, SETTINGS_DEFAULTS.music_volume)
 	case .stress:
 		seconds = 3
 		audio.set_reverb(m, 1.4, 0.5, 0.2, 0.2)
@@ -188,7 +262,38 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 	defer audio.analysis_destroy(&an)
 	audio.analysis_attach(m, &an, audio.BASELINE_BUSES)
 	out: [2 * BASELINE_BLOCK]f32
-	for _ in 0 ..< int(seconds * BASELINE_RATE) / BASELINE_BLOCK + 10 {
+	actions := make([dynamic]Music_Action, context.temp_allocator)
+	holds: Snapshot_Conditions
+	for block in 0 ..< int(seconds * BASELINE_RATE) / BASELINE_BLOCK + 10 {
+		if which == .music_session {
+			now := f64(block * BASELINE_BLOCK) / BASELINE_RATE
+			in_ := Music_Input {
+				session     = now >= 40,
+				loading     = now >= 40 && now < 45,
+				playing     = now >= 45,
+				paused      = now >= 120 && now < 130,
+				biome       = 4,
+				time_of_day = 0.5,
+				world_home  = true,
+				gap         = 3,
+			}
+			want: Snapshot_Conditions
+			if in_.session && in_.loading {want += {.Loading}}
+			if in_.paused {want += {.Paused}}
+			if want != holds {
+				audio.set_snapshot(
+					m,
+					snapshot_compose(want),
+					snapshot_time(holds, want),
+					u64(now * BASELINE_RATE) + 4800,
+				)
+				holds = want
+			}
+			music_alive(&player, m, &director)
+			clear(&actions)
+			director_update(&director, in_, f32(BASELINE_BLOCK) / BASELINE_RATE, &actions)
+			music_apply(&player, m, tracks, actions[:])
+		}
 		audio.mix(m, out[:])
 		audio.drain(m)
 	}
@@ -239,8 +344,19 @@ baseline_path :: proc(which: Audio_Scenario) -> string {
 test_audio_baselines :: proc(t: ^testing.T) {
 	for which in Audio_Scenario {
 		name := fmt.tprintf("%v", which)
+		if ONLY != "" && ONLY != name {continue}
 		got := scenario_run(which)
 		defer audio.baseline_destroy(&got)
+		if which == .music_session {
+			over := got.buses[.Music].integrated - got.buses[.Effects].integrated
+			testing.expectf(
+				t,
+				over <= MUSIC_OVER_EFFECTS_LU,
+				"music is %.1f LU above the effects (at most %d)",
+				over,
+				MUSIC_OVER_EFFECTS_LU,
+			)
+		}
 		path := baseline_path(which)
 		old_text, err := os.read_entire_file_from_path(path, context.allocator)
 		defer delete(old_text)

@@ -128,26 +128,34 @@ local SCHEMA = {
     { name = "block", t = "enum", signed = false },
     { name = "heard", t = "bool" },
   } },
-  { id = 13, name = "notice", key = "none", lane = "event", fields = {
+  { id = 13, name = "place", key = "none", lane = "reliable", fields = {
+    { name = "biome", t = "u8" },
+    { name = "warmth", t = "i8" },
+    { name = "wetness", t = "i8" },
+  } },
+  { id = 14, name = "notice", key = "none", lane = "event", fields = {
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 14, name = "chat_line", key = "none", lane = "event", fields = {
+  { id = 15, name = "chat_line", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
     { name = "sender", t = "u16" },
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 15, name = "chat_delete", key = "none", lane = "event", fields = {
+  { id = 16, name = "chat_delete", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
   } },
-  { id = 16, name = "entity_hurt", key = "none", lane = "event", fields = {
+  { id = 17, name = "entity_hurt", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 17, name = "entity_died", key = "none", lane = "event", fields = {
+  { id = 18, name = "entity_died", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 18, name = "explosion", key = "none", lane = "event", fields = {
+  { id = 19, name = "explosion", key = "none", lane = "event", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "radius", t = "f32" },
+  } },
+  { id = 20, name = "player_died", key = "none", lane = "event", fields = {
+    { name = "cause", t = "string", max = 32 },
   } },
 }
 -- schema end

@@ -89,6 +89,10 @@ receive :: proc(s: ^Session) {
 			clear(&s.edits)
 			clear(&s.puffs)
 			s.welcome.address = v.address
+			s.place = {
+				biome = game.NO_BIOME,
+			}
+			s.arrivals += 1
 			s.rules = v.rules
 			game.receiver_reset(&s.rx)
 			rules := v.rules
@@ -164,6 +168,10 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		return
 	}
 	s.welcome = w
+	s.home = w.address
+	s.place = {
+		biome = game.NO_BIOME,
+	}
 	// Everything the server can send us at once: the interest area plus the
 	// margin within which we keep chunks.
 	r, h :=

@@ -164,6 +164,18 @@ test_baseline_roundtrip_and_compare :: proc(t: ^testing.T) {
 	testing.expect(t, ok2)
 	defer baseline_destroy(&accepted)
 	testing.expect_value(t, len(baseline_compare(accepted, loud)), 0)
+	// Another OS's checksum is kept while this OS's is unchanged, and dropped
+	// when the sound changed (it would be stale).
+	same := b
+	same.checksums = make([dynamic]Checksum, context.temp_allocator)
+	append(&same.checksums, Checksum{"Nowhere.None", 7})
+	append(&same.checksums, b.checksums[0])
+	kept, _ := baseline_parse(baseline_format(b, same))
+	defer baseline_destroy(&kept)
+	testing.expect_value(t, len(kept.checksums), 2)
+	dropped, _ := baseline_parse(baseline_format(loud, same))
+	defer baseline_destroy(&dropped)
+	testing.expect_value(t, len(dropped.checksums), 1)
 	// A wrong checksum for this OS and level fails, one for another does not.
 	bad := b
 	bad.checksums = make([dynamic]Checksum, context.temp_allocator)

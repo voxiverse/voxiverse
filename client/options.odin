@@ -40,6 +40,7 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"volume",
 		"music_volume",
 		"ambience_volume",
+		"music_gap",
 		"effects_volume",
 		"mono_audio",
 		"swap_channels",

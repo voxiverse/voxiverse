@@ -109,6 +109,8 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	round_trip(t, &l, .Variables, {}, &variables)
 	selection := Selection{{Block_Pos{1, 2, 3}, nil}}
 	round_trip(t, &l, .Selection, {}, &selection)
+	place := Place{8, -20, 100}
+	round_trip(t, &l, .Place, {}, &place)
 	// Block_Changed (heard), Blocks_Changed (quiet)
 	heard := Block_Record{.Gravel, true}
 	round_trip(t, &l, .Block, key_of_block({1, 2, 3}), &heard)
@@ -191,6 +193,10 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse(t, &s, .Inventory, {}, &feet, "a cap on the feet")
 	far := Selection{{Block_Pos{1 << 28, 0, 0}, nil}}
 	refuse(t, &s, .Selection, {}, &far, "a corner outside the world")
+	far_biome := Place{254, 0, 0}
+	refuse(t, &s, .Place, {}, &far_biome, "a biome that does not exist")
+	hot := Place{4, 101, 0}
+	refuse(t, &s, .Place, {}, &hot, "warmth 101")
 	boom := Explosion{{1, 2, 3}, 1000}
 	refuse_event(t, &s, .Explosion, &boom, "an explosion of radius 1000")
 	kind_gap := Entity_Record{Entity_Kind(200), {}}

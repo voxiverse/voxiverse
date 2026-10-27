@@ -916,3 +916,34 @@ test_prompts_follow_device :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(seen_icons), len(Prompt_Shape))
 	free_all(context.temp_allocator)
 }
+
+// The music gap option (M44): Options > Audio cycles Rare, Normal, Often,
+// Constant, and the settings text written keeps the choice.
+@(test)
+test_music_gap_option :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	app.screen = .Options
+	app.options.tab = .Audio
+	ui_frame(app)
+	testing.expect_value(t, app.settings.music_gap, 1)
+	names := [4]string{"Rare", "Normal", "Often", "Constant"}
+	current := 1
+	for _ in 0 ..< 4 {
+		if !click(t, app, fmt.tprintf("Music gaps: %s", names[current])) {return}
+		current = (current + 1) % 4
+		testing.expect_value(t, app.settings.music_gap, i32(current))
+		b := strings.builder_make(context.temp_allocator)
+		base.vars_write(settings_table(), &app.settings, &b)
+		testing.expectf(
+			t,
+			strings.contains(
+				string(b.buf[:]),
+				fmt.tprintf("music_gap = %d", app.settings.music_gap),
+			),
+			"the written settings keep music_gap:\n%s",
+			string(b.buf[:]),
+		)
+	}
+	free_all(context.temp_allocator)
+}
