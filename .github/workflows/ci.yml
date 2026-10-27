@@ -394,8 +394,7 @@ jobs:
           if [ -z "$PREV" ]; then
             COUNT="$(printf '%s\n' "$LIST" | grep -c '^- ' || true)"
             if [ "$COUNT" -gt 40 ]; then
-              LIST="$(printf '%s\n' "$LIST" | tail -n 40)
-- …and $((COUNT - 40)) earlier milestones"
+              LIST="$(printf '%s\n' "$LIST" | tail -n 40)"$'\n'"- …and $((COUNT - 40)) earlier milestones"
             fi
           fi
           {
