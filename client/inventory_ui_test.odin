@@ -325,3 +325,198 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	escape(app)
 	testing.expect(t, !inventory_open_(app))
 }
+
+// ---------------------------------------------------------------------------
+// The inventory and the statistics with a pad (M42b): pad events alone.
+// ---------------------------------------------------------------------------
+
+// pad_rig: a rig playing, with a pad in use, the catalog granted.
+@(private = "file")
+pad_rig :: proc(t: ^testing.T) -> ^Rig {
+	r := rig_make(t)
+	app, s := r.app, r.s
+	app.session, app.screen = s, .Game
+	s.state = .Playing
+	append(&s.grants, game.Grant{pattern = "items.catalog", allow = true})
+	pad_connect(app, .Xbox)
+	pad_frame(app)
+	return r
+}
+
+// pad_cursor_to: the cursor on slot by directions alone.
+@(private = "file")
+pad_cursor_to :: proc(t: ^testing.T, app: ^App, slot: int, loc := #caller_location) {
+	v := &app.inventory_view
+	for _ in 0 ..< 60 {
+		if v.cursor == slot {return}
+		l := inventory_layout(&app.ui, v.tab)
+		if v.cursor >= CURSOR_CATALOG_BASE {
+			pad_go(app, .Down)
+			continue
+		}
+		a, b := l.slots[v.cursor], l.slots[slot]
+		dx, dy := (b.x + b.w / 2) - (a.x + a.w / 2), (b.y + b.h / 2) - (a.y + a.h / 2)
+		if abs(dx) > abs(dy) {
+			pad_go(app, .Right if dx > 0 else .Left)
+		} else {
+			pad_go(app, .Down if dy > 0 else .Up)
+		}
+	}
+	testing.expectf(
+		t,
+		v.cursor == slot,
+		"the cursor never reached slot %d (on %d)",
+		slot,
+		v.cursor,
+		loc = loc,
+	)
+}
+
+@(test)
+test_inventory_with_a_pad :: proc(t: ^testing.T) {
+	r := pad_rig(t)
+	defer rig_free(r)
+	app, s := r.app, r.s
+	inv := &s.inventory
+	v := &app.inventory_view
+	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	inv.slots[9] = {stone, 64}
+	inv.slots[0] = {dirt, 10}
+	inv.selected = 2
+
+	// Y opens it, the cursor on the hand's slot.
+	pad_tap(app, .Y)
+	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect_value(t, v.cursor, 2)
+
+	// A picks the stack up, directions carry it, A puts it down.
+	pad_cursor_to(t, app, 9)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.cursor, game.Stack{stone, 64})
+	testing.expect(t, game.stack_empty(inv.slots[9]))
+	pad_cursor_to(t, app, 20)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.slots[20], game.Stack{stone, 64})
+	testing.expect(t, game.stack_empty(inv.cursor))
+
+	// X takes half; A puts it back.
+	pad_tap(app, .X)
+	testing.expect_value(t, inv.cursor.count, 32)
+	testing.expect_value(t, inv.slots[20].count, 32)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.slots[20].count, 64)
+
+	// Y moves it to the hotbar.
+	pad_tap(app, .Y)
+	testing.expect(t, game.stack_empty(inv.slots[20]))
+	in_hotbar := 0
+	for i in 0 ..< game.HOTBAR_SLOTS {
+		if inv.slots[i].item == stone {in_hotbar += int(inv.slots[i].count)}
+	}
+	testing.expect_value(t, in_hotbar, 64)
+
+	// The prompts say what the buttons do here.
+	pad_frame(app)
+	seen := prompts_seen(app)
+	testing.expect(t, len(seen) >= 5, "the inventory's prompt bar is drawn")
+
+	// RB: the Creative tab. Up from the hotbar reaches the catalog; Y types a
+	// search; A takes a stack; down to an empty hotbar slot, A puts it there.
+	pad_tap(app, .Right_Bumper)
+	testing.expect_value(t, v.tab, Inventory_Tab.Creative)
+	pad_go(app, .Up)
+	testing.expect(t, v.cursor >= CURSOR_CATALOG_BASE, "the cursor is on the catalog")
+	pad_tap(app, .Y)
+	testing.expect(t, ui.osk_is_open(&app.ui), "Y on the catalog opens the keyboard")
+	pad_type(t, app, "dirt")
+	pad_tap(app, .Start)
+	testing.expect(t, !ui.osk_is_open(&app.ui))
+	testing.expect_value(t, string(app.inventory_search[:]), "dirt")
+	pad_frame(app)
+	pad_tap(app, .A)
+	testing.expect(t, !game.stack_empty(inv.cursor))
+	testing.expect(t, strings.contains(item_title(inv.cursor.item), "dirt"))
+	taken := inv.cursor
+	pad_go(app, .Down)
+	testing.expect(
+		t,
+		v.cursor < CURSOR_CATALOG_BASE,
+		"Down from the catalog's last row reaches the hotbar",
+	)
+	pad_cursor_to(t, app, 4)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.slots[4], taken)
+	testing.expect(t, game.stack_empty(inv.cursor))
+
+	// B closes with the cursor's stack put back.
+	pad_cursor_to(t, app, 0)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.cursor, game.Stack{dirt, 10})
+	pad_tap(app, .B)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, game.stack_empty(inv.cursor))
+	testing.expect_value(t, inv.slots[0], game.Stack{dirt, 10})
+
+	// A chest the server opened: its slots are reachable.
+	inv.chest[0] = {stone, 5}
+	inv.chest_open = true
+	pad_frame(app)
+	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect_value(t, v.tab, Inventory_Tab.Chest)
+	pad_cursor_to(t, app, game.CHEST_BASE)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.cursor, game.Stack{stone, 5})
+	pad_cursor_to(t, app, game.CHEST_BASE + 6)
+	pad_tap(app, .A)
+	testing.expect_value(t, inv.chest[6], game.Stack{stone, 5})
+	pad_tap(app, .B)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_stats_with_a_pad :: proc(t: ^testing.T) {
+	r := pad_rig(t)
+	defer rig_free(r)
+	app, s := r.app, r.s
+	v := &app.stats_view
+	append(
+		&s.player_stats.lines,
+		strings.clone("blocks.placed.stone 4"),
+		strings.clone("blocks.broken.dirt 2"),
+	)
+	s.player_stats.pages = 2
+
+	// View opens it, with the list focused; A opens a group.
+	pad_tap(app, .Back)
+	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+	pad_frame(app)
+	testing.expect_value(t, ui.focused_label(&app.ui), "stats rows")
+	testing.expect_value(t, len(v.expanded), 0)
+	pad_tap(app, .A)
+	testing.expect_value(t, len(v.expanded), 1)
+	pad_tap(app, .A) // and closes it
+	testing.expect_value(t, len(v.expanded), 0)
+
+	// A search, typed on the keyboard.
+	pad_focus(t, app, "stats search")
+	pad_tap(app, .A)
+	testing.expect(t, ui.osk_is_open(&app.ui))
+	pad_type(t, app, "dirt")
+	pad_tap(app, .Start)
+	testing.expect_value(t, string(v.filter[:]), "dirt")
+
+	// Next page.
+	pad_focus(t, app, "Next")
+	pad_tap(app, .A)
+	testing.expect_value(t, v.page, 1)
+
+	// B closes it; View opens it again and closes it.
+	pad_tap(app, .B)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	pad_tap(app, .Back)
+	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+	pad_tap(app, .Back)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	free_all(context.temp_allocator)
+}

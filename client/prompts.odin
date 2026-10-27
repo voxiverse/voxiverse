@@ -2,6 +2,8 @@ package client
 
 import "core:math"
 
+import "../common/game"
+
 import "platform"
 import "ui"
 
@@ -420,6 +422,15 @@ prompt_items :: proc(app: ^App) -> []Prompt_Item {
 			append(&items, select, Prompt_Item{.Menu_Secondary, "Erase", .None}, back)
 		case .Game_Menu, .Quit_Dialog, .Consent, .Chat:
 			append(&items, select, back)
+		case .Inventory:
+			inventory_prompts(app, &items)
+		case .Stats:
+			append(
+				&items,
+				Prompt_Item{.Menu_Confirm, "Open", .None},
+				Prompt_Item{.Menu_Back, "Close", .None},
+				tabs,
+			)
 		}
 		return items[:]
 	}
@@ -440,4 +451,20 @@ prompt_items :: proc(app: ^App) -> []Prompt_Item {
 		}
 	}
 	return items[:]
+}
+
+// inventory_prompts: the inventory's bar: what A, X and Y do under the pad's
+// cursor (with a stack on it A puts down and X puts one).
+@(private = "file")
+inventory_prompts :: proc(app: ^App, items: ^[dynamic]Prompt_Item) {
+	v := &app.inventory_view
+	holding := app.session != nil && !game.stack_empty(app.session.inventory.cursor)
+	on_catalog := v.cursor >= CURSOR_CATALOG_BASE
+	append(items, Prompt_Item{.Menu_Confirm, "Put" if holding else "Take", .None})
+	if !on_catalog {
+		append(items, Prompt_Item{.Menu_Secondary, "One" if holding else "Half", .None})
+	}
+	append(items, Prompt_Item{.Menu_Tertiary, "Search" if on_catalog else "Move", .None})
+	append(items, Prompt_Item{.Menu_Back, "Close", .None})
+	if v.tab != .Chest {append(items, Prompt_Item{.Tab_Prev, "Tabs", .Tab_Next})}
 }

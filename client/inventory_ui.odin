@@ -81,12 +81,17 @@ stack_slot :: proc(
 	}
 }
 
-// item_tooltip: name in a box by the mouse.
-item_tooltip :: proc(ctx: ^ui.Context, name: string) {
+// item_tooltip: name in a box by the mouse, or beside a slot (the pad's
+// cursor: right of it, left if it would run off the screen).
+item_tooltip :: proc(ctx: ^ui.Context, name: string, beside: Maybe(ui.Rect) = nil) {
 	t := &ctx.theme
 	mouse := ctx.input.mouse
 	w := ui.measure_text(ctx, name, t.font_size) + 2 * t.padding
 	tip := ui.Rect{mouse.x + 12, mouse.y + 12, w, t.row_height}
+	if r, ok := beside.?; ok {
+		tip = {r.x + r.w + 4, r.y + (r.h - t.row_height) / 2, w, t.row_height}
+		if tip.x + w > ctx.screen.w {tip.x = r.x - 4 - w}
+	}
 	ui.fill_rect(ctx, tip, t.slot_fill)
 	ui.draw_text(ctx, ui.rect_shrink(tip, t.padding), name, t.font_size, t.text)
 }
@@ -110,6 +115,7 @@ item_tooltip :: proc(ctx: ^ui.Context, name: string) {
 
 INVENTORY_COLUMNS :: 5
 CATALOG_COLUMNS :: 9 // (as wide as the Inventory tab: equipment, preview, grid)
+CURSOR_CATALOG_BASE :: 1000 // the pad's cursor on catalog cell k is this plus k (a slot is its index)
 PREVIEW_COLUMNS :: 3 // the player's preview, as wide as this many slots
 DOUBLE_CLICK_SECONDS :: 0.3
 
@@ -141,6 +147,7 @@ Inventory_View :: struct {
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
 	fresh:       bool, // opened this frame: its own key press is not a tab step
+	cursor:      int, // the pad's cursor: a slot, or CURSOR_CATALOG_BASE + a catalog cell (-1: not placed)
 }
 
 // inventory_keys: the inventory key over the game opens the inventory (it
@@ -175,6 +182,7 @@ inventory_open :: proc(app: ^App) {
 	app.inventory_view = {
 		drag_from  = -1,
 		click_slot = -1,
+		cursor     = -1,
 		fresh      = true,
 	}
 	clear(&app.inventory_search)
@@ -290,6 +298,8 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
+	pad := app.actions.device == .Pad
+	if pad && top && !ui.osk_is_open(ctx) {ctx.focused = 0} 	// (the cursor is the focus: A is not a click on a tab)
 	l := inventory_layout(ctx, v.tab)
 	ui.panel(ctx, l.panel)
 	if v.tab == .Chest {
@@ -304,9 +314,16 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	}
 	mouse := ctx.input.mouse
 	hovered := -1
+	items: []game.Item
+	if v.tab == .Creative {items = matching_items(string(app.inventory_search[:]))}
+	at: ui.Rect // the pad's cursor
+	if pad {
+		at = inventory_pad(app, ctx, l, items, top)
+		if v.cursor < game.ALL_SLOTS {hovered = v.cursor}
+	}
 	for r, i in l.slots {
 		if r.w == 0 {continue}
-		if ui.rect_contains(r, mouse) {hovered = i}
+		if !pad && ui.rect_contains(r, mouse) {hovered = i}
 		stack_slot(ctx, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
 		if i >= game.EQUIP_BASE && i < game.CHEST_BASE && game.stack_empty(game.slot_at(inv, i)^) {
 			small := ctx.theme.font_size * 0.6
@@ -320,7 +337,9 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			)
 		}
 	}
-	if v.tab == .Inventory {player_preview(app, ctx, l.preview)}
+	if v.tab == .Inventory {
+		player_preview(app, ctx, l.preview, {at.x + at.w / 2, at.y + at.h / 2} if pad else mouse)
+	}
 	do_ :: proc(s: ^Session, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 		session_inventory_do(s, {kind, slot, arg})
 	}
@@ -348,26 +367,22 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			}
 		}
 	}
-	if v.tab == .Creative {catalog_ui(app, ctx, l, top)}
-	// What is hovered, and what the cursor holds.
+	if v.tab == .Creative {catalog_ui(app, ctx, l, top, items, pad, at)}
+	// What is hovered, and what the cursor holds (the pad's: up and right of its slot).
 	if hovered >= 0 &&
 	   !game.stack_empty(game.slot_at(inv, hovered)^) &&
 	   game.stack_empty(inv.cursor) {
-		item_tooltip(ctx, item_title(game.slot_at(inv, hovered).item))
+		item_tooltip(ctx, item_title(game.slot_at(inv, hovered).item), at if pad else nil)
 	}
 	if !game.stack_empty(inv.cursor) {
-		stack_slot(
-			ctx,
-			&app.item_icons,
-			{
-				mouse.x - INVENTORY_SLOT.x / 2,
-				mouse.y - INVENTORY_SLOT.y / 2,
-				INVENTORY_SLOT.x,
-				INVENTORY_SLOT.y,
-			},
-			inv.cursor,
-			true,
-		)
+		held := ui.Rect {
+			mouse.x - INVENTORY_SLOT.x / 2,
+			mouse.y - INVENTORY_SLOT.y / 2,
+			INVENTORY_SLOT.x,
+			INVENTORY_SLOT.y,
+		}
+		if pad {held = {at.x + at.w / 2, at.y - at.h / 2, at.w, at.h}}
+		stack_slot(ctx, &app.item_icons, held, inv.cursor, true)
 	}
 }
 
@@ -452,47 +467,184 @@ ring_tabs :: proc(
 	return
 }
 
-// catalog_ui: every item that matches the search; a click puts a full stack
-// of it on the cursor.
+// catalog_rows: how many rows the catalog has and shows (the scroll is kept
+// within them).
 @(private = "file")
-catalog_ui :: proc(app: ^App, ctx: ^ui.Context, l: Inventory_Layout, top: bool) {
+catalog_rows :: proc(
+	ctx: ^ui.Context,
+	v: ^Inventory_View,
+	r: ui.Rect,
+	count: int,
+) -> (
+	rows, visible: int,
+) {
+	gap := ctx.theme.spacing
+	rows = (count + CATALOG_COLUMNS - 1) / CATALOG_COLUMNS
+	visible = int((r.h + gap) / (INVENTORY_SLOT.y + gap))
+	v.scroll = clamp(v.scroll, 0, f32(max(rows - visible, 0)))
+	return
+}
+
+// catalog_cell: the rect of the i-th cell shown (row by row from the top).
+@(private = "file")
+catalog_cell :: proc(r: ui.Rect, gap: f32, i: int) -> ui.Rect {
+	row, col := i / CATALOG_COLUMNS, i % CATALOG_COLUMNS
+	return {
+		r.x + f32(col) * (INVENTORY_SLOT.x + gap),
+		r.y + f32(row) * (INVENTORY_SLOT.y + gap),
+		INVENTORY_SLOT.x,
+		INVENTORY_SLOT.y,
+	}
+}
+
+// catalog_ui: every item that matches the search; a click puts a full stack
+// of it on the cursor (with the pad, the cursor's cell is the lit one).
+@(private = "file")
+catalog_ui :: proc(
+	app: ^App,
+	ctx: ^ui.Context,
+	l: Inventory_Layout,
+	top: bool,
+	items: []game.Item,
+	pad: bool,
+	at: ui.Rect,
+) {
 	r := l.catalog
 	s := app.session
 	t := &ctx.theme
 	v := &app.inventory_view
+	was_open := ui.osk_is_open(ctx)
 	ui.text_input(ctx, "inventory search", &app.inventory_search, l.search, "search items")
-	items := matching_items(string(app.inventory_search[:]))
+	if pad && top && !was_open && v.cursor >= CURSOR_CATALOG_BASE && .Tertiary in ctx.nav {
+		// (opened after the field is drawn: Y is not the keyboard's first key)
+		ui.osk_open(ctx, ui.get_id(ctx, "inventory search"))
+	}
 	gap := t.spacing
-	rows := (len(items) + CATALOG_COLUMNS - 1) / CATALOG_COLUMNS
-	visible := int((r.h + gap) / (INVENTORY_SLOT.y + gap))
+	_, visible := catalog_rows(ctx, v, r, len(items))
 	if ui.rect_contains(r, ctx.input.mouse) {v.scroll -= ctx.input.wheel.y}
-	v.scroll = clamp(v.scroll, 0, f32(max(rows - visible, 0)))
+	catalog_rows(ctx, v, r, len(items))
 	first := int(v.scroll) * CATALOG_COLUMNS
 	hovered := game.NO_ITEM
 	ui.push_clip_rect(ctx, r)
 	defer {
 		ui.pop_clip_rect(ctx)
 		if hovered != game.NO_ITEM && game.stack_empty(s.inventory.cursor) {
-			item_tooltip(ctx, item_title(hovered))
+			item_tooltip(ctx, item_title(hovered), at if pad else nil)
 		}
 	}
 	for k in first ..< len(items) {
 		i := k - first
-		row, col := i / CATALOG_COLUMNS, i % CATALOG_COLUMNS
-		if row >= visible {break}
-		slot := ui.Rect {
-			r.x + f32(col) * (INVENTORY_SLOT.x + gap),
-			r.y + f32(row) * (INVENTORY_SLOT.y + gap),
-			INVENTORY_SLOT.x,
-			INVENTORY_SLOT.y,
-		}
-		over := ui.rect_contains(slot, ctx.input.mouse)
+		if i / CATALOG_COLUMNS >= visible {break}
+		slot := catalog_cell(r, gap, i)
+		over :=
+			v.cursor == CURSOR_CATALOG_BASE + k if pad else ui.rect_contains(slot, ctx.input.mouse)
 		stack_slot(ctx, &app.item_icons, slot, {items[k], 1}, over)
 		if over {hovered = items[k]}
-		if top && over && .Left in ctx.input.mouse_pressed {
+		if !pad && top && over && .Left in ctx.input.mouse_pressed {
 			session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(items[k])})
 		}
 	}
+}
+
+// inventory_pad: the pad's cursor over the slots and the catalog's cells:
+// kept somewhere that exists (it starts on the hand's hotbar slot), moved by
+// directions (past the catalog's top or bottom row it scrolls a row), and A, X
+// and Y as a left click, a right click and a quick move on a slot; on a cell A
+// takes a stack and Y opens the keyboard on the search. Returns the cursor's rect.
+@(private = "file")
+inventory_pad :: proc(
+	app: ^App,
+	ctx: ^ui.Context,
+	l: Inventory_Layout,
+	items: []game.Item,
+	top: bool,
+) -> ui.Rect {
+	s := app.session
+	v := &app.inventory_view
+	gap := ctx.theme.spacing
+	creative := v.tab == .Creative
+	rows, visible: int
+	if creative {rows, visible = catalog_rows(ctx, v, l.catalog, len(items))}
+
+	// Keep it on something that is shown.
+	valid := false
+	if v.cursor >= CURSOR_CATALOG_BASE {
+		if creative && len(items) > 0 {
+			cell := min(v.cursor - CURSOR_CATALOG_BASE, len(items) - 1)
+			v.cursor = CURSOR_CATALOG_BASE + cell
+			row := cell / CATALOG_COLUMNS
+			if row < int(v.scroll) {
+				v.scroll = f32(row)
+			} else if row >= int(v.scroll) + visible {
+				v.scroll = f32(row - visible + 1)
+			}
+			valid = true
+		}
+	} else if v.cursor >= 0 && v.cursor < game.ALL_SLOTS {
+		valid = l.slots[v.cursor].w != 0
+	}
+	if !valid {v.cursor = clamp(s.inventory.selected, 0, game.HOTBAR_SLOTS - 1)}
+
+	cursor_rect :: proc(l: Inventory_Layout, gap: f32, v: ^Inventory_View) -> ui.Rect {
+		if v.cursor >= CURSOR_CATALOG_BASE {
+			cell := v.cursor - CURSOR_CATALOG_BASE - int(v.scroll) * CATALOG_COLUMNS
+			return catalog_cell(l.catalog, gap, cell)
+		}
+		return l.slots[v.cursor]
+	}
+
+	if top && !ui.osk_is_open(ctx) && !ctx.edit.active {
+		ui.consume_nav(ctx, ui.DIRECTIONS)
+		do_ :: proc(s: ^Session, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
+			session_inventory_do(s, {kind, slot, arg})
+		}
+		for dir in ui.Nav.Up ..= ui.Nav.Right {
+			if dir not_in ctx.nav {continue}
+			if v.cursor >= CURSOR_CATALOG_BASE && (dir == .Up || dir == .Down) {
+				cell := v.cursor - CURSOR_CATALOG_BASE
+				row, first_row := cell / CATALOG_COLUMNS, int(v.scroll)
+				if dir == .Down && row == first_row + visible - 1 && first_row + visible < rows {
+					v.scroll += 1
+					v.cursor = CURSOR_CATALOG_BASE + min(cell + CATALOG_COLUMNS, len(items) - 1)
+					continue
+				}
+				if dir == .Up && row == first_row && first_row > 0 {
+					v.scroll -= 1
+					v.cursor -= CATALOG_COLUMNS
+					continue
+				}
+			}
+			rects := make([dynamic]ui.Rect, context.temp_allocator)
+			ids := make([dynamic]int, context.temp_allocator)
+			for r, i in l.slots {
+				if r.w != 0 {append(&rects, r); append(&ids, i)}
+			}
+			if creative {
+				first := int(v.scroll) * CATALOG_COLUMNS
+				shown := min(visible * CATALOG_COLUMNS, len(items) - first)
+				for i in 0 ..< shown {
+					append(&rects, catalog_cell(l.catalog, gap, i))
+					append(&ids, CURSOR_CATALOG_BASE + first + i)
+				}
+			}
+			if to := ui.nav_pick(cursor_rect(l, gap, v), rects[:], dir); to >= 0 {
+				v.cursor = ids[to]
+			}
+		}
+		switch {
+		case v.cursor >= CURSOR_CATALOG_BASE:
+			if .Confirm in ctx.nav {
+				do_(s, .Take, game.CURSOR_SLOT, int(items[v.cursor - CURSOR_CATALOG_BASE]))
+			}
+		case .Confirm in ctx.nav:
+			do_(s, .Click, v.cursor)
+		case .Secondary in ctx.nav:
+			do_(s, .Click_Right, v.cursor)
+		case .Tertiary in ctx.nav:
+			do_(s, .Quick_Move, v.cursor)
+		}
+	}
+	return cursor_rect(l, gap, v)
 }
 
 // slot_takes: a slot a spread or a one-each drag may put into: empty, or
@@ -645,17 +797,16 @@ EQUIP_LABELS := [game.Equip_Slot]string {
 PREVIEW_IMAGE :: ui.Image(1)
 
 // player_preview shows the player (drawn to a texture by the renderer,
-// app.preview) turned toward the mouse.
+// app.preview) turned toward look: the mouse, or the pad's cursor.
 @(private = "file")
-player_preview :: proc(app: ^App, ctx: ^ui.Context, r: ui.Rect) {
+player_preview :: proc(app: ^App, ctx: ^ui.Context, r: ui.Rect, look: ui.Vec2) {
 	t := &ctx.theme
 	ui.fill_rect(ctx, r, t.preview_fill)
 	ui.stroke_rect(ctx, r, 1, t.faint_border)
-	// Where the mouse is from the middle of the player's chest: turn and look
-	// that way, within limits.
-	mouse := ctx.input.mouse
-	dx := (mouse.x - (r.x + r.w / 2)) / (r.w * 2)
-	dy := ((r.y + r.h * 0.3) - mouse.y) / (r.h * 2)
+	// Where it is from the middle of the player's chest: turn and look that
+	// way, within limits.
+	dx := (look.x - (r.x + r.w / 2)) / (r.w * 2)
+	dy := ((r.y + r.h * 0.3) - look.y) / (r.h * 2)
 	app.preview.active = true
 	app.preview.target_yaw = clamp(dx * 1.6, -0.9, 0.9)
 	app.preview.target_pitch = clamp(dy * 1.4, -0.6, 0.6)

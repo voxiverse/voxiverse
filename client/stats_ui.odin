@@ -42,7 +42,8 @@ Stats_View :: struct {
 	asked:    string, // the filter last asked for (heap)
 	asked_at: time.Tick,
 	page:     int,
-	scroll:   f32, // rows
+	first:    int, // the first row shown
+	selected: int, // the row the pad's focus is on
 	expanded: map[string]bool, // heap, keys owned
 	fresh:    bool, // opened this frame: its own key press is not a tab step
 }
@@ -71,7 +72,7 @@ stats_open :: proc(app: ^App) {
 	overlay_open(&app.overlays, .Stats)
 	v := &app.stats_view
 	clear(&v.filter)
-	v.page, v.scroll = 0, 0
+	v.page, v.first, v.selected = 0, 0, 0
 	v.fresh = true
 	delete(v.asked)
 	v.asked = ""
@@ -173,6 +174,17 @@ thousands :: proc(n: u64) -> string {
 	return strings.to_string(b)
 }
 
+// stats_toggle opens a group, or closes it.
+@(private = "file")
+stats_toggle :: proc(v: ^Stats_View, path: string) {
+	if v.expanded[path] {
+		key, _ := delete_key(&v.expanded, path)
+		delete(key)
+	} else {
+		v.expanded[strings.clone(path)] = true
+	}
+}
+
 // stats_ui: the overlay.
 stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	s := app.session
@@ -202,7 +214,7 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	// Asked again when the search changed (not more than four times a second).
 	if string(v.filter[:]) != v.asked &&
 	   time.duration_milliseconds(time.tick_since(v.asked_at)) > 250 {
-		v.page, v.scroll = 0, 0
+		v.page, v.first, v.selected = 0, 0, 0
 		stats_ask(app)
 	}
 	footer := ui.cut_bottom(&inner, t.row_height)
@@ -238,11 +250,26 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	rows := stats_rows(data.lines[:], v.expanded, len(v.filter) > 0)
 	step := t.row_height
 	visible := int(inner.h / step)
-	if ui.rect_contains(inner, ctx.input.mouse) {v.scroll -= ctx.input.wheel.y * 2}
-	v.scroll = clamp(v.scroll, 0, f32(max(len(rows) - visible, 0)))
+	// The list is one focus for the pad: Up and Down choose a row, A opens or
+	// closes its group.
+	v.selected = clamp(v.selected, 0, max(len(rows) - 1, 0))
+	ui.default_focus(ctx)
+	picked := ui.list_nav(
+		ctx,
+		"stats rows",
+		inner,
+		len(rows),
+		&v.selected,
+		&v.first,
+		visible,
+		step,
+	)
+	if top && picked.clicked && v.selected < len(rows) && !rows[v.selected].leaf {
+		stats_toggle(v, rows[v.selected].path)
+	}
 	ui.push_clip_rect(ctx, inner)
 	defer ui.pop_clip_rect(ctx)
-	first := int(v.scroll)
+	first := v.first
 	for row, i in rows[min(first, len(rows)):] {
 		if i >= visible {break}
 		r := ui.Rect{inner.x, inner.y + f32(i) * step, inner.w, step}
@@ -262,12 +289,7 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		)
 		ui.draw_text(ctx, r, stats_format(row.path, row.total), t.font_size, ink, .Right)
 		if top && over && !row.leaf && .Left in ctx.input.mouse_pressed {
-			if v.expanded[row.path] {
-				key, _ := delete_key(&v.expanded, row.path)
-				delete(key)
-			} else {
-				v.expanded[strings.clone(row.path)] = true
-			}
+			stats_toggle(v, row.path)
 		}
 	}
 }

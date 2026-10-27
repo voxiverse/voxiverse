@@ -3128,3 +3128,41 @@ hides its hover after pad use and comes back with the mouse.
 Not done: the by-hand checks (the glyphs at GUI scales 1-4, a real pad and the Steam Deck, the
 keyboard's feel, the hover hiding after pad use), a Windows or macOS run (CI covers the
 build).
+
+# M42b: the inventory and statistics with a controller
+
+- A slot cursor in the inventory overlay (`Inventory_View.cursor: int`, a slot index, or a
+  catalog cell as `CURSOR_CATALOG_BASE + item index`), shown and used while
+  `actions.device` is Pad, hidden when the mouse moves (mouse play exactly as now).
+  Directions move it with `ui.nav_pick` over the rects of every slot drawn (inventory,
+  hotbar, equipment, chest) and the visible catalog cells; moving past the catalog's top or
+  bottom row scrolls it a row. It opens on the selected hotbar slot.
+- On a slot: A is a left click (pick up, put down, swap, merge), X a right click (half, or
+  one put down), Y a quick move (shift-click); on a catalog cell A takes a full stack, Y
+  opens the keyboard on the search field. The cursor's stack is drawn at the slot cursor
+  (offset up and right), the tooltip beside it, the player preview turns toward it. LB/RB
+  change tabs (M40); B closes (`inventory_close`, the stack put back). The prompt bar shows
+  A Take/Put, X Half/One, Y Move (Search on the catalog), B Close, the tab glyphs.
+- The statistics (`stats_ui.odin`): the rows through `ui.list_nav` (A opens or closes a
+  group), the search field (keyboard), Previous/Next by direction; View (stats) or B closes.
+- Tests: `client/inventory_ui_test.odin`, `test_inventory_with_a_pad`: Y opens it; the
+  cursor moved to slot 9 by directions; A picks the stack, directions to 20, A puts it; X
+  halves; Y moves to the hotbar; RB to Creative, Y and "dirt" typed, A takes a stack, A
+  puts it in a hotbar slot; B closes with the cursor's stack put back; a chest opened by
+  the server shows the chest's slots reachable. `test_stats_with_a_pad`: open by View, a
+  group opened by A, a search typed, Next page, B closes. Pad events only, through M42's
+  harness (package-level in `menus_test.odin`: `rig_make`/`rig_free`, `pad_frame`, `pad_tap`,
+  `pad_go`, `pad_focus`, `pad_type`; `pad_frame` draws the overlays of a playing session; M42's
+  history entry says how it differs from its spec). `ui.list_nav` takes a `row_h`; the glyph
+  pair for the tabs is `Prompt_Item.also`; `prompt_items` in `prompts.odin` decides the bar
+  (add the inventory and statistics there).
+
+Exit check (M42b): the suite and CI green; both tests drive their overlays with pad events
+only. Check by hand: the inventory with a real pad (reach, how the cursor's stack reads).
+
+Left out (M42 and M42b): dropping from an inventory slot with a pad (drop in the world with
+X), drag gestures with a pad (spread, one each, gather), the console, tuning panel and audio
+inspector with a pad, haptics, a pad-specific layout of any screen (the layouts stay as they
+are; navigation adapts to them), Steam's own keyboard.
+
+What differed: the Y on a catalog cell opens the keyboard after the search field is drawn, so the press is not the keyboard's first key (a space); a pad-mode inventory clears the UI focus each frame (the cursor is the focus: A is not a click on a tab); the statistics' list is one `ui.list_nav` focus (default focus), its scroll now `first`/`selected` ints; `pad_frame` also runs `chest_sync`, `inventory_keys`, `stats_keys`, and `rig_free` frees what the new tests fill. The catalog cursor is the matching list's position, clamped when the search changes.
