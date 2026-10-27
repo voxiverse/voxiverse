@@ -3,10 +3,10 @@ package server
 import "core:log"
 import "core:math"
 
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
-// Gates (worldgen/gates.odin has their shape and places): a player dials
+// Gates (common/worldgen/gates.odin has their shape and places): a player dials
 // one (Dial: seven symbols, a world of this galaxy); its chevrons lock one
 // by one, and the far world's arrival gate (the nearest its middle) with
 // it; both open for a while; walking into the dialing gate's horizon

@@ -5,11 +5,11 @@ import "core:strings"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // What the server's State and Snapshot messages do to the session (M39): the
-// receiver decodes them into records and events (game/replica.odin), and one
+// receiver decodes them into records and events (common/game/replica.odin), and one
 // table says what each kind of record does here, a switch what each event does.
 
 @(private)

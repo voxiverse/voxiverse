@@ -10,8 +10,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../platform"
-import "../ui"
+import "platform"
+import "ui"
 
 // Singleplayer's saves (PLAN.md M20; Minecraft's Select World): one
 // directory each under saves/ in the user data directory (or VX_SAVES),

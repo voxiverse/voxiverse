@@ -7,9 +7,9 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../netcode"
-import "../telemetry"
+import "../../common/game"
+import "../../common/netcode"
+import "../../common/telemetry"
 
 @(private = "file")
 loopback :: proc(port: int) -> net.Endpoint {

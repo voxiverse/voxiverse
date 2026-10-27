@@ -6,8 +6,8 @@ import "core:path/filepath"
 import "core:strings"
 
 import "../base"
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // The player's settings (saved) and the debug switches (not saved), each a
 // plain struct described once by a variable table (see base/vars.odin and

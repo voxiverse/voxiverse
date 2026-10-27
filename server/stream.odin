@@ -5,11 +5,11 @@ import "core:mem"
 import "core:slice"
 
 import "../base"
-import "../game"
-import "../netcode"
+import "../common/game"
+import "../common/netcode"
 
 // Clients, and interest management for each (the area is defined in
-// game/interest.odin): which chunks a client has, which to send next and
+// common/game/interest.odin): which chunks a client has, which to send next and
 // which to tell it to drop; and which chunks no client wants any more.
 
 Client_State :: enum u8 {

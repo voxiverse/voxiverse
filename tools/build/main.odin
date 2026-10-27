@@ -14,18 +14,18 @@ import "core:strings"
 // package doesn't hide errors in the others.
 PACKAGES :: []string {
 	"base",
-	"audio",
-	"netcode",
-	"telemetry",
-	"collector",
-	"font",
-	"ui",
-	"game",
-	"worldgen",
+	"client/audio",
+	"common/netcode",
+	"common/telemetry",
+	"server/collector",
+	"client/font",
+	"client/ui",
+	"common/game",
+	"common/worldgen",
 	"server",
-	"platform",
-	"gpu",
-	"render",
+	"client/platform",
+	"client/gpu",
+	"client/render",
 	"client",
 	"client/mesh",
 	"client/sfx",
@@ -44,16 +44,16 @@ PACKAGES :: []string {
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
 	"base",
-	"audio",
-	"netcode",
-	"telemetry",
-	"collector",
-	"font",
-	"ui",
-	"game",
-	"worldgen",
+	"client/audio",
+	"common/netcode",
+	"common/telemetry",
+	"server/collector",
+	"client/font",
+	"client/ui",
+	"common/game",
+	"common/worldgen",
 	"server",
-	"render",
+	"client/render",
 	"client/mesh",
 	"client/sfx",
 	"client",
@@ -64,18 +64,18 @@ TEST_PACKAGES :: []string {
 SOURCE_DIRS :: []string {
 	"base",
 	"dedicated",
-	"audio",
-	"netcode",
-	"telemetry",
-	"collector",
-	"font",
-	"ui",
-	"game",
-	"worldgen",
+	"client/audio",
+	"common/netcode",
+	"common/telemetry",
+	"server/collector",
+	"client/font",
+	"client/ui",
+	"common/game",
+	"common/worldgen",
 	"server",
-	"platform",
-	"gpu",
-	"render",
+	"client/platform",
+	"client/gpu",
+	"client/render",
 	"client",
 	"tools",
 }
@@ -414,7 +414,40 @@ check :: proc() -> bool {
 			ok = false
 		}
 	}
-	return determinism_lint() && check_format() && ok
+	return determinism_lint() && check_format() && check_no_binaries() && ok
+}
+
+// check_no_binaries fails if git tracks an executable (ELF, PE or Mach-O): build
+// output belongs in build/, and one was once committed at the root by mistake.
+check_no_binaries :: proc() -> bool {
+	listing, ok := capture({"git", "ls-files", "-z"})
+	if !ok {
+		fmt.eprintln("binary git ls-files failed")
+		return false
+	}
+	found := 0
+	for path in strings.split(listing, "\x00", context.temp_allocator) {
+		if path == "" {continue}
+		f, err := os.open(path)
+		if err != nil {continue}
+		head: [4]u8
+		n, _ := os.read(f, head[:])
+		os.close(f)
+		if n < 4 {continue}
+		elf := head == {0x7f, 'E', 'L', 'F'}
+		pe := head[0] == 'M' && head[1] == 'Z'
+		mach :=
+			head == {0xcf, 0xfa, 0xed, 0xfe} ||
+			head == {0xfe, 0xed, 0xfa, 0xcf} ||
+			head == {0xca, 0xfe, 0xba, 0xbe}
+		if elf || pe || mach {
+			fmt.eprintfln("binary %s is an executable: build output goes in build/", path)
+			found += 1
+		}
+	}
+	if found > 0 {return false}
+	fmt.println("binary none tracked")
+	return true
 }
 
 test :: proc() -> bool {

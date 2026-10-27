@@ -11,14 +11,14 @@ import "core:strings"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../gpu"
-import "../netcode"
-import "../platform"
-import "../render"
+import "../common/game"
+import "../common/netcode"
+import "../common/worldgen"
 import "../server"
-import "../worldgen"
+import "gpu"
 import "mesh"
+import "platform"
+import "render"
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the connection (to its own in-process server, or over
@@ -26,7 +26,7 @@ import "mesh"
 // player and what it knows of the other players; everything it allocates
 // long-term is in its arena, freed at once by session_end. The client talks
 // to the server only through messages, the same either way: it sends
-// inputs, predicts their effect (game/prediction.odin), and the server's
+// inputs, predicts their effect (common/game/prediction.odin), and the server's
 // Player_Updates have the last word.
 
 Session_Config :: struct {
@@ -91,7 +91,7 @@ Session :: struct {
 	teleport:         Maybe(game.Teleport), // requested before joining: sent on Welcome
 	prediction:       game.Prediction,
 	rules:            game.Rules, // the server's, as last announced
-	clock:            f64, // world time: the server's last word, carried on since (game/time.odin)
+	clock:            f64, // world time: the server's last word, carried on since (common/game/time.odin)
 	cloud_drift:      f64, // blocks the clouds have moved
 	tick_time:        f32, // seconds into the current client tick
 	toggle_fly:       bool, // a double-tapped jump waits for the next tick

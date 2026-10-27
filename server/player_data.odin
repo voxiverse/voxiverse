@@ -8,7 +8,7 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-import "../game"
+import "../common/game"
 
 // What is kept about each character: their own file in the universe,
 // characters/<account>/<name>.json (where they are, where they look,

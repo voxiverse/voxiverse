@@ -5,8 +5,8 @@ import "core:math"
 import "core:strings"
 
 import "../base"
-import "../platform"
-import "../ui"
+import "platform"
+import "ui"
 
 // Options (PLAN.md M20): the player's settings in tabs, the same from the
 // title and in a game (there docked left, the world in view, so changes show

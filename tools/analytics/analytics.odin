@@ -5,7 +5,7 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 
-import "../../game"
+import "../../common/game"
 
 // Analysis of a lake of event lines (collector/): each function takes the
 // lines (JSON objects, one per line, as the sink wrote them with a "pid"

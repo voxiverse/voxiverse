@@ -1,7 +1,7 @@
 package server
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // Random ticks (Minecraft's): every tick, in each loaded chunk, a few blocks
 // (rules.random_tick_speed, 3 by default) are picked at random, and one that

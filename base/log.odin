@@ -120,7 +120,7 @@ tagged_logger_proc :: proc(
 	secs := time.duration_seconds(time.tick_since(s.start))
 	file := location.file_path
 	// Paths relative to the repository: from the first of our top-level dirs.
-	for dir in ([]string{"/base/", "/client/", "/game/", "/server/", "/gpu/", "/render/", "/ui/", "/font/", "/platform/", "/tools/"}) {
+	for dir in ([]string{"/base/", "/client/", "/common/", "/server/", "/dedicated/", "/tools/"}) {
 		if i := strings.last_index(file, dir); i >= 0 {
 			file = file[i + 1:]
 			break

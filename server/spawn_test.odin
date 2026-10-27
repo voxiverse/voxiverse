@@ -6,8 +6,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // Nobody arrives inside blocks: spawn lands on the top of what stands at
 // the spawn, a teleport into blocks comes out above them; setworldspawn

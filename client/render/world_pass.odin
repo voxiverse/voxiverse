@@ -5,7 +5,7 @@ import "core:mem"
 import "core:slice"
 import vk "vendor:vulkan"
 
-import "../base"
+import "../../base"
 import "../gpu"
 
 // Draws chunk meshes. Meshes are retained: each lives in a range of one

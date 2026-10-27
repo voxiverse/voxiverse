@@ -4,7 +4,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../game"
+import "../common/game"
 
 // M22b's exit check, two players over UDP: armor goes on through the
 // inventory's own actions (only into the slot it fits; swapping; quick

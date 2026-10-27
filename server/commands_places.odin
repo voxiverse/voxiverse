@@ -6,7 +6,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../game"
+import "../common/game"
 
 // Server commands for getting around (after EssentialsX's): homes, warps,
 // teleport requests, back, top, tp. Every arrival lands (spawn.odin) and

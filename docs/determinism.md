@@ -59,7 +59,7 @@ lets it be (`prediction_decay`'s visual offset, the pipe's simulated jitter).
 
 ## The state hash
 
-`game/state_hash.odin` is a reflective walker with two outputs: `hash_value` folds
+`common/game/state_hash.odin` is a reflective walker with two outputs: `hash_value` folds
 a value into a `Hasher`; `dump_value` writes a line per leaf,
 `entities[3].body.velocity.x = 0x3f8ccccd (1.1)`. Floats are their bits (so -0
 is not 0), padding never enters, a map or a pointer panics with its path (keyed

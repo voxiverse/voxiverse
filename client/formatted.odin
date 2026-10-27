@@ -4,10 +4,10 @@ import "core:fmt"
 import "core:strings"
 import "core:unicode/utf8"
 
-import "../game"
-import "../ui"
+import "../common/game"
+import "ui"
 
-// Formatted text on screen: & codes (game/format.odin) drawn with ui's
+// Formatted text on screen: & codes (common/game/format.odin) drawn with ui's
 // styled text, span by span.
 
 // draw_formatted draws text from pos (its baseline, UI units); color is

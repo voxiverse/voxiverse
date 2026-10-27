@@ -6,12 +6,12 @@ import "core:math"
 import "core:os"
 import "core:strings"
 
-import "../../audio"
 import "../../base"
 import "../../client"
+import "../../client/audio"
 
 // audiodump prints what a capture file holds (the game's audio recorder, see
-// audio/capture.odin) and what the engine did with it, by replaying it
+// client/audio/capture.odin) and what the engine did with it, by replaying it
 // through the same mixer: the audio's `netdump`.
 //
 //	build audiodump <capture>                     timeline, decisions, summaries

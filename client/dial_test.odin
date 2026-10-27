@@ -2,9 +2,9 @@ package client
 
 import "core:testing"
 
-import "../font"
-import "../game"
-import "../ui"
+import "../common/game"
+import "font"
+import "ui"
 
 // The dial overlay with the mouse: a symbol a click, none twice, Backspace
 // and Erase take the last back, the seventh sends Dial (this galaxy, the

@@ -9,7 +9,7 @@ name, never chat text, never an address: an event names its player by a number i
 data?" (asked once on the title screen, changeable in Options > Profile) or a server operator
 started the server with `--telemetry host:port`. No consent: no connection at all.
 
-**Transport.** The server's uploader (`collector/upload.odin`) sends its log, whole lines, in
+**Transport.** The server's uploader (`server/collector/upload.odin`) sends its log, whole lines, in
 batches of at most 30 KB over the game's own netcode (reliable UDP), after proving its account's
 key as joining does. The collector keeps no source addresses. Unacknowledged batches are sent
 again; a batch is written once however often it arrives.

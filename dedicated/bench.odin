@@ -9,8 +9,8 @@ import "core:sync"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../netcode"
+import "../common/game"
+import "../common/netcode"
 import "../server"
 
 // The `server` benchmark scenario (PLAN.md, M19; `build bench server`): the

@@ -4,8 +4,8 @@ import "core:os"
 import "core:testing"
 
 import "../base"
-import "../game"
-import "../ui"
+import "../common/game"
+import "ui"
 
 // Every variable table names real fields of supported types, with defaults
 // inside their ranges.

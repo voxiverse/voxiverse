@@ -8,8 +8,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../telemetry"
+import "../common/game"
+import "../common/telemetry"
 
 @(private = "file")
 Snapshot :: struct {

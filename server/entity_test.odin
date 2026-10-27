@@ -7,8 +7,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../netcode"
+import "../common/game"
+import "../common/netcode"
 
 // M8's exit check: an entity simulated on the server, seen by the players
 // near it and only them, hit to death, and kept by the save. Over real

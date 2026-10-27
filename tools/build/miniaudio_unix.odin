@@ -4,7 +4,7 @@ package build
 import "core:fmt"
 import "core:os"
 
-// The game uses Odin's vendor:miniaudio (audio/device.odin). Its static
+// The game uses Odin's vendor:miniaudio (client/audio/device.odin). Its static
 // library ships with the compiler on Windows only (miniaudio_windows.odin);
 // here it is compiled once, into the Odin install, from the C source that
 // comes with it (with cc, which linking needs anyway).

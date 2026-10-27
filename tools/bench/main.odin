@@ -6,8 +6,8 @@ import "core:os"
 
 import "../../base"
 import "../../client/mesh"
-import "../../game"
-import "../../worldgen"
+import "../../common/game"
+import "../../common/worldgen"
 
 // The `chunks` benchmark scenario (PLAN.md, M19; `build bench chunks`):
 // the chunk pipeline on one thread, without the game. An Earth world's

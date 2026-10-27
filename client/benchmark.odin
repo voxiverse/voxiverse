@@ -6,11 +6,11 @@ import "core:math"
 import "core:strings"
 import "core:time"
 
-import "../audio"
 import "../base"
-import "../game"
-import "../gpu"
+import "../common/game"
 import "../server"
+import "audio"
+import "gpu"
 
 // Benchmarks (PLAN.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
@@ -410,7 +410,7 @@ BENCH_AUDIO_BLOCK :: 480 // frames: 10 ms at 48 kHz, a device callback's size
 BENCH_AUDIO_BLOCKS :: 1000
 BENCH_AUDIO_SMOKE_BLOCKS :: 100
 BENCH_AUDIO_WARMUP :: 50
-BENCH_AUDIO_STREAM :: #load("../audio/testdata/tone.ogg")
+BENCH_AUDIO_STREAM :: #load("audio/testdata/tone.ogg")
 // BENCH_AUDIO_BUDGET: a core's share the mix may take (PLAN.md, M32c: 5%),
 // judged on the median block of a release build.
 BENCH_AUDIO_BUDGET :: 0.05

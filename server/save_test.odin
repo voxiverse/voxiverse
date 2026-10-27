@@ -8,8 +8,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // M5's exit check: save -> quit -> load gives back exactly the world that
 // was left (edited blocks, the player, the time, the seed), and edits survive their

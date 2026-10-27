@@ -3,10 +3,10 @@ package server
 import "core:fmt"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // Items on the server: inventory requests (applied by the shared rules,
-// game/inventory.odin), placing blocks from the stack in hand, what
+// common/game/inventory.odin), placing blocks from the stack in hand, what
 // breaking leaves, dropped stacks (thrown, falling, merging, picked up by
 // walking over them), and the give, clear and item commands. A player with
 // items.infinite places without using anything up and breaks without

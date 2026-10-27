@@ -5,8 +5,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // Structures players keep: `structure save` turns a box of the world into
 // a template file in the world's structures directory; `structure paste`

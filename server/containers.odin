@@ -9,13 +9,13 @@ import "core:strconv"
 import "core:strings"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // Blocks that hold things (M30): a chest's contents are a record kept with
 // its block, by position, owned by the server, saved with the world
 // (containers.cfg). Made when someone first opens the chest, dropped when the
 // block is gone (its contents spill out). A player looking into a chest has
-// its slots in their Inventory (chest, chest_open: game/inventory.odin), so
+// its slots in their Inventory (chest, chest_open: common/game/inventory.odin), so
 // the ordinary requests move stacks in and out of it, predicted by the
 // client like the rest; the record is the truth, copied in before each
 // request and out after it, and told to everyone else looking at it.

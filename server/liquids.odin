@@ -4,7 +4,7 @@ import "core:log"
 import "core:mem"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // Liquids: water flows by Minecraft's rules, through scheduled block
 // updates. Water levels are block ids (game.water_level): a source (0)

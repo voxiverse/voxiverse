@@ -1,7 +1,7 @@
 package server
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // Block changes: every block the world changes in a tick (a player's edit,
 // a bulk edit, an explosion; flowing water next) goes through set_block or

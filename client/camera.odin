@@ -2,8 +2,8 @@ package client
 
 import "core:math"
 
-import "../game"
-import "../render"
+import "../common/game"
+import "render"
 
 // The view: where the eyes are (the predicted player's, see session.odin)
 // and where they look. Looking turns every frame, for responsiveness;

@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:strings"
 
 import "../base"
-import "../game"
-import "../platform"
+import "../common/game"
+import "platform"
 
 // Controls (Options > Controls): every action is bound to a key or a mouse
 // button by its place on the keyboard (platform.Key), so WASD stays a

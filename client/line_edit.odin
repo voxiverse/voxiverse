@@ -5,10 +5,10 @@ import "core:mem"
 import "core:slice"
 import "core:strings"
 
-import "../ui"
+import "ui"
 
 // Line_Editor: a command line (the console's, chat's) beyond the editing
-// every text field has (ui/widgets.odin): Tab completion, history
+// every text field has (client/ui/widgets.odin): Tab completion, history
 // (Up/Down or Ctrl+P/N), reverse search (Ctrl+R), Ctrl+C to clear the line.
 
 HISTORY_MAX :: 500

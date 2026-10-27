@@ -7,8 +7,8 @@ import "core:slice"
 import "core:strings"
 
 import "../base"
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // The world's generator, as players can change it: its parameters
 // (worldgen.*, a cheat like rules: everyone is told in a Variables

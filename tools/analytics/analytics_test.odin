@@ -3,8 +3,8 @@ package analytics
 import "core:strings"
 import "core:testing"
 
-import "../../game"
-import "../../telemetry"
+import "../../common/game"
+import "../../common/telemetry"
 
 // A small recorded run: two senders, a few days, the kinds the questions use.
 @(private = "file")

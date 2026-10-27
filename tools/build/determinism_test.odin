@@ -7,12 +7,12 @@ import "core:testing"
 @(test)
 test_lint_names_line :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
-	found := lint_numbers("game/x.odin", "a := 1\nb := math.sin(a)\n")
+	found := lint_numbers("common/game/x.odin", "a := 1\nb := math.sin(a)\n")
 	testing.expect_value(t, len(found), 1)
 	testing.expect_value(
 		t,
 		found[0],
-		"game/x.odin:2: math.sin in shared code: use base.sin (docs/determinism.md)",
+		"common/game/x.odin:2: math.sin in shared code: use base.sin (docs/determinism.md)",
 	)
 }
 

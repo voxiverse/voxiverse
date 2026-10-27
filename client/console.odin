@@ -10,9 +10,9 @@ import "core:strings"
 import "core:sync"
 
 import "../base"
-import "../collector"
-import "../game"
-import "../ui"
+import "../common/game"
+import "../server/collector"
+import "ui"
 
 // The developer console: the log as scrollback, plus a command line. Toggle
 // with the ` key. Log lines can arrive from any thread (e.g. the Vulkan

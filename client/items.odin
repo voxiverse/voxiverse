@@ -3,10 +3,10 @@ package client
 import "core:math"
 import "core:time"
 
-import "../game"
+import "../common/game"
 
 // Items as the player uses them: the stack in hand (the selected hotbar
-// slot of the inventory, game/inventory.odin) and the mouse buttons. A
+// slot of the inventory, common/game/inventory.odin) and the mouse buttons. A
 // block's item places it with the right button (the left breaks, or hits a
 // sheep); the rocket launcher fires with the left. The inventory is the
 // server's: what we do to it is predicted at once and sent

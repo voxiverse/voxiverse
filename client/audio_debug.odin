@@ -8,8 +8,8 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 
-import "../audio"
 import "../base"
+import "audio"
 
 // The audio recorder in the running game (M32d). From the start the mixer
 // keeps its last minute or so in a ring (audio.capture_start_ring: the commands

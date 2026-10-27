@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 
-import "../base"
+import "../../base"
 
 // Entities: things in the world other than blocks and players (for now one
 // kind, the sheep). The server simulates them (server/entities.odin) and

@@ -7,11 +7,11 @@ import "core:net"
 import "core:strings"
 import "core:sync"
 
-import "../audio"
 import "../base"
-import "../game"
+import "../common/game"
 import "../server"
-import "../ui"
+import "audio"
+import "ui"
 
 // Screens, with overlays over them (overlays.odin). Escape backs out one
 // level: the top overlay; else in a world it pauses, on the title it asks

@@ -10,17 +10,17 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../audio"
 import "../base"
-import "../font"
-import "../game"
-import "../gpu"
-import "../netcode"
-import "../platform"
-import "../render"
+import "../common/game"
+import "../common/netcode"
 import "../server"
-import "../ui"
+import "audio"
+import "font"
+import "gpu"
 import "mesh"
+import "platform"
+import "render"
+import "ui"
 
 // App is everything that lives for the whole process: window, GPU, UI, the
 // console, settings. Created and destroyed in one place (app_init /
@@ -29,7 +29,7 @@ import "mesh"
 
 FONT_DATA :: #load("../assets/fonts/jetbrains_mono_regular.ttf")
 // SYMBOL_FONT_DATA: the addresses' symbols (Old Turkic), which the UI font
-// lacks (game/address.odin).
+// lacks (common/game/address.odin).
 SYMBOL_FONT_DATA :: #load("../assets/fonts/noto_sans_old_turkic_regular.ttf")
 
 Screen :: enum u8 {

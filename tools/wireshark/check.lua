@@ -57,7 +57,7 @@ function Tree:set_text(text) if os.getenv("VX_CHECK_VERBOSE") then print("   ", 
 dofile((arg[0]:match("^(.*)/") or ".") .. "/voxiverse.lua")
 assert(proto and proto.heuristic, "the dissector did not register")
 
--- The pcap (LINKTYPE_IPV4, as netcode/capture.odin writes).
+-- The pcap (LINKTYPE_IPV4, as common/netcode/capture.odin writes).
 local f = assert(io.open(path, "rb"))
 local all = f:read("a")
 f:close()

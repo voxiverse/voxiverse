@@ -7,9 +7,9 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../font"
-import "../platform"
-import "../ui"
+import "font"
+import "platform"
+import "ui"
 
 // A UI test's app: the font and the UI, nothing else.
 @(private = "file")

@@ -4,7 +4,7 @@ import "core:math"
 import "core:testing"
 import "core:time"
 
-import "../game"
+import "../common/game"
 
 // M4's exit check: a scripted player (walking, turning, jumping, breaking
 // and placing) gives the same results with 200 ms of latency each way (and

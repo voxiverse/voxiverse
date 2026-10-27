@@ -36,7 +36,7 @@ Params :: struct {
 	warmth:          f32, // added to the climate's temperature (-1 cold .. 1 hot); 0: Earth's
 	wetness:         f32, // added to its humidity
 	palette:         f32, // the surface's blocks (PALETTES); 0: Earth's
-	gates:           f32, // 1: gates stand (worldgen/gates.odin); 0: none (worlds made before them)
+	gates:           f32, // 1: gates stand (common/worldgen/gates.odin); 0: none (worlds made before them)
 	gate_distance:   f32, // blocks: none nearer the world's middle (where the spawn is sought)
 }
 

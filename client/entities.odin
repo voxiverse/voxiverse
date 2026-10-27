@@ -4,9 +4,9 @@ import "core:math"
 import "core:math/rand"
 import "core:time"
 
-import "../game"
-import "../render"
+import "../common/game"
 import "mesh"
+import "render"
 
 // Entities as the client shows them: interpolated like the other players
 // (players.odin), drawn as boxes in the entity pass. A sheep has a body,

@@ -21,7 +21,7 @@ Validation needs the layer installed (see README); without it you get one warnin
 
 ```
 console:    3.214 INFO  server     server player joined name="player"
-            3.215 WARN  main       gpu renderdoc is loaded but did not provide API 1.6 (gpu/renderdoc.odin:60)
+            3.215 WARN  main       gpu renderdoc is loaded but did not provide API 1.6 (client/gpu/renderdoc.odin:60)
 file:       3.214512 | INFO | server | server player joined name="player" | server/server.odin:224
 ```
 
@@ -261,10 +261,10 @@ character of an account; `whois` shows a character's account (`moderation.addres
 
 ## Items
 
-Items are data (`game/items.odin`): every block players may place has its item (its name is
+Items are data (`common/game/items.odin`): every block players may place has its item (its name is
 the block's), tools are items of their own (`rocket_launcher`). An inventory is 30 slots (the
 first five the hotbar, then a 5x5 grid) and the stack on the cursor; the server owns it and applies requests
-with the same code the client predicts with (`game/inventory.odin`), answering each with the
+with the same code the client predicts with (`common/game/inventory.odin`), answering each with the
 inventory (the `inventory` record: its `acked` says how far it got): a refused request is rolled back. Placing a
 block uses one from the hand (or the hotbar) unless the player has `items.infinite`; breaking
 leaves the block's item where `rules.drops` (not for `items.infinite`); `items.catalog` lets
@@ -307,8 +307,8 @@ and adds to the counters the kind names, the player's and the world's.
   day stops at 64 MiB. A scratch world (no save directory) writes nothing.
 - **Client reports** (`Client_Info`, `Client_Overlay`, `Client_Perf`) arrive in a `Telemetry_Report`
   message, at most six a minute, validated; refusals count in the world's `telemetry.refused`.
-- Looking at a log: `jq -c 'select(.k=="block_mined")' telemetry/*.jsonl`, or DuckDB:
-  `select k, count(*) from read_json_auto('telemetry/*.jsonl') group by 1 order by 2 desc`.
+- Looking at a log: `jq -c 'select(.k=="block_mined")' common/telemetry/*.jsonl`, or DuckDB:
+  `select k, count(*) from read_json_auto('common/telemetry/*.jsonl') group by 1 order by 2 desc`.
 
 ## Chat
 
@@ -367,12 +367,12 @@ flowing within the tick budget; CI runs it optimized too).
 
 ## Structures
 
-A template (`game/structure.odin`) is a box of cells, each a block or void (leave what is
+A template (`common/game/structure.odin`) is a box of cells, each a block or void (leave what is
 there); its .vxs file has a palette of block names and runs of cells. Shipped templates are
 `assets/structures/*.vxs`, built in-game and compiled into `worldgen` (generation reads no
 files). In an Earth world each structure kind has a set: cells of its spacing each decide by
 a hash whether they hold one, where and turned how, so any chunk can work out the pieces
-reaching into it (`worldgen/structures.odin`); surface ones need flat land and get
+reaching into it (`common/worldgen/structures.odin`); surface ones need flat land and get
 cobblestone foundations; trees keep clear; the column tops include them. Towers and dungeons
 (rooms and corridors, and a spiral stair in a shaft up to the land) are procedural pieces
 through the same placement. `locate tower`
@@ -388,7 +388,7 @@ world.cfg; worlds from before M10 are `classic`). Everything is a pure function 
 the settings and the position, so `build worldmap -seed:N` draws a world from above without
 the game (biomes, water depth, hill shading; a 4096-block map in well under a second), and
 `-bench:64` generates whole chunk columns and reports the time per chunk.
-`worldgen/worldgen_test.odin` keeps hashes of two seeds' chunks: CI runs it on Windows,
+`common/worldgen/worldgen_test.odin` keeps hashes of two seeds' chunks: CI runs it on Windows,
 Linux and macOS, so a platform that rounds differently fails there, not in a player's world.
 The generator's stages show in the profiler as `worldgen climate`, `worldgen place trees`,
 `worldgen terrain`.
@@ -423,8 +423,8 @@ disagree.
 
 What the server says about the world besides chunks (the player, other players, entities,
 the inventory, rules, health, the clock, chat, notices, blocks that changed) is the **state
-model** (`game/state_kinds.odin`): *records* of typed kinds under a key, and one-off
-*events*, encoded by one codec derived from the value types (`game/schema.odin`). Records
+model** (`common/game/state_kinds.odin`): *records* of typed kinds under a key, and one-off
+*events*, encoded by one codec derived from the value types (`common/game/schema.odin`). Records
 are deltas against what the client was last sent (`state` messages, reliable) or against the
 newest snapshot it acknowledged (`snapshot` messages, unreliable: the player's motion and
 other players' and entities' places). A new replicated value is a struct and an entry in

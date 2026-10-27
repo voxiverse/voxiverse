@@ -3,7 +3,7 @@ package game
 import "core:math"
 import "core:testing"
 
-import "../base"
+import "../../base"
 
 // A test world: listed blocks are stone, the rest air; everything is
 // loaded unless unloaded_below is set (then y < it is "not loaded").

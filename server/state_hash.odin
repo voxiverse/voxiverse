@@ -5,7 +5,7 @@ import "core:slice"
 import "core:strings"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // The server's state hash (docs/determinism.md): what a tick left behind, in
 // sections, so a divergence names where it began. Hashing runs only on

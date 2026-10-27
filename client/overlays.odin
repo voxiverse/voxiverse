@@ -1,6 +1,6 @@
 package client
 
-import "../ui"
+import "ui"
 
 // Overlays: what is open over the screen, on one stack (the newest on top).
 // Each declares what it takes: the keyboard (typing goes to it, game keys

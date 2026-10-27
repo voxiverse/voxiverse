@@ -4,8 +4,8 @@ import "core:math"
 import "core:mem/virtual"
 import "core:testing"
 
-import "../game"
-import "../render"
+import "../common/game"
+import "render"
 
 // Chunks at the top and bottom of the world are meshed once their neighbours
 // inside the world have arrived (outside counts as air above, bedrock below).

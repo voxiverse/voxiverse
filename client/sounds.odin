@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:math"
 import "core:math/rand"
 
-import "../audio"
-import "../game"
+import "../common/game"
+import "audio"
 import "sfx"
 
 // Sounds: the synthesized effects (client/sfx), made once at startup and

@@ -2,7 +2,7 @@ package client
 
 import "core:math"
 
-import "../ui"
+import "ui"
 
 // The menus' background (PLAN.md M20): a starfield streaming towards the
 // viewer, a warp, unhurried. Each star is a point in a box ahead of the

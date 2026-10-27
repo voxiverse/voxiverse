@@ -7,8 +7,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../telemetry"
+import "../common/game"
+import "../common/telemetry"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {
@@ -246,7 +246,7 @@ read_log :: proc(dir: string) -> string {
 
 // What a player wears changes their health: the server derives it from the
 // worn armor and tells the client (the client's prediction derives the speed
-// and jump from the same inventory: game/physics_test.odin).
+// and jump from the same inventory: common/game/physics_test.odin).
 @(test)
 test_worn_armor_raises_health :: proc(t: ^testing.T) {
 	srv: Server

@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../game"
+import "../common/game"
 
 @(private = "file")
 want_count: int

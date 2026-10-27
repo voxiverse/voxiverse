@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:strings"
 import "core:time"
 
-import "../game"
-import "../ui"
+import "../common/game"
+import "ui"
 
 // Slots as the UI draws them: the hotbar's and the inventory overlay's.
 

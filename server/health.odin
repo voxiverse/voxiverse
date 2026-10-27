@@ -2,11 +2,11 @@ package server
 
 import "core:math"
 
-import "../game"
-import "../telemetry"
+import "../common/game"
+import "../common/telemetry"
 
 // Health, damage, death and what a character grows by. A player has health
-// points (BASE_HEALTH, plus what they wear: game/mods.odin); a fall of more
+// points (BASE_HEALTH, plus what they wear: common/game/mods.odin); a fall of more
 // than 3 blocks onto ground costs a point a block, an explosion costs by how
 // near it was; at nought a player dies (a Death event, the inventory dropped
 // where they fell if rules.death_drops) and wakes at the world's spawn with

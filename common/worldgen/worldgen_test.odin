@@ -4,7 +4,7 @@ import "core:math"
 import "core:slice"
 import "core:testing"
 
-import "../base"
+import "../../base"
 import "../game"
 
 @(test)

@@ -10,8 +10,8 @@ import "core:thread"
 import "core:time"
 
 import "../../base"
-import "../../game"
-import "../../worldgen"
+import "../../common/game"
+import "../../common/worldgen"
 
 // Renders a top-down map of an Earth world to a PNG, without the game:
 // each pixel a block column's biome, its water shaded by depth and its

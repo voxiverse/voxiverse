@@ -1,10 +1,10 @@
 package server
 
-import "../game"
-import "../netcode"
+import "../common/game"
+import "../common/netcode"
 
 // What the server tells a playing client about the world, as records of the
-// schema's kinds and one-off events (game/state_kinds.odin). The server code
+// schema's kinds and one-off events (common/game/state_kinds.odin). The server code
 // says what the client should see now (a put, an event); replica_flush, once
 // per client at the end of the tick, turns that into State messages
 // (reliable: deltas against what the client was last sent) and Snapshot

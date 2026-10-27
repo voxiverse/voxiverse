@@ -8,8 +8,8 @@ import "core:path/filepath"
 import "core:strings"
 
 import "../base"
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
 // its generator and parameters, rules, clock, chunks, entities, liquids,
@@ -25,7 +25,7 @@ World :: struct {
 	seed:         i64,
 	params:       worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
 	rules:        game.Rules,
-	clock:        f64, // world time (game/time.odin)
+	clock:        f64, // world time (common/game/time.odin)
 	spawn:        World_Spawn, // where arrivals land (spawn.odin)
 	chunks:       Chunk_Store,
 	tops:         map[[2]i32]i32, // edited column tops (columns.odin)

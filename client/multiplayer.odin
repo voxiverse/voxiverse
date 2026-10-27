@@ -7,9 +7,9 @@ import "core:strings"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../netcode"
-import "../ui"
+import "../common/game"
+import "../common/netcode"
+import "ui"
 
 // Multiplayer (Minecraft's screen): the servers LAN discovery finds (asked
 // about every second while the screen is open), one selected and joined

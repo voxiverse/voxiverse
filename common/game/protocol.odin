@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 
-import "../base"
+import "../../base"
 
 // Messages between client and server. Every message travels as bytes, also
 // in-process, so singleplayer exercises the same encoding and validation as
@@ -28,7 +28,7 @@ CHUNK_LIMIT :: WORLD_LIMIT >> CHUNK_SHIFT
 
 // Client -> server.
 
-// Hello: the account joining (game/account.odin), and as which character
+// Hello: the account joining (common/game/account.odin), and as which character
 // ("": send the list to choose from). The server answers with a
 // Challenge, the client with a Proof; then the character joins (or
 // Characters, and a Choose).
@@ -91,7 +91,7 @@ Command :: struct {
 	command: string,
 }
 
-// Inventory_Request: something done in the inventory (game/inventory.odin),
+// Inventory_Request: something done in the inventory (common/game/inventory.odin),
 // numbered so the client can replay what the server has not answered
 // (Inventory says how far it got).
 Inventory_Request :: struct {
@@ -309,7 +309,7 @@ Stats_Page :: struct {
 MAX_STATS_TEXT :: 16 * 1024
 
 // Notice: something the server wants the player to read (chat and the
-// console), formatted (game/format.odin).
+// console), formatted (common/game/format.odin).
 Notice :: struct {
 	text: string `net:"max=1024"`,
 }
@@ -350,7 +350,7 @@ Explosion :: struct {
 	radius:   f32,
 }
 
-// Grants: what this player may do (game/permissions.odin), as
+// Grants: what this player may do (common/game/permissions.odin), as
 // grants_text's lines, and the server commands they may use (names, space
 // apart: for Tab): when they join and whenever it changes.
 Grants :: struct {

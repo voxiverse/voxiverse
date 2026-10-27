@@ -13,11 +13,11 @@ import "core:thread"
 import "core:time"
 
 import "../base"
-import "../collector"
-import "../game"
-import "../netcode"
-import "../telemetry"
-import "../worldgen"
+import "../common/game"
+import "../common/netcode"
+import "../common/telemetry"
+import "../common/worldgen"
+import "collector"
 
 // The authoritative side of a world, on its own thread at game.TICK_RATE.
 // Everything it owns lives in its session arena and is freed at once by

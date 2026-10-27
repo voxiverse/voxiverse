@@ -7,8 +7,8 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:time"
 
-import "../game"
-import "../netcode"
+import "../common/game"
+import "../common/netcode"
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the

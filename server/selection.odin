@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:strconv"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // World editing's selection (PLAN.md M19, commands): each player's two
 // corners, kept here (all world changes are the server's), set with /pos1

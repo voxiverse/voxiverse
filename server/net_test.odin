@@ -9,9 +9,9 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../netcode"
-import "../worldgen"
+import "../common/game"
+import "../common/netcode"
+import "../common/worldgen"
 
 // Players over the network: remote clients (netcode links on loopback) on a
 // server without a local player, as a dedicated server runs.

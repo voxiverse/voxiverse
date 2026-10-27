@@ -7,9 +7,9 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../game"
-import "../netcode"
-import "../worldgen"
+import "../common/game"
+import "../common/netcode"
+import "../common/worldgen"
 
 // Admin commands: what a player who may cheat can ask of the server, as
 // text (game.Command; the console's commands send them). Each one checks its

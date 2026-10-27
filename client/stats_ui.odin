@@ -6,8 +6,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../game"
-import "../ui"
+import "../common/game"
+import "ui"
 
 // The statistics overlay: the counters the server keeps for the character
 // (server/stats.odin) as a tree by their dotted names, a parent being the

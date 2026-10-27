@@ -3,7 +3,7 @@ package font
 import "core:testing"
 
 @(private = "file")
-FONT_DATA := #load("../assets/fonts/jetbrains_mono_regular.ttf")
+FONT_DATA := #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
 @(private = "file")
 load_test_font :: proc(t: ^testing.T) -> Font {

@@ -2,7 +2,7 @@ package server
 
 import "core:log"
 
-import "../game"
+import "../common/game"
 
 // Actions: what a player does besides moving (edit a block, hit an entity,
 // fire a rocket). Each says which of its inputs it came after, and waits

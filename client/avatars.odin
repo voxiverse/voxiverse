@@ -3,9 +3,9 @@ package client
 import "core:hash"
 import "core:math/linalg"
 
-import "../game"
-import "../render"
-import "../ui"
+import "../common/game"
+import "render"
+import "ui"
 
 // The other players' avatars: boxes in the entity pass (legs, a body that
 // turns with them, a head that also looks up and down), a shirt colour

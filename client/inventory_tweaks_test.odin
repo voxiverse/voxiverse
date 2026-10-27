@@ -3,9 +3,9 @@ package client
 import "core:mem/virtual"
 import "core:testing"
 
-import "../font"
-import "../game"
-import "../ui"
+import "../common/game"
+import "font"
+import "ui"
 
 // A session in the inventory overlay, for driving it with the mouse.
 Overlay_Fixture :: struct {

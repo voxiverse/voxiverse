@@ -162,7 +162,7 @@ jobs:
       # writer keeps up; optimized, with budgets for a slow runner.
       - name: Event cost, optimized (Linux)
         if: runner.os == 'Linux'
-        run: odin test telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
+        run: odin test common/telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
 
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler (Linux)

@@ -9,7 +9,7 @@ import "core:strings"
 // ("0.21.0+5"; "0.0.0-dev" before any tag). RELEASE_NAME is a release's
 // name for players, from its tag's message ("Pre-Alpha 1"), empty
 // otherwise. COMMIT is the commit's short hash ("-dirty" with uncommitted
-// changes). The network protocol's version is its own (game/protocol.odin).
+// changes). The network protocol's version is its own (common/game/protocol.odin).
 VERSION :: #config(VX_VERSION, "0.0.0-dev")
 RELEASE_NAME :: #config(VX_RELEASE_NAME, "")
 COMMIT :: #config(VX_COMMIT, "unknown")

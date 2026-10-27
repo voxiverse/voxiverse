@@ -7,8 +7,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // M18's exit check over UDP: misdials are refused; a dialed gate opens,
 // alice walks through its horizon to the far world's gate, and once the

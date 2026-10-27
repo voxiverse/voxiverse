@@ -7,7 +7,7 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../../game"
+import "../../common/game"
 
 // netdump prints a network trace (build/net.trace, recorded with
 // `set debug.net_trace 1` or the net_trace command), decoding every message

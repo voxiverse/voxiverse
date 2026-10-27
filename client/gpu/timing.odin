@@ -3,7 +3,7 @@ package gpu
 import "core:log"
 import vk "vendor:vulkan"
 
-import "../base"
+import "../../base"
 
 // GPU timing. Every frame is one section, and so is every begin_label /
 // end_label pair inside it: a timestamp is written at each boundary, read back

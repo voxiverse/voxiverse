@@ -8,7 +8,7 @@ import "core:strings"
 import "core:time"
 
 import "../base"
-import "../gpu"
+import "gpu"
 
 // Screenshots (F2, or `screenshot [name]`): PNGs in screenshots/ next to the
 // executable (build/screenshots in development). They arrive a frame or two

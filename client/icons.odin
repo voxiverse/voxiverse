@@ -1,8 +1,8 @@
 package client
 
-import "../game"
-import "../ui"
-import "./mesh"
+import "../common/game"
+import "mesh"
+import "ui"
 
 // Item icons, made by code at start-up into the UI's atlas: a block's item is
 // a cube seen from a corner (its top and two sides from the block's own

@@ -2,7 +2,7 @@ package client
 
 import "core:math"
 
-import "../game"
+import "../common/game"
 
 // What the player does besides moving: the hotbar and the mouse buttons
 // (items.odin), edits predicted at once and confirmed by the server, hits,

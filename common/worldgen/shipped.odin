@@ -9,7 +9,7 @@ import "../game"
 // by us and compiled in (world generation reads no files).
 
 @(private = "file")
-SHIPPED := #load_directory("../assets/structures")
+SHIPPED := #load_directory("../../assets/structures")
 
 // shipped_template: the shipped template called name.
 shipped_template :: proc(name: string, allocator := context.allocator) -> (game.Template, bool) {

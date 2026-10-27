@@ -2,7 +2,7 @@ package client
 
 import "core:strings"
 
-import "../render"
+import "render"
 
 // The render passes, in one table: what start-up (pipelines from their
 // shaders), shader hot reload and teardown go through. A pass's shaders are

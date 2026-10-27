@@ -1,7 +1,7 @@
 package client
 
-import "../platform"
-import "../ui"
+import "platform"
+import "ui"
 
 // Turns a frame's platform events into ui.Input and game controls. The
 // platform reports key presses and releases; held keys are tracked here,

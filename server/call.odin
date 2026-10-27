@@ -3,7 +3,7 @@ package server
 import "core:sync"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // call runs procedure(s, data) on the server's thread at the start of its
 // next tick, and waits for it: how code beside an in-process server (the

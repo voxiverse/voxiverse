@@ -8,9 +8,9 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-import "../game"
+import "../common/game"
 
-// Who may do what (game/permissions.odin has the rules): roles grant
+// Who may do what (common/game/permissions.odin has the rules): roles grant
 // nodes and inherit other roles; players have roles and grants of their
 // own; both carry metadata (prefix, suffix, ... whatever content wants).
 // Everyone has the role "default". Kept in the world's permissions.cfg:

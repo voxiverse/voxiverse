@@ -3,7 +3,7 @@ package server
 import "core:log"
 import "core:math"
 
-import "../game"
+import "../common/game"
 
 // Bulk edits: a shape (sphere, box) and an operation applied to every
 // block in it, chunk by chunk, each touched column's top found again once;

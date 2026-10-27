@@ -12,7 +12,7 @@ NO_ITEM :: Item(0)
 TOOL_ITEMS :: Item(0x8000)
 ARMOR_ITEMS :: Item(0xC000)
 
-// Equip_Slot: where a character wears or holds things (game/inventory.odin).
+// Equip_Slot: where a character wears or holds things (common/game/inventory.odin).
 Equip_Slot :: enum u8 {
 	Head,
 	Chest,

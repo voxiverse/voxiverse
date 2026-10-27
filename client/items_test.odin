@@ -2,7 +2,7 @@ package client
 
 import "core:testing"
 
-import "../game"
+import "../common/game"
 
 // The inventory as we predict it: our requests replayed over the server's
 // word until it answers them; a refused one rolled back; blocks placed

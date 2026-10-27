@@ -8,8 +8,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../collector"
-import "../game"
+import "../common/game"
+import "collector"
 
 @(private = "file")
 lake_text :: proc(dir: string) -> (text: string, files: int) {

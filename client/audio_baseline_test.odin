@@ -6,11 +6,11 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../audio"
+import "audio"
 import "sfx"
 
 // M32b's quality baselines: four scripted scenarios rendered offline, their
-// numbers compared with assets/baselines/audio/<scenario>.txt (audio/baseline.odin
+// numbers compared with assets/baselines/audio/<scenario>.txt (client/audio/baseline.odin
 // says what is measured and how much may move). A sound retuned without
 // accepting its baseline fails here; `build audio --accept <scenario|all>`
 // reruns these tests with -define:VX_AUDIO_ACCEPT=<scenario|all>, which
@@ -21,7 +21,7 @@ import "sfx"
 BASELINE_DIR :: "assets/baselines/audio"
 ACCEPT :: #config(VX_AUDIO_ACCEPT, "")
 WAV_DIR :: #config(VX_AUDIO_WAV_DIR, "") // `build audio -wav`: each scenario's master as a file
-BASELINE_STREAM :: #load("../audio/testdata/tone.ogg")
+BASELINE_STREAM :: #load("audio/testdata/tone.ogg")
 BASELINE_RATE :: 48000
 BASELINE_BLOCK :: 480
 

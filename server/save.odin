@@ -10,15 +10,15 @@ import "core:strings"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../worldgen"
+import "../common/game"
+import "../common/worldgen"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the home
 // world's address, the kit), characters/ and players/ (player_data.odin),
 // permissions.cfg, community.cfg, and worlds/<address>/ for each world
 // visited or edited: its world.cfg (generator, seed, time, spawn, rules,
 // generator parameters), entities.cfg, and regions/ with its edited chunks
-// (game/save.odin). The rest of a world is regenerated from its seed.
+// (common/game/save.odin). The rest of a world is regenerated from its seed.
 //
 // While running, each world keeps edited chunks it has unloaded in `saved`
 // (encoded), reads a region's file the first time one of its chunks is

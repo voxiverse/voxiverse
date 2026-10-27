@@ -5,7 +5,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../game"
+import "../common/game"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {

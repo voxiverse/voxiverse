@@ -1,6 +1,6 @@
 package game
 
-import "../base"
+import "../../base"
 
 // Sheep genetics, real and tiny: two genes, each with a common dominant
 // form and a rare recessive one; a sheep carries two copies of each. Wool:

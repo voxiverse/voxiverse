@@ -2,7 +2,7 @@ package sfx
 
 import "core:math"
 
-import "../../game"
+import "../../common/game"
 
 // Sound effects, synthesized: no recordings. Each sound is a few layers of
 // filtered noise bursts and decaying tones, made at a low rate and crushed

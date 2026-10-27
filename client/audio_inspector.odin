@@ -4,9 +4,9 @@ import "core:fmt"
 import "core:math"
 import "core:sync"
 
-import "../audio"
 import "../base"
-import "../ui"
+import "audio"
+import "ui"
 
 // The audio inspector (M32e, dev builds): F8 freezes the last stretch of the
 // mixer (audio.inspect_freeze: the rolling capture's newest window, replayed

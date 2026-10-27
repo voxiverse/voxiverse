@@ -2,7 +2,7 @@ package mesh
 
 import "core:testing"
 
-import "../../game"
+import "../../common/game"
 
 @(private = "file")
 count_faces :: proc(out: []Vertex) -> (faces: [Face]int) {

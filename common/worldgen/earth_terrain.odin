@@ -3,7 +3,7 @@ package worldgen
 import "core:math"
 import "core:math/noise"
 
-import "../base"
+import "../../base"
 import "../game"
 
 // Overhang noise lives on a world-aligned grid (every 4 blocks across,

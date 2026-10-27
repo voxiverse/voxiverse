@@ -6,8 +6,8 @@ import "core:path/filepath"
 import "core:testing"
 import "core:time"
 
-import "../game"
-import "../telemetry"
+import "../common/game"
+import "../common/telemetry"
 
 // M31: the item ledger and its audit.
 

@@ -6,7 +6,7 @@ import "core:os"
 import "core:time"
 
 import "../../base"
-import "../../game"
+import "../../common/game"
 import "../../server"
 
 // replay feeds the client's messages from a network trace to a fresh server

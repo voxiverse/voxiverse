@@ -1,6 +1,6 @@
 package game
 
-import "../base"
+import "../../base"
 
 // Game rules: the tunable numbers of the simulation. The server owns them
 // and sends them to clients (Welcome, and on change) so client prediction

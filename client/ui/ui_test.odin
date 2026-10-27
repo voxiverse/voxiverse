@@ -9,7 +9,7 @@ import "../font"
 // Behaviour tests: real frames with scripted input, no window or GPU.
 
 @(private = "file")
-FONT_DATA := #load("../assets/fonts/jetbrains_mono_regular.ttf")
+FONT_DATA := #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
 @(private = "file")
 SCREEN :: Vec2{800, 600}

@@ -10,7 +10,7 @@ import "core:strings"
 // keeps to base's sin, cos, exp and Rng. A line that is not state says so with a
 // trailing `// numbers: <why>`.
 
-DETERMINISM_DIRS :: []string{"game", "server", "worldgen"}
+DETERMINISM_DIRS :: []string{"common/game", "server", "common/worldgen"}
 
 @(rodata)
 BANNED_CALLS := [?]struct {

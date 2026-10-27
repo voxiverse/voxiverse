@@ -9,7 +9,7 @@ import "core:strings"
 import "core:testing"
 
 import "../base"
-import "../game"
+import "../common/game"
 
 // M38: the simulation is a function of what reaches it at each tick boundary.
 // A stepped server (no thread, inline chunk jobs) is run twice side by side

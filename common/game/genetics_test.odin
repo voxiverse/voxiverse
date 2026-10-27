@@ -2,7 +2,7 @@ package game
 
 import "core:testing"
 
-import "../base"
+import "../../base"
 
 // Two carriers (one recessive copy each) have black lambs a quarter of the
 // time, spotted ones likewise and independently; a black parent gives its

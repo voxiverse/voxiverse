@@ -1,6 +1,6 @@
 package server
 
-import "../game"
+import "../common/game"
 
 // Plants need support: a plant (game.block_is_plant) stands on a block that
 // holds it (game.plant_supported). When a block changes, the plant above it

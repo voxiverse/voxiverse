@@ -4,7 +4,7 @@ import "core:math"
 import "core:strings"
 import "core:testing"
 
-import "../game"
+import "../common/game"
 
 @(private = "file")
 said :: proc(c: ^Net_Client, what: string) -> bool {

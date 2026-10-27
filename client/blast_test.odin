@@ -6,9 +6,9 @@ import "core:math"
 import "core:time"
 
 import "../base"
-import "../game"
-import "../render"
+import "../common/game"
 import "../server"
+import "render"
 
 // M9's exit check (`--check blast`, exit_check.odin's CHECKS): it waits
 // for the world, hovers above the spawn and fires: rockets and radius-6

@@ -5,7 +5,7 @@ import "core:log"
 import "core:math"
 
 import "../base"
-import "../game"
+import "../common/game"
 import "../server"
 
 // The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
