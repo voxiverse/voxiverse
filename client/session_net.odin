@@ -135,6 +135,9 @@ receive :: proc(s: ^Session) {
 				s.newest_tick, s.newest_at = s.rx.tick, time.tick_now()
 			}
 			apply_received(s, got[:])
+			// Everything still present and not in the delta is unchanged now.
+			for _, &o in s.others {track_hold(&o.track, s.rx.tick)}
+			for _, &e in s.entities {track_hold(&e.track, s.rx.tick)}
 		case game.Telemetry_Ack:
 		case game.Stats_Page:
 			stats_data_take(&s.player_stats, v)

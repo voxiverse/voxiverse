@@ -12,7 +12,7 @@ import "../common/game"
 
 SNAPSHOTS :: 8
 INTERPOLATION_TICKS :: 3 // 100 ms at 30 Hz: covers a late or lost update
-STALE_TICKS :: 2 * game.TICK_RATE // no news this long: out of sight
+STALE_SECONDS :: 2 // no snapshot for this long: the connection is lost, nothing is shown
 
 Other_Player :: struct {
 	name:  string,
@@ -72,16 +72,26 @@ other_snapshot :: proc(o: ^Other_Player, tick: u32, m: game.Player_Motion) {
 
 // other_view: the player at server time `at` (in ticks, fractional),
 // between the snapshots around it (the nearest one at either end); false
-// if there is nothing recent enough to show.
+// if nothing is known of it yet.
 other_view :: proc(o: ^Other_Player, at: f64) -> (v: Other_View, ok: bool) {
 	return track_view(&o.track, at)
+}
+
+// track_hold records that the thing is unchanged as of `tick`: snapshots
+// carry only what changed, so a record that is still present and absent
+// from the delta stood still. Without this the track would glide from its
+// old sample to the next change across the whole time it stood.
+track_hold :: proc(o: ^Track, tick: u32) {
+	if o.count == 0 {return}
+	held := o.snapshots[o.count - 1]
+	held.tick = tick
+	track_add(o, held)
 }
 
 // track_view: where a track puts its thing at server time `at`.
 track_view :: proc(o: ^Track, at: f64) -> (v: Other_View, ok: bool) {
 	if o.count == 0 {return}
 	newest := o.snapshots[o.count - 1]
-	if at - f64(newest.tick) > STALE_TICKS {return}
 	if at >= f64(newest.tick) {return view_of(newest), true}
 	for i := o.count - 1; i > 0; i -= 1 {
 		a, b := o.snapshots[i - 1], o.snapshots[i]

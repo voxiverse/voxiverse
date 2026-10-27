@@ -430,9 +430,13 @@ session_set_rule :: proc(s: ^Session, name, value: string) {
 	send_message(s, game.Set_Rule{name, value})
 }
 
-// session_others_now: the server time (ticks) to show the other players at.
-session_others_now :: proc(s: ^Session) -> f64 {
-	return render_tick(s.newest_tick, f32(time.duration_seconds(time.tick_since(s.newest_at))))
+// session_others_now: the server time (ticks) to show the other players
+// and entities at, and whether the connection is live: snapshots stopped
+// coming for STALE_SECONDS means what we know of them is old, so none is
+// shown. (A thing that stands still sends nothing, and is still there.)
+session_others_now :: proc(s: ^Session) -> (now: f64, live: bool) {
+	since := f32(time.duration_seconds(time.tick_since(s.newest_at)))
+	return render_tick(s.newest_tick, since), s.newest_at != {} && since <= STALE_SECONDS
 }
 
 FLUSH_INTERVAL :: 8 * time.Millisecond

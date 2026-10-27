@@ -64,7 +64,8 @@ HURT :: [4]u8{236, 84, 72, 255}
 // entities_draw adds the entities and puffs to the entity pass and moves
 // the puffs on by dt.
 entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
-	now := session_others_now(s)
+	now, live := session_others_now(s)
+	if !live {return}
 	for _, &e in s.entities {
 		v, ok := track_view(&e.track, now)
 		if !ok {continue}
@@ -347,7 +348,8 @@ entity_aimed :: proc(
 	distance: f64,
 	ok: bool,
 ) {
-	now := session_others_now(s)
+	now, live := session_others_now(s)
+	if !live {return}
 	distance = max_distance
 	for key, &e in s.entities {
 		if !game.ENTITY_INFO[e.kind].hittable {continue}

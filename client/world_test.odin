@@ -143,8 +143,12 @@ test_other_players_interpolate :: proc(t: ^testing.T) {
 	testing.expectf(t, abs(abs(v.yaw) - math.PI) < 0.01, "turned the long way: yaw %v", v.yaw)
 	v, ok = other_view(&o, 20)
 	testing.expect(t, ok && v.position.x == 1, "after the newest: stays there")
-	_, ok = other_view(&o, 11 + STALE_TICKS + 1)
-	testing.expect(t, !ok, "stale players are hidden")
+	track_hold(&o.track, 500) // stood still until 500, then walked
+	other_snapshot(&o, 501, {position = {2, 64, 0}})
+	v, ok = other_view(&o, 400)
+	testing.expect(t, ok && v.position.x == 1, "stood still: still there")
+	v, _ = other_view(&o, 500.5)
+	testing.expect(t, abs(v.position.x - 1.5) < 1e-9, "no glide across the time it stood")
 	for i in 0 ..< 20 {other_snapshot(&o, u32(12 + i), {position = {f64(i), 0, 0}})}
 	testing.expect_value(t, o.track.count, SNAPSHOTS)
 	testing.expect(t, abs(render_tick(100, 0.5) - (100 + 15 - INTERPOLATION_TICKS)) < 1e-9)

@@ -45,7 +45,8 @@ ARMOR_COLORS := [game.Armor][4]u8 {
 
 // avatars_draw adds every visible other player to the entity pass.
 avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
-	now := session_others_now(s)
+	now, live := session_others_now(s)
+	if !live {return}
 	for _, &o in s.others {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
@@ -133,7 +134,8 @@ name_tags :: proc(app: ^App, ctx: ^ui.Context) {
 	camera := camera_render(&s.camera, w.width, w.height, app.settings.fov)
 	origin := chunk_origin_f64(camera.chunk)
 	t := &ctx.theme
-	now := session_others_now(s)
+	now, live := session_others_now(s)
+	if !live {return}
 	for _, &o in s.others {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
