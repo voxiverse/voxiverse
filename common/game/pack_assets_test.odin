@@ -115,17 +115,23 @@ test_registry_id_changes :: proc(t: ^testing.T) {
 	testing.expect(t, a != nil && b != nil)
 	if a == nil || b == nil {return}
 	testing.expect_value(t, len(ea) + len(eb), 0)
-	testing.expect_value(t, registry_id_changes(a, b), "")
+	same := registry_id_changes(a, b)
+	defer delete(same)
+	testing.expect_value(t, same, "")
 	testing.expect(t, a.hash != b.hash)
 	base_only, _ := build_with()
+	removed := registry_id_changes(a, base_only)
+	defer delete(removed)
 	testing.expect_value(
 		t,
-		registry_id_changes(a, base_only),
+		removed,
 		"this reload changes ids (removed testpack:marble); restart the universe to apply it",
 	)
+	added := registry_id_changes(base_only, a)
+	defer delete(added)
 	testing.expect_value(
 		t,
-		registry_id_changes(base_only, a),
+		added,
 		"this reload changes ids (added testpack:marble); restart the universe to apply it",
 	)
 	// registry_swap: a's address now holds b's contents.

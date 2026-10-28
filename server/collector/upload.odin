@@ -57,7 +57,12 @@ uploader_start :: proc(
 	game.writer_init(&u.writer)
 	u.scratch = new(game.Block_Array)
 	load_upload_cursors(u)
-	u.thread = thread.create_and_start_with_poly_data(u, uploader_main, self_cleanup = false)
+	u.thread = thread.create_and_start_with_poly_data(
+		u,
+		uploader_main,
+		context, // the caller's allocator: what the thread makes, stop frees
+		self_cleanup = false,
+	)
 }
 
 // uploader_stop does a last pass (what was written up to now) and stops.

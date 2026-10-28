@@ -120,6 +120,7 @@ packs_registry :: proc(
 	built, errs := game.registry_build(all[:])
 	if built == nil {
 		for e in errs {append(&list, game.pack_error_text(e))}
+		game.pack_errors_destroy(errs)
 		if len(list) == 0 {append(&list, "the registry could not be built")}
 		return nil, nil, list[:]
 	}

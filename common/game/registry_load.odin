@@ -8,7 +8,8 @@ import "core:strings"
 // registry_build: the registry the packs make, or every error found (never
 // both). Pack files are in memory (Pack_Source), so tests build registries
 // from string literals and nothing here touches the disk. The base pack comes
-// first; a pack's namespace is its directory's name.
+// first; a pack's namespace is its directory's name. The errors (strings and
+// slice) are made in `allocator` and the caller owns them: pack_errors_destroy.
 
 Pack_File :: struct {
 	path: string, // within the pack: "data/blocks/stone.json"
@@ -28,6 +29,18 @@ Pack_Error :: struct {
 	line:    i32,
 	column:  i32,
 	message: string,
+}
+
+// pack_errors_destroy frees what registry_build returned in errs (the slice and its strings,
+// all made in `allocator`): the caller owns them. Not for errors made elsewhere (pack_dir,
+// pack_fetch), whose strings are not all heap.
+pack_errors_destroy :: proc(errs: []Pack_Error, allocator := context.allocator) {
+	for e in errs {
+		delete(e.pack, allocator)
+		delete(e.file, allocator)
+		delete(e.message, allocator)
+	}
+	delete(errs, allocator)
 }
 
 pack_error_text :: proc(e: Pack_Error, allocator := context.temp_allocator) -> string {

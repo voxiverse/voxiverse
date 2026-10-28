@@ -560,6 +560,8 @@ check_no_binaries :: proc() -> bool {
 // alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to reproduce a failure) is ignored.
 test_env_defines :: proc() -> []string {
 	defines := make([dynamic]string)
+	// A leak or a bad free fails the test, naming the allocation (tracking stays on, its default).
+	append(&defines, "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true")
 	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS"}) {
 		if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
 			append(&defines, fmt.aprintf("-define:%s=%s", name, value))

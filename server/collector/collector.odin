@@ -91,7 +91,12 @@ collector_start :: proc(c: ^Collector, dir: string, port: int) -> bool {
 	game.writer_init(&c.writer)
 	load_salt(c)
 	load_cursors(c)
-	c.thread = thread.create_and_start_with_poly_data(c, collector_main, self_cleanup = false)
+	c.thread = thread.create_and_start_with_poly_data(
+		c,
+		collector_main,
+		context, // the caller's allocator: what the thread makes, stop frees
+		self_cleanup = false,
+	)
 	log.infof("collector listening port=%d dir=%s", c.port, dir)
 	return true
 }
@@ -124,6 +129,9 @@ collector_main :: proc(c: ^Collector) {
 		for e in c.host.events {
 			switch v in e {
 			case netcode.Peer_Connected:
+				// A kick's Peer_Disconnected can be missed (it is appended while this loop
+				// runs), and the slot reused: the old peer's pid is freed here then.
+				if old, ok := c.peers[v.peer]; ok {delete(old.pid)}
 				c.peers[v.peer] = {}
 			case netcode.Peer_Message:
 				handle(c, v.peer, v.data)

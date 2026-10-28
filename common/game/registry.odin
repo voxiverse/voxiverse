@@ -416,7 +416,7 @@ registry_swap :: proc(dst, src: ^Registry) {
 // registry_id_changes: how src's ids differ from dst's, "" when the numbers
 // of every block, item, texture and sound set are the same. A reload may
 // change what a thing is, never which number it has (the registry does not
-// grow while the universe runs).
+// grow while the universe runs). The text is made in context.allocator: the caller frees it.
 registry_id_changes :: proc(dst, src: ^Registry) -> string {
 	lists :: proc(reg: ^Registry) -> [4][dynamic]string {
 		out: [4][dynamic]string

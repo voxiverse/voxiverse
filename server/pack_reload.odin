@@ -136,6 +136,7 @@ reload_build :: proc(s: ^Server) {
 	if why := game.registry_id_changes(s.registry, reg); why != "" {
 		game.registry_destroy(reg)
 		reload_tell(s, {why})
+		delete(why)
 		return
 	}
 	for b in s.reload.blobs {
