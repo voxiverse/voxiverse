@@ -300,12 +300,12 @@ teardown :: proc(s: ^Server, world: bool) {
 	store_close(s)
 	permissions_destroy(&s.perms)
 	community_destroy(&s.community)
+	for w in s.worlds {world_close(w)} 	// (first: it joins the generator workers, which read the registry)
+	delete(s.worlds)
 	game.registry_destroy(s.registry)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
 	game.schema_destroy(&s.schema)
-	for w in s.worlds {world_close(w)}
-	delete(s.worlds)
 	ledger_destroy(&s.ledger)
 	base.queue_destroy(&s.calls)
 	refusal := s.refusal // (a failed start says why, after the rest is gone)
