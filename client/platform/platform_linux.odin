@@ -12,7 +12,10 @@ import "vendor:x11/xlib"
 // loaded at runtime, so only its types come from vendor:x11 and nothing is
 // linked at build time.
 
-VULKAN_LOADER :: "libvulkan.so.1"
+@(private)
+native_vulkan_loader_name :: proc() -> string {
+	return "libvulkan.so.1"
+}
 
 Native_Window :: struct {
 	display:          ^xlib.Display,

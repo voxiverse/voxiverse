@@ -116,6 +116,10 @@ create_instance :: proc(
 	// wherever the driver offers them, not only with validation.
 	use_debug_utils := has_instance_extension("VK_EXT_debug_utils")
 	if use_debug_utils {append(&exts, "VK_EXT_debug_utils")}
+	// Portability drivers (MoltenVK) show up only to an instance that asks
+	// for them.
+	portability := has_instance_extension("VK_KHR_portability_enumeration")
+	if portability {append(&exts, "VK_KHR_portability_enumeration")}
 	if use_validation {
 		append(&layers, "VK_LAYER_KHRONOS_validation")
 		append(&exts, "VK_EXT_validation_features")
@@ -142,6 +146,7 @@ create_instance :: proc(
 	info := vk.InstanceCreateInfo {
 		sType                   = .INSTANCE_CREATE_INFO,
 		pApplicationInfo        = &app,
+		flags                   = {.ENUMERATE_PORTABILITY_KHR} if portability else {},
 		enabledLayerCount       = u32(len(layers)),
 		ppEnabledLayerNames     = raw_data(layers),
 		enabledExtensionCount   = u32(len(exts)),
@@ -208,6 +213,11 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	append(&device_extensions, "VK_KHR_swapchain")
 	calibration := has_device_extension(g.physical, "VK_KHR_calibrated_timestamps")
 	if calibration {append(&device_extensions, "VK_KHR_calibrated_timestamps")}
+	// A device that implements a subset of Vulkan (MoltenVK) lists this and
+	// must be told the application knows.
+	if has_device_extension(g.physical, "VK_KHR_portability_subset") {
+		append(&device_extensions, "VK_KHR_portability_subset")
+	}
 	info := vk.DeviceCreateInfo {
 		sType                   = .DEVICE_CREATE_INFO,
 		pNext                   = &features,

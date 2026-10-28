@@ -1,5 +1,5 @@
 name: setup
-description: The pinned Odin (an official prebuilt release, by setup-odin), with dev odinfmt too, and the shader compiler's cache.
+description: The pinned Odin (an official prebuilt release, by setup-odin), with dev odinfmt too, and the shader compiler's and MoltenVK's cache.
 inputs:
   dev:
     description: also odinfmt (at the ols revision odinup.toml pins), which `build check` needs
@@ -24,11 +24,11 @@ runs:
         token: ${{ github.token }}
         release: ${{ steps.pins.outputs.odin }}
 
-    - name: Cache shader compiler
+    - name: Cache shader compiler and MoltenVK
       uses: actions/cache@v6
       with:
         path: build/tools
-        key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin') }}
+        key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin', 'tools/build/moltenvk.odin') }}
 
     - name: Cache odinfmt
       if: inputs.dev == 'true'

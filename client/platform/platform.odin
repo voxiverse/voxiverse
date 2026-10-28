@@ -402,7 +402,7 @@ vulkan_create_surface :: proc(w: ^Window, instance: vk.Instance) -> (vk.SurfaceK
 
 // vulkan_loader_name is the Vulkan loader library to open at runtime.
 vulkan_loader_name :: proc() -> string {
-	return VULKAN_LOADER
+	return native_vulkan_loader_name()
 }
 
 @(private)

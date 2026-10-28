@@ -298,6 +298,7 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 	v := version_of()
 	append(&mode, ..version_defines(v))
 	shaders() or_return
+	when ODIN_OS == .Darwin {moltenvk_path() or_return} 	// the Vulkan driver, found at run time
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
 	if sanitize {
 		append(&mode, "-sanitize:address")

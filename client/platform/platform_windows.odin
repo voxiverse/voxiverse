@@ -7,7 +7,10 @@ import vk "vendor:vulkan"
 
 // Windows backend: plain Win32 from core:sys/windows; nothing to ship.
 
-VULKAN_LOADER :: "vulkan-1.dll"
+@(private)
+native_vulkan_loader_name :: proc() -> string {
+	return "vulkan-1.dll"
+}
 
 Native_Window :: struct {
 	instance:       win.HINSTANCE,

@@ -60,7 +60,7 @@ not.
 |---|---|---|
 | Windows x86_64 (`windows_amd64`) | The "Test" job: format and compile check, the whole test suite, the cross-OS determinism run, a game build, the chunk benchmark, a short server benchmark. The "Package" job: builds the `.zip`, checks its paths as Explorer sees them, unpacks it, runs `voxiverse-server --version` and a 5 s server, and `voxiverse --version`, and checks the version resource. | Running the game with a window and a world: the runners have no GPU, so the game is not started past `--version` (a software Vulkan driver on the runner would do; not tried). The by-hand checks stay on a real Windows machine. |
 | Linux x86_64 (`linux_amd64`) | "Test" (checks, tests, determinism, optimized tests) and "Game" (the game on a software Vulkan driver in a virtual display: flights, screens, sky, multiplayer, crash handler, AddressSanitizer, profiling, screenshots); the "Package" job builds on Ubuntu 22.04 (glibc 2.35), unpacks the `.tar.gz` and plays a world from it. | Nothing for Tier 1. Native Wayland is not written (XWayland is used). |
-| macOS arm64 (`darwin_arm64`) | The "Test" job on `macos-latest`: the same checks, tests, determinism, game build, chunk and server benchmark as Windows. Until M47d the window backend is a stub that fails with a message. | M47d and M47e write the Cocoa window, MoltenVK, input, gamepads, audio, icon and the `.app` package, which CI builds and zips. Running the game in CI, a GPU probe and any hardware check are not done ("macOS verification in CI", deferred); testers cover them. |
+| macOS arm64 (`darwin_arm64`) | The "Test" job on `macos-latest`: the same checks, tests, determinism, game build, chunk and server benchmark as Windows. The Cocoa window, input and the Vulkan surface are written (M47d); the build downloads the pinned MoltenVK once (`build/tools/moltenvk/`, cached by hash in CI). | M47d wrote the Cocoa window, MoltenVK and input; M47e writes gamepads, audio, the icon and the `.app` package, which CI builds and zips. Running the game in CI, a GPU probe and any hardware check are not done ("macOS verification in CI", deferred); testers cover them. |
 | Linux arm64 (`linux_arm64`) | Nothing. | A CI job on `ubuntu-24.04-arm`: build and unit tests ("Tier 2 CI", deferred, in plan.md); `GLSLANG` set from the distribution's package, since the pinned shader compiler has no arm64 download. |
 | macOS x86_64 (`darwin_amd64`) | Nothing. | A CI job on an Intel macOS runner: build and unit tests ("Tier 2 CI", deferred); the `.app` of M47e built for it only on request. |
 | Windows arm64 (`windows_arm64`) | Nothing. | Anything; it is best effort. The shader compiler download has no arm64 build either. |
@@ -71,7 +71,7 @@ so code that only compiles on one OS fails before a push.
 ### Building for a platform without a download
 
 The pinned shader compiler is downloaded for Windows x86_64, Linux x86_64 and macOS (see
-`tools/build/glslang.odin`). On another host, install `glslangValidator` and run
+`tools/build/glslang.odin`); on macOS the build also downloads MoltenVK (`tools/build/moltenvk.odin`). On another host, install `glslangValidator` and run
 `GLSLANG=/path/to/glslangValidator ./build.sh`.
 
 ## Found a problem?
