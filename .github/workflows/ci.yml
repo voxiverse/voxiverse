@@ -1,9 +1,14 @@
 name: ci
 on:
-  # Not for changes to Markdown alone (README, PLAN, DEBUGGING): nothing
-  # there is built or tested. (Tags always run: GitHub ignores paths for
-  # them.)
+  # Branch pushes: not for changes to Markdown alone (README, PLAN, DEBUGGING):
+  # nothing there is built or tested. Tags: only the named releases (v0.1.0,
+  # v0.2.0...), which need the packages and the draft release. A patch tag
+  # (v0.1.1, the daily ones) points at a commit main's CI has already tested.
+  # (GitHub ignores paths for tags, and a push event with both filters runs
+  # for a branch matching `branches` or a tag matching `tags`.)
   push:
+    branches: ["**"]
+    tags: ["v*.*.0"]
     paths-ignore: ["**.md"]
   pull_request:
     paths-ignore: ["**.md"]

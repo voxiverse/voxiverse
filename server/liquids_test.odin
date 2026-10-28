@@ -151,7 +151,9 @@ client_hash :: proc(c: ^Net_Client) -> (sum: u64) {
 
 // 10 000 blocks of water at once: a layer of sources over an empty, rimmed
 // platform, each starting a stream down onto it. The server's ticks stay
-// within budget while it all flows and settles.
+// within budget while it all flows and settles. Judged in the server thread's
+// CPU time per tick, not wall time: other tests' threads taking the core
+// during a tick do not count.
 @(test)
 test_water_flood :: proc(t: ^testing.T) {
 	config := Config {
@@ -204,12 +206,12 @@ test_water_flood :: proc(t: ^testing.T) {
 	for time.tick_diff(time.tick_now(), end) > 0 {
 		net_pump(t, &a)
 		st := stats(&srv)
-		worst = max(worst, st.tick_ms)
+		worst = max(worst, st.tick_cpu_ms)
 		most = max(most, st.updates_waiting)
 		time.sleep(game.TICK_DURATION)
 	}
 	log_line := fmt.tprintf(
-		"water flood: slowest tick %.1f ms, at most %d updates waiting (%v)",
+		"water flood: slowest tick %.1f ms CPU, at most %d updates waiting (%v)",
 		worst,
 		most,
 		a.notices[:],

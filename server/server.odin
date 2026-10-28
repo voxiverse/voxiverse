@@ -82,6 +82,7 @@ UNLOAD_SWEEP_TICKS :: game.TICK_RATE * 10
 Stats :: struct {
 	tick:              u64,
 	tick_ms:           f32,
+	tick_cpu_ms:       f32, // the server thread's CPU time in the tick: what a budget test judges
 	chunks_loaded:     int,
 	chunks_generating: int,
 	arrays_allocated:  int,
@@ -370,11 +371,16 @@ server_main :: proc(t: ^thread.Thread) {
 	next := time.tick_now()
 	for !sync.atomic_load(&s.stopping) {
 		start := time.tick_now()
+		cpu := base.thread_cpu_us()
 		tick(s)
 		free_all(context.temp_allocator)
 		took := time.tick_since(start)
 		s.tick_us[s.tick % TICK_SUMMARY_TICKS] = u32(time.duration_microseconds(took))
-		publish_stats(s, f32(time.duration_milliseconds(took)))
+		publish_stats(
+			s,
+			f32(time.duration_milliseconds(took)),
+			f32(base.thread_cpu_us() - cpu) / 1000,
+		)
 
 		next = time.tick_add(next, game.TICK_DURATION)
 		left := time.tick_diff(time.tick_now(), next)
@@ -807,12 +813,13 @@ update_info :: proc(s: ^Server) {
 }
 
 @(private = "file")
-publish_stats :: proc(s: ^Server, tick_ms: f32) {
+publish_stats :: proc(s: ^Server, tick_ms, tick_cpu_ms: f32) {
 	playing := 0
 	for c in s.clients {if c.state == .Playing {playing += 1}}
 	st := Stats {
 		tick           = s.tick,
 		tick_ms        = tick_ms,
+		tick_cpu_ms    = tick_cpu_ms,
 		arena_used     = s.arena.total_used,
 		arena_reserved = s.arena.total_reserved,
 		clients        = playing,
