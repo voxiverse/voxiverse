@@ -75,6 +75,18 @@ wait_for :: proc(seconds: f64, done: proc() -> bool) -> bool {
 	return done()
 }
 
+// Waits until the collector has refused `n` more batches than `before`: it
+// handles a peer's messages on its own thread, so how long that takes is not ours to guess.
+@(private = "file")
+wait_refused :: proc(c: ^Collector, before, n: u64) -> bool {
+	end := time.tick_add(time.tick_now(), 20 * time.Second)
+	for time.tick_diff(time.tick_now(), end) > 0 {
+		if collector_stats(c).refused >= before + n {return true}
+		time.sleep(5 * time.Millisecond)
+	}
+	return collector_stats(c).refused >= before + n
+}
+
 // A log is uploaded, whole lines in the right partitions with an anonymous pid
 // and nothing else about who; sent again (the cursor lost), it is written once.
 @(test)
@@ -301,7 +313,7 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
 		before := collector_stats(&c).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, "this is not an event\n"})
-		time.sleep(150 * time.Millisecond)
+		testing.expect(t, wait_refused(&c, before, 1))
 		testing.expect_value(t, collector_stats(&c).refused, before + 1) // (and the peer is dropped)
 		netcode.link_close(&r.link, "done")
 		game.writer_destroy(&r.writer)
@@ -314,7 +326,7 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
 		before := collector_stats(&c).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, bad})
-		time.sleep(150 * time.Millisecond)
+		testing.expect(t, wait_refused(&c, before, 1))
 		testing.expectf(t, collector_stats(&c).refused == before + 1, "%q was not refused", bad)
 		netcode.link_close(&r.link, "done")
 		game.writer_destroy(&r.writer)
@@ -327,7 +339,7 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
 		before := collector_stats(&c).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "yesterday", 0, good})
-		time.sleep(150 * time.Millisecond)
+		testing.expect(t, wait_refused(&c, before, 1))
 		testing.expect_value(t, collector_stats(&c).refused, before + 1)
 		netcode.link_close(&r.link, "done")
 		game.writer_destroy(&r.writer)
@@ -341,7 +353,7 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
 		before := collector_stats(&c)
 		for i in 0 ..< 30 {raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", u64(i * len(good)), good})}
-		time.sleep(500 * time.Millisecond)
+		testing.expect(t, wait_refused(&c, before.refused, 1))
 		after := collector_stats(&c)
 		testing.expect_value(
 			t,
