@@ -261,14 +261,91 @@ Supersedes "creatures: the owner decides" for the systems. Which specific creatu
 Hard stop: never build, infer or prototype these. A session that needs one asks the owner
 (or, unattended, builds around it and says so); it does not pick.
 
-- Survival: its rules, numbers and gathering; health's look on the HUD.
-- Death and respawn: what you keep, where "home" is.
+- Survival beyond the LAN party's rules (*Survival for the LAN party*, below): hunger, gathering and break times, other numbers; health's look on the HUD.
+- Death and respawn beyond those rules: penalties, a respawn point other than the world spawn, "home".
 - Character: attributes, levels, skills, perks (the Character section stays hidden). Equipment modifiers are not character attributes.
 - How gate addresses get "found" for the Atlas; other ways to dial.
 - How players meet the agent that authors their universe; when and how players hear about agents at all (unknown until the agent is integrated).
 - Currency (the economy's money).
-- Hostility and combat: whether creatures are hostile, when, and the combat rules (the AI framework supports aggression; using it is a design call). Faction conflict's combat rules too.
+- Hostility and combat beyond the party's weapons: whether creatures are hostile, when, and the rest of the combat rules (the AI framework supports aggression; using it is a design call). Faction conflict's combat rules too.
 - Which specific creatures exist, on the home world and on alien worlds.
 - What breathing gear is, and any rule for a world without air (the hook exists; the rule is not decided).
 - The README and the store page (deferred to the end).
 - Emotes, onboarding and tutorials (later, as data).
+
+## Survival for the LAN party, 2026-10-28
+
+Owner-decided (issue #52), for a LAN party on Friday 2026-10-30 at 11:30; Alpha 2 is tagged
+Thursday evening. These rules leave *The owner decides* (only these; the rest of that list
+stays a hard stop). They knowingly bend "no gameplay before the foundation": they are built
+in Odin now, on the core systems below, and later move onto the declarative layer (M53) and
+the VM (M51/M52), which are not before the week after the party. Because they are built on
+the systems and not as special cases, that move is a re-expression, not a rewrite.
+
+**The rules.**
+
+- A universe has a default game mode, **Creative** or **Survival**, chosen at creation (a
+  simple choice for now; the full creation screen comes later). **A player's mode is their
+  own** (an operator can switch themselves to creative to fly); it is recorded in the save
+  with the character.
+- Survival: health on, 20 points. Damage from falls, explosions and weapons. Regeneration:
+  1 point a second after 5 s without damage.
+- Death: the player keeps their inventory and respawns at the world spawn. The death screen
+  shows the cause and a Respawn button. Death messages go to everyone in chat ("Alex was
+  shot by Sam (sniper)", "Sam fell", "Alex blew up"), through the UI string keys.
+- A server rule `pvp` on or off (friendly fire off when off; no teams yet).
+- Weapons (items, as data in the base pack, tunable at the party): pistol (semi-auto, 5
+  damage, magazine 12), rifle (automatic, 3 a shot, magazine 30), sniper (18 damage,
+  magazine 5, hold use to zoom with the FOV). Headshots 2x. R reloads; reserve is
+  unlimited; fire rates are data. The server is authoritative about hits and rewinds
+  targets by the shooter's latency (capped); the client predicts the shot's effects only
+  (tracer and sound). Feedback: muzzle flash or tracer, a hit marker, a hit sound, damage
+  direction. The rocket launcher stays as it is. In survival everyone (re)spawns with all
+  four weapons and full magazines (a kit, as data).
+- Party extras: hold P for the player list with names, pings, kills and deaths; F5 third
+  person; walk, run and sneak animation for avatars; the Open to LAN dialog (guests' game
+  mode, whether commands are allowed).
+
+**The core systems (no special cases; a session that adds a mode, a rule or a damage source
+adds data, not an `if`).**
+
+1. *Game modes are profiles of abilities, as data.* Abilities: `fly`, `invulnerable`,
+   `instant_break`, `infinite_items`, `catalog`, `health`, `regenerate`, `drop_on_death`,
+   and so on. A mode is a base-pack file `data/game_modes/<name>.json` listing its
+   abilities (and its kit). **No code tests a mode by name; systems ask for abilities.** A
+   new mode is data only.
+2. *One `derive` for abilities*, beside `derive_mods`: abilities = the mode's profile +
+   equipment modifiers (+ effects later). The server and the client's prediction both call
+   it, so flight is predicted.
+3. *A player's mode is state, set in one place:* `set_game_mode(player, mode, cause)`. It
+   is stored with the character; the universe has a `default_game_mode` and a world may
+   override it. It is replicated as a state kind (M39), written to the edit journal with
+   who changed it (M45), and emits a `mode_changed` event (M26).
+4. *Permissions guard the commands:* `/gamemode <mode> [player]`, nodes
+   `voxiverse.command.gamemode.self` and `voxiverse.command.gamemode.others` (M13 roles;
+   the operator role has both). Permissions are what you may *ask for*; abilities are what
+   your character *can do*. They stay separate.
+5. *One rules table per universe and per world,* typed: `pvp`, `keep_inventory`,
+   `natural_regeneration` (with its delay and rate), `default_game_mode`, next to the
+   existing rules (`daylight_cycle`). Changed by `/rule` with permission, and journalled.
+6. *One damage pipeline:* `damage(target, amount, source)` for falls, explosions, weapons
+   and everything later. It checks `invulnerable`, the `pvp` rule, regeneration and death.
+   Death messages are generated from the source (a string key per source kind, with the
+   attacker and the weapon as arguments). Kills and deaths are statistics counters; the
+   player list reads them.
+7. *Kits are data:* the survival respawn kit (the four weapons, full magazines) is in the
+   mode's or the world's data, not in code.
+8. *The scripting API's shape now:* `set_game_mode`, the abilities query, `damage`, the
+   rules, and the events `mode_changed`, `damaged`, `died`, `respawned` are named and typed
+   as future natives (`docs/script_api_notes.md`), so M51 and M52 wrap them.
+
+**Decisions made while planning (from the plan's principles).**
+
+- `keep_inventory` is the rule the owner's "the player keeps their inventory" sets: on by
+  default in the survival profile's world rules; the existing `death_drops` rule is its
+  inverse and is replaced by it (one rule, not two).
+- Damage off in creative is `invulnerable` and not `health`: creative has `health` off
+  (no bar), survival on.
+- A mode change keeps health (clamped to the new maximum); changing into a mode without
+  `health` clears the bar, and back restores full health.
+- The pvp rule is per world, defaulting to on in a survival universe.
