@@ -750,7 +750,9 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	pad_tap(app, .A)
 	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.A)
-	pad_focus(t, app, "Done")
+	pad_focus(t, app, "Credits") // (beside Done: Down reaches the pair, Left picks Done)
+	pad_go(app, .Left)
+	testing.expect_value(t, ui.focused_label(&app.ui), "Done")
 	pad_tap(app, .A)
 	testing.expect_value(t, app.screen, Screen.Title)
 
