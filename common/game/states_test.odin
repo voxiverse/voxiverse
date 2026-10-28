@@ -82,8 +82,8 @@ test_state_ids_are_mixed_radix :: proc(t: ^testing.T) {
 	if reg == nil {return}
 	tb := &reg.blocks
 	// Builtins keep their numbers; the pack's types follow, each with its states.
-	testing.expect_value(t, tb.count, len(Block) + 8 + 8 + 3 + 4 + 24)
-	testing.expect_value(t, len(tb.types), len(Block) + 5)
+	testing.expect_value(t, tb.count, BASE_STATES + 8 + 8 + 3 + 4 + 24)
+	testing.expect_value(t, len(tb.types), BASE_TYPES + 5)
 	lever, ok := registry_block(reg, "testpack:lever")
 	testing.expect(t, ok)
 	type := tb.type_of[lever]
@@ -95,13 +95,18 @@ test_state_ids_are_mixed_radix :: proc(t: ^testing.T) {
 	testing.expect_value(t, state_value(tb, lever, 2), 2)
 	for k in 0 ..< 24 {
 		b := Block(int(def.first_state) + k)
-		testing.expect_value(t, state_value(tb, b, 0) * 12 + state_value(tb, b, 1) * 4 + state_value(tb, b, 2), k)
+		testing.expect_value(
+			t,
+			state_value(tb, b, 0) * 12 + state_value(tb, b, 1) * 4 + state_value(tb, b, 2),
+			k,
+		)
 		for p in 0 ..< 3 {
 			for v in 0 ..< len(def.props[p].values) {
 				c := state_with(tb, b, p, v)
 				testing.expect_value(t, state_value(tb, c, p), v)
 				for q in 0 ..< 3 {
-					if q != p {testing.expect_value(t, state_value(tb, c, q), state_value(tb, b, q))}
+					if q !=
+					   p {testing.expect_value(t, state_value(tb, c, q), state_value(tb, b, q))}
 				}
 			}
 		}
@@ -123,7 +128,11 @@ test_state_text_round_trips :: proc(t: ^testing.T) {
 		testing.expectf(t, ok && int(got) == b, "%s", text)
 	}
 	stairs, _ := registry_block(reg, "testpack:planks_stairs[facing=east,half=top]")
-	testing.expect_value(t, state_text(reg, stairs), "testpack:planks_stairs[facing=east,half=top]")
+	testing.expect_value(
+		t,
+		state_text(reg, stairs),
+		"testpack:planks_stairs[facing=east,half=top]",
+	)
 	// Missing properties take the default's; a type without properties is its id.
 	d, ok := state_parse(reg, "testpack:planks_stairs")
 	testing.expect(t, ok)
@@ -134,15 +143,12 @@ test_state_text_round_trips :: proc(t: ^testing.T) {
 	stone, _ := registry_block(reg, "stone")
 	testing.expect_value(t, state_text(reg, stone), "voxiverse:stone")
 	lever, _ := state_parse(reg, "testpack:lever")
-	testing.expect_value(t, state_text(reg, lever), "testpack:lever[powered=false,face=wall,facing=south]")
-	for bad in ([]string{
-		"testpack:planks_stairs[facing=up]",
-		"testpack:planks_stairs[colour=red]",
-		"testpack:planks_stairs[facing=east",
-		"testpack:planks_stairs[facing=east,facing=west]",
-		"testpack:nope[facing=east]",
-		"testpack:planks_stairs[facing]",
-	}) {
+	testing.expect_value(
+		t,
+		state_text(reg, lever),
+		"testpack:lever[powered=false,face=wall,facing=south]",
+	)
+	for bad in ([]string{"testpack:planks_stairs[facing=up]", "testpack:planks_stairs[colour=red]", "testpack:planks_stairs[facing=east", "testpack:planks_stairs[facing=east,facing=west]", "testpack:nope[facing=east]", "testpack:planks_stairs[facing]"}) {
 		_, good := state_parse(reg, bad)
 		testing.expectf(t, !good, "%s", bad)
 	}
@@ -249,9 +255,9 @@ test_shape_cover :: proc(t: ^testing.T) {
 @(test)
 test_broken_states_and_shapes :: proc(t: ^testing.T) {
 	Case :: struct {
-		name: string,
+		name:  string,
 		files: []File,
-		want: string,
+		want:  string,
 	}
 	block :: `"states": {"facing": ["north", "east", "south", "west"]}, "textures": {"all": "voxiverse:stone"}`
 	cases := []Case {
@@ -259,15 +265,24 @@ test_broken_states_and_shapes :: proc(t: ^testing.T) {
 			"shape names a property the block lacks",
 			{
 				{"data/shapes/s.json", `{"s": {"boxes": [[0,0,0,16,8,16]], "rotate": "facing"}}`},
-				{"data/blocks/b.json", `{"b": {"shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`},
+				{
+					"data/blocks/b.json",
+					`{"b": {"shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`,
+				},
 			},
 			`testpack/data/blocks/b.json:1:2: testpack:b uses shape testpack:s (data/shapes/s.json:1:2), which names the property "facing"; give the block that property`,
 		},
 		{
 			"shape names a value the block lacks",
 			{
-				{"data/shapes/s.json", `{"s": {"boxes": [], "cases": [{"when": {"half": "top"}, "boxes": [[0,8,0,16,16,16]]}]}}`},
-				{"data/blocks/b.json", `{"b": {"states": {"half": ["bottom", "middle"]}, "shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`},
+				{
+					"data/shapes/s.json",
+					`{"s": {"boxes": [], "cases": [{"when": {"half": "top"}, "boxes": [[0,8,0,16,16,16]]}]}}`,
+				},
+				{
+					"data/blocks/b.json",
+					`{"b": {"states": {"half": ["bottom", "middle"]}, "shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`,
+				},
 			},
 			`testpack/data/blocks/b.json:1:2: testpack:b uses shape testpack:s (data/shapes/s.json:1:2), which names the value "top" of "half"; give the property that value`,
 		},
@@ -288,14 +303,25 @@ test_broken_states_and_shapes :: proc(t: ^testing.T) {
 		},
 		{
 			"too many boxes",
-			{{"data/shapes/s.json", fmt.tprintf(`{{"s": {{"boxes": [%s[0,0,0,1,1,1]]}}}}`, strings.repeat(`[0,0,0,1,1,1],`, 16, context.temp_allocator))}},
+			{
+				{
+					"data/shapes/s.json",
+					fmt.tprintf(
+						`{{"s": {{"boxes": [%s[0,0,0,1,1,1]]}}}}`,
+						strings.repeat(`[0,0,0,1,1,1],`, 16, context.temp_allocator),
+					),
+				},
+			},
 			`testpack/data/shapes/s.json:1:17: a shape has at most 16 boxes, got 17`,
 		},
 		{
 			"a tall box is only for collision",
 			{
 				{"data/shapes/s.json", `{"s": {"boxes": [[6,0,6,10,24,10]]}}`},
-				{"data/blocks/b.json", `{"b": {"shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`},
+				{
+					"data/blocks/b.json",
+					`{"b": {"shape": "testpack:s", "opaque": false, "textures": {"all": "voxiverse:stone"}}}`,
+				},
 			},
 			`testpack/data/blocks/b.json:1:2: testpack:b: a box of shape testpack:s reaches above y = 16; only a collision shape may (up to 24)`,
 		},
@@ -303,28 +329,52 @@ test_broken_states_and_shapes :: proc(t: ^testing.T) {
 			"opaque with a shaped render",
 			{
 				{"data/shapes/s.json", `{"s": {"boxes": [[0,0,0,16,8,16]]}}`},
-				{"data/blocks/b.json", `{"b": {"shape": "testpack:s", "textures": {"all": "voxiverse:stone"}}}`},
+				{
+					"data/blocks/b.json",
+					`{"b": {"shape": "testpack:s", "textures": {"all": "voxiverse:stone"}}}`,
+				},
 			},
 			`testpack/data/blocks/b.json:1:2: testpack:b is opaque but its render shape is not a full cube; set "opaque": false`,
 		},
 		{
 			"states on a builtin",
-			{{"data/blocks/s.json", `{"voxiverse:stone": {"override": true, "states": {"a": ["x", "y"]}}}`}},
+			{
+				{
+					"data/blocks/s.json",
+					`{"voxiverse:stone": {"override": true, "states": {"a": ["x", "y"]}}}`,
+				},
+			},
 			`testpack/data/blocks/s.json:1:50: voxiverse:stone is named by the engine and keeps one state`,
 		},
 		{
 			"more than 256 states",
-			{{"data/blocks/b.json", `{"b": {"opaque": false, "states": {"a": ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9","a10","a11","a12","a13","a14","a15"], "b": ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9","a10","a11","a12","a13","a14","a15"], "c": "bool"}, "textures": {"all": "voxiverse:stone"}}}`}},
+			{
+				{
+					"data/blocks/b.json",
+					`{"b": {"opaque": false, "states": {"a": ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9","a10","a11","a12","a13","a14","a15"], "b": ["a0","a1","a2","a3","a4","a5","a6","a7","a8","a9","a10","a11","a12","a13","a14","a15"], "c": "bool"}, "textures": {"all": "voxiverse:stone"}}}`,
+				},
+			},
 			`testpack/data/blocks/b.json:1:35: 512 states; a block has at most 256`,
 		},
 		{
 			"default not in the list",
-			{{"data/blocks/b.json", `{"b": {"opaque": false, "states": {"a": ["x", "y"]}, "default": {"a": "z"}, ` + `"textures": {"all": "voxiverse:stone"}}}`}},
+			{
+				{
+					"data/blocks/b.json",
+					`{"b": {"opaque": false, "states": {"a": ["x", "y"]}, "default": {"a": "z"}, ` +
+					`"textures": {"all": "voxiverse:stone"}}}`,
+				},
+			},
 			`testpack/data/blocks/b.json:1:71: z is not a value of a; the values are "x", "y"`,
 		},
 		{
 			"one value",
-			{{"data/blocks/b.json", `{"b": {"opaque": false, "states": {"a": ["x"]}, "textures": {"all": "voxiverse:stone"}}}`}},
+			{
+				{
+					"data/blocks/b.json",
+					`{"b": {"opaque": false, "states": {"a": ["x"]}, "textures": {"all": "voxiverse:stone"}}}`,
+				},
+			},
 			`testpack/data/blocks/b.json:1:41: a has 1 values; a property has 2 to 16`,
 		},
 	}

@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 27
+PROTOCOL_VERSION :: 28
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -184,11 +184,25 @@ MAX_TELEMETRY_TEXT :: 31
 // applied it (predicted); Edit_Result says what became of it. The server
 // applies it right after input `after`, where the client was when it made
 // the edit, so reach is judged the same however late it arrives.
+//
+// A placement carries what it followed (placement.odin): the cell aimed at,
+// the face (0..5) and where on it (sixteenths); the server runs the rule on
+// them and accepts only the same cell and state. Breaking has face
+// EDIT_FACE_BREAK; EDIT_FACE_PLAIN: no context (a hoe's tilling, a block of
+// the default rule in its default state).
 Edit :: struct {
-	id:    u32,
-	after: u32,
-	pos:   Block_Pos,
-	block: Block,
+	id:     u32,
+	after:  u32,
+	pos:    Block_Pos,
+	block:  Block,
+	target: Block_Pos,
+	face:   u8,
+	hit:    [3]u8,
+}
+
+// edit_plain: an edit without placement context.
+edit_plain :: proc(id, after: u32, pos: Block_Pos, block: Block) -> Edit {
+	return {id = id, after = after, pos = pos, block = block, face = EDIT_FACE_PLAIN}
 }
 
 // Attack hits an entity (left click on it). Like an Edit it follows input
@@ -701,6 +715,9 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u32(w, v.after)
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
+		write_block_pos(w, v.target)
+		write_u8(w, v.face)
+		for h in v.hit {write_u8(w, h)}
 	case Command:
 		write_u8(w, u8(Client_Kind.Command))
 		write_string(w, v.command)
@@ -921,6 +938,13 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 			pos   = read_block_pos(&r),
 			block = read_block(&r),
 		}
+		e := m.(Edit)
+		e.target = read_block_pos(&r)
+		e.face = read_u8(&r)
+		for &h in e.hit {h = read_u8(&r)}
+		if e.face > EDIT_FACE_PLAIN {reader_fail(&r)}
+		for h in e.hit {if h > 16 {reader_fail(&r)}}
+		m = e
 	case u8(Client_Kind.Command):
 		m = Command {
 			command = read_string(&r, MAX_ADMIN_TEXT),

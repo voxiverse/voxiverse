@@ -79,7 +79,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.Edit{1, alice.seq, beside, .Dirt})
+	net_send(&alice, game.edit_plain(1, alice.seq, beside, .Dirt))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			1 in cs[0].results &&
@@ -88,7 +88,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	})
 	testing.expect(t, ok && alice.results[1].accepted, "placing did not use one up")
 	// She breaks it: it falls at her side; she picks it up.
-	net_send(&alice, game.Edit{2, alice.seq, beside, .Air})
+	net_send(&alice, game.edit_plain(2, alice.seq, beside, .Air))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return game.inventory_count(&cs[0].inventory, game.item_of_block(test_reg(), .Dirt)) == 64
 	})

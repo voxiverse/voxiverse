@@ -4,6 +4,13 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 
+// The base pack's block types after the builtins: four stairs (8 states each),
+// four slabs (3) and a ladder (4).
+BASE_NEW_TYPES :: 9
+BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4
+BASE_TYPES :: len(Block) + BASE_NEW_TYPES
+BASE_STATES :: len(Block) + BASE_NEW_STATES
+
 @(test)
 test_base_builds :: proc(t: ^testing.T) {
 	src := base_pack_source(context.temp_allocator)
@@ -12,7 +19,7 @@ test_base_builds :: proc(t: ^testing.T) {
 	testing.expect(t, reg != nil)
 	if reg == nil {return}
 	defer registry_destroy(reg)
-	testing.expect_value(t, reg.blocks.count, len(Block))
+	testing.expect_value(t, reg.blocks.count, BASE_STATES)
 }
 
 @(private = "file")
@@ -62,7 +69,7 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 		)
 		testing.expectf(t, (.Cull_Same in tb.flags[n]) == (b == .Glass), "%v cull_same", b)
 	}
-	testing.expect_value(t, tb.count, len(Block))
+	testing.expect_value(t, tb.count, BASE_STATES)
 	// Plants stand where they did.
 	for plant in Block {
 		if !frozen_block_is_plant(plant) {continue}
@@ -120,12 +127,15 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		len(registry_every_item(reg)),
-		len(frozen_every_item(context.temp_allocator)),
+		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES,
 	)
+	// Every old item is still there (the base pack's new block types add theirs among the blocks').
 	old_all := frozen_every_item(context.temp_allocator)
 	new_all := registry_every_item(reg)
-	for i in 0 ..< min(len(old_all), len(new_all)) {
-		testing.expectf(t, old_all[i] == new_all[i], "every_item[%d]", i)
+	for i in old_all {
+		present := false
+		for j in new_all {if i == j {present = true}}
+		testing.expectf(t, present, "item %d", i)
 	}
 	// Nothing beyond the old items exists.
 	_, ok := registry_item_info(reg, PACK_ITEMS)
@@ -194,7 +204,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	if reg == nil {return}
 	marble, ok := registry_block(reg, "testpack:marble")
 	testing.expect(t, ok)
-	testing.expect_value(t, int(marble), len(Block))
+	testing.expect_value(t, int(marble), BASE_STATES)
 	testing.expect_value(t, reg.blocks.light[marble], 7)
 	testing.expect(t, block_collides(&reg.blocks, marble) && block_opaque(&reg.blocks, marble))
 	stone, _ := registry_block(reg, "stone")
@@ -202,7 +212,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	testing.expect_value(t, reg.blocks.defs[marble].sound, reg.blocks.defs[stone].sound)
 	item, item_ok := registry_item(reg, "testpack:marble")
 	testing.expect(t, item_ok)
-	testing.expect_value(t, int(item), len(Block) + 1)
+	testing.expect_value(t, int(item), BASE_TYPES + 1)
 	info, _ := registry_item_info(reg, item)
 	testing.expect_value(t, info.block, marble)
 	testing.expect_value(t, info.name, "testpack:marble")
@@ -216,7 +226,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		len(registry_every_item(reg)),
-		len(frozen_every_item(context.temp_allocator)) + 2,
+		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES + 2,
 	)
 
 	two := Stack{item, 1}
@@ -518,7 +528,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					{"data/blocks/b.json", many_blocks(2500, "b")},
 				},
 			),
-			`5053 blocks; the limit is 4096`,
+			fmt.tprintf("%d blocks; the limit is 4096", 5000 + BASE_TYPES),
 		},
 		{
 			"stack out of range",

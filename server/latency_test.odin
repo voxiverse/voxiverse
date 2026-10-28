@@ -244,9 +244,13 @@ run_script :: proc(
 				after = msg.sequence,
 				pos   = hit.block,
 				block = .Air,
+				face  = game.EDIT_FACE_BREAK,
 			}
 			if i == 1 { 	// place stone against the face
+				face, _ := game.face_of_normal(hit.normal)
 				e.pos, e.block = hit.block + hit.normal, .Stone
+				e.target, e.face, e.hit =
+					hit.block, u8(face), game.hit_sixteenths(hit.point, hit.block)
 			}
 			set_block(&c, e.pos, e.block) // predicted
 			send(&c, e)
@@ -329,4 +333,179 @@ test_desync_caught :: proc(t: ^testing.T) {
 		r.desyncs,
 		r.velocity,
 	)
+}
+
+// M48: stairs and slabs placed from every side with 200 ms of latency each way and
+// jitter: each edit carries what it followed, the server runs the same rule and
+// agrees, the client's blocks end equal to the server's; an edit whose state
+// disagrees with its context is refused.
+@(test)
+test_shaped_placements_with_latency :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	game.pipe_set_conditions(&pipe, {latency_ms = 200, jitter_ms = 60})
+	srv: Server
+	if !testing.expect(
+		t,
+		start(
+			&srv,
+			{
+				seed = 5,
+				generator = .Classic,
+				view_radius = 4,
+				view_height = 2,
+				workers = 2,
+				allow_cheats = true,
+			},
+			{&pipe, .Server},
+		),
+	) {return}
+	defer stop(&srv)
+	c := Predicting_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	state_rx_init(&c.rx)
+	defer state_rx_destroy(&c.rx)
+	game.block_arrays_init(&c.arrays, 2048)
+	defer game.block_arrays_destroy(&c.arrays)
+	defer delete(c.chunks)
+	defer delete(c.results)
+	c.key = test_key("latency_test")
+	send(&c, test_hello("latency_test"))
+	tick_wait :: proc() {time.sleep(game.TICK_DURATION)}
+	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
+	for !c.welcomed {
+		pump(t, &c)
+		tick_wait()
+		if !testing.expect(t, time.tick_diff(time.tick_now(), deadline) > 0, "no welcome") {return}
+	}
+	stand :: proc(t: ^testing.T, c: ^Predicting_Client, yaw: f32, ticks: int) -> u32 {
+		seq: u32
+		for _ in 0 ..< ticks {
+			pump(t, c)
+			msg := game.prediction_tick(
+				&c.prediction,
+				{pitch = -0.7, yaw = yaw},
+				&c.rules,
+				query(c),
+			)
+			msg.snapshot = c.rx.rx.ack
+			send(c, msg)
+			seq = msg.sequence
+			tick_wait()
+		}
+		return seq
+	}
+	for {
+		stand(t, &c, 0, 1)
+		s := c.last_update.state
+		if s.on_ground &&
+		   c.last_update.acked > 0 &&
+		   len(c.chunks) > 200 &&
+		   c.prediction.state == s {break}
+		if !testing.expect(
+			t,
+			time.tick_diff(time.tick_now(), deadline) > 0,
+			"never landed",
+		) {return}
+	}
+	p := c.prediction.state.position
+	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
+	// A wall two blocks east, four high: stairs and slabs go against its west face.
+	for text in ([]string{"fill ~1 ~ ~-3 ~3 ~3 ~3 air", "fill ~2 ~ ~-3 ~2 ~3 ~3 stone"}) {
+		send(&c, game.Command{text})
+		stand(t, &c, 0, 3)
+	}
+	stand(t, &c, 0, 25)
+	wall := o + {2, 0, 0}
+	_, ok := client_block(&c, wall)
+	if !testing.expect(t, ok) {return}
+	Placed :: struct {
+		id:  u32,
+		pos: game.Block_Pos,
+		b:   game.Block,
+	}
+	placed := make([dynamic]Placed, context.temp_allocator)
+	for k in 0 ..< 24 {
+		z, y := i32(k % 7) - 3, i32(k / 7)
+		face_yaw := f32(k % 4) * math.PI / 2 + 0.1 // every quadrant
+		hit_y := u8(3 if (k / 4) % 2 == 0 else 12) // both halves
+		name := "stone_stairs" if k < 16 else "stone_slab"
+		type := game.block_type_of(&test_reg().blocks, test_block(name))
+		ctx := game.Place_Context {
+			target = wall + {0, y, z},
+			face   = .Neg_X,
+			hit    = {0, hit_y, 8},
+			yaw    = face_yaw,
+		}
+		pos, state, good := game.placement(test_reg(), type, ctx, query(&c))
+		if !testing.expectf(t, good, "placement %d refused by the rule", k) {return}
+		seq := stand(t, &c, face_yaw, 2)
+		id := u32(k + 1)
+		set_block(&c, pos, state) // predicted
+		send(&c, game.Edit{id, seq, pos, state, ctx.target, u8(ctx.face), ctx.hit})
+		append(&placed, Placed{id, pos, state})
+		stand(t, &c, face_yaw, 1)
+	}
+	// A forged edit: the context says one thing, the state another.
+	forged_type := game.block_type_of(&test_reg().blocks, test_block("stone_stairs"))
+	forged_ctx := game.Place_Context {
+		target = wall + {0, 3, 3},
+		face   = .Pos_Y,
+		hit    = {8, 16, 8},
+		yaw    = 0,
+	}
+	fpos, fstate, _ := game.placement(test_reg(), forged_type, forged_ctx, query(&c))
+	wrong, _ := game.state_set(&test_reg().blocks, fstate, "facing", "east")
+	seq := stand(t, &c, 0, 2)
+	send(
+		&c,
+		game.Edit{100, seq, fpos, wrong, forged_ctx.target, u8(forged_ctx.face), forged_ctx.hit},
+	)
+	seq = stand(t, &c, 0, 2)
+	send(
+		&c,
+		game.Edit{101, seq, fpos, fstate, forged_ctx.target, u8(forged_ctx.face), forged_ctx.hit},
+	)
+	// All answered.
+	deadline = time.tick_add(time.tick_now(), 20 * time.Second)
+	for len(c.results) < len(placed) + 2 {
+		stand(t, &c, 0, 1)
+		if !testing.expect(
+			t,
+			time.tick_diff(time.tick_now(), deadline) > 0,
+			"not all answered",
+		) {return}
+	}
+	for pl in placed {
+		r := c.results[pl.id]
+		testing.expectf(t, r.accepted, "edit %d (%v) refused", pl.id, state_text(test_reg(), pl.b))
+		got, _ := chunks_block(&srv.home.chunks, pl.pos)
+		testing.expectf(
+			t,
+			got == pl.b,
+			"server has %s, client placed %s",
+			state_text(test_reg(), got),
+			state_text(test_reg(), pl.b),
+		)
+		mine, _ := client_block(&c, pl.pos)
+		testing.expect_value(t, mine, got)
+	}
+	testing.expect(t, !c.results[100].accepted, "a forged state was accepted")
+	testing.expect(t, c.results[101].accepted, "the honest edit after it was refused")
+}
+
+@(private = "file")
+state_text :: proc(reg: ^game.Registry, b: game.Block) -> string {
+	return game.state_text(reg, b)
+}
+
+@(private = "file")
+test_block :: proc(name: string) -> game.Block {
+	b, ok := game.registry_block(test_reg(), name)
+	if !ok {panic(name)}
+	return b
 }

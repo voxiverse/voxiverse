@@ -114,8 +114,9 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 		ok =
 			(infinite || slot >= 0) &&
 			game.can_place(&s.registry.blocks, e.block) &&
+			placement_agrees(s, c, e) &&
 			game.can_place_at(&s.registry.blocks, current, e.block, e.pos, player) &&
-			plant_placeable(w, e.pos, e.block) &&
+			support_placeable(w, e.pos, e.block) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
 	if !ok {return result}
@@ -178,10 +179,35 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 	return false
 }
 
-// plant_placeable: block may be placed at pos: a plant only on what holds it.
+// placement_agrees: running the placement rule on the edit's context gives
+// the cell and the state the client sent (an edit with no context: only a
+// type with the default rule, in its default state, at e.pos).
+@(private = "file")
+placement_agrees :: proc(s: ^Server, c: ^Client, e: game.Edit) -> bool {
+	t := &s.registry.blocks
+	type := game.block_type_of(t, e.block)
+	if e.face == game.EDIT_FACE_PLAIN {
+		def := &t.types[type]
+		return def.place == .Default && def.default == e.block
+	}
+	face, is_face := game.Face(e.face), e.face < 6
+	if !is_face {return false}
+	w := c.world
+	query := game.Block_Query{&w.chunks, chunks_block, t}
+	pos, state, ok := game.placement(
+		s.registry,
+		type,
+		{target = e.target, face = face, hit = e.hit, yaw = c.look[0]},
+		query,
+	)
+	return ok && pos == e.pos && state == e.block
+}
+
+// support_placeable: block may be placed at pos: what needs support, only
+// where it is held.
 @(private)
-plant_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
-	if !game.block_is_plant(&w.server.registry.blocks, block) {return true}
-	below, loaded := chunks_block(&w.chunks, pos + {0, -1, 0})
-	return loaded && game.block_supported(&w.server.registry.blocks, block, below)
+support_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
+	t := &w.server.registry.blocks
+	if !game.has_support_rule(t, block) {return true}
+	return game.support_holds(t, block, pos, game.Block_Query{&w.chunks, chunks_block, t})
 }

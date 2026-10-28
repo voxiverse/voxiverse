@@ -26,28 +26,39 @@ can_change :: proc(t: ^Block_Table, b: Block) -> bool {
 	return t.flags[b] & {.Breakable, .Replaceable} != {}
 }
 
-// can_place_at: block may go at pos, where current is: current gives way
-// to it, and the player is not standing there (unless block lets them
-// through: a flower).
+// can_place_at: block may go at pos, where current is: current gives way to
+// it (or is a single slab the block completes), and the player is not
+// standing there: none of the block's collision boxes overlaps theirs (a
+// flower has none).
 can_place_at :: proc(
 	t: ^Block_Table,
 	current, block: Block,
 	pos: Block_Pos,
 	player: Player_State,
 ) -> bool {
-	if !block_has(t, current, .Replaceable) || current == block {return false}
-	if !block_collides(t, block) {return true}
+	if current == block {return false}
+	if !block_has(t, current, .Replaceable) && !slab_completes(t, current, block) {return false}
 	lo, hi := player_box(player)
-	b := [3]f64{f64(pos.x), f64(pos.y), f64(pos.z)}
 	EPS :: 1e-6
-	overlaps :=
-		lo.x < b.x + 1 - EPS &&
-		hi.x > b.x + EPS &&
-		lo.y < b.y + 1 - EPS &&
-		hi.y > b.y + EPS &&
-		lo.z < b.z + 1 - EPS &&
-		hi.z > b.z + EPS
-	return !overlaps
+	for box in shape_boxes(t, t.collision[block]) {
+		blo, bhi := box_world(box, pos)
+		if lo.x < bhi.x - EPS &&
+		   hi.x > blo.x + EPS &&
+		   lo.y < bhi.y - EPS &&
+		   hi.y > blo.y + EPS &&
+		   lo.z < bhi.z - EPS &&
+		   hi.z > blo.z + EPS {
+			return false
+		}
+	}
+	return true
+}
+
+// slab_completes: placing block into the single slab current makes a double.
+slab_completes :: proc(t: ^Block_Table, current, block: Block) -> bool {
+	if t.type_of[current] != t.type_of[block] ||
+	   t.types[t.type_of[block]].place != .Slab {return false}
+	return state_is(t, block, "type", "double") && !state_is(t, current, "type", "double")
 }
 
 // in_reach: the block's nearest point is within reach of the eyes.

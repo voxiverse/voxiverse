@@ -81,6 +81,7 @@ TEXTURE_GENERATOR_NAMES := [?]string {
 	"wool_black",
 	"chest_side",
 	"chest_top",
+	"ladder",
 }
 @(rodata)
 SOUND_GENERATOR_NAMES := [?]string {
@@ -240,14 +241,16 @@ NO_TAG :: i32(-1)
 
 // Block_Def: what is not a flag or the light of one block.
 Block_Def :: struct {
-	id:      string,
-	render:  Render_Kind,
-	layer:   Layer_Kind,
-	faces:   [3]u32, // texture layers: side, top, bottom
-	sound:   i32, // a sound set index, or NO_SOUND
-	drop:    Item,
-	support: i32, // a block tag index (what a plant stands on), or NO_TAG
-	tags:    []u16, // the block tags it is in, ascending
+	id:        string,
+	render:    Render_Kind,
+	layer:     Layer_Kind,
+	faces:     [3]u32, // texture layers: side, top, bottom
+	sound:     i32, // a sound set index, or NO_SOUND
+	drop:      Item,
+	support:   i32, // a block tag index (what a plant stands on), or NO_TAG
+	back:      i32, // a block tag index: what a facing block's back is against, or NO_TAG
+	back_full: bool, // its back must be against a full face
+	tags:      []u16, // the block tags it is in, ascending
 }
 
 // Block_Table: the hot part, arrays indexed by the block's number.
@@ -711,7 +714,7 @@ registry_text_of :: proc(
 		}
 		fmt.sbprintf(
 			&b,
-			" light=%d render=%v layer=%v textures=%d,%d,%d sound=%d drop=%d support=%d tags=",
+			" light=%d render=%v layer=%v textures=%d,%d,%d sound=%d drop=%d support=%d back=%d,%v tags=",
 			reg.blocks.light[i],
 			d.render,
 			d.layer,
@@ -721,6 +724,8 @@ registry_text_of :: proc(
 			d.sound,
 			d.drop,
 			d.support,
+			d.back,
+			d.back_full,
 		)
 		for x in d.tags {fmt.sbprintf(&b, "%d,", x)}
 		fmt.sbprintf(&b, " type=%d", reg.blocks.type_of[i])
@@ -731,7 +736,16 @@ registry_text_of :: proc(
 		strings.write_byte(&b, '\n')
 	}
 	for d in reg.blocks.types {
-		fmt.sbprintf(&b, "type %s first=%d count=%d default=%d place=%v climbable=%v props=", d.id, d.first_state, d.state_count, d.default, d.place, d.climbable)
+		fmt.sbprintf(
+			&b,
+			"type %s first=%d count=%d default=%d place=%v climbable=%v props=",
+			d.id,
+			d.first_state,
+			d.state_count,
+			d.default,
+			d.place,
+			d.climbable,
+		)
 		for p in d.props {fmt.sbprintf(&b, "%s%v;", p.name, p.values)}
 		strings.write_byte(&b, '\n')
 	}

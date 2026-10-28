@@ -89,14 +89,14 @@ test_plants_need_support :: proc(t: ^testing.T) {
 			set_block(w, at(c, 4, 0, 0), .Air, test_act(w))
 			if block(w, at(c, 4, 1, 0)) != .Air {fail(c, "the tall grass stayed")}
 			// Placed by hand where nothing holds it: the edit is refused.
-			if plant_placeable(
+			if support_placeable(
 				w,
 				at(c, 6, 1, 0),
 				.Poppy,
 			) {fail(c, "a poppy may be placed on stone")}
 			set_block(w, at(c, 8, 0, 0), .Grass, test_act(w))
-			if !plant_placeable(w, at(c, 8, 1, 0), .Poppy) ||
-			   !plant_placeable(w, at(c, 8, 1, 0), .Stone) {
+			if !support_placeable(w, at(c, 8, 1, 0), .Poppy) ||
+			   !support_placeable(w, at(c, 8, 1, 0), .Stone) {
 				fail(c, "placing is refused where it should not be")
 			}
 			// Drops off: nothing left behind.

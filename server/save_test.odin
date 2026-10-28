@@ -1,5 +1,6 @@
 package server
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:os"
@@ -209,7 +210,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			{below + {-2, 1, 0}, .Gravel},
 		}
 		for e, i in wanted {
-			send(&c, game.Edit{u32(i + 1), c.seq, e.pos, e.block})
+			send(&c, game.edit_plain(u32(i + 1), c.seq, e.pos, e.block))
 		}
 		@(static) count: int
 		count = len(wanted)
@@ -220,6 +221,65 @@ test_save_round_trip :: proc(t: ^testing.T) {
 		for e, i in wanted {
 			r := c.results[u32(i + 1)]
 			if testing.expectf(t, r.accepted, "edit %d refused", i + 1) {append(&edits, e)}
+		}
+		// States are saved and loaded by name: a stair, a slab and a ladder (against a wall).
+		{
+			reg := test_reg()
+			stair, _ := game.state_parse(reg, "stone_stairs[facing=south,half=top]")
+			slab, _ := game.state_parse(reg, "planks_slab[type=double]")
+			ladder, _ := game.state_parse(reg, "ladder[facing=west]")
+			at :: proc(dx, dy, dz: i32, feet: [3]f64) -> game.Block_Pos {
+				return {
+					i32(math.floor(feet.x)) + dx,
+					i32(math.floor(feet.y)) + dy,
+					i32(math.floor(feet.z)) + dz,
+				}
+			}
+			put :: proc(
+				t: ^testing.T,
+				c: ^Save_Client,
+				text: string,
+				where_: game.Block_Pos,
+				want: game.Block,
+			) -> bool {
+				send(
+					c,
+					game.Command {
+						fmt.tprintf(
+							"fill %d %d %d %d %d %d %s",
+							where_.x,
+							where_.y,
+							where_.z,
+							where_.x,
+							where_.y,
+							where_.z,
+							text,
+						),
+					},
+				)
+				@(static) wanted_at: game.Block_Pos
+				@(static) wanted_block: game.Block
+				wanted_at, wanted_block = where_, want
+				return until(t, c, proc(c: ^Save_Client) -> bool {
+					b, ok := block_at(c, wanted_at)
+					return ok && b == wanted_block
+				})
+			}
+			cases := [?]struct {
+				text:   string,
+				where_: game.Block_Pos,
+				block:  game.Block,
+			} {
+				{"stone", at(5, 0, 0, feet), .Stone},
+				{"ladder[facing=west]", at(4, 0, 0, feet), ladder},
+				{"stone_stairs[facing=south,half=top]", at(3, 0, 0, feet), stair},
+				{"planks_slab[type=double]", at(3, 0, 1, feet), slab},
+			}
+			for cs in cases {
+				if testing.expectf(t, put(t, &c, cs.text, cs.where_, cs.block), "%s", cs.text) {
+					append(&edits, Edit{cs.where_, cs.block})
+				}
+			}
 		}
 		send(&c, game.Command{"time 0.9"}) // late evening
 		c.time = nil
@@ -357,7 +417,7 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)) + 1,
 		i32(math.floor(feet.z)),
 	}
-	send(&c, game.Edit{1, c.seq, target, .Lamp})
+	send(&c, game.edit_plain(1, c.seq, target, .Lamp))
 	testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return len(c.results) == 1}))
 	testing.expect(t, c.results[1].accepted)
 
@@ -413,12 +473,12 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 		feet := c.player.state.position
 		send(
 			&c,
-			game.Edit {
+			game.edit_plain(
 				1,
 				c.seq,
 				{i32(math.floor(feet.x)) + 1, i32(math.floor(feet.y)), i32(math.floor(feet.z))},
 				.Stone,
-			},
+			),
 		)
 		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return len(c.results) == 1}))
 		testing.expect(t, stop(&srv))

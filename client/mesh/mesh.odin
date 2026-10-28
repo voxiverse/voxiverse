@@ -171,7 +171,15 @@ mesh_chunk :: proc(
 						case game.SHAPE_CUBE:
 							cube_faces(reg, s, light, out, {x, y, z}, b, layer)
 						case:
-							box_faces(reg, s, light, out, {x, y, z}, b, game.shape_boxes(&reg.blocks, rs))
+							box_faces(
+								reg,
+								s,
+								light,
+								out,
+								{x, y, z},
+								b,
+								game.shape_boxes(&reg.blocks, rs),
+							)
 						}
 					case .Cross:
 						cross_quads(reg, s, light, out, {x, y, z}, b)
@@ -425,7 +433,8 @@ box_faces :: proc(
 			positive := axes.normal[axis] > 0
 			at := box.hi[axis] if positive else box.lo[axis]
 			layer_bits := block_texture(reg, b, face)
-			uv_lo, uv_hi := [2]i32{i32(box.lo[ua]), i32(box.lo[va])}, [2]i32{i32(box.hi[ua]), i32(box.hi[va])}
+			uv_lo, uv_hi :=
+				[2]i32{i32(box.lo[ua]), i32(box.lo[va])}, [2]i32{i32(box.hi[ua]), i32(box.hi[va])}
 			if at == (16 if positive else 0) {
 				front := p + axes.normal
 				n := s[snapshot_index(front.x, front.y, front.z)]

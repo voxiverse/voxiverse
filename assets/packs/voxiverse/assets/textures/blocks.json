@@ -145,5 +145,8 @@
 	},
 	"chest_top": {
 		"generator": "chest_top"
+	},
+	"ladder": {
+		"generator": "ladder"
 	}
 }

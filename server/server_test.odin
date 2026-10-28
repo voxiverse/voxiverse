@@ -411,10 +411,10 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	}
 	head := below + {0, 2, 0}
 	edits := []game.Edit {
-		{1, 60, below, .Air}, // break the block underfoot: fine
-		{2, 60, head, .Stone}, // place inside the player: no
-		{3, 60, below + {0, 0, 30}, .Air}, // out of reach: no
-		{4, 60, below + {0, -200, 0}, .Stone}, // not loaded: no
+		game.edit_plain(1, 60, below, .Air), // break the block underfoot: fine
+		game.edit_plain(2, 60, head, .Stone), // place inside the player: no
+		game.edit_plain(3, 60, below + {0, 0, 30}, .Air), // out of reach: no
+		game.edit_plain(4, 60, below + {0, -200, 0}, .Stone), // not loaded: no
 	}
 	for e in edits {fake_send(&c, e)}
 	// The results come at once; the column at the end of the tick.
@@ -504,7 +504,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	// Place a block 12 blocks ahead (out of reach now), after the 30 inputs
 	// that fly there, sent before them.
 	target := game.Block_Pos{12, 101, 0}
-	fake_send(&c, game.Edit{id = 1, after = seq + 30, pos = target, block = .Stone})
+	fake_send(&c, game.edit_plain(1, seq + 30, target, .Stone))
 	for _ in 0 ..< 30 {
 		seq += 1
 		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}, 0})

@@ -59,6 +59,7 @@ Texture_Generator :: enum u32 {
 	Wool_Black,
 	Chest_Side,
 	Chest_Top,
+	Ladder,
 }
 
 // block_texture: the layer of the client's texture array that b's face f
@@ -313,6 +314,13 @@ generate_texture :: proc(t: Texture_Generator, pixels: []Rgba) {
 				if y % 4 == 3 {v -= 0.2}
 				if (x + (y / 4) * 2) % 4 == 3 {v -= 0.12}
 				c = shade(WOOL, clamp(v, 0, 1))
+			case .Ladder:
+				// Two rails and four rungs; clear between.
+				rail := (x >= 2 && x <= 3) || (x >= 12 && x <= 13)
+				rung := x >= 4 && x <= 11 && (y % 4 == 1 || y % 4 == 2)
+				c = {}
+				if rail ||
+				   rung {c = shade(WOOD, 0.3 + 0.35 * hash01(seed ~ 89, x / 2, y / 2) + 0.2 * fine)}
 			case .Cactus_Top:
 				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
 				if x == 0 ||

@@ -93,10 +93,10 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&a, game.Edit{1, a.seq, beside, .Dirt})
+	net_send(&a, game.edit_plain(1, a.seq, beside, .Dirt))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && a.results[1].accepted, "the dirt was not placed")
-	net_send(&a, game.Edit{2, a.seq, beside, .Air})
+	net_send(&a, game.edit_plain(2, a.seq, beside, .Air))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the dirt was not broken")
 	// A sheep: sheared, then hit once.

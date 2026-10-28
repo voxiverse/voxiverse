@@ -101,7 +101,7 @@ bulk_edit :: proc(
 	if changed == 0 {return 0, .Done, protected}
 
 	wake_water_box(w, lo, hi, cause.action)
-	plants_check_box(w, lo, hi, cause.action)
+	supports_check_box(w, lo, hi, cause.action)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
 			if column_rescan(w, x, z, hi.y) {

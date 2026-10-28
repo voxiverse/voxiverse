@@ -132,22 +132,39 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	if !place {
 		b, _ := world_block(&s.world, hit.block)
 		if !game.can_break(&s.reg.blocks, b) {return false}
-		edit.pos, edit.block = hit.block, .Air
+		edit.pos, edit.block, edit.face = hit.block, .Air, game.EDIT_FACE_BREAK
 	} else {
-		if hit.normal == {} {return false}
-		edit.pos = hit.block + hit.normal
-		current, loaded := world_block(&s.world, edit.pos)
+		face, is_face := game.face_of_normal(hit.normal)
+		if !is_face {return false}
+		// Where it goes, and in which state: the rule the server runs on the same numbers.
+		ctx := game.Place_Context {
+			target = hit.block,
+			face   = face,
+			hit    = game.hit_sixteenths(hit.point, hit.block),
+			yaw    = s.input_yaw,
+		}
+		query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+		pos, state, ok := game.placement(
+			s.reg,
+			game.block_type_of(&s.reg.blocks, block),
+			ctx,
+			query,
+		)
+		if !ok {return false}
+		current, loaded := world_block(&s.world, pos)
 		if !loaded ||
-		   !can_place_from_hand(s, block) ||
-		   (game.block_is_plant(&s.reg.blocks, block) && !plant_stands(s, edit.pos, block)) ||
+		   !can_place_from_hand(s, state) ||
+		   (game.has_support_rule(&s.reg.blocks, state) &&
+				   !game.support_holds(&s.reg.blocks, state, pos, query)) ||
 		   !game.can_place_at(
 				   &s.reg.blocks,
 				   current,
-				   block,
-				   edit.pos,
+				   state,
+				   pos,
 				   s.prediction.state,
 			   ) {return false}
-		edit.block = block
+		edit.pos, edit.block = pos, state
+		edit.target, edit.face, edit.hit = ctx.target, u8(face), ctx.hit
 	}
 	before, _ := world_block(&s.world, edit.pos)
 	if !world_set_block(&s.world, edit.pos, edit.block) {return false}
@@ -172,6 +189,7 @@ session_till :: proc(s: ^Session) -> bool {
 		after = s.prediction.next_sequence - 1,
 		pos   = hit.block,
 		block = .Farmland,
+		face  = game.EDIT_FACE_PLAIN,
 	}
 	if !world_set_block(&s.world, edit.pos, .Farmland) {return false}
 	edit_sound(s, edit.pos, current, .Farmland)
@@ -190,11 +208,4 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 	} else {
 		append(&s.sounds, Sound_Event{.Place, new, centre, 1})
 	}
-}
-
-// plant_stands: the block under pos holds a plant (loaded and fit).
-@(private = "file")
-plant_stands :: proc(s: ^Session, pos: game.Block_Pos, plant: game.Block) -> bool {
-	below, loaded := world_block(&s.world, pos + {0, -1, 0})
-	return loaded && game.block_supported(&s.reg.blocks, plant, below)
 }

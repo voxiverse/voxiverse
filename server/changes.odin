@@ -60,7 +60,9 @@ set_block :: proc(
 	ch.blocks[p] = who
 	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
 	wake_water(w, p, cause.action)
-	plant_check(w, p + {0, 1, 0}, cause.action) // (a plant above lost its footing, perhaps)
+	for d in ([6][3]i32{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
+		support_check(w, p + d, cause.action) // (a plant or a ladder beside lost its footing, perhaps)
+	}
 	return true
 }
 

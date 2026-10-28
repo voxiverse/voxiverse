@@ -1,0 +1,82 @@
+{
+	"stone_slab": {
+		"states": {
+			"type": [
+				"bottom",
+				"top",
+				"double"
+			]
+		},
+		"default": {
+			"type": "bottom"
+		},
+		"shape": "voxiverse:slab",
+		"place": "slab",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:stone"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"cobblestone_slab": {
+		"states": {
+			"type": [
+				"bottom",
+				"top",
+				"double"
+			]
+		},
+		"default": {
+			"type": "bottom"
+		},
+		"shape": "voxiverse:slab",
+		"place": "slab",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:cobblestone"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"stone_bricks_slab": {
+		"states": {
+			"type": [
+				"bottom",
+				"top",
+				"double"
+			]
+		},
+		"default": {
+			"type": "bottom"
+		},
+		"shape": "voxiverse:slab",
+		"place": "slab",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:stone_bricks"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"planks_slab": {
+		"states": {
+			"type": [
+				"bottom",
+				"top",
+				"double"
+			]
+		},
+		"default": {
+			"type": "bottom"
+		},
+		"shape": "voxiverse:slab",
+		"place": "slab",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:planks"
+		},
+		"sound": "voxiverse:wood"
+	}
+}

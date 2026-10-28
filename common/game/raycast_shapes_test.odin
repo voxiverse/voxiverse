@@ -21,7 +21,11 @@ frozen_raycast :: proc(
 	length := math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z)
 	if length == 0 {return}
 	d := dir / length
-	cell := Block_Pos{i32(math.floor(origin.x)), i32(math.floor(origin.y)), i32(math.floor(origin.z))}
+	cell := Block_Pos {
+		i32(math.floor(origin.x)),
+		i32(math.floor(origin.y)),
+		i32(math.floor(origin.z)),
+	}
 	step: [3]i32
 	t_max, t_delta: [3]f64
 	for axis in 0 ..< 3 {
@@ -95,9 +99,18 @@ test_raycast_cubes_unchanged :: proc(t: ^testing.T) {
 	q := world_query(&w, reg)
 	mismatches := 0
 	for _ in 0 ..< 10_000 {
-		origin := [3]f64{rand.float64_range(-7, 7), rand.float64_range(-7, 7), rand.float64_range(-7, 7)}
-		if rand.int_max(4) == 0 {origin = {math.round(origin.x), math.round(origin.y), math.round(origin.z)}}
-		dir := [3]f64{rand.float64_range(-1, 1), rand.float64_range(-1, 1), rand.float64_range(-1, 1)}
+		origin := [3]f64 {
+			rand.float64_range(-7, 7),
+			rand.float64_range(-7, 7),
+			rand.float64_range(-7, 7),
+		}
+		if rand.int_max(4) ==
+		   0 {origin = {math.round(origin.x), math.round(origin.y), math.round(origin.z)}}
+		dir := [3]f64 {
+			rand.float64_range(-1, 1),
+			rand.float64_range(-1, 1),
+			rand.float64_range(-1, 1),
+		}
 		if rand.int_max(5) == 0 {dir[rand.int_max(3)] = 0}
 		hit, ok := raycast(q, origin, dir, 8)
 		block, normal, distance, ok2 := frozen_raycast(q, origin, dir, 8)

@@ -350,36 +350,36 @@ test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
 	pos := ground
 	up := pos + {0, 1, 0}
 	// Without a hoe in hand (slot 0 holds stone): refused.
-	net_send(&a, game.Edit{1, a.seq, pos, .Farmland})
+	net_send(&a, game.edit_plain(1, a.seq, pos, .Farmland))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && !a.results[1].accepted, "tilled without a hoe")
 	// With it (slot 3 selected): farmland.
 	req(&a, &seq, .Select, 0, 3)
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 5})
-	net_send(&a, game.Edit{2, a.seq, pos, .Farmland})
+	net_send(&a, game.edit_plain(2, a.seq, pos, .Farmland))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the hoe did not till")
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	b := server_block(&srv, pos)
 	testing.expect(t, game.block_is_farmland(b), "no farmland")
 	// Tilling it again, or a block with something above it: refused.
-	net_send(&a, game.Edit{3, a.seq, pos, .Farmland})
+	net_send(&a, game.edit_plain(3, a.seq, pos, .Farmland))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 3 in cs[0].results})
 	testing.expect(t, ok && !a.results[3].accepted, "tilled farmland")
 	// Seeds (slot 4) on the farmland: wheat, one seed used; on the grass beside: refused.
 	req(&a, &seq, .Select, 0, 4)
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 6})
-	net_send(&a, game.Edit{4, a.seq, pos + {1, 1, 0}, .Wheat_0}) // beside, in the air: nothing under it
+	net_send(&a, game.edit_plain(4, a.seq, pos + {1, 1, 0}, .Wheat_0)) // beside, in the air: nothing under it
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 4 in cs[0].results})
 	testing.expect(t, ok && !a.results[4].accepted, "seeds in the air")
-	net_send(&a, game.Edit{5, a.seq, up, .Wheat_0})
+	net_send(&a, game.edit_plain(5, a.seq, up, .Wheat_0))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 5 in cs[0].results})
 	testing.expect(t, ok && a.results[5].accepted, "seeds on farmland were refused")
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	b = server_block(&srv, up)
 	testing.expect_value(t, b, game.Block.Wheat_0)
 	// Breaking the farmland takes the wheat with it, and leaves dirt.
-	net_send(&a, game.Edit{6, a.seq, pos, .Air})
+	net_send(&a, game.edit_plain(6, a.seq, pos, .Air))
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 6 in cs[0].results})
 	testing.expect(t, ok && a.results[6].accepted)
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)

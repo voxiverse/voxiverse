@@ -16,11 +16,23 @@ type_state_count :: proc(props: []Prop_Def) -> int {
 // read_states: a block's properties (`states`) and the index of its default
 // state (`default`: each property's value; absent, each property's first).
 @(private)
-read_states :: proc(b: ^Reg_Build, m: ^Merged_Def, builtin: bool) -> (props: []Prop_Def, default_index: int) {
+read_states :: proc(
+	b: ^Reg_Build,
+	m: ^Merged_Def,
+	builtin: bool,
+) -> (
+	props: []Prop_Def,
+	default_index: int,
+) {
 	f := field_of(m, "states")
 	if f == nil {
 		if g := field_of(m, "default"); g != nil {
-			fail_field(b, g, g.value, "default needs \"states\"; a block without states has one state")
+			fail_field(
+				b,
+				g,
+				g.value,
+				"default needs \"states\"; a block without states has one state",
+			)
 		}
 		return nil, 0
 	}
@@ -34,7 +46,12 @@ read_states :: proc(b: ^Reg_Build, m: ^Merged_Def, builtin: bool) -> (props: []P
 		return nil, 0
 	}
 	if f.value.kind != .Object {
-		fail_field(b, f, f.value, "states is an object: {\"name\": [\"value\", ...]} or {\"name\": \"bool\"}")
+		fail_field(
+			b,
+			f,
+			f.value,
+			"states is an object: {\"name\": [\"value\", ...]} or {\"name\": \"bool\"}",
+		)
 		return nil, 0
 	}
 	if len(f.value.members) > MAX_PROPS {
@@ -50,7 +67,15 @@ read_states :: proc(b: ^Reg_Build, m: ^Merged_Def, builtin: bool) -> (props: []P
 	count := 1
 	for pm in f.value.members {
 		if !id_part_valid(pm.key, 32) {
-			fail_field(b, f, pm.value, fmt.aprintf("\"%s\" is not a property name; use 1 to 32 of a-z, 0-9 and _", pm.key))
+			fail_field(
+				b,
+				f,
+				pm.value,
+				fmt.aprintf(
+					"\"%s\" is not a property name; use 1 to 32 of a-z, 0-9 and _",
+					pm.key,
+				),
+			)
 			continue
 		}
 		p := Prop_Def {
@@ -83,7 +108,12 @@ read_states :: proc(b: ^Reg_Build, m: ^Merged_Def, builtin: bool) -> (props: []P
 					b,
 					f,
 					pm.value,
-					fmt.aprintf("%s has %d values; a property has 2 to %d", pm.key, len(vals), MAX_PROP_VALUES),
+					fmt.aprintf(
+						"%s has %d values; a property has 2 to %d",
+						pm.key,
+						len(vals),
+						MAX_PROP_VALUES,
+					),
 				)
 				continue
 			}
@@ -122,7 +152,11 @@ read_states :: proc(b: ^Reg_Build, m: ^Merged_Def, builtin: bool) -> (props: []P
 						b,
 						g,
 						dm.value,
-						fmt.aprintf("\"%s\" is not a property of this block%s", dm.key, suggestion(dm.key, names)),
+						fmt.aprintf(
+							"\"%s\" is not a property of this block%s",
+							dm.key,
+							suggestion(dm.key, names),
+						),
 					)
 					continue
 				}
@@ -171,7 +205,12 @@ Shape_Choice :: struct {
 NO_SHAPE :: ~u16(0)
 
 @(private)
-read_shapes :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order, first_state: []int) {
+read_shapes :: proc(
+	b: ^Reg_Build,
+	reg: ^Registry,
+	blocks: []Merged_Def,
+	order, first_state: []int,
+) {
 	t := &reg.blocks
 	sb: Shape_Builder
 	shape_builder_init(&sb)
@@ -190,7 +229,12 @@ read_shapes :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order, 
 		f := field_of(m, field)
 		if f == nil {return {}, false}
 		if f.value.kind != .String {
-			fail_field(b, f, f.value, fmt.aprintf("%s is \"cube\", \"empty\" or a shape id", field))
+			fail_field(
+				b,
+				f,
+				f.value,
+				fmt.aprintf("%s is \"cube\", \"empty\" or a shape id", field),
+			)
 			return {NO_SHAPE, -1}, true
 		}
 		switch f.value.s {
@@ -218,7 +262,13 @@ read_shapes :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order, 
 		coll, has_coll := choose(b, m, "collision")
 		sel, has_sel := choose(b, m, "selection")
 		rend, has_rend := choose(b, m, "render_shape")
-		pick :: proc(own: Shape_Choice, has_own: bool, one: Shape_Choice, has_one: bool, fallback: u16) -> Shape_Choice {
+		pick :: proc(
+			own: Shape_Choice,
+			has_own: bool,
+			one: Shape_Choice,
+			has_one: bool,
+			fallback: u16,
+		) -> Shape_Choice {
 			if has_own {return own}
 			if has_one {return one}
 			return {fallback, -1}
@@ -229,7 +279,7 @@ read_shapes :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order, 
 			pick(rend, has_rend, one, has_one, render_default),
 		}
 		for use in uses {
-			if use.id == NO_SHAPE && use.source < 0 {continue} // an error was reported
+			if use.id == NO_SHAPE && use.source < 0 {continue} 	// an error was reported
 			if use.source >= 0 {
 				if !checked[{use.source, n}] {
 					checked[{use.source, n}] = true
@@ -287,7 +337,10 @@ read_shapes :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order, 
 						m.file,
 						m.line,
 						m.column,
-						fmt.aprintf("%s is opaque but its render shape is not a full cube; set \"opaque\": false", m.id),
+						fmt.aprintf(
+							"%s is opaque but its render shape is not a full cube; set \"opaque\": false",
+							m.id,
+						),
 					)
 					break
 				}

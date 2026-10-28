@@ -1,0 +1,28 @@
+{
+	"ladder": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			]
+		},
+		"default": {
+			"facing": "north"
+		},
+		"render": "cube",
+		"layer": "cutout",
+		"collision": "voxiverse:ladder",
+		"selection": "voxiverse:ladder",
+		"render_shape": "voxiverse:ladder",
+		"climbable": true,
+		"place": "attached",
+		"support": {
+			"back": "full_face"
+		},
+		"collides": true,
+		"opaque": false,
+		"sound": "voxiverse:wood"
+	}
+}

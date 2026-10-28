@@ -175,7 +175,8 @@ player_step :: proc(
 			v := max(s.velocity.y, -LADDER_FALL_SPEED)
 			pushing :=
 				wish != {} &&
-				(sweep_stopped(s, q, 0, f64(s.velocity.x * dt)) || sweep_stopped(s, q, 2, f64(s.velocity.z * dt)))
+				(sweep_stopped(s, q, 0, f64(s.velocity.x * dt)) ||
+						sweep_stopped(s, q, 2, f64(s.velocity.z * dt)))
 			if jump || pushing {v = LADDER_CLIMB_SPEED}
 			if sneak && !(jump || pushing) {v = max(v, 0)}
 			s.velocity.y = v
@@ -309,7 +310,6 @@ box_blocked :: proc(q: Block_Query, position: [3]f64, width, height: f64) -> boo
 
 // box_world: a box's bounds in world units: sixteenths are exact in binary,
 // so a cube's box is exactly cell to cell + 1.
-@(private = "file")
 box_world :: #force_inline proc(box: Box, p: Block_Pos) -> (lo, hi: [3]f64) {
 	for k in 0 ..< 3 {
 		lo[k] = f64(p[k]) + f64(box.lo[k]) / 16
@@ -321,7 +321,14 @@ box_world :: #force_inline proc(box: Box, p: Block_Pos) -> (lo, hi: [3]f64) {
 @(private = "file")
 box_overlaps :: #force_inline proc(box: Box, p: Block_Pos, lo, hi: [3]f64) -> bool {
 	blo, bhi := box_world(box, p)
-	return blo.x < hi.x && bhi.x > lo.x && blo.y < hi.y && bhi.y > lo.y && blo.z < hi.z && bhi.z > lo.z
+	return(
+		blo.x < hi.x &&
+		bhi.x > lo.x &&
+		blo.y < hi.y &&
+		bhi.y > lo.y &&
+		blo.z < hi.z &&
+		bhi.z > lo.z \
+	)
 }
 
 @(rodata)
@@ -374,7 +381,12 @@ against_wall :: proc(q: Block_Query, position: [3]f64, wish: [2]f32) -> bool {
 point_solid :: proc(q: Block_Query, p: Block_Pos, at: [3]f64) -> bool {
 	for box in cell_boxes(q, p) {
 		lo, hi := box_world(box, p)
-		if at.x >= lo.x && at.x < hi.x && at.y >= lo.y && at.y < hi.y && at.z >= lo.z && at.z < hi.z {
+		if at.x >= lo.x &&
+		   at.x < hi.x &&
+		   at.y >= lo.y &&
+		   at.y < hi.y &&
+		   at.z >= lo.z &&
+		   at.z < hi.z {
 			return true
 		}
 	}

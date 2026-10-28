@@ -137,8 +137,13 @@ complete_vars :: proc(app: ^App, arg: int, args: []string) -> []string {
 @(private)
 complete_block :: proc(app: ^App, arg: int, args: []string) -> []string {
 	names := make([dynamic]string, context.temp_allocator)
-	if arg ==
-	   0 {for b in game.Block {if game.can_place(&app.session.reg.blocks, b) {append(&names, game.block_name(app.session.reg, b))}}}
+	if arg == 0 {
+		for def in app.session.reg.blocks.types {
+			if game.can_place(&app.session.reg.blocks, def.default) {
+				append(&names, game.block_name(app.session.reg, def.default))
+			}
+		}
+	}
 	return names[:]
 }
 
@@ -164,12 +169,11 @@ complete_world :: proc(app: ^App, arg: int, args: []string) -> []string {
 @(private)
 complete_block_or_air :: proc(app: ^App, arg: int, args: []string) -> []string {
 	names := make([dynamic]string, context.temp_allocator)
-	for b in game.Block {
-		if b == .Air ||
-		   game.can_place(
-			   &app.session.reg.blocks,
-			   b,
-		   ) {append(&names, game.block_name(app.session.reg, b))}
+	for def in app.session.reg.blocks.types {
+		b := def.default
+		if b == .Air || game.can_place(&app.session.reg.blocks, b) {
+			append(&names, game.block_name(app.session.reg, b))
+		}
 	}
 	return names[:]
 }

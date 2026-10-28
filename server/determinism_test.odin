@@ -149,6 +149,21 @@ mirror_pump :: proc(sess: ^Session) {
 	}
 }
 
+// The mirror's pieces, for the tests that script their own session.
+mirror_query :: proc(m: ^Mirror) -> game.Block_Query {
+	return query(m)
+}
+
+mirror_receive :: proc(sess: ^Session) {
+	mirror_pump(sess)
+}
+
+// chunks_agree: the mirror's chunks hash as the server's.
+chunks_agree :: proc(sess: ^Session) -> bool {
+	c := checkpoint(sess)
+	return c.server == c.mirror
+}
+
 // mirror_apply: what the receiver yielded, as the mirror keeps it.
 mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 	m := &sess.mirror
@@ -320,7 +335,7 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 		eye := game.player_eye(m.prediction.state)
 		if hit, aimed := game.raycast(query(m), eye, dir, f64(m.rules.reach)); aimed {
 			m.edit_id += 1
-			e := game.Edit{m.edit_id, msg.sequence, hit.block, .Air}
+			e := game.edit_plain(m.edit_id, msg.sequence, hit.block, .Air)
 			if (tick / 40) % 2 == 1 {e.pos, e.block = hit.block + hit.normal, .Stone}
 			mirror_set(m, e.pos, e.block) // predicted
 			mirror_send(m, e)

@@ -189,7 +189,12 @@ test_stand_on_slab_and_bump_top_slab :: proc(t: ^testing.T) {
 	w.blocks[{0, 0, 0}] = .Stone
 	for _ in 0 ..< 40 {
 		walk(&s, {buttons = {.Jump}}, &w, reg, 1)
-		testing.expectf(t, s.position.y + PLAYER_HEIGHT <= 3.5 + 1e-9, "head through the slab: %v", s.position.y)
+		testing.expectf(
+			t,
+			s.position.y + PLAYER_HEIGHT <= 3.5 + 1e-9,
+			"head through the slab: %v",
+			s.position.y,
+		)
 	}
 }
 
@@ -296,12 +301,23 @@ test_ladder :: proc(t: ^testing.T) {
 	// Holding jump climbs at LADDER_CLIMB_SPEED.
 	walk(&s, {buttons = {.Jump}}, &w, reg, 20)
 	rise := s.position.y - y0
-	testing.expectf(t, abs(rise - LADDER_CLIMB_SPEED * 20 * f64(DT)) < 0.2, "rose %v in 20 ticks", rise)
+	testing.expectf(
+		t,
+		abs(rise - LADDER_CLIMB_SPEED * 20 * f64(DT)) < 0.2,
+		"rose %v in 20 ticks",
+		rise,
+	)
 	// Sneaking holds still.
 	walk(&s, {buttons = {.Sneak}}, &w, reg, 6) // the rise dies down
 	at := s.position.y
 	walk(&s, {buttons = {.Sneak}}, &w, reg, 30)
-	testing.expectf(t, abs(s.position.y - at) < 1e-9, "slid from %v to %v while sneaking", at, s.position.y)
+	testing.expectf(
+		t,
+		abs(s.position.y - at) < 1e-9,
+		"slid from %v to %v while sneaking",
+		at,
+		s.position.y,
+	)
 	// Letting go: falls no faster than LADDER_FALL_SPEED.
 	walk(&s, {}, &w, reg, 10)
 	testing.expectf(t, s.velocity.y >= -LADDER_FALL_SPEED - 1e-6, "falls at %v", s.velocity.y)

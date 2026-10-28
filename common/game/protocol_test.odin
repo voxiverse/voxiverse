@@ -59,8 +59,15 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	tp, ok = decode_client_t(encode_c(Teleport{{1.5, -2e6, 3}, 2, 0.5})[:])
 	testing.expect(t, ok && tp.(Teleport) == Teleport{{1.5, -2e6, 3}, 2, 0.5})
 	edit: Client_Message
-	edit, ok = decode_client_t(encode_c(Edit{5, 9, {-3, WORLD_MIN_Y, 7}, .Sand})[:])
-	testing.expect(t, ok && edit.(Edit) == Edit{5, 9, {-3, WORLD_MIN_Y, 7}, .Sand})
+	edit, ok = decode_client_t(encode_c(edit_plain(5, 9, {-3, WORLD_MIN_Y, 7}, .Sand))[:])
+	testing.expect(t, ok && edit.(Edit) == edit_plain(5, 9, {-3, WORLD_MIN_Y, 7}, .Sand))
+	placed := Edit{6, 10, {1, 2, 3}, Block(60), {1, 1, 3}, 2, {8, 16, 0}}
+	edit, ok = decode_client_t(encode_c(placed)[:])
+	testing.expect(t, ok && edit.(Edit) == placed)
+	for bad in ([]Edit{{face = 8}, {hit = {17, 0, 0}}}) {
+		_, ok = decode_client_t(encode_c(bad)[:])
+		testing.expect(t, !ok)
+	}
 	result: Server_Message
 	result, ok = decode_server_t(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air})[:], scratch)
 	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air})
@@ -305,7 +312,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server_t(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc", 0}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(Edit{1, 2, {}, .Stone})}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc", 0}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(edit_plain(1, 2, {}, .Stone))}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client_t(bytes[:n])
 			testing.expect(t, !ok)
@@ -413,7 +420,7 @@ test_invalid_values_fail :: proc(t: ^testing.T) {
 	bad_server(t, scratch, "uniform chunk of an unknown block", proc(w: ^Writer) {
 		chunk_header(w)
 		write_u8(w, 0)
-		write_u16(w, len(Block))
+		write_u16(w, u16(len(Block) + BASE_NEW_STATES))
 	})
 	bad_server(t, scratch, "unknown chunk encoding", proc(w: ^Writer) {
 		chunk_header(w)

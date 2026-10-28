@@ -203,9 +203,7 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	mesh_chunk(test_reg(), s, nil, &out)
 	found := false
 	for i := 0; i < len(out); i += 4 {
-		if vertex_face(out[i]) != .Pos_Y ||
-		   bp(out[i]).y != 6 ||
-		   bp(out[i]).x > 6 {continue}
+		if vertex_face(out[i]) != .Pos_Y || bp(out[i]).y != 6 || bp(out[i]).x > 6 {continue}
 		if bp(out[i]).x < 5 {continue}
 		// The floor block's top quad (x 5..6, y 6).
 		all_in := true
@@ -328,6 +326,7 @@ test_textures :: proc(t: ^testing.T) {
 			layer_of[tex] = layer
 		}
 	}
+	layer_of[.Ladder] = .Cutout // (the base pack's ladder block, after the builtins)
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
 	for tex in Texture_Generator {
 		generate_texture(tex, a[:])

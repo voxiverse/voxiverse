@@ -207,13 +207,7 @@ read_boxes :: proc(b: ^Reg_Build, f: ^Def_Field, v: Json_Value, out: ^[dynamic]B
 			}
 		}
 		if !good {continue}
-		append(
-			out,
-			Box {
-				{u8(n[0]), u8(n[1]), u8(n[2])},
-				{u8(n[3]), u8(n[4]), u8(n[5])},
-			},
-		)
+		append(out, Box{{u8(n[0]), u8(n[1]), u8(n[2])}, {u8(n[3]), u8(n[4]), u8(n[5])}})
 	}
 }
 
@@ -243,7 +237,12 @@ read_shape_source :: proc(b: ^Reg_Build, m: ^Merged_Def) -> Shape_Source {
 					switch cm.key {
 					case "when":
 						if cm.value.kind != .Object {
-							fail_field(b, f, cm.value, "when is {property: value} or {property: [values]}")
+							fail_field(
+								b,
+								f,
+								cm.value,
+								"when is {property: value} or {property: [values]}",
+							)
 							continue
 						}
 						for wm in cm.value.members {
@@ -258,7 +257,12 @@ read_shape_source :: proc(b: ^Reg_Build, m: ^Merged_Def) -> Shape_Source {
 									}
 								}
 							case:
-								fail_field(b, f, wm.value, "a value is a string or a list of strings")
+								fail_field(
+									b,
+									f,
+									wm.value,
+									"a value is a string or a list of strings",
+								)
 							}
 							append(&sc.cond, [2]string{wm.key, strings.join(vals[:], "|")})
 						}
@@ -289,7 +293,9 @@ read_shape_source :: proc(b: ^Reg_Build, m: ^Merged_Def) -> Shape_Source {
 		}
 	}
 	if f := field_of(m, "flip"); f != nil {
-		if f.value.kind != .Object || len(f.value.members) != 1 || f.value.members[0].value.kind != .String {
+		if f.value.kind != .Object ||
+		   len(f.value.members) != 1 ||
+		   f.value.members[0].value.kind != .String {
 			fail_field(b, f, f.value, "flip is {property: value}")
 		} else {
 			s.flip = [2]string{f.value.members[0].key, f.value.members[0].value.s}

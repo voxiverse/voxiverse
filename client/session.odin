@@ -111,6 +111,7 @@ Session :: struct {
 	edits:            [dynamic]game.Edit, // predicted, waiting for Edit_Result
 	next_edit:        u32,
 	edit_timer:       f32, // seconds until a held button edits again
+	input_yaw:        f32, // the yaw of the last input predicted (the one an edit follows)
 	sounds:           [dynamic]Sound_Event, // this frame's; the App plays and clears them
 	walked:           f32, // blocks on the ground since the last footstep
 	drop_repeat:      Drop_Repeat, // the drop key held (items.odin)
@@ -391,6 +392,7 @@ session_update :: proc(
 		s.tick_time -= game.TICK_SECONDS
 		in_ :=
 			s.autopilot.? or_else (player_input(actions, s) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
+		s.input_yaw = in_.yaw
 		if s.toggle_fly {
 			in_.buttons += {.Toggle_Fly}
 			s.toggle_fly = false

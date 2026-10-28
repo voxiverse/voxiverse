@@ -128,7 +128,7 @@ box :: proc(g: ^Grief, a, b: [3]i32) -> string {
 // hand: an edit the way a client makes it (reach and place rules checked).
 hand :: proc(g: ^Grief, pos: game.Block_Pos, b: game.Block) -> bool {
 	g.edit += 1
-	r := apply_edit(grief_srv(g), grief_client(g), game.Edit{g.edit, 0, pos, b})
+	r := apply_edit(grief_srv(g), grief_client(g), game.edit_plain(g.edit, 0, pos, b))
 	run(g, 1)
 	return r.accepted
 }

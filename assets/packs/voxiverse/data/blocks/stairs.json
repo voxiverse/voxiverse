@@ -1,0 +1,106 @@
+{
+	"stone_stairs": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			],
+			"half": [
+				"bottom",
+				"top"
+			]
+		},
+		"default": {
+			"facing": "north",
+			"half": "bottom"
+		},
+		"shape": "voxiverse:stairs",
+		"place": "stairs",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:stone"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"cobblestone_stairs": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			],
+			"half": [
+				"bottom",
+				"top"
+			]
+		},
+		"default": {
+			"facing": "north",
+			"half": "bottom"
+		},
+		"shape": "voxiverse:stairs",
+		"place": "stairs",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:cobblestone"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"stone_bricks_stairs": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			],
+			"half": [
+				"bottom",
+				"top"
+			]
+		},
+		"default": {
+			"facing": "north",
+			"half": "bottom"
+		},
+		"shape": "voxiverse:stairs",
+		"place": "stairs",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:stone_bricks"
+		},
+		"sound": "voxiverse:stone"
+	},
+	"planks_stairs": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			],
+			"half": [
+				"bottom",
+				"top"
+			]
+		},
+		"default": {
+			"facing": "north",
+			"half": "bottom"
+		},
+		"shape": "voxiverse:stairs",
+		"place": "stairs",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:planks"
+		},
+		"sound": "voxiverse:wood"
+	}
+}

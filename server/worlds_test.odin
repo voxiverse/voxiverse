@@ -120,7 +120,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.Edit{1, alice.seq, at, .Stone})
+	net_send(&alice, game.edit_plain(1, alice.seq, at, .Stone))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && alice.results[1].accepted, "her edit was refused")
 

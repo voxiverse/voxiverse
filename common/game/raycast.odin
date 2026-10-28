@@ -61,7 +61,14 @@ raycast :: proc(
 				if sel == SHAPE_CUBE {
 					return {block, normal, distance, origin + d * distance}, true
 				}
-				if h, hit_box := ray_boxes(shape_boxes(q.table, sel), block, origin, d, distance, max_distance); hit_box {
+				if h, hit_box := ray_boxes(
+					shape_boxes(q.table, sel),
+					block,
+					origin,
+					d,
+					distance,
+					max_distance,
+				); hit_box {
 					return h, true
 				}
 			}

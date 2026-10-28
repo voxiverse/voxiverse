@@ -37,10 +37,18 @@ shaped :: proc() -> ^game.Registry {
 	sync.once_do(&shaped_once, proc() {
 		context.allocator = runtime.default_allocator()
 		files := []game.Pack_File {
-			{"pack.json", transmute([]u8)string(`{"format": 1, "namespace": "shapes", "version": "1", "title": "T", "requires": ["voxiverse"]}`)},
+			{
+				"pack.json",
+				transmute([]u8)string(
+					`{"format": 1, "namespace": "shapes", "version": "1", "title": "T", "requires": ["voxiverse"]}`,
+				),
+			},
 			{"data/blocks/shaped.json", transmute([]u8)string(SHAPED_BLOCKS)},
 		}
-		sources := []game.Pack_Source{game.base_pack_source(runtime.default_allocator()), {"shapes", files}}
+		sources := []game.Pack_Source {
+			game.base_pack_source(runtime.default_allocator()),
+			{"shapes", files},
+		}
 		reg, errs := game.registry_build(sources, .Server, runtime.default_allocator())
 		if reg == nil {
 			for e in errs {runtime.print_string(game.pack_error_text(e)); runtime.print_string("\n")}

@@ -467,7 +467,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)) - 1,
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.Edit{1, alice.seq, below, .Air})
+	net_send(&alice, game.edit_plain(1, alice.seq, below, .Air))
 	@(static) target: game.Block_Pos
 	target = below
 	ok = net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
@@ -620,7 +620,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	feet := a.update.state.position
 	@(static) below: game.Block_Pos
 	below = {i32(math.floor(feet.x)), i32(math.floor(feet.y)) - 1, i32(math.floor(feet.z))}
-	net_send(&a, game.Edit{1, a.seq, below, .Air})
+	net_send(&a, game.edit_plain(1, a.seq, below, .Air))
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 			for ch in cs[1].changed {
 				if ch.pos == below && ch.block == .Air && 1 in cs[0].results {return true}

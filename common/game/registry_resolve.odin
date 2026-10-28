@@ -428,13 +428,19 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		f := field_of(m, "support")
 		fs := first_state[n]
 		t.defs[fs].support = NO_TAG
+		t.defs[fs].back = NO_TAG
 		if f == nil {continue}
 		if f.value.kind != .Object {
-			fail_field(b, f, f.value, "support is an object: {\"below\": \"<block tag>\"}")
+			fail_field(
+				b,
+				f,
+				f.value,
+				"support is an object: {\"below\": \"<block tag>\"} and/or {\"back\": \"<block tag>\" or \"full_face\"}",
+			)
 			continue
 		}
 		for sm in f.value.members {
-			if sm.key != "below" {
+			if sm.key != "below" && sm.key != "back" {
 				fail_field(
 					b,
 					f,
@@ -442,13 +448,17 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 					fmt.aprintf(
 						"\"%s\" is not a support field%s",
 						sm.key,
-						suggestion(sm.key, []string{"below"}),
+						suggestion(sm.key, []string{"below", "back"}),
 					),
 				)
 				continue
 			}
 			if sm.value.kind != .String {
-				fail_field(b, f, sm.value, "below is a block tag id")
+				fail_field(b, f, sm.value, fmt.aprintf("%s is a block tag id", sm.key))
+				continue
+			}
+			if sm.key == "back" && sm.value.s == "full_face" {
+				t.defs[fs].back_full = true
 				continue
 			}
 			if at, ok := ref_index(
@@ -458,7 +468,8 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 				f,
 				sm.value,
 			); ok {
-				t.defs[fs].support = i32(at)
+				if sm.key ==
+				   "below" {t.defs[fs].support = i32(at)} else {t.defs[fs].back = i32(at)}
 			}
 		}
 	}
@@ -766,6 +777,7 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	d.layer = layer
 	d.sound = NO_SOUND
 	d.support = NO_TAG
+	d.back = NO_TAG
 	if f := field_of(m, "sound"); f != nil {
 		if f.value.kind != .String {
 			fail_field(b, f, f.value, "sound is a sound set id")

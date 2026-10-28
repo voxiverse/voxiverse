@@ -45,7 +45,7 @@ test_local_index_round_trips :: proc(t: ^testing.T) {
 @(test)
 test_block_valid :: proc(t: ^testing.T) {
 	testing.expect(t, block_valid(test_blocks(), u16(Block.Gravel)))
-	testing.expect(t, !block_valid(test_blocks(), len(Block)))
+	testing.expect(t, !block_valid(test_blocks(), u16(test_blocks().count)))
 	testing.expect(t, !block_valid(test_blocks(), max(u16)))
 	testing.expect(
 		t,

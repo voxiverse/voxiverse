@@ -72,7 +72,10 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 	} else if block == .Tall_Grass {
 		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1})}
 	} else if item := game.block_drop(w.server.registry, block); item != game.NO_ITEM {
-		append(&drops, game.Stack{item, 1})
+		t := &w.server.registry.blocks
+		double :=
+			t.types[t.type_of[block]].place == .Slab && game.state_is(t, block, "type", "double")
+		append(&drops, game.Stack{item, 2 if double else 1}) // (a double slab leaves two)
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in drops {

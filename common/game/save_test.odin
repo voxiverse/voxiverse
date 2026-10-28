@@ -79,7 +79,7 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(errs), 0)
 	if with_pack == nil {return}
 	marble, _ := registry_block(with_pack, "testpack:marble")
-	testing.expect_value(t, int(marble), len(Block))
+	testing.expect_value(t, int(marble), BASE_STATES)
 
 	arrays: Block_Arrays
 	testing.expect(t, block_arrays_init(&arrays, 2) == nil)

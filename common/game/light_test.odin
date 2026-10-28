@@ -253,3 +253,24 @@ test_light_through_water :: proc(t: ^testing.T) {
 	testing.expect_value(t, at(out, {12, 1, 12}), 5) // ten deep, on the bottom
 	testing.expect(t, at(out, {3, 13, 3}) < 15, "no shade under the leaves")
 }
+
+@(private = "file")
+slab_roof :: proc(p: Block_Pos) -> Block {
+	slab, _ := state_parse(test_reg(), "stone_slab[type=bottom]")
+	if p.y == 3 && p.x >= -20 && p.x < 40 && p.z >= -20 && p.z < 40 {return slab}
+	if p.y <= 0 {return .Stone}
+	return .Air
+}
+
+// Light passes a slab (it is not opaque) and a slab roof shades like leaves and
+// water: sky light seeps in one less per block, 14 in the slab's own cell, 13 under it.
+@(test)
+test_light_through_slabs :: proc(t: ^testing.T) {
+	out := new([LIGHT_OUT_VOLUME]u8)
+	defer free(out)
+	light_of(slab_roof, {0, 0, 0}, out)
+	testing.expect_value(t, out_at(out, {8, 4, 8}) >> 4, 15) // above
+	testing.expect_value(t, out_at(out, {8, 3, 8}) >> 4, 14) // in the slab's cell
+	testing.expect_value(t, out_at(out, {8, 2, 8}) >> 4, 13) // under the roof
+	testing.expect_value(t, out_at(out, {8, 1, 8}) >> 4, 12)
+}
