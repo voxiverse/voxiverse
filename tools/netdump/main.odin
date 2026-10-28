@@ -185,6 +185,10 @@ describe :: proc(
 				true
 		case game.Proof:
 			return "proof", true
+		case game.Pack_Want:
+			return fmt.tprintf("pack_want count=%d", v.count), true
+		case game.Packs_Ready:
+			return fmt.tprintf("packs_ready content=%016x", v.content), true
 		case game.Dial:
 			return fmt.tprintf("dial gate=%v address=%s", v.gate, game.address_dir(v.address)),
 				true
@@ -315,6 +319,16 @@ describe :: proc(
 			return describe_state(schema, "snapshot", v.data), true
 		case game.Characters:
 			return fmt.tprintf("characters names=%q", v.names), true
+		case game.Packs:
+			return fmt.tprintf("packs content=%016x count=%d", v.content, v.count), true
+		case game.Pack_Part:
+			return fmt.tprintf(
+					"pack_part index=%d offset=%d bytes=%d",
+					v.index,
+					v.offset,
+					len(v.data),
+				),
+				true
 		}
 	}
 	return "", true

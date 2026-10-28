@@ -71,7 +71,7 @@ check_universe :: proc(r: ^Check_Report, dir: string) {
 	if r.format > SAVE_FORMAT {problem(r, "format %d is newer than this game's", r.format)}
 	if r.format < SAVE_FORMAT {problem(r, "format %d: %s", r.format, OLDER_BUILD)}
 	packs_text, _ := text_value(text, "packs")
-	reg, why := packs_registry(dir, packs_parse(packs_text, context.temp_allocator))
+	reg, _, why := packs_registry(dir, packs_parse(packs_text, context.temp_allocator))
 	if reg == nil {
 		for p in why {problem(r, "packs: %s", p)}
 		return

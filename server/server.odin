@@ -113,6 +113,7 @@ Server :: struct {
 	stats:          Stats,
 	log_tag:        base.Log_Tag,
 	store:          Store, // saving (save.odin)
+	pack_blobs:     [dynamic]Pack_Blob, // the universe's packs as sent (pack_send.odin)
 	registry:       ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
 	refusal:        string, // why start returned false, when it is a message for the player
 	// Server thread only, after start:
@@ -303,6 +304,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	for w in s.worlds {world_close(w)} 	// (first: it joins the generator workers, which read the registry)
 	delete(s.worlds)
 	game.registry_destroy(s.registry)
+	pack_blobs_destroy(s)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
 	game.schema_destroy(&s.schema)
@@ -473,6 +475,7 @@ tick :: proc(s: ^Server) {
 	}
 	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
 	kick_due(s)
+	packs_tick(s)
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}
 		base.profile_scope("network flush")
@@ -536,6 +539,19 @@ client_of_peer :: proc(s: ^Server, peer: netcode.Peer_Id) -> ^Client {
 	return nil
 }
 
+// proved: the account is proved (and has its packs): its character, or the
+// list to choose from.
+@(private = "file")
+proved :: proc(s: ^Server, c: ^Client) {
+	if c.wanted_len == 0 {
+		c.state = .Choosing
+		names := characters_of(s, c.account)
+		send_message(s, c, game.Characters{strings.join(names, " ", context.temp_allocator)})
+		return
+	}
+	enter(s, c, string(c.wanted[:c.wanted_len]))
+}
+
 // enter: a proved account plays its character name (a new one if the name
 // is free), or is told why not.
 @(private = "file")
@@ -578,7 +594,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	if c.state != .Playing {
 		handshake: bool
 		#partial switch _ in m {
-		case game.Hello, game.Proof, game.Choose, game.Ping:
+		case game.Hello, game.Proof, game.Choose, game.Ping, game.Pack_Want, game.Packs_Ready:
 			handshake = true
 		}
 		if !handshake {
@@ -650,13 +666,12 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			return
 		}
 		c.nonce = {} // (used: a proof is for one nonce)
-		if c.wanted_len == 0 {
-			c.state = .Choosing
-			names := characters_of(s, c.account)
-			send_message(s, c, game.Characters{strings.join(names, " ", context.temp_allocator)})
-			return
-		}
-		enter(s, c, string(c.wanted[:c.wanted_len]))
+		if packs_begin(s, c) {return}
+		proved(s, c)
+	case game.Pack_Want:
+		pack_want(s, c, v)
+	case game.Packs_Ready:
+		if pack_ready(s, c, v) {proved(s, c)}
 	case game.Choose:
 		if c.state != .Choosing || !game.name_valid(v.character) {
 			disconnect(s, c, "unexpected choice")

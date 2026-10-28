@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:math/rand"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -190,6 +191,31 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		t,
 		ok && page.(Stats_Page) == Stats_Page{1, 3, "blocks.mined.stone 4\nsessions 1"},
 	)
+	// The packs phase.
+	want := Pack_Want {
+		count = 2,
+	}
+	want.indices[0], want.indices[1] = 0, 3
+	at, ok = decode_client_t(encode_c(want)[:])
+	testing.expect(t, ok && at.(Pack_Want) == want, "Pack_Want did not round-trip")
+	at, ok = decode_client_t(encode_c(Packs_Ready{1 << 40 | 5})[:])
+	testing.expect(t, ok && at.(Packs_Ready) == Packs_Ready{1 << 40 | 5})
+	packs := Packs {
+		content = 0xabcdef,
+		count   = 2,
+	}
+	packs.entries[0] = {"farmfix", "1.0.0", 5000, {0 = 1, 31 = 2}}
+	packs.entries[1] = {"peat", "0.2", 9, {}}
+	ps, pok := decode_server_t(encode_s(packs)[:], scratch)
+	testing.expect(t, pok && ps.(Packs) == packs, "Packs did not round-trip")
+	data := []u8{1, 2, 3, 4}
+	part: Server_Message
+	part, pok = decode_server_t(encode_s(Pack_Part{2, 1100, data})[:], scratch)
+	testing.expect(t, pok)
+	testing.expect_value(t, part.(Pack_Part).offset, u32(1100))
+	testing.expect(t, slice.equal(part.(Pack_Part).data, data))
+	_, pok = decode_server_t(encode_s(Pack_Part{2, 0, {}})[:], scratch)
+	testing.expect(t, !pok, "an empty Pack_Part decoded")
 	// Names: letters, digits, _ and -, 1..16 of them.
 	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
 	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}

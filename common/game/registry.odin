@@ -501,12 +501,29 @@ pair_off :: proc(
 
 // registry_text: every resolved definition, one per line, in registry order.
 registry_text :: proc(reg: ^Registry, allocator := context.temp_allocator) -> string {
+	return registry_text_of(reg, true, allocator)
+}
+
+// registry_text_of: with `all` false, only what both sides build from data/
+// (the lines the content hash covers); the texture, sound and structure lines
+// are left out.
+registry_text_of :: proc(
+	reg: ^Registry,
+	all: bool,
+	allocator := context.temp_allocator,
+) -> string {
 	b := strings.builder_make(allocator)
 	for p in reg.packs {
 		fmt.sbprintf(&b, "pack %s %s\n", p.namespace, p.version)
 	}
-	for t, i in reg.textures {fmt.sbprintf(&b, "texture %s %d generator=%s\n", t.id, i, t.generator)}
-	for s, i in reg.sounds {fmt.sbprintf(&b, "sound %s %d generator=%s\n", s.id, i, s.generator)}
+	if all {
+		for t, i in reg.textures {
+			fmt.sbprintf(&b, "texture %s %d generator=%s\n", t.id, i, t.generator)
+		}
+		for s, i in reg.sounds {
+			fmt.sbprintf(&b, "sound %s %d generator=%s\n", s.id, i, s.generator)
+		}
+	}
 	for i in 0 ..< reg.blocks.count {
 		d := reg.blocks.defs[i]
 		fmt.sbprintf(&b, "block %s %d flags=", d.id, i)
@@ -562,12 +579,16 @@ registry_text :: proc(reg: ^Registry, allocator := context.temp_allocator) -> st
 			r.output,
 		)
 	}
-	for s in reg.structures {fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)}
+	if all {
+		for s in reg.structures {
+			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)
+		}
+	}
 	return strings.to_string(b)
 }
 
 registry_hash_of :: proc(reg: ^Registry) -> u64 {
-	text := registry_text(reg)
+	text := registry_text_of(reg, false)
 	h := hasher_make()
 	hasher_bytes(&h, transmute([]u8)text)
 	return hasher_finish(h)

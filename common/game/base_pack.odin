@@ -51,7 +51,7 @@ join_path :: proc(dir, name: string) -> string {
 // registry_base: the registry of the base pack alone.
 registry_base :: proc(allocator := context.allocator) -> ^Registry {
 	src := base_pack_source(context.temp_allocator)
-	reg, errs := registry_build({src}, allocator)
+	reg, errs := registry_build({src}, .Server, allocator)
 	if reg == nil {
 		for e in errs {fmt.eprintln(pack_error_text(e))}
 		panic("the base pack does not build")

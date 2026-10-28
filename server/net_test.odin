@@ -68,6 +68,11 @@ Net_Client :: struct {
 	address:     game.Address, // the world it is in (Welcome, World_Changed)
 	travels:     int, // World_Changed messages
 	capture:     netcode.Capture, // (net_capture: every packet it sends and receives)
+	pack_cache:  string, // where it keeps the packs it was sent ("": nowhere)
+	fetch:       ^game.Pack_Fetch, // the Packs it was told of
+	reg:         ^game.Registry, // built from them (client side: no server/ files); nil: the base pack's
+	pack_parts:  int, // Pack_Part messages received
+	packs_error: string, // why the packs could not be taken (temp)
 }
 
 @(private)
@@ -130,6 +135,31 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
+	if c.fetch != nil {
+		game.pack_fetch_destroy(c.fetch)
+		free(c.fetch)
+	}
+	if c.reg != nil {game.registry_destroy(c.reg)}
+}
+
+// net_packs_built: with every pack held, the registry they make, and Packs_Ready.
+@(private)
+net_packs_built :: proc(c: ^Net_Client) {
+	if c.reg != nil || c.packs_error != "" || !game.pack_fetch_complete(c.fetch) {return}
+	sources, _ := game.pack_fetch_sources(c.fetch)
+	all := make([dynamic]game.Pack_Source, context.temp_allocator)
+	append(&all, game.pack_source_sent(game.base_pack_source(context.temp_allocator)))
+	append(&all, ..sources)
+	reg, problems := game.registry_build(all[:], .Client)
+	if reg == nil {
+		c.packs_error =
+			"the packs do not build" if len(problems) == 0 else game.pack_error_text(problems[0])
+		return
+	}
+	c.reg = reg
+	game.receiver_destroy(&c.rx)
+	game.receiver_init(&c.rx, &c.schema, reg)
+	net_send(c, game.Packs_Ready{reg.hash})
 }
 
 @(private)
@@ -247,9 +277,19 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	netcode.link_receive(&c.link, &c.messages)
 	for p in c.messages {
 		defer netcode.link_free(&c.link, p)
-		m, ok := game.decode_server(p, c.scratch, test_reg())
+		m, ok := game.decode_server(p, c.scratch, c.reg if c.reg != nil else test_reg())
 		if !testing.expect(t, ok, "invalid message from the server") {continue}
 		#partial switch v in m {
+		case game.Packs:
+			c.fetch = new(game.Pack_Fetch)
+			want, err := game.pack_fetch_begin(c.fetch, v, c.pack_cache)
+			c.packs_error = err
+			net_send(c, want)
+			net_packs_built(c)
+		case game.Pack_Part:
+			c.pack_parts += 1
+			c.packs_error = game.pack_fetch_part(c.fetch, v)
+			net_packs_built(c)
 		case game.Challenge:
 			signer := c.sign_name
 			if signer == "" {signer = c.key_name if c.key_name != "" else c.name}

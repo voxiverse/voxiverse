@@ -166,7 +166,7 @@ build_with :: proc(packs: ..Pack_Source) -> (^Registry, []Pack_Error) {
 	sources := make([dynamic]Pack_Source, context.temp_allocator)
 	append(&sources, base_pack_source(context.temp_allocator))
 	append(&sources, ..packs)
-	return registry_build(sources[:], context.temp_allocator)
+	return registry_build(sources[:], .Server, context.temp_allocator)
 }
 
 @(private = "file")
@@ -697,7 +697,7 @@ test_missing_builtin_is_named :: proc(t: ^testing.T) {
 		{{"data/blocks/air.json", `{"air": {"render": "none"}}`}},
 		`{"format": 1, "namespace": "voxiverse", "version": "1"}`,
 	)
-	reg, errs := registry_build({src}, context.temp_allocator)
+	reg, errs := registry_build({src}, .Server, context.temp_allocator)
 	testing.expect(t, reg == nil)
 	testing.expect(t, len(errs) > 1)
 	testing.expect_value(
@@ -822,6 +822,17 @@ test_registry_hash :: proc(t: ^testing.T) {
 		if !replaced {append(&changed, v)}
 		c, errs := build_with(pack_of("testpack", changed[:]))
 		testing.expect_value(t, errors_text(errs), "")
-		if c != nil {testing.expectf(t, c.hash != a.hash, "%s did not change the hash", v.path)}
+		if c == nil {continue}
+		if v.path == "assets/textures/x.json" {
+			// Client-side art: in the registry text, left out of the content hash.
+			testing.expect(t, c.hash == a.hash, "a texture changed the content hash")
+			testing.expect(
+				t,
+				registry_text(c) != registry_text(a),
+				"a texture did not change the text",
+			)
+		} else {
+			testing.expectf(t, c.hash != a.hash, "%s did not change the hash", v.path)
+		}
 	}
 }

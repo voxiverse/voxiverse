@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 25
+PROTOCOL_VERSION :: 26
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -42,6 +42,19 @@ Hello :: struct {
 // Proof: the Challenge's nonce signed with the account's key.
 Proof :: struct {
 	signature: Signature,
+}
+
+// Pack_Want: after Packs, the packs (by their index in it) the client has
+// neither as the universe's own nor in its cache. Empty: it has them all.
+Pack_Want :: struct {
+	count:   u8,
+	indices: [MAX_PACKS]u8,
+}
+
+// Packs_Ready: the client has built its registry from the packs; content is
+// its hash (the server compares it with its own).
+Packs_Ready :: struct {
+	content: u64,
 }
 
 // Dial: dial the gate a block of which is at gate, to address (its galaxy
@@ -238,9 +251,37 @@ Client_Message :: union {
 	Telemetry_Batch,
 	Use_Block,
 	Prediction_Check,
+	Pack_Want,
+	Packs_Ready,
 }
 
 // Server -> client.
+
+// Pack_Entry: one pack of the universe, as the Packs message lists it.
+Pack_Entry :: struct {
+	namespace: string, // view into the message
+	version:   string, // view into the message
+	size:      u32, // of its archive (pack_archive.odin)
+	sha256:    [32]u8, // of its archive: the pack's hash
+}
+
+MAX_PACK_PART :: 1100 // bytes of a pack in one Pack_Part
+
+// Packs: after the Proof, the packs of the universe besides the base pack, in
+// load order (the client asks for those it lacks with a Pack_Want), and the
+// content hash the registry they make has.
+Packs :: struct {
+	content: u64,
+	count:   u8,
+	entries: [MAX_PACKS]Pack_Entry,
+}
+
+// Pack_Part: bytes of one pack's archive, in order.
+Pack_Part :: struct {
+	index:  u8,
+	offset: u32,
+	data:   []u8, // view into the message
+}
 
 // Challenge: sign this (a Proof) to show the account is yours.
 Challenge :: struct {
@@ -419,6 +460,8 @@ Server_Message :: union {
 	Telemetry_Ack,
 	State_Message,
 	Snapshot_Message,
+	Packs,
+	Pack_Part,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -450,6 +493,8 @@ Client_Kind :: enum u8 {
 	Telemetry_Batch,
 	Use_Block,
 	Prediction_Check,
+	Pack_Want,
+	Packs_Ready,
 }
 
 @(private = "file")
@@ -477,6 +522,8 @@ Server_Kind :: enum u8 {
 	// 35: retired (Health)
 	State         = 36,
 	Snapshot      = 37,
+	Packs         = 38,
+	Pack_Part     = 39,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -547,6 +594,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "inventory_request"
 		case u8(Client_Kind.Proof):
 			return "proof"
+		case u8(Client_Kind.Pack_Want):
+			return "pack_want"
+		case u8(Client_Kind.Packs_Ready):
+			return "packs_ready"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -554,6 +605,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 		}
 	} else {
 		switch kind {
+		case u8(Server_Kind.Packs):
+			return "packs"
+		case u8(Server_Kind.Pack_Part):
+			return "pack_part"
 		case u8(Server_Kind.Welcome):
 			return "welcome"
 		case u8(Server_Kind.Reject):
@@ -658,6 +713,13 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Use_Block))
 		write_block_pos(w, v.pos)
 		write_u32(w, v.after)
+	case Pack_Want:
+		write_u8(w, u8(Client_Kind.Pack_Want))
+		write_u8(w, v.count)
+		for i in 0 ..< int(v.count) {write_u8(w, v.indices[i])}
+	case Packs_Ready:
+		write_u8(w, u8(Client_Kind.Packs_Ready))
+		write_fixed64(w, v.content)
 	case Prediction_Check:
 		write_u8(w, u8(Client_Kind.Prediction_Check))
 		write_u32(w, v.sequence)
@@ -758,6 +820,22 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, u8(Server_Kind.Challenge))
 		n := v.nonce
 		for b in n {write_u8(w, b)}
+	case Packs:
+		write_u8(w, u8(Server_Kind.Packs))
+		write_fixed64(w, v.content)
+		write_u8(w, v.count)
+		for i in 0 ..< int(v.count) {
+			e := v.entries[i]
+			write_string(w, e.namespace)
+			write_string(w, e.version)
+			write_u32(w, e.size)
+			for b in e.sha256 {write_u8(w, b)}
+		}
+	case Pack_Part:
+		write_u8(w, u8(Server_Kind.Pack_Part))
+		write_u8(w, v.index)
+		write_u32(w, v.offset)
+		append(&w.buf, ..v.data)
 	case Characters:
 		write_u8(w, u8(Server_Kind.Characters))
 		write_string(w, v.names)
@@ -862,6 +940,16 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		m = Use_Block {
 			pos   = read_block_pos(&r),
 			after = read_u32(&r),
+		}
+	case u8(Client_Kind.Pack_Want):
+		want: Pack_Want
+		want.count = read_u8(&r)
+		if int(want.count) > MAX_PACKS {reader_fail(&r)}
+		for i in 0 ..< min(int(want.count), MAX_PACKS) {want.indices[i] = read_u8(&r)}
+		m = want
+	case u8(Client_Kind.Packs_Ready):
+		m = Packs_Ready {
+			content = read_fixed64(&r),
 		}
 	case u8(Client_Kind.Prediction_Check):
 		c := Prediction_Check {
@@ -1012,6 +1100,32 @@ decode_server :: proc(
 			pages = read_u16(&r),
 			text  = read_string(&r, MAX_STATS_TEXT),
 		}
+	case u8(Server_Kind.Packs):
+		ps: Packs
+		ps.content = read_fixed64(&r)
+		ps.count = read_u8(&r)
+		if int(ps.count) > MAX_PACKS {reader_fail(&r)}
+		for i in 0 ..< min(int(ps.count), MAX_PACKS) {
+			e := &ps.entries[i]
+			e.namespace = read_string(&r, 32)
+			e.version = read_string(&r, 16)
+			e.size = read_u32(&r)
+			for &b in e.sha256 {b = read_u8(&r)}
+		}
+		m = ps
+	case u8(Server_Kind.Pack_Part):
+		part := Pack_Part {
+			index  = read_u8(&r),
+			offset = read_u32(&r),
+		}
+		n := len(r.data) - r.pos
+		if n < 1 || n > MAX_PACK_PART {
+			reader_fail(&r)
+		} else {
+			part.data = r.data[r.pos:][:n]
+			r.pos += n
+		}
+		m = part
 	case u8(Server_Kind.Characters):
 		m = Characters {
 			names = read_string(&r, MAX_CHARACTERS * (MAX_NAME_LENGTH + 1)),

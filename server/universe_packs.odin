@@ -31,26 +31,29 @@ packs_parse :: proc(value: string, allocator := context.allocator) -> []string {
 // packs, then config.extra_packs. Every problem is logged (and s.refusal says
 // the first), and false means the universe does not start.
 universe_registry :: proc(s: ^Server) -> bool {
-	reg, problems := packs_registry(s.store.dir, s.store.packs, s.config.extra_packs)
+	reg, sources, problems := packs_registry(s.store.dir, s.store.packs, s.config.extra_packs)
 	for p in problems {
 		log.errorf("server packs %s", p)
 		if s.refusal == "" {s.refusal = strings.clone(p, context.temp_allocator)}
 	}
 	if reg == nil {return false}
 	s.registry = reg
+	pack_blobs_make(s, sources)
 	log.infof("server packs loaded count=%d hash=%x", len(reg.packs), reg.hash)
 	return true
 }
 
 // packs_registry: the registry of the base pack, the packs listed (the
 // directories packs/<namespace> of the universe in dir) and extra; nil with
-// the problems (temp allocator) if there is none.
+// the problems (temp allocator) if there is none. sources are the packs'
+// files, the base pack first (temp allocator).
 packs_registry :: proc(
 	dir: string,
 	listed: []string,
 	extra: []game.Pack_Source = nil,
 ) -> (
 	reg: ^game.Registry,
+	sources: []game.Pack_Source,
 	problems: []string,
 ) {
 	list := make([dynamic]string, context.temp_allocator)
@@ -63,10 +66,10 @@ packs_registry :: proc(
 				game.MAX_PACKS - 1,
 			),
 		)
-		return nil, list[:]
+		return nil, nil, list[:]
 	}
-	sources := make([dynamic]game.Pack_Source, context.temp_allocator)
-	append(&sources, game.base_pack_source(context.temp_allocator))
+	all := make([dynamic]game.Pack_Source, context.temp_allocator)
+	append(&all, game.base_pack_source(context.temp_allocator))
 	for name in listed {
 		path := fmt.tprintf("%s/%s/%s", dir, PACKS_DIR, name)
 		if dir == "" || !os.is_directory(path) {
@@ -78,7 +81,7 @@ packs_registry :: proc(
 		}
 		src, errs := pack_read_dir(path, context.temp_allocator)
 		for e in errs {append(&list, game.pack_error_text(e))}
-		append(&sources, src)
+		append(&all, src)
 	}
 	// Packs that are there but not listed are not loaded (said, not refused).
 	if dir != "" {
@@ -97,15 +100,15 @@ packs_registry :: proc(
 			}
 		}
 	}
-	if len(list) > 0 {return nil, list[:]}
-	append(&sources, ..extra)
-	built, errs := game.registry_build(sources[:])
+	if len(list) > 0 {return nil, nil, list[:]}
+	append(&all, ..extra)
+	built, errs := game.registry_build(all[:])
 	if built == nil {
 		for e in errs {append(&list, game.pack_error_text(e))}
 		if len(list) == 0 {append(&list, "the registry could not be built")}
-		return nil, list[:]
+		return nil, nil, list[:]
 	}
-	return built, nil
+	return built, all[:], nil
 }
 
 // packs_text: the packs as Welcome.packs and /packs show them,
@@ -175,6 +178,6 @@ registry_for_dir :: proc(dir: string, allocator := context.allocator) -> ^game.R
 		if err == nil {text = string(data)}
 	}
 	value, _ := text_value(text, "packs")
-	reg, _ := packs_registry(dir, packs_parse(value, context.temp_allocator), nil)
+	reg, _, _ := packs_registry(dir, packs_parse(value, context.temp_allocator), nil)
 	return reg
 }

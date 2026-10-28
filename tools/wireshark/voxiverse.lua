@@ -26,13 +26,13 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
 	[5] = "pong", [8] = "edit_result", [10] = "column", [20] = "bulk",
 	[28] = "challenge", [29] = "characters", [30] = "world_changed",
-	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot",
+	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot", [38] = "packs", [39] = "pack_part",
 }
 local STATE, SNAPSHOT = 36, 37
 
@@ -402,6 +402,10 @@ local function describe(tvb, from_server)
 			elseif kind == 20 then
 				return string.format("prediction_check seq=%d position=%08x velocity=%08x on_ground=%08x flying=%08x crouched=%08x jump_held=%08x air_jumps=%08x",
 					u32(tvb, 1), u32(tvb, 5), u32(tvb, 9), u32(tvb, 13), u32(tvb, 17), u32(tvb, 21), u32(tvb, 25), u32(tvb, 29))
+			elseif kind == 21 then
+				return string.format("pack_want count=%d", tvb(1, 1):uint())
+			elseif kind == 22 then
+				return string.format("packs_ready content=%08x%08x", u32(tvb, 5), u32(tvb, 1))
 			elseif kind == 11 then
 				return string.format("inventory_request seq=%d action=%d slot=%d arg=%d", u32(tvb, 1),
 					tvb(5, 1):uint(), tvb(6, 1):int(), tvb(7, 2):le_uint())
@@ -414,6 +418,10 @@ local function describe(tvb, from_server)
 				return string.format("%s %q", name, gstring(tvb, 1) or "?")
 			elseif kind == 3 or kind == 4 then
 				return string.format("%s pos=[%d %d %d]", name, i32(tvb, 1), i32(tvb, 5), i32(tvb, 9))
+			elseif kind == 38 then
+				return string.format("packs content=%08x%08x count=%d", u32(tvb, 5), u32(tvb, 1), tvb(9, 1):uint())
+			elseif kind == 39 then
+				return string.format("pack_part index=%d offset=%d bytes=%d", tvb(1, 1):uint(), u32(tvb, 2), tvb:len() - 6)
 			elseif kind == 5 then
 				return string.format("pong id=%d", u32(tvb, 1))
 			elseif kind == 8 then

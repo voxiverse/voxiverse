@@ -5218,3 +5218,160 @@ For the owner's occasional Mac testers, once, with the CI `.zip`:
 - `./voxiverse-server --universe test --seconds 5` from Terminal in the unzipped folder runs.
 
 > **What differed (M47e):** gamepads keep polling `GCController.controllers` rather than observing connect/disconnect notifications through a delegate class (no Mac to run one; the list is the same truth); no Home button (`Pad_Button` has none). The icon is set from the images `app.odin` already draws (largest size) instead of a `#load`ed PNG. Audio failure keeps the existing silent path, now logging `no audio device found; sound is off`; CoreAudio's default-device changes are miniaudio's own. The frameworks are `@(require) foreign import`s in `device.odin`.
+
+# M47b: packs over the wire, pack assets and hot reload
+
+**Why.** M47 refuses a client that lacks a server's packs; a player should instead get
+them on joining, packs need art of their own beside the generated textures and sounds,
+and a pack author (person or agent) iterates faster when an edit shows without a
+restart.
+
+**Design.**
+
+*Pack sides* (decided in issue #31; the base pack's files were already moved into them, and
+`pack_read_dir`, the registry reader and its errors updated, with that decision). A pack has
+`pack.json` and three folders: `assets/` is client-only (`assets/textures/`, `assets/sounds/`,
+later music and UI text), `data/` is for both sides (`data/blocks/`, `items/`, `block_tags/`,
+`item_tags/`, `recipes/`, later data rules), `server/` is server-only (`server/structures/`
+now; scripts, quests, loot and worldgen graphs later). A custom item's definition lives in
+`data/` (the client must show it); its scripted behaviour may live in `server/`. A pack's
+content is per **universe** and fixed while the universe runs; its behaviour is enabled per
+world (never a different pack per world).
+
+*What is sent.* A joining client gets `pack.json`, `assets/` and `data/` of every pack in the
+universe, whether or not the player will visit a world that uses it, and never `server/`. The
+registry is built by side: the server from everything, the client (`registry_build(sources,
+.Client)`) from `assets/` and `data/`, refusing a `server/` file in what it is given. The
+**content hash** (`registry_hash_of`) covers what both sides build from `data/` (the `pack`,
+`block`, `item`, tag and recipe lines of `registry_text`); the texture, sound and structure
+lines stay in the text for the tools but are left out of the hash (the client has no
+structures, and the textures and sounds travel under each pack's own SHA-256).
+
+*The pack archive* (`common/game/pack_archive.odin`): one pack as one canonical file, `.vxpack`:
+`"VXPK"`, `u32` version 1, `varint` file count, then per file in byte order of paths: the
+path (string, at most 128 bytes), `varint` size, the bytes. The same files always give the
+same bytes. It holds `pack.json`, `assets/` and `data/` only: `pack_archive_make` leaves the
+`server/` files out, and `pack_archive_read` refuses one (`a sent pack has no server/ files;
+farmfix/server/quests/a.json`). A pack's **hash** is SHA-256 of its archive (`core:crypto/sha2`), shown as
+the first 16 hex digits. `pack_archive_make(source)` and `pack_archive_read(data) ->
+(Pack_Source, []Pack_Error)` (the same path and size checks as `pack_read_dir`).
+
+*Joining.* A new phase after `Proof` is accepted and before `Characters`:
+
+- Server to client, `Packs` (a handshake message), for every pack of the universe: `content: u64` (the content hash above), `count:
+  u8` (at most 32), per pack `namespace` (string, 32), `version` (string, 16), `size: u32`,
+  `sha256: [32]u8`, in load order. The base pack is not listed (the build has it; the
+  schema and protocol versions already pin the build).
+- Client to server, `Pack_Want {indices: []u8}`: the packs it has neither as the
+  universe's own (singleplayer, where the client reads the directory itself, `server/`
+  included, as the server does) nor in its cache (`<user data>/packs/<sha256 hex>.vxpack`).
+  Empty: it has them all.
+- Server to client, `Pack_Part {index: u8, offset: u32, data}` (at most 1100 bytes),
+  reliable and ordered, at most `PACK_SEND_PER_TICK :: 32 * 1024` bytes a tick to one
+  client (about 1 MiB/s), the parts of a pack in order.
+- Packs are sent only here, once, before the player is in the universe: never in the middle of
+  a session, and the registry never grows while the universe runs.
+- The client checks each pack's size and SHA-256 when its last part arrives (a mismatch
+  disconnects with `pack farmfix arrived damaged (hash <got> vs <announced>)`), stores it
+  in the cache (at most 256 MiB, least recently used dropped first), builds its registry
+  from the base pack and the listed packs in order, and sends `Packs_Ready {content:
+  u64}`. Pack errors disconnect with the first five lines.
+- The server compares `content` with its own: a difference rejects with `your game built
+  different content from the same packs (content <yours> vs <server's>)`. Then the
+  handshake goes on as today. A client in this phase longer than 120 s is dropped.
+- M47's `Welcome.content` stays as a last check. `PROTOCOL_VERSION` 26. The dissector
+  learns the four messages.
+
+*Pack assets* (beside the generated path, which stays the default):
+
+- **Textures**: a texture definition `{"image": "assets/textures/marble.png"}` (a path in the
+  pack). Decoded by `core:image/png` (Odin, bounds-checked; the C `vendor:stb/image` is not
+  used on files that come over the network). The file is at most 64 KiB and exactly
+  `TEXTURE_SIZE` (16) pixels square (`textures are 16x16 pixels; assets/textures/marble.png is
+  32x32`); grey, RGB, palette and alpha forms become RGBA8; mips are made by
+  `generate_mip` as for generated textures. Not palette-quantized: a pack's art is its
+  own.
+- **Sounds**: a sound set `{"break": ["assets/sounds/marble_1.ogg", ...], "place": [...],
+  "step": [...]}` (1 to `sfx.VARIANTS` files each; a missing action uses `break`'s).
+  Decoded whole when the session starts by miniaudio's own decoder, the one the engine's
+  streams use since M32c (`client/audio/stream.odin`; `vendor:stb/vorbis` is not used, see the
+  audio decisions), mixed to mono and resampled to the mixer's rate with M32a's resampler. Each file at most 1 MiB and 5 s once decoded (checked before
+  decoding from the Ogg header's sample count, and again after). This is the only C
+  decoder the pack path reaches; it is fuzzed with M51's fuzzers.
+- Asset files live in the pack (`assets/textures/*.png`, `assets/sounds/*.ogg`) and count
+  toward its size; a texture or sound file nothing refers to is an error
+  (`assets/textures/old.png is not used; remove it`).
+
+*Hot reload* (dev builds only, `when base.DEV`; a development tool, not a way to send packs
+in a running universe: any client that is not on the same machine is disconnected and
+receives the packs again as on any join):
+
+- `pack reload` (console, the owner only) and a watch (every 0.5 s, as
+  `client/shader_reload.odin` watches shaders) on the base pack's source directory found
+  next to the build (`<repo>/assets/packs/voxiverse`; without it the embedded pack is
+  used and the watch is off) and on the universe's `packs/`.
+- The server rebuilds the registry from the files. Errors: logged, sent to the owner as a
+  `Notice` (first ten lines), and the old registry stays. A registry that changes the
+  number of any existing block, item, texture or sound set (anything removed, reordered or
+  inserted before an existing one, or added at the end: the registry never grows at run
+  time) is refused: `this reload changes ids (removed farmfix:peat); restart the universe to
+  apply it`. Changing fields is allowed.
+- At the end of a tick the server waits for its chunk jobs to finish (none pending, or
+  it tries again next tick), swaps `s.registry` and frees the old one, and tells the clients on the same machine with
+  `Packs_Changed {content: u64}` (a handshake-style message); no pack file is sent.
+- A client on the same machine (singleplayer, or the host's own) rebuilds its registry
+  from the same sources, checks the hash (a difference disconnects with the message
+  above), waits for its mesh jobs, swaps, rebuilds the texture array and the block sound
+  bank, and re-meshes every loaded chunk. Any other client is disconnected with `the
+  server reloaded its packs; join again` and gets the packs on joining, as always.
+
+*The universe export carries packs.* M46's export writes the universe directory, and
+packs live in `<universe>/packs/`, so they travel already, `server/` folders included (an export is the universe's own
+backup, not a pack sent to a player). This milestone adds: an import
+builds the registry from the imported packs before the universe is accepted (pack errors
+refuse the import with their lines), and the exported file lists the packs' hashes in its
+header so a reader can see them without unpacking (M46's header gains a `packs` line).
+
+**The order of the steps:** the archive and hash; the join phase with its messages, the
+cache and the tests; textures from PNG; sounds from Ogg; hot reload; the export and
+import.
+
+**Left out:** signatures and trust (M54); packs per world (content is per universe; only a
+pack's behaviour is enabled per world); sending packs mid-session; compatibility with
+packs or archives of an older build (before 1.0 there is none); a pack browser or a menu to
+enable packs (universe.cfg and a restart); downloading packs from anywhere but the server
+being joined; animated textures; textures of other sizes; pack sounds for anything but
+block sound sets (M58's events).
+
+**Tests:**
+
+- `common/game/pack_archive_test.odin`: the same files in any order give the same bytes and
+  hash; a pack with `server/` files archives to the same bytes as without them, and an
+  archive holding one is refused; every malformed archive (each truncation, a bad path, oversize) is refused with
+  its message.
+- `server/net_test.odin`, `test_pack_transfer`: a universe with the test pack (with a PNG
+  texture and an Ogg sound, both generated by the test: `base.png_encode` and a short
+  Ogg committed under `common/game/testdata/`, 2 KiB) and a client with an empty cache join over
+  UDP with 10% loss; the client receives the pack (the test pack has a `server/structures/` file: it is not in
+  the client's cache copy or registry), its content hash equals the server's,
+  the pack is in the cache, and a second join sends no `Pack_Part`. A pack corrupted in
+  flight (one byte flipped by the test transport) disconnects with the damaged message.
+- `client` test: the PNG's pixels are the texture layer's level 0 exactly; the Ogg's
+  decode equals the sound bank's samples; an over-size image, a 32x32 one, a too-long
+  sound and an unused file are refused with their messages.
+- `server` test, `test_hot_reload`: a stepped server and an in-process client with the
+  test pack in memory; change marble's light from 7 to 12 and reload: the client's next
+  mesh of the chunk holding marble has block light 12 beside it; remove a block and
+  reload: refused with the message, the old registry still in use.
+- `server` test: export, import into a fresh directory, and the imported universe's
+  registry hash equals the exported one; an import with a broken pack is refused.
+
+**Exit check:** `test_pack_transfer` passes over UDP with loss; the asset tests pass;
+`test_hot_reload` passes; the export test passes; the suite and the CI run of the commit
+are green.
+
+**Check by hand:** host a LAN game with the test pack and join from a second client
+with an empty cache: the marble block shows its PNG and sounds its Ogg. Edit a texture
+entry while playing a dev build and see it change.
+
+> **What differed (M47b):** split once: M47b is the archive and the join phase; pack assets, hot reload and the export's pack hashes are [M47i](milestones/M47i.md). `pack_archive_read(namespace, data)` takes the namespace (the archive holds none). `registry_build(sources, side, allocator)`; the client builds the base pack from `pack_source_sent` (its files without `server/`). The phase is skipped for the local pipe (it reads the same directory: the spec's empty `Pack_Want`) and for a universe with no pack besides the base; `Welcome.content` still checks both. A client built from the `Packs` it was sent checks the hash itself too (the same message as the server's). `test_pack_transfer` runs over UDP with 10% loss and duplication; the damaged-pack check is `test_pack_fetch_checks_and_caches` (a flipped byte fed to `pack_fetch_part`), not a transport hook. The `Packs_Ready` timeout is the server's `PACK_JOIN_SECONDS` in `packs_tick`. `Packs_Changed` is M47i's. `PROTOCOL_VERSION` 26.

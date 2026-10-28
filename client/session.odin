@@ -86,6 +86,10 @@ Session :: struct {
 	welcome:          game.Welcome,
 	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
+	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
+	fetch:            ^game.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
+	fetching:         bool, // a Packs message came
+	fetched:          bool, // ... and its registry is built
 	world:            World, // set up from Welcome
 	world_init:       bool,
 	camera:           View, // the eyes, from the prediction; looking turns it every frame
@@ -313,6 +317,10 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 		f64(s.stats.bytes_received) / (1 << 20),
 		f64(s.arena.total_used) / (1 << 20),
 	)
+	if s.fetch != nil {
+		game.pack_fetch_destroy(s.fetch)
+		free(s.fetch)
+	}
 	if s.reg_owned {game.registry_destroy(s.reg)}
 	virtual.arena_destroy(&s.arena)
 	s^ = {}

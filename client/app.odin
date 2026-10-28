@@ -418,6 +418,10 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			app.last_frame_ms / 1000,
 			w.mouse_captured,
 		)
+		if app.session.reg_swapped { 	// (joined a server with packs: its items need icons)
+			item_icons_init(app.session.reg, &app.item_icons, &app.ui)
+			app.session.reg_swapped = false
+		}
 		fly_test_update(app)
 		blast_test_update(app)
 		audio_check_update(app)

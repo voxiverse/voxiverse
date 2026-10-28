@@ -160,6 +160,7 @@ Reg_Error :: struct {
 @(private)
 Reg_Build :: struct {
 	sources: []Pack_Source,
+	side:    Registry_Side,
 	errs:    [dynamic]Reg_Error,
 	packs:   [dynamic]Pack_Info,
 	defs:    [Content_Kind][dynamic]Merged_Def,
@@ -245,8 +246,16 @@ valid_path :: proc(path: string) -> bool {
 	return true
 }
 
+// Registry_Side: the server builds from every file of every pack; a client
+// from assets/ and data/ only (it never has server/, and refuses one).
+Registry_Side :: enum {
+	Server,
+	Client,
+}
+
 registry_build :: proc(
 	sources: []Pack_Source,
+	side := Registry_Side.Server,
 	allocator := context.allocator,
 ) -> (
 	reg: ^Registry,
@@ -262,6 +271,7 @@ registry_build :: proc(
 
 	b := Reg_Build {
 		sources = sources,
+		side    = side,
 	}
 	build_packs(&b)
 	if len(b.errs) == 0 {
@@ -374,6 +384,17 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 				0,
 				0,
 				fmt.aprintf("file is %d bytes; the limit is %d", len(f.data), JSON_MAX_FILE),
+			)
+			continue
+		}
+		if b.side == .Client && strings.has_prefix(f.path, "server/") {
+			fail(
+				b,
+				pi,
+				f.path,
+				0,
+				0,
+				"a client has no server/ files; the server does not send them",
 			)
 			continue
 		}

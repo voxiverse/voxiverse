@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem/virtual"
+import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
@@ -59,7 +61,13 @@ receive :: proc(s: ^Session) {
 		}
 		if s.state != .Playing {
 			#partial switch _ in m {
-			case game.Welcome, game.Reject, game.Pong, game.Challenge, game.Characters:
+			case game.Welcome,
+			     game.Reject,
+			     game.Pong,
+			     game.Challenge,
+			     game.Characters,
+			     game.Packs,
+			     game.Pack_Part:
 			case game.Snapshot_Message:
 				continue // unreliable: it overtook the welcome (newer ones follow)
 			case:
@@ -71,6 +79,10 @@ receive :: proc(s: ^Session) {
 		switch v in m {
 		case game.Challenge:
 			send_message(s, game.Proof{game.account_sign(&s.config.key, v.nonce)})
+		case game.Packs:
+			packs_begin(s, v)
+		case game.Pack_Part:
+			packs_part(s, v)
 		case game.Characters:
 			for c in s.characters {delete(c)}
 			clear(&s.characters)
@@ -359,4 +371,91 @@ content_mismatch :: proc(reg: ^game.Registry, w: game.Welcome) -> string {
 		"this server uses content packs this game does not have: %s",
 		strings.join(missing[:], ", ", context.temp_allocator),
 	)
+}
+
+// packs_cache_dir: VX_PACKS, else voxiverse/packs in the user data directory
+// (the packs of servers joined, by hash; game.pack_cache_store).
+packs_cache_dir :: proc() -> string {
+	if p, set := os.lookup_env("VX_PACKS", context.temp_allocator); set && p != "" {return p}
+	dir, err := os.user_data_dir(context.temp_allocator)
+	if err != nil {return ""}
+	return filepath.join({dir, "voxiverse", "packs"}, context.temp_allocator) or_else ""
+}
+
+// packs_begin: the server's packs (a remote server only: our own universe's
+// are read here): ask for those the cache lacks.
+@(private = "file")
+packs_begin :: proc(s: ^Session, p: game.Packs) {
+	if !s.remote || s.fetching {
+		fail(s, "the server sent its packs when it should not")
+		return
+	}
+	s.fetch = new(game.Pack_Fetch)
+	want, err := game.pack_fetch_begin(s.fetch, p, packs_cache_dir())
+	s.fetching = true
+	if err != "" {
+		fail(s, err)
+		return
+	}
+	log.infof("session packs announced=%d wanted=%d", p.count, want.count)
+	send_message(s, want)
+	packs_built(s)
+}
+
+@(private = "file")
+packs_part :: proc(s: ^Session, part: game.Pack_Part) {
+	if !s.fetching || s.fetched {
+		fail(s, "the server sent a pack part we did not ask for")
+		return
+	}
+	if err := game.pack_fetch_part(s.fetch, part); err != "" {
+		fail(s, err)
+		return
+	}
+	packs_built(s)
+}
+
+// packs_built: once every pack is held, the registry the base pack and these
+// make, and the word that we have it.
+@(private = "file")
+packs_built :: proc(s: ^Session) {
+	if s.state == .Failed || s.fetched || !game.pack_fetch_complete(s.fetch) {return}
+	sources, errs := game.pack_fetch_sources(s.fetch)
+	all := make([dynamic]game.Pack_Source, context.temp_allocator)
+	append(&all, game.pack_source_sent(game.base_pack_source(context.temp_allocator)))
+	append(&all, ..sources)
+	reg: ^game.Registry
+	if len(errs) == 0 {reg, errs = game.registry_build(all[:], .Client)}
+	if reg == nil {
+		lines := make([dynamic]string, context.temp_allocator)
+		for e in errs[:min(len(errs), 5)] {append(&lines, game.pack_error_text(e))}
+		fail(
+			s,
+			strings.concatenate(
+				{
+					"the server's packs do not load: ",
+					strings.join(lines[:], "; ", context.temp_allocator),
+				},
+				context.temp_allocator,
+			),
+		)
+		return
+	}
+	if reg.hash != s.fetch.content {
+		game.registry_destroy(reg)
+		fail(
+			s,
+			fmt.tprintf(
+				"your game built different content from the same packs (content %016x vs %016x)",
+				reg.hash,
+				s.fetch.content,
+			),
+		)
+		return
+	}
+	if s.reg_owned {game.registry_destroy(s.reg)}
+	s.reg, s.reg_owned, s.reg_swapped, s.fetched = reg, true, true, true
+	game.receiver_destroy(&s.rx)
+	game.receiver_init(&s.rx, &s.schema, s.reg)
+	send_message(s, game.Packs_Ready{reg.hash})
 }

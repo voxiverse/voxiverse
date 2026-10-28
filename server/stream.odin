@@ -16,6 +16,7 @@ Client_State :: enum u8 {
 	Free, // an empty seat
 	Connecting, // connected, waiting for Hello
 	Proving, // Challenge sent, waiting for the Proof
+	Packing, // proved; the universe's packs are being sent (pack_send.odin)
 	Choosing, // proved; Characters sent, waiting for Choose
 	Playing,
 	Gone, // refused; dropped soon (kick_at), or the local pipe closed
@@ -41,6 +42,12 @@ Client :: struct {
 	name_buf:      [game.MAX_NAME_LENGTH]u8,
 	name_len:      int,
 	kick_at:       u64, // tick to drop a refused client
+	pack_since:    u64, // Packing: the tick Packs was sent
+	pack_asked:    bool, // Packing: the Pack_Want came
+	pack_queue:    [game.MAX_PACKS]u8, // Packing: packs to send, in order
+	pack_count:    int,
+	pack_next:     int, // the queue's index being sent
+	pack_offset:   u32, // ... and how much of it has gone
 	protect_told:  u64, // the tick a protected place was last said (protect.odin)
 	kick_reason:   string, // (a constant)
 	position:      [3]f64,
