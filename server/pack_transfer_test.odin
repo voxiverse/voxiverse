@@ -2,6 +2,7 @@ package server
 
 import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:testing"
 
 import "../common/game"
@@ -12,9 +13,9 @@ import "../common/netcode"
 
 @(private = "file")
 transfer_pack :: proc() -> game.Pack_Source {
+	// marble, with a PNG texture and Ogg sounds (M47i: they cross the join too)
 	files := make([dynamic]game.Pack_File, context.temp_allocator)
-	append(&files, game.Pack_File{"pack.json", transmute([]u8)string(MANIFEST)})
-	append(&files, game.Pack_File{"data/blocks/marble.json", transmute([]u8)string(MARBLE)})
+	append(&files, ..game.test_asset_pack().files)
 	// A server-only file: a structure of the base pack (valid, and not sent).
 	for f in game.base_pack_source(context.temp_allocator).files {
 		if len(f.path) > 18 && f.path[:18] == "server/structures/" {
@@ -89,8 +90,30 @@ test_pack_transfer :: proc(t: ^testing.T) {
 	testing.expect_value(t, a.reg.hash, srv.registry.hash)
 	testing.expect_value(t, len(a.reg.structures), 0) // (server/ was not sent)
 	testing.expect_value(t, len(srv.registry.structures) > 2, true)
-	_, has_marble := game.registry_block(a.reg, "testpack:marble")
+	marble, has_marble := game.registry_block(a.reg, "testpack:marble")
 	testing.expect(t, has_marble, "the pack's block is not in the client's registry")
+	// The PNG's pixels and the Ogg arrived whole: the client decoded the server's own.
+	testing.expect_value(t, len(a.reg.images), 1)
+	if len(a.reg.images) == 1 {
+		testing.expect(t, a.reg.images[0] == srv.registry.images[0], "the decoded pixels differ")
+		testing.expect(
+			t,
+			a.reg.images[0] == game.test_marble_pixels(),
+			"the pixels are not the PNG's",
+		)
+	}
+	if has_marble {
+		client_set := a.reg.sounds[a.reg.blocks.defs[marble].sound]
+		server_set := srv.registry.sounds[srv.registry.blocks.defs[marble].sound]
+		testing.expect(t, len(client_set.clips[.Break]) == 1 && len(server_set.clips[.Break]) == 1)
+		if len(client_set.clips[.Break]) == 1 {
+			testing.expect(
+				t,
+				slice.equal(client_set.clips[.Break][0], server_set.clips[.Break][0]),
+				"the Ogg differs",
+			)
+		}
+	}
 	files, _ := os.read_all_directory_by_path(cache, context.temp_allocator)
 	testing.expect_value(t, len(files), 1)
 	for f in files {

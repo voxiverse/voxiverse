@@ -43,6 +43,7 @@ Chunk_Store :: struct {
 	done:          base.Queue(^Gen_Task), // finished tasks, from workers
 	free_tasks:    [dynamic]^Gen_Task,
 	in_flight:     int,
+	hold:          bool, // no new jobs: a registry swap waits for the ones running (pack_reload.odin)
 	max_in_flight: int,
 	caches:        []worldgen.Column_Cache, // one per worker (by context.user_index)
 	tops_done:     [dynamic]Tops_Done, // collected, for the world to take (heap)
@@ -169,7 +170,7 @@ chunks_get :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> ^Chunk {
 // are busy enough (try again next tick). Running out of chunk slots is a
 // sizing bug: the pool is sized for everything interest can load.
 chunks_request :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> bool {
-	if w.in_flight >= w.max_in_flight {return false}
+	if w.in_flight >= w.max_in_flight || w.hold {return false}
 	assert(pos not_in w.by_pos)
 	handle, _, ok := base.pool_add(&w.chunks, Chunk{pos = pos, state = .Generating})
 	assert(ok, "chunk pool full")
@@ -193,7 +194,7 @@ chunks_request :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> bool {
 // worker (they cost about as much as a chunk: never on the tick); false
 // when the workers are busy. The result arrives in tops_done.
 chunks_request_tops :: proc(w: ^Chunk_Store, column: [2]i32) -> bool {
-	if w.in_flight >= w.max_in_flight {return false}
+	if w.in_flight >= w.max_in_flight || w.hold {return false}
 	task := pop(&w.free_tasks)
 	task^ = {
 		world     = w,

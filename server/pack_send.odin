@@ -23,15 +23,24 @@ Pack_Blob :: struct {
 // pack_blobs_make: the archives of every pack after the base pack in
 // sources (kept for the run: the packs are fixed while the universe runs).
 pack_blobs_make :: proc(s: ^Server, sources: []game.Pack_Source) {
+	pack_blobs_into(&s.pack_blobs, s.registry, sources)
+}
+
+// pack_blobs_into: the same, appended to list, versions read from reg.
+pack_blobs_into :: proc(
+	list: ^[dynamic]Pack_Blob,
+	reg: ^game.Registry,
+	sources: []game.Pack_Source,
+) {
 	for src, i in sources {
 		if i == 0 {continue}
 		data := game.pack_archive_make(src)
 		version := ""
-		for p in s.registry.packs {
+		for p in reg.packs {
 			if p.namespace == src.namespace {version = p.version}
 		}
 		append(
-			&s.pack_blobs,
+			list,
 			Pack_Blob {
 				strings.clone(src.namespace),
 				strings.clone(version),

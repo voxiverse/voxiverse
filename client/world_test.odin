@@ -122,7 +122,6 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 }
 
 // add_columns gives every column within r of the origin flat heights.
-@(private = "file")
 add_columns :: proc(w: ^World, r: i32) {
 	for z in -r ..= r {
 		for x in -r ..= r {

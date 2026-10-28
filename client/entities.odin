@@ -400,7 +400,7 @@ dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: 
 // block_colour: b's look in one colour (the average of its side).
 @(private = "file")
 block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
-	side := mesh.Texture_Generator(mesh.block_texture(s.reg, b, .Pos_X))
+	side := mesh.block_texture(s.reg, b, .Pos_X)
 	sum: [3]u32
 	n: u32
 	for c in s.texels[side] {
@@ -416,7 +416,7 @@ block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 // (not a hole in it).
 @(private = "file")
 debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
-	side := mesh.Texture_Generator(mesh.block_texture(s.reg, b, .Pos_X))
+	side := mesh.block_texture(s.reg, b, .Pos_X)
 	pixels := &s.texels[side]
 	for _ in 0 ..< 8 {
 		c := pixels[rand.int_max(len(pixels))]

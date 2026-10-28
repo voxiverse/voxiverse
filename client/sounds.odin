@@ -1,6 +1,7 @@
 package client
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:math/rand"
 
@@ -31,12 +32,24 @@ Sound_Event :: struct {
 	volume:   f32, // 0..1
 }
 
+// Pack_Set: the files of a pack's sound set, by action (the ids are in the
+// mixer's pack slots); count 0: the action has none and takes break's.
+Pack_Set :: struct {
+	ids:   [sfx.Action][sfx.VARIANTS]audio.Sound_Id,
+	count: [sfx.Action]u8,
+}
+
+#assert(sfx.VARIANTS == game.SOUND_VARIANTS)
+
 Sound_Bank :: struct {
-	block:   [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
-	player:  [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
-	sheep:   [sfx.Sheep_Sound][sfx.VARIANTS]audio.Sound_Id,
-	blast:   [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
-	samples: [dynamic][]f32, // owned
+	pack:         [dynamic]Pack_Set, // by the registry's sound set (only those of files are filled)
+	pack_samples: [dynamic][]f32, // owned: the decoded files now in the mixer
+	pack_retired: [dynamic][]f32, // the files before them: freed at the swap after next (the audio thread has stopped reading them long before)
+	block:        [sfx.Material][sfx.Action][sfx.VARIANTS]audio.Sound_Id,
+	player:       [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
+	sheep:        [sfx.Sheep_Sound][sfx.VARIANTS]audio.Sound_Id,
+	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
+	samples:      [dynamic][]f32, // owned
 }
 
 SOUND_RANGE :: 24 // blocks: further sounds are not heard
@@ -77,7 +90,79 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 sounds_destroy :: proc(b: ^Sound_Bank) {
 	for s in b.samples {delete(s)}
 	delete(b.samples)
+	for s in b.pack_samples {delete(s)}
+	for s in b.pack_retired {delete(s)}
+	delete(b.pack_samples)
+	delete(b.pack_retired)
+	delete(b.pack)
 	b^ = {}
+}
+
+// sounds_load_pack decodes the sound files of reg's sound sets (each decoded
+// whole, mono, resampled to the mixer's rate) and puts them in the mixer's pack
+// slots, replacing what the last registry had there. A file that will not
+// decode is logged and its action has no sound. Returns the files in use.
+sounds_load_pack :: proc(b: ^Sound_Bank, m: ^audio.Mixer, reg: ^game.Registry) -> int {
+	clear(&b.pack)
+	resize(&b.pack, len(reg.sounds))
+	fresh := make([dynamic][]f32)
+	sounds := make([dynamic]audio.Sound, context.temp_allocator)
+	for def, i in reg.sounds {
+		if !game.sound_has_files(def) {continue}
+		for a in game.Sound_Action {
+			for clip, v in def.clips[a] {
+				if len(sounds) >= audio.PACK_SOUND_SLOTS {
+					log.warnf("sound %s: no room for %s", def.id, def.files[a][v])
+					continue
+				}
+				raw, ok := audio.decode_clip(clip, game.MAX_SOUND_SECONDS)
+				if !ok {
+					log.warnf("sound %s: %s cannot be decoded", def.id, def.files[a][v])
+					continue
+				}
+				made := audio.resample_sound(raw, m.rate)
+				delete(raw.samples)
+				append(&fresh, made.samples)
+				b.pack[i].ids[sfx.Action(a)][b.pack[i].count[sfx.Action(a)]] = audio.Sound_Id(
+					audio.PACK_SOUND_BASE + len(sounds),
+				)
+				b.pack[i].count[sfx.Action(a)] += 1
+				append(&sounds, made)
+			}
+		}
+	}
+	audio.set_pack_sounds(m, sounds[:])
+	for s in b.pack_retired {delete(s)}
+	delete(b.pack_retired)
+	b.pack_retired = b.pack_samples
+	b.pack_samples = fresh
+	return len(sounds)
+}
+
+// block_sound: the sound a block makes for an action (variant picks among the
+// files or the generated ones), false for a block with none.
+block_sound :: proc(
+	b: ^Sound_Bank,
+	reg: ^game.Registry,
+	block: game.Block,
+	action: sfx.Action,
+	variant: int,
+) -> (
+	audio.Sound_Id,
+	bool,
+) {
+	sound := reg.blocks.defs[block].sound
+	if sound == game.NO_SOUND {return 0, false}
+	def := reg.sounds[sound]
+	if !game.sound_has_files(
+		def,
+	) {return b.block[sfx.Material(def.material)][action][variant], true}
+	if int(sound) >= len(b.pack) {return 0, false}
+	set := &b.pack[sound]
+	a := action
+	if set.count[a] == 0 {a = .Break}
+	if set.count[a] == 0 {return 0, false}
+	return set.ids[a][variant % int(set.count[a])], true
 }
 
 // sounds_play plays a session's events of this frame, heard from view.
@@ -122,26 +207,15 @@ sounds_play :: proc(
 				m,
 				{sound = b.player[.Land][variant], gain = gain, pitch = pitch, bus = .Player},
 			)
-			if mat, ok := sfx.material_of(reg, e.block); ok {
-				audio.play(
-					m,
-					{
-						sound = b.block[mat][.Step][variant],
-						gain = gain,
-						pitch = pitch,
-						bus = .World,
-					},
-				)
+			if id, ok := block_sound(b, reg, e.block, .Step, variant); ok {
+				audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World})
 			}
 		case .Break, .Place, .Step:
-			mat, ok := sfx.material_of(reg, e.block)
-			if !ok {continue}
 			action: sfx.Action =
 				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
-			audio.play(
-				m,
-				{sound = b.block[mat][action][variant], gain = gain, pitch = pitch, bus = .World},
-			)
+			id, ok := block_sound(b, reg, e.block, action, variant)
+			if !ok {continue}
+			audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World})
 		}
 	}
 }

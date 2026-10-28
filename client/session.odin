@@ -80,12 +80,13 @@ Session :: struct {
 	characters:       [dynamic]string, // the account's, to choose from (heap; Choosing)
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
-	texels:           [mesh.Texture_Generator][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
+	texels:           [][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures by layer, for debris (made again when the registry is swapped)
 	render_clock:     Render_Clock, // when to show the others (players.odin)
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          game.Welcome,
 	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
+	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
 	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
 	fetch:            ^game.Pack_Fetch, // the server's packs, while joining (pack_fetch.odin)
 	fetching:         bool, // a Packs message came
@@ -187,8 +188,9 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
 	s.entities = make(map[u32]Other_Entity, 64)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
-	for &pixels, t in s.texels {mesh.generate_texture(t, pixels[:])}
+	session_texels(s)
 	s.config.name = strings.clone(config.name, arena)
+	s.config.save_dir = strings.clone(config.save_dir, arena)
 
 	if join, remote := config.join.?; remote {
 		s.remote = true
@@ -210,10 +212,12 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	// Our own world: its server here, through the pipe.
 	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
 	s.endpoint = {&s.pipe, .Client}
-	if own := server.registry_for_dir(config.save_dir); own != nil {
+	if own := server.registry_for_dir(config.save_dir, base_dir = server.dev_base_dir());
+	   own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
 		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
 		game.receiver_init(&s.rx, &s.schema, s.reg)
+		session_texels(s)
 	}
 	if !server.start(
 	&s.server,
@@ -224,6 +228,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		workers      = worker_count(),
 		allow_cheats = true, // our own world
 		save_dir     = config.save_dir,
+		pack_watch   = base.DEV, // (a development build reloads packs when their files change)
 		spawn        = config.spawn,
 		no_sheep     = config.no_sheep,
 		upload       = config.upload,
@@ -321,6 +326,8 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 		game.pack_fetch_destroy(s.fetch)
 		free(s.fetch)
 	}
+	delete(s.texels)
+	if s.reg_fresh != nil {game.registry_destroy(s.reg_fresh)}
 	if s.reg_owned {game.registry_destroy(s.reg)}
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
@@ -476,4 +483,15 @@ server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 // still_rules: nothing changing by itself, for benchmarks and exit checks.
 still_rules :: proc() -> game.Rules {
 	return game.rules_still()
+}
+
+// session_texels makes the block textures' pixels of s.reg (for debris and
+// colours), one per layer of the texture array.
+session_texels :: proc(s: ^Session) {
+	delete(s.texels)
+	s.texels = make(
+		[][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
+		game.registry_texture_layers(s.reg),
+	)
+	for &pixels, layer in s.texels {mesh.texture_layer_pixels(s.reg, u32(layer), pixels[:])}
 }

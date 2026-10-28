@@ -142,7 +142,6 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 
 // --- Packs in memory. ---
 
-@(private = "file")
 File :: struct {
 	path: string,
 	text: string,
@@ -169,7 +168,6 @@ build_with :: proc(packs: ..Pack_Source) -> (^Registry, []Pack_Error) {
 	return registry_build(sources[:], .Server, context.temp_allocator)
 }
 
-@(private = "file")
 errors_text :: proc(errs: []Pack_Error) -> string {
 	lines := make([dynamic]string, context.temp_allocator)
 	for e in errs {append(&lines, pack_error_text(e))}

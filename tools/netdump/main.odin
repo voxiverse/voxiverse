@@ -321,6 +321,8 @@ describe :: proc(
 			return fmt.tprintf("characters names=%q", v.names), true
 		case game.Packs:
 			return fmt.tprintf("packs content=%016x count=%d", v.content, v.count), true
+		case game.Packs_Changed:
+			return fmt.tprintf("packs_changed content=%016x", v.content), true
 		case game.Pack_Part:
 			return fmt.tprintf(
 					"pack_part index=%d offset=%d bytes=%d",

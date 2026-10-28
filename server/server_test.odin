@@ -26,6 +26,7 @@ Fake_Client :: struct {
 	rejected:       string,
 	scratch:        ^game.Block_Array,
 	chunks:         int, // chunk messages received
+	packs_changed:  u64, // the content of the last Packs_Changed
 	unloads:        int,
 	player:         game.Own_Player, // the latest
 	rx:             State_Rx, // (made when first needed, in the temp allocator)
@@ -72,6 +73,8 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			fake_send(c, game.Proof{game.account_sign(&c.key, v.nonce)})
 		case game.Characters: // (tests name their character in Hello)
 		case game.Packs, game.Pack_Part: // (no packs in these universes)
+		case game.Packs_Changed:
+			c.packs_changed = v.content
 		case game.Welcome:
 			c.welcome, c.welcomed, c.rules = v, true, v.rules
 			rules := v.rules

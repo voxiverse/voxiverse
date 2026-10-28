@@ -3,6 +3,7 @@ package game
 import "base:runtime"
 import "core:fmt"
 import "core:mem/virtual"
+import "core:slice"
 import "core:strings"
 
 // The registry: everything a pack adds is content (blocks, items, textures,
@@ -192,14 +193,43 @@ Item_Table :: struct {
 
 Texture_Def :: struct {
 	id:        string,
-	generator: string,
-	layer:     u32, // the generator's number in TEXTURE_GENERATOR_NAMES: its layer in the client's texture array
+	generator: string, // "" for a texture of the pack's own image
+	image:     string, // the pack file (assets/textures/marble.png), or ""
+	layer:     u32, // its layer in the client's texture array: the generator's number in TEXTURE_GENERATOR_NAMES, or for an image len(TEXTURE_GENERATOR_NAMES) + its place among the images (Registry.images)
 }
 
+// Sound_Def: a generated sound (generator) or a set of the pack's own files
+// (clips, by action: break, place, step; an empty list takes break's).
 Sound_Def :: struct {
 	id:        string,
-	generator: string,
+	generator: string, // "" for a set of files
 	material:  u32, // the generator's number in SOUND_GENERATOR_NAMES
+	files:     [Sound_Action][]string, // paths
+	clips:     [Sound_Action][][]u8, // the files' bytes (checked: size and length)
+}
+
+SOUND_VARIANTS :: 3 // files in one action of a sound set (the client's sfx.VARIANTS; a test compares)
+
+Sound_Action :: enum u8 {
+	Break,
+	Place,
+	Step,
+}
+
+SOUND_ACTION_NAMES :: [Sound_Action]string {
+	.Break = "break",
+	.Place = "place",
+	.Step  = "step",
+}
+
+sound_has_files :: proc(s: Sound_Def) -> bool {
+	return s.generator == ""
+}
+
+// registry_texture_layers: the layers of the client's texture array: one for each
+// generator, then one for each image of a pack.
+registry_texture_layers :: proc(reg: ^Registry) -> int {
+	return len(TEXTURE_GENERATOR_NAMES) + len(reg.images)
 }
 
 Tag_Def :: struct {
@@ -239,10 +269,11 @@ Pack_Info :: struct {
 }
 
 Registry :: struct {
-	arena:      virtual.Arena,
+	arena:      ^virtual.Arena, // its own allocation, so a swap of two registries (registry_swap) moves it with the contents
 	blocks:     Block_Table,
 	items:      Item_Table,
 	textures:   []Texture_Def,
+	images:     []Texture_Image, // the pixels of the textures that are images, in layer order
 	sounds:     []Sound_Def,
 	block_tags: []Tag_Def,
 	item_tags:  []Tag_Def,
@@ -257,8 +288,58 @@ Registry :: struct {
 registry_destroy :: proc(reg: ^Registry) {
 	if reg == nil {return}
 	a := reg.allocator
-	virtual.arena_destroy(&reg.arena)
+	virtual.arena_destroy(reg.arena)
+	free(reg.arena, a)
 	free(reg, a)
+}
+
+// registry_swap makes the registry at dst what src is, and frees what dst
+// was along with src's struct: the address everyone holds stays good. Only
+// when nothing is reading dst (the server between its jobs, the client
+// between its mesh jobs).
+registry_swap :: proc(dst, src: ^Registry) {
+	dst^, src^ = src^, dst^
+	registry_destroy(src)
+}
+
+// registry_id_changes: how src's ids differ from dst's, "" when the numbers
+// of every block, item, texture and sound set are the same. A reload may
+// change what a thing is, never which number it has (the registry does not
+// grow while the universe runs).
+registry_id_changes :: proc(dst, src: ^Registry) -> string {
+	lists :: proc(reg: ^Registry) -> [4][dynamic]string {
+		out: [4][dynamic]string
+		for i in 0 ..< reg.blocks.count {append(&out[0], reg.blocks.defs[i].id)}
+		for info in reg.items.blocks {if info.name != "" {append(&out[1], info.name)}}
+		for t in Tool {append(&out[1], reg.items.tools[t].name)}
+		for m in Material {append(&out[1], reg.items.materials[m].name)}
+		for a in Armor {append(&out[1], reg.items.armor[a].name)}
+		for info in reg.items.pack {append(&out[1], info.name)}
+		for t in reg.textures {append(&out[2], t.id)}
+		for t in reg.sounds {append(&out[3], t.id)}
+		return out
+	}
+	a, b := lists(dst), lists(src)
+	for k in 0 ..< 4 {
+		defer {delete(a[k]); delete(b[k])}
+		for id, i in a[k] {
+			if i < len(b[k]) && b[k][i] == id {continue}
+			word := "moved"
+			if !slice.contains(b[k][:], id) {word = "removed"}
+			return fmt.aprintf(
+				"this reload changes ids (%s %s); restart the universe to apply it",
+				word,
+				id,
+			)
+		}
+		if len(b[k]) > len(a[k]) {
+			return fmt.aprintf(
+				"this reload changes ids (added %s); restart the universe to apply it",
+				b[k][len(a[k])],
+			)
+		}
+	}
+	return ""
 }
 
 // --- Lookups by number. ---
@@ -518,10 +599,22 @@ registry_text_of :: proc(
 	}
 	if all {
 		for t, i in reg.textures {
-			fmt.sbprintf(&b, "texture %s %d generator=%s\n", t.id, i, t.generator)
+			if t.image != "" {
+				fmt.sbprintf(&b, "texture %s %d image=%s\n", t.id, i, t.image)
+			} else {
+				fmt.sbprintf(&b, "texture %s %d generator=%s\n", t.id, i, t.generator)
+			}
 		}
 		for s, i in reg.sounds {
-			fmt.sbprintf(&b, "sound %s %d generator=%s\n", s.id, i, s.generator)
+			if sound_has_files(s) {
+				fmt.sbprintf(&b, "sound %s %d files=", s.id, i)
+				for a in Sound_Action {
+					for f in s.files[a] {fmt.sbprintf(&b, "%v:%s,", a, f)}
+				}
+				fmt.sbprintf(&b, "\n")
+			} else {
+				fmt.sbprintf(&b, "sound %s %d generator=%s\n", s.id, i, s.generator)
+			}
 		}
 	}
 	for i in 0 ..< reg.blocks.count {

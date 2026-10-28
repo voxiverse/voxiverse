@@ -47,6 +47,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
 	{"seed", "", {0, 0}, admin_seed, "info.seed"},
 	{"packs", "", {0, 0}, admin_packs, "info.packs"},
+	{"pack", "reload", {1, 1}, admin_pack, "server.packs"},
 	{"wear", "", {0, 0}, admin_wear, "items.wear"},
 	{"help", "[command]", {0, 1}, admin_help, "info.help"},
 	// World editing: on the selection (selection.odin), or coordinates given.

@@ -216,6 +216,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, slice.equal(part.(Pack_Part).data, data))
 	_, pok = decode_server_t(encode_s(Pack_Part{2, 0, {}})[:], scratch)
 	testing.expect(t, !pok, "an empty Pack_Part decoded")
+	changed, cok := decode_server_t(encode_s(Packs_Changed{0xfeed_beef_1234})[:], scratch)
+	testing.expect(t, cok && changed.(Packs_Changed) == Packs_Changed{0xfeed_beef_1234})
 	// Names: letters, digits, _ and -, 1..16 of them.
 	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
 	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}

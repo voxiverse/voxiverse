@@ -31,7 +31,15 @@ packs_parse :: proc(value: string, allocator := context.allocator) -> []string {
 // packs, then config.extra_packs. Every problem is logged (and s.refusal says
 // the first), and false means the universe does not start.
 universe_registry :: proc(s: ^Server) -> bool {
-	reg, sources, problems := packs_registry(s.store.dir, s.store.packs, s.config.extra_packs)
+	base_dir := ""
+	if s.config.pack_watch {base_dir = dev_base_dir()}
+	s.reload.base_dir = strings.clone(base_dir)
+	reg, sources, problems := packs_registry(
+		s.store.dir,
+		s.store.packs,
+		s.config.extra_packs,
+		base_dir,
+	)
 	for p in problems {
 		log.errorf("server packs %s", p)
 		if s.refusal == "" {s.refusal = strings.clone(p, context.temp_allocator)}
@@ -51,6 +59,7 @@ packs_registry :: proc(
 	dir: string,
 	listed: []string,
 	extra: []game.Pack_Source = nil,
+	base_dir := "", // development: the base pack's files here, not the compiled-in ones
 ) -> (
 	reg: ^game.Registry,
 	sources: []game.Pack_Source,
@@ -69,7 +78,13 @@ packs_registry :: proc(
 		return nil, nil, list[:]
 	}
 	all := make([dynamic]game.Pack_Source, context.temp_allocator)
-	append(&all, game.base_pack_source(context.temp_allocator))
+	if base_dir != "" {
+		src, errs := pack_read_dir(base_dir, context.temp_allocator)
+		for e in errs {append(&list, game.pack_error_text(e))}
+		append(&all, src)
+	} else {
+		append(&all, game.base_pack_source(context.temp_allocator))
+	}
 	for name in listed {
 		path := fmt.tprintf("%s/%s/%s", dir, PACKS_DIR, name)
 		if dir == "" || !os.is_directory(path) {
@@ -168,7 +183,11 @@ universe_blocks_check :: proc(s: ^Server) -> bool {
 // registry_for_dir: a registry of its own for the universe in dir (as the
 // server there builds it), for a client that plays it here. nil if the
 // universe's packs do not load (the server says why when it starts).
-registry_for_dir :: proc(dir: string, allocator := context.allocator) -> ^game.Registry {
+registry_for_dir :: proc(
+	dir: string,
+	allocator := context.allocator,
+	base_dir := "",
+) -> ^game.Registry {
 	text := ""
 	if dir != "" {
 		data, err := os.read_entire_file_from_path(
@@ -178,6 +197,6 @@ registry_for_dir :: proc(dir: string, allocator := context.allocator) -> ^game.R
 		if err == nil {text = string(data)}
 	}
 	value, _ := text_value(text, "packs")
-	reg, _, _ := packs_registry(dir, packs_parse(value, context.temp_allocator), nil)
+	reg, _, _ := packs_registry(dir, packs_parse(value, context.temp_allocator), nil, base_dir)
 	return reg
 }

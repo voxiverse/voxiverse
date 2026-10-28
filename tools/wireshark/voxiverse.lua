@@ -32,7 +32,7 @@ local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
 	[5] = "pong", [8] = "edit_result", [10] = "column", [20] = "bulk",
 	[28] = "challenge", [29] = "characters", [30] = "world_changed",
-	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot", [38] = "packs", [39] = "pack_part",
+	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot", [38] = "packs", [39] = "pack_part", [40] = "packs_changed",
 }
 local STATE, SNAPSHOT = 36, 37
 
@@ -422,6 +422,8 @@ local function describe(tvb, from_server)
 				return string.format("packs content=%08x%08x count=%d", u32(tvb, 5), u32(tvb, 1), tvb(9, 1):uint())
 			elseif kind == 39 then
 				return string.format("pack_part index=%d offset=%d bytes=%d", tvb(1, 1):uint(), u32(tvb, 2), tvb:len() - 6)
+			elseif kind == 40 then
+				return string.format("packs_changed content=%08x%08x", u32(tvb, 5), u32(tvb, 1))
 			elseif kind == 5 then
 				return string.format("pong id=%d", u32(tvb, 1))
 			elseif kind == 8 then

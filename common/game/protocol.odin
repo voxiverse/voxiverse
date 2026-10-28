@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 26
+PROTOCOL_VERSION :: 27
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -276,6 +276,14 @@ Packs :: struct {
 	entries: [MAX_PACKS]Pack_Entry,
 }
 
+// Packs_Changed: the server reloaded its packs (a development build; hot
+// reload): content is the new registry's hash. A client on the same machine
+// builds the same registry from the same files and checks it; no pack file is
+// sent.
+Packs_Changed :: struct {
+	content: u64,
+}
+
 // Pack_Part: bytes of one pack's archive, in order.
 Pack_Part :: struct {
 	index:  u8,
@@ -462,6 +470,7 @@ Server_Message :: union {
 	Snapshot_Message,
 	Packs,
 	Pack_Part,
+	Packs_Changed,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -524,6 +533,7 @@ Server_Kind :: enum u8 {
 	Snapshot      = 37,
 	Packs         = 38,
 	Pack_Part     = 39,
+	Packs_Changed = 40,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -609,6 +619,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "packs"
 		case u8(Server_Kind.Pack_Part):
 			return "pack_part"
+		case u8(Server_Kind.Packs_Changed):
+			return "packs_changed"
 		case u8(Server_Kind.Welcome):
 			return "welcome"
 		case u8(Server_Kind.Reject):
@@ -831,6 +843,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 			write_u32(w, e.size)
 			for b in e.sha256 {write_u8(w, b)}
 		}
+	case Packs_Changed:
+		write_u8(w, u8(Server_Kind.Packs_Changed))
+		write_fixed64(w, v.content)
 	case Pack_Part:
 		write_u8(w, u8(Server_Kind.Pack_Part))
 		write_u8(w, v.index)
@@ -1113,6 +1128,8 @@ decode_server :: proc(
 			for &b in e.sha256 {b = read_u8(&r)}
 		}
 		m = ps
+	case u8(Server_Kind.Packs_Changed):
+		m = Packs_Changed{read_fixed64(&r)}
 	case u8(Server_Kind.Pack_Part):
 		part := Pack_Part {
 			index  = read_u8(&r),

@@ -11,6 +11,7 @@ import "core:time"
 
 import "../common/game"
 import "../common/netcode"
+import "../server"
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the
@@ -67,7 +68,8 @@ receive :: proc(s: ^Session) {
 			     game.Challenge,
 			     game.Characters,
 			     game.Packs,
-			     game.Pack_Part:
+			     game.Pack_Part,
+			     game.Packs_Changed:
 			case game.Snapshot_Message:
 				continue // unreliable: it overtook the welcome (newer ones follow)
 			case:
@@ -83,6 +85,8 @@ receive :: proc(s: ^Session) {
 			packs_begin(s, v)
 		case game.Pack_Part:
 			packs_part(s, v)
+		case game.Packs_Changed:
+			packs_changed(s, v)
 		case game.Characters:
 			for c in s.characters {delete(c)}
 			clear(&s.characters)
@@ -348,6 +352,37 @@ send_prediction_check :: proc(s: ^Session, sequence: u32) {
 	send_message(s, game.Prediction_Check{sequence, game.player_fields(s.prediction.state)})
 }
 
+// packs_changed: the server reloaded its packs (development builds). A player
+// here, on the same machine, builds the same registry from the same files and
+// checks its hash; the App swaps it in once the mesh jobs are done. Anyone
+// else was sent away by the server (they get the packs when they join again).
+@(private = "file")
+packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
+	if s.remote {
+		fail(s, "the server reloaded its packs; join again")
+		return
+	}
+	fresh := server.registry_for_dir(s.config.save_dir, base_dir = server.dev_base_dir())
+	if fresh == nil {
+		fail(s, "the reloaded packs do not load here; see the log")
+		return
+	}
+	if fresh.hash != v.content {
+		game.registry_destroy(fresh)
+		fail(
+			s,
+			fmt.tprintf(
+				"your game built different content from the same packs (content %016x vs %016x)",
+				fresh.hash,
+				v.content,
+			),
+		)
+		return
+	}
+	if s.reg_fresh != nil {game.registry_destroy(s.reg_fresh)} 	// (a newer one came before the swap)
+	s.reg_fresh = fresh
+}
+
 // content_mismatch: why a server whose registry is not ours (Welcome.content
 // differs) cannot be played here: the packs it uses that this game lacks.
 @(private = "file")
@@ -455,6 +490,7 @@ packs_built :: proc(s: ^Session) {
 	}
 	if s.reg_owned {game.registry_destroy(s.reg)}
 	s.reg, s.reg_owned, s.reg_swapped, s.fetched = reg, true, true, true
+	session_texels(s)
 	game.receiver_destroy(&s.rx)
 	game.receiver_init(&s.rx, &s.schema, s.reg)
 	send_message(s, game.Packs_Ready{reg.hash})

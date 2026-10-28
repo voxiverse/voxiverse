@@ -111,7 +111,9 @@ BLOCK_FIELDS := []string {
 @(private)
 ITEM_FIELDS := []string{"stack", "places", "tool", "armor", "equip", "modifiers", "override"}
 @(private)
-GENERATOR_FIELDS := []string{"generator", "override"}
+TEXTURE_FIELDS := []string{"generator", "image", "override"}
+@(private)
+SOUND_FIELDS := []string{"generator", "break", "place", "step", "override"}
 @(private)
 TAG_FIELDS := []string{"values", "replace", "override"}
 @(private)
@@ -157,8 +159,19 @@ Reg_Error :: struct {
 	e:     Pack_Error,
 }
 
+// Asset_File: a PNG or an Ogg of a pack; a texture or sound set that names it
+// marks it used, and one nothing names is an error.
+@(private)
+Asset_File :: struct {
+	pack: int,
+	path: string,
+	data: []u8,
+	used: bool,
+}
+
 @(private)
 Reg_Build :: struct {
+	assets:  [dynamic]Asset_File,
 	sources: []Pack_Source,
 	side:    Registry_Side,
 	errs:    [dynamic]Reg_Error,
@@ -263,11 +276,13 @@ registry_build :: proc(
 ) {
 	reg = new(Registry, allocator)
 	reg.allocator = allocator
-	if virtual.arena_init_growing(&reg.arena) != nil {
+	reg.arena = new(virtual.Arena, allocator)
+	if virtual.arena_init_growing(reg.arena) != nil {
+		free(reg.arena, allocator)
 		free(reg, allocator)
 		return nil, nil
 	}
-	context.allocator = virtual.arena_allocator(&reg.arena)
+	context.allocator = virtual.arena_allocator(reg.arena)
 
 	b := Reg_Build {
 		sources = sources,
@@ -303,7 +318,8 @@ registry_build :: proc(
 				message = fmt.aprintf("... and %d more", len(list) - n, allocator = allocator),
 			}
 		}
-		virtual.arena_destroy(&reg.arena)
+		virtual.arena_destroy(reg.arena)
+		free(reg.arena, allocator)
 		free(reg, allocator)
 		return nil, out
 	}
@@ -328,6 +344,19 @@ build_packs :: proc(b: ^Reg_Build) {
 		}
 		if kind == .Structure {continue}
 	}
+}
+
+// asset_suffix: the extension of the art or sound files that sit beside a
+// kind's definitions ("" for a kind with none).
+@(private)
+asset_suffix :: proc(kind: Content_Kind) -> string {
+	#partial switch kind {
+	case .Texture:
+		return ".png"
+	case .Sound:
+		return ".ogg"
+	}
+	return ""
 }
 
 @(private)
@@ -408,6 +437,13 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 			dir := f.path[:len(parts[0]) + 1 + len(parts[1])]
 			for kind in Content_Kind {
 				if dir != KIND_DIRS[kind] {continue}
+				if asset_suffix(kind) != "" &&
+				   strings.has_suffix(parts[2], asset_suffix(kind)) &&
+				   len(parts[2]) > len(asset_suffix(kind)) {
+					append(&b.assets, Asset_File{pack = pi, path = f.path, data = f.data})
+					matched = true
+					continue
+				}
 				want := ".vxs" if kind == .Structure else ".json"
 				if strings.has_suffix(parts[2], want) && len(parts[2]) > len(want) {
 					append(&b.by_dir[pi][kind], f)
@@ -583,8 +619,10 @@ fields_of :: proc(kind: Content_Kind) -> []string {
 		return BLOCK_FIELDS
 	case .Item:
 		return ITEM_FIELDS
-	case .Texture, .Sound:
-		return GENERATOR_FIELDS
+	case .Texture:
+		return TEXTURE_FIELDS
+	case .Sound:
+		return SOUND_FIELDS
 	case .Block_Tag, .Item_Tag:
 		return TAG_FIELDS
 	case .Recipe:

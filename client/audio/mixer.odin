@@ -31,7 +31,9 @@ import "core:sync"
 
 MAX_VOICES :: 128
 REAL_VOICES :: 64
-MAX_SOUNDS :: 256
+PACK_SOUND_SLOTS :: 128 // ids at the end of the table, set again whenever a pack's sounds change (set_pack_sounds)
+MAX_SOUNDS :: 256 + PACK_SOUND_SLOTS
+PACK_SOUND_BASE :: MAX_SOUNDS - PACK_SOUND_SLOTS
 MAX_BLOCK :: 512 // frames mixed at a time; parameters move once per block
 COMMAND_RING :: 512 // power of two
 EVENT_RING :: 256 // power of two
@@ -89,6 +91,7 @@ Mixer :: struct {
 	names:      [MAX_SOUNDS][SOUND_NAME_LEN]u8, // for captures and the dump (set_sound_name)
 	bandwidth:  [MAX_SOUNDS]f32, // Hz of the highest content of a sound, 0 if unknown (see set_bandwidth)
 	count:      int,
+	swap_lock:  sync.Atomic_Mutex, // held by `mix`, and by set_pack_sounds while it replaces sounds the audio thread may be reading
 	// Game thread only: the handle table.
 	handles:    [MAX_VOICES]Handle_Slot,
 	// Audio thread only:
@@ -321,6 +324,22 @@ add_sound :: proc(m: ^Mixer, s: Sound) -> Sound_Id {
 	return Sound_Id(m.count - 1)
 }
 
+// set_pack_sounds makes the sounds of the packs (slot i is the id
+// PACK_SOUND_BASE + i), while the device may be running: voices playing the
+// old ones end, then the table is replaced. The caller frees the old samples
+// afterwards (nothing reads them once this returns).
+set_pack_sounds :: proc(m: ^Mixer, sounds: []Sound) {
+	assert(len(sounds) <= PACK_SOUND_SLOTS)
+	sync.atomic_mutex_lock(&m.swap_lock)
+	defer sync.atomic_mutex_unlock(&m.swap_lock)
+	for &v in m.voices {
+		if v.state == .Playing && int(v.sound) >= PACK_SOUND_BASE {end_voice(&v, .Stopped)}
+	}
+	for i in 0 ..< PACK_SOUND_SLOTS {
+		m.sounds[PACK_SOUND_BASE + i] = sounds[i] if i < len(sounds) else {}
+	}
+}
+
 // set_sound_name gives a sound a name for captures and the dump (cut to
 // SOUND_NAME_LEN bytes).
 set_sound_name :: proc(m: ^Mixer, id: Sound_Id, name: string) {
@@ -355,7 +374,7 @@ latency :: proc(m: ^Mixer) -> int {
 // play queues a sound to start at the next mix and returns its handle; 0 when
 // dropped (the command ring or all MAX_VOICES handles are in use).
 play :: proc(m: ^Mixer, p: Play) -> Voice_Id {
-	assert(int(p.sound) < m.count)
+	assert(int(p.sound) < m.count || int(p.sound) >= PACK_SOUND_BASE)
 	id := alloc_handle(m)
 	if id == 0 {
 		sync.atomic_add(&m.dropped, 1)
@@ -490,6 +509,8 @@ push :: proc(m: ^Mixer, c: Command, at: u64 = 0) -> bool {
 // mix fills out (interleaved stereo, len = 2 * frames) with the next
 // frames. Audio thread; no allocation, no locks.
 mix :: proc "contextless" (m: ^Mixer, out: []f32) {
+	sync.atomic_mutex_lock(&m.swap_lock)
+	defer sync.atomic_mutex_unlock(&m.swap_lock)
 	frames := len(out) / 2
 	if rec := sync.atomic_load(&m.capture); rec != nil && frames > 0 {
 		capture_call(m, rec, frames)

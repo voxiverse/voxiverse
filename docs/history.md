@@ -5375,3 +5375,99 @@ with an empty cache: the marble block shows its PNG and sounds its Ogg. Edit a t
 entry while playing a dev build and see it change.
 
 > **What differed (M47b):** split once: M47b is the archive and the join phase; pack assets, hot reload and the export's pack hashes are [M47i](milestones/M47i.md). `pack_archive_read(namespace, data)` takes the namespace (the archive holds none). `registry_build(sources, side, allocator)`; the client builds the base pack from `pack_source_sent` (its files without `server/`). The phase is skipped for the local pipe (it reads the same directory: the spec's empty `Pack_Want`) and for a universe with no pack besides the base; `Welcome.content` still checks both. A client built from the `Packs` it was sent checks the hash itself too (the same message as the server's). `test_pack_transfer` runs over UDP with 10% loss and duplication; the damaged-pack check is `test_pack_fetch_checks_and_caches` (a flipped byte fed to `pack_fetch_part`), not a transport hook. The `Packs_Ready` timeout is the server's `PACK_JOIN_SECONDS` in `packs_tick`. `Packs_Changed` is M47i's. `PROTOCOL_VERSION` 26.
+
+# M47i: pack assets, hot reload and packs in the universe export
+
+**Why.** M47b sends packs to a joining client (the archive, the `Packs` phase, the cache, the
+client-side registry); what is left of M47b's design is packs' own art and sound, a faster
+authoring loop, and the export's pack hashes. Read M47b in history.md first (the archive and
+the join phase are built; `pack_archive_read(namespace, data)` takes the namespace because the
+archive does not hold it).
+
+**Design.**
+
+*Pack assets* (beside the generated path, which stays the default):
+
+- **Textures**: a texture definition `{"image": "assets/textures/marble.png"}` (a path in the
+  pack). Decoded by `core:image/png` (Odin, bounds-checked; the C `vendor:stb/image` is not
+  used on files that come over the network). The file is at most 64 KiB and exactly
+  `TEXTURE_SIZE` (16) pixels square (`textures are 16x16 pixels; assets/textures/marble.png is
+  32x32`); grey, RGB, palette and alpha forms become RGBA8; mips are made by
+  `generate_mip` as for generated textures. Not palette-quantized: a pack's art is its
+  own.
+- **Sounds**: a sound set `{"break": ["assets/sounds/marble_1.ogg", ...], "place": [...],
+  "step": [...]}` (1 to `sfx.VARIANTS` files each; a missing action uses `break`'s).
+  Decoded whole when the session starts by miniaudio's own decoder, the one the engine's
+  streams use since M32c (`client/audio/stream.odin`; `vendor:stb/vorbis` is not used, see the
+  audio decisions), mixed to mono and resampled to the mixer's rate with M32a's resampler. Each file at most 1 MiB and 5 s once decoded (checked before
+  decoding from the Ogg header's sample count, and again after). This is the only C
+  decoder the pack path reaches; it is fuzzed with M51's fuzzers.
+- Asset files live in the pack (`assets/textures/*.png`, `assets/sounds/*.ogg`) and count
+  toward its size; a texture or sound file nothing refers to is an error
+  (`assets/textures/old.png is not used; remove it`).
+
+
+*Hot reload* (dev builds only, `when base.DEV`; a development tool, not a way to send packs
+in a running universe: any client that is not on the same machine is disconnected and
+receives the packs again as on any join):
+
+- `pack reload` (console, the owner only) and a watch (every 0.5 s, as
+  `client/shader_reload.odin` watches shaders) on the base pack's source directory found
+  next to the build (`<repo>/assets/packs/voxiverse`; without it the embedded pack is
+  used and the watch is off) and on the universe's `packs/`.
+- The server rebuilds the registry from the files. Errors: logged, sent to the owner as a
+  `Notice` (first ten lines), and the old registry stays. A registry that changes the
+  number of any existing block, item, texture or sound set (anything removed, reordered or
+  inserted before an existing one, or added at the end: the registry never grows at run
+  time) is refused: `this reload changes ids (removed farmfix:peat); restart the universe to
+  apply it`. Changing fields is allowed.
+- At the end of a tick the server waits for its chunk jobs to finish (none pending, or
+  it tries again next tick), swaps `s.registry` and frees the old one, and tells the clients on the same machine with
+  `Packs_Changed {content: u64}` (a handshake-style message); no pack file is sent.
+- A client on the same machine (singleplayer, or the host's own) rebuilds its registry
+  from the same sources, checks the hash (a difference disconnects with the message
+  above), waits for its mesh jobs, swaps, rebuilds the texture array and the block sound
+  bank, and re-meshes every loaded chunk. Any other client is disconnected with `the
+  server reloaded its packs; join again` and gets the packs on joining, as always.
+
+
+*The universe export carries packs.* M46's export writes the universe directory, and
+packs live in `<universe>/packs/`, so they travel already, `server/` folders included (an export is the universe's own
+backup, not a pack sent to a player). This milestone adds: an import
+builds the registry from the imported packs before the universe is accepted (pack errors
+refuse the import with their lines), and the exported file lists the packs' hashes in its
+header so a reader can see them without unpacking (M46's header gains a `packs` line).
+
+
+**The order of the steps:** textures from PNG; sounds from Ogg; hot reload; the export and
+import.
+
+**Left out:** as M47b's (signatures and trust: M54; packs per world; sending packs
+mid-session; compatibility with older archives; a pack browser; downloading from anywhere but
+the server joined; animated textures; textures of other sizes; pack sounds for anything but
+block sound sets). `Packs_Changed` is the one new message (`PROTOCOL_VERSION` is bumped by
+one for it).
+
+**Tests:**
+
+- `client` test: the PNG's pixels are the texture layer's level 0 exactly; the Ogg's
+  decode equals the sound bank's samples; an over-size image, a 32x32 one, a too-long
+  sound and an unused file are refused with their messages. A pack with a PNG texture
+  and an Ogg sound (`base.png_encode` and a short Ogg committed under
+  `common/game/testdata/`, 2 KiB) crosses the `test_pack_transfer` join (M47b's test: extend
+  its pack with them) and its decoded pixels match the server's.
+- `server` test, `test_hot_reload`: a stepped server and an in-process client with the
+  test pack in memory; change marble's light from 7 to 12 and reload: the client's next
+  mesh of the chunk holding marble has block light 12 beside it; remove a block and
+  reload: refused with the message, the old registry still in use.
+- `server` test: export, import into a fresh directory, and the imported universe's
+  registry hash equals the exported one; an import with a broken pack is refused.
+
+**Exit check:** the asset tests pass; `test_hot_reload` passes; the export test passes; the
+suite and the CI run of the commit are green.
+
+**Check by hand:** host a LAN game with a pack that has a PNG texture and an Ogg sound and
+join from a second client with an empty cache: the block shows its PNG and sounds its Ogg.
+Edit a texture entry while playing a dev build and see it change.
+
+> **What differed (M47i):** `test_hot_reload` is two tests, because the server cannot import the client: `server.test_hot_reload` (the swap in place, `Packs_Changed` to the player here, the refusal and its notice) and `client.test_hot_reload_changes_the_next_mesh` (the next mesh beside marble has the new light). The registry's `arena` is now a pointer, so `registry_swap(dst, src)` can move a rebuilt registry's contents into the old one's address (everything holding the pointer, the server's generators and the clients' receivers included, stays good) and free the old; the spec's "swaps `s.registry`" would have left those dangling. "The same machine" is the in-process player only: a client on loopback has no copy of the files, so it is sent away and gets the packs when it joins again. The server holds new chunk jobs (`Chunk_Store.hold`) while a built registry waits for the running ones and for a save to finish. Pack sounds live in `audio.PACK_SOUND_SLOTS` (128) ids at the end of the mixer's table, replaced under a lock the mix takes (`audio.set_pack_sounds`), with the old samples freed at the swap after; a file set needs `break` and at most 128 files in all (`MAX_PACK_SOUND_FILES`). A texture that is an image takes the layer after the generators' (`len(TEXTURE_GENERATOR_NAMES) + n`); the client's texture array, debris colours and icons are sized by the registry. Item icons are not redrawn by a reload (a block's inventory picture keeps its old texture until the game restarts). The error for a 32x32 PNG is `textures are 16x16 pixels; assets/textures/marble.png is 32x32` as written; the unused-file one is `assets/textures/old.png is not used; remove it`. The test Ogg is 3.5 KiB, not 2 (the Vorbis setup header is most of it). The export is `EXPORT_FORMAT` 2: the header holds a pack count and, per pack, its namespace and the 64-digit SHA-256 of its archive (the hash a player is sent), not a text line; an import refuses a file whose packs do not hash to its header or do not load (the first lines of the errors). `pack reload` is the admin command `pack`, node `server.packs`, only in a development build with `Config.pack_watch` (the game sets it from `base.DEV`); the base pack is read from `<repo>/assets/packs/voxiverse` next to the build when it is there. Not done: the Ogg fuzzer (M51's fuzzers do not exist yet). `PROTOCOL_VERSION` 27.

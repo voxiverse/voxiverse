@@ -15,7 +15,10 @@ import "../common/game"
 // Export and import (M46b): one universe as one file, to move it between
 // machines or keep it. A .vxu file is
 //
-//	"VXUX" u32 format (1)  u32 save_format  u64 generation  u64 age  varint file count
+//	"VXUX" u32 format (2)  u32 save_format  u64 generation  u64 age
+//	varint pack count, per pack: string namespace, string hash (64 hex digits: the
+//	pack's .vxpack SHA-256, game.pack_hash_hex; a reader sees them without unpacking)
+//	varint file count
 //	per file: varint len, path, u64 size, u32 crc32, the bytes
 //	"VXUE" u32 crc32 over every path and file CRC, in order
 //
@@ -28,7 +31,7 @@ import "../common/game"
 
 EXPORT_MAGIC :: "VXUX"
 EXPORT_END :: "VXUE"
-EXPORT_FORMAT :: 1
+EXPORT_FORMAT :: 2 // 2: the header lists the universe's packs and their hashes
 EXPORTS_DIR :: "exports"
 
 IMPORT_MAX_TOTAL :: u64(16) << 30
@@ -89,6 +92,34 @@ write_u64 :: proc(w: ^game.Writer, v: u64) {
 Export_Entry :: struct {
 	path: string,
 	cut:  int, // keep this many bytes (-1: all)
+}
+
+// export_packs: the universe's packs as the header lists them: "namespace" and
+// the hash of the pack as it would be sent to a player (its archive without
+// server/ files), in universe.cfg's order. A pack that cannot be read is
+// listed with the hash "unreadable".
+Export_Pack :: struct {
+	namespace, hash: string,
+}
+
+@(private = "file")
+export_packs :: proc(dir: string, cfg: string) -> []Export_Pack {
+	value, _ := text_value(cfg, "packs")
+	out := make([dynamic]Export_Pack, context.temp_allocator)
+	for name in packs_parse(value, context.temp_allocator) {
+		src, errs := pack_read_dir(
+			full_path(dir, fmt.tprintf("%s/%s", PACKS_DIR, name)),
+			context.temp_allocator,
+		)
+		hash_text := "unreadable"
+		if len(errs) == 0 {
+			hash_text = game.pack_hash_hex(
+				game.pack_hash(game.pack_archive_make(src, context.temp_allocator)),
+			)
+		}
+		append(&out, Export_Pack{name, hash_text})
+	}
+	return out[:]
 }
 
 // export_entries: the files of dir's committed generation, in path order.
@@ -167,6 +198,12 @@ export_write :: proc(dir, out: string, d: ^base.Disk, journal := true) -> string
 	game.write_u32(&w, u32(format))
 	write_u64(&w, generation)
 	write_u64(&w, age)
+	packs := export_packs(dir, string(cfg))
+	game.write_varint(&w, u32(len(packs)))
+	for p in packs {
+		game.write_string(&w, p.namespace)
+		game.write_string(&w, p.hash)
+	}
 	game.write_varint(&w, u32(len(entries)))
 	if e := base.disk_write(d, tmp, w.buf[:]); e != .None {
 		return fmt.tprintf("cannot write %s (%v)", tmp, e)
@@ -279,10 +316,33 @@ universe_import :: proc(file, dest: string, d: ^base.Disk, limits := IMPORT_LIMI
 	er_take(&r, magic[:])
 	if !r.ok ||
 	   string(magic[:]) != EXPORT_MAGIC {return fmt.tprintf("%s is not a universe file", file)}
-	if er_u32(&r) > EXPORT_FORMAT {return "this file was made by a newer game"}
+	format := er_u32(&r)
+	if format > EXPORT_FORMAT {return "this file was made by a newer game"}
+	if format <
+	   EXPORT_FORMAT {return "this file was made by an older game; export the universe again"}
 	if int(er_u32(&r)) > SAVE_FORMAT {return "this universe was made by a newer game"}
 	er_u64(&r) // generation
 	er_u64(&r) // age
+	header_packs := make([dynamic]Export_Pack, context.temp_allocator)
+	pack_count := er_varint(&r)
+	if pack_count > game.MAX_PACKS {return fmt.tprintf("%s is damaged (too many packs)", file)}
+	for _ in 0 ..< pack_count {
+		ns: [IMPORT_MAX_PART + 1]u8
+		hash_text: [65]u8
+		n := er_varint(&r)
+		if !r.ok || n > 32 {return fmt.tprintf("%s is damaged (a pack name is too long)", file)}
+		er_take(&r, ns[:n])
+		m := er_varint(&r)
+		if !r.ok || m > 64 {return fmt.tprintf("%s is damaged (a pack hash is too long)", file)}
+		er_take(&r, hash_text[:m])
+		append(
+			&header_packs,
+			Export_Pack {
+				strings.clone(string(ns[:n]), context.temp_allocator),
+				strings.clone(string(hash_text[:m]), context.temp_allocator),
+			},
+		)
+	}
 	count := er_varint(&r)
 	if !r.ok {return fmt.tprintf("%s is cut short", file)}
 	if count >
@@ -361,6 +421,7 @@ universe_import :: proc(file, dest: string, d: ^base.Disk, limits := IMPORT_LIMI
 		}
 	}
 	if problem == "" && !r.ok {problem = fmt.tprintf("%s is cut short", file)}
+	if problem == "" {problem = import_check_packs(staging, header_packs[:])}
 	if problem != "" {
 		os.remove_all(staging)
 		return problem
@@ -371,5 +432,36 @@ universe_import :: proc(file, dest: string, d: ^base.Disk, limits := IMPORT_LIMI
 	}
 	base.disk_sync_dir(d, filepath.dir(dest))
 	log.infof("server imported file=%s dir=%s files=%d", file, dest, count)
+	return ""
+}
+
+// import_check_packs: the imported universe's packs must load (the registry
+// is built from them before the universe is accepted: a pack error refuses
+// the import with its lines), and match the hashes the header lists.
+@(private = "file")
+import_check_packs :: proc(staging: string, listed: []Export_Pack) -> string {
+	cfg, _ := os.read_entire_file_from_path(
+		full_path(staging, UNIVERSE_FILE),
+		context.temp_allocator,
+	)
+	for p, i in export_packs(staging, string(cfg)) {
+		if i >= len(listed) || listed[i] != p {
+			return fmt.tprintf(
+				"the pack %s in this file is not the one its header lists (hash %s)",
+				p.namespace,
+				p.hash,
+			)
+		}
+	}
+	value, _ := text_value(string(cfg), "packs")
+	names := packs_parse(value, context.temp_allocator)
+	if len(names) !=
+	   len(listed) {return "the packs in this file are not the ones its header lists"}
+	reg, _, problems := packs_registry(staging, names)
+	if reg == nil {
+		lines := strings.join(problems, "\n", context.temp_allocator)
+		return fmt.tprintf("the packs of this universe do not load:\n%s", lines)
+	}
+	game.registry_destroy(reg)
 	return ""
 }

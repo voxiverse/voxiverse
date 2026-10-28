@@ -30,26 +30,27 @@ Divergence :: struct {
 // Mirror: the client on the pipe. latency_test's predicting client grown up: it
 // answers the challenge, keeps the chunks it is sent, predicts and reconciles.
 Mirror :: struct {
-	key:         game.Account_Key,
-	endpoint:    game.Endpoint,
-	scratch:     ^game.Block_Array,
-	arrays:      game.Block_Arrays,
-	chunks:      map[game.Chunk_Pos]game.Chunk_Blocks,
-	prediction:  game.Prediction,
-	rules:       game.Rules,
-	welcomed:    bool,
-	last_update: game.Own_Player,
-	schema:      game.Schema,
-	rx:          game.Receiver,
-	teleports:   u8,
-	entities:    [dynamic]u32, // ids told, in the order told
-	notices:     [dynamic]string, // the text of every Notice told (heap)
-	inv_seq:     u32,
-	edit_id:     u32,
-	mismatches:  int, // updates where the mirror's prediction was not the server's
-	updates:     int,
-	corrections: int, // counted from the script's start
-	first_fix:   u64, // the server tick of the first
+	key:           game.Account_Key,
+	endpoint:      game.Endpoint,
+	scratch:       ^game.Block_Array,
+	arrays:        game.Block_Arrays,
+	chunks:        map[game.Chunk_Pos]game.Chunk_Blocks,
+	prediction:    game.Prediction,
+	rules:         game.Rules,
+	welcomed:      bool,
+	last_update:   game.Own_Player,
+	schema:        game.Schema,
+	rx:            game.Receiver,
+	teleports:     u8,
+	entities:      [dynamic]u32, // ids told, in the order told
+	notices:       [dynamic]string, // the text of every Notice told (heap)
+	packs_changed: u64, // the content of the last Packs_Changed
+	inv_seq:       u32,
+	edit_id:       u32,
+	mismatches:    int, // updates where the mirror's prediction was not the server's
+	updates:       int,
+	corrections:   int, // counted from the script's start
+	first_fix:     u64, // the server tick of the first
 }
 
 Session :: struct {
@@ -106,6 +107,8 @@ mirror_pump :: proc(sess: ^Session) {
 			continue
 		}
 		#partial switch v in msg {
+		case game.Packs_Changed:
+			m.packs_changed = v.content
 		case game.Challenge:
 			mirror_send(m, game.Proof{game.account_sign(&m.key, v.nonce)})
 		case game.Welcome:

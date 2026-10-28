@@ -203,7 +203,14 @@ world_init :: proc(
 	}
 
 	// Indices and textures go up with the first frame.
+	set_setup(p, texture_pixels, allocator)
+	return true
+}
+
+@(private = "file")
+set_setup :: proc(p: ^World_Pass, texture_pixels: []u8, allocator := context.allocator) {
 	index_bytes := MAX_QUADS_PER_LAYER * 6 * size_of(u32)
+	delete(p.setup_pending)
 	p.setup_pending = make([]u8, index_bytes + len(texture_pixels), allocator)
 	indices := mem.slice_data_cast([]u32, p.setup_pending[:index_bytes])
 	for q in 0 ..< MAX_QUADS_PER_LAYER {
@@ -211,6 +218,35 @@ world_init :: proc(
 		copy(indices[q * 6:], []u32{v, v + 1, v + 2, v, v + 2, v + 3})
 	}
 	copy(p.setup_pending[index_bytes:], texture_pixels)
+}
+
+// world_set_textures replaces the texture array (a pack's images: the layers
+// grow or shrink with the registry): the GPU is idled, the new array goes up
+// with the next frame. Meshes name layers by number, so the caller re-meshes.
+world_set_textures :: proc(
+	p: ^World_Pass,
+	g: ^gpu.Gpu,
+	texture_pixels: []u8,
+	texture_layers: u32,
+) -> bool {
+	gpu.wait_idle(g)
+	if p.textures.handle != 0 {gpu.unregister_texture(g, p.textures_id)}
+	size, mips := p.textures.width, p.textures.mips
+	gpu.destroy_image(g, &p.textures)
+	p.texture_layers = texture_layers
+	p.textures = gpu.create_image(
+		g,
+		size,
+		size,
+		.R8G8B8A8_SRGB,
+		{.SAMPLED, .TRANSFER_DST},
+		"block textures",
+		mips = mips,
+		layers = texture_layers,
+		view_type = .D2_ARRAY,
+	) or_return
+	p.textures_id = gpu.register_texture(g, p.textures.view) or_return
+	set_setup(p, texture_pixels)
 	return true
 }
 

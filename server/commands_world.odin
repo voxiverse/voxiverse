@@ -279,6 +279,24 @@ admin_packs :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
+// admin_pack: `pack reload` (development builds): read the packs' files again
+// and swap the registry (pack_reload.odin).
+@(private)
+admin_pack :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if args[0] != "reload" {return false}
+	when !base.DEV {
+		notice(s, c, "Reloading packs is for development builds")
+		return true
+	}
+	if !s.config.pack_watch {
+		notice(s, c, "Reloading packs is off here; the game turns it on in a development build")
+		return true
+	}
+	packs_reload_request(s)
+	notice(s, c, "Reloading the packs")
+	return true
+}
+
 // admin_wear: put on every piece of armor carried, where its slot is free.
 @(private)
 admin_wear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {

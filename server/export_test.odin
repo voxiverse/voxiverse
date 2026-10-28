@@ -20,7 +20,11 @@ Test_File :: struct {
 // vxu_bytes: a well-formed export of files, for the tests that need a file with
 // one thing wrong in it.
 @(private = "file")
-vxu_bytes :: proc(files: []Test_File, save_format := SAVE_FORMAT) -> []u8 {
+vxu_bytes :: proc(
+	files: []Test_File,
+	save_format := SAVE_FORMAT,
+	packs := []Export_Pack{},
+) -> []u8 {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
 	put_u64 :: proc(w: ^game.Writer, v: u64) {
@@ -32,6 +36,11 @@ vxu_bytes :: proc(files: []Test_File, save_format := SAVE_FORMAT) -> []u8 {
 	game.write_u32(&w, u32(save_format))
 	put_u64(&w, 1)
 	put_u64(&w, 0)
+	game.write_varint(&w, u32(len(packs)))
+	for p in packs {
+		game.write_string(&w, p.namespace)
+		game.write_string(&w, p.hash)
+	}
 	game.write_varint(&w, u32(len(files)))
 	seal := u32(0)
 	for f in files {
@@ -258,4 +267,121 @@ test_import_refuses_damaged_files :: proc(t: ^testing.T) {
 	// Not an export at all.
 	problem, _ = import_of("magic", transmute([]u8)string("hello, this is not a universe"))
 	testing.expect(t, problem != "", "a file that is not an export was accepted")
+}
+
+// M47i: a universe's packs travel in its export, are listed in its header
+// (their hashes, readable without unpacking), and are built into a registry
+// before an import is accepted.
+@(private = "file")
+write_pack_dir :: proc(universe: string, pack: game.Pack_Source) {
+	for f in pack.files {
+		path := fmt.tprintf("%s/%s/%s/%s", universe, PACKS_DIR, pack.namespace, f.path)
+		_ = os.make_directory_all(filepath_dir(path))
+		_ = os.write_entire_file(path, f.data)
+	}
+}
+
+@(private = "file")
+filepath_dir :: proc(path: string) -> string {
+	i := strings.last_index_byte(path, '/')
+	return path[:i] if i >= 0 else "."
+}
+
+@(test)
+test_export_carries_packs :: proc(t: ^testing.T) {
+	src := "build/test_export_packs_src"
+	dest := "build/test_export_packs_dest"
+	file := "build/test_export_packs.vxu"
+	for d in ([]string{src, dest, fmt.tprintf("%s.import", dest)}) {os.remove_all(d)}
+	defer {
+		os.remove_all(src)
+		os.remove_all(dest)
+		os.remove(file)
+	}
+	_ = os.make_directory_all(src)
+	_ = os.write_entire_file(
+		fmt.tprintf("%s/%s", src, UNIVERSE_FILE),
+		transmute([]u8)string("format = 6\ngeneration = 1\nage = 0\npacks = testpack\n"),
+	)
+	pack := game.test_asset_pack()
+	write_pack_dir(src, pack)
+	// A server-only file travels too (an export is the universe's own backup).
+	structure_path := fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", src, PACKS_DIR)
+	for f in game.base_pack_source(context.temp_allocator).files {
+		if strings.has_prefix(f.path, "server/structures/") {
+			_ = os.make_directory_all(filepath_dir(structure_path))
+			_ = os.write_entire_file(structure_path, f.data)
+			break
+		}
+	}
+	disk := base.Disk{}
+	testing.expect_value(t, export_write(src, file, &disk), "")
+	// The header names the pack and its hash (as a player would be sent it).
+	bytes, _ := os.read_entire_file_from_path(file, context.temp_allocator)
+	sent := game.pack_hash_hex(
+		game.pack_hash(game.pack_archive_make(pack, context.temp_allocator)),
+	)
+	testing.expect(
+		t,
+		strings.contains(string(bytes[:300]), sent) &&
+		strings.contains(string(bytes[:300]), "testpack"),
+		"the header does not list the pack and its hash",
+	)
+	testing.expect_value(t, universe_import(file, dest, &disk), "")
+	testing.expect(
+		t,
+		os.exists(fmt.tprintf("%s/%s/testpack/server/structures/x.vxs", dest, PACKS_DIR)),
+	)
+	exported := registry_for_dir(src)
+	imported := registry_for_dir(dest)
+	defer game.registry_destroy(exported)
+	defer game.registry_destroy(imported)
+	if !testing.expect(t, exported != nil && imported != nil) {return}
+	testing.expect_value(t, imported.hash, exported.hash)
+	_, has := game.registry_block(imported, "testpack:marble")
+	testing.expect(t, has, "the imported universe lacks the pack's block")
+}
+
+@(test)
+test_import_refuses_broken_packs :: proc(t: ^testing.T) {
+	good := game.test_asset_pack()
+	files := make([dynamic]Test_File, context.temp_allocator)
+	append(&files, Test_File{"universe.cfg", "format = 6\npacks = testpack\n"})
+	for f in good.files {
+		data := string(f.data)
+		if f.path == "data/blocks/marble.json" {data = `{"marble": {"light": "bright"}}`}
+		append(&files, Test_File{fmt.tprintf("%s/testpack/%s", PACKS_DIR, f.path), data})
+	}
+	broken := make([dynamic]game.Pack_File, context.temp_allocator)
+	for f in good.files {
+		data := f.data
+		if f.path ==
+		   "data/blocks/marble.json" {data = transmute([]u8)string(`{"marble": {"light": "bright"}}`)}
+		append(&broken, game.Pack_File{f.path, data})
+	}
+	hash_text := game.pack_hash_hex(
+		game.pack_hash(game.pack_archive_make({"testpack", broken[:]}, context.temp_allocator)),
+	)
+	problem, left := import_of(
+		"broken_pack",
+		vxu_bytes(files[:], packs = {{"testpack", hash_text}}),
+	)
+	testing.expect(
+		t,
+		strings.has_prefix(problem, "the packs of this universe do not load:"),
+		problem,
+	)
+	testing.expect(t, strings.contains(problem, "marble"), problem)
+	testing.expect(t, !left, "something of the import was left")
+	// A header that lists another hash: refused too.
+	files[1] = Test_File{files[1].path, files[1].data}
+	for &f in files {
+		if f.path == "packs/testpack/data/blocks/marble.json" {f.data = string(good.files[1].data)}
+	}
+	problem, left = import_of(
+		"hash_differs",
+		vxu_bytes(files[:], packs = {{"testpack", "0123456789abcdef"}}),
+	)
+	testing.expect(t, strings.contains(problem, "not the one its header lists"), problem)
+	testing.expect(t, !left)
 }

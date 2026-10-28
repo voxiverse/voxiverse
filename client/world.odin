@@ -300,7 +300,6 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 // mesh_now meshes a chunk on this thread with a reserved task; its result
 // is uploaded by the next world_apply like any other. Without a free
 // reserved task it stays queued for the workers.
-@(private = "file")
 mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) {
 	h, ok := w.by_pos[pos]
 	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return}
@@ -415,6 +414,25 @@ queue_if_complete :: proc(w: ^World, c: ^Client_Chunk) {
 	if c.queued || !c.dirty || !neighbours_present(w, c.pos) {return}
 	c.queued = true
 	append(&w.to_mesh, w.by_pos[c.pos])
+}
+
+// world_mesh_idle: no mesh job is running and none waits for its upload (every
+// task is back in its free list): the registry may be swapped.
+world_mesh_idle :: proc(w: ^World) -> bool {
+	return len(w.free_tasks) + len(w.urgent_tasks) == len(w.tasks)
+}
+
+// world_remesh_all makes every loaded chunk mesh again (the registry changed:
+// textures, light, shapes). Its old mesh stays until the new one replaces it.
+world_remesh_all :: proc(w: ^World) {
+	for _, h in w.by_pos {
+		c := base.pool_get(&w.chunks, h)
+		if c == nil {continue}
+		c.dirty = true
+		c.version = w.next_version
+		w.next_version += 1
+		queue_if_complete(w, c)
+	}
 }
 
 // world_update starts mesh jobs for waiting chunks, nearest to the camera

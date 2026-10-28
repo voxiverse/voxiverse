@@ -59,6 +59,7 @@ Config :: struct {
 	spawn:                 Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
 	world_idle:            f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
+	pack_watch:            bool, // development: reload the packs when their files change (pack_reload.odin)
 	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
 	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
 	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
@@ -115,6 +116,7 @@ Server :: struct {
 	log_tag:        base.Log_Tag,
 	store:          Store, // saving (save.odin)
 	pack_blobs:     [dynamic]Pack_Blob, // the universe's packs as sent (pack_send.odin)
+	reload:         Pack_Reload, // hot reload of the packs (pack_reload.odin)
 	registry:       ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
 	refusal:        string, // why start returned false, when it is a message for the player
 	// Server thread only, after start:
@@ -306,6 +308,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	delete(s.worlds)
 	game.registry_destroy(s.registry)
 	pack_blobs_destroy(s)
+	reload_destroy(s)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
 	game.schema_destroy(&s.schema)
@@ -482,6 +485,7 @@ tick :: proc(s: ^Server) {
 	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
 	kick_due(s)
 	packs_tick(s)
+	packs_reload_tick(s)
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}
 		base.profile_scope("network flush")

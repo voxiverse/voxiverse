@@ -6,7 +6,6 @@ import "core:math"
 import "core:net"
 import "core:os"
 import "core:path/filepath"
-import "core:slice"
 import "core:strings"
 import "core:time"
 
@@ -115,6 +114,7 @@ App :: struct {
 	prompt_icons:     Prompt_Icons, // the button glyphs (prompts.odin)
 	prompts_shown:    [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
 	prompts_count:    int,
+	shown:            ^game.Registry, // the registry the texture array, sound bank and icons were last made for (nil: none of a session)
 	registry:         ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
@@ -258,33 +258,35 @@ audio_listener :: proc(app: ^App, all: bool) {
 	}
 }
 
+// apply_registry makes what depends on a registry: the texture array, the
+// sound files of its packs and its items' icons. Nothing is made again for the
+// registry shown already.
+apply_registry :: proc(app: ^App, reg: ^game.Registry) {
+	if app.shown == reg {return}
+	app.shown = reg
+	if app.world_pass.textures.handle != 0 {
+		layers := u32(game.registry_texture_layers(reg))
+		render.world_set_textures(&app.world_pass, &app.g, mesh.texture_array(reg), layers)
+	}
+	if !app.benchmark {sounds_load_pack(&app.sounds, app.mixer, reg)}
+	item_icons_init(reg, &app.item_icons, &app.ui)
+}
+
 // world_pass_init sets up chunk rendering with the generated block textures.
 world_pass_init :: proc(app: ^App, vert, frag: []u8) -> bool {
-	pixels := make([dynamic]u8, context.temp_allocator)
-	level := make([]mesh.Rgba, mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE, context.temp_allocator)
-	for t in mesh.Texture_Generator {
-		mesh.generate_texture(t, level)
-		size := mesh.TEXTURE_SIZE
-		current := level
-		for _ in 0 ..< mesh.TEXTURE_MIPS {
-			append(&pixels, ..slice.to_bytes(current))
-			if size == 1 {break}
-			next := make([]mesh.Rgba, (size / 2) * (size / 2), context.temp_allocator)
-			mesh.generate_mip(current, size, next)
-			current, size = next, size / 2
-		}
-	}
+	pixels := mesh.texture_array(app.registry)
 	#assert(size_of(mesh.Vertex) == render.WORLD_VERTEX_SIZE)
 	shaders := world_shaders(vert, frag) or_return
+	app.shown = app.registry
 	return render.world_init(
 		&app.world_pass,
 		&app.g,
 		{vertex_capacity = CHUNK_VERTEX_CAPACITY, staging_size = 8 * 1024 * 1024},
 		shaders,
-		pixels[:],
+		pixels,
 		mesh.TEXTURE_SIZE,
 		mesh.TEXTURE_MIPS,
-		len(mesh.Texture_Generator),
+		u32(game.registry_texture_layers(app.registry)),
 		max_meshes = 1 << 16,
 	)
 }
@@ -418,9 +420,17 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			app.last_frame_ms / 1000,
 			w.mouse_captured,
 		)
-		if app.session.reg_swapped { 	// (joined a server with packs: its items need icons)
-			item_icons_init(app.session.reg, &app.item_icons, &app.ui)
+		if app.session.reg_swapped { 	// (joined a server with packs: its textures, sounds and items)
+			apply_registry(app, app.session.reg)
 			app.session.reg_swapped = false
+		}
+		if s := app.session; s.reg_fresh != nil && world_mesh_idle(&s.world) { 	// (the server reloaded its packs)
+			game.registry_swap(s.reg, s.reg_fresh)
+			s.reg_fresh = nil
+			session_texels(s)
+			app.shown = nil
+			apply_registry(app, s.reg)
+			world_remesh_all(&s.world)
 		}
 		fly_test_update(app)
 		blast_test_update(app)
@@ -632,9 +642,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 		leave_world(app)
 		return
 	}
-	if app.session.reg_owned { 	// (a universe with packs: its items need icons too)
-		item_icons_init(app.session.reg, &app.item_icons, &app.ui)
-	}
+	apply_registry(app, app.session.reg) // (a universe with packs: its textures, sounds and items)
 	app.screen = .Game
 	overlays_leave_game(&app.overlays)
 }
@@ -642,6 +650,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 // leave_world ends the session and returns to the title screen.
 leave_world :: proc(app: ^App) {
 	if app.session == nil {return}
+	app.shown = nil // (its registry goes with it)
 	gpu.wait_idle(&app.g) // its meshes may be in use
 	if !session_end(app.session, &app.world_pass, &app.g) {
 		log.error("the server stopped with an error (see above)")

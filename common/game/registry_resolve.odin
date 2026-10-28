@@ -144,14 +144,38 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		)
 	}
 	reg.textures = make([]Texture_Def, len(b.defs[.Texture]))
+	images := make([dynamic]Texture_Image)
 	for &m, i in b.defs[.Texture] {
+		if field_of(&m, "image") != nil {
+			reg.textures[i] = read_image_texture(b, &m, &images)
+			continue
+		}
 		name := read_generator(b, &m, TEXTURE_GENERATOR_NAMES[:])
-		reg.textures[i] = {m.id, name, u32(generator_index(name, TEXTURE_GENERATOR_NAMES[:]))}
+		reg.textures[i] = {
+			id        = m.id,
+			generator = name,
+			layer     = u32(generator_index(name, TEXTURE_GENERATOR_NAMES[:])),
+		}
 	}
+	reg.images = images[:]
 	reg.sounds = make([]Sound_Def, len(b.defs[.Sound]))
+	sound_files := 0
 	for &m, i in b.defs[.Sound] {
+		if sound_fields(&m) {
+			reg.sounds[i] = read_file_sound(b, &m, &sound_files)
+			continue
+		}
 		name := read_generator(b, &m, SOUND_GENERATOR_NAMES[:])
-		reg.sounds[i] = {m.id, name, u32(generator_index(name, SOUND_GENERATOR_NAMES[:]))}
+		reg.sounds[i] = {
+			id        = m.id,
+			generator = name,
+			material  = u32(generator_index(name, SOUND_GENERATOR_NAMES[:])),
+		}
+	}
+	for a in b.assets {
+		if !a.used {
+			fail(b, a.pack, a.path, 0, 0, fmt.aprintf("%s is not used; remove it", a.path))
+		}
 	}
 
 	// --- Block numbers. ---
@@ -469,6 +493,158 @@ append_tag :: proc(tags: []u16, tag: u16) -> []u16 {
 	copy(out, tags)
 	out[len(tags)] = tag
 	return out
+}
+
+// asset_of: the pack's file at path (within the pack that defined m, or a
+// pack it requires: the same pack only here), marked used.
+@(private)
+asset_of :: proc(b: ^Reg_Build, pack: int, path: string) -> ^Asset_File {
+	for &a in b.assets {
+		if a.pack == pack && a.path == path {
+			a.used = true
+			return &a
+		}
+	}
+	return nil
+}
+
+@(private)
+read_image_texture :: proc(
+	b: ^Reg_Build,
+	m: ^Merged_Def,
+	images: ^[dynamic]Texture_Image,
+) -> Texture_Def {
+	f := field_of(m, "image")
+	if field_of(m, "generator") != nil {
+		fail_field(b, f, f.value, "a texture has a generator or an image, not both; remove one")
+		return {id = m.id}
+	}
+	if f.value.kind != .String {
+		fail_field(b, f, f.value, "image is the path of a PNG in the pack")
+		return {id = m.id}
+	}
+	path := f.value.s
+	a := asset_of(b, f.pack, path)
+	if a == nil {
+		fail_field(
+			b,
+			f,
+			f.value,
+			fmt.aprintf(
+				"%s is not a file of this pack; PNG textures are in assets/textures/",
+				path,
+			),
+		)
+		return {id = m.id}
+	}
+	pixels, message, ok := png_texture(a.data, path)
+	if !ok {
+		fail(b, a.pack, a.path, 0, 0, message)
+		return {id = m.id}
+	}
+	layer := u32(len(TEXTURE_GENERATOR_NAMES) + len(images))
+	append(images, pixels)
+	return {id = m.id, image = path, layer = layer}
+}
+
+// sound_fields: whether m names files rather than a generator.
+@(private)
+sound_fields :: proc(m: ^Merged_Def) -> bool {
+	for n in SOUND_ACTION_NAMES {
+		if field_of(m, n) != nil {return true}
+	}
+	return false
+}
+
+@(private)
+read_file_sound :: proc(b: ^Reg_Build, m: ^Merged_Def, total: ^int) -> Sound_Def {
+	def := Sound_Def {
+		id = m.id,
+	}
+	if g := field_of(m, "generator"); g != nil {
+		fail_field(b, g, g.value, "a sound set has a generator or files, not both; remove one")
+		return def
+	}
+	names := SOUND_ACTION_NAMES
+	for a in Sound_Action {
+		f := field_of(m, names[a])
+		if f == nil {continue}
+		if f.value.kind != .Array ||
+		   len(f.value.items) < 1 ||
+		   len(f.value.items) > SOUND_VARIANTS {
+			fail_field(
+				b,
+				f,
+				f.value,
+				fmt.aprintf("%s is a list of 1 to %d Ogg files", names[a], SOUND_VARIANTS),
+			)
+			continue
+		}
+		paths := make([dynamic]string)
+		clips := make([dynamic][]u8)
+		for item in f.value.items {
+			if item.kind != .String {
+				fail(
+					b,
+					f.pack,
+					f.file,
+					item.line,
+					item.column,
+					"a sound file is a path as a string",
+				)
+				continue
+			}
+			file := asset_of(b, f.pack, item.s)
+			if file == nil {
+				fail(
+					b,
+					f.pack,
+					f.file,
+					item.line,
+					item.column,
+					fmt.aprintf(
+						"%s is not a file of this pack; sounds are in assets/sounds/",
+						item.s,
+					),
+				)
+				continue
+			}
+			if message := ogg_check(file.data); message != "" {
+				fail(b, file.pack, file.path, 0, 0, message)
+				continue
+			}
+			total^ += 1
+			append(&paths, item.s)
+			append(&clips, slice.clone(file.data))
+		}
+		def.files[a], def.clips[a] = paths[:], clips[:]
+	}
+	if field_of(m, "break") == nil {
+		fail(
+			b,
+			m.pack,
+			m.file,
+			m.line,
+			m.column,
+			"a sound set of files needs \"break\"; the other actions fall back to it",
+		)
+	}
+	if total^ > MAX_PACK_SOUND_FILES {
+		fail(
+			b,
+			-1,
+			"",
+			0,
+			0,
+			fmt.aprintf(
+				"%d sound files in sound sets; the limit is %d",
+				total^,
+				MAX_PACK_SOUND_FILES,
+			),
+		)
+		total^ = 0
+	}
+	return def
 }
 
 @(private)

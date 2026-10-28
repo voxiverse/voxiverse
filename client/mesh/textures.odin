@@ -1,6 +1,7 @@
 package mesh
 
 import "core:math"
+import "core:slice"
 
 import "../../common/game"
 
@@ -75,10 +76,42 @@ block_texture :: proc(reg: ^game.Registry, b: game.Block, f: Face) -> u32 {
 	return reg.textures[faces[k]].layer
 }
 
+// texture_layer_pixels fills pixels (TEXTURE_SIZE²) with a layer of the
+// texture array: a generator's, or a pack's image (level 0, as the pack made
+// it; it is not palette-quantized).
+texture_layer_pixels :: proc(reg: ^game.Registry, layer: u32, pixels: []Rgba) {
+	if int(layer) < len(game.TEXTURE_GENERATOR_NAMES) {
+		generate_texture(Texture_Generator(layer), pixels)
+		return
+	}
+	image := reg.images[int(layer) - len(game.TEXTURE_GENERATOR_NAMES)]
+	for p, i in image {pixels[i] = p}
+}
+
+// texture_array makes the bytes of the whole texture array for reg: every
+// layer's mips, one layer after another (what render.world_init takes).
+texture_array :: proc(reg: ^game.Registry, allocator := context.temp_allocator) -> []u8 {
+	pixels := make([dynamic]u8, allocator)
+	level := make([]Rgba, TEXTURE_SIZE * TEXTURE_SIZE, context.temp_allocator)
+	for layer in 0 ..< game.registry_texture_layers(reg) {
+		texture_layer_pixels(reg, u32(layer), level)
+		size := TEXTURE_SIZE
+		current := level
+		for _ in 0 ..< TEXTURE_MIPS {
+			append(&pixels, ..slice.to_bytes(current))
+			if size == 1 {break}
+			next := make([]Rgba, (size / 2) * (size / 2), context.temp_allocator)
+			generate_mip(current, size, next)
+			current, size = next, size / 2
+		}
+	}
+	return pixels[:]
+}
+
 // Generated pixels: TEXTURE_SIZE² RGBA8 (sRGB) per layer, plus mip levels
 // down to 1×1 averaged in linear light.
 
-TEXTURE_SIZE :: 16
+TEXTURE_SIZE :: game.TEXTURE_SIZE
 TEXTURE_MIPS :: 5 // 16, 8, 4, 2, 1
 
 Rgba :: [4]u8
