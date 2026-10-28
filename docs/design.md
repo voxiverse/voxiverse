@@ -36,7 +36,7 @@ The [glossary](#glossary) fixes the names; code, docs and UI use them.
 - HUD: hotbar, crosshair, health, prompt bar, item-name popup. F1 hides it all.
 
 ## Title screen
-- Splash text from `splashes.txt` (one entry per line); several entries, one chosen by the clock when the game starts ("The Universe, voxelized." is the title's own line)
+- Splash text from `splashes.txt` (one entry per line); several entries, one chosen by the clock when the game starts; the file's content is the owner's to edit, no test pins an entry
 - Buttons: Singleplayer, Multiplayer, Options, Quit Game; the splash text; the version lower left; the warp starfield behind.
 - No "Continue" shortcut: the Universes screen lists the last-played universe first.
 

@@ -12,11 +12,10 @@ test_splashes_parse :: proc(t: ^testing.T) {
 	testing.expect_value(t, got[0], "One")
 	testing.expect_value(t, got[1], "Two")
 	testing.expect_value(t, got[2], "Four")
-	// The shipped file has entries, the title's own line among them, and the
-	// chosen one is stable.
+	// The shipped file has entries (which ones is the owner's to edit, so the
+	// test pins none of them) and the chosen one is stable.
 	all := splashes_parse(SPLASHES)
 	testing.expect(t, len(all) >= 1)
-	testing.expect_value(t, slice.contains(all, "The Universe, voxelized."), true)
 	for entry in all {
 		testing.expect(t, entry != "")
 	}

@@ -41,11 +41,15 @@ test_run_limited_results :: proc(t: ^testing.T) {
 @(test)
 test_panic_in_a_server_thread_fails_fast :: proc(t: ^testing.T) {
 	os.make_directory_all("build/tmp")
+	out := "-out:build/tmp/panic_fixture"
+	when ODIN_OS == .Windows {
+		out = "-out:build/tmp/panic_fixture.exe" // Odin wants an extension there
+	}
 	cmd := []string {
 		"odin",
 		"test",
 		"tools/build/panic_fixture",
-		"-out:build/tmp/panic_fixture",
+		out,
 		"-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true",
 	}
 	start := time.tick_now()
