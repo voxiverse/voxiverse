@@ -139,19 +139,52 @@ journal_entities_free :: proc(j: ^Journal) {
 	delete(j.entity_order)
 }
 
-// entities_validate: after a chunk came from its save: an entity whose block
-// has no entity of its kind (a pack changed) is dropped and logged.
-entities_validate :: proc(w: ^World, c: ^Chunk) {
-	t := &w.server.registry.blocks
+// entities_reconcile: after a chunk came from its save, the one point where
+// its entities and blocks are made to agree (entity_lifecycle keeps them so
+// while the game runs; a damaged file or a pack that changed a block's entity
+// kind can break it). An entity whose block's kind differs from its own is
+// dropped and logged, what it held going out of the ledger as Orphaned (it was
+// counted in by the chunk's Scope_In just before); a block whose kind needs an
+// entity and has none gets an empty one.
+entities_reconcile :: proc(w: ^World, c: ^Chunk) {
+	s := w.server
+	t := &s.registry.blocks
 	origin := game.chunk_origin(c.pos)
 	for i := len(c.block_entities) - 1; i >= 0; i -= 1 {
 		e := &c.block_entities[i]
-		p := origin + game.local_from_index(int(e.local))
 		b := game.chunk_get(&c.blocks, game.local_from_index(int(e.local)))
-		if game.block_entity_kind(t, b) != e.kind {
-			log.errorf("server block entity without its block dropped pos=%v kind=%v", p, e.kind)
-			ordered_remove(&c.block_entities, i)
+		if game.block_entity_kind(t, b) == e.kind {continue}
+		p := origin + game.local_from_index(int(e.local))
+		held := 0
+		for st in e.slots {
+			if game.stack_empty(st) {continue}
+			held += st.count
+			ledger_stack(s, w, .Orphaned, st, -1)
 		}
+		log.errorf(
+			"server block entity without its block dropped pos=%v kind=%v items=%d",
+			p,
+			e.kind,
+			held,
+		)
+		ordered_remove(&c.block_entities, i)
+	}
+	if c.blocks.array == nil && game.block_entity_kind(t, c.blocks.uniform) == .None {return}
+	for local in 0 ..< game.CHUNK_VOLUME {
+		b := game.chunk_get(&c.blocks, game.local_from_index(local))
+		kind := game.block_entity_kind(t, b)
+		if kind == .None {continue}
+		if _, has := game.block_entity_find(c.block_entities[:], u16(local)); has {continue}
+		if c.block_entities.allocator.procedure == nil {c.block_entities.allocator = heap()}
+		game.block_entity_insert(
+			&c.block_entities,
+			game.Block_Entity{local = u16(local), kind = kind},
+		)
+		log.warnf(
+			"server block entity made for its block pos=%v kind=%v",
+			origin + game.local_from_index(local),
+			kind,
+		)
 	}
 }
 

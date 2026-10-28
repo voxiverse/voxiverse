@@ -5905,6 +5905,15 @@ state with `shape_update` applied).
   keeps it. Bulk edits and explosions go through the same point, so `containers_tick`'s
   sweep for records without their block goes (what it still does for lookers walking off
   stays).
+- **Reconcile on load** (owner's review of M48b), the one other point: the lifecycle
+  keeps entities and blocks in step while the game runs, but a loaded chunk can still
+  disagree (a damaged region file, or a pack revision that changed a block's entity
+  kind). `entities_reconcile` runs when a saved chunk loads (after its Scope_In): an
+  entity whose block's kind differs from its own is dropped and logged with position,
+  kind and items held, the items leaving the ledger as `Orphaned` (they are not
+  spilled: the block they belonged to is not a container any more); a block whose kind
+  needs an entity and has none gets an empty one. `test_entity_without_block_dropped`
+  and `test_block_without_entity_made` (in `containers_test.odin`) check both.
 - **Journal** (M45): the entry for a change that makes or removes a block entity carries
   the entity's encoded value (the bytes of the region encoding below), so undo and
   rollback restore a broken chest with its contents. The stacks spilled by the removal are

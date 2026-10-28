@@ -204,8 +204,8 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch, entities[:])
 	origin := game.chunk_origin(pos)
 	if chunk := chunks_get(&w.chunks, pos); chunk != nil {
-		entities_validate(w, chunk)
 		ledger_entities(w, chunk.block_entities[:], .Scope_In)
+		entities_reconcile(w, chunk)
 	}
 	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
 	delete(bytes)

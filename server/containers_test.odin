@@ -1,8 +1,13 @@
 package server
 
+import "base:runtime"
+import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
+import "core:strings"
 import "core:testing"
 
 import "../common/game"
@@ -250,4 +255,112 @@ test_explosion_removes_the_entity :: proc(t: ^testing.T) {
 	pause(t, {&a}, 0.3)
 	rec := record_at(&srv, pos)
 	testing.expect_value(t, rec.items, 5)
+}
+
+// Log_Lines collects what a chunk load logs (a test logger).
+@(private = "file")
+Log_Lines :: struct {
+	lines: [dynamic]string,
+}
+
+@(private = "file")
+collect_log :: proc(
+	data: rawptr,
+	level: runtime.Logger_Level,
+	text: string,
+	options: runtime.Logger_Options,
+	location := #caller_location,
+) {
+	l := (^Log_Lines)(data)
+	append(&l.lines, strings.clone(text, context.temp_allocator))
+}
+
+// save_chunk_with: a chunk of one block kind with `block` at local {5, 5, 5}, as
+// its save holds it, to be loaded at pos.
+@(private = "file")
+save_chunk_with :: proc(
+	w: ^World,
+	pos: game.Chunk_Pos,
+	block: game.Block,
+	entities: []game.Block_Entity,
+) {
+	array := new(game.Block_Array, context.temp_allocator)
+	array^ = {}
+	array[game.local_index({5, 5, 5})] = block
+	blocks := game.Chunk_Blocks {
+		array = array,
+	}
+	wr: game.Writer
+	game.writer_init(&wr, context.temp_allocator)
+	game.write_chunk_payload(&wr, &blocks, entities)
+	w.saved[pos] = slice.clone(wr.buf[:])
+}
+
+// A saved entity whose block is not a container any more (the block was
+// changed underneath it, or a pack revised it) is dropped on load: logged with
+// its position and kind, what it held leaving through the ledger as orphaned.
+@(test)
+test_entity_without_block_dropped :: proc(t: ^testing.T) {
+	dir := scratch_dir("orphan")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	g, ok := grief_open(t, dir)
+	defer grief_close(g)
+	if !ok {return}
+	s, w := grief_srv(g), grief_world(g)
+	planks := game.item_of_block(test_reg(), .Planks)
+	orphan := game.Block_Entity {
+		local = u16(game.local_index({5, 5, 5})),
+		kind  = .Container,
+	}
+	orphan.slots[3] = {planks, 5}
+	pos := game.Chunk_Pos{900, 0, 900}
+	save_chunk_with(w, pos, .Stone, {orphan})
+	before := s.ledger.entries[planks][.Orphaned]
+
+	lines: Log_Lines
+	loud := context.logger
+	context.logger = {collect_log, &lines, .Debug, {}}
+	loaded := request_chunk(w, pos)
+	context.logger = loud
+	if !testing.expect(t, loaded, "the chunk did not load") {return}
+
+	c := chunks_get(&w.chunks, pos)
+	if !testing.expect(t, c != nil, "the chunk is not there") {return}
+	testing.expect_value(t, len(c.block_entities), 0)
+	testing.expect_value(t, s.ledger.entries[planks][.Orphaned] - before, -5)
+	found := false
+	at := game.chunk_origin(pos) + {5, 5, 5}
+	for line in lines.lines {
+		if strings.contains(line, "without its block dropped") &&
+		   strings.contains(line, fmt.tprintf("%v", at)) &&
+		   strings.contains(line, "Container") {found = true}
+	}
+	testing.expect(t, found, "the drop was not logged with position and kind")
+}
+
+// The opposite: a chest block saved with no entity gets an empty one.
+@(test)
+test_block_without_entity_made :: proc(t: ^testing.T) {
+	dir := scratch_dir("noentity")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	g, ok := grief_open(t, dir)
+	defer grief_close(g)
+	if !ok {return}
+	w := grief_world(g)
+	pos := game.Chunk_Pos{900, 0, 900}
+	save_chunk_with(w, pos, .Chest, nil)
+	loud := context.logger
+	context.logger = log.nil_logger()
+	loaded := request_chunk(w, pos)
+	context.logger = loud
+	if !testing.expect(t, loaded, "the chunk did not load") {return}
+	c := chunks_get(&w.chunks, pos)
+	if !testing.expect(t, c != nil, "the chunk is not there") {return}
+	if !testing.expect_value(t, len(c.block_entities), 1) {return}
+	e := c.block_entities[0]
+	testing.expect_value(t, int(e.local), game.local_index({5, 5, 5}))
+	testing.expect_value(t, e.kind, game.Block_Entity_Kind.Container)
+	for st in e.slots {testing.expect(t, game.stack_empty(st), "the new entity is not empty")}
 }
