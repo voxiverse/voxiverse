@@ -39,6 +39,7 @@ Upload :: struct {
 }
 
 Config :: struct {
+	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
 	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
 	seed:                  i64,
 	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
@@ -191,12 +192,12 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		return false
 	}
 	kit_default(s.registry, &s.kit)
-	if s.store.kit_text != "" {
-		if kit, ok := kit_parse(s.registry, s.store.kit_text); ok {
+	if kit_text := s.store.kit_text if s.store.kit_text != "" else s.config.kit; kit_text != "" {
+		if kit, ok := kit_parse(s.registry, kit_text); ok {
 			clear(&s.kit)
 			append(&s.kit, ..kit)
 		} else {
-			log.warnf("server universe kit not understood kit=%q", s.store.kit_text)
+			log.warnf("server universe kit not understood kit=%q", kit_text)
 		}
 	}
 	permissions_open(s)

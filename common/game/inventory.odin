@@ -1,5 +1,7 @@
 package game
 
+import "core:slice"
+
 // A player's inventory and what may be done with it. The server applies
 // actions (inventory_apply) and is the authority; the client applies the
 // same actions at once to predict, and replays the ones the server has not
@@ -59,6 +61,7 @@ Inventory_Action_Kind :: enum u8 {
 	Put, // up to `arg` of the cursor's stack into the slot, if empty or of the same item (a drag spreading a stack)
 	Gather, // every stack of the cursor's item onto the cursor, as far as it fits (a double-click)
 	Move_One, // one between the hotbar and the rest: from the slot (arg 0), or into it (arg 1) (the wheel)
+	Sort, // the pockets' grid (not the hotbar): stacks merged, then in item order, empty slots last (the slot is ignored)
 }
 
 Inventory_Action :: struct {
@@ -217,6 +220,14 @@ inventory_apply :: proc(
 			inv.slots[from].count -= 1
 			slot.count += 1
 		}
+	case .Sort:
+		grid := inv.slots[HOTBAR_SLOTS:INVENTORY_SLOTS]
+		before := [INVENTORY_SLOTS - HOTBAR_SLOTS]Stack{}
+		copy(before[:], grid)
+		slots_sort(reg, grid)
+		same := true
+		for s, i in grid {if s != before[i] {same = false}}
+		if same {return}
 	case .Close:
 		if stack_empty(inv.cursor) && !inv.chest_open {return}
 		inv.chest, inv.chest_open = {}, false
@@ -233,6 +244,32 @@ inventory_add :: proc(reg: ^Registry, inv: ^Inventory, stack: Stack) -> (left: S
 	left = slots_add(reg, inv.slots[:], stack)
 	inventory_tidy(inv)
 	return
+}
+
+// slots_sort merges the stacks of one item (up to its stack size) and puts
+// them in item order, the empty slots last.
+@(private = "file")
+slots_sort :: proc(reg: ^Registry, slots: []Stack) {
+	items := make([dynamic]Stack, context.temp_allocator)
+	for s in slots {if !stack_empty(s) {append(&items, s)}}
+	slice.stable_sort_by(items[:], proc(a, b: Stack) -> bool {return a.item < b.item})
+	n := 0
+	for &s in slots {s = {}}
+	for it in items {
+		size := item_stack_size(reg, it.item)
+		left := it.count
+		if n > 0 && slots[n - 1].item == it.item && slots[n - 1].count < size {
+			moved := min(left, size - slots[n - 1].count)
+			slots[n - 1].count += moved
+			left -= moved
+		}
+		for left > 0 && n < len(slots) {
+			put := min(left, size)
+			slots[n] = {it.item, put}
+			left -= put
+			n += 1
+		}
+	}
 }
 
 @(private = "file")

@@ -10,8 +10,8 @@ import "core:sync"
 import "../base"
 import "../common/game"
 import "../server"
-import "ui"
 import "audio"
+import "ui"
 
 net_line :: proc(s: ^Session) -> string {
 	n := &s.net
@@ -242,4 +242,3 @@ HEART := [6]string{".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X.
 
 // health_bar: a heart for every two health points, over the hotbar's left
 // end: full, half or empty.
-

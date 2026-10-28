@@ -35,11 +35,11 @@ Section :: struct {
 
 @(rodata)
 SECTIONS := [Section_Id]Section {
-	.Map = {"Map", .World_Map, false, nil},
-	.Journal = {"Journal", .Journal, false, nil},
-	.Inventory = {"Inventory", .Inventory, true, inventory_ui},
-	.Character = {"Character", .Character, false, nil},
-	.Atlas = {"Atlas", .Atlas, false, nil},
+	.Map        = {"Map", .World_Map, false, nil},
+	.Journal    = {"Journal", .Journal, false, nil},
+	.Inventory  = {"Inventory", .Inventory, true, inventory_ui},
+	.Character  = {"Character", .Character, false, nil},
+	.Atlas      = {"Atlas", .Atlas, false, nil},
 	.Statistics = {"Statistics", .Stats, true, stats_ui},
 }
 
@@ -142,8 +142,28 @@ player_menu_keys :: proc(app: ^App) {
 	}
 }
 
+// menu_theme: the menus' look over the base theme (design.md: the
+// retro-futurist panels): thin cool lines and an accent in place of white,
+// the black surfaces kept. A scope the `menu_*` files draw in.
+menu_theme :: proc(base: ui.Theme) -> ui.Theme {
+	t := base
+	accent := ui.Color{110, 200, 255, 255}
+	t.border = accent
+	t.focus_ring = accent
+	t.hover = accent
+	t.pressed = {70, 150, 200, 255}
+	t.faint_border = {accent.r, accent.g, accent.b, 70}
+	t.list_border = {accent.r, accent.g, accent.b, 60}
+	t.row_hover = {accent.r, accent.g, accent.b, 40}
+	t.row_selected = {accent.r, accent.g, accent.b, 20}
+	t.text_muted = {140, 160, 175, 255}
+	t.border_width = 1
+	return t
+}
+
 // player_menu_ui: the overlay: the open section draws itself.
 player_menu_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
+	ui.theme_scope(ctx, menu_theme(ctx.theme))
 	if draw := SECTIONS[app.player_menu.section].draw; draw != nil {draw(app, ctx, top)}
 }
 

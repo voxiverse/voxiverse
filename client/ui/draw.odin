@@ -245,6 +245,40 @@ draw_text_styled :: proc(
 	return (pen.x - start) / ctx.scale
 }
 
+// draw_text_tilted draws one line of text centred on `centre` (UI units),
+// turned by `angle` radians (clockwise on the screen), over the layer's clip.
+draw_text_tilted :: proc(
+	ctx: ^Context,
+	centre: Vec2,
+	text: string,
+	size: f32,
+	color: Color,
+	angle: f32,
+) {
+	append(&ctx.texts, text)
+	pixel_size := u16(math.round(size * ctx.scale))
+	if pixel_size == 0 || len(text) == 0 {return}
+	width := measure_text(ctx, text, size) * ctx.scale
+	ascent, descent := font_line_metrics(ctx, size)
+	c := centre * ctx.scale
+	turn := [4]f32{c.x, c.y, math.sin(angle), math.cos(angle)}
+	pen := [2]f32{c.x - width / 2, c.y + (ascent + descent) * ctx.scale / 2}
+	inv := 1 / f32(ctx.glyphs.size)
+	for r in text {
+		g, ok := glyph_cache_get(&ctx.glyphs, r, pixel_size)
+		if !ok {g, ok = glyph_cache_get(&ctx.glyphs, '?', pixel_size)}
+		if ok && g.w > 0 {
+			quad := [4]f32{pen.x + g.offset.x, pen.y + g.offset.y, f32(g.w), f32(g.h)}
+			uv := [2][2]f32 {
+				{f32(g.x) * inv, f32(g.y) * inv},
+				{f32(g.x + g.w) * inv, f32(g.y + g.h) * inv},
+			}
+			push_quad(ctx, quad, uv, color, smooth = true, turn = turn)
+		}
+		pen.x += g.advance
+	}
+}
+
 // measure_text_styled is the width of text drawn with effects (UI units).
 measure_text_styled :: proc(ctx: ^Context, text: string, size: f32, effects: Text_Effects) -> f32 {
 	width := measure_text(ctx, text, size)
@@ -290,6 +324,7 @@ push_quad :: proc(
 	baseline: f32 = 0,
 	smooth := false,
 	image: Image = 0,
+	turn: [4]f32 = {}, // centre x, y (pixels), sin, cos: the quad turned about it (cos 0: not turned)
 ) {
 	if q[2] <= 0 || q[3] <= 0 {return}
 	l := &ctx.output.layers[ctx.layer]
@@ -327,6 +362,13 @@ push_quad :: proc(
 		Vertex{{x1 + bottom, y1}, {uv[1].x, uv[1].y}, color},
 		Vertex{{x0 + bottom, y1}, {uv[0].x, uv[1].y}, color},
 	)
+	if turn[3] != 0 {
+		for i in 0 ..< 4 {
+			d := l.vertices[int(base) + i].pos - {turn[0], turn[1]}
+			l.vertices[int(base) + i].pos =
+				{turn[0], turn[1]} + {d.x * turn[3] - d.y * turn[2], d.x * turn[2] + d.y * turn[3]}
+		}
+	}
 	append(&l.indices, base, base + 1, base + 2, base, base + 2, base + 3)
 	l.commands[len(l.commands) - 1].index_count += 6
 }

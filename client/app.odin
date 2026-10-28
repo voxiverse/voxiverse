@@ -70,7 +70,7 @@ App :: struct {
 	volumes:          [audio.Bus]f32, // as last told to the mixer
 	listener:         audio.Listener, // ... and the listener's options
 	shader_watch:     Shader_Watch,
-	universes:           Universes_Screen,
+	universes:        Universes_Screen,
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	debug:            Debug_Switches,
@@ -105,6 +105,11 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (overlay_chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
+	splash:           string, // the title screen's, chosen once (screen_title.odin)
+	started:          time.Tick, // when the app began (the splash's pulse)
+	toasts:           Toasts, // the notices at the top right (overlay_toasts.odin)
+	hud_hidden:       bool, // F1: the HUD is hidden (not saved)
+	popup:            Item_Popup, // the held item's name above the hotbar (hud_popup.odin)
 	player_menu:      Player_Menu, // the section shown and the one shown last (menu_player.odin)
 	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
@@ -130,6 +135,7 @@ App :: struct {
 // app_init brings everything up; on failure the caller still calls
 // app_destroy, which handles partially initialised apps.
 app_init :: proc(app: ^App) -> bool {
+	app.started = time.tick_now()
 	app.launched = time.tick_now()
 	app.registry = game.registry_base()
 	console_init(&app.console)
@@ -334,6 +340,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	render.entity_draw_destroy(&app.entity_draw)
 	shader_watch_destroy(&app.shader_watch)
 	universes_destroy(&app.universes)
+	toasts_destroy(&app.toasts)
 	multiplayer_destroy(&app.multiplayer)
 	delete(app.failed.reason)
 	delete(app.message)
@@ -661,6 +668,7 @@ leave_world :: proc(app: ^App) {
 	}
 	free(app.session)
 	app.session = nil
+	popup_reset(&app.popup)
 	app.screen = .Title
 	overlays_leave_game(&app.overlays)
 	platform.set_mouse_captured(&app.window, false)

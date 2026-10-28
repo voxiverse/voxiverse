@@ -461,3 +461,85 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect(t, !section_open(app, .Statistics))
 	free_all(context.temp_allocator)
 }
+
+// The layout: with a container open it docks above the pockets and the
+// preview is hidden; without one the preview shows; the catalog docks in
+// Creative; the details panel sits right of the pockets.
+@(test)
+test_inventory_layout_sections :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	ui.begin_frame(&f.app.ui, {}, SCREEN, 1)
+	defer ui.end_frame(&f.app.ui)
+	plain := inventory_layout(&f.app.ui, .Inventory)
+	chest := inventory_layout(&f.app.ui, .Chest)
+	creative := inventory_layout(&f.app.ui, .Creative)
+	testing.expect(t, plain.preview.w > 0 && plain.preview.h > 0, "the preview shows")
+	testing.expect_value(t, chest.preview.w, 0)
+	first_chest, first_pocket := chest.slots[game.CHEST_BASE], chest.slots[game.HOTBAR_SLOTS]
+	last_chest := chest.slots[game.CHEST_BASE + game.CHEST_SLOTS - 1]
+	testing.expect(
+		t,
+		last_chest.y + last_chest.h <= first_pocket.y,
+		"the container lies above the pockets",
+	)
+	testing.expect(t, first_chest.y < first_pocket.y)
+	testing.expect(
+		t,
+		plain.details.w > 0 && plain.details.x >= plain.slots[game.INVENTORY_SLOTS - 1].x,
+	)
+	testing.expect(t, plain.sort.w > 0 && plain.search.w > 0)
+	testing.expect(t, creative.catalog.w > 0 && creative.details.w > 0)
+	// Everything is on the screen.
+	for l in ([]Inventory_Layout{plain, chest, creative}) {
+		testing.expect(t, l.panel.x >= 0 && l.panel.y >= 0)
+		testing.expect(t, l.panel.x + l.panel.w <= SCREEN.x && l.panel.y + l.panel.h <= SCREEN.y)
+	}
+}
+
+// Sort is one request the server applies; the search dims what does not
+// match; a tooltip lists the name, the description and the modifiers.
+@(test)
+test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
+	reg := test_reg()
+	stone, dirt := game.item_of_block(reg, .Stone), game.item_of_block(reg, .Dirt)
+	f.s.inventory.slots[6] = {dirt, 3}
+	f.s.inventory.slots[9] = {stone, 5}
+	f.s.inventory.slots[12] = {dirt, 4}
+	overlay_frame(&f, {})
+	sort := ui.Vec2{}
+	if r, ok := ui.find_widget(&f.app.ui, "Sort"); ok {sort = {r.x + r.w / 2, r.y + r.h / 2}}
+	testing.expect(t, sort != {}, "a Sort button")
+	before := len(f.s.inv_pending)
+	overlay_frame(&f, {mouse = sort})
+	overlay_frame(&f, {mouse = sort, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	overlay_frame(&f, {mouse = sort, mouse_released = {.Left}})
+	testing.expect_value(t, len(f.s.inv_pending), before + 1)
+	// (Predicted at once: the dirt merged and the stacks in item order.)
+	grid := f.s.inventory.slots[game.HOTBAR_SLOTS:game.INVENTORY_SLOTS]
+	lo, hi := min(stone, dirt), max(stone, dirt)
+	testing.expect_value(t, grid[0].item, lo)
+	counts := map[game.Item]int{}
+	defer delete(counts)
+	for s in grid {if !game.stack_empty(s) {counts[s.item] += s.count}}
+	testing.expect_value(t, counts[dirt], 7)
+	testing.expect_value(t, counts[stone], 5)
+	testing.expect(t, game.stack_empty(grid[2]) && grid[1].item == hi)
+
+	testing.expect(t, stack_matches(reg, {stone, 1}, "STO"))
+	testing.expect(t, !stack_matches(reg, {dirt, 1}, "sto"))
+	testing.expect(t, !stack_matches(reg, {}, "a"))
+
+	boots := game.item_of_armor(.Boots)
+	lines := item_lines(reg, boots)
+	testing.expect_value(t, lines[0], "boots")
+	testing.expect_value(t, lines[1], "Worn on the feet.")
+	testing.expect_value(t, lines[2], "Speed +10%")
+	testing.expect_value(t, lines[3], "Jump +10%")
+	none := item_lines(reg, stone) // (a block's item: no description)
+	testing.expect_value(t, len(none), 1)
+}

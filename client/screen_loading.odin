@@ -1,6 +1,5 @@
 package client
 
-import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:strings"
@@ -201,7 +200,7 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	ui.label(
 		ctx,
-		fmt.tprintf("%d%%", 100 * ready / max(total, 1)) if s.state == .Playing else "",
+		tr(.Loading_Percent, 100 * ready / max(total, 1)) if s.state == .Playing else "",
 		ui.cut_top(&column, t.row_height),
 		.Center,
 		t.text_muted,
@@ -210,7 +209,7 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.default_focus(ctx)
 	if ui.button(
 		ctx,
-		"Cancel",
+		tr(.Dial_Cancel),
 		ui.rect_center(ui.cut_top(&column, t.row_height), 200, t.row_height),
 	) {
 		leave_world(app)

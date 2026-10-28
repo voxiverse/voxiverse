@@ -306,7 +306,8 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	defer universes_destroy(&app.universes)
 	defer multiplayer_destroy(&app.multiplayer)
 
-	WORDS :: []string{"universe", "scratch", "chunk", "session", "mesh", "interest", "var", "null"}
+	// ("universe" is a player's word now: design.md, the Universes screen and the title splash.)
+	WORDS :: []string{"scratch", "chunk", "session", "mesh", "interest", "var", "null"}
 	check :: proc(t: ^testing.T, app: ^App, what: string) {
 		ui_frame(app)
 		testing.expectf(t, len(app.ui.texts) > 2, "%s says nothing", what)

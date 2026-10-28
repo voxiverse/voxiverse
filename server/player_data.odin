@@ -357,29 +357,21 @@ players_save :: proc(s: ^Server) -> bool {
 }
 
 // The starter kit: what a player new to the world is given (world.cfg's
-// `kit`, "stone 64, dirt 64, ..."). Items a player may not use (the rocket
-// launcher without world.fire) are left out.
-@(private = "file", rodata)
-DEFAULT_KIT := [?]struct {
-	name:  string,
-	count: int,
-} {
-	{"stone", 64},
-	{"dirt", 64},
-	{"grass", 64},
-	{"sand", 64},
-	{"log", 64},
-	{"leaves", 64},
-	{"water", 64},
-	{"lamp", 64},
-	{"rocket_launcher", 1},
-}
+// `kit`, "stone 64, dirt 64, ..."). By default the rocket launcher alone, in
+// hotbar slot 1 (design.md: blocks are reached by creative's catalog; how
+// survival gathers is the owner's to decide). Items a player may not use
+// (the launcher without world.fire) are left out.
+DEFAULT_KIT_TEXT :: "rocket_launcher 1"
+
+// default_kit_override: the tests start worlds with a kit of blocks to place
+// (kit_test.odin sets it at start-up); a game never sets it. A world's own
+// kit (world.cfg) or a Config's comes first either way.
+default_kit_override: string
 
 kit_default :: proc(reg: ^game.Registry, kit: ^[dynamic]game.Stack) {
 	clear(kit)
-	for k in DEFAULT_KIT {
-		if item, ok := game.item_by_name(reg, k.name); ok {append(kit, game.Stack{item, k.count})}
-	}
+	text := default_kit_override if default_kit_override != "" else DEFAULT_KIT_TEXT
+	if stacks, ok := kit_parse(reg, text); ok {append(kit, ..stacks)}
 }
 
 kit_text :: proc(reg: ^game.Registry, kit: []game.Stack) -> string {

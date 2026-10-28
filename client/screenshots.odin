@@ -50,5 +50,6 @@ screenshots_save :: proc(app: ^App) {
 			continue
 		}
 		log.infof("screenshot saved path=%s size=%dx%d", path, w, h)
+		toast(app, .Screenshot_Saved, on_click = open_screenshots)
 	}
 }

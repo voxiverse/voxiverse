@@ -1,9 +1,13 @@
 {
 	"seeds": {
+		"description": "Plant them on farmland to grow wheat.",
 		"places": "voxiverse:wheat_0"
 	},
-	"wheat": {},
+	"wheat": {
+		"description": "A crop, grown from seeds."
+	},
 	"feather_charm": {
+		"description": "Carry it to jump once more in the air.",
 		"stack": 1,
 		"modifiers": [
 			{

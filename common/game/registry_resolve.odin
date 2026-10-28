@@ -868,6 +868,8 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 	}
 }
 
+ITEM_DESCRIPTION_MAX :: 160
+
 @(private)
 read_item :: proc(
 	b: ^Reg_Build,
@@ -895,6 +897,18 @@ read_item :: proc(
 	}
 	if f := field_of(m, "equip"); f != nil {
 		info.equip = Equip_Slot(choice_of(b, f, f.value, "equip", EQUIP_NAMES, 0))
+	}
+	if f := field_of(m, "description"); f != nil {
+		if f.value.kind != .String || len(f.value.s) > ITEM_DESCRIPTION_MAX {
+			fail_field(
+				b,
+				f,
+				f.value,
+				fmt.aprintf("description is a text of at most %d bytes", ITEM_DESCRIPTION_MAX),
+			)
+		} else {
+			info.description = strings.clone(f.value.s)
+		}
 	}
 	if f := field_of(m, "modifiers"); f != nil {
 		if f.value.kind != .Array {

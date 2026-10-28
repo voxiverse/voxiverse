@@ -25,6 +25,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 			overlay_close(&app.overlays, .Game_Menu)
 		}
 	}
+	hud_keys(app)
 	if action_pressed(&app.actions, .Screenshot) {screenshot_request(app, "")}
 	if action_pressed(&app.actions, .Fullscreen) {
 		app.settings.fullscreen = !app.settings.fullscreen
@@ -111,6 +112,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	if app.debug.overlay {debug_overlay(app, ctx)}
 	if app.settings.show_fps {fps_overlay(app, ctx)}
 	draw_overlays(app, ctx)
-	prompt_bar(app, ctx, prompt_items(app))
+	toasts_ui(app, ctx)
+	if !(app.hud_hidden && app.screen == .Game && app.overlays.count == 0) {
+		prompt_bar(app, ctx, prompt_items(app)) // (F1 hides it with the rest of the HUD)
+	}
 }
-

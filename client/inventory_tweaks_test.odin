@@ -61,6 +61,15 @@ overlay_frame :: proc(f: ^Overlay_Fixture, in_: ui.Input) {
 	ui.end_frame(&f.app.ui)
 }
 
+// ui_begin, ui_end: one UI frame at the test screen size.
+ui_begin :: proc(app: ^App) {
+	ui.begin_frame(&app.ui, {}, SCREEN, 1)
+}
+
+ui_end :: proc(app: ^App) {
+	ui.end_frame(&app.ui)
+}
+
 overlay_slot_at :: proc(f: ^Overlay_Fixture, slot: int) -> ui.Vec2 {
 	ui.begin_frame(&f.app.ui, {}, SCREEN, 1)
 	l := inventory_layout(&f.app.ui, f.app.inventory_view.tab)

@@ -73,13 +73,14 @@ BUILTIN_ARMOR_IDS := [Armor]string {
 }
 
 Item_Info :: struct {
-	name:      string,
-	stack:     int, // how many one slot holds
-	block:     Block, // what it places (Air: nothing)
-	tool:      Maybe(Tool),
-	armor:     Maybe(Armor),
-	modifiers: [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
-	equip:     Maybe(Equip_Slot), // where it can be worn (armor)
+	name:        string,
+	stack:       int, // how many one slot holds
+	block:       Block, // what it places (Air: nothing)
+	tool:        Maybe(Tool),
+	armor:       Maybe(Armor),
+	description: string, // a short line for the tooltip (the pack's; "": none)
+	modifiers:   [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
+	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
 }
 
 item_of_armor :: proc(a: Armor) -> Item {

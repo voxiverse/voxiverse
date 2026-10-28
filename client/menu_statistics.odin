@@ -203,7 +203,7 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	data := &s.player_stats
 	if data.pages > 1 {
 		half := footer.w / 3
-		if ui.button(ctx, "Previous", ui.cut_left(&footer, half), v.page == 0) {
+		if ui.button(ctx, tr(.Statistics_Previous), ui.cut_left(&footer, half), v.page == 0) {
 			v.page -= 1
 			stats_ask(app)
 		}
@@ -215,7 +215,7 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			t.text_muted,
 			.Center,
 		)
-		if ui.button(ctx, "Next", footer, v.page + 1 >= data.pages) {
+		if ui.button(ctx, tr(.Statistics_Next), footer, v.page + 1 >= data.pages) {
 			v.page += 1
 			stats_ask(app)
 		}

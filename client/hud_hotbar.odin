@@ -51,4 +51,3 @@ health_bar :: proc(ctx: ^ui.Context, s: ^Session) {
 		}
 	}
 }
-

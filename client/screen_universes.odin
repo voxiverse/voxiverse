@@ -204,14 +204,14 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
 	area := ui.rect_center(ctx.screen, SAVES_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, "Singleplayer", ui.cut_top(&area, 70))
+	ui.title(ctx, tr(.Title_Singleplayer), ui.cut_top(&area, 70))
 	buttons := ui.cut_bottom(&area, 2 * t.row_height + t.spacing)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	// The list, scrolled by the wheel.
 	ui.fill_rect(ctx, area, t.list_fill)
 	ui.stroke_rect(ctx, area, 1, t.list_border)
 	if len(w.entries) == 0 {
-		ui.label(ctx, "No saves yet: Create New Save to start one", area, .Center, t.text_muted)
+		ui.label(ctx, tr(.Universes_No_Saves_Yet_Create_New), area, .Center, t.text_muted)
 	}
 	visible := int(area.h / SAVE_ROW)
 	// One focusable widget for a pad or keyboard: Up and Down move the
@@ -263,19 +263,24 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 	top := ui.cut_top(&buttons, t.row_height)
 	ui.cut_top(&buttons, t.spacing)
 	chosen := w.selected >= 0 && w.selected < len(w.entries)
-	if ui.button(ctx, "Play Selected Save", ui.cut_left(&top, half), disabled = !chosen) {
+	if ui.button(
+		ctx,
+		tr(.Universes_Play_Selected_Save),
+		ui.cut_left(&top, half),
+		disabled = !chosen,
+	) {
 		save_play(app, w.selected)
 		return
 	}
 	ui.cut_left(&top, t.spacing)
-	if ui.button(ctx, "Create New Save", top) {
+	if ui.button(ctx, tr(.Universes_Create_New_Save), top) {
 		clear(&w.name)
 		append(&w.name, "New Save")
 		clear(&w.seed)
 		w.more, w.mode, w.message = false, .Create, ""
 	}
 	third := (buttons.w - 2 * t.spacing) / 3
-	if ui.button(ctx, "Edit", ui.cut_left(&buttons, third), disabled = !chosen) {
+	if ui.button(ctx, tr(.Universes_Edit), ui.cut_left(&buttons, third), disabled = !chosen) {
 		clear(&w.name)
 		append(&w.name, w.entries[w.selected].name)
 		w.mode, w.message = .Edit, ""
@@ -283,12 +288,12 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.cut_left(&buttons, t.spacing)
 	if ui.button(
 		ctx,
-		"Delete",
+		tr(.Universes_Delete),
 		ui.cut_left(&buttons, third),
 		disabled = !chosen,
 	) {w.mode = .Delete}
 	ui.cut_left(&buttons, t.spacing)
-	if ui.button(ctx, "Back", buttons) {app.screen = .Title}
+	if ui.button(ctx, tr(.Credits_Back), buttons) {app.screen = .Title}
 }
 
 @(private = "file")
@@ -303,30 +308,30 @@ save_create :: proc(app: ^App, ctx: ^ui.Context) {
 	w := &app.universes
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 420, 8 * (t.row_height + t.spacing) + 70)
-	ui.title(ctx, "Create New Save", ui.cut_top(&column, 70))
+	ui.title(ctx, tr(.Universes_Create_New_Save), ui.cut_top(&column, 70))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	ui.label(ctx, "Name", ui.next(ctx), .Left, t.text_muted)
+	ui.label(ctx, tr(.Universes_Name), ui.next(ctx), .Left, t.text_muted)
 	submitted := ui.text_input(ctx, "name", &w.name, ui.next(ctx), placeholder = "New Save")
 	if ui.button(
 		ctx,
-		"Fewer options" if w.more else "More options",
+		tr(.Universes_Fewer_Options) if w.more else tr(.Universes_More_Options),
 		ui.next(ctx),
 	) {w.more = !w.more}
 	if w.more {
-		ui.label(ctx, "Seed (leave empty for a random world)", ui.next(ctx), .Left, t.text_muted)
+		ui.label(ctx, tr(.Universes_Seed_Leave_Empty_For_A), ui.next(ctx), .Left, t.text_muted)
 		submitted ||= ui.text_input(ctx, "seed", &w.seed, ui.next(ctx), placeholder = "Random")
 	}
 	ui.next(ctx, 10)
 	row := ui.next(ctx)
 	cancel := ui.cut_right(&row, (row.w - t.spacing) / 2)
 	ui.cut_right(&row, t.spacing)
-	if ui.button(ctx, "Create Save", row) || submitted {
+	if ui.button(ctx, tr(.Universes_Create_Save), row) || submitted {
 		world_create(app, string(w.name[:]), string(w.seed[:]))
 		w.mode = .List
 		return
 	}
-	if ui.button(ctx, "Cancel", cancel) {w.mode = .List}
+	if ui.button(ctx, tr(.Dial_Cancel), cancel) {w.mode = .List}
 }
 
 @(private = "file")
@@ -339,12 +344,12 @@ save_edit :: proc(app: ^App, ctx: ^ui.Context) {
 	}
 	e := w.entries[w.selected]
 	column := ui.rect_center(ctx.screen, 420, 7 * (t.row_height + t.spacing) + 70)
-	ui.title(ctx, "Edit Save", ui.cut_top(&column, 70))
+	ui.title(ctx, tr(.Universes_Edit_Save), ui.cut_top(&column, 70))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	ui.label(ctx, "Name", ui.next(ctx), .Left, t.text_muted)
+	ui.label(ctx, tr(.Universes_Name), ui.next(ctx), .Left, t.text_muted)
 	submitted := ui.text_input(ctx, "name", &w.name, ui.next(ctx))
-	if ui.button(ctx, "Open Folder", ui.next(ctx)) {
+	if ui.button(ctx, tr(.Universes_Open_Folder), ui.next(ctx)) {
 		if !platform.open_folder(e.path) {w.message = "The folder could not be opened"}
 	}
 	if w.message != "" {ui.label(ctx, w.message, ui.next(ctx), .Center, t.text_muted)}
@@ -352,7 +357,7 @@ save_edit :: proc(app: ^App, ctx: ^ui.Context) {
 	row := ui.next(ctx)
 	cancel := ui.cut_right(&row, (row.w - t.spacing) / 2)
 	ui.cut_right(&row, t.spacing)
-	if ui.button(ctx, "Save", row) || submitted {
+	if ui.button(ctx, tr(.Universes_Save), row) || submitted {
 		name := save_dir_name(string(w.name[:]))
 		if name != "" && name != e.name {
 			path := free_save_path(name)
@@ -365,7 +370,7 @@ save_edit :: proc(app: ^App, ctx: ^ui.Context) {
 		universes_refresh(w)
 		return
 	}
-	if ui.button(ctx, "Cancel", cancel) {w.mode, w.message = .List, ""}
+	if ui.button(ctx, tr(.Dial_Cancel), cancel) {w.mode, w.message = .List, ""}
 }
 
 @(private = "file")
@@ -385,10 +390,10 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 	box := ui.rect_center(ctx.screen, 460, 170)
 	ui.panel(ctx, box)
 	inner := ui.rect_shrink(box, 2 * t.padding)
-	ui.label(ctx, fmt.tprintf("Delete \"%s\"?", e.name), ui.cut_top(&inner, t.row_height), .Center)
+	ui.label(ctx, tr(.Universes_Delete_Named, e.name), ui.cut_top(&inner, t.row_height), .Center)
 	ui.label(
 		ctx,
-		"It will be lost forever.",
+		tr(.Universes_It_Will_Be_Lost_Forever),
 		ui.cut_top(&inner, t.row_height),
 		.Center,
 		t.text_muted,
@@ -396,7 +401,7 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 	buttons := ui.cut_bottom(&inner, t.row_height)
 	cancel := ui.cut_right(&buttons, (buttons.w - t.spacing) / 2)
 	ui.cut_right(&buttons, t.spacing)
-	if ui.button(ctx, "Delete", buttons) {
+	if ui.button(ctx, tr(.Universes_Delete), buttons) {
 		if err := os.remove_all(e.path); err != nil {
 			log.errorf("saves cannot delete path=%s error=%v", e.path, err)
 		}
@@ -404,7 +409,7 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 		return
 	}
 	ui.default_focus(ctx)
-	if ui.button(ctx, "Cancel", cancel) {w.mode = .List}
+	if ui.button(ctx, tr(.Dial_Cancel), cancel) {w.mode = .List}
 }
 
 // save_export writes the save called name as one file (default <saves>/<name>.vxu)

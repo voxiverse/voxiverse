@@ -110,7 +110,7 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, in_game: bool) 
 	t := &ctx.theme
 	o := &app.options
 	column := area
-	ui.title(ctx, "Options", ui.cut_top(&column, 64))
+	ui.title(ctx, tr(.Options), ui.cut_top(&column, 64))
 
 	// Q and E (as bound) step through the tabs, around.
 	if step := menu_tab_step(app); step != 0 {
@@ -166,12 +166,12 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, in_game: bool) 
 		ui.cut_left(&pair, t.spacing)
 		credits_rect = pair
 	}
-	if ui.button(ctx, "Done", done_rect) {
+	if ui.button(ctx, tr(.Multiplayer_Done), done_rect) {
 		o.listening = .None
 		if app.settings_dirty {settings_save(app)}
 		return true
 	}
-	if !in_game && ui.button(ctx, "Credits", credits_rect) {
+	if !in_game && ui.button(ctx, tr(.Credits_Credits), credits_rect) {
 		o.listening = .None
 		if app.settings_dirty {settings_save(app)}
 		app.credits = {}
@@ -199,14 +199,20 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, in_game: bool) 
 	}
 	if o.tab == .Controls {
 		ui.next(ctx)
-		ui.label(ctx, "Bindings: Keyboard and Gamepad", ui.next(ctx), .Center, t.text_muted)
+		ui.label(
+			ctx,
+			tr(.Options_Bindings_Keyboard_And_Gamepad),
+			ui.next(ctx),
+			.Center,
+			t.text_muted,
+		)
 		if bindings_list(app, ctx) {settings_changed(app)}
 		reset := ui.next(ctx)
-		if ui.button(ctx, "Reset Keys", ui.cut_left(&reset, reset.w * 0.5)) {
+		if ui.button(ctx, tr(.Options_Reset_Keys), ui.cut_left(&reset, reset.w * 0.5)) {
 			app.settings.keys = DEFAULT_BINDINGS
 			settings_changed(app)
 		}
-		if ui.button(ctx, "Reset Pad Buttons", reset) {
+		if ui.button(ctx, tr(.Options_Reset_Pad_Buttons), reset) {
 			app.settings.pad = DEFAULT_PAD_BINDINGS
 			settings_changed(app)
 		}
@@ -356,9 +362,9 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 	inner := ui.rect_shrink(box, 2 * t.padding)
 	ui.label(
 		ctx,
-		fmt.tprintf(
-			"Press a %s for %s",
-			"button" if o.listening_pad else "key",
+		tr(
+			.Options_Press_For,
+			tr(.Options_Button) if o.listening_pad else tr(.Options_Key),
 			ACTION_INFO[o.listening].label,
 		),
 		ui.cut_top(&inner, t.row_height),
@@ -366,7 +372,7 @@ bindings_list :: proc(app: ^App, ctx: ^ui.Context) -> (changed: bool) {
 	)
 	ui.label(
 		ctx,
-		"Start or Escape: leave it as it is",
+		tr(.Options_Start_Or_Escape_Leave_It),
 		ui.cut_top(&inner, t.row_height),
 		.Center,
 		t.text_muted,

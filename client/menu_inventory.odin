@@ -82,19 +82,98 @@ stack_slot :: proc(
 	}
 }
 
-// item_tooltip: name in a box by the mouse, or beside a slot (the pad's
-// cursor: right of it, left if it would run off the screen).
-item_tooltip :: proc(ctx: ^ui.Context, name: string, beside: Maybe(ui.Rect) = nil) {
+// modifier_text: "Speed +10%" (speed and jump are fractions), "Air jumps +1".
+modifier_text :: proc(m: game.Modifier) -> string {
+	switch m.kind {
+	case .Speed:
+		return fmt.tprintf("Speed %+.0f%%", m.amount * 100)
+	case .Jump:
+		return fmt.tprintf("Jump %+.0f%%", m.amount * 100)
+	case .Air_Jumps:
+		return fmt.tprintf("Air jumps %+.0f", m.amount)
+	case .Max_Health:
+		return fmt.tprintf("Max health %+.0f", m.amount)
+	}
+	return ""
+}
+
+// item_lines: what a tooltip says of an item: its name, the pack's
+// description (none: none), each modifier; with_tags adds its item tags
+// (the details panel).
+item_lines :: proc(reg: ^game.Registry, item: game.Item, with_tags := false) -> []string {
+	lines := make([dynamic]string, context.temp_allocator)
+	append(&lines, item_title(reg, item))
+	info, _ := game.item_info(reg, item)
+	if info.description != "" {append(&lines, info.description)}
+	for m in info.modifiers {
+		if m.amount != 0 {append(&lines, modifier_text(m))}
+	}
+	if with_tags {
+		tags := make([dynamic]string, context.temp_allocator)
+		for tag, i in reg.item_tags {
+			if game.registry_item_in_tag(reg, item, i32(i)) {append(&tags, tag.id)}
+		}
+		if len(tags) > 0 {
+			append(
+				&lines,
+				strings.concatenate(
+					{"Tags: ", strings.join(tags[:], ", ", context.temp_allocator)},
+					context.temp_allocator,
+				),
+			)
+		}
+	}
+	return lines[:]
+}
+
+// item_tooltip: the lines in a box by the mouse, or beside a slot (the
+// pad's cursor).
+item_tooltip :: proc(ctx: ^ui.Context, lines: []string, beside: Maybe(ui.Rect) = nil) {
 	t := &ctx.theme
 	mouse := ctx.input.mouse
-	w := ui.measure_text(ctx, name, t.font_size) + 2 * t.padding
-	tip := ui.Rect{mouse.x + 12, mouse.y + 12, w, t.row_height}
+	w: f32
+	for l in lines {w = max(w, ui.measure_text(ctx, l, t.font_size))}
+	w += 2 * t.padding
+	h := f32(len(lines)) * t.row_height + t.padding
+	tip := ui.Rect{mouse.x + 12, mouse.y + 12, w, h}
 	if r, ok := beside.?; ok {
-		tip = {r.x + r.w + 4, r.y + (r.h - t.row_height) / 2, w, t.row_height}
+		tip = {r.x + r.w + 4, r.y + (r.h - h) / 2, w, h}
 		if tip.x + w > ctx.screen.w {tip.x = r.x - 4 - w}
 	}
+	if tip.x + w > ctx.screen.x + ctx.screen.w {tip.x = ctx.screen.x + ctx.screen.w - w}
+	if tip.y + h > ctx.screen.y + ctx.screen.h {tip.y = ctx.screen.y + ctx.screen.h - h}
 	ui.fill_rect(ctx, tip, t.slot_fill)
-	ui.draw_text(ctx, ui.rect_shrink(tip, t.padding), name, t.font_size, t.text)
+	row := ui.rect_shrink(tip, t.padding / 2)
+	for l, i in lines {
+		ui.draw_text(
+			ctx,
+			ui.cut_top(&row, t.row_height),
+			l,
+			t.font_size,
+			t.text if i == 0 else t.text_muted,
+		)
+	}
+}
+
+// details_panel: the item details (design.md, The player menu): its name,
+// description, modifiers and tags, wrapped to the panel.
+details_panel :: proc(ctx: ^ui.Context, reg: ^game.Registry, r: ui.Rect, stack: game.Stack) {
+	t := &ctx.theme
+	ui.fill_rect(ctx, r, t.preview_fill)
+	ui.stroke_rect(ctx, r, 1, t.faint_border)
+	if game.stack_empty(stack) {return}
+	inner := ui.rect_shrink(r, t.padding)
+	for line, i in item_lines(reg, stack.item, true) {
+		for part in ui.wrap_words(ctx, line, t.font_size, inner.w) {
+			ui.draw_text(
+				ctx,
+				ui.cut_top(&inner, t.row_height),
+				part,
+				t.font_size,
+				t.text if i == 0 else t.text_muted,
+			)
+		}
+	}
 }
 
 // The inventory overlay (`e`): the inventory over the game (it runs on).
@@ -118,6 +197,8 @@ INVENTORY_COLUMNS :: 5
 CATALOG_COLUMNS :: 9 // (as wide as the Inventory tab: equipment, preview, grid)
 CURSOR_CATALOG_BASE :: 1000 // the pad's cursor on catalog cell k is this plus k (a slot is its index)
 PREVIEW_COLUMNS :: 3 // the player's preview, as wide as this many slots
+DETAILS_COLUMNS :: 4 // the item details panel, as wide as this many slots
+SORT_WIDTH :: 80
 DOUBLE_CLICK_SECONDS :: 0.3
 
 Drag_Mode :: enum u8 {
@@ -147,6 +228,9 @@ Inventory_View :: struct {
 	first:       int, // where the drag began
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
+	spin:        f32, // the preview turned by dragging (radians)
+	spinning:    bool, // a drag on the preview is going
+	spin_x:      f32, // where the pointer was last frame
 	cursor:      int, // the pad's cursor: a slot, or CURSOR_CATALOG_BASE + a catalog cell (-1: not placed)
 }
 
@@ -196,8 +280,10 @@ Inventory_Layout :: struct {
 	panel:   ui.Rect,
 	title:   ui.Rect, // the title, or the tabs
 	slots:   [game.ALL_SLOTS]ui.Rect, // the inventory's, the equipment's, then the chest's (empty: not shown on this tab)
-	preview: ui.Rect, // the player (Inventory only)
-	search:  ui.Rect, // Creative only
+	preview: ui.Rect, // the player (Inventory only: a chest hides it)
+	details: ui.Rect, // the item details (not on Creative)
+	sort:    ui.Rect, // the Sort button (Inventory, Chest)
+	search:  ui.Rect, // the search: above the catalog (Creative), under the pockets (the others)
 	catalog: ui.Rect, // Creative only
 }
 
@@ -207,18 +293,43 @@ inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_
 	gap := t.spacing
 	step := INVENTORY_SLOT + gap
 	rest_rows := (game.INVENTORY_SLOTS - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS
-	content_h := f32(rest_rows) * step.y + t.row_height + gap // (the same on both tabs)
-	columns := 2 * INVENTORY_COLUMNS + 1 if tab == .Chest else CATALOG_COLUMNS // (the chest and the inventory side by side)
-	w := f32(columns) * step.x - gap + 2 * t.padding
+	// A container docks above the pockets, CATALOG_COLUMNS wide.
+	chest_rows :=
+		(game.CHEST_SLOTS + CATALOG_COLUMNS - 1) / CATALOG_COLUMNS if tab == .Chest else 0
+	chest_h := f32(chest_rows) * step.y
+	content_h := chest_h + f32(rest_rows) * step.y + t.row_height + gap
+	main_w := f32(CATALOG_COLUMNS) * step.x - gap
+	details_w := f32(DETAILS_COLUMNS) * step.x - gap
+	w := main_w + 2 * gap + details_w + 2 * t.padding // (the same width on every tab: the hotbar stays put)
 	h := t.row_height + 2 * gap + content_h + 2 * gap + step.y - gap + 2 * t.padding
 	l.panel = ui.rect_center(ctx.screen, w, h)
 	inner := ui.rect_shrink(l.panel, t.padding)
 	l.title = ui.cut_top(&inner, t.row_height)
 	ui.cut_top(&inner, 2 * gap)
 	content := ui.cut_top(&inner, content_h + 2 * gap)
-	hotbar_x := inner.x + (inner.w - (game.HOTBAR_SLOTS * step.x - gap)) / 2
+	hotbar_x := inner.x + (main_w - (game.HOTBAR_SLOTS * step.x - gap)) / 2
 	for i in 0 ..< game.HOTBAR_SLOTS {
 		l.slots[i] = {hotbar_x + f32(i) * step.x, inner.y, INVENTORY_SLOT.x, INVENTORY_SLOT.y}
+	}
+	grid_w := INVENTORY_COLUMNS * step.x - gap
+	grid_x := content.x + main_w - grid_w
+	grid_y := content.y + chest_h
+	l.details = {content.x + main_w + 2 * gap, content.y, details_w, content_h - gap}
+	if tab != .Creative {
+		for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
+			row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
+			l.slots[i] = {
+				grid_x + f32(col) * step.x,
+				grid_y + f32(row) * step.y,
+				INVENTORY_SLOT.x,
+				INVENTORY_SLOT.y,
+			}
+		}
+		// Under the pockets: Sort, and the search that dims what does not match.
+		row := ui.Rect{content.x, grid_y + f32(rest_rows) * step.y, main_w, t.row_height}
+		l.sort = ui.cut_left(&row, SORT_WIDTH)
+		ui.cut_left(&row, gap)
+		l.search = row
 	}
 	switch tab {
 	case .Inventory:
@@ -237,31 +348,11 @@ inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_
 			PREVIEW_COLUMNS * step.x - gap,
 			f32(rest_rows) * step.y - gap,
 		}
-		grid_x := content.x + content.w - (INVENTORY_COLUMNS * step.x - gap)
-		for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
-			row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
-			l.slots[i] = {
-				grid_x + f32(col) * step.x,
-				content.y + f32(row) * step.y,
-				INVENTORY_SLOT.x,
-				INVENTORY_SLOT.y,
-			}
-		}
 	case .Chest:
 		for i in 0 ..< game.CHEST_SLOTS {
-			row, col := i / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
+			row, col := i / CATALOG_COLUMNS, i % CATALOG_COLUMNS
 			l.slots[game.CHEST_BASE + i] = {
 				content.x + f32(col) * step.x,
-				content.y + f32(row) * step.y,
-				INVENTORY_SLOT.x,
-				INVENTORY_SLOT.y,
-			}
-		}
-		grid_x := content.x + content.w - (INVENTORY_COLUMNS * step.x - gap)
-		for i in game.HOTBAR_SLOTS ..< game.INVENTORY_SLOTS {
-			row, col := (i - game.HOTBAR_SLOTS) / INVENTORY_COLUMNS, i % INVENTORY_COLUMNS
-			l.slots[i] = {
-				grid_x + f32(col) * step.x,
 				content.y + f32(row) * step.y,
 				INVENTORY_SLOT.x,
 				INVENTORY_SLOT.y,
@@ -291,13 +382,17 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	l := inventory_layout(ctx, v.tab)
 	ui.panel(ctx, l.panel)
 	if v.tab == .Chest {
-		ui.title(ctx, "Chest", l.title, .Left)
+		ui.title(ctx, tr(.Inventory_Chest), l.title, .Left)
 	} else {
 		strip := l.title
 		if catalog {
 			// Pockets or the catalog of every item (the section's own switch).
 			b := ui.cut_right(&strip, SECTION_TAB_WIDTH)
-			if ui.button(ctx, "Pockets" if v.tab == .Creative else "Catalog", b) {
+			if ui.button(
+				ctx,
+				tr(.Inventory_Pockets) if v.tab == .Creative else tr(.Inventory_Catalog),
+				b,
+			) {
 				v.tab = .Inventory if v.tab == .Creative else .Creative
 				l = inventory_layout(ctx, v.tab)
 			}
@@ -330,6 +425,15 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		if r.w == 0 {continue}
 		if !pad && ui.rect_contains(r, mouse) {hovered = i}
 		stack_slot(ctx, app.session.reg, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
+		if v.tab != .Creative &&
+		   len(app.inventory_search) > 0 &&
+		   !stack_matches(
+				   app.session.reg,
+				   game.slot_at(inv, i)^,
+				   string(app.inventory_search[:]),
+			   ) {
+			ui.fill_rect(ctx, r, ui.Color{0, 0, 0, 150}) // (the search dims what it does not find)
+		}
 		if i >= game.EQUIP_BASE && i < game.CHEST_BASE && game.stack_empty(game.slot_at(inv, i)^) {
 			small := ctx.theme.font_size * 0.6
 			ui.draw_text(
@@ -348,6 +452,15 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	do_ :: proc(s: ^Session, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
 		session_inventory_do(s, {kind, slot, arg})
 	}
+	if v.tab != .Creative {
+		if ui.button(ctx, tr(.Inventory_Sort), l.sort) {do_(s, .Sort, 0)}
+		ui.text_input(ctx, "inventory search", &app.inventory_search, l.search, "search")
+	}
+	// The hovered stack's details, else the cursor's, else the held hotbar slot's.
+	shown := inv.slots[inv.selected]
+	if !game.stack_empty(inv.cursor) {shown = inv.cursor}
+	if hovered >= 0 {shown = game.slot_at(inv, hovered)^}
+	details_panel(ctx, app.session.reg, l.details, shown)
 	if top {
 		inventory_mouse(app, ctx, l.panel, hovered, catalog)
 		if hovered >= 0 && !ctx.edit.active {
@@ -375,7 +488,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	   game.stack_empty(inv.cursor) {
 		item_tooltip(
 			ctx,
-			item_title(app.session.reg, game.slot_at(inv, hovered).item),
+			item_lines(app.session.reg, game.slot_at(inv, hovered).item),
 			at if pad else nil,
 		)
 	}
@@ -453,7 +566,7 @@ catalog_ui :: proc(
 	defer {
 		ui.pop_clip_rect(ctx)
 		if hovered != game.NO_ITEM && game.stack_empty(s.inventory.cursor) {
-			item_tooltip(ctx, item_title(app.session.reg, hovered), at if pad else nil)
+			item_tooltip(ctx, item_lines(app.session.reg, hovered), at if pad else nil)
 		}
 	}
 	for k in first ..< len(items) {
@@ -698,6 +811,13 @@ spread_stack :: proc(s: ^Session, v: ^Inventory_View) {
 
 // matching_items: the items whose names contain query (any case; every item
 // when it is empty).
+// stack_matches: the stack's item has query in its name (an empty slot never matches).
+stack_matches :: proc(reg: ^game.Registry, stack: game.Stack, query: string) -> bool {
+	if game.stack_empty(stack) {return false}
+	name := strings.to_lower(item_title(reg, stack.item), context.temp_allocator)
+	return strings.contains(name, strings.to_lower(query, context.temp_allocator))
+}
+
 matching_items :: proc(reg: ^game.Registry, query: string) -> []game.Item {
 	all := game.every_item(reg)
 	if len(query) == 0 {return all}
@@ -734,7 +854,17 @@ player_preview :: proc(app: ^App, ctx: ^ui.Context, r: ui.Rect, look: ui.Vec2) {
 	dx := (look.x - (r.x + r.w / 2)) / (r.w * 2)
 	dy := ((r.y + r.h * 0.3) - look.y) / (r.h * 2)
 	app.preview.active = true
-	app.preview.target_yaw = clamp(dx * 1.6, -0.9, 0.9)
+	v := &app.inventory_view
+	mouse := ctx.input.mouse
+	if .Left in ctx.input.mouse_pressed && ui.rect_contains(r, mouse) {
+		v.spinning, v.spin_x = true, mouse.x
+	}
+	if .Left not_in ctx.input.mouse_down {v.spinning = false}
+	if v.spinning {
+		v.spin += (mouse.x - v.spin_x) / r.w * 4 // (dragging across it turns it round once or so)
+		v.spin_x = mouse.x
+	}
+	app.preview.target_yaw = clamp(dx * 1.6, -0.9, 0.9) + v.spin
 	app.preview.target_pitch = clamp(dy * 1.4, -0.6, 0.6)
 	ui.draw_image(ctx, r, PREVIEW_IMAGE)
 }

@@ -121,7 +121,7 @@ dial_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	l := dial_layout(ctx)
 	ui.panel(ctx, l.panel)
 	inner := ui.rect_shrink(l.panel, t.padding)
-	ui.label(ctx, "Dial a world", ui.cut_top(&inner, t.row_height), .Center)
+	ui.label(ctx, tr(.Dial_Dial_A_World), ui.cut_top(&inner, t.row_height), .Center)
 	here := s.welcome.address
 	galaxy := strings.builder_make(context.temp_allocator)
 	strings.write_string(&galaxy, "in galaxy ")
@@ -165,6 +165,6 @@ dial_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		}
 		ui.pop_id(ctx)
 	}
-	if ui.button(ctx, "Erase", l.erase, disabled = d.count == 0) {d.count -= 1}
-	if ui.button(ctx, "Cancel", l.cancel) {overlay_close(&app.overlays, .Dial)}
+	if ui.button(ctx, tr(.Dial_Erase), l.erase, disabled = d.count == 0) {d.count -= 1}
+	if ui.button(ctx, tr(.Dial_Cancel), l.cancel) {overlay_close(&app.overlays, .Dial)}
 }

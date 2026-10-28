@@ -1,5 +1,6 @@
 {
 	"cap": {
+		"description": "Worn on the head.",
 		"stack": 1,
 		"armor": "cap",
 		"equip": "head",
@@ -11,6 +12,7 @@
 		]
 	},
 	"tunic": {
+		"description": "Worn on the chest.",
 		"stack": 1,
 		"armor": "tunic",
 		"equip": "chest",
@@ -22,6 +24,7 @@
 		]
 	},
 	"trousers": {
+		"description": "Worn on the legs.",
 		"stack": 1,
 		"armor": "trousers",
 		"equip": "legs",
@@ -33,6 +36,7 @@
 		]
 	},
 	"boots": {
+		"description": "Worn on the feet.",
 		"stack": 1,
 		"armor": "boots",
 		"equip": "feet",

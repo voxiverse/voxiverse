@@ -98,7 +98,7 @@ servers_list :: proc(app: ^App, ctx: ^ui.Context) {
 	m := &app.multiplayer
 	t := &ctx.theme
 	area := ui.rect_center(ctx.screen, MULTIPLAYER_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, "Multiplayer", ui.cut_top(&area, 70))
+	ui.title(ctx, tr(.Title_Multiplayer), ui.cut_top(&area, 70))
 	buttons := ui.cut_bottom(&area, 2 * t.row_height + t.spacing)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	if app.message != "" {
@@ -191,18 +191,27 @@ servers_list :: proc(app: ^App, ctx: ^ui.Context) {
 	half := (buttons.w - t.spacing) / 2
 	top := ui.cut_top(&buttons, t.row_height)
 	ui.cut_top(&buttons, t.spacing)
-	if ui.button(ctx, "Join Server", ui.cut_left(&top, half), disabled = chosen == nil) {
+	if ui.button(
+		ctx,
+		tr(.Multiplayer_Join_Server),
+		ui.cut_left(&top, half),
+		disabled = chosen == nil,
+	) {
 		server_join(app, chosen.?)
 		return
 	}
 	ui.cut_left(&top, t.spacing)
-	if ui.button(ctx, "Direct Connection", top) {
+	if ui.button(ctx, tr(.Multiplayer_Direct_Connection), top) {
 		clear(&m.address)
 		append(&m.address, base.var_text(&app.settings.last_server))
 		clear(&m.password)
 		m.mode = .Direct
 	}
-	if ui.button(ctx, "Back", ui.rect_center(buttons, half, t.row_height)) {multiplayer_back(app)}
+	if ui.button(
+		ctx,
+		tr(.Credits_Back),
+		ui.rect_center(buttons, half, t.row_height),
+	) {multiplayer_back(app)}
 }
 
 // Found: a server of the list, enough to join it.
@@ -232,10 +241,10 @@ direct_connection :: proc(app: ^App, ctx: ^ui.Context) {
 	m := &app.multiplayer
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 460, 6 * (t.row_height + t.spacing) + 80)
-	ui.title(ctx, "Direct Connection", ui.cut_top(&column, 80))
+	ui.title(ctx, tr(.Multiplayer_Direct_Connection), ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	ui.label(ctx, "Server Address", ui.next(ctx), .Left, t.text_muted)
+	ui.label(ctx, tr(.Multiplayer_Server_Address), ui.next(ctx), .Left, t.text_muted)
 	submitted := ui.text_input(
 		ctx,
 		"address",
@@ -254,13 +263,18 @@ direct_connection :: proc(app: ^App, ctx: ^ui.Context) {
 	address := strings.trim_space(string(m.address[:]))
 	row := ui.next(ctx)
 	half := (row.w - t.spacing) / 2
-	join := ui.button(ctx, "Join Server", ui.cut_left(&row, half), disabled = address == "")
+	join := ui.button(
+		ctx,
+		tr(.Multiplayer_Join_Server),
+		ui.cut_left(&row, half),
+		disabled = address == "",
+	)
 	if (join || submitted) && address != "" {
 		if base.var_text_set(&app.settings.last_server, address) {settings_changed(app)}
 		join_from_screen(app, address, string(m.password[:]))
 		return
 	}
-	if ui.button(ctx, "Cancel", ui.cut_right(&row, half)) {m.mode = .List}
+	if ui.button(ctx, tr(.Dial_Cancel), ui.cut_right(&row, half)) {m.mode = .List}
 }
 
 // name_prompt: the first visit asks for the name others will see (kept in
@@ -270,28 +284,30 @@ name_prompt :: proc(app: ^App, ctx: ^ui.Context) {
 	m := &app.multiplayer
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 460, 5 * (t.row_height + t.spacing) + 80)
-	ui.title(ctx, "Choose a Name", ui.cut_top(&column, 80))
+	ui.title(ctx, tr(.Multiplayer_Choose_A_Name), ui.cut_top(&column, 80))
 	ui.layout_begin(ctx, column)
 	defer ui.layout_end(ctx)
-	ui.label(ctx, "The name other players see", ui.next(ctx), .Left, t.text_muted)
+	ui.label(ctx, tr(.Multiplayer_The_Name_Other_Players_See), ui.next(ctx), .Left, t.text_muted)
 	submitted := ui.text_input(ctx, "name", &m.name, ui.next(ctx), placeholder = DEFAULT_NAME)
 	name := strings.trim_space(string(m.name[:]))
 	valid := game.name_valid(name)
 	ui.label(
 		ctx,
-		"" if valid || name == "" else "Letters, digits, _ and - (16 at most)",
+		"" if valid || name == "" else tr(.Multiplayer_Letters_Digits_And_16_At),
 		ui.next(ctx),
 		.Left,
 		t.text_muted,
 	)
 	row := ui.next(ctx)
 	half := (row.w - t.spacing) / 2
-	if (ui.button(ctx, "Done", ui.cut_left(&row, half), disabled = !valid) || submitted) && valid {
+	if (ui.button(ctx, tr(.Multiplayer_Done), ui.cut_left(&row, half), disabled = !valid) ||
+		   submitted) &&
+	   valid {
 		base.var_text_set(&app.settings.name, name)
 		settings_changed(app)
 		m.mode = .List
 	}
-	if ui.button(ctx, "Cancel", ui.cut_right(&row, half)) {multiplayer_back(app)}
+	if ui.button(ctx, tr(.Dial_Cancel), ui.cut_right(&row, half)) {multiplayer_back(app)}
 }
 
 @(private = "file")

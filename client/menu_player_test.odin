@@ -1,5 +1,6 @@
 package client
 
+import "core:strings"
 import "core:testing"
 
 import "platform"
@@ -103,7 +104,11 @@ test_player_menu_keys :: proc(t: ^testing.T) {
 	testing.expect(t, !world_paused(app))
 	escape(app)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Player_Menu))
-	testing.expect(t, !overlay_is_open(&app.overlays, .Game_Menu), "no game menu in the same press")
+	testing.expect(
+		t,
+		!overlay_is_open(&app.overlays, .Game_Menu),
+		"no game menu in the same press",
+	)
 	testing.expect_value(t, app.overlays.count, 0)
 }
 
@@ -123,4 +128,34 @@ test_player_menu_below_an_overlay :: proc(t: ^testing.T) {
 	overlay_close(&app.overlays, .Quit_Dialog)
 	tap(&f, .K)
 	testing.expect(t, section_open(app, .Statistics))
+}
+
+// Each section and the title draw (the pictures themselves are looked at by
+// hand: the "Check by hand" list): a frame has vertices and says what a
+// player reads.
+@(test)
+test_sections_draw :: proc(t: ^testing.T) {
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	defer stats_view_destroy(&f.app.stats_view)
+	app := f.app
+	says :: proc(app: ^App, what: string) -> bool {
+		for x in app.ui.texts {if strings.contains(x, what) {return true}}
+		return false
+	}
+	overlay_frame(&f, {})
+	testing.expect(t, len(app.ui.output.vertices) > 0)
+	testing.expect(t, says(app, "Inventory"), "the inventory's strip")
+	testing.expect(t, says(app, "Statistics"))
+	testing.expect(t, says(app, "(E)"), "the key of a section is on its tab")
+	// The chest: no strip, the chest's title.
+	f.s.inventory.chest_open = true
+	overlay_frame(&f, {})
+	testing.expect(t, says(app, "Chest"))
+	f.s.inventory.chest_open = false
+	player_menu_show(app, .Statistics)
+	overlay_frame(&f, {})
+	testing.expect(t, len(app.ui.output.vertices) > 0)
+	testing.expect(t, says(app, "search") || says(app, "Statistics"))
 }

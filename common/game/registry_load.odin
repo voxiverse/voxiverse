@@ -136,7 +136,16 @@ BLOCK_FIELDS := []string {
 	"override",
 }
 @(private)
-ITEM_FIELDS := []string{"stack", "places", "tool", "armor", "equip", "modifiers", "override"}
+ITEM_FIELDS := []string {
+	"stack",
+	"places",
+	"tool",
+	"armor",
+	"equip",
+	"modifiers",
+	"description",
+	"override",
+}
 @(private)
 TEXTURE_FIELDS := []string{"generator", "image", "override"}
 @(private)

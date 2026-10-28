@@ -291,3 +291,33 @@ test_chest_actions :: proc(t: ^testing.T) {
 	_, ok = inventory_apply(test_reg(), &inv, {.Close, CURSOR_SLOT, 0}, false)
 	testing.expect(t, ok && !inv.chest_open && inv.chest == {} && stack_empty(inv.cursor))
 }
+
+// Sort: the grid's stacks merge up to the stack size and go in item order,
+// the empty slots last; the hotbar and the cursor are not touched; nothing
+// to change is no change.
+@(test)
+test_inventory_sort :: proc(t: ^testing.T) {
+	reg := test_reg()
+	stone, dirt := item_of_block(reg, .Stone), item_of_block(reg, .Dirt)
+	inv: Inventory
+	inv.slots[0] = {dirt, 9} // the hotbar: left alone
+	inv.slots[HOTBAR_SLOTS + 7] = {dirt, 60}
+	inv.slots[HOTBAR_SLOTS + 2] = {stone, 3}
+	inv.slots[HOTBAR_SLOTS + 11] = {dirt, 20}
+	inv.cursor = {stone, 2}
+	_, ok := inventory_apply(reg, &inv, {.Sort, 0, 0}, false)
+	testing.expect(t, ok)
+	grid := inv.slots[HOTBAR_SLOTS:INVENTORY_SLOTS]
+	first, second := min(stone, dirt), max(stone, dirt)
+	// Stone 3 and dirt 80 (a stack of 64 and one of 16), in item order.
+	want := [?]Stack{{stone, 3}, {dirt, 64}, {dirt, 16}}
+	if first != stone {want = {{dirt, 64}, {dirt, 16}, {stone, 3}}}
+	for w, i in want {testing.expect_value(t, grid[i], w)}
+	for s in grid[len(want):] {testing.expect(t, stack_empty(s))}
+	testing.expect_value(t, inv.slots[0], Stack{dirt, 9})
+	testing.expect_value(t, inv.cursor, Stack{stone, 2})
+	_ = second
+	// Sorted already: no change, and the server refuses it as a no-op.
+	_, ok = inventory_apply(reg, &inv, {.Sort, 0, 0}, false)
+	testing.expect(t, !ok)
+}

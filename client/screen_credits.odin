@@ -32,7 +32,7 @@ credits_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	v := &app.credits
 	t := &ctx.theme
 	area := ui.rect_center(ctx.screen, CREDITS_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, "Credits", ui.cut_top(&area, 70))
+	ui.title(ctx, tr(.Credits_Credits), ui.cut_top(&area, 70))
 	buttons := ui.cut_bottom(&area, t.row_height)
 	ui.cut_bottom(&area, 2 * t.spacing)
 	ui.fill_rect(ctx, area, t.list_fill)
@@ -49,7 +49,7 @@ credits_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.pop_clip_rect(ctx)
 	ui.layout_begin(ctx, buttons)
 	defer ui.layout_end(ctx)
-	if ui.button(ctx, "Back", ui.next(ctx)) {credits_back(app)}
+	if ui.button(ctx, tr(.Credits_Back), ui.next(ctx)) {credits_back(app)}
 }
 
 credits_back :: proc(app: ^App) {

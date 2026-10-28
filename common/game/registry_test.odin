@@ -844,3 +844,30 @@ test_registry_hash :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+// An item's description is an optional short text for the tooltip.
+@(test)
+test_item_description :: proc(t: ^testing.T) {
+	reg, errs := build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{"data/items/a.json", `{"a": {"stack": 1, "description": "A thing."}, "b": {}}`},
+			},
+		),
+	)
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	a, _ := registry_item(reg, "testpack:a")
+	b, _ := registry_item(reg, "testpack:b")
+	info, _ := registry_item_info(reg, a)
+	testing.expect_value(t, info.description, "A thing.")
+	info, _ = registry_item_info(reg, b)
+	testing.expect_value(t, info.description, "")
+	// Not a text: refused with its place.
+	_, bad := build_with(
+		pack_of("testpack", []File{{"data/items/a.json", `{"a": {"description": 5}}`}}),
+	)
+	testing.expect(t, len(bad) == 1, "a description that is not a text is refused")
+}
