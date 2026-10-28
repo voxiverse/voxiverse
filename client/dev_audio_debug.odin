@@ -32,7 +32,7 @@ Audio_Debug :: struct {
 	written:    int,
 	last_saved: bool,
 	last_path:  string, // the file written last (owned, clones into the heap)
-	frozen:     ^audio.Frozen, // the inspector's freeze (audio_inspector.odin)
+	frozen:     ^audio.Frozen, // the inspector's freeze (dev_audio_inspector.odin)
 	autosaved:  time.Tick, // audio-last.vxac, written while the mixer is busy
 }
 

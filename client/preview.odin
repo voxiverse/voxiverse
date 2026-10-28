@@ -9,7 +9,7 @@ import "render"
 // The player's preview in the inventory: the real avatar (avatar_draw, as
 // the others see it, with what it wears) drawn by the entity pass into a
 // render target of its own, seen from the front, turned toward the mouse
-// (inventory_ui.odin sets the target angles); the UI shows the target as an
+// (menu_inventory.odin sets the target angles); the UI shows the target as an
 // image. Drawn only while the inventory shows it.
 
 PREVIEW_WIDTH :: 256

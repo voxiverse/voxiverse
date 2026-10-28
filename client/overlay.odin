@@ -18,9 +18,9 @@ Overlay :: enum u8 {
 	Inventory,
 	Console,
 	Quit_Dialog,
-	Dial, // a gate's symbols (dial.odin)
-	Stats, // the statistics (stats_ui.odin)
-	Audio_Inspector, // F8, dev builds: the audio freeze and solo (audio_inspector.odin)
+	Dial, // a gate's symbols (overlay_dial.odin)
+	Stats, // the statistics (menu_statistics.odin)
+	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 }
 
@@ -129,9 +129,9 @@ escape :: proc(app: ^App) {
 		return
 	}
 	switch app.screen {
-	case .Worlds:
+	case .Universes:
 		// A save's screen (create, edit, delete) back to the list first.
-		if app.worlds.mode != .List {app.worlds.mode = .List} else {app.screen = .Title}
+		if app.universes.mode != .List {app.universes.mode = .List} else {app.screen = .Title}
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 		app.screen = .Title

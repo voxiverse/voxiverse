@@ -46,8 +46,8 @@ ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 		options_screen(app, &app.ui)
 	case .Credits:
 		credits_screen(app, &app.ui)
-	case .Worlds:
-		worlds_screen(app, &app.ui)
+	case .Universes:
+		universes_screen(app, &app.ui)
 	case .Multiplayer:
 		multiplayer_screen(app, &app.ui)
 	case .Failed:
@@ -228,42 +228,42 @@ test_saves_screen :: proc(t: ^testing.T) {
 	}
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer worlds_destroy(&app.worlds)
-	worlds_refresh(&app.worlds)
-	testing.expect_value(t, len(app.worlds.entries), 2)
-	app.screen = .Worlds
+	defer universes_destroy(&app.universes)
+	universes_refresh(&app.universes)
+	testing.expect_value(t, len(app.universes.entries), 2)
+	app.screen = .Universes
 	ui_frame(app)
 
 	click(t, app, "Castle")
-	testing.expect(t, app.worlds.selected >= 0)
-	testing.expect_value(t, app.worlds.entries[app.worlds.selected].name, "Castle")
+	testing.expect(t, app.universes.selected >= 0)
+	testing.expect_value(t, app.universes.entries[app.universes.selected].name, "Castle")
 
 	// Edit: the name, renamed on Save.
 	click(t, app, "Edit")
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.Edit)
-	clear(&app.worlds.name)
-	append(&app.worlds.name, "Fort")
+	testing.expect_value(t, app.universes.mode, Saves_Mode.Edit)
+	clear(&app.universes.name)
+	append(&app.universes.name, "Fort")
 	ui_frame(app)
 	click(t, app, "Save")
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.List)
+	testing.expect_value(t, app.universes.mode, Saves_Mode.List)
 	testing.expect(t, os.exists("build/test/saves/Fort") && !os.exists("build/test/saves/Castle"))
 
 	// Delete: asked first; Cancel keeps it, Delete does not.
 	// (Clicks on one save this close together would be a double-click: Play.)
-	app.worlds.last_row = -1
+	app.universes.last_row = -1
 	ui_frame(app)
 	click(t, app, "Fort")
 	click(t, app, "Delete")
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.Delete)
+	testing.expect_value(t, app.universes.mode, Saves_Mode.Delete)
 	click(t, app, "Cancel")
 	testing.expect(t, os.exists("build/test/saves/Fort"))
-	app.worlds.last_row = -1
+	app.universes.last_row = -1
 	click(t, app, "Fort")
 	click(t, app, "Delete")
 	ui_frame(app)
 	click(t, app, "Delete") // the dialog's
 	testing.expect(t, !os.exists("build/test/saves/Fort"))
-	testing.expect_value(t, len(app.worlds.entries), 1)
+	testing.expect_value(t, len(app.universes.entries), 1)
 	free_all(context.temp_allocator)
 }
 
@@ -303,7 +303,7 @@ test_multiplayer_screen :: proc(t: ^testing.T) {
 test_screens_speak_plainly :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer worlds_destroy(&app.worlds)
+	defer universes_destroy(&app.universes)
 	defer multiplayer_destroy(&app.multiplayer)
 
 	WORDS :: []string{"universe", "scratch", "chunk", "session", "mesh", "interest", "var", "null"}
@@ -321,14 +321,14 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	check(t, app, "the title")
 	// (A save of its own: VX_SAVES is the saves test's, running alongside.)
 	append(
-		&app.worlds.entries,
+		&app.universes.entries,
 		Save_Entry{strings.clone("Home"), strings.clone("Home"), time.now()},
 	)
-	app.screen = .Worlds
+	app.screen = .Universes
 	check(t, app, "Singleplayer")
-	app.worlds.selected = 0
+	app.universes.selected = 0
 	for mode in Saves_Mode {
-		app.worlds.mode, app.worlds.more = mode, true
+		app.universes.mode, app.universes.more = mode, true
 		check(t, app, fmt.tprint("Singleplayer", mode))
 	}
 	multiplayer_open(app)
@@ -617,7 +617,7 @@ rig_free :: proc(r: ^Rig) {
 	delete(r.app.new_character)
 	line_editor_destroy(&r.app.chat)
 	console_destroy(&r.app.console)
-	worlds_destroy(&r.app.worlds)
+	universes_destroy(&r.app.universes)
 	multiplayer_destroy(&r.app.multiplayer)
 	ui_app_free(r.app)
 	free(r)
@@ -645,13 +645,13 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	// The title: Singleplayer is lit at once; A opens the saves.
 	testing.expect_value(t, ui.focused_label(&app.ui), "Singleplayer")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.screen, Screen.Worlds)
-	testing.expect_value(t, len(app.worlds.entries), 2)
+	testing.expect_value(t, app.screen, Screen.Universes)
+	testing.expect_value(t, len(app.universes.entries), 2)
 	// The list: Down selects, and leaves at its last row.
 	testing.expect_value(t, ui.focused_label(&app.ui), "saves")
 	pad_go(app, .Down)
 	pad_go(app, .Down)
-	testing.expect_value(t, app.worlds.selected, 1)
+	testing.expect_value(t, app.universes.selected, 1)
 	pad_go(app, .Down)
 	testing.expect(t, ui.focused_label(&app.ui) != "saves", "Down at the last row leaves the list")
 
@@ -660,17 +660,17 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_go(app, .Right)
 	testing.expect_value(t, ui.focused_label(&app.ui), "Create New Save")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.Create)
+	testing.expect_value(t, app.universes.mode, Saves_Mode.Create)
 	testing.expect_value(t, ui.focused_label(&app.ui), "name")
 	pad_tap(app, .A) // Confirm on a text field: the keyboard
 	testing.expect(t, ui.osk_is_open(&app.ui))
 	for _ in 0 ..< len("New Save") {pad_tap(app, .X)} 	// X is Backspace
-	testing.expect_value(t, len(app.worlds.name), 0)
+	testing.expect_value(t, len(app.universes.name), 0)
 	pad_type(t, app, "Pad")
-	testing.expect_value(t, string(app.worlds.name[:]), "Pad")
+	testing.expect_value(t, string(app.universes.name[:]), "Pad")
 	pad_tap(app, .B)
 	testing.expect(t, !ui.osk_is_open(&app.ui))
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.Create) // (B closed the keyboard first)
+	testing.expect_value(t, app.universes.mode, Saves_Mode.Create) // (B closed the keyboard first)
 	pad_frame(app)
 	found := false
 	for text in app.ui.texts {if text == "Pad" {found = true}}
@@ -679,7 +679,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_go(app, .Right)
 	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.worlds.mode, Saves_Mode.List)
+	testing.expect_value(t, app.universes.mode, Saves_Mode.List)
 	pad_tap(app, .B)
 	testing.expect_value(t, app.screen, Screen.Title)
 

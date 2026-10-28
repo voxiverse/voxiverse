@@ -35,7 +35,7 @@ Screen :: enum u8 {
 	Title,
 	Options,
 	Credits,
-	Worlds,
+	Universes,
 	Multiplayer,
 	Game, // a session exists
 	Failed, // the session ended against our will: why (app.failed)
@@ -70,7 +70,7 @@ App :: struct {
 	volumes:          [audio.Bus]f32, // as last told to the mixer
 	listener:         audio.Listener, // ... and the listener's options
 	shader_watch:     Shader_Watch,
-	worlds:           Worlds_Screen,
+	universes:           Universes_Screen,
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	debug:            Debug_Switches,
@@ -80,9 +80,9 @@ App :: struct {
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
 	bench:            Bench, // the scenario running (benchmark.odin)
 	stars:            Starfield, // the menus' background (starfield.odin)
-	failed:           Failed, // the Failed screen's (loading.odin)
-	credits:          Credits_View, // the Credits screen's scroll (credits.odin)
-	options:          Options_View, // the Options screen's tab and state (options.odin)
+	failed:           Failed, // the Failed screen's (screen_loading.odin)
+	credits:          Credits_View, // the Credits screen's scroll (screen_credits.odin)
+	options:          Options_View, // the Options screen's tab and state (screen_options.odin)
 	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
 	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
@@ -99,25 +99,25 @@ App :: struct {
 	injected:         [dynamic]platform.Event, // events the pad command and checks add
 	settings:         Settings,
 	screen:           Screen,
-	overlays:         Overlays, // what is open over the screen (overlays.odin)
+	overlays:         Overlays, // what is open over the screen (overlay.odin)
 	account:          game.Account_Key, // who we are to servers (account.odin)
 	new_character:    [dynamic]u8, // the name typed on the characters screen
-	chat:             Line_Editor, // the chat's line (chat.odin)
+	chat:             Line_Editor, // the chat's line (overlay_chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
-	inventory_view:   Inventory_View, // the inventory overlay's (inventory_ui.odin)
+	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
 	launched:         time.Tick, // when the program started
-	stats_view:       Stats_View, // the statistics overlay's (stats_ui.odin)
+	stats_view:       Stats_View, // the statistics overlay's (menu_statistics.odin)
 	preview:          Preview, // the player in the inventory (preview.odin)
 	inventory_search: [dynamic]u8, // the Creative tab's search text
-	prompt_icons:     Prompt_Icons, // the button glyphs (prompts.odin)
+	prompt_icons:     Prompt_Icons, // the button glyphs (hud_prompts.odin)
 	prompts_shown:    [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
 	prompts_count:    int,
 	shown:            ^game.Registry, // the registry the texture array, sound bank and icons were last made for (nil: none of a session)
 	registry:         ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
-	dial:             Dial_View, // the dial overlay's (dial.odin)
+	dial:             Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:             bool,
 	frame_stats:      base.Frame_Stats,
 	triangle_stats:   base.Frame_Stats, // thousands drawn a frame, in a world
@@ -332,7 +332,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)
 	shader_watch_destroy(&app.shader_watch)
-	worlds_destroy(&app.worlds)
+	universes_destroy(&app.universes)
 	multiplayer_destroy(&app.multiplayer)
 	delete(app.failed.reason)
 	delete(app.message)

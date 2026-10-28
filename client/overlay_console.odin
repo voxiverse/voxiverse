@@ -262,7 +262,7 @@ register_builtin_commands :: proc(c: ^Console) {
 		c,
 		{
 			"screen",
-			"screen <title|game|menu|inventory [creative]|stats|options [tab]|worlds [create]|multiplayer [direct]|quit>: switch screens (game: back to it; menu: the game menu; quit: the quit dialog)",
+			"screen <title|game|menu|inventory [creative]|stats|options [tab]|universes [create]|multiplayer [direct]|quit>: switch screens (game: back to it; menu: the game menu; quit: the quit dialog)",
 			proc(app: ^App, args: []string) {
 				then := args[1] if len(args) > 1 else ""
 				switch args[0] {
@@ -293,13 +293,13 @@ register_builtin_commands :: proc(c: ^Console) {
 					} else {
 						app.screen = .Options
 					}
-				case "worlds":
-					worlds_refresh(&app.worlds)
-					app.screen = .Worlds
+				case "universes":
+					universes_refresh(&app.universes)
+					app.screen = .Universes
 					if then == "create" {
-						clear(&app.worlds.name)
-						append(&app.worlds.name, "New Save")
-						app.worlds.mode = .Create
+						clear(&app.universes.name)
+						append(&app.universes.name, "New Save")
+						app.universes.mode = .Create
 					}
 				case "multiplayer":
 					multiplayer_open(app)
@@ -313,7 +313,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				case:
 					console_print(
 						&app.console,
-						"screen: title, game, menu, inventory, stats, options, credits, worlds, multiplayer or quit",
+						"screen: title, game, menu, inventory, stats, options, credits, universes, multiplayer or quit",
 						.Warning,
 					)
 				}
@@ -630,7 +630,7 @@ register_builtin_commands :: proc(c: ^Console) {
 					console_print(&app.console, fmt.tprintf("import: %s", why), .Warning)
 					return
 				}
-				worlds_refresh(&app.worlds)
+				universes_refresh(&app.universes)
 				console_print(
 					&app.console,
 					fmt.tprintf(

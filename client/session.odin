@@ -60,7 +60,7 @@ Session_State :: enum u8 {
 
 Session :: struct {
 	state:            Session_State,
-	loading:          Maybe(Loading), // the loading screen is up (loading.odin)
+	loading:          Maybe(Loading), // the loading screen is up (screen_loading.odin)
 	failure:          string, // why it failed (in the arena)
 	arena:            virtual.Arena,
 	pipe:             game.Pipe, // to our own server (hosting)
@@ -135,7 +135,7 @@ Session :: struct {
 	home:             game.Address, // the world we joined in (the music's "home")
 	died:             int, // Player_Died events seen (the music's death stinger)
 	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
-	player_stats:     Stats_Data, // the counters the server last sent (stats_ui.odin)
+	player_stats:     Stats_Data, // the counters the server last sent (menu_statistics.odin)
 	config:           Session_Config,
 	net:              Net_Stats,
 }

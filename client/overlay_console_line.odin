@@ -122,7 +122,7 @@ complete_screen :: proc(app: ^App, arg: int, args: []string) -> []string {
 			"inventory",
 			"stats",
 			"options",
-			"worlds",
+			"universes",
 			"multiplayer",
 			"quit",
 		},

@@ -37,7 +37,7 @@ Saves_Mode :: enum u8 {
 	Delete, // confirming
 }
 
-Worlds_Screen :: struct {
+Universes_Screen :: struct {
 	entries:    [dynamic]Save_Entry,
 	mode:       Saves_Mode,
 	selected:   int, // -1: none
@@ -60,7 +60,7 @@ saves_dir :: proc() -> string {
 	return filepath.join({dir, "voxiverse", "saves"}, context.temp_allocator) or_else "saves"
 }
 
-worlds_destroy :: proc(w: ^Worlds_Screen) {
+universes_destroy :: proc(w: ^Universes_Screen) {
 	worlds_clear(w)
 	delete(w.entries)
 	delete(w.name)
@@ -68,7 +68,7 @@ worlds_destroy :: proc(w: ^Worlds_Screen) {
 }
 
 @(private = "file")
-worlds_clear :: proc(w: ^Worlds_Screen) {
+worlds_clear :: proc(w: ^Universes_Screen) {
 	for e in w.entries {
 		delete(e.name)
 		delete(e.path)
@@ -76,9 +76,9 @@ worlds_clear :: proc(w: ^Worlds_Screen) {
 	clear(&w.entries)
 }
 
-// worlds_refresh lists the saves: directories with a universe.cfg, or a
+// universes_refresh lists the saves: directories with a universe.cfg, or a
 // world.cfg (from before universes), most recently played first.
-worlds_refresh :: proc(w: ^Worlds_Screen) {
+universes_refresh :: proc(w: ^Universes_Screen) {
 	worlds_clear(w)
 	w.selected, w.mode, w.scroll, w.message = -1, .List, 0, ""
 	dir := saves_dir()
@@ -179,10 +179,10 @@ last_played :: proc(t: time.Time) -> string {
 	return fmt.tprintf("%d %v %d", d, m, y)
 }
 
-worlds_screen :: proc(app: ^App, ctx: ^ui.Context) {
+universes_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "saves")
 	defer ui.pop_id(ctx)
-	w := &app.worlds
+	w := &app.universes
 	switch w.mode {
 	case .List:
 		saves_list(app, ctx)
@@ -201,7 +201,7 @@ SAVES_WIDTH :: 620
 
 @(private = "file")
 saves_list :: proc(app: ^App, ctx: ^ui.Context) {
-	w := &app.worlds
+	w := &app.universes
 	t := &ctx.theme
 	area := ui.rect_center(ctx.screen, SAVES_WIDTH, ctx.screen.h - 60)
 	ui.title(ctx, "Singleplayer", ui.cut_top(&area, 70))
@@ -293,14 +293,14 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 
 @(private = "file")
 save_play :: proc(app: ^App, i: int) {
-	w := &app.worlds
+	w := &app.universes
 	if i < 0 || i >= len(w.entries) {return}
 	enter_world(app, w.entries[i].path, 0)
 }
 
 @(private = "file")
 save_create :: proc(app: ^App, ctx: ^ui.Context) {
-	w := &app.worlds
+	w := &app.universes
 	t := &ctx.theme
 	column := ui.rect_center(ctx.screen, 420, 8 * (t.row_height + t.spacing) + 70)
 	ui.title(ctx, "Create New Save", ui.cut_top(&column, 70))
@@ -331,7 +331,7 @@ save_create :: proc(app: ^App, ctx: ^ui.Context) {
 
 @(private = "file")
 save_edit :: proc(app: ^App, ctx: ^ui.Context) {
-	w := &app.worlds
+	w := &app.universes
 	t := &ctx.theme
 	if w.selected < 0 || w.selected >= len(w.entries) {
 		w.mode = .List
@@ -362,7 +362,7 @@ save_edit :: proc(app: ^App, ctx: ^ui.Context) {
 				return
 			}
 		}
-		worlds_refresh(w)
+		universes_refresh(w)
 		return
 	}
 	if ui.button(ctx, "Cancel", cancel) {w.mode, w.message = .List, ""}
@@ -370,7 +370,7 @@ save_edit :: proc(app: ^App, ctx: ^ui.Context) {
 
 @(private = "file")
 save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
-	w := &app.worlds
+	w := &app.universes
 	t := &ctx.theme
 	if w.selected < 0 || w.selected >= len(w.entries) {
 		w.mode = .List
@@ -400,7 +400,7 @@ save_delete_confirm :: proc(app: ^App, ctx: ^ui.Context) {
 		if err := os.remove_all(e.path); err != nil {
 			log.errorf("saves cannot delete path=%s error=%v", e.path, err)
 		}
-		worlds_refresh(w)
+		universes_refresh(w)
 		return
 	}
 	ui.default_focus(ctx)
