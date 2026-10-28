@@ -208,6 +208,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.endpoint = {&s.pipe, .Client}
 	if own := server.registry_for_dir(config.save_dir); own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
+		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
 		game.receiver_init(&s.rx, &s.schema, s.reg)
 	}
 	if !server.start(
