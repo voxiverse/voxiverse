@@ -262,7 +262,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	if !config.stepped {
 		s.thread = thread.create(server_main, name = "server")
 		s.thread.data = s
-		s.thread.init_context = context
+		s.thread.init_context = base.thread_context()
 		thread.start(s.thread)
 	}
 	log.infof(

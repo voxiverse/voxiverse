@@ -63,7 +63,7 @@ jobs_init :: proc(
 	j.threads = make([]^thread.Thread, count, allocator, loc)
 	j.names = make([]string, count, allocator, loc)
 	j.tags = make([]Log_Tag, count, allocator, loc)
-	ctx := context
+	ctx := thread_context()
 	ctx.allocator = allocator
 	for i in 0 ..< count {
 		j.names[i] = fmt.aprintf("%s %d", name, i + 1, allocator = allocator)

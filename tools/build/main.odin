@@ -4,7 +4,9 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
+import "core:time"
 
 // The Voxiverse build driver. build.sh / build.bat hand every argument to
 // it; its commands are listed by usage (`build help`). It runs from the
@@ -570,24 +572,127 @@ test_env_defines :: proc() -> []string {
 	return defines[:]
 }
 
+// TEST_TIMEOUT_FLOOR is the least a package's test run may be given (compile included).
+TEST_TIMEOUT_FLOOR :: 10 * time.Minute
+// TEST_TIMEOUT_FACTOR times the package's last passing run is its limit when that is longer.
+TEST_TIMEOUT_FACTOR :: 10
+
+// test_timeout is the limit for one package's `odin test`: ten times its last passing
+// run (recorded beside the binary), at least ten minutes; VX_TEST_TIMEOUT_SECONDS
+// overrides it (the hang test uses it).
+test_timeout :: proc(last_run: string) -> time.Duration {
+	if value, found := os.lookup_env("VX_TEST_TIMEOUT_SECONDS", context.allocator); found {
+		if seconds, ok := strconv.parse_int(value); ok && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	limit := TEST_TIMEOUT_FLOOR
+	if data, err := os.read_entire_file_from_path(last_run, context.allocator); err == nil {
+		if seconds, ok := strconv.parse_f64(strings.trim_space(string(data))); ok {
+			limit = max(
+				limit,
+				time.Duration(seconds * f64(TEST_TIMEOUT_FACTOR) * f64(time.Second)),
+			)
+		}
+	}
+	return limit
+}
+
 test :: proc() -> bool {
 	ok := true
 	for pkg in TEST_PACKAGES {
-		out := path_join(
-			{"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})},
-		)
-		cmd := slice.concatenate(
-			[][]string {
-				{"odin", "test", pkg},
-				ODIN_FLAGS,
-				{strings.concatenate({"-out:", out})},
-				test_env_defines(),
-			},
-		)
-		os.make_directory_all(filepath.dir(out))
-		ok = run(cmd) && ok
+		ok = test_package(pkg) && ok
 	}
 	return ok
+}
+
+// test_package runs one package's tests under the time limit; a run that outlasts it is
+// killed with its children and reported as a failure naming the package.
+test_package :: proc(pkg: string) -> bool {
+	out := path_join({"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})})
+	last_run := strings.concatenate({out, ".seconds"})
+	cmd := slice.concatenate(
+		[][]string {
+			{"odin", "test", pkg},
+			ODIN_FLAGS,
+			{strings.concatenate({"-out:", out})},
+			test_env_defines(),
+		},
+	)
+	os.make_directory_all(filepath.dir(out))
+	limit := test_timeout(last_run)
+	start := time.tick_now()
+	result := run_limited(cmd, limit)
+	took := time.duration_seconds(time.tick_since(start))
+	switch result {
+	case .Ok:
+		_ = os.write_entire_file(last_run, fmt.tprintf("%.1f", took))
+		return true
+	case .Failed:
+		return false
+	case .Timed_Out:
+		fmt.eprintfln(
+			"test   %s FAILED: still running after %.0f s (the limit): killed it and its children",
+			pkg,
+			time.duration_seconds(limit),
+		)
+		return false
+	}
+	return false
+}
+
+Run_Result :: enum {
+	Ok,
+	Failed, // exited nonzero, or could not start
+	Timed_Out,
+}
+
+// run_limited is run with a time limit: a command still going at the limit is killed
+// together with everything it started.
+run_limited :: proc(cmd: []string, limit: time.Duration) -> Run_Result {
+	desc := os.Process_Desc {
+		command = cmd,
+		stdin   = os.stdin,
+		stdout  = os.stdout,
+		stderr  = os.stderr,
+	}
+	child, err := os.process_start(desc)
+	if err != nil {
+		fmt.eprintfln("build: could not start '%s': %v", cmd[0], err)
+		return .Failed
+	}
+	state, werr := os.process_wait(child, limit)
+	if werr == nil {
+		return .Ok if state.exited && state.exit_code == 0 else .Failed
+	}
+	kill_tree(child.pid)
+	_, _ = os.process_wait(child)
+	return .Timed_Out
+}
+
+// kill_tree kills a process and every descendant (each is frozen before its children
+// are listed, so none can start more while the tree is walked).
+kill_tree :: proc(pid: int) {
+	context.allocator = context.temp_allocator // capture's output
+	when ODIN_OS == .Windows {
+		_, _ = capture({"taskkill", "/T", "/F", "/PID", fmt.tprint(pid)})
+	} else {
+		pids := make([dynamic]int, context.temp_allocator)
+		append(&pids, pid)
+		for i := 0; i < len(pids); i += 1 {
+			_, _ = capture({"kill", "-STOP", fmt.tprint(pids[i])})
+			out, _ := capture({"pgrep", "-P", fmt.tprint(pids[i])})
+			for line in strings.split_lines(out, context.temp_allocator) {
+				if child, ok := strconv.parse_int(strings.trim_space(line)); ok {
+					append(&pids, child)
+				}
+			}
+		}
+		cmd := make([dynamic]string, context.temp_allocator)
+		append(&cmd, "kill", "-KILL")
+		for p in pids {append(&cmd, fmt.tprint(p))}
+		_, _ = capture(cmd[:])
+	}
 }
 
 // ---------------------------------------------------------------------------

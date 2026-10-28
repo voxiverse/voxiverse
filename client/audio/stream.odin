@@ -1,5 +1,6 @@
 package audio
 
+import "../../base"
 import "core:log"
 import "core:math"
 import "core:sync"
@@ -109,7 +110,7 @@ add_stream :: proc(
 	}
 	m.streams[m.count] = st
 	m.count += 1
-	if !inline {st.thread = thread.create_and_start_with_data(st, decoder_main, context)}
+	if !inline {st.thread = thread.create_and_start_with_data(st, decoder_main, base.thread_context())}
 	return Sound_Id(m.count - 1), true
 }
 

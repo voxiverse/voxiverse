@@ -1,5 +1,6 @@
 package audio
 
+import "../../base"
 import "core:log"
 import "core:strings"
 import "core:sync"
@@ -155,7 +156,7 @@ device_open_null :: proc(d: ^Device, m: ^Mixer) -> bool {
 		callback = {m, d},
 	}
 	if m.rate == 0 {m.rate = DEVICE_RATE}
-	d.thread = thread.create_and_start_with_data(d, null_main, context)
+	d.thread = thread.create_and_start_with_data(d, null_main, base.thread_context())
 	d.open = d.thread != nil
 	return d.open
 }

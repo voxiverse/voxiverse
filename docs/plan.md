@@ -215,6 +215,20 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   `ODIN_TEST_THREADS` from the environment into `-define:` flags (Odin reads them only as
   defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh test` reproduces a CI failure. Every `odin test` also gets `-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true` (tracking stays on): a test that leaks or frees badly fails, naming the allocation's line (#46). Ownership: `registry_build`'s errors and `registry_id_changes`' text belong to the caller (`pack_errors_destroy`, `delete`); a thread started with `thread.create_and_start_with_poly_data` is given `context`, so what it allocates is freed by the owner under the same allocator. A budget a test asserts is read from `base.thread_cpu_us` (the thread's CPU time), not a wall clock: the suite runs tests on several threads, and a core taken from the measured one is not the work's cost (`test_save_200_characters` failed once on a 27 ms wall-clock capture of a few ms of work). On Windows it is the thread's cycle count over a rate measured against the wall clock: `GetThreadTimes` advances once per 15.6 ms scheduler tick, and read a 2 ms slice as 15625 us (CI run 40590622700). Where the work is big and the runner's speed is the unknown, the budget is a multiple of a reference the test measures on the same thread in the same run (`test_many_counters_save_and_load_fast`: save and load at most 6 times what building the counters cost, measured at 2 to 3), since a fixed 8 s failed at 10.6 s on a slow macOS runner (#43). Ubuntu packages come from a cache of their `.deb` files
   (`.github/actions/apt`), because the package mirror twice took over 20 minutes.
+- **A panic must fail a test, never hang it (#54).** The Odin test runner's signal handler
+  (`stop_test_callback`) returns without doing anything on a thread the runner did not start;
+  the trap then runs again, for ever, at full CPU. A thread a test starts (the server, job
+  workers, the telemetry writer, the collector, audio threads) copies the test's context, whose
+  `assertion_failure_proc` is the runner's, so a panic there spun (a 29 minute, 575% CPU hang in
+  `write_vars`). Every thread we start gets `base.thread_context()` instead: under `odin test`
+  its failed assert or panic prints and ends the process (exit 2), so the run fails in
+  seconds. A new thread-starting site must use it. Second layer: `./build.sh test` runs each
+  package under a limit (ten times its last passing run, at least ten minutes;
+  `VX_TEST_TIMEOUT_SECONDS` overrides it), kills the run with its children when it is over and
+  reports `test <package> FAILED: still running`. `test_panic_in_a_server_thread_fails_fast`
+  (tools/build, with the `tools/build/panic_fixture` package, not in TEST_PACKAGES) panics on
+  purpose in a worker with a server running and expects a failure well inside the limit;
+  `test_run_limited_kills_the_tree` covers the kill.
 
 ### Saves
 Region files (e.g. 32×32 chunk columns per file), palette + RLE per chunk, versioned, written

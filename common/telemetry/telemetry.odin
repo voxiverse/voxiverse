@@ -1,5 +1,6 @@
 package telemetry
 
+import "../../base"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -221,7 +222,12 @@ sink_start :: proc(s: ^Sink, dir: string, session: u32, day_cap := DEFAULT_DAY_C
 	if dir != "" {
 		s.dir = strings.clone(dir)
 		os.make_directory_all(dir)
-		s.thread = thread.create_and_start_with_poly_data(s, writer_main, self_cleanup = false)
+		s.thread = thread.create_and_start_with_poly_data(
+			s,
+			writer_main,
+			base.thread_context(),
+			self_cleanup = false,
+		)
 	}
 }
 

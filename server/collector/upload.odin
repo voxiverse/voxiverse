@@ -10,6 +10,7 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
+import "../../base"
 import "../../common/game"
 import "../../common/netcode"
 
@@ -60,7 +61,7 @@ uploader_start :: proc(
 	u.thread = thread.create_and_start_with_poly_data(
 		u,
 		uploader_main,
-		context, // the caller's allocator: what the thread makes, stop frees
+		base.thread_context(), // the caller's allocator: what the thread makes, stop frees
 		self_cleanup = false,
 	)
 }
