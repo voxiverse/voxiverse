@@ -147,27 +147,7 @@ Inventory_View :: struct {
 	first:       int, // where the drag began
 	click_slot:  int, // the last left press (-1: none), for double-clicks
 	click_time:  time.Tick,
-	fresh:       bool, // opened this frame: its own key press is not a tab step
 	cursor:      int, // the pad's cursor: a slot, or CURSOR_CATALOG_BASE + a catalog cell (-1: not placed)
-}
-
-// inventory_keys: the inventory key (Tab) opens the inventory over the game
-// and closes it again; Escape closes it too, and Q and E step its tabs. The
-// pad's button only opens (in the menu it is the cursor's, and B closes). Typing
-// in a text field is not a close.
-inventory_keys :: proc(app: ^App) {
-	s := app.session
-	if s == nil || s.state != .Playing {return}
-	if overlay_is_open(&app.overlays, .Inventory) {
-		if top, _ := overlay_top(&app.overlays);
-		   top == .Inventory &&
-		   key_action_pressed(&app.actions, .Inventory) &&
-		   !app.ui.edit.active &&
-		   !ui.osk_is_open(&app.ui) &&
-		   app.options.listening == .None {inventory_close(app)}
-		return
-	}
-	if action_pressed(&app.actions, .Inventory) && game_controls(app) {inventory_open(app)}
 }
 
 // chest_sync: a chest the server opened shows its overlay (the inventory
@@ -176,31 +156,32 @@ inventory_keys :: proc(app: ^App) {
 chest_sync :: proc(app: ^App) {
 	s := app.session
 	if s == nil || s.state != .Playing {return}
-	open := overlay_is_open(&app.overlays, .Inventory)
+	open := section_open(app, .Inventory)
 	if s.inventory.chest_open && !open {
-		inventory_open(app)
+		player_menu_show(app, .Inventory)
 		app.inventory_view.tab = .Chest
 	} else if !s.inventory.chest_open && open && app.inventory_view.tab == .Chest {
-		inventory_close(app)
+		player_menu_close(app)
 	}
 }
 
-// inventory_open shows the overlay, fresh.
-inventory_open :: proc(app: ^App) {
-	overlay_open(&app.overlays, .Inventory)
+// inventory_enter: the section shown, fresh.
+inventory_enter :: proc(app: ^App) {
 	app.inventory_view = {
 		drag_from  = -1,
 		click_slot = -1,
 		cursor     = -1,
-		fresh      = true,
 	}
 	clear(&app.inventory_search)
 }
 
-// inventory_close: the cursor's stack back in (the server drops what does
-// not fit).
-inventory_close :: proc(app: ^App) {
-	overlay_close(&app.overlays, .Inventory)
+// inventory_open shows the player menu at the inventory.
+inventory_open :: proc(app: ^App) {player_menu_show(app, .Inventory)}
+
+// inventory_leave: the section is left (closed, or another shown): the
+// cursor's stack goes back in (the server drops what does not fit) and an
+// open chest closes.
+inventory_leave :: proc(app: ^App) {
 	if s := app.session;
 	   s != nil && (!game.stack_empty(s.inventory.cursor) || s.inventory.chest_open) {
 		session_inventory_do(s, {.Close, game.CURSOR_SLOT, 0})
@@ -302,8 +283,6 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	catalog := session_allowed(s, "items.catalog")
 	v := &app.inventory_view
 	if inv.chest_open {v.tab = .Chest} else if v.tab == .Chest || !catalog {v.tab = .Inventory}
-	fresh := v.fresh
-	v.fresh = false
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
@@ -314,11 +293,27 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	if v.tab == .Chest {
 		ui.title(ctx, "Chest", l.title, .Left)
 	} else {
-		active := Ring_Tab.Inventory if v.tab == .Inventory else .Creative
-		if to, picked := ring_tabs(app, ctx, l.title, active); picked {
-			ring_go(app, to)
-			if to == .Statistics {return}
+		strip := l.title
+		if catalog {
+			// Pockets or the catalog of every item (the section's own switch).
+			b := ui.cut_right(&strip, SECTION_TAB_WIDTH)
+			if ui.button(ctx, "Pockets" if v.tab == .Creative else "Catalog", b) {
+				v.tab = .Inventory if v.tab == .Creative else .Creative
+				l = inventory_layout(ctx, v.tab)
+			}
+		}
+		if top &&
+		   catalog &&
+		   action_pressed(&app.actions, .Catalog) &&
+		   !ui.osk_is_open(ctx) &&
+		   v.tab != .Chest {
+			v.tab = .Inventory if v.tab == .Creative else .Creative
 			l = inventory_layout(ctx, v.tab)
+			v.cursor = -1
+		}
+		if to, picked := section_tabs(app, ctx, strip); picked {
+			player_menu_show(app, to)
+			return
 		}
 	}
 	mouse := ctx.input.mouse
@@ -354,10 +349,6 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		session_inventory_do(s, {kind, slot, arg})
 	}
 	if top {
-		// Q and E step the tabs; over a slot, the drop key still drops.
-		if step := menu_tab_step(app, hovered >= 0); v.tab != .Chest && !fresh && step != 0 {
-			if ring_go(app, ring_step(app, active_ring(v.tab), step)) == .Statistics {return}
-		}
 		inventory_mouse(app, ctx, l.panel, hovered, catalog)
 		if hovered >= 0 && !ctx.edit.active {
 			for act, n in HOTBAR_ACTIONS {
@@ -398,90 +389,6 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 		if pad {held = {at.x + at.w / 2, at.y - at.h / 2, at.w, at.h}}
 		stack_slot(ctx, app.session.reg, &app.item_icons, held, inv.cursor, true)
 	}
-}
-
-// Ring_Tab: the tabs Q and E step through, shared by the inventory and the
-// statistics overlays (the chest is not in the ring).
-Ring_Tab :: enum u8 {
-	Inventory,
-	Creative, // only with items.catalog
-	Statistics,
-}
-
-@(private = "file")
-active_ring :: proc(tab: Inventory_Tab) -> Ring_Tab {
-	return .Creative if tab == .Creative else .Inventory
-}
-
-@(private = "file")
-ring_has :: proc(app: ^App, tab: Ring_Tab) -> bool {
-	return(
-		tab != .Creative ||
-		(app.session != nil && session_allowed(app.session, "items.catalog")) \
-	)
-}
-
-// ring_step: the tab step places away from from (around, past missing ones).
-ring_step :: proc(app: ^App, from: Ring_Tab, step: int) -> Ring_Tab {
-	n := len(Ring_Tab)
-	to := from
-	for _ in 0 ..< n {
-		to = Ring_Tab((int(to) + step + n) % n)
-		if ring_has(app, to) {break}
-	}
-	return to
-}
-
-// ring_go shows a tab: the inventory's own are a switch within it; the
-// statistics are their own overlay, the other closed.
-ring_go :: proc(app: ^App, to: Ring_Tab) -> Ring_Tab {
-	inventory_open_now := overlay_is_open(&app.overlays, .Inventory)
-	switch to {
-	case .Inventory, .Creative:
-		if !inventory_open_now {
-			overlay_close(&app.overlays, .Stats)
-			inventory_open(app)
-		}
-		app.inventory_view.tab = .Inventory if to == .Inventory else .Creative
-	case .Statistics:
-		if inventory_open_now {inventory_close(app)}
-		if !overlay_is_open(&app.overlays, .Stats) {stats_open(app)}
-	}
-	return to
-}
-
-// ring_tabs: the tab row in a title row, the open one lit, and the keys that
-// step it at the ends (previous left, next right); the one chosen with the mouse, if any.
-ring_tabs :: proc(
-	app: ^App,
-	ctx: ^ui.Context,
-	r: ui.Rect,
-	active: Ring_Tab,
-) -> (
-	chosen: Ring_Tab,
-	picked: bool,
-) {
-	t := &ctx.theme
-	row := r
-	prev := action_label(app, .Tab_Prev)
-	next := action_label(app, .Tab_Next)
-	ui.draw_text(ctx, row, prev, t.font_size, t.text_muted, .Left)
-	ui.draw_text(ctx, row, next, t.font_size, t.text_muted, .Right)
-	ui.cut_left(&row, ui.measure_text(ctx, prev, t.font_size) + t.spacing)
-	for tab in Ring_Tab {
-		if !ring_has(app, tab) {continue}
-		b := ui.cut_left(&row, 140)
-		ui.cut_left(&row, t.spacing)
-		name := fmt.tprint(tab)
-		if tab == active {
-			ui.fill_rect(ctx, b, t.hover)
-			ui.stroke_rect(ctx, b, t.border_width, t.border)
-			ui.draw_text(ctx, b, name, t.font_size, t.hover_text, .Center)
-		} else if ui.button(ctx, name, b) {
-			chosen, picked = tab, true
-		}
-	}
-	return
 }
 
 // catalog_rows: how many rows the catalog has and shows (the scroll is kept

@@ -33,8 +33,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	menu_actions(app, input)
 	chat_keys(app, input)
 	chest_sync(app)
-	inventory_keys(app)
-	stats_keys(app)
+	player_menu_keys(app)
 	dial_keys(app)
 }
 

@@ -35,10 +35,10 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.app.screen = .Game
 	f.app.input.pressed = {.Tab}
 	actions_sync(f.app)
-	inventory_keys(f.app)
+	player_menu_keys(f.app)
 	f.app.input.pressed = {}
 	actions_sync(f.app)
-	testing.expect(t, overlay_is_open(&f.app.overlays, .Inventory))
+	testing.expect(t, section_open(f.app, .Inventory))
 }
 
 overlay_fixture_destroy :: proc(f: ^Overlay_Fixture) {
@@ -149,10 +149,10 @@ test_inventory_mouse_tweaks :: proc(t: ^testing.T) {
 		"gathered",
 	)
 	testing.expect(t, inv.slots[12] == {dirt, 7})
-	inventory_close(f.app)
+	player_menu_close(f.app)
 	f.app.input.pressed = {.Tab}
 	actions_sync(f.app)
-	inventory_keys(f.app) // open again
+	player_menu_keys(f.app) // open again
 	f.app.input.pressed = {}
 	actions_sync(f.app)
 
@@ -182,7 +182,7 @@ test_pick_block :: proc(t: ^testing.T) {
 	inv.slots[7] = {dirt, 1}
 	overlay_frame(&f, {mouse = overlay_slot_at(&f, 7), mouse_pressed = {.Middle}})
 	testing.expect(t, inv.cursor == {dirt, 64}, "a full stack, from the catalog")
-	inventory_close(f.app)
+	player_menu_close(f.app)
 	testing.expect_value(t, game.inventory_count(inv, dirt), 65)
 
 	// Aimed at stone.
@@ -284,7 +284,7 @@ test_creative_tab :: proc(t: ^testing.T) {
 	// The tab button switches; the rest of the inventory is not shown on it.
 	overlay_frame(&f, {})
 	l := inventory_layout(&f.app.ui, .Inventory)
-	creative := ui.Vec2{l.title.x + 140 + f.app.ui.theme.spacing + 70, l.title.y + l.title.h / 2}
+	creative := ui.Vec2{l.title.x + l.title.w - SECTION_TAB_WIDTH / 2, l.title.y + l.title.h / 2}
 	overlay_frame(&f, {mouse = creative})
 	overlay_frame(&f, {mouse = creative, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	overlay_frame(&f, {mouse = creative, mouse_released = {.Left}})

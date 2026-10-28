@@ -73,7 +73,7 @@ test_stats_overlay :: proc(t: ^testing.T) {
 	defer overlay_fixture_destroy(&f)
 	defer stats_view_destroy(&f.app.stats_view)
 	defer {stats_data_clear(&f.s.player_stats); delete(f.s.player_stats.lines)}
-	inventory_close(f.app)
+	player_menu_close(f.app)
 	received(&f)
 	stats_open(f.app)
 	msgs := received(&f)
@@ -128,7 +128,7 @@ test_client_reports :: proc(t: ^testing.T) {
 		len(f.app.reporter.queue) >= 1 && f.app.reporter.queue[0].kind == .Client_Info,
 	)
 	// The inventory was already open (the fixture opened it): close it.
-	inventory_close(f.app)
+	player_menu_close(f.app)
 	time.sleep(20 * time.Millisecond)
 	telemetry_update(f.app)
 	found := false
@@ -158,7 +158,7 @@ test_the_consent_question :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, false)
 	defer overlay_fixture_destroy(&f)
 	defer reporter_destroy(&f.app.reporter)
-	inventory_close(f.app)
+	player_menu_close(f.app)
 	f.app.session = nil
 	f.app.screen = .Title
 	testing.expect(

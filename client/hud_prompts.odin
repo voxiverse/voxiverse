@@ -407,6 +407,7 @@ prompt_bar :: proc(app: ^App, ctx: ^ui.Context, items: []Prompt_Item) {
 prompt_items :: proc(app: ^App) -> []Prompt_Item {
 	items := make([dynamic]Prompt_Item, context.temp_allocator)
 	tabs := Prompt_Item{.Tab_Prev, "Tabs", .Tab_Next}
+	sections := Prompt_Item{.Section_Prev, "Sections", .Section_Next}
 	if ui.osk_is_open(&app.ui) {
 		append(&items, Prompt_Item{.Menu_Confirm, "Type", .None})
 		append(&items, Prompt_Item{.Menu_Secondary, "Delete", .None})
@@ -426,15 +427,17 @@ prompt_items :: proc(app: ^App) -> []Prompt_Item {
 			append(&items, select, Prompt_Item{.Menu_Secondary, "Erase", .None}, back)
 		case .Game_Menu, .Quit_Dialog, .Consent, .Chat:
 			append(&items, select, back)
-		case .Inventory:
-			inventory_prompts(app, &items)
-		case .Stats:
-			append(
-				&items,
-				Prompt_Item{.Menu_Confirm, "Open", .None},
-				Prompt_Item{.Menu_Back, "Close", .None},
-				tabs,
-			)
+		case .Player_Menu:
+			if app.player_menu.section == .Inventory {
+				inventory_prompts(app, &items)
+			} else {
+				append(
+					&items,
+					Prompt_Item{.Menu_Confirm, "Open", .None},
+					Prompt_Item{.Menu_Back, "Close", .None},
+					sections,
+				)
+			}
 		}
 		return items[:]
 	}
@@ -470,5 +473,10 @@ inventory_prompts :: proc(app: ^App, items: ^[dynamic]Prompt_Item) {
 	}
 	append(items, Prompt_Item{.Menu_Tertiary, "Search" if on_catalog else "Move", .None})
 	append(items, Prompt_Item{.Menu_Back, "Close", .None})
-	if v.tab != .Chest {append(items, Prompt_Item{.Tab_Prev, "Tabs", .Tab_Next})}
+	if v.tab != .Chest {
+		append(items, Prompt_Item{.Section_Prev, "Sections", .Section_Next})
+		if app.session != nil && session_allowed(app.session, "items.catalog") {
+			append(items, Prompt_Item{.Catalog, "Catalog", .None})
+		}
+	}
 }

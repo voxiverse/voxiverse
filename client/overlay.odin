@@ -15,11 +15,10 @@ Overlay :: enum u8 {
 	Options, // Options over the game (above the game menu)
 	Tuning, // F4: the tuning panel
 	Chat,
-	Inventory,
+	Player_Menu, // the player menu: the inventory and the statistics (menu_player.odin)
 	Console,
 	Quit_Dialog,
 	Dial, // a gate's symbols (overlay_dial.odin)
-	Stats, // the statistics (menu_statistics.odin)
 	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 }
@@ -42,11 +41,10 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Options = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Tuning = {takes = {.Mouse}, in_game = true}, // watching the game respond: it runs on
 	.Chat = {takes = {.Keyboard, .Mouse}, in_game = true},
-	.Inventory = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Player_Menu = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Console = {takes = {.Keyboard, .Mouse}},
 	.Quit_Dialog = {takes = {.Keyboard, .Mouse}},
 	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
-	.Stats = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
 }
@@ -179,8 +177,8 @@ close_overlay :: proc(app: ^App, which: Overlay) {
 	case .Chat:
 		chat_close(app)
 		return
-	case .Inventory:
-		inventory_close(app)
+	case .Player_Menu:
+		player_menu_close(app)
 		return
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
@@ -203,16 +201,14 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			tuning_panel(app, ctx)
 		case .Chat:
 			chat_ui(app, ctx, top)
-		case .Inventory:
-			inventory_ui(app, ctx, top)
+		case .Player_Menu:
+			player_menu_ui(app, ctx, top)
 		case .Console:
 			console_ui(app, ctx, top)
 		case .Quit_Dialog:
 			quit_dialog(app, ctx)
 		case .Dial:
 			dial_ui(app, ctx, top)
-		case .Stats:
-			stats_ui(app, ctx, top)
 		case .Audio_Inspector:
 			audio_inspector_ui(app, ctx)
 		case .Consent:

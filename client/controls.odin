@@ -27,6 +27,12 @@ Bindings :: struct {
 	pick:            platform.Key, // pick the aimed block into the hand
 	inventory:       platform.Key,
 	stats:           platform.Key, // open the statistics
+	player_menu:     platform.Key, // the last section; closes the menu
+	world_map:       platform.Key, // (the Map section: hidden for now)
+	journal:         platform.Key, // (hidden)
+	character:       platform.Key, // (hidden)
+	atlas:           platform.Key, // (hidden)
+	toggle_hud:      platform.Key, // hide the HUD
 	drop:            platform.Key, // with Ctrl: the whole stack
 	chat:            platform.Key,
 	command:         platform.Key, // the chat, starting with /
@@ -54,8 +60,14 @@ DEFAULT_BINDINGS :: Bindings {
 	attack     = .Mouse_Left,
 	use        = .Mouse_Right,
 	pick       = .Mouse_Middle,
-	inventory  = .Tab,
+	inventory  = .E,
 	stats      = .K,
+	player_menu = .Tab,
+	world_map  = .M,
+	journal    = .J,
+	character  = .C,
+	atlas      = .L,
+	toggle_hud = .F1,
 	drop       = .Q,
 	chat       = .T,
 	command    = .Slash,
@@ -93,8 +105,22 @@ BINDING_VARS := [?]base.Var {
 		help = "Place a block, use the item in your hand, or dial a gate.",
 	},
 	{field = "pick", label = "Pick Block", help = "Take the block you aim at into your hand."},
-	{field = "inventory", help = "Open the inventory; the same key closes it again."},
-	{field = "stats", label = "Statistics", help = "Open your statistics."},
+	{field = "inventory", help = "Open the player menu at your inventory; the same key closes it."},
+	{field = "stats", label = "Statistics", help = "Open the player menu at your statistics."},
+	{
+		field = "player_menu",
+		label = "Player menu",
+		help = "Open the player menu at the section you had open last; the same key closes it.",
+	},
+	{field = "world_map", label = "Map", help = "Open the map (not there yet)."},
+	{field = "journal", help = "Open the journal (not there yet)."},
+	{field = "character", help = "Open your character (not there yet)."},
+	{field = "atlas", help = "Open the atlas (not there yet)."},
+	{
+		field = "toggle_hud",
+		label = "Hide HUD",
+		help = "Hide the hotbar, crosshair and health until you press it again.",
+	},
 	{
 		field = "drop",
 		label = "Drop item",
@@ -203,7 +229,7 @@ Pad_Bindings :: struct {
 	use:             platform.Pad_Button,
 	pick:            platform.Pad_Button,
 	inventory:       platform.Pad_Button,
-	stats:           platform.Pad_Button,
+	player_menu:     platform.Pad_Button,
 	drop:            platform.Pad_Button,
 	chat:            platform.Pad_Button,
 	command:         platform.Pad_Button,
@@ -226,7 +252,7 @@ DEFAULT_PAD_BINDINGS :: Pad_Bindings {
 	use             = .Left_Trigger,
 	pick            = .Right_Stick,
 	inventory       = .Y,
-	stats           = .Back,
+	player_menu     = .Back,
 	drop            = .X,
 	chat            = .Dpad_Up,
 	hotbar_next     = .Right_Bumper,
@@ -251,7 +277,7 @@ PAD_BINDING_VARS := [?]base.Var {
 	{field = "use", help = "pad: place a block, use the item in hand, dial a gate."},
 	{field = "pick", help = "pad: take the aimed block into your hand."},
 	{field = "inventory", help = "pad: open the inventory."},
-	{field = "stats", help = "pad: open your statistics."},
+	{field = "player_menu", help = "pad: open the player menu."},
 	{field = "drop", help = "pad: drop an item."},
 	{field = "chat", help = "pad: open the chat."},
 	{field = "command", help = "pad: open the chat with a slash."},

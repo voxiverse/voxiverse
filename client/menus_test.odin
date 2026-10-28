@@ -472,8 +472,7 @@ pad_frame :: proc(app: ^App, events: ..platform.Event) {
 	menu_actions(app, &input)
 	chat_keys(app, &input)
 	chest_sync(app)
-	inventory_keys(app)
-	stats_keys(app)
+	player_menu_keys(app)
 	dial_keys(app)
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	s := app.session

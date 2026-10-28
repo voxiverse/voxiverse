@@ -6,7 +6,6 @@ import "core:testing"
 
 import "../common/game"
 import "font"
-import "platform"
 import "ui"
 
 // The inventory overlay with the mouse: dragging a stack to another slot,
@@ -44,10 +43,10 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	app.input.pressed = {.Tab}
 
 	actions_sync(app)
-	inventory_keys(app)
+	player_menu_keys(app)
 	app.input.pressed = {}
 	actions_sync(app)
-	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, section_open(app, .Inventory))
 
 	SCREEN :: ui.Vec2{1280, 720}
 	frame :: proc(app: ^App, in_: ui.Input) {
@@ -102,7 +101,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	// Closing with a stack on the cursor puts it back.
 	frame(app, {mouse = at(app, 1), mouse_pressed = {.Right}, mouse_down = {.Right}})
 	escape(app)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, !section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, stone) == 64)
 	// No catalog without items.catalog: taking is refused before it is sent.
 	before := len(s.inv_pending)
@@ -206,10 +205,10 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	s.inventory.slots[9] = {stone, 64}
 
 	chest_sync(app)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory), "opened with no chest")
+	testing.expect(t, !section_open(app, .Inventory), "opened with no chest")
 	s.inventory.chest_open = true
 	chest_sync(app)
-	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, section_open(app, .Inventory))
 	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Chest)
 
 	SCREEN :: ui.Vec2{1280, 720}
@@ -256,83 +255,7 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	// The chest closes by itself (walked away): the overlay goes.
 	s.inventory.chest_open = false
 	chest_sync(app)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
-}
-
-// Q and E step the tabs: Inventory, Creative, then Statistics (its own
-// overlay; the inventory closes). Tab and Escape close the inventory. Over a slot Q still drops; off the slots it steps back.
-@(test)
-test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
-	f: Overlay_Fixture
-	overlay_fixture(t, &f, true)
-	defer overlay_fixture_destroy(&f)
-	defer stats_view_destroy(&f.app.stats_view)
-	app := f.app
-	away := ui.Vec2{-100, -100}
-	press :: proc(f: ^Overlay_Fixture, key: platform.Key, mouse: ui.Vec2) {
-		f.app.input.pressed = {key}
-		actions_sync(f.app)
-		overlay_frame(f, {mouse = mouse})
-		f.app.input.pressed = {}
-		actions_sync(f.app)
-	}
-	inventory_open_ := proc(app: ^App) -> bool {return overlay_is_open(&app.overlays, .Inventory)}
-	overlay_frame(&f, {mouse = away}) // (drawn once: the key that opened it is spent)
-	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
-
-	// Tab, the inventory key, closes it (and opens it again); typing in a
-	// text field does not close it.
-	tab :: proc(app: ^App) {
-		app.input.pressed = {.Tab}
-		actions_sync(app)
-		inventory_keys(app)
-		app.input.pressed = {}
-		actions_sync(app)
-	}
-	app.ui.edit.active = true
-	tab(app)
-	testing.expect(t, inventory_open_(app), "Tab typed in a field does not close")
-	app.ui.edit.active = false
-	tab(app)
-	testing.expect(t, !inventory_open_(app), "Tab closes")
-	tab(app)
-	testing.expect(t, inventory_open_(app), "Tab opens")
-	overlay_frame(&f, {mouse = away})
-
-	press(&f, .E, away)
-	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Creative)
-	press(&f, .E, away)
-	testing.expect(t, !inventory_open_(app), "Statistics closes the inventory")
-	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
-	overlay_frame(&f, {mouse = away}) // (the overlay drawn: its first frame spends the key that opened it)
-	press(&f, .Q, away)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
-	testing.expect(t, inventory_open_(app))
-	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Creative)
-	overlay_frame(&f, {mouse = away})
-	press(&f, .Q, away)
-	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
-
-	// Over a slot, Q drops (and does not step); E steps.
-	stone := game.item_of_block(test_reg(), .Stone)
-	f.s.inventory.slots[9] = {stone, 64}
-	before := len(f.s.inv_pending)
-	press(&f, .Q, overlay_slot_at(&f, 9))
-	testing.expect_value(t, len(f.s.inv_pending), before + 1)
-	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
-	// Off the slots, Q steps (around, to Statistics) and drops nothing.
-	before = len(f.s.inv_pending)
-	press(&f, .Q, away)
-	testing.expect_value(t, len(f.s.inv_pending), before)
-	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
-
-	// Escape closes whichever is open.
-	escape(app)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
-	tab(app)
-	testing.expect(t, inventory_open_(app))
-	escape(app)
-	testing.expect(t, !inventory_open_(app))
+	testing.expect(t, !section_open(app, .Inventory))
 }
 
 // ---------------------------------------------------------------------------
@@ -396,7 +319,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 
 	// Y opens it, the cursor on the hand's slot.
 	pad_tap(app, .Y)
-	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, section_open(app, .Inventory))
 	testing.expect_value(t, v.cursor, 2)
 
 	// A picks the stack up, directions carry it, A puts it down.
@@ -431,9 +354,9 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	seen := prompts_seen(app)
 	testing.expect(t, len(seen) >= 5, "the inventory's prompt bar is drawn")
 
-	// RB: the Creative tab. Up from the hotbar reaches the catalog; Y types a
+	// The left stick's press: the Catalog. Up from the hotbar reaches the catalog; Y types a
 	// search; A takes a stack; down to an empty hotbar slot, A puts it there.
-	pad_tap(app, .Right_Bumper)
+	pad_tap(app, .Left_Stick)
 	testing.expect_value(t, v.tab, Inventory_Tab.Creative)
 	pad_go(app, .Up)
 	testing.expect(t, v.cursor >= CURSOR_CATALOG_BASE, "the cursor is on the catalog")
@@ -464,7 +387,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	testing.expect_value(t, inv.cursor, game.Stack{dirt, 10})
 	pad_tap(app, .B)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, !section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor))
 	testing.expect_value(t, inv.slots[0], game.Stack{dirt, 10})
 
@@ -472,7 +395,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	inv.chest[0] = {stone, 5}
 	inv.chest_open = true
 	pad_frame(app)
-	testing.expect(t, overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, section_open(app, .Inventory))
 	testing.expect_value(t, v.tab, Inventory_Tab.Chest)
 	pad_cursor_to(t, app, game.CHEST_BASE)
 	pad_tap(app, .A)
@@ -481,7 +404,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	testing.expect_value(t, inv.chest[6], game.Stack{stone, 5})
 	pad_tap(app, .B)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Inventory))
+	testing.expect(t, !section_open(app, .Inventory))
 	free_all(context.temp_allocator)
 }
 
@@ -498,9 +421,16 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	)
 	s.player_stats.pages = 2
 
-	// View opens it, with the list focused; A opens a group.
+	// View opens the menu (the inventory first), RB steps to the statistics,
+	// with the list focused; A opens a group.
 	pad_tap(app, .Back)
-	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+	testing.expect(t, section_open(app, .Inventory))
+	pad_tap(app, .Right_Bumper)
+	testing.expect(t, section_open(app, .Statistics))
+	pad_tap(app, .Right_Bumper) // (round)
+	testing.expect(t, section_open(app, .Inventory))
+	pad_tap(app, .Left_Bumper)
+	testing.expect(t, section_open(app, .Statistics))
 	pad_frame(app)
 	testing.expect_value(t, ui.focused_label(&app.ui), "stats rows")
 	testing.expect_value(t, len(v.expanded), 0)
@@ -522,12 +452,12 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	testing.expect_value(t, v.page, 1)
 
-	// B closes it; View opens it again and closes it.
+	// B closes it; View opens it again (at the statistics, shown last) and closes it.
 	pad_tap(app, .B)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	testing.expect(t, !section_open(app, .Statistics))
 	pad_tap(app, .Back)
-	testing.expect(t, overlay_is_open(&app.overlays, .Stats))
+	testing.expect(t, section_open(app, .Statistics))
 	pad_tap(app, .Back)
-	testing.expect(t, !overlay_is_open(&app.overlays, .Stats))
+	testing.expect(t, !section_open(app, .Statistics))
 	free_all(context.temp_allocator)
 }

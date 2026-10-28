@@ -271,7 +271,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "menu":
 					if app.session != nil {overlay_open(&app.overlays, .Game_Menu)}
 				case "game":
-					if overlay_is_open(&app.overlays, .Inventory) {inventory_close(app)}
+					player_menu_close(app)
 					for o in ([]Overlay{.Options, .Game_Menu, .Quit_Dialog}) {
 						overlay_close(&app.overlays, o)
 					}

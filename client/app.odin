@@ -105,6 +105,7 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (overlay_chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
+	player_menu:      Player_Menu, // the section shown and the one shown last (menu_player.odin)
 	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
 	launched:         time.Tick, // when the program started

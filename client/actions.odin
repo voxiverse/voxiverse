@@ -26,6 +26,12 @@ Action :: enum u8 {
 	Pick,
 	Inventory,
 	Stats, // also closes it
+	Player_Menu, // Tab, the pad's View: the last section
+	World_Map, // M (the Map section's key; its name is not `Map`: a field cannot be called map): hidden until its section exists
+	Journal, // J
+	Character, // C
+	Atlas, // L
+	Toggle_HUD, // F1
 	Drop,
 	Chat,
 	Command,
@@ -47,6 +53,9 @@ Action :: enum u8 {
 	Menu_Tertiary,
 	Tab_Prev,
 	Tab_Next,
+	Section_Prev, // the player menu's sections: LB and RB
+	Section_Next,
+	Catalog, // the inventory's Pockets / Catalog switch on a pad (the left stick's press)
 	Screenshot,
 	Fullscreen,
 }
@@ -83,6 +92,12 @@ ACTION_INFO := [Action]Action_Info {
 	.Pick            = {{.World}, "Pick Block", {}, {}},
 	.Inventory       = {{.World}, "Inventory", {}, {}},
 	.Stats           = {{.World, .Menu}, "Statistics", {}, {}},
+	.Player_Menu     = {{.World, .Menu}, "Player menu", {}, {}},
+	.World_Map       = {{.World}, "Map", {}, {}},
+	.Journal         = {{.World}, "Journal", {}, {}},
+	.Character       = {{.World}, "Character", {}, {}},
+	.Atlas           = {{.World}, "Atlas", {}, {}},
+	.Toggle_HUD      = {{.World, .Menu}, "Hide HUD", {}, {}},
 	.Drop            = {{.World}, "Drop item", {}, {}},
 	.Chat            = {{.World}, "Open chat", {}, {}},
 	.Command         = {{.World}, "Open command", {}, {}},
@@ -104,6 +119,9 @@ ACTION_INFO := [Action]Action_Info {
 	.Menu_Tertiary   = {{.Menu}, "Third action", {}, {}},
 	.Tab_Prev        = {{.Menu}, "Previous tab", {}, {}},
 	.Tab_Next        = {{.Menu}, "Next tab", {}, {}},
+	.Section_Prev    = {{.Menu}, "Previous section", {}, {.Left_Bumper, .None}},
+	.Section_Next    = {{.Menu}, "Next section", {}, {.Right_Bumper, .None}},
+	.Catalog         = {{.Menu}, "Pockets or catalog", {}, {.Left_Stick, .None}},
 	.Screenshot      = {{.World, .Menu}, "Take screenshot", {}, {}},
 	.Fullscreen      = {{.World, .Menu}, "Toggle fullscreen", {}, {}},
 }
@@ -124,6 +142,12 @@ PAD_COVERED_BY :: [?]struct {
 	{.Hotbar_4, "the bumpers cycle the hotbar"},
 	{.Hotbar_5, "the bumpers cycle the hotbar"},
 	{.Command, "the chat, then a slash (menus with a pad: M42)"},
+	{.Stats, "the player menu: View, then LB and RB"},
+	{.World_Map, "the player menu: View, then LB and RB"},
+	{.Journal, "the player menu: View, then LB and RB"},
+	{.Character, "the player menu: View, then LB and RB"},
+	{.Atlas, "the player menu: View, then LB and RB"},
+	{.Toggle_HUD, "not on pads"},
 	{.Screenshot, "not on pads"},
 	{.Fullscreen, "not on pads"},
 }
@@ -137,6 +161,9 @@ KEY_COVERED_BY :: [?]struct {
 	{.Hotbar_Previous, "the wheel"},
 	{.Menu_Secondary, "menus with a pad only"},
 	{.Menu_Tertiary, "menus with a pad only"},
+	{.Section_Prev, "the player menu's keys switch sections"},
+	{.Section_Next, "the player menu's keys switch sections"},
+	{.Catalog, "the Catalog button"},
 }
 
 // action_key: the rebindable key of a, nil where it is fixed or none.
@@ -151,7 +178,10 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 	     .Menu_Confirm,
 	     .Menu_Back,
 	     .Menu_Secondary,
-	     .Menu_Tertiary:
+	     .Menu_Tertiary,
+	     .Section_Prev,
+	     .Section_Next,
+	     .Catalog:
 		return nil
 	case .Forward:
 		return &b.forward
@@ -177,6 +207,18 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.inventory
 	case .Stats:
 		return &b.stats
+	case .Player_Menu:
+		return &b.player_menu
+	case .World_Map:
+		return &b.world_map
+	case .Journal:
+		return &b.journal
+	case .Character:
+		return &b.character
+	case .Atlas:
+		return &b.atlas
+	case .Toggle_HUD:
+		return &b.toggle_hud
 	case .Drop:
 		return &b.drop
 	case .Chat:
@@ -227,6 +269,15 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 	     .Menu_Down,
 	     .Menu_Left,
 	     .Menu_Right,
+	     .Stats,
+	     .World_Map,
+	     .Journal,
+	     .Character,
+	     .Atlas,
+	     .Toggle_HUD,
+	     .Section_Prev,
+	     .Section_Next,
+	     .Catalog,
 	     .Fullscreen:
 		return nil
 	case .Jump:
@@ -243,8 +294,8 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 		return &p.pick
 	case .Inventory:
 		return &p.inventory
-	case .Stats:
-		return &p.stats
+	case .Player_Menu:
+		return &p.player_menu
 	case .Drop:
 		return &p.drop
 	case .Chat:
@@ -305,6 +356,11 @@ binding_conflicts :: proc(
 		for b in Action {
 			if b == .None || b <= a {continue}
 			if ACTION_INFO[a].contexts & ACTION_INFO[b].contexts == {} {continue}
+			// The tab actions (Options) and the section actions (the player menu)
+			// share LB and RB: only one pair is read at a time.
+			if (a == .Tab_Prev && b == .Section_Prev) || (a == .Tab_Next && b == .Section_Next) {
+				continue
+			}
 			ka, kb := action_keys(keys, a), action_keys(keys, b)
 			for x in ka {
 				if x == .Unknown {continue}

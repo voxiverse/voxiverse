@@ -45,7 +45,6 @@ Stats_View :: struct {
 	first:    int, // the first row shown
 	selected: int, // the row the pad's focus is on
 	expanded: map[string]bool, // heap, keys owned
-	fresh:    bool, // opened this frame: its own key press is not a tab step
 }
 
 stats_view_destroy :: proc(v: ^Stats_View) {
@@ -55,29 +54,18 @@ stats_view_destroy :: proc(v: ^Stats_View) {
 	delete(v.expanded)
 }
 
-// stats_keys: the key opens the overlay (and closes it), asking for the counters.
-stats_keys :: proc(app: ^App) {
-	s := app.session
-	if s == nil || s.state != .Playing {return}
-	if !action_pressed(&app.actions, .Stats) {return}
-	if overlay_is_open(&app.overlays, .Stats) {
-		if top, _ := overlay_top(&app.overlays);
-		   top == .Stats && !app.ui.edit.active {overlay_close(&app.overlays, .Stats)}
-	} else if game_controls(app) {
-		stats_open(app)
-	}
-}
-
-stats_open :: proc(app: ^App) {
-	overlay_open(&app.overlays, .Stats)
+// stats_enter: the section shown, fresh: the server is asked for the counters.
+stats_enter :: proc(app: ^App) {
 	v := &app.stats_view
 	clear(&v.filter)
 	v.page, v.first, v.selected = 0, 0, 0
-	v.fresh = true
 	delete(v.asked)
 	v.asked = ""
 	stats_ask(app)
 }
+
+// stats_open shows the player menu at the statistics.
+stats_open :: proc(app: ^App) {player_menu_show(app, .Statistics)}
 
 // stats_ask asks the server for the page of the counters matching the filter.
 @(private = "file")
@@ -197,14 +185,8 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	panel := ui.rect_center(ctx.screen, 560, 520)
 	ui.panel(ctx, panel)
 	inner := ui.rect_shrink(panel, t.padding)
-	fresh := v.fresh
-	v.fresh = false
-	if to, picked := ring_tabs(app, ctx, ui.cut_top(&inner, t.row_height), .Statistics); picked {
-		ring_go(app, to)
-		return
-	}
-	if step := menu_tab_step(app); top && !fresh && step != 0 {
-		ring_go(app, ring_step(app, .Statistics, step))
+	if to, picked := section_tabs(app, ctx, ui.cut_top(&inner, t.row_height)); picked {
+		player_menu_show(app, to)
 		return
 	}
 	ui.cut_top(&inner, t.spacing)
