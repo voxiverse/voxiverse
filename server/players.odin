@@ -103,6 +103,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 @(private)
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	if c.state != .Playing {return}
+	respawn(s, c) // (leaving at the death screen: kept alive, at the spawn)
 	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))
 	ledger_inventory(s, c.world, .Scope_Out, &c.inventory)
 	keep_player(s, c)
@@ -128,9 +129,16 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	waiting := landing_tick(s, c)
 	for msg in game.input_queue_tick(&c.inputs, &buf) {
 		held := c.player
+		input := msg.input
+		if c.dead { 	// (at the death screen: standing still, as the client's prediction does)
+			input = {
+				yaw   = input.yaw,
+				pitch = input.pitch,
+			}
+		}
 		game.player_step(
 			&c.player,
-			msg.input,
+			input,
 			&w.rules,
 			query,
 			game.TICK_SECONDS,

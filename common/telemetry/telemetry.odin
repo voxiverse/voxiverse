@@ -53,6 +53,7 @@ Kind :: enum u16 {
 	Item_Created, // text: item; n0: count; n1: the reason (server/ledger.odin)
 	Item_Destroyed, // text: item; n0: count; n1: the reason
 	Audit_Failed, // text: item; n0: held; n1: the ledger says; n2: difference
+	Respawned, // text: the game mode
 	Mode_Changed, // text: the new game mode; n0: 1 when a command did it (the journal says who)
 }
 
@@ -137,6 +138,7 @@ KIND_INFO := [Kind]Kind_Info {
 		text_name = "item",
 		n_names = {"held", "expected", "difference"},
 	},
+	.Respawned = {name = "respawned", text_name = "mode", counter = "respawns"},
 	.Mode_Changed = {
 		name = "mode_changed",
 		text_name = "mode",

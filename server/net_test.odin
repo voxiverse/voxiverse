@@ -18,62 +18,64 @@ import "../common/worldgen"
 
 @(private)
 Net_Client :: struct {
-	link:        netcode.Link,
-	name:        string,
-	scratch:     ^game.Block_Array,
-	arrays:      game.Block_Arrays,
-	chunks:      map[game.Chunk_Pos]game.Chunk_Blocks,
-	welcome:     game.Welcome,
-	welcomed:    bool,
-	rejected:    string,
-	update:      game.Own_Player,
-	schema:      game.Schema,
-	rx:          game.Receiver,
-	teleports:   int, // Own_Player.teleports changes seen
-	others:      map[u16]string, // joined, by player id
-	seen:        map[u16][3]f64, // last Players position, by player id
-	worn:        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
-	changed:     [dynamic]Net_Block,
-	entities:    map[u32][3]f64, // known entities, where last seen
-	shorn:       map[u32]bool, // sheep as last told shorn or not
-	sheep:       map[u32]game.Sheep_Flags, // and what else about their looks
-	stats_text:  string, // the last Stats_Page's lines (heap)
-	stats_pages: int,
-	health:      game.Health, // the last Health message
-	mode:        string, // the last Mode record's id (heap)
-	hurt:        int, // Entity_Hurt messages
-	bulk_begins: int,
-	explosions:  int,
-	place:       game.Place, // the last Place record
-	places:      int, // Place records received
-	deaths:      int, // Player_Died events
-	died:        int, // Entity_Despawn with died
-	results:     map[u32]game.Edit_Result,
-	seq:         u32,
-	messages:    [dynamic][]u8,
-	notices:     [dynamic]string, // (heap)
-	grants:      [dynamic]game.Grant, // (heap)
-	chat:        [dynamic]Net_Chat, // lines heard (heap)
-	deleted:     [dynamic]u32, // lines taken back
-	inventory:   game.Inventory, // the server's last word
-	rest_last:   [3]f64, // at_rest: where it was last update, and for how many
-	rest_still:  int,
-	inv_acked:   u32,
-	inv_updates: int,
-	look:        [2]f32, // yaw, pitch of its idle inputs
-	move:        [2]f32, // and their move (right, forward)
-	key_name:    string, // whose test_key it says it is (default: name)
-	sign_name:   string, // whose test_key it signs with (default: key_name: an impostor if not)
-	ask:         bool, // Hello without a character: Characters, then Choose name
-	characters:  string, // the last Characters (temp: compared at once)
-	address:     game.Address, // the world it is in (Welcome, World_Changed)
-	travels:     int, // World_Changed messages
-	capture:     netcode.Capture, // (net_capture: every packet it sends and receives)
-	pack_cache:  string, // where it keeps the packs it was sent ("": nowhere)
-	fetch:       ^game.Pack_Fetch, // the Packs it was told of
-	reg:         ^game.Registry, // built from them (client side: no server/ files); nil: the base pack's
-	pack_parts:  int, // Pack_Part messages received
-	packs_error: string, // why the packs could not be taken (temp)
+	link:                        netcode.Link,
+	name:                        string,
+	scratch:                     ^game.Block_Array,
+	arrays:                      game.Block_Arrays,
+	chunks:                      map[game.Chunk_Pos]game.Chunk_Blocks,
+	welcome:                     game.Welcome,
+	welcomed:                    bool,
+	rejected:                    string,
+	update:                      game.Own_Player,
+	schema:                      game.Schema,
+	rx:                          game.Receiver,
+	teleports:                   int, // Own_Player.teleports changes seen
+	others:                      map[u16]string, // joined, by player id
+	seen:                        map[u16][3]f64, // last Players position, by player id
+	worn:                        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
+	changed:                     [dynamic]Net_Block,
+	entities:                    map[u32][3]f64, // known entities, where last seen
+	shorn:                       map[u32]bool, // sheep as last told shorn or not
+	sheep:                       map[u32]game.Sheep_Flags, // and what else about their looks
+	stats_text:                  string, // the last Stats_Page's lines (heap)
+	stats_pages:                 int,
+	health:                      game.Health, // the last Health message
+	mode:                        string, // the last Mode record's id (heap)
+	hurt:                        int, // Entity_Hurt messages
+	bulk_begins:                 int,
+	explosions:                  int,
+	place:                       game.Place, // the last Place record
+	places:                      int, // Place records received
+	deaths:                      int, // Player_Died events
+	died:                        int, // Entity_Despawn with died
+	hits:                        int, // Damage_Hit events
+	death_cause, death_attacker: string, // the last Player_Died
+	results:                     map[u32]game.Edit_Result,
+	seq:                         u32,
+	messages:                    [dynamic][]u8,
+	notices:                     [dynamic]string, // (heap)
+	grants:                      [dynamic]game.Grant, // (heap)
+	chat:                        [dynamic]Net_Chat, // lines heard (heap)
+	deleted:                     [dynamic]u32, // lines taken back
+	inventory:                   game.Inventory, // the server's last word
+	rest_last:                   [3]f64, // at_rest: where it was last update, and for how many
+	rest_still:                  int,
+	inv_acked:                   u32,
+	inv_updates:                 int,
+	look:                        [2]f32, // yaw, pitch of its idle inputs
+	move:                        [2]f32, // and their move (right, forward)
+	key_name:                    string, // whose test_key it says it is (default: name)
+	sign_name:                   string, // whose test_key it signs with (default: key_name: an impostor if not)
+	ask:                         bool, // Hello without a character: Characters, then Choose name
+	characters:                  string, // the last Characters (temp: compared at once)
+	address:                     game.Address, // the world it is in (Welcome, World_Changed)
+	travels:                     int, // World_Changed messages
+	capture:                     netcode.Capture, // (net_capture: every packet it sends and receives)
+	pack_cache:                  string, // where it keeps the packs it was sent ("": nowhere)
+	fetch:                       ^game.Pack_Fetch, // the Packs it was told of
+	reg:                         ^game.Registry, // built from them (client side: no server/ files); nil: the base pack's
+	pack_parts:                  int, // Pack_Part messages received
+	packs_error:                 string, // why the packs could not be taken (temp)
 }
 
 @(private)
@@ -120,6 +122,8 @@ net_close :: proc(c: ^Net_Client) {
 	for _, n in c.others {delete(n)}
 	delete(c.others)
 	delete(c.mode)
+	delete(c.death_cause)
+	delete(c.death_attacker)
 	delete(c.seen)
 	delete(c.worn)
 	delete(c.changed)
@@ -261,6 +265,12 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.explosions += 1
 		case .Player_Died:
 			c.deaths += 1
+			v := (^game.Player_Died)(g.value)
+			delete(c.death_cause)
+			delete(c.death_attacker)
+			c.death_cause, c.death_attacker = strings.clone(v.cause), strings.clone(v.attacker)
+		case .Damage_Hit:
+			c.hits += 1
 		}
 	}
 }

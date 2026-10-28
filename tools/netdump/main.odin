@@ -233,6 +233,8 @@ describe :: proc(
 			return fmt.tprintf("inventory_request seq=%d action=%v", v.sequence, v.action), true
 		case game.Attack:
 			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
+		case game.Respawn:
+			return "respawn", true
 		case game.Stats_Request:
 			return fmt.tprintf("stats_request filter=%q page=%d of=%q", v.filter, v.page, v.of),
 				true

@@ -85,6 +85,8 @@ Client :: struct {
 	mode_set:      bool, // (a new client has none yet)
 	health:        f32, // health points (health.odin)
 	max_health:    f32,
+	dead:          bool, // at the death screen, waiting for Respawn (damage.odin)
+	last_damage:   u64, // the tick it was last hurt (regeneration waits after it)
 	airborne:      bool,
 	fall_peak:     f64, // the highest y of the present fall
 	report_window: u64, // the tick the current window of telemetry reports began

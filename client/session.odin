@@ -142,6 +142,11 @@ Session :: struct {
 	mode:             int, // the game mode the server last said (Mode): an index into reg.game_modes
 	health:           f32, // as the server last said (Health)
 	max_health:       f32,
+	hurt:             game.Damage_Hit, // the last hit (the damage direction on the screen)
+	hurts:            int, // Damage_Hits seen
+	dead:             bool, // at the death screen (Health.dead)
+	death_line:       [96]u8, // how it happened, as the death screen says it
+	death_len:        int,
 	place:            game.Place, // the server's word on where we are (the music's)
 	home:             game.Address, // the world we joined in (the music's "home")
 	died:             int, // Player_Died events seen (the music's death stinger)

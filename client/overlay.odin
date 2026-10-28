@@ -21,6 +21,7 @@ Overlay :: enum u8 {
 	Dial, // a gate's symbols (overlay_dial.odin)
 	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
+	Death, // dead: how, and the Respawn button (overlay_death.odin)
 }
 
 Overlay_Take :: enum u8 {
@@ -47,6 +48,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
+	.Death = {takes = {.Keyboard, .Mouse}, in_game = true},
 }
 
 Overlays :: struct {
@@ -156,10 +158,12 @@ escape :: proc(app: ^App) {
 // (Options saving if dirty), back to playing; elsewhere nothing.
 pause_toggle :: proc(app: ^App) {
 	if app.screen != .Game {return}
-	if _, open := overlay_top(&app.overlays); !open {
+	top_open, open := overlay_top(&app.overlays)
+	if !open {
 		if game_controls(app) {overlay_open(&app.overlays, .Game_Menu)}
 		return
 	}
+	if top_open == .Death {return}
 	for _ in 0 ..< 8 {
 		top, ok := overlay_top(&app.overlays)
 		if !ok {return}
@@ -179,6 +183,8 @@ close_overlay :: proc(app: ^App, which: Overlay) {
 	case .Chat:
 		chat_close(app)
 		return
+	case .Death:
+		return // (only Respawn leaves it)
 	case .Player_Menu:
 		player_menu_close(app)
 		return
@@ -215,6 +221,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			audio_inspector_ui(app, ctx)
 		case .Consent:
 			consent_dialog(app, ctx)
+		case .Death:
+			death_ui(app, ctx)
 		}
 	}
 }

@@ -30,6 +30,9 @@ config :: proc(dir: string) -> Config {
 }
 
 @(private = "file")
+was_dead, first_respawn, second_respawn: bool
+
+@(private = "file")
 Probe :: struct {
 	name:   string,
 	health: f32,
@@ -156,7 +159,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		creative, _ := game.mode_find(s.registry, "creative")
 		survival := c.mode
 		set_game_mode(s, c, creative, {"test", ""})
-		damage_player(s, c, 100, "test")
+		damage(s, c, 100, {kind = .Command})
 		set_game_mode(s, c, survival, {"test", ""})
 		c.health = c.max_health
 	})
@@ -165,8 +168,15 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// Death: full health at the spawn again, the inventory kept (keep_inventory).
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
 		c.player.position += {40, 0, 40}
-		damage_player(s, c, 100, "test")
+		damage(s, c, 100, {kind = .Command})
 	})
+	pause(t, {&a}, 0.5)
+	testing.expect(t, a.health.dead && a.deaths == 1, "the client was told it is dead")
+	testing.expect_value(t, probe(&srv, "a").health, f32(0))
+	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+		was_dead, first_respawn, second_respawn = c.dead, respawn(s, c), respawn(s, c)
+	})
+	testing.expect(t, was_dead && first_respawn && !second_respawn, "respawn works once")
 	pause(t, {&a}, 0.5)
 	died := probe(&srv, "a")
 	testing.expect_value(t, died.health, f32(game.BASE_HEALTH))
@@ -181,8 +191,9 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// Without keep_inventory: dropped where they fell.
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
 		c.world.rules.keep_inventory = false
-		damage_player(s, c, 100, "test")
+		damage(s, c, 100, {kind = .Command})
 		c.world.rules.keep_inventory = true
+		respawn(s, c)
 	})
 	testing.expect_value(t, probe(&srv, "a").items, 0)
 

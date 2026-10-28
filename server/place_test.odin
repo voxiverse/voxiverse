@@ -100,7 +100,7 @@ test_place_record :: proc(t: ^testing.T) {
 	testing.expect(t, a.places > seen)
 	// Death: told before they land at the spawn.
 	call(&srv, proc(s: ^Server, data: rawptr) {
-			if c := client_by_name(s, "a"); c != nil {damage_player(s, c, 1000, "test")}
+			if c := client_by_name(s, "a"); c != nil {damage(s, c, 1000, {kind = .Command})}
 		}, nil)
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].deaths == 1}, 5)
 	testing.expect(t, ok, "the client was not told it died")

@@ -723,6 +723,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case game.Telemetry_Batch:
 		disconnect(s, c, "this is not a telemetry collector")
+	case game.Respawn:
+		respawn(s, c) // (refused while alive: nothing happens)
 	case game.Stats_Request:
 		stats_request(s, c, v)
 	case game.Telemetry_Report:

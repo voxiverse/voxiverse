@@ -22,6 +22,8 @@ Run_Result :: struct {
 	skipped:      int,
 	velocity:     int, // ... of them in the velocity
 	flying:       bool,
+	was_dead:     bool, // the server said it died
+	dead:         bool, // ... and it is still
 }
 
 @(private = "file")
@@ -39,6 +41,8 @@ Predicting_Client :: struct {
 	rx:          State_Rx,
 	teleports:   u8,
 	results:     map[u32]game.Edit_Result,
+	was_dead:    bool, // it has been
+	dead:        bool, // the server says so (Health): the client stands still
 }
 
 @(private = "file")
@@ -101,6 +105,9 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 					)
 				case .Rules:
 					c.rules = (^game.Rules)(g.value)^
+				case .Health:
+					c.dead = (^game.Health)(g.value).dead
+					c.was_dead ||= c.dead
 				}
 			}
 		case game.Edit_Result:
@@ -161,6 +168,7 @@ run_script :: proc(
 	still_ticks := 0, // then standing still, no edits, still checking: a quiet stretch where checks are always judged
 	nudge := false, // the client puts one ulp into its predicted velocity.x after every prediction
 	fly := false, // the character is in a mode with `fly`, takes off and flies (no edits)
+	death := false, // survival: killed at tick 50, the Respawn button at tick 60
 ) -> (
 	result: Run_Result,
 	ok: bool,
@@ -172,7 +180,14 @@ run_script :: proc(
 	srv: Server
 	if !start(
 	&srv,
-	{seed = 5, generator = .Classic, view_radius = 4, view_height = 2, workers = 2}, // M4's gentle hills: corrections only from latency, not chunks still arriving under a forest
+	{
+		seed = 5,
+		generator = .Classic,
+		view_radius = 4,
+		view_height = 2,
+		workers = 2,
+		mode = "survival" if death else "",
+	}, // M4's gentle hills: corrections only from latency, not chunks still arriving under a forest
 	{&pipe, .Server},
 	) {return}
 	defer stop(&srv)
@@ -230,6 +245,17 @@ run_script :: proc(
 	for tick in 0 ..< ticks + still_ticks {
 		pump(t, &c)
 		in_ := script_input(tick) if tick < ticks else game.Player_Input{pitch = -0.7}
+		if death && tick == 50 {
+			call(&srv, proc(s: ^Server, _: rawptr) {
+					c := &s.clients[0]
+					damage(s, c, 1000, {kind = .Command})
+				}, nil)
+		}
+		if death && tick == 60 {send(&c, game.Respawn{})}
+		if c.dead {in_ = {
+				yaw   = in_.yaw,
+				pitch = in_.pitch,
+			}}
 		if fly && tick == 10 {in_.buttons += {.Toggle_Fly}}
 		if fly && tick > 10 && tick < ticks {in_.buttons += {.Jump}}
 		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c), mods)
@@ -280,6 +306,7 @@ run_script :: proc(
 	result.predicted = c.prediction.state
 	if !fly {for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}}
 	result.flying = c.prediction.state.flying
+	result.was_dead, result.dead = c.was_dead, c.dead
 	result.corrections = c.prediction.corrections - corrections_before
 	result.desyncs, result.judged, result.skipped =
 		srv.desyncs, srv.checks_judged, srv.checks_skipped
@@ -342,6 +369,17 @@ test_fly_predicted_with_latency :: proc(t: ^testing.T) {
 	testing.expect(t, r.flying && r.server_state.flying, "both sides are flying")
 	testing.expect(t, r.predicted == r.server_state, "prediction ended away from the server")
 	testing.expect_value(t, r.corrections, 0)
+	testing.expect_value(t, r.desyncs, 0)
+}
+
+// A death and the Respawn button over latency: the client stands still while
+// dead as the server does, wakes at the spawn, and ends where the server is.
+@(test)
+test_death_and_respawn_with_latency :: proc(t: ^testing.T) {
+	r, ok := run_script(t, 200, 60, ticks = 200, death = true)
+	if !testing.expect(t, ok, "the run did not finish") {return}
+	testing.expect(t, r.was_dead && !r.dead, "it died and respawned")
+	testing.expect(t, r.predicted == r.server_state, "prediction ended away from the server")
 	testing.expect_value(t, r.desyncs, 0)
 }
 

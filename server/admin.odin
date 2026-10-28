@@ -44,6 +44,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"setblock", "<x y z> <block>", {4, 4}, admin_setblock, "world.edit.bulk"},
 	{"rule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
 	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
+	{"damage", "<player> <amount>", {2, 2}, admin_damage, "voxiverse.command.damage"},
 	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
 	{"seed", "", {0, 0}, admin_seed, "info.seed"},
 	{"packs", "", {0, 0}, admin_packs, "info.packs"},

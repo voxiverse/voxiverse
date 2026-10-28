@@ -71,7 +71,7 @@ apply_mode :: proc(s: ^Session, g: game.Received) {
 @(private)
 apply_health :: proc(s: ^Session, g: game.Received) {
 	h := (^game.Health)(g.value)
-	s.health, s.max_health = h.health, h.max
+	s.health, s.max_health, s.dead = h.health, h.max, h.dead
 }
 
 @(private)
@@ -236,7 +236,14 @@ apply_event :: proc(s: ^Session, g: game.Received) {
 	case .Explosion:
 		x := (^game.Explosion)(g.value)
 		explosion_effects(s, x.position, f64(x.radius))
+	case .Damage_Hit:
+		s.hurt = (^game.Damage_Hit)(g.value)^
+		s.hurts += 1
 	case .Player_Died:
 		s.died += 1
+		d := (^game.Player_Died)(g.value)
+		kind, _ := game.damage_source_parse(d.cause)
+		line := game.death_text(kind, s.config.name, d.attacker, d.weapon, true)
+		s.death_len = copy(s.death_line[:], line)
 	}
 }

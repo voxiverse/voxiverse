@@ -41,6 +41,10 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 	for ; n < c.action_count; n += 1 {
 		a := c.actions[n]
 		if !game.sequence_before_or_at(action_after(a), c.inputs.last) {break}
+		if c.dead { 	// (the dead do nothing)
+			if e, edit := a.(game.Edit); edit {send_message(s, c, edit_refused(c.world, e))}
+			continue
+		}
 		switch v in a {
 		case game.Edit:
 			send_message(s, c, apply_edit(s, c, v))

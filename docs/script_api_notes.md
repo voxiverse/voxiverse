@@ -16,7 +16,7 @@ a mode or a rule except through these.
 | `player.damage(player, amount, source)` | `damage(s, target, amount, source) -> Damage_Result` | `players.damage` | Checks `invulnerable`, `pvp`, `health`; `source` has a kind and optional attacker and weapon. Death messages come from the source. |
 | `player.heal(player, amount)` | `heal_player` | `players.damage` | |
 | `player.respawn(player)` | `respawn(s, c)` | `players.respawn` | Valid only while dead. |
-| `rules.get(name)` / `rules.set(name, value, cause)` | `rules_get`, `rules_set` (the table that `/rule` uses) | `rules.read` / `rules.set` | Journalled with the actor. `rules.set` needs the rule's name in the pack's grant list (M52). |
+| `rules.get(name)` / `rules.set(name, value, cause)` | `native_rule_get`, `rule_set` (the one place `/rule` and the console change a rule) | `rules.read` / `rules.set` | Journalled with the actor. `rules.set` needs the rule's name in the pack's grant list (M52). |
 | `kit.give(player, kit)` | `kit_give(s, c, kit)` | `item.give` | A kit is data (`Mode_Def.kit` or `data/kits`). |
 
 ## Events (M26's stream; M52's `Script_Event`)

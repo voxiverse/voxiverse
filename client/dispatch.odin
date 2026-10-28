@@ -36,6 +36,7 @@ handle_global_keys :: proc(app: ^App, input: ^ui.Input) {
 	chest_sync(app)
 	player_menu_keys(app)
 	dial_keys(app)
+	death_sync(app)
 }
 
 // menu_actions: what the menus take from the actions this frame: back and the

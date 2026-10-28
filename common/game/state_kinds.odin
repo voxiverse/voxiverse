@@ -40,6 +40,7 @@ Event_Kind :: enum u8 {
 	Entity_Died,
 	Explosion,
 	Player_Died,
+	Damage_Hit,
 }
 
 // Own_Player: the player's authoritative state after the server applied
@@ -120,7 +121,18 @@ Place :: struct {
 
 // Player_Died: the player died, of cause (sent before they land at the spawn).
 Player_Died :: struct {
-	cause: string `net:"max=32"`,
+	cause:    string `net:"max=32"`, // a Source_Kind's name
+	attacker: string `net:"max=16"`, // the player who did it ("" if none)
+	weapon:   string `net:"max=32"`,
+}
+
+// Damage_Hit: the player was hurt by something at a place: the direction the
+// hit came from, for the screen (an angle in radians, as a yaw: 0 is -z) and
+// how much.
+Damage_Hit :: struct {
+	yaw:    f32,
+	amount: f32,
+	known:  bool, // the source had a place (a fall has none)
 }
 
 // Entity_Died: an entity the client knows died (sent before its record goes).
@@ -204,6 +216,7 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 	.Entity_Died = {name = "entity_died", value = Entity_Died},
 	.Explosion = {name = "explosion", value = Explosion, check = check_explosion},
 	.Player_Died = {name = "player_died", value = Player_Died},
+	.Damage_Hit = {name = "damage_hit", value = Damage_Hit},
 }
 
 // game_schema builds the schema of the game's kinds. The server builds it when

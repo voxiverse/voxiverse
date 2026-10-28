@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready", [23] = "respawn",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -57,6 +57,7 @@ local SCHEMA = {
   { id = 1, name = "health", key = "none", lane = "reliable", fields = {
     { name = "health", t = "f32" },
     { name = "max", t = "f32" },
+    { name = "dead", t = "bool" },
   } },
   { id = 2, name = "mode", key = "none", lane = "reliable", fields = {
     { name = "mode", t = "string", max = 64 },
@@ -165,6 +166,13 @@ local SCHEMA = {
   } },
   { id = 21, name = "player_died", key = "none", lane = "event", fields = {
     { name = "cause", t = "string", max = 32 },
+    { name = "attacker", t = "string", max = 16 },
+    { name = "weapon", t = "string", max = 32 },
+  } },
+  { id = 22, name = "damage_hit", key = "none", lane = "event", fields = {
+    { name = "yaw", t = "f32" },
+    { name = "amount", t = "f32" },
+    { name = "known", t = "bool" },
   } },
 }
 -- schema end

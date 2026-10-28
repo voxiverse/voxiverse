@@ -281,7 +281,7 @@ scenario_proc :: proc(s: ^Server, data: rawptr) {
 	case 0:
 		d.ok = travel(s, c, d.addr) == ""
 	case 1:
-		damage_player(s, c, 1000, "test")
+		damage(s, c, 1000, {kind = .Command})
 	case 2:
 		// A chest placed and filled by hand through the requests.
 		set_block(c.world, d.pos, .Chest, test_act(c.world))

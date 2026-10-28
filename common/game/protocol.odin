@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 32
+PROTOCOL_VERSION :: 33
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -120,6 +120,9 @@ Chat :: struct {
 
 MAX_CHAT_TEXT :: 256
 
+// Respawn: the dead player presses the button (refused while alive).
+Respawn :: struct {}
+
 // Stats_Request asks for the player's counters (those whose names contain
 // filter), a page of them; the answer is a Stats_Page.
 Stats_Request :: struct {
@@ -151,6 +154,7 @@ MAX_BATCH_TEXT :: 32 * 1024
 Health :: struct {
 	health: f32,
 	max:    f32,
+	dead:   bool, // waiting at the death screen for the Respawn button
 }
 
 // Telemetry_Ack: a batch was taken: its day and the offset after it (a report:
@@ -267,6 +271,7 @@ Client_Message :: union {
 	Prediction_Check,
 	Pack_Want,
 	Packs_Ready,
+	Respawn,
 }
 
 // Server -> client.
@@ -528,6 +533,7 @@ Client_Kind :: enum u8 {
 	Prediction_Check,
 	Pack_Want,
 	Packs_Ready,
+	Respawn,
 }
 
 @(private = "file")
@@ -632,6 +638,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "pack_want"
 		case u8(Client_Kind.Packs_Ready):
 			return "packs_ready"
+		case u8(Client_Kind.Respawn):
+			return "respawn"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -707,6 +715,8 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u32(w, v.sequence)
 		write_player_input(w, v.input)
 		write_varint(w, v.snapshot)
+	case Respawn:
+		write_u8(w, u8(Client_Kind.Respawn))
 	case Ping:
 		write_u8(w, u8(Client_Kind.Ping))
 		write_u32(w, v.id)
@@ -931,6 +941,8 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 			input    = read_player_input(&r),
 			snapshot = read_varint(&r),
 		}
+	case u8(Client_Kind.Respawn):
+		m = Respawn{}
 	case u8(Client_Kind.Ping):
 		m = Ping {
 			id = read_u32(&r),
