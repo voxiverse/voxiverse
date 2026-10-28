@@ -32,6 +32,7 @@ APPLY := [game.State_Kind]Apply_Proc {
 	.Entity_Motion = apply_entity_motion,
 	.Block         = apply_block,
 	.Place         = apply_place,
+	.Tally         = apply_tally,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -138,18 +139,28 @@ apply_player :: proc(s: ^Session, g: game.Received) {
 			o.name = strings.clone(v.name)
 		}
 		o.worn = v.worn
+		o.held = v.held
+		o.kills, o.deaths = v.kills, v.deaths
 		return
 	}
 	if o, known := s.others[id]; known {delete(o.name)} 	// a seat taken again
 	s.others[id] = {
-		name = strings.clone(v.name),
-		worn = v.worn,
+		name   = strings.clone(v.name),
+		worn   = v.worn,
+		held   = v.held,
+		kills  = v.kills,
+		deaths = v.deaths,
 	}
 	// its motion may have arrived first (the lanes are not ordered together)
 	if m := game.receiver_snapshot_get(&s.rx, int(game.State_Kind.Player_Motion), g.key);
 	   m != nil {
 		other_snapshot(&s.others[id], s.rx.tick, (^game.Player_Motion)(m)^)
 	}
+}
+
+@(private)
+apply_tally :: proc(s: ^Session, g: game.Received) {
+	s.tally = (^game.Tally)(g.value)^
 }
 
 @(private)

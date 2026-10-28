@@ -843,6 +843,34 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .Start)
 	testing.expect_value(t, app.overlays.count, 0)
 
+	// Open to LAN: every control by the pad: the guests' mode, Allow
+	// commands, Open (the two rules and the command are what it sends), Cancel.
+	pad_tap(app, .Start)
+	pad_focus(t, app, "Open to LAN")
+	pad_tap(app, .A)
+	testing.expect(t, overlay_is_open(&app.overlays, .Open_To_LAN))
+	mode := app.lan.mode
+	testing.expect(t, !app.lan.commands && !app.lan.started)
+	pad_focus(t, app, fmt.tprintf("Guests' game mode: %s", game.mode_label(s.reg, mode)))
+	pad_go(app, .Right)
+	testing.expect(t, app.lan.mode != mode, "Right chose the next mode")
+	pad_focus(t, app, "Allow commands")
+	pad_tap(app, .A)
+	testing.expect(t, app.lan.commands)
+	commands := lan_commands(s, app.lan)
+	testing.expect_value(t, commands[1], "rule guest_role mod")
+	testing.expect_value(t, commands[2], "open_lan")
+	testing.expect(t, strings.has_prefix(commands[0], "rule default_game_mode "))
+	pad_focus(t, app, "Open")
+	pad_tap(app, .A)
+	testing.expect(t, app.lan.started)
+	pad_focus(t, app, "Cancel")
+	pad_tap(app, .A)
+	testing.expect(t, !overlay_is_open(&app.overlays, .Open_To_LAN))
+	testing.expect(t, overlay_is_open(&app.overlays, .Game_Menu))
+	pad_tap(app, .Start)
+	testing.expect_value(t, app.overlays.count, 0)
+
 	// The dial: seven symbols by directions and A, one erased by X.
 	dial_open(app, {10, 20, 30})
 	pad_frame(app)

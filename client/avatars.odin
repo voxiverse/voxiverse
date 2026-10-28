@@ -1,6 +1,7 @@
 package client
 
 import "core:hash"
+import "core:math"
 import "core:math/linalg"
 
 import "../common/game"
@@ -43,17 +44,79 @@ ARMOR_COLORS := [game.Armor][4]u8 {
 	.Boots    = {58, 42, 34, 255},
 }
 
-// avatars_draw adds every visible other player to the entity pass.
+// Avatar_Pose: how the limbs and the body stand (radians about the shoulder
+// and hip; the body's heights). Derived from the speed and the sneak flag the
+// server replicated, never from what the client guesses.
+Avatar_Pose :: struct {
+	legs:   [2]f32, // left, right: the swing about the hip
+	arms:   [2]f32, // left, right: opposite the legs; the right one raised with an item
+	hip:    f32, // the legs' length (sneaking: shorter)
+	neck_y: f32, // the shoulders' height
+}
+
+AVATAR_MOVING :: 0.3 // blocks/s: below this it stands (replicated positions are not still to the last digit)
+AVATAR_FULL_STEP :: 0.8 // blocks/s: the swing is whole from here
+AVATAR_WALK_SWING :: 0.55 // radians
+AVATAR_RUN_SWING :: 1.0
+AVATAR_SNEAK_SWING :: 0.25 // a shortened stride
+AVATAR_RAISED :: 1.1 // the arm that holds something, forward
+
+// avatar_pose_advance: the limbs' phase after moving `distance` blocks. The
+// phase follows the ground covered, so it is continuous when the speed changes
+// and a slow avatar swings slowly; sneaking takes shorter strides.
+avatar_pose_advance :: proc(phase, distance: f32, crouched: bool) -> f32 {
+	per_block: f32 = 7.0 if crouched else 4.5 // radians of the cycle per block
+	return math.mod(phase + distance * per_block, math.TAU)
+}
+
+// avatar_pose: the pose at `phase` while going `speed` blocks/s. walk_speed
+// and sprint_speed are the world's rules: the swing grows from the walk's to
+// the run's between them. At rest every limb is still.
+avatar_pose :: proc(
+	speed: f32,
+	crouched: bool,
+	phase: f32,
+	holding: bool,
+	walk_speed, sprint_speed: f32,
+) -> (
+	pose: Avatar_Pose,
+) {
+	pose.hip, pose.neck_y = 0.75, 1.4
+	if crouched {pose.hip, pose.neck_y = 0.6, 1.1}
+	if speed < AVATAR_MOVING {
+		if holding {pose.arms[1] = -AVATAR_RAISED}
+		return
+	}
+	amp: f32 = AVATAR_SNEAK_SWING
+	if !crouched {
+		run := clamp((speed - walk_speed) / max(sprint_speed - walk_speed, 0.01), 0, 1)
+		amp = AVATAR_WALK_SWING + (AVATAR_RUN_SWING - AVATAR_WALK_SWING) * run
+	}
+	amp *= clamp((speed - AVATAR_MOVING) / (AVATAR_FULL_STEP - AVATAR_MOVING), 0.4, 1)
+	swing := math.sin(phase) * amp
+	pose.legs = {swing, -swing}
+	pose.arms = {-swing, swing}
+	if holding {pose.arms[1] = -AVATAR_RAISED + swing * 0.15}
+	return
+}
+
+// avatar_rest: standing still.
+avatar_rest :: proc(crouched: bool) -> Avatar_Pose {
+	return avatar_pose(0, crouched, 0, false, 1, 2)
+}
+
+// avatars_draw adds every visible other player to the entity pass (their limbs
+// move on with the ground they cover each frame).
 avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 	if s.camera_mode != .First {
-		// Ourselves, standing (animations are next tier).
+		// Ourselves, standing.
 		avatar_draw(
 			s.reg,
 			d,
 			s.feet,
 			s.camera.yaw,
 			s.camera.pitch,
-			s.prediction.state.crouched,
+			avatar_rest(s.prediction.state.crouched),
 			shirt_of(s.config.name),
 			game.worn_of(&s.inventory),
 		)
@@ -63,25 +126,84 @@ avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 	for _, &o in s.others {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
-		avatar_draw(s.reg, d, v.position, v.yaw, v.pitch, v.crouched, shirt_of(o.name), o.worn)
+		moved := v.position - o.last_seen
+		if o.last_seen != {} {
+			o.stride = avatar_pose_advance(
+				o.stride,
+				f32(math.sqrt(moved.x * moved.x + moved.z * moved.z)),
+				v.crouched,
+			)
+		}
+		o.last_seen = v.position
+		pose := avatar_pose(
+			v.speed,
+			v.crouched,
+			o.stride,
+			o.held != game.NO_ITEM,
+			s.rules.walk_speed,
+			s.rules.sprint_speed,
+		)
+		avatar_draw(s.reg, d, v.position, v.yaw, v.pitch, pose, shirt_of(o.name), o.worn)
 	}
 }
 
-// avatar_draw adds one avatar standing at p (feet): legs, a body that turns
-// with it, a head that also looks up and down, and what it wears.
+// avatar_draw adds one avatar standing at p (feet): legs and arms swung as
+// the pose says, a body that turns with it, a head that also looks up and
+// down, and what it wears.
 avatar_draw :: proc(
 	reg: ^game.Registry,
 	d: ^render.Entity_Draw,
 	p: [3]f64,
 	yaw, pitch: f32,
-	crouched: bool,
+	pose: Avatar_Pose,
 	shirt: [4]u8,
 	worn: [game.WORN_SLOTS]game.Item,
 ) {
-	// Sneaking: shorter legs and body, the head lower (1.5 tall).
-	hip, neck_y: f32 = 0.75, 1.4
-	if crouched {hip, neck_y = 0.6, 1.1}
-	render.entity_box(d, p, yaw, 0, {-0.25, 0, -0.125}, {0.25, hip, 0.125}, LEGS, .Legs)
+	hip, neck_y := pose.hip, pose.neck_y
+	leg :: proc(
+		d: ^render.Entity_Draw,
+		p: [3]f64,
+		yaw, swing, hip: f32,
+		side, lo, hi, grow: f32,
+		color: [4]u8,
+	) {
+		pivot := p + turn_yaw({side * 0.125, hip, 0}, yaw)
+		render.entity_box(
+			d,
+			pivot,
+			yaw,
+			swing,
+			{-0.125 - grow, lo - hip, -0.125 - grow},
+			{0.125 + grow, hi - hip, 0.125 + grow},
+			color,
+			.Legs,
+		)
+	}
+	for side, i in ([2]f32{-1, 1}) {
+		leg(d, p, yaw, pose.legs[i], hip, side, 0, hip, 0, LEGS)
+		// An arm hangs from the shoulder: a sleeve, then a hand.
+		shoulder := p + turn_yaw({side * 0.375, neck_y - 0.1, 0}, yaw)
+		render.entity_box(
+			d,
+			shoulder,
+			yaw,
+			pose.arms[i],
+			{-0.075, -0.4, -0.075},
+			{0.075, 0.1, 0.075},
+			shirt,
+			.Body,
+		)
+		render.entity_box(
+			d,
+			shoulder,
+			yaw,
+			pose.arms[i],
+			{-0.075, -0.65, -0.075},
+			{0.075, -0.4, 0.075},
+			SKIN,
+			.Body,
+		)
+	}
 	render.entity_box(d, p, yaw, 0, {-0.3, hip, -0.15}, {0.3, neck_y, 0.15}, shirt, .Body)
 	neck := p + {0, f64(neck_y), 0}
 	render.entity_box(d, neck, yaw, pitch, {-0.24, 0, -0.24}, {0.24, 0.48, 0.24}, SKIN, .Head)
@@ -116,27 +238,13 @@ avatar_draw :: proc(
 				.Body,
 			)
 		case .Trousers:
-			render.entity_box(
-				d,
-				p,
-				yaw,
-				0,
-				{-0.25 - G, 0.2, -0.125 - G},
-				{0.25 + G, hip + 0.08, 0.125 + G},
-				c,
-				.Legs,
-			)
+			for side, i in ([2]f32{-1, 1}) {
+				leg(d, p, yaw, pose.legs[i], hip, side, 0.2, hip + 0.08, G, c)
+			}
 		case .Boots:
-			render.entity_box(
-				d,
-				p,
-				yaw,
-				0,
-				{-0.25 - G, 0, -0.125 - G},
-				{0.25 + G, 0.22, 0.125 + G},
-				c,
-				.Legs,
-			)
+			for side, i in ([2]f32{-1, 1}) {
+				leg(d, p, yaw, pose.legs[i], hip, side, 0, 0.22, G, c)
+			}
 		}
 	}
 }

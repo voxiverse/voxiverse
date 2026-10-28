@@ -188,17 +188,34 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 	c.teleported = false
 }
 
+// held_item: the item in c's hand (NO_ITEM: an empty hand).
+held_item :: proc(c: ^Client) -> game.Item {
+	st := game.inventory_held(&c.inventory)
+	return st.item if st.count > 0 else game.NO_ITEM
+}
+
+// tally_of: c's kills and deaths, the counters of the damage pipeline.
+@(private)
+tally_of :: proc(c: ^Client) -> game.Tally {
+	return {u32(stats_total(c.stats, "kills")), u32(stats_total(c.stats, "deaths"))}
+}
+
 // players_put tells a client who else is in its world (their names and what
 // they wear) and where the ones near it are.
 @(private)
 players_put :: proc(s: ^Server, c: ^Client) {
 	near := f64((s.config.view_radius + 1) * game.CHUNK_SIZE)
+	tally := tally_of(c)
+	state_put(s, c, .Tally, &tally)
 	for &other in s.clients {
 		if &other == c || other.state != .Playing || other.world != c.world {continue}
 		id := player_id(s, &other)
 		record := game.Player_Record {
-			name = client_name(&other),
-			worn = game.worn_of(&other.inventory),
+			name   = client_name(&other),
+			worn   = game.worn_of(&other.inventory),
+			held   = held_item(&other),
+			kills  = u32(stats_total(other.stats, "kills")),
+			deaths = u32(stats_total(other.stats, "deaths")),
 		}
 		state_put(s, c, .Player, &record, game.key_player(id))
 		d := other.player.position - c.player.position

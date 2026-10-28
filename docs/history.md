@@ -6449,3 +6449,57 @@ numbers are tuned in `weapons.json` (hot reload applies at once).
 - The pad's X reloads; drop moved to the pad's d-pad down (the two clashed in the world context). `R` reloads.
 - Effects: the tracer is a streak of specks (the puffs), the flash a few sparks, the recoil a view pitch that decays (nothing is sent); the damage arc and the hit marker are drawn from squares at the screen edge and the crosshair; the sounds are synthesized (`sfx.Gun_Sound`); the weapons' icons are 16x16 art by the weapon's `sound` cue.
 - Test pack: the weapon data is tested through the loader (`test_weapon_data`: a pack overrides the pistol's damage; a missing number is a load error) and on the server by changing the registry's data in place (`test_weapons`); the over-UDP test is `test_shooting_through_loss`, the client's `test_weapons_over_a_stepped_server` (prediction exact, no desync: the effects touch no state).
+
+# M48i: party 3: party extras (what M48e did not deliver)
+
+M48e delivered the universes screen and creation, F5's camera modes with the pull-in
+(behind, then front), the FOV and toggles, F, the offhand swap and the hold-P player list
+(names and pings). This adds only what is still missing:
+
+- *Kills and deaths in the P list:* two columns read from the statistics counters
+  `kills` and `deaths` (M48g) of every player, replicated as a state kind
+  (`Player_Stats` in the player-list record, M39: `kills: u32, deaths: u32` per player;
+  the list's existing record gains them; `PROTOCOL_VERSION` +1). Sorted by kills, then
+  deaths, then name when held. Strings through the string table (`players.kills`,
+  `players.deaths`).
+- *Avatar animation:* walk, run and sneak for other players' avatars so they do not
+  glide: limb swing phase driven by the avatar's horizontal speed (walk below the sprint
+  threshold, run above it, a shortened stride and a lowered body when sneaking), arms
+  swinging opposite the legs, a held item raised, a still pose at rest; the pose is
+  derived from the replicated velocity and the `sneak` flag (an `Avatar_Pose` state
+  field in the player's entity record if it is not already replicated: `sneak: bool`),
+  never from client-only guesses, and interpolated like the position. The avatar mesh
+  stays programmatic and palette-quantized.
+- *The Open to LAN dialog* (singleplayer's game menu entry "Open to LAN", M48d's
+  `menu_game`): a dialog with **guests' game mode** (a choice among the registered
+  modes: the default is the universe's) and **Allow commands** (guests get the `default`
+  role plus the commands nodes the host picks: off = the `default` role as today; on =
+  the `mod` role), and **Open** which starts the listening server on a port shown in the
+  dialog (the LAN address and port, copyable); the host stays the owner. The setting is
+  `default_game_mode` (the world's rule override) and a `guest_role` setting; both are
+  rules-table entries changed through the same journalled path as `/rule`. A "Close LAN"
+  entry stops listening. The existing listening code is used as is (this milestone adds the
+  dialog and the two settings; it does not touch the transport).
+
+## Tests
+
+- The player list shows kills and deaths for two players after scripted kills (the UI
+  test reads the formatted rows); sort order; strings through keys.
+- The avatar's pose function: walk, run, sneak and rest from velocity and flag, a swing
+  phase that is continuous across a speed change; no glide (a moving avatar's limbs are
+  never at rest); a snapshot of the poses.
+- The dialog opens the LAN with the chosen mode and role: a guest joining gets that mode
+  (the mode is theirs, not the host's) and the role's commands, or not; pad navigation
+  reaches every control (M42's test pattern).
+- The suite, `build check`, CI green.
+
+**Exit check (M48i):** the tests pass, the whole suite and `build check`, CI green.
+
+**Check by hand (M48i):** open to LAN with a friend: look at their avatar walk, run,
+sneak; hold P: kills and deaths update as you shoot each other; F5 pulls in at walls.
+
+**What differed from the spec (M48i):**
+
+- Kills and deaths: `Player_Record` gained `kills`, `deaths` (and `held`, the hotbar item, for the raised arm); our own come as a new state kind `Tally` (`kills`, `deaths`), because a player is not sent their own `Player` record. Sorting puts ourselves among the others (the old list had us first). `PROTOCOL_VERSION` 35.
+- Avatar pose: no `Avatar_Pose` state field: `crouched` (the sneak flag) was already in `Player_Motion`, and the speed is derived from the replicated positions of the track (`snapshot_speed`), interpolated like the position. `avatar_pose` (speed, flag, phase, holding, the world's walk and sprint speeds) and `avatar_pose_advance` (the phase follows the ground covered, so it is continuous across speed changes; sneaking takes a shorter stride) are pure. The avatar's legs and arms are now separate boxes. Ourselves in third person still stand (animation of the own avatar was not asked for).
+- Open to LAN: the dialog is the overlay `Open_To_LAN` (`overlay_lan.odin`); it sends `rule default_game_mode <mode>`, `rule guest_role mod|default`, `open_lan`. `guest_role` is a rules-table text entry the grants are resolved with (`resolve(..., guest_role)`): everyone but the owner has that role besides `default`; changing it refreshes the grants of the players already in. Off is `default` (a command argument cannot be empty). New command `close_lan` (node `server.open_lan`): remote players are sent away, the port shut, `guest_role` cleared; the game menu shows "Close LAN" while open. The address is found with `core:net`'s interface list (first up, non-loopback, non-link-local IPv4) and shown with the port; **not copyable**: the platform layer has no clipboard, and adding one per OS is its own piece of work (a clipboard stays on the platform layer's left-out list). A player reads the address off the dialog; it is also what the host tells a friend.

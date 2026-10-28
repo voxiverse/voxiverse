@@ -65,7 +65,7 @@ preview_record :: proc(app: ^App, frame: gpu.Frame) {
 		{0, 0, 0},
 		p.yaw,
 		p.pitch,
-		false,
+		avatar_rest(false),
 		shirt_of(s.config.name),
 		game.worn_of(&s.inventory),
 	)

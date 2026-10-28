@@ -32,6 +32,7 @@ Net_Client :: struct {
 	teleports:                   int, // Own_Player.teleports changes seen
 	others:                      map[u16]string, // joined, by player id
 	seen:                        map[u16][3]f64, // last Players position, by player id
+	counts:                      map[u16][2]u32, // the others' kills and deaths (Player records)
 	worn:                        map[u16][game.WORN_SLOTS]game.Item, // last Player_Worn, by player id
 	changed:                     [dynamic]Net_Block,
 	entities:                    map[u32][3]f64, // known entities, where last seen
@@ -45,6 +46,7 @@ Net_Client :: struct {
 	bulk_begins:                 int,
 	explosions:                  int,
 	place:                       game.Place, // the last Place record
+	tally:                       game.Tally, // the last Tally record
 	places:                      int, // Place records received
 	deaths:                      int, // Player_Died events
 	died:                        int, // Entity_Despawn with died
@@ -128,6 +130,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.death_attacker)
 	delete(c.seen)
 	delete(c.worn)
+	delete(c.counts)
 	delete(c.changed)
 	for n in c.notices {delete(n)}
 	delete(c.notices)
@@ -199,6 +202,8 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			delete(c.mode)
 			c.mode = strings.clone((^game.Mode_Record)(g.value).mode)
 		case .Rules, .Clock, .Variables, .Selection:
+		case .Tally:
+			c.tally = (^game.Tally)(g.value)^
 		case .Place:
 			c.place = (^game.Place)(g.value)^
 			c.places += 1
@@ -218,6 +223,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 				if n, had := c.others[id]; had {delete(n)}
 				c.others[id] = strings.clone(v.name)
 				c.worn[id] = v.worn
+				c.counts[id] = {v.kills, v.deaths}
 			}
 		case .Player_Motion:
 			id := u16(g.key.a)

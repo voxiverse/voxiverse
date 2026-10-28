@@ -29,6 +29,7 @@ Rules :: struct {
 	regen_delay:          f32, // seconds without damage before it does
 	regen_rate:           f32, // health points a second
 	default_game_mode:    base.Var_Text, // a new character's mode here ("": the universe's)
+	guest_role:           base.Var_Text, // the role players who are not the owner have besides default ("": none; Open to LAN's "Allow commands" sets mod)
 	show_coordinates:     bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
 	random_tick_speed:    i32, // blocks picked in each chunk each tick to change by themselves (0: none)
 }
@@ -116,6 +117,11 @@ RULES_VARS := [?]base.Var {
 		hint = "creative, survival or a pack's mode",
 	},
 	{
+		field = "guest_role",
+		help = "the role every player has besides default (empty: only default)",
+		hint = "mod, or a role of permissions.cfg",
+	},
+	{
 		field = "show_coordinates",
 		help = "F3 shows position, chunk and block under (off: only with debug.coordinates)",
 	},
@@ -149,6 +155,7 @@ rules_still :: proc() -> Rules {
 rules_valid :: proc(r: ^Rules) -> bool {
 	t := rules_table()
 	if int(r.default_game_mode.len) > base.VAR_TEXT_MAX {return false}
+	if int(r.guest_role.len) > base.VAR_TEXT_MAX {return false}
 	for &v in t.vars {
 		kind, _ := base.var_kind(t, &v)
 		if kind == .Bool || kind == .Text {continue}

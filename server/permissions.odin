@@ -8,6 +8,7 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
+import "../base"
 import "../common/game"
 
 // Who may do what (common/game/permissions.odin has the rules): roles grant
@@ -284,6 +285,7 @@ resolve :: proc(
 	owner: bool,
 	out: ^[dynamic]game.Grant,
 	allocator := context.allocator,
+	guest_role := "", // the world's rule: a role everyone has besides default
 ) {
 	if owner {append(out, game.Grant{strings.clone("*", allocator), true, 0})}
 	add :: proc(out: ^[dynamic]game.Grant, texts: []string, rank: int, allocator: mem.Allocator) {
@@ -303,6 +305,7 @@ resolve :: proc(
 		}
 	}
 	append(&level, "default")
+	if guest_role != "" {append(&level, guest_role)}
 	seen := make(map[string]struct{}, 16, context.temp_allocator)
 	for rank := 1; len(level) > 0 && rank < 32; rank += 1 {
 		next := make([dynamic]string, context.temp_allocator)
@@ -391,7 +394,8 @@ is_owner :: proc(s: ^Server, c: ^Client) -> bool {
 refresh_grants :: proc(s: ^Server, c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	clear(&c.grants)
-	resolve(&s.perms, client_name(c), c.account, is_owner(s, c), &c.grants)
+	guest := base.var_text(&c.world.rules.guest_role) if c.world != nil else ""
+	resolve(&s.perms, client_name(c), c.account, is_owner(s, c), &c.grants, guest_role = guest)
 	grants := game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)}
 	state_put(s, c, .Grants, &grants)
 }

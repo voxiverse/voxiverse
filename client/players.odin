@@ -15,9 +15,13 @@ INTERPOLATION_TICKS :: game.INTERPOLATION_TICKS
 STALE_SECONDS :: 2 // no snapshot for this long: the connection is lost, nothing is shown
 
 Other_Player :: struct {
-	name:  string,
-	worn:  [game.WORN_SLOTS]game.Item, // head to feet (Player_Worn)
-	track: Track,
+	name:          string,
+	worn:          [game.WORN_SLOTS]game.Item, // head to feet (Player_Worn)
+	held:          game.Item, // in hand (NO_ITEM: nothing)
+	kills, deaths: u32, // for the player list
+	stride:        f32, // blocks walked, the limbs' phase (avatars.odin)
+	last_seen:     [3]f64, // where it was drawn last frame
+	track:         Track,
 }
 
 // Other_Entity: an entity near us (entities.odin draws it).
@@ -46,6 +50,7 @@ Snapshot :: struct {
 
 // Other_View: where to draw another player now.
 Other_View :: struct {
+	speed:      f32, // horizontal, blocks/s, from the snapshots around it
 	position:   [3]f64,
 	yaw, pitch: f32,
 	flying:     bool,
@@ -92,12 +97,17 @@ track_hold :: proc(o: ^Track, tick: u32) {
 track_view :: proc(o: ^Track, at: f64) -> (v: Other_View, ok: bool) {
 	if o.count == 0 {return}
 	newest := o.snapshots[o.count - 1]
-	if at >= f64(newest.tick) {return view_of(newest), true}
+	if at >= f64(newest.tick) {
+		v = view_of(newest)
+		if o.count > 1 {v.speed = snapshot_speed(o.snapshots[o.count - 2], newest)}
+		return v, true
+	}
 	for i := o.count - 1; i > 0; i -= 1 {
 		a, b := o.snapshots[i - 1], o.snapshots[i]
 		if at < f64(a.tick) {continue}
 		t := (at - f64(a.tick)) / f64(b.tick - a.tick)
 		return {
+				speed = snapshot_speed(a, b),
 				position = a.position + (b.position - a.position) * t,
 				yaw = lerp_angle(a.yaw, b.yaw, f32(t)),
 				pitch = a.pitch + (b.pitch - a.pitch) * f32(t),
@@ -106,7 +116,18 @@ track_view :: proc(o: ^Track, at: f64) -> (v: Other_View, ok: bool) {
 			},
 			true
 	}
-	return view_of(o.snapshots[0]), true
+	v = view_of(o.snapshots[0])
+	if o.count > 1 {v.speed = snapshot_speed(o.snapshots[0], o.snapshots[1])}
+	return v, true
+}
+
+// snapshot_speed: how fast the thing went between two snapshots, across the
+// ground (the pose of an avatar reads it; vertical motion does not swing legs).
+snapshot_speed :: proc(a, b: Snapshot) -> f32 {
+	ticks := b.tick - a.tick
+	if ticks == 0 {return 0}
+	d := b.position - a.position
+	return f32(math.sqrt(d.x * d.x + d.z * d.z)) * game.TICK_RATE / f32(ticks)
 }
 
 // Render_Clock: the server time to show the others at (ticks). It is not
@@ -160,7 +181,7 @@ clock_live :: proc(c: Render_Clock) -> bool {
 
 @(private = "file")
 view_of :: proc(s: Snapshot) -> Other_View {
-	return {s.position, s.yaw, s.pitch, s.flying, s.crouched}
+	return {0, s.position, s.yaw, s.pitch, s.flying, s.crouched}
 }
 
 // lerp_angle turns the short way round.

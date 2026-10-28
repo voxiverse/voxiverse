@@ -95,6 +95,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"redo", "[n]", {0, 1}, admin_redo, "world.edit.undo"},
 	{"summon", "[kind] [count]", {0, 2}, admin_summon, "world.summon"},
 	{"open_lan", "", {0, 0}, admin_open_lan, "server.open_lan"},
+	{"close_lan", "", {0, 0}, admin_close_lan, "server.open_lan"},
 	{"locate", "[biome|structure] <name>", {1, 2}, admin_locate, "teleport.locate"},
 	{"spawn", "", {0, 0}, admin_spawn, "teleport.spawn"},
 	{"delmsg", "<player> [count]", {1, 2}, admin_delmsg, "chat.delete"},
@@ -346,6 +347,26 @@ admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	} else {
 		notice(s, c, "Could not open to LAN: no free port (see the log)")
 	}
+	return true
+}
+
+// admin_close_lan stops taking players from the LAN: the remote players are sent
+// away, the port is shut and guests' role goes (a world opened again chooses it again).
+@(private = "file")
+admin_close_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if !s.listening {
+		notice(s, c, "Not open to LAN")
+		return true
+	}
+	closed := rule_set(s, c, c.world, "guest_role", "") == .None // (while c is still here)
+	for &other in s.clients {
+		if _, remote := other.link.(netcode.Peer_Id); remote {
+			leave(s, &other, "the host closed the world to the LAN")
+		}
+	}
+	netcode.host_close(&s.host, "closed to the LAN")
+	s.listening = false
+	if closed && c.state == .Playing {notice(s, c, "Closed to LAN")}
 	return true
 }
 

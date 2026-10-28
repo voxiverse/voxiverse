@@ -20,6 +20,16 @@ Text :: enum u16 {
 	Game_Menu_Disconnect,
 	Game_Menu_Open_To_LAN,
 	Game_Menu_Open_To_LAN_Port,
+	Game_Menu_Close_LAN,
+	Lan_Title,
+	Lan_Guest_Mode,
+	Lan_Allow_Commands,
+	Lan_Open,
+	Lan_Opening,
+	Lan_Open_On,
+	Lan_Port, // {0}: the port
+	Lan_Mode_Is, // {0}: the guests' mode
+	Lan_Done,
 	Universes_Delete_Named,
 	Options_Press_For,
 	Loading_Percent,
@@ -117,6 +127,9 @@ Text :: enum u16 {
 	Fact_Terrain_Mountains,
 	Player_List_Ping,
 	Player_List_No_Ping,
+	Players_Kills, // `players.kills`: the P list's column
+	Players_Deaths, // `players.deaths`
+	Players_Player,
 	Hud_Ammo,
 	Hud_Reloading,
 }
@@ -134,6 +147,16 @@ TEXT_EN := [Text]string {
 	.Game_Menu_Disconnect                   = "Disconnect",
 	.Game_Menu_Open_To_LAN                  = "Open to LAN",
 	.Game_Menu_Open_To_LAN_Port             = "Open to LAN: port {0}",
+	.Game_Menu_Close_LAN                    = "Close LAN",
+	.Lan_Title                              = "Open to LAN",
+	.Lan_Guest_Mode                         = "Guests' game mode",
+	.Lan_Allow_Commands                     = "Allow commands",
+	.Lan_Open                               = "Open",
+	.Lan_Opening                            = "Opening...",
+	.Lan_Open_On                            = "Open to the LAN. Join with:",
+	.Lan_Port                               = "port {0}",
+	.Lan_Mode_Is                            = "Guests play in {0}",
+	.Lan_Done                               = "Done",
 	.Universes_Delete_Named                 = "Delete \"{0}\"?",
 	.Options_Press_For                      = "Press a {0} for {1}",
 	.Loading_Percent                        = "{0}%",
@@ -231,6 +254,9 @@ TEXT_EN := [Text]string {
 	.Fact_Terrain_Mountains                 = "mountains and valleys",
 	.Player_List_Ping                       = "{0} ms",
 	.Player_List_No_Ping                    = "-",
+	.Players_Kills                          = "Kills",
+	.Players_Deaths                         = "Deaths",
+	.Players_Player                         = "Player",
 	.Hud_Ammo                               = "{0} / inf",
 	.Hud_Reloading                          = "Reloading",
 }

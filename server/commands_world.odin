@@ -214,6 +214,11 @@ rule_set :: proc(s: ^Server, c: ^Client, w: ^World, name, value: string) -> base
 		v, _ := base.var_find(table, rule_name(name))
 		text := fmt.tprintf("rule %s %s", name, base.var_format(table, &w.rules, v))
 		journal_setting(w, Actor{.Character, client_name(c), false}, text)
+		if rule_name(name) == "rules.guest_role" {
+			for &other in s.clients {
+				if other.state == .Playing && other.world == w {refresh_grants(s, &other)}
+			}
+		}
 		clock_resend(s, w) // (day_length and daylight_cycle change what the clock means)
 		disturb_world(s, w)
 	} else {

@@ -30,6 +30,7 @@ State_Kind :: enum u8 {
 	Entity_Motion,
 	Block,
 	Place,
+	Tally,
 }
 
 Event_Kind :: enum u8 {
@@ -78,8 +79,17 @@ Clock :: struct {
 
 // Player_Record: someone is in the world (the key is their player id).
 Player_Record :: struct {
-	name: string `net:"max=16"`,
-	worn: [WORN_SLOTS]Item, // head to feet; NO_ITEM: nothing
+	name:   string `net:"max=16"`,
+	worn:   [WORN_SLOTS]Item, // head to feet; NO_ITEM: nothing
+	held:   Item, // the hotbar item in hand (NO_ITEM: none), for the avatar's raised arm
+	kills:  u32, // the counters `kills` and `deaths` (M48g), for the player list
+	deaths: u32,
+}
+
+// Tally: our own kills and deaths (the others' are in their Player_Record).
+Tally :: struct {
+	kills:  u32,
+	deaths: u32,
 }
 
 Player_Motion :: struct {
@@ -224,6 +234,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		check = check_block_record,
 	},
 	.Place = {name = "place", value = Place, check = check_place},
+	.Tally = {name = "tally", value = Tally},
 }
 
 @(rodata)
@@ -327,7 +338,7 @@ check_player_record :: proc(reg: ^Registry, v: rawptr) -> bool {
 	p := (^Player_Record)(v)
 	if !name_valid(p.name) {return false}
 	for item in p.worn {if item != NO_ITEM && !item_valid(reg, item) {return false}}
-	return true
+	return p.held == NO_ITEM || item_valid(reg, p.held)
 }
 
 @(private = "file")

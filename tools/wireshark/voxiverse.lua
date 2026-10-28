@@ -96,6 +96,8 @@ local SCHEMA = {
     { name = "regen_rate", t = "f32" },
     { name = "default_game_mode.len", t = "u8" },
     { name = "default_game_mode.buf", t = "array", scalar = true, count = 48, elem = { t = "u8" } },
+    { name = "guest_role.len", t = "u8" },
+    { name = "guest_role.buf", t = "array", scalar = true, count = 48, elem = { t = "u8" } },
     { name = "show_coordinates", t = "bool" },
     { name = "random_tick_speed", t = "i32" },
   } },
@@ -116,6 +118,9 @@ local SCHEMA = {
   { id = 9, name = "player", key = "player", lane = "reliable", fields = {
     { name = "name", t = "string", max = 16 },
     { name = "worn", t = "array", scalar = true, count = 4, elem = { t = "u16" } },
+    { name = "held", t = "u16" },
+    { name = "kills", t = "u32" },
+    { name = "deaths", t = "u32" },
   } },
   { id = 10, name = "player_motion", key = "player", lane = "snapshot", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
@@ -145,44 +150,48 @@ local SCHEMA = {
     { name = "warmth", t = "i8" },
     { name = "wetness", t = "i8" },
   } },
-  { id = 15, name = "notice", key = "none", lane = "event", fields = {
+  { id = 15, name = "tally", key = "none", lane = "reliable", fields = {
+    { name = "kills", t = "u32" },
+    { name = "deaths", t = "u32" },
+  } },
+  { id = 16, name = "notice", key = "none", lane = "event", fields = {
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 16, name = "chat_line", key = "none", lane = "event", fields = {
+  { id = 17, name = "chat_line", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
     { name = "sender", t = "u16" },
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 17, name = "chat_delete", key = "none", lane = "event", fields = {
+  { id = 18, name = "chat_delete", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
   } },
-  { id = 18, name = "entity_hurt", key = "none", lane = "event", fields = {
+  { id = 19, name = "entity_hurt", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 19, name = "entity_died", key = "none", lane = "event", fields = {
+  { id = 20, name = "entity_died", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 20, name = "explosion", key = "none", lane = "event", fields = {
+  { id = 21, name = "explosion", key = "none", lane = "event", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "radius", t = "f32" },
   } },
-  { id = 21, name = "player_died", key = "none", lane = "event", fields = {
+  { id = 22, name = "player_died", key = "none", lane = "event", fields = {
     { name = "cause", t = "string", max = 32 },
     { name = "attacker", t = "string", max = 16 },
     { name = "weapon", t = "string", max = 32 },
   } },
-  { id = 22, name = "damage_hit", key = "none", lane = "event", fields = {
+  { id = 23, name = "damage_hit", key = "none", lane = "event", fields = {
     { name = "yaw", t = "f32" },
     { name = "amount", t = "f32" },
     { name = "known", t = "bool" },
   } },
-  { id = 23, name = "shot", key = "none", lane = "event", fields = {
+  { id = 24, name = "shot", key = "none", lane = "event", fields = {
     { name = "shooter", t = "u16" },
     { name = "weapon", t = "u16" },
     { name = "origin", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "end", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
   } },
-  { id = 24, name = "hit_confirm", key = "none", lane = "event", fields = {
+  { id = 25, name = "hit_confirm", key = "none", lane = "event", fields = {
     { name = "kill", t = "bool" },
     { name = "headshot", t = "bool" },
   } },

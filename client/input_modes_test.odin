@@ -206,9 +206,47 @@ test_player_list :: proc(t: ^testing.T) {
 	s.net.rtt_ms = 42
 	rows = player_rows(s)
 	testing.expect_value(t, len(rows), 3)
-	testing.expect_value(t, rows[0], Player_Row{"amy", "42 ms"})
+	testing.expect_value(t, rows[0].name, "amy")
+	testing.expect_value(t, rows[0].ping, "42 ms")
 	testing.expect_value(t, rows[1].name, "bob")
 	testing.expect_value(t, rows[2].name, "zed")
+}
+
+// The list's kills and deaths: the most kills first, then the fewest
+// deaths, then the name; ourselves among the rest.
+@(test)
+test_player_list_kills_and_deaths :: proc(t: ^testing.T) {
+	s := open_world()
+	defer close_world(s)
+	s.config.name = "amy"
+	s.tally = {
+		kills  = 3,
+		deaths = 1,
+	}
+	s.others[1] = {
+		name   = "bob",
+		kills  = 3,
+		deaths = 0,
+	}
+	s.others[2] = {
+		name   = "cy",
+		kills  = 5,
+		deaths = 9,
+	}
+	s.others[3] = {
+		name   = "al",
+		kills  = 3,
+		deaths = 1,
+	}
+	rows := player_rows(s)
+	names := [?]string{"cy", "bob", "al", "amy"}
+	testing.expect_value(t, len(rows), len(names))
+	for n, i in names {testing.expect_value(t, rows[i].name, n)}
+	testing.expect_value(t, rows[0].kills, "5")
+	testing.expect_value(t, rows[0].deaths, "9")
+	testing.expect_value(t, rows[3].kills, "3")
+	testing.expect_value(t, tr(.Players_Kills), "Kills")
+	testing.expect_value(t, tr(.Players_Deaths), "Deaths")
 }
 
 @(test)

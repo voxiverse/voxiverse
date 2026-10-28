@@ -12,7 +12,9 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	column := ui.rect_center(ctx.screen, 400, 4 * t.row_height + 3 * t.spacing + 80)
+	port := server.stats(&s.server).port if session_hosting(s) else 0
+	rows: f32 = 4 if port == 0 else 5
+	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 80)
 	heading := ui.cut_top(&column, 80)
 	if s.frozen {
 		ui.label(
@@ -34,9 +36,9 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	) {overlay_close(&app.overlays, .Game_Menu)}
 	if ui.button(ctx, tr(.Options), ui.next(ctx)) {overlay_open(&app.overlays, .Options)}
 	if session_hosting(s) {
-		port := server.stats(&s.server).port
 		label := tr(.Game_Menu_Open_To_LAN_Port, port) if port != 0 else tr(.Game_Menu_Open_To_LAN)
-		if ui.button(ctx, label, ui.next(ctx), disabled = port != 0) {session_open_lan(app)}
+		if ui.button(ctx, label, ui.next(ctx)) {lan_dialog_open(app)}
+		if port != 0 && ui.button(ctx, tr(.Game_Menu_Close_LAN), ui.next(ctx)) {close_lan(app)}
 	}
 	// Ours: saved on the way out (a scratch world has nothing to save);
 	// someone else's server: we only go.

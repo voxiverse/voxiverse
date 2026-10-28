@@ -114,6 +114,7 @@ App :: struct {
 	toasts:           Toasts, // the notices at the top right (overlay_toasts.odin)
 	hud_hidden:       bool, // F1: the HUD is hidden (not saved)
 	popup:            Item_Popup, // the held item's name above the hotbar (hud_popup.odin)
+	lan:              Lan_Dialog, // the Open to LAN dialog's choices (overlay_lan.odin)
 	player_menu:      Player_Menu, // the section shown and the one shown last (menu_player.odin)
 	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)

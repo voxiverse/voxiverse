@@ -162,6 +162,7 @@ Session :: struct {
 	dead:             bool, // at the death screen (Health.dead)
 	death_line:       [96]u8, // how it happened, as the death screen says it
 	death_len:        int,
+	tally:            game.Tally, // our kills and deaths (the P list)
 	place:            game.Place, // the server's word on where we are (the music's)
 	home:             game.Address, // the world we joined in (the music's "home")
 	died:             int, // Player_Died events seen (the music's death stinger)

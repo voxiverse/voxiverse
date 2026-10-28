@@ -76,8 +76,13 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	record := Player_Record {
 		"bob_the-builder",
 		{item_of_armor(.Cap), NO_ITEM, NO_ITEM, item_of_armor(.Boots)},
+		NO_ITEM,
+		7,
+		3,
 	}
 	round_trip(t, &l, .Player, key_player(7), &record)
+	tally := Tally{12, 4}
+	round_trip(t, &l, .Tally, {}, &tally)
 	motion := Player_Motion{{1.5, -60, 2e6}, 1, -0.5, true, true}
 	round_trip(t, &l, .Player_Motion, key_player(4), &motion)
 	// Entity_Spawn, Entities
@@ -181,9 +186,9 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse(t, &s, .Clock, {}, &early, "negative time")
 	nan := Clock{transmute(f64)u64(0x7ff8000000000001), 0}
 	refuse(t, &s, .Clock, {}, &nan, "time NaN")
-	bad_name := Player_Record{"bad name", {}}
+	bad_name := Player_Record{"bad name", {}, NO_ITEM, 0, 0}
 	refuse(t, &s, .Player, key_player(1), &bad_name, "a name with a space")
-	not_item := Player_Record{"ok", {Item(0x7fff), 0, 0, 0}}
+	not_item := Player_Record{"ok", {Item(0x7fff), 0, 0, 0}, NO_ITEM, 0, 0}
 	refuse(t, &s, .Player, key_player(1), &not_item, "an item that does not exist")
 	health := Health{30, 24, false}
 	refuse(t, &s, .Health, {}, &health, "health above the maximum")

@@ -21,6 +21,7 @@ Overlay :: enum u8 {
 	Dial, // a gate's symbols (overlay_dial.odin)
 	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
+	Open_To_LAN, // the game menu's dialog (overlay_lan.odin)
 	Death, // dead: how, and the Respawn button (overlay_death.odin)
 }
 
@@ -48,6 +49,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Dial = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
+	.Open_To_LAN = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Death = {takes = {.Keyboard, .Mouse}, in_game = true},
 }
 
@@ -221,6 +223,8 @@ draw_overlays :: proc(app: ^App, ctx: ^ui.Context) {
 			audio_inspector_ui(app, ctx)
 		case .Consent:
 			consent_dialog(app, ctx)
+		case .Open_To_LAN:
+			lan_dialog_ui(app, ctx)
 		case .Death:
 			death_ui(app, ctx)
 		}

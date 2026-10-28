@@ -215,6 +215,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		     .Player,
 		     .Player_Motion,
 		     .Entity_Motion,
+		     .Tally,
 		     .Place:
 		}
 	}

@@ -218,6 +218,17 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 		}
 		testing.expect_value(t, n, 1)
 	}
+	// The P list's numbers: each is told their own (Tally) and the other's (Player).
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
+		a, b := cs[0], cs[1]
+		return(
+			a.tally.deaths >= 1 &&
+			b.tally.kills == 1 &&
+			a.counts[b.welcome.player] == {1, 0} &&
+			b.counts[a.welcome.player] == {0, a.tally.deaths} \
+		)
+	})
+	testing.expect(t, ok, "kills and deaths did not reach both")
 	testing.expect_value(t, alice.death_cause, "weapon")
 	testing.expect_value(t, alice.death_attacker, "bob")
 	testing.expect(t, alice.health.dead && alice.hits > 0, "alice was told: dead, and hit")

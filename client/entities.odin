@@ -365,7 +365,6 @@ entity_aimed :: proc(
 }
 
 // turn_yaw turns an offset as a body facing yaw turns it.
-@(private = "file")
 turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 	c, s := math.cos(yaw), math.sin(yaw)
 	return {f64(p.x * c + p.z * s), f64(p.y), f64(-p.x * s + p.z * c)}
