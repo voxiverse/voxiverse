@@ -49,7 +49,7 @@ test_single_block :: proc(t: ^testing.T) {
 	defer delete(out)
 
 	s[snapshot_index(3, 4, 5)] = .Stone
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	testing.expect_value(t, len(out), 24)
 	for n in count_faces(out[:]) {testing.expect_value(t, n, 1)}
 	for v in out {
@@ -77,28 +77,28 @@ test_hidden_faces_and_border :: proc(t: ^testing.T) {
 	// Two touching blocks: the shared faces are hidden.
 	s[snapshot_index(0, 0, 0)] = .Dirt
 	s[snapshot_index(1, 0, 0)] = .Dirt
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	testing.expect_value(t, total(face_area(out[:])), 10)
 
 	// A block in the neighbour's border hides the face towards it, but is
 	// not meshed itself.
 	s[snapshot_index(-1, 0, 0)] = .Stone
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	testing.expect_value(t, total(face_area(out[:])), 9)
 
 	// All solid: nothing visible.
 	for &b in s {b = .Stone}
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	testing.expect_value(t, len(out), 0)
 	// Open the border on top: exactly the top layer shows.
 	for z in i32(-1) ..= 16 {
 		for x in i32(-1) ..= 16 {s[snapshot_index(x, 16, z)] = .Air}
 	}
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	testing.expect_value(t, face_area(out[:])[.Pos_Y], 256)
 	testing.expect_value(t, total(face_area(out[:])), 256)
 	testing.expect_value(t, len(out), 4) // evenly lit: greedy meshing makes it one quad
-	mesh_chunk(s, nil, &out, merge = false)
+	mesh_chunk(test_reg(), s, nil, &out, merge = false)
 	testing.expect_value(t, len(out), 256 * 4)
 }
 
@@ -133,8 +133,8 @@ test_greedy_meshing_is_exact :: proc(t: ^testing.T) {
 		}
 	}
 	s[snapshot_index(8, 9, 8)] = .Lamp
-	mesh_chunk(s, light, &merged)
-	mesh_chunk(s, light, &plain, merge = false)
+	mesh_chunk(test_reg(), s, light, &merged)
+	mesh_chunk(test_reg(), s, light, &plain, merge = false)
 	testing.expect(t, len(merged) < len(plain), "nothing merged")
 	Cell :: struct {
 		face:   Face,
@@ -194,7 +194,7 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	// the floor's top face darkens along its +x edge.
 	s[snapshot_index(5, 5, 5)] = .Stone
 	s[snapshot_index(6, 6, 5)] = .Stone
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	found := false
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y ||
@@ -230,7 +230,7 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	s[snapshot_index(5, 5, 5)] = .Stone
 	s[snapshot_index(6, 6, 5)] = .Stone
 	s[snapshot_index(5, 6, 6)] = .Stone
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	darkest := u32(3)
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y {continue}
@@ -263,7 +263,7 @@ test_quad_split_follows_ao :: proc(t: ^testing.T) {
 		for d, i in around {
 			if (config * 37 + i * 11) % 3 == 0 {s[snapshot_index(5 + d[0], 6, 5 + d[1])] = .Stone}
 		}
-		mesh_chunk(s, nil, &out)
+		mesh_chunk(test_reg(), s, nil, &out)
 		for i := 0; i < len(out); i += 4 {
 			q := out[i:][:4]
 			if vertex_face(q[0]) != .Pos_Y || vertex_position(q[0]).y != 6 {continue}
@@ -310,12 +310,12 @@ test_snapshot_fill_uses_neighbours :: proc(t: ^testing.T) {
 test_textures :: proc(t: ^testing.T) {
 	// Each texture's alpha suits the layer of the blocks that use it:
 	// opaque, cutout (fully there or not at all), translucent.
-	layer_of: [Texture]Maybe(Layer)
+	layer_of: [Texture_Generator]Maybe(Layer)
 	for b in game.Block {
-		shape, layer := block_shape(b)
+		shape, layer := frozen_block_shape(b)
 		if shape == .None {continue}
-		side, top, bottom := block_faces(b)
-		for tex in ([3]Texture{side, top, bottom}) {
+		side, top, bottom := frozen_block_faces(b)
+		for tex in ([3]Texture_Generator{side, top, bottom}) {
 			if l, seen := layer_of[tex].?; seen {
 				testing.expectf(t, l == layer, "%v is used in two layers", tex)
 			}
@@ -323,7 +323,7 @@ test_textures :: proc(t: ^testing.T) {
 		}
 	}
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
-	for tex in Texture {
+	for tex in Texture_Generator {
 		generate_texture(tex, a[:])
 		generate_texture(tex, b[:])
 		testing.expect(t, a == b) // deterministic
@@ -350,9 +350,17 @@ test_textures :: proc(t: ^testing.T) {
 		if layer == .Cutout {testing.expectf(t, holes > 0, "%v has no holes", tex)}
 	}
 	// Every block face has a texture of its own kind.
-	testing.expect_value(t, block_texture(.Grass, .Pos_Y), u32(Texture.Grass_Top))
-	testing.expect_value(t, block_texture(.Grass, .Neg_Y), u32(Texture.Dirt))
-	testing.expect_value(t, block_texture(.Grass, .Pos_X), u32(Texture.Grass_Side))
+	testing.expect_value(
+		t,
+		block_texture(test_reg(), .Grass, .Pos_Y),
+		u32(Texture_Generator.Grass_Top),
+	)
+	testing.expect_value(t, block_texture(test_reg(), .Grass, .Neg_Y), u32(Texture_Generator.Dirt))
+	testing.expect_value(
+		t,
+		block_texture(test_reg(), .Grass, .Pos_X),
+		u32(Texture_Generator.Grass_Side),
+	)
 
 	// Mips average in linear light: black and white average to mid grey in
 	// light (188 in sRGB), not 128.
@@ -376,7 +384,7 @@ test_smooth_light :: proc(t: ^testing.T) {
 	for &l in light {l = 0}
 	light[snapshot_index(5, 6, 5)] = 12
 	light[snapshot_index(6, 6, 5)] = 4
-	mesh_chunk(s, light, &out)
+	mesh_chunk(test_reg(), s, light, &out)
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y {continue}
 		for v in out[i:][:4] {
@@ -388,7 +396,7 @@ test_smooth_light :: proc(t: ^testing.T) {
 		}
 	}
 	// Without light: full sky.
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	sky, block := vertex_light(out[0])
 	testing.expect(t, sky == 15 && block == 0)
 }
@@ -407,7 +415,7 @@ test_layers :: proc(t: ^testing.T) {
 	s[snapshot_index(4, 1, 1)] = .Water
 	s[snapshot_index(5, 1, 1)] = .Water
 	s[snapshot_index(5, 0, 1)] = .Stone // under the second water block
-	grouped := mesh_chunk(s, nil, &out)
+	grouped := mesh_chunk(test_reg(), s, nil, &out)
 	counts: [Layer]int
 	for l in Layer {counts[l] = counts_layer(grouped, l)}
 	testing.expect_value(t, counts[.Opaque], 2 * 24) // two stones (the one under water shows through it)
@@ -426,7 +434,7 @@ test_layers :: proc(t: ^testing.T) {
 	for v in plant {
 		face := v.packed >> 15 & 7
 		testing.expect(t, face == CROSS_A || face == CROSS_B)
-		testing.expect_value(t, v.layer, u32(Texture.Poppy))
+		testing.expect_value(t, v.layer, u32(Texture_Generator.Poppy))
 	}
 	water := out[counts[.Opaque] + counts[.Cutout]:]
 	for v in water {
@@ -454,13 +462,13 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 	defer delete(out)
 	for x in i32(3) ..= 5 {s[snapshot_index(x, 4, 5)] = .Farmland}
 	s[snapshot_index(6, 4, 5)] = .Stone
-	mesh_chunk(s, nil, &out)
+	mesh_chunk(test_reg(), s, nil, &out)
 	tops := 0
 	for i := 0; i < len(out); i += 4 {
 		q := out[i:][:4]
 		lo, hi := quad_box(q)
 		face := vertex_face(q[0])
-		is_farm := q[0].layer & 0xffff == block_texture(.Farmland, face)
+		is_farm := q[0].layer & 0xffff == block_texture(test_reg(), .Farmland, face)
 		for v in q {testing.expect(t, v.layer & TILLED == 0, "TILLED left on")}
 		if !is_farm {continue}
 		for v in q {
@@ -485,7 +493,7 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 	for i := 0; i < len(out); i += 4 {
 		q := out[i:][:4]
 		lo, _ := quad_box(q)
-		is_stone := q[0].layer & 0xffff == block_texture(.Stone, .Neg_X)
+		is_stone := q[0].layer & 0xffff == block_texture(test_reg(), .Stone, .Neg_X)
 		if is_stone && vertex_face(q[0]) == .Neg_X && lo.x == 6 {stone_west += 1}
 		if !is_stone && vertex_face(q[0]) == .Pos_X && lo.x == 6 {farm_east += 1}
 	}
@@ -500,16 +508,16 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 test_base_looks_the_same :: proc(t: ^testing.T) {
 	reg := game.registry_base()
 	defer game.registry_destroy(reg)
-	testing.expect_value(t, len(game.TEXTURE_GENERATOR_NAMES), len(Texture))
+	testing.expect_value(t, len(game.TEXTURE_GENERATOR_NAMES), len(Texture_Generator))
 	for name, i in game.TEXTURE_GENERATOR_NAMES {
 		testing.expect_value(
 			t,
 			name,
-			strings.to_lower(fmt.tprintf("%v", Texture(i)), context.temp_allocator),
+			strings.to_lower(fmt.tprintf("%v", Texture_Generator(i)), context.temp_allocator),
 		)
 	}
 	for b in game.Block {
-		shape, layer := block_shape(b)
+		shape, layer := frozen_block_shape(b)
 		def := reg.blocks.defs[b]
 		want_render := game.Render_Kind.None
 		switch shape {
@@ -523,7 +531,7 @@ test_base_looks_the_same :: proc(t: ^testing.T) {
 		testing.expectf(t, def.render == want_render, "%v render", b)
 		if shape != .None {
 			testing.expectf(t, int(def.layer) == int(layer), "%v layer", b)
-			side, top, bottom := block_faces(b)
+			side, top, bottom := frozen_block_faces(b)
 			testing.expectf(
 				t,
 				def.faces == {u32(side), u32(top), u32(bottom)},

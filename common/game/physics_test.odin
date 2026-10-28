@@ -21,7 +21,7 @@ query :: proc(w: ^Test_World) -> Block_Query {
 			if limit, ok := w.unloaded_below.?; ok && p.y < limit {return .Air, false}
 			if p in w.water {return .Water, true}
 			return .Stone if p in w.solid else .Air, true
-		}}
+		}, test_blocks()}
 }
 
 @(private = "file")
@@ -383,7 +383,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1}
 	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
 	inv.slots[3] = {item_of_armor(.Tunic), 1}
-	m := derive_mods(&inv)
+	m := derive_mods(test_reg(), &inv)
 	testing.expectf(
 		t,
 		abs(m.speed - 1.1) < 1e-5 &&
@@ -393,7 +393,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		"%v",
 		m,
 	)
-	testing.expect_value(t, derive_mods(&Inventory{}), MODS_NONE)
+	testing.expect_value(t, derive_mods(test_reg(), &Inventory{}), MODS_NONE)
 }
 
 // Prediction and the server agree with mods, tick for tick, including an air jump.

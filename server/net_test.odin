@@ -90,7 +90,7 @@ net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "", cap
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
 	c.schema = game.game_schema()
-	game.receiver_init(&c.rx, &c.schema)
+	game.receiver_init(&c.rx, &c.schema, test_reg())
 	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, time.tick_now())
 	if capture != "" {net_capture(c, capture)}
 }
@@ -204,9 +204,9 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 		case .Block:
 			v := (^game.Block_Record)(g.value)
 			p := game.key_block(g.key)
-			append(&c.changed, Net_Block{p, v.block, v.heard})
+			append(&c.changed, Net_Block{p, game.Block(v.block), v.heard})
 			if blocks, have := &c.chunks[game.chunk_of(p)]; have {
-				game.chunk_set(blocks, &c.arrays, game.local_of(p), v.block)
+				game.chunk_set(blocks, &c.arrays, game.local_of(p), game.Block(v.block))
 			}
 		}
 		if g.op != .Event {continue}
@@ -247,7 +247,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	netcode.link_receive(&c.link, &c.messages)
 	for p in c.messages {
 		defer netcode.link_free(&c.link, p)
-		m, ok := game.decode_server(p, c.scratch)
+		m, ok := game.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok, "invalid message from the server") {continue}
 		#partial switch v in m {
 		case game.Challenge:
@@ -552,7 +552,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	for c in ([]^Net_Client{&a, &b}) {
 		damaged := 0
 		for pos, &blocks in c.chunks {
-			gen := worldgen.generator_make(config.generator, config.seed)
+			gen := worldgen.generator_make(config.generator, config.seed, test_reg())
 			worldgen.generate(&gen, pos, expected)
 			for i in 0 ..< len(expected) {
 				got := blocks.uniform if blocks.array == nil else blocks.array[i]

@@ -23,13 +23,14 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.app.font, ok = font.load(FONT_DATA)
 	testing.expect(t, ok)
 	testing.expect(t, ui.init(&f.app.ui, &f.app.font))
-	testing.expect(t, item_icons_init(&f.app.item_icons, &f.app.ui))
+	testing.expect(t, item_icons_init(test_reg(), &f.app.item_icons, &f.app.ui))
 	f.s = new(Session)
 	game.pipe_init(&f.pipe)
 	f.s.endpoint = {&f.pipe, .Client}
 	game.writer_init(&f.s.writer)
 	f.s.state = .Playing
 	if catalog {append(&f.s.grants, game.Grant{pattern = "items.catalog", allow = true})}
+	f.s.reg = test_reg()
 	f.app.session = f.s
 	f.app.screen = .Game
 	f.app.input.pressed = {.Tab}
@@ -78,7 +79,7 @@ test_inventory_mouse_tweaks :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, false)
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 	at := proc(f: ^Overlay_Fixture, slot: int) -> ui.Vec2 {return overlay_slot_at(f, slot)}
 
 	// Shift-drag over slots 5, 6 and 7 (and the empty 8): all go to the hotbar.
@@ -176,7 +177,7 @@ test_pick_block :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, true)
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 
 	inv.slots[7] = {dirt, 1}
 	overlay_frame(&f, {mouse = overlay_slot_at(&f, 7), mouse_pressed = {.Middle}})
@@ -188,7 +189,10 @@ test_pick_block :: proc(t: ^testing.T) {
 	arena: virtual.Arena
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
 	defer virtual.arena_destroy(&arena)
-	testing.expect(t, world_init(&f.s.world, 64, 16, 1, virtual.arena_allocator(&arena)) == nil)
+	testing.expect(
+		t,
+		world_init(&f.s.world, test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) == nil,
+	)
 	defer world_destroy(&f.s.world)
 	column := game.Column {
 		pos = {0, 0},
@@ -248,13 +252,18 @@ test_item_icons :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, true)
 	defer overlay_fixture_destroy(&f)
 	atlas := &f.app.ui.glyphs
-	for item in game.every_item() {
+	for item in game.every_item(test_reg()) {
 		icon, ok := f.app.item_icons[item]
-		testing.expectf(t, ok, "%v has no icon", game.item_name(item))
+		testing.expectf(t, ok, "%v has no icon", game.item_name(test_reg(), item))
 		img := atlas.icons[icon]
 		opaque := 0
 		for p in img.pixels {if p.a > 0 {opaque += 1}}
-		testing.expectf(t, opaque >= 24, "%v's icon is nearly blank", game.item_name(item))
+		testing.expectf(
+			t,
+			opaque >= 24,
+			"%v's icon is nearly blank",
+			game.item_name(test_reg(), item),
+		)
 		// And it is in the atlas as made.
 		at := (img.at.y * atlas.size + img.at.x) * 4
 		testing.expect(t, atlas.pixels[at + 3] == img.pixels[0][3])
@@ -270,7 +279,7 @@ test_creative_tab :: proc(t: ^testing.T) {
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
 	v := &f.app.inventory_view
-	dirt := game.item_of_block(.Dirt)
+	dirt := game.item_of_block(test_reg(), .Dirt)
 
 	// The tab button switches; the rest of the inventory is not shown on it.
 	overlay_frame(&f, {})
@@ -285,13 +294,13 @@ test_creative_tab :: proc(t: ^testing.T) {
 	testing.expect(t, c.slots[0] == l.slots[0], "the hotbar does not move between tabs")
 
 	// A search narrows the catalog.
-	testing.expect_value(t, len(matching_items("")), len(game.every_item()))
-	found := matching_items("DIR")
+	testing.expect_value(t, len(matching_items(test_reg(), "")), len(game.every_item(test_reg())))
+	found := matching_items(test_reg(), "DIR")
 	testing.expect(t, len(found) == 1 && found[0] == dirt)
-	testing.expect_value(t, len(matching_items("no such item")), 0)
+	testing.expect_value(t, len(matching_items(test_reg(), "no such item")), 0)
 
 	// Clicking the first catalog item takes a stack; a click on a hotbar slot puts it there.
-	first := game.every_item()[0]
+	first := game.every_item(test_reg())[0]
 	cell := ui.Vec2{c.catalog.x + INVENTORY_SLOT.x / 2, c.catalog.y + INVENTORY_SLOT.y / 2}
 	overlay_frame(&f, {mouse = cell, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	testing.expect_value(t, inv.cursor, game.Stack{first, 64})

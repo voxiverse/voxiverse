@@ -22,7 +22,7 @@ fits :: proc(q: Block_Query, feet: Block_Pos) -> (fits: bool, loaded: bool) {
 		if p.y < WORLD_MIN_Y {return false, true}
 		b, ok := q.get(q.data, p)
 		if !ok {return false, false}
-		if block_collides(b) {return false, true}
+		if block_collides(q.table, b) {return false, true}
 	}
 	return true, true
 }
@@ -53,7 +53,7 @@ landing_spot :: proc(q: Block_Query, p: [3]f64, mode: Landing_Mode) -> ([3]f64, 
 			below, ok := q.get(q.data, {feet.x, y - 1, feet.z})
 			if !ok {return {}, false}
 			_, water := water_level(below)
-			if !block_collides(below) && !water {continue}
+			if !block_collides(q.table, below) && !water {continue}
 			if water {y -= 1} 	// in it, the head above the surface
 			// Ground found: stand on it, or (under a ledge) where they fit.
 			return landing_spot(q, {p.x, f64(y), p.z}, .Exact)

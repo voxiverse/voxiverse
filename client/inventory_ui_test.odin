@@ -33,10 +33,11 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	defer delete(s.inv_pending)
 	defer delete(app.inventory_search)
 	s.state = .Playing
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 	s.inventory.slots[9] = {stone, 64}
 	s.inventory.slots[0] = {dirt, 10}
 
@@ -137,6 +138,7 @@ test_characters_screen :: proc(t: ^testing.T) {
 	defer virtual.arena_destroy(&s.arena)
 	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
 	s.state = .Choosing
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
@@ -196,10 +198,11 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	defer delete(s.inv_pending)
 	defer delete(app.inventory_search)
 	s.state = .Playing
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
-	stone := game.item_of_block(.Stone)
+	stone := game.item_of_block(test_reg(), .Stone)
 	s.inventory.slots[9] = {stone, 64}
 
 	chest_sync(app)
@@ -311,7 +314,7 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.inventory_view.tab, Inventory_Tab.Inventory)
 
 	// Over a slot, Q drops (and does not step); E steps.
-	stone := game.item_of_block(.Stone)
+	stone := game.item_of_block(test_reg(), .Stone)
 	f.s.inventory.slots[9] = {stone, 64}
 	before := len(f.s.inv_pending)
 	press(&f, .Q, overlay_slot_at(&f, 9))
@@ -341,6 +344,7 @@ test_inventory_tabs_by_keys :: proc(t: ^testing.T) {
 pad_rig :: proc(t: ^testing.T) -> ^Rig {
 	r := rig_make(t)
 	app, s := r.app, r.s
+	s.reg = test_reg()
 	app.session, app.screen = s, .Game
 	s.state = .Playing
 	append(&s.grants, game.Grant{pattern = "items.catalog", allow = true})
@@ -385,7 +389,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	app, s := r.app, r.s
 	inv := &s.inventory
 	v := &app.inventory_view
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 	inv.slots[9] = {stone, 64}
 	inv.slots[0] = {dirt, 10}
 	inv.selected = 2
@@ -442,7 +446,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_frame(app)
 	pad_tap(app, .A)
 	testing.expect(t, !game.stack_empty(inv.cursor))
-	testing.expect(t, strings.contains(item_title(inv.cursor.item), "dirt"))
+	testing.expect(t, strings.contains(item_title(test_reg(), inv.cursor.item), "dirt"))
 	taken := inv.cursor
 	pad_go(app, .Down)
 	testing.expect(

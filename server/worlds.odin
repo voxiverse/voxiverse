@@ -76,7 +76,7 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&w.arena)
-	gen := worldgen.generator_make(w.generator, w.seed, w.params)
+	gen := worldgen.generator_make(w.generator, w.seed, s.registry, w.params)
 	if err := chunks_init(&w.chunks, gen, s.capacity, s.config.workers, arena); err != nil {
 		log.errorf("server cannot allocate a world: %v", err)
 		virtual.arena_destroy(&w.arena)

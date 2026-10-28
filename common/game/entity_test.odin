@@ -16,7 +16,7 @@ flat_query :: proc(f: ^Flat) -> Block_Query {
 			if p.y <= f.ground {return .Stone, true}
 			if x, ok := f.wall_x.?; ok && p.x == x && p.y == f.ground + 1 {return .Stone, true}
 			return .Air, true
-		}}
+		}, test_blocks()}
 }
 
 // A sheep falls, lands, walks, stops at a step it does not jump, and

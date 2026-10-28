@@ -4,32 +4,34 @@ import "core:testing"
 
 @(test)
 test_items :: proc(t: ^testing.T) {
-	stone := item_of_block(.Stone)
-	testing.expect_value(t, item_name(stone), "stone")
-	testing.expect_value(t, item_stack_size(stone), BLOCK_STACK)
-	info, _ := item_info(stone)
+	stone := item_of_block(test_reg(), .Stone)
+	testing.expect_value(t, item_name(test_reg(), stone), "stone")
+	testing.expect_value(t, item_stack_size(test_reg(), stone), BLOCK_STACK)
+	info, _ := item_info(test_reg(), stone)
 	testing.expect_value(t, info.block, Block.Stone)
-	testing.expect_value(t, item_of_block(.Bedrock), NO_ITEM)
-	launcher, ok := item_by_name("rocket_launcher")
-	testing.expect(t, ok && item_stack_size(launcher) == 1)
+	testing.expect_value(t, item_of_block(test_reg(), .Bedrock), NO_ITEM)
+	launcher, ok := item_by_name(test_reg(), "rocket_launcher")
+	testing.expect(t, ok && item_stack_size(test_reg(), launcher) == 1)
 	testing.expect(
 		t,
-		!item_valid(Item(0x7fff)) && !item_valid(TOOL_ITEMS + 99) && !item_valid(NO_ITEM),
+		!item_valid(test_reg(), Item(0x7fff)) &&
+		!item_valid(test_reg(), TOOL_ITEMS + 99) &&
+		!item_valid(test_reg(), NO_ITEM),
 	)
-	for i in every_item() {
-		back, found := item_by_name(item_name(i))
+	for i in every_item(test_reg()) {
+		back, found := item_by_name(test_reg(), item_name(test_reg(), i))
 		testing.expectf(t, found && back == i, "%v does not round-trip its name", i)
 	}
 }
 
 @(test)
 test_inventory_actions :: proc(t: ^testing.T) {
-	stone, dirt := item_of_block(.Stone), item_of_block(.Dirt)
+	stone, dirt := item_of_block(test_reg(), .Stone), item_of_block(test_reg(), .Dirt)
 	launcher := item_of_tool(.Launcher)
 	inv: Inventory
-	testing.expect(t, inventory_add(&inv, {stone, 100}) == {}, "100 stone fit")
+	testing.expect(t, inventory_add(test_reg(), &inv, {stone, 100}) == {}, "100 stone fit")
 	testing.expect(t, inv.slots[0] == {stone, 64} && inv.slots[1] == {stone, 36})
-	inventory_add(&inv, {launcher, 1})
+	inventory_add(test_reg(), &inv, {launcher, 1})
 	testing.expect(t, inv.slots[2] == {launcher, 1})
 
 	do_ :: proc(
@@ -41,7 +43,7 @@ test_inventory_actions :: proc(t: ^testing.T) {
 		Stack,
 		bool,
 	) {
-		return inventory_apply(inv, {kind, slot, arg}, false)
+		return inventory_apply(test_reg(), inv, {kind, slot, arg}, false)
 	}
 	// Pick up 36, put them onto the 64 (full: swap), onto an empty slot.
 	_, ok := do_(&inv, .Click, 1)
@@ -75,7 +77,7 @@ test_inventory_actions :: proc(t: ^testing.T) {
 	// The catalog only for those who may.
 	_, ok = do_(&inv, .Take, CURSOR_SLOT, int(dirt))
 	testing.expect(t, !ok)
-	_, ok = inventory_apply(&inv, {.Take, CURSOR_SLOT, int(dirt)}, true)
+	_, ok = inventory_apply(test_reg(), &inv, {.Take, CURSOR_SLOT, int(dirt)}, true)
 	testing.expect(t, ok && inv.cursor == {dirt, 64})
 	dropped, _ = do_(&inv, .Close, CURSOR_SLOT)
 	testing.expect(
@@ -94,10 +96,10 @@ test_inventory_actions :: proc(t: ^testing.T) {
 	inventory_use_held(&inv)
 	testing.expect_value(t, inventory_held(&inv).count, before.count - 1)
 	for bad in ([]Inventory_Action{{.Select, 0, 5}, {.Click, 30, 0}, {.Swap_Hotbar, 5, 12}, {.Drop, -2, 0}}) {
-		_, ok = inventory_apply(&inv, bad, false)
+		_, ok = inventory_apply(test_reg(), &inv, bad, false)
 		testing.expectf(t, !ok, "%v accepted", bad)
 	}
-	testing.expect(t, inventory_valid(&inv))
+	testing.expect(t, inventory_valid(test_reg(), &inv))
 	testing.expect_value(t, inventory_remove(&inv, stone, 1000), inventory_count(&inv, stone) + 35)
 }
 
@@ -105,10 +107,10 @@ test_inventory_actions :: proc(t: ^testing.T) {
 // double-click), Move_One (the wheel).
 @(test)
 test_inventory_tweak_actions :: proc(t: ^testing.T) {
-	stone, dirt := item_of_block(.Stone), item_of_block(.Dirt)
+	stone, dirt := item_of_block(test_reg(), .Stone), item_of_block(test_reg(), .Dirt)
 	inv: Inventory
 	do_ :: proc(inv: ^Inventory, kind: Inventory_Action_Kind, slot: int, arg := 0) -> bool {
-		_, ok := inventory_apply(inv, {kind, slot, arg}, false)
+		_, ok := inventory_apply(test_reg(), inv, {kind, slot, arg}, false)
 		return ok
 	}
 	// Put: up to arg; onto the same item or an empty slot only, and no more than fits.
@@ -170,7 +172,8 @@ test_inventory_tweak_actions :: proc(t: ^testing.T) {
 // into the inventory; the other actions leave the equipment slots alone.
 @(test)
 test_equipment_actions :: proc(t: ^testing.T) {
-	cap_, boots, stone := item_of_armor(.Cap), item_of_armor(.Boots), item_of_block(.Stone)
+	cap_, boots, stone :=
+		item_of_armor(.Cap), item_of_armor(.Boots), item_of_block(test_reg(), .Stone)
 	head, feet, off :=
 		EQUIP_BASE +
 		int(Equip_Slot.Head),
@@ -180,12 +183,18 @@ test_equipment_actions :: proc(t: ^testing.T) {
 		int(Equip_Slot.Offhand)
 	inv: Inventory
 	do_ :: proc(inv: ^Inventory, kind: Inventory_Action_Kind, slot: int, arg := 0) -> bool {
-		_, ok := inventory_apply(inv, {kind, slot, arg}, true)
+		_, ok := inventory_apply(test_reg(), inv, {kind, slot, arg}, true)
 		return ok
 	}
-	testing.expect(t, item_fits({cap_, 1}, .Head) && !item_fits({cap_, 1}, .Feet))
-	testing.expect(t, item_fits({stone, 5}, .Offhand) && !item_fits({stone, 5}, .Head))
-	testing.expect(t, item_fits({}, .Head), "empty fits anywhere")
+	testing.expect(
+		t,
+		item_fits(test_reg(), {cap_, 1}, .Head) && !item_fits(test_reg(), {cap_, 1}, .Feet),
+	)
+	testing.expect(
+		t,
+		item_fits(test_reg(), {stone, 5}, .Offhand) && !item_fits(test_reg(), {stone, 5}, .Head),
+	)
+	testing.expect(t, item_fits(test_reg(), {}, .Head), "empty fits anywhere")
 
 	do_(&inv, .Take, CURSOR_SLOT, int(cap_))
 	testing.expect(t, !do_(&inv, .Click, feet), "a cap does not go on the feet")
@@ -234,9 +243,9 @@ test_equipment_actions :: proc(t: ^testing.T) {
 		inv.equipment[.Feet] == {boots, 1},
 	)
 	// Valid inventories are those whose equipment fits.
-	testing.expect(t, inventory_valid(&inv))
+	testing.expect(t, inventory_valid(test_reg(), &inv))
 	inv.equipment[.Head] = {boots, 1}
-	testing.expect(t, !inventory_valid(&inv))
+	testing.expect(t, !inventory_valid(test_reg(), &inv))
 	// What the avatar shows.
 	inv.equipment[.Head] = {cap_, 1}
 	inv.equipment[.Offhand] = {stone, 1}
@@ -247,21 +256,21 @@ test_equipment_actions :: proc(t: ^testing.T) {
 // shut, they refuse; shift-click moves between the two; closing clears it.
 @(test)
 test_chest_actions :: proc(t: ^testing.T) {
-	stone, dirt := item_of_block(.Stone), item_of_block(.Dirt)
+	stone, dirt := item_of_block(test_reg(), .Stone), item_of_block(test_reg(), .Dirt)
 	inv: Inventory
 	inv.slots[6] = {stone, 40}
 	inv.slots[0] = {dirt, 5}
-	_, ok := inventory_apply(&inv, {.Click, CHEST_BASE, 0}, false)
+	_, ok := inventory_apply(test_reg(), &inv, {.Click, CHEST_BASE, 0}, false)
 	testing.expect(t, !ok, "a shut chest took a request")
 	inv.chest_open = true
 	// Shift-click: into the chest, and back out.
-	_, ok = inventory_apply(&inv, {.Quick_Move, 6, 0}, false)
+	_, ok = inventory_apply(test_reg(), &inv, {.Quick_Move, 6, 0}, false)
 	testing.expect(
 		t,
 		ok && inv.chest[0] == {stone, 40} && stack_empty(inv.slots[6]),
 		"not into the chest",
 	)
-	_, ok = inventory_apply(&inv, {.Quick_Move, CHEST_BASE, 0}, false)
+	_, ok = inventory_apply(test_reg(), &inv, {.Quick_Move, CHEST_BASE, 0}, false)
 	testing.expect(
 		t,
 		ok && stack_empty(inv.chest[0]) && inv.slots[1] == {stone, 40},
@@ -269,16 +278,16 @@ test_chest_actions :: proc(t: ^testing.T) {
 	)
 	// A click picks up from a chest slot, puts down in another, right-click halves.
 	inv.chest[3] = {stone, 10}
-	inventory_apply(&inv, {.Click, CHEST_BASE + 3, 0}, false)
+	inventory_apply(test_reg(), &inv, {.Click, CHEST_BASE + 3, 0}, false)
 	testing.expect_value(t, inv.cursor, Stack{stone, 10})
-	inventory_apply(&inv, {.Click, CHEST_BASE + 24, 0}, false)
+	inventory_apply(test_reg(), &inv, {.Click, CHEST_BASE + 24, 0}, false)
 	testing.expect(t, inv.chest[24] == {stone, 10} && stack_empty(inv.cursor))
-	inventory_apply(&inv, {.Click_Right, CHEST_BASE + 24, 0}, false)
+	inventory_apply(test_reg(), &inv, {.Click_Right, CHEST_BASE + 24, 0}, false)
 	testing.expect(t, inv.cursor == {stone, 5} && inv.chest[24] == {stone, 5})
 	// Dropping from a chest slot gives the stack.
-	dropped, _ := inventory_apply(&inv, {.Drop, CHEST_BASE + 24, 1}, false)
+	dropped, _ := inventory_apply(test_reg(), &inv, {.Drop, CHEST_BASE + 24, 1}, false)
 	testing.expect_value(t, dropped, Stack{stone, 5})
 	// Closing puts the cursor away and empties the view.
-	_, ok = inventory_apply(&inv, {.Close, CURSOR_SLOT, 0}, false)
+	_, ok = inventory_apply(test_reg(), &inv, {.Close, CURSOR_SLOT, 0}, false)
 	testing.expect(t, ok && !inv.chest_open && inv.chest == {} && stack_empty(inv.cursor))
 }

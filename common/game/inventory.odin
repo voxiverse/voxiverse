@@ -34,8 +34,8 @@ slot_at :: proc(inv: ^Inventory, i: int) -> ^Stack {
 
 // slot_accepts: whether stack may be put into slot i (equipment slots take
 // only what fits them).
-slot_accepts :: proc(i: int, stack: Stack) -> bool {
-	return i < EQUIP_BASE || i >= CHEST_BASE || item_fits(stack, Equip_Slot(i - EQUIP_BASE))
+slot_accepts :: proc(reg: ^Registry, i: int, stack: Stack) -> bool {
+	return i < EQUIP_BASE || i >= CHEST_BASE || item_fits(reg, stack, Equip_Slot(i - EQUIP_BASE))
 }
 
 // worn_of: the items the avatar shows (head to feet).
@@ -71,6 +71,7 @@ Inventory_Action :: struct {
 // could not be done (nothing changes then). catalog: the player may take
 // any item.
 inventory_apply :: proc(
+	reg: ^Registry,
 	inv: ^Inventory,
 	a: Inventory_Action,
 	catalog: bool,
@@ -88,12 +89,12 @@ inventory_apply :: proc(
 		if !in_slots {return}
 		slot := slot_at(inv, a.slot)
 		cur := &inv.cursor
-		if !slot_accepts(a.slot, cur^) {return} 	// (and what comes back is what was there)
+		if !slot_accepts(reg, a.slot, cur^) {return} 	// (and what comes back is what was there)
 		switch {
 		case stack_empty(cur^) && stack_empty(slot^):
 			return
 		case !stack_empty(cur^) && !stack_empty(slot^) && cur.item == slot.item:
-			moved := min(cur.count, item_stack_size(slot.item) - slot.count)
+			moved := min(cur.count, item_stack_size(reg, slot.item) - slot.count)
 			if moved <= 0 {cur^, slot^ = slot^, cur^} else {
 				slot.count += moved
 				cur.count -= moved
@@ -105,7 +106,7 @@ inventory_apply :: proc(
 		if !in_slots {return}
 		slot := slot_at(inv, a.slot)
 		cur := &inv.cursor
-		if !stack_empty(cur^) && !slot_accepts(a.slot, cur^) {return}
+		if !stack_empty(cur^) && !slot_accepts(reg, a.slot, cur^) {return}
 		switch {
 		case stack_empty(cur^):
 			if stack_empty(slot^) {return}
@@ -116,7 +117,7 @@ inventory_apply :: proc(
 			slot^ = {cur.item, 1}
 			cur.count -= 1
 		case slot.item == cur.item:
-			if slot.count >= item_stack_size(slot.item) {return}
+			if slot.count >= item_stack_size(reg, slot.item) {return}
 			slot.count += 1
 			cur.count -= 1
 		case:
@@ -127,27 +128,27 @@ inventory_apply :: proc(
 		slot := slot_at(inv, a.slot)
 		if a.slot >= CHEST_BASE {
 			// Out of the chest: into the inventory.
-			left := slots_add(inv.slots[:], slot^)
+			left := slots_add(reg, inv.slots[:], slot^)
 			if left.count == slot.count {return}
 			slot^ = left
 			break
 		}
 		if regular && inv.chest_open {
 			// Into the chest.
-			left := slots_add(inv.chest[:], slot^)
+			left := slots_add(reg, inv.chest[:], slot^)
 			if left.count == slot.count {return}
 			slot^ = left
 			break
 		}
 		if !regular {
 			// Out of an equipment slot: into the inventory.
-			left := slots_add(inv.slots[:], slot^)
+			left := slots_add(reg, inv.slots[:], slot^)
 			if left.count == slot.count {return}
 			slot^ = left
 			break
 		}
 		// Armor goes on, if its slot is free.
-		if info, _ := item_info(slot.item); info.equip != nil {
+		if info, _ := item_info(reg, slot.item); info.equip != nil {
 			e := info.equip.?
 			if stack_empty(inv.equipment[e]) {
 				inv.equipment[e], slot^ = slot^, {}
@@ -156,7 +157,7 @@ inventory_apply :: proc(
 		}
 		lo, hi := HOTBAR_SLOTS, INVENTORY_SLOTS
 		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
-		left := slots_add(inv.slots[lo:hi], slot^)
+		left := slots_add(reg, inv.slots[lo:hi], slot^)
 		if left.count == slot.count {return}
 		slot^ = left
 	case .Swap_Hotbar:
@@ -171,20 +172,20 @@ inventory_apply :: proc(
 		from.count -= n
 	case .Take:
 		item := Item(a.arg)
-		if !catalog || !item_valid(item) {return}
-		inv.cursor = {item, item_stack_size(item)}
+		if !catalog || !item_valid(reg, item) {return}
+		inv.cursor = {item, item_stack_size(reg, item)}
 	case .Put:
-		if !in_slots || stack_empty(inv.cursor) || !slot_accepts(a.slot, inv.cursor) {return}
+		if !in_slots || stack_empty(inv.cursor) || !slot_accepts(reg, a.slot, inv.cursor) {return}
 		slot := slot_at(inv, a.slot)
 		if !stack_empty(slot^) && slot.item != inv.cursor.item {return}
-		moved := min(a.arg, inv.cursor.count, item_stack_size(inv.cursor.item) - slot.count)
+		moved := min(a.arg, inv.cursor.count, item_stack_size(reg, inv.cursor.item) - slot.count)
 		if moved <= 0 {return}
 		slot^ = {inv.cursor.item, slot.count + moved}
 		inv.cursor.count -= moved
 	case .Gather:
 		cur := &inv.cursor
 		if stack_empty(cur^) {return}
-		size := item_stack_size(cur.item)
+		size := item_stack_size(reg, cur.item)
 		before := cur.count
 		// Stacks that are not full first, then the full ones.
 		for full in ([2]bool{false, true}) {
@@ -205,10 +206,10 @@ inventory_apply :: proc(
 		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
 		if a.arg == 0 {
 			if stack_empty(slot^) {return}
-			if left := slots_add(inv.slots[lo:hi], {slot.item, 1}); left.count != 0 {return}
+			if left := slots_add(reg, inv.slots[lo:hi], {slot.item, 1}); left.count != 0 {return}
 			slot.count -= 1
 		} else {
-			if stack_empty(slot^) || slot.count >= item_stack_size(slot.item) {return}
+			if stack_empty(slot^) || slot.count >= item_stack_size(reg, slot.item) {return}
 			// From the last slot of the other section holding it.
 			from := -1
 			for i in lo ..< hi {if inv.slots[i].item == slot.item && !stack_empty(inv.slots[i]) {from = i}}
@@ -219,7 +220,7 @@ inventory_apply :: proc(
 	case .Close:
 		if stack_empty(inv.cursor) && !inv.chest_open {return}
 		inv.chest, inv.chest_open = {}, false
-		dropped = inventory_add(inv, inv.cursor)
+		dropped = inventory_add(reg, inv, inv.cursor)
 		inv.cursor = {}
 	}
 	inventory_tidy(inv)
@@ -228,16 +229,16 @@ inventory_apply :: proc(
 
 // inventory_add puts stack in: onto stacks of its item first (the hotbar
 // first), then into empty slots. What does not fit is returned.
-inventory_add :: proc(inv: ^Inventory, stack: Stack) -> (left: Stack) {
-	left = slots_add(inv.slots[:], stack)
+inventory_add :: proc(reg: ^Registry, inv: ^Inventory, stack: Stack) -> (left: Stack) {
+	left = slots_add(reg, inv.slots[:], stack)
 	inventory_tidy(inv)
 	return
 }
 
 @(private = "file")
-slots_add :: proc(slots: []Stack, stack: Stack) -> Stack {
+slots_add :: proc(reg: ^Registry, slots: []Stack, stack: Stack) -> Stack {
 	left := stack
-	size := item_stack_size(stack.item)
+	size := item_stack_size(reg, stack.item)
 	if stack_empty(left) || size == 0 {return left}
 	for &s in slots {
 		if left.count == 0 {break}
@@ -274,8 +275,8 @@ inventory_use_held :: proc(inv: ^Inventory) {
 // inventory_placing_slot: the slot placing block takes one from: the stack
 // in hand if it is that block's item, else the first hotbar stack of it
 // (the hand may have moved on since the edit was made); -1 if none.
-inventory_placing_slot :: proc(inv: ^Inventory, block: Block) -> int {
-	item := placing_item(block)
+inventory_placing_slot :: proc(reg: ^Registry, inv: ^Inventory, block: Block) -> int {
+	item := placing_item(reg, block)
 	if item == NO_ITEM {return -1}
 	if inv.slots[inv.selected].item == item {return inv.selected}
 	for st, i in inv.slots[:HOTBAR_SLOTS] {if st.item == item {return i}}
@@ -316,13 +317,16 @@ inventory_tidy :: proc(inv: ^Inventory) {
 
 // inventory_valid: every stack is a known item within its size (a decoded
 // inventory, a loaded one).
-inventory_valid :: proc(inv: ^Inventory) -> bool {
+inventory_valid :: proc(reg: ^Registry, inv: ^Inventory) -> bool {
 	if inv.selected < 0 || inv.selected >= HOTBAR_SLOTS {return false}
-	check :: proc(s: Stack) -> bool {
-		return stack_empty(s) || (item_valid(s.item) && s.count <= item_stack_size(s.item))
+	check :: proc(reg: ^Registry, s: Stack) -> bool {
+		return(
+			stack_empty(s) ||
+			(item_valid(reg, s.item) && s.count <= item_stack_size(reg, s.item)) \
+		)
 	}
-	for s in inv.slots {if !check(s) {return false}}
-	for s in inv.chest {if !check(s) {return false}}
-	for s, e in inv.equipment {if !check(s) || !item_fits(s, e) {return false}}
-	return check(inv.cursor)
+	for s in inv.slots {if !check(reg, s) {return false}}
+	for s in inv.chest {if !check(reg, s) {return false}}
+	for s, e in inv.equipment {if !check(reg, s) || !item_fits(reg, s, e) {return false}}
+	return check(reg, inv.cursor)
 }

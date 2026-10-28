@@ -255,7 +255,7 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 			&s.world,
 			{i32(math.floor(at.x)), i32(math.floor(at.y)), i32(math.floor(at.z))},
 		)
-		if !game.block_collides(b) {continue}
+		if !game.block_collides(&s.reg.blocks, b) {continue}
 		out := [3]f32{f32(p.x), f32(p.y) + 0.6, f32(p.z)} * rand.float32_range(6, 14)
 		puff_add(
 			s,
@@ -375,7 +375,7 @@ turn_yaw :: proc(p: [3]f32, yaw: f32) -> [3]f64 {
 // (more of them stacked for a bigger stack).
 @(private = "file")
 dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: game.Stack) {
-	info, _ := game.item_info(stack.item)
+	info, _ := game.item_info(s.reg, stack.item)
 	colour := [4]u8{60, 60, 64, 255} // a tool
 	if info.block != .Air {colour = block_colour(s, info.block)}
 	t := f32(time.duration_seconds(time.tick_since({}))) // (any steady clock)
@@ -400,7 +400,7 @@ dropped_item :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View, stack: 
 // block_colour: b's look in one colour (the average of its side).
 @(private = "file")
 block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
-	side, _, _ := mesh.block_faces(b)
+	side := mesh.Texture_Generator(mesh.block_texture(s.reg, b, .Pos_X))
 	sum: [3]u32
 	n: u32
 	for c in s.texels[side] {
@@ -416,7 +416,7 @@ block_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 // (not a hole in it).
 @(private = "file")
 debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
-	side, _, _ := mesh.block_faces(b)
+	side := mesh.Texture_Generator(mesh.block_texture(s.reg, b, .Pos_X))
 	pixels := &s.texels[side]
 	for _ in 0 ..< 8 {
 		c := pixels[rand.int_max(len(pixels))]

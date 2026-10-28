@@ -27,7 +27,11 @@ Options :: struct {
 	linger: f64 `usage:"seconds to keep the server running after the last message"`,
 }
 
+// base_registry: what block and item numbers in a recording mean.
+base_registry: ^game.Registry
+
 main :: proc() {
+	base_registry = game.registry_base()
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "replay.log", "replay")
 	opts := Options {
@@ -97,7 +101,7 @@ run :: proc(opts: Options) -> bool {
 	) -> int {
 		n := game.receive(client, incoming)
 		for p in incoming {
-			if m, ok := game.decode_server(p, scratch); ok {
+			if m, ok := game.decode_server(p, scratch, base_registry); ok {
 				if c, is := m.(game.Challenge); is {challenge^ = c.nonce}
 			}
 			game.packet_free(client, p)
@@ -116,7 +120,7 @@ run :: proc(opts: Options) -> bool {
 			time.sleep(time.Millisecond)
 		}
 		message := r.data
-		if m, ok := game.decode_client(r.data); ok {
+		if m, ok := game.decode_client(r.data, base_registry); ok {
 			#partial switch v in m {
 			case game.Hello:
 				h := v

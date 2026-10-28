@@ -48,7 +48,7 @@ test_journal_records_round_trip :: proc(t: ^testing.T) {
 	seen := Seen {
 		records = make([dynamic]Journal_Record, context.temp_allocator),
 	}
-	r := journal_read_segment(w.buf[:], collect, &seen)
+	r := journal_read_segment(test_reg(), w.buf[:], collect, &seen)
 	testing.expect_value(t, r.status, Segment_Status.Whole)
 	testing.expect_value(t, r.valid_bytes, len(w.buf))
 	testing.expect_value(t, r.header.seq, 7)
@@ -77,12 +77,12 @@ test_journal_cut_at_every_byte :: proc(t: ^testing.T) {
 	// The offsets where a record ends.
 	ends := make([dynamic]int, context.temp_allocator)
 	for cut in JOURNAL_HEADER_SIZE ..= len(w.buf) {
-		r := journal_read_segment(w.buf[:cut], nil)
+		r := journal_read_segment(test_reg(), w.buf[:cut], nil)
 		if r.status == .Whole {append(&ends, cut)}
 	}
 	testing.expect_value(t, len(ends), 7) // the header alone, and six records
 	for cut in 0 ..< len(w.buf) {
-		r := journal_read_segment(w.buf[:cut], nil)
+		r := journal_read_segment(test_reg(), w.buf[:cut], nil)
 		if cut < JOURNAL_HEADER_SIZE {
 			testing.expect_value(t, r.status, Segment_Status.Bad_Header)
 			continue
@@ -108,7 +108,7 @@ test_journal_flipped_bit_refused :: proc(t: ^testing.T) {
 		data := make([]u8, whole, context.temp_allocator)
 		copy(data, w.buf[:])
 		data[i] ~= 0x10
-		r := journal_read_segment(data, nil)
+		r := journal_read_segment(test_reg(), data, nil)
 		testing.expect(t, r.status != .Whole, "a flipped bit must not read as whole")
 		if i >= JOURNAL_HEADER_SIZE {
 			testing.expect(t, r.valid_bytes <= i, "the damaged record must not be accepted")
@@ -132,7 +132,11 @@ test_journal_caps :: proc(t: ^testing.T) {
 		t,
 		journal_write_record(&w, Journal_Changes{changes = many[:MAX_CHANGES_PER_RECORD]}),
 	)
-	testing.expect_value(t, journal_read_segment(w.buf[:], nil).status, Segment_Status.Whole)
+	testing.expect_value(
+		t,
+		journal_read_segment(test_reg(), w.buf[:], nil).status,
+		Segment_Status.Whole,
+	)
 
 	// A record that claims too much: a Changes count of 4097 (hand-made).
 	bad: Writer
@@ -149,7 +153,7 @@ test_journal_caps :: proc(t: ^testing.T) {
 	write_varint(&bad, u32(len(payload.buf)))
 	append(&bad.buf, ..payload.buf[:])
 	write_u32(&bad, crc32_of(bad.buf[start:]))
-	r := journal_read_segment(bad.buf[:], nil)
+	r := journal_read_segment(test_reg(), bad.buf[:], nil)
 	testing.expect_value(t, r.status, Segment_Status.Torn)
 	testing.expect_value(t, r.valid_bytes, JOURNAL_HEADER_SIZE)
 }

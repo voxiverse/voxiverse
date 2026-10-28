@@ -56,7 +56,7 @@ structure_save :: proc(w: ^World, name: string, lo, hi: game.Block_Pos, clear: b
 	}
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.template_encode(&w, &t)
+	game.template_encode(&w, &t, s.registry)
 	dir :=
 		filepath.join({s.store.dir, STRUCTURES_DIR}, context.temp_allocator) or_else STRUCTURES_DIR
 	os.make_directory_all(dir)
@@ -87,10 +87,10 @@ structure_load :: proc(s: ^Server, name: string) -> (t: game.Template, ok: bool)
 				context.temp_allocator,
 			) or_else name
 		if data, err := os.read_entire_file_from_path(path, context.temp_allocator); err == nil {
-			return game.template_decode(data, context.temp_allocator)
+			return game.template_decode(s.registry, data, context.temp_allocator)
 		}
 	}
-	return worldgen.shipped_template(name, context.temp_allocator)
+	return worldgen.shipped_template(s.registry, name, context.temp_allocator)
 }
 
 // structure_paste puts template name with its lowest corner at at.
@@ -149,7 +149,7 @@ structure_list :: proc(s: ^Server) -> string {
 			}
 		}
 	}
-	for n in worldgen.shipped_names(context.temp_allocator) {append(&names, fmt.tprintf("%s (shipped)", n))}
+	for n in worldgen.shipped_names(s.registry, context.temp_allocator) {append(&names, fmt.tprintf("%s (shipped)", n))}
 	if len(names) ==
 	   0 {return "No structures yet: select a box (pos1, pos2) and `structure save <name>`"}
 	return strings.join(names[:], ", ", context.temp_allocator)

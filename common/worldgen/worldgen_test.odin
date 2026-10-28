@@ -9,8 +9,8 @@ import "../game"
 
 @(test)
 test_generate_is_deterministic :: proc(t: ^testing.T) {
-	g := generator_make(.Classic, 1234)
-	one, two := generator_make(.Classic, 1), generator_make(.Classic, 2)
+	g := generator_make(.Classic, 1234, test_reg())
+	one, two := generator_make(.Classic, 1, test_reg()), generator_make(.Classic, 2, test_reg())
 	a, b := new(game.Block_Array), new(game.Block_Array)
 	defer free(a)
 	defer free(b)
@@ -29,7 +29,7 @@ test_generate_is_deterministic :: proc(t: ^testing.T) {
 
 @(test)
 test_generate_terrain_shape :: proc(t: ^testing.T) {
-	g := generator_make(.Classic, 42)
+	g := generator_make(.Classic, 42, test_reg())
 	arr := new(game.Block_Array)
 	defer free(arr)
 
@@ -90,7 +90,7 @@ test_generate_terrain_shape :: proc(t: ^testing.T) {
 // spawn is on dry land.
 @(test)
 test_earth :: proc(t: ^testing.T) {
-	g := generator_make(.Earth, 24301)
+	g := generator_make(.Earth, 24301, test_reg())
 	a, b := new(game.Block_Array), new(game.Block_Array)
 	defer free(a)
 	defer free(b)
@@ -121,7 +121,7 @@ test_earth :: proc(t: ^testing.T) {
 					if found[i] != game.WORLD_MIN_Y {continue}
 					for y := i32(game.CHUNK_SIZE - 1); y >= 0; y -= 1 {
 						bl := uniform if is_uniform else a[game.local_index({x, y, z})]
-						if game.block_shades(bl) {
+						if game.block_shades(test_blocks(), bl) {
 							found[i] = cy * game.CHUNK_SIZE + y
 							break
 						}
@@ -191,7 +191,7 @@ earth_hashes :: proc(params: Params) -> (got: [2]u64) {
 	arr := new(game.Block_Array)
 	defer free(arr)
 	for seed, i in seeds {
-		g := generator_make(.Earth, seed)
+		g := generator_make(.Earth, seed, test_reg())
 		g.params = params
 		h := u64(0xcbf2_9ce4_8422_2325)
 		mix :: proc(h: ^u64, bytes: []u8) {
@@ -223,7 +223,7 @@ earth_hashes :: proc(params: Params) -> (got: [2]u64) {
 // meeting once. (Coasts and rivers follow the land, not the climate.)
 @(test)
 test_biome_borders_blend :: proc(t: ^testing.T) {
-	g := generator_make(.Earth, 24301)
+	g := generator_make(.Earth, 24301, test_reg())
 	hard := g.params
 	hard.biome_blend = 0
 	reach := i32(g.params.biome_blend) + 1
@@ -278,7 +278,7 @@ test_biome_borders_blend :: proc(t: ^testing.T) {
 // blocks that shade.
 @(test)
 test_structures :: proc(t: ^testing.T) {
-	g := generator_make(.Earth, 24301)
+	g := generator_make(.Earth, 24301, test_reg())
 	found := make([dynamic]Structure)
 	defer delete(found)
 	structures_near(&g, {-4096, -4096}, {4096, 4096}, &found)
@@ -325,6 +325,7 @@ test_structures :: proc(t: ^testing.T) {
 								generate(&g, c, made[c])
 							}
 							if game.block_shades(
+								test_blocks(),
 								made[c][game.local_index(game.local_of({cx * 16 + x, y, cz * 16 + z}))],
 							) {got = y}
 						}
@@ -350,7 +351,7 @@ test_structures :: proc(t: ^testing.T) {
 test_spawn_on_open_ground :: proc(t: ^testing.T) {
 	chunks := make(map[game.Chunk_Pos]^game.Block_Array, context.temp_allocator)
 	for seed in i64(1) ..= 8 {
-		g := generator_make(.Earth, seed)
+		g := generator_make(.Earth, seed, test_reg())
 		clear(&chunks)
 		block :: proc(
 			g: ^Generator,
@@ -379,6 +380,7 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 				d := (^Generated)(data)
 				return block(d.g, d.chunks, p), true
 			},
+			test_blocks(),
 		}
 		spawn, _ := game.landing_spot(query, spawn_point(&g) + {0, 1, 0}, .Ground)
 		feet := game.Block_Pos {
@@ -387,10 +389,22 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 			i32(math.floor(spawn.z)),
 		}
 		below := block(&g, &chunks, feet - {0, 1, 0})
-		testing.expectf(t, game.block_collides(below), "seed %d: standing on %v", seed, below)
+		testing.expectf(
+			t,
+			game.block_collides(test_blocks(), below),
+			"seed %d: standing on %v",
+			seed,
+			below,
+		)
 		for dy in i32(0) ..< 2 {
 			b := block(&g, &chunks, feet + {0, dy, 0})
-			testing.expectf(t, !game.block_collides(b), "seed %d: %v at the spawn", seed, b)
+			testing.expectf(
+				t,
+				!game.block_collides(test_blocks(), b),
+				"seed %d: %v at the spawn",
+				seed,
+				b,
+			)
 		}
 		for dz in i32(-2) ..= 2 {
 			for dx in i32(-2) ..= 2 {
@@ -422,7 +436,7 @@ test_gates :: proc(t: ^testing.T) {
 		return arr[game.local_index(game.local_of(p))]
 	}
 	for seed in i64(1) ..= 6 {
-		g := generator_make(.Earth, seed)
+		g := generator_make(.Earth, seed, test_reg())
 		s, ok := arrival_gate(&g)
 		if !testing.expectf(t, ok, "seed %d: no gate", seed) {continue}
 		d := math.sqrt(f64(s.lo.x) * f64(s.lo.x) + f64(s.lo.z) * f64(s.lo.z))
@@ -457,17 +471,17 @@ test_gates :: proc(t: ^testing.T) {
 		}
 		testing.expect(
 			t,
-			game.block_collides(block_at(&g, arr, feet - {0, 1, 0})),
+			game.block_collides(test_blocks(), block_at(&g, arr, feet - {0, 1, 0})),
 			"nothing to arrive on",
 		)
 		testing.expect(
 			t,
-			!game.block_collides(block_at(&g, arr, feet)),
+			!game.block_collides(test_blocks(), block_at(&g, arr, feet)),
 			"the arrival spot is in a block",
 		)
 		testing.expect(
 			t,
-			!game.block_collides(block_at(&g, arr, feet + {0, 1, 0})),
+			!game.block_collides(test_blocks(), block_at(&g, arr, feet + {0, 1, 0})),
 			"the arrival spot is in a block",
 		)
 		found, has := gate_containing(&g, gate_chevrons(s)[3])
@@ -479,7 +493,7 @@ test_gates :: proc(t: ^testing.T) {
 	}
 
 	// The same places on every machine (as the terrain's golden hashes).
-	g := generator_make(.Earth, 1)
+	g := generator_make(.Earth, 1, test_reg())
 	found := make([dynamic]Structure, context.temp_allocator)
 	structures_near(&g, {-8192, -8192}, {8192, 8192}, &found)
 	sum: [3]i64
@@ -504,7 +518,7 @@ test_column_cache :: proc(t: ^testing.T) {
 	a, b := new(game.Block_Array), new(game.Block_Array)
 	defer free(a)
 	defer free(b)
-	g := generator_make(.Earth, 24301)
+	g := generator_make(.Earth, 24301, test_reg())
 	check :: proc(
 		t: ^testing.T,
 		g: ^Generator,
@@ -548,7 +562,7 @@ test_no_floating_plants :: proc(t: ^testing.T) {
 	defer free(a)
 	defer free(below)
 	for kind in ([]Kind{.Classic, .Earth}) {
-		g := generator_make(kind, 24301)
+		g := generator_make(kind, 24301, test_reg())
 		plants := 0
 		for cz in i32(-6) ..= 6 {
 			for cx in i32(-6) ..= 6 {
@@ -559,13 +573,13 @@ test_no_floating_plants :: proc(t: ^testing.T) {
 						for z in i32(0) ..< game.CHUNK_SIZE {
 							for x in i32(0) ..< game.CHUNK_SIZE {
 								b := a[game.local_index({x, y, z})]
-								if !game.block_is_plant(b) {continue}
+								if !game.block_is_plant(test_blocks(), b) {continue}
 								plants += 1
 								under :=
 									a[game.local_index({x, y - 1, z})] if y > 0 else below[game.local_index({x, game.CHUNK_SIZE - 1, z})]
 								testing.expectf(
 									t,
-									game.plant_supported(b, under),
+									game.block_supported(test_blocks(), b, under),
 									"%v: a %v over %v at chunk %v %v",
 									kind,
 									b,

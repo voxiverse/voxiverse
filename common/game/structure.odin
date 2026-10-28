@@ -44,7 +44,7 @@ template_cell :: proc(t: ^Template, l: [3]i32, rotation: u8) -> u16 {
 	return t.cells[template_index(t, {x, l.y, z})]
 }
 
-template_encode :: proc(w: ^Writer, t: ^Template) {
+template_encode :: proc(w: ^Writer, t: ^Template, reg: ^Registry) {
 	write_u32(w, TEMPLATE_MAGIC)
 	for v in t.size {write_i32(w, v)}
 	// The palette: the cells' kinds in order of first appearance.
@@ -55,7 +55,7 @@ template_encode :: proc(w: ^Writer, t: ^Template) {
 		if !found {append(&palette, c)}
 	}
 	write_varint(w, u32(len(palette)))
-	for p in palette {write_string(w, "void" if p == VOID else BLOCK_INFO[Block(p)].name)}
+	for p in palette {write_string(w, "void" if p == VOID else block_id(reg, Block(p)))}
 	for i := 0; i < len(t.cells); {
 		j := i
 		for j < len(t.cells) && t.cells[j] == t.cells[i] {j += 1}
@@ -69,8 +69,19 @@ template_encode :: proc(w: ^Writer, t: ^Template) {
 
 // template_decode reads a .vxs; false for a damaged file or an unknown
 // block name.
-template_decode :: proc(data: []u8, allocator := context.allocator) -> (t: Template, ok: bool) {
-	return template_decode_with(data, nil, nil, allocator)
+template_decode :: proc(
+	reg: ^Registry,
+	data: []u8,
+	allocator := context.allocator,
+) -> (
+	t: Template,
+	ok: bool,
+) {
+	resolve :: proc(user: rawptr, name: string) -> (u16, bool) {
+		b, found := registry_block((^Registry)(user), name)
+		return u16(b), found
+	}
+	return template_decode_with(data, resolve, reg, allocator)
 }
 
 // template_decode_with: as template_decode, the names resolved by resolve
@@ -104,9 +115,7 @@ template_decode_with :: proc(
 			append(&palette, id)
 			continue
 		}
-		b, known := block_by_name(name)
-		if !known {return}
-		append(&palette, u16(b))
+		return // (no resolver: no names are known)
 	}
 	err: mem.Allocator_Error
 	t.cells, err = make([]u16, int(t.size.x * t.size.y * t.size.z), allocator)

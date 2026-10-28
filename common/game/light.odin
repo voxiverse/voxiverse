@@ -34,6 +34,7 @@ Light_Input :: struct {
 	// from (centre origin - 16) on x and z; NO_GROUND for none.
 	heights: [LIGHT_REGION * LIGHT_REGION]i32,
 	origin:  Block_Pos, // the centre chunk's origin
+	table:   ^Block_Table, // what the blocks are
 }
 
 // Light_Scratch is a worker's working memory (about 0.5 MiB; reuse it).
@@ -58,7 +59,8 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 		base := [3]i32{i32(ci % 3), i32(ci / 3 % 3), i32(ci / 9)} * CHUNK_SIZE
 		// Row by row: x runs along both layouts (the chunk's and the region's).
 		if c.array == nil {
-			solid, light := block_opaque(c.uniform), block_light(c.uniform)
+			solid, light :=
+				block_opaque(input.table, c.uniform), block_light(input.table, c.uniform)
 			for y in i32(0) ..< CHUNK_SIZE {
 				for z in i32(0) ..< CHUNK_SIZE {
 					row := region_index(base + {0, y, z})
@@ -78,10 +80,10 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 				solid := s.solid[row:][:CHUNK_SIZE]
 				light := s.light[row:][:CHUNK_SIZE]
 				for b, x in src {
-					info := &BLOCK_INFO[b]
-					solid[x] = info.opaque
-					light[x] = info.light
-					if info.light > 0 {append(&s.queue, u32(row + x))}
+					solid[x] = block_opaque(input.table, b)
+					emit := block_light(input.table, b)
+					light[x] = emit
+					if emit > 0 {append(&s.queue, u32(row + x))}
 				}
 			}
 		}

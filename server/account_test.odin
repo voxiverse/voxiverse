@@ -119,7 +119,11 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 	defer net_close(&bea)
 	ok = net_wait(t, {&bea}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_updates > 0})
 	testing.expect(t, ok)
-	testing.expect_value(t, game.inventory_count(&bea.inventory, game.item_of_block(.Sand)), 7)
+	testing.expect_value(
+		t,
+		game.inventory_count(&bea.inventory, game.item_of_block(test_reg(), .Sand)),
+		7,
+	)
 
 	// A ban follows the account: alice banned, her account can't play a new
 	// character either.

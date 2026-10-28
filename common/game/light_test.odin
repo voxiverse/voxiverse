@@ -13,7 +13,7 @@ World_Fn :: proc(p: Block_Pos) -> Block
 @(private = "file")
 column_top :: proc(f: World_Fn, x, z: i32) -> i32 {
 	for y := i32(TEST_TOP); y > -200; y -= 1 {
-		if block_shades(f({x, y, z})) {return y}
+		if block_shades(test_blocks(), f({x, y, z})) {return y}
 	}
 	return NO_GROUND
 }
@@ -28,6 +28,7 @@ light_of :: proc(f: World_Fn, c: Chunk_Pos, out: ^[LIGHT_OUT_VOLUME]u8) {
 	input := new(Light_Input)
 	defer free(input)
 	input.origin = chunk_origin(c)
+	input.table = test_blocks()
 	for i in 0 ..< 27 {
 		d := Chunk_Pos{i32(i % 3) - 1, i32(i / 3 % 3) - 1, i32(i / 9) - 1}
 		o := chunk_origin(c + d)
@@ -82,8 +83,8 @@ reference_build :: proc(f: World_Fn, c: Chunk_Pos) -> Reference {
 				p := [3]i32{x, y, z}
 				b := f(r.origin + p)
 				i := index(p)
-				solid[i] = block_opaque(b)
-				l := block_light(b)
+				solid[i] = block_opaque(test_blocks(), b)
+				l := block_light(test_blocks(), b)
 				top := tops[x + z * SIZE]
 				if !solid[i] && (top == NO_GROUND || r.origin.y + y > top) {l |= 15 << 4}
 				r.light[i] = l

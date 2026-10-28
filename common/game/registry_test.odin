@@ -25,7 +25,7 @@ base_registry :: proc(t: ^testing.T) -> ^Registry {
 }
 
 // The base pack is today's game: block by block and field by field against
-// the Odin tables (frozen copies of them take over when the tables go).
+// frozen copies of the Odin tables the registry replaced (registry_frozen_test.odin).
 @(test)
 test_base_matches_legacy :: proc(t: ^testing.T) {
 	reg := base_registry(t)
@@ -33,7 +33,7 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 	defer registry_destroy(reg)
 	tb := &reg.blocks
 	for b in Block {
-		want := BLOCK_INFO[b]
+		want := FROZEN_BLOCK_INFO[b]
 		n := int(b)
 		testing.expect_value(t, tb.defs[n].id, BUILTIN_BLOCK_IDS[b])
 		testing.expect_value(t, BUILTIN_BLOCK_IDS[b], fmt.tprintf("voxiverse:%s", want.name))
@@ -45,9 +45,9 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 		testing.expectf(t, (.Replaceable in tb.flags[n]) == want.replaceable, "%v replaceable", b)
 		testing.expectf(t, (.Shades in tb.flags[n]) == want.shades, "%v shades", b)
 		testing.expectf(t, tb.light[n] == want.light, "%v light", b)
-		testing.expectf(t, block_shades(tb, b) == block_shades(b), "%v shades (column)", b)
-		testing.expectf(t, registry_block_drop(reg, b) == block_drop(b), "%v drop", b)
-		testing.expectf(t, block_is_plant_in(tb, b) == block_is_plant(b), "%v plant", b)
+		testing.expectf(t, block_shades(tb, b) == frozen_block_shades(b), "%v shades (column)", b)
+		testing.expectf(t, registry_block_drop(reg, b) == frozen_block_drop(b), "%v drop", b)
+		testing.expectf(t, block_is_plant(tb, b) == frozen_block_is_plant(b), "%v plant", b)
 		// by id
 		got, ok := registry_block(reg, want.name)
 		testing.expect(t, ok && got == b)
@@ -65,11 +65,11 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 	testing.expect_value(t, tb.count, len(Block))
 	// Plants stand where they did.
 	for plant in Block {
-		if !block_is_plant(plant) {continue}
+		if !frozen_block_is_plant(plant) {continue}
 		for below in Block {
 			testing.expectf(
 				t,
-				block_supported(tb, plant, below) == plant_supported(plant, below),
+				block_supported(tb, plant, below) == frozen_plant_supported(plant, below),
 				"%v on %v",
 				plant,
 				below,
@@ -80,12 +80,17 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 	tillable, found := registry_block_tag(reg, "tillable")
 	testing.expect(t, found)
 	for b in Block {
-		testing.expectf(t, block_in_tag(tb, b, tillable) == can_till(b, .Air), "%v tillable", b)
+		testing.expectf(
+			t,
+			block_in_tag(tb, b, tillable) == frozen_can_till(b, .Air),
+			"%v tillable",
+			b,
+		)
 	}
 
 	// Items: the same numbers, names and fields.
-	for i in every_item(context.temp_allocator) {
-		old, _ := item_info(i)
+	for i in frozen_every_item(context.temp_allocator) {
+		old, _ := frozen_item_info(i)
 		got, ok := registry_item_info(reg, i)
 		testing.expectf(t, ok, "item %d", i)
 		short := old.name
@@ -112,8 +117,12 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 		by_id, item_found := registry_item(reg, short)
 		testing.expectf(t, item_found && by_id == i, "%s by id", short)
 	}
-	testing.expect_value(t, len(registry_every_item(reg)), len(every_item(context.temp_allocator)))
-	old_all := every_item(context.temp_allocator)
+	testing.expect_value(
+		t,
+		len(registry_every_item(reg)),
+		len(frozen_every_item(context.temp_allocator)),
+	)
+	old_all := frozen_every_item(context.temp_allocator)
 	new_all := registry_every_item(reg)
 	for i in 0 ..< min(len(old_all), len(new_all)) {
 		testing.expectf(t, old_all[i] == new_all[i], "every_item[%d]", i)
@@ -139,7 +148,6 @@ File :: struct {
 	text: string,
 }
 
-@(private = "file")
 pack_of :: proc(ns: string, files: []File, manifest := "") -> Pack_Source {
 	list := make([dynamic]Pack_File, context.temp_allocator)
 	m := manifest
@@ -154,7 +162,6 @@ pack_of :: proc(ns: string, files: []File, manifest := "") -> Pack_Source {
 	return {ns, list[:]}
 }
 
-@(private = "file")
 build_with :: proc(packs: ..Pack_Source) -> (^Registry, []Pack_Error) {
 	sources := make([dynamic]Pack_Source, context.temp_allocator)
 	append(&sources, base_pack_source(context.temp_allocator))
@@ -211,7 +218,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		len(registry_every_item(reg)),
-		len(every_item(context.temp_allocator)) + 2,
+		len(frozen_every_item(context.temp_allocator)) + 2,
 	)
 
 	two := Stack{item, 1}

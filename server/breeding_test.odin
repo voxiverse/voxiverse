@@ -221,7 +221,8 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			if e, _ := entity_find(c.world, d.id); e != nil {
 				sheep_use(s, c, e)
 				for it in c.world.entities.list {
-					if it.kind == .Item && it.stack.item == game.item_of_block(.Wool_Black) {
+					if it.kind == .Item &&
+					   it.stack.item == game.item_of_block(test_reg(), .Wool_Black) {
 						d.n += it.stack.count
 					}
 				}

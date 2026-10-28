@@ -20,7 +20,7 @@ SAFE_FALL :: 3.0 // blocks
 // health_tick: once a tick for each playing client, after its movement.
 health_tick :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	mods := game.derive_mods(&c.inventory)
+	mods := game.derive_mods(s.registry, &c.inventory)
 	if c.max_health == 0 {c.health = mods.max_health} 	// (just joined: full)
 	if mods.max_health != c.max_health {
 		c.max_health = mods.max_health
@@ -28,7 +28,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	}
 	// A fall: from where the player left the ground to where they land.
 	p := c.player
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	safe :=
 		p.on_ground ||
 		p.flying ||
@@ -80,7 +80,7 @@ die :: proc(s: ^Server, c: ^Client, cause: string) {
 		c.inventory.cursor = {}
 		c.inv_changed = true
 	}
-	c.max_health = game.derive_mods(&c.inventory).max_health
+	c.max_health = game.derive_mods(s.registry, &c.inventory).max_health
 	c.health = c.max_health
 	c.airborne = false
 	land_at_spawn(s, c, remember = false)

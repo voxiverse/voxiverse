@@ -50,7 +50,7 @@ client_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 
 @(private = "file")
 query :: proc(c: ^Predicting_Client) -> game.Block_Query {
-	return {c, client_block}
+	return {c, client_block, test_blocks()}
 }
 
 @(private = "file")
@@ -59,7 +59,7 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 	game.receive(c.endpoint, &packets)
 	for p in packets {
 		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch)
+		m, ok := game.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
 		case game.Challenge:

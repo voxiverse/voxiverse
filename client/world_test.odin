@@ -19,7 +19,10 @@ test_world_edges_mesh :: proc(t: ^testing.T) {
 
 	for layer in ([]i32{game.CHUNK_MAX_Y - 1, game.CHUNK_MIN_Y}) {
 		w: World
-		testing.expect(t, world_init(&w, 64, 16, 1, virtual.arena_allocator(&arena)) == nil)
+		testing.expect(
+			t,
+			world_init(&w, test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) == nil,
+		)
 		add_columns(&w, 1)
 		inward: i32 = -1 if layer == game.CHUNK_MAX_Y - 1 else 1
 		// Everything around (0, layer, 0) that exists, except the last one.
@@ -60,7 +63,10 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	w: World
-	testing.expect(t, world_init(&w, 128, 32, 1, virtual.arena_allocator(&arena)) == nil)
+	testing.expect(
+		t,
+		world_init(&w, test_reg(), 128, 32, 1, virtual.arena_allocator(&arena)) == nil,
+	)
 	defer world_destroy(&w)
 	add_columns(&w, 2)
 	for z in i32(-2) ..= 2 {
@@ -198,6 +204,7 @@ test_render_clock_smooth :: proc(t: ^testing.T) {
 @(test)
 test_entity_death_puff :: proc(t: ^testing.T) {
 	s: Session
+	s.reg = test_reg()
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS)
 	defer delete(s.puffs)
 	defer delete(s.sounds)
@@ -241,7 +248,10 @@ test_near_ready :: proc(t: ^testing.T) {
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	w: World
-	testing.expect(t, world_init(&w, 512, 64, 1, virtual.arena_allocator(&arena)) == nil)
+	testing.expect(
+		t,
+		world_init(&w, test_reg(), 512, 64, 1, virtual.arena_allocator(&arena)) == nil,
+	)
 	defer world_destroy(&w)
 	add_columns(&w, 2) // (the columns 3 away are not known: they must not matter)
 	set :: proc(t: ^testing.T, w: ^World, p: game.Chunk_Pos, scratch: ^game.Block_Array) {

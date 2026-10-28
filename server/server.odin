@@ -69,6 +69,7 @@ Config :: struct {
 	journal_detail:        u64, // tests: ticks a segment keeps its detail (0: JOURNAL_DETAIL)
 	journal_keep:          u64, // tests: ticks a segment is kept (0: JOURNAL_KEEP)
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
+	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -112,6 +113,8 @@ Server :: struct {
 	stats:          Stats,
 	log_tag:        base.Log_Tag,
 	store:          Store, // saving (save.odin)
+	registry:       ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
+	refusal:        string, // why start returned false, when it is a message for the player
 	// Server thread only, after start:
 	arena:          virtual.Arena,
 	home:           ^World, // the universe's first world (always loaded)
@@ -172,13 +175,25 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	s.config.password = strings.clone(config.password, arena)
 	s.config.name = strings.clone(config.name, arena)
 	s.config.capture = strings.clone(config.capture, arena)
-	kit_default(&s.kit)
 	s.home = world_make(s)
 	append(&s.worlds, s.home)
 	// A saved world's seed and rules replace the config's.
 	if !store_open(s, config.save_dir) {
 		teardown(s, world = false)
 		return false
+	}
+	if !universe_registry(s) || !universe_blocks_check(s) {
+		teardown(s, world = false)
+		return false
+	}
+	kit_default(s.registry, &s.kit)
+	if s.store.kit_text != "" {
+		if kit, ok := kit_parse(s.registry, s.store.kit_text); ok {
+			clear(&s.kit)
+			append(&s.kit, ..kit)
+		} else {
+			log.warnf("server universe kit not understood kit=%q", s.store.kit_text)
+		}
 	}
 	permissions_open(s)
 	community_open(s)
@@ -285,6 +300,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	store_close(s)
 	permissions_destroy(&s.perms)
 	community_destroy(&s.community)
+	game.registry_destroy(s.registry)
 	delete(s.kit)
 	for &c in s.clients {client_reset(&c)}
 	game.schema_destroy(&s.schema)
@@ -292,8 +308,11 @@ teardown :: proc(s: ^Server, world: bool) {
 	delete(s.worlds)
 	ledger_destroy(&s.ledger)
 	base.queue_destroy(&s.calls)
+	refusal := s.refusal // (a failed start says why, after the rest is gone)
 	virtual.arena_destroy(&s.arena)
-	s^ = {}
+	s^ = {
+		refusal = refusal,
+	}
 }
 
 // freeze stops (or restarts) time and entities while the local player is
@@ -550,7 +569,7 @@ enter :: proc(s: ^Server, c: ^Client, name: string) {
 handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	w := c.world
 	if c.state == .Free || c.state == .Gone {return}
-	m, ok := game.decode_client(p)
+	m, ok := game.decode_client(p, s.registry)
 	if !ok {
 		disconnect(s, c, "invalid message")
 		return

@@ -256,7 +256,8 @@ test_crop_drops :: proc(t: ^testing.T) {
 			clear(&w.entities.list)
 			// Farmland breaks into dirt; with drops off, nothing.
 			block_drop(w, p, .Farmland_Moist)
-			if count(w, game.item_of_block(.Dirt)) != 1 {fail(f, "farmland did not leave dirt")}
+			if count(w, game.item_of_block(test_reg(), .Dirt)) !=
+			   1 {fail(f, "farmland did not leave dirt")}
 			clear(&w.entities.list)
 			w.rules.drops = false
 			block_drop(w, p, .Wheat_7)

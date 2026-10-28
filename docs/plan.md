@@ -392,6 +392,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M46 | 65 | 4 | 1 | persistence v2: disk layer, transactional saves on a worker, region format 2, migration registry, backups, restore, check, crash harness (the last session of several; an unattended session) |
 | M46b | 305 | 64 | 1 | saves that capture one tick and encode in slices, compaction, export and import, the universe lock, the save budget test and its CI step (an unattended session) |
 | M47 | 107 | 13 | 1 | pack JSON, the registry and the base data pack, `build packs`; the plumbing, universe packs and name palettes are M47a (an unattended session; counted from M46b's line) |
+| M47a | 538 | 154 | 1 | the game reads the registry: `Block_Table` through the game, frozen copies, universe packs and `/packs`, `Welcome.content`, region format 3 with names, older saves refused (an unattended session; the steps include a debugging detour: a sed by line number broke a line and hung a test) |
 
 | # | Slice | Exit check |
 |---|---|---|

@@ -15,7 +15,7 @@ column_query :: proc(w: ^Column_World) -> Block_Query {
 			w := (^Column_World)(data)
 			if p.y < w.loaded_from {return .Air, false}
 			return w.blocks[p.y] or_else .Air, true
-		}}
+		}, test_blocks()}
 }
 
 @(test)

@@ -11,11 +11,12 @@ import "../common/game"
 test_inventory_prediction :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
+	s.reg = test_reg()
 	defer delete(s.inv_pending)
 	defer delete(s.edits)
 	defer delete(s.grants)
 	s.state = .Playing
-	stone := game.item_of_block(.Stone)
+	stone := game.item_of_block(test_reg(), .Stone)
 	server: game.Inventory
 	server.slots[0] = {stone, 64}
 	inventory_reconcile(s, {0, server})
@@ -96,6 +97,7 @@ test_drop_repeat :: proc(t: ^testing.T) {
 test_right_click_uses_the_aimed_entity :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
+	s.reg = test_reg()
 	pipe: game.Pipe
 	game.pipe_init(&pipe)
 	defer game.pipe_destroy(&pipe)
@@ -103,14 +105,14 @@ test_right_click_uses_the_aimed_entity :: proc(t: ^testing.T) {
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
-	stone := game.Stack{game.item_of_block(.Stone), 5}
+	stone := game.Stack{game.item_of_block(test_reg(), .Stone), 5}
 	sent :: proc(pipe: ^game.Pipe) -> (uses: int, others: int) {
 		packets := make([dynamic]game.Packet, context.temp_allocator)
 		server := game.Endpoint{pipe, .Server}
 		game.receive(server, &packets)
 		for p in packets {
 			defer game.packet_free(server, p)
-			m, ok := game.decode_client(p)
+			m, ok := game.decode_client(p, test_reg())
 			if !ok {continue}
 			if u, is_use := m.(game.Use_Entity);
 			   is_use && u.entity == 7 {uses += 1} else {others += 1}

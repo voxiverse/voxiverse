@@ -74,6 +74,7 @@ test_overlay_keys_go_to_the_top :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
 	s.state = .Playing
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game

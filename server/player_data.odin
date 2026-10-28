@@ -136,7 +136,7 @@ player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 			if err != .Not_Exist {log.errorf("server cannot read path=%s error=%v", path, err)}
 			continue
 		}
-		r, ok := player_parse(data)
+		r, ok := player_parse(s.registry, data)
 		if !ok {
 			log.errorf("server character file not understood, starting afresh path=%s", path)
 			return {}, false
@@ -149,7 +149,7 @@ player_record :: proc(s: ^Server, name: string) -> (Player_Record, bool) {
 }
 
 // player_parse reads a player file's JSON.
-player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
+player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: bool) {
 	rest, stats, found, read := split_stats(data)
 	if !read {return}
 	f: Player_File
@@ -173,18 +173,18 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 	r.stats = stats
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
-		item, known := game.item_by_name(st.item)
+		item, known := game.item_by_name(reg, st.item)
 		if !known || st.count <= 0 {
 			log.warnf("server player file item dropped item=%q", st.item)
 			continue
 		}
-		stack := game.Stack{item, min(st.count, game.item_stack_size(item))}
+		stack := game.Stack{item, min(st.count, game.item_stack_size(reg, item))}
 		switch {
 		case st.slot >= 0 && st.slot < game.INVENTORY_SLOTS:
 			r.inventory.slots[st.slot] = stack
 		case st.slot >= EQUIPMENT_FILE_SLOT &&
 		     st.slot < EQUIPMENT_FILE_SLOT + game.EQUIP_SLOTS &&
-		     game.item_fits(stack, game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)) &&
+		     game.item_fits(reg, stack, game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)) &&
 		     game.stack_empty(
 			     r.inventory.equipment[game.Equip_Slot(st.slot - EQUIPMENT_FILE_SLOT)],
 		     ):
@@ -199,7 +199,7 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 	// to be dropped.
 	n := 0
 	for st in late {
-		left := game.inventory_add(&r.inventory, st)
+		left := game.inventory_add(reg, &r.inventory, st)
 		if !game.stack_empty(left) && n < MAX_OVERFLOW {
 			r.overflow[n] = left
 			n += 1
@@ -209,21 +209,23 @@ player_parse :: proc(data: []u8) -> (r: Player_Record, ok: bool) {
 }
 
 // player_json: a player file's text.
-player_json :: proc(r: ^Player_Record) -> []u8 {
+player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 	items := make([dynamic]File_Stack, context.temp_allocator)
 	for st, i in r.inventory.slots {
-		if !game.stack_empty(st) {append(&items, File_Stack{i, game.item_name(st.item), st.count})}
+		if !game.stack_empty(
+			st,
+		) {append(&items, File_Stack{i, game.item_id(reg, st.item), st.count})}
 	}
 	for st, e in r.inventory.equipment {
 		if !game.stack_empty(st) {
 			append(
 				&items,
-				File_Stack{EQUIPMENT_FILE_SLOT + int(e), game.item_name(st.item), st.count},
+				File_Stack{EQUIPMENT_FILE_SLOT + int(e), game.item_id(reg, st.item), st.count},
 			)
 		}
 	}
 	if c := r.inventory.cursor; !game.stack_empty(c) {
-		append(&items, File_Stack{game.CURSOR_SLOT, game.item_name(c.item), c.count})
+		append(&items, File_Stack{game.CURSOR_SLOT, game.item_id(reg, c.item), c.count})
 	}
 	world := ""
 	if a, has := r.world.?; has {world = game.address_dir(a)}
@@ -333,7 +335,7 @@ players_save :: proc(s: ^Server) -> bool {
 				ok = false
 				continue
 			}
-			if !store_write(s, path, player_json(&r)) {
+			if !store_write(s, path, player_json(s.registry, &r)) {
 				ok = false
 				continue
 			}
@@ -373,32 +375,32 @@ DEFAULT_KIT := [?]struct {
 	{"rocket_launcher", 1},
 }
 
-kit_default :: proc(kit: ^[dynamic]game.Stack) {
+kit_default :: proc(reg: ^game.Registry, kit: ^[dynamic]game.Stack) {
 	clear(kit)
 	for k in DEFAULT_KIT {
-		if item, ok := game.item_by_name(k.name); ok {append(kit, game.Stack{item, k.count})}
+		if item, ok := game.item_by_name(reg, k.name); ok {append(kit, game.Stack{item, k.count})}
 	}
 }
 
-kit_text :: proc(kit: []game.Stack) -> string {
+kit_text :: proc(reg: ^game.Registry, kit: []game.Stack) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	for st, i in kit {
 		if i > 0 {strings.write_string(&b, ", ")}
-		strings.write_string(&b, game.item_name(st.item))
+		strings.write_string(&b, game.item_id(reg, st.item))
 		strings.write_byte(&b, ' ')
 		strings.write_int(&b, st.count)
 	}
 	return strings.to_string(b)
 }
 
-kit_parse :: proc(text: string) -> ([]game.Stack, bool) {
+kit_parse :: proc(reg: ^game.Registry, text: string) -> ([]game.Stack, bool) {
 	kit := make([dynamic]game.Stack, context.temp_allocator)
 	rest := text
 	for part in strings.split_iterator(&rest, ",") {
 		f := strings.fields(part, context.temp_allocator)
 		if len(f) == 0 {continue}
 		if len(f) > 2 {return nil, false}
-		item, ok := game.item_by_name(f[0])
+		item, ok := game.item_by_name(reg, f[0])
 		if !ok {return nil, false}
 		count := 1
 		if len(f) == 2 {
@@ -408,7 +410,7 @@ kit_parse :: proc(text: string) -> ([]game.Stack, bool) {
 		}
 		append(
 			&kit,
-			game.Stack{item, min(count, game.item_stack_size(item) * game.INVENTORY_SLOTS)},
+			game.Stack{item, min(count, game.item_stack_size(reg, item) * game.INVENTORY_SLOTS)},
 		)
 	}
 	return kit[:], true
@@ -417,10 +419,10 @@ kit_parse :: proc(text: string) -> ([]game.Stack, bool) {
 // give_kit fills a new player's inventory from the world's kit.
 give_kit :: proc(s: ^Server, c: ^Client) {
 	for st in s.kit {
-		info, _ := game.item_info(st.item)
+		info, _ := game.item_info(s.registry, st.item)
 		if t, tool := info.tool.?;
 		   tool && t == .Launcher && !allowed(s, c, "world.fire") {continue}
-		left := game.inventory_add(&c.inventory, st)
+		left := game.inventory_add(s.registry, &c.inventory, st)
 		ledger(s, c.world, .Kit, st.item, st.count - left.count)
 	}
 }

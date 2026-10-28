@@ -87,7 +87,7 @@ session_pick :: proc(s: ^Session) -> bool {
 	hit, aimed := s.aim.?
 	if !aimed {return false}
 	block, _ := world_block(&s.world, hit.block)
-	item := game.item_of_block(block)
+	item := game.item_of_block(s.reg, block)
 	if item == game.NO_ITEM {return false}
 	inv := &s.inventory
 	for st, i in inv.slots[:game.HOTBAR_SLOTS] {
@@ -131,7 +131,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 	}
 	if !place {
 		b, _ := world_block(&s.world, hit.block)
-		if !game.can_break(b) {return false}
+		if !game.can_break(&s.reg.blocks, b) {return false}
 		edit.pos, edit.block = hit.block, .Air
 	} else {
 		if hit.normal == {} {return false}
@@ -139,8 +139,14 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 		current, loaded := world_block(&s.world, edit.pos)
 		if !loaded ||
 		   !can_place_from_hand(s, block) ||
-		   (game.block_is_plant(block) && !plant_stands(s, edit.pos, block)) ||
-		   !game.can_place_at(current, block, edit.pos, s.prediction.state) {return false}
+		   (game.block_is_plant(&s.reg.blocks, block) && !plant_stands(s, edit.pos, block)) ||
+		   !game.can_place_at(
+				   &s.reg.blocks,
+				   current,
+				   block,
+				   edit.pos,
+				   s.prediction.state,
+			   ) {return false}
 		edit.block = block
 	}
 	before, _ := world_block(&s.world, edit.pos)
@@ -160,7 +166,7 @@ session_till :: proc(s: ^Session) -> bool {
 	if !aimed || len(s.edits) >= MAX_PENDING_EDITS {return false}
 	current, _ := world_block(&s.world, hit.block)
 	above, loaded := world_block(&s.world, hit.block + {0, 1, 0})
-	if !loaded || !game.can_till(current, above) {return false}
+	if !loaded || !game.can_till(s.reg, current, above) {return false}
 	edit := game.Edit {
 		id    = s.next_edit + 1,
 		after = s.prediction.next_sequence - 1,
@@ -190,5 +196,5 @@ edit_sound :: proc(s: ^Session, pos: game.Block_Pos, old, new: game.Block) {
 @(private = "file")
 plant_stands :: proc(s: ^Session, pos: game.Block_Pos, plant: game.Block) -> bool {
 	below, loaded := world_block(&s.world, pos + {0, -1, 0})
-	return loaded && game.plant_supported(plant, below)
+	return loaded && game.block_supported(&s.reg.blocks, plant, below)
 }

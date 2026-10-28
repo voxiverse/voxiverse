@@ -17,22 +17,25 @@ Item_Icons :: map[game.Item]ui.Icon
 
 // item_icons_init makes an icon for every item. False if the atlas has no
 // room for one.
-item_icons_init :: proc(icons: ^Item_Icons, ctx: ^ui.Context) -> bool {
-	layers: [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba
-	for t in mesh.Texture {mesh.generate_texture(t, layers[t][:])}
+item_icons_init :: proc(reg: ^game.Registry, icons: ^Item_Icons, ctx: ^ui.Context) -> bool {
+	layers: [mesh.Texture_Generator][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba
+	for t in mesh.Texture_Generator {mesh.generate_texture(t, layers[t][:])}
 	pixels: [ICON_SIZE * ICON_SIZE][4]u8
-	for item in game.every_item() {
-		info, _ := game.item_info(item)
+	for item in game.every_item(reg) {
+		if item in icons {continue} 	// (made at start-up: the session of a universe with packs adds its own)
+		info, _ := game.item_info(reg, item)
 		if item >= game.MATERIAL_ITEMS && item < game.ARMOR_ITEMS {
 			material_sprite(game.Material(item - game.MATERIAL_ITEMS), &pixels)
 		} else if tool, is_tool := info.tool.?; is_tool {
 			tool_sprite(tool, &pixels)
 		} else if armor, is_armor := info.armor.?; is_armor {
 			armor_sprite(armor, &pixels)
-		} else if info.block == .Poppy || info.block == .Dandelion || info.block == .Tall_Grass {
-			block_flat(info.block, &layers, &pixels) // (plants are crossed planes, not cubes)
+		} else if reg.blocks.defs[info.block].render == .Cross {
+			block_flat(reg, info.block, &layers, &pixels) // (plants are crossed planes, not cubes)
+		} else if info.block != .Air {
+			block_cube(reg, info.block, &layers, &pixels)
 		} else {
-			block_cube(info.block, &layers, &pixels)
+			continue // (a pack's item with no art of its own: none)
 		}
 		icons[item] = ui.add_icon(ctx, ICON_SIZE, pixels[:]) or_return
 	}
@@ -63,14 +66,15 @@ texel :: proc(
 // texel of that face under it.
 @(private = "file")
 block_cube :: proc(
+	reg: ^game.Registry,
 	b: game.Block,
-	layers: ^[mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
+	layers: ^[mesh.Texture_Generator][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
 	pixels: ^[ICON_SIZE * ICON_SIZE][4]u8,
 ) {
 	N :: mesh.TEXTURE_SIZE
-	top := layers[mesh.Texture(mesh.block_texture(b, .Pos_Y))]
-	left := layers[mesh.Texture(mesh.block_texture(b, .Pos_Z))]
-	right := layers[mesh.Texture(mesh.block_texture(b, .Pos_X))]
+	top := layers[mesh.Texture_Generator(mesh.block_texture(reg, b, .Pos_Y))]
+	left := layers[mesh.Texture_Generator(mesh.block_texture(reg, b, .Pos_Z))]
+	right := layers[mesh.Texture_Generator(mesh.block_texture(reg, b, .Pos_X))]
 	centre := f32(ICON_SIZE) / 2
 	sample :: proc(top, left, right: [N * N]mesh.Rgba, px, py: f32) -> (c: [4]u8, ok: bool) {
 		K :: f32(0.8660254)
@@ -117,12 +121,13 @@ block_cube :: proc(
 // block_flat draws b's side texture as it is, each texel ICON_SIZE / 16 times as large.
 @(private = "file")
 block_flat :: proc(
+	reg: ^game.Registry,
 	b: game.Block,
-	layers: ^[mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
+	layers: ^[mesh.Texture_Generator][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba,
 	pixels: ^[ICON_SIZE * ICON_SIZE][4]u8,
 ) {
 	N :: mesh.TEXTURE_SIZE
-	face := layers[mesh.Texture(mesh.block_texture(b, .Pos_X))]
+	face := layers[mesh.Texture_Generator(mesh.block_texture(reg, b, .Pos_X))]
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
 			pixels[y * ICON_SIZE + x] = face[(y * N / ICON_SIZE) * N + x * N / ICON_SIZE]

@@ -77,7 +77,7 @@ test_plants_need_support :: proc(t: ^testing.T) {
 				fail(c, "plants on what holds them were removed")
 			}
 			// The ground goes from under the poppy: it breaks and drops itself.
-			poppy := game.item_of_block(.Poppy)
+			poppy := game.item_of_block(test_reg(), .Poppy)
 			before := drops(w, poppy)
 			set_block(w, at(c, 0, 0, 0), .Air, test_act(w))
 			if block(w, at(c, 0, 1, 0)) != .Air {fail(c, "the poppy stayed in the air")}
@@ -102,7 +102,7 @@ test_plants_need_support :: proc(t: ^testing.T) {
 			// Drops off: nothing left behind.
 			w.rules.drops = false
 			set_block(w, at(c, 8, 1, 0), .Dandelion, test_act(w))
-			dandelion := game.item_of_block(.Dandelion)
+			dandelion := game.item_of_block(test_reg(), .Dandelion)
 			count := drops(w, dandelion)
 			set_block(w, at(c, 8, 0, 0), .Air, test_act(w))
 			if drops(w, dandelion) != count {fail(c, "a drop with rules.drops off")}
@@ -152,7 +152,7 @@ poppies_dropped :: proc(srv: ^Server, beyond: i32) -> (count: int) {
 			w := client_by_name(s, "a").world
 			for e in w.entities.list {
 				if e.kind == .Item &&
-				   e.stack.item == game.item_of_block(.Poppy) {n^ += e.stack.count}
+				   e.stack.item == game.item_of_block(test_reg(), .Poppy) {n^ += e.stack.count}
 			}
 		}, &d)
 	return d.count

@@ -31,6 +31,7 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
 	s.welcome.address = game.address_derive(3)
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
@@ -78,7 +79,7 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	picks := [game.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
 	for p in picks {click(app, l.symbols[p])}
 	testing.expect(t, !overlay_is_open(&app.overlays, .Dial))
-	m, decoded := game.decode_client(s.writer.buf[:])
+	m, decoded := game.decode_client(s.writer.buf[:], test_reg())
 	sent, is_dial := m.(game.Dial)
 	testing.expect(t, decoded && is_dial, "no Dial sent")
 	testing.expect_value(t, sent.gate, gate)

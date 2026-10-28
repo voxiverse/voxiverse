@@ -100,8 +100,8 @@ script :: proc(s: ^Server, data: rawptr) {
 	c := client_by_name(s, r.name)
 	if c == nil {return}
 	w := c.world
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
-	wool, wheat := game.item_of_block(.Wool), game.item_of_material(.Wheat)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
+	wool, wheat := game.item_of_block(test_reg(), .Wool), game.item_of_material(.Wheat)
 	r.items = {stone, dirt, wool, wheat}
 	switch r.step {
 	case 0:
@@ -244,7 +244,7 @@ test_ledger_session :: proc(t: ^testing.T) {
 
 	r = step(&srv, "a", 2)
 	testing.expect_value(t, r.count, 1)
-	testing.expect_value(t, r.lines[0].item, game.item_of_block(.Stone))
+	testing.expect_value(t, r.lines[0].item, game.item_of_block(test_reg(), .Stone))
 	testing.expect_value(t, r.lines[0].held - r.lines[0].expected, 7)
 	r = step(&srv, "a", 3)
 	testing.expect_value(t, r.count, 1)
@@ -284,7 +284,7 @@ scenario_proc :: proc(s: ^Server, data: rawptr) {
 	case 3:
 		// A saved character with more than it can hold.
 		if rec, ok := &s.store.players[d.name]; ok {
-			rec.overflow[0] = {game.item_of_block(.Dirt), 9}
+			rec.overflow[0] = {game.item_of_block(test_reg(), .Dirt), 9}
 			d.ok = true
 		}
 	case 4:
@@ -396,7 +396,7 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 	a = {}
 	if !testing.expect(t, join_one(t, &a, port, "a"), "never came back") {return}
 	expect_balanced(t, audit_now(&srv), "a player back")
-	r := audit_now(&srv, {game.item_of_block(.Dirt), 0, 0, 0})
+	r := audit_now(&srv, {game.item_of_block(test_reg(), .Dirt), 0, 0, 0})
 	testing.expect(t, r.rows[0][.Spill_Old] == 9, "the old stack was not in the ledger")
 }
 
@@ -433,16 +433,16 @@ put_block_at :: proc(srv: ^Server, pos: game.Block_Pos, block: game.Block) {
 // random_inventory: stacks of random items (kept valid).
 @(private = "file")
 random_inventory :: proc(r: rand.Generator) -> (inv: game.Inventory) {
-	items := game.every_item(context.temp_allocator)
+	items := game.every_item(test_reg(), context.temp_allocator)
 	pick :: proc(r: rand.Generator, items: []game.Item) -> game.Stack {
 		if rand.int_max(3, r) == 0 {return {}}
 		item := rand.choice(items, r)
-		return {item, rand.int_range(1, game.item_stack_size(item) + 1, r)}
+		return {item, rand.int_range(1, game.item_stack_size(test_reg(), item) + 1, r)}
 	}
 	for &st in inv.slots {st = pick(r, items)}
 	for &st, e in inv.equipment {
 		st = pick(r, items)
-		if !game.item_fits(st, e) {st = {}}
+		if !game.item_fits(test_reg(), st, e) {st = {}}
 	}
 	for &st in inv.chest {st = pick(r, items)}
 	inv.cursor = pick(r, items)
@@ -485,7 +485,7 @@ test_inventory_fuzz :: proc(t: ^testing.T) {
 			counted := inv
 			if a.kind == .Close {counted.chest = {}}
 			sum := totals(&counted)
-			dropped, ok := game.inventory_apply(&inv, a, false)
+			dropped, ok := game.inventory_apply(test_reg(), &inv, a, false)
 			if !ok {
 				if !testing.expectf(
 					t,
@@ -497,7 +497,7 @@ test_inventory_fuzz :: proc(t: ^testing.T) {
 			}
 			if !testing.expectf(
 				t,
-				game.inventory_valid(&inv),
+				game.inventory_valid(test_reg(), &inv),
 				"%v left an invalid inventory",
 				a,
 			) {return}
@@ -599,7 +599,7 @@ test_audit_budget :: proc(t: ^testing.T) {
 	append(&s.worlds, w)
 	defer delete(s.worlds)
 	defer ledger_destroy(&s.ledger)
-	items := game.every_item(context.temp_allocator)
+	items := game.every_item(test_reg(), context.temp_allocator)
 	for &c, i in s.clients {
 		c.state = .Playing
 		for &st, k in c.inventory.slots {

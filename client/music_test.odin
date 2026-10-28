@@ -366,6 +366,7 @@ test_arrival_into_a_seen_address :: proc(t: ^testing.T) {
 	defer free(app)
 	s := new(Session)
 	defer free(s)
+	s.reg = test_reg()
 	app.session = s
 	defer app.session = nil
 	s.state = .Playing

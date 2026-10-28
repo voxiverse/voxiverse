@@ -129,7 +129,7 @@ restless :: proc(w: ^World, p: game.Block_Pos) -> bool {
 	if level != 0 {return true}
 	for d in ([5]game.Block_Pos{{1, 0, 0}, {-1, 0, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		nb, n_loaded := chunks_block(&w.chunks, p + d)
-		if n_loaded && takes_water(nb, 7) {return true}
+		if n_loaded && takes_water(&w.server.registry.blocks, nb, 7) {return true}
 	}
 	return false
 }
@@ -198,7 +198,7 @@ water_update :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
 	below := p + {0, -1, 0}
 	under, under_loaded := chunks_block(&w.chunks, below)
 	if !under_loaded {return}
-	if takes_water(under, game.WATER_FALLING_LEVEL) {
+	if takes_water(&w.server.registry.blocks, under, game.WATER_FALLING_LEVEL) {
 		set_block(w, below, .Water_Falling, act)
 		return
 	}
@@ -212,7 +212,12 @@ water_update :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
 		if !ways[i] {continue}
 		n := p + d
 		nb, n_loaded := chunks_block(&w.chunks, n)
-		if n_loaded && takes_water(nb, next) {set_block(w, n, game.water_block(next), act)}
+		if n_loaded &&
+		   takes_water(
+			   &w.server.registry.blocks,
+			   nb,
+			   next,
+		   ) {set_block(w, n, game.water_block(next), act)}
 	}
 }
 
@@ -240,7 +245,8 @@ fed_level :: proc(w: ^World, p: game.Block_Pos) -> (level: i32, alive: bool) {
 		// Between two sources over firm ground (or a source): a source.
 		under, _ := chunks_block(&w.chunks, p + {0, -1, 0})
 		if l, water := game.water_level(under);
-		   game.block_collides(under) || (water && l == 0) {return 0, true}
+		   game.block_collides(&w.server.registry.blocks, under) ||
+		   (water && l == 0) {return 0, true}
 	}
 	if best >= 7 {return 0, false}
 	return best + 1, true
@@ -249,13 +255,16 @@ fed_level :: proc(w: ^World, p: game.Block_Pos) -> (level: i32, alive: bool) {
 // takes_water: water of level may flow into a block that is b: air, or
 // what gives way (tall grass; flowers wash away), or weaker water.
 @(private = "file")
-takes_water :: proc(b: game.Block, level: i32) -> bool {
+takes_water :: proc(t: ^game.Block_Table, b: game.Block, level: i32) -> bool {
 	if l, water := game.water_level(b); water {
 		if l == 0 || l == game.WATER_FALLING_LEVEL {return false}
 		return level == game.WATER_FALLING_LEVEL || level < l
 	}
-	info := game.BLOCK_INFO[b]
-	return b == .Air || info.replaceable || (!info.collides && info.breakable)
+	return(
+		b == .Air ||
+		game.block_has(t, b, .Replaceable) ||
+		(!game.block_collides(t, b) && game.block_has(t, b, .Breakable)) \
+	)
 }
 
 // ways_down: which sides lead to the nearest way down within WATER_REACH
@@ -270,7 +279,9 @@ ways_down :: proc(w: ^World, p: game.Block_Pos) -> (ways: [4]bool) {
 	}
 	for d, i in SIDES {
 		nb, _ := chunks_block(&w.chunks, p + d)
-		ways[i] = takes_water(nb, 7) && (best > WATER_REACH || dist[i] == best)
+		ways[i] =
+			takes_water(&w.server.registry.blocks, nb, 7) &&
+			(best > WATER_REACH || dist[i] == best)
 	}
 	return
 }
@@ -280,9 +291,9 @@ ways_down :: proc(w: ^World, p: game.Block_Pos) -> (ways: [4]bool) {
 @(private = "file")
 distance_down :: proc(w: ^World, p, came: game.Block_Pos, steps: i32) -> i32 {
 	b, loaded := chunks_block(&w.chunks, p)
-	if !loaded || !takes_water(b, 7) {return WATER_REACH + 1}
+	if !loaded || !takes_water(&w.server.registry.blocks, b, 7) {return WATER_REACH + 1}
 	under, _ := chunks_block(&w.chunks, p + {0, -1, 0})
-	if takes_water(under, game.WATER_FALLING_LEVEL) {return steps}
+	if takes_water(&w.server.registry.blocks, under, game.WATER_FALLING_LEVEL) {return steps}
 	if steps >= WATER_REACH {return WATER_REACH + 1}
 	best := i32(WATER_REACH + 1)
 	for d in SIDES {

@@ -115,6 +115,7 @@ App :: struct {
 	prompt_icons:     Prompt_Icons, // the button glyphs (prompts.odin)
 	prompts_shown:    [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
 	prompts_count:    int,
+	registry:         ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
 	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:             Dial_View, // the dial overlay's (dial.odin)
 	quit:             bool,
@@ -129,6 +130,7 @@ App :: struct {
 // app_destroy, which handles partially initialised apps.
 app_init :: proc(app: ^App) -> bool {
 	app.launched = time.tick_now()
+	app.registry = game.registry_base()
 	console_init(&app.console)
 	line_editor_init(&app.chat)
 	register_builtin_commands(&app.console)
@@ -180,7 +182,7 @@ app_init :: proc(app: ^App) -> bool {
 		}
 		platform.set_window_icon(&app.window, images[:])
 	}
-	if !item_icons_init(&app.item_icons, &app.ui) {return false}
+	if !item_icons_init(app.registry, &app.item_icons, &app.ui) {return false}
 	if !prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
@@ -260,7 +262,7 @@ audio_listener :: proc(app: ^App, all: bool) {
 world_pass_init :: proc(app: ^App, vert, frag: []u8) -> bool {
 	pixels := make([dynamic]u8, context.temp_allocator)
 	level := make([]mesh.Rgba, mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE, context.temp_allocator)
-	for t in mesh.Texture {
+	for t in mesh.Texture_Generator {
 		mesh.generate_texture(t, level)
 		size := mesh.TEXTURE_SIZE
 		current := level
@@ -282,7 +284,7 @@ world_pass_init :: proc(app: ^App, vert, frag: []u8) -> bool {
 		pixels[:],
 		mesh.TEXTURE_SIZE,
 		mesh.TEXTURE_MIPS,
-		len(mesh.Texture),
+		len(mesh.Texture_Generator),
 		max_meshes = 1 << 16,
 	)
 }
@@ -320,6 +322,7 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	if app.settings_dirty {settings_save(app)}
 	console_history_save(&app.console)
 	delete(app.item_icons)
+	game.registry_destroy(app.registry)
 	delete(app.inventory_search)
 	stats_view_destroy(&app.stats_view)
 	reporter_destroy(&app.reporter)
@@ -419,7 +422,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		blast_test_update(app)
 		audio_check_update(app)
 		tour_test_update(app)
-		if !app.benchmark {sounds_play(&app.sounds, app.mixer, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
+		if !app.benchmark {sounds_play(&app.sounds, app.mixer, app.session.reg, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
 		for n in app.session.notices {
 			console_print(&app.console, n)
@@ -618,10 +621,15 @@ start_session :: proc(app: ^App, config: Session_Config) {
 	delete(app.message)
 	app.message = ""
 	app.session = new(Session)
+	config := config
+	config.registry = app.registry
 	if !session_start(app.session, config) {
 		app.message = fmt.aprintf("Could not start: %s", app.session.failure)
 		leave_world(app)
 		return
+	}
+	if app.session.reg_owned { 	// (a universe with packs: its items need icons too)
+		item_icons_init(app.session.reg, &app.item_icons, &app.ui)
 	}
 	app.screen = .Game
 	overlays_leave_game(&app.overlays)

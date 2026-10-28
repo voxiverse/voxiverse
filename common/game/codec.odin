@@ -81,13 +81,21 @@ write_string :: proc(w: ^Writer, s: string) {
 }
 
 Reader :: struct {
-	data: []u8,
-	pos:  int,
-	ok:   bool,
+	data:        []u8,
+	pos:         int,
+	ok:          bool,
+	reg:         ^Registry, // what block and item numbers must be known to (nil: none are)
+	block_limit: u32, // else: block numbers below this are valid (a region's own table)
 }
 
-reader_make :: proc(data: []u8) -> Reader {
-	return {data = data, ok = true}
+reader_make :: proc(data: []u8, reg: ^Registry = nil) -> Reader {
+	return {data = data, ok = true, reg = reg}
+}
+
+// reader_block_valid: id is a block of the reader's registry.
+reader_block_valid :: proc(r: ^Reader, id: u16) -> bool {
+	if r.block_limit > 0 {return u32(id) < r.block_limit}
+	return r.reg != nil && block_valid(&r.reg.blocks, id)
 }
 
 // reader_finish is true when everything read was valid and nothing is left.
@@ -231,8 +239,8 @@ write_chunk_blocks :: proc(w: ^Writer, c: ^Chunk_Blocks) {
 		return
 	}
 	write_u8(w, u8(Chunk_Encoding.Palette_Runs))
-	slot: [Block]u16 // palette index + 1, 0 = not in the palette
-	palette: [len(Block)]Block
+	slot: [MAX_BLOCK_STATES]u16 // palette index + 1, 0 = not in the palette
+	palette: [MAX_BLOCK_STATES]Block
 	n := 0
 	for b in c.array {
 		if slot[b] == 0 {
@@ -261,21 +269,23 @@ read_chunk_blocks :: proc(r: ^Reader, dst: ^Block_Array) -> (uniform: Block, is_
 	switch encoding {
 	case u8(Chunk_Encoding.Uniform):
 		id := read_u16(r)
-		if !block_valid(id) {
+		if !reader_block_valid(r, id) {
 			reader_fail(r)
 			return
 		}
 		return Block(id), r.ok
 	case u8(Chunk_Encoding.Palette_Runs):
 		n := read_varint(r)
-		if n == 0 || n > len(Block) {
+		limit :=
+			r.block_limit if r.block_limit > 0 else (u32(r.reg.blocks.count) if r.reg != nil else 0)
+		if n == 0 || n > limit {
 			reader_fail(r)
 			return
 		}
-		palette: [len(Block)]Block
+		palette: [MAX_BLOCK_STATES]Block
 		for &p in palette[:n] {
 			id := read_u16(r)
-			if !block_valid(id) {reader_fail(r)}
+			if !reader_block_valid(r, id) {reader_fail(r)}
 			p = Block(id) if r.ok else .Air
 		}
 		i := 0

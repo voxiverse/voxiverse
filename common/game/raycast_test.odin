@@ -16,7 +16,7 @@ query :: proc(s: ^Solids) -> Block_Query {
 			s := (^Solids)(data)
 			if p in s.unloaded {return .Air, false}
 			return .Stone if p in s.set else .Air, true
-		}}
+		}, test_blocks()}
 }
 
 @(test)

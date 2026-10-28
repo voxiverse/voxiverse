@@ -120,7 +120,7 @@ entities_tick :: proc(w: ^World) {
 	e := &w.entities
 	e.budget = PATH_BUDGET_PER_TICK
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	Blast :: struct {
 		sphere: Sphere,
 		action: Action_Id,
@@ -214,7 +214,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 	ent.shorn = true
 	record(s, c, .Sheep_Sheared)
 	r := &w.entities.rng
-	wool := game.item_of_block(.Wool_Black if game.genes_black(ent.genes) else .Wool)
+	wool := game.item_of_block(s.registry, .Wool_Black if game.genes_black(ent.genes) else .Wool)
 	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
 		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger(s, w, .Drop_Mob, wool, 1)
@@ -373,7 +373,7 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	from := ent.body.position + {0, 0.15, 0}
 	nearest := step
 	hit_at: [3]f64
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	if b, ok := game.raycast(query, from, dir, step); ok {
 		nearest, hit_at, hit = b.distance, from + dir * b.distance, true
 	} else if !chunk_ready(w, from) {
@@ -497,7 +497,7 @@ entity_hurt_shown :: proc(w: ^World, id: u32) {
 // summon puts an entity in front of a player (cheats: Admin "summon").
 summon :: proc(s: ^Server, c: ^Client, kind: game.Entity_Kind) -> bool {
 	w := c.world
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	yaw := c.look[0]
 	ahead := c.player.position + {-f64(base.sin(yaw)) * 3, 0, -f64(base.cos(yaw)) * 3}
 	at := game.Block_Pos {
@@ -644,7 +644,7 @@ graze_eat :: proc(w: ^World, ent: ^Entity) {
 plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
 	e := &w.entities
 	if e.budget < PATH_BUDGET_EACH {return false}
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	pos := ent.body.position
 	start := game.Block_Pos {
 		i32(math.floor(pos.x)),
@@ -720,7 +720,7 @@ spawn_natural :: proc(w: ^World) {
 	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
 	r := &w.entities.rng
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
 		near := 0

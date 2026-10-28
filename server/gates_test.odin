@@ -49,7 +49,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	for !srv.listening {}
 	port := srv.host.socket.port
 	home := srv.home.address
-	home_gen := worldgen.generator_make(.Earth, srv.home.seed, srv.home.params)
+	home_gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
 	here, has := worldgen.arrival_gate(&home_gen)
 	if !testing.expect(t, has, "no gate at home") {return}
 	// A world of this galaxy, and its gate (worked out here as anywhere).
@@ -60,7 +60,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		address = away,
 	}
 	world_kind(&far_world)
-	far_gen := worldgen.generator_make(.Earth, far_world.seed, far_world.params)
+	far_gen := worldgen.generator_make(.Earth, far_world.seed, srv.registry, far_world.params)
 	there, far_has := worldgen.arrival_gate(&far_gen)
 	if !testing.expect(t, far_has, "no gate at the far end") {return}
 

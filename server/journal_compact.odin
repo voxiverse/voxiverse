@@ -32,7 +32,7 @@ segment_header :: proc(w: ^World, seq: u32) -> (h: game.Journal_Header, ok: bool
 	buf: [game.JOURNAL_HEADER_SIZE]u8
 	n, _ := os.read(f, buf[:])
 	if n != len(buf) {return}
-	r := game.journal_read_segment(buf[:], nil)
+	r := game.journal_read_segment(nil, buf[:], nil)
 	return r.header, r.status != .Bad_Header
 }
 
@@ -62,7 +62,7 @@ segment_compact :: proc(w: ^World, seq: u32) {
 	path := segment_path(w, seq)
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return}
-	out, ok := compact_bytes(data)
+	out, ok := compact_bytes(w.server.registry, data)
 	if !ok {
 		log.warnf("server cannot compact a journal segment seq=%d", seq)
 		return
@@ -88,7 +88,7 @@ Compacting :: struct {
 }
 
 // compact_bytes returns the compacted form of a segment's bytes (temp allocator).
-compact_bytes :: proc(data: []u8) -> (out: []u8, ok: bool) {
+compact_bytes :: proc(reg: ^game.Registry, data: []u8) -> (out: []u8, ok: bool) {
 	c := Compacting {
 		ticks   = make(map[u64]i64, 64, context.temp_allocator),
 		actors  = make(map[u32]game.Journal_Actor, 16, context.temp_allocator),
@@ -96,7 +96,7 @@ compact_bytes :: proc(data: []u8) -> (out: []u8, ok: bool) {
 		entries = make([dynamic]game.Journal_Entry, context.temp_allocator),
 		params  = make([dynamic]u64, context.temp_allocator),
 	}
-	r := game.journal_read_segment(data, proc(user: rawptr, rec: game.Journal_Record) {
+	r := game.journal_read_segment(reg, data, proc(user: rawptr, rec: game.Journal_Record) {
 			c := cast(^Compacting)user
 			switch v in rec {
 			case game.Journal_Tick:

@@ -49,39 +49,12 @@ Sheep_Sound :: enum u8 {
 	Die, // a long, falling one, and a puff
 }
 
-// material_of: what a block sounds like; false for air.
-material_of :: proc(b: game.Block) -> (Material, bool) {
-	switch b {
-	case .Air, .Water, .Water_1 ..= .Water_7, .Water_Falling, .Gate_Horizon:
-		return {}, false
-	case .Stone,
-	     .Bedrock,
-	     .Sandstone,
-	     .Coal_Ore,
-	     .Iron_Ore,
-	     .Copper_Ore,
-	     .Cobblestone,
-	     .Stone_Bricks,
-	     .Gate_Ring,
-	     .Gate_Chevron,
-	     .Gate_Chevron_Lit:
-		return .Stone, true
-	case .Dirt, .Clay, .Farmland, .Farmland_Moist:
-		return .Dirt, true
-	case .Grass, .Leaves, .Spruce_Leaves, .Tall_Grass, .Poppy, .Dandelion, .Wheat_0 ..= .Wheat_7:
-		return .Grass, true
-	case .Sand:
-		return .Sand, true
-	case .Gravel:
-		return .Gravel, true
-	case .Lamp, .Ice, .Glass:
-		return .Glass, true
-	case .Log, .Spruce_Log, .Cactus, .Planks, .Chest:
-		return .Wood, true
-	case .Snow, .Wool, .Wool_Black:
-		return .Snow, true
-	}
-	return {}, false
+// material_of: what a block sounds like, from its sound set in the registry;
+// false for none (air, water).
+material_of :: proc(reg: ^game.Registry, b: game.Block) -> (Material, bool) {
+	sound := reg.blocks.defs[b].sound
+	if sound == game.NO_SOUND {return {}, false}
+	return Material(reg.sounds[sound].material), true
 }
 
 // Breaking is the full sound; placing a shorter, fuller thunk; a step a

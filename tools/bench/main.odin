@@ -192,7 +192,9 @@ main :: proc() {
 // run generates the region and lights and meshes it once, recording the
 // stages' metrics.
 run :: proc(opts: Options) -> (counts: Counts) {
-	gen := worldgen.generator_make(.Earth, opts.seed)
+	reg := game.registry_base()
+	defer game.registry_destroy(reg)
+	gen := worldgen.generator_make(.Earth, opts.seed, reg)
 	r := i32(opts.radius)
 	centre := [2]i32{i32(opts.x) >> game.CHUNK_SHIFT, i32(opts.z) >> game.CHUNK_SHIFT}
 	base.metrics_start()
@@ -259,7 +261,7 @@ run :: proc(opts: Options) -> (counts: Counts) {
 		for cx in centre.x - r ..= centre.x + r {
 			for cy in i32(game.CHUNK_MIN_Y) ..< game.CHUNK_MAX_Y {
 				pos := game.Chunk_Pos{cx, cy, cz}
-				if trivially_empty(chunks, pos) {
+				if trivially_empty(&reg.blocks, chunks, pos) {
 					counts.skipped += 1
 					continue
 				}
@@ -270,6 +272,7 @@ run :: proc(opts: Options) -> (counts: Counts) {
 				}
 				light_in.chunks = n
 				light_in.origin = game.chunk_origin(pos)
+				light_in.table = &reg.blocks
 				for dz in i32(-1) ..= 1 {
 					for dx in i32(-1) ..= 1 {
 						t := tops[{cx + dx, cz + dz}]
@@ -291,7 +294,7 @@ run :: proc(opts: Options) -> (counts: Counts) {
 				{
 					base.metric_scope(.Mesh_Faces)
 					mesh.snapshot_fill(snapshot, &n)
-					c = mesh.mesh_chunk(snapshot, light, &vertices)
+					c = mesh.mesh_chunk(reg, snapshot, light, &vertices)
 				}
 				for _, layer in c {
 					n := mesh.counts_layer(c, layer)
@@ -320,6 +323,7 @@ neighbour :: proc(
 
 // trivially_empty: as client/world.odin decides.
 trivially_empty :: proc(
+	table: ^game.Block_Table,
 	chunks: map[game.Chunk_Pos]game.Chunk_Blocks,
 	pos: game.Chunk_Pos,
 ) -> bool {
@@ -329,7 +333,7 @@ trivially_empty :: proc(
 	for d in ([6]game.Chunk_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		n, ok := chunks[pos + d]
 		if !ok {n = AIR_CHUNK}
-		if n.array != nil || !game.block_opaque(n.uniform) {return false}
+		if n.array != nil || !game.block_opaque(table, n.uniform) {return false}
 	}
 	return true
 }

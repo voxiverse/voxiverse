@@ -78,8 +78,9 @@ player_eye_height :: proc(s: Player_State) -> f64 {
 // Block_Query reads the world for physics: loaded is false where the chunk
 // is not loaded (treated as solid).
 Block_Query :: struct {
-	data: rawptr,
-	get:  proc(data: rawptr, p: Block_Pos) -> (b: Block, loaded: bool),
+	data:  rawptr,
+	get:   proc(data: rawptr, p: Block_Pos) -> (b: Block, loaded: bool),
+	table: ^Block_Table, // what the blocks are (the registry's)
 }
 
 // player_step advances the player by dt seconds (one tick).
@@ -263,7 +264,7 @@ solid_at :: proc(q: Block_Query, p: Block_Pos) -> bool {
 	if p.y >= WORLD_MAX_Y {return false}
 	if p.y < WORLD_MIN_Y {return true}
 	b, loaded := q.get(q.data, p)
-	return !loaded || block_collides(b)
+	return !loaded || block_collides(q.table, b)
 }
 
 // sweep moves a box (width across, height up, position at the centre of

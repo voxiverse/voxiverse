@@ -178,7 +178,7 @@ write_containers :: proc(w: ^World) -> bool {
 			strings.write_byte(&b, ' ')
 			strings.write_int(&b, i)
 			strings.write_byte(&b, ':')
-			strings.write_string(&b, game.item_name(st.item))
+			strings.write_string(&b, game.item_id(w.server.registry, st.item))
 			strings.write_byte(&b, ':')
 			strings.write_int(&b, st.count)
 		}
@@ -218,18 +218,19 @@ load_containers :: proc(w: ^World) {
 		}
 		if ok {
 			for token in f[3:] {
-				parts := strings.split(token, ":", context.temp_allocator)
-				if len(parts) != 3 {ok = false; break}
-				slot, ok1 := strconv.parse_int(parts[0])
-				item, known := game.item_by_name(parts[1])
-				n, ok2 := strconv.parse_int(parts[2])
+				// slot:id:count, the id being namespace:name (the base pack's may say just name)
+				first, last := strings.index_byte(token, ':'), strings.last_index_byte(token, ':')
+				if first < 0 || last <= first {ok = false; break}
+				slot, ok1 := strconv.parse_int(token[:first])
+				item, known := game.item_by_name(w.server.registry, token[first + 1:last])
+				n, ok2 := strconv.parse_int(token[last + 1:])
 				if !ok1 ||
 				   !known ||
 				   !ok2 ||
 				   slot < 0 ||
 				   slot >= game.CHEST_SLOTS ||
 				   n <= 0 ||
-				   n > game.item_stack_size(item) {
+				   n > game.item_stack_size(w.server.registry, item) {
 					ok = false
 					break
 				}

@@ -54,14 +54,14 @@ State_Kind_Info :: struct {
 	max_records:   int, // at most this many records at a time (singletons: 1)
 	version:       u8, // bumped when a value keeps its type but changes meaning
 	predicted:     Predicted,
-	check:         proc(value: rawptr) -> bool, // what the types cannot say; nil if none
+	check:         proc(reg: ^Registry, value: rawptr) -> bool, // what the types cannot say; nil if none
 }
 
 Event_Kind_Info :: struct {
 	name:    string,
 	value:   typeid,
 	version: u8,
-	check:   proc(value: rawptr) -> bool,
+	check:   proc(reg: ^Registry, value: rawptr) -> bool,
 }
 
 Field_Type :: enum u8 {

@@ -368,9 +368,9 @@ flowing within the tick budget; CI runs it optimized too).
 ## Structures
 
 A template (`common/game/structure.odin`) is a box of cells, each a block or void (leave what is
-there); its .vxs file has a palette of block names and runs of cells. Shipped templates are
-`assets/structures/*.vxs`, built in-game and compiled into `worldgen` (generation reads no
-files). In an Earth world each structure kind has a set: cells of its spacing each decide by
+there); its .vxs file has a palette of block ids (`namespace:name`) and runs of cells. Shipped
+templates are the base pack's `server/structures/*.vxs` (`assets/packs/voxiverse/`), built
+in-game, compiled in and read through the registry (generation reads no files). In an Earth world each structure kind has a set: cells of its spacing each decide by
 a hash whether they hold one, where and turned how, so any chunk can work out the pieces
 reaching into it (`common/worldgen/structures.odin`); surface ones need flat land and get
 cobblestone foundations; trees keep clear; the column tops include them. Towers and dungeons

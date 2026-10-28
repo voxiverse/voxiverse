@@ -38,7 +38,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	defer if !stopped {stop(&srv)}
 	for !srv.listening {}
 	port := srv.host.socket.port
-	stone, dirt := game.item_of_block(.Stone), game.item_of_block(.Dirt)
+	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 
 	alice, bob: Net_Client
 	net_connect(&alice, port, "alice")
@@ -65,7 +65,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			cs[0].inv_acked == 1 &&
-			game.inventory_count(&cs[1].inventory, game.item_of_block(.Stone)) == 128 \
+			game.inventory_count(&cs[1].inventory, game.item_of_block(test_reg(), .Stone)) == 128 \
 		)
 	})
 	testing.expectf(t, ok, "bob has %d stone", game.inventory_count(&bob.inventory, stone))
@@ -83,14 +83,14 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			1 in cs[0].results &&
-			game.inventory_count(&cs[0].inventory, game.item_of_block(.Dirt)) == 63 \
+			game.inventory_count(&cs[0].inventory, game.item_of_block(test_reg(), .Dirt)) == 63 \
 		)
 	})
 	testing.expect(t, ok && alice.results[1].accepted, "placing did not use one up")
 	// She breaks it: it falls at her side; she picks it up.
 	net_send(&alice, game.Edit{2, alice.seq, beside, .Air})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
-		return game.inventory_count(&cs[0].inventory, game.item_of_block(.Dirt)) == 64
+		return game.inventory_count(&cs[0].inventory, game.item_of_block(test_reg(), .Dirt)) == 64
 	})
 	testing.expectf(
 		t,
@@ -150,43 +150,6 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	_ = want_count
 }
 
-// A world saved before players had files: their lines in world.cfg move
-// to players/<name>.json at the next save.
-@(test)
-test_players_move_to_their_files :: proc(t: ^testing.T) {
-	dir := filepath.join({"build", "test", "player_files"}, context.temp_allocator) or_else ""
-	os.remove_all(dir)
-	defer os.remove_all(dir)
-	os.make_directory_all(dir)
-	old := "format = 2\nseed = 7\ngenerator = classic\ntime = 0.3\nplayer.bea.x = 10.5\nplayer.bea.y = 40\nplayer.bea.z = -3.5\nplayer.bea.yaw = 1\nplayer.bea.pitch = 0.5\nplayer.bea.flying = true\n"
-	cfg := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else ""
-	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)old) == nil)
-	srv: Server
-	if !testing.expect(
-		t,
-		start(&srv, {seed = 1, view_radius = 2, view_height = 1, workers = 1, save_dir = dir}, {}),
-	) {return}
-	testing.expect_value(t, srv.home.params.biome_blend, 0) // (made before biomes blended)
-	testing.expect(t, stop(&srv))
-	data, err := os.read_entire_file_from_path(
-		filepath.join({dir, PLAYERS_DIR, "bea.json"}, context.temp_allocator) or_else "",
-		context.temp_allocator,
-	)
-	if !testing.expect(t, err == nil, "bea.json not written") {return}
-	r, ok := player_parse(data)
-	testing.expect(
-		t,
-		ok && r.state.position == {10.5, 40, -3.5} && r.state.flying && r.look == {1, 0.5},
-	)
-	testing.expect(t, !os.exists(cfg), "the world.cfg from before universes stayed")
-	universe, _ := os.read_entire_file_from_path(
-		filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else "",
-		context.temp_allocator,
-	)
-	testing.expect(t, !strings.contains(string(universe), "player."), "universe.cfg has players")
-	testing.expect(t, strings.contains(string(universe), "kit = stone 64"), string(universe))
-}
-
 // A player file from when inventories had 36 slots: what no longer fits
 // is kept to be dropped at their feet when they join.
 @(test)
@@ -203,9 +166,9 @@ test_old_inventory_fits :: proc(t: ^testing.T) {
 		strings.write_string(&b, `, "item": "stone", "count": 64}`)
 	}
 	strings.write_string(&b, "]}")
-	r, ok := player_parse(transmute([]u8)strings.to_string(b))
+	r, ok := player_parse(test_reg(), transmute([]u8)strings.to_string(b))
 	testing.expect(t, ok)
-	stone := game.item_of_block(.Stone)
+	stone := game.item_of_block(test_reg(), .Stone)
 	testing.expect_value(t, game.inventory_count(&r.inventory, stone), 64 * game.INVENTORY_SLOTS)
 	testing.expect_value(t, r.inventory.selected, game.HOTBAR_SLOTS - 1)
 	over := 0

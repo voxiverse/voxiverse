@@ -103,18 +103,18 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	infinite := allowed(s, c, "items.infinite")
 	tilling := e.block == .Farmland
 	if e.block == .Air {
-		ok = game.can_break(current)
+		ok = game.can_break(&s.registry.blocks, current)
 	} else if tilling {
 		// The hoe: farmland out of grass or dirt with air above.
 		above, _ := chunks_block(&w.chunks, e.pos + {0, 1, 0})
 		hoe := game.inventory_held(&c.inventory).item == game.item_of_tool(.Hoe)
-		ok = hoe && game.can_till(current, above)
+		ok = hoe && game.can_till(s.registry, current, above)
 	} else {
-		if !infinite {slot = game.inventory_placing_slot(&c.inventory, e.block)}
+		if !infinite {slot = game.inventory_placing_slot(s.registry, &c.inventory, e.block)}
 		ok =
 			(infinite || slot >= 0) &&
-			game.can_place(e.block) &&
-			game.can_place_at(current, e.block, e.pos, player) &&
+			game.can_place(&s.registry.blocks, e.block) &&
+			game.can_place_at(&s.registry.blocks, current, e.block, e.pos, player) &&
 			plant_placeable(w, e.pos, e.block) &&
 			!anyone_else_in(s, c, e.pos, e.block)
 	}
@@ -131,11 +131,11 @@ apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
 	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist, act)} 	// (everyone is told, the tiller too)
 	switch {
 	case e.block == .Air:
-		record(s, c, .Block_Mined, game.BLOCK_INFO[current].name, at = e.pos)
+		record(s, c, .Block_Mined, game.block_name(s.registry, current), at = e.pos)
 	case tilling:
 		record(s, c, .Item_Used, "hoe", at = e.pos)
 	case:
-		record(s, c, .Block_Placed, game.BLOCK_INFO[e.block].name, at = e.pos)
+		record(s, c, .Block_Placed, game.block_name(s.registry, e.block), at = e.pos)
 	}
 	if e.block == .Air {
 		broken_drop(s, c, e.pos, current)
@@ -171,7 +171,7 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 		if &other != c &&
 		   other.world == c.world &&
 		   other.state == .Playing &&
-		   !game.can_place_at(.Air, block, pos, other.player) {
+		   !game.can_place_at(&s.registry.blocks, .Air, block, pos, other.player) {
 			return true
 		}
 	}
@@ -181,7 +181,7 @@ anyone_else_in :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.
 // plant_placeable: block may be placed at pos: a plant only on what holds it.
 @(private)
 plant_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
-	if !game.block_is_plant(block) {return true}
+	if !game.block_is_plant(&w.server.registry.blocks, block) {return true}
 	below, loaded := chunks_block(&w.chunks, pos + {0, -1, 0})
-	return loaded && game.plant_supported(block, below)
+	return loaded && game.block_supported(&w.server.registry.blocks, block, below)
 }

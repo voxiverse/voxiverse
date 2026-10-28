@@ -1,5 +1,7 @@
 package game
 
+import "core:strings"
+
 // Items: what players carry. Every block players may place has its item;
 // tools are items of their own. An item's id is on the wire; saves use its
 // name. Ids are append-only like blocks': a block's item is its block id
@@ -80,53 +82,8 @@ Item_Info :: struct {
 	equip:     Maybe(Equip_Slot), // where it can be worn (armor)
 }
 
-@(rodata)
-ARMOR_INFO := [Armor]Item_Info {
-	.Cap = {
-		name = "cap",
-		stack = 1,
-		armor = .Cap,
-		equip = .Head,
-		modifiers = {{.Max_Health, 2}, {}},
-	},
-	.Tunic = {
-		name = "tunic",
-		stack = 1,
-		armor = .Tunic,
-		equip = .Chest,
-		modifiers = {{.Max_Health, 4}, {}},
-	},
-	.Trousers = {
-		name = "trousers",
-		stack = 1,
-		armor = .Trousers,
-		equip = .Legs,
-		modifiers = {{.Max_Health, 2}, {}},
-	},
-	.Boots = {
-		name = "boots",
-		stack = 1,
-		armor = .Boots,
-		equip = .Feet,
-		modifiers = {{.Speed, 0.1}, {.Jump, 0.1}},
-	},
-}
-
 item_of_armor :: proc(a: Armor) -> Item {
 	return ARMOR_ITEMS + Item(a)
-}
-
-@(rodata)
-TOOL_INFO := [Tool]Item_Info {
-	.Launcher = {name = "rocket_launcher", stack = 1, tool = .Launcher},
-	.Hoe = {name = "hoe", stack = 1, tool = .Hoe},
-}
-
-@(rodata)
-MATERIAL_INFO := [Material]Item_Info {
-	.Seeds = {name = "seeds", stack = 64, block = .Wheat_0}, // (placed with the right button, like a block)
-	.Wheat = {name = "wheat", stack = 64},
-	.Feather_Charm = {name = "feather_charm", stack = 1, modifiers = {{.Air_Jumps, 1}, {}}},
 }
 
 item_of_material :: proc(m: Material) -> Item {
@@ -135,15 +92,17 @@ item_of_material :: proc(m: Material) -> Item {
 
 // placing_item: the item a placed block uses up (a block's own, seeds for
 // the first stage of wheat; none for the rest).
-placing_item :: proc(b: Block) -> Item {
+placing_item :: proc(reg: ^Registry, b: Block) -> Item {
 	if b == .Wheat_0 {return item_of_material(.Seeds)}
-	return item_of_block(b)
+	return item_of_block(reg, b)
 }
 
 BLOCK_STACK :: 64
 
-item_of_block :: proc(b: Block) -> Item {
-	if !BLOCK_INFO[b].placeable {return NO_ITEM}
+// item_of_block: the item of a block players may place (a block's own
+// number + 1), else none.
+item_of_block :: proc(reg: ^Registry, b: Block) -> Item {
+	if !block_valid(&reg.blocks, u16(b)) || !block_has(&reg.blocks, b, .Placeable) {return NO_ITEM}
 	return Item(u16(b) + 1)
 }
 
@@ -151,76 +110,40 @@ item_of_tool :: proc(t: Tool) -> Item {
 	return TOOL_ITEMS + Item(t)
 }
 
-// item_info: what item i is; false if it is no item (or not one we know).
-item_info :: proc(i: Item) -> (Item_Info, bool) {
-	switch {
-	case i == NO_ITEM:
-		return {}, false
-	case i >= ARMOR_ITEMS:
-		a := int(i - ARMOR_ITEMS)
-		if a >= len(Armor) {return {}, false}
-		return ARMOR_INFO[Armor(a)], true
-	case i >= MATERIAL_ITEMS:
-		m := int(i - MATERIAL_ITEMS)
-		if m >= len(Material) {return {}, false}
-		return MATERIAL_INFO[Material(m)], true
-	case i >= TOOL_ITEMS:
-		t := int(i - TOOL_ITEMS)
-		if t >= len(Tool) {return {}, false}
-		return TOOL_INFO[Tool(t)], true
-	}
-	id := u16(i) - 1
-	if !block_valid(id) || !BLOCK_INFO[Block(id)].placeable {return {}, false}
-	b := Block(id)
-	return {name = BLOCK_INFO[b].name, stack = BLOCK_STACK, block = b}, true
-}
+// item_info: what item i is; false if it is no item here.
+item_info :: registry_item_info
 
-item_valid :: proc(i: Item) -> bool {
-	_, ok := item_info(i)
+item_valid :: proc(reg: ^Registry, i: Item) -> bool {
+	_, ok := registry_item_info(reg, i)
 	return ok
 }
 
-item_name :: proc(i: Item) -> string {
-	info, _ := item_info(i)
+// item_id: the item's id ("voxiverse:stone"): what files and packs say.
+item_id :: proc(reg: ^Registry, i: Item) -> string {
+	info, _ := registry_item_info(reg, i)
 	return info.name
 }
 
-item_stack_size :: proc(i: Item) -> int {
-	info, _ := item_info(i)
+// item_name: the item's name for people, logs and counters: its id without
+// the base pack's namespace ("stone"; "testpack:marble").
+item_name :: proc(reg: ^Registry, i: Item) -> string {
+	return strings.trim_prefix(item_id(reg, i), BASE_NAMESPACE + ":")
+}
+
+item_stack_size :: proc(reg: ^Registry, i: Item) -> int {
+	info, _ := registry_item_info(reg, i)
 	return info.stack
 }
 
-// item_by_name: the item called name ("stone", "rocket_launcher").
-item_by_name :: proc(name: string) -> (Item, bool) {
-	for t in Tool {if TOOL_INFO[t].name == name {return item_of_tool(t), true}}
-	for m in Material {if MATERIAL_INFO[m].name == name {return item_of_material(m), true}}
-	for a in Armor {if ARMOR_INFO[a].name == name {return item_of_armor(a), true}}
-	if b, ok := block_by_name(name); ok && BLOCK_INFO[b].placeable {return item_of_block(b), true}
-	return NO_ITEM, false
-}
+// item_by_name: the item with this id ("stone" is voxiverse:stone).
+item_by_name :: registry_item
 
-// every_item: all the items there are, in a stable order (blocks, tools, armor).
-every_item :: proc(allocator := context.temp_allocator) -> []Item {
-	items := make([dynamic]Item, allocator)
-	for b in Block {if i := item_of_block(b); i != NO_ITEM {append(&items, i)}}
-	for t in Tool {append(&items, item_of_tool(t))}
-	for m in Material {append(&items, item_of_material(m))}
-	for a in Armor {append(&items, item_of_armor(a))}
-	return items[:]
-}
+// every_item: all the items there are, in a stable order (blocks, tools,
+// materials, armor, then the packs').
+every_item :: registry_every_item
 
-// block_drop: the item breaking b leaves (none for what players may not
-// place: ores, plants, ice are data to give drops of their own later).
-block_drop :: proc(b: Block) -> Item {
-	switch {
-	case b == .Tall_Grass:
-		return NO_ITEM // (seeds, by chance: the server's)
-	case block_is_farmland(b):
-		return item_of_block(.Dirt)
-	}
-	if _, wheat := wheat_stage(b); wheat {return NO_ITEM} 	// (by stage: the server's)
-	return item_of_block(b)
-}
+// block_drop: the item breaking b leaves.
+block_drop :: registry_block_drop
 
 // Stack: some of one item (count 0: empty, item NO_ITEM).
 Stack :: struct {
@@ -233,10 +156,10 @@ stack_empty :: proc(s: Stack) -> bool {
 }
 
 // item_fits: whether stack may go in equipment slot e (empty always may).
-item_fits :: proc(stack: Stack, e: Equip_Slot) -> bool {
+item_fits :: proc(reg: ^Registry, stack: Stack, e: Equip_Slot) -> bool {
 	if stack_empty(stack) {return true}
 	if e == .Offhand {return true}
-	info, _ := item_info(stack.item)
+	info, _ := registry_item_info(reg, stack.item)
 	slot, has := info.equip.?
 	return has && slot == e
 }

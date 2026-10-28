@@ -233,7 +233,7 @@ test_record_without_block_dropped :: proc(t: ^testing.T) {
 	call(&srv, proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
 			rec := Container{}
-			rec.slots[3] = {game.item_of_block(.Planks), 5}
+			rec.slots[3] = {game.item_of_block(test_reg(), .Planks), 5}
 			s.worlds[0].containers[d.pos] = rec
 		}, &d)
 	pause(t, {&a}, 0.6)

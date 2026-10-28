@@ -13,8 +13,8 @@ SLOT_SIZE :: ui.Vec2{48, 48} // the hotbar's
 INVENTORY_SLOT :: ui.Vec2{44, 44} // the overlay's
 
 // item_title: an item's name as players read it ("rocket launcher").
-item_title :: proc(item: game.Item) -> string {
-	name, _ := strings.replace_all(game.item_name(item), "_", " ", context.temp_allocator)
+item_title :: proc(reg: ^game.Registry, item: game.Item) -> string {
+	name, _ := strings.replace_all(game.item_name(reg, item), "_", " ", context.temp_allocator)
 	return name
 }
 
@@ -23,6 +23,7 @@ item_title :: proc(item: game.Item) -> string {
 // selected.
 stack_slot :: proc(
 	ctx: ^ui.Context,
+	reg: ^game.Registry,
 	icons: ^Item_Icons,
 	r: ui.Rect,
 	stack: game.Stack,
@@ -51,7 +52,7 @@ stack_slot :: proc(
 		ui.draw_icon(ctx, ui.rect_center(inner, side, side), icon)
 	} else {
 		ui.push_clip_rect(ctx, inner)
-		title := item_title(stack.item)
+		title := item_title(reg, stack.item)
 		align := ui.Align.Center if ui.measure_text(ctx, title, small) <= inner.w else .Left
 		ui.draw_text(ctx, inner, title, small, t.text, align)
 		ui.pop_clip_rect(ctx)
@@ -323,7 +324,8 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	mouse := ctx.input.mouse
 	hovered := -1
 	items: []game.Item
-	if v.tab == .Creative {items = matching_items(string(app.inventory_search[:]))}
+	if v.tab ==
+	   .Creative {items = matching_items(app.session.reg, string(app.inventory_search[:]))}
 	at: ui.Rect // the pad's cursor
 	if pad {
 		at = inventory_pad(app, ctx, l, items, top)
@@ -332,7 +334,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	for r, i in l.slots {
 		if r.w == 0 {continue}
 		if !pad && ui.rect_contains(r, mouse) {hovered = i}
-		stack_slot(ctx, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
+		stack_slot(ctx, app.session.reg, &app.item_icons, r, game.slot_at(inv, i)^, i == hovered)
 		if i >= game.EQUIP_BASE && i < game.CHEST_BASE && game.stack_empty(game.slot_at(inv, i)^) {
 			small := ctx.theme.font_size * 0.6
 			ui.draw_text(
@@ -380,7 +382,11 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	if hovered >= 0 &&
 	   !game.stack_empty(game.slot_at(inv, hovered)^) &&
 	   game.stack_empty(inv.cursor) {
-		item_tooltip(ctx, item_title(game.slot_at(inv, hovered).item), at if pad else nil)
+		item_tooltip(
+			ctx,
+			item_title(app.session.reg, game.slot_at(inv, hovered).item),
+			at if pad else nil,
+		)
 	}
 	if !game.stack_empty(inv.cursor) {
 		held := ui.Rect {
@@ -390,7 +396,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 			INVENTORY_SLOT.y,
 		}
 		if pad {held = {at.x + at.w / 2, at.y - at.h / 2, at.w, at.h}}
-		stack_slot(ctx, &app.item_icons, held, inv.cursor, true)
+		stack_slot(ctx, app.session.reg, &app.item_icons, held, inv.cursor, true)
 	}
 }
 
@@ -540,7 +546,7 @@ catalog_ui :: proc(
 	defer {
 		ui.pop_clip_rect(ctx)
 		if hovered != game.NO_ITEM && game.stack_empty(s.inventory.cursor) {
-			item_tooltip(ctx, item_title(hovered), at if pad else nil)
+			item_tooltip(ctx, item_title(app.session.reg, hovered), at if pad else nil)
 		}
 	}
 	for k in first ..< len(items) {
@@ -549,7 +555,7 @@ catalog_ui :: proc(
 		slot := catalog_cell(r, gap, i)
 		over :=
 			v.cursor == CURSOR_CATALOG_BASE + k if pad else ui.rect_contains(slot, ctx.input.mouse)
-		stack_slot(ctx, &app.item_icons, slot, {items[k], 1}, over)
+		stack_slot(ctx, app.session.reg, &app.item_icons, slot, {items[k], 1}, over)
 		if over {hovered = items[k]}
 		if !pad && top && over && .Left in ctx.input.mouse_pressed {
 			session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(items[k])})
@@ -661,10 +667,10 @@ inventory_pad :: proc(
 // slot_takes: a slot a spread or a one-each drag may put into: empty, or
 // holding the cursor's item.
 @(private = "file")
-slot_takes :: proc(inv: ^game.Inventory, slot: int) -> bool {
+slot_takes :: proc(reg: ^game.Registry, inv: ^game.Inventory, slot: int) -> bool {
 	st := game.slot_at(inv, slot)^
 	return(
-		game.slot_accepts(slot, inv.cursor) &&
+		game.slot_accepts(reg, slot, inv.cursor) &&
 		(game.stack_empty(st) || st.item == inv.cursor.item) \
 	)
 }
@@ -729,7 +735,9 @@ inventory_mouse :: proc(app: ^App, ctx: ^ui.Context, panel: ui.Rect, hovered: in
 	case .Quick:
 		if entered && .Left in down {do_(s, .Quick_Move, hovered)}
 	case .One_Each:
-		if entered && .Right in down && slot_takes(inv, hovered) {do_(s, .Click_Right, hovered)}
+		if entered &&
+		   .Right in down &&
+		   slot_takes(s.reg, inv, hovered) {do_(s, .Click_Right, hovered)}
 	}
 
 	// Releases.
@@ -764,7 +772,7 @@ spread_stack :: proc(s: ^Session, v: ^Inventory_View) {
 	for i in 0 ..< game.ALL_SLOTS {
 		if !v.visited[i] {continue}
 		visited += 1
-		if slot_takes(inv, i) {append(&slots, i)}
+		if slot_takes(s.reg, inv, i) {append(&slots, i)}
 	}
 	if visited <= 1 {
 		session_inventory_do(s, {.Click, v.first, 0})
@@ -783,13 +791,13 @@ spread_stack :: proc(s: ^Session, v: ^Inventory_View) {
 
 // matching_items: the items whose names contain query (any case; every item
 // when it is empty).
-matching_items :: proc(query: string) -> []game.Item {
-	all := game.every_item()
+matching_items :: proc(reg: ^game.Registry, query: string) -> []game.Item {
+	all := game.every_item(reg)
 	if len(query) == 0 {return all}
 	q := strings.to_lower(query, context.temp_allocator)
 	found := make([dynamic]game.Item, context.temp_allocator)
 	for item in all {
-		name := strings.to_lower(item_title(item), context.temp_allocator)
+		name := strings.to_lower(item_title(reg, item), context.temp_allocator)
 		if strings.contains(name, q) {append(&found, item)}
 	}
 	return found[:]

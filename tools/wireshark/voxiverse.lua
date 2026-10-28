@@ -125,7 +125,7 @@ local SCHEMA = {
     { name = "flags", t = "bits" },
   } },
   { id = 12, name = "block", key = "block", lane = "reliable", fields = {
-    { name = "block", t = "enum", signed = false },
+    { name = "block", t = "u16" },
     { name = "heard", t = "bool" },
   } },
   { id = 13, name = "place", key = "none", lane = "reliable", fields = {

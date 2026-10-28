@@ -118,7 +118,7 @@ changes_flush :: proc(w: ^World) {
 			chunk := game.chunk_of(p)
 			if who == i || chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
 			b, _ := chunks_block(&w.chunks, p)
-			record := game.Block_Record{b, who >= 0}
+			record := game.Block_Record{u16(b), who >= 0}
 			state_put(s, &c, .Block, &record, game.key_of_block(p))
 		}
 	}

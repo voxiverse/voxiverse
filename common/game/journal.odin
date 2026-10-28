@@ -137,13 +137,11 @@ journal_write_header :: proc(w: ^Writer, h: Journal_Header) {
 	write_u32(w, hash.crc32(w.buf[start:]))
 }
 
-@(private = "file")
 write_fixed64 :: proc(w: ^Writer, v: u64) {
 	write_u32(w, u32(v))
 	write_u32(w, u32(v >> 32))
 }
 
-@(private = "file")
 read_fixed64 :: proc(r: ^Reader) -> u64 {
 	lo := u64(read_u32(r))
 	return lo | u64(read_u32(r)) << 32
@@ -225,6 +223,7 @@ Segment_Read :: struct {
 // with each good record, and stops at the first bad or short one (a torn
 // tail). Strings and slices in a record are valid during the call only.
 journal_read_segment :: proc(
+	reg: ^Registry,
 	data: []u8,
 	visit: proc(user: rawptr, rec: Journal_Record),
 	user: rawptr = nil,
@@ -269,7 +268,7 @@ journal_read_segment :: proc(
 			u32(data[at + total - 2]) << 16 |
 			u32(data[at + total - 1]) << 24
 		if hash.crc32(record) != crc {break}
-		rec, ok := decode_record(Journal_Record_Type(type), record[body_at:])
+		rec, ok := decode_record(reg, Journal_Record_Type(type), record[body_at:])
 		if !ok {break}
 		if visit != nil {visit(user, rec)}
 		at += total
@@ -282,13 +281,14 @@ journal_read_segment :: proc(
 
 @(private = "file")
 decode_record :: proc(
+	reg: ^Registry,
 	type: Journal_Record_Type,
 	payload: []u8,
 ) -> (
 	rec: Journal_Record,
 	ok: bool,
 ) {
-	r := reader_make(payload)
+	r := reader_make(payload, reg)
 	switch type {
 	case .Tick:
 		v: Journal_Tick
@@ -334,8 +334,8 @@ decode_record :: proc(
 			   index >= CHUNK_VOLUME ||
 			   old > 0xffff ||
 			   new > 0xffff ||
-			   !block_valid(u16(old)) ||
-			   !block_valid(u16(new)) ||
+			   !block_valid(&reg.blocks, u16(old)) ||
+			   !block_valid(&reg.blocks, u16(new)) ||
 			   action < 0 ||
 			   action > i64(max(u32)) ||
 			   how >= len(Edit_System) {return}

@@ -12,7 +12,7 @@ World :: struct {
 query :: proc(w: ^World) -> Block_Query {
 	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
 			return .Stone if p in (^World)(data).solid else .Air, true
-		}}
+		}, test_blocks()}
 }
 
 @(private = "file")

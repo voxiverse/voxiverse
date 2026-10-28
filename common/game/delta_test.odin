@@ -102,7 +102,7 @@ Link :: struct {
 link_init :: proc(l: ^Link, schema: ^Schema, loss := 0, seed := u64(7)) {
 	l.schema = schema
 	sender_init(&l.tx, schema)
-	receiver_init(&l.rx, schema)
+	receiver_init(&l.rx, schema, test_reg())
 	replica_init(&l.view, schema)
 	l.rng = base.rng_make(seed)
 	l.loss = loss
@@ -683,7 +683,7 @@ valid_messages :: proc(l: ^Link) -> (state, snapshot: []u8) {
 @(private = "file")
 fresh_rx :: proc(s: ^Schema) -> Receiver {
 	rx: Receiver
-	receiver_init(&rx, s)
+	receiver_init(&rx, s, test_reg())
 	return rx
 }
 

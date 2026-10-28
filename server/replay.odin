@@ -70,8 +70,8 @@ journal_replay :: proc(w: ^World, snapshot_dir: string, since: u64) -> (r: Repla
 				e.pos.z,
 				e.action,
 				e.how,
-				game.BLOCK_INFO[e.old].name,
-				game.BLOCK_INFO[blocks[l]].name,
+				game.block_name(w.server.registry, e.old),
+				game.block_name(w.server.registry, blocks[l]),
 			)
 		}
 		blocks[l] = e.new
@@ -110,8 +110,8 @@ journal_replay :: proc(w: ^World, snapshot_dir: string, since: u64) -> (r: Repla
 					p.x,
 					p.y,
 					p.z,
-					game.BLOCK_INFO[live[i]].name,
-					game.BLOCK_INFO[replayed[i]].name,
+					game.block_name(w.server.registry, live[i]),
+					game.block_name(w.server.registry, replayed[i]),
 				)
 				break
 			}
@@ -161,7 +161,7 @@ read_snapshot_region :: proc(
 		) or_else name
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return chunks}
-	r, open_err := game.region_open(data, region)
+	r, open_err := game.region_open(w.server.registry, data, region)
 	if open_err != .None {return chunks}
 	for {
 		scratch := new(game.Block_Array, context.temp_allocator)
@@ -182,7 +182,7 @@ live_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> (blocks: ^game.Block_Array
 		return out, true
 	}
 	if bytes, saved := w.saved[pos]; saved {
-		r := game.reader_make(bytes)
+		r := game.reader_make(bytes, w.server.registry)
 		uniform, is_uniform := game.read_chunk_blocks(&r, out)
 		if is_uniform {for &b in out {b = uniform}}
 		return out, r.ok

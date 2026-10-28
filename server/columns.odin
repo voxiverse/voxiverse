@@ -81,7 +81,7 @@ column_message :: proc(w: ^World, column: [2]i32) -> game.Column {
 // column_edited updates the top of p's column after the block at p changed
 // to b; true if it changed.
 column_edited :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	old := column_top(w, p.x, p.z)
 	return column_set(
 		w,
@@ -96,7 +96,7 @@ column_edited :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 // reached up to y = from (anything above the old top and from is air);
 // true if it changed.
 column_rescan :: proc(w: ^World, x, z: i32, from: i32) -> bool {
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	old := column_top(w, x, z)
 	return column_set(
 		w,

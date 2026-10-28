@@ -151,11 +151,12 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_C
 	Tops_Put :: struct {
 		origin: [2]i32,
 		out:    ^Tops,
+		table:  ^game.Block_Table,
 	}
-	put := Tops_Put{origin, out}
+	put := Tops_Put{origin, out, &gen.reg.blocks}
 	pieces := make([dynamic]Piece, context.temp_allocator)
 	pieces_in(gen, origin, &pieces)
-	if len(pieces) > 0 {pieces_tops(p, pieces[:], cols, origin, out)}
+	if len(pieces) > 0 {pieces_tops(p, &gen.reg.blocks, pieces[:], cols, origin, out)}
 	for t in trees {
 		tree_shape(gen.seed, t, &put, proc(data: rawptr, p: game.Block_Pos, b: game.Block) {
 			tp := (^Tops_Put)(data)
@@ -164,7 +165,7 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_C
 			   z < 0 ||
 			   x >= game.CHUNK_SIZE ||
 			   z >= game.CHUNK_SIZE ||
-			   !game.block_shades(b) {return}
+			   !game.block_shades(tp.table, b) {return}
 			i := x + z * game.CHUNK_SIZE
 			tp.out[i] = max(tp.out[i], p.y)
 		})
@@ -268,9 +269,9 @@ earth_generate :: proc(
 			   plain >= p.sea_level {plant(p, seed, col, origin, dst, x, plain, z)}
 		}
 	}
-	if len(pieces) > 0 {pieces_write(pieces[:], cols, origin, dst)}
+	if len(pieces) > 0 {pieces_write(&gen.reg.blocks, pieces[:], cols, origin, dst)}
 	for t in trees {tree_write(seed, t, origin, dst)}
-	if len(pieces) > 0 {clear_unsupported_plants(dst)}
+	if len(pieces) > 0 {clear_unsupported_plants(&gen.reg.blocks, dst)}
 
 	first := dst[0]
 	for b in dst {if b != first {return {}, false}}
@@ -279,13 +280,14 @@ earth_generate :: proc(
 
 // clear_unsupported_plants removes the plants a structure's floor was laid
 // under (the server would break them at the first change beside them).
-clear_unsupported_plants :: proc(dst: ^game.Block_Array) {
+clear_unsupported_plants :: proc(t: ^game.Block_Table, dst: ^game.Block_Array) {
 	for z in i32(0) ..< game.CHUNK_SIZE {
 		for x in i32(0) ..< game.CHUNK_SIZE {
 			for y in i32(1) ..< game.CHUNK_SIZE {
 				i := game.local_index({x, y, z})
-				if game.block_is_plant(dst[i]) &&
-				   !game.plant_supported(
+				if game.block_is_plant(t, dst[i]) &&
+				   !game.block_supported(
+						   t,
 						   dst[i],
 						   dst[game.local_index({x, y - 1, z})],
 					   ) {dst[i] = .Air}
@@ -469,6 +471,7 @@ floor_div :: proc(a, b: i32) -> i32 {
 // land (where it has no overhangs).
 @(private = "file")
 pieces_write :: proc(
+	t: ^game.Block_Table,
 	pieces: []Piece,
 	cols: ^Columns,
 	origin: game.Block_Pos,
@@ -479,7 +482,7 @@ pieces_write :: proc(
 		for x in i32(0) ..< game.CHUNK_SIZE {
 			wx, wz := origin.x + x, origin.z + z
 			col := &cols[z][x]
-			bottom, under := foundation_under(pieces, wx, wz)
+			bottom, under := foundation_under(t, pieces, wx, wz)
 			plain := i32(math.floor(col.height))
 			for y in i32(0) ..< game.CHUNK_SIZE {
 				p := game.Block_Pos{wx, origin.y + y, wz}
@@ -499,7 +502,14 @@ pieces_write :: proc(
 // stand (out holds the land's): the highest block that shades, of the
 // structures, their foundations, the land and the sea under them.
 @(private = "file")
-pieces_tops :: proc(p: ^Params, pieces: []Piece, cols: ^Columns, origin: [2]i32, out: ^Tops) {
+pieces_tops :: proc(
+	p: ^Params,
+	t: ^game.Block_Table,
+	pieces: []Piece,
+	cols: ^Columns,
+	origin: [2]i32,
+	out: ^Tops,
+) {
 	for z in i32(0) ..< game.CHUNK_SIZE {
 		for x in i32(0) ..< game.CHUNK_SIZE {
 			wx, wz := origin.x + x, origin.y + z
@@ -515,10 +525,10 @@ pieces_tops :: proc(p: ^Params, pieces: []Piece, cols: ^Columns, origin: [2]i32,
 			land := out[i]
 			col := &cols[z][x]
 			plain := i32(math.floor(col.height))
-			bottom, under := foundation_under(pieces, wx, wz)
+			bottom, under := foundation_under(t, pieces, wx, wz)
 			for y := max(highest, land); y > game.WORLD_MIN_Y; y -= 1 {
 				if b, ok := piece_at(pieces, {wx, y, wz}); ok {
-					if game.block_shades(b) {
+					if game.block_shades(t, b) {
 						out[i] = y
 						break
 					}

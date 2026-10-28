@@ -37,7 +37,7 @@ test_place_record :: proc(t: ^testing.T) {
 	) {return}
 	defer stop(&srv)
 	for !srv.listening {}
-	gen := worldgen.generator_make(.Earth, srv.home.seed, srv.home.params)
+	gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
 	desert, found := worldgen.locate(&gen, .Desert, 0, 0, 8192)
 	ocean, found_ocean := worldgen.locate(&gen, .Ocean, 0, 0, 8192)
 	if !testing.expect(t, found && found_ocean, "the test seed has a desert and an ocean") {return}

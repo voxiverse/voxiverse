@@ -64,7 +64,7 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 	game.receive(c.endpoint, &packets)
 	for p in packets {
 		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch)
+		m, ok := game.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok, "server sent an invalid message") {continue}
 		if c.rx.schema.kinds == nil {state_rx_init(&c.rx, context.temp_allocator)}
 		switch v in m {

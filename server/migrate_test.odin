@@ -1,20 +1,13 @@
 package server
 
 import "core:fmt"
+import "core:log"
 import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:testing"
 
-import "../base"
 import "../common/game"
-
-// The fixtures: a universe saved by an older format's code, committed under
-// assets/fixtures/save-v<N>/ with the expect.txt of what it holds, so the
-// migrations are tested from real files (docs/saves.md).
-
-FIXTURE_WRITE :: #config(VX_FIXTURE_WRITE, false)
-FIXTURE_V4 :: "assets/fixtures/save-v4"
 
 // fixture_expect: what a loaded fixture must hold, as expect.txt's text: the
 // hash of the chunks around its center, the character's inventory, the chests.
@@ -26,7 +19,7 @@ fixture_expect :: proc(g: ^Grief) -> string {
 	cl := grief_client(g)
 	for st, i in cl.inventory.slots {
 		if game.stack_empty(st) {continue}
-		fmt.sbprintfln(&b, "inventory %d %s %d", i, game.item_name(st.item), st.count)
+		fmt.sbprintfln(&b, "inventory %d %s %d", i, game.item_name(test_reg(), st.item), st.count)
 	}
 	w := grief_world(g)
 	for pos, rec in w.containers {
@@ -39,49 +32,12 @@ fixture_expect :: proc(g: ^Grief) -> string {
 				pos.y,
 				pos.z,
 				i,
-				game.item_name(st.item),
+				game.item_name(test_reg(), st.item),
 				st.count,
 			)
 		}
 	}
 	return strings.to_string(b)
-}
-
-// Run once, by hand, with today's code of the format: writes the fixture.
-@(test)
-test_write_v4_fixture :: proc(t: ^testing.T) {
-	if !FIXTURE_WRITE {return}
-	dir := scratch_dir("fixture_v4")
-	defer delete(dir)
-	defer os.remove_all(dir)
-	cfg := grief_config(dir)
-	cfg.no_sheep = false
-	g, ok := grief_open(t, dir, cfg)
-	if !ok {grief_close(g); return}
-	defer grief_close(g)
-	grief_build(g)
-	cmd(g, "protect add house %s", box(g, {3, -1, -2}, {7, 3, 2}))
-	home := g.f
-	for far in ([]game.Block_Pos{{600, 0, 0}, {0, 0, 600}}) {
-		cmd(g, "tp %d %d %d", home.x + far.x, home.y, home.z + far.z)
-		run(g, 300)
-		p := grief_client(g).player.position
-		cmd(g, "setblock %d %d %d stone", i32(p.x), i32(p.y) - 1, i32(p.z))
-		run(g, 30)
-	}
-	cmd(g, "tp %d %d %d", home.x, home.y, home.z)
-	run(g, 300)
-	w := grief_world(g)
-	grief_locate(g)
-	e := entity_spawn(w, .Item, {f64(home.x) + 0.5, f64(home.y) + 1, f64(home.z) + 5.5}, false)
-	if e != nil {e.stack = {game.item_of_block(.Stone), 7}}
-	entity_spawn(w, .Sheep, {f64(home.x) + 0.5, f64(home.y) + 1, f64(home.z) - 6.5}, false)
-	run(g, 20)
-	testing.expect(t, save(grief_srv(g)), "the save failed")
-	expect := fixture_expect(g)
-	os.remove_all(FIXTURE_V4)
-	copy_tree(dir, FIXTURE_V4)
-	_ = os.write_entire_file(fmt.tprintf("%s/expect.txt", FIXTURE_V4), transmute([]u8)expect)
 }
 
 // copy_tree copies directory from into to (made), files and directories.
@@ -172,72 +128,52 @@ fixture_matches :: proc(t: ^testing.T, g: ^Grief, expect: []string) {
 	testing.expect_value(t, i, len(expect))
 }
 
-@(test)
-test_v4_save_migrates :: proc(t: ^testing.T) {
-	dir := fmt.aprintf("build/test_migrate_v4")
-	defer delete(dir)
-	defer os.remove_all(dir)
-	g, expect, ok := open_fixture(t, FIXTURE_V4, dir)
-	if !ok {grief_close(g); return}
-	defer grief_close(g)
-	defer free_lines(expect)
-	testing.expect_value(t, g.sess.srv.store.format, SAVE_FORMAT)
-	fixture_matches(t, g, expect[:])
-	text, _ := os.read_entire_file_from_path(
-		fmt.tprintf("%s/universe.cfg", dir),
-		context.temp_allocator,
-	)
-	testing.expect(
-		t,
-		strings.contains(string(text), "format = 5"),
-		"universe.cfg still says the old format",
-	)
-	testing.expect(
-		t,
-		os.exists(fmt.tprintf("%s/backups/pre-migration-4/universe.cfg", dir)),
-		"no backup",
-	)
-}
-
 free_lines :: proc(lines: [dynamic]string) {
 	for l in lines {delete(l)}
 	delete(lines)
 }
 
-// The registry is a chain: sorted, contiguous from the first format it knows,
-// ending at the current one.
+// The registry is a chain: sorted, contiguous, ending at the current format
+// (empty while nothing is migrated: before 1.0 older saves are refused).
 @(test)
 test_migrations_are_a_chain :: proc(t: ^testing.T) {
-	testing.expect_value(t, MIGRATIONS[0].from, LEGACY_FORMAT)
 	for m, i in MIGRATIONS {
-		testing.expect_value(t, m.from, LEGACY_FORMAT + i)
 		testing.expect(t, m.name != "" && m.run != nil, "a migration needs a name and a run")
+		if i > 0 {testing.expect_value(t, m.from, MIGRATIONS[i - 1].from + 1)}
 	}
-	testing.expect_value(t, MIGRATIONS[len(MIGRATIONS) - 1].from + 1, SAVE_FORMAT)
+	next := SAVE_FORMAT
+	for m in MIGRATIONS {next = m.from + 1}
+	testing.expect_value(t, next, SAVE_FORMAT)
 }
 
-// A migration that fails commits nothing, and the save opens afterwards.
+// A universe of an older format (or from before universes) is refused with
+// the reason; nothing of it is touched.
 @(test)
-test_failed_migration_changes_nothing :: proc(t: ^testing.T) {
-	dir := "build/test_migrate_fail"
-	os.remove_all(dir)
-	defer os.remove_all(dir)
-	copy_tree(FIXTURE_V4, dir)
-	before := state_digest(dir)
-	disk := base.Disk{}
-	failing := []Migration{{5, "fails", proc(m: ^Migrator) -> bool {
-				mig_write(m, "universe.cfg", transmute([]u8)string("garbage"))
-				m.why = "boom"
-				return false
-			}}}
-	res := migrate_universe(dir, &disk, 4, 0, failing)
-	testing.expect(t, !res.ok, "it should have failed")
-	testing.expect_value(t, res.why, "boom")
-	testing.expect_value(t, state_digest(dir), before)
-	os.remove(fmt.tprintf("%s/expect.txt", dir))
-	g, expect, ok := open_fixture(t, FIXTURE_V4, dir)
-	defer free_lines(expect)
-	if !ok {grief_close(g); return}
-	defer grief_close(g)
-	fixture_matches(t, g, expect[:])
+test_older_save_is_refused :: proc(t: ^testing.T) {
+	for case_, i in ([]struct {
+			file, text: string,
+		}{{UNIVERSE_FILE, "format = 5\nseed = 7\n"}, {WORLD_FILE, "format = 4\nseed = 7\n"}}) {
+		dir := fmt.tprintf("build/test_older_save_%d", i)
+		os.remove_all(dir)
+		defer os.remove_all(dir)
+		os.make_directory_all(dir)
+		path := fmt.tprintf("%s/%s", dir, case_.file)
+		testing.expect(t, os.write_entire_file(path, transmute([]u8)case_.text) == nil)
+		srv: Server
+		config := Config {
+			seed        = 7,
+			view_radius = 2,
+			view_height = 1,
+			workers     = 1,
+			stepped     = true,
+			save_dir    = dir,
+		}
+		{
+			context.logger = log.nil_logger() // (the refusal is the point)
+			testing.expect(t, !start(&srv, config, {}), "an older save was opened")
+		}
+		testing.expect_value(t, srv.refusal, OLDER_BUILD)
+		data, _ := os.read_entire_file_from_path(path, context.temp_allocator)
+		testing.expect_value(t, string(data), case_.text)
+	}
 }

@@ -38,7 +38,7 @@ slice_digest :: proc(dir: string) -> (digest: u64, character: string) {
 	for rel in files {
 		if !strings.has_prefix(rel, "characters/") {continue}
 		data, _ := os.read_entire_file_from_path(full_path(dir, rel), context.temp_allocator)
-		r, ok := player_parse(data)
+		r, ok := player_parse(test_reg(), data)
 		if !ok {continue}
 		character = fmt.aprintf("%v %v %v", r.state.position, r.look, r.inventory.slots)
 		counters_free(&r.stats)
@@ -71,7 +71,7 @@ region_diff :: proc(x, y: []u8) -> string {
 				i32(b[2]) << 16 |
 				i32(b[3]) << 24 \
 			)}
-		r, _ := game.region_open(data, {le(data[8:]), le(data[12:])})
+		r, _ := game.region_open(test_reg(), data, {le(data[8:]), le(data[12:])})
 		for e in r.index {
 			m[e.pos] = string(r.payloads[e.offset:][:e.length])
 		}

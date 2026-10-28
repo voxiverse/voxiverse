@@ -1,8 +1,7 @@
 package worldgen
 
-import "base:runtime"
+
 import "core:math"
-import "core:sync"
 
 import "../game"
 
@@ -109,7 +108,7 @@ structure_in_cell :: proc(gen: ^Generator, k: int, cell: [2]i32) -> (s: Structur
 	case .Tower:
 		size = {7, 13 + i32(h2 >> 8) % 12, 7}
 	case .Ruin, .Well:
-		t := shipped(set.kind) or_return
+		t := shipped(gen, set.kind) or_return
 		size = game.rotated_size(t.size, s.rotation)
 	case .Dungeon:
 		size = {40, 7, 40}
@@ -203,7 +202,7 @@ overlaps_earlier :: proc(gen: ^Generator, k: int, s: Structure) -> bool {
 }
 
 // structure_pieces appends what s is made of.
-structure_pieces :: proc(s: Structure, out: ^[dynamic]Piece) {
+structure_pieces :: proc(gen: ^Generator, s: Structure, out: ^[dynamic]Piece) {
 	switch s.kind {
 	case .Tower:
 		append(
@@ -211,7 +210,7 @@ structure_pieces :: proc(s: Structure, out: ^[dynamic]Piece) {
 			Piece{kind = .Tower, lo = s.lo, hi = s.hi, rotation = s.rotation, foundation = true},
 		)
 	case .Ruin, .Well:
-		t, _ := shipped(s.kind)
+		t, _ := shipped(gen, s.kind)
 		append(
 			out,
 			Piece {
@@ -372,7 +371,7 @@ tower_block :: proc(piece: ^Piece, l, size: [3]i32) -> (game.Block, int) {
 pieces_in :: proc(gen: ^Generator, origin: [2]i32, out: ^[dynamic]Piece) {
 	structures := make([dynamic]Structure, context.temp_allocator)
 	structures_near(gen, origin, origin + game.CHUNK_SIZE - 1, &structures)
-	for s in structures {structure_pieces(s, out)}
+	for s in structures {structure_pieces(gen, s, out)}
 }
 
 // piece_at: the block the pieces put at p (the heaviest wins; ties: the
@@ -408,7 +407,14 @@ near_piece :: proc(pieces: []Piece, x, y, z: i32, margin: i32) -> bool {
 
 // foundation_under: the pieces want a foundation under (x, z) from
 // below their bottom; the y it starts below (false: none).
-foundation_under :: proc(pieces: []Piece, x, z: i32) -> (bottom: i32, ok: bool) {
+foundation_under :: proc(
+	t: ^game.Block_Table,
+	pieces: []Piece,
+	x, z: i32,
+) -> (
+	bottom: i32,
+	ok: bool,
+) {
 	for &piece in pieces {
 		if !piece.foundation ||
 		   x < piece.lo.x ||
@@ -416,32 +422,17 @@ foundation_under :: proc(pieces: []Piece, x, z: i32) -> (bottom: i32, ok: bool) 
 		   x > piece.hi.x ||
 		   z > piece.hi.z {continue}
 		b, w := piece_block(&piece, {x, piece.lo.y, z})
-		if w > 0 && game.block_collides(b) {return piece.lo.y, true}
+		if w > 0 && game.block_collides(t, b) {return piece.lo.y, true}
 	}
 	return
 }
 
-// The shipped templates the sets use, decoded the first time any is
-// needed (by whichever thread: Once).
+// shipped: the template of a kind the sets use (the registry's own copy).
 @(private = "file")
-templates: [Structure_Kind]Maybe(game.Template)
-@(private = "file")
-templates_once: sync.Once
-
-@(private = "file")
-shipped :: proc(kind: Structure_Kind) -> (^game.Template, bool) {
-	sync.once_do(
-		&templates_once,
-		proc() {
-			for kind in Structure_Kind {
-				// Kept for good: on the heap, whichever thread asks first.
-				t, ok := shipped_template(STRUCTURE_NAMES[kind], runtime.heap_allocator())
-				if ok {templates[kind] = t}
-			}
-		},
-	)
-	if _, ok := templates[kind].?; !ok {return nil, false}
-	return &templates[kind].?, true
+shipped :: proc(gen: ^Generator, kind: Structure_Kind) -> (^game.Template, bool) {
+	index := gen.shipped[kind]
+	if index < 0 {return nil, false}
+	return &gen.reg.structures[index].template, true
 }
 
 structure_by_name :: proc(name: string) -> (Structure_Kind, bool) {

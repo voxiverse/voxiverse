@@ -50,13 +50,14 @@ avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 	for _, &o in s.others {
 		v, ok := other_view(&o, now)
 		if !ok {continue}
-		avatar_draw(d, v.position, v.yaw, v.pitch, v.crouched, shirt_of(o.name), o.worn)
+		avatar_draw(s.reg, d, v.position, v.yaw, v.pitch, v.crouched, shirt_of(o.name), o.worn)
 	}
 }
 
 // avatar_draw adds one avatar standing at p (feet): legs, a body that turns
 // with it, a head that also looks up and down, and what it wears.
 avatar_draw :: proc(
+	reg: ^game.Registry,
 	d: ^render.Entity_Draw,
 	p: [3]f64,
 	yaw, pitch: f32,
@@ -74,7 +75,7 @@ avatar_draw :: proc(
 	// Armor: slightly larger boxes over the parts.
 	G :: f32(0.03)
 	for item in worn {
-		info, known := game.item_info(item)
+		info, known := game.item_info(reg, item)
 		armor, is_armor := info.armor.?
 		if !known || !is_armor {continue}
 		c := ARMOR_COLORS[armor]

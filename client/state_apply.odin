@@ -55,8 +55,8 @@ apply_own_player :: proc(s: ^Session, g: game.Received) {
 		&s.prediction,
 		v,
 		&s.rules,
-		{&s.world, world_block},
-		game.derive_mods(&s.inventory),
+		{&s.world, world_block, &s.reg.blocks},
+		game.derive_mods(s.reg, &s.inventory),
 		teleported,
 	)
 	if teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
@@ -197,12 +197,13 @@ apply_block :: proc(s: ^Session, g: game.Received) {
 	v := (^game.Block_Record)(g.value)
 	p := game.key_block(g.key)
 	if !v.heard {
-		world_set_block(&s.world, p, v.block) // the world's own changes (flowing water): quietly
+		world_set_block(&s.world, p, game.Block(v.block)) // the world's own changes (flowing water): quietly
 		return
 	}
 	// Someone else's edit: heard where it happened.
 	old, _ := world_block(&s.world, p)
-	if world_set_block(&s.world, p, v.block) && old != v.block {edit_sound(s, p, old, v.block)}
+	block := game.Block(v.block)
+	if world_set_block(&s.world, p, block) && old != block {edit_sound(s, p, old, block)}
 }
 
 @(private)

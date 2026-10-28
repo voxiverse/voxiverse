@@ -17,7 +17,7 @@ column_scan :: proc(query: Block_Query, x, z, from: i32, natural: Maybe(i32)) ->
 			top, known := natural.?
 			return min(top, y) if known else y
 		}
-		if block_shades(block) {return y}
+		if block_shades(query.table, block) {return y}
 	}
 	return WORLD_MIN_Y
 }
@@ -31,7 +31,7 @@ column_top_after :: proc(
 	b: Block,
 	natural: Maybe(i32),
 ) -> i32 {
-	if block_shades(b) {return max(old, p.y)}
+	if block_shades(query.table, b) {return max(old, p.y)}
 	if p.y == old {return column_scan(query, p.x, p.z, p.y - 1, natural)} 	// the top went
 	return old
 }

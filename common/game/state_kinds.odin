@@ -93,7 +93,7 @@ Entity_Motion :: struct {
 // Block_Record: a block that changed. heard: another player's edit (a sound);
 // else the world's own change (flowing water), quietly.
 Block_Record :: struct {
-	block: Block,
+	block: u16, // a block number (any pack's): check_block_record asks the registry
 	heard: bool,
 }
 
@@ -177,7 +177,13 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		locate = locate_entity_motion,
 		check = check_entity_motion,
 	},
-	.Block = {name = "block", value = Block_Record, key = .Block, write_through = true},
+	.Block = {
+		name = "block",
+		value = Block_Record,
+		key = .Block,
+		write_through = true,
+		check = check_block_record,
+	},
 	.Place = {name = "place", value = Place, check = check_place},
 }
 
@@ -226,7 +232,7 @@ look_ok :: proc(yaw, pitch: f32) -> bool {
 }
 
 @(private = "file")
-check_own_player :: proc(v: rawptr) -> bool {
+check_own_player :: proc(reg: ^Registry, v: rawptr) -> bool {
 	o := (^Own_Player)(v)
 	s := o.state
 	for x in s.velocity {if !(abs(x) <= MAX_SPEED) {return false}}
@@ -234,28 +240,28 @@ check_own_player :: proc(v: rawptr) -> bool {
 }
 
 @(private = "file")
-check_health :: proc(v: rawptr) -> bool {
+check_health :: proc(reg: ^Registry, v: rawptr) -> bool {
 	h := (^Health)(v)
 	return h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max
 }
 
 @(private = "file")
-check_inventory :: proc(v: rawptr) -> bool {
-	return inventory_valid(&(^Inventory_State)(v).inventory)
+check_inventory :: proc(reg: ^Registry, v: rawptr) -> bool {
+	return inventory_valid(reg, &(^Inventory_State)(v).inventory)
 }
 
 @(private = "file")
-check_rules :: proc(v: rawptr) -> bool {
+check_rules :: proc(reg: ^Registry, v: rawptr) -> bool {
 	return rules_valid((^Rules)(v))
 }
 
 @(private = "file")
-check_clock :: proc(v: rawptr) -> bool {
+check_clock :: proc(reg: ^Registry, v: rawptr) -> bool {
 	return time_valid((^Clock)(v).time)
 }
 
 @(private = "file")
-check_selection :: proc(v: rawptr) -> bool {
+check_selection :: proc(reg: ^Registry, v: rawptr) -> bool {
 	for corner in (^Selection)(v).corners {
 		if p, set := corner.?; set && !in_world(chunk_of(p)) {return false}
 	}
@@ -263,39 +269,44 @@ check_selection :: proc(v: rawptr) -> bool {
 }
 
 @(private = "file")
-check_player_record :: proc(v: rawptr) -> bool {
+check_player_record :: proc(reg: ^Registry, v: rawptr) -> bool {
 	p := (^Player_Record)(v)
 	if !name_valid(p.name) {return false}
-	for item in p.worn {if item != NO_ITEM && !item_valid(item) {return false}}
+	for item in p.worn {if item != NO_ITEM && !item_valid(reg, item) {return false}}
 	return true
 }
 
 @(private = "file")
-check_player_motion :: proc(v: rawptr) -> bool {
+check_player_motion :: proc(reg: ^Registry, v: rawptr) -> bool {
 	m := (^Player_Motion)(v)
 	return position_ok(m.position) && look_ok(m.yaw, m.pitch)
 }
 
 @(private = "file")
-check_entity_record :: proc(v: rawptr) -> bool {
+check_entity_record :: proc(reg: ^Registry, v: rawptr) -> bool {
 	st := (^Entity_Record)(v).stack
-	return st.count >= 0 && (st.item == NO_ITEM || item_valid(st.item))
+	return st.count >= 0 && (st.item == NO_ITEM || item_valid(reg, st.item))
 }
 
 @(private = "file")
-check_entity_motion :: proc(v: rawptr) -> bool {
+check_entity_motion :: proc(reg: ^Registry, v: rawptr) -> bool {
 	m := (^Entity_Motion)(v)
 	return position_ok(m.position) && look_ok(m.yaw, m.pitch)
 }
 
 @(private = "file")
-check_explosion :: proc(v: rawptr) -> bool {
+check_explosion :: proc(reg: ^Registry, v: rawptr) -> bool {
 	x := (^Explosion)(v)
 	return position_ok(x.position) && x.radius >= 0 && x.radius <= 64
 }
 
 @(private = "file")
-check_place :: proc(v: rawptr) -> bool {
+check_block_record :: proc(reg: ^Registry, v: rawptr) -> bool {
+	return block_valid(&reg.blocks, (^Block_Record)(v).block)
+}
+
+@(private = "file")
+check_place :: proc(reg: ^Registry, v: rawptr) -> bool {
 	p := (^Place)(v)
 	return(
 		(p.biome < MAX_BIOMES || p.biome == NO_BIOME) &&

@@ -42,6 +42,7 @@ Session_Config :: struct {
 	no_sheep:     bool, // (hosting) none appear by themselves: benchmarks
 	still_clouds: bool, // the clouds stay where they start: benchmarks
 	upload:       Maybe(server.Upload), // (hosting) send its event log to a collector
+	registry:     ^game.Registry, // the game's own (the base pack): what a remote server must match
 }
 
 // Join: a server to play on.
@@ -79,10 +80,12 @@ Session :: struct {
 	characters:       [dynamic]string, // the account's, to choose from (heap; Choosing)
 	commands:         [dynamic]string, // the server commands it may use (heap, for Tab)
 	chat:             [dynamic]Chat_Entry, // the lines kept (heap; chat.odin)
-	texels:           [mesh.Texture][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
+	texels:           [mesh.Texture_Generator][mesh.TEXTURE_SIZE * mesh.TEXTURE_SIZE]mesh.Rgba, // block textures, for debris
 	render_clock:     Render_Clock, // when to show the others (players.odin)
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          game.Welcome,
+	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
+	reg_owned:        bool, // reg is the universe's own (freed with the session)
 	world:            World, // set up from Welcome
 	world_init:       bool,
 	camera:           View, // the eyes, from the prediction; looking turns it every frame
@@ -171,7 +174,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.scratch = new(game.Block_Array, arena)
 	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
 	s.schema = game.game_schema()
-	game.receiver_init(&s.rx, &s.schema)
+	s.reg = config.registry
+	game.receiver_init(&s.rx, &s.schema, s.reg)
 	s.received = make([dynamic]game.Packet, 0, 256)
 	s.edits = make([dynamic]game.Edit, 0, MAX_PENDING_EDITS, arena)
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
@@ -202,6 +206,10 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	// Our own world: its server here, through the pipe.
 	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
 	s.endpoint = {&s.pipe, .Client}
+	if own := server.registry_for_dir(config.save_dir); own != nil {
+		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
+		game.receiver_init(&s.rx, &s.schema, s.reg)
+	}
 	if !server.start(
 	&s.server,
 	{
@@ -219,7 +227,8 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	},
 	{&s.pipe, .Server},
 	) {
-		fail(s, "the world could not start (the log says why)")
+		reason := s.server.refusal if s.server.refusal != "" else "the log says why"
+		fail(s, fmt.tprintf("the world could not start: %s", reason))
 		return false
 	}
 	if config.trace {session_trace(s)}
@@ -303,6 +312,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 		f64(s.stats.bytes_received) / (1 << 20),
 		f64(s.arena.total_used) / (1 << 20),
 	)
+	if s.reg_owned {game.registry_destroy(s.reg)}
 	virtual.arena_destroy(&s.arena)
 	s^ = {}
 	return ok
@@ -360,7 +370,7 @@ session_update :: proc(
 	// Fixed ticks, like the server's; a long hitch is not caught up on.
 	s.tick_time += dt
 	if s.tick_time > 4 * game.TICK_SECONDS {s.tick_time = game.TICK_SECONDS}
-	query := game.Block_Query{&s.world, world_block}
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
 	for s.tick_time >= game.TICK_SECONDS {
 		s.tick_time -= game.TICK_SECONDS
 		in_ :=
@@ -374,7 +384,7 @@ session_update :: proc(
 			in_,
 			&s.rules,
 			query,
-			game.derive_mods(&s.inventory),
+			game.derive_mods(s.reg, &s.inventory),
 		)
 		sent.snapshot = s.rx.ack
 		send_message(s, sent)

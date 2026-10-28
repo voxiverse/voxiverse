@@ -211,11 +211,11 @@ test_import_refuses_sizes_and_versions :: proc(t: ^testing.T) {
 		strings.contains(problem, "too many"),
 		"more files than the limit were accepted",
 	)
-	// A universe from a newer game, and an older one (it migrates when opened).
+	// A universe from a newer game, and an older one (it is refused when opened).
 	newer, left := import_of("newer", vxu_bytes({{"universe.cfg", "x"}}, SAVE_FORMAT + 1))
 	testing.expect(t, strings.contains(newer, "newer game"), "a newer universe was accepted")
 	testing.expect(t, !left, "something of the import was left")
-	problem, _ = import_of("older", vxu_bytes({{"universe.cfg", "x"}}, LEGACY_FORMAT))
+	problem, _ = import_of("older", vxu_bytes({{"universe.cfg", "x"}}, SAVE_FORMAT - 1))
 	testing.expect_value(t, problem, "")
 }
 
@@ -258,31 +258,4 @@ test_import_refuses_damaged_files :: proc(t: ^testing.T) {
 	// Not an export at all.
 	problem, _ = import_of("magic", transmute([]u8)string("hello, this is not a universe"))
 	testing.expect(t, problem != "", "a file that is not an export was accepted")
-}
-
-@(test)
-test_v4_export_imports_and_migrates :: proc(t: ^testing.T) {
-	src := "build/test_export_v4_src"
-	file := "build/test_export_v4.vxu"
-	dest := "build/test_export_v4_dest"
-	open := "build/test_export_v4_open"
-	for d in ([]string{src, dest, open}) {os.remove_all(d)}
-	defer for d in ([]string{src, dest, open}) {os.remove_all(d)}
-	defer os.remove(file)
-	copy_tree(FIXTURE_V4, src)
-	expect, _ := os.read_entire_file_from_path(
-		fmt.tprintf("%s/expect.txt", src),
-		context.temp_allocator,
-	)
-	os.remove(fmt.tprintf("%s/expect.txt", src))
-	disk := base.Disk{}
-	testing.expectf(t, universe_export(src, file, &disk) == "", "the export failed")
-	testing.expectf(t, universe_import(file, dest, &disk) == "", "the import failed")
-	_ = os.write_entire_file(fmt.tprintf("%s/expect.txt", dest), expect)
-	g, lines, ok := open_fixture(t, dest, open)
-	defer grief_close(g)
-	defer free_lines(lines)
-	if !ok {return}
-	testing.expect_value(t, g.sess.srv.store.format, SAVE_FORMAT)
-	fixture_matches(t, g, lines[:])
 }

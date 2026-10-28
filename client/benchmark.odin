@@ -248,7 +248,7 @@ bench_update :: proc(app: ^App) {
 		}
 		if b.scenario.kind == .Edits {
 			// The ground at fixed places round the spawn (the world is fixed).
-			query := game.Block_Query{&s.world, world_block}
+			query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
 			for &t, k in b.targets {
 				angle := f64(k) * 2 * math.PI / BENCH_EDITS
 				x := SCRATCH_SPAWN.x + BENCH_EDIT_RING * math.cos(angle)

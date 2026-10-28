@@ -83,7 +83,7 @@ landing_tick :: proc(s: ^Server, c: ^Client) -> bool {
 	w := c.world
 	l, waiting := c.landing.?
 	if !waiting {return false}
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	from := l.position
 	if l.mode == .Ground {
 		// From above everything the column has.

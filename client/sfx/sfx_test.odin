@@ -99,10 +99,12 @@ test_base_sounds_match :: proc(t: ^testing.T) {
 		)
 	}
 	for b in game.Block {
-		m, has := material_of(b)
+		m, has := frozen_material_of(b)
 		set := reg.blocks.defs[b].sound
 		if has {
 			testing.expectf(t, set == i32(m), "%v sound %d vs %v", b, set, m)
+			got, ok := material_of(reg, b)
+			testing.expectf(t, ok && got == m, "%v sounds like %v, not %v", b, got, m)
 		} else {
 			testing.expectf(t, set == game.NO_SOUND, "%v is silent", b)
 		}

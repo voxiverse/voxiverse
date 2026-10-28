@@ -1,6 +1,7 @@
 package client
 
 import "core:fmt"
+import "core:log"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
@@ -760,6 +761,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	// With a session: the characters, the loading screen, the game menu, the
 	// dial and the chat.
 	s := r.s
+	s.reg = test_reg()
 	app.session = s
 	app.screen = .Game
 	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
@@ -822,7 +824,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect(t, overlay_is_open(&app.overlays, .Dial))
 	pad_tap(app, .A)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Dial))
-	m, decoded := game.decode_client(s.writer.buf[:])
+	m, decoded := game.decode_client(s.writer.buf[:], test_reg())
 	_, is_dial := m.(game.Dial)
 	testing.expect(t, decoded && is_dial, "no Dial sent")
 	clear(&s.writer.buf)
@@ -836,7 +838,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(app.chat.text[:]), "hi")
 	pad_tap(app, .Start)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Chat))
-	m, decoded = game.decode_client(s.writer.buf[:])
+	m, decoded = game.decode_client(s.writer.buf[:], test_reg())
 	said, is_chat := m.(game.Chat)
 	testing.expect(t, decoded && is_chat, "no chat line sent")
 	testing.expect_value(t, said.text, "hi")
@@ -951,4 +953,37 @@ test_music_gap_option :: proc(t: ^testing.T) {
 		)
 	}
 	free_all(context.temp_allocator)
+}
+
+// A server whose content is not ours is refused with the packs we lack.
+@(test)
+test_welcome_with_other_content_is_refused :: proc(t: ^testing.T) {
+	s := new(Session)
+	defer free(s)
+	s.reg = test_reg()
+	s.state = .Connecting
+	testing.expect(t, virtual.arena_init_growing(&s.arena) == nil)
+	defer virtual.arena_destroy(&s.arena)
+	context.logger = log.nil_logger() // (the refusal is logged: the point)
+	welcome(
+		s,
+		game.Welcome {
+			protocol = game.PROTOCOL_VERSION,
+			tick_rate = game.TICK_RATE,
+			view_radius = 4,
+			view_height = 2,
+			content = s.reg.hash + 1,
+			packs = fmt.tprintf(
+				"%s@%s,testpack@2.0.1",
+				s.reg.packs[0].namespace,
+				s.reg.packs[0].version,
+			),
+		},
+	)
+	testing.expect_value(t, s.state, Session_State.Failed)
+	testing.expect_value(
+		t,
+		s.failure,
+		"this server uses content packs this game does not have: testpack@2.0.1",
+	)
 }

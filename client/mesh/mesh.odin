@@ -109,49 +109,19 @@ Shape :: enum u8 {
 	Cross,
 }
 
-// block_shape: how a block is drawn (a switch, so a new block does not
-// compile until it says).
-block_shape :: proc(b: game.Block) -> (Shape, Layer) {
-	switch b {
-	case .Air:
-		return .None, .Opaque
-	case .Stone,
-	     .Dirt,
-	     .Grass,
-	     .Sand,
-	     .Gravel,
-	     .Bedrock,
-	     .Lamp,
-	     .Snow,
-	     .Ice,
-	     .Clay,
-	     .Sandstone,
-	     .Log,
-	     .Spruce_Log,
-	     .Coal_Ore,
-	     .Iron_Ore,
-	     .Copper_Ore,
-	     .Cactus,
-	     .Cobblestone,
-	     .Stone_Bricks,
-	     .Planks,
-	     .Chest,
-	     .Wool,
-	     .Wool_Black,
-	     .Farmland,
-	     .Farmland_Moist,
-	     .Gate_Ring,
-	     .Gate_Chevron,
-	     .Gate_Chevron_Lit:
-		return .Cube, .Opaque
-	case .Leaves, .Spruce_Leaves, .Glass:
-		return .Cube, .Cutout
-	case .Tall_Grass, .Poppy, .Dandelion, .Wheat_0 ..= .Wheat_7:
-		return .Cross, .Cutout
-	case .Water, .Water_1 ..= .Water_7, .Water_Falling, .Gate_Horizon:
-		return .Cube, .Translucent
+// block_shape: how a block is drawn, from the registry (its render and layer).
+block_shape :: proc(t: ^game.Block_Table, b: game.Block) -> (Shape, Layer) {
+	def := &t.defs[b]
+	shape: Shape
+	switch def.render {
+	case .Cube:
+		shape = .Cube
+	case .Cross:
+		shape = .Cross
+	case .None:
+		shape = .None
 	}
-	return .None, .Opaque
+	return shape, Layer(def.layer)
 }
 
 // The two diagonal planes of a Cross, as face codes after the six cube
@@ -185,6 +155,7 @@ counts_layer :: proc(c: Counts, layer: Layer) -> (n: int) {
 // layer by layer, each layer's quads by face group. light may be nil:
 // everything fully lit by the sky (tests).
 mesh_chunk :: proc(
+	reg: ^game.Registry,
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
@@ -199,14 +170,14 @@ mesh_chunk :: proc(
 			for z in i32(0) ..< game.CHUNK_SIZE {
 				for x in i32(0) ..< game.CHUNK_SIZE {
 					b := s[snapshot_index(x, y, z)]
-					shape, l := block_shape(b)
+					shape, l := block_shape(&reg.blocks, b)
 					if l != layer {continue}
 					switch shape {
 					case .None:
 					case .Cube:
-						cube_faces(s, light, out, {x, y, z}, b, layer)
+						cube_faces(reg, s, light, out, {x, y, z}, b, layer)
 					case .Cross:
-						cross_quads(s, light, out, {x, y, z}, b)
+						cross_quads(reg, s, light, out, {x, y, z}, b)
 					}
 				}
 			}
@@ -383,6 +354,7 @@ lower_tilled :: proc(quads: []Vertex) {
 // opaque block (nor, for a liquid, against more of it).
 @(private = "file")
 cube_faces :: proc(
+	reg: ^game.Registry,
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
@@ -393,15 +365,15 @@ cube_faces :: proc(
 	for axes, face in FACE_AXES {
 		front := p + axes.normal
 		n := s[snapshot_index(front.x, front.y, front.z)]
-		if game.block_opaque(n) {continue}
+		if game.block_opaque(&reg.blocks, n) {continue}
 		_, water := game.water_level(b)
 		_, water_beside := game.water_level(n)
 		if water && water_beside {continue} 	// inside the same body of water
-		if b == .Glass && n == .Glass {continue} 	// one pane
+		if b == n && game.block_has(&reg.blocks, b, .Cull_Same) {continue} 	// one pane (glass)
 		tilled := game.block_is_farmland(b)
 		if tilled && game.block_is_farmland(n) {continue} 	// (not opaque, but as good as)
 		first := len(out)
-		emit_face(s, light, out, p, face, axes, block_texture(b, face))
+		emit_face(reg, s, light, out, p, face, axes, block_texture(reg, b, face))
 		if tilled {for &v in out[first:] {v.layer |= TILLED}}
 		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);
 		   water && !under_water {
@@ -440,6 +412,7 @@ water_drop :: proc(s: ^Snapshot, c: [3]i32) -> u32 {
 // lit by its own cell.
 @(private = "file")
 cross_quads :: proc(
+	reg: ^game.Registry,
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
@@ -451,8 +424,8 @@ cross_quads :: proc(
 		l := light[snapshot_index(p.x, p.y, p.z)]
 		sky, block = u32(l >> 4), u32(l & 15)
 	}
-	block = max(block, u32(game.block_light(b)))
-	layer := block_texture(b, .Pos_X)
+	block = max(block, u32(game.block_light(&reg.blocks, b)))
+	layer := block_texture(reg, b, .Pos_X)
 	PLANES :: [2][4][3]i32 {
 		{{0, 0, 0}, {1, 0, 1}, {1, 1, 1}, {0, 1, 0}},
 		{{1, 0, 0}, {0, 0, 1}, {0, 1, 1}, {1, 1, 0}},
@@ -476,6 +449,7 @@ cross_quads :: proc(
 
 @(private = "file")
 emit_face :: proc(
+	reg: ^game.Registry,
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
 	out: ^[dynamic]Vertex,
@@ -484,8 +458,8 @@ emit_face :: proc(
 	axes: Face_Axes,
 	layer: u32,
 ) {
-	solid :: #force_inline proc(s: ^Snapshot, p: [3]i32) -> int {
-		return 1 if game.block_opaque(s[snapshot_index(p.x, p.y, p.z)]) else 0
+	solid :: #force_inline proc(t: ^game.Block_Table, s: ^Snapshot, p: [3]i32) -> int {
+		return 1 if game.block_opaque(t, s[snapshot_index(p.x, p.y, p.z)]) else 0
 	}
 	front := p + axes.normal
 	// The face's plane: the far side of the block for positive normals.
@@ -495,12 +469,12 @@ emit_face :: proc(
 	for corner, i in CORNERS {
 		du := axes.u if corner[0] == 1 else -axes.u
 		dv := axes.v if corner[1] == 1 else -axes.v
-		side1, side2 := solid(s, front + du), solid(s, front + dv)
-		corner_solid := solid(s, front + du + dv)
+		side1, side2 := solid(&reg.blocks, s, front + du), solid(&reg.blocks, s, front + dv)
+		corner_solid := solid(&reg.blocks, s, front + du + dv)
 		level := 0 if side1 == 1 && side2 == 1 else 3 - side1 - side2 - corner_solid
 		ao[i] = u32(level)
 		sky, block := corner_light(light, front, du, dv, side1 == 1, side2 == 1, corner_solid == 1)
-		emits := u32(game.block_light(s[snapshot_index(p.x, p.y, p.z)]))
+		emits := u32(game.block_light(&reg.blocks, s[snapshot_index(p.x, p.y, p.z)]))
 		block = max(block, emits) // a light's own faces are as bright as it
 		v := base + corner[0] * axes.u + corner[1] * axes.v
 		quad[i] = {

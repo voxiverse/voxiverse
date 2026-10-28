@@ -31,12 +31,12 @@ Mods :: struct {
 MODS_NONE :: Mods{1, 1, 0, BASE_HEALTH}
 
 // derive_mods: what inv's equipment makes of a character.
-derive_mods :: proc(inv: ^Inventory) -> (m: Mods) {
+derive_mods :: proc(reg: ^Registry, inv: ^Inventory) -> (m: Mods) {
 	m = MODS_NONE
 	air := f32(0)
 	for st in inv.equipment {
 		if stack_empty(st) {continue}
-		info, _ := item_info(st.item)
+		info, _ := item_info(reg, st.item)
 		for mod in info.modifiers {
 			switch mod.kind {
 			case .Speed:

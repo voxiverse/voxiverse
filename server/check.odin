@@ -17,6 +17,7 @@ Check_Report :: struct {
 	format:     int,
 	generation: u64,
 	problems:   [dynamic]string, // (temp allocator)
+	reg:        ^game.Registry, // the universe's packs, built to read its files
 }
 
 @(private = "file")
@@ -40,6 +41,7 @@ text_value :: proc(text, key: string) -> (value: string, found: bool) {
 universe_check :: proc(dir: string) -> (r: Check_Report) {
 	r.problems = make([dynamic]string, context.temp_allocator)
 	check_universe(&r, dir)
+	if r.reg != nil {game.registry_destroy(r.reg)}
 	r.ok = len(r.problems) == 0
 	return
 }
@@ -67,6 +69,14 @@ check_universe :: proc(r: ^Check_Report, dir: string) {
 	}
 	if v, ok := text_value(text, "generation"); ok {r.generation, _ = strconv.parse_u64(v, 10)}
 	if r.format > SAVE_FORMAT {problem(r, "format %d is newer than this game's", r.format)}
+	if r.format < SAVE_FORMAT {problem(r, "format %d: %s", r.format, OLDER_BUILD)}
+	packs_text, _ := text_value(text, "packs")
+	reg, why := packs_registry(dir, packs_parse(packs_text, context.temp_allocator))
+	if reg == nil {
+		for p in why {problem(r, "packs: %s", p)}
+		return
+	}
+	r.reg = reg
 	if _, ok := text_value(text, "home"); !ok {problem(r, "%s has no home world", UNIVERSE_FILE)}
 	worlds, _ := os.read_all_directory_by_path(full_path(dir, WORLDS_DIR), context.temp_allocator)
 	for e in worlds {
@@ -151,7 +161,7 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 			case len(seg) < offset:
 				problem(r, "%s is shorter (%d) than the save says (%d)", rel, len(seg), offset)
 			case:
-				read := game.journal_read_segment(seg[:offset], nil)
+				read := game.journal_read_segment(r.reg, seg[:offset], nil)
 				if read.status != .Whole {problem(r, "%s is damaged before byte %d", rel, offset)}
 			}
 		}
@@ -173,12 +183,7 @@ check_region :: proc(r: ^Check_Report, dir, rel, name: string) {
 		return
 	}
 	region := game.Region_Pos{i32(x), i32(z)}
-	if r.format < 5 {
-		if _, err := game.region_open_v1(data, region);
-		   err != .None {problem(r, "%s is damaged (%v)", rel, err)}
-		return
-	}
-	rr, rerr := game.region_open(data, region)
+	rr, rerr := game.region_open(r.reg, data, region, true)
 	if rerr != .None {
 		problem(r, "%s is damaged (%v)", rel, rerr)
 		return

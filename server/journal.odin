@@ -405,7 +405,7 @@ journal_resume :: proc(w: ^World) {
 			continue
 		}
 		last = seq
-		if seq == r.segment {journal_cut(path, r.offset)}
+		if seq == r.segment {journal_cut(w.server.registry, path, r.offset)}
 	}
 	j.seq = last
 	if last > 0 { 	// (a save records where the journal ends: here, until something is written)
@@ -417,13 +417,13 @@ journal_resume :: proc(w: ^World) {
 // journal_cut truncates a segment to offset (or to its last good record when
 // the file is shorter than the save says).
 @(private = "file")
-journal_cut :: proc(path: string, saved: u64) {
+journal_cut :: proc(reg: ^game.Registry, path: string, saved: u64) {
 	offset := saved
 	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
 	if err != nil {return}
 	size := u64(len(data))
 	if size < offset {
-		read := game.journal_read_segment(data, nil)
+		read := game.journal_read_segment(reg, data, nil)
 		log.warnf(
 			"server journal segment is shorter than its save path=%s have=%d saved=%d",
 			path,
@@ -631,11 +631,11 @@ Loading :: struct {
 segment_load :: proc(w: ^World, seq: u32) -> (seg: Loaded_Segment, ok: bool) {
 	data, err := os.read_entire_file_from_path(segment_path(w, seq), context.temp_allocator)
 	if err != nil {return}
-	return segment_decode(data)
+	return segment_decode(w.server.registry, data)
 }
 
 // segment_decode decodes a segment's bytes (temp allocator).
-segment_decode :: proc(data: []u8) -> (seg: Loaded_Segment, ok: bool) {
+segment_decode :: proc(reg: ^game.Registry, data: []u8) -> (seg: Loaded_Segment, ok: bool) {
 	seg.entries = make([dynamic]game.Journal_Entry, context.temp_allocator)
 	seg.actions = make(map[u32]Action_Info, 16, context.temp_allocator)
 	seg.params = make([dynamic]u64, context.temp_allocator)
@@ -643,7 +643,7 @@ segment_decode :: proc(data: []u8) -> (seg: Loaded_Segment, ok: bool) {
 		seg    = &seg,
 		actors = make(map[u32]Actor_Entry, 16, context.temp_allocator),
 	}
-	r := game.journal_read_segment(data, proc(user: rawptr, rec: game.Journal_Record) {
+	r := game.journal_read_segment(reg, data, proc(user: rawptr, rec: game.Journal_Record) {
 			l := cast(^Loading)user
 			switch v in rec {
 			case game.Journal_Tick:

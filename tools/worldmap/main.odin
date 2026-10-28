@@ -60,13 +60,14 @@ main :: proc() {
 		out  = "build/worldmap.png",
 	}
 	flags.parse_or_exit(&opts, os.args, .Odin)
+	game_registry := game.registry_base()
 	if opts.scale <= 0 {opts.scale = max(1, opts.size / 1024)}
 	width := opts.size / opts.scale
 	if width <= 0 {
 		fmt.eprintln("worldmap: -size must be at least -scale")
 		os.exit(1)
 	}
-	gen := worldgen.generator_make(.Earth, opts.seed)
+	gen := worldgen.generator_make(.Earth, opts.seed, game_registry)
 	if opts.bench > 0 {
 		bench(&gen, &opts)
 		return

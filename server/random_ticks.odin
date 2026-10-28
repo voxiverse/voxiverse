@@ -45,7 +45,7 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	if !loaded {return}
 	switch {
 	case b == .Grass:
-		if game.block_opaque(above) {
+		if game.block_opaque(&w.server.registry.blocks, above) {
 			set_block(w, p, .Dirt, world_act(w, .Random_Tick)) // buried
 			return
 		}
@@ -62,7 +62,7 @@ random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 			if !t_loaded || tb != .Dirt {continue}
 			over, over_loaded := chunks_block(&w.chunks, t + {0, 1, 0})
 			if !over_loaded ||
-			   game.block_opaque(over) ||
+			   game.block_opaque(&w.server.registry.blocks, over) ||
 			   light_above(w, t + {0, 1, 0}) < 9 {continue}
 			set_block(w, t, .Grass, world_act(w, .Random_Tick))
 		}

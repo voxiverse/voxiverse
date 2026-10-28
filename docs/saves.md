@@ -108,10 +108,17 @@ OS drops a lock with its process, so a crash leaves none.
 
 ## Formats
 
-`SAVE_FORMAT` (5) is in `universe.cfg` and each `world.cfg`. Region format 2 has a header
-with an index (position, offset, length and CRC per chunk) and a CRC of the header: a bad
-chunk drops only itself; a bad header moves the file aside and loads the region from the
-newest backup that has it whole (logged, with what is lost). Text files and character JSON
+`SAVE_FORMAT` (6) is in `universe.cfg` and each `world.cfg`. Region format 3 has a header
+with the names of the blocks (every block of the registry, by its number: the ids), an
+index (position, offset, length and CRC per chunk) and a CRC of the header: a bad chunk
+drops only itself; a bad header moves the file aside and loads the region from the
+newest backup that has it whole (logged, with what is lost). The chunks hold block
+numbers; the header says which block each number was, so a registry whose numbers moved
+(another pack set, a pack ahead of another) still loads them. A name the registry lacks
+refuses the world at start, naming the blocks, unless `universe.cfg` says
+`unknown_blocks = air` (they load as air). The edit journal stores numbers, which are
+fixed for a universe: its packs are listed in `universe.cfg` (`packs = a, b`, the
+directories `packs/<namespace>/`; the base pack is always first and never listed). Text files and character JSON
 have no checksums: people edit them, and the transaction makes them whole.
 
 ## Migrations
@@ -121,17 +128,17 @@ Opening an older save makes a `pre-migration-<from>` backup, runs every entry fr
 on one `Migrator` (writes are staged, not made), then commits all of it as one
 transaction. A failing entry commits nothing and the open fails with its reason.
 
-Rules:
+`MIGRATIONS` is empty: before 1.0 nothing is compatible, so M47a (format 6) did not
+migrate format 5 (nor the formats from before universes, which it used to upgrade in
+memory): a universe of an older format is refused with `this world was made by an older
+build; create a new one`, and nothing of it is touched. The chain stays for the first
+release that must keep saves; its rules then are:
 
 - A migration reads only files of its `from` format, with readers frozen beside it (never
-  the current reader, which will change: `common/game/save_v1.odin` is region format 1).
+  the current reader, which will change).
 - A migration is never edited once released.
-- It is tested from a committed fixture of its `from` format (`assets/fixtures/save-v4`,
-  written by the code of format 4; `test_v4_save_migrates`). Fixtures are `-text` in
-  `.gitattributes`.
-- Formats 1-3 predate universes and are upgraded in memory by the format-4 readers.
-
-The next entry is M47's names palette.
+- It is tested from a committed fixture of its `from` format (written by the code of that
+  format). Fixtures are `-text` in `.gitattributes`.
 
 ## Backups
 

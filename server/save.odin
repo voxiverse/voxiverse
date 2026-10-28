@@ -3,6 +3,7 @@ package server
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
 import "core:strconv"
@@ -39,11 +40,10 @@ ENTITIES_FILE :: "entities.cfg"
 // 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3:
 // players in players/ (player_data.odin); 4: a universe of worlds; 5 (M46):
 // regions with a checksum per chunk, saves as transactions (save_tx.odin),
-// migrations in a registry (migrate.odin).
-SAVE_FORMAT :: 5
-// LEGACY_FORMAT: what a directory from before universes becomes first (and
-// the registry's first migration then takes it on).
-LEGACY_FORMAT :: 4
+// migrations in a registry (migrate.odin); 6 (M47a): regions name their
+// blocks, universes list their packs. Older ones are refused (no migration
+// before 1.0).
+SAVE_FORMAT :: 6
 LEGACY_PLAYER :: "Player"
 
 Store :: struct {
@@ -69,6 +69,9 @@ Store :: struct {
 	serial:         u32, // ids of saves, for copy-on-write marks
 	slice_worst_us: i64, // the largest slice of the last save (save_slice.odin)
 	slice_hold:     bool, // tests: the ticks do not encode (save_finish does)
+	unknown_air:    bool, // universe.cfg's `unknown_blocks = air`: blocks the packs no longer define load as air (else the world is refused)
+	kit_text:       string, // universe.cfg's `kit`, parsed when the registry exists
+	packs:          []string, // universe.cfg's `packs`: the namespaces besides the base pack
 }
 
 // store_open reads the universe's files if dir has them (its seed and the
@@ -106,8 +109,9 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		read_universe_file(s, string(data), universe) or_return
 		home.seed, home.generator = s.config.seed, s.config.generator
 	case os.exists(legacy):
-		migrate_world_dir(s, legacy) or_return
-		return store_migrate(s)
+		s.refusal = OLDER_BUILD
+		log.errorf("server %s path=%s", OLDER_BUILD, legacy)
+		return false
 	case:
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
 		home.address = game.address_derive(u64(s.config.seed))
@@ -168,50 +172,6 @@ world_dir_open :: proc(w: ^World) -> bool {
 	return read_world_file(w, string(data), path)
 }
 
-// migrate_world_dir: a directory from before universes becomes one, its
-// world the home world.
-@(private = "file")
-migrate_world_dir :: proc(s: ^Server, legacy: string) -> bool {
-	home := s.home
-	data, err := os.read_entire_file_from_path(legacy, context.temp_allocator)
-	if err != nil {
-		log.errorf("server cannot read path=%s error=%v", legacy, err)
-		return false
-	}
-	read_universe_file(s, string(data), legacy) or_return
-	read_world_file(home, string(data), legacy) or_return
-	s.config.seed, s.config.generator = home.seed, home.generator
-	home.address = game.address_derive(u64(s.config.seed))
-	dir := s.store.dir
-	world_dir :=
-		filepath.join(
-			{dir, WORLDS_DIR, game.address_dir(home.address)},
-			context.temp_allocator,
-		) or_else ""
-	if dir_err := os.make_directory_all(world_dir); dir_err != nil && dir_err != .Exist {
-		log.errorf("server cannot create the world directory dir=%s error=%v", world_dir, dir_err)
-		return false
-	}
-	for name in ([]string{"regions", ENTITIES_FILE, CONTAINERS_FILE}) {
-		from := filepath.join({dir, name}, context.temp_allocator) or_else name
-		to := filepath.join({world_dir, name}, context.temp_allocator) or_else name
-		if !os.exists(from) {continue}
-		if move_err := os.rename(from, to); move_err != nil {
-			log.errorf("server cannot move path=%s to=%s error=%v", from, to, move_err)
-			return false
-		}
-	}
-	home.dir = strings.clone(world_dir)
-	os.make_directory_all(
-		filepath.join({world_dir, "regions"}, context.temp_allocator) or_else world_dir,
-	)
-	if !write_universe_file(s, LEGACY_FORMAT) ||
-	   !write_world_file(home, LEGACY_FORMAT) {return false}
-	s.store.format = LEGACY_FORMAT
-	os.remove(legacy)
-	log.infof("server world became a universe dir=%s home=%s", dir, game.address_dir(home.address))
-	return true
-}
 
 store_close :: proc(s: ^Server) {
 	st := &s.store
@@ -238,7 +198,7 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	bytes, edited := w.saved[pos]
 	if !edited {return chunks_request(&w.chunks, pos)}
 	scratch := new(game.Block_Array, context.temp_allocator)
-	r := game.reader_make(bytes)
+	r := game.reader_make(bytes, w.server.registry)
 	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
 	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch)
 	origin := game.chunk_origin(pos)
@@ -344,6 +304,11 @@ load_region :: proc(w: ^World, region: game.Region_Pos) {
 		return
 	}
 	open_err, ok := region_ingest(w, data, region, path)
+	if open_err == .Unknown_Blocks {
+		// (not damage: the packs changed; start refused this unless it says air)
+		log.errorf("server region names blocks the packs do not define, not loaded path=%s", path)
+		return
+	}
 	if !ok {
 		aside := fmt.tprintf("%s.damaged-%d", path, time.time_to_unix(time.now()))
 		os.rename(path, aside)
@@ -371,7 +336,7 @@ region_ingest :: proc(
 	ok: bool,
 ) {
 	r: game.Region_Reader
-	r, open_err = game.region_open(data, region)
+	r, open_err = game.region_open(w.server.registry, data, region, w.server.store.unknown_air)
 	scratch := new(game.Block_Array, context.temp_allocator)
 	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
 	ok = open_err == .None
@@ -450,7 +415,10 @@ write_universe_file :: proc(s: ^Server, format := SAVE_FORMAT) -> bool {
 	fmt.sbprintfln(&b, "format = %d", format)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
-	fmt.sbprintfln(&b, "kit = %s", kit_text(s.kit[:]))
+	fmt.sbprintfln(&b, "kit = %s", kit_text(s.registry, s.kit[:]))
+	if len(s.store.packs) >
+	   0 {fmt.sbprintfln(&b, "packs = %s", strings.join(s.store.packs, ", ", context.temp_allocator))}
+	if s.store.unknown_air {fmt.sbprintfln(&b, "unknown_blocks = air")}
 	fmt.sbprintfln(&b, "generation = %d", s.store.generation + 1) // (the save this file belongs to)
 	fmt.sbprintfln(&b, "age = %d", age_of(s)) // ticks of the universe, across runs
 	return store_write(
@@ -505,13 +473,12 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			if n, ok := strconv.parse_u64(value, 10); ok {s.store.generation = n}
 		case key == "age":
 			if n, ok := strconv.parse_u64(value, 10); ok {s.age_base = n}
+		case key == "packs":
+			s.store.packs = packs_parse(value, virtual.arena_allocator(&s.arena))
+		case key == "unknown_blocks":
+			s.store.unknown_air = value == "air"
 		case key == "kit":
-			if kit, ok := kit_parse(value); ok {
-				clear(&s.kit)
-				append(&s.kit, ..kit)
-			} else {
-				log.warnf("server universe kit not understood path=%s kit=%q", path, value)
-			}
+			s.store.kit_text = strings.clone(value, virtual.arena_allocator(&s.arena)) // (parsed once the packs are loaded)
 		case strings.has_prefix(key, "player."):
 			// player.<name>.<field>; format 1 had one player: player.<field>.
 			after := key[len("player."):]
@@ -700,7 +667,7 @@ write_entities :: proc(w: ^World) -> bool {
 			e.natural,
 		)
 		if e.kind ==
-		   .Item {fmt.sbprintf(&b, " %s %d", game.item_name(e.stack.item), e.stack.count)}
+		   .Item {fmt.sbprintf(&b, " %s %d", game.item_id(w.server.registry, e.stack.item), e.stack.count)}
 		if e.kind == .Sheep {
 			fmt.sbprintf(
 				&b,
@@ -776,10 +743,10 @@ load_entities :: proc(w: ^World) {
 		stack: game.Stack
 		if ok && found && kind == .Item {
 			// A dropped stack: what it is.
-			item, known := game.item_by_name(f[7] if len(f) == 9 else "")
+			item, known := game.item_by_name(w.server.registry, f[7] if len(f) == 9 else "")
 			n, counted := strconv.parse_int(f[8] if len(f) == 9 else "")
 			ok = known && counted && n > 0
-			stack = {item, min(n, game.item_stack_size(item))}
+			stack = {item, min(n, game.item_stack_size(w.server.registry, item))}
 		}
 		if !ok || !found {
 			skipped += 1

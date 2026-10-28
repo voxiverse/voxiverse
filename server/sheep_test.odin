@@ -23,7 +23,7 @@ wool_dropped :: proc(srv: ^Server, name: string) -> int {
 			d := (^Data)(data)
 			w := client_by_name(s, d.name).world
 			for e in w.entities.list {
-				if e.kind == .Item && e.stack.item == game.item_of_block(.Wool) {
+				if e.kind == .Item && e.stack.item == game.item_of_block(test_reg(), .Wool) {
 					d.count += e.stack.count
 				}
 			}

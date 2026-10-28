@@ -4894,3 +4894,110 @@ all of them; a pack's behaviour, its scripts and gameplay data, is enabled per w
 > `reg.ids` (maps). The generator name lists live in `game` and tests in `mesh` and `sfx` compare them to
 > the enums. Tags of one id merge across packs without `override`. A shapeless recipe's `count` is a number
 > of cells. Entities and biomes have no ids yet. See M47a for the names of the lookups.
+
+# M47a: registries, the rest: the game reads the registry
+
+**Read first:** M47 in docs/history.md (the whole design: ids, pack JSON, the pack layout, block and
+item fields, the registry's shape, plumbing, load order, errors, limits, hash, saves store names).
+M47 built steps 1, 2 and the registry-level part of 6; this milestone is steps 3, 4 and 5 and the
+tests that need the game around the registry.
+
+**What M47 built (so this builds on it):**
+
+- `common/game/pack_json.odin`: `json_parse`, our own scanner (not `core:encoding/json`'s tokenizer:
+  exact messages and positions needed the control), `Json_Value`/`Json_Member`.
+- `common/game/registry.odin` (types, lookups, `recipe_match`, `registry_text`, the hash),
+  `registry_load.odin` (packs, files, merging, conflicts), `registry_resolve.odin` (numbers, tables,
+  tags, recipes, structures), `base_pack.odin` (`base_pack_source`, `registry_base`),
+  `assets/packs/voxiverse/` (the base pack as JSON, in the three side folders `assets/` (client
+  only: textures, sounds), `data/` (both sides: blocks, items, tags, recipes) and `server/` (server
+  only: structures), with `pack.json` at the top; `assets/structures/` still holds the same two
+  `.vxs` for `worldgen/shipped.odin`), `server/pack_dir.odin` (`pack_read_dir`),
+  `tools/packcheck` (`./build.sh packs [dir ...]`).
+- Names differ a little from the spec's: lookups by id are `registry_block(reg, text)`,
+  `registry_item(reg, text)`, `registry_item_info`, `registry_item_id`, `registry_every_item`,
+  `registry_block_drop`, `registry_block_tag`, `registry_item_tag`; `block_id(reg, b)`; the table
+  forms `block_collides(t, b)`, `block_opaque`, `block_targetable`, `block_shades`, `block_light`,
+  `block_valid(t, id)` are overload groups in `block.odin` beside the old forms
+  (`block_collides_legacy`...), which go with the tables. `block_is_plant_in(t, b)`,
+  `block_supported(t, plant, below)`, `block_in_tag(t, b, tag)`, `block_has(t, b, flag)`.
+  The id index is `reg.ids: [Content_Kind]map[string]u32` (id text -> block or item number, or the
+  index in its list).
+- `TEXTURE_GENERATOR_NAMES` and `SOUND_GENERATOR_NAMES` (in `registry.odin`) are the generator names
+  a pack may use; `mesh_test`'s `test_base_looks_the_same` and `sfx_test`'s
+  `test_base_sounds_match` compare them to the `mesh.Texture` and `sfx.Material` enums and the
+  registry's blocks to `block_shape`, `block_faces`, `material_of`.
+- There are 53 builtin blocks (numbers 0..52), not 57; the pack's first block is 53, its item 54.
+- Tags of one id merge across packs without `override`; a tag of another namespace must already
+  exist. A shapeless recipe's `count` is the number of cells; `recipe_match` pairs the filled cells
+  with the inputs one to one (backtracking), a shaped one compares the filled cells' bounding box
+  with the pattern. Entities and biomes have no ids in the registry yet.
+- `test_base_matches_legacy` compares against the live `BLOCK_INFO`, `TOOL_INFO`, ... tables.
+
+**This milestone:**
+
+1. Freeze copies of today's tables into the tests (`BLOCK_INFO`, `TOOL_INFO`/`MATERIAL_INFO`/`ARMOR_INFO`,
+   `block_drop`, `can_place`, plant rules, `block_shape`, `block_faces`, `material_of`, `every_item`'s
+   order) so the equivalence tests outlive the tables.
+2. The plumbing (M47's step 3): `Block_Table` through `Block_Query`, `Light_Input`, the mesh job,
+   worldgen's `Generator`, `server.Server` (`s.registry`) and `client.App`/`Session`, the codec and the
+   state-kind checks (`check` takes the registry, `Receiver.reg`, `Block_Record.block` tagged
+   `net:"open"`, `PROTOCOL_VERSION` 26 or whatever is next), the tools (`registry_base`); the client's
+   texture array and icons by registry layer; the sound bank by sound set. Then delete `BLOCK_INFO`,
+   the item tables, `block_shape`, `block_faces`, `material_of`, `block_drop`, `block_is_plant`,
+   `plant_supported`, `can_till`'s block names, the `_legacy` procs, `mesh.Texture` becomes
+   `Texture_Generator`, `shipped.odin` reads the registry's structures, `assets/structures/` goes.
+   Worldgen's golden hashes, M38's determinism test and M39's bandwidth test pass unchanged
+   (the bandwidth baseline is re-accepted only if the difference is exactly the `Welcome` fields,
+   said in the commit).
+3. Universe packs (step 4): `universe.cfg`'s `packs`, `<universe>/packs/<namespace>/`, the load errors
+   (a listed pack missing, one there but not listed (warned), more than 32), the server refusing to
+   start with every line logged, `/packs`, `Welcome.content` and `Welcome.packs`, the refusal
+   `this server uses content packs this game does not have: ...`.
+4. Names in region files (step 5): region format 3 with a name table, `unknown_blocks`, M45's journal
+   if it stores block values. No migration from the format M46 left (before 1.0 nothing is
+   compatible): a world of an older format is refused with `this world was made by an older
+   build; create a new one`, and no frozen `LEGACY_BLOCK_NAMES_V1` is kept.
+5. The server-side tests: a server with the test pack places (`/setblock`) and saves marble and
+   reloads it; the full-name `.cfg` writing; `server/net_test.odin`'s refused client.
+
+**Tests:** `test_region_names_round_trip` (a region with names saves and loads to the same ids,
+including a pack block), `test_pack_adds_block_item_recipe`'s server half (marble placed,
+saved, reloaded), `test_unknown_block_refuses_the_world` and `unknown_blocks = air`, a client whose
+registry differs is refused with the message, the equivalence tests against frozen copies, worldgen
+golden / determinism / bandwidth unchanged.
+
+**Exit check:** the tests above pass; the base registry's block numbers, items and `every_item` order
+equal the frozen copies; worldgen's golden hashes and M38's roots are unchanged; the suite,
+`build check`, `build determinism` and the CI run are green.
+
+**Check by hand:**
+
+- Create a singleplayer world: it looks and sounds the same as before this milestone, the catalog
+  lists the same items in the same order. (A world from before it is refused; that is intended.)
+- Drop the test pack's files into a universe's `packs/`, list it in `universe.cfg`, `/give marble`,
+  place it: it shows with stone's texture and glows.
+
+> What differed (M47a, written when it was built): `Block_Record.block` is a plain `u16` (the
+> schema has no open enums), checked by `check_block_record` against the registry; `check` takes
+> `^Registry` (`Receiver.reg`), and `Reader.reg` does the same for the codec and the protocol
+> (`decode_client` and `decode_server` take it, nil refusing every block and item); `PROTOCOL_VERSION`
+> is 25 (24 before, not 26) and `Welcome.packs` is the text `namespace@version,...`, not a list.
+> The texture array has one layer per generator (`Texture_Def.layer`, `Sound_Def.material`): a
+> pack's texture of a generator draws that picture, so the array does not depend on the packs, and
+> `block_texture(reg, b, face)` reads the registry. The client's registry is the base pack's; a
+> session that plays a universe with packs builds its own (`server.registry_for_dir`), and
+> icons are made for its extra items at session start. `item_name` is the short name (`stone`,
+> `testpack:marble`: for people, logs, counters and permissions) and `item_id` the full id (what
+> files write); `.cfg` and JSON saves now write ids, and the chest line parser takes the
+> last colon as the count's. Region format 3 names *every* block of the registry in its header
+> (not only the used ones): any name the registry lacks refuses the world at start (`universe_blocks_check`
+> reads each region's header once), unless `unknown_blocks = air`. The edit journal still stores block
+> numbers (fixed for a universe, validated against the registry). Older worlds, including those from
+> before universes, are refused with `this world was made by an older build; create a new one`:
+> `save_v1.odin`, `migrate_regions_v2`, `migrate_world_dir`, the fixture `save-v4` and their tests
+> are gone, `MIGRATIONS` is empty, `SAVE_FORMAT` is 6. `Config.extra_packs` lets tests and tools add
+> packs without files. The baseline's `Welcome` grew by 24 bytes and the command list by 6 (`/packs`),
+> which is all that changed in `bandwidth.txt`; roots, golden hashes and `build determinism` are as
+> they were. `registry_base` is still how tools and tests get the base registry (each test package
+> builds one once: `test_reg()`).

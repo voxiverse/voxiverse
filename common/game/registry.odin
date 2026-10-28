@@ -193,11 +193,13 @@ Item_Table :: struct {
 Texture_Def :: struct {
 	id:        string,
 	generator: string,
+	layer:     u32, // the generator's number in TEXTURE_GENERATOR_NAMES: its layer in the client's texture array
 }
 
 Sound_Def :: struct {
 	id:        string,
 	generator: string,
+	material:  u32, // the generator's number in SOUND_GENERATOR_NAMES
 }
 
 Tag_Def :: struct {
@@ -261,29 +263,29 @@ registry_destroy :: proc(reg: ^Registry) {
 
 // --- Lookups by number. ---
 
-block_valid_table :: #force_inline proc(t: ^Block_Table, id: u16) -> bool {
+block_valid :: #force_inline proc(t: ^Block_Table, id: u16) -> bool {
 	return int(id) < t.count
 }
 
-block_targetable_table :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
+block_targetable :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
 	return .Targetable in t.flags[b]
 }
 
-block_collides_table :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
+block_collides :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
 	return .Collides in t.flags[b]
 }
 
-block_opaque_table :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
+block_opaque :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
 	return .Opaque in t.flags[b]
 }
 
-// block_shades_table: it stops sunlight from straight above (opaque blocks,
+// block_shades: it stops sunlight from straight above (opaque blocks,
 // and water and leaves, which let it seep in dimmed): a column's top.
-block_shades_table :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
+block_shades :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
 	return t.flags[b] & {.Opaque, .Shades} != {}
 }
 
-block_light_table :: #force_inline proc(t: ^Block_Table, b: Block) -> u8 {
+block_light :: #force_inline proc(t: ^Block_Table, b: Block) -> u8 {
 	return t.light[b]
 }
 
@@ -297,8 +299,8 @@ block_in_tag :: proc(t: ^Block_Table, b: Block, tag: i32) -> bool {
 	return false
 }
 
-// block_is_plant_in: a block that stands on the ground and goes when it does.
-block_is_plant_in :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
+// block_is_plant: a block that stands on the ground and goes when it does.
+block_is_plant :: #force_inline proc(t: ^Block_Table, b: Block) -> bool {
 	return t.defs[b].support != NO_TAG
 }
 
@@ -320,7 +322,7 @@ registry_block :: proc(reg: ^Registry, text: string) -> (Block, bool) {
 }
 
 block_id :: proc(reg: ^Registry, b: Block) -> string {
-	if !block_valid_table(&reg.blocks, u16(b)) {return ""}
+	if !block_valid(&reg.blocks, u16(b)) {return ""}
 	return reg.blocks.defs[b].id
 }
 
@@ -569,4 +571,10 @@ registry_hash_of :: proc(reg: ^Registry) -> u64 {
 	h := hasher_make()
 	hasher_bytes(&h, transmute([]u8)text)
 	return hasher_finish(h)
+}
+
+// block_name: b's name for people and logs: its id, without the base pack's
+// namespace ("stone", "testpack:marble").
+block_name :: proc(reg: ^Registry, b: Block) -> string {
+	return strings.trim_prefix(block_id(reg, b), BASE_NAMESPACE + ":")
 }

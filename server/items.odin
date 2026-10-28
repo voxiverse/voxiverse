@@ -19,7 +19,12 @@ import "../common/game"
 inventory_request :: proc(s: ^Server, c: ^Client, q: game.Inventory_Request) {
 	chest_refresh(s, c)
 	before := c.inventory.cursor
-	dropped, ok := game.inventory_apply(&c.inventory, q.action, allowed(s, c, "items.catalog"))
+	dropped, ok := game.inventory_apply(
+		s.registry,
+		&c.inventory,
+		q.action,
+		allowed(s, c, "items.catalog"),
+	)
 	if ok && q.action.kind == .Take {
 		// The catalog makes the stack, and takes back what was on the cursor.
 		ledger_stack(s, c.world, .Catalog_Return, before, -1)
@@ -66,7 +71,7 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 		}
 	} else if block == .Tall_Grass {
 		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1})}
-	} else if item := game.block_drop(block); item != game.NO_ITEM {
+	} else if item := game.block_drop(w.server.registry, block); item != game.NO_ITEM {
 		append(&drops, game.Stack{item, 1})
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
@@ -80,7 +85,7 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 // drop_stack: c throws stack ahead of it.
 @(private)
 drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
-	record(s, c, .Item_Dropped, game.item_name(stack.item), i64(stack.count))
+	record(s, c, .Item_Dropped, game.item_name(s.registry, stack.item), i64(stack.count))
 	yaw, pitch := c.look[0], c.look[1]
 	cp := base.cos(pitch)
 	dir := [3]f32{-base.sin(yaw) * cp, base.sin(pitch), -base.cos(yaw) * cp}
@@ -121,10 +126,10 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		return true
 	}
 	if !chunk_ready(w, ent.body.position) {return false} 	// its ground is not loaded: it waits
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	game.body_step(&ent.body, .Item, {}, false, &w.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
-	size := game.item_stack_size(ent.stack.item)
+	size := game.item_stack_size(s.registry, ent.stack.item)
 	if ent.age % 10 == 0 {
 		// Those after it in the list (not yet moved this tick) join it.
 		for j := len(w.entities.list) - 1; j > index; j -= 1 {
@@ -147,13 +152,13 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		d := c.player.position + {0, 0.5, 0} - ent.body.position
 		if d.x * d.x + d.y * d.y + d.z * d.z >
 		   game.ITEM_PICKUP_RANGE * game.ITEM_PICKUP_RANGE {continue}
-		left := game.inventory_add(&c.inventory, ent.stack)
+		left := game.inventory_add(s.registry, &c.inventory, ent.stack)
 		if left.count == ent.stack.count {continue} 	// no room
 		record(
 			s,
 			&c,
 			.Item_Picked,
-			game.item_name(ent.stack.item),
+			game.item_name(s.registry, ent.stack.item),
 			i64(ent.stack.count - left.count),
 		)
 		ent.stack = left
@@ -174,7 +179,7 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, fmt.tprintf("&c%s is not here", args[0]))
 		return true
 	}
-	item, known := game.item_by_name(args[1])
+	item, known := game.item_by_name(s.registry, args[1])
 	if !known {
 		notice(s, c, fmt.tprintf("&cNo item %s", args[1]))
 		return true
@@ -185,11 +190,11 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		if !ok {return false}
 		count = n
 	}
-	size := game.item_stack_size(item)
+	size := game.item_stack_size(s.registry, item)
 	for to in targets {
 		ledger(s, to.world, .Give, item, count)
 		for left := count; left > 0; left -= size {
-			rest := game.inventory_add(&to.inventory, {item, min(left, size)})
+			rest := game.inventory_add(s.registry, &to.inventory, {item, min(left, size)})
 			if !game.stack_empty(
 				rest,
 			) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
@@ -206,7 +211,7 @@ admin_clear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	who := c
 	item := game.NO_ITEM
 	for a in args {
-		if i, ok := game.item_by_name(a); ok {
+		if i, ok := game.item_by_name(s.registry, a); ok {
 			item = i
 		} else if other := find_player(s, c, a); other != nil {
 			who = other
@@ -252,9 +257,9 @@ admin_item :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			fmt.tprintf(
 				"%d %s (item %d; %d per stack)",
 				held.count,
-				game.item_name(held.item),
+				game.item_name(s.registry, held.item),
 				int(held.item),
-				game.item_stack_size(held.item),
+				game.item_stack_size(s.registry, held.item),
 			),
 		)
 	}

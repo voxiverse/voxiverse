@@ -138,6 +138,7 @@ world_capture :: proc(s: ^Server, job: ^Save_Job, w: ^World) {
 		rj := new(Region_Job, heap())
 		rj.world, rj.region, rj.gen = w.address, region, w.chunks.gen
 		rj.generation = s.store.generation + 1
+		rj.reg = s.registry
 		rj.path = strings.clone(relative_path(s.store.dir, region_path(w.dir, region)), heap())
 		index[region] = len(cw.regions)
 		append(&cw.regions, Cap_Region{job = rj})
@@ -242,7 +243,7 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 		rec.stats = r.stats
 	}
 	path := character_path(s, cc.name, rec.account)
-	batch_stage(job.batch, relative_path(st.dir, path), player_json(&rec))
+	batch_stage(job.batch, relative_path(st.dir, path), player_json(s.registry, &rec))
 	if r, ok := &st.players[cc.name];
 	   ok && cc.forget && !r.dirty && client_by_name(s, cc.name) == nil {
 		counters_free(&r.stats)

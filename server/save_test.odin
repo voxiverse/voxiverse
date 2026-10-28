@@ -60,7 +60,7 @@ pump :: proc(t: ^testing.T, c: ^Save_Client) {
 	game.receive(c.endpoint, &packets)
 	for p in packets {
 		defer game.packet_free(c.endpoint, p)
-		m, ok := game.decode_server(p, c.scratch)
+		m, ok := game.decode_server(p, c.scratch, test_reg())
 		if !testing.expect(t, ok) {continue}
 		#partial switch v in m {
 		case game.Challenge:
@@ -467,15 +467,14 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 	testing.expect_value(t, aside, damaged)
 }
 
-// A world keeps its generator: one saved before generators had names is
-// classic; one made by a generator this game lacks is not loaded.
+// A world keeps its generator: one made by a generator this game lacks is
+// not loaded.
 @(test)
 test_world_generator_kept :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "generator"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
-	path := filepath.join({dir, WORLD_FILE}, context.temp_allocator) or_else ""
 	config := Config {
 		seed        = 5,
 		view_radius = 2,
@@ -483,21 +482,23 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 		workers     = 1,
 		save_dir    = dir,
 	}
-	write :: proc(path, text: string) {_ = os.write_entire_file(path, transmute([]u8)text)}
-
-	write(path, "format = 2\nseed = 9\n")
 	srv: Server
 	if testing.expect(t, start(&srv, config, {})) {
-		testing.expect_value(t, srv.home.generator, worldgen.Kind.Classic)
+		testing.expect_value(t, srv.home.generator, worldgen.Kind.Earth)
 		testing.expect(t, stop(&srv))
 	}
-	moved := filepath.join({home_dir(dir, 9), WORLD_FILE}, context.temp_allocator) or_else ""
+	moved := filepath.join({home_dir(dir, 5), WORLD_FILE}, context.temp_allocator) or_else ""
 	saved, _ := os.read_entire_file_from_path(moved, context.temp_allocator)
-	testing.expect(t, strings.contains(string(saved), "generator = classic"), "not written back")
-
-	os.remove_all(dir)
-	os.make_directory_all(dir)
-	write(path, "format = 2\nseed = 9\ngenerator = moon\n")
+	testing.expect(t, strings.contains(string(saved), "generator = "), "not written")
+	text, _ := strings.replace(
+		string(saved),
+		"generator = earth",
+		"generator = moon",
+		1,
+		context.temp_allocator,
+	)
+	testing.expect(t, text != string(saved), "no generator line to change")
+	_ = os.write_entire_file(moved, transmute([]u8)text)
 	{
 		context.logger = log.nil_logger() // its error is the point
 		testing.expect(t, !start(&srv, config, {}), "a world from an unknown generator loaded")

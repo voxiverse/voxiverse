@@ -168,7 +168,7 @@ grief_build :: proc(g: ^Grief) {
 	sequence := m.prediction.next_sequence - 1
 	mirror_send(m, game.Use_Block{chest, sequence})
 	run(g, 3)
-	inventory(m, .Click, slot_of(g, game.item_of_block(.Planks)))
+	inventory(m, .Click, slot_of(g, game.item_of_block(test_reg(), .Planks)))
 	inventory(m, .Click, game.CHEST_BASE)
 	run(g, 3)
 	run(g, 300) // (the water settles)
@@ -562,7 +562,10 @@ test_journal_matches_disk :: proc(t: ^testing.T) {
 			actors  = make(map[u32]struct{}, 8, context.temp_allocator),
 			actions = make(map[u32]struct{}, 8, context.temp_allocator),
 		}
-		res := game.journal_read_segment(data, proc(user: rawptr, rec: game.Journal_Record) {
+		res := game.journal_read_segment(
+			test_reg(),
+			data,
+			proc(user: rawptr, rec: game.Journal_Record) {
 				d := cast(^Declared)user
 				#partial switch v in rec {
 				case game.Journal_Actor:
@@ -573,11 +576,13 @@ test_journal_matches_disk :: proc(t: ^testing.T) {
 				case game.Journal_Changes:
 					for c in v.changes {if c.action not_in d.actions {d.bad += 1}}
 				}
-			}, &d)
+			},
+			&d,
+		)
 		testing.expect_value(t, res.status, game.Segment_Status.Whole)
 		testing.expect_value(t, d.bad, 0) // (declared before first use, in this segment)
 		testing.expect_value(t, int(res.header.seq), int(seq))
-		seg, _ := segment_decode(data)
+		seg, _ := segment_decode(test_reg(), data)
 		append(&disk, ..seg.entries[:])
 	}
 	testing.expect_value(t, len(disk), len(ring))

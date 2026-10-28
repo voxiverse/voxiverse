@@ -34,7 +34,7 @@ budget_scale :: proc() -> i64 {
 budget_scene :: proc(g: ^Grief) {
 	s := grief_srv(g)
 	w := grief_world(g)
-	planks := game.item_of_block(.Planks)
+	planks := game.item_of_block(test_reg(), .Planks)
 	for i in 0 ..< 200 {
 		rec := Player_Record {
 			dirty = true,

@@ -59,6 +59,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			view_height = u32(s.config.view_height),
 			rules = w.rules,
 			address = w.address,
+			content = s.registry.hash,
+			packs = packs_text(s.registry),
 		},
 	)
 	replica_seed(s, c) // (the rules came with the Welcome)
@@ -113,7 +115,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 simulate_player :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	buf: [game.INPUT_BUDGET_MAX]game.Input
-	query := game.Block_Query{&w.chunks, chunks_block}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
 	if c.inv_changed {disturb(s, c)} 	// (the mods its gear gives)
 	waiting := landing_tick(s, c)
@@ -125,7 +127,7 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 			&w.rules,
 			query,
 			game.TICK_SECONDS,
-			game.derive_mods(&c.inventory),
+			game.derive_mods(s.registry, &c.inventory),
 		)
 		if c.afk && msg.input.move != {} {set_afk(s, c, false)} 	// back
 		if waiting {

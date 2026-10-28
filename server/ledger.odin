@@ -41,11 +41,22 @@ ledger :: proc(s: ^Server, w: ^World, reason: game.Reason, item: game.Item, coun
 	n := abs(count)
 	telemetry.emit(
 		&s.sink,
-		event_for(s, w, kind, telemetry.NO_ACTOR, game.item_name(item), {i64(n), i64(reason), 0}),
+		event_for(
+			s,
+			w,
+			kind,
+			telemetry.NO_ACTOR,
+			game.item_name(s.registry, item),
+			{i64(n), i64(reason), 0},
+		),
 	)
 	if w != nil {
 		pattern := "items.created." if count > 0 else "items.destroyed."
-		counter_add(&w.stats, fmt.tprintf("%s%s", pattern, game.item_name(item)), u64(n))
+		counter_add(
+			&w.stats,
+			fmt.tprintf("%s%s", pattern, game.item_name(s.registry, item)),
+			u64(n),
+		)
 	}
 }
 
@@ -168,7 +179,7 @@ audit_report :: proc(s: ^Server) -> int {
 	for l in lines {
 		log.errorf(
 			"server audit unbalanced item=%s held=%d expected=%d difference=%d",
-			game.item_name(l.item),
+			game.item_name(s.registry, l.item),
 			l.held,
 			l.expected,
 			l.held - l.expected,
@@ -180,7 +191,7 @@ audit_report :: proc(s: ^Server) -> int {
 				nil,
 				.Audit_Failed,
 				telemetry.NO_ACTOR,
-				game.item_name(l.item),
+				game.item_name(s.registry, l.item),
 				{l.held, l.expected, l.held - l.expected},
 			),
 		)
@@ -203,7 +214,7 @@ admin_audit :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 			c,
 			fmt.tprintf(
 				"&cUnbalanced: %s held %d, ledger %d",
-				game.item_name(l.item),
+				game.item_name(s.registry, l.item),
 				l.held,
 				l.expected,
 			),

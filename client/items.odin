@@ -59,7 +59,7 @@ held :: proc(s: ^Session) -> game.Stack {
 item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 	// Using what is aimed at comes before placing a block behind it.
 	if placing && !breaking && (session_use_entity(s) || session_use_block(s)) {return}
-	info, _ := game.item_info(stack.item)
+	info, _ := game.item_info(s.reg, stack.item)
 	if t, tool := info.tool.?; tool {
 		switch t {
 		case .Launcher:
@@ -91,7 +91,7 @@ Pending_Inventory :: struct {
 // server; false (and nothing sent) if it does nothing.
 session_inventory_do :: proc(s: ^Session, a: game.Inventory_Action) -> bool {
 	if s.state != .Playing {return false}
-	_, ok := game.inventory_apply(&s.inventory, a, session_allowed(s, "items.catalog"))
+	_, ok := game.inventory_apply(s.reg, &s.inventory, a, session_allowed(s, "items.catalog"))
 	if !ok {return false}
 	s.inv_sequence += 1
 	append(&s.inv_pending, Pending_Inventory{s.inv_sequence, a})
@@ -114,11 +114,11 @@ inventory_reconcile :: proc(s: ^Session, u: game.Inventory_State) {
 inventory_predict :: proc(s: ^Session) {
 	s.inventory = s.server_inventory
 	catalog := session_allowed(s, "items.catalog")
-	for p in s.inv_pending {game.inventory_apply(&s.inventory, p.action, catalog)}
+	for p in s.inv_pending {game.inventory_apply(s.reg, &s.inventory, p.action, catalog)}
 	if session_allowed(s, "items.infinite") {return}
 	for e in s.edits {
 		if e.block == .Air {continue}
-		if slot := game.inventory_placing_slot(&s.inventory, e.block); slot >= 0 {
+		if slot := game.inventory_placing_slot(s.reg, &s.inventory, e.block); slot >= 0 {
 			s.inventory.slots[slot].count -= 1
 			game.inventory_tidy(&s.inventory)
 		}
@@ -130,6 +130,6 @@ inventory_predict :: proc(s: ^Session) {
 can_place_from_hand :: proc(s: ^Session, block: game.Block) -> bool {
 	return(
 		session_allowed(s, "items.infinite") ||
-		game.inventory_placing_slot(&s.inventory, block) >= 0 \
+		game.inventory_placing_slot(s.reg, &s.inventory, block) >= 0 \
 	)
 }

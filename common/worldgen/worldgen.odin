@@ -1,5 +1,7 @@
 package worldgen
 
+import "core:fmt"
+
 import "../game"
 
 // World generation: a pure function of (generator, chunk position). The
@@ -23,14 +25,27 @@ KIND_NAMES := [Kind]string {
 }
 
 Generator :: struct {
-	kind:   Kind,
-	seed:   i64,
-	params: Params, // (Earth)
+	kind:    Kind,
+	seed:    i64,
+	params:  Params, // (Earth)
+	reg:     ^game.Registry, // what the blocks are, and the structures templates
+	shipped: [Structure_Kind]i32, // the registry's structure of each kind (-1: none)
 }
 
 // generator_make: a generator with the default parameters.
-generator_make :: proc(kind: Kind, seed: i64, params := PARAMS_DEFAULTS) -> Generator {
-	return {kind, seed, params}
+generator_make :: proc(
+	kind: Kind,
+	seed: i64,
+	reg: ^game.Registry,
+	params := PARAMS_DEFAULTS,
+) -> Generator {
+	g := Generator{kind, seed, params, reg, {}}
+	for k in Structure_Kind {
+		index, found :=
+			reg.ids[.Structure][fmt.tprintf("%s:%s", game.BASE_NAMESPACE, STRUCTURE_NAMES[k])]
+		g.shipped[k] = i32(index) if found else -1
+	}
+	return g
 }
 
 kind_by_name :: proc(name: string) -> (Kind, bool) {

@@ -145,11 +145,13 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	}
 	reg.textures = make([]Texture_Def, len(b.defs[.Texture]))
 	for &m, i in b.defs[.Texture] {
-		reg.textures[i] = {m.id, read_generator(b, &m, TEXTURE_GENERATOR_NAMES[:])}
+		name := read_generator(b, &m, TEXTURE_GENERATOR_NAMES[:])
+		reg.textures[i] = {m.id, name, u32(generator_index(name, TEXTURE_GENERATOR_NAMES[:]))}
 	}
 	reg.sounds = make([]Sound_Def, len(b.defs[.Sound]))
 	for &m, i in b.defs[.Sound] {
-		reg.sounds[i] = {m.id, read_generator(b, &m, SOUND_GENERATOR_NAMES[:])}
+		name := read_generator(b, &m, SOUND_GENERATOR_NAMES[:])
+		reg.sounds[i] = {m.id, name, u32(generator_index(name, SOUND_GENERATOR_NAMES[:]))}
 	}
 
 	// --- Block numbers. ---
@@ -987,4 +989,12 @@ read_recipe :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> Reci
 		)
 	}
 	return r
+}
+
+// generator_index: where name is in names (0 for one that is not there; the
+// loader has refused those already).
+@(private = "file")
+generator_index :: proc(name: string, names: []string) -> int {
+	for n, i in names {if n == name {return i}}
+	return 0
 }

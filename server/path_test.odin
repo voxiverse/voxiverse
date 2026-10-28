@@ -18,7 +18,7 @@ query :: proc(b: ^Blocks) -> game.Block_Query {
 			if abs(p.x) > b.region.x || abs(p.z) > b.region.y {return .Air, false}
 			if p.y <= b.floor || p in b.solid {return .Stone, true}
 			return .Air, true
-		}}
+		}, test_blocks()}
 }
 
 @(private = "file")

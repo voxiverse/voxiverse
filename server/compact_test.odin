@@ -19,7 +19,7 @@ region_has :: proc(
 ) {
 	data, err := os.read_entire_file_from_path(region_path(w.dir, region), context.temp_allocator)
 	if err != nil {return}
-	r, open_err := game.region_open(data, region)
+	r, open_err := game.region_open(test_reg(), data, region)
 	if open_err != .None {return}
 	list := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	for e in r.index {append(&list, e.pos)}

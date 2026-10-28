@@ -27,7 +27,11 @@ Options :: struct {
 	limit:   int `usage:"stop after this many messages"`,
 }
 
+// base_registry: what block and item numbers in a capture mean (the base pack's).
+base_registry: ^game.Registry
+
 main :: proc() {
+	base_registry = game.registry_base()
 	opts := Options {
 		file = "build/net.trace",
 	}
@@ -167,7 +171,7 @@ describe :: proc(
 	bool,
 ) {
 	if r.sender == .Client {
-		m, ok := game.decode_client(r.data)
+		m, ok := game.decode_client(r.data, base_registry)
 		if !ok {return "INVALID client message", false}
 		switch v in m {
 		case game.Hello:
@@ -252,7 +256,7 @@ describe :: proc(
 			return fmt.tprintf("ping id=%d", v.id), true
 		}
 	} else {
-		m, ok := game.decode_server(r.data, scratch)
+		m, ok := game.decode_server(r.data, scratch, base_registry)
 		if !ok {return "INVALID server message", false}
 		switch v in m {
 		case game.Welcome:

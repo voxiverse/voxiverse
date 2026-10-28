@@ -30,6 +30,7 @@ Job_Chunk :: struct {
 
 // Region_Job: a region as captured, for the worker (heap).
 Region_Job :: struct {
+	reg:          ^game.Registry,
 	world:        game.Address,
 	region:       game.Region_Pos,
 	path:         string, // relative to the universe
@@ -67,7 +68,7 @@ region_job_run :: proc(b: ^Save_Batch, j: ^Region_Job) {
 		defer free(natural, a)
 		for &c in j.chunks {
 			if !slice.contains(j.revisit[:], c.pos) {continue}
-			r := game.reader_make(c.bytes)
+			r := game.reader_make(c.bytes, j.reg)
 			u1, uni1 := game.read_chunk_blocks(&r, have)
 			if !game.reader_finish(&r) {continue}
 			u2, uni2 := worldgen.generate(&j.gen, c.pos, natural, cache)
@@ -117,7 +118,7 @@ region_job_run :: proc(b: ^Save_Batch, j: ^Region_Job) {
 	w: game.Writer
 	game.writer_init(&w, a)
 	defer game.writer_destroy(&w)
-	game.region_encode_bytes(&w, j.region, encoded[:], tops[:], j.generation)
+	game.region_encode_bytes(j.reg, &w, j.region, encoded[:], tops[:], j.generation)
 	batch_stage(b, j.path, w.buf[:])
 }
 

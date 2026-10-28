@@ -134,6 +134,7 @@ test_console_command_needs :: proc(t: ^testing.T) {
 	testing.expect_value(t, last(&app.console), "poke: not in a world")
 	s := new(Session)
 	defer free(s)
+	s.reg = test_reg()
 	app.session = s
 	s.state = .Playing
 	console_execute(app, "poke it")

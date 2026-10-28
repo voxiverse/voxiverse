@@ -60,6 +60,7 @@ preview_record :: proc(app: ^App, frame: gpu.Frame) {
 	p.yaw += (p.target_yaw - p.yaw) * ease
 	p.pitch += (p.target_pitch - p.pitch) * ease
 	avatar_draw(
+		s.reg,
 		&p.draw,
 		{0, 0, 0},
 		p.yaw,

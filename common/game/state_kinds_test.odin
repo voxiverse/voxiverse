@@ -83,20 +83,20 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	// Entity_Spawn, Entities
 	sheep := Entity_Record{.Sheep, {}}
 	round_trip(t, &l, .Entity, key_entity(77), &sheep)
-	dropped := Entity_Record{.Item, {item_of_block(.Sand), 12}}
+	dropped := Entity_Record{.Item, {item_of_block(test_reg(), .Sand), 12}}
 	round_trip(t, &l, .Entity, key_entity(78), &dropped)
 	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, {.Lamb, .Black}}
 	round_trip(t, &l, .Entity_Motion, key_entity(77), &moving)
 	// Inventory_Update, with a chest
 	inv: Inventory
-	inventory_add(&inv, {item_of_block(.Stone), 100})
+	inventory_add(test_reg(), &inv, {item_of_block(test_reg(), .Stone), 100})
 	inv.cursor = {item_of_tool(.Launcher), 1}
 	inv.selected = 3
 	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
-	inv.equipment[.Offhand] = {item_of_block(.Dirt), 12}
+	inv.equipment[.Offhand] = {item_of_block(test_reg(), .Dirt), 12}
 	inv.chest_open = true
-	inv.chest[0] = {item_of_block(.Stone), 7}
-	inv.chest[24] = {item_of_block(.Dirt), 64}
+	inv.chest[0] = {item_of_block(test_reg(), .Stone), 7}
+	inv.chest[24] = {item_of_block(test_reg(), .Dirt), 64}
 	state := Inventory_State{5, inv}
 	round_trip(t, &l, .Inventory, {}, &state)
 	// Health
@@ -112,9 +112,9 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	place := Place{8, -20, 100}
 	round_trip(t, &l, .Place, {}, &place)
 	// Block_Changed (heard), Blocks_Changed (quiet)
-	heard := Block_Record{.Gravel, true}
+	heard := Block_Record{u16(Block.Gravel), true}
 	round_trip(t, &l, .Block, key_of_block({1, 2, 3}), &heard)
-	quiet := Block_Record{.Water_3, false}
+	quiet := Block_Record{u16(Block.Water_3), false}
 	round_trip(t, &l, .Block, key_of_block({-2 * 16 + 7, 3 * 16, 4 * 16 + 5}), &quiet)
 
 	// Entity_Despawn: the removal of its records (the death is an event, below)
@@ -186,7 +186,7 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	health := Health{30, 24}
 	refuse(t, &s, .Health, {}, &health, "health above the maximum")
 	bad := Inventory_State{5, {}}
-	bad.inventory.slots[0] = {item_of_block(.Stone), 65} // more than a stack
+	bad.inventory.slots[0] = {item_of_block(test_reg(), .Stone), 65} // more than a stack
 	refuse(t, &s, .Inventory, {}, &bad, "more than a stack")
 	feet := Inventory_State{5, {}}
 	feet.inventory.equipment[.Feet] = {item_of_armor(.Cap), 1} // a cap on the feet

@@ -76,6 +76,7 @@ World :: struct {
 	groups:        [dynamic]Mesh_Group,
 	next_group:    u32,
 	stats:         World_Stats,
+	reg:           ^game.Registry, // what the blocks are (set by world_init)
 }
 
 World_Stats :: struct {
@@ -134,12 +135,14 @@ MESH_TASKS_PER_WORKER :: 4
 // from arena; whatever workers touch from heap.
 world_init :: proc(
 	w: ^World,
+	reg: ^game.Registry,
 	capacity, columns, workers: int,
 	arena: mem.Allocator,
 	heap := context.allocator,
 ) -> mem.Allocator_Error {
 	w^ = {
 		next_version = 1,
+		reg          = reg,
 	}
 	base.pool_init(&w.chunks, capacity, arena) or_return
 	w.by_pos = base.map_make_fixed(map[game.Chunk_Pos]Chunk_Handle, capacity, arena) or_return
@@ -160,6 +163,7 @@ world_init :: proc(
 		t.vertices = make([dynamic]mesh.Vertex, heap)
 		t.scratch.queue = make([dynamic]u32, heap)
 		for &c, j in t.chunks {t.light_in.chunks[j] = &c}
+		t.light_in.table = &reg.blocks
 		t.urgent = i >= count
 		task_free(w, &t)
 	}
@@ -349,7 +353,7 @@ predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	if !ok {return}
 	i := int(p.x & game.CHUNK_MASK) + int(p.z & game.CHUNK_MASK) * game.CHUNK_SIZE
 	old := column.heights[i]
-	top := game.column_top_after(game.Block_Query{w, world_block}, old, p, b, nil)
+	top := game.column_top_after(game.Block_Query{w, world_block, &w.reg.blocks}, old, p, b, nil)
 	if top == old {return}
 	column.heights[i] = top
 	remesh_box(
@@ -688,7 +692,7 @@ trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	if c.blocks.uniform == .Air {return true} 	// (a uniform chunk of another non-solid block, water, has faces)
 	for d in ([6]game.Chunk_Pos{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		n := neighbour_blocks(w, c.pos + d)
-		if n.array != nil || !game.block_opaque(n.uniform) {return false}
+		if n.array != nil || !game.block_opaque(&w.reg.blocks, n.uniform) {return false}
 	}
 	return true
 }
@@ -749,5 +753,5 @@ mesh_task_run :: proc(task: ^Mesh_Task) {
 	n: mesh.Neighbourhood
 	for &c, i in task.chunks {n[i] = &c}
 	mesh.snapshot_fill(&task.snapshot, &n)
-	task.counts = mesh.mesh_chunk(&task.snapshot, &task.light, &task.vertices)
+	task.counts = mesh.mesh_chunk(task.world.reg, &task.snapshot, &task.light, &task.vertices)
 }

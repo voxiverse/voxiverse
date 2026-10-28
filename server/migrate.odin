@@ -4,11 +4,9 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:slice"
-import "core:strconv"
 import "core:strings"
 
 import "../base"
-import "../common/game"
 
 // The migration registry. A save from an older format is brought to
 // SAVE_FORMAT when it is opened: a backup first (backups/pre-migration-<from>),
@@ -19,8 +17,8 @@ import "../common/game"
 // The rules for writing one are in docs/saves.md: it reads only files of its
 // `from` format, with readers frozen beside it; it is never edited once released;
 // it is tested from a committed fixture (assets/fixtures/save-v<from>).
-// Formats 1-3 predate universes: the readers of format 4 upgrade them in memory
-// (migrate_world_dir moves them into a universe), so the registry starts at 4.
+// The registry is empty (M47a): older formats are refused, not migrated, before
+// 1.0 (docs/saves.md).
 
 Migration :: struct {
 	from: int, // the format it reads; it leaves from + 1
@@ -38,9 +36,7 @@ Migrator :: struct {
 }
 
 @(rodata)
-MIGRATIONS := [?]Migration {
-	{4, "regions get an index and a checksum per chunk (region format 2)", migrate_regions_v2},
-}
+MIGRATIONS := [?]Migration{}
 
 Migrate_Result :: struct {
 	from, to: int,
@@ -179,53 +175,19 @@ set_line :: proc(m: ^Migrator, rel, key, value: string) {
 	mig_write(m, rel, transmute([]u8)strings.to_string(b))
 }
 
-// store_migrate: the open's step after the format is known.
+// store_migrate: the open's step after the format is known. Saves of an
+// older format are refused, not migrated: before 1.0 nothing is compatible
+// (the registry above is the way a later format will bring them on).
 store_migrate :: proc(s: ^Server) -> bool {
 	st := &s.store
 	if st.format >= SAVE_FORMAT {return true}
-	res := migrate_universe(st.dir, &st.disk, max(st.format, LEGACY_FORMAT), st.generation)
-	if !res.ok {
-		log.errorf("server save could not be upgraded from format %d: %s", res.from, res.why)
-		return false
-	}
-	st.generation += 1
-	st.format = SAVE_FORMAT
-	log.infof("server save upgraded from=%d to=%d", res.from, res.to)
-	return true
+	s.refusal = OLDER_BUILD
+	log.errorf("server %s format=%d", OLDER_BUILD, st.format)
+	return false
 }
 
-// ---- format 4 to 5 ----
-
-@(private = "file")
-migrate_regions_v2 :: proc(m: ^Migrator) -> bool {
-	for world in world_dirs(m) {
-		regions := fmt.tprintf("%s/regions", world)
-		for rel in mig_list(m, regions, ".vxr") {
-			data, ok := mig_read(m, rel)
-			if !ok {continue}
-			name := rel[len(regions) + 1:]
-			rx, rz: int
-			if parts := strings.split(name, ".", context.temp_allocator);
-			   len(parts) != 4 || parts[0] != "r" {
-				continue
-			} else {
-				x, ok1 := strconv.parse_int(parts[1])
-				z, ok2 := strconv.parse_int(parts[2])
-				if !ok1 || !ok2 {continue}
-				rx, rz = x, z
-			}
-			region := game.Region_Pos{i32(rx), i32(rz)}
-			out, converted := region_v1_to_v2(data, region, m.generation)
-			if !converted {
-				// (as before: the loader moves a damaged region aside)
-				log.warnf("server region not converted, left as it is path=%s", rel)
-				continue
-			}
-			mig_write(m, rel, out)
-		}
-	}
-	return true
-}
+// OLDER_BUILD: why a world of an older format is not opened.
+OLDER_BUILD :: "this world was made by an older build; create a new one"
 
 // world_dirs: "worlds/<address>" for each world in the universe.
 @(private = "file")
@@ -242,30 +204,4 @@ world_dirs :: proc(m: ^Migrator) -> []string {
 	}
 	slice.sort(out[:])
 	return out[:]
-}
-
-// region_v1_to_v2: one region file's chunks and tops, written as format 2.
-@(private = "file")
-region_v1_to_v2 :: proc(data: []u8, region: game.Region_Pos, generation: u64) -> ([]u8, bool) {
-	r, err := game.region_open_v1(data, region)
-	if err != .None {return nil, false}
-	chunks := make([dynamic]game.Saved_Chunk, context.temp_allocator)
-	for {
-		blocks := new(game.Chunk_Blocks, context.temp_allocator)
-		array := new(game.Block_Array, context.temp_allocator)
-		pos, uniform, is_uniform, got := game.region_next_chunk_v1(&r, array)
-		if !got {break}
-		blocks^ = {
-			uniform = uniform,
-			array   = nil if is_uniform else array,
-		}
-		append(&chunks, game.Saved_Chunk{pos, blocks})
-	}
-	if !r.reader.ok {return nil, false}
-	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
-	if !game.region_tops_v1(&r, &tops) {return nil, false}
-	w: game.Writer
-	game.writer_init(&w, context.temp_allocator)
-	game.region_encode(&w, region, chunks[:], tops[:], generation)
-	return w.buf[:], true
 }

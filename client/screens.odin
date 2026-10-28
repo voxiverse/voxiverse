@@ -267,7 +267,7 @@ hotbar :: proc(ctx: ^ui.Context, s: ^Session, icons: ^Item_Icons) {
 	for i in 0 ..< game.HOTBAR_SLOTS {
 		slot := ui.cut_left(&row, SLOT_SIZE.x)
 		ui.cut_left(&row, t.spacing)
-		stack_slot(ctx, icons, slot, s.inventory.slots[i], i == s.inventory.selected, i + 1)
+		stack_slot(ctx, s.reg, icons, slot, s.inventory.slots[i], i == s.inventory.selected, i + 1)
 	}
 }
 

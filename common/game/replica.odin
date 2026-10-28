@@ -872,11 +872,18 @@ Receiver :: struct {
 	dropped: int, // snapshots whose baseline we lacked
 	gather:  Gather,
 	blobs:   [dynamic]rawptr,
+	reg:     ^Registry, // what ids in values must be known to (blocks, items)
 }
 
-receiver_init :: proc(rx: ^Receiver, schema: ^Schema, allocator := context.allocator) {
+receiver_init :: proc(
+	rx: ^Receiver,
+	schema: ^Schema,
+	reg: ^Registry,
+	allocator := context.allocator,
+) {
 	rx^ = {
 		schema = schema,
+		reg    = reg,
 		blobs  = make([dynamic]rawptr, allocator),
 	}
 	replica_init(&rx.live, schema, allocator)
@@ -935,8 +942,8 @@ read_changes :: proc(r: ^Reader, k: ^Schema_Kind, mask: u64, value: rawptr, own:
 }
 
 @(private)
-valid_value :: proc(k: ^Schema_Kind, value: rawptr) -> bool {
-	return k.check == nil || k.check(value)
+valid_value :: proc(reg: ^Registry, k: ^Schema_Kind, value: rawptr) -> bool {
+	return k.check == nil || k.check(reg, value)
 }
 
 // read_head: the op and mask of a record entry.
@@ -969,7 +976,7 @@ read_head :: proc(r: ^Reader, k: ^Schema_Kind) -> (op: Op, mask: u64) {
 // connection).
 receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> bool {
 	blobs_free(rx)
-	r := reader_make(data)
+	r := reader_make(data, rx.reg)
 	if read_u8(&r) != STATE_MESSAGE {return false}
 	rx.tick = read_varint(&r)
 	for r.ok && r.pos < len(data) {
@@ -986,7 +993,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 		for _ in 0 ..< count {
 			if k.is_event {
 				v := blob_make(rx, k)
-				if !read_fields(&r, k, v, false) || !valid_value(k, v) {return false}
+				if !read_fields(&r, k, v, false) || !valid_value(rx.reg, k, v) {return false}
 				append(out, Received{kind = id, op = .Event, value = v})
 				continue
 			}
@@ -998,7 +1005,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 			if k.write_through {
 				if op != .Create {return false}
 				v := blob_make(rx, k)
-				if !read_fields(&r, k, v, false) || !valid_value(k, v) {return false}
+				if !read_fields(&r, k, v, false) || !valid_value(rx.reg, k, v) {return false}
 				append(
 					out,
 					Received{kind = id, op = .Create, key = key, value = v, mask = value_all(k)},
@@ -1010,7 +1017,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 			case .Create:
 				if found || len(rx.live.tables[id].records) >= k.max_records {return false}
 				rec := replica_insert(&rx.live, id, i, key)
-				if !read_fields(&r, k, rec.value, true) || !valid_value(k, rec.value) {
+				if !read_fields(&r, k, rec.value, true) || !valid_value(rx.reg, k, rec.value) {
 					replica_remove_at(&rx.live, id, i)
 					return false
 				}
@@ -1028,7 +1035,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 				if !found {return false}
 				rec := &rx.live.tables[id].records[i]
 				if !read_changes(&r, k, mask, rec.value, true) ||
-				   !valid_value(k, rec.value) {return false}
+				   !valid_value(rx.reg, k, rec.value) {return false}
 				append(
 					out,
 					Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask},
@@ -1050,7 +1057,7 @@ receive_state :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> boo
 // gone (counted in rx.dropped), yields nothing and is not an error.
 receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> bool {
 	blobs_free(rx)
-	r := reader_make(data)
+	r := reader_make(data, rx.reg)
 	if read_u8(&r) != SNAPSHOT_MESSAGE {return false}
 	tick := read_varint(&r)
 	back := read_varint(&r)
@@ -1107,7 +1114,7 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 			case .Create:
 				if found || len(g.work.tables[id].records) >= k.max_records {return false}
 				rec := replica_insert(&g.work, id, i, key)
-				if !read_fields(&r, k, rec.value, true) || !valid_value(k, rec.value) {
+				if !read_fields(&r, k, rec.value, true) || !valid_value(rx.reg, k, rec.value) {
 					replica_remove_at(&g.work, id, i)
 					return false
 				}
@@ -1125,7 +1132,7 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 				if !found {return false}
 				rec := &g.work.tables[id].records[i]
 				if !read_changes(&r, k, mask, rec.value, true) ||
-				   !valid_value(k, rec.value) {return false}
+				   !valid_value(rx.reg, k, rec.value) {return false}
 				append(
 					out,
 					Received{kind = id, op = .Change, key = key, value = rec.value, mask = mask},

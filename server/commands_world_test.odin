@@ -138,7 +138,7 @@ test_world_commands :: proc(t: ^testing.T) {
 	pump(t, both)
 
 	// /give to everyone; /wear.
-	stone := game.item_of_block(.Stone)
+	stone := game.item_of_block(test_reg(), .Stone)
 	before_a, before_b :=
 		game.inventory_count(&a.inventory, stone), game.inventory_count(&b.inventory, stone)
 	cmd(&a, "give @a stone 10")

@@ -19,7 +19,7 @@ state_rx_init :: proc(r: ^State_Rx, allocator := context.allocator) {
 	r.allocator = allocator
 	context.allocator = allocator
 	r.schema = game.game_schema(allocator)
-	game.receiver_init(&r.rx, &r.schema, allocator)
+	game.receiver_init(&r.rx, &r.schema, test_reg(), allocator)
 }
 
 @(private)

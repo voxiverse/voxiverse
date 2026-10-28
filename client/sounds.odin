@@ -81,7 +81,13 @@ sounds_destroy :: proc(b: ^Sound_Bank) {
 }
 
 // sounds_play plays a session's events of this frame, heard from view.
-sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view: View) {
+sounds_play :: proc(
+	b: ^Sound_Bank,
+	m: ^audio.Mixer,
+	reg: ^game.Registry,
+	events: []Sound_Event,
+	view: View,
+) {
 	right := [3]f32{math.cos(view.yaw), 0, -math.sin(view.yaw)}
 	for e in events {
 		d := e.position - view.position
@@ -116,7 +122,7 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 				m,
 				{sound = b.player[.Land][variant], gain = gain, pitch = pitch, bus = .Player},
 			)
-			if mat, ok := sfx.material_of(e.block); ok {
+			if mat, ok := sfx.material_of(reg, e.block); ok {
 				audio.play(
 					m,
 					{
@@ -128,7 +134,7 @@ sounds_play :: proc(b: ^Sound_Bank, m: ^audio.Mixer, events: []Sound_Event, view
 				)
 			}
 		case .Break, .Place, .Step:
-			mat, ok := sfx.material_of(e.block)
+			mat, ok := sfx.material_of(reg, e.block)
 			if !ok {continue}
 			action: sfx.Action =
 				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
@@ -181,7 +187,7 @@ block_under :: proc(s: ^Session, feet: [3]f64) -> (game.Block, bool) {
 			&s.world,
 			{i32(math.floor(feet.x + o.x)), y, i32(math.floor(feet.z + o.y))},
 		)
-		if game.block_collides(b) {return b, true}
+		if game.block_collides(&s.reg.blocks, b) {return b, true}
 	}
 	return .Air, false
 }

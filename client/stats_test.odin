@@ -59,7 +59,7 @@ received :: proc(f: ^Overlay_Fixture) -> []game.Client_Message {
 	game.receive(server, &packets)
 	for p in packets {
 		defer game.packet_free(server, p)
-		if m, ok := game.decode_client(p); ok {append(&out, m)}
+		if m, ok := game.decode_client(p, test_reg()); ok {append(&out, m)}
 	}
 	return out[:]
 }

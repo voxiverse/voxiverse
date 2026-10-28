@@ -76,7 +76,7 @@ block_of :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 
 @(private = "file")
 query :: proc(m: ^Mirror) -> game.Block_Query {
-	return {m, block_of}
+	return {m, block_of, test_blocks()}
 }
 
 @(private = "file")
@@ -100,7 +100,7 @@ mirror_pump :: proc(sess: ^Session) {
 	game.receive(m.endpoint, &packets)
 	for p in packets {
 		defer game.packet_free(m.endpoint, p)
-		msg, ok := game.decode_server(p, m.scratch)
+		msg, ok := game.decode_server(p, m.scratch, m.rx.reg)
 		if !ok {
 			append(&sess.failures, "the mirror could not decode a message")
 			continue
@@ -159,7 +159,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		switch game.State_Kind(g.kind) {
 		case .Block:
 			v := (^game.Block_Record)(g.value)
-			mirror_set(m, game.key_block(g.key), v.block)
+			mirror_set(m, game.key_block(g.key), game.Block(v.block))
 		case .Own_Player:
 			v := (^game.Own_Player)(g.value)^
 			m.last_update = v
@@ -228,7 +228,7 @@ session_start :: proc(
 	game.block_arrays_init(&m.arrays, 2048)
 	m.key = test_key("determinism")
 	m.schema = game.game_schema()
-	game.receiver_init(&m.rx, &m.schema)
+	game.receiver_init(&m.rx, &m.schema, sess.srv.registry)
 	for sec in Hash_Section {sess.seen[sec] = make(map[u64]struct{})}
 	sess.logging = logging
 	if logging {

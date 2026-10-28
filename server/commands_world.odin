@@ -270,13 +270,24 @@ admin_seed :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
+// admin_packs: the packs the universe runs, in load order.
+@(private)
+admin_packs :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	for p in s.registry.packs {
+		notice(s, c, fmt.tprintf("%s %s: %s", p.namespace, p.version, p.title))
+	}
+	return true
+}
+
 // admin_wear: put on every piece of armor carried, where its slot is free.
 @(private)
 admin_wear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	worn := 0
 	for i in 0 ..< game.INVENTORY_SLOTS {
-		if info, _ := game.item_info(c.inventory.slots[i].item); info.equip == nil {continue}
-		if _, ok := game.inventory_apply(&c.inventory, {.Quick_Move, i, 0}, false); ok {worn += 1}
+		if info, _ := game.item_info(s.registry, c.inventory.slots[i].item);
+		   info.equip == nil {continue}
+		if _, ok := game.inventory_apply(s.registry, &c.inventory, {.Quick_Move, i, 0}, false);
+		   ok {worn += 1}
 	}
 	c.inv_changed = true
 	notice(s, c, fmt.tprintf("Put on %d", worn))

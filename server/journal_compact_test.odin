@@ -53,7 +53,7 @@ segments_size :: proc(w: ^World) -> (bytes: int, compacted: int, count: int) {
 }
 
 segment_header_of :: proc(data: []u8) -> (game.Journal_Header, bool) {
-	r := game.journal_read_segment(data, nil)
+	r := game.journal_read_segment(test_reg(), data, nil)
 	return r.header, r.status != .Bad_Header
 }
 

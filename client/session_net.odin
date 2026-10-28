@@ -52,7 +52,7 @@ receive :: proc(s: ^Session) {
 	for p in s.received {
 		if s.state == .Failed {return}
 		s.stats.bytes_received += len(p)
-		m, ok := game.decode_server(p, s.scratch)
+		m, ok := game.decode_server(p, s.scratch, s.reg)
 		if !ok {
 			fail(s, "the server sent an invalid message")
 			return
@@ -168,6 +168,10 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		fail(s, "the server runs a different version")
 		return
 	}
+	if w.content != s.reg.hash {
+		fail(s, content_mismatch(s.reg, w))
+		return
+	}
 	s.welcome = w
 	s.home = w.address
 	s.place = {
@@ -181,6 +185,7 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	columns := game.interest_count(r, 0)
 	if err := world_init(
 		&s.world,
+		s.reg,
 		capacity,
 		columns,
 		worker_count(),
@@ -329,4 +334,29 @@ send_prediction_check :: proc(s: ^Session, sequence: u32) {
 		}
 	}
 	send_message(s, game.Prediction_Check{sequence, game.player_fields(s.prediction.state)})
+}
+
+// content_mismatch: why a server whose registry is not ours (Welcome.content
+// differs) cannot be played here: the packs it uses that this game lacks.
+@(private = "file")
+content_mismatch :: proc(reg: ^game.Registry, w: game.Welcome) -> string {
+	missing := make([dynamic]string, context.temp_allocator)
+	rest := w.packs
+	for entry in strings.split_iterator(&rest, ",") {
+		namespace, _, _ := strings.partition(entry, "@")
+		have := false
+		for p in reg.packs {
+			if fmt.tprintf("%s@%s", p.namespace, p.version) == entry && p.namespace == namespace {
+				have = true
+			}
+		}
+		if !have {append(&missing, entry)}
+	}
+	if len(missing) == 0 {
+		return "this server's content differs from this game's"
+	}
+	return fmt.tprintf(
+		"this server uses content packs this game does not have: %s",
+		strings.join(missing[:], ", ", context.temp_allocator),
+	)
 }

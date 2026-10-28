@@ -46,6 +46,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
 	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
 	{"seed", "", {0, 0}, admin_seed, "info.seed"},
+	{"packs", "", {0, 0}, admin_packs, "info.packs"},
 	{"wear", "", {0, 0}, admin_wear, "items.wear"},
 	{"help", "[command]", {0, 1}, admin_help, "info.help"},
 	// World editing: on the selection (selection.odin), or coordinates given.
@@ -266,7 +267,7 @@ admin_fill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	box, ok, said := edit_box(s, c, args, 1)
 	if said {return true}
 	if !ok {return false}
-	block := parse_block(args[len(args) - 1]) or_return
+	block := parse_block(s, args[len(args) - 1]) or_return
 	bulk_notice(s, c, "fill", {shape = box, op = .Set, block = block})
 	return true
 }
@@ -276,8 +277,8 @@ admin_replace :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	box, ok, said := edit_box(s, c, args, 2)
 	if said {return true}
 	if !ok {return false}
-	from := parse_block(args[len(args) - 2]) or_return
-	to := parse_block(args[len(args) - 1]) or_return
+	from := parse_block(s, args[len(args) - 2]) or_return
+	to := parse_block(s, args[len(args) - 1]) or_return
 	bulk_notice(s, c, "replace", {shape = box, op = .Replace, from = from, block = to})
 	return true
 }
@@ -302,7 +303,7 @@ admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	case:
 		return false
 	}
-	block := parse_block(args[len(args) - 1]) or_return
+	block := parse_block(s, args[len(args) - 1]) or_return
 	bulk_notice(s, c, "sphere", {shape = Sphere{center, radius}, op = .Set, block = block})
 	return true
 }
@@ -566,10 +567,12 @@ parse_ball :: proc(words: []string) -> (center: [3]f64, radius: f64, ok: bool) {
 
 // parse_block: a block a bulk edit may set (air, or a placeable one).
 @(private = "file")
-parse_block :: proc(name: string) -> (game.Block, bool) {
-	b, ok := game.block_by_name(name)
+parse_block :: proc(s: ^Server, name: string) -> (game.Block, bool) {
+	b, ok := game.registry_block(s.registry, name)
 	_, wheat := game.wheat_stage(b)
-	return b, ok && (b == .Air || game.can_place(b) || game.block_is_farmland(b) || wheat)
+	return b,
+		ok &&
+		(b == .Air || game.can_place(&s.registry.blocks, b) || game.block_is_farmland(b) || wheat)
 }
 
 // admin_role edits a role (it is made by its first grant, inherit or meta).

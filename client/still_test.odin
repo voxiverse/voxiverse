@@ -70,6 +70,7 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 				join = Join{address = address},
 				view_radius = 3,
 				view_height = 2,
+				registry = test_reg(),
 			},
 		)
 		return s

@@ -140,7 +140,7 @@ edit_chunk :: proc(
 				p := origin + l
 				if !shape_has(e.shape, p) {continue}
 				old := game.chunk_get(&c.blocks, l)
-				if !game.can_change(old) {continue} 	// the world's floor stays
+				if !game.can_change(&w.server.registry.blocks, old) {continue} 	// the world's floor stays
 				new := old
 				switch e.op {
 				case .Set:

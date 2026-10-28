@@ -10,17 +10,21 @@ import "core:slice"
 // runs). Files end in a CRC-32 of everything before it, so damage is
 // detected instead of loaded.
 //
-// Format 2 (format 1 is in save_v1.odin): a header that indexes the chunks,
-// each with its own CRC-32, so that damage to one chunk loses only that chunk.
+// Format 3 (older ones are refused: before 1.0 nothing is compatible): a header
+// that indexes the chunks, each with its own CRC-32, so that damage to one
+// chunk loses only that chunk, and names the blocks: the chunks hold block
+// numbers, the header says which block each number was (its id), so a
+// registry whose numbers moved (another pack set) still loads them.
 //
-// "VXRG", u32 format (2), i32 region x, z, varint64 generation (the save that
-// wrote it), varint chunk count n, the index (n x { i32 x, y, z, u32 offset,
+// "VXRG", u32 format (3), i32 region x, z, varint64 generation (the save that
+// wrote it), varint block count b, b x string id (number = position), varint
+// chunk count n, the index (n x { i32 x, y, z, u32 offset,
 // u32 length, u32 CRC-32 of the payload }, sorted by chunk_pos_less), varint
 // top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
 // the payloads (each chunk's blocks, offset counted from here).
 
 REGION_MAGIC :: "VXRG"
-REGION_FORMAT :: 2
+REGION_FORMAT :: 3
 REGION_SIZE :: 16 // chunk columns per side
 REGION_SHIFT :: 4
 
@@ -42,6 +46,7 @@ Saved_Top :: struct {
 // region_encode writes a region's edited chunks and tops into w, as the
 // save of generation.
 region_encode :: proc(
+	reg: ^Registry,
 	w: ^Writer,
 	region: Region_Pos,
 	chunks: []Saved_Chunk,
@@ -56,7 +61,7 @@ region_encode :: proc(
 		write_chunk_blocks(&scratch, c.blocks)
 		encoded[i] = {c.pos, slice.clone(scratch.buf[:], context.temp_allocator)}
 	}
-	region_encode_bytes(w, region, encoded, tops, generation)
+	region_encode_bytes(reg, w, region, encoded, tops, generation)
 }
 
 // Encoded_Chunk: a chunk's blocks as write_chunk_blocks wrote them.
@@ -68,6 +73,7 @@ Encoded_Chunk :: struct {
 // region_encode_bytes is region_encode for chunks already encoded (the save
 // slices encode them a few at a time, the worker assembles the file).
 region_encode_bytes :: proc(
+	reg: ^Registry,
 	w: ^Writer,
 	region: Region_Pos,
 	chunks: []Encoded_Chunk,
@@ -94,6 +100,8 @@ region_encode_bytes :: proc(
 	write_i32(w, region.x)
 	write_i32(w, region.y)
 	write_varint64(w, generation)
+	write_varint(w, u32(reg.blocks.count))
+	for i in 0 ..< reg.blocks.count {write_string(w, reg.blocks.defs[i].id)}
 	write_varint(w, u32(len(sorted)))
 	for c, i in sorted {
 		for v in c.pos {write_i32(w, v)}
@@ -118,6 +126,9 @@ Region_Reader :: struct {
 	region:     Region_Pos,
 	generation: u64,
 	index:      []Region_Index,
+	remap:      []u16, // the saved number's block number here
+	identity:   bool, // the numbers are as they were: nothing to remap
+	unknown:    [dynamic]string, // saved blocks this registry lacks (temp allocator)
 	next:       int,
 	payloads:   []u8,
 	tops:       [dynamic]Saved_Top, // (temp allocator)
@@ -133,22 +144,52 @@ Region_Error :: enum u8 {
 	None,
 	Not_A_Region, // wrong magic
 	Newer_Format, // written by a newer game
-	Older_Format, // format 1: the migration reads it (region_open_v1)
+	Older_Format, // format 2 or less: there is no migration
 	Damaged, // the header's checksum, truncation, bad values
 	Wrong_Region, // the file says it is another region
+	Unknown_Blocks, // it names blocks the registry lacks (r.unknown), and they are not to become air
 }
+
+// MAX_SAVED_BLOCK_NAME: the longest block id a region file may name.
+MAX_SAVED_BLOCK_NAME :: 96
 
 // region_open checks a region file's header (magic, format, checksum, region,
 // index, tops). The chunks are checked as they are read.
-region_open :: proc(data: []u8, expect: Region_Pos) -> (r: Region_Reader, err: Region_Error) {
+// unknown_air: blocks the registry lacks become air (else: Unknown_Blocks).
+region_open :: proc(
+	reg: ^Registry,
+	data: []u8,
+	expect: Region_Pos,
+	unknown_air := false,
+) -> (
+	r: Region_Reader,
+	err: Region_Error,
+) {
 	if len(data) < 4 || string(data[:4]) != REGION_MAGIC {return {}, .Not_A_Region}
 	if len(data) < 8 {return {}, .Damaged}
-	r.reader = reader_make(data[4:])
+	r.reader = reader_make(data[4:], reg)
 	format := read_u32(&r.reader)
 	if format > REGION_FORMAT {return {}, .Newer_Format}
 	if format < REGION_FORMAT {return {}, .Older_Format}
 	r.region = {read_i32(&r.reader), read_i32(&r.reader)}
 	r.generation = read_varint64(&r.reader)
+	names := read_varint(&r.reader)
+	if !r.reader.ok || names > MAX_BLOCK_STATES {return {}, .Damaged}
+	r.remap = make([]u16, names, context.temp_allocator)
+	r.unknown = make([dynamic]string, context.temp_allocator)
+	r.identity = int(names) == reg.blocks.count
+	for i in 0 ..< int(names) {
+		name := read_string(&r.reader, MAX_SAVED_BLOCK_NAME)
+		b, found := registry_block(reg, name)
+		if found {
+			r.remap[i] = u16(b)
+			if int(b) != i {r.identity = false}
+		} else {
+			r.remap[i] = u16(Block.Air)
+			r.identity = false
+			append(&r.unknown, name)
+		}
+	}
 	n := read_varint(&r.reader)
 	max_chunks := REGION_SIZE * REGION_SIZE * (CHUNK_MAX_Y - CHUNK_MIN_Y)
 	if !r.reader.ok || int(n) > max_chunks {return {}, .Damaged}
@@ -179,6 +220,7 @@ region_open :: proc(data: []u8, expect: Region_Pos) -> (r: Region_Reader, err: R
 	r.payloads = data[crc_at + 4:]
 	if r.region != expect {return {}, .Wrong_Region}
 	r.reader.ok = true
+	if len(r.unknown) > 0 && !unknown_air {return r, .Unknown_Blocks}
 	return r, .None
 }
 
@@ -204,10 +246,18 @@ region_next_chunk :: proc(
 			continue
 		}
 		cr := reader_make(r.payloads[e.offset:][:e.length])
+		cr.block_limit = u32(len(r.remap))
 		uniform, is_uniform = read_chunk_blocks(&cr, dst)
 		if !reader_finish(&cr) {
 			append(&r.dropped, e.pos)
 			continue
+		}
+		if !r.identity {
+			if is_uniform {
+				uniform = Block(r.remap[uniform])
+			} else {
+				for &b in dst {b = Block(r.remap[b])}
+			}
 		}
 		return e.pos, uniform, is_uniform, true
 	}

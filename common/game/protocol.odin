@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 24
+PROTOCOL_VERSION :: 25
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -262,7 +262,12 @@ Welcome :: struct {
 	view_height: u32,
 	rules:       Rules,
 	address:     Address, // the world the player is in
+	content:     u64, // the server's registry hash (registry.hash): its blocks, items, recipes...
+	packs:       string, // the universe's packs, "namespace@version" comma separated, in load order
 }
+
+// MAX_PACKS_TEXT: the longest Welcome.packs.
+MAX_PACKS_TEXT :: 2048
 
 // World_Changed: the player travelled to another world (its address and
 // rules): drop everything of the last one. Its chunks, entities and the
@@ -701,6 +706,8 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		rules := v.rules
 		write_vars(w, rules_table(), &rules)
 		write_address(w, v.address)
+		write_fixed64(w, v.content)
+		write_string(w, v.packs)
 	case World_Changed:
 		write_u8(w, u8(Server_Kind.World_Changed))
 		write_address(w, v.address)
@@ -764,9 +771,9 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 
 // decode_client returns the message in data, or ok = false if it is not a
 // valid one. Strings in the result point into data.
-decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
+decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, ok: bool) {
 	if len(data) > MAX_MESSAGE_SIZE {return}
-	r := reader_make(data)
+	r := reader_make(data, reg)
 	switch read_u8(&r) {
 	case u8(Client_Kind.Hello):
 		h := Hello {
@@ -904,9 +911,16 @@ decode_client :: proc(data: []u8) -> (m: Client_Message, ok: bool) {
 
 // decode_server is decode_client's counterpart; a chunk's blocks go into
 // blocks (left unchanged for a uniform chunk).
-decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, ok: bool) {
+decode_server :: proc(
+	data: []u8,
+	blocks: ^Block_Array,
+	reg: ^Registry = nil,
+) -> (
+	m: Server_Message,
+	ok: bool,
+) {
 	if len(data) > MAX_MESSAGE_SIZE {return}
-	r := reader_make(data)
+	r := reader_make(data, reg)
 	switch read_u8(&r) {
 	case u8(Server_Kind.Welcome):
 		w := Welcome {
@@ -919,6 +933,8 @@ decode_server :: proc(data: []u8, blocks: ^Block_Array) -> (m: Server_Message, o
 		w.view_height = read_u32(&r)
 		read_vars(&r, rules_table(), &w.rules)
 		w.address = read_address(&r)
+		w.content = read_fixed64(&r)
+		w.packs = read_string(&r, MAX_PACKS_TEXT)
 		if w.view_radius == 0 ||
 		   w.view_radius > MAX_VIEW_RADIUS ||
 		   w.view_height == 0 ||
@@ -1151,7 +1167,7 @@ read_block_pos :: proc(r: ^Reader) -> (p: Block_Pos) {
 @(private = "file")
 read_block :: proc(r: ^Reader) -> Block {
 	id := read_u16(r)
-	if !block_valid(id) {
+	if !reader_block_valid(r, id) {
 		reader_fail(r)
 		return .Air
 	}
@@ -1211,7 +1227,10 @@ read_stack :: proc(r: ^Reader) -> Stack {
 	item := Item(read_u16(r))
 	if item == NO_ITEM {return {}}
 	count := int(read_u16(r))
-	if !item_valid(item) || count <= 0 || count > item_stack_size(item) {
+	if r.reg == nil ||
+	   !item_valid(r.reg, item) ||
+	   count <= 0 ||
+	   count > item_stack_size(r.reg, item) {
 		reader_fail(r)
 		return {}
 	}

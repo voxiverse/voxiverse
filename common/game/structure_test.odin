@@ -21,8 +21,8 @@ test_templates :: proc(t: ^testing.T) {
 	// Round trip.
 	w: Writer
 	writer_init(&w, context.temp_allocator)
-	template_encode(&w, &tmpl)
-	back, ok := template_decode(w.buf[:])
+	template_encode(&w, &tmpl, test_reg())
+	back, ok := template_decode(test_reg(), w.buf[:])
 	defer delete(back.cells)
 	testing.expect(t, ok && back.size == tmpl.size)
 	testing.expect(t, ok && string(transmute([]u8)back.cells) == string(transmute([]u8)tmpl.cells))
@@ -48,8 +48,8 @@ test_templates :: proc(t: ^testing.T) {
 	bad := make([]u8, len(w.buf), context.temp_allocator)
 	copy(bad, w.buf[:])
 	bad[0] ~= 1
-	_, ok = template_decode(bad)
+	_, ok = template_decode(test_reg(), bad)
 	testing.expect(t, !ok, "a bad magic number")
-	_, ok = template_decode(w.buf[:len(w.buf) - 1])
+	_, ok = template_decode(test_reg(), w.buf[:len(w.buf) - 1])
 	testing.expect(t, !ok, "a short file")
 }

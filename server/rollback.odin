@@ -711,8 +711,8 @@ admin_history :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 				age_text(s, e.age),
 				who,
 				strings.to_lower(fmt.tprint(e.how), context.temp_allocator),
-				game.BLOCK_INFO[e.old].name,
-				game.BLOCK_INFO[e.new].name,
+				game.block_name(s.registry, e.old),
+				game.block_name(s.registry, e.new),
 				e.action,
 			),
 		)

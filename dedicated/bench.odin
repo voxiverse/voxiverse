@@ -147,7 +147,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
 		b.scratch = new(game.Block_Array)
 		b.schema = game.game_schema()
-		game.receiver_init(&b.rx, &b.schema)
+		game.receiver_init(&b.rx, &b.schema, srv.registry)
 		netcode.link_connect(&b.link, {net.IP4_Loopback, port}, "", time.tick_now())
 	}
 	defer for &b in bots {
@@ -206,7 +206,7 @@ pump :: proc(bots: []Bot) {
 		netcode.link_receive(&b.link, &b.messages)
 		for p in b.messages {
 			defer netcode.link_free(&b.link, p)
-			m, ok := game.decode_server(p, b.scratch)
+			m, ok := game.decode_server(p, b.scratch, b.rx.reg)
 			if !ok {continue}
 			#partial switch v in m {
 			case game.Challenge:
