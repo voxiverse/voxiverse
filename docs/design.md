@@ -1,6 +1,9 @@
 # Voxiverse design decisions
 
-The owner's product and UI decisions, from the design interview of 2026-10-28 (#45), grouped.
+The owner's product and UI decisions, from the design interviews of 2026-10-28 (#45, then the second batch, #51), grouped.
+The second batch's sections (*Worlds of a universe* to *Economy and culture*, *Creatures in play*) are
+**launching points for the Living worlds arc** (plan.md), not schedule: nothing in them is built before the
+foundation arc is done.
 Planning and milestone sessions read this file and cite it in specs ("design.md, *Camera and
 movement*"). It changes only with the owner's word: a session that disagrees asks the owner
 and does not edit it. What is decided is marked as such; what is not is under **The owner
@@ -142,7 +145,111 @@ The [glossary](#glossary) fixes the names; code, docs and UI use them.
 
 ## World feel
 - Weather: in the next tier, as planned (with atmosphere and lighting).
-- Day length: per world, from its address (its astronomy), defaulting near 20 minutes.
+- Day length: per world, from its address (its astronomy), defaulting near 20 minutes; the home world's is the default. Gravity, atmosphere and the star also differ per world: see *Worlds of a universe* and *Physics of worlds*.
+
+## Principle: low-fidelity science
+- Use low-fidelity scientific classifications and algorithms wherever possible (planet classes, stellar types, climate from the star and atmosphere, ecology as population dynamics, body plans adapted to physics, genetics), always simplified, and always behind "it must stay fun". Simulate the gist, never the detail; when realism and fun conflict, fun wins.
+
+## Worlds of a universe
+- World kinds follow actual scientific classifications of planets: most worlds are alien and few are Earth-like. A player who wants an Earth-like world stays on the home world.
+- Worlds differ in gravity, day length and atmosphere (thin, none, toxic; the gameplay consequences are the owner's, see *The owner decides*).
+- Worlds are infinite and flat (as today), not finite wrapping planets.
+- The home world is always gentle and Earth-like: the seed picks among friendly kinds.
+- Classification, by mass and composition: rocky (sub-Earth, Earth-like, super-Earth), ocean, ice, desert and hot rocky, lava, and moons. Gas giants appear in the sky only; you visit their moons.
+- Stars matter: the star's colour tints daylight (red dwarfs warm and orange, blue stars cold); binary systems have two suns; the star's size sets the heat (climate, with atmosphere).
+- Each sky shows the other bodies of the world's system (moons, planets, gas giants) at their positions: the "sky from astronomy" tier item.
+- Names: a catalogue designation from the address (e.g. "VX-4471 c") plus a pronounceable generated common name; players can rename worlds for themselves (*Universes*).
+- The galaxy: each universe's galaxy is a spiral (arm count, twist and colours from the seed); worlds sit on its stars. An address's glyphs encode its position: nearby addresses are nearby stars, and the Atlas's galaxy view shows real positions.
+- The number of worlds is effectively unbounded (the address space is astronomically large); only visited worlds cost disk.
+
+## Physics of worlds
+Experimental: "try all of it; may streamline later". Built so it can be simplified.
+- Gravity changes jump height and fall speed (physics shared by the server and prediction), fall damage when health is on, projectiles and dropped items, and creatures' movement.
+- No atmosphere: a black sky with stars by day, muffled or silent sound, no weather and no fog. Breathing needs gear: a gameplay hook only, the rule is the owner's. Try it and keep what works.
+- On arrival in a new world: a card with its name, kind and three facts (gravity, day length, atmosphere), fading after a few seconds.
+- A visited world's physical facts are in its Atlas entry.
+
+## Blocks of alien worlds
+- Each world kind has a block set in the base pack (rocks, soils, ices, crystals...). Each such block has 8 colour variants as block states (palette-quantized), and worldgen chooses which variants each world uses. The registry stays fixed, a carried block keeps its look, and every world looks distinct. The star's tint colours the light, not the blocks.
+- The world-kind block sets are authored by agents as packs, with textures programmatic from recipes, and reviewed by the owner.
+- Blocks don't carry their origin world until the economy exists. Everything travels between worlds freely (content is per universe).
+
+## Flora
+- A world's plants are procedural: assembled from a grammar of parts (stems, leaves, flowers, colours) per world kind and climate. The base pack defines the grammar; worldgen rolls each world's species.
+- Growth, spreading and dying are neighbour rules as data (M49b), driven by light, water, temperature and atmosphere: one engine for every world.
+- Trees are built from blocks and grown from rules (L-system-like growth into blocks), so they can be harvested.
+- Ecosystems: populations are simulated coarsely, as per-region densities of each species that grow or decline with food and predators; spawning reads them.
+
+## Fauna
+Supersedes "creatures: the owner decides" for the systems. Which specific creatures exist is still content, and the owner decides it later (creatures on alien worlds too).
+- Creatures are procedural: body plans from parts (legs, segments, wings, fins), sizes and colours per world kind, with procedural animation (like the avatar's cycles); each world's species are rolled by worldgen. Sizes run from insect-like to elephant-like, within block-scale limits; huge, multi-entity bodies later.
+- Behaviour is data: utility AI or behaviour trees (needs such as eat, flee, rest, herd, and the actions that meet them) as pack data, on the navigation and AI framework (next tier). Scripts only for special creatures.
+- Bodies adapt to their world, by rules in the grammar: low gravity gives tall or gliding bodies, oceans give swimmers, no air gives none or alien forms.
+- Genetics in general: M25's inherited traits extended to every species; heritable traits (colour, size, pattern) come from the species' grammar.
+
+## Creatures in play
+- Spawning combines both models. The population simulation decides what lives in a region and how many; Minecraft-style local rules (light, biome, the block underneath, space to fit) decide where an individual appears near players. A spawn uses up the region's density and despawning returns it; named and tamed individuals persist.
+- The AI framework supports aggression; whether creatures are hostile and how combat works is the owner's (*The owner decides*).
+- The Atlas has a species codex: the species you have seen on each world, with a generated scientific-style name and their traits. No gameplay rewards are decided.
+
+## NPCs
+- NPCs are persistent entities with identity (name, home, job), needs, memory, relationships and a daily schedule. Behaviour is data, as for fauna. Dialogue comes from the declarative layer (M53). The universe's agent can author or drive important NPCs.
+- Each NPC remembers what players did to them, alongside faction reputation; both feed dialogue and prices.
+- Dialogue is authored trees in packs, written by the agent (for example between visits), and deterministic in play: no live model conversation. No voice acting: dialogue and quests are text.
+- NPCs live only where civilizations exist; most worlds are wild.
+- Schedules (sleep, work, gather) follow the world's day length and are caught up on arrival.
+
+## Civilizations
+- Rolled from a world's habitability: a low-fidelity Drake-style chance from world kind, star, atmosphere and age, so inhabited worlds are rare and meaningful.
+- Development is a low-fidelity scale (Kardashev-ish tiers: tribal, agrarian, industrial, spacefaring). The tier sets a civilization's buildings, its items, and whether it knows gates.
+- Settlements are procedural from culture, tech tier and terrain: a settlement grammar (layout, buildings from structure templates (M12), materials from the world's blocks).
+- Civilizations change through a coarse simulation, run when a world is visited and caught up (population, resources, relations evolve in steps); players' actions change them.
+- Each civilization has a generated naming language (low-fidelity phonology for names of people, places and items) and a few culture traits (values, architecture style, colours) that shape its settlements and dialogue tone.
+
+## Factions
+- Groups with goals, territory and relations (ally, neutral, hostile as numbers), within and across civilizations. NPCs belong to them, and each player has a reputation with each faction.
+- Spacefaring, gate-knowing factions span several worlds; the others are local to one.
+- Players can join NPC factions, which affects their reputation. Player-made groups (guilds, parties) are a separate social system, later.
+- Conflict between factions is simulated coarsely in the catch-up simulation (wars, trade) and shows up as events: territory changes, refugees, quests. The combat rules themselves are gameplay, the owner's.
+
+## Economy
+- A low-fidelity supply-and-demand simulation per settlement: each produces and consumes goods by its tech tier, biome and population; prices move with stock; trade between settlements and worlds evens them out. Deterministic.
+- Currency: the owner decides later.
+
+## The core game and agents
+- The core game is classic and complete without any agent. Its systems (ecology, civilizations, factions, the economy) are deterministic rule simulations in the state tier (bit-identical, journalled): simple rules producing emergent, computationally irreducible complexity. Nobody, agent included, reaches in to change their numbers.
+- A future platform, like Fortnite's custom experiences, will let people spin up their own custom games. That is a later feature idea, not designed now. The core game dogfoods it: it is built from the same packs, data and scripts a custom experience would use.
+- Agents are optional, sandboxed content authors (packs, quests, NPC dialogue). The engine must make it safe for them to write content without breaking the game. They are not a live director over the simulations.
+- Only visited worlds simulate; a world is caught up when visited (unvisited worlds are generated fresh from rules and elapsed time). A world nobody is in freezes and catches up on return (crops grow by the elapsed time).
+- "Classic, non-procedural" applies to the agent's role only: flora, fauna and settlements stay procedural from grammars.
+
+## Performance and graphics
+- Target: 60 fps at 12 chunks' render distance on a "mid" reference PC, described in the docs in relative terms (no one's hardware named); benchmarks guard it.
+- Options gets graphics presets (Low, Medium, High, Custom); changing any single option makes it Custom.
+- Vsync on by default, plus an fps cap option; unlimited allowed; menus capped low to save power.
+- Lower fps when the window is unfocused or minimized; nothing else automatic.
+
+## Packs in the UI
+- Each universe card's menu has a Packs list: the universe's packs, versions and authors (labelled agent or person), enabled or disabled for singleplayer.
+- Joining a server that sends packs shows a progress bar with the packs' names and sizes in the loading screen; cached packs skip it.
+- Later: client-only assets packs, so a player can layer their own textures and sounds over any universe (visuals and sounds only).
+- Authoring in the game: hot reload (M47i) plus a pack-errors panel showing file:line.
+
+## Sound of worlds
+- Music is chosen by world kind (ice, lava, ocean... each has its own moods); the director (M44) picks by world and biome.
+- Atmosphere shapes sound: thin air muffles it and no air silences it. Each world kind also has its own ambience bed: alien fauna and wind (M58b).
+- No voice acting.
+- Gate travel sounds: a rising warp whoosh, then an arrival stinger (the discovery stinger on a first visit).
+
+## Multiplayer across worlds
+- Players spread across many worlds at once: each world runs where people are (one server process per universe, worlds on their own threads), and empty worlds sleep.
+- Target: about 100 players per universe, spread over worlds, benchmarked. Beyond that is a later scaling problem (plan.md, *Scale*).
+- Servers can limit gate travel with gate rules: allow all, an allow list, or visited-only, enforced when dialing.
+
+## Identity and releases
+- In one sentence: "Explore a voxel universe of countless worlds."
+- The README and any store page's lead feature: deferred until the end; not updated now.
+- Named Alpha builds every Friday: the loop tags the next minor version (vX.Y.0, "Alpha N") on the last green main commit, never a red one, which makes the draft release; the owner reviews and publishes it. Opus drafts player-facing release notes from the week's milestones (like Alpha 1's), plus a short hand-check list from that week's #1 checks for the owner to try before publishing.
 
 ## Deferred
 - Item icons for non-cube blocks (stairs, slabs, doors, fences) render wrong: noted, deferred (non-essential).
@@ -158,5 +265,10 @@ Hard stop: never build, infer or prototype these. A session that needs one asks 
 - Death and respawn: what you keep, where "home" is.
 - Character: attributes, levels, skills, perks (the Character section stays hidden). Equipment modifiers are not character attributes.
 - How gate addresses get "found" for the Atlas; other ways to dial.
-- How players meet the agent that authors their universe.
+- How players meet the agent that authors their universe; when and how players hear about agents at all (unknown until the agent is integrated).
+- Currency (the economy's money).
+- Hostility and combat: whether creatures are hostile, when, and the combat rules (the AI framework supports aggression; using it is a design call). Faction conflict's combat rules too.
+- Which specific creatures exist, on the home world and on alien worlds.
+- What breathing gear is, and any rule for a world without air (the hook exists; the rule is not decided).
+- The README and the store page (deferred to the end).
 - Emotes, onboarding and tutorials (later, as data).
