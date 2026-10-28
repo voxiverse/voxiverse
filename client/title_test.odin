@@ -1,5 +1,6 @@
 package client
 
+import "core:slice"
 import "core:testing"
 
 import "ui"
@@ -11,10 +12,14 @@ test_splashes_parse :: proc(t: ^testing.T) {
 	testing.expect_value(t, got[0], "One")
 	testing.expect_value(t, got[1], "Two")
 	testing.expect_value(t, got[2], "Four")
-	// The shipped file has at least one entry, and the chosen one is stable.
+	// The shipped file has entries, the title's own line among them, and the
+	// chosen one is stable.
 	all := splashes_parse(SPLASHES)
 	testing.expect(t, len(all) >= 1)
-	testing.expect_value(t, all[0], "The Universe, Voxelized.")
+	testing.expect_value(t, slice.contains(all, "The Universe, voxelized."), true)
+	for entry in all {
+		testing.expect(t, entry != "")
+	}
 	testing.expect_value(t, splash_choose(all, 12345), splash_choose(all, 12345))
 	testing.expect_value(t, splash_choose(nil, 5), "")
 }
@@ -37,5 +42,6 @@ test_title_buttons :: proc(t: ^testing.T) {
 		testing.expectf(t, r.y > last, "%s is out of order", label)
 		last = r.y
 	}
-	testing.expect_value(t, app.splash, "The Universe, Voxelized.")
+	// The splash is picked by the clock, so any shipped entry is right.
+	testing.expect_value(t, slice.contains(splashes_parse(SPLASHES), app.splash), true)
 }
