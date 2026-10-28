@@ -55,7 +55,7 @@ template_encode :: proc(w: ^Writer, t: ^Template, reg: ^Registry) {
 		if !found {append(&palette, c)}
 	}
 	write_varint(w, u32(len(palette)))
-	for p in palette {write_string(w, "void" if p == VOID else block_id(reg, Block(p)))}
+	for p in palette {write_string(w, "void" if p == VOID else state_text(reg, Block(p)))}
 	for i := 0; i < len(t.cells); {
 		j := i
 		for j < len(t.cells) && t.cells[j] == t.cells[i] {j += 1}

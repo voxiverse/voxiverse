@@ -4,12 +4,12 @@
 #include "world.glsl"
 
 // Chunk meshes (render/world_pass.odin, client/mesh), every layer: 8-byte
-// vertices with a chunk-local position, face, AO level, light and texture
-// layer. Positions are relative to the camera's chunk, so floats stay exact
+// vertices with a chunk-local position (in sixteenths of a block), face, AO
+// level, light and texture layer. Positions are relative to the camera's chunk, so floats stay exact
 // far from the origin.
 
-layout(location = 0) in uint in_packed; // x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24 | surface << 28 | drop << 29
-layout(location = 1) in uint in_layer;
+layout(location = 0) in uint in_packed; // x | y << 9 | z << 18 | face << 27 | ao << 30
+layout(location = 1) in uint in_layer; // texture layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21
 
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
 layout(location = 1) out vec3 out_light;
@@ -36,9 +36,9 @@ vec3 lifted(vec3 light, float lift) {
 
 void main() {
 	Scene s = push.scene;
-	vec3 local = vec3(in_packed & 31u, (in_packed >> 5) & 31u, (in_packed >> 10) & 31u);
-	uint face = (in_packed >> 15) & 7u;
-	uint ao = (in_packed >> 18) & 3u;
+	vec3 local = vec3(in_packed & 511u, (in_packed >> 9) & 511u, (in_packed >> 18) & 511u) / 16.0;
+	uint face = (in_packed >> 27) & 7u;
+	uint ao = (in_packed >> 30) & 3u;
 
 	// One texture per block, aligned to the world grid; texture rows run
 	// downwards, so v follows -y on the sides (and on a plant's planes).
@@ -46,22 +46,20 @@ void main() {
 	if (face < 2u) uv = vec2(local.z, -local.y);
 	else if (face < 4u) uv = vec2(local.x, local.z);
 	else uv = vec2(local.x, -local.y);
-	out_uvw = vec3(uv, float(in_layer & 0xffffu));
-	// Tilled soil's top sits a sixteenth low.
-	if ((in_layer & 0x10000u) != 0u) local.y -= 1.0 / 16.0;
+	out_uvw = vec3(uv, float(in_layer & 0xfffu));
 
 	// A liquid's open top sits a little low and swells slowly. The waves'
 	// lengths divide the chunk's, so they meet across chunk borders.
-	if (((in_packed >> 28) & 1u) != 0u) {
+	if (((in_layer >> 20) & 1u) != 0u) {
 		float t = push.time;
-		float drop = float(in_packed >> 29) / 8.0; // eighths below the block's top
+		float drop = float((in_layer >> 21) & 7u) / 8.0; // eighths below the block's top
 		local.y -= drop + 0.03 * sin(t * 1.3 + local.x * PI / 4.0) * cos(t * 0.9 + local.z * PI / 8.0);
 	}
 	vec3 pos = push.chunk_offset + local;
 	gl_Position = s.view_proj * vec4(pos, 1.0);
 
-	uint sky = (in_packed >> 20) & 15u;
-	uint block = (in_packed >> 24) & 15u;
+	uint sky = (in_layer >> 12) & 15u;
+	uint block = (in_layer >> 16) & 15u;
 	// Sky light takes the colour of the time of day; lamps stay warm.
 	vec3 light = max(s.sky_light.rgb * brightness(sky), LAMP_COLOR * brightness(block));
 	light = lifted(light, s.sky_light.w);

@@ -100,10 +100,10 @@ placing_item :: proc(reg: ^Registry, b: Block) -> Item {
 BLOCK_STACK :: 64
 
 // item_of_block: the item of a block players may place (a block's own
-// number + 1), else none.
+// type's number + 1), else none.
 item_of_block :: proc(reg: ^Registry, b: Block) -> Item {
 	if !block_valid(&reg.blocks, u16(b)) || !block_has(&reg.blocks, b, .Placeable) {return NO_ITEM}
-	return Item(u16(b) + 1)
+	return Item(u16(reg.blocks.type_of[b]) + 1)
 }
 
 item_of_tool :: proc(t: Tool) -> Item {

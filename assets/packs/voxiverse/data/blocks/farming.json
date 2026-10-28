@@ -4,6 +4,7 @@
 		"placeable": false,
 		"shades": true,
 		"drop": "voxiverse:dirt",
+		"render_shape": "voxiverse:farmland",
 		"textures": {
 			"side": "voxiverse:dirt",
 			"top": "voxiverse:farmland_top",
@@ -16,6 +17,7 @@
 		"placeable": false,
 		"shades": true,
 		"drop": "voxiverse:dirt",
+		"render_shape": "voxiverse:farmland",
 		"textures": {
 			"side": "voxiverse:dirt",
 			"top": "voxiverse:farmland_moist_top",

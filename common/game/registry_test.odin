@@ -317,7 +317,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					},
 				},
 			),
-			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "override"`,
 		},
 		{
 			"light out of range",
@@ -487,12 +487,12 @@ test_broken_packs :: proc(t: ^testing.T) {
 		{
 			"stray directory",
 			one({{"data/blocks/sub/a.json", "{}"}}),
-			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/ (both sides) and server/structures/ (server only)`,
+			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"stray top-level file",
 			one({{"readme.md", "hello"}}),
-			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/ (both sides) and server/structures/ (server only)`,
+			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"loot tables",

@@ -133,6 +133,7 @@ Content_Kind :: enum u8 {
 	Item_Tag,
 	Recipe,
 	Structure,
+	Shape,
 }
 
 Block_Flag :: enum u8 {
@@ -160,6 +161,80 @@ Layer_Kind :: enum u8 {
 	Translucent,
 }
 
+// Block_Type: one block definition (a number per definition, in M47's order);
+// a Block is a state id, and a type owns a run of them (Type_Def).
+Block_Type :: distinct u16
+
+MAX_PROPS :: 6
+MAX_PROP_VALUES :: 16
+MAX_TYPE_STATES :: 256
+MAX_SHAPE_BOXES :: 16
+
+// Prop_Def: a state property: a name and its values, in declared order.
+Prop_Def :: struct {
+	name:   string,
+	values: []string,
+}
+
+// Place_Rule: how an item places its type (common/game/placement.odin).
+Place_Rule :: enum u8 {
+	Default,
+	Stairs,
+	Slab,
+	Attached,
+}
+
+PLACE_RULE_LIST := [?]string{"default", "stairs", "slab", "attached"}
+#assert(len(PLACE_RULE_LIST) == len(Place_Rule))
+
+// Type_Def: one block type: its states are first_state ..< first_state +
+// state_count, the index within the type mixed-radix over props (the last
+// property fastest).
+Type_Def :: struct {
+	id:          string,
+	first_state: u16,
+	state_count: u16,
+	props:       []Prop_Def,
+	default:     Block,
+	place:       Place_Rule,
+	climbable:   bool,
+}
+
+// Box: a box in sixteenths of a block, 0 <= lo < hi <= 16 (collision boxes
+// may reach 24 on y).
+Box :: struct {
+	lo, hi: [3]u8,
+}
+
+// Shape_Ref: a shape's boxes: boxes[first:first+count] of Shape_Table.boxes.
+Shape_Ref :: struct {
+	first, count: u16,
+}
+
+SHAPE_EMPTY :: u16(0)
+SHAPE_CUBE :: u16(1)
+
+// Face: a cell's six faces, by the axis they face (the mesher's order).
+Face :: enum u8 {
+	Pos_X,
+	Neg_X,
+	Pos_Y,
+	Neg_Y,
+	Pos_Z,
+	Neg_Z,
+}
+
+// Cover: which sixteenths of a cell's face a shape's boxes cover, per face
+// 16 rows of 16 bits (row = the face's second axis, bit = the first).
+Cover :: [Face][16]u16
+
+Shape_Table :: struct {
+	refs:  []Shape_Ref, // by shape id
+	boxes: []Box,
+	cover: []Cover, // by shape id (computed from the boxes)
+	ids:   []string, // by shape id: "" for the interned ones a block made
+}
+
 NO_SOUND :: i32(-1)
 NO_TAG :: i32(-1)
 
@@ -176,15 +251,23 @@ Block_Def :: struct {
 }
 
 // Block_Table: the hot part, arrays indexed by the block's number.
+// A block here is a state id: count is the number of states, and the arrays
+// are by state (a type's states share what is not a shape).
 Block_Table :: struct {
-	count: int,
-	flags: []Block_Flags,
-	light: []u8,
-	defs:  []Block_Def,
+	count:     int,
+	flags:     []Block_Flags,
+	light:     []u8,
+	defs:      []Block_Def,
+	type_of:   []Block_Type, // by state
+	types:     []Type_Def,
+	shapes:    Shape_Table,
+	collision: []u16, // shape ids by state
+	selection: []u16,
+	render:    []u16,
 }
 
 Item_Table :: struct {
-	blocks:    []Item_Info, // by block number (name "" where not placeable)
+	blocks:    []Item_Info, // by block type (name "" where not placeable)
 	tools:     [Tool]Item_Info,
 	materials: [Material]Item_Info,
 	armor:     [Armor]Item_Info,
@@ -392,8 +475,11 @@ block_supported :: proc(t: ^Block_Table, plant, below: Block) -> bool {
 
 // --- Lookups by id. ---
 
-// registry_block: the block with this id (a name without a colon is voxiverse:'s).
+// registry_block: the block with this id (a name without a colon is
+// voxiverse:'s): the type's default state. `id[prop=value,...]` names a state
+// (state_parse).
 registry_block :: proc(reg: ^Registry, text: string) -> (Block, bool) {
+	if strings.index_byte(text, '[') >= 0 {return state_parse(reg, text)}
 	id, ok := id_parse(text)
 	if !ok {return .Air, false}
 	buf: [96]u8
@@ -637,6 +723,16 @@ registry_text_of :: proc(
 			d.support,
 		)
 		for x in d.tags {fmt.sbprintf(&b, "%d,", x)}
+		fmt.sbprintf(&b, " type=%d", reg.blocks.type_of[i])
+		for use, k in ([3][]u16{reg.blocks.collision, reg.blocks.selection, reg.blocks.render}) {
+			fmt.sbprintf(&b, " shape%d=", k)
+			for bx in shape_boxes(&reg.blocks, use[i]) {fmt.sbprintf(&b, "%v-%v,", bx.lo, bx.hi)}
+		}
+		strings.write_byte(&b, '\n')
+	}
+	for d in reg.blocks.types {
+		fmt.sbprintf(&b, "type %s first=%d count=%d default=%d place=%v climbable=%v props=", d.id, d.first_state, d.state_count, d.default, d.place, d.climbable)
+		for p in d.props {fmt.sbprintf(&b, "%s%v;", p.name, p.values)}
 		strings.write_byte(&b, '\n')
 	}
 	item_line :: proc(b: ^strings.Builder, n: u32, info: Item_Info) {

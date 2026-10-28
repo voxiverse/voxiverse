@@ -9,10 +9,10 @@ import "../../common/game"
 // border from its 26 neighbours, and its light from game.light_chunk), so it
 // runs on worker threads while the world changes.
 //
-// Vertices are 8 bytes: chunk-local position (0..16), face, AO level, sky
-// and block light (0..15 each, averaged over the open cells around the
-// corner) and texture layer. Texture coordinates follow from position and face in the
-// shader. Every quad is 4 vertices drawn with the shared index pattern
+// Vertices are 8 bytes: chunk-local position (in sixteenths of a block,
+// 0..256), face, AO level, sky and block light (0..15 each, averaged over the
+// open cells around the corner) and texture layer. Texture coordinates follow
+// from position and face in the shader. Every quad is 4 vertices drawn with the shared index pattern
 // 0 1 2 0 2 3; quads whose AO is brighter along the 1-3 diagonal are rotated
 // so it splits them along that diagonal instead (avoids AO's classic
 // diamond artifact).
@@ -30,19 +30,27 @@ Light_Snapshot :: [PADDED_VOLUME]u8
 #assert(game.LIGHT_OUT == PADDED)
 
 Vertex :: struct {
-	// x | y << 5 | z << 10 | face << 15 | ao << 18 | sky << 20 | block << 24
-	// (ao: 0 darkest .. 3 open; sky and block light 0..15)
+	// x | y << 9 | z << 18 | face << 27 | ao << 30
+	// (positions in sixteenths of a block, 0..256; ao: 0 darkest .. 3 open)
 	packed: u32,
-	layer:  u32, // texture array layer
+	// texture array layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21
+	// (sky and block light 0..15; surface and drop: see SURFACE)
+	layer:  u32,
 }
 
-Face :: enum u8 {
-	Pos_X,
-	Neg_X,
-	Pos_Y,
-	Neg_Y,
-	Pos_Z,
-	Neg_Z,
+Face :: game.Face
+Face_Axes :: game.Face_Axes
+
+// The bits of a vertex: where a position, a texture layer, the surface mark and its drop sit.
+POSITION_BITS :: u32(1 << 27 - 1)
+LAYER_BITS :: u32(0xFFF)
+SIXTEENTHS :: 16 // a block's width in the positions
+
+make_vertex :: #force_inline proc(pos: [3]i32, face: u32, ao, sky, block, layer: u32) -> Vertex {
+	return {
+		packed = u32(pos.x) | u32(pos.y) << 9 | u32(pos.z) << 18 | face << 27 | ao << 30,
+		layer = layer | sky << 12 | block << 16,
+	}
 }
 
 // snapshot_index of a local position, each axis in -1..16.
@@ -71,23 +79,6 @@ snapshot_fill :: proc(s: ^Snapshot, n: ^Neighbourhood) {
 			}
 		}
 	}
-}
-
-// Per face: the normal and two in-plane axes u, v with u × v = normal, so
-// corners (0,0) (1,0) (1,1) (0,1) wind counter-clockwise seen from outside.
-@(private = "file")
-Face_Axes :: struct {
-	normal, u, v: [3]i32,
-}
-
-@(private = "file", rodata)
-FACE_AXES := [Face]Face_Axes {
-	.Pos_X = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}},
-	.Neg_X = {{-1, 0, 0}, {0, 0, 1}, {0, 1, 0}},
-	.Pos_Y = {{0, 1, 0}, {0, 0, 1}, {1, 0, 0}},
-	.Neg_Y = {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}},
-	.Pos_Z = {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}},
-	.Neg_Z = {{0, 0, -1}, {0, 1, 0}, {1, 0, 0}},
 }
 
 @(private = "file", rodata)
@@ -132,8 +123,8 @@ CROSS_B :: 7
 // SURFACE: a vertex on a liquid's open top (the shader lowers and moves
 // it), DROP_SHIFT: how far below the block's top it sits, in eighths (3
 // bits: the levels of the water around that corner).
-SURFACE :: u32(1) << 28
-DROP_SHIFT :: 29
+SURFACE :: u32(1) << 20 // (in the layer word)
+DROP_SHIFT :: 21
 
 // Face groups: within a layer, quads come grouped by the way they face
 // (Face order), then the plants' crossed quads (seen from both sides), so
@@ -175,7 +166,13 @@ mesh_chunk :: proc(
 					switch shape {
 					case .None:
 					case .Cube:
-						cube_faces(reg, s, light, out, {x, y, z}, b, layer)
+						switch rs := reg.blocks.render[b]; rs {
+						case game.SHAPE_EMPTY:
+						case game.SHAPE_CUBE:
+							cube_faces(reg, s, light, out, {x, y, z}, b, layer)
+						case:
+							box_faces(reg, s, light, out, {x, y, z}, b, game.shape_boxes(&reg.blocks, rs))
+						}
 					case .Cross:
 						cross_quads(reg, s, light, out, {x, y, z}, b)
 					}
@@ -183,7 +180,6 @@ mesh_chunk :: proc(
 			}
 		}
 		if merge && layer != .Translucent {merge_faces(out, before)}
-		lower_tilled(out[before:])
 		counts[layer] = group_faces(out[before:])
 	}
 	return
@@ -199,7 +195,6 @@ mesh_chunk :: proc(
 // differ.)
 @(private = "file")
 merge_faces :: proc(out: ^[dynamic]Vertex, before: int) {
-	POSITION_BITS :: u32(1 << 15 - 1)
 	Mergeable :: struct {
 		face:  int,
 		plane: i32, // position along the face's axis
@@ -214,16 +209,24 @@ merge_faces :: proc(out: ^[dynamic]Vertex, before: int) {
 		attrs := q[0].packed &~ POSITION_BITS
 		alike := true
 		for v in q[1:] {alike &&= v.packed &~ POSITION_BITS == attrs && v.layer == q[0].layer}
-		face := int(attrs >> 15 & 7)
+		face := int(attrs >> 27 & 7)
+		// Only whole cells' faces merge: every corner on a block boundary.
+		for v in q {
+			p := vertex_position(v)
+			alike &&= p.x % SIXTEENTHS == 0 && p.y % SIXTEENTHS == 0 && p.z % SIXTEENTHS == 0
+		}
 		if !alike || face >= len(Face) {
 			// Kept: moved down over the mergeable ones taken out.
 			copy(out[kept:][:4], q)
 			kept += 4
 			continue
 		}
-		axes := FACE_AXES[Face(face)]
-		lo := vertex_position(q[0])
-		for v in q[1:] {lo = {min(lo.x, vertex_position(v).x), min(lo.y, vertex_position(v).y), min(lo.z, vertex_position(v).z)}}
+		axes := game.FACE_AXES[Face(face)]
+		lo := vertex_position(q[0]) / SIXTEENTHS
+		for v in q[1:] {
+			at := vertex_position(v) / SIXTEENTHS
+			lo = {min(lo.x, at.x), min(lo.y, at.y), min(lo.z, at.z)}
+		}
 		normal_axis := [3]i32{abs(axes.normal.x), abs(axes.normal.y), abs(axes.normal.z)}
 		append(
 			&found,
@@ -283,16 +286,16 @@ merge_faces :: proc(out: ^[dynamic]Vertex, before: int) {
 // plane, its corners in emit_face's order.
 @(private = "file")
 emit_merged :: proc(out: ^[dynamic]Vertex, m: $T, u, v, w, h: i32) {
-	axes := FACE_AXES[Face(m.face)]
+	axes := game.FACE_AXES[Face(m.face)]
 	normal_axis := [3]i32{abs(axes.normal.x), abs(axes.normal.y), abs(axes.normal.z)}
 	base := normal_axis * m.plane
 	attrs := u32(m.attrs)
 	layer := u32(m.attrs >> 32)
 	quad: [4]Vertex
 	for corner, i in CORNERS {
-		p := base + (u + corner[0] * w) * axes.u + (v + corner[1] * h) * axes.v
+		p := (base + (u + corner[0] * w) * axes.u + (v + corner[1] * h) * axes.v) * SIXTEENTHS
 		quad[i] = {
-			packed = attrs | u32(p.x) | u32(p.y) << 5 | u32(p.z) << 10,
+			packed = attrs | u32(p.x) | u32(p.y) << 9 | u32(p.z) << 18,
 			layer  = layer,
 		}
 	}
@@ -304,7 +307,7 @@ emit_merged :: proc(out: ^[dynamic]Vertex, m: $T, u, v, w, h: i32) {
 @(private = "file")
 group_faces :: proc(quads: []Vertex) -> (counts: [FACE_GROUPS]int) {
 	group :: #force_inline proc(v: Vertex) -> int {return min(
-			int(v.packed >> 15 & 7),
+			int(v.packed >> 27 & 7),
 			CROSS_GROUP,
 		)}
 	for i := 0; i < len(quads); i += 4 {counts[group(quads[i])] += 4}
@@ -320,38 +323,44 @@ group_faces :: proc(quads: []Vertex) -> (counts: [FACE_GROUPS]int) {
 	return
 }
 
-// TILLED: set on every vertex of farmland's quads; LOWERED (read by the
-// shader, as the texture layer's bit 16) on the vertices of them that are
-// at the block's top, a sixteenth down: set after merging, which keeps a
-// merged quad's four corners alike.
-TILLED :: u32(1) << 17
-LOWERED :: u32(1) << 16
-
-// lower_tilled turns TILLED into LOWERED for the vertices at the top of
-// each quad (every vertex of a top face, the upper two of a side, none of a
-// bottom face).
-@(private = "file")
-lower_tilled :: proc(quads: []Vertex) {
-	for i := 0; i + 3 < len(quads); i += 4 {
-		q := quads[i:][:4]
-		if q[0].layer & TILLED == 0 {continue}
-		top := max(
-			vertex_position(q[0]).y,
-			vertex_position(q[1]).y,
-			vertex_position(q[2]).y,
-			vertex_position(q[3]).y,
-		)
-		face := vertex_face(q[0])
-		for &v in q {
-			v.layer &= ~TILLED
-			if face == .Pos_Y ||
-			   (face != .Neg_Y && vertex_position(v).y == top) {v.layer |= LOWERED}
-		}
-	}
+// opposite: the face across the cell (a neighbour's face against this one).
+opposite :: #force_inline proc(f: Face) -> Face {
+	return Face(u8(f) ~ 1)
 }
 
-// cube_faces: a cube's faces that can be seen: those not against an
-// opaque block (nor, for a liquid, against more of it).
+// rect_covered: every sixteenth of the face f of a cell inside lo..hi (only
+// the two in-plane axes count) is set in the cover c.
+@(private = "file")
+rect_covered :: proc(c: ^game.Cover, f: Face, lo, hi: [3]u8) -> bool {
+	axes := game.FACE_AXES[f]
+	ua, va := 0, 0
+	for k in 0 ..< 3 {
+		if axes.u[k] != 0 {ua = k}
+		if axes.v[k] != 0 {va = k}
+	}
+	mask := u16((u32(1) << hi[ua]) - (u32(1) << lo[ua]))
+	for v in lo[va] ..< hi[va] {
+		if c[f][v] & mask != mask {return false}
+	}
+	return true
+}
+
+// face_hidden: the cell n (across face f of a block) hides the part lo..hi of
+// that face: n is opaque, or it is a solid shape (not see-through) whose
+// render cover takes in the whole rectangle.
+@(private = "file")
+face_hidden :: proc(reg: ^game.Registry, n: game.Block, f: Face, lo, hi: [3]u8) -> bool {
+	t := &reg.blocks
+	if game.block_opaque(t, n) {return true}
+	rs := t.render[n]
+	if rs == game.SHAPE_EMPTY || rs == game.SHAPE_CUBE {return false}
+	if Layer(t.defs[n].layer) != .Opaque {return false}
+	return rect_covered(game.shape_cover(t, rs), opposite(f), lo, hi)
+}
+
+// cube_faces: a cube's faces that can be seen: those not hidden by the
+// block across (opaque, or a shape that covers the face), nor, for a liquid,
+// against more of it.
 @(private = "file")
 cube_faces :: proc(
 	reg: ^game.Registry,
@@ -362,24 +371,79 @@ cube_faces :: proc(
 	b: game.Block,
 	layer: Layer,
 ) {
-	for axes, face in FACE_AXES {
+	for axes, face in game.FACE_AXES {
 		front := p + axes.normal
 		n := s[snapshot_index(front.x, front.y, front.z)]
-		if game.block_opaque(&reg.blocks, n) {continue}
+		if face_hidden(reg, n, face, {0, 0, 0}, {16, 16, 16}) {continue}
 		_, water := game.water_level(b)
 		_, water_beside := game.water_level(n)
 		if water && water_beside {continue} 	// inside the same body of water
 		if b == n && game.block_has(&reg.blocks, b, .Cull_Same) {continue} 	// one pane (glass)
-		tilled := game.block_is_farmland(b)
-		if tilled && game.block_is_farmland(n) {continue} 	// (not opaque, but as good as)
 		first := len(out)
-		emit_face(reg, s, light, out, p, face, axes, block_texture(reg, b, face))
-		if tilled {for &v in out[first:] {v.layer |= TILLED}}
+		values := cell_face_values(reg, s, light, p, face, axes)
+		at := i32(16) if axes.normal.x + axes.normal.y + axes.normal.z > 0 else 0
+		emit_rect(out, values, face, axes, p, {0, 0}, {16, 16}, at, block_texture(reg, b, face))
 		if _, under_water := game.water_level(s[snapshot_index(p.x, p.y + 1, p.z)]);
 		   water && !under_water {
 			for &v in out[first:] {
 				at := vertex_position(v)
-				if at.y == p.y + 1 {v.packed |= SURFACE | water_drop(s, at) << DROP_SHIFT}
+				if at.y == (p.y + 1) * SIXTEENTHS {
+					v.layer |= SURFACE | water_drop(s, at / SIXTEENTHS) << DROP_SHIFT
+				}
+			}
+		}
+	}
+}
+
+// box_faces: the faces of a block drawn as boxes (a stair, a slab, a ladder,
+// farmland): a face on the cell's boundary is left out where the block across
+// hides it; a face inside the cell is always drawn, open (AO 3) and lit by the
+// cell itself.
+@(private = "file")
+box_faces :: proc(
+	reg: ^game.Registry,
+	s: ^Snapshot,
+	light: ^Light_Snapshot,
+	out: ^[dynamic]Vertex,
+	p: [3]i32,
+	b: game.Block,
+	boxes: []game.Box,
+) {
+	_, water := game.water_level(b)
+	own := Face_Values{}
+	own_ready := false
+	cell: [Face]Face_Values
+	cell_ready: [Face]bool
+	for box in boxes {
+		for axes, face in game.FACE_AXES {
+			axis, ua, va := 0, 0, 0
+			for k in 0 ..< 3 {
+				if axes.normal[k] != 0 {axis = k}
+				if axes.u[k] != 0 {ua = k}
+				if axes.v[k] != 0 {va = k}
+			}
+			positive := axes.normal[axis] > 0
+			at := box.hi[axis] if positive else box.lo[axis]
+			layer_bits := block_texture(reg, b, face)
+			uv_lo, uv_hi := [2]i32{i32(box.lo[ua]), i32(box.lo[va])}, [2]i32{i32(box.hi[ua]), i32(box.hi[va])}
+			if at == (16 if positive else 0) {
+				front := p + axes.normal
+				n := s[snapshot_index(front.x, front.y, front.z)]
+				if face_hidden(reg, n, face, box.lo, box.hi) {continue}
+				_, water_beside := game.water_level(n)
+				if water && water_beside {continue}
+				if b == n && game.block_has(&reg.blocks, b, .Cull_Same) {continue}
+				if !cell_ready[face] {
+					cell[face] = cell_face_values(reg, s, light, p, face, axes)
+					cell_ready[face] = true
+				}
+				emit_rect(out, cell[face], face, axes, p, uv_lo, uv_hi, i32(at), layer_bits)
+			} else {
+				if !own_ready {
+					own = own_values(reg, s, light, p, b)
+					own_ready = true
+				}
+				emit_rect(out, own, face, axes, p, uv_lo, uv_hi, i32(at), layer_bits)
 			}
 		}
 	}
@@ -419,12 +483,7 @@ cross_quads :: proc(
 	p: [3]i32,
 	b: game.Block,
 ) {
-	sky, block := u32(15), u32(0)
-	if light != nil {
-		l := light[snapshot_index(p.x, p.y, p.z)]
-		sky, block = u32(l >> 4), u32(l & 15)
-	}
-	block = max(block, u32(game.block_light(&reg.blocks, b)))
+	own := own_values(reg, s, light, p, b)
 	layer := block_texture(reg, b, .Pos_X)
 	PLANES :: [2][4][3]i32 {
 		{{0, 0, 0}, {1, 0, 1}, {1, 1, 1}, {0, 1, 0}},
@@ -434,57 +493,120 @@ cross_quads :: proc(
 		face := u32(CROSS_A + i)
 		quad: [4]Vertex
 		for c, k in plane {
-			v := p + c
-			quad[k] = {
-				packed = u32(
-					v.x,
-				) | u32(v.y) << 5 | u32(v.z) << 10 | face << 15 | 3 << 18 | sky << 20 | block << 24,
-				layer  = layer,
-			}
+			quad[k] = make_vertex((p + c) * SIXTEENTHS, face, 3, own.sky[0], own.block[0], layer)
 		}
 		append(out, ..quad[:])
 		append(out, quad[3], quad[2], quad[1], quad[0]) // the back
 	}
 }
 
+// Face_Values: the AO level and the sky and block light at the four corners of
+// a face (in CORNERS' order).
 @(private = "file")
-emit_face :: proc(
+Face_Values :: struct {
+	ao, sky, block: [4]u32,
+}
+
+// cell_face_values: the values at the corners of the whole cell's face: AO
+// from the opaque cells around the cell in front, light from the open ones.
+@(private = "file")
+cell_face_values :: proc(
 	reg: ^game.Registry,
 	s: ^Snapshot,
 	light: ^Light_Snapshot,
-	out: ^[dynamic]Vertex,
 	p: [3]i32,
 	face: Face,
 	axes: Face_Axes,
-	layer: u32,
+) -> (
+	v: Face_Values,
 ) {
 	solid :: #force_inline proc(t: ^game.Block_Table, s: ^Snapshot, p: [3]i32) -> int {
 		return 1 if game.block_opaque(t, s[snapshot_index(p.x, p.y, p.z)]) else 0
 	}
 	front := p + axes.normal
-	// The face's plane: the far side of the block for positive normals.
-	base := p + {max(axes.normal.x, 0), max(axes.normal.y, 0), max(axes.normal.z, 0)}
-	quad: [4]Vertex
-	ao: [4]u32
 	for corner, i in CORNERS {
 		du := axes.u if corner[0] == 1 else -axes.u
 		dv := axes.v if corner[1] == 1 else -axes.v
 		side1, side2 := solid(&reg.blocks, s, front + du), solid(&reg.blocks, s, front + dv)
 		corner_solid := solid(&reg.blocks, s, front + du + dv)
 		level := 0 if side1 == 1 && side2 == 1 else 3 - side1 - side2 - corner_solid
-		ao[i] = u32(level)
+		v.ao[i] = u32(level)
 		sky, block := corner_light(light, front, du, dv, side1 == 1, side2 == 1, corner_solid == 1)
 		emits := u32(game.block_light(&reg.blocks, s[snapshot_index(p.x, p.y, p.z)]))
 		block = max(block, emits) // a light's own faces are as bright as it
-		v := base + corner[0] * axes.u + corner[1] * axes.v
-		quad[i] = {
-			packed = u32(
-				v.x,
-			) | u32(v.y) << 5 | u32(v.z) << 10 | u32(face) << 15 | u32(level) << 18 | sky << 20 | block << 24,
-			layer  = layer,
-		}
+		v.sky[i], v.block[i] = sky, block
 	}
-	if ao[0] + ao[2] < ao[1] + ao[3] {
+	return
+}
+
+// own_values: the values of a face inside a cell: open, lit as the cell is
+// (and as bright as the block itself).
+@(private = "file")
+own_values :: proc(
+	reg: ^game.Registry,
+	s: ^Snapshot,
+	light: ^Light_Snapshot,
+	p: [3]i32,
+	b: game.Block,
+) -> (
+	v: Face_Values,
+) {
+	sky, block := u32(15), u32(0)
+	if light != nil {
+		l := light[snapshot_index(p.x, p.y, p.z)]
+		sky, block = u32(l >> 4), u32(l & 15)
+	}
+	block = max(block, u32(game.block_light(&reg.blocks, b)))
+	for i in 0 ..< 4 {v.ao[i], v.sky[i], v.block[i] = 3, sky, block}
+	return
+}
+
+// bilinear: the four corner values (CORNERS' order) at (u, v) in sixteenths
+// of the face, rounded to the nearest level; at a corner, exactly its value.
+@(private = "file")
+bilinear :: #force_inline proc(c: [4]u32, u, v: i32) -> u32 {
+	sum :=
+		i32(c[0]) * (16 - u) * (16 - v) +
+		i32(c[1]) * u * (16 - v) +
+		i32(c[2]) * u * v +
+		i32(c[3]) * (16 - u) * v
+	return u32((sum + 128) / 256)
+}
+
+// emit_rect: the part uv_lo..uv_hi (in sixteenths, along the face's u and v
+// axes) of the face of cell p, at `at` sixteenths along its normal axis (the
+// positive face of a whole cube: 16, the negative face: 0), its corner values
+// interpolated from the face's.
+@(private = "file")
+emit_rect :: proc(
+	out: ^[dynamic]Vertex,
+	values: Face_Values,
+	face: Face,
+	axes: Face_Axes,
+	p: [3]i32,
+	uv_lo, uv_hi: [2]i32,
+	at: i32,
+	layer: u32,
+) {
+	plane := p * SIXTEENTHS
+	if axes.normal.x != 0 {plane.x += at}
+	if axes.normal.y != 0 {plane.y += at}
+	if axes.normal.z != 0 {plane.z += at}
+	quad: [4]Vertex
+	for corner, i in CORNERS {
+		u := uv_hi[0] if corner[0] == 1 else uv_lo[0]
+		v := uv_hi[1] if corner[1] == 1 else uv_lo[1]
+		pos := plane + u * axes.u + v * axes.v
+		quad[i] = make_vertex(
+			pos,
+			u32(face),
+			bilinear(values.ao, u, v),
+			bilinear(values.sky, u, v),
+			bilinear(values.block, u, v),
+			layer,
+		)
+	}
+	if vertex_ao(quad[0]) + vertex_ao(quad[2]) < vertex_ao(quad[1]) + vertex_ao(quad[3]) {
 		// Split along 1-3: start the quad at corner 1 (same winding).
 		quad = {quad[1], quad[2], quad[3], quad[0]}
 	}
@@ -520,18 +642,19 @@ corner_light :: proc(
 }
 
 // Vertex fields, for tests and debugging (the shader unpacks the same way).
+// Positions are in sixteenths of a block.
 vertex_position :: proc(v: Vertex) -> [3]i32 {
-	return {i32(v.packed & 31), i32(v.packed >> 5 & 31), i32(v.packed >> 10 & 31)}
+	return {i32(v.packed & 511), i32(v.packed >> 9 & 511), i32(v.packed >> 18 & 511)}
 }
 
 vertex_face :: proc(v: Vertex) -> Face {
-	return Face(v.packed >> 15 & 7)
+	return Face(v.packed >> 27 & 7)
 }
 
 vertex_ao :: proc(v: Vertex) -> u32 {
-	return v.packed >> 18 & 3
+	return v.packed >> 30 & 3
 }
 
 vertex_light :: proc(v: Vertex) -> (sky, block: u32) {
-	return v.packed >> 20 & 15, v.packed >> 24 & 15
+	return v.layer >> 12 & 15, v.layer >> 16 & 15
 }

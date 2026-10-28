@@ -41,6 +41,10 @@ SWIM_SINK :: 1.2 // blocks/s holding nothing
 SWIM_DOWN :: 3 // blocks/s holding sneak
 SWIM_CLIMB :: 1.2 // blocks above the water a swimmer against a wall can rise (a ledge one high)
 
+STEP_HEIGHT :: 0.5625 // the height a player on the ground walks up without jumping (a stair, a slab)
+LADDER_FALL_SPEED :: 3.0 // blocks/s: the fastest a player falls in a climbable block
+LADDER_CLIMB_SPEED :: 3.0 // blocks/s: climbing
+
 Button :: enum u8 {
 	Jump,
 	Sneak,
@@ -165,6 +169,18 @@ player_step :: proc(
 		}
 		vy_before = s.velocity.y
 		s.velocity.y = max(s.velocity.y - rules.gravity * dt, -rules.terminal_velocity)
+		if on_climbable(q, s.position, player_height(s^)) {
+			// A ladder: down no faster than LADDER_FALL_SPEED, up by walking into
+			// something or holding jump, held still while sneaking.
+			v := max(s.velocity.y, -LADDER_FALL_SPEED)
+			pushing :=
+				wish != {} &&
+				(sweep_stopped(s, q, 0, f64(s.velocity.x * dt)) || sweep_stopped(s, q, 2, f64(s.velocity.z * dt)))
+			if jump || pushing {v = LADDER_CLIMB_SPEED}
+			if sneak && !(jump || pushing) {v = max(v, 0)}
+			s.velocity.y = v
+			vy_before = v
+		}
 	}
 
 	// Vertically, the average of the velocity before and after gravity: the
@@ -173,7 +189,11 @@ player_step :: proc(
 	delta := [3]f64{f64(s.velocity.x * dt), f64(vy * dt), f64(s.velocity.z * dt)}
 	edge_guard := s.on_ground && s.crouched && !swimming
 	s.on_ground = false
+	vel_before := s.velocity
+	stepped_from: [3]f64 // the position before the horizontal moves
+	stopped: bool // stopped on x or z
 	for axis in ([3]int{1, 0, 2}) {
+		if axis == 0 {stepped_from = s.position}
 		if axis != 1 && edge_guard && supported(q, s.position) {
 			// Not off the edge: back off until the feet stay over ground.
 			d := delta[axis]
@@ -190,11 +210,68 @@ player_step :: proc(
 		s.position[axis] += moved
 		if hit {
 			if axis == 1 && delta.y < 0 {s.on_ground = true}
+			if axis != 1 {stopped = true}
 			s.velocity[axis] = 0
 		}
 	}
+	if stopped && s.on_ground && !s.flying && !swimming {
+		try_step_up(s, q, stepped_from, delta, vel_before)
+	}
 	if s.flying && s.on_ground {s.flying = false} 	// landing ends flight
 	s.jump_held = jump
+}
+
+// sweep_stopped: moving the player's box along axis by delta, something stops it.
+@(private = "file")
+sweep_stopped :: proc(s: ^Player_State, q: Block_Query, axis: int, delta: f64) -> bool {
+	_, hit := sweep(s.position, PLAYER_WIDTH, player_height(s^), axis, delta, q)
+	return hit
+}
+
+// on_climbable: the box overlaps a cell holding a climbable block.
+@(private = "file")
+on_climbable :: proc(q: Block_Query, position: [3]f64, height: f64) -> bool {
+	half :: PLAYER_WIDTH / 2
+	EPS :: 1e-7
+	lo := [3]f64{position.x - half, position.y, position.z - half} + EPS
+	hi := [3]f64{position.x + half, position.y + height, position.z + half} - EPS
+	for y in i32(math.floor(lo.y)) ..= i32(math.floor(hi.y)) {
+		for z in i32(math.floor(lo.z)) ..= i32(math.floor(hi.z)) {
+			for x in i32(math.floor(lo.x)) ..= i32(math.floor(hi.x)) {
+				if y < WORLD_MIN_Y || y >= WORLD_MAX_Y {continue}
+				b, loaded := q.get(q.data, {x, y, z})
+				if loaded && q.table.types[q.table.type_of[b]].climbable {return true}
+			}
+		}
+	}
+	return false
+}
+
+// try_step_up: a player on the ground who was stopped sideways tries the
+// same horizontal move from STEP_HEIGHT higher (up, across, down by what it
+// rose) and keeps it only if it went strictly farther; otherwise nothing
+// changes. from: where the horizontal moves began.
+@(private = "file")
+try_step_up :: proc(s: ^Player_State, q: Block_Query, from, delta: [3]f64, vel: [3]f32) {
+	height := player_height(s^)
+	normal := abs(s.position.x - from.x) + abs(s.position.z - from.z)
+	p := from
+	rose, _ := sweep(p, PLAYER_WIDTH, height, 1, STEP_HEIGHT, q)
+	if rose <= 0 {return}
+	p.y += rose
+	v := vel
+	for axis in ([2]int{0, 2}) {
+		moved, hit := sweep(p, PLAYER_WIDTH, height, axis, delta[axis], q)
+		p[axis] += moved
+		if hit {v[axis] = 0}
+	}
+	dropped, landed := sweep(p, PLAYER_WIDTH, height, 1, -rose, q)
+	if !landed {return}
+	p.y += dropped
+	if abs(p.x - from.x) + abs(p.z - from.z) <= normal {return}
+	s.position = p
+	s.velocity.x, s.velocity.z = v.x, v.z
+	s.on_ground = true
 }
 
 // player_box is the player's box (feet centre at its position).
@@ -209,22 +286,55 @@ supported :: proc(q: Block_Query, position: [3]f64) -> bool {
 	return box_blocked(q, position - {0, EDGE_DROP, 0}, PLAYER_WIDTH, EDGE_DROP)
 }
 
-// box_blocked: a block that stops movement overlaps the box (width across,
-// height up from position, the centre of its bottom).
-@(private = "file")
+// box_blocked: a collision box overlaps the box (width across, height up
+// from position, the centre of its bottom).
 box_blocked :: proc(q: Block_Query, position: [3]f64, width, height: f64) -> bool {
 	EPS :: 1e-7 // touching is not overlapping
 	half := width / 2
 	lo := [3]f64{position.x - half, position.y, position.z - half} + EPS
 	hi := [3]f64{position.x + half, position.y + height, position.z + half} - EPS
-	for y in i32(math.floor(lo.y)) ..= i32(math.floor(hi.y)) {
+	// One cell further down: a tall box (a fence) reaches up into the next.
+	for y in i32(math.floor(lo.y)) - 1 ..= i32(math.floor(hi.y)) {
 		for z in i32(math.floor(lo.z)) ..= i32(math.floor(hi.z)) {
 			for x in i32(math.floor(lo.x)) ..= i32(math.floor(hi.x)) {
-				if solid_at(q, {x, y, z}) {return true}
+				p := Block_Pos{x, y, z}
+				for box in cell_boxes(q, p) {
+					if box_overlaps(box, p, lo, hi) {return true}
+				}
 			}
 		}
 	}
 	return false
+}
+
+// box_world: a box's bounds in world units: sixteenths are exact in binary,
+// so a cube's box is exactly cell to cell + 1.
+@(private = "file")
+box_world :: #force_inline proc(box: Box, p: Block_Pos) -> (lo, hi: [3]f64) {
+	for k in 0 ..< 3 {
+		lo[k] = f64(p[k]) + f64(box.lo[k]) / 16
+		hi[k] = f64(p[k]) + f64(box.hi[k]) / 16
+	}
+	return
+}
+
+@(private = "file")
+box_overlaps :: #force_inline proc(box: Box, p: Block_Pos, lo, hi: [3]f64) -> bool {
+	blo, bhi := box_world(box, p)
+	return blo.x < hi.x && bhi.x > lo.x && blo.y < hi.y && bhi.y > lo.y && blo.z < hi.z && bhi.z > lo.z
+}
+
+@(rodata)
+CUBE_BOXES := [1]Box{CUBE_BOX}
+
+// cell_boxes: the collision shape of the block at p (the cube where the
+// chunk is not loaded or below the world, nothing above it).
+cell_boxes :: proc(q: Block_Query, p: Block_Pos) -> []Box {
+	if p.y >= WORLD_MAX_Y {return nil}
+	if p.y < WORLD_MIN_Y {return CUBE_BOXES[:]}
+	b, loaded := q.get(q.data, p)
+	if !loaded {return CUBE_BOXES[:]}
+	return shape_boxes(q.table, q.table.collision[b])
 }
 
 // in_water: the block at height above the feet is water.
@@ -239,8 +349,8 @@ in_water :: proc(q: Block_Query, position: [3]f64, height: f64) -> bool {
 	return loaded && water
 }
 
-// against_wall: a block stands just ahead of the player (the way they move)
-// at their feet: a ledge to climb out onto.
+// against_wall: a collision box stands just ahead of the player (the way
+// they move) at their feet: a ledge to climb out onto.
 @(private = "file")
 against_wall :: proc(q: Block_Query, position: [3]f64, wish: [2]f32) -> bool {
 	l := math.sqrt(wish.x * wish.x + wish.y * wish.y)
@@ -252,24 +362,34 @@ against_wall :: proc(q: Block_Query, position: [3]f64, wish: [2]f32) -> bool {
 				0.2,
 				f64(wish.y / l) * (PLAYER_WIDTH / 2 + 0.2),
 			}
-	return solid_at(
+	return point_solid(
 		q,
 		{i32(math.floor(ahead.x)), i32(math.floor(ahead.y)), i32(math.floor(ahead.z))},
+		ahead,
 	)
 }
 
-// solid_at: a block that stops movement (unloaded chunks too; above the
-// world is open air, below it solid).
+// point_solid: point at (inside cell p) is in a collision box.
+@(private = "file")
+point_solid :: proc(q: Block_Query, p: Block_Pos, at: [3]f64) -> bool {
+	for box in cell_boxes(q, p) {
+		lo, hi := box_world(box, p)
+		if at.x >= lo.x && at.x < hi.x && at.y >= lo.y && at.y < hi.y && at.z >= lo.z && at.z < hi.z {
+			return true
+		}
+	}
+	return false
+}
+
+// solid_at: the block at p has something to collide with (unloaded chunks
+// too; above the world is open air, below it solid).
 solid_at :: proc(q: Block_Query, p: Block_Pos) -> bool {
-	if p.y >= WORLD_MAX_Y {return false}
-	if p.y < WORLD_MIN_Y {return true}
-	b, loaded := q.get(q.data, p)
-	return !loaded || block_collides(q.table, b)
+	return len(cell_boxes(q, p)) > 0
 }
 
 // sweep moves a box (width across, height up, position at the centre of
 // its bottom) along one axis by up to delta and returns how far it got and
-// whether a block stopped it. Players and entities share it.
+// whether a collision box stopped it. Players and entities share it.
 sweep :: proc(
 	position: [3]f64,
 	width, height: f64,
@@ -281,61 +401,60 @@ sweep :: proc(
 	hit: bool,
 ) {
 	if delta == 0 {return 0, false}
-	EPS :: 1e-7 // touching a block's face is not overlapping it
+	EPS :: 1e-7 // touching a box's face is not overlapping it
 	half := width / 2
 	lo, hi := position - {half, 0, half}, position + {half, height, half}
-	// The blocks the box covers on the other two axes.
+	// The cells the box covers on the other two axes (a cell further down on
+	// y: a tall box reaches up into the next).
 	a1, a2 := (axis + 1) % 3, (axis + 2) % 3
 	from1, to1 := i32(math.floor(lo[a1] + EPS)), i32(math.floor(hi[a1] - EPS))
 	from2, to2 := i32(math.floor(lo[a2] + EPS)), i32(math.floor(hi[a2] - EPS))
-	layer_solid :: proc(
-		q: Block_Query,
-		axis, a1, a2: int,
-		layer, from1, to1, from2, to2: i32,
-	) -> bool {
-		for i in from1 ..= to1 {
-			for j in from2 ..= to2 {
-				p: Block_Pos
-				p[axis], p[a1], p[a2] = layer, i, j
-				if solid_at(q, p) {return true}
-			}
-		}
-		return false
-	}
+	if a1 == 1 {from1 -= 1}
+	if a2 == 1 {from2 -= 1}
+	best := delta
 	if delta > 0 {
 		face := hi[axis]
-		first := i32(math.floor(face - EPS)) + 1 // the first layer beyond the face
+		first := i32(math.floor(face - EPS)) // the cell holding the face (a box may start inside it)
 		last := i32(math.ceil(face + delta)) - 1
 		for layer in first ..= last {
-			if layer_solid(
-				q,
-				axis,
-				a1,
-				a2,
-				layer,
-				from1,
-				to1,
-				from2,
-				to2,
-			) {return f64(layer) - face, true}
+			for i in from1 ..= to1 {
+				for j in from2 ..= to2 {
+					p: Block_Pos
+					p[axis], p[a1], p[a2] = layer, i, j
+					for box in cell_boxes(q, p) {
+						blo, bhi := box_world(box, p)
+						if blo[axis] < face - EPS || blo[axis] >= face + delta {continue}
+						if blo[axis] - face >= best {continue}
+						if blo[a1] >= hi[a1] - EPS || bhi[a1] <= lo[a1] + EPS {continue}
+						if blo[a2] >= hi[a2] - EPS || bhi[a2] <= lo[a2] + EPS {continue}
+						best, hit = blo[axis] - face, true
+					}
+				}
+			}
 		}
 	} else {
 		face := lo[axis]
-		first := i32(math.floor(face + EPS)) - 1
-		last := i32(math.floor(face + delta))
+		first := i32(math.floor(face + EPS))
+		last := i32(math.floor(face + delta)) - 1 // one more: a tall box below reaches up
+		best = delta
+		best_set := false
 		for layer := first; layer >= last; layer -= 1 {
-			if layer_solid(
-				q,
-				axis,
-				a1,
-				a2,
-				layer,
-				from1,
-				to1,
-				from2,
-				to2,
-			) {return f64(layer + 1) - face, true}
+			for i in from1 ..= to1 {
+				for j in from2 ..= to2 {
+					p: Block_Pos
+					p[axis], p[a1], p[a2] = layer, i, j
+					for box in cell_boxes(q, p) {
+						blo, bhi := box_world(box, p)
+						if bhi[axis] > face + EPS || bhi[axis] <= face + delta {continue}
+						if best_set && bhi[axis] - face <= best {continue}
+						if blo[a1] >= hi[a1] - EPS || bhi[a1] <= lo[a1] + EPS {continue}
+						if blo[a2] >= hi[a2] - EPS || bhi[a2] <= lo[a2] + EPS {continue}
+						best, best_set, hit = bhi[axis] - face, true, true
+					}
+				}
+			}
 		}
 	}
-	return delta, false
+	if !hit {return delta, false}
+	return best, true
 }

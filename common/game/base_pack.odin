@@ -21,6 +21,8 @@ BASE_SOUNDS := #load_directory("../../assets/packs/voxiverse/assets/sounds")
 @(private = "file")
 BASE_BLOCK_TAGS := #load_directory("../../assets/packs/voxiverse/data/block_tags")
 @(private = "file")
+BASE_SHAPES := #load_directory("../../assets/packs/voxiverse/data/shapes")
+@(private = "file")
 BASE_STRUCTURES := #load_directory("../../assets/packs/voxiverse/server/structures")
 
 // base_pack_source: the base pack's files, for registry_build (and for
@@ -39,6 +41,7 @@ base_pack_source :: proc(allocator := context.allocator) -> Pack_Source {
 	add(&files, "assets/textures", BASE_TEXTURES)
 	add(&files, "assets/sounds", BASE_SOUNDS)
 	add(&files, "data/block_tags", BASE_BLOCK_TAGS)
+	add(&files, "data/shapes", BASE_SHAPES)
 	add(&files, "server/structures", BASE_STRUCTURES)
 	return {BASE_NAMESPACE, files[:]}
 }

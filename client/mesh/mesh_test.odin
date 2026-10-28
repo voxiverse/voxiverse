@@ -6,6 +6,12 @@ import "core:testing"
 
 import "../../common/game"
 
+// bp: a vertex's position in blocks (the whole-cell quads of cubes lie on block boundaries).
+@(private = "file")
+bp :: proc(v: Vertex) -> [3]i32 {
+	return vertex_position(v) / SIXTEENTHS
+}
+
 @(private = "file")
 count_faces :: proc(out: []Vertex) -> (faces: [Face]int) {
 	for i := 0; i < len(out); i += 4 {faces[vertex_face(out[i])] += 1}
@@ -15,9 +21,9 @@ count_faces :: proc(out: []Vertex) -> (faces: [Face]int) {
 // quad_box: the low and high corners of a quad.
 @(private = "file")
 quad_box :: proc(q: []Vertex) -> (lo, hi: [3]i32) {
-	lo, hi = vertex_position(q[0]), vertex_position(q[0])
+	lo, hi = bp(q[0]), bp(q[0])
 	for v in q {
-		p := vertex_position(v)
+		p := bp(v)
 		lo = {min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z)}
 		hi = {max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z)}
 	}
@@ -54,7 +60,7 @@ test_single_block :: proc(t: ^testing.T) {
 	for n in count_faces(out[:]) {testing.expect_value(t, n, 1)}
 	for v in out {
 		testing.expect_value(t, vertex_ao(v), 3) // nothing around it
-		p := vertex_position(v)
+		p := bp(v)
 		testing.expect(t, p.x >= 3 && p.x <= 4 && p.y >= 4 && p.y <= 5 && p.z >= 5 && p.z <= 6)
 	}
 	// The top face lies in the plane y = 5, the bottom in y = 4.
@@ -62,7 +68,7 @@ test_single_block :: proc(t: ^testing.T) {
 		face := vertex_face(out[i])
 		if face == .Pos_Y || face == .Neg_Y {
 			want := i32(5) if face == .Pos_Y else 4
-			for v in out[i:][:4] {testing.expect_value(t, vertex_position(v).y, want)}
+			for v in out[i:][:4] {testing.expect_value(t, bp(v).y, want)}
 		}
 	}
 }
@@ -142,7 +148,7 @@ test_greedy_meshing_is_exact :: proc(t: ^testing.T) {
 		packed: u32, // with the position left out when evenly lit
 		layer:  u32,
 	}
-	POSITION :: u32(1 << 15 - 1)
+	POSITION :: POSITION_BITS
 	cells :: proc(out: []Vertex, set: ^map[Cell]int) {
 		for i := 0; i < len(out); i += 4 {
 			q := out[i:][:4]
@@ -151,7 +157,7 @@ test_greedy_meshing_is_exact :: proc(t: ^testing.T) {
 			for v in q {alike &&= v.packed &~ POSITION == q[0].packed &~ POSITION && v.layer == q[0].layer}
 			if !alike || int(face) >= len(Face) {
 				// Never merged: its corners as they are.
-				for v in q {set[{face, vertex_position(v), v.packed, v.layer}] += 1}
+				for v in q {set[{face, bp(v), v.packed, v.layer}] += 1}
 				continue
 			}
 			// Evenly lit: one cell per block face it covers.
@@ -198,19 +204,19 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	found := false
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y ||
-		   vertex_position(out[i]).y != 6 ||
-		   vertex_position(out[i]).x > 6 {continue}
-		if vertex_position(out[i]).x < 5 {continue}
+		   bp(out[i]).y != 6 ||
+		   bp(out[i]).x > 6 {continue}
+		if bp(out[i]).x < 5 {continue}
 		// The floor block's top quad (x 5..6, y 6).
 		all_in := true
 		for v in out[i:][:4] {
-			p := vertex_position(v)
+			p := bp(v)
 			if p.x < 5 || p.x > 6 || p.z < 5 || p.z > 6 {all_in = false}
 		}
 		if !all_in {continue}
 		found = true
 		for v in out[i:][:4] {
-			p := vertex_position(v)
+			p := bp(v)
 			want := u32(2) if p.x == 6 else 3 // one side neighbour at the wall edge
 			testing.expectf(
 				t,
@@ -235,8 +241,8 @@ test_ambient_occlusion :: proc(t: ^testing.T) {
 	for i := 0; i < len(out); i += 4 {
 		if vertex_face(out[i]) != .Pos_Y {continue}
 		for v in out[i:][:4] {
-			if vertex_position(v) == {6, 6, 6} && vertex_position(out[i]).y == 6 {
-				p0 := vertex_position(out[i])
+			if bp(v) == {6, 6, 6} && bp(out[i]).y == 6 {
+				p0 := bp(out[i])
 				if p0.x >= 5 &&
 				   p0.x <= 6 &&
 				   p0.z >= 5 &&
@@ -266,7 +272,7 @@ test_quad_split_follows_ao :: proc(t: ^testing.T) {
 		mesh_chunk(test_reg(), s, nil, &out)
 		for i := 0; i < len(out); i += 4 {
 			q := out[i:][:4]
-			if vertex_face(q[0]) != .Pos_Y || vertex_position(q[0]).y != 6 {continue}
+			if vertex_face(q[0]) != .Pos_Y || bp(q[0]).y != 6 {continue}
 			// Indices 0 1 2 0 2 3: the diagonal is q[0]-q[2].
 			testing.expect(
 				t,
@@ -389,7 +395,7 @@ test_smooth_light :: proc(t: ^testing.T) {
 		if vertex_face(out[i]) != .Pos_Y {continue}
 		for v in out[i:][:4] {
 			_, block := vertex_light(v)
-			p := vertex_position(v)
+			p := bp(v)
 			// Corners on the +x edge average 12 and 4 (and dark cells).
 			if p.x == 5 {testing.expectf(t, block < 12, "corner %v: %d", p, block)}
 			testing.expect(t, block <= 12)
@@ -432,28 +438,26 @@ test_layers :: proc(t: ^testing.T) {
 	}
 	plant := out[counts[.Opaque]:][:counts[.Cutout]]
 	for v in plant {
-		face := v.packed >> 15 & 7
+		face := v.packed >> 27 & 7
 		testing.expect(t, face == CROSS_A || face == CROSS_B)
-		testing.expect_value(t, v.layer, u32(Texture_Generator.Poppy))
+		testing.expect_value(t, v.layer & LAYER_BITS, u32(Texture_Generator.Poppy))
 	}
 	water := out[counts[.Opaque] + counts[.Cutout]:]
 	for v in water {
-		p := vertex_position(v)
-		testing.expectf(t, (v.packed & SURFACE != 0) == (p.y == 2), "surface flag at %v", p)
+		p := bp(v)
+		testing.expectf(t, (v.layer & SURFACE != 0) == (p.y == 2), "surface flag at %v", p)
 	}
 	// Water between the two: neither +x of the first nor -x of the second.
 	for i := 0; i < len(water); i += 4 {
 		face := vertex_face(water[i])
-		x := vertex_position(water[i]).x
+		x := bp(water[i]).x
 		testing.expect(t, !(face == .Pos_X && x == 5) && !(face == .Neg_X && x == 5))
 	}
 }
 
-// Farmland sits a sixteenth low: its top face's vertices and the upper two
-// of each side's are marked LOWERED (the shader moves them), the bottom's are
-// not; merged quads keep their corners alike; the texture layer is intact;
-// beside stone, the stone's face is drawn (farmland does not hide it) but
-// two farmlands hide each other's.
+// Farmland is a shape: its top at 15/16 of the block, its sides 15/16 high; the
+// row of farmland hides its own neighbouring sides but not the stone's; beside
+// stone, the stone's face is drawn (farmland's cover is not full).
 @(test)
 test_farmland_is_low :: proc(t: ^testing.T) {
 	s := new(Snapshot)
@@ -466,39 +470,34 @@ test_farmland_is_low :: proc(t: ^testing.T) {
 	tops := 0
 	for i := 0; i < len(out); i += 4 {
 		q := out[i:][:4]
-		lo, hi := quad_box(q)
 		face := vertex_face(q[0])
-		is_farm := q[0].layer & 0xffff == block_texture(test_reg(), .Farmland, face)
-		for v in q {testing.expect(t, v.layer & TILLED == 0, "TILLED left on")}
+		is_farm := q[0].layer & LAYER_BITS == block_texture(test_reg(), .Farmland, face)
 		if !is_farm {continue}
 		for v in q {
-			low := v.layer & LOWERED != 0
+			p := vertex_position(v)
 			switch face {
 			case .Pos_Y:
-				testing.expect(t, low, "the top is not lowered")
+				testing.expect_value(t, p.y, 4 * 16 + 15)
 			case .Neg_Y:
-				testing.expect(t, !low, "the bottom is lowered")
+				testing.expect_value(t, p.y, 4 * 16)
 			case .Pos_X, .Neg_X, .Pos_Z, .Neg_Z:
-				testing.expect_value(t, low, vertex_position(v).y == hi.y)
+				testing.expect(t, p.y == 4 * 16 || p.y == 4 * 16 + 15)
 			}
 		}
-		if face == .Pos_Y {
-			tops += 1
-			testing.expect_value(t, hi.x - lo.x, 3) // one merged quad over the row
-		}
+		if face == .Pos_Y {tops += 1}
 	}
-	testing.expect_value(t, tops, 1)
+	testing.expect_value(t, tops, 3) // (the shaped tops are not merged)
 	// The stone's side towards the farmland is drawn; the farmlands' sides towards each other are not.
 	stone_west, farm_east := 0, 0
 	for i := 0; i < len(out); i += 4 {
 		q := out[i:][:4]
 		lo, _ := quad_box(q)
-		is_stone := q[0].layer & 0xffff == block_texture(test_reg(), .Stone, .Neg_X)
+		is_stone := q[0].layer & LAYER_BITS == block_texture(test_reg(), .Stone, .Neg_X)
 		if is_stone && vertex_face(q[0]) == .Neg_X && lo.x == 6 {stone_west += 1}
 		if !is_stone && vertex_face(q[0]) == .Pos_X && lo.x == 6 {farm_east += 1}
 	}
 	testing.expect_value(t, stone_west, 1)
-	testing.expect_value(t, farm_east, 0) // (the end of the row: hidden by the stone)
+	testing.expect_value(t, farm_east, 0) // (the end of the row: the stone hides it)
 }
 
 // The base pack is the old look: every block's shape, layer and faces from

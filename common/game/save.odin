@@ -101,7 +101,7 @@ region_encode_bytes :: proc(
 	write_i32(w, region.y)
 	write_varint64(w, generation)
 	write_varint(w, u32(reg.blocks.count))
-	for i in 0 ..< reg.blocks.count {write_string(w, reg.blocks.defs[i].id)}
+	for i in 0 ..< reg.blocks.count {write_string(w, state_text(reg, Block(i)))}
 	write_varint(w, u32(len(sorted)))
 	for c, i in sorted {
 		for v in c.pos {write_i32(w, v)}
@@ -151,7 +151,7 @@ Region_Error :: enum u8 {
 }
 
 // MAX_SAVED_BLOCK_NAME: the longest block id a region file may name.
-MAX_SAVED_BLOCK_NAME :: 96
+MAX_SAVED_BLOCK_NAME :: 512
 
 // region_open checks a region file's header (magic, format, checksum, region,
 // index, tops). The chunks are checked as they are read.

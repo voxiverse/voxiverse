@@ -75,7 +75,13 @@ world_debug_lines :: proc(app: ^App) {
 	if hit, ok := app.session.aim.?; ok && !world_paused(app) {
 		// The aimed-at block: a thin outline just outside its faces.
 		b := [3]f64{f64(hit.block.x), f64(hit.block.y), f64(hit.block.z)}
-		render.debug_box(dd, b - 0.004, b + 1.004, {16, 16, 20, 220})
+		state, _ := world_block(&app.session.world, hit.block)
+		t := &app.session.reg.blocks
+		for box in game.shape_boxes(t, t.selection[state]) {
+			lo := [3]f64{f64(box.lo.x), f64(box.lo.y), f64(box.lo.z)} / 16
+			hi := [3]f64{f64(box.hi.x), f64(box.hi.y), f64(box.hi.z)} / 16
+			render.debug_box(dd, b + lo - 0.004, b + hi + 0.004, {16, 16, 20, 220})
+		}
 	}
 	// The selection (pos1, pos2): its box, or the one corner set.
 	sel := app.session.selection

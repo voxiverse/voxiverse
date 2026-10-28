@@ -11,6 +11,7 @@ Ray_Hit :: struct {
 	block:    Block_Pos, // the solid block hit
 	normal:   [3]i32, // the face the ray entered through (where a placed block goes); zero if it started inside
 	distance: f64,
+	point:    [3]f64, // where the ray met it: origin + dir * distance
 }
 
 // raycast returns the first solid, loaded block along the ray; unloaded
@@ -55,7 +56,15 @@ raycast :: proc(
 		if block.y >= WORLD_MIN_Y && block.y < WORLD_MAX_Y {
 			b, loaded := q.get(q.data, block)
 			if !loaded {return}
-			if block_targetable(q.table, b) {return {block, normal, distance}, true}
+			if block_targetable(q.table, b) {
+				sel := q.table.selection[b]
+				if sel == SHAPE_CUBE {
+					return {block, normal, distance, origin + d * distance}, true
+				}
+				if h, hit_box := ray_boxes(shape_boxes(q.table, sel), block, origin, d, distance, max_distance); hit_box {
+					return h, true
+				}
+			}
 		}
 		// Step into the next block along the axis whose boundary is nearest.
 		axis := 0
@@ -66,6 +75,49 @@ raycast :: proc(
 		block[axis] += step[axis]
 		normal = {}
 		normal[axis] = -step[axis]
+	}
+	return
+}
+
+// ray_boxes: the nearest of a cell's selection boxes the ray hits, entered at
+// or after entry and within max_distance (the slab method, in f64).
+@(private = "file")
+ray_boxes :: proc(
+	boxes: []Box,
+	cell: Block_Pos,
+	origin, d: [3]f64,
+	entry, max_distance: f64,
+) -> (
+	hit: Ray_Hit,
+	ok: bool,
+) {
+	best := math.INF_F64
+	for box in boxes {
+		t_near, t_far := -math.INF_F64, math.INF_F64
+		axis_in := -1
+		inside_slabs := true
+		for k in 0 ..< 3 {
+			lo := f64(cell[k]) + f64(box.lo[k]) / 16
+			hi := f64(cell[k]) + f64(box.hi[k]) / 16
+			if d[k] == 0 {
+				if origin[k] < lo || origin[k] > hi {inside_slabs = false}
+				continue
+			}
+			t0, t1 := (lo - origin[k]) / d[k], (hi - origin[k]) / d[k]
+			if t0 > t1 {t0, t1 = t1, t0}
+			if t0 > t_near {t_near, axis_in = t0, k}
+			t_far = min(t_far, t1)
+		}
+		if !inside_slabs || t_near > t_far || t_far < 0 {continue}
+		t := max(t_near, 0)
+		t = max(t, entry) if t_near > 0 else t
+		if t > max_distance || t >= best {continue}
+		best = t
+		hit = {cell, {}, t, origin + d * t}
+		if t_near > 0 && axis_in >= 0 {
+			hit.normal[axis_in] = -1 if d[axis_in] > 0 else 1
+		}
+		ok = true
 	}
 	return
 }

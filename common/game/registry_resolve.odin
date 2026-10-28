@@ -191,9 +191,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		)
 		return
 	}
-	number := make([]int, len(blocks)) // defs index -> block number
+	number := make([]int, len(blocks)) // defs index -> block type number
 	slice.fill(number, -1)
-	order := make([]int, len(blocks)) // block number -> defs index
+	order := make([]int, len(blocks)) // block type number -> defs index
+	builtin_at := make([]bool, len(blocks))
 	for builtin in Block {
 		id := BUILTIN_BLOCK_IDS[builtin]
 		at, found := b.index[.Block][id]
@@ -213,6 +214,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		}
 		number[at] = int(builtin)
 		order[int(builtin)] = at
+		builtin_at[at] = true
 	}
 	if len(b.errs) > 0 {return}
 	next := len(Block)
@@ -223,7 +225,33 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 			next += 1
 		}
 	}
-	for text, at in b.index[.Block] {reg.ids[.Block][text] = u32(number[at])}
+	// States: each type's properties, and so its run of state ids (builtins
+	// have one each, so they keep their numbers).
+	props_of := make([][]Prop_Def, len(blocks)) // by type number
+	default_index := make([]int, len(blocks)) // by type number: the default state's index
+	first_state := make([]int, len(blocks)) // by type number
+	state_total := 0
+	for n in 0 ..< len(blocks) {
+		m := &blocks[order[n]]
+		props_of[n], default_index[n] = read_states(b, m, builtin_at[order[n]])
+		first_state[n] = state_total
+		state_total += type_state_count(props_of[n])
+	}
+	if len(b.errs) > 0 {return}
+	if state_total > MAX_BLOCK_STATES {
+		fail(
+			b,
+			-1,
+			"",
+			0,
+			0,
+			fmt.aprintf("%d block states; the limit is %d", state_total, MAX_BLOCK_STATES),
+		)
+		return
+	}
+	dstate := make([]int, len(blocks)) // defs index -> the default state
+	for n in 0 ..< len(blocks) {dstate[order[n]] = first_state[n] + default_index[n]}
+	for text, at in b.index[.Block] {reg.ids[.Block][text] = u32(dstate[at])}
 
 	// --- Items: numbers. ---
 	items := b.defs[.Item]
@@ -313,20 +341,35 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 
 	// --- Blocks. ---
 	t := &reg.blocks
-	t.count = len(blocks)
+	t.count = state_total
 	t.flags = make([]Block_Flags, t.count)
 	t.light = make([]u8, t.count)
 	t.defs = make([]Block_Def, t.count)
-	for n in 0 ..< t.count {
+	t.type_of = make([]Block_Type, t.count)
+	t.types = make([]Type_Def, len(blocks))
+	t.collision = make([]u16, t.count)
+	t.selection = make([]u16, t.count)
+	t.render = make([]u16, t.count)
+	for n in 0 ..< len(blocks) {
 		m := &blocks[order[n]]
-		read_block(b, reg, m, n, order, number)
+		read_block(b, reg, m, first_state[n], order, number)
+		count := type_state_count(props_of[n])
+		t.types[n] = {
+			id          = m.id,
+			first_state = u16(first_state[n]),
+			state_count = u16(count),
+			props       = props_of[n],
+			default     = Block(first_state[n] + default_index[n]),
+		}
+		for k in 0 ..< count {t.type_of[first_state[n] + k] = Block_Type(n)}
+		read_block_rules(b, &t.types[n], m)
 	}
 
 	// --- Items: definitions. ---
-	reg.items.blocks = make([]Item_Info, t.count)
+	reg.items.blocks = make([]Item_Info, len(blocks))
 	reg.items.pack = make([]Item_Info, pack_count)
 	for &m, i in items {
-		info := read_item(b, &m, number, item_numbers)
+		info := read_item(b, &m, dstate, item_numbers)
 		n := item_numbers[i]
 		switch {
 		case n >= ARMOR_ITEMS:
@@ -343,11 +386,12 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	}
 
 	// --- Block drops. ---
-	for n in 0 ..< t.count {
+	for n in 0 ..< len(blocks) {
 		m := &blocks[order[n]]
+		fs := first_state[n]
 		f := field_of(m, "drop")
 		if f == nil {
-			t.defs[n].drop = Item(n + 1) if .Placeable in t.flags[n] else NO_ITEM
+			t.defs[fs].drop = Item(n + 1) if .Placeable in t.flags[fs] else NO_ITEM
 			continue
 		}
 		if f.value.kind != .String {
@@ -356,7 +400,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		}
 		if f.value.s == "none" {continue}
 		if at, ok := ref_index(b, .Item, f.value.s, f, f.value);
-		   ok {t.defs[n].drop = item_numbers[at]}
+		   ok {t.defs[fs].drop = item_numbers[at]}
 	}
 
 	// --- Tags. ---
@@ -374,15 +418,16 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	for text, at in b.index[.Structure] {reg.ids[.Structure][text] = u32(at)}
 	for ti, ai in reg.block_tags {
 		for member in ti.members {
-			tags := &reg.blocks.defs[member].tags
+			tags := &reg.blocks.defs[first_state[member]].tags
 			tags^ = append_tag(tags^, u16(ai))
 		}
 	}
 	// support references the tags: a tag index is the defs index.
-	for n in 0 ..< t.count {
+	for n in 0 ..< len(blocks) {
 		m := &blocks[order[n]]
 		f := field_of(m, "support")
-		t.defs[n].support = NO_TAG
+		fs := first_state[n]
+		t.defs[fs].support = NO_TAG
 		if f == nil {continue}
 		if f.value.kind != .Object {
 			fail_field(b, f, f.value, "support is an object: {\"below\": \"<block tag>\"}")
@@ -413,10 +458,20 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 				f,
 				sm.value,
 			); ok {
-				t.defs[n].support = i32(at)
+				t.defs[fs].support = i32(at)
 			}
 		}
 	}
+	// Every state has what its type has (the shapes aside).
+	for n in 0 ..< len(blocks) {
+		fs := first_state[n]
+		for k in 1 ..< type_state_count(props_of[n]) {
+			t.flags[fs + k] = t.flags[fs]
+			t.light[fs + k] = t.light[fs]
+			t.defs[fs + k] = t.defs[fs]
+		}
+	}
+	read_shapes(b, reg, blocks[:], order, first_state)
 
 	// --- Recipes. ---
 	if len(b.defs[.Recipe]) > MAX_RECIPES {
@@ -667,6 +722,7 @@ read_generator :: proc(b: ^Reg_Build, m: ^Merged_Def, names: []string) -> string
 
 @(private)
 read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order, number: []int) {
+	// n: the block's first state (what it writes; the rest copy it)
 	t := &reg.blocks
 	flags: Block_Flags
 	if rd_bool(b, m, "collides", true) {flags += {.Collides}}
@@ -798,19 +854,19 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 read_item :: proc(
 	b: ^Reg_Build,
 	m: ^Merged_Def,
-	number: []int,
+	dstate: []int,
 	item_numbers: []Item,
 ) -> Item_Info {
 	info: Item_Info
 	info.name = m.id
 	info.stack = 64
-	if m.auto {info.block = Block(number[m.aux])}
+	if m.auto {info.block = Block(dstate[m.aux])}
 	info.stack = rd_int(b, m, "stack", 64, 1, 999)
 	if f := field_of(m, "places"); f != nil {
 		if f.value.kind != .String {
 			fail_field(b, f, f.value, "places is a block id")
 		} else if at, ok := ref_index(b, .Block, f.value.s, f, f.value); ok {
-			info.block = Block(number[at])
+			info.block = Block(dstate[at])
 		}
 	}
 	if f := field_of(m, "tool"); f != nil {

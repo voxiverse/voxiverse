@@ -1,0 +1,17 @@
+{
+	"stairs": {
+		"boxes": [[0, 0, 0, 16, 8, 16], [0, 8, 0, 16, 16, 8]],
+		"rotate": "facing",
+		"flip": {"half": "top"}
+	},
+	"slab": {
+		"boxes": [],
+		"cases": [
+			{"when": {"type": "bottom"}, "boxes": [[0, 0, 0, 16, 8, 16]]},
+			{"when": {"type": "top"}, "boxes": [[0, 8, 0, 16, 16, 16]]},
+			{"when": {"type": "double"}, "boxes": [[0, 0, 0, 16, 16, 16]]}
+		]
+	},
+	"ladder": {"boxes": [[0, 0, 13, 16, 16, 16]], "rotate": "facing"},
+	"farmland": {"boxes": [[0, 0, 0, 16, 15, 16]]}
+}
