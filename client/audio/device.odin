@@ -7,6 +7,14 @@ import "core:thread"
 import "core:time"
 import ma "vendor:miniaudio"
 
+// macOS: miniaudio's CoreAudio backend needs these linked (@(require) keeps
+// them though nothing here names a symbol of theirs).
+when ODIN_OS == .Darwin {
+	@(require) foreign import _coreaudio "system:CoreAudio.framework"
+	@(require) foreign import _audiotoolbox "system:AudioToolbox.framework"
+	@(require) foreign import _corefoundation "system:CoreFoundation.framework"
+}
+
 // The sound card, through miniaudio (only its device layer: it opens the
 // default output and calls us for samples; mixing is ours). No device (a
 // server, CI) is not an error: the game runs silent.
@@ -95,7 +103,7 @@ device_open :: proc(d: ^Device, m: ^Mixer) -> bool {
 	d.callback = {m, d}
 	config.pUserData = &d.callback
 	if r := ma.device_init(ctx, &config, &d.device); r != .SUCCESS {
-		log.warnf("audio no output device, running silent result=%v", r)
+		log.warnf("audio no audio device found; sound is off result=%v", r)
 		if d.has_ctx {ma.context_uninit(&d.ma_ctx)}
 		d^ = {}
 		return false

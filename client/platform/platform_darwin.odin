@@ -991,9 +991,51 @@ assertion: u32
 @(private = "file")
 keep_awake_warned: bool // a failure is told once per run
 
-// No window icon until M47e gives the application its icon.
+// The application's icon (the Dock's, also for a run from the terminal; the
+// .app has Voxiverse.icns): the largest image offered, as an NSImage.
 @(private)
-native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {}
+native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
+	best := -1
+	for img, i in images {
+		if len(img.rgba) == img.size * img.size * 4 && (best < 0 || img.size > images[best].size) {
+			best = i
+		}
+	}
+	if best < 0 {return}
+	img := images[best]
+	pool := NS.AutoreleasePool.alloc()->init()
+	defer pool->drain()
+	NONPREMULTIPLIED :: 2 // NSBitmapFormatAlphaNonpremultiplied
+	rep := msg(
+		^NS.Object,
+		msg(^NS.Object, class_of("NSBitmapImageRep"), "alloc"),
+		"initWithBitmapDataPlanes:pixelsWide:pixelsHigh:bitsPerSample:samplesPerPixel:hasAlpha:isPlanar:colorSpaceName:bitmapFormat:bytesPerRow:bitsPerPixel:",
+		rawptr(nil),
+		NS.Integer(img.size),
+		NS.Integer(img.size),
+		NS.Integer(8),
+		NS.Integer(4),
+		NS.BOOL(true),
+		NS.BOOL(false),
+		ns_string("NSDeviceRGBColorSpace"),
+		NS.UInteger(NONPREMULTIPLIED),
+		NS.Integer(img.size * 4),
+		NS.Integer(32),
+	)
+	if rep == nil {return}
+	pixels := msg([^]u8, rep, "bitmapData")
+	if pixels == nil {
+		msg(nil, rep, "release")
+		return
+	}
+	copy(pixels[:len(img.rgba)], img.rgba)
+	image := msg(^NS.Object, msg(^NS.Object, class_of("NSImage"), "alloc"), "init")
+	msg(nil, image, "addRepresentation:", rep)
+	msg(nil, image, "setSize:", NS.Size{NS.Float(img.size), NS.Float(img.size)})
+	msg(nil, w.native.app, "setApplicationIconImage:", image)
+	msg(nil, rep, "release")
+	msg(nil, image, "release") // (the application keeps its own reference)
+}
 
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {

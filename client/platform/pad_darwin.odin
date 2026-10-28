@@ -9,7 +9,14 @@ import NS "core:sys/darwin/Foundation"
 // while in a slot); those without an extended gamepad are skipped. The
 // framework's connect notifications need the run loop that M1b brings, which
 // is why [GCController controllers] is polled. Compiled and its pure parts
-// tested here; running it waits for the macOS window (M1b).
+// tested here; running it waits for a tester's Mac.
+//
+// M47e's decision: the list is still read each poll rather than through
+// GCControllerDidConnect/DidDisconnect observers on a delegate class made at
+// run time. The list is the framework's own truth (a connect or disconnect
+// shows on the next frame, which is as soon as the notification would reach
+// the same event list), and the observer class would be code nobody here can
+// run. Slots free when a controller leaves the list.
 
 foreign import gamecontroller "system:GameController.framework"
 
@@ -111,9 +118,15 @@ native_pads_poll :: proc(p: ^Pads) {
 		s := Pad_State {
 			connected = true,
 		}
+		// The family: productCategory names the model, vendorName where it
+		// does not ("Xbox Wireless Controller", "DualSense Wireless Controller").
 		category := msg(^NS.Object, c, "productCategory")
 		if category != nil {
 			s.family = pad_family_from_category(string(msg(cstring, category, "UTF8String")))
+		}
+		vendor := msg(^NS.Object, c, "vendorName")
+		if s.family == .Generic && vendor != nil {
+			s.family = pad_family_from_category(string(msg(cstring, vendor, "UTF8String")))
 		}
 		set :: proc(s: ^Pad_State, b: Pad_Button, on: bool) {
 			if on {s.buttons += {b}}

@@ -295,6 +295,7 @@ jobs:
         include:
           - { os: ubuntu-22.04, name: Linux x64 }
           - { os: windows-latest, name: Windows x64 }
+          - { os: macos-latest, name: macOS arm64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -364,12 +365,28 @@ jobs:
           $info | Format-List ProductName, ProductVersion, FileDescription, FileVersion
           if ($info.ProductName -ne "Voxiverse") { exit 1 }
 
+      # Not run: no window server or GPU here. Unpacked as a user would, its
+      # bundle checked and both programs asked for their version.
+      - name: Check the package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ditto -x -k build/dist/*.zip "$RUNNER_TEMP/package"
+          cd "$RUNNER_TEMP"/package/voxiverse-*-macos-arm64
+          ls -l
+          plutil -lint Voxiverse.app/Contents/Info.plist
+          codesign --verify --deep --strict Voxiverse.app
+          codesign --verify --strict voxiverse-server
+          test -f Voxiverse.app/Contents/Frameworks/libMoltenVK.dylib
+          test -f Voxiverse.app/Contents/Resources/Voxiverse.icns
+          ./voxiverse-server --version
+          Voxiverse.app/Contents/MacOS/voxiverse --version
+
       # The package itself, not zipped again: the artifact is the file, by
       # its own name.
       - name: Upload
         uses: actions/upload-artifact@v7
         with:
-          path: build/dist/voxiverse-*.${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }}
+          path: build/dist/voxiverse-*.${{ runner.os == 'Linux' && 'tar.gz' || 'zip' }}
           archive: false
           retention-days: 30
           if-no-files-found: error
@@ -411,10 +428,11 @@ jobs:
           esac
           cd dist
           ls -l
-          # Exactly the two packages, as files, for this version.
-          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 2
+          # Exactly the three packages, as files, for this version.
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
           test -f "voxiverse-$VERSION-windows-x64.zip"
           test -f "voxiverse-$VERSION-linux-x64.tar.gz"
+          test -f "voxiverse-$VERSION-macos-arm64.zip"
           sha256sum * > SHA256SUMS
           # The notes: the milestones done since the previous x.y.0 tag (or
           # since the start), from the commit subjects, to be edited.
@@ -439,7 +457,7 @@ jobs:
             echo
             echo "- Windows (64-bit): the .zip. Windows may warn about an unknown publisher (not code-signed yet): More info, Run anyway."
             echo "- Linux (64-bit): the .tar.gz. Needs a Vulkan 1.3 driver."
-            echo "- macOS: not yet (Apple Silicon is in progress)."
+            echo "- macOS (Apple Silicon): the .zip. macOS asks you to confirm opening an app that is not from the App Store: see README.txt."
             echo
             echo "Will it run on your computer, and what to include in a report: https://github.com/voxiverse/voxiverse/blob/main/docs/platforms.md"
             echo

@@ -10,6 +10,12 @@ PLAYING
   Linux: run ./voxiverse. It needs a Vulkan driver (Mesa's or your GPU
   vendor's; most distributions install one) and X11 or XWayland.
 
+  macOS (Apple Silicon): open Voxiverse.app. The app is not from the App
+  Store and not notarized, so macOS asks you to confirm the first time:
+  right-click it, choose Open, then Open again. Or, in Terminal, in this
+  folder: xattr -dr com.apple.quarantine Voxiverse.app
+  Vulkan comes inside the app (MoltenVK); nothing else to install.
+
   Your graphics driver must support Vulkan 1.3.
 
 WHERE YOUR THINGS ARE
@@ -21,9 +27,10 @@ WHERE YOUR THINGS ARE
            %LOCALAPPDATA%\voxiverse\saves\
   Linux:   ~/.config/voxiverse/settings.cfg
            ~/.local/share/voxiverse/saves/
+  macOS:   ~/Library/Application Support/voxiverse/
 
   The game's log (voxiverse.log) and screenshots (F2) are written beside
-  the game.
+  the game (on macOS, beside Voxiverse.app).
 
 RUNNING A SERVER
 

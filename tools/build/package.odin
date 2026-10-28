@@ -159,17 +159,14 @@ PACKAGE_README :: #load("package_readme.txt", string)
 // a release build (shaders carried inside; on Windows a windowed program,
 // no console), the server, README.txt and the licences, in a folder of the
 // package's name (unpacking never scatters files), archived as
-// voxiverse-<version>-<os>-<arch>.zip on Windows or .tar.gz elsewhere (tar
-// keeps the executable bit). A development build's name carries its commit
+// voxiverse-<version>-<os>-<arch>.zip on Windows and macOS (where the game is
+// Voxiverse.app, macos_app.odin) or .tar.gz elsewhere (tar keeps the
+// executable bit). A development build's name carries its commit
 // too: builds between releases are told apart by name.
 package_game :: proc() -> bool {
-	when ODIN_OS == .Darwin {
-		fmt.eprintln("build: no macOS package until the macOS backend (docs/plan.md, M1b)")
-		return false
-	}
 	v := version_of()
 	build_game({"--release"}, windowed = true) or_return
-	os_name := "windows" when ODIN_OS == .Windows else "linux"
+	os_name := "windows" when ODIN_OS == .Windows else "macos" when ODIN_OS == .Darwin else "linux"
 	arch := "arm64" when ODIN_ARCH == .arm64 else "x64"
 	label := v.version
 	if version_is_dev(v) {label = fmt.tprintf("%s-%s", v.version, v.commit)}
@@ -179,14 +176,18 @@ package_game :: proc() -> bool {
 	os.remove_all(stage)
 	os.make_directory_all(path_join({stage, "licenses"}))
 
+	// (macOS: the game goes inside the .app instead.)
 	for exe in ([]string{GAME_NAME, SERVER_NAME}) {
+		if exe == GAME_NAME && ODIN_OS == .Darwin {continue}
 		file := strings.concatenate({exe, exe_suffix()})
 		if err := os.copy_file(path_join({stage, file}), path_join({"build", file})); err != nil {
 			fmt.eprintfln("build: cannot copy %s: %v", file, err)
 			return false
 		}
 	}
-	when ODIN_OS != .Windows {
+	when ODIN_OS == .Darwin {
+		assemble_app(stage, v) or_return
+	} else when ODIN_OS != .Windows {
 		// The picture for a launcher or desktop entry (Windows has it in the .exe).
 		write_icon() or_return
 		if err := os.copy_file(
@@ -228,6 +229,11 @@ package_game :: proc() -> bool {
 		// The folder by name: archiving "." would store "./" paths, which
 		// Explorer shows as an empty zip that will not extract.
 		run({tar, "-a", "-c", "-f", abs_archive, "-C", dist, name}) or_return
+	} else when ODIN_OS == .Darwin {
+		// ditto keeps the bundle's metadata and the executable bits.
+		archive = path_join({dist, strings.concatenate({name, ".zip"})})
+		os.remove(archive)
+		run({"ditto", "-c", "-k", "--keepParent", stage, archive}) or_return
 	} else {
 		archive = path_join({dist, strings.concatenate({name, ".tar.gz"})})
 		// (Owned by nobody in particular: not the builder's account.)

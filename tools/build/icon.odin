@@ -14,7 +14,6 @@ import "../../client/ui"
 
 ICON_SIZES :: [7]int{16, 24, 32, 48, 64, 128, 256}
 
-@(private = "file")
 ICON_FONT := #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
 // write_icon writes build/voxiverse.ico, build/icon-<size>.png for each size and

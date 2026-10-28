@@ -311,6 +311,13 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 	game_extra, server_extra: [dynamic]string
 	// One file: the shaders inside (no hot reload without the dev aids).
 	if profile == .Release {append(&game_extra, "-define:VX_EMBED_SHADERS=true")}
+	// macOS: the oldest system asked for, and the game finds MoltenVK in the
+	// .app's Frameworks folder.
+	when ODIN_OS == .Darwin {
+		append(&game_extra, "-minimum-os-version:" + MACOS_MINIMUM)
+		append(&game_extra, "-extra-linker-flags:-Wl,-rpath,@executable_path/../Frameworks")
+		append(&server_extra, "-minimum-os-version:" + MACOS_MINIMUM)
+	}
 	// Windows: the icon and version information linked in.
 	when ODIN_OS == .Windows {
 		rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
