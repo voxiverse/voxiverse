@@ -24,6 +24,7 @@ game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	if world_paused(app) {return}
 	chat_feed(app, ctx)
 	hud_draw(app, ctx)
+	player_list_draw(app, ctx)
 }
 
 // hud_draw: the crosshair, the hotbar, the hearts and the item-name popup
@@ -33,8 +34,10 @@ hud_draw :: proc(app: ^App, ctx: ^ui.Context) {
 	s := app.session
 	c := ui.rect_center(ctx.screen, 0, 0)
 	t := &ctx.theme
-	ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, t.crosshair)
-	ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
+	if crosshair_shown(s) {
+		ui.fill_rect(ctx, {c.x - 8, c.y - 1, 16, 2}, t.crosshair)
+		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
+	}
 	hotbar(ctx, s, &app.item_icons)
 	health_bar(ctx, s)
 	hud_popup(app, ctx)

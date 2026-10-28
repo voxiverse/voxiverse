@@ -421,6 +421,8 @@ write_universe_file :: proc(s: ^Server, format := SAVE_FORMAT) -> bool {
 	fmt.sbprintfln(&b, "format = %d", format)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
+	fmt.sbprintfln(&b, "mode = %s", game.game_mode_name(s.config.mode))
+	if s.config.mode_changed {fmt.sbprintfln(&b, "mode_changed = true")}
 	fmt.sbprintfln(&b, "kit = %s", kit_text(s.registry, s.kit[:]))
 	if len(s.store.packs) >
 	   0 {fmt.sbprintfln(&b, "packs = %s", strings.join(s.store.packs, ", ", context.temp_allocator))}
@@ -475,6 +477,10 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 				return false
 			}
 			s.home.address = a
+		case key == "mode":
+			if m, ok := game.game_mode_parse(value); ok {s.config.mode = m}
+		case key == "mode_changed":
+			s.config.mode_changed = value == "true"
 		case key == "generation":
 			if n, ok := strconv.parse_u64(value, 10); ok {s.store.generation = n}
 		case key == "age":

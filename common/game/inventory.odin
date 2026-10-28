@@ -62,6 +62,7 @@ Inventory_Action_Kind :: enum u8 {
 	Gather, // every stack of the cursor's item onto the cursor, as far as it fits (a double-click)
 	Move_One, // one between the hotbar and the rest: from the slot (arg 0), or into it (arg 1) (the wheel)
 	Sort, // the pockets' grid (not the hotbar): stacks merged, then in item order, empty slots last (the slot is ignored)
+	Swap_Offhand, // the hand's stack with the offhand slot's (nothing to swap when both are empty; the slot and arg are ignored)
 }
 
 Inventory_Action :: struct {
@@ -228,6 +229,10 @@ inventory_apply :: proc(
 		same := true
 		for s, i in grid {if s != before[i] {same = false}}
 		if same {return}
+	case .Swap_Offhand:
+		hand, off := &inv.slots[inv.selected], &inv.equipment[.Offhand]
+		if stack_empty(hand^) && stack_empty(off^) {return}
+		hand^, off^ = off^, hand^
 	case .Close:
 		if stack_empty(inv.cursor) && !inv.chest_open {return}
 		inv.chest, inv.chest_open = {}, false

@@ -25,6 +25,7 @@ Rules :: struct {
 	drops:             bool, // a block a player breaks leaves its item
 	damage:            bool, // players take damage (falls, explosions) and can die
 	death_drops:       bool, // a player who dies drops their inventory where they fell (else keeps it)
+	show_coordinates:  bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
 	random_tick_speed: i32, // blocks picked in each chunk each tick to change by themselves (0: none)
 }
 
@@ -46,6 +47,7 @@ RULES_DEFAULTS := Rules {
 	daylight_cycle    = true,
 	drops             = true,
 	damage            = false,
+	show_coordinates  = true,
 	random_tick_speed = 3,
 }
 
@@ -87,6 +89,10 @@ RULES_VARS := [?]base.Var {
 	{
 		field = "damage",
 		help = "players take damage (falls, explosions) and can die; off in new worlds",
+	},
+	{
+		field = "show_coordinates",
+		help = "F3 shows position, chunk and block under (off: only with debug.coordinates)",
 	},
 	{field = "death_drops", help = "a player who dies drops their inventory where they fell"},
 	{

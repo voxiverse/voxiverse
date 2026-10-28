@@ -1,6 +1,7 @@
 package client
 
 import "core:math"
+import "core:math/linalg"
 
 import "../common/game"
 import "render"
@@ -13,6 +14,7 @@ import "render"
 View :: struct {
 	position:   [3]f64, // the eyes
 	yaw, pitch: f32, // radians: yaw turns left from -z, pitch up
+	roll:       f32, // radians, the drawn view's sway (view_camera.odin)
 }
 
 MOUSE_RADIANS_PER_PIXEL :: 0.0025 // at mouse_sensitivity 1
@@ -64,7 +66,9 @@ camera_render :: proc(c: ^View, width, height: i32, fov_degrees: f32) -> render.
 	return {
 		chunk = chunk,
 		position = position,
-		view_proj = proj * render.view_matrix(position, c.yaw, c.pitch),
+		view_proj = proj *
+		linalg.matrix4_rotate_f32(c.roll, {0, 0, 1}) *
+		render.view_matrix(position, c.yaw, c.pitch),
 	}
 }
 

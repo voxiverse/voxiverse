@@ -128,8 +128,10 @@ escape :: proc(app: ^App) {
 	}
 	switch app.screen {
 	case .Universes:
-		// A save's screen (create, edit, delete) back to the list first.
+		// A card's menu, rename, delete or import back to the list first.
 		if app.universes.mode != .List {app.universes.mode = .List} else {app.screen = .Title}
+	case .Creation:
+		app.screen = .Universes
 	case .Options:
 		if app.settings_dirty {settings_save(app)}
 		app.screen = .Title

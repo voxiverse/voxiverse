@@ -102,6 +102,8 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 		credits_screen(app, ctx)
 	case .Universes:
 		universes_screen(app, ctx)
+	case .Creation:
+		creation_screen(app, ctx)
 	case .Multiplayer:
 		multiplayer_screen(app, ctx)
 	case .Game:
@@ -112,6 +114,7 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	if app.debug.overlay {debug_overlay(app, ctx)}
 	if app.settings.show_fps {fps_overlay(app, ctx)}
 	draw_overlays(app, ctx)
+	ignite_ui(app, ctx)
 	toasts_ui(app, ctx)
 	if !(app.hud_hidden && app.screen == .Game && app.overlays.count == 0) {
 		prompt_bar(app, ctx, prompt_items(app)) // (F1 hides it with the rest of the HUD)

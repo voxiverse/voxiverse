@@ -16,6 +16,9 @@ hotbar :: proc(ctx: ^ui.Context, s: ^Session, icons: ^Item_Icons) {
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
 	row = ui.rect_center(row, game.HOTBAR_SLOTS * (SLOT_SIZE.x + t.spacing), SLOT_SIZE.y)
+	// The offhand slot, left of the hotbar (F swaps it with the hand).
+	off := ui.Rect{row.x - 2 * t.spacing - SLOT_SIZE.x, row.y, SLOT_SIZE.x, SLOT_SIZE.y}
+	stack_slot(ctx, s.reg, icons, off, s.inventory.equipment[.Offhand], false)
 	for i in 0 ..< game.HOTBAR_SLOTS {
 		slot := ui.cut_left(&row, SLOT_SIZE.x)
 		ui.cut_left(&row, t.spacing)

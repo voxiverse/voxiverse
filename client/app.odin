@@ -36,6 +36,7 @@ Screen :: enum u8 {
 	Options,
 	Credits,
 	Universes,
+	Creation,
 	Multiplayer,
 	Game, // a session exists
 	Failed, // the session ended against our will: why (app.failed)
@@ -71,6 +72,9 @@ App :: struct {
 	listener:         audio.Listener, // ... and the listener's options
 	shader_watch:     Shader_Watch,
 	universes:        Universes_Screen,
+	creation:         Creation_Screen,
+	ignite:           Ignite,
+	cues:             [dynamic]string, // UI sound events fired (ui_cue)
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	debug:            Debug_Switches,
@@ -340,6 +344,8 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	render.entity_draw_destroy(&app.entity_draw)
 	shader_watch_destroy(&app.shader_watch)
 	universes_destroy(&app.universes)
+	creation_destroy(&app.creation)
+	delete(app.cues)
 	toasts_destroy(&app.toasts)
 	multiplayer_destroy(&app.multiplayer)
 	delete(app.failed.reason)
@@ -498,7 +504,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		if in_world {
 			s := app.session
 			width, height := render_size(app)
-			camera = camera_render(&s.camera, width, height, app.settings.fov)
+			camera = camera_render(&s.view, width, height, camera_fov(s, app.settings))
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
 			sky := render.sky_at(game.time_of_day(s.clock))
 			scene = render.scene_upload(
@@ -580,6 +586,7 @@ enter_world :: proc(
 	seed: i64,
 	spawn: Maybe([3]f64) = nil,
 	benchmark := false, // the same work every run: no sheep, still clouds
+	mode := game.Game_Mode.Creative, // a new universe's
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
@@ -590,6 +597,7 @@ enter_world :: proc(
 			name = player_name(&app.settings),
 			key = app.account,
 			seed = seed,
+			mode = mode,
 			save_dir = save_dir,
 			spawn = spawn,
 			view_radius = view_radius,

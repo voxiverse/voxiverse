@@ -56,7 +56,9 @@ Settings :: struct {
 	keys:              Bindings, // (their own table: bindings_table)
 	pad:               Pad_Bindings, // gamepad buttons (pad_bindings_table)
 	// Accessibility
-	reduce_motion:     bool, // still the menus' stars (and later camera bob and shake)
+	reduce_motion:     bool, // still the menus' stars, the view bobbing, the sprint FOV kick and Ignite's zoom
+	sprint_fov_kick:   bool, // the view widens a little while sprinting
+	view_bobbing:      bool, // the first-person view sways while walking
 	chat_text_size:    f32, // times the UI's text size
 	prompt_bar:        bool, // the bar of button prompts along the bottom of menus (off by default)
 }
@@ -82,6 +84,8 @@ SETTINGS_DEFAULTS := Settings {
 	keys              = DEFAULT_BINDINGS,
 	pad               = DEFAULT_PAD_BINDINGS,
 	chat_text_size    = 1,
+	sprint_fov_kick   = true,
+	view_bobbing      = true,
 }
 
 @(rodata)
@@ -133,7 +137,7 @@ SETTINGS_VARS := [?]base.Var {
 		field = "fov",
 		label = "Field of view",
 		help = "How wide your view is, in degrees. Wider shows more, but bends the edges.",
-		min = 50,
+		min = 30,
 		max = 110,
 		step = 1,
 	},
@@ -314,6 +318,18 @@ SETTINGS_VARS := [?]base.Var {
 	{
 		field = "reduce_motion",
 		help = "Keeps the moving backgrounds still.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "sprint_fov_kick",
+		label = "Sprint view kick",
+		help = "The view widens a little while you sprint. Reduce motion turns it off too.",
+		choices = {{0, "Off"}, {1, "On"}},
+	},
+	{
+		field = "view_bobbing",
+		label = "View bobbing",
+		help = "The first-person view sways a little while you walk. Reduce motion turns it off too.",
 		choices = {{0, "Off"}, {1, "On"}},
 	},
 	{

@@ -60,7 +60,13 @@ OPTIONS_TABS := [Options_Tab][]string {
 		"stick_swap",
 		"button_prompts",
 	},
-	.Accessibility = {"reduce_motion", "prompt_bar", "chat_text_size"},
+	.Accessibility = {
+		"reduce_motion",
+		"sprint_fov_kick",
+		"view_bobbing",
+		"prompt_bar",
+		"chat_text_size",
+	},
 	.Profile       = {"name", "share_data"},
 }
 

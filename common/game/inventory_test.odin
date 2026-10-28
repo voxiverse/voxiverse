@@ -321,3 +321,28 @@ test_inventory_sort :: proc(t: ^testing.T) {
 	_, ok = inventory_apply(reg, &inv, {.Sort, 0, 0}, false)
 	testing.expect(t, !ok)
 }
+
+// Swap_Offhand: the hand's stack and the offhand slot's change places; with
+// both empty there is nothing to do (the server refuses it, the client does
+// not predict it); a swapped-in stack comes from the selected slot only.
+@(test)
+test_swap_offhand :: proc(t: ^testing.T) {
+	stone, dirt := item_of_block(test_reg(), .Stone), item_of_block(test_reg(), .Dirt)
+	inv: Inventory
+	swap :: proc(inv: ^Inventory) -> bool {
+		_, ok := inventory_apply(test_reg(), inv, {.Swap_Offhand, 0, 0}, false)
+		return ok
+	}
+	testing.expect(t, !swap(&inv), "nothing to swap")
+	inv.selected = 2
+	inv.slots[2], inv.slots[3] = {stone, 5}, {dirt, 1}
+	testing.expect(t, swap(&inv), "into an empty offhand")
+	testing.expect(t, stack_empty(inv.slots[2]) && inv.equipment[.Offhand] == {stone, 5})
+	testing.expect_value(t, inv.slots[3], Stack{dirt, 1})
+	testing.expect(t, swap(&inv), "back")
+	testing.expect(t, inv.slots[2] == {stone, 5} && stack_empty(inv.equipment[.Offhand]))
+	inv.equipment[.Offhand] = {dirt, 9}
+	testing.expect(t, swap(&inv), "both full")
+	testing.expect(t, inv.slots[2] == {dirt, 9} && inv.equipment[.Offhand] == {stone, 5})
+	testing.expect(t, inventory_valid(test_reg(), &inv))
+}

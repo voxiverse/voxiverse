@@ -446,7 +446,7 @@ prompt_items :: proc(app: ^App) -> []Prompt_Item {
 		append(&items, select, Prompt_Item{.Menu_Back, "Quit", .None})
 	case .Options:
 		append(&items, select, back, tabs)
-	case .Universes, .Multiplayer, .Failed, .Credits:
+	case .Universes, .Creation, .Multiplayer, .Failed, .Credits:
 		append(&items, select, back)
 	case .Game:
 		s := app.session

@@ -6188,3 +6188,177 @@ the catalog in creative. (7) On a pad: View opens the player menu, LB/RB switch 
 - The scan test (`test_no_string_literals_in_ui_calls`) reads the sources of `screen_*`, `menu_*`, `overlay_*` and `hud_*` and fails a `ui.button`, `ui.label`, `ui.title` or `toast` call with a string literal (`id = "..."` and the empty string aside). Strings in other calls (`draw_text`, checkboxes, the Options variable tables, action labels) are not swept: they go to the table when a milestone touches them.
 - The stills: there is no screenshot set to add to (`still_test.odin` is about players standing still); `test_sections_draw`, `test_title_buttons` and the layout test stand in for it, and the pictures are in the check by hand.
 - The pad's cursor cannot reach Sort or the pockets' search (the cursor moves over slots and the catalog): carried to M48e.
+
+# M48e: Menus, part two (the universes screen and creation, Ignite, export and import, camera and keys)
+
+**Why.** The second half of the owner's Menus milestone (2026-10-28, #45; the design is
+[design.md](../design.md), cited as *(section)*). M48d (done first) built the player menu, the
+HUD, toasts, the title screen, the string keys and the layer layout; this one builds the
+universes screen and universe creation, and the camera and keys. It builds on M17's addresses
+and galaxies (done) and the seed handling already in `server`.
+
+**Carried from M48d** (what it left, found by building it): the universes screen's strings
+already go through keys (`Universes_*` in `client/text.odin`), the scan test
+(`test_no_string_literals_in_ui_calls`) fails any new `ui.button`, `ui.label`, `ui.title` or
+`toast` call with a literal, so this milestone's new screens add keys, not literals; "X joined"
+as a toast needs the server to say a join as an event of its own (today it is a chat line:
+the toast is added with that event); on a pad the inventory's cursor cannot reach Sort or
+the pockets' search (the Catalog switch is the left stick's press): if the universes screen
+or creation needs the same pad reach, make it a focus move in one place and use it for both.
+
+**Hard stop.** As in M48d: nothing under *The owner decides*. Specifically here: the home world
+preview and creation show only what the generator already decides (climate, sky, terrain); no
+survival rules, no death or respawn, no way of "finding" addresses.
+
+**Design (decided).**
+
+*The universes screen (Universes).* `screen_universes.odin` (was the Worlds screen). A list of
+universe **cards**: a galaxy thumbnail drawn from the universe's seed (see below) and the name;
+the last-played universe first, then by last played; a card shows the game mode and last-played
+time small. No Continue shortcut. Clicking a card enters the universe, in the world the
+character last stood in (the server's character record says it already; the client only asks to
+join). Each card has a menu (a "..." button): Rename, Export, Delete (and Edit, as today if it
+has a use). **Export and import** move here from where they are today: Export writes the archive
+the export command writes now; "Import" is a button beside "New Universe" opening a file path
+field (the platform's file dialog is not in scope). **Delete** asks one confirm dialog ("Delete
+<name>? This cannot be undone.") for now; later type-the-name and a trash folder (next tier,
+design.md). The screen's music: the title piece continues from the title screen.
+
+*The galaxy thumbnail and the seed's glyphs.* A universe's seed is its home world's gate
+address, shown as gate glyphs (the 40 symbols). A pure function in `common/game` (the free
+tier is wrong: it feeds a thumbnail only, but the *seed to address* mapping is state, so it is
+deterministic): `seed_glyphs(seed: u64) -> Address` gives the address whose galaxy part and world
+part are derived from the seed by a fixed mix (documented in the code; a golden test pins five
+seeds). Typed text becomes a seed by hashing the text (FNV-1a 64 of its UTF-8 bytes, existing
+helper if the server has one); a typed number is the seed itself; either shows its glyphs live as
+it is typed, and an empty field means Roll. `galaxy_stars(seed, n) -> [n]Star` is the galaxy
+as a point set (position, size, colour from a small palette), a pure function of the galaxy's
+symbols, drawn by the UI as dots: the thumbnail (about 400 stars, rendered once to a small
+texture per card) and the creation screen's big view (about 4 000). The home world's star is
+marked.
+
+*Universe creation.* `screen_creation.odin`. Choices: the name (default a generated one from the
+name palettes if the registry has them, else "Universe N"), the seed as glyphs (editable by
+typed text or number, see above), **Roll** (draws a new random seed, and the galaxy view
+redraws: stars fade and re-settle over 0.4 s; Reduce motion: instantly), and the game mode
+(Creative or Survival; nothing else is asked). The **home-world preview** beside the galaxy: a
+small rotating planet (a lit sphere, rendered by the UI's draw layer or a tiny render pass,
+whichever the existing preview uses: free tier) coloured by the world's palette, its address
+glyphs under it, and three facts as one line each: climate, sky, terrain, taken from the
+generator parameters the address decides (words from the string table). Creative is the
+default mode. The mode can change later by `/gamemode` with permission; the save records that it
+was changed (a `mode_changed` flag in `universe.cfg`, read by this screen's card as "changed").
+Seed and mode persist in `universe.cfg` as today.
+
+*Ignite.* The button that creates the universe. A 2–3 s big bang (2.5 s): the galaxy view
+collapses to a point (0.9 s), flashes (0.15 s), zooms into the home world (1.1 s) and then the
+loading screen's starfield takes over, while the universe is created and the world loads in the
+background (the animation never waits for it; if loading is slower, the loading screen
+continues from the last frame; if it is quicker, the animation still plays out unless
+skipped). Any key or click skips it to the load. With Reduce motion: no collapse, flash or
+zoom; a 0.3 s cross-fade. The stinger cue is an event name (`ui_ignite`) fired to the sound
+system; with no sound for it yet (UI sounds are next tier) it is a no-op that a test sees fired.
+The music continues from the title piece through creation.
+
+*Camera and keys (Camera and movement; Hotkeys and input).*
+- **F5** cycles first person → third person behind → third person facing you, one `Camera_Mode`
+  in the client's view state (not saved). Third person is centred behind the head (no shoulder
+  offset); the camera distance is 4 blocks and **pulls in** to the first hit of a ray from the
+  head toward the camera (with 0.2 block margin, using the box raycast of M48), never inside a
+  block; it eases back out over 0.2 s. Facing-you looks back at the head from the front; look
+  direction mirrors. The crosshair is hidden in third person unless aiming (a held item that
+  aims: the rocket launcher with Use held), the model of the player is drawn in both third
+  person modes (the avatar exists: `avatars.odin`; here it stands, animations are next tier).
+  The first-person arm and held item (viewmodel) are next tier.
+- **FOV**: the slider exists in Options (`fov`); check its range (30–110) and that the Options
+  screen labels it through the string table. **Sprint FOV kick**: while sprinting the FOV
+  widens by 8% over 0.15 s and eases back; a setting `sprint_fov_kick` (default on) in
+  Options' comfort group turns it off; Reduce motion turns it off too.
+- **Sprint and sneak**: hold by default; `sprint_toggle` and `sneak_toggle` already exist in
+  Settings (Hold/Toggle choices in Accessibility): this milestone verifies both are wired in the
+  per-tick input, that a toggle press-release persists until pressed again and clears on
+  leaving a world and when the player stops moving for sprint, and that the HUD shows no
+  indicator beyond the existing one.
+- **View bobbing**: a camera offset while walking on the ground (vertical 0.03 blocks, roll 0.3°,
+  at stride frequency 1.8 per block moved), setting `view_bobbing` (default on) in Options;
+  Reduce motion turns it off. First person only.
+- **F** (`Swap_Offhand`): swaps the held item with the offhand slot. The offhand slot exists if
+  the equipment system (M22b) gave one; if it did not, this milestone adds one slot to the
+  character (a record in the character file and a state record on the wire, with the schema
+  hash bump) and draws it left of the hotbar. Swap is a server-validated action (a new
+  client message), with prediction of the swap.
+- **Hold P** (`Player_List`): while held, a panel lists connected players' names and pings
+  (ping from `Net_Stats`; singleplayer: just you, ping "-"). Released: gone. It is an overlay
+  that takes no input.
+- **F3**: the debug screen for everyone (coordinates, chunk, biome, FPS, the sky's time):
+  `dev_debug.odin`. Today's debug overlay stays the base, but its coordinate lines are shown
+  only if the server allows: a server rule `rules.show_coordinates` (default true, in `world.cfg`
+  and the Rules the client receives, and a console variable) hides position, chunk and
+  block-under lines from F3 for players without the permission `debug.coordinates` (the owner
+  has it); the other lines stay. F3 is not a cheat tool otherwise.
+- Controls lists the new actions (`Camera`, `Swap_Offhand`, `Player_List`); every key and
+  button remains remappable.
+
+**Left out.** Map, Atlas, viewmodel, avatar animations, ghost preview (next tier), the
+multiplayer screen's server list, Options › Profile, UI sounds (a cue name is fired only),
+the name-typing delete confirm and the trash folder, creative building tools, localization
+beyond the string keys (M48d).
+
+**Tests.**
+
+- `common/game/universe_seed_test.odin`: `seed_glyphs` golden for five seeds; typed text and
+  number map as specified; `galaxy_stars` is deterministic, equal for equal galaxies, differs
+  for different ones, and its home star is marked.
+- `client/universes_test.odin`: the card order (last played first), entering a card joins in the
+  last world (a stepped session: leave in a second world, re-enter, land there), the card menu's
+  Delete asks once and removes the directory only on confirm, Export and Import round-trip a
+  universe through the cards' buttons.
+- `client/creation_test.odin`: Roll changes the seed and keeps name and mode; typing text shows
+  glyphs; the preview's three facts equal the generator's parameters for that address; Ignite
+  creates exactly one universe with the chosen name, seed and mode, runs 2.5 s of frames (a
+  stepped clock), is skipped by a key press, and with Reduce motion shows no zoom; the
+  `ui_ignite` cue is fired once.
+- `client/camera_test.odin`: F5's cycle order and wrap; in third person with a wall behind the
+  head the camera distance is less than 4 and the camera is not inside a block (checked for 200
+  random head positions and directions in a test world); eases back out; crosshair hidden in
+  third person, shown when aiming.
+- `client/input_modes_test.odin`: hold and toggle for sprint and sneak, each as the tests'
+  stepped input; the FOV kick's widening and its off switch; view bobbing's off with Reduce
+  motion; F swap round trip over the stepped session (server validated: swapping with an empty
+  offhand moves the item; the bandwidth baseline is regenerated and listed if the new record
+  changes it); the player list lists names and pings.
+- `server/rules_test.odin` (extended): `rules.show_coordinates` false hides coordinate lines
+  from a player without the permission and not from one with it.
+- Stills of the universes screen with three cards, the creation screen and a third-person frame.
+
+**Exit check (M48e):**
+
+- The tests above pass; `build check` (cross-OS included), the suite and the CI run of the
+  commit are green. Any regenerated baseline is listed with its reason.
+- Singleplayer from the title screen reaches the universes screen; a universe created there
+  with a typed seed has exactly that seed's glyph address as its home world's address (a test).
+
+**Check by hand (M48e):** (1) Singleplayer → New Universe: type a word; the glyphs appear and the
+galaxy redraws; Roll redraws it; the planet rotates with three facts under its glyphs; Ignite
+plays about 2.5 s (collapse, flash, zoom) and you arrive; a key press during it skips to the
+load; with Reduce motion on it is a cross-fade. (2) The universes screen shows galaxy-thumbnail
+cards, the last played first; enter one: you stand in the world you left (use a gate first to
+leave in a second world). (3) A card's menu: Export writes the archive; Import brings it back;
+Delete asks once. (4) In a world: F5 cycles the three views; back against a wall in third person
+the camera comes in rather than entering the wall; sprinting widens the view a little and the
+Options toggle stops it; view bobbing is subtle and its toggle works; hold P shows the player
+list while held; F swaps with the offhand; F3 shows the debug screen, and on a server with
+`rules.show_coordinates false` no coordinates.
+
+**What differed from this spec (found by building it):**
+
+- `seed_glyphs` is `address_derive`, the mapping the server has always used for a home world, not a new mix (a golden test pins five seeds); `seed_of_text` is the typed-seed rule `world_create` already had (a number is the seed, text is FNV-1a 64, empty is Roll). `galaxy_stars(address, out)` fills a slice (the thumbnail's 400, the creation view's 4 000) from the galaxy's symbols; its first star is the home world's, placed by the world's symbols and marked.
+- There was no game mode: `Game_Mode` (Creative, Survival) is a label a universe keeps (`universe.cfg` `mode`, `mode_changed`; `Config.mode`), chosen at creation and shown on the card; `/gamemode [creative|survival]` (node `world.rules`) changes it and records that it was changed. No rules follow from it (the hard stop).
+- The home world is Earth's (worldgen's defaults), so the preview's three facts are the same for every seed; the words follow the generator's parameters (`home_facts_of`). The planet is drawn in bands by the UI (no render pass); the galaxy thumbnails are drawn as dots every frame from the card's cached stars (no texture per card).
+- The offhand swap is an inventory action (`Swap_Offhand`, `PROTOCOL_VERSION` 31), not a message of its own: it gets the server's validation and the prediction and replay the inventory already has. The offhand slot existed (M22b's `Equip_Slot.Offhand`); the hotbar draws it on its left.
+- The universes list sorted the oldest first (the comparison was reversed): fixed, with a test. `saves_override` (thread-local) replaces the tests' `VX_SAVES` (the environment is shared by every test thread). The console's `export` and `import` stay beside the cards' buttons.
+- View bobbing's stride is 1.8 radians of sway per block walked (the spec's "1.8 per block" read as a cycle would shake at 8 Hz). A toggled sprint ends when you stop after you had started (pressing it standing still keeps it).
+- The player list shows our own ping (a joined server's round trip) and "-" for everyone else: the client knows no other player's ping. F3 has no biome line (the world has no biome query on the client): it gained the time of day, and its position line follows `rules.show_coordinates` / `debug.coordinates`.
+- FOV's range is 30-110 (it was 50-110). Options' labels still come from `SETTINGS_VARS` (English there), not the string table: the key scan covers the screens, not the settings table.
+- Pad and key reach: the universes screen and creation are reachable by the pad's focus moves as they are (a test walks them), so no shared focus move was added; the inventory's Sort and search stay as M48d left them. "X joined" as a toast (a join event of its own) was not added: no screen needed it. Camera, Swap and Player list have no pad button (next tier's ring).
+- The stills were not made (as in M48d: no screenshot set exists); the screens' draw tests stand in and the pictures are in the check by hand.

@@ -154,6 +154,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	// Worlds (client/screen_universes.odin).
 	{"travel", "<address> [character]", {1, 3}, admin_travel, "world.travel"},
 	{"address", "", {0, 0}, admin_address, "info.address"},
+	{"gamemode", "[creative|survival]", {0, 1}, admin_gamemode, "world.rules"},
 	{"worlds", "", {0, 0}, admin_worlds, "info.worlds"},
 	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},

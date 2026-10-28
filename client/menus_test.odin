@@ -16,7 +16,6 @@ import "platform"
 import "ui"
 
 // A UI test's app: the font and the UI, nothing else.
-@(private = "file")
 ui_app :: proc(t: ^testing.T) -> ^App {
 	app := new(App)
 	ok: bool
@@ -28,14 +27,12 @@ ui_app :: proc(t: ^testing.T) -> ^App {
 	return app
 }
 
-@(private = "file")
 ui_app_free :: proc(app: ^App) {
 	ui.destroy(&app.ui)
 	free(app)
 }
 
 // ui_frame draws one frame of the app's screen with input.
-@(private = "file")
 ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 	actions_sync(app)
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
@@ -48,6 +45,8 @@ ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 		credits_screen(app, &app.ui)
 	case .Universes:
 		universes_screen(app, &app.ui)
+	case .Creation:
+		creation_screen(app, &app.ui)
 	case .Multiplayer:
 		multiplayer_screen(app, &app.ui)
 	case .Failed:
@@ -58,7 +57,6 @@ ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 }
 
 // click: the widget saying label, as a player clicks it (over it, down, up).
-@(private = "file")
 click :: proc(t: ^testing.T, app: ^App, label: string, loc := #caller_location) -> bool {
 	r, found := ui.find_widget(&app.ui, label)
 	if !testing.expectf(
@@ -211,15 +209,27 @@ test_keys_by_place :: proc(t: ^testing.T) {
 	testing.expect_value(t, key_label(nil, .Mouse_Right), "Right Button")
 }
 
-// Singleplayer: the saves newest first; select, rename, delete (asked
-// first).
+// open_menu opens the card menu of the universe called name.
+open_menu :: proc(t: ^testing.T, app: ^App, name: string, loc := #caller_location) {
+	for e, i in app.universes.entries {
+		if e.name == name {
+			app.universes.selected, app.universes.mode = i, .Menu
+			ui_frame(app)
+			return
+		}
+	}
+	testing.expectf(t, false, "no universe called %s", name, loc = loc)
+}
+
+// The universes screen: the saves newest first; rename and delete (asked
+// first) from a card's menu.
 @(test)
 test_saves_screen :: proc(t: ^testing.T) {
 	dir := "build/test/saves"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	os.set_env("VX_SAVES", dir)
-	defer os.unset_env("VX_SAVES")
+	saves_override = dir
+	defer saves_override = ""
 	for name in ([]string{"Old", "Castle"}) {
 		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
 		os.make_directory_all(save)
@@ -229,17 +239,15 @@ test_saves_screen :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
 	defer universes_destroy(&app.universes)
+	defer creation_destroy(&app.creation)
 	universes_refresh(&app.universes)
 	testing.expect_value(t, len(app.universes.entries), 2)
 	app.screen = .Universes
 	ui_frame(app)
 
-	click(t, app, "Castle")
-	testing.expect(t, app.universes.selected >= 0)
-	testing.expect_value(t, app.universes.entries[app.universes.selected].name, "Castle")
-
-	// Edit: the name, renamed on Save.
-	click(t, app, "Edit")
+	// A card's menu: Rename takes the name, renamed on Save.
+	open_menu(t, app, "Castle")
+	click(t, app, "Rename")
 	testing.expect_value(t, app.universes.mode, Saves_Mode.Edit)
 	clear(&app.universes.name)
 	append(&app.universes.name, "Fort")
@@ -249,16 +257,12 @@ test_saves_screen :: proc(t: ^testing.T) {
 	testing.expect(t, os.exists("build/test/saves/Fort") && !os.exists("build/test/saves/Castle"))
 
 	// Delete: asked first; Cancel keeps it, Delete does not.
-	// (Clicks on one save this close together would be a double-click: Play.)
-	app.universes.last_row = -1
-	ui_frame(app)
-	click(t, app, "Fort")
+	open_menu(t, app, "Fort")
 	click(t, app, "Delete")
 	testing.expect_value(t, app.universes.mode, Saves_Mode.Delete)
 	click(t, app, "Cancel")
 	testing.expect(t, os.exists("build/test/saves/Fort"))
-	app.universes.last_row = -1
-	click(t, app, "Fort")
+	open_menu(t, app, "Fort")
 	click(t, app, "Delete")
 	ui_frame(app)
 	click(t, app, "Delete") // the dialog's
@@ -304,6 +308,7 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
 	defer universes_destroy(&app.universes)
+	defer creation_destroy(&app.creation)
 	defer multiplayer_destroy(&app.multiplayer)
 
 	// ("universe" is a player's word now: design.md, the Universes screen and the title splash.)
@@ -320,16 +325,20 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	}
 	app.screen = .Title
 	check(t, app, "the title")
-	// (A save of its own: VX_SAVES is the saves test's, running alongside.)
+	// (A save of its own.)
 	append(
 		&app.universes.entries,
-		Save_Entry{strings.clone("Home"), strings.clone("Home"), time.now()},
+		Save_Entry {
+			name = strings.clone("Home"),
+			path = strings.clone("Home"),
+			played = time.now(),
+		},
 	)
 	app.screen = .Universes
 	check(t, app, "Singleplayer")
 	app.universes.selected = 0
 	for mode in Saves_Mode {
-		app.universes.mode, app.universes.more = mode, true
+		app.universes.mode = mode
 		check(t, app, fmt.tprint("Singleplayer", mode))
 	}
 	multiplayer_open(app)
@@ -618,6 +627,7 @@ rig_free :: proc(r: ^Rig) {
 	line_editor_destroy(&r.app.chat)
 	console_destroy(&r.app.console)
 	universes_destroy(&r.app.universes)
+	creation_destroy(&r.app.creation)
 	multiplayer_destroy(&r.app.multiplayer)
 	ui_app_free(r.app)
 	free(r)
@@ -628,8 +638,8 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	dir := "build/test/pad_saves"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	os.set_env("VX_SAVES", dir)
-	defer os.unset_env("VX_SAVES")
+	saves_override = dir
+	defer saves_override = ""
 	for name in ([]string{"Old", "Castle"}) {
 		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
 		os.make_directory_all(save)
@@ -655,31 +665,30 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_go(app, .Down)
 	testing.expect(t, ui.focused_label(&app.ui) != "saves", "Down at the last row leaves the list")
 
-	// Create: the name on the keyboard, B closes it (text kept), Cancel.
-	pad_focus(t, app, "Play Selected Save")
-	pad_go(app, .Right)
-	testing.expect_value(t, ui.focused_label(&app.ui), "Create New Save")
+	// New Universe: the creation screen; its name on the keyboard, B closes
+	// it (text kept), Cancel.
+	pad_focus(t, app, "New Universe")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.universes.mode, Saves_Mode.Create)
-	testing.expect_value(t, ui.focused_label(&app.ui), "name")
+	testing.expect_value(t, app.screen, Screen.Creation)
+	pad_focus(t, app, "name")
 	pad_tap(app, .A) // Confirm on a text field: the keyboard
 	testing.expect(t, ui.osk_is_open(&app.ui))
-	for _ in 0 ..< len("New Save") {pad_tap(app, .X)} 	// X is Backspace
-	testing.expect_value(t, len(app.universes.name), 0)
+	for _ in 0 ..< 24 {pad_tap(app, .X)} 	// X is Backspace
+	testing.expect_value(t, len(app.creation.name), 0)
 	pad_type(t, app, "Pad")
-	testing.expect_value(t, string(app.universes.name[:]), "Pad")
+	testing.expect_value(t, string(app.creation.name[:]), "Pad")
 	pad_tap(app, .B)
 	testing.expect(t, !ui.osk_is_open(&app.ui))
-	testing.expect_value(t, app.universes.mode, Saves_Mode.Create) // (B closed the keyboard first)
+	testing.expect_value(t, app.screen, Screen.Creation) // (B closed the keyboard first)
 	pad_frame(app)
 	found := false
 	for text in app.ui.texts {if text == "Pad" {found = true}}
 	testing.expect(t, found, "the name is seen in the field")
-	pad_focus(t, app, "Create Save")
-	pad_go(app, .Right)
+	pad_focus(t, app, "Ignite")
+	pad_go(app, .Left)
 	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
 	pad_tap(app, .A)
-	testing.expect_value(t, app.universes.mode, Saves_Mode.List)
+	testing.expect_value(t, app.screen, Screen.Universes)
 	pad_tap(app, .B)
 	testing.expect_value(t, app.screen, Screen.Title)
 

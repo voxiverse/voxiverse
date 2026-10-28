@@ -33,6 +33,7 @@ Session_Config :: struct {
 	key:          game.Account_Key, // the account
 	join:         Maybe(Join), // play on that server; otherwise host the world here
 	seed:         i64,
+	mode:         game.Game_Mode, // a new universe's
 	view_radius:  i32,
 	view_height:  i32,
 	trace:        bool, // record every message to net.trace from the start (hosting only)
@@ -94,6 +95,14 @@ Session :: struct {
 	world:            World, // set up from Welcome
 	world_init:       bool,
 	camera:           View, // the eyes, from the prediction; looking turns it every frame
+	view:             View, // what is drawn from: the eyes, or the third person camera, with the bobbing (view_camera.odin)
+	camera_mode:      Camera_Mode, // F5 (not saved)
+	pull:             f64, // the third person camera's distance now (pulled in against walls, easing back out)
+	fov_kick:         f32, // 0 ..= 1: how far the sprint widening has come
+	bob_phase:        f32,
+	bob_amp:          f32, // 0 ..= 1, easing in and out as walking starts and stops
+	aiming:           bool, // a held item that aims is aimed (the crosshair stays in third person)
+	feet:             [3]f64, // where the predicted player stands (the avatar in third person)
 	teleport:         Maybe(game.Teleport), // requested before joining: sent on Welcome
 	prediction:       game.Prediction,
 	rules:            game.Rules, // the server's, as last announced
@@ -105,6 +114,7 @@ Session :: struct {
 	sneak_on:         bool,
 	eye_height:       f64, // the camera above the feet: easing to player_eye_height // toggled sneaking and sprinting (Options: Toggle)
 	sprint_on:        bool,
+	sprint_moved:     bool, // moved since the sprint toggled on
 	autopilot:        Maybe(game.Player_Input), // overrides the controls (fly_test)
 	aim:              Maybe(game.Ray_Hit), // the block under the crosshair, within reach
 	aim_entity:       Maybe(u32), // an entity under the crosshair, nearer than that block
@@ -224,6 +234,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	&s.server,
 	{
 		seed         = config.seed,
+		mode         = config.mode,
 		view_radius  = config.view_radius,
 		view_height  = config.view_height,
 		workers      = worker_count(),
@@ -373,11 +384,7 @@ session_update :: proc(
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	if look {
 		look_update(&s.camera, input, actions, settings, dt)
-		toggle :: proc(a: ^Actions, action: Action, toggles: bool, on: ^bool) {
-			if !toggles {on^ = false} else if action_pressed(a, action) {on^ = !on^}
-		}
-		toggle(actions, .Sneak, settings.sneak_toggle, &s.sneak_on)
-		toggle(actions, .Sprint, settings.sprint_toggle, &s.sprint_on)
+		movement_toggles(s, actions, settings)
 		if action_pressed(actions, .Jump) {
 			if time.duration_seconds(time.tick_since(s.last_jump)) <
 			   DOUBLE_TAP_SECONDS {s.toggle_fly = true}
@@ -417,6 +424,7 @@ session_update :: proc(
 	s.eye_height += (eye - s.eye_height) * f64(1 - math.exp(-15 * dt))
 	if s.eye_height == 0 {s.eye_height = eye}
 	s.camera.position = eyes + {0, s.eye_height, 0}
+	s.feet = eyes
 	s.aim = nil
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	if hit, ok := game.raycast(
@@ -434,7 +442,23 @@ session_update :: proc(
 	   ok {
 		s.aim_entity = id
 	}
+	camera_update(s, actions, settings, query, dt, look)
 	world_update(&s.world, camera_chunk(&s.camera))
+}
+
+// movement_toggles: sneak and sprint as Options chooses: held, or toggled by
+// a press (sneak stays until pressed again; sprint also ends when you stop
+// moving after you had started). Hold clears what a toggle left.
+movement_toggles :: proc(s: ^Session, actions: ^Actions, settings: Settings) {
+	toggle :: proc(a: ^Actions, action: Action, toggles: bool, on: ^bool) {
+		if !toggles {on^ = false} else if action_pressed(a, action) {on^ = !on^}
+	}
+	toggle(actions, .Sneak, settings.sneak_toggle, &s.sneak_on)
+	toggle(actions, .Sprint, settings.sprint_toggle, &s.sprint_on)
+	if actions.move != {} {s.sprint_moved = true} else if s.sprint_moved {
+		s.sprint_on, s.sprint_moved = false, false
+	}
+	if !s.sprint_on {s.sprint_moved = false}
 }
 
 // session_apply does the session's GPU work for this frame; between

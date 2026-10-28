@@ -36,6 +36,12 @@ net_line :: proc(s: ^Session) -> string {
 	)
 }
 
+// coordinates_shown: F3 may show where we are (rules.show_coordinates, or the
+// permission debug.coordinates).
+coordinates_shown :: proc(s: ^Session) -> bool {
+	return s.rules.show_coordinates || session_allowed(s, "debug.coordinates")
+}
+
 // hotbar: the inventory's first row along the bottom, the one in hand framed.
 
 debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
@@ -55,18 +61,21 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 	)
 	if s := app.session; s != nil && s.state == .Playing {
 		p := s.camera.position
-		append(
-			&lines,
-			fmt.tprintf(
-				"position %.1f %.1f %.1f  chunk %v  yaw %.0f pitch %.0f",
-				p.x,
-				p.y,
-				p.z,
-				camera_chunk(&s.camera),
-				s.camera.yaw * math.DEG_PER_RAD,
-				s.camera.pitch * math.DEG_PER_RAD,
-			),
-		)
+		if coordinates_shown(s) {
+			append(
+				&lines,
+				fmt.tprintf(
+					"position %.1f %.1f %.1f  chunk %v  yaw %.0f pitch %.0f",
+					p.x,
+					p.y,
+					p.z,
+					camera_chunk(&s.camera),
+					s.camera.yaw * math.DEG_PER_RAD,
+					s.camera.pitch * math.DEG_PER_RAD,
+				),
+			)
+		}
+		append(&lines, fmt.tprintf("sky: time of day %.2f", game.time_of_day(s.clock)))
 		w := &s.world
 		append(
 			&lines,

@@ -86,6 +86,7 @@ local SCHEMA = {
     { name = "drops", t = "bool" },
     { name = "damage", t = "bool" },
     { name = "death_drops", t = "bool" },
+    { name = "show_coordinates", t = "bool" },
     { name = "random_tick_speed", t = "i32" },
   } },
   { id = 4, name = "clock", key = "none", lane = "reliable", fields = {

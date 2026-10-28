@@ -33,6 +33,9 @@ Bindings :: struct {
 	character:       platform.Key, // (hidden)
 	atlas:           platform.Key, // (hidden)
 	toggle_hud:      platform.Key, // hide the HUD
+	camera:          platform.Key, // first person, third person behind, third person facing you
+	swap_offhand:    platform.Key, // the hand's item with the offhand slot's
+	player_list:     platform.Key, // held: who is here
 	drop:            platform.Key, // with Ctrl: the whole stack
 	chat:            platform.Key,
 	command:         platform.Key, // the chat, starting with /
@@ -50,36 +53,39 @@ Bindings :: struct {
 }
 
 DEFAULT_BINDINGS :: Bindings {
-	forward     = .W,
-	back        = .S,
-	left        = .A,
-	right       = .D,
-	jump        = .Space,
-	sneak       = .Left_Shift,
-	sprint      = .Left_Control,
-	attack      = .Mouse_Left,
-	use         = .Mouse_Right,
-	pick        = .Mouse_Middle,
-	inventory   = .E,
-	stats       = .K,
-	player_menu = .Tab,
-	world_map   = .M,
-	journal     = .J,
-	character   = .C,
-	atlas       = .L,
-	toggle_hud  = .F1,
-	drop        = .Q,
-	chat        = .T,
-	command     = .Slash,
-	hotbar_1    = .Num_1,
-	hotbar_2    = .Num_2,
-	hotbar_3    = .Num_3,
-	hotbar_4    = .Num_4,
-	hotbar_5    = .Num_5,
-	screenshot  = .F2,
-	fullscreen  = .F11,
-	tab_prev    = .Q,
-	tab_next    = .E,
+	forward      = .W,
+	back         = .S,
+	left         = .A,
+	right        = .D,
+	jump         = .Space,
+	sneak        = .Left_Shift,
+	sprint       = .Left_Control,
+	attack       = .Mouse_Left,
+	use          = .Mouse_Right,
+	pick         = .Mouse_Middle,
+	inventory    = .E,
+	stats        = .K,
+	player_menu  = .Tab,
+	world_map    = .M,
+	journal      = .J,
+	character    = .C,
+	atlas        = .L,
+	toggle_hud   = .F1,
+	camera       = .F5,
+	swap_offhand = .F,
+	player_list  = .P,
+	drop         = .Q,
+	chat         = .T,
+	command      = .Slash,
+	hotbar_1     = .Num_1,
+	hotbar_2     = .Num_2,
+	hotbar_3     = .Num_3,
+	hotbar_4     = .Num_4,
+	hotbar_5     = .Num_5,
+	screenshot   = .F2,
+	fullscreen   = .F11,
+	tab_prev     = .Q,
+	tab_next     = .E,
 }
 
 @(rodata)
@@ -124,6 +130,16 @@ BINDING_VARS := [?]base.Var {
 		label = "Hide HUD",
 		help = "Hide the hotbar, crosshair and health until you press it again.",
 	},
+	{
+		field = "camera",
+		help = "Cycle the camera: first person, third person behind you, third person facing you.",
+	},
+	{
+		field = "swap_offhand",
+		label = "Swap with offhand",
+		help = "Swap the item in your hand with the one in your offhand slot.",
+	},
+	{field = "player_list", label = "Player list", help = "Hold to see who is here."},
 	{
 		field = "drop",
 		label = "Drop item",

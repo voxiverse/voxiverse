@@ -296,11 +296,7 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "universes":
 					universes_refresh(&app.universes)
 					app.screen = .Universes
-					if then == "create" {
-						clear(&app.universes.name)
-						append(&app.universes.name, "New Save")
-						app.universes.mode = .Create
-					}
+					if then == "create" {creation_open(app)}
 				case "multiplayer":
 					multiplayer_open(app)
 					if then == "direct" &&

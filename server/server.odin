@@ -42,6 +42,8 @@ Config :: struct {
 	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
 	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
 	seed:                  i64,
+	mode:                  game.Game_Mode, // a new universe's (a saved one keeps its own: universe.cfg)
+	mode_changed:          bool, // /gamemode changed it since the universe was made (saved)
 	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
 	view_radius:           i32, // chunks, horizontally
 	view_height:           i32, // chunks above and below

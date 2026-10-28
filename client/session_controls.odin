@@ -72,6 +72,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 	}
 
 	if action_pressed(a, .Pick) {session_pick(s)}
+	if action_pressed(a, .Swap_Offhand) {session_inventory_do(s, {.Swap_Offhand, 0, 0})}
 
 	s.edit_timer -= dt
 	breaking := action_down(a, .Attack)

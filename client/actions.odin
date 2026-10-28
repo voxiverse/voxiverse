@@ -32,6 +32,9 @@ Action :: enum u8 {
 	Character, // C
 	Atlas, // L
 	Toggle_HUD, // F1
+	Camera, // F5
+	Swap_Offhand, // F
+	Player_List, // P, held
 	Drop,
 	Chat,
 	Command,
@@ -98,6 +101,9 @@ ACTION_INFO := [Action]Action_Info {
 	.Character       = {{.World}, "Character", {}, {}},
 	.Atlas           = {{.World}, "Atlas", {}, {}},
 	.Toggle_HUD      = {{.World, .Menu}, "Hide HUD", {}, {}},
+	.Camera          = {{.World}, "Camera", {}, {}},
+	.Swap_Offhand    = {{.World}, "Swap with offhand", {}, {}},
+	.Player_List     = {{.World}, "Player list", {}, {}},
 	.Drop            = {{.World}, "Drop item", {}, {}},
 	.Chat            = {{.World}, "Open chat", {}, {}},
 	.Command         = {{.World}, "Open command", {}, {}},
@@ -148,6 +154,9 @@ PAD_COVERED_BY :: [?]struct {
 	{.Character, "the player menu: View, then LB and RB"},
 	{.Atlas, "the player menu: View, then LB and RB"},
 	{.Toggle_HUD, "not on pads"},
+	{.Camera, "not on pads (the pad's quick ring is next tier)"},
+	{.Swap_Offhand, "not on pads (the pad's quick ring is next tier)"},
+	{.Player_List, "not on pads (the pad's quick ring is next tier)"},
 	{.Screenshot, "not on pads"},
 	{.Fullscreen, "not on pads"},
 }
@@ -219,6 +228,12 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.atlas
 	case .Toggle_HUD:
 		return &b.toggle_hud
+	case .Camera:
+		return &b.camera
+	case .Swap_Offhand:
+		return &b.swap_offhand
+	case .Player_List:
+		return &b.player_list
 	case .Drop:
 		return &b.drop
 	case .Chat:
@@ -275,6 +290,9 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 	     .Character,
 	     .Atlas,
 	     .Toggle_HUD,
+	     .Camera,
+	     .Swap_Offhand,
+	     .Player_List,
 	     .Section_Prev,
 	     .Section_Next,
 	     .Catalog,
