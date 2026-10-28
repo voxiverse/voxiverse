@@ -1,5 +1,6 @@
 package server
 
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:math"
@@ -64,6 +65,7 @@ Rollback_Job :: struct {
 	ring_next:   u64, // the scan's next ring index, going down
 	catch_up:    u64, // the ring index of the next entry to fold in
 	plan:        map[game.Block_Pos]Plan,
+	entities:    map[Entity_Undo_Key][]u8, // removed entities' values read from segments (heap)
 	order:       [dynamic]game.Block_Pos,
 	cursor:      int,
 	restored:    int,
@@ -76,7 +78,10 @@ rollback_free :: proc(w: ^World) {
 	job := w.rollback
 	if job == nil {return}
 	delete(job.plan)
+	for _, bytes in job.entities {delete(bytes, runtime.heap_allocator())}
+	delete(job.entities)
 	delete(job.order)
+	if name, has := job.filter.actor.?; has {delete(name)}
 	delete(job.caller)
 	delete(job.title)
 	delete(job.segments)
@@ -200,6 +205,9 @@ rollback_start :: proc(
 	}
 	job := new(Rollback_Job)
 	job.filter = f
+	if name, has := f.actor.?; has { 	// (the job outlives the command's temporary strings)
+		job.filter.actor = strings.clone(name)
+	}
 	job.action = action_begin(w, actor_of(s, c), system, c.command)
 	job.caller = strings.clone(client_name(c))
 	job.title = strings.clone(title)
@@ -310,7 +318,7 @@ rollback_step :: proc(w: ^World) {
 			pl.kept = true
 		case:
 			if set_block(w, p, pl.restore, {job.action, report_system(j, job)}) {
-				entity_restore(w, p, pl.restore_from)
+				entity_restore(w, p, pl.restore_from, job.entities)
 				job.restored += 1
 				applied += 1
 			}
@@ -380,6 +388,12 @@ scan_step :: proc(w: ^World, job: ^Rollback_Job) {
 	#reverse for e in seg.entries {
 		info, known := seg.actions[e.action]
 		scan_entry(job, e, info, known)
+	}
+	for key, bytes in seg.entities { 	// (those the filter could ask for)
+		if key.age < job.filter.since || !in_box(job.filter.box, key.pos) {continue}
+		if key not_in job.entities {
+			job.entities[key] = slice.clone(bytes, runtime.heap_allocator())
+		}
 	}
 	if seg.header.first_age <= job.filter.since {job.scanning = false}
 	finish_scan(job)

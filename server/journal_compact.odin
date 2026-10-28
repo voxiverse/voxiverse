@@ -85,6 +85,7 @@ Compacting :: struct {
 	actions: map[u32]game.Journal_Action,
 	entries: [dynamic]game.Journal_Entry,
 	params:  [dynamic]u64,
+	values:  map[Entity_Undo_Key][]u8, // by (pos, action; age 0): the first removal's packed value
 }
 
 // compact_bytes returns the compacted form of a segment's bytes (temp allocator).
@@ -95,8 +96,12 @@ compact_bytes :: proc(reg: ^game.Registry, data: []u8) -> (out: []u8, ok: bool) 
 		actions = make(map[u32]game.Journal_Action, 16, context.temp_allocator),
 		entries = make([dynamic]game.Journal_Entry, context.temp_allocator),
 		params  = make([dynamic]u64, context.temp_allocator),
+		values  = make(map[Entity_Undo_Key][]u8, 16, context.temp_allocator),
 	}
-	r := game.journal_read_segment(reg, data, proc(user: rawptr, rec: game.Journal_Record) {
+	r := game.journal_read_segment(
+		reg,
+		data,
+		proc(user: rawptr, rec: game.Journal_Record) {
 			c := cast(^Compacting)user
 			switch v in rec {
 			case game.Journal_Tick:
@@ -128,8 +133,18 @@ compact_bytes :: proc(reg: ^game.Registry, data: []u8) -> (out: []u8, ok: bool) 
 			case game.Journal_Save:
 			case game.Journal_Params:
 				append(&c.params, v.age)
+			case game.Journal_Entity:
+				// (the first removal of a block by an action: the one its kept
+				// entry restores)
+				pos := game.chunk_origin(v.chunk) + game.local_from_index(int(v.local))
+				key := Entity_Undo_Key{pos, v.action, 0}
+				if key not_in c.values {
+					c.values[key] = slice.clone(v.value, context.temp_allocator)
+				}
 			}
-		}, &c)
+		},
+		&c,
+	)
 	if r.status == .Bad_Header {return}
 
 	// One entry per run of changes of a block by one action: its first old,
@@ -210,6 +225,21 @@ compact_bytes :: proc(reg: ^game.Registry, data: []u8) -> (out: []u8, ok: bool) 
 				end += 1
 			}
 			game.journal_write_record(&w, game.Journal_Changes{chunk, changes[:]})
+			for i in start ..< end { 	// the entities its entries removed, under the kept entry's age
+				e := live[order[i].order]
+				if value, had := c.values[{e.pos, e.action, 0}]; had {
+					game.journal_write_record(
+						&w,
+						game.Journal_Entity {
+							chunk,
+							u16(game.local_index(game.local_of(e.pos))),
+							e.age,
+							e.action,
+							value,
+						},
+					)
+				}
+			}
 			start = end
 		}
 		run_start = run_end

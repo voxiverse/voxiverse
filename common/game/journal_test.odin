@@ -38,6 +38,7 @@ sample_segment :: proc(w: ^Writer) {
 	journal_write_record(w, Journal_Changes{chunk = {-3, 2, 40}, changes = changes})
 	journal_write_record(w, Journal_Save{age = 101})
 	journal_write_record(w, Journal_Params{age = 102})
+	journal_write_record(w, Journal_Entity{{-3, 2, 40}, 9, 100, 5, {1, 2, 3}})
 }
 
 @(test)
@@ -53,7 +54,7 @@ test_journal_records_round_trip :: proc(t: ^testing.T) {
 	testing.expect_value(t, r.valid_bytes, len(w.buf))
 	testing.expect_value(t, r.header.seq, 7)
 	testing.expect_value(t, r.header.first_age, 123_456_789_012)
-	testing.expect_value(t, len(seen.records), 6)
+	testing.expect_value(t, len(seen.records), 7)
 	tick, _ := seen.records[0].(Journal_Tick)
 	testing.expect_value(t, tick.unix_ms, 1_700_000_000_000)
 	actor, _ := seen.records[1].(Journal_Actor)
@@ -67,6 +68,10 @@ test_journal_records_round_trip :: proc(t: ^testing.T) {
 	testing.expect_value(t, ch.changes[1].index, 4095)
 	testing.expect_value(t, ch.changes[2].action, 3)
 	testing.expect_value(t, ch.changes[2].new, Block.Grass)
+	ent, _ := seen.records[6].(Journal_Entity)
+	testing.expect_value(t, ent.age, 100)
+	testing.expect_value(t, ent.local, 9)
+	testing.expect_value(t, len(ent.value), 3)
 }
 
 @(test)
@@ -80,7 +85,7 @@ test_journal_cut_at_every_byte :: proc(t: ^testing.T) {
 		r := journal_read_segment(test_reg(), w.buf[:cut], nil)
 		if r.status == .Whole {append(&ends, cut)}
 	}
-	testing.expect_value(t, len(ends), 7) // the header alone, and six records
+	testing.expect_value(t, len(ends), 8) // the header alone, and seven records
 	for cut in 0 ..< len(w.buf) {
 		r := journal_read_segment(test_reg(), w.buf[:cut], nil)
 		if cut < JOURNAL_HEADER_SIZE {

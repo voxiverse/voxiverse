@@ -23,6 +23,12 @@ Entity_Undo_Key :: struct {
 	age:    u64,
 }
 
+// Pending_Entity: a removed entity's value, not encoded yet.
+Pending_Entity :: struct {
+	key:   Entity_Undo_Key,
+	value: []u8, // (heap)
+}
+
 // Entity_At: a block entity and where it is (temp).
 Entity_At :: struct {
 	pos: game.Block_Pos,
@@ -98,10 +104,7 @@ entity_removed :: proc(w: ^World, p: game.Block_Pos, cause: Act) {
 	if e == nil {return}
 	value := e^
 	// The value stays with the journal, for undo and rollback.
-	wr: game.Writer
-	game.writer_init(&wr, context.temp_allocator)
-	game.write_block_entity_value(&wr, &value)
-	journal_entity(w, {p, u32(cause.action), age_of(w.server)}, wr.buf[:])
+	journal_entity(w, {p, u32(cause.action), age_of(w.server)}, &value)
 	block_entity_touch(w, p)
 	c := chunks_get(&w.chunks, game.chunk_of(p))
 	at, _ := game.block_entity_find(c.block_entities[:], value.local)
@@ -109,10 +112,14 @@ entity_removed :: proc(w: ^World, p: game.Block_Pos, cause: Act) {
 	if value.kind == .Container {container_gone(w, p, &value, cause)}
 }
 
-// journal_entity keeps the value of an entity a journal entry removed.
+// journal_entity keeps the value of an entity a journal entry removed: in
+// memory (the newest ENTITY_UNDO_MAX) and, with a save directory, in the
+// segment files as an Entity record (journal_encode writes it).
 @(private = "file")
-journal_entity :: proc(w: ^World, key: Entity_Undo_Key, value: []u8) {
+journal_entity :: proc(w: ^World, key: Entity_Undo_Key, entity: ^game.Block_Entity) {
 	j := &w.journal
+	value := game.block_entity_pack(w.server.registry, entity, context.temp_allocator)
+	if w.dir != "" {append(&j.pending_entities, Pending_Entity{key, slice.clone(value, heap())})}
 	if j.entities == nil {j.entities = make(map[Entity_Undo_Key][]u8, heap())}
 	if old, had := j.entities[key]; had {delete(old, heap())}
 	j.entities[key] = slice.clone(value, heap())
@@ -134,6 +141,8 @@ journal_entity_value :: proc(w: ^World, key: Entity_Undo_Key) -> (value: []u8, o
 }
 
 journal_entities_free :: proc(j: ^Journal) {
+	for p in j.pending_entities {delete(p.value, heap())}
+	delete(j.pending_entities)
 	for _, bytes in j.entities {delete(bytes, heap())}
 	delete(j.entities)
 	delete(j.entity_order)
@@ -207,15 +216,19 @@ RESTORE_REACH :: 3.0
 // them), and is taken back into it; what someone picked up meanwhile is theirs
 // and stays so: items are moved, never made. Without a value (the journal
 // forgot it, or the block never held one) the entity stays as made, empty.
-entity_restore :: proc(w: ^World, p: game.Block_Pos, from: Entity_Undo_Key) {
+entity_restore :: proc(
+	w: ^World,
+	p: game.Block_Pos,
+	from: Entity_Undo_Key,
+	disk: map[Entity_Undo_Key][]u8,
+) {
 	e := block_entity_at(w, p)
 	if e == nil {return}
 	bytes, found := journal_entity_value(w, from)
+	if !found {bytes, found = disk[from]} 	// (what a rollback read from the segments)
 	if !found {return}
 	value: game.Block_Entity
-	r := game.reader_make(bytes, w.server.registry)
-	game.read_block_entity_value(&r, &value)
-	if !game.reader_finish(&r) || value.kind != e.kind {return}
+	if !game.block_entity_unpack(w.server.registry, bytes, &value) || value.kind != e.kind {return}
 	// What lies about of it: this action's stacks near p, per item.
 	here := [3]f64{f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5}
 	lying := make(map[game.Item]int, context.temp_allocator)

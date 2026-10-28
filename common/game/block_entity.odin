@@ -167,3 +167,48 @@ read_chunk_payload :: proc(
 	read_block_entities(r, out)
 	return
 }
+
+// block_entity_pack: a value that reads back under any registry, for the
+// journal (M48c): a table of the item ids its slots hold, then the value with
+// each item as 1 + its place in the table.
+block_entity_pack :: proc(
+	reg: ^Registry,
+	e: ^Block_Entity,
+	allocator := context.allocator,
+) -> []u8 {
+	w: Writer
+	writer_init(&w, allocator)
+	table := make([dynamic]Item, context.temp_allocator)
+	packed := e^
+	for st, i in e.slots {
+		if stack_empty(st) {continue}
+		at := -1
+		for item, k in table {if item == st.item {at = k}}
+		if at < 0 {
+			at = len(table)
+			append(&table, st.item)
+		}
+		packed.slots[i].item = Item(at + 1) // (0 is no item: a stack of it is empty)
+	}
+	write_varint(&w, u32(len(table)))
+	for item in table {write_string(&w, item_id(reg, item))}
+	write_block_entity_value(&w, &packed)
+	return w.buf[:]
+}
+
+// block_entity_unpack reads what block_entity_pack wrote. False: damaged, or
+// it names an item this registry does not have.
+block_entity_unpack :: proc(reg: ^Registry, bytes: []u8, e: ^Block_Entity) -> bool {
+	r := reader_make(bytes, reg)
+	n := read_varint(&r)
+	if !r.ok || n > CHEST_SLOTS {return false}
+	r.items = make(map[u16]Item, context.temp_allocator)
+	for k in 0 ..< n {
+		name := read_string(&r, 256)
+		item, found := item_by_name(reg, name)
+		if !r.ok || !found {return false}
+		r.items[u16(k + 1)] = item
+	}
+	read_block_entity_value(&r, e)
+	return reader_finish(&r)
+}

@@ -65,8 +65,9 @@ Journal_Entry :: struct {
 //	header:  "VXJN" u32 format u32 seq u64 first_age u8 flags u32 crc32(header)
 //	records: u8 type, varint length, payload, u32 crc32(type, length, payload)
 JOURNAL_MAGIC :: "VXJN"
-JOURNAL_FORMAT :: 1
+JOURNAL_FORMAT :: 2 // 2: Entity records (M48c)
 JOURNAL_HEADER_SIZE :: 4 + 4 + 4 + 8 + 1 + 4
+MAX_ENTITY_VALUE :: 1 << 14 // bytes of one Entity record's value
 JOURNAL_COMPACTED :: u8(1) // header flag bit 0
 
 Journal_Header :: struct {
@@ -82,6 +83,7 @@ Journal_Record_Type :: enum u8 {
 	Changes = 4,
 	Save    = 5,
 	Params  = 6,
+	Entity  = 7,
 }
 
 Journal_Tick :: struct {
@@ -117,6 +119,16 @@ Journal_Params :: struct {
 	age: u64, // generator parameters changed here
 }
 
+// Journal_Entity: what a block entity held when the entry (pos, action, age)
+// removed it. value is block_entity_pack's bytes (items by name).
+Journal_Entity :: struct {
+	chunk:  Chunk_Pos,
+	local:  u16, // local index in the chunk
+	age:    u64,
+	action: u32,
+	value:  []u8,
+}
+
 
 Journal_Record :: union {
 	Journal_Tick,
@@ -125,6 +137,7 @@ Journal_Record :: union {
 	Journal_Changes,
 	Journal_Save,
 	Journal_Params,
+	Journal_Entity,
 }
 
 journal_write_header :: proc(w: ^Writer, h: Journal_Header) {
@@ -197,6 +210,16 @@ journal_write_record :: proc(w: ^Writer, rec: Journal_Record) -> bool {
 	case Journal_Params:
 		type = .Params
 		write_varint64(&payload, v.age)
+	case Journal_Entity:
+		if len(v.value) < 1 || len(v.value) > MAX_ENTITY_VALUE {return false}
+		type = .Entity
+		write_svarint(&payload, v.chunk.x)
+		write_svarint(&payload, v.chunk.y)
+		write_svarint(&payload, v.chunk.z)
+		write_varint(&payload, u32(v.local))
+		write_varint64(&payload, v.age)
+		write_varint(&payload, v.action)
+		append(&payload.buf, ..v.value)
 	}
 	start := len(w.buf)
 	write_u8(w, u8(type))
@@ -347,6 +370,20 @@ decode_record :: proc(
 		rec = Journal_Save{read_varint64(&r)}
 	case .Params:
 		rec = Journal_Params{read_varint64(&r)}
+	case .Entity:
+		v: Journal_Entity
+		v.chunk.x = read_svarint(&r)
+		v.chunk.y = read_svarint(&r)
+		v.chunk.z = read_svarint(&r)
+		local := read_varint(&r)
+		v.age = read_varint64(&r)
+		v.action = read_varint(&r)
+		if !r.ok || local >= CHUNK_VOLUME {return}
+		v.local = u16(local)
+		v.value = r.data[r.pos:]
+		if len(v.value) < 1 || len(v.value) > MAX_ENTITY_VALUE {return}
+		r.pos = len(r.data)
+		rec = v
 	case:
 		return
 	}

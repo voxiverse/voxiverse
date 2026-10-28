@@ -672,8 +672,15 @@ write_entities :: proc(w: ^World) -> bool {
 			e.health,
 			e.natural,
 		)
-		if e.kind ==
-		   .Item {fmt.sbprintf(&b, " %s %d", game.item_id(w.server.registry, e.stack.item), e.stack.count)}
+		if e.kind == .Item { 	// (and the action that dropped it, M48c: a rollback takes it back after a restart)
+			fmt.sbprintf(
+				&b,
+				" %s %d %d",
+				game.item_id(w.server.registry, e.stack.item),
+				e.stack.count,
+				e.action,
+			)
+		}
 		if e.kind == .Sheep {
 			fmt.sbprintf(
 				&b,
@@ -719,7 +726,7 @@ load_entities :: proc(w: ^World) {
 			// An item has its stack after, a sheep whether it is shorn; no other has more.
 			// An item has its stack after; a sheep whether it is shorn (and, from
 			// M25, its genes, growth, love and wait); no other has more.
-			if found && kind == .Item && len(f) != 9 {ok = false}
+			if found && kind == .Item && len(f) != 9 && len(f) != 10 {ok = false}
 			if found && kind == .Sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
 			if found && kind != .Item && kind != .Sheep && len(f) != 7 {ok = false}
 		}
@@ -747,11 +754,17 @@ load_entities :: proc(w: ^World) {
 			pos, yaw, health = {x, y, z}, w, h
 		}
 		stack: game.Stack
+		action: u32
 		if ok && found && kind == .Item {
 			// A dropped stack: what it is.
-			item, known := game.item_by_name(w.server.registry, f[7] if len(f) == 9 else "")
-			n, counted := strconv.parse_int(f[8] if len(f) == 9 else "")
-			ok = known && counted && n > 0
+			item, known := game.item_by_name(w.server.registry, f[7] if len(f) >= 9 else "")
+			n, counted := strconv.parse_int(f[8] if len(f) >= 9 else "")
+			if len(f) == 10 {
+				a, has := strconv.parse_u64(f[9], 10)
+				ok = has && a <= u64(max(u32))
+				action = u32(a)
+			}
+			ok = ok && known && counted && n > 0
 			stack = {item, min(n, game.item_stack_size(w.server.registry, item))}
 		}
 		if !ok || !found {
@@ -760,7 +773,7 @@ load_entities :: proc(w: ^World) {
 		}
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
-			e.stack = stack
+			e.stack, e.action = stack, action
 			if kind == .Sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
 			if kind == .Sheep && len(f) == 12 {
 				genes, ok1 := strconv.parse_int(f[8])

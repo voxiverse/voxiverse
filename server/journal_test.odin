@@ -742,3 +742,64 @@ test_journal_cost :: proc(t: ^testing.T) {
 		log_line,
 	)
 }
+
+// M48c: a filled chest broken, the server restarted: the rollback finds the
+// chest's value in the segment files (the ring and the memory are empty); a
+// compacted journal still holds it.
+chest_after_restart :: proc(t: ^testing.T, name: string, compact: bool) {
+	dir := scratch_dir(name)
+	defer delete(dir)
+	defer os.remove_all(dir)
+	cfg := compact_config(dir, 60 if compact else 1 << 40, 0, 0)
+	g, ok := grief_open(t, dir, cfg)
+	if !ok {grief_close(g); return}
+	grief_build(g)
+	chest := at(g, -3, 0, 2)
+	filled: [game.CHEST_SLOTS]game.Stack
+	if e := block_entity_at(grief_world(g), chest); e != nil {filled = e.slots}
+	testing.expect(t, !game.stack_empty(filled[0]), "the chest was not filled")
+	g.at = age_of(grief_srv(g))
+	testing.expect(t, hand(g, chest, .Air), "the chest could not be broken")
+	run(g, 60)
+	testing.expect(t, block_entity_at(grief_world(g), chest) == nil, "the chest entity stayed")
+	if compact { 	// later history, so that the segment holding the break is compacted
+		compact_history(g)
+		run(g, 100)
+		for _ in 0 ..< 8 {
+			testing.expect(t, world_save(grief_world(g)))
+			run(g, 2)
+		}
+		_, compacted, _ := segments_size(grief_world(g))
+		testing.expect(t, compacted >= 1, "segments should have been compacted")
+	}
+	at_age, f := g.at, g.f
+	chunks := make([dynamic]game.Chunk_Pos)
+	defer delete(chunks)
+	append(&chunks, ..g.chunks[:])
+	grief_close(g)
+	g2, ok2 := grief_open(t, dir, cfg)
+	defer grief_close(g2)
+	if !ok2 {return}
+	testing.expect_value(t, g2.f, f)
+	g2.at = at_age
+	testing.expect_value(t, grief_world(g2).journal.head, 0)
+	testing.expect_value(t, len(grief_world(g2).journal.entities), 0)
+	r := grief_rollback(g2, grief_player(g2))
+	run(g2, 300)
+	testing.expect(t, r.done, "the rollback did not finish")
+	e := block_entity_at(grief_world(g2), chest)
+	if testing.expect(t, e != nil, "the restored chest has no entity") {
+		testing.expect(t, e.slots == filled, "the restored chest lacks its contents")
+	}
+	testing.expect_value(t, len(audit(grief_srv(g2))), 0)
+}
+
+@(test)
+test_chest_restored_after_restart :: proc(t: ^testing.T) {
+	chest_after_restart(t, "chest_restart", false)
+}
+
+@(test)
+test_chest_restored_from_compacted :: proc(t: ^testing.T) {
+	chest_after_restart(t, "chest_compacted", true)
+}

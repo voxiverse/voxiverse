@@ -5984,3 +5984,43 @@ inside, filled, the universe saved, quit and reopened.
 - **Rollback and the stacks a removal spilled (the spec's open question):** M45 does not remove entities a rolled-back cause made, so the spilled stacks would have duplicated the contents. Decided: a spilled item entity carries the action that spilled it (`Entity.action`); a rollback that restores the container takes back those stacks still lying within three blocks, per item, up to what the container held; what someone picked up meanwhile stays theirs. Items are moved, never made, so the audit balances without a ledger entry. M45 is unchanged.
 - A world with a `containers.cfg` is refused (`universe_blocks_check`, M47a's message), as the spec said; the integrity checker no longer reads the file.
 - The door latency test is in `server/latency_test.odin` (`test_doors_with_latency`).
+
+# M48c: block entity values in the journal's files
+
+**Why.** M48b keeps what a removed block entity held (a broken chest's 25 slots) with the
+journal entry that removed it, in memory (`Journal.entities`, the newest 4096). A rollback
+or undo after the server restarted, or of an entry older than the newest 4096 removals,
+puts the chest back empty (its spilled stacks, if still lying about, are not taken back:
+they carry the action but the value that says which slots they came from is gone).
+The journal's segment files are the record that outlives a run; the value belongs there.
+
+**Design.** A journal record type `Entity` (segment format 2, `JOURNAL_FORMAT`; older
+segments are refused as everything before 1.0): `varint chunk x, y, z`, `varint local`,
+`varint64 age`, `varint action`, then the entity's value bytes as
+`write_block_entity_value` wrote them, items by name (a table per record: the value names
+each item by its id, not its number, so a registry whose numbers moved still reads it).
+`journal_entity` appends one with the entry that removed the entity (same tick, same
+action), `journal_read_segment` visits it, and rollback's planning (`scan_entry`) reads the
+records it passes into the same `Entity_Undo_Key` map `entity_restore` already uses, for
+the entries in its filter only. Compaction (M45b) keeps an `Entity` record whose entry it
+keeps and drops it with the entry.
+
+**Left out:** entity kinds beyond the container; undoing an entity's contents changes (only
+the block's removal is journaled).
+
+**Tests:** `server/journal_test.odin`: break a filled chest, save, stop and start the
+server, roll back by cause: the chest and its 25 slots are back (the stacks it spilled
+were still on the ground and are taken back) and `/audit` balances; a compacted journal
+still restores it.
+
+**Exit check:** that test passes, `./build.sh check` and the suite are green, and the CI run
+of the commit is green.
+
+**What differed from the spec (built in M48c):**
+
+- The in-memory values are packed the same way (`block_entity_pack`), so one format serves memory and files; `entity_restore` takes the values a rollback read from the segments (`Rollback_Job.entities`) as its fallback.
+- The record's value uses the item ids in a table and stores each item as 1 + its table place (0 is no item, and a stack of it counts as empty).
+- Compaction keeps the first removal's record per (block, action) and writes it with the kept entry's age.
+- The spilled stacks are taken back after a restart only because dropped items now save the action that dropped them (`entities.cfg`, a tenth field on item lines; lines of nine fields still load): the spec assumed they were still linked.
+- A bug that the longer scan showed: a rollback's actor filter pointed into the command's temporary memory and was garbage after a few ticks (a scan over several segments); the job now owns a copy of the name.
+- Tests are `test_chest_restored_after_restart` and `test_chest_restored_from_compacted` in `server/journal_test.odin`; the common record round trip carries an Entity record.

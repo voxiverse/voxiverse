@@ -1,6 +1,7 @@
 package server
 
 import "base:intrinsics"
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:mem"
@@ -67,33 +68,35 @@ Undo_Stacks :: struct {
 }
 
 Journal :: struct {
-	entries:      []game.Journal_Entry, // a ring
-	head:         u64, // entries ever appended this session
-	actions:      [dynamic]Live_Action, // ids actions_base ..< next_action
-	actions_base: u32,
-	next_action:  u32,
-	actors:       [dynamic]Actor_Entry, // index 0: the world
-	actor_keys:   map[string]u32, // kind byte + name -> index (keys owned)
-	undo:         map[u32]Undo_Stacks, // by actor index
-	tick_actions: [game.Edit_System]Action_Id, // the world's own action per system this tick
-	tick_hash:    game.Hasher, // a stepped server's entries and actions of this tick
+	entries:          []game.Journal_Entry, // a ring
+	head:             u64, // entries ever appended this session
+	actions:          [dynamic]Live_Action, // ids actions_base ..< next_action
+	actions_base:     u32,
+	next_action:      u32,
+	actors:           [dynamic]Actor_Entry, // index 0: the world
+	actor_keys:       map[string]u32, // kind byte + name -> index (keys owned)
+	undo:             map[u32]Undo_Stacks, // by actor index
+	tick_actions:     [game.Edit_System]Action_Id, // the world's own action per system this tick
+	tick_hash:        game.Hasher, // a stepped server's entries and actions of this tick
 	// On disk (only with a save directory):
-	pending:      [dynamic]game.Journal_Entry, // appended this tick, not encoded yet
-	out:          game.Writer, // encoded records, not yet written
-	out_age:      u64, // the age of the first record in out
-	file:         ^os.File, // the open segment
-	seq:          u32, // the segment records go to
-	file_bytes:   u64, // written to the open segment
-	declared:     map[u64]struct{}, // actors (bit 62) and actions declared in this segment
-	last_tick:    u64, // the age of the last Tick record encoded (+1; 0: none in this segment)
-	last_flush:   u64, // the server tick of the last write
-	// What removed block entities held, by the entry that removed them (not
-	// saved: rollback after a restart restores such a block with an empty entity):
-	entities:     map[Entity_Undo_Key][]u8, // (heap)
-	entity_order: [dynamic]Entity_Undo_Key,
+	pending:          [dynamic]game.Journal_Entry, // appended this tick, not encoded yet
+	pending_entities: [dynamic]Pending_Entity, // removed entities' values, not encoded yet
+	out:              game.Writer, // encoded records, not yet written
+	out_age:          u64, // the age of the first record in out
+	file:             ^os.File, // the open segment
+	seq:              u32, // the segment records go to
+	file_bytes:       u64, // written to the open segment
+	declared:         map[u64]struct{}, // actors (bit 62) and actions declared in this segment
+	last_tick:        u64, // the age of the last Tick record encoded (+1; 0: none in this segment)
+	last_flush:       u64, // the server tick of the last write
+	// What removed block entities held, by the entry that removed them, packed
+	// (block_entity_pack): the newest in memory; all of it in the segments as
+	// Entity records (a rollback after a restart reads them from there):
+	entities:         map[Entity_Undo_Key][]u8, // (heap)
+	entity_order:     [dynamic]Entity_Undo_Key,
 	// Tests:
-	cost_cycles:  u64, // Config.journal_timed: cycles spent in the journal
-	report:       Rollback_Report, // the newest rollback's
+	cost_cycles:      u64, // Config.journal_timed: cycles spent in the journal
+	report:           Rollback_Report, // the newest rollback's
 }
 
 // Where a world's journal resumes after a start: what its world.cfg says.
@@ -460,7 +463,7 @@ declare_key_actor :: proc(i: u32) -> u64 {return 1 << 62 | u64(i)}
 journal_encode :: proc(w: ^World) {
 	s := w.server
 	j := &w.journal
-	if len(j.pending) == 0 {return}
+	if len(j.pending) == 0 && len(j.pending_entities) == 0 {return}
 	from := timed(s)
 	defer spent(w, from)
 	// A segment ends at its size: the next record begins another.
@@ -473,7 +476,9 @@ journal_encode :: proc(w: ^World) {
 		clear(&j.declared)
 		j.last_tick = 0
 	}
-	if len(j.out.buf) == 0 {j.out_age = j.pending[0].age}
+	if len(j.out.buf) == 0 {
+		j.out_age = j.pending[0].age if len(j.pending) > 0 else j.pending_entities[0].key.age
+	}
 	Keyed :: struct {
 		chunk: game.Chunk_Pos,
 		order: int,
@@ -525,6 +530,22 @@ journal_encode :: proc(w: ^World) {
 		run_start = run_end
 	}
 	clear(&j.pending)
+	// The entities the entries removed (each carries its entry's age).
+	for p in j.pending_entities {
+		cp := game.chunk_of(p.key.pos)
+		game.journal_write_record(
+			&j.out,
+			game.Journal_Entity {
+				cp,
+				u16(game.local_index(game.local_of(p.key.pos))),
+				p.key.age,
+				p.key.action,
+				p.value,
+			},
+		)
+		delete(p.value, runtime.heap_allocator())
+	}
+	clear(&j.pending_entities)
 }
 
 // declare_action writes the action and its actor into the segment if it has
@@ -609,12 +630,13 @@ journal_save_point :: proc(w: ^World) {
 // Loaded_Segment: a segment read whole, entries in the order written, each
 // with the age of the Tick before it.
 Loaded_Segment :: struct {
-	header:  game.Journal_Header,
-	status:  game.Segment_Status,
-	valid:   int,
-	entries: [dynamic]game.Journal_Entry,
-	actions: map[u32]Action_Info,
-	params:  [dynamic]u64, // the ages generator parameters changed in it
+	header:   game.Journal_Header,
+	status:   game.Segment_Status,
+	valid:    int,
+	entries:  [dynamic]game.Journal_Entry,
+	actions:  map[u32]Action_Info,
+	params:   [dynamic]u64, // the ages generator parameters changed in it
+	entities: map[Entity_Undo_Key][]u8, // what the entries removed entities held (packed)
 }
 
 // Action_Info: what an entry's action says, from a segment or the ring.
@@ -644,6 +666,7 @@ segment_decode :: proc(reg: ^game.Registry, data: []u8) -> (seg: Loaded_Segment,
 	seg.entries = make([dynamic]game.Journal_Entry, context.temp_allocator)
 	seg.actions = make(map[u32]Action_Info, 16, context.temp_allocator)
 	seg.params = make([dynamic]u64, context.temp_allocator)
+	seg.entities = make(map[Entity_Undo_Key][]u8, context.temp_allocator)
 	l := Loading {
 		seg    = &seg,
 		actors = make(map[u32]Actor_Entry, 16, context.temp_allocator),
@@ -681,6 +704,12 @@ segment_decode :: proc(reg: ^game.Registry, data: []u8) -> (seg: Loaded_Segment,
 			case game.Journal_Save:
 			case game.Journal_Params:
 				append(&l.seg.params, v.age)
+			case game.Journal_Entity:
+				pos := game.chunk_origin(v.chunk) + game.local_from_index(int(v.local))
+				l.seg.entities[{pos, v.action, v.age}] = slice.clone(
+					v.value,
+					context.temp_allocator,
+				)
 			}
 		}, &l)
 	seg.header, seg.status, seg.valid = r.header, r.status, r.valid_bytes
