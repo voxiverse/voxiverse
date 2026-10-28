@@ -1,6 +1,7 @@
 package ui
 
 import "core:log"
+import "core:math"
 import "core:strings"
 import "core:testing"
 
@@ -838,4 +839,32 @@ test_pad_confirm_opens_the_keyboard_enter_submits :: proc(t: ^testing.T) {
 	for _ in 0 ..< 4 {frame(ctx, nav({}), &text, &submitted)}
 	frame(ctx, keys({.Enter}), &text, &submitted)
 	testing.expect(t, submitted && !osk_is_open(ctx), "keyboard Enter submits, no keyboard")
+}
+
+// A text whose size changes every frame scales its quads smoothly and does
+// not grow the glyph cache (it rasterizes once, at the largest size).
+@(test)
+test_tilted_text_scales_continuously :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	base: f32 = 20
+	largest := base * 1.05
+	entries := -1
+	last_width: f32 = -1
+	for i in 0 ..= 40 {
+		size := base * (0.95 + 0.1 * f32(i) / 40)
+		begin_frame(ctx, at({0, 0}), SCREEN, 1)
+		draw_text_tilted(ctx, {400, 300}, "Splash", size, {255, 255, 255, 255}, -0.1, largest)
+		end_frame(ctx)
+		// The first glyph quad's top edge length is its (turned) width.
+		v := ctx.output.layers[.Base].vertices
+		testing.expect(t, len(v) >= 4)
+		d := v[1].pos - v[0].pos
+		width := math.sqrt(d.x * d.x + d.y * d.y)
+		testing.expectf(t, width != last_width, "step %d: quad width %v repeats", i, width)
+		last_width = width
+		if entries < 0 {entries = len(ctx.glyphs.entries)}
+		testing.expectf(t, len(ctx.glyphs.entries) == entries, "glyph cache grew at step %d", i)
+	}
 }

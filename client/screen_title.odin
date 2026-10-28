@@ -59,6 +59,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 			size,
 			SPLASH_COLOR,
 			SPLASH_TILT,
+			t.font_size * (1 + SPLASH_PULSE),
 		)
 	}
 	ui.cut_top(&column, 40)

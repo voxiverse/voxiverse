@@ -247,6 +247,10 @@ draw_text_styled :: proc(
 
 // draw_text_tilted draws one line of text centred on `centre` (UI units),
 // turned by `angle` radians (clockwise on the screen), over the layer's clip.
+// Glyphs are rasterized once at `raster_size` (UI units; 0: `size`) rounded up
+// to whole pixels, and the quads scaled by the continuous factor
+// size * scale / pixel size, so text whose size changes every frame (a pulse)
+// scales smoothly and never fetches glyphs at a new size.
 draw_text_tilted :: proc(
 	ctx: ^Context,
 	centre: Vec2,
@@ -254,10 +258,13 @@ draw_text_tilted :: proc(
 	size: f32,
 	color: Color,
 	angle: f32,
+	raster_size: f32 = 0,
 ) {
 	append(&ctx.texts, text)
-	pixel_size := u16(math.round(size * ctx.scale))
+	raster := raster_size if raster_size > 0 else size
+	pixel_size := u16(math.ceil(max(raster, size) * ctx.scale))
 	if pixel_size == 0 || len(text) == 0 {return}
+	k := size * ctx.scale / f32(pixel_size) // quad scale: raster pixels to screen pixels
 	width := measure_text(ctx, text, size) * ctx.scale
 	ascent, descent := font_line_metrics(ctx, size)
 	c := centre * ctx.scale
@@ -268,14 +275,14 @@ draw_text_tilted :: proc(
 		g, ok := glyph_cache_get(&ctx.glyphs, r, pixel_size)
 		if !ok {g, ok = glyph_cache_get(&ctx.glyphs, '?', pixel_size)}
 		if ok && g.w > 0 {
-			quad := [4]f32{pen.x + g.offset.x, pen.y + g.offset.y, f32(g.w), f32(g.h)}
+			quad := [4]f32{pen.x + g.offset.x * k, pen.y + g.offset.y * k, f32(g.w) * k, f32(g.h) * k}
 			uv := [2][2]f32 {
 				{f32(g.x) * inv, f32(g.y) * inv},
 				{f32(g.x + g.w) * inv, f32(g.y + g.h) * inv},
 			}
 			push_quad(ctx, quad, uv, color, smooth = true, turn = turn)
 		}
-		pen.x += g.advance
+		pen.x += g.advance * k
 	}
 }
 
