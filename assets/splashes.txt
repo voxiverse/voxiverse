@@ -1,7 +1,3 @@
 # The title screen's splash texts: one per line; blank lines and lines
 # starting with # are ignored. One is chosen when the game starts.
-The Universe, voxelized.
 Ai SlOp!!! :^(
-Leaked from a lab
-Enter Dreamland
-Holodeck
