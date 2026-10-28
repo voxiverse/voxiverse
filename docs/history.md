@@ -5914,6 +5914,9 @@ state with `shape_update` applied).
   spilled: the block they belonged to is not a container any more); a block whose kind
   needs an entity and has none gets an empty one. `test_entity_without_block_dropped`
   and `test_block_without_entity_made` (in `containers_test.odin`) check both.
+  The ledger's rows are folded into the state hash whole, so a new `Reason` (here
+  `Orphaned`) changes the bandwidth baselines' roots (accepted once, bytes unchanged); the
+  next added `Reason` will do the same, and its commit accepts them the same way.
 - **Journal** (M45): the entry for a change that makes or removes a block entity carries
   the entity's encoded value (the bytes of the region encoding below), so undo and
   rollback restore a broken chest with its contents. The stacks spilled by the removal are

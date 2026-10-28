@@ -272,7 +272,7 @@ collect_log :: proc(
 	location := #caller_location,
 ) {
 	l := (^Log_Lines)(data)
-	append(&l.lines, strings.clone(text, context.temp_allocator))
+	append(&l.lines, strings.clone(text)) // (heap: core:log rewinds the temp allocator when the call returns)
 }
 
 // save_chunk_with: a chunk of one block kind with `block` at local {5, 5, 5}, as
@@ -316,9 +316,17 @@ test_entity_without_block_dropped :: proc(t: ^testing.T) {
 	orphan.slots[3] = {planks, 5}
 	pos := game.Chunk_Pos{900, 0, 900}
 	save_chunk_with(w, pos, .Stone, {orphan})
-	before := s.ledger.entries[planks][.Orphaned]
+	orphaned := proc(s: ^Server, item: game.Item) -> i64 {
+		row := s.ledger.entries[item] // (a missing item is a zero row: index the copy, not the lookup)
+		return row[.Orphaned]
+	}
+	before := orphaned(s, planks)
 
 	lines: Log_Lines
+	defer {
+		for line in lines.lines {delete(line)}
+		delete(lines.lines)
+	}
 	loud := context.logger
 	context.logger = {collect_log, &lines, .Debug, {}}
 	loaded := request_chunk(w, pos)
@@ -328,7 +336,7 @@ test_entity_without_block_dropped :: proc(t: ^testing.T) {
 	c := chunks_get(&w.chunks, pos)
 	if !testing.expect(t, c != nil, "the chunk is not there") {return}
 	testing.expect_value(t, len(c.block_entities), 0)
-	testing.expect_value(t, s.ledger.entries[planks][.Orphaned] - before, -5)
+	testing.expect_value(t, orphaned(s, planks) - before, -5)
 	found := false
 	at := game.chunk_origin(pos) + {5, 5, 5}
 	for line in lines.lines {
