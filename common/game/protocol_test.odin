@@ -1,5 +1,6 @@
 package game
 
+import "../../base"
 import "core:fmt"
 import "core:math"
 import "core:math/rand"
@@ -729,4 +730,30 @@ test_varint64_edges :: proc(t: ^testing.T) {
 		read_varint64(&r)
 		testing.expectf(t, !r.ok, "bad encoding %d was accepted", i)
 	}
+}
+
+// A rules table carries every kind it holds (numbers, bools and the text of
+// default_game_mode) through write_vars and read_vars; a kind write_vars
+// does not know panics, and a panic inside a test thread hangs the runner.
+@(test)
+test_rules_vars_round_trip :: proc(t: ^testing.T) {
+	rules := RULES_DEFAULTS
+	rules.gravity = 12.5
+	rules.pvp = false
+	rules.random_tick_speed = 9
+	testing.expect(t, base.var_text_set(&rules.default_game_mode, "adventure"))
+
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	write_vars(&w, rules_table(), &rules)
+
+	r := reader_make(w.buf[:])
+	got: Rules
+	read_vars(&r, rules_table(), &got)
+	testing.expect(t, r.ok)
+	testing.expect_value(t, got.gravity, rules.gravity)
+	testing.expect_value(t, got.pvp, false)
+	testing.expect_value(t, got.random_tick_speed, i32(9))
+	testing.expect_value(t, base.var_text(&got.default_game_mode), "adventure")
+	testing.expect(t, rules_valid(&got))
 }
