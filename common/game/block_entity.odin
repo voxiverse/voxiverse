@@ -101,7 +101,7 @@ read_block_entity_value :: proc(r: ^Reader, e: ^Block_Entity) {
 			reader_fail(r)
 			return
 		}
-		e.slots[slot] = {item, int(count)}
+		e.slots[slot] = {item, int(count), 0}
 	}
 }
 

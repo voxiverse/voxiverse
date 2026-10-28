@@ -60,7 +60,7 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return cs[0].inv_acked == 2
 	})
-	testing.expect(t, ok && alice.inventory.equipment[.Head] == {cap_, 1}, "the cap is not on")
+	testing.expect(t, ok && alice.inventory.equipment[.Head] == {cap_, 1, 0}, "the cap is not on")
 	testing.expect(t, game.stack_empty(alice.inventory.cursor))
 
 	// Boots into the head slot: refused (the cursor keeps them); into the feet: on.

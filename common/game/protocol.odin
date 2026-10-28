@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 33
+PROTOCOL_VERSION :: 34
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -236,6 +236,20 @@ Fire :: struct {
 	yaw, pitch: f32,
 }
 
+// Shoot: the held hitscan weapon (slot: the hotbar slot the client thinks it
+// holds), aimed yaw/pitch, after input `after`. press: a new press of the
+// button (a semi-automatic weapon needs one). The server fires from where it
+// has the player's eye; nothing the client says about hits is believed.
+Shoot :: struct {
+	after:      u32,
+	slot:       u8,
+	press:      bool,
+	yaw, pitch: f32,
+}
+
+// Reload: the held weapon's magazine is refilled after its reload time.
+Reload :: struct {}
+
 // Prediction_Check: a hash, by field, of the state the client predicted after
 // input `sequence`, sent every DESYNC_CHECK_INPUTS inputs. The server hashes
 // its own state after the same input and, if the player has been quiet, names
@@ -272,6 +286,8 @@ Client_Message :: union {
 	Pack_Want,
 	Packs_Ready,
 	Respawn,
+	Shoot,
+	Reload,
 }
 
 // Server -> client.
@@ -534,6 +550,8 @@ Client_Kind :: enum u8 {
 	Pack_Want,
 	Packs_Ready,
 	Respawn,
+	Shoot,
+	Reload,
 }
 
 @(private = "file")
@@ -640,6 +658,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "packs_ready"
 		case u8(Client_Kind.Respawn):
 			return "respawn"
+		case u8(Client_Kind.Shoot):
+			return "shoot"
+		case u8(Client_Kind.Reload):
+			return "reload"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -717,6 +739,15 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_varint(w, v.snapshot)
 	case Respawn:
 		write_u8(w, u8(Client_Kind.Respawn))
+	case Reload:
+		write_u8(w, u8(Client_Kind.Reload))
+	case Shoot:
+		write_u8(w, u8(Client_Kind.Shoot))
+		write_u32(w, v.after)
+		write_u8(w, v.slot)
+		write_u8(w, 1 if v.press else 0)
+		write_f32(w, v.yaw)
+		write_f32(w, v.pitch)
 	case Ping:
 		write_u8(w, u8(Client_Kind.Ping))
 		write_u32(w, v.id)
@@ -943,6 +974,21 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		}
 	case u8(Client_Kind.Respawn):
 		m = Respawn{}
+	case u8(Client_Kind.Reload):
+		m = Reload{}
+	case u8(Client_Kind.Shoot):
+		f := Shoot {
+			after = read_u32(&r),
+			slot  = read_u8(&r),
+		}
+		press := read_u8(&r)
+		f.yaw, f.pitch = read_f32(&r), read_f32(&r)
+		f.press = press == 1
+		if press > 1 ||
+		   int(f.slot) >= HOTBAR_SLOTS ||
+		   !(abs(f.yaw) <= 1e6) ||
+		   !(abs(f.pitch) <= PITCH_LIMIT) {reader_fail(&r)}
+		m = f
 	case u8(Client_Kind.Ping):
 		m = Ping {
 			id = read_u32(&r),
@@ -1439,7 +1485,7 @@ read_stack :: proc(r: ^Reader) -> Stack {
 		reader_fail(r)
 		return {}
 	}
-	return {item, count}
+	return {item, count, 0}
 }
 
 @(private = "file")

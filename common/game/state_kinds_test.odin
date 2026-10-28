@@ -83,20 +83,22 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	// Entity_Spawn, Entities
 	sheep := Entity_Record{.Sheep, {}}
 	round_trip(t, &l, .Entity, key_entity(77), &sheep)
-	dropped := Entity_Record{.Item, {item_of_block(test_reg(), .Sand), 12}}
+	dropped := Entity_Record{.Item, {item_of_block(test_reg(), .Sand), 12, 0}}
 	round_trip(t, &l, .Entity, key_entity(78), &dropped)
 	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, {.Lamb, .Black}}
 	round_trip(t, &l, .Entity_Motion, key_entity(77), &moving)
 	// Inventory_Update, with a chest
 	inv: Inventory
-	inventory_add(test_reg(), &inv, {item_of_block(test_reg(), .Stone), 100})
-	inv.cursor = {item_of_tool(.Launcher), 1}
+	inventory_add(test_reg(), &inv, {item_of_block(test_reg(), .Stone), 100, 0})
+	inv.cursor = {item_of_tool(.Launcher), 1, 0}
 	inv.selected = 3
-	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
-	inv.equipment[.Offhand] = {item_of_block(test_reg(), .Dirt), 12}
+	inv.equipment[.Head] = {item_of_armor(.Cap), 1, 0}
+	inv.equipment[.Offhand] = {item_of_block(test_reg(), .Dirt), 12, 0}
 	inv.chest_open = true
-	inv.chest[0] = {item_of_block(test_reg(), .Stone), 7}
-	inv.chest[24] = {item_of_block(test_reg(), .Dirt), 64}
+	inv.chest[0] = {item_of_block(test_reg(), .Stone), 7, 0}
+	inv.chest[24] = {item_of_block(test_reg(), .Dirt), 64, 0}
+	pistol, _ := registry_item(test_reg(), "pistol")
+	inv.slots[4] = {pistol, 1, 7} // (a weapon's magazine goes with its stack)
 	state := Inventory_State{5, inv}
 	round_trip(t, &l, .Inventory, {}, &state)
 	// Health
@@ -186,10 +188,10 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	health := Health{30, 24, false}
 	refuse(t, &s, .Health, {}, &health, "health above the maximum")
 	bad := Inventory_State{5, {}}
-	bad.inventory.slots[0] = {item_of_block(test_reg(), .Stone), 65} // more than a stack
+	bad.inventory.slots[0] = {item_of_block(test_reg(), .Stone), 65, 0} // more than a stack
 	refuse(t, &s, .Inventory, {}, &bad, "more than a stack")
 	feet := Inventory_State{5, {}}
-	feet.inventory.equipment[.Feet] = {item_of_armor(.Cap), 1} // a cap on the feet
+	feet.inventory.equipment[.Feet] = {item_of_armor(.Cap), 1, 0} // a cap on the feet
 	refuse(t, &s, .Inventory, {}, &feet, "a cap on the feet")
 	far := Selection{{Block_Pos{1 << 28, 0, 0}, nil}}
 	refuse(t, &s, .Selection, {}, &far, "a corner outside the world")

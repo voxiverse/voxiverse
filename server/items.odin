@@ -65,17 +65,21 @@ block_drop :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) {
 	drops := make([dynamic]game.Stack, context.temp_allocator)
 	if stage, is_wheat := game.wheat_stage(block); is_wheat {
 		if stage == game.WHEAT_STAGES - 1 {
-			append(&drops, game.Stack{wheat, 1}, game.Stack{seeds, base.rng_int_range(r, 1, 4)})
+			append(
+				&drops,
+				game.Stack{wheat, 1, 0},
+				game.Stack{seeds, base.rng_int_range(r, 1, 4), 0},
+			)
 		} else {
-			append(&drops, game.Stack{seeds, 1})
+			append(&drops, game.Stack{seeds, 1, 0})
 		}
 	} else if block == .Tall_Grass {
-		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1})}
+		if base.rng_int_max(r, 8) == 0 {append(&drops, game.Stack{seeds, 1, 0})}
 	} else if item := game.block_drop(w.server.registry, block); item != game.NO_ITEM {
 		t := &w.server.registry.blocks
 		double :=
 			t.types[t.type_of[block]].place == .Slab && game.state_is(t, block, "type", "double")
-		append(&drops, game.Stack{item, 2 if double else 1}) // (a double slab leaves two)
+		append(&drops, game.Stack{item, 2 if double else 1, 0}) // (a double slab leaves two)
 	}
 	at := [3]f64{f64(pos.x) + 0.5, f64(pos.y) + 0.3, f64(pos.z) + 0.5}
 	for st in drops {
@@ -197,7 +201,7 @@ admin_give :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	for to in targets {
 		ledger(s, to.world, .Give, item, count)
 		for left := count; left > 0; left -= size {
-			rest := game.inventory_add(s.registry, &to.inventory, {item, min(left, size)})
+			rest := game.inventory_add(s.registry, &to.inventory, {item, min(left, size), 0})
 			if !game.stack_empty(
 				rest,
 			) {spawn_item(to.world, to.player.position + {0, 0.5, 0}, rest, {}, -1)}
@@ -233,13 +237,19 @@ admin_clear :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		who.inventory.cursor = {}
 	}
 	for st, i in before.slots {
-		ledger_stack(s, who.world, .Clear, {st.item, st.count - who.inventory.slots[i].count}, -1)
+		ledger_stack(
+			s,
+			who.world,
+			.Clear,
+			{st.item, st.count - who.inventory.slots[i].count, 0},
+			-1,
+		)
 	}
 	ledger_stack(
 		s,
 		who.world,
 		.Clear,
-		{before.cursor.item, before.cursor.count - who.inventory.cursor.count},
+		{before.cursor.item, before.cursor.count - who.inventory.cursor.count, 0},
 		-1,
 	)
 	who.inv_changed = true

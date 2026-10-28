@@ -25,7 +25,7 @@ test_default_kit_is_the_launcher :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok) {return}
 	if stacks, parsed := kit_parse(reg, DEFAULT_KIT_TEXT); testing.expect(t, parsed) {
 		testing.expect_value(t, len(stacks), 1)
-		testing.expect_value(t, stacks[0], game.Stack{launcher, 1})
+		testing.expect_value(t, stacks[0], game.Stack{launcher, 1, 0})
 	}
 	// (kit_default itself is the override while the tests run.)
 	kit_default(reg, &kit)
@@ -77,7 +77,7 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 		}
 		launcher := game.item_of_tool(.Launcher)
 		if game.allowed(a.grants[:], "world.fire") {
-			testing.expect_value(t, a.inventory.slots[0], game.Stack{launcher, 1})
+			testing.expect_value(t, a.inventory.slots[0], game.Stack{launcher, 1, 0})
 		} else {
 			testing.expect(
 				t,

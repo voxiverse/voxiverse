@@ -123,11 +123,14 @@ camera_update :: proc(
 	info, _ := game.item_info(s.reg, held(s).item)
 	tool, is_tool := info.tool.?
 	s.aiming = look && is_tool && tool == .Launcher && action_down(actions, .Use)
+	weapon_tick(s, actions, look, dt)
+	if s.camera_mode == .First {s.view.pitch = min(s.view.pitch + s.recoil, game.PITCH_LIMIT)}
 }
 
 // camera_fov: the field of view to draw with, in degrees.
 camera_fov :: proc(s: ^Session, settings: Settings) -> f32 {
-	return settings.fov * (1 + SPRINT_FOV_KICK * s.fov_kick)
+	// (a zoomed weapon turns the sprint's widening off)
+	return settings.fov * (1 + SPRINT_FOV_KICK * s.fov_kick * (1 - s.zoom)) * zoom_factor(s)
 }
 
 // crosshair_shown: first person always; third person only while aiming.

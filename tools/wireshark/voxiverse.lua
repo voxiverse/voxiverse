@@ -26,7 +26,7 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready", [23] = "respawn",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready", [23] = "respawn", [24] = "shoot", [25] = "reload",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
@@ -64,12 +64,13 @@ local SCHEMA = {
   } },
   { id = 3, name = "inventory", key = "none", lane = "reliable", fields = {
     { name = "acked", t = "u32" },
-    { name = "inventory.slots", t = "array", scalar = false, count = 30, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
-    { name = "inventory.equipment", t = "array", scalar = false, count = 5, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
+    { name = "inventory.slots", t = "array", scalar = false, count = 30, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, } } },
+    { name = "inventory.equipment", t = "array", scalar = false, count = 5, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, } } },
     { name = "inventory.cursor.item", t = "u16" },
     { name = "inventory.cursor.count", t = "i64" },
+    { name = "inventory.cursor.ammo", t = "u8" },
     { name = "inventory.selected", t = "i64" },
-    { name = "inventory.chest", t = "array", scalar = false, count = 25, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
+    { name = "inventory.chest", t = "array", scalar = false, count = 25, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, { name = "ammo", t = "u8" }, } } },
     { name = "inventory.chest_open", t = "bool" },
   } },
   { id = 4, name = "rules", key = "none", lane = "reliable", fields = {
@@ -127,6 +128,7 @@ local SCHEMA = {
     { name = "kind", t = "enum", signed = false },
     { name = "stack.item", t = "u16" },
     { name = "stack.count", t = "i64" },
+    { name = "stack.ammo", t = "u8" },
   } },
   { id = 12, name = "entity_motion", key = "entity", lane = "snapshot", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
@@ -173,6 +175,16 @@ local SCHEMA = {
     { name = "yaw", t = "f32" },
     { name = "amount", t = "f32" },
     { name = "known", t = "bool" },
+  } },
+  { id = 23, name = "shot", key = "none", lane = "event", fields = {
+    { name = "shooter", t = "u16" },
+    { name = "weapon", t = "u16" },
+    { name = "origin", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+    { name = "end", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
+  } },
+  { id = 24, name = "hit_confirm", key = "none", lane = "event", fields = {
+    { name = "kill", t = "bool" },
+    { name = "headshot", t = "bool" },
   } },
 }
 -- schema end

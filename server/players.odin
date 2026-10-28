@@ -73,7 +73,10 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	replica_seed(s, c) // (the rules came with the Welcome)
 	c.clock_pending = true
 	refresh_grants(s, c) // what they may do
-	if !has_saved {give_kit(s, c)} 	// (as their grants allow)
+	if !has_saved { 	// (as their grants allow)
+		give_kit(s, c) // the world's
+		kit_give(s, c) // and the mode's (survival: the weapons)
+	}
 	c.inv_changed = true
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick
 	if m, ok := worldgen_variables(w); ok {state_put(s, c, .Variables, &m)}

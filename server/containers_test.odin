@@ -244,7 +244,7 @@ test_explosion_removes_the_entity :: proc(t: ^testing.T) {
 		proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
-			block_entity_at(w, d.pos).slots[3] = {game.item_of_block(test_reg(), .Planks), 5}
+			block_entity_at(w, d.pos).slots[3] = {game.item_of_block(test_reg(), .Planks), 5, 0}
 			p := d.pos
 			bulk_edit(w, Bulk_Edit{shape = Box{p, p}, op = .Carve}, world_act(w, .Explosion))
 			d.has = block_entity_at(w, d.pos) != nil // (in the same call: no tick, no sweep)
@@ -313,7 +313,7 @@ test_entity_without_block_dropped :: proc(t: ^testing.T) {
 		local = u16(game.local_index({5, 5, 5})),
 		kind  = .Container,
 	}
-	orphan.slots[3] = {planks, 5}
+	orphan.slots[3] = {planks, 5, 0}
 	pos := game.Chunk_Pos{900, 0, 900}
 	save_chunk_with(w, pos, .Stone, {orphan})
 	orphaned := proc(s: ^Server, item: game.Item) -> i64 {

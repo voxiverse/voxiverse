@@ -81,7 +81,25 @@ Item_Info :: struct {
 	description: string, // a short line for the tooltip (the pack's; "": none)
 	modifiers:   [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
 	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
+	weapon:      Maybe(Weapon_Info), // a hitscan weapon (data: items/weapons.json)
 }
+
+// Weapon_Info: what a hitscan weapon does, all of it data (the item's
+// `weapon` object; server/weapons.odin is the only reader that matters).
+Weapon_Info :: struct {
+	damage:      f32, // health points a body hit does
+	magazine:    int, // shots before a reload (at most MAX_MAGAZINE)
+	fire_rate:   f32, // shots a second
+	automatic:   bool, // holding the button keeps firing
+	range:       f32, // blocks
+	headshot:    f32, // the head's damage factor
+	zoom:        f32, // the field of view's factor while the use button is held (0: none)
+	reload_time: f32, // seconds
+	spread:      f32, // radians of random cone
+	sound:       string, // the shot's cue (client/sfx: "pistol", "rifle", "sniper"; "": the pistol's)
+}
+
+MAX_MAGAZINE :: 255 // (Stack.ammo is a byte)
 
 item_of_armor :: proc(a: Armor) -> Item {
 	return ARMOR_ITEMS + Item(a)
@@ -150,6 +168,7 @@ block_drop :: registry_block_drop
 Stack :: struct {
 	item:  Item,
 	count: int,
+	ammo:  u8, // a weapon's magazine (instance data; 0 for everything else)
 }
 
 stack_empty :: proc(s: Stack) -> bool {

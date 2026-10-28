@@ -54,7 +54,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		return ready(cs[0]) && ready(cs[1])
 	})
 	if !testing.expect(t, ok, "the players never landed with their kits") {return}
-	testing.expect(t, alice.inventory.slots[0] == {stone, 64}, "no kit")
+	testing.expect(t, alice.inventory.slots[0] == {stone, 64, 0}, "no kit")
 	testing.expect(t, !game.allowed(alice.grants[:], "items.infinite"))
 
 	// Alice drops all her stone at her feet (looking down); bob, standing

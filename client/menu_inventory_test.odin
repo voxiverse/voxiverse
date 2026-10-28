@@ -37,8 +37,8 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	defer app.session = nil
 	app.screen = .Game
 	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
-	s.inventory.slots[9] = {stone, 64}
-	s.inventory.slots[0] = {dirt, 10}
+	s.inventory.slots[9] = {stone, 64, 0}
+	s.inventory.slots[0] = {dirt, 10, 0}
 
 	app.input.pressed = {.Tab}
 
@@ -64,34 +64,34 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	inv := &s.inventory
 	// Drag the stone from slot 9 to slot 20.
 	frame(app, {mouse = at(app, 9), mouse_pressed = {.Left}, mouse_down = {.Left}})
-	testing.expect(t, inv.cursor == {stone, 64})
+	testing.expect(t, inv.cursor == {stone, 64, 0})
 	frame(app, {mouse = at(app, 20), mouse_down = {.Left}})
 	frame(app, {mouse = at(app, 20), mouse_released = {.Left}})
 	testing.expect(
 		t,
-		inv.slots[20] == {stone, 64} &&
+		inv.slots[20] == {stone, 64, 0} &&
 		game.stack_empty(inv.slots[9]) &&
 		game.stack_empty(inv.cursor),
 	)
 	// Right-click: half up; a click puts them in slot 21.
 	frame(app, {mouse = at(app, 20), mouse_pressed = {.Right}, mouse_down = {.Right}})
-	testing.expect(t, inv.cursor == {stone, 32} && inv.slots[20] == {stone, 32})
+	testing.expect(t, inv.cursor == {stone, 32, 0} && inv.slots[20] == {stone, 32, 0})
 	frame(app, {mouse = at(app, 21), mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at(app, 21), mouse_released = {.Left}})
-	testing.expect(t, inv.slots[21] == {stone, 32} && game.stack_empty(inv.cursor))
+	testing.expect(t, inv.slots[21] == {stone, 32, 0} && game.stack_empty(inv.cursor))
 	// Shift-click: into the hotbar (slot 0 holds dirt: the next free one).
 	frame(
 		app,
 		{mouse = at(app, 21), mouse_pressed = {.Left}, mouse_down = {.Left}, modifiers = {.Shift}},
 	)
-	testing.expect(t, inv.slots[1] == {stone, 32} && game.stack_empty(inv.slots[21]))
+	testing.expect(t, inv.slots[1] == {stone, 32, 0} && game.stack_empty(inv.slots[21]))
 	// A number key over a slot swaps it with that hotbar slot.
 	app.input.pressed = {.Num_3}
 	actions_sync(app)
 	frame(app, {mouse = at(app, 20)})
 	app.input.pressed = {}
 	actions_sync(app)
-	testing.expect(t, inv.slots[2] == {stone, 32} && game.stack_empty(inv.slots[20]))
+	testing.expect(t, inv.slots[2] == {stone, 32, 0} && game.stack_empty(inv.slots[20]))
 	// Pick up the dirt; a click outside the panel drops it all.
 	frame(app, {mouse = at(app, 0), mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at(app, 0), mouse_released = {.Left}})
@@ -203,7 +203,7 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	defer app.session = nil
 	app.screen = .Game
 	stone := game.item_of_block(test_reg(), .Stone)
-	s.inventory.slots[9] = {stone, 64}
+	s.inventory.slots[9] = {stone, 64, 0}
 
 	chest_sync(app)
 	testing.expect(t, !section_open(app, .Inventory), "opened with no chest")
@@ -249,7 +249,7 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	)
 	testing.expect(
 		t,
-		s.inventory.chest[0] == {stone, 64} && game.stack_empty(s.inventory.slots[9]),
+		s.inventory.chest[0] == {stone, 64, 0} && game.stack_empty(s.inventory.slots[9]),
 		"shift-click did not move it in",
 	)
 	testing.expect_value(t, len(s.inv_pending), 1)
@@ -314,8 +314,8 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	inv := &s.inventory
 	v := &app.inventory_view
 	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
-	inv.slots[9] = {stone, 64}
-	inv.slots[0] = {dirt, 10}
+	inv.slots[9] = {stone, 64, 0}
+	inv.slots[0] = {dirt, 10, 0}
 	inv.selected = 2
 
 	// Y opens it, the cursor on the hand's slot.
@@ -326,11 +326,11 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	// A picks the stack up, directions carry it, A puts it down.
 	pad_cursor_to(t, app, 9)
 	pad_tap(app, .A)
-	testing.expect_value(t, inv.cursor, game.Stack{stone, 64})
+	testing.expect_value(t, inv.cursor, game.Stack{stone, 64, 0})
 	testing.expect(t, game.stack_empty(inv.slots[9]))
 	pad_cursor_to(t, app, 20)
 	pad_tap(app, .A)
-	testing.expect_value(t, inv.slots[20], game.Stack{stone, 64})
+	testing.expect_value(t, inv.slots[20], game.Stack{stone, 64, 0})
 	testing.expect(t, game.stack_empty(inv.cursor))
 
 	// X takes half; A puts it back.
@@ -386,24 +386,24 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	// B closes with the cursor's stack put back.
 	pad_cursor_to(t, app, 0)
 	pad_tap(app, .A)
-	testing.expect_value(t, inv.cursor, game.Stack{dirt, 10})
+	testing.expect_value(t, inv.cursor, game.Stack{dirt, 10, 0})
 	pad_tap(app, .B)
 	testing.expect(t, !section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor))
-	testing.expect_value(t, inv.slots[0], game.Stack{dirt, 10})
+	testing.expect_value(t, inv.slots[0], game.Stack{dirt, 10, 0})
 
 	// A chest the server opened: its slots are reachable.
-	inv.chest[0] = {stone, 5}
+	inv.chest[0] = {stone, 5, 0}
 	inv.chest_open = true
 	pad_frame(app)
 	testing.expect(t, section_open(app, .Inventory))
 	testing.expect_value(t, v.tab, Inventory_Tab.Chest)
 	pad_cursor_to(t, app, game.CHEST_BASE)
 	pad_tap(app, .A)
-	testing.expect_value(t, inv.cursor, game.Stack{stone, 5})
+	testing.expect_value(t, inv.cursor, game.Stack{stone, 5, 0})
 	pad_cursor_to(t, app, game.CHEST_BASE + 6)
 	pad_tap(app, .A)
-	testing.expect_value(t, inv.chest[6], game.Stack{stone, 5})
+	testing.expect_value(t, inv.chest[6], game.Stack{stone, 5, 0})
 	pad_tap(app, .B)
 	testing.expect(t, !section_open(app, .Inventory))
 	free_all(context.temp_allocator)
@@ -508,9 +508,9 @@ test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
 	defer overlay_fixture_destroy(&f)
 	reg := test_reg()
 	stone, dirt := game.item_of_block(reg, .Stone), game.item_of_block(reg, .Dirt)
-	f.s.inventory.slots[6] = {dirt, 3}
-	f.s.inventory.slots[9] = {stone, 5}
-	f.s.inventory.slots[12] = {dirt, 4}
+	f.s.inventory.slots[6] = {dirt, 3, 0}
+	f.s.inventory.slots[9] = {stone, 5, 0}
+	f.s.inventory.slots[12] = {dirt, 4, 0}
 	overlay_frame(&f, {})
 	sort := ui.Vec2{}
 	if r, ok := ui.find_widget(&f.app.ui, "Sort"); ok {sort = {r.x + r.w / 2, r.y + r.h / 2}}
@@ -531,8 +531,8 @@ test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
 	testing.expect_value(t, counts[stone], 5)
 	testing.expect(t, game.stack_empty(grid[2]) && grid[1].item == hi)
 
-	testing.expect(t, stack_matches(reg, {stone, 1}, "STO"))
-	testing.expect(t, !stack_matches(reg, {dirt, 1}, "sto"))
+	testing.expect(t, stack_matches(reg, {stone, 1, 0}, "STO"))
+	testing.expect(t, !stack_matches(reg, {dirt, 1, 0}, "sto"))
 	testing.expect(t, !stack_matches(reg, {}, "a"))
 
 	boots := game.item_of_armor(.Boots)

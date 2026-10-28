@@ -148,6 +148,16 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	fire: Client_Message
 	fire, ok = decode_client_t(encode_c(Fire{5, 1.5, -0.3})[:])
 	testing.expect(t, ok && fire.(Fire) == Fire{5, 1.5, -0.3})
+	shoot: Client_Message
+	shoot, ok = decode_client_t(encode_c(Shoot{5, 2, true, 1.5, -0.3})[:])
+	testing.expect(t, ok && shoot.(Shoot) == Shoot{5, 2, true, 1.5, -0.3})
+	_, ok = decode_client_t(encode_c(Shoot{5, 9, true, 1.5, 0})[:]) // (no such hotbar slot)
+	testing.expect(t, !ok)
+	_, ok = decode_client_t(encode_c(Shoot{5, 1, true, 1.5, 3})[:]) // (looking past straight up)
+	testing.expect(t, !ok)
+	reload: Client_Message
+	reload, ok = decode_client_t(encode_c(Reload{})[:])
+	testing.expect(t, ok && reload == Reload{})
 	at: Client_Message
 	at, ok = decode_client_t(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})

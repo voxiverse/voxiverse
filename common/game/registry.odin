@@ -785,7 +785,7 @@ registry_text_of :: proc(
 	item_line :: proc(b: ^strings.Builder, n: u32, info: Item_Info) {
 		fmt.sbprintf(
 			b,
-			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v\n",
+			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v weapon=%v\n",
 			info.name,
 			n,
 			info.stack,
@@ -794,6 +794,7 @@ registry_text_of :: proc(
 			info.armor,
 			info.equip,
 			info.modifiers,
+			info.weapon,
 		)
 	}
 	for info, i in reg.items.blocks {if info.name != "" {item_line(&b, u32(i + 1), info)}}

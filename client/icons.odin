@@ -30,6 +30,8 @@ item_icons_init :: proc(reg: ^game.Registry, icons: ^Item_Icons, ctx: ^ui.Contex
 		info, _ := game.item_info(reg, item)
 		if item >= game.MATERIAL_ITEMS && item < game.ARMOR_ITEMS {
 			material_sprite(game.Material(item - game.MATERIAL_ITEMS), &pixels)
+		} else if weapon, is_weapon := info.weapon.?; is_weapon {
+			weapon_sprite(weapon.sound, &pixels)
 		} else if tool, is_tool := info.tool.?; is_tool {
 			tool_sprite(tool, &pixels)
 		} else if armor, is_armor := info.armor.?; is_armor {
@@ -159,6 +161,80 @@ LAUNCHER_ART := [16]string {
 	"................",
 }
 
+@(private = "file")
+PISTOL_ART := [16]string {
+	"................",
+	"................",
+	"................",
+	"................",
+	"..oooooooooo....",
+	".oLLLLLLLLLLo...",
+	".oGGGGGGGGGGo...",
+	".oDDDDDDDDDDo...",
+	"..ooooBBoooo....",
+	"......oBBBo.....",
+	"......oBBBo.....",
+	"......oBBBo.....",
+	".......ooo......",
+	"................",
+	"................",
+	"................",
+}
+
+@(private = "file")
+RIFLE_ART := [16]string {
+	"................",
+	"................",
+	"................",
+	"................",
+	"..oo.ooooooooo..",
+	".oGGoGLLLLLLLLo.",
+	".oGGGGGGGGGGGGo.",
+	".oBBBDDDDDDDDDo.",
+	".oBBBBoooooooo..",
+	"..oBBBBoDo......",
+	"...oooo.oDo.....",
+	"........ooo.....",
+	"................",
+	"................",
+	"................",
+	"................",
+}
+
+@(private = "file")
+SNIPER_ART := [16]string {
+	"................",
+	"................",
+	"................",
+	"......oooo......",
+	".....oRRRRo.....",
+	"..oooooooooooo..",
+	".oLLLLLLLLLLLLLo",
+	".oGGGGGGGGGGGGGo",
+	"oBBBDDDDDDDDDDDo",
+	"oBBBBooooooooooo",
+	".oBBBBo.oDo.....",
+	"..oooo..oDo.....",
+	"........ooo.....",
+	"................",
+	"................",
+	"................",
+}
+
+// weapon_sprite draws a hitscan weapon's art by its sound cue (a pack's weapon
+// with another cue has the pistol's).
+@(private = "file")
+weapon_sprite :: proc(cue: string, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
+	art := PISTOL_ART
+	switch cue {
+	case "rifle":
+		art = RIFLE_ART
+	case "sniper":
+		art = SNIPER_ART
+	}
+	sprite_pixels(art, pixels)
+}
+
 // tool_sprite draws tool's 16 x 16 art, each pixel ICON_SIZE / 16 times as large.
 @(private = "file")
 tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
@@ -169,6 +245,12 @@ tool_sprite :: proc(tool: game.Tool, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 	case .Hoe:
 		art = HOE_ART
 	}
+	sprite_pixels(art, pixels)
+}
+
+// sprite_pixels: 16 x 16 art in the tools' palette, each pixel ICON_SIZE / 16 times as large.
+@(private = "file")
+sprite_pixels :: proc(art: [16]string, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 	for y in 0 ..< ICON_SIZE {
 		for x in 0 ..< ICON_SIZE {
 			c: [4]u8

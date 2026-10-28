@@ -16,6 +16,7 @@ Action :: union {
 	game.Use_Entity,
 	game.Use_Block,
 	game.Fire,
+	game.Shoot,
 }
 
 // FIRE_EVERY: ticks between a player's rockets.
@@ -59,6 +60,8 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 				c.fired_at = s.tick
 				fire(s, c, v.yaw, v.pitch)
 			}
+		case game.Shoot:
+			weapon_shoot(s, c, v)
 		}
 	}
 	copy(c.actions[:], c.actions[n:c.action_count])
@@ -77,6 +80,8 @@ action_after :: proc(a: Action) -> u32 {
 	case game.Use_Block:
 		return v.after
 	case game.Fire:
+		return v.after
+	case game.Shoot:
 		return v.after
 	}
 	return 0

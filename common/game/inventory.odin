@@ -27,6 +27,21 @@ Inventory :: struct {
 	chest_open: bool,
 }
 
+// with_count: st with another count (what a split or a merge leaves: a weapon's
+// magazine goes with it).
+with_count :: proc(st: Stack, count: int) -> Stack {
+	r := st
+	r.count = count
+	return r
+}
+
+// new_ammo: the magazine a new stack of item has: a weapon's full one.
+new_ammo :: proc(reg: ^Registry, item: Item) -> u8 {
+	info, _ := registry_item_info(reg, item)
+	if w, ok := info.weapon.?; ok {return u8(w.magazine)}
+	return 0
+}
+
 // slot_at: slot i's stack (a regular slot, or an equipment slot).
 slot_at :: proc(inv: ^Inventory, i: int) -> ^Stack {
 	if i >= CHEST_BASE {return &inv.chest[i - CHEST_BASE]}
@@ -115,10 +130,10 @@ inventory_apply :: proc(
 		case stack_empty(cur^):
 			if stack_empty(slot^) {return}
 			half := (slot.count + 1) / 2
-			cur^ = {slot.item, half}
+			cur^ = with_count(slot^, half)
 			slot.count -= half
 		case stack_empty(slot^):
-			slot^ = {cur.item, 1}
+			slot^ = with_count(cur^, 1)
 			cur.count -= 1
 		case slot.item == cur.item:
 			if slot.count >= item_stack_size(reg, slot.item) {return}
@@ -172,19 +187,19 @@ inventory_apply :: proc(
 			&inv.cursor if a.slot == CURSOR_SLOT else (slot_at(inv, a.slot) if in_slots else nil)
 		if from == nil || stack_empty(from^) {return}
 		n := from.count if a.arg == 1 else 1
-		dropped = {from.item, n}
+		dropped = with_count(from^, n)
 		from.count -= n
 	case .Take:
 		item := Item(a.arg)
 		if !catalog || !item_valid(reg, item) {return}
-		inv.cursor = {item, item_stack_size(reg, item)}
+		inv.cursor = {item, item_stack_size(reg, item), new_ammo(reg, item)}
 	case .Put:
 		if !in_slots || stack_empty(inv.cursor) || !slot_accepts(reg, a.slot, inv.cursor) {return}
 		slot := slot_at(inv, a.slot)
 		if !stack_empty(slot^) && slot.item != inv.cursor.item {return}
 		moved := min(a.arg, inv.cursor.count, item_stack_size(reg, inv.cursor.item) - slot.count)
 		if moved <= 0 {return}
-		slot^ = {inv.cursor.item, slot.count + moved}
+		slot^ = with_count(inv.cursor, slot.count + moved)
 		inv.cursor.count -= moved
 	case .Gather:
 		cur := &inv.cursor
@@ -210,7 +225,8 @@ inventory_apply :: proc(
 		if a.slot >= HOTBAR_SLOTS {lo, hi = 0, HOTBAR_SLOTS}
 		if a.arg == 0 {
 			if stack_empty(slot^) {return}
-			if left := slots_add(reg, inv.slots[lo:hi], {slot.item, 1}); left.count != 0 {return}
+			if left := slots_add(reg, inv.slots[lo:hi], with_count(slot^, 1));
+			   left.count != 0 {return}
 			slot.count -= 1
 		} else {
 			if stack_empty(slot^) || slot.count >= item_stack_size(reg, slot.item) {return}
@@ -270,7 +286,7 @@ slots_sort :: proc(reg: ^Registry, slots: []Stack) {
 		}
 		for left > 0 && n < len(slots) {
 			put := min(left, size)
-			slots[n] = {it.item, put}
+			slots[n] = with_count(it, put)
 			left -= put
 			n += 1
 		}
@@ -295,7 +311,7 @@ slots_add :: proc(reg: ^Registry, slots: []Stack, stack: Stack) -> Stack {
 		if left.count == 0 {break}
 		if !stack_empty(s) {continue}
 		moved := min(left.count, size)
-		s = {left.item, moved}
+		s = with_count(left, moved)
 		left.count -= moved
 	}
 	if left.count == 0 {left = {}}

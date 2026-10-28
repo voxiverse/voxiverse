@@ -379,10 +379,10 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 
 	// derive_mods: worn boots and a charm in the offhand; the pocket's do not count.
 	inv: Inventory
-	inv.equipment[.Feet] = {item_of_armor(.Boots), 1}
-	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1}
-	inv.equipment[.Head] = {item_of_armor(.Cap), 1}
-	inv.slots[3] = {item_of_armor(.Tunic), 1}
+	inv.equipment[.Feet] = {item_of_armor(.Boots), 1, 0}
+	inv.equipment[.Offhand] = {item_of_material(.Feather_Charm), 1, 0}
+	inv.equipment[.Head] = {item_of_armor(.Cap), 1, 0}
+	inv.slots[3] = {item_of_armor(.Tunic), 1, 0}
 	m := derive_mods(test_reg(), &inv)
 	testing.expectf(
 		t,

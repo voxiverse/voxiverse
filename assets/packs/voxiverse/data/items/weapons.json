@@ -1,0 +1,50 @@
+{
+	"pistol": {
+		"description": "A semi-automatic pistol. Twelve shots, then reload.",
+		"stack": 1,
+		"weapon": {
+			"damage": 5,
+			"magazine": 12,
+			"fire_rate": 4.0,
+			"automatic": false,
+			"range": 100,
+			"headshot": 2.0,
+			"zoom": 0.0,
+			"reload_time": 1.4,
+			"spread": 0.0,
+			"sound": "pistol"
+		}
+	},
+	"rifle": {
+		"description": "An automatic rifle. Hold to keep firing.",
+		"stack": 1,
+		"weapon": {
+			"damage": 3,
+			"magazine": 30,
+			"fire_rate": 10.0,
+			"automatic": true,
+			"range": 100,
+			"headshot": 2.0,
+			"zoom": 0.0,
+			"reload_time": 2.0,
+			"spread": 0.01,
+			"sound": "rifle"
+		}
+	},
+	"sniper": {
+		"description": "A sniper rifle. Hold the use button to zoom.",
+		"stack": 1,
+		"weapon": {
+			"damage": 18,
+			"magazine": 5,
+			"fire_rate": 1.0,
+			"automatic": false,
+			"range": 200,
+			"headshot": 2.0,
+			"zoom": 0.25,
+			"reload_time": 2.5,
+			"spread": 0.0,
+			"sound": "sniper"
+		}
+	}
+}

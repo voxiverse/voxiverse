@@ -876,6 +876,120 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 ITEM_DESCRIPTION_MAX :: 160
 
 @(private)
+WEAPON_NUMBERS := []string {
+	"damage",
+	"magazine",
+	"fire_rate",
+	"range",
+	"headshot",
+	"zoom",
+	"reload_time",
+	"spread",
+}
+
+// read_weapon: an item's `weapon` object: every number is required (a missing
+// one is a load error), so a weapon is never half-defined.
+@(private)
+read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
+	if f.value.kind != .Object {
+		fail_field(b, f, f.value, "weapon is an object: damage, magazine, fire_rate, ...")
+		return
+	}
+	w: Weapon_Info
+	seen: [8]bool
+	ok := true
+	for mm in f.value.members {
+		at := -1
+		for name, i in WEAPON_NUMBERS {if name == mm.key {at = i}}
+		switch {
+		case at >= 0:
+			if mm.value.kind != .Int && mm.value.kind != .Float {
+				fail_field(b, f, mm.value, fmt.aprintf("%s is a number", mm.key))
+				ok = false
+				continue
+			}
+			seen[at] = true
+			v := f32(mm.value.f)
+			switch mm.key {
+			case "damage":
+				w.damage = v
+			case "magazine":
+				w.magazine = int(mm.value.f)
+			case "fire_rate":
+				w.fire_rate = v
+			case "range":
+				w.range = v
+			case "headshot":
+				w.headshot = v
+			case "zoom":
+				w.zoom = v
+			case "reload_time":
+				w.reload_time = v
+			case "spread":
+				w.spread = v
+			}
+		case mm.key == "automatic":
+			if mm.value.kind != .Bool {
+				fail_field(b, f, mm.value, "automatic is true or false")
+				ok = false
+			} else {
+				w.automatic = mm.value.b
+			}
+		case mm.key == "sound":
+			if mm.value.kind != .String || len(mm.value.s) > 32 {
+				fail_field(b, f, mm.value, "sound is a cue name (a short text)")
+				ok = false
+			} else {
+				w.sound = strings.clone(mm.value.s)
+			}
+		case:
+			fail_field(
+				b,
+				f,
+				mm.value,
+				fmt.aprintf(
+					"\"%s\" is not a weapon field%s",
+					mm.key,
+					suggestion(mm.key, WEAPON_NUMBERS),
+				),
+			)
+			ok = false
+		}
+	}
+	for name, i in WEAPON_NUMBERS {
+		if !seen[i] {
+			fail_field(b, f, f.value, fmt.aprintf("a weapon needs \"%s\"", name))
+			ok = false
+		}
+	}
+	if !ok {return}
+	bad := ""
+	switch {
+	case !(w.damage > 0):
+		bad = "damage is above 0"
+	case w.magazine < 1 || w.magazine > MAX_MAGAZINE:
+		bad = fmt.aprintf("magazine is 1..%d", MAX_MAGAZINE)
+	case !(w.fire_rate > 0) || w.fire_rate > 30:
+		bad = "fire_rate is shots a second, above 0 and at most 30"
+	case !(w.range > 0) || w.range > 512:
+		bad = "range is blocks, above 0 and at most 512"
+	case !(w.headshot >= 1) || w.headshot > 100:
+		bad = "headshot is a factor of at least 1"
+	case w.zoom < 0 || w.zoom >= 1:
+		bad = "zoom is 0 (none) or the field of view's factor below 1"
+	case !(w.reload_time >= 0) || w.reload_time > 60:
+		bad = "reload_time is seconds, 0..60"
+	case !(w.spread >= 0) || w.spread > 0.5:
+		bad = "spread is radians, 0..0.5"
+	}
+	if bad != "" {
+		fail_field(b, f, f.value, bad)
+		return
+	}
+	info.weapon = w
+}
+
+@(private)
 read_item :: proc(
 	b: ^Reg_Build,
 	m: ^Merged_Def,
@@ -914,6 +1028,9 @@ read_item :: proc(
 		} else {
 			info.description = strings.clone(f.value.s)
 		}
+	}
+	if f := field_of(m, "weapon"); f != nil {
+		read_weapon(b, f, &info)
 	}
 	if f := field_of(m, "modifiers"); f != nil {
 		if f.value.kind != .Array {

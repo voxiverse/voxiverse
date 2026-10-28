@@ -139,7 +139,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	req(&a, &seq, .Click, 3)
 	req(&a, &seq, .Select, 0, 3)
 	ok = wait_for(t, both, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 3})
-	testing.expect(t, ok && a.inventory.slots[3] == {wheat, 64}, "no wheat in hand")
+	testing.expect(t, ok && a.inventory.slots[3] == {wheat, 64, 0}, "no wheat in hand")
 
 	// Feeding: both ready (hearts), two wheat used; feeding the same one again does nothing.
 	net_send(&a, game.Use_Entity{black.id, a.seq})

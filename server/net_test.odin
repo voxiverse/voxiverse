@@ -49,6 +49,8 @@ Net_Client :: struct {
 	deaths:                      int, // Player_Died events
 	died:                        int, // Entity_Despawn with died
 	hits:                        int, // Damage_Hit events
+	shots_seen:                  int, // Shot events (another player's)
+	confirms:                    [dynamic]game.Hit_Confirm, // Hit_Confirm events (heap)
 	death_cause, death_attacker: string, // the last Player_Died
 	results:                     map[u32]game.Edit_Result,
 	seq:                         u32,
@@ -133,6 +135,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.grants)
 	for l in c.chat {delete(l.text)}
 	delete(c.chat)
+	delete(c.confirms)
 	delete(c.deleted)
 	delete(c.entities)
 	delete(c.shorn)
@@ -271,6 +274,10 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.death_cause, c.death_attacker = strings.clone(v.cause), strings.clone(v.attacker)
 		case .Damage_Hit:
 			c.hits += 1
+		case .Shot:
+			c.shots_seen += 1
+		case .Hit_Confirm:
+			append(&c.confirms, (^game.Hit_Confirm)(g.value)^)
 		}
 	}
 }

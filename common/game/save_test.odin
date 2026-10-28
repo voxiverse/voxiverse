@@ -21,8 +21,8 @@ test_region_round_trip :: proc(t: ^testing.T) {
 		local = 17,
 		kind  = .Container,
 	}
-	held.slots[0] = {item_of_material(.Seeds), 3}
-	held.slots[24] = {item_of_material(.Seeds), 1}
+	held.slots[0] = {item_of_material(.Seeds), 3, 0}
+	held.slots[24] = {item_of_material(.Seeds), 1, 0}
 	chunks := []Saved_Chunk{{{-3, 0, 40}, &terrain, {held}}, {{-16, CHUNK_MIN_Y, 47}, &air, nil}}
 	tops := []Saved_Top{{-40, 600, 12}, {-1, 512, WORLD_MIN_Y}}
 	testing.expect_value(t, region_of({-16, 0, 47}), region)

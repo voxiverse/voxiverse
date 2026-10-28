@@ -444,6 +444,7 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		simulate_player(s, &c)
 		health_tick(s, &c)
+		weapons_tick(s, &c)
 		place_tick(s, &c)
 		stats_tick(s, &c)
 		if c.moved {
@@ -470,6 +471,7 @@ tick :: proc(s: ^Server) {
 			entities_tick(w)
 			containers_tick(w)
 		}
+		rewind_record(s, w)
 		gates_tick(w)
 		rollback_tick(w)
 		base.profile_scope("changes flush")
@@ -721,6 +723,10 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case game.Fire:
 		queue_action(s, c, v)
+	case game.Shoot:
+		queue_action(s, c, v)
+	case game.Reload:
+		weapon_reload(s, c)
 	case game.Telemetry_Batch:
 		disconnect(s, c, "this is not a telemetry collector")
 	case game.Respawn:

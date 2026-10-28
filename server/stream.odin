@@ -67,6 +67,10 @@ Client :: struct {
 	teleport:      [2]f32, // yaw, pitch to look after it
 	look:          [2]f32, // yaw, pitch of the last input applied (saved with the player)
 	fired_at:      u64, // tick of its last rocket (a rate limit)
+	shot_due:      f64, // the tick its next weapon shot is due (weapons.odin)
+	reload_until:  u64, // the tick its reload ends (0: none)
+	reload_slot:   int, // the hotbar slot being reloaded
+	shots_refused: int, // shots refused for coming too early
 	chat_tokens:   int, // lines it may say now (chat.odin)
 	chat_tick:     u64, // the bucket refilled up to here
 	address:       string, // its IP address ("": the local player; owned)

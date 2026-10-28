@@ -102,6 +102,21 @@ Session :: struct {
 	bob_phase:        f32,
 	bob_amp:          f32, // 0 ..= 1, easing in and out as walking starts and stops
 	aiming:           bool, // a held item that aims is aimed (the crosshair stays in third person)
+	weapon_clock:     f64, // seconds, advanced by the frames (weapons.odin's timers)
+	shot_next:        f64, // when the held weapon may fire again (its rate)
+	ammo_shown:       int, // the magazine as predicted ...
+	ammo_until:       f64, // ... until this time (the server's word is shown after)
+	reload_end:       f64, // when the reload we asked for is done (0: none)
+	reload_slot:      int,
+	recoil:           f32, // radians the view is lifted by the last shots (cosmetic)
+	zoom:             f32, // 0 ..= 1: how far the held weapon's zoom has come
+	zoom_to:          f32, // the held weapon's field-of-view factor
+	marker:           f32, // seconds the hit marker has left
+	marker_kill:      bool,
+	marker_head:      bool,
+	hurt_age:         f32, // seconds since the last Damage_Hit
+	shots:            int, // shots we fired (tests)
+	confirms:         int, // Hit_Confirm events seen
 	feet:             [3]f64, // where the predicted player stands (the avatar in third person)
 	teleport:         Maybe(game.Teleport), // requested before joining: sent on Welcome
 	prediction:       game.Prediction,
@@ -395,7 +410,7 @@ session_update :: proc(
 	s.clock = game.advance_time(s.clock, f64(dt), &s.rules)
 	if !s.config.still_clouds {s.cloud_drift += f64(dt) * render.CLOUD_SPEED}
 	if look {
-		look_update(&s.camera, input, actions, settings, dt)
+		look_update(&s.camera, input, actions, settings, dt, zoom_factor(s))
 		movement_toggles(s, actions, settings)
 		if action_pressed(actions, .Jump) {
 			if time.duration_seconds(time.tick_since(s.last_jump)) <

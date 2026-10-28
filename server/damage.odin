@@ -137,9 +137,16 @@ kit_give :: proc(s: ^Server, c: ^Client) {
 	for e in s.registry.game_modes[c.mode].kit {
 		have := game.inventory_count(&c.inventory, e.item)
 		if have >= int(e.count) {continue}
-		game.inventory_add(s.registry, &c.inventory, {e.item, int(e.count) - have})
+		want := int(e.count) - have
+		left := game.inventory_add(
+			s.registry,
+			&c.inventory,
+			{e.item, want, game.new_ammo(s.registry, e.item)},
+		)
+		ledger(s, c.world, .Kit, e.item, want - left.count)
 		c.inv_changed = true
 	}
+	refill_weapons(s, c)
 }
 
 // regenerate: health comes back by itself for a mode that regenerates, under

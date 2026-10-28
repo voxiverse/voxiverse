@@ -55,6 +55,7 @@ Kind :: enum u16 {
 	Item_Destroyed, // text: item; n0: count; n1: the reason
 	Audit_Failed, // text: item; n0: held; n1: the ledger says; n2: difference
 	Respawned, // text: the game mode
+	Shot_Fired, // text: the weapon; n0: 1 when it hit
 	Mode_Changed, // text: the new game mode; n0: 1 when a command did it (the journal says who)
 }
 
@@ -140,6 +141,12 @@ KIND_INFO := [Kind]Kind_Info {
 		n_names = {"held", "expected", "difference"},
 	},
 	.Respawned = {name = "respawned", text_name = "mode", counter = "respawns"},
+	.Shot_Fired = {
+		name = "shot_fired",
+		text_name = "weapon",
+		n_names = {"hit", "", ""},
+		counter = "shots.fired",
+	},
 	.Mode_Changed = {
 		name = "mode_changed",
 		text_name = "mode",

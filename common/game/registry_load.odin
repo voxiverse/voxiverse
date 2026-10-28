@@ -147,6 +147,7 @@ ITEM_FIELDS := []string {
 	"equip",
 	"modifiers",
 	"description",
+	"weapon",
 	"override",
 }
 @(private)

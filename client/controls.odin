@@ -35,6 +35,7 @@ Bindings :: struct {
 	toggle_hud:      platform.Key, // hide the HUD
 	camera:          platform.Key, // first person, third person behind, third person facing you
 	swap_offhand:    platform.Key, // the hand's item with the offhand slot's
+	reload:          platform.Key, // refill the held weapon's magazine
 	player_list:     platform.Key, // held: who is here
 	drop:            platform.Key, // with Ctrl: the whole stack
 	chat:            platform.Key,
@@ -73,6 +74,7 @@ DEFAULT_BINDINGS :: Bindings {
 	toggle_hud   = .F1,
 	camera       = .F5,
 	swap_offhand = .F,
+	reload       = .R,
 	player_list  = .P,
 	drop         = .Q,
 	chat         = .T,
@@ -138,6 +140,10 @@ BINDING_VARS := [?]base.Var {
 		field = "swap_offhand",
 		label = "Swap with offhand",
 		help = "Swap the item in your hand with the one in your offhand slot.",
+	},
+	{
+		field = "reload",
+		help = "Reload the weapon in your hand. An empty magazine reloads when you fire.",
 	},
 	{field = "player_list", label = "Player list", help = "Hold to see who is here."},
 	{
@@ -250,6 +256,7 @@ Pad_Bindings :: struct {
 	inventory:       platform.Pad_Button,
 	player_menu:     platform.Pad_Button,
 	drop:            platform.Pad_Button,
+	reload:          platform.Pad_Button,
 	chat:            platform.Pad_Button,
 	command:         platform.Pad_Button,
 	hotbar_next:     platform.Pad_Button,
@@ -272,7 +279,8 @@ DEFAULT_PAD_BINDINGS :: Pad_Bindings {
 	pick            = .Right_Stick,
 	inventory       = .Y,
 	player_menu     = .Back,
-	drop            = .X,
+	drop            = .Dpad_Down,
+	reload          = .X,
 	chat            = .Dpad_Up,
 	hotbar_next     = .Right_Bumper,
 	hotbar_previous = .Left_Bumper,
@@ -298,6 +306,7 @@ PAD_BINDING_VARS := [?]base.Var {
 	{field = "inventory", help = "pad: open the inventory."},
 	{field = "player_menu", help = "pad: open the player menu."},
 	{field = "drop", help = "pad: drop an item."},
+	{field = "reload", help = "pad: reload the weapon in your hand."},
 	{field = "chat", help = "pad: open the chat."},
 	{field = "command", help = "pad: open the chat with a slash."},
 	{field = "hotbar_next", help = "pad: the next hotbar slot."},

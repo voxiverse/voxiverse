@@ -41,6 +41,8 @@ Event_Kind :: enum u8 {
 	Explosion,
 	Player_Died,
 	Damage_Hit,
+	Shot,
+	Hit_Confirm,
 }
 
 // Own_Player: the player's authoritative state after the server applied
@@ -135,6 +137,23 @@ Damage_Hit :: struct {
 	known:  bool, // the source had a place (a fall has none)
 }
 
+// Shot: a weapon was fired (the others' tracer, flash and sound): by whom, the
+// weapon's item and where the shot started and ended. The shooter predicts
+// its own and is not sent it.
+Shot :: struct {
+	shooter: u16,
+	weapon:  Item,
+	origin:  [3]f64,
+	end:     [3]f64,
+}
+
+// Hit_Confirm: the server says the shooter's shot hit someone (the hit marker
+// and its sound; never predicted).
+Hit_Confirm :: struct {
+	kill:     bool,
+	headshot: bool,
+}
+
 // Entity_Died: an entity the client knows died (sent before its record goes).
 Entity_Died :: struct {
 	entity: u32,
@@ -217,6 +236,8 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 	.Explosion = {name = "explosion", value = Explosion, check = check_explosion},
 	.Player_Died = {name = "player_died", value = Player_Died},
 	.Damage_Hit = {name = "damage_hit", value = Damage_Hit},
+	.Shot = {name = "shot", value = Shot, check = check_shot},
+	.Hit_Confirm = {name = "hit_confirm", value = Hit_Confirm},
 }
 
 // game_schema builds the schema of the game's kinds. The server builds it when
@@ -275,6 +296,12 @@ check_mode :: proc(reg: ^Registry, v: rawptr) -> bool {
 @(private = "file")
 check_inventory :: proc(reg: ^Registry, v: rawptr) -> bool {
 	return inventory_valid(reg, &(^Inventory_State)(v).inventory)
+}
+
+@(private = "file")
+check_shot :: proc(reg: ^Registry, v: rawptr) -> bool {
+	s := (^Shot)(v)
+	return position_ok(s.origin) && position_ok(s.end) && item_valid(reg, s.weapon)
 }
 
 @(private = "file")

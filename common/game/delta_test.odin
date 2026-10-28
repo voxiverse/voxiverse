@@ -309,11 +309,13 @@ random_all :: proc(rng: ^base.Rng, v: ^Sch_All, names: []string) {
 		v.stack[base.rng_int_max(rng, 4)] = {
 			Item(base.rng_int_max(rng, 300)),
 			base.rng_int_range(rng, 0, 99),
+			0,
 		}
 	case 13:
 		v.worn[Equip_Slot(base.rng_int_max(rng, len(Equip_Slot)))] = {
 			Item(base.rng_int_max(rng, 300)),
 			base.rng_int_range(rng, 0, 99),
+			0,
 		}
 	case 14:
 		v.inner = {i32(base.rng_u32(rng)), base.rng_f32(rng)}
@@ -371,7 +373,7 @@ test_events_carry_every_field :: proc(t: ^testing.T) {
 		name  = "boom",
 		spot  = Block_Pos{1, -2, 3},
 	}
-	ev.worn[.Head] = {4, 1}
+	ev.worn[.Head] = {4, 1, 0}
 	ping := Dt_Ping{"hello", 77}
 	sender_event(&l.tx, DT_ALL_EVENT, &ev)
 	sender_event(&l.tx, DT_PING, &ping)
@@ -410,10 +412,10 @@ test_costs :: proc(t: ^testing.T) {
 	inv := Dt_Inv {
 		acked = 1,
 	}
-	inv.inventory.slots[3] = {5, 20}
+	inv.inventory.slots[3] = {5, 20, 0}
 	sender_put(&l.tx, DT_INV, {}, &inv)
 	link_step(&l)
-	inv.inventory.slots[4] = {5, 20}
+	inv.inventory.slots[4] = {5, 20, 0}
 	sender_put(&l.tx, DT_INV, {}, &inv)
 	bytes, _ := link_step(&l)
 	// kind, tick, id, count, then the entry

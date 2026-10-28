@@ -117,6 +117,8 @@ Text :: enum u16 {
 	Fact_Terrain_Mountains,
 	Player_List_Ping,
 	Player_List_No_Ping,
+	Hud_Ammo,
+	Hud_Reloading,
 }
 
 @(rodata)
@@ -229,6 +231,8 @@ TEXT_EN := [Text]string {
 	.Fact_Terrain_Mountains                 = "mountains and valleys",
 	.Player_List_Ping                       = "{0} ms",
 	.Player_List_No_Ping                    = "-",
+	.Hud_Ammo                               = "{0} / inf",
+	.Hud_Reloading                          = "Reloading",
 }
 
 // tr: the string for key with {n} replaced by args[n] (temp allocator).

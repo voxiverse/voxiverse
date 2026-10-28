@@ -773,7 +773,7 @@ load_entities :: proc(w: ^World) {
 				action = u32(a)
 			}
 			ok = ok && known && counted && n > 0
-			stack = {item, min(n, game.item_stack_size(w.server.registry, item))}
+			stack = {item, min(n, game.item_stack_size(w.server.registry, item)), 0}
 		}
 		if !ok || !found {
 			skipped += 1

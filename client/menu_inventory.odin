@@ -580,7 +580,7 @@ catalog_ui :: proc(
 		slot := catalog_cell(r, gap, i)
 		over :=
 			v.cursor == CURSOR_CATALOG_BASE + k if pad else ui.rect_contains(slot, ctx.input.mouse)
-		stack_slot(ctx, app.session.reg, &app.item_icons, slot, {items[k], 1}, over)
+		stack_slot(ctx, app.session.reg, &app.item_icons, slot, {items[k], 1, 0}, over)
 		if over {hovered = items[k]}
 		if !pad && top && over && .Left in ctx.input.mouse_pressed {
 			session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(items[k])})

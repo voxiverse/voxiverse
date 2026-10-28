@@ -11,7 +11,7 @@ import "../common/game"
 // although updates come at the tick rate and the network jitters.
 
 SNAPSHOTS :: 8
-INTERPOLATION_TICKS :: 3 // 100 ms at 30 Hz: covers a late or lost update
+INTERPOLATION_TICKS :: game.INTERPOLATION_TICKS
 STALE_SECONDS :: 2 // no snapshot for this long: the connection is lost, nothing is shown
 
 Other_Player :: struct {

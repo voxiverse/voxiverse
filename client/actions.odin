@@ -34,6 +34,7 @@ Action :: enum u8 {
 	Toggle_HUD, // F1
 	Camera, // F5
 	Swap_Offhand, // F
+	Reload, // R, the pad's X: the held weapon's magazine
 	Player_List, // P, held
 	Drop,
 	Chat,
@@ -103,6 +104,7 @@ ACTION_INFO := [Action]Action_Info {
 	.Toggle_HUD      = {{.World, .Menu}, "Hide HUD", {}, {}},
 	.Camera          = {{.World}, "Camera", {}, {}},
 	.Swap_Offhand    = {{.World}, "Swap with offhand", {}, {}},
+	.Reload          = {{.World}, "Reload", {}, {}},
 	.Player_List     = {{.World}, "Player list", {}, {}},
 	.Drop            = {{.World}, "Drop item", {}, {}},
 	.Chat            = {{.World}, "Open chat", {}, {}},
@@ -232,6 +234,8 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.camera
 	case .Swap_Offhand:
 		return &b.swap_offhand
+	case .Reload:
+		return &b.reload
 	case .Player_List:
 		return &b.player_list
 	case .Drop:
@@ -316,6 +320,8 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 		return &p.player_menu
 	case .Drop:
 		return &p.drop
+	case .Reload:
+		return &p.reload
 	case .Chat:
 		return &p.chat
 	case .Command:

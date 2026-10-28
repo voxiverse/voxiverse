@@ -307,9 +307,9 @@ find_pad_var :: proc(name: string) -> bool {
 @(test)
 test_binding_conflicts :: proc(t: ^testing.T) {
 	keys, pad := DEFAULT_BINDINGS, DEFAULT_PAD_BINDINGS
-	pad.jump = .X // drop's button, in the same context
+	pad.jump = .X // reload's button, in the same context
 	_, pc := binding_conflicts(&keys, &pad)
-	testing.expect(t, .Jump in pc && .Drop in pc)
+	testing.expect(t, .Jump in pc && .Reload in pc)
 	testing.expect(t, .Menu_Confirm not_in pc, "A is jump's too, but in another context")
 	pad = DEFAULT_PAD_BINDINGS
 	pad.sneak = .Start // the fixed pause button

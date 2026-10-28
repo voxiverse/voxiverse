@@ -23,6 +23,12 @@ Sound_Kind :: enum u8 {
 	Entity_Die,
 	Launch,
 	Explosion,
+	Shot_Pistol, // a weapon's, by its `sound` cue
+	Shot_Rifle,
+	Shot_Sniper,
+	Hit, // the hit marker's
+	Hit_Head,
+	Reload,
 }
 
 Sound_Event :: struct {
@@ -49,6 +55,7 @@ Sound_Bank :: struct {
 	player:       [sfx.Player_Sound][sfx.VARIANTS]audio.Sound_Id,
 	sheep:        [sfx.Sheep_Sound][sfx.VARIANTS]audio.Sound_Id,
 	blast:        [sfx.Blast_Sound][sfx.VARIANTS]audio.Sound_Id,
+	gun:          [sfx.Gun_Sound][sfx.VARIANTS]audio.Sound_Id,
 	samples:      [dynamic][]f32, // owned
 }
 
@@ -85,6 +92,20 @@ sounds_init :: proc(b: ^Sound_Bank, m: ^audio.Mixer) {
 	for x in sfx.Blast_Sound {
 		for v in 0 ..< sfx.VARIANTS {b.blast[x][v] = add(b, m, sfx.blast_sound(x, v), fmt.tprintf("blast.%v.%d", x, v))}
 	}
+	for x in sfx.Gun_Sound {
+		for v in 0 ..< sfx.VARIANTS {b.gun[x][v] = add(b, m, sfx.gun_sound(x, v), fmt.tprintf("gun.%v.%d", x, v))}
+	}
+}
+
+// gun_cue: a weapon's `sound` cue as the sound of its shot.
+gun_cue :: proc(cue: string) -> Sound_Kind {
+	switch cue {
+	case "rifle":
+		return .Shot_Rifle
+	case "sniper":
+		return .Shot_Sniper
+	}
+	return .Shot_Pistol
 }
 
 sounds_destroy :: proc(b: ^Sound_Bank) {
@@ -176,7 +197,13 @@ sounds_play :: proc(
 	right := [3]f32{math.cos(view.yaw), 0, -math.sin(view.yaw)}
 	for e in events {
 		d := e.position - view.position
-		range: f32 = 4 * SOUND_RANGE if e.kind == .Explosion else SOUND_RANGE // explosions carry
+		range: f32 = SOUND_RANGE
+		#partial switch e.kind {
+		case .Explosion:
+			range = 4 * SOUND_RANGE // explosions carry
+		case .Shot_Pistol, .Shot_Rifle, .Shot_Sniper:
+			range = 3 * SOUND_RANGE // and so do shots
+		}
 		gain := audio.spatial_gain({f32(d.x), f32(d.y), f32(d.z)}, right, e.volume, range)
 		if gain == {} {continue}
 		pitch := rand.float32_range(0.9, 1.1)
@@ -201,6 +228,24 @@ sounds_play :: proc(
 			audio.play(
 				m,
 				{sound = b.blast[.Boom][variant], gain = gain, pitch = pitch * 0.9, bus = .World},
+			)
+		case .Shot_Pistol, .Shot_Rifle, .Shot_Sniper, .Hit, .Hit_Head, .Reload:
+			which: sfx.Gun_Sound
+			#partial switch e.kind {
+			case .Shot_Rifle:
+				which = .Rifle
+			case .Shot_Sniper:
+				which = .Sniper
+			case .Hit:
+				which = .Hit
+			case .Hit_Head:
+				which = .Headshot
+			case .Reload:
+				which = .Reload
+			}
+			audio.play(
+				m,
+				{sound = b.gun[which][variant], gain = gain, pitch = pitch, bus = .World},
 			)
 		case .Land:
 			audio.play(

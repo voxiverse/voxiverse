@@ -8,6 +8,7 @@ import "core:testing"
 // four slabs (3), a ladder (4), a fence (16) and a door (16).
 BASE_NEW_TYPES :: 11
 BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4 + 16 + 16
+BASE_WEAPONS :: 3 // the pistol, the rifle and the sniper: items of their own
 BASE_TYPES :: len(Block) + BASE_NEW_TYPES
 BASE_STATES :: len(Block) + BASE_NEW_STATES
 
@@ -127,7 +128,7 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		len(registry_every_item(reg)),
-		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES,
+		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES + BASE_WEAPONS,
 	)
 	// Every old item is still there (the base pack's new block types add theirs among the blocks').
 	old_all := frozen_every_item(context.temp_allocator)
@@ -137,8 +138,8 @@ test_base_matches_legacy :: proc(t: ^testing.T) {
 		for j in new_all {if i == j {present = true}}
 		testing.expectf(t, present, "item %d", i)
 	}
-	// Nothing beyond the old items exists.
-	_, ok := registry_item_info(reg, PACK_ITEMS)
+	// Nothing beyond the old items and the base's weapons exists.
+	_, ok := registry_item_info(reg, PACK_ITEMS + BASE_WEAPONS)
 	testing.expect(t, !ok)
 	// Textures and sounds: one per generator, in order.
 	testing.expect_value(t, len(reg.textures), len(TEXTURE_GENERATOR_NAMES))
@@ -218,7 +219,7 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	testing.expect_value(t, info.name, "testpack:marble")
 	chisel, chisel_ok := registry_item(reg, "testpack:chisel")
 	testing.expect(t, chisel_ok)
-	testing.expect_value(t, chisel, PACK_ITEMS)
+	testing.expect_value(t, chisel, PACK_ITEMS + BASE_WEAPONS) // (after the base's weapons)
 	info, _ = registry_item_info(reg, chisel)
 	testing.expect_value(t, info.stack, 1)
 	testing.expect_value(t, registry_block_drop(reg, marble), item)
@@ -226,10 +227,10 @@ test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		len(registry_every_item(reg)),
-		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES + 2,
+		len(frozen_every_item(context.temp_allocator)) + BASE_NEW_TYPES + BASE_WEAPONS + 2,
 	)
 
-	two := Stack{item, 1}
+	two := Stack{item, 1, 0}
 	grid: [9]Stack
 	grid[0], grid[1] = two, two // 1 wide, 2 high
 	id, found := recipe_match(reg, grid, 1, 2)
@@ -870,4 +871,89 @@ test_item_description :: proc(t: ^testing.T) {
 		pack_of("testpack", []File{{"data/items/a.json", `{"a": {"description": 5}}`}}),
 	)
 	testing.expect(t, len(bad) == 1, "a description that is not a text is refused")
+}
+
+// A weapon is data: every number is required, the values are checked, and a
+// pack that overrides the base's pistol changes what it does.
+@(test)
+test_weapon_data :: proc(t: ^testing.T) {
+	good := `{"gun": {"stack": 1, "weapon": {"damage": 7, "magazine": 6, "fire_rate": 2.5,
+		"automatic": true, "range": 50, "headshot": 3, "zoom": 0.5, "reload_time": 1,
+		"spread": 0.02, "sound": "rifle"}}}`
+	reg, errs := build_with(pack_of("testpack", []File{{"data/items/gun.json", good}}))
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	defer registry_destroy(reg)
+	gun, _ := registry_item(reg, "testpack:gun")
+	info, _ := registry_item_info(reg, gun)
+	w, is_weapon := info.weapon.?
+	testing.expect(t, is_weapon, "the item is a weapon")
+	testing.expect_value(t, w.damage, f32(7))
+	testing.expect_value(t, w.magazine, 6)
+	testing.expect_value(t, w.automatic, true)
+	testing.expect_value(t, w.zoom, f32(0.5))
+	testing.expect_value(t, w.sound, "rifle")
+	testing.expect_value(t, new_ammo(reg, gun), u8(6))
+
+	// The base's weapons: the pistol is semi-automatic, the rifle automatic.
+	pistol, _ := registry_item(reg, "pistol")
+	info, _ = registry_item_info(reg, pistol)
+	w, _ = info.weapon.?
+	testing.expect_value(t, w.damage, f32(5))
+	testing.expect_value(t, w.magazine, 12)
+	testing.expect_value(t, w.automatic, false)
+	sniper, _ := registry_item(reg, "sniper")
+	info, _ = registry_item_info(reg, sniper)
+	w, _ = info.weapon.?
+	testing.expect_value(t, w.damage, f32(18))
+	testing.expect_value(t, w.zoom, f32(0.25))
+
+	// A missing number is a load error that names it; so is a wrong one.
+	_, bad := build_with(
+		pack_of(
+			"testpack",
+			[]File{{"data/items/gun.json", `{"gun": {"weapon": {"damage": 7, "magazine": 6}}}`}},
+		),
+	)
+	testing.expect(t, len(bad) >= 1, "a weapon with numbers missing is refused")
+	testing.expect(
+		t,
+		strings.contains(errors_text(bad), "fire_rate"),
+		"the error names the missing number",
+	)
+	_, bad = build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{
+					"data/items/gun.json",
+					`{"gun": {"weapon": {"damage": -1, "magazine": 6, "fire_rate": 1, "range": 9,
+					"headshot": 2, "zoom": 0, "reload_time": 1, "spread": 0}}}`,
+				},
+			},
+		),
+	)
+	testing.expect(t, len(bad) == 1, "a weapon that does no damage is refused")
+
+	// A pack changes the pistol's damage without a line of code.
+	over, errs2 := build_with(
+		pack_of(
+			"testpack",
+			[]File {
+				{
+					"data/items/pistol.json",
+					`{"voxiverse:pistol": {"override": true, "weapon": {"damage": 9, "magazine": 12,
+					"fire_rate": 4, "range": 100, "headshot": 2, "zoom": 0, "reload_time": 1.4,
+					"spread": 0}}}`,
+				},
+			},
+		),
+	)
+	testing.expect_value(t, errors_text(errs2), "")
+	if over == nil {return}
+	defer registry_destroy(over)
+	pistol, _ = registry_item(over, "pistol")
+	info, _ = registry_item_info(over, pistol)
+	w, _ = info.weapon.?
+	testing.expect_value(t, w.damage, f32(9))
 }

@@ -1,7 +1,12 @@
 {
 	"survival": {
 		"abilities": ["health", "regenerate", "drop_on_death"],
-		"kit": [],
+		"kit": [
+			{"item": "voxiverse:pistol", "count": 1},
+			{"item": "voxiverse:rifle", "count": 1},
+			{"item": "voxiverse:sniper", "count": 1},
+			{"item": "voxiverse:rocket_launcher", "count": 1}
+		],
 		"rules": {}
 	}
 }

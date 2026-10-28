@@ -74,7 +74,7 @@ test_worn_items_grant_and_revoke_abilities :: proc(t: ^testing.T) {
 		derive_abilities(reg, survival, &inv),
 		Abilities{.Health, .Regenerate, .Drop_On_Death},
 	)
-	inv.equipment[.Head] = {cap, 1}
+	inv.equipment[.Head] = {cap, 1, 0}
 	testing.expect_value(
 		t,
 		derive_abilities(reg, survival, &inv),

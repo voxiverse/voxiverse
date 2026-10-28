@@ -39,7 +39,7 @@ budget_scene :: proc(g: ^Grief) {
 		rec := Player_Record {
 			dirty = true,
 		}
-		for &st in rec.inventory.slots {st = {planks, 7}}
+		for &st in rec.inventory.slots {st = {planks, 7, 0}}
 		for k in 0 ..< 300 {counter_set(&rec.stats, fmt.tprintf("budget.%d", k), u64(i * k))}
 		s.store.players[fmt.aprintf("budget%03d", i)] = rec
 	}
@@ -68,7 +68,7 @@ budget_scene :: proc(g: ^Grief) {
 				local = u16(game.local_index({5, 5, 5})),
 				kind  = .Container,
 			}
-			for &st in chest.slots {st = {planks, 3}}
+			for &st in chest.slots {st = {planks, 3, 0}}
 			held = {chest}
 		}
 		chunks_insert(&w.chunks, pos, .Air, array, held[:] if n < 100 else nil)
@@ -76,7 +76,7 @@ budget_scene :: proc(g: ^Grief) {
 	}
 	for n in 0 ..< 400 {
 		e := entity_spawn(w, .Item, {f64(1000 + n), 200, 1000}, false)
-		if e != nil {e.stack = {planks, 5}}
+		if e != nil {e.stack = {planks, 5, 0}}
 	}
 }
 

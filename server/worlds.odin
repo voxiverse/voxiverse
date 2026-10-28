@@ -31,6 +31,7 @@ World :: struct {
 	tops:              map[[2]i32]i32, // edited column tops (columns.odin)
 	natural:           []Natural_Slot, // natural column tops (columns.odin)
 	entities:          Entities, // (entities.odin)
+	rewind:            Rewind, // where bodies stood lately (rewind.odin; heap)
 	changes:           Changes, // blocks changed this tick (changes.odin)
 	stats:             Counters, // the world's totals (stats.odin; <world>/stats.json)
 	tick_rng:          base.Rng, // which blocks get random ticks (random_ticks.odin)
@@ -107,6 +108,7 @@ world_close :: proc(w: ^World) {
 	rollback_free(w)
 	journal_close(w)
 	protections_free(w)
+	rewind_destroy(&w.rewind)
 	if w.started {
 		ledger_world_scope(w, .Scope_Out)
 		chunks_destroy(&w.chunks)

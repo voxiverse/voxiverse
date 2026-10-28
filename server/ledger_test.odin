@@ -165,7 +165,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		// A world with no room for what is dropped: it is void.
 		ledger(s, w, .Give, stone, 5)
 		for len(w.entities.list) < MAX_ENTITIES {entity_spawn(w, .Sheep, {0, 100, 0}, false)}
-		spawn_item(w, {0, 100, 0}, {stone, 5}, {}, -1)
+		spawn_item(w, {0, 100, 0}, {stone, 5, 0}, {}, -1)
 		for len(w.entities.list) > 0 && w.entities.list[len(w.entities.list) - 1].kind == .Sheep {
 			entity_gone(w, len(w.entities.list) - 1)
 		}
@@ -174,7 +174,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		// A stack duplicated: the audit says which item and how much.
 		for &st in c.inventory.slots {
 			if game.stack_empty(st) {
-				st = {stone, 7}
+				st = {stone, 7, 0}
 				read_audit(s, r)
 				st = {}
 				break
@@ -289,7 +289,7 @@ scenario_proc :: proc(s: ^Server, data: rawptr) {
 	case 3:
 		// A saved character with more than it can hold.
 		if rec, ok := &s.store.players[d.name]; ok {
-			rec.overflow[0] = {game.item_of_block(test_reg(), .Dirt), 9}
+			rec.overflow[0] = {game.item_of_block(test_reg(), .Dirt), 9, 0}
 			d.ok = true
 		}
 	case 4:
@@ -442,7 +442,7 @@ random_inventory :: proc(r: rand.Generator) -> (inv: game.Inventory) {
 	pick :: proc(r: rand.Generator, items: []game.Item) -> game.Stack {
 		if rand.int_max(3, r) == 0 {return {}}
 		item := rand.choice(items, r)
-		return {item, rand.int_range(1, game.item_stack_size(test_reg(), item) + 1, r)}
+		return {item, rand.int_range(1, game.item_stack_size(test_reg(), item) + 1, r), 0}
 	}
 	for &st in inv.slots {st = pick(r, items)}
 	for &st, e in inv.equipment {
@@ -608,12 +608,12 @@ test_audit_budget :: proc(t: ^testing.T) {
 	for &c, i in s.clients {
 		c.state = .Playing
 		for &st, k in c.inventory.slots {
-			st = {items[(i + k) % len(items)], 1 + k % 5}
+			st = {items[(i + k) % len(items)], 1 + k % 5, 0}
 			given(s, st)
 		}
 	}
 	for i in 0 ..< 3000 {
-		st := game.Stack{items[i % len(items)], 1 + i % 7}
+		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
 		append(&w.entities.list, Entity{kind = .Item, stack = st})
 		given(s, st)
 	}

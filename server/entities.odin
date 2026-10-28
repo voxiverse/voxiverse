@@ -218,7 +218,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
 		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger(s, w, .Drop_Mob, wool, 1)
-		spawn_item(w, ent.body.position + {0, 0.6, 0}, {wool, 1}, v, -1)
+		spawn_item(w, ent.body.position + {0, 0.6, 0}, {wool, 1, 0}, v, -1)
 	}
 	return true
 }
@@ -405,7 +405,6 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	return {}, false
 }
 
-@(private = "file")
 forward :: proc(yaw, pitch: f32) -> [3]f64 {
 	cp := base.cos(f64(pitch))
 	return {-base.sin(f64(yaw)) * cp, base.sin(f64(pitch)), -base.cos(f64(yaw)) * cp}

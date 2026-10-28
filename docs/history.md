@@ -6362,3 +6362,90 @@ list while held; F swaps with the offhand; F3 shows the debug screen, and on a s
 - FOV's range is 30-110 (it was 50-110). Options' labels still come from `SETTINGS_VARS` (English there), not the string table: the key scan covers the screens, not the settings table.
 - Pad and key reach: the universes screen and creation are reachable by the pad's focus moves as they are (a test walks them), so no shared focus move was added; the inventory's Sort and search stay as M48d left them. "X joined" as a toast (a join event of its own) was not added: no screen needed it. Camera, Swap and Player list have no pad button (next tier's ring).
 - The stills were not made (as in M48d: no screenshot set exists); the screens' draw tests stand in and the pictures are in the check by hand.
+
+# M48h: party 2: hitscan weapons
+
+Rules: design.md's *Survival for the LAN party*. Builds on M48g's `damage` and kits.
+
+- *Weapons are items as data* (`assets/packs/voxiverse/data/items/weapons.json`): a new
+  item field `weapon` (parsed by M47's item loader, validated: a missing number is a load
+  error): `{"damage": 5, "magazine": 12, "fire_rate": 4.0, "automatic": false,
+  "range": 100, "headshot": 2.0, "zoom": 0.0, "reload_time": 1.4, "spread": 0.0,
+  "sound": "..."}`. Pistol: semi-auto, damage 5, magazine 12; rifle: automatic, damage 3,
+  magazine 30; sniper: damage 18, magazine 5, `zoom` 0.25 (the FOV factor while the use
+  button is held). `fire_rate` is shots per second and is data. Textures are
+  programmatic (aesthetic: crunchy pixels); the rocket launcher stays as it is.
+- *Ammo:* the held stack's magazine is state on the item stack's instance data (an
+  `ammo: u8` in the stack's extra field; `Item_Stack` gets the field if it has none, the
+  M30 container records and the save format carry it: format bump with a migration).
+  `R` reloads (`Action.Reload`, bound by default; the pad's X): takes `reload_time`
+  seconds (server timer; moving does not cancel it, switching the held slot does), reserve
+  unlimited. An empty magazine on use starts a reload. `refill_weapons(c)` refills every
+  weapon (used by the kit).
+- *The server is authoritative.* A `Fire` client message (held slot, origin and
+  direction as the client aimed, the client's tick `t_shot`, seq): the server checks the
+  weapon, the magazine, the fire rate (a per-client next-allowed tick; a client that is
+  too early is refused and counted) and the dead state, then ray-tests.
+  Ray test order: blocks first (the box raycast: the nearest block hit shortens the ray),
+  then players and creatures as boxes, nearest first. A hit in the head's box (the top
+  quarter of the body's box) multiplies by `headshot` (2x). It calls `damage` with a
+  `Weapon` source (`weapon` = the item's id name: "pistol", "rifle", "sniper").
+- *Lag compensation* (`server/rewind.odin`): every tick the server stores each player's
+  and creature's position for the last `REWIND_MAX` ticks (250 ms: a ring of 5+
+  samples, 20 Hz). A shot rewinds targets to `now - latency(shooter)`, where latency is
+  the shooter's measured round trip plus the interpolation delay the client renders
+  with, **capped at `REWIND_MAX`**; the shooter's own claimed tick is only a hint and is
+  clamped to the cap. Outside the window the shot tests against current positions. Only
+  the ray test sees rewound positions; nothing else moves.
+- *Client prediction is the effects only:* the tracer and the muzzle flash, the shot
+  sound, the recoil kick (a small pitch, cosmetic), and the magazine counter; never a
+  hit or damage. Other clients see the tracer from a `Shot` event (shooter, origin,
+  end point) broadcast to those in range.
+- *Feedback:* a **hit marker** on the crosshair when the server confirms a hit (a
+  `Hit_Confirm` event: kill or not, headshot or not; the marker is white, red on a
+  kill), a hit sound (distinct for headshot), the victim's **damage direction** (M48g's
+  `Damage_Hit` event: a red arc on the screen edge toward the source for 0.8 s), a muzzle
+  flash.
+- *Zoom:* holding the use button with the sniper held sets the FOV factor `zoom` (0.25
+  = a 4x) with a smoothed transition, sprint-kick off, sensitivity scaled by the factor;
+  released: back. Other weapons ignore it.
+- *Loadout:* the base survival mode's kit is the four weapons (pistol, rifle, sniper,
+  rocket launcher) with full magazines; the rocket launcher as it is.
+- HUD: the magazine count by the hotbar (`12 / inf`).
+
+## Tests
+
+- A hit at a known latency registers against the rewound position: a target moving
+  across the line at 8 blocks/s, a shooter with 100 ms latency, aim at where the target
+  was: hit; at where it is now: miss. At 400 ms latency (beyond the cap) the cap applies:
+  the shot tests at the capped rewind.
+- A miss outside the window; a shot through a wall hits the wall, not the player behind.
+- Headshots do 2x (the sniper's 36 on the head, 18 on the body); damage numbers equal the
+  data, and a test pack changes a weapon's damage with no code change.
+- Magazines and reloads: 12 pistol shots then empty; reload takes `reload_time`; R while
+  full does nothing; the kit refills; automatic fire holds the rate, semi-auto needs a
+  new press; too-early shots refused.
+- The pvp rule: off, a shot at a player does nothing (a creature is still hit); on, it
+  hurts.
+- The death message: shot by Sam (sniper) in both chats.
+- Prediction: the effects fire at the client with no wait; the desync check passes.
+- Over UDP with loss: a firing exchange between two clients keeps both worlds in step.
+- The suite, `build check`, `build determinism`, the bandwidth roots (shots are events).
+
+**Exit check (M48h):** the tests pass, the whole suite, `build check`, CI green.
+
+**Check by hand (M48h):** two clients on a LAN; shoot a moving friend with each weapon;
+the hit marker, the sound and the red arc read right; the sniper's zoom feels right;
+numbers are tuned in `weapons.json` (hot reload applies at once).
+
+**What differed from this spec (found by building it):**
+
+- The tick rate is 30 Hz, not 20: `REWIND_MAX_TICKS` is 8 (267 ms, the cap nearest 250 ms), the ring 10 frames. A body's frame is the end of a tick; the shot at tick N rewinds to the frame of tick N-1-k, k the latency in ticks (round trip plus `INTERPOLATION_TICKS`, now `game.INTERPOLATION_TICKS`, 100 ms), capped; k of 0 tests where things are.
+- The client message is `Shoot` (`Fire` is the rocket's, kept): `{after, slot, press, yaw, pitch}`, queued as an action after the input it follows like `Fire`. The server fires from its own eye position and its own tick: no origin and no `t_shot` travel (nothing the client says about where it stood is believed). `press` is true on a new press: a semi-automatic weapon needs one (the server cannot see the button). `Reload` is a message of its own (`PROTOCOL_VERSION` 34).
+- The rate has one tick of slack (a shot a tick early is let through, the average is the data's; `shot_due` is a fraction of a tick); a held pistol makes 4 or 5 shots in a second, a rifle 9 to 11. Too-early shots are counted in `Client.shots_refused`.
+- `Stack.ammo: u8` rides the schema (wire, inventory record, `Entity_Record`) and is kept by every inventory action (`with_count`: a split, a merge or a swap carries it) and by the player file (`PLAYER_FILE_FORMAT` 2 with `ammo`; a file of 1 loads full magazines). It is **not** kept by the chest's records, the region format, the journal's entity records or `entities.cfg`: a weapon stored in a chest or picked up from the ground comes back with a full magazine (a carried one keeps the number; the journal's values stay as they were, no format bump). A weapon taken from the catalog starts full (`new_ammo`).
+- A creature takes one hit from any shot that hits (their health is in hits: sheep 4), headshot or not; the `Hit_Confirm` still says headshot. `Shot` and `Hit_Confirm` are events (`Shot` to others within 96 blocks; the bandwidth baseline moved by the ammo byte in the inventory record: 1411145 to 1411220 and 2124778 to 2124939 bytes, the roots with it).
+- The mode's kit is now given at join as well as at respawn (M48g's spec said so, the code did not): `kit_give` after the world's kit, with the ledger's `Kit` entries. The survival kit is the pistol, rifle, sniper and rocket launcher, so a respawn with `keep_inventory` off gives the four weapons back.
+- The pad's X reloads; drop moved to the pad's d-pad down (the two clashed in the world context). `R` reloads.
+- Effects: the tracer is a streak of specks (the puffs), the flash a few sparks, the recoil a view pitch that decays (nothing is sent); the damage arc and the hit marker are drawn from squares at the screen edge and the crosshair; the sounds are synthesized (`sfx.Gun_Sound`); the weapons' icons are 16x16 art by the weapon's `sound` cue.
+- Test pack: the weapon data is tested through the loader (`test_weapon_data`: a pack overrides the pistol's damage; a missing number is a load error) and on the server by changing the registry's data in place (`test_weapons`); the over-UDP test is `test_shooting_through_loss`, the client's `test_weapons_over_a_stepped_server` (prediction exact, no desync: the effects touch no state).

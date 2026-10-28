@@ -235,6 +235,18 @@ describe :: proc(
 			return fmt.tprintf("attack entity=%d after=%d", v.entity, v.after), true
 		case game.Respawn:
 			return "respawn", true
+		case game.Reload:
+			return "reload", true
+		case game.Shoot:
+			return fmt.tprintf(
+					"shoot after=%d slot=%d press=%v yaw=%.2f pitch=%.2f",
+					v.after,
+					v.slot,
+					v.press,
+					v.yaw,
+					v.pitch,
+				),
+				true
 		case game.Stats_Request:
 			return fmt.tprintf("stats_request filter=%q page=%d of=%q", v.filter, v.page, v.of),
 				true

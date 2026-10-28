@@ -189,7 +189,7 @@ test_options_pad_bindings :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.settings.pad.jump, platform.Pad_Button.X)
 	testing.expect_value(t, app.options.listening, Action.None)
 	_, clash := binding_conflicts(&app.settings.keys, &app.settings.pad)
-	testing.expect(t, .Jump in clash && .Drop in clash)
+	testing.expect(t, .Jump in clash && .Reload in clash)
 
 	ui_frame(app, {mouse = {640, 360}, wheel = {0, -100}})
 	click(t, app, "Reset Pad Buttons")

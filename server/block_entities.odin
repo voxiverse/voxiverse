@@ -250,7 +250,7 @@ entity_restore :: proc(
 		n := min(st.count, lying[st.item])
 		lying[st.item] -= n
 		taken[st.item] += n
-		if n > 0 {e.slots[i] = {st.item, n}}
+		if n > 0 {e.slots[i] = {st.item, n, 0}}
 	}
 	for i := len(w.entities.list) - 1; i >= 0; i -= 1 {
 		ent := &w.entities.list[i]

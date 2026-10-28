@@ -44,6 +44,15 @@ Blast_Sound :: enum u8 {
 	Boom, // an explosion: a deep thump, a rumble, crackle
 }
 
+Gun_Sound :: enum u8 {
+	Pistol, // a sharp crack and a short thump
+	Rifle, // a tighter, higher crack
+	Sniper, // a heavy boom with a long tail
+	Hit, // the hit marker's tick
+	Headshot, // ... and its brighter ring
+	Reload, // two clicks
+}
+
 Sheep_Sound :: enum u8 {
 	Hurt, // a short bleat
 	Die, // a long, falling one, and a puff
@@ -255,6 +264,40 @@ sheep_sound :: proc(c: Sheep_Sound, variant: int, allocator := context.allocator
 		burst(&s, {start = 0.38, tau = 0.06, filter = .Low, freq = 900, gain = 0.5})
 	}
 	return finish(&s, 0.7, allocator)
+}
+
+// gun_sound: the hitscan weapons' sounds and their feedback's.
+gun_sound :: proc(x: Gun_Sound, variant: int, allocator := context.allocator) -> []f32 {
+	s := Synth {
+		rng = seed(5150 + u32(x) * 131 + u32(variant) * 7),
+	}
+	r := rand_range(&s.rng, 0.94, 1.06)
+	switch x {
+	case .Pistol:
+		burst(&s, {start = 0, tau = 0.010, filter = .Band, freq = 1900 * r, q = 0.8, gain = 1})
+		burst(&s, {start = 0, tau = 0.045, filter = .Low, freq = 240 * r, gain = 0.9})
+		scatter(&s, 8, 0.01, 0.12, {tau = 0.01, filter = .Band, q = 1.2}, 700, 2600, 0.08, 0.3)
+	case .Rifle:
+		burst(&s, {start = 0, tau = 0.008, filter = .Band, freq = 2600 * r, q = 0.8, gain = 1})
+		burst(&s, {start = 0, tau = 0.030, filter = .Low, freq = 320 * r, gain = 0.8})
+		scatter(&s, 6, 0.005, 0.08, {tau = 0.008, filter = .Band, q = 1.2}, 1200, 3200, 0.06, 0.25)
+	case .Sniper:
+		burst(&s, {start = 0, tau = 0.014, filter = .Band, freq = 1300 * r, q = 0.7, gain = 1})
+		burst(&s, {start = 0, tau = 0.120, filter = .Low, freq = 130 * r, gain = 1})
+		burst(&s, {start = 0.02, tau = 0.200, filter = .Low, freq = 70 * r, gain = 0.6})
+		scatter(&s, 24, 0.04, 0.6, {tau = 0.02, filter = .Band, q = 1.5}, 300, 1800, 0.05, 0.25)
+	case .Hit:
+		burst(&s, {start = 0, tau = 0.008, filter = .Band, freq = 2800 * r, q = 4, gain = 1})
+	case .Headshot:
+		burst(&s, {start = 0, tau = 0.012, filter = .Band, freq = 3400 * r, q = 6, gain = 1})
+		burst(&s, {start = 0.03, tau = 0.020, filter = .Band, freq = 5100 * r, q = 6, gain = 0.8})
+	case .Reload:
+		burst(&s, {start = 0, tau = 0.010, filter = .Band, freq = 1500 * r, q = 3, gain = 0.9})
+		burst(&s, {start = 0, tau = 0.030, filter = .Low, freq = 400 * r, gain = 0.5})
+		burst(&s, {start = 0.18, tau = 0.012, filter = .Band, freq = 2100 * r, q = 3, gain = 1})
+		burst(&s, {start = 0.18, tau = 0.040, filter = .Low, freq = 300 * r, gain = 0.6})
+	}
+	return finish(&s, 0.9, allocator)
 }
 
 // blast_sound: the rocket launcher's sounds.

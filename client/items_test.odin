@@ -19,7 +19,7 @@ test_inventory_prediction :: proc(t: ^testing.T) {
 	s.state = .Playing
 	stone := game.item_of_block(test_reg(), .Stone)
 	server: game.Inventory
-	server.slots[0] = {stone, 64}
+	server.slots[0] = {stone, 64, 0}
 	inventory_reconcile(s, {0, server})
 	testing.expect(t, s.inventory == server)
 
@@ -32,14 +32,17 @@ test_inventory_prediction :: proc(t: ^testing.T) {
 	inventory_predict(s)
 	testing.expect(
 		t,
-		s.inventory.slots[5] == {stone, 64} && game.stack_empty(s.inventory.slots[0]),
+		s.inventory.slots[5] == {stone, 64, 0} && game.stack_empty(s.inventory.slots[0]),
 	)
 	// The server has done the first: the second is still replayed.
 	picked := server
-	picked.slots[0], picked.cursor = {}, {stone, 64}
+	picked.slots[0], picked.cursor = {}, {stone, 64, 0}
 	inventory_reconcile(s, {1, picked})
 	testing.expect_value(t, len(s.inv_pending), 1)
-	testing.expect(t, s.inventory.slots[5] == {stone, 64} && game.stack_empty(s.inventory.cursor))
+	testing.expect(
+		t,
+		s.inventory.slots[5] == {stone, 64, 0} && game.stack_empty(s.inventory.cursor),
+	)
 	// It refused the second (the inventory as before it): rolled back.
 	inventory_reconcile(s, {2, picked})
 	testing.expect_value(t, len(s.inv_pending), 0)
@@ -106,7 +109,7 @@ test_right_click_uses_the_aimed_entity :: proc(t: ^testing.T) {
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
-	stone := game.Stack{game.item_of_block(test_reg(), .Stone), 5}
+	stone := game.Stack{game.item_of_block(test_reg(), .Stone), 5, 0}
 	sent :: proc(pipe: ^game.Pipe) -> (uses: int, others: int) {
 		packets := make([dynamic]game.Packet, context.temp_allocator)
 		server := game.Endpoint{pipe, .Server}

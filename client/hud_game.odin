@@ -39,6 +39,7 @@ hud_draw :: proc(app: ^App, ctx: ^ui.Context) {
 		ui.fill_rect(ctx, {c.x - 1, c.y - 8, 2, 16}, t.crosshair)
 	}
 	hotbar(ctx, s, &app.item_icons)
+	weapon_hud(ctx, s)
 	health_bar(ctx, s)
 	hud_popup(app, ctx)
 }

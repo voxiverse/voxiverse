@@ -23,12 +23,19 @@ DOUBLE_TAP_SECONDS :: 0.3 // two jump presses this close toggle flying
 
 // look_update turns the view by this frame's mouse motion and the pad's
 // right stick.
-look_update :: proc(v: ^View, input: ^Input_State, a: ^Actions, settings: Settings, dt: f32) {
-	turn := MOUSE_RADIANS_PER_PIXEL * settings.mouse_sensitivity
+look_update :: proc(
+	v: ^View,
+	input: ^Input_State,
+	a: ^Actions,
+	settings: Settings,
+	dt: f32,
+	scale := f32(1), // the field of view's factor: a zoom turns slower
+) {
+	turn := MOUSE_RADIANS_PER_PIXEL * settings.mouse_sensitivity * scale
 	v.yaw -= input.look.x * turn
 	v.pitch -= input.look.y * turn * (-1 if settings.invert_mouse else 1)
-	v.yaw += a.look.x * dt
-	v.pitch += a.look.y * dt
+	v.yaw += a.look.x * dt * scale
+	v.pitch += a.look.y * dt * scale
 	v.pitch = clamp(v.pitch, -game.PITCH_LIMIT, game.PITCH_LIMIT)
 	v.yaw = math.mod(v.yaw, math.TAU)
 }
