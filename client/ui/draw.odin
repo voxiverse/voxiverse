@@ -275,7 +275,12 @@ draw_text_tilted :: proc(
 		g, ok := glyph_cache_get(&ctx.glyphs, r, pixel_size)
 		if !ok {g, ok = glyph_cache_get(&ctx.glyphs, '?', pixel_size)}
 		if ok && g.w > 0 {
-			quad := [4]f32{pen.x + g.offset.x * k, pen.y + g.offset.y * k, f32(g.w) * k, f32(g.h) * k}
+			quad := [4]f32 {
+				pen.x + g.offset.x * k,
+				pen.y + g.offset.y * k,
+				f32(g.w) * k,
+				f32(g.h) * k,
+			}
 			uv := [2][2]f32 {
 				{f32(g.x) * inv, f32(g.y) * inv},
 				{f32(g.x + g.w) * inv, f32(g.y + g.h) * inv},
