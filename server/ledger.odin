@@ -80,8 +80,8 @@ ledger_inventory :: proc(s: ^Server, w: ^World, reason: game.Reason, inv: ^game.
 ledger_world_scope :: proc(w: ^World, reason: game.Reason) {
 	s := w.server
 	sign := 1 if reason == .Scope_In else -1
-	for _, rec in w.containers {
-		for st in rec.slots {ledger_stack(s, w, reason, st, sign)}
+	for at in block_entities_all(w) {
+		for st in at.e.slots {ledger_stack(s, w, reason, st, sign)}
 	}
 	for e in w.entities.list {
 		if e.kind == .Item {ledger_stack(s, w, reason, e.stack, sign)}
@@ -103,8 +103,8 @@ held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 		add(&held, c.inventory.cursor)
 	}
 	for w in s.worlds {
-		for _, rec in w.containers {
-			for st in rec.slots {add(&held, st)}
+		for at in block_entities_all(w) {
+			for st in at.e.slots {add(&held, st)}
 		}
 		for e in w.entities.list {
 			if e.kind == .Item {add(&held, e.stack)}

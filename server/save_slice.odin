@@ -154,7 +154,7 @@ world_capture :: proc(s: ^Server, job: ^Save_Job, w: ^World) {
 	}
 	cow := new(Cow, heap())
 	cow.id = job.id
-	cow.copies = make(map[game.Chunk_Pos]game.Chunk_Blocks, heap())
+	cow.copies = make(map[game.Chunk_Pos]Cow_Copy, heap())
 	w.chunks.cow = cow
 	it: base.Pool_Iterator
 	for c in base.pool_next(&w.chunks.chunks, &it) {
@@ -258,18 +258,19 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 @(private = "file")
 chunk_encode :: proc(job: ^Save_Job, cw: ^Cap_World, cr: ^Cap_Region, pos: game.Chunk_Pos) {
 	blocks: ^game.Chunk_Blocks
+	entities: []game.Block_Entity
 	if copy, ok := &cw.world.chunks.cow.copies[pos]; ok {
-		blocks = copy
+		blocks, entities = &copy.blocks, copy.entities
 	} else if c := chunks_get(&cw.world.chunks, pos);
 	   c != nil && c.state == .Ready && c.capture == job.id {
-		blocks = &c.blocks
+		blocks, entities = &c.blocks, c.block_entities[:]
 	} else {
 		log.errorf("server save lost a chunk it captured chunk=%v", pos)
 		job.ok = false
 		return
 	}
 	clear(&job.writer.buf)
-	game.write_chunk_blocks(&job.writer, blocks)
+	game.write_chunk_payload(&job.writer, blocks, entities)
 	append(&cr.job.chunks, Job_Chunk{pos = pos, bytes = slice.clone(job.writer.buf[:], heap())})
 }
 
@@ -284,8 +285,9 @@ job_release :: proc(s: ^Server, job: ^Save_Job) {
 		for c in base.pool_next(&w.chunks.chunks, &it) {
 			if c.capture == job.id {c.capture = 0}
 		}
-		for _, blocks in w.chunks.cow.copies {
-			if blocks.array != nil {free(blocks.array, heap())}
+		for _, copy in w.chunks.cow.copies {
+			if copy.blocks.array != nil {free(copy.blocks.array, heap())}
+			delete(copy.entities, heap())
 		}
 		delete(w.chunks.cow.copies)
 		free(w.chunks.cow, heap())

@@ -105,6 +105,7 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 		case game.Edit_Result:
 			c.results[v.id] = v
 			set_block(c, v.pos, v.block)
+			if cm, two := v.companion.?; two {set_block(c, cm.pos, cm.block)}
 		}
 	}
 }
@@ -496,6 +497,185 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, !c.results[100].accepted, "a forged state was accepted")
 	testing.expect(t, c.results[101].accepted, "the honest edit after it was refused")
+}
+
+// M48b: a door placed, opened and closed at 200 ms each way with jitter: both
+// halves are predicted and the server agrees; a door with no room above is
+// refused and both cells are put back (the upper half by the companion).
+@(test)
+test_doors_with_latency :: proc(t: ^testing.T) {
+	pipe: game.Pipe
+	game.pipe_init(&pipe)
+	defer game.pipe_destroy(&pipe)
+	game.pipe_set_conditions(&pipe, {latency_ms = 200, jitter_ms = 60})
+	srv: Server
+	if !testing.expect(
+		t,
+		start(
+			&srv,
+			{
+				seed = 5,
+				generator = .Classic,
+				view_radius = 4,
+				view_height = 2,
+				workers = 2,
+				allow_cheats = true,
+			},
+			{&pipe, .Server},
+		),
+	) {return}
+	defer stop(&srv)
+	c := Predicting_Client {
+		endpoint = {&pipe, .Client},
+		scratch  = new(game.Block_Array),
+	}
+	defer free(c.scratch)
+	state_rx_init(&c.rx)
+	defer state_rx_destroy(&c.rx)
+	game.block_arrays_init(&c.arrays, 2048)
+	defer game.block_arrays_destroy(&c.arrays)
+	defer delete(c.chunks)
+	defer delete(c.results)
+	c.key = test_key("latency_test")
+	send(&c, test_hello("latency_test"))
+	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
+	for !c.welcomed {
+		pump(t, &c)
+		time.sleep(game.TICK_DURATION)
+		if !testing.expect(t, time.tick_diff(time.tick_now(), deadline) > 0, "no welcome") {return}
+	}
+	stand :: proc(t: ^testing.T, c: ^Predicting_Client, ticks: int) -> u32 {
+		seq: u32
+		for _ in 0 ..< ticks {
+			pump(t, c)
+			msg := game.prediction_tick(&c.prediction, {pitch = -0.7}, &c.rules, query(c))
+			msg.snapshot = c.rx.rx.ack
+			send(c, msg)
+			seq = msg.sequence
+			time.sleep(game.TICK_DURATION)
+		}
+		return seq
+	}
+	for {
+		stand(t, &c, 1)
+		s := c.last_update.state
+		if s.on_ground &&
+		   c.last_update.acked > 0 &&
+		   len(c.chunks) > 200 &&
+		   c.prediction.state == s {break}
+		if !testing.expect(
+			t,
+			time.tick_diff(time.tick_now(), deadline) > 0,
+			"never landed",
+		) {return}
+	}
+	p := c.prediction.state.position
+	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
+	// Room for a door at o + (2, 0, 0) and a ceiling over the one at o + (2, 0, 3).
+	for text in ([]string{"fill ~2 ~-1 ~-1 ~2 ~3 ~4 stone", "fill ~2 ~ ~ ~2 ~3 ~ air", "fill ~2 ~ ~3 ~2 ~ ~3 air"}) {
+		send(&c, game.Command{text})
+		stand(t, &c, 3)
+	}
+	stand(t, &c, 25)
+	door_type := game.block_type_of(&test_reg().blocks, test_block("voxiverse:planks_door"))
+	door :: proc(
+		t: ^testing.T,
+		c: ^Predicting_Client,
+		id: u32,
+		type: game.Block_Type,
+		pos: game.Block_Pos,
+	) -> (
+		lower: game.Block,
+		ok: bool,
+	) {
+		ctx := game.Place_Context {
+			target = pos + {0, -1, 0},
+			face   = .Pos_Y,
+			hit    = {8, 16, 8},
+			yaw    = 0,
+		}
+		_, lower, ok = game.placement(test_reg(), type, ctx, query(c))
+		if !ok {return}
+		seq := stand(t, c, 2)
+		set_block(c, pos, lower)
+		_, upper, _ := game.companion(test_reg(), lower, pos)
+		set_block(c, pos + {0, 1, 0}, upper)
+		send(c, game.Edit{id, seq, pos, lower, ctx.target, u8(ctx.face), ctx.hit})
+		return
+	}
+	at_door := o + {2, 0, 0}
+	lower, ok := door(t, &c, 1, door_type, at_door)
+	if !testing.expect(t, ok, "the door's placement was refused by the rule") {return}
+	await :: proc(t: ^testing.T, c: ^Predicting_Client, id: u32) -> bool {
+		deadline := time.tick_add(time.tick_now(), 20 * time.Second)
+		for _, answered := c.results[id]; !answered; _, answered = c.results[id] {
+			stand(t, c, 1)
+			if !testing.expect(
+				t,
+				time.tick_diff(time.tick_now(), deadline) > 0,
+				"no answer",
+			) {return false}
+		}
+		return true
+	}
+	if !await(t, &c, 1) {return}
+	testing.expect(t, c.results[1].accepted, "the door was refused")
+	// Opened, then closed: both halves turn each time, predicted at once.
+	turn :: proc(t: ^testing.T, c: ^Predicting_Client, id: u32, pos: game.Block_Pos) -> bool {
+		now, _ := client_block(c, pos)
+		tb := &test_reg().blocks
+		i, _ := game.prop_index(tb, tb.type_of[now], "open")
+		flipped := game.state_with(tb, now, i, 1 - game.state_value(tb, now, i))
+		seq := stand(t, c, 2)
+		set_block(c, pos, flipped)
+		_, upper, _ := game.companion(test_reg(), flipped, pos)
+		set_block(c, pos + {0, 1, 0}, upper)
+		send(c, game.edit_plain(id, seq, pos, flipped))
+		return await(t, c, id)
+	}
+	for id in u32(2) ..= 3 {
+		if !turn(t, &c, id, at_door) {return}
+		testing.expectf(t, c.results[id].accepted, "turning %d was refused", id)
+		stand(t, &c, 10)
+		for cell in ([]game.Block_Pos{at_door, at_door + {0, 1, 0}}) {
+			got, _ := chunks_block(&srv.home.chunks, cell)
+			mine, _ := client_block(&c, cell)
+			testing.expectf(
+				t,
+				got == mine,
+				"turn %d: server %s, client %s",
+				id,
+				state_text(test_reg(), got),
+				state_text(test_reg(), mine),
+			)
+		}
+	}
+	back, _ := chunks_block(&srv.home.chunks, at_door)
+	testing.expect_value(t, back, lower) // closed again
+	// No room above: the forged edit is refused and both cells go back as the server has them.
+	bad := o + {2, 0, 3}
+	send(&c, game.Command{"setblock ~2 ~1 ~3 stone"})
+	stand(t, &c, 30)
+	seq := stand(t, &c, 2)
+	set_block(&c, bad, lower)
+	_, upper, _ := game.companion(test_reg(), lower, bad)
+	set_block(&c, bad + {0, 1, 0}, upper)
+	send(&c, game.Edit{4, seq, bad, lower, bad + {0, -1, 0}, u8(game.Face.Pos_Y), {8, 16, 8}})
+	if !await(t, &c, 4) {return}
+	testing.expect(t, !c.results[4].accepted, "a door with a ceiling was accepted")
+	for cell in ([]game.Block_Pos{bad, bad + {0, 1, 0}}) {
+		got, _ := chunks_block(&srv.home.chunks, cell)
+		mine, _ := client_block(&c, cell)
+		testing.expectf(
+			t,
+			got == mine,
+			"after the refusal: server %s, client %s",
+			state_text(test_reg(), got),
+			state_text(test_reg(), mine),
+		)
+	}
+	above, _ := client_block(&c, bad + {0, 1, 0})
+	testing.expect_value(t, above, game.Block.Stone)
 }
 
 @(private = "file")

@@ -38,6 +38,7 @@ Run_State :: enum u8 {
 @(private = "file")
 Plan :: struct {
 	restore, expect: game.Block,
+	restore_from:    Entity_Undo_Key, // the journal entry the restore comes from (what it removed)
 	state:           Run_State,
 	kept:            bool, // the filter's entries are there, but someone else changed it since
 	queued:          bool, // waiting in order
@@ -125,15 +126,16 @@ scan_entry :: proc(job: ^Rollback_Job, e: game.Journal_Entry, info: Action_Info,
 	pl, seen := &job.plan[e.pos]
 	if !seen {
 		job.plan[e.pos] = {
-			restore = e.old,
-			expect  = e.new,
-			state   = .Open if hit else .Blocked,
+			restore      = e.old,
+			expect       = e.new,
+			restore_from = {e.pos, e.action, e.age},
+			state        = .Open if hit else .Blocked,
 		}
 		return
 	}
 	switch pl.state {
 	case .Open:
-		if hit {pl.restore = e.old} else {pl.state = .Closed}
+		if hit {pl.restore, pl.restore_from = e.old, {e.pos, e.action, e.age}} else {pl.state = .Closed}
 	case .Blocked:
 		if hit {pl.kept = true} 	// (the position stays as it is)
 	case .Closed:
@@ -149,9 +151,10 @@ fold_entry :: proc(job: ^Rollback_Job, e: game.Journal_Entry, info: Action_Info,
 	if !seen {
 		if !hit {return}
 		job.plan[e.pos] = {
-			restore = e.old,
-			expect  = e.new,
-			state   = .Open,
+			restore      = e.old,
+			expect       = e.new,
+			restore_from = {e.pos, e.action, e.age},
+			state        = .Open,
 		}
 		pl = &job.plan[e.pos]
 	} else if hit {
@@ -159,10 +162,11 @@ fold_entry :: proc(job: ^Rollback_Job, e: game.Journal_Entry, info: Action_Info,
 			pl.expect = e.new
 		} else {
 			pl^ = {
-				restore = e.old,
-				expect  = e.new,
-				state   = .Open,
-				queued  = pl.queued,
+				restore      = e.old,
+				expect       = e.new,
+				restore_from = {e.pos, e.action, e.age},
+				state        = .Open,
+				queued       = pl.queued,
 			}
 		}
 	} else {
@@ -306,6 +310,7 @@ rollback_step :: proc(w: ^World) {
 			pl.kept = true
 		case:
 			if set_block(w, p, pl.restore, {job.action, report_system(j, job)}) {
+				entity_restore(w, p, pl.restore_from)
 				job.restored += 1
 				applied += 1
 			}

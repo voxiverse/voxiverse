@@ -69,8 +69,10 @@ region_job_run :: proc(b: ^Save_Batch, j: ^Region_Job) {
 		for &c in j.chunks {
 			if !slice.contains(j.revisit[:], c.pos) {continue}
 			r := game.reader_make(c.bytes, j.reg)
-			u1, uni1 := game.read_chunk_blocks(&r, have)
-			if !game.reader_finish(&r) {continue}
+			held := make([dynamic]game.Block_Entity, a)
+			defer delete(held)
+			u1, uni1 := game.read_chunk_payload(&r, have, &held)
+			if !game.reader_finish(&r) || len(held) > 0 {continue} 	// (a chunk with entities is not natural)
 			u2, uni2 := worldgen.generate(&j.gen, c.pos, natural, cache)
 			a_, b_ := game.Chunk_Blocks {
 					uniform = u1,
@@ -165,6 +167,6 @@ compaction_apply :: proc(s: ^Server, b: ^Save_Batch) {
 chunk_bytes :: proc(c: ^Chunk) -> []u8 {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
-	game.write_chunk_blocks(&w, &c.blocks)
+	game.write_chunk_payload(&w, &c.blocks, c.block_entities[:])
 	return w.buf[:]
 }

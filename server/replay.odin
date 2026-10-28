@@ -163,9 +163,10 @@ read_snapshot_region :: proc(
 	if err != nil {return chunks}
 	r, open_err := game.region_open(w.server.registry, data, region)
 	if open_err != .None {return chunks}
+	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
 	for {
 		scratch := new(game.Block_Array, context.temp_allocator)
-		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch)
+		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch, &entities)
 		if !got {break}
 		if is_uniform {for &b in scratch {b = uniform}}
 		chunks[pos] = scratch

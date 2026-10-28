@@ -122,10 +122,15 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 		}
 	case .Containers:
 		for w, i in s.worlds {
-			for pos in base.keys_sorted(w.containers, game.block_pos_less, context.temp_allocator) {
-				path := wpath(i, fmt.tprintf("containers[%v]", pos))
-				fold(k, path, pos)
-				fold(k, path, w.containers[pos])
+			all := block_entities_all(w)
+			slice.sort_by(
+				all,
+				proc(a, b: Entity_At) -> bool {return game.block_pos_less(a.pos, b.pos)},
+			)
+			for at in all {
+				path := wpath(i, fmt.tprintf("containers[%v]", at.pos))
+				fold(k, path, at.pos)
+				fold(k, path, at.e.slots)
 			}
 		}
 	case .Gates:

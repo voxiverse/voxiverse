@@ -98,8 +98,8 @@ A save is a universe, a directory: `universe.cfg` (format, seed, the home world'
 starter kit), `characters/<account>/<name>.json` (each character: their world, where they are
 and look, flying, their inventory by item name; written when it changed), `permissions.cfg`,
 `community.cfg`, and `worlds/<address>/` for each world visited or edited: its `world.cfg`
-(generator, seed, time, spawn, rules, generator parameters), `entities.cfg`, `containers.cfg` (chests' contents) and `regions/`
-with the edited chunks only (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates
+(generator, seed, time, spawn, rules, generator parameters), `entities.cfg` and `regions/`
+with the edited chunks only (a chest's contents are its block entity, saved with its chunk) (`r.<x>.<z>.vxr`, 16x16 chunk columns each; the rest regenerates
 from the seed). A directory from before universes (a `world.cfg` at the top) becomes one when
 opened: its world is the home world. Files are replaced through a temporary file, so a crash
 mid-save keeps the previous save; a region file that fails its checksum is moved aside
@@ -272,15 +272,14 @@ the inventory take any item. Dropped stacks are entities: they fall, merge with 
 their item, are picked up by walking over them (half a second; two for the one who dropped
 it) and go after five minutes. A player new to a world gets `world.cfg`'s `kit`.
 
-A chest (`server/containers.odin`) is a block with a record of 25 stacks, kept by position in
-the world (`containers.cfg`) and made when someone first opens it. Right-clicking it sends
-`Use_Block`; the server then puts the record's slots in that player's `Inventory` (`chest`,
+A chest (`server/containers.odin`) is a block with a container block entity of 25 stacks, kept
+with its chunk (`server/block_entities.odin`) and made when the block is placed. Right-clicking
+it sends `Use_Block`; the server then puts the entity's slots in that player's `Inventory` (`chest`,
 `chest_open`), so the ordinary requests may name slots `CHEST_BASE ..< ALL_SLOTS`, the client
 predicts them, and the record is copied in before each request and out after it, and told to
 everyone else looking. It closes (the `Close` request, or by itself) when the player goes more
-than the reach plus two blocks away or the block is gone; a record whose block is gone
-(broken, blown up, edited in bulk) is dropped within half a second and what it held spills
-out. `server/containers_test.odin` covers it.
+than the reach plus two blocks away or the block is gone; the entity goes with its block
+(broken, blown up, edited in bulk: one point, `entity_lifecycle`) and what it held spills out. `server/containers_test.odin` covers it.
 
 | Command | |
 |---|---|

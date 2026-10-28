@@ -130,14 +130,6 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 	check_lines(
 		r,
 		dir,
-		fmt.tprintf("%s/%s", world, CONTAINERS_FILE),
-		3,
-		3 + game.CHEST_SLOTS,
-		true,
-	)
-	check_lines(
-		r,
-		dir,
 		fmt.tprintf("%s/%s", world, PROTECTIONS_FILE),
 		8,
 		1 << 10,
@@ -189,8 +181,9 @@ check_region :: proc(r: ^Check_Report, dir, rel, name: string) {
 		return
 	}
 	scratch := new(game.Block_Array, context.temp_allocator)
+	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
 	for {
-		_, _, _, got := game.region_next_chunk(&rr, scratch)
+		_, _, _, got := game.region_next_chunk(&rr, scratch, &entities)
 		if !got {break}
 	}
 	for pos in rr.dropped {problem(r, "%s: chunk %v is damaged", rel, pos)}

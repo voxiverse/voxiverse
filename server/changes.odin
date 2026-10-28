@@ -55,7 +55,7 @@ set_block :: proc(
 	b = game.shape_update(s.registry, b, p, query) // (a fence set by a command joins what is beside it)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
 	journal_entry(w, cause, p, old, b)
-	if old == .Chest && b != .Chest {chest_gone(w, p)}
+	entity_lifecycle(w, p, old, b, cause)
 	mark_edited(w, game.chunk_of(p))
 	ch := changes_begin(w)
 	who := int(player_id(s, by)) if by != nil else -1

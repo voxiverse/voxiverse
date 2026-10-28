@@ -171,6 +171,7 @@ edit_chunk :: proc(
 					return
 				}
 				if _, water := game.water_level(new); water {c.water = true}
+				entity_lifecycle(w, p, old, new, act)
 				append(&entries, game.Journal_Entry{pos = p, old = old, new = new})
 				changed += 1
 			}

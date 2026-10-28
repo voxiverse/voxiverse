@@ -134,13 +134,29 @@ packs_text :: proc(reg: ^game.Registry, allocator := context.temp_allocator) -> 
 	return strings.join(parts[:], ",", allocator)
 }
 
-// universe_blocks_check refuses a universe whose regions name blocks the
+// universe_blocks_check refuses a universe with a containers.cfg (from before
+// block entities), or whose regions name blocks the
 // packs no longer define (unless universe.cfg says `unknown_blocks = air`,
 // which loads them as air). Every region's header is read once, at start.
 universe_blocks_check :: proc(s: ^Server) -> bool {
-	if s.store.dir == "" || s.store.unknown_air {return true}
-	names := make([dynamic]string, context.temp_allocator)
+	if s.store.dir == "" {return true}
+	// A world with a containers.cfg is from before block entities (M48b): its
+	// chests' contents are not read any more, so it is an older build's world.
 	worlds, _ := os.read_all_directory_by_path(
+		fmt.tprintf("%s/%s", s.store.dir, WORLDS_DIR),
+		context.temp_allocator,
+	)
+	for wd in worlds {
+		if wd.type == .Directory &&
+		   os.exists(fmt.tprintf("%s/%s/%s/containers.cfg", s.store.dir, WORLDS_DIR, wd.name)) {
+			s.refusal = OLDER_BUILD
+			log.errorf("server %s world=%s (containers.cfg)", OLDER_BUILD, wd.name)
+			return false
+		}
+	}
+	if s.store.unknown_air {return true}
+	names := make([dynamic]string, context.temp_allocator)
+	worlds, _ = os.read_all_directory_by_path(
 		fmt.tprintf("%s/%s", s.store.dir, WORLDS_DIR),
 		context.temp_allocator,
 	)

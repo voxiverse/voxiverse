@@ -61,14 +61,17 @@ budget_scene :: proc(g: ^Grief) {
 				if i < len(array) {array[i] = block; i += 1}
 			}
 		}
+		held: [1]game.Block_Entity
 		if n < 100 { 	// a chest in it
 			array[game.local_index({5, 5, 5})] = .Chest
-			at := game.chunk_origin(pos) + {5, 5, 5}
-			chest: Container
+			chest := game.Block_Entity {
+				local = u16(game.local_index({5, 5, 5})),
+				kind  = .Container,
+			}
 			for &st in chest.slots {st = {planks, 3}}
-			w.containers[at] = chest
+			held = {chest}
 		}
-		chunks_insert(&w.chunks, pos, .Air, array)
+		chunks_insert(&w.chunks, pos, .Air, array, held[:] if n < 100 else nil)
 		mark_edited(w, pos)
 	}
 	for n in 0 ..< 400 {

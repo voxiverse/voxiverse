@@ -199,9 +199,14 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	if !edited {return chunks_request(&w.chunks, pos)}
 	scratch := new(game.Block_Array, context.temp_allocator)
 	r := game.reader_make(bytes, w.server.registry)
-	uniform, is_uniform := game.read_chunk_blocks(&r, scratch)
-	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch)
+	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
+	uniform, is_uniform := game.read_chunk_payload(&r, scratch, &entities)
+	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch, entities[:])
 	origin := game.chunk_origin(pos)
+	if chunk := chunks_get(&w.chunks, pos); chunk != nil {
+		entities_validate(w, chunk)
+		ledger_entities(w, chunk.block_entities[:], .Scope_In)
+	}
 	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
 	delete(bytes)
 	delete_key(&w.saved, pos)
@@ -220,9 +225,10 @@ chunk_load_saved :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 // keep_edits stores an edited chunk that is being unloaded.
 keep_edits :: proc(w: ^World, c: ^Chunk) {
 	if !c.modified {return}
+	ledger_entities(w, c.block_entities[:], .Scope_Out)
 	wr := &w.server.store.writer
 	clear(&wr.buf)
-	game.write_chunk_blocks(wr, &c.blocks)
+	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:])
 	if old, had := w.saved[c.pos]; had {delete(old)}
 	w.saved[c.pos] = transmute([]u8)strings.clone(string(wr.buf[:])) // an owned copy
 }
@@ -279,7 +285,6 @@ world_stage :: proc(w: ^World) -> bool {
 	if w.protections_dirty && !protections_write(w) {ok = false}
 	journal_maintain(w)
 	if !write_entities(w) {ok = false}
-	if !write_containers(w) {ok = false}
 	if !write_stats(w) {ok = false}
 	return ok
 }
@@ -341,9 +346,10 @@ region_ingest :: proc(
 	tops := make([dynamic]game.Saved_Top, context.temp_allocator)
 	ok = open_err == .None
 	loaded := make([dynamic]game.Chunk_Pos, context.temp_allocator)
+	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
 	wr := &w.server.store.writer
 	for ok {
-		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch)
+		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch, &entities)
 		if !got {
 			ok = r.reader.ok
 			break
@@ -353,7 +359,7 @@ region_ingest :: proc(
 			uniform = uniform,
 			array   = nil if is_uniform else scratch,
 		}
-		game.write_chunk_blocks(wr, &blocks)
+		game.write_chunk_payload(wr, &blocks, entities[:])
 		w.saved[pos] = transmute([]u8)strings.clone(string(wr.buf[:]))
 		append(&loaded, pos)
 	}

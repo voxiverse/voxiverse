@@ -10,21 +10,23 @@ import "core:slice"
 // runs). Files end in a CRC-32 of everything before it, so damage is
 // detected instead of loaded.
 //
-// Format 3 (older ones are refused: before 1.0 nothing is compatible): a header
+// Format 4 (older ones are refused: before 1.0 nothing is compatible): a header
 // that indexes the chunks, each with its own CRC-32, so that damage to one
 // chunk loses only that chunk, and names the blocks: the chunks hold block
 // numbers, the header says which block each number was (its id), so a
 // registry whose numbers moved (another pack set) still loads them.
 //
-// "VXRG", u32 format (3), i32 region x, z, varint64 generation (the save that
+// "VXRG", u32 format (4), i32 region x, z, varint64 generation (the save that
 // wrote it), varint block count b, b x string id (number = position), varint
-// chunk count n, the index (n x { i32 x, y, z, u32 offset,
+// item count i, i x { varint item number, string id } (the items the block
+// entities name), varint chunk count n, the index (n x { i32 x, y, z, u32 offset,
 // u32 length, u32 CRC-32 of the payload }, sorted by chunk_pos_less), varint
 // top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
-// the payloads (each chunk's blocks, offset counted from here).
+// the payloads (each chunk's blocks, then its block entities as
+// write_block_entities, offset counted from here).
 
 REGION_MAGIC :: "VXRG"
-REGION_FORMAT :: 3
+REGION_FORMAT :: 4
 REGION_SIZE :: 16 // chunk columns per side
 REGION_SHIFT :: 4
 
@@ -35,8 +37,9 @@ region_of :: proc(c: Chunk_Pos) -> Region_Pos {
 }
 
 Saved_Chunk :: struct {
-	pos:    Chunk_Pos,
-	blocks: ^Chunk_Blocks,
+	pos:      Chunk_Pos,
+	blocks:   ^Chunk_Blocks,
+	entities: []Block_Entity,
 }
 
 Saved_Top :: struct {
@@ -58,13 +61,13 @@ region_encode :: proc(
 	writer_init(&scratch, context.temp_allocator)
 	for c, i in chunks {
 		clear(&scratch.buf)
-		write_chunk_blocks(&scratch, c.blocks)
+		write_chunk_payload(&scratch, c.blocks, c.entities)
 		encoded[i] = {c.pos, slice.clone(scratch.buf[:], context.temp_allocator)}
 	}
 	region_encode_bytes(reg, w, region, encoded, tops, generation)
 }
 
-// Encoded_Chunk: a chunk's blocks as write_chunk_blocks wrote them.
+// Encoded_Chunk: a chunk as write_chunk_payload wrote it.
 Encoded_Chunk :: struct {
 	pos:   Chunk_Pos,
 	bytes: []u8,
@@ -102,6 +105,12 @@ region_encode_bytes :: proc(
 	write_varint64(w, generation)
 	write_varint(w, u32(reg.blocks.count))
 	for i in 0 ..< reg.blocks.count {write_string(w, state_text(reg, Block(i)))}
+	items := registry_every_item(reg)
+	write_varint(w, u32(len(items)))
+	for item in items {
+		write_varint(w, u32(item))
+		write_string(w, item_id(reg, item))
+	}
 	write_varint(w, u32(len(sorted)))
 	for c, i in sorted {
 		for v in c.pos {write_i32(w, v)}
@@ -128,6 +137,7 @@ Region_Reader :: struct {
 	index:      []Region_Index,
 	remap:      []u16, // the saved number's block number here
 	identity:   bool, // the numbers are as they were: nothing to remap
+	items:      map[u16]Item, // the saved item number's item here (temp allocator)
 	unknown:    [dynamic]string, // saved blocks this registry lacks (temp allocator)
 	next:       int,
 	payloads:   []u8,
@@ -190,6 +200,15 @@ region_open :: proc(
 			append(&r.unknown, name)
 		}
 	}
+	item_count := read_varint(&r.reader)
+	if !r.reader.ok || item_count > 0x10000 {return {}, .Damaged}
+	r.items = make(map[u16]Item, context.temp_allocator)
+	for _ in 0 ..< item_count {
+		number := read_varint(&r.reader)
+		name := read_string(&r.reader, MAX_SAVED_BLOCK_NAME)
+		if number > 0xFFFF {reader_fail(&r.reader)}
+		if item, found := item_by_name(reg, name); found {r.items[u16(number)] = item}
+	}
 	n := read_varint(&r.reader)
 	max_chunks := REGION_SIZE * REGION_SIZE * (CHUNK_MAX_Y - CHUNK_MIN_Y)
 	if !r.reader.ok || int(n) > max_chunks {return {}, .Damaged}
@@ -225,11 +244,12 @@ region_open :: proc(
 }
 
 // region_next_chunk reads the next chunk into dst (uniform chunks leave it
-// untouched). A chunk that fails its checksum or does not decode is skipped
+// untouched) and its block entities into entities (cleared first). A chunk that fails its checksum or does not decode is skipped
 // (listed in r.dropped); got is false at the end.
 region_next_chunk :: proc(
 	r: ^Region_Reader,
 	dst: ^Block_Array,
+	entities: ^[dynamic]Block_Entity,
 ) -> (
 	pos: Chunk_Pos,
 	uniform: Block,
@@ -247,7 +267,9 @@ region_next_chunk :: proc(
 		}
 		cr := reader_make(r.payloads[e.offset:][:e.length])
 		cr.block_limit = u32(len(r.remap))
-		uniform, is_uniform = read_chunk_blocks(&cr, dst)
+		cr.items, cr.reg = r.items, r.reader.reg
+		clear(entities)
+		uniform, is_uniform = read_chunk_payload(&cr, dst, entities)
 		if !reader_finish(&cr) {
 			append(&r.dropped, e.pos)
 			continue

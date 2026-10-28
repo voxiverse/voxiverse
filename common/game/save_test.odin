@@ -17,7 +17,13 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	air := Chunk_Blocks {
 		uniform = .Air,
 	}
-	chunks := []Saved_Chunk{{{-3, 0, 40}, &terrain}, {{-16, CHUNK_MIN_Y, 47}, &air}}
+	held := Block_Entity {
+		local = 17,
+		kind  = .Container,
+	}
+	held.slots[0] = {item_of_material(.Seeds), 3}
+	held.slots[24] = {item_of_material(.Seeds), 1}
+	chunks := []Saved_Chunk{{{-3, 0, 40}, &terrain, {held}}, {{-16, CHUNK_MIN_Y, 47}, &air, nil}}
 	tops := []Saved_Top{{-40, 600, 12}, {-1, 512, WORLD_MIN_Y}}
 	testing.expect_value(t, region_of({-16, 0, 47}), region)
 
@@ -30,11 +36,17 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	testing.expect_value(t, err, Region_Error.None)
 	scratch := new(Block_Array)
 	defer free(scratch)
-	pos, uniform, is_uniform, ok := region_next_chunk(&r, scratch)
+	ents := make([dynamic]Block_Entity, context.temp_allocator)
+	pos, uniform, is_uniform, ok := region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && pos == chunks[1].pos && is_uniform && uniform == .Air) // (sorted)
-	pos, uniform, is_uniform, ok = region_next_chunk(&r, scratch)
+	pos, uniform, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && pos == chunks[0].pos && !is_uniform && scratch^ == terrain.array^)
-	_, _, _, ok = region_next_chunk(&r, scratch)
+	testing.expect(
+		t,
+		len(ents) == 1 && ents[0] == held,
+		"the container did not come back as saved",
+	)
+	_, _, _, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, !ok && r.reader.ok) // the end, not damage
 	got := make([dynamic]Saved_Top, context.temp_allocator)
 	testing.expect(t, region_tops(&r, &got))
@@ -57,13 +69,13 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	r2, e2 := region_open(test_reg(), broken, region)
 	testing.expect_value(t, e2, Region_Error.None)
 	first, second := r2.index[0].pos, r2.index[1].pos
-	pos, _, _, ok = region_next_chunk(&r2, scratch)
+	pos, _, _, ok = region_next_chunk(&r2, scratch, &ents)
 	testing.expect(t, ok && pos == second)
 	testing.expect(t, len(r2.dropped) == 1 && r2.dropped[0] == first)
 	r3, _ := region_open(test_reg(), data[:len(data) - 1], region)
-	_, _, _, ok = region_next_chunk(&r3, scratch)
+	_, _, _, ok = region_next_chunk(&r3, scratch, &ents)
 	testing.expect(t, ok) // (the first chunk is whole)
-	_, _, _, ok = region_next_chunk(&r3, scratch)
+	_, _, _, ok = region_next_chunk(&r3, scratch, &ents)
 	testing.expect(t, !ok && len(r3.dropped) == 1) // (the cut one is dropped)
 	_, e := region_open(test_reg(), data, {0, 0})
 	testing.expect_value(t, e, Region_Error.Wrong_Region)
@@ -92,21 +104,22 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 		uniform = marble,
 	}
 	region := Region_Pos{0, 0}
-	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk}, {{2, 0, 2}, &solid}}
+	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk, nil}, {{2, 0, 2}, &solid, nil}}
 	w: Writer
 	writer_init(&w, context.temp_allocator)
 	region_encode(with_pack, &w, region, chunks, nil)
 
 	scratch := new(Block_Array)
 	defer free(scratch)
+	ents := make([dynamic]Block_Entity, context.temp_allocator)
 	// The same registry: every block comes back as it was, pack block included.
 	r, err := region_open(with_pack, w.buf[:], region)
 	testing.expect_value(t, err, Region_Error.None)
-	pos, _, is_uniform, ok := region_next_chunk(&r, scratch)
+	pos, _, is_uniform, ok := region_next_chunk(&r, scratch, &ents)
 	uniform: Block
 	testing.expect(t, ok && pos == chunks[0].pos && !is_uniform && scratch^ == chunk.array^)
 	testing.expect_value(t, scratch[5], marble)
-	_, uniform, is_uniform, ok = region_next_chunk(&r, scratch)
+	_, uniform, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && is_uniform && uniform == marble)
 
 	// A registry that lacks the pack: refused, naming the block...
@@ -119,9 +132,9 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 	// ...or reading it as air.
 	r, err = region_open(base, w.buf[:], region, unknown_air = true)
 	testing.expect_value(t, err, Region_Error.None)
-	_, _, is_uniform, ok = region_next_chunk(&r, scratch)
+	_, _, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && !is_uniform && scratch[5] == .Air)
-	_, uniform, is_uniform, ok = region_next_chunk(&r, scratch)
+	_, uniform, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && is_uniform && uniform == .Air)
 
 	// Numbers that moved: a pack ahead of the first makes marble another number.
@@ -138,7 +151,7 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, marble2 != marble)
 	r, err = region_open(moved, w.buf[:], region)
 	testing.expect_value(t, err, Region_Error.None)
-	_, _, is_uniform, ok = region_next_chunk(&r, scratch)
+	_, _, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && !is_uniform && scratch[5] == marble2)
 	chunk_release(&chunk, &arrays)
 }

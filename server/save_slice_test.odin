@@ -162,7 +162,10 @@ test_sliced_save_is_the_capture_tick :: proc(t: ^testing.T) {
 	cmd(g2, "give @s planks 5")
 	cmd(g2, "clear @s stone")
 	chest := at(g2, -3, 0, 2)
-	if rec, held := &w.containers[chest]; held {rec.slots[0] = {}}
+	if e := block_entity_at(w, chest); e != nil {
+		block_entity_touch(w, chest)
+		e.slots[0] = {}
+	}
 	far_edit(g2, 0, 700) // (the area around the player is left and unloaded: copies and bytes)
 	run(g2, 100)
 	testing.expect(

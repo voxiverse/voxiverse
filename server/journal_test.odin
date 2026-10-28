@@ -257,6 +257,9 @@ test_grief_rolled_back :: proc(t: ^testing.T) {
 	grief_build(g)
 	w := grief_world(g)
 	g.h0 = world_hash_here(g)
+	filled: [game.CHEST_SLOTS]game.Stack
+	if e := block_entity_at(w, at(g, -3, 0, 2)); e != nil {filled = e.slots}
+	testing.expect(t, !game.stack_empty(filled[0]), "the chest was not filled")
 	grief_do(g)
 	testing.expect(t, world_hash_here(g) != g.h0, "the grief changed nothing")
 	hows := journal_hows(w)
@@ -270,8 +273,10 @@ test_grief_rolled_back :: proc(t: ^testing.T) {
 	testing.expect_value(t, r.missing, 0)
 	testing.expect_value(t, world_hash_here(g), g.h0)
 	chest := at(g, -3, 0, 2)
-	rec, held := w.containers[chest]
-	if held {for st in rec.slots {testing.expect(t, game.stack_empty(st), "the restored chest holds items")}}
+	e := block_entity_at(w, chest)
+	if testing.expect(t, e != nil, "the restored chest has no entity") {
+		testing.expect(t, e.slots == filled, "the restored chest lacks its contents")
+	}
 	testing.expect_value(t, len(audit(grief_srv(g))), 0)
 }
 

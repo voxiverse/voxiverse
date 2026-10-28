@@ -86,6 +86,7 @@ Reader :: struct {
 	ok:          bool,
 	reg:         ^Registry, // what block and item numbers must be known to (nil: none are)
 	block_limit: u32, // else: block numbers below this are valid (a region's own table)
+	items:       map[u16]Item, // else: the saved item numbers a region's own table maps (block entities)
 }
 
 reader_make :: proc(data: []u8, reg: ^Registry = nil) -> Reader {

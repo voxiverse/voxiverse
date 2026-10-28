@@ -87,6 +87,10 @@ Journal :: struct {
 	declared:     map[u64]struct{}, // actors (bit 62) and actions declared in this segment
 	last_tick:    u64, // the age of the last Tick record encoded (+1; 0: none in this segment)
 	last_flush:   u64, // the server tick of the last write
+	// What removed block entities held, by the entry that removed them (not
+	// saved: rollback after a restart restores such a block with an empty entity):
+	entities:     map[Entity_Undo_Key][]u8, // (heap)
+	entity_order: [dynamic]Entity_Undo_Key,
 	// Tests:
 	cost_cycles:  u64, // Config.journal_timed: cycles spent in the journal
 	report:       Rollback_Report, // the newest rollback's
@@ -152,6 +156,7 @@ journal_close :: proc(w: ^World) {
 	}
 	delete(j.undo)
 	delete(j.pending)
+	journal_entities_free(j)
 	delete(j.declared)
 	game.writer_destroy(&j.out)
 	j^ = {}

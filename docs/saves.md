@@ -7,8 +7,8 @@ universe.cfg            format, seed, home world, kit, generation, age
 save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<name>.json
-worlds/<address>/world.cfg, entities.cfg, containers.cfg, protections.cfg
-worlds/<address>/regions/r.<x>.<z>.vxr      region format 2
+worlds/<address>/world.cfg, entities.cfg, protections.cfg
+worlds/<address>/regions/r.<x>.<z>.vxr      region format 4
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
 lock                                          held while the universe is open (never part of a save)
@@ -108,7 +108,7 @@ OS drops a lock with its process, so a crash leaves none.
 
 ## Formats
 
-`SAVE_FORMAT` (6) is in `universe.cfg` and each `world.cfg`. Region format 3 has a header
+`SAVE_FORMAT` (6) is in `universe.cfg` and each `world.cfg`. Region format 4 (block entities after each chunk's blocks, a table of item ids after the blocks') has a header
 with the names of the blocks (every block of the registry, by its number: the ids), an
 index (position, offset, length and CRC per chunk) and a CRC of the header: a bad chunk
 drops only itself; a bad header moves the file aside and loads the region from the

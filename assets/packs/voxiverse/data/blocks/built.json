@@ -33,6 +33,7 @@
 			"top": "voxiverse:chest_top",
 			"bottom": "voxiverse:chest_top"
 		},
-		"sound": "voxiverse:wood"
+		"sound": "voxiverse:wood",
+		"entity": {"kind": "container", "slots": 25}
 	}
 }

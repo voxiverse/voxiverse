@@ -1,11 +1,11 @@
 bandwidth 1
 scenario session ticks=6500 root=eb6a7499836416ad
-server_to_client 1411005
-client_to_server 119316
+server_to_client 1411095
+client_to_server 120756
 inputs 6505
 kind c:hello 1 57
 kind c:input 6505 116964
-kind c:edit 90 2070
+kind c:edit 90 3510
 kind c:command 6 138
 kind c:fire 1 13
 kind c:proof 1 65
@@ -13,7 +13,7 @@ kind c:use_entity 1 9
 kind s:welcome 1 139
 kind s:chunk 397 147953
 kind s:unload 25 325
-kind s:edit_result 90 1800
+kind s:edit_result 90 1890
 kind s:column 72 19080
 kind s:bulk 3 9
 kind s:challenge 1 33

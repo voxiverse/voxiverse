@@ -2,6 +2,7 @@ package server
 
 import "base:runtime"
 import "core:mem"
+import "core:slice"
 import "core:time"
 
 import "../base"
@@ -25,12 +26,13 @@ Chunk_State :: enum u8 {
 }
 
 Chunk :: struct {
-	pos:      game.Chunk_Pos,
-	state:    Chunk_State,
-	blocks:   game.Chunk_Blocks,
-	modified: bool, // edited since generated (saved when unloaded: save.odin)
-	water:    bool, // may hold water (set when it does, never cleared): liquids skip it if not
-	capture:  u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
+	pos:            game.Chunk_Pos,
+	state:          Chunk_State,
+	blocks:         game.Chunk_Blocks,
+	modified:       bool, // edited since generated (saved when unloaded: save.odin)
+	water:          bool, // may hold water (set when it does, never cleared): liquids skip it if not
+	capture:        u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
+	block_entities: [dynamic]game.Block_Entity, // sorted by local (block_entities.odin; heap)
 }
 
 Chunk_Store :: struct {
@@ -55,7 +57,13 @@ Chunk_Store :: struct {
 // copied here.
 Cow :: struct {
 	id:     u32,
-	copies: map[game.Chunk_Pos]game.Chunk_Blocks, // arrays owned (heap)
+	copies: map[game.Chunk_Pos]Cow_Copy, // arrays owned (heap)
+}
+
+// Cow_Copy: a chunk as it was at the capture.
+Cow_Copy :: struct {
+	blocks:   game.Chunk_Blocks,
+	entities: []game.Block_Entity, // (heap)
 }
 
 // chunk_cow copies c's blocks for the running save, if c is still marked for it.
@@ -69,7 +77,7 @@ chunk_cow :: proc(w: ^Chunk_Store, c: ^Chunk) {
 		a^ = c.blocks.array^
 		copy_blocks.array = a
 	}
-	w.cow.copies[c.pos] = copy_blocks
+	w.cow.copies[c.pos] = {copy_blocks, slice.clone(c.block_entities[:], runtime.heap_allocator())}
 }
 
 // Jobs queued per worker: enough that results collected once a tick keep the
@@ -136,6 +144,8 @@ chunks_destroy :: proc(w: ^Chunk_Store) {
 	base.jobs_destroy(&w.jobs)
 	base.queue_destroy(&w.done)
 	game.block_arrays_destroy(&w.arrays)
+	it: base.Pool_Iterator
+	for c in base.pool_next(&w.chunks, &it) {delete(c.block_entities)}
 	delete(w.tops_done)
 	w^ = {}
 }
@@ -214,6 +224,7 @@ chunks_insert :: proc(
 	pos: game.Chunk_Pos,
 	uniform: game.Block,
 	array: ^game.Block_Array,
+	entities: []game.Block_Entity = nil,
 ) -> ^Chunk {
 	assert(pos not_in w.by_pos)
 	handle, chunk, ok := base.pool_add(
@@ -233,6 +244,10 @@ chunks_insert :: proc(
 		}
 	}
 	chunk.water = has_water(&chunk.blocks)
+	if len(entities) > 0 {
+		chunk.block_entities = make([dynamic]game.Block_Entity, runtime.heap_allocator())
+		append(&chunk.block_entities, ..entities)
+	}
 	w.by_pos[pos] = handle
 	return chunk
 }
@@ -285,6 +300,7 @@ chunks_unload :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) {
 	assert(chunk.state == .Ready)
 	chunk_cow(w, chunk)
 	game.chunk_release(&chunk.blocks, &w.arrays)
+	delete(chunk.block_entities)
 	delete_key(&w.by_pos, pos)
 	base.pool_remove(&w.chunks, h)
 }

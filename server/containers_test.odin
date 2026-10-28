@@ -77,7 +77,7 @@ record_at :: proc(srv: ^Server, pos: game.Block_Pos) -> Block_Data {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
-			if rec, ok := w.containers[d.pos]; ok {d.slots, d.has = rec.slots, true}
+			if e := block_entity_at(w, d.pos); e != nil {d.slots, d.has = e.slots, true}
 			for e in w.entities.list {
 				if e.kind == .Item {d.items += e.stack.count}
 			}
@@ -215,9 +215,10 @@ test_two_players_one_chest :: proc(t: ^testing.T) {
 	)
 }
 
-// A record whose block is not there is dropped, what it held spilling out.
+// A chest blown up (a bulk edit, no set_block) loses its entity at once, at the
+// pipeline, what it held spilling out: no sweep is needed.
 @(test)
-test_record_without_block_dropped :: proc(t: ^testing.T) {
+test_explosion_removes_the_entity :: proc(t: ^testing.T) {
 	srv: Server
 	if !testing.expect(t, start(&srv, config(""), {})) {return}
 	defer stop(&srv)
@@ -227,17 +228,26 @@ test_record_without_block_dropped :: proc(t: ^testing.T) {
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
 	pos := beside(&srv, "a")
+	put_block(&srv, pos, .Chest)
 	d := Block_Data {
 		pos = pos,
 	}
-	call(&srv, proc(s: ^Server, data: rawptr) {
+	made := record_at(&srv, pos)
+	testing.expect(t, made.has, "placing the chest made no entity")
+	call(
+		&srv,
+		proc(s: ^Server, data: rawptr) {
 			d := (^Block_Data)(data)
-			rec := Container{}
-			rec.slots[3] = {game.item_of_block(test_reg(), .Planks), 5}
-			s.worlds[0].containers[d.pos] = rec
-		}, &d)
-	pause(t, {&a}, 0.6)
+			w := s.worlds[0]
+			block_entity_at(w, d.pos).slots[3] = {game.item_of_block(test_reg(), .Planks), 5}
+			p := d.pos
+			bulk_edit(w, Bulk_Edit{shape = Box{p, p}, op = .Carve}, world_act(w, .Explosion))
+			d.has = block_entity_at(w, d.pos) != nil // (in the same call: no tick, no sweep)
+		},
+		&d,
+	)
+	testing.expect(t, !d.has, "the entity outlived its block")
+	pause(t, {&a}, 0.3)
 	rec := record_at(&srv, pos)
-	testing.expect(t, !rec.has, "a record without a chest stayed")
 	testing.expect_value(t, rec.items, 5)
 }

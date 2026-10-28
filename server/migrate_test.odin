@@ -22,8 +22,9 @@ fixture_expect :: proc(g: ^Grief) -> string {
 		fmt.sbprintfln(&b, "inventory %d %s %d", i, game.item_name(test_reg(), st.item), st.count)
 	}
 	w := grief_world(g)
-	for pos, rec in w.containers {
-		for st, i in rec.slots {
+	for at in block_entities_all(w) {
+		pos := at.pos
+		for st, i in at.e.slots {
 			if game.stack_empty(st) {continue}
 			fmt.sbprintfln(
 				&b,
@@ -176,4 +177,37 @@ test_older_save_is_refused :: proc(t: ^testing.T) {
 		data, _ := os.read_entire_file_from_path(path, context.temp_allocator)
 		testing.expect_value(t, string(data), case_.text)
 	}
+}
+
+// A world with a containers.cfg (the chests' contents before block entities)
+// is an older build's: refused, not read.
+@(test)
+test_containers_cfg_world_is_refused :: proc(t: ^testing.T) {
+	dir := "build/test_containers_cfg"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := Config {
+		seed        = 7,
+		view_radius = 2,
+		view_height = 1,
+		workers     = 1,
+		stepped     = true,
+		save_dir    = dir,
+	}
+	{
+		srv: Server
+		if !testing.expect(t, start(&srv, config, {})) {return}
+		stop(&srv)
+	}
+	worlds, _ := os.read_all_directory_by_path(
+		fmt.tprintf("%s/%s", dir, WORLDS_DIR),
+		context.temp_allocator,
+	)
+	testing.expect(t, len(worlds) == 1)
+	path := fmt.tprintf("%s/%s/%s/containers.cfg", dir, WORLDS_DIR, worlds[0].name)
+	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("1 2 3\n")) == nil)
+	srv: Server
+	context.logger = log.nil_logger()
+	testing.expect(t, !start(&srv, config, {}), "a world with a containers.cfg was opened")
+	testing.expect_value(t, srv.refusal, OLDER_BUILD)
 }

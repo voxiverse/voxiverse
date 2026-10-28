@@ -42,7 +42,6 @@ World :: struct {
 	idle_since:        u64, // the last tick someone was in it
 	touched:           [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
 	gates:             [dynamic]Gate, // active: dialing or open (gates.odin)
-	containers:        map[game.Block_Pos]Container, // chests' contents, by position (containers.odin; heap)
 	tops_pending:      map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 	journal:           Journal, // who changed which block (journal.odin)
 	journal_resume:    Journal_Resume, // where its world.cfg says the journal ends
@@ -97,7 +96,6 @@ world_start :: proc(w: ^World) -> bool {
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
-	load_containers(w)
 	load_stats(w)
 	ledger_world_scope(w, .Scope_In)
 	return true
@@ -118,7 +116,6 @@ world_close :: proc(w: ^World) {
 	delete(w.tops)
 	delete(w.gates)
 	delete(w.touched)
-	delete(w.containers)
 	delete(w.tops_pending)
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)

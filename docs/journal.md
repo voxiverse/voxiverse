@@ -34,7 +34,7 @@ Consequences inherit their cause, so rolling back a griefer also restores the wa
 released, and rolling back someone else's change next to water they woke leaves that water
 (it is theirs: reported as `kept`).
 
-Entities, container contents and inventories are not journaled (M48, M50, M31's ledger);
+Entities and inventories are not journaled (M50, M31's ledger); a block entity's value is kept with the entry that removed it, in memory only (M48b, `server/block_entities.odin`: a rollback puts a broken chest back with what it held, taking its spilled stacks back from the ground; M48c saves the values);
 rules, the clock and generator parameters get marker records only (`Params`).
 
 ## Time
