@@ -8,6 +8,7 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
+import "../base"
 import "../common/game"
 
 // What is kept about each character: their own file in the universe,
@@ -31,6 +32,7 @@ Player_Record :: struct {
 	world:     Maybe(game.Address), // where they are (none: the home world)
 	state:     game.Player_State,
 	look:      [2]f32, // yaw, pitch
+	mode:      base.Var_Text, // their game mode's id ("": none yet: the world's default)
 	inventory: game.Inventory,
 	dirty:     bool, // changed since its file was written
 	stats:     Counters, // its counters (heap; stats.odin)
@@ -49,6 +51,7 @@ Player_File :: struct {
 	look:     [2]f32,
 	flying:   bool,
 	selected: int,
+	mode:     string, // their game mode's id (absent in a file from before modes)
 	items:    []File_Stack,
 }
 
@@ -169,6 +172,7 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 	if f.world != "" {
 		if a, valid := game.address_parse(f.world, {}); valid {r.world = a}
 	}
+	base.var_text_set(&r.mode, f.mode) // (too long: none)
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
 	r.stats = stats
 	late := make([dynamic]game.Stack, context.temp_allocator)
@@ -236,6 +240,7 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 		look     = r.look,
 		flying   = r.state.flying,
 		selected = r.inventory.selected,
+		mode     = base.var_text(&r.mode),
 		items    = items[:],
 	}
 	data, _ := json.marshal(
@@ -309,6 +314,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		state     = c.player,
 		look      = c.look,
 		inventory = c.inventory,
+		mode      = mode_record_text(s, c),
 		dirty     = true,
 		stats     = counters_clone(c.stats),
 	}

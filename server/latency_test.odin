@@ -21,6 +21,7 @@ Run_Result :: struct {
 	judged:       int,
 	skipped:      int,
 	velocity:     int, // ... of them in the velocity
+	flying:       bool,
 }
 
 @(private = "file")
@@ -159,6 +160,7 @@ run_script :: proc(
 	ticks := 150,
 	still_ticks := 0, // then standing still, no edits, still checking: a quiet stretch where checks are always judged
 	nudge := false, // the client puts one ulp into its predicted velocity.x after every prediction
+	fly := false, // the character is in a mode with `fly`, takes off and flies (no edits)
 ) -> (
 	result: Run_Result,
 	ok: bool,
@@ -187,6 +189,12 @@ run_script :: proc(
 	defer delete(c.chunks)
 	defer delete(c.results)
 
+	mods := game.MODS_NONE
+	if fly {
+		inv: game.Inventory
+		m, _ := game.mode_find(srv.registry, "creative")
+		mods = game.derive_character(srv.registry, m, &inv)
+	}
 	c.key = test_key("latency_test")
 	send(&c, test_hello("latency_test"))
 	// Each phase gets its own budget: the script alone is `ticks` sleeps long,
@@ -222,7 +230,9 @@ run_script :: proc(
 	for tick in 0 ..< ticks + still_ticks {
 		pump(t, &c)
 		in_ := script_input(tick) if tick < ticks else game.Player_Input{pitch = -0.7}
-		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c))
+		if fly && tick == 10 {in_.buttons += {.Toggle_Fly}}
+		if fly && tick > 10 && tick < ticks {in_.buttons += {.Jump}}
+		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c), mods)
 		msg.snapshot = c.rx.rx.ack
 		if nudge {
 			v := &c.prediction.state.velocity.x
@@ -231,7 +241,7 @@ run_script :: proc(
 		send(&c, msg)
 		check(&c, msg.sequence)
 		for edit_tick, i in EDIT_TICKS {
-			if tick != edit_tick {continue}
+			if tick != edit_tick || fly {continue}
 			f := [3]f64 {
 				-math.sin(f64(in_.yaw)) * math.cos(f64(in_.pitch)),
 				math.sin(f64(in_.pitch)),
@@ -261,14 +271,15 @@ run_script :: proc(
 	// Everything acknowledged and answered.
 	deadline = time.tick_add(time.tick_now(), PHASE_BUDGET)
 	last := c.prediction.next_sequence - 1
-	for c.last_update.acked != last || len(c.results) < 3 || c.prediction.count > 0 {
+	for c.last_update.acked != last || (len(c.results) < 3 && !fly) || c.prediction.count > 0 {
 		pump(t, &c)
 		tick_wait()
 		if time.tick_diff(time.tick_now(), deadline) < 0 {return}
 	}
 	result.server_state = c.last_update.state
 	result.predicted = c.prediction.state
-	for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}
+	if !fly {for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}}
+	result.flying = c.prediction.state.flying
 	result.corrections = c.prediction.corrections - corrections_before
 	result.desyncs, result.judged, result.skipped =
 		srv.desyncs, srv.checks_judged, srv.checks_skipped
@@ -322,6 +333,18 @@ test_no_desync_with_latency :: proc(t: ^testing.T) {
 }
 
 // A client whose prediction is one ulp off is told so, by field.
+// Flight is predicted: the client flies the same ticks the server does, with
+// latency and no corrections (both ask derive_character for `fly`).
+@(test)
+test_fly_predicted_with_latency :: proc(t: ^testing.T) {
+	r, ok := run_script(t, 200, 60, fly = true)
+	if !testing.expect(t, ok, "the run did not finish") {return}
+	testing.expect(t, r.flying && r.server_state.flying, "both sides are flying")
+	testing.expect(t, r.predicted == r.server_state, "prediction ended away from the server")
+	testing.expect_value(t, r.corrections, 0)
+	testing.expect_value(t, r.desyncs, 0)
+}
+
 @(test)
 test_desync_caught :: proc(t: ^testing.T) {
 	r, ok := run_script(t, 200, 60, ticks = 450, still_ticks = QUIET_STRETCH, nudge = true)

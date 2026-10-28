@@ -202,7 +202,7 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 		}
 		record(s, c, .Item_Used, "wheat")
 		if !lamb {record(s, c, .Sheep_Fed)}
-		if !allowed(s, c, "items.infinite") {
+		if !has_ability(s, c, .Infinite_Items) {
 			ledger(s, w, .Use, held.item, -1)
 			c.inventory.slots[c.inventory.selected].count -= 1
 			game.inventory_tidy(&c.inventory)

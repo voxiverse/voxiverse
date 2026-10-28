@@ -63,7 +63,7 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	testing.expect_value(t, names, [3]string{"Newest", "Middle", "Oldest"})
 	newest := app.universes.entries[0]
 	testing.expect_value(t, newest.seed, 42)
-	testing.expect_value(t, newest.mode, game.Game_Mode.Survival)
+	testing.expect_value(t, newest.mode, "survival")
 	testing.expect(t, newest.stars[0].home, "the thumbnail's home star")
 	galaxy: [THUMB_STARS]game.Star
 	game.galaxy_stars(game.seed_glyphs(42), galaxy[:])

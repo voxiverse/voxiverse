@@ -21,7 +21,7 @@ Admin_Command :: struct {
 	usage: string, // its arguments
 	args:  [2]int, // how many: at least, at most
 	run:   proc(s: ^Server, c: ^Client, args: []string) -> bool, // false: bad arguments
-	node:  string, // the permission it needs
+	node:  string, // the permission it needs ("": none to run it; the command checks its own)
 }
 
 @(private = "file", rodata)
@@ -154,7 +154,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	// Worlds (client/screen_universes.odin).
 	{"travel", "<address> [character]", {1, 3}, admin_travel, "world.travel"},
 	{"address", "", {0, 0}, admin_address, "info.address"},
-	{"gamemode", "[creative|survival]", {0, 1}, admin_gamemode, "world.rules"},
+	{"gamemode", "[mode] [player]", {0, 2}, admin_gamemode, ""},
 	{"worlds", "", {0, 0}, admin_worlds, "info.worlds"},
 	{"setworldspawn", "[x y z]", {0, 3}, admin_setworldspawn, "world.spawn"},
 	{"regen", "[radius in chunks, 1..8]", {0, 1}, admin_regen, "world.gen"},
@@ -196,7 +196,7 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 	for &cmd in ADMIN_COMMANDS {
 		if cmd.name != f[0] {continue}
 		args := expand_relative(c, f[1:])
-		if !allowed(s, c, cmd.node) {
+		if cmd.node != "" && !allowed(s, c, cmd.node) {
 			notice(s, c, fmt.tprintf("You may not use %s here (%s)", cmd.name, cmd.node))
 			return
 		}
@@ -225,7 +225,7 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 commands_allowed :: proc(s: ^Server, c: ^Client) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	for &cmd in ADMIN_COMMANDS {
-		if !allowed(s, c, cmd.node) {continue}
+		if cmd.node != "" && !allowed(s, c, cmd.node) {continue}
 		if strings.builder_len(b) > 0 {strings.write_byte(&b, ' ')}
 		strings.write_string(&b, cmd.name)
 	}

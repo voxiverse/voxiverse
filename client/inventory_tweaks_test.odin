@@ -29,8 +29,8 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.s.endpoint = {&f.pipe, .Client}
 	game.writer_init(&f.s.writer)
 	f.s.state = .Playing
-	if catalog {append(&f.s.grants, game.Grant{pattern = "items.catalog", allow = true})}
 	f.s.reg = test_reg()
+	test_mode(f.s, "creative" if catalog else "survival")
 	f.app.session = f.s
 	f.app.screen = .Game
 	f.app.input.pressed = {.Tab}
@@ -243,11 +243,11 @@ test_pick_block :: proc(t: ^testing.T) {
 	testing.expect(t, session_pick(f.s) && inv.slots[4] == {stone, 64})
 	testing.expect_value(t, game.inventory_count(inv, dirt), 10)
 	// Without items.catalog: only what the hotbar holds.
-	clear(&f.s.grants)
+	test_mode(f.s, "survival")
 	inv^ = {}
 	testing.expect(t, !session_pick(f.s))
 	// A block with no item (bedrock) picks nothing.
-	append(&f.s.grants, game.Grant{pattern = "items.catalog", allow = true})
+	test_mode(f.s, "creative")
 	testing.expect(t, world_set_block(&f.s.world, {1, 1, 1}, .Bedrock))
 	testing.expect(t, !session_pick(f.s))
 	free_all(context.temp_allocator)
@@ -319,8 +319,8 @@ test_creative_tab :: proc(t: ^testing.T) {
 	overlay_frame(&f, {mouse = slot, mouse_released = {.Left}})
 	testing.expect_value(t, inv.slots[4], game.Stack{first, 64})
 
-	// Without items.catalog there is no Creative tab to be on.
-	clear(&f.s.grants)
+	// Without the catalog ability there is no Creative tab to be on.
+	test_mode(f.s, "survival")
 	overlay_frame(&f, {})
 	testing.expect_value(t, v.tab, Inventory_Tab.Inventory)
 }

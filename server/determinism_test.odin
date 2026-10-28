@@ -206,6 +206,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		case .Entity:
 			if g.op == .Create {append(&m.entities, u32(g.key.a))}
 		case .Health,
+		     .Mode,
 		     .Inventory,
 		     .Clock,
 		     .Grants,

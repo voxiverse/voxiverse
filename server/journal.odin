@@ -313,7 +313,7 @@ journal_append :: proc(w: ^World, act: Act, entries: []game.Journal_Entry) {
 undo_push :: proc(j: ^Journal, a: ^Live_Action) {
 	if a.actor == 0 {return}
 	switch a.system {
-	case .Undo, .Redo, .Rollback:
+	case .Undo, .Redo, .Rollback, .Setting:
 		return
 	case .Hand,
 	     .Till,
@@ -572,6 +572,20 @@ journal_note :: proc(w: ^World, rec: game.Journal_Record) {
 	j := &w.journal
 	if len(j.out.buf) == 0 {j.out_age = age_of(w.server)}
 	game.journal_write_record(&j.out, rec)
+}
+
+// journal_setting records that actor changed a setting (a rule, a player's game
+// mode): an action of its own with no blocks, its command text saying what, so
+// the journal answers who changed it.
+journal_setting :: proc(w: ^World, actor: Actor, text: string) -> Action_Id {
+	id := action_begin(w, actor, .Setting, text)
+	if w.dir != "" {
+		journal_encode(w)
+		j := &w.journal
+		if len(j.out.buf) == 0 {j.out_age = age_of(w.server)}
+		declare_action(w, u32(id))
+	}
+	return id
 }
 
 // journal_flush writes the encoded records to the open segment (begun if

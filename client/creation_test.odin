@@ -32,17 +32,17 @@ test_roll_keeps_name_and_mode :: proc(t: ^testing.T) {
 	app := creation_app(t)
 	defer creation_free(app)
 	c := &app.creation
-	testing.expect_value(t, c.mode, game.Game_Mode.Creative) // the default
+	testing.expect_value(t, c.mode, "creative") // the default
 	clear(&c.name)
 	append(&c.name, "Mine")
-	c.mode = .Survival
+	c.mode = "survival"
 	before := c.seed
 	stars_before := c.stars[1]
 	creation_roll(c, 12345)
 	testing.expect(t, c.seed != before, "a new seed")
 	testing.expect(t, c.stars[1] != stars_before, "the galaxy redrawn")
 	testing.expect_value(t, string(c.name[:]), "Mine")
-	testing.expect_value(t, c.mode, game.Game_Mode.Survival)
+	testing.expect_value(t, c.mode, "survival")
 	testing.expect_value(t, c.settle, 0) // the stars re-settle ...
 	free_all(context.temp_allocator)
 	// ... over 0.4 s (and at once with Reduce motion).
@@ -127,17 +127,17 @@ test_universe_plan :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	saves_override = dir
 	defer saves_override = ""
-	plan := universe_plan("My World", 42, .Survival)
+	plan := universe_plan("My World", 42, "survival")
 	testing.expect_value(t, plan.seed, 42)
-	testing.expect_value(t, plan.mode, game.Game_Mode.Survival)
+	testing.expect_value(t, plan.mode, "survival")
 	testing.expect(t, strings.has_suffix(plan.path, "My World"))
 	os.make_directory_all(plan.path)
-	again := universe_plan("My World", 43, .Creative)
+	again := universe_plan("My World", 43, "creative")
 	testing.expect(t, strings.has_suffix(again.path, "My World (2)"), "a free variant")
 	testing.expect(
 		t,
-		strings.has_suffix(universe_plan("///", 1, .Creative).path, "New Universe") ||
-		strings.contains(universe_plan("///", 1, .Creative).path, "___"),
+		strings.has_suffix(universe_plan("///", 1, "creative").path, "New Universe") ||
+		strings.contains(universe_plan("///", 1, "creative").path, "___"),
 	)
 	free_all(context.temp_allocator)
 }

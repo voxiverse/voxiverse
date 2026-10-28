@@ -42,7 +42,7 @@ Config :: struct {
 	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
 	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
 	seed:                  i64,
-	mode:                  game.Game_Mode, // a new universe's (a saved one keeps its own: universe.cfg)
+	mode:                  string, // a new universe's default game mode, by id ("": creative; a saved one keeps its own: universe.cfg)
 	mode_changed:          bool, // /gamemode changed it since the universe was made (saved)
 	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
 	view_radius:           i32, // chunks, horizontally
@@ -621,7 +621,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 	case game.Teleport:
 		node = "teleport.tp"
 	case game.Set_Rule:
-		node = "world.gen" if strings.has_prefix(v.name, "worldgen.") else "world.rules"
+		node = "world.gen" if strings.has_prefix(v.name, "worldgen.") else NODE_RULE
 	case game.Fire:
 		node = "world.fire"
 	case game.Edit:
@@ -700,21 +700,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			set_worldgen(s, c, v.name, v.value)
 			return
 		}
-		switch err := base.var_set(game.rules_table(), &w.rules, v.name, v.value); err {
-		case .None, .Out_Of_Range:
-			if err ==
-			   .Out_Of_Range {log.warnf("server rule clamped name=%q value=%q", v.name, v.value)}
-			log.infof(
-				"server rule changed name=%s value=%s by=%s",
-				v.name,
-				v.value,
-				client_name(c),
-			)
-			clock_resend(s, w)
-			disturb_world(s, w)
-		case .Unknown_Name, .Bad_Value:
-			log.warnf("server rule not changed name=%q value=%q problem=%v", v.name, v.value, err)
-		}
+		rule_set(s, c, w, v.name, v.value)
 	case game.Ping:
 		send_message(s, c, game.Pong{v.id})
 	case game.Command:

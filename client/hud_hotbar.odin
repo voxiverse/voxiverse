@@ -32,7 +32,7 @@ HEART := [6]string{".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X.
 // health_bar: a heart for every two health points, over the hotbar's left
 // end: full, half or empty.
 health_bar :: proc(ctx: ^ui.Context, s: ^Session) {
-	if s.max_health <= 0 || !s.rules.damage {return}
+	if s.max_health <= 0 || !session_ability(s, .Health) {return}
 	t := &ctx.theme
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)

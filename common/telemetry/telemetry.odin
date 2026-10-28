@@ -53,6 +53,7 @@ Kind :: enum u16 {
 	Item_Created, // text: item; n0: count; n1: the reason (server/ledger.odin)
 	Item_Destroyed, // text: item; n0: count; n1: the reason
 	Audit_Failed, // text: item; n0: held; n1: the ledger says; n2: difference
+	Mode_Changed, // text: the new game mode; n0: 1 when a command did it (the journal says who)
 }
 
 Kind_Info :: struct {
@@ -135,6 +136,12 @@ KIND_INFO := [Kind]Kind_Info {
 		name = "audit_failed",
 		text_name = "item",
 		n_names = {"held", "expected", "difference"},
+	},
+	.Mode_Changed = {
+		name = "mode_changed",
+		text_name = "mode",
+		n_names = {"command", "", ""},
+		counter = "mode_changes",
 	},
 	.Client_Perf = {name = "client_perf", n_names = {"p50_us", "p99_us", "frames"}, client = true},
 }

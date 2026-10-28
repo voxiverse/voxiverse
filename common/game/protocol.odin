@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 31
+PROTOCOL_VERSION :: 32
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -1268,7 +1268,13 @@ read_player_state :: proc(r: ^Reader) -> (s: Player_State) {
 @(private)
 write_vars :: proc(w: ^Writer, t: base.Var_Table, data: rawptr) {
 	for &v in t.vars {
-		kind, _ := base.var_kind(t, &v)
+		kind, offset := base.var_kind(t, &v)
+		if kind == .Text {
+			text := base.var_text((^base.Var_Text)(uintptr(data) + offset))
+			write_u8(w, u8(len(text)))
+			for c in transmute([]u8)text {write_u8(w, c)}
+			continue
+		}
 		value := base.var_get_f64(t, data, &v)
 		switch kind {
 		case .Bool:
@@ -1286,7 +1292,17 @@ write_vars :: proc(w: ^Writer, t: base.Var_Table, data: rawptr) {
 @(private)
 read_vars :: proc(r: ^Reader, t: base.Var_Table, data: rawptr) {
 	for &v in t.vars {
-		kind, _ := base.var_kind(t, &v)
+		kind, offset := base.var_kind(t, &v)
+		if kind == .Text {
+			n := int(read_u8(r))
+			buf: [base.VAR_TEXT_MAX]u8
+			if n > len(buf) {reader_fail(r)}
+			if !r.ok {return}
+			for i in 0 ..< n {buf[i] = read_u8(r)}
+			if !r.ok {return}
+			base.var_text_set((^base.Var_Text)(uintptr(data) + offset), string(buf[:n]))
+			continue
+		}
 		value: f64
 		switch kind {
 		case .Bool:

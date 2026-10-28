@@ -96,7 +96,7 @@ player_step :: proc(
 	dt: f32,
 	mods := MODS_NONE,
 ) {
-	if !rules.allow_flying {
+	if !rules.allow_flying || .Fly not_in mods.abilities {
 		s.flying = false
 	} else if .Toggle_Fly in input.buttons {
 		s.flying = !s.flying

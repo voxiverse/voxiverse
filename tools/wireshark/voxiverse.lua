@@ -58,7 +58,10 @@ local SCHEMA = {
     { name = "health", t = "f32" },
     { name = "max", t = "f32" },
   } },
-  { id = 2, name = "inventory", key = "none", lane = "reliable", fields = {
+  { id = 2, name = "mode", key = "none", lane = "reliable", fields = {
+    { name = "mode", t = "string", max = 64 },
+  } },
+  { id = 3, name = "inventory", key = "none", lane = "reliable", fields = {
     { name = "acked", t = "u32" },
     { name = "inventory.slots", t = "array", scalar = false, count = 30, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
     { name = "inventory.equipment", t = "array", scalar = false, count = 5, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
@@ -68,7 +71,7 @@ local SCHEMA = {
     { name = "inventory.chest", t = "array", scalar = false, count = 25, elem = { t = "struct", fields = { { name = "item", t = "u16" }, { name = "count", t = "i64" }, } } },
     { name = "inventory.chest_open", t = "bool" },
   } },
-  { id = 3, name = "rules", key = "none", lane = "reliable", fields = {
+  { id = 4, name = "rules", key = "none", lane = "reliable", fields = {
     { name = "gravity", t = "f32" },
     { name = "terminal_velocity", t = "f32" },
     { name = "walk_speed", t = "f32" },
@@ -84,78 +87,83 @@ local SCHEMA = {
     { name = "day_length", t = "f32" },
     { name = "daylight_cycle", t = "bool" },
     { name = "drops", t = "bool" },
-    { name = "damage", t = "bool" },
-    { name = "death_drops", t = "bool" },
+    { name = "pvp", t = "bool" },
+    { name = "keep_inventory", t = "bool" },
+    { name = "natural_regeneration", t = "bool" },
+    { name = "regen_delay", t = "f32" },
+    { name = "regen_rate", t = "f32" },
+    { name = "default_game_mode.len", t = "u8" },
+    { name = "default_game_mode.buf", t = "array", scalar = true, count = 48, elem = { t = "u8" } },
     { name = "show_coordinates", t = "bool" },
     { name = "random_tick_speed", t = "i32" },
   } },
-  { id = 4, name = "clock", key = "none", lane = "reliable", fields = {
+  { id = 5, name = "clock", key = "none", lane = "reliable", fields = {
     { name = "time", t = "f64" },
     { name = "tick", t = "u32" },
   } },
-  { id = 5, name = "grants", key = "none", lane = "reliable", fields = {
+  { id = 6, name = "grants", key = "none", lane = "reliable", fields = {
     { name = "text", t = "string", max = 16384 },
     { name = "commands", t = "string", max = 16384 },
   } },
-  { id = 6, name = "variables", key = "none", lane = "reliable", fields = {
+  { id = 7, name = "variables", key = "none", lane = "reliable", fields = {
     { name = "text", t = "string", max = 4096 },
   } },
-  { id = 7, name = "selection", key = "none", lane = "reliable", fields = {
+  { id = 8, name = "selection", key = "none", lane = "reliable", fields = {
     { name = "corners", t = "array", scalar = false, count = 2, elem = { t = "union", variants = { { t = "array", scalar = true, count = 3, elem = { t = "i32" } }, } } },
   } },
-  { id = 8, name = "player", key = "player", lane = "reliable", fields = {
+  { id = 9, name = "player", key = "player", lane = "reliable", fields = {
     { name = "name", t = "string", max = 16 },
     { name = "worn", t = "array", scalar = true, count = 4, elem = { t = "u16" } },
   } },
-  { id = 9, name = "player_motion", key = "player", lane = "snapshot", fields = {
+  { id = 10, name = "player_motion", key = "player", lane = "snapshot", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "yaw", t = "f32" },
     { name = "pitch", t = "f32" },
     { name = "flying", t = "bool" },
     { name = "crouched", t = "bool" },
   } },
-  { id = 10, name = "entity", key = "entity", lane = "reliable", fields = {
+  { id = 11, name = "entity", key = "entity", lane = "reliable", fields = {
     { name = "kind", t = "enum", signed = false },
     { name = "stack.item", t = "u16" },
     { name = "stack.count", t = "i64" },
   } },
-  { id = 11, name = "entity_motion", key = "entity", lane = "snapshot", fields = {
+  { id = 12, name = "entity_motion", key = "entity", lane = "snapshot", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "yaw", t = "f32" },
     { name = "pitch", t = "f32" },
     { name = "flags", t = "bits" },
   } },
-  { id = 12, name = "block", key = "block", lane = "reliable", fields = {
+  { id = 13, name = "block", key = "block", lane = "reliable", fields = {
     { name = "block", t = "u16" },
     { name = "heard", t = "bool" },
   } },
-  { id = 13, name = "place", key = "none", lane = "reliable", fields = {
+  { id = 14, name = "place", key = "none", lane = "reliable", fields = {
     { name = "biome", t = "u8" },
     { name = "warmth", t = "i8" },
     { name = "wetness", t = "i8" },
   } },
-  { id = 14, name = "notice", key = "none", lane = "event", fields = {
+  { id = 15, name = "notice", key = "none", lane = "event", fields = {
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 15, name = "chat_line", key = "none", lane = "event", fields = {
+  { id = 16, name = "chat_line", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
     { name = "sender", t = "u16" },
     { name = "text", t = "string", max = 1024 },
   } },
-  { id = 16, name = "chat_delete", key = "none", lane = "event", fields = {
+  { id = 17, name = "chat_delete", key = "none", lane = "event", fields = {
     { name = "id", t = "u32" },
   } },
-  { id = 17, name = "entity_hurt", key = "none", lane = "event", fields = {
+  { id = 18, name = "entity_hurt", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 18, name = "entity_died", key = "none", lane = "event", fields = {
+  { id = 19, name = "entity_died", key = "none", lane = "event", fields = {
     { name = "entity", t = "u32" },
   } },
-  { id = 19, name = "explosion", key = "none", lane = "event", fields = {
+  { id = 20, name = "explosion", key = "none", lane = "event", fields = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "radius", t = "f32" },
   } },
-  { id = 20, name = "player_died", key = "none", lane = "event", fields = {
+  { id = 21, name = "player_died", key = "none", lane = "event", fields = {
     { name = "cause", t = "string", max = 32 },
   } },
 }

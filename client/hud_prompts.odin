@@ -475,7 +475,7 @@ inventory_prompts :: proc(app: ^App, items: ^[dynamic]Prompt_Item) {
 	append(items, Prompt_Item{.Menu_Back, "Close", .None})
 	if v.tab != .Chest {
 		append(items, Prompt_Item{.Section_Prev, "Sections", .Section_Next})
-		if app.session != nil && session_allowed(app.session, "items.catalog") {
+		if app.session != nil && session_ability(app.session, .Catalog) {
 			append(items, Prompt_Item{.Catalog, "Catalog", .None})
 		}
 	}

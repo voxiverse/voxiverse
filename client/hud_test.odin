@@ -50,7 +50,7 @@ test_hud_f1 :: proc(t: ^testing.T) {
 	f.s.inventory.selected = 0
 	f.s.max_health = 20
 	f.s.health = 20
-	f.s.rules.damage = true
+	f.s.mode, _ = game.mode_find(f.s.reg, "survival") // (health is its ability)
 	drawn := proc(app: ^App) -> (vertices: int, texts: []string) {
 		ui_frame(app)
 		return len(app.ui.output.vertices), app.ui.texts[:]

@@ -33,7 +33,7 @@ Session_Config :: struct {
 	key:          game.Account_Key, // the account
 	join:         Maybe(Join), // play on that server; otherwise host the world here
 	seed:         i64,
-	mode:         game.Game_Mode, // a new universe's
+	mode:         string, // a new universe's default game mode ("": creative)
 	view_radius:  i32,
 	view_height:  i32,
 	trace:        bool, // record every message to net.trace from the start (hosting only)
@@ -139,6 +139,7 @@ Session :: struct {
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
 	stats:            Session_Stats,
+	mode:             int, // the game mode the server last said (Mode): an index into reg.game_modes
 	health:           f32, // as the server last said (Health)
 	max_health:       f32,
 	place:            game.Place, // the server's word on where we are (the music's)
@@ -282,6 +283,12 @@ session_allowed :: proc(s: ^Session, node: string) -> bool {
 	return s.state == .Playing && game.allowed(s.grants[:], node)
 }
 
+// session_ability: the character can do a (its mode's profile and what it wears:
+// the same derive_abilities the server asks).
+session_ability :: proc(s: ^Session, a: game.Ability) -> bool {
+	return s.state == .Playing && a in game.derive_abilities(s.reg, s.mode, &s.inventory)
+}
+
 // session_end stops everything and frees the session; false if the server
 // stopped on an error. Call after gpu.wait_idle (meshes are removed).
 session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool {
@@ -409,7 +416,7 @@ session_update :: proc(
 			in_,
 			&s.rules,
 			query,
-			game.derive_mods(s.reg, &s.inventory),
+			game.derive_character(s.reg, s.mode, &s.inventory),
 		)
 		sent.snapshot = s.rx.ack
 		send_message(s, sent)

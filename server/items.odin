@@ -9,8 +9,8 @@ import "../common/game"
 // common/game/inventory.odin), placing blocks from the stack in hand, what
 // breaking leaves, dropped stacks (thrown, falling, merging, picked up by
 // walking over them), and the give, clear and item commands. A player with
-// items.infinite places without using anything up and breaks without
-// leaving anything (they can have anything: items.catalog).
+// the infinite_items ability places without using anything up and breaks without
+// leaving anything (they can have anything: the catalog ability).
 
 // inventory_request: the client did something in its inventory. The answer
 // (the inventory, and how far it got) goes out at the end of the tick,
@@ -23,7 +23,7 @@ inventory_request :: proc(s: ^Server, c: ^Client, q: game.Inventory_Request) {
 		s.registry,
 		&c.inventory,
 		q.action,
-		allowed(s, c, "items.catalog"),
+		has_ability(s, c, .Catalog),
 	)
 	if ok && q.action.kind == .Take {
 		// The catalog makes the stack, and takes back what was on the cursor.
@@ -49,7 +49,7 @@ used_to_place :: proc(s: ^Server, c: ^Client, slot: int) {
 // broken_drop: what a player breaking block at pos leaves.
 @(private)
 broken_drop :: proc(s: ^Server, c: ^Client, pos: game.Block_Pos, block: game.Block) {
-	if allowed(s, c, "items.infinite") {return}
+	if has_ability(s, c, .Infinite_Items) {return}
 	block_drop(c.world, pos, block)
 }
 

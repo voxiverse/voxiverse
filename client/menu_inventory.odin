@@ -93,6 +93,11 @@ modifier_text :: proc(m: game.Modifier) -> string {
 		return fmt.tprintf("Air jumps %+.0f", m.amount)
 	case .Max_Health:
 		return fmt.tprintf("Max health %+.0f", m.amount)
+	case .Grant_Ability, .Revoke_Ability:
+		if at := int(m.amount); at >= 0 && at < len(game.Ability) {
+			verb := "Grants" if m.kind == .Grant_Ability else "Removes"
+			return fmt.tprintf("%s %s", verb, game.ability_name(game.Ability(at)))
+		}
 	}
 	return ""
 }
@@ -371,7 +376,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	s := app.session
 	if s == nil {return}
 	inv := &s.inventory
-	catalog := session_allowed(s, "items.catalog")
+	catalog := session_ability(s, .Catalog)
 	v := &app.inventory_view
 	if inv.chest_open {v.tab = .Chest} else if v.tab == .Chest || !catalog {v.tab = .Inventory}
 	prev := ui.begin_layer(ctx, .Modal)

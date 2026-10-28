@@ -9,8 +9,8 @@ import "../common/telemetry"
 // points (BASE_HEALTH, plus what they wear: common/game/mods.odin); a fall of more
 // than 3 blocks onto ground costs a point a block, an explosion costs by how
 // near it was; at nought a player dies (a Death event, the inventory dropped
-// where they fell if rules.death_drops) and wakes at the world's spawn with
-// full health. Rules.damage off: nothing hurts. Every event that happens to
+// where they fell if the character's mode drops them and keep_inventory is off) and wakes at the world's spawn with
+// full health. A character without the health ability, or with invulnerable, is not hurt. Every event that happens to
 // a player may also earn experience (award_xp): the pipeline from something
 // happening to the character growing, a table and a curve, kept as the counters
 // `xp` and `level` (so saved with the character).
@@ -20,7 +20,7 @@ SAFE_FALL :: 3.0 // blocks
 // health_tick: once a tick for each playing client, after its movement.
 health_tick :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	mods := game.derive_mods(s.registry, &c.inventory)
+	mods := character_mods(s, c)
 	if c.max_health == 0 {c.health = mods.max_health} 	// (just joined: full)
 	if mods.max_health != c.max_health {
 		c.max_health = mods.max_health
@@ -54,7 +54,9 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 
 // damage_player hurts c by amount health points from cause; at nought they die.
 damage_player :: proc(s: ^Server, c: ^Client, amount: f32, cause: string) {
-	if !c.world.rules.damage || amount <= 0 || c.state != .Playing {return}
+	if amount <= 0 || c.state != .Playing {return}
+	abilities := game.derive_abilities(s.registry, c.mode, &c.inventory)
+	if .Health not_in abilities || .Invulnerable in abilities {return}
 	c.health = max(c.health - amount, 0)
 	record(s, c, .Damage, cause, i64(math.round(amount * 10)), i64(math.round(c.health * 10)))
 	if c.health <= 0 {die(s, c, cause)}
@@ -66,7 +68,8 @@ die :: proc(s: ^Server, c: ^Client, cause: string) {
 	died := game.Player_Died{cause}
 	event_send(s, c, .Player_Died, &died)
 	w := c.world
-	if w.rules.death_drops {
+	if .Drop_On_Death in game.derive_abilities(s.registry, c.mode, &c.inventory) &&
+	   !w.rules.keep_inventory {
 		at := c.player.position + {0, 0.5, 0}
 		for &st in c.inventory.slots {
 			if !game.stack_empty(st) {spawn_item(w, at, st, {}, -1)}
@@ -80,7 +83,7 @@ die :: proc(s: ^Server, c: ^Client, cause: string) {
 		c.inventory.cursor = {}
 		c.inv_changed = true
 	}
-	c.max_health = game.derive_mods(s.registry, &c.inventory).max_health
+	c.max_health = character_mods(s, c).max_health
 	c.health = c.max_health
 	c.airborne = false
 	land_at_spawn(s, c, remember = false)

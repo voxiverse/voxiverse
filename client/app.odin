@@ -586,7 +586,7 @@ enter_world :: proc(
 	seed: i64,
 	spawn: Maybe([3]f64) = nil,
 	benchmark := false, // the same work every run: no sheep, still clouds
-	mode := game.Game_Mode.Creative, // a new universe's
+	mode := "creative", // a new universe's default game mode
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(

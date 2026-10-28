@@ -17,6 +17,7 @@ MAX_KNOWN_ENTITIES :: 256 // entities a client is told about at a time
 State_Kind :: enum u8 {
 	Own_Player,
 	Health,
+	Mode,
 	Inventory,
 	Rules,
 	Clock,
@@ -50,6 +51,12 @@ Own_Player :: struct {
 	teleports: u8,
 	yaw:       f32, // after a teleport: where to look
 	pitch:     f32,
+}
+
+// Mode_Record: the player's own game mode, by id ("base:creative"): what the
+// client derives its abilities from (derive_abilities), with the inventory.
+Mode_Record :: struct {
+	mode: string `net:"max=64"`,
 }
 
 // Inventory_State: the player's inventory as the server has it, having applied
@@ -132,6 +139,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 		check = check_own_player,
 	},
 	.Health = {name = "health", value = Health, check = check_health},
+	.Mode = {name = "mode", value = Mode_Record, check = check_mode},
 	.Inventory = {
 		name = "inventory",
 		value = Inventory_State,
@@ -243,6 +251,12 @@ check_own_player :: proc(reg: ^Registry, v: rawptr) -> bool {
 check_health :: proc(reg: ^Registry, v: rawptr) -> bool {
 	h := (^Health)(v)
 	return h.max >= 1 && h.max <= 1000 && h.health >= 0 && h.health <= h.max
+}
+
+@(private = "file")
+check_mode :: proc(reg: ^Registry, v: rawptr) -> bool {
+	_, ok := mode_find(reg, (^Mode_Record)(v).mode)
+	return ok
 }
 
 @(private = "file")

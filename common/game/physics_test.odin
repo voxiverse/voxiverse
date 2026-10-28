@@ -324,7 +324,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		for _ in 0 ..< 60 {player_step(&s, {move = {0, 1}}, rules, query(w), DT, mods)}
 		return abs(s.position.z - 0.5)
 	}
-	plain, fast := walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH})
+	plain, fast := walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH, {.Fly}})
 	testing.expectf(
 		t,
 		fast / plain > 1.09 && fast / plain < 1.11,
@@ -346,7 +346,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		}
 		return peak - 1
 	}
-	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH})
+	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH, {.Fly}})
 	testing.expectf(
 		t,
 		high > 1.25 * 1.2 - 0.03 && high < 1.25 * 1.2 + 0.01,
@@ -356,7 +356,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 	)
 
 	// Air jumps: one charm, one more jump in the air, on a new press only.
-	mods := Mods{1, 1, 1, BASE_HEALTH}
+	mods := Mods{1, 1, 1, BASE_HEALTH, {.Fly}}
 	s := Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
@@ -403,7 +403,7 @@ test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
 	defer delete(w.solid)
 	floor(&w, 0, 40)
 	rules := RULES_DEFAULTS
-	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4}
+	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4, {.Fly}}
 	start := Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
@@ -437,4 +437,27 @@ test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
 		mods,
 	)
 	testing.expect(t, predicted.state == server)
+}
+
+// Flight needs the fly ability as well as the world's rule: the same step the
+// server and the client's prediction run.
+@(test)
+test_fly_needs_the_ability :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0)
+	rules := RULES_DEFAULTS
+	s := Player_State {
+		position = {0.5, 1, 0.5},
+	}
+	mods := MODS_NONE
+	mods.abilities = {}
+	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, query(&w), DT, mods)
+	testing.expect(t, !s.flying, "no fly ability: the toggle does nothing")
+	mods.abilities = {.Fly}
+	player_step(&s, {buttons = {.Toggle_Fly}}, &rules, query(&w), DT, mods)
+	testing.expect(t, s.flying)
+	mods.abilities = {} // (a mode change took it away)
+	player_step(&s, {}, &rules, query(&w), DT, mods)
+	testing.expect(t, !s.flying, "losing the ability ends the flight")
 }

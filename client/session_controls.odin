@@ -100,7 +100,7 @@ session_pick :: proc(s: ^Session) -> bool {
 		if i != inv.selected {session_inventory_do(s, {.Select, 0, i})}
 		return true
 	}
-	if !session_allowed(s, "items.catalog") {return false}
+	if !session_ability(s, .Catalog) {return false}
 	target := inv.selected
 	if !game.stack_empty(inv.slots[target]) {
 		for st, i in inv.slots[:game.HOTBAR_SLOTS] {

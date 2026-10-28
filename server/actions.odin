@@ -137,7 +137,7 @@ apply_edit_cells :: proc(
 	) {return}
 	ok := false
 	slot := -1 // placing from (infinite: none)
-	infinite := allowed(s, c, "items.infinite")
+	infinite := has_ability(s, c, .Infinite_Items)
 	tilling := e.block == .Farmland
 	kind := game.edit_kind(t, current, e.block)
 	other_to: game.Block // what the other cell of a two-cell block becomes

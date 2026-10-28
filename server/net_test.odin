@@ -40,6 +40,7 @@ Net_Client :: struct {
 	stats_text:  string, // the last Stats_Page's lines (heap)
 	stats_pages: int,
 	health:      game.Health, // the last Health message
+	mode:        string, // the last Mode record's id (heap)
 	hurt:        int, // Entity_Hurt messages
 	bulk_begins: int,
 	explosions:  int,
@@ -118,6 +119,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.chunks)
 	for _, n in c.others {delete(n)}
 	delete(c.others)
+	delete(c.mode)
 	delete(c.seen)
 	delete(c.worn)
 	delete(c.changed)
@@ -186,6 +188,9 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			v := (^game.Inventory_State)(g.value)
 			c.inventory, c.inv_acked = v.inventory, v.acked
 			c.inv_updates += 1
+		case .Mode:
+			delete(c.mode)
+			c.mode = strings.clone((^game.Mode_Record)(g.value).mode)
 		case .Rules, .Clock, .Variables, .Selection:
 		case .Place:
 			c.place = (^game.Place)(g.value)^

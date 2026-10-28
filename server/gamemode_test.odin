@@ -22,7 +22,7 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 	typed, _ := game.seed_of_text("andromeda")
 	config := Config {
 		seed        = i64(typed),
-		mode        = .Survival,
+		mode        = "survival",
 		view_radius = 2,
 		view_height = 1,
 		workers     = 1,
@@ -49,10 +49,10 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 	testing.expect(t, !strings.contains(text, "mode_changed"))
 
 	// Opened as a creative one: the universe keeps what it was made as.
-	config.mode = .Creative
+	config.mode = "creative"
 	if !testing.expect(t, start(&srv, config, {})) {return}
-	testing.expect_value(t, srv.config.mode, game.Game_Mode.Survival)
-	srv.config.mode, srv.config.mode_changed = .Creative, true // (what /gamemode does)
+	testing.expect_value(t, srv.config.mode, "survival")
+	srv.config.mode, srv.config.mode_changed = "creative", true
 	stop(&srv)
 	text = read_universe(dir)
 	testing.expect(t, strings.contains(text, "mode = creative"))

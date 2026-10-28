@@ -14,13 +14,13 @@ test_place_record :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	rules := quiet_rules()
-	rules.damage = true
 	srv: Server
 	if !testing.expect(
 		t,
 		start(
 			&srv,
 			Config {
+				mode = "survival",
 				rules = rules,
 				seed = 1,
 				view_radius = 2,

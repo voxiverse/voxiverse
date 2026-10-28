@@ -22,6 +22,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
+		mode        = "survival",
 		rules       = quiet_rules(),
 		seed        = 21,
 		view_radius = 2,

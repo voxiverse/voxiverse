@@ -497,12 +497,12 @@ test_broken_packs :: proc(t: ^testing.T) {
 		{
 			"stray directory",
 			one({{"data/blocks/sub/a.json", "{}"}}),
-			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/ (both sides) and server/structures/ (server only)`,
+			`testpack/data/blocks/sub/a.json: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"stray top-level file",
 			one({{"readme.md", "hello"}}),
-			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/ (both sides) and server/structures/ (server only)`,
+			`testpack/readme.md: not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/ (both sides) and server/structures/ (server only)`,
 		},
 		{
 			"loot tables",

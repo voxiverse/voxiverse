@@ -1,6 +1,7 @@
 package server
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:strconv"
 import "core:strings"
@@ -200,6 +201,27 @@ admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
+NODE_RULE :: "voxiverse.command.rule"
+
+// rule_set: the one place a world rule changes (the command and the console's
+// Set_Rule both come here): set, journalled with who asked, the world told.
+rule_set :: proc(s: ^Server, c: ^Client, w: ^World, name, value: string) -> base.Var_Error {
+	table := game.rules_table()
+	err := base.var_set(table, &w.rules, rule_name(name), value)
+	if err == .None || err == .Out_Of_Range {
+		if err == .Out_Of_Range {log.warnf("server rule clamped name=%q value=%q", name, value)}
+		log.infof("server rule changed name=%s value=%s by=%s", name, value, client_name(c))
+		v, _ := base.var_find(table, rule_name(name))
+		text := fmt.tprintf("rule %s %s", name, base.var_format(table, &w.rules, v))
+		journal_setting(w, Actor{.Character, client_name(c), false}, text)
+		clock_resend(s, w) // (day_length and daylight_cycle change what the clock means)
+		disturb_world(s, w)
+	} else {
+		log.warnf("server rule not changed name=%q value=%q problem=%v", name, value, err)
+	}
+	return err
+}
+
 // admin_rule: rule (all, with values), rule <name> (one), rule <name> <value> (set).
 @(private)
 admin_rule :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
@@ -219,14 +241,12 @@ admin_rule :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 		notice(s, c, fmt.tprintf("%s = %s", args[0], base.var_format(table, &w.rules, v)))
 	case 2:
-		if !allowed(s, c, "world.rules") {
-			notice(s, c, "You may not change rules here (world.rules)")
+		if !allowed(s, c, NODE_RULE) {
+			notice(s, c, "You may not change rules here.")
 			return true
 		}
-		switch err := base.var_set(table, &w.rules, rule_name(args[0]), args[1]); err {
+		switch err := rule_set(s, c, w, args[0], args[1]); err {
 		case .None, .Out_Of_Range:
-			clock_resend(s, w) // (day_length and daylight_cycle change what the clock means)
-			disturb_world(s, w)
 			v, _ := base.var_find(table, rule_name(args[0]))
 			notice(s, c, fmt.tprintf("%s = %s", args[0], base.var_format(table, &w.rules, v)))
 		case .Unknown_Name:
@@ -330,7 +350,6 @@ admin_help :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 }
 
 // rule_name: a rule as the table names it ("drops" or "rules.drops").
-@(private = "file")
 rule_name :: proc(name: string) -> string {
 	if strings.has_prefix(name, "rules.") {return name}
 	return strings.concatenate({"rules.", name}, context.temp_allocator)

@@ -103,7 +103,8 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	escape(app)
 	testing.expect(t, !section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, stone) == 64)
-	// No catalog without items.catalog: taking is refused before it is sent.
+	// No catalog without the catalog ability: taking is refused before it is sent.
+	test_mode(s, "survival")
 	before := len(s.inv_pending)
 	testing.expect(t, !session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(dirt)}))
 	testing.expect_value(t, len(s.inv_pending), before)
@@ -270,7 +271,7 @@ pad_rig :: proc(t: ^testing.T) -> ^Rig {
 	s.reg = test_reg()
 	app.session, app.screen = s, .Game
 	s.state = .Playing
-	append(&s.grants, game.Grant{pattern = "items.catalog", allow = true})
+	test_mode(s, "creative")
 	pad_connect(app, .Xbox)
 	pad_frame(app)
 	return r

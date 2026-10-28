@@ -81,6 +81,8 @@ Client :: struct {
 	last_position: [3]f64, // for distance counters
 	dist_acc:      [3]f64, // centimetres walked, flown, fallen not yet counted
 	was_grounded:  bool,
+	mode:          int, // its game mode: an index into the registry's modes (modes.odin)
+	mode_set:      bool, // (a new client has none yet)
 	health:        f32, // health points (health.odin)
 	max_health:    f32,
 	airborne:      bool,

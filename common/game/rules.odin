@@ -8,47 +8,55 @@ import "../../base"
 // defaults follow Minecraft's feel (blocks, seconds).
 
 Rules :: struct {
-	gravity:           f32, // blocks/s²
-	terminal_velocity: f32, // blocks/s, falling
-	walk_speed:        f32, // blocks/s
-	sprint_speed:      f32,
-	sneak_speed:       f32,
-	jump_height:       f32, // blocks
-	fly_speed:         f32,
-	fly_sprint_speed:  f32,
-	ground_control:    f32, // how fast velocity follows input on the ground (1/s)
-	air_control:       f32, // ... in the air
-	reach:             f32, // blocks, for breaking and placing
-	allow_flying:      bool,
-	day_length:        f32, // seconds from one midnight to the next (time.odin)
-	daylight_cycle:    bool, // time passes (false: it stands still)
-	drops:             bool, // a block a player breaks leaves its item
-	damage:            bool, // players take damage (falls, explosions) and can die
-	death_drops:       bool, // a player who dies drops their inventory where they fell (else keeps it)
-	show_coordinates:  bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
-	random_tick_speed: i32, // blocks picked in each chunk each tick to change by themselves (0: none)
+	gravity:              f32, // blocks/s²
+	terminal_velocity:    f32, // blocks/s, falling
+	walk_speed:           f32, // blocks/s
+	sprint_speed:         f32,
+	sneak_speed:          f32,
+	jump_height:          f32, // blocks
+	fly_speed:            f32,
+	fly_sprint_speed:     f32,
+	ground_control:       f32, // how fast velocity follows input on the ground (1/s)
+	air_control:          f32, // ... in the air
+	reach:                f32, // blocks, for breaking and placing
+	allow_flying:         bool,
+	day_length:           f32, // seconds from one midnight to the next (time.odin)
+	daylight_cycle:       bool, // time passes (false: it stands still)
+	drops:                bool, // a block a player breaks leaves its item
+	pvp:                  bool, // players may hurt each other (off: friendly fire off; falls and explosions still hurt)
+	keep_inventory:       bool, // a player who dies keeps their inventory (off: it drops where they fell, for modes with drop_on_death)
+	natural_regeneration: bool, // health comes back by itself, for modes with regenerate
+	regen_delay:          f32, // seconds without damage before it does
+	regen_rate:           f32, // health points a second
+	default_game_mode:    base.Var_Text, // a new character's mode here ("": the universe's)
+	show_coordinates:     bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
+	random_tick_speed:    i32, // blocks picked in each chunk each tick to change by themselves (0: none)
 }
 
 @(rodata)
 RULES_DEFAULTS := Rules {
-	gravity           = 32,
-	terminal_velocity = 78.4,
-	walk_speed        = 4.317,
-	sprint_speed      = 5.612,
-	sneak_speed       = 1.31,
-	jump_height       = 1.25,
-	fly_speed         = 10.92,
-	fly_sprint_speed  = 21.6,
-	ground_control    = 20,
-	air_control       = 3,
-	reach             = 5,
-	allow_flying      = true,
-	day_length        = 1200,
-	daylight_cycle    = true,
-	drops             = true,
-	damage            = false,
-	show_coordinates  = true,
-	random_tick_speed = 3,
+	gravity              = 32,
+	terminal_velocity    = 78.4,
+	walk_speed           = 4.317,
+	sprint_speed         = 5.612,
+	sneak_speed          = 1.31,
+	jump_height          = 1.25,
+	fly_speed            = 10.92,
+	fly_sprint_speed     = 21.6,
+	ground_control       = 20,
+	air_control          = 3,
+	reach                = 5,
+	allow_flying         = true,
+	day_length           = 1200,
+	daylight_cycle       = true,
+	drops                = true,
+	pvp                  = true,
+	keep_inventory       = true,
+	natural_regeneration = true,
+	regen_delay          = 5,
+	regen_rate           = 1,
+	show_coordinates     = true,
+	random_tick_speed    = 3,
 }
 
 @(rodata)
@@ -86,15 +94,35 @@ RULES_VARS := [?]base.Var {
 	{field = "day_length", help = "seconds per day and night", min = 10, max = 86400, step = 60},
 	{field = "daylight_cycle", help = "time passes (off: the sun stands still)"},
 	{field = "drops", help = "a block a player breaks leaves its item"},
+	{field = "pvp", help = "players may hurt each other (off: friendly fire off)"},
+	{field = "natural_regeneration", help = "health comes back by itself (modes with regenerate)"},
 	{
-		field = "damage",
-		help = "players take damage (falls, explosions) and can die; off in new worlds",
+		field = "regen_delay",
+		help = "seconds without damage before health comes back",
+		min = 0,
+		max = 600,
+		step = 0.5,
+	},
+	{
+		field = "regen_rate",
+		help = "health points a second while it comes back",
+		min = 0,
+		max = 100,
+		step = 0.25,
+	},
+	{
+		field = "default_game_mode",
+		help = "the game mode a new character starts in here (empty: the universe's)",
+		hint = "creative, survival or a pack's mode",
 	},
 	{
 		field = "show_coordinates",
 		help = "F3 shows position, chunk and block under (off: only with debug.coordinates)",
 	},
-	{field = "death_drops", help = "a player who dies drops their inventory where they fell"},
+	{
+		field = "keep_inventory",
+		help = "a player who dies keeps their inventory (off: it drops where they fell)",
+	},
 	{
 		field = "random_tick_speed",
 		help = "blocks picked in each chunk each tick: grass spreads, crops grow (0: none)",
@@ -120,9 +148,10 @@ rules_still :: proc() -> Rules {
 // rules_valid: every rule within its table range (rules from the wire).
 rules_valid :: proc(r: ^Rules) -> bool {
 	t := rules_table()
+	if int(r.default_game_mode.len) > base.VAR_TEXT_MAX {return false}
 	for &v in t.vars {
 		kind, _ := base.var_kind(t, &v)
-		if kind == .Bool {continue}
+		if kind == .Bool || kind == .Text {continue}
 		value := base.var_get_f64(t, r, &v)
 		if !(value >= v.min && value <= v.max) {return false}
 	}

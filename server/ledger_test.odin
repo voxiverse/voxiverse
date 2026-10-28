@@ -15,8 +15,9 @@ import "../common/telemetry"
 @(private = "file")
 config :: proc(dir: string, death_drops := false) -> Config {
 	rules := quiet_rules()
-	rules.death_drops = death_drops
+	rules.keep_inventory = !death_drops
 	return {
+		mode = "survival",
 		seed = 31,
 		generator = .Classic,
 		rules = rules,
@@ -113,10 +114,14 @@ script :: proc(s: ^Server, data: rawptr) {
 		// Faucets and sinks of the lists.
 		admin_give(s, c, {r.name, "dirt", "100"})
 		admin_give(s, c, {r.name, "wheat", "10"})
-		// The catalog makes a stack of stone; the next Take replaces it.
+		// The catalog (an ability of creative) makes a stack of stone; the next Take replaces it.
+		survival := c.mode
+		creative, _ := game.mode_find(s.registry, "creative")
+		set_game_mode(s, c, creative, {"test", ""})
 		inventory_request(s, c, {1, {.Take, 0, int(stone)}})
 		inventory_request(s, c, {2, {.Take, 0, int(dirt)}})
 		inventory_request(s, c, {3, {.Close, game.CURSOR_SLOT, 0}})
+		set_game_mode(s, c, survival, {"test", ""})
 		// Placing uses one up.
 		for st, i in c.inventory.slots {
 			if st.item == stone {

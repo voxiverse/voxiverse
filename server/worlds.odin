@@ -303,24 +303,6 @@ admin_address :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
-// admin_gamemode: the universe's game mode, or change it (the universe keeps
-// that it was changed: the universes screen's card says so).
-@(private)
-admin_gamemode :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	if len(args) == 0 {
-		changed := " (changed since it was made)" if s.config.mode_changed else ""
-		notice(s, c, fmt.tprintf("game mode %s%s", game.game_mode_name(s.config.mode), changed))
-		return true
-	}
-	m, ok := game.game_mode_parse(args[0])
-	if !ok {return false}
-	if m != s.config.mode {
-		s.config.mode, s.config.mode_changed = m, true
-	}
-	notice(s, c, fmt.tprintf("game mode %s", game.game_mode_name(m)))
-	return true
-}
-
 // admin_worlds: the loaded worlds and who is in each; how many are saved.
 @(private)
 admin_worlds :: proc(s: ^Server, c: ^Client, args: []string) -> bool {

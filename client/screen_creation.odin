@@ -2,6 +2,10 @@ package client
 
 import "core:time"
 
+// The two modes the creation screen offers (the base pack's; a pack's modes come with the full screen).
+MODE_CREATIVE :: "creative"
+MODE_SURVIVAL :: "survival"
+
 import "../common/game"
 import "../common/worldgen"
 import "ui"
@@ -20,7 +24,7 @@ Creation_Screen :: struct {
 	seed_text: [dynamic]u8, // typed: a word or a number; empty: the rolled seed
 	seed:      u64, // what the universe will be made with
 	typed:     bool, // seed comes from the text (else rolled)
-	mode:      game.Game_Mode,
+	mode:      string, // the new universe's default game mode (its id)
 	stars:     []game.Star, // the galaxy of seed (CREATION_STARS)
 	settle:    f32, // 0 ..= 1: how far the stars have re-settled
 	spin:      f32, // the preview planet's turn, radians
@@ -40,7 +44,7 @@ creation_open :: proc(app: ^App) {
 	text := tr(.Creation_Default_Name, len(app.universes.entries) + 1)
 	append(&c.name, text)
 	clear(&c.seed_text)
-	c.mode = .Creative
+	c.mode = MODE_CREATIVE
 	creation_set_seed(c, u64(time.now()._nsec) ~ 0x5eed_5eed, false)
 	c.typed = false
 	app.screen = .Creation
@@ -181,11 +185,11 @@ creation_screen :: proc(app: ^App, ctx: ^ui.Context) {
 		ctx,
 		tr(.Universes_Mode_Creative),
 		ui.cut_left(&modes, half),
-		disabled = c.mode == .Creative,
-	) {c.mode = .Creative}
+		disabled = c.mode == MODE_CREATIVE,
+	) {c.mode = MODE_CREATIVE}
 	ui.cut_left(&modes, t.spacing)
-	if ui.button(ctx, tr(.Universes_Mode_Survival), modes, disabled = c.mode == .Survival) {
-		c.mode = .Survival
+	if ui.button(ctx, tr(.Universes_Mode_Survival), modes, disabled = c.mode == MODE_SURVIVAL) {
+		c.mode = MODE_SURVIVAL
 	}
 	ui.label(ctx, tr(.Creation_Home_World), ui.next(ctx), .Left, t.text_muted)
 	facts := home_facts()

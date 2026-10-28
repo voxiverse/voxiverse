@@ -96,25 +96,3 @@ sin_approx :: proc(x: f32) -> f32 {
 cos_approx :: proc(x: f32) -> f32 {
 	return sin_approx(x + 1.5707963)
 }
-
-// Game_Mode: how a universe was made to be played, chosen at creation
-// (universe.cfg `mode`). For now it is a label the universe keeps: no
-// survival rules follow from it (docs/plan.md, M48e's hard stop).
-Game_Mode :: enum u8 {
-	Creative,
-	Survival,
-}
-
-game_mode_name :: proc(m: Game_Mode) -> string {
-	return "survival" if m == .Survival else "creative"
-}
-
-game_mode_parse :: proc(text: string) -> (m: Game_Mode, ok: bool) {
-	switch strings.to_lower(strings.trim_space(text), context.temp_allocator) {
-	case "creative":
-		return .Creative, true
-	case "survival":
-		return .Survival, true
-	}
-	return .Creative, false
-}

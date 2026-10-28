@@ -1,0 +1,7 @@
+{
+	"survival": {
+		"abilities": ["health", "regenerate", "drop_on_death"],
+		"kit": [],
+		"rules": {}
+	}
+}

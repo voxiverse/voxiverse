@@ -137,6 +137,7 @@ Content_Kind :: enum u8 {
 	Recipe,
 	Structure,
 	Shape,
+	Game_Mode,
 }
 
 Block_Flag :: enum u8 {
@@ -390,6 +391,7 @@ Registry :: struct {
 	item_tags:  []Tag_Def,
 	recipes:    []Recipe_Def,
 	structures: []Structure_Def,
+	game_modes: []Mode_Def,
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
 	hash:       u64,
@@ -813,6 +815,7 @@ registry_text_of :: proc(
 			r.output,
 		)
 	}
+	for m in reg.game_modes {fmt.sbprintf(&b, "game_mode %s %v kit=%v\n", m.id, m.abilities, m.kit)}
 	if all {
 		for s in reg.structures {
 			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)

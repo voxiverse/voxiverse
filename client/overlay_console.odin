@@ -380,7 +380,7 @@ register_builtin_commands :: proc(c: ^Console) {
 					if !allowed_here(
 						app,
 						"set",
-						"world.gen" if table.prefix == "worldgen." else "world.rules",
+						"world.gen" if table.prefix == "worldgen." else "voxiverse.command.rule",
 					) {return}
 					session_set_rule(app.session, args[0], args[1])
 					return

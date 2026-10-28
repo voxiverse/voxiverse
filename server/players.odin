@@ -3,6 +3,7 @@ package server
 import "core:log"
 import "core:time"
 
+import "../base"
 import "../common/game"
 import "../common/netcode"
 
@@ -47,6 +48,12 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	} else {
 		land_at_spawn(s, c, remember = false)
 	}
+	mode := mode_default(s, w)
+	if has_saved {
+		if m, ok := game.mode_find(s.registry, base.var_text(&saved.mode));
+		   ok && saved.mode.len > 0 {mode = m}
+	}
+	set_game_mode(s, c, mode, {"join", ""})
 	send_message(
 		s,
 		c,
@@ -127,7 +134,7 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 			&w.rules,
 			query,
 			game.TICK_SECONDS,
-			game.derive_mods(s.registry, &c.inventory),
+			character_mods(s, c),
 		)
 		if c.afk && msg.input.move != {} {set_afk(s, c, false)} 	// back
 		if waiting {

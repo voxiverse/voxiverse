@@ -13,19 +13,19 @@ import "../common/telemetry"
 @(private = "file")
 config :: proc(dir: string) -> Config {
 	rules := quiet_rules()
-	rules.damage = true // (off in new worlds; these tests are about it)
 	return {
-		seed = 28,
-		generator = .Classic,
-		rules = rules,
-		view_radius = 3,
-		view_height = 2,
-		workers = 2,
-		max_players = 4,
-		listen = true,
+		mode            = "survival", // (health is an ability of it)
+		seed            = 28,
+		generator       = .Classic,
+		rules           = rules,
+		view_radius     = 3,
+		view_height     = 2,
+		workers         = 2,
+		max_players     = 4,
+		listen          = true,
 		everyone_cheats = true,
-		save_dir = dir,
-		no_sheep = true,
+		save_dir        = dir,
+		no_sheep        = true,
 	}
 }
 
@@ -150,16 +150,19 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		hit.health,
 	)
 
-	// rules.damage off: nothing hurts.
+	// A mode without health (and invulnerable): nothing hurts.
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
 		c.health = c.max_health
-		c.world.rules.damage = false
+		creative, _ := game.mode_find(s.registry, "creative")
+		survival := c.mode
+		set_game_mode(s, c, creative, {"test", ""})
 		damage_player(s, c, 100, "test")
-		c.world.rules.damage = true
+		set_game_mode(s, c, survival, {"test", ""})
+		c.health = c.max_health
 	})
 	testing.expect_value(t, probe(&srv, "a").health, f32(game.BASE_HEALTH))
 
-	// Death: full health at the spawn again, the inventory kept (death_drops off).
+	// Death: full health at the spawn again, the inventory kept (keep_inventory).
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
 		c.player.position += {40, 0, 40}
 		damage_player(s, c, 100, "test")
@@ -174,12 +177,12 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		died.pos,
 		start_at.pos,
 	)
-	testing.expect(t, died.items > 0, "the inventory was dropped though death_drops is off")
-	// With death_drops: dropped where they fell.
+	testing.expect(t, died.items > 0, "the inventory was dropped though keep_inventory is on")
+	// Without keep_inventory: dropped where they fell.
 	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
-		c.world.rules.death_drops = true
+		c.world.rules.keep_inventory = false
 		damage_player(s, c, 100, "test")
-		c.world.rules.death_drops = false
+		c.world.rules.keep_inventory = true
 	})
 	testing.expect_value(t, probe(&srv, "a").items, 0)
 

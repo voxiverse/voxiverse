@@ -19,6 +19,7 @@ Apply_Proc :: proc(s: ^Session, g: game.Received)
 APPLY := [game.State_Kind]Apply_Proc {
 	.Own_Player    = apply_own_player,
 	.Health        = apply_health,
+	.Mode          = apply_mode,
 	.Inventory     = apply_inventory,
 	.Rules         = apply_rules,
 	.Clock         = apply_clock,
@@ -56,10 +57,15 @@ apply_own_player :: proc(s: ^Session, g: game.Received) {
 		v,
 		&s.rules,
 		{&s.world, world_block, &s.reg.blocks},
-		game.derive_mods(s.reg, &s.inventory),
+		game.derive_character(s.reg, s.mode, &s.inventory),
 		teleported,
 	)
 	if teleported {s.camera.yaw, s.camera.pitch = v.yaw, v.pitch}
+}
+
+@(private)
+apply_mode :: proc(s: ^Session, g: game.Received) {
+	if m, ok := game.mode_find(s.reg, (^game.Mode_Record)(g.value).mode); ok {s.mode = m}
 }
 
 @(private)

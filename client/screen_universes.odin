@@ -35,7 +35,7 @@ Save_Entry :: struct {
 	path:         string,
 	played:       time.Time, // its config file's last change: when it was last saved
 	seed:         u64, // the universe's seed (its home world's address, its galaxy)
-	mode:         game.Game_Mode,
+	mode:         string, // the universe's default game mode, as universe.cfg says it
 	mode_changed: bool, // /gamemode changed it since it was made
 	stars:        [THUMB_STARS]game.Star, // its galaxy
 }
@@ -85,6 +85,7 @@ worlds_clear :: proc(w: ^Universes_Screen) {
 	for e in w.entries {
 		delete(e.name)
 		delete(e.path)
+		delete(e.mode)
 	}
 	clear(&w.entries)
 }
@@ -141,7 +142,7 @@ entry_read_config :: proc(e: ^Save_Entry, cfg: string) {
 		case "seed":
 			if n, ok := strconv.parse_i64(value); ok {e.seed = u64(n)}
 		case "mode":
-			if m, ok := game.game_mode_parse(value); ok {e.mode = m}
+			e.mode = strings.clone(value)
 		case "mode_changed":
 			e.mode_changed = value == "true"
 		}
@@ -184,12 +185,12 @@ free_save_path :: proc(name: string) -> string {
 Universe_Plan :: struct {
 	path: string, // the directory (a free variant of the name)
 	seed: u64,
-	mode: game.Game_Mode,
+	mode: string,
 }
 
 // universe_plan: the directory for a universe called name (a free variant
 // of it, "New Universe" if nothing is left of it), with its seed and mode.
-universe_plan :: proc(name: string, seed: u64, mode: game.Game_Mode) -> Universe_Plan {
+universe_plan :: proc(name: string, seed: u64, mode: string) -> Universe_Plan {
 	base_name := save_dir_name(name)
 	if base_name == "" {base_name = "New Universe"}
 	return {free_save_path(base_name), seed, mode}
@@ -201,7 +202,7 @@ universe_plan :: proc(name: string, seed: u64, mode: game.Game_Mode) -> Universe
 world_create :: proc(app: ^App, name, seed_text: string) {
 	seed, typed := game.seed_of_text(seed_text)
 	if !typed {seed = u64(time.now()._nsec) ~ 0x5eed_5eed}
-	plan := universe_plan(name, seed, .Creative)
+	plan := universe_plan(name, seed, "creative")
 	log.infof("saves creating name=%q seed=%d", filepath.base(plan.path), i64(plan.seed))
 	enter_world(app, plan.path, i64(plan.seed), mode = plan.mode)
 }
@@ -294,7 +295,7 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 		menu_clicked := ui.button(ctx, tr(.Universes_Card_Menu), menu)
 		ui.pop_id(ctx)
 		mode_text := tr(
-			.Universes_Mode_Survival if e.mode == .Survival else .Universes_Mode_Creative,
+			.Universes_Mode_Survival if e.mode == "survival" else .Universes_Mode_Creative,
 		)
 		if e.mode_changed {mode_text = tr(.Universes_Mode_Changed, mode_text)}
 		ui.draw_text(ctx, ui.cut_top(&inner, t.font_size + 8), e.name, t.font_size, t.text, .Left)

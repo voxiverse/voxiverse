@@ -416,6 +416,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	for text, at in b.index[.Sound] {reg.ids[.Sound][text] = u32(at)}
 	for text, at in b.index[.Recipe] {reg.ids[.Recipe][text] = u32(at)}
 	for text, at in b.index[.Structure] {reg.ids[.Structure][text] = u32(at)}
+	for text, at in b.index[.Game_Mode] {reg.ids[.Game_Mode][text] = u32(at)}
 	for ti, ai in reg.block_tags {
 		for member in ti.members {
 			tags := &reg.blocks.defs[first_state[member]].tags
@@ -500,6 +501,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	}
 	reg.recipes = make([]Recipe_Def, len(b.defs[.Recipe]))
 	for &m, i in b.defs[.Recipe] {reg.recipes[i] = read_recipe(b, &m, item_numbers)}
+
+	// --- Game modes. ---
+	reg.game_modes = make([]Mode_Def, len(b.defs[.Game_Mode]))
+	for &m, i in b.defs[.Game_Mode] {reg.game_modes[i] = read_game_mode(b, &m, item_numbers)}
 
 	// --- Structures. ---
 	if len(b.defs[.Structure]) > MAX_STRUCTURES {

@@ -91,7 +91,7 @@ Pending_Inventory :: struct {
 // server; false (and nothing sent) if it does nothing.
 session_inventory_do :: proc(s: ^Session, a: game.Inventory_Action) -> bool {
 	if s.state != .Playing {return false}
-	_, ok := game.inventory_apply(s.reg, &s.inventory, a, session_allowed(s, "items.catalog"))
+	_, ok := game.inventory_apply(s.reg, &s.inventory, a, session_ability(s, .Catalog))
 	if !ok {return false}
 	s.inv_sequence += 1
 	append(&s.inv_pending, Pending_Inventory{s.inv_sequence, a})
@@ -113,9 +113,9 @@ inventory_reconcile :: proc(s: ^Session, u: game.Inventory_State) {
 // answered everything we have done.
 inventory_predict :: proc(s: ^Session) {
 	s.inventory = s.server_inventory
-	catalog := session_allowed(s, "items.catalog")
+	catalog := session_ability(s, .Catalog)
 	for p in s.inv_pending {game.inventory_apply(s.reg, &s.inventory, p.action, catalog)}
-	if session_allowed(s, "items.infinite") {return}
+	if session_ability(s, .Infinite_Items) {return}
 	for e in s.edits {
 		if e.block == .Air {continue}
 		if slot := game.inventory_placing_slot(s.reg, &s.inventory, e.block); slot >= 0 {
@@ -129,7 +129,7 @@ inventory_predict :: proc(s: ^Session) {
 // the player places without using anything up).
 can_place_from_hand :: proc(s: ^Session, block: game.Block) -> bool {
 	return(
-		session_allowed(s, "items.infinite") ||
+		session_ability(s, .Infinite_Items) ||
 		game.inventory_placing_slot(s.reg, &s.inventory, block) >= 0 \
 	)
 }
