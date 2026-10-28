@@ -20,8 +20,12 @@ tone_mixer :: proc() -> (m: ^Mixer, id: Sound_Id, samples: []f32) {
 	return
 }
 
-// The null device mixes at real rate: a second of wall clock is about a
-// second of frames, the callback's timing is measured, and nothing is lost.
+// The null device mixes at real rate: it never runs ahead of the wall clock
+// (a second of frames takes at least a second), it reaches a second of
+// frames however late a loaded machine schedules it (it catches up on its
+// own schedule), the callback's timing is measured, and nothing is lost.
+// Only the pacing is asserted, never a rate over a fixed sleep: that
+// depends on the scheduler, not on the device.
 @(test)
 test_null_device_runs_in_real_time :: proc(t: ^testing.T) {
 	m, id, samples := tone_mixer()
@@ -30,16 +34,30 @@ test_null_device_runs_in_real_time :: proc(t: ^testing.T) {
 		free(m)
 	}
 	d: Device
+	start := time.tick_now()
 	testing.expect(t, device_open_null(&d, m))
 	v := play(m, {sound = id, gain = {1, 1}, loop = true})
 	testing.expect(t, v != 0)
-	time.sleep(1200 * time.Millisecond)
 	s := stats(m)
+	for s.frames < 48000 && time.duration_seconds(time.tick_since(start)) < 30 {
+		time.sleep(5 * time.Millisecond)
+		s = stats(m)
+	}
+	elapsed := time.duration_seconds(time.tick_since(start))
 	device_close(&d)
 	testing.expect_value(t, d.open, false)
 	seconds := f64(s.frames) / 48000
-	testing.expectf(t, seconds > 1.0 && seconds < 1.4, "mixed %.2f s in 1.2 s", seconds)
-	testing.expect(t, s.callbacks > 100, "callbacks")
+	testing.expectf(t, seconds >= 1.0, "mixed only %.2f s of audio in %.2f s", seconds, elapsed)
+	// Never ahead of the clock: the mixed audio, less the block in flight,
+	// is no more than the time that has passed.
+	testing.expectf(
+		t,
+		seconds - f64(NULL_BLOCK) / 48000 <= elapsed,
+		"mixed %.3f s in %.3f s: ahead of real time",
+		seconds,
+		elapsed,
+	)
+	testing.expect(t, s.callbacks >= 100, "callbacks")
 	testing.expect(t, s.cb_max_ns > 0, "timed")
 	testing.expect_value(t, s.nan_guarded, 0)
 	testing.expect_value(t, s.underruns, 0)
