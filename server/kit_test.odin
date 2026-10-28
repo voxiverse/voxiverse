@@ -11,9 +11,13 @@ import "../common/game"
 // launcher alone, is what kit_default and a Config's kit are tested with.
 TEST_KIT :: "stone 64, dirt 64, grass 64, sand 64, log 64, leaves 64, water 64, lamp 64, rocket_launcher 1"
 
-@(init)
-test_kit_init :: proc "contextless" () {
-	default_kit_override = TEST_KIT
+// (Odin compiles a _test.odin file into every build of the package: without
+// the `when`, the game and the server started everyone with these blocks.)
+when ODIN_TEST {
+	@(init)
+	test_kit_init :: proc "contextless" () {
+		default_kit_override = TEST_KIT
+	}
 }
 
 @(test)

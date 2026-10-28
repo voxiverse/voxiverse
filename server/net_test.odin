@@ -79,6 +79,7 @@ Net_Client :: struct {
 	fetch:                       ^game.Pack_Fetch, // the Packs it was told of
 	reg:                         ^game.Registry, // built from them (client side: no server/ files); nil: the base pack's
 	pack_parts:                  int, // Pack_Part messages received
+	received:                    int, // bytes of server messages taken (party_test's bandwidth)
 	packs_error:                 string, // why the packs could not be taken (temp)
 }
 
@@ -305,6 +306,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 	netcode.link_receive(&c.link, &c.messages)
 	for p in c.messages {
 		defer netcode.link_free(&c.link, p)
+		c.received += len(p)
 		m, ok := game.decode_server(p, c.scratch, c.reg if c.reg != nil else test_reg())
 		if !testing.expect(t, ok, "invalid message from the server") {continue}
 		#partial switch v in m {

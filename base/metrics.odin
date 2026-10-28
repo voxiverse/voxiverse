@@ -141,6 +141,7 @@ metric_scope_end :: proc "contextless" (m: Metric, start: time.Tick) {
 Metric_Summary :: struct {
 	count:                       int,
 	mean, median, p10, p90, p99: f64,
+	max:                         f64,
 }
 
 // metric_summary: m's samples so far (call once recording has stopped).
@@ -163,5 +164,6 @@ metric_summary :: proc(m: Metric) -> (s: Metric_Summary) {
 		p10 = at(sorted, 0.1),
 		p90 = at(sorted, 0.9),
 		p99 = at(sorted, 0.99),
+		max = f64(sorted[n - 1]),
 	}
 }

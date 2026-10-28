@@ -26,6 +26,7 @@ import "../server"
 // does): results compare on one machine.
 
 BENCH_SCENARIO :: "server"
+BENCH_PARTY :: "party" // the party: the same bots, in survival with the four weapons, shooting each other
 BENCH_VERSION :: 1
 BENCH_REPETITIONS :: 3
 BENCH_BOTS :: 8
@@ -42,27 +43,38 @@ Bot_Stage :: enum u8 {
 }
 
 Bot :: struct {
-	link:     netcode.Link,
-	name:     string,
-	key:      game.Account_Key,
-	yaw:      f32, // its direction out
-	scratch:  ^game.Block_Array,
-	schema:   game.Schema,
-	rx:       game.Receiver, // what the server says (its own player: Own_Player)
-	messages: [dynamic][]u8,
-	stage:    Bot_Stage,
-	welcomed: bool,
-	position: [3]f64, // the server's last word
-	flying:   bool,
-	seq:      u32,
-	next:     time.Tick, // its next input (one a tick, as a client sends)
-	asked:    bool, // the teleport and flying asked for
+	link:                     netcode.Link,
+	name:                     string,
+	key:                      game.Account_Key,
+	yaw:                      f32, // its direction out
+	scratch:                  ^game.Block_Array,
+	schema:                   game.Schema,
+	rx:                       game.Receiver, // what the server says (its own player: Own_Player)
+	messages:                 [dynamic][]u8,
+	stage:                    Bot_Stage,
+	welcomed:                 bool,
+	position:                 [3]f64, // the server's last word
+	flying:                   bool,
+	seq:                      u32,
+	next:                     time.Tick, // its next input (one a tick, as a client sends)
+	asked:                    bool, // the teleport and flying asked for
+	// The party scenario's play:
+	others:                   map[u16][3]f64, // where the other players are, as last told
+	dead:                     bool, // at the death screen
+	dead_for:                 int,
+	weapon:                   int, // the hotbar slot in hand
+	changes:                  int, // ticks since it changed weapon
+	inv_seq:                  u32,
+	rng:                      u64,
+	party:                    bool, // play the party instead of flying out
+	shots_seen, hurt, deaths: int, // events it was told of
 }
 
 // run_benchmark runs the server scenario and writes its result.
 // smoke: one short repetition, written as "server-smoke" (CI).
 run_benchmark :: proc(scenario: string, smoke := false) -> bool {
-	if scenario != BENCH_SCENARIO {
+	party := scenario == BENCH_PARTY
+	if scenario != BENCH_SCENARIO && !party {
 		log.errorf(
 			"no benchmark scenario %q in the server (it has: %s; the game has the others)",
 			scenario,
@@ -70,22 +82,24 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 		)
 		return false
 	}
+	scenario_name := BENCH_PARTY if party else BENCH_SCENARIO
 	result := base.Bench_Result {
-		scenario = BENCH_SCENARIO,
+		scenario = scenario_name,
 		version  = BENCH_VERSION,
 	}
 	defer base.bench_result_destroy(&result)
 	log.infof(
-		"bench %s: %d players flying out of a fresh world over UDP (%d repetitions)",
-		BENCH_SCENARIO,
+		"bench %s: %d players %s over UDP (%d repetitions)",
+		scenario_name,
 		BENCH_BOTS,
+		"in survival with all four weapons, shooting each other" if party else "flying out of a fresh world",
 		BENCH_REPETITIONS,
 	)
 	repetitions := 1 if smoke else BENCH_REPETITIONS
-	if smoke {result.scenario = "server-smoke"}
+	if smoke {result.scenario = fmt.tprintf("%s-smoke", scenario_name)}
 	for rep in 0 ..< repetitions {
-		bench_repetition(&result, smoke) or_return
-		log.infof("bench %s repetition %d of %d done", BENCH_SCENARIO, rep + 1, repetitions)
+		bench_repetition(&result, smoke, party) or_return
+		log.infof("bench %s repetition %d of %d done", scenario_name, rep + 1, repetitions)
 	}
 	append(&result.counts, base.Bench_Count{"players", BENCH_BOTS})
 	path := base.bench_result_write(&result)
@@ -102,7 +116,7 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 		for v in medians {lo, hi = min(lo, v), max(hi, v)}
 		log.infof(
 			"bench %s %s %.3f %s (repetitions %.3f..%.3f)",
-			BENCH_SCENARIO,
+			scenario_name,
 			info.name,
 			base.median_of(medians[:]),
 			info.unit,
@@ -110,19 +124,33 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 			hi,
 		)
 	}
-	log.infof("bench %s result=%s", BENCH_SCENARIO, path)
+	if party {
+		// The tick's budget is the tick: the worst of each repetition is listed, not only its median.
+		for rep, i in result.repetitions {
+			t := rep[.Server_Tick]
+			log.infof(
+				"bench party repetition %d: server tick p99 %.3f ms, worst %.3f ms (the budget is %.1f ms)",
+				i + 1,
+				t.p99,
+				t.max,
+				1000.0 / game.TICK_RATE,
+			)
+		}
+	}
+	log.infof("bench %s result=%s", scenario_name, path)
 	return true
 }
 
 // bench_repetition: one server, its players joining, warming up, measured.
 @(private = "file")
-bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
+bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -> bool {
 	config := server.Config {
 		seed            = BENCH_SEED,
-		view_radius     = 12,
-		view_height     = 6,
+		view_radius     = 6 if party else 12,
+		view_height     = 4 if party else 6,
 		workers         = max(1, os.get_processor_core_count() / 2),
-		everyone_cheats = true, // (the teleport up, flying)
+		everyone_cheats = !party, // (the teleport up, flying)
+		mode            = "survival" if party else "",
 		max_players     = BENCH_BOTS,
 		listen          = true,
 		port            = 0, // any free one
@@ -145,6 +173,10 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		for k in 0 ..< 32 {seed[k] = u8(k * 13 + i * 101 + 7)}
 		game.account_key_set(&b.key, seed[:])
 		b.yaw = f32(i) * 2 * math.PI / BENCH_BOTS
+		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
+		b.party = party
+		b.changes = 1000 // (the first tick takes a weapon in hand)
+		b.weapon = 1
 		b.scratch = new(game.Block_Array)
 		b.schema = game.game_schema()
 		game.receiver_init(&b.rx, &b.schema, srv.registry)
@@ -158,6 +190,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		game.receiver_destroy(&b.rx)
 		game.schema_destroy(&b.schema)
 		delete(b.name)
+		delete(b.others)
 	}
 
 	// Joining: every bot in, up and flying.
@@ -188,6 +221,16 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool) -> bool {
 		time.sleep(2 * time.Millisecond)
 	}
 	base.bench_repetition_end(result)
+	if party {
+		shots, hurt, deaths := 0, 0, 0
+		for b in bots {shots, hurt, deaths = shots + b.shots_seen, hurt + b.hurt, deaths + b.deaths}
+		log.infof(
+			"bench party: the bots were told of %d shots, %d hits taken and %d deaths in the whole run",
+			shots,
+			hurt,
+			deaths,
+		)
+	}
 	stopped = true
 	return server.stop(srv)
 }
@@ -226,9 +269,30 @@ pump :: proc(bots: []Bot) {
 					game.receive_snapshot(&b.rx, s.data, &got)
 				}
 				for g in got {
-					if g.op != .Event && game.State_Kind(g.kind) == .Own_Player {
+					if g.op == .Event {
+						#partial switch game.Event_Kind(g.kind - len(game.State_Kind)) {
+						case .Shot:
+							b.shots_seen += 1
+						case .Damage_Hit:
+							b.hurt += 1
+						case .Player_Died:
+							b.deaths += 1
+						}
+						continue
+					}
+					#partial switch game.State_Kind(g.kind) {
+					case .Own_Player:
 						own := (^game.Own_Player)(g.value)
 						b.position, b.flying = own.state.position, own.state.flying
+					case .Player_Motion:
+						id := u16(g.key.a)
+						if g.op == .Remove {
+							delete_key(&b.others, id)
+						} else {
+							b.others[id] = (^game.Player_Motion)(g.value).position
+						}
+					case .Health:
+						b.dead = (^game.Health)(g.value).dead
 					}
 				}
 			case game.Reject:
@@ -247,6 +311,10 @@ pump :: proc(bots: []Bot) {
 // bot_input: up (a teleport, flying), then straight out.
 @(private = "file")
 bot_input :: proc(b: ^Bot) {
+	if b.party {
+		party_input(b)
+		return
+	}
 	input := game.Player_Input {
 		yaw = b.yaw,
 	}
@@ -264,6 +332,55 @@ bot_input :: proc(b: ^Bot) {
 	case .Flying:
 		input.move = {0, 1}
 		input.buttons = {.Sprint}
+	}
+	b.seq += 1
+	send(b, game.Input{b.seq, input, b.rx.ack})
+}
+
+// party_input: stand and turn about among the others, face the nearest, shoot
+// whatever is in hand (the server reloads an empty magazine), change weapon
+// now and then, respawn when dead.
+@(private = "file")
+party_input :: proc(b: ^Bot) {
+	roll :: proc(b: ^Bot) -> u64 {
+		b.rng = b.rng * 6364136223846793005 + 1442695040888963407
+		return b.rng >> 33
+	}
+	b.stage = .Flying // (nothing to wait for: joined is welcomed)
+	input: game.Player_Input
+	if b.dead {
+		b.dead_for += 1
+		if b.dead_for > 15 {
+			send(b, game.Respawn{})
+			b.dead_for = 0
+		}
+	} else {
+		best, near := f64(1e18), [3]f64{}
+		for _, p in b.others {
+			d := p - b.position
+			if dist := d.x * d.x + d.y * d.y + d.z * d.z; dist < best {best, near = dist, p}
+		}
+		input.yaw = b.yaw
+		if best < 1e18 {
+			d := near + {0, 1, 0} - (b.position + {0, 1.6, 0})
+			input.yaw = f32(math.atan2(-d.x, -d.z))
+			b.yaw = input.yaw
+			input.pitch = clamp(f32(math.atan2(d.y, math.sqrt(d.x * d.x + d.z * d.z))), -1.5, 1.5)
+			input.move = {f32(int(roll(b) % 3) - 1), f32(int(roll(b) % 2))}
+		}
+		b.changes += 1
+		if b.changes > 60 + int(roll(b) % 90) {
+			b.changes = 0
+			b.weapon = 1 + int(roll(b) % 3) // (the launcher is the start kit's slot 0, then the mode's pistol, rifle and sniper)
+			b.inv_seq += 1
+			send(b, game.Inventory_Request{b.inv_seq, {kind = .Select, arg = b.weapon}})
+		}
+		if best < 1e18 {
+			b.seq += 1
+			send(b, game.Input{b.seq, input, b.rx.ack})
+			send(b, game.Shoot{b.seq, u8(b.weapon), true, input.yaw, input.pitch})
+			return
+		}
 	}
 	b.seq += 1
 	send(b, game.Input{b.seq, input, b.rx.ack})

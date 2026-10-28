@@ -568,6 +568,27 @@ tools, from narrow to wide:
 `python3 tools/debugger/check_spall.py build/voxiverse.spall` checks a trace (well-formed,
 balanced, aligned when calibrated).
 
+## Found by the party hardening (M48j)
+
+- **`odin test` is not the only build that sees a `_test.odin` file.** Odin compiles every
+  `.odin` file of a package into every build of it; only `@(test)` procedures are dropped.
+  `server/kit_test.odin`'s `@(init)` (the tests' block kit) therefore ran in the game and the
+  server, and every new player started with eight stacks of blocks instead of the launcher
+  and the mode's weapons. It is now inside `when ODIN_TEST`; anything else at package level in a
+  `_test.odin` file that has an effect (an `@(init)`, a global set at start-up) needs the same.
+  `build bench party` found it: its bots held no weapon.
+- **`stats_total("deaths")` counted every death twice**: `die` adds the `deaths` counter and the
+  Death event adds `deaths.<cause>`, and `stats_total` sums a name and its dotted children. The
+  P list's Deaths column (`tally_of`, `players_put`) now reads the exact keys.
+- A message with a pitch past `PITCH_LIMIT` (`Fire`, and so any aim computed straight up or
+  down) is refused as invalid and the sender is disconnected: clamp an aim before sending it.
+- The party's profile (`build bench party`: 8 players, survival, the pistol, rifle and sniper,
+  shooting each other and respawning for 35 seconds, three repetitions): the server's tick has a
+  median of about 1.2 ms, a p99 of 2.0 to 2.1 ms and a worst of 3.2 to 3.6 ms against the 33.3 ms
+  tick; no spike. The client's frame with eight avatars is a hand check (it needs a window).
+- `server/party_test.odin` (`test_party_six_clients`, `test_party_eight_clients`): a stepped
+  server over real UDP, bots from `net_test.odin`'s `Net_Client`, 6 000 ticks; a few seconds each.
+
 ## In CI
 
 Every push builds on Windows, Linux and macOS. On Linux it also runs real frames on Mesa's CPU

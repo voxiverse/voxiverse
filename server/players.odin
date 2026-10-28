@@ -194,10 +194,12 @@ held_item :: proc(c: ^Client) -> game.Item {
 	return st.item if st.count > 0 else game.NO_ITEM
 }
 
-// tally_of: c's kills and deaths, the counters of the damage pipeline.
+// tally_of: c's kills and deaths, the counters of the damage pipeline (the
+// exact keys: stats_total("deaths") also adds the "deaths.<cause>" counters the
+// Death event makes, and counted every death twice).
 @(private)
 tally_of :: proc(c: ^Client) -> game.Tally {
-	return {u32(stats_total(c.stats, "kills")), u32(stats_total(c.stats, "deaths"))}
+	return {u32(c.stats["kills"] or_else 0), u32(c.stats["deaths"] or_else 0)}
 }
 
 // players_put tells a client who else is in its world (their names and what
@@ -214,8 +216,8 @@ players_put :: proc(s: ^Server, c: ^Client) {
 			name   = client_name(&other),
 			worn   = game.worn_of(&other.inventory),
 			held   = held_item(&other),
-			kills  = u32(stats_total(other.stats, "kills")),
-			deaths = u32(stats_total(other.stats, "deaths")),
+			kills  = u32(other.stats["kills"] or_else 0),
+			deaths = u32(other.stats["deaths"] or_else 0),
 		}
 		state_put(s, c, .Player, &record, game.key_player(id))
 		d := other.player.position - c.player.position

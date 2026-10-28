@@ -6503,3 +6503,47 @@ sneak; hold P: kills and deaths update as you shoot each other; F5 pulls in at w
 - Kills and deaths: `Player_Record` gained `kills`, `deaths` (and `held`, the hotbar item, for the raised arm); our own come as a new state kind `Tally` (`kills`, `deaths`), because a player is not sent their own `Player` record. Sorting puts ourselves among the others (the old list had us first). `PROTOCOL_VERSION` 35.
 - Avatar pose: no `Avatar_Pose` state field: `crouched` (the sneak flag) was already in `Player_Motion`, and the speed is derived from the replicated positions of the track (`snapshot_speed`), interpolated like the position. `avatar_pose` (speed, flag, phase, holding, the world's walk and sprint speeds) and `avatar_pose_advance` (the phase follows the ground covered, so it is continuous across speed changes; sneaking takes a shorter stride) are pure. The avatar's legs and arms are now separate boxes. Ourselves in third person still stand (animation of the own avatar was not asked for).
 - Open to LAN: the dialog is the overlay `Open_To_LAN` (`overlay_lan.odin`); it sends `rule default_game_mode <mode>`, `rule guest_role mod|default`, `open_lan`. `guest_role` is a rules-table text entry the grants are resolved with (`resolve(..., guest_role)`): everyone but the owner has that role besides `default`; changing it refreshes the grants of the players already in. Off is `default` (a command argument cannot be empty). New command `close_lan` (node `server.open_lan`): remote players are sent away, the port shut, `guest_role` cleared; the game menu shows "Close LAN" while open. The address is found with `core:net`'s interface list (first up, non-loopback, non-link-local IPv4) and shown with the port; **not copyable**: the platform layer has no clipboard, and adding one per OS is its own piece of work (a clipboard stays on the platform layer's left-out list). A player reads the address off the dialog; it is also what the host tells a friend.
+
+# M48j: party 4: hardening and the hand checks for Thursday evening
+
+- *The eight-client test* (`server/party_test.odin`, `test_party_eight_clients`): the
+  stepped server plus real UDP with 6 and 8 clients (a size argument), each a scripted
+  bot (M39's `Net_Client` helpers) running survival with all four weapons for a few
+  minutes of ticks (at least 5 simulated minutes: 6 000 ticks): moving, shooting, being
+  shot, dying, respawning, reloading, changing modes (one operator toggling creative and
+  back), joining and leaving once.
+  Asserts: **no desyncs** (every client's predicted state equals the server's after each
+  settle; the desync detector reports none), **no leaks** (the server's allocator tracking
+  allocations at the end of the run equal those after a warm-up of a minute: flat within a
+  few hundred bytes; the same for a bot's), **bandwidth within budget** (a new row in the
+  bandwidth roots for the party: per-client downstream under the baseline's per-client
+  budget times 1.5, the rows written in `server/bandwidth_test.odin`), kills and deaths
+  consistent (every death message has a matching kill or source; the sum of kills equals
+  the number of weapon deaths), no negative or over-maximum health ever observed.
+- *Profile a session with 8 players* (`build bench party`: reuses the bench harness; no
+  new infrastructure): the tick time and the frame time of a client in an 8-player session
+  with weapons, the p99 and the worst tick listed. Fix every spike that is not a pure
+  allocation of the test; the fixes are to the code, the thresholds stay: a tick under
+  the budget the bench already states. Anything found is written in docs/debugging.md
+  and fixed here.
+- *The owner's hand checks for Thursday evening* are collected in
+  `docs/party_checks.md` (committed): each M48f-M48i's "Check by hand" in one list in
+  the order of a playtest, each concrete (what to run, what to expect), with a short
+  "what to tune at the party" list: which file and key holds each weapon's damage,
+  fire rate and magazine; the rules (`/rule pvp`, `keep_inventory`,
+  `natural_regeneration`); the commands (`/gamemode`, `/rule`, `/damage`, `/give`).
+  The report lists them too.
+
+**Exit check (M48j):** `test_party_eight_clients` passes for 6 and 8 clients (locally,
+optimized, and in CI), the profile shows no frame or tick over budget, the whole suite and
+`build check`, CI green; `docs/party_checks.md` exists.
+
+**What differed from this spec (M48j):**
+
+- Two tests, `test_party_six_clients` and `test_party_eight_clients`, share one procedure (a test has no arguments). The bots are `Net_Client`s with an added received-bytes counter; they do not predict, so "no desyncs" is the replicated state against the server's at four settles (nobody moves or shoots for 120 ticks; the dead respawn), plus the server's own desync counter staying 0 (it has no checks to judge from bots that send none).
+- The stepped server listens on a real socket: the test steps it, sleeping 0.3 ms between ticks so the packets arrive. 6 000 ticks at the game's 30 a second are 200 simulated seconds, not five minutes; the length is the spec's tick count.
+- The allocator is a tracking allocator in force only while the server runs (start, each step, stop), so the bots' own memory is not in the number. The warm-up is a minute's ticks; the joiner's visit has its own bound (the server keeps a little for a character that came and went), and the flat check runs from after they left, since an autosave and the visit are steps, not a slope. "A few hundred bytes" became 4 KiB over 1 200 ticks (observed about 1.3 KiB: stats counters and the like).
+- The bandwidth "row" is not a stored baseline (a UDP run's bytes are not exact): the budget is the baseline session's server-to-client bytes a tick times 1.5, read from the file. Observed 20 to 45 bytes a tick against 326.
+- `build bench party` is a second scenario of the server benchmark (`dedicated/bench.odin`), and measures the server's tick; the client's frame with eight avatars needs a window and is a hand check.
+- Found: the tests' block kit (`kit_test.odin`'s `@(init)`) ran in every build; the P list counted every death twice. Both fixed, written in docs/debugging.md.
+

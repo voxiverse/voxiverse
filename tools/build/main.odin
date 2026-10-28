@@ -909,7 +909,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, load, views, flight, edits, audio (client/benchmark.odin), server (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
 		)
 		return false
 	}
@@ -930,7 +930,7 @@ bench :: proc(args: []string) -> bool {
 		}
 	}
 	exe := build_game(build_args) or_return
-	if scenario == "server" {
+	if scenario == "server" || scenario == "party" {
 		// The server alone (dedicated/bench.odin).
 		exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	}
