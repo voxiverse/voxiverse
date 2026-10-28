@@ -431,8 +431,11 @@ registry_id_changes :: proc(dst, src: ^Registry) -> string {
 		return out
 	}
 	a, b := lists(dst), lists(src)
+	defer for k in 0 ..< 4 {
+		delete(a[k])
+		delete(b[k])
+	}
 	for k in 0 ..< 4 {
-		defer {delete(a[k]); delete(b[k])}
 		for id, i in a[k] {
 			if i < len(b[k]) && b[k][i] == id {continue}
 			word := "moved"

@@ -186,6 +186,7 @@ test_rotate_and_flip :: proc(t: ^testing.T) {
 		"facing=south,half=top"    = "0,8,0-16,16,16 0,0,8-16,8,16",
 		"facing=west,half=top"     = "0,8,0-16,16,16 0,0,0-8,8,16",
 	}
+	defer delete(want)
 	for state, boxes in want {
 		b, ok := state_parse(reg, fmt.tprintf("testpack:planks_stairs[%s]", state))
 		testing.expect(t, ok)
