@@ -10,22 +10,13 @@ import "../base"
 import "../common/game"
 
 // M46b's budget: what a save costs the tick on a server holding a lot, and how
-// long it takes to land. Budgets are for the CI runner (optimized); an
-// unoptimized build is allowed four times each.
+// long it takes to land. Budgets are for the CI runner: judged in optimized
+// builds only (`base.budget_applies`).
 
 SLICE_BUDGET_US :: 3000
 CAPTURE_BUDGET_US :: 4000
 COMMIT_BUDGET_TICKS :: 150
 BLOCKING_BUDGET_MS :: 1500
-
-@(private = "file")
-budget_scale :: proc() -> i64 {
-	when ODIN_OPTIMIZATION_MODE == .Speed || ODIN_OPTIMIZATION_MODE == .Aggressive {
-		return 1
-	} else {
-		return 4
-	}
-}
 
 // The scene: 200 characters (a full inventory and 300 counters each) not playing,
 // one world with 512 chunks of seeded mixed blocks over 16 regions, all loaded,
@@ -107,12 +98,9 @@ test_save_200_characters :: proc(t: ^testing.T) {
 	start := base.thread_cpu_us()
 	testing.expect(t, save_begin(s), "the capture failed")
 	capture := base.thread_cpu_us() - start
-	testing.expectf(
-		t,
-		capture <= CAPTURE_BUDGET_US * budget_scale(),
-		"capture took %d us",
-		capture,
-	)
+	if base.budget_applies() {
+		testing.expectf(t, capture <= CAPTURE_BUDGET_US, "capture took %d us", capture)
+	}
 
 	// Slices, a tick each; then the worker, at the pace of ticks.
 	ticks := 0
@@ -127,18 +115,15 @@ test_save_200_characters :: proc(t: ^testing.T) {
 		) {return}
 	}
 	testing.expect_value(t, st.generation, generation + 1)
-	testing.expectf(
-		t,
-		ticks <= COMMIT_BUDGET_TICKS * int(budget_scale()),
-		"the save took %d ticks",
-		ticks,
-	)
-	testing.expectf(
-		t,
-		st.slice_worst_us <= SLICE_BUDGET_US * budget_scale(),
-		"the largest slice took %d us",
-		st.slice_worst_us,
-	)
+	if base.budget_applies() {
+		testing.expectf(t, ticks <= COMMIT_BUDGET_TICKS, "the save took %d ticks", ticks)
+		testing.expectf(
+			t,
+			st.slice_worst_us <= SLICE_BUDGET_US,
+			"the largest slice took %d us",
+			st.slice_worst_us,
+		)
+	}
 	log.infof(
 		"save budget: capture %d us, largest slice %d us, %d ticks",
 		capture,
@@ -152,11 +137,13 @@ test_save_200_characters :: proc(t: ^testing.T) {
 	from := time.tick_now()
 	testing.expect(t, save(s), "the blocking save failed")
 	blocking := i64(time.duration_milliseconds(time.tick_since(from)))
-	testing.expectf(
-		t,
-		blocking <= BLOCKING_BUDGET_MS * budget_scale(),
-		"the blocking save took %d ms",
-		blocking,
-	)
+	if base.budget_applies() {
+		testing.expectf(
+			t,
+			blocking <= BLOCKING_BUDGET_MS,
+			"the blocking save took %d ms",
+			blocking,
+		)
+	}
 	log.infof("save budget: blocking save %d ms", blocking)
 }

@@ -622,7 +622,9 @@ test_audit_budget :: proc(t: ^testing.T) {
 	lines := audit(s)
 	took := base.thread_cpu_us() - start
 	testing.expect_value(t, len(lines), 0)
-	testing.expectf(t, took < 10_000, "the audit took %d us", took)
+	if base.budget_applies() {
+		testing.expectf(t, took < 10_000, "the audit took %d us", took)
+	}
 	free_all(context.temp_allocator)
 }
 

@@ -5,6 +5,7 @@ import "core:math"
 import "core:testing"
 import "core:time"
 
+import "../base"
 import "../common/game"
 
 // M11's exit check: a dam break. A pool of water on a raised stone
@@ -217,18 +218,19 @@ test_water_flood :: proc(t: ^testing.T) {
 		a.notices[:],
 	)
 	testing.expectf(t, most >= 10000, "%s: not 10 000 flowing", log_line)
-	testing.expectf(
-		t,
-		worst < WATER_TICK_BUDGET_MS,
-		"%s: over %d ms",
-		log_line,
-		WATER_TICK_BUDGET_MS,
-	)
+	if base.budget_applies() {
+		testing.expectf(
+			t,
+			worst < WATER_TICK_BUDGET_MS,
+			"%s: over %d ms",
+			log_line,
+			WATER_TICK_BUDGET_MS,
+		)
+	}
 }
 
 // The slowest tick allowed while 10 000 blocks of water flow: a tick, 33
-// ms, optimized (CI runs the timed tests one at a time). Unoptimized, sharing the machine with
-// the other tests running at once, only a gross slowdown fails.
+// ms. Judged in optimized builds only (CI runs the timed tests one at a time);
+// the unoptimized suite checks the flow, not the clock (#55).
 @(private = "file")
-WATER_TICK_BUDGET_MS ::
-	150 when ODIN_OPTIMIZATION_MODE == .None || ODIN_OPTIMIZATION_MODE == .Minimal else 33
+WATER_TICK_BUDGET_MS :: 33

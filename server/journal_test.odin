@@ -9,6 +9,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "../base"
 import "../common/game"
 
 // M45: the edit journal. test_grief_rolled_back is the exit check: a player
@@ -712,8 +713,6 @@ test_journal_cost :: proc(t: ^testing.T) {
 			}, tick)
 	}
 	cost := w.journal.cost_cycles
-	allow := 1.0
-	when ODIN_OPTIMIZATION_MODE == .None {allow = 4}
 	share := f64(cost) / f64(total)
 	per_tick_ms := share * f64(wall_ns) / f64(s.tick - started) / 1e6
 	log_line := fmt.tprintf(
@@ -729,18 +728,20 @@ test_journal_cost :: proc(t: ^testing.T) {
 		"the scenario changed only %d blocks",
 		w.journal.head,
 	)
-	testing.expectf(
-		t,
-		share <= 0.05 * allow,
-		"the journal's share of tick time is too high: %s",
-		log_line,
-	)
-	testing.expectf(
-		t,
-		per_tick_ms <= 0.5 * allow,
-		"the journal's mean per tick is too high: %s",
-		log_line,
-	)
+	if base.budget_applies() {
+		testing.expectf(
+			t,
+			share <= 0.05,
+			"the journal's share of tick time is too high: %s",
+			log_line,
+		)
+		testing.expectf(
+			t,
+			per_tick_ms <= 0.5,
+			"the journal's mean per tick is too high: %s",
+			log_line,
+		)
+	}
 }
 
 // M48c: a filled chest broken, the server restarted: the rollback finds the

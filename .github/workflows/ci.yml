@@ -131,7 +131,7 @@ jobs:
       # of water costs the flood its tick budget (#26). Run one after the
       # other, nothing outlives a test: no thread, the same memory.
       - name: Optimized tests
-        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost,server.test_save_200_characters -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
+        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost,server.test_save_200_characters,server.test_audit_budget -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
       # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
       # writer keeps up; optimized, with budgets for a slow runner.
       - name: Event cost, optimized
