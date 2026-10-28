@@ -69,8 +69,11 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		testing.expect(t, !ok)
 	}
 	result: Server_Message
-	result, ok = decode_server_t(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air})[:], scratch)
-	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air})
+	result, ok = decode_server_t(encode_s(Edit_Result{5, true, {1, 2, 3}, .Air, nil})[:], scratch)
+	testing.expect(t, ok && result.(Edit_Result) == Edit_Result{5, true, {1, 2, 3}, .Air, nil})
+	with_companion := Edit_Result{6, false, {1, 2, 3}, .Stone, Companion_Record{{1, 3, 3}, .Air}}
+	result, ok = decode_server_t(encode_s(with_companion)[:], scratch)
+	testing.expect(t, ok && result.(Edit_Result) == with_companion)
 	column := Column {
 		pos = {-7, 12},
 	}
@@ -293,7 +296,7 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 			},
 		),
 		encode_s(Bulk_Begin{1}),
-		encode_s(Edit_Result{1, false, {}, .Stone}),
+		encode_s(Edit_Result{1, false, {}, .Stone, nil}),
 		encode_s(Column{}),
 		encode_s(Reject{"bye"}),
 		encode_s(Chunk_Message{}, &terrain),

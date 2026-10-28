@@ -161,6 +161,9 @@ receive :: proc(s: ^Session) {
 			// The server's word, accepted or not: set it (undoing a rejected
 			// prediction) and stop waiting.
 			world_set_block(&s.world, v.pos, v.block)
+			if c, two := v.companion.?; two {world_set_block(&s.world, c.pos, c.block)}
+			predict_neighbours(s, v.pos)
+			if c, two := v.companion.?; two {predict_neighbours(s, c.pos)}
 			for e, i in s.edits {
 				if e.id == v.id {
 					ordered_remove(&s.edits, i)

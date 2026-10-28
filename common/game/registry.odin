@@ -82,6 +82,8 @@ TEXTURE_GENERATOR_NAMES := [?]string {
 	"chest_side",
 	"chest_top",
 	"ladder",
+	"door_lower",
+	"door_upper",
 }
 @(rodata)
 SOUND_GENERATOR_NAMES := [?]string {
@@ -183,10 +185,30 @@ Place_Rule :: enum u8 {
 	Stairs,
 	Slab,
 	Attached,
+	Connect, // the default state with its neighbours' connections (a fence)
+	Door, // two cells, a lower and an upper half
 }
 
-PLACE_RULE_LIST := [?]string{"default", "stairs", "slab", "attached"}
+PLACE_RULE_LIST := [?]string{"default", "stairs", "slab", "attached", "connect", "door"}
 #assert(len(PLACE_RULE_LIST) == len(Place_Rule))
+
+// Use_Rule: what the right button does to a block of the type (besides what
+// the item in hand does): an edit of its state, predicted like any edit.
+Use_Rule :: enum u8 {
+	None,
+	Toggle_Open, // flips the property `open`
+}
+
+USE_RULE_LIST := [?]string{"none", "toggle_open"}
+#assert(len(USE_RULE_LIST) == len(Use_Rule))
+
+// Block_Entity_Kind: the data a block of its own keeps beyond its state
+// (block_entity.odin). The kinds are the engine's.
+Block_Entity_Kind :: enum u8 {
+	None,
+	Container,
+}
+
 
 // Type_Def: one block type: its states are first_state ..< first_state +
 // state_count, the index within the type mixed-radix over props (the last
@@ -199,6 +221,9 @@ Type_Def :: struct {
 	default:     Block,
 	place:       Place_Rule,
 	climbable:   bool,
+	connect:     i32, // a block tag index: what a side connects to, or NO_TAG (north..west are bool properties)
+	use:         Use_Rule,
+	entity:      Block_Entity_Kind,
 }
 
 // Box: a box in sixteenths of a block, 0 <= lo < hi <= 16 (collision boxes
@@ -738,13 +763,16 @@ registry_text_of :: proc(
 	for d in reg.blocks.types {
 		fmt.sbprintf(
 			&b,
-			"type %s first=%d count=%d default=%d place=%v climbable=%v props=",
+			"type %s first=%d count=%d default=%d place=%v climbable=%v connect=%d use=%v entity=%v props=",
 			d.id,
 			d.first_state,
 			d.state_count,
 			d.default,
 			d.place,
 			d.climbable,
+			d.connect,
+			d.use,
+			d.entity,
 		)
 		for p in d.props {fmt.sbprintf(&b, "%s%v;", p.name, p.values)}
 		strings.write_byte(&b, '\n')

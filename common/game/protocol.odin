@@ -15,7 +15,7 @@ import "../../base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 28
+PROTOCOL_VERSION :: 29
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -448,11 +448,21 @@ Column :: struct {
 
 // Edit_Result answers an Edit: accepted or not, and the block now at pos
 // either way (the client sets it, undoing a rejected prediction).
+//
+// An edit of a two-cell block (a door) answers for the other cell too:
+// `companion`, where it is and what the server has there, so a refusal puts
+// both back.
 Edit_Result :: struct {
-	id:       u32,
-	accepted: bool,
-	pos:      Block_Pos,
-	block:    Block,
+	id:        u32,
+	accepted:  bool,
+	pos:       Block_Pos,
+	block:     Block,
+	companion: Maybe(Companion_Record),
+}
+
+Companion_Record :: struct {
+	pos:   Block_Pos,
+	block: Block,
 }
 
 // State_Message and Snapshot_Message carry the bytes of a State or Snapshot
@@ -833,6 +843,13 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_u8(w, 1 if v.accepted else 0)
 		write_block_pos(w, v.pos)
 		write_u16(w, u16(v.block))
+		if c, has := v.companion.?; has {
+			write_u8(w, 1)
+			write_block_pos(w, c.pos)
+			write_u16(w, u16(c.block))
+		} else {
+			write_u8(w, 0)
+		}
 	case Column:
 		write_u8(w, u8(Server_Kind.Column))
 		write_i32(w, v.pos.x)
@@ -1096,6 +1113,11 @@ decode_server :: proc(
 		e.accepted = flag == 1
 		e.pos = read_block_pos(&r)
 		e.block = read_block(&r)
+		has := read_u8(&r)
+		if has > 1 {reader_fail(&r)}
+		if has == 1 {
+			e.companion = Companion_Record{read_block_pos(&r), read_block(&r)}
+		}
 		m = e
 	case u8(Server_Kind.Column):
 		c: Column

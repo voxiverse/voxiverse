@@ -60,6 +60,8 @@ Texture_Generator :: enum u32 {
 	Chest_Side,
 	Chest_Top,
 	Ladder,
+	Door_Lower,
+	Door_Upper,
 }
 
 // block_texture: the layer of the client's texture array that b's face f
@@ -321,6 +323,19 @@ generate_texture :: proc(t: Texture_Generator, pixels: []Rgba) {
 				c = {}
 				if rail ||
 				   rung {c = shade(WOOD, 0.3 + 0.35 * hash01(seed ~ 89, x / 2, y / 2) + 0.2 * fine)}
+			case .Door_Lower, .Door_Upper:
+				// Planks in a frame; the upper half has a window.
+				board := x / 4
+				v := 0.3 + 0.25 * hash01(seed ~ 97, board, 0) + 0.2 * fine
+				if x % 4 == 3 {v = 0.05}
+				c = shade(WOOD, v)
+				frame := x < 2 || x >= TEXTURE_SIZE - 2 || y < 2 || y >= TEXTURE_SIZE - 2
+				if frame {c = shade(WOOD, 0.1 + 0.2 * fine)}
+				if t == .Door_Upper && x >= 4 && x < 12 && y >= 4 && y < 11 {
+					c = shade(WINDOW, 0.4 + 0.4 * coarse)
+				}
+				knob := t == .Door_Lower && x >= 11 && x < 13 && y >= 7 && y < 9
+				if knob {c = shade(IRON, 0.5 + 0.4 * fine)}
 			case .Cactus_Top:
 				c = shade(CACTUS, 0.35 + 0.25 * coarse + 0.25 * fine)
 				if x == 0 ||
@@ -504,6 +519,14 @@ COAL := [5]Rgba {
 	{40, 40, 44, 255},
 	{54, 54, 58, 255},
 	{70, 70, 74, 255},
+}
+@(private = "file", rodata)
+WINDOW := [5]Rgba {
+	{52, 78, 104, 255},
+	{70, 102, 132, 255},
+	{92, 128, 160, 255},
+	{118, 154, 184, 255},
+	{150, 184, 210, 255},
 }
 @(private = "file", rodata)
 IRON := [5]Rgba {

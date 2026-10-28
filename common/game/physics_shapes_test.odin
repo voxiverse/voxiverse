@@ -1,5 +1,6 @@
 package game
 
+import "core:fmt"
 import "core:math"
 import "core:math/rand"
 import "core:testing"
@@ -330,4 +331,109 @@ test_ladder :: proc(t: ^testing.T) {
 	z0 := s.position.y
 	walk(&s, {move = {0, -1}, yaw = 0}, &w, reg, 40) // backward: into the wall (+z)
 	testing.expectf(t, s.position.y > z0 + 1, "climbed to %v from %v", s.position.y, z0)
+}
+
+@(test)
+test_fence_cannot_be_jumped :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	w := Shaped_World {
+		floor = 0,
+	}
+	defer delete(w.blocks)
+	// A fence line across x = 3 (z -2..2); the walker runs east into it, jumping.
+	for z in i32(-2) ..= 2 {
+		set(&w, reg, {3, 0, z}, "voxiverse:planks_fence[north=true,south=true]")
+	}
+	s := Player_State {
+		position = {0.5, 0, 0.5},
+	}
+	walk(&s, {}, &w, reg, 10)
+	input := Player_Input {
+		move = {0, 1},
+		yaw  = -math.PI / 2,
+	}
+	most := f64(0)
+	for i in 0 ..< 200 {
+		in_ := input
+		if i % 10 == 0 {in_.buttons += {.Jump}}
+		walk(&s, in_, &w, reg, 1)
+		most = max(most, s.position.y)
+	}
+	testing.expectf(t, most > 0.8, "never jumped (%v)", most)
+	// (the post's west face is at 3.375: the player's centre stops 0.3 short of it)
+	testing.expectf(t, s.position.x < 3.1, "got over the fence: x = %v", s.position.x)
+	// Open ground has nothing in the way.
+	w2 := Shaped_World {
+		floor = 0,
+	}
+	defer delete(w2.blocks)
+	s = {
+		position = {0.5, 0, 0.5},
+	}
+	walk(&s, input, &w2, reg, 60)
+	testing.expectf(t, s.position.x > 5, "free ground: x = %v", s.position.x)
+}
+
+@(test)
+test_door_stops_when_closed_and_lets_through_when_open :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	// A door in a wall at x = 3 (a gap one wide, two high), facing east: closed,
+	// its plate lies on the cell's east edge (the north plate turned east).
+	run :: proc(reg: ^Registry, open: string, start_x: f64) -> f64 {
+		w := Shaped_World {
+			floor = 0,
+		}
+		defer delete(w.blocks)
+		for y in i32(0) ..< 4 {
+			for z in i32(-3) ..= 3 {w.blocks[{3, y, z}] = .Stone}
+		}
+		set(&w, reg, {3, 0, 0}, fmt_door("lower", open))
+		set(&w, reg, {3, 1, 0}, fmt_door("upper", open))
+		s := Player_State {
+			position = {start_x, 0, 0.5},
+		}
+		walk(&s, {}, &w, reg, 10)
+		input := Player_Input {
+			move = {0, 1},
+			yaw  = -math.PI / 2,
+		}
+		walk(&s, input, &w, reg, 120)
+		return s.position.x
+	}
+	// facing=east closed: the plate [0,0,0,16,16,3] turned east is x 13..16.
+	closed := run(reg, "false", 0.5)
+	testing.expectf(t, closed < 3.8, "through a closed door: x = %v", closed)
+	opened := run(reg, "true", 0.5)
+	testing.expectf(t, opened > 4.5, "stopped by an open door: x = %v", opened)
+}
+
+@(private = "file")
+fmt_door :: proc(half, open: string) -> string {
+	return fmt.tprintf("voxiverse:planks_door[facing=east,half=%s,open=%s]", half, open)
+}
+
+@(test)
+test_player_in_a_closing_door_walks_out :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	w := Shaped_World {
+		floor = 0,
+	}
+	defer delete(w.blocks)
+	// The door faces north (plate on the north edge, z 0..3 sixteenths), closed,
+	// with the player standing inside its cell, south of the plate.
+	set(&w, reg, {0, 0, 0}, "voxiverse:planks_door[facing=north,half=lower,open=false]")
+	set(&w, reg, {0, 1, 0}, "voxiverse:planks_door[facing=north,half=upper,open=false]")
+	s := Player_State {
+		position = {0.5, 0, 0.1}, // overlapping the plate (z 0..0.1875)
+	}
+	walk(&s, {}, &w, reg, 10)
+	south := Player_Input {
+		move = {0, 1},
+		yaw  = math.PI, // forward is +z
+	}
+	walk(&s, south, &w, reg, 40)
+	testing.expectf(t, s.position.z > 1, "stuck in the door: z = %v", s.position.z)
 }

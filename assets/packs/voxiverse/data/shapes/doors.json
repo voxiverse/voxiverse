@@ -1,0 +1,7 @@
+{
+	"door": {
+		"boxes": [[0, 0, 0, 16, 16, 3]],
+		"rotate": "facing",
+		"cases": [{"when": {"open": "true"}, "replace": true, "boxes": [[0, 0, 0, 3, 16, 16]]}]
+	}
+}

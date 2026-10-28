@@ -27,10 +27,7 @@ FIRE_EVERY :: game.TICK_RATE / 4
 queue_action :: proc(s: ^Server, c: ^Client, a: Action) {
 	w := c.world
 	if c.action_count == MAX_QUEUED_ACTIONS {
-		if e, edit := a.(game.Edit); edit {
-			current, _ := chunks_block(&w.chunks, e.pos)
-			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
-		}
+		if e, edit := a.(game.Edit); edit {send_message(s, c, edit_refused(w, e))}
 		return
 	}
 	c.actions[c.action_count] = a
@@ -81,69 +78,143 @@ action_after :: proc(a: Action) -> u32 {
 	return 0
 }
 
-// apply_edit checks an edit against the shared rules, from where the server
-// has the player, and applies it if it passes.
-apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
-	w := c.world
-	current, loaded := chunks_block(&w.chunks, e.pos)
-	result := game.Edit_Result {
+// edit_refused: the answer to an edit nobody looked at: the blocks as they are.
+edit_refused :: proc(w: ^World, e: game.Edit) -> game.Edit_Result {
+	current, _ := chunks_block(&w.chunks, e.pos)
+	r := game.Edit_Result {
 		id    = e.id,
 		pos   = e.pos,
 		block = current,
 	}
-	if !loaded {return result}
+	cell, _, two := game.companion(w.server.registry, current, e.pos)
+	if !two {cell, _, two = game.companion(w.server.registry, e.block, e.pos)}
+	if b, there := chunks_block(&w.chunks, cell); two && there {
+		r.companion = game.Companion_Record{cell, b}
+	}
+	return r
+}
+
+// apply_edit checks an edit against the shared rules, from where the server
+// has the player, and applies it if it passes. An edit of a two-cell block (a
+// door) answers for the other cell too.
+apply_edit :: proc(s: ^Server, c: ^Client, e: game.Edit) -> game.Edit_Result {
+	result, cell, two := apply_edit_cells(s, c, e)
+	if b, there := chunks_block(&c.world.chunks, cell); two && there {
+		result.companion = game.Companion_Record{cell, b}
+	}
+	return result
+}
+
+// apply_edit_cells: apply_edit's work; it also says which other cell the edit
+// concerns (the other half of a door), whatever became of it.
+@(private = "file")
+apply_edit_cells :: proc(
+	s: ^Server,
+	c: ^Client,
+	e: game.Edit,
+) -> (
+	result: game.Edit_Result,
+	cell: game.Block_Pos,
+	two: bool,
+) {
+	w := c.world
+	t := &s.registry.blocks
+	current, loaded := chunks_block(&w.chunks, e.pos)
+	result = {
+		id    = e.id,
+		pos   = e.pos,
+		block = current,
+	}
+	if !loaded {return}
+	cell_to: game.Block
+	cell, cell_to, two = game.companion(s.registry, current, e.pos)
+	if !two {cell, cell_to, two = game.companion(s.registry, e.block, e.pos)}
 	player := c.player
 	if !game.in_reach(
 		game.player_eye(player),
 		e.pos,
 		f64(w.rules.reach) + game.EDIT_REACH_SLACK,
-	) {return result}
+	) {return}
 	ok := false
 	slot := -1 // placing from (infinite: none)
 	infinite := allowed(s, c, "items.infinite")
 	tilling := e.block == .Farmland
-	if e.block == .Air {
-		ok = game.can_break(&s.registry.blocks, current)
-	} else if tilling {
+	kind := game.edit_kind(t, current, e.block)
+	other_to: game.Block // what the other cell of a two-cell block becomes
+	moves_other := false
+	switch {
+	case kind == .Break:
+		ok = game.can_break(t, current)
+		// (a half whose other half is not there breaks alone)
+		there, _ := chunks_block(&w.chunks, cell)
+		if two && there == cell_to {moves_other, other_to = true, .Air}
+	case kind == .Toggle:
+		// A door turns on both halves, which must be there and agree.
+		there, _ := chunks_block(&w.chunks, cell)
+		if !two || there != cell_to {return}
+		_, other_to, _ = game.companion(s.registry, e.block, e.pos)
+		moves_other = true
+		ok = e.face == game.EDIT_FACE_PLAIN
+	case tilling:
 		// The hoe: farmland out of grass or dirt with air above.
 		above, _ := chunks_block(&w.chunks, e.pos + {0, 1, 0})
 		hoe := game.inventory_held(&c.inventory).item == game.item_of_tool(.Hoe)
 		ok = hoe && game.can_till(s.registry, current, above)
-	} else {
+	case:
 		if !infinite {slot = game.inventory_placing_slot(s.registry, &c.inventory, e.block)}
 		ok =
 			(infinite || slot >= 0) &&
-			game.can_place(&s.registry.blocks, e.block) &&
+			game.can_place(t, e.block) &&
 			placement_agrees(s, c, e) &&
-			game.can_place_at(&s.registry.blocks, current, e.block, e.pos, player) &&
+			game.can_place_at(t, current, e.block, e.pos, player) &&
 			support_placeable(w, e.pos, e.block) &&
 			!anyone_else_in(s, c, e.pos, e.block)
+		if two && ok {
+			// The upper half goes where the lower half's rule left room for it.
+			above, loaded2 := chunks_block(&w.chunks, cell)
+			ok =
+				loaded2 &&
+				game.can_place_at(t, above, cell_to, cell, player) &&
+				!anyone_else_in(s, c, cell, cell_to)
+			moves_other, other_to = true, cell_to
+		}
 	}
-	if !ok {return result}
-	act := Act {
-		action_begin(w, actor_of(s, c), .Till if tilling else .Hand),
-		.Till if tilling else .Hand,
+	if !ok {return}
+	system := game.Edit_System.Till if tilling else .Hand
+	act := Act{action_begin(w, actor_of(s, c), system), system}
+	if moves_other && admit(w, act, cell) != .Yes {
+		protect_notice(s, c, act, cell)
+		return
 	}
 	if !set_block(w, e.pos, e.block, act, c) {
 		protect_notice(s, c, act, e.pos)
-		return result
+		return
 	}
-	result.accepted, result.block = true, e.block
+	if moves_other {
+		// (breaking the lower half took the upper with it already: its support went)
+		if now, _ := chunks_block(&w.chunks, cell); now != other_to {
+			set_block(w, cell, other_to, act, c)
+		}
+	}
+	result.accepted = true
+	result.block, _ = chunks_block(&w.chunks, e.pos)
 	if tilling && farmland_wet(w, e.pos) {set_block(w, e.pos, .Farmland_Moist, act)} 	// (everyone is told, the tiller too)
 	switch {
-	case e.block == .Air:
+	case kind == .Break:
 		record(s, c, .Block_Mined, game.block_name(s.registry, current), at = e.pos)
+	case kind == .Toggle:
+		record(s, c, .Item_Used, game.block_name(s.registry, e.block), at = e.pos)
 	case tilling:
 		record(s, c, .Item_Used, "hoe", at = e.pos)
 	case:
 		record(s, c, .Block_Placed, game.block_name(s.registry, e.block), at = e.pos)
 	}
-	if e.block == .Air {
+	if kind == .Break {
 		broken_drop(s, c, e.pos, current)
 	} else if slot >= 0 {
 		used_to_place(s, c, slot)
 	}
-	return result
+	return
 }
 
 // attack: a player hits an entity, if it is within reach of where the

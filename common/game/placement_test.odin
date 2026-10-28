@@ -220,3 +220,148 @@ registry_block_must :: proc(reg: ^Registry, text: string) -> Block {
 	if !ok {panic(text)}
 	return b
 }
+
+@(private = "file")
+block_named :: proc(reg: ^Registry, name: string) -> Block {
+	b, ok := registry_block(reg, name)
+	if !ok {panic(name)}
+	return b
+}
+
+@(private = "file")
+sides_of :: proc(reg: ^Registry, b: Block) -> (sides: [4]bool) {
+	for name, i in ROTATE_VALUES {sides[i] = state_is(&reg.blocks, b, name, "true")}
+	return
+}
+
+@(test)
+test_fence_states :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	w: Map_World
+	defer delete(w)
+	q := map_query(&w, reg)
+	fence := block_named(reg, "planks_fence")
+	type := type_named(reg, "planks_fence")
+	at := Block_Pos{0, 1, 0}
+	// Alone: no side.
+	testing.expect_value(t, sides_of(reg, shape_update(reg, fence, at, q)), [4]bool{})
+	// Beside another fence (east), stone (south), a stair's full back (west) and
+	// its partial side, a slab's partial side, water: north, east, south, west.
+	w[at + {1, 0, 0}] = fence
+	w[at + {0, 0, 1}] = .Stone
+	w[at + {-1, 0, 0}] = block_named(reg, "stone_stairs[facing=east,half=bottom]")
+	w[at + {0, 0, -1}] = block_named(reg, "stone_slab[type=bottom]")
+	got := sides_of(reg, shape_update(reg, fence, at, q))
+	// A stair facing east has its high side east: the face toward the fence is full.
+	testing.expect_value(t, got, [4]bool{false, true, true, true})
+	// Facing west, the face toward the fence is the low step: partial, no join.
+	w[at + {-1, 0, 0}] = block_named(reg, "stone_stairs[facing=west,half=bottom]")
+	got = sides_of(reg, shape_update(reg, fence, at, q))
+	testing.expect_value(t, got, [4]bool{false, true, true, false})
+	// Water is not a wall.
+	w[at + {0, 0, -1}] = block_named(reg, "water")
+	got = sides_of(reg, shape_update(reg, fence, at, q))
+	testing.expect_value(t, got[0], false)
+	// Placing next to a fence gives the placed one the side.
+	w[at + {1, 0, 0}] = fence
+	_, placed, ok := placement(
+		reg,
+		type,
+		{target = {-3, 0, 0}, face = .Pos_Y, hit = {8, 16, 8}},
+		q,
+	)
+	testing.expect(t, ok)
+	testing.expect_value(t, sides_of(reg, placed), [4]bool{})
+	// Changing a cell updates the neighbours that follow it.
+	w[at] = fence
+	w[at + {1, 0, 0}] = fence
+	changes: [4]Block_Change
+	n := neighbour_updates(reg, at + {1, 0, 0}, q, &changes)
+	testing.expect_value(t, n >= 1, true)
+	found := false
+	for c in changes[:n] {
+		if c.pos == at {
+			found = true
+			testing.expect_value(t, sides_of(reg, c.b)[1], true) // east
+		}
+	}
+	testing.expect(t, found, "the fence beside did not join")
+}
+
+@(test)
+test_door_placement_and_companions :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	w: Map_World
+	defer delete(w)
+	q := map_query(&w, reg)
+	door := type_named(reg, "planks_door")
+	w[{0, 0, 0}] = .Stone
+	ctx := Place_Context {
+		target = {0, 0, 0},
+		face   = .Pos_Y,
+		hit    = {8, 16, 8},
+		yaw    = 0,
+	}
+	pos, b, ok := placement(reg, door, ctx, q)
+	testing.expect(t, ok)
+	testing.expect_value(t, pos, Block_Pos{0, 1, 0})
+	testing.expect_value(
+		t,
+		text(reg, b),
+		"voxiverse:planks_door[facing=north,half=lower,open=false]",
+	)
+	at, other, has := companion(reg, b, pos)
+	testing.expect(t, has)
+	testing.expect_value(t, at, Block_Pos{0, 2, 0})
+	testing.expect_value(
+		t,
+		text(reg, other),
+		"voxiverse:planks_door[facing=north,half=upper,open=false]",
+	)
+	back, lower, has_back := companion(reg, other, at)
+	testing.expect(t, has_back)
+	testing.expect_value(t, back, pos)
+	testing.expect_value(t, lower, b)
+	_, _, plain := companion(reg, .Stone, {})
+	testing.expect(t, !plain)
+	// No room above: refused.
+	w[{0, 2, 0}] = .Stone
+	_, _, ok = placement(reg, door, ctx, q)
+	testing.expect(t, !ok, "a door without room above")
+	delete_key(&w, Block_Pos{0, 2, 0})
+	// No floor: refused (a slab's top half is not a full face, nor air).
+	_, _, ok = placement(reg, door, {target = {0, 0, 0}, face = .Pos_X, hit = {16, 8, 8}}, q)
+	testing.expect(t, !ok, "a door over air")
+	w[{1, -1, 0}] = block_named(reg, "stone_slab[type=bottom]")
+	_, _, ok = placement(reg, door, {target = {0, 0, 0}, face = .Pos_X, hit = {16, 8, 8}}, q)
+	testing.expect(t, !ok, "a door on a bottom slab")
+	w[{1, -1, 0}] = block_named(reg, "stone_slab[type=top]")
+	_, _, ok = placement(reg, door, {target = {0, 0, 0}, face = .Pos_X, hit = {16, 8, 8}}, q)
+	testing.expect(t, ok, "a door on a top slab")
+	// The upper half holds only on a lower half; the lower on a full top face.
+	w[pos] = b
+	testing.expect(t, support_holds(&reg.blocks, other, at, q))
+	delete_key(&w, pos)
+	testing.expect(t, !support_holds(&reg.blocks, other, at, q))
+	delete_key(&w, Block_Pos{0, 0, 0})
+	testing.expect(t, !support_holds(&reg.blocks, b, pos, q))
+}
+
+@(test)
+test_edit_kind :: proc(t: ^testing.T) {
+	reg := registry_base()
+	defer registry_destroy(reg)
+	tb := &reg.blocks
+	closed := block_named(reg, "planks_door[facing=east,half=upper,open=false]")
+	opened := block_named(reg, "planks_door[facing=east,half=upper,open=true]")
+	turned := block_named(reg, "planks_door[facing=west,half=upper,open=false]")
+	testing.expect_value(t, edit_kind(tb, .Stone, .Air), Edit_Kind.Break)
+	testing.expect_value(t, edit_kind(tb, .Air, .Stone), Edit_Kind.Place)
+	testing.expect_value(t, edit_kind(tb, closed, opened), Edit_Kind.Toggle)
+	testing.expect_value(t, edit_kind(tb, opened, closed), Edit_Kind.Toggle)
+	testing.expect_value(t, edit_kind(tb, closed, closed), Edit_Kind.Place)
+	testing.expect_value(t, edit_kind(tb, closed, turned), Edit_Kind.Place)
+	testing.expect_value(t, edit_kind(tb, .Stone, opened), Edit_Kind.Place)
+}

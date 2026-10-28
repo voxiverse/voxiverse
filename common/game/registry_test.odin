@@ -5,9 +5,9 @@ import "core:strings"
 import "core:testing"
 
 // The base pack's block types after the builtins: four stairs (8 states each),
-// four slabs (3) and a ladder (4).
-BASE_NEW_TYPES :: 9
-BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4
+// four slabs (3), a ladder (4), a fence (16) and a door (16).
+BASE_NEW_TYPES :: 11
+BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4 + 16 + 16
 BASE_TYPES :: len(Block) + BASE_NEW_TYPES
 BASE_STATES :: len(Block) + BASE_NEW_STATES
 
@@ -327,7 +327,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 					},
 				},
 			),
-			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "override"`,
+			`testpack/data/blocks/a.json:1:41: "zzzzzzzzzzzz" is not a block field; the valid ones are "collides", "opaque", "targetable", "breakable", "placeable", "replaceable", "shades", "cull_same", "liquid", "light", "render", "layer", "textures", "sound", "drop", "support", "states", "default", "shape", "collision", "selection", "render_shape", "place", "climbable", "connect", "use", "entity", "override"`,
 		},
 		{
 			"light out of range",

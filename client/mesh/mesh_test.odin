@@ -327,6 +327,7 @@ test_textures :: proc(t: ^testing.T) {
 		}
 	}
 	layer_of[.Ladder] = .Cutout // (the base pack's ladder block, after the builtins)
+	layer_of[.Door_Lower], layer_of[.Door_Upper] = .Opaque, .Opaque // (its door)
 	a, b: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
 	for tex in Texture_Generator {
 		generate_texture(tex, a[:])

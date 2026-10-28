@@ -627,10 +627,7 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		node = "chat.send"
 	}
 	if node != "" && !allowed(s, c, node) {
-		if e, edit := m.(game.Edit); edit {
-			current, _ := chunks_block(&w.chunks, e.pos)
-			send_message(s, c, game.Edit_Result{id = e.id, pos = e.pos, block = current})
-		}
+		if e, edit := m.(game.Edit); edit {send_message(s, c, edit_refused(w, e))}
 		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
 		return
 	}

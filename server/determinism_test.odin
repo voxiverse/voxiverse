@@ -145,6 +145,7 @@ mirror_pump :: proc(sess: ^Session) {
 			mirror_apply(sess, got[:])
 		case game.Edit_Result:
 			mirror_set(m, v.pos, v.block)
+			if c, two := v.companion.?; two {mirror_set(m, c.pos, c.block)}
 		}
 	}
 }

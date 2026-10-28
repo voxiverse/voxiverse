@@ -41,15 +41,18 @@ changes_begin :: proc(w: ^World) -> ^Changes {
 set_block :: proc(
 	w: ^World,
 	p: game.Block_Pos,
-	b: game.Block,
+	block: game.Block,
 	act: Act,
 	by: ^Client = nil,
 ) -> bool {
 	s := w.server
 	old, loaded := chunks_block(&w.chunks, p)
 	if !loaded {return false}
+	b := block
 	cause := act_current(w, act)
 	if admit(w, cause, p) != .Yes {return false}
+	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks}
+	b = game.shape_update(s.registry, b, p, query) // (a fence set by a command joins what is beside it)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
 	journal_entry(w, cause, p, old, b)
 	if old == .Chest && b != .Chest {chest_gone(w, p)}
@@ -62,6 +65,10 @@ set_block :: proc(
 	wake_water(w, p, cause.action)
 	for d in ([6][3]i32{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		support_check(w, p + d, cause.action) // (a plant or a ladder beside lost its footing, perhaps)
+	}
+	updates: [4]game.Block_Change
+	for u in updates[:game.neighbour_updates(s.registry, p, query, &updates)] {
+		set_block(w, u.pos, u.b, cause) // (a fence beside joins or lets go)
 	}
 	return true
 }

@@ -473,6 +473,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 			}
 		}
 	}
+	read_block_behaviour(b, reg, blocks[:], order)
 	// Every state has what its type has (the shapes aside).
 	for n in 0 ..< len(blocks) {
 		fs := first_state[n]
@@ -482,6 +483,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 			t.defs[fs + k] = t.defs[fs]
 		}
 	}
+	read_upper_textures(b, reg, blocks[:], order, first_state)
 	read_shapes(b, reg, blocks[:], order, first_state)
 
 	// --- Recipes. ---
@@ -817,8 +819,8 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 		return
 	}
 	errors_before := len(b.errs)
-	got: [4]int = {-1, -1, -1, -1} // all, side, top, bottom
-	keys := []string{"all", "side", "top", "bottom"}
+	got: [5]int = {-1, -1, -1, -1, -1} // all, side, top, bottom, upper (read again by read_upper_textures)
+	keys := []string{"all", "side", "top", "bottom", "upper"}
 	for tm in f.value.members {
 		k := -1
 		for name, i in keys {if name == tm.key {k = i}}
@@ -837,8 +839,12 @@ read_block :: proc(b: ^Reg_Build, reg: ^Registry, m: ^Merged_Def, n: int, order,
 		}
 		if at, ok := ref_index(b, .Texture, tm.value.s, f, tm.value); ok {got[k] = at}
 	}
+	if got[4] >= 0 && got[1] < 0 {
+		fail_field(b, f, f.value, "\"upper\" goes with \"side\"")
+		return
+	}
 	if got[0] >= 0 {
-		if got[1] >= 0 || got[2] >= 0 || got[3] >= 0 {
+		if got[1] >= 0 || got[2] >= 0 || got[3] >= 0 || got[4] >= 0 {
 			fail_field(
 				b,
 				f,

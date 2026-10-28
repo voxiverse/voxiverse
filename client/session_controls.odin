@@ -28,11 +28,15 @@ session_use_entity :: proc(s: ^Session) -> bool {
 }
 
 // session_use_block uses the aimed block if it is one that is used (a chest
-// opens: the server answers with its contents); false if it is not.
+// opens: the server answers with its contents; a door turns); false if it is not.
 session_use_block :: proc(s: ^Session) -> bool {
 	hit, aimed := s.aim.?
 	if !aimed {return false}
-	if b, _ := world_block(&s.world, hit.block); b != .Chest {return false}
+	b, _ := world_block(&s.world, hit.block)
+	if s.reg.blocks.types[s.reg.blocks.type_of[b]].use == .Toggle_Open {
+		return session_toggle(s, hit.block, b)
+	}
+	if b != .Chest {return false}
 	if !s.inventory.chest_open {
 		send_message(s, game.Use_Block{hit.block, s.prediction.next_sequence - 1})
 	}
@@ -163,15 +167,80 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 				   pos,
 				   s.prediction.state,
 			   ) {return false}
+		if at, to, has := game.companion(s.reg, state, pos); has {
+			above, there := world_block(&s.world, at)
+			if !there ||
+			   !game.can_place_at(&s.reg.blocks, above, to, at, s.prediction.state) {return false}
+		}
 		edit.pos, edit.block = pos, state
 		edit.target, edit.face, edit.hit = ctx.target, u8(face), ctx.hit
 	}
 	before, _ := world_block(&s.world, edit.pos)
-	if !world_set_block(&s.world, edit.pos, edit.block) {return false}
+	if !predict_edit(s, edit.pos, edit.block) {return false}
 	edit_sound(s, edit.pos, before, edit.block)
 	s.next_edit = edit.id
 	append(&s.edits, edit)
 	inventory_predict(s) // (one used up)
+	send_message(s, edit)
+	return true
+}
+
+// predict_edit applies an edit to our world as the server will: the cell, the
+// other half of a door with it (broken, placed or turned together), and the
+// neighbours that follow what changed (a fence joins). False if its chunk is not here.
+predict_edit :: proc(s: ^Session, pos: game.Block_Pos, block: game.Block) -> bool {
+	current, _ := world_block(&s.world, pos)
+	cell, cell_to, two := game.companion(s.reg, current, pos)
+	if !two {cell, cell_to, two = game.companion(s.reg, block, pos)}
+	if two {
+		// What the other cell becomes: nothing when breaking, its state when
+		// placing, and the state turned with this one when toggling.
+		there, _ := world_block(&s.world, cell)
+		switch game.edit_kind(&s.reg.blocks, current, block) {
+		case .Break:
+			if there != cell_to {two = false}
+			cell_to = .Air
+		case .Toggle:
+			if there != cell_to {two = false}
+			_, cell_to, _ = game.companion(s.reg, block, pos)
+		case .Place:
+			_, cell_to, _ = game.companion(s.reg, block, pos)
+		}
+	}
+	if !world_set_block(&s.world, pos, block) {return false}
+	predict_neighbours(s, pos)
+	if two && world_set_block(&s.world, cell, cell_to) {predict_neighbours(s, cell)}
+	return true
+}
+
+// predict_neighbours: the four neighbours of pos follow it (shape_update).
+predict_neighbours :: proc(s: ^Session, pos: game.Block_Pos) {
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+	changes: [4]game.Block_Change
+	for c in changes[:game.neighbour_updates(s.reg, pos, query, &changes)] {
+		world_set_block(&s.world, c.pos, c.b)
+	}
+}
+
+// session_toggle turns the door at pos (state b) open or shut: predicted now,
+// then sent as an edit of its state. False if it cannot.
+session_toggle :: proc(s: ^Session, pos: game.Block_Pos, b: game.Block) -> bool {
+	if len(s.edits) >= MAX_PENDING_EDITS {return true} 	// (used, but too many are waiting)
+	t := &s.reg.blocks
+	i, found := game.prop_index(t, t.type_of[b], "open")
+	if !found {return false}
+	flipped := game.state_with(t, b, i, 1 - game.state_value(t, b, i))
+	edit := game.Edit {
+		id    = s.next_edit + 1,
+		after = s.prediction.next_sequence - 1,
+		pos   = pos,
+		block = flipped,
+		face  = game.EDIT_FACE_PLAIN,
+	}
+	if !predict_edit(s, pos, flipped) {return false}
+	append(&s.sounds, Sound_Event{.Place, flipped, {f64(pos.x), f64(pos.y), f64(pos.z)} + 0.5, 1})
+	s.next_edit = edit.id
+	append(&s.edits, edit)
 	send_message(s, edit)
 	return true
 }

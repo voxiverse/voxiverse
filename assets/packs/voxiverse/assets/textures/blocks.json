@@ -148,5 +148,11 @@
 	},
 	"ladder": {
 		"generator": "ladder"
+	},
+	"door_lower": {
+		"generator": "door_lower"
+	},
+	"door_upper": {
+		"generator": "door_upper"
 	}
 }

@@ -1,0 +1,22 @@
+{
+	"planks_fence": {
+		"states": {
+			"north": "bool",
+			"east": "bool",
+			"south": "bool",
+			"west": "bool"
+		},
+		"connect": {
+			"to": "voxiverse:fences"
+		},
+		"shape": "voxiverse:fence",
+		"collision": "voxiverse:fence_collision",
+		"place": "connect",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"all": "voxiverse:planks"
+		},
+		"sound": "voxiverse:wood"
+	}
+}

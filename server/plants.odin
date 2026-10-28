@@ -17,7 +17,10 @@ support_check :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) -> bool {
 	query := game.Block_Query{&w.chunks, chunks_block, t}
 	if game.support_holds(t, b, p, query) {return false}
 	if !set_block(w, p, .Air, {action, .Support}) {return false}
-	block_drop(w, p, b)
+	// A door's two halves drop one item between them: the lower half's.
+	if !(t.types[t.type_of[b]].place == .Door && game.state_is(t, b, "half", "upper")) {
+		block_drop(w, p, b)
+	}
 	return true
 }
 
@@ -26,6 +29,25 @@ supports_check_box :: proc(w: ^World, lo, hi: game.Block_Pos, action: Action_Id)
 	for y in lo.y - 1 ..= hi.y + 1 {
 		for z in lo.z - 1 ..= hi.z + 1 {
 			for x in lo.x - 1 ..= hi.x + 1 {support_check(w, {x, y, z}, action)}
+		}
+	}
+}
+
+// shapes_update_box makes every block in lo..hi and around it follow its
+// neighbours (a fence joins what was set beside it), as part of cause.
+shapes_update_box :: proc(w: ^World, lo, hi: game.Block_Pos, cause: Act) {
+	reg := w.server.registry
+	query := game.Block_Query{&w.chunks, chunks_block, &reg.blocks}
+	for y in lo.y - 1 ..= hi.y + 1 {
+		for z in lo.z - 1 ..= hi.z + 1 {
+			for x in lo.x - 1 ..= hi.x + 1 {
+				p := game.Block_Pos{x, y, z}
+				b, loaded := chunks_block(&w.chunks, p)
+				if !loaded {continue}
+				if updated := game.shape_update(reg, b, p, query); updated != b {
+					set_block(w, p, updated, cause)
+				}
+			}
 		}
 	}
 }

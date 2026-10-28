@@ -350,3 +350,147 @@ read_shapes :: proc(
 	shape_builder_finish(&sb, t)
 	_ = strings.concatenate
 }
+
+// prop_has_values: the type has a property called name with exactly these values.
+@(private)
+prop_has_values :: proc(def: ^Type_Def, name: string, values: []string) -> bool {
+	for p in def.props {
+		if p.name != name {continue}
+		if len(p.values) != len(values) {return false}
+		for v, i in values {if p.values[i] != v {return false}}
+		return true
+	}
+	return false
+}
+
+// read_block_behaviour: connect, use and entity, and what the place rules need
+// of a type's properties (after the tags are resolved).
+@(private)
+read_block_behaviour :: proc(b: ^Reg_Build, reg: ^Registry, blocks: []Merged_Def, order: []int) {
+	t := &reg.blocks
+	BOOL := []string{"false", "true"}
+	for n in 0 ..< len(blocks) {
+		m := &blocks[order[n]]
+		def := &t.types[n]
+		def.connect = NO_TAG
+		fail_type :: proc(b: ^Reg_Build, m: ^Merged_Def, text: string) {
+			fail(b, m.pack, m.file, m.line, m.column, fmt.aprintf("%s: %s", m.id, text))
+		}
+		if f := field_of(m, "connect"); f != nil {
+			ok := f.value.kind == .Object && len(f.value.members) == 1
+			if ok {ok = f.value.members[0].key == "to" && f.value.members[0].value.kind == .String}
+			if !ok {
+				fail_field(b, f, f.value, "connect is {\"to\": \"<block tag>\"}")
+			} else {
+				v := f.value.members[0].value
+				if at, found := ref_index(b, .Block_Tag, strings.trim_prefix(v.s, "#"), f, v);
+				   found {def.connect = i32(at)}
+			}
+			for side in ROTATE_VALUES {
+				if !prop_has_values(def, side, BOOL) {
+					fail_type(
+						b,
+						m,
+						fmt.aprintf("connect needs the bool property \"%s\" (states)", side),
+					)
+				}
+			}
+		}
+		if def.place == .Connect && def.connect == NO_TAG && field_of(m, "connect") == nil {
+			fail_type(b, m, "place \"connect\" needs a \"connect\" field")
+		}
+		if def.place == .Door {
+			if !prop_has_values(def, "facing", ROTATE_VALUES[:]) {
+				fail_type(
+					b,
+					m,
+					"place \"door\" needs the property facing: north, east, south, west",
+				)
+			}
+			if !prop_has_values(def, "half", []string{"lower", "upper"}) {
+				fail_type(b, m, "place \"door\" needs the property half: lower, upper")
+			}
+			if !prop_has_values(def, "open", BOOL) {
+				fail_type(b, m, "place \"door\" needs the bool property open")
+			}
+		}
+		def.use = Use_Rule(rd_choice(b, m, "use", USE_RULE_LIST[:], 0))
+		if def.use == .Toggle_Open && !prop_has_values(def, "open", BOOL) {
+			fail_type(b, m, "use \"toggle_open\" needs the bool property open")
+		}
+		if f := field_of(m, "entity"); f != nil {
+			ok := f.value.kind == .Object
+			kind, slots := "", i64(0)
+			if ok {
+				for em in f.value.members {
+					switch {
+					case em.key == "kind" && em.value.kind == .String:
+						kind = em.value.s
+					case em.key == "slots" && em.value.kind == .Int:
+						slots = em.value.i
+					case:
+						ok = false
+					}
+				}
+			}
+			switch {
+			case !ok || kind == "":
+				fail_field(b, f, f.value, "entity is {\"kind\": \"container\", \"slots\": 25}")
+			case kind != "container":
+				fail_field(
+					b,
+					f,
+					f.value,
+					fmt.aprintf("entity kind is \"container\"; got \"%s\"", kind),
+				)
+			case slots != CHEST_SLOTS:
+				fail_field(
+					b,
+					f,
+					f.value,
+					fmt.aprintf(
+						"containers hold %d slots (the chest screen); got %d",
+						CHEST_SLOTS,
+						slots,
+					),
+				)
+			case:
+				def.entity = .Container
+			}
+		}
+	}
+}
+
+// read_upper_textures: a type with a property `half` (values lower, upper) may
+// name a side texture for its upper half: "textures": {"side": ..., "upper": ...}.
+@(private)
+read_upper_textures :: proc(
+	b: ^Reg_Build,
+	reg: ^Registry,
+	blocks: []Merged_Def,
+	order, first_state: []int,
+) {
+	if len(b.errs) > 0 {return}
+	t := &reg.blocks
+	for n in 0 ..< len(blocks) {
+		m := &blocks[order[n]]
+		f := field_of(m, "textures")
+		if f == nil || f.value.kind != .Object {continue}
+		for tm in f.value.members {
+			if tm.key != "upper" {continue}
+			def := &t.types[n]
+			half, found := prop_index(t, Block_Type(n), "half")
+			if !found || !prop_has_values(def, "half", []string{"lower", "upper"}) {
+				fail_field(b, f, tm.value, "\"upper\" needs the property half: lower, upper")
+				break
+			}
+			at, ok := ref_index(b, .Texture, tm.value.s, f, tm.value)
+			if !ok {break}
+			for k in 0 ..< int(def.state_count) {
+				if state_value(t, Block(first_state[n] + k), half) == 1 {
+					t.defs[first_state[n] + k].faces[0] = u32(at)
+				}
+			}
+		}
+	}
+}

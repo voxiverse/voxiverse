@@ -149,9 +149,10 @@ Shape_Source :: struct {
 
 @(private)
 Shape_Case :: struct {
-	cond:  [dynamic][2]string, // property name; one of the values, as "a|b"
-	boxes: [dynamic]Box,
-	value: Json_Value,
+	cond:    [dynamic][2]string, // property name; one of the values, as "a|b"
+	boxes:   [dynamic]Box,
+	value:   Json_Value,
+	replace: bool, // its boxes instead of the shape's own and those of the cases before it
 }
 
 SHAPE_FIELDS := []string{"boxes", "cases", "rotate", "flip", "override"}
@@ -268,6 +269,12 @@ read_shape_source :: proc(b: ^Reg_Build, m: ^Merged_Def) -> Shape_Source {
 						}
 					case "boxes":
 						read_boxes(b, f, cm.value, &sc.boxes)
+					case "replace":
+						if cm.value.kind != .Bool {
+							fail_field(b, f, cm.value, "replace is true or false")
+						} else {
+							sc.replace = cm.value.b
+						}
 					case:
 						fail_field(
 							b,
@@ -276,7 +283,7 @@ read_shape_source :: proc(b: ^Reg_Build, m: ^Merged_Def) -> Shape_Source {
 							fmt.aprintf(
 								"\"%s\" is not a case field%s",
 								cm.key,
-								suggestion(cm.key, []string{"when", "boxes"}),
+								suggestion(cm.key, []string{"when", "boxes", "replace"}),
 							),
 						)
 					}
@@ -408,7 +415,10 @@ shape_for_state :: proc(
 				matches = false
 			}
 		}
-		if matches {append(&out, ..c.boxes[:])}
+		if matches {
+			if c.replace {clear(&out)}
+			append(&out, ..c.boxes[:])
+		}
 	}
 	if fl, has := s.flip.?; has && value_of(props, values, fl[0]) == fl[1] {
 		for &bx in out {bx = box_flip(bx)}

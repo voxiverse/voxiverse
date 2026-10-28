@@ -117,6 +117,9 @@ BLOCK_FIELDS := []string {
 	"render_shape",
 	"place",
 	"climbable",
+	"connect",
+	"use",
+	"entity",
 	"override",
 }
 @(private)

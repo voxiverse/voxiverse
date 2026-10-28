@@ -145,6 +145,18 @@ placement :: proc(
 			}
 		}
 		return pos, b, true
+	case .Connect:
+		return pos, shape_update(reg, b, pos, q), true
+	case .Door:
+		b = state_set(t, b, "facing", ROTATE_VALUES[facing_of_yaw(ctx.yaw)]) or_return
+		b = state_set(t, b, "half", "lower") or_return
+		// Room for both halves and a floor under the lower one.
+		for y in i32(0) ..< 2 {
+			cell, loaded := q.get(q.data, pos + {0, y, 0})
+			if !loaded || !block_has(t, cell, .Replaceable) {return pos, b, false}
+		}
+		if !support_holds(t, b, pos, q) {return pos, b, false}
+		return pos, b, true
 	case .Attached:
 		if normal.y != 0 {return}
 		for name in ROTATE_VALUES {
@@ -174,6 +186,14 @@ placement :: proc(
 // cells hold.
 support_holds :: proc(t: ^Block_Table, b: Block, pos: Block_Pos, q: Block_Query) -> bool {
 	def := &t.defs[b]
+	if t.types[t.type_of[b]].place == .Door {
+		below, loaded := q.get(q.data, pos + {0, -1, 0})
+		if !loaded {return true}
+		if state_is(t, b, "half", "upper") {
+			return t.type_of[below] == t.type_of[b] && state_is(t, below, "half", "lower")
+		}
+		return cover_full(shape_cover(t, t.render[below]), .Pos_Y)
+	}
 	if def.support != NO_TAG {
 		below, loaded := q.get(q.data, pos + {0, -1, 0})
 		if loaded && !block_in_tag(t, below, def.support) {return false}
@@ -195,5 +215,100 @@ support_holds :: proc(t: ^Block_Table, b: Block, pos: Block_Pos, q: Block_Query)
 // has_support_rule: b needs something around it (support_holds can fail).
 has_support_rule :: proc(t: ^Block_Table, b: Block) -> bool {
 	def := &t.defs[b]
+	if t.types[t.type_of[b]].place == .Door {return true}
 	return def.support != NO_TAG || def.back != NO_TAG || def.back_full
+}
+
+// HORIZONTAL: the four sides a state follows its neighbours on, as the
+// properties north, east, south and west (ROTATE_VALUES' order).
+HORIZONTAL := [4][3]i32{{0, 0, -1}, {1, 0, 0}, {0, 0, 1}, {-1, 0, 0}}
+
+// shape_update: the state the neighbours of pos call for: a type that
+// connects (a fence) has each side true when the neighbour there is in the
+// type's tag or is a solid block with a full cover on the face toward it
+// (not a liquid); a side whose neighbour is not loaded stays as it is.
+shape_update :: proc(reg: ^Registry, b: Block, pos: Block_Pos, q: Block_Query) -> Block {
+	t := &reg.blocks
+	tag := t.types[t.type_of[b]].connect
+	if tag == NO_TAG {return b}
+	r := b
+	for side, i in ROTATE_VALUES {
+		prop, found := prop_index(t, t.type_of[b], side)
+		if !found {continue}
+		dir := HORIZONTAL[i]
+		nb, loaded := q.get(q.data, pos + dir)
+		if !loaded {continue}
+		toward, _ := face_of_normal(-dir)
+		joins :=
+			block_in_tag(t, nb, tag) ||
+			(.Liquid not_in t.flags[nb] && cover_full(shape_cover(t, t.render[nb]), toward))
+		r = state_with(t, r, prop, 1 if joins else 0)
+	}
+	return r
+}
+
+// Block_Change: a cell and the state it is to have.
+Block_Change :: struct {
+	pos: Block_Pos,
+	b:   Block,
+}
+
+// neighbour_updates: the changes the four horizontal neighbours of pos make
+// now that pos has changed (a fence joins or leaves): up to four, in
+// HORIZONTAL's order. Both sides run it on their own world.
+neighbour_updates :: proc(
+	reg: ^Registry,
+	pos: Block_Pos,
+	q: Block_Query,
+	out: ^[4]Block_Change,
+) -> (
+	count: int,
+) {
+	for dir in HORIZONTAL {
+		np := pos + dir
+		nb, loaded := q.get(q.data, np)
+		if !loaded {continue}
+		updated := shape_update(reg, nb, np, q)
+		if updated != nb {
+			out[count] = {np, updated}
+			count += 1
+		}
+	}
+	return
+}
+
+// companion: the other half of a door b at pos: where it is and the state it
+// has (b's with the half turned over). ok false for a block without halves.
+companion :: proc(
+	reg: ^Registry,
+	b: Block,
+	pos: Block_Pos,
+) -> (
+	at: Block_Pos,
+	other: Block,
+	ok: bool,
+) {
+	t := &reg.blocks
+	if t.types[t.type_of[b]].place != .Door {return}
+	lower := state_is(t, b, "half", "lower")
+	other = state_set(t, b, "half", "upper" if lower else "lower") or_return
+	return pos + {0, 1 if lower else -1, 0}, other, true
+}
+
+Edit_Kind :: enum u8 {
+	Break,
+	Place,
+	Toggle, // a block's `open` flipped (a door)
+}
+
+// edit_kind: what an edit that makes the cell hold requested, where current is, does.
+edit_kind :: proc(t: ^Block_Table, current, requested: Block) -> Edit_Kind {
+	if requested == .Air {return .Break}
+	type := t.type_of[current]
+	if type == t.type_of[requested] && t.types[type].use == .Toggle_Open && current != requested {
+		i, _ := prop_index(t, type, "open")
+		now := state_value(t, current, i)
+		if state_with(t, current, i, 1 - now) == requested {return .Toggle}
+	}
+	return .Place
 }

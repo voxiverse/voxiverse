@@ -1,0 +1,34 @@
+{
+	"planks_door": {
+		"states": {
+			"facing": [
+				"north",
+				"east",
+				"south",
+				"west"
+			],
+			"half": [
+				"lower",
+				"upper"
+			],
+			"open": "bool"
+		},
+		"default": {
+			"facing": "north",
+			"half": "lower",
+			"open": "false"
+		},
+		"shape": "voxiverse:door",
+		"place": "door",
+		"use": "toggle_open",
+		"opaque": false,
+		"shades": true,
+		"textures": {
+			"side": "voxiverse:door_lower",
+			"top": "voxiverse:planks",
+			"bottom": "voxiverse:planks",
+			"upper": "voxiverse:door_upper"
+		},
+		"sound": "voxiverse:wood"
+	}
+}

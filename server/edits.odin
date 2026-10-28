@@ -102,6 +102,7 @@ bulk_edit :: proc(
 
 	wake_water_box(w, lo, hi, cause.action)
 	supports_check_box(w, lo, hi, cause.action)
+	shapes_update_box(w, lo, hi, cause)
 	for z in lo.z ..= hi.z {
 		for x in lo.x ..= hi.x {
 			if column_rescan(w, x, z, hi.y) {
