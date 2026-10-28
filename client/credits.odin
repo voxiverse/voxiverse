@@ -4,7 +4,7 @@ import "core:strings"
 
 import "ui"
 
-// The credits screen (Title, between Options and Quit Game): the sound
+// The credits screen (from Options, beside Done): the sound
 // sources' and the music's credit lines (assets/music/CREDITS.txt, which the
 // release packages copy to licenses/), then the fonts' licence names, scrolled
 // by the wheel.
@@ -53,5 +53,5 @@ credits_screen :: proc(app: ^App, ctx: ^ui.Context) {
 }
 
 credits_back :: proc(app: ^App) {
-	app.screen = .Title
+	app.screen = .Options
 }

@@ -92,9 +92,9 @@ options_panel :: proc(app: ^App, ctx: ^ui.Context, in_game: bool) -> (done: bool
 		r := ctx.screen
 		panel := ui.cut_left(&r, OPTIONS_WIDTH + 4 * t.padding)
 		ui.panel(ctx, panel)
-		return options_body(app, ctx, ui.rect_shrink(panel, 2 * t.padding))
+		return options_body(app, ctx, ui.rect_shrink(panel, 2 * t.padding), true)
 	}
-	return options_body(app, ctx, area)
+	return options_body(app, ctx, area, false)
 }
 
 // options_cancel_listening: Escape while a binding waits for its key
@@ -106,7 +106,7 @@ options_cancel_listening :: proc(app: ^App) -> bool {
 }
 
 @(private = "file")
-options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool) {
+options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, in_game: bool) -> (done: bool) {
 	t := &ctx.theme
 	o := &app.options
 	column := area
@@ -155,10 +155,27 @@ options_body :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect) -> (done: bool)
 
 	bottom := ui.cut_bottom(&column, t.row_height)
 	ui.cut_bottom(&column, 2 * t.spacing)
-	if ui.button(ctx, "Done", ui.rect_center(bottom, 200, t.row_height)) {
+	// Credits sits beside Done, under every tab (it is no setting, so no tab
+	// of its own; Back there returns here). Only from the title: in a game
+	// Options is a docked panel over the world.
+	done_rect := ui.rect_center(bottom, 200, t.row_height)
+	credits_rect: ui.Rect
+	if !in_game {
+		pair := ui.rect_center(bottom, 400 + t.spacing, t.row_height)
+		done_rect = ui.cut_left(&pair, 200)
+		ui.cut_left(&pair, t.spacing)
+		credits_rect = pair
+	}
+	if ui.button(ctx, "Done", done_rect) {
 		o.listening = .None
 		if app.settings_dirty {settings_save(app)}
 		return true
+	}
+	if !in_game && ui.button(ctx, "Credits", credits_rect) {
+		o.listening = .None
+		if app.settings_dirty {settings_save(app)}
+		app.credits = {}
+		app.screen = .Credits
 	}
 
 	// The tab's rows, scrolled by the wheel when they do not fit.

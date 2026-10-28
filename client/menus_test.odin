@@ -44,6 +44,8 @@ ui_frame :: proc(app: ^App, input: ui.Input = {}) {
 		title_screen(app, &app.ui)
 	case .Options:
 		options_screen(app, &app.ui)
+	case .Credits:
+		credits_screen(app, &app.ui)
 	case .Worlds:
 		worlds_screen(app, &app.ui)
 	case .Multiplayer:
@@ -72,6 +74,29 @@ click :: proc(t: ^testing.T, app: ^App, label: string, loc := #caller_location) 
 	ui_frame(app, {mouse = p, mouse_released = {.Left}})
 	ui_frame(app, {mouse = p}) // what the click changed, drawn
 	return true
+}
+
+// Credits: not on the title; Options' Credits button opens it, Back and
+// Escape return to Options.
+@(test)
+test_credits_from_options :: proc(t: ^testing.T) {
+	app := ui_app(t)
+	defer ui_app_free(app)
+	app.screen = .Title
+	ui_frame(app)
+	_, on_title := ui.find_widget(&app.ui, "Credits")
+	testing.expect(t, !on_title, "the title still has a Credits button")
+	app.screen = .Options
+	ui_frame(app)
+	click(t, app, "Credits")
+	testing.expect_value(t, app.screen, Screen.Credits)
+	ui_frame(app)
+	click(t, app, "Back")
+	testing.expect_value(t, app.screen, Screen.Options)
+	click(t, app, "Credits")
+	escape(app)
+	ui_frame(app)
+	testing.expect_value(t, app.screen, Screen.Options)
 }
 
 // Options: the tabs, a choice cycling, and a key bound by pressing it (or

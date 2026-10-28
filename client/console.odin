@@ -305,12 +305,15 @@ register_builtin_commands :: proc(c: ^Console) {
 					multiplayer_open(app)
 					if then == "direct" &&
 					   app.multiplayer.mode == .List {app.multiplayer.mode = .Direct}
+				case "credits":
+					app.credits = {}
+					app.screen = .Credits
 				case "quit":
 					overlay_open(&app.overlays, .Quit_Dialog)
 				case:
 					console_print(
 						&app.console,
-						"screen: title, game, menu, inventory, stats, options, worlds, multiplayer or quit",
+						"screen: title, game, menu, inventory, stats, options, credits, worlds, multiplayer or quit",
 						.Warning,
 					)
 				}
