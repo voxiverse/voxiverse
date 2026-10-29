@@ -11,8 +11,12 @@ mkdir -p build/cache
 # content key of its own sources: tools/build/cache.odin).
 if ! build/build-driver self-fresh >/dev/null 2>&1; then
 	: >build/cache/build-driver.started
-	odin build tools/build -out:build/build-driver \
+	# Built under a name of its own and renamed over: another ./build.sh may be
+	# starting the old one or building it too, and a rename is atomic where writing
+	# over it is not.
+	odin build tools/build -out:build/build-driver.new.$$ \
 		-export-dependencies:json -export-dependencies-file:build/cache/build-driver.deps.json
+	mv -f build/build-driver.new.$$ build/build-driver
 	build/build-driver self-built
 fi
 exec build/build-driver "$@"

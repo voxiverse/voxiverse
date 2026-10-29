@@ -91,3 +91,44 @@ test_run_parallel_results :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(out), "hello\n")
 	for j in jobs {os.remove(j.log)}
 }
+
+// A stop request (Ctrl-C) kills the running jobs with their children and starts no
+// more: each running one is reported Interrupted, and so is each one left. The request
+// comes from done, as the first job ends (a real signal would stop the test runner).
+@(test)
+test_run_parallel_stops_on_request :: proc(t: ^testing.T) {
+	when ODIN_OS == .Windows {
+		return
+	}
+	marker := "build/tmp/parallel_stop_child"
+	os.make_directory_all("build/tmp")
+	os.remove(marker)
+	jobs := []limited.Job {
+		{cmd = {"true"}, log = "build/tmp/parallel_stop_0.log"},
+		{
+			cmd = {"sh", "-c", fmt.tprintf("(sleep 3; : > %s) & wait", marker)},
+			log = "build/tmp/parallel_stop_1.log",
+		},
+		{cmd = {"true"}, log = "build/tmp/parallel_stop_2.log"},
+	}
+	stop :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
+		heard := (^[3]limited.Run_Result)(data)
+		heard[index] = result
+		if index == 0 {limited.request_stop()}
+	}
+	heard := [3]limited.Run_Result{.Failed, .Failed, .Failed}
+	start := time.tick_now()
+	results := limited.run_parallel(jobs, 2, stop, &heard, context.temp_allocator)
+	took := time.duration_seconds(time.tick_since(start))
+	limited.clear_stop()
+	testing.expect(t, took < 3, "the stop took too long")
+	testing.expect_value(t, results[0], limited.Run_Result.Ok)
+	testing.expect_value(t, results[1], limited.Run_Result.Interrupted)
+	testing.expect_value(t, results[2], limited.Run_Result.Interrupted)
+	testing.expect_value(t, heard[1], limited.Run_Result.Interrupted)
+	testing.expect_value(t, heard[2], limited.Run_Result.Failed) // never started: not told
+	time.sleep(4 * time.Second)
+	testing.expect(t, !os.exists(marker), "a child outlived the stop")
+	for j in jobs {os.remove(j.log)}
+	os.remove(marker)
+}

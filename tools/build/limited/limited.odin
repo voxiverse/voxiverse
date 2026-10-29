@@ -3,6 +3,7 @@
 // both can.
 package limited
 
+import "base:intrinsics"
 import "core:fmt"
 import "core:os"
 import "core:time"
@@ -11,6 +12,30 @@ Run_Result :: enum {
 	Ok,
 	Failed, // exited nonzero, or could not start
 	Timed_Out,
+	Interrupted, // a stop signal arrived: it stopped itself, or was killed with its children
+}
+
+// stop_requested is set from the signal handler (signal_posix.odin, signal_windows.odin)
+// and read by run_parallel's loop, so a Ctrl-C costs the run its jobs, not the driver:
+// without it the driver dies first and leaves what it started running.
+@(private = "file")
+stop_requested: b32
+
+// request_stop is what the signal handler does. It is also how smoke tests the
+// interruption path: the test runner has handlers of its own in that process, so a
+// real signal there would stop the run instead of the job.
+request_stop :: proc "contextless" () {
+	intrinsics.atomic_store(&stop_requested, true)
+}
+
+// clear_stop forgets an interrupt; a real run never does.
+clear_stop :: proc "contextless" () {
+	intrinsics.atomic_store(&stop_requested, false)
+}
+
+// interrupted reports whether a stop signal has arrived.
+interrupted :: proc "contextless" () -> bool {
+	return intrinsics.atomic_load(&stop_requested) != false
 }
 
 // run_limited is run with a time limit: a command still going at the limit is killed
@@ -58,7 +83,9 @@ Job_Done :: #type proc(data: rawptr, index: int, result: Run_Result, seconds: f6
 
 // run_parallel runs jobs, at most width at once, starting them in the order given. A
 // job's output goes to its log and is printed whole when it ends, so no two
-// interleave; then done hears of it. results[i] is jobs[i]'s.
+// interleave; then done hears of it. results[i] is jobs[i]'s. A stop request (a
+// signal, see install_stop_signals) kills what is running, children and all: each of
+// those is reported Interrupted to done, and every job not yet started is Interrupted.
 run_parallel :: proc(
 	jobs: []Job,
 	width: int,
@@ -77,6 +104,23 @@ run_parallel :: proc(
 	running := make([dynamic]Running, context.temp_allocator)
 	next := 0
 	for next < len(jobs) || len(running) > 0 {
+		if interrupted() {
+			for r in running {kill_tree(r.process.pid)}
+			for r in running {
+				_, _ = os.process_wait(r.process)
+				results[r.index] = .Interrupted
+				if done != nil {
+					done(
+						data,
+						r.index,
+						.Interrupted,
+						time.duration_seconds(time.tick_since(r.started)),
+					)
+				}
+			}
+			for i in next ..< len(jobs) {results[i] = .Interrupted}
+			break
+		}
 		for next < len(jobs) && len(running) < max(width, 1) {
 			job := jobs[next]
 			if p, ok := job_start(job); ok {

@@ -116,6 +116,24 @@ main :: proc() {
 		usage()
 		os.exit(1)
 	}
+	switch args[0] {
+	case "self-fresh", "self-built", "help", "-h", "--help", "shaders":
+	// No lock: the bootstrap runs before the driver is there to take it, help writes
+	// nothing, and a game with hot reload runs `shaders` on its main thread (waiting
+	// for a test run there would freeze it).
+	case:
+		// One run at a time: the job logs, the test binaries, the content cache and the
+		// cross objects are one set of names, and two runs at once silently corrupt
+		// each other. A second run waits for the first. run, serve, debug and the tools
+		// let it go once built, so a game that is up never holds it.
+		os.make_directory_all(CACHE_DIR)
+		locked: bool
+		build_lock, locked = lock_build(
+			path_join({CACHE_DIR, "lock"}),
+			fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
+		)
+		if !locked {os.exit(1)}
+	}
 	ok: bool
 	switch args[0] {
 	case "check",
@@ -169,9 +187,9 @@ main :: proc() {
 	     "analytics",
 	     "schema",
 	     "ogg":
-		ok = run_tool(args[0], args[1:])
+		ok = run_tool(args[0], args[1:], release = true)
 	case "packs":
-		ok = run_tool("packcheck", args[1:])
+		ok = run_tool("packcheck", args[1:], release = true)
 	case "audio":
 		ok = audio_baselines(args[1:])
 	case "bench":
@@ -202,6 +220,16 @@ main :: proc() {
 		usage()
 	}
 	os.exit(0 if ok else 1)
+}
+
+// build_lock: held by this run until it ends or release_build_lock (main).
+@(private = "file")
+build_lock: Build_Lock
+
+// release_build_lock lets another run start: what follows writes nothing under build/
+// that a run shares (a game or a tool, started after it is built).
+release_build_lock :: proc() {
+	unlock_build(&build_lock)
 }
 
 usage :: proc() {
@@ -396,7 +424,7 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 		},
 	)
 	// The two are independent: compiled side by side, each printing its output whole.
-	results := limited.run_parallel(
+	results := parallel(
 		{
 			{cmd = cmd, log = job_log(0, ".game.log")},
 			{cmd = server_cmd, log = job_log(0, ".server.log")},
@@ -438,6 +466,7 @@ debug_game :: proc(args: []string) -> bool {
 	}
 	exe, ok := build_game({"--debug"})
 	if !ok {return false}
+	release_build_lock()
 	when ODIN_OS == .Windows {
 		// PDB debug info; RAD Debugger understands Odin types natively.
 		if _, found := capture({"where", "raddbg"}); found {
@@ -474,6 +503,7 @@ serve :: proc(args: []string) -> bool {
 		build_args, server_args = args[:i], args[i + 1:]
 	}
 	build_game(build_args) or_return
+	release_build_lock()
 	exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	return run(slice.concatenate([][]string{{exe}, server_args}))
 }
@@ -485,6 +515,7 @@ run_game :: proc(args: []string) -> bool {
 	}
 	exe, ok := build_game(build_args)
 	if !ok {return false}
+	release_build_lock()
 	return run(slice.concatenate([][]string{{exe}, game_args}))
 }
 
@@ -551,16 +582,39 @@ run_checks :: proc(jobs: []Check_Job) -> bool {
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
 		job := &state.jobs[state.indices[index]]
-		if result == .Ok {
+		switch result {
+		case .Ok:
 			if step, cached := &job.step.?; cached {odin_step_succeeded(step)}
 			fmt.println(job.label)
-		} else {
+		case .Interrupted:
+			fmt.eprintfln("%s interrupted", job.label)
+			state.ok = false
+		case .Failed, .Timed_Out:
 			fmt.eprintfln("%s FAILED", job.label)
 			state.ok = false
 		}
 	}
-	limited.run_parallel(run_jobs[:], jobs_width(), done, &state)
+	parallel(run_jobs[:], jobs_width(), done, &state)
 	return state.ok
+}
+
+// parallel is limited.run_parallel with Ctrl-C (and TERM) as its stop: the jobs are
+// killed with their children and the run ends there, with exit code 130. Outside it a
+// Ctrl-C ends the driver as it always did.
+parallel :: proc(
+	jobs: []limited.Job,
+	width: int,
+	done: limited.Job_Done = nil,
+	data: rawptr = nil,
+) -> []limited.Run_Result {
+	limited.install_stop_signals()
+	results := limited.run_parallel(jobs, width, done, data)
+	limited.restore_stop_signals()
+	if limited.interrupted() {
+		fmt.eprintln("build: interrupted")
+		os.exit(130)
+	}
+	return results
 }
 
 // job_log: where a parallel job's output waits to be printed.
@@ -840,7 +894,9 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		pkg := state.packages[index]
 		step := &state.steps[index]
 		// Built in this run (whatever the tests said): the binary is good for its inputs.
+		// Not when interrupted: the kill may have come while it was being written.
 		if info, err := os.stat(step.output, context.temp_allocator);
+		   result != .Interrupted &&
 		   err == nil &&
 		   step.started != {} &&
 		   time.diff(step.started, info.modification_time) >= 0 {
@@ -863,9 +919,12 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 				time.duration_seconds(state.limits[index]),
 			)
 			state.ok = false
+		case .Interrupted:
+			fmt.eprintfln("test   %s interrupted", pkg)
+			state.ok = false
 		}
 	}
-	limited.run_parallel(jobs, width, done, &state)
+	parallel(jobs, width, done, &state)
 	return state.ok
 }
 
@@ -916,7 +975,7 @@ check_format :: proc() -> bool {
 			},
 		)
 	}
-	results := limited.run_parallel(jobs[:], jobs_width())
+	results := parallel(jobs[:], jobs_width())
 	dirty := 0
 	clean := make([dynamic]string)
 	for key in known {append(&clean, key)}
@@ -1154,8 +1213,11 @@ audio_baselines :: proc(args: []string) -> bool {
 }
 
 // run_tool builds and runs tools/<name> with args (netdump, replay, sfx).
-run_tool :: proc(name: string, args: []string) -> bool {
+// run_tool builds tools/<name> and runs it; release: the build lock is let go first
+// (the tools a person runs; a benchmark keeps it, so no other run shares its machine).
+run_tool :: proc(name: string, args: []string, release := false) -> bool {
 	exe := build_tool(name) or_return
+	if release {release_build_lock()}
 	return run(slice.concatenate([][]string{{exe}, args}))
 }
 
