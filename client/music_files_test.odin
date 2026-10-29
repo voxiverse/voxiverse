@@ -1,13 +1,12 @@
 package client
 
+import "../common/ogg"
+import "audio"
 import "core:encoding/json"
 import "core:math"
 import "core:os"
 import "core:strings"
 import "core:testing"
-import ma "vendor:miniaudio"
-
-import "audio"
 
 // The committed music (assets/music, M43b): every piece decodes to what its
 // metadata says, at the loudness the mix expects, loops without a seam, and
@@ -24,20 +23,28 @@ Music_Meta :: struct {
 	lufs:   f64,
 }
 
-// music_decode: the whole file as interleaved stereo float, by a decoder of
-// its own.
+// music_decode: the whole file as interleaved stereo float, by common/ogg.
 @(private = "file")
-music_decode :: proc(ogg: []byte) -> (pcm: []f32, rate: int) {
-	cfg := ma.decoder_config_init(.f32, 2, 0)
-	d: ma.decoder
-	if ma.decoder_init_memory(raw_data(ogg), uint(len(ogg)), &cfg, &d) != .SUCCESS {return}
-	defer ma.decoder_uninit(&d)
-	n: u64
-	ma.decoder_get_length_in_pcm_frames(&d, &n)
+music_decode :: proc(file: []byte) -> (pcm: []f32, rate: int) {
+	d, err := ogg.open(file)
+	if err != .None {return}
+	defer ogg.close(d)
+	n := int(ogg.info(d).frames)
+	rate = int(ogg.info(d).rate)
 	pcm = make([]f32, 2 * n)
-	got: u64
-	ma.decoder_read_pcm_frames(&d, raw_data(pcm), n, &got)
-	return pcm[:2 * got], int(d.outputSampleRate)
+	block: [ogg.MAX_CHANNELS * 4096]f32
+	got := 0
+	for got < n {
+		k, e := ogg.read(d, block[:], min(4096, n - got))
+		if k == 0 || e != .None {break}
+		ch := int(ogg.info(d).channels)
+		for i in 0 ..< k {
+			pcm[2 * (got + i)] = block[i * ch]
+			pcm[2 * (got + i) + 1] = block[i * ch + (1 if ch > 1 else 0)]
+		}
+		got += k
+	}
+	return pcm[:2 * got], rate
 }
 
 @(test)

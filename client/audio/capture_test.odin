@@ -149,9 +149,10 @@ test_capture_replays_bit_identical :: proc(t: ^testing.T) {
 	testing.expect(t, capture_replay(replayed.m, &file, got))
 	// The same samples at every optimization level (checked: none to aggressive).
 	// Held as a number only where the maths library is the one it was taken with.
+	// (Retaken in M53c: the scene plays a stream, which common/ogg decodes.)
 	log.infof("capture scene checksum %x", checksum(got))
 	when ODIN_OS == .Linux && ODIN_ARCH == .amd64 {
-		testing.expect_value(t, checksum(got), 0xa3a802ad06ba86e0)
+		testing.expect_value(t, checksum(got), 0x7c1ba0dd3cf9273b)
 	}
 	testing.expectf(
 		t,

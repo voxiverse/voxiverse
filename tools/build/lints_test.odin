@@ -40,6 +40,20 @@ test_mode_name_lint :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_miniaudio_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	imp := "import ma \"vendor:miniaudio\"\n"
+	testing.expect_value(t, len(lint_miniaudio("client/audio/clip.odin", imp)), 1)
+	testing.expect_value(t, len(lint_miniaudio("client/audio/device.odin", imp)), 0)
+	testing.expect_value(t, len(lint_miniaudio("server/x_test.odin", imp)), 1)
+	testing.expect_value(
+		t,
+		len(lint_miniaudio("client/a.odin", "// \"vendor:miniaudio\" in a comment\n")),
+		0,
+	)
+}
+
+@(test)
 test_ci_test_name_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	tests := tests_in(

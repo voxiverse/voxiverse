@@ -1,6 +1,6 @@
 package game
 
-import "core:encoding/endian"
+import "core:fmt"
 import "core:testing"
 
 import "../../base"
@@ -74,17 +74,17 @@ test_pack_assets_refused :: proc(t: ^testing.T) {
 		build_assets({{"assets/sounds/spare.ogg", string(test_click_ogg())}}),
 		"testpack/assets/sounds/spare.ogg: assets/sounds/spare.ogg is not used; remove it",
 	)
-	// A sound of 6 s (the last page's position says so; the file is not decoded to find out).
-	long := make([]u8, len(test_click_ogg()), context.temp_allocator)
-	copy(long, test_click_ogg())
-	rate, _, _ := ogg_length(long)
-	at := len(long) - 4
-	for at > 0 && string(long[at:at + 4]) != "OggS" {at -= 1}
-	endian.put_i64(long[at + 6:], .Little, i64(rate) * 6)
+	// A sound of over 5 s (a granule edited into the click would be a bad CRC, and a length
+	// the packets cannot fill a bad page: the long file is a real one).
+	rate, frames, _ := ogg_length(test_long_ogg())
+	seconds := fmt.tprintf(
+		"testpack/assets/sounds/click.ogg: sound is %.1f s; the limit is 5 s",
+		f64(frames) / f64(rate),
+	)
 	testing.expect_value(
 		t,
-		build_assets({{TEST_MARBLE_OGG, string(long)}}),
-		"testpack/assets/sounds/click.ogg: sound is 6.0 s; the limit is 5 s\ntestpack/assets/sounds/click.ogg: sound is 6.0 s; the limit is 5 s", // (break and step name it)
+		build_assets({{TEST_MARBLE_OGG, string(test_long_ogg())}}),
+		fmt.tprintf("%s\n%s", seconds, seconds), // (break and step name it)
 	)
 	testing.expect_value(
 		t,

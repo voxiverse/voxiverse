@@ -77,6 +77,30 @@ lint_mode_names :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// lint_miniaudio: `vendor:miniaudio` is the output device's layer only (client/audio/device.odin,
+// until the next tier replaces it): every Ogg the game reads goes through common/ogg.
+lint_miniaudio :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	if strings.has_suffix(path, "client/audio/device.odin") {return found[:]}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		if strings.contains(code, "\"vendor:miniaudio\"") {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: vendor:miniaudio outside client/audio/device.odin: decode with common/ogg",
+					path,
+					line_no,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
 // lint_test_timing: no `*_test.odin` outside smoke/ sleeps or reads a clock (time.sleep,
 // time.now, tick_now, tick_since): a unit test counts ticks and steps a harness; what
 // needs the real clock is a smoke test.
@@ -163,7 +187,6 @@ source_lint :: proc() -> bool {
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
 			if info.type != .Regular || filepath.ext(info.name) != ".odin" {continue}
-			if strings.has_suffix(info.name, "_test.odin") {continue}
 			data, err := os.read_entire_file_from_path(info.fullpath, context.allocator)
 			if err != nil {
 				fmt.eprintfln("lint   %s: unreadable", info.fullpath)
@@ -173,6 +196,14 @@ source_lint :: proc() -> bool {
 			text := string(data)
 			path, _ := strings.replace_all(info.fullpath, "\\", "/")
 			msgs := make([dynamic]string)
+			append(&msgs, ..lint_miniaudio(path, text))
+			if strings.has_suffix(info.name, "_test.odin") {
+				for msg in msgs {
+					fmt.eprintln(msg)
+					ok = false
+				}
+				continue
+			}
 			append(&msgs, ..lint_mode_names(path, text))
 			if dir == "client" && filepath.dir(path) == "client" && is_layer_file(info.name) {
 				append(&msgs, ..lint_ui_literals(path, text))
@@ -184,7 +215,7 @@ source_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   ui text, colours and mode names clean")}
+	if ok {fmt.println("lint   ui text, colours, mode names and miniaudio imports clean")}
 	return ok
 }
 

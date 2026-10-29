@@ -2,7 +2,8 @@ package audio
 
 import "core:math"
 import "core:testing"
-import ma "vendor:miniaudio"
+
+import "../../common/ogg"
 
 // Tests for M32c's streams: what comes out of a stream voice is the file's
 // decode, loops have no seam, a starved decoder is counted and never skipped
@@ -14,18 +15,22 @@ TONE := #load("testdata/tone.ogg") // 3 s, 44.1 kHz, 440 Hz left and 660 Hz righ
 // reference: the file decoded in one go by a decoder of its own (two channels).
 @(private = "file")
 reference :: proc() -> (left, right: []f32) {
-	cfg := ma.decoder_config_init(.f32, 2, 0)
-	d: ma.decoder
-	assert(ma.decoder_init_memory(raw_data(TONE), uint(len(TONE)), &cfg, &d) == .SUCCESS)
-	defer ma.decoder_uninit(&d)
-	n: u64
-	ma.decoder_get_length_in_pcm_frames(&d, &n)
+	d, err := ogg.open(TONE)
+	assert(err == .None)
+	defer ogg.close(d)
+	n := int(ogg.info(d).frames)
 	both := make([]f32, 2 * n)
 	defer delete(both)
-	got: u64
-	ma.decoder_read_pcm_frames(&d, raw_data(both), n, &got)
+	block: [2 * 4096]f32
+	got := 0
+	for got < n {
+		k, _ := ogg.read(d, block[:], min(4096, n - got))
+		if k == 0 {break}
+		copy(both[2 * got:], block[:2 * k])
+		got += k
+	}
 	left, right = make([]f32, got), make([]f32, got)
-	for i in 0 ..< int(got) {
+	for i in 0 ..< got {
 		left[i], right[i] = both[2 * i], both[2 * i + 1]
 	}
 	return

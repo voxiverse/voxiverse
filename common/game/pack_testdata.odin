@@ -12,6 +12,7 @@ import "../../base"
 
 @(private = "file")
 TEST_CLICK := #load("testdata/click.ogg")
+TEST_LONG := #load("testdata/long_sound.ogg") // 5.1 s: made by `build ogg make-test-files`
 
 TEST_MARBLE_PNG :: "assets/textures/marble.png"
 TEST_MARBLE_OGG :: "assets/sounds/click.ogg"
@@ -28,6 +29,8 @@ test_marble_pixels :: proc() -> Texture_Image {
 }
 
 test_click_ogg :: proc() -> []u8 {return TEST_CLICK}
+
+test_long_ogg :: proc() -> []u8 {return TEST_LONG}
 
 // test_asset_pack: marble with its light, and its image and sounds. Files are
 // in `allocator` (a server test that runs ticks must not use the temp one:

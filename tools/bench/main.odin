@@ -79,6 +79,10 @@ main :: proc() {
 		telemetry_main(os.args[2:])
 		return
 	}
+	if len(os.args) > 1 && os.args[1] == "ogg" {
+		ogg_main()
+		return
+	}
 	if len(os.args) > 1 && os.args[1] == "budgets" {
 		budgets_main(os.args[2:])
 		return

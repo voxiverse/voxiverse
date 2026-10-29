@@ -1,12 +1,12 @@
 package audio
 
 import "../../base"
+import "../../common/ogg"
 import "core:log"
 import "core:math"
 import "core:sync"
 import "core:thread"
 import "core:time"
-import ma "vendor:miniaudio"
 
 // Streams: sounds too long to keep decoded (music, ambience beds), read from
 // an Ogg Vorbis file in memory by a decoder thread and played by the same
@@ -66,7 +66,7 @@ Stream :: struct {
 
 @(private)
 Decoder :: struct {
-	d:       ma.decoder, // miniaudio's, which carries its own stb_vorbis: nothing else is linked
+	d:       ^ogg.Decoder, // our own Odin decoder (M53c), made on the decoder thread's behalf
 	open:    bool,
 	epoch:   u32,
 	pos:     int, // frames of the file consumed this pass
@@ -186,31 +186,17 @@ stream_pump :: proc "contextless" (st: ^Stream) -> bool {
 
 @(private)
 dec_open :: proc(st: ^Stream, crossfade: f32, start: f32) -> bool {
-	// The file's own channels (one or two) at its own rate; a file of more is
-	// opened again as two, which miniaudio mixes down.
-	cfg := ma.decoder_config_init(.f32, 0, 0)
-	r := ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d)
-	if r == .SUCCESS && st.dec.d.outputChannels > 2 {
-		ma.decoder_uninit(&st.dec.d)
-		cfg = ma.decoder_config_init(.f32, 2, 0)
-		r = ma.decoder_init_memory(raw_data(st.data), uint(len(st.data)), &cfg, &st.dec.d)
-	}
-	if r != .SUCCESS {
-		log.warnf("audio stream: not a file miniaudio can decode (result %v)", r)
+	d, err := ogg.open(st.data)
+	if err != .None {
+		log.warnf("audio stream: not an Ogg Vorbis file we can decode (%v)", err)
 		return false
 	}
-	st.dec.open = true
-	d := &st.dec.d
-	st.channels = u8(d.outputChannels)
-	length: u64
-	ma.decoder_get_length_in_pcm_frames(d, &length)
-	rate := d.outputSampleRate
-	if st.channels < 1 ||
-	   st.channels > 2 ||
-	   rate < 8000 ||
-	   rate > 192000 ||
-	   length < 2 ||
-	   length > 1 << 36 {
+	st.dec.d, st.dec.open = d, true
+	// One or two channels, as the file's first link has them; more are folded down.
+	inf := ogg.info(d)
+	st.channels = u8(min(inf.channels, 2))
+	rate, length := inf.rate, inf.frames
+	if inf.channels < 1 || rate < 8000 || rate > 192000 || length < 2 || length > 1 << 36 {
 		log.warnf("audio stream: unusable (rate=%d length=%d)", rate, length)
 		dec_close(st)
 		return false
@@ -233,7 +219,7 @@ dec_open :: proc(st: ^Stream, crossfade: f32, start: f32) -> bool {
 	}
 	if start > 0 {
 		at := clamp(int(f64(start) * f64(st.rate)), 0, st.length - st.crossfade - 1)
-		ma.decoder_seek_to_pcm_frame(d, u64(at))
+		_ = ogg.seek(d, u64(at))
 		st.dec.pos = at
 	}
 	return true
@@ -242,7 +228,7 @@ dec_open :: proc(st: ^Stream, crossfade: f32, start: f32) -> bool {
 @(private)
 dec_close :: proc(st: ^Stream) {
 	d := &st.dec
-	if d.open {ma.decoder_uninit(&d.d)}
+	if d.open {ogg.close(d.d)}
 	delete(d.head)
 	delete(d.tail)
 	delete(d.head_r)
@@ -253,31 +239,34 @@ dec_close :: proc(st: ^Stream) {
 @(private)
 dec_rewind :: proc "contextless" (st: ^Stream) {
 	d := &st.dec
-	ma.decoder_seek_to_pcm_frame(&d.d, 0)
+	_ = ogg.seek(d.d, 0)
 	d.pos, d.since, d.tail_at = 0, 0, len(d.tail)
 }
 
 // dec_read: up to len(out) frames of the file; `right` (as long as `out`)
-// gets the second channel of a two-channel file.
+// gets the second channel of a two-channel stream. A file with more channels
+// is folded to two (the centre into both, the rest dropped); a chained file's
+// next link goes on without a gap, at the first link's rate and channel count.
 @(private)
 dec_read :: proc "contextless" (st: ^Stream, out, right: []f32) -> int {
-	if st.channels == 1 {
-		got: u64
-		ma.decoder_read_pcm_frames(&st.dec.d, raw_data(out), u64(len(out)), &got)
-		return int(got)
-	}
 	total := 0
-	tmp: [2 * STREAM_CHUNK]f32
+	tmp: [ogg.MAX_CHANNELS * STREAM_CHUNK]f32
 	for total < len(out) {
 		want := min(len(out) - total, STREAM_CHUNK)
-		got: u64
-		ma.decoder_read_pcm_frames(&st.dec.d, raw_data(tmp[:]), u64(want), &got)
-		for i in 0 ..< int(got) {
-			out[total + i] = tmp[2 * i]
-			right[total + i] = tmp[2 * i + 1]
+		got, err := ogg.read(st.dec.d, tmp[:], want)
+		if got == 0 || err != .None {break}
+		ch := int(ogg.info(st.dec.d).channels)
+		for i in 0 ..< got {
+			f := tmp[i * ch:][:ch]
+			l, r := f[0], f[0] if ch == 1 else f[1]
+			if ch > 2 {
+				l += 0.707 * f[2]
+				r += 0.707 * f[2]
+			}
+			out[total + i] = l if st.channels == 2 else 0.5 * (l + r)
+			if st.channels == 2 {right[total + i] = r}
 		}
-		total += int(got)
-		if int(got) < want {break}
+		total += got
 	}
 	return total
 }

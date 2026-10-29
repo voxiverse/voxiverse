@@ -135,12 +135,26 @@ console draw the symbols from a fallback font (`assets/fonts/noto_sans_old_turki
 ## Sound
 
 Every sound effect is synthesized at startup (`client/sfx`: no recordings) and mixed by our
-own mixer (`audio/`); miniaudio only opens the sound card. `build sfx` writes them all to
+own mixer (`audio/`); miniaudio only opens the sound card (every Ogg, the music and a pack's
+sounds, is decoded by our own Odin code, `common/ogg`: see *The Ogg decoder* below). `build sfx` writes them all to
 `build/sounds/*.wav` to listen to outside the game. F3 shows the device, voices playing,
 sounds played and dropped; the log's last `audio` line sums up the run. Without a sound card
 (CI, a headless box) the game logs a warning and runs silent. `set volume 0..1` is the
 player's volume. On Linux and macOS the build compiles Odin's miniaudio library once (into the
 Odin install; Windows ships it), which needs a C compiler.
+
+### The Ogg decoder
+
+`common/ogg` is a Vorbis I decoder and an Ogg reader (M53c) that refuses malformed input with
+an `Error` and never allocates past `open`'s one block. Its maintenance commands:
+
+| Command | What it does |
+|---|---|
+| `build ogg digests` | Rewrites `common/ogg/testdata/digests.txt` (FNV-1a of every decoded `f32` of the music, the small test files and the edge-case files) and prints the lines that changed. A digest moves only with a decoder edit that is meant |
+| `build ogg reference` | Rewrites `common/ogg/testdata/reference/` from the reference decoder (libvorbis through `ffmpeg` on the PATH; used only here, the output is committed): half a second at the start, middle and end of each music file, and each edge-case file whole. `reference.odin` says which edge-case files have none, and why |
+| `build ogg make-test-files` | Rewrites `common/ogg/testdata/edge/` (`tools/ogg/make.odin`): valid Vorbis streams of seeded random packets over a fixed codebook set, one file per feature (every block size, tiny and cut streams, mono, coupled stereo, six channels, floor 0, residue 0 and 2, pages, chained links). Run it only to change them; the digests and references follow |
+| `build ogg fuzz [--seed N] [--iterations N]` | The same fuzz as `test_ogg_fuzz`, for longer. The input is written to `build/fuzz/current.bin` before each run, so a crash leaves it there; copy it to `common/ogg/testdata/regress/` and the suite replays it first |
+| `build bench ogg` | The music decoded by `common/ogg` and by miniaudio, best of three: seconds of audio per CPU second for both and their ratio |
 
 ## Keeping the screen awake
 

@@ -5,11 +5,13 @@ import "core:fmt"
 import "core:image"
 import "core:image/png"
 
+import "../ogg"
+
 // A pack's own art and sound (assets/textures/*.png, assets/sounds/*.ogg),
 // checked when the registry is built. Both files come over the network, so
 // they are read by code that is bounds-checked: the PNG by Odin's decoder
-// after its header says 16x16, the Ogg's length by walking its pages (the
-// client's decoder only sees a file that passed).
+// after its header says 16x16, the Ogg by `common/ogg` (M53c): scanned for its
+// length and decoded once, so the client only plays a file that passed.
 
 TEXTURE_SIZE :: 16 // a block texture is this many pixels square
 MAX_PNG_BYTES :: 64 << 10
@@ -87,36 +89,18 @@ png_texture :: proc(
 	return pixels, "", true
 }
 
-// ogg_length reads an Ogg Vorbis file's sample rate and length (frames) from
-// its first and last pages, without decoding it.
+// ogg_length reads an Ogg Vorbis file's sample rate and length (frames) with
+// `ogg.scan`: every page's CRC and structure and the granules, no decoding.
 ogg_length :: proc(data: []u8) -> (rate: u32, frames: u64, ok: bool) {
-	at := 0
-	last: i64 = -1
-	first := true
-	for at + 27 <= len(data) {
-		if string(data[at:at + 4]) != "OggS" {return 0, 0, false}
-		segments := int(data[at + 26])
-		if at + 27 + segments > len(data) {return 0, 0, false}
-		body := 0
-		for s in 0 ..< segments {body += int(data[at + 27 + s])}
-		start := at + 27 + segments
-		if start + body > len(data) {return 0, 0, false}
-		if first {
-			// The identification packet: 0x01 "vorbis", version, channels, rate.
-			if body < 16 || string(data[start:start + 7]) != "\x01vorbis" {return 0, 0, false}
-			rate, _ = endian.get_u32(data[start + 12:], .Little)
-			first = false
-		}
-		granule, _ := endian.get_i64(data[at + 6:], .Little)
-		if granule >= 0 {last = granule}
-		at = start + body
-	}
-	if first || at != len(data) || last < 0 || rate == 0 {return 0, 0, false}
-	return rate, u64(last), true
+	info, _, err := ogg.scan(data)
+	if err != .None || info.rate == 0 {return 0, 0, false}
+	return info.rate, info.frames, true
 }
 
-// ogg_check is the message for a sound file that is too big or too long (""
-// when it is fine).
+// ogg_check is the message for a sound file that is too big, too long or not
+// decodable ("" when it is fine). A pack's sound is decoded once, to the end,
+// into a discard buffer, so a file whose pages are good and whose audio is not
+// is refused when the pack loads, not when the sound first plays.
 ogg_check :: proc(data: []u8) -> string {
 	if len(data) > MAX_OGG_BYTES {
 		return fmt.aprintf("file is %d bytes; the limit is %d", len(data), MAX_OGG_BYTES)
@@ -129,6 +113,15 @@ ogg_check :: proc(data: []u8) -> string {
 			f64(frames) / f64(rate),
 			MAX_SOUND_SECONDS,
 		)
+	}
+	d, err := ogg.open(data)
+	if err != .None {return fmt.aprintf("not an Ogg Vorbis file (%v)", err)}
+	defer ogg.close(d)
+	discard: [2048]f32
+	for {
+		n, e := ogg.read(d, discard[:])
+		if e != .None {return fmt.aprintf("not decodable Ogg Vorbis audio (%v)", e)}
+		if n == 0 {break}
 	}
 	return ""
 }

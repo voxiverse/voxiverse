@@ -5,3 +5,5 @@ tools/wireshark/*.lua text eol=lf
 assets/baselines/audio/*.decisions text eol=lf
 assets/baselines/audio/*.txt text eol=lf
 assets/fixtures/** -text
+common/ogg/testdata/digests.txt text eol=lf
+common/ogg/testdata/reference/*.s16 -text

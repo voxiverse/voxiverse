@@ -18,6 +18,7 @@ import "limited"
 // package doesn't hide errors in the others.
 PACKAGES :: []string {
 	"base",
+	"common/ogg",
 	"client/audio",
 	"common/netcode",
 	"common/telemetry",
@@ -37,6 +38,7 @@ PACKAGES :: []string {
 	"dedicated",
 	"tools/build",
 	"tools/netdump",
+	"tools/ogg",
 	"tools/schema",
 	"tools/packcheck",
 	"tools/audiodump",
@@ -52,6 +54,7 @@ PACKAGES :: []string {
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
 	"base",
+	"common/ogg",
 	"client/audio",
 	"common/netcode",
 	"common/telemetry",
@@ -73,6 +76,7 @@ TEST_PACKAGES :: []string {
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"base",
+	"common/ogg",
 	"dedicated",
 	"client/audio",
 	"common/netcode",
@@ -126,6 +130,7 @@ main :: proc() {
 	     "package",
 	     "audiodump",
 	     "music",
+	     "bench",
 	     "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
@@ -156,7 +161,15 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
-	case "netdump", "audiodump", "replay", "sfx", "music", "worldmap", "analytics", "schema":
+	case "netdump",
+	     "audiodump",
+	     "replay",
+	     "sfx",
+	     "music",
+	     "worldmap",
+	     "analytics",
+	     "schema",
+	     "ogg":
 		ok = run_tool(args[0], args[1:])
 	case "packs":
 		ok = run_tool("packcheck", args[1:])
@@ -205,6 +218,9 @@ usage :: proc() {
 	fmt.println(
 		"  packs     check content packs: the base pack plus the given pack directories, in order",
 	)
+	fmt.println(
+		"  ogg       the Ogg decoder's maintenance: digests | reference | fuzz [--seed N] [--iterations N]",
+	)
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")
 	fmt.println(
@@ -217,6 +233,9 @@ usage :: proc() {
 		"  bench     run a benchmark scenario (docs/plan.md, M19; results in build/benchmarks/):",
 	)
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
+	fmt.println(
+		"              ogg          the Ogg decoder against miniaudio's, on the music (no game)",
+	)
 	fmt.println(
 		"              load, views, flight, edits, audio  the game (a release build, fixed settings;",
 	)
@@ -881,14 +900,16 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, telemetry, budgets (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
 		)
 		return false
 	}
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
-	if scenario == "telemetry" || scenario == "budgets" {return run_tool("bench", args)}
+	if scenario == "telemetry" || scenario == "budgets" || scenario == "ogg" {
+		return run_tool("bench", args)
+	}
 	build_args := []string{"--release"}
 	smoke := false
 	for arg in args[1:] {
