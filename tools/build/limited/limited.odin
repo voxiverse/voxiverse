@@ -164,7 +164,12 @@ run_parallel :: proc(
 // job_start starts job with its output in its log.
 @(private = "file")
 job_start :: proc(job: Job) -> (os.Process, bool) {
-	out, err := os.open(job.log, {.Write, .Create, .Trunc})
+	// Windows hands a child only the handles opened inheritable: without it the job's
+	// output went nowhere there (every file "needed formatting"). Elsewhere the handle
+	// is copied onto the child's stdout, so the flag is left off.
+	flags := os.File_Flags{.Write, .Create, .Trunc}
+	when ODIN_OS == .Windows {flags += {.Inheritable}}
+	out, err := os.open(job.log, flags)
 	if err != nil {
 		fmt.eprintfln("build: could not write '%s': %v", job.log, err)
 		return {}, false
@@ -172,7 +177,7 @@ job_start :: proc(job: Job) -> (os.Process, bool) {
 	defer os.close(out)
 	errors := out
 	if job.errors != "" {
-		errors, err = os.open(job.errors, {.Write, .Create, .Trunc})
+		errors, err = os.open(job.errors, flags)
 		if err != nil {
 			fmt.eprintfln("build: could not write '%s': %v", job.errors, err)
 			return {}, false
