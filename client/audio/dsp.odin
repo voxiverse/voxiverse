@@ -254,17 +254,23 @@ lufs :: proc "contextless" (mean_square: f64) -> f64 {
 }
 
 // meter_push measures interleaved stereo.
+// (Frames by range and the channels by constant index, so no index is checked
+// per sample; the filters and the running sum in locals until the end. The
+// same operations in the same order as one frame at a time.)
 meter_push :: proc "contextless" (m: ^Meter, buf: []f32) {
-	for f in 0 ..< len(buf) / 2 {
-		for c in 0 ..< 2 {
-			y := biquad_step(&m.high[c], biquad_step(&m.shelf[c], f64(buf[2 * f + c])))
-			m.sum += y * y
-		}
-		m.filled += 1
-		if m.filled < m.sub {continue}
-		m.last[m.count % 4] = m.sum / f64(m.sub)
+	frames := ([^][2]f32)(raw_data(buf))[:len(buf) / 2]
+	shelf0, shelf1, high0, high1 := m.shelf[0], m.shelf[1], m.high[0], m.high[1]
+	sum, filled := m.sum, m.filled
+	for frame in frames {
+		y0 := biquad_step(&high0, biquad_step(&shelf0, f64(frame[0])))
+		sum += y0 * y0
+		y1 := biquad_step(&high1, biquad_step(&shelf1, f64(frame[1])))
+		sum += y1 * y1
+		filled += 1
+		if filled < m.sub {continue}
+		m.last[m.count % 4] = sum / f64(m.sub)
 		m.count += 1
-		m.sum, m.filled = 0, 0
+		sum, filled = 0, 0
 		if m.count < 4 {continue}
 		ms := (m.last[0] + m.last[1] + m.last[2] + m.last[3]) / 4
 		l := lufs(ms)
@@ -275,6 +281,8 @@ meter_push :: proc "contextless" (m: ^Meter, buf: []f32) {
 			m.energy[bin] += ms
 		}
 	}
+	m.shelf[0], m.shelf[1], m.high[0], m.high[1] = shelf0, shelf1, high0, high1
+	m.sum, m.filled = sum, filled
 }
 
 // meter_integrated: loudness of everything measured, gated; -inf when

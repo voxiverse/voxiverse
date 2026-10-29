@@ -277,16 +277,42 @@ true_peak :: proc(x: []f32) -> f32 {
 	best: f32
 	for v in x {best = max(best, abs(v))}
 	// Largest sample of the 32 around each frame, so the filter runs only where
-	// it could beat `best`.
+	// it could beat `best`. The window's largest comes from van Herk's running
+	// maxima over blocks of TP_TAPS frames (a window spans at most two blocks):
+	// the same bound as looking at all 32, at three steps a frame.
+	peak := make([]f32, frames)
+	ahead := make([]f32, frames) // largest from the block's start up to the frame
+	behind := make([]f32, frames) // largest from the frame to the block's end
+	defer {delete(peak); delete(ahead); delete(behind)}
+	#no_bounds_check {
+		for k in 0 ..< frames {peak[k] = max(abs(x[2 * k]), abs(x[2 * k + 1]))}
+		for k in 0 ..< frames {
+			ahead[k] = peak[k] if k % TP_TAPS == 0 else max(ahead[k - 1], peak[k])
+		}
+		for k := frames - 1; k >= 0; k -= 1 {
+			end := k % TP_TAPS == TP_TAPS - 1 || k == frames - 1
+			behind[k] = peak[k] if end else max(behind[k + 1], peak[k])
+		}
+	}
 	for f in 0 ..< frames {
 		lo, hi := max(f - TP_TAPS / 2 + 1, 0), min(f + TP_TAPS / 2, frames - 1)
+		// (Every index is a frame in 0 ..< frames, a point or a tap: none is
+		// checked per sample.)
 		bound: f32
-		for k in lo ..= hi {bound = max(bound, abs(x[2 * k]), abs(x[2 * k + 1]))}
+		#no_bounds_check {
+			// lo and hi are at most TP_TAPS - 1 apart: the end of one block and the
+			// start of the next, or inside one block (at the ends, and once a block).
+			if lo / TP_TAPS != hi / TP_TAPS {
+				bound = max(behind[lo], ahead[hi])
+			} else {
+				for k in lo ..= hi {bound = max(bound, peak[k])}
+			}
+		}
 		if bound * l.l1 <= best {continue}
 		for c in 0 ..< 2 {
 			for p in 0 ..< TP_POINTS {
 				acc: f32
-				for k in 0 ..< TP_TAPS {
+				#no_bounds_check for k in 0 ..< TP_TAPS {
 					i := f - TP_TAPS / 2 + 1 + k
 					if i < 0 || i >= frames {continue}
 					acc += l.tp[p][k] * x[2 * i + c]
@@ -326,28 +352,32 @@ third_octaves :: proc(x: []f32, rate: u32) -> (bands: [BANDS]f64) {
 // fft: in-place radix-2 on re, im (length a power of two).
 fft :: proc(re, im: []f64) {
 	n := len(re)
-	j := 0
-	for i in 1 ..< n {
-		bit := n >> 1
-		for ; j & bit != 0; bit >>= 1 {j ~= bit}
-		j ~= bit
-		if i < j {
-			re[i], re[j] = re[j], re[i]
-			im[i], im[j] = im[j], im[i]
+	assert(len(im) == n && n & (n - 1) == 0, "fft: re and im of one power-of-two length")
+	// Every index below is under n, so none is checked per element.
+	#no_bounds_check {
+		j := 0
+		for i in 1 ..< n {
+			bit := n >> 1
+			for ; j & bit != 0; bit >>= 1 {j ~= bit}
+			j ~= bit
+			if i < j {
+				re[i], re[j] = re[j], re[i]
+				im[i], im[j] = im[j], im[i]
+			}
 		}
-	}
-	for size := 2; size <= n; size <<= 1 {
-		ang := -2 * math.PI / f64(size)
-		wr, wi := math.cos(ang), math.sin(ang)
-		for start := 0; start < n; start += size {
-			cr, ci := 1.0, 0.0
-			for k in 0 ..< size / 2 {
-				a, b := start + k, start + k + size / 2
-				tr := re[b] * cr - im[b] * ci
-				ti := re[b] * ci + im[b] * cr
-				re[b], im[b] = re[a] - tr, im[a] - ti
-				re[a], im[a] = re[a] + tr, im[a] + ti
-				cr, ci = cr * wr - ci * wi, cr * wi + ci * wr
+		for size := 2; size <= n; size <<= 1 {
+			ang := -2 * math.PI / f64(size)
+			wr, wi := math.cos(ang), math.sin(ang)
+			for start := 0; start < n; start += size {
+				cr, ci := 1.0, 0.0
+				for k in 0 ..< size / 2 {
+					a, b := start + k, start + k + size / 2
+					tr := re[b] * cr - im[b] * ci
+					ti := re[b] * ci + im[b] * cr
+					re[b], im[b] = re[a] - tr, im[a] - ti
+					re[a], im[a] = re[a] + tr, im[a] + ti
+					cr, ci = cr * wr - ci * wi, cr * wi + ci * wr
+				}
 			}
 		}
 	}

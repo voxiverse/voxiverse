@@ -59,41 +59,55 @@ mdct_init :: proc "contextless" (t: ^Mdct, a: ^Arena, n: int) -> Error {
 dct4 :: proc "contextless" (t: ^Mdct, x, out, work: []f32) {
 	m := t.m
 	h := m / 2
-	// Fold into complex z[j] = (x[2j] + i x[m-1-2j]) * w[j], in bit-reversed place.
-	for j in 0 ..< h {
-		re := x[2 * j]
-		im := x[m - 1 - 2 * j]
-		c, s := t.pre[2 * j], t.pre[2 * j + 1]
-		p := int(t.rev[j])
-		work[2 * p] = re * c - im * s
-		work[2 * p + 1] = re * s + im * c
-	}
-	// Radix-2 butterflies.
-	size := 2
-	for size <= h {
-		half := size / 2
-		step := h / size
-		for start := 0; start < h; start += size {
-			for k in 0 ..< half {
-				wr, wi := t.ftw[2 * k * step], t.ftw[2 * k * step + 1]
-				i0 := 2 * (start + k)
-				i1 := 2 * (start + k + half)
-				xr := work[i1] * wr - work[i1 + 1] * wi
-				xi := work[i1] * wi + work[i1 + 1] * wr
-				work[i1] = work[i0] - xr
-				work[i1 + 1] = work[i0 + 1] - xi
-				work[i0] += xr
-				work[i0 + 1] += xi
-			}
+	// Every index below is under these lengths (rev holds 0 ..< h, mdct_init's
+	// bit reversal), so none is checked per sample.
+	assert_contextless(
+		len(x) >= m &&
+		len(out) >= m &&
+		len(work) >= m &&
+		len(t.pre) >= m &&
+		len(t.tw) >= m &&
+		len(t.ftw) >= h &&
+		len(t.rev) >= h,
+		"dct4: buffers shorter than the block",
+	)
+	#no_bounds_check {
+		// Fold into complex z[j] = (x[2j] + i x[m-1-2j]) * w[j], in bit-reversed place.
+		for j in 0 ..< h {
+			re := x[2 * j]
+			im := x[m - 1 - 2 * j]
+			c, s := t.pre[2 * j], t.pre[2 * j + 1]
+			p := int(t.rev[j])
+			work[2 * p] = re * c - im * s
+			work[2 * p + 1] = re * s + im * c
 		}
-		size *= 2
-	}
-	for k in 0 ..< h {
-		c, s := t.tw[2 * k], t.tw[2 * k + 1]
-		re := work[2 * k] * c - work[2 * k + 1] * s
-		im := work[2 * k] * s + work[2 * k + 1] * c
-		out[2 * k] = re
-		out[m - 1 - 2 * k] = -im
+		// Radix-2 butterflies.
+		size := 2
+		for size <= h {
+			half := size / 2
+			step := h / size
+			for start := 0; start < h; start += size {
+				for k in 0 ..< half {
+					wr, wi := t.ftw[2 * k * step], t.ftw[2 * k * step + 1]
+					i0 := 2 * (start + k)
+					i1 := 2 * (start + k + half)
+					xr := work[i1] * wr - work[i1 + 1] * wi
+					xi := work[i1] * wi + work[i1 + 1] * wr
+					work[i1] = work[i0] - xr
+					work[i1 + 1] = work[i0 + 1] - xi
+					work[i0] += xr
+					work[i0 + 1] += xi
+				}
+			}
+			size *= 2
+		}
+		for k in 0 ..< h {
+			c, s := t.tw[2 * k], t.tw[2 * k + 1]
+			re := work[2 * k] * c - work[2 * k + 1] * s
+			im := work[2 * k] * s + work[2 * k + 1] * c
+			out[2 * k] = re
+			out[m - 1 - 2 * k] = -im
+		}
 	}
 }
 
