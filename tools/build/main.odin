@@ -694,7 +694,11 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 		for pkg in ([]string{GAME_PACKAGE, SERVER_PACKAGE}) {
 			append(&builds, [2]string{"build", pkg})
 		}
-		if !windows {
+		if windows {
+			// The driver itself: its Windows files (the lock, Ctrl-C, how a job's output
+			// reaches its log) build nowhere else before CI.
+			append(&builds, [2]string{"build", "tools/build"})
+		} else {
 			for pkg in TEST_PACKAGES {
 				append(&builds, [2]string{"test", pkg})
 			}
