@@ -54,9 +54,9 @@ Mirror :: struct {
 }
 
 Session :: struct {
-	srv:        Server,
-	started:    bool,
-	pipe:       game.Pipe,
+	scripted:   bool, // the mirror's turn this tick follows the script
+	manual:     bool, // the test drives the mirror itself (mirror_receive, mirror_send) before each harness_step: its turn does nothing
+	h:          Harness, // the server, its pipe and its clock (harness.odin)
 	mirror:     Mirror,
 	script_at:  u64, // the server tick the script started after
 	hashes:     [dynamic]State_Hash,
@@ -193,10 +193,10 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 				teleported = teleported,
 			)
 			m.updates += 1
-			knockback := sess.srv.tick - sess.script_at
+			knockback := sess.h.srv.tick - sess.script_at
 			if m.prediction.corrections != before && !(knockback >= 6000 && knockback < 6030) { 	// (the rocket's blast moves the player: a correction by design)
 				m.corrections += 1
-				if m.first_fix == 0 {m.first_fix = sess.srv.tick}
+				if m.first_fix == 0 {m.first_fix = sess.h.srv.tick}
 			}
 			if v.acked == m.prediction.next_sequence - 1 && m.prediction.state != v.state {
 				m.mismatches += 1
@@ -228,28 +228,25 @@ session_start :: proc(
 	no_sheep := false,
 	with: Maybe(Config) = nil,
 ) -> bool {
-	game.pipe_init(&sess.pipe)
 	config := Config {
 		seed         = DETERMINISM_SEED,
 		generator    = .Earth,
 		view_radius  = 4,
 		view_height  = 2,
-		stepped      = true,
 		allow_cheats = true,
 		max_players  = 1,
 		perturb      = perturb,
 		no_sheep     = no_sheep,
 	}
 	if c, given := with.?; given {config = c}
-	if !start(&sess.srv, config, {&sess.pipe, .Server}) {return false}
-	sess.started = true
+	if !harness_start(&sess.h, config, local = true) {return false}
 	m := &sess.mirror
-	m.endpoint = {&sess.pipe, .Client}
+	m.endpoint = harness_local(&sess.h)
 	m.scratch = new(game.Block_Array)
 	game.block_arrays_init(&m.arrays, 2048)
 	m.key = test_key("determinism")
 	m.schema = game.game_schema()
-	game.receiver_init(&m.rx, &m.schema, sess.srv.registry)
+	game.receiver_init(&m.rx, &m.schema, sess.h.srv.registry)
 	for sec in Hash_Section {sess.seen[sec] = make(map[u64]struct{})}
 	sess.logging = logging
 	if logging {
@@ -264,12 +261,13 @@ session_start :: proc(
 			ODIN_VERSION,
 		)
 	}
+	harness_add(&sess.h, mirror_tick, sess)
 	mirror_send(m, test_hello("determinism"))
 	return true
 }
 
 session_stop :: proc(sess: ^Session) {
-	stop(&sess.srv)
+	harness_stop(&sess.h)
 	m := &sess.mirror
 	for _, &c in m.chunks {game.chunk_release(&c, &m.arrays)}
 	delete(m.chunks)
@@ -280,7 +278,6 @@ session_stop :: proc(sess: ^Session) {
 	game.schema_destroy(&m.schema)
 	game.block_arrays_destroy(&m.arrays)
 	free(m.scratch)
-	game.pipe_destroy(&sess.pipe)
 	delete(sess.hashes)
 	delete(sess.checkpoint)
 	for f in sess.failures {delete(f)}
@@ -290,7 +287,7 @@ session_stop :: proc(sess: ^Session) {
 }
 
 ticks_of :: proc(sess: ^Session) -> u64 {
-	return sess.srv.tick - sess.script_at
+	return sess.h.srv.tick - sess.script_at
 }
 
 // The script is a pure function of the tick it is on.
@@ -377,9 +374,12 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 	}
 }
 
-// session_step: the mirror takes what the last tick sent, plays its part of
-// this tick, and the server runs it.
-session_step :: proc(sess: ^Session, scripted: bool) -> State_Hash {
+// mirror_tick is the mirror's turn in a tick (a harness party): it takes what
+// the last tick sent and plays its part of this one.
+@(private = "file")
+mirror_tick :: proc(data: rawptr) {
+	sess := (^Session)(data)
+	if sess.manual {return}
 	m := &sess.mirror
 	mirror_pump(sess)
 	if m.welcomed {
@@ -387,13 +387,19 @@ session_step :: proc(sess: ^Session, scripted: bool) -> State_Hash {
 		in_ := game.Player_Input {
 			pitch = -0.7,
 		}
-		if scripted {in_ = script_input(tick)}
+		if sess.scripted {in_ = script_input(tick)}
 		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
-		if scripted {act(m, tick, msg, in_)}
+		if sess.scripted {act(m, tick, msg, in_)}
 	}
-	h := step(&sess.srv)
+}
+
+// session_step: one harness tick (the mirror's turn, then the server's), and
+// the bookkeeping.
+session_step :: proc(sess: ^Session, scripted: bool) -> State_Hash {
+	sess.scripted = scripted
+	h := harness_step(&sess.h)
 	append(&sess.hashes, h)
 	for sec in Hash_Section {sess.seen[sec][h.sections[sec]] = {}}
 	if sess.logging {log_tick(sess, h)}
@@ -420,6 +426,19 @@ ready :: proc(sess: ^Session) -> bool {
 	)
 }
 
+// session_land steps until the player has landed and the world is there
+// (at most 900 ticks), unscripted: a failure is a test failure.
+session_land :: proc(t: ^testing.T, sess: ^Session) -> bool {
+	sess.scripted = false
+	_, ok := harness_step_until(
+		&sess.h,
+		proc(data: rawptr) -> bool {return ready((^Session)(data))},
+		sess,
+		900,
+	)
+	return testing.expect(t, ok, "the player never landed")
+}
+
 @(private = "file")
 Checkpoint :: struct {
 	server, mirror: u64,
@@ -435,7 +454,7 @@ checkpoint :: proc(sess: ^Session) -> Checkpoint {
 	slice.sort_by(held[:], game.chunk_pos_less)
 	h := game.hasher_make()
 	for pos in held {game.hash_chunk(&h, pos, &m.chunks[pos])}
-	return {hash_chunks(sess.srv.home, held[:]), game.hasher_finish(h)}
+	return {hash_chunks(sess.h.srv.home, held[:]), game.hasher_finish(h)}
 }
 
 @(private = "file")
@@ -462,7 +481,7 @@ first_difference :: proc(a, b: string) -> (string, string) {
 diverged :: proc(a, b: ^Session, ha, hb: State_Hash) -> (d: Divergence, found: bool) {
 	for sec in Hash_Section {
 		if ha.sections[sec] == hb.sections[sec] {continue}
-		la, lb := first_difference(dump_sections(&a.srv, {sec}), dump_sections(&b.srv, {sec}))
+		la, lb := first_difference(dump_sections(&a.h.srv, {sec}), dump_sections(&b.h.srv, {sec}))
 		return {tick = ha.tick, section = sec, a = la, b = lb}, true
 	}
 	return {}, false
@@ -476,7 +495,7 @@ divergence_text :: proc(d: Divergence) -> string {
 @(private = "file")
 maps_apart :: proc(a, b: ^Session) -> bool {
 	table :: proc(s: ^Session) -> rawptr {
-		return rawptr((^runtime.Raw_Map)(&s.srv.home.chunks.by_pos).data)
+		return rawptr((^runtime.Raw_Map)(&s.h.srv.home.chunks.by_pos).data)
 	}
 	return table(a) != table(b)
 }
@@ -506,7 +525,7 @@ run_side_by_side :: proc(
 		if !testing.expect(t, i < 899, "the player never landed") {return}
 	}
 	for s in ([2]^Session{a, b}) {
-		s.script_at = s.srv.tick
+		s.script_at = s.h.srv.tick
 		s.mirror.corrections, s.mirror.mismatches, s.mirror.updates = 0, 0, 0
 	}
 	for _ in 0 ..< ticks {
@@ -528,11 +547,11 @@ run_side_by_side :: proc(
 
 @(private = "file")
 log_checkpoint :: proc(sess: ^Session, world: u64) {
-	fmt.sbprintfln(&sess.log, "dump %d", sess.srv.tick)
+	fmt.sbprintfln(&sess.log, "dump %d", sess.h.srv.tick)
 	all: Hash_Sections
 	for sec in Hash_Section {all += {sec}}
-	fmt.sbprint(&sess.log, dump_sections(&sess.srv, all))
-	fmt.sbprintfln(&sess.log, "world %016x", world_hash(&sess.srv))
+	fmt.sbprint(&sess.log, dump_sections(&sess.h.srv, all))
+	fmt.sbprintfln(&sess.log, "world %016x", world_hash(&sess.h.srv))
 }
 
 @(private = "file")
@@ -544,8 +563,8 @@ write_log :: proc(sess: ^Session) {
 
 @(private = "file")
 finish :: proc(a, b: ^Session) {
-	if a != nil && a.started {session_stop(a)}
-	if b != nil && b.started {session_stop(b)}
+	if a != nil && a.h.started {session_stop(a)}
+	if b != nil && b.h.started {session_stop(b)}
 	free(a)
 	free(b)
 }
@@ -634,7 +653,7 @@ test_stepped_jobs_in_order :: proc(t: ^testing.T) {
 	slots :: proc(s: ^Session) -> [dynamic]u64 {
 		out := make([dynamic]u64, context.temp_allocator)
 		it: base.Pool_Iterator
-		for c, h in base.pool_next(&s.srv.home.chunks.chunks, &it) {
+		for c, h in base.pool_next(&s.h.srv.home.chunks.chunks, &it) {
 			append(
 				&out,
 				u64(h) << 32 |

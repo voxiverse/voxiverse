@@ -1,7 +1,6 @@
 package server
 
 import "core:log"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -96,8 +95,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 @(private)
 leave :: proc(s: ^Server, c: ^Client, reason: string) {
 	farewell(s, c, reason)
-	if p, ok := c.link.(netcode.Peer_Id);
-	   ok {netcode.host_kick(&s.host, p, reason, time.tick_now())}
+	if p, ok := c.link.(netcode.Peer_Id); ok {netcode.host_kick(&s.host, p, reason, server_now(s))}
 	client_reset(c)
 }
 

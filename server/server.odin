@@ -64,6 +64,7 @@ Config :: struct {
 	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
 	pack_watch:            bool, // development: reload the packs when their files change (pack_reload.odin)
 	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
+	net:                   ^netcode.Simnet, // listen on this simulated network, not UDP (needs stepped; no conditions: the network's are the only ones)
 	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
 	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
 	backups:               Maybe(int), // rolling backups kept (nil: BACKUP_KEEP; 0: none)
@@ -160,6 +161,10 @@ KICK_DELAY :: game.TICK_RATE
 // its address until stop. local: the in-process player's end of a pipe
 // ({} for none).
 start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
+	if config.net != nil && (!config.stepped || config.conditions != {}) {
+		log.warnf("a simulated network needs a stepped server and no conditions of its own")
+		return false
+	}
 	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
 	assert(
 		config.view_height > 0 &&
@@ -341,6 +346,15 @@ stats :: proc(s: ^Server) -> Stats {
 	return s.stats
 }
 
+// server_now: the time netcode is given: the simulated network's clock when
+// the server runs on one, else the OS's. (The live tick's pacing keeps the
+// wall clock: it is not state.)
+@(private)
+server_now :: proc(s: ^Server) -> time.Tick {
+	if s.config.net != nil {return s.config.net.now}
+	return time.tick_now()
+}
+
 // listen opens the UDP port for remote players: the first free one from
 // first to last. False (logged) if none could be opened.
 @(private)
@@ -348,7 +362,13 @@ listen :: proc(s: ^Server, first, last: int) -> bool {
 	if s.listening {return true}
 	err: net.Network_Error
 	for port in first ..= last {
-		err = netcode.host_open(&s.host, port, s.config.max_players, s.config.password)
+		err = netcode.host_open(
+			&s.host,
+			port,
+			s.config.max_players,
+			s.config.password,
+			sim = s.config.net,
+		)
 		if err == nil {
 			s.listening = true
 			s.host.socket.conditions = s.config.conditions
@@ -494,7 +514,7 @@ tick :: proc(s: ^Server) {
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}
 		base.profile_scope("network flush")
-		netcode.host_flush(&s.host, time.tick_now())
+		netcode.host_flush(&s.host, server_now(s))
 	}
 }
 
@@ -509,7 +529,7 @@ receive_messages :: proc(s: ^Server) {
 		for p in packets {handle(s, &s.clients[0], p)}
 	}
 	if !s.listening {return}
-	netcode.host_update(&s.host, time.tick_now())
+	netcode.host_update(&s.host, server_now(s))
 	for e in s.host.events {
 		switch v in e {
 		case netcode.Peer_Connected:
@@ -521,7 +541,7 @@ receive_messages :: proc(s: ^Server) {
 				}
 			}
 			if slot < 0 { 	// the host's seats are ours, but the local player has one too
-				netcode.host_kick(&s.host, v.peer, "the server is full", time.tick_now())
+				netcode.host_kick(&s.host, v.peer, "the server is full", server_now(s))
 				continue
 			}
 			c := &s.clients[slot]

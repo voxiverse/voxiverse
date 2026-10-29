@@ -21,7 +21,7 @@ import "../server"
 receive :: proc(s: ^Session) {
 	if s.remote {
 		was := s.link.state
-		netcode.link_update(&s.link, time.tick_now())
+		netcode.link_update(&s.link, netcode.link_now(&s.link))
 		if s.link.state == .Failed {
 			fail(s, s.link.reason)
 			return
@@ -128,7 +128,11 @@ receive :: proc(s: ^Session) {
 			s.stats.chunks_received += 1
 		case game.Pong:
 			if s.net.ping_pending && v.id == s.net.ping_id {
-				s.net.rtt_ms = f32(time.duration_milliseconds(time.tick_since(s.net.ping_sent)))
+				s.net.rtt_ms = f32(
+					time.duration_milliseconds(
+						time.tick_diff(s.net.ping_sent, netcode.link_now(&s.link)),
+					),
+				)
 				s.net.ping_pending = false
 			}
 		case game.Unload_Chunk:
@@ -240,7 +244,7 @@ notice :: proc(s: ^Session, text: string) {
 @(private)
 flush :: proc(s: ^Session) {
 	if !s.remote {return}
-	now := time.tick_now()
+	now := netcode.link_now(&s.link)
 	if time.tick_diff(s.last_flush, now) < FLUSH_INTERVAL {return}
 	s.last_flush = now
 	netcode.link_flush(&s.link, now)
@@ -278,7 +282,7 @@ net_update :: proc(s: ^Session, dt: f32) {
 	if n.ping_timer >= 1 && !n.ping_pending && s.state == .Playing {
 		n.ping_timer = 0
 		n.ping_id += 1
-		n.ping_sent = time.tick_now()
+		n.ping_sent = netcode.link_now(&s.link)
 		n.ping_pending = true
 		send_message(s, game.Ping{n.ping_id})
 	}

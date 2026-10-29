@@ -49,13 +49,14 @@ link_connect :: proc(
 	password: string,
 	now: time.Tick,
 	allocator := context.allocator,
+	sim: ^Simnet = nil,
 ) -> net.Network_Error {
 	l^ = {
 		server    = server,
 		started   = now,
 		allocator = allocator,
 	}
-	socket_open(&l.socket, 0) or_return
+	socket_open(&l.socket, 0, sim = sim) or_return
 	l.password = strings.clone(password, allocator)
 	crypto.rand_bytes(mem.ptr_to_bytes(&l.salt))
 	l.buffer = make([dynamic]u8, allocator)
@@ -63,6 +64,9 @@ link_connect :: proc(
 	send_handshake(l, now)
 	return nil
 }
+
+// link_now: the time on the link's network (the OS's, or a simulated one's).
+link_now :: proc(l: ^Link) -> time.Tick {return socket_now(&l.socket)}
 
 // link_close says goodbye (if connected) and frees everything.
 link_close :: proc(l: ^Link, reason: string) {
@@ -73,7 +77,7 @@ link_close :: proc(l: ^Link, reason: string) {
 		put_u8(&w, u8(Packet_Kind.Disconnect))
 		put_u32(&w, l.conn.token)
 		put_blob(&w, transmute([]u8)reason[:min(len(reason), MAX_REASON)])
-		now := time.tick_now()
+		now := link_now(l)
 		for _ in 0 ..< 3 {socket_send(&l.socket, l.server, buf[:w.n], now)}
 		socket_pump(&l.socket, time.tick_add(now, time.Hour))
 		conn_destroy(&l.conn)

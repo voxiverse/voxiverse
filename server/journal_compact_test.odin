@@ -136,8 +136,8 @@ journal_retention :: proc(t: ^testing.T) {
 		testing.expect(t, world_save(w))
 		before = len(journal_segments(w))
 		// The same world, now with a retention.
-		g.sess.srv.config.journal_keep, g.sess.srv.config.journal_max_bytes = keep, most
-		g.sess.srv.config.journal_detail = 1 << 40
+		g.sess.h.srv.config.journal_keep, g.sess.h.srv.config.journal_max_bytes = keep, most
+		g.sess.h.srv.config.journal_detail = 1 << 40
 		testing.expect(t, world_save(w))
 		segs := journal_segments(w)
 		count = len(segs)

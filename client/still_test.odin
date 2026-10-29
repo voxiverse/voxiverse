@@ -3,9 +3,9 @@ package client
 import "core:math"
 import "core:net"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
+import "../common/netcode"
 import "../server"
 
 // Those who stand still stay in sight. Snapshots carry only what changed, so
@@ -18,19 +18,24 @@ STILL_TICKS :: 4 * 2 * game.TICK_RATE // well past what the old two-second rule 
 
 @(private = "file")
 Pair :: struct {
-	srv:          server.Server,
+	h:            server.Harness,
 	mover, watch: ^Session,
 }
 
 @(private = "file")
 tick_all :: proc(p: ^Pair) {
-	server.step(&p.srv)
+	server.harness_step(&p.h)
+}
+
+// sessions_tick: the two sessions' frame, a party of the harness (before the server's tick).
+@(private = "file")
+sessions_tick :: proc(data: rawptr) {
+	p := (^Pair)(data)
 	input: Input_State
 	actions: Actions
 	for s in ([2]^Session{p.mover, p.watch}) {
 		session_update(s, &input, &actions, {}, {}, game.TICK_SECONDS, false)
 	}
-	time.sleep(time.Millisecond) // (the loopback packets of this tick)
 }
 
 // seen: the watcher shows the thing at the time it renders at (its clock
@@ -50,15 +55,19 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 		view_height     = 2,
 		max_players     = 4,
 		listen          = true,
-		stepped         = true,
 		allow_cheats    = true,
 		everyone_cheats = true,
 		no_sheep        = true,
 		rules           = still_rules(),
 	}
-	if !testing.expect(t, server.start(&p.srv, config, {})) {return false}
-	address := net.Endpoint{net.IP4_Loopback, p.srv.host.socket.port}
-	open :: proc(name: string, seed: byte, address: net.Endpoint) -> ^Session {
+	if !testing.expect(t, server.harness_start(&p.h, config)) {return false}
+	address := server.harness_address(&p.h)
+	open :: proc(
+		name: string,
+		seed: byte,
+		address: net.Endpoint,
+		sim: ^netcode.Simnet,
+	) -> ^Session {
 		s := new(Session)
 		key: game.Account_Key
 		game.account_key_set(&key, {0 ..< 32 = seed})
@@ -71,19 +80,22 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 				view_radius = 3,
 				view_height = 2,
 				registry = test_reg(),
+				net = sim,
 			},
 		)
 		return s
 	}
-	p.mover, p.watch = open("mover", 1, address), open("watcher", 2, address)
-	for _ in 0 ..< 3000 {
-		tick_all(p)
-		if p.mover.state == .Playing &&
-		   p.watch.state == .Playing &&
-		   len(p.watch.others) == 1 {return true}
-	}
-	testing.expect(t, false, "the two players never met")
-	return false
+	p.mover, p.watch = open("mover", 1, address, &p.h.net), open("watcher", 2, address, &p.h.net)
+	server.harness_add(&p.h, sessions_tick, p)
+	_, met := server.harness_step_until(&p.h, proc(data: rawptr) -> bool {
+			p := (^Pair)(data)
+			return(
+				p.mover.state == .Playing &&
+				p.watch.state == .Playing &&
+				len(p.watch.others) == 1 \
+			)
+		}, p, 3000)
+	return testing.expect(t, met, "the two players never met")
 }
 
 @(private = "file")
@@ -92,7 +104,7 @@ pair_stop :: proc(p: ^Pair) {
 	session_end(p.watch, nil, nil)
 	free(p.mover)
 	free(p.watch)
-	server.stop(&p.srv)
+	server.harness_stop(&p.h)
 }
 
 @(test)

@@ -92,12 +92,13 @@ host_open :: proc(
 	max_peers: int,
 	password := "",
 	allocator := context.allocator,
+	sim: ^Simnet = nil,
 ) -> net.Network_Error {
 	h^ = {
 		allocator = allocator,
 		password  = password,
 	}
-	socket_open(&h.socket, port) or_return
+	socket_open(&h.socket, port, sim = sim) or_return
 	crypto.rand_bytes(h.secret[:])
 	crypto.rand_bytes(mem.ptr_to_bytes(&h.instance))
 	h.peers = make([]Peer, max_peers, allocator)
@@ -109,9 +110,12 @@ host_open :: proc(
 	return nil
 }
 
+// host_now: the time on the host's network (the OS's, or a simulated one's).
+host_now :: proc(h: ^Host) -> time.Tick {return socket_now(&h.socket)}
+
 // host_close says goodbye to every peer (reason shown to them) and closes.
 host_close :: proc(h: ^Host, reason: string) {
-	now := time.tick_now()
+	now := host_now(h)
 	for &p, i in h.peers {
 		if p.active {host_kick(h, Peer_Id(i + 1), reason, now)}
 	}

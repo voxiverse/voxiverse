@@ -1,11 +1,9 @@
 package client
 
 import "core:math"
-import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 import "../server"
@@ -26,7 +24,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "client_weapons"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	srv: server.Server
+	rig: Frame_Rig
 	config := server.Config {
 		save_dir    = dir,
 		kit         = "rocket_launcher 1", // (the world's kit: the blocks of the other tests are not wanted)
@@ -35,13 +33,12 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		view_height = 2,
 		max_players = 2,
 		listen      = true,
-		stepped     = true,
 		no_sheep    = true,
 		mode        = "survival",
 		rules       = still_rules(),
 	}
-	if !testing.expect(t, server.start(&srv, config, {})) {return}
-	defer server.stop(&srv)
+	if !testing.expect(t, server.harness_start(&rig.h, config)) {return}
+	defer server.harness_stop(&rig.h)
 	s := new(Session)
 	defer free(s)
 	key: game.Account_Key
@@ -51,27 +48,27 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		{
 			name = "shooter",
 			key = key,
-			join = Join{address = net.Endpoint{net.IP4_Loopback, srv.host.socket.port}},
+			join = Join{address = server.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
 			registry = test_reg(),
+			net = &rig.h.net,
 		},
 	)
 	defer session_end(s, nil, nil)
-	input: Input_State
-	frame :: proc(srv: ^server.Server, s: ^Session, input: ^Input_State, a: ^Actions) {
-		server.step(srv)
-		session_update(s, input, a, SETTINGS_DEFAULTS, {}, game.TICK_SECONDS, true)
-		time.sleep(time.Millisecond)
-	}
+	rig_add(&rig, s)
 	idle: Actions
 	pistol, _ := game.item_by_name(s.reg, "pistol")
-	for _ in 0 ..< 3000 {
-		frame(&srv, s, &input, &idle)
-		if s.state == .Playing &&
-		   s.server_inventory.slots[0].item == pistol &&
-		   s.prediction.state.on_ground {break}
-	}
+	rig.actions = &idle
+	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+			s := (^Frame_Rig)(data).s
+			pistol, _ := game.item_by_name(s.reg, "pistol")
+			return(
+				s.state == .Playing &&
+				s.server_inventory.slots[0].item == pistol &&
+				s.prediction.state.on_ground \
+			)
+		}, &rig, 3000)
 	if !testing.expect_value(t, s.state, Session_State.Playing) {return}
 	// The survival kit: the mode's pistol, rifle and sniper, with full magazines.
 	testing.expect_value(t, s.inventory.slots[0].item, pistol)
@@ -81,16 +78,16 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.inventory.slots[1].item, rifle)
 	testing.expect_value(t, s.inventory.slots[2].item, sniper)
 	testing.expect_value(t, s.inventory.slots[2].ammo, u8(5))
-	for _ in 0 ..< 30 {frame(&srv, s, &input, &idle)}
+	for _ in 0 ..< 30 {rig_frame(&rig, &idle)}
 
 	// A target in front of us, a block off, in line with the eyes' look down at it.
 	feet := s.prediction.state.position
-	client := &srv.clients[0]
-	sheep := server.entity_spawn(srv.worlds[0], .Sheep, feet + {0, 0, -1.4}, false)
+	client := &rig.h.srv.clients[0]
+	sheep := server.entity_spawn(rig.h.srv.worlds[0], .Sheep, feet + {0, 0, -1.4}, false)
 	if !testing.expect(t, sheep != nil) {return}
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))
-	for _ in 0 ..< 6 {frame(&srv, s, &input, &idle)} 	// (a few ticks of history to rewind to)
+	for _ in 0 ..< 6 {rig_frame(&rig, &idle)} 	// (a few ticks of history to rewind to)
 	sheep.body.position = feet + {0, 0, -1.4}
 	_ = client
 
@@ -99,7 +96,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		pressed = {.Attack},
 		down    = {.Attack},
 	}
-	frame(&srv, s, &input, &press)
+	rig_frame(&rig, &press)
 	testing.expect_value(t, s.shots, 1)
 	testing.expect(t, has_sound(s, .Shot_Pistol), "the shot's sound plays at once")
 	testing.expect(t, len(s.puffs) > 0, "the tracer and the flash are at once")
@@ -111,11 +108,11 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	hold_down := Actions {
 		down = {.Attack},
 	}
-	for _ in 0 ..< 20 {frame(&srv, s, &input, &hold_down)}
+	for _ in 0 ..< 20 {rig_frame(&rig, &hold_down)}
 	testing.expect_value(t, s.shots, 1)
-	frame(&srv, s, &input, &idle)
+	rig_frame(&rig, &idle)
 	// The server's word arrived: the magazine, the hit.
-	for _ in 0 ..< 10 {frame(&srv, s, &input, &idle)}
+	for _ in 0 ..< 10 {rig_frame(&rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].ammo, u8(11))
 	testing.expect_value(t, s.confirms, 1)
 	testing.expect(t, has_sound(s, .Hit), "the hit has its sound")
@@ -124,10 +121,10 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	reload := Actions {
 		pressed = {.Reload},
 	}
-	frame(&srv, s, &input, &reload)
+	rig_frame(&rig, &reload)
 	testing.expect(t, weapon_reloading(s), "the reload shows")
-	frame(&srv, s, &input, &reload)
-	for _ in 0 ..< int(1.4 * game.TICK_RATE) + 10 {frame(&srv, s, &input, &idle)}
+	rig_frame(&rig, &reload)
+	for _ in 0 ..< int(1.4 * game.TICK_RATE) + 10 {rig_frame(&rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].ammo, u8(12))
 	testing.expect(t, !weapon_reloading(s))
 
@@ -136,11 +133,11 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	select := Actions {
 		pressed = {.Hotbar_3},
 	}
-	frame(&srv, s, &input, &select)
+	rig_frame(&rig, &select)
 	zoom := Actions {
 		down = {.Use},
 	}
-	for _ in 0 ..< 30 {frame(&srv, s, &input, &zoom)}
+	for _ in 0 ..< 30 {rig_frame(&rig, &zoom)}
 	fov := camera_fov(s, SETTINGS_DEFAULTS)
 	testing.expectf(
 		t,
@@ -150,7 +147,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		SETTINGS_DEFAULTS.fov,
 	)
 	testing.expect(t, zoom_factor(s) < 0.3)
-	for _ in 0 ..< 30 {frame(&srv, s, &input, &idle)}
+	for _ in 0 ..< 30 {rig_frame(&rig, &idle)}
 	testing.expect(t, abs(camera_fov(s, SETTINGS_DEFAULTS) - SETTINGS_DEFAULTS.fov) < 1)
 }
 

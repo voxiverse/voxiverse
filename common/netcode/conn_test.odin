@@ -2,74 +2,75 @@ package netcode
 
 import "core:encoding/endian"
 import "core:math/rand"
+import "core:net"
 import "core:slice"
 import "core:testing"
 import "core:time"
 
-// A simulated link between two connections on a simulated clock (5 ms
-// steps): each packet may be lost, duplicated or delayed (which reorders).
+// A simulated link between two connections: two sockets on one simulated
+// network (simnet.odin), stepped 5 ms at a time. Each packet may be lost,
+// duplicated or delayed (which reorders), from a seed: the same every run.
 @(private = "file")
 Wire :: struct {
-	loss, duplicate: f32,
-	delay_steps:     [2]int, // min, max
-	flight:          [dynamic]Flying,
-	step:            int,
-	base:            time.Tick,
-	buffer:          [dynamic]u8,
-	packets:         [dynamic][]u8,
-	sent_bytes:      [2]int,
-}
-
-@(private = "file")
-Flying :: struct {
-	to:   int,
-	due:  int,
-	data: []u8,
+	net:        Simnet,
+	socks:      [2]Socket,
+	step:       int,
+	base:       time.Tick,
+	buffer:     [dynamic]u8,
+	packets:    [dynamic][]u8,
+	sent_bytes: [2]int,
 }
 
 @(private = "file")
 STEP :: 5 * time.Millisecond
 
 @(private = "file")
+wire_init :: proc(w: ^Wire, c: Conditions) {
+	simnet_init(&w.net, c)
+	w.base = w.net.now
+	for &s in w.socks {socket_open(&s, 0, sim = &w.net)}
+}
+
+@(private = "file")
 wire_now :: proc(w: ^Wire) -> time.Tick {
 	return time.tick_add(w.base, time.Duration(w.step) * STEP)
 }
 
-// wire_step: both sides flush; the link carries what they sent; what is
+@(private = "file")
+wire_address :: proc(w: ^Wire, i: int) -> net.Endpoint {
+	return {net.IP4_Loopback, w.socks[i].port}
+}
+
+// wire_step: both sides flush; the network carries what they sent; what is
 // due arrives.
 @(private = "file")
 wire_step :: proc(w: ^Wire, conns: [2]^Conn) {
 	now := wire_now(w)
+	w.net.now = now
 	for c, from in conns {
 		conn_flush(c, now, &w.buffer, &w.packets)
 		for p in w.packets {
 			w.sent_bytes[from] += len(p)
-			if rand.float32() < w.loss {continue}
-			copies := 2 if rand.float32() < w.duplicate else 1
-			for _ in 0 ..< copies {
-				delay := rand.int_range(w.delay_steps[0], w.delay_steps[1] + 1)
-				append(&w.flight, Flying{1 - from, w.step + delay, slice.clone(p)})
-			}
+			socket_send(&w.socks[from], wire_address(w, 1 - from), p, now)
 		}
 	}
 	w.step += 1
 	now = wire_now(w)
-	for i := 0; i < len(w.flight); {
-		f := w.flight[i]
-		if f.due > w.step {
-			i += 1
-			continue
+	w.net.now = now
+	for &s in w.socks {socket_pump(&s, now)}
+	for &s, to in w.socks {
+		for {
+			data, _, ok := socket_receive(&s)
+			if !ok {break}
+			conn_packet(conns[to], data, now)
 		}
-		conn_packet(conns[f.to], f.data, now)
-		delete(f.data)
-		unordered_remove(&w.flight, i)
 	}
 }
 
 @(private = "file")
 wire_destroy :: proc(w: ^Wire) {
-	for f in w.flight {delete(f.data)}
-	delete(w.flight)
+	for &s in w.socks {socket_close(&s)}
+	simnet_destroy(&w.net)
 	delete(w.buffer)
 	delete(w.packets)
 }
@@ -86,12 +87,8 @@ message :: proc(n: int, size: int) -> []u8 {
 // duplication and reordering: each arrives exactly once, in order, intact.
 @(test)
 test_reliable_through_a_bad_link :: proc(t: ^testing.T) {
-	w := Wire {
-		loss        = 0.1,
-		duplicate   = 0.1,
-		delay_steps = {2, 12},
-		base        = time.tick_now(),
-	}
+	w: Wire
+	wire_init(&w, {loss = 0.1, duplicate = 0.1, latency_ms = 10, jitter_ms = 50, seed = 77})
 	defer wire_destroy(&w)
 	a, b: Conn
 	conn_init(&a, 77, w.base)
@@ -142,12 +139,8 @@ test_reliable_through_a_bad_link :: proc(t: ^testing.T) {
 // one after a newer one.
 @(test)
 test_unreliable_latest_wins :: proc(t: ^testing.T) {
-	w := Wire {
-		loss        = 0.1,
-		duplicate   = 0.2,
-		delay_steps = {1, 10},
-		base        = time.tick_now(),
-	}
+	w: Wire
+	wire_init(&w, {loss = 0.1, duplicate = 0.2, latency_ms = 5, jitter_ms = 45, seed = 5})
 	defer wire_destroy(&w)
 	a, b: Conn
 	conn_init(&a, 5, w.base)
@@ -181,10 +174,8 @@ test_unreliable_latest_wins :: proc(t: ^testing.T) {
 // is sent twice, even though the packet acks cover only 33 packets.
 @(test)
 test_burst_is_acknowledged :: proc(t: ^testing.T) {
-	w := Wire {
-		delay_steps = {4, 4}, // 20 ms one way
-		base        = time.tick_now(),
-	}
+	w: Wire
+	wire_init(&w, {latency_ms = 20}) // one way
 	defer wire_destroy(&w)
 	a, b: Conn
 	conn_init(&a, 9, w.base)

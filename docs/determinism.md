@@ -73,6 +73,38 @@ without anyone remembering to.
 its first tick on. Hashing runs only on stepped servers. `Config.perturb` (tests)
 puts one ulp into the state a tick leaves, to prove a divergence is named.
 
+## The harness
+
+`server/harness.odin` is what tests run a stepped server on (T2, issue #66): a `Harness`
+holds the server, an in-memory network and the parties that play on it, and a test
+waits for a **number of ticks**, never for a clock or a sleep.
+
+- **A tick** (`harness_step`): the network's clock moves to the time of the tick about to
+  run (`simnet_tick_time(tick)`: `tick * 1 s / TICK_RATE` in integers after a fixed epoch,
+  so 30 ticks are exactly a second), every party takes its turn in the order added (the M38
+  mirror, a test client, a `client.Session`, a bot), then the server steps. What a party
+  sends in a tick is handled in that tick; what the server sends at its end is there for
+  the parties at the next. `harness_step_until(until, data, max_ticks)` checks after each
+  tick and fails after exactly `max_ticks`.
+- **The clock.** `netcode.Simnet` (`common/netcode/simnet.odin`) is datagram ports with an
+  inbox each, on a clock only its owner moves. A `Socket` opened with `sim` is a port on it;
+  hosts and links (`socket_now`, `host_now`, `link_now`) take their time from it, so
+  keepalives, resends, the rate allowance and the timeouts count ticks. `Config.net` puts
+  the server's host on it, `Session_Config.net` a client's link. The live tick's pacing and
+  the save timings keep the wall clock: they are not state.
+- **The network's seed.** Loss, duplication, delay and jitter are drawn from `base.Rng`
+  streams, one a socket, seeded `Conditions.seed ~ (port << 32)`: a socket's draws do not
+  depend on the others' traffic, and the same seed gives the same losses at the same ticks.
+  A simulated network is never seeded from the clock (seed 0 becomes `SIMNET_DEFAULT_SEED`).
+  The handshake's crypto randomness (cookies, salts, nonces) is never state (rule 3) and
+  draws nothing from these streams.
+- **The fixed world.** `harness_world()`: the `Flat` generator (grass at y -1, three layers
+  of dirt, stone, a bedrock floor at the world's bottom; the same for every seed), seed 66,
+  view radius 2 and height 1 (39 chunks a player), spawn at `{0.5, 0, 0.5}`, cheats on,
+  and `harness_rules()`: no random ticks, no daylight cycle, no natural spawning. A test
+  turns one on in its config or through `/gamerule`. A test that needs the Earth keeps its
+  own config (`harness_start` forces only `stepped`, `workers = 0` and the network).
+
 ## The cross-OS job
 
 `build determinism` runs `server.test_determinism_session` (a scripted 10 000-tick

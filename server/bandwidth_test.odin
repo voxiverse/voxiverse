@@ -49,19 +49,15 @@ bandwidth_run :: proc(t: ^testing.T, name: string) -> (b: Bandwidth, ok: bool) {
 	crowd := name == "crowd"
 	if !testing.expect(t, session_start(sess, {}, false, no_sheep = crowd)) {return}
 	defer session_stop(sess)
-	for i in 0 ..< 900 {
-		session_step(sess, false)
-		if ready(sess) {break}
-		if !testing.expect(t, i < 899, "the player never landed") {return}
-	}
-	sess.script_at = sess.srv.tick
+	if !session_land(t, sess) {return}
+	sess.script_at = sess.h.srv.tick
 	ticks := CROWD_TICKS if crowd else BANDWIDTH_TICKS
 	h: State_Hash
 	for i in 0 ..< ticks {
 		if crowd && i >= 1 && i <= 5 {mirror_send(&sess.mirror, game.Command{"summon sheep 20"})}
 		h = session_step(sess, !crowd)
 	}
-	traffic := game.pipe_traffic(&sess.pipe)
+	traffic := game.pipe_traffic(&sess.h.pipe)
 	b = {
 		name  = name,
 		ticks = ticks,

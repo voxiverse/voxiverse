@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -102,12 +101,11 @@ test_save_200_characters :: proc(t: ^testing.T) {
 		testing.expectf(t, capture <= CAPTURE_BUDGET_US, "capture took %d us", capture)
 	}
 
-	// Slices, a tick each; then the worker, at the pace of ticks.
+	// Slices, a tick each; then the worker, a tick at a time.
 	ticks := 0
 	for st.job != nil || st.inflight != nil {
 		run(g, 1)
 		ticks += 1
-		if st.job == nil && st.inflight != nil {time.sleep(game.TICK_DURATION)}
 		if !testing.expect(
 			t,
 			ticks <= 10 * COMMIT_BUDGET_TICKS,
@@ -134,9 +132,9 @@ test_save_200_characters :: proc(t: ^testing.T) {
 	// A full blocking save: everything changed again.
 	for pos in w.chunks.by_pos {mark_edited(w, pos)}
 	for _, &r in st.players {r.dirty = true}
-	from := time.tick_now()
+	from := base.thread_cpu_us() // (the thread's CPU time, as for the capture)
 	testing.expect(t, save(s), "the blocking save failed")
-	blocking := i64(time.duration_milliseconds(time.tick_since(from)))
+	blocking := (base.thread_cpu_us() - from) / 1000
 	if base.budget_applies() {
 		testing.expectf(
 			t,

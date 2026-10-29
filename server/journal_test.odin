@@ -7,7 +7,6 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -46,7 +45,6 @@ grief_config :: proc(dir: string, memory := 0, segment := 0) -> Config {
 		generator = .Earth,
 		view_radius = 4,
 		view_height = 2,
-		stepped = true,
 		allow_cheats = true,
 		max_players = 1,
 		rules = rules_still(),
@@ -72,17 +70,13 @@ grief_open :: proc(
 	g.sess = new(Session)
 	cfg := config.? or_else grief_config(dir)
 	if !testing.expect(t, session_start(g.sess, {}, false, with = cfg)) {return g, false}
-	for i in 0 ..< 900 {
-		session_step(g.sess, false)
-		if ready(g.sess) {break}
-		if !testing.expect(t, i < 899, "the player never landed") {return g, false}
-	}
+	if !session_land(t, g.sess) {return g, false}
 	grief_locate(g)
 	return g, true
 }
 
 grief_locate :: proc(g: ^Grief) {
-	c := &g.sess.srv.clients[0]
+	c := &g.sess.h.srv.clients[0]
 	p := c.player.position
 	g.f = {i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
 	clear(&g.chunks)
@@ -95,7 +89,7 @@ grief_locate :: proc(g: ^Grief) {
 }
 
 grief_close :: proc(g: ^Grief) {
-	if g.sess != nil && g.sess.started {
+	if g.sess != nil && g.sess.h.started {
 		clear(&g.sess.failures) // (the mirror does not know every State record a chest sends)
 		session_stop(g.sess)
 	}
@@ -104,8 +98,8 @@ grief_close :: proc(g: ^Grief) {
 	free(g)
 }
 
-grief_srv :: proc(g: ^Grief) -> ^Server {return &g.sess.srv}
-grief_client :: proc(g: ^Grief) -> ^Client {return &g.sess.srv.clients[0]}
+grief_srv :: proc(g: ^Grief) -> ^Server {return &g.sess.h.srv}
+grief_client :: proc(g: ^Grief) -> ^Client {return &g.sess.h.srv.clients[0]}
 grief_world :: proc(g: ^Grief) -> ^World {return grief_client(g).world}
 
 run :: proc(g: ^Grief, ticks: int) {
@@ -468,20 +462,15 @@ test_journal_replays :: proc(t: ^testing.T) {
 		generator    = .Earth,
 		view_radius  = 4,
 		view_height  = 2,
-		stepped      = true,
 		allow_cheats = true,
 		max_players  = 1,
 		save_dir     = dir,
 	}
 	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
 	defer session_stop(sess)
-	for i in 0 ..< 900 {
-		session_step(sess, false)
-		if ready(sess) {break}
-		if !testing.expect(t, i < 899, "the player never landed") {return}
-	}
-	sess.script_at = sess.srv.tick
-	s := &sess.srv
+	if !session_land(t, sess) {return}
+	sess.script_at = sess.h.srv.tick
+	s := &sess.h.srv
 	w := s.home
 	snapshot_age: u64
 	bypass: game.Block_Pos
@@ -642,10 +631,10 @@ slice_sort :: proc(s: []game.Journal_Entry) {
 }
 
 grief_close_keep :: proc(g: ^Grief) {
-	if g.sess != nil && g.sess.started {
+	if g.sess != nil && g.sess.h.started {
 		clear(&g.sess.failures)
 		session_stop(g.sess)
-		g.sess.started = false
+		g.sess.h.started = false
 	}
 }
 
@@ -666,10 +655,10 @@ test_journal_cost :: proc(t: ^testing.T) {
 	started := s.tick
 	measure :: proc(g: ^Grief, total, wall_ns: ^i64, body: proc(g: ^Grief, n: int), n: int) {
 		from := u64(intrinsics.read_cycle_counter())
-		wall := time.tick_now()
+		cpu := base.thread_cpu_us() // (this thread's CPU time: other tests run on other threads)
 		body(g, n)
 		total^ += i64(u64(intrinsics.read_cycle_counter()) - from)
-		wall_ns^ += i64(time.tick_diff(wall, time.tick_now()))
+		wall_ns^ += 1000 * (base.thread_cpu_us() - cpu)
 	}
 	total, wall_ns: i64
 	// The platform and the layer of sources over it.

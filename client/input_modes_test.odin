@@ -1,8 +1,6 @@
 package client
 
-import "core:net"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 import "../server"
@@ -270,19 +268,18 @@ test_f3_coordinates :: proc(t: ^testing.T) {
 // hand goes to the offhand and back; with nothing in either, nothing moves.
 @(test)
 test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
-	srv: server.Server
+	rig: Frame_Rig
 	config := server.Config {
 		seed        = 33,
 		view_radius = 3,
 		view_height = 2,
 		max_players = 2,
 		listen      = true,
-		stepped     = true,
 		no_sheep    = true,
 		rules       = still_rules(),
 	}
-	if !testing.expect(t, server.start(&srv, config, {})) {return}
-	defer server.stop(&srv)
+	if !testing.expect(t, server.harness_start(&rig.h, config)) {return}
+	defer server.harness_stop(&rig.h)
 	s := new(Session)
 	defer free(s)
 	key: game.Account_Key
@@ -292,44 +289,41 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 		{
 			name = "swapper",
 			key = key,
-			join = Join{address = net.Endpoint{net.IP4_Loopback, srv.host.socket.port}},
+			join = Join{address = server.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
 			registry = test_reg(),
+			net = &rig.h.net,
 		},
 	)
 	defer session_end(s, nil, nil)
-	input: Input_State
-	frame :: proc(srv: ^server.Server, s: ^Session, input: ^Input_State, a: ^Actions) {
-		server.step(srv)
-		session_update(s, input, a, SETTINGS_DEFAULTS, {}, game.TICK_SECONDS, true)
-		time.sleep(time.Millisecond)
-	}
+	rig_add(&rig, s)
 	idle: Actions
-	for _ in 0 ..< 3000 {
-		frame(&srv, s, &input, &idle)
-		if s.state == .Playing && s.server_inventory.slots[0].item != 0 {break}
-	}
+	rig.actions = &idle
+	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+			s := (^Frame_Rig)(data).s
+			return s.state == .Playing && s.server_inventory.slots[0].item != 0
+		}, &rig, 3000)
 	if !testing.expect_value(t, s.state, Session_State.Playing) {return}
 	launcher := s.inventory.slots[0].item // (whatever the kit put in the hand)
 	testing.expect(t, launcher != 0)
 	swap := Actions {
 		pressed = {.Swap_Offhand},
 	}
-	frame(&srv, s, &input, &swap)
+	rig_frame(&rig, &swap)
 	testing.expect_value(t, s.inventory.equipment[.Offhand].item, launcher) // predicted at once
 	testing.expect(t, game.stack_empty(s.inventory.slots[0]))
-	for _ in 0 ..< 60 {frame(&srv, s, &input, &idle)}
+	for _ in 0 ..< 60 {rig_frame(&rig, &idle)}
 	testing.expect_value(t, s.server_inventory.equipment[.Offhand].item, launcher) // and the server's word
 	testing.expect(t, game.stack_empty(s.server_inventory.slots[0]))
-	frame(&srv, s, &input, &swap)
-	for _ in 0 ..< 60 {frame(&srv, s, &input, &idle)}
+	rig_frame(&rig, &swap)
+	for _ in 0 ..< 60 {rig_frame(&rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].item, launcher)
 	testing.expect(t, game.stack_empty(s.server_inventory.equipment[.Offhand]))
 	// Both empty: nothing to swap (not even sent as a change).
 	s.inventory.slots[0] = {}
 	s.server_inventory.slots[0] = {}
 	before := s.inventory
-	frame(&srv, s, &input, &swap)
+	rig_frame(&rig, &swap)
 	testing.expect(t, s.inventory == before)
 }

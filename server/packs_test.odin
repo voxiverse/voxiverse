@@ -99,19 +99,19 @@ test_unknown_block_refuses_the_world :: proc(t: ^testing.T) {
 	grief_close(g)
 
 	// Without the pack: refused, naming the block.
-	srv: Server
+	h: Harness
 	{
 		context.logger = log.nil_logger() // (the refusal is the point)
 		testing.expect(
 			t,
-			!start(&srv, pack_config(dir, false), {}),
+			!harness_start(&h, pack_config(dir, false)),
 			"a world with unknown blocks loaded",
 		)
 	}
 	testing.expect(
 		t,
-		strings.contains(srv.refusal, "testpack:marble"),
-		fmt.tprintf("the refusal does not name the block: %q", srv.refusal),
+		strings.contains(h.srv.refusal, "testpack:marble"),
+		fmt.tprintf("the refusal does not name the block: %q", h.srv.refusal),
 	)
 
 	// `unknown_blocks = air`: loads, the block is air.

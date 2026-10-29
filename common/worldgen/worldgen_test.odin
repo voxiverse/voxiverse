@@ -602,3 +602,69 @@ test_no_floating_plants :: proc(t: ^testing.T) {
 		)
 	}
 }
+
+// The flat world: the table's blocks at every (x, z) and for every seed.
+@(test)
+test_flat_world :: proc(t: ^testing.T) {
+	arr := new(game.Block_Array)
+	defer free(arr)
+	for seed in ([]i64{1, 66}) {
+		g := generator_make(.Flat, seed, test_reg())
+		for x in ([]i32{0, -3, 41}) {
+			for z in ([]i32{0, 7, -90}) {
+				uniform, ok := generate(&g, {x, 0, z}, arr)
+				testing.expect(t, ok && uniform == .Air)
+				uniform, ok = generate(&g, {x, -2, z}, arr)
+				testing.expect(t, ok && uniform == .Stone)
+				_, ok = generate(&g, {x, -1, z}, arr)
+				testing.expect(t, !ok)
+				for l in 0 ..< game.CHUNK_VOLUME {
+					want: game.Block
+					switch y := game.local_from_index(l).y; {
+					case y == 15:
+						want = .Grass
+					case y >= 12:
+						want = .Dirt
+					case:
+						want = .Stone
+					}
+					if arr[l] != want {
+						testing.expectf(
+							t,
+							false,
+							"chunk y -1, block %d: %v, want %v",
+							l,
+							arr[l],
+							want,
+						)
+						break
+					}
+				}
+				_, ok = generate(&g, {x, -16, z}, arr)
+				testing.expect(t, !ok)
+				for l in 0 ..< game.CHUNK_VOLUME {
+					want := game.Block.Bedrock if game.local_from_index(l).y == 0 else .Stone
+					if arr[l] != want {
+						testing.expectf(
+							t,
+							false,
+							"chunk y -16, block %d: %v, want %v",
+							l,
+							arr[l],
+							want,
+						)
+						break
+					}
+				}
+			}
+		}
+		testing.expect_value(t, column_top(&g, 0, 0), -1)
+		testing.expect_value(t, column_top(&g, -1000, 777), -1)
+		tops: Tops
+		column_tops(&g, {3, -4}, &tops)
+		for top in tops {testing.expect_value(t, top, -1)}
+		testing.expect_value(t, spawn_point(&g), [3]f64{0.5, 0, 0.5})
+	}
+	kind, ok := kind_by_name("flat")
+	testing.expect(t, ok && kind == .Flat)
+}

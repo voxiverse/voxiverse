@@ -67,11 +67,8 @@ test_shapes_agree :: proc(t: ^testing.T) {
 	if !testing.expect(t, session_start(sess, {}, false, no_sheep = true)) {return}
 	defer session_stop(sess)
 	m := &sess.mirror
-	for i in 0 ..< 900 { 	// join, and stand until the world is there
-		session_step(sess, false)
-		if ready(sess) {break}
-		if !testing.expect(t, i < 899, "the player never landed") {return}
-	}
+	if !session_land(t, sess) {return}
+	sess.manual = true // (the test drives the mirror from here on)
 	origin := stand(m).position
 	ox := math.floor(origin.x)
 	m.corrections, m.mismatches, m.updates = 0, 0, 0
@@ -99,7 +96,7 @@ test_shapes_agree :: proc(t: ^testing.T) {
 		msg := game.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
-		step(&sess.srv)
+		harness_step(&sess.h)
 		now := stand(m)
 		col := int(math.floor(now.position.x - ox))
 		if col >= 0 && col < len(track.max_y) {
@@ -154,13 +151,13 @@ tick_once :: proc(sess: ^Session, in_: game.Player_Input) -> u32 {
 	msg := game.prediction_tick(&m.prediction, in_, &m.rules, mirror_query(m))
 	msg.snapshot = m.rx.ack
 	mirror_send(m, msg)
-	step(&sess.srv)
+	harness_step(&sess.h)
 	return msg.sequence
 }
 
 @(private = "file")
 server_block :: proc(sess: ^Session, p: game.Block_Pos) -> game.Block {
-	b, _ := chunks_block(&sess.srv.home.chunks, p)
+	b, _ := chunks_block(&sess.h.srv.home.chunks, p)
 	return b
 }
 
@@ -176,11 +173,8 @@ test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	if !testing.expect(t, session_start(sess, {}, false, no_sheep = true)) {return}
 	defer session_stop(sess)
 	m := &sess.mirror
-	for i in 0 ..< 900 {
-		session_step(sess, false)
-		if ready(sess) {break}
-		if !testing.expect(t, i < 899, "the player never landed") {return}
-	}
+	if !session_land(t, sess) {return}
+	sess.manual = true // (the test drives the mirror from here on)
 	feet := game.Block_Pos {
 		i32(math.floor(m.prediction.state.position.x)),
 		i32(math.floor(m.prediction.state.position.y)),

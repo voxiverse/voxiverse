@@ -7,12 +7,11 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 
 // M48j: the LAN party's hardening. Six and eight scripted bots play survival
-// with all four weapons against a stepped server over real UDP (the caller
+// with all four weapons against a stepped server over the harness's simulated network (the caller
 // runs the ticks, so six thousand of them take seconds, not five minutes):
 // moving, shooting, being shot, dying, respawning, reloading; one operator
 // toggles creative and back; one more player joins and leaves in the middle.
@@ -163,7 +162,9 @@ party_budget :: proc() -> (per_tick: f64, ok: bool) {
 
 @(private = "file")
 Party :: struct {
+	h:     ^Harness,
 	srv:   ^Server,
+	outer: mem.Allocator, // the test's own: the bots' work is not the server's
 	bots:  []^Bot,
 	tick:  int,
 	t:     ^testing.T,
@@ -171,19 +172,27 @@ Party :: struct {
 	track: ^mem.Tracking_Allocator, // the server's allocations alone: only its steps run under it
 }
 
-// party_tick: every bot plays and pumps, the server steps.
+// party_bots: every bot plays and pumps (a party of the harness, before the
+// server's step).
 @(private = "file")
-party_tick :: proc(p: ^Party) {
+party_bots :: proc(data: rawptr) {
+	p := (^Party)(data)
+	context.allocator = p.outer
 	p.tick += 1
 	for b, i in p.bots {
 		if b == nil {continue}
 		drive(b, p.tick, i == 0)
 		net_pump(p.t, &b.net)
 	}
-	time.sleep(300 * time.Microsecond)
+}
+
+// party_tick: the bots play and pump, the server steps (its allocations alone
+// are tracked).
+@(private = "file")
+party_tick :: proc(p: ^Party) {
 	{
 		context.allocator = mem.tracking_allocator(p.track)
-		step(p.srv)
+		harness_step(p.h)
 	}
 	// Health is never out of range, for anyone.
 	for &c in p.srv.clients {
@@ -327,8 +336,9 @@ party :: proc(t: ^testing.T, size: int) {
 	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
 
-	srv := new(Server)
-	defer free(srv)
+	h := new(Harness)
+	defer free(h)
+	srv := &h.srv
 	config := Config {
 		seed        = 23,
 		mode        = "survival",
@@ -338,7 +348,6 @@ party :: proc(t: ^testing.T, size: int) {
 		save_dir    = dir,
 		max_players = size,
 		listen      = true,
-		stepped     = true,
 		generator   = .Classic,
 		no_sheep    = true,
 		kit         = "pistol 1, rifle 1, sniper 1, rocket_launcher 1", // (the tests' own default is blocks)
@@ -346,19 +355,21 @@ party :: proc(t: ^testing.T, size: int) {
 	started: bool
 	{
 		context.allocator = mem.tracking_allocator(&track)
-		started = start(srv, config, {})
+		started = harness_start(h, config)
 	}
 	if !testing.expect(t, started) {return}
 	stopped := false
 	defer if !stopped {
 		context.allocator = mem.tracking_allocator(&track)
-		stop(srv)
+		harness_stop(h)
 	}
 	srv.home.rules.pvp = true
 	port := srv.host.socket.port
 
 	p := Party {
+		h     = h,
 		srv   = srv,
+		outer = context.allocator,
 		t     = t,
 		track = &track,
 	}
@@ -366,6 +377,7 @@ party :: proc(t: ^testing.T, size: int) {
 		for line in p.bad {delete(line)}
 		delete(p.bad)
 	}
+	harness_add(h, party_bots, &p)
 	resident := size - 1 // one seat is the one who comes and goes
 	p.bots = make([]^Bot, size)
 	defer delete(p.bots)
@@ -381,39 +393,47 @@ party :: proc(t: ^testing.T, size: int) {
 	join :: proc(p: ^Party, made: ^[dynamic]^Bot, i: int, port: int) -> ^Bot {
 		b := new(Bot)
 		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
-		net_connect(&b.net, port, fmt.aprintf("bot%d", i + 1)) // (heap: the steps free the temp allocator)
+		net_connect(&b.net, port, fmt.aprintf("bot%d", i + 1), sim = &p.h.net) // (heap: the steps free the temp allocator)
 		append(made, b)
 		return b
 	}
 	for i in 0 ..< resident {p.bots[i] = join(&p, &made, i, port)}
 
 	// Everyone in and landed.
-	joined_at := time.tick_now()
-	for {
-		party_tick(&p)
-		time.sleep(2 * time.Millisecond) // (the handshake and the first chunks take real time)
-		all := true
-		for b in p.bots[:resident] {all &&= b.net.welcomed && b.net.update.acked > 0 && len(b.net.chunks) >= 20 && b.net.mode != "" && len(b.net.grants) > 0}
-		if all {break}
-		if time.tick_diff(joined_at, time.tick_now()) > 20 * time.Second {
-			for b in p.bots[:resident] {
-				n := &b.net
-				fmt.printfln(
-					"%s: welcomed=%v ground=%v acked=%d chunks=%d mode=%q grants=%d rejected=%q link=%v",
-					n.name,
-					n.welcomed,
-					n.update.state.on_ground,
-					n.update.acked,
-					len(n.chunks),
-					n.mode,
-					len(n.grants),
-					n.rejected,
-					n.link.state,
-				)
-			}
-			testing.expect(t, false, "the bots never all landed")
-			return
+	landed: bool
+	{
+		context.allocator = mem.tracking_allocator(&track)
+		_, landed = harness_step_until(h, proc(data: rawptr) -> bool {
+				p := (^Party)(data)
+				for b in p.bots {
+					if b == nil {continue}
+					if !(b.net.welcomed &&
+						   b.net.update.acked > 0 &&
+						   len(b.net.chunks) >= 20 &&
+						   b.net.mode != "" &&
+						   len(b.net.grants) > 0) {return false}
+				}
+				return true
+			}, &p, 2000)
+	}
+	if !landed {
+		for b in p.bots[:resident] {
+			n := &b.net
+			fmt.printfln(
+				"%s: welcomed=%v ground=%v acked=%d chunks=%d mode=%q grants=%d rejected=%q link=%v",
+				n.name,
+				n.welcomed,
+				n.update.state.on_ground,
+				n.update.acked,
+				len(n.chunks),
+				n.mode,
+				len(n.grants),
+				n.rejected,
+				n.link.state,
+			)
 		}
+		testing.expect(t, false, "the bots never all landed")
+		return
 	}
 	// A clear arena around the first bot (hills in the line of fire made a party of misses).
 	if c := client_by_name(srv, p.bots[0].net.name); c != nil {
@@ -583,7 +603,7 @@ party :: proc(t: ^testing.T, size: int) {
 
 	stopped = true
 	context.allocator = mem.tracking_allocator(&track)
-	testing.expect(t, stop(srv), "the server stopped with an error")
+	testing.expect(t, harness_stop(h), "the server stopped with an error")
 }
 
 @(test)

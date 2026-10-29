@@ -17,11 +17,13 @@ import "../game"
 Kind :: enum u8 {
 	Earth, // continents, biomes, rivers, mountains, caves, trees (M10)
 	Classic, // M3's heightmap hills (worlds made before M10)
+	Flat, // the same everywhere, for every seed (the tests' world)
 }
 
 KIND_NAMES := [Kind]string {
 	.Earth   = "earth",
 	.Classic = "classic",
+	.Flat    = "flat",
 }
 
 Generator :: struct {
@@ -70,6 +72,8 @@ generate :: proc(
 		return earth_generate(g, c, dst, cache)
 	case .Classic:
 		return classic_generate(g.seed, c, dst)
+	case .Flat:
+		return flat_generate(c, dst)
 	}
 	return
 }
@@ -103,6 +107,8 @@ column_top :: proc(g: ^Generator, x, z: i32) -> i32 {
 		return tops[(x & game.CHUNK_MASK) + (z & game.CHUNK_MASK) * game.CHUNK_SIZE]
 	case .Classic:
 		return classic_height(g.seed, x, z)
+	case .Flat:
+		return FLAT_TOP
 	}
 	return game.WORLD_MIN_Y
 }
@@ -154,6 +160,8 @@ spawn_point :: proc(g: ^Generator) -> [3]f64 {
 	case .Earth:
 		return earth_spawn(g)
 	case .Classic:
+	case .Flat:
+		return {0.5, 0, 0.5}
 	}
 	return {0.5, f64(column_top(g, 0, 0)) + 1, 0.5}
 }

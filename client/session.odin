@@ -44,6 +44,7 @@ Session_Config :: struct {
 	still_clouds: bool, // the clouds stay where they start: benchmarks
 	upload:       Maybe(server.Upload), // (hosting) send its event log to a collector
 	registry:     ^game.Registry, // the game's own (the base pack): what a remote server must match
+	net:          ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
 }
 
 // Join: a server to play on.
@@ -128,7 +129,8 @@ Session :: struct {
 	cloud_drift:      f64, // blocks the clouds have moved
 	tick_time:        f32, // seconds into the current client tick
 	toggle_fly:       bool, // a double-tapped jump waits for the next tick
-	last_jump:        time.Tick, // for double-tap detection
+	frame_seconds:    f64, // the sum of the frames' dt: the session's own clock for the double tap
+	last_jump:        f64, // frame_seconds at the last jump, for double-tap detection (-1e9: never)
 	sneak_on:         bool,
 	eye_height:       f64, // the camera above the feet: easing to player_eye_height // toggled sneaking and sprinting (Options: Toggle)
 	sprint_on:        bool,
@@ -204,7 +206,8 @@ worker_count :: proc() -> int {
 // caller still calls session_end.
 session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s^ = {
-		config = config,
+		config    = config,
+		last_jump = -1e9,
 	}
 	loading_begin(s, false)
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
@@ -230,8 +233,14 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 
 	if join, remote := config.join.?; remote {
 		s.remote = true
-		if err := netcode.link_connect(&s.link, join.address, join.password, time.tick_now());
-		   err != nil {
+		now := time.tick_now() if config.net == nil else config.net.now
+		if err := netcode.link_connect(
+			&s.link,
+			join.address,
+			join.password,
+			now,
+			sim = config.net,
+		); err != nil {
 			fail(s, fmt.tprintf("cannot open a network socket (%v)", err))
 			return false
 		}
@@ -392,6 +401,7 @@ session_update :: proc(
 	base.profile_scope("session")
 	base.metric_scope(.Frame_Session)
 	clock_advance(&s.render_clock, dt)
+	s.frame_seconds += f64(dt)
 	if s.remote {
 		s.link.socket.conditions = {
 			loss       = conditions.loss_percent / 100,
@@ -417,9 +427,8 @@ session_update :: proc(
 		look_update(&s.camera, input, actions, settings, dt, zoom_factor(s))
 		movement_toggles(s, actions, settings)
 		if action_pressed(actions, .Jump) {
-			if time.duration_seconds(time.tick_since(s.last_jump)) <
-			   DOUBLE_TAP_SECONDS {s.toggle_fly = true}
-			s.last_jump = time.tick_now()
+			if s.frame_seconds - s.last_jump < DOUBLE_TAP_SECONDS {s.toggle_fly = true}
+			s.last_jump = s.frame_seconds
 		}
 	}
 	// Fixed ticks, like the server's; a long hitch is not caught up on.

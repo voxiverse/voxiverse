@@ -39,7 +39,7 @@ party toys (#65) come after. Each row leaves the suite green.
 
 ## T2: the deterministic harness
 
-Full spec: [T2.md](T2.md) (the loss lives on netcode over an in-memory network, not on the
+Full spec: [history.md](../history.md) (T2) (the loss lives on netcode over an in-memory network, not on the
 pipe; the fixed world is a flat generator; 23 files start a stepped server, not 16).
 
 The stepped server (M38) behind an in-memory transport: seeded loss, latency, reordering and

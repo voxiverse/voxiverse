@@ -98,13 +98,21 @@ Net_Chat :: struct {
 }
 
 @(private)
-net_connect :: proc(c: ^Net_Client, port: int, name: string, password := "", capture := "") {
+net_connect :: proc(
+	c: ^Net_Client,
+	port: int,
+	name: string,
+	password := "",
+	capture := "",
+	sim: ^netcode.Simnet = nil,
+) {
 	c.name = name
+	now := time.tick_now() if sim == nil else sim.now
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
 	c.schema = game.game_schema()
 	game.receiver_init(&c.rx, &c.schema, test_reg())
-	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, time.tick_now())
+	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, now, sim = sim)
 	if capture != "" {net_capture(c, capture)}
 }
 
@@ -293,7 +301,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 // welcomed, as a real client sends one every tick), network out.
 @(private)
 net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
-	now := time.tick_now()
+	now := netcode.link_now(&c.link)
 	was := c.link.state
 	netcode.link_update(&c.link, now)
 	if was != .Connected && c.link.state == .Connected {

@@ -17,6 +17,7 @@ Socket :: struct {
 	rng:        base.Rng, // the simulation's draws (Conditions.seed)
 	rng_seed:   u64, // the seed rng was made from (0: not yet)
 	held:       [dynamic]Held, // delayed by the simulation, not yet sent
+	sim:        ^Simnet, // the in-memory network this socket is a port on (nil: UDP)
 	capture:    ^Capture, // records every packet sent and received (nil: none)
 	recv_buf:   [MTU + 1]u8, // one byte more: anything that fills it is too long
 }
@@ -38,9 +39,23 @@ Held :: struct {
 
 // socket_open binds a UDP socket to port (0: any free one) on all
 // interfaces. broadcast: allowed to send to broadcast addresses (LAN
-// discovery).
-socket_open :: proc(s: ^Socket, port: int, broadcast := false) -> (err: net.Network_Error) {
+// discovery). With sim, the socket is a port on that simulated network:
+// no OS socket, and broadcast must be false.
+socket_open :: proc(
+	s: ^Socket,
+	port: int,
+	broadcast := false,
+	sim: ^Simnet = nil,
+) -> (
+	err: net.Network_Error,
+) {
 	s^ = {}
+	if sim != nil {
+		assert(!broadcast, "LAN discovery stays on UDP")
+		s.port = sim_bind(sim, port) or_return
+		s.sim = sim
+		return nil
+	}
 	s.socket = net.make_bound_udp_socket(net.IP4_Any, port) or_return
 	if e := net.set_blocking(s.socket, false); e != nil {
 		net.close(s.socket)
@@ -63,21 +78,34 @@ socket_open :: proc(s: ^Socket, port: int, broadcast := false) -> (err: net.Netw
 
 socket_close :: proc(s: ^Socket) {
 	if s.socket != 0 {net.close(s.socket)}
+	if s.sim != nil {sim_unbind(s.sim, s.port)}
 	for h in s.held {delete(h.data)}
 	delete(s.held)
 	s^ = {}
+}
+
+// socket_now is the clock this socket's network runs on: the simulated
+// network's, else the OS's.
+socket_now :: proc(s: ^Socket) -> time.Tick {
+	if s.sim != nil {return s.sim.now}
+	return time.tick_now()
 }
 
 // socket_send sends (or, under simulated conditions, may drop, repeat or
 // hold back) one packet.
 socket_send :: proc(s: ^Socket, to: net.Endpoint, data: []u8, now: time.Tick) {
 	c := s.conditions
-	if c == {} {
+	if s.sim != nil {c = s.sim.conditions}
+	if c.loss == 0 && c.duplicate == 0 && c.latency_ms == 0 && c.jitter_ms == 0 {
 		send_now(s, to, data) // a full buffer drops it: UDP may
 		return
 	}
 	seed := c.seed if c.seed != 0 else s.rng_seed
-	if seed == 0 {seed = u64(time.tick_now()._nsec) | 1} 	// (unseeded: whatever the clock says)
+	if s.sim != nil {
+		seed = c.seed ~ (u64(s.port) << 32) // one stream a socket: its draws do not depend on the others' traffic
+	} else if seed == 0 {
+		seed = u64(time.tick_now()._nsec) | 1 // (unseeded: whatever the clock says)
+	}
 	if s.rng_seed != seed {
 		s.rng, s.rng_seed = base.rng_make(seed), seed
 	}
@@ -109,6 +137,18 @@ socket_pump :: proc(s: ^Socket, now: time.Tick) {
 // socket's buffer, valid until the next call), or ok = false when there are
 // none. Packets longer than MTU are skipped.
 socket_receive :: proc(s: ^Socket) -> (data: []u8, from: net.Endpoint, ok: bool) {
+	if s.sim != nil {
+		for {
+			pk := sim_take(s.sim, s.port) or_break
+			defer delete(pk.data, s.sim.allocator)
+			if len(pk.data) > MTU {continue}
+			n := copy(s.recv_buf[:], pk.data)
+			if s.capture !=
+			   nil {capture_packet(s.capture, pk.from, local(s, pk.from), s.recv_buf[:n])}
+			return s.recv_buf[:n], pk.from, true
+		}
+		return nil, {}, false
+	}
 	// Errors other than "nothing more" are skipped: Windows reports an
 	// earlier packet's ICMP "port unreachable" here, as a receive error.
 	for _ in 0 ..< 64 {
@@ -124,6 +164,10 @@ socket_receive :: proc(s: ^Socket) -> (data: []u8, from: net.Endpoint, ok: bool)
 @(private = "file")
 send_now :: proc(s: ^Socket, to: net.Endpoint, data: []u8) {
 	if s.capture != nil {capture_packet(s.capture, local(s, to), to, data)}
+	if s.sim != nil {
+		sim_deliver(s.sim, local(s, to), to, data)
+		return
+	}
 	net.send_udp(s.socket, data, to)
 }
 

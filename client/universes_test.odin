@@ -83,17 +83,16 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 @(private = "file")
 server_made :: proc(t: ^testing.T, dir, name: string) -> bool {
 	path := filepath.join({dir, name}, context.temp_allocator) or_else ""
-	srv: server.Server
+	h: server.Harness
 	config := server.Config {
 		seed        = 5,
 		view_radius = 2,
 		view_height = 1,
-		stepped     = true,
 		save_dir    = path,
 		generator   = .Classic,
 	}
-	if !testing.expect(t, server.start(&srv, config, {})) {return false}
-	server.stop(&srv)
+	if !testing.expect(t, server.harness_start(&h, config)) {return false}
+	server.harness_stop(&h)
 	return true
 }
 
