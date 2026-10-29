@@ -59,7 +59,10 @@ budgets_main :: proc(args: []string) {
 		version  = BUDGETS_VERSION,
 	}
 	failures := make([dynamic]string) // (not the temp allocator: the scenes free it)
-	dir := filepath.join({"build", "tmp", "bench_budgets"}, context.temp_allocator) or_else ""
+	// (on the heap too: the scenes free the temp allocator, and a path in it is
+	// garbage from the second repetition on)
+	dir := filepath.join({"build", "tmp", "bench_budgets"}) or_else ""
+	defer delete(dir)
 	reg := game.registry_base(context.allocator)
 	defer game.registry_destroy(reg)
 	for _ in 0 ..< max(opts.repetitions, 1) {
