@@ -1,6 +1,5 @@
 package server
 
-import "base:intrinsics"
 import "core:fmt"
 
 import "../base"
@@ -287,7 +286,7 @@ budget_flood :: proc() -> (r: Budget_Flood, ok: bool) {
 // ---- the journal ----
 
 Budget_Journal :: struct {
-	share:       f64, // the journal's cycles over all the ticks'
+	share:       f64, // the journal's ticks over all the ticks'
 	per_tick_us: f64, // its mean cost in a tick, on the thread's CPU time
 	head:        u64, // entries written
 }
@@ -309,10 +308,10 @@ budget_journal :: proc() -> (r: Budget_Journal, ok: bool) {
 		w: ^World,
 		n: int,
 	) {
-		from := u64(intrinsics.read_cycle_counter())
+		from := base.ticks()
 		cpu := base.thread_cpu_us()
 		body(s, w, n)
-		total^ += i64(u64(intrinsics.read_cycle_counter()) - from)
+		total^ += i64(base.ticks() - from)
 		cpu_us^ += base.thread_cpu_us() - cpu
 	}
 	measure(&total, &cpu_us, proc(s: ^Server, w: ^World, _: int) {
@@ -345,7 +344,7 @@ budget_journal :: proc() -> (r: Budget_Journal, ok: bool) {
 				budget_world_tick(s, w)
 			}, s, w, tick)
 	}
-	r.share = f64(w.journal.cost_cycles) / f64(total)
+	r.share = f64(w.journal.cost_ticks) / f64(total)
 	r.per_tick_us = r.share * f64(cpu_us) / 600
 	r.head = w.journal.head
 	return r, true

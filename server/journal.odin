@@ -1,6 +1,5 @@
 package server
 
-import "base:intrinsics"
 import "base:runtime"
 import "core:fmt"
 import "core:log"
@@ -95,7 +94,7 @@ Journal :: struct {
 	entities:         map[Entity_Undo_Key][]u8, // (heap)
 	entity_order:     [dynamic]Entity_Undo_Key,
 	// Tests:
-	cost_cycles:      u64, // Config.journal_timed: cycles spent in the journal
+	cost_ticks:       u64, // Config.journal_timed: ticks spent in the journal
 	report:           Rollback_Report, // the newest rollback's
 }
 
@@ -110,17 +109,17 @@ Journal_Resume :: struct {
 // age_of: the universe's tick count across runs.
 age_of :: proc(s: ^Server) -> u64 {return s.age_base + s.tick}
 
-// Config.journal_timed: the journal's time is counted in cycles of the
-// processor's counter (a clock read costs more than a journal_entry call).
+// Config.journal_timed: the journal's time is counted in base.ticks
+// (the processor's cycle counter reads 0 on arm64 macOS).
 @(private = "file")
 timed :: proc(s: ^Server) -> u64 {
-	return u64(intrinsics.read_cycle_counter()) if s.config.journal_timed else 0
+	return base.ticks() if s.config.journal_timed else 0
 }
 
 @(private = "file")
 spent :: proc(w: ^World, from: u64) {
 	if w.server.config.journal_timed {
-		w.journal.cost_cycles += u64(intrinsics.read_cycle_counter()) - from
+		w.journal.cost_ticks += base.ticks() - from
 	}
 }
 

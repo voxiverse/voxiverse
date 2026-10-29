@@ -70,7 +70,7 @@ Config :: struct {
 	backups:               Maybe(int), // rolling backups kept (nil: BACKUP_KEEP; 0: none)
 	journal_memory:        int, // tests: entries in a world's journal ring (0: JOURNAL_MEMORY)
 	journal_segment_bytes: int, // tests: where a journal segment ends (0: JOURNAL_SEGMENT_BYTES)
-	journal_timed:         bool, // tests: time the journal (Journal.cost_ns)
+	journal_timed:         bool, // tests: time the journal (Journal.cost_ticks)
 	journal_detail:        u64, // tests: ticks a segment keeps its detail (0: JOURNAL_DETAIL)
 	journal_keep:          u64, // tests: ticks a segment is kept (0: JOURNAL_KEEP)
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)

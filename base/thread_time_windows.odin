@@ -1,6 +1,7 @@
 #+build windows
 package base
 
+import "base:intrinsics"
 import "core:sync"
 import "core:sys/windows"
 import "core:time"
@@ -52,3 +53,7 @@ thread_cpu_us :: proc() -> i64 {
 	}
 	return i64(thread_cycles() / rate)
 }
+
+// ticks is a cheap counter for the ratio of two spans (the unit differs by
+// platform: processor cycles here).
+ticks :: proc() -> u64 {return u64(intrinsics.read_cycle_counter())}
