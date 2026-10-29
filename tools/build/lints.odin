@@ -77,6 +77,84 @@ lint_mode_names :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// lint_test_timing: no `*_test.odin` outside smoke/ sleeps or reads a clock (time.sleep,
+// time.now, tick_now, tick_since): a unit test counts ticks and steps a harness; what
+// needs the real clock is a smoke test.
+lint_test_timing :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		for word in ([]string{"time.sleep", "time.now", "tick_now", "tick_since"}) {
+			if strings.contains(code, word) {
+				append(
+					&found,
+					fmt.aprintf(
+						"%s:%d: %s in a unit test: step ticks, or move it to smoke/",
+						path,
+						line_no,
+						word,
+					),
+				)
+			}
+		}
+	}
+	return found[:]
+}
+
+// lint_test_servers: no `start(&srv` in a unit test outside smoke/: a unit test runs the
+// stepped server on the harness (harness_start), never a threaded one.
+lint_test_servers :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		if strings.contains(code, "start(&srv") {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: start(&srv...) in a unit test: use harness_start, or move it to smoke/",
+					path,
+					line_no,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
+// test_lint scans the unit tests (every `_test.odin` outside smoke/) with the two rules above.
+test_lint :: proc() -> bool {
+	ok := true
+	for dir in ([]string{"client", "server", "common", "base", "dedicated", "tools"}) {
+		w := os.walker_create(dir)
+		defer os.walker_destroy(&w)
+		for info in os.walker_walk(&w) {
+			if info.type != .Regular || !strings.has_suffix(info.name, "_test.odin") {continue}
+			data, err := os.read_entire_file_from_path(info.fullpath, context.allocator)
+			if err != nil {
+				fmt.eprintfln("lint   %s: unreadable", info.fullpath)
+				ok = false
+				continue
+			}
+			path, _ := strings.replace_all(info.fullpath, "\\", "/")
+			msgs := make([dynamic]string)
+			append(&msgs, ..lint_test_timing(path, string(data)))
+			append(&msgs, ..lint_test_servers(path, string(data)))
+			for msg in msgs {
+				fmt.eprintln(msg)
+				ok = false
+			}
+		}
+	}
+	if ok {fmt.println("lint   unit tests neither sleep, read a clock nor start a threaded server")}
+	return ok
+}
+
 // source_lint runs the source lints over the first-party code.
 source_lint :: proc() -> bool {
 	ok := true

@@ -207,6 +207,7 @@ Sink :: struct {
 	dropped:       u64, // events refused since the writer last said so
 	dropped_total: u64,
 	written:       u64, // events written (the writer's)
+	busy:          bool, // a batch is taken from the ring and not yet written
 	capped:        u64, // events not written for the day cap
 	session:       u32,
 	dir:           string, // "": nothing is written (events still counted)
@@ -272,12 +273,11 @@ sink_flush :: proc(s: ^Sink) {
 	if s.thread == nil {return}
 	for {
 		sync.mutex_lock(&s.mutex)
-		done := s.tail == s.head && s.dropped == 0
+		done := s.tail == s.head && s.dropped == 0 && !s.busy
 		sync.mutex_unlock(&s.mutex)
 		if done {break}
 		time.sleep(5 * time.Millisecond)
 	}
-	time.sleep(20 * time.Millisecond) // (the batch being written)
 }
 
 now_ms :: proc() -> i64 {
@@ -334,6 +334,7 @@ writer_pass :: proc(s: ^Sink, batch: []Event, text: ^strings.Builder) -> int {
 		n += 1
 	}
 	if n < len(batch) {dropped, s.dropped = s.dropped, 0}
+	s.busy = n > 0 || dropped > 0
 	sync.mutex_unlock(&s.mutex)
 	strings.builder_reset(text)
 	if dropped > 0 {
@@ -350,6 +351,9 @@ writer_pass :: proc(s: ^Sink, batch: []Event, text: ^strings.Builder) -> int {
 	}
 	for i in 0 ..< n {write_event(text, batch[i])}
 	if text.buf != nil && len(text.buf) > 0 {write_out(s, string(text.buf[:]), batch[:n], n)}
+	sync.mutex_lock(&s.mutex)
+	s.busy = false
+	sync.mutex_unlock(&s.mutex)
 	return n
 }
 

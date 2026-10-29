@@ -7189,3 +7189,30 @@ budget numbers were kept; the new scenes run in a release-like build (`-o:speed`
 tests ran theirs, so no new slack. `budget_applies` is gone with its callers; the unit tests
 are the same in debug and optimized builds.
 
+## T6: the smoke suite, the new lints, CI
+
+`./build.sh smoke` (runs `odin test smoke` single-threaded; add `smoke` to the format and
+check dirs): one test per subsystem that really runs the thing (networking over real UDP, the
+real server thread, the audio device, render frames under the CPU Vulkan driver). New lints in
+`check`: no `time.sleep`, `time.now`, `tick_now` or `tick_since` in `*_test.odin` outside
+`smoke/`; no `start(&srv…)` in unit tests. CI: unit tests once per OS, the smoke suite in the
+Linux game job, benchmarks gated; duplicate steps and the optimized-test special cases
+removed. The job layout and times before and after are reported.
+
+### What differed (T6)
+
+- **Smoke runs in the Linux test job, not the game job**: the virtual gamepad the uinput
+  test needs is set up there, and the game job is CI's longest (586 s against 411 s).
+- **No render-frame smoke test**: the game job's `--check` and `--benchmark` runs already
+  render frames on the CPU driver; `smoke/` has the nine files T4b made.
+- **The optimized step went by raising the crash test's default** (`VX_CRASH_POINTS`) from
+  200 to 1000: 28 s in a debug build, instead of a separate 64 s optimized build.
+- **The telemetry and budgets benchmark checks also run in the Linux game job** (they ran
+  only on macOS and Windows), so every OS gates them.
+- **The lint tests build their sample text from pieces** (`"time" + ".sleep"`), because the
+  lint reads `lints_test.odin` itself and has no exemption.
+- **A real bug found by the first smoke run**: `sink_flush` returned once the ring was empty,
+  while the writer thread still held a batch not yet written (a 20 ms sleep hid it); now
+  `Sink.busy` covers the batch in flight.
+- CI times before (run 40864048998, main before T6): Test Windows 475 s, Test Linux 411 s
+  (check 98, test 157, optimized tests 64), Test macOS 399 s, Game Linux 586 s.

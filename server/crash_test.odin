@@ -17,7 +17,7 @@ import "../common/game"
 // operation, then the universe is recovered and checked, and must be exactly
 // the generation before the save or the one it wrote, never a mix.
 
-CRASH_POINTS :: #config(VX_CRASH_POINTS, 200)
+CRASH_POINTS :: #config(VX_CRASH_POINTS, 1000)
 
 // state_digest: a hash of every file of a universe (relative path and bytes),
 // without backups/ and telemetry/; journal segments only up to where the

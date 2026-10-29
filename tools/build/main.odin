@@ -47,6 +47,7 @@ PACKAGES :: []string {
 	"tools/worldmap",
 	"tools/bench",
 	"tools/debugger/printer_test",
+	"smoke",
 }
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
@@ -87,6 +88,7 @@ SOURCE_DIRS :: []string {
 	"client/render",
 	"client",
 	"tools",
+	"smoke",
 }
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
@@ -96,6 +98,7 @@ CHECK_FLAGS :: []string{"-no-entry-point"}
 GAME_PACKAGE :: "client"
 GAME_NAME :: "voxiverse"
 SERVER_PACKAGE :: "dedicated"
+SMOKE_PACKAGE :: "smoke"
 SERVER_NAME :: "voxiverse-server"
 
 SHADER_DIR :: "assets/shaders"
@@ -114,6 +117,7 @@ main :: proc() {
 	switch args[0] {
 	case "check",
 	     "test",
+	     "smoke",
 	     "build",
 	     "determinism",
 	     "run",
@@ -132,6 +136,8 @@ main :: proc() {
 		ok = check()
 	case "test":
 		ok = test()
+	case "smoke":
+		ok = smoke()
 	case "determinism":
 		ok = determinism(args[1:])
 	case "fmt":
@@ -178,6 +184,9 @@ usage :: proc() {
 		"  check     type-check every package (-vet -strict-style), build objects for the other Tier 1 targets, verify formatting",
 	)
 	fmt.println("  test      run the unit tests")
+	fmt.println(
+		"  smoke     run the smoke suite (real threads, sockets, audio devices, child processes), one test at a time",
+	)
 	fmt.println(
 		"  determinism  run the scripted session at -o:minimal and -o:speed and compare the logs (--compare <dir>: every log in a directory)",
 	)
@@ -450,6 +459,7 @@ check :: proc() -> bool {
 	return(
 		determinism_lint() &&
 		source_lint() &&
+		test_lint() &&
 		ci_lint() &&
 		check_format() &&
 		check_no_binaries() &&
@@ -615,9 +625,15 @@ test :: proc() -> bool {
 	return ok
 }
 
+// smoke runs the smoke suite on one thread: its tests start threads, sockets and clocks of
+// their own, and two at once would only compete for the machine.
+smoke :: proc() -> bool {
+	return test_package(SMOKE_PACKAGE, {"-define:ODIN_TEST_THREADS=1"})
+}
+
 // test_package runs one package's tests under the time limit; a run that outlasts it is
 // killed with its children and reported as a failure naming the package.
-test_package :: proc(pkg: string) -> bool {
+test_package :: proc(pkg: string, extra: []string = {}) -> bool {
 	out := path_join({"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})})
 	last_run := strings.concatenate({out, ".seconds"})
 	cmd := slice.concatenate(
@@ -626,6 +642,7 @@ test_package :: proc(pkg: string) -> bool {
 			ODIN_FLAGS,
 			{strings.concatenate({"-out:", out})},
 			test_env_defines(),
+			extra,
 		},
 	)
 	os.make_directory_all(filepath.dir(out))

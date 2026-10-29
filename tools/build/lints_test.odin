@@ -67,3 +67,28 @@ test_ci_test_name_lint :: proc(t: ^testing.T) {
 		0,
 	)
 }
+
+// The words are built here so that this file does not hold them as text of its own.
+SLEEP :: "time" + ".sleep"
+START :: "start(" + "&srv"
+
+@(test)
+test_test_timing_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	found := lint_test_timing("server/x_test.odin", "a := 1\n" + SLEEP + "(1)\n")
+	testing.expect_value(t, len(found), 1)
+	testing.expect_value(
+		t,
+		found[0],
+		"server/x_test.odin:2: " + SLEEP + " in a unit test: step ticks, or move it to smoke/",
+	)
+	testing.expect_value(t, len(lint_test_timing("f", "t := time.tick_" + "now()\n")), 1)
+	testing.expect_value(t, len(lint_test_timing("f", "// " + SLEEP + "\n")), 0)
+}
+
+@(test)
+test_test_server_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	testing.expect_value(t, len(lint_test_servers("f", "ok := " + START + ", cfg, {})\n")), 1)
+	testing.expect_value(t, len(lint_test_servers("f", "h := harness_start(&h)\n")), 0)
+}

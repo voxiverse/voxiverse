@@ -126,12 +126,12 @@ jobs:
           name: determinism-ubuntu-latest
           path: build/determinism/
           if-no-files-found: error
-      # The optimized test, one build: M46 the save killed at 1000 different
-      # operations (a faulty disk layer, not real kills: every point loads,
-      # and is exactly the old generation or the new one). No test judges a
-      # time (T5): the costs are `bench budgets`, below.
-      - name: Optimized tests
-        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
+      # The smoke suite (T6): what needs a real thread, socket, audio device,
+      # child process or clock, one test at a time. Here, not in the game job,
+      # because the virtual gamepad above is set up here and the game job is
+      # the longest.
+      - name: Smoke
+        run: ./build.sh smoke
 
   # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
   # under the validation layer, any validation finding, leak, sanitizer
@@ -158,6 +158,10 @@ jobs:
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
         run: ./build.sh bench chunks -check
+      - name: Benchmark check, telemetry
+        run: ./build.sh bench telemetry -check
+      - name: Benchmark check, budgets
+        run: ./build.sh bench budgets -check
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP; its numbers compare with nothing.
       - name: Server benchmark (smoke)

@@ -65,15 +65,9 @@ Full spec: [history.md](../history.md) (T4b).
 
 Full spec: [history.md](../history.md) (T5).
 
-## T6: the smoke suite, the new lints, CI
+## T6: the smoke suite, the new lints, CI (done)
 
-`./build.sh smoke` (runs `odin test smoke` single-threaded: the files exist since T4b, see
-history.md; add `smoke` to the format and check dirs): one test per subsystem that really runs the thing (networking over real
-UDP, the real server thread, the audio device, render frames under the CPU Vulkan driver).
-New lints in `check`: no `time.sleep`, `time.now`, `tick_now` or `tick_since` in
-`*_test.odin` outside `smoke/`; no `start(&srv…)` in unit tests. CI: unit tests once per OS,
-the smoke suite in the Linux game job, benchmarks gated; duplicate steps and the
-optimized-test special cases removed. The job layout and times before and after are reported.
+Full spec: [history.md](../history.md) (T6).
 
 ## T7: prune
 
