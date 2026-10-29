@@ -445,7 +445,7 @@ check :: proc() -> bool {
 		}
 	}
 	ok = check_cross() && ok
-	return determinism_lint() && check_format() && check_no_binaries() && ok
+	return determinism_lint() && source_lint() && check_format() && check_no_binaries() && ok
 }
 
 // host_target is the Odin target this driver runs on, as -target: spells it.

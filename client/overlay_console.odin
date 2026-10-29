@@ -280,7 +280,9 @@ register_builtin_commands :: proc(c: ^Console) {
 				case "inventory":
 					if app.session != nil && game_controls(app) {
 						inventory_open(app)
-						if then == "creative" {app.inventory_view.tab = .Creative}
+						if strings.equal_fold(fmt.tprint(Inventory_Tab.Creative), then) {
+							app.inventory_view.tab = .Creative
+						}
 					}
 				case "options":
 					app.options.tab, app.options.scroll, app.options.listening = .Video, 0, .None

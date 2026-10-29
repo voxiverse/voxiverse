@@ -191,47 +191,6 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	testing.expect_value(t, rules_found, 3)
 }
 
-// No code tests a game mode by name: systems ask for abilities. The creation
-// screen's labels are the one place the base modes' words appear in a
-// comparison (and the console's inventory tab is not a mode).
-@(test)
-test_no_code_tests_a_mode_by_name :: proc(t: ^testing.T) {
-	allowed := []string{"screen_creation.odin", "screen_universes.odin", "overlay_console.odin"}
-	found := 0
-	for dir in ([]string{"server", "client", "common"}) {
-		w := os.walker_create(dir)
-		defer os.walker_destroy(&w)
-		files: for info in os.walker_walk(&w) {
-			if info.type == .Directory || !strings.has_suffix(info.name, ".odin") {continue}
-			if strings.has_suffix(info.name, "_test.odin") {continue}
-			for a in allowed {if info.name == a {continue files}}
-			data, err := os.read_entire_file(info.fullpath, context.temp_allocator)
-			if err != nil {continue}
-			rest := string(data)
-			for line in strings.split_lines_iterator(&rest) {
-				code, _, _ := strings.partition(line, "//")
-				for word in ([]string{"creative", "survival"}) {
-					for op in ([]string{"== \"", "!= \""}) {
-						plain := strings.concatenate({op, word, "\""}, context.temp_allocator)
-						based := strings.concatenate({op, "base:", word}, context.temp_allocator)
-						if strings.contains(code, plain) || strings.contains(code, based) {
-							testing.expectf(
-								t,
-								false,
-								"%s tests a mode by name: %s",
-								info.fullpath,
-								line,
-							)
-							found += 1
-						}
-					}
-				}
-			}
-		}
-	}
-	testing.expect_value(t, found, 0)
-}
-
 // A character's mode is kept with it; a file from before modes has none, and the
 // character takes the world's default.
 @(test)

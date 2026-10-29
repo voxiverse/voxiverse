@@ -295,7 +295,7 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 		menu_clicked := ui.button(ctx, tr(.Universes_Card_Menu), menu)
 		ui.pop_id(ctx)
 		mode_text := tr(
-			.Universes_Mode_Survival if e.mode == "survival" else .Universes_Mode_Creative,
+			.Universes_Mode_Survival if e.mode == MODE_SURVIVAL else .Universes_Mode_Creative,
 		)
 		if e.mode_changed {mode_text = tr(.Universes_Mode_Changed, mode_text)}
 		ui.draw_text(ctx, ui.cut_top(&inner, t.font_size + 8), e.name, t.font_size, t.text, .Left)
