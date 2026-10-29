@@ -3,7 +3,6 @@ package server
 import "core:fmt"
 import "core:math"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 
@@ -17,18 +16,17 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 		generator       = .Classic, // flat-ish M3 terrain: this tests the server, not the land
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
-	port := srv.host.socket.port
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a, b: Net_Client
-	net_connect(&a, port, "a")
-	net_connect(&b, port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	ok := net_wait(
@@ -96,8 +94,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// Too big: refused, nothing changes.
 	before := a.bulk_begins
 	net_send(&a, game.Command{"fill -100 0 -100 100 60 100 dirt"})
-	time.sleep(300 * time.Millisecond)
-	net_pump(t, &a)
+	net_for(t, {&a}, 0.3)
 	testing.expect_value(t, a.bulk_begins, before)
 
 	// An explosion: air inside, and the two players agree on every block
@@ -108,22 +105,14 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 		at: game.Block_Pos,
 	}
 	blast_at := Blast{blast}
-	call(
-		&srv,
-		proc(s: ^Server, data: rawptr) {explode_by(s, "a", (^Blast)(data).at, 4)},
-		&blast_at,
-	)
+	call(srv, proc(s: ^Server, data: rawptr) {explode_by(s, "a", (^Blast)(data).at, 4)}, &blast_at)
 	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
 		x0, _ := net_block(cs[0], blast)
 		x1, _ := net_block(cs[1], blast)
 		return x0 == .Air && x1 == .Air && cs[0].explosions > 0 && cs[1].explosions > 0
 	})
 	testing.expect(t, ok, "the explosion did not reach both")
-	for _ in 0 ..< 20 {
-		net_pump(t, &a)
-		net_pump(t, &b)
-		time.sleep(game.TICK_DURATION)
-	}
+	net_ticks(t, {&a, &b}, 20)
 	differ := 0
 	for pos, &blocks in a.chunks {
 		other, both := &b.chunks[pos]
@@ -141,8 +130,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// A rocket, straight down from up high: it hits the ground and blows.
 	explosions := a.explosions
 	net_send(&a, game.Teleport{position = a.update.state.position + {0, 20, 0}})
-	time.sleep(200 * time.Millisecond)
-	net_pump(t, &a)
+	net_for(t, {&a}, 0.2)
 	net_send(&a, game.Fire{a.seq, 0, -1.5})
 	@(static) want: int
 	want = explosions + 1

@@ -27,24 +27,24 @@ pump :: proc(t: ^testing.T, clients: []^Net_Client, seconds := 0.4) {
 // /seed, /give to everyone, /wear, /help, /locate.
 @(test)
 test_world_commands :: proc(t: ^testing.T) {
-	srv: Server
+	h: Harness
+	srv := &h.srv
 	config := Config {
 		seed            = 27,
 		generator       = .Earth,
 		rules           = quiet_rules(),
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true,
 		no_sheep        = true,
 	}
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a, b: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
-	net_connect(&b, srv.host.socket.port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	both := []^Net_Client{&a, &b}
@@ -64,23 +64,23 @@ test_world_commands :: proc(t: ^testing.T) {
 	}
 	cmd(&a, "setblock ~2 ~3 ~ glass")
 	pump(t, both)
-	testing.expect_value(t, block_on_server(&srv, target), game.Block.Glass)
+	testing.expect_value(t, block_on_server(srv, target), game.Block.Glass)
 
 	// /time and /rule.
 	cmd(&a, "time set midnight")
 	pump(t, both, 0.3)
 	testing.expect(
 		t,
-		abs(clock_fraction(&srv)) < 0.02 || clock_fraction(&srv) > 0.98,
+		abs(clock_fraction(srv)) < 0.02 || clock_fraction(srv) > 0.98,
 		"time set midnight",
 	)
 	cmd(&a, "time add 6")
 	pump(t, both, 0.3)
 	testing.expectf(
 		t,
-		abs(clock_fraction(&srv) - 0.25) < 0.02,
+		abs(clock_fraction(srv) - 0.25) < 0.02,
 		"time add 6 gave %.3f",
-		clock_fraction(&srv),
+		clock_fraction(srv),
 	)
 	cmd(&a, "time query")
 	cmd(&a, "rule drops false")

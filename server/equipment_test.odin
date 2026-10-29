@@ -19,26 +19,24 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 		seed            = 22,
 		view_radius     = 2,
 		view_height     = 1,
-		workers         = 1,
 		save_dir        = dir,
 		max_players     = 4,
 		listen          = true,
 		generator       = .Classic,
 		everyone_cheats = true, // (the catalog)
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 	cap_, boots := game.item_of_armor(.Cap), game.item_of_armor(.Boots)
 	head, feet :=
 		game.EQUIP_BASE + int(game.Equip_Slot.Head), game.EQUIP_BASE + int(game.Equip_Slot.Feet)
 
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -105,14 +103,13 @@ test_equipment_over_the_network :: proc(t: ^testing.T) {
 	net_close(&alice)
 	net_close(&bob)
 	alice, bob = {}, {}
-	expect_items_balanced(t, &srv)
-	testing.expect(t, stop(&srv))
+	expect_items_balanced(t, srv)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped = false
-	for !srv.listening {}
-	net_connect(&alice, srv.host.socket.port, "alice")
-	net_connect(&bob, srv.host.socket.port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	ok = net_wait(
 		t,
 		both,

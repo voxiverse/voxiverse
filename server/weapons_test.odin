@@ -306,32 +306,29 @@ test_weapons :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
 	res = {}
-	srv: Server
+	h: Harness
+	srv := &h.srv
 	if !testing.expect(
 		t,
-		start(
-			&srv,
+		harness_start(
+			&h,
 			Config {
 				seed = 22,
 				mode = "survival",
 				view_radius = 2,
 				view_height = 1,
-				workers = 1,
 				save_dir = dir,
 				max_players = 4,
 				listen = true,
 				generator = .Classic,
 				no_sheep = true,
 			},
-			{},
 		),
 	) {return}
-	defer stop(&srv)
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer harness_stop(&h)
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -348,7 +345,7 @@ test_weapons :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "never came to rest") {return}
 
-	call(&srv, shots_scenario, nil)
+	call(srv, shots_scenario, nil)
 	testing.expect_value(t, res.rewound_ticks_100, 3)
 	testing.expect_value(t, res.rewound_ticks_400, REWIND_MAX_TICKS)
 	testing.expect_value(t, res.rewound_ticks_9999, REWIND_MAX_TICKS)
@@ -367,7 +364,7 @@ test_weapons :: proc(t: ^testing.T) {
 	testing.expect(t, !res.dead_shot, "the dead do not shoot")
 	testing.expect(t, !res.bad_slot, "a shot from a slot that is not in hand is refused")
 
-	call(&srv, magazine_scenario, nil)
+	call(srv, magazine_scenario, nil)
 	testing.expect_value(t, res.ammo_after_12, 1200) // 12 shots, 0 left
 	testing.expect(t, res.reload_started, "an empty magazine starts a reload")
 	testing.expect_value(t, res.ammo_while_reloading, 0)
@@ -391,7 +388,7 @@ test_weapons :: proc(t: ^testing.T) {
 	)
 
 	// Stand clear of the old shots' damage, then the rules.
-	call(&srv, rules_scenario, nil)
+	call(srv, rules_scenario, nil)
 	testing.expect(t, !res.pvp_off_hurt, "pvp off: a shot at a player does nothing")
 	testing.expect(t, res.creature_hit, "pvp off: a creature is still hit")
 	testing.expect(t, res.pvp_on_hurt, "pvp on: it hurts")

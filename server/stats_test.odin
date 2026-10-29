@@ -6,7 +6,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -40,7 +39,6 @@ config :: proc(dir: string, cheats := true) -> Config {
 		rules = quiet_rules(),
 		view_radius = 3,
 		view_height = 2,
-		workers = 2,
 		max_players = 4,
 		listen = true,
 		everyone_cheats = cheats,
@@ -69,12 +67,13 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "stats"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
+	defer if !stopped {harness_stop(&h)}
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
@@ -116,12 +115,12 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	a.move = {0, 0}
 	pause(t, &a, 0.2)
 	// A position sample is due every 10 s: make it due now.
-	call(&srv, proc(s: ^Server, data: rawptr) {
+	call(srv, proc(s: ^Server, data: rawptr) {
 			c := client_by_name(s, "a")
 			s.tick = (s.tick / 300 + 1) * 300 - u64(player_id(s, c)) * 7
 			stats_tick(s, c)
 		}, nil)
-	flush_events(&srv)
+	flush_events(srv)
 
 	check :: proc(t: ^testing.T, m: Counters, when_: string) {
 		expect :: proc(t: ^testing.T, m: Counters, name: string, want: u64, when_: string) {
@@ -153,7 +152,7 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 			stats_total(m, "time.played"),
 		)
 	}
-	mine := counters_of(&srv, "a")
+	mine := counters_of(srv, "a")
 	defer counters_free(&mine)
 	check(t, mine, "live")
 	sessions_before := stats_total(mine, "sessions")
@@ -202,8 +201,8 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	// Kept: save and load.
 	net_close(&a)
 	a = {}
-	time.sleep(100 * time.Millisecond)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	world_stats, _ := os.read_entire_file_from_path(
 		filepath.join({home_dir(dir, 26), STATS_FILE}, context.temp_allocator) or_else "",
@@ -214,14 +213,14 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		strings.contains(string(world_stats), `"chat.lines": 2`),
 		"the world's totals were not written",
 	)
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped = false
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "a")
+	net_connect(&again, 0, "a", h = &h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
-	loaded := counters_of(&srv, "a")
+	loaded := counters_of(srv, "a")
 	defer counters_free(&loaded)
 	testing.expect_value(t, stats_total(loaded, "sessions"), 2)
 	testing.expect_value(t, stats_total(loaded, "chat.lines"), 2)
@@ -251,12 +250,12 @@ read_log :: proc(dir: string) -> string {
 // player asking for another's gets an empty page.
 @(test)
 test_others_stats_need_permission :: proc(t: ^testing.T) {
-	srv: Server
-	if !testing.expect(t, start(&srv, config("", cheats = false), {})) {return}
-	defer stop(&srv)
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config("", cheats = false))) {return}
+	defer harness_stop(&h)
 	a, b: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
-	net_connect(&b, srv.host.socket.port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	ok := net_wait(
@@ -285,11 +284,12 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "reports"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
-	defer stop(&srv)
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	defer harness_stop(&h)
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
@@ -307,13 +307,13 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 	for _ in 0 ..< 10 {net_send(&a, report(.Client_Info, "flood", {1, 1, 1}))}
 	pause(t, &a, 0.5)
 	refused := u64(0)
-	call(&srv, proc(s: ^Server, data: rawptr) {
+	call(srv, proc(s: ^Server, data: rawptr) {
 			if c := client_by_name(s, "a");
 			   c != nil {(^u64)(data)^ = c.world.stats["telemetry.refused"] or_else 0}
 		}, &refused)
 	// Messages 1-6 are taken (3 bad entries refused among them); 7-14 are refused whole: 3 + 8.
 	testing.expect_value(t, refused, 3 + 8)
-	flush_events(&srv)
+	flush_events(srv)
 	text := read_log(dir)
 	testing.expect_value(t, strings.count(text, `"k":"client_info"`), 1 + 2) // the good one and two of the flood
 	testing.expect(

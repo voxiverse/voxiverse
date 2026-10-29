@@ -20,6 +20,7 @@ Harness :: struct {
 	started: bool,
 	local:   bool,
 	last:    State_Hash, // the last step's
+	temp:    runtime.Arena, // the steps' temp allocator: the server frees it each tick, the test's own stays
 }
 
 // Harness_Party: the mirror, a test client, a client session driven by a
@@ -69,6 +70,7 @@ harness_start :: proc(
 	conditions := netcode.Conditions{},
 ) -> bool {
 	h^ = {}
+	h.temp.backing_allocator = runtime.heap_allocator()
 	// (the network's packets are not the server's memory: a test that tracks the
 	// server's allocations does not count what is in flight)
 	netcode.simnet_init(&h.net, conditions, runtime.heap_allocator())
@@ -78,6 +80,8 @@ harness_start :: proc(
 	end: game.Endpoint
 	if local {
 		game.pipe_init(&h.pipe)
+		h.pipe.clock, h.pipe.start = &h.net.now, h.net.now // (latency and jitter in ticks of the harness, drawn from its seed)
+		game.pipe_seed(&h.pipe, HARNESS_SEED)
 		end = {&h.pipe, .Server}
 		h.local = true
 	}
@@ -123,7 +127,13 @@ harness_step :: proc(h: ^Harness, n := 1) -> State_Hash {
 	for _ in 0 ..< n {
 		h.net.now = harness_time(h.srv.tick + 1)
 		for p in h.parties {p.tick(p.data)}
-		h.last = step(&h.srv)
+		// (the server frees the temp allocator at the end of a tick: its own arena, so what
+		// the test holds in the test's survives the steps; the parties keep the test's, as a
+		// thread a party starts keeps the context it was started in)
+		{
+			context.temp_allocator = runtime.arena_allocator(&h.temp)
+			h.last = step(&h.srv)
+		}
 	}
 	return h.last
 }
@@ -159,6 +169,7 @@ harness_stop :: proc(h: ^Harness) -> bool {
 	ok := stop(&h.srv)
 	if h.local {game.pipe_destroy(&h.pipe)}
 	netcode.simnet_destroy(&h.net)
+	runtime.arena_destroy(&h.temp)
 	delete(h.parties)
 	h^ = {}
 	return ok

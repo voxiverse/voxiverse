@@ -3,7 +3,6 @@ package server
 import "core:fmt"
 import "core:math"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 
@@ -18,16 +17,16 @@ test_plants_need_support :: proc(t: ^testing.T) {
 		generator       = .Classic,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 2,
 		listen          = true,
 		everyone_cheats = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	if !testing.expect(t, net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) > 100
@@ -48,7 +47,7 @@ test_plants_need_support :: proc(t: ^testing.T) {
 	}
 	defer delete(data.failures)
 	call(
-		&srv,
+		srv,
 		proc(s: ^Server, data: rawptr) {
 			c := (^Case)(data)
 			w := client_by_name(s, c.name).world
@@ -118,18 +117,18 @@ test_plants_need_support :: proc(t: ^testing.T) {
 		net_send(&a, game.Command{bulk_at("fill", x + 10 + dx, y, z, "grass")})
 		net_send(&a, game.Command{bulk_at("fill", x + 10 + dx, y + 1, z, "poppy")})
 	}
-	pump_for(t, &a, time.Second)
+	net_for(t, {&a}, 1)
 	for dx in i32(0) ..< 6 {
 		b, _ := net_block(&a, {x + 10 + dx, y + 1, z})
 		testing.expect_value(t, b, game.Block.Poppy)
 	}
 	net_send(&a, game.Command{bulk_row("fill", x + 10, x + 15, y, z, "air")})
-	pump_for(t, &a, time.Second)
+	net_for(t, {&a}, 1)
 	for dx in i32(0) ..< 6 {
 		b, _ := net_block(&a, {x + 10 + dx, y + 1, z})
 		testing.expectf(t, b == .Air, "a poppy stayed at %d after the bulk edit", dx)
 	}
-	after := poppies_dropped(&srv, x + 5)
+	after := poppies_dropped(srv, x + 5)
 	dropped := after
 	testing.expectf(
 		t,
@@ -166,13 +165,4 @@ bulk_at :: proc(cmd: string, x, y, z: i32, block: string) -> string {
 @(private = "file")
 bulk_row :: proc(cmd: string, x0, x1, y, z: i32, block: string) -> string {
 	return fmt.tprintf("%s %d %d %d %d %d %d %s", cmd, x0, y, z, x1, y, z, block)
-}
-
-@(private = "file")
-pump_for :: proc(t: ^testing.T, c: ^Net_Client, d: time.Duration) {
-	end := time.tick_add(time.tick_now(), d)
-	for time.tick_diff(time.tick_now(), end) > 0 {
-		net_pump(t, c)
-		time.sleep(game.TICK_DURATION)
-	}
 }

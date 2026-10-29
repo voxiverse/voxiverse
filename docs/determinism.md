@@ -105,6 +105,19 @@ waits for a **number of ticks**, never for a clock or a sleep.
   turns one on in its config or through `/gamerule`. A test that needs the Earth keeps its
   own config (`harness_start` forces only `stepped`, `workers = 0` and the network).
 
+- **What a test holds across steps.** The server frees the temp allocator at the end of
+  each tick; the harness gives it an arena of its own, so the strings a test keeps in its
+  own temp (a directory, a name) survive the steps. `step` publishes `Stats` (timings zero:
+  a stepped server reads no clock), and `call` on a stepped server runs its procedure at
+  once, between two steps; a test that needs the tick that takes a change in steps one.
+- **The local player's pipe** reads the harness's clock too (`Pipe.clock`) and draws its
+  jitter from a seeded `base.Rng` (`pipe_seed`): `game.pipe_set_conditions(&h.pipe, ...)`
+  after `harness_start(local = true)` gives latency in ticks, the same on every run.
+- **Waiting in a test.** `net_connect(&c, 0, name, h = &h)` joins a test client to the
+  harness; `net_wait`, `net_for` and `net_ticks` pump the clients and step the harness, and
+  `wait_until` does the same for the pipe's `Fake_Client`. A wait is `seconds * TICK_RATE`
+  ticks at most, never a clock.
+
 ## Scenarios
 
 `server/scenario_test.odin` (T3) plays a `Scenario` (steps of a tick, a player and an

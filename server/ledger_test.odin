@@ -4,7 +4,6 @@ import "core:math/rand"
 import "core:os"
 import "core:path/filepath"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -23,7 +22,6 @@ config :: proc(dir: string, death_drops := false) -> Config {
 		rules = rules,
 		view_radius = 3,
 		view_height = 2,
-		workers = 1,
 		max_players = 4,
 		listen = true,
 		everyone_cheats = true,
@@ -88,8 +86,8 @@ expect_balanced :: proc(t: ^testing.T, r: Report, what: string, loc := #caller_l
 }
 
 @(private = "file")
-join_one :: proc(t: ^testing.T, a: ^Net_Client, port: int, name: string) -> bool {
-	net_connect(a, port, name)
+join_one :: proc(t: ^testing.T, h: ^Harness, a: ^Net_Client, name: string) -> bool {
+	net_connect(a, 0, name, h = h)
 	return net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])}, 30)
 }
 
@@ -217,19 +215,19 @@ step :: proc(srv: ^Server, name: string, n: int) -> Report {
 test_ledger_session :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_session")
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
-	defer stop(&srv)
-	for !srv.listening {}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	defer harness_stop(&h)
 	a: Net_Client
 	defer net_close(&a)
-	if !testing.expect(t, join_one(t, &a, srv.host.socket.port, "a"), "never landed") {return}
+	if !testing.expect(t, join_one(t, &h, &a, "a"), "never landed") {return}
 
-	r := step(&srv, "a", 0)
+	r := step(srv, "a", 0)
 	expect_balanced(t, r, "after joining (the kit)")
 	testing.expect(t, r.detail > 0, "the kit was not in the ledger")
 
-	r = step(&srv, "a", 1)
+	r = step(srv, "a", 1)
 	expect_balanced(t, r, "after the session")
 	stone, dirt, wool, wheat := r.rows[0], r.rows[1], r.rows[2], r.rows[3]
 	testing.expect_value(t, dirt[.Give], 100)
@@ -247,14 +245,14 @@ test_ledger_session :: proc(t: ^testing.T) {
 	for row in r.rows {expired += row[.Expire]}
 	testing.expect(t, expired < 0, "nothing expired")
 
-	r = step(&srv, "a", 2)
+	r = step(srv, "a", 2)
 	testing.expect_value(t, r.count, 1)
 	testing.expect_value(t, r.lines[0].item, game.item_of_block(test_reg(), .Stone))
 	testing.expect_value(t, r.lines[0].held - r.lines[0].expected, 7)
-	r = step(&srv, "a", 3)
+	r = step(srv, "a", 3)
 	testing.expect_value(t, r.count, 1)
 	testing.expect_value(t, r.lines[0].held - r.lines[0].expected, -3)
-	expect_balanced(t, step(&srv, "a", 4), "put back")
+	expect_balanced(t, step(srv, "a", 4), "put back")
 }
 
 @(private = "file")
@@ -328,19 +326,18 @@ settle :: proc(t: ^testing.T, a: ^Net_Client, seconds: f64) {
 test_ledger_scenarios :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_scenarios")
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir, death_drops = true), {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir, death_drops = true))) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 	a: Net_Client
 	defer net_close(&a)
-	if !testing.expect(t, join_one(t, &a, port, "a"), "never landed") {return}
+	if !testing.expect(t, join_one(t, &h, &a, "a"), "never landed") {return}
 
 	// A chest, filled and emptied through requests.
-	pos := beside_of(&srv, "a")
-	d := scenario(&srv, "a", 2, pos = pos)
+	pos := beside_of(srv, "a")
+	d := scenario(srv, "a", 2, pos = pos)
 	testing.expect_value(t, d.count, 0)
 	n: u32
 	for slot in 0 ..< 3 {
@@ -348,38 +345,38 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 		net_send(&a, game.Inventory_Request{n, {.Quick_Move, slot, 0}})
 	}
 	settle(t, &a, 0.4)
-	expect_balanced(t, audit_now(&srv), "stacks in a chest")
+	expect_balanced(t, audit_now(srv), "stacks in a chest")
 	// Broken, it spills.
-	put_block_at(&srv, pos, .Air)
+	put_block_at(srv, pos, .Air)
 	settle(t, &a, 0.4)
-	expect_balanced(t, audit_now(&srv), "a chest broken")
+	expect_balanced(t, audit_now(srv), "a chest broken")
 
 	// Travel away and back.
 	away := game.address_derive(31)
-	d = scenario(&srv, "a", 0, away)
+	d = scenario(srv, "a", 0, away)
 	testing.expect(t, d.ok, "no travel")
 	testing.expect_value(t, d.count, 0)
 	settle(t, &a, 0.6)
 
 	// Death drops everything where they fell (in the other world).
-	d = scenario(&srv, "a", 1)
+	d = scenario(srv, "a", 1)
 	testing.expect_value(t, d.count, 0)
 	settle(t, &a, 0.4)
 
 	// Home: the other world goes once nobody is in it, with its dropped
 	// stacks; going there again loads them from its save.
-	d = scenario(&srv, "a", 0, srv.home.address)
+	d = scenario(srv, "a", 0, srv.home.address)
 	testing.expect_value(t, d.count, 0)
 	for _ in 0 ..< 40 {
 		settle(t, &a, 0.1)
-		if scenario(&srv, "a", 4).count == 0 && stats(&srv).worlds == 1 {break}
+		if scenario(srv, "a", 4).count == 0 && stats(srv).worlds == 1 {break}
 	}
-	testing.expect_value(t, stats(&srv).worlds, 1)
-	expect_balanced(t, audit_now(&srv), "a world unloaded")
-	d = scenario(&srv, "a", 0, away)
+	testing.expect_value(t, stats(srv).worlds, 1)
+	expect_balanced(t, audit_now(srv), "a world unloaded")
+	d = scenario(srv, "a", 0, away)
 	testing.expect_value(t, d.count, 0)
 	settle(t, &a, 0.6)
-	expect_balanced(t, audit_now(&srv), "a world loaded again")
+	expect_balanced(t, audit_now(srv), "a world loaded again")
 
 	// Gone with what they carry, back with a saved character that had
 	// more than it could hold.
@@ -388,20 +385,20 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 		r := Report {
 			name = "a",
 		}
-		call(&srv, proc(s: ^Server, data: rawptr) {
+		call(srv, proc(s: ^Server, data: rawptr) {
 				r := (^Report)(data)
 				r.flag = client_by_name(s, r.name) != nil
 			}, &r)
 		if !r.flag {break}
-		time.sleep(20 * time.Millisecond)
+		harness_step(&h)
 	}
-	expect_balanced(t, audit_now(&srv), "a player gone")
-	d = scenario(&srv, "a", 3)
+	expect_balanced(t, audit_now(srv), "a player gone")
+	d = scenario(srv, "a", 3)
 	testing.expect(t, d.ok, "no saved character")
 	a = {}
-	if !testing.expect(t, join_one(t, &a, port, "a"), "never came back") {return}
-	expect_balanced(t, audit_now(&srv), "a player back")
-	r := audit_now(&srv, {game.item_of_block(test_reg(), .Dirt), 0, 0, 0})
+	if !testing.expect(t, join_one(t, &h, &a, "a"), "never came back") {return}
+	expect_balanced(t, audit_now(srv), "a player back")
+	r := audit_now(srv, {game.item_of_block(test_reg(), .Dirt), 0, 0, 0})
 	testing.expect(t, r.rows[0][.Spill_Old] == 9, "the old stack was not in the ledger")
 }
 
@@ -529,16 +526,15 @@ test_inventory_fuzz :: proc(t: ^testing.T) {
 test_ledger_fuzz_over_udp :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_fuzz")
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir, death_drops = true), {})) {return}
-	defer stop(&srv)
-	for !srv.listening {}
-	port := srv.host.socket.port
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir, death_drops = true))) {return}
+	defer harness_stop(&h)
 	a, b: Net_Client
 	defer net_close(&a)
 	defer net_close(&b)
-	net_connect(&a, port, "a")
-	net_connect(&b, port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	both := []^Net_Client{&a, &b}
 	ok := net_wait(
 		t,
@@ -547,8 +543,8 @@ test_ledger_fuzz_over_udp :: proc(t: ^testing.T) {
 		30,
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	pos := beside_of(&srv, "a")
-	put_block_at(&srv, pos, .Chest)
+	pos := beside_of(srv, "a")
+	put_block_at(srv, pos, .Chest)
 	state := rand.create(32)
 	r := rand.default_random_generator(&state)
 	for i in 0 ..< 2000 {
@@ -574,13 +570,13 @@ test_ledger_fuzz_over_udp :: proc(t: ^testing.T) {
 		if i % 100 == 99 {
 			net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 			if i == 999 {
-				d := scenario(&srv, "a", 1) // dies mid-way
+				d := scenario(srv, "a", 1) // dies mid-way
 				testing.expect_value(t, d.count, 0)
 			}
 		}
 	}
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 1.0)
-	expect_balanced(t, audit_now(&srv), "after 4000 random requests")
+	expect_balanced(t, audit_now(srv), "after 4000 random requests")
 }
 
 @(private = "file")

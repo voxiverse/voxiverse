@@ -36,18 +36,16 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		seed        = 1,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 2,
 		save_dir    = dir,
 		max_players = 2,
 		listen      = true,
 		generator   = .Earth,
 		gate_open   = 2,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
-	for !srv.listening {}
-	port := srv.host.socket.port
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
+	srv := &h.srv
 	home := srv.home.address
 	home_gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
 	here, has := worldgen.arrival_gate(&home_gen)
@@ -56,7 +54,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	away := game.address_derive(77)
 	away.galaxy = home.galaxy
 	far_world := World {
-		server  = &srv,
+		server  = srv,
 		address = away,
 	}
 	world_kind(&far_world)
@@ -65,7 +63,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	if !testing.expect(t, far_has, "no gate at the far end") {return}
 
 	alice: Net_Client
-	net_connect(&alice, port, "alice")
+	net_connect(&alice, 0, "alice", h = &h)
 	defer net_close(&alice)
 	clients := []^Net_Client{&alice}
 	ok := net_wait(t, clients, proc(cs: []^Net_Client) -> bool {

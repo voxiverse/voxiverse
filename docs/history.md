@@ -7051,3 +7051,38 @@ are deleted in the same step.
   argument. `Net_Client` now applies an `Edit_Result` to its chunks, as a client does.
 - Survival is entered with `/gamemode survival` in a step: `Config.mode` only sets the mode of a
   new universe with a save directory, not of the harness world.
+
+# T4: the threaded-server test files move onto the harness
+
+Each moves onto T2, or, where it exists only to exercise real threads or sockets, to T6's
+smoke suite. Every `time.sleep` and polling wait in them goes.
+
+## What differed
+
+- **Scope.** The spec's "32 files" are the `server/` package's tests that start a threaded
+  `Server` (plus the client-side fakes that drove them). Those are all on the harness. The
+  files that sleep for another reason (a real UDP collector, `netcode` host and link tests, a
+  child-process lock, audio and uinput devices, app-side clocks) are **T4b**, with the
+  smoke suite they belong to.
+- **The mechanism.** `net_connect(&c, 0, name, h = &harness)` joins a client to the harness's
+  network (at the server's address) and sets `Net_Client.stepper`; `net_wait` pumps the
+  clients and steps the harness a tick at a time, `seconds` meaning `seconds * TICK_RATE`
+  ticks; `net_for` and `net_ticks` are the "play on" forms; `Fake_Client.stepper`,
+  `Save_Client.h` and `Predicting_Client.h` do the same for the pipe clients. A test that
+  used to sleep for the server to see a close now steps four ticks.
+- **Four changes to the harness, each at the layer that owned the problem.** The harness
+  runs its steps on its own temp arena (the server frees the temp allocator each tick, which
+  freed the strings a test held across steps: directories, names). `step` publishes `Stats`
+  with zero timings (a stepped server had none, so `stats(srv).worlds` read 0). `call` on a
+  stepped server runs the procedure at once (it used to wait for a tick that no thread
+  would run). The local pipe reads the harness's tick clock and draws its jitter from a
+  seeded `base.Rng` (`Pipe.clock`, `pipe_seed`), so the latency tests are in ticks.
+- **Loss.** A test's per-socket `conditions` became `harness_start(conditions = ...)`; the
+  network's seed gives each socket its own stream. `test_pack_transfer` and the ten-percent
+  loss test run on it. The pcap that `net_test` wrote for `tools/wireshark/check.lua` is gone
+  with the real socket: CI captures the real server binary for that check.
+- **Tests changed in meaning, not only in form:** the bandwidth pipe test now moves a clock
+  (the first packet of a 50 KB/s pipe is due after 20 ms, not at once, as its old comment
+  said); `test_damage_death_and_xp` waits one tick after a `with_client` body before it
+  probes (the body used to run at the start of a tick that continued after it);
+  `test_server_start_fails_cleanly` takes the port on the simulated network.

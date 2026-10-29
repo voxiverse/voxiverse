@@ -8,7 +8,7 @@ import "core:testing"
 import "../common/game"
 import "../common/netcode"
 
-// M47b: a universe's packs go to a joining client, over real sockets with
+// M47b: a universe's packs go to a joining client, over a simulated network with
 // loss; the client keeps them by hash and a second join needs no parts.
 
 @(private = "file")
@@ -39,45 +39,36 @@ test_pack_transfer :: proc(t: ^testing.T) {
 		seed       = LOSS_SEED,
 	}
 	extra := []game.Pack_Source{transfer_pack()}
-	srv: Server
+	h: Harness
+	srv := &h.srv
 	if !testing.expect(
 		t,
-		start(
-			&srv,
+		harness_start(
+			&h,
 			{
 				rules = quiet_rules(),
 				seed = 31,
 				view_radius = 2,
 				view_height = 2,
-				workers = 2,
 				max_players = 4,
 				listen = true,
-				conditions = bad,
 				no_sheep = true,
 				extra_packs = extra,
 			},
-			{},
+			conditions = bad,
 		),
 	) {return}
-	defer stop(&srv)
-	port := srv.host.socket.port
+	defer harness_stop(&h)
 	testing.expect_value(t, len(srv.pack_blobs), 1)
 
-	join :: proc(t: ^testing.T, port: int, name: string, cache: string, seed: u64) -> Net_Client {
+	join :: proc(h: ^Harness, name: string, cache: string) -> Net_Client {
 		c: Net_Client
-		net_connect(&c, port, name)
+		net_connect(&c, 0, name, h = h)
 		c.pack_cache = cache
-		c.link.socket.conditions = {
-			loss       = 0.1,
-			duplicate  = 0.1,
-			latency_ms = 10,
-			jitter_ms  = 10,
-			seed       = seed,
-		}
 		return c
 	}
 
-	a := join(t, port, "alpha", cache, LOSS_SEED + 1)
+	a := join(&h, "alpha", cache)
 	defer net_close(&a)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed || cs[0].packs_error != ""
@@ -124,7 +115,7 @@ test_pack_transfer :: proc(t: ^testing.T) {
 		)
 	}
 	// A pack arrives whole the first time only.
-	b := join(t, port, "beta", cache, LOSS_SEED + 2)
+	b := join(&h, "beta", cache)
 	defer net_close(&b)
 	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed || cs[0].packs_error != ""

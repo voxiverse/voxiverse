@@ -62,26 +62,24 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		seed        = 4,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = 4,
 		listen      = true,
 		generator   = .Classic,
 		world_idle  = 0.5,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 	home := srv.home.address
 	away := game.address_derive(999)
 	@(static) want: game.Address
 
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -111,7 +109,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "alice never arrived")
 	testing.expect(t, alice.inventory == carried, "the inventory did not travel")
 	testing.expect(t, bob.address == home && bob.travels == 0)
-	testing.expect_value(t, stats(&srv).worlds, 2)
+	testing.expect_value(t, stats(srv).worlds, 2)
 
 	// She builds there.
 	feet := alice.update.state.position
@@ -143,7 +141,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "alice never came home")
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 1.5)
-	testing.expect_value(t, stats(&srv).worlds, 1)
+	testing.expect_value(t, stats(srv).worlds, 1)
 	away_regions :=
 		filepath.join(
 			{dir, WORLDS_DIR, game.address_dir(away), "regions"},
@@ -153,7 +151,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, len(entries) > 0, "the other world's edit was not saved in its directory")
 
 	// Back and forth: memory comes back each time the other world goes.
-	settled := stats(&srv).arena_used
+	settled := stats(srv).arena_used
 	for _ in 0 ..< 3 {
 		for target in ([]game.Address{away, home}) {
 			net_send(
@@ -178,8 +176,8 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		}
 		net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 1.5)
 	}
-	testing.expect_value(t, stats(&srv).worlds, 1)
-	used := stats(&srv).arena_used
+	testing.expect_value(t, stats(srv).worlds, 1)
+	used := stats(srv).arena_used
 	testing.expectf(
 		t,
 		used <= settled + settled / 10,

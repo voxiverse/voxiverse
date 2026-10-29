@@ -27,22 +27,19 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 		seed        = 21,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = 4,
 		listen      = true,
 		generator   = .Classic,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -135,7 +132,7 @@ test_chat_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "no rate limit")
 
 	// Kept with the world.
-	testing.expect(t, stop(&srv))
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	data, err := os.read_entire_file_from_path(
 		filepath.join({dir, COMMUNITY_FILE}, context.temp_allocator) or_else "",

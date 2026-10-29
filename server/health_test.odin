@@ -5,7 +5,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 import "../common/telemetry"
@@ -20,7 +19,6 @@ config :: proc(dir: string) -> Config {
 		rules           = rules,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true,
@@ -86,17 +84,18 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "health"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
+	defer if !stopped {harness_stop(&h)}
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
 	pause(t, {&a}, 0.3)
-	start_at := probe(&srv, "a")
+	start_at := probe(srv, "a")
 	testing.expect_value(t, start_at.health, f32(game.BASE_HEALTH))
 	ok = net_wait(
 		t,
@@ -106,7 +105,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "the client was not told its health")
 
 	// A fall of 8 blocks: 5 points.
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.player.position.y += 8
 		c.player.on_ground = false
 		c.player.velocity = {}
@@ -114,10 +113,10 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// (a slow runner takes a while to land: wait for the hurt, then for it to settle)
 	for _ in 0 ..< 40 {
 		pause(t, {&a}, 0.25)
-		if probe(&srv, "a").health < game.BASE_HEALTH {break}
+		if probe(srv, "a").health < game.BASE_HEALTH {break}
 	}
 	pause(t, {&a}, 0.5)
-	after := probe(&srv, "a")
+	after := probe(srv, "a")
 	testing.expectf(
 		t,
 		abs(after.health - (game.BASE_HEALTH - 5)) < 0.6,
@@ -133,19 +132,19 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "the client was not told it was hurt")
 	// A short fall costs nothing.
 	hurt := after.health
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.player.position.y += 2
 		c.player.on_ground = false
 	})
 	pause(t, {&a}, 1)
-	testing.expect_value(t, probe(&srv, "a").health, hurt)
+	testing.expect_value(t, probe(srv, "a").health, hurt)
 
 	// An explosion 3 blocks away, blast reach 8: (1 - 3/8) * 12 = 7.5.
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.health = c.max_health
 		explode(c.world, c.player.position + {3, 0.9, 0}, 4, world_act(c.world, .Explosion).action)
 	})
-	hit := probe(&srv, "a")
+	hit := probe(srv, "a")
 	testing.expectf(
 		t,
 		abs(hit.health - (game.BASE_HEALTH - 7.5)) < 1.2,
@@ -154,7 +153,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	)
 
 	// A mode without health (and invulnerable): nothing hurts.
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.health = c.max_health
 		creative, _ := game.mode_find(s.registry, "creative")
 		survival := c.mode
@@ -163,22 +162,23 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		set_game_mode(s, c, survival, {"test", ""})
 		c.health = c.max_health
 	})
-	testing.expect_value(t, probe(&srv, "a").health, f32(game.BASE_HEALTH))
+	pause(t, {&a}, 0.1) // (the tick that takes it in)
+	testing.expect_value(t, probe(srv, "a").health, f32(game.BASE_HEALTH))
 
 	// Death: full health at the spawn again, the inventory kept (keep_inventory).
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.player.position += {40, 0, 40}
 		damage(s, c, 100, {kind = .Command})
 	})
 	pause(t, {&a}, 0.5)
 	testing.expect(t, a.health.dead && a.deaths == 1, "the client was told it is dead")
-	testing.expect_value(t, probe(&srv, "a").health, f32(0))
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	testing.expect_value(t, probe(srv, "a").health, f32(0))
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		was_dead, first_respawn, second_respawn = c.dead, respawn(s, c), respawn(s, c)
 	})
 	testing.expect(t, was_dead && first_respawn && !second_respawn, "respawn works once")
 	pause(t, {&a}, 0.5)
-	died := probe(&srv, "a")
+	died := probe(srv, "a")
 	testing.expect_value(t, died.health, f32(game.BASE_HEALTH))
 	testing.expectf(
 		t,
@@ -189,21 +189,21 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, died.items > 0, "the inventory was dropped though keep_inventory is on")
 	// Without keep_inventory: dropped where they fell.
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		c.world.rules.keep_inventory = false
 		damage(s, c, 100, {kind = .Command})
 		c.world.rules.keep_inventory = true
 		respawn(s, c)
 	})
 	// (nothing of what they held: the survival kit's four weapons are what respawn gives)
-	testing.expect_value(t, probe(&srv, "a").items, 4)
+	testing.expect_value(t, probe(srv, "a").items, 4)
 
 	// Experience: 100 points of mining is level 2 (one level up, and only one).
-	xp0 := probe(&srv, "a").xp
-	with_client(&srv, "a", proc(s: ^Server, c: ^Client) {
+	xp0 := probe(srv, "a").xp
+	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		for _ in 0 ..< 100 {record(s, c, .Block_Mined, "stone")}
 	})
-	grown := probe(&srv, "a")
+	grown := probe(srv, "a")
 	testing.expect_value(t, grown.xp, xp0 + 100)
 	testing.expect_value(t, grown.level, level_of(xp0 + 100))
 	testing.expect(t, level_of(xp0 + 100) >= 2)
@@ -214,7 +214,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	testing.expect_value(t, level_of(300), 3)
 
 	// The events carry the causes; the log has them.
-	call(&srv, proc(s: ^Server, data: rawptr) {telemetry.sink_flush(&s.sink)}, nil)
+	call(srv, proc(s: ^Server, data: rawptr) {telemetry.sink_flush(&s.sink)}, nil)
 	log_text := read_log(dir)
 	testing.expect(
 		t,
@@ -230,18 +230,18 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	// Kept: the experience through save and load.
 	net_close(&a)
 	a = {}
-	time.sleep(100 * time.Millisecond)
-	expect_items_balanced(t, &srv)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	expect_items_balanced(t, srv)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped = false
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "a")
+	net_connect(&again, 0, "a", h = &h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
-	back := probe(&srv, "a")
+	back := probe(srv, "a")
 	testing.expect_value(t, back.xp, grown.xp)
 	testing.expect_value(t, back.level, grown.level)
 	free_all(context.temp_allocator)
@@ -266,11 +266,11 @@ read_log :: proc(dir: string) -> string {
 // and jump from the same inventory: common/game/physics_test.odin).
 @(test)
 test_worn_armor_raises_health :: proc(t: ^testing.T) {
-	srv: Server
-	if !testing.expect(t, start(&srv, config(""), {})) {return}
-	defer stop(&srv)
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config(""))) {return}
+	defer harness_stop(&h)
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	ok := net_wait(
 		t,

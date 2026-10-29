@@ -830,7 +830,7 @@ update_info :: proc(s: ^Server) {
 	netcode.host_set_info(&s.host, w.buf[:])
 }
 
-@(private = "file")
+@(private)
 publish_stats :: proc(s: ^Server, tick_ms, tick_cpu_ms: f32) {
 	playing := 0
 	for c in s.clients {if c.state == .Playing {playing += 1}}

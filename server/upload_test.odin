@@ -32,10 +32,10 @@ lake_text :: proc(dir: string) -> (text: string, files: int) {
 
 @(private = "file")
 play_a_little :: proc(t: ^testing.T, config: Config) -> bool {
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return false}
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return false}
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "alice")
+	net_connect(&a, 0, "alice", h = &h)
 	defer net_close(&a)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	net_send(&a, game.Chat{"hello"})
@@ -43,8 +43,8 @@ play_a_little :: proc(t: ^testing.T, config: Config) -> bool {
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
 	net_close(&a)
 	a = {}
-	time.sleep(100 * time.Millisecond)
-	stop(&srv) // the last pass: what was written goes
+	harness_step(&h, 4)
+	harness_stop(&h) // the last pass: what was written goes
 	return ok
 }
 
@@ -66,7 +66,6 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 		rules           = quiet_rules(),
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 2,
 		listen          = true,
 		allow_cheats    = true,

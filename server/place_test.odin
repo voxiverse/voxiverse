@@ -14,36 +14,34 @@ test_place_record :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	rules := quiet_rules()
-	srv: Server
+	h: Harness
+	srv := &h.srv
 	if !testing.expect(
 		t,
-		start(
-			&srv,
+		harness_start(
+			&h,
 			Config {
 				mode = "survival",
 				rules = rules,
 				seed = 1,
 				view_radius = 2,
 				view_height = 1,
-				workers = 2,
 				save_dir = dir,
 				max_players = 2,
 				listen = true,
 				generator = .Earth,
 				no_sheep = true,
 			},
-			{},
 		),
 	) {return}
-	defer stop(&srv)
-	for !srv.listening {}
+	defer harness_stop(&h)
 	gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
 	desert, found := worldgen.locate(&gen, .Desert, 0, 0, 8192)
 	ocean, found_ocean := worldgen.locate(&gen, .Ocean, 0, 0, 8192)
 	if !testing.expect(t, found && found_ocean, "the test seed has a desert and an ocean") {return}
 
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	if !testing.expect(
 		t,
@@ -74,7 +72,7 @@ test_place_record :: proc(t: ^testing.T) {
 			&m,
 		)
 	}
-	to(&srv, desert)
+	to(srv, desert)
 	ok := net_wait(
 		t,
 		{&a},
@@ -89,7 +87,7 @@ test_place_record :: proc(t: ^testing.T) {
 	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 1)
 	testing.expect_value(t, a.places, seen)
 	// Another biome: told again.
-	to(&srv, ocean)
+	to(srv, ocean)
 	ok = net_wait(
 		t,
 		{&a},
@@ -99,7 +97,7 @@ test_place_record :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "the client was not told the ocean")
 	testing.expect(t, a.places > seen)
 	// Death: told before they land at the spawn.
-	call(&srv, proc(s: ^Server, data: rawptr) {
+	call(srv, proc(s: ^Server, data: rawptr) {
 			if c := client_by_name(s, "a"); c != nil {damage(s, c, 1000, {kind = .Command})}
 		}, nil)
 	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].deaths == 1}, 5)

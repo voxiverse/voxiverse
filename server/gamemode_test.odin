@@ -25,14 +25,14 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 		mode        = "survival",
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		generator   = .Classic,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	testing.expect_value(t, srv.home.address, game.seed_glyphs(typed))
-	stop(&srv)
+	harness_stop(&h)
 	text := read_universe(dir)
 	testing.expect(
 		t,
@@ -50,10 +50,10 @@ test_universe_made_with_a_seed_and_a_mode :: proc(t: ^testing.T) {
 
 	// Opened as a creative one: the universe keeps what it was made as.
 	config.mode = "creative"
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	testing.expect_value(t, srv.config.mode, "survival")
 	srv.config.mode, srv.config.mode_changed = "creative", true
-	stop(&srv)
+	harness_stop(&h)
 	text = read_universe(dir)
 	testing.expect(t, strings.contains(text, "mode = creative"))
 	testing.expect(t, strings.contains(text, "mode_changed = true"))
@@ -90,7 +90,6 @@ test_rejoin_in_the_last_world :: proc(t: ^testing.T) {
 		seed        = 4,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = 4,
 		listen      = true,
@@ -101,11 +100,11 @@ test_rejoin_in_the_last_world :: proc(t: ^testing.T) {
 	@(static) want: game.Address
 	want = away
 	for round in 0 ..< 2 {
-		srv: Server
-		if !testing.expect(t, start(&srv, config, {})) {return}
-		for !srv.listening {}
+		h: Harness
+		srv := &h.srv
+		if !testing.expect(t, harness_start(&h, config)) {return}
 		alice: Net_Client
-		net_connect(&alice, srv.host.socket.port, "alice")
+		net_connect(&alice, 0, "alice", h = &h)
 		both := []^Net_Client{&alice}
 		ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed && cs[0].update.acked > 0
@@ -130,6 +129,6 @@ test_rejoin_in_the_last_world :: proc(t: ^testing.T) {
 			testing.expect(t, alice.address == away, "the second time, in the world she left")
 		}
 		net_close(&alice)
-		stop(&srv)
+		harness_stop(&h)
 	}
 }

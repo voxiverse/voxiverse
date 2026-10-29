@@ -52,41 +52,38 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	)
 	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
-	srv: Server
+	h: Harness
+	srv := &h.srv
 	if !testing.expect(
 		t,
-		start(
-			&srv,
+		harness_start(
+			&h,
 			Config {
 				seed = 22,
 				mode = "creative",
 				view_radius = 2,
 				view_height = 1,
-				workers = 1,
 				save_dir = dir,
 				max_players = 4,
 				listen = true,
 				generator = .Classic,
 			},
-			{},
 		),
 	) {return}
-	defer stop(&srv)
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer harness_stop(&h)
 	alice, bob, cy: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	defer net_close(&cy)
 	if !testing.expect(t, net_wait(t, {&alice, &bob}, joined), "never joined") {return}
 
-	lan_srv = &srv
+	lan_srv = srv
 	both := []^Net_Client{&alice, &bob}
 	// Off (the default role only): the guest has no commands nodes.
-	testing.expect(t, !may(&srv, "bob", "teleport.tp"))
-	testing.expect(t, may(&srv, "alice", "teleport.tp"))
+	testing.expect(t, !may(srv, "bob", "teleport.tp"))
+	testing.expect(t, may(srv, "alice", "teleport.tp"))
 	// Allow commands: the mod role, for the guest already in, at once.
 	net_send(&alice, game.Command{"rule guest_role mod"})
 	testing.expect(
@@ -99,7 +96,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		),
 		"bob has the mod role",
 	)
-	testing.expect(t, !may(&srv, "bob", "server.open_lan"), "mod is not admin")
+	testing.expect(t, !may(srv, "bob", "server.open_lan"), "mod is not admin")
 	net_send(&alice, game.Command{"rule guest_role default"})
 	testing.expect(
 		t,
@@ -127,7 +124,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		),
 		"the rule is set",
 	)
-	net_connect(&cy, port, "cy")
+	net_connect(&cy, 0, "cy", h = &h)
 	if !testing.expect(t, net_wait(t, {&alice, &cy}, joined), "cy never joined") {return}
 	testing.expect_value(t, cy.mode, "voxiverse:survival")
 	testing.expect_value(t, alice.mode, "voxiverse:creative") // (the host's own is theirs)
@@ -145,7 +142,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		),
 		"the port is shut",
 	)
-	testing.expect_value(t, base_rule(&srv, "guest_role"), "")
+	testing.expect_value(t, base_rule(srv, "guest_role"), "")
 }
 
 @(private = "file")

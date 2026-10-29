@@ -344,7 +344,6 @@ party :: proc(t: ^testing.T, size: int) {
 		mode        = "survival",
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = size,
 		listen      = true,

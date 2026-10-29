@@ -21,7 +21,6 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 		seed         = 4,
 		view_radius  = 2,
 		view_height  = 1,
-		workers      = 1,
 		allow_cheats = true,
 		save_dir     = dir,
 		generator    = .Classic,
@@ -29,13 +28,12 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 	@(static) want: f64
 	top: i32
 	{
-		pipe: game.Pipe
-		game.pipe_init(&pipe)
-		defer game.pipe_destroy(&pipe)
-		srv: Server
-		if !testing.expect(t, start(&srv, config, {&pipe, .Server})) {return}
+		h: Harness
+		srv := &h.srv
+		if !testing.expect(t, harness_start(&h, config, local = true)) {return}
 		c := Fake_Client {
-			endpoint = {&pipe, .Client},
+			endpoint = harness_local(&h),
+			stepper  = &h,
 			scratch  = new(game.Block_Array),
 		}
 		defer free(c.scratch)
@@ -70,17 +68,15 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 				for n in c.notices {if strings.has_prefix(n, "World spawn set") {return true}}
 				return false
 			}))
-		testing.expect(t, stop(&srv))
+		testing.expect(t, harness_stop(&h))
 	}
 	// Kept: a newcomer arrives there (exactly: in the air).
 	{
-		pipe: game.Pipe
-		game.pipe_init(&pipe)
-		defer game.pipe_destroy(&pipe)
-		srv: Server
-		if !testing.expect(t, start(&srv, config, {&pipe, .Server})) {return}
+		h: Harness
+		if !testing.expect(t, harness_start(&h, config, local = true)) {return}
 		c := Fake_Client {
-			endpoint = {&pipe, .Client},
+			endpoint = harness_local(&h),
+			stepper  = &h,
 			scratch  = new(game.Block_Array),
 		}
 		defer free(c.scratch)
@@ -89,6 +85,6 @@ test_spawn_and_landings :: proc(t: ^testing.T) {
 		fake_hello(t, &c, "newcomer")
 		testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 		testing.expect_value(t, c.welcome.spawn, [3]f64{5.5, f64(top + 20), 5.5})
-		testing.expect(t, stop(&srv))
+		testing.expect(t, harness_stop(&h))
 	}
 }

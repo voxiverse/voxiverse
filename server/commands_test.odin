@@ -70,22 +70,19 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 		seed        = 21,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = 8,
 		listen      = true,
 		generator   = .Classic,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -185,7 +182,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	net_send(&alice, game.Command{"ban bob griefing"})
 	expect_told(t, &alice, {}, "Banned bob for good")
 	again: Net_Client
-	net_connect(&again, port, "bob")
+	net_connect(&again, 0, "bob", h = &h)
 	defer net_close(&again)
 	ok = net_wait(
 		t,
@@ -196,7 +193,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	net_send(&alice, game.Command{"unban bob"})
 	expect_told(t, &alice, {}, "Unbanned bob")
 	back_again: Net_Client
-	net_connect(&back_again, port, "bob")
+	net_connect(&back_again, 0, "bob", h = &h)
 	defer net_close(&back_again)
 	ok = net_wait(
 		t,
@@ -214,7 +211,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, back_again.rejected, "Banned: spam")
 	carol: Net_Client
-	net_connect(&carol, port, "carol")
+	net_connect(&carol, 0, "carol", h = &h)
 	defer net_close(&carol)
 	ok = net_wait(
 		t,
@@ -224,7 +221,7 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, carol.rejected, "Banned for good: spam")
 
 	// Kept with the world.
-	testing.expect(t, stop(&srv))
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	data, err := os.read_entire_file_from_path(
 		filepath.join({dir, COMMUNITY_FILE}, context.temp_allocator) or_else "",

@@ -62,6 +62,9 @@ Pipe :: struct {
 	conditions: Conditions,
 	traffic:    [Side]Traffic, // by sender
 	trace:      Trace_Writer,
+	clock:      ^time.Tick, // the time the pipe reads (nil: the OS's; the harness gives its tick clock)
+	rng:        base.Rng, // the jitter's draws, once seeded (pipe_seed)
+	seeded:     bool,
 }
 
 @(private)
@@ -78,7 +81,7 @@ Endpoint :: struct {
 pipe_init :: proc(p: ^Pipe, allocator := context.allocator, loc := #caller_location) {
 	p^ = {
 		allocator = allocator,
-		start     = time.tick_now(),
+		start     = time.tick_now(), // (the trace's zero: wall time, never read by a test)
 	}
 	for &q in p.queues {base.queue_init(&q, allocator, loc)}
 	for &h in p.held {h = make([dynamic]In_Flight, allocator, loc)}
@@ -97,6 +100,17 @@ pipe_destroy :: proc(p: ^Pipe) {
 	}
 	for f in left {delete(f.packet, p.allocator)}
 	trace_close(&p.trace)
+}
+
+// pipe_seed makes the jitter a seeded sequence, the same on every run.
+pipe_seed :: proc(p: ^Pipe, seed: u64) {
+	sync.guard(&p.mutex)
+	p.rng, p.seeded = base.rng_make(seed), true
+}
+
+@(private)
+pipe_now :: proc(p: ^Pipe) -> time.Tick {
+	return p.clock^ if p.clock != nil else time.tick_now()
 }
 
 pipe_set_conditions :: proc(p: ^Pipe, c: Conditions) {
@@ -119,11 +133,13 @@ send :: proc(e: Endpoint, data: []u8) -> bool {
 	packet := make(Packet, len(data), p.allocator)
 	copy(packet, data)
 	to := other(e.side)
-	due := time.tick_now()
+	now := pipe_now(p)
+	due := now
 	{
 		sync.guard(&p.mutex)
 		c := p.conditions
-		delay := c.latency_ms + c.jitter_ms * rand.float32() // numbers: the pipe's simulated jitter
+		draw := base.rng_f32(&p.rng) if p.seeded else rand.float32() // numbers: the pipe's simulated jitter
+		delay := c.latency_ms + c.jitter_ms * draw // numbers: the pipe's simulated jitter
 		due = time.tick_add(due, time.Duration(f64(delay) * f64(time.Millisecond)))
 		// Bandwidth: a packet cannot arrive before the previous one plus its
 		// own transmission time. Never earlier than the previous: in order.
@@ -137,8 +153,7 @@ send :: proc(e: Endpoint, data: []u8) -> bool {
 		p.due[to] = due
 		p.traffic[e.side].messages[data[0]] += 1
 		p.traffic[e.side].bytes[data[0]] += len(data)
-		if p.trace.file !=
-		   nil {trace_write(&p.trace, time.tick_diff(p.start, time.tick_now()), e.side, data)}
+		if p.trace.file != nil {trace_write(&p.trace, time.tick_diff(p.start, now), e.side, data)}
 	}
 	if !base.queue_push(&p.queues[to], In_Flight{packet, due}) {
 		delete(packet, p.allocator)
@@ -152,7 +167,7 @@ receive :: proc(e: Endpoint, out: ^[dynamic]Packet) -> int {
 	p := e.pipe
 	held := &p.held[e.side]
 	base.queue_drain(&p.queues[e.side], held)
-	now := time.tick_now()
+	now := pipe_now(p)
 	n := 0
 	for n < len(held) && time.tick_diff(held[n].due, now) >= 0 {
 		append(out, held[n].packet)

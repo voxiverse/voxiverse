@@ -3,7 +3,6 @@ package server
 import "core:fmt"
 import "core:math"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -47,18 +46,17 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 		rules           = still,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
-	port := srv.host.socket.port
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a, b: Net_Client
-	net_connect(&a, port, "a")
-	net_connect(&b, port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	if !testing.expect(t, net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
@@ -82,16 +80,16 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 		fmt.tprintf("fill 7 %d -5 10 %d -2 water", y + 1, y + 2),
 	}
 	for c in commands {net_send(&a, game.Command{c})}
-	settle(t, &a, &b, 2 * time.Second)
+	settle(t, &a, &b, 2)
 	net_send(&a, game.Command{fmt.tprintf("fill 11 %d -5 11 %d -2 air", y + 1, y + 3)}) // the dam breaks
-	settle(t, &a, &b, 6 * time.Second)
+	settle(t, &a, &b, 6)
 
 	// Settled: the hash no longer moves; both players have the server's.
 	last: u64
 	for _ in 0 ..< 10 {
-		h, count := server_hash(t, &srv, &a)
-		if h == last && h == client_hash(&a) && stats(&srv).updates_waiting == 0 {
-			hb, _ := server_hash(t, &srv, &b)
+		h, count := server_hash(t, srv, &a)
+		if h == last && h == client_hash(&a) && stats(srv).updates_waiting == 0 {
+			hb, _ := server_hash(t, srv, &b)
 			testing.expectf(t, hb == client_hash(&b), "b's chunks differ from the server's")
 			testing.expect(t, count == len(a.chunks))
 			result.hash = h
@@ -99,7 +97,7 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 			break
 		}
 		last = h
-		settle(t, &a, &b, time.Second)
+		settle(t, &a, &b, 1)
 	}
 	for z in i32(-8) ..= 11 {
 		for x in i32(4) ..= 23 {
@@ -112,13 +110,8 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 
 // settle pumps both clients for a while.
 @(private = "file")
-settle :: proc(t: ^testing.T, a, b: ^Net_Client, d: time.Duration) {
-	end := time.tick_add(time.tick_now(), d)
-	for time.tick_diff(time.tick_now(), end) > 0 {
-		net_pump(t, a)
-		net_pump(t, b)
-		time.sleep(game.TICK_DURATION)
-	}
+settle :: proc(t: ^testing.T, a, b: ^Net_Client, seconds: f64) {
+	net_for(t, {a, b}, seconds)
 }
 
 // server_hash: the server's hash of the chunks c has (server.call), then c
@@ -137,10 +130,7 @@ server_hash :: proc(t: ^testing.T, srv: ^Server, c: ^Net_Client) -> (sum: u64, c
 			h := (^Hash)(data)
 			h.count, h.sum = chunks_hash_of(s, h.name)
 		}, &h)
-	for _ in 0 ..< 5 {
-		net_pump(t, c)
-		time.sleep(game.TICK_DURATION)
-	}
+	net_ticks(t, {c}, 5)
 	return h.sum, h.count
 }
 
@@ -162,16 +152,16 @@ test_water_flood :: proc(t: ^testing.T) {
 		generator       = .Classic,
 		view_radius     = 7, // the square's corners loaded too
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 2,
 		listen          = true,
 		everyone_cheats = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	if !testing.expect(
 		t,
@@ -200,16 +190,15 @@ test_water_flood :: proc(t: ^testing.T) {
 		net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].notices) >= 3}),
 		"the fills were not answered",
 	) {return}
-	time.sleep(4 * game.TICK_DURATION)
+	harness_step(&h, 4)
 	worst: f32
 	most := 0
-	end := time.tick_add(time.tick_now(), 8 * time.Second)
-	for time.tick_diff(time.tick_now(), end) > 0 {
+	for _ in 0 ..< 8 * game.TICK_RATE {
 		net_pump(t, &a)
-		st := stats(&srv)
+		harness_step(&h)
+		st := stats(srv)
 		worst = max(worst, st.tick_cpu_ms)
 		most = max(most, st.updates_waiting)
-		time.sleep(game.TICK_DURATION)
 	}
 	log_line := fmt.tprintf(
 		"water flood: slowest tick %.1f ms CPU, at most %d updates waiting (%v)",

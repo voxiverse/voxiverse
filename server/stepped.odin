@@ -7,13 +7,14 @@ package server
 // order. This is the reproducible form of the server: tests, the cross-OS job
 // and, later, replay use it.
 
-// step runs one tick on the caller's thread, frees the temp allocator, and
-// returns the tick's hash.
+// step runs one tick on the caller's thread, frees the temp allocator,
+// publishes the stats (timings zero) and returns the tick's hash.
 step :: proc(s: ^Server) -> State_Hash {
 	assert(s.config.stepped, "step needs a stepped server (Config.stepped)")
 	tick(s)
 	perturb(s) // (into what the tick left: a one-ulp change in a velocity is otherwise absorbed by the next tick's arithmetic)
 	hash := state_hash(s)
+	publish_stats(s, 0, 0) // (no clock: the timings are zero)
 	free_all(context.temp_allocator)
 	return hash
 }

@@ -44,26 +44,24 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 		dir := filepath.join({"build", "test", "kit_default"}, context.temp_allocator) or_else ""
 		os.remove_all(dir)
 		defer os.remove_all(dir)
-		srv: Server
+		h: Harness
 		config := Config {
 			rules           = quiet_rules(),
 			everyone_cheats = cheats,
 			seed            = 22,
 			view_radius     = 2,
 			view_height     = 1,
-			workers         = 1,
 			save_dir        = dir,
 			max_players     = 2,
 			listen          = true,
 			generator       = .Classic,
 			kit             = DEFAULT_KIT_TEXT,
 		}
-		if !testing.expect(t, start(&srv, config, {})) {return}
+		if !testing.expect(t, harness_start(&h, config)) {return}
 		stopped := false
-		defer if !stopped {stop(&srv)}
-		for !srv.listening {}
+		defer if !stopped {harness_stop(&h)}
 		a: Net_Client
-		net_connect(&a, srv.host.socket.port, "alice")
+		net_connect(&a, 0, "alice", h = &h)
 		defer net_close(&a)
 		if !testing.expect(
 			t,
@@ -96,6 +94,6 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			"cheats %v",
 			cheats,
 		)
-		stopped = stop(&srv)
+		stopped = harness_stop(&h)
 	}
 }

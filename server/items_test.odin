@@ -27,23 +27,21 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		seed        = 21,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		save_dir    = dir,
 		max_players = 4,
 		listen      = true,
 		generator   = .Classic,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	for !srv.listening {}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 
 	alice, bob: Net_Client
-	net_connect(&alice, port, "alice")
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
@@ -115,8 +113,8 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	net_close(&alice)
 	net_close(&bob)
 	alice, bob = {}, {}
-	expect_items_balanced(t, &srv)
-	testing.expect(t, stop(&srv))
+	expect_items_balanced(t, srv)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	for name in ([]string{"alice", "bob"}) {
 		path :=
@@ -131,11 +129,10 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 			) or_else ""
 		testing.expectf(t, os.exists(path), "%s not written", path)
 	}
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped = false
-	for !srv.listening {}
-	net_connect(&alice, srv.host.socket.port, "alice")
-	net_connect(&bob, srv.host.socket.port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	ok = net_wait(
 		t,
 		both,

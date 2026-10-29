@@ -3,7 +3,6 @@ package server
 import "core:os"
 import "core:path/filepath"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 
@@ -67,7 +66,6 @@ config :: proc(dir: string) -> Config {
 		rules = quiet_rules(),
 		view_radius = 3,
 		view_height = 2,
-		workers = 2,
 		max_players = 4,
 		listen = true,
 		everyone_cheats = true,
@@ -94,13 +92,14 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "breeding"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	srv: Server
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
+	defer if !stopped {harness_stop(&h)}
 	a, b: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
-	net_connect(&b, srv.host.socket.port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	both := []^Net_Client{&a, &b}
@@ -124,11 +123,11 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "the sheep never showed up") {return}
 
 	// A black sheep and a plain one (no recessive copies); wheat in hand (slot 3).
-	list := sheep_list(&srv)
+	list := sheep_list(srv)
 	black, plain := list[0], list[1]
 	black.genes, plain.genes = game.WOOL_BLACK, {}
-	sheep_set(&srv, black)
-	sheep_set(&srv, plain)
+	sheep_set(srv, black)
+	sheep_set(srv, plain)
 	wheat := game.item_of_material(.Wheat)
 	seq := u32(0)
 	req :: proc(a: ^Net_Client, seq: ^u32, kind: game.Inventory_Action_Kind, slot: int, arg := 0) {
@@ -154,7 +153,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			)},
 	)
 	if !testing.expect(t, ok, "no lamb") {return}
-	list = sheep_list(&srv)
+	list = sheep_list(srv)
 	testing.expect_value(t, len(list), 3)
 	lamb: Sheep_Info
 	for s in list {
@@ -180,7 +179,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.4)
 	net_send(&a, game.Use_Entity{lamb.id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.6)
-	list = sheep_list(&srv)
+	list = sheep_list(srv)
 	for s in list {
 		if s.id == lamb.id {
 			testing.expect(
@@ -201,10 +200,10 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	// A lamb cannot be shorn (nothing in hand but stone: slot 0), and cannot be fed to breed.
 	req(&a, &seq, .Select, 0, 0)
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
-	bring(&srv, lamb.id)
+	bring(srv, lamb.id)
 	net_send(&a, game.Use_Entity{lamb.id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.4)
-	for s in sheep_list(&srv) {if s.id == lamb.id {testing.expect(t, !s.shorn, "a lamb was shorn")}}
+	for s in sheep_list(srv) {if s.id == lamb.id {testing.expect(t, !s.shorn, "a lamb was shorn")}}
 	// The black sheep drops black wool (shorn on the server's thread, wool counted at once).
 	n := 0
 	Shear :: struct {
@@ -213,7 +212,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	}
 	shear := Shear{black.id, 0}
 	call(
-		&srv,
+		srv,
 		proc(s: ^Server, data: rawptr) {
 			d := (^Shear)(data)
 			c := client_by_name(s, "a")
@@ -235,24 +234,24 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 
 	// It grows up on time: 30 ticks short of it, a second later an adult.
 	lamb.growth = game.LAMB_TICKS - 30
-	sheep_set(&srv, lamb)
+	sheep_set(srv, lamb)
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 2)
-	for s in sheep_list(&srv) {if s.id == lamb.id {testing.expect(t, s.growth == game.LAMB_TICKS, "the lamb did not grow up")}}
+	for s in sheep_list(srv) {if s.id == lamb.id {testing.expect(t, s.growth == game.LAMB_TICKS, "the lamb did not grow up")}}
 	for _, f in b.sheep {testing.expect(t, .Lamb not_in f, "the lamb still looks small")}
 
 	// Kept: genes, growth, love and wait through save and load.
 	keep := Sheep_Info{plain.id, game.Genes{.Wool_A, .Coat_B}, 1234, 77, 4321, true}
-	sheep_set(&srv, keep)
+	sheep_set(srv, keep)
 	net_close(&a)
 	net_close(&b)
 	a, b = {}, {}
-	time.sleep(100 * time.Millisecond)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
-	if !testing.expect(t, start(&srv, config(dir), {})) {return}
+	if !testing.expect(t, harness_start(&h, config(dir))) {return}
 	stopped = false
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "a")
+	net_connect(&again, 0, "a", h = &h)
 	defer net_close(&again)
 	ok = net_wait(
 		t,
@@ -261,7 +260,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "the sheep did not come back")
 	found := false
-	for s in sheep_list(&srv) {
+	for s in sheep_list(srv) {
 		// (ids are new after loading: find it by what was set)
 		if s.genes == keep.genes && s.growth >= 1234 && s.growth < 1234 + 300 && s.shorn {
 			found = true

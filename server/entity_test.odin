@@ -5,7 +5,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 import "../common/netcode"
@@ -22,21 +21,19 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 		seed            = 21,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true, // summon, tp, time
 		save_dir        = dir,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 
 	near, far: Net_Client
-	net_connect(&near, port, "near")
-	net_connect(&far, port, "far")
+	net_connect(&near, 0, "near", h = &h)
+	net_connect(&far, 0, "far", h = &h)
 	defer net_close(&near)
 	defer net_close(&far)
 	ok := net_wait(
@@ -69,11 +66,11 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	start_at: [3]f64
 	for k, p in near.entities {id, start_at = k, p}
 	moved := false
-	deadline := time.tick_add(time.tick_now(), 20 * time.Second)
-	for !moved && time.tick_diff(time.tick_now(), deadline) > 0 {
+	for _ in 0 ..< 20 * game.TICK_RATE {
+		if moved {break}
 		net_pump(t, &near)
 		net_pump(t, &far)
-		time.sleep(game.TICK_DURATION)
+		harness_step(&h)
 		p := near.entities[id]
 		d := p - start_at
 		if math.sqrt(d.x * d.x + d.z * d.z) > 1 {moved = true}
@@ -100,8 +97,7 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 
 	// Out of reach: nothing happens.
 	net_send(&far, game.Attack{id, far.seq})
-	time.sleep(200 * time.Millisecond)
-	net_pump(t, &near)
+	net_for(t, {&near, &far}, 0.2)
 	testing.expect_value(t, near.hurt, 0)
 
 	// Near walks up and hits it four times: three flinches, then it dies,
@@ -135,8 +131,8 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "the rocket never showed up")
 	netcode.link_close(&near.link, "bye")
 	netcode.link_close(&far.link, "bye")
-	time.sleep(100 * time.Millisecond)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	saved, _ := os.read_entire_file_from_path(
 		filepath.join({home_dir(dir, 21), ENTITIES_FILE}, context.temp_allocator) or_else "",
@@ -144,11 +140,11 @@ test_entities_replicated_hit_and_saved :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, strings.contains(string(saved), "sheep"), "the sheep was not saved")
 	testing.expect(t, !strings.contains(string(saved), "rocket"), "a rocket in flight was saved")
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped = false
 	// Near comes back where it left, beside the saved sheep.
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "near")
+	net_connect(&again, 0, "near", h = &h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok, "the saved sheep did not come back")
@@ -163,16 +159,15 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 		generator       = .Classic, // grass near the spawn
 		view_radius     = 4,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 2,
 		listen          = true,
 		everyone_cheats = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	c: Net_Client
-	net_connect(&c, srv.host.socket.port, "watcher")
+	net_connect(&c, 0, "watcher", h = &h)
 	defer net_close(&c)
 	ok := net_wait(
 		t,
@@ -182,17 +177,17 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 	if !testing.expect(t, ok, "never landed") {return}
 	net_send(&c, game.Command{"time noon"})
 	most := 0
-	deadline := time.tick_add(time.tick_now(), 40 * time.Second)
-	for time.tick_diff(time.tick_now(), deadline) > 0 && len(c.entities) < 3 {
+	for _ in 0 ..< 40 * game.TICK_RATE {
+		if len(c.entities) >= 3 {break}
 		net_pump(t, &c)
 		most = max(most, len(c.entities))
-		time.sleep(game.TICK_DURATION)
+		harness_step(&h)
 	}
 	testing.expectf(t, len(c.entities) >= 1, "no sheep came in daylight (most seen %d)", most)
 	for _ in 0 ..< 60 {
 		net_pump(t, &c)
 		most = max(most, len(c.entities))
-		time.sleep(game.TICK_DURATION)
+		harness_step(&h)
 	}
 	testing.expectf(
 		t,

@@ -71,18 +71,15 @@ test_permissions_commands :: proc(t: ^testing.T) {
 		seed         = 3,
 		view_radius  = 2,
 		view_height  = 1,
-		workers      = 1,
 		allow_cheats = true,
 		save_dir     = dir,
 	}
 	{
-		pipe: game.Pipe
-		game.pipe_init(&pipe)
-		defer game.pipe_destroy(&pipe)
-		srv: Server
-		if !testing.expect(t, start(&srv, config, {&pipe, .Server})) {return}
+		h: Harness
+		if !testing.expect(t, harness_start(&h, config, local = true)) {return}
 		c := Fake_Client {
-			endpoint = {&pipe, .Client},
+			endpoint = harness_local(&h),
+			stepper  = &h,
 			scratch  = new(game.Block_Array),
 		}
 		defer free(c.scratch)
@@ -102,7 +99,7 @@ test_permissions_commands :: proc(t: ^testing.T) {
 			testing.expect_value(t, c.notices[3], "user: done")
 			testing.expect(t, strings.has_prefix(c.notices[5], "Usage: role"), c.notices[5])
 		}
-		testing.expect(t, stop(&srv))
+		testing.expect(t, harness_stop(&h))
 	}
 	// Saved, and read back.
 	s: Server

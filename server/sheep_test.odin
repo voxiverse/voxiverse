@@ -5,7 +5,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 
@@ -44,21 +43,20 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		seed            = 23,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
 		everyone_cheats = true,
 		save_dir        = dir,
 		no_sheep        = true, // (only the summoned one: natural ones spawn by day)
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 	a, b: Net_Client
-	net_connect(&a, port, "a")
-	net_connect(&b, port, "b")
+	net_connect(&a, 0, "a", h = &h)
+	net_connect(&b, 0, "b", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
 	both := []^Net_Client{&a, &b}
@@ -95,12 +93,12 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		ok && a.shorn[id] && b.shorn[id],
 		"the sheep was not shorn (or a client was not told)",
 	)
-	wool := wool_dropped(&srv, "a")
+	wool := wool_dropped(srv, "a")
 	testing.expectf(t, wool >= 1 && wool <= 3, "%d wool dropped", wool)
 	// Used again: nothing more.
 	net_send(&a, game.Use_Entity{id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
-	testing.expect_value(t, wool_dropped(&srv, "a"), wool)
+	testing.expect_value(t, wool_dropped(srv, "a"), wool)
 
 	// Too far to use: another sheep, and a player far from it.
 	// (Reach is judged by the server.)
@@ -115,9 +113,9 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 
 	// Kept: stop, read the file, start again.
-	netcode_close_both(&a, &b)
-	expect_items_balanced(t, &srv)
-	testing.expect(t, stop(&srv))
+	netcode_close_both(&h, &a, &b)
+	expect_items_balanced(t, srv)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
 	saved, _ := os.read_entire_file_from_path(
 		filepath.join({home_dir(dir, 23), ENTITIES_FILE}, context.temp_allocator) or_else "",
@@ -128,10 +126,10 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		strings.contains(string(saved), "sheep") && strings.contains(string(saved), "true"),
 		"shorn was not saved",
 	)
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped = false
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "a")
+	net_connect(&again, 0, "a", h = &h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {
 		for _, v in cs[0].shorn {if v {return true}}
@@ -141,11 +139,11 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 }
 
 @(private = "file")
-netcode_close_both :: proc(a, b: ^Net_Client) {
+netcode_close_both :: proc(h: ^Harness, a, b: ^Net_Client) {
 	net_close(a)
 	net_close(b)
 	a^, b^ = {}, {}
-	time.sleep(100 * time.Millisecond)
+	harness_step(h, 4)
 }
 
 // Grazing: a shorn sheep with its head down over grass eats it (the block
@@ -158,17 +156,17 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		generator       = .Classic,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 2,
 		listen          = true,
 		everyone_cheats = true,
 		no_sheep        = true, // (the test counts its own two: natural ones spawn by day)
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	defer net_close(&a)
 	if !testing.expect(t, net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) > 100
@@ -186,7 +184,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 	// A platform: grass on one half, stone on the other; two sheep on it,
 	// shorn, facing -z (their feet at y + 1).
 	call(
-		&srv,
+		srv,
 		proc(s: ^Server, data: rawptr) {
 			c := (^Case)(data)
 			w := client_by_name(s, "a").world
@@ -215,7 +213,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		},
 		&c,
 	)
-	time.sleep(2 * time.Second)
+	harness_step(&h, 2 * game.TICK_RATE)
 	Result :: struct {
 		c:           ^Case,
 		front_block: game.Block,
@@ -227,7 +225,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		c = &c,
 	}
 	call(
-		&srv,
+		srv,
 		proc(s: ^Server, data: rawptr) {
 			r := (^Result)(data)
 			w := client_by_name(s, "a").world
@@ -261,35 +259,35 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 		seed        = 24,
 		view_radius = 3,
 		view_height = 2,
-		workers     = 2,
 		max_players = 2,
 		listen      = true,
 		save_dir    = dir,
 		generator   = .Classic,
 		no_sheep    = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	a: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
+	net_connect(&a, 0, "a", h = &h)
 	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
 	net_close(&a)
 	a = {}
-	time.sleep(100 * time.Millisecond)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	testing.expect(t, harness_stop(&h))
 	path := filepath.join({home_dir(dir, 24), ENTITIES_FILE}, context.temp_allocator) or_else ""
 	old := "# Voxiverse entities\ncritter 4.5000 20.0000 4.5000 1.0000 4 false\n"
 	testing.expect(t, os.write_entire_file(path, transmute([]u8)old) == nil)
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	b: Net_Client
-	net_connect(&b, srv.host.socket.port, "a")
+	net_connect(&b, 0, "a", h = &h)
 	defer net_close(&b)
 	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
 	n := 0
-	call(&srv, proc(s: ^Server, data: rawptr) {
+	call(srv, proc(s: ^Server, data: rawptr) {
 			w := client_by_name(s, "a").world
 			for e in w.entities.list {
 				if e.kind == .Sheep && !e.shorn {(^int)(data)^ += 1}

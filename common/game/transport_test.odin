@@ -15,6 +15,9 @@ test_pipe_latency_and_order :: proc(t: ^testing.T) {
 	pipe: Pipe
 	pipe_init(&pipe)
 	defer pipe_destroy(&pipe)
+	clock: time.Tick // (the pipe's own time: the test moves it)
+	pipe.clock = &clock
+	pipe_seed(&pipe, 1)
 	client, server := Endpoint{&pipe, .Client}, Endpoint{&pipe, .Server}
 	got := make([dynamic]Packet)
 	defer delete(got)
@@ -23,7 +26,7 @@ test_pipe_latency_and_order :: proc(t: ^testing.T) {
 	pipe_set_conditions(&pipe, {latency_ms = 40, jitter_ms = 30})
 	for i in 0 ..< 20 {send(client, []u8{u8(i)})}
 	testing.expect_value(t, receive(server, &got), 0) // nothing is due yet
-	time.sleep(90 * time.Millisecond)
+	clock = time.tick_add(clock, 90 * time.Millisecond)
 	testing.expect_value(t, receive(server, &got), 20)
 	for p, i in got {testing.expectf(t, p[0] == u8(i), "out of order at %d", i)} 	// jitter keeps order
 
@@ -37,6 +40,8 @@ test_pipe_bandwidth :: proc(t: ^testing.T) {
 	pipe: Pipe
 	pipe_init(&pipe)
 	defer pipe_destroy(&pipe)
+	clock: time.Tick
+	pipe.clock = &clock
 	client, server := Endpoint{&pipe, .Client}, Endpoint{&pipe, .Server}
 	got := make([dynamic]Packet)
 	defer delete(got)
@@ -45,20 +50,11 @@ test_pipe_bandwidth :: proc(t: ^testing.T) {
 	// 5 x 1000 bytes at 50 KB/s: one every 20 ms.
 	pipe_set_conditions(&pipe, {bandwidth_kbps = 50})
 	big: [1000]u8
-	sent_at := time.tick_now()
 	for _ in 0 ..< 5 {send(client, big[:])}
-	time.sleep(30 * time.Millisecond)
-	early := receive(server, &got)
-	// The first is due at once, then one per 20 ms (however long we slept).
-	elapsed := time.duration_milliseconds(time.tick_since(sent_at))
-	testing.expectf(
-		t,
-		early >= 1 && f64(early) <= elapsed / 20 + 1,
-		"%d arrived after %.0f ms",
-		early,
-		elapsed,
-	)
-	time.sleep(100 * time.Millisecond)
+	clock = time.tick_add(clock, 30 * time.Millisecond)
+	// One every 20 ms: at 30 ms, the first only.
+	testing.expect_value(t, receive(server, &got), 1)
+	clock = time.tick_add(clock, 100 * time.Millisecond)
 	receive(server, &got)
 	testing.expect_value(t, len(got), 5)
 }

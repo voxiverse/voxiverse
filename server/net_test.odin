@@ -1,13 +1,11 @@
 package server
 
-import "core:fmt"
 import "core:math"
 import "core:net"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../common/game"
 import "../common/netcode"
@@ -19,6 +17,7 @@ import "../common/worldgen"
 @(private)
 Net_Client :: struct {
 	link:                        netcode.Link,
+	stepper:                     ^Harness, // net_wait steps this harness's ticks
 	name:                        string,
 	scratch:                     ^game.Block_Array,
 	arrays:                      game.Block_Arrays,
@@ -105,9 +104,16 @@ net_connect :: proc(
 	password := "",
 	capture := "",
 	sim: ^netcode.Simnet = nil,
+	h: ^Harness = nil,
 ) {
+	sim, port := sim, port
+	if h != nil {
+		// (on the harness's network, at the server's address, stepped by net_wait)
+		sim, port, c.stepper = &h.net, h.srv.host.socket.port, h
+	}
 	c.name = name
-	now := time.tick_now() if sim == nil else sim.now
+	assert(sim != nil, "net_connect needs a harness (h) or a simulated network (sim)")
+	now := sim.now
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
 	c.schema = game.game_schema()
@@ -417,13 +423,31 @@ net_wait :: proc(
 	done: proc(clients: []^Net_Client) -> bool,
 	seconds := 15.0,
 ) -> bool {
-	deadline := time.tick_add(time.tick_now(), time.Duration(seconds * f64(time.Second)))
-	for !done(clients) {
-		if time.tick_diff(time.tick_now(), deadline) < 0 {return false}
+	h := clients[0].stepper
+	assert(h != nil, "net_wait steps a harness: connect with net_connect(h = ...)")
+	// (ticks, not time: what a test waits for is the same on every machine)
+	for _ in 0 ..< int(seconds * game.TICK_RATE) {
+		if done(clients) {return true}
 		for c in clients {net_pump(t, c)}
-		time.sleep(game.TICK_DURATION / 2)
+		harness_step(h)
 	}
-	return true
+	return done(clients)
+}
+
+// net_for: the clients play on for `seconds` of the harness's ticks, whatever
+// happens (for what must not happen, or what needs a moment to settle).
+@(private)
+net_for :: proc(t: ^testing.T, clients: []^Net_Client, seconds: f64) {
+	net_ticks(t, clients, int(seconds * game.TICK_RATE + 0.5))
+}
+
+// net_ticks: n ticks of the harness, every client pumped before each.
+@(private)
+net_ticks :: proc(t: ^testing.T, clients: []^Net_Client, n: int) {
+	for _ in 0 ..< n {
+		for c in clients {net_pump(t, c)}
+		harness_step(clients[0].stepper)
+	}
 }
 
 // at_rest: on the ground and still, as of the server's last word.
@@ -452,25 +476,20 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		seed        = 21,
 		view_radius = 3,
 		view_height = 2,
-		workers     = 2,
 		save_dir    = dir,
 		max_players = 4,
 		listen      = true,
 		name        = "net test",
 	}
-	srv: Server
+	h: Harness
 	// No local player; listen on a free port.
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped := false
-	defer if !stopped {stop(&srv)}
-	sync_listen(&srv)
-	port := srv.host.socket.port
+	defer if !stopped {harness_stop(&h)}
 
 	alice, bob, impostor: Net_Client
-	net_connect(&alice, port, "alice", capture = "build/net_players.pcap")
-	// (for tools/wireshark/check.lua: VX_SERVER_PORT=$(cat build/net_players.port))
-	_ = os.write_entire_file("build/net_players.port", fmt.tprintf("%d", port))
-	net_connect(&bob, port, "bob")
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	ok := net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
@@ -501,7 +520,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.others[alice.welcome.player], "alice")
 
 	// The same name again is refused.
-	net_connect(&impostor, port, "alice")
+	net_connect(&impostor, 0, "alice", h = &h)
 	defer net_close(&impostor)
 	ok = net_wait(t, {&impostor, &alice, &bob}, proc(cs: []^Net_Client) -> bool {
 		return cs[0].rejected != ""
@@ -540,14 +559,13 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	// Saved by name: after a restart, each comes back where they were.
 	alice_at := alice.update.state.position
 	netcode.link_close(&alice.link, "bye")
-	time.sleep(100 * time.Millisecond)
-	testing.expect(t, stop(&srv))
+	harness_step(&h, 4)
+	testing.expect(t, harness_stop(&h))
 	stopped = true
-	if !testing.expect(t, start(&srv, config, {})) {return}
+	if !testing.expect(t, harness_start(&h, config)) {return}
 	stopped = false
-	sync_listen(&srv)
 	again: Net_Client
-	net_connect(&again, srv.host.socket.port, "bob")
+	net_connect(&again, 0, "bob", h = &h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
 	if testing.expect(t, ok) {
@@ -563,21 +581,13 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	_ = alice_at
 }
 
-// sync_listen waits for the server thread to be listening (start opens the
-// socket before the thread starts, so this is immediate; kept explicit).
-@(private = "file")
-sync_listen :: proc(s: ^Server) {
-	for !s.listening {time.sleep(time.Millisecond)}
-}
-
 // The seed of the loss, duplication and jitter draws of the test below: the
-// same seed, the same drops on each socket (the timing of the threads still
-// varies). A failure prints it; run again with
+// same seed, the same drops. A failure prints it; run again with
 // `./build.sh test -define:VX_LOSS_SEED=<n>` (try others to hunt).
 LOSS_SEED :: u64(#config(VX_LOSS_SEED, 7))
 
-// M7's exit check (the half a machine can do alone): two players over real
-// sockets with 10% loss, 10% duplication and jitter on every socket, both
+// M7's exit check (the half a machine can do alone): two players over a
+// simulated network with 10% loss, 10% duplication and jitter, both
 // ways. Every chunk each receives is exactly what the world generator
 // makes there; they see each other; an edit by one reaches the other.
 @(test)
@@ -594,27 +604,21 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		seed            = 31,
 		view_radius     = 3,
 		view_height     = 2,
-		workers         = 2,
 		max_players     = 4,
 		listen          = true,
-		conditions      = bad,
 		everyone_cheats = true,
 		no_sheep        = true, // (the summoned one is the only one: natural ones spawn by day, when the timing lets them)
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
-	port := srv.host.socket.port
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(t, harness_start(&h, config, conditions = bad)) {return}
+	defer harness_stop(&h)
 
 	a, b: Net_Client
-	net_connect(&a, port, "alpha")
-	net_connect(&b, port, "beta")
+	net_connect(&a, 0, "alpha", h = &h)
+	net_connect(&b, 0, "beta", h = &h)
 	defer net_close(&a)
 	defer net_close(&b)
-	a.link.socket.conditions = bad
-	a.link.socket.conditions.seed = LOSS_SEED + 1 // (each socket's own stream)
-	b.link.socket.conditions = bad
-	b.link.socket.conditions.seed = LOSS_SEED + 2
 	// The whole interest area, not just enough to land on.
 	@(static) want: int
 	want = game.interest_count(config.view_radius, config.view_height)
@@ -687,9 +691,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 			return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
 		}, 30)
 	if !testing.expect(t, ok, "the summoned sheep never reached both clients") {return}
-	call(&srv, proc(s: ^Server, data: rawptr) {s.host.socket.conditions = {}}, nil)
-	a.link.socket.conditions = {}
-	b.link.socket.conditions = {}
+	netcode.simnet_set_conditions(&h.net, {})
 	// Converged: a client's newest complete snapshot is recent, and what it
 	// holds is exactly what the server's sender recorded for that tick (the
 	// sender's ring is what the receiver holds if every part arrived), and what
@@ -706,14 +708,14 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 	look: Look
 	look.cs = {&a, &b}
 	look.ids = {a.welcome.player, b.welcome.player}
-	deadline := time.tick_add(time.tick_now(), 30 * game.TICK_DURATION + 5 * time.Second)
 	converged := false
-	for !converged && time.tick_diff(time.tick_now(), deadline) > 0 {
+	for _ in 0 ..< 30 + 5 * game.TICK_RATE {
+		if converged {break}
 		net_pump(t, &a)
 		net_pump(t, &b)
-		time.sleep(game.TICK_DURATION)
+		harness_step(&h)
 		call(
-			&srv,
+			srv,
 			proc(s: ^Server, data: rawptr) {
 				look := (^Look)(data)
 				for c, i in look.cs {
@@ -791,15 +793,14 @@ test_schema_mismatch_refused :: proc(t: ^testing.T) {
 		seed        = 32,
 		view_radius = 2,
 		view_height = 1,
-		workers     = 1,
 		max_players = 2,
 		listen      = true,
 	}
-	srv: Server
-	if !testing.expect(t, start(&srv, config, {})) {return}
-	defer stop(&srv)
+	h: Harness
+	if !testing.expect(t, harness_start(&h, config)) {return}
+	defer harness_stop(&h)
 	c: Net_Client
-	net_connect(&c, srv.host.socket.port, "stranger")
+	net_connect(&c, 0, "stranger", h = &h)
 	defer net_close(&c)
 	c.schema.hash += 1
 	ok := net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})

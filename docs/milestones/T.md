@@ -53,10 +53,42 @@ loss pattern.
 
 Full spec: [history.md](../history.md) (T3).
 
-## T4: the 32 threaded-server files move onto the harness
+## T4: the threaded-server files move onto the harness (done)
 
-Each moves onto T2, or, where it exists only to exercise real threads or sockets, to T6's
-smoke suite. Every `time.sleep` and polling wait in them goes.
+Full spec: [history.md](../history.md) (T4).
+
+## T4b: the tests that still sleep or read a clock
+
+T4 moved every test that starts a threaded `Server` and could run on the harness. What is
+left sleeps or reads a clock for a reason of its own; each moves onto a simulated form, or to
+T6's smoke suite (a package `smoke/`, which can use only the packages' public procs):
+
+- `server/upload_test.odin` and `server/collector/collector_test.odin`: a real UDP collector
+  and the server's wall-clock upload interval. The upload test goes to the smoke suite; the
+  collector's own logic (batches, forged and refused, the lake's files) is tested without
+  sleeping, on `netcode` over a `Simnet`, the collector's passes stepped by the test.
+- `server/lock_linux_test.odin`: a lock held by a child process (smoke).
+- `common/netcode/host_test.odin`, `conn_test.odin`: real loopback UDP with sleeps; move onto
+  `Simnet` (they test the host and link, not the OS), keeping one real-UDP round trip in smoke.
+- `common/telemetry/telemetry_test.odin`: the writer thread's drain (smoke) and the rest on a
+  stepped writer.
+- `client/audio/device_test.odin`, `stream_test.odin`, `client/platform/pad_uinput_test.odin`:
+  a real device, a decoder thread, a uinput device (smoke); the stream tests that wait for the
+  decoder thread run it inline, as the stepped server runs its chunk jobs.
+- `client/stats_test.odin`, `blast_test.odin`, `tour_test.odin`, `menus_test.odin`: the app
+  reads `time.tick_now()`/`time.now()` itself (a stats search throttle, the report's overlay
+  time, the tour's and the blast's phases): the app takes its time from one injectable clock
+  (as `Link` takes `now`), the tests move it.
+- `server/harness_test.odin` and `server/server_test.odin` call `start(&srv` on purpose, to
+  see it refuse (a simulated network without `stepped`, or with conditions). They call a
+  `harness_refused(config) -> bool` in `harness.odin` (not a test file) instead, so T6's lint
+  on `start(&srv` needs no exemption. (The second-server-on-one-port test already runs on a
+  `Simnet`'s port refusal and is a refusal of the same kind.)
+
+Exit: no `*_test.odin` outside `smoke/` calls `time.sleep`, `time.tick_now`, `time.now`,
+`tick_since` or `os.process_start`, or opens a thread or a real socket (a refusal expected
+from `start` is not a start); the smoke files are listed and each runs under
+`./build.sh smoke` once T6 adds it (until then, `odin test smoke`).
 
 ## T5: no timing in tests
 

@@ -6,10 +6,16 @@ import "../base"
 import "../common/game"
 
 // call runs procedure(s, data) on the server's thread at the start of its
-// next tick, and waits for it: how code beside an in-process server (the
-// game hosting its own world: checks, benchmarks) reaches into it safely.
+// next tick, and waits for it (a stepped server runs it at once): how code
+// beside an in-process server (the game hosting its own world: checks,
+// benchmarks) reaches into it safely.
 // Never over the network; never from the server's own thread.
 call :: proc(s: ^Server, procedure: proc(s: ^Server, data: rawptr), data: rawptr) {
+	if s.config.stepped {
+		// (no thread: the caller is between two steps, as the server's thread is between ticks)
+		procedure(s, data)
+		return
+	}
 	c := Server_Call {
 		procedure = procedure,
 		data      = data,
