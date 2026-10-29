@@ -110,6 +110,96 @@ source_lint :: proc() -> bool {
 	return ok
 }
 
+// lint_ci_test_names: every name in a `-define:ODIN_TEST_NAMES=pkg.test,...` of the workflow
+// is one of `tests` (as "pkg.test"): a step naming a test that is gone would run nothing and pass.
+lint_ci_test_names :: proc(path, text: string, tests: []string) -> []string {
+	found := make([dynamic]string)
+	line_no := 0
+	rest := text
+	KEY :: "ODIN_TEST_NAMES="
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		at := strings.index(line, KEY)
+		if at < 0 {continue}
+		list := line[at + len(KEY):]
+		if end := strings.index_any(list, " \t\"'"); end >= 0 {list = list[:end]}
+		for name in strings.split(list, ",", context.temp_allocator) {
+			exists := false
+			for t in tests {if t == name {exists = true}}
+			if !exists {
+				append(
+					&found,
+					fmt.aprintf(
+						"%s:%d: ODIN_TEST_NAMES names %s, which is not a test",
+						path,
+						line_no,
+						name,
+					),
+				)
+			}
+		}
+	}
+	return found[:]
+}
+
+// test_names lists every `@(test)` proc under the first-party directories (SOURCE_DIRS' roots, and smoke) as "pkg.name".
+test_names :: proc() -> (names: []string, ok: bool) {
+	out := make([dynamic]string)
+	ok = true
+	for dir in ([]string{"smoke", "common", "base", "client", "server", "dedicated", "tools"}) {
+		w := os.walker_create(dir)
+		defer os.walker_destroy(&w)
+		for info in os.walker_walk(&w) {
+			if info.type != .Regular || !strings.has_suffix(info.name, "_test.odin") {continue}
+			data, err := os.read_entire_file_from_path(info.fullpath, context.allocator)
+			if err != nil {
+				fmt.eprintfln("lint   %s: unreadable", info.fullpath)
+				ok = false
+				continue
+			}
+			append(&out, ..tests_in(string(data)))
+		}
+	}
+	return out[:], ok
+}
+
+// tests_in: "pkg.name" of each `@(test)` proc in one file's text.
+tests_in :: proc(text: string) -> []string {
+	out := make([dynamic]string)
+	pkg := ""
+	marked := false
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		l := strings.trim_space(line)
+		if strings.has_prefix(l, "package ") {pkg = strings.trim_space(l[len("package "):])}
+		if l == "@(test)" {marked = true; continue}
+		if marked {
+			if name, match, _ := strings.partition(l, " ::"); match != "" {
+				append(&out, fmt.aprintf("%s.%s", pkg, name))
+			}
+			marked = false
+		}
+	}
+	return out[:]
+}
+
+// ci_lint reads the workflow and checks the test names it runs.
+ci_lint :: proc() -> bool {
+	path := ".github/workflows/ci.yml"
+	data, err := os.read_entire_file_from_path(path, context.allocator)
+	if err != nil {
+		fmt.eprintfln("lint   %s: unreadable", path)
+		return false
+	}
+	tests, ok := test_names()
+	for msg in lint_ci_test_names(path, string(data), tests) {
+		fmt.eprintln(msg)
+		ok = false
+	}
+	if ok {fmt.println("lint   ci.yml names only existing tests")}
+	return ok
+}
+
 Literal_Call :: struct {
 	line: int,
 	call: string,

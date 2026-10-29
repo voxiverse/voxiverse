@@ -64,6 +64,10 @@ jobs:
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench chunks -check
+      # Telemetry's cost (M26, M29, T5): an event is a lock and a copy, and the
+      # writer keeps up; budgets for a slow runner.
+      - name: Benchmark check, telemetry
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench telemetry -check
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP on every platform; its numbers compare with nothing.
       - name: Server benchmark (smoke)
@@ -132,10 +136,6 @@ jobs:
       # other, nothing outlives a test: no thread, the same memory.
       - name: Optimized tests
         run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost,server.test_save_200_characters,server.test_audit_budget -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
-      # Telemetry's cost (M26, M29): an event is a lock and a copy, and the
-      # writer keeps up; optimized, with budgets for a slow runner.
-      - name: Event cost, optimized
-        run: odin test common/telemetry -o:speed -vet -strict-style -define:ODIN_TEST_NAMES=telemetry.test_event_cost -out:build/cost_test
 
   # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
   # under the validation layer, any validation finding, leak, sanitizer

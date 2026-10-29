@@ -78,7 +78,7 @@ on automatically and which reports GPU API misuse in the log.
 | `netdump`, `replay` | Print a network trace / replay its client messages against a fresh server (docs/debugging.md) |
 | `sfx` | Write every sound effect to `build/sounds/*.wav` |
 | `worldmap` | Draw a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation) |
-| `bench <scenario>` | Benchmark under fixed conditions: `chunks` (generation, light and meshing on one thread; `-check` as CI), `load`, `views`, `flight` (the game); results in `build/benchmarks/` |
+| `bench <scenario>` | Benchmark under fixed conditions: `chunks` (generation, light and meshing on one thread; `-check` as CI), `telemetry` (an event's emit and write cost; `-check` as CI), `load`, `views`, `flight` (the game); results in `build/benchmarks/` |
 | `trace` | Summarize a profile trace (`build/voxiverse.spall`) |
 | `perf` | Record the game, `server` or `bench` under Linux perf and print where the time went (`perf -- --exec "..."`) |
 | `package` | A release package for this platform in `build/dist/` (one executable each for the game and the server, README.txt, licences) |

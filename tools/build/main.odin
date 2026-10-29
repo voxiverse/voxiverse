@@ -447,7 +447,14 @@ check :: proc() -> bool {
 		}
 	}
 	ok = check_cross() && ok
-	return determinism_lint() && source_lint() && check_format() && check_no_binaries() && ok
+	return(
+		determinism_lint() &&
+		source_lint() &&
+		ci_lint() &&
+		check_format() &&
+		check_no_binaries() &&
+		ok \
+	)
 }
 
 // host_target is the Odin target this driver runs on, as -target: spells it.
@@ -857,13 +864,14 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
 		)
 		return false
 	}
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
+	if scenario == "telemetry" {return run_tool("bench", args)}
 	build_args := []string{"--release"}
 	smoke := false
 	for arg in args[1:] {

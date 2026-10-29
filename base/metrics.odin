@@ -44,6 +44,9 @@ Metric :: enum u8 {
 	Edit_Shown, // a bulk edit's chunks arriving to all their new meshes shown at once, ms
 	// The audio scenario: one value per block mixed.
 	Audio_Mix, // one 10 ms block of the 64-voice mix (audio.mix), ms
+	// The telemetry scenario: one value per event.
+	Telemetry_Emit, // emitting an event (a lock and a copy), us
+	Telemetry_Write, // the writer's work on an event (format and file), us
 }
 
 Metric_Info :: struct {
@@ -84,6 +87,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Load_Seconds     = {"load", "s", false},
 	.Edit_Shown       = {"edit_shown", "ms", false},
 	.Audio_Mix        = {"audio_mix", "ms", false},
+	.Telemetry_Emit   = {"telemetry_emit", "us", false},
+	.Telemetry_Write  = {"telemetry_write", "us", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)
