@@ -10,31 +10,6 @@ peak :: proc(out: []f32, channel: int) -> f32 {
 	return p
 }
 
-@(private = "file")
-new_mixer :: proc(rate: u32) -> ^Mixer {
-	m := new(Mixer)
-	mixer_init(m, rate)
-	return m
-}
-
-// mix_frames mixes that many frames (in blocks of the device's size) and
-// returns them; the caller deletes.
-@(private = "file")
-mix_frames :: proc(m: ^Mixer, frames: int) -> []f32 {
-	out := make([]f32, 2 * frames)
-	for at := 0; at < frames; at += 480 {
-		mix(m, out[2 * at:][:2 * min(480, frames - at)])
-	}
-	return out
-}
-
-@(private = "file")
-constant :: proc(n: int, v: f32) -> []f32 {
-	s := make([]f32, n)
-	for &x in s {x = v}
-	return s
-}
-
 // A sound plays once, at its pitch, through the gains it was given, and
 // stops at its end (everything arrives `latency` frames late, the limiter's
 // look-ahead).

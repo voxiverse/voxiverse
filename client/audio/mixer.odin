@@ -1005,7 +1005,7 @@ take_commands :: proc "contextless" (m: ^Mixer) {
 				kept += 1
 				continue
 			}
-			if rec != nil {capture_command(rec, m.clock, q.cmd)}
+			if rec != nil {capture_add(rec, {frame = m.clock, cmd = q.cmd})}
 			apply_command(m, q.cmd)
 		}
 		applied := m.held_n - kept

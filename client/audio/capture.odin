@@ -173,9 +173,9 @@ capture_ring_save :: proc(m: ^Mixer, path: string) -> bool {
 }
 
 // capture_ring_bytes is capture_ring_save into memory: the file's bytes (nil
-// if there is nothing to write yet), in `allocator`. newest: from the newest
-// state (see capture_encode).
-capture_ring_bytes :: proc(m: ^Mixer, newest := false, allocator := context.allocator) -> []byte {
+// if there is nothing to write yet), in `allocator`, from the newest state
+// (see capture_encode).
+capture_ring_bytes :: proc(m: ^Mixer, allocator := context.allocator) -> []byte {
 	c := sync.atomic_exchange(&m.capture, nil)
 	if c == nil {return nil}
 	if !c.ring {
@@ -183,7 +183,7 @@ capture_ring_bytes :: proc(m: ^Mixer, newest := false, allocator := context.allo
 		return nil
 	}
 	time.sleep(5 * time.Millisecond)
-	data := capture_encode(m, c, allocator, newest)
+	data := capture_encode(m, c, allocator, newest = true)
 	c.next_snap = 0
 	c.valid_from = sync.atomic_load(&c.snaps)
 	sync.atomic_store(&m.capture, c)
@@ -293,11 +293,6 @@ state_valid :: proc(s: ^Mixer_State, sounds: int) -> bool {
 		li.group < 8 &&
 		li.tail - li.head <= LIMITER_MAX \
 	)
-}
-
-@(private)
-capture_command :: proc "contextless" (c: ^Capture, frame: u64, cmd: Command) {
-	capture_add(c, {frame = frame, cmd = cmd})
 }
 
 @(private)

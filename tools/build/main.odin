@@ -1006,13 +1006,7 @@ perf_record :: proc(args: []string) -> bool {
 	}
 }
 
-// capture executes cmd and returns its stdout; ok is false if it failed or
-// couldn't start (silently: callers decide whether that is an error).
-capture :: proc(cmd: []string) -> (output: string, ok: bool) {
-	state, stdout, _, err := os.process_exec(os.Process_Desc{command = cmd}, context.allocator)
-	if err != nil {return "", false}
-	return string(stdout), state.exited && state.exit_code == 0
-}
+capture :: limited.capture
 
 exe_suffix :: proc() -> string {
 	return ".exe" when ODIN_OS == .Windows else ""

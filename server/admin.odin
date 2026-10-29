@@ -464,7 +464,7 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, structure_list(s))
 	case "save":
 		// save <name> [x1 y1 z1 x2 y2 z2] [clear]
-		if len(args) < 2 || !structure_name_valid(args[1]) {return false}
+		if len(args) < 2 || !short_name_valid(args[1]) {return false}
 		rest := args[2:]
 		clear := len(rest) > 0 && rest[len(rest) - 1] == "clear"
 		if clear {rest = rest[:len(rest) - 1]}
@@ -474,7 +474,7 @@ admin_structure :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		notice(s, c, structure_save(c.world, args[1], box.lo, box.hi, clear))
 	case "paste":
 		// paste <name> [x y z] [turns]
-		if len(args) < 2 || !structure_name_valid(args[1]) {return false}
+		if len(args) < 2 || !short_name_valid(args[1]) {return false}
 		rest := args[2:]
 		turns := 0
 		if len(rest) == 1 || len(rest) == 4 {
@@ -636,7 +636,7 @@ admin_role :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		)
 		return true
 	}
-	if len(args) < 2 || !role_name_valid(args[1]) {return false}
+	if len(args) < 2 || !short_name_valid(args[1]) {return false}
 	switch args[0] {
 	case "delete":
 		if len(args) != 2 {return false}
@@ -651,7 +651,7 @@ admin_role :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		r := role_get(p, args[1])
 		list_set(&r.grants, args[2], args[0] == "grant")
 	case "inherit", "uninherit":
-		if len(args) != 3 || !role_name_valid(args[2]) || args[1] == args[2] {return false}
+		if len(args) != 3 || !short_name_valid(args[2]) || args[1] == args[2] {return false}
 		r := role_get(p, args[1])
 		list_set(&r.inherits, args[2], args[0] == "inherit")
 	case "meta":
@@ -680,7 +680,7 @@ admin_user :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 		notice(s, c, fmt.tprintf("%s: roles %v; grants %v", args[1], pl.roles[:], pl.grants[:]))
 	case "role":
-		if len(args) != 4 || !game.name_valid(args[2]) || !role_name_valid(args[3]) {return false}
+		if len(args) != 4 || !game.name_valid(args[2]) || !short_name_valid(args[3]) {return false}
 		if args[1] != "add" && args[1] != "remove" {return false}
 		list_set(&player_perms(p, args[2]).roles, args[3], args[1] == "add")
 	case "grant", "revoke":

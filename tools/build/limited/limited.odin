@@ -36,8 +36,8 @@ run_limited :: proc(cmd: []string, limit: time.Duration) -> Run_Result {
 	return .Timed_Out
 }
 
-// capture runs a command and returns what it printed (to stdout).
-@(private)
+// capture executes cmd and returns its stdout; ok is false if it failed or
+// couldn't start (silently: callers decide whether that is an error).
 capture :: proc(cmd: []string) -> (output: string, ok: bool) {
 	state, stdout, _, err := os.process_exec(os.Process_Desc{command = cmd}, context.allocator)
 	if err != nil {return "", false}

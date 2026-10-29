@@ -92,7 +92,7 @@ Frozen :: struct {
 // inspect_freeze takes the window and replays it. nil if the ring holds
 // nothing yet, is not running, or the window does not parse.
 inspect_freeze :: proc(live: ^Mixer) -> ^Frozen {
-	bytes := capture_ring_bytes(live, true)
+	bytes := capture_ring_bytes(live)
 	if bytes == nil {return nil}
 	fz := new(Frozen)
 	fz.live, fz.bytes = live, bytes

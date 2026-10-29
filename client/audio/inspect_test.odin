@@ -53,13 +53,6 @@ rig_run :: proc(r: Rig) {
 	}
 }
 
-@(private = "file")
-level :: proc(x: []f32) -> f64 {
-	sum: f64
-	for v in x {sum += f64(v) * f64(v)}
-	return math.sqrt(sum / f64(max(len(x), 1)))
-}
-
 @(test)
 test_inspect_freeze_lists_voices_and_replays :: proc(t: ^testing.T) {
 	r := rig_new()
@@ -71,7 +64,7 @@ test_inspect_freeze_lists_voices_and_replays :: proc(t: ^testing.T) {
 	defer inspect_destroy(fz)
 	testing.expect_value(t, len(fz.voices), 2)
 	testing.expect_value(t, len(fz.loop), 2 * 24000)
-	testing.expect(t, level(fz.loop) > 0.01, "the loop has the mix in it")
+	testing.expect(t, rms(fz.loop) > 0.01, "the loop has the mix in it")
 	buses: bit_set[Bus]
 	for v in fz.voices {buses += {v.bus}}
 	testing.expect(t, buses == {.Ambience, .Effects})
@@ -95,10 +88,10 @@ test_inspect_solo_and_mute :: proc(t: ^testing.T) {
 		return
 	}
 	defer inspect_destroy(fz)
-	all := level(fz.loop)
+	all := rms(fz.loop)
 	// Solo the bell's bus: the tone goes, the bell stays.
 	testing.expect(t, inspect_pick(fz, {mode = .Solo, bus = .Effects}))
-	solo := level(fz.loop)
+	solo := rms(fz.loop)
 	testing.expect(t, solo > 0 && solo < all, "solo of Effects is quieter than all")
 	for v in fz.voices {testing.expect_value(t, v.heard, v.bus == .Effects)}
 	testing.expect_value(t, fz.an.peak[.Ambience], 0)
@@ -112,7 +105,7 @@ test_inspect_solo_and_mute :: proc(t: ^testing.T) {
 	for v in fz.voices {testing.expect_value(t, v.heard, v.id == id)}
 	// Off: back to the whole.
 	testing.expect(t, inspect_pick(fz, {}))
-	testing.expect_value(t, level(fz.loop), all)
+	testing.expect_value(t, rms(fz.loop), all)
 }
 
 @(test)

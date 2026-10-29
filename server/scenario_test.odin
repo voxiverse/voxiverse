@@ -144,7 +144,7 @@ mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
 				feet_of(m.prediction.state.position) + s.off,
 				b,
 			)
-			mirror_set_block(m, e.pos, e.block) // predicted
+			mirror_set(m, e.pos, e.block) // predicted
 			mirror_send(m, e)
 		case .Use:
 			mirror_send(
@@ -171,13 +171,6 @@ mirror_op :: proc(data: rawptr, msg: game.Input, in_: game.Player_Input) {
 		}
 	}
 	clear(&r.queue)
-}
-
-@(private = "file")
-mirror_set_block :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
-	if blocks, ok := &m.chunks[game.chunk_of(p)]; ok {
-		game.chunk_set(blocks, &m.arrays, game.local_of(p), b)
-	}
 }
 
 // bot_op: a bot's step, sent now.

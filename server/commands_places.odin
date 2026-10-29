@@ -24,12 +24,6 @@ Tpa :: struct {
 // TPA_TIMEOUT: ticks a request waits for an answer (2 minutes).
 TPA_TIMEOUT :: 120 * game.TICK_RATE
 
-// place_name_valid: a home's or warp's name.
-@(private)
-place_name_valid :: proc(name: string) -> bool {
-	return role_name_valid(name) // (lowercase letters, digits, _ and -)
-}
-
 @(private)
 place_of :: proc(c: ^Client) -> Place {
 	return {c.world.address, c.player.position, c.look}
@@ -56,7 +50,7 @@ names_text :: proc(m: map[string]Place) -> string {
 @(private)
 admin_sethome :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	name := args[0] if len(args) > 0 else "home"
-	if !place_name_valid(name) {return false}
+	if !short_name_valid(name) {return false}
 	m := member_get(&s.community, client_name(c))
 	if name not_in m.homes {
 		if most, ok := strconv.parse_int(meta_of(&s.perms, client_name(c), "max_homes"));
@@ -141,7 +135,7 @@ admin_warps :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private)
 admin_setwarp :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	if !place_name_valid(args[0]) {return false}
+	if !short_name_valid(args[0]) {return false}
 	place_set(&s.community.warps, args[0], place_of(c))
 	notice(s, c, fmt.tprintf("Warp %s set", args[0]))
 	return true

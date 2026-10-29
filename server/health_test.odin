@@ -247,20 +247,6 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-@(private = "file")
-read_log :: proc(dir: string) -> string {
-	infos, _ := os.read_all_directory_by_path(
-		filepath.join({dir, "telemetry"}, context.temp_allocator) or_else "",
-		context.temp_allocator,
-	)
-	b := strings.builder_make(context.temp_allocator)
-	for info in infos {
-		data, _ := os.read_entire_file_from_path(info.fullpath, context.temp_allocator)
-		strings.write_string(&b, string(data))
-	}
-	return strings.to_string(b)
-}
-
 // What a player wears changes their health: the server derives it from the
 // worn armor and tells the client (the client's prediction derives the speed
 // and jump from the same inventory: common/game/physics_test.odin).

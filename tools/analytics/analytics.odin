@@ -200,8 +200,8 @@ faucets :: proc(events: []Event) -> string {
 	return strings.to_string(b)
 }
 
-// slowest: the worst server minutes (tick_summary) and client frame p99s.
-slowest :: proc(events: []Event, n := 5) -> string {
+// slowest: the five worst server minutes (tick_summary) and client frame p99s.
+slowest :: proc(events: []Event) -> string {
 	Row :: struct {
 		t:     i64,
 		pid:   string,
@@ -219,7 +219,7 @@ slowest :: proc(events: []Event, n := 5) -> string {
 	}
 	slice.sort_by(rows[:], proc(a, b: Row) -> bool {return a.value > b.value})
 	b := strings.builder_make(context.temp_allocator)
-	for r in rows[:min(n, len(rows))] {fmt.sbprintfln(&b, "  %-14s %8.0f  pid %s  t %d", r.kind, r.value, r.pid, r.t)}
+	for r in rows[:min(5, len(rows))] {fmt.sbprintfln(&b, "  %-14s %8.0f  pid %s  t %d", r.kind, r.value, r.pid, r.t)}
 	return strings.to_string(b)
 }
 

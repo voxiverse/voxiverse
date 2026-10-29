@@ -84,37 +84,6 @@ effects_scene :: proc() -> []f32 {
 	return mono
 }
 
-// fft: in-place radix-2 on re, im (length a power of two).
-@(private = "file")
-fft :: proc(re, im: []f64) {
-	n := len(re)
-	j := 0
-	for i in 1 ..< n {
-		bit := n >> 1
-		for ; j & bit != 0; bit >>= 1 {j ~= bit}
-		j ~= bit
-		if i < j {
-			re[i], re[j] = re[j], re[i]
-			im[i], im[j] = im[j], im[i]
-		}
-	}
-	for size := 2; size <= n; size <<= 1 {
-		ang := -2 * math.PI / f64(size)
-		wr, wi := math.cos(ang), math.sin(ang)
-		for start := 0; start < n; start += size {
-			cr, ci := 1.0, 0.0
-			for k in 0 ..< size / 2 {
-				a, b := start + k, start + k + size / 2
-				tr := re[b] * cr - im[b] * ci
-				ti := re[b] * ci + im[b] * cr
-				re[b], im[b] = re[a] - tr, im[a] - ti
-				re[a], im[a] = re[a] + tr, im[a] + ti
-				cr, ci = cr * wr - ci * wi, cr * wi + ci * wr
-			}
-		}
-	}
-}
-
 // third_octaves: dB (power) in each of SPECTRUM_BANDS bands from 50 Hz.
 @(private = "file")
 third_octaves :: proc(x: []f32) -> (bands: [SPECTRUM_BANDS]f64) {
@@ -124,7 +93,7 @@ third_octaves :: proc(x: []f32) -> (bands: [SPECTRUM_BANDS]f64) {
 	im := make([]f64, n)
 	defer {delete(re); delete(im)}
 	for v, i in x {re[i] = f64(v)}
-	fft(re, im)
+	audio.fft(re, im)
 	for b in 0 ..< SPECTRUM_BANDS {
 		centre := 50 * math.pow(2, f64(b) / 3)
 		lo := int(centre / math.pow(2, 1.0 / 6) * f64(n) / SPECTRUM_RATE)

@@ -7,33 +7,10 @@ import "core:testing"
 // windowed-sinc resampler, scheduled starts and the listener's options.
 
 @(private = "file")
-engine :: proc(rate: u32) -> ^Mixer {
-	m := new(Mixer)
-	mixer_init(m, rate)
-	return m
-}
-
-@(private = "file")
-render :: proc(m: ^Mixer, frames: int, block := 480) -> []f32 {
-	out := make([]f32, 2 * frames)
-	for at := 0; at < frames; at += block {
-		mix(m, out[2 * at:][:2 * min(block, frames - at)])
-	}
-	return out
-}
-
-@(private = "file")
 tone :: proc(n: int, rate, hz, amp: f64, phase := 0.0) -> []f32 {
 	s := make([]f32, n)
 	for i in 0 ..< n {s[i] = f32(amp * math.sin(2 * math.PI * hz * f64(i) / rate + phase))}
 	return s
-}
-
-@(private = "file")
-rms :: proc(x: []f32) -> f64 {
-	sum: f64
-	for v in x {sum += f64(v) * f64(v)}
-	return math.sqrt(sum / f64(max(len(x), 1)))
 }
 
 // true_peak measures a mono signal independently of the limiter's own
@@ -338,13 +315,13 @@ test_resample_sound :: proc(t: ^testing.T) {
 // tone at the right pitch comes out.
 @(test)
 test_mixer_rate_conversion :: proc(t: ^testing.T) {
-	m := engine(48000)
+	m := new_mixer(48000)
 	defer free(m)
 	s := tone(44100, 44100, 1000, 0.4)
 	defer delete(s)
 	id := add_sound(m, {samples = s, rate = 44100})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1})
-	out := render(m, 40000)
+	out := mix_frames(m, 40000)
 	defer delete(out)
 	left := make([]f32, 30000)
 	defer delete(left)
@@ -359,7 +336,7 @@ test_mixer_rate_conversion :: proc(t: ^testing.T) {
 test_scheduled_start :: proc(t: ^testing.T) {
 	hour := u64(3600 * 48000)
 	for block in ([]int{480, 1000, 97, 2048}) {
-		m := engine(48000)
+		m := new_mixer(48000)
 		defer free(m)
 		m.clock = hour
 		m.stats.frames = hour
@@ -371,7 +348,7 @@ test_scheduled_start :: proc(t: ^testing.T) {
 		for s in starts {
 			play(m, {sound = id, gain = {1, 1}, pitch = 1, start_frame = s})
 		}
-		out := render(m, 12000, block)
+		out := mix_frames(m, 12000, block)
 		defer delete(out)
 		testing.expect_value(t, clock(m), hour + 12000)
 		late := latency(m)
@@ -404,25 +381,18 @@ test_scheduled_start :: proc(t: ^testing.T) {
 		testing.expect_value(t, stats.played, 4)
 	}
 	// In the past: starts with the next mix.
-	m := engine(48000)
+	m := new_mixer(48000)
 	defer free(m)
 	m.clock = hour
-	tick := constant_sound(2000, 0.25)
+	tick := constant(2000, 0.25)
 	defer delete(tick)
 	id := add_sound(m, {samples = tick, rate = 48000})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1, start_frame = hour - 50})
-	out := render(m, 480)
+	out := mix_frames(m, 480)
 	defer delete(out)
 	testing.expect_value(t, stats(m).late, 1)
 	late := latency(m)
 	testing.expectf(t, abs(out[2 * (late + 10)] - 0.25) < 1e-6, "late start heard")
-}
-
-@(private = "file")
-constant_sound :: proc(n: int, v: f32) -> []f32 {
-	s := make([]f32, n)
-	for &x in s {x = v}
-	return s
 }
 
 // A bus that sends to the reverb is heard after the sound ends; one that does
@@ -430,7 +400,7 @@ constant_sound :: proc(n: int, v: f32) -> []f32 {
 @(test)
 test_mixer_reverb_send :: proc(t: ^testing.T) {
 	for send in ([]f32{0, 0.5}) {
-		m := engine(48000)
+		m := new_mixer(48000)
 		defer free(m)
 		burst := tone(2400, 48000, 800, 0.3)
 		defer delete(burst)
@@ -438,7 +408,7 @@ test_mixer_reverb_send :: proc(t: ^testing.T) {
 		set_reverb(m, 1.5, 0.3, 1, 0.5)
 		set_bus_reverb(m, .Effects, send)
 		play(m, {sound = id, gain = {1, 1}, pitch = 1})
-		out := render(m, 48000)
+		out := mix_frames(m, 48000)
 		defer delete(out)
 		tail := rms(out[2 * 9600:][:2 * 9600])
 		if send == 0 {
@@ -449,7 +419,7 @@ test_mixer_reverb_send :: proc(t: ^testing.T) {
 		testing.expect_value(t, stats(m).nan_guarded, 0)
 	}
 	// The tail dies out and the mixer stops running the reverb.
-	m := engine(48000)
+	m := new_mixer(48000)
 	defer free(m)
 	burst := tone(480, 48000, 800, 0.3)
 	defer delete(burst)
@@ -458,7 +428,7 @@ test_mixer_reverb_send :: proc(t: ^testing.T) {
 	set_bus_reverb(m, .Effects, 1)
 	play(m, {sound = id, gain = {1, 1}, pitch = 1})
 	set_bus_reverb(m, .Effects, 0)
-	out := render(m, 96000)
+	out := mix_frames(m, 96000)
 	defer delete(out)
 	testing.expectf(t, m.reverb.tail == 0, "reverb still running: %v", m.reverb.tail)
 }
@@ -467,14 +437,14 @@ test_mixer_reverb_send :: proc(t: ^testing.T) {
 @(test)
 test_listener_options :: proc(t: ^testing.T) {
 	rate :: 48000
-	m := engine(rate)
+	m := new_mixer(rate)
 	defer free(m)
-	s := constant_sound(20000, 0.3)
+	s := constant(20000, 0.3)
 	defer delete(s)
 	id := add_sound(m, {samples = s, rate = rate})
 	play(m, {sound = id, gain = {1, 0.5}, pitch = 1, loop = true})
 	set_listener(m, {swap = true})
-	out := render(m, 8000)
+	out := mix_frames(m, 8000)
 	defer delete(out)
 	late := latency(m)
 	testing.expectf(
@@ -485,13 +455,13 @@ test_listener_options :: proc(t: ^testing.T) {
 	)
 	testing.expectf(t, abs(out[2 * (5000 + late) + 1] - 0.3) < 1e-4, "swapped right")
 	set_listener(m, {mono = true})
-	out2 := render(m, 8000)
+	out2 := mix_frames(m, 8000)
 	defer delete(out2)
 	testing.expectf(t, abs(out2[2 * 6000] - 0.225) < 1e-4, "mono: %v", out2[2 * 6000])
 	testing.expect_value(t, out2[2 * 6000], out2[2 * 6000 + 1])
 	// Cross-feed keeps a centered signal's level and moves some of the lows across.
 	set_listener(m, {crossfeed = 0.4})
-	out3 := render(m, 8000)
+	out3 := mix_frames(m, 8000)
 	defer delete(out3)
 	l, r := out3[2 * 7000], out3[2 * 7000 + 1]
 	testing.expectf(t, abs(l - (0.3 + 0.4 * 0.15) / 1.4) < 1e-3, "cross-fed left %v", l)
@@ -509,29 +479,29 @@ test_listener_ceiling_and_night :: proc(t: ^testing.T) {
 		return p
 	}
 	// A safety ceiling of -12 dBFS: nothing above 0.2512, not even the first frames.
-	m := engine(rate)
+	m := new_mixer(rate)
 	defer free(m)
 	id := add_sound(m, {samples = s, rate = rate})
 	set_listener(m, {ceiling_db = -12})
 	play(m, {sound = id, gain = {1, 1}, pitch = 1})
-	out := render(m, rate * 2)
+	out := mix_frames(m, rate * 2)
 	defer delete(out)
 	p := peak_of(out)
 	testing.expectf(t, p <= 0.2512 * 1.001, "ceiling -12 dBFS: peak %v", p)
 	testing.expectf(t, p > 0.2, "and the sound is still there: %v", p)
 	// Night mode lowers loud things: the steady level is below the plain mix's.
-	plain := engine(rate)
+	plain := new_mixer(rate)
 	defer free(plain)
 	id2 := add_sound(plain, {samples = s, rate = rate})
 	play(plain, {sound = id2, gain = {1, 1}, pitch = 1})
-	a := render(plain, rate * 2)
+	a := mix_frames(plain, rate * 2)
 	defer delete(a)
-	night := engine(rate)
+	night := new_mixer(rate)
 	defer free(night)
 	id3 := add_sound(night, {samples = s, rate = rate})
 	set_listener(night, {night = true})
 	play(night, {sound = id3, gain = {1, 1}, pitch = 1})
-	b := render(night, rate * 2)
+	b := mix_frames(night, rate * 2)
 	defer delete(b)
 	loud := rms(a[2 * rate:][:2 * 9600])
 	calm := rms(b[2 * rate:][:2 * 9600])

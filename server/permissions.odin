@@ -154,14 +154,14 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 		switch word {
 		case "role":
 			if player != nil {
-				ok = role_name_valid(value)
+				ok = short_name_valid(value)
 				if ok &&
 				   !slice.contains(
 						   player.roles[:],
 						   value,
 					   ) {append(&player.roles, strings.clone(value))}
 			} else {
-				ok = role_name_valid(value)
+				ok = short_name_valid(value)
 				if ok {role = role_get(p, value)}
 			}
 		case "player":
@@ -178,7 +178,7 @@ permissions_parse :: proc(p: ^Permissions, text: string) {
 				player = player_perms(p, account_key(a))
 			}
 		case "inherit":
-			ok = role != nil && role_name_valid(value)
+			ok = role != nil && short_name_valid(value)
 			if ok {append(&role.inherits, strings.clone(value))}
 		case "grant":
 			_, ok = game.grant_parse(value, 0)
@@ -224,7 +224,7 @@ permissions_text :: proc(p: ^Permissions, allocator := context.temp_allocator) -
 	return strings.to_string(b)
 }
 
-@(private = "file")
+// sorted_keys: a map's keys in order (temp allocator).
 sorted_keys :: proc(m: map[string]$V) -> []string {
 	keys := make([dynamic]string, 0, len(m), context.temp_allocator)
 	for k in m {append(&keys, k)}
@@ -232,7 +232,9 @@ sorted_keys :: proc(m: map[string]$V) -> []string {
 	return keys[:]
 }
 
-role_name_valid :: proc(name: string) -> bool {
+// short_name_valid: a role's, a structure's, a home's or a warp's name: 1 to 32
+// lowercase letters, digits, _ and -.
+short_name_valid :: proc(name: string) -> bool {
 	if len(name) == 0 || len(name) > 32 {return false}
 	for c in transmute([]u8)name {
 		if !((c >= 'a' && c <= 'z') ||

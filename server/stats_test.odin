@@ -230,7 +230,6 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 }
 
 // read_log: the day files of dir/telemetry, joined.
-@(private = "file")
 read_log :: proc(dir: string) -> string {
 	infos, _ := os.read_all_directory_by_path(
 		filepath.join({dir, "telemetry"}, context.temp_allocator) or_else "",

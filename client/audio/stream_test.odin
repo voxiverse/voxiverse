@@ -11,22 +11,6 @@ import ma "vendor:miniaudio"
 @(rodata)
 TONE := #load("testdata/tone.ogg") // 3 s, 44.1 kHz, 440 Hz left and 660 Hz right
 
-@(private = "file")
-new_mixer :: proc(rate: u32) -> ^Mixer {
-	m := new(Mixer)
-	mixer_init(m, rate)
-	return m
-}
-
-@(private = "file")
-mix_frames :: proc(m: ^Mixer, frames: int, block := 480) -> []f32 {
-	out := make([]f32, 2 * frames)
-	for at := 0; at < frames; at += block {
-		mix(m, out[2 * at:][:2 * min(block, frames - at)])
-	}
-	return out
-}
-
 // reference: the file decoded in one go by a decoder of its own (two channels).
 @(private = "file")
 reference :: proc() -> (left, right: []f32) {

@@ -85,7 +85,6 @@ query :: proc(m: ^Mirror) -> game.Block_Query {
 	return {m, block_of, test_blocks()}
 }
 
-@(private = "file")
 mirror_set :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
 	if blocks, ok := &m.chunks[game.chunk_of(p)]; ok {
 		game.chunk_set(blocks, &m.arrays, game.local_of(p), b)

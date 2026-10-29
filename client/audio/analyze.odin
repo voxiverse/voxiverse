@@ -324,7 +324,6 @@ third_octaves :: proc(x: []f32, rate: u32) -> (bands: [BANDS]f64) {
 }
 
 // fft: in-place radix-2 on re, im (length a power of two).
-@(private)
 fft :: proc(re, im: []f64) {
 	n := len(re)
 	j := 0

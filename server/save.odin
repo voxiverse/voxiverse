@@ -415,10 +415,10 @@ region_from_backup :: proc(w: ^World, region: game.Region_Pos, path: string) {
 
 // universe.cfg: "key = value" lines.
 @(private)
-write_universe_file :: proc(s: ^Server, format := SAVE_FORMAT) -> bool {
+write_universe_file :: proc(s: ^Server) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", format)
+	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "mode = %s", mode_config_text(s.config.mode))
@@ -534,10 +534,10 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 
 // world.cfg: "key = value" lines, then the rules and generator parameters.
 @(private = "file")
-write_world_file :: proc(w: ^World, format := SAVE_FORMAT) -> bool {
+write_world_file :: proc(w: ^World) -> bool {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintfln(&b, "# Voxiverse world (written by the server)")
-	fmt.sbprintfln(&b, "format = %d", format)
+	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
 	fmt.sbprintfln(&b, "address = %s", game.address_dir(w.address))
 	fmt.sbprintfln(&b, "seed = %d", w.seed)
 	fmt.sbprintfln(&b, "generator = %s", worldgen.KIND_NAMES[w.generator])

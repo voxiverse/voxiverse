@@ -15,17 +15,6 @@ import "../common/worldgen"
 
 STRUCTURES_DIR :: "structures"
 
-structure_name_valid :: proc(name: string) -> bool {
-	if len(name) == 0 || len(name) > 32 {return false}
-	for c in transmute([]u8)name {
-		if !((c >= 'a' && c <= 'z') ||
-			   (c >= '0' && c <= '9') ||
-			   c == '_' ||
-			   c == '-') {return false}
-	}
-	return true
-}
-
 // structure_save keeps lo..hi of the world as template name: air as void
 // (pasting leaves what is there), or with clear, as air (pasting clears).
 structure_save :: proc(w: ^World, name: string, lo, hi: game.Block_Pos, clear: bool) -> string {

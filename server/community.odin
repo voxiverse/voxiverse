@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:path/filepath"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:time"
@@ -266,30 +265,30 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 			game.address_dir(p.world),
 		)
 	}
-	for name in sorted_names(m.warps) {
+	for name in sorted_keys(m.warps) {
 		fmt.sbprintf(&b, "warp %s ", name)
 		place(&b, m.warps[name])
 		strings.write_byte(&b, '\n')
 	}
-	for name in sorted_names(m.bans) {
+	for name in sorted_keys(m.bans) {
 		ban := m.bans[name]
 		fmt.sbprintfln(&b, "ban %s %d %s %s", name, ban.until, ban.by, ban.reason)
 	}
-	for name in sorted_names(m.ip_bans) {
+	for name in sorted_keys(m.ip_bans) {
 		ban := m.ip_bans[name]
 		fmt.sbprintfln(&b, "ban_ip %s %d %s %s", name, ban.until, ban.by, ban.reason)
 	}
-	for name in sorted_names(m.account_bans) {
+	for name in sorted_keys(m.account_bans) {
 		ban := m.account_bans[name]
 		fmt.sbprintfln(&b, "ban_account %s %d %s %s", name, ban.until, ban.by, ban.reason)
 	}
-	for name in sorted_names(m.members) {
+	for name in sorted_keys(m.members) {
 		e := &m.members[name]
 		fmt.sbprintfln(&b, "player %s", name)
 		if e.nick != "" {fmt.sbprintfln(&b, "nick %s", e.nick)}
 		if e.muted_until != 0 {fmt.sbprintfln(&b, "mute %d", e.muted_until)}
 		for x in e.ignores {fmt.sbprintfln(&b, "ignore %s", x)}
-		for h in sorted_names(e.homes) {
+		for h in sorted_keys(e.homes) {
 			fmt.sbprintf(&b, "home %s ", h)
 			place(&b, e.homes[h])
 			strings.write_byte(&b, '\n')
@@ -298,14 +297,6 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 		if e.ip != "" {fmt.sbprintfln(&b, "ip %s", e.ip)}
 	}
 	return strings.to_string(b)
-}
-
-@(private = "file")
-sorted_names :: proc(m: map[string]$V) -> []string {
-	keys := make([dynamic]string, 0, len(m), context.temp_allocator)
-	for k in m {append(&keys, k)}
-	slice.sort(keys[:])
-	return keys[:]
 }
 
 // community_open reads the world's community.cfg (none: nobody yet).
