@@ -478,11 +478,3 @@ json_read_object :: proc(r: ^Json_Reader, depth: int) -> (v: Json_Value) {
 	v.members = members[:]
 	return
 }
-
-// json_get: the member of an object called key.
-json_get :: proc(v: Json_Value, key: string) -> (^Json_Member, bool) {
-	for &m in v.members {
-		if m.key == key {return &m, true}
-	}
-	return nil, false
-}

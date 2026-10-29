@@ -665,18 +665,6 @@ allowed_here :: proc(app: ^App, command, node: string) -> bool {
 	return false
 }
 
-// session_open_lan asks our own server to take players from the LAN.
-session_open_lan :: proc(app: ^App) {
-	switch {
-	case app.session == nil || app.session.state != .Playing:
-		console_print(&app.console, "open_lan: not in a world", .Warning)
-	case !session_hosting(app.session):
-		console_print(&app.console, "open_lan: only the host can open the world", .Warning)
-	case:
-		send_message(app.session, game.Command{"open_lan"})
-	}
-}
-
 // report_text: a note, with what helps to read it: the version, the system,
 // the last console lines.
 report_text :: proc(app: ^App, note: string) -> string {

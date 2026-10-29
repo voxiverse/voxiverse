@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:strings"
 
 import "../base"
-import "../common/game"
 import "platform"
 import "ui"
 
@@ -204,11 +203,6 @@ menu_tab_step :: proc(app: ^App, over_slot := false) -> int {
 
 bindings_table :: proc() -> base.Var_Table {
 	return {"key.", Bindings, BINDING_VARS[:], &BINDINGS_DEFAULTS}
-}
-
-// hotbar_keys: the keys of the hotbar's slots, in order.
-hotbar_keys :: proc(b: Bindings) -> [game.HOTBAR_SLOTS]platform.Key {
-	return {b.hotbar_1, b.hotbar_2, b.hotbar_3, b.hotbar_4, b.hotbar_5}
 }
 
 // key_label: what to call k on screen, as the player's keyboard prints it.

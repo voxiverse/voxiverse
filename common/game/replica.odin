@@ -1222,11 +1222,3 @@ scan_state :: proc(schema: ^Schema, data: []u8, bytes, entries: []int) -> bool {
 	}
 	return r.ok
 }
-
-// schema_kind_of: the kind id of a value type (-1: none).
-schema_kind_of :: proc(s: ^Schema, value: typeid, events := false) -> int {
-	for k in s.kinds {
-		if k.value == value && k.is_event == events {return k.id}
-	}
-	return -1
-}

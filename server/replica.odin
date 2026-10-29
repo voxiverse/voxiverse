@@ -20,31 +20,12 @@ state_put :: proc(s: ^Server, c: ^Client, kind: game.State_Kind, value: ^$T, key
 	game.sender_put(&c.tx, int(kind), key, value)
 }
 
-// state_remove removes a record by hand (a keyed kind's records go by
-// themselves when they are not put).
-@(private)
-state_remove :: proc(c: ^Client, kind: game.State_Kind, key := game.Key{}) {
-	if c.tx.schema == nil {return}
-	game.sender_remove(&c.tx, int(kind), key)
-}
-
 // event_send queues a one-off event for c.
 @(private)
 event_send :: proc(s: ^Server, c: ^Client, kind: game.Event_Kind, value: ^$T) {
 	assert(s.schema.kinds[game.kind_of_event(kind)].value == T, "an event of the wrong type")
 	if c.tx.schema == nil {return}
 	game.sender_event(&c.tx, game.kind_of_event(kind), value)
-}
-
-// event_broadcast queues an event for every playing client (in world, if
-// given).
-@(private)
-event_broadcast :: proc(s: ^Server, kind: game.Event_Kind, value: ^$T, world: ^World = nil) {
-	for &c in s.clients {
-		if c.state == .Playing && (world == nil || c.world == world) {
-			event_send(s, &c, kind, value)
-		}
-	}
 }
 
 // replicate_tick puts what every client sees of the world at the end of a

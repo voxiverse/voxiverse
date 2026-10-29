@@ -584,20 +584,12 @@ registry_block_drop :: proc(reg: ^Registry, b: Block) -> Item {
 	return reg.blocks.defs[b].drop
 }
 
-// registry_block_tag, registry_item_tag: a tag by id.
+// registry_block_tag: a tag by id.
 registry_block_tag :: proc(reg: ^Registry, text: string) -> (i32, bool) {
 	id, ok := id_parse(strings.trim_prefix(text, "#"))
 	if !ok {return NO_TAG, false}
 	buf: [96]u8
 	n, found := reg.ids[.Block_Tag][fmt.bprintf(buf[:], "%s:%s", id.namespace, id.name)]
-	return i32(n), found
-}
-
-registry_item_tag :: proc(reg: ^Registry, text: string) -> (i32, bool) {
-	id, ok := id_parse(strings.trim_prefix(text, "#"))
-	if !ok {return NO_TAG, false}
-	buf: [96]u8
-	n, found := reg.ids[.Item_Tag][fmt.bprintf(buf[:], "%s:%s", id.namespace, id.name)]
 	return i32(n), found
 }
 

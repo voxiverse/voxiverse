@@ -54,11 +54,6 @@ next :: proc(ctx: ^Context, size: f32 = 0) -> Rect {
 	return r
 }
 
-// remaining is what is left of the current layout.
-remaining :: proc(ctx: ^Context) -> Rect {
-	return ctx.layouts[ctx.layout_depth - 1].rect
-}
-
 cut_top :: proc(r: ^Rect, amount: f32) -> Rect {
 	a := min(amount, r.h)
 	out := Rect{r.x, r.y, r.w, a}

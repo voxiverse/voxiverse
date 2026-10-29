@@ -32,20 +32,6 @@ draw_formatted :: proc(
 	return x - pos.x
 }
 
-// measure_formatted: the width draw_formatted would draw.
-measure_formatted :: proc(
-	ctx: ^ui.Context,
-	text: string,
-	size: f32,
-	allowed := game.FORMAT_ALL,
-) -> f32 {
-	spans := make([dynamic]game.Span, context.temp_allocator)
-	game.format_parse(text, &spans, allowed)
-	width: f32
-	for s in spans {width += ui.measure_text_styled(ctx, s.text, size, text_effects(s.style))}
-	return width
-}
-
 @(private = "file")
 text_effects :: proc(s: game.Text_Style) -> ui.Text_Effects {
 	e: ui.Text_Effects

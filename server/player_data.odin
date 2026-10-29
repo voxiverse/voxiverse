@@ -337,42 +337,6 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 	}
 }
 
-// players_save writes the files of the players that changed, and forgets
-// those who are gone (their files have them).
-players_save :: proc(s: ^Server) -> bool {
-	for &c in s.clients {if c.state == .Playing {keep_player(s, &c)}}
-	if s.store.dir == "" {return true}
-	ok := true
-	gone := make([dynamic]string, context.temp_allocator)
-	for name, &r in s.store.players {
-		if r.dirty {
-			path := character_path(s, name, r.account)
-			if err := os.make_directory_all(filepath.dir(path)); err != nil && err != .Exist {
-				log.errorf("server cannot create the directory of path=%s error=%v", path, err)
-				ok = false
-				continue
-			}
-			if !store_write(s, path, player_json(s.registry, &r)) {
-				ok = false
-				continue
-			}
-			r.dirty = false
-			if _, claimed := r.account.?; claimed {
-				// Its file from before accounts is this one now.
-				old := character_path(s, name, nil)
-				if os.exists(old) {store_delete(s, old)}
-			}
-		}
-		if client_by_name(s, name) == nil {append(&gone, name)}
-	}
-	for name in gone {
-		if r, present := &s.store.players[name]; present {counters_free(&r.stats)}
-		key, _ := delete_key(&s.store.players, name)
-		delete(key)
-	}
-	return ok
-}
-
 // The starter kit: what a player new to the world is given (world.cfg's
 // `kit`, "stone 64, dirt 64, ..."). By default the rocket launcher alone, in
 // hotbar slot 1 (blocks are reached by creative's catalog; how

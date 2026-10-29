@@ -431,11 +431,6 @@ clock :: proc(m: ^Mixer) -> u64 {
 	return sync.atomic_load(&m.stats.frames)
 }
 
-// set_volume sets the master volume (0..1) from the next mix on.
-set_volume :: proc(m: ^Mixer, volume: f32) {
-	set_bus_gain(m, .Master, volume)
-}
-
 // poll takes the next end the audio thread reported (a voice ended or was
 // stopped), freeing its handle. Game thread.
 poll :: proc(m: ^Mixer) -> (e: Voice_Event, ok: bool) {
@@ -1170,17 +1165,6 @@ start :: proc "contextless" (m: ^Mixer, c: Play_Cmd) {
 		cutoff_now = cutoff,
 	}
 	sync.atomic_add(&m.stats.played, 1)
-}
-
-// soft_clip leaves quiet signals alone and bends loud ones under 1. The
-// limiter does this job now; it stays for callers that want a cheap bend.
-@(private)
-soft_clip :: proc "contextless" (x: f32) -> f32 {
-	KNEE :: 0.8
-	a := abs(x)
-	if a <= KNEE {return x}
-	over := a - KNEE
-	return math.sign(x) * (KNEE + (1 - KNEE) * over / (over + (1 - KNEE)))
 }
 
 // spatial_gain: left and right gains for a sound at offset (from the
