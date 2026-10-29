@@ -38,6 +38,38 @@ Star :: struct {
 
 STAR_COLORS :: 5
 
+// STAR_KELVIN: the surface temperature of each star colour (a spectral
+// class, roughly: sun-like, orange, blue-white, red, white).
+STAR_KELVIN := [STAR_COLORS]f32{5800, 4200, 9500, 3200, 7400}
+
+// star_color: what a star looks like, its colour from its temperature along
+// a coarse blackbody ramp (low-fidelity, no libm: the same on every
+// machine). The galaxy views (creation, later the Atlas) share it.
+star_color :: proc(s: Star) -> [4]u8 {
+	RAMP :: [?]struct {
+		kelvin: f32,
+		rgb:    [3]f32,
+	} {
+		{3000, {255, 170, 110}},
+		{4000, {255, 196, 140}},
+		{5000, {255, 219, 186}},
+		{6000, {255, 243, 234}},
+		{7500, {226, 232, 255}},
+		{10000, {190, 210, 255}},
+	}
+	ramp := RAMP
+	k := STAR_KELVIN[int(s.color) % STAR_COLORS]
+	if k <= ramp[0].kelvin {return {u8(ramp[0].rgb.r), u8(ramp[0].rgb.g), u8(ramp[0].rgb.b), 255}}
+	for i in 1 ..< len(ramp) {
+		lo, hi := ramp[i - 1], ramp[i]
+		if k > hi.kelvin && i < len(ramp) - 1 {continue}
+		x := clamp((k - lo.kelvin) / (hi.kelvin - lo.kelvin), 0, 1)
+		c := lo.rgb + (hi.rgb - lo.rgb) * x
+		return {u8(c.r), u8(c.g), u8(c.b), 255}
+	}
+	return {255, 255, 255, 255}
+}
+
 // galaxy_stars fills out with a galaxy as a point set, a pure function of the
 // galaxy's symbols (the first star is the home world's, placed by the
 // world's symbols, and marked; the rest do not depend on the world).

@@ -25,6 +25,7 @@ Ignite :: struct {
 	frames: int, // frames drawn (input in the first is the one that started it)
 	reduce: bool,
 	stars:  [IGNITE_STARS]game.Star,
+	planet: Planet_Palette, // the home world's colours (planet.odin)
 }
 
 // ui_cue fires a UI sound's event name at the sound system. There are no UI
@@ -40,6 +41,7 @@ ignite_start :: proc(app: ^App, stars: []game.Star, seed: u64) {
 	i^ = {
 		active = true,
 		reduce = app.settings.reduce_motion,
+		planet = home_planet_palette(app.registry),
 	}
 	copy(i.stars[:], stars)
 	ui_cue(app, "ui_ignite")
@@ -94,7 +96,7 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^Ignite) {
 			ui.fill_rect(
 				ctx,
 				{view.x + p.x * side - size / 2, view.y + p.y * side - size / 2, size, size},
-				STAR_PALETTE[s.color],
+				ui.Color(game.star_color(s)),
 			)
 		}
 	} else if i.t < IGNITE_COLLAPSE + IGNITE_FLASH {
@@ -108,18 +110,25 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^Ignite) {
 		z = z * z * z
 		ui.fill_rect(ctx, screen, {0, 0, 0, 255})
 		radius := 4 + z * math.sqrt(screen.w * screen.w + screen.h * screen.h)
-		draw_planet(ctx, centre, radius, i.t, 1)
+		draw_planet(ctx, centre, radius, i.t, 1, i.planet)
 	} else {
 		// The planet is all there is; it gives way to the loading screen.
 		x := clamp((i.t - fade_start) / (f32(IGNITE_SECONDS) - fade_start), 0, 1)
 		radius := 4 + math.sqrt(screen.w * screen.w + screen.h * screen.h)
-		draw_planet(ctx, centre, radius, i.t, 1 - x)
+		draw_planet(ctx, centre, radius, i.t, 1 - x, i.planet)
 	}
 }
 
-// draw_planet draws a lit sphere (Earth's colours: seas, land, ice) of this
-// radius, turned by spin, in horizontal bands; alpha fades it.
-draw_planet :: proc(ctx: ^ui.Context, centre: ui.Vec2, radius, spin: f32, alpha: f32) {
+// draw_planet draws a lit sphere (the home world's colours: water, ground,
+// dry ground, ice) of this radius, turned by spin, in horizontal bands;
+// alpha fades it.
+draw_planet :: proc(
+	ctx: ^ui.Context,
+	centre: ui.Vec2,
+	radius, spin: f32,
+	alpha: f32,
+	palette: Planet_Palette,
+) {
 	BANDS :: 48
 	CELLS :: 14
 	clip := ctx.screen
@@ -139,10 +148,10 @@ draw_planet :: proc(ctx: ^ui.Context, centre: ui.Vec2, radius, spin: f32, alpha:
 			// Longitude of the cell's middle on the sphere, turned by spin.
 			lon := math.asin(clamp((u0 + u1) / 2, -1, 1)) + spin
 			n := planet_noise(math.floor(lon * 2.2), b / 3)
-			color := ui.Color{36, 84, 170, 255} // sea
-			if n > 0.55 {color = {64, 140, 70, 255}} 	// land
-			if n > 0.86 {color = {196, 176, 108, 255}} 	// desert
-			if abs(ym) > 0.86 {color = {232, 238, 246, 255}} 	// ice caps
+			color := palette.water
+			if n > 0.55 {color = palette.ground}
+			if n > 0.86 {color = palette.dry}
+			if abs(ym) > 0.86 {color = palette.ice}
 			// Light from the upper left: darker toward the lower right.
 			lit := clamp(
 				0.55 +

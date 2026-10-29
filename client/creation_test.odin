@@ -6,6 +6,7 @@ import "core:testing"
 
 import "../common/game"
 import "../common/worldgen"
+import "mesh"
 import "ui"
 
 // The creation screen and Ignite (screen_creation.odin, screen_ignite.odin).
@@ -199,4 +200,46 @@ test_ignite_plays_and_skips :: proc(t: ^testing.T) {
 		"no zoom with Reduce motion",
 	)
 	free_all(context.temp_allocator)
+}
+
+// The planet Ignite draws takes its colours from the home world's kind:
+// its water, its palette's ground and dry ground, and snow; whatever the seed.
+@(test)
+test_planet_colours_are_the_kinds :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	surface := worldgen.PALETTES[int(worldgen.PARAMS_DEFAULTS.palette)]
+	want := Planet_Palette {
+		water  = ui.Color(mesh.block_average_colour(app.registry, .Water, .Pos_Y)),
+		ground = ui.Color(mesh.block_average_colour(app.registry, surface[0], .Pos_Y)),
+		dry    = ui.Color(mesh.block_average_colour(app.registry, surface[2], .Pos_Y)),
+		ice    = ui.Color(mesh.block_average_colour(app.registry, .Snow, .Pos_Y)),
+	}
+	for seed in ([]u64{42, 0xdead_beef}) {
+		creation_roll(&app.creation, seed)
+		testing.expect_value(t, app.creation.planet, want)
+		ignite_start(app, app.creation.stars, seed)
+		testing.expect_value(t, app.ignite.planet, want)
+	}
+	// Another kind of world has another palette (frost: snow, dirt, ice).
+	p := worldgen.PARAMS_DEFAULTS
+	p.palette = 2
+	frost := planet_palette(app.registry, p)
+	testing.expect(t, frost.ground != want.ground, "frost's ground is not Earth's")
+	testing.expect_value(
+		t,
+		frost.dry,
+		ui.Color(mesh.block_average_colour(app.registry, .Ice, .Pos_Y)),
+	)
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_star_colours_come_from_the_stars :: proc(t: ^testing.T) {
+	seen: [game.STAR_COLORS][4]u8
+	for c in 0 ..< game.STAR_COLORS {
+		seen[c] = game.star_color({color = u8(c)})
+		testing.expect_value(t, seen[c].a, 255)
+		for o in 0 ..< c {testing.expect(t, seen[o] != seen[c], "each class has its own colour")}
+	}
 }

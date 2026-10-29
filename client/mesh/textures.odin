@@ -91,6 +91,22 @@ texture_layer_pixels :: proc(reg: ^game.Registry, layer: u32, pixels: []Rgba) {
 	for p, i in image {pixels[i] = p}
 }
 
+// block_average_colour: the average of the opaque pixels of b's face f, one
+// colour (grey where there are none).
+block_average_colour :: proc(reg: ^game.Registry, b: game.Block, f: Face) -> Rgba {
+	pixels: [TEXTURE_SIZE * TEXTURE_SIZE]Rgba
+	texture_layer_pixels(reg, block_texture(reg, b, f), pixels[:])
+	sum: [3]u32
+	n: u32
+	for c in pixels {
+		if c.a == 0 {continue}
+		sum += {u32(c.r), u32(c.g), u32(c.b)}
+		n += 1
+	}
+	if n == 0 {return {128, 128, 128, 255}}
+	return {u8(sum.r / n), u8(sum.g / n), u8(sum.b / n), 255}
+}
+
 // texture_array makes the bytes of the whole texture array for reg: every
 // layer's mips, one layer after another (what render.world_init takes).
 texture_array :: proc(reg: ^game.Registry, allocator := context.temp_allocator) -> []u8 {

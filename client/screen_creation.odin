@@ -28,6 +28,7 @@ Creation_Screen :: struct {
 	stars:     []game.Star, // the galaxy of seed (CREATION_STARS)
 	settle:    f32, // 0 ..= 1: how far the stars have re-settled
 	spin:      f32, // the preview planet's turn, radians
+	planet:    Planet_Palette, // the home world's colours (planet.odin)
 }
 
 creation_destroy :: proc(c: ^Creation_Screen) {
@@ -47,6 +48,7 @@ creation_open :: proc(app: ^App) {
 	c.mode = MODE_CREATIVE
 	creation_set_seed(c, u64(time.now()._nsec) ~ 0x5eed_5eed, false)
 	c.typed = false
+	c.planet = home_planet_palette(app.registry)
 	app.screen = .Creation
 }
 
@@ -111,25 +113,17 @@ home_facts :: proc() -> Home_Facts {
 	return home_facts_of(worldgen.PARAMS_DEFAULTS, game.RULES_DEFAULTS)
 }
 
-STAR_PALETTE := [game.STAR_COLORS]ui.Color {
-	{255, 255, 255, 255},
-	{255, 236, 190, 255},
-	{190, 210, 255, 255},
-	{255, 190, 160, 255},
-	{200, 255, 220, 255},
-}
-
 // draw_galaxy draws stars as dots in r over a dark ground; settle (0 ..= 1)
 // fades them in (and brings them in from a little way out); the home star
 // is ringed.
 draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []game.Star, settle: f32) {
-	ui.fill_rect(ctx, r, {6, 8, 16, 255})
+	ui.fill_rect(ctx, r, ctx.theme.preview_fill)
 	ease := 1 - (1 - settle) * (1 - settle)
 	for s in stars {
 		centre := ui.Vec2{0.5, 0.5}
 		p := centre + (s.position - centre) * (0.85 + 0.15 * ease)
 		size := (1 + 1.5 * s.size) * max(r.w / 400, 1)
-		color := STAR_PALETTE[s.color]
+		color := ui.Color(game.star_color(s))
 		color.a = u8(f32(color.a) * (0.25 + 0.75 * ease))
 		ui.fill_rect(
 			ctx,
@@ -138,11 +132,13 @@ draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []game.Star, settle: f3
 		)
 		if s.home {
 			ring := 6 * max(r.w / 400, 1)
+			ring_color := ctx.theme.focus_ring
+			ring_color.a = u8(f32(ring_color.a) * ease)
 			ui.stroke_rect(
 				ctx,
 				{r.x + p.x * r.w - ring, r.y + p.y * r.h - ring, 2 * ring, 2 * ring},
 				1,
-				{255, 220, 120, u8(255 * ease)},
+				ring_color,
 			)
 		}
 	}
@@ -194,7 +190,7 @@ creation_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.label(ctx, tr(.Creation_Home_World), ui.next(ctx), .Left, t.text_muted)
 	facts := home_facts()
 	planet := ui.next(ctx, 130)
-	draw_planet(ctx, {planet.x + planet.w / 2, planet.y + planet.h / 2}, 60, c.spin, 1)
+	draw_planet(ctx, {planet.x + planet.w / 2, planet.y + planet.h / 2}, 60, c.spin, 1, c.planet)
 	ui.label(
 		ctx,
 		tr(.Creation_Climate, tr(.Fact_Pair, tr(facts.warmth), tr(facts.wetness))),

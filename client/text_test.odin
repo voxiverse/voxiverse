@@ -137,9 +137,9 @@ literal_calls :: proc(source: string) -> []Literal_Call {
 }
 
 // Screens take every colour from the theme's named colours (M40): no
-// `ui.Color{...}` literal in a screen, menu, overlay or HUD file. The two
-// exceptions are artwork palettes, not interface colours: the ignite
-// screen's planet and the creation screen's star colours.
+// `ui.Color{...}` literal in a screen, menu, overlay or HUD file, with no
+// exemption: interface colours come from the theme, artwork colours from
+// data (planet.odin, game.star_color).
 @(test)
 test_no_colour_literals_in_screens :: proc(t: ^testing.T) {
 	dir, err := os.open(#directory)
@@ -151,7 +151,6 @@ test_no_colour_literals_in_screens :: proc(t: ^testing.T) {
 	for info in infos {
 		name := info.name
 		if !strings.has_suffix(name, ".odin") || strings.has_suffix(name, "_test.odin") {continue}
-		if name == "screen_ignite.odin" || name == "screen_creation.odin" {continue}
 		layered := false
 		for prefix in ([]string{"screen_", "menu_", "overlay_", "hud_"}) {
 			if strings.has_prefix(name, prefix) {layered = true}

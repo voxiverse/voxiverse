@@ -15,7 +15,8 @@ import "font"
 import "platform"
 import "ui"
 
-// A UI test's app: the font and the UI, nothing else.
+// A UI test's app: the font, the UI and the base registry (a screen's
+// artwork takes its colours from it), nothing else.
 ui_app :: proc(t: ^testing.T) -> ^App {
 	app := new(App)
 	ok: bool
@@ -24,11 +25,13 @@ ui_app :: proc(t: ^testing.T) -> ^App {
 	testing.expect(t, ui.init(&app.ui, &app.font))
 	app.settings = SETTINGS_DEFAULTS
 	app.scripted = true // (nothing saved)
+	app.registry = game.registry_base()
 	return app
 }
 
 ui_app_free :: proc(app: ^App) {
 	ui.destroy(&app.ui)
+	game.registry_destroy(app.registry)
 	free(app)
 }
 
