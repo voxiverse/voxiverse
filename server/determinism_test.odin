@@ -52,6 +52,16 @@ Mirror :: struct {
 	updates:       int,
 	corrections:   int, // counted from the script's start
 	first_fix:     u64, // the server tick of the first
+	inventory:     game.Inventory, // as the server last said
+	mode:          int, // the game mode it said (when mode_known)
+	mode_known:    bool,
+}
+
+// mirror_mods: what the real client moves with: the mode and inventory the server told
+// (derive_character), as the server's step does.
+mirror_mods :: proc(m: ^Mirror) -> game.Mods {
+	if !m.mode_known {return game.MODS_NONE}
+	return game.derive_character(test_reg(), m.mode, &m.inventory)
 }
 
 Session :: struct {
@@ -194,6 +204,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 				v,
 				&m.rules,
 				query(m),
+				mirror_mods(m),
 				teleported = teleported,
 			)
 			m.updates += 1
@@ -209,9 +220,14 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 			m.rules = (^game.Rules)(g.value)^
 		case .Entity:
 			if g.op == .Create {append(&m.entities, u32(g.key.a))}
+		case .Mode:
+			if mode, found := game.mode_find(test_reg(), (^game.Mode_Record)(g.value).mode);
+			   found {
+				m.mode, m.mode_known = mode, true
+			}
+		case .Inventory:
+			m.inventory = (^game.Inventory_State)(g.value).inventory
 		case .Health,
-		     .Mode,
-		     .Inventory,
 		     .Clock,
 		     .Grants,
 		     .Variables,
@@ -410,7 +426,7 @@ mirror_tick :: proc(data: rawptr) {
 		tick := ticks_of(sess)
 		in_ := sess.input
 		if sess.scripted {in_ = script_input(tick)}
-		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m))
+		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m), mirror_mods(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
 		if sess.check {mirror_check(m, msg.sequence)}

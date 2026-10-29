@@ -85,6 +85,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 		pressed = action_pressed(a, .Use)
 		if w.zoom > 0 {placing = false}
 	}
+	if _, hook := grapple_in_hand(s); hook {placing = false} 	// (the use button is the hook's)
 	if !(breaking || placing) || (!pressed && s.edit_timer > 0) {return}
 	s.edit_timer = EDIT_REPEAT_SECONDS
 	item_use(s, held(s), breaking, placing)

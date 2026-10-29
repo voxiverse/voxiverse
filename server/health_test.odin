@@ -195,8 +195,8 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		c.world.rules.keep_inventory = true
 		respawn(s, c)
 	})
-	// (nothing of what they held: the survival kit's four weapons are what respawn gives)
-	testing.expect_value(t, probe(srv, "a").items, 4)
+	// (nothing of what they held: respawn gives the survival kit: six items in the slots, the boots worn)
+	testing.expect_value(t, probe(srv, "a").items, 6)
 
 	// Experience: 100 points of mining is level 2 (one level up, and only one).
 	xp0 := probe(srv, "a").xp

@@ -49,5 +49,23 @@
 			"spread": 0.0,
 			"sound": "sniper"
 		}
+	},
+	"shotgun": {
+		"model": "voxiverse:shotgun",
+		"description": "A pump shotgun. Eight pellets a shot; reload with R.",
+		"stack": 1,
+		"weapon": {
+			"damage": 2,
+			"magazine": 6,
+			"fire_rate": 1.1111,
+			"automatic": false,
+			"range": 60,
+			"headshot": 2.0,
+			"zoom": 0.0,
+			"reload_time": 2.4,
+			"spread": 0.10472,
+			"pellets": 8,
+			"sound": "shotgun"
+		}
 	}
 }

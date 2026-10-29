@@ -138,10 +138,12 @@ kit_give :: proc(s: ^Server, c: ^Client) {
 		have := game.inventory_count(&c.inventory, e.item)
 		if have >= int(e.count) {continue}
 		want := int(e.count) - have
-		left := game.inventory_add(
+		left := game.inventory_add_at(
 			s.registry,
 			&c.inventory,
 			{e.item, want, game.new_ammo(s.registry, e.item)},
+			e.place,
+			e.worn,
 		)
 		ledger(s, c.world, .Kit, e.item, want - left.count)
 		c.inv_changed = true

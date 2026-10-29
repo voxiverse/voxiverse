@@ -71,6 +71,30 @@ read_game_mode :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> M
 					if at, ok := ref_index(b, .Item, em.value.s, f, em.value); ok {
 						entry.item, have = item_numbers[at], true
 					}
+				case "slot":
+					if em.value.kind != .String {
+						fail_field(b, f, em.value, "slot is hotbar, pockets or a worn slot")
+						continue
+					}
+					switch em.value.s {
+					case "hotbar":
+						entry.place = .Hotbar
+					case "pockets":
+						entry.place = .Pockets
+					case:
+						worn := -1
+						for name, i in EQUIP_NAMES {if name == em.value.s {worn = i}}
+						if worn < 0 {
+							fail_field(
+								b,
+								f,
+								em.value,
+								"slot is \"hotbar\", \"pockets\" or one of head, chest, legs, feet, offhand",
+							)
+							continue
+						}
+						entry.place, entry.worn = .Worn, Equip_Slot(worn)
+					}
 				case "count":
 					if em.value.kind != .Int || em.value.i < 1 || em.value.i > 4096 {
 						fail_field(b, f, em.value, "count is 1..4096")
@@ -82,7 +106,7 @@ read_game_mode :: proc(b: ^Reg_Build, m: ^Merged_Def, item_numbers: []Item) -> M
 						b,
 						f,
 						em.value,
-						fmt.aprintf("a kit entry has item and count, not \"%s\"", em.key),
+						fmt.aprintf("a kit entry has item, count and slot, not \"%s\"", em.key),
 					)
 				}
 			}

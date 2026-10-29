@@ -50,5 +50,21 @@
 				"amount": 0.1
 			}
 		]
+	},
+	"jump_boots": {
+		"description": "Worn on the feet. One more jump in the air, and a little faster.",
+		"stack": 1,
+		"armor": "boots",
+		"equip": "feet",
+		"modifiers": [
+			{
+				"stat": "air_jumps",
+				"amount": 1
+			},
+			{
+				"stat": "speed",
+				"amount": 0.2
+			}
+		]
 	}
 }

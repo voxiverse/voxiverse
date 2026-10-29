@@ -42,9 +42,34 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	defer net_close(&alice)
 	defer net_close(&bob)
 	both := []^Net_Client{&alice, &bob}
-	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
+	ok := net_wait(
+		t,
+		both,
+		proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[1].welcomed},
+	)
+	if !testing.expect(t, ok, "never joined") {return}
+	// (survival's own kit is the weapons: these two hold the test world's blocks instead)
+	call(
+		srv,
+		proc(s: ^Server, _: rawptr) {
+			for &c in s.clients {
+				if c.state != .Playing {continue}
+				ledger_inventory(s, c.world, .Clear, &c.inventory) // (the audit stays balanced)
+				c.inventory = {}
+				give_kit(s, &c)
+				c.inv_changed = true
+			}
+		},
+		nil,
+	)
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		ready :: proc(c: ^Net_Client) -> bool {
-			return c.inv_updates > 0 && c.update.acked > 0 && c.update.state.on_ground
+			return(
+				c.inv_updates > 0 &&
+				c.update.acked > 0 &&
+				c.update.state.on_ground &&
+				c.inventory.slots[0].count == 64 \
+			)
 		}
 		return ready(cs[0]) && ready(cs[1])
 	})

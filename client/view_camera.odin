@@ -123,6 +123,7 @@ camera_update :: proc(
 	tool, is_tool := info.tool.?
 	s.aiming = look && is_tool && tool == .Launcher && action_down(actions, .Use)
 	weapon_tick(s, actions, look, dt)
+	grapple_rope(s)
 	if s.camera_mode == .First {s.view.pitch = min(s.view.pitch + s.recoil, game.PITCH_LIMIT)}
 }
 

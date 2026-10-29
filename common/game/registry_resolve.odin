@@ -933,6 +933,13 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
 			case "spread":
 				w.spread = v
 			}
+		case mm.key == "pellets":
+			if mm.value.kind != .Int || mm.value.i < 1 || mm.value.i > MAX_PELLETS {
+				fail_field(b, f, mm.value, fmt.aprintf("pellets is 1..%d", MAX_PELLETS))
+				ok = false
+			} else {
+				w.pellets = int(mm.value.i)
+			}
 		case mm.key == "automatic":
 			if mm.value.kind != .Bool {
 				fail_field(b, f, mm.value, "automatic is true or false")
@@ -995,6 +1002,67 @@ read_weapon :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
 }
 
 @(private)
+GRAPPLE_NUMBERS := []string{"range", "speed", "cooldown"}
+
+// read_grapple: an item's `grapple` object: range (blocks), speed (blocks a
+// second) and cooldown (seconds), all required.
+@(private)
+read_grapple :: proc(b: ^Reg_Build, f: ^Def_Field, info: ^Item_Info) {
+	if f.value.kind != .Object {
+		fail_field(b, f, f.value, "grapple is an object: range, speed, cooldown")
+		return
+	}
+	g: Grapple_Info
+	seen: [3]bool
+	for mm in f.value.members {
+		at := -1
+		for name, i in GRAPPLE_NUMBERS {if name == mm.key {at = i}}
+		if at < 0 {
+			fail_field(
+				b,
+				f,
+				mm.value,
+				fmt.aprintf(
+					"\"%s\" is not a grapple field%s",
+					mm.key,
+					suggestion(mm.key, GRAPPLE_NUMBERS),
+				),
+			)
+			return
+		}
+		if mm.value.kind != .Int && mm.value.kind != .Float {
+			fail_field(b, f, mm.value, fmt.aprintf("%s is a number", mm.key))
+			return
+		}
+		seen[at] = true
+		switch at {
+		case 0:
+			g.range = f32(mm.value.f)
+		case 1:
+			g.speed = f32(mm.value.f)
+		case 2:
+			g.cooldown = f32(mm.value.f)
+		}
+	}
+	for name, i in GRAPPLE_NUMBERS {
+		if !seen[i] {
+			fail_field(b, f, f.value, fmt.aprintf("a grapple needs \"%s\"", name))
+			return
+		}
+	}
+	switch {
+	case !(g.range > 0) || g.range > 128:
+		fail_field(b, f, f.value, "range is blocks, above 0 and at most 128")
+	case !(g.speed > 0) || g.speed > 60:
+		fail_field(b, f, f.value, "speed is blocks a second, above 0 and at most 60")
+	case g.cooldown < 0 || g.cooldown > 60:
+		fail_field(b, f, f.value, "cooldown is seconds, 0..60")
+	case:
+		info.grapple = g
+	}
+}
+
+@(private)
 read_item :: proc(
 	b: ^Reg_Build,
 	m: ^Merged_Def,
@@ -1036,6 +1104,9 @@ read_item :: proc(
 	}
 	if f := field_of(m, "weapon"); f != nil {
 		read_weapon(b, f, &info)
+	}
+	if f := field_of(m, "grapple"); f != nil {
+		read_grapple(b, f, &info)
 	}
 	if f := field_of(m, "model"); f != nil {
 		if f.value.kind != .String {

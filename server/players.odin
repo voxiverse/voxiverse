@@ -73,8 +73,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	c.clock_pending = true
 	refresh_grants(s, c) // what they may do
 	if !has_saved { 	// (as their grants allow)
-		give_kit(s, c) // the world's
-		kit_give(s, c) // and the mode's (survival: the weapons)
+		kit_give(s, c) // the mode's first: it lays out the hotbar (survival: the weapons)
+		give_kit(s, c) // then the world's, what is still lacking
 	}
 	c.inv_changed = true
 	c.chat_tokens, c.chat_tick = CHAT_BURST, s.tick

@@ -288,7 +288,12 @@ check_own_player :: proc(reg: ^Registry, v: rawptr) -> bool {
 	o := (^Own_Player)(v)
 	s := o.state
 	for x in s.velocity {if !(abs(x) <= MAX_SPEED) {return false}}
-	return position_ok(s.position) && s.air_jumps <= 3 && look_ok(o.yaw, o.pitch)
+	return(
+		position_ok(s.position) &&
+		s.air_jumps <= 3 &&
+		position_ok(s.anchor) &&
+		look_ok(o.yaw, o.pitch) \
+	)
 }
 
 @(private = "file")

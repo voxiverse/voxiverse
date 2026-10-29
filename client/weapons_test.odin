@@ -65,17 +65,26 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 			pistol, _ := game.item_by_name(s.reg, "pistol")
 			return(
 				s.state == .Playing &&
-				s.server_inventory.slots[0].item == pistol &&
+				s.server_inventory.slots[game.HOTBAR_SLOTS].item == pistol &&
 				s.prediction.state.on_ground \
 			)
 		}, &rig, 3000)
 	if !testing.expect_value(t, s.state, Session_State.Playing) {return}
-	// The survival kit: the mode's pistol, rifle and sniper, with full magazines.
+	// The survival kit: the hotbar's rifle, shotgun, sniper, launcher and hook, the pistol in
+	// the pockets. The pistol is what this test fires: it swaps into the first slot.
+	rifle, _ := game.item_by_name(s.reg, "rifle")
+	shotgun, _ := game.item_by_name(s.reg, "shotgun")
+	sniper, _ := game.item_by_name(s.reg, "sniper")
+	testing.expect_value(t, s.inventory.slots[0].item, rifle)
+	testing.expect_value(t, s.inventory.slots[1].item, shotgun)
+	session_inventory_do(s, {.Swap_Hotbar, game.HOTBAR_SLOTS, 0})
+	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+			s := (^Frame_Rig)(data).s
+			pistol, _ := game.item_by_name(s.reg, "pistol")
+			return s.server_inventory.slots[0].item == pistol
+		}, &rig, 300)
 	testing.expect_value(t, s.inventory.slots[0].item, pistol)
 	testing.expect_value(t, s.inventory.slots[0].ammo, u8(12))
-	rifle, _ := game.item_by_name(s.reg, "rifle")
-	sniper, _ := game.item_by_name(s.reg, "sniper")
-	testing.expect_value(t, s.inventory.slots[1].item, rifle)
 	testing.expect_value(t, s.inventory.slots[2].item, sniper)
 	testing.expect_value(t, s.inventory.slots[2].ammo, u8(5))
 	for _ in 0 ..< 30 {rig_frame(&rig, &idle)}

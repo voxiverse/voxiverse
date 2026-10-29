@@ -99,30 +99,39 @@ session_shoot :: proc(s: ^Session, stack: game.Stack, w: game.Weapon_Info, press
 		if press {session_reload(s)}
 		return false
 	}
-	send_message(
-		s,
-		game.Shoot {
-			after = s.prediction.next_sequence - 1,
-			slot = u8(s.inventory.selected),
-			press = press,
-			yaw = s.camera.yaw,
-			pitch = s.camera.pitch,
-		},
-	)
+	shoot := game.Shoot {
+		after = s.prediction.next_sequence - 1,
+		slot  = u8(s.inventory.selected),
+		press = press,
+		yaw   = s.camera.yaw,
+		pitch = s.camera.pitch,
+	}
+	send_message(s, shoot)
 	s.shot_next = s.weapon_clock + f64(1 / w.fire_rate)
 	s.ammo_shown, s.ammo_until =
 		ammo - 1, s.weapon_clock + AMMO_HOLD_SECONDS + f64(s.net.rtt_ms) / 1000
 	s.shots += 1
 
-	// The effects: from the muzzle to what the ray meets.
+	// The effects: from the muzzle to what each ray meets (the rays are the
+	// server's: the same procedure and seed).
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	dir := [3]f64{f64(f.x), f64(f.y), f64(f.z)}
 	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
-	end := s.camera.position + dir * f64(w.range)
-	if hit, ok := game.raycast(query, s.camera.position, dir, f64(w.range)); ok {end = hit.point}
 	right := [3]f64{f64(math.cos(s.camera.yaw)), 0, -f64(math.sin(s.camera.yaw))}
 	muzzle := s.camera.position + dir * 0.6 + right * 0.18 - {0, 0.16, 0}
-	tracer(s, muzzle, end)
+	rays, count := game.pellet_dirs(
+		game.shot_seed(s.welcome.player, shoot.after, shoot.slot),
+		shoot.yaw,
+		shoot.pitch,
+		w,
+	)
+	for i in 0 ..< count {
+		end := s.camera.position + rays[i] * f64(w.range)
+		if hit, ok := game.raycast(query, s.camera.position, rays[i], f64(w.range)); ok {
+			end = hit.point
+		}
+		tracer(s, muzzle, end)
+	}
 	muzzle_flash(s, muzzle)
 	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, s.camera.position, 1})
 	s.recoil += RECOIL_KICK * (3 if w.zoom > 0 else 1)
@@ -171,6 +180,12 @@ muzzle_flash :: proc(s: ^Session, at: [3]f64) {
 // shot_seen: another player's shot: the tracer and the sound where it began.
 shot_seen :: proc(s: ^Session, v: ^game.Shot) {
 	tracer(s, v.origin - {0, 0.16, 0}, v.end)
+	if s.shot_seen_time == s.weapon_clock &&
+	   s.shot_seen_by == v.shooter &&
+	   s.shot_seen_at == v.origin {
+		return // (a shotgun's other rays: one flash and one sound for the shot)
+	}
+	s.shot_seen_by, s.shot_seen_at, s.shot_seen_time = v.shooter, v.origin, s.weapon_clock
 	muzzle_flash(s, v.origin)
 	info, _ := game.item_info(s.reg, v.weapon)
 	w, _ := info.weapon.?

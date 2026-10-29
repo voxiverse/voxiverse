@@ -399,6 +399,7 @@ give_kit :: proc(s: ^Server, c: ^Client) {
 		info, _ := game.item_info(s.registry, st.item)
 		if t, tool := info.tool.?;
 		   tool && t == .Launcher && !allowed(s, c, "world.fire") {continue}
+		if game.inventory_count(&c.inventory, st.item) >= st.count {continue} 	// (the mode's kit gave it)
 		left := game.inventory_add(s.registry, &c.inventory, st)
 		ledger(s, c.world, .Kit, st.item, st.count - left.count)
 	}

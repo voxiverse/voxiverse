@@ -119,7 +119,7 @@ respawn_scenario :: proc(s: ^Server, _: rawptr) {
 	survival := alice.mode
 	old := s.registry.game_modes[survival].kit
 	stone := game.item_of_block(s.registry, .Stone)
-	s.registry.game_modes[survival].kit = {{stone, 3}}
+	s.registry.game_modes[survival].kit = {{item = stone, count = 3}}
 	defer s.registry.game_modes[survival].kit = old
 	alice.inventory = {}
 	respawn(s, alice)

@@ -51,6 +51,7 @@ player_input :: proc(a: ^Actions, s: ^Session) -> game.Player_Input {
 	if action_down(a, .Jump) {in_.buttons += {.Jump}}
 	if action_down(a, .Sneak) || s.sneak_on {in_.buttons += {.Sneak}}
 	if action_down(a, .Sprint) || s.sprint_on {in_.buttons += {.Sprint}}
+	if grapple_button(s, a) {in_.buttons += {.Grapple}}
 	return in_
 }
 

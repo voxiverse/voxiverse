@@ -50,6 +50,7 @@ Button :: enum u8 {
 	Sneak,
 	Sprint,
 	Toggle_Fly, // pressed this tick (the client turns a double-tapped jump into this)
+	Grapple, // the use button is down with a grappling hook in hand (the hook's line and pull)
 }
 
 Player_Input :: struct {
@@ -60,13 +61,52 @@ Player_Input :: struct {
 }
 
 Player_State :: struct {
-	position:  [3]f64, // centre of the feet
-	velocity:  [3]f32,
-	on_ground: bool,
-	flying:    bool,
-	crouched:  bool, // sneaking: the lower box (player_height)
-	jump_held: bool, // the jump button was down last tick (an air jump needs a new press)
-	air_jumps: u8, // jumps in the air left (mods.air_jumps, given back on the ground)
+	position:      [3]f64, // centre of the feet
+	velocity:      [3]f32,
+	on_ground:     bool,
+	flying:        bool,
+	crouched:      bool, // sneaking: the lower box (player_height)
+	jump_held:     bool, // the jump button was down last tick (an air jump needs a new press)
+	air_jumps:     u8, // jumps in the air left (mods.air_jumps, given back on the ground)
+	hooked:        bool, // a grappling hook holds: the player is pulled toward `anchor`
+	anchor:        [3]f64, // where the line met the block
+	hook_block:    Block_Pos, // the block it holds on to (the pull ends when that is gone)
+	hook_cooldown: u16, // ticks until the hook may attach again
+}
+
+HOOK_HANG :: 1.5 // blocks: this close to the anchor the pull stops and the player hangs
+HOOK_FOLLOW :: 10.0 // 1/s: how quickly the velocity follows the pull's
+HOOK_AIR_CONTROL :: 0.3 // 1/s: air control while the momentum of a released hook is kept (the cooldown, until landing)
+
+// hook_update: one tick of the grappling hook. It attaches (a hitscan line
+// from the eye along the look, to a block: a body is never in the line), holds
+// while the button stays down and the block stays, and lets go with the
+// velocity kept, starting its cooldown. true: the player is being pulled
+// (gravity and ground control give way to it this tick).
+@(private = "file")
+hook_update :: proc(s: ^Player_State, input: Player_Input, q: Block_Query, mods: Mods) -> bool {
+	if s.hook_cooldown > 0 && !s.hooked {s.hook_cooldown -= 1}
+	holding := .Grapple in input.buttons && mods.grapple.range > 0 && !s.flying
+	if s.hooked {
+		b, loaded := q.get(q.data, s.hook_block)
+		if !holding || !loaded || !block_targetable(q.table, b) {
+			s.hooked = false
+			s.hook_cooldown = u16(math.ceil(mods.grapple.cooldown * TICK_RATE))
+			return false
+		}
+		return true
+	}
+	if !holding || s.hook_cooldown > 0 {return false}
+	cp := base.cos(input.pitch)
+	dir := [3]f64 {
+		f64(-base.sin(input.yaw) * cp),
+		f64(base.sin(input.pitch)),
+		f64(-base.cos(input.yaw) * cp),
+	}
+	hit, ok := raycast(q, player_eye(s^), dir, f64(mods.grapple.range))
+	if !ok || hit.distance > f64(mods.grapple.range) {return false}
+	s.hooked, s.anchor, s.hook_block = true, hit.point, hit.block
+	return true
 }
 
 // player_height: the player's box's height (crouched: lower).
@@ -111,6 +151,7 @@ player_step :: proc(
 		.Sprint in input.buttons, .Sneak in input.buttons, .Jump in input.buttons
 	feet_wet, chest_wet := in_water(q, s.position, 0.2), in_water(q, s.position, 1.2)
 	swimming := !s.flying && (feet_wet || chest_wet)
+	pulled := hook_update(s, input, q, mods) && !swimming
 	// Crouched while sneaking on foot; up again once a standing box fits.
 	if sneak && !s.flying && !swimming {
 		s.crouched = true
@@ -138,10 +179,22 @@ player_step :: proc(
 	}
 	control := rules.ground_control if s.flying || s.on_ground else rules.air_control
 	if swimming {control = SWIM_CONTROL}
+	if s.hook_cooldown > 0 && !s.hooked && !s.on_ground && !s.flying && !swimming {
+		control = min(control, HOOK_AIR_CONTROL) // (a released hook's momentum carries)
+	}
 	follow := 1 - base.exp(-control * dt)
 	target := wish * speed
 	s.velocity.x += (target.x - s.velocity.x) * follow
 	s.velocity.z += (target.y - s.velocity.z) * follow
+	if pulled {
+		// The hook: the whole velocity eases to the pull's (no gravity below).
+		to := s.anchor - player_eye(s^)
+		d := math.sqrt(to.x * to.x + to.y * to.y + to.z * to.z)
+		pull: [3]f32
+		if d >
+		   HOOK_HANG {pull = [3]f32{f32(to.x / d), f32(to.y / d), f32(to.z / d)} * mods.grapple.speed}
+		s.velocity += (pull - s.velocity) * (1 - base.exp(-HOOK_FOLLOW * dt))
+	}
 	vy_before: f32
 	if swimming {
 		// Buoyant: the vertical speed eases towards the swim's, no gravity.
@@ -161,14 +214,18 @@ player_step :: proc(
 	} else {
 		jump_speed := math.sqrt(2 * rules.gravity * rules.jump_height * mods.jump)
 		if s.on_ground {s.air_jumps = mods.air_jumps}
-		if s.on_ground && jump {
+		if pulled {
+			// (the hook's pull is not a jump)
+		} else if s.on_ground && jump {
 			s.velocity.y = jump_speed
 		} else if jump && !s.jump_held && !s.on_ground && s.air_jumps > 0 {
 			s.velocity.y = jump_speed // a new press in the air
 			s.air_jumps -= 1
 		}
 		vy_before = s.velocity.y
-		s.velocity.y = max(s.velocity.y - rules.gravity * dt, -rules.terminal_velocity)
+		if !pulled {
+			s.velocity.y = max(s.velocity.y - rules.gravity * dt, -rules.terminal_velocity)
+		}
 		if on_climbable(q, s.position, player_height(s^)) {
 			// A ladder: down no faster than LADDER_FALL_SPEED, up by walking into
 			// something or holding jump, held still while sneaking.

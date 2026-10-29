@@ -82,6 +82,7 @@ Item_Info :: struct {
 	modifiers:   [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
 	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
 	weapon:      Maybe(Weapon_Info), // a hitscan weapon (data: items/weapons.json)
+	grapple:     Maybe(Grapple_Info), // a grappling hook (data: items/tools.json)
 	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
 }
 
@@ -98,6 +99,17 @@ Weapon_Info :: struct {
 	reload_time: f32, // seconds
 	spread:      f32, // radians of random cone
 	sound:       string, // the shot's cue (client/sfx: "pistol", "rifle", "sniper"; "": the pistol's)
+	pellets:     int, // rays a shot casts, each doing `damage` (0 or 1: one; MAX_PELLETS at most)
+}
+
+MAX_PELLETS :: 16
+
+// Grapple_Info: what a grappling hook does, all of it data (the item's `grapple`
+// object; the shared movement code, physics.odin, is its only reader).
+Grapple_Info :: struct {
+	range:    f32, // blocks: how far the line reaches (0: not a hook)
+	speed:    f32, // blocks a second: the pull toward the anchor
+	cooldown: f32, // seconds after a release before the next attach
 }
 
 MAX_MAGAZINE :: 255 // (Stack.ammo is a byte)

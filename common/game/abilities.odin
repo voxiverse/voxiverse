@@ -44,10 +44,20 @@ ability_parse :: proc(text: string) -> (a: Ability, ok: bool) {
 	return {}, false
 }
 
+// Kit_Place: where a kit's stack goes.
+Kit_Place :: enum u8 {
+	Anywhere, // the first free slot, hotbar first
+	Hotbar,
+	Pockets, // the grid beyond the hotbar
+	Worn, // the equipment slot Kit_Entry.worn
+}
+
 // Kit_Entry: a stack a mode's kit gives.
 Kit_Entry :: struct {
 	item:  Item,
 	count: u16,
+	place: Kit_Place,
+	worn:  Equip_Slot,
 }
 
 // Mode_Def: a game mode from a pack.

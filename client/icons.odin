@@ -55,8 +55,13 @@ item_sprite :: proc(
 		weapon_sprite(weapon.sound, pixels)
 	} else if tool, is_tool := info.tool.?; is_tool {
 		tool_sprite(tool, pixels)
+	} else if _, is_hook := info.grapple.?; is_hook {
+		sprite_pixels(GRAPPLE_ART, pixels)
 	} else if armor, is_armor := info.armor.?; is_armor {
 		armor_sprite(armor, pixels)
+		for mod in info.modifiers {
+			if mod.kind == .Air_Jumps && mod.amount > 0 {spring_soles(pixels)}
+		}
 	} else {
 		return false
 	}
@@ -236,6 +241,57 @@ SNIPER_ART := [16]string {
 	"................",
 }
 
+@(private = "file")
+SHOTGUN_ART := [16]string {
+	"................",
+	"................",
+	"................",
+	"................",
+	".oooooooooooooo.",
+	"oLLLLLLLLLLLLLGo",
+	"oGGGGGGGGGGGGGDo",
+	".ooooooooooBBBBo",
+	"..oRRRRRoooBBBBo",
+	"...oooooo.oBBBo.",
+	"..........ooBo..",
+	"...........oo...",
+	"................",
+	"................",
+	"................",
+	"................",
+}
+
+// The grappling hook: a claw on a coil of rope.
+@(private = "file")
+GRAPPLE_ART := [16]string {
+	"................",
+	".....oo..oo.....",
+	".....oLo.oLo....",
+	"......oLooLo....",
+	".......oGGo.....",
+	".......oGGo.....",
+	"....ooooBBooo...",
+	"...oBBBBooBBBo..",
+	"..oBBooooooBBo..",
+	"..oBo......oBBo.",
+	"..oBo......oBBo.",
+	"..oBBo....oBBo..",
+	"...oBBBooBBBo...",
+	"....oooooooo....",
+	"................",
+	"................",
+}
+
+// spring_soles: the jump boots' mark: green springs under the soles.
+@(private = "file")
+spring_soles :: proc(pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
+	for y in 13 * ICON_SIZE / 16 ..< 15 * ICON_SIZE / 16 {
+		for x in 0 ..< ICON_SIZE {
+			if (x * 16 / ICON_SIZE) % 2 == 0 {pixels[y * ICON_SIZE + x] = {96, 220, 90, 255}}
+		}
+	}
+}
+
 // weapon_sprite draws a hitscan weapon's art by its sound cue (a pack's weapon
 // with another cue has the pistol's).
 @(private = "file")
@@ -246,6 +302,8 @@ weapon_sprite :: proc(cue: string, pixels: ^[ICON_SIZE * ICON_SIZE][4]u8) {
 		art = RIFLE_ART
 	case "sniper":
 		art = SNIPER_ART
+	case "shotgun":
+		art = SHOTGUN_ART
 	}
 	sprite_pixels(art, pixels)
 }

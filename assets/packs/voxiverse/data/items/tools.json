@@ -9,5 +9,15 @@
 		"description": "Tills dirt and grass into farmland.",
 		"stack": 1,
 		"tool": "hoe"
+	},
+	"grappling_hook": {
+		"model": "voxiverse:grappling_hook",
+		"description": "Hold the use button to hook a block up to 30 blocks away and be pulled to it.",
+		"stack": 1,
+		"grapple": {
+			"range": 30,
+			"speed": 20,
+			"cooldown": 2.0
+		}
 	}
 }

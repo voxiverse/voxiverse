@@ -104,6 +104,9 @@ Session :: struct {
 	bob_amp:          f32, // 0 ..= 1, easing in and out as walking starts and stops
 	aiming:           bool, // a held item that aims is aimed (the crosshair stays in third person)
 	weapon_clock:     f64, // seconds, advanced by the frames (weapons.odin's timers)
+	shot_seen_by:     u16, // the shooter and place of the last shot drawn: a pattern's other rays are tracers only
+	shot_seen_at:     [3]f64,
+	shot_seen_time:   f64,
 	shot_next:        f64, // when the held weapon may fire again (its rate)
 	ammo_shown:       int, // the magazine as predicted ...
 	ammo_until:       f64, // ... until this time (the server's word is shown after)

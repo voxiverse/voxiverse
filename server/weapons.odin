@@ -108,16 +108,6 @@ shot_trace :: proc(
 	return res
 }
 
-// spread_offset: a repeatable pair of offsets in -1 ..< 1 from a seed.
-@(private = "file")
-spread_offset :: proc(seed: u64) -> [2]f32 {
-	h := seed * 0x9E37_79B9_7F4A_7C15
-	h ~= h >> 31
-	h *= 0xD1B5_4A32_D192_ED03
-	h ~= h >> 29
-	return {f32(h & 0xFFFF) / 32768 - 1, f32((h >> 16) & 0xFFFF) / 32768 - 1}
-}
-
 // weapon_interval: ticks between shots, as a fraction (the rate is shots a second).
 weapon_interval :: proc(info: game.Weapon_Info) -> f64 {
 	return f64(game.TICK_RATE) / f64(info.fire_rate)
@@ -150,22 +140,62 @@ weapon_shoot :: proc(
 	stack.ammo -= 1
 	c.inv_changed = true
 
-	yaw, pitch := m.yaw, m.pitch
-	if info.spread > 0 {
-		o := spread_offset(s.tick * 31 + u64(player_id(s, c)) + 1)
-		yaw += o.x * info.spread
-		pitch = clamp(pitch + o.y * info.spread, -game.PITCH_LIMIT, game.PITCH_LIMIT)
-	}
-	dir := forward(yaw, pitch)
+	id := player_id(s, c)
 	origin := game.player_eye(c.player)
 	latency_ms := claimed_latency_ms if claimed_latency_ms >= 0 else shooter_latency_ms(s, c)
-	res := shot_trace(s, c, origin, dir, f64(info.range), latency_ms)
-
-	id := player_id(s, c)
-	hit, killed := false, false
-	switch res.kind {
-	case .Player:
-		amount := info.damage * (info.headshot if res.head else 1)
+	// The rays: one (a pistol's) or a pattern (a shotgun's), the same ones the
+	// shooter's client draws (game.pellet_dirs, from the seed both know).
+	dirs, rays := game.pellet_dirs(game.shot_seed(u16(id), m.after, m.slot), m.yaw, m.pitch, info)
+	ends: [game.MAX_PELLETS][3]f64
+	Body_Hit :: struct {
+		player: ^Client,
+		amount: f32,
+		head:   bool,
+	}
+	bodies: [game.MAX_PELLETS]Body_Hit
+	body_count := 0
+	creatures: [game.MAX_PELLETS]u32
+	creature_count := 0
+	hit, killed, headshot := false, false, false
+	for i in 0 ..< rays {
+		res := shot_trace(s, c, origin, dirs[i], f64(info.range), latency_ms)
+		ends[i] = origin + dirs[i] * res.distance
+		switch res.kind {
+		case .Player:
+			// (a shot's pellets on one body add up: one damage, one message)
+			amount := info.damage * (info.headshot if res.head else 1)
+			at := -1
+			for b, k in bodies[:body_count] {if b.player == res.player {at = k}}
+			if at < 0 {
+				bodies[body_count] = {res.player, 0, false}
+				at, body_count = body_count, body_count + 1
+			}
+			bodies[at].amount += amount
+			bodies[at].head ||= res.head
+		case .Creature:
+			// (one hit from a shot, however many pellets land)
+			seen := false
+			for id in creatures[:creature_count] {seen ||= id == res.creature}
+			if seen {continue}
+			creatures[creature_count] = res.creature
+			creature_count += 1
+			w := c.world
+			if ent, index := entity_find(w, res.creature); ent != nil {
+				hit = true
+				headshot ||= res.head
+				record(s, c, .Entity_Hit, game.ENTITY_INFO[ent.kind].name)
+				if entity_attack(w, ent, c.player.position) {
+					killed = true
+					record(s, c, .Entity_Killed, game.ENTITY_INFO[ent.kind].name)
+					entity_died(w, index)
+				} else {
+					entity_hurt_shown(w, res.creature)
+				}
+			}
+		case .Block, .None:
+		}
+	}
+	for b in bodies[:body_count] {
 		source := Damage_Source {
 			kind     = .Weapon,
 			attacker = id,
@@ -173,44 +203,34 @@ weapon_shoot :: proc(
 			pos      = origin,
 			placed   = true,
 		}
-		switch damage(s, res.player, amount, source) {
+		switch damage(s, b.player, b.amount, source) {
 		case .Hurt:
 			hit = true
+			headshot ||= b.head
 		case .Killed:
 			hit, killed = true, true
+			headshot ||= b.head
 		case .Ignored, .Blocked:
 		}
-	case .Creature:
-		w := c.world
-		if ent, index := entity_find(w, res.creature); ent != nil {
-			hit = true
-			record(s, c, .Entity_Hit, game.ENTITY_INFO[ent.kind].name)
-			if entity_attack(w, ent, c.player.position) {
-				killed = true
-				record(s, c, .Entity_Killed, game.ENTITY_INFO[ent.kind].name)
-				entity_died(w, index)
-			} else {
-				entity_hurt_shown(w, res.creature)
-			}
-		}
-	case .Block, .None:
 	}
 	if hit {
 		confirm := game.Hit_Confirm {
 			kill     = killed,
-			headshot = res.head,
+			headshot = headshot,
 		}
 		event_send(s, c, .Hit_Confirm, &confirm)
 	}
 	record(s, c, .Shot_Fired, name, 1 if hit else 0)
 
-	// Everyone else near sees the tracer.
-	shot := game.Shot{id, stack.item, origin, origin + dir * res.distance}
+	// Everyone else near sees the tracers.
 	for &o in s.clients {
 		if &o == c || o.state != .Playing || o.world != c.world {continue}
 		d := o.player.position - origin
 		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
-		event_send(s, &o, .Shot, &shot)
+		for i in 0 ..< rays {
+			shot := game.Shot{id, stack.item, origin, ends[i]}
+			event_send(s, &o, .Shot, &shot)
+		}
 	}
 	return true
 }

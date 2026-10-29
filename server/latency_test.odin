@@ -21,6 +21,7 @@ Run_Result :: struct {
 	skipped:      int,
 	velocity:     int, // ... of them in the velocity
 	flying:       bool,
+	hooked_ticks: int, // ticks the prediction was hooked
 	was_dead:     bool, // the server said it died
 	dead:         bool, // ... and it is still
 }
@@ -43,6 +44,15 @@ Predicting_Client :: struct {
 	results:     map[u32]game.Edit_Result,
 	was_dead:    bool, // it has been
 	dead:        bool, // the server says so (Health): the client stands still
+	inventory:   game.Inventory, // as the server last said (the mods the gear gives)
+	mode:        int, // the game mode it said
+}
+
+// client_mods: what the real client derives its movement from: the character's mode
+// and inventory as the server told them.
+@(private = "file")
+client_mods :: proc(c: ^Predicting_Client) -> game.Mods {
+	return game.derive_character(test_reg(), c.mode, &c.inventory)
 }
 
 @(private = "file")
@@ -101,6 +111,7 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 						c.last_update,
 						&c.rules,
 						query(c),
+						client_mods(c),
 						teleported = teleported,
 					)
 				case .Rules:
@@ -108,6 +119,11 @@ pump :: proc(t: ^testing.T, c: ^Predicting_Client) {
 				case .Health:
 					c.dead = (^game.Health)(g.value).dead
 					c.was_dead ||= c.dead
+				case .Inventory:
+					c.inventory = (^game.Inventory_State)(g.value).inventory
+				case .Mode:
+					if m, found := game.mode_find(test_reg(), (^game.Mode_Record)(g.value).mode);
+					   found {c.mode = m}
 				}
 			}
 		case game.Edit_Result:
@@ -169,6 +185,7 @@ run_script :: proc(
 	nudge := false, // the client puts one ulp into its predicted velocity.x after every prediction
 	fly := false, // the character is in a mode with `fly`, takes off and flies (no edits)
 	death := false, // survival: killed at tick 50, the Respawn button at tick 60
+	hook := false, // a grappling hook in hand: held for stretches of the script (no edits)
 ) -> (
 	result: Run_Result,
 	ok: bool,
@@ -193,6 +210,7 @@ run_script :: proc(
 		endpoint = harness_local(&h),
 		h        = &h,
 		scratch  = new(game.Block_Array),
+		mode     = game.NO_MODE,
 	}
 	defer free(c.scratch)
 	state_rx_init(&c.rx)
@@ -202,12 +220,6 @@ run_script :: proc(
 	defer delete(c.chunks)
 	defer delete(c.results)
 
-	mods := game.MODS_NONE
-	if fly {
-		inv: game.Inventory
-		m, _ := game.mode_find(srv.registry, "creative")
-		mods = game.derive_character(srv.registry, m, &inv)
-	}
 	c.key = test_key("latency_test")
 	send(&c, test_hello("latency_test"))
 	// Each phase gets its own budget of ticks.
@@ -223,7 +235,13 @@ run_script :: proc(
 	}
 	for {
 		pump(t, &c)
-		msg := game.prediction_tick(&c.prediction, {pitch = -0.7}, &c.rules, query(&c))
+		msg := game.prediction_tick(
+			&c.prediction,
+			{pitch = -0.7},
+			&c.rules,
+			query(&c),
+			client_mods(&c),
+		)
 		msg.snapshot = c.rx.rx.ack
 		send(&c, msg)
 		harness_step(c.h)
@@ -233,6 +251,15 @@ run_script :: proc(
 		if harness_ticks(&h) > deadline {return}
 	}
 
+	if hook { 	// (the server's character holds it too: its mods come from the inventory)
+		item, _ := game.item_by_name(srv.registry, "grappling_hook")
+		call(srv, proc(s: ^Server, data: rawptr) {
+				c := &s.clients[0]
+				c.inventory.slots[0] = {(^game.Item)(data)^, 1, 0}
+				c.inventory.selected = 0
+				c.inv_changed = true
+			}, &item)
+	}
 	deadline = harness_ticks(&h) + PHASE_BUDGET
 	// The script: 150 ticks of walking and jumping, three edits.
 	EDIT_TICKS :: [3]int{40, 80, 120}
@@ -253,7 +280,8 @@ run_script :: proc(
 			}}
 		if fly && tick == 10 {in_.buttons += {.Toggle_Fly}}
 		if fly && tick > 10 && tick < ticks {in_.buttons += {.Jump}}
-		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c), mods)
+		if hook && (tick % 90 >= 10 && tick % 90 < 50) {in_.buttons += {.Grapple}} 	// (held, let go, the cooldown, held)
+		msg := game.prediction_tick(&c.prediction, in_, &c.rules, query(&c), client_mods(&c))
 		msg.snapshot = c.rx.rx.ack
 		if nudge {
 			v := &c.prediction.state.velocity.x
@@ -261,8 +289,9 @@ run_script :: proc(
 		}
 		send(&c, msg)
 		check(&c, msg.sequence)
+		if c.prediction.state.hooked {result.hooked_ticks += 1}
 		for edit_tick, i in EDIT_TICKS {
-			if tick != edit_tick || fly {continue}
+			if tick != edit_tick || fly || hook {continue}
 			f := [3]f64 {
 				-math.sin(f64(in_.yaw)) * math.cos(f64(in_.pitch)),
 				math.sin(f64(in_.pitch)),
@@ -292,14 +321,16 @@ run_script :: proc(
 	// Everything acknowledged and answered.
 	deadline = harness_ticks(&h) + PHASE_BUDGET
 	last := c.prediction.next_sequence - 1
-	for c.last_update.acked != last || (len(c.results) < 3 && !fly) || c.prediction.count > 0 {
+	for c.last_update.acked != last ||
+	    (len(c.results) < 3 && !fly && !hook) ||
+	    c.prediction.count > 0 {
 		pump(t, &c)
 		harness_step(c.h)
 		if harness_ticks(&h) > deadline {return}
 	}
 	result.server_state = c.last_update.state
 	result.predicted = c.prediction.state
-	if !fly {for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}}
+	if !fly && !hook {for i in 0 ..< 3 {result.edits[i] = c.results[u32(i + 1)]}}
 	result.flying = c.prediction.state.flying
 	result.was_dead, result.dead = c.was_dead, c.dead
 	result.corrections = c.prediction.corrections - corrections_before
@@ -723,4 +754,16 @@ test_block :: proc(name: string) -> game.Block {
 	b, ok := game.registry_block(test_reg(), name)
 	if !ok {panic(name)}
 	return b
+}
+
+// The hook is predicted: with 50 ms of latency the client holds, pulls and lets go
+// on the same ticks the server does and ends where it is, with no correction.
+@(test)
+test_grapple_predicted_with_latency :: proc(t: ^testing.T) {
+	r, ok := run_script(t, 50, 0, ticks = 200, hook = true)
+	if !testing.expect(t, ok, "the run did not finish") {return}
+	testing.expect(t, r.hooked_ticks > 20, "the hook never held")
+	testing.expect(t, r.predicted == r.server_state, "prediction ended away from the server")
+	testing.expect_value(t, r.corrections, 0)
+	testing.expect_value(t, r.desyncs, 0)
 }

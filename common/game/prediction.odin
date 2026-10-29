@@ -247,6 +247,7 @@ Player_Field :: enum u8 {
 	Crouched,
 	Jump_Held,
 	Air_Jumps,
+	Hook,
 }
 
 @(rodata)
@@ -258,6 +259,7 @@ PLAYER_FIELD_NAMES := [Player_Field]string {
 	.Crouched  = "crouched",
 	.Jump_Held = "jump_held",
 	.Air_Jumps = "air_jumps",
+	.Hook      = "hook",
 }
 
 // player_fields hashes each field of s to 32 bits (hash_value's walk).
@@ -276,5 +278,12 @@ player_fields :: proc(s: Player_State) -> (fields: [Player_Field]u32) {
 	fields[.Crouched] = fold(s.crouched)
 	fields[.Jump_Held] = fold(s.jump_held)
 	fields[.Air_Jumps] = fold(s.air_jumps)
+	hook := struct {
+		hooked:   bool,
+		anchor:   [3]f64,
+		block:    Block_Pos,
+		cooldown: u16,
+	}{s.hooked, s.anchor, s.hook_block, s.hook_cooldown}
+	fields[.Hook] = fold(hook)
 	return
 }

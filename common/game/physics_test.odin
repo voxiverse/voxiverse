@@ -324,7 +324,8 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		for _ in 0 ..< 60 {player_step(&s, {move = {0, 1}}, rules, query(w), DT, mods)}
 		return abs(s.position.z - 0.5)
 	}
-	plain, fast := walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH, {.Fly}})
+	plain, fast :=
+		walk(&w, &rules, MODS_NONE), walk(&w, &rules, {1.1, 1, 0, BASE_HEALTH, {.Fly}, {}})
 	testing.expectf(
 		t,
 		fast / plain > 1.09 && fast / plain < 1.11,
@@ -346,7 +347,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 		}
 		return peak - 1
 	}
-	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH, {.Fly}})
+	high := apex(&w, &rules, {1, 1.2, 0, BASE_HEALTH, {.Fly}, {}})
 	testing.expectf(
 		t,
 		high > 1.25 * 1.2 - 0.03 && high < 1.25 * 1.2 + 0.01,
@@ -356,7 +357,7 @@ test_mods_change_movement :: proc(t: ^testing.T) {
 	)
 
 	// Air jumps: one charm, one more jump in the air, on a new press only.
-	mods := Mods{1, 1, 1, BASE_HEALTH, {.Fly}}
+	mods := Mods{1, 1, 1, BASE_HEALTH, {.Fly}, {}}
 	s := Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
@@ -403,7 +404,7 @@ test_prediction_agrees_with_mods :: proc(t: ^testing.T) {
 	defer delete(w.solid)
 	floor(&w, 0, 40)
 	rules := RULES_DEFAULTS
-	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4, {.Fly}}
+	mods := Mods{1.1, 1.1, 1, BASE_HEALTH + 4, {.Fly}, {}}
 	start := Player_State {
 		position  = {0.5, 1, 0.5},
 		on_ground = true,
@@ -460,4 +461,213 @@ test_fly_needs_the_ability :: proc(t: ^testing.T) {
 	mods.abilities = {} // (a mode change took it away)
 	player_step(&s, {}, &rules, query(&w), DT, mods)
 	testing.expect(t, !s.flying, "losing the ability ends the flight")
+}
+
+// The jump boots: exactly one more jump in the air and a fifth faster, from
+// the base pack's data, through derive_mods.
+@(test)
+test_jump_boots_give_one_extra_jump :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	rules := RULES_DEFAULTS
+	boots, found := item_by_name(test_reg(), "jump_boots")
+	if !testing.expect(t, found) {return}
+	inv: Inventory
+	inv.equipment[.Feet] = {boots, 1, 0}
+	mods := derive_mods(test_reg(), &inv)
+	testing.expect_value(t, mods.air_jumps, 1)
+	testing.expectf(t, abs(mods.speed - 1.2) < 1e-5, "speed %v", mods.speed)
+	// (carried in the pockets they do nothing)
+	inv.equipment[.Feet] = {}
+	inv.slots[7] = {boots, 1, 0}
+	testing.expect_value(t, derive_mods(test_reg(), &inv).air_jumps, 0)
+
+	s := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods) // the jump
+	jumps := 1
+	for _ in 0 ..< 4 { 	// four more presses in the air, a release between each
+		player_step(&s, {}, &rules, query(&w), DT, mods)
+		before := s.velocity.y
+		player_step(&s, {buttons = {.Jump}}, &rules, query(&w), DT, mods)
+		if s.velocity.y > before {jumps += 1}
+	}
+	testing.expect_value(t, jumps, 2)
+}
+
+// A wall of stone `distance` blocks ahead (z = -distance), 12 wide and 12 high.
+@(private = "file")
+hook_wall :: proc(w: ^Test_World, distance: i32) {
+	for x in i32(-6) ..= 6 {
+		for y in i32(0) ..= 12 {w.solid[{x, y, -distance}] = true}
+	}
+}
+
+@(private = "file")
+HOOK :: Grapple_Info{30, 20, 2}
+
+// The hook: it attaches to a block in range, pulls at about its speed, lets go
+// with the velocity kept, and waits out its cooldown before the next.
+@(test)
+test_grapple_pulls_and_releases :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	hook_wall(&w, 25)
+	rules := RULES_DEFAULTS
+	mods := MODS_NONE
+	mods.grapple = HOOK
+	s := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	look := Player_Input {
+		pitch   = 0.15, // (slightly up: the wall's face ahead)
+		buttons = {.Grapple},
+	}
+	player_step(&s, look, &rules, query(&w), DT, mods)
+	if !testing.expect(t, s.hooked, "the line did not attach") {return}
+	testing.expect_value(t, s.hook_block.z, -25)
+	fastest := f32(0)
+	for _ in 0 ..< 20 {
+		player_step(&s, look, &rules, query(&w), DT, mods)
+		fastest = max(fastest, -s.velocity.z)
+	}
+	testing.expectf(t, fastest > 15 && fastest < 21, "pulled at %.1f blocks a second", fastest)
+	testing.expectf(t, s.position.z < -5, "pulled to z %.1f", s.position.z)
+	// Let go: the velocity stays (momentum), the cooldown starts, gravity is back.
+	moving := s.velocity
+	player_step(&s, {pitch = 0.15}, &rules, query(&w), DT, mods)
+	testing.expect(t, !s.hooked)
+	testing.expect_value(t, s.hook_cooldown, 60)
+	testing.expectf(
+		t,
+		abs(s.velocity.z - moving.z) < 0.5 || moving.z == 0,
+		"velocity %v -> %v",
+		moving,
+		s.velocity,
+	)
+	// Held during the cooldown: nothing. After it: again.
+	for _ in 0 ..< 59 {
+		player_step(&s, look, &rules, query(&w), DT, mods)
+		if s.hooked {break}
+	}
+	testing.expect(t, !s.hooked, "attached during the cooldown")
+	player_step(&s, look, &rules, query(&w), DT, mods)
+	player_step(&s, look, &rules, query(&w), DT, mods)
+	testing.expect(t, s.hooked, "did not attach after the cooldown")
+}
+
+// Range: a block 29 blocks away is hooked, one 32 is not (and a miss costs nothing);
+// a hook that is not in hand does nothing.
+@(test)
+test_grapple_respects_range :: proc(t: ^testing.T) {
+	rules := RULES_DEFAULTS
+	for distance in ([]i32{20, 29, 32, 60}) {
+		w: Test_World
+		defer delete(w.solid)
+		floor(&w, 0, 40)
+		hook_wall(&w, distance)
+		mods := MODS_NONE
+		mods.grapple = HOOK
+		s := Player_State {
+			position  = {0.5, 1, 0.5},
+			on_ground = true,
+		}
+		player_step(&s, {pitch = 0.1, buttons = {.Grapple}}, &rules, query(&w), DT, mods)
+		testing.expectf(
+			t,
+			s.hooked == (distance <= 29),
+			"a wall at %d: hooked %v",
+			distance,
+			s.hooked,
+		)
+		testing.expect_value(t, s.hook_cooldown, 0)
+	}
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	hook_wall(&w, 10)
+	s := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	player_step(&s, {pitch = 0.1, buttons = {.Grapple}}, &rules, query(&w), DT) // no hook in hand
+	testing.expect(t, !s.hooked)
+}
+
+// The hook lets go when its block is gone.
+@(test)
+test_grapple_lets_go_of_a_broken_block :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	hook_wall(&w, 20)
+	rules := RULES_DEFAULTS
+	mods := MODS_NONE
+	mods.grapple = HOOK
+	s := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	look := Player_Input {
+		pitch   = 0.1,
+		buttons = {.Grapple},
+	}
+	player_step(&s, look, &rules, query(&w), DT, mods)
+	testing.expect(t, s.hooked)
+	delete_key(&w.solid, s.hook_block)
+	player_step(&s, look, &rules, query(&w), DT, mods)
+	testing.expect(t, !s.hooked, "held a block that is gone")
+	testing.expect_value(t, s.hook_cooldown, 60)
+}
+
+// Prediction and the server step agree with the hook, tick for tick.
+@(test)
+test_prediction_agrees_with_the_hook :: proc(t: ^testing.T) {
+	w: Test_World
+	defer delete(w.solid)
+	floor(&w, 0, 40)
+	hook_wall(&w, 25)
+	rules := RULES_DEFAULTS
+	mods := MODS_NONE
+	mods.grapple = HOOK
+	start := Player_State {
+		position  = {0.5, 1, 0.5},
+		on_ground = true,
+	}
+	predicted: Prediction
+	prediction_init(&predicted, start)
+	server := start
+	hooked_ticks := 0
+	for tick in 0 ..< 200 {
+		in_ := Player_Input {
+			pitch   = 0.15,
+			move    = {0.2, 0.5},
+			buttons = {.Grapple} if tick % 100 < 40 else {},
+		}
+		msg := prediction_tick(&predicted, in_, &rules, query(&w), mods)
+		player_step(&server, msg.input, &rules, query(&w), TICK_SECONDS, mods)
+		if server.hooked {hooked_ticks += 1}
+		if !testing.expectf(
+			t,
+			predicted.state == server,
+			"tick %d: %v against %v",
+			tick,
+			predicted.state,
+			server,
+		) {break}
+	}
+	testing.expect(t, hooked_ticks > 20, "it never hooked")
+	prediction_reconcile(
+		&predicted,
+		{acked = predicted.next_sequence - 1, state = server},
+		&rules,
+		query(&w),
+		mods,
+	)
+	testing.expect(t, predicted.state == server)
 }

@@ -8,7 +8,7 @@ import "core:testing"
 // four slabs (3), a ladder (4), a fence (16) and a door (16).
 BASE_NEW_TYPES :: 11
 BASE_NEW_STATES :: 4 * 8 + 4 * 3 + 4 + 16 + 16
-BASE_WEAPONS :: 3 // the pistol, the rifle and the sniper: items of their own
+BASE_WEAPONS :: 6 // the pistol, rifle, sniper, shotgun, grappling hook and jump boots: items of their own
 BASE_TYPES :: len(Block) + BASE_NEW_TYPES
 BASE_STATES :: len(Block) + BASE_NEW_STATES
 

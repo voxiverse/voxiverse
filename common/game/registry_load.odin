@@ -151,6 +151,7 @@ ITEM_FIELDS := []string {
 	"modifiers",
 	"description",
 	"weapon",
+	"grapple",
 	"model",
 	"override",
 }

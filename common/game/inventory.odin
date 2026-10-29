@@ -267,6 +267,38 @@ inventory_add :: proc(reg: ^Registry, inv: ^Inventory, stack: Stack) -> (left: S
 	return
 }
 
+// inventory_add_at: like inventory_add, into one place only (a kit's: the
+// hotbar, the pockets or a worn slot, which takes only what fits it and is not
+// stacked). What did not fit is left; a full hotbar or pockets spill into the other.
+inventory_add_at :: proc(
+	reg: ^Registry,
+	inv: ^Inventory,
+	stack: Stack,
+	place: Kit_Place,
+	worn: Equip_Slot,
+) -> (
+	left: Stack,
+) {
+	switch place {
+	case .Anywhere:
+		return inventory_add(reg, inv, stack)
+	case .Hotbar:
+		left = slots_add(reg, inv.slots[:HOTBAR_SLOTS], stack)
+		if !stack_empty(left) {left = slots_add(reg, inv.slots[HOTBAR_SLOTS:], left)} 	// (full: wherever there is room)
+	case .Pockets:
+		left = slots_add(reg, inv.slots[HOTBAR_SLOTS:], stack)
+		if !stack_empty(left) {left = slots_add(reg, inv.slots[:HOTBAR_SLOTS], left)}
+	case .Worn:
+		left = stack
+		if stack_empty(inv.equipment[worn]) && item_fits(reg, stack, worn) {
+			inv.equipment[worn] = stack
+			left = {}
+		}
+	}
+	inventory_tidy(inv)
+	return
+}
+
 // slots_sort merges the stacks of one item (up to its stack size) and puts
 // them in item order, the empty slots last.
 @(private = "file")

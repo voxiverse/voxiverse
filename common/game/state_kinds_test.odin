@@ -56,11 +56,18 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 
 	// Player_Update
 	own := Own_Player {
-		acked     = 9,
-		state     = {{1, 2, 3}, {4, -5, 6}, true, false, true, true, 2},
+		acked = 9,
+		state = {
+			position = {1, 2, 3},
+			velocity = {4, -5, 6},
+			on_ground = true,
+			crouched = true,
+			jump_held = true,
+			air_jumps = 2,
+		},
 		teleports = 3,
-		yaw       = 1,
-		pitch     = -1,
+		yaw = 1,
+		pitch = -1,
 	}
 	round_trip(t, &l, .Own_Player, {}, &own)
 	// Rules_Changed (the receiver holds the world's rules from its Welcome)

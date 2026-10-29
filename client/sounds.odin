@@ -102,7 +102,8 @@ gun_cue :: proc(cue: string) -> Sound_Kind {
 	switch cue {
 	case "rifle":
 		return .Shot_Rifle
-	case "sniper":
+	case "sniper", "shotgun":
+		// (the shotgun has the sniper's boom)
 		return .Shot_Sniper
 	}
 	return .Shot_Pistol

@@ -1,11 +1,46 @@
 {
 	"survival": {
-		"abilities": ["health", "regenerate", "drop_on_death"],
+		"abilities": [
+			"health",
+			"regenerate",
+			"drop_on_death"
+		],
 		"kit": [
-			{"item": "voxiverse:pistol", "count": 1},
-			{"item": "voxiverse:rifle", "count": 1},
-			{"item": "voxiverse:sniper", "count": 1},
-			{"item": "voxiverse:rocket_launcher", "count": 1}
+			{
+				"item": "voxiverse:rifle",
+				"count": 1,
+				"slot": "hotbar"
+			},
+			{
+				"item": "voxiverse:shotgun",
+				"count": 1,
+				"slot": "hotbar"
+			},
+			{
+				"item": "voxiverse:sniper",
+				"count": 1,
+				"slot": "hotbar"
+			},
+			{
+				"item": "voxiverse:rocket_launcher",
+				"count": 1,
+				"slot": "hotbar"
+			},
+			{
+				"item": "voxiverse:grappling_hook",
+				"count": 1,
+				"slot": "hotbar"
+			},
+			{
+				"item": "voxiverse:pistol",
+				"count": 1,
+				"slot": "pockets"
+			},
+			{
+				"item": "voxiverse:jump_boots",
+				"count": 1,
+				"slot": "feet"
+			}
 		],
 		"rules": {}
 	}
