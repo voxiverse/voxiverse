@@ -77,21 +77,30 @@ Collector :: struct {
 	stop:    bool, // (atomic)
 	writer:  game.Writer,
 	port:    int,
+	now:     time.Tick, // the step's time (the OS's on the thread, the network's when stepped)
 }
 
-// collector_start opens the collector in dir on a UDP port (0: any) and runs it on a thread.
-collector_start :: proc(c: ^Collector, dir: string, port: int) -> bool {
+// collector_open opens the collector in dir on a UDP port (0: any), or on a
+// port of `sim`, with nothing running: the caller steps it (collector_step).
+collector_open :: proc(c: ^Collector, dir: string, port: int, sim: ^netcode.Simnet = nil) -> bool {
 	c^ = {}
 	c.dir = strings.clone(dir)
 	os.make_directory_all(dir)
-	if err := netcode.host_open(&c.host, port, 64); err != nil {
+	if err := netcode.host_open(&c.host, port, 64, sim = sim); err != nil {
 		log.errorf("collector cannot open its port=%d error=%v", port, err)
+		delete(c.dir)
 		return false
 	}
 	c.port = c.host.socket.port
 	game.writer_init(&c.writer)
 	load_salt(c)
 	load_cursors(c)
+	return true
+}
+
+// collector_start opens the collector on a UDP port and runs it on a thread.
+collector_start :: proc(c: ^Collector, dir: string, port: int) -> bool {
+	collector_open(c, dir, port) or_return
 	c.thread = thread.create_and_start_with_poly_data(
 		c,
 		collector_main,
@@ -106,6 +115,11 @@ collector_stop :: proc(c: ^Collector) {
 	sync.atomic_store(&c.stop, true)
 	thread.join(c.thread)
 	thread.destroy(c.thread)
+	collector_close(c)
+}
+
+// collector_close frees a collector that is not running on a thread.
+collector_close :: proc(c: ^Collector) {
 	netcode.host_close(&c.host, "the collector stopped")
 	game.writer_destroy(&c.writer)
 	for _, p in c.peers {delete(p.pid)}
@@ -125,25 +139,31 @@ collector_stats :: proc(c: ^Collector) -> Collector_Stats {
 @(private)
 collector_main :: proc(c: ^Collector) {
 	for !sync.atomic_load(&c.stop) {
-		now := time.tick_now()
-		netcode.host_update(&c.host, now)
-		for e in c.host.events {
-			switch v in e {
-			case netcode.Peer_Connected:
-				// A kick's Peer_Disconnected can be missed (it is appended while this loop
-				// runs), and the slot reused: the old peer's pid is freed here then.
-				if old, ok := c.peers[v.peer]; ok {delete(old.pid)}
-				c.peers[v.peer] = {}
-			case netcode.Peer_Message:
-				handle(c, v.peer, v.data)
-			case netcode.Peer_Disconnected:
-				if p, ok := c.peers[v.peer]; ok {delete(p.pid)}
-				delete_key(&c.peers, v.peer)
-			}
-		}
-		netcode.host_flush(&c.host, now)
+		collector_step(c, time.tick_now())
 		time.sleep(5 * time.Millisecond)
 	}
+}
+
+// collector_step: one pass at time `now`: the host's packets, the peers'
+// messages, what is owed back.
+collector_step :: proc(c: ^Collector, now: time.Tick) {
+	c.now = now
+	netcode.host_update(&c.host, now)
+	for e in c.host.events {
+		switch v in e {
+		case netcode.Peer_Connected:
+			// A kick's Peer_Disconnected can be missed (it is appended while this loop
+			// runs), and the slot reused: the old peer's pid is freed here then.
+			if old, ok := c.peers[v.peer]; ok {delete(old.pid)}
+			c.peers[v.peer] = {}
+		case netcode.Peer_Message:
+			handle(c, v.peer, v.data)
+		case netcode.Peer_Disconnected:
+			if p, ok := c.peers[v.peer]; ok {delete(p.pid)}
+			delete_key(&c.peers, v.peer)
+		}
+	}
+	netcode.host_flush(&c.host, now)
 }
 
 @(private)
@@ -160,7 +180,7 @@ refuse :: proc(c: ^Collector, peer: netcode.Peer_Id, why: string) {
 	sync.mutex_unlock(&c.mutex)
 	log.warnf("collector refused a batch why=%s", why)
 	if p, known := &c.peers[peer]; known {p.state = .Dropped}
-	netcode.host_kick(&c.host, peer, why, time.tick_now())
+	netcode.host_kick(&c.host, peer, why, c.now)
 }
 
 @(private)
@@ -196,14 +216,14 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 		}
 		p.pid = pid_of(c, p.account)
 		p.state = .Ready
-		p.window = time.tick_now()
+		p.window = c.now
 	case game.Telemetry_Batch:
 		if p.state != .Ready {
 			refuse(c, id, "a batch before a proof")
 			return
 		}
-		if time.tick_diff(p.window, time.tick_now()) > BATCH_WINDOW {
-			p.window, p.count = time.tick_now(), 0
+		if time.tick_diff(p.window, c.now) > BATCH_WINDOW {
+			p.window, p.count = c.now, 0
 		}
 		p.count += 1
 		if p.count > BATCHES_PER_WINDOW {

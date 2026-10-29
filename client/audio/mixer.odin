@@ -552,7 +552,7 @@ mix_block :: proc "contextless" (m: ^Mixer, out: []f32, n: int) -> (guarded: u32
 	}
 	for i in 0 ..< 2 * n {m.rev_in[i] = 0}
 	for st in m.streams[:m.count] {
-		if st != nil && st.inline {
+		if st != nil && st.inline && !sync.atomic_load(&st.pause) {
 			for stream_pump(st) {}
 		}
 	}

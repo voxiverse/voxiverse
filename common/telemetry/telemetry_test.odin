@@ -3,9 +3,7 @@ package telemetry
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
-import "core:sync"
 import "core:testing"
-import "core:time"
 
 @(private = "file")
 read_dir :: proc(dir: string) -> (names: []string, contents: []string) {
@@ -28,7 +26,7 @@ test_events_become_json_lines :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	s: Sink
-	sink_start(&s, dir, 7)
+	sink_start(&s, dir, 7, stepped = true)
 	day1 := i64(1_700_000_000_000) // 2023-11-14
 	day2 := day1 + 86_400_000
 	emit(
@@ -89,23 +87,23 @@ test_events_become_json_lines :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// A burst never blocks the emitter: with the writer held up, the ring fills,
-// later events are dropped and counted, and the count is itself written.
+// A burst never blocks the emitter: with the writer held up (a stepped sink's
+// is, until it is drained), the ring fills, later events are dropped and
+// counted, and the count is itself written. (What an emit costs is a bench
+// scenario, not a test.)
 @(test)
 test_a_burst_never_blocks_and_counts_its_losses :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "telemetry_burst"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	s: Sink
-	sink_start(&s, dir, 1)
+	sink_start(&s, dir, 1, stepped = true)
 	N :: 200_000
-	start := time.tick_now()
 	for i in 0 ..< N {emit(&s, {kind = .Block_Placed, actor = 1, text = short("stone"), n = {i64(i), 0, 0}})}
-	elapsed := time.duration_seconds(time.tick_since(start))
-	testing.expectf(t, elapsed / N < 20e-6, "an emit took %.1f us on average", elapsed / N * 1e6)
 	sink_flush(&s)
 	stats := sink_stats(&s)
-	testing.expect_value(t, stats.written + stats.dropped, N + (1 if stats.dropped > 0 else 0))
+	testing.expect_value(t, stats.dropped, N - RING_SIZE)
+	testing.expect_value(t, stats.written, RING_SIZE + 1)
 	sink_stop(&s)
 	_, contents := read_dir(dir)
 	text := strings.concatenate(contents, context.temp_allocator)
@@ -128,7 +126,7 @@ test_the_day_cap_holds :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	s: Sink
-	sink_start(&s, dir, 1, day_cap = 2000)
+	sink_start(&s, dir, 1, day_cap = 2000, stepped = true)
 	for i in 0 ..< 100 {emit(&s, {time_ms = 1_700_000_000_000 + i64(i), kind = .Block_Mined, text = short("stone")})}
 	sink_flush(&s)
 	stats := sink_stats(&s)
@@ -153,17 +151,15 @@ test_day_names :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// The cost of an event, as the server pays it on its tick: emitting is a lock
-// and a copy, and the writer keeps up with a busy server. The budgets are
-// generous (CI runs this optimized too, tests are unoptimized with more slack)
-// and catch a regression to something like a syscall or an allocation per event.
+// A writer kept up with (drained as the ring half fills): every event is
+// written and none dropped.
 @(test)
-test_event_cost :: proc(t: ^testing.T) {
-	dir := filepath.join({"build", "test", "telemetry_cost"}, context.temp_allocator) or_else ""
+test_a_drained_sink_loses_nothing :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "telemetry_drained"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	s: Sink
-	sink_start(&s, dir, 9)
+	sink_start(&s, dir, 9, stepped = true)
 	defer sink_stop(&s)
 	N :: 50_000
 	e := Event {
@@ -173,20 +169,11 @@ test_event_cost :: proc(t: ^testing.T) {
 		text  = short("stone"),
 		n     = {1, 2, 3},
 	}
-	emitting: time.Duration
-	start := time.now()
 	for _ in 0 ..< N {
-		for sync.atomic_load(&s.head) - sync.atomic_load(&s.tail) > RING_SIZE / 2 {
-			time.sleep(time.Millisecond) // (a server's writer drains as it goes)
-		}
-		t0 := time.tick_now()
+		if s.head - s.tail > RING_SIZE / 2 {sink_drain(&s)}
 		emit(&s, e)
-		emitting += time.tick_since(t0)
 	}
 	sink_flush(&s)
-	total := time.since(start)
-	emit_ns := f64(time.duration_nanoseconds(emitting)) / N
-	write_ns := f64(time.duration_nanoseconds(total)) / N
 	stats := sink_stats(&s)
 	testing.expectf(
 		t,
@@ -195,12 +182,5 @@ test_event_cost :: proc(t: ^testing.T) {
 		stats.written,
 		N,
 		stats.dropped,
-	)
-	testing.expectf(t, emit_ns < 5_000, "emitting an event costs %.0f ns (budget 5000)", emit_ns)
-	testing.expectf(
-		t,
-		write_ns < 50_000,
-		"writing an event costs %.0f ns (budget 50000)",
-		write_ns,
 	)
 }

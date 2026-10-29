@@ -65,26 +65,70 @@ fresh :: proc(name: string) -> (lake, logs: string) {
 	return
 }
 
+// Everything here runs on one simulated network (netcode.Simnet): the collector
+// is stepped by the test, the uploader's waits step it, nothing sleeps or reads
+// a clock. The real-UDP round trips are in smoke/.
 @(private = "file")
-wait_for :: proc(seconds: f64, done: proc() -> bool) -> bool {
-	end := time.tick_add(time.tick_now(), time.Duration(seconds * f64(time.Second)))
-	for time.tick_diff(time.tick_now(), end) > 0 {
-		if done() {return true}
-		time.sleep(10 * time.Millisecond)
-	}
-	return done()
+STEP :: 5 * time.Millisecond
+
+@(private = "file")
+COLLECTOR_PORT :: 40_000
+
+@(private = "file")
+Rig :: struct {
+	net: netcode.Simnet,
+	c:   Collector,
+	up:  bool, // the collector is open
 }
 
-// Waits until the collector has refused `n` more batches than `before`: it
-// handles a peer's messages on its own thread, so how long that takes is not ours to guess.
 @(private = "file")
-wait_refused :: proc(c: ^Collector, before, n: u64) -> bool {
-	end := time.tick_add(time.tick_now(), 20 * time.Second)
-	for time.tick_diff(time.tick_now(), end) > 0 {
-		if collector_stats(c).refused >= before + n {return true}
-		time.sleep(5 * time.Millisecond)
+rig_open :: proc(r: ^Rig, lake: string) -> bool {
+	netcode.simnet_init(&r.net)
+	r.up = collector_open(&r.c, lake, COLLECTOR_PORT, &r.net)
+	return r.up
+}
+
+@(private = "file")
+rig_close :: proc(r: ^Rig) {
+	if r.up {collector_close(&r.c)}
+	r.up = false
+	netcode.simnet_destroy(&r.net)
+}
+
+// rig_step: 5 ms of the network's time, and the collector's pass.
+@(private = "file")
+rig_step :: proc(r: ^Rig) {
+	r.net.now = time.tick_add(r.net.now, STEP)
+	if r.up {collector_step(&r.c, r.net.now)}
+}
+
+@(private = "file")
+rig_idle :: proc(data: rawptr) {rig_step((^Rig)(data))}
+
+// rig_run steps for `seconds` of the network's time.
+@(private = "file")
+rig_run :: proc(r: ^Rig, seconds: f64) {
+	for _ in 0 ..< int(seconds * f64(time.Second) / f64(STEP)) {rig_step(r)}
+}
+
+@(private = "file")
+rig_uploader :: proc(r: ^Rig, u: ^Uploader, logs: string, key: game.Account_Key) {
+	uploader_open(u, logs, loopback(COLLECTOR_PORT), key, 100 * time.Millisecond, &r.net)
+	u.idle, u.idle_data = rig_idle, r
+}
+
+// rig_stats: the collector's counters.
+@(private = "file")
+rig_stats :: proc(r: ^Rig) -> Collector_Stats {return collector_stats(&r.c)}
+
+// Steps until the collector has refused `n` more batches than `before`.
+@(private = "file")
+wait_refused :: proc(r: ^Rig, before, n: u64) -> bool {
+	for _ in 0 ..< 4000 {
+		if rig_stats(r).refused >= before + n {return true}
+		rig_step(r)
 	}
-	return collector_stats(c).refused >= before + n
+	return rig_stats(r).refused >= before + n
 }
 
 // A log is uploaded, whole lines in the right partitions with an anonymous pid
@@ -99,23 +143,17 @@ test_a_log_reaches_the_lake_once :: proc(t: ^testing.T) {
 		t,
 		os.write_entire_file(fmt.tprintf("%s/2023-11-14.jsonl", logs), transmute([]u8)text) == nil,
 	)
-	c: Collector
-	if !testing.expect(t, collector_start(&c, lake, 0)) {return}
+	r: Rig
+	if !testing.expect(t, rig_open(&r, lake)) {return}
+	defer rig_close(&r)
 	key := game.account_key_make()
 	u: Uploader
-	uploader_start(&u, logs, loopback(c.port), key, 100 * time.Millisecond)
-	@(static) up: ^Uploader
-	@(static) col: ^Collector
-	up, col = &u, &c
-	ok := wait_for(
-		10,
-		proc() -> bool {a, _ := uploader_counts(up); return(
-				a >= 1 &&
-				collector_stats(col).accepted_lines == 50 \
-			)},
-	)
-	testing.expect(t, ok, "the log never arrived")
-	uploader_stop(&u)
+	rig_uploader(&r, &u, logs, key)
+	upload_pass(&u)
+	acked, _ := uploader_counts(&u)
+	testing.expect(t, acked >= 1, "the log never arrived")
+	testing.expect_value(t, rig_stats(&r).accepted_lines, 50)
+	uploader_close(&u)
 	got, files := read_lake(lake)
 	testing.expect_value(t, strings.count(got, "\n"), 50)
 	testing.expect(t, files >= 1)
@@ -131,7 +169,6 @@ test_a_log_reaches_the_lake_once :: proc(t: ^testing.T) {
 		t,
 		strings.contains(got, `"k":"block_mined"`) && strings.contains(got, `"block":"stone"`),
 	)
-	// The same pid for the same account, not another's.
 	cursor, _ := os.read_entire_file_from_path(
 		fmt.tprintf("%s/upload.cursor", logs),
 		context.temp_allocator,
@@ -145,28 +182,25 @@ test_a_log_reaches_the_lake_once :: proc(t: ^testing.T) {
 	// The cursor is lost: everything is sent again, and written once.
 	os.remove(fmt.tprintf("%s/upload.cursor", logs))
 	u2: Uploader
-	uploader_start(&u2, logs, loopback(c.port), key, 100 * time.Millisecond)
-	up = &u2
-	ok = wait_for(10, proc() -> bool {return collector_stats(col).duplicates >= 1})
-	testing.expect(t, ok, "a second send was not recognised")
-	uploader_stop(&u2)
+	rig_uploader(&r, &u2, logs, key)
+	upload_pass(&u2)
+	testing.expect(t, rig_stats(&r).duplicates >= 1, "a second send was not recognised")
+	uploader_close(&u2)
 	again, _ := read_lake(lake)
 	testing.expect_value(t, strings.count(again, "\n"), 50)
-	collector_stop(&c)
 
 	// A restarted collector remembers (its cursors are on disk).
-	c2: Collector
-	if !testing.expect(t, collector_start(&c2, lake, 0)) {return}
+	collector_close(&r.c)
+	r.up = collector_open(&r.c, lake, COLLECTOR_PORT, &r.net)
+	if !testing.expect(t, r.up) {return}
 	os.remove(fmt.tprintf("%s/upload.cursor", logs))
 	u3: Uploader
-	uploader_start(&u3, logs, loopback(c2.port), key, 100 * time.Millisecond)
-	col, up = &c2, &u3
-	ok = wait_for(10, proc() -> bool {return collector_stats(col).duplicates >= 1})
-	testing.expect(t, ok, "a restarted collector wrote a batch twice")
-	uploader_stop(&u3)
+	rig_uploader(&r, &u3, logs, key)
+	upload_pass(&u3)
+	testing.expect(t, rig_stats(&r).duplicates >= 1, "a restarted collector wrote a batch twice")
+	uploader_close(&u3)
 	final, _ := read_lake(lake)
 	testing.expect_value(t, strings.count(final, "\n"), 50)
-	collector_stop(&c2)
 	free_all(context.temp_allocator)
 }
 
@@ -177,15 +211,14 @@ test_the_spool_survives_a_collector_that_is_down :: proc(t: ^testing.T) {
 	lake, logs := fresh("down")
 	defer os.remove_all(lake)
 	defer os.remove_all(logs)
-	// A port: opened once to learn one, then closed.
-	probe: Collector
-	if !testing.expect(t, collector_start(&probe, lake, 0)) {return}
-	port := probe.port
-	collector_stop(&probe)
+	r: Rig
+	netcode.simnet_init(&r.net)
+	defer rig_close(&r)
 	key := game.account_key_make()
 	u: Uploader
-	uploader_start(&u, logs, loopback(port), key, 100 * time.Millisecond)
-	time.sleep(400 * time.Millisecond) // (nothing to send: no pass)
+	rig_uploader(&r, &u, logs, key)
+	defer uploader_close(&u)
+	upload_pass(&u) // nothing to send: no pass
 	_, passes := uploader_counts(&u)
 	testing.expect_value(t, passes, 0)
 	text := events(20)
@@ -193,27 +226,23 @@ test_the_spool_survives_a_collector_that_is_down :: proc(t: ^testing.T) {
 		t,
 		os.write_entire_file(fmt.tprintf("%s/2023-11-14.jsonl", logs), transmute([]u8)text) == nil,
 	)
-	time.sleep(800 * time.Millisecond) // (it tries and nobody answers)
+	upload_pass(&u) // it tries and nobody answers
 	acked, _ := uploader_counts(&u)
 	testing.expect_value(t, acked, 0)
 	// The collector comes up on that port: the log goes.
-	c: Collector
-	if !testing.expect(t, collector_start(&c, lake, port)) {return}
-	@(static) col: ^Collector
-	col = &c
-	ok := wait_for(12, proc() -> bool {return collector_stats(col).accepted_lines == 20})
-	testing.expect(t, ok, "the waiting log never went")
+	r.up = collector_open(&r.c, lake, COLLECTOR_PORT, &r.net)
+	if !testing.expect(t, r.up) {return}
+	upload_pass(&u)
+	testing.expect_value(t, rig_stats(&r).accepted_lines, 20)
 	// More is written meanwhile: only the new lines go.
 	more := events(5)
 	f, _ := os.open(fmt.tprintf("%s/2023-11-14.jsonl", logs), {.Write, .Append})
 	os.write_string(f, more)
 	os.close(f)
-	ok = wait_for(12, proc() -> bool {return collector_stats(col).accepted_lines == 25})
-	testing.expect(t, ok, "the new lines did not go")
-	uploader_stop(&u)
+	upload_pass(&u)
+	testing.expect_value(t, rig_stats(&r).accepted_lines, 25)
 	got, _ := read_lake(lake)
 	testing.expect_value(t, strings.count(got, "\n"), 25)
-	collector_stop(&c)
 	free_all(context.temp_allocator)
 }
 
@@ -221,16 +250,19 @@ test_the_spool_survives_a_collector_that_is_down :: proc(t: ^testing.T) {
 Raw :: struct {
 	link:   netcode.Link,
 	writer: game.Writer,
+	rig:    ^Rig,
 }
 
 @(private = "file")
-raw_connect :: proc(r: ^Raw, port: int) -> bool {
+raw_connect :: proc(r: ^Raw, rig: ^Rig) -> bool {
+	r.rig = rig
 	game.writer_init(&r.writer)
-	if netcode.link_connect(&r.link, loopback(port), "", time.tick_now()) != nil {return false}
+	if netcode.link_connect(&r.link, loopback(COLLECTOR_PORT), "", rig.net.now, sim = &rig.net) !=
+	   nil {return false}
 	for r.link.state != .Connected {
-		netcode.link_update(&r.link, time.tick_now())
+		netcode.link_update(&r.link, rig.net.now)
 		if r.link.state == .Failed {return false}
-		time.sleep(2 * time.Millisecond)
+		rig_step(rig)
 	}
 	return true
 }
@@ -240,7 +272,7 @@ raw_send :: proc(r: ^Raw, m: game.Client_Message) {
 	clear(&r.writer.buf)
 	game.encode_client(&r.writer, m)
 	netcode.link_send(&r.link, r.writer.buf[:], true)
-	netcode.link_flush(&r.link, time.tick_now())
+	netcode.link_flush(&r.link, r.rig.net.now)
 }
 
 // raw_challenge: Hello, and the nonce the collector answers with.
@@ -249,10 +281,9 @@ raw_challenge :: proc(r: ^Raw, account: game.Account) -> (nonce: game.Nonce, ok:
 	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0})
 	scratch := new(game.Block_Array)
 	defer free(scratch)
-	start := time.tick_now()
 	got := make([dynamic][]u8, context.temp_allocator)
-	for time.tick_diff(start, time.tick_now()) < 3 * time.Second {
-		netcode.link_update(&r.link, time.tick_now())
+	for _ in 0 ..< 600 { 	// 3 s of the network's time
+		netcode.link_update(&r.link, r.rig.net.now)
 		clear(&got)
 		netcode.link_receive(&r.link, &got)
 		for data in got {
@@ -261,9 +292,16 @@ raw_challenge :: proc(r: ^Raw, account: game.Account) -> (nonce: game.Nonce, ok:
 				if c, is_c := m.(game.Challenge); is_c {return c.nonce, true}
 			}
 		}
-		time.sleep(2 * time.Millisecond)
+		netcode.link_flush(&r.link, r.rig.net.now)
+		rig_step(r.rig)
 	}
 	return
+}
+
+@(private = "file")
+raw_close :: proc(r: ^Raw) {
+	netcode.link_close(&r.link, "done")
+	game.writer_destroy(&r.writer)
 }
 
 // What a collector must refuse: a forged proof, batches before a proof, a line
@@ -273,96 +311,90 @@ test_the_collector_refuses_what_it_should :: proc(t: ^testing.T) {
 	lake, logs := fresh("refuse")
 	defer os.remove_all(lake)
 	defer os.remove_all(logs)
-	c: Collector
-	if !testing.expect(t, collector_start(&c, lake, 0)) {return}
-	defer collector_stop(&c)
+	rig: Rig
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
 	good := events(1)
 
 	// A proof signed by another key.
 	{
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		mine, other := game.account_key_make(), game.account_key_make()
 		nonce, ok := raw_challenge(&r, mine.account)
 		testing.expect(t, ok)
 		raw_send(&r, game.Proof{game.account_sign(&other, nonce)})
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, good})
-		time.sleep(300 * time.Millisecond)
-		testing.expect_value(t, collector_stats(&c).forged, 1)
-		testing.expect_value(t, collector_stats(&c).accepted_lines, 0)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		rig_run(&rig, 0.3)
+		testing.expect_value(t, rig_stats(&rig).forged, 1)
+		testing.expect_value(t, rig_stats(&rig).accepted_lines, 0)
+		raw_close(&r)
 	}
 	// A batch before any proof.
 	{
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, good})
-		time.sleep(200 * time.Millisecond)
-		testing.expect_value(t, collector_stats(&c).accepted_lines, 0)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		rig_run(&rig, 0.2)
+		testing.expect_value(t, rig_stats(&rig).accepted_lines, 0)
+		raw_close(&r)
 	}
 	// Proved: bad lines, an unknown kind, a bad day; then good ones; then a flood.
 	{
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		key := game.account_key_make()
 		nonce, ok := raw_challenge(&r, key.account)
 		testing.expect(t, ok)
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
-		before := collector_stats(&c).refused
+		before := rig_stats(&rig).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, "this is not an event\n"})
-		testing.expect(t, wait_refused(&c, before, 1))
-		testing.expect_value(t, collector_stats(&c).refused, before + 1) // (and the peer is dropped)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		testing.expect(t, wait_refused(&rig, before, 1))
+		testing.expect_value(t, rig_stats(&rig).refused, before + 1) // (and the peer is dropped)
+		raw_close(&r)
 	}
 	for bad in ([]string{"{\"t\":1,\"k\":\"made_up_kind\"}\n", "{\"t\":1,\"tick\":0,\"k\":\"block_mined\",\"block\":\"x\x01y\"}\n", "{\"k\":\"block_mined\"}\n"}) {
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		key := game.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
-		before := collector_stats(&c).refused
+		before := rig_stats(&rig).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", 0, bad})
-		testing.expect(t, wait_refused(&c, before, 1))
-		testing.expectf(t, collector_stats(&c).refused == before + 1, "%q was not refused", bad)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		testing.expect(t, wait_refused(&rig, before, 1))
+		testing.expectf(t, rig_stats(&rig).refused == before + 1, "%q was not refused", bad)
+		raw_close(&r)
 	}
 	{
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		key := game.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
-		before := collector_stats(&c).refused
+		before := rig_stats(&rig).refused
 		raw_send(&r, game.Telemetry_Batch{.Events, "yesterday", 0, good})
-		testing.expect(t, wait_refused(&c, before, 1))
-		testing.expect_value(t, collector_stats(&c).refused, before + 1)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		testing.expect(t, wait_refused(&rig, before, 1))
+		testing.expect_value(t, rig_stats(&rig).refused, before + 1)
+		raw_close(&r)
 	}
 	// A flood: more batches than a window allows are refused (the rest were taken).
 	{
 		r: Raw
-		testing.expect(t, raw_connect(&r, c.port))
+		testing.expect(t, raw_connect(&r, &rig))
 		key := game.account_key_make()
 		nonce, _ := raw_challenge(&r, key.account)
 		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
-		before := collector_stats(&c)
+		before := rig_stats(&rig)
 		for i in 0 ..< 30 {raw_send(&r, game.Telemetry_Batch{.Events, "2023-11-14", u64(i * len(good)), good})}
-		testing.expect(t, wait_refused(&c, before.refused, 1))
-		after := collector_stats(&c)
+		testing.expect(t, wait_refused(&rig, before.refused, 1))
+		after := rig_stats(&rig)
 		testing.expect_value(
 			t,
 			after.accepted_batches - before.accepted_batches,
 			BATCHES_PER_WINDOW,
 		)
 		testing.expect_value(t, after.refused - before.refused, 1)
-		netcode.link_close(&r.link, "done")
-		game.writer_destroy(&r.writer)
+		raw_close(&r)
 	}
 	free_all(context.temp_allocator)
 }
@@ -373,17 +405,15 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 	lake, logs := fresh("report")
 	defer os.remove_all(lake)
 	defer os.remove_all(logs)
-	c: Collector
-	if !testing.expect(t, collector_start(&c, lake, 0)) {return}
-	defer collector_stop(&c)
+	r: Rig
+	if !testing.expect(t, rig_open(&r, lake)) {return}
+	defer rig_close(&r)
 	testing.expect(t, report_write(logs, "the sheep ate my homework\nversion 0.26"))
 	u: Uploader
-	uploader_start(&u, logs, loopback(c.port), game.account_key_make(), 100 * time.Millisecond)
-	@(static) col: ^Collector
-	col = &c
-	ok := wait_for(10, proc() -> bool {return collector_stats(col).reports == 1})
-	testing.expect(t, ok, "the report never arrived")
-	uploader_stop(&u)
+	rig_uploader(&r, &u, logs, game.account_key_make())
+	upload_pass(&u)
+	testing.expect_value(t, rig_stats(&r).reports, 1)
+	uploader_close(&u)
 	infos, _ := os.read_all_directory_by_path(
 		fmt.tprintf("%s/reports", logs),
 		context.temp_allocator,

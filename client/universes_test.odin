@@ -25,7 +25,7 @@ make_universe :: proc(dir, name: string, seed: u64, mode: string, age: time.Dura
 		context.temp_allocator,
 	)
 	_ = os.write_entire_file(cfg, transmute([]u8)text)
-	then := time.time_add(time.now(), -age)
+	then := time.time_add(time.Time{_nsec = CLOCK_FIXED_WALL}, -age) // (ages are relative: no clock read)
 	os.change_times(cfg, then, then)
 }
 

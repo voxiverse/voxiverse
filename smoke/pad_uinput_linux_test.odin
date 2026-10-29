@@ -1,5 +1,5 @@
 #+build linux
-package platform
+package smoke
 
 import "core:log"
 import "core:os"
@@ -7,6 +7,7 @@ import "core:sys/linux"
 import "core:testing"
 import "core:time"
 
+import "../client/platform"
 // The Linux backend against a virtual pad made through /dev/uinput: connect,
 // a button, an axis and the disconnect, through the real inotify and evdev
 // paths. Where /dev/uinput cannot be written the test warns and passes,
@@ -52,10 +53,14 @@ send :: proc(fd: linux.Fd, type, code: u16, value: i32) {
 }
 
 @(private = "file")
-wait_for :: proc(p: ^Pads, events: ^[dynamic]Event, found: proc(e: Event) -> bool) -> bool {
+wait_for :: proc(
+	p: ^platform.Pads,
+	events: ^[dynamic]platform.Event,
+	found: proc(e: platform.Event) -> bool,
+) -> bool {
 	for _ in 0 ..< 200 {
 		clear(events)
-		pads_poll(p, events, true)
+		platform.pads_poll(p, events, true)
 		for e in events {
 			if found(e) {return true}
 		}
@@ -75,12 +80,12 @@ test_uinput_pad :: proc(t: ^testing.T) {
 	}
 	defer linux.close(fd)
 	ioctl :: proc(fd: linux.Fd, req: u32, arg: uintptr) {_ = linux.ioctl(fd, req, arg)}
-	ioctl(fd, UI_SET_EVBIT, EV_KEY)
-	ioctl(fd, UI_SET_EVBIT, EV_ABS)
-	ioctl(fd, UI_SET_EVBIT, EV_SYN)
-	ioctl(fd, UI_SET_KEYBIT, BTN_SOUTH)
-	ioctl(fd, UI_SET_ABSBIT, ABS_X)
-	ioctl(fd, UI_SET_ABSBIT, ABS_Y)
+	ioctl(fd, UI_SET_EVBIT, platform.EV_KEY)
+	ioctl(fd, UI_SET_EVBIT, platform.EV_ABS)
+	ioctl(fd, UI_SET_EVBIT, platform.EV_SYN)
+	ioctl(fd, UI_SET_KEYBIT, platform.BTN_SOUTH)
+	ioctl(fd, UI_SET_ABSBIT, platform.ABS_X)
+	ioctl(fd, UI_SET_ABSBIT, platform.ABS_Y)
 	dev: Uinput_User_Dev
 	copy(dev.name[:], "Voxiverse Test Pad")
 	dev.bustype, dev.vendor, dev.product = 3, 0x1209, 0x0001
@@ -89,18 +94,18 @@ test_uinput_pad :: proc(t: ^testing.T) {
 	}
 	linux.write(fd, ([^]u8)(&dev)[:size_of(dev)])
 
-	p: Pads
-	pads_open(&p)
-	defer pads_close(&p)
-	events: [dynamic]Event
+	p: platform.Pads
+	platform.pads_open(&p)
+	defer platform.pads_close(&p)
+	events: [dynamic]platform.Event
 	defer delete(events)
 
 	ioctl(fd, UI_DEV_CREATE, 0)
 	created := true
 	defer if created {ioctl(fd, UI_DEV_DESTROY, 0)}
 
-	is_ours :: proc(e: Event) -> bool {
-		c, ok := e.(Pad_Connect_Event)
+	is_ours :: proc(e: platform.Event) -> bool {
+		c, ok := e.(platform.Pad_Connect_Event)
 		return ok && c.connected && c.vendor == 0x1209 && c.product == 1
 	}
 	if !wait_for(&p, &events, is_ours) {
@@ -110,22 +115,22 @@ test_uinput_pad :: proc(t: ^testing.T) {
 		)
 		return
 	}
-	send(fd, EV_KEY, BTN_SOUTH, 1)
-	send(fd, EV_SYN, SYN_REPORT, 0)
-	testing.expect(t, wait_for(&p, &events, proc(e: Event) -> bool {
-			b, ok := e.(Pad_Button_Event)
+	send(fd, platform.EV_KEY, platform.BTN_SOUTH, 1)
+	send(fd, platform.EV_SYN, platform.SYN_REPORT, 0)
+	testing.expect(t, wait_for(&p, &events, proc(e: platform.Event) -> bool {
+			b, ok := e.(platform.Pad_Button_Event)
 			return ok && b.button == .A && b.pressed
 		}), "the A press arrived")
-	send(fd, EV_ABS, ABS_X, 32767)
-	send(fd, EV_SYN, SYN_REPORT, 0)
-	testing.expect(t, wait_for(&p, &events, proc(e: Event) -> bool {
-			a, ok := e.(Pad_Axis_Event)
+	send(fd, platform.EV_ABS, platform.ABS_X, 32767)
+	send(fd, platform.EV_SYN, platform.SYN_REPORT, 0)
+	testing.expect(t, wait_for(&p, &events, proc(e: platform.Event) -> bool {
+			a, ok := e.(platform.Pad_Axis_Event)
 			return ok && a.axis == .Left_X && a.value > 0.99
 		}), "Left_X reached 1")
 	ioctl(fd, UI_DEV_DESTROY, 0)
 	created = false
-	testing.expect(t, wait_for(&p, &events, proc(e: Event) -> bool {
-			c, ok := e.(Pad_Connect_Event)
+	testing.expect(t, wait_for(&p, &events, proc(e: platform.Event) -> bool {
+			c, ok := e.(platform.Pad_Connect_Event)
 			return ok && !c.connected && c.vendor == 0x1209
 		}), "the disconnect arrived")
 }

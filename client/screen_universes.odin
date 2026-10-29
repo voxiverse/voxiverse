@@ -208,8 +208,8 @@ world_create :: proc(app: ^App, name, seed_text: string) {
 }
 
 // last_played: when a save was last played, as people say it.
-last_played :: proc(t: time.Time) -> string {
-	ago := time.duration_seconds(time.diff(t, time.now()))
+last_played :: proc(t, now: time.Time) -> string {
+	ago := time.duration_seconds(time.diff(t, now))
 	switch {
 	case ago < 60:
 		return tr(.Universes_Last_Just_Now)
@@ -303,7 +303,7 @@ saves_list :: proc(app: ^App, ctx: ^ui.Context) {
 		ui.draw_text(
 			ctx,
 			ui.cut_top(&inner, small + 4),
-			tr(.Universes_Card_Info, mode_text, last_played(e.played)),
+			tr(.Universes_Card_Info, mode_text, last_played(e.played, app_wall(app))),
 			small,
 			t.text_muted,
 			.Left,

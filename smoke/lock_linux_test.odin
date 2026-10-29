@@ -1,16 +1,36 @@
 #+build linux
-package server
+package smoke
 
 import "core:fmt"
+import "core:log"
 import "core:os"
 import "core:testing"
 import "core:time"
 
+import "../base"
+import "../server"
+
+@(private = "file")
+refused :: proc(dir: string) -> bool {
+	loud := context.logger
+	quiet := loud
+	quiet.lowest_level = .Fatal
+	context.logger = quiet
+	defer context.logger = loud
+	probe: server.Store
+	if server.universe_lock(&probe, dir) {
+		base.file_unlock(&probe.lock)
+		return false
+	}
+	return true
+}
+
 // A lock held by another process, which the OS drops with it.
 @(test)
 test_lock_held_by_a_child_process :: proc(t: ^testing.T) {
-	dir := scratch_dir("lock_child")
+	dir := fmt.aprintf("build/tmp/smoke_lock_child")
 	defer delete(dir)
+	os.remove_all(dir)
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
 	script := fmt.tprintf("exec 9>%s/lock; flock -n 9 && exec sleep 20", dir)
@@ -30,4 +50,5 @@ test_lock_held_by_a_child_process :: proc(t: ^testing.T) {
 	_ = os.process_kill(child)
 	_, _ = os.process_wait(child)
 	testing.expect(t, !refused(dir), "a crashed process left its lock behind")
+	_ = log.Level.Info
 }

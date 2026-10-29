@@ -7,7 +7,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:time"
 
 import "../base"
 import "../common/game"
@@ -19,6 +18,7 @@ import "ui"
 // artwork takes its colours from it), nothing else.
 ui_app :: proc(t: ^testing.T) -> ^App {
 	app := new(App)
+	app_clock_fix(app)
 	ok: bool
 	app.font, ok = font.load(FONT_DATA)
 	testing.expect(t, ok)
@@ -334,7 +334,7 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 		Save_Entry {
 			name = strings.clone("Home"),
 			path = strings.clone("Home"),
-			played = time.now(),
+			played = app_wall(app),
 		},
 	)
 	app.screen = .Universes

@@ -213,6 +213,7 @@ Sink :: struct {
 	day_cap:       int,
 	thread:        ^thread.Thread,
 	stop:          bool, // (atomic)
+	stepped:       bool, // no thread: the owner calls sink_drain (tests)
 	// the writer's, thread-private
 	day:           i64, // days since the epoch of the open file
 	day_bytes:     int,
@@ -221,14 +222,23 @@ Sink :: struct {
 }
 
 // sink_start opens the sink; dir "" writes nothing. session identifies this run.
-sink_start :: proc(s: ^Sink, dir: string, session: u32, day_cap := DEFAULT_DAY_CAP) {
+// A `stepped` sink has no writer thread: sink_drain is the writer's pass.
+sink_start :: proc(
+	s: ^Sink,
+	dir: string,
+	session: u32,
+	day_cap := DEFAULT_DAY_CAP,
+	stepped := false,
+) {
 	s^ = {}
 	s.session = session
 	s.day_cap = day_cap
+	s.stepped = stepped
 	s.ring = make([]Event, RING_SIZE)
 	if dir != "" {
 		s.dir = strings.clone(dir)
 		os.make_directory_all(dir)
+		if stepped {return}
 		s.thread = thread.create_and_start_with_poly_data(
 			s,
 			writer_main,
@@ -240,7 +250,10 @@ sink_start :: proc(s: ^Sink, dir: string, session: u32, day_cap := DEFAULT_DAY_C
 
 // sink_stop drains what is left and closes the file.
 sink_stop :: proc(s: ^Sink) {
-	if s.thread != nil {
+	if s.stepped {
+		sink_drain(s)
+		if s.file_open {os.close(s.file)}
+	} else if s.thread != nil {
 		sync.atomic_store(&s.stop, true)
 		thread.join(s.thread)
 		thread.destroy(s.thread)
@@ -252,6 +265,10 @@ sink_stop :: proc(s: ^Sink) {
 
 // sink_flush waits until everything emitted so far is written (tests).
 sink_flush :: proc(s: ^Sink) {
+	if s.stepped {
+		sink_drain(s)
+		return
+	}
 	if s.thread == nil {return}
 	for {
 		sync.mutex_lock(&s.mutex)
@@ -295,6 +312,47 @@ sink_stats :: proc(s: ^Sink) -> Sink_Stats {
 	return {s.written, s.dropped_total, s.capped}
 }
 
+// sink_drain is the writer's work on the caller's thread: everything emitted
+// so far is written, as the thread would write it.
+sink_drain :: proc(s: ^Sink) {
+	batch := make([]Event, 2048)
+	defer delete(batch)
+	text := strings.builder_make()
+	defer strings.builder_destroy(&text)
+	for writer_pass(s, batch, &text) == len(batch) {}
+}
+
+// writer_pass drains up to a batch from the ring and writes it; the count.
+@(private)
+writer_pass :: proc(s: ^Sink, batch: []Event, text: ^strings.Builder) -> int {
+	n := 0
+	dropped: u64
+	sync.mutex_lock(&s.mutex)
+	for s.tail < s.head && n < len(batch) {
+		batch[n] = s.ring[s.tail % RING_SIZE]
+		s.tail += 1
+		n += 1
+	}
+	if n < len(batch) {dropped, s.dropped = s.dropped, 0}
+	sync.mutex_unlock(&s.mutex)
+	strings.builder_reset(text)
+	if dropped > 0 {
+		write_event(
+			text,
+			{
+				time_ms = now_ms(),
+				session = s.session,
+				actor = NO_ACTOR,
+				kind = .Events_Dropped,
+				n = {i64(dropped), 0, 0},
+			},
+		)
+	}
+	for i in 0 ..< n {write_event(text, batch[i])}
+	if text.buf != nil && len(text.buf) > 0 {write_out(s, string(text.buf[:]), batch[:n], n)}
+	return n
+}
+
 @(private)
 writer_main :: proc(s: ^Sink) {
 	batch := make([]Event, 2048)
@@ -303,31 +361,7 @@ writer_main :: proc(s: ^Sink) {
 	defer strings.builder_destroy(&text)
 	for {
 		stopping := sync.atomic_load(&s.stop)
-		n := 0
-		dropped: u64
-		sync.mutex_lock(&s.mutex)
-		for s.tail < s.head && n < len(batch) {
-			batch[n] = s.ring[s.tail % RING_SIZE]
-			s.tail += 1
-			n += 1
-		}
-		if n < len(batch) {dropped, s.dropped = s.dropped, 0}
-		sync.mutex_unlock(&s.mutex)
-		strings.builder_reset(&text)
-		if dropped > 0 {
-			write_event(
-				&text,
-				{
-					time_ms = now_ms(),
-					session = s.session,
-					actor = NO_ACTOR,
-					kind = .Events_Dropped,
-					n = {i64(dropped), 0, 0},
-				},
-			)
-		}
-		for i in 0 ..< n {write_event(&text, batch[i])}
-		if text.buf != nil && len(text.buf) > 0 {write_out(s, string(text.buf[:]), batch[:n], n)}
+		n := writer_pass(s, batch, &text)
 		if stopping && n == 0 {break}
 		if n < len(batch) {time.sleep(100 * time.Millisecond)}
 	}

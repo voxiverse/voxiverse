@@ -2,7 +2,6 @@ package audio
 
 import "core:math"
 import "core:testing"
-import "core:time"
 import ma "vendor:miniaudio"
 
 // Tests for M32c's streams: what comes out of a stream voice is the file's
@@ -56,61 +55,42 @@ max_diff :: proc(a, b: []f32) -> f32 {
 }
 
 // A stream voice plays what the decoder gives, sample for sample, and ends
-// where the file does; an inline stream (no thread) and a threaded one agree.
+// where the file does. (The same through a decoder thread is in smoke/.)
 @(test)
 test_stream_equals_decode :: proc(t: ^testing.T) {
 	ref, ref_r := reference()
 	defer delete(ref)
 	defer delete(ref_r)
-	for inline in ([]bool{true, false}) {
-		m := new_mixer(44100)
-		defer free(m)
-		id, ok := add_stream(m, TONE, inline = inline)
-		defer streams_close(m)
-		testing.expect(t, ok)
-		if !inline {
-			for i := 0;
-			    i < 500 && sync_written(m, id) < 20000;
-			    i += 1 {time.sleep(time.Millisecond)}
-		}
-		v := play(m, {sound = id, gain = {1, 1}, pitch = 1})
-		late := latency(m)
-		total := len(ref) + 4410 + late
-		out: []f32
-		if inline {
-			out = mix_frames(m, total)
-		} else {
-			// A thread decodes in real time at best: the mixing is paced (a block
-			// of 10 ms every 5 ms), as a device would ask for it.
-			out = make([]f32, 2 * total)
-			for at := 0; at < total; at += 441 {
-				mix(m, out[2 * at:][:2 * min(441, total - at)])
-				time.sleep(5 * time.Millisecond)
-			}
-		}
-		defer delete(out)
-		// (the last sample is not played, as with any sound)
-		left := make([]f32, len(ref) - 1)
-		defer delete(left)
-		right := make([]f32, len(left))
-		defer delete(right)
-		for i in 0 ..< len(left) {
-			left[i] = out[2 * (i + late)]
-			right[i] = out[2 * (i + late) + 1]
-		}
-		testing.expectf(
-			t,
-			max_diff(left, ref) < 1e-5 && max_diff(right, ref_r) < 1e-5,
-			"inline=%v: differs by %v, %v",
-			inline,
-			max_diff(left, ref),
-			max_diff(right, ref_r),
-		)
-		testing.expect_value(t, stream_underruns(m, id), 0)
-		e, got := poll(m)
-		testing.expect(t, got && e.voice == v && e.reason == .Ended, "ends with the file")
-		testing.expect_value(t, out[2 * (len(ref) + late + 100)], 0)
+	m := new_mixer(44100)
+	defer free(m)
+	id, ok := add_stream(m, TONE, inline = true)
+	defer streams_close(m)
+	testing.expect(t, ok)
+	v := play(m, {sound = id, gain = {1, 1}, pitch = 1})
+	late := latency(m)
+	total := len(ref) + 4410 + late
+	out := mix_frames(m, total)
+	defer delete(out)
+	// (the last sample is not played, as with any sound)
+	left := make([]f32, len(ref) - 1)
+	defer delete(left)
+	right := make([]f32, len(left))
+	defer delete(right)
+	for i in 0 ..< len(left) {
+		left[i] = out[2 * (i + late)]
+		right[i] = out[2 * (i + late) + 1]
 	}
+	testing.expectf(
+		t,
+		max_diff(left, ref) < 1e-5 && max_diff(right, ref_r) < 1e-5,
+		"differs by %v, %v",
+		max_diff(left, ref),
+		max_diff(right, ref_r),
+	)
+	testing.expect_value(t, stream_underruns(m, id), 0)
+	e, got := poll(m)
+	testing.expect(t, got && e.voice == v && e.reason == .Ended, "ends with the file")
+	testing.expect_value(t, out[2 * (len(ref) + late + 100)], 0)
 }
 
 @(private = "file")
@@ -218,8 +198,8 @@ test_stream_rejects_garbage :: proc(t: ^testing.T) {
 	testing.expect_value(t, m.count, 0)
 }
 
-// The decoder thread starved 200 ms (paused) while the voice plays: the ring
-// holds enough, nothing is missed. Starved past the ring, the underrun is
+// The decoder starved 200 ms (paused: an inline one is not run) while the
+// voice plays: the ring holds enough, nothing is missed. Starved past the ring, the underrun is
 // counted, the voice holds its place and goes on from it.
 @(test)
 test_stream_starved_decoder :: proc(t: ^testing.T) {
@@ -228,12 +208,11 @@ test_stream_starved_decoder :: proc(t: ^testing.T) {
 	defer delete(ref_r)
 	m := new_mixer(44100)
 	defer free(m)
-	id, ok := add_stream(m, TONE)
+	id, ok := add_stream(m, TONE, inline = true)
 	defer streams_close(m)
 	testing.expect(t, ok)
-	for i := 0;
-	    i < 1000 && sync_written(m, id) < STREAM_RING - 4096;
-	    i += 1 {time.sleep(time.Millisecond)}
+	for stream_pump(m.streams[id]) {} 	// the ring is full when the decoder stops
+	testing.expect(t, sync_written(m, id) >= STREAM_RING - 4096)
 	stream_pause(m, id, true)
 	v := play(m, {sound = id, gain = {1, 1}})
 	late := latency(m)
@@ -259,7 +238,6 @@ test_stream_starved_decoder :: proc(t: ^testing.T) {
 		for e in more {energy += f64(e) * f64(e)}
 		delete(more)
 		drain(m)
-		time.sleep(2 * time.Millisecond)
 	}
 	testing.expect(t, !alive(m, v), "it finished")
 	// The mixed part, the dry part and the rest: the file's energy, once.
@@ -301,25 +279,19 @@ goertzel :: proc(x: []f32, stride, offset, from, to: int, freq, rate: f64) -> f6
 // 660 Hz on the right, each other's tone at least 60 dB down.
 @(test)
 test_stream_stereo_channels :: proc(t: ^testing.T) {
-	for inline in ([]bool{true, false}) {
+	{
 		m := new_mixer(48000)
 		defer free(m)
-		id, ok := add_stream(m, TONE, inline = inline)
+		id, ok := add_stream(m, TONE, inline = true)
 		defer streams_close(m)
 		testing.expect(t, ok)
 		testing.expect_value(t, m.streams[id].channels, 2)
-		if !inline {
-			for i := 0;
-			    i < 500 && sync_written(m, id) < 20000;
-			    i += 1 {time.sleep(time.Millisecond)}
-		}
 		play(m, {sound = id, gain = {1, 1}, pitch = 1})
 		frames := 48000
 		out := make([]f32, 2 * frames)
 		defer delete(out)
 		for at := 0; at < frames; at += 480 {
 			mix(m, out[2 * at:][:2 * 480])
-			if !inline {time.sleep(2 * time.Millisecond)}
 		}
 		from, to := 24000, 48000 - 2400 // past the limiter's delay
 		l440 := goertzel(out, 2, 0, from, to, 440, 48000)

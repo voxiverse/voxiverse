@@ -115,16 +115,15 @@ test_harness_refusals :: proc(t: ^testing.T) {
 	net: netcode.Simnet
 	netcode.simnet_init(&net)
 	defer netcode.simnet_destroy(&net)
-	srv: Server
 	config := harness_world()
 	config.net = &net
 	config.workers = 0
 	// Not stepped.
-	testing.expect(t, !start(&srv, config, {}), "a simulated network without stepped was taken")
+	testing.expect(t, harness_refused(config), "a simulated network without stepped was taken")
 	// With conditions of its own.
 	config.stepped = true
 	config.conditions = {
 		loss = 0.1,
 	}
-	testing.expect(t, !start(&srv, config, {}), "a simulated network with conditions was taken")
+	testing.expect(t, harness_refused(config), "a simulated network with conditions was taken")
 }

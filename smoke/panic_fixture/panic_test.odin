@@ -1,11 +1,11 @@
 package panic_fixture
 
-// Not in TEST_PACKAGES: tools/build's test_panic_in_a_server_thread_fails_fast runs it on
+// Not run with the smoke suite: smoke's test_panic_in_a_server_thread_fails_fast runs it on
 // purpose. A test with a server running whose worker thread panics must fail the run in
 // seconds, not spin (voxiverse#54).
 
-import "../../../base"
-import "../../../server"
+import "../../base"
+import "../../server"
 import "core:testing"
 import "core:time"
 

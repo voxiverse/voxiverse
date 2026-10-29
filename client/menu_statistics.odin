@@ -73,7 +73,7 @@ stats_ask :: proc(app: ^App) {
 	v := &app.stats_view
 	delete(v.asked)
 	v.asked = strings.clone(string(v.filter[:]))
-	v.asked_at = time.tick_now()
+	v.asked_at = app_tick(app)
 	send_message(app.session, game.Stats_Request{filter = v.asked, page = u16(v.page)})
 }
 
@@ -195,7 +195,7 @@ stats_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 	ui.cut_top(&inner, t.spacing)
 	// Asked again when the search changed (not more than four times a second).
 	if string(v.filter[:]) != v.asked &&
-	   time.duration_milliseconds(time.tick_since(v.asked_at)) > 250 {
+	   time.duration_milliseconds(app_since(app, v.asked_at)) > 250 {
 		v.page, v.first, v.selected = 0, 0, 0
 		stats_ask(app)
 	}

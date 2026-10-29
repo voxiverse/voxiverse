@@ -84,17 +84,17 @@ telemetry_update :: proc(app: ^App) {
 			strings.to_lower(fmt.tprint(ODIN_OS), context.temp_allocator),
 			u32(radius),
 			u32(app.settings.fov),
-			u32(time.duration_milliseconds(time.tick_since(app.launched))),
+			u32(time.duration_milliseconds(app_since(app, app.launched))),
 		)
-		r.last_send, r.perf_at = time.tick_now(), time.tick_now()
+		r.last_send, r.perf_at = app_tick(app), app_tick(app)
 		r.frame_n = 0
 	}
 	// Overlays: how long each was open.
 	for o in Overlay {
 		open := overlay_is_open(&app.overlays, o)
-		if open && !r.was_open[o] {r.opened[o] = time.tick_now()}
+		if open && !r.was_open[o] {r.opened[o] = app_tick(app)}
 		if !open && r.was_open[o] {
-			ms := time.duration_milliseconds(time.tick_since(r.opened[o]))
+			ms := time.duration_milliseconds(app_since(app, r.opened[o]))
 			queue_report(
 				r,
 				.Client_Overlay,
@@ -111,7 +111,7 @@ telemetry_update :: proc(app: ^App) {
 		r.frames[r.frame_n] = u32(app.last_frame_ms * 1000)
 		r.frame_n += 1
 	}
-	if time.tick_since(r.perf_at) >= PERF_EVERY && r.frame_n > 10 {
+	if app_since(app, r.perf_at) >= PERF_EVERY && r.frame_n > 10 {
 		times := slice.clone(r.frames[:r.frame_n], context.temp_allocator)
 		slice.sort(times)
 		queue_report(
@@ -122,12 +122,12 @@ telemetry_update :: proc(app: ^App) {
 			times[len(times) * 99 / 100],
 			u32(r.frame_n),
 		)
-		r.frame_n, r.perf_at = 0, time.tick_now()
+		r.frame_n, r.perf_at = 0, app_tick(app)
 	}
 	// Send.
-	if len(r.queue) > 0 && time.tick_since(r.last_send) >= REPORT_EVERY {
+	if len(r.queue) > 0 && app_since(app, r.last_send) >= REPORT_EVERY {
 		telemetry_send(s, r)
-		r.last_send = time.tick_now()
+		r.last_send = app_tick(app)
 	}
 }
 

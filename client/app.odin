@@ -124,6 +124,7 @@ App :: struct {
 	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
 	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
 	launched:         time.Tick, // when the program started
+	clock:            App_Clock, // the OS's unless a test fixed it (clock.odin)
 	stats_view:       Stats_View, // the statistics overlay's (menu_statistics.odin)
 	preview:          Preview, // the player in the inventory (preview.odin)
 	inventory_search: [dynamic]u8, // the Creative tab's search text

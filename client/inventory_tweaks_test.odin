@@ -18,6 +18,7 @@ SCREEN :: ui.Vec2{1280, 720}
 
 overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.app = new(App)
+	app_clock_fix(f.app)
 	f.app.settings = SETTINGS_DEFAULTS
 	ok: bool
 	f.app.font, ok = font.load(FONT_DATA)

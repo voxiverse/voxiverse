@@ -8,6 +8,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+import "limited"
+
 // The Voxiverse build driver. build.sh / build.bat hand every argument to
 // it; its commands are listed by usage (`build help`). It runs from the
 // repository root (the wrapper scripts cd there).
@@ -622,7 +624,7 @@ test_package :: proc(pkg: string) -> bool {
 	os.make_directory_all(filepath.dir(out))
 	limit := test_timeout(last_run)
 	start := time.tick_now()
-	result := run_limited(cmd, limit)
+	result := limited.run_limited(cmd, limit)
 	took := time.duration_seconds(time.tick_since(start))
 	switch result {
 	case .Ok:
@@ -639,60 +641,6 @@ test_package :: proc(pkg: string) -> bool {
 		return false
 	}
 	return false
-}
-
-Run_Result :: enum {
-	Ok,
-	Failed, // exited nonzero, or could not start
-	Timed_Out,
-}
-
-// run_limited is run with a time limit: a command still going at the limit is killed
-// together with everything it started.
-run_limited :: proc(cmd: []string, limit: time.Duration) -> Run_Result {
-	desc := os.Process_Desc {
-		command = cmd,
-		stdin   = os.stdin,
-		stdout  = os.stdout,
-		stderr  = os.stderr,
-	}
-	child, err := os.process_start(desc)
-	if err != nil {
-		fmt.eprintfln("build: could not start '%s': %v", cmd[0], err)
-		return .Failed
-	}
-	state, werr := os.process_wait(child, limit)
-	if werr == nil {
-		return .Ok if state.exited && state.exit_code == 0 else .Failed
-	}
-	kill_tree(child.pid)
-	_, _ = os.process_wait(child)
-	return .Timed_Out
-}
-
-// kill_tree kills a process and every descendant (each is frozen before its children
-// are listed, so none can start more while the tree is walked).
-kill_tree :: proc(pid: int) {
-	context.allocator = context.temp_allocator // capture's output
-	when ODIN_OS == .Windows {
-		_, _ = capture({"taskkill", "/T", "/F", "/PID", fmt.tprint(pid)})
-	} else {
-		pids := make([dynamic]int, context.temp_allocator)
-		append(&pids, pid)
-		for i := 0; i < len(pids); i += 1 {
-			_, _ = capture({"kill", "-STOP", fmt.tprint(pids[i])})
-			out, _ := capture({"pgrep", "-P", fmt.tprint(pids[i])})
-			for line in strings.split_lines(out, context.temp_allocator) {
-				if child, ok := strconv.parse_int(strings.trim_space(line)); ok {
-					append(&pids, child)
-				}
-			}
-		}
-		cmd := make([dynamic]string, context.temp_allocator)
-		append(&cmd, "kill", "-KILL")
-		for p in pids {append(&cmd, fmt.tprint(p))}
-		_, _ = capture(cmd[:])
-	}
 }
 
 // ---------------------------------------------------------------------------

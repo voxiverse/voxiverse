@@ -57,7 +57,7 @@ blast_test_begin :: proc(app: ^App, shots: int) {
 		app.quit = true
 		return
 	}
-	t.phase, t.shots, t.fired, t.started, t.tick_max = .Loading, int(shots), 0, time.tick_now(), 0
+	t.phase, t.shots, t.fired, t.started, t.tick_max = .Loading, int(shots), 0, app_tick(app), 0
 	log.infof("blast_test waiting for the world shots=%d", t.shots)
 }
 
@@ -75,12 +75,12 @@ blast_test_update :: proc(app: ^App) {
 		blast_test_finish(app, "left the world")
 		return
 	}
-	if time.tick_since(t.started) > BLAST_TIMEOUT {
+	if app_since(app, t.started) > BLAST_TIMEOUT {
 		blast_test_finish(app, fmt.tprintf("stuck in phase %v", t.phase))
 		return
 	}
-	next :: proc(t: ^Blast_Test, phase: Blast_Test_Phase) {
-		t.phase, t.started = phase, time.tick_now()
+	next :: proc(app: ^App, t: ^Blast_Test, phase: Blast_Test_Phase) {
+		t.phase, t.started = phase, app_tick(app)
 	}
 	switch t.phase {
 	case .Off:
@@ -88,7 +88,7 @@ blast_test_update :: proc(app: ^App) {
 		if !world_settled(app) {return}
 		p := s.prediction.state.position
 		session_teleport(s, {{p.x, p.y + 25, p.z}, -math.PI / 2, -0.7})
-		next(t, .Rising)
+		next(app, t, .Rising)
 	case .Rising:
 		p := s.prediction.state
 		if !p.flying {s.toggle_fly = true}
@@ -101,14 +101,14 @@ blast_test_update :: proc(app: ^App) {
 		exit_check_baseline(&t.check, s)
 		t.late_before = s.world.stats.groups_late
 		t.shown_before = s.world.stats.groups_shown
-		t.next_shot = time.tick_now()
-		next(t, .Firing)
+		t.next_shot = app_tick(app)
+		next(app, t, .Firing)
 		log.info("blast_test firing")
 	case .Firing:
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
 		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
-		if time.tick_diff(time.tick_now(), t.next_shot) > 0 {return}
-		t.next_shot = time.tick_add(time.tick_now(), BLAST_SHOT_EVERY)
+		if time.tick_diff(app_tick(app), t.next_shot) > 0 {return}
+		t.next_shot = time.tick_add(app_tick(app), BLAST_SHOT_EVERY)
 		// A little further round each time: fresh ground.
 		s.camera.yaw = -math.PI / 2 + f32(t.fired) * 0.35
 		s.camera.pitch = -0.7
@@ -131,11 +131,11 @@ blast_test_update :: proc(app: ^App) {
 			server_explode(s, hit.block, 6)
 		}
 		t.fired += 1
-		if t.fired == t.shots {next(t, .Settling)}
+		if t.fired == t.shots {next(app, t, .Settling)}
 	case .Settling:
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
 		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
-		if time.tick_since(t.started) < 2 * time.Second || !world_settled(app) {return}
+		if app_since(app, t.started) < 2 * time.Second || !world_settled(app) {return}
 		if len(s.world.groups) > 0 {return}
 		// Water the blasts let loose flows on a while: until it settles.
 		if server.stats(&s.server).updates_waiting > 0 {return}
@@ -153,9 +153,9 @@ blast_test_update :: proc(app: ^App) {
 				h.count, h.sum = server.chunks_hash_of(srv, "")
 			}, &hashed)
 		t.server_count, t.server_sum = hashed.count, hashed.sum
-		next(t, .Comparing)
+		next(app, t, .Comparing)
 	case .Comparing:
-		if time.tick_since(t.started) < 100 * time.Millisecond {return}
+		if app_since(app, t.started) < 100 * time.Millisecond {return}
 		blast_test_compare(app, t.server_count, t.server_sum)
 	}
 }

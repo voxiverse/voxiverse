@@ -3,7 +3,6 @@ package server
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:mem"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -679,15 +678,10 @@ test_server_start_fails_cleanly :: proc(t: ^testing.T) {
 	defer testing.expect(t, harness_stop(&h))
 	config.port = h.srv.host.socket.port
 	config.stepped, config.net = true, &h.net // (the same simulated network)
-	second: Server
-	{
-		context.logger = log.nil_logger() // its error is the point
-		testing.expect(t, !start(&second, config, {}), "two servers on one port")
-	}
 	testing.expect(
 		t,
-		mem.check_zero(mem.ptr_to_bytes(&second)),
-		"a failed start left state behind",
+		harness_refused(config),
+		"two servers on one port, or a failed start left state",
 	)
 }
 

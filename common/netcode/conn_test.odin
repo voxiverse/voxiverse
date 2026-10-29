@@ -208,7 +208,7 @@ test_burst_is_acknowledged :: proc(t: ^testing.T) {
 // Garbage, truncated and forged packets are refused without harm.
 @(test)
 test_bad_packets_refused :: proc(t: ^testing.T) {
-	now := time.tick_now()
+	now := simnet_tick_time(0, 30)
 	a, b: Conn
 	conn_init(&a, 1234, now)
 	conn_init(&b, 1234, now)

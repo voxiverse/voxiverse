@@ -30,21 +30,41 @@ ACK_TIMEOUT :: 5 * time.Second
 CONNECT_TIMEOUT :: 5 * time.Second
 
 Uploader :: struct {
-	dir:      string,
-	server:   net.Endpoint,
-	key:      game.Account_Key,
-	interval: time.Duration,
-	thread:   ^thread.Thread,
-	stop:     bool, // (atomic)
-	mutex:    sync.Mutex,
-	acked:    u64, // batches acknowledged (for tests and the log)
-	passes:   u64, // passes that connected
-	link:     netcode.Link,
-	writer:   game.Writer,
-	scratch:  ^game.Block_Array,
-	cursors:  map[string]u64, // day -> bytes sent
+	dir:       string,
+	server:    net.Endpoint,
+	key:       game.Account_Key,
+	interval:  time.Duration,
+	thread:    ^thread.Thread,
+	stop:      bool, // (atomic)
+	mutex:     sync.Mutex,
+	acked:     u64, // batches acknowledged (for tests and the log)
+	passes:    u64, // passes that connected
+	link:      netcode.Link,
+	writer:    game.Writer,
+	scratch:   ^game.Block_Array,
+	cursors:   map[string]u64, // day -> bytes sent
+	sim:       ^netcode.Simnet, // the simulated network it runs on (nil: UDP)
+	idle:      proc(data: rawptr), // what a wait does instead of sleeping (nil: sleep)
+	idle_data: rawptr,
 }
 
+uploader_open :: proc(
+	u: ^Uploader,
+	dir: string,
+	server: net.Endpoint,
+	key: game.Account_Key,
+	interval := 30 * time.Second,
+	sim: ^netcode.Simnet = nil,
+) {
+	u^ = {}
+	u.dir = strings.clone(dir)
+	u.server, u.key, u.interval, u.sim = server, key, interval, sim
+	game.writer_init(&u.writer)
+	u.scratch = new(game.Block_Array)
+	load_upload_cursors(u)
+}
+
+// uploader_start opens the uploader and runs its passes on a thread.
 uploader_start :: proc(
 	u: ^Uploader,
 	dir: string,
@@ -52,12 +72,7 @@ uploader_start :: proc(
 	key: game.Account_Key,
 	interval := 30 * time.Second,
 ) {
-	u^ = {}
-	u.dir = strings.clone(dir)
-	u.server, u.key, u.interval = server, key, interval
-	game.writer_init(&u.writer)
-	u.scratch = new(game.Block_Array)
-	load_upload_cursors(u)
+	uploader_open(u, dir, server, key, interval)
 	u.thread = thread.create_and_start_with_poly_data(
 		u,
 		uploader_main,
@@ -71,12 +86,31 @@ uploader_stop :: proc(u: ^Uploader) {
 	sync.atomic_store(&u.stop, true)
 	thread.join(u.thread)
 	thread.destroy(u.thread)
+	uploader_close(u)
+}
+
+// uploader_close frees an uploader that is not running on a thread.
+uploader_close :: proc(u: ^Uploader) {
 	game.writer_destroy(&u.writer)
 	free(u.scratch)
 	for k in u.cursors {delete(k)}
 	delete(u.cursors)
 	delete(u.dir)
 	u^ = {}
+}
+
+// uploader_now: the time on the uploader's network.
+@(private)
+uploader_now :: proc(u: ^Uploader) -> time.Tick {
+	if u.sim != nil {return u.sim.now}
+	return time.tick_now()
+}
+
+// uploader_wait: between two looks at the link, a sleep, or what the owner
+// of a simulated network does to move it on.
+@(private)
+uploader_wait :: proc(u: ^Uploader) {
+	if u.idle != nil {u.idle(u.idle_data)} else {time.sleep(2 * time.Millisecond)}
 }
 
 uploader_counts :: proc(u: ^Uploader) -> (acked, passes: u64) {
@@ -167,16 +201,16 @@ whole_lines :: proc(data: []u8, limit: int) -> []u8 {
 
 @(private)
 connect :: proc(u: ^Uploader) -> bool {
-	if err := netcode.link_connect(&u.link, u.server, "", time.tick_now());
+	if err := netcode.link_connect(&u.link, u.server, "", uploader_now(u), sim = u.sim);
 	   err != nil {return false}
-	start := time.tick_now()
+	start := uploader_now(u)
 	for u.link.state != .Connected {
-		netcode.link_update(&u.link, time.tick_now())
-		if u.link.state == .Failed || time.tick_diff(start, time.tick_now()) > CONNECT_TIMEOUT {
+		netcode.link_update(&u.link, uploader_now(u))
+		if u.link.state == .Failed || time.tick_diff(start, uploader_now(u)) > CONNECT_TIMEOUT {
 			netcode.link_close(&u.link, "no collector")
 			return false
 		}
-		time.sleep(2 * time.Millisecond)
+		uploader_wait(u)
 	}
 	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, "", 0})
 	msg, ok := wait_message(u)
@@ -194,16 +228,16 @@ up_send :: proc(u: ^Uploader, m: game.Client_Message) {
 	clear(&u.writer.buf)
 	game.encode_client(&u.writer, m)
 	netcode.link_send(&u.link, u.writer.buf[:], true)
-	netcode.link_flush(&u.link, time.tick_now())
+	netcode.link_flush(&u.link, uploader_now(u))
 }
 
 // wait_message: the next message from the collector, within the timeout.
 @(private)
 wait_message :: proc(u: ^Uploader) -> (m: game.Server_Message, ok: bool) {
-	start := time.tick_now()
+	start := uploader_now(u)
 	got := make([dynamic][]u8, context.temp_allocator)
-	for time.tick_diff(start, time.tick_now()) < ACK_TIMEOUT {
-		now := time.tick_now()
+	for time.tick_diff(start, uploader_now(u)) < ACK_TIMEOUT {
+		now := uploader_now(u)
 		netcode.link_update(&u.link, now)
 		if u.link.state == .Failed {return}
 		clear(&got)
@@ -219,7 +253,7 @@ wait_message :: proc(u: ^Uploader) -> (m: game.Server_Message, ok: bool) {
 		}
 		if ok {return}
 		netcode.link_flush(&u.link, now)
-		time.sleep(2 * time.Millisecond)
+		uploader_wait(u)
 	}
 	return
 }

@@ -54,7 +54,7 @@ tour_test_begin :: proc(app: ^App) {
 		return
 	}
 	t.phase, t.biome, t.started, t.measuring, t.missing =
-		.Loading, worldgen.Biome(0), time.tick_now(), false, {}
+		.Loading, worldgen.Biome(0), app_tick(app), false, {}
 	log.info("tour_test waiting for the world")
 }
 
@@ -67,7 +67,7 @@ tour_test_update :: proc(app: ^App) {
 		tour_test_finish(app, "left the world")
 		return
 	}
-	if time.tick_since(t.started) > TOUR_TIMEOUT {
+	if app_since(app, t.started) > TOUR_TIMEOUT {
 		tour_test_finish(app, fmt.tprintf("stuck in phase %v at %v", t.phase, t.biome))
 		return
 	}
@@ -81,12 +81,12 @@ tour_test_update :: proc(app: ^App) {
 			tour_test_finish(app, "not an Earth world")
 			return
 		}
-		tour_locate(t, s)
+		tour_locate(app, t, s)
 	case .Locating:
 		for n in s.notices {
 			switch {
 			case strings.has_prefix(n, fmt.tprintf("%s at ", name)):
-				t.phase, t.started = .Arriving, time.tick_now()
+				t.phase, t.started = .Arriving, app_tick(app)
 			case strings.has_prefix(n, fmt.tprintf("No %s ", name)):
 				t.missing += {t.biome}
 				tour_next(app, t, s)
@@ -95,7 +95,7 @@ tour_test_update :: proc(app: ^App) {
 	case .Arriving:
 		// A moment for the server to drop what is left behind, then the
 		// whole area loaded and meshed.
-		if time.tick_since(t.started) < 500 * time.Millisecond || !world_settled(app) {return}
+		if app_since(app, t.started) < 500 * time.Millisecond || !world_settled(app) {return}
 		screenshot_request(app, fmt.tprintf("biome_%s", name))
 		log.infof("tour_test biome=%s chunks=%d", name, s.world.chunks.count)
 		if !t.measuring {
@@ -108,9 +108,9 @@ tour_test_update :: proc(app: ^App) {
 }
 
 @(private = "file")
-tour_locate :: proc(t: ^Tour_Test, s: ^Session) {
+tour_locate :: proc(app: ^App, t: ^Tour_Test, s: ^Session) {
 	send_message(s, game.Command{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])})
-	t.phase, t.started = .Locating, time.tick_now()
+	t.phase, t.started = .Locating, app_tick(app)
 }
 
 @(private = "file")
@@ -120,7 +120,7 @@ tour_next :: proc(app: ^App, t: ^Tour_Test, s: ^Session) {
 		return
 	}
 	t.biome += worldgen.Biome(1)
-	tour_locate(t, s)
+	tour_locate(app, t, s)
 }
 
 @(private = "file")

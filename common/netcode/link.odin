@@ -220,15 +220,23 @@ Found_Server :: struct {
 DISCOVER_EVERY :: 1 * time.Second
 DISCOVER_FORGET :: 4 * time.Second // not heard from this long: gone from the list
 
-discovery_open :: proc(d: ^Discovery, allocator := context.allocator) -> net.Network_Error {
+// discovery_open: with `sim`, a port on the simulated network, which has
+// no broadcast and asks loopback only.
+discovery_open :: proc(
+	d: ^Discovery,
+	allocator := context.allocator,
+	sim: ^Simnet = nil,
+) -> net.Network_Error {
 	d^ = {
 		allocator = allocator,
 	}
-	socket_open(&d.socket, 0, broadcast = true) or_return
+	socket_open(&d.socket, 0, broadcast = sim == nil, sim = sim) or_return
 	crypto.rand_bytes(mem.ptr_to_bytes(&d.nonce))
 	d.found = make([dynamic]Found_Server, allocator)
 	d.targets = make([dynamic]net.Address, allocator)
-	append(&d.targets, net.IP4_Loopback, net.IP4_Address{255, 255, 255, 255})
+	append(&d.targets, net.IP4_Loopback)
+	if sim != nil {return nil}
+	append(&d.targets, net.IP4_Address{255, 255, 255, 255})
 	if interfaces, err := net.enumerate_interfaces(context.temp_allocator); err == nil {
 		for iface in interfaces {
 			for lease in iface.unicast {

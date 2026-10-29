@@ -1,6 +1,8 @@
 package server
 
 import "base:runtime"
+import "core:log"
+import "core:mem"
 import "core:net"
 import "core:time"
 
@@ -28,6 +30,20 @@ Harness :: struct {
 Harness_Party :: struct {
 	tick: proc(data: rawptr), // receive what has arrived, decide, send
 	data: rawptr,
+}
+
+// harness_refused: whether `start` refuses this configuration, and cleanly
+// (the refusal is the point, so its log is muted; a failed start leaves no
+// state behind). A test of a refusal asks here, so no test starts a server
+// itself; a server that did start is stopped again.
+harness_refused :: proc(config: Config) -> bool {
+	context.logger = log.nil_logger()
+	srv: Server
+	if start(&srv, config, {}) {
+		stop(&srv)
+		return false
+	}
+	return mem.check_zero(mem.ptr_to_bytes(&srv))
 }
 
 HARNESS_SEED :: 66 // issue #66; the flat world does not depend on it, its RNG streams do

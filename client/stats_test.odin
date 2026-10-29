@@ -99,7 +99,7 @@ test_stats_overlay :: proc(t: ^testing.T) {
 	append(&f.app.stats_view.filter, "san")
 	overlay_frame(&f, {})
 	testing.expect_value(t, len(received(&f)), 0) // (too soon after the last ask)
-	time.sleep(300 * time.Millisecond)
+	app_clock_advance(f.app, 300 * time.Millisecond)
 	overlay_frame(&f, {})
 	msgs = received(&f)
 	if len(msgs) == 1 {
@@ -120,7 +120,7 @@ test_client_reports :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, false)
 	defer overlay_fixture_destroy(&f)
 	defer reporter_destroy(&f.app.reporter)
-	f.app.launched = time.tick_now()
+	f.app.launched = app_tick(f.app)
 	received(&f)
 	telemetry_update(f.app) // joined: info queued
 	testing.expect(
@@ -129,7 +129,7 @@ test_client_reports :: proc(t: ^testing.T) {
 	)
 	// The inventory was already open (the fixture opened it): close it.
 	player_menu_close(f.app)
-	time.sleep(20 * time.Millisecond)
+	app_clock_advance(f.app, 20 * time.Millisecond)
 	telemetry_update(f.app)
 	found := false
 	for q in f.app.reporter.queue {if q.kind == .Client_Overlay {found = true}}
