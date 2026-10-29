@@ -90,7 +90,11 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		}
 		return true
 	})
-	testing.expect(t, ok && a.shorn[id] && b.shorn[id], "the sheep was not shorn (or a client was not told)")
+	testing.expect(
+		t,
+		ok && a.shorn[id] && b.shorn[id],
+		"the sheep was not shorn (or a client was not told)",
+	)
 	wool := wool_dropped(&srv, "a")
 	testing.expectf(t, wool >= 1 && wool <= 3, "%d wool dropped", wool)
 	// Used again: nothing more.
