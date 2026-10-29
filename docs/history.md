@@ -7004,3 +7004,50 @@ and the determinism job are its check.
   `harness_start(&` is the harness, not a bare `start(&`.
 - `Simnet.sent` counts datagrams that reached the network (after any delay), so `sent` equals
   `delivered + unbound + overflowed`.
+
+# T3: scenarios with invariants
+
+A scenario is data or a short Odin script of inputs over ticks (join, leave, walk, fly, jump,
+place, break, shoot, open a container, change mode, die, respawn). One runner plays any
+scenario on the harness and checks, after each: no desync between prediction and server; item
+conservation through the M31 ledger; no leaks or bad frees; the state hash replays
+bit-identically; no error log lines. Scenarios: joining and moving, building, containers,
+combat, death and respawn, chunk streaming under loss. The hand-written tests they replace
+are deleted in the same step.
+
+## Decisions (made here; T.md left them open)
+
+- **A scenario is data**: a `Scenario` with `Step`s (a tick, a player, an operation), played
+  by one runner, `scenario(t, sc)`, in `server/scenario_test.odin`. Player 0 is M38's
+  mirror (it predicts, so it is the one that can desync; it walks, jumps, flies, builds);
+  players 1.. are bots (`Net_Client`) on the harness's simulated network. Jumping and
+  flying are the mirror's alone (a bot sends no buttons).
+- **The invariants** are the runner's, not the scenario's: no desync (the mirror sends
+  `Prediction_Check`s like a client, the server must judge none different and at least one in
+  the walking scenario; the mirror's prediction ends at the server's state); item
+  conservation (`audit` every second and at the end); agreement (every chunk any player
+  holds equals the server's block for block, what a bot was told of its own position and
+  health is the server's); replay (every scenario is played twice, the state hash of every
+  tick and the datagrams delivered are the same); no error lines (the test runner fails a
+  test that logs at error); no leaks or bad frees. A scenario's `done` adds what it was about.
+- **Leaks are counted by the runner.** The test runner only warns about a leak and passes the
+  test (checked), so each run is wrapped in a tracking allocator and any allocation left or
+  bad free is a failure.
+- **Everyone stands still for 180 ticks at the end** before agreement is judged, so what the
+  lossy network still holds lands first.
+
+## What differed from this spec (as built)
+
+- Six scenarios: joining and moving, building, containers, combat (under loss), death and
+  respawn, chunk streaming under loss.
+- Three hand-written tests are deleted: `test_two_players_through_loss_replay` (streaming
+  under loss, with the replay), `test_two_players_one_chest` (containers) and
+  `test_shooting_through_loss` (combat under loss); the last two were among the threaded,
+  real-socket tests T4 would have moved. `test_weapons`, `test_damage_death_and_xp` and the
+  rest keep what the scenarios do not cover (fall and explosion damage, lag compensation,
+  weapon numbers); T7 prunes by the invariants.
+- `Session` gained `input`, `check` and `hook` (what the mirror sends when not scripted, the
+  prediction check, and a callback after each input) and `session_start` a `conditions`
+  argument. `Net_Client` now applies an `Edit_Result` to its chunks, as a client does.
+- Survival is entered with `/gamemode survival` in a step: `Config.mode` only sets the mode of a
+  new universe with a save directory, not of the harness world.

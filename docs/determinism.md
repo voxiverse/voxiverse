@@ -105,6 +105,16 @@ waits for a **number of ticks**, never for a clock or a sleep.
   turns one on in its config or through `/gamerule`. A test that needs the Earth keeps its
   own config (`harness_start` forces only `stepped`, `workers = 0` and the network).
 
+## Scenarios
+
+`server/scenario_test.odin` (T3) plays a `Scenario` (steps of a tick, a player and an
+operation) on the harness: the mirror (player 0, predicting) and bots on the simulated
+network. Whatever the scenario does, the runner checks no desync, item conservation by
+`audit`, that every chunk a player holds is the server's, that the scenario played twice
+gives the same hash at every tick, and no leak or bad free (counted with a tracking
+allocator: the test runner only warns). A new area of play is a new scenario, not a new
+test with its own setup.
+
 ## The cross-OS job
 
 `build determinism` runs `server.test_determinism_session` (a scripted 10 000-tick

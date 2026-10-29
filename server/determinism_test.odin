@@ -10,6 +10,7 @@ import "core:testing"
 
 import "../base"
 import "../common/game"
+import "../common/netcode"
 
 // M38: the simulation is a function of what reaches it at each tick boundary.
 // A stepped server (no thread, inline chunk jobs) is run twice side by side
@@ -65,6 +66,10 @@ Session :: struct {
 	seen:       [Hash_Section]map[u64]struct{},
 	checkpoint: [dynamic]bool, // per checkpoint: the mirror's chunks hash as the server's
 	failures:   [dynamic]string,
+	input:      game.Player_Input, // what the mirror's turn sends when it is not scripted (scenario_test.odin sets it)
+	check:      bool, // the mirror sends a Prediction_Check every DESYNC_CHECK_INPUTS inputs, as a client does
+	hook:       proc(data: rawptr, msg: game.Input, in_: game.Player_Input), // after each input sent (not scripted)
+	hook_data:  rawptr,
 }
 
 @(private = "file")
@@ -227,6 +232,7 @@ session_start :: proc(
 	logging: bool,
 	no_sheep := false,
 	with: Maybe(Config) = nil,
+	conditions := netcode.Conditions{},
 ) -> bool {
 	config := Config {
 		seed         = DETERMINISM_SEED,
@@ -239,7 +245,10 @@ session_start :: proc(
 		no_sheep     = no_sheep,
 	}
 	if c, given := with.?; given {config = c}
-	if !harness_start(&sess.h, config, local = true) {return false}
+	if !harness_start(&sess.h, config, local = true, conditions = conditions) {return false}
+	sess.input = {
+		pitch = -0.7,
+	}
 	m := &sess.mirror
 	m.endpoint = harness_local(&sess.h)
 	m.scratch = new(game.Block_Array)
@@ -374,6 +383,22 @@ act :: proc(m: ^Mirror, tick: u64, msg: game.Input, in_: game.Player_Input) {
 	}
 }
 
+// mirror_check sends the Prediction_Check a client sends every DESYNC_CHECK_INPUTS
+// inputs, once the chunks around it are there.
+@(private = "file")
+mirror_check :: proc(m: ^Mirror, sequence: u32) {
+	if sequence % game.DESYNC_CHECK_INPUTS != 0 {return}
+	centre := game.chunk_of(feet_block(m))
+	for dy in i32(-1) ..= 1 {
+		for dz in i32(-1) ..= 1 {
+			for dx in i32(-1) ..= 1 {
+				if centre + {dx, dy, dz} not_in m.chunks {return}
+			}
+		}
+	}
+	mirror_send(m, game.Prediction_Check{sequence, game.player_fields(m.prediction.state)})
+}
+
 // mirror_tick is the mirror's turn in a tick (a harness party): it takes what
 // the last tick sent and plays its part of this one.
 @(private = "file")
@@ -384,14 +409,17 @@ mirror_tick :: proc(data: rawptr) {
 	mirror_pump(sess)
 	if m.welcomed {
 		tick := ticks_of(sess)
-		in_ := game.Player_Input {
-			pitch = -0.7,
-		}
+		in_ := sess.input
 		if sess.scripted {in_ = script_input(tick)}
 		msg := game.prediction_tick(&m.prediction, in_, &m.rules, query(m))
 		msg.snapshot = m.rx.ack
 		mirror_send(m, msg)
-		if sess.scripted {act(m, tick, msg, in_)}
+		if sess.check {mirror_check(m, msg.sequence)}
+		if sess.scripted {
+			act(m, tick, msg, in_)
+		} else if sess.hook != nil {
+			sess.hook(sess.hook_data, msg, in_)
+		}
 	}
 }
 

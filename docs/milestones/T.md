@@ -49,15 +49,9 @@ spawning, random ticks and weather off unless the test turns them on). `step(n)`
 server (23) runs on it unchanged in meaning; a transport test shows the same seed gives the same
 loss pattern.
 
-## T3: scenarios with invariants
+## T3: scenarios with invariants (done)
 
-A scenario is data or a short Odin script of inputs over ticks (join, leave, walk, fly, jump,
-place, break, shoot, open a container, change mode, die, respawn). One runner plays any
-scenario on the harness and checks, after each: no desync between prediction and server; item
-conservation through the M31 ledger; no leaks or bad frees; the state hash replays
-bit-identically; no error log lines. Scenarios: joining and moving, building, containers,
-combat, death and respawn, chunk streaming under loss. The hand-written tests they replace
-are deleted in the same step.
+Full spec: [history.md](../history.md) (T3).
 
 ## T4: the 32 threaded-server files move onto the harness
 

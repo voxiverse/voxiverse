@@ -297,6 +297,13 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 	}
 }
 
+@(private)
+net_set_block :: proc(c: ^Net_Client, p: game.Block_Pos, b: game.Block) {
+	if blocks, have := &c.chunks[game.chunk_of(p)]; have {
+		game.chunk_set(blocks, &c.arrays, game.local_of(p), b)
+	}
+}
+
 // net_pump: network in, messages handled, an idle input sent (once
 // welcomed, as a real client sends one every tick), network out.
 @(private)
@@ -385,6 +392,9 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			c.stats_pages = int(v.pages)
 		case game.Edit_Result:
 			c.results[v.id] = v
+			// (as a client does: the result is what the server holds, for the sender alone)
+			net_set_block(c, v.pos, v.block)
+			if two, has := v.companion.?; has {net_set_block(c, two.pos, two.block)}
 		case game.Bulk_Begin:
 			c.bulk_begins += 1
 		}

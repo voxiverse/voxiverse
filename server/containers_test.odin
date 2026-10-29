@@ -177,49 +177,6 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 	testing.expect_value(t, rec.items, 128)
 }
 
-// Two players at one chest see each other's moves and agree with the server.
-@(test)
-test_two_players_one_chest :: proc(t: ^testing.T) {
-	srv: Server
-	if !testing.expect(t, start(&srv, config(""), {})) {return}
-	defer stop(&srv)
-	a, b: Net_Client
-	net_connect(&a, srv.host.socket.port, "a")
-	net_connect(&b, srv.host.socket.port, "b")
-	defer net_close(&a)
-	defer net_close(&b)
-	ok := net_wait(
-		t,
-		{&a, &b},
-		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
-	)
-	if !testing.expect(t, ok, "never landed") {return}
-	pos := beside(&srv, "a")
-	put_block(&srv, pos, .Chest)
-	if !testing.expect(t, open_chest(t, &srv, &a, pos), "a's chest did not open") {return}
-	if !testing.expect(t, open_chest(t, &srv, &b, pos), "b's chest did not open") {return}
-	na, nb: u32
-	request(&a, &na, .Quick_Move, 0)
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
-		return cs[0].inventory.chest[0].count == 64 && cs[1].inventory.chest[0].count == 64
-	})
-	if !testing.expect(t, ok, "b did not see a's stone go in") {return}
-	// b takes half of it out, a sees what is left.
-	request(&b, &nb, .Click_Right, game.CHEST_BASE)
-	request(&b, &nb, .Click, 29)
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
-		return cs[0].inventory.chest[0].count == 32 && cs[1].inventory.slots[29].count == 32
-	})
-	testing.expect(t, ok, "a did not see b's half come out")
-	rec := record_at(&srv, pos)
-	testing.expect_value(t, rec.slots[0].count, 32)
-	testing.expect(
-		t,
-		a.inventory.chest == rec.slots && b.inventory.chest == rec.slots,
-		"the clients disagree with the server",
-	)
-}
-
 // A chest blown up (a bulk edit, no set_block) loses its entity at once, at the
 // pipeline, what it held spilling out: no sweep is needed.
 @(test)
