@@ -174,9 +174,6 @@ harness_step_until :: proc(
 	return ticks, false
 }
 
-// harness_now: the network's clock.
-harness_now :: proc(h: ^Harness) -> time.Tick {return h.net.now}
-
 harness_ticks :: proc(h: ^Harness) -> u64 {return h.srv.tick}
 
 // harness_stop stops the server, then the pipe and the network (whatever is
