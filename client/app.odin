@@ -163,7 +163,10 @@ app_init :: proc(app: ^App) -> bool {
 	app.telemetry = TELEMETRY_DEFAULTS
 	shader_watch_init(&app.shader_watch)
 
-	if !platform.window_open(&app.window, "Voxiverse", 1280, 720) {return false}
+	// A benchmark's window has a title of its own, so a desktop can keep it out of the
+	// way (a window rule) without touching the game's.
+	title := "Voxiverse benchmark" if app.benchmark else "Voxiverse"
+	if !platform.window_open(&app.window, title, 1280, 720) {return false}
 	g := &app.g
 	extensions := platform.vulkan_instance_extensions()
 	if !gpu.create_instance(
