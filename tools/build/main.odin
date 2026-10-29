@@ -385,7 +385,6 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 			{strings.concatenate({"-out:", exe})},
 		},
 	)
-	run(cmd) or_return
 	server_exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	server_cmd := slice.concatenate(
 		[][]string {
@@ -396,7 +395,15 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 			{strings.concatenate({"-out:", server_exe})},
 		},
 	)
-	run(server_cmd) or_return
+	// The two are independent: compiled side by side, each printing its output whole.
+	results := limited.run_parallel(
+		{
+			{cmd = cmd, log = job_log(0, ".game.log")},
+			{cmd = server_cmd, log = job_log(0, ".server.log")},
+		},
+		2,
+	)
+	if results[0] != .Ok || results[1] != .Ok {return "", false}
 	fmt.printfln(
 		"built  %s, %s %s (%s%s%s%s)",
 		exe,
