@@ -649,82 +649,108 @@ test_ogg_truncation :: proc(t: ^testing.T) {
 	}
 }
 
+// test_ogg_seek and test_ogg_seek_<piece>: one test per file, so the runner's
+// threads decode them side by side. Each file's seeds are its place in the
+// list (the tone 1, the chain 2, then MUSIC_FILES in order).
+#assert(len(MUSIC_FILES) == 7, "a new piece needs its test below")
+
 @(test)
 test_ogg_seek :: proc(t: ^testing.T) {
 	chain := make([dynamic]byte, context.temp_allocator)
 	append(&chain, ..TONE)
 	append(&chain, ..CLICK)
 	append(&chain, ..TONE)
-	files := make([dynamic][]byte, context.temp_allocator)
-	names := make([dynamic]string, context.temp_allocator)
-	append(&files, TONE, chain[:])
-	append(&names, "tone", "chained")
-	for name in MUSIC_FILES {
-		data, rerr := os.read_entire_file(
-			strings.concatenate({MUSIC_DIR, name, ".ogg"}, context.temp_allocator),
-			context.temp_allocator,
-		)
-		if rerr != nil {continue}
-		append(&files, data)
-		append(&names, name)
-	}
-	for data, fi in files {
-		// The straight decode, link by link.
-		d, _ := open(data)
-		defer close(d)
-		total := info(d).frames
-		samples := make([dynamic]f32, context.temp_allocator)
-		starts := make([dynamic][3]int, context.temp_allocator) // frame, channels, sample offset
-		block: [4096]f32
-		frames_done := 0
-		last_link := -1
-		for {
-			n, e := read(d, block[:])
-			testing.expect_value(t, e, Error.None)
-			if n == 0 {break}
-			if d.out_link != last_link {
-				last_link = d.out_link
-				append(&starts, [3]int{frames_done, int(info(d).channels), len(samples)})
-			}
-			append(&samples, ..block[:n * int(info(d).channels)])
-			frames_done += n
+	seek_check(t, "tone", TONE, 0)
+	seek_check(t, "chained", chain[:], 1)
+}
+
+@(test)
+test_ogg_seek_death :: proc(t: ^testing.T) {seek_check_music(t, 0)}
+@(test)
+test_ogg_seek_deep :: proc(t: ^testing.T) {seek_check_music(t, 1)}
+@(test)
+test_ogg_seek_discovery :: proc(t: ^testing.T) {seek_check_music(t, 2)}
+@(test)
+test_ogg_seek_far :: proc(t: ^testing.T) {seek_check_music(t, 3)}
+@(test)
+test_ogg_seek_meadow :: proc(t: ^testing.T) {seek_check_music(t, 4)}
+@(test)
+test_ogg_seek_night :: proc(t: ^testing.T) {seek_check_music(t, 5)}
+@(test)
+test_ogg_seek_title :: proc(t: ^testing.T) {seek_check_music(t, 6)}
+
+// seek_check_music: MUSIC_FILES[i], if it is there.
+@(private = "file")
+seek_check_music :: proc(t: ^testing.T, i: int) {
+	names := MUSIC_FILES
+	name := names[i]
+	data, rerr := os.read_entire_file(
+		strings.concatenate({MUSIC_DIR, name, ".ogg"}, context.temp_allocator),
+		context.temp_allocator,
+	)
+	if rerr != nil {return}
+	seek_check(t, name, data, 2 + i)
+}
+
+// seek_check decodes data straight through, link by link, then seeks to the
+// ends, the middle and 100 places from a seed of fi and reads the same samples.
+@(private = "file")
+seek_check :: proc(t: ^testing.T, name: string, data: []byte, fi: int) {
+	// The straight decode, link by link.
+	d, _ := open(data)
+	defer close(d)
+	total := info(d).frames
+	samples := make([dynamic]f32, context.temp_allocator)
+	starts := make([dynamic][3]int, context.temp_allocator) // frame, channels, sample offset
+	block: [4096]f32
+	frames_done := 0
+	last_link := -1
+	for {
+		n, e := read(d, block[:])
+		testing.expect_value(t, e, Error.None)
+		if n == 0 {break}
+		if d.out_link != last_link {
+			last_link = d.out_link
+			append(&starts, [3]int{frames_done, int(info(d).channels), len(samples)})
 		}
-		testing.expect_value(t, u64(frames_done), total)
-		rng := base.rng_make(u64(fi) + 1)
-		positions := make([dynamic]u64, context.temp_allocator)
-		append(&positions, 0, total - 1, total / 2)
-		for _ in 0 ..< 100 {append(&positions, base.rng_u64(&rng) % total)}
-		for pos in positions {
-			testing.expect_value(t, seek(d, pos), Error.None)
-			n, e := read(d, block[:])
-			testing.expect_value(t, e, Error.None)
-			ch := int(info(d).channels)
-			// Which link: the last start at or before pos.
-			s := starts[0]
-			for st in starts {if st[0] <= int(pos) {s = st}}
-			at := s[2] + (int(pos) - s[0]) * ch
-			testing.expectf(t, n > 0, "%s: seek %d read nothing", names[fi], pos)
-			ok := true
-			for i in 0 ..< min(n * ch, len(block)) {ok &&= block[i] == samples[at + i]}
-			testing.expectf(t, ok, "%s: samples after seek to %d differ", names[fi], pos)
-			if !ok {break}
-		}
-		// Back to the start after reading everything; past the end is an error.
-		testing.expect_value(t, seek(d, 0), Error.None)
-		n, _ := read(d, block[:])
-		testing.expect(
-			t,
-			n > 0 &&
-			block[0] == samples[0] &&
-			block[n * int(info(d).channels) - 1] == samples[n * int(info(d).channels) - 1],
-			"start again",
-		)
-		testing.expect_value(t, seek(d, total + 1), Error.Bad_Seek)
-		testing.expect_value(t, seek(d, total), Error.None)
-		n2, e2 := read(d, block[:])
-		testing.expect_value(t, n2, 0)
-		testing.expect_value(t, e2, Error.None)
+		append(&samples, ..block[:n * int(info(d).channels)])
+		frames_done += n
 	}
+	testing.expect_value(t, u64(frames_done), total)
+	rng := base.rng_make(u64(fi) + 1)
+	positions := make([dynamic]u64, context.temp_allocator)
+	append(&positions, 0, total - 1, total / 2)
+	for _ in 0 ..< 100 {append(&positions, base.rng_u64(&rng) % total)}
+	for pos in positions {
+		testing.expect_value(t, seek(d, pos), Error.None)
+		n, e := read(d, block[:])
+		testing.expect_value(t, e, Error.None)
+		ch := int(info(d).channels)
+		// Which link: the last start at or before pos.
+		s := starts[0]
+		for st in starts {if st[0] <= int(pos) {s = st}}
+		at := s[2] + (int(pos) - s[0]) * ch
+		testing.expectf(t, n > 0, "%s: seek %d read nothing", name, pos)
+		ok := true
+		for i in 0 ..< min(n * ch, len(block)) {ok &&= block[i] == samples[at + i]}
+		testing.expectf(t, ok, "%s: samples after seek to %d differ", name, pos)
+		if !ok {break}
+	}
+	// Back to the start after reading everything; past the end is an error.
+	testing.expect_value(t, seek(d, 0), Error.None)
+	n, _ := read(d, block[:])
+	testing.expect(
+		t,
+		n > 0 &&
+		block[0] == samples[0] &&
+		block[n * int(info(d).channels) - 1] == samples[n * int(info(d).channels) - 1],
+		"start again",
+	)
+	testing.expect_value(t, seek(d, total + 1), Error.Bad_Seek)
+	testing.expect_value(t, seek(d, total), Error.None)
+	n2, e2 := read(d, block[:])
+	testing.expect_value(t, n2, 0)
+	testing.expect_value(t, e2, Error.None)
 }
 
 @(test)

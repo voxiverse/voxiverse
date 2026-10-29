@@ -340,73 +340,90 @@ baseline_path :: proc(which: Audio_Scenario) -> string {
 	return fmt.tprintf("%s/%v.txt", BASELINE_DIR, which)
 }
 
+// One test per scenario, so the runner's threads play them side by side (the
+// slowest alone took the whole package's time when one test played them all).
+#assert(len(Audio_Scenario) == 5, "a new scenario needs its test below")
+
 @(test)
-test_audio_baselines :: proc(t: ^testing.T) {
-	for which in Audio_Scenario {
-		name := fmt.tprintf("%v", which)
-		if ONLY != "" && ONLY != name {continue}
-		got := scenario_run(which)
-		defer audio.baseline_destroy(&got)
-		if which == .music_session {
-			over := got.buses[.Music].integrated - got.buses[.Effects].integrated
-			testing.expectf(
-				t,
-				over <= MUSIC_OVER_EFFECTS_LU,
-				"music is %.1f LU above the effects (at most %d)",
-				over,
-				MUSIC_OVER_EFFECTS_LU,
-			)
-		}
-		path := baseline_path(which)
-		old_text, err := os.read_entire_file_from_path(path, context.allocator)
-		defer delete(old_text)
-		old, have := audio.baseline_parse(string(old_text))
-		defer if have {audio.baseline_destroy(&old)}
-		if ACCEPT == "all" || ACCEPT == name {
-			text: string
-			if have {
-				text = audio.baseline_format(got, old)
-			} else {
-				text = audio.baseline_format(got)
-			}
-			os.make_directory_all(BASELINE_DIR)
-			if werr := os.write_entire_file(path, text); werr != nil {
-				testing.expectf(t, false, "cannot write %s: %v", path, werr)
-			} else {
-				log.infof("audio baseline %s accepted: %s", name, path)
-			}
-			continue
-		}
-		if err != nil || !have {
-			testing.expectf(
-				t,
-				false,
-				"%s: no baseline at %s (`build audio --accept %s` makes it)",
-				name,
-				path,
-				name,
-			)
-			continue
-		}
-		// (CI's logs carry every OS's checksums: a run's lines are committed
-		// into the baselines as `checksum <key> <value>`)
-		for c in got.checksums {
-			log.infof("audio baseline %s checksum %s %016x", name, c.key, c.value)
-		}
-		problems := audio.baseline_compare(old, got)
-		for p in problems {
-			testing.expectf(
-				t,
-				false,
-				"%s: %s (`build audio --accept %s` if the change is meant)",
-				name,
-				p,
-				name,
-			)
-		}
-		// Frames are compared too: a scenario that changed its length changed.
-		testing.expect_value(t, got.frames, old.frames)
+test_audio_baseline_burst :: proc(t: ^testing.T) {audio_baseline_check(t, .burst)}
+@(test)
+test_audio_baseline_cave_walk :: proc(t: ^testing.T) {audio_baseline_check(t, .cave_walk)}
+@(test)
+test_audio_baseline_title_to_world :: proc(t: ^testing.T) {audio_baseline_check(
+		t,
+		.title_to_world,
+	)}
+@(test)
+test_audio_baseline_stress :: proc(t: ^testing.T) {audio_baseline_check(t, .stress)}
+@(test)
+test_audio_baseline_music_session :: proc(t: ^testing.T) {audio_baseline_check(t, .music_session)}
+
+// audio_baseline_check plays one scenario and compares it with its baseline
+// (or rewrites the baseline when it is accepted).
+audio_baseline_check :: proc(t: ^testing.T, which: Audio_Scenario) {
+	name := fmt.tprintf("%v", which)
+	if ONLY != "" && ONLY != name {return}
+	got := scenario_run(which)
+	defer audio.baseline_destroy(&got)
+	if which == .music_session {
+		over := got.buses[.Music].integrated - got.buses[.Effects].integrated
+		testing.expectf(
+			t,
+			over <= MUSIC_OVER_EFFECTS_LU,
+			"music is %.1f LU above the effects (at most %d)",
+			over,
+			MUSIC_OVER_EFFECTS_LU,
+		)
 	}
+	path := baseline_path(which)
+	old_text, err := os.read_entire_file_from_path(path, context.allocator)
+	defer delete(old_text)
+	old, have := audio.baseline_parse(string(old_text))
+	defer if have {audio.baseline_destroy(&old)}
+	if ACCEPT == "all" || ACCEPT == name {
+		text: string
+		if have {
+			text = audio.baseline_format(got, old)
+		} else {
+			text = audio.baseline_format(got)
+		}
+		os.make_directory_all(BASELINE_DIR)
+		if werr := os.write_entire_file(path, text); werr != nil {
+			testing.expectf(t, false, "cannot write %s: %v", path, werr)
+		} else {
+			log.infof("audio baseline %s accepted: %s", name, path)
+		}
+		return
+	}
+	if err != nil || !have {
+		testing.expectf(
+			t,
+			false,
+			"%s: no baseline at %s (`build audio --accept %s` makes it)",
+			name,
+			path,
+			name,
+		)
+		return
+	}
+	// (CI's logs carry every OS's checksums: a run's lines are committed
+	// into the baselines as `checksum <key> <value>`)
+	for c in got.checksums {
+		log.infof("audio baseline %s checksum %s %016x", name, c.key, c.value)
+	}
+	problems := audio.baseline_compare(old, got)
+	for p in problems {
+		testing.expectf(
+			t,
+			false,
+			"%s: %s (`build audio --accept %s` if the change is meant)",
+			name,
+			p,
+			name,
+		)
+	}
+	// Frames are compared too: a scenario that changed its length changed.
+	testing.expect_value(t, got.frames, old.frames)
 }
 
 // A sound made louder fails its baseline, and accepting it makes it pass.

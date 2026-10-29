@@ -43,3 +43,117 @@ capture :: proc(cmd: []string) -> (output: string, ok: bool) {
 	if err != nil {return "", false}
 	return string(stdout), state.exited && state.exit_code == 0
 }
+
+// Job is one command of run_parallel's.
+Job :: struct {
+	cmd:    []string,
+	limit:  time.Duration, // killed with its children at this (0: no limit)
+	log:    string, // its stdout and stderr until it ends (a file run_parallel overwrites)
+	errors: string, // its stderr instead, when set
+	quiet:  bool, // its log is not printed (the caller reads it)
+}
+
+// Job_Done is told each job's end, in the order they end, after its output is printed.
+Job_Done :: #type proc(data: rawptr, index: int, result: Run_Result, seconds: f64)
+
+// run_parallel runs jobs, at most width at once, starting them in the order given. A
+// job's output goes to its log and is printed whole when it ends, so no two
+// interleave; then done hears of it. results[i] is jobs[i]'s.
+run_parallel :: proc(
+	jobs: []Job,
+	width: int,
+	done: Job_Done = nil,
+	data: rawptr = nil,
+	allocator := context.allocator,
+) -> (
+	results: []Run_Result,
+) {
+	Running :: struct {
+		index:   int,
+		process: os.Process,
+		started: time.Tick,
+	}
+	results = make([]Run_Result, len(jobs), allocator)
+	running := make([dynamic]Running, context.temp_allocator)
+	next := 0
+	for next < len(jobs) || len(running) > 0 {
+		for next < len(jobs) && len(running) < max(width, 1) {
+			job := jobs[next]
+			if p, ok := job_start(job); ok {
+				append(&running, Running{next, p, time.tick_now()})
+			} else {
+				results[next] = .Failed
+				job_finish(job)
+				if done != nil {done(data, next, .Failed, 0)}
+			}
+			next += 1
+		}
+		ended := false
+		for i := 0; i < len(running); i += 1 {
+			r := running[i]
+			job := jobs[r.index]
+			result: Run_Result
+			state, werr := os.process_wait(r.process, 0)
+			if werr == nil {
+				result = .Ok if state.exited && state.exit_code == 0 else .Failed
+			} else if job.limit > 0 && time.tick_since(r.started) > job.limit {
+				kill_tree(r.process.pid)
+				_, _ = os.process_wait(r.process)
+				result = .Timed_Out
+			} else {
+				continue
+			}
+			results[r.index] = result
+			job_finish(job)
+			if done != nil {
+				done(data, r.index, result, time.duration_seconds(time.tick_since(r.started)))
+			}
+			unordered_remove(&running, i)
+			i -= 1
+			ended = true
+		}
+		if !ended && len(running) > 0 {time.sleep(10 * time.Millisecond)}
+	}
+	return
+}
+
+// job_start starts job with its output in its log.
+@(private = "file")
+job_start :: proc(job: Job) -> (os.Process, bool) {
+	out, err := os.open(job.log, {.Write, .Create, .Trunc})
+	if err != nil {
+		fmt.eprintfln("build: could not write '%s': %v", job.log, err)
+		return {}, false
+	}
+	defer os.close(out)
+	errors := out
+	if job.errors != "" {
+		errors, err = os.open(job.errors, {.Write, .Create, .Trunc})
+		if err != nil {
+			fmt.eprintfln("build: could not write '%s': %v", job.errors, err)
+			return {}, false
+		}
+	}
+	// (Closed once the child has its copies; a defer inside the `if` would close it
+	// before the start.)
+	defer if errors != out {os.close(errors)}
+	child, serr := os.process_start(
+		os.Process_Desc{command = job.cmd, stdout = out, stderr = errors},
+	)
+	if serr != nil {
+		fmt.eprintfln("build: could not start '%s': %v", job.cmd[0], serr)
+		return {}, false
+	}
+	return child, true
+}
+
+// job_finish prints a finished job's log (and errors) in one piece, unless it is quiet.
+@(private = "file")
+job_finish :: proc(job: Job) {
+	if job.quiet {return}
+	for path in ([]string{job.log, job.errors}) {
+		if path == "" {continue}
+		data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+		if err == nil && len(data) > 0 {os.write(os.stdout, data)}
+	}
+}

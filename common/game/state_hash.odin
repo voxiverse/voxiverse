@@ -130,6 +130,22 @@ refuse :: proc(w: ^Walker, what: string) {
 	panic(msg)
 }
 
+// append_index appends "[i]", as fmt's "[%d]" would, without the formatter: the walk
+// names every element it passes, and formatting each was most of a hash's time.
+@(private = "file")
+append_index :: proc(path: ^[dynamic]u8, i: int) {
+	digits: [20]u8
+	n := 0
+	for v := i;; v /= 10 {
+		digits[n] = u8('0' + v % 10)
+		n += 1
+		if v < 10 {break}
+	}
+	append(path, '[')
+	for k := n - 1; k >= 0; k -= 1 {append(path, digits[k])}
+	append(path, ']')
+}
+
 @(private = "file")
 scalar_array :: proc(base: ^runtime.Type_Info) -> bool {
 	#partial switch v in base.variant {
@@ -167,7 +183,7 @@ walk :: proc(w: ^Walker, data: rawptr, base: ^runtime.Type_Info, ti: ^runtime.Ty
 				letters := "xyzw"
 				append(&w.path, '.', letters[i])
 			} else {
-				append(&w.path, ..transmute([]u8)fmt.tprintf("[%d]", i))
+				append_index(&w.path, i)
 			}
 			walk(w, rawptr(uintptr(data) + uintptr(i * elem.size)), eb, elem)
 		}

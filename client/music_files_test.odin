@@ -47,100 +47,120 @@ music_decode :: proc(file: []byte) -> (pcm: []f32, rate: int) {
 	return pcm[:2 * got], rate
 }
 
-@(test)
-test_music_decodes_to_its_metadata :: proc(t: ^testing.T) {
-	for f in MUSIC {
-		meta: Music_Meta
-		testing.expectf(
-			t,
-			json.unmarshal(transmute([]u8)f.json, &meta, allocator = context.temp_allocator) ==
-			nil,
-			"%s.json",
-			f.name,
-		)
-		testing.expectf(t, meta.rate == 48000 && meta.frames > 0, "%s: %v", f.name, meta)
-		_, err := os.stat(
-			strings.concatenate({MUSIC_DIR, meta.source}, context.temp_allocator),
-			context.temp_allocator,
-		)
-		testing.expectf(t, err == nil, "%s names %s, which does not exist", f.name, meta.source)
-		// Through a mixer at 48 kHz, as the game plays it: the voice ends at `frames`.
-		m := new(audio.Mixer)
-		defer free(m)
-		audio.mixer_init(m, 48000)
-		id, ok := audio.add_stream(m, f.ogg, inline = true)
-		defer audio.streams_close(m)
-		testing.expectf(t, ok, "%s does not decode", f.name)
-		if !ok {continue}
-		testing.expect_value(t, m.streams[id].length, meta.frames)
-		testing.expect_value(t, int(m.streams[id].rate), meta.rate)
-		testing.expect_value(t, int(m.streams[id].channels), 2)
-		v := audio.play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music})
-		block := 480
-		out := make([]f32, 2 * block)
-		defer delete(out)
-		played := 0
-		for audio.alive(m, v) && played < meta.frames + 4 * block {
-			audio.mix(m, out)
-			audio.drain(m)
-			played += block
-		}
-		late := audio.latency(m)
-		testing.expectf(
-			t,
-			abs(played - late - meta.frames) <= block + 1,
-			"%s: ends after %d frames (latency %d), says %d",
-			f.name,
-			played,
-			late,
-			meta.frames,
-		)
-		free_all(context.temp_allocator)
-	}
-}
+// One test per piece, so the runner's threads decode them side by side: each
+// decodes to what its metadata says, at the loudness the mix expects, and
+// loops without a seam.
+#assert(len(MUSIC) == 7, "a new piece needs its test below")
 
 @(test)
-test_music_loudness_and_loops :: proc(t: ^testing.T) {
+test_music_title :: proc(t: ^testing.T) {music_check(t, "title")}
+@(test)
+test_music_meadow :: proc(t: ^testing.T) {music_check(t, "meadow")}
+@(test)
+test_music_night :: proc(t: ^testing.T) {music_check(t, "night")}
+@(test)
+test_music_deep :: proc(t: ^testing.T) {music_check(t, "deep")}
+@(test)
+test_music_far :: proc(t: ^testing.T) {music_check(t, "far")}
+@(test)
+test_music_death :: proc(t: ^testing.T) {music_check(t, "death")}
+@(test)
+test_music_discovery :: proc(t: ^testing.T) {music_check(t, "discovery")}
+
+@(private = "file")
+music_check :: proc(t: ^testing.T, name: string) {
 	for f in MUSIC {
-		meta: Music_Meta
-		json.unmarshal(transmute([]u8)f.json, &meta, allocator = context.temp_allocator)
-		pcm, rate := music_decode(f.ogg)
-		defer delete(pcm)
-		testing.expect_value(t, rate, meta.rate)
-		testing.expect_value(t, len(pcm) / 2, meta.frames)
-		meter := new(audio.Meter)
-		defer free(meter)
-		audio.meter_init(meter, f64(rate))
-		audio.meter_push(meter, pcm)
-		lufs := f64(audio.meter_integrated(meter))
+		if f.name != name {continue}
+		music_decodes_to_its_metadata(t, f)
+		music_loudness_and_loops(t, f)
+		return
+	}
+	testing.expectf(t, false, "no piece called %s in MUSIC", name)
+}
+
+@(private = "file")
+music_decodes_to_its_metadata :: proc(t: ^testing.T, f: Music_File) {
+	meta: Music_Meta
+	testing.expectf(
+		t,
+		json.unmarshal(transmute([]u8)f.json, &meta, allocator = context.temp_allocator) == nil,
+		"%s.json",
+		f.name,
+	)
+	testing.expectf(t, meta.rate == 48000 && meta.frames > 0, "%s: %v", f.name, meta)
+	_, err := os.stat(
+		strings.concatenate({MUSIC_DIR, meta.source}, context.temp_allocator),
+		context.temp_allocator,
+	)
+	testing.expectf(t, err == nil, "%s names %s, which does not exist", f.name, meta.source)
+	// Through a mixer at 48 kHz, as the game plays it: the voice ends at `frames`.
+	m := new(audio.Mixer)
+	defer free(m)
+	audio.mixer_init(m, 48000)
+	id, ok := audio.add_stream(m, f.ogg, inline = true)
+	defer audio.streams_close(m)
+	testing.expectf(t, ok, "%s does not decode", f.name)
+	if !ok {return}
+	testing.expect_value(t, m.streams[id].length, meta.frames)
+	testing.expect_value(t, int(m.streams[id].rate), meta.rate)
+	testing.expect_value(t, int(m.streams[id].channels), 2)
+	v := audio.play(m, {sound = id, gain = {1, 1}, pitch = 1, bus = .Music})
+	block := 480
+	out := make([]f32, 2 * block)
+	defer delete(out)
+	played := 0
+	for audio.alive(m, v) && played < meta.frames + 4 * block {
+		audio.mix(m, out)
+		audio.drain(m)
+		played += block
+	}
+	late := audio.latency(m)
+	testing.expectf(
+		t,
+		abs(played - late - meta.frames) <= block + 1,
+		"%s: ends after %d frames (latency %d), says %d",
+		f.name,
+		played,
+		late,
+		meta.frames,
+	)
+	free_all(context.temp_allocator)
+}
+
+@(private = "file")
+music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
+	meta: Music_Meta
+	json.unmarshal(transmute([]u8)f.json, &meta, allocator = context.temp_allocator)
+	pcm, rate := music_decode(f.ogg)
+	defer delete(pcm)
+	testing.expect_value(t, rate, meta.rate)
+	testing.expect_value(t, len(pcm) / 2, meta.frames)
+	meter := new(audio.Meter)
+	defer free(meter)
+	audio.meter_init(meter, f64(rate))
+	audio.meter_push(meter, pcm)
+	lufs := f64(audio.meter_integrated(meter))
+	testing.expectf(t, abs(lufs - -20) <= 1, "%s: %.2f LUFS, wanted -20 within 1", f.name, lufs)
+	if !meta.loop {return}
+	n := len(pcm) / 2
+	near := rate / 100 // 10 ms
+	for ch in 0 ..< 2 {
+		jump := abs(pcm[ch] - pcm[2 * (n - 1) + ch])
+		steps: f32
+		for i in 0 ..< near {
+			steps = max(steps, abs(pcm[2 * (i + 1) + ch] - pcm[2 * i + ch]))
+			k := n - 1 - i
+			steps = max(steps, abs(pcm[2 * k + ch] - pcm[2 * (k - 1) + ch]))
+		}
 		testing.expectf(
 			t,
-			abs(lufs - -20) <= 1,
-			"%s: %.2f LUFS, wanted -20 within 1",
+			jump <= 1.5 * steps + 1e-6,
+			"%s ch %d: the loop jumps %v, its neighbours differ by %v",
 			f.name,
-			lufs,
+			ch,
+			jump,
+			steps,
 		)
-		if !meta.loop {continue}
-		n := len(pcm) / 2
-		near := rate / 100 // 10 ms
-		for ch in 0 ..< 2 {
-			jump := abs(pcm[ch] - pcm[2 * (n - 1) + ch])
-			steps: f32
-			for i in 0 ..< near {
-				steps = max(steps, abs(pcm[2 * (i + 1) + ch] - pcm[2 * i + ch]))
-				k := n - 1 - i
-				steps = max(steps, abs(pcm[2 * k + ch] - pcm[2 * (k - 1) + ch]))
-			}
-			testing.expectf(
-				t,
-				jump <= 1.5 * steps + 1e-6,
-				"%s ch %d: the loop jumps %v, its neighbours differ by %v",
-				f.name,
-				ch,
-				jump,
-				steps,
-			)
-		}
 	}
 }
 

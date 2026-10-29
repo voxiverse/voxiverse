@@ -205,8 +205,25 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   against hashes committed in the repo, and unpacks it into `build/tools/`. Everyone compiles
   with the same version; bumping it is a one-line change plus hashes.
 - Override for unusual hosts (e.g. Linux arm64): `GLSLANG=/path/to/glslangValidator`.
-- Shaders recompile only when their source changes; compile errors point at the GLSL file
-  and line.
+- Shaders recompile only when their content key changes (below); compile errors point at
+  the GLSL file and line.
+- **The inner loop is parallel and skips what is unchanged, by content (issue #67,
+  2026-10-29).** `check` runs the host's type checks and the other targets' object builds in
+  one pool, one job per core (`VX_JOBS=n` overrides); `test` runs the packages the same way,
+  the slowest last time first, each printing its output whole when it ends; `test
+  <package>...` runs only those. A step whose inputs are byte for byte what they were when
+  it last succeeded is not repeated: a test package runs its kept binary without compiling,
+  a cross-OS object build and a file's formatting check are not redone, a shader is not
+  recompiled, and `build.sh`/`build.bat` rebuild the driver only when its own inputs
+  changed (`tools/build/cache.odin`, records in `build/cache/`). A key is a 128-bit XXH3 over
+  the command, `odin version` and the content of every file the compiler read (its
+  `-export-dependencies` list: sources and `#load`s) plus the names in their directories, so
+  a file added beside them counts; it is kept only when every input is older than the
+  step's start. Modification times alone never decide: a stale result is a wrong one, not a
+  speedup. The host's `odin check` is not cached (it has no dependency list) and takes
+  seconds in parallel. A test that loops over independent cases that each take seconds (the
+  music, the audio scenarios, seeking in each file) is one test per case, so the runner's
+  threads share them; a new case needs its test (an `#assert` on the count says so).
 - CI uses exactly the same path, cached between runs.
 - CI's Linux checks are split into two parallel jobs, "Test · Linux x64" (check, tests, determinism,
   the smoke suite) and "Game · Linux x64" (everything that runs the game or tools under
