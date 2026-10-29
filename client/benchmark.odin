@@ -43,14 +43,14 @@ SCENARIOS := [?]Scenario {
 	{
 		"views",
 		.Views,
-		1,
+		2, // 2: the view model (the start kit's rocket launcher) is drawn too (M48k)
 		3,
 		"sixteen still views from the spawn (eight ways, at the horizon and down)",
 	},
 	{
 		"flight",
 		.Flight,
-		1,
+		2, // 2: the view model is drawn too (M48k)
 		3,
 		"fly 600 blocks over the land at 40 blocks/s, looking ahead and down",
 	},

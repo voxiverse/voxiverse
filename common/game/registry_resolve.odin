@@ -417,6 +417,7 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	for text, at in b.index[.Recipe] {reg.ids[.Recipe][text] = u32(at)}
 	for text, at in b.index[.Structure] {reg.ids[.Structure][text] = u32(at)}
 	for text, at in b.index[.Game_Mode] {reg.ids[.Game_Mode][text] = u32(at)}
+	for text, at in b.index[.Model] {reg.ids[.Model][text] = u32(at)}
 	for ti, ai in reg.block_tags {
 		for member in ti.members {
 			tags := &reg.blocks.defs[first_state[member]].tags
@@ -501,6 +502,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	}
 	reg.recipes = make([]Recipe_Def, len(b.defs[.Recipe]))
 	for &m, i in b.defs[.Recipe] {reg.recipes[i] = read_recipe(b, &m, item_numbers)}
+
+	// --- Models. ---
+	reg.models = make([]Model_Def, len(b.defs[.Model]))
+	for &m, i in b.defs[.Model] {reg.models[i] = read_model(b, &m)}
 
 	// --- Game modes. ---
 	reg.game_modes = make([]Mode_Def, len(b.defs[.Game_Mode]))
@@ -1031,6 +1036,13 @@ read_item :: proc(
 	}
 	if f := field_of(m, "weapon"); f != nil {
 		read_weapon(b, f, &info)
+	}
+	if f := field_of(m, "model"); f != nil {
+		if f.value.kind != .String {
+			fail_field(b, f, f.value, "model is a model id")
+		} else if at, ok := ref_index(b, .Model, f.value.s, f, f.value); ok {
+			info.model = u16(at)
+		}
 	}
 	if f := field_of(m, "modifiers"); f != nil {
 		if f.value.kind != .Array {

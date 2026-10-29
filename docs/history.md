@@ -6544,3 +6544,41 @@ optimized, and in CI), the profile shows no frame or tick over budget, the whole
 - `build bench party` is a second scenario of the server benchmark (`dedicated/bench.odin`), and measures the server's tick; the client's frame with eight avatars needs a window and is a hand check.
 - Found: the tests' block kit (`kit_test.odin`'s `@(init)`) ran in every build; the P list counted every death twice. Both fixed, written in docs/debugging.md.
 
+# M48k: first-person hands, held blocks and voxel gun models
+
+Rules: issue #60 (owner-decided; the spec is `docs/milestones/M48k.md`). Built as specified;
+what differed, found by building it:
+
+- **Models are a registry kind** (`Content_Kind.Model`, `data/models/`, `Model_Def`,
+  `read_model`, `Item_Info.model`): the item field `model` names one. Model space has the grip
+  at the origin after the mesh is built; the data's `grip` is `[column, row, slice]` (the
+  picture's own coordinates) and `Model_Def.grip` is the same voxel in model space (x the slice,
+  y up from the bottom row, z the column). The registry's text (and so its hash) lists models.
+- **One mesh format for everything held** (`render.Held_Vertex`, 28 bytes: position, uv, colour,
+  layer): voxels and the arm are flat colours (`layer = HELD_FLAT`; the shader gives each voxel
+  face a small crunch from a hash of its uv, constant over the face), a block's mesh is
+  `mesh_chunk`'s own quads (`merge = false`) with the layer, shade and uv the world shader
+  derives. The pass (`held_pass.odin`, `held.vert`, `held.frag`) draws two lists: the view model
+  in view space under its own scene, after `gpu.clear_depth`, and the third person's items in the
+  world's scene, depth tested, positioned from a per-avatar base (like the entity pass, from the
+  camera's chunk).
+- **The arm follows the item**, not the other way round: the item's grip is placed (rest place,
+  then the animation's offsets and rotations about the grip) and the arm is derived from it
+  (`view_arm_matrix`), turned about the grip by `VIEW_ARM_SINK` so it comes up from below. In the
+  hand of an avatar the same `held_in_arm` maps the grip onto the arm's end. A flat item's picture
+  runs along the arm's length with its plane facing out.
+- **A bug found:** the avatar's raised arm pointed backwards (a positive pitch swings the hand to
+  the front, -z; the pose gave -1.1). `avatar_pose` takes a `Hold` (`.None`, `.Item`, `.Gun`) and
+  raises forward (1.1) or level (1.5); `test_avatar_arm_raises_forward` pins the hand's tip in front
+  of the shoulder.
+- **The animations** are `Vm_State` (swing 0.28 s, place 0.22 s, recoil decaying at 12 a second to a
+  cap of two shots' worth, reload for `reload_time`), events from `item_use`, `session_shoot`,
+  `session_reload` and the launcher's fire. The sway and the bob come from `vm_comfort` (View
+  bobbing on, Reduce motion off) and the camera's own bob phase.
+- **Picture aids on the console** (no gameplay): `hold <item>` selects the hotbar slot that has an
+  item, `camera <first|behind|facing> [degrees]` sets the mode and circles a third person camera
+  round the head (`Session.orbit`), so CI's "Held items" step can show each model from the side.
+- `item_sprite` was split out of the icon code so held flat items use exactly the inventory's art.
+- Weapons' `Item_Info.model` changes the registry hash (an item line gained `model=`); nothing in
+  the wire or the saves changed.
+

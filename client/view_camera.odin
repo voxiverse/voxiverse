@@ -99,7 +99,7 @@ camera_update :: proc(
 		view, used := camera_third_person(
 			query,
 			s.camera.position,
-			s.camera.yaw,
+			s.camera.yaw + s.orbit,
 			s.camera.pitch,
 			s.camera_mode,
 			THIRD_DISTANCE,
@@ -111,7 +111,7 @@ camera_update :: proc(
 		view, _ = camera_third_person(
 			query,
 			s.camera.position,
-			s.camera.yaw,
+			s.camera.yaw + s.orbit,
 			s.camera.pitch,
 			s.camera_mode,
 			s.pull,

@@ -14,6 +14,7 @@ Pass :: enum u8 {
 	Debug,
 	Sky,
 	Entity,
+	Held,
 	World,
 }
 
@@ -92,6 +93,23 @@ PASSES := [Pass]Pass_Info {
 				frag,
 			)},
 		destroy = proc(app: ^App) {render.entity_destroy(&app.entity_pass, &app.g)},
+	},
+	.Held = {
+		shader = "held",
+		includes = {"scene"},
+		init = proc(app: ^App, vert, frag: []u8) -> bool {return render.held_init(
+				&app.held_pass,
+				&app.g,
+				vert,
+				frag,
+			)},
+		reload = proc(app: ^App, vert, frag: []u8) -> bool {return render.held_reload(
+				&app.held_pass,
+				&app.g,
+				vert,
+				frag,
+			)},
+		destroy = proc(app: ^App) {render.held_destroy(&app.held_pass, &app.g)},
 	},
 	.World = {
 		shader = "world",

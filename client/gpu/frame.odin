@@ -322,3 +322,18 @@ check :: proc(result: vk.Result, loc := #caller_location) -> bool {
 frame_slot :: proc(g: ^Gpu) -> int {
 	return g.frame_index
 }
+
+// clear_depth clears the depth buffer to the far plane (0 in reverse Z) inside
+// the frame's rendering: what is drawn next is never hidden by what was drawn
+// before (the first-person view model).
+clear_depth :: proc(frame: Frame) {
+	attachment := vk.ClearAttachment {
+		aspectMask = {.DEPTH},
+		clearValue = {depthStencil = {depth = 0}},
+	}
+	rect := vk.ClearRect {
+		rect = {extent = frame.extent},
+		layerCount = 1,
+	}
+	vk.CmdClearAttachments(frame.cmd, 1, &attachment, 1, &rect)
+}

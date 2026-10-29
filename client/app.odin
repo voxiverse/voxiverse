@@ -61,6 +61,11 @@ App :: struct {
 	debug_draw:       render.Debug_Draw, // this frame's debug lines
 	entity_pass:      render.Entity_Pass,
 	entity_draw:      render.Entity_Draw, // this frame's boxes (players, entities, particles)
+	held_pass:        render.Held_Pass, // what the hands hold (viewmodel.odin)
+	held_draw:        render.Held_Draw, // this frame's held meshes: the view model, third person items
+	held_cache:       Held_Cache, // every item's mesh in a hand
+	held_arm:         Held_Mesh, // our right arm, in our shirt
+	held_arm_shirt:   [4]u8,
 	mixer:            ^audio.Mixer, // heap (it is large); fed to the sound card by audio_device
 	audio_device:     audio.Device,
 	null_audio:       bool, // mix into the null device, whatever the sound card (--null-audio, --check audio)
@@ -198,6 +203,7 @@ app_init :: proc(app: ^App) -> bool {
 	if !prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
+	render.held_draw_init(&app.held_draw)
 	if !render.scene_init(&app.scenes, g) {return false}
 	app.mixer = new(audio.Mixer)
 	audio.mixer_init(app.mixer, audio.DEVICE_RATE)
@@ -343,6 +349,9 @@ app_destroy :: proc(app: ^App) -> (validation_issues: int) {
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
 	render.entity_draw_destroy(&app.entity_draw)
+	render.held_draw_destroy(&app.held_draw)
+	held_cache_destroy(&app.held_cache)
+	held_mesh_destroy(&app.held_arm)
 	shader_watch_destroy(&app.shader_watch)
 	universes_destroy(&app.universes)
 	creation_destroy(&app.creation)
@@ -501,7 +510,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		in_world :=
 			app.session != nil && app.session.state == .Playing && app.session.loading == nil
 		camera: render.Camera
-		scene: u64
+		scene, view_scene: u64
 		if in_world {
 			s := app.session
 			width, height := render_size(app)
@@ -522,18 +531,23 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 				),
 			)
 			world_debug_lines(app)
-			avatars_draw(s, &app.entity_draw)
+			avatars_draw(s, &app.entity_draw, &app.held_draw, &app.held_cache)
 			entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
+			view_scene = view_model_frame(app, s, width, height)
 		}
 		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
 		render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
+		render.held_upload(&app.held_pass, g, &app.held_draw, camera)
+		textures := u32(app.world_pass.textures_id)
 		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
 			render.world_draw(&app.world_pass, g, frame, camera, scene)
 			render.entity_draw(&app.entity_pass, g, frame, scene)
+			render.held_draw_world(&app.held_pass, g, frame, scene, textures)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
 			render.world_draw_translucent(&app.world_pass, g, frame, camera, scene, app.seconds)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
+			render.held_draw_view(&app.held_pass, g, frame, view_scene, textures)
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)
 		gpu.end_rendering(frame)

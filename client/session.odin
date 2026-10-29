@@ -109,6 +109,9 @@ Session :: struct {
 	reload_end:       f64, // when the reload we asked for is done (0: none)
 	reload_slot:      int,
 	recoil:           f32, // radians the view is lifted by the last shots (cosmetic)
+	orbit:            f32, // radians: the third person camera circles the head by this (a picture aid, `camera <mode> <degrees>`)
+	vm:               Vm_State, // the view model's animations (viewmodel.odin)
+	vm_item:          game.Item, // what they were last stepped for
 	zoom:             f32, // 0 ..= 1: how far the held weapon's zoom has come
 	zoom_to:          f32, // the held weapon's field-of-view factor
 	marker:           f32, // seconds the hit marker has left

@@ -1,5 +1,6 @@
 {
 	"rocket_launcher": {
+		"model": "voxiverse:rocket_launcher",
 		"description": "Fires a rocket that explodes where it lands.",
 		"stack": 1,
 		"tool": "launcher"

@@ -82,6 +82,7 @@ Item_Info :: struct {
 	modifiers:   [2]Modifier, // what wearing or holding it changes (mods.odin); amount 0: none
 	equip:       Maybe(Equip_Slot), // where it can be worn (armor)
 	weapon:      Maybe(Weapon_Info), // a hitscan weapon (data: items/weapons.json)
+	model:       Maybe(u16), // the voxel model it is held as (an index into Registry.models)
 }
 
 // Weapon_Info: what a hitscan weapon does, all of it data (the item's

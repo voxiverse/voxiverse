@@ -13,8 +13,8 @@ WALK :: f32(4.317)
 RUN :: f32(5.612)
 
 @(private = "file")
-pose :: proc(speed: f32, crouched: bool, phase: f32, holding := false) -> Avatar_Pose {
-	return avatar_pose(speed, crouched, phase, holding, WALK, RUN)
+pose :: proc(speed: f32, crouched: bool, phase: f32, hold := Hold.None) -> Avatar_Pose {
+	return avatar_pose(speed, crouched, phase, hold, WALK, RUN)
 }
 
 @(test)
@@ -43,10 +43,10 @@ test_avatar_pose_rest_walk_run_sneak :: proc(t: ^testing.T) {
 	testing.expect_value(t, sneak.hip, 0.6)
 	testing.expect_value(t, sneak.neck_y, 1.1)
 	// Holding something: the right arm is raised, forward.
-	held := pose(0, false, 0, true)
-	testing.expect_value(t, held.arms[1], -AVATAR_RAISED)
+	held := pose(0, false, 0, .Item)
+	testing.expect_value(t, held.arms[1], AVATAR_RAISED)
 	testing.expect_value(t, held.arms[0], 0)
-	testing.expect(t, pose(WALK, false, 0, true).arms[1] < -0.9)
+	testing.expect(t, pose(WALK, false, 0, .Item).arms[1] > 0.9)
 }
 
 @(test)
@@ -129,4 +129,41 @@ test_snapshot_speed_from_the_track :: proc(t: ^testing.T) {
 	other_snapshot(&o, 2, game.Player_Motion{position = {0, 5, 0}})
 	v, _ = other_view(&o, 99)
 	testing.expect_value(t, v.speed, 0)
+}
+
+// The arm that holds something swings its hand to the front (-z, the way the
+// avatar looks), a weapon's level; at rest it hangs (M48k found the raised
+// arm pointing backwards).
+@(test)
+test_avatar_arm_raises_forward :: proc(t: ^testing.T) {
+	tip :: proc(pitch: f32) -> [3]f32 {
+		// The hand's end in the avatar's space about the shoulder, as the entity pass
+		// turns a box: pitch about x.
+		p := [3]f32{0, -0.65, 0}
+		return {
+			p.x,
+			p.y * math.cos(pitch) - p.z * math.sin(pitch),
+			p.y * math.sin(pitch) + p.z * math.cos(pitch),
+		}
+	}
+	rest := tip(pose(0, false, 0).arms[1])
+	testing.expect(t, rest.z == 0 && rest.y < -0.6, "at rest the arm hangs")
+	item := tip(pose(0, false, 0, .Item).arms[1])
+	testing.expect(t, item.z < -0.4, "a raised arm is in front of the shoulder")
+	gun := tip(pose(0, false, 0, .Gun).arms[1])
+	testing.expect(t, gun.z < item.z, "an aimed arm reaches further forward")
+	testing.expect(t, abs(gun.y) < 0.1, "an aimed arm is level")
+	moving := tip(pose(WALK, false, 1, .Gun).arms[1])
+	testing.expect(t, moving.z < -0.6, "walking with a gun keeps it forward")
+	reg := test_reg()
+	named :: proc(reg: ^game.Registry, name: string) -> game.Item {
+		i, _ := game.registry_item(reg, name)
+		return i
+	}
+	testing.expect_value(t, hold_of(reg, game.NO_ITEM), Hold.None)
+	testing.expect_value(t, hold_of(reg, named(reg, "pistol")), Hold.Gun)
+	testing.expect_value(t, hold_of(reg, named(reg, "sniper")), Hold.Gun)
+	testing.expect_value(t, hold_of(reg, named(reg, "rocket_launcher")), Hold.Gun)
+	testing.expect_value(t, hold_of(reg, named(reg, "stone")), Hold.Item)
+	testing.expect_value(t, hold_of(reg, named(reg, "hoe")), Hold.Item)
 }

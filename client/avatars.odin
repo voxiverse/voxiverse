@@ -25,8 +25,7 @@ SHIRTS := [8][4]u8 {
 }
 @(private = "file")
 LEGS :: [4]u8{52, 58, 92, 255}
-@(private = "file")
-SKIN :: [4]u8{224, 178, 140, 255}
+AVATAR_SKIN :: [4]u8{224, 178, 140, 255}
 
 NAME_TAG_DISTANCE :: 48 // blocks: names further away are not shown
 
@@ -59,7 +58,25 @@ AVATAR_FULL_STEP :: 0.8 // blocks/s: the swing is whole from here
 AVATAR_WALK_SWING :: 0.55 // radians
 AVATAR_RUN_SWING :: 1.0
 AVATAR_SNEAK_SWING :: 0.25 // a shortened stride
-AVATAR_RAISED :: 1.1 // the arm that holds something, forward
+AVATAR_RAISED :: 1.1 // the arm that holds something: raised forward (positive: the hand swings to the front, -z)
+AVATAR_AIMED :: 1.5 // holding a weapon: the arm level, pointing the way it looks
+
+// Hold: what the right hand holds, for the arm's raise.
+Hold :: enum u8 {
+	None,
+	Item, // anything
+	Gun, // a weapon: aimed
+}
+
+// hold_of: how an item is held (a weapon or a launcher aimed, anything else raised).
+hold_of :: proc(reg: ^game.Registry, item: game.Item) -> Hold {
+	if item == game.NO_ITEM {return .None}
+	info, known := game.item_info(reg, item)
+	if !known {return .None}
+	if _, is_weapon := info.weapon.?; is_weapon {return .Gun}
+	if tool, is_tool := info.tool.?; is_tool && tool == .Launcher {return .Gun}
+	return .Item
+}
 
 // avatar_pose_advance: the limbs' phase after moving `distance` blocks. The
 // phase follows the ground covered, so it is continuous when the speed changes
@@ -76,15 +93,16 @@ avatar_pose :: proc(
 	speed: f32,
 	crouched: bool,
 	phase: f32,
-	holding: bool,
+	hold: Hold,
 	walk_speed, sprint_speed: f32,
 ) -> (
 	pose: Avatar_Pose,
 ) {
 	pose.hip, pose.neck_y = 0.75, 1.4
 	if crouched {pose.hip, pose.neck_y = 0.6, 1.1}
+	raised: f32 = AVATAR_AIMED if hold == .Gun else AVATAR_RAISED
 	if speed < AVATAR_MOVING {
-		if holding {pose.arms[1] = -AVATAR_RAISED}
+		if hold != .None {pose.arms[1] = raised}
 		return
 	}
 	amp: f32 = AVATAR_SNEAK_SWING
@@ -96,18 +114,35 @@ avatar_pose :: proc(
 	swing := math.sin(phase) * amp
 	pose.legs = {swing, -swing}
 	pose.arms = {-swing, swing}
-	if holding {pose.arms[1] = -AVATAR_RAISED + swing * 0.15}
+	if hold != .None {pose.arms[1] = raised + swing * 0.15}
 	return
 }
 
 // avatar_rest: standing still.
 avatar_rest :: proc(crouched: bool) -> Avatar_Pose {
-	return avatar_pose(0, crouched, 0, false, 1, 2)
+	return avatar_pose(0, crouched, 0, .None, 1, 2)
+}
+
+// avatar_hold_pose: standing still, holding `item`.
+avatar_hold_pose :: proc(reg: ^game.Registry, crouched: bool, item: game.Item) -> Avatar_Pose {
+	return avatar_pose(0, crouched, 0, hold_of(reg, item), 1, 2)
+}
+
+// Avatar_Hand: where the item in an avatar's right hand is drawn (nil draw: it is
+// not) and what it looks like.
+Avatar_Hand :: struct {
+	draw:  ^render.Held_Draw,
+	entry: ^Held_Entry,
 }
 
 // avatars_draw adds every visible other player to the entity pass (their limbs
 // move on with the ground they cover each frame).
-avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
+avatars_draw :: proc(
+	s: ^Session,
+	d: ^render.Entity_Draw,
+	hand_draw: ^render.Held_Draw,
+	cache: ^Held_Cache,
+) {
 	if s.camera_mode != .First {
 		// Ourselves, standing.
 		avatar_draw(
@@ -116,9 +151,10 @@ avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 			s.feet,
 			s.camera.yaw,
 			s.camera.pitch,
-			avatar_rest(s.prediction.state.crouched),
+			avatar_hold_pose(s.reg, s.prediction.state.crouched, held(s).item),
 			shirt_of(s.config.name),
 			game.worn_of(&s.inventory),
+			{hand_draw, held_entry(cache, s.reg, held(s).item)},
 		)
 	}
 	now, live := session_others_now(s)
@@ -139,11 +175,21 @@ avatars_draw :: proc(s: ^Session, d: ^render.Entity_Draw) {
 			v.speed,
 			v.crouched,
 			o.stride,
-			o.held != game.NO_ITEM,
+			hold_of(s.reg, o.held),
 			s.rules.walk_speed,
 			s.rules.sprint_speed,
 		)
-		avatar_draw(s.reg, d, v.position, v.yaw, v.pitch, pose, shirt_of(o.name), o.worn)
+		avatar_draw(
+			s.reg,
+			d,
+			v.position,
+			v.yaw,
+			v.pitch,
+			pose,
+			shirt_of(o.name),
+			o.worn,
+			{hand_draw, held_entry(cache, s.reg, o.held)},
+		)
 	}
 }
 
@@ -158,8 +204,20 @@ avatar_draw :: proc(
 	pose: Avatar_Pose,
 	shirt: [4]u8,
 	worn: [game.WORN_SLOTS]game.Item,
+	hand := Avatar_Hand{},
 ) {
 	hip, neck_y := pose.hip, pose.neck_y
+	if hand.draw != nil && hand.entry != nil && hand.entry.kind != .None {
+		// The item in the right hand: its grip at the hand, the arm's raise as the pose says.
+		xf := avatar_hand_matrix(hand.entry.kind, {0.375, neck_y - 0.1, 0}, yaw, pose.arms[1])
+		render.held_world_begin(hand.draw, p)
+		for v in hand.entry.mesh.vertices {
+			at := xf * [4]f32{v.pos.x, v.pos.y, v.pos.z, 1}
+			w := v
+			w.pos = {at.x, at.y, at.z}
+			render.held_world_add(hand.draw, w)
+		}
+	}
 	leg :: proc(
 		d: ^render.Entity_Draw,
 		p: [3]f64,
@@ -200,13 +258,22 @@ avatar_draw :: proc(
 			pose.arms[i],
 			{-0.075, -0.65, -0.075},
 			{0.075, -0.4, 0.075},
-			SKIN,
+			AVATAR_SKIN,
 			.Body,
 		)
 	}
 	render.entity_box(d, p, yaw, 0, {-0.3, hip, -0.15}, {0.3, neck_y, 0.15}, shirt, .Body)
 	neck := p + {0, f64(neck_y), 0}
-	render.entity_box(d, neck, yaw, pitch, {-0.24, 0, -0.24}, {0.24, 0.48, 0.24}, SKIN, .Head)
+	render.entity_box(
+		d,
+		neck,
+		yaw,
+		pitch,
+		{-0.24, 0, -0.24},
+		{0.24, 0.48, 0.24},
+		AVATAR_SKIN,
+		.Head,
+	)
 	// Armor: slightly larger boxes over the parts.
 	G :: f32(0.03)
 	for item in worn {

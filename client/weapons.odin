@@ -82,6 +82,7 @@ session_reload :: proc(s: ^Session) -> bool {
 	send_message(s, game.Reload{})
 	s.reload_end = s.weapon_clock + f64(w.reload_time)
 	s.reload_slot = s.inventory.selected
+	vm_event(&s.vm, .Reload, w.reload_time)
 	s.ammo_until = 0
 	append(&s.sounds, Sound_Event{.Reload, .Air, s.camera.position, 1})
 	return true
@@ -125,6 +126,7 @@ session_shoot :: proc(s: ^Session, stack: game.Stack, w: game.Weapon_Info, press
 	muzzle_flash(s, muzzle)
 	append(&s.sounds, Sound_Event{gun_cue(w.sound), .Air, s.camera.position, 1})
 	s.recoil += RECOIL_KICK * (3 if w.zoom > 0 else 1)
+	vm_event(&s.vm, .Shot)
 	return true
 }
 
@@ -207,6 +209,9 @@ weapon_hud :: proc(ctx: ^ui.Context, s: ^Session) {
 	}
 	stack, w, ok := weapon_in_hand(s)
 	if !ok {return}
+	if w.zoom > 0 && s.camera_mode == .First {
+		scope_draw(ctx, clamp((s.zoom - VM_SCOPE_HIDE * 0.6) / 0.5, 0, 1))
+	}
 	r := ctx.screen
 	row := ui.cut_bottom(&r, SLOT_SIZE.y + 24)
 	row = ui.rect_center(row, game.HOTBAR_SLOTS * (SLOT_SIZE.x + t.spacing), SLOT_SIZE.y)

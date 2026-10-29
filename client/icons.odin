@@ -28,22 +28,37 @@ item_icons_init :: proc(reg: ^game.Registry, icons: ^Item_Icons, ctx: ^ui.Contex
 	for item in game.every_item(reg) {
 		if item in icons {continue} 	// (made at start-up: the session of a universe with packs adds its own)
 		info, _ := game.item_info(reg, item)
-		if item >= game.MATERIAL_ITEMS && item < game.ARMOR_ITEMS {
-			material_sprite(game.Material(item - game.MATERIAL_ITEMS), &pixels)
-		} else if weapon, is_weapon := info.weapon.?; is_weapon {
-			weapon_sprite(weapon.sound, &pixels)
-		} else if tool, is_tool := info.tool.?; is_tool {
-			tool_sprite(tool, &pixels)
-		} else if armor, is_armor := info.armor.?; is_armor {
-			armor_sprite(armor, &pixels)
-		} else if reg.blocks.defs[info.block].render == .Cross {
-			block_flat(reg, info.block, layers, &pixels) // (plants are crossed planes, not cubes)
-		} else if info.block != .Air {
-			block_cube(reg, info.block, layers, &pixels)
-		} else {
-			continue // (a pack's item with no art of its own: none)
+		if !item_sprite(item, info, &pixels) {
+			if reg.blocks.defs[info.block].render == .Cross {
+				block_flat(reg, info.block, layers, &pixels) // (plants are crossed planes, not cubes)
+			} else if info.block != .Air {
+				block_cube(reg, info.block, layers, &pixels)
+			} else {
+				continue // (a pack's item with no art of its own: none)
+			}
 		}
 		icons[item] = ui.add_icon(ctx, ICON_SIZE, pixels[:]) or_return
+	}
+	return true
+}
+
+// item_sprite draws the 16 x 16 art of an item that is not a block (a material, a
+// weapon, a tool, armor); false for one that is none of them.
+item_sprite :: proc(
+	item: game.Item,
+	info: game.Item_Info,
+	pixels: ^[ICON_SIZE * ICON_SIZE][4]u8,
+) -> bool {
+	if item >= game.MATERIAL_ITEMS && item < game.ARMOR_ITEMS {
+		material_sprite(game.Material(item - game.MATERIAL_ITEMS), pixels)
+	} else if weapon, is_weapon := info.weapon.?; is_weapon {
+		weapon_sprite(weapon.sound, pixels)
+	} else if tool, is_tool := info.tool.?; is_tool {
+		tool_sprite(tool, pixels)
+	} else if armor, is_armor := info.armor.?; is_armor {
+		armor_sprite(armor, pixels)
+	} else {
+		return false
 	}
 	return true
 }

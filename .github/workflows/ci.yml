@@ -220,6 +220,12 @@ jobs:
       - name: Sky
         run: xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait_world; set rules.daylight_cycle 0; /tp 0 12 0 -90 8; wait 30; /time 0.26; wait 5; screenshot sky_sunrise; /tp 0 12 0 -90 50; /time 0.4; wait 5; screenshot sky_day; /tp 0 12 0 90 8; /time 0.77; wait 5; screenshot sky_dusk; /tp 0 12 0 -90 20; /time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
+      # What the hands hold (M48k): each weapon, a block, a shaped block and a flat
+      # item, seen in first person and from the side in third (screenshots
+      # uploaded below, for the owner's review of the models).
+      - name: Held items
+        run: xvfb-run -a ./build/voxiverse --exec "set name ci; set vsync false; set render_distance 4; singleplayer; wait_world; sleep 1; /clear ci; sleep 1; /give ci pistol; sleep 1; hold pistol; camera first; sleep 1; screenshot held_pistol_first; camera behind 90; sleep 1; screenshot held_pistol_third; sleep 1; /clear ci; sleep 1; /give ci rifle; sleep 1; hold rifle; camera first; sleep 1; screenshot held_rifle_first; camera behind 90; sleep 1; screenshot held_rifle_third; sleep 1; /clear ci; sleep 1; /give ci sniper; sleep 1; hold sniper; camera first; sleep 1; screenshot held_sniper_first; camera behind 90; sleep 1; screenshot held_sniper_third; sleep 1; /clear ci; sleep 1; /give ci rocket_launcher; sleep 1; hold rocket_launcher; camera first; sleep 1; screenshot held_rocket_launcher_first; camera behind 90; sleep 1; screenshot held_rocket_launcher_third; sleep 1; /clear ci; sleep 1; /give ci dirt; sleep 1; hold dirt; camera first; sleep 1; screenshot held_dirt_first; camera behind 90; sleep 1; screenshot held_dirt_third; sleep 1; /clear ci; sleep 1; /give ci planks_stairs; sleep 1; hold planks_stairs; camera first; sleep 1; screenshot held_planks_stairs_first; camera behind 90; sleep 1; screenshot held_planks_stairs_third; sleep 1; /clear ci; sleep 1; /give ci hoe; sleep 1; hold hoe; camera first; sleep 1; screenshot held_hoe_first; camera behind 90; sleep 1; screenshot held_hoe_third; sleep 1; quit"
+
       # Over real sockets: a dedicated server and a client joining it, the
       # server capturing every packet; the Wireshark dissector must decode
       # them all (our harness, then tshark itself).

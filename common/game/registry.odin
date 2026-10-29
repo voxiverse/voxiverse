@@ -138,6 +138,7 @@ Content_Kind :: enum u8 {
 	Structure,
 	Shape,
 	Game_Mode,
+	Model,
 }
 
 Block_Flag :: enum u8 {
@@ -392,6 +393,7 @@ Registry :: struct {
 	recipes:    []Recipe_Def,
 	structures: []Structure_Def,
 	game_modes: []Mode_Def,
+	models:     []Model_Def,
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
 	hash:       u64,
@@ -785,7 +787,7 @@ registry_text_of :: proc(
 	item_line :: proc(b: ^strings.Builder, n: u32, info: Item_Info) {
 		fmt.sbprintf(
 			b,
-			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v weapon=%v\n",
+			"item %s %d stack=%d places=%d tool=%v armor=%v equip=%v mods=%v weapon=%v model=%v\n",
 			info.name,
 			n,
 			info.stack,
@@ -795,6 +797,7 @@ registry_text_of :: proc(
 			info.equip,
 			info.modifiers,
 			info.weapon,
+			info.model,
 		)
 	}
 	for info, i in reg.items.blocks {if info.name != "" {item_line(&b, u32(i + 1), info)}}
@@ -817,6 +820,18 @@ registry_text_of :: proc(
 		)
 	}
 	for m in reg.game_modes {fmt.sbprintf(&b, "game_mode %s %v kit=%v\n", m.id, m.abilities, m.kit)}
+	for m in reg.models {
+		fmt.sbprintf(
+			&b,
+			"model %s %v %d %v %v %v\n",
+			m.id,
+			m.size,
+			m.colors,
+			m.palette,
+			m.grip,
+			m.voxels,
+		)
+	}
 	if all {
 		for s in reg.structures {
 			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)

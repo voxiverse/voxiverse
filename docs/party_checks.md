@@ -43,6 +43,22 @@ host runs the game, the others join by the address the dialog shows.
     still do. `/rule pvp true` turns it back on.
 12. The operator's `Close LAN` in the game menu: guests are sent away, the port shuts.
 
+## Hands and held items (M48k)
+
+13. In first person, hold each of pistol, rifle, sniper and rocket launcher, then a dirt
+    block, a stair, and a hoe: your right arm comes up from the lower right with the item
+    in its hand (the weapons as small voxel models, a block as its real shape and
+    textures, the hoe as a thick icon). Look at a wall up close: nothing clips into it.
+    Change the FOV slider: the hand does not stretch.
+14. Swing at the air with a hoe or a block, place a block, shoot (the weapon kicks back
+    and settles), reload (it dips and returns after its reload time). Walk: the hand
+    bobs and sways a little. Turn off Options > View bobbing, or turn on Reduce motion:
+    the bob and the sway stop, the swing, place, kick and dip still play.
+15. Hold the sniper and the use button: the model hides and a round scope view fades in;
+    release: the rifle is back. `F1` hides the arm and the scope with the HUD.
+16. `F5` (and a friend's avatar): the same models in the right hand, the arm held out level
+    for a weapon and raised for anything else.
+
 ## What to tune at the party
 
 - **Weapons** (`assets/packs/voxiverse/data/items/weapons.json`): per weapon `damage`,
@@ -54,4 +70,8 @@ host runs the game, the others join by the address the dialog shows.
   `default_game_mode` (what a newcomer starts as), `guest_role` (`mod` or `default`).
 - **Commands** (operator): `/gamemode [mode] [player]`, `/rule [name] [value]`,
   `/damage <player> <amount>`, `/give <player> <item> [count]`, `/open_lan`, `/close_lan`.
+- **Weapon models** (`assets/packs/voxiverse/data/models/weapons.json`): a side view
+  drawn in characters (`.` empty, `1`-`4` the palette), up to 16 voxels a side; `grip` is
+  the voxel the hand holds. Hot reload applies a saved change at once. The screenshots
+  `held_<item>_first` and `held_<item>_third` of CI's "Held items" step show them all.
 - **The survival kit** is `assets/packs/voxiverse/data/game_modes/survival.json` (`kit`).

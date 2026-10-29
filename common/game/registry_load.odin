@@ -72,12 +72,13 @@ KIND_DIRS := [Content_Kind]string {
 	.Structure = "server/structures",
 	.Shape     = "data/shapes",
 	.Game_Mode = "data/game_modes",
+	.Model     = "data/models",
 }
 
 // What a pack holds, by side: assets/ is the client's alone, data/ is both
 // sides', server/ is the server's alone (the server sends assets/ and data/).
 @(private)
-PACK_LAYOUT_HELP :: "not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/ (both sides) and server/structures/ (server only)"
+PACK_LAYOUT_HELP :: "not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/ (both sides) and server/structures/ (server only)"
 
 @(private)
 KIND_NAMES := [Content_Kind]string {
@@ -91,6 +92,7 @@ KIND_NAMES := [Content_Kind]string {
 	.Structure = "a structure",
 	.Shape     = "a shape",
 	.Game_Mode = "a game mode",
+	.Model     = "a model",
 }
 
 @(private)
@@ -105,6 +107,7 @@ KIND_ADJ := [Content_Kind]string {
 	.Structure = "structure",
 	.Shape     = "shape",
 	.Game_Mode = "game mode",
+	.Model     = "model",
 }
 
 @(private)
@@ -148,6 +151,7 @@ ITEM_FIELDS := []string {
 	"modifiers",
 	"description",
 	"weapon",
+	"model",
 	"override",
 }
 @(private)
@@ -158,6 +162,8 @@ SOUND_FIELDS := []string{"generator", "break", "place", "step", "override"}
 TAG_FIELDS := []string{"values", "replace", "override"}
 @(private)
 MODE_FIELDS := []string{"abilities", "kit", "rules", "override"}
+@(private)
+MODEL_FIELDS := []string{"size", "palette", "slices", "grip", "override"}
 @(private)
 RECIPE_FIELDS := []string{"type", "inputs", "pattern", "key", "output", "override"}
 @(private)
@@ -673,6 +679,8 @@ fields_of :: proc(kind: Content_Kind) -> []string {
 		return SHAPE_FIELDS
 	case .Game_Mode:
 		return MODE_FIELDS
+	case .Model:
+		return MODEL_FIELDS
 	}
 	return nil
 }

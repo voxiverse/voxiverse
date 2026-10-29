@@ -58,27 +58,33 @@ held :: proc(s: ^Session) -> game.Stack {
 // item_use: the mouse buttons with stack in hand.
 item_use :: proc(s: ^Session, stack: game.Stack, breaking, placing: bool) {
 	// Using what is aimed at comes before placing a block behind it.
-	if placing && !breaking && (session_use_entity(s) || session_use_block(s)) {return}
+	if placing && !breaking && (session_use_entity(s) || session_use_block(s)) {
+		vm_event(&s.vm, .Place)
+		return
+	}
 	info, _ := game.item_info(s.reg, stack.item)
 	if t, tool := info.tool.?; tool {
 		switch t {
 		case .Launcher:
-			if breaking {session_fire(s)}
+			if breaking && session_fire(s) {vm_event(&s.vm, .Shot)}
 			return
 		case .Hoe:
 			// Tills with the right button; the left still breaks and hits.
 			if placing && !breaking {
-				session_till(s)
+				if session_till(s) {vm_event(&s.vm, .Place)}
 				return
 			}
 		}
 	}
 	if breaking && !placing {
+		vm_event(&s.vm, .Swing)
 		if session_attack(s) {return}
 		session_edit(s, false, .Air)
 		return
 	}
-	if placing && !breaking && info.block != .Air {session_edit(s, true, info.block)}
+	if placing && !breaking && info.block != .Air {
+		if session_edit(s, true, info.block) {vm_event(&s.vm, .Place)}
+	}
 }
 
 // Pending_Inventory: an inventory request sent, not yet answered.

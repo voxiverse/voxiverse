@@ -1,5 +1,6 @@
 {
 	"pistol": {
+		"model": "voxiverse:pistol",
 		"description": "A semi-automatic pistol. Twelve shots, then reload.",
 		"stack": 1,
 		"weapon": {
@@ -16,6 +17,7 @@
 		}
 	},
 	"rifle": {
+		"model": "voxiverse:rifle",
 		"description": "An automatic rifle. Hold to keep firing.",
 		"stack": 1,
 		"weapon": {
@@ -32,6 +34,7 @@
 		}
 	},
 	"sniper": {
+		"model": "voxiverse:sniper",
 		"description": "A sniper rifle. Hold the use button to zoom.",
 		"stack": 1,
 		"weapon": {
