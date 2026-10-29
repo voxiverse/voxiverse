@@ -135,3 +135,37 @@ literal_calls :: proc(source: string) -> []Literal_Call {
 	}
 	return out[:]
 }
+
+// Screens take every colour from the theme's named colours (M40): no
+// `ui.Color{...}` literal in a screen, menu, overlay or HUD file. The two
+// exceptions are artwork palettes, not interface colours: the ignite
+// screen's planet and the creation screen's star colours.
+@(test)
+test_no_colour_literals_in_screens :: proc(t: ^testing.T) {
+	dir, err := os.open(#directory)
+	if !testing.expect(t, err == nil, "cannot open the client directory") {return}
+	defer os.close(dir)
+	infos, read_err := os.read_all_directory(dir, context.temp_allocator)
+	if !testing.expect(t, read_err == nil) {return}
+	scanned := 0
+	for info in infos {
+		name := info.name
+		if !strings.has_suffix(name, ".odin") || strings.has_suffix(name, "_test.odin") {continue}
+		if name == "screen_ignite.odin" || name == "screen_creation.odin" {continue}
+		layered := false
+		for prefix in ([]string{"screen_", "menu_", "overlay_", "hud_"}) {
+			if strings.has_prefix(name, prefix) {layered = true}
+		}
+		if !layered {continue}
+		data, ok := os.read_entire_file(info.fullpath, context.temp_allocator)
+		if !testing.expectf(t, ok == nil, "cannot read %s", name) {continue}
+		scanned += 1
+		testing.expectf(
+			t,
+			!strings.contains(string(data), "ui.Color{"),
+			"%s has a colour literal: use a theme colour",
+			name,
+		)
+	}
+	testing.expect(t, scanned >= 10, "the scan found the layer files")
+}

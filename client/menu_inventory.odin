@@ -437,7 +437,7 @@ inventory_ui :: proc(app: ^App, ctx: ^ui.Context, top: bool) {
 				   game.slot_at(inv, i)^,
 				   string(app.inventory_search[:]),
 			   ) {
-			ui.fill_rect(ctx, r, ui.Color{0, 0, 0, 150}) // (the search dims what it does not find)
+			ui.fill_rect(ctx, r, ctx.theme.backdrop) // (the search dims what it does not find)
 		}
 		if i >= game.EQUIP_BASE && i < game.CHEST_BASE && game.stack_empty(game.slot_at(inv, i)^) {
 			small := ctx.theme.font_size * 0.6

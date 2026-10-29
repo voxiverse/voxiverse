@@ -13,7 +13,6 @@ SPLASHES :: #load("../assets/splashes.txt", string)
 
 SPLASH_TILT :: -0.105 // radians: a few degrees, rising to the right
 SPLASH_PULSE :: 0.05 // how much its size swells and shrinks
-SPLASH_COLOR :: ui.Color{120, 225, 255, 255}
 
 // splashes_parse: the entries of a splashes file (slices of text).
 splashes_parse :: proc(text: string, allocator := context.temp_allocator) -> []string {
@@ -57,7 +56,7 @@ title_screen :: proc(app: ^App, ctx: ^ui.Context) {
 			{logo.x + logo.w / 2 + 120, logo.y + logo.h - 4},
 			app.splash,
 			size,
-			SPLASH_COLOR,
+			t.text,
 			SPLASH_TILT,
 			t.font_size * (1 + SPLASH_PULSE),
 		)
