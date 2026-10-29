@@ -7,7 +7,7 @@ import "../common/game"
 import "../server"
 import "ui"
 
-// The Open to LAN dialog (design.md, *Game menu*): the guests' game mode, whether
+// The Open to LAN dialog: the guests' game mode, whether
 // guests may use commands, and Open; once the world is open it shows where to
 // join. The choices are two rules of the world (`default_game_mode`,
 // `guest_role`), changed through the commands, so they are journalled like any

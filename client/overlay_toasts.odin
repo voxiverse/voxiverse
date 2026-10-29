@@ -5,7 +5,7 @@ import "core:strings"
 import "platform"
 import "ui"
 
-// Toasts (design.md, Loading, notices, screenshots): short notices at the
+// Toasts: short notices at the
 // top right, newest on top, at most TOAST_MAX shown (older ones leave
 // early), TOAST_LIFE seconds each: they slide in over TOAST_SLIDE and fade
 // over the last TOAST_FADE. With Reduce motion they neither slide nor fade:

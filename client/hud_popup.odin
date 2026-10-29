@@ -3,7 +3,7 @@ package client
 import "../common/game"
 import "ui"
 
-// The item-name popup (design.md, HUD): the held item's name above the
+// The item-name popup: the held item's name above the
 // hotbar when the selected slot changes, the first frame in a world
 // included; it holds POPUP_HOLD seconds and fades over POPUP_FADE; an empty
 // slot shows nothing. With Reduce motion it does not fade: it shows for the

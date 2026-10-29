@@ -8,8 +8,7 @@ import "ui"
 // later the Map, Journal, Character and Atlas). A section is a row of
 // SECTIONS (its key, whether it is shown, its draw proc) and a draw proc
 // that calls section_tabs for the strip. A hidden section's key does
-// nothing: its row is there for the day it is built (design.md, The player
-// menu).
+// nothing: its row is there for the day it is built.
 //
 // Keys (player_menu_keys): a section's key opens it, and closes the menu
 // when its section is the open one, else switches to it; Tab opens the
@@ -29,7 +28,7 @@ Section_Id :: enum u8 {
 Section :: struct {
 	label:   string,
 	action:  Action, // the key that opens it
-	visible: bool, // hidden: no key, no tab (design.md: not yet decided or built)
+	visible: bool, // hidden: no key, no tab (not yet decided or built)
 	draw:    proc(app: ^App, ctx: ^ui.Context, top: bool),
 }
 

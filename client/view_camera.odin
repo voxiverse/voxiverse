@@ -5,8 +5,7 @@ import "core:math"
 import "../common/game"
 import "render"
 
-// The camera's modes and comforts (docs/plan.md M48e; design.md, *Camera and
-// movement*): F5 cycles first person, third person behind and third person
+// The camera's modes and comforts (docs/plan.md M48e): F5 cycles first person, third person behind and third person
 // facing you; third person pulls in against walls; sprinting widens the field
 // of view a little; walking bobs the first-person view. The View the
 // session keeps (s.camera) stays the eyes: this makes the View the renderer

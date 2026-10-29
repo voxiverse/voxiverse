@@ -15,7 +15,7 @@ import "../server"
 import "platform"
 import "ui"
 
-// Singleplayer's saves (docs/plan.md M20, M48e; design.md, *Universes*): one
+// Singleplayer's saves (docs/plan.md M20, M48e): one
 // directory each under saves/ in the user data directory (or VX_SAVES),
 // written by the server (server/save.odin): a universe (universe.cfg) or,
 // from before M17, a single world (world.cfg). The screen shows them as

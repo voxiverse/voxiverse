@@ -5,7 +5,7 @@ import "core:math"
 import "../common/game"
 import "ui"
 
-// Ignite (design.md, *Universes*; docs/plan.md M48e): the big bang after
+// Ignite (M48e): the big bang after
 // the creation screen's button. The galaxy view collapses to a point, flashes
 // and zooms into the home world, then the loading screen takes over, while
 // the universe is created and the world loads in the background (the

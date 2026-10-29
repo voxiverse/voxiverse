@@ -311,7 +311,7 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	defer creation_destroy(&app.creation)
 	defer multiplayer_destroy(&app.multiplayer)
 
-	// ("universe" is a player's word now: design.md, the Universes screen and the title splash.)
+	// ("universe" is a player's word now, M48d.)
 	WORDS :: []string{"scratch", "chunk", "session", "mesh", "interest", "var", "null"}
 	check :: proc(t: ^testing.T, app: ^App, what: string) {
 		ui_frame(app)

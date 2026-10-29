@@ -6,7 +6,7 @@ import "core:strings"
 
 import "ui"
 
-// The player list (design.md, *Hotkeys and input*): while the key is held,
+// The player list: while the key is held,
 // the connected players' names and pings. An overlay that takes no input.
 // A ping is known for ourselves on a server we joined (the link's round
 // trip); alone in our own world, and for the others, it reads "-".

@@ -3,7 +3,7 @@ package client
 import "core:fmt"
 import "core:strings"
 
-// The UI's strings (design.md, Language): every string the player reads goes
+// The UI's strings: every string the player reads goes
 // through a key. `Text` names them, TEXT_EN is the English table, tr formats
 // one: arguments are positional, {0}, {1}, ... Item and block names are not
 // here: the registry (packs) gives them. Dev panels are not translated.

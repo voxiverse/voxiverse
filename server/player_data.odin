@@ -375,7 +375,7 @@ players_save :: proc(s: ^Server) -> bool {
 
 // The starter kit: what a player new to the world is given (world.cfg's
 // `kit`, "stone 64, dirt 64, ..."). By default the rocket launcher alone, in
-// hotbar slot 1 (design.md: blocks are reached by creative's catalog; how
+// hotbar slot 1 (blocks are reached by creative's catalog; how
 // survival gathers is the owner's to decide). Items a player may not use
 // (the launcher without world.fire) are left out.
 DEFAULT_KIT_TEXT :: "rocket_launcher 1"

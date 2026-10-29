@@ -160,7 +160,7 @@ item_tooltip :: proc(ctx: ^ui.Context, lines: []string, beside: Maybe(ui.Rect) =
 	}
 }
 
-// details_panel: the item details (design.md, The player menu): its name,
+// details_panel: the item details: its name,
 // description, modifiers and tags, wrapped to the panel.
 details_panel :: proc(ctx: ^ui.Context, reg: ^game.Registry, r: ui.Rect, stack: game.Stack) {
 	t := &ctx.theme

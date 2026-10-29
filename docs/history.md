@@ -6027,13 +6027,11 @@ of the commit is green.
 
 # M48d: Menus, part one (the player menu, the HUD, toasts, the title screen, the layer layout)
 
-**Why.** The owner's design interview (2026-10-28, #45) decided the menus: [design.md](../design.md)
-is the source, cited below as *(section)*. This milestone is the first of two (the Menus
+**Why.** The owner's design interview (2026-10-28, #45) decided the menus. This milestone is the first of two (the Menus
 milestone, first among the open rows, before M49); **M48e** does the universes screen, universe
-creation and the camera and keys. Documents were written first (design.md, its glossary, the
-plan's locked decisions); this one builds, and renames the code to the glossary.
+creation and the camera and keys. The plan's glossary and locked decisions were written first; this one builds, and renames the code to the glossary.
 
-**Hard stop.** Nothing under design.md's *The owner decides* is built, inferred or prototyped.
+**Hard stop.** Nothing on the plan's hard-stop list is built, inferred or prototyped.
 The Character and Journal sections stay hidden (no attributes, levels, skills; equipment
 modifiers are not character attributes). Health stays hearts. The death screen stays as it is.
 No Map, no Atlas (next tier): their keys (M, L) are declared in the section table as hidden.
@@ -6192,7 +6190,7 @@ the catalog in creative. (7) On a pad: View opens the player menu, LB/RB switch 
 # M48e: Menus, part two (the universes screen and creation, Ignite, export and import, camera and keys)
 
 **Why.** The second half of the owner's Menus milestone (2026-10-28, #45; the design is
-[design.md](../design.md), cited as *(section)*). M48d (done first) built the player menu, the
+the owner's interview answers). M48d (done first) built the player menu, the
 HUD, toasts, the title screen, the string keys and the layer layout; this one builds the
 universes screen and universe creation, and the camera and keys. It builds on M17's addresses
 and galaxies (done) and the seed handling already in `server`.
@@ -6221,8 +6219,7 @@ join). Each card has a menu (a "..." button): Rename, Export, Delete (and Edit, 
 has a use). **Export and import** move here from where they are today: Export writes the archive
 the export command writes now; "Import" is a button beside "New Universe" opening a file path
 field (the platform's file dialog is not in scope). **Delete** asks one confirm dialog ("Delete
-<name>? This cannot be undone.") for now; later type-the-name and a trash folder (next tier,
-design.md). The screen's music: the title piece continues from the title screen.
+<name>? This cannot be undone.") for now; later type-the-name and a trash folder (next tier). The screen's music: the title piece continues from the title screen.
 
 *The galaxy thumbnail and the seed's glyphs.* A universe's seed is its home world's gate
 address, shown as gate glyphs (the 40 symbols). A pure function in `common/game` (the free
@@ -6365,7 +6362,7 @@ list while held; F swaps with the offhand; F3 shows the debug screen, and on a s
 
 # M48h: party 2: hitscan weapons
 
-Rules: design.md's *Survival for the LAN party*. Builds on M48g's `damage` and kits.
+Rules: issue #52 (survival for the LAN party). Builds on M48g's `damage` and kits.
 
 - *Weapons are items as data* (`assets/packs/voxiverse/data/items/weapons.json`): a new
   item field `weapon` (parsed by M47's item loader, validated: a missing number is a load

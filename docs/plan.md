@@ -39,9 +39,9 @@ The rules below exist to make those mistakes structurally hard to repeat.
 | License | MIT. |
 | Versions | Alpha (owner's decision, 2026-10-27; the old v0.20.0, v0.21.0 and Pre-Alpha 1 are gone, versions restart at v0.1.0 "Alpha 1"). **Minor versions are named playtest builds** (v0.1.0 "Alpha 1", v0.2.0 "Alpha 2"...), tagged every Friday (owner's decision, 2026-10-28, #51): the loop script tags the next minor version (`git tag -a v0.N.0 -m "Alpha N"`) on the last green main commit, never a red one, so no repository code is needed; only an `x.y.0` tag makes the draft GitHub Release (its notes list the milestones done since the previous `x.y.0` tag, from the commit subjects). Opus drafts the player-facing notes (like Alpha 1's) and a short hand-check list from that week's #1 checks; the owner reviews, tries the list and publishes. **Patch versions are daily tags** (v0.1.1, v0.1.2...) the loop script makes once a day when main has moved and CI is green; the tag's message lists the day's milestones; a patch tag makes no release and **runs no CI** (it points at a commit main's CI already tested; `ci.yml` triggers on tags `v*.*.0` only). **Versions no longer map to milestones.** Between tags a build is `<last tag>+<commits since>`. |
 | Line endings | Native (`* text=auto`: CRLF in a Windows checkout, which is what odinfmt writes there). Files a test or generator compares byte for byte are pinned to LF in `.gitattributes` (the Wireshark dissector, whose schema block is spliced and compared; the audio baselines and the music director's `.decisions` file, which tests compare as text); add any new one there rather than normalizing in code. |
-| Design decisions (owner's decision, 2026-10-28, #45) | [design.md](design.md) holds the owner's product and UI decisions, grouped, with its glossary (title screen, universes screen, universe creation, multiplayer screen, Options, game menu, player menu and its sections, container view, HUD, overlays, toasts, dev panels). Specs cite it ("design.md, *Camera and movement*"); a session that disagrees with it asks the owner and does not change it. The code's names follow its glossary (the Menus milestones, M48d-M48e, do the renames) |
-| Undecided gameplay is a hard stop (owner's decision, 2026-10-28, #45) | Never build, infer or prototype anything under *The owner decides* in design.md: survival's rules and health's look, death and respawn, the Character section's attributes, levels, skills and perks, how gate addresses are "found" and other ways to dial, how players meet the agent and when players hear about agents, currency, hostility and combat, which creatures exist, breathing gear's rule, the README and store page, emotes, onboarding. Equipment modifiers (speed, jump, air jumps, max health) are not character attributes. A feature that needs one is built around it or left out, and the session says so |
-| Low-fidelity science (owner's decision, 2026-10-28, #51) | Use low-fidelity scientific classifications and algorithms wherever possible (planet classes, stellar types, climate from the star and atmosphere, ecology as population dynamics, body plans adapted to physics, genetics), always simplified, and always behind "it must stay fun". Simulate the gist, never the detail; when realism and fun conflict, fun wins. design.md, *Principle: low-fidelity science* |
+| Specs are the only instructions (owner's decision, 2026-10-28, #59) | **Specs are the only instructions.** Build what the current milestone's spec states, nothing more. Infer nothing from other documents, names, examples or existing code's style: no colours, rules, numbers, features or content a spec doesn't state. When a spec is silent on something the work needs, don't choose: end with `LOOP: blocked: <the question>`. |
+| Undecided gameplay is a hard stop (owner's decision, 2026-10-28, #45) | Never build, infer or prototype anything on this list, which the owner decides: survival's rules and health's look, death and respawn, the Character section's attributes, levels, skills and perks, how gate addresses are "found" and other ways to dial, how players meet the agent and when players hear about agents, currency, hostility and combat, which creatures exist, breathing gear's rule, the README and store page, emotes, onboarding. Equipment modifiers (speed, jump, air jumps, max health) are not character attributes. A feature that needs one is built around it or left out, and the session says so |
+| Low-fidelity science (owner's decision, 2026-10-28, #51) | Use low-fidelity scientific classifications and algorithms wherever possible (planet classes, stellar types, climate from the star and atmosphere, ecology as population dynamics, body plans adapted to physics, genetics), always simplified, and always behind "it must stay fun". Simulate the gist, never the detail; when realism and fun conflict, fun wins. |
 
 ## Ground rules
 
@@ -290,7 +290,7 @@ the milestone that changes it is named.
 | Variables | The mechanism all of the above are read, set and saved through | `base.Var` |
 | Permissions | Nodes, roles and grants, per universe | `Permissions` |
 
-**Screens and menus** (title screen, universes screen, universe creation, multiplayer screen, Options, game menu, player menu and its sections, container view, HUD, overlays, toasts, dev panels) are named in the [glossary of design.md](design.md#glossary). The Singleplayer screen of the Save row is the universes screen; the code follows in M48d-M48e.
+**Glossary** (names only; code, docs and UI use them): Title screen, Universes screen, Universe creation, Multiplayer screen, Options, Game menu, Player menu, Section (a page of the player menu: Map, Journal, Inventory, Character, Atlas, Statistics), Container view, HUD, Overlay, Toast, Dev panels. The Singleplayer screen of the Save row is the universes screen; the code follows in M48d-M48e.
 
 **Renames these imply:** M16 turns player files into characters
 (`characters/<account>/<character>.json`). M17 renames the client's Worlds screen and
@@ -360,8 +360,8 @@ million tokens re-read per step), not the code it wrote. So:
     M50→M55, M35→M56, M36→M57, M37→M58. history.md and older commits use the old numbers.
   - **The LAN party (owner's priority, 2026-10-28, issue #52).** M48f-M48j come first among
     the open rows, next after M48e (done): survival, death and respawn, hitscan weapons,
-    the party extras, hardening. The owner decided those rules (design.md, *Survival for the
-    LAN party*); they bend "no gameplay before the foundation" knowingly and are built in
+    the party extras, hardening. The owner decided those rules (#52, survival for the
+    LAN party); they bend "no gameplay before the foundation" knowingly and are built in
     Odin on core systems (abilities as data, one damage pipeline, one rules table) so they
     move onto M53 and the VM later. Everything is done and green by Thursday 2026-10-29
     afternoon; the owner tags Alpha 2 Thursday evening; the loop is paused Friday about
@@ -632,8 +632,7 @@ the simulations. The engine's job is to make it safe, cheap and good for an agen
 content without breaking the game; the agent service, if there is one, is a separate product
 built against this engine. So the foundations come first, and game content (survival,
 crafting, combat, villages, machines, ...) comes after as data and scripts on top of them: the
-"After M29" list below is content, not foundation, and waits for M55 (see design.md,
-*The core game and agents*).
+"After M29" list below is content, not foundation, and waits for M55.
 
 ### First principles
 
@@ -703,7 +702,7 @@ a milestone below:
 | Scripts stay in the VM (2026-10-27) | Scripts are never transpiled or compiled to native code. When a script pattern is hot, the engine gains a reviewed native building block or function for it instead |
 | Accounts and remotes (2026-10-27) | Identity and ownership (skins, owned things) come from a central source of truth: an auth service reached through *remotes* in `settings.cfg`. The default remote is `voxiverse.net`, with services at `auth.voxiverse.net` and `api.voxiverse.net` (the remote format allows other hosts). The website and service are closed source; the game sees only the API. As with Minecraft: singleplayer and LAN work offline with a local key. A server is either **online** (it requires a token signed by its remote's auth service) or **offline** (local keys, as today). Online becomes the default once it's built; until then servers are offline. The keypair of the glossary's Account stays as a device key an account vouches for when online. Built in "Auth client and online servers" (the next tier) |
 | Third-party code in the game (owner's decision, 2026-10-28, #44) | The game ships no third-party C or C++ except MoltenVK on macOS (Vulkan on Metal; revisit only if it causes trouble). Build-time tools (glslang, the music pipeline's `ffmpeg`, `7z` or `bsdtar`, the SoundFont) are fine, because their output is checked or committed and they are never shipped. Untrusted data (anything from packs or the network) is parsed only by Odin code: pack PNGs by `core:image/png` (M47b), pack Oggs by `common/ogg` (M53c). Why: it is the sandbox principle applied to decoders (C parsing a hostile file is the memory-unsafe surface the script VM already refuses), and it removes a C library to build, our reliance on Odin's `vendor/` folder for miniaudio (and the cross-check's placeholder library) and our lack of control over default-device and hot-plug behaviour. miniaudio is replaced in two steps: its decoder by M53c, its device layer by *Audio devices in Odin* (the next tier), which also removes `ensure_miniaudio` and `ensure_foreign_miniaudio` |
-| Modes and death in M53 (owner's decision, #50) | design.md's *The owner decides* is a hard stop in specs too. M53 builds the mechanism (game modes as data, death causes as ids, the `death` trigger and its actions) and chooses no rules: `base:creative` and `base:survival` list none, no death has a chat line, instant respawn stays as it is. M53b's death screen is the placeholder (a Respawn button). Why: what you keep, where you wake and any penalty are the owner's design; a spec that fixes them lets a session build them |
+| Modes and death in M53 (owner's decision, #50) | The hard-stop list is a hard stop in specs too. M53 builds the mechanism (game modes as data, death causes as ids, the `death` trigger and its actions) and chooses no rules: `base:creative` and `base:survival` list none, no death has a chat line, instant respawn stays as it is. M53b's death screen is the placeholder (a Respawn button). Why: what you keep, where you wake and any penalty are the owner's design; a spec that fixes them lets a session build them |
 | Pack media moderation (2026-10-27) | Images and sounds in packs go through a moderation hook before players see them, like generated text. M54 owns the hook; the service does the moderation |
 | Before 1.0, no compatibility (2026-10-27) | Saves and the protocol carry no migrations and no compatibility. A new build may require a fresh world, and older clients must update. Specs drop their migration and compatibility work (a world of an older format is refused with a message). Existing migration code can stay until it is in the way |
 | macOS port, one pass (2026-10-27, #35) | The port is M47d (window, input, MoltenVK, renderer) and M47e (gamepads, audio, keep-awake, icon, `.app`), first in the order, each written once. Their exit check is `build check`, build and link on the macOS CI runner with the existing unit tests, and the `.app` as a CI artifact. No macOS-specific tests, offscreen game checks, screenshots or benchmarks; what only hardware shows is under "Check by hand" for occasional testers, and what they find becomes an issue then, with no sessions spent chasing behaviour nobody here can see. Unchanged: the loop's checks before a push, the weakened-test guard, CI on every push |
@@ -724,27 +723,27 @@ a tester's report or a regression makes them worth it.
 **Auth client and online servers** (remotes in `settings.cfg`, tokens, skins and owned things
 from the service; it builds on M55's secure transport and the account proof, and needs only
 the service's API, whose server side is not in this repository); time, scheduling and world simulation (a persisted scheduler, calendar, simulation of worlds
-nobody is in: a world nobody is in freezes and is caught up on return, design.md, *The core game and agents*); dynamic voxel bodies (ships, elevators, flying machines: decided at M48
+nobody is in: a world nobody is in freezes and is caught up on return); dynamic voxel bodies (ships, elevators, flying machines: decided at M48
 whether to plan for them); worldgen as data graphs (density functions in packs: new
-kinds of world with no code; first in the Living worlds arc, with planet and star classification, design.md, *Worlds of a universe*); navigation and AI framework; render foundations (frame graph,
+kinds of world with no code; first in the Living worlds arc, with planet and star classification); navigation and AI framework; render foundations (frame graph,
 GPU-driven culling, far-terrain level of detail, shadows); atmosphere and lighting (sky from
 each world's astronomy: its star's colour and size, binary suns, the system's other bodies at their positions, per-world gravity and atmosphere as the Living worlds arc defines them; weather, coloured lights); UI v2 (layout engine, localization,
 accessibility; focus navigation and gamepads are M41-M42); the Windows pass (Windows behaviour, once a Windows machine is at hand; macOS's port is M47d-M47e, first in the order) **and, beside it, *Audio devices in Odin*** (owner's decision, 2026-10-28, #44; not specified yet: WASAPI, CoreAudio and PipeWire with an ALSA fallback as our own backends; output callbacks feeding our mixer, following the default device, surviving unplug and sample-rate changes; then miniaudio is removed entirely, with its build step `ensure_miniaudio` and `ensure_foreign_miniaudio`, the cross-check's placeholder library and `tools/bench/ogg_miniaudio.odin`; it needs real hardware to verify, so it is sized when the Windows and macOS passes are);
 server operations and moderation tools; replay, fuzz and soak (full-session recording,
 overnight soak, the release gate).
 
-**From the design interview** (owner's decisions, 2026-10-28, #45; each cites [design.md](design.md), each is sized before it starts, none under *The owner decides*). They join the tier in this order, the first two as soon as the foundation arc allows because third person exists after M48e:
+**From the design interview** (owner's decisions, 2026-10-28, #45; each is sized before it starts, none on the hard-stop list). They join the tier in this order, the first two as soon as the foundation arc allows because third person exists after M48e:
 
-1. **Feel: the viewmodel and avatar animations.** First person shows the held item and arm with swing and place animations (F1 hides it); the avatar's walk, run, sneak, swim and fly, procedural, for F5's third person (design.md, *Camera and movement*). Reduce motion applies.
-2. **Building feel.** The translucent ghost preview of the block at the target with its orientation (stairs, slabs); pick block (middle click) copying the exact state; the protection outline (a refused edit briefly shows the region's outline and a "Protected by X" toast: M45's regions, M48e's toasts) (*Building*).
-3. **Travel and loading.** The loading screen's tips from a data file like `splashes.txt`; the gate-travel warp transition (the title's starfield, 1-2 s, the address glyphs and name fading in on arrival) (*Loading, notices, screenshots*; *Modes, death, gates*).
-4. **The Map section** (M): a top-down render of explored terrain (block colours from above), revealed as you explore, with pan, zoom and markers the player places; never a minimap on the HUD (*Map, Atlas, Journal*). Waypoints are map markers only.
+1. **Feel: the viewmodel and avatar animations.** First person shows the held item and arm with swing and place animations (F1 hides it); the avatar's walk, run, sneak, swim and fly, procedural, for F5's third person. Reduce motion applies.
+2. **Building feel.** The translucent ghost preview of the block at the target with its orientation (stairs, slabs); pick block (middle click) copying the exact state; the protection outline (a refused edit briefly shows the region's outline and a "Protected by X" toast: M45's regions, M48e's toasts).
+3. **Travel and loading.** The loading screen's tips from a data file like `splashes.txt`; the gate-travel warp transition (the title's starfield, 1-2 s, the address glyphs and name fading in on arrival).
+4. **The Map section** (M): a top-down render of explored terrain (block colours from above), revealed as you explore, with pan, zoom and markers the player places; never a minimap on the HUD. Waypoints are map markers only.
 5. **The Atlas section** (L): worlds visited (glyph address, kind, last visit), a galaxy view placing the player's worlds as stars in the universe's galaxy, personal names for worlds (every world has a generated name; a player renames it for themselves). No dialing from the Atlas. **Gate addresses "found but not visited" wait for the owner** (how addresses get found is under *The owner decides*): the first Atlas lists visited worlds only.
-6. **UI sounds** (after M57's synth): soft clicks and whooshes with their own volume slider, the menu music rules (the title piece on the title and universes screens, continuing into creation; Ignite's stinger if M48e left it out) (*Look and sound of the UI*).
-7. **Options for comfort** (graphics presets Low, Medium, High and Custom, vsync and an fps cap, lower fps when unfocused: design.md, *Performance and graphics*; the pack list and pack-errors panel: *Packs in the UI*): the crosshair's size, colour and shape in Accessibility (hidden in third person unless aiming); the Open to LAN dialog's guest game mode and commands switch; per-world day length from the address's astronomy, defaulting near 20 minutes (with atmosphere and lighting).
-8. **Online screens** (with the auth client and online servers): the Multiplayer screen's saved servers (ping, player count, icon and line) beside LAN and direct connection; Options › Profile (name, skin preview, sign-in to a remote or offline); skins from voxiverse.net (*Online and servers*).
+6. **UI sounds** (after M57's synth): soft clicks and whooshes with their own volume slider, the menu music rules (the title piece on the title and universes screens, continuing into creation; Ignite's stinger if M48e left it out).
+7. **Options for comfort** (graphics presets Low, Medium, High and Custom, vsync and an fps cap, lower fps when unfocused; the pack list and pack-errors panel): the crosshair's size, colour and shape in Accessibility (hidden in third person unless aiming); the Open to LAN dialog's guest game mode and commands switch; per-world day length from the address's astronomy, defaulting near 20 minutes (with atmosphere and lighting).
+8. **Online screens** (with the auth client and online servers): the Multiplayer screen's saved servers (ping, player count, icon and line) beside LAN and direct connection; Options › Profile (name, skin preview, sign-in to a remote or offline); skins from voxiverse.net.
 
-**Backlog, deferred (non-essential):** item icons for non-cube blocks (stairs, slabs, doors, fences) render wrong; a session that touches `icons.odin` for another reason may fix it, none is planned for it. Also later, from design.md: creative building tools (selection, copy and paste, undo), emotes (owner decides), onboarding and tutorials as data, achievements as data (with M53's declarative layer), the delete confirm that asks for the universe's name and moves it to a trash folder, an admin panel (with server operations).
+**Backlog, deferred (non-essential):** item icons for non-cube blocks (stairs, slabs, doors, fences) render wrong; a session that touches `icons.odin` for another reason may fix it, none is planned for it. Also later: creative building tools (selection, copy and paste, undo), emotes (owner decides), onboarding and tutorials as data, achievements as data (with M53's declarative layer), the delete confirm that asks for the universe's name and moves it to a trash folder, an admin panel (with server operations).
 
 Not now: a live agent director, the agent service, a custom-experience platform, payments, a distributed universe.
 
@@ -752,26 +751,24 @@ The **Living worlds** arc, below, follows the foundation arc and this tier.
 
 ## The Living worlds arc (launching points, not schedule)
 
-Owner's decisions, 2026-10-28, #51 (design.md's *Worlds of a universe* to *Economy*, *Physics of
-worlds*, *Sound of worlds*). **Not to be planned in detail until the foundation (through M55)
+Owner's decisions, 2026-10-28, #51. **Not to be planned in detail until the foundation (through M55)
 is done.** No specs, no milestone numbers: an ordered outline, each line sized and specified
 only when its turn comes. It follows the foundation arc and the next tier. Every step is data
 (packs, grammars, rules) on the foundation's pieces, and every simulation in it is
 deterministic and low-fidelity (the *Low-fidelity science* row).
 
-1. **Planet and star classification, and the sky** (with worldgen as data graphs). Builds on worldgen as data (the next tier), M49's layers for climate fields. design.md, *Worlds of a universe*.
-2. **Per-world physics** (gravity, atmosphere, day length; experimental). Builds on `game.Rules` per world (M17), M50's entities for projectiles and drops, the sky of step 1. design.md, *Physics of worlds*.
-3. **Alien block sets with 8 colour variants** (block states, palette-quantized; authored by agents as packs, reviewed by the owner). Builds on M48's block states, M47's registry and packs, worldgen of step 1. design.md, *Blocks of alien worlds*.
-4. **The flora grammar and ecology** (procedural plants, trees grown into blocks, coarse per-region populations). Builds on M49b's neighbour rules, M49's layers (density per region), M12's structures. design.md, *Flora*.
-5. **The fauna grammar, AI and genetics** (body plans, procedural animation, behaviour as data, spawning from the populations). Builds on M50's entities and spatial queries, M53's declarative layer, the navigation and AI framework (next tier), M25's genetics, step 4. design.md, *Fauna*, *Creatures in play*.
-6. **Civilizations and settlements** (habitability roll, tech tiers, the settlement grammar, the catch-up simulation). Builds on M49 and M49b, M12's structure templates, the simulation of worlds nobody is in (next tier), the sky and block sets above. design.md, *Civilizations*.
-7. **NPCs** (identity, needs, memory, schedules, deterministic dialogue trees). Builds on M50's entities, M53's declarative layer (dialogue, quests), step 5's behaviour data, step 6. design.md, *NPCs*.
-8. **Factions and the economy** (reputation, relations, conflict in the catch-up simulation, supply and demand per settlement; currency and combat are the owner's). Builds on M53, step 6 and 7, the item ledger (M31). design.md, *Factions*, *Economy*.
-9. **The species codex** (the Atlas's seen species with generated scientific names and traits). Builds on the Atlas section (the next tier's design-interview list), steps 4 and 5. design.md, *Creatures in play*.
+1. **Planet and star classification, and the sky**
+2. **Per-world physics**
+3. **Alien block sets with 8 colour variants**
+4. **The flora grammar and ecology**
+5. **The fauna grammar, AI and genetics**
+6. **Civilizations and settlements**
+7. **NPCs**
+8. **Factions and the economy**
+9. **The species codex**
 
 Alongside, not in the order: the sound of worlds (music by world kind, atmosphere shaping
-sound, ambience beds: M44, M58b; *Sound of worlds*), multiplayer across worlds and gate rules
-(*Multiplayer across worlds*), the graphics presets (*Performance and graphics*).
+sound, ambience beds: M44, M58b), multiplayer across worlds and gate rules, the graphics presets.
 
 ## Why the plan changed (after M25)
 
@@ -827,7 +824,7 @@ plugged in and played.
 Cheap, deterministic astronomy, so a world implies a sky worth observing (one could keep a
 lunar calendar by watching): a few trigonometric terms per frame from the world clock.
 
-- **Each world's astronomy** (from its address; the home world Earth-like, gentle; the star's class, colour and size and a system of other bodies, design.md, *Worlds of a universe*, are part of it): day length,
+- **Each world's astronomy** (from its address; the home world Earth-like, gentle; the star's class, colour and size and a system of other bodies, are part of it): day length,
   days in a year, axial tilt, one or more moons with their periods, and a star catalogue.
 - **The sun's path:** its height and bearing from the time of day, the day of the year
   (declination from the tilt) and the latitude (from z): longer days in summer, a lower
@@ -850,13 +847,13 @@ built as data and scripts on it.
 
 Each becomes a milestone spec, sized as above, before it starts.
 
-- **A minimap (dropped: design.md says no minimap on the HUD, ever; the Map section is the answer):** the map in a corner as Xaero's minimap draws it (the tops of the columns
+- **A minimap (dropped: no minimap on the HUD, ever; the Map section is the answer):** the map in a corner as Xaero's minimap draws it (the tops of the columns
   around, shaded by height, players and animals as marks), but drawn as part of the game:
   its own frame and pixels, no settings wall; a full map on a key. From the columns the
   client already has.
 - **Throwables:** dynamite (thrown, a fuse, the rocket's explosion) and a glowing stone
   that lights where it lands (a light block that crumbles after a while); then a bow.
-- **Teleporter blocks (reconsider: design.md has map markers only and no fast travel):** placed by a player, named, they are the only places the full map
+- **Teleporter blocks (reconsider: the plan has map markers only and no fast travel):** placed by a player, named, they are the only places the full map
   can send one to (fast travel from block to block, not from anywhere). Built on M26's
   blocks that hold things and the Map section.
 - **Villages and traders (superseded by Living worlds: civilizations, NPCs and the economy; currency is the owner's, not decided):** villages as M12 structures; villagers (a big crooked nose,
@@ -883,14 +880,14 @@ Each becomes a milestone spec, sized as above, before it starts.
 
 - **Music:** settled in the audio milestones (scores and MIDI rendered offline by our SF2 renderer to
   Ogg). Still open: what each world's music sounds like beyond the tags (M58 starts it).
-- **Worlds that change while you are away (answered, #51: only visited worlds simulate, a coarse deterministic catch-up on return; design.md, *Civilizations*):** what happens in a world over the time a
+- **Worlds that change while you are away (answered, #51: only visited worlds simulate, a coarse deterministic catch-up on return):** what happens in a world over the time a
   player spends elsewhere (wars, growth, ruin), how it is computed cheaply when the world
   is loaded again, and whether worlds have histories generated from their seed.
-- **Peoples between worlds (answered, #51: factions, spacefaring ones span worlds; reputation per faction; design.md, *Factions*):** factions and a player's standing with each, per world or
+- **Peoples between worlds (answered, #51: factions, spacefaring ones span worlds; reputation per faction):** factions and a player's standing with each, per world or
   across worlds; whether worlds near each other by address can be neighbours a people
   spans ("the next world over").
 - **A lesson per world:** each world with its own puzzle to solve.
-- **Kinds of world (answered, #51: scientific classes, design.md, *Worlds of a universe*):** more generators, and what they are called (scientific names, or
+- **Kinds of world (answered, #51: scientific classes):** more generators, and what they are called (scientific names, or
   invented ones).
 - **Moving faster:** dash, double jump, a grappling hook: from items, or from something a
   character learns.
