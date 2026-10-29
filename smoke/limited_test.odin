@@ -65,3 +65,29 @@ test_panic_in_a_server_thread_fails_fast :: proc(t: ^testing.T) {
 	// The compile is most of it; the panic itself ends the run in about a second.
 	testing.expectf(t, took < 100, "the panicking run took %.0f s", took)
 }
+
+// run_parallel: each job's result in its place, a quiet job's output left in its log, and
+// one over its limit killed while the others finish.
+@(test)
+test_run_parallel_results :: proc(t: ^testing.T) {
+	when ODIN_OS == .Windows {
+		return
+	}
+	os.make_directory_all("build/tmp")
+	jobs := []limited.Job {
+		{cmd = {"sh", "-c", "echo hello"}, log = "build/tmp/parallel_0.log", quiet = true},
+		{cmd = {"sh", "-c", "exit 3"}, log = "build/tmp/parallel_1.log"},
+		{cmd = {"sh", "-c", "sleep 30"}, log = "build/tmp/parallel_2.log", limit = time.Second},
+		{cmd = {"true"}, log = "build/tmp/parallel_3.log"},
+	}
+	start := time.tick_now()
+	results := limited.run_parallel(jobs, 2, allocator = context.temp_allocator)
+	testing.expect(t, time.duration_seconds(time.tick_since(start)) < 20, "the limit was not kept")
+	testing.expect_value(t, results[0], limited.Run_Result.Ok)
+	testing.expect_value(t, results[1], limited.Run_Result.Failed)
+	testing.expect_value(t, results[2], limited.Run_Result.Timed_Out)
+	testing.expect_value(t, results[3], limited.Run_Result.Ok)
+	out, _ := os.read_entire_file_from_path("build/tmp/parallel_0.log", context.temp_allocator)
+	testing.expect_value(t, string(out), "hello\n")
+	for j in jobs {os.remove(j.log)}
+}
