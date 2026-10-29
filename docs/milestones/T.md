@@ -39,11 +39,14 @@ party toys (#65) come after. Each row leaves the suite green.
 
 ## T2: the deterministic harness
 
+Full spec: [T2.md](T2.md) (the loss lives on netcode over an in-memory network, not on the
+pipe; the fixed world is a flat generator; 23 files start a stepped server, not 16).
+
 The stepped server (M38) behind an in-memory transport: seeded loss, latency, reordering and
 duplication, no sockets, no threads. A fixed small test world (flat, a known spawn, natural
 spawning, random ticks and weather off unless the test turns them on). `step(n)` and
-`step_until(pred, max_ticks)` count ticks, never time. Exit: the existing 16 stepped-server
-files run on it unchanged in meaning; a transport test shows the same seed gives the same
+`step_until(pred, max_ticks)` count ticks, never time. Exit: every file that starts a stepped
+server (23) runs on it unchanged in meaning; a transport test shows the same seed gives the same
 loss pattern.
 
 ## T3: scenarios with invariants
