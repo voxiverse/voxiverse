@@ -5,13 +5,18 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
+import "../../base"
 import "../../common/ogg"
 
 // The `ogg` benchmark scenario (docs/plan.md, M53c; `build bench ogg`): the
 // committed music decoded whole by common/ogg and, for comparison, by
 // miniaudio's decoder, each three times, the best kept. Reported as seconds of
 // audio decoded per second of CPU for both and their ratio. There is no pass
-// bar; the figure goes in the milestone's history entry.
+// bar; the figure goes in the milestone's history entry. Each repetition also
+// records every piece's decode by common/ogg (`ogg_decode`, a result file that
+// `build bench compare <ref> ogg` reads: issue #67).
+
+OGG_VERSION :: 1
 
 OGG_MUSIC :: [7]string{"death", "deep", "discovery", "far", "meadow", "night", "title"}
 
@@ -30,10 +35,21 @@ ogg_main :: proc() {
 	}
 	seconds: f64
 	ours_best, theirs_best := max(f64), max(f64)
+	result := base.Bench_Result {
+		scenario = "ogg",
+		version  = OGG_VERSION,
+	}
+	frames := 0
 	for rep in 0 ..< 3 {
 		start := time.tick_now()
-		frames := 0
-		for data in files {frames += ogg_decode_all(data)}
+		frames = 0
+		base.metrics_start()
+		for data in files {
+			piece := time.tick_now()
+			frames += ogg_decode_all(data)
+			base.metric_add(.Ogg_Decode, f32(time.duration_milliseconds(time.tick_since(piece))))
+		}
+		base.bench_repetition_end(&result)
 		took := time.duration_seconds(time.tick_since(start))
 		ours_best = min(ours_best, took)
 		seconds = f64(frames) / 48000
@@ -47,6 +63,9 @@ ogg_main :: proc() {
 	fmt.printfln("  common/ogg  %.0f s of audio per CPU second", ours)
 	fmt.printfln("  miniaudio   %.0f s of audio per CPU second", theirs)
 	fmt.printfln("  ratio       %.2f (ours over theirs)", ours / theirs)
+	append(&result.counts, base.Bench_Count{"frames", frames})
+	if path := base.bench_result_write(&result); path != "" {fmt.printfln("result %s", path)}
+	base.bench_result_destroy(&result)
 }
 
 // ogg_decode_all: the frames of a whole file through the decoder (the samples

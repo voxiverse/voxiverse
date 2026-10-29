@@ -58,6 +58,8 @@ Metric :: enum u8 {
 	Flood_Tick, // the slowest world tick with 10 000 blocks of water flowing, us
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us
+	// The ogg scenario: one value per piece of music.
+	Ogg_Decode, // one piece decoded whole by common/ogg, ms
 }
 
 Metric_Info :: struct {
@@ -109,6 +111,7 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Journal_Tick     = {"journal_tick", "us", false},
 	.Flood_Tick       = {"flood_tick", "us", false},
 	.View_Model       = {"view_model", "us", false},
+	.Ogg_Decode       = {"ogg_decode", "ms", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)

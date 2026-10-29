@@ -22,6 +22,9 @@ import "core:strings"
 // build/benchmarks/).
 
 COMPARE_RUNS :: 5
+// TOOL_SCENARIOS are tools/bench's (no game): `bench` alone runs chunks, the others
+// are its first argument.
+TOOL_SCENARIOS :: []string{"chunks", "ogg", "telemetry", "budgets"}
 COMPARE_P :: 0.05
 
 Compare_Side :: struct {
@@ -80,7 +83,7 @@ bench_compare :: proc(args: []string) -> bool {
 		os.set_working_directory(side.root)
 		os.make_directory_all("build") // (a new worktree has none)
 		ok: bool
-		if scenario == "chunks" {
+		if slice.contains(TOOL_SCENARIOS, scenario) {
 			_, ok = build_tool("bench")
 		} else {
 			_, ok = build_game({"--release"})
@@ -106,8 +109,9 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 	defer os.set_working_directory(main_root)
 	exe := path_join({"build", strings.concatenate({"voxiverse", exe_suffix()})})
 	cmd := []string{exe, "--benchmark", scenario}
+	bench_exe := path_join({"build", strings.concatenate({"bench", exe_suffix()})})
 	if scenario ==
-	   "chunks" {cmd = {path_join({"build", strings.concatenate({"bench", exe_suffix()})})}}
+	   "chunks" {cmd = {bench_exe}} else if slice.contains(TOOL_SCENARIOS, scenario) {cmd = {bench_exe, scenario}}
 	if scenario == "server" || scenario == "party" {
 		// The server alone (dedicated/bench.odin).
 		cmd = {
