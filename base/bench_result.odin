@@ -168,7 +168,7 @@ write_metrics :: proc(b: ^strings.Builder, rep: [Metric]Metric_Summary) {
 		if s.count == 0 {continue}
 		fmt.sbprintf(
 			b,
-			`%s%q:{{"unit":%q,"value":%.6g,"count":%d,"mean":%.6g,"median":%.6g,"p10":%.6g,"p90":%.6g,"p99":%.6g}}`,
+			`%s%q:{{"unit":%q,"value":%.6g,"count":%d,"mean":%.6g,"median":%.6g,"p10":%.6g,"p90":%.6g,"p95":%.6g,"p99":%.6g,"max":%.6g}}`,
 			"" if first else ",",
 			METRIC_INFO[m].name,
 			METRIC_INFO[m].unit,
@@ -178,7 +178,9 @@ write_metrics :: proc(b: ^strings.Builder, rep: [Metric]Metric_Summary) {
 			s.median,
 			s.p10,
 			s.p90,
+			s.p95,
 			s.p99,
+			s.max,
 		)
 		first = false
 	}

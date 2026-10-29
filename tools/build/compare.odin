@@ -108,7 +108,7 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 	cmd := []string{exe, "--benchmark", scenario}
 	if scenario ==
 	   "chunks" {cmd = {path_join({"build", strings.concatenate({"bench", exe_suffix()})})}}
-	if scenario == "server" {
+	if scenario == "server" || scenario == "party" {
 		// The server alone (dedicated/bench.odin).
 		cmd = {
 			path_join({"build", strings.concatenate({"voxiverse-server", exe_suffix()})}),
@@ -159,13 +159,18 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 			// results from before values were written have medians.
 			chosen, has := fields["value"]
 			append(&medians[name], number(chosen if has else fields["median"]))
-			// Times also by their worst 1%: hitches and spikes matter as much
-			// as the middle (a fix to those may not move it at all).
+			// Times also by their tail (p95, p99) and their worst: hitches and
+			// spikes matter as much as the middle (a fix to those may not move
+			// it at all). Results from before a field was written lack it.
 			if fields["unit"].(json.String) == "ms" {
-				tail := strings.concatenate({name, " p99"})
-				if tail not_in medians {medians[tail] = {}}
-				append(&medians[tail], number(fields["p99"]))
-				side.units[tail] = "ms"
+				for field in ([]string{"p95", "p99", "max"}) {
+					v, written := fields[field]
+					if !written {continue}
+					tail := strings.concatenate({name, " ", field})
+					if tail not_in medians {medians[tail] = {}}
+					append(&medians[tail], number(v))
+					side.units[tail] = "ms"
+				}
 			}
 			side.units[name] = fields["unit"].(json.String)
 		}
