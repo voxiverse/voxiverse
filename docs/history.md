@@ -7216,3 +7216,48 @@ removed. The job layout and times before and after are reported.
   `Sink.busy` covers the batch in flight.
 - CI times before (run 40864048998, main before T6): Test Windows 475 s, Test Linux 411 s
   (check 98, test 157, optimized tests 64), Test macOS 399 s, Game Linux 586 s.
+
+## T7: prune, dead code, simplify
+
+Widened by issue #73 (the owner's maintenance pass), which replaced the plan's row: delete
+tests the scenarios (T3) and their invariants cover, naming the covering scenario or
+invariant for each, and tests that only test their own fixtures, never a test whose
+behaviour nothing else checks; delete every top-level procedure, type, constant and file
+nothing references (across all packages, tests and `tools/`; procedure tables, `#load` and
+reflection counted), keeping what a test, the build tool, CI or a documented command uses;
+simplify (merge duplicated helpers, collapse one-use wrappers, drop options nobody sets and
+parameters always passed the same value), with no behaviour change. Proof: `check`, `test`
+and `smoke` pass, the determinism roots, golden hashes and benchmarks unchanged, the numbers
+before and after reported. One commit per kind of change.
+
+### What differed (T7)
+
+- **The scenarios made few hand-written tests redundant.** T3 had already deleted the three
+  they replace whole. The rest each check something no scenario does (latency, sprint and
+  delays in prediction, saving and loading, spills, falls, travel, a world unloaded, lag
+  compensation, weapon numbers): the prune deleted the two tests of the harness itself
+  (`test_step_until_counts_ticks`, `test_parties_run_before_the_tick`) and the ten-percent
+  loss test's chunk-by-chunk comparison with the generator (the agreement invariant of
+  `test_scenario_chunk_streaming_under_loss` covers it).
+- **The dead-code list is built by a script, not by the compiler**: every top-level
+  declaration (also one tab in) looked up by name, per package and qualified, in every
+  tracked file outside `docs/`, with comments left out (a first pass that counted a name in
+  a comment as a use missed twelve). Removed: 42 procedures, constants and variables, and values
+  computed only to be discarded (`_ = x`), one of them an allocation nothing read.
+- **Kept although unreferenced** (recorded as the design): `base.sincos` (named by
+  `docs/determinism.md`), the save migration framework (`migrate_universe`, `mig_list`,
+  `mig_delete`: empty registry before 1.0, `docs/saves.md`), the script API natives and
+  their `CAP_*` constants (M48f's shape for M51 and M52), `client.music_table` (see below),
+  RenderDoc's `LaunchReplayUI` (a field of the API struct).
+- **`client/fly_test.odin` was never a test**: it is the `--check fly` exit check the game
+  runs; renamed `fly_check.odin` like `blast_check.odin`. Its 237 lines move from the test
+  count to the code count.
+- **Found, not fixed (no behaviour change here):** `music_table()` (the `music.*` tuning)
+  is not in `app_variables`, so M44's "console-reachable in all builds" never held.
+- **The numbers** (`./build.sh test` on one Linux machine, wall time with compilation):
+  before (7a85db7) 657 tests in `build test`, 680 `@(test)` in all (smoke and tools
+  included), 41,641 lines of test code, 87,254 lines of other Odin, 2 min 43 s; after 655,
+  678, 41,171 (237 of the 470 are `fly_check.odin` moving out) and 87,175 (549 fewer Odin
+  lines in all), 2 min 43-46 s (the suite's time is its slow tests', which stay). CI per job
+  before (run 40864048998, main before T6, which changed CI): Test Windows 475 s, Linux 411
+  s, macOS 399 s, Game Linux 586 s, Package 132-184 s, Determinism 13 s, 590 s wall.

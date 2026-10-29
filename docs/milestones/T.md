@@ -69,10 +69,9 @@ Full spec: [history.md](../history.md) (T5).
 
 Full spec: [history.md](../history.md) (T6).
 
-## T7: prune
+## T7: prune, dead code, simplify (done)
 
-Delete tests made redundant by scenarios and invariants and tests that only test their own
-fixtures. Report the counts before and after (tests, test lines, suite time per OS, CI time).
+Full spec: [history.md](../history.md) (T7; widened by issue #73).
 
 ## Done when
 
