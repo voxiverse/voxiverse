@@ -864,14 +864,14 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, telemetry (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry, budgets (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
 		)
 		return false
 	}
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
-	if scenario == "telemetry" {return run_tool("bench", args)}
+	if scenario == "telemetry" || scenario == "budgets" {return run_tool("bench", args)}
 	build_args := []string{"--release"}
 	smoke := false
 	for arg in args[1:] {

@@ -79,6 +79,10 @@ main :: proc() {
 		telemetry_main(os.args[2:])
 		return
 	}
+	if len(os.args) > 1 && os.args[1] == "budgets" {
+		budgets_main(os.args[2:])
+		return
+	}
 	flags.parse_or_exit(&opts, os.args, .Odin)
 	default_region := opts.seed == 1 && opts.radius == 3 && opts.x == 0 && opts.z == 0
 	if opts.check && !default_region {

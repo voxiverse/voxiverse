@@ -3,7 +3,6 @@ package client
 import "core:math"
 import "core:testing"
 
-import "../base"
 import "../common/game"
 import "mesh"
 import "render"
@@ -432,29 +431,12 @@ test_f1_and_the_camera_decide_if_the_view_model_is_shown :: proc(t: ^testing.T) 
 	testing.expect_value(t, len(d.view), 72)
 }
 
-// A frame of the view model is a few hundred vertices moved by one matrix: well
-// inside a frame's budget (judged in optimized builds only).
+// The biggest model's frame is a few thousand vertices moved by one matrix;
+// what that costs is the `viewmodel` benchmark (`build bench viewmodel`).
 @(test)
-test_view_model_costs_little_per_frame :: proc(t: ^testing.T) {
-	reg := test_reg()
-	cache: Held_Cache
-	defer held_cache_destroy(&cache)
-	launcher, _ := game.registry_item(reg, "rocket_launcher")
-	entry := held_entry(&cache, reg, launcher)
-	arm := held_mesh_arm({196, 64, 52, 255})
-	defer held_mesh_destroy(&arm)
-	d: render.Held_Draw
-	render.held_draw_init(&d)
+test_the_biggest_model_is_thousands_of_vertices :: proc(t: ^testing.T) {
+	d, ok := view_model_bench_frame(test_reg())
 	defer render.held_draw_destroy(&d)
-	FRAMES :: 2000
-	start := base.thread_cpu_us()
-	for _ in 0 ..< FRAMES {
-		render.held_draw_clear(&d)
-		view_model_add(&d, entry.kind, &entry.mesh, &arm, {})
-	}
-	each := f64(base.thread_cpu_us() - start) / FRAMES
+	testing.expect(t, ok)
 	testing.expect(t, len(d.view) > 1000, "the biggest model is a few thousand vertices")
-	if base.budget_applies() {
-		testing.expectf(t, each < 100, "a frame of the view model took %.1f us (budget 100)", each)
-	}
 }

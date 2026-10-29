@@ -35,8 +35,9 @@ yet encoding a big universe takes longer than a tick. `save_begin` (`server/save
 - A world with a save running does not unload. `stop` (a `save` with wait) finishes the
   running save at once and then saves again. Timing is the wall clock's: how many ticks a save
   takes varies, never what it writes or any hashed state.
-- `test_save_200_characters` holds the numbers on the CI runner: capture at most 4 ms, a
-  slice tick at most 3 ms, committed within 150 ticks, a blocking save at most 1.5 s.
+- `build bench budgets -check` holds the numbers on the CI runner: capture at most 4 ms, a
+  slice tick at most 3 ms, a blocking save at most 1.5 s (`test_save_200_characters` checks that the
+  same scene commits; how many ticks the worker takes is wall-clock time, not a budget).
 
 The journal segment a save names is synced by the worker before the commit, not on the tick.
 

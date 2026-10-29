@@ -8,7 +8,6 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../base"
 import "../common/game"
 
 // M45: the edit journal. test_grief_rolled_back is the exit check: a player
@@ -638,99 +637,14 @@ grief_close_keep :: proc(g: ^Grief) {
 	}
 }
 
-// The journal's cost: M11's flood (10 000 flowing blocks), 20 blasts of radius
-// 6 and ten 32 x 32 x 32 fills over 600 ticks. Its time is a small share of
-// the ticks', and a small mean per tick (optimized in CI; four times the
-// allowance in a debug run).
+// The journal under load: M11's flood (10 000 flowing blocks), 20 blasts of
+// radius 6 and ten 32 x 32 x 32 fills over 600 ticks write a lot of entries.
+// What that costs is `build bench budgets`.
 @(test)
-test_journal_cost :: proc(t: ^testing.T) {
-	config := grief_config("")
-	config.view_radius = 7 // (the flood's square, corners too)
-	config.journal_timed = true
-	g, ok := grief_open(t, "", config)
-	defer grief_close(g)
-	if !ok {return}
-	s := grief_srv(g)
-	w := grief_world(g)
-	started := s.tick
-	measure :: proc(g: ^Grief, total, wall_ns: ^i64, body: proc(g: ^Grief, n: int), n: int) {
-		from := u64(intrinsics.read_cycle_counter())
-		cpu := base.thread_cpu_us() // (this thread's CPU time: other tests run on other threads)
-		body(g, n)
-		total^ += i64(u64(intrinsics.read_cycle_counter()) - from)
-		wall_ns^ += 1000 * (base.thread_cpu_us() - cpu)
-	}
-	total, wall_ns: i64
-	// The platform and the layer of sources over it.
-	measure(g, &total, &wall_ns, proc(g: ^Grief, _: int) {
-			p := g.f
-			x0, z0, y := p.x - 50, p.z - 50, p.y + 12
-			cmd(g, "fill %d %d %d %d %d %d stone", x0 - 1, y, z0 - 1, x0 + 100, y + 1, z0 + 100)
-			cmd(g, "fill %d %d %d %d %d %d air", x0, y + 1, z0, x0 + 99, y + 1, z0 + 99)
-			cmd(g, "fill %d %d %d %d %d %d water", x0, y + 8, z0, x0 + 99, y + 8, z0 + 99)
-		}, 0)
-	for tick in 0 ..< 600 {
-		measure(g, &total, &wall_ns, proc(g: ^Grief, tick: int) {
-				w := grief_world(g)
-				p := g.f
-				switch {
-				case tick % 30 == 10 && tick < 600:
-					n := i32(tick / 30)
-					if n < 20 {
-						at := [3]f64 {
-							f64(p.x - 40 + (n % 5) * 20),
-							f64(p.y - 6),
-							f64(p.z - 40 + (n / 5) * 20),
-						}
-						explode(w, at, 6, action_begin(w, {.World, "", false}, .Explosion))
-					}
-				case tick % 60 == 20 && tick < 600:
-					n := i32(tick / 60)
-					cmd(
-						g,
-						"fill %d %d %d %d %d %d %s",
-						p.x + n * 3 - 20,
-						p.y - 40,
-						p.z - 20,
-						p.x + n * 3 + 11,
-						p.y - 9,
-						p.z + 11,
-						"stone" if n % 2 == 0 else "dirt",
-					)
-				}
-				session_step(g.sess, false)
-			}, tick)
-	}
-	cost := w.journal.cost_cycles
-	share := f64(cost) / f64(total)
-	per_tick_ms := share * f64(wall_ns) / f64(s.tick - started) / 1e6
-	log_line := fmt.tprintf(
-		"journal cost: %.2f%% of the ticks' time, %.3f ms per tick (%d entries)",
-		share * 100,
-		per_tick_ms,
-		w.journal.head,
-	)
-	fmt.println(log_line)
-	testing.expectf(
-		t,
-		w.journal.head > 20000,
-		"the scenario changed only %d blocks",
-		w.journal.head,
-	)
-	if base.budget_applies() {
-		testing.expectf(
-			t,
-			share <= 0.05,
-			"the journal's share of tick time is too high: %s",
-			log_line,
-		)
-		testing.expectf(
-			t,
-			per_tick_ms <= 0.5,
-			"the journal's mean per tick is too high: %s",
-			log_line,
-		)
-	}
+test_journal_scene :: proc(t: ^testing.T) {
+	r, ok := budget_journal()
+	testing.expect(t, ok)
+	testing.expectf(t, r.head > 20000, "the scenario changed only %d blocks", r.head)
 }
 
 // M48c: a filled chest broken, the server restarted: the rollback finds the

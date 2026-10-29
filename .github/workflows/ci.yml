@@ -68,6 +68,11 @@ jobs:
       # writer keeps up; budgets for a slow runner.
       - name: Benchmark check, telemetry
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench telemetry -check
+      # What the server's heavy work costs (T5; the budgets the tests held: a
+      # save, the audit, counters, the journal, 10 000 blocks of water); CPU
+      # time on this thread, budgets for a slow runner.
+      - name: Benchmark check, budgets
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench budgets -check
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP on every platform; its numbers compare with nothing.
       - name: Server benchmark (smoke)
@@ -121,21 +126,12 @@ jobs:
           name: determinism-ubuntu-latest
           path: build/determinism/
           if-no-files-found: error
-      # The optimized tests, one build: M46 the save killed at 1000 different
+      # The optimized test, one build: M46 the save killed at 1000 different
       # operations (a faulty disk layer, not real kills: every point loads,
-      # and is exactly the old generation or the new one); M11 10 000 blocks
-      # of water flowing within the server's tick; M45 the edit journal's
-      # cost, a share of the ticks' time and a mean per tick. (The unit
-      # tests are unoptimized, with more slack.) The save budget (M46b: what
-      # a save costs the tick with 200 characters, 512 edited chunks, 100
-      # chests and 400 entities; the budgets are the runner's) is in the same
-      # run. One test at a time, as a define (the runner reads no environment
-      # variable): by default it runs the tests on several threads at once,
-      # and a server saving 512 chunks next to one flooding 10 000 blocks
-      # of water costs the flood its tick budget (#26). Run one after the
-      # other, nothing outlives a test: no thread, the same memory.
+      # and is exactly the old generation or the new one). No test judges a
+      # time (T5): the costs are `bench budgets`, below.
       - name: Optimized tests
-        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes,server.test_water_flood,server.test_journal_cost,server.test_save_200_characters,server.test_audit_budget -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
+        run: odin test server -o:speed -vet -strict-style -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=server.test_save_survives_crashes -define:VX_CRASH_POINTS=1000 -out:build/optimized_test
 
   # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
   # under the validation layer, any validation finding, leak, sanitizer
@@ -197,7 +193,7 @@ jobs:
       # CPU driver under validation; timing here means nothing.
       - name: Benchmark scenarios (smoke)
         run: |
-          for scenario in load views flight edits audio; do
+          for scenario in load views flight edits audio viewmodel; do
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
           done
 
@@ -262,6 +258,8 @@ jobs:
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --check fly
           python3 tools/debugger/check_spall.py build/voxiverse.spall
+          # The view model's frame within its budget (T5; judged on a release build).
+          xvfb-run -a ./build/voxiverse --benchmark viewmodel
           # The optimized build's chunk budgets (tighter than a debug build's).
           xvfb-run -a ./build/voxiverse --check tour
 

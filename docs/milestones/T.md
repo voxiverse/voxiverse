@@ -61,17 +61,9 @@ Full spec: [history.md](../history.md) (T4).
 
 Full spec: [history.md](../history.md) (T4b).
 
-## T5: no timing in tests
+## T5: no timing in tests (done)
 
-Every performance budget asserted in a test moves to `build bench` (M19) with baselines and
-tolerances, gated by CI's `Benchmark check`. `budget_applies()` (#55) goes. T4b dropped two
-budgets from `common/telemetry` (an emit's cost, a burst's speed) and the file device's
-"faster than real time": T5 gives them bench scenarios. Done early (issue #70): the telemetry
-budgets are `build bench telemetry -check` (emit 5 us, write 50 us an event, the old test's;
-CI step "Benchmark check, telemetry"; the old "Event cost, optimized" step is gone). `check` fails
-if a `-define:ODIN_TEST_NAMES` in ci.yml names a test that does not exist. Decision: the budgets
-are in code beside the scenario like `chunks`'s CHECK (a baseline file would be a second place),
-and the scenario drains a stepped sink, so it measures the work and not a thread's scheduling.
+Full spec: [history.md](../history.md) (T5).
 
 ## T6: the smoke suite, the new lints, CI
 

@@ -11,6 +11,7 @@ import "../common/game"
 import "../server"
 import "audio"
 import "gpu"
+import "render"
 
 // Benchmarks (docs/plan.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
@@ -27,6 +28,7 @@ Bench_Kind :: enum u8 {
 	Flight, // flying over the land: streaming while drawing
 	Edits, // explosions round the spawn: bulk edits re-meshed, water let loose
 	Audio, // the mixer alone: 64 voices on 4 buses, the reverb and a stream (no world, no GPU)
+	Viewmodel, // the view model's vertices for a frame, the biggest model (no world, no GPU)
 }
 
 Scenario :: struct {
@@ -67,6 +69,13 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"the mixer offline: 64 looping voices on 4 buses, the reverb, a music stream; 10 s of blocks",
+	},
+	{
+		"viewmodel",
+		.Viewmodel,
+		1,
+		3,
+		"the view model's vertices for a frame of the biggest model, 2000 frames",
 	},
 }
 
@@ -191,6 +200,10 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 		bench_audio(app) // (nothing here draws, so nothing is set up for it)
 		return
 	}
+	if scenario.kind == .Viewmodel {
+		bench_viewmodel(app)
+		return
+	}
 	if !gpu.set_offscreen(&app.g, BENCH_SIZE.x, BENCH_SIZE.y) {
 		bench_fail(app, "cannot draw offscreen at a fixed size here")
 		return
@@ -296,7 +309,7 @@ bench_update :: proc(app: ^App) {
 		base.metrics_start()
 	case .Measuring:
 		switch b.scenario.kind {
-		case .Load, .Audio:
+		case .Load, .Audio, .Viewmodel:
 		case .Views:
 			pitches := BENCH_VIEW_PITCHES
 			s.camera.yaw = f32(b.view % BENCH_VIEW_YAWS) * 2 * math.PI / BENCH_VIEW_YAWS
@@ -532,6 +545,74 @@ bench_audio :: proc(app: ^App) {
 		)
 		if share > BENCH_AUDIO_BUDGET {
 			bench_fail(app, "the 64-voice mix takes more than its share of a core")
+			return
+		}
+	}
+	bench_finish(app)
+}
+
+BENCH_VIEWMODEL_FRAMES :: 2000
+// BENCH_VIEWMODEL_BUDGET_US: a frame of the view model is a few thousand
+// vertices moved by one matrix, well inside a frame (judged, like the audio's,
+// on a release build's median).
+BENCH_VIEWMODEL_BUDGET_US :: 100
+
+// view_model_bench_frame: the start kit's launcher (the biggest model) added to a
+// held draw as a frame does; the draw is the caller's to destroy.
+view_model_bench_frame :: proc(reg: ^game.Registry) -> (d: render.Held_Draw, ok: bool) {
+	launcher := game.registry_item(reg, "rocket_launcher") or_return
+	cache: Held_Cache
+	defer held_cache_destroy(&cache)
+	entry := held_entry(&cache, reg, launcher)
+	arm := held_mesh_arm({196, 64, 52, 255})
+	defer held_mesh_destroy(&arm)
+	render.held_draw_init(&d)
+	view_model_add(&d, entry.kind, &entry.mesh, &arm, {})
+	return d, true
+}
+
+// bench_viewmodel runs the viewmodel scenario: each frame's time is a sample.
+@(private = "file")
+bench_viewmodel :: proc(app: ^App) {
+	b := &app.bench
+	reg := game.registry_base(context.allocator)
+	defer game.registry_destroy(reg)
+	frames := 200 if b.smoke else BENCH_VIEWMODEL_FRAMES
+	launcher, found := game.registry_item(reg, "rocket_launcher")
+	if !found {
+		bench_fail(app, "the base pack has no rocket launcher")
+		return
+	}
+	for _ in 0 ..< b.scenario.repetitions {
+		cache: Held_Cache
+		entry := held_entry(&cache, reg, launcher)
+		arm := held_mesh_arm({196, 64, 52, 255})
+		d: render.Held_Draw
+		render.held_draw_init(&d)
+		base.metrics_start()
+		for _ in 0 ..< frames {
+			start := time.tick_now()
+			render.held_draw_clear(&d)
+			view_model_add(&d, entry.kind, &entry.mesh, &arm, {})
+			base.metric_add(.View_Model, f32(time.duration_microseconds(time.tick_since(start))))
+		}
+		base.bench_repetition_end(&b.result)
+		render.held_draw_destroy(&d)
+		held_mesh_destroy(&arm)
+		held_cache_destroy(&cache)
+	}
+	counted, _ := view_model_bench_frame(reg)
+	append(&b.result.counts, base.Bench_Count{"vertices", len(counted.view)})
+	render.held_draw_destroy(&counted)
+	if base.build_name() == "release" {
+		median := b.result.repetitions[0][.View_Model].median
+		log.infof(
+			"bench viewmodel: a frame takes %.1f us (budget %d)",
+			median,
+			BENCH_VIEWMODEL_BUDGET_US,
+		)
+		if median > BENCH_VIEWMODEL_BUDGET_US {
+			bench_fail(app, "a frame of the view model takes more than its budget")
 			return
 		}
 	}

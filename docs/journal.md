@@ -143,6 +143,6 @@ record in the interval refuses the replay.
 
 ## Cost
 
-`Config.journal_timed` (tests) counts the journal's cycles. `test_journal_cost` (CI:
-"Journal cost, optimized") holds it to 5% of the ticks' time and 0.5 ms a tick on average
-over a flood, 20 blasts and ten big fills.
+`Config.journal_timed` counts the journal's cycles. `build bench budgets -check` (CI:
+"Benchmark check, budgets"; the scene is `budget_journal`, `server/budgets.odin`) holds it to 5% of the
+ticks' time and 0.5 ms a tick on average over a flood, 20 blasts and ten big fills.

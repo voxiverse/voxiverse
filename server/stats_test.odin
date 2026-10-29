@@ -1,13 +1,11 @@
 package server
 
-import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../base"
 import "../common/game"
 import "../common/telemetry"
 
@@ -323,56 +321,12 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 	testing.expect(t, !strings.contains(text, "inv\x01"), "odd text got into the log")
 }
 
-// Many players with thousands of counters each save and load within budget.
-// The budget is relative: the save and load of all of them may cost no more
-// than a few times what building their counters cost, on this thread, in
-// this run (the same hashing, copying and allocating). A fixed number of
-// seconds would be a measure of the machine, as a slow, shared runner showed.
+// Many players with thousands of counters each save and load whole. What it costs
+// (against building them, on the same thread) is `build bench budgets`.
 @(test)
-test_many_counters_save_and_load_fast :: proc(t: ^testing.T) {
-	PLAYERS :: 200
-	COUNTERS :: 3000
-	BUDGET :: 6 // times the building (measured at 2 to 3)
-	records := make([]Player_Record, PLAYERS)
-	defer {
-		for &r in records {counters_free(&r.stats)}
-		delete(records)
-	}
-	built := base.thread_cpu_us()
-	name: [64]u8
-	for &r, i in records {
-		for k in 0 ..< COUNTERS {
-			counter_add(
-				&r.stats,
-				fmt.bprintf(name[:], "blocks.mined.block_%d_%d", i % 7, k),
-				u64(k + 1),
-			)
-		}
-	}
-	start := base.thread_cpu_us()
-	total := 0
-	for &r in records {
-		json := player_json(test_reg(), &r)
-		total += len(json)
-		back, ok := player_parse(test_reg(), json)
-		testing.expect(t, ok)
-		testing.expect_value(t, len(back.stats), COUNTERS)
-		counters_free(&back.stats)
-		free_all(context.temp_allocator) // (a server's tick does the same: the cost is the work, not a heap grown to hold every player's text)
-	}
-	// CPU seconds: other tests' threads do not count
-	building := f64(start - built) / 1e6
-	elapsed := f64(base.thread_cpu_us() - start) / 1e6
-	testing.expectf(
-		t,
-		elapsed < BUDGET * building,
-		"%d players of %d counters took %.1f s, building them %.1f s (%d MiB of JSON)",
-		PLAYERS,
-		COUNTERS,
-		elapsed,
-		building,
-		total >> 20,
-	)
+test_many_counters_save_and_load :: proc(t: ^testing.T) {
+	_, _, _, bad := budget_counters(test_reg())
+	testing.expect_value(t, bad, 0)
 }
 
 // Counters written by hand read back, whatever their names; a player file

@@ -5,7 +5,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../base"
 import "../common/game"
 import "../common/telemetry"
 
@@ -586,42 +585,12 @@ given :: proc(s: ^Server, st: game.Stack) {
 	s.ledger.entries[st.item] = row
 }
 
-// The audit's cost: 200 players and 3000 item entities.
+// The audit of a full server balances: 200 players and 3000 item entities. Its
+// cost is `build bench budgets`.
 @(test)
-test_audit_budget :: proc(t: ^testing.T) {
-	s := new(Server)
-	defer free(s)
-	s.clients = make([]Client, 200)
-	defer delete(s.clients)
-	w := new(World)
-	defer free(w)
-	defer delete(w.entities.list)
-	w.server = s
-	append(&s.worlds, w)
-	defer delete(s.worlds)
-	defer ledger_destroy(&s.ledger)
-	items := game.every_item(test_reg(), context.temp_allocator)
-	for &c, i in s.clients {
-		c.state = .Playing
-		for &st, k in c.inventory.slots {
-			st = {items[(i + k) % len(items)], 1 + k % 5, 0}
-			given(s, st)
-		}
-	}
-	for i in 0 ..< 3000 {
-		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
-		append(&w.entities.list, Entity{kind = .Item, stack = st})
-		given(s, st)
-	}
-	// (the thread's CPU time: other tests run on other threads)
-	start := base.thread_cpu_us()
-	lines := audit(s)
-	took := base.thread_cpu_us() - start
-	testing.expect_value(t, len(lines), 0)
-	if base.budget_applies() {
-		testing.expectf(t, took < 10_000, "the audit took %d us", took)
-	}
-	free_all(context.temp_allocator)
+test_audit_balances_a_full_server :: proc(t: ^testing.T) {
+	lines, _ := budget_audit(test_reg())
+	testing.expect_value(t, lines, 0)
 }
 
 @(test)

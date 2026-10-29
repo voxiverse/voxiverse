@@ -47,6 +47,17 @@ Metric :: enum u8 {
 	// The telemetry scenario: one value per event.
 	Telemetry_Emit, // emitting an event (a lock and a copy), us
 	Telemetry_Write, // the writer's work on an event (format and file), us
+	// The budgets scenario: one value per repetition (server/budgets.odin).
+	Save_Capture, // starting a save with 200 characters and 512 edited chunks, us
+	Save_Slice, // the largest slice of that save, us
+	Save_Blocking, // a blocking save of all of it, ms
+	Audit, // the item audit of 200 players and 3000 entities, us
+	Counters_Ratio, // saving and loading 200 players of 3000 counters over building them, times
+	Journal_Share, // the journal's share of the ticks' time under a flood and blasts, %
+	Journal_Tick, // its mean cost in a tick, us
+	Flood_Tick, // the slowest world tick with 10 000 blocks of water flowing, us
+	// The viewmodel scenario: one value per frame.
+	View_Model, // building the view model's vertices for a frame (the biggest model), us
 }
 
 Metric_Info :: struct {
@@ -89,6 +100,15 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Audio_Mix        = {"audio_mix", "ms", false},
 	.Telemetry_Emit   = {"telemetry_emit", "us", false},
 	.Telemetry_Write  = {"telemetry_write", "us", false},
+	.Save_Capture     = {"save_capture", "us", false},
+	.Save_Slice       = {"save_slice", "us", false},
+	.Save_Blocking    = {"save_blocking", "ms", false},
+	.Audit            = {"audit", "us", false},
+	.Counters_Ratio   = {"counters_ratio", "x", false},
+	.Journal_Share    = {"journal_share", "%", false},
+	.Journal_Tick     = {"journal_tick", "us", false},
+	.Flood_Tick       = {"flood_tick", "us", false},
+	.View_Model       = {"view_model", "us", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)

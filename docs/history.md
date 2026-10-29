@@ -7157,3 +7157,35 @@ from `start` is not a start); the smoke files are listed and each runs under
   (`-define:ODIN_TEST_THREADS=1`); T6's `./build.sh smoke` does that. (Two runs of the suite
   at eight threads once stopped without a result; one thread, and eight on the three runs
   after, passed every time. Not found; T6 should run it single-threaded and look again.)
+
+## T5: no timing in tests
+
+Every performance budget asserted in a test moves to `build bench` (M19) with baselines and
+tolerances, gated by CI's `Benchmark check`. `budget_applies()` (#55) goes. T4b dropped two
+budgets from `common/telemetry` (an emit's cost, a burst's speed) and the file device's
+"faster than real time": T5 gives them bench scenarios. Done early (issue #70): the telemetry
+budgets are `build bench telemetry -check` (emit 5 us, write 50 us an event, the old test's;
+CI step "Benchmark check, telemetry"; the old "Event cost, optimized" step is gone). `check` fails
+if a `-define:ODIN_TEST_NAMES` in ci.yml names a test that does not exist. Decision: the budgets
+are in code beside the scenario like `chunks`'s CHECK (a baseline file would be a second place),
+and the scenario drains a stepped sink, so it measures the work and not a thread's scheduling.
+
+What differed: the spec named three budgets (the telemetry ones, done in #70) and the file
+device's; the tests that still asserted a time were seven (`test_save_200_characters`'s capture,
+slice and blocking save, `test_journal_cost`, `test_water_flood`, `test_audit_budget`,
+`test_many_counters_save_and_load_fast`, `test_view_model_costs_little_per_frame`). The scenes
+moved out of the tests into `server/budgets.odin` as headless procs that return numbers (the
+tests call them for what they do); `build bench budgets` judges them. Decisions: (1) the journal
+and flood scenes have no player (the tests' player needs the mirror, which is test code), so
+they put air chunks in the home world and run the world's part of a tick (`budget_world_tick`:
+clock, block updates, changes flush, journal) themselves, because the server's own sweep unloads
+chunks nobody wants; they measure that part, not a whole tick with a client's network and
+physics. (2) "Committed within 150 ticks" is gone as a budget: the worker is a real thread and
+stepped ticks are fast, so the ticks it takes are wall time, not a unit; the scene gives it 1500
+ticks, the tests check that it commits, the tick's cost is the capture and the slices. (3) The
+view model's frame is the game's `viewmodel` scenario (it needs the client package); its
+budget is judged only on a release build, in CI's Profiling step, like `audio`'s. (4) The old
+budget numbers were kept; the new scenes run in a release-like build (`-o:speed`) where the old
+tests ran theirs, so no new slack. `budget_applies` is gone with its callers; the unit tests
+are the same in debug and optimized builds.
+
