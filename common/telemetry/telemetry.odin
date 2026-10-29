@@ -57,15 +57,32 @@ Kind :: enum u16 {
 	Respawned, // text: the game mode
 	Shot_Fired, // text: the weapon; n0: 1 when it hit
 	Mode_Changed, // text: the new game mode; n0: 1 when a command did it (the journal says who)
+	// The session recording's (issue #65): what a LAN party's analytics needs.
+	Ping_Sample, // n0: round trip in ms; every 10 s for each player
+	Damage_Dealt, // text: the weapon; n0: tenths of a health point; n1: the victim's player id
+	Kill, // text: the weapon; n0: ms from the first damage to the death; n1: the victim's player id
+	Grapple_Used, // the hook attached
+	Jump, // text: ground or air (a double jump)
+	Client_Hardware, // from a client at joining: text: the GPU's name; n0, n1: the window's width and height
+	Client_Driver, // from a client at joining: text: the GPU driver and its version
+	Client_Frames, // from a client every minute: n0: frame p50 us, n1: p95 us, n2: worst us
+	Server_Perf, // every minute: n0: tick time p50 in us, n1: p95, n2: worst
+	Server_Net, // every minute: n0: desyncs so far, n1: checks judged, n2: checks skipped
+	Bandwidth_Sample, // every minute for each player: n0: bytes sent, n1: bytes received, n2: records sent again
+	Log_Line, // a warning or an error of the server's log: line: the text
+	Server_Start, // n0: the most players
+	Server_Stop, // a clean stop (a session that has none ended in a crash)
 }
 
 Kind_Info :: struct {
-	name:      string, // in the log
-	text_name: string, // what its text is called ("" none)
-	n_names:   [3]string, // what its numbers are called ("" none)
-	counter:   string, // the counter it adds to ("%t": the text; "": none); the amount is n0 (1 if none)
-	client:    bool, // a client may report it
-	amount:    bool, // the counter grows by n0 (else by 1)
+	name:         string, // in the log
+	text_name:    string, // what its text is called ("" none)
+	note_name:    string, // what its note (a long text) is called ("" none)
+	n_names:      [3]string, // what its numbers are called ("" none)
+	counter:      string, // the counter it adds to ("%t": the text; "": none); the amount is n0 (1 if none)
+	client:       bool, // a client may report it
+	session_only: bool, // only the session recording keeps it (never the day files, which may be uploaded)
+	amount:       bool, // the counter grows by n0 (else by 1)
 }
 
 @(rodata)
@@ -154,6 +171,65 @@ KIND_INFO := [Kind]Kind_Info {
 		counter = "mode_changes",
 	},
 	.Client_Perf = {name = "client_perf", n_names = {"p50_us", "p99_us", "frames"}, client = true},
+	.Ping_Sample = {session_only = true, name = "ping_sample", n_names = {"rtt_ms", "", ""}},
+	.Damage_Dealt = {
+		session_only = true,
+		name = "damage_dealt",
+		text_name = "weapon",
+		n_names = {"tenths", "victim", ""},
+		counter = "weapon_damage.%t",
+		amount = true,
+	},
+	.Kill = {
+		session_only = true,
+		name = "kill",
+		text_name = "weapon",
+		n_names = {"ttk_ms", "victim", ""},
+		counter = "weapon_kills.%t",
+	},
+	.Grapple_Used = {session_only = true, name = "grapple_used", counter = "grapple.uses"},
+	.Jump = {session_only = true, name = "jump", text_name = "kind", counter = "jump.%t"},
+	.Client_Hardware = {
+		session_only = true,
+		name = "client_hardware",
+		text_name = "gpu",
+		n_names = {"width", "height", ""},
+		client = true,
+	},
+	.Client_Driver = {
+		session_only = true,
+		name = "client_driver",
+		text_name = "driver",
+		client = true,
+	},
+	.Client_Frames = {
+		session_only = true,
+		name = "client_frames",
+		n_names = {"p50_us", "p95_us", "worst_us"},
+		client = true,
+	},
+	.Server_Perf = {
+		session_only = true,
+		name = "server_perf",
+		n_names = {"p50_us", "p95_us", "worst_us"},
+	},
+	.Server_Net = {
+		session_only = true,
+		name = "server_net",
+		n_names = {"desyncs", "judged", "skipped"},
+	},
+	.Bandwidth_Sample = {
+		session_only = true,
+		name = "bandwidth_sample",
+		n_names = {"sent", "received", "resent"},
+	},
+	.Log_Line = {session_only = true, name = "log_line", note_name = "line"},
+	.Server_Start = {
+		session_only = true,
+		name = "server_start",
+		n_names = {"max_players", "", ""},
+	},
+	.Server_Stop = {session_only = true, name = "server_stop"},
 }
 
 kind_by_name :: proc(name: string) -> (Kind, bool) {
@@ -180,6 +256,25 @@ short_string :: proc(s: Short) -> string {
 	return strings.clone(string(s.b[:s.n]), context.temp_allocator)
 }
 
+NOTE_MAX :: 119
+
+// Note: a long text in an event (a log line), cut to NOTE_MAX bytes.
+Note :: struct {
+	n: u8,
+	b: [NOTE_MAX]u8,
+}
+
+note :: proc(s: string) -> (r: Note) {
+	r.n = u8(min(len(s), NOTE_MAX))
+	copy(r.b[:], s[:r.n])
+	return
+}
+
+note_string :: proc(n: Note) -> string {
+	n := n
+	return strings.clone(string(n.b[:n.n]), context.temp_allocator)
+}
+
 Event :: struct {
 	time_ms: i64, // wall clock, ms since the Unix epoch
 	tick:    u32, // the server's tick
@@ -190,6 +285,7 @@ Event :: struct {
 	pos:     [3]i32, // block coordinates
 	world:   Short, // address, directory form
 	text:    Short,
+	note:    Note,
 	n:       [3]i64,
 }
 
@@ -211,6 +307,7 @@ Sink :: struct {
 	capped:        u64, // events not written for the day cap
 	session:       u32,
 	dir:           string, // "": nothing is written (events still counted)
+	file_name:     string, // not "": every event goes to this one file in dir (a session's), not to a file a day
 	day_cap:       int,
 	thread:        ^thread.Thread,
 	stop:          bool, // (atomic)
@@ -223,6 +320,7 @@ Sink :: struct {
 }
 
 // sink_start opens the sink; dir "" writes nothing. session identifies this run.
+// file_name: every event goes to that one file (a session's), not to a file a day.
 // A `stepped` sink has no writer thread: sink_drain is the writer's pass.
 sink_start :: proc(
 	s: ^Sink,
@@ -230,11 +328,13 @@ sink_start :: proc(
 	session: u32,
 	day_cap := DEFAULT_DAY_CAP,
 	stepped := false,
+	file_name := "",
 ) {
 	s^ = {}
 	s.session = session
 	s.day_cap = day_cap
 	s.stepped = stepped
+	s.file_name = strings.clone(file_name)
 	s.ring = make([]Event, RING_SIZE)
 	if dir != "" {
 		s.dir = strings.clone(dir)
@@ -260,6 +360,7 @@ sink_stop :: proc(s: ^Sink) {
 		thread.destroy(s.thread)
 	}
 	delete(s.dir)
+	delete(s.file_name)
 	delete(s.ring)
 	s^ = {}
 }
@@ -381,10 +482,12 @@ write_out :: proc(s: ^Sink, text: string, batch: []Event, count: int) {
 	for line in strings.split_lines_iterator(&rest) {
 		if len(line) == 0 {continue}
 		day := day_of(line_time(line))
+		if s.file_name != "" {day = 0} 	// (a session's file spans days)
 		if !s.file_open || day != s.day {
 			if s.file_open {os.close(s.file)}
 			s.day, s.day_bytes, s.file_open = day, 0, false
 			path := fmt.tprintf("%s/%s.jsonl", s.dir, day_name(day))
+			if s.file_name != "" {path = fmt.tprintf("%s/%s", s.dir, s.file_name)}
 			f, err := os.open(path, {.Write, .Create, .Append})
 			if err != nil {continue}
 			s.file, s.file_open = f, true
@@ -452,6 +555,10 @@ write_event :: proc(b: ^strings.Builder, e: Event) {
 	if info.text_name != "" && e.text.n > 0 {
 		fmt.sbprintf(b, `,"%s":`, info.text_name)
 		write_string(b, short_string(e.text))
+	}
+	if info.note_name != "" && e.note.n > 0 {
+		fmt.sbprintf(b, `,"%s":`, info.note_name)
+		write_string(b, note_string(e.note))
 	}
 	for name, i in info.n_names {
 		if name != "" {fmt.sbprintf(b, `,"%s":%d`, name, e.n[i])}

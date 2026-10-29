@@ -12,7 +12,7 @@ worlds/<address>/regions/r.<x>.<z>.vxr      region format 4
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
 lock                                          held while the universe is open (never part of a save)
-telemetry/, exports/                          (never part of a save)
+telemetry/, analytics/, exports/              (never part of a save: analytics/ holds the session recordings)
 ```
 
 ## A save describes one tick, and does not stall it

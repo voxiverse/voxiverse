@@ -31,79 +31,83 @@ Client_Link :: union {
 Local :: struct {}
 
 Client :: struct {
-	state:         Client_State,
-	link:          Client_Link,
-	grants:        [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
-	world:         ^World, // where they are (Playing)
-	account:       game.Account, // (proved once Playing)
-	nonce:         game.Nonce, // the Challenge sent
-	wanted:        [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
-	wanted_len:    int,
-	name_buf:      [game.MAX_NAME_LENGTH]u8,
-	name_len:      int,
-	kick_at:       u64, // tick to drop a refused client
-	pack_since:    u64, // Packing: the tick Packs was sent
-	pack_asked:    bool, // Packing: the Pack_Want came
-	pack_queue:    [game.MAX_PACKS]u8, // Packing: packs to send, in order
-	pack_count:    int,
-	pack_next:     int, // the queue's index being sent
-	pack_offset:   u32, // ... and how much of it has gone
-	protect_told:  u64, // the tick a protected place was last said (protect.odin)
-	kick_reason:   string, // (a constant)
-	position:      [3]f64,
-	center:        game.Chunk_Pos, // the chunk the client is in
-	moved:         bool, // center changed since the last unload pass
-	moved_from:    game.Chunk_Pos, // ... from there (unload_left)
-	has:           map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
-	columns:       map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
-	cursor:        int, // offsets before this are all sent
-	player:        game.Player_State,
-	inputs:        game.Input_Queue,
-	teleported:    bool, // since the last Own_Player record
-	teleports:     u8, // teleports told (it wraps; Own_Player.teleports)
-	landing:       Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
-	actions:       [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
-	action_count:  int,
-	teleport:      [2]f32, // yaw, pitch to look after it
-	look:          [2]f32, // yaw, pitch of the last input applied (saved with the player)
-	fired_at:      u64, // tick of its last rocket (a rate limit)
-	shot_due:      f64, // the tick its next weapon shot is due (weapons.odin)
-	reload_until:  u64, // the tick its reload ends (0: none)
-	reload_slot:   int, // the hotbar slot being reloaded
-	shots_refused: int, // shots refused for coming too early
-	chat_tokens:   int, // lines it may say now (chat.odin)
-	chat_tick:     u64, // the bucket refilled up to here
-	address:       string, // its IP address ("": the local player; owned)
-	back:          Maybe(Place), // where it was before its last teleport
-	afk:           bool,
-	reply:         [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
-	reply_len:     int,
-	tpa:           Tpa, // a teleport request to it
-	inventory:     game.Inventory,
-	stats:         Counters, // its character's counters (stats.odin; heap, keys owned)
-	joined_tick:   u64, // when it joined (session length)
-	last_position: [3]f64, // for distance counters
-	dist_acc:      [3]f64, // centimetres walked, flown, fallen not yet counted
-	was_grounded:  bool,
-	mode:          int, // its game mode: an index into the registry's modes (modes.odin)
-	mode_set:      bool, // (a new client has none yet)
-	health:        f32, // health points (health.odin)
-	max_health:    f32,
-	dead:          bool, // at the death screen, waiting for Respawn (damage.odin)
-	last_damage:   u64, // the tick it was last hurt (regeneration waits after it)
-	airborne:      bool,
-	fall_peak:     f64, // the highest y of the present fall
-	report_window: u64, // the tick the current window of telemetry reports began
-	report_count:  int,
-	inv_acked:     u32, // its newest Inventory_Request applied
-	tx:            game.Sender, // what it has been told (replica.odin; made when it joins)
-	clock_pending: bool, // the Clock record is due (join, travel)
-	inv_changed:   bool, // since the end of the last tick
-	open_chest:    Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
-	disturbed:     u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
-	check:         Maybe(game.Prediction_Check), // its newest, until that input is applied
-	selection:     [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
-	command:       string, // the text of the command admin is running ("" otherwise; journal actions record it)
+	state:          Client_State,
+	link:           Client_Link,
+	grants:         [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
+	world:          ^World, // where they are (Playing)
+	account:        game.Account, // (proved once Playing)
+	nonce:          game.Nonce, // the Challenge sent
+	wanted:         [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
+	wanted_len:     int,
+	name_buf:       [game.MAX_NAME_LENGTH]u8,
+	name_len:       int,
+	kick_at:        u64, // tick to drop a refused client
+	pack_since:     u64, // Packing: the tick Packs was sent
+	pack_asked:     bool, // Packing: the Pack_Want came
+	pack_queue:     [game.MAX_PACKS]u8, // Packing: packs to send, in order
+	pack_count:     int,
+	pack_next:      int, // the queue's index being sent
+	pack_offset:    u32, // ... and how much of it has gone
+	protect_told:   u64, // the tick a protected place was last said (protect.odin)
+	kick_reason:    string, // (a constant)
+	position:       [3]f64,
+	center:         game.Chunk_Pos, // the chunk the client is in
+	moved:          bool, // center changed since the last unload pass
+	moved_from:     game.Chunk_Pos, // ... from there (unload_left)
+	has:            map[game.Chunk_Pos]struct{}, // chunks sent and not dropped
+	columns:        map[[2]i32]int, // chunks it has per column (its Column was sent while > 0)
+	cursor:         int, // offsets before this are all sent
+	player:         game.Player_State,
+	inputs:         game.Input_Queue,
+	teleported:     bool, // since the last Own_Player record
+	teleports:      u8, // teleports told (it wraps; Own_Player.teleports)
+	landing:        Maybe(Landing), // an arrival waiting for its blocks (spawn.odin)
+	actions:        [MAX_QUEUED_ACTIONS]Action, // waiting for their input (oldest first; actions.odin)
+	action_count:   int,
+	teleport:       [2]f32, // yaw, pitch to look after it
+	look:           [2]f32, // yaw, pitch of the last input applied (saved with the player)
+	fired_at:       u64, // tick of its last rocket (a rate limit)
+	shot_due:       f64, // the tick its next weapon shot is due (weapons.odin)
+	reload_until:   u64, // the tick its reload ends (0: none)
+	reload_slot:    int, // the hotbar slot being reloaded
+	shots_refused:  int, // shots refused for coming too early
+	chat_tokens:    int, // lines it may say now (chat.odin)
+	chat_tick:      u64, // the bucket refilled up to here
+	address:        string, // its IP address ("": the local player; owned)
+	back:           Maybe(Place), // where it was before its last teleport
+	afk:            bool,
+	reply:          [game.MAX_NAME_LENGTH]u8, // who it last whispered with (r)
+	reply_len:      int,
+	tpa:            Tpa, // a teleport request to it
+	inventory:      game.Inventory,
+	stats:          Counters, // its character's counters (stats.odin; heap, keys owned)
+	joined_tick:    u64, // when it joined (session length)
+	last_position:  [3]f64, // for distance counters
+	dist_acc:       [3]f64, // centimetres walked, flown, fallen not yet counted
+	was_grounded:   bool,
+	last_air_jumps: u8, // (the session recording: a drop in the air is a double jump)
+	was_hooked:     bool, // ... and the hook attaching
+	net_seen:       netcode.Conn_Stats, // the connection's totals when last sampled
+	fights:         [8]Engagement, // who has been hurting it, since when
+	mode:           int, // its game mode: an index into the registry's modes (modes.odin)
+	mode_set:       bool, // (a new client has none yet)
+	health:         f32, // health points (health.odin)
+	max_health:     f32,
+	dead:           bool, // at the death screen, waiting for Respawn (damage.odin)
+	last_damage:    u64, // the tick it was last hurt (regeneration waits after it)
+	airborne:       bool,
+	fall_peak:      f64, // the highest y of the present fall
+	report_window:  u64, // the tick the current window of telemetry reports began
+	report_count:   int,
+	inv_acked:      u32, // its newest Inventory_Request applied
+	tx:             game.Sender, // what it has been told (replica.odin; made when it joins)
+	clock_pending:  bool, // the Clock record is due (join, travel)
+	inv_changed:    bool, // since the end of the last tick
+	open_chest:     Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)
+	disturbed:      u64, // the last tick something besides its own inputs could have changed its movement (desync.odin)
+	check:          Maybe(game.Prediction_Check), // its newest, until that input is applied
+	selection:      [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
+	command:        string, // the text of the command admin is running ("" otherwise; journal actions record it)
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about

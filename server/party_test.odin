@@ -9,9 +9,10 @@ import "core:strings"
 import "core:testing"
 
 import "../common/game"
+import "../common/telemetry"
 
 // M48j: the LAN party's hardening. Six and eight scripted bots play survival
-// with all four weapons against a stepped server over the harness's simulated network (the caller
+// with the survival kit (the weapons, the hook and the boots) against a stepped server over the harness's simulated network (the caller
 // runs the ticks, so six thousand of them take seconds, not five minutes):
 // moving, shooting, being shot, dying, respawning, reloading; one operator
 // toggles creative and back; one more player joins and leaves in the middle.
@@ -34,6 +35,8 @@ Bot :: struct {
 	dead_for:    int, // ticks waiting at the death screen
 	turn_at:     int, // the tick its walk changes
 	weapon_at:   int, // the tick it changes the weapon in hand
+	jump_until:  int, // the tick its present run of jumps ends (a press, a release, a press: a double jump)
+	reported:    bool, // it has told the server what it runs on
 	received_at: int, // bytes taken when the warm-up ended
 	still:       bool, // the settle: no moving, no shooting
 	// What it was told of deaths (kept past a leave).
@@ -94,10 +97,51 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 		return
 	}
 	b.dead_for = 0
+	c.buttons = {}
 	if b.still {
 		c.move = {}
 		return
 	}
+	// What a client tells the server about itself: at joining, then the frame times a minute.
+	if !b.reported {
+		b.reported = true
+		net_send(
+			c,
+			game.Telemetry_Report {
+				count = 3,
+				entries = {
+					{u8(telemetry.Kind.Client_Info), "linux", {3, 90, 1500}},
+					{u8(telemetry.Kind.Client_Hardware), "Test GPU", {1280, 720, 0}},
+					{u8(telemetry.Kind.Client_Driver), "Test driver 1.0", {}},
+					{},
+					{},
+					{},
+					{},
+					{},
+				},
+			},
+		)
+	} else if tick % 1800 == 100 {
+		net_send(
+			c,
+			game.Telemetry_Report {
+				count = 1,
+				entries = {
+					{u8(telemetry.Kind.Client_Frames), "", {6000, 9000, 14000}},
+					{},
+					{},
+					{},
+					{},
+					{},
+					{},
+					{},
+				},
+			},
+		)
+	}
+	// Jumps: now and then a run of presses.
+	if tick >= b.jump_until && roll(b) % 60 == 0 {b.jump_until = tick + 10}
+	if tick < b.jump_until && tick % 4 < 2 {c.buttons += {.Jump}}
 	if operator && tick % 1200 == 300 {net_send(c, game.Command{"gamemode creative"})}
 	if operator && tick % 1200 == 900 {net_send(c, game.Command{"gamemode survival"})}
 	// Walk: a direction for a while, strafing and stopping at random.
@@ -119,7 +163,7 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 				{
 					kind = .Select,
 					slot = 0,
-					arg = int(roll(b) % 8) % 4 if roll(b) % 3 == 0 else int(roll(b) % 3),
+					arg = int(roll(b) % 5) if roll(b) % 3 == 0 else int(roll(b) % 3),
 				},
 			},
 		)
@@ -137,6 +181,11 @@ drive :: proc(b: ^Bot, tick: int, operator: bool) {
 	yaw, pitch := aim(me + {0, 1.6, 0}, target + {0, 1.0, 0})
 	pitch = clamp(pitch, -1.5, 1.5) // (a message with a pitch past the limit is refused)
 	selected := c.inventory.selected
+	if selected == 4 { 	// the hook: held, aimed down and ahead (the ground)
+		c.look[1] = -0.4
+		c.buttons += {.Grapple}
+		return
+	}
 	if selected == 3 {
 		if tick % 150 == int(roll(b) % 150) {net_send(c, game.Fire{c.seq, yaw, pitch})}
 		return
@@ -349,7 +398,7 @@ party :: proc(t: ^testing.T, size: int) {
 		listen      = true,
 		generator   = .Classic,
 		no_sheep    = true,
-		kit         = "pistol 1, rifle 1, sniper 1, rocket_launcher 1", // (the tests' own default is blocks)
+		kit         = "rocket_launcher 1", // (the survival kit has the rest; the tests' own default is blocks)
 	}
 	started: bool
 	{
@@ -603,6 +652,53 @@ party :: proc(t: ^testing.T, size: int) {
 	stopped = true
 	context.allocator = mem.tracking_allocator(&track)
 	testing.expect(t, harness_stop(h), "the server stopped with an error")
+
+	// The session recording: its file holds what a party's analytics needs.
+	files, _ := os.read_all_directory_by_path(
+		filepath.join({dir, "analytics"}, context.temp_allocator) or_else "",
+		context.temp_allocator,
+	)
+	recorded := ""
+	for f in files {
+		if strings.has_prefix(f.name, SESSION_FILE_PREFIX) {
+			data, _ := os.read_entire_file_from_path(f.fullpath, context.temp_allocator)
+			recorded = string(data)
+		}
+	}
+	if testing.expect(t, recorded != "", "the server wrote no session file") {
+		for kind in ([]telemetry.Kind{.Server_Start, .Server_Stop, .Ping_Sample, .Shot_Fired, .Damage_Dealt, .Kill, .Death, .Jump, .Grapple_Used, .Client_Info, .Client_Hardware, .Client_Driver, .Client_Frames, .Server_Perf, .Server_Net, .Bandwidth_Sample}) {
+			needle := fmt.tprintf(`"k":"%s"`, telemetry.KIND_INFO[kind].name)
+			testing.expectf(t, strings.contains(recorded, needle), "the session has no %s", needle)
+		}
+		testing.expect(
+			t,
+			strings.contains(recorded, `"kind":"air"`),
+			"no double jump was recorded",
+		)
+		testing.expect(
+			t,
+			strings.contains(recorded, `"weapon":"shotgun"`),
+			"the shotgun is not in it",
+		)
+		// (a session's file is never the day sink's: nothing of it may be uploaded)
+		day_files, _ := os.read_all_directory_by_path(
+			filepath.join({dir, "telemetry"}, context.temp_allocator) or_else "",
+			context.temp_allocator,
+		)
+		for f in day_files {
+			data, _ := os.read_entire_file_from_path(f.fullpath, context.temp_allocator)
+			testing.expect(
+				t,
+				!strings.contains(string(data), `"gpu"`),
+				"hardware went to the day file",
+			)
+			testing.expect(
+				t,
+				!strings.contains(string(data), `"k":"kill"`),
+				"a kill went to the day file",
+			)
+		}
+	}
 }
 
 @(test)

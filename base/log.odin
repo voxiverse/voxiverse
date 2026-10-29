@@ -37,6 +37,10 @@ Log_Sink :: struct {
 	// locked: it must not log.
 	listener:      proc(data: rawptr, level: log.Level, tag: string, text: string),
 	listener_data: rawptr,
+	// Also receives every warning and error (the session recording). Called
+	// with the sink locked, never from the crash handler: it must not log.
+	capture:       proc(data: rawptr, level: log.Level, tag: string, text: string),
+	capture_data:  rawptr,
 	root:          Log_Tag, // the creating thread's tagged logger
 	// Set by the crash handler: the crashing thread may hold the lock, so
 	// from here on lines are written without it (best effort).
@@ -92,6 +96,23 @@ log_set_listener :: proc(
 ) {
 	sync.guard(&s.mutex)
 	s.listener, s.listener_data = listener, data
+}
+
+// log_set_capture adds (or with nil removes) a receiver of every line at level
+// Warning and up.
+log_set_capture :: proc(
+	s: ^Log_Sink,
+	capture: proc(data: rawptr, level: log.Level, tag: string, text: string),
+	data: rawptr,
+) {
+	sync.guard(&s.mutex)
+	s.capture, s.capture_data = capture, data
+}
+
+// log_sink_of: the sink a logger of ours writes to (nil: not one of ours, e.g. the test runner's).
+log_sink_of :: proc(logger: log.Logger) -> ^Log_Sink {
+	if logger.procedure != tagged_logger_proc {return nil}
+	return (^Log_Tag)(logger.data).sink
 }
 
 // log_retag returns a logger writing to parent's sink under a new tag
@@ -184,6 +205,9 @@ tagged_logger_proc :: proc(
 		)
 	}
 	if s.listener != nil && level >= .Info {s.listener(s.listener_data, level, t.tag, text)}
+	if locked && s.capture != nil && level >= .Warning {
+		s.capture(s.capture_data, level, t.tag, text)
+	}
 }
 
 @(private = "file")

@@ -55,6 +55,7 @@ damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) 
 		hit.yaw = f32(math.atan2(-d.x, -d.z)) // (a yaw: 0 looks down -z)
 	}
 	event_send(s, target, .Damage_Hit, &hit)
+	session_damage(s, target, amount, source, target.health <= 0)
 	if target.health <= 0 {
 		die(s, target, source)
 		return .Killed

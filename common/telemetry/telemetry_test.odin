@@ -1,5 +1,6 @@
 package telemetry
 
+import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -182,5 +183,40 @@ test_a_drained_sink_loses_nothing :: proc(t: ^testing.T) {
 		stats.written,
 		N,
 		stats.dropped,
+	)
+}
+
+// A session's file: every event in the one file whatever its day, the long text of a
+// log line cut to its limit, and every kind writes a line that names it.
+@(test)
+test_session_file_takes_every_kind :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "telemetry_session"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	s: Sink
+	sink_start(&s, dir, 7, stepped = true, file_name = "session-1.jsonl")
+	day1 := i64(1_700_000_000_000)
+	for kind in Kind {
+		emit(&s, {time_ms = day1, actor = 2, kind = kind, text = short("x"), n = {1, 2, 3}})
+	}
+	emit(&s, {time_ms = day1 + 86_400_000 * 3, kind = .Server_Stop, actor = NO_ACTOR})
+	long := [200]u8{}
+	for &c in long {c = 'e'}
+	emit(&s, {time_ms = day1, kind = .Log_Line, actor = NO_ACTOR, note = note(string(long[:]))})
+	sink_flush(&s)
+	sink_stop(&s)
+	names, contents := read_dir(dir)
+	if !testing.expect_value(t, len(names), 1) {return}
+	testing.expect_value(t, names[0], "session-1.jsonl")
+	lines := strings.split_lines(strings.trim_space(contents[0]), context.temp_allocator)
+	testing.expect_value(t, len(lines), len(Kind) + 2)
+	for kind in Kind {
+		needle := fmt.tprintf(`"k":"%s"`, KIND_INFO[kind].name)
+		testing.expectf(t, strings.contains(contents[0], needle), "no line for %s", needle)
+	}
+	testing.expect(
+		t,
+		strings.contains(contents[0], fmt.tprintf(`"line":"%s"`, string(long[:NOTE_MAX]))),
+		"a log line is cut at NOTE_MAX bytes",
 	)
 }

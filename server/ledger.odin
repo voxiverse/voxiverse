@@ -39,8 +39,8 @@ ledger :: proc(s: ^Server, w: ^World, reason: game.Reason, item: game.Item, coun
 	if reason == .Scope_In || reason == .Scope_Out {return}
 	kind := telemetry.Kind.Item_Created if count > 0 else telemetry.Kind.Item_Destroyed
 	n := abs(count)
-	telemetry.emit(
-		&s.sink,
+	emit_event(
+		s,
 		event_for(
 			s,
 			w,
@@ -184,8 +184,8 @@ audit_report :: proc(s: ^Server) -> int {
 			l.expected,
 			l.held - l.expected,
 		)
-		telemetry.emit(
-			&s.sink,
+		emit_event(
+			s,
 			event_for(
 				s,
 				nil,

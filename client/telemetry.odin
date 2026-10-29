@@ -13,7 +13,9 @@ import "ui"
 // runs or what it opens. Three kinds (telemetry.Kind with `client` set):
 // Client_Info once per world joined (OS, view distance, fov, how long from
 // launch to playing), Client_Overlay when an overlay closes (how long it was
-// open), Client_Perf once a minute (frame time p50 and p99). They are queued
+// open), Client_Perf once a minute (frame time p50 and p99). The session
+// recording (server/session_log.odin) also takes Client_Hardware and
+// Client_Driver at joining and Client_Frames (p50, p95, worst) each minute. They are queued
 // and sent in a Telemetry_Report every 12 seconds at most (the server takes
 // a handful a minute); singleplayer reports to its own server the same way.
 
@@ -53,6 +55,7 @@ queue_report :: proc(r: ^Reporter, kind: telemetry.Kind, text: string, a, b, c: 
 	}
 	q.len = min(len(text), telemetry.SHORT_MAX)
 	copy(q.text[:], text[:q.len])
+	for &ch in q.text[:q.len] {if ch < 0x20 || ch >= 0x7f {ch = '?'}} 	// (the server takes printable text only)
 	append(&r.queue, q)
 }
 
@@ -86,6 +89,16 @@ telemetry_update :: proc(app: ^App) {
 			u32(app.settings.fov),
 			u32(time.duration_milliseconds(app_since(app, app.launched))),
 		)
+		// The hardware, for the session recording: the GPU, its driver, the window.
+		queue_report(
+			r,
+			.Client_Hardware,
+			app.g.device_name,
+			u32(max(app.window.width, 0)),
+			u32(max(app.window.height, 0)),
+			0,
+		)
+		queue_report(r, .Client_Driver, app.g.driver, 0, 0, 0)
 		r.last_send, r.perf_at = app_tick(app), app_tick(app)
 		r.frame_n = 0
 	}
@@ -121,6 +134,14 @@ telemetry_update :: proc(app: ^App) {
 			times[len(times) / 2],
 			times[len(times) * 99 / 100],
 			u32(r.frame_n),
+		)
+		queue_report(
+			r,
+			.Client_Frames,
+			"",
+			times[len(times) / 2],
+			times[len(times) * 95 / 100],
+			times[len(times) - 1],
 		)
 		r.frame_n, r.perf_at = 0, app_tick(app)
 	}

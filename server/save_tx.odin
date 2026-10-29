@@ -366,7 +366,7 @@ store_recover :: proc(dir: string, d: ^base.Disk) -> string {
 }
 
 // walk_files lists the files under dir/rel (relative, '/'), without the
-// directories backups/, telemetry/ and exports/.
+// directories backups/, telemetry/, analytics/ (the session recordings) and exports/.
 walk_files :: proc(dir, rel: string, out: ^[dynamic]string) {
 	entries, err := os.read_all_directory_by_path(full_path(dir, rel), context.temp_allocator)
 	if err != nil {return}
@@ -374,7 +374,11 @@ walk_files :: proc(dir, rel: string, out: ^[dynamic]string) {
 		sub :=
 			e.name if rel == "" else strings.concatenate({rel, "/", e.name}, context.temp_allocator)
 		if e.type == .Directory {
-			if rel == "" && (e.name == "backups" || e.name == "telemetry" || e.name == "exports") {
+			if rel == "" &&
+			   (e.name == "backups" ||
+					   e.name == "telemetry" ||
+					   e.name == "analytics" ||
+					   e.name == "exports") {
 				continue
 			}
 			walk_files(dir, sub, out)

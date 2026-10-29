@@ -141,6 +141,9 @@ Server :: struct {
 	writer:         game.Writer,
 	tick:           u64,
 	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
+	session:        telemetry.Sink, // the session recording's file (session_log.odin)
+	session_on:     bool,
+	log_sink:       ^base.Log_Sink, // whose warnings and errors it keeps
 	uploader:       collector.Uploader, // sends its log to a collector
 	uploading:      bool,
 	ledger:         Ledger, // every item made or unmade (ledger.odin)
@@ -214,6 +217,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
 		u32(telemetry.now_ms()),
 	)
+	session_open(s)
 	if up, ok := config.upload.?; ok && s.store.dir != "" {
 		interval := up.interval if up.interval > 0 else 30 * time.Second
 		collector.uploader_start(
@@ -306,6 +310,7 @@ stop :: proc(s: ^Server) -> bool {
 // failed: what was not set up yet is zero; world: whether it was).
 @(private = "file")
 teardown :: proc(s: ^Server, world: bool) {
+	session_close(s)
 	telemetry.sink_stop(&s.sink) // (the events written; safe if it never started)
 	if s.uploading {collector.uploader_stop(&s.uploader)} 	// (a last pass: what was written)
 	netcode.capture_close(&s.capture)

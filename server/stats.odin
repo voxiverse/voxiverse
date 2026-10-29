@@ -207,7 +207,7 @@ record :: proc(
 		p = {i32(c.position.x), i32(c.position.y), i32(c.position.z)}
 	}
 	e.has_pos, e.pos = true, {p.x, p.y, p.z}
-	telemetry.emit(&s.sink, e)
+	emit_event(s, e)
 	count_event(c, kind, text, n0)
 	award_xp(s, c, kind)
 }
@@ -222,7 +222,7 @@ record_world :: proc(
 	n1 := i64(0),
 	n2 := i64(0),
 ) {
-	telemetry.emit(&s.sink, event_for(s, w, kind, telemetry.NO_ACTOR, text, {n0, n1, n2}))
+	emit_event(s, event_for(s, w, kind, telemetry.NO_ACTOR, text, {n0, n1, n2}))
 	if name := counter_name(kind, text); name != "" && w != nil {counter_add(&w.stats, name, 1)}
 }
 
@@ -301,8 +301,16 @@ stats_tick :: proc(s: ^Server, c: ^Client) {
 			acc -= whole
 		}
 	}
-	if c.was_grounded && !p.on_ground && p.velocity.y > 0 && !p.flying {stat_add(c, "jumps", 1)}
+	if c.was_grounded && !p.on_ground && p.velocity.y > 0 && !p.flying && !p.hooked {
+		stat_add(c, "jumps", 1)
+		record(s, c, .Jump, "ground")
+	}
 	c.was_grounded = p.on_ground
+	if p.air_jumps < c.last_air_jumps && !p.on_ground {record(s, c, .Jump, "air")} 	// (a double jump)
+	c.last_air_jumps = p.air_jumps
+	if p.hooked && !c.was_hooked {record(s, c, .Grapple_Used)}
+	c.was_hooked = p.hooked
+	session_ping(s, c)
 	if s.tick % game.TICK_RATE == 0 {
 		stat_add(c, "time.away" if c.afk else "time.played", 1)
 		if p.flying {stat_add(c, "time.flying", 1)}
@@ -335,8 +343,8 @@ tick_summary :: proc(s: ^Server) {
 		s.checks_judged,
 		s.checks_skipped,
 	)
-	telemetry.emit(
-		&s.sink,
+	emit_event(
+		s,
 		{
 			tick = u32(s.tick),
 			actor = telemetry.NO_ACTOR,
@@ -344,6 +352,7 @@ tick_summary :: proc(s: ^Server) {
 			n = {i64(online), i64(samples[len(samples) / 2]), i64(samples[len(samples) - 1])},
 		},
 	)
+	session_minute(s, samples)
 }
 
 // stats_target: whose counters c may see by name ("": their own).
@@ -436,6 +445,6 @@ telemetry_report :: proc(s: ^Server, c: ^Client, report: game.Telemetry_Report) 
 			e.text,
 			{i64(e.n[0]), i64(e.n[1]), i64(e.n[2])},
 		)
-		telemetry.emit(&s.sink, event)
+		emit_event(s, event)
 	}
 }

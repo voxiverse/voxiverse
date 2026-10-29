@@ -16,18 +16,32 @@ import "../../base"
 //
 //	build analytics --pull <host:path> [dir]      (dir: lake)
 //
+// and reads one server's session recording (server/session_log.odin) as a report:
+// weapon balance, each player's frame times and hardware, network quality, errors:
+//
+//	build analytics --session <file>
+//
 // JSON lines in, text out; for anything else, DuckDB reads the same files:
 //
 //	select k, count(*) from read_json_auto('lake/**/*.jsonl') group by 1
 main :: proc() {
 	args := os.args[1:]
+	if len(args) == 2 && args[0] == "--session" {
+		data, err := os.read_entire_file_from_path(args[1], context.temp_allocator)
+		if err != nil {
+			fmt.eprintfln("analytics: cannot read %s", args[1])
+			os.exit(1)
+		}
+		fmt.print(session_summary(parse_events(string(data))))
+		return
+	}
 	if len(args) >= 2 && args[0] == "--pull" {
 		pull(args[1], args[2] if len(args) > 2 else "lake")
 		return
 	}
 	if len(args) < 2 {
 		fmt.eprintln(
-			"usage: analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]\n       analytics --pull <host:path> [dir]",
+			"usage: analytics <dir> summary | sessions | economy | faucets | slow | launch | heat [out.png]\n       analytics --pull <host:path> [dir]\n       analytics --session <file>",
 		)
 		os.exit(2)
 	}

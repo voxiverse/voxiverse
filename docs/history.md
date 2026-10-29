@@ -7261,3 +7261,126 @@ before and after reported. One commit per kind of change.
   lines in all), 2 min 43-46 s (the suite's time is its slow tests', which stay). CI per job
   before (run 40864048998, main before T6, which changed CI): Test Windows 475 s, Linux 411
   s, macOS 399 s, Game Linux 586 s, Package 132-184 s, Determinism 13 s, 590 s wall.
+
+# P1-P3: the LAN party toys, analytics recording and stability (issue #65)
+
+Rules: issue #65 (the owner's priority; the spec was `docs/milestones/P.md`, moved here). The spec as
+written:
+
+Stability first, then the toys, then analytics; everything is good before Friday 11:30, no
+live tuning at the party. These rows are **first among the open rows**, ahead of M49; M49,
+M49b, M50 and M50b are held until after the party (no core system rewrites before Friday).
+After them, until the freeze, only flakes and fixes from the owner's playtest. The toys are
+Odin with their numbers as data (like M48h's weapons) and move onto the script VM later.
+
+## Decisions (made here; the issue left them open)
+
+- **Pellet pattern.** `pellets` is a new optional weapon number (default 1, 1..16). The
+  pattern is one shared procedure, `game.pellet_dirs(seed, yaw, pitch, weapon)`, a uniform
+  disc of half-angle `spread` radians around the aim (the shotgun's 6 degrees are
+  0.10472). The seed is `game.shot_seed(player id, Shoot.after, slot)`: both sides know all
+  three, so the client draws the server's pellets as tracers without a number travelling.
+  A client that picks `after` can only choose among seeds, never aim outside the cone. The
+  rifle's spread (0.01) was a square of +-0.01 and is now a disc of 0.01.
+- **Pellet damage is summed per target:** one `damage` call per body a shot hits (so one
+  death message, one hit confirm, one `Damage_Hit`), headshots counted per pellet. A
+  creature takes one hit from a shot, as with any weapon.
+- **Boots are armour data:** `jump_boots`, equip `feet`, `air_jumps` 1 and `speed` 0.2. M28's
+  clamp (`air_jumps` 0..3) is unchanged; `boots` stays as it was.
+- **The grapple is in the shared movement code.** `Button.Grapple` is what the client sends
+  while the use button is held and a grappling hook is in the hand; `Player_State` gains
+  `hooked` (the block it is anchored to, `Block_Pos`), `anchor` (the point the line hit) and
+  `hook_cooldown` (ticks). `Mods.grapple` is the `grapple` object of the held item
+  (`range`, `speed`, `cooldown`, derived with the equipment's mods from the selected slot, so
+  prediction and the server agree). On the tick the button is first down, with no cooldown, the
+  line is a block raycast from the eye along the input's yaw and pitch, up to `range`; it
+  attaches to a block and never to a body (a body is not in the ray), a miss does nothing and
+  costs nothing. While the button stays down and the anchor block is still solid, the
+  velocity eases to `speed` toward the anchor (a pull, not a teleport: gravity is off while
+  hooked); within 1.5 blocks of the anchor the player hangs. Release (or the item leaving the
+  hand, or the anchor block breaking) keeps the velocity and starts the cooldown (2 s).
+- **The kit places its stacks:** `kit` entries take an optional `slot`: `hotbar`, `pockets`,
+  or an equipment slot (`head`, `chest`, `legs`, `feet`, `offhand`); without it the stack goes
+  to the first free slot as before. The survival kit: hotbar rifle, shotgun, sniper, rocket
+  launcher, grappling hook (slots 1-5 by order); pockets pistol; feet jump boots; full
+  magazines (`refill_weapons`).
+- **Recording** (P2): a per-session file `<universe>/analytics/session-<unix time>.vxa` of
+  the existing telemetry events and counters (M26, M27), one line of text per record, never
+  uploaded; the server writes it when it runs (dedicated or Open to LAN). Details below.
+
+## P1: shotgun, jump boots, grappling hook, the survival kit
+
+Items as data: `assets/packs/voxiverse/data/items/weapons.json` (shotgun), `armor.json` (jump
+boots), `tools.json` (grappling hook, a `grapple` object), voxel models in
+`data/models/weapons.json`, the kit in `data/game_modes/survival.json`.
+
+Tests: the shotgun's pellet pattern is identical on client and server for a seed (the shared
+procedure, and the server's tracers equal the client's); eight pellets, 2 damage, headshots
+2x per pellet, magazine 6, about 0.9 s between shots; the boots give exactly one extra jump
+and +0.2 speed; the grapple's pull is predicted with no correction at 50 ms latency, refuses a
+player and an entity in the line, respects range and cooldown, releases with momentum; the
+kit's slots are as above on join and on respawn; a pack that gives a kit entry another slot
+loads, a bad slot name is a load error.
+
+## P2: analytics recording and `build analytics --session`
+
+Written by the server into the session file, from its own knowledge plus what clients send:
+
+- per player: ping over time (a sample every 10 s); kills and deaths by weapon and cause;
+  shots fired and hits per weapon; damage dealt and taken per weapon; time-to-kill per kill
+  (the first damage to that victim by that killer, to the death, in seconds); grapple uses;
+  jumps and double jumps;
+- per client, once on joining: OS, GPU name, driver version, resolution (a `Client_Info`
+  message the client sends after Welcome), then frame-time statistics (median, p95, worst)
+  every minute (a `Frame_Stats` message);
+- the server: tick time statistics (median, p95, worst a minute), the desync counter,
+  bandwidth per client, crashes and error lines (the log's warnings and errors).
+
+`./build.sh analytics --session <file>` prints the summary: weapon balance (kills, accuracy,
+time-to-kill per weapon), each player's frame times and hardware, network quality, errors.
+Tested on a recorded bot session (`build bench party` writes one).
+
+## P3: stability
+
+Rerun M48j's 6 and 8 client tests with the new items in the kit (bots use the shotgun and the
+grapple) and fix what they find. The client frame time with 8 avatars holding models needs a
+window: listed under "Check by hand" unless a windowed CI run exists.
+
+**Exit check (P1-P3):** the tests above, the whole suite, `build check`, `build determinism`, CI green.
+
+**What differed from this spec (found by building it), and what was decided where it was silent:**
+
+- **Numbers the issue did not give** (decided from the plan's principles, all data): the shotgun's
+  `range` is 60 blocks and `reload_time` 2.4 s (pump shotguns reload slowly; the sniper's is 2.5
+  and its range 200); its `spread` is 0.10472 radians (6 degrees); the hook's pull eases to its
+  speed (`HOOK_FOLLOW` 10 a second) and hangs within 1.5 blocks of the anchor; after a release
+  the velocity is kept by cutting the air control to 0.3 a second until landing or the cooldown's
+  end (the normal 3 a second would have cut the momentum in a third of a second).
+- **The seed** is `shot_seed(player id, Shoot.after, slot)`: the issue said "from the shot's
+  seed"; nothing new travels. The rifle's `spread` (0.01) changed from a square to a disc.
+- **The mode's kit is given before the world's** at joining (the world's kit skips what the mode
+  gave): the issue's order (rifle, shotgun, sniper, launcher, hook in slots 1-5) cannot hold if the
+  world's default kit (the launcher) goes first. The tests' block kit therefore lands in the pockets
+  in survival; `test_items_over_the_network` sets its own blocks up after joining. A full hotbar
+  or pockets spill into the other.
+- **The tests' clients now derive their mods from the inventory and mode the server told them**
+  (`client_mods` in `latency_test.odin`, `mirror_mods` in `determinism_test.odin`), as the real
+  client does: with the boots in the survival kit a client that predicted with no mods saw
+  `air_jumps` differ (the detector said so).
+- **`PROTOCOL_VERSION` 36**; the bandwidth baseline re-accepted (the state holds the hook; roots
+  moved); the Wireshark schema regenerated.
+- **Others do not see your rope** (nothing is replicated of a player's hook); the rope is drawn
+  from the hand for the player's own view. The shotgun has the sniper's sound (a new `Gun_Sound`
+  would need new audio baselines): listed under Check by hand.
+- **The recording** reuses the telemetry: `session_only` kinds (ping, damage dealt and kills by
+  weapon with the time to kill, jumps, the hook, the clients' hardware and frame times, the server's
+  tick times, desyncs and bandwidth, the log's warnings and errors, start and stop) go only to
+  `<universe>/analytics/session-<time>.jsonl`, never to the day files the uploader reads; the
+  other kinds go to both. A session with no `server_stop` ended in a crash. `Client_Perf` stays as
+  it was; `Client_Frames` adds the 95th percentile and the worst frame. A player is named by id in
+  the report (events carry no names).
+- **`build bench party`** records a session of its own into `build/benchmarks/party-universe/`
+  (its bots shoot the shotgun, hold the hook, jump and report) and prints the file's path;
+  `./build.sh analytics --session <file>` reads it.
+- **Not done by me:** the client frame time with eight avatars (needs a window; listed), the
+  CI run of the commits, looking at the rope and the models in a real window.

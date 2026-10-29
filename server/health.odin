@@ -104,8 +104,8 @@ award_xp :: proc(s: ^Server, c: ^Client, kind: telemetry.Kind) {
 	level := level_of(xp)
 	if now := c.stats["level"] or_else 1; level > now {
 		counter_set(&c.stats, "level", level)
-		telemetry.emit(
-			&s.sink,
+		emit_event(
+			s,
 			event_for(s, c.world, .Level_Up, player_id(s, c), "", {i64(level), i64(xp), 0}),
 		)
 	}

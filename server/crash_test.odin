@@ -20,7 +20,7 @@ import "../common/game"
 CRASH_POINTS :: #config(VX_CRASH_POINTS, 1000)
 
 // state_digest: a hash of every file of a universe (relative path and bytes),
-// without backups/ and telemetry/; journal segments only up to where the
+// without backups/, telemetry/ and analytics/; journal segments only up to where the
 // save's world.cfg says they end.
 state_digest :: proc(dir: string) -> u64 {
 	files := make([dynamic]string, context.temp_allocator)

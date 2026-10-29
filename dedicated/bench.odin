@@ -11,6 +11,7 @@ import "core:time"
 import "../base"
 import "../common/game"
 import "../common/netcode"
+import "../common/telemetry"
 import "../server"
 
 // The `server` benchmark scenario (docs/plan.md, M19; `build bench server`): the
@@ -26,7 +27,8 @@ import "../server"
 // does): results compare on one machine.
 
 BENCH_SCENARIO :: "server"
-BENCH_PARTY :: "party" // the party: the same bots, in survival with the four weapons, shooting each other
+BENCH_PARTY :: "party" // the party: the same bots, in survival with its kit (the weapons, the hook, the boots), shooting each other
+PARTY_UNIVERSE :: "build/benchmarks/party-universe" // its universe: the session recording is in analytics/ (build analytics --session <file>)
 BENCH_VERSION :: 1
 BENCH_REPETITIONS :: 3
 BENCH_BOTS :: 8
@@ -65,6 +67,8 @@ Bot :: struct {
 	weapon:                   int, // the hotbar slot in hand
 	changes:                  int, // ticks since it changed weapon
 	inv_seq:                  u32,
+	ticks:                    int, // inputs sent
+	reported:                 bool, // it has told the server what it runs on
 	rng:                      u64,
 	party:                    bool, // play the party instead of flying out
 	shots_seen, hurt, deaths: int, // events it was told of
@@ -92,7 +96,7 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 		"bench %s: %d players %s over UDP (%d repetitions)",
 		scenario_name,
 		BENCH_BOTS,
-		"in survival with all four weapons, shooting each other" if party else "flying out of a fresh world",
+		"in survival with its kit, shooting each other" if party else "flying out of a fresh world",
 		BENCH_REPETITIONS,
 	)
 	repetitions := 1 if smoke else BENCH_REPETITIONS
@@ -156,7 +160,9 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		port            = 0, // any free one
 		name            = "benchmark",
 		no_sheep        = true,
+		save_dir        = PARTY_UNIVERSE if party else "",
 	}
+	if party {os.remove_all(PARTY_UNIVERSE)}
 	srv := new(server.Server)
 	defer free(srv)
 	if !server.start(srv, config, {}) {return false}
@@ -176,7 +182,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		b.rng = u64(i + 1) * 0x9E3779B97F4A7C15
 		b.party = party
 		b.changes = 1000 // (the first tick takes a weapon in hand)
-		b.weapon = 1
+		b.weapon = 0
 		b.scratch = new(game.Block_Array)
 		b.schema = game.game_schema()
 		game.receiver_init(&b.rx, &b.schema, srv.registry)
@@ -232,7 +238,25 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		)
 	}
 	stopped = true
-	return server.stop(srv)
+	ok := server.stop(srv)
+	if party {report_session()}
+	return ok
+}
+
+// report_session: where the party's recording is (the server has written and closed it).
+@(private = "file")
+report_session :: proc() {
+	files, _ := os.read_all_directory_by_path(
+		PARTY_UNIVERSE + "/analytics",
+		context.temp_allocator,
+	)
+	for f in files {
+		log.infof(
+			"bench party: session recorded in %s (build analytics --session %s)",
+			f.fullpath,
+			f.fullpath,
+		)
+	}
 }
 
 // pump: each bot's network in and out, its messages handled, its input sent
@@ -347,6 +371,43 @@ party_input :: proc(b: ^Bot) {
 		return b.rng >> 33
 	}
 	b.stage = .Flying // (nothing to wait for: joined is welcomed)
+	b.ticks += 1
+	if !b.reported { 	// what a client tells the server about itself (the session recording keeps it)
+		b.reported = true
+		send(
+			b,
+			game.Telemetry_Report {
+				count = 3,
+				entries = {
+					{u8(telemetry.Kind.Client_Info), "linux", {6, 90, 1500}},
+					{u8(telemetry.Kind.Client_Hardware), "Bench GPU", {1280, 720, 0}},
+					{u8(telemetry.Kind.Client_Driver), "Bench driver 1.0", {}},
+					{},
+					{},
+					{},
+					{},
+					{},
+				},
+			},
+		)
+	} else if b.ticks % (20 * game.TICK_RATE) == 0 {
+		send(
+			b,
+			game.Telemetry_Report {
+				count = 1,
+				entries = {
+					{u8(telemetry.Kind.Client_Frames), "", {5000, 8000, 12000}},
+					{},
+					{},
+					{},
+					{},
+					{},
+					{},
+					{},
+				},
+			},
+		)
+	}
 	input: game.Player_Input
 	if b.dead {
 		b.dead_for += 1
@@ -371,14 +432,22 @@ party_input :: proc(b: ^Bot) {
 		b.changes += 1
 		if b.changes > 60 + int(roll(b) % 90) {
 			b.changes = 0
-			b.weapon = 1 + int(roll(b) % 3) // (the launcher is the start kit's slot 0, then the mode's pistol, rifle and sniper)
+			b.weapon = int(roll(b) % 3) // (the kit's hotbar: rifle, shotgun, sniper, then the launcher and the hook)
+			if roll(b) % 5 == 0 {b.weapon = 4}
 			b.inv_seq += 1
 			send(b, game.Inventory_Request{b.inv_seq, {kind = .Select, arg = b.weapon}})
 		}
+		if b.ticks % 40 < 2 || b.ticks % 40 == 6 {input.buttons += {.Jump}} 	// (a jump, and a double jump in the boots)
 		if best < 1e18 {
+			if b.weapon == 4 { 	// the hook, held, at the ground ahead
+				input.pitch = -0.4
+				input.buttons += {.Grapple}
+			}
 			b.seq += 1
 			send(b, game.Input{b.seq, input, b.rx.ack})
-			send(b, game.Shoot{b.seq, u8(b.weapon), true, input.yaw, input.pitch})
+			if b.weapon != 4 {
+				send(b, game.Shoot{b.seq, u8(b.weapon), true, input.yaw, input.pitch})
+			}
 			return
 		}
 	}

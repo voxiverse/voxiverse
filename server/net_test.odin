@@ -16,6 +16,7 @@ import "../common/netcode"
 @(private)
 Net_Client :: struct {
 	link:                        netcode.Link,
+	buttons:                     bit_set[game.Button;u8], // what its Inputs hold down
 	stepper:                     ^Harness, // net_wait steps this harness's ticks
 	name:                        string,
 	scratch:                     ^game.Block_Array,
@@ -409,7 +410,11 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		c.seq += 1
 		net_send(
 			c,
-			game.Input{c.seq, {move = c.move, yaw = c.look[0], pitch = c.look[1]}, c.rx.ack},
+			game.Input {
+				c.seq,
+				{move = c.move, yaw = c.look[0], pitch = c.look[1], buttons = c.buttons},
+				c.rx.ack,
+			},
 		)
 	}
 	netcode.link_flush(&c.link, now)
