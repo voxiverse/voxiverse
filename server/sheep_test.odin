@@ -80,11 +80,17 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 
 	// Used: shorn, and 1 to 3 wool.
 	net_send(&a, game.Use_Entity{id, a.seq})
+	// (Both must have been told: the server sends to each client on its own,
+	// so b hearing first does not mean a has.)
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
-		for _, v in cs[1].shorn {if v {return true}}
-		return false
+		for c in cs {
+			told := false
+			for _, v in c.shorn {told ||= v}
+			if !told {return false}
+		}
+		return true
 	})
-	testing.expect(t, ok && a.shorn[id], "the sheep was not shorn (or b was not told)")
+	testing.expect(t, ok && a.shorn[id] && b.shorn[id], "the sheep was not shorn (or a client was not told)")
 	wool := wool_dropped(&srv, "a")
 	testing.expectf(t, wool >= 1 && wool <= 3, "%d wool dropped", wool)
 	// Used again: nothing more.
