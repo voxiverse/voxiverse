@@ -3,19 +3,32 @@ package base
 import "core:testing"
 import "core:time"
 
-// A 2 ms busy loop must read as 1-4 ms on every OS. Windows used to report 0
-// or 15625 us here (GetThreadTimes ticks). The loop is timed on the wall
-// clock, so a preemption can make the CPU time come up short: any of a few
-// attempts in range passes, a coarse clock never lands in range.
+// The thread CPU clock must tick in steps well under 1 ms on every OS.
+// Windows used to advance in 15625 us steps (GetThreadTimes ticks). The test
+// reads the clock itself, not the wall clock: it spins until 5 ms of this
+// thread's CPU time have passed and looks at the smallest step between two
+// different readings. Preemption by other threads or processes takes no CPU
+// time from this clock, so it cannot change the result; a coarse clock has no
+// step below its tick.
 @(test)
-test_thread_cpu_us_resolves_two_milliseconds :: proc(t: ^testing.T) {
-	took: i64
-	for _ in 0 ..< 5 {
-		wall := time.tick_now()
-		start := thread_cpu_us()
-		for time.duration_microseconds(time.tick_since(wall)) < 2000 {}
-		took = thread_cpu_us() - start
-		if took >= 1000 && took <= 4000 {return}
+test_thread_cpu_us_resolves_under_a_millisecond :: proc(t: ^testing.T) {
+	guard := time.tick_now()
+	start := thread_cpu_us()
+	last := start
+	smallest := max(i64)
+	for last - start < 5000 {
+		now := thread_cpu_us()
+		if now != last {
+			smallest = min(smallest, now - last)
+			last = now
+		}
+		if time.duration_seconds(time.tick_since(guard)) > 30 {break}
 	}
-	testing.expectf(t, false, "2 ms busy loop read as %d us of thread CPU time", took)
+	testing.expectf(
+		t,
+		smallest < 1000,
+		"thread CPU time advanced in steps of at least %d us (%d us seen)",
+		smallest,
+		last - start,
+	)
 }
