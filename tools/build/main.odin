@@ -727,10 +727,12 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 	return true
 }
 
-// check_no_binaries fails if git tracks an executable (ELF, PE or Mach-O): build
-// output belongs in build/, and one was once committed at the root by mistake.
+// check_no_binaries fails if an executable (ELF, PE or Mach-O) is in the tree outside
+// build/, tracked or not: build output belongs in build/. One was once committed at the
+// root by mistake, and a bare `odin build <pkg>` or `odin test <pkg>` (no -out:) leaves
+// <pkg>.bin there.
 check_no_binaries :: proc() -> bool {
-	listing, ok := capture({"git", "ls-files", "-z"})
+	listing, ok := capture({"git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"})
 	if !ok {
 		fmt.eprintln("binary git ls-files failed")
 		return false
@@ -751,23 +753,28 @@ check_no_binaries :: proc() -> bool {
 			head == {0xfe, 0xed, 0xfa, 0xcf} ||
 			head == {0xca, 0xfe, 0xba, 0xbe}
 		if elf || pe || mach {
-			fmt.eprintfln("binary %s is an executable: build output goes in build/", path)
+			fmt.eprintfln(
+				"binary %s is an executable: build output goes in build/ (delete it; `./build.sh test <package>` instead of `odin test`)",
+				path,
+			)
 			found += 1
 		}
 	}
 	if found > 0 {return false}
-	fmt.println("binary none tracked")
+	fmt.println("binary none outside build/")
 	return true
 }
 
-// test_env_defines turns the environment's ODIN_TEST_RANDOM_SEED and ODIN_TEST_THREADS into
-// -define flags: Odin's test runner reads both only as compile-time defines, so the variable
-// alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to reproduce a failure) is ignored.
+// test_env_defines turns the environment's ODIN_TEST_RANDOM_SEED, ODIN_TEST_THREADS and
+// ODIN_TEST_NAMES into -define flags: Odin's test runner reads them only as compile-time
+// defines, so the variable alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to
+// reproduce a failure, `ODIN_TEST_NAMES=server.test_x ./build.sh test server` for one
+// test) is ignored.
 test_env_defines :: proc() -> []string {
 	defines := make([dynamic]string)
 	// A leak or a bad free fails the test, naming the allocation (tracking stays on, its default).
 	append(&defines, "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true")
-	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS"}) {
+	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS", "ODIN_TEST_NAMES"}) {
 		if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
 			append(&defines, fmt.aprintf("-define:%s=%s", name, value))
 		}

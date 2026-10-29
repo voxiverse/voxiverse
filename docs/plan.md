@@ -334,8 +334,8 @@ million tokens re-read per step), not the code it wrote. So:
   conversation.
 - **Small enough to finish in one sitting:** one new system, or one system and the content
   that proves it. Bigger ideas are split (M20, done the old way, would be three).
-- **Checked locally first,** with the tests the milestone touches (`odin test <package>
-  -define:ODIN_TEST_NAMES=...`), then the whole suite once; pushed once at the end, and CI
+- **Checked locally first,** with the tests the milestone touches (`ODIN_TEST_NAMES=...
+  ./build.sh test <package>`; never a bare `odin test`, which leaves a binary at the root), then the whole suite once; pushed once at the end, and CI
   waited on once (a blocking `gh run watch`), not polled.
 - **Windows-only code is kept together** (one milestone of it, checked on a Windows
   machine), because each mistake there costs a round trip through CI.

@@ -446,7 +446,7 @@ other players' and entities' places). A new replicated value is a struct and an 
 hash differs is refused when joining. `server/bandwidth_test.odin` measures the bytes of a
 scripted session and of a crowd of 100 sheep exactly; `assets/baselines/net/bandwidth.txt`
 holds the numbers, rewritten with `-define:VX_BANDWIDTH_ACCEPT=true`
-(`odin test server -define:ODIN_TEST_NAMES=server.test_bandwidth_accept`).
+(`ODIN_TEST_NAMES=server.test_bandwidth_accept ./build.sh test server`).
 
 Replays repeat the server's *inputs*, not its exact output: chunk generation runs on worker
 threads, so chunks can arrive in a slightly different order.
