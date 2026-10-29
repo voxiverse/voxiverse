@@ -565,11 +565,6 @@ registry_item :: proc(reg: ^Registry, text: string) -> (Item, bool) {
 	return Item(n), found
 }
 
-registry_item_id :: proc(reg: ^Registry, i: Item) -> string {
-	info, _ := registry_item_info(reg, i)
-	return info.name
-}
-
 // registry_every_item: all the items there are, in a stable order (blocks,
 // tools, materials, armor, then the packs' items).
 registry_every_item :: proc(reg: ^Registry, allocator := context.temp_allocator) -> []Item {

@@ -260,7 +260,6 @@ test_broken_states_and_shapes :: proc(t: ^testing.T) {
 		files: []File,
 		want:  string,
 	}
-	block :: `"states": {"facing": ["north", "east", "south", "west"]}, "textures": {"all": "voxiverse:stone"}`
 	cases := []Case {
 		{
 			"shape names a property the block lacks",
@@ -384,5 +383,4 @@ test_broken_states_and_shapes :: proc(t: ^testing.T) {
 		testing.expectf(t, reg == nil, "%s: built", c.name)
 		testing.expect_value(t, errors_text(errs), c.want)
 	}
-	_ = block
 }

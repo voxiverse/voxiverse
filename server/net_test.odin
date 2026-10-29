@@ -557,7 +557,6 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "alice was not told bob left")
 
 	// Saved by name: after a restart, each comes back where they were.
-	alice_at := alice.update.state.position
 	netcode.link_close(&alice.link, "bye")
 	harness_step(&h, 4)
 	testing.expect(t, harness_stop(&h))
@@ -578,7 +577,6 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 			bob_at,
 		)
 	}
-	_ = alice_at
 }
 
 // The seed of the loss, duplication and jitter draws of the test below: the

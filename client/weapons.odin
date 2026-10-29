@@ -218,7 +218,6 @@ weapon_hud :: proc(ctx: ^ui.Context, s: ^Session) {
 	box := ui.Rect{row.x + row.w + 12, row.y, 120, SLOT_SIZE.y}
 	text := tr(.Hud_Reloading) if weapon_reloading(s) else tr(.Hud_Ammo, weapon_ammo(s, stack))
 	ui.draw_text(ctx, box, text, t.font_size, t.text, .Left)
-	_ = w
 }
 
 // arc_draw: a red arc on the screen's edge toward the source of the last hit,

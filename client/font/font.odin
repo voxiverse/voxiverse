@@ -270,7 +270,6 @@ simple_outline :: proc(
 	xf: Transform,
 	out: ^Outline,
 ) -> bool {
-	ON_CURVE :: 0x01
 	X_SHORT :: 0x02
 	Y_SHORT :: 0x04
 	REPEAT :: 0x08
@@ -466,11 +465,6 @@ rasterize :: proc(
 		bm.pixels[i] = u8(min(abs(sum), 1) * 255 + 0.5)
 	}
 	return bm, true
-}
-
-bitmap_destroy :: proc(bm: ^Bitmap, allocator := context.allocator) {
-	delete(bm.pixels, allocator)
-	bm^ = {}
 }
 
 // draw_line accumulates a line's signed area contribution per pixel; a

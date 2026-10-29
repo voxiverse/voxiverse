@@ -23,11 +23,8 @@ Debug_Point :: struct {
 	color: [4]u8, // sRGB
 }
 
-RED :: [4]u8{230, 60, 50, 255}
-GREEN :: [4]u8{80, 220, 90, 255}
 BLUE :: [4]u8{70, 130, 240, 255}
 YELLOW :: [4]u8{250, 220, 60, 255}
-WHITE :: [4]u8{255, 255, 255, 255}
 
 debug_draw_init :: proc(d: ^Debug_Draw, allocator := context.allocator) {
 	d.vertices = make([dynamic]Debug_Point, allocator)

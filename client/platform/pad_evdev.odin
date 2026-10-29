@@ -12,7 +12,6 @@ SYN_DROPPED :: 3
 
 BTN_SOUTH :: 0x130
 BTN_EAST :: 0x131
-BTN_C :: 0x132
 BTN_NORTH :: 0x133 // 0x133 and 0x134 depend on the driver: see Evdev_Layout
 BTN_WEST :: 0x134
 BTN_TL :: 0x136

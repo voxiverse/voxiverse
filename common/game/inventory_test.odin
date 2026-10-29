@@ -314,7 +314,7 @@ test_inventory_sort :: proc(t: ^testing.T) {
 	_, ok := inventory_apply(reg, &inv, {.Sort, 0, 0}, false)
 	testing.expect(t, ok)
 	grid := inv.slots[HOTBAR_SLOTS:INVENTORY_SLOTS]
-	first, second := min(stone, dirt), max(stone, dirt)
+	first := min(stone, dirt)
 	// Stone 3 and dirt 80 (a stack of 64 and one of 16), in item order.
 	want := [?]Stack{{stone, 3, 0}, {dirt, 64, 0}, {dirt, 16, 0}}
 	if first != stone {want = {{dirt, 64, 0}, {dirt, 16, 0}, {stone, 3, 0}}}
@@ -322,7 +322,6 @@ test_inventory_sort :: proc(t: ^testing.T) {
 	for s in grid[len(want):] {testing.expect(t, stack_empty(s))}
 	testing.expect_value(t, inv.slots[0], Stack{dirt, 9, 0})
 	testing.expect_value(t, inv.cursor, Stack{stone, 2, 0})
-	_ = second
 	// Sorted already: no change, and the server refuses it as a no-op.
 	_, ok = inventory_apply(reg, &inv, {.Sort, 0, 0}, false)
 	testing.expect(t, !ok)

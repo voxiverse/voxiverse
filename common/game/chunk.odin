@@ -89,10 +89,6 @@ block_arrays_destroy :: proc(a: ^Block_Arrays) {
 	a^ = {}
 }
 
-block_arrays_capacity :: proc(a: ^Block_Arrays) -> int {
-	return len(a.free)
-}
-
 block_arrays_in_use :: proc(a: ^Block_Arrays) -> int {
 	return a.allocated - a.free_len
 }

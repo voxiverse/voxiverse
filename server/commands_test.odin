@@ -37,14 +37,6 @@ expect_told :: proc(
 }
 
 @(private = "file")
-forget :: proc(c: ^Net_Client) {
-	for n in c.notices {delete(n)}
-	clear(&c.notices)
-	for l in c.chat {delete(l.text)}
-	clear(&c.chat)
-}
-
-@(private = "file")
 near :: proc(a, b: [3]f64) -> bool {
 	d := a - b
 	return abs(d.x) + abs(d.z) < 0.01
@@ -234,5 +226,4 @@ test_commands_over_the_network :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, !strings.contains(text, "home d "), "a fourth home")
 	testing.expect(t, !strings.contains(text, "ban bob"), "the ban by name stayed")
-	_ = forget
 }

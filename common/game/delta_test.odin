@@ -507,8 +507,6 @@ test_snapshot_lane_survives_loss :: proc(t: ^testing.T) {
 	motions: [60]Dt_Motion
 	for &m, i in motions {m.position = {f64(i), 3, f64(i % 7)}}
 	me := Dt_Me{}
-	last_loss := 0
-	max_lag := 0
 	for tick in 0 ..< 300 {
 		me.acked += 1
 		me.x += 0.1
@@ -517,11 +515,8 @@ test_snapshot_lane_survives_loss :: proc(t: ^testing.T) {
 			walk_motion(&rng, &m)
 			link_put(&l, DT_MOTION, u32(i + 1), &m)
 		}
-		before := l.lost
 		link_step(&l)
-		if l.lost != before {last_loss = tick}
 		if !testing.expectf(t, !l.failed, "tick %d: a snapshot part was refused", tick) {return}
-		if !kinds_equal(&l.tx.cur, &l.view, DT_MOTION) {max_lag = tick - last_loss}
 	}
 	// after the loss stops, the view converges within a couple of ticks
 	for _ in 0 ..< 3 {
@@ -532,7 +527,6 @@ test_snapshot_lane_survives_loss :: proc(t: ^testing.T) {
 	testing.expect(t, l.lost > 5, "the link lost nothing")
 	testing.expect(t, kinds_equal(&l.tx.cur, &l.view, DT_MOTION), "the view never caught up")
 	testing.expect(t, kinds_equal(&l.tx.cur, &l.view, DT_ME), "the singleton never caught up")
-	_ = max_lag
 }
 
 @(test)
@@ -787,8 +781,6 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 		defer receiver_destroy(&rx)
 		got := make([dynamic]Received, context.temp_allocator)
 		testing.expect(t, receive_state(&rx, state_with(DT_SINGLE, 1, 1, 5), &got))
-		nan := state_with(DT_ME, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-		_ = nan
 	}
 	// a Block_Pos outside the world
 	{

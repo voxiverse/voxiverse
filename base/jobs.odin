@@ -113,10 +113,6 @@ jobs_stopping :: proc(j: ^Jobs) -> bool {
 	return sync.atomic_load(&j.stopping)
 }
 
-jobs_worker_count :: proc(j: ^Jobs) -> int {
-	return len(j.threads)
-}
-
 @(private = "file")
 worker_main :: proc(t: ^thread.Thread) {
 	j := (^Jobs)(t.data)

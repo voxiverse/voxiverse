@@ -227,9 +227,7 @@ test_spectrogram_follows_a_sweep :: proc(t: ^testing.T) {
 	testing.expectf(t, abs(got - want) < 14, "row %.0f, wanted %.0f", got, want)
 	silent := make([]f32, 2 * 20000)
 	defer delete(silent)
-	dark, dw, dh := spectrogram_rgba(silent, rate, 100)
+	dark, _, _ := spectrogram_rgba(silent, rate, 100)
 	defer delete(dark)
 	for v, i in dark {if i % 4 != 3 && v > 3 {testing.fail_now(t, "silence is not dark")}}
-	_ = dw
-	_ = dh
 }

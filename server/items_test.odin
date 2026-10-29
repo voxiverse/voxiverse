@@ -8,9 +8,6 @@ import "core:testing"
 
 import "../common/game"
 
-@(private = "file")
-want_count: int
-
 // M14's exit check for items, two players over UDP: the kit, dropping a
 // stack that the other picks up, placing using one up, breaking leaving
 // the block to pick up, a refused request answered with the inventory as
@@ -145,7 +142,6 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		"alice's inventory changed through the restart",
 	)
 	testing.expect(t, bob.inventory == bob_had, "bob's inventory changed through the restart")
-	_ = want_count
 }
 
 // A player file from when inventories had 36 slots: what no longer fits

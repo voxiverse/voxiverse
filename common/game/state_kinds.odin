@@ -264,7 +264,6 @@ game_schema :: proc(allocator := context.allocator) -> Schema {
 	return s
 }
 
-kind_of_state :: #force_inline proc(k: State_Kind) -> int {return int(k)}
 
 kind_of_event :: #force_inline proc(k: Event_Kind) -> int {return len(State_Kind) + int(k)}
 

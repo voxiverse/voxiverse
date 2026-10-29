@@ -373,14 +373,6 @@ frozen_block_drop :: proc(b: Block) -> Item {
 	return frozen_item_of_block(b)
 }
 
-frozen_can_break :: proc(b: Block) -> bool {return FROZEN_BLOCK_INFO[b].breakable}
-frozen_can_place :: proc(b: Block) -> bool {
-	return FROZEN_BLOCK_INFO[b].placeable || b == .Wheat_0
-}
-frozen_can_change :: proc(b: Block) -> bool {
-	return FROZEN_BLOCK_INFO[b].breakable || FROZEN_BLOCK_INFO[b].replaceable
-}
-
 frozen_block_is_plant :: proc(b: Block) -> bool {
 	if _, wheat := wheat_stage(b); wheat {return true}
 	#partial switch b {

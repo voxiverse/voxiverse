@@ -11,7 +11,6 @@ import "core:time"
 // (reading an empty slot stalls).
 
 XINPUT_PROBE_INTERVAL :: 250 * time.Millisecond
-ERROR_DEVICE_NOT_CONNECTED :: 1167
 
 @(private = "file")
 Get_State :: #type proc "system" (user: u32, state: ^Xinput_State) -> u32

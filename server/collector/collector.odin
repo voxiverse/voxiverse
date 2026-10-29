@@ -405,9 +405,8 @@ load_cursors :: proc(c: ^Collector) {
 	for line in strings.split_lines_iterator(&rest) {
 		key, _, n := strings.partition(line, " ")
 		if value, ok := strconv.parse_u64(n); ok && key != "" {
-			if old, had := c.cursors[key]; had {
+			if key in c.cursors {
 				c.cursors[key] = value
-				_ = old
 			} else {
 				c.cursors[strings.clone(key)] = value
 			}

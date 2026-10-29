@@ -267,13 +267,6 @@ position_of :: proc(ps: ^Parse, line: int, toks: []Token, at: int) -> (bar, beat
 }
 
 @(private = "file")
-words_of :: proc(toks: []Token) -> [dynamic]string {
-	out: [dynamic]string
-	for t in toks {append(&out, t.text)}
-	return out
-}
-
-@(private = "file")
 header_line :: proc(ps: ^Parse, toks: []Token, line: int) -> bool {
 	p := &ps.p
 	key := toks[0]

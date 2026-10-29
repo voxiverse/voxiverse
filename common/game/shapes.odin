@@ -321,7 +321,6 @@ check_shape_against :: proc(
 	props: []Prop_Def,
 ) -> bool {
 	ok := true
-	where_ := fmt.aprintf("%s", block.id)
 	find :: proc(props: []Prop_Def, name: string) -> (Prop_Def, bool) {
 		for p in props {if p.name == name {return p, true}}
 		return {}, false
@@ -388,7 +387,6 @@ check_shape_against :: proc(
 			need(b, s, block, props, w[0], strings.split(w[1], "|"), &ok)
 		}
 	}
-	_ = where_
 	return ok
 }
 

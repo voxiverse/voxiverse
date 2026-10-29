@@ -57,10 +57,6 @@ ITEM_MERGE_RANGE :: 1.0 // blocks: stacks of one item this near become one
 ITEM_LIFE :: 300 // seconds: then a dropped stack is gone
 ITEM_THROW :: 9 // blocks/s: a stack a player drops flies ahead
 
-entity_kind_valid :: proc(k: u8) -> bool {
-	return int(k) < len(Entity_Kind)
-}
-
 // Entity_Body: where an entity is and how it moves.
 Entity_Body :: struct {
 	position:  [3]f64, // centre of its bottom

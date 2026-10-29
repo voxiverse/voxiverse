@@ -400,9 +400,8 @@ flatten :: proc(b: ^Builder, ti: ^runtime.Type_Info, offset: int, path: string, 
 @(private = "file")
 whole_supported :: proc(b: ^Builder, ti: ^runtime.Type_Info, path: string) -> bool {
 	if scalar_type(ti) {
-		if i, is_int := ti.variant.(runtime.Type_Info_Integer); is_int && ti.size > 8 {
+		if _, is_int := ti.variant.(runtime.Type_Info_Integer); is_int && ti.size > 8 {
 			refuse(b, path, "integer wider than 64 bits")
-			_ = i
 			return false
 		}
 		return true

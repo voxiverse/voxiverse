@@ -414,7 +414,6 @@ Chat_Line :: struct {
 }
 
 NO_PLAYER :: 0xffff
-MAX_CHAT_LINE :: 1024
 
 // Chat_Delete: a moderator took line id back.
 Chat_Delete :: struct {
@@ -446,8 +445,6 @@ Grants :: struct {
 	text:     string `net:"max=16384"`,
 	commands: string `net:"max=16384"`,
 }
-
-MAX_GRANTS_TEXT :: 16384
 
 MAX_BLOCKS_CHANGED :: 64 // single changes in a chunk in one tick (a chunk with more is sent whole)
 
@@ -519,7 +516,6 @@ Server_Message :: union {
 }
 
 MAX_VIEW_RADIUS :: 32
-MAX_VARIABLES_TEXT :: 4096
 MAX_REASON_LENGTH :: 256
 MAX_RULE_TEXT :: 64
 MAX_ADMIN_TEXT :: 256
@@ -1291,36 +1287,6 @@ quantize_input :: proc(in_: Player_Input) -> Player_Input {
 	return q
 }
 
-@(private = "file")
-write_player_state :: proc(w: ^Writer, s: Player_State) {
-	write_position(w, s.position)
-	for v in s.velocity {write_f32(w, v)}
-	write_u8(
-		w,
-		(1 if s.on_ground else 0) |
-		(2 if s.flying else 0) |
-		(4 if s.crouched else 0) |
-		(8 if s.jump_held else 0),
-	)
-	write_u8(w, s.air_jumps)
-}
-
-@(private = "file")
-read_player_state :: proc(r: ^Reader) -> (s: Player_State) {
-	s.position = read_position(r)
-	for &v in s.velocity {
-		v = read_f32(r)
-		if abs(v) > MAX_SPEED {reader_fail(r)}
-	}
-	flags := read_u8(r)
-	if flags > 15 {reader_fail(r)}
-	s.on_ground, s.flying, s.crouched = flags & 1 != 0, flags & 2 != 0, flags & 4 != 0
-	s.jump_held = flags & 8 != 0
-	s.air_jumps = read_u8(r)
-	if s.air_jumps > 3 {reader_fail(r)}
-	return
-}
-
 // write_vars / read_vars carry a variable table's struct field by field, in
 // table order; numbers outside their range fail the reader.
 @(private)
@@ -1461,32 +1427,6 @@ decode_server_info :: proc(data: []u8) -> (i: Server_Info, ok: bool) {
 }
 
 MAX_SERVER_NAME :: 48
-
-// A stack on the wire: its item (0: none) and count.
-@(private = "file")
-write_stack :: proc(w: ^Writer, st: Stack) {
-	if stack_empty(st) {
-		write_u16(w, 0)
-		return
-	}
-	write_u16(w, u16(st.item))
-	write_u16(w, u16(st.count))
-}
-
-@(private = "file")
-read_stack :: proc(r: ^Reader) -> Stack {
-	item := Item(read_u16(r))
-	if item == NO_ITEM {return {}}
-	count := int(read_u16(r))
-	if r.reg == nil ||
-	   !item_valid(r.reg, item) ||
-	   count <= 0 ||
-	   count > item_stack_size(r.reg, item) {
-		reader_fail(r)
-		return {}
-	}
-	return {item, count, 0}
-}
 
 @(private = "file")
 write_address :: proc(w: ^Writer, a: Address) {

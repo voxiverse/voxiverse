@@ -104,14 +104,6 @@ pool_remove :: proc(p: ^Pool($T, $H), handle: H) -> bool {
 	return true
 }
 
-pool_clear :: proc(p: ^Pool($T, $H)) {
-	for index in 1 ..< p.high {
-		if p.alive[index] {
-			pool_remove(p, pool_make_handle(H, index, p.gens[index]))
-		}
-	}
-}
-
 // Pool_Iterator walks live objects in slot order:
 //
 //	it: base.Pool_Iterator

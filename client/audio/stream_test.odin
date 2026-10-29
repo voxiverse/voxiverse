@@ -159,12 +159,11 @@ test_stream_is_a_voice :: proc(t: ^testing.T) {
 	e, got = poll(m)
 	testing.expect(t, got && e.voice == w && e.reason == .Stopped)
 	// The stream starts over for the next voice and plays the same again.
-	x := play(m, {sound = id, gain = {1, 1}, pitch = 1.5})
+	_ = play(m, {sound = id, gain = {1, 1}, pitch = 1.5})
 	again := mix_frames(m, 48000 * 3)
 	defer delete(again)
 	diff := max_diff(out, again)
 	testing.expectf(t, diff < 1e-5, "a second play differs by %v", diff)
-	_ = x
 }
 
 // A stream has one voice at a time: a second play while one is playing is

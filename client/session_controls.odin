@@ -78,10 +78,9 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 	breaking := action_down(a, .Attack)
 	placing := action_down(a, .Use)
 	pressed := action_pressed(a, .Attack) || action_pressed(a, .Use)
-	if stack, w, is_weapon := weapon_in_hand(s); is_weapon {
+	if _, w, is_weapon := weapon_in_hand(s); is_weapon {
 		// The trigger is the weapon's; a zooming weapon keeps the use button.
 		weapon_controls(s, a)
-		_ = stack
 		breaking = false
 		pressed = action_pressed(a, .Use)
 		if w.zoom > 0 {placing = false}

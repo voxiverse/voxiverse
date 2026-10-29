@@ -412,7 +412,6 @@ test_undo_redo :: proc(t: ^testing.T) {
 	testing.expect_value(t, world_hash_here(g), h2)
 	// An action pushed out of the ring is too old.
 	cmd(g, "fill %s stone", box(g, {3, 0, 3}, {4, 1, 4}))
-	h3 := world_hash_here(g)
 	for _ in 0 ..< 3 {
 		cmd(g, "fill %s planks", box(g, {-9, -1, -9}, {-1, 3, -3}))
 		cmd(g, "fill %s glass", box(g, {-9, -1, -9}, {-1, 3, -3}))
@@ -423,7 +422,6 @@ test_undo_redo :: proc(t: ^testing.T) {
 	testing.expect(t, w.journal.head > 1024)
 	// ... down to the first that has left the ring: the stone at (3, 0, 3) stays.
 	testing.expect_value(t, block_at_pos(w, at(g, 3, 0, 3)), game.Block.Stone)
-	_ = h3
 }
 
 // copy_regions copies the region files of dir's home world into snapshot (a
