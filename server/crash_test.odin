@@ -195,13 +195,26 @@ crash_run :: proc(
 	return state_digest(cs.run)
 }
 
+// The crash points in CRASH_SHARDS tests, so the runner's threads share them: shard k
+// takes the points i with i % CRASH_SHARDS == k (the same countdowns and seeds as one
+// test taking them all), in a universe of its own, and must see both outcomes itself.
+CRASH_SHARDS :: 4
+
 @(test)
-test_save_survives_crashes :: proc(t: ^testing.T) {
-	cs, ok := crash_setup(t, "crash")
+test_save_survives_crashes_0 :: proc(t: ^testing.T) {save_crash_shard(t, 0)}
+@(test)
+test_save_survives_crashes_1 :: proc(t: ^testing.T) {save_crash_shard(t, 1)}
+@(test)
+test_save_survives_crashes_2 :: proc(t: ^testing.T) {save_crash_shard(t, 2)}
+@(test)
+test_save_survives_crashes_3 :: proc(t: ^testing.T) {save_crash_shard(t, 3)}
+
+save_crash_shard :: proc(t: ^testing.T, shard: int) {
+	cs, ok := crash_setup(t, fmt.tprintf("crash%d", shard))
 	defer crash_teardown(&cs)
 	if !ok {return}
 	seen: [2]int
-	for i in 0 ..< CRASH_POINTS {
+	for i := shard; i < CRASH_POINTS; i += CRASH_SHARDS {
 		countdown := 1 + (i * 7919) % cs.ops
 		dig := crash_run(t, &cs, countdown, u64(i), i % 2 == 1)
 		switch dig {
@@ -237,9 +250,11 @@ test_save_survives_crashes :: proc(t: ^testing.T) {
 	}
 	testing.expectf(t, seen[0] > 0 && seen[1] > 0, "outcomes: old %d, new %d", seen[0], seen[1])
 	fmt.printfln(
-		"save crash points: %d ops, %d runs: old %d, new %d",
+		"save crash points, shard %d of %d: %d ops, %d runs: old %d, new %d",
+		shard,
+		CRASH_SHARDS,
 		cs.ops,
-		CRASH_POINTS,
+		seen[0] + seen[1],
 		seen[0],
 		seen[1],
 	)
