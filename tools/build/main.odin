@@ -238,10 +238,13 @@ usage :: proc() {
 		"  check     type-check every package (-vet -strict-style), build objects for the other Tier 1 targets, verify formatting",
 	)
 	fmt.println(
-		"            (check and test skip what is unchanged since it last passed, by content: build/cache)",
+		"            (its builds for other targets skip what is unchanged since it last passed, by content: build/cache)",
 	)
 	fmt.println(
 		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core); `test <package>...`: only those",
+	)
+	fmt.println(
+		"            (a package unchanged since built runs without compiling; its output is kept in build/test/<package>.log, printed only when it fails)",
 	)
 	fmt.println(
 		"  smoke     run the smoke suite (real threads, sockets, audio devices, child processes), one test at a time",
@@ -849,6 +852,30 @@ test_binary :: proc(pkg: string) -> string {
 	return path_join({"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})})
 }
 
+// test_log: where a test package's output is kept. A package that passed prints one
+// line (its test count and time); the whole output is printed only when it failed.
+test_log :: proc(pkg: string) -> string {
+	return path_join({"build", "test", strings.concatenate({filepath.base(pkg), ".log"})})
+}
+
+// test_count: " N tests", from the test runner's last words in the log at path ("" if not there).
+test_count :: proc(path: string) -> string {
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return ""}
+	text := string(data)
+	i := strings.last_index(text, "Finished ")
+	if i < 0 {return ""}
+	fields := strings.fields(text[i:], context.temp_allocator)
+	if len(fields) < 3 {return ""}
+	return fmt.tprintf(" %s %s", fields[1], strings.trim_right(fields[2], "."))
+}
+
+// print_file writes a file's content to stdout (nothing if it cannot be read).
+print_file :: proc(path: string) {
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err == nil {os.write(os.stdout, data)}
+}
+
 // test_packages runs packages' tests, width at a time, each under its time limit; a run
 // that outlasts it is killed with its children and reported as a failure naming the
 // package. A package whose inputs are unchanged since its binary was built runs that
@@ -896,7 +923,8 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		jobs[i] = limited.Job {
 			cmd   = cmd,
 			limit = state.limits[i],
-			log   = job_log(i),
+			log   = test_log(pkg),
+			quiet = true, // (printed by done when the package failed)
 		}
 	}
 	if reused > 0 {fmt.printfln("test   %d unchanged since built: run without compiling", reused)}
@@ -919,11 +947,13 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 				strings.concatenate({step.output, ".seconds"}),
 				fmt.tprintf("%.1f", seconds),
 			)
-			fmt.printfln("test   %s (%.1f s)", pkg, seconds)
+			fmt.printfln("test   %s%s (%.1f s)", pkg, test_count(test_log(pkg)), seconds)
 		case .Failed:
-			fmt.eprintfln("test   %s FAILED", pkg)
+			print_file(test_log(pkg))
+			fmt.eprintfln("test   %s FAILED (its output: %s)", pkg, test_log(pkg))
 			state.ok = false
 		case .Timed_Out:
+			print_file(test_log(pkg))
 			fmt.eprintfln(
 				"test   %s FAILED: still running after %.0f s (the limit): killed it and its children",
 				pkg,
