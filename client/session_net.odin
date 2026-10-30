@@ -274,12 +274,18 @@ session_trace :: proc(s: ^Session) -> bool {
 	return true
 }
 
+// PING_GIVE_UP: seconds a ping waits for its Pong before the next one goes anyway.
+// Neither is reliable: one lost on the way would otherwise stop the pinging, and
+// leave the round trip at its last value, for the rest of the session.
+PING_GIVE_UP :: 5
+
 // net_update pings once a second and refreshes the per-second rates.
 @(private)
 net_update :: proc(s: ^Session, dt: f32) {
 	n := &s.net
 	n.ping_timer += dt
-	if n.ping_timer >= 1 && !n.ping_pending && s.state == .Playing {
+	waiting := n.ping_pending && n.ping_timer < PING_GIVE_UP
+	if n.ping_timer >= 1 && !waiting && s.state == .Playing {
 		n.ping_timer = 0
 		n.ping_id += 1
 		n.ping_sent = netcode.link_now(&s.link)
