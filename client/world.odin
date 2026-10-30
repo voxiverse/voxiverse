@@ -303,6 +303,8 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) {
 	h, ok := w.by_pos[pos]
 	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return}
+	// (On the main thread, within the frame: an edit never shows a hole.)
+	base.profile_scope("mesh now (block changed)")
 	c := base.pool_get(&w.chunks, h)
 	task := pop(&w.urgent_tasks)
 	if c.meshes > 0 {w.stats.remeshed += 1}

@@ -1,5 +1,6 @@
 package gpu
 
+import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
@@ -79,7 +80,10 @@ timing_destroy :: proc(g: ^Gpu, t: ^Frame_Timing) {
 @(private)
 timing_frame_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	if !g.timing {return}
-	timing_collect(g, t)
+	{
+		base.profile_scope("read GPU timings")
+		timing_collect(g, t)
+	}
 	vk.CmdResetQueryPool(cmd, t.pool, 0, MAX_GPU_SECTIONS * 2)
 	t.section_count, t.query_count, t.open_count = 0, 0, 0
 	timing_section_begin(g, t, cmd, "frame")
@@ -233,7 +237,7 @@ timing_setup :: proc(g: ^Gpu, valid_bits: u32, period: f32, calibration_availabl
 	g.timestamp_mask = max(u64) if valid_bits >= 64 else (u64(1) << valid_bits) - 1
 	if !calibration_available {
 		log.info("gpu timing on (approximate alignment in traces)")
-		base.profile_name_gpu_track(false)
+		base.profile_name_gpu_track(false, fmt.tprintf("%s, %s", g.device_name, g.driver))
 		return
 	}
 
@@ -250,6 +254,6 @@ timing_setup :: proc(g: ^Gpu, valid_bits: u32, period: f32, calibration_availabl
 	}
 	g.calibrated = has_device && has_host
 	g.host_time_domain = host_domain
-	base.profile_name_gpu_track(g.calibrated)
+	base.profile_name_gpu_track(g.calibrated, fmt.tprintf("%s, %s", g.device_name, g.driver))
 	log.infof("gpu timing on calibrated=%v", g.calibrated)
 }

@@ -428,14 +428,20 @@ server_main :: proc(t: ^thread.Thread) {
 
 @(private)
 tick :: proc(s: ^Server) {
-	base.profile_scope("server tick")
+	base.profile_scope_number("server tick", s.tick + 1)
 	base.metric_scope(.Server_Tick)
 	s.tick += 1
-	calls_run(s)
+	{
+		base.profile_scope("scheduled calls")
+		calls_run(s)
+	}
 	if s.tick % TICK_SUMMARY_TICKS == 0 {tick_summary(s)}
-	save_poll(s)
-	save_slice(s)
-	if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
+	{
+		base.profile_scope("saving")
+		save_poll(s)
+		save_slice(s)
+		if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
+	}
 	for w in s.worlds {
 		chunks_collect(
 			&w.chunks,
@@ -452,7 +458,7 @@ tick :: proc(s: ^Server) {
 		naturals_take(w)
 	}
 	{
-		base.profile_scope("receive")
+		base.profile_scope("receive messages")
 		receive_messages(s)
 	}
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
@@ -467,6 +473,7 @@ tick :: proc(s: ^Server) {
 	moves := make([dynamic]Move, context.temp_allocator)
 	for &c in s.clients {
 		if c.state != .Playing {continue}
+		base.profile_scope("player")
 		simulate_player(s, &c)
 		health_tick(s, &c)
 		weapons_tick(s, &c)
@@ -479,8 +486,11 @@ tick :: proc(s: ^Server) {
 			drop_far(s, &c)
 		}
 	}
-	worlds_unload_idle(s)
-	audit_tick(s)
+	{
+		base.profile_scope("unload idle worlds and audit")
+		worlds_unload_idle(s)
+		audit_tick(s)
+	}
 	for m in moves {
 		base.profile_scope("unload left")
 		unload_left(m.world, m.from, m.to)
@@ -492,30 +502,51 @@ tick :: proc(s: ^Server) {
 		}
 		if !frozen {
 			updates_run(w)
-			random_ticks(w)
+			{
+				base.profile_scope("random ticks")
+				random_ticks(w)
+			}
 			entities_tick(w)
-			containers_tick(w)
+			{
+				base.profile_scope("containers")
+				containers_tick(w)
+			}
 		}
-		rewind_record(s, w)
-		gates_tick(w)
-		rollback_tick(w)
-		base.profile_scope("changes flush")
-		changes_flush(w)
-		journal_tick(w)
+		rewind: {
+			base.profile_scope("rewind, gates and rollback")
+			rewind_record(s, w)
+			gates_tick(w)
+			rollback_tick(w)
+		}
+		{
+			base.profile_scope("changes flush")
+			changes_flush(w)
+		}
+		{
+			base.profile_scope("journal")
+			journal_tick(w)
+		}
 	}
 	sent := 0
 	for &c in s.clients {
 		if c.state != .Playing {continue}
-		replicate_tick(s, &c)
+		{
+			base.profile_scope("replicate")
+			replicate_tick(s, &c)
+		}
 		base.profile_scope("stream")
 		base.metric_scope(.Server_Stream)
 		sent += stream(s, &c)
+		base.profile_scope("replica flush")
 		replica_flush(s, &c)
 	}
 	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
-	kick_due(s)
-	packs_tick(s)
-	packs_reload_tick(s)
+	{
+		base.profile_scope("kicks and packs")
+		kick_due(s)
+		packs_tick(s)
+		packs_reload_tick(s)
+	}
 	if s.listening {
 		if s.tick % game.TICK_RATE == 0 {update_info(s)}
 		base.profile_scope("network flush")

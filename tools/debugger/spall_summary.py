@@ -14,6 +14,7 @@ import collections
 import struct
 import sys
 
+TREES = 3
 SLOWEST = 8
 
 
@@ -29,14 +30,19 @@ def read(path):
             kind = data[off]
             if kind == 3:  # begin
                 ts, nl, al = struct.unpack_from('<QBB', data, off + 1)
-                stacks[tid].append((data[off + 11:off + 11 + nl].decode(), ts))
+                args = data[off + 11 + nl:off + 11 + nl + al].decode()
+                stacks[tid].append((data[off + 11:off + 11 + nl].decode(), ts, args))
                 off += 11 + nl + al
             elif kind == 4:  # end
                 (ts,) = struct.unpack_from('<Q', data, off + 1)
                 off += 9
                 if stacks[tid]:
-                    name, begin = stacks[tid].pop()
-                    events.append((tid, name, begin, ts, len(stacks[tid])))
+                    name, begin, args = stacks[tid].pop()
+                    events.append((tid, name, begin, ts, len(stacks[tid]), args))
+            elif kind == 8:  # process name: what was profiled
+                nl = data[off + 1]
+                names['process'] = data[off + 2:off + 2 + nl].decode()
+                off += 2 + nl
             elif kind == 9:  # thread name
                 nl = data[off + 1]
                 names[tid] = data[off + 2:off + 2 + nl].decode()
@@ -53,12 +59,39 @@ def ms(begin, end):
     return (end - begin) / 1e6
 
 
+def tree(track, spans, depth, indent):
+    """Prints the scopes one level below spans (merged by name), heaviest first, and
+    below them in turn: where a slow frame's time went, however many calls it took."""
+    lo, hi = min(b for b, _ in spans), max(e for _, e in spans)
+    inner = {}
+    for _t, n, ib, ie, d, _a in track:
+        if d == depth + 1 and lo <= ib and ie <= hi and any(b <= ib and ie <= e for b, e in spans):
+            total, calls, kids = inner.get(n, (0.0, 0, []))
+            inner[n] = (total + ms(ib, ie), calls + 1, kids + [(ib, ie)])
+    covered = sum(t for t, _c, _k in inner.values())
+    for n, (total, calls, kids) in sorted(inner.items(), key=lambda kv: -kv[1][0]):
+        if total < 0.1:
+            continue
+        times = f" x{calls}" if calls > 1 else ""
+        print(f"    {'  ' * indent}{total:7.2f}  {n}{times}")
+        if indent < 6:
+            tree(track, kids, depth + 1, indent + 1)
+    whole = sum(ms(b, e) for b, e in spans)
+    if inner and whole - covered >= 0.1:
+        print(f"    {'  ' * indent}{whole - covered:7.2f}  (untimed)")
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     names, events = read(sys.argv[1])
     if not events:
         sys.exit("no events")
+    print(f"trace:   {sys.argv[1]}")
+    print(f"process: {names.get('process', '(not named: an older trace)')}")
+    for tid, n in sorted((t, n) for t, n in names.items() if t != 'process' and n.startswith('GPU')):
+        print(f"gpu:     {n}")
+    print()
     watch = sys.argv[2:] or ['frame', 'server tick', 'generate chunk', 'mesh chunk']
     # Worker threads are numbered ("worldgen 1", "mesh 2"): one row per pool.
     def thread(tid):
@@ -66,7 +99,7 @@ def main():
         return n.rstrip('0123456789').rstrip() or n
 
     by = collections.defaultdict(list)
-    for tid, name, b, e, _depth in events:
+    for tid, name, b, e, _depth, _args in events:
         by[(thread(tid), name)].append(ms(b, e))
     print(f"{'thread':16} {'scope':26} {'calls':>7} {'total ms':>10} {'p50':>8} {'p99':>8} {'max':>8}")
     for (t, n), d in sorted(by.items(), key=lambda kv: -sum(kv[1])):
@@ -77,7 +110,7 @@ def main():
     t0 = min(e[2] for e in events)
     seconds = int((max(e[3] for e in events) - t0) / 1e9) + 1
     per = collections.defaultdict(lambda: [0, 0.0])
-    for _tid, name, b, e, _depth in events:
+    for _tid, name, b, e, _depth, _args in events:
         if name in watch:
             row = per[(int((b - t0) / 1e9), name)]
             row[0] += 1
@@ -93,14 +126,19 @@ def main():
         if not outer:
             continue
         print(f"\nslowest {scope}s ({thread_name}): the scopes directly inside")
-        for _tid, _n, b, e, depth in outer[:SLOWEST]:
+        for _tid, _n, b, e, depth, args in outer[:SLOWEST]:
             inner = collections.Counter()
-            for _t, n, ib, ie, d in track:
+            for _t, n, ib, ie, d, _a in track:
                 if d == depth + 1 and ib >= b and ie <= e:
                     inner[n] += ms(ib, ie)
             covered = sum(inner.values())
             parts = ", ".join(f"{n} {v:.1f}" for n, v in inner.most_common(6))
-            print(f"  {ms(b, e):7.1f} ms at {ms(t0, b) / 1000:6.2f}s: {parts}; untimed {ms(b, e) - covered:.1f}")
+            label = f"{args} " if args else ""
+            print(f"  {ms(b, e):7.1f} ms {label}at {ms(t0, b) / 1000:6.2f}s: {parts}; untimed {ms(b, e) - covered:.1f}")
+        # The slowest three as trees: every scope inside over 0.1 ms, by level.
+        for _tid, _n, b, e, depth, args in outer[:TREES]:
+            print(f"\n  {scope}{' ' + args if args else ''} ({ms(b, e):.1f} ms) as a tree (ms; scopes over 0.1 ms, calls merged):")
+            tree(track, [(b, e)], depth, 1)
 
 
 main()

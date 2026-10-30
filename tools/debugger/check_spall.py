@@ -29,6 +29,8 @@ while off < len(data):
             name, b = stack.pop(); tracks[tid].append((name, b, ts, len(stack)))
         elif t == 9:
             nl = data[off + 1]; names[tid] = data[off + 2: off + 2 + nl].decode(); off += 2 + nl
+        elif t == 8:
+            nl = data[off + 1]; print("process:", data[off + 2: off + 2 + nl].decode()); off += 2 + nl
         elif t == 7:
             (sz,) = struct.unpack_from('<I', data, off + 1); off += sz
         else:
@@ -48,16 +50,19 @@ inside = sum(1 for g in gpu if any(c[1] <= g[1] and g[2] <= c[2] + 50_000_000 fo
 print(f"CPU frames {len(cpu)}, GPU frames {len(gpu)}; GPU frames starting after a CPU frame began and ending within 50 ms of it: {inside}/{len(gpu)}")
 if gpu:
     durs = sorted((g[2]-g[1])/1e6 for g in gpu); print(f"GPU frame duration ms: min {durs[0]:.3f} median {durs[len(durs)//2]:.3f} max {durs[-1]:.3f}")
-    nested = [e for tid, evs in tracks.items() if not isinstance(tid, tuple) and names.get(tid, '').startswith('GPU') for e in evs if e[0] == 'triangle']
-    ok_nest = sum(1 for t in nested if t[3] == 1 and any(g[1] <= t[1] and t[2] <= g[2] for g in gpu))
-    print(f"GPU 'triangle' sections nested inside a GPU 'frame': {ok_nest}/{len(nested)}")
+    # Every other GPU section (a pass) is inside a GPU frame.
+    nested = [e for tid, evs in tracks.items() if not isinstance(tid, tuple) and names.get(tid, '').startswith('GPU') for e in evs if e[0] not in ('frame', 'Spall Trace Buffer Flush')]
+    ok_nest = sum(1 for t in nested if t[3] >= 1 and any(g[1] <= t[1] and t[2] <= g[2] for g in gpu))
+    print(f"GPU sections nested inside a GPU 'frame': {ok_nest}/{len(nested)}")
+# (The GPU track's name goes on with the device and driver.)
+calibrated = any(n.startswith('GPU (calibrated)') for n in names.values())
 if not gpu:
     print("no GPU frames in the trace"); problems += 1
 elif nested and ok_nest != len(nested):
     print("GPU sections are not nested in their frames"); problems += 1
-elif 'GPU (calibrated)' in names.values() and inside != len(gpu):
+elif calibrated and inside != len(gpu):
     print("calibrated GPU events are not aligned with CPU frames"); problems += 1
-elif 'GPU (calibrated)' not in names.values():
+elif not calibrated:
     print("GPU timestamps not calibrated on this machine: alignment not checked")
 print("problems:", problems)
 sys.exit(1 if problems else 0)

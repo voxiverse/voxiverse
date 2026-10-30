@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
+import "../../base"
+
 // Frame pacing. Per frame in flight: a command pool + buffer, a fence and an
 // "image acquired" semaphore. Per swapchain image: a "rendering finished"
 // semaphore, since presentation of an image may still be waiting on it when
@@ -63,21 +65,22 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 	if width <= 0 || height <= 0 {return}
 	sc := &g.swapchain
 	if sc.handle == 0 || sc.stale || sc.extent != {u32(width), u32(height)} {
+		base.profile_scope("recreate swapchain")
 		if !recreate_swapchain(g, width, height) {return}
 	}
 
 	f := &g.frames[g.frame_index]
-	check(vk.WaitForFences(g.device, 1, &f.fence, true, max(u64))) or_return
+	{
+		// The GPU still drawing this slot's last frame (FRAMES_IN_FLIGHT ago): GPU-bound.
+		base.profile_scope("wait for frame fence")
+		check(vk.WaitForFences(g.device, 1, &f.fence, true, max(u64))) or_return
+	}
 
 	index: u32
-	#partial switch result := vk.AcquireNextImageKHR(
-		g.device,
-		sc.handle,
-		max(u64),
-		f.image_acquired,
-		0,
-		&index,
-	); result {
+	base.profile_begin("acquire image") // (ended right after the call)
+	result := vk.AcquireNextImageKHR(g.device, sc.handle, max(u64), f.image_acquired, 0, &index)
+	base.profile_end()
+	#partial switch result {
 	case .SUCCESS:
 	case .SUBOPTIMAL_KHR:
 		sc.stale = true // still usable this frame (the semaphore is signalled)
@@ -90,14 +93,16 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 	}
 	// Only now: resetting before a failed acquire would leave nothing to
 	// signal the fence and deadlock the next wait.
-	check(vk.ResetFences(g.device, 1, &f.fence)) or_return
-	check(vk.ResetCommandPool(g.device, f.pool, {})) or_return
-
-	begin := vk.CommandBufferBeginInfo {
-		sType = .COMMAND_BUFFER_BEGIN_INFO,
-		flags = {.ONE_TIME_SUBMIT},
+	{
+		base.profile_scope("reset and begin commands")
+		check(vk.ResetFences(g.device, 1, &f.fence)) or_return
+		check(vk.ResetCommandPool(g.device, f.pool, {})) or_return
+		begin := vk.CommandBufferBeginInfo {
+			sType = .COMMAND_BUFFER_BEGIN_INFO,
+			flags = {.ONE_TIME_SUBMIT},
+		}
+		check(vk.BeginCommandBuffer(f.cmd, &begin)) or_return
 	}
-	check(vk.BeginCommandBuffer(f.cmd, &begin)) or_return
 	timing_frame_begin(g, &f.timing, f.cmd)
 
 	frame = Frame {
@@ -179,7 +184,10 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 		signalSemaphoreInfoCount = 1,
 		pSignalSemaphoreInfos    = &signal,
 	}
-	if !check(vk.QueueSubmit2(g.queue, 1, &submit, f.fence)) {return}
+	{
+		base.profile_scope("queue submit")
+		if !check(vk.QueueSubmit2(g.queue, 1, &submit, f.fence)) {return}
+	}
 
 	index := frame.image_index
 	present := vk.PresentInfoKHR {
@@ -190,12 +198,15 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 		pSwapchains        = &sc.handle,
 		pImageIndices      = &index,
 	}
-	#partial switch result := vk.QueuePresentKHR(g.queue, &present); result {
+	base.profile_begin("queue present") // (ended right after the call: vsync may wait here)
+	presented := vk.QueuePresentKHR(g.queue, &present)
+	base.profile_end()
+	#partial switch presented {
 	case .SUCCESS:
 	case .SUBOPTIMAL_KHR, .ERROR_OUT_OF_DATE_KHR:
 		sc.stale = true
 	case:
-		log.errorf("gpu vkQueuePresentKHR failed: %v", result)
+		log.errorf("gpu vkQueuePresentKHR failed: %v", presented)
 	}
 	g.frame_index = (g.frame_index + 1) % FRAMES_IN_FLIGHT
 }

@@ -211,6 +211,7 @@ entity_snapshot :: proc(e: ^Other_Entity, tick: u32, m: game.Entity_Motion) {
 
 @(private)
 apply_block :: proc(s: ^Session, g: game.Received) {
+	base.profile_scope("apply block change")
 	v := (^game.Block_Record)(g.value)
 	p := game.key_block(g.key)
 	if !v.heard {

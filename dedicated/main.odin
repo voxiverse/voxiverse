@@ -76,7 +76,10 @@ main :: proc() {
 				{dir, "voxiverse-server.spall"},
 				context.temp_allocator,
 			) or_else "voxiverse-server.spall"
-		if base.profile_start(path) {log.infof("profiling to %s", path)}
+		if base.profile_start(path) {
+			log.infof("profiling to %s", path)
+			base.profile_name_process(base.profile_process_name("server"))
+		}
 	}
 	ok: bool
 	switch {

@@ -384,11 +384,12 @@ keep_awake_update :: proc(app: ^App) {
 	platform.set_keep_awake(&app.window, true)
 }
 
-app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
-	base.profile_scope("frame")
+// app_frame draws frame number (counted from 1, as --capture-frame counts).
+app_frame :: proc(app: ^App, capture_this_frame: bool, number: int) -> bool {
+	base.profile_scope_number("frame", u64(number))
 	w := &app.window
 	{
-		base.profile_scope("events")
+		base.profile_scope("input")
 		minimized := w.width <= 0 || w.height <= 0
 		events := platform.wait_events(w) if minimized else platform.poll_events(w)
 		if len(app.injected) > 0 {
@@ -409,8 +410,11 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	}
 	if w.close_requested || app.quit {return false}
 
-	shader_watch_update(app, app.last_frame_ms / 1000)
-	telemetry_update(app)
+	{
+		base.profile_scope("shader watch and telemetry")
+		shader_watch_update(app, app.last_frame_ms / 1000)
+		telemetry_update(app)
+	}
 	scale := ui_scale(app)
 	input := ui_input(&app.input, scale)
 	handle_global_keys(app, &input)
@@ -418,14 +422,17 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
 	keep_awake_update(app)
 	gpu.set_vsync(&app.g, app.settings.vsync)
-	audio_volumes(app, false)
-	audio_listener(app, false)
-	audio.drain(app.mixer)
-	if !app.benchmark {
-		music_update(app, app.last_frame_ms / 1000)
-		snapshots_update(app, app.last_frame_ms / 1000)
+	{
+		base.profile_scope("audio and music")
+		audio_volumes(app, false)
+		audio_listener(app, false)
+		audio.drain(app.mixer)
+		if !app.benchmark {
+			music_update(app, app.last_frame_ms / 1000)
+			snapshots_update(app, app.last_frame_ms / 1000)
+		}
+		audio_debug_update(app)
 	}
-	audio_debug_update(app)
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
@@ -448,6 +455,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			app.last_frame_ms / 1000,
 			w.mouse_captured,
 		)
+		base.profile_begin("after session (packs, checks, sounds, loading)") // (no return before its end)
 		if app.session.reg_swapped { 	// (joined a server with packs: its textures, sounds and items)
 			apply_registry(app, app.session.reg)
 			app.session.reg_swapped = false
@@ -472,6 +480,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		}
 		clear(&app.session.notices)
 		loading_update(app.session)
+		base.profile_end()
 		if s := app.session; s.state == .Failed {
 			// Why, on a screen of its own; Back to where we came from.
 			title := "Connection Lost" if s.welcome.view_radius != 0 else "Could Not Join"
@@ -484,7 +493,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		platform.set_mouse_captured(w, false)
 	}
 	{
-		base.profile_scope("ui")
+		base.profile_scope("ui layout")
 		width, height := render_size(app)
 		ui.begin_frame(&app.ui, input, {f32(width), f32(height)}, scale)
 		app_ui(app, &app.ui)
@@ -496,26 +505,34 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 	ok: bool
 	{
 		// Waits for this frame slot's previous GPU work and the next image.
-		base.profile_scope("begin_frame")
+		base.profile_scope("wait for GPU")
 		frame, ok = gpu.begin_frame(&app.g, w.width, w.height)
 	}
 	screenshots_save(app)
 	if !ok {return true}
 	{
-		base.profile_scope("record")
+		// The CPU's side of drawing: uploads, the scene, the command buffer, submit.
+		base.profile_scope("render")
 		base.metric_scope(.Frame_Record)
 		g := &app.g
 		app.world_pass.occlusion = app.debug.occlusion_stats
-		render.world_begin(&app.world_pass, g)
-		if app.session != nil {session_apply(app.session, &app.world_pass, g)}
-		render.world_upload(&app.world_pass, g, frame)
-		render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
-		preview_record(app, frame)
+		{
+			base.profile_scope("chunk meshes in")
+			render.world_begin(&app.world_pass, g)
+			if app.session != nil {session_apply(app.session, &app.world_pass, g)}
+		}
+		{
+			base.profile_scope("world and ui uploads")
+			render.world_upload(&app.world_pass, g, frame)
+			render.ui_upload(&app.ui_pass, g, frame, &app.ui.output)
+			preview_record(app, frame)
+		}
 		in_world :=
 			app.session != nil && app.session.state == .Playing && app.session.loading == nil
 		camera: render.Camera
 		scene, view_scene: u64
 		if in_world {
+			base.profile_scope("scene (avatars, entities, view model)")
 			s := app.session
 			width, height := render_size(app)
 			camera = camera_render(&s.view, width, height, camera_fov(s, app.settings))
@@ -539,10 +556,14 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 			entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
 			view_scene = view_model_frame(app, s, width, height)
 		}
-		render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
-		render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
-		render.held_upload(&app.held_pass, g, &app.held_draw, camera)
+		entity_uploads: {
+			base.profile_scope("entity uploads")
+			render.debug_upload(&app.debug_pass, g, &app.debug_draw, camera)
+			render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
+			render.held_upload(&app.held_pass, g, &app.held_draw, camera)
+		}
 		textures := u32(app.world_pass.textures_id)
+		base.profile_begin("record commands") // (no return before its end)
 		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
 			render.world_draw(&app.world_pass, g, frame, camera, scene)
@@ -555,6 +576,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool) -> bool {
 		}
 		render.ui_draw(&app.ui_pass, g, frame, &app.ui.output)
 		gpu.end_rendering(frame)
+		base.profile_end()
 		gpu.end_frame(g, frame)
 	}
 	return true

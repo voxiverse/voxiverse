@@ -415,9 +415,16 @@ session_update :: proc(
 	} else {
 		game.pipe_set_conditions(&s.pipe, conditions)
 	}
-	net_update(s, dt)
-	receive(s)
-	defer flush(s)
+	{
+		// What the server sent (block changes are applied here: an edit's chunks mesh now).
+		base.profile_scope("receive messages")
+		net_update(s, dt)
+		receive(s)
+	}
+	defer {
+		base.profile_scope("send messages")
+		flush(s)
+	}
 	if s.state != .Playing {return}
 	if s.frozen {
 		s.tick_time = 0 // and no inputs: the server's player waits too
@@ -439,6 +446,7 @@ session_update :: proc(
 	if s.tick_time > 4 * game.TICK_SECONDS {s.tick_time = game.TICK_SECONDS}
 	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
 	for s.tick_time >= game.TICK_SECONDS {
+		base.profile_scope("prediction tick")
 		s.tick_time -= game.TICK_SECONDS
 		in_ :=
 			s.autopilot.? or_else (player_input(actions, s) if look else game.Player_Input{yaw = s.camera.yaw, pitch = s.camera.pitch})
@@ -468,6 +476,7 @@ session_update :: proc(
 	if s.eye_height == 0 {s.eye_height = eye}
 	s.camera.position = eyes + {0, s.eye_height, 0}
 	s.feet = eyes
+	base.profile_begin("aim (raycasts)") // (no return before its end)
 	s.aim = nil
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	if hit, ok := game.raycast(
@@ -485,6 +494,7 @@ session_update :: proc(
 	   ok {
 		s.aim_entity = id
 	}
+	base.profile_end()
 	camera_update(s, actions, settings, query, dt, look)
 	world_update(&s.world, camera_chunk(&s.camera))
 }

@@ -42,6 +42,7 @@ main :: proc() {
 	if base.PROFILE {
 		path := path_next_to_exe("voxiverse.spall")
 		if base.profile_start(path) {
+			base.profile_name_process(base.profile_process_name("client"))
 			log.infof("profiling to %s (open with Spall: https://gravitymoth.com/spall/)", path)
 		}
 	}
@@ -108,11 +109,17 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 				check.start(app)
 			}
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
-			if !app_frame(app, capture) {break}
-			bench_update(app) // between frames: it may leave and join worlds
+			if !app_frame(app, capture, frames + 1) {break}
+			{
+				base.profile_scope("benchmark driver")
+				bench_update(app) // between frames: it may leave and join worlds
+			}
 			frames += 1
 			if cap := frame_cap(app); cap > 0 {
-				if spent := time.tick_since(last); spent < cap {time.sleep(cap - spent)}
+				if spent := time.tick_since(last); spent < cap {
+					base.profile_scope("frame cap (sleep)")
+					time.sleep(cap - spent)
+				}
 			}
 			now := time.tick_now()
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
