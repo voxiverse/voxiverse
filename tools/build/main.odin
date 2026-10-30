@@ -1132,6 +1132,11 @@ shaders :: proc() -> bool {
 			"-V",
 			"--target-env",
 			"vulkan1.3",
+			// Debug information: line numbers and the source text (OpLine, OpSource), so
+			// a RenderDoc capture shows the GLSL. Not -gV/-gVS: their NonSemantic debug
+			// information needs SPV_KHR_relaxed_extended_instruction, which a Vulkan 1.3
+			// driver need not support (the validation layer refuses it without).
+			"-g",
 			"--quiet",
 			"-o",
 			out,
