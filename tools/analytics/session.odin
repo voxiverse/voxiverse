@@ -3,6 +3,7 @@ package analytics
 import "core:fmt"
 import "core:slice"
 import "core:strings"
+import "core:time"
 
 // `build analytics --session <file>`: one server session's file (server/session_log.odin:
 // the events of one LAN party, nothing uploaded) read as a report: what the weapons
@@ -67,13 +68,26 @@ session_summary :: proc(events: []Event) -> string {
 	ticks_worst = make([dynamic]f64, context.temp_allocator)
 	desyncs, judged, skipped: f64
 	errors := make([dynamic]string, context.temp_allocator)
+	moments := make([dynamic]Moment, context.temp_allocator)
 	for e in events {
 		first, last = min(first, e.t), max(last, e.t)
 		switch e.kind {
 		case "server_start":
 			started = true
+			append(&moments, Moment{e.t, "server started"})
 		case "server_stop":
 			stopped = true
+			append(&moments, Moment{e.t, "server stopped"})
+		case "session_start":
+			append(&moments, Moment{e.t, fmt.tprintf("player %d joined", e.actor)})
+		case "session_end":
+			append(
+				&moments,
+				Moment {
+					e.t,
+					fmt.tprintf("player %d left after %.0f s", e.actor, number(e, "seconds")),
+				},
+			)
 		case "shot_fired":
 			w := weapon(&weapons, text(e, "weapon"))
 			w.shots += 1
@@ -124,6 +138,20 @@ session_summary :: proc(events: []Event) -> string {
 				append(&p.frame_p50, number(e, "p50_us"))
 				append(&p.frame_p95, number(e, "p95_us"))
 				p.frame_worst = max(p.frame_worst, number(e, "worst_us"))
+				if worst := number(e, "worst_us"); worst >= SLOW_US {
+					append(
+						&moments,
+						Moment {
+							e.t,
+							fmt.tprintf(
+								"player %d: a frame took %.1f ms that minute (p95 %.1f ms)",
+								e.actor,
+								worst / 1000,
+								number(e, "p95_us") / 1000,
+							),
+						},
+					)
+				}
 			}
 		case "ping_sample":
 			if e.actor >= 0 {append(&player(&players, e.actor).pings, number(e, "rtt_ms"))}
@@ -134,16 +162,39 @@ session_summary :: proc(events: []Event) -> string {
 				p.recv += number(e, "received")
 				p.resent += number(e, "resent")
 				p.minutes += 1
+				if resent := number(e, "resent"); resent > 0 {
+					append(
+						&moments,
+						Moment {
+							e.t,
+							fmt.tprintf(
+								"player %d: %.0f records resent that minute",
+								e.actor,
+								resent,
+							),
+						},
+					)
+				}
 			}
 		case "server_perf":
 			append(&ticks_p50, number(e, "p50_us"))
 			append(&ticks_p95, number(e, "p95_us"))
 			append(&ticks_worst, number(e, "worst_us"))
+			if worst := number(e, "worst_us"); worst >= SLOW_US {
+				append(
+					&moments,
+					Moment {
+						e.t,
+						fmt.tprintf("server: a tick took %.1f ms that minute", worst / 1000),
+					},
+				)
+			}
 		case "server_net":
 			desyncs, judged, skipped =
 				number(e, "desyncs"), number(e, "judged"), number(e, "skipped")
 		case "log_line":
 			append(&errors, text(e, "line"))
+			append(&moments, Moment{e.t, text(e, "line")})
 		}
 	}
 	b := strings.builder_make(context.temp_allocator)
@@ -319,5 +370,41 @@ session_summary :: proc(events: []Event) -> string {
 	fmt.sbprintfln(&b, "  warnings and errors: %d", len(errors))
 	for line in errors[:min(len(errors), 20)] {fmt.sbprintfln(&b, "    %s", line)}
 	if len(errors) > 20 {fmt.sbprintfln(&b, "    ... %d more", len(errors) - 20)}
+	// The timeline.
+	fmt.sbprintln(
+		&b,
+		"\ntimeline (since the start, then UTC: the clock a log file's first line gives)",
+	)
+	slice.stable_sort_by(moments[:], proc(a, b: Moment) -> bool {return a.t < b.t})
+	for m in moments[:min(len(moments), TIMELINE_LINES)] {
+		since := (m.t - first) / 1000
+		h, mi, sec := time.clock_from_time(time.unix(m.t / 1000, 0))
+		fmt.sbprintfln(
+			&b,
+			"  +%02d:%02d  %02d:%02d:%02d  %s",
+			since / 60,
+			since % 60,
+			h,
+			mi,
+			sec,
+			m.text,
+		)
+	}
+	if len(moments) > TIMELINE_LINES {
+		fmt.sbprintfln(&b, "  ... %d more", len(moments) - TIMELINE_LINES)
+	}
 	return strings.to_string(b)
 }
+
+// Moment: a line of the session report's timeline.
+@(private = "file")
+Moment :: struct {
+	t:    i64, // ms
+	text: string,
+}
+
+// SLOW_US: a frame or a tick this long (microseconds) is on the timeline: a hitch anyone
+// notices (three frames at 60 Hz).
+SLOW_US :: 50_000
+
+TIMELINE_LINES :: 80

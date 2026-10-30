@@ -114,6 +114,7 @@ test_session_report_prints_every_part :: proc(t: ^testing.T) {
 			"desyncs: 2 of 40",
 			"warnings and errors: 1",
 			"chunk dropped",
+			"+00:05  22:13:25  player 0: a frame took 60.0 ms that minute (p95 12.0 ms)",
 		}) {
 		testing.expectf(
 			t,
@@ -123,6 +124,11 @@ test_session_report_prints_every_part :: proc(t: ^testing.T) {
 			report,
 		)
 	}
+	testing.expect(
+		t,
+		!strings.contains(report, "a frame took 40.0 ms"),
+		"a frame under SLOW_US is not on the timeline",
+	)
 	testing.expect(
 		t,
 		strings.contains(report, "no clean stop"),
