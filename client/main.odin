@@ -226,6 +226,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			   .Off {log.error("audio_check the run ended before the test finished")}
 			ok = false
 		}
+		if app.cull_check.failed {ok = false}
 		if app.blast_test.failed || app.blast_test.phase != .Off {
 			if app.blast_test.phase !=
 			   .Off {log.error("blast_test the run ended before the test finished")}

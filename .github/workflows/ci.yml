@@ -182,6 +182,11 @@ jobs:
       - name: Gamepad flight
         run: xvfb-run -a ./build/voxiverse --check fly_pad
 
+      # GPU culling (R6): the culling shader's commands, for fixed chunks and
+      # cameras, exactly the CPU's rules' (lavapipe).
+      - name: Culling check
+        run: xvfb-run -a ./build/voxiverse --check cull
+
       # Bulk edits (M9): rockets and explosions, each shown whole, and the
       # client's chunks end up exactly the server's.
       - name: Blast test

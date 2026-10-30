@@ -39,17 +39,27 @@ Scenario :: struct {
 	version:     int, // bump when what it does changes: results of other versions never compare
 	repetitions: int,
 	description: string,
+	view:        [2]i32, // view radius and height, chunks ({}: BENCHMARK_SETTINGS')
 }
 
 @(rodata)
 SCENARIOS := [?]Scenario {
-	{"load", .Load, 1, 3, "join the scratch world until it is loaded and meshed"},
+	{"load", .Load, 1, 3, "join the scratch world until it is loaded and meshed", {}},
 	{
 		"views",
 		.Views,
 		2, // 2: the view model (the start kit's rocket launcher) is drawn too (M48k)
 		3,
 		"sixteen still views from the spawn (eight ways, at the horizon and down)",
+		{},
+	},
+	{
+		"views-far",
+		.Views,
+		1,
+		3,
+		"views' sixteen still views at view radius 24, height 12 (R6: culling's cost as the view grows)",
+		{24, 12},
 	},
 	{
 		"flight",
@@ -57,6 +67,7 @@ SCENARIOS := [?]Scenario {
 		2, // 2: the view model is drawn too (M48k)
 		3,
 		"fly 600 blocks over the land at 40 blocks/s, looking ahead and down",
+		{},
 	},
 	{
 		"edits",
@@ -64,6 +75,7 @@ SCENARIOS := [?]Scenario {
 		2, // 2: the explosions are queued, not waited for (R2: server.call_async)
 		3,
 		"12 explosions round the spawn, until re-meshed and the water is still",
+		{},
 	},
 	{
 		"audio",
@@ -71,6 +83,7 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"the mixer offline: 64 looping voices on 4 buses, the reverb, a music stream; 10 s of blocks",
+		{},
 	},
 	{
 		"viewmodel",
@@ -78,6 +91,7 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"the view model's vertices for a frame of the biggest model, 2000 frames",
+		{},
 	},
 	{
 		"avatars",
@@ -85,6 +99,7 @@ SCENARIOS := [?]Scenario {
 		1,
 		3,
 		"eight players walking in view from the spawn, each holding a weapon, 1200 frames",
+		{},
 	},
 }
 
@@ -214,6 +229,8 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false, size := BENCH
 		// scenario still works (its numbers compare with nothing).
 		scenario.repetitions = 1
 		app.fixed_view = {BENCH_SMOKE_VIEW_RADIUS, BENCH_SMOKE_VIEW_HEIGHT}
+	} else if scenario.view != {} {
+		app.fixed_view = scenario.view
 	}
 	b^ = {
 		scenario = scenario,
@@ -444,7 +461,9 @@ bench_repetition_done :: proc(app: ^App) {
 bench_finish :: proc(app: ^App) {
 	b := &app.bench
 	b.phase = .Off
-	if b.smoke {b.result.scenario = fmt.tprintf("%s-smoke", bench_name(b.scenario.name, b.size))}
+	// Named now: bench_name's string is the frame's (temp), long gone since bench_begin.
+	b.result.scenario = bench_name(b.scenario.name, b.size)
+	if b.smoke {b.result.scenario = fmt.tprintf("%s-smoke", b.result.scenario)}
 	path := base.bench_result_write(&b.result)
 	if path == "" {
 		bench_fail(app, "could not write the result (run from the repository: build/ must exist)")

@@ -18,6 +18,9 @@ import vk "vendor:vulkan"
 
 MAX_TEXTURES :: 1024
 PUSH_CONSTANT_SIZE :: 128
+// PUSH_STAGES: the stages that see the push constants (every pipeline's,
+// graphics and compute).
+PUSH_STAGES :: vk.ShaderStageFlags{.VERTEX, .FRAGMENT, .COMPUTE}
 
 Texture_Id :: distinct u32
 
@@ -115,7 +118,7 @@ bindless_init :: proc(g: ^Gpu) -> bool {
 	set_name(g, .DESCRIPTOR_SET, u64(b.set), "bindless set")
 
 	push := vk.PushConstantRange {
-		stageFlags = {.VERTEX, .FRAGMENT},
+		stageFlags = PUSH_STAGES,
 		size       = PUSH_CONSTANT_SIZE,
 	}
 	pl_info := vk.PipelineLayoutCreateInfo {
@@ -186,5 +189,5 @@ push_constants :: proc(
 	data: ^$T,
 ) where size_of(T) <=
 	PUSH_CONSTANT_SIZE {
-	vk.CmdPushConstants(cmd, g.pipeline_layout, {.VERTEX, .FRAGMENT}, 0, size_of(T), data)
+	vk.CmdPushConstants(cmd, g.pipeline_layout, PUSH_STAGES, 0, size_of(T), data)
 }

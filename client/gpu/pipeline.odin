@@ -5,9 +5,10 @@ import vk "vendor:vulkan"
 
 import "../../base"
 
-// Graphics pipelines for dynamic rendering. Viewport and scissor are dynamic
-// state, so pipelines don't depend on the window size and survive resizes.
-// All pipelines use the shared layout (bindless set + push constants).
+// Graphics pipelines for dynamic rendering, and compute pipelines. Viewport
+// and scissor are dynamic state, so pipelines don't depend on the window
+// size and survive resizes. All pipelines use the shared layout (bindless
+// set + push constants).
 
 Pipeline :: struct {
 	handle: vk.Pipeline,
@@ -199,6 +200,42 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		log.debugf("gpu pipeline built name=%s ms=%.2f cache_hit=%v", desc.name, ms, hit)
 	}
 	return p, true
+}
+
+// create_compute_pipeline makes a compute pipeline on the shared layout
+// (its shader reads and writes buffers by address, given in push constants).
+create_compute_pipeline :: proc(g: ^Gpu, name: string, spirv: []byte) -> (p: Pipeline, ok: bool) {
+	module := create_shader_module(g, spirv) or_return
+	defer vk.DestroyShaderModule(g.device, module, nil)
+	info := vk.ComputePipelineCreateInfo {
+		sType = .COMPUTE_PIPELINE_CREATE_INFO,
+		stage = {
+			sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+			stage = {.COMPUTE},
+			module = module,
+			pName = "main",
+		},
+		layout = g.pipeline_layout,
+	}
+	{
+		base.profile_begin("create pipeline", name)
+		defer base.profile_end()
+		check(
+			vk.CreateComputePipelines(g.device, g.pipeline_cache, 1, &info, nil, &p.handle),
+		) or_return
+	}
+	set_name(g, .PIPELINE, u64(p.handle), name)
+	g.pipelines_built += 1
+	return p, true
+}
+
+// replace_compute_pipeline: replace_pipeline's for a compute pipeline.
+replace_compute_pipeline :: proc(g: ^Gpu, p: ^Pipeline, name: string, spirv: []byte) -> bool {
+	fresh := create_compute_pipeline(g, name, spirv) or_return
+	wait_idle(g)
+	destroy_pipeline(g, p)
+	p^ = fresh
+	return true
 }
 
 // replace_pipeline rebuilds p from desc (shader hot reload). On failure p

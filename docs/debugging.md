@@ -292,6 +292,7 @@ Checks and measurements are implemented in code:
 |---|---|
 | `fly` | The memory check. Flies 400 blocks at 40 blocks/s (view 6 x 3), and fails if either session arena grew or chunk storage exceeded its fixed size. Logs frame times and resident memory. |
 | `tour` | The M10 check. Visits every biome (view 4 x 3) and screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that otherwise), or memory growth after the first biome. |
+| `cull` | The R6 check. Runs the world's culling shader on 343 chunks round a camera, from four cameras, outside the frames, and fails on any command, in-view bit or count that differs from the CPU's rules (`cull_reference`). Needs no world. |
 | `blast` | The M9 check. Hovers above the spawn (view 4 x 2) and sets off 12 rockets and explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them). |
 
 A check runs with the benchmarks' fixed settings (its own view), after any `--exec` script
@@ -717,6 +718,7 @@ A label names the pass in validation messages and GPU captures, and times it on 
 |---|---|
 | `frame` | The whole frame (a label and a timed section of its own). |
 | `upload chunk meshes` | Copies of new chunk meshes from the staging buffer. |
+| `cull` | The world's culling pass (compute, before rendering): the draw commands of the opaque and cutout layers. |
 | `world` | Opaque and cutout terrain. |
 | `entities` | Avatars, sheep, items, projectiles. |
 | `held` | The item in hand, in third person (`held_draw_world`) and first person (`held_draw_view`). |
@@ -733,7 +735,8 @@ back once its frame slot's fence has signalled. The results appear in three plac
 
 - the F3 overlay (`GPU x ms`) and the exit log line `gpu frame times`;
 - benchmark metrics: `gpu_frame` (without `gpu_present_copy`), `gpu_world`, `gpu_water`,
-  `gpu_sky`, `gpu_entities`, `gpu_held`, `gpu_upload`, `gpu_ui`, `gpu_present_copy`;
+  `gpu_sky`, `gpu_entities`, `gpu_held`, `gpu_upload`, `gpu_cull`, `gpu_ui`,
+  `gpu_present_copy`;
 - in a profiling build, the trace's GPU track, named `GPU (calibrated) <device>, <driver>`.
   With `VK_KHR_calibrated_timestamps` the GPU events sit on the CPU tracks' clock; otherwise
   the track is named `GPU (approximate) ...` and only durations are exact. Each pass carries
@@ -758,6 +761,11 @@ benchmark metrics:
 | `world_triangles` | The world pass's triangles, opaque and water (thousands). |
 | `world_meshes` | Chunk meshes drawn by the opaque world pass. A mesh is drawn as one command per run of visible face groups, so this is not a count of draws. |
 
+The opaque and cutout layers' commands are written on the GPU, so their share of these
+counts is the culling pass's own (`Cull_Stats`: meshes in view, triangles, commands that
+draw something), read back `FRAMES_IN_FLIGHT` frames late; `draw_calls` counts those
+commands, not the ones that draw nothing.
+
 A profiling build's GPU track gives each pass's draws and API calls in its arguments.
 
 ### How the world is drawn
@@ -777,23 +785,39 @@ water) with one `vkCmdDrawIndexedIndirect`:
   buffer supplies the rest. Pulling them by address (`gl_VertexIndex`) was measured and
   left out: on the development machine it cost `gpu_world`
   5-10% (history.md, R5).
-- **`world_cull`** runs before rendering (the `world cull` profile scope). It walks a
-  dense list of every mesh's chunk (`live`: 16 bytes a mesh, not the pool), tests each
-  against the frustum, sorts what it keeps by distance (a radix sort of 64-bit keys:
-  distance bits over the mesh's place), and writes one `VkDrawIndexedIndirectCommand` per
-  run of visible face groups into this frame slot's host-visible `world draw commands`
-  buffer (doubled when the mesh count needs it): opaque and cutout nearest first, water
-  farthest first. Face groups are meshed in the order +x +y +z, crossed, -z -y -x
-  (`client/mesh`), so the groups a camera sees are adjacent: two runs a mesh on average.
-- **`world_draw` and `world_draw_translucent`** bind each pipeline once and draw the
-  frame's spans. The push constants hold only what every world draw shares (the scene's
-  address, the texture array, the sampler, the time). With `debug.occlusion_stats`, the
-  opaque layer is drawn as one indirect call per queried chunk, each inside its query.
+- **The culling pass** (`world_cull`, R6) runs before rendering: the `world cull` profile
+  scope on the CPU, the `cull` label on the GPU. Every mesh shown has a `Cull_Record` (its
+  chunk, pool slot, first vertex and each opaque and cutout face group's vertex count:
+  80 bytes) in a dense device-local table (`cull records`), in the order of `live`; a mesh
+  shown, or moved into a removed one's place, marks its place dirty, and the pass first
+  copies the dirty records in from `cull staging`. `world_cull.comp` then runs one
+  invocation per record: it tests the chunk's box against the frustum's planes (taken
+  from the scene's `view_proj`) and writes `CULL_RUNS` (3) `VkDrawIndexedIndirectCommand`
+  per layer at fixed places in this frame slot's `cull commands` buffer: every opaque one,
+  then every cutout one. A run of face groups that can face the camera gets one command;
+  the others, and every command of a chunk out of view, draw nothing (`instanceCount` 0:
+  `drawIndirectCount` is not used). Face groups are meshed in the order +x +y +z, crossed,
+  -z -y -x (`client/mesh`), so the groups a camera sees make at most three runs
+  (`test_runs_of_visible_face_groups`). The pass also counts (`cull stats`, copied to the
+  host-visible `cull readback` and read by `world_begin` when the slot comes round again)
+  and sets a bit per mesh in view. The CPU never walks the opaque meshes.
+- **Water** is still culled and sorted on the CPU, farthest first (blending needs it): only
+  the meshes with water (`water`, a dense list of their own) are walked, and their commands
+  written into the host-visible `world draw commands` buffer.
+- **`world_draw` and `world_draw_translucent`** bind each pipeline once and draw: the
+  opaque and cutout layers each one indirect call over every mesh's commands, the water
+  one over its sorted commands. The push constants hold only what every world draw shares
+  (the scene's address, the texture array, the sampler, the time). With
+  `debug.occlusion_stats`, the opaque layer is drawn as one indirect call per mesh with
+  opaque faces, nearest first, each inside its query; a query counts only for a mesh the
+  pass found in view (its bit).
 
-A chunk drawn at another chunk's place points at a table slot written for one mesh and
-drawn for another (`live_at`, `world_remove_mesh`); a wrong position or texture in every
-chunk points at the push constant or scene layout (`render_test.odin` asserts both against
-the shaders' declarations).
+`--check cull` runs `world_cull.comp` on a fixed set of chunks and cameras outside the
+frames and compares every command, bit and count with `cull_reference`, the same rules on
+the CPU (`client/render/cull_check.odin`); CI runs it on lavapipe. A chunk missing at the
+edge of the screen points at the planes (the scene's `view_proj`); faces missing on one
+side of every chunk at `facing`; garbage geometry at the record layout (`render_test.odin`
+asserts `Cull_Record`, `Cull_Push` and `Cull_Stats` against the shader's declarations).
 
 Multi-draw indirect has a cost of its own on some drivers. The development machine's
 driver generates an indirect call's draws on the GPU when it holds more than a few commands; `views`
@@ -934,6 +958,7 @@ scene is a line in `scenes.txt` and `./build.sh images --accept <name>`.
 | `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check` (CI), it also fails if the chunk, mesh or vertex counts changed or a stage exceeded a generous budget. |
 | `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks. |
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame. |
+| `views-far` | The same views at view radius 24, height 12 (R6): what culling and recording cost as the view grows. A name of its own: it never compares with `views`. On a machine whose CPU and GPU share power (an integrated GPU), `frame_record` follows the GPU's load as much as the CPU's work: compare it with `views` drawn at a size that loads the GPU as much (`-size:2560x1440`). |
 | `avatars` | Eight players walking in view from the spawn, each holding one of the kit's weapons, drawn as other players are drawn: `avatar_draw` (building their vertices), the entity and held passes, the frame. |
 | `flight` | 600 blocks of flight at 40 blocks/s: frames while streaming, generation and meshing, ticks. |
 | `edits` | 12 explosions around the spawn: `edit_shown` (from a bulk edit's chunks arriving until all their new meshes are shown), meshing, frames, ticks. It waits for the water they release to settle. The explosions are queued on the in-process server (`server.call_async`), not waited for, so no frame holds a server tick of the driver's waiting (version 2, R2; version 1's frame times did). |

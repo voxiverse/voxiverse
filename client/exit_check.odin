@@ -5,6 +5,7 @@ import "core:log"
 
 import "../base"
 import "../server"
+import "render"
 
 // Exit checks (fly, tour, blast: `--check <name>`): they drive the game
 // and check how it holds up. What they share lives here: starting in a
@@ -86,6 +87,13 @@ CHECKS := [?]Check_Info {
 		proc(app: ^App) {blast_test_begin(app, 12)},
 	},
 	{
+		"cull",
+		"the GPU's culling pass against the CPU's rules: fixed chunks and cameras, every command compared",
+		2,
+		2,
+		proc(app: ^App) {cull_check_run(app)},
+	},
+	{
 		"audio",
 		"30 s of a busy session into the null device: no underruns, NaN, dropped or late commands, the callback in its block",
 		3,
@@ -136,4 +144,16 @@ exit_check_finish :: proc(app: ^App, c: ^Exit_Check, failures: []string) {
 	}
 	c.failed = len(failures) > 0
 	if c.quit {app.quit = true}
+}
+
+// cull_check_run: the cull check (render.world_cull_check), at once: no
+// world, the world pass's culling pipeline on its own buffers.
+cull_check_run :: proc(app: ^App) {
+	c := &app.cull_check
+	c^ = {
+		name = "cull_check",
+		quit = true,
+	}
+	failures := render.world_cull_check(&app.world_pass, &app.g)
+	exit_check_finish(app, c, failures[:])
 }

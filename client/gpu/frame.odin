@@ -351,3 +351,57 @@ clear_depth :: proc(frame: Frame) {
 	}
 	vk.CmdClearAttachments(frame.cmd, 1, &attachment, 1, &rect)
 }
+
+// One_Shot: commands recorded and run outside the frames (one_shot_begin,
+// one_shot_end), for checks that read their results back at once.
+One_Shot :: struct {
+	pool: vk.CommandPool,
+	cmd:  vk.CommandBuffer,
+}
+
+// one_shot_begin starts a command buffer of its own; one_shot_end submits it
+// and waits for it. Not between begin_frame and end_frame.
+one_shot_begin :: proc(g: ^Gpu) -> (s: One_Shot, ok: bool) {
+	pool_info := vk.CommandPoolCreateInfo {
+		sType            = .COMMAND_POOL_CREATE_INFO,
+		flags            = {.TRANSIENT},
+		queueFamilyIndex = g.queue_family,
+	}
+	check(vk.CreateCommandPool(g.device, &pool_info, nil, &s.pool)) or_return
+	defer if !ok {vk.DestroyCommandPool(g.device, s.pool, nil)}
+	alloc := vk.CommandBufferAllocateInfo {
+		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
+		commandPool        = s.pool,
+		level              = .PRIMARY,
+		commandBufferCount = 1,
+	}
+	check(vk.AllocateCommandBuffers(g.device, &alloc, &s.cmd)) or_return
+	begin := vk.CommandBufferBeginInfo {
+		sType = .COMMAND_BUFFER_BEGIN_INFO,
+		flags = {.ONE_TIME_SUBMIT},
+	}
+	check(vk.BeginCommandBuffer(s.cmd, &begin)) or_return
+	return s, true
+}
+
+// one_shot_end: false if the commands could not be run (said why).
+one_shot_end :: proc(g: ^Gpu, s: ^One_Shot) -> (ok: bool) {
+	defer {
+		vk.DestroyCommandPool(g.device, s.pool, nil) // (frees the buffer)
+		s^ = {}
+	}
+	check(vk.EndCommandBuffer(s.cmd)) or_return
+	fence_info := vk.FenceCreateInfo {
+		sType = .FENCE_CREATE_INFO,
+	}
+	fence: vk.Fence
+	check(vk.CreateFence(g.device, &fence_info, nil, &fence)) or_return
+	defer vk.DestroyFence(g.device, fence, nil)
+	submit := vk.SubmitInfo {
+		sType              = .SUBMIT_INFO,
+		commandBufferCount = 1,
+		pCommandBuffers    = &s.cmd,
+	}
+	check(vk.QueueSubmit(g.queue, 1, &submit, fence)) or_return
+	return check(vk.WaitForFences(g.device, 1, &fence, true, max(u64)))
+}

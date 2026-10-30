@@ -101,6 +101,7 @@ App :: struct {
 	fly_test:         Fly_Test,
 	blast_test:       Blast_Test,
 	audio_check:      Audio_Check,
+	cull_check:       Exit_Check, // `--check cull` (cull_check_run)
 	tour_test:        Tour_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
 	script_failed:    bool, // an --exec script could not go on (fails the run)
@@ -568,7 +569,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool, number: int) -> bool {
 		}
 		if in_world {
 			base.profile_scope("world cull")
-			render.world_cull(&app.world_pass, g, camera)
+			render.world_cull(&app.world_pass, g, frame, scene, camera)
 		}
 		textures := u32(app.world_pass.textures_id)
 		base.profile_begin("record commands") // (no return before its end)

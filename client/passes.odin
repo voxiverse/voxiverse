@@ -113,7 +113,7 @@ PASSES := [Pass]Pass_Info {
 	},
 	.World = {
 		shader = "world",
-		others = {"world_cutout", "water"},
+		others = {"world_cutout", "water", "world_cull"},
 		includes = {"scene", "world"},
 		init = world_pass_init,
 		reload = proc(app: ^App, vert, frag: []u8) -> bool {
@@ -151,11 +151,12 @@ pass_shaders :: proc(info: Pass_Info) -> (vert, frag: []u8, ok: bool) {
 }
 
 // world_shaders: the world pass's vertex shader, its opaque fragment
-// shader (given) and the other layers' (read here).
+// shader (given), the other layers' and the culling pass's (read here).
 world_shaders :: proc(vert, frag: []u8) -> (shaders: render.World_Shaders, ok: bool) {
 	shaders.vertex = vert
 	shaders.fragment[.Opaque] = frag
 	shaders.fragment[.Cutout] = read_shader("world_cutout.frag.spv") or_return
 	shaders.fragment[.Translucent] = read_shader("water.frag.spv") or_return
+	shaders.cull = read_shader("world_cull.comp.spv") or_return
 	return shaders, true
 }

@@ -23,7 +23,7 @@ import "../gpu"
 //	render.world_begin(&pass, &g)
 //	render.world_add_mesh(...) / world_remove_mesh(...)  // add returns .Busy when staging is full
 //	render.world_upload(&pass, &g, frame)                // before begin_rendering
-//	render.world_cull(&pass, &g, camera)                 // the draw commands
+//	render.world_cull(&pass, &g, frame, scene, camera)   // the draw commands (GPU culling)
 //	... begin_rendering ...
 //	render.world_draw(&pass, &g, frame, scene)           // opaque, cutout
 //	... entities, sky ...
@@ -35,10 +35,20 @@ import "../gpu"
 //
 // Drawing is indirect. The chunk draw table holds one Chunk_Draw per mesh,
 // at its pool slot; world.vert reads it as a per-instance attribute, so a
-// command's firstInstance (the mesh's slot) picks its chunk. world_cull
-// culls on the CPU and writes one vk.DrawIndexedIndirectCommand per run of
-// visible face groups into this frame slot's indirect buffer; each layer is
-// then one vkCmdDrawIndexedIndirect. (Vertices come through vertex input,
+// command's firstInstance (the mesh's slot) picks its chunk.
+//
+// Culling is on the GPU (R6). Every mesh shown has a Cull_Record in a dense
+// table (its place: live_at); world_cull dispatches world_cull.comp, one
+// invocation per record, which tests the chunk against the frustum (from
+// the scene buffer) and writes CULL_RUNS vk.DrawIndexedIndirectCommand per
+// opaque and cutout layer at fixed places: one per run of face groups that
+// can face the camera, the rest (and every command of a mesh out of view)
+// drawing nothing. Each layer is then one vkCmdDrawIndexedIndirect of every
+// mesh's commands: the CPU never walks the meshes. Water is drawn after
+// everything else, farthest first, so the CPU still culls and sorts the
+// meshes with water (a short list of their own). What the GPU drew (meshes,
+// triangles, commands) is read back FRAMES_IN_FLIGHT frames late, for the
+// statistics. (Vertices come through vertex input,
 // not pulled by address: on the development machine's GPU pulling cost the
 // world pass 5-10%; R8's quad records bring pulling, with their own check.)
 
@@ -58,10 +68,41 @@ Chunk_Draw :: struct {
 	first_vertex: u32,
 }
 
-// Indirect commands a mesh can take in a frame, at most: runs of visible
-// face groups in the opaque and cutout layers (three at most in the group
-// order; four bounds it), one translucent.
-COMMANDS_PER_MESH :: 4 + 4 + 1
+// CULL_RUNS: commands per mesh in each culled layer: runs of face groups
+// that can face the camera, three at most in the group order (whichever
+// side of a chunk the camera is on along an axis, one of the axis's two
+// groups can face it; test_runs_of_visible_face_groups tries every case).
+CULL_RUNS :: 3
+CULL_LAYERS :: 2 // opaque and cutout: culled on the GPU (water on the CPU)
+
+// Cull_Record: a mesh shown, in the dense table world_cull.comp reads
+// (std430, as the shader declares it).
+Cull_Record :: struct {
+	chunk:        [3]i32,
+	slot:         u32, // its pool slot (its Chunk_Draw: the commands' firstInstance)
+	first_vertex: u32,
+	counts:       [CULL_LAYERS * FACE_GROUPS]u32, // face groups' vertices, opaque then cutout
+	_:            u32,
+}
+
+// Cull_Push matches world_cull.comp's push constants.
+@(private)
+Cull_Push :: struct {
+	scene:    u64,
+	records:  u64,
+	commands: u64,
+	stats:    u64,
+	count:    u32,
+}
+
+// Cull_Stats: the head of world_cull.comp's statistics (a bit per mesh in
+// view follows it).
+Cull_Stats :: struct {
+	drawn:     u32, // meshes with opaque faces in view
+	triangles: u32, // opaque and cutout
+	commands:  u32, // that draw something
+	_:         u32,
+}
 
 Camera :: struct {
 	chunk:     [3]i32, // the camera's chunk; everything below is relative to its origin
@@ -80,10 +121,12 @@ Mesh_Layer :: enum u8 {
 	Translucent,
 }
 
-// World_Shaders: the world's SPIR-V, one vertex shader for every layer.
+// World_Shaders: the world's SPIR-V, one vertex shader for every layer,
+// and the culling pass's compute shader.
 World_Shaders :: struct {
 	vertex:   []byte,
 	fragment: [Mesh_Layer][]byte,
+	cull:     []byte,
 }
 
 Upload_Result :: enum {
@@ -95,6 +138,7 @@ Upload_Result :: enum {
 World_Pass :: struct {
 	settings:         World_Settings,
 	pipelines:        [Mesh_Layer]gpu.Pipeline,
+	cull_pipeline:    gpu.Pipeline,
 	vertices:         gpu.Buffer,
 	chunk_draws:      gpu.Buffer, // one Chunk_Draw per mesh pool slot
 	ranges:           base.Range_Allocator, // in vertices
@@ -112,16 +156,27 @@ World_Pass :: struct {
 	// what occlusion culling could leave out.
 	occlusion:        bool,
 	occlusion_stats:  Occlusion_Stats,
-	// This frame's meshes in view (world_draw), and keys into it sorted
-	// nearest first: those with opaque or cutout faces, those with water.
-	// Every mesh's chunk, densely (what culling walks: a mesh is larger,
-	// and the pool has gaps), and each pool slot's place in it.
+	// Every mesh shown, densely (the pool has gaps), and each pool slot's
+	// place in it; their Cull_Records, in the same order, as the GPU's table
+	// (cull_records) has them once the records changed since are copied
+	// (dirty: their places, each once).
 	live:             [dynamic]Live_Mesh,
 	live_at:          []u32,
+	records:          [dynamic]Cull_Record,
+	cull_records:     gpu.Buffer,
+	dirty:            [dynamic]u32,
+	is_dirty:         []bool,
+	// The meshes shown with water, densely (culled and sorted on the CPU),
+	// and each pool slot's place in it.
+	water:            [dynamic]Live_Mesh,
+	water_at:         []u32,
+	// This frame's water in view, and keys into it sorted nearest first; with
+	// occlusion statistics, every mesh's place in live, nearest first.
 	visible:          [dynamic]Visible,
 	near_first:       [dynamic]u64,
 	water_near_first: [dynamic]u64,
 	sort_scratch:     [dynamic]u64,
+	gpu_stats:        Cull_Stats, // the GPU's culling, as last read back
 }
 
 Occlusion_Stats :: struct {
@@ -157,17 +212,25 @@ Mesh :: struct {
 
 @(private)
 World_Frame :: struct {
-	staging:      gpu.Buffer,
-	staging_used: int,
-	copies:       [dynamic]vk.BufferCopy, // into the vertices
-	draw_copies:  [dynamic]vk.BufferCopy, // into the chunk draw table
-	// This frame's draw commands, written by world_cull (grown there).
-	indirect:     gpu.Buffer,
-	commands:     int, // written this frame
-	spans:        [Mesh_Layer][dynamic]Span, // what each layer's draws are
-	freed:        [dynamic]base.Range, // reusable once this slot comes round again
-	queries:      vk.QueryPool, // occlusion (made when first wanted)
-	queried:      u32, // queries recorded in this slot's last frame
+	staging:       gpu.Buffer,
+	staging_used:  int,
+	copies:        [dynamic]vk.BufferCopy, // into the vertices
+	draw_copies:   [dynamic]vk.BufferCopy, // into the chunk draw table
+	// This frame's water draw commands, written by world_cull (grown there).
+	indirect:      gpu.Buffer,
+	commands:      int, // written this frame
+	water:         Span,
+	// The culling pass's: its commands (CULL_RUNS per mesh per culled
+	// layer, every opaque one, then every cutout one), its statistics and
+	// their copy for the CPU, and the records it copies into the table.
+	cull_commands: gpu.Buffer,
+	cull_stats:    gpu.Buffer,
+	cull_readback: gpu.Buffer,
+	cull_staging:  gpu.Buffer,
+	culled:        u32, // meshes culled this frame (its commands' count / CULL_RUNS / CULL_LAYERS)
+	freed:         [dynamic]base.Range, // reusable once this slot comes round again
+	queries:       vk.QueryPool, // occlusion (made when first wanted)
+	queried:       [dynamic]u32, // the meshes (places in live) queried in this slot's last frame
 }
 
 // World_Push matches world.glsl's push constants: the same for every
@@ -200,6 +263,14 @@ world_init :: proc(
 	for &pipeline, layer in p.pipelines {
 		pipeline = gpu.create_pipeline(g, world_pipeline_desc(g, shaders, layer)) or_return
 	}
+	p.cull_pipeline = gpu.create_compute_pipeline(g, "world cull", shaders.cull) or_return
+	p.cull_records = gpu.create_buffer(
+		g,
+		max_meshes * size_of(Cull_Record),
+		{.STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS, .TRANSFER_DST},
+		false,
+		"cull records",
+	) or_return
 	p.vertices = gpu.create_buffer(
 		g,
 		int(settings.vertex_capacity) * WORLD_VERTEX_SIZE,
@@ -237,6 +308,11 @@ world_init :: proc(
 	if base.pool_init(&p.meshes, max_meshes, allocator) != nil {return false}
 	p.live = make([dynamic]Live_Mesh, 0, max_meshes, allocator)
 	p.live_at = make([]u32, max_meshes + 1, allocator)
+	p.records = make([dynamic]Cull_Record, 0, max_meshes, allocator)
+	p.dirty = make([dynamic]u32, allocator)
+	p.is_dirty = make([]bool, max_meshes, allocator)
+	p.water = make([dynamic]Live_Mesh, allocator)
+	p.water_at = make([]u32, max_meshes + 1, allocator)
 	p.visible = make([dynamic]Visible, allocator)
 	p.near_first = make([dynamic]u64, allocator)
 	p.water_near_first = make([dynamic]u64, allocator)
@@ -251,8 +327,23 @@ world_init :: proc(
 		) or_return
 		f.copies = make([dynamic]vk.BufferCopy, allocator)
 		f.draw_copies = make([dynamic]vk.BufferCopy, allocator)
-		for &spans in f.spans {spans = make([dynamic]Span, allocator)}
 		f.freed = make([dynamic]base.Range, allocator)
+		f.queried = make([dynamic]u32, allocator)
+		stats_size := size_of(Cull_Stats) + (max_meshes + 31) / 32 * size_of(u32)
+		f.cull_stats = gpu.create_buffer(
+			g,
+			stats_size,
+			{.STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS, .TRANSFER_DST, .TRANSFER_SRC},
+			false,
+			i == 0 ? "cull stats 0" : "cull stats 1",
+		) or_return
+		f.cull_readback = gpu.create_buffer(
+			g,
+			stats_size,
+			{.TRANSFER_DST},
+			true,
+			i == 0 ? "cull readback 0" : "cull readback 1",
+		) or_return
 	}
 
 	// Indices and textures go up with the first frame.
@@ -349,6 +440,7 @@ world_reload :: proc(p: ^World_Pass, g: ^gpu.Gpu, shaders: World_Shaders) -> boo
 	for &pipeline, layer in p.pipelines {
 		if !gpu.replace_pipeline(g, &pipeline, world_pipeline_desc(g, shaders, layer)) {ok = false}
 	}
+	if !gpu.replace_compute_pipeline(g, &p.cull_pipeline, "world cull", shaders.cull) {ok = false}
 	return ok
 }
 
@@ -358,7 +450,11 @@ world_destroy :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 		if f.queries != 0 {vk.DestroyQueryPool(g.device, f.queries, nil)}
 		gpu.destroy_buffer(g, &f.staging)
 		gpu.destroy_buffer(g, &f.indirect)
-		for spans in f.spans {delete(spans)}
+		gpu.destroy_buffer(g, &f.cull_commands)
+		gpu.destroy_buffer(g, &f.cull_stats)
+		gpu.destroy_buffer(g, &f.cull_readback)
+		gpu.destroy_buffer(g, &f.cull_staging)
+		delete(f.queried)
 		delete(f.copies)
 		delete(f.draw_copies)
 		delete(f.freed)
@@ -366,6 +462,11 @@ world_destroy :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	delete(p.setup_pending)
 	delete(p.live)
 	delete(p.live_at)
+	delete(p.records)
+	delete(p.dirty)
+	delete(p.is_dirty)
+	delete(p.water)
+	delete(p.water_at)
 	delete(p.visible)
 	delete(p.near_first)
 	delete(p.water_near_first)
@@ -376,32 +477,45 @@ world_destroy :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	gpu.destroy_image(g, &p.textures)
 	gpu.destroy_buffer(g, &p.indices)
 	gpu.destroy_buffer(g, &p.chunk_draws)
+	gpu.destroy_buffer(g, &p.cull_records)
 	gpu.destroy_buffer(g, &p.vertices)
 	for &pipeline in p.pipelines {gpu.destroy_pipeline(g, &pipeline)}
+	gpu.destroy_pipeline(g, &p.cull_pipeline)
 	p^ = {}
 }
 
 // world_begin starts this frame slot's uploads: its staging buffer is free
-// again, and ranges removed when the slot was last used can be reused.
+// again, and ranges removed when the slot was last used can be reused. What
+// the slot's last culling pass counted is read back.
 world_begin :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	f := &p.frames[gpu.frame_slot(g)]
 	f.staging_used = 0
 	f.commands = 0
-	for &spans in f.spans {clear(&spans)}
+	f.water = {}
+	if f.culled > 0 {
+		p.gpu_stats = (^Cull_Stats)(f.cull_readback.mapped)^
+		f.culled = 0
+	}
 	clear(&f.copies)
 	clear(&f.draw_copies)
 	for r in f.freed {base.range_free(&p.ranges, r)}
 	clear(&f.freed)
 	p.stats.uploaded_bytes = 0
 	// This slot's last occlusion queries are done (its fence was waited on).
-	if f.queried > 0 {
+	// A query counts only for a mesh the GPU found in view (the rest drew
+	// nothing).
+	if n := u32(len(f.queried)); n > 0 {
 		results: [OCCLUSION_QUERIES]u64
+		visible := mem.slice_data_cast(
+			[]u32,
+			f.cull_readback.mapped[size_of(Cull_Stats):f.cull_readback.size],
+		)
 		if vk.GetQueryPoolResults(
 			   g.device,
 			   f.queries,
 			   0,
-			   f.queried,
-			   int(f.queried) * size_of(u64),
+			   n,
+			   int(n) * size_of(u64),
 			   &results[0],
 			   size_of(u64),
 			   {._64},
@@ -409,10 +523,14 @@ world_begin :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 		   .SUCCESS {
 			o := &p.occlusion_stats
 			o.frames += 1
-			o.queried += int(f.queried)
-			for r in results[:f.queried] {if r == 0 {o.hidden += 1}}
+			for r, q in results[:n] {
+				at := f.queried[q]
+				if visible[at >> 5] & (1 << (at & 31)) == 0 {continue}
+				o.queried += 1
+				if r == 0 {o.hidden += 1}
+			}
 		}
-		f.queried = 0
+		clear(&f.queried)
 	}
 }
 
@@ -462,8 +580,7 @@ world_add_mesh :: proc(
 		log.error("render too many chunk meshes")
 		return 0, .Full
 	}
-	p.live_at[base.pool_index(h)] = u32(len(p.live))
-	append(&p.live, Live_Mesh{chunk, h})
+	if !hidden {live_add(p, h)}
 	copy(f.staging.mapped[f.staging_used:][:len(vertices)], vertices)
 	append(
 		&f.copies,
@@ -494,7 +611,10 @@ world_add_mesh :: proc(
 
 // world_show_mesh starts drawing a mesh added hidden.
 world_show_mesh :: proc(p: ^World_Pass, h: Mesh_Handle) {
-	if m := base.pool_get(&p.meshes, h); m != nil {m.hidden = false}
+	if m := base.pool_get(&p.meshes, h); m != nil && m.hidden {
+		m.hidden = false
+		live_add(p, h)
+	}
 }
 
 // world_remove_mesh stops drawing the mesh; its memory is reused once the
@@ -503,13 +623,62 @@ world_remove_mesh :: proc(p: ^World_Pass, g: ^gpu.Gpu, h: Mesh_Handle) {
 	m := base.pool_get(&p.meshes, h)
 	if m == nil {return}
 	append(&p.frames[gpu.frame_slot(g)].freed, m.range)
-	at := p.live_at[base.pool_index(h)]
+	if !m.hidden {live_remove(p, h, m)}
+	base.pool_remove(&p.meshes, h)
+}
+
+// live_add puts a mesh being shown at the end of live (and of water, if it
+// has some), its record to be copied.
+@(private = "file")
+live_add :: proc(p: ^World_Pass, h: Mesh_Handle) {
+	m := base.pool_get(&p.meshes, h)
+	slot := base.pool_index(h)
+	p.live_at[slot] = u32(len(p.live))
+	append(&p.live, Live_Mesh{m.chunk, h})
+	record := Cull_Record {
+		chunk        = m.chunk,
+		slot         = slot,
+		first_vertex = m.range.offset,
+	}
+	copy(record.counts[:FACE_GROUPS], m.counts[.Opaque][:])
+	copy(record.counts[FACE_GROUPS:], m.counts[.Cutout][:])
+	append(&p.records, record)
+	record_dirty(p, p.live_at[slot])
+	if m.layers[.Translucent] > 0 {
+		p.water_at[slot] = u32(len(p.water))
+		append(&p.water, Live_Mesh{m.chunk, h})
+	}
+}
+
+// live_remove takes a mesh shown out of live (and water): the last takes
+// its place, its record to be copied there.
+@(private = "file")
+live_remove :: proc(p: ^World_Pass, h: Mesh_Handle, m: ^Mesh) {
+	slot := base.pool_index(h)
+	at := p.live_at[slot]
 	last := pop(&p.live)
+	last_record := pop(&p.records)
 	if int(at) < len(p.live) {
 		p.live[at] = last
+		p.records[at] = last_record
 		p.live_at[base.pool_index(last.handle)] = at
+		record_dirty(p, at)
 	}
-	base.pool_remove(&p.meshes, h)
+	if m.layers[.Translucent] > 0 {
+		at = p.water_at[slot]
+		last = pop(&p.water)
+		if int(at) < len(p.water) {
+			p.water[at] = last
+			p.water_at[base.pool_index(last.handle)] = at
+		}
+	}
+}
+
+@(private = "file")
+record_dirty :: proc(p: ^World_Pass, at: u32) {
+	if p.is_dirty[at] {return}
+	p.is_dirty[at] = true
+	append(&p.dirty, at)
 }
 
 // world_upload records this frame's copies. Call before begin_rendering.
@@ -646,106 +815,233 @@ upload_setup :: proc(p: ^World_Pass, f: ^World_Frame, cmd: vk.CommandBuffer) -> 
 	return true
 }
 
-// world_cull finds the meshes in the camera's view and writes this frame's
-// draw commands. Call before world_draw (a GPU culling pass, recorded
-// before rendering, will take its place).
-world_cull :: proc(p: ^World_Pass, g: ^gpu.Gpu, camera: Camera) {
+// world_cull writes this frame's draw commands: the culling pass (compute,
+// recorded here, before rendering) writes the opaque and cutout layers',
+// the CPU the water's. scene: this frame's scene_upload (for camera).
+world_cull :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64, camera: Camera) {
 	p.stats.meshes = p.meshes.count
 	p.stats.vertices_used = p.ranges.used
-	p.stats.drawn = 0
+	p.stats.drawn = int(p.gpu_stats.drawn)
 	p.stats.triangles = 0
 	p.stats.api_draws = 0
 	clear(&p.visible)
 	clear(&p.near_first)
 	clear(&p.water_near_first)
-	if p.meshes.count == 0 {return}
+	if len(p.live) == 0 {return}
 	slot := &p.frames[gpu.frame_slot(g)]
-	// Room for every command this frame can write; its last frame is done.
-	if !indirect_reserve(g, slot, p.meshes.count * COMMANDS_PER_MESH) {return}
-	// The meshes in view, each list sorted nearest first: what is nearer is
-	// drawn before what it hides, so the depth test spares the hidden
-	// fragments their shading (water is drawn the other way). A key is the
-	// distance's bits (ordered as the distance: it is not negative) over
-	// the mesh's place in visible.
+	if !cull_dispatch(p, g, frame.cmd, slot, scene) {return}
+	slot.culled = u32(len(p.live))
+	if p.occlusion && slot.queries != 0 {
+		// The meshes with opaque faces nearest first (each drawn on its own,
+		// in a query, after the nearer ones that may hide it).
+		for l, at in p.live {
+			if base.pool_get(&p.meshes, l.handle).layers[.Opaque] == 0 {continue}
+			append(&p.near_first, distance_key(l.chunk, camera, u32(at)))
+		}
+		sort_keys(p.near_first[:], &p.sort_scratch)
+	}
+
+	// Water in view, drawn farthest first (blended over what is behind).
 	planes := frustum_planes(camera.view_proj)
-	for l in p.live {
+	for l in p.water {
 		origin := (l.chunk - camera.chunk) * CHUNK_EXTENT
 		lo := [3]f32{f32(origin.x), f32(origin.y), f32(origin.z)}
 		if !box_visible(&planes, lo, lo + CHUNK_EXTENT) {continue}
-		m := base.pool_get(&p.meshes, l.handle)
-		if m.hidden {continue}
-		h := l.handle
-		d := lo + CHUNK_EXTENT / 2 - camera.position
-		distance := d.x * d.x + d.y * d.y + d.z * d.z
-		key := u64(transmute(u32)distance) << 32 | u64(len(p.visible))
-		append(&p.visible, Visible{m, base.pool_index(h), facing(lo, camera.position)})
-		if m.layers[.Opaque] + m.layers[.Cutout] > 0 {append(&p.near_first, key)}
-		if m.layers[.Translucent] > 0 {append(&p.water_near_first, key)}
+		key := distance_key(l.chunk, camera, u32(len(p.visible)))
+		append(&p.visible, Visible{base.pool_get(&p.meshes, l.handle), base.pool_index(l.handle)})
+		append(&p.water_near_first, key)
 	}
-	sort_keys(p.near_first[:], &p.sort_scratch)
+	if len(p.visible) == 0 || !indirect_reserve(g, slot, len(p.visible)) {return}
 	sort_keys(p.water_near_first[:], &p.sort_scratch)
-	query := p.occlusion && slot.queries != 0
-	queried := 0
-	for layer in ([2]Mesh_Layer{.Opaque, .Cutout}) {
-		span := Span {
-			first = slot.commands,
-		}
-		for key in p.near_first {
-			v := &p.visible[u32(key)]
-			if v.mesh.layers[layer] == 0 {continue}
-			if layer == .Opaque {p.stats.drawn += 1}
-			if query && layer == .Opaque && queried < OCCLUSION_QUERIES {
-				// Counting what each chunk hides: a span (a draw) a chunk.
-				at := slot.commands
-				t := write_commands(slot, v, layer)
-				append(&slot.spans[layer], Span{at, slot.commands - at, t, true})
-				queried += 1
-				span.first = slot.commands
-				continue
-			}
-			span.triangles += write_commands(slot, v, layer)
-		}
-		span.count = slot.commands - span.first
-		append(&slot.spans[layer], span)
-	}
-	span := Span {
-		first = slot.commands,
-	}
+	commands := ([^]vk.DrawIndexedIndirectCommand)(slot.indirect.mapped)
 	#reverse for key in p.water_near_first {
-		span.triangles += write_commands(slot, &p.visible[u32(key)], .Translucent)
+		v := &p.visible[u32(key)]
+		m := v.mesh
+		first := m.range.offset + m.layers[.Opaque] + m.layers[.Cutout]
+		commands[slot.commands] = {m.layers[.Translucent] / 4 * 6, 1, 0, i32(first), v.slot}
+		slot.commands += 1
+		slot.water.triangles += int(m.layers[.Translucent] / 2)
 	}
-	span.count = slot.commands - span.first
-	append(&slot.spans[.Translucent], span)
+	slot.water.count = slot.commands
 }
 
-// world_draw draws the opaque and cutout layers world_cull found in view,
-// one indirect draw a layer. Call inside rendering. scene: this frame's
-// scene_upload (for world_cull's camera).
+// distance_key: a sort key for a chunk by its distance from the camera
+// (its centre's, squared): the distance's bits (ordered as the distance: it
+// is not negative) over what it is the key of.
+@(private = "file")
+distance_key :: proc(chunk: [3]i32, camera: Camera, of: u32) -> u64 {
+	origin := (chunk - camera.chunk) * CHUNK_EXTENT
+	d := [3]f32{f32(origin.x), f32(origin.y), f32(origin.z)} + CHUNK_EXTENT / 2 - camera.position
+	distance := d.x * d.x + d.y * d.y + d.z * d.z
+	return u64(transmute(u32)distance) << 32 | u64(of)
+}
+
+// cull_dispatch records the culling pass: the records changed since last
+// time copied into the table, the statistics cleared, world_cull.comp over
+// every mesh shown, and the statistics copied for the CPU (world_begin
+// reads them when the slot comes round again).
+@(private = "file")
+cull_dispatch :: proc(
+	p: ^World_Pass,
+	g: ^gpu.Gpu,
+	cmd: vk.CommandBuffer,
+	f: ^World_Frame,
+	scene: u64,
+) -> bool {
+	n := len(p.live)
+	buffer_reserve(
+		g,
+		&f.cull_commands,
+		n * CULL_LAYERS * CULL_RUNS * size_of(vk.DrawIndexedIndirectCommand),
+		{.INDIRECT_BUFFER, .STORAGE_BUFFER, .SHADER_DEVICE_ADDRESS},
+		false,
+		"cull commands",
+	) or_return
+	buffer_reserve(
+		g,
+		&f.cull_staging,
+		max(len(p.dirty), 1) * size_of(Cull_Record),
+		{.TRANSFER_SRC},
+		true,
+		"cull staging",
+	) or_return
+	copies := make([dynamic]vk.BufferCopy, 0, len(p.dirty), context.temp_allocator)
+	for at in p.dirty {
+		p.is_dirty[at] = false
+		if int(at) >= n {continue} 	// (no longer a place: the list shrank)
+		offset := len(copies) * size_of(Cull_Record)
+		mem.copy(&f.cull_staging.mapped[offset], &p.records[at], size_of(Cull_Record))
+		append(
+			&copies,
+			vk.BufferCopy {
+				srcOffset = vk.DeviceSize(offset),
+				dstOffset = vk.DeviceSize(at) * size_of(Cull_Record),
+				size = size_of(Cull_Record),
+			},
+		)
+	}
+	clear(&p.dirty)
+
+	gpu.begin_label(g, cmd, "cull")
+	defer gpu.end_label(g, cmd)
+	// The table was last read by the previous frame's pass: written after it.
+	memory_barrier(cmd, {.COMPUTE_SHADER, .COPY}, {}, {.COPY, .CLEAR}, {.TRANSFER_WRITE})
+	stats_size := size_of(Cull_Stats) + (n + 31) / 32 * size_of(u32)
+	vk.CmdFillBuffer(cmd, f.cull_stats.handle, 0, vk.DeviceSize(stats_size), 0)
+	if len(copies) > 0 {
+		vk.CmdCopyBuffer(
+			cmd,
+			f.cull_staging.handle,
+			p.cull_records.handle,
+			u32(len(copies)),
+			raw_data(copies),
+		)
+	}
+	memory_barrier(
+		cmd,
+		{.COPY, .CLEAR},
+		{.TRANSFER_WRITE},
+		{.COMPUTE_SHADER},
+		{.SHADER_STORAGE_READ, .SHADER_STORAGE_WRITE},
+	)
+	vk.CmdBindPipeline(cmd, .COMPUTE, p.cull_pipeline.handle)
+	push := Cull_Push {
+		scene    = scene,
+		records  = gpu.buffer_address(g, p.cull_records),
+		commands = gpu.buffer_address(g, f.cull_commands),
+		stats    = gpu.buffer_address(g, f.cull_stats),
+		count    = u32(n),
+	}
+	gpu.push_constants(g, cmd, &push)
+	vk.CmdDispatch(cmd, u32(n + CULL_GROUP - 1) / CULL_GROUP, 1, 1)
+	memory_barrier(
+		cmd,
+		{.COMPUTE_SHADER},
+		{.SHADER_STORAGE_WRITE},
+		{.DRAW_INDIRECT, .COPY},
+		{.INDIRECT_COMMAND_READ, .TRANSFER_READ},
+	)
+	region := vk.BufferCopy {
+		size = vk.DeviceSize(stats_size),
+	}
+	vk.CmdCopyBuffer(cmd, f.cull_stats.handle, f.cull_readback.handle, 1, &region)
+	memory_barrier(cmd, {.COPY}, {.TRANSFER_WRITE}, {.HOST}, {.HOST_READ})
+	return true
+}
+
+CULL_GROUP :: 64 // world_cull.comp's local_size_x
+
+@(private)
+memory_barrier :: proc(
+	cmd: vk.CommandBuffer,
+	src_stage: vk.PipelineStageFlags2,
+	src_access: vk.AccessFlags2,
+	dst_stage: vk.PipelineStageFlags2,
+	dst_access: vk.AccessFlags2,
+) {
+	barrier := vk.MemoryBarrier2 {
+		sType         = .MEMORY_BARRIER_2,
+		srcStageMask  = src_stage,
+		srcAccessMask = src_access,
+		dstStageMask  = dst_stage,
+		dstAccessMask = dst_access,
+	}
+	dep := vk.DependencyInfo {
+		sType              = .DEPENDENCY_INFO,
+		memoryBarrierCount = 1,
+		pMemoryBarriers    = &barrier,
+	}
+	vk.CmdPipelineBarrier2(cmd, &dep)
+}
+
+// world_draw draws the opaque and cutout layers: every mesh's commands the
+// culling pass wrote, one indirect draw a layer (with occlusion statistics,
+// the opaque layer a draw a mesh, nearest first). Call inside rendering.
+// scene: this frame's scene_upload (for world_cull's camera).
 world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64) {
 	slot := &p.frames[gpu.frame_slot(g)]
-	if slot.commands == 0 {return}
+	n := int(slot.culled)
+	if n == 0 {return}
 	cmd := frame.cmd
 	gpu.begin_label(g, cmd, "world")
 	defer gpu.end_label(g, cmd)
-	query := 0
-	for layer in ([2]Mesh_Layer{.Opaque, .Cutout}) {
+	// What they draw is known on the GPU: counted once, as last read back.
+	calls, triangles := int(p.gpu_stats.commands), int(p.gpu_stats.triangles)
+	for layer, l in ([2]Mesh_Layer{.Opaque, .Cutout}) {
 		draw_begin(p, g, cmd, layer, scene, 0)
-		for s in slot.spans[layer] {
-			if s.query {vk.CmdBeginQuery(cmd, slot.queries, u32(query), {})}
-			draw_span(p, g, cmd, slot, s)
-			if s.query {
-				vk.CmdEndQuery(cmd, slot.queries, u32(query))
-				query += 1
+		first := l * n * CULL_RUNS
+		if layer == .Opaque && len(p.near_first) > 0 {
+			for key in p.near_first {
+				at := u32(key)
+				query := len(slot.queried) < OCCLUSION_QUERIES
+				if query {vk.CmdBeginQuery(cmd, slot.queries, u32(len(slot.queried)), {})}
+				draw_commands(
+					p,
+					g,
+					cmd,
+					slot.cull_commands,
+					first + int(at) * CULL_RUNS,
+					CULL_RUNS,
+					triangles,
+					calls,
+				)
+				triangles, calls = 0, 0
+				if query {
+					vk.CmdEndQuery(cmd, slot.queries, u32(len(slot.queried)))
+					append(&slot.queried, at)
+				}
 			}
+			continue
 		}
+		draw_commands(p, g, cmd, slot.cull_commands, first, n * CULL_RUNS, triangles, calls)
+		triangles, calls = 0, 0
 	}
-	slot.queried = u32(query)
 }
 
-// world_draw_translucent draws the translucent layers world_cull found in
-// view, the farthest chunks first (blending needs what is behind drawn
-// already: the commands are written in that order). Call after world_draw.
-// time: seconds, for the moving surface.
+// world_draw_translucent draws the water world_cull found in view, the
+// farthest chunks first (blending needs what is behind drawn already: the
+// commands are written in that order). Call after world_draw. time:
+// seconds, for the moving surface.
 world_draw_translucent :: proc(
 	p: ^World_Pass,
 	g: ^gpu.Gpu,
@@ -754,22 +1050,20 @@ world_draw_translucent :: proc(
 	time: f32,
 ) {
 	slot := &p.frames[gpu.frame_slot(g)]
-	spans := slot.spans[.Translucent][:]
-	if len(spans) == 0 || spans[0].count == 0 {return}
+	if slot.water.count == 0 {return}
 	cmd := frame.cmd
 	gpu.begin_label(g, cmd, "water")
 	defer gpu.end_label(g, cmd)
 	draw_begin(p, g, cmd, .Translucent, scene, time)
-	draw_span(p, g, cmd, slot, spans[0])
+	s := slot.water
+	draw_commands(p, g, cmd, slot.indirect, s.first, s.count, s.triangles)
 }
 
-// Span: commands drawn by one indirect draw (in the occlusion statistics'
-// queries, one mesh's).
+// Span: commands drawn by one indirect draw.
 @(private)
 Span :: struct {
 	first, count: int,
 	triangles:    int,
-	query:        bool,
 }
 
 // Live_Mesh: a mesh's chunk, for culling.
@@ -779,19 +1073,18 @@ Live_Mesh :: struct {
 	handle: Mesh_Handle,
 }
 
-// Visible: a mesh in view this frame.
+// Visible: a mesh with water in view this frame.
 @(private)
 Visible :: struct {
-	mesh:  ^Mesh,
-	slot:  u32, // its pool slot: its record in the chunk draw table
-	faces: u8, // bit g: face group g can face the camera (facing)
+	mesh: ^Mesh,
+	slot: u32, // its pool slot: its record in the chunk draw table
 }
 
 // facing: which face groups of a chunk whose box starts at lo can face a
 // camera at eye: a group's faces lie within the chunk's box, so +x faces can
 // face the camera only when it is past the box's low x side, and so on;
-// both-ways faces (plants) always can.
-@(private = "file")
+// both-ways faces (plants) always can. (world_cull.comp has the same.)
+@(private)
 facing :: proc(lo, eye: [3]f32) -> (faces: u8) {
 	hi := lo + CHUNK_EXTENT
 	if eye.x > lo.x {faces |= 1 << 0} 	// +x
@@ -803,18 +1096,104 @@ facing :: proc(lo, eye: [3]f32) -> (faces: u8) {
 	return faces | 1 << 3 // both ways
 }
 
-// indirect_reserve makes this slot's indirect buffer hold at least n
-// commands (doubling it); its last frame is done with it.
+// Cull_Command: what world_cull.comp writes (vk.DrawIndexedIndirectCommand).
+Cull_Command :: vk.DrawIndexedIndirectCommand
+
+// cull_reference: what world_cull.comp writes for the record r, by the same
+// rules on the CPU (world_cull_check compares the two), and its share of
+// the statistics.
+@(private)
+cull_reference :: proc(
+	r: Cull_Record,
+	planes: ^Planes,
+	eye: [3]f32,
+	camera_chunk: [3]i32,
+) -> (
+	commands: [CULL_LAYERS * CULL_RUNS]Cull_Command,
+	stats: Cull_Stats,
+	in_view: bool,
+) {
+	origin := (r.chunk - camera_chunk) * CHUNK_EXTENT
+	lo := [3]f32{f32(origin.x), f32(origin.y), f32(origin.z)}
+	in_view = box_visible(planes, lo, lo + CHUNK_EXTENT)
+	faces := facing(lo, eye) if in_view else 0
+	first := r.first_vertex
+	r := r
+	for layer in 0 ..< CULL_LAYERS {
+		counts := r.counts[layer * FACE_GROUPS:][:FACE_GROUPS]
+		runs := face_runs(faces, counts, first)
+		for run, i in runs {
+			if run.count == 0 {continue}
+			commands[layer * CULL_RUNS + i] = {run.count / 4 * 6, 1, 0, i32(run.first), r.slot}
+			stats.commands += 1
+			stats.triangles += run.count / 2
+		}
+		for n in counts {first += n}
+	}
+	opaque: u32
+	for n in r.counts[:FACE_GROUPS] {opaque += n}
+	if in_view && opaque > 0 {stats.drawn = 1}
+	return
+}
+
+// Run: vertices first ..< first + count of a layer, drawn by one command.
+@(private)
+Run :: struct {
+	first, count: u32,
+}
+
+// face_runs: the runs of a layer's face groups (counts, from its first
+// vertex) whose bit is set in faces, adjacent groups in one run; empty
+// runs after them. There are never more than CULL_RUNS
+// (test_runs_of_visible_face_groups).
+@(private)
+face_runs :: proc(faces: u8, counts: []u32, first: u32) -> (runs: [CULL_RUNS]Run) {
+	n := 0
+	at := first
+	for count, group in counts {
+		if faces & (1 << u8(group)) != 0 {
+			if runs[n].count == 0 {runs[n].first = at}
+			runs[n].count += count
+		} else if runs[n].count > 0 {
+			n += 1
+		}
+		at += count
+	}
+	return
+}
+
+// indirect_reserve makes this slot's water command buffer hold at least n
+// commands; its last frame is done with it.
 @(private = "file")
 indirect_reserve :: proc(g: ^gpu.Gpu, f: ^World_Frame, n: int) -> bool {
-	STRIDE :: size_of(vk.DrawIndexedIndirectCommand)
-	if f.indirect.size >= n * STRIDE {return true}
-	size := max(f.indirect.size, 4096 * STRIDE)
-	for size < n * STRIDE {size *= 2}
-	gpu.destroy_buffer(g, &f.indirect)
+	return buffer_reserve(
+		g,
+		&f.indirect,
+		n * size_of(vk.DrawIndexedIndirectCommand),
+		{.INDIRECT_BUFFER},
+		true,
+		"world draw commands",
+	)
+}
+
+// buffer_reserve makes b hold at least size bytes (doubling it; what it
+// held is lost); nothing may still use it.
+@(private = "file")
+buffer_reserve :: proc(
+	g: ^gpu.Gpu,
+	b: ^gpu.Buffer,
+	size: int,
+	usage: vk.BufferUsageFlags,
+	host_visible: bool,
+	name: string,
+) -> bool {
+	if b.size >= size {return true}
+	grown := max(b.size, 64 * 1024)
+	for grown < size {grown *= 2}
+	gpu.destroy_buffer(g, b)
 	ok: bool
-	f.indirect, ok = gpu.create_buffer(g, size, {.INDIRECT_BUFFER}, true, "world draw commands")
-	if !ok {log.errorf("render could not make a %d-byte indirect buffer", size)}
+	b^, ok = gpu.create_buffer(g, grown, usage, host_visible, name)
+	if !ok {log.errorf("render could not make a %d-byte buffer (%s)", grown, name)}
 	return ok
 }
 
@@ -842,65 +1221,30 @@ draw_begin :: proc(
 	gpu.push_constants(g, cmd, &push)
 }
 
-// draw_span draws a span's commands (none: no call).
+// draw_commands draws count commands from first in buffer (none: no call);
+// triangles and calls: what they draw (calls -1: every command).
 @(private = "file")
-draw_span :: proc(p: ^World_Pass, g: ^gpu.Gpu, cmd: vk.CommandBuffer, f: ^World_Frame, s: Span) {
-	if s.count == 0 {return}
-	calls := g.draws.api_calls
+draw_commands :: proc(
+	p: ^World_Pass,
+	g: ^gpu.Gpu,
+	cmd: vk.CommandBuffer,
+	buffer: gpu.Buffer,
+	first, count, triangles: int,
+	calls := -1,
+) {
+	if count == 0 {return}
+	api_calls := g.draws.api_calls
 	gpu.draw_indexed_indirect(
 		g,
 		cmd,
-		f.indirect.handle,
-		s.first * size_of(vk.DrawIndexedIndirectCommand),
-		u32(s.count),
-		s.triangles,
+		buffer.handle,
+		first * size_of(vk.DrawIndexedIndirectCommand),
+		u32(count),
+		triangles,
+		calls,
 	)
-	p.stats.api_draws += g.draws.api_calls - calls
-	p.stats.triangles += s.triangles
-}
-
-// write_commands writes a mesh's layer's draw commands to the frame's
-// indirect buffer: for opaque and cutout, only the face groups that can
-// face the camera (v.faces), adjacent groups in one command. Returns the
-// triangles.
-@(private = "file")
-write_commands :: proc(f: ^World_Frame, v: ^Visible, layer: Mesh_Layer) -> (triangles: int) {
-	m := v.mesh
-	commands := ([^]vk.DrawIndexedIndirectCommand)(f.indirect.mapped)
-	first := m.range.offset
-	switch layer {
-	case .Opaque:
-	case .Cutout:
-		first += m.layers[.Opaque]
-	case .Translucent:
-		first += m.layers[.Opaque] + m.layers[.Cutout]
-		commands[f.commands] = {m.layers[layer] / 4 * 6, 1, 0, i32(first), v.slot}
-		f.commands += 1
-		return int(m.layers[layer] / 2)
-	}
-	// Runs of visible groups, one command each.
-	counts := &m.counts[layer]
-	run_start, run_count := first, u32(0)
-	at := first
-	#no_bounds_check for group in 0 ..< FACE_GROUPS {
-		n := counts[group]
-		if v.faces & (1 << u8(group)) != 0 {
-			if run_count == 0 {run_start = at}
-			run_count += n
-		} else if run_count > 0 {
-			commands[f.commands] = {run_count / 4 * 6, 1, 0, i32(run_start), v.slot}
-			f.commands += 1
-			triangles += int(run_count / 2)
-			run_count = 0
-		}
-		at += n
-	}
-	if run_count > 0 {
-		commands[f.commands] = {run_count / 4 * 6, 1, 0, i32(run_start), v.slot}
-		f.commands += 1
-		triangles += int(run_count / 2)
-	}
-	return
+	p.stats.api_draws += g.draws.api_calls - api_calls
+	p.stats.triangles += triangles
 }
 
 // sort_keys sorts keys by their high 32 bits, keeping the order of equal

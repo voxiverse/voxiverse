@@ -49,7 +49,9 @@ draw_indexed :: proc(
 // draw_indexed_indirect records vkCmdDrawIndexedIndirect of count commands
 // (tightly packed vk.DrawIndexedIndirectCommand) at offset in buffer, in as
 // few calls as the device's maxDrawIndirectCount allows. triangles: what
-// the commands draw (the CPU wrote them; it knows).
+// the commands draw; calls: how many of them draw anything (-1: all). Where
+// the GPU wrote the commands, the caller counts them as it can (the GPU's
+// own count, a few frames late).
 draw_indexed_indirect :: proc(
 	g: ^Gpu,
 	cmd: vk.CommandBuffer,
@@ -57,6 +59,7 @@ draw_indexed_indirect :: proc(
 	offset: int,
 	count: u32,
 	triangles: int,
+	calls := -1,
 ) {
 	STRIDE :: size_of(vk.DrawIndexedIndirectCommand)
 	limit := max(g.max_draw_indirect_count, 1)
@@ -72,6 +75,6 @@ draw_indexed_indirect :: proc(
 		g.draws.api_calls += 1
 		done += n
 	}
-	g.draws.calls += int(count)
+	g.draws.calls += int(count) if calls < 0 else calls
 	g.draws.triangles += triangles
 }

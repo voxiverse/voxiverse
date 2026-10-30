@@ -126,6 +126,13 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 #assert(offset_of(World_Push, time) == 16)
 #assert(size_of(Chunk_Draw) == 16)
 
+// world_cull.comp's records (std430: an ivec3 and a uint, a uint, 14 uints,
+// padding to the ivec3's 16), its push constants and statistics.
+#assert(size_of(Cull_Record) == 80)
+#assert(offset_of(Cull_Record, counts) == 20)
+#assert(offset_of(Cull_Push, count) == 32)
+#assert(size_of(Cull_Stats) == 16)
+
 // The cloud map: blobs, not noise; it tiles; some sky stays clear.
 @(test)
 test_cloud_map :: proc(t: ^testing.T) {
@@ -186,4 +193,72 @@ test_sort_keys :: proc(t: ^testing.T) {
 			want_near[i],
 		)
 	}
+}
+
+// Wherever the camera is along each axis (below a chunk, within it, above
+// it), a layer's visible face groups make at most CULL_RUNS runs, and the
+// runs cover exactly the visible groups' vertices, in order.
+@(test)
+test_runs_of_visible_face_groups :: proc(t: ^testing.T) {
+	counts := [FACE_GROUPS]u32{4, 8, 12, 16, 20, 24, 28}
+	SIDES :: [3]f32{-5, 8, 21} // the chunk's box is 0 to 16
+	for x in SIDES {
+		for y in SIDES {
+			for z in SIDES {
+				faces := facing({0, 0, 0}, {x, y, z})
+				runs := face_runs(faces, counts[:], 100) // (more than CULL_RUNS: out of bounds)
+				want, got: u32
+				for n, g in counts {if faces & (1 << u8(g)) != 0 {want += n}}
+				for r in runs {got += r.count}
+				testing.expectf(
+					t,
+					got == want,
+					"eye %v: runs %v cover %d vertices, not %d",
+					[3]f32{x, y, z},
+					runs,
+					got,
+					want,
+				)
+			}
+		}
+	}
+	// The most there can be: +x, +z and the both-ways group, then -y.
+	runs := face_runs(0b0101101, counts[:], 0)
+	testing.expect_value(t, runs, [CULL_RUNS]Run{{0, 4}, {12, 28}, {60, 24}})
+}
+
+// cull_reference (what the GPU's culling is checked against, `--check
+// cull`): a chunk out of view draws nothing; one in view draws its runs.
+@(test)
+test_cull_reference :: proc(t: ^testing.T) {
+	vp := perspective_reverse_z(math.PI / 2, 16.0 / 9, 0.1) * view_matrix({8, 8, 8}, 0, 0)
+	planes := frustum_planes(vp)
+	r := Cull_Record {
+		slot         = 9,
+		first_vertex = 1000,
+	}
+	for &c in r.counts {c = 4}
+	r.chunk = {0, 0, -3} // ahead (the camera looks down -z)
+	commands, stats, in_view := cull_reference(r, &planes, {8, 8, 8}, {0, 0, 0})
+	testing.expect(t, in_view)
+	testing.expect_value(t, stats, Cull_Stats{drawn = 1, triangles = 2 * 12, commands = 4})
+	// The camera is within the chunk's x and y and past its +z side: every
+	// group but -z faces it, two runs a layer (+x +y +z both, -y -x).
+	testing.expect_value(
+		t,
+		commands,
+		[CULL_LAYERS * CULL_RUNS]Cull_Command {
+			{24, 1, 0, 1000, 9},
+			{12, 1, 0, 1020, 9},
+			{},
+			{24, 1, 0, 1028, 9},
+			{12, 1, 0, 1048, 9},
+			{},
+		},
+	)
+	r.chunk = {0, 0, 3} // behind
+	commands, stats, in_view = cull_reference(r, &planes, {8, 8, 8}, {0, 0, 0})
+	testing.expect(t, !in_view)
+	testing.expect_value(t, stats, Cull_Stats{})
+	testing.expect_value(t, commands, [CULL_LAYERS * CULL_RUNS]Cull_Command{})
 }

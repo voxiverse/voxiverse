@@ -120,26 +120,8 @@ Its exit check's frame p99 half is left to the GPU's own frame and R5b and R6.
 
 ## R6: GPU culling
 
-**Why.** After R5 the CPU still walks every mesh twice a frame; at larger view distances
-that walk grows with radius² × height.
-
-**Design (decided).** A compute pass before rendering reads every `Chunk_Draw` record and
-the frustum (from the scene buffer), and writes the indirect commands: a culled run gets
-`instanceCount` 0 (no `drawIndirectCount`). Face-group culling (the runs facing away) moves
-into the same shader. Opaque and cutout draws need no order; translucent draws keep the
-CPU's sorted list (water is a small part of the scene). The CPU walk of the opaque pool is
-removed.
-
-**Steps.** (1) The cull compute pipeline and its label (`cull`). (2) Barriers between the
-compute writes and the indirect reads. (3) Remove the CPU opaque walk. (4) GPU time of
-`cull` as a metric (`gpu_cull`).
-
-**Tests.** `images` passes; a culling unit test on the compute shader's logic, run on
-lavapipe (a fixed set of chunks and a camera, the resulting instance counts).
-
-**Exit check.** `frame_record` on `views` within noise of R5 or better; a new scenario,
-`views-far` (`views` at view radius 24, height 12, its own name so it never compares with
-`views`), has `frame_record` within 20% of `views`; `gpu_cull` under 0.1 ms on `views`.
+Done: its spec and outcome are in history.md, "R6: GPU culling". `gpu_world` rose with it
+(fixed commands for every mesh, no nearest-first order): R5b measures that too.
 
 ## R5b: the indirect draws' cost (after R6)
 
@@ -154,6 +136,14 @@ Of what is left of `frame_record`, about 0.1 ms is the driver recording the two 
 indirect calls and 0.1 ms is `world_cull` (walk, sort, writing commands). R6 replaces
 `world_cull`'s walk and writes with a compute pass, which changes both numbers; this row
 comes after it, so it measures what R6 leaves.
+
+What R6 left (`bench compare 6750fee views`, development machine): `frame_record` 0.415 ->
+0.335 ms; `gpu_world` 1.518 -> 1.800 ms (+18.5%, p 0.008). The culling pass writes
+`CULL_RUNS` (3) commands per mesh shown per opaque and cutout layer, drawn or not: on
+`views` 1681 meshes, 10 086 commands for the 1312 that draw, and the opaque meshes in table
+order, not nearest first. Candidates, measured like the others: a table per layer (a mesh
+without cutout faces then has no cutout commands), the table kept roughly nearest first
+(meshes arrive nearest first; a removal's swap breaks it), and the water list's walk.
 
 **Design (decided 2026-10-30, unattended: measure, then cut, as R3b).**
 

@@ -1,0 +1,152 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "scene.glsl"
+
+// The world's culling pass (render/world_pass.odin, world_cull): one
+// invocation per mesh shown. A mesh whose chunk is outside the frustum, or
+// a face-group run that faces away from the camera, gets a command that
+// draws nothing; every mesh has CULL_RUNS commands per layer, at fixed
+// places, so the CPU knows how many to draw without reading anything back.
+
+layout(local_size_x = 64) in;
+
+const uint FACE_GROUPS = 7u; // +x +y +z, both ways, -z -y -x (client/mesh)
+const uint CULL_RUNS = 3u; // runs of visible groups a layer can have, at most
+const uint CULL_LAYERS = 2u; // opaque, cutout (water is sorted on the CPU)
+
+// Cull_Record: a mesh shown, in world_pass.odin's dense order.
+struct Cull_Record {
+	ivec3 chunk;
+	uint slot; // its pool slot: its chunk draw table record (firstInstance)
+	uint first_vertex;
+	uint counts[CULL_LAYERS * FACE_GROUPS]; // vertices of each face group, opaque then cutout
+	uint pad;
+};
+
+// vk.DrawIndexedIndirectCommand
+struct Command {
+	uint index_count;
+	uint instance_count;
+	uint first_index;
+	int vertex_offset;
+	uint first_instance;
+};
+
+layout(buffer_reference, std430) readonly buffer Cull_Records {
+	Cull_Record records[];
+};
+
+layout(buffer_reference, std430) writeonly buffer Commands {
+	Command commands[];
+};
+
+// What the CPU reads back (a few frames late): statistics, and a bit per
+// mesh that was drawn (the occlusion statistics' queries need it).
+layout(buffer_reference, std430) buffer Cull_Stats {
+	uint drawn; // meshes with opaque faces in view
+	uint triangles;
+	uint commands; // commands that draw something
+	uint pad;
+	uint visible[]; // bit i: mesh i was in view
+};
+
+layout(push_constant) uniform Push {
+	Scene scene;
+	Cull_Records records;
+	Commands commands;
+	Cull_Stats stats;
+	uint count; // meshes
+} push;
+
+shared uint group_drawn, group_triangles, group_commands;
+
+// row i of m (GLSL indexes columns first).
+vec4 row(mat4 m, int i) {
+	return vec4(m[0][i], m[1][i], m[2][i], m[3][i]);
+}
+
+// in_view: the box is not wholly outside any of the frustum's planes (left,
+// right, bottom, top, near: reverse Z with no far plane), as box_visible.
+bool in_view(mat4 m, vec3 lo, vec3 hi) {
+	vec4 r0 = row(m, 0), r1 = row(m, 1), r2 = row(m, 2), r3 = row(m, 3);
+	vec4 planes[5] = vec4[](r3 + r0, r3 - r0, r3 + r1, r3 - r1, r3 - r2);
+	for (int i = 0; i < 5; i++) {
+		vec4 p = planes[i];
+		vec3 far = mix(lo, hi, greaterThanEqual(p.xyz, vec3(0.0)));
+		if (dot(p.xyz, far) + p.w < 0.0) return false;
+	}
+	return true;
+}
+
+// facing: bit g set when face group g can face a camera at eye (as the
+// CPU's facing).
+uint facing(vec3 lo, vec3 eye) {
+	vec3 hi = lo + 16.0;
+	uint faces = 1u << 3; // both ways
+	if (eye.x > lo.x) faces |= 1u << 0;
+	if (eye.y > lo.y) faces |= 1u << 1;
+	if (eye.z > lo.z) faces |= 1u << 2;
+	if (eye.z < hi.z) faces |= 1u << 4;
+	if (eye.y < hi.y) faces |= 1u << 5;
+	if (eye.x < hi.x) faces |= 1u << 6;
+	return faces;
+}
+
+void main() {
+	if (gl_LocalInvocationIndex == 0u) {
+		group_drawn = 0u;
+		group_triangles = 0u;
+		group_commands = 0u;
+	}
+	barrier();
+	uint i = gl_GlobalInvocationID.x;
+	if (i < push.count) {
+		Cull_Record r = push.records.records[i];
+		Scene s = push.scene;
+		vec3 lo = vec3((r.chunk - s.camera_chunk.xyz) * 16);
+		uint faces = in_view(s.view_proj, lo, lo + 16.0) ? facing(lo, s.camera.xyz) : 0u;
+		uint triangles = 0u, written = 0u;
+		uint at = r.first_vertex;
+		for (uint layer = 0u; layer < CULL_LAYERS; layer++) {
+			// Runs of visible groups, one command each; the rest draw nothing.
+			uint base = layer * push.count * CULL_RUNS + i * CULL_RUNS;
+			uint runs = 0u, run_start = at, run_count = 0u;
+			for (uint g = 0u; g < FACE_GROUPS; g++) {
+				uint n = r.counts[layer * FACE_GROUPS + g];
+				if ((faces & (1u << g)) != 0u) {
+					if (run_count == 0u) run_start = at;
+					run_count += n;
+				} else if (run_count > 0u) {
+					push.commands.commands[base + runs] = Command(run_count / 4u * 6u, 1u, 0u, int(run_start), r.slot);
+					runs++;
+					triangles += run_count / 2u;
+					run_count = 0u;
+				}
+				at += n;
+			}
+			if (run_count > 0u) {
+				push.commands.commands[base + runs] = Command(run_count / 4u * 6u, 1u, 0u, int(run_start), r.slot);
+				runs++;
+				triangles += run_count / 2u;
+			}
+			written += runs;
+			for (; runs < CULL_RUNS; runs++) {
+				push.commands.commands[base + runs] = Command(0u, 0u, 0u, 0, 0u);
+			}
+		}
+		uint opaque = 0u;
+		for (uint g = 0u; g < FACE_GROUPS; g++) opaque += r.counts[g];
+		if (faces != 0u) {
+			if (opaque > 0u) atomicAdd(group_drawn, 1u);
+			atomicOr(push.stats.visible[i >> 5], 1u << (i & 31u));
+		}
+		atomicAdd(group_triangles, triangles);
+		atomicAdd(group_commands, written);
+	}
+	barrier();
+	if (gl_LocalInvocationIndex == 0u) {
+		atomicAdd(push.stats.drawn, group_drawn);
+		atomicAdd(push.stats.triangles, group_triangles);
+		atomicAdd(push.stats.commands, group_commands);
+	}
+}

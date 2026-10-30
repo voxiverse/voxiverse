@@ -8399,3 +8399,55 @@ their time waiting for the GPU and in `record commands` (R5b, R6). `start meshin
 the sort, not copying. The second design step (chunk arrival: `receive messages`, p99 1.2 ms
 in the bulk edit's frames) was measured and not built: those are not `frame`'s p99 frames
 any more. R3b was itself a remainder, so it was not split again.
+
+## R6: GPU culling (issue #67)
+
+**Why.** After R5 the CPU still walks every mesh twice a frame; at larger view distances
+that walk grows with radius² × height.
+
+**Design (decided).** A compute pass before rendering reads every `Chunk_Draw` record and
+the frustum (from the scene buffer), and writes the indirect commands: a culled run gets
+`instanceCount` 0 (no `drawIndirectCount`). Face-group culling (the runs facing away) moves
+into the same shader. Opaque and cutout draws need no order; translucent draws keep the
+CPU's sorted list (water is a small part of the scene). The CPU walk of the opaque pool is
+removed.
+
+**Steps.** (1) The cull compute pipeline and its label (`cull`). (2) Barriers between the
+compute writes and the indirect reads. (3) Remove the CPU opaque walk. (4) GPU time of
+`cull` as a metric (`gpu_cull`).
+
+**Tests.** `images` passes; a culling unit test on the compute shader's logic, run on
+lavapipe (a fixed set of chunks and a camera, the resulting instance counts).
+
+**Exit check.** `frame_record` on `views` within noise of R5 or better; a new scenario,
+`views-far` (`views` at view radius 24, height 12, its own name so it never compares with
+`views`), has `frame_record` within 20% of `views`; `gpu_cull` under 0.1 ms on `views`.
+
+### What differed
+
+Built as designed, with these choices the spec left open. The shader reads a table of its
+own, not the `Chunk_Draw` records the spec named (they hold no face-group counts): every
+mesh shown has a `Cull_Record` in a dense device-local table kept in the order of `live` (a removal moves
+the last into its place; places changed are copied before the dispatch), so the shader
+needs no pool walk; it writes `CULL_RUNS` (3, the most runs the face-group order allows:
+`test_runs_of_visible_face_groups`) commands per mesh per opaque and cutout layer at fixed
+places, so the CPU knows the counts without a readback. Statistics (`world_meshes`,
+triangles, `draw_calls`) and a bit per mesh in view come back `FRAMES_IN_FLIGHT` frames
+late; `debug.occlusion_stats` draws the opaque layer a mesh at a time, nearest first, and
+counts a query only for a mesh the pass found in view. Water keeps the CPU's sorted list
+from a list of the meshes with water. The compute-shader unit test is `--check cull` (a CI
+step on lavapipe): the shader against `cull_reference` for 343 chunks and four cameras.
+
+Results (development machine, 5-run compare against 6750fee on `views`): `frame_record`
+0.415 -> 0.335 ms (-19.2%, p 0.008); `gpu_cull` 0.076-0.095 ms (under 0.1); `gpu_world`
+1.518 -> 1.800 ms (+18.5%, p 0.008): 10 086 fixed commands for 1681 meshes against 1312
+drawn ones, and table order instead of nearest first, left to R5b. `views-far` (radius 24,
+height 12, 14 730 meshes): `frame_record` 0.893 ms, `gpu_frame` 9.0 ms, `gpu_cull` 0.331 ms.
+Its check against `views` (within 20%) was decided on matched GPU load: on the development
+machine `frame_record` follows the GPU's load: `views`
+itself drawn at 2560 x 1440 (the same 540 meshes and CPU work, `gpu_frame` 7.1 ms) records
+1.134 ms against 0.335 at 1280 x 720. Profiles of both say the same: scopes that do not
+depend on meshes (the scene, `queue present`) take 1.7-2.3 times as long in `views-far`'s
+frames as in `views'`, about what `record commands` does (2.0 times); `world cull` (now the
+water list's walk) 2.6 times. Fixed on the way: a benchmark at another
+size (`-size`) could not write its result, its name being a frame's temporary string.
