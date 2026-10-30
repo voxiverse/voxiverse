@@ -59,6 +59,12 @@ Gpu :: struct {
 	draws:                Draw_Counts, // this frame's draw calls so far (draw.odin)
 	memory_bytes:         int, // device memory allocated by us, now (resources.odin)
 	memory_budget:        bool, // VK_EXT_memory_budget: memory_report has the driver's view
+	// Pipelines (pipeline.odin, pipeline_cache.odin)
+	pipeline_cache:       vk.PipelineCache,
+	pipeline_cache_path:  string,
+	pipelines_built:      int,
+	pipelines_cached:     int, // of those, found in the cache (creation feedback)
+	pipeline_ms:          f64, // building them, in all
 	// Bindless textures and the pipeline layout every pipeline shares.
 	bindless:             Bindless,
 	pipeline_layout:      vk.PipelineLayout,
@@ -262,6 +268,13 @@ destroy :: proc(g: ^Gpu) -> (validation_issues: int) {
 			timing_collect(g, &g.frames[(g.frame_index + i) % FRAMES_IN_FLIGHT].timing)
 		}
 		timing_log_summary(g)
+		log.infof(
+			"gpu pipelines built=%d from_cache=%d ms=%.1f",
+			g.pipelines_built,
+			g.pipelines_cached,
+			g.pipeline_ms,
+		)
+		pipeline_cache_close(g)
 		for &f in g.frames {destroy_frame_sync(g, &f)}
 		bindless_destroy(g)
 		offscreen_destroy(g)

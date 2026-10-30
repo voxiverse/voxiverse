@@ -3,6 +3,8 @@ package gpu
 import "core:log"
 import vk "vendor:vulkan"
 
+import "../../base"
+
 // Graphics pipelines for dynamic rendering. Viewport and scissor are dynamic
 // state, so pipelines don't depend on the window size and survive resizes.
 // All pipelines use the shared layout (bindless set + push constants).
@@ -157,8 +159,30 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 		pDynamicState       = &dynamic_state,
 		layout              = g.pipeline_layout,
 	}
-	check(vk.CreateGraphicsPipelines(g.device, 0, 1, &info, nil, &p.handle)) or_return
+	// What the driver reports about the build: its time, and whether the cache had it.
+	feedback: vk.PipelineCreationFeedback
+	feedback_info := vk.PipelineCreationFeedbackCreateInfo {
+		sType                     = .PIPELINE_CREATION_FEEDBACK_CREATE_INFO,
+		pPipelineCreationFeedback = &feedback,
+	}
+	feedback_info.pNext = info.pNext // (the chain before it: the attachments' formats)
+	info.pNext = &feedback_info
+	{
+		base.profile_begin("create pipeline", desc.name)
+		defer base.profile_end()
+		check(
+			vk.CreateGraphicsPipelines(g.device, g.pipeline_cache, 1, &info, nil, &p.handle),
+		) or_return
+	}
 	set_name(g, .PIPELINE, u64(p.handle), desc.name)
+	g.pipelines_built += 1
+	if .VALID in feedback.flags {
+		ms := f64(feedback.duration) / 1e6
+		hit := .APPLICATION_PIPELINE_CACHE_HIT in feedback.flags
+		g.pipeline_ms += ms
+		if hit {g.pipelines_cached += 1}
+		log.debugf("gpu pipeline built name=%s ms=%.2f cache_hit=%v", desc.name, ms, hit)
+	}
 	return p, true
 }
 

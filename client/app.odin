@@ -181,6 +181,7 @@ app_init :: proc(app: ^App) -> bool {
 		return false
 	}
 	if !gpu.init_device(g, surface) {return false}
+	gpu.pipeline_cache_open(g, path_next_to_exe("pipeline-cache.bin"))
 	capture_dir := path_next_to_exe("captures")
 	if gpu.renderdoc_attach(&app.renderdoc, capture_dir, "voxiverse") {
 		os.make_directory_all(capture_dir)
