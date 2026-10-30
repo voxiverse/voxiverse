@@ -71,6 +71,24 @@ host runs the game, the others join by the address the dialog shows.
     clients' own `client_frames` lines in the session file say it (median, p95 and worst
     a minute); anything over about 16 ms a frame at the median is worth a note.
 
+## Keeping the evidence (issue #67)
+
+Nothing is uploaded: what is not collected before people pack up is gone.
+
+- **During play:** anything odd (a stutter, a glitch, a wrong death, a rubber band), type
+  it in the chat as `bug: <what happened>`. Every client's log keeps each chat line with its
+  time, and the host's session file has everyone's position every 10 s: the time finds the
+  place and what the frame and tick numbers were doing then. `F2` takes a screenshot (a
+  `screenshots/` folder beside the game).
+- **After play, from every machine:** the game folder's `voxiverse.log` and
+  `voxiverse.log.1` ... `.5` (the last five runs before it: a crash's log survives the
+  restart), and `screenshots/`. A log's first line gives its version and its start in UTC.
+- **From the host:** the same, plus `<universe>/analytics/session-*.jsonl` (one per time the
+  world was opened). `./build.sh analytics --session <file>` ends with a timeline (in UTC):
+  joins and leaves, every minute in which someone's frame or the server's tick took over
+  50 ms, resends, warnings and errors.
+- **Everyone on the same version:** the log's first line (`Voxiverse 0.1.2+N (commit)`).
+
 ## Hands and held items (M48k)
 
 13. In first person, hold each of pistol, rifle, sniper and rocket launcher, then a dirt
