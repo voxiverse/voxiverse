@@ -21,6 +21,7 @@ layout(buffer_reference, std430) readonly buffer Scene {
 	vec4 cloud;         // rgb: lit cloud colour; w: 1 drawn, 0 not (the setting)
 	vec4 cloud_origin;  // xz: the camera in the (wrapped) cloud pattern
 	vec4 water;         // rgb: water seen from inside; w: 1 with the camera under water
+	ivec4 camera_chunk; // xyz: the camera's chunk
 	Cloud_Map cloud_map;
 };
 

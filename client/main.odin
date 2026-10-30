@@ -175,6 +175,8 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 				base.metric_add(.World_Triangles, f32(app.world_pass.stats.triangles) / 1000)
 				base.metric_add(.World_Meshes, f32(app.world_pass.stats.drawn))
 				base.metric_add(.Draw_Calls, f32(app.g.draws.calls))
+				base.metric_add(.Api_Draw_Calls, f32(app.g.draws.api_calls))
+				base.metric_add(.World_Api_Draw_Calls, f32(app.world_pass.stats.api_draws))
 				base.metric_add(.Frame_Triangles, f32(app.g.draws.triangles) / 1000)
 			}
 			base.metric_add(.Frame, app.last_frame_ms)

@@ -126,12 +126,26 @@ CROSS_B :: 7
 SURFACE :: u32(1) << 20 // (in the layer word)
 DROP_SHIFT :: 21
 
-// Face groups: within a layer, quads come grouped by the way they face
-// (Face order), then the plants' crossed quads (seen from both sides), so
-// the renderer can leave out the directions that face away from the
-// camera (a chunk wholly on one side of it shows at most three).
+// Face groups: within a layer, quads come grouped by the way they face,
+// with the plants' crossed quads (seen from both sides) as a group of their
+// own, so the renderer can leave out the directions that face away from
+// the camera (a chunk wholly on one side of it shows at most three). The
+// order, +x +y +z crossed -z -y -x, keeps the groups a camera sees together:
+// one of each axis' two and the crossed make two runs on average (one draw
+// command each), where Face order made three.
 FACE_GROUPS :: 7
-CROSS_GROUP :: 6
+CROSS_GROUP :: 3
+
+// FACE_GROUP: each face's group.
+@(rodata)
+FACE_GROUP := [game.Face]int {
+	.Pos_X = 0,
+	.Pos_Y = 1,
+	.Pos_Z = 2,
+	.Neg_Z = 4,
+	.Neg_Y = 5,
+	.Neg_X = 6,
+}
 
 // Counts: vertices of each layer's face groups, in order.
 Counts :: [Layer][FACE_GROUPS]int
@@ -314,10 +328,10 @@ emit_merged :: proc(out: ^[dynamic]Vertex, m: $T, u, v, w, h: i32) {
 // group keeping its order) and counts each group's vertices.
 @(private = "file")
 group_faces :: proc(quads: []Vertex) -> (counts: [FACE_GROUPS]int) {
-	group :: #force_inline proc(v: Vertex) -> int {return min(
-			int(v.packed >> 27 & 7),
-			CROSS_GROUP,
-		)}
+	group :: #force_inline proc(v: Vertex) -> int {
+		face := v.packed >> 27 & 7
+		return FACE_GROUP[game.Face(face)] if face < len(game.Face) else CROSS_GROUP
+	}
 	for i := 0; i < len(quads); i += 4 {counts[group(quads[i])] += 4}
 	sorted := make([]Vertex, len(quads), context.temp_allocator)
 	at: [FACE_GROUPS]int

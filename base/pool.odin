@@ -126,6 +126,13 @@ pool_next :: proc(p: ^Pool($T, $H), it: ^Pool_Iterator) -> (item: ^T, handle: H,
 	return
 }
 
+// pool_index: the slot a live handle names (1..capacity), for tables kept
+// beside the pool (a GPU buffer indexed like it).
+pool_index :: proc(handle: $H) -> u32 {
+	index, _ := pool_split_handle(handle)
+	return index
+}
+
 @(private)
 pool_make_handle :: #force_inline proc($H: typeid, index: u32, gen: u16) -> H {
 	return H(u32(gen) << POOL_INDEX_BITS | index)

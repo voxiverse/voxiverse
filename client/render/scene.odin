@@ -28,6 +28,7 @@ Scene :: struct {
 	cloud:         [4]f32, // rgb cloud colour (lit side); w: 1 drawn, 0 not
 	cloud_origin:  [4]f32, // xz: the camera in the cloud pattern (wrapped; see CLOUD_PERIOD)
 	water:         [4]f32, // rgb: the colour of water seen from inside it; w: 1 with the camera under water
+	camera_chunk:  [4]i32, // xyz: the camera's chunk (what "from the camera chunk's origin" is from)
 	cloud_map:     u64, // address of the Cloud_Map (set by scene_upload)
 	_:             u64,
 }
@@ -181,6 +182,7 @@ scene_make :: proc(
 			UNDERWATER.b * sky.sky_light.b,
 			1 if underwater else 0,
 		},
+		camera_chunk = {camera.chunk.x, camera.chunk.y, camera.chunk.z, 0},
 	}
 }
 

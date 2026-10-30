@@ -566,15 +566,19 @@ app_frame :: proc(app: ^App, capture_this_frame: bool, number: int) -> bool {
 			render.entity_upload(&app.entity_pass, g, &app.entity_draw, camera)
 			render.held_upload(&app.held_pass, g, &app.held_draw, camera)
 		}
+		if in_world {
+			base.profile_scope("world cull")
+			render.world_cull(&app.world_pass, g, camera)
+		}
 		textures := u32(app.world_pass.textures_id)
 		base.profile_begin("record commands") // (no return before its end)
 		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
-			render.world_draw(&app.world_pass, g, frame, camera, scene)
+			render.world_draw(&app.world_pass, g, frame, scene)
 			render.entity_draw(&app.entity_pass, g, frame, scene)
 			render.held_draw_world(&app.held_pass, g, frame, scene, textures)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
-			render.world_draw_translucent(&app.world_pass, g, frame, camera, scene, app.seconds)
+			render.world_draw_translucent(&app.world_pass, g, frame, scene, app.seconds)
 			render.debug_draw(&app.debug_pass, g, frame, camera)
 			render.held_draw_view(&app.held_pass, g, frame, view_scene, textures)
 		}

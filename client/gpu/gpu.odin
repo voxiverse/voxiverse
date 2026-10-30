@@ -33,46 +33,47 @@ Validation :: struct {
 }
 
 Gpu :: struct {
-	loader:               dynlib.Library,
-	instance:             vk.Instance,
-	messenger:            vk.DebugUtilsMessengerEXT,
-	surface:              vk.SurfaceKHR,
-	physical:             vk.PhysicalDevice,
-	device:               vk.Device,
-	queue_family:         u32,
-	queue:                vk.Queue,
-	device_name:          string,
-	driver:               string, // its driver's name and version (benchmark results)
-	offscreen:            Offscreen, // frames drawn at a fixed size (set_offscreen)
-	swapchain:            Swapchain,
-	frames:               [FRAMES_IN_FLIGHT]Frame_Sync,
-	frame_index:          int,
-	ctx:                  runtime.Context, // logger etc. for the validation callback
-	debug_utils:          bool, // object names and command labels are available
+	loader:                  dynlib.Library,
+	instance:                vk.Instance,
+	messenger:               vk.DebugUtilsMessengerEXT,
+	surface:                 vk.SurfaceKHR,
+	physical:                vk.PhysicalDevice,
+	device:                  vk.Device,
+	queue_family:            u32,
+	queue:                   vk.Queue,
+	device_name:             string,
+	driver:                  string, // its driver's name and version (benchmark results)
+	offscreen:               Offscreen, // frames drawn at a fixed size (set_offscreen)
+	swapchain:               Swapchain,
+	frames:                  [FRAMES_IN_FLIGHT]Frame_Sync,
+	frame_index:             int,
+	ctx:                     runtime.Context, // logger etc. for the validation callback
+	debug_utils:             bool, // object names and command labels are available
 	// GPU timing (timing.odin)
-	timing:               bool,
-	calibrated:           bool, // GPU timestamps convertible to the trace clock
-	host_time_domain:     vk.TimeDomainKHR,
-	timestamp_period:     f32, // ns per tick
-	timestamp_mask:       u64,
-	gpu_frame_stats:      base.Frame_Stats,
-	draws:                Draw_Counts, // this frame's draw calls so far (draw.odin)
-	memory_bytes:         int, // device memory allocated by us, now (resources.odin)
-	memory_budget:        bool, // VK_EXT_memory_budget: memory_report has the driver's view
+	timing:                  bool,
+	calibrated:              bool, // GPU timestamps convertible to the trace clock
+	host_time_domain:        vk.TimeDomainKHR,
+	timestamp_period:        f32, // ns per tick
+	timestamp_mask:          u64,
+	gpu_frame_stats:         base.Frame_Stats,
+	draws:                   Draw_Counts, // this frame's draw calls so far (draw.odin)
+	memory_bytes:            int, // device memory allocated by us, now (resources.odin)
+	memory_budget:           bool, // VK_EXT_memory_budget: memory_report has the driver's view
 	// Pipelines (pipeline.odin, pipeline_cache.odin)
-	pipeline_cache:       vk.PipelineCache,
-	pipeline_cache_path:  string,
-	pipelines_built:      int,
-	pipelines_cached:     int, // of those, found in the cache (creation feedback)
-	pipeline_ms:          f64, // building them, in all
+	pipeline_cache:          vk.PipelineCache,
+	pipeline_cache_path:     string,
+	pipelines_built:         int,
+	pipelines_cached:        int, // of those, found in the cache (creation feedback)
+	pipeline_ms:             f64, // building them, in all
 	// Bindless textures and the pipeline layout every pipeline shares.
-	bindless:             Bindless,
-	pipeline_layout:      vk.PipelineLayout,
-	max_anisotropy:       f32, // 0 when not supported
-	screenshot_requested: bool,
+	bindless:                Bindless,
+	pipeline_layout:         vk.PipelineLayout,
+	max_anisotropy:          f32, // 0 when not supported
+	max_draw_indirect_count: u32, // commands one indirect draw may take (draw.odin)
+	screenshot_requested:    bool,
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
-	validation_issues:    int,
+	validation_issues:       int,
 }
 
 // create_instance opens the Vulkan loader and creates the instance, with the
@@ -216,7 +217,13 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	features := vk.PhysicalDeviceFeatures2 {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		pNext = &features13,
-		features = {samplerAnisotropy = supported.samplerAnisotropy},
+		features = {
+			samplerAnisotropy         = supported.samplerAnisotropy,
+			// The world's layers drawn with one indirect call each, every
+			// command naming its chunk's record by its first instance.
+			multiDrawIndirect         = true,
+			drawIndirectFirstInstance = true,
+		},
 	}
 	device_extensions := make([dynamic]cstring, context.temp_allocator)
 	append(&device_extensions, "VK_KHR_swapchain")
@@ -250,6 +257,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	vk.GetPhysicalDeviceProperties(g.physical, &props)
 	timing_setup(g, queue_timestamp_bits(g), props.limits.timestampPeriod, calibration)
 	if supported.samplerAnisotropy {g.max_anisotropy = props.limits.maxSamplerAnisotropy}
+	g.max_draw_indirect_count = props.limits.maxDrawIndirectCount
 
 	for &f, i in g.frames {
 		if !create_frame_sync(g, &f, i) {return false}
@@ -340,7 +348,7 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 	}
 	if best_score < 0 {
 		log.error(
-			"gpu no GPU with Vulkan 1.3 (dynamic rendering, synchronization2, descriptor indexing) that can present to this window",
+			"gpu no GPU with Vulkan 1.3 (dynamic rendering, synchronization2, descriptor indexing, multi-draw indirect) that can present to this window",
 		)
 		return false
 	}
@@ -379,6 +387,8 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 	}
 	vk.GetPhysicalDeviceFeatures2(device, &features)
 	return bool(
+		features.features.multiDrawIndirect &&
+		features.features.drawIndirectFirstInstance &&
 		features13.dynamicRendering &&
 		features13.synchronization2 &&
 		features13.shaderDemoteToHelperInvocation &&

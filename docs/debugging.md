@@ -744,15 +744,61 @@ the GPU is still drawing the frame recorded `FRAMES_IN_FLIGHT` frames earlier.
 
 ### Draw calls and triangles
 
-Every draw goes through `gpu.draw` or `gpu.draw_indexed` (`client/gpu/draw.odin`), which
-count it. The counts appear on F3's `render:` line and as benchmark metrics:
+Every draw goes through `gpu.draw`, `gpu.draw_indexed` or `gpu.draw_indexed_indirect`
+(`client/gpu/draw.odin`), which count it. An indirect call counts once as an API call and
+once per command it holds as a draw. The counts appear on F3's `render:` line and as
+benchmark metrics:
 
 | Metric | Counts |
 |---|---|
-| `draw_calls` | Every draw call of the frame, all passes. |
+| `draw_calls` | Every draw of the frame, all passes: an indirect call's commands each. |
+| `api_draw_calls` | The `vkCmdDraw*` calls that recorded them, all passes. |
+| `world_api_draw_calls` | Of those, the world pass's: one per layer drawn (opaque, cutout, water), more only with `debug.occlusion_stats` (one per chunk queried) or past the device's `maxDrawIndirectCount`. |
 | `frame_triangles` | Every triangle drawn in the frame, all passes (thousands). Line lists count none. |
 | `world_triangles` | The world pass's triangles, opaque and water (thousands). |
-| `world_meshes` | Chunk meshes drawn by the opaque world pass. A mesh is drawn as one call per run of visible face groups, so this is not a count of draw calls. |
+| `world_meshes` | Chunk meshes drawn by the opaque world pass. A mesh is drawn as one command per run of visible face groups, so this is not a count of draws. |
+
+A profiling build's GPU track gives each pass's draws and API calls in its arguments.
+
+### How the world is drawn
+
+The world pass (`client/render/world_pass.odin`, R5) draws each layer (opaque, cutout,
+water) with one `vkCmdDrawIndexedIndirect`:
+
+- **The chunk draw table** (`chunk draws`, a device-local buffer) holds one `Chunk_Draw`
+  per mesh at its pool slot: the chunk (three `i32`) and its first vertex. A copy writes it
+  when the mesh is added (`world_add_mesh`, in `upload chunk meshes`). `world.vert` reads
+  it as a per-instance attribute (`in_chunk`, vertex binding 1); each command's
+  `firstInstance` is the mesh's slot, so the hardware fetches that mesh's record. The
+  chunk's offset from the camera's chunk is computed in integers from the scene's
+  `camera_chunk`, so positions stay exact far from the origin.
+- **Vertices** come through vertex input (binding 0) as before; the command's
+  `vertexOffset` is the run's first vertex in the shared buffer, and the static quad index
+  buffer supplies the rest. Pulling them by address (`gl_VertexIndex`) was measured and
+  left out: on the development machine it cost `gpu_world`
+  5-10% (history.md, R5).
+- **`world_cull`** runs before rendering (the `world cull` profile scope). It walks a
+  dense list of every mesh's chunk (`live`: 16 bytes a mesh, not the pool), tests each
+  against the frustum, sorts what it keeps by distance (a radix sort of 64-bit keys:
+  distance bits over the mesh's place), and writes one `VkDrawIndexedIndirectCommand` per
+  run of visible face groups into this frame slot's host-visible `world draw commands`
+  buffer (doubled when the mesh count needs it): opaque and cutout nearest first, water
+  farthest first. Face groups are meshed in the order +x +y +z, crossed, -z -y -x
+  (`client/mesh`), so the groups a camera sees are adjacent: two runs a mesh on average.
+- **`world_draw` and `world_draw_translucent`** bind each pipeline once and draw the
+  frame's spans. The push constants hold only what every world draw shares (the scene's
+  address, the texture array, the sampler, the time). With `debug.occlusion_stats`, the
+  opaque layer is drawn as one indirect call per queried chunk, each inside its query.
+
+A chunk drawn at another chunk's place points at a table slot written for one mesh and
+drawn for another (`live_at`, `world_remove_mesh`); a wrong position or texture in every
+chunk points at the push constant or scene layout (`render_test.odin` asserts both against
+the shaders' declarations).
+
+Multi-draw indirect has a cost of its own on some drivers. The development machine's
+driver generates an indirect call's draws on the GPU when it holds more than a few commands; `views`
+measured the world pass 6-10% slower than R4's direct draws, and the same commands recorded
+as direct draws as fast as R4's. R5b is that remainder.
 
 ### Memory
 
@@ -1008,7 +1054,7 @@ The main thread's frame (`client/app.odin`, `app_frame`), outermost first:
 | `after session (packs, checks, sounds, loading)` | What follows from the session. |
 | `ui layout` | Building the HUD and menus (the GPU's `ui` pass draws them). |
 | `wait for GPU` | `wait for frame fence` (the GPU is still drawing this slot's previous frame: GPU-bound), `acquire image`, `reset and begin commands`, `read GPU timings`, and rarely `recreate swapchain`. |
-| `render` | The CPU side of drawing: `chunk meshes in` (`apply meshes`), `world and ui uploads`, `scene (avatars, entities, view model)`, `entity uploads`, `record commands`, `queue submit`, `queue present` (vsync may wait here). |
+| `render` | The CPU side of drawing: `chunk meshes in` (`apply meshes`), `world and ui uploads`, `scene (avatars, entities, view model)`, `entity uploads`, `world cull` (the world's draw commands, R5), `record commands`, `queue submit`, `queue present` (vsync may wait here). |
 
 ### Server tick scopes
 

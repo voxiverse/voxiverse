@@ -114,11 +114,17 @@ test_sky_through_a_day :: proc(t: ^testing.T) {
 	}
 }
 
-// scene.glsl's Scene: two mat4, ten vec4, the cloud map's address (std430).
-#assert(size_of(Scene) == 2 * 64 + 10 * 16 + 16)
+// scene.glsl's Scene: two mat4, ten vec4, an ivec4, the cloud map's address (std430).
+#assert(size_of(Scene) == 2 * 64 + 11 * 16 + 16)
 #assert(offset_of(Scene, camera) == 128)
 #assert(offset_of(Scene, water) == 272)
-#assert(offset_of(Scene, cloud_map) == 288)
+#assert(offset_of(Scene, camera_chunk) == 288)
+#assert(offset_of(Scene, cloud_map) == 304)
+
+// world.glsl's push constants and chunk draw records.
+#assert(offset_of(World_Push, textures) == 8)
+#assert(offset_of(World_Push, time) == 16)
+#assert(size_of(Chunk_Draw) == 16)
 
 // The cloud map: blobs, not noise; it tiles; some sky stays clear.
 @(test)
@@ -148,4 +154,36 @@ test_cloud_map :: proc(t: ^testing.T) {
 		cloud_map_get(m, -1, 5) == cloud_map_get(m, CLOUD_MAP_SIZE - 1, 5),
 		"it repeats",
 	)
+}
+
+// sort_keys orders by the high 32 bits (distances' bits), equal ones kept
+// in order, as a comparison sort would.
+@(test)
+test_sort_keys :: proc(t: ^testing.T) {
+	distances := []f32{9, 0.5, 300, 9, 0, 1e6, 0.25, 9}
+	keys := make([]u64, len(distances))
+	defer delete(keys)
+	for d, i in distances {keys[i] = u64(transmute(u32)d) << 32 | u64(i)}
+	scratch := make([dynamic]u64)
+	defer delete(scratch)
+	sort_keys(keys, &scratch)
+	want := []u32{4, 6, 1, 0, 3, 7, 2, 5}
+	for k, i in keys {
+		testing.expectf(t, u32(k) == want[i], "place %d: index %d, want %d", i, u32(k), want[i])
+	}
+	// Keys whose high bytes are all the same (the passes they skip).
+	near := []f32{2.5, 2.25, 2.75, 2.25}
+	for d, i in near {keys[i] = u64(transmute(u32)d) << 32 | u64(i)}
+	sort_keys(keys[:len(near)], &scratch)
+	want_near := []u32{1, 3, 0, 2}
+	for k, i in keys[:len(near)] {
+		testing.expectf(
+			t,
+			u32(k) == want_near[i],
+			"near place %d: index %d, want %d",
+			i,
+			u32(k),
+			want_near[i],
+		)
+	}
 }

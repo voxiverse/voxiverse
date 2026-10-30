@@ -1,12 +1,12 @@
 // What the world shaders share (render/world_pass.odin). Include after
 // scene.glsl.
 
+// The same for every world draw.
 layout(push_constant) uniform Push {
 	Scene scene;
-	layout(offset = 16) vec3 chunk_offset; // this chunk's origin, from the camera chunk's origin
-	uint textures;                         // texture id of the block texture array
+	uint textures;   // texture id of the block texture array
 	uint sampler_id;
-	float time;                            // seconds (wrapped): moving water
+	float time;      // seconds (wrapped): moving water
 } push;
 
 // world_shade: a surface's colour at pos (from the camera chunk's origin):

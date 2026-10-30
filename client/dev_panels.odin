@@ -105,8 +105,9 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"render: %d draw calls, %dk triangles; world %d meshes, %d drawn, vertices %.1f%% of %d M",
+				"render: %d draws (%d calls), %dk triangles; world %d meshes, %d drawn, vertices %.1f%% of %d M",
 				app.g.draws.calls,
+				app.g.draws.api_calls,
 				app.g.draws.triangles / 1000,
 				ws.meshes,
 				ws.drawn,

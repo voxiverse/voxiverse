@@ -8238,3 +8238,116 @@ re-meshes the chunks its light reaches.
 **Exit check.** `bench compare` on `flight`: `mesh_chunk` at most 40% of baseline; on
 `edits`: chunks re-meshed per edit (the `session mesher` line's `dirtied_edit`) at most a
 third; `images` passes.
+
+## R5: multi-draw indirect (issue #67)
+
+Planned as "vertex pulling and multi-draw indirect". Built: a chunk draw table, the world's
+layers drawn with one `vkCmdDrawIndexedIndirect` each from commands the CPU writes before
+rendering, and the API-call counts as metrics. Vertex pulling was built, measured and left
+out; the exit check's `frame_record` half and `gpu_world` were split off as R5b, after R6.
+
+### What was built
+
+- **The chunk draw table** (`chunk draws`, `Chunk_Draw`: the chunk, three `i32`, and the
+  mesh's first vertex; one per mesh at its pool slot, `base.pool_index`), written by a copy
+  in `upload chunk meshes` when the mesh is added. `world.vert` reads it as a per-instance
+  attribute (`in_chunk`, binding 1: `Pipeline_Desc.instance_stride` and
+  `instance_attributes`); a command's `firstInstance` is the slot. The chunk's offset is
+  computed in integers from the scene's new `camera_chunk`. The push constant keeps only the
+  scene, the texture array, the sampler and the time.
+- **`world_cull`**, before rendering: a dense list of every mesh's chunk (`live`,
+  `live_at`, swap-removed) walked against the frustum; each mesh's facing groups as a
+  bit mask; keys (distance bits over the mesh's place) radix-sorted (`sort_keys`);
+  one `VkDrawIndexedIndirectCommand` per run of facing groups written into the frame
+  slot's host-visible `world draw commands` buffer (doubled as needed), as spans per
+  layer. `world_draw` and `world_draw_translucent` (no camera any more) draw the spans:
+  one indirect call per layer; with `debug.occlusion_stats`, one per queried chunk.
+- **Face groups reordered** in `client/mesh` (`FACE_GROUP`): +x +y +z, crossed, -z -y -x,
+  so a camera's groups are adjacent: 1547 -> 1312 commands on `views` for the same
+  triangles.
+- **Counting:** `gpu.draw_indexed_indirect` (split at `maxDrawIndirectCount`), `Draw_Counts`
+  with `api_calls`; metrics `api_draw_calls` and `world_api_draw_calls`; F3's `render:`
+  line shows both; the trace's GPU passes carry both.
+- **Device:** `multiDrawIndirect` and `drawIndirectFirstInstance` required (refused with
+  the log line naming multi-draw indirect).
+
+### Measured (the development machine; `bench compare 8a0879e views`)
+
+The last compare: `frame_record` 0.811 -> 0.421 ms (-48.0%, p 0.008); `gpu_world` 1.532 ->
+1.598 ms (+4.3%, p 0.095, not called); `gpu_water` 0.055 -> 0.068 ms (+23.8%, p 0.008);
+`gpu_frame` +4.5% (p 0.008); `draw_calls` 1547 -> 1312; `world_api_draw_calls` 3,
+`api_draw_calls` 9; `world_triangles` unchanged (242.8 k). Two earlier compares of nearly
+the final code: `frame_record` -49.4% and -49.5%, `gpu_world` +5.9% (p 0.032) and +9.6%
+(p 0.008). Single runs on the way (three repetitions each, same session as a run of
+8a0879e at 1.392 ms `gpu_world`):
+
+| Variant | `gpu_world` ms | `gpu_water` ms |
+|---|---|---|
+| 8a0879e (direct draws, vertex input, push constant per draw) | 1.392 | 0.055 |
+| pulling by address + table by `gl_InstanceIndex`, indirect | 1.548-1.552 | 0.078 |
+| the same, recorded as direct draws | 1.518 | 0.064 |
+| pulling + record as instance attribute, indirect | 1.499 | 0.073 |
+| vertex input + table by `gl_InstanceIndex`, indirect | 1.525 | 0.073 |
+| vertex input + record as instance attribute, indirect (kept) | 1.465-1.475 | 0.069 |
+| the kept variant recorded as direct draws | 1.434 | 0.056 |
+| the kept variant with no face-group culling (675 commands, 402 k triangles) | 1.827 | 0.056 |
+| the kept variant with the driver's generated draws off (diagnostic only) | 2.294 | 0.073 |
+
+The CPU side, profiled: sorting 32-byte records with `slice.sort_by` took 0.16 ms a frame
+on this machine (its CPU runs slowly while frames wait on the GPU), the radix sort 0.013 ms;
+the pool walk 0.065 ms, the dense list less; the driver records the two world indirect
+calls in about 0.09 ms.
+
+Checked by `images` (11 of 11, 0.000% differ), `test_sort_keys`, the mesh tests with the
+new group order, the layout asserts (`Scene.camera_chunk`, `World_Push`, `Chunk_Draw`),
+the blast check under validation and the fly check with `debug.occlusion_stats` under
+validation (exit 0, no finding), `build check` and `build test`.
+
+### What differed from the spec
+
+- **No vertex pulling.** Pulling the 8-byte vertices by address (`gl_VertexIndex`) cost
+  `gpu_world` 5-10% on this GPU against vertex input, and reading the record by
+  `gl_InstanceIndex` from the table cost more than a per-instance attribute; the decided
+  shape (a record per mesh found through `firstInstance`) is kept through the attribute.
+  R8's quad records bring pulling with their own `gpu_world` check. (Decided 2026-10-30,
+  unattended: the spec's exit check asks `gpu_world` within noise, and "speed is shown,
+  not claimed".)
+- **Culling before rendering** (`world_cull`), where R6's compute pass will go; the draw
+  procedures lost their camera.
+- **Face groups reordered** (not in the spec): fewer commands for the same triangles.
+- **The exit check:** `api_draw_calls` for the world 3 (at most 8: met); `frame_record`
+  -48.0% to -49.5% (half: not met); `gpu_world` +4.3% to +9.6% (within noise: met in one
+  compare of three). The rest is R5b, after R6.
+
+### The spec as planned
+
+**Why.** 1547 draw calls and 1.07 ms of recording per frame for 540 meshes.
+
+**Design (decided).**
+
+- **Chunk draw table.** A device-local storage buffer, one 16-byte `Chunk_Draw` record per
+  mesh: the chunk's origin in chunks (three `i32`) and the mesh's first vertex. Written when
+  a mesh is shown; read by the shaders, which subtract the camera's chunk (from the scene
+  buffer) to stay camera-relative. Each run's own range is in its indirect command
+  (`firstIndex`, `vertexOffset`), as in today's `draw_layer`.
+- **Vertex pulling.** `world.vert` reads the packed 8-byte vertices from a storage buffer
+  by address (`gl_VertexIndex`, `buffer_reference`), no vertex-input attributes; the
+  per-draw record is found through `gl_InstanceIndex` (`firstInstance` carries the record
+  index, `instanceCount` 1).
+- **CPU-built indirect draws.** Culling stays on the CPU in this milestone. It writes one
+  `VkDrawIndexedIndirectCommand` per visible run into a per-frame host-visible buffer, and
+  each layer is drawn with one `vkCmdDrawIndexedIndirect(…, drawCount)` call. The push
+  constant keeps only what is the same for every world draw (the scene address, the
+  texture array id).
+- Translucent meshes keep their back-to-front order (the indirect buffer is written in that
+  order).
+
+**Steps.** (1) `Chunk_Draw` buffer and its updates. (2) Shaders pull vertices. (3) Indirect
+buffer per frame slot. (4) `world_draw` writes commands instead of recording draws. (5)
+`draw_calls` metric counts indirect draws as their `drawCount` commands and also reports
+`api_draw_calls` (the vkCmd calls).
+
+**Tests.** `images` passes with no re-accept; the render tests for culling unchanged.
+
+**Exit check.** `bench compare` on `views`: `frame_record` at most half of baseline;
+`api_draw_calls` at most 8 for the world; `gpu_world` within noise or better.

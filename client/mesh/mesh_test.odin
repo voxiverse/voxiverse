@@ -428,12 +428,12 @@ test_layers :: proc(t: ^testing.T) {
 	testing.expect_value(t, counts[.Cutout], 16) // 2 planes x 2 sides x 4 corners
 	testing.expect_value(t, counts[.Translucent], 4 * (10 - 1)) // 10 faces of two cubes, less the bottom on stone
 	testing.expect_value(t, len(out), counts[.Opaque] + counts[.Cutout] + counts[.Translucent])
-	// Quads by face group: the stones' faces in Face order, the plant's all crossed.
-	testing.expect_value(t, grouped[.Opaque], [FACE_GROUPS]int{8, 8, 8, 8, 8, 8, 0})
+	// Quads by face group: the stones' faces in group order, the plant's all crossed.
+	testing.expect_value(t, grouped[.Opaque], [FACE_GROUPS]int{8, 8, 8, 0, 8, 8, 8})
 	testing.expect_value(t, grouped[.Cutout][CROSS_GROUP], 16)
 	at := 0
 	for n, g in grouped[.Opaque] {
-		for v in out[at:][:n] {testing.expect_value(t, int(vertex_face(v)), g)}
+		for v in out[at:][:n] {testing.expect_value(t, FACE_GROUP[vertex_face(v)], g)}
 		at += n
 	}
 	plant := out[counts[.Opaque]:][:counts[.Cutout]]

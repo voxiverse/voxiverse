@@ -5,11 +5,15 @@
 
 // Chunk meshes (render/world_pass.odin, client/mesh), every layer: 8-byte
 // vertices with a chunk-local position (in sixteenths of a block), face, AO
-// level, light and texture layer. Positions are relative to the camera's chunk, so floats stay exact
-// far from the origin.
+// level, light and texture layer. Positions are relative to the camera's
+// chunk, so floats stay exact far from the origin.
 
 layout(location = 0) in uint in_packed; // x | y << 9 | z << 18 | face << 27 | ao << 30
 layout(location = 1) in uint in_layer; // texture layer (12 bits) | sky << 12 | block << 16 | surface << 20 | drop << 21
+// The chunk draw table's record (Chunk_Draw), per instance: each indirect
+// command's firstInstance is its mesh's slot. xyz the chunk, w its mesh's
+// first vertex.
+layout(location = 2) in ivec4 in_chunk;
 
 layout(location = 0) out vec3 out_uvw; // texture coordinates and layer
 layout(location = 1) out vec3 out_light;
@@ -36,6 +40,8 @@ vec3 lifted(vec3 light, float lift) {
 
 void main() {
 	Scene s = push.scene;
+	// This chunk's origin from the camera chunk's: whole blocks, exact.
+	vec3 chunk_offset = vec3((in_chunk.xyz - s.camera_chunk.xyz) * 16);
 	vec3 local = vec3(in_packed & 511u, (in_packed >> 9) & 511u, (in_packed >> 18) & 511u) / 16.0;
 	uint face = (in_packed >> 27) & 7u;
 	uint ao = (in_packed >> 30) & 3u;
@@ -55,7 +61,7 @@ void main() {
 		float drop = float((in_layer >> 21) & 7u) / 8.0; // eighths below the block's top
 		local.y -= drop + 0.03 * sin(t * 1.3 + local.x * PI / 4.0) * cos(t * 0.9 + local.z * PI / 8.0);
 	}
-	vec3 pos = push.chunk_offset + local;
+	vec3 pos = chunk_offset + local;
 	gl_Position = s.view_proj * vec4(pos, 1.0);
 
 	uint sky = (in_layer >> 12) & 15u;

@@ -19,18 +19,23 @@ Vertex_Attribute :: struct {
 }
 
 Pipeline_Desc :: struct {
-	name:           string, // for validation messages and captures
-	vertex_spirv:   []byte,
-	fragment_spirv: []byte,
-	color_format:   vk.Format,
+	name:                string, // for validation messages and captures
+	vertex_spirv:        []byte,
+	fragment_spirv:      []byte,
+	color_format:        vk.Format,
 	// One interleaved vertex buffer at binding 0; stride 0 = no vertex input
 	// (vertices generated in the shader).
-	vertex_stride:  u32,
-	attributes:     []Vertex_Attribute, // locations 0, 1, ...
-	alpha_blend:    bool, // standard "over" blending
-	depth:          Depth_Mode,
-	cull_back:      bool, // skip triangles wound clockwise on screen
-	lines:          bool, // line list instead of triangle list
+	vertex_stride:       u32,
+	attributes:          []Vertex_Attribute, // locations 0, 1, ...
+	// One per-instance buffer at binding 1 (stride 0 = none): its
+	// attributes take the locations after the vertex ones. An indirect
+	// command's firstInstance picks the record.
+	instance_stride:     u32,
+	instance_attributes: []Vertex_Attribute,
+	alpha_blend:         bool, // standard "over" blending
+	depth:               Depth_Mode,
+	cull_back:           bool, // skip triangles wound clockwise on screen
+	lines:               bool, // line list instead of triangle list
 }
 
 // Depth_Mode: reverse Z (nearer = greater) when tested.
@@ -61,32 +66,42 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 			pName = "main",
 		},
 	}
-	binding := vk.VertexInputBindingDescription {
-		binding   = 0,
-		stride    = desc.vertex_stride,
-		inputRate = .VERTEX,
+	bindings := make([dynamic]vk.VertexInputBindingDescription, context.temp_allocator)
+	attributes := make([dynamic]vk.VertexInputAttributeDescription, context.temp_allocator)
+	if desc.vertex_stride > 0 {
+		append(&bindings, vk.VertexInputBindingDescription{0, desc.vertex_stride, .VERTEX})
+		for a in desc.attributes {
+			append(
+				&attributes,
+				vk.VertexInputAttributeDescription {
+					location = u32(len(attributes)),
+					binding = 0,
+					format = a.format,
+					offset = a.offset,
+				},
+			)
+		}
 	}
-	attributes := make(
-		[]vk.VertexInputAttributeDescription,
-		len(desc.attributes),
-		context.temp_allocator,
-	)
-	for a, i in desc.attributes {
-		attributes[i] = {
-			location = u32(i),
-			binding  = 0,
-			format   = a.format,
-			offset   = a.offset,
+	if desc.instance_stride > 0 {
+		append(&bindings, vk.VertexInputBindingDescription{1, desc.instance_stride, .INSTANCE})
+		for a in desc.instance_attributes {
+			append(
+				&attributes,
+				vk.VertexInputAttributeDescription {
+					location = u32(len(attributes)),
+					binding = 1,
+					format = a.format,
+					offset = a.offset,
+				},
+			)
 		}
 	}
 	vertex_input := vk.PipelineVertexInputStateCreateInfo {
-		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	}
-	if desc.vertex_stride > 0 {
-		vertex_input.vertexBindingDescriptionCount = 1
-		vertex_input.pVertexBindingDescriptions = &binding
-		vertex_input.vertexAttributeDescriptionCount = u32(len(attributes))
-		vertex_input.pVertexAttributeDescriptions = raw_data(attributes)
+		sType                           = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		vertexBindingDescriptionCount   = u32(len(bindings)),
+		pVertexBindingDescriptions      = raw_data(bindings),
+		vertexAttributeDescriptionCount = u32(len(attributes)),
+		pVertexAttributeDescriptions    = raw_data(attributes),
 	}
 	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
 		sType    = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,

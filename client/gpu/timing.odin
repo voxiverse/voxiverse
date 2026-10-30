@@ -129,7 +129,11 @@ timing_section_end :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	t.open_count -= 1
 	s := &t.sections[t.open[t.open_count]]
 	s.end_query = t.query_count
-	s.draws = {g.draws.calls - s.draws_at.calls, g.draws.triangles - s.draws_at.triangles}
+	s.draws = {
+		calls     = g.draws.calls - s.draws_at.calls,
+		api_calls = g.draws.api_calls - s.draws_at.api_calls,
+		triangles = g.draws.triangles - s.draws_at.triangles,
+	}
 	vk.CmdWriteTimestamp2(cmd, {.ALL_COMMANDS}, t.pool, t.query_count)
 	t.query_count += 1
 }
@@ -218,7 +222,12 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 		if q == s.begin_query {
 			args := ""
 			if s.draws.calls > 0 {
-				args = fmt.tprintf("%d draw calls, %d triangles", s.draws.calls, s.draws.triangles)
+				args = fmt.tprintf(
+					"%d draw calls (%d API calls), %d triangles",
+					s.draws.calls,
+					s.draws.api_calls,
+					s.draws.triangles,
+				)
 			}
 			base.profile_gpu_begin(string(s.name[:s.name_len]), ns, args)
 		} else {

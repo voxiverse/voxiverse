@@ -109,36 +109,9 @@ re-meshing only where light changed".
 
 ## R5: vertex pulling and multi-draw indirect
 
-**Why.** 1547 draw calls and 1.07 ms of recording per frame for 540 meshes.
-
-**Design (decided).**
-
-- **Chunk draw table.** A device-local storage buffer, one 16-byte `Chunk_Draw` record per
-  mesh: the chunk's origin in chunks (three `i32`) and the mesh's first vertex. Written when
-  a mesh is shown; read by the shaders, which subtract the camera's chunk (from the scene
-  buffer) to stay camera-relative. Each run's own range is in its indirect command
-  (`firstIndex`, `vertexOffset`), as in today's `draw_layer`.
-- **Vertex pulling.** `world.vert` reads the packed 8-byte vertices from a storage buffer
-  by address (`gl_VertexIndex`, `buffer_reference`), no vertex-input attributes; the
-  per-draw record is found through `gl_InstanceIndex` (`firstInstance` carries the record
-  index, `instanceCount` 1).
-- **CPU-built indirect draws.** Culling stays on the CPU in this milestone. It writes one
-  `VkDrawIndexedIndirectCommand` per visible run into a per-frame host-visible buffer, and
-  each layer is drawn with one `vkCmdDrawIndexedIndirect(…, drawCount)` call. The push
-  constant keeps only what is the same for every world draw (the scene address, the
-  texture array id).
-- Translucent meshes keep their back-to-front order (the indirect buffer is written in that
-  order).
-
-**Steps.** (1) `Chunk_Draw` buffer and its updates. (2) Shaders pull vertices. (3) Indirect
-buffer per frame slot. (4) `world_draw` writes commands instead of recording draws. (5)
-`draw_calls` metric counts indirect draws as their `drawCount` commands and also reports
-`api_draw_calls` (the vkCmd calls).
-
-**Tests.** `images` passes with no re-accept; the render tests for culling unchanged.
-
-**Exit check.** `bench compare` on `views`: `frame_record` at most half of baseline;
-`api_draw_calls` at most 8 for the world; `gpu_world` within noise or better.
+Done: its spec and outcome are in history.md, "R5: multi-draw indirect". Vertex pulling
+was measured and left to R8; the exit check's `frame_record` half and `gpu_world` are
+R5b's (below, after R6).
 
 ## R3b: an edit's frames hide behind the GPU
 
@@ -196,6 +169,39 @@ lavapipe (a fixed set of chunks and a camera, the resulting instance counts).
 **Exit check.** `frame_record` on `views` within noise of R5 or better; a new scenario,
 `views-far` (`views` at view radius 24, height 12, its own name so it never compares with
 `views`), has `frame_record` within 20% of `views`; `gpu_cull` under 0.1 ms on `views`.
+
+## R5b: the indirect draws' cost (after R6)
+
+**Why.** R5 drew each world layer with one `vkCmdDrawIndexedIndirect` (3 world API calls,
+from 1547 draws), but against 8a0879e on `views` (development machine) `frame_record` fell 48.0-49.5% over three five-run compares (half not
+reached) and `gpu_world` rose 4.3-9.6% (p 0.008-0.095), `gpu_water` 24% (0.055 -> 0.068
+ms). Measured in R5: the same commands recorded as direct draws cost what 8a0879e's did
+on the GPU (water 0.056 ms), so the GPU cost is the driver's indirect path, not the
+shaders; with the driver's generated draws turned off (its
+`generated_indirect_threshold` option, a diagnostic) the world pass took 2.29 ms, so that path is already the driver's faster one.
+Of what is left of `frame_record`, about 0.1 ms is the driver recording the two world
+indirect calls and 0.1 ms is `world_cull` (walk, sort, writing commands). R6 replaces
+`world_cull`'s walk and writes with a compute pass, which changes both numbers; this row
+comes after it, so it measures what R6 leaves.
+
+**Design (decided 2026-10-30, unattended: measure, then cut, as R3b).**
+
+- **Measured first.** `bench compare 8a0879e views` after R6, and a profiled `views` run:
+  the CPU left in `world cull` and `record commands`, and the GPU's world and water time
+  against 8a0879e's.
+- **Then cut, in this order, each kept only if `bench compare` shows it:** the chunk
+  record as a 12-byte attribute (`R32G32B32_SINT`: the first vertex moves to a second
+  table for R6's shader); fewer commands for the same triangles (R8's water runs and quad
+  records, if R8 has landed, else meshes of one region allocated next to each other in
+  the vertex buffer so adjacent chunks' runs merge into one command where their ranges
+  touch); the water layer as one command per contiguous range.
+- **Not done:** setting driver options from the game, direct draws for small layers, a
+  per-driver path.
+
+**Tests.** `images` passes with no re-accept; R5's and R6's tests unchanged.
+
+**Exit check.** `bench compare 8a0879e views`: `frame_record` at most half (p < 0.05);
+`gpu_world` within noise or better; `images` passes.
 
 ## R7: occlusion culling
 
