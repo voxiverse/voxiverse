@@ -104,40 +104,8 @@ frame". Its exit check's frame p99 half is R3b's (below, after R5).
 
 ## R4: light computed once per chunk version, re-meshing only where light changed
 
-**Why.** `light_chunk` is 76% of a mesh job, and an edit re-meshes 8 to 27 chunks although
-light rarely changes more than a few blocks from it.
-
-**Design (decided).**
-
-- **Light is a client-side cache, not stored state.** The PLAN's decision stands: light is
-  a pure function of the 48³ neighbourhood and the column heights. Each chunk's computed
-  light (its 16³ cells, `sky<<4 | block`, 4 KiB) is cached on the client chunk with the key
-  of its inputs: the versions of its 27 neighbours and the column heights it read, hashed
-  (XXH3-64). A cache entry is used only when the key matches.
-- **Light jobs separate from mesh jobs.** A light job computes one chunk's light from its
-  neighbourhood (`light_chunk`, unchanged) and stores it with its key. A mesh job reads the
-  cached light of its chunk and its 26 neighbours (the 18³ border comes from them), so the
-  48³ pass runs once per chunk per change, not once per mesh.
-- **Re-mesh only when light changed.** After an edit, the chunks within `LIGHT_MAX` get new
-  light jobs; a chunk whose new light equals its old light (a byte compare) and whose own
-  blocks and neighbours' border blocks did not change is not re-meshed.
-- **Workers:** `max(1, cores/4)` becomes `max(2, cores/2)` for light and mesh jobs together
-  (settled by measuring 2, cores/4, cores/2 in `flight`; the choice and numbers go in
-  history.md).
-
-**Steps.** (1) The cache fields on `Client_Chunk` and the key. (2) Light jobs and their
-scheduling (nearest first, before mesh jobs that need them). (3) Mesh jobs read cached
-light; `Light_Snapshot` assembled from neighbours. (4) The light-changed check. (5)
-Workers measured and set.
-
-**Tests.** Golden: for the benchmark's chunks, meshes built with cached light are
-byte-identical to meshes built the old way (a test that builds both); an edit far from any
-light change re-meshes only the edited chunk and its geometry neighbours; a lamp placed
-re-meshes the chunks its light reaches.
-
-**Exit check.** `bench compare` on `flight`: `mesh_chunk` at most 40% of baseline; on
-`edits`: chunks re-meshed per edit (the `session mesher` line's `dirtied_edit`) at most a
-third; `images` passes.
+Done: its spec and outcome are in history.md, "R4: light computed once per chunk version,
+re-meshing only where light changed".
 
 ## R5: vertex pulling and multi-draw indirect
 

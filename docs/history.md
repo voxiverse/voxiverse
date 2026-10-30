@@ -8101,3 +8101,140 @@ its chunk within the frame (the x-ray case); `opens_hole` table test.
 **Exit check.** `bench compare` on `edits` (R2's version): frame p99 and worst at most half
 the R2 baseline, p < 0.05; `images` passes; a profiled `edits` run has no frame over
 16.7 ms whose tree shows `mesh now`.
+
+## R4: light computed once per chunk version, re-meshing only where light changed (issue #67)
+
+A mesh task (`client/world.odin`, `Mesh_Task`, `mesh_task_run`) now lights its chunk, then
+meshes it only when it must. Each chunk keeps a `Light_Cache`: the light its mesh was made
+with (the chunk and its 1-block border, 18³ bytes, as `light_chunk` writes it) and the key
+of its inputs (`light_key`: XXH3-64 of the 27 chunks' `blocks_version`, bumped by every
+change to a chunk's blocks, and the 48 x 48 column heights). A task whose key matches takes
+the cached light without a light pass (`light_reused`); a task whose chunk's
+`Client_Chunk.geometry` is not set (no block within a block of it changed: set by a chunk
+arriving, a neighbour resent, an edit's cell (`World.cells`, settled with the light boxes),
+a registry swap, or no mesh yet) and whose new light is byte for byte the cache's is not
+meshed: the chunk keeps its mesh (`unchanged`). `world_apply`'s per-task logic is split into
+`task_take` (stale, unchanged, or a mesh to place) and `task_meshed` (the light kept, the
+chunk clean), which the tests call without a GPU. A registry swap drops the caches. The
+`light chunk` and `mesh chunk` scopes and the `light_chunk` and `mesh_chunk` metrics time
+the two parts apart. The mesh workers are `mesh_worker_count()`: a quarter of the cores, at
+least two. `world_init` with no workers runs each task as it starts (tests). The
+`session mesher` line gained `relit_edit`, `unchanged` and `light_reused`; `dirtied_edit` now
+counts chunks an edit dirtied while clean that were then meshed again.
+
+### What differed from the spec
+
+- **The cache holds the chunk and its border (18³, 5.7 KiB), not the chunk alone (16³),
+  and a mesh reads only its own chunk's cache.** Assembling the border from the 26
+  neighbours' caches would need every neighbour lit, and a neighbour can be lit only when
+  its own 26 neighbours are here: the chunks one ring inside the view's edge, meshed today,
+  could not be meshed any more (a smaller view). Light at a border cell is exact either way
+  (any source or path beyond the 48³ region is at least 16 blocks away), so the meshes are
+  the same; the light-changed check compares the 18³, which also covers a neighbour's
+  light changing at the border. One cache per chunk with a mesh, from a free list on the
+  heap (`light_take`, `light_release`), freed with the world.
+- **Light and mesh are the two parts of one task, not two jobs.** With the border in the
+  chunk's own cache, a mesh never waits for another chunk's light, so there is nothing to
+  order between jobs; "nearest first" is the tasks' existing order.
+- **Workers: a quarter of the cores, at least two (`max(2, cores/4)`), not half.** Measured
+  in `flight` against 6df0679 (5 runs each): with half the cores, `frame` p99 3.364 -> 3.790 ms (+12.6%,
+  p 0.008 slower), `frame` max +25.7% (p 0.008 slower), `frame_session` p99 +41.3%
+  (p 0.008 slower), each `light_chunk` +28.1% (p 0.008 slower); with two, `frame` p99
+  3.434 -> 3.503 ms (+2.0%, p 0.421, no change called). The workers share the cores with the
+  server's generation and the main thread; more of them made every frame and every light
+  pass slower.
+- **The key rarely matches in play (`light_reused=0` in `edits`, `flight` and the blast
+  check).** Every event that dirties a chunk (an edit within 15 blocks, a column top moving,
+  a neighbour arriving or resent) changes one of the inputs its key is made of, so the key
+  only saves work when a chunk is dirtied with nothing changed (tested). The saving is the
+  skipped meshes, not skipped light.
+- `dirtied_edit` counted, before, every clean meshed chunk an edit dirtied (all of them
+  were meshed again); it now counts those that were meshed again. `relit_edit` counts
+  every meshed chunk an edit lit again.
+
+### The exit check, measured
+
+`build bench compare 6df0679 flight` (5 runs each, alternating; A the commit before, B
+this one, with two mesh workers):
+
+| Metric | A | B | Change | p |
+|---|---|---|---|---|
+| `mesh_chunk` (median) | 2.150 ms | 0.342 ms | -84.1% | 0.008 faster |
+| `mesh_chunk` p99 | 5.416 ms | 2.541 ms | -53.1% | 0.008 faster |
+| `light_chunk` (median) | 1.510 ms | 1.683 ms | +11.5% | 0.095 |
+| `light_chunk` p99 | 4.685 ms | 5.920 ms | +26.4% | 0.008 slower |
+| `mesh_faces` (median) | 0.330 ms | 0.339 ms | +2.9% | 1.000 |
+| `frame` (median) | 2.157 ms | 2.169 ms | +0.6% | 1.000 |
+| `frame` p99 | 3.434 ms | 3.503 ms | +2.0% | 0.421 |
+| `frame` max | 6.095 ms | 6.210 ms | +1.9% | 0.841 |
+| `world_meshes` | 105 | 104 | -1.0% | 1.000 |
+
+`mesh_chunk` at 16% of the baseline (at most 40% asked). It is a mesh job's time now, its
+light timed apart: in `flight` each chunk is still lit once (the light passes are the same
+in number), so the total work per chunk is about the same; a light pass's tail is slower
+(two passes may now run at once where a mesh used to follow each).
+
+`build bench compare 6df0679 edits` (5 runs each):
+
+| Metric | A | B | Change | p |
+|---|---|---|---|---|
+| `mesh_chunk` (median) | 1.235 ms | 0.387 ms | -68.6% | 0.008 faster |
+| `light_chunk` (median) | 0.895 ms | 1.007 ms | +12.5% | 0.008 slower |
+| `frame` p99 | 3.511 ms | 3.377 ms | -3.8% | 1.000 |
+| `frame` max | 4.921 ms | 4.954 ms | +0.7% | 0.841 |
+| `frame_session` p95 | 0.414 ms | 0.459 ms | +10.8% | 0.016 slower |
+| `edit_shown` (median) | 32.669 ms | 33.560 ms | +2.7% | 0.841 |
+| `edit_shown` max | 44.644 ms | 51.762 ms | +15.9% | 0.151 |
+
+Counts equal (meshes 522). The `session mesher` lines of each side's three repetitions
+(the same in all three): A `meshed=2958 remeshed=1152 dirtied_edit=144 dirtied_column=934`;
+B `meshed=2394 remeshed=588 dirtied_edit=6 relit_edit=633 unchanged=545 dirtied_column=933`
+(the last B run, after `dirtied_edit` was made to count as A's did: clean chunks an edit
+dirtied, here those of them meshed again). Chunks meshed again for an edit: 144 -> 6 (4%,
+at most a third asked); chunks meshed in all: -19%; 545 tasks lit a chunk and left its mesh.
+
+Also checked: `test_cached_light_meshes_are_byte_identical` (terrain from the generator,
+the middle 3x3x3 meshed through the world's tasks and compared byte for byte with meshes
+lit from scratch, after the first meshing and three lamps), `test_an_edit_in_the_dark_
+remeshes_only_its_geometry`, `test_a_lamp_remeshes_the_chunks_its_light_reaches` (exactly
+the chunks whose light changed, and those within a block), `test_light_reused_when_the_key_
+matches` (and a registry swap meshing all again); a mutation (the light-changed check
+removed) failed the first and the lamp test 26 times. `images` (11 of 11, identical), the
+blast check under validation (exit 0, no finding), `build check`, `build test`.
+
+### The spec as planned
+
+**Why.** `light_chunk` is 76% of a mesh job, and an edit re-meshes 8 to 27 chunks although
+light rarely changes more than a few blocks from it.
+
+**Design (decided).**
+
+- **Light is a client-side cache, not stored state.** The PLAN's decision stands: light is
+  a pure function of the 48³ neighbourhood and the column heights. Each chunk's computed
+  light (its 16³ cells, `sky<<4 | block`, 4 KiB) is cached on the client chunk with the key
+  of its inputs: the versions of its 27 neighbours and the column heights it read, hashed
+  (XXH3-64). A cache entry is used only when the key matches.
+- **Light jobs separate from mesh jobs.** A light job computes one chunk's light from its
+  neighbourhood (`light_chunk`, unchanged) and stores it with its key. A mesh job reads the
+  cached light of its chunk and its 26 neighbours (the 18³ border comes from them), so the
+  48³ pass runs once per chunk per change, not once per mesh.
+- **Re-mesh only when light changed.** After an edit, the chunks within `LIGHT_MAX` get new
+  light jobs; a chunk whose new light equals its old light (a byte compare) and whose own
+  blocks and neighbours' border blocks did not change is not re-meshed.
+- **Workers:** `max(1, cores/4)` becomes `max(2, cores/2)` for light and mesh jobs together
+  (settled by measuring 2, cores/4, cores/2 in `flight`; the choice and numbers go in
+  history.md).
+
+**Steps.** (1) The cache fields on `Client_Chunk` and the key. (2) Light jobs and their
+scheduling (nearest first, before mesh jobs that need them). (3) Mesh jobs read cached
+light; `Light_Snapshot` assembled from neighbours. (4) The light-changed check. (5)
+Workers measured and set.
+
+**Tests.** Golden: for the benchmark's chunks, meshes built with cached light are
+byte-identical to meshes built the old way (a test that builds both); an edit far from any
+light change re-meshes only the edited chunk and its geometry neighbours; a lamp placed
+re-meshes the chunks its light reaches.
+
+**Exit check.** `bench compare` on `flight`: `mesh_chunk` at most 40% of baseline; on
+`edits`: chunks re-meshed per edit (the `session mesher` line's `dirtied_edit`) at most a
+third; `images` passes.

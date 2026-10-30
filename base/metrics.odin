@@ -35,9 +35,9 @@ Metric :: enum u8 {
 	// Work on the pools, per job, ms.
 	Generate_Chunk,
 	Column_Tops,
-	Light_Chunk, // a chunk's light (game.light_chunk)
+	Light_Chunk, // a chunk's light (game.light_chunk; the client's, only when its light's inputs changed)
 	Mesh_Faces, // its faces (the snapshot and mesh.mesh_chunk)
-	Mesh_Chunk, // both: a meshing job
+	Mesh_Chunk, // a mesh job: the client's meshing of a lit chunk (its light is Light_Chunk's, R4)
 	// The server, a tick at a time, ms.
 	Server_Tick,
 	Server_Stream,

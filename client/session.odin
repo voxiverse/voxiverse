@@ -199,11 +199,19 @@ Session_Stats :: struct {
 	bytes_received:  int,
 }
 
-// worker_count: threads for each pool (the server's generation, our
-// meshing): a quarter of the cores each, leaving the rest to the game.
+// worker_count: the server's generation threads: a quarter of the cores,
+// leaving the rest to the game.
 @(private)
 worker_count :: proc() -> int {
 	return max(1, os.get_processor_core_count() / 4)
+}
+
+// mesh_worker_count: our light and mesh threads: a quarter of the cores,
+// at least two (R4 measured half the cores in flight: frames slower, each
+// light slower; history.md).
+@(private)
+mesh_worker_count :: proc() -> int {
+	return max(2, os.get_processor_core_count() / 4)
 }
 
 // session_start starts the server and connects to it. On failure the
@@ -355,13 +363,16 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 		st := &s.world.stats
 		times := base.frame_stats_summary(&st.mesh_times)
 		log.infof(
-			"session mesher meshed=%d meshed_now=%d remeshed=%d stale=%d dirtied_resent=%d dirtied_edit=%d dirtied_column=%d mesh_ms_p50=%.2f p99=%.2f",
+			"session mesher meshed=%d meshed_now=%d remeshed=%d stale=%d dirtied_resent=%d dirtied_edit=%d relit_edit=%d unchanged=%d light_reused=%d dirtied_column=%d mesh_ms_p50=%.2f p99=%.2f",
 			st.meshed,
 			st.meshed_now,
 			st.remeshed,
 			st.stale_meshes,
 			st.dirtied_resent,
 			st.dirtied_edit,
+			st.relit_edit,
+			st.unchanged,
+			st.light_reused,
 			st.dirtied_column,
 			times.p50,
 			times.p99,

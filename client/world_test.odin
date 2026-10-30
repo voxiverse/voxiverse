@@ -176,7 +176,7 @@ test_world_changes_settle_once_per_chunk :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(w.uploads), 0)
 	// Every chunk within light's reach of the cells, once (the centre's 26
 	// neighbours are not complete: only the centre can be queued).
-	testing.expect_value(t, w.stats.dirtied_edit, 27)
+	testing.expect_value(t, w.stats.relit_edit, 27)
 	testing.expect_value(t, len(w.to_mesh), 1)
 	// Water going down again (a level, not geometry) still meshes nothing.
 	for p in cells {world_set_block(&w, p, .Water_5)}
@@ -189,7 +189,7 @@ test_world_changes_settle_once_per_chunk :: proc(t: ^testing.T) {
 	world_changes_settle(&w)
 	testing.expect_value(t, w.stats.meshed_now, 1)
 	testing.expect(t, len(w.uploads) == 1 && w.uploads[0].pos == {0, 0, 0})
-	testing.expect_value(t, w.stats.dirtied_edit, 27)
+	testing.expect_value(t, w.stats.relit_edit, 27)
 	world_destroy(&w)
 }
 

@@ -211,7 +211,7 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		s.reg,
 		capacity,
 		columns,
-		worker_count(),
+		mesh_worker_count(),
 		virtual.arena_allocator(&s.arena),
 	); err != nil {
 		fail(s, "out of memory for the world")

@@ -1,5 +1,6 @@
 package client
 
+import "core:hash/xxhash"
 import "core:log"
 import "core:mem"
 import "core:slice"
@@ -21,25 +22,47 @@ import "render"
 // results that are stale by the time they finish (chunk changed or gone)
 // are dropped. Mesh uploads and removals touch the GPU, so they wait for
 // world_apply in the frame's recording phase.
+//
+// Light (R4): a task first lights its chunk (game.light_chunk, the chunk
+// and its 1-block border), then meshes it only if it must. Each chunk keeps
+// the light its mesh was made with (Light_Cache) and the key of what that
+// light was computed from: its 27 chunks' block versions and the column
+// heights around. A task whose key matches takes the cached light without
+// computing it; one whose blocks within a block of the chunk did not change
+// (Client_Chunk.geometry) and whose light came out the same is not meshed
+// again: its mesh is already that one. So an edit lights the chunks within
+// LIGHT_MAX of it, and re-meshes only those whose light it changed and the
+// few whose blocks it touched.
 
 Chunk_Handle :: distinct u32
+
+// Light_Cache: a chunk's light, as its mesh was made with it, and the key
+// of its inputs (light_key).
+Light_Cache :: struct {
+	key:   u64,
+	light: mesh.Light_Snapshot,
+}
 
 #assert(mesh.FACE_GROUPS == render.FACE_GROUPS)
 
 Client_Chunk :: struct {
-	pos:     game.Chunk_Pos,
-	blocks:  game.Chunk_Blocks,
-	version: u32, // bumped whenever its mesh's inputs change: its blocks, or a neighbour's
-	mesh:    render.Mesh_Handle, // 0: no mesh (nothing visible, or not meshed yet)
-	dirty:   bool, // its mesh does not match its blocks
-	queued:  bool, // waiting in to_mesh or being meshed
-	group:   u32, // a bulk edit's mesh group it belongs to (0: none)
-	pending: render.Mesh_Handle, // its new mesh, uploaded hidden until its group is shown
-	waiting: bool, // a new mesh (pending, or none: empty) waits for its group
-	meshes:  u32, // times meshed (started), for World_Stats.remeshed
-	settled: u32, // the last world_changes_settle that dirtied it (once per pass)
-	checked: u32, // ... that tried meshing it on the spot
-	hurry:   bool, // a block change opened a hole in it: meshed before other waiting chunks
+	pos:            game.Chunk_Pos,
+	blocks:         game.Chunk_Blocks,
+	version:        u32, // bumped whenever its mesh's inputs change: its blocks, or a neighbour's
+	blocks_version: u32, // bumped whenever its own blocks change (what light keys are made of)
+	light:          ^Light_Cache, // the light its mesh was made with (nil: none yet)
+	geometry:       bool, // a block within a block of it changed since its last mesh began: mesh it whatever its light
+	edited:         bool, // an edit (or prediction) dirtied it when it was clean (World_Stats.dirtied_edit)
+	mesh:           render.Mesh_Handle, // 0: no mesh (nothing visible, or not meshed yet)
+	dirty:          bool, // its mesh does not match its blocks
+	queued:         bool, // waiting in to_mesh or being meshed
+	group:          u32, // a bulk edit's mesh group it belongs to (0: none)
+	pending:        render.Mesh_Handle, // its new mesh, uploaded hidden until its group is shown
+	waiting:        bool, // a new mesh (pending, or none: empty) waits for its group
+	meshes:         u32, // tasks started for it (lit, and meshed if they must)
+	settled:        u32, // the last world_changes_settle that dirtied it (once per pass)
+	checked:        u32, // ... that tried meshing it on the spot
+	hurry:          bool, // a block change opened a hole in it: meshed before other waiting chunks
 }
 
 // Mesh_Group: the chunks a bulk edit touched, and their neighbours: their
@@ -80,9 +103,12 @@ World :: struct {
 	next_group:    u32,
 	// Block changes since the last world_changes_settle (heap: a frame may
 	// bring any number):
-	changed:       [dynamic][2]game.Block_Pos, // boxes whose chunks' meshes may look different
+	changed:       [dynamic][2]game.Block_Pos, // boxes whose chunks' light may be different
+	cells:         [dynamic]game.Block_Pos, // cells that changed: the chunks within a block of each change geometry
 	holes:         [dynamic]game.Block_Pos, // cells whose change could open a hole (opens_hole)
 	settles:       u32, // world_changes_settle passes so far
+	light_free:    [dynamic]^Light_Cache, // light caches to reuse (heap; as many as chunks ever lit at once)
+	light_all:     [dynamic]^Light_Cache, // ... every one made, to free
 	stats:         World_Stats,
 	reg:           ^game.Registry, // what the blocks are (set by world_init)
 }
@@ -91,17 +117,20 @@ World_Stats :: struct {
 	meshed:         int, // chunks meshed in total
 	remeshed:       int, // ... of chunks meshed before (a change, or churn)
 	// Why chunks went dirty again after being complete: the server sent a
-	// chunk we had, an edit (or prediction) changed light or blocks near,
-	// a column's top moved.
+	// chunk we had, an edit (or prediction) changed light or blocks near
+	// and it was meshed again for it, a column's top moved.
 	dirtied_resent: int,
 	dirtied_edit:   int,
+	relit_edit:     int, // chunks an edit (or prediction) made light again (within LIGHT_MAX of it)
+	unchanged:      int, // lit again without meshing: light and geometry as their mesh's
+	light_reused:   int, // lit from the cache (the key matched): no light pass
 	meshed_now:     int, // ... of chunks meshed on the main thread (mesh_now)
 	dirtied_column: int,
 	stale_meshes:   int, // results dropped because the chunk changed or left
 	mesh_jobs_busy: int,
 	groups_shown:   int, // bulk edits shown whole
 	groups_late:    int, // ... shown on the timeout instead (could flash a hole)
-	mesh_times:     base.Frame_Stats, // ms per chunk meshed (and lit), on the workers
+	mesh_times:     base.Frame_Stats, // ms per task (lit, and meshed when it had to be), on the workers
 }
 
 @(private)
@@ -118,6 +147,14 @@ Mesh_Task :: struct {
 	scratch:  game.Light_Scratch,
 	snapshot: mesh.Snapshot,
 	light:    mesh.Light_Snapshot,
+	key:      u64, // of light's inputs (light_key)
+	old:      mesh.Light_Snapshot, // the light the chunk's mesh was made with, if has_old
+	has_old:  bool,
+	reuse:    bool, // old's key is key: old is the light, no light pass
+	geometry: bool, // mesh whatever the light (Client_Chunk.geometry, or no mesh yet)
+	again:    bool, // the chunk had a task before (World_Stats.remeshed)
+	edited:   bool, // (Client_Chunk.edited, carried for the stats)
+	meshed:   bool, // the result: meshed (vertices), or the old mesh stands
 	vertices: [dynamic]mesh.Vertex, // heap; keeps its capacity between uses
 	ms:       f32, // how long lighting and meshing took
 	counts:   mesh.Counts, // vertices of each layer's face groups, in order
@@ -160,7 +197,7 @@ world_init :: proc(
 	w.mesh_removals = make([dynamic]render.Mesh_Handle, 0, capacity, arena) or_return
 	// Columns: at most one per loaded chunk (in practice far fewer).
 	w.columns = base.map_make_fixed(map[[2]i32]Client_Column, columns, arena) or_return
-	count := workers * MESH_TASKS_PER_WORKER
+	count := max(workers, 1) * MESH_TASKS_PER_WORKER // (no workers: jobs run as they are submitted)
 	w.tasks = make([]Mesh_Task, count + URGENT_TASKS, arena) or_return
 	w.free_tasks = make([dynamic]^Mesh_Task, 0, count, arena) or_return
 	w.urgent_tasks = make([dynamic]^Mesh_Task, 0, URGENT_TASKS, arena) or_return
@@ -177,6 +214,9 @@ world_init :: proc(
 		task_free(w, &t)
 	}
 	w.changed = make([dynamic][2]game.Block_Pos, heap)
+	w.cells = make([dynamic]game.Block_Pos, heap)
+	w.light_free = make([dynamic]^Light_Cache, heap)
+	w.light_all = make([dynamic]^Light_Cache, heap)
 	w.holes = make([dynamic]game.Block_Pos, heap)
 	base.queue_init(&w.done, heap)
 	base.jobs_init(&w.jobs, "mesh", workers, heap)
@@ -193,7 +233,11 @@ world_destroy :: proc(w: ^World) {
 		game.light_scratch_destroy(&t.scratch)
 	}
 	game.block_arrays_destroy(&w.arrays)
+	for l in w.light_all {free(l, w.light_all.allocator)}
+	delete(w.light_all)
+	delete(w.light_free)
 	delete(w.changed)
+	delete(w.cells)
 	delete(w.holes)
 	w^ = {}
 }
@@ -251,8 +295,9 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 		}
 	}
 	c.version = w.next_version
+	c.blocks_version = w.next_version
 	w.next_version += 1
-	c.dirty = true
+	c.dirty, c.geometry = true, true
 	if w.batch_left > 0 {
 		append(&w.batch, m.pos)
 		w.batch_left -= 1
@@ -269,7 +314,7 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 					// Its mesh was made from the old blocks here: a result still
 					// on its way is stale too (border faces, light).
 					if n.meshes > 0 {w.stats.dirtied_resent += 1}
-					n.dirty = true
+					n.dirty, n.geometry = true, true
 					n.version = w.next_version
 					w.next_version += 1
 				}
@@ -294,8 +339,12 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 		log.error("client out of chunk arrays for an edit")
 		return false
 	}
-	// Light reaches 15 blocks: everything that close may look different.
+	c.blocks_version = w.next_version
+	w.next_version += 1
+	// Light reaches 15 blocks: everything that close may be lit differently;
+	// within a block, its geometry changed.
 	append(&w.changed, [2]game.Block_Pos{p - game.LIGHT_MAX, p + game.LIGHT_MAX})
+	append(&w.cells, p)
 	if opens_hole(&w.reg.blocks, old, b) {append(&w.holes, p)}
 	predict_column_top(w, p, b)
 	return true
@@ -313,17 +362,20 @@ opens_hole :: proc(t: ^game.Block_Table, old, new: game.Block) -> bool {
 }
 
 // world_changes_settle absorbs the block changes since the last call: each
-// chunk they reach is dirtied once (the union of their light boxes), and
+// chunk they reach is dirtied once (the union of their light boxes: lit
+// again, and meshed again if its light or geometry changed), those within a
+// block of a changed cell are marked to be meshed whatever their light, and
 // those whose geometry could show a hole (opens_hole), within a block of
 // such a cell, are meshed on this thread at once, at most URGENT_TASKS of
 // them; the rest are meshed by the workers, those first. Called after
 // messages are received and after predictions, before world_update.
 world_changes_settle :: proc(w: ^World) {
-	if len(w.changed) == 0 && len(w.holes) == 0 {return}
+	if len(w.changed) == 0 && len(w.holes) == 0 && len(w.cells) == 0 {return}
 	base.profile_scope("settle block changes")
 	defer {
 		clear(&w.changed)
 		clear(&w.holes)
+		clear(&w.cells)
 	}
 	w.settles += 1
 	last: [2]game.Chunk_Pos
@@ -339,7 +391,8 @@ world_changes_settle :: proc(w: ^World) {
 					n := world_get(w, {cx, cy, cz})
 					if n == nil || n.settled == w.settles {continue}
 					n.settled = w.settles
-					if n.meshes > 0 && !n.dirty {w.stats.dirtied_edit += 1}
+					if n.meshes > 0 {w.stats.relit_edit += 1}
+					if n.meshes > 0 && !n.dirty {n.edited = true} 	// (dirty already: meshed again for something else)
 					n.dirty = true
 					n.version = w.next_version // a mesh being made now is stale
 					w.next_version += 1
@@ -348,7 +401,22 @@ world_changes_settle :: proc(w: ^World) {
 			}
 		}
 	}
-	// Geometry changes only within a block of a cell: those chunks, once each.
+	// Geometry changes only within a block of a cell: those chunks (all of
+	// them dirtied above) are meshed whatever their light.
+	last_cell: [2]game.Chunk_Pos
+	for p, i in w.cells {
+		a, z := game.chunk_of(p - 1), game.chunk_of(p + 1)
+		if i > 0 && last_cell == {a, z} {continue}
+		last_cell = {a, z}
+		for cy in a.y ..= z.y {
+			for cz in a.z ..= z.z {
+				for cx in a.x ..= z.x {
+					if n := world_get(w, {cx, cy, cz}); n != nil {n.geometry = true}
+				}
+			}
+		}
+	}
+	// Holes, within a block of a cell: those chunks, once each.
 	for p in w.holes {
 		a, z := game.chunk_of(p - 1), game.chunk_of(p + 1)
 		for cy in a.y ..= z.y {
@@ -375,12 +443,10 @@ mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	base.profile_scope("mesh now (block changed)")
 	c := base.pool_get(&w.chunks, h)
 	task := pop(&w.urgent_tasks)
-	if c.meshes > 0 {w.stats.remeshed += 1}
-	c.meshes += 1
 	w.stats.meshed_now += 1
 	c.hurry = false
-	task.handle, task.version, task.pos = h, c.version, pos
-	task_fill(w, task, pos)
+	c.geometry = true // (meshed now: whatever its light)
+	task_start(w, task, h, c)
 	mesh_task_run(task)
 	append(&w.uploads, task)
 	return true
@@ -476,6 +542,7 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
 	if c.pending != 0 {append(&w.mesh_removals, c.pending)}
 	game.chunk_release(&c.blocks, &w.arrays)
+	light_release(w, c)
 	delete_key(&w.by_pos, pos)
 	column := &w.columns[[2]i32{pos.x, pos.z}]
 	column.chunks -= 1
@@ -483,7 +550,7 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	base.pool_remove(&w.chunks, h) // queued work for it is dropped as stale
 }
 
-@(private = "file")
+@(private)
 queue_if_complete :: proc(w: ^World, c: ^Client_Chunk) {
 	if c.queued || !c.dirty || !neighbours_present(w, c.pos) {return}
 	c.queued = true
@@ -502,7 +569,8 @@ world_remesh_all :: proc(w: ^World) {
 	for _, h in w.by_pos {
 		c := base.pool_get(&w.chunks, h)
 		if c == nil {continue}
-		c.dirty = true
+		c.dirty, c.geometry = true, true
+		light_release(w, c) // (light may be another now)
 		c.version = w.next_version
 		w.next_version += 1
 		queue_if_complete(w, c)
@@ -556,15 +624,13 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 				if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
 				c.mesh = 0
 			}
-			c.dirty = false
+			c.dirty, c.geometry, c.edited = false, false, false
+			light_release(w, c)
 			continue
 		}
 		c.queued, c.hurry = true, false
-		if c.meshes > 0 {w.stats.remeshed += 1}
-		c.meshes += 1
 		task := pop(&w.free_tasks)
-		task.handle, task.version, task.pos = h, c.version, c.pos
-		task_fill(w, task, c.pos)
+		task_start(w, task, h, c)
 		base.jobs_submit(&w.jobs, mesh_job, task)
 	}
 	remove_range(&w.to_mesh, 0, started)
@@ -686,54 +752,93 @@ world_apply :: proc(w: ^World, pass: ^render.World_Pass, g: ^gpu.Gpu) {
 	defer groups_update(w, pass, g)
 	kept := 0
 	for task, i in w.uploads {
-		c := base.pool_get(&w.chunks, task.handle)
-		// Changed again while being meshed (flowing water into a crater):
-		// for a bulk edit's chunk still without its new mesh, one made
-		// since the edit is shown with it all the same (and it is meshed
-		// again after); otherwise it is dropped.
-		for_group :=
-			c != nil &&
-			c.version != task.version &&
-			c.group != 0 &&
-			!c.waiting &&
-			task.version >= group_since(w, c.group)
-		if c == nil || (c.version != task.version && !for_group) {
-			// Unloaded, or changed while being meshed: mesh it again.
-			w.stats.stale_meshes += 1
-			task_free(w, task)
-			if c != nil {
-				c.queued = false
-				queue_if_complete(w, c)
+		c, for_group, ok := task_take(w, task)
+		if !ok {continue}
+		mesh: render.Mesh_Handle
+		failed := false
+		if len(task.vertices) > 0 {
+			bytes := slice.to_bytes(task.vertices[:])
+			counts: render.Mesh_Counts
+			for groups, l in task.counts {
+				for n, group in groups {counts[render.Mesh_Layer(l)][group] = u32(n)}
 			}
-			continue
+			result: render.Upload_Result
+			mesh, result = render.world_add_mesh(
+				pass,
+				g,
+				c.pos,
+				bytes,
+				counts,
+				hidden = c.group != 0,
+			)
+			if result == .Busy {
+				// Keep this and everything after it for the next frame.
+				copy(w.uploads[kept:], w.uploads[i:])
+				kept += len(w.uploads) - i
+				break
+			}
+			failed = result != .Ok
 		}
-		if len(task.vertices) == 0 {
-			replace_mesh(w, pass, g, c, 0)
-			c.dirty, c.queued = for_group, false
-			if for_group {queue_if_complete(w, c)}
-			w.stats.meshed += 1
-			task_free(w, task)
-			continue
-		}
-		bytes := slice.to_bytes(task.vertices[:])
-		counts: render.Mesh_Counts
-		for groups, l in task.counts {
-			for n, group in groups {counts[render.Mesh_Layer(l)][group] = u32(n)}
-		}
-		h, result := render.world_add_mesh(pass, g, c.pos, bytes, counts, hidden = c.group != 0)
-		if result == .Busy {
-			// Keep this and everything after it for the next frame.
-			copy(w.uploads[kept:], w.uploads[i:])
-			kept += len(w.uploads) - i
-			break
-		}
-		if result == .Ok {replace_mesh(w, pass, g, c, h)}
-		c.dirty, c.queued = for_group, false
-		if for_group {queue_if_complete(w, c)}
-		w.stats.meshed += 1
-		task_free(w, task)
+		if !failed {replace_mesh(w, pass, g, c, mesh)}
+		task_meshed(w, c, task, for_group)
 	}
 	resize(&w.uploads, kept)
+}
+
+// task_take judges a finished task: unloaded or changed while being meshed
+// (flowing water into a crater) and it is dropped and the chunk meshed
+// again; lit the same, and the chunk keeps its mesh (and the new key);
+// otherwise ok: its mesh is to be put in place (then task_meshed). For a
+// bulk edit's chunk still without its new mesh, one made since the edit is
+// shown with it all the same (for_group; it is meshed again after).
+@(private)
+task_take :: proc(w: ^World, task: ^Mesh_Task) -> (c: ^Client_Chunk, for_group, ok: bool) {
+	c = base.pool_get(&w.chunks, task.handle)
+	for_group =
+		c != nil &&
+		c.version != task.version &&
+		c.group != 0 &&
+		!c.waiting &&
+		task.meshed &&
+		task.version >= group_since(w, c.group)
+	// (Lit the same, but its cache dropped meanwhile: nothing to keep it by.)
+	if c == nil || (c.version != task.version && !for_group) || (!task.meshed && c.light == nil) {
+		w.stats.stale_meshes += 1
+		task_free(w, task)
+		if c != nil {
+			c.geometry ||= task.geometry // (what it had to mesh, it still has to)
+			c.edited ||= task.edited
+			c.queued = false
+			queue_if_complete(w, c)
+		}
+		return nil, false, false
+	}
+	if !task.meshed {
+		w.stats.unchanged += 1
+		c.light.key = task.key
+		c.dirty, c.queued = false, false
+		task_free(w, task)
+		return nil, false, false
+	}
+	return c, for_group, true
+}
+
+// task_meshed finishes a chunk's task once its mesh is in place: the light
+// it was made with is kept, and the chunk is clean (or, for_group, meshed
+// again).
+@(private)
+task_meshed :: proc(w: ^World, c: ^Client_Chunk, task: ^Mesh_Task, for_group: bool) {
+	if c.light == nil {c.light = light_take(w)}
+	c.light^ = {
+		key   = task.key,
+		light = task.light,
+	}
+	c.dirty, c.queued = for_group, false
+	if for_group {queue_if_complete(w, c)}
+	w.stats.meshed += 1
+	if task.again {w.stats.remeshed += 1}
+	if task.edited {w.stats.dirtied_edit += 1}
+	task_free(w, task)
 }
 
 // world_remove_all_meshes schedules every mesh for removal (session end).
@@ -780,7 +885,7 @@ neighbour_blocks :: proc(w: ^World, pos: game.Chunk_Pos) -> ^game.Chunk_Blocks {
 
 // trivially_empty: nothing to draw without meshing: all air, or solid all
 // the way through with solid chunks on all six sides.
-@(private = "file")
+@(private)
 trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	if c.blocks.array != nil {return false}
 	if c.blocks.uniform == .Air {return true} 	// (a uniform chunk of another non-solid block, water, has faces)
@@ -791,13 +896,32 @@ trivially_empty :: proc(w: ^World, c: ^Client_Chunk) -> bool {
 	return true
 }
 
-// task_fill copies what meshing pos needs: its neighbourhood's blocks and
-// the column heights around it (the copies are the task's own, so the job
-// never touches the live world).
+// task_start hands chunk c's next mesh to task: what meshing needs (copies:
+// the job never touches the live world), the light its mesh was made with,
+// and whether it must be meshed whatever its light.
 @(private = "file")
+task_start :: proc(w: ^World, task: ^Mesh_Task, h: Chunk_Handle, c: ^Client_Chunk) {
+	task.handle, task.version, task.pos = h, c.version, c.pos
+	task.again = c.meshes > 0
+	c.meshes += 1
+	task_fill(w, task, c.pos)
+	task.has_old = c.light != nil
+	task.reuse = task.has_old && c.light.key == task.key
+	if task.has_old {task.old = c.light.light}
+	task.geometry = c.geometry || !task.has_old
+	task.edited = c.edited
+	c.geometry, c.edited = false, false
+	if task.reuse {w.stats.light_reused += 1}
+}
+
+// task_fill copies what meshing pos needs: its neighbourhood's blocks and
+// the column heights around it, and the key of light's inputs.
+@(private)
 task_fill :: proc(w: ^World, task: ^Mesh_Task, pos: game.Chunk_Pos) {
+	versions: [27]u32 // (0 outside the world: its blocks never change)
 	for i in 0 ..< 27 {
 		d := game.Chunk_Pos{i32(i % 3) - 1, i32(i / 3 % 3) - 1, i32(i / 9) - 1}
+		if n := world_get(w, pos + d); n != nil {versions[i] = n.blocks_version}
 		src := neighbour_blocks(w, pos + d)
 		if src.array != nil {
 			task.arrays[i] = src.array^
@@ -823,6 +947,37 @@ task_fill :: proc(w: ^World, task: ^Mesh_Task, pos: game.Chunk_Pos) {
 			}
 		}
 	}
+	task.key = light_key(&versions, &task.light_in.heights)
+}
+
+// light_key: the key of a chunk's light inputs, its 27 chunks' block
+// versions and the column heights around (never 0: no key).
+@(private)
+light_key :: proc(
+	versions: ^[27]u32,
+	heights: ^[game.LIGHT_REGION * game.LIGHT_REGION]i32,
+) -> u64 {
+	key := xxhash.XXH3_64(slice.to_bytes(versions[:]))
+	key = xxhash.XXH3_64(slice.to_bytes(heights[:]), key)
+	return max(key, 1)
+}
+
+// light_take: a light cache to fill (reused, or made).
+@(private = "file")
+light_take :: proc(w: ^World) -> ^Light_Cache {
+	if l, ok := pop_safe(&w.light_free); ok {return l}
+	l := new(Light_Cache, w.light_all.allocator)
+	append(&w.light_all, l)
+	return l
+}
+
+// light_release gives back a chunk's light cache (its blocks or what they
+// are changed beyond what a key sees, or it has no mesh to keep light for).
+@(private = "file")
+light_release :: proc(w: ^World, c: ^Client_Chunk) {
+	if c.light == nil {return}
+	append(&w.light_free, c.light)
+	c.light = nil
 }
 
 @(private = "file")
@@ -832,17 +987,24 @@ mesh_job :: proc(data: rawptr) {
 	base.queue_push(&task.world.done, task)
 }
 
-// mesh_task_run lights and meshes a filled task (any thread).
-@(private = "file")
+// mesh_task_run lights a filled task (from the cache if its key matched),
+// then meshes it unless its geometry and light are its mesh's (any thread).
+@(private)
 mesh_task_run :: proc(task: ^Mesh_Task) {
-	base.profile_scope("mesh chunk")
-	base.metric_scope(.Mesh_Chunk)
 	start := time.tick_now()
 	defer task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
-	{
+	if task.reuse {
+		task.light = task.old
+	} else {
+		base.profile_scope("light chunk")
 		base.metric_scope(.Light_Chunk)
 		game.light_chunk(&task.light_in, &task.scratch, &task.light)
 	}
+	task.meshed = task.geometry || task.light != task.old
+	clear(&task.vertices)
+	if !task.meshed {return}
+	base.profile_scope("mesh chunk")
+	base.metric_scope(.Mesh_Chunk)
 	base.metric_scope(.Mesh_Faces)
 	n: mesh.Neighbourhood
 	for &c, i in task.chunks {n[i] = &c}

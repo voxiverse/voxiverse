@@ -762,6 +762,32 @@ count it. The counts appear on F3's `render:` line and as benchmark metrics:
 the driver currently allows. F3's `memory:` line shows both, with the bytes of chunk meshes
 uploaded this frame.
 
+### Chunk light
+
+Light is not stored: a chunk's light is a pure function of the blocks within 16 blocks of it
+and the column heights there (`common/game/light.odin`). The client computes it for each
+chunk before meshing (`client/world.odin`, R4) and keeps it, with the chunk, as its
+`Light_Cache`: the light of the chunk and its 1-block border (18³ bytes, `sky << 4 | block`)
+that its mesh was made with, and the key of what it was computed from: an XXH3-64 hash of
+the 27 chunks' block versions (`Client_Chunk.blocks_version`, bumped by every change to a
+chunk's blocks) and the 48 x 48 column heights around.
+
+A mesh task (`Mesh_Task`, on the `mesh` workers) runs in two parts:
+
+1. **Light** (scope `light chunk`, metric `light_chunk`): skipped when the key matches the
+   cache (the cached light is the light: `light_reused`).
+2. **Mesh** (scope `mesh chunk`, metric `mesh_chunk`): skipped when the chunk's blocks
+   within a block of it did not change (`Client_Chunk.geometry`, set by a chunk arriving,
+   a neighbour resent, an edit within a block, or a registry swap) and the new light is
+   byte for byte the cache's. The chunk then keeps its mesh (`unchanged`).
+
+So an edit lights again every chunk within `LIGHT_MAX` (15) blocks of it, and meshes again
+only the chunks within a block of it and those whose light it changed. A registry swap
+(`world_remesh_all`) drops every cache: its blocks may light differently.
+
+The workers are `mesh_worker_count()` (`client/session.odin`): a quarter of the cores, at
+least two (R4's measurement of half the cores is in history.md).
+
 ### Pipelines
 
 Pipelines are created through a `VkPipelineCache` whose data is kept beside the game as
@@ -948,7 +974,7 @@ The profiling tools, from narrowest to widest:
 | `build bench <scenario>` | A benchmark scenario under fixed conditions (see [Benchmarking](#benchmarking)). Run this first, before and after a change for speed. |
 | `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where available) and prints the hottest functions per thread. Use `perf report -i build/game.perf` for call graphs, and `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`). |
 | `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes. `trace` prints each scope's calls and percentiles per thread, a per-second timeline, and the slowest frames and server ticks broken down. |
-| The `session mesher` log line | At the end of a session: chunks meshed (`meshed_now`: meshes made on the main thread because a block change could have shown a hole), re-meshed (and why: resent, edits, column tops), and mesh times. |
+| The `session mesher` log line | At the end of a session: chunks meshed (`meshed_now`: meshes made on the main thread because a block change could have shown a hole), re-meshed (and why: resent, `dirtied_edit` edits that changed their geometry or light, column tops), `relit_edit` (chunks an edit lit again), `unchanged` (lit again and not meshed: light and geometry as their mesh's), `light_reused` (lit from the cache), and task times (see [Chunk light](#chunk-light)). |
 | `set debug.occlusion_stats 1` | Counts the chunks drawn that pass no pixel (hidden behind nearer ones: what occlusion culling would leave out), logged at exit as `render occlusion`. |
 
 ### Spall traces
@@ -978,7 +1004,7 @@ The main thread's frame (`client/app.odin`, `app_frame`), outermost first:
 | `frame #N` | One frame. It excludes the frame cap's sleep (`frame cap (sleep)`) and `benchmark driver`, which run between frames. |
 | `input` | Window events, input and actions. |
 | `shader watch and telemetry`, `audio and music` | Per-frame upkeep. |
-| `session` | The game: `receive messages` (what the server sent: `apply block change` writes each block and records the change; `settle block changes` then dirties each chunk the frame's changes reach once, and meshes on the spot, as `mesh now (block changed)`, only the chunks where a change could show a see-through hole: a block that drew opaque or cutout faces is gone or replaced, at most 8 chunks a frame; flowing water never meshes here), `prediction tick` (each fixed tick), `aim (raycasts)`, `start meshing` (settles what predictions changed the same way, then hands chunks to the `mesh` workers, holes first), `send messages`. |
+| `session` | The game: `receive messages` (what the server sent: `apply block change` writes each block and records the change; `settle block changes` then dirties each chunk the frame's changes reach once, and meshes on the spot, as `mesh now (block changed)`, only the chunks where a change could show a see-through hole: a block that drew opaque or cutout faces is gone or replaced, at most 8 chunks a frame; flowing water never meshes here), `prediction tick` (each fixed tick), `aim (raycasts)`, `start meshing` (settles what predictions changed the same way, then hands chunks to the `mesh` workers, holes first: each task is `light chunk`, then `mesh chunk` when its light or geometry changed), `send messages`. |
 | `after session (packs, checks, sounds, loading)` | What follows from the session. |
 | `ui layout` | Building the HUD and menus (the GPU's `ui` pass draws them). |
 | `wait for GPU` | `wait for frame fence` (the GPU is still drawing this slot's previous frame: GPU-bound), `acquire image`, `reset and begin commands`, `read GPU timings`, and rarely `recreate swapchain`. |
