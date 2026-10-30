@@ -7267,10 +7267,8 @@ before and after reported. One commit per kind of change.
 Rules: issue #65 (the owner's priority; the spec was `docs/milestones/P.md`, moved here). The spec as
 written:
 
-Stability first, then the toys, then analytics; everything is good before Friday 11:30, no
-live tuning at the party. These rows are **first among the open rows**, ahead of M49; M49,
-M49b, M50 and M50b are held until after the party (no core system rewrites before Friday).
-After them, until the freeze, only flakes and fixes from the owner's playtest. The toys are
+Stability first, then the toys, then analytics. These rows are **first among the open rows**,
+ahead of M49. The toys are
 Odin with their numbers as data (like M48h's weapons) and move onto the script VM later.
 
 ## Decisions (made here; the issue left them open)
@@ -7715,7 +7713,7 @@ the three OSes.
   only after the fix); the residue 0 books must divide the partition; ffmpeg refuses
   mixed block sizes unless each floor's range is its own block's half.
 
-## Performance and tooling pass before the LAN party (issue #67)
+## Performance and tooling pass (issue #67)
 
 A running log: hotspot, change, measured effect. Numbers are relative or from `build bench`
 on one machine, release build, 1280x720 offscreen; medians of the repetitions.
@@ -7735,8 +7733,8 @@ the world's own changes (flowing water filling the craters) took 1.9 s over 2088
 to 23 ms in one frame, and held every one of the 522 main-thread `mesh chunk` calls;
 other players' edits did not show. Each water cell that changes meshes its chunks at once
 on the main thread (`world_set_block` -> `mesh_now`, the x-ray fix of 7b332d6, up to 8 a
-frame at 2-8 ms each), and the next cell makes that mesh stale. Not changed tonight: water
-meshed on the workers would show a frame or two later, a visible change. A follow-up.
+frame at 2-8 ms each), and the next cell makes that mesh stale. Not changed yet: water
+meshed on the workers would show a frame or two later, a visible change to weigh.
 
 ### Tooling audit: what is measured, what is not
 
@@ -7755,7 +7753,7 @@ Found and fixed (no behaviour of the game changed, except the ping):
 - **Docs:** a profiling build's own cost (in one measurement the server tick took 2-3x as
   long under `--profile`: every scope is two clock system calls) and the server's trace.
 
-Not measurable today (follow-ups, after the party unless noted):
+Not measurable yet (follow-ups):
 
 - **CPU traces:** `record` holds upload, recording and submit/present unsplit; `session`
   (the 20-50 ms edits frames) has no scope inside; the server tick's replication, saving,
@@ -7776,3 +7774,72 @@ Not measurable today (follow-ups, after the party unless noted):
 - **Inner loop:** `check`'s 32 type checks always run (`odin check` cannot list its inputs),
   about 10 s warm; a warm `test` is the client and server packages' run time (~2.5 min),
   and its output is ~4800 lines of test-runner and server logs around 19 result lines.
+
+### Profiling: a trace that explains itself
+
+- **Clock.** Spall read `CLOCK_MONOTONIC_RAW` through a system call (about 930 ns per read,
+  measured); a scope reads it twice. The profiler now stamps its own events through libc's
+  vDSO on the same clock (about 60 ns), so GPU calibration is unchanged. Before, a profiled
+  `server` benchmark ran its tick 2-3 times slower than an unprofiled one (one run each); after, the two were
+  within run-to-run variation (median tick 11.44 and 6.35 ms profiled, 11.55 and 12.75 ms
+  plain; this machine's variation between runs is large).
+- **Identity.** The trace's process is named with the program, version, commit, build and
+  arguments; the GPU track with the device and driver; `frame` and `server tick` carry their
+  number.
+- **Coverage.** The client frame and the server tick are covered by named scopes down to
+  their phases (see debugging.md, Profiling). The edits stutter now reads directly from the
+  trace: `session` > `receive messages` > `apply block change` x43 > `mesh now (block
+  changed)` x8 > `mesh chunk` x8, 40.6 ms of a 48.1 ms frame.
+- **Tools.** `build trace` prints what was profiled and the slowest three frames and ticks as
+  trees; `check_spall.py` reads process names and checks that every GPU pass lies inside its
+  frame (it checked a section type that no longer existed).
+- **Found:** the `edits` benchmark's driver blocks the main thread on `server.call` (up to a
+  server tick, then the explosion) between frames, inside the measured frame time. Some of
+  the scenario's worst frames are the harness, not the game. Not changed: correcting it moves
+  every `edits` baseline.
+
+### Graphics instrumentation
+
+- Draw calls and triangles are counted for every pass (`gpu.draw`, `gpu.draw_indexed`):
+  metrics `draw_calls` and `frame_triangles`. The former `draws` and `triangles` metrics, which
+  counted the world pass's meshes and triangles only, are renamed `world_meshes` and
+  `world_triangles`, so no comparison mixes the two meanings.
+- New metrics `gpu_held` and `gpu_upload`; a new scenario, `avatars` (eight players in view,
+  each holding a weapon, with `avatar_draw` timed).
+- Device memory: our allocations in total, and with `VK_EXT_memory_budget` the driver's usage
+  and budget, on F3 with the bytes uploaded each frame.
+- A persistent pipeline cache, validated by content hash and Vulkan's header; creation
+  feedback per pipeline. Mesa keeps a disk cache of its own and already supplied every
+  pipeline (8 in 0.7 ms); ours matters for drivers without one. The first frame's long
+  `queue submit` (42-88 ms) remains with a warm cache, so it is not pipeline compilation:
+  open.
+- Shaders carry debug information (`-g`: lines and source) for RenderDoc. `-gVS` was tried
+  first: `spirv-val` and the validation layer reject its output without
+  `SPV_KHR_relaxed_extended_instruction`. The frame and the
+  present copy carry debug labels; a timing section begun past the 64-section limit no longer
+  closes another section.
+- `build bench <scenario> -size:WIDTHxHEIGHT` (and `bench compare ... -size:`) measure at
+  another resolution, as a scenario of its own.
+
+### Documentation
+
+The reference documents (README.md, debugging.md, determinism.md, platforms.md, saves.md,
+script_api_notes.md, telemetry.md, party_checks.md) were rewritten to the standard of
+SerenityOS and Ladybird's documentation. The rewrite found statements that no longer matched
+the code; corrected: the hotbar slot of the rocket launcher, the character file path, the
+Windows data directory (Local AppData), package paths, the event log's location, and the log
+files kept between runs. Open: debugging.md's account of opening older saves (converted;
+damaged regions moved aside) disagrees with saves.md (older formats refused; a damaged header
+falls back to a backup).
+
+### First measurements with the new instruments (smoke runs: one repetition each)
+
+- **Eight avatars** (`avatars`): building their vertices takes 0.10 ms of CPU a frame
+  (`avatar_draw`); on the GPU, 0.04 ms in `entities` and 0.11 ms in `held`. The frame is 68
+  draw calls and 18.9k triangles.
+- **2560 x 1440** (`views -size:2560x1440`): `gpu_frame` 5.65 ms, over a 240 Hz display's
+  4.17 ms. `gpu_sky` alone is 2.35 ms (0.52 ms at 1280 x 720, about 4.5 times for 4 times the
+  pixels): the sky pass is fill-rate bound and the first target at high resolutions.
+- **Validation** (`VX_VALIDATION=1 --check blast`, a development build): no findings over
+  10 895 frames with every change above.
+
