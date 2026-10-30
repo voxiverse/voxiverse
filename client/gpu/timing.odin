@@ -36,6 +36,7 @@ Frame_Timing :: struct {
 	query_count:   u32,
 	open:          [MAX_GPU_SECTIONS]int, // stack of unfinished sections
 	open_count:    int,
+	dropped:       int, // sections begun past MAX_GPU_SECTIONS, not yet ended (untimed)
 }
 
 // gpu_frame_summary reports GPU frame times so far (ms).
@@ -85,7 +86,7 @@ timing_frame_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 		timing_collect(g, t)
 	}
 	vk.CmdResetQueryPool(cmd, t.pool, 0, MAX_GPU_SECTIONS * 2)
-	t.section_count, t.query_count, t.open_count = 0, 0, 0
+	t.section_count, t.query_count, t.open_count, t.dropped = 0, 0, 0, 0
 	timing_section_begin(g, t, cmd, "frame")
 }
 
@@ -98,7 +99,12 @@ timing_frame_end :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 
 @(private)
 timing_section_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer, name: string) {
-	if !g.timing || t.section_count == MAX_GPU_SECTIONS {return}
+	if !g.timing {return}
+	if t.section_count == MAX_GPU_SECTIONS {
+		// Past the limit a section is not timed; its end must not close another.
+		t.dropped += 1
+		return
+	}
 	s := &t.sections[t.section_count]
 	s.name_len = u8(copy(s.name[:], name))
 	s.begin_query = t.query_count
@@ -113,6 +119,10 @@ timing_section_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer, n
 @(private)
 timing_section_end :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	if !g.timing || t.open_count == 0 {return}
+	if t.dropped > 0 {
+		t.dropped -= 1
+		return
+	}
 	t.open_count -= 1
 	s := &t.sections[t.open[t.open_count]]
 	s.end_query = t.query_count

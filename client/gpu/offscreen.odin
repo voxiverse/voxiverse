@@ -95,7 +95,7 @@ offscreen_begin :: proc(cmd: vk.CommandBuffer, image: vk.Image) {
 offscreen_copy :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 	sc := &g.swapchain
 	target := sc.images[frame.image_index]
-	timing_section_begin(g, &f.timing, frame.cmd, "present copy")
+	begin_label(g, frame.cmd, "present copy")
 	range := vk.ImageSubresourceRange {
 		aspectMask = {.COLOR},
 		levelCount = 1,
@@ -167,5 +167,5 @@ offscreen_copy :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 		pImageMemoryBarriers    = &after,
 	}
 	vk.CmdPipelineBarrier2(frame.cmd, &dependency)
-	timing_section_end(g, &f.timing, frame.cmd)
+	end_label(g, frame.cmd)
 }

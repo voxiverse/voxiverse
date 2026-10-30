@@ -503,6 +503,23 @@ begin_label :: proc(
 	color := [4]f32{0.5, 0.5, 0.5, 1},
 ) {
 	timing_section_begin(g, &g.frames[g.frame_index].timing, cmd, name)
+	debug_label_begin(g, cmd, name, color)
+}
+
+end_label :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
+	timing_section_end(g, &g.frames[g.frame_index].timing, cmd)
+	debug_label_end(g, cmd)
+}
+
+// debug_label_begin / debug_label_end: the label alone (what captures and validation
+// messages show), for sections timed by other means (the frame itself).
+@(private)
+debug_label_begin :: proc(
+	g: ^Gpu,
+	cmd: vk.CommandBuffer,
+	name: string,
+	color := [4]f32{0.5, 0.5, 0.5, 1},
+) {
 	if !g.debug_utils {return}
 	label := vk.DebugUtilsLabelEXT {
 		sType      = .DEBUG_UTILS_LABEL_EXT,
@@ -512,8 +529,8 @@ begin_label :: proc(
 	vk.CmdBeginDebugUtilsLabelEXT(cmd, &label)
 }
 
-end_label :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
-	timing_section_end(g, &g.frames[g.frame_index].timing, cmd)
+@(private)
+debug_label_end :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
 	if !g.debug_utils {return}
 	vk.CmdEndDebugUtilsLabelEXT(cmd)
 }

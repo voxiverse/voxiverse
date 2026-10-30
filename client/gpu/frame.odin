@@ -104,6 +104,7 @@ begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
 		check(vk.BeginCommandBuffer(f.cmd, &begin)) or_return
 	}
 	timing_frame_begin(g, &f.timing, f.cmd)
+	debug_label_begin(g, f.cmd, "frame")
 
 	frame = Frame {
 		cmd         = f.cmd,
@@ -157,6 +158,7 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 		shown.extent = sc.extent
 	}
 	screenshot_record(g, f, shown) // also transitions the image for presenting
+	debug_label_end(g, frame.cmd)
 	timing_frame_end(g, &f.timing, frame.cmd)
 	if !check(vk.EndCommandBuffer(frame.cmd)) {return}
 
