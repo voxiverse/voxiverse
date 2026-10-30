@@ -79,7 +79,8 @@ test_packs_text_outlives_sources :: proc(t: ^testing.T) {
 	want := strings.clone(packs_text(reg))
 	defer delete(want)
 	free_all(context.temp_allocator) // (the sources were made in it)
-	for _ in 0 ..< 64 {_ = make([]u8, 4096, context.temp_allocator)} // (and it is reused)
+	// (and it is reused)
+	for _ in 0 ..< 64 {_ = make([]u8, 4096, context.temp_allocator)}
 	testing.expect_value(t, packs_text(reg), want)
 
 	again, _, _ := packs_registry("", nil, extra, base_dir = "assets/packs/voxiverse")
