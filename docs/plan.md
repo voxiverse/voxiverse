@@ -381,23 +381,18 @@ million tokens re-read per step), not the code it wrote. So:
     the party extras, hardening. The owner decided those rules (#52, survival for the
     LAN party); they bend "no gameplay before the foundation" knowingly and are built in
     Odin on core systems (abilities as data, one damage pipeline, one rules table) so they
-    move onto M53 and the VM later. Everything is done and green by Thursday 2026-10-29
-    afternoon; the owner tags Alpha 2 Thursday evening; the loop is paused Friday about
-    9:00. **The foundation then continues (M49...); the script VM (M51) is not before the
-    week after the party.** M48e's universes screen, camera, F5 and the P list were already
+    move onto M53 and the VM later. **The foundation then continues (M49...).** M48e's universes screen, camera, F5 and the P list were already
     done, so M48i adds only kills and deaths, avatar animation and the LAN dialog.
     **T1-T7 (issue #66, 2026-10-28, the owner's priority) are first among the open rows,
-    ahead of M48k, M49 and M50:** the test and CI overhaul, spec in milestones/T.md. M49 and M50
-    stay held, and the party toys (#65) come after.
+    ahead of M48k, M49 and M50:** the test and CI overhaul, spec in milestones/T.md; the toys
+    (#65) come after.
     **P1-P3 (issue #65, 2026-10-29, the owner's priority) are first among the open rows, ahead
     of M49:** the shotgun, jump boots, grappling hook and survival kit, the session recording
-    and `analytics --session`, and the stability rerun; spec in history.md. M49, M49b, M50 and
-    M50b stay held until after the party; until the freeze only flakes and fixes from the
-    owner's playtest.
+    and `analytics --session`, and the stability rerun; spec in history.md.
     **M48k (issue #60, 2026-10-28) is first among the open rows, ahead of M49:** first-person
     hands with held blocks and voxel gun models, the same models in third person.
     M48g supersedes M53b's "no death message" placeholder: the death screen shows the cause.
-    **M49d (issue #63, 2026-10-28) comes after M49 and M49b, not before the party:** a compact
+    **M49d (issue #63, 2026-10-28) comes after M49 and M49b:** a compact
     creation screen and a new Ignite animation, spec in milestones/M49d.md. The owner's
     "after M49 and M49b" outranks the rule that new work goes first.
   - **Checks by hand do not block:** a milestone is done when its tests pass and CI is green
@@ -479,7 +474,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | T6 | 68 | 4 | 1 | the smoke command, the two test lints, CI without the optimized step, the telemetry flush race |
 | T7 | - | - | 1 | prune, dead code, simplify: issue #73 (an unattended session: not measured) |
 | P1-P3 | - | - | 1 | the party toys, the session recording and its report, the stability rerun (issue #65; an unattended session; counts not measured) |
-| M49d | - | - | 1 | the compact creation screen and the new Ignite animation (issue #63; after the party; an unattended session; counts not measured) |
+| M49d | - | - | 1 | the compact creation screen and the new Ignite animation (issue #63; an unattended session; counts not measured) |
 | M53c | 359 | 98 | 1 | Ogg Vorbis in Odin: `common/ogg` (pages, Vorbis I with floors 0-1 and residues 0-2, one allocation), every Ogg the game reads through it, golden digests, the reference decoder and 26 generated edge-case files, refusals, seek, fuzz, `build ogg`, `build bench ogg`, the miniaudio lint (an unattended session; no split) |
 
 | # | Slice | Exit check |
