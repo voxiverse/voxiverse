@@ -56,5 +56,5 @@ sky_draw :: proc(p: ^Sky_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64) {
 	gpu.bind_globals(g, cmd)
 	push := Sky_Push{scene}
 	gpu.push_constants(g, cmd, &push)
-	vk.CmdDraw(cmd, 3, 1, 0, 0)
+	gpu.draw(g, cmd, 3)
 }

@@ -8,21 +8,23 @@ import vk "vendor:vulkan"
 // pass's vertices: base/range_alloc.odin).
 
 Buffer :: struct {
-	handle: vk.Buffer,
-	memory: vk.DeviceMemory,
-	size:   int,
-	mapped: [^]u8, // host-visible buffers stay mapped
+	handle:      vk.Buffer,
+	memory:      vk.DeviceMemory,
+	size:        int,
+	mapped:      [^]u8, // host-visible buffers stay mapped
+	memory_size: int, // what its memory took (Gpu.memory_bytes)
 }
 
 Image :: struct {
-	handle: vk.Image,
-	memory: vk.DeviceMemory,
-	view:   vk.ImageView,
-	format: vk.Format,
-	width:  u32,
-	height: u32,
-	mips:   u32,
-	layers: u32,
+	handle:      vk.Image,
+	memory:      vk.DeviceMemory,
+	view:        vk.ImageView,
+	format:      vk.Format,
+	width:       u32,
+	height:      u32,
+	mips:        u32,
+	layers:      u32,
+	memory_size: int, // what its memory took (Gpu.memory_bytes)
 }
 
 // DEPTH_FORMAT: 32-bit float depth, supported everywhere. The world renders
@@ -66,6 +68,7 @@ create_buffer :: proc(
 	props: vk.MemoryPropertyFlags =
 		{.HOST_VISIBLE, .HOST_COHERENT} if host_visible else {.DEVICE_LOCAL}
 	b.memory = allocate(g, reqs, props, .SHADER_DEVICE_ADDRESS in usage) or_return
+	b.memory_size = int(reqs.size)
 	check(vk.BindBufferMemory(g.device, b.handle, b.memory, 0)) or_return
 	if host_visible {
 		mapped: rawptr
@@ -80,6 +83,7 @@ create_buffer :: proc(
 destroy_buffer :: proc(g: ^Gpu, b: ^Buffer) {
 	if b.handle != 0 {vk.DestroyBuffer(g.device, b.handle, nil)}
 	if b.memory != 0 {vk.FreeMemory(g.device, b.memory, nil)} 	// also unmaps
+	g.memory_bytes -= b.memory_size
 	b^ = {}
 }
 
@@ -116,6 +120,7 @@ create_image :: proc(
 	reqs: vk.MemoryRequirements
 	vk.GetImageMemoryRequirements(g.device, img.handle, &reqs)
 	img.memory = allocate(g, reqs, {.DEVICE_LOCAL}) or_return
+	img.memory_size = int(reqs.size)
 	check(vk.BindImageMemory(g.device, img.handle, img.memory, 0)) or_return
 	img.format, img.width, img.height, img.mips, img.layers = format, width, height, mips, layers
 	view_info := vk.ImageViewCreateInfo {
@@ -135,6 +140,7 @@ destroy_image :: proc(g: ^Gpu, img: ^Image) {
 	if img.view != 0 {vk.DestroyImageView(g.device, img.view, nil)}
 	if img.handle != 0 {vk.DestroyImage(g.device, img.handle, nil)}
 	if img.memory != 0 {vk.FreeMemory(g.device, img.memory, nil)}
+	g.memory_bytes -= img.memory_size
 	img^ = {}
 }
 
@@ -275,8 +281,36 @@ allocate :: proc(
 			memoryTypeIndex = i,
 		}
 		check(vk.AllocateMemory(g.device, &info, nil, &mem)) or_return
+		g.memory_bytes += int(reqs.size)
 		return mem, true
 	}
 	log.errorf("gpu no memory type with %v for %d bytes", props, reqs.size)
 	return 0, false
+}
+
+// Memory_Report: device memory as the driver sees it (VK_EXT_memory_budget), summed
+// over the device-local heaps: what the whole process uses and what it may use.
+Memory_Report :: struct {
+	ours:   int, // allocated by us (Gpu.memory_bytes)
+	usage:  int, // the process's use of device-local heaps (0: no memory_budget)
+	budget: int, // what the driver lets it use there now (0: no memory_budget)
+}
+
+memory_report :: proc(g: ^Gpu) -> (r: Memory_Report) {
+	r.ours = g.memory_bytes
+	if !g.memory_budget {return}
+	budget := vk.PhysicalDeviceMemoryBudgetPropertiesEXT {
+		sType = .PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+	}
+	props := vk.PhysicalDeviceMemoryProperties2 {
+		sType = .PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+		pNext = &budget,
+	}
+	vk.GetPhysicalDeviceMemoryProperties2(g.physical, &props)
+	for heap, i in props.memoryProperties.memoryHeaps[:props.memoryProperties.memoryHeapCount] {
+		if .DEVICE_LOCAL not_in heap.flags {continue}
+		r.usage += int(budget.heapUsage[i])
+		r.budget += int(budget.heapBudget[i])
+	}
+	return
 }

@@ -147,5 +147,5 @@ debug_draw :: proc(p: ^Debug_Pass, g: ^gpu.Gpu, frame: gpu.Frame, camera: Camera
 	gpu.push_constants(g, cmd, &view_proj)
 	offset: vk.DeviceSize
 	vk.CmdBindVertexBuffers(cmd, 0, 1, &p.frames[slot].handle, &offset)
-	vk.CmdDraw(cmd, p.counts[slot], 1, 0, 0)
+	gpu.draw(g, cmd, p.counts[slot], lines = true)
 }

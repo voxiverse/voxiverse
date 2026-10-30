@@ -230,5 +230,5 @@ held_record :: proc(
 	gpu.push_constants(g, cmd, &push)
 	offset: vk.DeviceSize
 	vk.CmdBindVertexBuffers(cmd, 0, 1, &buffer.handle, &offset)
-	vk.CmdDraw(cmd, count, 1, 0, 0)
+	gpu.draw(g, cmd, count)
 }

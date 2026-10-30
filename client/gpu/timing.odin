@@ -26,6 +26,8 @@ Gpu_Section :: struct {
 	name_len:    u8,
 	begin_query: u32,
 	end_query:   u32,
+	draws_at:    Draw_Counts, // the frame's draws when the section began
+	draws:       Draw_Counts, // the section's own, once it ended
 }
 
 @(private)
@@ -109,6 +111,7 @@ timing_section_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer, n
 	s.name_len = u8(copy(s.name[:], name))
 	s.begin_query = t.query_count
 	s.end_query = NO_QUERY
+	s.draws_at, s.draws = g.draws, {}
 	vk.CmdWriteTimestamp2(cmd, {.ALL_COMMANDS}, t.pool, t.query_count)
 	t.query_count += 1
 	t.open[t.open_count] = t.section_count
@@ -126,6 +129,7 @@ timing_section_end :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	t.open_count -= 1
 	s := &t.sections[t.open[t.open_count]]
 	s.end_query = t.query_count
+	s.draws = {g.draws.calls - s.draws_at.calls, g.draws.triangles - s.draws_at.triangles}
 	vk.CmdWriteTimestamp2(cmd, {.ALL_COMMANDS}, t.pool, t.query_count)
 	t.query_count += 1
 }
@@ -212,7 +216,11 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 		s := &t.sections[i]
 		ns := to_ns(g, results[q], anchor_ticks, anchor_ns)
 		if q == s.begin_query {
-			base.profile_gpu_begin(string(s.name[:s.name_len]), ns)
+			args := ""
+			if s.draws.calls > 0 {
+				args = fmt.tprintf("%d draw calls, %d triangles", s.draws.calls, s.draws.triangles)
+			}
+			base.profile_gpu_begin(string(s.name[:s.name_len]), ns, args)
 		} else {
 			base.profile_gpu_end(ns)
 		}
@@ -232,6 +240,8 @@ GPU_SECTION_METRICS := [?]struct {
 	{"entities", .Gpu_Entities},
 	{"ui", .Gpu_UI},
 	{"present copy", .Gpu_Present_Copy},
+	{"held", .Gpu_Held},
+	{"upload chunk meshes", .Gpu_Upload},
 }
 
 // timing_setup decides at device creation whether timestamps work on this

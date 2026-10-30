@@ -62,6 +62,7 @@ Frame :: struct {
 // nothing to draw into this time (minimized, or the swapchain had to be
 // rebuilt); just try again next frame.
 begin_frame :: proc(g: ^Gpu, width, height: i32) -> (frame: Frame, ok: bool) {
+	g.draws = {}
 	if width <= 0 || height <= 0 {return}
 	sc := &g.swapchain
 	if sc.handle == 0 || sc.stale || sc.extent != {u32(width), u32(height)} {

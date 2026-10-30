@@ -183,7 +183,7 @@ entity_draw :: proc(
 	gpu.push_constants(g, cmd, &push)
 	offset: vk.DeviceSize
 	vk.CmdBindVertexBuffers(cmd, 0, 1, &p.frames[slot].handle, &offset)
-	vk.CmdDraw(cmd, p.counts[slot], 1, 0, 0)
+	gpu.draw(g, cmd, p.counts[slot])
 }
 
 // turn rotates a point around the pivot: pitch (about x: up and down),

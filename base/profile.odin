@@ -153,13 +153,18 @@ profile_name_process :: proc(name: string) {
 // profile_gpu_begin / profile_gpu_end record a GPU section on the GPU track
 // with explicit timestamps (trace clock, ns). Call them in recording order so
 // nested sections nest.
-profile_gpu_begin :: proc(name: string, ns: i64) {
+profile_gpu_begin :: proc(name: string, ns: i64, args := "") {
 	when PROFILE {
 		if !active {return}
 		if gpu_buffer.head + spall.BEGIN_EVENT_MAX > len(gpu_buffer.data) {
 			spall.buffer_flush(&trace, &gpu_buffer)
 		}
-		gpu_buffer.head += spall._build_begin(gpu_buffer.data[gpu_buffer.head:], name, "", u64(ns))
+		gpu_buffer.head += spall._build_begin(
+			gpu_buffer.data[gpu_buffer.head:],
+			name,
+			args,
+			u64(ns),
+		)
 	}
 }
 

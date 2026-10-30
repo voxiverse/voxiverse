@@ -11,15 +11,17 @@ import "core:time"
 // costs a load and a branch:
 //
 //	base.metric_scope(.Mesh_Chunk) // times the rest of the block
-//	base.metric_add(.Triangles, f32(n))
+//	base.metric_add(.Draw_Calls, f32(n))
 
 Metric :: enum u8 {
 	// The client, a frame at a time.
 	Frame, // wall clock, ms
 	Frame_Record, // recording the frame's commands, ms
 	Frame_Session, // the session's update (messages, prediction, meshing jobs started), ms
-	Triangles, // drawn, thousands
-	Draws, // chunk meshes drawn
+	Draw_Calls, // every draw call of the frame, all passes
+	Frame_Triangles, // every triangle drawn in the frame, all passes, thousands
+	World_Triangles, // the world pass's (opaque and water), thousands
+	World_Meshes, // chunk meshes drawn (opaque): not draw calls, a mesh takes several
 	// The GPU's passes (gpu timing sections), ms.
 	Gpu_Frame,
 	Gpu_World,
@@ -28,6 +30,8 @@ Metric :: enum u8 {
 	Gpu_Entities,
 	Gpu_UI,
 	Gpu_Present_Copy, // the offscreen image onto the window (left out of Gpu_Frame)
+	Gpu_Held, // the item in hand (first and third person)
+	Gpu_Upload, // chunk mesh uploads (copies)
 	// Work on the pools, per job, ms.
 	Generate_Chunk,
 	Column_Tops,
@@ -79,8 +83,10 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Frame            = {"frame", "ms", false},
 	.Frame_Record     = {"frame_record", "ms", false},
 	.Frame_Session    = {"frame_session", "ms", false},
-	.Triangles        = {"triangles", "k", false},
-	.Draws            = {"draws", "meshes", false},
+	.Draw_Calls       = {"draw_calls", "calls", false},
+	.Frame_Triangles  = {"frame_triangles", "k", false},
+	.World_Triangles  = {"world_triangles", "k", false},
+	.World_Meshes     = {"world_meshes", "meshes", false},
 	.Gpu_Frame        = {"gpu_frame", "ms", false},
 	.Gpu_World        = {"gpu_world", "ms", false},
 	.Gpu_Water        = {"gpu_water", "ms", false},
@@ -88,6 +94,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Gpu_Entities     = {"gpu_entities", "ms", false},
 	.Gpu_UI           = {"gpu_ui", "ms", false},
 	.Gpu_Present_Copy = {"gpu_present_copy", "ms", false},
+	.Gpu_Held         = {"gpu_held", "ms", false},
+	.Gpu_Upload       = {"gpu_upload", "ms", false},
 	.Generate_Chunk   = {"generate_chunk", "ms", false},
 	.Column_Tops      = {"column_tops", "ms", false},
 	.Light_Chunk      = {"light_chunk", "ms", false},

@@ -156,7 +156,7 @@ ui_draw :: proc(p: ^Ui_Pass, g: ^gpu.Gpu, frame: gpu.Frame, out: ^ui.Output) {
 			push.sampler_id = u32(sampler)
 			gpu.push_constants(g, cmd, &push)
 		}
-		vk.CmdDrawIndexed(cmd, c.index_count, 1, c.first_index, 0, 0)
+		gpu.draw_indexed(g, cmd, c.index_count, first_index = c.first_index)
 	}
 	full := vk.Rect2D {
 		extent = frame.extent,

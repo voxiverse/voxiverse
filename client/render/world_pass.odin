@@ -684,7 +684,7 @@ draw_layer :: proc(
 	push.chunk_offset = lo
 	gpu.push_constants(g, cmd, push)
 	if layer == .Translucent {
-		vk.CmdDrawIndexed(cmd, m.layers[layer] / 4 * 6, 1, 0, i32(first), 0)
+		gpu.draw_indexed(g, cmd, m.layers[layer] / 4 * 6, vertex_offset = i32(first))
 		return int(m.layers[layer] / 2)
 	}
 	hi := lo + CHUNK_EXTENT
@@ -705,14 +705,14 @@ draw_layer :: proc(
 			if run_count == 0 {run_start = at}
 			run_count += n
 		} else if run_count > 0 {
-			vk.CmdDrawIndexed(cmd, run_count / 4 * 6, 1, 0, i32(run_start), 0)
+			gpu.draw_indexed(g, cmd, run_count / 4 * 6, vertex_offset = i32(run_start))
 			triangles += int(run_count / 2)
 			run_count = 0
 		}
 		at += n
 	}
 	if run_count > 0 {
-		vk.CmdDrawIndexed(cmd, run_count / 4 * 6, 1, 0, i32(run_start), 0)
+		gpu.draw_indexed(g, cmd, run_count / 4 * 6, vertex_offset = i32(run_start))
 		triangles += int(run_count / 2)
 	}
 	return

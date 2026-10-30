@@ -11,6 +11,7 @@ import "../base"
 import "../common/game"
 import "../server"
 import "audio"
+import "gpu"
 import "ui"
 
 net_line :: proc(s: ^Session) -> string {
@@ -104,13 +105,28 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		append(
 			&lines,
 			fmt.tprintf(
-				"render: %d meshes, %d drawn, %dk triangles, vertices %.1f%% of %d M",
+				"render: %d draw calls, %dk triangles; world %d meshes, %d drawn, vertices %.1f%% of %d M",
+				app.g.draws.calls,
+				app.g.draws.triangles / 1000,
 				ws.meshes,
 				ws.drawn,
-				ws.triangles / 1000,
 				100 * f64(ws.vertices_used) / f64(CHUNK_VERTEX_CAPACITY),
 				CHUNK_VERTEX_CAPACITY >> 20,
 			),
+		)
+		memory := gpu.memory_report(&app.g)
+		vram := fmt.tprintf("memory: ours %.0f MiB", f64(memory.ours) / (1 << 20))
+		if memory.budget > 0 {
+			vram = fmt.tprintf(
+				"%s, process %.0f of %.0f MiB budget",
+				vram,
+				f64(memory.usage) / (1 << 20),
+				f64(memory.budget) / (1 << 20),
+			)
+		}
+		append(
+			&lines,
+			fmt.tprintf("%s; uploads %.1f KiB this frame", vram, f64(ws.uploaded_bytes) / 1024),
 		)
 		if s.remote {
 			c := &s.link.conn

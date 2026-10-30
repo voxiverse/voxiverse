@@ -56,6 +56,9 @@ Gpu :: struct {
 	timestamp_period:     f32, // ns per tick
 	timestamp_mask:       u64,
 	gpu_frame_stats:      base.Frame_Stats,
+	draws:                Draw_Counts, // this frame's draw calls so far (draw.odin)
+	memory_bytes:         int, // device memory allocated by us, now (resources.odin)
+	memory_budget:        bool, // VK_EXT_memory_budget: memory_report has the driver's view
 	// Bindless textures and the pipeline layout every pipeline shares.
 	bindless:             Bindless,
 	pipeline_layout:      vk.PipelineLayout,
@@ -213,6 +216,8 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	append(&device_extensions, "VK_KHR_swapchain")
 	calibration := has_device_extension(g.physical, "VK_KHR_calibrated_timestamps")
 	if calibration {append(&device_extensions, "VK_KHR_calibrated_timestamps")}
+	g.memory_budget = has_device_extension(g.physical, "VK_EXT_memory_budget")
+	if g.memory_budget {append(&device_extensions, "VK_EXT_memory_budget")}
 	// A device that implements a subset of Vulkan (MoltenVK) lists this and
 	// must be told the application knows.
 	if has_device_extension(g.physical, "VK_KHR_portability_subset") {

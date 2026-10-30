@@ -130,8 +130,10 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 					&app.triangle_stats,
 					f32(app.world_pass.stats.triangles) / 1000,
 				)
-				base.metric_add(.Triangles, f32(app.world_pass.stats.triangles) / 1000)
-				base.metric_add(.Draws, f32(app.world_pass.stats.drawn))
+				base.metric_add(.World_Triangles, f32(app.world_pass.stats.triangles) / 1000)
+				base.metric_add(.World_Meshes, f32(app.world_pass.stats.drawn))
+				base.metric_add(.Draw_Calls, f32(app.g.draws.calls))
+				base.metric_add(.Frame_Triangles, f32(app.g.draws.triangles) / 1000)
 			}
 			base.metric_add(.Frame, app.last_frame_ms)
 			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
