@@ -40,6 +40,7 @@ Native_Window :: struct {
 	saved_cursor:  NS.Point, // global position to return to on release
 	held_mods:     bit_set[Key], // modifier keys down (released on losing focus)
 	buttons:       bit_set[Mouse_Button], // buttons pressed inside the window
+	in_space:      bool, // the full-screen space as the delegate last reported it (settled, not mid-animation)
 }
 
 @(private = "file")
@@ -572,6 +573,7 @@ zoom_frame :: proc(window: ^NS.Object, fallback: NS.Rect) -> NS.Rect {
 // setting follows.
 @(private = "file")
 fullscreen_changed :: proc(w: ^Window, fullscreen: bool) {
+	w.native.in_space = fullscreen
 	if w.fullscreen != fullscreen {push_event(w, Fullscreen_Event{fullscreen})}
 	report_size(w)
 }

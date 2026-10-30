@@ -115,12 +115,12 @@ main :: proc() {
 	clear(&seen)
 	platform.set_fullscreen(&w, true)
 	pump_until(&w, &seen, proc(w: ^platform.Window) -> bool {
-		return .FullScreen in msg(NS.WindowStyleMask, w.native.window, "styleMask")
+		return w.native.in_space
 	})
 	expect(w.fullscreen && len(seen) == 0, "the game's own full screen was echoed")
 	platform.set_fullscreen(&w, false)
 	pump_until(&w, &seen, proc(w: ^platform.Window) -> bool {
-		return .FullScreen not_in msg(NS.WindowStyleMask, w.native.window, "styleMask")
+		return !w.native.in_space
 	})
 	expect(!w.fullscreen && len(seen) == 0, "leaving the game's full screen was echoed")
 	if failed {os.exit(1)}
