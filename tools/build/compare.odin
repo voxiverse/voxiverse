@@ -227,7 +227,7 @@ compare_report :: proc(sides: []Compare_Side, scenario: string) {
 		unit := ref.units[name]
 		verdict := ""
 		if p < COMPARE_P {
-			lower_better := unit == "ms" || unit == "s"
+			lower_better := unit == "us" || unit == "ms" || unit == "s"
 			if lower_better {verdict = "faster" if mb < ma else "SLOWER"} else {verdict = "fewer" if mb < ma else "more"}
 		}
 		fmt.printfln(
