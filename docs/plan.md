@@ -596,6 +596,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | R9 | [Memory: sub-allocation, a growing geometry arena, no lost meshes](milestones/R.md#r9-memory) | at most 10 `vkAllocateMemory` calls in `flight`; no mesh ever dropped |
 | R10 | [Uploads off the graphics queue](milestones/R.md#r10-uploads-off-the-graphics-queue) | `flight` frame p99 and worst at most 80% of R9's |
 | R11 | [The frame graph and an HDR target](milestones/R.md#r11-the-frame-graph-and-an-hdr-target) | `images` passes unchanged; `gpu_frame` within 5% |
+| R11b | [The look: tonemap, grade, dither, water, foliage](milestones/R.md#r11b-the-look) | `images` baselines re-accepted with the new look and still catching a change; each effect's GPU cost measured with `bench compare`, within the budget the spec states from that measurement |
 | R12 | [The sky at a fraction of the cost (half-resolution clouds)](milestones/R.md#r12-the-sky-at-a-fraction-of-the-cost) | `gpu_sky` at 2560x1440 at most 30% of baseline |
 | R13 | [Far terrain at level of detail](milestones/R.md#r13-far-terrain-at-level-of-detail) | `views-far` `gpu_world` at most 60% and `world_triangles` at most 40% of no LOD |
 | R14 | [Far terrain beyond the interest area (a protocol change: the owner decides first)](milestones/R.md#r14-far-terrain-beyond-the-interest-area) | set when the owner approves the design |
