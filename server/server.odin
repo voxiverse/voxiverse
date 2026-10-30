@@ -216,6 +216,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		&s.sink,
 		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
 		u32(telemetry.now_ms()),
+		stepped = config.stepped,
 	)
 	session_open(s)
 	if up, ok := config.upload.?; ok && s.store.dir != "" {
@@ -426,6 +427,8 @@ server_main :: proc(t: ^thread.Thread) {
 	runtime.default_temp_allocator_destroy(&runtime.global_default_temp_allocator_data)
 }
 
+SINK_DRAIN_TICKS :: game.TICK_RATE // a stepped server writes its events once a second
+
 @(private)
 tick :: proc(s: ^Server) {
 	base.profile_scope_number("server tick", s.tick + 1)
@@ -440,6 +443,10 @@ tick :: proc(s: ^Server) {
 		base.profile_scope("saving")
 		save_poll(s)
 		save_slice(s)
+		if s.config.stepped && s.tick % SINK_DRAIN_TICKS == 0 { 	// (no writer thread: its timing is not the test's)
+			telemetry.sink_drain(&s.sink)
+			if s.session_on {telemetry.sink_drain(&s.session)}
+		}
 		if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
 	}
 	for w in s.worlds {

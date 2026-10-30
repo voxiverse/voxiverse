@@ -416,6 +416,7 @@ sink_stats :: proc(s: ^Sink) -> Sink_Stats {
 // sink_drain is the writer's work on the caller's thread: everything emitted
 // so far is written, as the thread would write it.
 sink_drain :: proc(s: ^Sink) {
+	if s.tail == s.head && s.dropped == 0 {return}
 	batch := make([]Event, 2048)
 	defer delete(batch)
 	text := strings.builder_make()

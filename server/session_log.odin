@@ -35,7 +35,13 @@ session_open :: proc(s: ^Server) {
 	if s.store.dir == "" {return}
 	dir := filepath.join({s.store.dir, "analytics"}, context.temp_allocator) or_else ""
 	name := fmt.tprintf("%s%d.jsonl", SESSION_FILE_PREFIX, telemetry.now_ms() / 1000)
-	telemetry.sink_start(&s.session, dir, u32(telemetry.now_ms()), file_name = name)
+	telemetry.sink_start(
+		&s.session,
+		dir,
+		u32(telemetry.now_ms()),
+		stepped = s.config.stepped,
+		file_name = name,
+	)
 	s.session_on = true
 	emit_event(
 		s,
