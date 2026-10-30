@@ -7714,3 +7714,65 @@ the three OSes.
   (a slope that truncates to zero went the wrong way: the first run matched ffmpeg to 3e-7
   only after the fix); the residue 0 books must divide the partition; ffmpeg refuses
   mixed block sizes unless each floor's range is its own block's half.
+
+## Performance and tooling pass before the LAN party (issue #67)
+
+A running log: hotspot, change, measured effect. Numbers are relative or from `build bench`
+on one machine, release build, 1280x720 offscreen; medians of the repetitions.
+
+### Baseline (f1db83b)
+
+| Scenario | Frame median | Frame p99 | Worst frame |
+|---|---|---|---|
+| views | 2.8 ms | 5.0-5.4 ms | 5.5-6.6 ms |
+| flight | 2.3-2.7 ms | 6.4-7.8 ms | 13-21 ms |
+| edits | 2.7-3.5 ms | 24-39 ms | 28-53 ms |
+
+### Hotspot: the edits scenario's stutter is the water, not the explosion
+
+A traced `edits` run with a temporary scope around each path of `apply_block` (removed):
+the world's own changes (flowing water filling the craters) took 1.9 s over 2088 calls, up
+to 23 ms in one frame, and held every one of the 522 main-thread `mesh chunk` calls;
+other players' edits did not show. Each water cell that changes meshes its chunks at once
+on the main thread (`world_set_block` -> `mesh_now`, the x-ray fix of 7b332d6, up to 8 a
+frame at 2-8 ms each), and the next cell makes that mesh stale. Not changed tonight: water
+meshed on the workers would show a frame or two later, a visible change. A follow-up.
+
+### Tooling audit: what is measured, what is not
+
+Found and fixed (no behaviour of the game changed, except the ping):
+
+- **A flaky server test.** `test_rollback_keeps_others` and `journal_retention` both used
+  `build/test_keeps`; scheduled together, one deleted the other's journal (failed once in a
+  full `build test`, passed alone). The retention test's directory is `test_keep_all` now.
+- **The ping froze after one lost packet.** Ping and Pong are unreliable and a pending ping
+  had no timeout: one lost on Wi-Fi left F3's round trip, the player list's ping and the
+  weapons' ammo hold at the last value for the session. A ping waits 5 s for its Pong now
+  (`test_ping_after_a_lost_pong`).
+- **`bench compare` judged microsecond metrics as counts** ("fewer/more", not
+  "faster/SLOWER"): `view_model`, `save_*`, `audit`, `flood_tick`, `journal_tick`,
+  `telemetry_*`.
+- **Docs:** a profiling build's own cost (in one measurement the server tick took 2-3x as
+  long under `--profile`: every scope is two clock system calls) and the server's trace.
+
+Not measurable today (follow-ups, after the party unless noted):
+
+- **CPU traces:** `record` holds upload, recording and submit/present unsplit; `session`
+  (the 20-50 ms edits frames) has no scope inside; the server tick's replication, saving,
+  player simulation, audit and random ticks are untimed (a slow tick shows "untimed 11 ms");
+  the audio mix, stream decoder and telemetry threads are not registered (a scope there
+  would crash a profiling build); no frame or tick numbers in the trace; a result of
+  `bench --profile` is recorded as a plain release build; the clock is a system call.
+- **GPU:** the held (view model) and upload passes are traced but not benchmark metrics;
+  `draws` counts chunk meshes and `triangles` the world pass only; no VRAM figure
+  (VK_EXT_memory_budget), upload bytes per frame computed but never shown; no pipeline
+  cache or compile timing; no CPU-waiting-on-GPU metric; benchmarks only at 1280x720; no
+  client scenario with avatars (the eight-player frame is a hand check).
+- **Network:** the server's per-connection counters (bytes, resends, round trip) reach only
+  the once-a-minute session file: no live per-client view, no bytes per tick per client, no
+  loss, jitter, dropped-snapshot or throttled-stream counts; the round trip includes up to a
+  tick of waiting (a ~33 ms floor on a LAN); bandwidth is averaged over the session;
+  no network benchmark or explosion scenario; KB and KiB mixed in labels.
+- **Inner loop:** `check`'s 32 type checks always run (`odin check` cannot list its inputs),
+  about 10 s warm; a warm `test` is the client and server packages' run time (~2.5 min),
+  and its output is ~4800 lines of test-runner and server logs around 19 result lines.
