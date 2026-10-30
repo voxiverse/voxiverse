@@ -555,6 +555,7 @@ app_frame :: proc(app: ^App, capture_this_frame: bool, number: int) -> bool {
 			world_debug_lines(app)
 			avatars_draw(s, &app.entity_draw, &app.held_draw, &app.held_cache)
 			entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
+			bench_avatars_draw(app, s)
 			view_scene = view_model_frame(app, s, width, height)
 		}
 		entity_uploads: {

@@ -37,16 +37,21 @@ Compare_Side :: struct {
 
 bench_compare :: proc(args: []string) -> bool {
 	if len(args) < 2 {
-		fmt.eprintln("build: bench compare <ref> <scenario> [-runs:N]")
+		fmt.eprintln("build: bench compare <ref> <scenario> [-runs:N] [-size:WIDTHxHEIGHT]")
 		return false
 	}
 	ref, scenario := args[0], args[1]
 	runs := COMPARE_RUNS
+	size := "" // the game's scenarios at another size (-size:): a commit before it has none
 	for arg in args[2:] {
 		if strings.has_prefix(arg, "-runs:") {
 			if n, ok := strconv.parse_int(arg[len("-runs:"):]); ok && n >= 2 {runs = n; continue}
 		}
-		fmt.eprintfln("build: bench compare: not an option '%s' (-runs:N, at least 2)", arg)
+		if strings.has_prefix(arg, "-size:") {size = arg[len("-size:"):]; continue}
+		fmt.eprintfln(
+			"build: bench compare: not an option '%s' (-runs:N, at least 2; -size:WIDTHxHEIGHT)",
+			arg,
+		)
 		return false
 	}
 	out, found := capture(
@@ -94,7 +99,7 @@ bench_compare :: proc(args: []string) -> bool {
 	for i in 0 ..< runs {
 		for &side in sides {
 			fmt.printfln("bench  run %d of %d: %s", i + 1, runs, side.label)
-			compare_run(&side, scenario) or_return
+			compare_run(&side, scenario, size) or_return
 		}
 	}
 	compare_report(sides[:], scenario)
@@ -103,12 +108,13 @@ bench_compare :: proc(args: []string) -> bool {
 
 // compare_run runs the scenario once in side's tree and reads its result.
 @(private = "file")
-compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
+compare_run :: proc(side: ^Compare_Side, scenario, size: string) -> bool {
 	main_root, _ := os.get_working_directory(context.allocator)
 	os.set_working_directory(side.root)
 	defer os.set_working_directory(main_root)
 	exe := path_join({"build", strings.concatenate({"voxiverse", exe_suffix()})})
 	cmd := []string{exe, "--benchmark", scenario}
+	if size != "" {cmd = slice.concatenate([][]string{cmd, {"--bench-size", size}})}
 	bench_exe := path_join({"build", strings.concatenate({"bench", exe_suffix()})})
 	if scenario ==
 	   "chunks" {cmd = {bench_exe}} else if slice.contains(TOOL_SCENARIOS, scenario) {cmd = {bench_exe, scenario}}
@@ -138,7 +144,10 @@ compare_run :: proc(side: ^Compare_Side, scenario: string) -> bool {
 		return false
 	}
 	// Its result: the newest file of the scenario's.
-	dir := path_join({"build", "benchmarks", scenario})
+	// (A size of its own is a scenario of its own: client/benchmark.odin, bench_name.)
+	dir := path_join(
+		{"build", "benchmarks", scenario if size == "" else fmt.tprintf("%s-%s", scenario, size)},
+	)
 	files, err := os.read_all_directory_by_path(dir, context.allocator)
 	if err != nil || len(files) == 0 {
 		fmt.eprintfln("build: bench compare: no results in %s/%s", side.root, dir)

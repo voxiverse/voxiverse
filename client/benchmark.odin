@@ -3,6 +3,7 @@ package client
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:strconv"
 import "core:strings"
 import "core:time"
 
@@ -29,6 +30,7 @@ Bench_Kind :: enum u8 {
 	Edits, // explosions round the spawn: bulk edits re-meshed, water let loose
 	Audio, // the mixer alone: 64 voices on 4 buses, the reverb and a stream (no world, no GPU)
 	Viewmodel, // the view model's vertices for a frame, the biggest model (no world, no GPU)
+	Avatars, // other players in view: BENCH_AVATARS walking, each holding a weapon
 }
 
 Scenario :: struct {
@@ -77,11 +79,40 @@ SCENARIOS := [?]Scenario {
 		3,
 		"the view model's vertices for a frame of the biggest model, 2000 frames",
 	},
+	{
+		"avatars",
+		.Avatars,
+		1,
+		3,
+		"eight players walking in view from the spawn, each holding a weapon, 1200 frames",
+	},
 }
 
+// The avatars scenario: how many, and for how long.
+BENCH_AVATARS :: 8
+BENCH_AVATAR_FRAMES :: 1200
+BENCH_SMOKE_AVATAR_FRAMES :: 120
+BENCH_AVATAR_DISTANCE :: 7 // blocks in front of the spawn: the ring's centre
+BENCH_AVATAR_RING :: 3 // its radius, blocks
+
 // BENCH_SIZE: what benchmarks draw at, offscreen (gpu.set_offscreen),
-// whatever the window is.
+// whatever the window is, unless --bench-size says otherwise.
 BENCH_SIZE :: [2]u32{1280, 720}
+
+// bench_name: the scenario's name in results: its own at BENCH_SIZE, else with the size.
+bench_name :: proc(scenario: string, size: [2]u32) -> string {
+	if size == BENCH_SIZE {return scenario}
+	return fmt.tprintf("%s-%dx%d", scenario, size.x, size.y)
+}
+
+// parse_size reads "WIDTHxHEIGHT" (each 64 to 8192).
+parse_size :: proc(text: string) -> (size: [2]u32, ok: bool) {
+	w, _, h := strings.partition(text, "x")
+	width := strconv.parse_uint(w, 10) or_return
+	height := strconv.parse_uint(h, 10) or_return
+	if width < 64 || height < 64 || width > 8192 || height > 8192 {return}
+	return {u32(width), u32(height)}, true
+}
 
 // BENCHMARK_SETTINGS: what benchmarks run with instead of the player's
 // settings: no vsync, nothing extra on screen, the default view. Never
@@ -141,6 +172,7 @@ Bench_Phase :: enum u8 {
 Bench :: struct {
 	scenario:  Scenario,
 	smoke:     bool, // one short repetition (CI)
+	size:      [2]u32, // drawn at (BENCH_SIZE, or --bench-size)
 	phase:     Bench_Phase,
 	rep:       int,
 	frames:    int, // in this phase
@@ -148,6 +180,7 @@ Bench :: struct {
 	view:      int,
 	start_x:   f64, // (flight)
 	targets:   [BENCH_EDITS]game.Block_Pos, // (edits) where the explosions go
+	crowd:     [BENCH_AVATARS][3]f64, // (avatars) where each stands
 	fired:     int,
 	next_shot: time.Tick,
 	first:     time.Tick, // the first explosion
@@ -171,7 +204,9 @@ scenario_names :: proc() -> string {
 // bench_begin starts the scenario (after app_init).
 // smoke: one short repetition, written as "<scenario>-smoke" (never
 // compared with the real thing): CI keeps every scenario working with it.
-bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
+// size: what it draws at; a size other than BENCH_SIZE is a scenario of its own in the
+// results ("views-2560x1440"): numbers at different sizes never compare.
+bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false, size := BENCH_SIZE) {
 	b := &app.bench
 	scenario := scenario
 	if smoke {
@@ -183,8 +218,9 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 	b^ = {
 		scenario = scenario,
 		smoke = smoke,
+		size = size,
 		result = {
-			scenario = scenario.name,
+			scenario = bench_name(scenario.name, size),
 			version = scenario.version,
 			gpu = app.g.device_name,
 			driver = app.g.driver,
@@ -204,11 +240,11 @@ bench_begin :: proc(app: ^App, scenario: Scenario, smoke := false) {
 		bench_viewmodel(app)
 		return
 	}
-	if !gpu.set_offscreen(&app.g, BENCH_SIZE.x, BENCH_SIZE.y) {
+	if !gpu.set_offscreen(&app.g, size.x, size.y) {
 		bench_fail(app, "cannot draw offscreen at a fixed size here")
 		return
 	}
-	b.result.resolution = {int(BENCH_SIZE.x), int(BENCH_SIZE.y)}
+	b.result.resolution = {int(size.x), int(size.y)}
 	bench_join(app)
 }
 
@@ -287,6 +323,27 @@ bench_update :: proc(app: ^App) {
 			base.metrics_start()
 			return
 		}
+		if b.scenario.kind == .Avatars {
+			// The ring in front of the spawn, each avatar on the ground there.
+			query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+			feet := s.prediction.state.position
+			for &p, k in b.crowd {
+				angle := f64(k) * 2 * math.PI / BENCH_AVATARS
+				x := feet.x + BENCH_AVATAR_RING * math.cos(angle)
+				z := feet.z - BENCH_AVATAR_DISTANCE + BENCH_AVATAR_RING * math.sin(angle)
+				from := [3]f64{x, feet.y + 16, z}
+				hit, found := game.raycast(query, from, {0, -1, 0}, 64)
+				if !found {
+					bench_fail(app, "no ground where an avatar stands")
+					return
+				}
+				p = {x, f64(hit.block.y) + 1, z}
+			}
+			s.camera.yaw, s.camera.pitch = 0, -0.15
+			b.phase, b.frames = .Measuring, 0
+			base.metrics_start()
+			return
+		}
 		b.phase, b.frames, b.view = .Measuring, 0, 0
 		base.metrics_start()
 		base.metrics_stop() // (the first view's settle)
@@ -310,6 +367,10 @@ bench_update :: proc(app: ^App) {
 	case .Measuring:
 		switch b.scenario.kind {
 		case .Load, .Audio, .Viewmodel:
+		case .Avatars:
+			s.camera.yaw, s.camera.pitch = 0, -0.15
+			frames := BENCH_SMOKE_AVATAR_FRAMES if b.smoke else BENCH_AVATAR_FRAMES
+			if b.frames >= frames {bench_repetition_done(app)}
 		case .Views:
 			pitches := BENCH_VIEW_PITCHES
 			s.camera.yaw = f32(b.view % BENCH_VIEW_YAWS) * 2 * math.PI / BENCH_VIEW_YAWS
@@ -382,7 +443,7 @@ bench_repetition_done :: proc(app: ^App) {
 bench_finish :: proc(app: ^App) {
 	b := &app.bench
 	b.phase = .Off
-	if b.smoke {b.result.scenario = fmt.tprintf("%s-smoke", b.scenario.name)}
+	if b.smoke {b.result.scenario = fmt.tprintf("%s-smoke", bench_name(b.scenario.name, b.size))}
 	path := base.bench_result_write(&b.result)
 	if path == "" {
 		bench_fail(app, "could not write the result (run from the repository: build/ must exist)")
@@ -617,4 +678,38 @@ bench_viewmodel :: proc(app: ^App) {
 		}
 	}
 	bench_finish(app)
+}
+
+// bench_avatars_draw draws the avatars scenario's crowd while it measures: other
+// players as the session draws them (avatar_draw, the entity and held passes), each
+// walking on the spot with one of the kit's weapons. Called with the scene.
+bench_avatars_draw :: proc(app: ^App, s: ^Session) {
+	b := &app.bench
+	if b.phase != .Measuring || b.scenario.kind != .Avatars {return}
+	base.metric_scope(.Avatar_Draw)
+	weapons := [?]string{"rifle", "shotgun", "sniper", "pistol", "rocket_launcher"}
+	for p, k in b.crowd {
+		item, _ := game.item_by_name(s.reg, weapons[k % len(weapons)])
+		stride := f32(math.mod(f64(b.frames) * 0.12 + f64(k), math.TAU))
+		pose := avatar_pose(
+			s.rules.walk_speed,
+			false,
+			stride,
+			hold_of(s.reg, item),
+			s.rules.walk_speed,
+			s.rules.sprint_speed,
+		)
+		yaw := f32(f64(k) * 2 * math.PI / BENCH_AVATARS)
+		avatar_draw(
+			s.reg,
+			&app.entity_draw,
+			p,
+			yaw,
+			0,
+			pose,
+			shirt_of(fmt.tprintf("bot%d", k + 1)),
+			{},
+			{&app.held_draw, held_entry(&app.held_cache, s.reg, item)},
+		)
+	}
 }

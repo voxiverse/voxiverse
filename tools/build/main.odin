@@ -289,10 +289,11 @@ usage :: proc() {
 		"              load, views, flight, edits, audio  the game (a release build, fixed settings;",
 	)
 	fmt.println("                           server: the server alone, simulated players;")
-	fmt.println("                           --smoke: one short run, as CI does)")
-	fmt.println("                           --profile: traced too)")
+	fmt.println("                           --smoke: one short run, as CI does;")
+	fmt.println("                           --profile: traced too;")
+	fmt.println("                           -size:WIDTHxHEIGHT: drawn at that size, not 1280x720)")
 	fmt.println(
-		"              compare <ref> <scenario> [-runs:N]  the working tree against a commit,",
+		"              compare <ref> <scenario> [-runs:N] [-size:WxH]  the working tree against a commit,",
 	)
 	fmt.println("                           alternating runs; changes called beyond the noise")
 	fmt.println(
@@ -1300,15 +1301,21 @@ bench :: proc(args: []string) -> bool {
 		return run_tool("bench", args)
 	}
 	build_args := []string{"--release"}
-	smoke := false
+	extra := make([dynamic]string)
 	for arg in args[1:] {
-		switch arg {
-		case "--profile":
+		switch {
+		case arg == "--profile":
 			build_args = {"--release", "--profile"}
-		case "--smoke":
-			smoke = true
+		case arg == "--smoke":
+			append(&extra, "--smoke")
+		case strings.has_prefix(arg, "-size:"):
+			append(&extra, "--bench-size", arg[len("-size:"):])
 		case:
-			fmt.eprintfln("build: bench %s takes --profile or --smoke, not '%s'", scenario, arg)
+			fmt.eprintfln(
+				"build: bench %s takes --profile, --smoke or -size:WIDTHxHEIGHT, not '%s'",
+				scenario,
+				arg,
+			)
 			return false
 		}
 	}
@@ -1317,8 +1324,7 @@ bench :: proc(args: []string) -> bool {
 		// The server alone (dedicated/bench.odin).
 		exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	}
-	if smoke {return run({exe, "--benchmark", scenario, "--smoke"})}
-	return run({exe, "--benchmark", scenario})
+	return run(slice.concatenate([][]string{{exe, "--benchmark", scenario}, extra[:]}))
 }
 
 // trace summarizes a Spall trace (default build/voxiverse.spall); further

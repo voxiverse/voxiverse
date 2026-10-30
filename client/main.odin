@@ -25,6 +25,7 @@ Options :: struct {
 	benchmark:     string `usage:"run a benchmark scenario (load, views, flight, edits) with fixed settings, write its result, quit"`,
 	null_audio:    bool `usage:"mix into the null device (real time, no sound card) instead of the card"`,
 	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
+	bench_size:    string `usage:"with --benchmark: draw at WIDTHxHEIGHT instead of 1280x720 (results under <scenario>-WIDTHxHEIGHT)"`,
 	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
 	version:       bool `usage:"print the version and quit"`,
 }
@@ -69,6 +70,18 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		app.benchmark = true
 	}
 	check: Check_Info
+	bench_size := BENCH_SIZE
+	if opts.bench_size != "" {
+		size, ok := parse_size(opts.bench_size)
+		if !ok {
+			fmt.eprintfln(
+				"--bench-size: '%s' is not WIDTHxHEIGHT (such as 2560x1440)",
+				opts.bench_size,
+			)
+			os.exit(2)
+		}
+		bench_size = size
+	}
 	if opts.check != "" {
 		found: bool
 		if check, found = check_find(opts.check); !found {
@@ -92,7 +105,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 	app.null_audio = opts.null_audio || opts.check == "audio"
 	ok := app_init(app)
 	if ok {
-		if app.benchmark {bench_begin(app, scenario, opts.smoke)}
+		if app.benchmark {bench_begin(app, scenario, opts.smoke, bench_size)}
 		script: Script
 		script_init(&script, opts.exec)
 		defer script_destroy(&script)
