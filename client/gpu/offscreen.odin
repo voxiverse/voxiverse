@@ -67,12 +67,13 @@ offscreen_destroy :: proc(g: ^Gpu) {
 }
 
 // offscreen_begin readies the offscreen image to draw on: after the last
-// frame's copy has finished reading it (one image serves every frame).
+// frame's copy (and any screenshot's) has finished reading it (one image
+// serves every frame).
 @(private)
 offscreen_begin :: proc(cmd: vk.CommandBuffer, image: vk.Image) {
 	barrier := vk.ImageMemoryBarrier2 {
 		sType = .IMAGE_MEMORY_BARRIER_2,
-		srcStageMask = {.BLIT, .COLOR_ATTACHMENT_OUTPUT},
+		srcStageMask = {.BLIT, .COPY, .COLOR_ATTACHMENT_OUTPUT},
 		dstStageMask = {.COLOR_ATTACHMENT_OUTPUT},
 		dstAccessMask = {.COLOR_ATTACHMENT_WRITE, .COLOR_ATTACHMENT_READ},
 		oldLayout = .UNDEFINED,
@@ -103,14 +104,14 @@ offscreen_copy :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 	}
 	before := [2]vk.ImageMemoryBarrier2 {
 		{
-			sType = .IMAGE_MEMORY_BARRIER_2,
-			srcStageMask = {.COLOR_ATTACHMENT_OUTPUT},
-			srcAccessMask = {.COLOR_ATTACHMENT_WRITE},
-			dstStageMask = {.BLIT},
-			dstAccessMask = {.TRANSFER_READ},
-			oldLayout = .COLOR_ATTACHMENT_OPTIMAL,
-			newLayout = .TRANSFER_SRC_OPTIMAL,
-			image = frame.image,
+			sType            = .IMAGE_MEMORY_BARRIER_2,
+			srcStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
+			srcAccessMask    = {.COLOR_ATTACHMENT_WRITE},
+			dstStageMask     = {.BLIT, .COPY}, // (COPY: a screenshot reads it too)
+			dstAccessMask    = {.TRANSFER_READ},
+			oldLayout        = .COLOR_ATTACHMENT_OPTIMAL,
+			newLayout        = .TRANSFER_SRC_OPTIMAL,
+			image            = frame.image,
 			subresourceRange = range,
 		},
 		{

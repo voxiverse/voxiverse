@@ -1,0 +1,17 @@
+# Visual baselines (docs/debugging.md, "Visual baselines"): one scene a line,
+# `name: script`, the script being console commands separated by ';' (as --exec
+# takes them). `voxiverse --scene <name>` runs one in the scratch world at its
+# spawn (client/scenes.odin: the fixed conditions); `build images` runs them
+# all on lavapipe and compares each with <name>.png here. Gravity is off in a
+# scene, so a player teleported anywhere stays there.
+north: look 0 0
+east: look -90 0
+south: look 180 0
+west: look 90 0
+down: look 0 -89
+underwater: /tp 69 -1.5 -9 0 -10
+night_lamp: /time set midnight; /setblock 24 11 8 lamp; /tp 24.5 14 14.5 0 -25
+cave: /sphere 24 -24 8 6 air; /setblock 24 -29 4 lamp; /tp 24.5 -26 10.5 0 -15
+water: /tp 69 6 -4 0 -35
+held_first: look 135 -20
+held_third: look 135 -10; camera behind 30

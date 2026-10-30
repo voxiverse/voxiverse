@@ -197,6 +197,20 @@ TEST_PACK :: []File {
 	},
 }
 
+// The registry owns its packs' names: a source's namespace (a directory's name,
+// in the caller's memory: the server reads its packs into temp memory) may be
+// gone by the time a player joins and the server lists the packs.
+@(test)
+test_registry_owns_pack_names :: proc(t: ^testing.T) {
+	ns := strings.clone("testpack", context.temp_allocator)
+	reg, errs := build_with(pack_of(ns, TEST_PACK))
+	testing.expect_value(t, errors_text(errs), "")
+	if reg == nil {return}
+	for &c in transmute([]u8)ns {c = 'x'} 	// (the caller's memory, reused)
+	testing.expect_value(t, len(reg.packs), 2)
+	testing.expect_value(t, reg.packs[1].namespace, "testpack")
+}
+
 // A pack adds a block, an item and a recipe with no code of its own.
 @(test)
 test_pack_adds_block_item_recipe :: proc(t: ^testing.T) {

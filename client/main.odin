@@ -27,6 +27,7 @@ Options :: struct {
 	smoke:         bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
 	bench_size:    string `usage:"with --benchmark: draw at WIDTHxHEIGHT instead of 1280x720 (results under <scenario>-WIDTHxHEIGHT)"`,
 	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
+	scene:         string `usage:"render a visual baseline's scene (assets/baselines/images/scenes.txt) offscreen to images/<scene>.png, and quit"`,
 	version:       bool `usage:"print the version and quit"`,
 }
 
@@ -97,17 +98,42 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 		app.checking = true
 	}
 	check_pending := opts.check != ""
+	exec := opts.exec
+	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
+	if opts.scene != "" {
+		script, found := scene_find(SCENES_TEXT, opts.scene)
+		if !found {
+			log.errorf(
+				"no scene %q (there are: %s)",
+				opts.scene,
+				strings.join(
+					scene_names(SCENES_TEXT, context.temp_allocator),
+					", ",
+					context.temp_allocator,
+				),
+			)
+			return false
+		}
+		if opts.exec != "" || opts.benchmark != "" || opts.check != "" {
+			log.error("--scene runs its own script: not with --exec, --benchmark or --check")
+			return false
+		}
+		exec = scene_exec(script) // (the script points into it while it runs: not temp)
+		app.checking = true // (its settings: the benchmarks')
+	}
 
 	// The console shows the log too (from here on).
 	base.log_set_listener(sink, console_listener, &app.console)
 	defer base.log_set_listener(sink, nil, nil)
 
-	app.null_audio = opts.null_audio || opts.check == "audio"
+	app.null_audio = opts.null_audio || opts.check == "audio" || opts.scene != ""
 	ok := app_init(app)
 	if ok {
 		if app.benchmark {bench_begin(app, scenario, opts.smoke, bench_size)}
+		if opts.scene != "" &&
+		   !scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
 		script: Script
-		script_init(&script, opts.exec)
+		script_init(&script, exec)
 		defer script_destroy(&script)
 		frames := 0
 		last := time.tick_now()
@@ -121,6 +147,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 				log.infof("check %s: %s", check.name, check.description)
 				check.start(app)
 			}
+			scene_update(app, script_done(&script))
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture, frames + 1) {break}
 			{
@@ -136,7 +163,9 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			}
 			now := time.tick_now()
 			app.last_frame_ms = f32(time.duration_milliseconds(time.tick_diff(last, now)))
-			app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
+			if app.scene.phase == .Off { 	// (a scene's water stands still)
+				app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
+			}
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
 			if app.screen == .Game {
 				base.frame_stats_add(
@@ -200,6 +229,10 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 			   .Off {log.error("blast_test the run ended before the test finished")}
 			ok = false
 		}
+	}
+	if opts.scene != "" && app.scene.phase != .Done {
+		log.errorf("scene %s: the run ended before its picture was written", opts.scene)
+		ok = false
 	}
 	server_failed := app.server_failed
 	// app_destroy frees the console: later lines must not reach it.

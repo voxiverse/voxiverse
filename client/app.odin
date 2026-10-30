@@ -93,8 +93,10 @@ App :: struct {
 	credits:          Credits_View, // the Credits screen's scroll (screen_credits.odin)
 	options:          Options_View, // the Options screen's tab and state (screen_options.odin)
 	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
-	checking:         bool, // --check: BENCHMARK_SETTINGS (with the check's view), nothing saved
+	checking:         bool, // --check or --scene: BENCHMARK_SETTINGS (with the check's view), nothing saved
+	scene:            Scene_Run, // --scene: a visual baseline's (scenes.odin)
 	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
+	screenshot_dir:   string, // where they go, next to the executable ("": screenshots)
 	message:          string, // shown on the title screen (why a session ended)
 	fly_test:         Fly_Test,
 	blast_test:       Blast_Test,

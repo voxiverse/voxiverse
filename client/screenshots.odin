@@ -38,7 +38,7 @@ screenshots_save :: proc(app: ^App) {
 			log.errorf("screenshot cannot encode error=%v", err)
 			continue
 		}
-		dir := path_next_to_exe("screenshots")
+		dir := path_next_to_exe(app.screenshot_dir if app.screenshot_dir != "" else "screenshots")
 		os.make_directory_all(dir)
 		path :=
 			filepath.join(
@@ -47,9 +47,15 @@ screenshots_save :: proc(app: ^App) {
 			) or_else name
 		if werr := os.write_entire_file(path, png); werr != nil {
 			log.errorf("screenshot cannot write path=%s error=%v", path, werr)
+			if app.scene.phase == .Shooting {
+				app.script_failed, app.quit = true, true
+			}
 			continue
 		}
 		log.infof("screenshot saved path=%s size=%dx%d", path, w, h)
+		if app.scene.phase == .Shooting {
+			app.scene.phase, app.quit = .Done, true // (the scene's picture: its run is over)
+		}
 		toast(app, .Screenshot_Saved, on_click = open_screenshots)
 	}
 }

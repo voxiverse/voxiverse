@@ -51,15 +51,19 @@ screenshot_take :: proc(
 	return
 }
 
-// screenshot_record copies the frame's image if a screenshot was requested
-// and leaves it ready to present; otherwise just transitions it. Replaces
-// the frame's final barrier.
+// screenshot_record copies what was drawn if a screenshot was requested and
+// leaves the shown image ready to present; otherwise just transitions it.
+// Replaces the frame's final barrier. Drawn offscreen (set_offscreen), the
+// copy is of the offscreen image at its own size (left TRANSFER_SRC_OPTIMAL by
+// offscreen_copy), not of the window's scaled copy of it.
 @(private)
-screenshot_record :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
+screenshot_record :: proc(g: ^Gpu, f: ^Frame_Sync, shown: Frame, drawn: Frame) {
 	if !g.screenshot_requested || f.screenshot.pending {
-		image_barrier(frame.cmd, frame.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
+		image_barrier(shown.cmd, shown.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
 		return
 	}
+	offscreen := g.offscreen.size != {}
+	frame := drawn if offscreen else shown
 	s := &f.screenshot
 	size := int(frame.extent.width * frame.extent.height * 4)
 	if s.buffer.size < size {
@@ -67,7 +71,7 @@ screenshot_record :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 		ok: bool
 		if s.buffer, ok = create_buffer(g, size, {.TRANSFER_DST}, true, "screenshot readback");
 		   !ok {
-			image_barrier(frame.cmd, frame.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
+			image_barrier(shown.cmd, shown.image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
 			return
 		}
 	}
@@ -92,7 +96,7 @@ screenshot_record :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 		imageMemoryBarrierCount = 1,
 		pImageMemoryBarriers    = &to_copy,
 	}
-	vk.CmdPipelineBarrier2(frame.cmd, &dep)
+	if !offscreen {vk.CmdPipelineBarrier2(frame.cmd, &dep)} 	// (offscreen: the blit's read layout already)
 	region := vk.BufferImageCopy {
 		imageSubresource = {aspectMask = {.COLOR}, layerCount = 1},
 		imageExtent = {frame.extent.width, frame.extent.height, 1},
@@ -114,6 +118,13 @@ screenshot_record :: proc(g: ^Gpu, f: ^Frame_Sync, frame: Frame) {
 		newLayout        = .PRESENT_SRC_KHR,
 		image            = frame.image,
 		subresourceRange = range,
+	}
+	if offscreen {
+		// The window's image was not copied from: it goes from drawing to presenting.
+		to_present.srcStageMask = {.COLOR_ATTACHMENT_OUTPUT}
+		to_present.srcAccessMask = {.COLOR_ATTACHMENT_WRITE}
+		to_present.oldLayout = .COLOR_ATTACHMENT_OPTIMAL
+		to_present.image = shown.image
 	}
 	// The host reads the buffer after the frame's fence.
 	host := vk.MemoryBarrier2 {

@@ -411,7 +411,7 @@ asset_suffix :: proc(kind: Content_Kind) -> string {
 @(private)
 read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 	info: Pack_Info
-	info.namespace = src.namespace
+	info.namespace = strings.clone(src.namespace) // (the registry's: the source is the caller's)
 	if !id_part_valid(src.namespace, 32) {
 		fail(
 			b,

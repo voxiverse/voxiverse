@@ -7843,3 +7843,91 @@ falls back to a backup).
 - **Validation** (`VX_VALIDATION=1 --check blast`, a development build): no findings over
   10 895 frames with every change above.
 
+## R1: visual baselines (issue #67)
+
+`./build.sh images` renders eleven scenes on lavapipe under `xvfb-run` and compares each
+with its baseline in `assets/baselines/images/`; `voxiverse --scene <name>` runs one
+(`client/scenes.odin`), `tools/build/images.odin` renders, compares, accepts and draws the
+difference; CI's Linux game job runs it and uploads `build/images/` on a failure. How it
+works is in debugging.md, Graphics, "Visual baselines".
+
+### The thresholds, measured
+
+Every scene rendered four times locally on lavapipe (the accepted run and three more, each a
+full `./build.sh images`): every run was bit-identical to the baseline, so the largest
+difference between any two runs was 0% of pixels and a mean of 0/255. Four times that is
+below the spec's floor, so the thresholds are the floor: a scene fails above 0.1% of pixels
+differing by more than 8/255, or a mean absolute difference above 0.5/255. CI's lavapipe
+(Ubuntu's Mesa) was not measured in the session (unattended sessions do not push): its first
+run is the measurement; if it differs from these baselines the thresholds are revisited from
+its numbers, not loosened by guess.
+
+The exit check: `FACE_LIGHT[2]` in `world.vert` raised by 0.05 failed four scenes, all by
+the mean (no pixel moved by more than 8/255): `down` 1.254/255, `underwater` 0.605,
+`water` 1.483, `held_first` 0.685; the other seven stayed within (0.15-0.49). Reverted.
+
+### What differed from the spec
+
+- Eleven scenes, not ten: the spec's list names eleven (`north`, `east`, `south`, `west`,
+  `down`, `underwater`, `night_lamp`, `cave`, `water`, `held_first`, `held_third`). The held
+  scenes show the start kit's rocket launcher, which the scratch world gives.
+- Fixed besides the spec's list: no gravity (a player put somewhere stays there), the water's
+  animation stopped, chat lines and toasts cleared two frames before the picture (they fade
+  with the clock), no sound device.
+- A screenshot of an offscreen frame is now of the offscreen image at its own size, not of
+  the window's scaled copy (`client/gpu/screenshot.odin`); the offscreen barriers name the
+  copy stage too.
+- The build driver points `VK_DRIVER_FILES` and the older `VK_ICD_FILENAMES` at the
+  `lvp_icd*.json` it finds in the system's ICD directories.
+- `build images` on Windows or macOS refuses at run time (not with `when`, so the code still
+  compiles and is checked on every OS).
+- A bug found on the way: the registry kept a pack's namespace as a slice of the caller's
+  memory (the server's temp memory), so the pack list sent to a joining player could be
+  garbage; the registry clones it now (`test_registry_owns_pack_names`).
+- The baselines are 922 KB each (10 MB in all): `base.png_encode` writes stored, uncompressed
+  blocks. Kept: a compressing encoder is its own work, and a later milestone re-accepts only
+  the scenes it changes.
+
+### The spec (from milestones/R.md)
+
+**Why.** No test compares a rendered image with anything: CI's screenshots are uploaded
+for a person to look at. Every later milestone rebuilds part of the frame and must prove
+the picture did not change.
+
+**Design (decided).**
+
+- **Scenes** are console scripts, kept in `assets/baselines/images/scenes.txt`, one scene a
+  line: `name: script`. Each runs with the benchmarks' fixed settings
+  (`BENCHMARK_SETTINGS`), still rules, still clouds, a fixed time of day, the scratch world,
+  and draws offscreen at 640 x 360 (`gpu.set_offscreen`). Ten scenes: the spawn looking
+  north, east, south and west at the horizon; straight down; underwater; night with a lamp;
+  a cave; a water surface in sunlight; the held rocket launcher in first and third person.
+- **The renderer is lavapipe** (`VK_ICD_FILENAMES` pointing at Mesa's `lvp_icd`) under
+  `xvfb-run`, locally and in CI: deterministic, the same on every machine, and never a
+  window on a person's desktop. Images are written as PNG to `build/images/<scene>.png`.
+- **Comparison** (`tools/build/images.odin`): per scene, the share of pixels whose largest
+  channel difference exceeds 8/255, and the mean absolute difference. A scene fails above
+  0.1% of pixels or a mean of 0.5/255. These thresholds are settled in this milestone by
+  measurement: render every scene three times locally and once in CI, take the largest
+  difference observed between any two runs, and set each threshold to four times it (never
+  lower than the values above). Record the measurement in history.md.
+- **Commands:** `./build.sh images` renders and compares, printing per scene its two
+  numbers and PASS or FAIL, and writes `build/images/<scene>.diff.png` for a failure;
+  `./build.sh images --accept <scene|all>` replaces the baselines (as `build audio
+  --accept` does). Baselines live in `assets/baselines/images/` (PNG, 640 x 360).
+- **CI:** the Linux game job runs `./build.sh images` and uploads `build/images/` on
+  failure.
+
+**Steps.** (1) The scenes file and a `--scene <name>` client option that runs one scene,
+writes its image and quits. (2) `images.odin` in the build driver: render, compare, accept,
+the diff image. (3) The measurement and thresholds. (4) Baselines accepted. (5) CI step.
+(6) docs/debugging.md, Graphics: "Visual baselines".
+
+**Left out.** Per-GPU baselines; perceptual metrics; animated scenes.
+
+**Tests.** `tools/build` unit tests for the comparison on synthetic images (identical,
+one pixel off, a shifted image). The suite and `images` green locally and in CI.
+
+**Exit check.** `./build.sh images` passes locally and in CI; changing `FACE_LIGHT[2]` in
+`world.vert` by 0.05 makes at least four scenes fail (checked by hand, then reverted, and
+stated in the report).

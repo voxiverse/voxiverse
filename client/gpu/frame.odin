@@ -158,7 +158,7 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 		shown.image, shown.view = sc.images[frame.image_index], sc.views[frame.image_index]
 		shown.extent = sc.extent
 	}
-	screenshot_record(g, f, shown) // also transitions the image for presenting
+	screenshot_record(g, f, shown, frame) // also transitions the image for presenting
 	debug_label_end(g, frame.cmd)
 	timing_frame_end(g, &f.timing, frame.cmd)
 	if !check(vk.EndCommandBuffer(frame.cmd)) {return}

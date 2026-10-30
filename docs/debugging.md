@@ -803,6 +803,55 @@ information (`-gV`, `-gVS`) is not used: it requires
 and `spirv-val` rejects it without that extension. The game communicates with RenderDoc
 only when started from it; it never loads RenderDoc itself.
 
+### Visual baselines
+
+`./build.sh images` renders a fixed set of scenes and compares each picture with a baseline
+kept in the repository, so a change to the renderer that changes the picture is found by a
+test rather than by eye. It runs on Linux only, on lavapipe (Mesa's CPU Vulkan driver) under
+`xvfb-run`: the same on every machine, and never a window on the desktop. The build driver
+finds lavapipe's manifest in the system's ICD directories and points `VK_DRIVER_FILES` (and
+the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has. CI's Linux game job runs
+the same command for every change.
+
+The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
+`name: script`; the script is console commands separated by `;`, as `--exec` takes them.
+`voxiverse --scene <name>` runs one scene and quits: it joins the scratch world at its fixed
+spawn and draws offscreen at 640 x 360 (`client/scenes.odin`). Whatever could change the
+picture from one run to the next is fixed:
+
+- the benchmarks' settings (`BENCHMARK_SETTINGS`), with no sound device;
+- still clouds, no sheep, and still rules: the daylight cycle stopped at the benchmarks'
+  time of day (a scene may set another with `/time set`), no random ticks, and no gravity,
+  so a player teleported anywhere stays there;
+- the water's animation stopped;
+- no chat lines and no toasts: they fade with the clock, so they are cleared two frames
+  before the picture.
+
+After the scene's own script, the run waits a second for the server to answer, waits until
+the world around the player is loaded and meshed, and draws ten more frames. The picture is
+the offscreen image itself, not the window's scaled copy of it. It is written to
+`build/images/<scene>.png`.
+
+For each scene the comparison reports two numbers: the share of pixels whose largest colour
+channel differs from the baseline's by more than 8/255, and the mean absolute difference of
+the colour channels. A scene fails when the first is above 0.1% or the second above 0.5/255
+(`IMAGE_MAX_SHARE`, `IMAGE_MAX_MEAN` in `tools/build/images.odin`; how they were settled is
+in [history.md](history.md), R1). A failed scene also gets `build/images/<scene>.diff.png`:
+the baseline in dim grey, the differing pixels in red. Each run's log is
+`build/images/<scene>.log`. CI uploads `build/images/` as the `images` artifact when a step
+fails.
+
+```
+./build.sh images                      # every scene, compared
+./build.sh images cave                 # one scene, compared
+./build.sh images --accept cave        # render it and make the picture its baseline
+./build.sh images --accept all         # every baseline rewritten
+```
+
+A change that alters the picture on purpose re-accepts only the scenes it changes, after
+looking at their pictures and differences; the commit says which scenes and why. A new
+scene is a line in `scenes.txt` and `./build.sh images --accept <name>`.
+
 ## Benchmarking
 
 `build bench <scenario>` measures one thing the same way every time, on any machine

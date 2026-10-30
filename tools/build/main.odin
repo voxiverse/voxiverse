@@ -148,6 +148,7 @@ main :: proc() {
 	     "audiodump",
 	     "music",
 	     "bench",
+	     "images",
 	     "audio":
 		// The game's packages link miniaudio; even type-checking wants it.
 		compare_only := args[0] == "determinism" && len(args) > 1 && args[1] == "--compare"
@@ -192,6 +193,8 @@ main :: proc() {
 		ok = run_tool("packcheck", args[1:], release = true)
 	case "audio":
 		ok = audio_baselines(args[1:])
+	case "images":
+		ok = images(args[1:])
 	case "bench":
 		ok = bench(args[1:])
 	case "trace":
@@ -256,6 +259,9 @@ usage :: proc() {
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println(
 		"  audio     run the audio baselines (--accept <scenario|all> rewrites them, --wav <dir> renders each to a WAV)",
+	)
+	fmt.println(
+		"  images    render the visual baselines' scenes on lavapipe and compare them (--accept <scene|all> rewrites them; Linux)",
 	)
 	fmt.println(
 		"  audiodump dump an audio capture: timeline, voice decisions, loudness, a bus as WAV (-report, -bus:, -wav:)",
