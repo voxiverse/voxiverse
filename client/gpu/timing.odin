@@ -232,7 +232,7 @@ timing_setup :: proc(g: ^Gpu, valid_bits: u32, period: f32, calibration_availabl
 	g.timestamp_period = period
 	g.timestamp_mask = max(u64) if valid_bits >= 64 else (u64(1) << valid_bits) - 1
 	if !calibration_available {
-		log.info("gpu GPU timing on (approximate alignment in traces)")
+		log.info("gpu timing on (approximate alignment in traces)")
 		base.profile_name_gpu_track(false)
 		return
 	}

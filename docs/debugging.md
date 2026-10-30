@@ -582,6 +582,17 @@ tools, from narrow to wide:
 `python3 tools/debugger/check_spall.py build/voxiverse.spall` checks a trace (well-formed,
 balanced, aligned when calibrated).
 
+The dedicated server (`build serve --release --profile`) writes its own trace beside it,
+`build/voxiverse-server.spall`: `build trace build/voxiverse-server.spall`. Each run
+overwrites the last.
+
+**A trace shows where the time goes, not how much there is.** Every scope reads the clock
+twice through a system call, and a profiling build pays for it: in one measurement the
+`server` benchmark's tick took 2-3 times as long under `--profile` as without, and the server
+fell behind. Read proportions from a trace; take numbers (and before/after comparisons) from
+`build bench` on a build without `--profile`. Scopes that fire many thousand times a second
+cost the most.
+
 ## Found by the party hardening (M48j)
 
 - **`odin test` is not the only build that sees a `_test.odin` file.** Odin compiles every
