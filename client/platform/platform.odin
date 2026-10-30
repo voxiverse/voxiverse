@@ -25,6 +25,7 @@ Window :: struct {
 Event :: union {
 	Resize_Event,
 	Focus_Event,
+	Fullscreen_Event,
 	Key_Event,
 	Text_Event,
 	Mouse_Move_Event,
@@ -42,6 +43,13 @@ Resize_Event :: struct {
 
 Focus_Event :: struct {
 	focused: bool,
+}
+
+// Fullscreen_Event: the window entered or left full screen by other means
+// than set_fullscreen (macOS's green button): w.fullscreen already says so;
+// the game's setting follows.
+Fullscreen_Event :: struct {
+	fullscreen: bool,
 }
 
 // Key_Event: key is where the key is on the keyboard (bindings: WASD stays
@@ -411,6 +419,8 @@ push_event :: proc(w: ^Window, e: Event) {
 	#partial switch v in e {
 	case Resize_Event:
 		w.width, w.height = v.width, v.height
+	case Fullscreen_Event:
+		w.fullscreen = v.fullscreen
 	case Focus_Event:
 		w.focused = v.focused
 		if w.mouse_captured {native_set_mouse_captured(w, v.focused)}

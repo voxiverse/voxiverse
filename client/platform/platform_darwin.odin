@@ -520,8 +520,7 @@ make_delegate_class :: proc() -> NS.Class {
 		rawptr(proc "c" (self: NS.id, cmd: NS.SEL, note: ^NS.Object) {
 				context = callback_ctx
 				if active == nil {return}
-				active.fullscreen = true
-				report_size(active)
+				fullscreen_changed(active, true)
 			}),
 		"v@:@",
 	)
@@ -531,13 +530,50 @@ make_delegate_class :: proc() -> NS.Class {
 		rawptr(proc "c" (self: NS.id, cmd: NS.SEL, note: ^NS.Object) {
 				context = callback_ctx
 				if active == nil {return}
-				active.fullscreen = false
-				report_size(active)
+				fullscreen_changed(active, false)
 			}),
 		"v@:@",
 	)
+	// The zoom button (and Window > Zoom): the window fills the screen's visible
+	// area, and a second zoom gives it its size back.
+	rect_encoding :: "{CGRect={CGPoint=dd}{CGSize=dd}}"
+	add_method(
+		cls,
+		"windowWillUseStandardFrame:defaultFrame:",
+		rawptr(proc "c" (self: NS.id, cmd: NS.SEL, window: ^NS.Object, frame: NS.Rect) -> NS.Rect {
+				context = callback_ctx
+				return zoom_frame(window, frame)
+			}),
+		rect_encoding + "@:@" + rect_encoding,
+	)
+	add_method(
+		cls,
+		"windowShouldZoom:toFrame:",
+		rawptr(proc "c" (self: NS.id, cmd: NS.SEL, window: ^NS.Object, frame: NS.Rect) -> NS.BOOL {
+				return true
+			}),
+		"B@:@" + rect_encoding,
+	)
 	NS.objc_registerClassPair(cls)
 	return cls
+}
+
+// zoom_frame: where a zoomed window goes: the visible area (below the menu
+// bar, clear of the Dock) of the screen it is on; fallback if it has none.
+@(private = "file")
+zoom_frame :: proc(window: ^NS.Object, fallback: NS.Rect) -> NS.Rect {
+	screen := msg(^NS.Object, window, "screen")
+	if screen == nil {return fallback}
+	return msg(NS.Rect, screen, "visibleFrame")
+}
+
+// fullscreen_changed: the window is (not) in its full-screen space now. A
+// change the game did not ask for (the green button) is reported, so its
+// setting follows.
+@(private = "file")
+fullscreen_changed :: proc(w: ^Window, fullscreen: bool) {
+	if w.fullscreen != fullscreen {push_event(w, Fullscreen_Event{fullscreen})}
+	report_size(w)
 }
 
 @(private = "file")
@@ -720,6 +756,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 
 	window_menu := new_menu("Window")
 	add_item(window_menu, "Minimize", "performMiniaturize:", "m")
+	add_item(window_menu, "Zoom", "performZoom:", "")
 	full := add_item(window_menu, "Enter Full Screen", "toggleFullScreen:", "f")
 	// Ctrl+Cmd+F, as in other applications.
 	msg(nil, full, "setKeyEquivalentModifierMask:", NS.EventModifierFlags{.Control, .Command})

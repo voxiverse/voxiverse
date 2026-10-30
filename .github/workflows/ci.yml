@@ -58,6 +58,11 @@ jobs:
           name: determinism-${{ matrix.os }}
           path: build/determinism/
           if-no-files-found: error
+      # The window's zoom and green buttons against a real AppKit window (the
+      # runner has a window server).
+      - name: Smoke
+        if: runner.os == 'macOS'
+        run: ./build.sh smoke
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
       # The chunk pipeline (M19): exact counts, and every stage within a

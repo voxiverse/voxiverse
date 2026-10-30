@@ -122,7 +122,7 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 			if int(v.pad) >= platform.MAX_PADS {continue}
 			s.pads[v.pad].axes[v.axis] = v.value
 			if abs(v.value) > 0.5 {s.pad_last = int(v.pad)}
-		case platform.Resize_Event:
+		case platform.Resize_Event, platform.Fullscreen_Event:
 		}
 	}
 }

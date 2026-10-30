@@ -330,6 +330,10 @@ admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		count = n
 	}
 	for _ in 0 ..< count {
+		if len(c.world.entities.list) >= MAX_ENTITIES {
+			notice(s, c, fmt.tprintf("Too many entities (the limit is %d)", MAX_ENTITIES))
+			break
+		}
 		if !summon(s, c, kind) {
 			notice(s, c, "Nowhere to put it (look at open ground nearby)")
 			break

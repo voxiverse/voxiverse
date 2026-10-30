@@ -409,6 +409,10 @@ app_frame :: proc(app: ^App, capture_this_frame: bool, number: int) -> bool {
 			clear(&app.injected)
 			events = all[:]
 		}
+		for e in events {
+			// (the window's own full screen, from its green button: the setting follows)
+			if f, ok := e.(platform.Fullscreen_Event); ok {app.settings.fullscreen = f.fullscreen}
+		}
 		input_update(&app.input, events)
 		actions_sync(app, app.last_frame_ms / 1000)
 	}
