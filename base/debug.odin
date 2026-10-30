@@ -75,6 +75,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	console_level: log.Level =
 		.Debug if os.get_env("VX_LOG", context.temp_allocator) == "debug" else .Info
 	if path, ok := log_file_path(log_file_name); ok {
+		log_rotate(path)
 		if f, err := os.open(path, {.Write, .Create, .Trunc}); err == nil {
 			d.log_file = f
 			d.log_path = strings.clone(path, d.backing)
@@ -208,6 +209,23 @@ assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Loca
 		log_stack_trace(.Fatal, 1)
 	}
 	runtime.trap()
+}
+
+// LOGS_KEPT: how many earlier runs' logs are kept beside the current one (path.1 is the
+// last run's, path.2 the one before, ...). A crash's log, and its stack, survives the
+// restart that follows it.
+LOGS_KEPT :: 5
+
+// log_rotate moves path to path.1, path.1 to path.2, ..., dropping the oldest. It is
+// best effort: a log that cannot be moved is overwritten, as before.
+log_rotate :: proc(path: string) {
+	for i := LOGS_KEPT; i >= 1; i -= 1 {
+		from := path if i == 1 else fmt.tprintf("%s.%d", path, i - 1)
+		if !os.exists(from) {continue}
+		to := fmt.tprintf("%s.%d", path, i)
+		os.remove(to)
+		os.rename(from, to)
+	}
 }
 
 // log_file_path places the log next to the executable (build/ in dev).

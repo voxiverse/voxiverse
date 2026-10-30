@@ -74,7 +74,7 @@ log_sink_init :: proc(
 		h, min, sec := time.clock(now)
 		fmt.fprintfln(
 			file,
-			"log started %04d-%02d-%02d %02d:%02d:%02d (times are seconds since then)",
+			"log started %04d-%02d-%02d %02d:%02d:%02d UTC (times are seconds since then)",
 			y,
 			mon,
 			d,

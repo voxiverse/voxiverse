@@ -130,3 +130,29 @@ test_disk_counts_operations :: proc(t: ^testing.T) {
 	testing.expect_value(t, disk_read(link), "yz")
 	disk_faults_destroy(&faults)
 }
+
+// Each run's log moves down one (a.log.1 is the last run's); the oldest past LOGS_KEPT goes.
+@(test)
+test_log_rotate_keeps_earlier_runs :: proc(t: ^testing.T) {
+	dir := disk_scratch("rotate")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	path := fmt.tprintf("%s/a.log", dir)
+	for run in 0 ..< LOGS_KEPT + 2 {
+		log_rotate(path)
+		_ = os.write_entire_file(path, transmute([]u8)fmt.tprintf("run %d", run))
+	}
+	last := LOGS_KEPT + 1
+	testing.expect_value(t, disk_read(path), fmt.tprintf("run %d", last))
+	testing.expect_value(t, disk_read(fmt.tprintf("%s.1", path)), fmt.tprintf("run %d", last - 1))
+	testing.expect_value(
+		t,
+		disk_read(fmt.tprintf("%s.%d", path, LOGS_KEPT)),
+		fmt.tprintf("run %d", last - LOGS_KEPT),
+	)
+	testing.expect(
+		t,
+		!os.exists(fmt.tprintf("%s.%d", path, LOGS_KEPT + 1)),
+		"more than LOGS_KEPT kept",
+	)
+}
