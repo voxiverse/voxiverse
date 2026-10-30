@@ -588,6 +588,21 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M57b | [Sound design, part two (the new sounds, the listening tools, references)](milestones/M57b.md) | the tests and CI green; `build sfx` exits 0. Check by hand: `--listen` every class, `--abx` the ones in doubt, and send back which to retune (an assistant cannot hear: measurements keep the sounds correct, ears decide whether they are good). |
 | M58 | [Events (the event table and everything audible)](milestones/M58.md) | the tests and CI green; `build audio --wav build/audio events` (a new baseline scenario that fires every event once, 0.5 s apart, at fixed positions) is accepted and within its numbers. Check by hand: listen to `events.wav`. |
 | M58b | [Ambience (the sound of the world)](milestones/M58b.md) | the tests and CI green; a new audio baseline scenario `tour` (the tour scenario's path with ambience and steps, 120 s, rendered offline from a recorded list of places) is accepted: Ambience's integrated loudness within -30..-20 LUFS, Master's true peak under -1 dBTP, `build bench audio` within budge (see the spec) |
+| R1 | [Visual baselines: scenes rendered on lavapipe and compared with tolerance](milestones/R.md#r1-visual-baselines) | `./build.sh images` passes locally and in CI; a 0.05 change to one face's light fails at least four scenes |
+| R2 | [The edits benchmark measures the game, not its driver (`server.call_async`)](milestones/R.md#r2-the-edits-benchmark-measures-the-game-not-its-driver) | `benchmark driver` under 1 ms at every explosion; `edits` re-baselined |
+| R3 | [Block changes absorbed once per chunk per frame](milestones/R.md#r3-block-changes-absorbed-once-per-chunk-per-frame) | `edits` frame p99 and worst at most half of R2's; no frame over 16.7 ms meshing on the main thread; `images` passes |
+| R4 | [Light computed once per chunk version; re-meshing only where light changed](milestones/R.md#r4-light-computed-once-per-chunk-version-re-meshing-only-where-light-changed) | `flight` `mesh_chunk` at most 40% of baseline; chunks re-meshed per edit at most a third; meshes byte-identical |
+| R5 | [Vertex pulling and multi-draw indirect](milestones/R.md#r5-vertex-pulling-and-multi-draw-indirect) | `views` `frame_record` at most half; at most 8 world draw calls; `images` passes |
+| R6 | [GPU culling](milestones/R.md#r6-gpu-culling) | `views-far` `frame_record` within 20% of `views`; `gpu_cull` under 0.1 ms |
+| R7 | [Occlusion culling (two-phase, depth pyramid)](milestones/R.md#r7-occlusion-culling) | `views` `gpu_world` at most 60% of R6's; no popping (`images`) |
+| R8 | [Compact geometry: quad pulling, water merged](milestones/R.md#r8-compact-geometry) | geometry memory at most 55% of R7's; `images` passes |
+| R9 | [Memory: sub-allocation, a growing geometry arena, no lost meshes](milestones/R.md#r9-memory) | at most 10 `vkAllocateMemory` calls in `flight`; no mesh ever dropped |
+| R10 | [Uploads off the graphics queue](milestones/R.md#r10-uploads-off-the-graphics-queue) | `flight` frame p99 and worst at most 80% of R9's |
+| R11 | [The frame graph and an HDR target](milestones/R.md#r11-the-frame-graph-and-an-hdr-target) | `images` passes unchanged; `gpu_frame` within 5% |
+| R12 | [The sky at a fraction of the cost (half-resolution clouds)](milestones/R.md#r12-the-sky-at-a-fraction-of-the-cost) | `gpu_sky` at 2560x1440 at most 30% of baseline |
+| R13 | [Far terrain at level of detail](milestones/R.md#r13-far-terrain-at-level-of-detail) | `views-far` `gpu_world` at most 60% and `world_triangles` at most 40% of no LOD |
+| R14 | [Far terrain beyond the interest area (a protocol change: the owner decides first)](milestones/R.md#r14-far-terrain-beyond-the-interest-area) | set when the owner approves the design |
+| R15 | [Entities and held items on the GPU](milestones/R.md#r15-entities-and-held-items-on-the-gpu) | `avatars` `avatar_draw` at most 25% of baseline |
 
 ## Playtest and controllers (M40-M42b)
 
@@ -781,7 +796,8 @@ the service's API, whose server side is not in this repository); time, schedulin
 nobody is in: a world nobody is in freezes and is caught up on return); dynamic voxel bodies (ships, elevators, flying machines: decided at M48
 whether to plan for them); worldgen as data graphs (density functions in packs: new
 kinds of world with no code; first in the Living worlds arc, with planet and star classification); navigation and AI framework; render foundations (frame graph,
-GPU-driven culling, far-terrain level of detail, shadows); atmosphere and lighting (sky from
+GPU-driven culling, far-terrain level of detail, shadows; planned as R1-R15 in
+[milestones/R.md](milestones/R.md), shadows among its visual changes that wait for the owner); atmosphere and lighting (sky from
 each world's astronomy: its star's colour and size, binary suns, the system's other bodies at their positions, per-world gravity and atmosphere as the Living worlds arc defines them; weather, coloured lights); UI v2 (layout engine, localization,
 accessibility; focus navigation and gamepads are M41-M42); the Windows pass (Windows behaviour, once a Windows machine is at hand; macOS's port is M47d-M47e, first in the order) **and, beside it, *Audio devices in Odin*** (owner's decision, 2026-10-28, #44; not specified yet: WASAPI, CoreAudio and PipeWire with an ALSA fallback as our own backends; output callbacks feeding our mixer, following the default device, surviving unplug and sample-rate changes; then miniaudio is removed entirely, with its build step `ensure_miniaudio` and `ensure_foreign_miniaudio`, the cross-check's placeholder library and `tools/bench/ogg_miniaudio.odin`; it needs real hardware to verify, so it is sized when the Windows and macOS passes are);
 server operations and moderation tools; replay, fuzz and soak (full-session recording,
