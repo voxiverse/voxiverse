@@ -864,7 +864,7 @@ scene is a line in `scenes.txt` and `./build.sh images --accept <name>`.
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame. |
 | `avatars` | Eight players walking in view from the spawn, each holding one of the kit's weapons, drawn as other players are drawn: `avatar_draw` (building their vertices), the entity and held passes, the frame. |
 | `flight` | 600 blocks of flight at 40 blocks/s: frames while streaming, generation and meshing, ticks. |
-| `edits` | 12 explosions around the spawn: `edit_shown` (from a bulk edit's chunks arriving until all their new meshes are shown), meshing, frames, ticks. It waits for the water they release to settle. |
+| `edits` | 12 explosions around the spawn: `edit_shown` (from a bulk edit's chunks arriving until all their new meshes are shown), meshing, frames, ticks. It waits for the water they release to settle. The explosions are queued on the in-process server (`server.call_async`), not waited for, so no frame holds a server tick of the driver's waiting (version 2, R2; version 1's frame times did). |
 | `server` | The dedicated server alone (`voxiverse-server --benchmark server`): 8 simulated players join over UDP and fly out in 8 directions; ticks, streaming, generation, bytes sent. |
 
 ### Benchmark conditions

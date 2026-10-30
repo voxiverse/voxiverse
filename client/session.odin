@@ -3,6 +3,7 @@ package client
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:mem"
 import "core:mem/virtual"
 import "core:net"
 import "core:os"
@@ -546,17 +547,19 @@ session_others_now :: proc(s: ^Session) -> (now: f64, live: bool) {
 FLUSH_INTERVAL :: 8 * time.Millisecond
 
 // server_explode: an explosion at block p of radius blocks, done by our own
-// in-process server (server.call): checks and benchmarks, not a command.
+// in-process server at its next tick, without waiting for it
+// (server.call_async: a benchmark's frames hold the game's work, not a tick
+// of waiting): checks and benchmarks, not a command.
 server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 	Explosion :: struct {
 		at:     game.Block_Pos,
 		radius: f64,
 	}
 	e := Explosion{p, radius}
-	server.call(&s.server, proc(srv: ^server.Server, data: rawptr) {
+	server.call_async(&s.server, proc(srv: ^server.Server, data: rawptr) {
 			e := (^Explosion)(data)
 			server.explode_by(srv, "", e.at, e.radius)
-		}, &e)
+		}, mem.ptr_to_bytes(&e))
 }
 
 // still_rules: nothing changing by itself, for benchmarks and exit checks.

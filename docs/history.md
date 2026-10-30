@@ -7931,3 +7931,81 @@ one pixel off, a shifted image). The suite and `images` green locally and in CI.
 **Exit check.** `./build.sh images` passes locally and in CI; changing `FACE_LIGHT[2]` in
 `world.vert` by 0.05 makes at least four scenes fail (checked by hand, then reverted, and
 stated in the report).
+
+## R2: the edits benchmark measures the game, not its driver (issue #67)
+
+`server.call_async(s, procedure, data)` (`server/call.odin`) queues a call with a copy of
+its data (at most `CALL_DATA_MAX`, 64 bytes, in the `Server_Call` itself) and returns at
+once; the server runs it at the start of its next tick, in order with the waiting calls.
+`server_explode` (the `edits` benchmark and the blast check) uses it; `call` is unchanged
+for every other caller. The `edits` scenario is version 2, and the driver's explosion has a
+scope of its own, `queue explosion`, inside `benchmark driver`.
+
+### The exit check, measured
+
+A profiled `edits` run (`build bench edits --profile`, three repetitions, 36 explosions):
+`benchmark driver` took 0.004-0.007 ms at every explosion (`queue explosion` 0.002-0.003
+ms). The driver's other calls over 1 ms (37 of 10 012) are not explosions: three of 43-66 ms
+are a repetition's leaving and joining, the rest 1.0-3.1 ms between explosions or while
+waiting for the water to settle.
+
+`build bench compare 312d384 edits` (5 runs each; A the commit before, B this one):
+
+| Metric | A | B | Change | p |
+|---|---|---|---|---|
+| `frame` p99 | 10.394 ms | 5.072 ms | -51.2% | 0.008 faster |
+| `frame` max | 26.861 ms | 16.232 ms | -39.6% | 0.008 faster |
+| `frame` (median) | 2.219 ms | 2.219 ms | 0% | 1.000 |
+| `frame_session` p99 | 6.208 ms | 3.053 ms | -50.8% | 0.008 faster |
+| `edit_shown` | 35.200 ms | 32.598 ms | -7.4% | 0.056 (not called) |
+| `gpu_frame` p99 | 2.284 ms | 2.183 ms | -4.4% | 0.032 faster |
+| `server_tick` p99 | 1.214 ms | 1.482 ms | +22.1% | 0.032 slower |
+
+Counts equal (meshes 522, draw calls 1337). The slower `server_tick` p99 is called, not
+explained: a guess is that the explosion's tick no longer runs while the main thread is
+blocked waiting for it, so it shares the cores with the frame's meshing. It is not
+investigated here (the server's work did not change).
+
+### The new `edits` baseline (version 2)
+
+Three full `build bench edits` runs (three repetitions each), on the development machine:
+`frame` median 2.18-2.20 ms, p99 4.93-7.56 ms, worst 13.98-19.02 ms; `edit_shown` median
+31.3-34.3 ms, worst 41.1-64.5 ms; `mesh_chunk` median 1.22-1.29 ms. Beside the old: the arc
+was planned at frame p99 / worst 24-39 / 28-53 ms (13932f5, version 1), and version 1 at the
+commit before R2 measured 10.4 / 26.9 ms (the compare's medians). R3's exit check halves
+version 2's p99 and worst.
+
+### What differed from the spec
+
+- `call_async` takes its data as bytes (`mem.ptr_to_bytes(&e)`), so its size is known and
+  checked; the queue holds `Server_Call` values rather than pointers (a waiting caller's
+  `done` is a pointer to its own semaphore).
+- On a stepped server `call_async` queues too, and the call runs at the next step (`call`
+  runs at once there because it must not wait; an async call need not). The test
+  (`server/call_test.odin`) relies on that: nothing runs before the step, both run once at
+  it, in order, each with the data as it was queued.
+- The blast check's explosions are async too (it calls `server_explode`); it waits for the
+  world to settle afterwards, as before, and passes under validation.
+- `queue explosion` was added: the driver had no scope inside it, so which of its calls
+  held an explosion could not be read from a trace.
+
+### The spec (from milestones/R.md)
+
+**Why.** The `edits` scenario sets off explosions with `server.call`, which blocks the main
+thread until the server's next tick and the explosion have run (`client/session.odin`,
+`server_explode`). That wait sits between two frames, inside the measured frame time, so
+the scenario's worst frames include up to a server tick of harness. Every later
+measurement of block-change handling depends on this scenario.
+
+**Design (decided).** A non-blocking call: `server.call_async(s, procedure, data)` queues
+the call with a copy of its data (at most 64 bytes, copied into the `Server_Call`) and
+returns at once; the server runs it at the start of its next tick, as `call` does. The
+benchmark driver uses it for explosions. `call` is unchanged for every other caller.
+
+**Steps.** (1) `call_async` in `server/call.odin` with a test on the stepped server.
+(2) `server_explode` uses it. (3) Bump the `edits` scenario's version (results of other
+versions never compare). (4) Re-baseline `edits` (three full runs) and record the new
+baseline in history.md beside the old.
+
+**Exit check.** A profiled `edits` run shows `benchmark driver` under 1 ms at every
+explosion; the suite green.

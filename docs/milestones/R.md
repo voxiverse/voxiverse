@@ -94,24 +94,8 @@ Done: its spec and outcome are in history.md, "R1: visual baselines".
 
 ## R2: the edits benchmark measures the game, not its driver
 
-**Why.** The `edits` scenario sets off explosions with `server.call`, which blocks the main
-thread until the server's next tick and the explosion have run (`client/session.odin`,
-`server_explode`). That wait sits between two frames, inside the measured frame time, so
-the scenario's worst frames include up to a server tick of harness. Every later
-measurement of block-change handling depends on this scenario.
-
-**Design (decided).** A non-blocking call: `server.call_async(s, procedure, data)` queues
-the call with a copy of its data (at most 64 bytes, copied into the `Server_Call`) and
-returns at once; the server runs it at the start of its next tick, as `call` does. The
-benchmark driver uses it for explosions. `call` is unchanged for every other caller.
-
-**Steps.** (1) `call_async` in `server/call.odin` with a test on the stepped server.
-(2) `server_explode` uses it. (3) Bump the `edits` scenario's version (results of other
-versions never compare). (4) Re-baseline `edits` (three full runs) and record the new
-baseline in history.md beside the old.
-
-**Exit check.** A profiled `edits` run shows `benchmark driver` under 1 ms at every
-explosion; the suite green.
+Done: its spec and outcome are in history.md, "R2: the edits benchmark measures the game, not
+its driver". Its `edits` baseline (version 2) is the one R3 halves.
 
 ## R3: block changes absorbed once per chunk per frame
 

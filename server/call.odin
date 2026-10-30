@@ -16,28 +16,48 @@ call :: proc(s: ^Server, procedure: proc(s: ^Server, data: rawptr), data: rawptr
 		procedure(s, data)
 		return
 	}
-	c := Server_Call {
-		procedure = procedure,
-		data      = data,
-	}
-	base.queue_push(&s.calls, &c)
-	sync.sema_wait(&c.done)
+	done: sync.Sema
+	base.queue_push(&s.calls, Server_Call{procedure = procedure, data = data, done = &done})
+	sync.sema_wait(&done)
 }
 
+// CALL_DATA_MAX: the most data call_async copies (bytes).
+CALL_DATA_MAX :: 64
+
+// call_async queues procedure(s, a copy of data) to run on the server's
+// thread at the start of its next tick (a stepped server's next step), and
+// returns at once: what a caller that must not wait for a tick uses (the
+// benchmark's explosions). data is copied, so it may be the caller's own
+// stack; at most CALL_DATA_MAX bytes.
+call_async :: proc(s: ^Server, procedure: proc(s: ^Server, data: rawptr), data: []byte) {
+	assert(len(data) <= CALL_DATA_MAX, "call_async: more data than CALL_DATA_MAX")
+	c := Server_Call {
+		procedure = procedure,
+		size      = len(data),
+	}
+	copy(c.copied[:], data)
+	base.queue_push(&s.calls, c)
+}
+
+// Server_Call: a call waiting for the server's next tick. A waiting caller's
+// (call) has its data and done on the caller's stack; an async one
+// (call_async) carries a copy of its data.
 Server_Call :: struct {
 	procedure: proc(s: ^Server, data: rawptr),
-	data:      rawptr,
-	done:      sync.Sema,
+	data:      rawptr, // the waiting caller's (an async call's is copied[:size])
+	done:      ^sync.Sema, // posted once it has run (nil: nobody waits)
+	copied:    [CALL_DATA_MAX]byte,
+	size:      int,
 }
 
 // calls_run runs the calls waiting (the server's thread, each tick).
 @(private)
 calls_run :: proc(s: ^Server) {
-	pending := make([dynamic]^Server_Call, context.temp_allocator)
+	pending := make([dynamic]Server_Call, context.temp_allocator)
 	base.queue_drain(&s.calls, &pending)
-	for c in pending {
-		c.procedure(s, c.data)
-		sync.sema_post(&c.done)
+	for &c in pending {
+		c.procedure(s, c.data if c.done != nil else raw_data(c.copied[:c.size]))
+		if c.done != nil {sync.sema_post(c.done)}
 	}
 }
 

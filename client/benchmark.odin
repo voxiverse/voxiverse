@@ -61,7 +61,7 @@ SCENARIOS := [?]Scenario {
 	{
 		"edits",
 		.Edits,
-		1,
+		2, // 2: the explosions are queued, not waited for (R2: server.call_async)
 		3,
 		"12 explosions round the spawn, until re-meshed and the water is still",
 	},
@@ -384,6 +384,7 @@ bench_update :: proc(app: ^App) {
 		case .Edits:
 			if b.fired < BENCH_EDITS {
 				if time.tick_diff(time.tick_now(), b.next_shot) > 0 {return}
+				base.profile_scope("queue explosion")
 				t := b.targets[b.fired]
 				server_explode(s, t, BENCH_EDIT_RADIUS)
 				b.fired += 1

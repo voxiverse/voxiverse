@@ -137,7 +137,7 @@ Server :: struct {
 	kit:            [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
 	offsets:        []game.Chunk_Pos, // the interest area around a client, nearest first
 	unload_offsets: []game.Chunk_Pos, // ... with SERVER_UNLOAD_MARGIN (unload_left)
-	calls:          base.Queue(^Server_Call), // from beside an in-process server (call.odin)
+	calls:          base.Queue(Server_Call), // from beside an in-process server (call.odin)
 	writer:         game.Writer,
 	tick:           u64,
 	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
