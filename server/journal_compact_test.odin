@@ -145,7 +145,7 @@ journal_retention :: proc(t: ^testing.T) {
 		bytes, _, _ = segments_size(w)
 		return
 	}
-	_, _, all, _, before := segments(t, "keeps", 1 << 40, 1 << 40)
+	_, _, all, _, before := segments(t, "keep_all", 1 << 40, 1 << 40)
 	testing.expect(t, before >= 3, "the history should span several segments")
 	testing.expect_value(t, all, before)
 	// By age: only what began within the window stays.
