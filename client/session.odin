@@ -355,8 +355,9 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 		st := &s.world.stats
 		times := base.frame_stats_summary(&st.mesh_times)
 		log.infof(
-			"session mesher meshed=%d remeshed=%d stale=%d dirtied_resent=%d dirtied_edit=%d dirtied_column=%d mesh_ms_p50=%.2f p99=%.2f",
+			"session mesher meshed=%d meshed_now=%d remeshed=%d stale=%d dirtied_resent=%d dirtied_edit=%d dirtied_column=%d mesh_ms_p50=%.2f p99=%.2f",
 			st.meshed,
+			st.meshed_now,
 			st.remeshed,
 			st.stale_meshes,
 			st.dirtied_resent,
@@ -417,10 +418,12 @@ session_update :: proc(
 		game.pipe_set_conditions(&s.pipe, conditions)
 	}
 	{
-		// What the server sent (block changes are applied here: an edit's chunks mesh now).
+		// What the server sent (block changes are applied here, and settled
+		// once: chunks a change could show a hole in mesh now).
 		base.profile_scope("receive messages")
 		net_update(s, dt)
 		receive(s)
+		world_changes_settle(&s.world)
 	}
 	defer {
 		base.profile_scope("send messages")

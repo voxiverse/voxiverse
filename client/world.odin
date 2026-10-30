@@ -37,6 +37,9 @@ Client_Chunk :: struct {
 	pending: render.Mesh_Handle, // its new mesh, uploaded hidden until its group is shown
 	waiting: bool, // a new mesh (pending, or none: empty) waits for its group
 	meshes:  u32, // times meshed (started), for World_Stats.remeshed
+	settled: u32, // the last world_changes_settle that dirtied it (once per pass)
+	checked: u32, // ... that tried meshing it on the spot
+	hurry:   bool, // a block change opened a hole in it: meshed before other waiting chunks
 }
 
 // Mesh_Group: the chunks a bulk edit touched, and their neighbours: their
@@ -75,6 +78,11 @@ World :: struct {
 	batch:         [dynamic]game.Chunk_Pos, // ... those come so far
 	groups:        [dynamic]Mesh_Group,
 	next_group:    u32,
+	// Block changes since the last world_changes_settle (heap: a frame may
+	// bring any number):
+	changed:       [dynamic][2]game.Block_Pos, // boxes whose chunks' meshes may look different
+	holes:         [dynamic]game.Block_Pos, // cells whose change could open a hole (opens_hole)
+	settles:       u32, // world_changes_settle passes so far
 	stats:         World_Stats,
 	reg:           ^game.Registry, // what the blocks are (set by world_init)
 }
@@ -87,6 +95,7 @@ World_Stats :: struct {
 	// a column's top moved.
 	dirtied_resent: int,
 	dirtied_edit:   int,
+	meshed_now:     int, // ... of chunks meshed on the main thread (mesh_now)
 	dirtied_column: int,
 	stale_meshes:   int, // results dropped because the chunk changed or left
 	mesh_jobs_busy: int,
@@ -167,6 +176,8 @@ world_init :: proc(
 		t.urgent = i >= count
 		task_free(w, &t)
 	}
+	w.changed = make([dynamic][2]game.Block_Pos, heap)
+	w.holes = make([dynamic]game.Block_Pos, heap)
 	base.queue_init(&w.done, heap)
 	base.jobs_init(&w.jobs, "mesh", workers, heap)
 	return nil
@@ -182,6 +193,8 @@ world_destroy :: proc(w: ^World) {
 		game.light_scratch_destroy(&t.scratch)
 	}
 	game.block_arrays_destroy(&w.arrays)
+	delete(w.changed)
+	delete(w.holes)
 	w^ = {}
 }
 
@@ -268,51 +281,109 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 }
 
 // world_set_block changes one block (an edit, predicted or confirmed) and
-// re-meshes every chunk whose mesh it touches: its own, and neighbours
-// whose border faces or ambient occlusion include it. False if its chunk
-// is not loaded.
+// records it: the chunks whose meshes it touches are dirtied and meshed by
+// the next world_changes_settle, once however many blocks changed in them.
+// False if its chunk is not loaded.
 world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 	c := world_get(w, game.chunk_of(p))
 	if c == nil {return false}
 	local := game.local_of(p)
-	if game.chunk_get(&c.blocks, local) == b {return true}
+	old := game.chunk_get(&c.blocks, local)
+	if old == b {return true}
 	if game.chunk_set(&c.blocks, &w.arrays, local, b) != nil {
 		log.error("client out of chunk arrays for an edit")
 		return false
 	}
-	c.version = w.next_version
-	w.next_version += 1
 	// Light reaches 15 blocks: everything that close may look different.
-	remesh_box(w, p - game.LIGHT_MAX, p + game.LIGHT_MAX, &w.stats.dirtied_edit)
+	append(&w.changed, [2]game.Block_Pos{p - game.LIGHT_MAX, p + game.LIGHT_MAX})
+	if opens_hole(&w.reg.blocks, old, b) {append(&w.holes, p)}
 	predict_column_top(w, p, b)
-	// Geometry changes only within a block of it: mesh those now, so faces
-	// the edit uncovers appear in the same frame (no seeing through the
-	// world while a worker gets round to it). The rest is only light.
-	a, z := game.chunk_of(p - 1), game.chunk_of(p + 1)
-	for cy in a.y ..= z.y {
-		for cz in a.z ..= z.z {
-			for cx in a.x ..= z.x {mesh_now(w, {cx, cy, cz})}
+	return true
+}
+
+// opens_hole: a cell going from old to new could show a see-through hole
+// until its chunk is meshed again: old drew opaque or cutout faces (they
+// hid what is behind, and the faces around it were culled against it), and
+// it holds something else now. Blocks appearing, and water (translucent)
+// changing, never do: at worst they show a frame late.
+opens_hole :: proc(t: ^game.Block_Table, old, new: game.Block) -> bool {
+	if old == new {return false}
+	d := t.defs[old]
+	return d.render != .None && d.layer != .Translucent
+}
+
+// world_changes_settle absorbs the block changes since the last call: each
+// chunk they reach is dirtied once (the union of their light boxes), and
+// those whose geometry could show a hole (opens_hole), within a block of
+// such a cell, are meshed on this thread at once, at most URGENT_TASKS of
+// them; the rest are meshed by the workers, those first. Called after
+// messages are received and after predictions, before world_update.
+world_changes_settle :: proc(w: ^World) {
+	if len(w.changed) == 0 && len(w.holes) == 0 {return}
+	base.profile_scope("settle block changes")
+	defer {
+		clear(&w.changed)
+		clear(&w.holes)
+	}
+	w.settles += 1
+	last: [2]game.Chunk_Pos
+	for box, i in w.changed {
+		a, b := game.chunk_of(box[0]), game.chunk_of(box[1])
+		if i > 0 && last == {a, b} {continue} 	// the same chunks as the one before
+		last = {a, b}
+		b.y = min(b.y, game.CHUNK_MAX_Y - 1)
+		a.y = max(a.y, game.CHUNK_MIN_Y)
+		for cy in a.y ..= b.y {
+			for cz in a.z ..= b.z {
+				for cx in a.x ..= b.x {
+					n := world_get(w, {cx, cy, cz})
+					if n == nil || n.settled == w.settles {continue}
+					n.settled = w.settles
+					if n.meshes > 0 && !n.dirty {w.stats.dirtied_edit += 1}
+					n.dirty = true
+					n.version = w.next_version // a mesh being made now is stale
+					w.next_version += 1
+					queue_if_complete(w, n)
+				}
+			}
 		}
 	}
-	return true
+	// Geometry changes only within a block of a cell: those chunks, once each.
+	for p in w.holes {
+		a, z := game.chunk_of(p - 1), game.chunk_of(p + 1)
+		for cy in a.y ..= z.y {
+			for cz in a.z ..= z.z {
+				for cx in a.x ..= z.x {
+					n := world_get(w, {cx, cy, cz})
+					if n == nil || n.checked == w.settles {continue}
+					n.checked = w.settles
+					// (On the main thread, within the frame: an edit never
+					// shows a hole.) Past the budget: the workers', first.
+					if !mesh_now(w, {cx, cy, cz}) {n.hurry = true}
+				}
+			}
+		}
+	}
 }
 
 // mesh_now meshes a chunk on this thread with a reserved task; its result
 // is uploaded by the next world_apply like any other. Without a free
-// reserved task it stays queued for the workers.
-mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) {
+// reserved task it stays queued for the workers (false).
+mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	h, ok := w.by_pos[pos]
-	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return}
-	// (On the main thread, within the frame: an edit never shows a hole.)
+	if !ok || len(w.urgent_tasks) == 0 || !neighbours_present(w, pos) {return false}
 	base.profile_scope("mesh now (block changed)")
 	c := base.pool_get(&w.chunks, h)
 	task := pop(&w.urgent_tasks)
 	if c.meshes > 0 {w.stats.remeshed += 1}
 	c.meshes += 1
+	w.stats.meshed_now += 1
+	c.hurry = false
 	task.handle, task.version, task.pos = h, c.version, pos
 	task_fill(w, task, pos)
 	mesh_task_run(task)
 	append(&w.uploads, task)
+	return true
 }
 
 // task_free returns a task to its free list.
@@ -357,11 +428,12 @@ predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	top := game.column_top_after(game.Block_Query{w, world_block, &w.reg.blocks}, old, p, b, nil)
 	if top == old {return}
 	column.heights[i] = top
-	remesh_box(
-		w,
-		{p.x, min(old, top), p.z} - game.LIGHT_MAX,
-		{p.x, max(old, top), p.z} + game.LIGHT_MAX,
-		&w.stats.dirtied_edit,
+	append(
+		&w.changed,
+		[2]game.Block_Pos {
+			{p.x, min(old, top), p.z} - game.LIGHT_MAX,
+			{p.x, max(old, top), p.z} + game.LIGHT_MAX,
+		},
 	)
 }
 
@@ -437,9 +509,10 @@ world_remesh_all :: proc(w: ^World) {
 	}
 }
 
-// world_update starts mesh jobs for waiting chunks, nearest to the camera
-// first. Runs every frame, also when nothing is drawn.
+// world_update settles the frame's block changes and starts mesh jobs for
+// waiting chunks, nearest to the camera first. Runs every frame, also when nothing is drawn.
 world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
+	world_changes_settle(w) // what this frame's predictions changed
 	base.profile_scope("start meshing")
 	if len(w.to_mesh) > len(w.free_tasks) {
 		// More waiting than can start: a bulk edit's first, then the nearest.
@@ -454,8 +527,9 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 				s := (^Sort)(context.user_ptr)
 				ca, cb := base.pool_get(&s.w.chunks, a), base.pool_get(&s.w.chunks, b)
 				if ca == nil || cb == nil {return ca == nil && cb != nil} 	// stale first: dropped right away
-				// A bulk edit's chunks next (it is shown when all are done),
-				// then the nearest.
+				// A hole a block change opened first, then a bulk edit's
+				// chunks (it is shown when all are done), then the nearest.
+				if ca.hurry != cb.hurry {return ca.hurry}
 				if (ca.group != 0) != (cb.group != 0) {return ca.group != 0}
 				return(
 					game.chunk_distance_sq(ca.pos, s.camera) <
@@ -485,7 +559,7 @@ world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 			c.dirty = false
 			continue
 		}
-		c.queued = true
+		c.queued, c.hurry = true, false
 		if c.meshes > 0 {w.stats.remeshed += 1}
 		c.meshes += 1
 		task := pop(&w.free_tasks)

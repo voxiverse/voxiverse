@@ -99,36 +99,8 @@ its driver". Its `edits` baseline (version 2) is the one R3 halves.
 
 ## R3: block changes absorbed once per chunk per frame
 
-**Why.** The `edits` stutter: per received block record, up to eight synchronous meshes,
-most of them made stale by the next record in the same chunk.
-
-**Design (decided).**
-
-- `apply_block` records changes; it no longer meshes. Block writes and column-top
-  predictions happen at once (game logic and prediction read blocks), but dirtying and
-  meshing are deferred to one pass at the end of `receive`: `world_changes_settle`.
-- `world_changes_settle` collects the frame's changed cells per chunk, dirties each
-  affected chunk once (the union of the `LIGHT_MAX` boxes), and meshes on the main thread
-  at most once per chunk, only for chunks whose **geometry** changed in a way that could
-  open a hole: a cell that held an opaque or cutout-layer block now holds something else.
-  Water-level changes, light-only changes and blocks appearing never mesh on the main
-  thread; they go to the workers. This keeps commit 7b332d6's guarantee (breaking a block
-  never shows a see-through hole for a frame) and removes the cost it did not need.
-- The main-thread budget stays `URGENT_TASKS` (8) chunks a frame; the rest are queued first
-  among the workers' tasks.
-
-**Steps.** (1) The pending-change list on `World` and `world_changes_settle`. (2)
-`apply_block` and `Edit_Result` use it. (3) The x-ray rule as a predicate,
-`opens_hole(old, new: Block) -> bool`, with tests. (4) Profile `edits` and confirm
-`mesh now (block changed)` no longer appears for water.
-
-**Tests.** A client test applies 200 water records to one chunk in one frame and checks one
-main-thread mesh at most, none for water; a test that breaking a solid block still meshes
-its chunk within the frame (the x-ray case); `opens_hole` table test.
-
-**Exit check.** `bench compare` on `edits` (R2's version): frame p99 and worst at most half
-the R2 baseline, p < 0.05; `images` passes; a profiled `edits` run has no frame over
-16.7 ms whose tree shows `mesh now`.
+Done: its spec and outcome are in history.md, "R3: block changes absorbed once per chunk per
+frame". Its exit check's frame p99 half is R3b's (below, after R5).
 
 ## R4: light computed once per chunk version, re-meshing only where light changed
 
@@ -199,6 +171,40 @@ buffer per frame slot. (4) `world_draw` writes commands instead of recording dra
 
 **Exit check.** `bench compare` on `views`: `frame_record` at most half of baseline;
 `api_draw_calls` at most 8 for the world; `gpu_world` within noise or better.
+
+## R3b: an edit's frames hide behind the GPU
+
+**Why.** R3 took block records' meshing off the main thread (`mesh now` no longer appears in
+`edits`) and halved the worst frame, but frame p99 fell 31% (4.76 -> 3.28 ms against
+0be56e1), not half. R3's split (decided 2026-10-30, unattended): what is left in the p99
+frames is not block records. In a profiled `edits` run, the frames at or above p99 spend on
+average 1.25 ms in `session` (0.74 `receive messages`: decoding and storing the bulk edit's
+resent chunks, `world_set_chunk`'s neighbour checks; 0.48 `start meshing`: `task_fill`
+copying 27 block arrays, 216 KiB, per job) and 0.98 ms in `record commands`, while the
+GPU's own frame p99 is 2.1-2.5 ms. Half of R2's p99 is 2.38 ms: reachable only when the
+CPU side of an edit's frame fits behind the GPU's. R5 removes most of the recording; R4
+changes what a mesh job reads. This row comes after them, so it measures what they leave.
+
+**Design (decided).**
+
+- **Snapshots by reference.** A mesh (or R4's light) job takes references to its
+  neighbourhood's block arrays instead of copies: the client's arrays are copy-on-write
+  (a reference count per array in the client's `Block_Arrays`; `world_set_block` and
+  `world_set_chunk` write to a fresh array when the current one is referenced by a job, and
+  the job releases its references when its result is taken). The server's chunk storage is
+  untouched.
+- **Chunk arrival measured, then cut.** With snapshots by reference, profile `edits` again;
+  whatever of `receive messages` is still over 0.3 ms in a p99 frame (decoding, the 27
+  neighbour lookups per chunk) is the next step: decode into a fresh array without the
+  scratch copy, one neighbour pass per frame for all arrived chunks.
+
+**Tests.** A job's snapshot is unchanged by an edit made while it runs (a test writes the
+live world between `task_fill` and the job); an array referenced by a job is never handed
+out again until released; the R3 tests unchanged.
+
+**Exit check.** `bench compare` on `edits` against the commit before R3 (0be56e1): frame
+p99 at most half (2.38 ms on the development machine at that commit's 4.76), p < 0.05;
+`start meshing` p99 under 0.1 ms in a profiled run; `images` passes.
 
 ## R6: GPU culling
 

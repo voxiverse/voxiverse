@@ -8009,3 +8009,95 @@ baseline in history.md beside the old.
 
 **Exit check.** A profiled `edits` run shows `benchmark driver` under 1 ms at every
 explosion; the suite green.
+
+## R3: block changes absorbed once per chunk per frame (issue #67)
+
+`world_set_block` (`client/world.odin`) writes the block and predicts the column top at
+once, and records the change: its light box (the cell +- `LIGHT_MAX`), the column top's box
+when that moved, and the cell itself when `opens_hole` says the change could show a hole.
+`world_changes_settle` runs after `receive` (inside `receive messages`) and at the start of
+`world_update` (what the frame's predictions changed). It dirties each chunk the boxes reach
+once per pass (`Client_Chunk.settled`), then meshes on the spot, once each
+(`Client_Chunk.checked`), the chunks within a block of a hole cell, at most `URGENT_TASKS`
+(8) a frame; those past the budget are `hurry` and sort first among the workers' tasks.
+`opens_hole(t, old, new)`: old drew faces (`render != .None`) in the opaque or cutout layer
+and the cell holds something else now. `World_Stats.meshed_now` counts main-thread meshes
+and is on the `session mesher` line.
+
+### What differed from the spec
+
+- `opens_hole` takes the block table (`opens_hole(t: ^game.Block_Table, old, new)`): which
+  layer a block draws in is the registry's, not the block number's.
+- Predictions settle too, at the start of `world_update`, not only after `receive`: an edit
+  the player makes is in the same frame's settle as before.
+- The exit check's frame p99 half was not reached, and is split off as R3b (decided here,
+  unattended, by the plan's "split at most once"; R3b is after R5): the p99 frames are not
+  block records.
+
+### The exit check, measured
+
+`build bench compare 0be56e1 edits` (5 runs each; A the commit before, B this one):
+
+| Metric | A | B | Change | p |
+|---|---|---|---|---|
+| `frame` max | 14.185 ms | 4.953 ms | -65.1% | 0.008 faster |
+| `frame` p99 | 4.763 ms | 3.278 ms | -31.2% | 0.008 faster |
+| `frame` p95 | 2.783 ms | 2.663 ms | -4.3% | 0.056 |
+| `frame` (median) | 2.211 ms | 2.184 ms | -1.2% | 0.690 |
+| `frame_session` max | 12.262 ms | 1.269 ms | -89.6% | 0.008 faster |
+| `frame_session` p99 | 3.052 ms | 0.837 ms | -72.6% | 0.008 faster |
+| `edit_shown` (median) | 31.599 ms | 32.114 ms | +1.6% | 0.690 |
+| `edit_shown` max | 41.702 ms | 48.172 ms | +15.5% | 0.032 slower |
+| `mesh_chunk` (median) | 1.195 ms | 1.288 ms | +7.8% | 0.016 slower |
+
+Counts equal (meshes 522). Worst halved; p99 not (half is 2.38 ms). `edit_shown` max and
+`mesh_chunk` are called slower: the water's chunks the main thread used to mesh at every
+record now wait for the two workers with the bulk edit's own, and the workers mesh more.
+
+A profiled `edits` run (`build run --release --profile -- --benchmark edits`): no `mesh now`
+scope at all (`edits` has no hole-opening block records: its explosions are bulk edits, its
+records water); `settle block changes` 72 calls, at most 0.08 ms; no frame over 16.7 ms
+but the first (58 ms, the swapchain's creation and first uploads). In the frames at or
+above p99 (3.0 ms in that run), the main thread spent on average 1.25 ms in `session`
+(0.74 `receive messages`, 0.48 `start meshing`), 0.98 ms in `record commands` and 0.69 ms
+waiting for the GPU, whose own frame p99 was 2.5 ms. `perf` puts `task_fill` (27 block
+arrays copied per job) at 2.9% of the main thread's samples, `receive` at 0.8%. That is
+R3b's work (snapshots by reference), after R4 changes what a job reads and R5 removes most
+of the recording.
+
+Also checked: the blast check under validation (`meshed_now=0`, 12 groups shown, no
+finding), `images` (11 of 11), `build check`, `build test`.
+
+### The spec as planned
+
+
+**Why.** The `edits` stutter: per received block record, up to eight synchronous meshes,
+most of them made stale by the next record in the same chunk.
+
+**Design (decided).**
+
+- `apply_block` records changes; it no longer meshes. Block writes and column-top
+  predictions happen at once (game logic and prediction read blocks), but dirtying and
+  meshing are deferred to one pass at the end of `receive`: `world_changes_settle`.
+- `world_changes_settle` collects the frame's changed cells per chunk, dirties each
+  affected chunk once (the union of the `LIGHT_MAX` boxes), and meshes on the main thread
+  at most once per chunk, only for chunks whose **geometry** changed in a way that could
+  open a hole: a cell that held an opaque or cutout-layer block now holds something else.
+  Water-level changes, light-only changes and blocks appearing never mesh on the main
+  thread; they go to the workers. This keeps commit 7b332d6's guarantee (breaking a block
+  never shows a see-through hole for a frame) and removes the cost it did not need.
+- The main-thread budget stays `URGENT_TASKS` (8) chunks a frame; the rest are queued first
+  among the workers' tasks.
+
+**Steps.** (1) The pending-change list on `World` and `world_changes_settle`. (2)
+`apply_block` and `Edit_Result` use it. (3) The x-ray rule as a predicate,
+`opens_hole(old, new: Block) -> bool`, with tests. (4) Profile `edits` and confirm
+`mesh now (block changed)` no longer appears for water.
+
+**Tests.** A client test applies 200 water records to one chunk in one frame and checks one
+main-thread mesh at most, none for water; a test that breaking a solid block still meshes
+its chunk within the frame (the x-ray case); `opens_hole` table test.
+
+**Exit check.** `bench compare` on `edits` (R2's version): frame p99 and worst at most half
+the R2 baseline, p < 0.05; `images` passes; a profiled `edits` run has no frame over
+16.7 ms whose tree shows `mesh now`.

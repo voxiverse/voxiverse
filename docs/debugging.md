@@ -948,7 +948,7 @@ The profiling tools, from narrowest to widest:
 | `build bench <scenario>` | A benchmark scenario under fixed conditions (see [Benchmarking](#benchmarking)). Run this first, before and after a change for speed. |
 | `build perf [game\|server\|bench] [-- arguments]` | Samples a `--release --symbols` build under Linux perf (call stacks from the CPU's branch records where available) and prints the hottest functions per thread. Use `perf report -i build/game.perf` for call graphs, and `--sort srcline` for source lines. Threads carry their names (`server`, `worldgen 1`, `mesh 2`). |
 | `build run --release --profile`, then `build trace` | A Spall trace of every instrumented scope and the GPU's passes. `trace` prints each scope's calls and percentiles per thread, a per-second timeline, and the slowest frames and server ticks broken down. |
-| The `session mesher` log line | At the end of a session: chunks meshed, re-meshed (and why: resent, edits, column tops), and mesh times. |
+| The `session mesher` log line | At the end of a session: chunks meshed (`meshed_now`: meshes made on the main thread because a block change could have shown a hole), re-meshed (and why: resent, edits, column tops), and mesh times. |
 | `set debug.occlusion_stats 1` | Counts the chunks drawn that pass no pixel (hidden behind nearer ones: what occlusion culling would leave out), logged at exit as `render occlusion`. |
 
 ### Spall traces
@@ -978,7 +978,7 @@ The main thread's frame (`client/app.odin`, `app_frame`), outermost first:
 | `frame #N` | One frame. It excludes the frame cap's sleep (`frame cap (sleep)`) and `benchmark driver`, which run between frames. |
 | `input` | Window events, input and actions. |
 | `shader watch and telemetry`, `audio and music` | Per-frame upkeep. |
-| `session` | The game: `receive messages` (what the server sent: `apply block change`, under which `mesh now (block changed)` appears when an edit's chunks are meshed immediately), `prediction tick` (each fixed tick), `aim (raycasts)`, `start meshing` (hands chunks to the `mesh` workers), `send messages`. |
+| `session` | The game: `receive messages` (what the server sent: `apply block change` writes each block and records the change; `settle block changes` then dirties each chunk the frame's changes reach once, and meshes on the spot, as `mesh now (block changed)`, only the chunks where a change could show a see-through hole: a block that drew opaque or cutout faces is gone or replaced, at most 8 chunks a frame; flowing water never meshes here), `prediction tick` (each fixed tick), `aim (raycasts)`, `start meshing` (settles what predictions changed the same way, then hands chunks to the `mesh` workers, holes first), `send messages`. |
 | `after session (packs, checks, sounds, loading)` | What follows from the session. |
 | `ui layout` | Building the HUD and menus (the GPU's `ui` pass draws them). |
 | `wait for GPU` | `wait for frame fence` (the GPU is still drawing this slot's previous frame: GPU-bound), `acquire image`, `reset and begin commands`, `read GPU timings`, and rarely `recreate swapchain`. |

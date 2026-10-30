@@ -4,6 +4,7 @@ import "core:math"
 import "core:mem/virtual"
 import "core:testing"
 
+import "../base"
 import "../common/game"
 import "render"
 
@@ -96,6 +97,7 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	// A block in the corner of chunk (0,0,0) at (15, 0, 15): chunks +x, -y,
 	// +z (and their combinations) see it in their borders; others do not.
 	testing.expect(t, world_set_block(&w, {15, 0, 15}, .Air))
+	world_changes_settle(&w) // (the end of the frame's messages)
 	testing.expect(t, world_get(&w, {0, 0, 0}).dirty)
 	testing.expect(
 		t,
@@ -119,6 +121,110 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	}
 	// One that is near enough for light but not geometry is left to workers.
 	for task in w.uploads {testing.expect(t, task.pos != {0, 1, 0})}
+}
+
+// settled_world: the 27 chunks around the origin, all filled with fill,
+// as if meshed (nothing dirty or queued).
+@(private = "file")
+settled_world :: proc(t: ^testing.T, w: ^World, fill: game.Block, arena: ^virtual.Arena) {
+	scratch := new(game.Block_Array, context.temp_allocator)
+	testing.expect(t, world_init(w, test_reg(), 128, 32, 1, virtual.arena_allocator(arena)) == nil)
+	add_columns(w, 2)
+	for z in i32(-1) ..= 1 {
+		for y in i32(-1) ..= 1 {
+			for x in i32(-1) ..= 1 {
+				m := game.Chunk_Message {
+					pos        = {x, y, z},
+					uniform    = fill,
+					is_uniform = true,
+				}
+				testing.expect(t, world_set_chunk(w, m, scratch))
+			}
+		}
+	}
+	clear(&w.to_mesh)
+	for _, h in w.by_pos {
+		c := base.pool_get(&w.chunks, h)
+		c.dirty, c.queued, c.meshes = false, false, 1
+	}
+}
+
+// R3: a frame's 200 block records in one chunk are absorbed once: flowing
+// water (no hole it could open) meshes nothing on the main thread, and every
+// chunk its light reaches is dirtied once; 200 broken blocks inside one
+// chunk mesh it on the spot once.
+@(test)
+test_world_changes_settle_once_per_chunk :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	defer free_all(context.temp_allocator)
+	cells := make([dynamic]game.Block_Pos, context.temp_allocator)
+	for z in i32(7) ..= 8 {
+		for y in i32(1) ..= 14 {
+			for x in i32(1) ..= 14 {append(&cells, game.Block_Pos{x, y, z})}
+		}
+	}
+	resize(&cells, 200)
+
+	w: World
+	settled_world(t, &w, .Air, &arena)
+	levels := []game.Block{.Water_1, .Water_2, .Water_3, .Water_7, .Water_Falling, .Water}
+	for p, i in cells {testing.expect(t, world_set_block(&w, p, levels[i % len(levels)]))}
+	world_changes_settle(&w)
+	testing.expect_value(t, w.stats.meshed_now, 0)
+	testing.expect_value(t, len(w.uploads), 0)
+	// Every chunk within light's reach of the cells, once (the centre's 26
+	// neighbours are not complete: only the centre can be queued).
+	testing.expect_value(t, w.stats.dirtied_edit, 27)
+	testing.expect_value(t, len(w.to_mesh), 1)
+	// Water going down again (a level, not geometry) still meshes nothing.
+	for p in cells {world_set_block(&w, p, .Water_5)}
+	world_changes_settle(&w)
+	testing.expect_value(t, w.stats.meshed_now, 0)
+	world_destroy(&w)
+
+	settled_world(t, &w, .Stone, &arena)
+	for p in cells {testing.expect(t, world_set_block(&w, p, .Air))}
+	world_changes_settle(&w)
+	testing.expect_value(t, w.stats.meshed_now, 1)
+	testing.expect(t, len(w.uploads) == 1 && w.uploads[0].pos == {0, 0, 0})
+	testing.expect_value(t, w.stats.dirtied_edit, 27)
+	world_destroy(&w)
+}
+
+// R3: the x-ray rule. A cell opens a hole when what it held drew opaque or
+// cutout faces and it holds something else now.
+@(test)
+test_opens_hole :: proc(t: ^testing.T) {
+	blocks := &test_reg().blocks
+	Case :: struct {
+		old, new: game.Block,
+		hole:     bool,
+	}
+	cases := []Case {
+		{.Stone, .Air, true}, // broken
+		{.Stone, .Water, true}, // flooded
+		{.Leaves, .Air, true}, // cutout
+		{.Tall_Grass, .Water_3, true}, // a plant washed away
+		{.Glass, .Air, true},
+		{.Air, .Stone, false}, // placed
+		{.Air, .Water_1, false}, // water flowing in
+		{.Water_1, .Water_2, false}, // its level
+		{.Water_3, .Air, false}, // drained
+		{.Water, .Stone, false},
+		{.Stone, .Stone, false},
+	}
+	for c in cases {
+		testing.expectf(
+			t,
+			opens_hole(blocks, c.old, c.new) == c.hole,
+			"%v -> %v: want %v",
+			c.old,
+			c.new,
+			c.hole,
+		)
+	}
 }
 
 // add_columns gives every column within r of the origin flat heights.
