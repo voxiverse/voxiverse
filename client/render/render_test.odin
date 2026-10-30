@@ -197,7 +197,8 @@ test_sort_keys :: proc(t: ^testing.T) {
 
 // Wherever the camera is along each axis (below a chunk, within it, above
 // it), a layer's visible face groups make at most CULL_RUNS runs, and the
-// runs cover exactly the visible groups' vertices, in order.
+// runs cover the visible groups' vertices and, when they would be three
+// runs, the smaller gap's, in order.
 @(test)
 test_runs_of_visible_face_groups :: proc(t: ^testing.T) {
 	counts := [FACE_GROUPS]u32{4, 8, 12, 16, 20, 24, 28}
@@ -208,7 +209,9 @@ test_runs_of_visible_face_groups :: proc(t: ^testing.T) {
 				faces := facing({0, 0, 0}, {x, y, z})
 				runs := face_runs(faces, counts[:], 100) // (more than CULL_RUNS: out of bounds)
 				want, got: u32
-				for n, g in counts {if faces & (1 << u8(g)) != 0 {want += n}}
+				drawn := bridged(faces, counts[:])
+				testing.expect(t, drawn & faces == faces)
+				for n, g in counts {if drawn & (1 << u8(g)) != 0 {want += n}}
 				for r in runs {got += r.count}
 				testing.expectf(
 					t,
@@ -222,9 +225,15 @@ test_runs_of_visible_face_groups :: proc(t: ^testing.T) {
 			}
 		}
 	}
-	// The most there can be: +x, +z and the both-ways group, then -y.
+	// The most there can be: +x, +z and the both-ways group, then -y: the gap of
+	// +y (8 vertices) is drawn, not -z's (20).
 	runs := face_runs(0b0101101, counts[:], 0)
-	testing.expect_value(t, runs, [CULL_RUNS]Run{{0, 4}, {12, 28}, {60, 24}})
+	testing.expect_value(t, runs, [CULL_RUNS]Run{{0, 40}, {60, 24}})
+	testing.expect_value(t, bridged(0b0101101, counts[:]), 0b0101111)
+	// Two runs, or one, are left as they are.
+	testing.expect_value(t, bridged(0b1101111, counts[:]), 0b1101111)
+	testing.expect_value(t, bridged(0b0001111, counts[:]), 0b0001111)
+	testing.expect_value(t, bridged(0, counts[:]), 0)
 }
 
 // cull_reference (what the GPU's culling is checked against, `--check
@@ -250,10 +259,8 @@ test_cull_reference :: proc(t: ^testing.T) {
 		[CULL_LAYERS * CULL_RUNS]Cull_Command {
 			{24, 1, 0, 1000, 9},
 			{12, 1, 0, 1020, 9},
-			{},
 			{24, 1, 0, 1028, 9},
 			{12, 1, 0, 1048, 9},
-			{},
 		},
 	)
 	r.chunk = {0, 0, 3} // behind

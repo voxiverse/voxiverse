@@ -34,6 +34,25 @@ world_cull_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]str
 			count = u32(4 * ((i * 7 + c * 3) % 9 + 1))
 		}
 	}
+	// The records with cutout faces first, as the pass keeps them.
+	cutouts := 0
+	for i in 0 ..< N {
+		has: u32
+		for n in records[i].counts[FACE_GROUPS:] {has += n}
+		if has > 0 {
+			records[i], records[cutouts] = records[cutouts], records[i]
+			cutouts += 1
+		}
+	}
+	if cutouts == 0 || cutouts == N {
+		fail(
+			&failures,
+			"%d of %d records have cutout faces: not a test of the cutout prefix",
+			cutouts,
+			N,
+		)
+		return
+	}
 	Case :: struct {
 		eye:        [3]f32, // from the camera chunk's origin
 		yaw, pitch: f32,
@@ -95,6 +114,7 @@ world_cull_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]str
 			commands = gpu.buffer_address(g, commands),
 			stats    = gpu.buffer_address(g, stats),
 			count    = N,
+			cutouts  = u32(cutouts),
 		}
 		gpu.push_constants(g, run.cmd, &push)
 		vk.CmdDispatch(run.cmd, (N + CULL_GROUP - 1) / CULL_GROUP, 1, 1)
@@ -120,6 +140,7 @@ world_cull_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]str
 				seen += 1
 			}
 			for layer in 0 ..< CULL_LAYERS {
+				if layer == 1 && i >= cutouts {break} 	// (it writes none: it has no cutout faces)
 				for run in 0 ..< CULL_RUNS {
 					w := want[layer * CULL_RUNS + run]
 					at := layer * N * CULL_RUNS + i * CULL_RUNS + run

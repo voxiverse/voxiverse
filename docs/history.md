@@ -8451,3 +8451,46 @@ depend on meshes (the scene, `queue present`) take 1.7-2.3 times as long in `vie
 frames as in `views'`, about what `record commands` does (2.0 times); `world cull` (now the
 water list's walk) 2.6 times. Fixed on the way: a benchmark at another
 size (`-size`) could not write its result, its name being a frame's temporary string.
+
+## R5b: the indirect draws' cost (after R6)
+
+**Why.** R5 drew each world layer with one `vkCmdDrawIndexedIndirect` (3 world API calls,
+from 1547 draws), but against 8a0879e on `views` (development machine) `frame_record` fell 48.0-49.5% over three five-run compares (half not
+reached) and `gpu_world` rose 4.3-9.6% (p 0.008-0.095), `gpu_water` 24% (0.055 -> 0.068
+ms). Measured in R5: the same commands recorded as direct draws cost what 8a0879e's did
+on the GPU (water 0.056 ms), so the GPU cost is the driver's indirect path, not the
+shaders; with the driver's generated draws turned off (its
+`generated_indirect_threshold` option, a diagnostic) the world pass took 2.29 ms, so that path is already the driver's faster one.
+Of what is left of `frame_record`, about 0.1 ms is the driver recording the two world
+indirect calls and 0.1 ms is `world_cull` (walk, sort, writing commands). R6 replaces
+`world_cull`'s walk and writes with a compute pass, which changes both numbers; this row
+comes after it, so it measures what R6 leaves.
+
+What R6 left (`bench compare 6750fee views`, development machine): `frame_record` 0.415 ->
+0.335 ms; `gpu_world` 1.518 -> 1.800 ms (+18.5%, p 0.008). The culling pass writes
+`CULL_RUNS` (3) commands per mesh shown per opaque and cutout layer, drawn or not: on
+`views` 1681 meshes, 10 086 commands for the 1312 that draw, and the opaque meshes in table
+order, not nearest first. Candidates, measured like the others: a table per layer (a mesh
+without cutout faces then has no cutout commands), the table kept roughly nearest first
+(meshes arrive nearest first; a removal's swap breaks it), and the water list's walk.
+
+**Design (decided 2026-10-30, unattended: measure, then cut, as R3b).**
+
+- **Measured first.** `bench compare 8a0879e views` after R6, and a profiled `views` run:
+  the CPU left in `world cull` and `record commands`, and the GPU's world and water time
+  against 8a0879e's.
+- **Then cut, in this order, each kept only if `bench compare` shows it:** the chunk
+  record as a 12-byte attribute (`R32G32B32_SINT`: the first vertex moves to a second
+  table for R6's shader); fewer commands for the same triangles (R8's water runs and quad
+  records, if R8 has landed, else meshes of one region allocated next to each other in
+  the vertex buffer so adjacent chunks' runs merge into one command where their ranges
+  touch); the water layer as one command per contiguous range.
+- **Not done:** setting driver options from the game, direct draws for small layers, a
+  per-driver path.
+
+**Tests.** `images` passes with no re-accept; R5's and R6's tests unchanged.
+
+**Exit check.** `bench compare 8a0879e views`: `frame_record` at most half (p < 0.05);
+`gpu_world` within noise or better; `images` passes.
+
+**What differed.** Only the first candidate (a table per layer) and a new one, bridging the smaller gap so `CULL_RUNS` is 2, were built; `frame_record` -61% against 8a0879e; `gpu_world` +14%, not within noise. The 12-byte record, merged runs and the water command were not measured; left to R8.

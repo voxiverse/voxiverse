@@ -11,7 +11,7 @@
 layout(local_size_x = 64) in;
 
 const uint FACE_GROUPS = 7u; // +x +y +z, both ways, -z -y -x (client/mesh)
-const uint CULL_RUNS = 3u; // runs of visible groups a layer can have, at most
+const uint CULL_RUNS = 2u; // runs of visible groups a layer can have, at most (see bridged)
 const uint CULL_LAYERS = 2u; // opaque, cutout (water is sorted on the CPU)
 
 // Cull_Record: a mesh shown, in world_pass.odin's dense order.
@@ -56,6 +56,7 @@ layout(push_constant) uniform Push {
 	Commands commands;
 	Cull_Stats stats;
 	uint count; // meshes
+	uint cutouts; // the first records have cutout faces, the rest none
 } push;
 
 shared uint group_drawn, group_triangles, group_commands;
@@ -92,6 +93,40 @@ uint facing(vec3 lo, vec3 eye) {
 	return faces;
 }
 
+// bridged: faces, and when its groups make three runs, the gap with fewer
+// vertices filled too (its faces all face away: back-face culling drops
+// them), so two commands cover every case (as world_pass.odin's bridged).
+uint bridged(uint faces, uint layer, Cull_Record r) {
+	int first = -1, last = -1;
+	for (uint g = 0u; g < FACE_GROUPS; g++) {
+		if ((faces & (1u << g)) != 0u) {
+			if (first < 0) first = int(g);
+			last = int(g);
+		}
+	}
+	uint gap_from[2], gap_to[2], gap_vertices[2];
+	int n = 0;
+	for (int g = first; first >= 0 && g <= last;) {
+		if ((faces & (1u << uint(g))) != 0u) {
+			g++;
+			continue;
+		}
+		if (n == 2) return faces;
+		gap_from[n] = uint(g);
+		gap_vertices[n] = 0u;
+		while (g <= last && (faces & (1u << uint(g))) == 0u) {
+			gap_vertices[n] += r.counts[layer * FACE_GROUPS + uint(g)];
+			g++;
+		}
+		gap_to[n] = uint(g);
+		n++;
+	}
+	if (n < 2) return faces;
+	int pick = gap_vertices[1] < gap_vertices[0] ? 1 : 0;
+	for (uint g = gap_from[pick]; g < gap_to[pick]; g++) faces |= 1u << g;
+	return faces;
+}
+
 void main() {
 	if (gl_LocalInvocationIndex == 0u) {
 		group_drawn = 0u;
@@ -108,18 +143,20 @@ void main() {
 		uint triangles = 0u, written = 0u;
 		uint at = r.first_vertex;
 		for (uint layer = 0u; layer < CULL_LAYERS; layer++) {
+			if (layer == 1u && i >= push.cutouts) break; // (no cutout commands drawn for it)
 			// Runs of visible groups, one command each; the rest draw nothing.
 			uint base = layer * push.count * CULL_RUNS + i * CULL_RUNS;
 			uint runs = 0u, run_start = at, run_count = 0u;
+			uint drawn_faces = bridged(faces, layer, r);
 			for (uint g = 0u; g < FACE_GROUPS; g++) {
 				uint n = r.counts[layer * FACE_GROUPS + g];
-				if ((faces & (1u << g)) != 0u) {
+				if ((faces & (1u << g)) != 0u) triangles += n / 2u;
+				if ((drawn_faces & (1u << g)) != 0u) {
 					if (run_count == 0u) run_start = at;
 					run_count += n;
 				} else if (run_count > 0u) {
 					push.commands.commands[base + runs] = Command(run_count / 4u * 6u, 1u, 0u, int(run_start), r.slot);
 					runs++;
-					triangles += run_count / 2u;
 					run_count = 0u;
 				}
 				at += n;
@@ -127,7 +164,6 @@ void main() {
 			if (run_count > 0u) {
 				push.commands.commands[base + runs] = Command(run_count / 4u * 6u, 1u, 0u, int(run_start), r.slot);
 				runs++;
-				triangles += run_count / 2u;
 			}
 			written += runs;
 			for (; runs < CULL_RUNS; runs++) {

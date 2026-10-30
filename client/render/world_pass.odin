@@ -69,10 +69,13 @@ Chunk_Draw :: struct {
 }
 
 // CULL_RUNS: commands per mesh in each culled layer: runs of face groups
-// that can face the camera, three at most in the group order (whichever
-// side of a chunk the camera is on along an axis, one of the axis's two
-// groups can face it; test_runs_of_visible_face_groups tries every case).
-CULL_RUNS :: 3
+// that can face the camera. They are three at most in the group order
+// (whichever side of a chunk the camera is on along an axis, one of the axis's
+// two groups can face it); when there are three, the gap with fewer vertices
+// is drawn too (`bridged`: its faces all face away, the back-face culling
+// drops them), so two commands cover every case: a command costs the GPU more
+// than a few vertices do (R5b; test_runs_of_visible_face_groups).
+CULL_RUNS :: 2
 CULL_LAYERS :: 2 // opaque and cutout: culled on the GPU (water on the CPU)
 
 // Cull_Record: a mesh shown, in the dense table world_cull.comp reads
@@ -93,6 +96,7 @@ Cull_Push :: struct {
 	commands: u64,
 	stats:    u64,
 	count:    u32,
+	cutouts:  u32, // the first records have cutout faces; the others have none
 }
 
 // Cull_Stats: the head of world_cull.comp's statistics (a bit per mesh in
@@ -162,6 +166,9 @@ World_Pass :: struct {
 	// (dirty: their places, each once).
 	live:             [dynamic]Live_Mesh,
 	live_at:          []u32,
+	// The meshes with cutout faces are the first `cutouts` places of live and
+	// records, so the cutout layer's commands are only theirs.
+	cutouts:          u32,
 	records:          [dynamic]Cull_Record,
 	cull_records:     gpu.Buffer,
 	dirty:            [dynamic]u32,
@@ -227,6 +234,7 @@ World_Frame :: struct {
 	cull_stats:    gpu.Buffer,
 	cull_readback: gpu.Buffer,
 	cull_staging:  gpu.Buffer,
+	cutouts:       u32, // of them, with cutout faces (the first places)
 	culled:        u32, // meshes culled this frame (its commands' count / CULL_RUNS / CULL_LAYERS)
 	freed:         [dynamic]base.Range, // reusable once this slot comes round again
 	queries:       vk.QueryPool, // occlusion (made when first wanted)
@@ -644,29 +652,45 @@ live_add :: proc(p: ^World_Pass, h: Mesh_Handle) {
 	copy(record.counts[FACE_GROUPS:], m.counts[.Cutout][:])
 	append(&p.records, record)
 	record_dirty(p, p.live_at[slot])
+	if m.layers[.Cutout] > 0 {
+		live_swap(p, p.live_at[slot], p.cutouts)
+		p.cutouts += 1
+	}
 	if m.layers[.Translucent] > 0 {
 		p.water_at[slot] = u32(len(p.water))
 		append(&p.water, Live_Mesh{m.chunk, h})
 	}
 }
 
+// live_swap exchanges two places of live (and records), both to be copied.
+@(private = "file")
+live_swap :: proc(p: ^World_Pass, a, b: u32) {
+	if a == b {return}
+	p.live[a], p.live[b] = p.live[b], p.live[a]
+	p.records[a], p.records[b] = p.records[b], p.records[a]
+	p.live_at[base.pool_index(p.live[a].handle)] = a
+	p.live_at[base.pool_index(p.live[b].handle)] = b
+	record_dirty(p, a)
+	record_dirty(p, b)
+}
+
 // live_remove takes a mesh shown out of live (and water): the last takes
-// its place, its record to be copied there.
+// its place, its record to be copied there. A mesh with cutout faces first
+// goes to the end of the cutout places, so they stay the first.
 @(private = "file")
 live_remove :: proc(p: ^World_Pass, h: Mesh_Handle, m: ^Mesh) {
 	slot := base.pool_index(h)
-	at := p.live_at[slot]
-	last := pop(&p.live)
-	last_record := pop(&p.records)
-	if int(at) < len(p.live) {
-		p.live[at] = last
-		p.records[at] = last_record
-		p.live_at[base.pool_index(last.handle)] = at
-		record_dirty(p, at)
+	if m.layers[.Cutout] > 0 {
+		live_swap(p, p.live_at[slot], p.cutouts - 1)
+		p.cutouts -= 1
 	}
+	at := p.live_at[slot]
+	live_swap(p, at, u32(len(p.live)) - 1)
+	pop(&p.live)
+	pop(&p.records)
 	if m.layers[.Translucent] > 0 {
 		at = p.water_at[slot]
-		last = pop(&p.water)
+		last := pop(&p.water)
 		if int(at) < len(p.water) {
 			p.water[at] = last
 			p.water_at[base.pool_index(last.handle)] = at
@@ -831,6 +855,7 @@ world_cull :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64, ca
 	slot := &p.frames[gpu.frame_slot(g)]
 	if !cull_dispatch(p, g, frame.cmd, slot, scene) {return}
 	slot.culled = u32(len(p.live))
+	slot.cutouts = p.cutouts
 	if p.occlusion && slot.queries != 0 {
 		// The meshes with opaque faces nearest first (each drawn on its own,
 		// in a query, after the nearer ones that may hide it).
@@ -959,6 +984,7 @@ cull_dispatch :: proc(
 		commands = gpu.buffer_address(g, f.cull_commands),
 		stats    = gpu.buffer_address(g, f.cull_stats),
 		count    = u32(n),
+		cutouts  = p.cutouts,
 	}
 	gpu.push_constants(g, cmd, &push)
 	vk.CmdDispatch(cmd, u32(n + CULL_GROUP - 1) / CULL_GROUP, 1, 1)
@@ -1018,6 +1044,7 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64) {
 	for layer, l in ([2]Mesh_Layer{.Opaque, .Cutout}) {
 		draw_begin(p, g, cmd, layer, scene, 0)
 		first := l * n * CULL_RUNS
+		count := n if layer == .Opaque else int(slot.cutouts)
 		if layer == .Opaque && len(p.near_first) > 0 {
 			for key in p.near_first {
 				at := u32(key)
@@ -1041,7 +1068,7 @@ world_draw :: proc(p: ^World_Pass, g: ^gpu.Gpu, frame: gpu.Frame, scene: u64) {
 			}
 			continue
 		}
-		draw_commands(p, g, cmd, slot.cull_commands, first, n * CULL_RUNS, triangles, calls)
+		draw_commands(p, g, cmd, slot.cull_commands, first, count * CULL_RUNS, triangles, calls)
 		triangles, calls = 0, 0
 	}
 }
@@ -1134,9 +1161,11 @@ cull_reference :: proc(
 			if run.count == 0 {continue}
 			commands[layer * CULL_RUNS + i] = {run.count / 4 * 6, 1, 0, i32(run.first), r.slot}
 			stats.commands += 1
-			stats.triangles += run.count / 2
 		}
-		for n in counts {first += n}
+		for n, group in counts {
+			if faces & (1 << u8(group)) != 0 {stats.triangles += n / 2}
+			first += n
+		}
 	}
 	opaque: u32
 	for n in r.counts[:FACE_GROUPS] {opaque += n}
@@ -1150,19 +1179,59 @@ Run :: struct {
 	first, count: u32,
 }
 
-// face_runs: the runs of a layer's face groups (counts, from its first
-// vertex) whose bit is set in faces, adjacent groups in one run; empty
-// runs after them. There are never more than CULL_RUNS
-// (test_runs_of_visible_face_groups).
+// bridged: faces, and when its groups make three runs (the most they can), the
+// group-wide gap whose groups have the fewer vertices (the earlier on a tie)
+// too, so they make two. world_cull.comp has the same.
 @(private)
-face_runs :: proc(faces: u8, counts: []u32, first: u32) -> (runs: [CULL_RUNS]Run) {
+bridged :: proc(faces: u8, counts: []u32) -> u8 {
+	first, last := -1, -1
+	for g in 0 ..< len(counts) {
+		if faces & (1 << u8(g)) != 0 {
+			if first < 0 {first = g}
+			last = g
+		}
+	}
+	From_To :: struct {
+		from, to: int, // the groups from ..< to
+		vertices: u32,
+	}
+	gaps: [2]From_To
+	n := 0
+	for g := first; first >= 0 && g <= last; {
+		if faces & (1 << u8(g)) != 0 {
+			g += 1
+			continue
+		}
+		if n == len(gaps) {return faces}
+		gaps[n].from = g
+		for g <= last && faces & (1 << u8(g)) == 0 {
+			gaps[n].vertices += counts[g]
+			g += 1
+		}
+		gaps[n].to = g
+		n += 1
+	}
+	if n < len(gaps) {return faces}
+	gap := gaps[1] if gaps[1].vertices < gaps[0].vertices else gaps[0]
+	filled := faces
+	for g in gap.from ..< gap.to {filled |= 1 << u8(g)}
+	return filled
+}
+
+// face_runs: the runs of a layer's face groups (counts, from its first
+// vertex) whose bit is set in faces, or in the gap `bridged` fills, adjacent
+// groups in one run; empty runs after them. There are never more than
+// CULL_RUNS (test_runs_of_visible_face_groups).
+@(private)
+face_runs :: proc(visible: u8, counts: []u32, first: u32) -> (runs: [CULL_RUNS]Run) {
+	faces := bridged(visible, counts)
 	n := 0
 	at := first
 	for count, group in counts {
 		if faces & (1 << u8(group)) != 0 {
 			if runs[n].count == 0 {runs[n].first = at}
 			runs[n].count += count
-		} else if runs[n].count > 0 {
+		} else if n < CULL_RUNS - 1 && runs[n].count > 0 {
 			n += 1
 		}
 		at += count
