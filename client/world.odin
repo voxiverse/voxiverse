@@ -139,9 +139,9 @@ Mesh_Task :: struct {
 	handle:   Chunk_Handle,
 	version:  u32,
 	pos:      game.Chunk_Pos,
-	// Copies of the 3x3x3 neighbourhood (light needs all of it) and the
-	// column heights around it.
-	arrays:   [27]game.Block_Array,
+	// The 3x3x3 neighbourhood (light needs all of it) by reference: each
+	// array holds one holder for this task (World.arrays), so an edit meanwhile
+	// writes a fresh copy; released by task_free. And the column heights.
 	chunks:   [27]game.Chunk_Blocks,
 	light_in: game.Light_Input,
 	scratch:  game.Light_Scratch,
@@ -192,7 +192,12 @@ world_init :: proc(
 	}
 	base.pool_init(&w.chunks, capacity, arena) or_return
 	w.by_pos = base.map_make_fixed(map[game.Chunk_Pos]Chunk_Handle, capacity, arena) or_return
-	game.block_arrays_init(&w.arrays, capacity, arena) or_return
+	// (Headroom: an edit writes a fresh array while a job still reads the old.)
+	game.block_arrays_init(
+		&w.arrays,
+		capacity + 27 * (workers * MESH_TASKS_PER_WORKER + URGENT_TASKS + 1),
+		arena,
+	) or_return
 	w.to_mesh = make([dynamic]Chunk_Handle, 0, capacity, arena) or_return
 	w.mesh_removals = make([dynamic]render.Mesh_Handle, 0, capacity, arena) or_return
 	// Columns: at most one per loaded chunk (in practice far fewer).
@@ -335,6 +340,17 @@ world_set_block :: proc(w: ^World, p: game.Block_Pos, b: game.Block) -> bool {
 	local := game.local_of(p)
 	old := game.chunk_get(&c.blocks, local)
 	if old == b {return true}
+	if c.blocks.array != nil && game.block_arrays_holders(&w.arrays, c.blocks.array) > 1 {
+		// A mesh job reads it: write a copy, the job keeps the old.
+		fresh, err := game.block_arrays_take(&w.arrays)
+		if err != nil {
+			log.error("client out of chunk arrays for an edit")
+			return false
+		}
+		fresh^ = c.blocks.array^
+		game.block_arrays_give(&w.arrays, c.blocks.array)
+		c.blocks.array = fresh
+	}
 	if game.chunk_set(&c.blocks, &w.arrays, local, b) != nil {
 		log.error("client out of chunk arrays for an edit")
 		return false
@@ -453,8 +469,12 @@ mesh_now :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 }
 
 // task_free returns a task to its free list.
-@(private = "file")
+@(private)
 task_free :: proc(w: ^World, task: ^Mesh_Task) {
+	for &c in task.chunks {
+		if c.array != nil {game.block_arrays_give(&w.arrays, c.array)}
+		c = {}
+	}
 	append(&w.urgent_tasks if task.urgent else &w.free_tasks, task)
 }
 
@@ -921,12 +941,17 @@ task_fill :: proc(w: ^World, task: ^Mesh_Task, pos: game.Chunk_Pos) {
 	versions: [27]u32 // (0 outside the world: its blocks never change)
 	for i in 0 ..< 27 {
 		d := game.Chunk_Pos{i32(i % 3) - 1, i32(i / 3 % 3) - 1, i32(i / 9) - 1}
-		if n := world_get(w, pos + d); n != nil {versions[i] = n.blocks_version}
-		src := neighbour_blocks(w, pos + d)
+		src: ^game.Chunk_Blocks
+		if n := world_get(w, pos + d); n != nil {
+			versions[i] = n.blocks_version
+			src = &n.blocks
+		} else {
+			src = neighbour_blocks(w, pos + d) // (the sky and the bedrock; nil if not here)
+		}
 		if src.array != nil {
-			task.arrays[i] = src.array^
+			game.block_arrays_ref(&w.arrays, src.array)
 			task.chunks[i] = {
-				array = &task.arrays[i],
+				array = src.array,
 			}
 		} else {
 			task.chunks[i] = {

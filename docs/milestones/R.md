@@ -115,37 +115,8 @@ R5b's (below, after R6).
 
 ## R3b: an edit's frames hide behind the GPU
 
-**Why.** R3 took block records' meshing off the main thread (`mesh now` no longer appears in
-`edits`) and halved the worst frame, but frame p99 fell 31% (4.76 -> 3.28 ms against
-0be56e1), not half. R3's split (decided 2026-10-30, unattended): what is left in the p99
-frames is not block records. In a profiled `edits` run, the frames at or above p99 spend on
-average 1.25 ms in `session` (0.74 `receive messages`: decoding and storing the bulk edit's
-resent chunks, `world_set_chunk`'s neighbour checks; 0.48 `start meshing`: `task_fill`
-copying 27 block arrays, 216 KiB, per job) and 0.98 ms in `record commands`, while the
-GPU's own frame p99 is 2.1-2.5 ms. Half of R2's p99 is 2.38 ms: reachable only when the
-CPU side of an edit's frame fits behind the GPU's. R5 removes most of the recording; R4
-changes what a mesh job reads. This row comes after them, so it measures what they leave.
-
-**Design (decided).**
-
-- **Snapshots by reference.** A mesh (or R4's light) job takes references to its
-  neighbourhood's block arrays instead of copies: the client's arrays are copy-on-write
-  (a reference count per array in the client's `Block_Arrays`; `world_set_block` and
-  `world_set_chunk` write to a fresh array when the current one is referenced by a job, and
-  the job releases its references when its result is taken). The server's chunk storage is
-  untouched.
-- **Chunk arrival measured, then cut.** With snapshots by reference, profile `edits` again;
-  whatever of `receive messages` is still over 0.3 ms in a p99 frame (decoding, the 27
-  neighbour lookups per chunk) is the next step: decode into a fresh array without the
-  scratch copy, one neighbour pass per frame for all arrived chunks.
-
-**Tests.** A job's snapshot is unchanged by an edit made while it runs (a test writes the
-live world between `task_fill` and the job); an array referenced by a job is never handed
-out again until released; the R3 tests unchanged.
-
-**Exit check.** `bench compare` on `edits` against the commit before R3 (0be56e1): frame
-p99 at most half (2.38 ms on the development machine at that commit's 4.76), p < 0.05;
-`start meshing` p99 under 0.1 ms in a profiled run; `images` passes.
+Done: its spec and outcome are in history.md, "R3b: an edit's frames hide behind the GPU".
+Its exit check's frame p99 half is left to the GPU's own frame and R5b and R6.
 
 ## R6: GPU culling
 

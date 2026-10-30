@@ -108,6 +108,7 @@ fresh :: proc(
 	for &c, i in task.chunks {n[i] = &c}
 	mesh.snapshot_fill(&task.snapshot, &n)
 	mesh.mesh_chunk(w.reg, &task.snapshot, &task.light, &task.vertices)
+	for &c in task.chunks {if c.array != nil {game.block_arrays_give(&w.arrays, c.array)}}
 	return task.vertices[:], &task.light
 }
 
@@ -282,4 +283,67 @@ test_light_reused_when_the_key_matches :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(f.meshed), first)
 	testing.expect_value(t, f.w.stats.light_reused, 1)
 	expect_identical(t, &f, "after the registry")
+}
+
+// R3b: a job's snapshot is by reference; an edit meanwhile writes a copy.
+
+@(private = "file")
+find_array_chunk :: proc(f: ^Cache_Fixture) -> game.Chunk_Pos {
+	for i in 0 ..< 27 {
+		pos := game.Chunk_Pos{i32(i % 3) - 1, f.surface + i32(i / 3 % 3) - 1, i32(i / 9) - 1}
+		if world_get(&f.w, pos).blocks.array != nil {return pos}
+	}
+	return {}
+}
+
+@(test)
+test_a_job_snapshot_is_unchanged_by_an_edit_made_while_it_runs :: proc(t: ^testing.T) {
+	f: Cache_Fixture
+	fixture_make(t, &f)
+	defer fixture_destroy(&f)
+	w := &f.w
+	pos := find_array_chunk(&f)
+	c := world_get(w, pos)
+	testing.expect(t, c.blocks.array != nil)
+	task := pop(&w.free_tasks)
+	task_fill(w, task, pos)
+	before := c.blocks.array^
+	live := c.blocks.array
+	testing.expect_value(t, game.block_arrays_holders(&w.arrays, live), 2)
+	// The edit between task_fill and the job.
+	p := game.chunk_origin(pos)
+	old := game.chunk_get(&c.blocks, {0, 0, 0})
+	nb := game.Block.Air if old != .Air else game.Block.Stone
+	testing.expect(t, world_set_block(w, p, nb))
+	testing.expect(t, c.blocks.array != live)
+	testing.expect_value(t, game.chunk_get(&c.blocks, {0, 0, 0}), nb)
+	testing.expect(t, slice.equal(live[:], before[:])) // the job's array: as it was
+	testing.expect(t, task.chunks[13].array == live)
+	testing.expect_value(t, game.block_arrays_holders(&w.arrays, live), 1)
+	task_free(w, task)
+	// Released: the old array went back.
+}
+
+@(test)
+test_an_array_a_job_holds_is_not_handed_out_until_released :: proc(t: ^testing.T) {
+	f: Cache_Fixture
+	fixture_make(t, &f)
+	defer fixture_destroy(&f)
+	w := &f.w
+	pos := find_array_chunk(&f)
+	c := world_get(w, pos)
+	task := pop(&w.free_tasks)
+	task_fill(w, task, pos)
+	held := c.blocks.array
+	game.chunk_release(&c.blocks, &w.arrays) // the world drops it (a resent chunk, an unload)
+	for _ in 0 ..< 50 {
+		a, err := game.block_arrays_take(&w.arrays)
+		testing.expect(t, err == nil && a != held)
+	}
+	testing.expect_value(t, game.block_arrays_holders(&w.arrays, held), 1)
+	used := game.block_arrays_in_use(&w.arrays)
+	task_free(w, task)
+	testing.expect_value(t, game.block_arrays_in_use(&w.arrays), used - 1)
+	a, _ := game.block_arrays_take(&w.arrays)
+	testing.expect(t, a == held) // only now it comes back
 }

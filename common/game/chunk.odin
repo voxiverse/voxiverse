@@ -63,6 +63,7 @@ Block_Arrays :: struct {
 	allocated: int, // arrays handed out at least once
 	free:      []^Block_Array,
 	free_len:  int,
+	refs:      []u16, // holders of each array handed out (0: free); see block_arrays_ref
 	allocator: mem.Allocator,
 }
 
@@ -80,12 +81,14 @@ block_arrays_init :: proc(
 	}
 	a.region = virtual.reserve(uint(capacity * size_of(Block_Array))) or_return
 	a.free = make([]^Block_Array, capacity, allocator, loc) or_return
+	a.refs = make([]u16, capacity, allocator, loc) or_return
 	return nil
 }
 
 block_arrays_destroy :: proc(a: ^Block_Arrays) {
 	virtual.release(raw_data(a.region), len(a.region))
 	delete(a.free, a.allocator)
+	delete(a.refs, a.allocator)
 	a^ = {}
 }
 
@@ -93,12 +96,18 @@ block_arrays_in_use :: proc(a: ^Block_Arrays) -> int {
 	return a.allocated - a.free_len
 }
 
-// block_arrays_take returns an array with unspecified contents, or
-// .Out_Of_Memory when capacity arrays are in use.
+block_arrays_index :: #force_inline proc(a: ^Block_Arrays, p: ^Block_Array) -> int {
+	return (int(uintptr(p)) - int(uintptr(raw_data(a.region)))) / size_of(Block_Array)
+}
+
+// block_arrays_take returns an array with unspecified contents and one
+// holder, or .Out_Of_Memory when capacity arrays are in use.
 block_arrays_take :: proc(a: ^Block_Arrays) -> (array: ^Block_Array, err: mem.Allocator_Error) {
 	if a.free_len > 0 {
 		a.free_len -= 1
-		return a.free[a.free_len], nil
+		p := a.free[a.free_len]
+		a.refs[block_arrays_index(a, p)] = 1
+		return p, nil
 	}
 	if a.allocated == len(a.free) {return nil, .Out_Of_Memory}
 	end := (a.allocated + 1) * size_of(Block_Array)
@@ -108,11 +117,29 @@ block_arrays_take :: proc(a: ^Block_Arrays) -> (array: ^Block_Array, err: mem.Al
 		a.committed += step
 	}
 	p := (^Block_Array)(&a.region[a.allocated * size_of(Block_Array)])
+	a.refs[a.allocated] = 1
 	a.allocated += 1
 	return p, nil
 }
 
+// block_arrays_ref adds a holder: a reader (a mesh job) that keeps the array
+// as it is. Whoever writes an array with more than one holder takes a fresh
+// one first (copy on write); the array goes back to the free list with its
+// last holder's block_arrays_give.
+block_arrays_ref :: #force_inline proc(a: ^Block_Arrays, p: ^Block_Array) {
+	a.refs[block_arrays_index(a, p)] += 1
+}
+
+block_arrays_holders :: #force_inline proc(a: ^Block_Arrays, p: ^Block_Array) -> int {
+	return int(a.refs[block_arrays_index(a, p)])
+}
+
+// block_arrays_give drops one holder; the last one returns the array.
 block_arrays_give :: proc(a: ^Block_Arrays, p: ^Block_Array) {
+	i := block_arrays_index(a, p)
+	assert(a.refs[i] > 0, "array given back twice")
+	a.refs[i] -= 1
+	if a.refs[i] > 0 {return}
 	assert(a.free_len < len(a.free), "array given back twice")
 	a.free[a.free_len] = p
 	a.free_len += 1
