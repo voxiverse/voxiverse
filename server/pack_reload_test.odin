@@ -2,6 +2,7 @@ package server
 
 import "base:runtime"
 import "core:os"
+import "core:strings"
 import "core:testing"
 
 import "../common/game"
@@ -59,4 +60,31 @@ test_hot_reload :: proc(t: ^testing.T) {
 			"this reload changes ids (removed testpack:marble); restart the universe to apply it"
 	}
 	testing.expect(t, told, "the owner was not told why the reload was refused")
+}
+
+// A registry's pack names and versions are its own (voxiverse#79: a join
+// read them after the temp allocator and a reload had moved on): they read the
+// same after the sources they came from are gone and after a swap.
+@(test)
+test_packs_text_outlives_sources :: proc(t: ^testing.T) {
+	extra := make([]game.Pack_Source, 1, runtime.default_allocator())
+	defer delete(extra, runtime.default_allocator())
+	extra[0] = game.test_asset_pack(7, allocator = runtime.default_allocator())
+	reg, _, problems := packs_registry("", nil, extra, base_dir = "assets/packs/voxiverse")
+	if !testing.expect(t, reg != nil, "the registry did not build") {
+		for p in problems {testing.expect_value(t, p, "")}
+		return
+	}
+	defer game.registry_destroy(reg)
+	want := strings.clone(packs_text(reg))
+	defer delete(want)
+	free_all(context.temp_allocator) // (the sources were made in it)
+	for _ in 0 ..< 64 {_ = make([]u8, 4096, context.temp_allocator)} // (and it is reused)
+	testing.expect_value(t, packs_text(reg), want)
+
+	again, _, _ := packs_registry("", nil, extra, base_dir = "assets/packs/voxiverse")
+	if !testing.expect(t, again != nil) {return}
+	game.registry_swap(reg, again)
+	free_all(context.temp_allocator)
+	testing.expect_value(t, packs_text(reg), want)
 }
