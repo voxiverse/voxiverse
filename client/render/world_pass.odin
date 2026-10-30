@@ -925,7 +925,15 @@ cull_dispatch :: proc(
 	gpu.begin_label(g, cmd, "cull")
 	defer gpu.end_label(g, cmd)
 	// The table was last read by the previous frame's pass: written after it.
-	memory_barrier(cmd, {.COMPUTE_SHADER, .COPY}, {}, {.COPY, .CLEAR}, {.TRANSFER_WRITE})
+	// Those copies' own writes (the stats readback below, written again by this
+	// frame slot's next pass) are ordered before this frame's too.
+	memory_barrier(
+		cmd,
+		{.COMPUTE_SHADER, .COPY},
+		{.TRANSFER_WRITE},
+		{.COPY, .CLEAR},
+		{.TRANSFER_WRITE},
+	)
 	stats_size := size_of(Cull_Stats) + (n + 31) / 32 * size_of(u32)
 	vk.CmdFillBuffer(cmd, f.cull_stats.handle, 0, vk.DeviceSize(stats_size), 0)
 	if len(copies) > 0 {
