@@ -5,6 +5,7 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
+import "../base"
 import "../common/game"
 import "../common/telemetry"
 import "ui"
@@ -36,8 +37,11 @@ Reporter :: struct {
 	perf_at:   time.Tick,
 	was_open:  [Overlay]bool,
 	opened:    [Overlay]time.Tick,
-	frames:    [PERF_FRAMES]u32, // frame times of the last minute, microseconds
+	frames:    [PERF_FRAMES]u32, // a sample of the minute's frame times, microseconds (perf_sample)
 	frame_n:   int,
+	seen:      int, // frames this minute
+	worst:     u32, // the minute's slowest frame, microseconds
+	sample:    base.Rng,
 	told:      ^Session, // the session Client_Info went out for
 	asked:     bool, // the consent dialog was shown this run
 }
@@ -100,7 +104,7 @@ telemetry_update :: proc(app: ^App) {
 		)
 		queue_report(r, .Client_Driver, app.g.driver, 0, 0, 0)
 		r.last_send, r.perf_at = app_tick(app), app_tick(app)
-		r.frame_n = 0
+		r.frame_n, r.seen, r.worst = 0, 0, 0
 	}
 	// Overlays: how long each was open.
 	for o in Overlay {
@@ -120,10 +124,7 @@ telemetry_update :: proc(app: ^App) {
 		r.was_open[o] = open
 	}
 	// Frame times.
-	if r.frame_n < PERF_FRAMES {
-		r.frames[r.frame_n] = u32(app.last_frame_ms * 1000)
-		r.frame_n += 1
-	}
+	perf_sample(r, u32(app.last_frame_ms * 1000))
 	if app_since(app, r.perf_at) >= PERF_EVERY && r.frame_n > 10 {
 		times := slice.clone(r.frames[:r.frame_n], context.temp_allocator)
 		slice.sort(times)
@@ -133,7 +134,7 @@ telemetry_update :: proc(app: ^App) {
 			"",
 			times[len(times) / 2],
 			times[len(times) * 99 / 100],
-			u32(r.frame_n),
+			u32(r.seen),
 		)
 		queue_report(
 			r,
@@ -141,9 +142,9 @@ telemetry_update :: proc(app: ^App) {
 			"",
 			times[len(times) / 2],
 			times[len(times) * 95 / 100],
-			times[len(times) - 1],
+			r.worst,
 		)
-		r.frame_n, r.perf_at = 0, app_tick(app)
+		r.frame_n, r.seen, r.worst, r.perf_at = 0, 0, 0, app_tick(app)
 	}
 	// Send.
 	if len(r.queue) > 0 && app_since(app, r.last_send) >= REPORT_EVERY {
@@ -197,4 +198,20 @@ consent_dialog :: proc(app: ^App, ctx: ^ui.Context) {
 		settings_changed(app)
 		overlay_close(&app.overlays, .Consent)
 	}
+}
+
+// perf_sample takes one frame's time: counted, and the worst kept, exactly; and held in a
+// uniform sample of the minute's frames for the percentiles (reservoir sampling). A fast
+// machine draws far more than PERF_FRAMES frames a minute (240 fps: 14 400), and keeping
+// only the first would leave most of the minute's hitches out.
+perf_sample :: proc(r: ^Reporter, us: u32) {
+	r.seen += 1
+	r.worst = max(r.worst, us)
+	if r.frame_n < PERF_FRAMES {
+		r.frames[r.frame_n] = us
+		r.frame_n += 1
+		return
+	}
+	if r.sample == {} {r.sample = base.rng_make(1)}
+	if j := base.rng_int_max(&r.sample, r.seen); j < PERF_FRAMES {r.frames[j] = us}
 }
