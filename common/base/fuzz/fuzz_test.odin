@@ -3,7 +3,10 @@ package fuzz
 import "base:runtime"
 import "core:os"
 import "core:strings"
+import "core:sync"
 import "core:testing"
+import "core:thread"
+import "core:time"
 
 import "common:base"
 
@@ -29,7 +32,12 @@ toy_big :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	return 0
 }
 
+// other_ready: another target has installed its crash state on another thread.
+other_ready: sync.Sema
+
 toy_assert :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
+	// (the other target installs after this one did: a process-wide state would now hold its name)
+	sync.sema_wait_with_timeout(&other_ready, 5 * time.Second)
 	assert(len(data) > 1000, "the toy always fails")
 	return 0
 }
@@ -127,17 +135,19 @@ test_watchdog_limit :: proc(t: ^testing.T) {
 }
 
 // The crash path, in a child process (it ends the process): the parent starts this test's
-// own binary on test_child_crash and looks for the saved input.
+// own binary (the runner's test filter is a compile-time define: the child runs the suite,
+// and every test but test_child_crash does its usual work) and looks for the saved input.
 @(test)
 test_crash_saves_the_input :: proc(t: ^testing.T) {
 	// (the child runs the whole suite, this test included: it must not start a child itself)
 	if os.get_env("VX_FUZZ_CHILD", context.temp_allocator) == "1" {return}
 	dir := TEST_OUT + "/toy.assert"
 	os.remove_all(dir)
+	os.remove_all(TEST_OUT + "/toy.other")
 	self, _ := os.get_executable_path(context.temp_allocator)
 	desc := os.Process_Desc {
 		command = {self},
-		env     = {"VX_FUZZ_CHILD=1", "ODIN_TEST_THREADS=1"},
+		env     = {"VX_FUZZ_CHILD=1"},
 	}
 	_, stdout, stderr, err := os.process_exec(desc, context.allocator)
 	defer {delete(stdout); delete(stderr)}
@@ -150,6 +160,17 @@ test_crash_saves_the_input :: proc(t: ^testing.T) {
 		if strings.has_suffix(f.name, ".bin") {bins += 1}
 	}
 	testing.expect_value(t, bins, 1)
+	// (and nothing under the name of the target that was only installed beside it)
+	other, _ := os.read_all_directory_by_path(TEST_OUT + "/toy.other", context.allocator)
+	defer os.file_info_slice_delete(other, context.allocator)
+	for f in other {
+		testing.expectf(
+			t,
+			!strings.has_suffix(f.name, ".bin"),
+			"saved under the wrong target: %s",
+			f.name,
+		)
+	}
 }
 
 @(test)
@@ -160,5 +181,17 @@ test_child_crash :: proc(t: ^testing.T) {
 		run     = toy_assert,
 		max_len = 64,
 	}
+	// Two targets in one process: another thread installs its own state while this target
+	// runs; the crash is saved under this one's name.
+	other := thread.create_and_start_with_poly_data(&other_ready, proc(ready: ^sync.Sema) {
+			other_target := Target {
+				name    = "toy.other",
+				run     = toy_boom,
+				max_len = 16,
+			}
+			crash_install(&other_target, {seed = 2, out_dir = TEST_OUT})
+			sync.sema_post(ready)
+		})
+	defer thread.destroy(other)
 	run_target(&target, {seed = 1, cases = 10, out_dir = TEST_OUT})
 }

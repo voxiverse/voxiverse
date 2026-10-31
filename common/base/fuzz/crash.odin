@@ -15,6 +15,9 @@ import "common:base"
 // Saving the input that crashed. Before each case the harness copies the input into a
 // buffer made once; the crash hook (a failed assert, a fatal signal, the watchdog) writes it
 // to <out_dir>/<target>/crash-<XXH64>.bin with the target's name and seed in crash-<XXH64>.txt.
+// The state belongs to the thread running the case (a failed assert and a fatal signal run on
+// that thread), so two targets fuzzing at once never save under each other's names. The
+// watchdog runs on its own thread: it looks at every thread's state through a registry.
 
 @(private = "file")
 Crash_State :: struct {
@@ -27,24 +30,45 @@ Crash_State :: struct {
 	seed:    u64,
 	seeds:   [256]u8,
 	seeds_n: int,
+	started: i64, // the wall tick the thread's case began at (0: none running); atomic
 }
 
+// The thread's state, made on its first crash_install and kept (the watchdog may read it
+// after the thread is gone).
+@(private = "file", thread_local)
+crash: ^Crash_State
+
+MAX_THREADS :: 256
+
 @(private = "file")
-crash: Crash_State
+registry: [MAX_THREADS]^Crash_State
+@(private = "file")
+registry_n: int // atomic: slots below it are filled
+@(private = "file")
+registry_lock: sync.Mutex
 
 @(private = "file")
 installed: bool
 
-// The watchdog: the wall tick a case began at (0: none running).
-@(private = "file")
-watch_started: i64
-
 @(private = "file")
 watch_thread: ^thread.Thread
+
+// crash_state makes the thread's state on first use (run_case may run without crash_install).
+@(private = "file")
+crash_state :: proc() {
+	if crash != nil {return}
+	context.allocator = runtime.heap_allocator()
+	crash = new(Crash_State)
+	sync.guard(&registry_lock)
+	assert(registry_n < MAX_THREADS, "more fuzzing threads than the crash registry holds")
+	registry[registry_n] = crash
+	sync.atomic_store(&registry_n, registry_n + 1)
+}
 
 crash_install :: proc(t: ^Target, cfg: Config) {
 	// (kept for the run: not the tracked allocator's, which would call them leaks)
 	context.allocator = runtime.heap_allocator()
+	crash_state()
 	if len(crash.buf) < t.max_len {
 		// (a bigger target replaces the buffer; the hook only runs between cases)
 		crash.buf = make([]u8, t.max_len)
@@ -52,8 +76,7 @@ crash_install :: proc(t: ^Target, cfg: Config) {
 	crash.name_n = copy(crash.name[:], t.name)
 	crash.out_n = copy(crash.out_dir[:], cfg.out_dir)
 	crash.seed = cfg.seed
-	if installed {return}
-	installed = true
+	if sync.atomic_exchange(&installed, true) {return}
 	base.crash_hook_set(crash_hook)
 	base.crash_handlers_install()
 	asan_install()
@@ -61,6 +84,7 @@ crash_install :: proc(t: ^Target, cfg: Config) {
 }
 
 crash_input_set :: proc(t: ^Target, data: []u8) {
+	crash_state()
 	crash.len = copy(crash.buf, data)
 }
 
@@ -98,6 +122,12 @@ failure_key :: proc(what: string) -> string {
 
 @(private)
 crash_hook :: proc(what: string) {
+	crash_save(crash, what)
+}
+
+@(private = "file")
+crash_save :: proc(crash: ^Crash_State, what: string) {
+	if crash == nil {return}
 	if crash.len == 0 && crash.name_n == 0 {return}
 	hash := xxhash.XXH64(crash.buf[:crash.len])
 	dir := fmt.tprintf(
@@ -131,11 +161,12 @@ assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Loca
 }
 
 watchdog_begin :: proc() {
-	sync.atomic_store(&watch_started, time.tick_now()._nsec + 1)
+	crash_state()
+	sync.atomic_store(&crash.started, time.tick_now()._nsec + 1)
 }
 
 watchdog_end :: proc() {
-	sync.atomic_store(&watch_started, 0)
+	sync.atomic_store(&crash.started, 0)
 }
 
 // hung: has a case begun at `started` (0: none) run past the limit at `now`?
@@ -147,10 +178,13 @@ hung :: proc(started, now: i64) -> bool {
 watchdog_main :: proc() {
 	for {
 		time.sleep(200 * time.Millisecond)
-		started := sync.atomic_load(&watch_started)
-		if hung(started, time.tick_now()._nsec + 1) {
-			crash_hook("hang: a case ran past the watchdog's limit")
-			os.exit(3)
+		now := time.tick_now()._nsec + 1
+		for i in 0 ..< sync.atomic_load(&registry_n) {
+			state := registry[i]
+			if hung(sync.atomic_load(&state.started), now) {
+				crash_save(state, "hang: a case ran past the watchdog's limit")
+				os.exit(3)
+			}
 		}
 	}
 }
