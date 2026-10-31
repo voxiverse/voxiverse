@@ -269,23 +269,14 @@ Spec: [R11c.md](R11c.md) (split from R11b by #87).
 
 Spec: [R12.md](R12.md) (checked against the code by #87).
 
-## R13: far terrain at level of detail
+## R13: the level-of-detail mesher
 
-**Why.** Every chunk out to the radius is full detail; the view distance cannot grow
-without its cost growing with radius² × height.
+Spec: [R13.md](R13.md) (checked against the code and split by #87: the mesher, skirts and
+their watertightness test, nothing drawn).
 
-**Design (decided).** Client-side level of detail for loaded chunks: beyond a radius of
-`lod_start` chunks (default 8), chunks are meshed from a 2 x 2 x 2 downsampled grid (the
-most common opaque block of each 2³ cell; light from the cached light, R4), and beyond
-`2 * lod_start` from 4 x 4 x 4. Seams between levels are covered by skirts (downward faces
-along level borders). Level changes swap meshes in one frame (as mesh groups do), never
-showing a hole. No server change: this uses the chunks the client already has.
+## R13b: far terrain at level of detail in the world
 
-**Tests.** Downsampling unit tests; `images` gets two far-view scenes (accepted in this
-milestone, reviewed by hand).
-
-**Exit check.** `views-far` (R6): `gpu_world` at most 60% of the same scenario with LOD
-disabled (`debug.lod 0`), `world_triangles` at most 40%.
+Spec: [R13b.md](R13b.md) (split from R13 by #87).
 
 ## R14: far terrain beyond the interest area
 
