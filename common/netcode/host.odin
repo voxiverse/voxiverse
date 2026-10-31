@@ -224,7 +224,7 @@ find :: proc(h: ^Host, from: net.Endpoint) -> Peer_Id {
 	return 0
 }
 
-@(private = "file")
+@(private)
 handle :: proc(h: ^Host, data: []u8, from: net.Endpoint, now: time.Tick) {
 	r := reader(data)
 	if get_u32(&r) != MAGIC {return}
@@ -323,12 +323,12 @@ handshake_allowed :: proc(h: ^Host) -> bool {
 
 // window: which cookie window it is (wall clock: cookies outlive no restart
 // anyway, as the secret is new each run).
-@(private = "file")
+@(private)
 window :: proc() -> i64 {
 	return time.time_to_unix(time.now()) / COOKIE_WINDOW
 }
 
-@(private = "file")
+@(private)
 make_cookie :: proc(
 	h: ^Host,
 	from: net.Endpoint,

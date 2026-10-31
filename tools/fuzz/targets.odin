@@ -2,6 +2,7 @@ package fuzz_tool
 
 import "common:base/fuzz"
 import "common:game"
+import "common:netcode"
 import "common:ogg"
 import "server:."
 
@@ -11,6 +12,7 @@ every_target :: proc() -> []fuzz.Target {
 	out := make([dynamic]fuzz.Target)
 	append(&out, ..game.game_fuzz_targets())
 	append(&out, ..game.net_fuzz_targets())
+	append(&out, ..netcode.net_fuzz_targets())
 	append(&out, ..ogg.ogg_fuzz_targets())
 	append(&out, ..server.server_fuzz_targets())
 	return out[:]
