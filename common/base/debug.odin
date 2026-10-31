@@ -169,6 +169,10 @@ debug_attach :: proc(path: string) {
 // exception filter: best effort, the process is going down anyway).
 @(private)
 crash_report :: proc(what: string) {
+	if crash_hook != nil {
+		context = runtime.default_context()
+		crash_hook(what)
+	}
 	if active == nil {
 		fmt.eprintfln("crash: %s", what)
 		return
@@ -199,8 +203,29 @@ debug_break :: proc() {
 	}
 }
 
+// Crash_Hook runs first in crash_report and in a failed assert: the fuzzer's way to save the
+// input that crashed (common/base/fuzz). It may not allocate more than it must.
+Crash_Hook :: proc(what: string)
+
+@(private = "file")
+crash_hook: Crash_Hook
+
+crash_hook_set :: proc(hook: Crash_Hook) {
+	crash_hook = hook
+}
+
+// crash_handlers_install installs the fatal-signal handlers for a program that does not use
+// debug_begin (the fuzzer): a crash then reaches crash_report and the hook. Under a sanitizer
+// the sanitizer's own handlers stay.
+crash_handlers_install :: proc() {
+	when ODIN_SANITIZER_FLAGS == {} {crash_handler_install()}
+}
+
 @(private = "file")
 assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Location) -> ! {
+	if crash_hook != nil {
+		crash_hook(fmt.tprintf("%s: %s (%v)", prefix, message, loc))
+	}
 	// Write straight to stderr too: the logger may be what failed.
 	fmt.eprintfln("%s: %s (%v)", prefix, message, loc)
 	if active != nil {

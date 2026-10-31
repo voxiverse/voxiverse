@@ -224,7 +224,7 @@ batch_run :: proc(b: ^Save_Batch) {
 	if b.backup > 0 {backup_run(b.dir, b.generation, b.backup, d)}
 }
 
-@(private = "file")
+@(private)
 tx_encode :: proc(b: ^Save_Batch) -> []u8 {
 	w: game.Writer
 	game.writer_init(&w, context.temp_allocator)
@@ -277,7 +277,7 @@ tx_decode :: proc(data: []u8) -> (ops: [dynamic]Tx_Op, generation, age: u64, ok:
 }
 
 // tx_path_safe: a relative path that stays inside the universe.
-@(private = "file")
+@(private)
 tx_path_safe :: proc(p: string) -> bool {
 	if p == "" ||
 	   p[0] == '/' ||

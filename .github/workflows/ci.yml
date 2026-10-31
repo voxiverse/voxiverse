@@ -121,6 +121,11 @@ jobs:
         run: |
           echo "ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"
           ./build.sh test || { echo "::error::tests failed with ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"; exit 1; }
+      # Every parser of untrusted input, 2 000 cases each at the fixed seed 84 (a push never
+      # fails on a seed nobody has seen: the nightly run takes others), then the regression
+      # files of every crash found (Q1, docs/fuzzing.md).
+      - name: Fuzz (smoke)
+        run: ./build.sh fuzz --smoke
       # The scripted 10 000-tick session at both optimization levels (M38):
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism

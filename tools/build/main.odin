@@ -18,6 +18,7 @@ import "tools:build/limited"
 // package doesn't hide errors in the others.
 PACKAGES :: []string {
 	"common/base",
+	"common/base/fuzz",
 	"common/ogg",
 	"client/audio",
 	"common/netcode",
@@ -53,6 +54,7 @@ PACKAGES :: []string {
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
 	"common/base",
+	"common/base/fuzz",
 	"common/ogg",
 	"client/audio",
 	"common/netcode",
@@ -75,6 +77,7 @@ TEST_PACKAGES :: []string {
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
 	"common/base",
+	"common/base/fuzz",
 	"common/ogg",
 	"dedicated",
 	"client/audio",
@@ -199,6 +202,8 @@ main :: proc() {
 		ok = run_tool(args[0], args[1:], release = true)
 	case "packs":
 		ok = run_tool("packcheck", args[1:], release = true)
+	case "fuzz":
+		ok = fuzz(args[1:])
 	case "audio":
 		ok = audio_baselines(args[1:])
 	case "images":
@@ -281,8 +286,9 @@ usage :: proc() {
 	fmt.println(
 		"  packs     check content packs: the base pack plus the given pack directories, in order",
 	)
+	fmt.println("  ogg       the Ogg decoder's maintenance: digests | reference | make-test-files")
 	fmt.println(
-		"  ogg       the Ogg decoder's maintenance: digests | reference | fuzz [--seed N] [--iterations N]",
+		"  fuzz      fuzz every parser of untrusted input (--list, --smoke, <target>... --seed N --cases N|--seconds N --sanitize, --case <file>, --minimize <file>)",
 	)
 	fmt.println("  replay    replay a trace's client messages against a fresh server")
 	fmt.println("  sfx       write every sound effect to build/sounds/*.wav")

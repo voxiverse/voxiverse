@@ -1,0 +1,32 @@
+name: nightly
+on:
+  schedule:
+    # 03:17 UTC, on the default branch only (GitHub runs schedules there).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Fuzz · nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    # main only: a manual run from a branch would fuzz that branch under the nightly's name.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      # Every target four minutes under AddressSanitizer, at the run number's seed: a failure
+      # names its seed and its input. The input is minimized and committed as a regression
+      # file with its fix (docs/fuzzing.md).
+      - name: Fuzz
+        run: ./build.sh fuzz --sanitize --seconds 240 --seed ${{ github.run_number }}
+
+      - name: Failures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-failures
+          path: build/fuzz/
+          if-no-files-found: ignore

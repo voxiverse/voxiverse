@@ -88,6 +88,15 @@ pack_archive_read :: proc(
 		return {}, bad(namespace, "", fmt.tprintf("the archive lists %d files; the limit is %d", count, MAX_PACK_FILES), allocator)
 	}
 	files := make([]Pack_File, int(count), allocator)
+	made := 0 // files[:made] are whole; a refusal frees them
+	refused := true
+	defer if refused {
+		for f in files[:made] {
+			delete(f.path, allocator)
+			delete(f.data, allocator)
+		}
+		delete(files, allocator)
+	}
 	total := 0
 	last := ""
 	for i in 0 ..< int(count) {
@@ -116,11 +125,13 @@ pack_archive_read :: proc(
 		r.pos += int(size)
 		total += int(size)
 		files[i] = {strings.clone(path, allocator), body}
+		made = i + 1
 		last = files[i].path
 	}
 	if r.pos != len(data) {
 		return {}, bad(namespace, "", "the archive has bytes after its last file", allocator)
 	}
+	refused = false
 	return {strings.clone(namespace, allocator), files}, nil
 }
 

@@ -1,6 +1,7 @@
 package ogg
 
 import "common:base"
+import "common:base/fuzz"
 import "core:encoding/endian"
 import "core:fmt"
 import "core:mem"
@@ -777,62 +778,11 @@ test_ogg_allocates_once :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_ogg_fuzz :: proc(t: ^testing.T) {
-	tone := TONE
-	pg := pages_of(tone)
-	corpus := make([dynamic][]byte, context.temp_allocator)
-	append(&corpus, CLICK, tone[:pg[3].off + pg[3].len])
-	two := make([dynamic]byte, context.temp_allocator)
-	append(&two, ..CLICK)
-	append(&two, ..CLICK)
-	append(&corpus, two[:])
-	hp := header_packets(CLICK)
-	append(&corpus, write_pages(hp[:], 3, 0))
-	for name in ([]string{"block_64_128", "stereo_coupled", "six_channels", "floor0_residue0", "chain_mixed", "pages_span3"}) {
-		edge, ok := os.read_entire_file(
-			fmt.tprintf("%sedge/%s.ogg", TESTDATA, name),
-			context.temp_allocator,
-		)
-		if ok == nil {append(&corpus, edge)}
-	}
-	// What the fuzzer once broke, replayed first.
-	if files, err := os.read_all_directory_by_path(TESTDATA + "regress", context.temp_allocator);
-	   err == nil {
-		for f in files {
-			if data, rerr := os.read_entire_file(
-				fmt.tprintf("%sregress/%s", TESTDATA, f.name),
-				context.temp_allocator,
-			); rerr == nil {
-				fuzz_one(data, max_frames = 100_000)
-			}
-		}
-	}
-	run_fuzz(t, corpus[:], 1, 20000)
-}
-
-run_fuzz :: proc(t: ^testing.T, corpus: [][]byte, seed: u64, iterations: int) {
-	rng := base.rng_make(seed)
-	for it in 0 ..< iterations {
-		src := corpus[int(base.rng_u64(&rng) % u64(len(corpus)))]
-		other := corpus[int(base.rng_u64(&rng) % u64(len(corpus)))]
-		data := mutate(&rng, src, other, context.temp_allocator)
-		if it & 1 == 0 {repair_crc(data)}
-		track: mem_tracking
-		fuzz_one(data, tracking_make(&track), 100_000)
-		if track.total > 1 || track.live != 0 {
-			testing.expectf(
-				t,
-				false,
-				"seed %d iteration %d: %d allocations, %d left",
-				seed,
-				it,
-				track.total,
-				track.live,
-			)
-			return
-		}
-		free_all(context.temp_allocator)
-	}
+test_fuzz_pack_ogg_smoke :: proc(t: ^testing.T) {
+	targets := ogg_fuzz_targets()
+	report := fuzz.run_smoke(&targets[0])
+	defer fuzz.report_destroy(&report)
+	for f in report.failures {testing.expect(t, false, f)}
 }
 
 // --- golden digests and the reference decoder

@@ -4,17 +4,15 @@ import "core:encoding/endian"
 import "core:fmt"
 import "core:os"
 import "core:slice"
-import "core:strconv"
 import "core:strings"
 
-import "common:base"
 import "common:ogg"
 
 // The Ogg decoder's maintenance commands (docs/debugging.md):
 //
 //	build ogg digests     rewrite common/ogg/testdata/digests.txt and print what changed
 //	build ogg reference   rewrite common/ogg/testdata/reference/ from the reference decoder (ffmpeg)
-//	build ogg fuzz [--seed N] [--iterations N]   fuzz the decoder from the command line
+//	(the decoder is fuzzed by `build fuzz`, target pack.ogg)
 MUSIC_DIR :: "assets/music/"
 TESTDATA :: "common/ogg/testdata/"
 WINDOW_FRAMES :: 24000 // half a second at 48 kHz
@@ -23,7 +21,7 @@ MUSIC :: [7]string{"death", "deep", "discovery", "far", "meadow", "night", "titl
 
 main :: proc() {
 	if len(os.args) < 2 {
-		fmt.eprintln("usage: build ogg digests | reference | fuzz [--seed N] [--iterations N]")
+		fmt.eprintln("usage: build ogg digests | reference | make-test-files")
 		os.exit(1)
 	}
 	ok := false
@@ -32,8 +30,6 @@ main :: proc() {
 		ok = digests()
 	case "reference":
 		ok = reference()
-	case "fuzz":
-		ok = fuzz(os.args[2:])
 	case "make-test-files":
 		ok = make_test_files()
 	case:
@@ -164,44 +160,6 @@ reference :: proc() -> bool {
 	}
 	if !reference_edge() {return false}
 	fmt.println("reference windows written")
-	return true
-}
-
-fuzz :: proc(args: []string) -> bool {
-	seed, iterations := u64(1), 20000
-	for i := 0; i + 1 < len(args); i += 2 {
-		switch args[i] {
-		case "--seed":
-			seed, _ = strconv.parse_u64(args[i + 1])
-		case "--iterations":
-			iterations, _ = strconv.parse_int(args[i + 1])
-		}
-	}
-	corpus := make([dynamic][]byte)
-	for f in golden_files() {
-		// The big music files would make an iteration take seconds.
-		if strings.has_prefix(f, MUSIC_DIR) {continue}
-		if data, err := os.read_entire_file(f, context.allocator);
-		   err == nil {append(&corpus, data)}
-	}
-	os.make_directory_all("build/fuzz")
-	rng := base.rng_make(seed)
-	for it in 0 ..< iterations {
-		src := corpus[int(base.rng_u64(&rng) % u64(len(corpus)))]
-		other := corpus[int(base.rng_u64(&rng) % u64(len(corpus)))]
-		data := ogg.mutate(&rng, src, other, context.temp_allocator)
-		if it & 1 == 0 {ogg.repair_crc(data)}
-		// The input is on disk before it runs: a crash leaves it there.
-		_ = os.write_entire_file("build/fuzz/current.bin", data)
-		_ = os.write_entire_file(
-			"build/fuzz/current.txt",
-			transmute([]byte)fmt.tprintf("seed %d iteration %d\n", seed, it),
-		)
-		ogg.fuzz_one(data, max_frames = 200_000)
-		free_all(context.temp_allocator)
-		if it % 2000 == 1999 {fmt.printfln("seed %d: %d iterations", seed, it + 1)}
-	}
-	fmt.printfln("seed %d: %d iterations, no failure", seed, iterations)
 	return true
 }
 
