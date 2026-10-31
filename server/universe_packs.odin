@@ -8,6 +8,7 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
+import "server:packs"
 
 // A universe's packs: universe.cfg's `packs` line lists their namespaces (the
 // base pack, voxiverse, is always first and never listed), each is the
@@ -79,7 +80,7 @@ packs_registry :: proc(
 	}
 	all := make([dynamic]game.Pack_Source, context.temp_allocator)
 	if base_dir != "" {
-		src, errs := pack_read_dir(base_dir, context.temp_allocator)
+		src, errs := packs.pack_read_dir(base_dir, context.temp_allocator)
 		for e in errs {append(&list, game.pack_error_text(e))}
 		append(&all, src)
 	} else {
@@ -94,7 +95,7 @@ packs_registry :: proc(
 			)
 			continue
 		}
-		src, errs := pack_read_dir(path, context.temp_allocator)
+		src, errs := packs.pack_read_dir(path, context.temp_allocator)
 		for e in errs {append(&list, game.pack_error_text(e))}
 		append(&all, src)
 	}

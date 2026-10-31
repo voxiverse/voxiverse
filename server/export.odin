@@ -11,6 +11,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "server:packs"
 
 // Export and import (M46b): one universe as one file, to move it between
 // machines or keep it. A .vxu file is
@@ -107,7 +108,7 @@ export_packs :: proc(dir: string, cfg: string) -> []Export_Pack {
 	value, _ := text_value(cfg, "packs")
 	out := make([dynamic]Export_Pack, context.temp_allocator)
 	for name in packs_parse(value, context.temp_allocator) {
-		src, errs := pack_read_dir(
+		src, errs := packs.pack_read_dir(
 			full_path(dir, fmt.tprintf("%s/%s", PACKS_DIR, name)),
 			context.temp_allocator,
 		)

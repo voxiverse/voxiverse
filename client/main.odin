@@ -8,6 +8,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
+import "client:dev"
 import "common:base"
 
 // Entry point: debugging setup, then the App's lifetime and frame loop.
@@ -181,7 +182,7 @@ run :: proc(opts: Options, sink: ^base.Log_Sink) -> bool {
 				base.metric_add(.Frame_Triangles, f32(app.g.draws.triangles) / 1000)
 			}
 			base.metric_add(.Frame, app.last_frame_ms)
-			fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
+			dev.fps_update(&app.fps, app.last_frame_ms, &app.g.gpu_frame_stats)
 			last = now
 		}
 		log_frame_stats(&app.frame_stats)

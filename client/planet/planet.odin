@@ -1,4 +1,4 @@
-package client
+package planet
 
 import "client:mesh"
 import "client:ui"

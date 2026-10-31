@@ -1,6 +1,7 @@
 package client
 
 import "client:audio"
+import "client:music"
 import "common:ogg"
 import "core:encoding/json"
 import "core:math"
@@ -50,7 +51,7 @@ music_decode :: proc(file: []byte) -> (pcm: []f32, rate: int) {
 // One test per piece, so the runner's threads decode them side by side: each
 // decodes to what its metadata says, at the loudness the mix expects, and
 // loops without a seam.
-#assert(len(MUSIC) == 7, "a new piece needs its test below")
+#assert(len(music.MUSIC) == 7, "a new piece needs its test below")
 
 @(test)
 test_music_title :: proc(t: ^testing.T) {music_check(t, "title")}
@@ -69,7 +70,7 @@ test_music_discovery :: proc(t: ^testing.T) {music_check(t, "discovery")}
 
 @(private = "file")
 music_check :: proc(t: ^testing.T, name: string) {
-	for f in MUSIC {
+	for f in music.MUSIC {
 		if f.name != name {continue}
 		music_decodes_to_its_metadata(t, f)
 		music_loudness_and_loops(t, f)
@@ -79,7 +80,7 @@ music_check :: proc(t: ^testing.T, name: string) {
 }
 
 @(private = "file")
-music_decodes_to_its_metadata :: proc(t: ^testing.T, f: Music_File) {
+music_decodes_to_its_metadata :: proc(t: ^testing.T, f: music.Music_File) {
 	meta: Music_Meta
 	testing.expectf(
 		t,
@@ -128,7 +129,7 @@ music_decodes_to_its_metadata :: proc(t: ^testing.T, f: Music_File) {
 }
 
 @(private = "file")
-music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
+music_loudness_and_loops :: proc(t: ^testing.T, f: music.Music_File) {
 	meta: Music_Meta
 	json.unmarshal(transmute([]u8)f.json, &meta, allocator = context.temp_allocator)
 	pcm, rate := music_decode(f.ogg)
@@ -167,8 +168,14 @@ music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
 @(test)
 test_music_set :: proc(t: ^testing.T) {
 	total := 0
-	for f in MUSIC {total += len(f.ogg)}
-	testing.expectf(t, total <= MUSIC_BUDGET, "the Oggs take %d bytes of %d", total, MUSIC_BUDGET)
+	for f in music.MUSIC {total += len(f.ogg)}
+	testing.expectf(
+		t,
+		total <= music.MUSIC_BUDGET,
+		"the Oggs take %d bytes of %d",
+		total,
+		music.MUSIC_BUDGET,
+	)
 	files, err := os.read_all_directory_by_path(MUSIC_DIR, context.temp_allocator)
 	testing.expect(t, err == nil)
 	scores := 0
@@ -177,15 +184,15 @@ test_music_set :: proc(t: ^testing.T) {
 		scores += 1
 		stem := e.name[:len(e.name) - len(".score")]
 		listed := false
-		for f in MUSIC {listed ||= f.name == stem}
+		for f in music.MUSIC {listed ||= f.name == stem}
 		testing.expectf(t, listed, "%s has no entry in MUSIC", e.name)
 		for ext in ([]string{".ogg", ".json"}) {
 			path := strings.concatenate({MUSIC_DIR, stem, ext}, context.temp_allocator)
 			testing.expectf(t, os.exists(path), "%s%s is missing", stem, ext)
 		}
 	}
-	testing.expect_value(t, scores, len(MUSIC))
-	testing.expect_value(t, MUSIC[0].name, "title")
+	testing.expect_value(t, scores, len(music.MUSIC))
+	testing.expect_value(t, music.MUSIC[0].name, "title")
 	_ = math.PI
 	free_all(context.temp_allocator)
 }

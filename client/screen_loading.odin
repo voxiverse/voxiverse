@@ -5,6 +5,7 @@ import "core:math"
 import "core:strings"
 import "core:time"
 
+import "client:starfield"
 import "client:ui"
 import "common:game"
 
@@ -150,8 +151,8 @@ loading_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	defer ui.pop_id(ctx)
 	s := app.session
 	t := &ctx.theme
-	starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
-	starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
+	starfield.starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
+	starfield.starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
 	// A world that is ready within a moment just appears: only the stars till then.
 	if l, on := s.loading.?;
 	   on && time.duration_seconds(time.tick_since(l.since)) < LOADING_SHOW_AFTER {

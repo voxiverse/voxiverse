@@ -9064,3 +9064,14 @@ lint, scene, baseline and CI step still runs; commits are small and each passes 
 
 
 Differed from the spec: nothing; the spec's L2 and L3 stay in `milestones/L1.md`.
+
+
+## L2, first slice (the packages that depend on nothing)
+
+Spec: milestones/L1.md, "L2". Built: the six packages named in the plan row, by a move script
+that qualifies the names and adds the imports; the driver's package lists, the determinism
+dirs and the manifest follow.
+
+Differed from the spec: the spec's exit (no `.odin` at either root) was not reached. The
+dependency graph showed one cycle holding 61 of 68 `server` and 75 of 81 `client` files, so
+the session split once: the rest is L2b, with the decision on breaking the cycle in its spec.

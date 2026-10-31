@@ -1,4 +1,4 @@
-package server
+package packs
 
 import "core:fmt"
 import "core:os"

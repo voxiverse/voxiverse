@@ -65,12 +65,17 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `client` | The game client (being split into feature packages by L2) | `*.odin` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |
 | `client/audio/testdata` | Audio test input | `*.ogg` |
+| `client/dev` | Developer overlays (frame-time readout; L2b gathers the `dev_*` files) | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
+| `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |
 | `client/gpu` | Vulkan | `*.odin` |
 | `client/mesh` | Chunk meshing | `*.odin` |
+| `client/music` | The committed music: the piece table and its embedded files | `*.odin` |
+| `client/planet` | The planet palette for the title and creation backdrops | `*.odin` |
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
 | `client/render` | Frame rendering | `*.odin` |
 | `client/sfx` | Sound-effect synthesis | `*.odin` |
+| `client/starfield` | The starfield backdrop | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
 | `common/base` | Logging, clocks, jobs, pools, numbers, crash bundles | `*.odin` |
 | `common/base/fuzz` | The fuzz harness | `*.odin` |
@@ -89,6 +94,7 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `server` | The server (being split into feature packages by L2) | `*.odin` |
 | `server/collector` | The telemetry collector | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
+| `server/packs` | Reading pack folders from disk (L2b gathers the `pack_*` files) | `*.odin` |
 | `tests` | Tests spanning several packages | `*.odin` |
 | `tests/crash_fixture` | A child process the crash tests start | `*.odin` |
 | `tests/panic_fixture` | A child process the panic tests start | `*.odin` |

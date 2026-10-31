@@ -4,6 +4,7 @@ import "core:strings"
 import "core:time"
 import "core:unicode/utf8"
 
+import "client:formatted"
 import "client:ui"
 import "common:game"
 
@@ -161,7 +162,7 @@ chat_lines :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, open: bool) {
 			alpha = clamp(CHAT_SHOW_SECONDS + 1 - age, 0, 1)
 		}
 		shown += 1
-		wrapped := wrap_formatted(ctx, e.text, size, width - 2 * t.padding)
+		wrapped := formatted.wrap_formatted(ctx, e.text, size, width - 2 * t.padding)
 		block := f32(len(wrapped)) * line_h
 		y -= block
 		ui.fill_rect(ctx, {area.x, y, width, block}, {0, 0, 0, u8(140 * alpha)})
@@ -169,7 +170,7 @@ chat_lines :: proc(app: ^App, ctx: ^ui.Context, area: ui.Rect, open: bool) {
 			baseline := y + f32(k) * line_h + (line_h - (ascent - descent)) / 2 + ascent
 			color := t.text
 			color.a = u8(255 * alpha)
-			draw_formatted(ctx, {area.x + t.padding, baseline}, line, size, color)
+			formatted.draw_formatted(ctx, {area.x + t.padding, baseline}, line, size, color)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import "core:strings"
 import "core:testing"
 
 import "client:mesh"
+import "client:planet"
 import "client:ui"
 import "common:game"
 import "common:worldgen"
@@ -209,7 +210,7 @@ test_planet_colours_are_the_kinds :: proc(t: ^testing.T) {
 	app := creation_app(t)
 	defer creation_free(app)
 	surface := worldgen.PALETTES[int(worldgen.PARAMS_DEFAULTS.palette)]
-	want := Planet_Palette {
+	want := planet.Planet_Palette {
 		water  = ui.Color(mesh.block_average_colour(app.registry, .Water, .Pos_Y)),
 		ground = ui.Color(mesh.block_average_colour(app.registry, surface[0], .Pos_Y)),
 		dry    = ui.Color(mesh.block_average_colour(app.registry, surface[2], .Pos_Y)),
@@ -224,7 +225,7 @@ test_planet_colours_are_the_kinds :: proc(t: ^testing.T) {
 	// Another kind of world has another palette (frost: snow, dirt, ice).
 	p := worldgen.PARAMS_DEFAULTS
 	p.palette = 2
-	frost := planet_palette(app.registry, p)
+	frost := planet.planet_palette(app.registry, p)
 	testing.expect(t, frost.ground != want.ground, "frost's ground is not Earth's")
 	testing.expect_value(
 		t,

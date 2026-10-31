@@ -6,6 +6,7 @@ import "core:time"
 MODE_CREATIVE :: "creative"
 MODE_SURVIVAL :: "survival"
 
+import "client:planet"
 import "client:ui"
 import "common:game"
 import "common:worldgen"
@@ -28,7 +29,7 @@ Creation_Screen :: struct {
 	stars:     []game.Star, // the galaxy of seed (CREATION_STARS)
 	settle:    f32, // 0 ..= 1: how far the stars have re-settled
 	spin:      f32, // the preview planet's turn, radians
-	planet:    Planet_Palette, // the home world's colours (planet.odin)
+	planet:    planet.Planet_Palette, // the home world's colours (planet.odin)
 }
 
 creation_destroy :: proc(c: ^Creation_Screen) {
@@ -48,7 +49,7 @@ creation_open :: proc(app: ^App) {
 	c.mode = MODE_CREATIVE
 	creation_set_seed(c, u64(time.now()._nsec) ~ 0x5eed_5eed, false)
 	c.typed = false
-	c.planet = home_planet_palette(app.registry)
+	c.planet = planet.home_planet_palette(app.registry)
 	app.screen = .Creation
 }
 

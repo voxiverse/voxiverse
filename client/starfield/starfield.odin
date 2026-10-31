@@ -1,4 +1,4 @@
-package client
+package starfield
 
 import "core:math"
 

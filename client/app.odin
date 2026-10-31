@@ -10,11 +10,13 @@ import "core:strings"
 import "core:time"
 
 import "client:audio"
+import "client:dev"
 import "client:font"
 import "client:gpu"
 import "client:mesh"
 import "client:platform"
 import "client:render"
+import "client:starfield"
 import "client:ui"
 import "common:base"
 import "common:game"
@@ -88,7 +90,7 @@ App :: struct {
 	scripted:         bool, // running --exec commands: settings changes are not saved
 	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
 	bench:            Bench, // the scenario running (benchmark.odin)
-	stars:            Starfield, // the menus' background (starfield.odin)
+	stars:            starfield.Starfield, // the menus' background (starfield.odin)
 	failed:           Failed, // the Failed screen's (screen_loading.odin)
 	credits:          Credits_View, // the Credits screen's scroll (screen_credits.odin)
 	options:          Options_View, // the Options screen's tab and state (screen_options.odin)
@@ -143,7 +145,7 @@ App :: struct {
 	triangle_stats:   base.Frame_Stats, // thousands drawn a frame, in a world
 	last_frame_ms:    f32,
 	seconds:          f32, // since start, wrapped every 1000 (moving water)
-	fps:              Fps,
+	fps:              dev.Fps,
 }
 
 // app_init brings everything up; on failure the caller still calls

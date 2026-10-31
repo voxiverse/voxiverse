@@ -1,4 +1,4 @@
-package client
+package formatted
 
 import "core:fmt"
 import "core:strings"

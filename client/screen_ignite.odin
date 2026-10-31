@@ -2,6 +2,7 @@ package client
 
 import "core:math"
 
+import "client:planet"
 import "client:ui"
 import "common:game"
 
@@ -25,7 +26,7 @@ Ignite :: struct {
 	frames: int, // frames drawn (input in the first is the one that started it)
 	reduce: bool,
 	stars:  [IGNITE_STARS]game.Star,
-	planet: Planet_Palette, // the home world's colours (planet.odin)
+	planet: planet.Planet_Palette, // the home world's colours (planet.odin)
 }
 
 // ui_cue fires a UI sound's event name at the sound system. There are no UI
@@ -41,7 +42,7 @@ ignite_start :: proc(app: ^App, stars: []game.Star, seed: u64) {
 	i^ = {
 		active = true,
 		reduce = app.settings.reduce_motion,
-		planet = home_planet_palette(app.registry),
+		planet = planet.home_planet_palette(app.registry),
 	}
 	copy(i.stars[:], stars)
 	ui_cue(app, "ui_ignite")
@@ -127,7 +128,7 @@ draw_planet :: proc(
 	centre: ui.Vec2,
 	radius, spin: f32,
 	alpha: f32,
-	palette: Planet_Palette,
+	palette: planet.Planet_Palette,
 ) {
 	BANDS :: 48
 	CELLS :: 14

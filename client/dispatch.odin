@@ -1,6 +1,7 @@
 package client
 
 
+import "client:starfield"
 import "client:ui"
 
 
@@ -91,8 +92,12 @@ app_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	defer ui.pop_id(ctx)
 	if app.screen != .Game {
 		// Every menu screen over the stars.
-		starfield_update(&app.stars, app.last_frame_ms / 1000, app.settings.reduce_motion)
-		starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
+		starfield.starfield_update(
+			&app.stars,
+			app.last_frame_ms / 1000,
+			app.settings.reduce_motion,
+		)
+		starfield.starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
 	}
 	switch app.screen {
 	case .Title:
