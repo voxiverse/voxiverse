@@ -3,7 +3,6 @@ package game
 import "common:base"
 import "core:fmt"
 import "core:math"
-import "core:math/rand"
 import "core:os"
 import "core:slice"
 import "core:strings"
@@ -615,39 +614,6 @@ test_varint :: proc(t: ^testing.T) {
 		read_varint(&r)
 		testing.expectf(t, !r.ok, "accepted varint %v", b)
 	}
-}
-
-// Random bytes and random corruptions of valid messages: decoding must never
-// crash (bounds checks would panic), whatever it decides.
-@(test)
-test_decode_fuzz :: proc(t: ^testing.T) {
-	scratch := new(Block_Array)
-	defer free(scratch)
-	arrays: Block_Arrays
-	testing.expect(t, block_arrays_init(&arrays, 16) == nil)
-	defer block_arrays_destroy(&arrays)
-	terrain := Chunk_Blocks{}
-	terrain.array, _ = block_arrays_take(&arrays)
-	defer chunk_release(&terrain, &arrays)
-	test_terrain(3, terrain.array)
-	valid := encode_s(Chunk_Message{}, &terrain)
-
-	buf: [512]u8
-	accepted := 0
-	for _ in 0 ..< 20_000 {
-		n := rand.int_max(len(buf))
-		for &b in buf[:n] {b = u8(rand.uint32())}
-		buf[0] = u8(rand.int_max(6))
-		if _, ok := decode_server_t(buf[:n], scratch); ok {accepted += 1}
-		if _, ok := decode_client_t(buf[:n]); ok {accepted += 1}
-	}
-	corrupt := make([]u8, len(valid), context.temp_allocator)
-	for _ in 0 ..< 5_000 {
-		copy(corrupt, valid[:])
-		for _ in 0 ..< 1 + rand.int_max(4) {corrupt[rand.int_max(len(corrupt))] = u8(rand.uint32())}
-		decode_server_t(corrupt, scratch)
-	}
-	testing.expect(t, accepted < 40_000)
 }
 
 // The dissector's generated schema block is the game's schema as it is now.

@@ -847,25 +847,3 @@ test_snapshot_malformed_cases :: proc(t: ^testing.T) {
 	testing.expect_value(t, rx.dropped, 1)
 	testing.expect_value(t, len(got), 0)
 }
-
-@(test)
-test_state_decode_fuzz :: proc(t: ^testing.T) {
-	s := dt_schema()
-	l: Link
-	link_init(&l, &s)
-	defer link_destroy(&l)
-	state, snapshot := valid_messages(&l)
-	rng := base.rng_make(99)
-	got := make([dynamic]Received, context.temp_allocator)
-	for i in 0 ..< 3000 {
-		which := state if i % 2 == 0 else snapshot
-		data := slice.clone(which, context.temp_allocator)
-		for _ in 0 ..< 1 + base.rng_int_max(&rng, 3) {
-			data[base.rng_int_max(&rng, len(data))] = u8(base.rng_u32(&rng))
-		}
-		rx := fresh_rx(&s)
-		clear(&got)
-		if i % 2 == 0 {receive_state(&rx, data, &got)} else {receive_snapshot(&rx, data, &got)}
-		receiver_destroy(&rx) // (whatever was accepted must also be freeable)
-	}
-}

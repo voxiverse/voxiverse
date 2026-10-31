@@ -39,3 +39,24 @@ test_fuzz_save_journal_smoke :: proc(t: ^testing.T) {smoke(t, "save.journal")}
 
 @(test)
 test_fuzz_save_structure_smoke :: proc(t: ^testing.T) {smoke(t, "save.structure")}
+
+@(test)
+test_fuzz_net_client_decode_smoke :: proc(t: ^testing.T) {smoke_net(t, "net.client_decode")}
+
+@(test)
+test_fuzz_net_server_decode_smoke :: proc(t: ^testing.T) {smoke_net(t, "net.server_decode")}
+
+@(test)
+test_fuzz_net_state_smoke :: proc(t: ^testing.T) {smoke_net(t, "net.state")}
+
+@(private = "file")
+smoke_net :: proc(t: ^testing.T, name: string) {
+	for &target in net_fuzz_targets() {
+		if target.name != name {continue}
+		report := fuzz.run_smoke(&target)
+		defer fuzz.report_destroy(&report)
+		for f in report.failures {testing.expect(t, false, f)}
+		return
+	}
+	testing.expectf(t, false, "no target %s", name)
+}
