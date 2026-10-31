@@ -123,8 +123,12 @@ SOURCE_DIRS :: []string {
 COLLECTIONS :: limited.COLLECTIONS
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
-// CHECK_FLAGS: library packages have no main of their own.
-CHECK_FLAGS :: []string{"-no-entry-point"}
+// CHECK_FLAGS: library packages have no main of their own. The compiler's threaded
+// global checker (dev-2026-10) sometimes ends with a group not done and asserts
+// (checker_global.cpp, `groups[gi].done`), so the type checks run it serially; check
+// already runs its jobs in parallel, so little time is lost. Drop the flag when the
+// pinned compiler no longer does this.
+CHECK_FLAGS :: []string{"-no-entry-point", "-no-threaded-checker"}
 
 GAME_PACKAGE :: "client/main"
 // AUDIO_BASELINES: the packages whose tests are the audio baselines, and which of their tests.
@@ -752,6 +756,7 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 				{strings.concatenate({"-target:", target}), "-build-mode:obj"},
 				ODIN_FLAGS,
 				COLLECTIONS,
+				{"-no-threaded-checker"},
 			},
 		)
 		if windows {
