@@ -174,3 +174,111 @@ base_rule :: proc(srv: ^Server, name: string) -> string {
 		}, &q)
 	return strings.clone(string(q.text[:q.n]), context.temp_allocator)
 }
+
+@(private = "file")
+fired_at_of :: proc(srv: ^Server, name: string) -> u64 {
+	Probe_Fire :: struct {
+		name: string,
+		at:   u64,
+	}
+	p := Probe_Fire {
+		name = name,
+	}
+	call(srv, proc(s: ^Server, data: rawptr) {
+			p := (^Probe_Fire)(data)
+			if c := client_by_name(s, p.name); c != nil {p.at = c.fired_at}
+		}, &p)
+	return p.at
+}
+
+// Issue #91: a player who joined an opened-to-LAN world fires the rocket
+// launcher as the host does. The world's permissions.cfg is one from before
+// the default role had world.fire (what the owner's world was); Open to LAN
+// gives it, and a world made now has it from the start.
+@(test)
+test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "lan_fire"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.make_directory_all(dir)
+	old_default, _ := strings.replace(
+		DEFAULT_PERMISSIONS,
+		"grant world.fire\n",
+		"",
+		1,
+		context.temp_allocator,
+	)
+	testing.expect(t, old_default != DEFAULT_PERMISSIONS, "the default role grants world.fire")
+	perms := strings.concatenate(
+		{old_default, "player alice\nrole admin\n"},
+		context.temp_allocator,
+	)
+	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
+	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
+	h: Harness
+	srv := &h.srv
+	if !testing.expect(
+		t,
+		harness_start(
+			&h,
+			Config {
+				seed = 22,
+				mode = "creative",
+				view_radius = 2,
+				view_height = 1,
+				save_dir = dir,
+				max_players = 4,
+				listen = true,
+				generator = .Classic,
+			},
+		),
+	) {return}
+	defer harness_stop(&h)
+	alice, bob: Net_Client
+	net_connect(&alice, 0, "alice", h = &h)
+	net_connect(&bob, 0, "bob", h = &h)
+	defer net_close(&alice)
+	defer net_close(&bob)
+	if !testing.expect(t, net_wait(t, {&alice, &bob}, joined), "never joined") {return}
+	lan_srv = srv
+	both := []^Net_Client{&alice, &bob}
+	testing.expect(t, may(srv, "alice", "world.fire"), "the host may fire")
+	testing.expect(t, !may(srv, "bob", "world.fire"), "(the old world: not yet)")
+
+	net_send(&alice, game.Command{"open_lan"})
+	testing.expect(
+		t,
+		net_wait(
+			t,
+			both,
+			proc(_: []^Net_Client) -> bool {return may(lan_srv, "bob", "world.fire")},
+			5,
+		),
+		"bob may fire once the world is open",
+	)
+	testing.expect_value(t, fired_at_of(srv, "bob"), 0)
+	net_send(&bob, game.Fire{bob.seq, 0, 0})
+	testing.expect(
+		t,
+		net_wait(
+			t,
+			both,
+			proc(_: []^Net_Client) -> bool {return fired_at_of(lan_srv, "bob") > 0},
+			5,
+		),
+		"bob's rocket was not fired",
+	)
+}
+
+@(test)
+test_new_world_default_role_may_fire :: proc(t: ^testing.T) {
+	p: Permissions
+	defer permissions_destroy(&p)
+	permissions_parse(&p, DEFAULT_PERMISSIONS)
+	grants := make([dynamic]game.Grant, context.temp_allocator)
+	resolve(&p, "bob", nil, false, &grants, context.temp_allocator)
+	testing.expect(t, game.allowed(grants[:], "world.fire"))
+	testing.expect(t, game.allowed(grants[:], "world.edit"))
+	testing.expect(t, !game.allowed(grants[:], "world.summon"))
+	testing.expect(t, !game.allowed(grants[:], "teleport.tp"))
+}

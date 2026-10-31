@@ -344,6 +344,7 @@ admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_open_lan :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	permissions_allow_fire(s)
 	if s.listening {
 		notice(s, c, fmt.tprintf("Already open on port %d", s.host.socket.port))
 	} else if listen(s, netcode.DEFAULT_PORT, netcode.DEFAULT_PORT + netcode.DISCOVERY_PORTS - 1) {

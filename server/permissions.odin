@@ -55,6 +55,7 @@ DEFAULT_PERMISSIONS :: `# Voxiverse permissions: roles grant nodes ("chat.*": ev
 # roles and grants. Everyone has the role default. See docs/debugging.md.
 role default
 grant world.edit
+grant world.fire
 grant chat.send
 grant chat.msg
 grant chat.me
@@ -383,6 +384,21 @@ permissions_save :: proc(s: ^Server) -> bool {
 		) or_else PERMISSIONS_FILE
 	text := permissions_text(&s.perms)
 	return store_write(s, path, transmute([]u8)text)
+}
+
+// permissions_allow_fire: a world made before the default role had world.fire
+// (the rocket launcher, like world.edit, is for everyone who plays) gets it
+// when it is opened to the LAN, so its guests have what the host has in hand.
+// A role that already says anything about the node (grant or -grant) is left
+// as its owner wrote it.
+permissions_allow_fire :: proc(s: ^Server) {
+	r, ok := &s.perms.roles["default"]
+	if !ok {return}
+	for g in r.grants {
+		if g == "world.fire" || g == "-world.fire" {return}
+	}
+	list_set(&r.grants, "world.fire", true)
+	permissions_changed(s)
 }
 
 // is_owner: c has every node (the local player of a world played here;

@@ -334,14 +334,14 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	defer delete(c.columns)
 	fake_hello(t, &c, "tester")
 	fake_send(&c, game.Command{"summon"})
-	fake_send(&c, game.Fire{})
+	fake_send(&c, game.Teleport{})
 	testing.expect(
 		t,
 		wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return len(c.notices) >= 2}),
 	)
 	if len(c.notices) >= 2 {
 		testing.expect_value(t, c.notices[0], "You may not use summon here (world.summon)")
-		testing.expect_value(t, c.notices[1], "You may not do that here (world.fire)")
+		testing.expect_value(t, c.notices[1], "You may not do that here (teleport.tp)")
 	}
 	testing.expect_value(t, c.rejected, "")
 	testing.expect(t, !game.is_closed(c.endpoint))
