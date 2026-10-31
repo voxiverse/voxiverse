@@ -51,6 +51,10 @@ bundle_close :: proc(f: Bundle_File) {
 	win.CloseHandle(f)
 }
 
+// bundle_watchdog: nothing on Windows yet (no known hang; the exception filter ends the process).
+@(private)
+bundle_watchdog :: proc(arm: bool) {}
+
 @(private)
 bundle_platform_init :: proc() {}
 

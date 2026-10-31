@@ -40,12 +40,19 @@ action presses and releases (`actions_update`) and console command names (`conso
    the title; "Close" writes `seen` and a second start shows nothing; three unseen bundles name
    the newest "and 2 earlier"; the dialog is reachable and closable by pad only.
 
+**Decided after CI (2026-10-31):** the first macOS smoke run of Q3's crash test hung for 50 minutes
+and the runner was lost. The writer is now bounded: `bundle_watchdog` arms `alarm(20)` (SIGALRM's
+default action ends the process) around `crash_bundle_write`; `threads.txt` is written with raw
+addresses first and again with resolved frames last, because resolving on macOS (CoreSymbolication)
+takes locks and talks to other processes; `limited.run_limited` waits at most 30 s for a killed
+child; the macOS Smoke CI step has `timeout-minutes: 15`. Windows has no watchdog yet.
+
 **Left out:** as Q3's (uploading, symbol files, GPU-driver crashes, a crash in the writer).
 
 **Exit check:** the UI tests and the smoke test (all five threads on the three OSes in CI) pass;
 the suite and `build check` green.
 
-**Check by hand:** on Windows, run `voxiverse.exe --exec crash` from the package, start the game
+**Check by hand:** on macOS, if CI's Smoke step still fails or times out: run `./build.sh smoke` and note which of the four fixture modes (`build/tmp/crash_fixture build/tmp/x <mode>`) hangs or lacks `  at ` frames in `threads.txt`.  on Windows, run `voxiverse.exe --exec crash` from the package, start the game
 again: the dialog opens on the title, "Open folder" opens Explorer on a folder holding the four
 files, and `threads.txt` lists the main thread and the audio decoder threads with frames. On
 macOS, the same with the `.app` (Finder opens the folder).

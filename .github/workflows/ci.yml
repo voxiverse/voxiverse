@@ -62,6 +62,7 @@ jobs:
       # runner has a window server).
       - name: Smoke
         if: runner.os == 'macOS'
+        timeout-minutes: 15 # a hang fails this step; it once starved the runner for 50 minutes
         run: ./build.sh smoke
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build

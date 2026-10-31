@@ -66,7 +66,7 @@ run_limited :: proc(cmd: []string, limit: time.Duration) -> Run_Result {
 		return .Ok if state.exited && state.exit_code == 0 else .Failed
 	}
 	kill_tree(child.pid)
-	_, _ = os.process_wait(child)
+	_, _ = os.process_wait(child, 30 * time.Second) // a process the OS is still tearing down (a crash report) is not waited for forever
 	return .Timed_Out
 }
 

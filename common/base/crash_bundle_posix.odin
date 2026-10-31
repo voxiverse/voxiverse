@@ -59,6 +59,15 @@ bundle_close :: proc(f: Bundle_File) {
 	posix.close(f)
 }
 
+// bundle_watchdog bounds the writer: armed, SIGALRM's default action ends the process after
+// BUNDLE_WATCHDOG_S seconds, whatever the writing thread is stuck in (a lock held by a thread
+// that is gone, the symbolizer). Disarmed when the bundle is done.
+@(private)
+bundle_watchdog :: proc(arm: bool) {
+	if arm {posix.signal(.SIGALRM, auto_cast posix.SIG_DFL)}
+	posix.alarm(BUNDLE_WATCHDOG_S if arm else 0)
+}
+
 @(private)
 bundle_platform_init :: proc() {
 	// The first backtrace loads the unwinder (it allocates): do that now, not in a handler.

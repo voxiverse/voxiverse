@@ -33,6 +33,7 @@ BUNDLE_FRAMES :: 48
 BUNDLE_TEXT :: 64 * 1024
 BUNDLE_ARENA :: 4 * 1024 * 1024
 BUNDLE_WAIT_MS :: 500
+BUNDLE_WATCHDOG_S :: 20 // the writer's whole budget: after it the process is ended as it was
 
 Thread_Slot :: struct {
 	used:      u32, // atomic: 1 while the thread is registered
@@ -250,6 +251,8 @@ crash_bundle_write :: proc(what: string) -> string {
 		bundle_pid(),
 	)
 	b.last_len = len(name)
+	bundle_watchdog(true)
+	defer bundle_watchdog(false)
 	if !bundle_mkdir(name) {return ""}
 
 	// Every other thread captures its stack; this one's goes first.
@@ -276,11 +279,14 @@ crash_bundle_write :: proc(what: string) -> string {
 		)
 		bundle_file(name, "crash.txt", transmute([]u8)text)
 	}
-	// threads.txt
-	{
+	// threads.txt: first with raw addresses (nothing to go wrong), then, with the frames
+	// resolved to our procedures, over it. Resolving asks the C library or the OS for symbols
+	// (on macOS CoreSymbolication, which takes locks, allocates and talks to other processes),
+	// so a hang there leaves the raw file, and the watchdog ends the process.
+	for resolve in ([]bool{false, true}) {
 		sb := strings.builder_from_bytes(b.text[1])
 		fmt.sbprintf(&sb, "thread %s (crashing)\n", thread_name_here())
-		write_frames(&sb, var_frames[:own_n])
+		write_frames(&sb, var_frames[:own_n], resolve)
 		for i in 0 ..< BUNDLE_THREADS {
 			s := &slots[i]
 			if sync.atomic_load(&s.used) != 1 || my_slot == i + 1 {continue}
@@ -288,7 +294,7 @@ crash_bundle_write :: proc(what: string) -> string {
 			if sync.atomic_load(&s.done) == 0 {
 				strings.write_string(&sb, "  did not answer\n")
 			} else {
-				write_frames(&sb, s.frames[:s.frame_n])
+				write_frames(&sb, s.frames[:s.frame_n], resolve)
 			}
 		}
 		bundle_file(name, "threads.txt", sb.buf[:])
@@ -360,11 +366,18 @@ is_handler_frame :: proc(procedure: string) -> bool {
 	return false
 }
 
-// write_frames lists the frames of ours; with none, the raw addresses.
+// write_frames lists the frames of ours (resolve), or just the raw addresses; with none of
+// ours, the raw addresses.
 @(private)
-write_frames :: proc(sb: ^strings.Builder, frames: []rawptr) {
+write_frames :: proc(sb: ^strings.Builder, frames: []rawptr, resolve: bool) {
 	if len(frames) == 0 {
 		strings.write_string(sb, "  (no frames)\n")
+		return
+	}
+	if !resolve {
+		strings.write_string(sb, "  (raw")
+		for f in frames[:min(len(frames), 16)] {fmt.sbprintf(sb, " %p", f)}
+		strings.write_string(sb, ")\n")
 		return
 	}
 	entries := make([]trace.Capture_Entry, len(frames))
