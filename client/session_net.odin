@@ -52,7 +52,14 @@ receive :: proc(s: ^Session) {
 		}
 		clear(&s.received)
 	}
-	for p in s.received {
+	handle_packets(s, s.received[:])
+}
+
+// handle_packets decodes what the server sent and acts on it, in order, until the session
+// fails (the fuzz target feeds it packets of its own).
+@(private)
+handle_packets :: proc(s: ^Session, packets: []game.Packet) {
+	for p in packets {
 		if s.state == .Failed {return}
 		s.stats.bytes_received += len(p)
 		m, ok := game.decode_server(p, s.scratch, s.reg)

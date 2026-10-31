@@ -337,6 +337,16 @@ session_ability :: proc(s: ^Session, a: game.Ability) -> bool {
 // session_end stops everything and frees the session; false if the server
 // stopped on an error. Call after gpu.wait_idle (meshes are removed).
 session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool {
+	if s.world_init {
+		world_remove_all_meshes(&s.world)
+		for h in s.world.mesh_removals {render.world_remove_mesh(pass, g, h)}
+	}
+	return session_free(s)
+}
+
+// session_free ends the session without a GPU: what session_end does after the world's
+// meshes are removed (the fuzz target, which has no GPU, ends its sessions here).
+session_free :: proc(s: ^Session) -> bool {
 	ok := true
 	if s.server.thread != nil {ok = server.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
@@ -377,8 +387,6 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 			times.p50,
 			times.p99,
 		)
-		world_remove_all_meshes(&s.world)
-		for h in s.world.mesh_removals {render.world_remove_mesh(pass, g, h)}
 		world_destroy(&s.world)
 	}
 	for p in s.received {game.packet_free(s.endpoint, p)}

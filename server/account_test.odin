@@ -8,22 +8,6 @@ import "core:testing"
 import "common:game"
 import "common:netcode"
 
-// test_key: the account a test client of name has (the same every run, so
-// a restarted server knows it again).
-@(private)
-test_key :: proc(name: string) -> (k: game.Account_Key) {
-	seed: [32]u8
-	for i in 0 ..< 32 {seed[i] = u8(i) * 7 ~ (name[i % len(name)] if len(name) > 0 else 0)}
-	game.account_key_set(&k, seed[:])
-	return
-}
-
-@(private)
-test_hello :: proc(name: string) -> game.Hello {
-	schema := game.game_schema(context.temp_allocator)
-	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.hash}
-}
-
 // A proof is good for its nonce and account only.
 @(test)
 test_account_proofs :: proc(t: ^testing.T) {

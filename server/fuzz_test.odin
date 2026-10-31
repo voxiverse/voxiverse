@@ -33,3 +33,9 @@ test_fuzz_save_config_smoke :: proc(t: ^testing.T) {smoke(t, "save.config")}
 
 @(test)
 test_fuzz_text_parsers_smoke :: proc(t: ^testing.T) {smoke(t, "text.parsers")}
+
+@(test)
+test_fuzz_net_server_session_smoke :: proc(t: ^testing.T) {smoke(t, "net.server_session")}
+
+@(test)
+test_fuzz_commands_player_smoke :: proc(t: ^testing.T) {smoke(t, "commands.player")}

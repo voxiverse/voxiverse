@@ -191,6 +191,16 @@ command_usage :: proc(name: string) -> (usage, node: string, found: bool) {
 	return
 }
 
+// command_count: the rows of the table.
+command_count :: proc() -> int {return len(ADMIN_COMMANDS)}
+
+// command_at: the i-th command of the table (the fuzz target draws its command lines from it).
+command_at :: proc(i: int) -> (name, usage: string, args: [2]int, ok: bool) {
+	if i < 0 || i >= len(ADMIN_COMMANDS) {return}
+	cmd := &ADMIN_COMMANDS[i]
+	return cmd.name, cmd.usage, cmd.args, true
+}
+
 // admin runs a command from c.
 admin :: proc(s: ^Server, c: ^Client, command: string) {
 	f := strings.fields(command, context.temp_allocator)

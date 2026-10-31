@@ -93,6 +93,14 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `net.handshake` | the host's `handle` of one datagram from an address, with or without a peer admitted there first | a valid Connect, Response (with the host's cookie), Disconnect, Discover | the host's cookie key is fixed; the fixup repairs a mutated Response's cookie |
 | `text.parsers` | the first byte picks `format_parse`, `address_parse`, `id_parse`, `state_parse`, `account_parse`, `ability_parse`, `parse_time_of_day`, `damage_source_parse` or the chat's `parse_count` | a valid example of each | checks what each promised (an accepted address is valid, spans lie in the text, a time is in 0..1) |
 | `save.config` | the first byte picks `permissions_parse`, `grants_parse`, `packs_parse` or `counters_read` | each file as the server writes it | |
+| `net.server_session` | a stepped server (the harness's flat world) with one seat the case drives by hand: its frames (a length byte, then one client message) are sent one a tick, up to 64 ticks | a run of consecutive messages the scripted session sent, each left as it was, with one to three bytes changed, or raw bytes | after the case: the server still steps, its state hash computes, the item ledger balances, no freed seat keeps a name; a message that does not decode ends the seat with "invalid message" (its slot reset), and the server is built again |
+| `net.client_session` | the client's receive path (`handle_packets`) on a headless session (no window, no GPU, no server), frame by frame (two-byte length, then one server message) | the packets a stepped server sent one client in its first 200 ticks, from the start or a cut, mutated; sometimes a pack phase (`Packs`, then `Pack_Part`s of a small archive, damaged or cut, the hash right or wrong) | the session fails with a reason or keeps running; the chunk pool stays within its capacity; the pack cache is `build/tmp/fuzz/client_packs` |
+| `commands.player` | `admin` on one command line, by an operator (the owner) or a guest (the default role's grants) | a command from the table, its arguments drawn from numbers at the edges, `~` coordinates, selectors, ids known and unknown, the usage's own words, very long words | a command refused to a guest changes no section of the state hash and writes no journal entry; the chunks an operator's command changes are journaled with the operator as actor |
+
+The stateful targets (`net.server_session`, `commands.player`) keep one server across cases and
+build it again every 50 cases or when a case ended the seat: they run under the server's own
+allocator, so the per-case leak check says nothing of the server's memory (the case's temp
+allocator is emptied after each case).
 
 Seeds are the generators; a committed corpus (`testdata/fuzz/<target>/`) is grown by hand with
 `--keep`. Where a decoder needs a file the target writes it under `build/tmp/fuzz/` and removes

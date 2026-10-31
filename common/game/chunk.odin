@@ -36,6 +36,18 @@ chunk_set :: proc(
 	return nil
 }
 
+// chunk_replica_set: chunk_set for a copy of the world a client holds (the test client's, in
+// server/harness_client.odin). A server's chunks change only through set_block and bulk_edit
+// (docs/journal.md); the pipeline lint looks for chunk_set, so a replica writes by this name.
+chunk_replica_set :: proc(
+	c: ^Chunk_Blocks,
+	arrays: ^Block_Arrays,
+	l: [3]i32,
+	b: Block,
+) -> mem.Allocator_Error {
+	return chunk_set(c, arrays, l, b)
+}
+
 // chunk_compact returns the array to arrays if all blocks are the same.
 chunk_compact :: proc(c: ^Chunk_Blocks, arrays: ^Block_Arrays) {
 	if c.array == nil {return}
