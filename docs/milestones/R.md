@@ -267,25 +267,7 @@ Spec: [R11c.md](R11c.md) (split from R11b by #87).
 
 ## R12: the sky at a fraction of the cost
 
-**Why.** At 2560 x 1440 the sky pass is 2.35 ms of a 5.65 ms GPU frame: a 160-step DDA per
-pixel through the cloud slab, each step a dependent storage-buffer load.
-
-**Design (decided).**
-
-- **Clouds at reduced resolution.** The cloud slab is traced at half resolution in each
-  dimension into its own target (graph pass `clouds`), storing colour and the hit distance;
-  the sky pass and world fragments read it with a depth-aware upsample instead of tracing.
-- **The cloud map as an image.** The 256 x 256-bit map becomes an `R8_UNORM` image read
-  with texel fetches, not buffer-address loads.
-- **Scene constants** read in the sky and world shaders move from buffer-address loads to
-  a uniform buffer.
-
-This changes the picture slightly at cloud edges: `images` scenes with clouds are
-re-accepted after the owner has looked at the before and after images (listed under "Check
-by hand"; the milestone does not wait).
-
-**Exit check.** `views -size:2560x1440` (full run): `gpu_sky` at most 30% of baseline,
-`gpu_world` not worse; `images` passes after the re-accept.
+Spec: [R12.md](R12.md) (checked against the code by #87).
 
 ## R13: far terrain at level of detail
 
