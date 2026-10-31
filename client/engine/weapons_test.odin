@@ -5,6 +5,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 import "server:core"
 
@@ -51,7 +52,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 			join = Join{address = core.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
-			registry = test_reg(),
+			registry = testkit.test_reg(),
 			net = &rig.h.net,
 		},
 	)

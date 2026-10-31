@@ -3,6 +3,7 @@ package engine
 import "core:math"
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 
 // The avatars' poses: derived from the speed and the sneak flag; the limbs'
@@ -155,7 +156,7 @@ test_avatar_arm_raises_forward :: proc(t: ^testing.T) {
 	testing.expect(t, abs(gun.y) < 0.1, "an aimed arm is level")
 	moving := tip(pose(WALK, false, 1, .Gun).arms[1])
 	testing.expect(t, moving.z < -0.6, "walking with a gun keeps it forward")
-	reg := test_reg()
+	reg := testkit.test_reg()
 	named :: proc(reg: ^game.Registry, name: string) -> game.Item {
 		i, _ := game.registry_item(reg, name)
 		return i

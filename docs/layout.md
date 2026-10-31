@@ -77,6 +77,7 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `client/render` | Frame rendering | `*.odin` |
 | `client/sfx` | Sound-effect synthesis | `*.odin` |
 | `client/starfield` | The starfield backdrop | `*.odin` |
+| `client/testkit` | Helpers the packages' tests share (the base registry, a mode by name); only tests import it | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
 | `common/base` | Logging, clocks, jobs, pools, numbers, crash bundles | `*.odin` |
 | `common/base/fuzz` | The fuzz harness | `*.odin` |

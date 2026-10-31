@@ -3,6 +3,7 @@ package engine
 import "core:strings"
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 
 @(private = "file")
@@ -19,7 +20,7 @@ sent :: proc(f: ^Overlay_Fixture) -> (commands: [dynamic]string) {
 	game.receive(server, &packets)
 	for p in packets {
 		defer game.packet_free(server, p)
-		if m, ok := game.decode_client(p, test_reg()); ok {
+		if m, ok := game.decode_client(p, testkit.test_reg()); ok {
 			if c, is_command := m.(game.Command);
 			   is_command {append(&commands, strings.clone(c.command, context.temp_allocator))}
 		}

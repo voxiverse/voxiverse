@@ -5,6 +5,7 @@ import "core:strings"
 import "core:testing"
 
 import "client:font"
+import "client:testkit"
 import "client:ui"
 import "common:game"
 
@@ -32,11 +33,13 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	defer delete(s.inv_pending)
 	defer delete(app.inventory_search)
 	s.state = .Playing
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
-	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
+	stone, dirt :=
+		game.item_of_block(testkit.test_reg(), .Stone),
+		game.item_of_block(testkit.test_reg(), .Dirt)
 	s.inventory.slots[9] = {stone, 64, 0}
 	s.inventory.slots[0] = {dirt, 10, 0}
 
@@ -104,7 +107,7 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	testing.expect(t, !section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, stone) == 64)
 	// No catalog without the catalog ability: taking is refused before it is sent.
-	test_mode(s, "survival")
+	s.mode = testkit.mode(s.reg, "survival")
 	before := len(s.inv_pending)
 	testing.expect(t, !session_inventory_do(s, {.Take, game.CURSOR_SLOT, int(dirt)}))
 	testing.expect_value(t, len(s.inv_pending), before)
@@ -138,7 +141,7 @@ test_characters_screen :: proc(t: ^testing.T) {
 	defer virtual.arena_destroy(&s.arena)
 	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
 	s.state = .Choosing
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
@@ -198,11 +201,11 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	defer delete(s.inv_pending)
 	defer delete(app.inventory_search)
 	s.state = .Playing
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
-	stone := game.item_of_block(test_reg(), .Stone)
+	stone := game.item_of_block(testkit.test_reg(), .Stone)
 	s.inventory.slots[9] = {stone, 64, 0}
 
 	chest_sync(app)
@@ -268,10 +271,10 @@ test_chest_overlay :: proc(t: ^testing.T) {
 pad_rig :: proc(t: ^testing.T) -> ^Rig {
 	r := rig_make(t)
 	app, s := r.app, r.s
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session, app.screen = s, .Game
 	s.state = .Playing
-	test_mode(s, "creative")
+	s.mode = testkit.mode(s.reg, "creative")
 	pad_connect(app, .Xbox)
 	pad_frame(app)
 	return r
@@ -313,7 +316,9 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	app, s := r.app, r.s
 	inv := &s.inventory
 	v := &app.inventory_view
-	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
+	stone, dirt :=
+		game.item_of_block(testkit.test_reg(), .Stone),
+		game.item_of_block(testkit.test_reg(), .Dirt)
 	inv.slots[9] = {stone, 64, 0}
 	inv.slots[0] = {dirt, 10, 0}
 	inv.selected = 2
@@ -370,7 +375,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_frame(app)
 	pad_tap(app, .A)
 	testing.expect(t, !game.stack_empty(inv.cursor))
-	testing.expect(t, strings.contains(item_title(test_reg(), inv.cursor.item), "dirt"))
+	testing.expect(t, strings.contains(item_title(testkit.test_reg(), inv.cursor.item), "dirt"))
 	taken := inv.cursor
 	pad_go(app, .Down)
 	testing.expect(
@@ -506,7 +511,7 @@ test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
 	f: Overlay_Fixture
 	overlay_fixture(t, &f, false)
 	defer overlay_fixture_destroy(&f)
-	reg := test_reg()
+	reg := testkit.test_reg()
 	stone, dirt := game.item_of_block(reg, .Stone), game.item_of_block(reg, .Dirt)
 	f.s.inventory.slots[6] = {dirt, 3, 0}
 	f.s.inventory.slots[9] = {stone, 5, 0}

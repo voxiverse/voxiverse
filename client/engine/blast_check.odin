@@ -6,6 +6,7 @@ import "core:math"
 import "core:time"
 
 import "client:render"
+import "client:testkit"
 import "common:base"
 import "common:game"
 import "server:core"
@@ -121,7 +122,7 @@ blast_test_update :: proc(app: ^App) {
 		} else {
 			// Where the view meets the ground (beyond reach: we hover high).
 			f := render.forward(s.camera.yaw, s.camera.pitch)
-			query := game.Block_Query{&s.world, world_block, test_blocks()}
+			query := game.Block_Query{&s.world, world_block, testkit.test_blocks()}
 			dir := [3]f64{f64(f.x), f64(f.y), f64(f.z)}
 			hit, ok := game.raycast(query, s.camera.position, dir, 96)
 			if !ok {

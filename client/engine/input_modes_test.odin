@@ -2,6 +2,7 @@ package engine
 
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 import "server:core"
 
@@ -12,7 +13,7 @@ import "server:core"
 @(private = "file")
 open_world :: proc() -> ^Session {
 	s := new(Session)
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	s.state = .Playing
 	return s
 }
@@ -168,7 +169,7 @@ test_view_bobbing :: proc(t: ^testing.T) {
 	// Off by its setting and by Reduce motion: the view is the eyes.
 	for off in ([]string{"setting", "motion"}) {
 		quiet := new(Session)
-		quiet.reg = test_reg()
+		quiet.reg = testkit.test_reg()
 		defer free(quiet)
 		quiet.camera = {
 			position = {0.5, 1.6, 0.5},
@@ -292,7 +293,7 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 			join = Join{address = core.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
-			registry = test_reg(),
+			registry = testkit.test_reg(),
 			net = &rig.h.net,
 		},
 	)

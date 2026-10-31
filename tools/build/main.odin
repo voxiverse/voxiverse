@@ -35,6 +35,7 @@ PACKAGES :: []string {
 	"client/render",
 	"client/engine",
 	"client/main",
+	"client/testkit",
 	"client/mesh",
 	"client/starfield",
 	"client/planet",

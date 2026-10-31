@@ -4,6 +4,7 @@ import "core:mem/virtual"
 import "core:testing"
 
 import "client:font"
+import "client:testkit"
 import "client:ui"
 import "common:game"
 
@@ -24,14 +25,14 @@ overlay_fixture :: proc(t: ^testing.T, f: ^Overlay_Fixture, catalog: bool) {
 	f.app.font, ok = font.load(FONT_DATA)
 	testing.expect(t, ok)
 	testing.expect(t, ui.init(&f.app.ui, &f.app.font))
-	testing.expect(t, item_icons_init(test_reg(), &f.app.item_icons, &f.app.ui))
+	testing.expect(t, item_icons_init(testkit.test_reg(), &f.app.item_icons, &f.app.ui))
 	f.s = new(Session)
 	game.pipe_init(&f.pipe)
 	f.s.endpoint = {&f.pipe, .Client}
 	game.writer_init(&f.s.writer)
 	f.s.state = .Playing
-	f.s.reg = test_reg()
-	test_mode(f.s, "creative" if catalog else "survival")
+	f.s.reg = testkit.test_reg()
+	f.s.mode = testkit.mode(f.s.reg, "creative" if catalog else "survival")
 	f.app.session = f.s
 	f.app.screen = .Game
 	f.app.input.pressed = {.Tab}
@@ -89,7 +90,9 @@ test_inventory_mouse_tweaks :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, false)
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
-	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
+	stone, dirt :=
+		game.item_of_block(testkit.test_reg(), .Stone),
+		game.item_of_block(testkit.test_reg(), .Dirt)
 	at := proc(f: ^Overlay_Fixture, slot: int) -> ui.Vec2 {return overlay_slot_at(f, slot)}
 
 	// Shift-drag over slots 5, 6 and 7 (and the empty 8): all go to the hotbar.
@@ -195,7 +198,9 @@ test_pick_block :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, true)
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
-	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
+	stone, dirt :=
+		game.item_of_block(testkit.test_reg(), .Stone),
+		game.item_of_block(testkit.test_reg(), .Dirt)
 
 	inv.slots[7] = {dirt, 1, 0}
 	overlay_frame(&f, {mouse = overlay_slot_at(&f, 7), mouse_pressed = {.Middle}})
@@ -209,7 +214,8 @@ test_pick_block :: proc(t: ^testing.T) {
 	defer virtual.arena_destroy(&arena)
 	testing.expect(
 		t,
-		world_init(&f.s.world, test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) == nil,
+		world_init(&f.s.world, testkit.test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) ==
+		nil,
 	)
 	defer world_destroy(&f.s.world)
 	column := game.Column {
@@ -252,11 +258,11 @@ test_pick_block :: proc(t: ^testing.T) {
 	testing.expect(t, session_pick(f.s) && inv.slots[4] == {stone, 64, 0})
 	testing.expect_value(t, game.inventory_count(inv, dirt), 10)
 	// Without items.catalog: only what the hotbar holds.
-	test_mode(f.s, "survival")
+	f.s.mode = testkit.mode(f.s.reg, "survival")
 	inv^ = {}
 	testing.expect(t, !session_pick(f.s))
 	// A block with no item (bedrock) picks nothing.
-	test_mode(f.s, "creative")
+	f.s.mode = testkit.mode(f.s.reg, "creative")
 	testing.expect(t, world_set_block(&f.s.world, {1, 1, 1}, .Bedrock))
 	testing.expect(t, !session_pick(f.s))
 	free_all(context.temp_allocator)
@@ -270,9 +276,9 @@ test_item_icons :: proc(t: ^testing.T) {
 	overlay_fixture(t, &f, true)
 	defer overlay_fixture_destroy(&f)
 	atlas := &f.app.ui.glyphs
-	for item in game.every_item(test_reg()) {
+	for item in game.every_item(testkit.test_reg()) {
 		icon, ok := f.app.item_icons[item]
-		testing.expectf(t, ok, "%v has no icon", game.item_name(test_reg(), item))
+		testing.expectf(t, ok, "%v has no icon", game.item_name(testkit.test_reg(), item))
 		img := atlas.icons[icon]
 		opaque := 0
 		for p in img.pixels {if p.a > 0 {opaque += 1}}
@@ -280,7 +286,7 @@ test_item_icons :: proc(t: ^testing.T) {
 			t,
 			opaque >= 24,
 			"%v's icon is nearly blank",
-			game.item_name(test_reg(), item),
+			game.item_name(testkit.test_reg(), item),
 		)
 		// And it is in the atlas as made.
 		at := (img.at.y * atlas.size + img.at.x) * 4
@@ -297,7 +303,7 @@ test_creative_tab :: proc(t: ^testing.T) {
 	defer overlay_fixture_destroy(&f)
 	inv := &f.s.inventory
 	v := &f.app.inventory_view
-	dirt := game.item_of_block(test_reg(), .Dirt)
+	dirt := game.item_of_block(testkit.test_reg(), .Dirt)
 
 	// The tab button switches; the rest of the inventory is not shown on it.
 	overlay_frame(&f, {})
@@ -312,13 +318,17 @@ test_creative_tab :: proc(t: ^testing.T) {
 	testing.expect(t, c.slots[0] == l.slots[0], "the hotbar does not move between tabs")
 
 	// A search narrows the catalog.
-	testing.expect_value(t, len(matching_items(test_reg(), "")), len(game.every_item(test_reg())))
-	found := matching_items(test_reg(), "DIR")
+	testing.expect_value(
+		t,
+		len(matching_items(testkit.test_reg(), "")),
+		len(game.every_item(testkit.test_reg())),
+	)
+	found := matching_items(testkit.test_reg(), "DIR")
 	testing.expect(t, len(found) == 1 && found[0] == dirt)
-	testing.expect_value(t, len(matching_items(test_reg(), "no such item")), 0)
+	testing.expect_value(t, len(matching_items(testkit.test_reg(), "no such item")), 0)
 
 	// Clicking the first catalog item takes a stack; a click on a hotbar slot puts it there.
-	first := game.every_item(test_reg())[0]
+	first := game.every_item(testkit.test_reg())[0]
 	cell := ui.Vec2{c.catalog.x + INVENTORY_SLOT.x / 2, c.catalog.y + INVENTORY_SLOT.y / 2}
 	overlay_frame(&f, {mouse = cell, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	testing.expect_value(t, inv.cursor, game.Stack{first, 64, 0})
@@ -329,7 +339,7 @@ test_creative_tab :: proc(t: ^testing.T) {
 	testing.expect_value(t, inv.slots[4], game.Stack{first, 64, 0})
 
 	// Without the catalog ability there is no Creative tab to be on.
-	test_mode(f.s, "survival")
+	f.s.mode = testkit.mode(f.s.reg, "survival")
 	overlay_frame(&f, {})
 	testing.expect_value(t, v.tab, Inventory_Tab.Inventory)
 }

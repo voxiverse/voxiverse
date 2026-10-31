@@ -4,6 +4,7 @@ import "core:math"
 import "core:math/rand"
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 
 // F5 and the third person camera (view_camera.odin). A made-up world: a wall
@@ -25,7 +26,7 @@ fake_get :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 }
 
 fake_query :: proc(w: ^Fake_World) -> game.Block_Query {
-	return {w, fake_get, test_blocks()}
+	return {w, fake_get, testkit.test_blocks()}
 }
 
 @(private = "file")
@@ -37,7 +38,7 @@ solid_at :: proc(w: ^Fake_World, p: [3]f64) -> bool {
 @(private = "file")
 session_at :: proc(eyes: [3]f64, yaw, pitch: f32) -> ^Session {
 	s := new(Session)
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	s.camera = {
 		position = eyes,
 		yaw      = yaw,
@@ -200,7 +201,7 @@ test_crosshair_in_third_person :: proc(t: ^testing.T) {
 	a.down = {.Use}
 	camera_update(s, &a, SETTINGS_DEFAULTS, fake_query(&w), 0.016, true)
 	testing.expect(t, crosshair_shown(s), "shown while aiming")
-	s.inventory.slots[0] = {game.item_of_block(test_reg(), .Stone), 1, 0}
+	s.inventory.slots[0] = {game.item_of_block(testkit.test_reg(), .Stone), 1, 0}
 	camera_update(s, &a, SETTINGS_DEFAULTS, fake_query(&w), 0.016, true)
 	testing.expect(t, !crosshair_shown(s), "a block does not aim")
 }

@@ -4,6 +4,7 @@ import "core:math"
 import "core:net"
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 import "common:netcode"
 import "server:core"
@@ -79,7 +80,7 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 				join = Join{address = address},
 				view_radius = 3,
 				view_height = 2,
-				registry = test_reg(),
+				registry = testkit.test_reg(),
 				net = sim,
 			},
 		)

@@ -3,6 +3,7 @@ package engine
 import "core:testing"
 
 import "client:font"
+import "client:testkit"
 import "client:ui"
 import "common:game"
 
@@ -30,7 +31,7 @@ test_death_screen :: proc(t: ^testing.T) {
 	game.writer_init(&s.writer)
 	defer game.writer_destroy(&s.writer)
 	s.state = .Playing
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game
@@ -64,7 +65,7 @@ test_death_screen :: proc(t: ^testing.T) {
 	frame(app, {mouse = at})
 	frame(app, {mouse = at, mouse_pressed = {.Left}, mouse_down = {.Left}})
 	frame(app, {mouse = at, mouse_released = {.Left}})
-	m, decoded := game.decode_client(s.writer.buf[:], test_reg())
+	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
 	_, respawn := m.(game.Respawn)
 	testing.expect(t, decoded && respawn, "no Respawn sent")
 

@@ -5,6 +5,7 @@ import "core:testing"
 
 import "client:mesh"
 import "client:render"
+import "client:testkit"
 import "common:game"
 
 // The view model (docs/milestones/M48k.md): a mesh for each held kind, its own
@@ -29,7 +30,7 @@ extent :: proc(m: ^Held_Mesh) -> (lo, hi: [3]f32) {
 
 @(test)
 test_a_mesh_for_each_held_kind :: proc(t: ^testing.T) {
-	reg := test_reg()
+	reg := testkit.test_reg()
 	cache: Held_Cache
 	defer held_cache_destroy(&cache)
 	Case :: struct {
@@ -65,7 +66,7 @@ test_a_mesh_for_each_held_kind :: proc(t: ^testing.T) {
 
 @(test)
 test_the_shaped_blocks_are_meshed :: proc(t: ^testing.T) {
-	reg := test_reg()
+	reg := testkit.test_reg()
 	seen := 0
 	for item in game.every_item(reg) {
 		info, _ := game.item_info(reg, item)
@@ -133,7 +134,7 @@ test_hidden_voxel_faces_are_not_made :: proc(t: ^testing.T) {
 
 @(test)
 test_weapon_models_are_as_big_as_promised :: proc(t: ^testing.T) {
-	reg := test_reg()
+	reg := testkit.test_reg()
 	for name in ([]string{"pistol", "rifle", "sniper", "rocket_launcher"}) {
 		item := item_named(reg, name)
 		info, _ := game.item_info(reg, item)
@@ -163,7 +164,7 @@ model_extent :: proc(m: ^game.Model_Def) -> [3]int {
 
 @(test)
 test_extruded_icon :: proc(t: ^testing.T) {
-	reg := test_reg()
+	reg := testkit.test_reg()
 	item := item_named(reg, "hoe")
 	info, _ := game.item_info(reg, item)
 	m, ok := held_mesh_icon(item, info)
@@ -200,7 +201,7 @@ test_the_arm_is_the_avatars :: proc(t: ^testing.T) {
 @(test)
 test_the_view_model_projection_ignores_the_fov :: proc(t: ^testing.T) {
 	s: Session
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	aspect := f32(16.0 / 9.0)
 	want := view_model_projection(aspect)
 	for fov in ([]f32{30, 70, 110, 140}) {
@@ -435,7 +436,7 @@ test_f1_and_the_camera_decide_if_the_view_model_is_shown :: proc(t: ^testing.T) 
 // what that costs is the `viewmodel` benchmark (`build bench viewmodel`).
 @(test)
 test_the_biggest_model_is_thousands_of_vertices :: proc(t: ^testing.T) {
-	d, ok := view_model_bench_frame(test_reg())
+	d, ok := view_model_bench_frame(testkit.test_reg())
 	defer render.held_draw_destroy(&d)
 	testing.expect(t, ok)
 	testing.expect(t, len(d.view) > 1000, "the biggest model is a few thousand vertices")

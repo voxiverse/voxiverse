@@ -10,6 +10,7 @@ import "core:testing"
 
 import "client:font"
 import "client:platform"
+import "client:testkit"
 import "client:ui"
 import "common:base"
 import "common:game"
@@ -800,7 +801,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	// With a session: the characters, the loading screen, the game menu, the
 	// dial and the chat.
 	s := r.s
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	app.screen = .Game
 	append(&s.characters, strings.clone("alice"), strings.clone("bob"))
@@ -891,7 +892,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect(t, overlay_is_open(&app.overlays, .Dial))
 	pad_tap(app, .A)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Dial))
-	m, decoded := game.decode_client(s.writer.buf[:], test_reg())
+	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
 	_, is_dial := m.(game.Dial)
 	testing.expect(t, decoded && is_dial, "no Dial sent")
 	clear(&s.writer.buf)
@@ -905,7 +906,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(app.chat.text[:]), "hi")
 	pad_tap(app, .Start)
 	testing.expect(t, !overlay_is_open(&app.overlays, .Chat))
-	m, decoded = game.decode_client(s.writer.buf[:], test_reg())
+	m, decoded = game.decode_client(s.writer.buf[:], testkit.test_reg())
 	said, is_chat := m.(game.Chat)
 	testing.expect(t, decoded && is_chat, "no chat line sent")
 	testing.expect_value(t, said.text, "hi")
@@ -1027,7 +1028,7 @@ test_music_gap_option :: proc(t: ^testing.T) {
 test_welcome_with_other_content_is_refused :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	s.state = .Connecting
 	testing.expect(t, virtual.arena_init_growing(&s.arena) == nil)
 	defer virtual.arena_destroy(&s.arena)

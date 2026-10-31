@@ -2,6 +2,7 @@ package engine
 
 import "core:testing"
 
+import "client:testkit"
 import "common:game"
 
 // The HUD: F1, the item-name popup and its fade.
@@ -45,7 +46,7 @@ test_hud_f1 :: proc(t: ^testing.T) {
 	defer overlay_fixture_destroy(&f)
 	app := f.app
 	player_menu_close(app)
-	stone := game.item_of_block(test_reg(), .Stone)
+	stone := game.item_of_block(testkit.test_reg(), .Stone)
 	f.s.inventory.slots[0] = {stone, 5, 0}
 	f.s.inventory.selected = 0
 	f.s.max_health = 20
@@ -58,7 +59,7 @@ test_hud_f1 :: proc(t: ^testing.T) {
 	shown, texts := drawn(app)
 	testing.expect(t, shown > 0, "the HUD is drawn")
 	named := false
-	for x in texts {if x == item_title(test_reg(), stone) {named = true}}
+	for x in texts {if x == item_title(testkit.test_reg(), stone) {named = true}}
 	testing.expect(t, named, "the held item's name is above the hotbar")
 
 	press :: proc(app: ^App) {

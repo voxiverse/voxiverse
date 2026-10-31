@@ -5,6 +5,7 @@ import "core:slice"
 import "core:testing"
 
 import "client:mesh"
+import "client:testkit"
 import "common:base"
 import "common:game"
 import "common:worldgen"
@@ -27,7 +28,7 @@ Cache_Fixture :: struct {
 @(private = "file")
 fixture_make :: proc(t: ^testing.T, f: ^Cache_Fixture) {
 	testing.expect(t, virtual.arena_init_growing(&f.arena) == nil)
-	reg := test_reg()
+	reg := testkit.test_reg()
 	testing.expect(t, world_init(&f.w, reg, 256, 32, 0, virtual.arena_allocator(&f.arena)) == nil)
 	gen := worldgen.generator_make(.Earth, 12345, reg)
 	cache := new(worldgen.Column_Cache, context.temp_allocator)

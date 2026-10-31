@@ -5,6 +5,7 @@ import "core:mem/virtual"
 import "core:testing"
 
 import "client:render"
+import "client:testkit"
 import "common:base"
 import "common:game"
 
@@ -22,7 +23,7 @@ test_world_edges_mesh :: proc(t: ^testing.T) {
 		w: World
 		testing.expect(
 			t,
-			world_init(&w, test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) == nil,
+			world_init(&w, testkit.test_reg(), 64, 16, 1, virtual.arena_allocator(&arena)) == nil,
 		)
 		add_columns(&w, 1)
 		inward: i32 = -1 if layer == game.CHUNK_MAX_Y - 1 else 1
@@ -66,7 +67,7 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 	w: World
 	testing.expect(
 		t,
-		world_init(&w, test_reg(), 128, 32, 1, virtual.arena_allocator(&arena)) == nil,
+		world_init(&w, testkit.test_reg(), 128, 32, 1, virtual.arena_allocator(&arena)) == nil,
 	)
 	defer world_destroy(&w)
 	add_columns(&w, 2)
@@ -128,7 +129,10 @@ test_world_edit_remeshes_neighbours :: proc(t: ^testing.T) {
 @(private = "file")
 settled_world :: proc(t: ^testing.T, w: ^World, fill: game.Block, arena: ^virtual.Arena) {
 	scratch := new(game.Block_Array, context.temp_allocator)
-	testing.expect(t, world_init(w, test_reg(), 128, 32, 1, virtual.arena_allocator(arena)) == nil)
+	testing.expect(
+		t,
+		world_init(w, testkit.test_reg(), 128, 32, 1, virtual.arena_allocator(arena)) == nil,
+	)
 	add_columns(w, 2)
 	for z in i32(-1) ..= 1 {
 		for y in i32(-1) ..= 1 {
@@ -197,7 +201,7 @@ test_world_changes_settle_once_per_chunk :: proc(t: ^testing.T) {
 // cutout faces and it holds something else now.
 @(test)
 test_opens_hole :: proc(t: ^testing.T) {
-	blocks := &test_reg().blocks
+	blocks := &testkit.test_reg().blocks
 	Case :: struct {
 		old, new: game.Block,
 		hole:     bool,
@@ -309,7 +313,7 @@ test_render_clock_smooth :: proc(t: ^testing.T) {
 @(test)
 test_entity_death_puff :: proc(t: ^testing.T) {
 	s: Session
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS)
 	defer delete(s.puffs)
 	defer delete(s.sounds)
@@ -355,7 +359,7 @@ test_near_ready :: proc(t: ^testing.T) {
 	w: World
 	testing.expect(
 		t,
-		world_init(&w, test_reg(), 512, 64, 1, virtual.arena_allocator(&arena)) == nil,
+		world_init(&w, testkit.test_reg(), 512, 64, 1, virtual.arena_allocator(&arena)) == nil,
 	)
 	defer world_destroy(&w)
 	add_columns(&w, 2) // (the columns 3 away are not known: they must not matter)

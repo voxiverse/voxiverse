@@ -3,6 +3,7 @@ package engine
 import "core:testing"
 
 import "client:font"
+import "client:testkit"
 import "client:ui"
 
 // Escape backs out of the top overlay first, a step at a time; game
@@ -74,7 +75,7 @@ test_overlay_keys_go_to_the_top :: proc(t: ^testing.T) {
 	s := new(Session)
 	defer free(s)
 	s.state = .Playing
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	app.screen = .Game

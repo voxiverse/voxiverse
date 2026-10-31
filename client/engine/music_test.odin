@@ -9,6 +9,7 @@ import "core:strings"
 import "core:testing"
 
 import "client:audio"
+import "client:testkit"
 import "common:game"
 import "common:worldgen"
 
@@ -366,7 +367,7 @@ test_arrival_into_a_seen_address :: proc(t: ^testing.T) {
 	defer free(app)
 	s := new(Session)
 	defer free(s)
-	s.reg = test_reg()
+	s.reg = testkit.test_reg()
 	app.session = s
 	defer app.session = nil
 	s.state = .Playing
