@@ -30,3 +30,6 @@ test_fuzz_save_import_smoke :: proc(t: ^testing.T) {smoke(t, "save.import")}
 
 @(test)
 test_fuzz_save_config_smoke :: proc(t: ^testing.T) {smoke(t, "save.config")}
+
+@(test)
+test_fuzz_text_parsers_smoke :: proc(t: ^testing.T) {smoke(t, "text.parsers")}

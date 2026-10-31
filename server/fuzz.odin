@@ -21,6 +21,30 @@ FUZZ_TMP :: "build/tmp/fuzz/"
 server_fuzz_targets :: proc() -> []fuzz.Target {
 	@(static) targets := [?]fuzz.Target {
 		{
+			name = "text.parsers",
+			run = fuzz_text_parsers,
+			seeds = FUZZ_SEEDS + "text.parsers",
+			dictionary = {
+				"&",
+				"&#",
+				"&l",
+				"&#ff00ff",
+				"[",
+				"]",
+				"=",
+				",",
+				":",
+				"-",
+				"voxiverse:",
+				"midnight",
+				"fly",
+				"1e999",
+				"NaN",
+			},
+			max_len = 1 << 12,
+			generate = fuzz_text_generate,
+		},
+		{
 			name = "save.tx",
 			run = fuzz_save_tx,
 			seeds = FUZZ_SEEDS + "save.tx",
