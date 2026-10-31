@@ -56,7 +56,11 @@ PACKAGES :: []string {
 	"tools/worldmap",
 	"tools/bench",
 	"tools/debugger/printer_test",
+	"tools/fuzz",
 	"tests",
+	"tests/crash_fixture",
+	"tests/panic_fixture",
+	"tests/window_fixture",
 }
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
@@ -580,6 +584,7 @@ check :: proc() -> bool {
 		import_lint() &&
 		collections_lint() &&
 		layout_lint() &&
+		package_lists_lint() &&
 		scratch_lint() &&
 		test_lint() &&
 		ci_lint() &&
