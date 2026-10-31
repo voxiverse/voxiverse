@@ -9068,13 +9068,33 @@ Differed from the spec: nothing; the spec's L2 and L3 stay in `milestones/L1.md`
 
 ## L2, first slice (the packages that depend on nothing)
 
-Spec: milestones/L1.md, "L2". Built: the six packages named in the plan row, by a move script
-that qualifies the names and adds the imports; the driver's package lists, the determinism
-dirs and the manifest follow.
+Spec: milestones/L1.md, "L2" (below, as it stood; L1.md now holds L3). Built: the six
+packages named in the plan row, by a move script that qualifies the names and adds the
+imports; the driver's package lists, the determinism dirs and the manifest follow.
 
 Differed from the spec: the spec's exit (no `.odin` at either root) was not reached. The
 dependency graph showed one cycle holding 61 of 68 `server` and 75 of 81 `client` files, so
 the session split once: the rest is L2b, with the decision on breaking the cycle in its spec.
+
+### L2: the spec, as it stood
+
+Exit: `client/` and `server/` hold no `.odin` file at their root (`client/app`, `hud`,
+`screens`, `overlays`, ...; `server/core`, `commands`, `save`, `packs`, ... as the code's
+imports allow, cycles broken by moving code where that is clean); the prefix of every moved
+file is dropped (`hud_hotbar.odin` becomes `hud/hotbar.odin`); tests sit beside the code as
+`<file>_test.odin`, test-only helpers (`*_check.odin`, `*_test_support.odin`,
+`audio_baseline`, `audio_check`) are in `tests/` or a test-kit package; each library-plus-tool
+pair keeps the library in `common/` or `client/` with only the command line in `tools/`
+(`common/ogg` and `tools/ogg`, `client/sfx` and `tools/sfx`, the client's `music*` files and
+`tools/music`); fuzz code is `fuzz*.odin` in the owning package; `ols.json`, the plan's paths,
+the specs' file paths and the docs follow; the manifest rows narrow to the names each folder
+allows; `check`, `test`, `smoke`, `determinism` pass after every commit. The final reply lists
+the tree, the rename list and the caps. The audit's checklist is in the issue: `menus` next to
+`menu_*`; `title`, `creation`, `universes` next to `screen_*`; `overlay_*`, `hud_*`, `dev_*`;
+`music`, `music_app`, `music_data`, `music_files`; `viewmodel*`; `entity`, `entities`,
+`entity_arena`; `players` and `player_data`; the `save*` and `journal*` groups; `pack_*` and
+`packs`; `commands_*`; fuzz code in `client/fuzz`, `server/fuzz*`, `common/game/fuzz*` and
+`tools/fuzz`.
 
 
 ## L2b: the rest of the split (`server/core`, `client/engine` and the feature packages)
