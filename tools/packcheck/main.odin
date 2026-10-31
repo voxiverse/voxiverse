@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 
 import "common:game"
-import "server:."
+import "server:packs"
 
 // Checks packs: the base pack plus the given pack directories, in order, the
 // way a universe loads them. Prints every error, one per line
@@ -19,7 +19,7 @@ main :: proc() {
 	append(&sources, game.base_pack_source())
 	failed := false
 	for dir in os.args[1:] {
-		src, errs := server.pack_read_dir(dir)
+		src, errs := packs.pack_read_dir(dir)
 		for e in errs {
 			fmt.println(game.pack_error_text(e))
 			failed = true
