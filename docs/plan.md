@@ -415,7 +415,7 @@ million tokens re-read per step), not the code it wrote. So:
     and the sandbox) → packs signed and checked (M54, M54g, M54h, M54i; split in four by #86) → the creator tools (M54c experiences,
     M54d edit mode and test-play, M54e a text area and the clipboard, M54f scripts edited in
     the game) → the client renderer (R7,
-    R7b, R8, R9, R10, R11, R11b, R12, R13; independent of the rest; R7 split in two by #87) → R15 (entities on the GPU,
+    R7b, R8, R9, R9b, R10, R11, R11b, R12, R13; independent of the rest; R7 and R9 split in two by #87) → R15 (entities on the GPU,
     after M50's entity storage) → M49d → M54b → secure transport and scale (M55, M55b) → the
     hooks for online services (M55c) → audio (M56, M56b, M57, M57b, M58, M58b). R14 stays
     held: the owner deferred it. Sharing experiences beyond one server comes after online
@@ -658,7 +658,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | R7 | [The depth pyramid and the occlusion test, checked against the CPU](milestones/R7.md) | `--check hiz` (every mip bit-exact against the CPU; every occlusion verdict equal) and the conservativeness property test pass in CI; `images` with scene counts; `gpu_hiz` within its budget (measured) |
 | R7b | [Two-phase occlusion culling in the frame](milestones/R7b.md) | `--check occlusion` finds no chunk hidden while visible; motion scenes unchanged on baselines from before culling; `views` `gpu_world` at most 60% of the commit before (measured) |
 | R8 | [Compact geometry: 16-byte quad records pulled by the vertex shader, water's flat faces merged](milestones/R8.md) | `--check quads` (every expanded corner equal to the CPU's) in CI; `bench chunks -check`: quad bytes at most 55% of the vertex bytes; `images` unchanged; `gpu_world` within noise (measured) |
-| R9 | [Memory: sub-allocation, a growing geometry arena, no lost meshes](milestones/R.md#r9-memory) | at most 10 `vkAllocateMemory` calls in `flight`; no mesh ever dropped |
+| R9 | [A GPU memory allocator: every buffer and image sub-allocated](milestones/R9.md) | the TLSF tests and model property test; `bench budgets -check` within `Tlsf_Op`; every `--check` and `images` under validation with `gpu_allocations` in the counts; at most 10 `vkAllocateMemory` calls in `flight` (measured) |
+| R9b | [The geometry arena grows; no mesh is ever lost](milestones/R9b.md) | `--check arena`: growth verified byte for byte, eviction only of the farthest and every near chunk shown; `.Full` gone; `flight` p99 within noise (measured) |
 | R10 | [Uploads off the graphics queue](milestones/R.md#r10-uploads-off-the-graphics-queue) | `flight` frame p99 and worst at most 80% of R9's |
 | R11 | [The frame graph and an HDR target](milestones/R.md#r11-the-frame-graph-and-an-hdr-target) | `images` passes unchanged; `gpu_frame` within 5% |
 | R11b | [The look: tonemap, grade, dither, water, foliage](milestones/R.md#r11b-the-look) | `images` baselines re-accepted with the new look and still catching a change; each effect's GPU cost measured with `bench compare`, within the budget the spec states from that measurement |

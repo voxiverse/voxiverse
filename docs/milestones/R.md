@@ -239,29 +239,14 @@ Spec: [R7b.md](R7b.md) (split from R7 by #87).
 Spec: [R8.md](R8.md) (checked against the code by #87: quad records packed after meshing,
 water's flat faces merged, its surface an open question).
 
-## R9: memory
+## R9: a GPU memory allocator
 
-**Why.** One allocation per resource; a full vertex buffer silently loses meshes; the mesh
-limit is below the chunk capacity.
+Spec: [R9.md](R9.md) (checked against the code and split by #87: the allocator and every
+resource on it).
 
-**Design (decided).**
+## R9b: the geometry arena grows, no mesh lost
 
-- **Sub-allocation.** `client/gpu/allocator.odin`: per memory type, 64 MiB blocks with a
-  TLSF-style free list; resources at or above 32 MiB get a dedicated allocation. All
-  `create_buffer` and `create_image` calls go through it. `Gpu.memory_bytes` counts block
-  bytes; a new metric counts `vkAllocateMemory` calls.
-- **The world's geometry arena grows.** When the quad arena cannot place a mesh, it grows
-  by a block (up to a limit derived from `VK_EXT_memory_budget` when present, else 512 MiB)
-  and moves live ranges with a GPU copy in the upload pass; meshes are never dropped. If
-  the limit is reached, the farthest meshes are evicted and re-requested when the camera
-  comes closer, and a warning is logged once.
-- `max_meshes` derives from the client's chunk capacity.
-
-**Tests.** Allocator unit tests (fragmentation, coalescing, dedicated); a client test that
-fills the arena past its first size and keeps every mesh; the old `.Full` path removed.
-
-**Exit check.** `vkAllocateMemory` calls during `flight` at most 10; `images` passes;
-`flight` frame p99 within noise or better.
+Spec: [R9b.md](R9b.md) (split from R9 by #87).
 
 ## R10: uploads off the graphics queue
 
