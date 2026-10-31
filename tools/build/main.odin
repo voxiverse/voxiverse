@@ -97,13 +97,10 @@ SOURCE_DIRS :: []string {
 // COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
 // common:game, tools:build/limited). The driver passes them to every odin it runs; build.sh,
 // build.bat (the driver's own build) and ols.json (the editor) repeat them, and a test keeps
-// those three in step. A package's own directory is `server:.` / `client:.`.
-COLLECTIONS :: []string {
-	"-collection:client=client",
-	"-collection:server=server",
-	"-collection:common=common",
-	"-collection:tools=tools",
-}
+// those three in step. The list lives in package limited, which tests/ shares, so the
+// `odin` the tests run on their fixtures takes the same flags. A package's own directory is
+// `server:.` / `client:.`.
+COLLECTIONS :: limited.COLLECTIONS
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
 // CHECK_FLAGS: library packages have no main of their own.

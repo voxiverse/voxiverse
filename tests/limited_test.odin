@@ -2,6 +2,7 @@ package tests
 
 import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:testing"
 import "core:time"
 
@@ -51,13 +52,14 @@ test_panic_in_a_server_thread_fails_fast :: proc(t: ^testing.T) {
 	when ODIN_OS == .Windows {
 		out = "-out:build/tmp/panic_fixture.exe" // Odin wants an extension there
 	}
-	cmd := []string {
-		"odin",
-		"test",
-		"tests/panic_fixture",
-		out,
-		"-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true",
-	}
+	cmd := slice.concatenate(
+		[][]string {
+			{"odin", "test", "tests/panic_fixture", out},
+			limited.COLLECTIONS,
+			{"-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"},
+		},
+		context.temp_allocator,
+	)
 	start := time.tick_now()
 	result := limited.run_limited(cmd, 120 * time.Second)
 	took := time.duration_seconds(time.tick_since(start))

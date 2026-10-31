@@ -2,6 +2,7 @@
 package tests
 
 import "core:os"
+import "core:slice"
 import "core:testing"
 import "core:time"
 
@@ -13,15 +14,14 @@ import "tools:build/limited"
 @(test)
 test_zoom_and_green_button :: proc(t: ^testing.T) {
 	os.make_directory_all("build/tmp")
-	build := []string {
-		"odin",
-		"build",
-		"tests/window_fixture",
-		"-out:build/tmp/window_fixture",
-		"-vet",
-		"-strict-style",
-		"-warnings-as-errors",
-	}
+	build := slice.concatenate(
+		[][]string {
+			{"odin", "build", "tests/window_fixture", "-out:build/tmp/window_fixture"},
+			{"-vet", "-strict-style", "-warnings-as-errors"},
+			limited.COLLECTIONS,
+		},
+		context.temp_allocator,
+	)
 	if !testing.expect_value(
 		t,
 		limited.run_limited(build, 120 * time.Second),

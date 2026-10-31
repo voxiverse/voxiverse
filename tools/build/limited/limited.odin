@@ -8,6 +8,15 @@ import "core:fmt"
 import "core:os"
 import "core:time"
 
+// COLLECTIONS: the `-collection:` flags every first-party `odin` run takes (see the driver's
+// own comment in main.odin); here so tests/ can pass them to the fixtures it builds.
+COLLECTIONS :: []string {
+	"-collection:client=client",
+	"-collection:server=server",
+	"-collection:common=common",
+	"-collection:tools=tools",
+}
+
 Run_Result :: enum {
 	Ok,
 	Failed, // exited nonzero, or could not start
