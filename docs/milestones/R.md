@@ -256,58 +256,14 @@ Spec: [R10.md](R10.md) (checked against the code by #87).
 
 Spec: [R11.md](R11.md) (checked against the code by #87).
 
-## R11b: the look
+## R11b: the look, part one (tonemap and exposure, grade, dither)
 
-**Why.** R11 gives the scene an HDR target and a tonemap pass that is the identity. The owner
-decided (2026-10-30) the look that goes on it. This section is the spec; nothing is built yet.
+Spec: [R11b.md](R11b.md) (checked against the code and split by #87; the owner's decision of
+2026-10-30 is kept there as written).
 
-**Design (decided).** Each effect is its own toggle in Options (Graphics), on by default, with
-every tunable (below) a data value that hot-reloads. CI screenshots each effect on and off.
+## R11c: the look, part two (water, foliage)
 
-1. **Tonemap and exposure.** A neutral AgX-style tonemap (hues stay true as they brighten)
-   replaces R11's identity. Exposure follows eye adaptation (a caves-to-daylight and back
-   transition) from the average log luminance of the HDR target, computed in a compute pass
-   in the frame graph; the tonemap reads the exposure from a GPU buffer, with no CPU
-   readback. Reduce motion makes adaptation instant. Tunables: adaptation speed up and down,
-   exposure minimum and maximum, exposure bias.
-2. **A colour grade per world.** A small 3D lookup table (32 cubed) built on load from the
-   world's palette (the palettes already come from the world's address; same address, same
-   table), applied after the tonemap. Tunable: grade strength (0 is the identity table).
-3. **Dithering at the output.** Ordered (blue-noise texture, generated, no asset file) noise of
-   under one output step added before the swapchain's quantization, removing banding in sky
-   and fog gradients. It is applied to the scene only: the UI is drawn after the tonemap pass
-   and stays clean. Block textures keep nearest filtering and their palette quantization; the
-   dither is at the output's resolution and one output step, so it does not soften them.
-   Tunable: strength.
-4. **Water.** A reflection of the sky at grazing angles (Schlick fresnel; the sky colour from
-   the sky model's horizon and zenith, no screen-space trace) and a fade of the water's
-   opacity and colour with depth (the depth behind the surface from the depth target).
-   Tunables: fresnel strength and power, depth fade distance.
-5. **Foliage.** Grass and leaves sway in a wind computed in the vertex shader from the
-   server's time (the world tick, not the client clock), the block's position and a fixed
-   noise, so every player sees the same motion. Reduce motion sets the sway to zero.
-   Tunables: sway amount, wind speed.
-
-**Not in R11b (the owner's choice):** bloom, light shafts, vignette, film grain, sun
-shadows, anti-aliasing; they stay in "Visual changes that wait for the owner".
-
-**Data.** The tunables live in one data file (in the format the other hot-reloaded renderer
-data uses), with the starting values listed in the report for the owner to tune.
-
-**Tests.** The grade table is deterministic per address and the identity at strength 0;
-the tonemap's reference function agrees with the shader on a grid (as `--check cull` does);
-adaptation steps toward the target at the set speed and is instant under Reduce motion;
-the wind at a given tick and position is the same on two clients and zero under Reduce motion;
-the dither leaves UI pixels unchanged and a flat gradient banding-free; each toggle off gives
-`images` output identical to R11's; hot reload changes a tunable without a restart.
-
-**Exit check.** The `images` baselines are re-accepted with the new look and still catch a
-change (as R1 requires: a mutation of a tunable fails them). The effects' GPU cost is measured
-with `bench compare` against R11's last commit on `views` and `views -size:2560x1440`, each
-effect's cost reported on its own; the budget is stated from that measurement (decided now:
-until measured, at most 15% more `gpu_frame`, to be replaced by the measured figure plus 25%
-headroom). CI screenshots with each effect on and off. Check by hand: look at those
-screenshots and tune the starting values.
+Spec: [R11c.md](R11c.md) (split from R11b by #87).
 
 ## R12: the sky at a fraction of the cost
 

@@ -415,7 +415,7 @@ million tokens re-read per step), not the code it wrote. So:
     and the sandbox) → packs signed and checked (M54, M54g, M54h, M54i; split in four by #86) → the creator tools (M54c experiences,
     M54d edit mode and test-play, M54e a text area and the clipboard, M54f scripts edited in
     the game) → the client renderer (R7,
-    R7b, R8, R9, R9b, R10, R11, R11b, R12, R13; independent of the rest; R7 and R9 split in two by #87) → R15 (entities on the GPU,
+    R7b, R8, R9, R9b, R10, R11, R11b, R11c, R12, R13; independent of the rest; R7, R9 and R11b split in two by #87) → R15 (entities on the GPU,
     after M50's entity storage) → M49d → M54b → secure transport and scale (M55, M55b) → the
     hooks for online services (M55c) → audio (M56, M56b, M57, M57b, M58, M58b). R14 stays
     held: the owner deferred it. Sharing experiences beyond one server comes after online
@@ -662,7 +662,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | R9b | [The geometry arena grows; no mesh is ever lost](milestones/R9b.md) | `--check arena`: growth verified byte for byte, eviction only of the farthest and every near chunk shown; `.Full` gone; `flight` p99 within noise (measured) |
 | R10 | [Uploads off the graphics queue: a transfer queue, a staging ring, a timeline](milestones/R10.md) | `--check uploads` under synchronization validation (every mesh shown, none drawn before its upload, a tiny ring, growths interleaved); `flight` frame p99 and worst at most 80% of the commit before (measured) |
 | R11 | [The frame graph and an HDR target](milestones/R11.md) | the graph's barrier and aliasing tests; every `--check` clean under synchronization validation; `images` unchanged with no re-accept; `bench budgets -check` within `Graph_Compile`; `views` `gpu_frame` within 5% (measured) |
-| R11b | [The look: tonemap, grade, dither, water, foliage](milestones/R.md#r11b-the-look) | `images` baselines re-accepted with the new look and still catching a change; each effect's GPU cost measured with `bench compare`, within the budget the spec states from that measurement |
+| R11b | [The look, part one: AgX tonemap and exposure, the grade's machinery, dithering, the look file](milestones/R11b.md) | `--check look` (AgX, luminance and adaptation against the CPU) in CI; `images` re-accepted with the look and catching a mutation, and every effect off equal to R11's pictures (`plain/`); the `Look` step's screenshots; each effect's cost measured, the look within 15% of R11's `gpu_frame` |
+| R11c | [The look, part two: water's sky reflection and depth fade, foliage in the wind](milestones/R11c.md) | `--check look` (wind, fresnel, fade against the CPU), `--check cull` with the sway margin and `--check occlusion` with foliage, in CI; `images` both sets; the look's budget fixed from the measurement |
 | R12 | [The sky at a fraction of the cost (half-resolution clouds)](milestones/R.md#r12-the-sky-at-a-fraction-of-the-cost) | `gpu_sky` at 2560x1440 at most 30% of baseline |
 | R13 | [Far terrain at level of detail](milestones/R.md#r13-far-terrain-at-level-of-detail) | `views-far` `gpu_world` at most 60% and `world_triangles` at most 40% of no LOD |
 | R14 | [Far terrain beyond the interest area (a protocol change: the owner decides first)](milestones/R.md#r14-far-terrain-beyond-the-interest-area) | set when the owner approves the design |
