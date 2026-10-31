@@ -94,7 +94,7 @@ test_test_timing_lint :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		found[0],
-		"server/x_test.odin:2: " + SLEEP + " in a unit test: step ticks, or move it to smoke/",
+		"server/x_test.odin:2: " + SLEEP + " in a unit test: step ticks, or move it to tests/",
 	)
 	testing.expect_value(t, len(lint_test_timing("f", "t := time.tick_" + "now()\n")), 1)
 	testing.expect_value(t, len(lint_test_timing("f", "// " + SLEEP + "\n")), 0)

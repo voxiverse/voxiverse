@@ -1,5 +1,5 @@
 #+build darwin
-package smoke
+package tests
 
 import "core:os"
 import "core:testing"
@@ -16,7 +16,7 @@ test_zoom_and_green_button :: proc(t: ^testing.T) {
 	build := []string {
 		"odin",
 		"build",
-		"smoke/window_fixture",
+		"tests/window_fixture",
 		"-out:build/tmp/window_fixture",
 		"-vet",
 		"-strict-style",

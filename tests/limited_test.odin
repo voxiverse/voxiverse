@@ -1,4 +1,4 @@
-package smoke
+package tests
 
 import "core:fmt"
 import "core:os"
@@ -54,7 +54,7 @@ test_panic_in_a_server_thread_fails_fast :: proc(t: ^testing.T) {
 	cmd := []string {
 		"odin",
 		"test",
-		"smoke/panic_fixture",
+		"tests/panic_fixture",
 		out,
 		"-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true",
 	}

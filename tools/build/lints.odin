@@ -101,7 +101,7 @@ lint_miniaudio :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// lint_test_timing: no `*_test.odin` outside smoke/ sleeps or reads a clock (time.sleep,
+// lint_test_timing: no `*_test.odin` outside tests/ sleeps or reads a clock (time.sleep,
 // time.now, tick_now, tick_since): a unit test counts ticks and steps a harness; what
 // needs the real clock is a smoke test.
 lint_test_timing :: proc(path, text: string) -> []string {
@@ -116,7 +116,7 @@ lint_test_timing :: proc(path, text: string) -> []string {
 				append(
 					&found,
 					fmt.aprintf(
-						"%s:%d: %s in a unit test: step ticks, or move it to smoke/",
+						"%s:%d: %s in a unit test: step ticks, or move it to tests/",
 						path,
 						line_no,
 						word,
@@ -128,7 +128,7 @@ lint_test_timing :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// lint_test_servers: no `start(&srv` in a unit test outside smoke/: a unit test runs the
+// lint_test_servers: no `start(&srv` in a unit test outside tests/: a unit test runs the
 // stepped server on the harness (harness_start), never a threaded one.
 lint_test_servers :: proc(path, text: string) -> []string {
 	found := make([dynamic]string)
@@ -141,7 +141,7 @@ lint_test_servers :: proc(path, text: string) -> []string {
 			append(
 				&found,
 				fmt.aprintf(
-					"%s:%d: start(&srv...) in a unit test: use harness_start, or move it to smoke/",
+					"%s:%d: start(&srv...) in a unit test: use harness_start, or move it to tests/",
 					path,
 					line_no,
 				),
@@ -151,7 +151,7 @@ lint_test_servers :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// test_lint scans the unit tests (every `_test.odin` outside smoke/) with the two rules above.
+// test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules above.
 test_lint :: proc() -> bool {
 	ok := true
 	for dir in ([]string{"client", "server", "common", "base", "dedicated", "tools"}) {
@@ -255,7 +255,7 @@ lint_ci_test_names :: proc(path, text: string, tests: []string) -> []string {
 test_names :: proc() -> (names: []string, ok: bool) {
 	out := make([dynamic]string)
 	ok = true
-	for dir in ([]string{"smoke", "common", "base", "client", "server", "dedicated", "tools"}) {
+	for dir in ([]string{"tests", "common", "base", "client", "server", "dedicated", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {

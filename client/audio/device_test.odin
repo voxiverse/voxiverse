@@ -6,7 +6,7 @@ import "core:slice"
 import "core:testing"
 
 // The file device, which needs no sound card. (The null device, paced by the
-// clock, is tested in smoke/.)
+// clock, is tested in tests/.)
 
 @(private = "file")
 tone_mixer :: proc() -> (m: ^Mixer, id: Sound_Id, samples: []f32) {

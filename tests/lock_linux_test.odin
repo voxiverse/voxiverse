@@ -1,5 +1,5 @@
 #+build linux
-package smoke
+package tests
 
 import "core:fmt"
 import "core:log"

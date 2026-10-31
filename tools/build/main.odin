@@ -48,7 +48,7 @@ PACKAGES :: []string {
 	"tools/worldmap",
 	"tools/bench",
 	"tools/debugger/printer_test",
-	"smoke",
+	"tests",
 }
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
@@ -91,7 +91,7 @@ SOURCE_DIRS :: []string {
 	"client/render",
 	"client",
 	"tools",
-	"smoke",
+	"tests",
 }
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
@@ -101,7 +101,7 @@ CHECK_FLAGS :: []string{"-no-entry-point"}
 GAME_PACKAGE :: "client"
 GAME_NAME :: "voxiverse"
 SERVER_PACKAGE :: "dedicated"
-SMOKE_PACKAGE :: "smoke"
+SMOKE_PACKAGE :: "tests"
 SERVER_NAME :: "voxiverse-server"
 
 SHADER_DIR :: "assets/shaders"

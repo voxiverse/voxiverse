@@ -1,5 +1,5 @@
 // Package limited runs a command under a time limit. The build driver's `test`
-// uses it, and so does smoke/ (which tests it): it is its own package so that
+// uses it, and so does tests/ (which tests it): it is its own package so that
 // both can.
 package limited
 

@@ -44,7 +44,7 @@ max_diff :: proc(a, b: []f32) -> f32 {
 }
 
 // A stream voice plays what the decoder gives, sample for sample, and ends
-// where the file does. (The same through a decoder thread is in smoke/.)
+// where the file does. (The same through a decoder thread is in tests/.)
 @(test)
 test_stream_equals_decode :: proc(t: ^testing.T) {
 	ref, ref_r := reference()

@@ -1,5 +1,5 @@
 #+build linux
-package smoke
+package tests
 
 import "core:log"
 import "core:os"

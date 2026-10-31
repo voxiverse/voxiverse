@@ -1,4 +1,4 @@
-package smoke
+package tests
 
 import "core:net"
 import "core:slice"
