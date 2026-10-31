@@ -78,7 +78,7 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `pack.json` | `json_parse` | random JSON to depth 45 (past the depth cap), long strings, escapes, numbers at the edges | |
 | `pack.registry` | `registry_build` over the base pack with one file replaced | the base pack's JSON files with one to four values replaced (a number by a string, an array by a 10 000-element one, ...) | errors carry a line inside the input |
 | `pack.png` | `png_texture` | a valid 16x16 PNG with IHDR sizes at the edges | CRCs repaired by the fixup |
-| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired |
+| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) still drives the suite's `test_ogg_fuzz` (20 000 cases) until Q2 |
 | `pack.archive` | `pack_archive_read` | a valid archive of three files | refusals of bad paths and sizes |
 | `save.region` | `region_open`, then every chunk by `region_next_chunk` | a region of four chunks written by the save code | header checksum repaired |
 | `save.journal` | `journal_read_segment` | a segment of 64 records of every kind | header and record checksums repaired |
