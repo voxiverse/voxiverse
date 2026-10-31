@@ -657,7 +657,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 | Q6 | [Showcase experiences built only from packs and scripts (a placeholder)](milestones/Q6.md) | **blocked on the owner: the owner names each showcase**; none is invented |
 | R7 | [The depth pyramid and the occlusion test, checked against the CPU](milestones/R7.md) | `--check hiz` (every mip bit-exact against the CPU; every occlusion verdict equal) and the conservativeness property test pass in CI; `images` with scene counts; `gpu_hiz` within its budget (measured) |
 | R7b | [Two-phase occlusion culling in the frame](milestones/R7b.md) | `--check occlusion` finds no chunk hidden while visible; motion scenes unchanged on baselines from before culling; `views` `gpu_world` at most 60% of the commit before (measured) |
-| R8 | [Compact geometry: quad pulling, water merged](milestones/R.md#r8-compact-geometry) | geometry memory at most 55% of R7's; `images` passes |
+| R8 | [Compact geometry: 16-byte quad records pulled by the vertex shader, water's flat faces merged](milestones/R8.md) | `--check quads` (every expanded corner equal to the CPU's) in CI; `bench chunks -check`: quad bytes at most 55% of the vertex bytes; `images` unchanged; `gpu_world` within noise (measured) |
 | R9 | [Memory: sub-allocation, a growing geometry arena, no lost meshes](milestones/R.md#r9-memory) | at most 10 `vkAllocateMemory` calls in `flight`; no mesh ever dropped |
 | R10 | [Uploads off the graphics queue](milestones/R.md#r10-uploads-off-the-graphics-queue) | `flight` frame p99 and worst at most 80% of R9's |
 | R11 | [The frame graph and an HDR target](milestones/R.md#r11-the-frame-graph-and-an-hdr-target) | `images` passes unchanged; `gpu_frame` within 5% |

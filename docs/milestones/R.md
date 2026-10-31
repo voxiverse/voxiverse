@@ -236,26 +236,8 @@ Spec: [R7b.md](R7b.md) (split from R7 by #87).
 
 ## R8: compact geometry
 
-**Why.** A quad is stored as four 8-byte vertices and six indices; the index buffer is
-sized per layer (`MAX_QUADS_PER_LAYER` 24 576), and water gets neither greedy merging nor
-face-group culling.
-
-**Design (decided).**
-
-- **Quad pulling.** A mesh stores one 16-byte record per quad instead of four 8-byte
-  vertices: position and size in sixteenths, face, texture layer, surface and drop bits, and
-  the four corners' AO (2 bits each) and light (8 bits each); the vertex shader expands six
-  vertices per quad from `gl_VertexIndex / 6` and `gl_VertexIndex % 6`. No index buffer. The record
-  layout is fixed in `client/mesh/mesh.odin` and mirrored in `world.glsl`, with a test that
-  both agree.
-- **Water** merges its top faces greedily where level and light agree, and uses face-group
-  runs like the opaque layers.
-
-**Tests.** Golden meshes of the benchmark region (vertex count, quad count) updated with
-their new numbers; `images` passes.
-
-**Exit check.** Geometry memory for `views` (bytes in the arena) at most 55% of R7's;
-`gpu_world` within noise or better; `mesh_faces` within noise or better.
+Spec: [R8.md](R8.md) (checked against the code by #87: quad records packed after meshing,
+water's flat faces merged, its surface an open question).
 
 ## R9: memory
 
