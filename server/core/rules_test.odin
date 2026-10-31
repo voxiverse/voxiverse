@@ -8,7 +8,7 @@ import "common:game"
 // rules.show_coordinates: on by default, a variable like the others
 // (world.cfg, the console), and sent to the clients with the rest of the
 // rules; it is the client's F3 that hides the position when it is off, for
-// a player without the permission debug.coordinates (client/camera_test.odin).
+// a player without the permission debug.coordinates (client/main/camera_test.odin).
 @(test)
 test_show_coordinates_rule :: proc(t: ^testing.T) {
 	rules := game.RULES_DEFAULTS

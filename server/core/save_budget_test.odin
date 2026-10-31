@@ -6,7 +6,7 @@ import "core:testing"
 // M46b's scene: a server holding a lot (200 characters, 512 edited chunks, 100
 // chests, 400 entities) saves as a running server does, then blocking. The
 // test checks that it works; what it costs the tick is `build bench budgets`
-// (server/budgets.odin).
+// (server/core/budgets.odin).
 
 @(test)
 test_save_200_characters :: proc(t: ^testing.T) {

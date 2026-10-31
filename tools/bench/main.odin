@@ -333,7 +333,7 @@ neighbour :: proc(
 	return &AIR_CHUNK
 }
 
-// trivially_empty: as client/world.odin decides.
+// trivially_empty: as client/engine/world.odin decides.
 trivially_empty :: proc(
 	table: ^game.Block_Table,
 	chunks: map[game.Chunk_Pos]game.Chunk_Blocks,

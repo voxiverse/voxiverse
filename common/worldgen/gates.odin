@@ -10,7 +10,7 @@ import "common:game"
 // stands within Params.gate_distance of the world's middle: something to
 // find late (`locate gate`). Travellers to a world arrive at its gate
 // nearest the middle (arrival_gate). The server opens them
-// (server/gates.odin): lit chevrons, and horizon blocks inside the ring.
+// (server/core/gates.odin): lit chevrons, and horizon blocks inside the ring.
 
 GATE_SIZE :: [2]i32{11, 10} // across, up (the ring's plane), on a platform
 GATE_DEPTH :: 3

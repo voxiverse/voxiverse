@@ -1266,7 +1266,7 @@ AUDIO_SCENARIOS :: []string {
 	"all",
 }
 
-// audio_baselines runs the audio quality baselines (client/audio_baseline_test.odin,
+// audio_baselines runs the audio quality baselines (client/engine/audio_baseline_test.odin,
 // files in assets/baselines/audio/): `--accept <scenario|all>` rewrites the
 // named baseline from what the scenario sounds like now (review the diff),
 // `--wav <dir>` also writes every scenario's master as a WAV to listen to,
@@ -1363,11 +1363,11 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 
 // bench runs a benchmark scenario the one way: `chunks` is tools/bench
 // (no game), the others a release build of the game with --benchmark
-// (client/benchmark.odin has them and their fixed conditions).
+// (client/autopilot/benchmark.odin has them and their fixed conditions).
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (server/dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/autopilot/benchmark.odin), server and party (server/dedicated/bench.odin), or compare",
 		)
 		return false
 	}

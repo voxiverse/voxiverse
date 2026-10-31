@@ -28,14 +28,18 @@ directly in it, not its sub-folders: each sub-folder has its own row.
 5. **Fuzz code** is named `fuzz*.odin` (`fuzz.odin`, `fuzz_<target>.odin`; its test is
    `fuzz_test.odin`) in the package that owns the thing fuzzed.
 
-## The move (state of the work: L1 of 3)
+## The move (state of the work: L2 of 3 done)
 
-Packages are being split into feature packages (milestone row L1; spec in
-[milestones/L1.md](milestones/L1.md)). Until a split is done its package's row carries the
-broad pattern `*.odin`; a finished split narrows the row to the names the folder allows. The
-**cap on files per package** (rule 5 of the owner's decisions, #96) is switched on by L3, when
-the layout it counts is the layout it will keep: a cap that the unsplit `client` and `server`
-fail cannot be switched on first, and a per-folder allowance is an exemption.
+Packages were split into feature packages (milestone rows L1 and L2, specs in
+[history.md](history.md)): no package sits at the root of `client/` or `server/`. `server/core`
+is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
+`client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
+feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
+import it, in that order, with `client/main` on top. The tests that share a fixture which needs
+the whole frame (`ui_frame`, `overlay_fixture`) live in `client/main`. The **cap on files per
+package** (rule 5 of the owner's decisions, #96) is switched on by L3, which chooses it
+knowing the counts of `server/core` and `client/engine`; a per-folder allowance is an
+exemption.
 
 ## Folders
 

@@ -14,8 +14,8 @@ import "core:time"
 // filter on:
 //
 //	console:    3.214 INFO  server    started seed=24301 view=12x6 workers=2
-//	            3.215 WARN  mesh 2    chunk dropped pos=[1,6,4] (client/world.odin:240)
-//	file:       3.214512 | INFO | server | started seed=24301 view=12x6 workers=2 | server/server.odin:105
+//	            3.215 WARN  mesh 2    chunk dropped pos=[1,6,4] (client/engine/world.odin:240)
+//	file:       3.214512 | INFO | server | started seed=24301 view=12x6 workers=2 | server/core/server.odin:105
 //
 // One Log_Sink per process owns the outputs (console, file, and a listener
 // such as the in-game console); a lock keeps lines whole when threads log at

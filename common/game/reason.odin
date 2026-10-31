@@ -1,6 +1,6 @@
 package game
 
-// Why an item was made or unmade (the server's ledger, server/ledger.odin;
+// Why an item was made or unmade (the server's ledger, server/core/ledger.odin;
 // telemetry's Item_Created and Item_Destroyed carry the number).
 
 // Reason: append-only (the number is in the event's n1).

@@ -16,7 +16,7 @@ import "common:base"
 //
 //	build analytics --pull <host:path> [dir]      (dir: lake)
 //
-// and reads one server's session recording (server/session_log.odin) as a report:
+// and reads one server's session recording (server/core/session_log.odin) as a report:
 // weapon balance, each player's frame times and hardware, network quality, errors:
 //
 //	build analytics --session <file>

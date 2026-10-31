@@ -51,7 +51,7 @@ Kind :: enum u16 {
 	Damage, // text: cause (fall, explosion); n0: tenths of a health point; n1: health left in tenths
 	Death, // text: cause
 	Level_Up, // n0: the new level; n1: total xp
-	Item_Created, // text: item; n0: count; n1: the reason (server/ledger.odin)
+	Item_Created, // text: item; n0: count; n1: the reason (server/core/ledger.odin)
 	Item_Destroyed, // text: item; n0: count; n1: the reason
 	Audit_Failed, // text: item; n0: held; n1: the ledger says; n2: difference
 	Respawned, // text: the game mode

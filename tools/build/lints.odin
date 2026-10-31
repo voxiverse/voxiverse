@@ -9,8 +9,7 @@ import "core:strings"
 // exemption or a skip list: a rule is kept by changing the code it finds.
 
 // The interface layers of the client: the files of the packages that draw screens, menus,
-// overlays, the console, the HUD and the button prompts. (While a file with an old prefix
-// still sits in client/engine, it counts too: that clause goes when the last one has moved.)
+// overlays, the console, the HUD and the button prompts.
 LAYER_FOLDERS :: []string {
 	"client/screen",
 	"client/menu",
@@ -27,11 +26,6 @@ is_layer_file :: proc(path: string) -> bool {
 	if strings.has_suffix(name, "_test.odin") {return false}
 	for layer in LAYER_FOLDERS {
 		if folder == layer {return true}
-	}
-	if folder == "client/engine" {
-		for prefix in ([]string{"screen_", "menu_", "overlay_", "hud_"}) {
-			if strings.has_prefix(name, prefix) {return true}
-		}
 	}
 	return false
 }

@@ -6,7 +6,7 @@ import "client:render"
 import "client:ui"
 import "common:game"
 
-// Hitscan weapons on the client (server/weapons.odin decides everything). The
+// Hitscan weapons on the client (server/core/weapons.odin decides everything). The
 // client sends "I pulled the trigger" (Shoot) and predicts only effects: the
 // tracer and muzzle flash, the shot's sound, the recoil kick and the magazine
 // counter. A hit, a kill and the damage are the server's word (Hit_Confirm,

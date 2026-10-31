@@ -7,7 +7,7 @@ import "core:testing"
 
 import "common:game"
 
-// The universes screen's creation (client/screen_creation.odin) starts a
+// The universes screen's creation (client/screen/creation.odin) starts a
 // universe with the typed seed and a game mode; the files say what the
 // screen's cards show.
 

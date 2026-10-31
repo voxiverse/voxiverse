@@ -4,7 +4,7 @@ This document defines the shape of the script API that M51 and M52 will expose f
 survival systems.
 
 Survival for the LAN playtest (M48f, M48g) is built in Odin, on procedures that the script VM
-will wrap rather than bypass. Each procedure is declared in `server/script_api.odin` as a
+will wrap rather than bypass. Each procedure is declared in `server/core/script_api.odin` as a
 typed procedure (the future native), with its capability (using M52's names) as a constant.
 
 No part of this API is scriptable yet; this document is the contract. A script never changes

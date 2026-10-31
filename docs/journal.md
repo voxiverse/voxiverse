@@ -8,7 +8,7 @@ point (`admit`) sits on the way in.
 ## The pipeline rule
 
 Blocks of a server's chunks change in one way: `set_block(w, p, b, act, by)` and
-`bulk_edit(w, e, act)` (`server/changes.odin`, `server/edits.odin`). The `act` is
+`bulk_edit(w, e, act)` (`server/core/changes.odin`, `server/core/edits.odin`). The `act` is
 required: `Act{action, how}`. Inside, per block: `act_current` (a freed action becomes the
 world's), `admit`, the write, `journal_entry` (or `journal_batch` for a bulk edit's chunk).
 `build check` fails on `chunks_set_block(` or `game.chunk_set(` in any non-test file of
@@ -34,7 +34,7 @@ Consequences inherit their cause, so rolling back a griefer also restores the wa
 released, and rolling back someone else's change next to water they woke leaves that water
 (it is theirs: reported as `kept`).
 
-Entities and inventories are not journaled (M50, M31's ledger); a block entity's value is kept with the entry that removed it, in memory only (M48b, `server/block_entities.odin`: a rollback puts a broken chest back with what it held, taking its spilled stacks back from the ground; M48c saves the values);
+Entities and inventories are not journaled (M50, M31's ledger); a block entity's value is kept with the entry that removed it, in memory only (M48b, `server/core/block_entities.odin`: a rollback puts a broken chest back with what it held, taking its spilled stacks back from the ground; M48c saves the values);
 rules, the clock and generator parameters get marker records only (`Params`).
 
 ## Time
@@ -72,7 +72,7 @@ empty journal.
 
 ### Compaction and retention
 
-`world_save` (`journal_maintain`, `server/journal_compact.odin`) compacts at most one
+`world_save` (`journal_maintain`, `server/core/journal_compact.odin`) compacts at most one
 segment per save: a closed segment whose newest change is older than `JOURNAL_DETAIL`
 (108 000 ticks, an hour; judged by the next segment's first age, so a quiet world compacts
 late, never early) is rewritten once, with header flag `JOURNAL_COMPACTED`, through
@@ -93,7 +93,7 @@ from a snapshot newer than the oldest segment still is. `Config.journal_detail`,
 
 ## Region protection
 
-`World.protections` (`server/protect.odin`), at most 256 per world, each a name (1-32 of
+`World.protections` (`server/core/protect.odin`), at most 256 per world, each a name (1-32 of
 `[a-z0-9_-]`), a box and member character names; saved in `worlds/<address>/protections.cfg`
 (`protect <name> x1 y1 z1 x2 y2 z2 [member ...]`, one per line; written when changed and
 retried at save) and hashed in the `Journal` section (by name). A change inside a protection
@@ -144,5 +144,5 @@ record in the interval refuses the replay.
 ## Cost
 
 `Config.journal_timed` counts the journal's cycles. `build bench budgets -check` (CI:
-"Benchmark check, budgets"; the scene is `budget_journal`, `server/budgets.odin`) holds it to 5% of the
+"Benchmark check, budgets"; the scene is `budget_journal`, `server/core/budgets.odin`) holds it to 5% of the
 ticks' time and 0.5 ms a tick on average over a flood, 20 blasts and ten big fills.

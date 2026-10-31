@@ -10,7 +10,7 @@ import "common:game"
 import "server:core"
 
 // The `budgets` benchmark scenario (docs/plan.md, T5; `build bench budgets`):
-// what the server's heavy work costs, each scene of server/budgets.odin once a
+// what the server's heavy work costs, each scene of server/core/budgets.odin once a
 // repetition, in CPU time of this thread: a save (what the tick pays to start
 // it, its largest slice, a blocking one), the item audit, saving and loading
 // many counters, the journal under a flood and blasts, 10 000 blocks of water

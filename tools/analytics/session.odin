@@ -5,7 +5,7 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-// `build analytics --session <file>`: one server session's file (server/session_log.odin:
+// `build analytics --session <file>`: one server session's file (server/core/session_log.odin:
 // the events of one LAN party, nothing uploaded) read as a report: what the weapons
 // did, how each player's machine and network did, how the server did, what went wrong.
 

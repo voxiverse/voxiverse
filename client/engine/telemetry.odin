@@ -15,7 +15,7 @@ import "common:telemetry"
 // Client_Info once per world joined (OS, view distance, fov, how long from
 // launch to playing), Client_Overlay when an overlay closes (how long it was
 // open), Client_Perf once a minute (frame time p50 and p99). The session
-// recording (server/session_log.odin) also takes Client_Hardware and
+// recording (server/core/session_log.odin) also takes Client_Hardware and
 // Client_Driver at joining and Client_Frames (p50, p95, worst) each minute. They are queued
 // and sent in a Telemetry_Report every 12 seconds at most (the server takes
 // a handful a minute); singleplayer reports to its own server the same way.

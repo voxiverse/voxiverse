@@ -24,7 +24,7 @@ telemetry/, analytics/, exports/              (never part of a save: analytics/ 
 
 A save must describe a single tick, because items move between inventories, chests and
 dropped stacks. Encoding a large universe, however, takes longer than a tick. `save_begin`
-(`server/save_slice.odin`) therefore **captures** the state at tick T, and the following
+(`server/core/save_slice.odin`) therefore **captures** the state at tick T, and the following
 ticks **encode** what was captured.
 
 ### Capture
@@ -64,7 +64,7 @@ The journal segment a save names is synced by the worker before the commit, not 
 
 ## The save transaction
 
-Each save is a single transaction. The batch (`Save_Batch`, `server/save_tx.odin`) is passed
+Each save is a single transaction. The batch (`Save_Batch`, `server/core/save_tx.odin`) is passed
 to the save worker. A stepped server has no worker; there, the batch runs inside `save`.
 
 The worker performs the following steps:
@@ -99,7 +99,7 @@ All disk access goes through `common/base/disk.odin` (`disk_write`, `disk_replac
 `disk_link`, ...). These operations are durable (`fsync`; `F_FULLFSYNC` on macOS;
 `FlushFileBuffers` and write-through renames on Windows) and support fault injection.
 `Disk_Faults` tears the Nth operation and refuses every operation after it;
-`server/crash_test.odin` uses this to kill a save at every operation.
+`server/core/crash_test.odin` uses this to kill a save at every operation.
 
 ## Compaction
 
@@ -117,7 +117,7 @@ A region file has the same bytes whenever it is written (tops are sorted).
 
 ## Export and import
 
-A `.vxu` file contains one universe (`server/export.odin`): a header, then each file with
+A `.vxu` file contains one universe (`server/core/export.odin`): a header, then each file with
 its path, size and CRC, then a seal over every path and CRC. The files are those of a
 backup, plus the journal up to the end that its `world.cfg` records. `--no-journal` omits
 the journal, which names characters. The file is not compressed, because regions are already
@@ -195,7 +195,7 @@ them whole.
 
 ## Migrations
 
-`MIGRATIONS` in `server/migrate.odin` is a chain: the entry `from` produces format
+`MIGRATIONS` in `server/core/migrate.odin` is a chain: the entry `from` produces format
 `from + 1`. Opening an older save:
 
 1. makes a `pre-migration-<from>` backup;

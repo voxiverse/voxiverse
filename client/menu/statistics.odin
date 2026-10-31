@@ -11,7 +11,7 @@ import "client:ui"
 import "common:game"
 
 // The statistics overlay: the counters the server keeps for the character
-// (server/stats.odin) as a tree by their dotted names, a parent being the
+// (server/core/stats.odin) as a tree by their dotted names, a parent being the
 // sum of what is below it; a search narrows it (the server filters, a page
 // at a time) and a click opens or closes a group. Numbers are shown by
 // unit: distances in metres, times as hours and minutes.

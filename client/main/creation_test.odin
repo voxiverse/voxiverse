@@ -14,7 +14,7 @@ import "common:worldgen"
 
 // The creation screen and Ignite (screen_creation.odin, screen_ignite.odin).
 // (A universe made with a typed seed has that seed's glyph address:
-// server/gamemode_test.odin.)
+// server/core/gamemode_test.odin.)
 
 @(private = "file")
 creation_app :: proc(t: ^testing.T) -> ^engine.App {

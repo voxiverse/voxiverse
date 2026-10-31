@@ -54,7 +54,7 @@ Metric :: enum u8 {
 	// The telemetry scenario: one value per event.
 	Telemetry_Emit, // emitting an event (a lock and a copy), us
 	Telemetry_Write, // the writer's work on an event (format and file), us
-	// The budgets scenario: one value per repetition (server/budgets.odin).
+	// The budgets scenario: one value per repetition (server/core/budgets.odin).
 	Save_Capture, // starting a save with 200 characters and 512 edited chunks, us
 	Save_Slice, // the largest slice of that save, us
 	Save_Blocking, // a blocking save of all of it, ms

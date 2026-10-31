@@ -80,7 +80,7 @@ Floats are hashed as their bits, so -0 is distinct from 0. Padding never enters 
 map or a pointer causes a panic naming its path; keyed state is hashed by hand, in sorted
 order. A field added to a struct is therefore hashed without any further action.
 
-`server/state_hash.odin` hashes what a tick left behind, in sections:
+`server/core/state_hash.odin` hashes what a tick left behind, in sections:
 `Clock`, `Rules`, `Players`, `Inventories`, `Entities`, `Chunks`, `Liquids`, `Containers`,
 `Gates`, `Random`, `Ledger` and `Journal`. The `Chunks` section covers the chunks changed
 this tick. The `Journal` section covers every entry and action of the tick, folded as
@@ -93,7 +93,7 @@ is reported by name.
 
 ## The harness
 
-`server/harness.odin` provides the stepped server that tests run on (T2, issue #66). A
+`server/core/harness.odin` provides the stepped server that tests run on (T2, issue #66). A
 `Harness` holds the server, an in-memory network, and the parties that play on it. A test
 waits for a **number of ticks**, never for a clock or a sleep.
 
@@ -105,7 +105,7 @@ waits for a **number of ticks**, never for a clock or a sleep.
    (`simnet_tick_time(tick)`: `tick * 1 s / TICK_RATE` in integers after a fixed epoch, so
    30 ticks are exactly one second).
 2. Every party takes its turn, in the order added: the M38 mirror, a test client, a
-   `client.Session`, a bot.
+   `engine.Session`, a bot.
 3. The server steps.
 
 What a party sends during a tick is handled in that tick. What the server sends at the end of
@@ -168,7 +168,7 @@ pipe's `Fake_Client`. A wait lasts at most `seconds * TICK_RATE` ticks; it never
 
 ## Scenarios
 
-`server/scenario_test.odin` (T3) plays a `Scenario` on the harness. A scenario is a sequence
+`server/core/scenario_test.odin` (T3) plays a `Scenario` on the harness. A scenario is a sequence
 of steps, each consisting of a tick, a player and an operation, played by the mirror
 (player 0, predicting) and bots on the simulated network. Whatever the scenario does, the
 runner checks that:
@@ -184,7 +184,7 @@ A new area of play is covered by a new scenario, not by a new test with its own 
 
 ## The cross-OS job
 
-`build determinism` runs `server.test_determinism_session`, a scripted 10 000-tick session
+`build determinism` runs `core.test_determinism_session`, a scripted 10 000-tick session
 on a stepped server with seed 38 and a mirror client on the pipe. It runs at `-o:minimal`
 and at `-o:speed`, each writing `build/determinism/<os>.<opt>.txt` (one line per tick with
 every section's hash, and a full dump at each checkpoint), and compares the logs.

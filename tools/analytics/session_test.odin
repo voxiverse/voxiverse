@@ -6,7 +6,7 @@ import "core:testing"
 import "common:telemetry"
 
 // A recorded session of two players: the file the server writes
-// (server/session_log.odin) read as a report.
+// (server/core/session_log.odin) read as a report.
 @(private = "file")
 session_text :: proc() -> string {
 	b := strings.builder_make(context.temp_allocator)

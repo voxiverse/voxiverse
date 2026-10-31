@@ -87,7 +87,7 @@ Item_Info :: struct {
 }
 
 // Weapon_Info: what a hitscan weapon does, all of it data (the item's
-// `weapon` object; server/weapons.odin is the only reader that matters).
+// `weapon` object; server/core/weapons.odin is the only reader that matters).
 Weapon_Info :: struct {
 	damage:      f32, // health points a body hit does
 	magazine:    int, // shots before a reload (at most MAX_MAGAZINE)

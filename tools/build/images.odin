@@ -15,7 +15,7 @@ import "common:limited"
 
 // Visual baselines (docs/debugging.md, "Visual baselines"): `build images`
 // renders every scene of assets/baselines/images/scenes.txt with the game
-// (`voxiverse --scene <name>`, client/scenes.odin) on lavapipe under
+// (`voxiverse --scene <name>`, client/autopilot/scene.odin) on lavapipe under
 // xvfb-run, the same on every machine and never a window on anyone's desktop,
 // and compares each picture with its baseline, <name>.png beside the scenes
 // file. `--accept <scene|all>` makes what was rendered the baseline (review
@@ -105,7 +105,7 @@ picture_read :: proc(path: string) -> (p: Picture, ok: bool) {
 	return {img.width, img.height, bytes.buffer_to_bytes(&img.pixels)}, true
 }
 
-// scenes_of: the scenes' names in a scenes file's text (client/scenes.odin
+// scenes_of: the scenes' names in a scenes file's text (client/autopilot/scene.odin
 // reads the same form: `name: script` a line, '#' comments).
 scenes_of :: proc(text: string) -> []string {
 	names := make([dynamic]string)

@@ -139,7 +139,7 @@ test_collections_lint :: proc(t: ^testing.T) {
 test_layer_files :: proc(t: ^testing.T) {
 	testing.expect(t, is_layer_file("client/hud/hotbar.odin"))
 	testing.expect(t, is_layer_file("client/console/line.odin"))
-	testing.expect(t, is_layer_file("client/engine/hud_game.odin"))
+	testing.expect(t, !is_layer_file("client/engine/hud_game.odin"))
 	testing.expect(t, !is_layer_file("client/engine/session.odin"))
 	testing.expect(t, !is_layer_file("client/hud/hud_test.odin"))
 	testing.expect(t, !is_layer_file("client/dev/panels.odin"))

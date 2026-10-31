@@ -5,7 +5,7 @@ import "core:hash"
 // The edit journal's shared half (docs/journal.md): who and what changed a
 // block (an actor and a system), the entries and actions the server keeps,
 // and the segment file format, with its readers so tools can read journals.
-// The server's side is server/journal.odin.
+// The server's side is server/core/journal.odin.
 
 Actor_Kind :: enum u8 {
 	World, // the world itself (natural water, random ticks, gates, grazing)

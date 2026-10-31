@@ -16,7 +16,7 @@ import "server:core"
 // card knows from its config, Export and Import through the buttons. (Rename
 // and Delete's one confirmation: menus_test.odin's test_saves_screen; that
 // entering a universe puts the character where it last stood:
-// server/gamemode_test.odin.)
+// server/core/gamemode_test.odin.)
 
 @(private = "file")
 make_universe :: proc(dir, name: string, seed: u64, mode: string, age: time.Duration) {

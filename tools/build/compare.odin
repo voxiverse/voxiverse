@@ -149,7 +149,7 @@ compare_run :: proc(side: ^Compare_Side, scenario, size: string) -> bool {
 		return false
 	}
 	// Its result: the newest file of the scenario's.
-	// (A size of its own is a scenario of its own: client/benchmark.odin, bench_name.)
+	// (A size of its own is a scenario of its own: client/autopilot/benchmark.odin, bench_name.)
 	dir := path_join(
 		{"build", "benchmarks", scenario if size == "" else fmt.tprintf("%s-%s", scenario, size)},
 	)

@@ -98,7 +98,7 @@ Set_Rule :: struct {
 	value: string,
 }
 
-// Command runs a server command (server/admin.odin), each needing its own
+// Command runs a server command (server/core/admin.odin), each needing its own
 // permission.
 Command :: struct {
 	command: string,

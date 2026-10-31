@@ -3,7 +3,7 @@ package game
 import "core:strings"
 
 // What hurts a player, and how a death is told. A source kind is the one
-// thing the damage pipeline (server/damage.odin) and the death message are
+// thing the damage pipeline (server/core/damage.odin) and the death message are
 // keyed by: a new source is an enum value and a line below, no branches.
 
 Source_Kind :: enum u8 {

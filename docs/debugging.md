@@ -25,7 +25,7 @@ warning at startup.
 ```
 console:    3.214 INFO  server     server player joined name="player"
             3.215 WARN  main       gpu renderdoc is loaded but did not provide API 1.6 (client/gpu/renderdoc.odin:60)
-file:       3.214512 | INFO | server | server player joined name="player" | server/server.odin:224
+file:       3.214512 | INFO | server | server player joined name="player" | server/core/server.odin:224
 ```
 
 Each line contains:
@@ -66,8 +66,8 @@ Options combine, e.g. `VX_VALIDATION=best,gpu` or `build run --release --profile
 
 ```
 vulkan [VUID-vkCmdDraw-renderpass]: vkCmdDraw(): This call must be issued inside an active render pass.
-  at client::draw (client/main.odin:118)
-  at client::run_with_gpu (client/main.odin:107)
+  at client::draw (client/main/main.odin:118)
+  at client::run_with_gpu (client/main/main.odin:107)
 ```
 
 - The bracketed ID can be searched for in the
@@ -104,7 +104,7 @@ that fails to compile logs glslang's message with file and line, and the previou
 running. `set debug.hot_reload_shaders 0` disables hot reload.
 
 `scene.glsl` is included by the world, sky and entity shaders (the per-frame scene, sky
-colours, clouds); saving it reloads all three. `client/passes.odin` lists the passes and what
+colours, clouds); saving it reloads all three. `client/engine/passes.odin` lists the passes and what
 they include.
 
 `time <name|0..1>` together with `set rules.daylight_cycle 0` holds the sky still while you
@@ -128,7 +128,7 @@ A save is a universe, which is a directory. It contains:
 A directory from before universes (a `world.cfg` at the top) becomes a universe when opened,
 and its world becomes the home world. Files are replaced through a temporary file, so a crash
 during a save keeps the previous save. A region file that fails its checksum is moved aside
-(`.damaged-<time>`) with an error, and is never loaded. `server/save_test.odin` covers save,
+(`.damaged-<time>`) with an error, and is never loaded. `server/core/save_test.odin` covers save,
 quit and load, edits surviving unloading, and damaged files.
 
 [saves.md](saves.md) describes the save format and transaction in full.
@@ -215,7 +215,7 @@ Where no mechanism responds, the game logs this and does nothing further.
 
 `render.debug_line` and `render.debug_box` draw world-space lines for one frame from anywhere
 on the main thread. The lines are hidden behind terrain and never hide it. See
-`world_debug_lines` in `client/camera.odin`. `set debug.chunk_borders 1` outlines the
+`world_debug_lines` in `client/engine/camera.odin`. `set debug.chunk_borders 1` outlines the
 camera's chunk and its neighbours' edges.
 
 ## Commands
@@ -414,8 +414,8 @@ despawn after five minutes.
 
 ### Chests
 
-A chest (`server/containers.odin`) is a block with a container block entity of 25 stacks,
-kept with its chunk (`server/block_entities.odin`) and created when the block is placed.
+A chest (`server/core/containers.odin`) is a block with a container block entity of 25 stacks,
+kept with its chunk (`server/core/block_entities.odin`) and created when the block is placed.
 
 Right-clicking a chest sends `Use_Block`. The server then places the entity's slots in that
 player's `Inventory` (`chest`, `chest_open`), so that ordinary requests may name slots
@@ -425,7 +425,7 @@ request and out after it, and other players viewing the chest are notified.
 The chest closes on the `Close` request, or automatically when the player moves more than the
 reach plus two blocks away or the block is removed. The entity is removed with its block
 (broken, blown up, or edited in bulk; one code path, `entity_lifecycle`), and its contents
-spill out. `server/containers_test.odin` covers this behaviour.
+spill out. `server/core/containers_test.odin` covers this behaviour.
 
 ### Commands
 
@@ -440,7 +440,7 @@ spill out. `server/containers_test.odin` covers this behaviour.
 ## Statistics and events
 
 Everything the server counts or measures is an *event* (`common/telemetry/`: one kind per row of
-`KIND_INFO`, which defines the meaning of its fields). `record` (`server/stats.odin`) emits the
+`KIND_INFO`, which defines the meaning of its fields). `record` (`server/core/stats.odin`) emits the
 event and adds to the counters the kind names, both the player's and the world's.
 
 ### Counters
@@ -552,7 +552,7 @@ last addresses, and the message of the day are stored in `<world>/community.cfg`
 
 ## Overlays
 
-Every in-game panel is an overlay on a single stack (`client/overlay.odin`): the game menu,
+Every in-game panel is an overlay on a single stack (`client/engine/overlay.odin`): the game menu,
 Options, tuning, chat, console, and the quit dialog. Each overlay declares whether it takes
 the keyboard, frees the mouse, or pauses the world. The top overlay receives the keys, the
 focus and Escape.
@@ -562,13 +562,13 @@ focus and Escape.
 Water levels are block IDs (a source, flow levels 1-7, falling), so saves and the protocol
 require nothing new.
 
-The server runs scheduled block updates (`server/liquids.odin`): a queue ordered by tick and
+The server runs scheduled block updates (`server/core/liquids.odin`): a queue ordered by tick and
 position, of which at most 4096 run per tick, so the same edits produce the same water on
 every run. Any block change wakes the water next to it; seas and lakes are left alone until
 something opens them. Changes made by the world travel as `block` records (not `heard`),
 sorted by chunk, in the tick's `state` message. F3's server line shows the updates waiting.
 
-`server/liquids_test.odin` contains the dam break test (the same water twice, both players
+`server/core/liquids_test.odin` contains the dam break test (the same water twice, both players
 matching the server) and the flood test (10 000 blocks flowing within the tick budget; CI
 also runs it optimized).
 
@@ -662,12 +662,12 @@ refused when joining.
 
 ### Bandwidth baselines
 
-`server/bandwidth_test.odin` measures the exact bytes of a scripted session and of a crowd of
+`server/core/bandwidth_test.odin` measures the exact bytes of a scripted session and of a crowd of
 100 sheep. `assets/baselines/net/bandwidth.txt` holds the numbers, which are rewritten with
 `-define:VX_BANDWIDTH_ACCEPT=true`:
 
 ```sh
-ODIN_TEST_NAMES=server.test_bandwidth_accept ./build.sh test server
+ODIN_TEST_NAMES=core.test_bandwidth_accept ./build.sh test server/core
 ```
 
 ## Threads
@@ -678,7 +678,7 @@ traces.
 
 Odin's `-sanitize:thread` does not instrument memory accesses (as of dev-2026-10, only
 function entry and exit), so it finds no races. Threaded code is instead covered by
-deterministic tests (`common/base/queue_test.odin`, `server/server_test.odin`).
+deterministic tests (`common/base/queue_test.odin`, `server/core/server_test.odin`).
 
 ## Debuggers
 
@@ -836,7 +836,7 @@ uploaded this frame.
 
 Light is not stored: a chunk's light is a pure function of the blocks within 16 blocks of it
 and the column heights there (`common/game/light.odin`). The client computes it for each
-chunk before meshing (`client/world.odin`, R4) and keeps it, with the chunk, as its
+chunk before meshing (`client/engine/world.odin`, R4) and keeps it, with the chunk, as its
 `Light_Cache`: the light of the chunk and its 1-block border (18³ bytes, `sky << 4 | block`)
 that its mesh was made with, and the key of what it was computed from: an XXH3-64 hash of
 the 27 chunks' block versions (`Client_Chunk.blocks_version`, bumped by every change to a
@@ -855,7 +855,7 @@ So an edit lights again every chunk within `LIGHT_MAX` (15) blocks of it, and me
 only the chunks within a block of it and those whose light it changed. A registry swap
 (`world_remesh_all`) drops every cache: its blocks may light differently.
 
-The workers are `mesh_worker_count()` (`client/session.odin`): a quarter of the cores, at
+The workers are `mesh_worker_count()` (`client/engine/session.odin`): a quarter of the cores, at
 least two (R4's measurement of half the cores is in history.md).
 
 ### Pipelines
@@ -912,7 +912,7 @@ the same command for every change.
 The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
 `name: script`; the script is console commands separated by `;`, as `--exec` takes them.
 `voxiverse --scene <name>` runs one scene and quits: it joins the scratch world at its fixed
-spawn and draws offscreen at 640 x 360 (`client/scenes.odin`). Whatever could change the
+spawn and draws offscreen at 640 x 360 (`client/autopilot/scene.odin`). Whatever could change the
 picture from one run to the next is fixed:
 
 - the benchmarks' settings (`BENCHMARK_SETTINGS`), with no sound device;
@@ -968,7 +968,7 @@ scene is a line in `scenes.txt` and `./build.sh images --accept <name>`.
 
 The game's scenarios run a release build with `--benchmark <scenario>` under fixed conditions:
 
-- fixed settings (`BENCHMARK_SETTINGS` in `client/benchmark.odin`: no vsync; the player's
+- fixed settings (`BENCHMARK_SETTINGS` in `client/autopilot/benchmark.odin`: no vsync; the player's
   settings file is neither read nor written);
 - frames drawn offscreen at 1280 x 720 regardless of the window size (`gpu.set_offscreen`; the
   copy onto the window is `gpu_present_copy`, excluded from `gpu_frame`). `-size:WIDTHxHEIGHT`
@@ -1068,7 +1068,7 @@ The profiling tools, from narrowest to widest:
 
 ### Frame scopes
 
-The main thread's frame (`client/app.odin`, `app_frame`), outermost first:
+The main thread's frame (`client/engine/app.odin`, `app_frame`), outermost first:
 
 | Scope | Contents |
 |---|---|
@@ -1083,7 +1083,7 @@ The main thread's frame (`client/app.odin`, `app_frame`), outermost first:
 
 ### Server tick scopes
 
-The server's tick (`server/server.odin`, `tick`): `server tick #N` holds `scheduled calls`,
+The server's tick (`server/core/server.odin`, `tick`): `server tick #N` holds `scheduled calls`,
 `saving`, `collect chunks` (worldgen results), `receive messages`, `player` (each player),
 `unload idle worlds and audit`; per world, `block updates`, `random ticks`, `entities`,
 `containers`, `rewind, gates and rollback`, `changes flush`, `journal`; per player,
@@ -1133,7 +1133,7 @@ trace; take numbers, and before/after comparisons, from `build bench` on a build
 
 - **`odin test` is not the only build that sees a `_test.odin` file.** Odin compiles every
   `.odin` file of a package into every build of it; only `@(test)` procedures are dropped.
-  `server/kit_test.odin`'s `@(init)` (the tests' block kit) therefore ran in the game and the
+  `server/core/kit_test.odin`'s `@(init)` (the tests' block kit) therefore ran in the game and the
   server, and every new player started with eight stacks of blocks instead of the launcher and
   the mode's weapons. It is now inside `when ODIN_TEST`. Anything else at package level in a
   `_test.odin` file that has an effect (an `@(init)`, a global set at startup) requires the
@@ -1149,7 +1149,7 @@ trace; take numbers, and before/after comparisons, from `build bench` on a build
   The server's tick has a median of about 1.2 ms, a p99 of 2.0 to 2.1 ms, and a worst case of
   3.2 to 3.6 ms, against the 33.3 ms tick; there are no spikes. The client's frame with eight
   avatars is a manual check, because it requires a window.
-- **The multiplayer tests.** `server/party_test.odin` (`test_party_six_clients`,
+- **The multiplayer tests.** `server/core/party_test.odin` (`test_party_six_clients`,
   `test_party_eight_clients`) runs a stepped server over real UDP, with bots from
   `net_test.odin`'s `Net_Client`, for 6 000 ticks; each takes a few seconds.
 

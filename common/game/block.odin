@@ -63,7 +63,7 @@ Block :: enum u16 {
 	Wheat_6,
 	Wheat_7, // ripe
 	Wool_Black, // from a sheep with the recessive wool gene (M25)
-	Chest, // holds 25 stacks (M30): a block with a record of its own (server/containers.odin)
+	Chest, // holds 25 stacks (M30): a block with a record of its own (server/core/containers.odin)
 }
 
 // BUILTIN_BLOCK_IDS: the ids of the blocks engine code names (the members

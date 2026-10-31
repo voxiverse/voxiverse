@@ -37,7 +37,7 @@ chunk_set :: proc(
 }
 
 // chunk_replica_set: chunk_set for a copy of the world a client holds (the test client's, in
-// server/harness_client.odin). A server's chunks change only through set_block and bulk_edit
+// server/core/harness_client.odin). A server's chunks change only through set_block and bulk_edit
 // (docs/journal.md); the pipeline lint looks for chunk_set, so a replica writes by this name.
 chunk_replica_set :: proc(
 	c: ^Chunk_Blocks,

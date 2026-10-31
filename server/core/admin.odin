@@ -153,7 +153,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"clear", "[player] [item]", {0, 2}, admin_clear, "items.clear"},
 	{"item", "", {0, 0}, admin_item, "info.item"},
 	{"audit", "", {0, 0}, admin_audit, "admin.audit"},
-	// Worlds (client/screen_universes.odin).
+	// Worlds (client/screen/universes.odin).
 	{"travel", "<address> [character]", {1, 3}, admin_travel, "world.travel"},
 	{"address", "", {0, 0}, admin_address, "info.address"},
 	{"gamemode", "[mode] [player]", {0, 2}, admin_gamemode, ""},
