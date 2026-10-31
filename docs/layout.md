@@ -62,13 +62,14 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `assets/packs/voxiverse/data/shapes` | Block shapes | `*.json` |
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
-| `client` | The game client (being split into feature packages by L2) | `*.odin` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |
 | `client/audio/testdata` | Audio test input | `*.ogg` |
 | `client/dev` | Developer overlays (frame-time readout; L2b gathers the `dev_*` files) | `*.odin` |
+| `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, and the state every feature of `App` holds | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
 | `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |
 | `client/gpu` | Vulkan | `*.odin` |
+| `client/main` | The game's main package: entry point, frame and dispatch | `*.odin` |
 | `client/mesh` | Chunk meshing | `*.odin` |
 | `client/music` | The committed music: the piece table and its embedded files | `*.odin` |
 | `client/planet` | The planet palette for the title and creation backdrops | `*.odin` |

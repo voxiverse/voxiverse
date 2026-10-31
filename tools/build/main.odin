@@ -33,7 +33,8 @@ PACKAGES :: []string {
 	"client/platform",
 	"client/gpu",
 	"client/render",
-	"client",
+	"client/engine",
+	"client/main",
 	"client/mesh",
 	"client/starfield",
 	"client/planet",
@@ -80,7 +81,7 @@ TEST_PACKAGES :: []string {
 	"client/mesh",
 	"client/sfx",
 	"client/platform",
-	"client",
+	"client/engine",
 	"tools/analytics",
 	"tools/music",
 	"tools/build",
@@ -91,26 +92,12 @@ SOURCE_DIRS :: []string {
 	"common/base/fuzz",
 	"common/ogg",
 	"common/limited",
-	"client/audio",
 	"common/netcode",
 	"common/telemetry",
-	"server/collector",
-	"client/font",
-	"client/ui",
 	"common/game",
 	"common/worldgen",
-	"server/core",
-	"client/platform",
-	"client/gpu",
-	"client/render",
-	"client/starfield",
-	"client/planet",
-	"client/formatted",
-	"client/dev",
-	"client/music",
-	"server/packs",
-	"server/dedicated",
 	"client",
+	"server",
 	"tools",
 	"tests",
 }
@@ -127,7 +114,8 @@ ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
 // CHECK_FLAGS: library packages have no main of their own.
 CHECK_FLAGS :: []string{"-no-entry-point"}
 
-GAME_PACKAGE :: "client"
+GAME_PACKAGE :: "client/main"
+AUDIO_BASELINE_PACKAGE :: "client/engine"
 GAME_NAME :: "voxiverse"
 SERVER_PACKAGE :: "server/dedicated"
 SMOKE_PACKAGE :: "tests"
@@ -1299,12 +1287,12 @@ audio_baselines :: proc(args: []string) -> bool {
 	os.make_directory_all(filepath.dir(out))
 	cmd := slice.concatenate(
 		[][]string {
-			{"odin", "test", GAME_PACKAGE},
+			{"odin", "test", AUDIO_BASELINE_PACKAGE},
 			ODIN_FLAGS,
 			COLLECTIONS,
 			{
 				strings.concatenate({"-out:", out}),
-				"-define:ODIN_TEST_NAMES=client.test_audio_baseline_burst,client.test_audio_baseline_cave_walk,client.test_audio_baseline_title_to_world,client.test_audio_baseline_stress,client.test_audio_baseline_music_session,client.test_music_hour_golden",
+				"-define:ODIN_TEST_NAMES=engine.test_audio_baseline_burst,engine.test_audio_baseline_cave_walk,engine.test_audio_baseline_title_to_world,engine.test_audio_baseline_stress,engine.test_audio_baseline_music_session,engine.test_music_hour_golden",
 			},
 			defines[:],
 			test_env_defines(),

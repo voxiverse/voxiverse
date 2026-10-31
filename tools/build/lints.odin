@@ -8,11 +8,30 @@ import "core:strings"
 // Source lints, run by `check` (they were tests that read the sources). None has an
 // exemption or a skip list: a rule is kept by changing the code it finds.
 
-// The interface layers of the client: screens, menus, overlays and the HUD.
-is_layer_file :: proc(name: string) -> bool {
+// The interface layers of the client: the files of the packages that draw screens, menus,
+// overlays, the console, the HUD and the button prompts. (While a file with an old prefix
+// still sits in client/engine, it counts too: that clause goes when the last one has moved.)
+LAYER_FOLDERS :: []string {
+	"client/screen",
+	"client/menu",
+	"client/overlay",
+	"client/console",
+	"client/hud",
+	"client/prompt",
+}
+
+is_layer_file :: proc(path: string) -> bool {
+	slash := strings.last_index_byte(path, '/')
+	if slash < 0 {return false}
+	folder, name := path[:slash], path[slash + 1:]
 	if strings.has_suffix(name, "_test.odin") {return false}
-	for prefix in ([]string{"screen_", "menu_", "overlay_", "hud_"}) {
-		if strings.has_prefix(name, prefix) {return true}
+	for layer in LAYER_FOLDERS {
+		if folder == layer {return true}
+	}
+	if folder == "client/engine" {
+		for prefix in ([]string{"screen_", "menu_", "overlay_", "hud_"}) {
+			if strings.has_prefix(name, prefix) {return true}
+		}
 	}
 	return false
 }
@@ -205,7 +224,7 @@ source_lint :: proc() -> bool {
 				continue
 			}
 			append(&msgs, ..lint_mode_names(path, text))
-			if dir == "client" && filepath.dir(path) == "client" && is_layer_file(info.name) {
+			if dir == "client" && is_layer_file(path) {
 				append(&msgs, ..lint_ui_literals(path, text))
 				append(&msgs, ..lint_colour_literals(path, text))
 			}

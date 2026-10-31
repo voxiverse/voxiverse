@@ -6,8 +6,8 @@ import "core:math"
 import "core:os"
 import "core:strings"
 
-import "client:."
 import "client:audio"
+import "client:engine"
 import "common:base"
 
 // audiodump prints what a capture file holds (the game's audio recorder, see
@@ -147,8 +147,8 @@ main :: proc() {
 	// The audio: the game's sounds in a fresh mixer.
 	m := new(audio.Mixer)
 	audio.mixer_init(m, h.rate)
-	bank := new(client.Sound_Bank)
-	client.sounds_init(bank, m)
+	bank := new(engine.Sound_Bank)
+	engine.sounds_init(bank, m)
 	an: audio.Analysis
 	if (h.start_clock != 0 && f.state == nil) ||
 	   !audio.analyze_replay(m, &f, {.Master} | {bus}, &an) {
