@@ -3,8 +3,8 @@ package packcheck
 import "core:fmt"
 import "core:os"
 
-import "../../common/game"
-import "../../server"
+import "common:game"
+import "server:."
 
 // Checks packs: the base pack plus the given pack directories, in order, the
 // way a universe loads them. Prints every error, one per line

@@ -2,7 +2,7 @@ package ui
 
 import "core:testing"
 
-import "../font"
+import "client:font"
 
 @(private = "file")
 ICON_FONT := #load("../../assets/fonts/jetbrains_mono_regular.ttf")

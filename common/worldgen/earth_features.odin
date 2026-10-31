@@ -2,7 +2,7 @@ package worldgen
 
 import "core:math"
 
-import "../game"
+import "common:game"
 
 // Trees and plants. Trees are placed per chunk column from a hash of its
 // position (where they stand comes from the land's smooth height: they

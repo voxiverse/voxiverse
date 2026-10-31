@@ -1,8 +1,8 @@
 package client
 
-import "../common/game"
-import "mesh"
-import "render"
+import "client:mesh"
+import "client:render"
+import "common:game"
 
 // What a hand holds, as meshes (docs/milestones/M48k.md). Pure: no GPU, no
 // session. Every mesh is a triangle list of render.Held_Vertex with the

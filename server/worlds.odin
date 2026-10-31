@@ -7,9 +7,9 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
 // its generator and parameters, rules, clock, chunks, entities, liquids,

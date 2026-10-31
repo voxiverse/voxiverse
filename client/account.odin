@@ -8,8 +8,8 @@ import "core:strings"
 
 import "core:mem/virtual"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // The player's account: a key pair made on first launch and kept beside the
 // settings (account.key: the private key's 32 bytes in hex). Whoever has

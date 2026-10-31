@@ -5,9 +5,9 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 
-import "../../base"
-import "../../common/game"
-import "../../server"
+import "common:base"
+import "common:game"
+import "server:."
 
 // The `budgets` benchmark scenario (docs/plan.md, T5; `build bench budgets`):
 // what the server's heavy work costs, each scene of server/budgets.odin once a

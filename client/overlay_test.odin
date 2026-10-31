@@ -2,8 +2,8 @@ package client
 
 import "core:testing"
 
-import "font"
-import "ui"
+import "client:font"
+import "client:ui"
 
 // Escape backs out of the top overlay first, a step at a time; game
 // controls run only with nothing over the world that takes them.

@@ -3,7 +3,7 @@ package worldgen
 
 import "core:math"
 
-import "../game"
+import "common:game"
 
 // Structures in the world: a ruin and a well (templates shipped with the
 // game, built in-game), towers and dungeons (procedural). Each kind has a

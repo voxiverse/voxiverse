@@ -1,7 +1,7 @@
 package server
 
-import "../common/game"
-import "../common/worldgen"
+import "common:game"
+import "common:worldgen"
 
 // Column heights (the highest opaque block of each block column) for sky
 // light; the rules are common/game/column.odin's. The generator knows each

@@ -4,7 +4,7 @@ import "core:log"
 import "core:math"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // The desync detector (docs/determinism.md): the client hashes the state it
 // predicted every DESYNC_CHECK_INPUTS inputs (a Prediction_Check); the server

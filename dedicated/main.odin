@@ -11,11 +11,11 @@ import "core:path/filepath"
 import "core:sync"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
-import "../server"
-import "../server/collector"
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "server:."
+import "server:collector"
 
 // voxiverse-server: a world with no window, for players to join over the
 // network. Ctrl+C (or SIGTERM) stops it cleanly: the world is saved and

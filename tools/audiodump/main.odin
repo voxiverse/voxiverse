@@ -6,9 +6,9 @@ import "core:math"
 import "core:os"
 import "core:strings"
 
-import "../../base"
-import "../../client"
-import "../../client/audio"
+import "client:."
+import "client:audio"
+import "common:base"
 
 // audiodump prints what a capture file holds (the game's audio recorder, see
 // client/audio/capture.odin) and what the engine did with it, by replaying it

@@ -2,7 +2,7 @@ package client
 
 import "core:strings"
 
-import "ui"
+import "client:ui"
 
 // The credits screen (from Options, beside Done): the sound
 // sources' and the music's credit lines (assets/music/CREDITS.txt, which the

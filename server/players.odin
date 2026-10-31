@@ -2,9 +2,9 @@ package server
 
 import "core:log"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
+import "common:base"
+import "common:game"
+import "common:netcode"
 
 // Players: joining (welcomed where they left off), simulating their inputs
 // each tick, telling them about each other, and leaving or being sent away.

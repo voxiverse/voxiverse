@@ -2,7 +2,7 @@ package mesh
 
 import "core:slice"
 
-import "../../common/game"
+import "common:game"
 
 // Chunk meshing: visible block faces with per-vertex ambient occlusion and
 // smooth light, from an immutable padded snapshot (the chunk plus a 1-block

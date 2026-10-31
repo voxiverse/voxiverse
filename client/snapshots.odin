@@ -1,6 +1,6 @@
 package client
 
-import "audio"
+import "client:audio"
 
 // The mixer's snapshots, composed (M44): one wanted snapshot a frame from the
 // conditions that hold (paused, loading, just died), each a set of bus gains

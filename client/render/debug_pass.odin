@@ -3,7 +3,7 @@ package render
 import "core:mem"
 import vk "vendor:vulkan"
 
-import "../gpu"
+import "client:gpu"
 
 // Debug drawing: lines and boxes in world space, collected during the frame
 // from anywhere on the main thread and drawn over the world (hidden behind

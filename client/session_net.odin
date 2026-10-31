@@ -9,9 +9,9 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
-import "../common/game"
-import "../common/netcode"
-import "../server"
+import "common:game"
+import "common:netcode"
+import "server:."
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the

@@ -2,8 +2,8 @@ package client
 
 import "core:strings"
 
-import "platform"
-import "ui"
+import "client:platform"
+import "client:ui"
 
 // Toasts: short notices at the
 // top right, newest on top, at most TOAST_MAX shown (older ones leave

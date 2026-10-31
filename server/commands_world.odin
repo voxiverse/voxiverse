@@ -6,8 +6,8 @@ import "core:math"
 import "core:strconv"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Server commands about the world and the players in it, after Minecraft's
 // most useful ones: selectors (@s @p @a @r) wherever a command takes a

@@ -3,7 +3,7 @@ package client
 import "core:math"
 import "core:time"
 
-import "../common/game"
+import "common:game"
 
 // Items as the player uses them: the stack in hand (the selected hotbar
 // slot of the inventory, common/game/inventory.odin) and the mouse buttons. A

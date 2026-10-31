@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:strconv"
 
-import "../common/game"
+import "common:game"
 
 // The damage pipeline: everything that hurts a player (falls, explosions,
 // weapons, commands) goes through `damage`, which asks the abilities and the

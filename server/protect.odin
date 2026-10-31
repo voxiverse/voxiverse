@@ -8,7 +8,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // Region protection (docs/journal.md): boxes of a world that only their
 // members, the world itself and actors with world.protect.bypass may change.

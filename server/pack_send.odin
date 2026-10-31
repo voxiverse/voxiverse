@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:log"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // Sending packs (the Packs phase of joining, M47b): after a remote client's
 // Proof the server lists the universe's packs (not the base pack), the client

@@ -7,8 +7,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // Players over the network: remote clients (netcode links on loopback) on a
 // server without a local player, as a dedicated server runs.

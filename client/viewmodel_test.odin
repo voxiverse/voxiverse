@@ -3,9 +3,9 @@ package client
 import "core:math"
 import "core:testing"
 
-import "../common/game"
-import "mesh"
-import "render"
+import "client:mesh"
+import "client:render"
+import "common:game"
 
 // The view model (docs/milestones/M48k.md): a mesh for each held kind, its own
 // projection, the animations' states, the third-person hand, F1.

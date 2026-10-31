@@ -9,11 +9,11 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../server"
-import "platform"
-import "ui"
+import "client:platform"
+import "client:ui"
+import "common:base"
+import "common:game"
+import "server:."
 
 // Singleplayer's saves (docs/plan.md M20, M48e): one
 // directory each under saves/ in the user data directory (or VX_SAVES),

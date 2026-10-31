@@ -7,7 +7,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 
-import "../../client/audio"
+import "client:audio"
 
 MUSIC_DIR :: "assets/music"
 WORK_DIR :: "build/music-out" // (build/music is the tool itself)

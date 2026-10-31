@@ -5,9 +5,9 @@ import "core:log"
 import "core:os"
 import "core:time"
 
-import "../../base"
-import "../../common/game"
-import "../../server"
+import "common:base"
+import "common:game"
+import "server:."
 
 // replay feeds the client's messages from a network trace to a fresh server
 // (same seed and view distance, same timing), so whatever the server did

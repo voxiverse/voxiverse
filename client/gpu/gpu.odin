@@ -7,7 +7,7 @@ import "core:strings"
 import "core:sync"
 import vk "vendor:vulkan"
 
-import "../../base"
+import "common:base"
 
 // Vulkan device, swapchain and frame pacing. Vulkan 1.3 core features only:
 // dynamic rendering (no render passes or framebuffers) and synchronization2.

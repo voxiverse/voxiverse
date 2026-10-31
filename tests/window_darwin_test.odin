@@ -5,7 +5,7 @@ import "core:os"
 import "core:testing"
 import "core:time"
 
-import "../tools/build/limited"
+import "tools:build/limited"
 
 // The window's zoom and green buttons against a real AppKit window. AppKit takes windows
 // only on a process's main thread and the test runner's tests run on another, so

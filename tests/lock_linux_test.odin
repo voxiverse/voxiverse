@@ -7,8 +7,8 @@ import "core:os"
 import "core:testing"
 import "core:time"
 
-import "../base"
-import "../server"
+import "common:base"
+import "server:."
 
 @(private = "file")
 refused :: proc(dir: string) -> bool {

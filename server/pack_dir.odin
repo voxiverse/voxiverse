@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // pack_read_dir: a pack's directory as files in memory, for game.registry_build.
 // The directory's name is the pack's namespace. Symlinks are refused (a pack

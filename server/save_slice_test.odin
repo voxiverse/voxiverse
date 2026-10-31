@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M46b: a save describes the tick it began on, however many ticks it takes to
 // encode (save_slice.odin).

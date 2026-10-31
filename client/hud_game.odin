@@ -1,7 +1,7 @@
 package client
 
 
-import "ui"
+import "client:ui"
 
 game_screen :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "game")

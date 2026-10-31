@@ -10,8 +10,8 @@ import "core:slice"
 import "core:strings"
 import "core:sync"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // The save transaction: a save writes every file or none.
 //

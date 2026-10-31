@@ -5,7 +5,7 @@ import "core:math"
 import "core:strings"
 import "core:testing"
 
-import "../font"
+import "client:font"
 
 // Behaviour tests: real frames with scripted input, no window or GPU.
 

@@ -7,7 +7,7 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../base"
+import "common:base"
 
 
 // Shader hot reload (development builds, `debug.hot_reload_shaders`): when a

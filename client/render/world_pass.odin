@@ -4,8 +4,8 @@ import "core:log"
 import "core:mem"
 import vk "vendor:vulkan"
 
-import "../../base"
-import "../gpu"
+import "client:gpu"
+import "common:base"
 
 // Draws chunk meshes. Meshes are retained: each lives in a range of one
 // device-local vertex buffer until removed, uploaded once through this frame

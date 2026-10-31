@@ -8,7 +8,7 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-import "../../client/audio"
+import "client:audio"
 
 MUSIC_LUFS :: -20.0
 TRUE_PEAK_CEILING_DB :: -1.0

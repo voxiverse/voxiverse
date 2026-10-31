@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // wool_dropped: the wool lying about in client name's world.
 @(private = "file")

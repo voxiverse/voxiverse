@@ -3,8 +3,8 @@ package ogg_tool
 import "core:fmt"
 import "core:os"
 
-import "../../base"
-import "../../common/ogg"
+import "common:base"
+import "common:ogg"
 
 // `build ogg make-test-files`: the edge-case Oggs (common/ogg/testdata/edge/),
 // made once and committed. Each is a *valid* Vorbis stream of seeded random

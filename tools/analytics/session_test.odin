@@ -3,7 +3,7 @@ package analytics
 import "core:strings"
 import "core:testing"
 
-import "../../common/telemetry"
+import "common:telemetry"
 
 // A recorded session of two players: the file the server writes
 // (server/session_log.odin) read as a report.

@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 
-import "ui"
+import "client:ui"
 
 // The player list: while the key is held,
 // the connected players' names and pings. An overlay that takes no input.

@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The party's toys on the server (issue #65): the survival kit's places on join and
 // on respawn, and the shotgun: eight pellets of two, the pattern a function of

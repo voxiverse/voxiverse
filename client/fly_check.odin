@@ -4,10 +4,10 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 
-import "../base"
-import "../common/game"
-import "../server"
-import "platform"
+import "client:platform"
+import "common:base"
+import "common:game"
+import "server:."
 
 // The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
 // for the world around the spawn to load, then flies the camera in a

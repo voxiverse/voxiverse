@@ -2,7 +2,7 @@ package worldgen
 
 import "core:strings"
 
-import "../game"
+import "common:game"
 
 // Templates the base pack ships (assets/packs/voxiverse/server/structures,
 // in the registry): world generation reads no files.

@@ -7,8 +7,8 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "audio"
-import "sfx"
+import "client:audio"
+import "client:sfx"
 
 // M32b's quality baselines: four scripted scenarios rendered offline, their
 // numbers compared with assets/baselines/audio/<scenario>.txt (client/audio/baseline.odin

@@ -8,7 +8,7 @@ import "core:strings"
 
 // Versions, Windows resources and release packages (docs/plan.md, M21).
 
-// Version: what a build is, from git (base/version.odin says how players
+// Version: what a build is, from git (common/base/version.odin says how players
 // see it).
 Version :: struct {
 	version: string, // "0.21.0" on a version tag, "0.21.0+5" after it

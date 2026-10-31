@@ -6,7 +6,7 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // universe_check: is the universe in dir whole? Read-only; run it after
 // store_recover (the dedicated server's --check does). It reads every file the

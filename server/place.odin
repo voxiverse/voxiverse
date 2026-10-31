@@ -2,8 +2,8 @@ package server
 
 import "core:math"
 
-import "../common/game"
-import "../common/worldgen"
+import "common:game"
+import "common:worldgen"
 
 // The place record (M44): the biome under the player's feet and the world's
 // warmth and wetness, for the client's music. Put every PLACE_TICKS ticks; the

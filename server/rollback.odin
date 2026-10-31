@@ -7,7 +7,7 @@ import "core:math"
 import "core:slice"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // Rollback, undo and history (docs/journal.md): blocks put back from the
 // journal. A rollback is a job over ticks: it plans from the journal, then

@@ -154,7 +154,7 @@ lint_test_servers :: proc(path, text: string) -> []string {
 // test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules above.
 test_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"client", "server", "common", "base", "dedicated", "tools"}) {
+	for dir in ([]string{"client", "server", "common", "dedicated", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -255,7 +255,7 @@ lint_ci_test_names :: proc(path, text: string, tests: []string) -> []string {
 test_names :: proc() -> (names: []string, ok: bool) {
 	out := make([dynamic]string)
 	ok = true
-	for dir in ([]string{"tests", "common", "base", "client", "server", "dedicated", "tools"}) {
+	for dir in ([]string{"tests", "common", "client", "server", "dedicated", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -392,4 +392,106 @@ literal_calls :: proc(source: string) -> []Literal_Call {
 		}
 	}
 	return out[:]
+}
+
+// lint_relative_imports: every first-party import goes through a collection
+// (`common:game`, `client:gpu`), never a path relative to the importing file.
+lint_relative_imports :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		trimmed := strings.trim_left_space(line)
+		if !strings.has_prefix(trimmed, "import ") &&
+		   !strings.has_prefix(trimmed, "foreign import ") {continue}
+		open := strings.index_byte(trimmed, '"')
+		if open < 0 {continue}
+		target := trimmed[open + 1:]
+		if end := strings.index_byte(target, '"'); end >= 0 {target = target[:end]}
+		if strings.index_byte(target, ':') >= 0 {continue}
+		append(
+			&found,
+			fmt.aprintf(
+				"%s:%d: import \"%s\" is a relative path: import through a collection (client:, server:, common:, tools:)",
+				path,
+				line_no,
+				target,
+			),
+		)
+	}
+	return found[:]
+}
+
+// import_lint runs lint_relative_imports over every first-party Odin file.
+import_lint :: proc() -> bool {
+	ok := true
+	for dir in ([]string{"tests", "common", "client", "server", "dedicated", "tools"}) {
+		w := os.walker_create(dir)
+		defer os.walker_destroy(&w)
+		for info in os.walker_walk(&w) {
+			if info.type != .Regular || filepath.ext(info.name) != ".odin" {continue}
+			data, err := os.read_entire_file_from_path(info.fullpath, context.allocator)
+			if err != nil {
+				fmt.eprintfln("lint   %s: unreadable", info.fullpath)
+				ok = false
+				continue
+			}
+			path, _ := strings.replace_all(info.fullpath, "\\", "/")
+			for msg in lint_relative_imports(path, string(data)) {
+				fmt.eprintln(msg)
+				ok = false
+			}
+		}
+	}
+	if ok {fmt.println("lint   imports go through collections")}
+	return ok
+}
+
+// lint_collections: the wrapper scripts and the editor config pass the same collections the
+// driver does (COLLECTIONS), so a hand-run `odin` and the editor resolve imports the same way.
+lint_collections :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	for flag in COLLECTIONS {
+		name := flag[len("-collection:"):]
+		eq := strings.index_byte(name, '=')
+		if strings.has_suffix(path, ".json") {
+			want := fmt.aprintf(
+				"{{ \"name\": \"%s\", \"path\": \"%s\" }}",
+				name[:eq],
+				name[eq + 1:],
+			)
+			if !strings.contains(text, want) {
+				append(
+					&found,
+					fmt.aprintf("%s: collection %s is missing from ols.json", path, name[:eq]),
+				)
+			}
+		} else if !strings.contains(text, flag) {
+			append(
+				&found,
+				fmt.aprintf("%s: %s is missing: keep it in step with COLLECTIONS", path, flag),
+			)
+		}
+	}
+	return found[:]
+}
+
+// collections_lint checks build.sh, build.bat and ols.json against COLLECTIONS.
+collections_lint :: proc() -> bool {
+	ok := true
+	for path in ([]string{"build.sh", "build.bat", "ols.json"}) {
+		data, err := os.read_entire_file_from_path(path, context.allocator)
+		if err != nil {
+			fmt.eprintfln("lint   %s: unreadable", path)
+			ok = false
+			continue
+		}
+		for msg in lint_collections(path, string(data)) {
+			fmt.eprintln(msg)
+			ok = false
+		}
+	}
+	if ok {fmt.println("lint   build.sh, build.bat and ols.json name the collections")}
+	return ok
 }

@@ -5,7 +5,7 @@ import "core:mem"
 import "core:sync"
 import "core:time"
 
-import "../../base"
+import "common:base"
 
 // Pipe connects a client and a server in one process: a queue of packets in
 // each direction. Packets are owned byte copies; whoever receives one frees

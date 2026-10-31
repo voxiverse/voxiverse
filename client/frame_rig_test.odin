@@ -1,7 +1,7 @@
 package client
 
-import "../common/game"
-import "../server"
+import "common:game"
+import "server:."
 
 // Frame_Rig: one session on the harness's simulated network, given a frame
 // of the actions the test chooses at every tick (a party of the harness, run

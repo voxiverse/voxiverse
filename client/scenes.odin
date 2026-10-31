@@ -3,7 +3,7 @@ package client
 import "core:log"
 import "core:strings"
 
-import "gpu"
+import "client:gpu"
 
 // Visual baselines (docs/debugging.md, "Visual baselines"): `voxiverse --scene
 // <name>` runs one scene of assets/baselines/images/scenes.txt, writes what it

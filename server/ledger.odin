@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:log"
 import "core:slice"
 
-import "../common/game"
-import "../common/telemetry"
+import "common:game"
+import "common:telemetry"
 
 // The item ledger (M31): every item that enters or leaves what the server
 // holds is one call to ledger with a reason (a faucet: count positive, a

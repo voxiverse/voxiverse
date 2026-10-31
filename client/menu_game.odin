@@ -1,8 +1,8 @@
 package client
 
 
-import "../server"
-import "ui"
+import "client:ui"
+import "server:."
 
 game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "game menu")

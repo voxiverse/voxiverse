@@ -1,6 +1,6 @@
 package ogg
 
-import "../../base"
+import "common:base"
 import "core:math"
 
 // Floors 0 and 1: their headers, their packets and their curves.

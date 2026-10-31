@@ -3,7 +3,7 @@ package render
 import "core:math"
 import "core:math/linalg"
 
-import "../gpu"
+import "client:gpu"
 
 // The scene: what every world pass shares this frame (camera, sun, sky
 // colours, fog, clouds), written to a per-frame-slot buffer that shaders

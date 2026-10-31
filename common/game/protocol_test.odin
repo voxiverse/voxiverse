@@ -1,6 +1,6 @@
 package game
 
-import "../../base"
+import "common:base"
 import "core:fmt"
 import "core:math"
 import "core:math/rand"

@@ -4,7 +4,7 @@ import "core:math"
 import "core:mem"
 import vk "vendor:vulkan"
 
-import "../gpu"
+import "client:gpu"
 
 // Entities (for now: the other players) as boxes, rebuilt every frame on
 // the CPU: few boxes, so no meshes to keep. Each box turns around a pivot

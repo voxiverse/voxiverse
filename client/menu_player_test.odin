@@ -3,7 +3,7 @@ package client
 import "core:strings"
 import "core:testing"
 
-import "platform"
+import "client:platform"
 
 // The player menu: the section table, the keys that open, switch and close
 // it, Escape, the pad's View and bumpers, and what is above it.

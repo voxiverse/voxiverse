@@ -5,8 +5,8 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
-import "../../base"
-import "../../common/ogg"
+import "common:base"
+import "common:ogg"
 
 // The `ogg` benchmark scenario (docs/plan.md, M53c; `build bench ogg`): the
 // committed music decoded whole by common/ogg and, for comparison, by

@@ -4,8 +4,8 @@ import "core:math"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "ui"
+import "client:ui"
+import "common:base"
 
 // SPLASHES: the splash texts (assets/splashes.txt, one per line; blank lines
 // and # lines ignored).

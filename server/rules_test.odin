@@ -2,8 +2,8 @@ package server
 
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // rules.show_coordinates: on by default, a variable like the others
 // (world.cfg, the console), and sent to the clients with the rest of the

@@ -2,7 +2,7 @@ package worldgen
 
 import "core:math"
 
-import "../game"
+import "common:game"
 
 // Gates (M18): a ring standing on a platform, its 15 chevrons around it (the
 // first 7 lit to dial a world in the galaxy; the other 8 dark until a gate

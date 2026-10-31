@@ -3,9 +3,9 @@ package client
 import "core:testing"
 import "core:time"
 
-import "../common/game"
-import "../common/telemetry"
-import "ui"
+import "client:ui"
+import "common:game"
+import "common:telemetry"
 
 // The tree of counters: groups with totals, closed until opened (open all
 // the time when searching), by their dotted names.

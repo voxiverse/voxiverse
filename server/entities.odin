@@ -3,8 +3,8 @@ package server
 import "core:log"
 import "core:math"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Entities on the server: sheep and rockets. What each kind is lies in
 // game.ENTITY_INFO; what it does each tick, in entities_tick's switch. A

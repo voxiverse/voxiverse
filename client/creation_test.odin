@@ -4,10 +4,10 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/worldgen"
-import "mesh"
-import "ui"
+import "client:mesh"
+import "client:ui"
+import "common:game"
+import "common:worldgen"
 
 // The creation screen and Ignite (screen_creation.odin, screen_ignite.odin).
 // (A universe made with a typed seed has that seed's glyph address:

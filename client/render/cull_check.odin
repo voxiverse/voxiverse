@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:math"
 import vk "vendor:vulkan"
 
-import "../gpu"
+import "client:gpu"
 
 // world_cull_check runs world_cull.comp on a fixed set of chunks seen by a
 // fixed set of cameras, outside the frames, and compares what it writes

@@ -6,8 +6,8 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // M46b: a universe as one file and back (export.odin).
 

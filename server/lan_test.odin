@@ -5,8 +5,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Open to LAN's two settings (the client's dialog sends them as commands): the
 // guests' game mode (the rule default_game_mode: a guest who joins gets it,

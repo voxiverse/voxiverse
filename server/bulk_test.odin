@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // Bulk edits reach every player who has the chunks, whole, and leave them
 // all with the same blocks; rockets fly and blow holes.

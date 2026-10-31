@@ -5,7 +5,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-import "../../base"
+import "common:base"
 
 // Reads a lake (the collector's `lake/` directory, or a server's own
 // telemetry directory of day files) and answers the questions asked most:

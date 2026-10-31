@@ -3,7 +3,7 @@ package client
 import "core:slice"
 import "core:testing"
 
-import "ui"
+import "client:ui"
 
 @(test)
 test_splashes_parse :: proc(t: ^testing.T) {

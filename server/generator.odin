@@ -6,9 +6,9 @@ import "core:math"
 import "core:slice"
 import "core:strings"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // The world's generator, as players can change it: its parameters
 // (worldgen.*, a cheat like rules: everyone is told in a Variables

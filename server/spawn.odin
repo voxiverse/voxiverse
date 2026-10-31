@@ -5,8 +5,8 @@ import "core:log"
 import "core:math"
 import "core:strconv"
 
-import "../common/game"
-import "../common/worldgen"
+import "common:game"
+import "common:worldgen"
 
 // The world spawn and landings: every arrival (joining, a teleport, spawn)
 // goes through land, and the player stands where game.landing_spot says

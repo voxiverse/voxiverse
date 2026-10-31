@@ -7,7 +7,7 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // fixture_expect: what a loaded fixture must hold, as expect.txt's text: the
 // hash of the chunks around its center, the character's inventory, the chests.

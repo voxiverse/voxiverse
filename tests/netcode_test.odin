@@ -5,7 +5,7 @@ import "core:slice"
 import "core:testing"
 import "core:time"
 
-import "../common/netcode"
+import "common:netcode"
 
 // The real thing under the netcode: UDP on the loopback, the OS's clock.
 // netcode's own tests run the same host and link over a Simnet; these two

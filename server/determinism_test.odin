@@ -8,9 +8,9 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
+import "common:base"
+import "common:game"
+import "common:netcode"
 
 // M38: the simulation is a function of what reaches it at each tick boundary.
 // A stepped server (no thread, inline chunk jobs) is run twice side by side

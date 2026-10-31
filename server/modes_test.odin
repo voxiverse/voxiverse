@@ -5,8 +5,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Game modes per player, through permissions: an operator's /gamemode changes
 // their own mode (and another's); a player without the nodes is refused;

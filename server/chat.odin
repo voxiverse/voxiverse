@@ -5,7 +5,7 @@ import "core:log"
 import "core:strings"
 import "core:unicode/utf8"
 
-import "../common/game"
+import "common:game"
 
 // Chat: what players say, as everyone sees it (their tag, name and words,
 // each formatted on its own: common/game/format.odin), within a rate; numbered,

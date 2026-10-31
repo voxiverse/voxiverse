@@ -4,7 +4,7 @@ import "core:math"
 import "core:mem"
 import "core:strings"
 
-import "../font"
+import "client:font"
 
 // Draw output. Vertices are in pixels; colors are sRGB as authored (the
 // shader converts to linear); every command carries a scissor rect, so text

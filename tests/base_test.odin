@@ -5,7 +5,7 @@ import "core:testing"
 import "core:thread"
 import "core:time"
 
-import "../base"
+import "common:base"
 
 // The queue and the job pool across real threads, and the thread CPU clock:
 // base's own tests (queue_test.odin) run on one thread.

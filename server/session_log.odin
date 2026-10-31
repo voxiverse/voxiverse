@@ -4,10 +4,10 @@ import "core:fmt"
 import "core:log"
 import "core:path/filepath"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
-import "../common/telemetry"
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "common:telemetry"
 
 // The session recording (issue #65, the LAN party): while a server runs (a
 // dedicated one, or a game Open to LAN) it writes every event to one file of

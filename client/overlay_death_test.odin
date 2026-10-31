@@ -2,9 +2,9 @@ package client
 
 import "core:testing"
 
-import "../common/game"
-import "font"
-import "ui"
+import "client:font"
+import "client:ui"
+import "common:game"
 
 // The death screen: it opens when the server says the player is dead, says how
 // (the death line), cannot be escaped, and its one button sends Respawn; it

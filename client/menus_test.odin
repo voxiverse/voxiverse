@@ -8,11 +8,11 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
-import "font"
-import "platform"
-import "ui"
+import "client:font"
+import "client:platform"
+import "client:ui"
+import "common:base"
+import "common:game"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
 // artwork takes its colours from it), nothing else.

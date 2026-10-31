@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 
-import "../../common/game"
+import "common:game"
 
 // bp: a vertex's position in blocks (the whole-cell quads of cubes lie on block boundaries).
 @(private = "file")

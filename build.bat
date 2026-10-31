@@ -8,7 +8,7 @@ rem content key of its own sources: tools/build/cache.odin).
 build\build-driver.exe self-fresh >nul 2>&1
 if errorlevel 1 (
 	type nul > build\cache\build-driver.started
-	odin build tools/build -out:build/build-driver.exe -export-dependencies:json -export-dependencies-file:build/cache/build-driver.deps.json || exit /b 1
+	odin build tools/build -out:build/build-driver.exe -collection:client=client -collection:server=server -collection:common=common -collection:tools=tools -export-dependencies:json -export-dependencies-file:build/cache/build-driver.deps.json || exit /b 1
 	build\build-driver.exe self-built
 )
 build\build-driver.exe %*

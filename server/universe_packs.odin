@@ -7,7 +7,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 // A universe's packs: universe.cfg's `packs` line lists their namespaces (the
 // base pack, voxiverse, is always first and never listed), each is the

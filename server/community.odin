@@ -8,7 +8,7 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../common/game"
+import "common:game"
 
 // What a world keeps about its people, besides their permissions: each
 // player's nickname, mute, ignore list, homes, when they were last seen and

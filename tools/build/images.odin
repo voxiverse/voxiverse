@@ -10,8 +10,8 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../../base"
-import "limited"
+import "common:base"
+import "tools:build/limited"
 
 // Visual baselines (docs/debugging.md, "Visual baselines"): `build images`
 // renders every scene of assets/baselines/images/scenes.txt with the game

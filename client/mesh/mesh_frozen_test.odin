@@ -3,7 +3,7 @@ package mesh
 // Frozen copies of how the Odin tables drew blocks before the registry did
 // (M47a): test_base_looks_the_same compares the base pack against them.
 
-import "../../common/game"
+import "common:game"
 
 // block_faces: a block's side, top and bottom textures (a switch, so a new
 // block does not compile until it has its look).

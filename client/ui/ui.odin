@@ -5,7 +5,7 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 
-import "../font"
+import "client:font"
 
 // Immediate-mode UI. Each frame:
 //

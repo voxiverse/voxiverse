@@ -6,8 +6,8 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // edit_and_save: a block set at (x, 4, 0) from the player's spot, then a save.
 edit_and_save :: proc(g: ^Grief, x: i32) -> game.Block_Pos {

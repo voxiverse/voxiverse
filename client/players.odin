@@ -3,7 +3,7 @@ package client
 import "core:math"
 import "core:time"
 
-import "../common/game"
+import "common:game"
 
 // The other players and the entities: what the server last said about
 // each, kept as a few timed snapshots (a Track) and shown a little in the

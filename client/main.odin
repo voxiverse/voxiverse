@@ -8,7 +8,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
-import "../base"
+import "common:base"
 
 // Entry point: debugging setup, then the App's lifetime and frame loop.
 // `--frames N` exits after N frames and fails the run on any validation

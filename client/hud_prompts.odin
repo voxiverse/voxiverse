@@ -2,10 +2,10 @@ package client
 
 import "core:math"
 
-import "../common/game"
+import "common:game"
 
-import "platform"
-import "ui"
+import "client:platform"
+import "client:ui"
 
 // Button prompts: the glyph of the button or key an action is on, for the
 // device used last, drawn along the bottom of menus ("A Select  B Back").

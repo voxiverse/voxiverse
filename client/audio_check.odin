@@ -5,8 +5,8 @@ import "core:log"
 import "core:math"
 import "core:time"
 
-import "../base"
-import "audio"
+import "client:audio"
+import "common:base"
 
 // M32d's real-time check (`--check audio`, exit_check.odin's CHECKS): the
 // game mixes into the null device (audio.device_open_null: the real callback

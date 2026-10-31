@@ -1,7 +1,7 @@
 package server
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // The shape of the script API for the party systems (docs/script_api_notes.md).
 // No VM exists yet: these are the typed procedures M51 and M52 will wrap as

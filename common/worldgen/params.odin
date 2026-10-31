@@ -1,6 +1,6 @@
 package worldgen
 
-import "../../base"
+import "common:base"
 
 // The Earth generator's parameters as variables (worldgen.*): set from the
 // console or F4 (the server's: a cheat, like rules), saved with the world.

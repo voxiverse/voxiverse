@@ -6,7 +6,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M24's exit check. A platform in the air over a landed player (its own
 // columns, so "open sky" is exact), blocks set and random ticks run on the

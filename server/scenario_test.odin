@@ -6,8 +6,8 @@ import "core:mem"
 import "core:slice"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // T3: scenarios with invariants. A scenario is data: steps (a tick, a player, an
 // operation) played on the harness (harness.odin) by one runner. Player 0 is the

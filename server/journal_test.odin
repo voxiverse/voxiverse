@@ -8,7 +8,7 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M45: the edit journal. test_grief_rolled_back is the exit check: a player
 // builds a house, a pool, a chest and a field; a grief of every kind of change

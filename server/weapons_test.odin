@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // Hitscan weapons: the server alone decides (the ray from where it has the
 // player's eye, blocks first, bodies as the shooter saw them), the numbers are

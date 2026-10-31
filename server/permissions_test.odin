@@ -5,7 +5,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // Roles resolve nearest first: a player's own grants, then their roles and
 // default, then what those inherit; metadata likewise.

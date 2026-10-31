@@ -2,7 +2,7 @@ package audio
 
 import "core:log"
 
-import "../../common/ogg"
+import "common:ogg"
 
 // decode_clip decodes a short sound file (Ogg Vorbis, by common/ogg) whole,
 // mixed down to mono at its own rate. The caller has already checked the

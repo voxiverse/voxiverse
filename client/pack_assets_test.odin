@@ -6,10 +6,10 @@ import "core:mem/virtual"
 import "core:slice"
 import "core:testing"
 
-import "../common/game"
-import "audio"
-import "mesh"
-import "sfx"
+import "client:audio"
+import "client:mesh"
+import "client:sfx"
+import "common:game"
 
 // M47i: a pack's PNG is its texture's layer, level 0, exactly; its Ogg is the
 // sound bank's samples (decoded whole, mono, at the mixer's rate).

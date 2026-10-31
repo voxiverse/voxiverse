@@ -8,9 +8,9 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/worldgen"
-import "audio"
+import "client:audio"
+import "common:game"
+import "common:worldgen"
 
 // The music director (M44), on a clock and seed of its own: no mixer, the
 // test plays the app's part (a voice lives as long as its track is long).

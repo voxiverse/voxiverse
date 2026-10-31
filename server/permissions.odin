@@ -8,8 +8,8 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Who may do what (common/game/permissions.odin has the rules): roles grant
 // nodes and inherit other roles; players have roles and grants of their

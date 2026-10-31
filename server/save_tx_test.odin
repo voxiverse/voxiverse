@@ -5,8 +5,8 @@ import "core:log"
 import "core:os"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // A small universe by hand: a.txt and sub/b.txt exist, d.txt is to go; the
 // save changes a, creates sub/c.txt and deletes d.

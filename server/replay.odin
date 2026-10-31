@@ -5,8 +5,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 
-import "../common/game"
-import "../common/worldgen"
+import "common:game"
+import "common:worldgen"
 
 // Replay (docs/journal.md): the journal applied onto a snapshot of the world
 // (a saved copy of its directory, or the generator) must give the world as it

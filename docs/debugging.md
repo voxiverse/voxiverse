@@ -678,7 +678,7 @@ traces.
 
 Odin's `-sanitize:thread` does not instrument memory accesses (as of dev-2026-10, only
 function entry and exit), so it finds no races. Threaded code is instead covered by
-deterministic tests (`base/queue_test.odin`, `server/server_test.odin`).
+deterministic tests (`common/base/queue_test.odin`, `server/server_test.odin`).
 
 ## Debuggers
 
@@ -986,7 +986,7 @@ A metric's value is its median, except for the server's load metrics (ticks, str
 collecting, bytes sent), where it is the mean: half the server's ticks may do nothing while
 the workers catch up, and the heavy ticks are what matters. Results are comparable only on
 one machine (identified by its fingerprint) and one scenario version. The metrics are
-`base.Metric` (`base/metrics.odin`): recorded in any build, but only while a benchmark is
+`base.Metric` (`common/base/metrics.odin`): recorded in any build, but only while a benchmark is
 measuring. `--profile` adds a Spall trace of the run.
 
 ### Comparing two versions

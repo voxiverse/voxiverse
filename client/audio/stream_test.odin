@@ -3,7 +3,7 @@ package audio
 import "core:math"
 import "core:testing"
 
-import "../../common/ogg"
+import "common:ogg"
 
 // Tests for M32c's streams: what comes out of a stream voice is the file's
 // decode, loops have no seam, a starved decoder is counted and never skipped

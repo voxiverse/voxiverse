@@ -2,7 +2,7 @@ package client
 
 import "core:testing"
 
-import "ui"
+import "client:ui"
 
 clicks: int // (the toast action's count)
 

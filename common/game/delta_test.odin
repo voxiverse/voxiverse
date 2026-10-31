@@ -3,7 +3,7 @@ package game
 import "core:slice"
 import "core:testing"
 
-import "../../base"
+import "common:base"
 
 // M39's state model, end to end through test kinds of the tests' own: the
 // sender's encoder and the receiver's decoder, with no game type involved.

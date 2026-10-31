@@ -5,7 +5,7 @@ import "core:mem"
 import "core:slice"
 import "core:strings"
 
-import "ui"
+import "client:ui"
 
 // Line_Editor: a command line (the console's, chat's) beyond the editing
 // every text field has (client/ui/widgets.odin): Tab completion, history

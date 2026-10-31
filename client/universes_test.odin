@@ -6,8 +6,8 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../common/game"
-import "../server"
+import "common:game"
+import "server:."
 
 // The universes screen's cards (screen_universes.odin): the order, what a
 // card knows from its config, Export and Import through the buttons. (Rename

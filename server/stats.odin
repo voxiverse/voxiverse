@@ -10,8 +10,8 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../common/game"
-import "../common/telemetry"
+import "common:game"
+import "common:telemetry"
 
 // Statistics and events: everything the server counts or measures goes
 // through record (a player did something) or record_world (the world did): it

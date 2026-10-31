@@ -4,9 +4,9 @@ import "core:hash"
 import "core:math"
 import "core:math/linalg"
 
-import "../common/game"
-import "render"
-import "ui"
+import "client:render"
+import "client:ui"
+import "common:game"
 
 // The other players' avatars: boxes in the entity pass (legs, a body that
 // turns with them, a head that also looks up and down), a shirt colour

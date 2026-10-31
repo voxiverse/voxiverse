@@ -6,11 +6,11 @@ import "core:mem"
 import "core:slice"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "gpu"
-import "mesh"
-import "render"
+import "client:gpu"
+import "client:mesh"
+import "client:render"
+import "common:base"
+import "common:game"
 
 // The client's copy of the world: the chunks the server sent, and their
 // meshes. Storage is sized once from the interest area the server announced

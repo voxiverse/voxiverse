@@ -2,8 +2,8 @@ package server
 
 import "core:math"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // Hitscan weapons. A weapon is an item with a `weapon` object (data: its
 // damage, magazine, rate, range...); this file is the only place that fires

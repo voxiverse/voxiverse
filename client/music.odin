@@ -4,9 +4,9 @@ import "core:encoding/json"
 import "core:log"
 import "core:mem/virtual"
 
-import "../base"
-import "../common/worldgen"
-import "audio"
+import "client:audio"
+import "common:base"
+import "common:worldgen"
 
 // The music director (M44): a state machine the app feeds with what is going
 // on (the screen, the session, the place, the time) and whose actions the app

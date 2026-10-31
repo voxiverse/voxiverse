@@ -3,7 +3,7 @@ package mesh
 import "core:math"
 import "core:slice"
 
-import "../../common/game"
+import "common:game"
 
 // Block textures: one layer per Texture_Generator in a texture array, made by
 // code (see generate_texture). The registry says which generator each texture

@@ -8,11 +8,11 @@ import "core:os"
 import "core:sync"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
-import "../common/telemetry"
-import "../server"
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "common:telemetry"
+import "server:."
 
 // The `server` benchmark scenario (docs/plan.md, M19; `build bench server`): the
 // server alone, as players load it. A fresh scratch world (the client's

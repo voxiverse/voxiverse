@@ -106,3 +106,31 @@ test_test_server_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_test_servers("f", "ok := " + START + ", cfg, {})\n")), 1)
 	testing.expect_value(t, len(lint_test_servers("f", "h := harness_start(&h)\n")), 0)
 }
+
+@(test)
+test_relative_import_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	found := lint_relative_imports(
+		"client/x.odin",
+		"package client\nimport \"../base\"\nimport \"ui\"\n",
+	)
+	testing.expect_value(t, len(found), 2)
+	testing.expect_value(
+		t,
+		len(
+			lint_relative_imports(
+				"f",
+				"import \"common:game\"\nimport \"core:fmt\"\nimport b \"common:base\"\nforeign import libc \"system:c\"\n",
+			),
+		),
+		0,
+	)
+}
+
+@(test)
+test_collections_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	all := "-collection:client=client -collection:server=server -collection:common=common -collection:tools=tools"
+	testing.expect_value(t, len(lint_collections("build.sh", all)), 0)
+	testing.expect_value(t, len(lint_collections("build.sh", "-collection:client=client")), 3)
+}

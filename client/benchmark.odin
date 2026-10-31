@@ -7,12 +7,12 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../server"
-import "audio"
-import "gpu"
-import "render"
+import "client:audio"
+import "client:gpu"
+import "client:render"
+import "common:base"
+import "common:game"
+import "server:."
 
 // Benchmarks (docs/plan.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build

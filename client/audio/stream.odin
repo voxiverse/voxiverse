@@ -1,7 +1,7 @@
 package audio
 
-import "../../base"
-import "../../common/ogg"
+import "common:base"
+import "common:ogg"
 import "core:log"
 import "core:math"
 import "core:sync"

@@ -5,7 +5,7 @@ import "core:fmt"
 import "core:image"
 import "core:image/png"
 
-import "../ogg"
+import "common:ogg"
 
 // A pack's own art and sound (assets/textures/*.png, assets/sounds/*.ogg),
 // checked when the registry is built. Both files come over the network, so

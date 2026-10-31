@@ -10,9 +10,9 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
-import "../../base"
-import "../../common/game"
-import "../../common/netcode"
+import "common:base"
+import "common:game"
+import "common:netcode"
 
 // The uploader: what a server (a player's singleplayer world, a dedicated
 // server) does to get its event log to a collector. Every interval, and a

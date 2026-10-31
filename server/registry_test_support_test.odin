@@ -3,7 +3,7 @@ package server
 import "base:runtime"
 import "core:sync"
 
-import "../common/game"
+import "common:game"
 
 @(private = "file")
 shared_reg: ^game.Registry

@@ -5,10 +5,10 @@ import "core:log"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
-import "../server"
+import "common:base"
+import "common:game"
+import "common:worldgen"
+import "server:."
 
 // M10's exit check (`--check tour`, exit_check.odin's CHECKS): it visits every
 // biome of an Earth world in turn (`locate`, then waiting for the land to

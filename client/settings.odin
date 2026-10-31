@@ -5,12 +5,12 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // The player's settings (saved) and the debug switches (not saved), each a
-// plain struct described once by a variable table (see base/vars.odin and
+// plain struct described once by a variable table (see common/base/vars.odin and
 // docs/plan.md, "Console and variables"). Code reads the fields; the console
 // (`set`, `vars`, `reset`), the tuning panel and the settings file go
 // through the tables.

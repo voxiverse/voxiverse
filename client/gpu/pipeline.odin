@@ -3,7 +3,7 @@ package gpu
 import "core:log"
 import vk "vendor:vulkan"
 
-import "../../base"
+import "common:base"
 
 // Graphics pipelines for dynamic rendering, and compute pipelines. Viewport
 // and scissor are dynamic state, so pipelines don't depend on the window

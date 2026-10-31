@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 
-import "../../base"
+import "common:base"
 
 // Player movement: one procedure both sides run each tick (the server for
 // every player, the client to predict its own), so the same inputs on the

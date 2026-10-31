@@ -3,8 +3,8 @@ package server
 import "core:fmt"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Game modes, per player. A mode is a profile of abilities from a pack
 // (data/game_modes/); what a character can do is derive_abilities(mode,

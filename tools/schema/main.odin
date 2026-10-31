@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-import "../../common/game"
+import "common:game"
 
 // schema rewrites the generated block of the Wireshark dissector
 // (tools/wireshark/voxiverse.lua, between `-- schema begin` and `-- schema end`)

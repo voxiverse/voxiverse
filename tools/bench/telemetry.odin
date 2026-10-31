@@ -6,8 +6,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:time"
 
-import "../../base"
-import "../../common/telemetry"
+import "common:base"
+import "common:telemetry"
 
 // The `telemetry` benchmark scenario (docs/plan.md, T5; `build bench telemetry`):
 // what an event costs the server on its tick. Emitting is a lock and a copy;

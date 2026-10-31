@@ -5,8 +5,8 @@ import "core:os"
 import "core:slice"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // M47b: a universe's packs go to a joining client, over a simulated network with
 // loss; the client keeps them by hash and a second join needs no parts.

@@ -3,7 +3,7 @@ package worldgen
 import "core:math"
 import "core:math/noise"
 
-import "../game"
+import "common:game"
 
 // The classic generator (M3; worlds made before M10 keep it).
 //

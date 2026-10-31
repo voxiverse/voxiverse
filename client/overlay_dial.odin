@@ -3,8 +3,8 @@ package client
 import "core:strings"
 import "core:unicode/utf8"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // The dial overlay: right-click a gate's ring and pick a world of this
 // galaxy, symbol by symbol (none twice; Backspace takes the last back).

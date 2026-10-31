@@ -1,7 +1,7 @@
 package client
 
 
-import "ui"
+import "client:ui"
 
 
 // Screens, with overlays over them (overlay.odin). Escape backs out one

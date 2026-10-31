@@ -4,9 +4,9 @@ import "core:math"
 import "core:mem"
 import "core:slice"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
+import "common:base"
+import "common:game"
+import "common:netcode"
 
 // Clients, and interest management for each (the area is defined in
 // common/game/interest.odin): which chunks a client has, which to send next and

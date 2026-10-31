@@ -3,7 +3,7 @@ package server
 import "core:math"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M48: stairs, slabs and ladders on a built course, walked by a mirror client
 // against a stepped server: they collide, step up and climb the same on both

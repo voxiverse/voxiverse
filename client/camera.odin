@@ -3,8 +3,8 @@ package client
 import "core:math"
 import "core:math/linalg"
 
-import "../common/game"
-import "render"
+import "client:render"
+import "common:game"
 
 // The view: where the eyes are (the predicted player's, see session.odin)
 // and where they look. Looking turns every frame, for responsiveness;

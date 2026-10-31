@@ -5,7 +5,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M13's exit check for chat: two players over UDP, one a moderator with a
 // tag. Formatting where the role allows it (as written where not), an

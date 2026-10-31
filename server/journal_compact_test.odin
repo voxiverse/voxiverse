@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M45b: a segment older than the detail window is rewritten with one entry per
 // run of changes of a block by one action; a rollback over compacted history

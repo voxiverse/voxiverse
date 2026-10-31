@@ -156,6 +156,7 @@ determinism :: proc(args: []string) -> bool {
 			[][]string {
 				{"odin", "test", "server"},
 				ODIN_FLAGS,
+				COLLECTIONS,
 				{
 					strings.concatenate({"-o:", level}),
 					strings.concatenate({"-out:", out}),

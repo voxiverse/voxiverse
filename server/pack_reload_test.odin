@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M47i, hot reload: a pack file changes while the universe runs; the registry
 // is rebuilt, swapped in place at a safe moment, and the player here is told

@@ -2,7 +2,7 @@ package worldgen
 
 import "core:fmt"
 
-import "../game"
+import "common:game"
 
 // World generation: a pure function of (generator, chunk position). The
 // same generator gives the same world on any machine and in any order, so

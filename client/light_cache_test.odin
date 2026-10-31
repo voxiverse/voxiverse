@@ -4,10 +4,10 @@ import "core:mem/virtual"
 import "core:slice"
 import "core:testing"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
-import "mesh"
+import "client:mesh"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // R4: the light cache. Terrain from the generator (5x5 chunk columns, five
 // chunks high round the surface: the middle 3x3x3 can be meshed) is meshed

@@ -3,7 +3,7 @@ package client
 import "core:math"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The avatars' poses: derived from the speed and the sneak flag; the limbs'
 // phase follows the ground covered, so it is continuous across a change of

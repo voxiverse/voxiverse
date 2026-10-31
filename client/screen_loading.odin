@@ -5,8 +5,8 @@ import "core:math"
 import "core:strings"
 import "core:time"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // The loading screen (docs/plan.md M20): joining a world, or arriving in one
 // through a gate, shows what is happening instead of a world building

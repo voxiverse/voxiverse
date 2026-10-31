@@ -2,7 +2,7 @@ package server
 
 import "core:math"
 
-import "../common/game"
+import "common:game"
 
 // Lag compensation: what a shooter saw is not what the server has now. Every
 // tick the server keeps where each player and each hittable creature stood

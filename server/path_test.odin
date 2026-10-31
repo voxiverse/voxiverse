@@ -2,7 +2,7 @@ package server
 
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 @(private = "file")
 Blocks :: struct {

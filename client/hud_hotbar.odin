@@ -2,8 +2,8 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // HOTBAR_OPACITY: how opaque the hotbar is (1: as the rest; tuned by eye).
 HOTBAR_OPACITY :: 1

@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // An address is the same kind of world in any universe (its parameters and
 // rules), with terrain of its own (the seed); the home world is Earth's.

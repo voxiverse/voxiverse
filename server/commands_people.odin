@@ -5,8 +5,8 @@ import "core:log"
 import "core:slice"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Server commands about people (after EssentialsX's): whispering, actions,
 // broadcasts, nicknames, the message of the day; kicking and banning (by

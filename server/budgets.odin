@@ -2,8 +2,8 @@ package server
 
 import "core:fmt"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // The server's timed scenes (docs/plan.md, T5; `build bench budgets`). A test
 // never asserts a time: the tests call these for what the scene does (a save

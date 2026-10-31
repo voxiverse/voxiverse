@@ -4,7 +4,7 @@ import "core:net"
 import "core:slice"
 import "core:time"
 
-import "../../base"
+import "common:base"
 
 // A non-blocking UDP socket, with bad network conditions simulated on the
 // way out (for tests and the debug variables): loss, duplication, delay

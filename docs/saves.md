@@ -95,7 +95,7 @@ again. Files written outside a save (`structure save`, `permissions_changed`) us
 
 ### Disk access
 
-All disk access goes through `base/disk.odin` (`disk_write`, `disk_replace`, `disk_rename`,
+All disk access goes through `common/base/disk.odin` (`disk_write`, `disk_replace`, `disk_rename`,
 `disk_link`, ...). These operations are durable (`fsync`; `F_FULLFSYNC` on macOS;
 `FlushFileBuffers` and write-through renames on Windows) and support fault injection.
 `Disk_Faults` tears the Nth operation and refuses every operation after it;

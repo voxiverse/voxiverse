@@ -4,9 +4,9 @@ import "core:math"
 import "core:net"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
-import "../server"
+import "common:game"
+import "common:netcode"
+import "server:."
 
 // Those who stand still stay in sight. Snapshots carry only what changed, so
 // a player or a sheep that does not move sends nothing; it must not go

@@ -7,7 +7,7 @@ import "core:sys/linux"
 import "core:testing"
 import "core:time"
 
-import "../client/platform"
+import "client:platform"
 // The Linux backend against a virtual pad made through /dev/uinput: connect,
 // a button, an axis and the disconnect, through the real inotify and evdev
 // paths. Where /dev/uinput cannot be written the test warns and passes,

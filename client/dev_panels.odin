@@ -7,12 +7,12 @@ import "core:net"
 import "core:strings"
 import "core:sync"
 
-import "../base"
-import "../common/game"
-import "../server"
-import "audio"
-import "gpu"
-import "ui"
+import "client:audio"
+import "client:gpu"
+import "client:ui"
+import "common:base"
+import "common:game"
+import "server:."
 
 net_line :: proc(s: ^Session) -> string {
 	n := &s.net

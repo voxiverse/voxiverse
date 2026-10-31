@@ -5,8 +5,8 @@ import "core:log"
 import "core:os"
 import "core:path/filepath"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Hot reload of the packs (development builds, `Config.pack_watch`; M47i): a
 // pack author edits a file and sees it in the running game. It is a

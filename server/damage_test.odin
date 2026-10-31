@@ -5,7 +5,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The damage pipeline: abilities and the pvp rule decide, regeneration waits
 // its delay, a death is counted and told from its source, the Respawn button

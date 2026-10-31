@@ -2,7 +2,7 @@ package client
 
 import "core:testing"
 
-import "../common/netcode"
+import "common:netcode"
 
 // A lost Ping (or Pong) does not stop the pinging: after PING_GIVE_UP seconds
 // without an answer the next ping goes, under a new id.

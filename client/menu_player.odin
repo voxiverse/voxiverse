@@ -2,7 +2,7 @@ package client
 
 import "core:fmt"
 
-import "ui"
+import "client:ui"
 
 // The player menu: one overlay with a section open (Inventory, Statistics;
 // later the Map, Journal, Character and Atlas). A section is a row of

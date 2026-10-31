@@ -4,7 +4,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The worlds the tests start give their players the blocks the old default
 // kit gave (the tests place and break them); the real default, the rocket

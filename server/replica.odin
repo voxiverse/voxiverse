@@ -1,7 +1,7 @@
 package server
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // What the server tells a playing client about the world, as records of the
 // schema's kinds and one-off events (common/game/state_kinds.odin). The server code

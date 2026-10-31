@@ -3,7 +3,7 @@ package ui
 import "core:log"
 import "core:mem"
 
-import "../font"
+import "client:font"
 
 // Glyph cache: glyphs are rasterized on first use at the exact pixel size
 // they are drawn at and shelf-packed into an RGBA8 atlas (a glyph is white

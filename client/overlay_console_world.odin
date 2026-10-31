@@ -4,7 +4,7 @@ import "core:math"
 import "core:strconv"
 import "core:strings"
 
-import "../common/game"
+import "common:game"
 
 
 // The developer console's world primitives (docs/plan.md M19, commands): placing

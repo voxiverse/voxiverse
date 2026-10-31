@@ -7,8 +7,8 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../../base"
-import "../../common/ogg"
+import "common:base"
+import "common:ogg"
 
 // The Ogg decoder's maintenance commands (docs/debugging.md):
 //

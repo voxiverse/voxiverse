@@ -5,9 +5,9 @@ import "core:log"
 import "core:math"
 import "core:math/rand"
 
-import "../common/game"
-import "audio"
-import "sfx"
+import "client:audio"
+import "client:sfx"
+import "common:game"
 
 // Sounds: the synthesized effects (client/sfx), made once at startup and
 // played through the App's mixer. A session only records what happened

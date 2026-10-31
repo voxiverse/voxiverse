@@ -270,8 +270,17 @@ keep each player's position by name.
 
 ## Source layout
 
-See [docs/plan.md](docs/plan.md#layout). Packages depend only downward: `base/` depends on
+See [docs/plan.md](docs/plan.md#layout). Packages depend only downward: `common/base/` depends on
 nothing, `common/game/` never imports platform or GPU code, and `client/ui/` never imports the renderer.
+
+Imports go through the collections `client`, `server`, `common` and `tools`
+(`import "common:game"`, `import "client:gpu"`), never a relative path. `./build.sh` passes
+them to every `odin` it runs. To run `odin` yourself (`odin check client`, or an editor's
+language server) pass the same flags, which `ols.json` lists:
+
+```
+odin check client -no-entry-point -collection:client=client -collection:server=server -collection:common=common -collection:tools=tools
+```
 
 ## Documentation
 

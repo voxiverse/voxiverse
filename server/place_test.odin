@@ -4,7 +4,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../common/worldgen"
+import "common:worldgen"
 
 // M44: the server tells a player the biome under their feet (and the world's
 // warmth and wetness), only when it changes; and tells them when they die.

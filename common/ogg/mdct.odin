@@ -1,6 +1,6 @@
 package ogg
 
-import "../../base"
+import "common:base"
 
 // The inverse MDCT of a block of n samples from n/2 coefficients: a DCT-IV
 // of size m = n/2 (one complex FFT of size m/2, radix 2, written once with a

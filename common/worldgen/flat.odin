@@ -1,6 +1,6 @@
 package worldgen
 
-import "../game"
+import "common:game"
 
 // The flat generator (T2): the same at every (x, z) and for every seed, so a
 // test's world does not move when terrain code changes. From the top: air,

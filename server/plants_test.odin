@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:math"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M22c's exit check: a plant breaks, and drops its item, when the block
 // under it goes or stops holding it; one rule for a single block, a chain

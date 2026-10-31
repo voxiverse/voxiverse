@@ -4,7 +4,7 @@ import "core:log"
 import "core:math"
 import "core:testing"
 
-import "audio"
+import "client:audio"
 
 // M32c's exit check "old effects heard as before": a fixed scene of the
 // block sounds (a break, a place, a step, a landing, at two pitches) is

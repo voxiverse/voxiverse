@@ -6,7 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-import "../base"
+import "common:base"
 
 // The migration registry. A save from an older format is brought to
 // SAVE_FORMAT when it is opened: a backup first (backups/pre-migration-<from>),

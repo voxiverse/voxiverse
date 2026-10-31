@@ -1,6 +1,6 @@
 package client
 
-import "../base"
+import "common:base"
 
 // Fps: what the FPS counter shows, measured over the last half second:
 // steady enough to read, quick enough to follow a change.

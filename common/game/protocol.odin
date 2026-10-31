@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 
-import "../../base"
+import "common:base"
 
 // Messages between client and server. Every message travels as bytes, also
 // in-process, so singleplayer exercises the same encoding and validation as

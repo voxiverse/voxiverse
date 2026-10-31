@@ -3,9 +3,9 @@ package build
 import "core:fmt"
 import "core:os"
 
-import "../../base"
-import "../../client/font"
-import "../../client/ui"
+import "client:font"
+import "client:ui"
+import "common:base"
 
 // The game's icon: drawn by client/ui/icon.odin (the game sets its window
 // icon with the same code), here written at each size as an .ico of PNG

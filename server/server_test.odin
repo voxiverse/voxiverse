@@ -9,7 +9,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../common/game"
+import "common:game"
 
 // A scripted client: joins, then flies in a straight line, keeping the
 // chunks it is sent (and dropping those it is told to), as the real client

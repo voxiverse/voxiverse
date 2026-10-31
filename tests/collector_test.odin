@@ -7,10 +7,10 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "../common/game"
-import "../common/telemetry"
-import "../server"
-import "../server/collector"
+import "common:game"
+import "common:telemetry"
+import "server:."
+import "server:collector"
 
 // The collector and the uploader on their threads, over real UDP and the OS's
 // clock; their logic (what is refused, what is written once) is tested in

@@ -2,7 +2,7 @@ package sfx
 
 // The Odin table of what blocks sounded like before the registry said so (M47a).
 
-import "../../common/game"
+import "common:game"
 
 // material_of: what a block sounds like; false for air.
 frozen_material_of :: proc(b: game.Block) -> (Material, bool) {

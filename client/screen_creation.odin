@@ -6,9 +6,9 @@ import "core:time"
 MODE_CREATIVE :: "creative"
 MODE_SURVIVAL :: "survival"
 
-import "../common/game"
-import "../common/worldgen"
-import "ui"
+import "client:ui"
+import "common:game"
+import "common:worldgen"
 
 // Universe creation (M48e): the name, the
 // seed as the glyphs of its home world's gate address (typed text or a number

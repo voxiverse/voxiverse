@@ -1,7 +1,7 @@
 package client
 
 
-import "ui"
+import "client:ui"
 
 quit_dialog :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "quit dialog")

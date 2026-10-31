@@ -2,8 +2,8 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "render"
+import "client:render"
+import "common:game"
 
 // The camera's modes and comforts (docs/plan.md M48e): F5 cycles first person, third person behind and third person
 // facing you; third person pulls in against walls; sprinting widens the field

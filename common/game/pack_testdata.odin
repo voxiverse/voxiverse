@@ -3,7 +3,7 @@ package game
 import "core:fmt"
 import "core:slice"
 
-import "../../base"
+import "common:base"
 
 // A pack of the pack tests (here, not in a _test file, so the tests of the
 // server and the client use the same one): "testpack" with the block marble,

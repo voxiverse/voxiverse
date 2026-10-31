@@ -4,20 +4,20 @@ import "core:flags"
 import "core:fmt"
 import "core:os"
 
-import "../../base"
-import "../../client/mesh"
-import "../../common/game"
-import "../../common/worldgen"
+import "client:mesh"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // The `chunks` benchmark scenario (docs/plan.md, M19; `build bench chunks`):
 // the chunk pipeline on one thread, without the game. An Earth world's
 // chunks are generated around a point (every chunk from the bedrock to the
 // sky), then each one the client would mesh is lit and meshed as the client
 // does (game.light_chunk, then mesh.snapshot_fill and mesh.mesh_chunk), each
-// stage a metric (base/metrics.odin), the whole done -repetitions times from
+// stage a metric (common/base/metrics.odin), the whole done -repetitions times from
 // scratch. Deterministic: the same chunks, faces and vertices every time
 // (the counts), so a change shows as time alone. The result goes where the
-// game's scenarios' do (base/bench_result.odin). Built optimized with line
+// game's scenarios' do (common/base/bench_result.odin). Built optimized with line
 // tables, for perf (`build perf bench`).
 
 Options :: struct {

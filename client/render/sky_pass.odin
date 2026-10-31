@@ -2,7 +2,7 @@ package render
 
 import vk "vendor:vulkan"
 
-import "../gpu"
+import "client:gpu"
 
 // Draws the sky (assets/shaders/sky.*): one screen-covering triangle after
 // the world, at the far plane, so it only fills pixels the world left

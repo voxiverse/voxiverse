@@ -3,8 +3,8 @@ package worldgen
 import "core:math"
 import "core:math/noise"
 
-import "../../base"
-import "../game"
+import "common:base"
+import "common:game"
 
 // Overhang noise lives on a world-aligned grid (every 4 blocks across,
 // every 8 up) and is interpolated between: cheap, and the same at a block

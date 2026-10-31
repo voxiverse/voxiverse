@@ -11,8 +11,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // The edit journal (docs/journal.md): every block a world's state changes,
 // who caused it (an action, by an actor, through a system) and how. One

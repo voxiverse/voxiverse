@@ -4,8 +4,8 @@ import "core:strings"
 import "core:time"
 import "core:unicode/utf8"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // Chat: `t` opens it, `/` opens it with a command started; Enter says the
 // line (or runs the command on the server), Escape closes it. The lines

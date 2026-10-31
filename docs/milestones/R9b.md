@@ -80,7 +80,7 @@ and compares every live range's hash. Metrics `arena_bytes` (the arena's size, p
 
 ## Tests (R9b)
 
-- `base/range_alloc_test.odin`: `test_range_grow` (ranges kept, the new tail free and merged
+- `common/base/range_alloc_test.odin`: `test_range_grow` (ranges kept, the new tail free and merged
   with a free end; growth by more than double; growth of a full allocator).
 - `client/render/render_test.odin`: `test_arena_limit` (from a `Memory_Report`: with and
   without a budget, the 1 GiB cap); `test_eviction_order` (the farthest first; the mesh being

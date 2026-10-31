@@ -6,8 +6,8 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // M39's bandwidth benchmark. A stepped session is deterministic, so the bytes
 // it moves are too, on every OS: the numbers are exact, not statistical. Two

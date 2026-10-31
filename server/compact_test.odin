@@ -3,7 +3,7 @@ package server
 import "core:os"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M46b: a region file holds only what differs from the generator's (compact.odin).
 

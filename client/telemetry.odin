@@ -5,10 +5,10 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/telemetry"
-import "ui"
+import "client:ui"
+import "common:base"
+import "common:game"
+import "common:telemetry"
 
 // What the client reports about itself: the server cannot see how a client
 // runs or what it opens. Three kinds (telemetry.Kind with `client` set):

@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:strings"
 import "core:unicode/utf8"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // Formatted text on screen: & codes (common/game/format.odin) drawn with ui's
 // styled text, span by span.

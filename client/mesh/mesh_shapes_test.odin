@@ -4,7 +4,7 @@ import "base:runtime"
 import "core:sync"
 import "core:testing"
 
-import "../../common/game"
+import "common:game"
 
 // Meshing shaped blocks: boxes, cover culling, interior faces, interpolated corners.
 

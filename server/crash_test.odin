@@ -9,8 +9,8 @@ import "core:strconv"
 import "core:strings"
 import "core:testing"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // M46: the crash harness. Faults injected into the disk layer (not real kills),
 // so every point is reproducible: a save is run with the "process" dying at one

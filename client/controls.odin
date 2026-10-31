@@ -3,9 +3,9 @@ package client
 import "core:fmt"
 import "core:strings"
 
-import "../base"
-import "platform"
-import "ui"
+import "client:platform"
+import "client:ui"
+import "common:base"
 
 // Controls (Options > Controls): every action is bound to a key or a mouse
 // button by its place on the keyboard (platform.Key), so WASD stays a

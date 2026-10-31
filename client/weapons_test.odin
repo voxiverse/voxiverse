@@ -5,8 +5,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../common/game"
-import "../server"
+import "common:game"
+import "server:."
 
 // Weapons on the client: the effects are at once and the client's own (the
 // tracer, the flash, the sound, the recoil, the magazine), a hit is only the

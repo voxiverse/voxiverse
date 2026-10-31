@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:log"
 import vk "vendor:vulkan"
 
-import "../../base"
+import "common:base"
 
 // Frame pacing. Per frame in flight: a command pool + buffer, a fence and an
 // "image acquired" semaphore. Per swapchain image: a "rendering finished"

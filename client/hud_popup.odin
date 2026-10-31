@@ -1,7 +1,7 @@
 package client
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // The item-name popup: the held item's name above the
 // hotbar when the selected slot changes, the first frame in a world

@@ -1,9 +1,9 @@
 package client
 
-import "../common/game"
-import "../common/worldgen"
-import "mesh"
-import "ui"
+import "client:mesh"
+import "client:ui"
+import "common:game"
+import "common:worldgen"
 
 // Planet_Palette: the colours of a world seen from space, read from the
 // world's kind (worldgen.PALETTES holds its surface blocks, a block's look

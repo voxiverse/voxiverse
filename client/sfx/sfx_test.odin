@@ -6,7 +6,7 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../../common/game"
+import "common:game"
 
 // Every sound: audible, within -1..1, crushed to BITS bits, ending in
 // silence, under a second; the same each time it is made.

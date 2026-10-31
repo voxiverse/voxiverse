@@ -8,8 +8,8 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // A save that does not stall the tick (M46b).
 //

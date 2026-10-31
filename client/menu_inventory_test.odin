@@ -4,9 +4,9 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "font"
-import "ui"
+import "client:font"
+import "client:ui"
+import "common:game"
 
 // The inventory overlay with the mouse: dragging a stack to another slot,
 // right-click halves, shift-click to the hotbar, a number key, dropping

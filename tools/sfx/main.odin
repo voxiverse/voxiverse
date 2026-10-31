@@ -5,7 +5,7 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 
-import "../../client/sfx"
+import "client:sfx"
 
 // Writes every synthesized sound effect to build/sounds/<name>.wav (16-bit
 // mono at sfx.RATE), to listen to them outside the game:

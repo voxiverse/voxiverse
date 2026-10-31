@@ -9,7 +9,7 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../base"
+import "common:base"
 
 // Backups: a backup is a directory under backups/ holding every file of a
 // committed generation, as hard links (a copy where the file system has none):

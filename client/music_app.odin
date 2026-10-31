@@ -4,7 +4,7 @@ import "core:math"
 import "core:mem/virtual"
 import "core:time"
 
-import "../common/game"
+import "common:game"
 
 // The music in the app (M44): the director, fed each frame from the session,
 // and its actions carried out on the mixer.

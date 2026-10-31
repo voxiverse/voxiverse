@@ -6,8 +6,8 @@ import "core:mem"
 import "core:net"
 import "core:time"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // The deterministic harness (docs/determinism.md, "The harness"): a stepped
 // server, an in-memory network on a tick clock, the fixed flat world and one

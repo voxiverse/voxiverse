@@ -9,8 +9,8 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Export and import (M46b): one universe as one file, to move it between
 // machines or keep it. A .vxu file is

@@ -1,0 +1,12 @@
+{
+	"collections": [
+		{ "name": "client", "path": "client" },
+		{ "name": "server", "path": "server" },
+		{ "name": "common", "path": "common" },
+		{ "name": "tools", "path": "tools" }
+	],
+	"enable_semantic_tokens": false,
+	"enable_document_symbols": true,
+	"enable_hover": true,
+	"enable_snippets": false
+}

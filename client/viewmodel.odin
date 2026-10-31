@@ -3,8 +3,8 @@ package client
 import "core:math"
 import "core:math/linalg"
 
-import "render"
-import "ui"
+import "client:render"
+import "client:ui"
 
 // The view model (docs/milestones/M48k.md): the avatar's right arm and what it
 // holds, drawn over the world from the camera, in a pass of its own with a

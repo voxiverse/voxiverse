@@ -4,7 +4,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 @(private = "file")
 Sheep_Info :: struct {

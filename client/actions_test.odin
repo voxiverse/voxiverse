@@ -5,8 +5,8 @@ import "core:os"
 import "core:reflect"
 import "core:testing"
 
-import "../common/game"
-import "platform"
+import "client:platform"
+import "common:game"
 
 @(private = "file")
 Rig :: struct {

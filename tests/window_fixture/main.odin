@@ -8,7 +8,7 @@ import "core:os"
 import NS "core:sys/darwin/Foundation"
 import "core:time"
 
-import "../../client/platform"
+import "client:platform"
 
 @(private = "file")
 msg :: intrinsics.objc_send

@@ -4,10 +4,10 @@ package panic_fixture
 // purpose. A test with a server running whose worker thread panics must fail the run in
 // seconds, not spin (voxiverse#54).
 
-import "../../base"
-import "../../server"
+import "common:base"
 import "core:testing"
 import "core:time"
+import "server:."
 
 @(test)
 test_worker_panics_with_a_server_running :: proc(t: ^testing.T) {

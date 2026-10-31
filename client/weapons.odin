@@ -2,9 +2,9 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "render"
-import "ui"
+import "client:render"
+import "client:ui"
+import "common:game"
 
 // Hitscan weapons on the client (server/weapons.odin decides everything). The
 // client sends "I pulled the trigger" (Shoot) and predicts only effects: the

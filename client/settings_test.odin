@@ -3,9 +3,9 @@ package client
 import "core:os"
 import "core:testing"
 
-import "../base"
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:base"
+import "common:game"
 
 // Every variable table names real fields of supported types, with defaults
 // inside their ranges.

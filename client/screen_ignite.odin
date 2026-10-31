@@ -2,8 +2,8 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // Ignite (M48e): the big bang after
 // the creation screen's button. The galaxy view collapses to a point, flashes

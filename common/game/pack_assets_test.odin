@@ -3,7 +3,7 @@ package game
 import "core:fmt"
 import "core:testing"
 
-import "../../base"
+import "common:base"
 
 @(test)
 test_pack_assets_load :: proc(t: ^testing.T) {

@@ -2,7 +2,7 @@ package client
 
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The HUD: F1, the item-name popup and its fade.
 

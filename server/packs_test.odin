@@ -6,7 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // A universe's packs (M47a): a pack the universe lists adds a block with no
 // code of its own; the block is placed, saved by name and loaded again, and a

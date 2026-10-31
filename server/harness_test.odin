@@ -2,7 +2,7 @@ package server
 
 import "core:testing"
 
-import "../common/netcode"
+import "common:netcode"
 
 @(private = "file")
 HARNESS_INTEREST :: 39 // the chunks a player holds in the harness world: 13 columns, 3 high

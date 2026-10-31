@@ -6,8 +6,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // The console's command line (a Line_Editor, line_edit.odin): Tab
 // completes commands and their arguments; the history is saved between

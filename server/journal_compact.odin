@@ -4,8 +4,8 @@ import "core:log"
 import "core:os"
 import "core:slice"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Journal compaction and retention (docs/journal.md). A closed segment older
 // than JOURNAL_DETAIL is rewritten once with one entry per run of changes of

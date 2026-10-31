@@ -2,7 +2,7 @@ package worldgen
 
 import "core:math/noise"
 
-import "../game"
+import "common:game"
 
 // The Earth generator: continents and oceans, rivers, mountains with
 // overhangs, biomes from a climate, caves, ores, trees and plants.

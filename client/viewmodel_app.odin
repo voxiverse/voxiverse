@@ -1,8 +1,8 @@
 package client
 
 
-import "../common/game"
-import "render"
+import "client:render"
+import "common:game"
 
 // The view model's frame (docs/milestones/M48k.md): step the animations, make
 // the arm's and the item's vertices in view space and the scene they are drawn

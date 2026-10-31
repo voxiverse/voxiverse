@@ -5,8 +5,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/netcode"
+import "common:game"
+import "common:netcode"
 
 // test_key: the account a test client of name has (the same every run, so
 // a restarted server knows it again).

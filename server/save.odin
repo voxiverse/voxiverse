@@ -10,9 +10,9 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the home
 // world's address, the kit), characters/ and players/ (player_data.odin),

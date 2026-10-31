@@ -6,8 +6,8 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
-import "../common/telemetry"
+import "common:game"
+import "common:telemetry"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {

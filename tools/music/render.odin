@@ -2,8 +2,8 @@ package music_tool
 
 import "core:math"
 
-import "../../base"
-import "../../client/audio"
+import "client:audio"
+import "common:base"
 
 RATE :: 48000
 FADE_SECONDS :: 0.02 // an exclusive class's cut

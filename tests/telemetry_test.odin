@@ -4,7 +4,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../common/telemetry"
+import "common:telemetry"
 
 // The sink's writer thread drains the ring to the day's file (sink_flush
 // waits for it); the lines and the counts are tested on a stepped sink in

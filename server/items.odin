@@ -2,8 +2,8 @@ package server
 
 import "core:fmt"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Items on the server: inventory requests (applied by the shared rules,
 // common/game/inventory.odin), placing blocks from the stack in hand, what

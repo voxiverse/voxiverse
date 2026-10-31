@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // M14's exit check for items, two players over UDP: the kit, dropping a
 // stack that the other picks up, placing using one up, breaking leaving

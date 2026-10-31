@@ -1,6 +1,6 @@
 package server
 
-import "../common/game"
+import "common:game"
 
 // Support: a block with a support rule (game.has_support_rule: a plant stands
 // on a block that holds it; a ladder is against a face that holds it) goes when

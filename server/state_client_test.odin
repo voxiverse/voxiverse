@@ -3,7 +3,7 @@ package server
 import "core:mem"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // State_Rx: a test client's decoder of the server's State and Snapshot
 // messages (the schema and the receiver a real client keeps in its session).

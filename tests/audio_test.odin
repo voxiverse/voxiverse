@@ -4,7 +4,7 @@ import "core:math"
 import "core:testing"
 import "core:time"
 
-import "../client/audio"
+import "client:audio"
 
 // What needs a device or a decoder thread, and the OS's clock: the null
 // device's pacing, and a threaded stream against the inline one. The mixer's

@@ -5,7 +5,7 @@ import "core:math"
 import "core:reflect"
 import "core:strings"
 
-import "platform"
+import "client:platform"
 
 // Input actions: one layer between the platform's events (keys, mouse
 // buttons, gamepads) and everything that reads controls. Call sites ask

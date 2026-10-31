@@ -3,9 +3,9 @@ package client
 import "core:fmt"
 import "core:net"
 
-import "../common/game"
-import "../server"
-import "ui"
+import "client:ui"
+import "common:game"
+import "server:."
 
 // The Open to LAN dialog: the guests' game mode, whether
 // guests may use commands, and Open; once the world is open it shows where to

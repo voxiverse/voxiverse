@@ -3,9 +3,9 @@ package client
 import "core:fmt"
 import "core:log"
 
-import "../base"
-import "../server"
-import "render"
+import "client:render"
+import "common:base"
+import "server:."
 
 // Exit checks (fly, tour, blast: `--check <name>`): they drive the game
 // and check how it holds up. What they share lives here: starting in a

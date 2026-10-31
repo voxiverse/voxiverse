@@ -4,7 +4,7 @@ import "core:math"
 import "core:math/rand"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // F5 and the third person camera (view_camera.odin). A made-up world: a wall
 // at x = -2 (when there is one) and a scatter of blocks by a hash.

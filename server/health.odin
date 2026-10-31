@@ -1,8 +1,8 @@
 package server
 
 
-import "../common/game"
-import "../common/telemetry"
+import "common:game"
+import "common:telemetry"
 
 // Health, damage, death and what a character grows by. A player has health
 // points (BASE_HEALTH, plus what they wear: common/game/mods.odin); a fall of more

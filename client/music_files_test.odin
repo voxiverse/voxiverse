@@ -1,7 +1,7 @@
 package client
 
-import "../common/ogg"
-import "audio"
+import "client:audio"
+import "common:ogg"
 import "core:encoding/json"
 import "core:math"
 import "core:os"

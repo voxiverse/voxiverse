@@ -1,6 +1,6 @@
 package ogg
 
-import "../../base"
+import "common:base"
 
 // The fuzz target and its mutations. The suite (`test_ogg_fuzz`) and the
 // `build ogg fuzz` command run the same code; M51c's fuzzers call `fuzz_one`.

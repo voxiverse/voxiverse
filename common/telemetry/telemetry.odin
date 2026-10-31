@@ -1,6 +1,6 @@
 package telemetry
 
-import "../../base"
+import "common:base"
 import "core:fmt"
 import "core:os"
 import "core:strings"

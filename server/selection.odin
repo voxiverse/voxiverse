@@ -3,8 +3,8 @@ package server
 import "core:fmt"
 import "core:strconv"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // World editing's selection (docs/plan.md M19, commands): each player's two
 // corners, kept here (all world changes are the server's), set with /pos1

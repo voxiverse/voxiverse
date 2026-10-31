@@ -4,8 +4,8 @@ import "base:runtime"
 import "core:log"
 import "core:slice"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // Block entities (M48b, common/game/block_entity.odin): the data a block
 // keeps beyond its state, held by its chunk. One point decides when they

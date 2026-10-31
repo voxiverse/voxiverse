@@ -1,6 +1,6 @@
 package ogg
 
-import "../../base"
+import "common:base"
 import "core:encoding/endian"
 import "core:fmt"
 import "core:mem"

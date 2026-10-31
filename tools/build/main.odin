@@ -8,7 +8,7 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "limited"
+import "tools:build/limited"
 
 // The Voxiverse build driver. build.sh / build.bat hand every argument to
 // it; its commands are listed by usage (`build help`). It runs from the
@@ -17,7 +17,7 @@ import "limited"
 // PACKAGES are type-checked by `check`, each on its own so one broken
 // package doesn't hide errors in the others.
 PACKAGES :: []string {
-	"base",
+	"common/base",
 	"common/ogg",
 	"client/audio",
 	"common/netcode",
@@ -52,7 +52,7 @@ PACKAGES :: []string {
 }
 // TEST_PACKAGES contain @(test) procedures.
 TEST_PACKAGES :: []string {
-	"base",
+	"common/base",
 	"common/ogg",
 	"client/audio",
 	"common/netcode",
@@ -74,7 +74,7 @@ TEST_PACKAGES :: []string {
 }
 // SOURCE_DIRS hold first-party Odin code (formatting is checked here).
 SOURCE_DIRS :: []string {
-	"base",
+	"common/base",
 	"common/ogg",
 	"dedicated",
 	"client/audio",
@@ -92,6 +92,17 @@ SOURCE_DIRS :: []string {
 	"client",
 	"tools",
 	"tests",
+}
+
+// COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
+// common:game, tools:build/limited). The driver passes them to every odin it runs; build.sh,
+// build.bat (the driver's own build) and ols.json (the editor) repeat them, and a test keeps
+// those three in step. A package's own directory is `server:.` / `client:.`.
+COLLECTIONS :: []string {
+	"-collection:client=client",
+	"-collection:server=server",
+	"-collection:common=common",
+	"-collection:tools=tools",
 }
 
 ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
@@ -418,6 +429,7 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 		[][]string {
 			{"odin", "build", GAME_PACKAGE},
 			ODIN_FLAGS,
+			COLLECTIONS,
 			mode[:],
 			game_extra[:],
 			{strings.concatenate({"-out:", exe})},
@@ -428,6 +440,7 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 		[][]string {
 			{"odin", "build", SERVER_PACKAGE},
 			ODIN_FLAGS,
+			COLLECTIONS,
 			mode[:],
 			server_extra[:],
 			{strings.concatenate({"-out:", server_exe})},
@@ -538,7 +551,7 @@ check :: proc() -> bool {
 			Check_Job {
 				label = strings.concatenate({"check  ", pkg}),
 				cmd = slice.concatenate(
-					[][]string{{"odin", "check", pkg}, ODIN_FLAGS, CHECK_FLAGS},
+					[][]string{{"odin", "check", pkg}, ODIN_FLAGS, COLLECTIONS, CHECK_FLAGS},
 				),
 			},
 		)
@@ -548,6 +561,8 @@ check :: proc() -> bool {
 	return(
 		determinism_lint() &&
 		source_lint() &&
+		import_lint() &&
+		collections_lint() &&
 		test_lint() &&
 		ci_lint() &&
 		check_format() &&
@@ -648,8 +663,11 @@ driver_step :: proc() -> Odin_Step {
 	exe := path_join({"build", strings.concatenate({"build-driver", exe_suffix()})})
 	return Odin_Step {
 		name = "build-driver",
-		cmd = slice.clone(
-			[]string{"odin", "build", "tools/build", strings.concatenate({"-out:", exe})},
+		cmd = slice.concatenate(
+			[][]string {
+				{"odin", "build", "tools/build", strings.concatenate({"-out:", exe})},
+				COLLECTIONS,
+			},
 		),
 		output = exe,
 	}
@@ -695,7 +713,11 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 		if target == host {continue}
 		windows := strings.has_prefix(target, "windows")
 		cross_flags := slice.concatenate(
-			[][]string{{strings.concatenate({"-target:", target}), "-build-mode:obj"}, ODIN_FLAGS},
+			[][]string {
+				{strings.concatenate({"-target:", target}), "-build-mode:obj"},
+				ODIN_FLAGS,
+				COLLECTIONS,
+			},
 		)
 		if windows {
 			cross_flags = slice.concatenate([][]string{cross_flags, {"-windows-sdk-root:."}})
@@ -912,6 +934,7 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 				[][]string {
 					{"odin", "test", pkg},
 					ODIN_FLAGS,
+					COLLECTIONS,
 					{strings.concatenate({"-out:", out}), "-keep-executable"},
 					test_env_defines(),
 					extra,
@@ -1254,6 +1277,7 @@ audio_baselines :: proc(args: []string) -> bool {
 		[][]string {
 			{"odin", "test", GAME_PACKAGE},
 			ODIN_FLAGS,
+			COLLECTIONS,
 			{
 				strings.concatenate({"-out:", out}),
 				"-define:ODIN_TEST_NAMES=client.test_audio_baseline_burst,client.test_audio_baseline_cave_walk,client.test_audio_baseline_title_to_world,client.test_audio_baseline_stress,client.test_audio_baseline_music_session,client.test_music_hour_golden",
@@ -1281,6 +1305,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 	[][]string {
 		{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
 		ODIN_FLAGS,
+		COLLECTIONS,
 		// The map generates millions of columns: optimized. The benchmark
 		// as a release build, with line tables for perf.
 		{"-o:speed"} if name == "worldmap" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},

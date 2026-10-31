@@ -3,7 +3,7 @@ package client
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 @(private = "file")
 last_line :: proc(c: ^Console) -> string {

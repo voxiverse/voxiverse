@@ -5,7 +5,7 @@ import vk "vendor:vulkan"
 
 // Buffers and images, one memory allocation each: there are few. What
 // needs many small pieces sub-allocates one big buffer instead (the world
-// pass's vertices: base/range_alloc.odin).
+// pass's vertices: common/base/range_alloc.odin).
 
 Buffer :: struct {
 	handle:      vk.Buffer,

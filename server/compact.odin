@@ -3,8 +3,8 @@ package server
 import "base:runtime"
 import "core:slice"
 
-import "../common/game"
-import "../common/worldgen"
+import "common:game"
+import "common:worldgen"
 
 // Region compaction (M46b). A region's file holds the chunks edits left
 // different from the generator's and the column tops that differ from its

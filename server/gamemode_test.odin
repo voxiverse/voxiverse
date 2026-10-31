@@ -5,7 +5,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 // The universes screen's creation (client/screen_creation.odin) starts a
 // universe with the typed seed and a game mode; the files say what the

@@ -3,8 +3,8 @@ package render
 import "core:mem"
 import vk "vendor:vulkan"
 
-import "../gpu"
-import "../ui"
+import "client:gpu"
+import "client:ui"
 
 // Draws a ui.Output. Per frame slot it owns a vertex, an index and a
 // staging buffer (grown as needed: begin_frame has waited for the slot's

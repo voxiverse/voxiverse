@@ -4,9 +4,9 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 
-import "../base"
-import "platform"
-import "ui"
+import "client:platform"
+import "client:ui"
+import "common:base"
 
 // Options (docs/plan.md M20): the player's settings in tabs, the same from the
 // title and in a game (there docked left, the world in view, so changes show

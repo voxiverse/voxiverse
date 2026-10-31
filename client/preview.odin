@@ -2,9 +2,9 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "gpu"
-import "render"
+import "client:gpu"
+import "client:render"
+import "common:game"
 
 // The player's preview in the inventory: the real avatar (avatar_draw, as
 // the others see it, with what it wears) drawn by the entity pass into a

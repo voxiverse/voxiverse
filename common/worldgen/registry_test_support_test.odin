@@ -3,7 +3,7 @@ package worldgen
 import "base:runtime"
 import "core:sync"
 
-import "../game"
+import "common:game"
 
 @(private = "file")
 shared_reg: ^game.Registry

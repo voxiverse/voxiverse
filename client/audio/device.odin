@@ -1,6 +1,6 @@
 package audio
 
-import "../../base"
+import "common:base"
 import "core:log"
 import "core:strings"
 import "core:sync"

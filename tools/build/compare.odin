@@ -62,9 +62,14 @@ bench_compare :: proc(args: []string) -> bool {
 		return false
 	}
 	hash := strings.trim_space(out)
-	if _, has := capture(
+	// The benchmark system lived in base/ before it moved to common/base/.
+	_, has_new := capture(
+		{"git", "cat-file", "-e", strings.concatenate({hash, ":common/base/bench_result.odin"})},
+	)
+	_, has_old := capture(
 		{"git", "cat-file", "-e", strings.concatenate({hash, ":base/bench_result.odin"})},
-	); !has {
+	)
+	if !has_new && !has_old {
 		fmt.eprintfln("build: bench compare: %s is older than the benchmark system", ref)
 		return false
 	}

@@ -33,7 +33,7 @@ completion order may reach state or the wire.
 1. **Floats.** Floats in state are IEEE `f32`/`f64` with default rounding. Do not use
    `math.fmuladd` or fast-math. Odin does not contract `a*b + c`; the cross-OS job guards
    against that changing.
-2. **Transcendentals.** Transcendental functions in state come from `base/numbers.odin`:
+2. **Transcendentals.** Transcendental functions in state come from `common/base/numbers.odin`:
    `base.sin`, `base.cos`, `base.sincos` and `base.exp`, each for `f32` (computed in `f64`
    and rounded once) and for `f64`. They are plain Odin code: Cephes' sine and cosine as
    `core:math.sincos_f64` has them, and FreeBSD's `e_exp.c` for `exp`.
@@ -46,7 +46,7 @@ completion order may reach state or the wire.
    plain Odin code: `sqrt`, `abs`, `min`, `max`, `clamp`, `floor`, `ceil`, `trunc`, `round`,
    `mod`, `atan2`, `asin`, `acos`, `ln`, `smoothstep`, `lerp`. Integer powers are written as
    multiplications.
-3. **Randomness.** Randomness in state is `base.Rng` (`base/rng.odin`): xoshiro256** seeded
+3. **Randomness.** Randomness in state is `base.Rng` (`common/base/rng.odin`): xoshiro256** seeded
    through splitmix64, with 32 bytes of state and a stream the project owns. Never use
    `core:math/rand` (ChaCha8, 1 KiB of state, and a stream the toolchain may change). Each
    stream is seeded from its world's seed XOR a named constant. Cryptographic randomness

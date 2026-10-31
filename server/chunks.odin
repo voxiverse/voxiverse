@@ -5,9 +5,9 @@ import "core:mem"
 import "core:slice"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/worldgen"
+import "common:base"
+import "common:game"
+import "common:worldgen"
 
 // The server's chunks: a fixed pool, a position -> handle map and recycled
 // block arrays, all in the session arena and sized once, so memory stops

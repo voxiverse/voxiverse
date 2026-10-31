@@ -7,8 +7,8 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../../base"
-import "../../client/audio"
+import "client:audio"
+import "common:base"
 
 PHRASE :: #load("testdata/phrase.score", string)
 

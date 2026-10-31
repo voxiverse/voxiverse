@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "../base"
+import "common:base"
 
 // M46b: one process has a universe open at a time (the lock file).
 

@@ -4,8 +4,8 @@ import "core:math"
 import "core:slice"
 import "core:testing"
 
-import "../../base"
-import "../game"
+import "common:base"
+import "common:game"
 
 @(test)
 test_generate_is_deterministic :: proc(t: ^testing.T) {

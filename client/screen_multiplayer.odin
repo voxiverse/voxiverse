@@ -6,10 +6,10 @@ import "core:net"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
-import "ui"
+import "client:ui"
+import "common:base"
+import "common:game"
+import "common:netcode"
 
 // Multiplayer (Minecraft's screen): the servers LAN discovery finds (asked
 // about every second while the screen is open), one selected and joined

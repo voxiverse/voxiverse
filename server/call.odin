@@ -2,8 +2,8 @@ package server
 
 import "core:sync"
 
-import "../base"
-import "../common/game"
+import "common:base"
+import "common:game"
 
 // call runs procedure(s, data) on the server's thread at the start of its
 // next tick, and waits for it (a stepped server runs it at once): how code

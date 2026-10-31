@@ -10,7 +10,7 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-import "../common/game"
+import "common:game"
 
 @(private = "file")
 config :: proc(dir: string) -> Config {

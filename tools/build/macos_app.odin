@@ -4,9 +4,9 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-import "../../base"
-import "../../client/font"
-import "../../client/ui"
+import "client:font"
+import "client:ui"
+import "common:base"
 
 // The macOS .app: its Info.plist and icon file are made here from pure
 // procedures (tested on any OS); package_game assembles and signs the bundle

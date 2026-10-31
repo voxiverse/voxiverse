@@ -3,7 +3,7 @@ package render
 import "core:mem"
 import vk "vendor:vulkan"
 
-import "../gpu"
+import "client:gpu"
 
 // What the hands hold (client/viewmodel*.odin): small meshes, a few hundred
 // vertices, transformed on the CPU each frame into a mapped buffer like the

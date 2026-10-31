@@ -2,8 +2,8 @@ package client
 
 import "core:math"
 
-import "../common/game"
-import "render"
+import "client:render"
+import "common:game"
 
 // The grappling hook on the client. The line, the pull and the release are the
 // shared movement code's (game.player_step reads Button.Grapple), so the

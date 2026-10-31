@@ -1,7 +1,7 @@
 package client
 
-import "../common/game"
-import "ui"
+import "client:ui"
+import "common:game"
 
 // The death screen: how it happened and a Respawn button. It opens when the
 // server says the player is dead (Health.dead) and closes when it says they

@@ -2,8 +2,8 @@ package client
 
 import "core:testing"
 
-import "../common/game"
-import "../server"
+import "common:game"
+import "server:."
 
 // Sprint and sneak (held or toggled), the sprint's widening of the view,
 // view bobbing, F (the offhand swap over a stepped server), hold P (the

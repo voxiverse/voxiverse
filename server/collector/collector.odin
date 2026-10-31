@@ -13,10 +13,10 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
-import "../../base"
-import "../../common/game"
-import "../../common/netcode"
-import "../../common/telemetry"
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "common:telemetry"
 
 // The collector: the end of M27's pipe. Servers (a player's singleplayer
 // world, a dedicated server) send their event logs to it in batches over the

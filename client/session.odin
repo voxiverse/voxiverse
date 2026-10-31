@@ -11,14 +11,14 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
-import "../base"
-import "../common/game"
-import "../common/netcode"
-import "../common/worldgen"
-import "../server"
-import "gpu"
-import "mesh"
-import "render"
+import "client:gpu"
+import "client:mesh"
+import "client:render"
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "common:worldgen"
+import "server:."
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the connection (to its own in-process server, or over

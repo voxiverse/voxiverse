@@ -3,7 +3,7 @@ package server
 import pq "core:container/priority_queue"
 import "core:math"
 
-import "../common/game"
+import "common:game"
 
 // Pathfinding for walking entities: A* over the block grid. A walker
 // stands in a block of air on a solid block (one block tall is enough for

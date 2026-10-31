@@ -2,7 +2,7 @@ package ui
 
 import "core:math"
 
-import "../font"
+import "client:font"
 
 // The game's icon, drawn by code like every other asset: a dark cube in
 // oblique three-quarter view with a white question mark on its front, on a

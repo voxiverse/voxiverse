@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 
-import "../../base"
+import "common:base"
 
 // The pattern of a shot's rays, one procedure for both sides: the server
 // casts them, the client draws their tracers, and a seed gives the same rays
