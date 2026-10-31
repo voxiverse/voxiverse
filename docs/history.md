@@ -9026,3 +9026,41 @@ macOS, the same with the `.app` (Finder opens the folder).
 - Handler frames (`crash_report`, `crash_signal`, ...) are left out of threads.txt.
 - CI's step checks `thread main (crashing)` and `thread audio...` (a title-screen crash has no server thread, as the spec assumed), and `command crash` in actions.txt (command names and action presses are recorded; the rest is Q3b).
 - The gpu line is the device name and the driver description (the Vulkan API version is not in it).
+
+## L1: the layout manifest and its lints (issue #96)
+
+The owner's decisions (2026-10-31) are in issue #96; the goal is a layout so plain that an
+agent always knows where a new file goes and `check` refuses anything else. The manifest is
+[../layout.md](../layout.md); this is the plan for reaching the layout it describes.
+
+These rows are **first among the open rows**. Behaviour does not change; every test, check,
+lint, scene, baseline and CI step still runs; commits are small and each passes `check`,
+`test`, `smoke` and `determinism`.
+
+## Decisions (made here; the issue left them open)
+
+- **Three rows, not one.** L1 builds the manifest and what can be enforced at once; L2 splits
+  the packages; L3 turns the cap on. A lint that the tree fails today cannot be switched on
+  first, and a per-folder allowance would be an exemption (#62; T6 did the same with the
+  sleep lints), so the **cap lint lands in L3**, when nothing violates it.
+- **The manifest is a table in `docs/layout.md`**, one row per folder with file-name globs;
+  a row covers the files directly in the folder. The pure parser and the two lints are in
+  `tools/build/layout.odin` with tests on text (`layout_test.odin`). An unsplit package's row
+  holds `*.odin` until its split narrows it.
+- **The scratch lint** (`scratch_lint`) fails on any untracked, non-ignored file. A session
+  commits (with the manifest row, if a folder is new) before it runs `check`.
+- **The `tools` collection is gone.** Its only user was `tools/build/limited`, now
+  `common/limited`; the three collections are `client`, `server`, `common`.
+- **The cap's number** is chosen in L3 from the layout it counts and recorded in the manifest
+  with the reasoning.
+
+### L1: the manifest, the lints, the first moves (done)
+
+- `docs/layout.md` lists every folder and its patterns; `check` runs `layout_lint` and
+  `scratch_lint`.
+- `dedicated/` moved to `server/dedicated/`; `tools/build/limited` moved to `common/limited`
+  and the `tools` collection was dropped (`build.sh`, `build.bat`, `ols.json`, `COLLECTIONS`).
+- README's "Where things go" section points at the manifest.
+
+
+Differed from the spec: nothing; the spec's L2 and L3 stay in `milestones/L1.md`.
