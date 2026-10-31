@@ -91,7 +91,7 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `common/worldgen` | World generators | `*.odin` |
 | `docs` | Documents and this manifest | `*.md` |
 | `docs/milestones` | Milestone specs | `*.md` |
-| `server` | The server (being split into feature packages by L2) | `*.odin` |
+| `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
 | `server/packs` | Reading pack folders from disk (L2b gathers the `pack_*` files) | `*.odin` |

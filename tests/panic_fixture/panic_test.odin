@@ -7,19 +7,19 @@ package panic_fixture
 import "common:base"
 import "core:testing"
 import "core:time"
-import "server:."
+import "server:core"
 
 @(test)
 test_worker_panics_with_a_server_running :: proc(t: ^testing.T) {
-	config := server.Config {
+	config := core.Config {
 		seed        = 3,
 		view_radius = 2,
 		view_height = 1,
 		workers     = 1,
 	}
-	s: server.Server
-	if !testing.expect(t, server.start(&s, config, {})) {return}
-	defer server.stop(&s)
+	s: core.Server
+	if !testing.expect(t, core.start(&s, config, {})) {return}
+	defer core.stop(&s)
 	jobs: base.Jobs
 	base.jobs_init(&jobs, "fixture", 2)
 	defer base.jobs_destroy(&jobs)

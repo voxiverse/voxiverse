@@ -8,7 +8,7 @@ import "core:testing"
 import "core:time"
 
 import "common:base"
-import "server:."
+import "server:core"
 
 @(private = "file")
 refused :: proc(dir: string) -> bool {
@@ -17,8 +17,8 @@ refused :: proc(dir: string) -> bool {
 	quiet.lowest_level = .Fatal
 	context.logger = quiet
 	defer context.logger = loud
-	probe: server.Store
-	if server.universe_lock(&probe, dir) {
+	probe: core.Store
+	if core.universe_lock(&probe, dir) {
 		base.file_unlock(&probe.lock)
 		return false
 	}

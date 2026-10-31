@@ -32,26 +32,26 @@ test_lint_exception_and_comments :: proc(t: ^testing.T) {
 @(test)
 test_pipeline_lint_names_the_write :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
-	found := lint_pipeline("server/x.odin", "a := 1\nchunks_set_block(&w.chunks, p, .Air)\n")
+	found := lint_pipeline("server/core/x.odin", "a := 1\nchunks_set_block(&w.chunks, p, .Air)\n")
 	testing.expect_value(t, len(found), 1)
 	testing.expect_value(
 		t,
 		found[0],
-		"server/x.odin:2: block write outside the edit pipeline: use set_block or bulk_edit with an Act (docs/journal.md)",
+		"server/core/x.odin:2: block write outside the edit pipeline: use set_block or bulk_edit with an Act (docs/journal.md)",
 	)
 	testing.expect_value(
 		t,
-		len(lint_pipeline("server/x.odin", "game.chunk_set(&c.blocks, a, l, b)\n")),
+		len(lint_pipeline("server/core/x.odin", "game.chunk_set(&c.blocks, a, l, b)\n")),
 		1,
 	)
 	testing.expect_value(
 		t,
-		len(lint_pipeline("server/changes.odin", "chunks_set_block(&w.chunks, p, b)\n")),
+		len(lint_pipeline("server/core/changes.odin", "chunks_set_block(&w.chunks, p, b)\n")),
 		0,
 	)
 	testing.expect_value(
 		t,
-		len(lint_pipeline("server/x.odin", "// chunks_set_block( is only the pipeline's\n")),
+		len(lint_pipeline("server/core/x.odin", "// chunks_set_block( is only the pipeline's\n")),
 		0,
 	)
 }

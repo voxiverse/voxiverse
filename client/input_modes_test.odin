@@ -3,7 +3,7 @@ package client
 import "core:testing"
 
 import "common:game"
-import "server:."
+import "server:core"
 
 // Sprint and sneak (held or toggled), the sprint's widening of the view,
 // view bobbing, F (the offhand swap over a stepped server), hold P (the
@@ -269,7 +269,7 @@ test_f3_coordinates :: proc(t: ^testing.T) {
 @(test)
 test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 	rig: Frame_Rig
-	config := server.Config {
+	config := core.Config {
 		seed        = 33,
 		view_radius = 3,
 		view_height = 2,
@@ -278,8 +278,8 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 		no_sheep    = true,
 		rules       = still_rules(),
 	}
-	if !testing.expect(t, server.harness_start(&rig.h, config)) {return}
-	defer server.harness_stop(&rig.h)
+	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
+	defer core.harness_stop(&rig.h)
 	s := new(Session)
 	defer free(s)
 	key: game.Account_Key
@@ -289,7 +289,7 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 		{
 			name = "swapper",
 			key = key,
-			join = Join{address = server.harness_address(&rig.h)},
+			join = Join{address = core.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
 			registry = test_reg(),
@@ -300,7 +300,7 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 	rig_add(&rig, s)
 	idle: Actions
 	rig.actions = &idle
-	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+	core.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
 			s := (^Frame_Rig)(data).s
 			return s.state == .Playing && s.server_inventory.slots[0].item != 0
 		}, &rig, 3000)

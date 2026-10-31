@@ -12,7 +12,7 @@ import "client:gpu"
 import "client:render"
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // Benchmarks (docs/plan.md, M19): `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
@@ -418,7 +418,7 @@ bench_update :: proc(app: ^App) {
 			}
 			if time.tick_diff(b.next_shot, time.tick_now()) < 500 * time.Millisecond {return}
 			if !world_settled(app) || len(s.world.groups) > 0 {return}
-			if server.stats(&s.server).updates_waiting > 0 {return}
+			if core.stats(&s.server).updates_waiting > 0 {return}
 			bench_repetition_done(app)
 		case .Flight:
 			p := s.prediction.state

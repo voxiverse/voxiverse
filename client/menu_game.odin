@@ -2,7 +2,7 @@ package client
 
 
 import "client:ui"
-import "server:."
+import "server:core"
 
 game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "game menu")
@@ -12,7 +12,7 @@ game_menu :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	port := server.stats(&s.server).port if session_hosting(s) else 0
+	port := core.stats(&s.server).port if session_hosting(s) else 0
 	rows: f32 = 4 if port == 0 else 5
 	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 80)
 	heading := ui.cut_top(&column, 80)

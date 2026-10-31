@@ -13,7 +13,7 @@ import "client:platform"
 import "client:ui"
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // Singleplayer's saves (docs/plan.md M20, M48e): one
 // directory each under saves/ in the user data directory (or VX_SAVES),
@@ -509,7 +509,7 @@ save_export :: proc(name, file: string) -> (path, problem: string) {
 				context.temp_allocator,
 			) or_else name
 	}
-	if why := server.universe_export(dir, path, &base.Disk{}); why != "" {return "", why}
+	if why := core.universe_export(dir, path, &base.Disk{}); why != "" {return "", why}
 	return path, ""
 }
 
@@ -522,6 +522,6 @@ save_import :: proc(file, name: string) -> (path, problem: string) {
 		if name == "" {name = "Imported"}
 	}
 	path = free_save_path(name)
-	if why := server.universe_import(file, path, &base.Disk{}); why != "" {return "", why}
+	if why := core.universe_import(file, path, &base.Disk{}); why != "" {return "", why}
 	return path, ""
 }

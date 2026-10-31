@@ -12,7 +12,7 @@ import "common:base"
 import "common:game"
 import "common:netcode"
 import "common:telemetry"
-import "server:."
+import "server:core"
 
 // The `server` benchmark scenario (docs/plan.md, M19; `build bench server`): the
 // server alone, as players load it. A fresh scratch world (the client's
@@ -148,7 +148,7 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 // bench_repetition: one server, its players joining, warming up, measured.
 @(private = "file")
 bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -> bool {
-	config := server.Config {
+	config := core.Config {
 		seed            = BENCH_SEED,
 		view_radius     = 6 if party else 12,
 		view_height     = 4 if party else 6,
@@ -163,11 +163,11 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		save_dir        = PARTY_UNIVERSE if party else "",
 	}
 	if party {os.remove_all(PARTY_UNIVERSE)}
-	srv := new(server.Server)
+	srv := new(core.Server)
 	defer free(srv)
-	if !server.start(srv, config, {}) {return false}
+	if !core.start(srv, config, {}) {return false}
 	stopped := false
-	defer if !stopped {server.stop(srv)}
+	defer if !stopped {core.stop(srv)}
 	for !sync.atomic_load(&srv.listening) {time.sleep(time.Millisecond)}
 	port := srv.host.socket.port
 
@@ -238,7 +238,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		)
 	}
 	stopped = true
-	ok := server.stop(srv)
+	ok := core.stop(srv)
 	if party {report_session()}
 	return ok
 }

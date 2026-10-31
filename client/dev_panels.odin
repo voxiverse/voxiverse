@@ -12,7 +12,7 @@ import "client:gpu"
 import "client:ui"
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 net_line :: proc(s: ^Session) -> string {
 	n := &s.net
@@ -97,7 +97,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 		mesh_ms := base.frame_stats_summary(&w.stats.mesh_times)
 		work := fmt.tprintf("mesh %.2f ms (p99 %.2f)", mesh_ms.avg, mesh_ms.p99)
 		if session_hosting(s) {
-			gen := server.stats(&s.server).generate
+			gen := core.stats(&s.server).generate
 			work = fmt.tprintf("generate %.2f ms (p99 %.2f), %s", gen.avg, gen.p99, work)
 		}
 		append(&lines, fmt.tprintf("chunks: %s", work))
@@ -146,7 +146,7 @@ debug_overlay :: proc(app: ^App, ctx: ^ui.Context) {
 				),
 			)
 		} else {
-			st := server.stats(&s.server)
+			st := core.stats(&s.server)
 			append(
 				&lines,
 				fmt.tprintf(

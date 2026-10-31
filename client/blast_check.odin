@@ -8,7 +8,7 @@ import "core:time"
 import "client:render"
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // M9's exit check (`--check blast`, exit_check.odin's CHECKS): it waits
 // for the world, hovers above the spawn and fires: rockets and radius-6
@@ -106,7 +106,7 @@ blast_test_update :: proc(app: ^App) {
 		log.info("blast_test firing")
 	case .Firing:
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
-		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
+		t.tick_max = max(t.tick_max, core.stats(&s.server).tick_ms)
 		if time.tick_diff(app_tick(app), t.next_shot) > 0 {return}
 		t.next_shot = time.tick_add(app_tick(app), BLAST_SHOT_EVERY)
 		// A little further round each time: fresh ground.
@@ -134,23 +134,23 @@ blast_test_update :: proc(app: ^App) {
 		if t.fired == t.shots {next(app, t, .Settling)}
 	case .Settling:
 		base.frame_stats_add(&t.frames, app.last_frame_ms)
-		t.tick_max = max(t.tick_max, server.stats(&s.server).tick_ms)
+		t.tick_max = max(t.tick_max, core.stats(&s.server).tick_ms)
 		if app_since(app, t.started) < 2 * time.Second || !world_settled(app) {return}
 		if len(s.world.groups) > 0 {return}
 		// Water the blasts let loose flows on a while: until it settles.
-		if server.stats(&s.server).updates_waiting > 0 {return}
+		if core.stats(&s.server).updates_waiting > 0 {return}
 		// The server's hash of what it sent us; compared once what it sent
 		// before has arrived (the pipe delivers it all at the next receive).
 		hashed := struct {
 			count: int,
 			sum:   u64,
 		}{}
-		server.call(&s.server, proc(srv: ^server.Server, data: rawptr) {
+		core.call(&s.server, proc(srv: ^core.Server, data: rawptr) {
 				h := (^struct {
 						count: int,
 						sum:   u64,
 					})(data)
-				h.count, h.sum = server.chunks_hash_of(srv, "")
+				h.count, h.sum = core.chunks_hash_of(srv, "")
 			}, &hashed)
 		t.server_count, t.server_sum = hashed.count, hashed.sum
 		next(app, t, .Comparing)

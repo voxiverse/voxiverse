@@ -7,7 +7,7 @@ import "core:path/filepath"
 
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // The `budgets` benchmark scenario (docs/plan.md, T5; `build bench budgets`):
 // what the server's heavy work costs, each scene of server/budgets.odin once a
@@ -100,7 +100,7 @@ budgets_main :: proc(args: []string) {
 @(private = "file")
 budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string) {
 	os.remove_all(dir)
-	save, saved := server.budget_save(dir, BUDGET_COMMIT_TICKS)
+	save, saved := core.budget_save(dir, BUDGET_COMMIT_TICKS)
 	os.remove_all(dir)
 	if !saved || !save.committed || !save.blocking_ok {
 		append(failures, fmt.aprintf("the save: %v", save))
@@ -109,22 +109,22 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	base.metric_add(.Save_Slice, f32(save.slice_worst_us))
 	base.metric_add(.Save_Blocking, f32(save.blocking_ms))
 
-	lines, audit_us := server.budget_audit(reg)
+	lines, audit_us := core.budget_audit(reg)
 	if lines != 0 {append(failures, fmt.aprintf("the audit gave %d lines", lines))}
 	base.metric_add(.Audit, f32(audit_us))
 
-	building, work, _, bad := server.budget_counters(reg)
+	building, work, _, bad := core.budget_counters(reg)
 	if bad != 0 {append(failures, fmt.aprintf("%d players did not read back", bad))}
 	base.metric_add(.Counters_Ratio, f32(work) / f32(max(building, 1)))
 
-	journal, journaled := server.budget_journal()
+	journal, journaled := core.budget_journal()
 	if !journaled || journal.head <= 20_000 {
 		append(failures, fmt.aprintf("the journal scene changed %d blocks", journal.head))
 	}
 	base.metric_add(.Journal_Share, f32(journal.share * 100))
 	base.metric_add(.Journal_Tick, f32(journal.per_tick_us))
 
-	flood, flooded := server.budget_flood()
+	flood, flooded := core.budget_flood()
 	if !flooded || flood.most < 10_000 {
 		append(failures, fmt.aprintf("only %d block updates flowing", flood.most))
 	}

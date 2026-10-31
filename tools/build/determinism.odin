@@ -10,7 +10,14 @@ import "core:strings"
 // keeps to base's sin, cos, exp and Rng. A line that is not state says so with a
 // trailing `// numbers: <why>`.
 
-DETERMINISM_DIRS :: []string{"common/game", "server", "server/packs", "common/worldgen"}
+DETERMINISM_DIRS :: []string {
+	"common/game",
+	"server/core",
+	"server/packs",
+	"server/collector",
+	"server/dedicated",
+	"common/worldgen",
+}
 
 @(rodata)
 BANNED_CALLS := [?]struct {
@@ -65,7 +72,11 @@ lint_numbers :: proc(path, text: string) -> []string {
 // The pipeline lint (docs/journal.md): a block of a server's chunks changes
 // only through set_block and bulk_edit, which take the cause, check admit and
 // journal the change. Only these files write blocks themselves.
-PIPELINE_FILES :: []string{"server/chunks.odin", "server/changes.odin", "server/edits.odin"}
+PIPELINE_FILES :: []string {
+	"server/core/chunks.odin",
+	"server/core/changes.odin",
+	"server/core/edits.odin",
+}
 
 // lint_pipeline returns one message per line of a server file (not a test)
 // that writes a block itself.
@@ -114,7 +125,7 @@ determinism_lint :: proc() -> bool {
 				fmt.eprintln(msg)
 				ok = false
 			}
-			if dir == "server" {
+			if strings.has_prefix(dir, "server/") {
 				slash, _ := strings.replace_all(info.fullpath, "\\", "/", context.temp_allocator)
 				rel := slash[strings.last_index(slash, "/server/") + 1:]
 				for msg in lint_pipeline(rel, string(data)) {
@@ -154,13 +165,13 @@ determinism :: proc(args: []string) -> bool {
 		os.make_directory_all(filepath.dir(out))
 		cmd := slice.concatenate(
 			[][]string {
-				{"odin", "test", "server"},
+				{"odin", "test", "server/core"},
 				ODIN_FLAGS,
 				COLLECTIONS,
 				{
 					strings.concatenate({"-o:", level}),
 					strings.concatenate({"-out:", out}),
-					"-define:ODIN_TEST_NAMES=server.test_determinism_session",
+					"-define:ODIN_TEST_NAMES=core.test_determinism_session",
 					fmt.aprintf("-define:VX_DETERMINISM_TICKS=%d", DETERMINISM_TICKS),
 					strings.concatenate({"-define:VX_DETERMINISM_LOG=", log_path}),
 				},

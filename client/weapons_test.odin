@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:testing"
 
 import "common:game"
-import "server:."
+import "server:core"
 
 // Weapons on the client: the effects are at once and the client's own (the
 // tracer, the flash, the sound, the recoil, the magazine), a hit is only the
@@ -25,7 +25,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	rig: Frame_Rig
-	config := server.Config {
+	config := core.Config {
 		save_dir    = dir,
 		kit         = "rocket_launcher 1", // (the world's kit: the blocks of the other tests are not wanted)
 		seed        = 33,
@@ -37,8 +37,8 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		mode        = "survival",
 		rules       = still_rules(),
 	}
-	if !testing.expect(t, server.harness_start(&rig.h, config)) {return}
-	defer server.harness_stop(&rig.h)
+	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
+	defer core.harness_stop(&rig.h)
 	s := new(Session)
 	defer free(s)
 	key: game.Account_Key
@@ -48,7 +48,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		{
 			name = "shooter",
 			key = key,
-			join = Join{address = server.harness_address(&rig.h)},
+			join = Join{address = core.harness_address(&rig.h)},
 			view_radius = 3,
 			view_height = 2,
 			registry = test_reg(),
@@ -60,7 +60,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	idle: Actions
 	pistol, _ := game.item_by_name(s.reg, "pistol")
 	rig.actions = &idle
-	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+	core.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
 			s := (^Frame_Rig)(data).s
 			pistol, _ := game.item_by_name(s.reg, "pistol")
 			return(
@@ -78,7 +78,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	testing.expect_value(t, s.inventory.slots[0].item, rifle)
 	testing.expect_value(t, s.inventory.slots[1].item, shotgun)
 	session_inventory_do(s, {.Swap_Hotbar, game.HOTBAR_SLOTS, 0})
-	server.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
+	core.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
 			s := (^Frame_Rig)(data).s
 			pistol, _ := game.item_by_name(s.reg, "pistol")
 			return s.server_inventory.slots[0].item == pistol
@@ -91,7 +91,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 
 	// A target in front of us, a block off, in line with the eyes' look down at it.
 	feet := s.prediction.state.position
-	sheep := server.entity_spawn(rig.h.srv.worlds[0], .Sheep, feet + {0, 0, -1.4}, false)
+	sheep := core.entity_spawn(rig.h.srv.worlds[0], .Sheep, feet + {0, 0, -1.4}, false)
 	if !testing.expect(t, sheep != nil) {return}
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))

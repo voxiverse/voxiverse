@@ -7,7 +7,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // replay feeds the client's messages from a network trace to a fresh server
 // (same seed and view distance, same timing), so whatever the server did
@@ -73,15 +73,15 @@ run :: proc(opts: Options) -> bool {
 		opts.out,
 		header,
 	) {log.warnf("replay cannot record path=%s", opts.out)}
-	srv: server.Server
-	config := server.Config {
+	srv: core.Server
+	config := core.Config {
 		seed         = header.seed,
 		view_radius  = i32(header.view_radius),
 		view_height  = i32(header.view_height),
 		workers      = 2,
 		allow_cheats = header.allow_cheats,
 	}
-	if !server.start(&srv, config, {&pipe, .Server}) {return false}
+	if !core.start(&srv, config, {&pipe, .Server}) {return false}
 	client := game.Endpoint{&pipe, .Client}
 
 	key := game.account_key_make()
@@ -155,7 +155,7 @@ run :: proc(opts: Options) -> bool {
 		time.sleep(time.Millisecond)
 	}
 	disconnected := game.is_closed(client)
-	server_ok := server.stop(&srv)
+	server_ok := core.stop(&srv)
 	received += drain(client, &incoming, &challenge, scratch)
 	log.infof(
 		"replay done sent=%d received=%d disconnected=%v server_ok=%v out=%s",

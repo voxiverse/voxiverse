@@ -1,0 +1,922 @@
+package core
+
+import "base:runtime"
+import "core:fmt"
+import "core:log"
+import "core:mem"
+import "core:mem/virtual"
+import "core:net"
+import "core:path/filepath"
+import "core:strings"
+import "core:sync"
+import "core:thread"
+import "core:time"
+
+import "common:base"
+import "common:game"
+import "common:netcode"
+import "common:telemetry"
+import "common:worldgen"
+import "server:collector"
+
+// The authoritative side of a world, on its own thread at game.TICK_RATE.
+// Everything it owns lives in its session arena and is freed at once by
+// stop. Players reach it through the in-process Pipe (the local player of
+// a game that hosts its own world) or over UDP (netcode: a dedicated server,
+// or a world opened to the LAN); either way they speak the same messages.
+// The rest of the program sees only published Stats.
+//
+//	server.start(&srv, {seed = 1, view_radius = 12, view_height = 6, workers = 2}, {&pipe, .Server})
+//	...
+//	ok := server.stop(&srv) // false if it stopped on an error
+
+// Upload: send the event log to a collector (collector/) every interval
+// (default 30 s) and at stop, as this account.
+Upload :: struct {
+	address:  net.Endpoint,
+	key:      game.Account_Key,
+	interval: time.Duration,
+}
+
+Config :: struct {
+	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
+	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
+	seed:                  i64,
+	mode:                  string, // a new universe's default game mode, by id ("": creative; a saved one keeps its own: universe.cfg)
+	mode_changed:          bool, // /gamemode changed it since the universe was made (saved)
+	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
+	view_radius:           i32, // chunks, horizontally
+	view_height:           i32, // chunks above and below
+	workers:               int,
+	allow_cheats:          bool, // the local player may Teleport, Set_Rule and Admin
+	everyone_cheats:       bool, // ... and so may remote players
+	save_dir:              string, // the world's directory; "" = not saved (its seed and rules win over these)
+	rules:                 game.Rules, // zero: the defaults
+	max_players:           int, // seats (0: DEFAULT_MAX_PLAYERS)
+	listen:                bool, // take remote players from the start (else only after Admin "open_lan")
+	port:                  int, // ... on this UDP port (0: any free one)
+	password:              string, // remote players must know it ("": none)
+	name:                  string, // what LAN discovery shows
+	capture:               string, // write every packet to this pcap file once listening ("": no)
+	conditions:            netcode.Conditions, // simulated loss etc. on what the server sends (tests)
+	spawn:                 Maybe([3]f64), // a new world's spawn (lands on the ground there), not the generator's
+	world_idle:            f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
+	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
+	pack_watch:            bool, // development: reload the packs when their files change (pack_reload.odin)
+	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
+	net:                   ^netcode.Simnet, // listen on this simulated network, not UDP (needs stepped; no conditions: the network's are the only ones)
+	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
+	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism
+	backups:               Maybe(int), // rolling backups kept (nil: BACKUP_KEEP; 0: none)
+	journal_memory:        int, // tests: entries in a world's journal ring (0: JOURNAL_MEMORY)
+	journal_segment_bytes: int, // tests: where a journal segment ends (0: JOURNAL_SEGMENT_BYTES)
+	journal_timed:         bool, // tests: time the journal (Journal.cost_ticks)
+	journal_detail:        u64, // tests: ticks a segment keeps its detail (0: JOURNAL_DETAIL)
+	journal_keep:          u64, // tests: ticks a segment is kept (0: JOURNAL_KEEP)
+	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
+	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
+}
+
+DEFAULT_MAX_PLAYERS :: 8
+
+// UNLOAD_SWEEP_TICKS: how often every loaded chunk is looked at for whether
+// anyone wants it (a client's moves free what it left as it goes).
+UNLOAD_SWEEP_TICKS :: game.TICK_RATE * 10
+
+// Stats is a snapshot, published at the end of every tick.
+Stats :: struct {
+	tick:              u64,
+	tick_ms:           f32,
+	tick_cpu_ms:       f32, // the server thread's CPU time in the tick: what a budget test judges
+	chunks_loaded:     int,
+	chunks_generating: int,
+	arrays_allocated:  int,
+	arrays_in_use:     int,
+	arrays_bytes:      int, // committed for chunk arrays
+	arena_used:        uint,
+	arena_reserved:    uint,
+	clients:           int,
+	port:              int, // listening on (0: not)
+	generate:          base.Frame_Summary, // ms per chunk, on the workers (updated each second)
+	updates_waiting:   int, // scheduled block updates (flowing water)
+	worlds:            int, // loaded
+	desyncs:           int, // prediction checks that differed
+	checks_judged:     int, // prediction checks compared
+	checks_skipped:    int, // ... and skipped (not quiet)
+}
+
+Server :: struct {
+	config:         Config,
+	capacity:       int, // chunks
+	local:          game.Endpoint, // the in-process player's pipe (none: a dedicated server)
+	thread:         ^thread.Thread,
+	stopping:       bool, // (atomic)
+	schema:         game.Schema, // what is replicated to clients (state_kinds.odin)
+	time_stopped:   bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
+	frozen:         bool, // (atomic) the local player paused: time and entities stand still
+	failed:         bool, // (atomic)
+	stats_mutex:    sync.Mutex,
+	stats:          Stats,
+	log_tag:        base.Log_Tag,
+	store:          Store, // saving (save.odin)
+	pack_blobs:     [dynamic]Pack_Blob, // the universe's packs as sent (pack_send.odin)
+	reload:         Pack_Reload, // hot reload of the packs (pack_reload.odin)
+	registry:       ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
+	refusal:        string, // why start returned false, when it is a message for the player
+	// Server thread only, after start:
+	arena:          virtual.Arena,
+	home:           ^World, // the universe's first world (always loaded)
+	worlds:         [dynamic]^World, // loaded (home first)
+	clients:        []Client, // index = player id
+	host:           netcode.Host, // remote players (listening when host_open)
+	listening:      bool,
+	capture:        netcode.Capture, // (config.capture)
+	perms:          Permissions, // who may do what (permissions.odin)
+	community:      Community, // nicknames, mutes, homes, warps, bans (community.odin)
+	chat:           Chat_State, // (chat.odin)
+	kit:            [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
+	offsets:        []game.Chunk_Pos, // the interest area around a client, nearest first
+	unload_offsets: []game.Chunk_Pos, // ... with SERVER_UNLOAD_MARGIN (unload_left)
+	calls:          base.Queue(Server_Call), // from beside an in-process server (call.odin)
+	writer:         game.Writer,
+	tick:           u64,
+	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
+	session:        telemetry.Sink, // the session recording's file (session_log.odin)
+	session_on:     bool,
+	log_sink:       ^base.Log_Sink, // whose warnings and errors it keeps
+	uploader:       collector.Uploader, // sends its log to a collector
+	uploading:      bool,
+	ledger:         Ledger, // every item made or unmade (ledger.odin)
+	desyncs:        int, // checks that differed (desync.odin)
+	desync_fields:  [game.Player_Field]int, // ... and in which fields
+	checks_judged:  int, // checks compared
+	checks_skipped: int, // checks not compared: the player was not quiet
+	hash_root:      u64, // a stepped server's chain of tick hashes (state_hash.odin)
+	age_base:       u64, // the universe's ticks before this run (universe.cfg; age_of)
+	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
+}
+
+// A rejected remote client is told why and dropped this many ticks later.
+@(private)
+KICK_DELAY :: game.TICK_RATE
+
+// start sets up the session and starts the server thread. s must stay at
+// its address until stop. local: the in-process player's end of a pipe
+// ({} for none).
+start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
+	if config.net != nil && (!config.stepped || config.conditions != {}) {
+		log.warnf("a simulated network needs a stepped server and no conditions of its own")
+		return false
+	}
+	assert(config.view_radius > 0 && config.view_radius <= game.MAX_VIEW_RADIUS)
+	assert(
+		config.view_height > 0 &&
+		config.view_height <= game.MAX_VIEW_HEIGHT &&
+		(config.workers > 0 || config.stepped),
+	)
+	s^ = {
+		config = config,
+		local  = local,
+	}
+	s.schema = game.game_schema()
+	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
+	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
+	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
+	if err := virtual.arena_init_growing(&s.arena); err != nil {
+		log.errorf("server cannot reserve its memory: %v", err)
+		return false
+	}
+	arena := virtual.arena_allocator(&s.arena)
+	s.config.password = strings.clone(config.password, arena)
+	s.config.name = strings.clone(config.name, arena)
+	s.config.capture = strings.clone(config.capture, arena)
+	s.home = world_make(s)
+	append(&s.worlds, s.home)
+	// A saved world's seed and rules replace the config's.
+	if !store_open(s, config.save_dir) {
+		teardown(s, world = false)
+		return false
+	}
+	if !universe_registry(s) || !universe_blocks_check(s) {
+		teardown(s, world = false)
+		return false
+	}
+	kit_default(s.registry, &s.kit)
+	if kit_text := s.store.kit_text if s.store.kit_text != "" else s.config.kit; kit_text != "" {
+		if kit, ok := kit_parse(s.registry, kit_text); ok {
+			clear(&s.kit)
+			append(&s.kit, ..kit)
+		} else {
+			log.warnf("server universe kit not understood kit=%q", kit_text)
+		}
+	}
+	permissions_open(s)
+	community_open(s)
+	telemetry.sink_start(
+		&s.sink,
+		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
+		u32(telemetry.now_ms()),
+		stepped = config.stepped,
+	)
+	session_open(s)
+	if up, ok := config.upload.?; ok && s.store.dir != "" {
+		interval := up.interval if up.interval > 0 else 30 * time.Second
+		collector.uploader_start(
+			&s.uploader,
+			filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "",
+			up.address,
+			up.key,
+			interval,
+		)
+		s.uploading = true
+	}
+	characters_open(s)
+	base.queue_init(&s.calls)
+	s.offsets = game.interest_offsets(config.view_radius, config.view_height, arena)
+	s.unload_offsets = game.interest_offsets(
+		config.view_radius + game.SERVER_UNLOAD_MARGIN,
+		config.view_height + game.SERVER_UNLOAD_MARGIN,
+		arena,
+	)
+	// Loaded chunks stay within the unload distance of some player, plus
+	// chunks still generating that were requested before they moved.
+	per_player := game.interest_count(
+		config.view_radius + game.SERVER_UNLOAD_MARGIN,
+		config.view_height + game.SERVER_UNLOAD_MARGIN,
+	)
+	capacity :=
+		per_player * s.config.max_players + max(config.workers, 1) * MAX_IN_FLIGHT_PER_WORKER
+	s.capacity = capacity
+	if !world_start(s.home) {
+		teardown(s, world = false)
+		return false
+	}
+	s.clients = make([]Client, s.config.max_players, arena)
+	for &c in s.clients {
+		if err := client_init(&c, s.config, arena); err != nil {
+			log.errorf("server cannot allocate client state: %v", err)
+			teardown(s, world = true)
+			return false
+		}
+	}
+	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
+	if local.pipe != nil {
+		s.clients[0].state = .Connecting
+		s.clients[0].link = Local{}
+	}
+	if config.listen && !listen(s, config.port, config.port) {
+		teardown(s, world = true)
+		return false
+	}
+
+	if !config.stepped {
+		s.thread = thread.create(server_main, name = "server")
+		s.thread.data = s
+		s.thread.init_context = base.thread_context()
+		thread.start(s.thread)
+	}
+	log.infof(
+		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d",
+		s.config.seed,
+		worldgen.KIND_NAMES[s.config.generator],
+		config.view_radius,
+		config.view_height,
+		config.workers,
+		capacity,
+		s.config.max_players,
+	)
+	return true
+}
+
+// stop finishes the current tick, stops the thread, saves, says goodbye to
+// remote players and frees the session. False if the server stopped
+// because of an error (or the last save failed).
+stop :: proc(s: ^Server) -> bool {
+	sync.atomic_store(&s.stopping, true)
+	if s.thread != nil {
+		thread.join(s.thread)
+		thread.destroy(s.thread)
+	}
+	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
+	if s.listening {netcode.host_close(&s.host, "the server stopped")}
+	used := s.arena.total_used
+	ticks := s.tick
+	failed := sync.atomic_load(&s.failed)
+	teardown(s, world = true)
+	log.infof("server stopped ticks=%d arena=%v", ticks, base_bytes(used))
+	return !failed
+}
+
+// teardown frees the session, started (stop) or partly (a start that
+// failed: what was not set up yet is zero; world: whether it was).
+@(private = "file")
+teardown :: proc(s: ^Server, world: bool) {
+	session_close(s)
+	telemetry.sink_stop(&s.sink) // (the events written; safe if it never started)
+	if s.uploading {collector.uploader_stop(&s.uploader)} 	// (a last pass: what was written)
+	netcode.capture_close(&s.capture)
+	store_close(s)
+	permissions_destroy(&s.perms)
+	community_destroy(&s.community)
+	for w in s.worlds {world_close(w)} 	// (first: it joins the generator workers, which read the registry)
+	delete(s.worlds)
+	game.registry_destroy(s.registry)
+	pack_blobs_destroy(s)
+	reload_destroy(s)
+	delete(s.kit)
+	for &c in s.clients {client_reset(&c)}
+	game.schema_destroy(&s.schema)
+	ledger_destroy(&s.ledger)
+	base.queue_destroy(&s.calls)
+	refusal := s.refusal // (a failed start says why, after the rest is gone)
+	virtual.arena_destroy(&s.arena)
+	s^ = {
+		refusal = refusal,
+	}
+}
+
+// freeze stops (or restarts) time and entities while the local player is
+// paused. Ignored while anyone else could be playing: remote players, or
+// the world open to the LAN.
+freeze :: proc(s: ^Server, on: bool) {
+	sync.atomic_store(&s.frozen, on)
+}
+
+// block_capacity is the most chunk arrays the server can ever hold.
+block_capacity :: proc(s: ^Server) -> int {
+	return s.capacity
+}
+
+stats :: proc(s: ^Server) -> Stats {
+	sync.guard(&s.stats_mutex)
+	return s.stats
+}
+
+// server_now: the time netcode is given: the simulated network's clock when
+// the server runs on one, else the OS's. (The live tick's pacing keeps the
+// wall clock: it is not state.)
+@(private)
+server_now :: proc(s: ^Server) -> time.Tick {
+	if s.config.net != nil {return s.config.net.now}
+	return time.tick_now()
+}
+
+// listen opens the UDP port for remote players: the first free one from
+// first to last. False (logged) if none could be opened.
+@(private)
+listen :: proc(s: ^Server, first, last: int) -> bool {
+	if s.listening {return true}
+	err: net.Network_Error
+	for port in first ..= last {
+		err = netcode.host_open(
+			&s.host,
+			port,
+			s.config.max_players,
+			s.config.password,
+			sim = s.config.net,
+		)
+		if err == nil {
+			s.listening = true
+			s.host.socket.conditions = s.config.conditions
+			if s.config.capture != "" {
+				if netcode.capture_open(&s.capture, s.config.capture) {
+					s.host.socket.capture = &s.capture
+					log.infof("server capturing packets path=%s", s.config.capture)
+				} else {
+					log.errorf("server cannot write the capture path=%s", s.config.capture)
+				}
+			}
+			log.infof("server listening port=%d password=%v", port, s.config.password != "")
+			update_info(s)
+			return true
+		}
+	}
+	log.errorf("server cannot listen ports=%d..%d error=%v", first, last, err)
+	return false
+}
+
+@(private = "file")
+server_main :: proc(t: ^thread.Thread) {
+	base.thread_register("server")
+	defer base.thread_unregister()
+	s := (^Server)(t.data)
+	context.logger = base.log_retag(&s.log_tag, context.logger, "server")
+	base.profile_thread_start("server")
+	next := time.tick_now()
+	for !sync.atomic_load(&s.stopping) {
+		start := time.tick_now()
+		cpu := base.thread_cpu_us()
+		tick(s)
+		free_all(context.temp_allocator)
+		took := time.tick_since(start)
+		s.tick_us[s.tick % TICK_SUMMARY_TICKS] = u32(time.duration_microseconds(took))
+		publish_stats(
+			s,
+			f32(time.duration_milliseconds(took)),
+			f32(base.thread_cpu_us() - cpu) / 1000,
+		)
+
+		next = time.tick_add(next, game.TICK_DURATION)
+		left := time.tick_diff(time.tick_now(), next)
+		if left < -5 * game.TICK_DURATION {
+			log.debugf("server behind, skipping ticks behind=%v", -left)
+			next = time.tick_now()
+		} else if left > 0 {
+			time.sleep(left)
+		}
+	}
+	base.profile_thread_stop()
+	runtime.default_temp_allocator_destroy(&runtime.global_default_temp_allocator_data)
+}
+
+SINK_DRAIN_TICKS :: game.TICK_RATE // a stepped server writes its events once a second
+
+@(private)
+tick :: proc(s: ^Server) {
+	base.profile_scope_number("server tick", s.tick + 1)
+	base.metric_scope(.Server_Tick)
+	s.tick += 1
+	{
+		base.profile_scope("scheduled calls")
+		calls_run(s)
+	}
+	if s.tick % TICK_SUMMARY_TICKS == 0 {tick_summary(s)}
+	{
+		base.profile_scope("saving")
+		save_poll(s)
+		save_slice(s)
+		if s.config.stepped && s.tick % SINK_DRAIN_TICKS == 0 { 	// (no writer thread: its timing is not the test's)
+			telemetry.sink_drain(&s.sink)
+			if s.session_on {telemetry.sink_drain(&s.session)}
+		}
+		if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
+	}
+	for w in s.worlds {
+		chunks_collect(
+			&w.chunks,
+			proc(pos: game.Chunk_Pos, data: rawptr) -> bool {
+				w := (^World)(data)
+				if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {return false}
+				// Water next door that stopped at this chunk's edge flows on.
+				origin := game.chunk_origin(pos)
+				wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0, only_border = true)
+				return true
+			},
+			w,
+		)
+		naturals_take(w)
+	}
+	{
+		base.profile_scope("receive messages")
+		receive_messages(s)
+	}
+	frozen := sync.atomic_load(&s.frozen) && !s.listening
+	s.time_stopped = frozen
+	if !frozen {
+		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
+	}
+	Move :: struct {
+		world:    ^World,
+		from, to: game.Chunk_Pos,
+	}
+	moves := make([dynamic]Move, context.temp_allocator)
+	for &c in s.clients {
+		if c.state != .Playing {continue}
+		base.profile_scope("player")
+		simulate_player(s, &c)
+		health_tick(s, &c)
+		weapons_tick(s, &c)
+		place_tick(s, &c)
+		stats_tick(s, &c)
+		if c.moved {
+			base.profile_scope("drop far")
+			c.moved = false
+			append(&moves, Move{c.world, c.moved_from, c.center})
+			drop_far(s, &c)
+		}
+	}
+	{
+		base.profile_scope("unload idle worlds and audit")
+		worlds_unload_idle(s)
+		audit_tick(s)
+	}
+	for m in moves {
+		base.profile_scope("unload left")
+		unload_left(m.world, m.from, m.to)
+	}
+	for w in s.worlds {
+		if s.tick % UNLOAD_SWEEP_TICKS == 0 {
+			base.profile_scope("unload unwanted")
+			unload_unwanted(w)
+		}
+		if !frozen {
+			updates_run(w)
+			{
+				base.profile_scope("random ticks")
+				random_ticks(w)
+			}
+			entities_tick(w)
+			{
+				base.profile_scope("containers")
+				containers_tick(w)
+			}
+		}
+		rewind: {
+			base.profile_scope("rewind, gates and rollback")
+			rewind_record(s, w)
+			gates_tick(w)
+			rollback_tick(w)
+		}
+		{
+			base.profile_scope("changes flush")
+			changes_flush(w)
+		}
+		{
+			base.profile_scope("journal")
+			journal_tick(w)
+		}
+	}
+	sent := 0
+	for &c in s.clients {
+		if c.state != .Playing {continue}
+		{
+			base.profile_scope("replicate")
+			replicate_tick(s, &c)
+		}
+		base.profile_scope("stream")
+		base.metric_scope(.Server_Stream)
+		sent += stream(s, &c)
+		base.profile_scope("replica flush")
+		replica_flush(s, &c)
+	}
+	base.metric_add(.Server_Sent_KiB, f32(sent) / 1024)
+	{
+		base.profile_scope("kicks and packs")
+		kick_due(s)
+		packs_tick(s)
+		packs_reload_tick(s)
+	}
+	if s.listening {
+		if s.tick % game.TICK_RATE == 0 {update_info(s)}
+		base.profile_scope("network flush")
+		netcode.host_flush(&s.host, server_now(s))
+	}
+}
+
+// receive_messages handles what every player sent since the last tick: the
+// local player's pipe, then the network.
+@(private = "file")
+receive_messages :: proc(s: ^Server) {
+	if s.local.pipe != nil {
+		packets := make([dynamic]game.Packet, context.temp_allocator)
+		game.receive(s.local, &packets)
+		defer for p in packets {game.packet_free(s.local, p)}
+		for p in packets {handle(s, &s.clients[0], p)}
+	}
+	if !s.listening {return}
+	netcode.host_update(&s.host, server_now(s))
+	for e in s.host.events {
+		switch v in e {
+		case netcode.Peer_Connected:
+			slot := -1
+			for c, i in s.clients {
+				if c.state == .Free {
+					slot = i
+					break
+				}
+			}
+			if slot < 0 { 	// the host's seats are ours, but the local player has one too
+				netcode.host_kick(&s.host, v.peer, "the server is full", server_now(s))
+				continue
+			}
+			c := &s.clients[slot]
+			c.state = .Connecting
+			c.link = v.peer
+			c.address = strings.clone(
+				net.address_to_string(v.address.address, context.temp_allocator),
+			)
+			log.infof(
+				"server connection player=%d from=%s",
+				slot,
+				net.endpoint_to_string(v.address),
+			)
+		case netcode.Peer_Message:
+			if c := client_of_peer(s, v.peer); c != nil {handle(s, c, v.data)}
+		case netcode.Peer_Disconnected:
+			if c := client_of_peer(s, v.peer); c != nil {
+				c.link = nil // gone already: nothing to send it
+				leave(s, c, fmt.tprint(v.reason))
+			}
+		}
+	}
+}
+
+@(private = "file")
+client_of_peer :: proc(s: ^Server, peer: netcode.Peer_Id) -> ^Client {
+	for &c in s.clients {
+		if p, ok := c.link.(netcode.Peer_Id); ok && p == peer {return &c}
+	}
+	return nil
+}
+
+// proved: the account is proved (and has its packs): its character, or the
+// list to choose from.
+@(private = "file")
+proved :: proc(s: ^Server, c: ^Client) {
+	if c.wanted_len == 0 {
+		c.state = .Choosing
+		names := characters_of(s, c.account)
+		send_message(s, c, game.Characters{strings.join(names, " ", context.temp_allocator)})
+		return
+	}
+	enter(s, c, string(c.wanted[:c.wanted_len]))
+}
+
+// enter: a proved account plays its character name (a new one if the name
+// is free), or is told why not.
+@(private = "file")
+enter :: proc(s: ^Server, c: ^Client, name: string) {
+	if owner, taken := s.store.characters[name]; taken && owner != c.account {
+		disconnect(s, c, "that name is another account's")
+		return
+	}
+	for &other in s.clients {
+		if other.state == .Playing && client_name(&other) == name {
+			disconnect(s, c, "someone with that name is playing")
+			return
+		}
+	}
+	if _, mine := s.store.characters[name];
+	   !mine && len(characters_of(s, c.account)) >= game.MAX_CHARACTERS {
+		disconnect(s, c, "this account has as many characters as it may here")
+		return
+	}
+	if why, banned := banned(s, name, c.address, c.account); banned {
+		log.infof("server banned player refused name=%s address=%s", name, c.address)
+		disconnect(s, c, why)
+		return
+	}
+	character_claim(s, name, c.account)
+	join(s, c, name)
+}
+
+// handle one message from a client.
+@(private = "file")
+handle :: proc(s: ^Server, c: ^Client, p: []u8) {
+	w := c.world
+	if c.state == .Free || c.state == .Gone {return}
+	m, ok := game.decode_client(p, s.registry)
+	if !ok {
+		disconnect(s, c, "invalid message")
+		return
+	}
+	// Before playing only the handshake (or a ping) makes sense.
+	if c.state != .Playing {
+		handshake: bool
+		#partial switch _ in m {
+		case game.Hello, game.Proof, game.Choose, game.Ping, game.Pack_Want, game.Packs_Ready:
+			handshake = true
+		}
+		if !handshake {
+			disconnect(s, c, "message before hello")
+			return
+		}
+	}
+	// What needs permission (refused with a word; commands check their own).
+	node := ""
+	#partial switch v in m {
+	case game.Teleport:
+		node = "teleport.tp"
+	case game.Set_Rule:
+		node = "world.gen" if strings.has_prefix(v.name, "worldgen.") else NODE_RULE
+	case game.Fire:
+		node = "world.fire"
+	case game.Edit:
+		node = "world.edit"
+	case game.Chat:
+		node = "chat.send"
+	}
+	if node != "" && !allowed(s, c, node) {
+		if e, edit := m.(game.Edit); edit {send_message(s, c, edit_refused(w, e))}
+		notice(s, c, fmt.tprintf("You may not do that here (%s)", node))
+		return
+	}
+	switch v in m {
+	case game.Hello:
+		if c.state != .Connecting {
+			disconnect(s, c, "unexpected hello")
+			return
+		}
+		if v.protocol != game.PROTOCOL_VERSION {
+			disconnect(s, c, "protocol version mismatch")
+			return
+		}
+		if v.schema != s.schema.hash {
+			disconnect(
+				s,
+				c,
+				fmt.tprintf(
+					"this server runs a different version of the game (state schema %016x vs %016x)",
+					s.schema.hash,
+					v.schema,
+				),
+			)
+			return
+		}
+		if v.character != "" && !game.name_valid(v.character) {
+			disconnect(s, c, "names are 1 to 16 letters, digits, _ or -")
+			return
+		}
+		c.account = v.account
+		c.wanted_len = copy(c.wanted[:], v.character)
+		c.nonce = game.nonce_make()
+		c.state = .Proving
+		send_message(s, c, game.Challenge{c.nonce})
+	case game.Proof:
+		if c.state != .Proving {
+			disconnect(s, c, "unexpected proof")
+			return
+		}
+		if !game.account_verify(c.account, c.nonce, v.signature) {
+			log.warnf("server account proof failed account=%s", game.account_text(c.account))
+			disconnect(s, c, "the account's proof is wrong")
+			return
+		}
+		c.nonce = {} // (used: a proof is for one nonce)
+		if packs_begin(s, c) {return}
+		proved(s, c)
+	case game.Pack_Want:
+		pack_want(s, c, v)
+	case game.Packs_Ready:
+		if pack_ready(s, c, v) {proved(s, c)}
+	case game.Choose:
+		if c.state != .Choosing || !game.name_valid(v.character) {
+			disconnect(s, c, "unexpected choice")
+			return
+		}
+		enter(s, c, v.character)
+	case game.Input:
+		if v.snapshot <= u32(s.tick) {game.sender_ack(&c.tx, v.snapshot)} 	// (a client cannot hold a snapshot not sent yet)
+		if !game.input_queue_push(&c.inputs, v) {disturb(s, c)} 	// (refused: it was predicted, not applied)
+	case game.Prediction_Check:
+		c.check = v
+	case game.Teleport:
+		land(s, c, v.position, {v.yaw, v.pitch}, .Exact)
+	case game.Set_Rule:
+		if strings.has_prefix(v.name, "worldgen.") {
+			set_worldgen(s, c, v.name, v.value)
+			return
+		}
+		rule_set(s, c, w, v.name, v.value)
+	case game.Ping:
+		send_message(s, c, game.Pong{v.id})
+	case game.Command:
+		admin(s, c, v.command)
+	case game.Chat:
+		chat_say(s, c, v.text)
+	case game.Inventory_Request:
+		inventory_request(s, c, v)
+	case game.Dial:
+		notice_if(s, c, gate_dial(s, c, v))
+	case game.Edit:
+		queue_action(s, c, v)
+	case game.Attack:
+		queue_action(s, c, v)
+	case game.Use_Entity:
+		queue_action(s, c, v)
+	case game.Use_Block:
+		queue_action(s, c, v)
+	case game.Fire:
+		queue_action(s, c, v)
+	case game.Shoot:
+		queue_action(s, c, v)
+	case game.Reload:
+		weapon_reload(s, c)
+	case game.Telemetry_Batch:
+		disconnect(s, c, "this is not a telemetry collector")
+	case game.Respawn:
+		respawn(s, c) // (refused while alive: nothing happens)
+	case game.Stats_Request:
+		stats_request(s, c, v)
+	case game.Telemetry_Report:
+		telemetry_report(s, c, v)
+	}
+}
+
+// send_message encodes m for a client: down the pipe, or over the network
+// (reliably unless the kind is a state that the next one replaces).
+@(private)
+send_message :: proc(
+	s: ^Server,
+	c: ^Client,
+	m: game.Server_Message,
+	blocks: ^game.Chunk_Blocks = nil,
+	reliable := false,
+) -> (
+	bytes: int,
+) {
+	if c.link == nil {return}
+	clear(&s.writer.buf)
+	game.encode_server(&s.writer, m, blocks)
+	data := s.writer.buf[:]
+	switch l in c.link {
+	case Local:
+		game.send(s.local, data)
+	case netcode.Peer_Id:
+		netcode.host_send(&s.host, l, data, reliable || game.message_reliable(.Server, data[0]))
+	}
+	return len(data)
+}
+
+// broadcast sends m to every player (in world, if given: its news).
+@(private)
+broadcast :: proc(s: ^Server, m: game.Server_Message, world: ^World = nil) {
+	for &c in s.clients {
+		if c.state == .Playing && (world == nil || c.world == world) {send_message(s, &c, m)}
+	}
+}
+
+@(private)
+notice :: proc(s: ^Server, c: ^Client, text: string) {
+	log.info("server notice ", text)
+	text := text
+	if len(text) > game.MAX_NOTICE_TEXT {
+		cut := game.MAX_NOTICE_TEXT
+		for cut > 0 && text[cut] & 0xc0 == 0x80 {cut -= 1} 	// (a whole letter)
+		text = text[:cut]
+	}
+	shown := game.Notice{text}
+	event_send(s, c, .Notice, &shown)
+}
+
+@(private)
+player_id :: proc(s: ^Server, c: ^Client) -> u16 {
+	return u16(mem.ptr_sub(c, &s.clients[0]))
+}
+
+// update_info refreshes what LAN discovery answers.
+@(private = "file")
+update_info :: proc(s: ^Server) {
+	players := 0
+	for c in s.clients {if c.state == .Playing {players += 1}}
+	w: game.Writer
+	game.writer_init(&w, context.temp_allocator)
+	name := s.config.name if s.config.name != "" else "Voxiverse server"
+	game.encode_server_info(
+		&w,
+		{
+			protocol = game.PROTOCOL_VERSION,
+			name = name[:min(len(name), game.MAX_SERVER_NAME)],
+			players = players,
+			max_players = s.config.max_players,
+			password = s.config.password != "",
+		},
+	)
+	netcode.host_set_info(&s.host, w.buf[:])
+}
+
+@(private)
+publish_stats :: proc(s: ^Server, tick_ms, tick_cpu_ms: f32) {
+	playing := 0
+	for c in s.clients {if c.state == .Playing {playing += 1}}
+	st := Stats {
+		tick           = s.tick,
+		tick_ms        = tick_ms,
+		tick_cpu_ms    = tick_cpu_ms,
+		arena_used     = s.arena.total_used,
+		arena_reserved = s.arena.total_reserved,
+		clients        = playing,
+		port           = s.host.socket.port if s.listening else 0,
+		worlds         = len(s.worlds),
+		desyncs        = s.desyncs,
+		checks_judged  = s.checks_judged,
+		checks_skipped = s.checks_skipped,
+	}
+	for w in s.worlds {
+		st.chunks_loaded += w.chunks.chunks.count
+		st.chunks_generating += w.chunks.in_flight
+		st.arrays_allocated += w.chunks.arrays.allocated
+		st.arrays_in_use += game.block_arrays_in_use(&w.chunks.arrays)
+		st.arrays_bytes += w.chunks.arrays.committed
+		st.arena_used += w.arena.total_used
+		st.arena_reserved += w.arena.total_reserved
+		st.updates_waiting += w.updates.count
+	}
+	sync.guard(&s.stats_mutex)
+	// Sorting the window for percentiles: once a second is enough (the
+	// home world's: where the tests and the F3 numbers look).
+	st.generate =
+		base.frame_stats_summary(&s.home.chunks.gen_times) if s.tick % game.TICK_RATE == 0 else s.stats.generate
+	s.stats = st
+}
+
+@(private = "file")
+base_bytes :: proc(n: uint) -> string {
+	switch {
+	case n >= mem.Megabyte:
+		return fmt.tprintf("%.1f MiB", f64(n) / mem.Megabyte)
+	case n >= mem.Kilobyte:
+		return fmt.tprintf("%.1f KiB", f64(n) / mem.Kilobyte)
+	}
+	return fmt.tprintf("%d B", n)
+}

@@ -18,7 +18,7 @@ import "common:base"
 import "common:game"
 import "common:netcode"
 import "common:worldgen"
-import "server:."
+import "server:core"
 
 // A Session is one visit to a world: from choosing Singleplayer until
 // leaving. It owns the connection (to its own in-process server, or over
@@ -43,7 +43,7 @@ Session_Config :: struct {
 	spawn:        Maybe([3]f64), // a new world's spawn (else the generator's)
 	no_sheep:     bool, // (hosting) none appear by themselves: benchmarks
 	still_clouds: bool, // the clouds stay where they start: benchmarks
-	upload:       Maybe(server.Upload), // (hosting) send its event log to a collector
+	upload:       Maybe(core.Upload), // (hosting) send its event log to a collector
 	registry:     ^game.Registry, // the game's own (the base pack): what a remote server must match
 	net:          ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
 }
@@ -68,7 +68,7 @@ Session :: struct {
 	arena:            virtual.Arena,
 	pipe:             game.Pipe, // to our own server (hosting)
 	endpoint:         game.Endpoint,
-	server:           server.Server,
+	server:           core.Server,
 	remote:           bool, // playing on someone else's server, through link
 	link:             netcode.Link,
 	capture:          netcode.Capture,
@@ -269,14 +269,13 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	// Our own world: its server here, through the pipe.
 	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
 	s.endpoint = {&s.pipe, .Client}
-	if own := server.registry_for_dir(config.save_dir, base_dir = server.dev_base_dir());
-	   own != nil {
+	if own := core.registry_for_dir(config.save_dir, base_dir = core.dev_base_dir()); own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
 		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
 		game.receiver_init(&s.rx, &s.schema, s.reg)
 		session_texels(s)
 	}
-	if !server.start(
+	if !core.start(
 	&s.server,
 	{
 		seed         = config.seed,
@@ -316,10 +315,10 @@ session_hosting :: proc(s: ^Session) -> bool {
 // nobody else can be in it (no remote server, not open to the LAN); then
 // the server stands still and so do we. Unpausing lets both go on.
 session_freeze :: proc(s: ^Session, paused: bool) {
-	want := paused && !s.remote && s.state == .Playing && server.stats(&s.server).port == 0
+	want := paused && !s.remote && s.state == .Playing && core.stats(&s.server).port == 0
 	if want == s.frozen {return}
 	s.frozen = want
-	server.freeze(&s.server, want)
+	core.freeze(&s.server, want)
 }
 
 // session_allowed: the server lets this player do node (its Grants; it
@@ -348,7 +347,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 // meshes are removed (the fuzz target, which has no GPU, ends its sessions here).
 session_free :: proc(s: ^Session) -> bool {
 	ok := true
-	if s.server.thread != nil {ok = server.stop(&s.server)}
+	if s.server.thread != nil {ok = core.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
 	delete(s.entities) // the heap: entities come and go
 	game.receiver_destroy(&s.rx)
@@ -578,9 +577,9 @@ server_explode :: proc(s: ^Session, p: game.Block_Pos, radius: f64) {
 		radius: f64,
 	}
 	e := Explosion{p, radius}
-	server.call_async(&s.server, proc(srv: ^server.Server, data: rawptr) {
+	core.call_async(&s.server, proc(srv: ^core.Server, data: rawptr) {
 			e := (^Explosion)(data)
-			server.explode_by(srv, "", e.at, e.radius)
+			core.explode_by(srv, "", e.at, e.radius)
 		}, mem.ptr_to_bytes(&e))
 }
 

@@ -5,7 +5,7 @@ import "core:log"
 
 import "client:render"
 import "common:base"
-import "server:."
+import "server:core"
 
 // Exit checks (fly, tour, blast: `--check <name>`): they drive the game
 // and check how it holds up. What they share lives here: starting in a
@@ -110,7 +110,7 @@ check_find :: proc(name: string) -> (Check_Info, bool) {
 // exit_check_baseline: memory now, which must not grow until the end.
 exit_check_baseline :: proc(c: ^Exit_Check, s: ^Session) {
 	c.client_arena = s.arena.total_used
-	c.server_arena = server.stats(&s.server).arena_used
+	c.server_arena = core.stats(&s.server).arena_used
 }
 
 // exit_check_memory adds a failure for each arena that grew.
@@ -125,7 +125,7 @@ exit_check_memory :: proc(c: ^Exit_Check, s: ^Session, failures: ^[dynamic]strin
 			),
 		)
 	}
-	if used := server.stats(&s.server).arena_used; used != c.server_arena {
+	if used := core.stats(&s.server).arena_used; used != c.server_arena {
 		append(
 			failures,
 			fmt.tprintf("server session arena grew from %d to %d bytes", c.server_arena, used),

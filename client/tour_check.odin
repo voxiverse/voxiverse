@@ -8,7 +8,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:worldgen"
-import "server:."
+import "server:core"
 
 // M10's exit check (`--check tour`, exit_check.odin's CHECKS): it visits every
 // biome of an Earth world in turn (`locate`, then waiting for the land to
@@ -133,7 +133,7 @@ tour_test_finish :: proc(app: ^App, failure: string) {
 		if t.missing != {} {append(&failures, fmt.tprintf("biomes not found: %v", t.missing))}
 		exit_check_memory(&t.check, s, &failures)
 		frames := base.frame_stats_summary(&t.frames)
-		generate := server.stats(&s.server).generate // (published each second)
+		generate := core.stats(&s.server).generate // (published each second)
 		mesh := base.frame_stats_summary(&s.world.stats.mesh_times)
 		budget :: proc(failures: ^[dynamic]string, what: string, p99: f32, limit: int) {
 			if p99 >

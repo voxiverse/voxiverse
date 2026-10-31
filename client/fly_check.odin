@@ -7,7 +7,7 @@ import "core:math"
 import "client:platform"
 import "common:base"
 import "common:game"
-import "server:."
+import "server:core"
 
 // The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
 // for the world around the spawn to load, then flies the camera in a
@@ -158,11 +158,11 @@ fly_test_finish :: proc(app: ^App, error: string) {
 	if error != "" {append(&failures, error)}
 	if error == "" {
 		exit_check_memory(&t.check, s, &failures)
-		st := server.stats(&s.server)
+		st := core.stats(&s.server)
 		w := &s.world
 		capacity := len(w.chunks.items) - 1
 		if w.arrays.allocated > capacity {append(&failures, "client chunk arrays past capacity")}
-		if st.arrays_allocated > server.block_capacity(&s.server) {
+		if st.arrays_allocated > core.block_capacity(&s.server) {
 			append(&failures, "server chunk arrays past capacity")
 		}
 		sum := base.frame_stats_summary(&t.frames)

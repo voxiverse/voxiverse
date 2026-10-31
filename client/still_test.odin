@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 import "common:netcode"
-import "server:."
+import "server:core"
 
 // Those who stand still stay in sight. Snapshots carry only what changed, so
 // a player or a sheep that does not move sends nothing; it must not go
@@ -18,13 +18,13 @@ STILL_TICKS :: 4 * 2 * game.TICK_RATE // well past what the old two-second rule 
 
 @(private = "file")
 Pair :: struct {
-	h:            server.Harness,
+	h:            core.Harness,
 	mover, watch: ^Session,
 }
 
 @(private = "file")
 tick_all :: proc(p: ^Pair) {
-	server.harness_step(&p.h)
+	core.harness_step(&p.h)
 }
 
 // sessions_tick: the two sessions' frame, a party of the harness (before the server's tick).
@@ -49,7 +49,7 @@ seen :: proc(s: ^Session, t: ^Track) -> (v: Other_View, ok: bool) {
 
 @(private = "file")
 pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
-	config := server.Config {
+	config := core.Config {
 		seed            = 33,
 		view_radius     = 3,
 		view_height     = 2,
@@ -60,8 +60,8 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 		no_sheep        = true,
 		rules           = still_rules(),
 	}
-	if !testing.expect(t, server.harness_start(&p.h, config)) {return false}
-	address := server.harness_address(&p.h)
+	if !testing.expect(t, core.harness_start(&p.h, config)) {return false}
+	address := core.harness_address(&p.h)
 	open :: proc(
 		name: string,
 		seed: byte,
@@ -86,8 +86,8 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 		return s
 	}
 	p.mover, p.watch = open("mover", 1, address, &p.h.net), open("watcher", 2, address, &p.h.net)
-	server.harness_add(&p.h, sessions_tick, p)
-	_, met := server.harness_step_until(&p.h, proc(data: rawptr) -> bool {
+	core.harness_add(&p.h, sessions_tick, p)
+	_, met := core.harness_step_until(&p.h, proc(data: rawptr) -> bool {
 			p := (^Pair)(data)
 			return(
 				p.mover.state == .Playing &&
@@ -104,7 +104,7 @@ pair_stop :: proc(p: ^Pair) {
 	session_end(p.watch, nil, nil)
 	free(p.mover)
 	free(p.watch)
-	server.harness_stop(&p.h)
+	core.harness_stop(&p.h)
 }
 
 @(test)

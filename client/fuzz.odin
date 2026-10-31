@@ -9,7 +9,7 @@ import "core:sync"
 import "common:base"
 import "common:base/fuzz"
 import "common:game"
-import "server:."
+import "server:core"
 
 // net.client_session (Q2b, docs/fuzzing.md): a headless session (no window, no GPU, no server)
 // fed what a server sends, in order, through the receive path: the handshake, the pack phase,
@@ -113,7 +113,7 @@ fuzz_heard_packets: [][]u8
 // three bytes of some changed; sometimes a pack phase (Packs, then Pack_Parts, the archive's
 // hash right for what is sent, or not) after the Challenge.
 fuzz_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	if fuzz_heard_packets == nil {fuzz_heard_packets = server.fuzz_heard(FUZZ_HEARD_TICKS)}
+	if fuzz_heard_packets == nil {fuzz_heard_packets = core.fuzz_heard(FUZZ_HEARD_TICKS)}
 	heard := fuzz_heard_packets
 	if len(heard) == 0 {return}
 	put :: proc(out: ^[dynamic]u8, msg: []u8) {

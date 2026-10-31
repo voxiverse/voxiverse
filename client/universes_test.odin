@@ -7,7 +7,7 @@ import "core:testing"
 import "core:time"
 
 import "common:game"
-import "server:."
+import "server:core"
 
 // The universes screen's cards (screen_universes.odin): the order, what a
 // card knows from its config, Export and Import through the buttons. (Rename
@@ -83,16 +83,16 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 @(private = "file")
 server_made :: proc(t: ^testing.T, dir, name: string) -> bool {
 	path := filepath.join({dir, name}, context.temp_allocator) or_else ""
-	h: server.Harness
-	config := server.Config {
+	h: core.Harness
+	config := core.Config {
 		seed        = 5,
 		view_radius = 2,
 		view_height = 1,
 		save_dir    = path,
 		generator   = .Classic,
 	}
-	if !testing.expect(t, server.harness_start(&h, config)) {return false}
-	server.harness_stop(&h)
+	if !testing.expect(t, core.harness_start(&h, config)) {return false}
+	core.harness_stop(&h)
 	return true
 }
 

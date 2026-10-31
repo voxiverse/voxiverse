@@ -5,7 +5,7 @@ import "core:net"
 
 import "client:ui"
 import "common:game"
-import "server:."
+import "server:core"
 
 // The Open to LAN dialog: the guests' game mode, whether
 // guests may use commands, and Open; once the world is open it shows where to
@@ -85,7 +85,7 @@ lan_dialog_ui :: proc(app: ^App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	port := server.stats(&s.server).port
+	port := core.stats(&s.server).port
 	rows: f32 = 4 if port == 0 else 5
 	box := ui.rect_center(ctx.screen, 440, rows * t.row_height + (rows + 1) * t.spacing + 80)
 	ui.panel(ctx, box)

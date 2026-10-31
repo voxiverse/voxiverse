@@ -14,8 +14,8 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:netcode"
-import "server:."
 import "server:collector"
+import "server:core"
 
 // voxiverse-server: a world with no window, for players to join over the
 // network. Ctrl+C (or SIGTERM) stops it cleanly: the world is saved and
@@ -55,10 +55,10 @@ main :: proc() {
 	opts := Options {
 		universe    = "universe",
 		port        = netcode.DEFAULT_PORT,
-		max_players = server.DEFAULT_MAX_PLAYERS,
+		max_players = core.DEFAULT_MAX_PLAYERS,
 		view_radius = 12,
 		view_height = 6,
-		backups     = server.BACKUP_KEEP,
+		backups     = core.BACKUP_KEEP,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
 	if opts.version {
@@ -112,7 +112,7 @@ run :: proc(opts: Options) -> bool {
 	if seed == 0 {crypto.rand_bytes(mem.ptr_to_bytes(&seed))}
 	name := opts.name
 	if name == "" {name = filepath.base(opts.universe)}
-	config := server.Config {
+	config := core.Config {
 		seed            = seed,
 		view_radius     = i32(clamp(opts.view_radius, 2, 32)),
 		view_height     = i32(clamp(opts.view_height, 1, 16)),
@@ -134,11 +134,11 @@ run :: proc(opts: Options) -> bool {
 			return false
 		}
 		if ep.port == 0 {ep.port = COLLECTOR_PORT}
-		config.upload = server.Upload{ep, server_key(opts.universe), 0}
+		config.upload = core.Upload{ep, server_key(opts.universe), 0}
 	}
-	srv := new(server.Server)
+	srv := new(core.Server)
 	defer free(srv)
-	if !server.start(srv, config, {}) {return false}
+	if !core.start(srv, config, {}) {return false}
 	catch_stop()
 	log.infof(
 		"server ready world=%s port=%d name=%q (Ctrl+C stops it)",
@@ -156,7 +156,7 @@ run :: proc(opts: Options) -> bool {
 		}
 		if time.duration_seconds(time.tick_since(last_report)) >= 60 {
 			last_report = time.tick_now()
-			st := server.stats(srv)
+			st := core.stats(srv)
 			log.infof(
 				"server status players=%d chunks=%d tick_ms=%.2f arena_mib=%.1f",
 				st.clients,
@@ -167,7 +167,7 @@ run :: proc(opts: Options) -> bool {
 		}
 	}
 	log.info("server stopping")
-	return server.stop(srv)
+	return core.stop(srv)
 }
 
 COLLECTOR_PORT :: 27316
@@ -216,11 +216,11 @@ server_key :: proc(dir: string) -> (key: game.Account_Key) {
 
 // run_check: --check. A save the server could open is whole.
 run_check :: proc(universe: string) -> bool {
-	if why := server.store_recover(universe, &base.Disk{}); why != "" {
+	if why := core.store_recover(universe, &base.Disk{}); why != "" {
 		fmt.eprintfln("%s", why)
 		return false
 	}
-	report := server.universe_check(universe)
+	report := core.universe_check(universe)
 	if report.ok {
 		fmt.printfln("%s: ok (generation %d)", universe, report.generation)
 		return true
@@ -231,7 +231,7 @@ run_check :: proc(universe: string) -> bool {
 
 // run_restore: --restore.
 run_restore :: proc(universe, name: string) -> bool {
-	if why := server.universe_restore(universe, name, &base.Disk{}); why != "" {
+	if why := core.universe_restore(universe, name, &base.Disk{}); why != "" {
 		fmt.eprintfln("cannot restore: %s", why)
 		return false
 	}
@@ -241,7 +241,7 @@ run_restore :: proc(universe, name: string) -> bool {
 
 // run_export: --export.
 run_export :: proc(universe, file: string, journal: bool) -> bool {
-	if why := server.universe_export(universe, file, &base.Disk{}, journal); why != "" {
+	if why := core.universe_export(universe, file, &base.Disk{}, journal); why != "" {
 		fmt.eprintfln("cannot export: %s", why)
 		return false
 	}
@@ -251,7 +251,7 @@ run_export :: proc(universe, file: string, journal: bool) -> bool {
 
 // run_import: --import.
 run_import :: proc(file, universe: string) -> bool {
-	if why := server.universe_import(file, universe, &base.Disk{}); why != "" {
+	if why := core.universe_import(file, universe, &base.Disk{}); why != "" {
 		fmt.eprintfln("cannot import: %s", why)
 		return false
 	}

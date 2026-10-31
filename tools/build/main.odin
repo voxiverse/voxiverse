@@ -29,7 +29,7 @@ PACKAGES :: []string {
 	"client/ui",
 	"common/game",
 	"common/worldgen",
-	"server",
+	"server/core",
 	"client/platform",
 	"client/gpu",
 	"client/render",
@@ -75,7 +75,7 @@ TEST_PACKAGES :: []string {
 	"client/ui",
 	"common/game",
 	"common/worldgen",
-	"server",
+	"server/core",
 	"client/render",
 	"client/mesh",
 	"client/sfx",
@@ -99,7 +99,7 @@ SOURCE_DIRS :: []string {
 	"client/ui",
 	"common/game",
 	"common/worldgen",
-	"server",
+	"server/core",
 	"client/platform",
 	"client/gpu",
 	"client/render",
@@ -109,6 +109,7 @@ SOURCE_DIRS :: []string {
 	"client/dev",
 	"client/music",
 	"server/packs",
+	"server/dedicated",
 	"client",
 	"tools",
 	"tests",
@@ -827,7 +828,7 @@ check_no_binaries :: proc() -> bool {
 // test_env_defines turns the environment's ODIN_TEST_RANDOM_SEED, ODIN_TEST_THREADS and
 // ODIN_TEST_NAMES into -define flags: Odin's test runner reads them only as compile-time
 // defines, so the variable alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to
-// reproduce a failure, `ODIN_TEST_NAMES=server.test_x ./build.sh test server` for one
+// reproduce a failure, `ODIN_TEST_NAMES=core.test_x ./build.sh test server/core` for one
 // test) is ignored.
 test_env_defines :: proc() -> []string {
 	defines := make([dynamic]string)

@@ -11,7 +11,7 @@ import "core:time"
 
 import "common:game"
 import "common:netcode"
-import "server:."
+import "server:core"
 
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the
@@ -382,7 +382,7 @@ packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
 		fail(s, "the server reloaded its packs; join again")
 		return
 	}
-	fresh := server.registry_for_dir(s.config.save_dir, base_dir = server.dev_base_dir())
+	fresh := core.registry_for_dir(s.config.save_dir, base_dir = core.dev_base_dir())
 	if fresh == nil {
 		fail(s, "the reloaded packs do not load here; see the log")
 		return

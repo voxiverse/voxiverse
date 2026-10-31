@@ -9,8 +9,8 @@ import "core:time"
 
 import "common:game"
 import "common:telemetry"
-import "server:."
 import "server:collector"
+import "server:core"
 
 // The collector and the uploader on their threads, over real UDP and the OS's
 // clock; their logic (what is refused, what is written once) is tested in
@@ -99,13 +99,13 @@ test_an_uploader_thread_reaches_a_collector_thread :: proc(t: ^testing.T) {
 }
 
 @(private = "file")
-play_a_little :: proc(t: ^testing.T, config: server.Config) -> bool {
-	srv: server.Server
-	if !testing.expect(t, server.start(&srv, config, {})) {return false}
+play_a_little :: proc(t: ^testing.T, config: core.Config) -> bool {
+	srv: core.Server
+	if !testing.expect(t, core.start(&srv, config, {})) {return false}
 	// (what a player's joining writes: a kind that carries no name)
 	telemetry.emit(&srv.sink, {kind = .Block_Mined, text = telemetry.short("stone")})
 	time.sleep(300 * time.Millisecond)
-	server.stop(&srv) // the last pass: what was written goes
+	core.stop(&srv) // the last pass: what was written goes
 	return true
 }
 
@@ -121,7 +121,7 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 	c: collector.Collector
 	if !testing.expect(t, collector.collector_start(&c, lake, 0)) {return}
 	defer collector.collector_stop(&c)
-	config := server.Config {
+	config := core.Config {
 		seed        = 28,
 		generator   = .Classic,
 		rules       = game.RULES_DEFAULTS,
@@ -144,11 +144,7 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 	testing.expect_value(t, files, 0)
 	// Told to: it goes (singleplayer's own key, here a made one).
 	config.save_dir = saves
-	config.upload = server.Upload {
-		loopback(c.port),
-		game.account_key_make(),
-		200 * time.Millisecond,
-	}
+	config.upload = core.Upload{loopback(c.port), game.account_key_make(), 200 * time.Millisecond}
 	if !play_a_little(t, config) {return}
 	time.sleep(300 * time.Millisecond)
 	text, files2 := lake_text(lake)
