@@ -8755,7 +8755,8 @@ edge, in the decoder or validator, not in the handler.
 
 **CI:** the targets join Q1's "Fuzz (smoke)" step and the nightly job with no change to
 either (they run every target). The regression replay and each target's smoke test run in
-the suite on all three OSes. `test_decode_fuzz` and `test_state_decode_fuzz` are removed in
+the suite on all three OSes (200 cases each, except `net.client_decode` and `net.server_decode` at
+25 000 and `net.state` at 3 000: at least what the removed loops ran). `test_decode_fuzz` and `test_state_decode_fuzz` are removed in
 the commit that adds their targets.
 
 **Steps, in order:**
