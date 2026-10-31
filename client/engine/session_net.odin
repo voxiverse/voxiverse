@@ -188,7 +188,6 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 	}
 }
 
-@(private)
 welcome :: proc(s: ^Session, w: game.Welcome) {
 	if s.state != .Connecting {
 		fail(s, "the server welcomed us twice")

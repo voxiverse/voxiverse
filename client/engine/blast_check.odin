@@ -62,7 +62,6 @@ blast_test_begin :: proc(app: ^App, shots: int) {
 	log.infof("blast_test waiting for the world shots=%d", t.shots)
 }
 
-@(private)
 blast_test_update :: proc(app: ^App) {
 	t := &app.blast_test
 	s := app.session

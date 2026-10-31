@@ -280,7 +280,6 @@ inventory_leave :: proc(app: ^App) {
 // inventory_layout: where everything is (UI units). A title row (with the
 // tabs), then the tab's content: the rest of the inventory as a grid, or a
 // search above the catalog; the hotbar below both.
-@(private)
 Inventory_Layout :: struct {
 	panel:   ui.Rect,
 	title:   ui.Rect, // the title, or the tabs
@@ -292,7 +291,6 @@ Inventory_Layout :: struct {
 	catalog: ui.Rect, // Creative only
 }
 
-@(private)
 inventory_layout :: proc(ctx: ^ui.Context, tab: Inventory_Tab) -> (l: Inventory_Layout) {
 	t := &ctx.theme
 	gap := t.spacing

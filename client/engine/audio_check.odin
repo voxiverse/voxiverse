@@ -70,7 +70,6 @@ audio_check_begin :: proc(app: ^App) {
 	log.infof("audio_check waiting for the world")
 }
 
-@(private)
 audio_check_update :: proc(app: ^App) {
 	t := &app.audio_check
 	s := app.session

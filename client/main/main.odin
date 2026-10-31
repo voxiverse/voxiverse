@@ -116,7 +116,7 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	defer base.log_set_listener(sink, nil, nil)
 
 	app.null_audio = opts.null_audio || opts.check == "audio" || opts.scene != ""
-	ok := engine.app_init(app)
+	ok := app_init(app)
 	if ok {
 		if app.benchmark {engine.bench_begin(app, scenario, opts.smoke, bench_size)}
 		if opts.scene != "" &&
@@ -138,7 +138,7 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 			}
 			engine.scene_update(app, engine.script_done(&script))
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
-			if !engine.app_frame(app, capture, frames + 1) {break}
+			if !app_frame(app, capture, frames + 1) {break}
 			{
 				base.profile_scope("benchmark driver")
 				engine.bench_update(app) // between frames: it may leave and join worlds
@@ -229,7 +229,7 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	server_failed := app.server_failed
 	// app_destroy frees the console: later lines must not reach it.
 	base.log_set_listener(sink, nil, nil)
-	issues := engine.app_destroy(app) // leaves any world, so server failures are known after
+	issues := app_destroy(app) // leaves any world, so server failures are known after
 	if app.server_failed || server_failed || app.script_failed {ok = false}
 	if issues > 0 {
 		log.errorf("%d validation finding(s) during this run", issues)

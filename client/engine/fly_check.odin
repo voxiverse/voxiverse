@@ -55,7 +55,6 @@ fly_test_begin :: proc(app: ^App, distance: f64, pad := false) {
 	log.infof("fly_test waiting for the world to load blocks=%.0f", distance)
 }
 
-@(private)
 fly_test_update :: proc(app: ^App) {
 	t := &app.fly_test
 	s := app.session

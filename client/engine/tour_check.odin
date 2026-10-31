@@ -58,7 +58,6 @@ tour_test_begin :: proc(app: ^App) {
 	log.info("tour_test waiting for the world")
 }
 
-@(private)
 tour_test_update :: proc(app: ^App) {
 	t := &app.tour_test
 	s := app.session
