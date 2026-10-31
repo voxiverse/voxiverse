@@ -128,6 +128,7 @@ console_execute :: proc(app: ^App, line: string) {
 		return
 	}
 	args := strings.fields(text, context.temp_allocator)
+	base.crash_bundle_action("command", args[0]) // (its name only: the arguments can hold names)
 	for &cmd in c.commands {
 		if cmd.name != args[0] {continue}
 		if problem := command_refused(app, &cmd, len(args) - 1); problem != "" {

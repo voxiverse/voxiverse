@@ -397,6 +397,8 @@ listen :: proc(s: ^Server, first, last: int) -> bool {
 
 @(private = "file")
 server_main :: proc(t: ^thread.Thread) {
+	base.thread_register("server")
+	defer base.thread_unregister()
 	s := (^Server)(t.data)
 	context.logger = base.log_retag(&s.log_tag, context.logger, "server")
 	base.profile_thread_start("server")

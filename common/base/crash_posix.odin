@@ -34,8 +34,11 @@ crash_handler_install :: proc() {
 crash_signal :: proc "c" (sig: posix.Signal, info: ^posix.siginfo_t, _: rawptr) {
 	context = runtime.default_context()
 	buf: [128]u8
-	crash_report(
-		fmt.bprintf(buf[:], "signal=%v address=%p", sig, info.si_addr if info != nil else nil),
-	)
+	address := info.si_addr if info != nil else nil
+	what := fmt.bprintf(buf[:], "signal=%v address=%p", sig, address)
+	if sig == .SIGSEGV && stack_overflow_at(address) {
+		what = fmt.bprintf(buf[:], "signal=%v address=%p (stack overflow)", sig, address)
+	}
+	crash_report(what)
 	posix.raise(sig) // handler reset: the default action now
 }

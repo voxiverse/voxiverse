@@ -138,6 +138,8 @@ collector_stats :: proc(c: ^Collector) -> Collector_Stats {
 
 @(private)
 collector_main :: proc(c: ^Collector) {
+	base.thread_register("collector")
+	defer base.thread_unregister()
 	for !sync.atomic_load(&c.stop) {
 		collector_step(c, time.tick_now())
 		time.sleep(5 * time.Millisecond)

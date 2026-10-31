@@ -41,6 +41,7 @@ main :: proc() {
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "voxiverse.log", "main")
 	log.infof("Voxiverse %s (%s build)", base.version_text(), base.build_name())
+	if dir, found := crashes_dir(); found {base.crash_bundle_init(dir, "game")}
 	if base.PROFILE {
 		path := path_next_to_exe("voxiverse.spall")
 		if base.profile_start(path) {

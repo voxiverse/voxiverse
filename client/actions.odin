@@ -5,6 +5,8 @@ import "core:math"
 import "core:reflect"
 import "core:strings"
 
+import "common:base"
+
 import "client:platform"
 
 // Input actions: one layer between the platform's events (keys, mouse
@@ -550,6 +552,13 @@ actions_update :: proc(
 	a.pad_acts = pad_raw_pressed & usable
 	a.released = a.prev_down - a.down
 	a.prev_down = a.down
+	if a.pressed != {} || a.released != {} {
+		for act in Action {
+			name, _ := reflect.enum_name_from_value(act)
+			if act in a.pressed {base.crash_bundle_action("action", name)}
+			if act in a.released {base.crash_bundle_action("released", name)}
+		}
+	}
 
 	// Which device was used last.
 	moved := abs(input.mouse.x - a.mouse.x) + abs(input.mouse.y - a.mouse.y) > 4

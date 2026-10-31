@@ -118,6 +118,8 @@ worker_main :: proc(t: ^thread.Thread) {
 	j := (^Jobs)(t.data)
 	context.logger = log_retag(&j.tags[t.user_index], context.logger, j.names[t.user_index])
 	context.user_index = t.user_index // jobs may keep per-worker state by it
+	thread_register(j.names[t.user_index])
+	defer thread_unregister()
 	profile_thread_start(j.names[t.user_index])
 	for job in queue_pop(&j.queue) {
 		job.procedure(job.data)

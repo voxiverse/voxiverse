@@ -87,6 +87,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	ctx.logger = d.logger
 	ctx.assertion_failure_proc = assertion_failure
 	when ODIN_SANITIZER_FLAGS == {} {crash_handler_install()} 	// sanitizers have their own
+	thread_register("main")
 
 	when DEV {
 		mem.tracking_allocator_init(&d.tracking, d.backing, d.backing)
@@ -121,6 +122,8 @@ debug_end :: proc(d: ^Debug) -> bool {
 	}
 
 	context.allocator = d.backing
+	crash_bundle_destroy()
+	thread_unregister()
 	if d.log_file != nil {os.close(d.log_file)}
 	delete(d.log_path, d.backing)
 	active = nil
@@ -193,6 +196,7 @@ crash_report :: proc(what: string) {
 		log.fatalf("crash full log: %s", active.log_path)
 		os.flush(active.log_file)
 	}
+	if dir := crash_bundle_write(what); dir != "" {log.fatalf("crash bundle: %s", dir)}
 }
 
 // debug_break stops in an attached debugger when VX_BREAK=1; otherwise it
@@ -232,6 +236,9 @@ assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Loca
 		context.logger = active.logger
 		log.fatalf("%s: %s (%v)", prefix, message, loc)
 		log_stack_trace(.Fatal, 1)
+	}
+	when !ODIN_TEST {
+		crash_bundle_write(fmt.tprintf("%s: %s (%v)", prefix, message, loc))
 	}
 	runtime.trap()
 }

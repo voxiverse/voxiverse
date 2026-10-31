@@ -204,6 +204,21 @@ tagged_logger_proc :: proc(
 			location.line,
 		)
 	}
+	if crash_bundle_active() {
+		ring: [1024]u8
+		line := fmt.bprintf(
+			ring[:],
+			"%.6f | %s | %s | %s | %s:%d\n",
+			secs,
+			name,
+			t.tag,
+			text,
+			file,
+			location.line,
+		)
+		if len(line) == len(ring) {line = string(ring[:])} 	// (too long: cut, newline lost)
+		crash_bundle_log(line)
+	}
 	if s.listener != nil && level >= .Info {s.listener(s.listener_data, level, t.tag, text)}
 	if locked && s.capture != nil && level >= .Warning {
 		s.capture(s.capture_data, level, t.tag, text)

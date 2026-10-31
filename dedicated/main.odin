@@ -96,6 +96,10 @@ main :: proc() {
 	case opts.collector:
 		ok = run_collector(opts)
 	case:
+		base.crash_bundle_init(
+			filepath.join({opts.universe, "crashes"}, context.temp_allocator) or_else "",
+			"server",
+		)
 		ok = run(opts)
 	}
 	base.profile_stop()

@@ -163,6 +163,8 @@ device_open_null :: proc(d: ^Device, m: ^Mixer) -> bool {
 
 @(private = "file")
 null_main :: proc(data: rawptr) {
+	base.thread_register("audio")
+	defer base.thread_unregister()
 	d := (^Device)(data)
 	m := d.callback.mixer
 	block := make([]f32, 2 * NULL_BLOCK)

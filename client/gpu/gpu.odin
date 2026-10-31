@@ -2,6 +2,7 @@ package gpu
 
 import "base:runtime"
 import "core:dynlib"
+import "core:fmt"
 import "core:log"
 import "core:strings"
 import "core:sync"
@@ -354,6 +355,7 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 	}
 	g.driver = driver_describe(g.physical)
 	log.infof("gpu device name=%q driver=%q", g.device_name, g.driver)
+	base.crash_bundle_set_gpu(fmt.tprintf("%s, %s", g.device_name, g.driver))
 	return true
 }
 

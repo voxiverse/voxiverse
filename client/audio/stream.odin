@@ -145,6 +145,8 @@ stream_pause :: proc(m: ^Mixer, id: Sound_Id, paused: bool) {
 
 @(private)
 decoder_main :: proc(data: rawptr) {
+	base.thread_register("audio decoder")
+	defer base.thread_unregister()
 	st := (^Stream)(data)
 	for !sync.atomic_load(&st.quit) {
 		if sync.atomic_load(&st.pause) || !stream_pump(st) {time.sleep(time.Millisecond)}

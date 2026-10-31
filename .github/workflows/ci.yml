@@ -275,8 +275,14 @@ jobs:
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler
         run: |
-          if xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
+          rm -rf build/tmp/crash-home && mkdir -p build/tmp/crash-home
+          if VX_SETTINGS=build/tmp/crash-home/settings.cfg xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at client::console_execute' build/crash.txt
+          # The bundle (Q3): the signal, the main thread and another, the log and the actions.
+          bundle=$(ls -d build/tmp/crash-home/crashes/*/ | tail -n 1)
+          grep 'signal=SIGSEGV' "$bundle/crash.txt"
+          grep 'thread main (crashing)' "$bundle/threads.txt" && grep '^thread audio' "$bundle/threads.txt"
+          test -s "$bundle/log.txt" && grep 'command crash' "$bundle/actions.txt"
 
       - name: AddressSanitizer
         run: |

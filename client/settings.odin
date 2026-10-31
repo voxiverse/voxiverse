@@ -508,6 +508,14 @@ settings_path :: proc() -> (string, bool) {
 		true
 }
 
+// crashes_dir: where crash bundles go, beside the settings file (VX_SETTINGS moves both).
+crashes_dir :: proc() -> (string, bool) {
+	path, ok := settings_path()
+	if !ok {return "", false}
+	context.allocator = context.temp_allocator
+	return filepath.join({filepath.dir(path), "crashes"}) or_else "", true
+}
+
 // settings_load reads the settings file (if any) over the defaults.
 settings_load :: proc(app: ^App) {
 	app.settings = SETTINGS_DEFAULTS

@@ -461,6 +461,8 @@ writer_pass :: proc(s: ^Sink, batch: []Event, text: ^strings.Builder) -> int {
 
 @(private)
 writer_main :: proc(s: ^Sink) {
+	base.thread_register("telemetry")
+	defer base.thread_unregister()
 	batch := make([]Event, 2048)
 	defer delete(batch)
 	text := strings.builder_make()

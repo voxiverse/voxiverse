@@ -122,6 +122,8 @@ uploader_counts :: proc(u: ^Uploader) -> (acked, passes: u64) {
 // uploader_wake: send what there is now (tests).
 @(private)
 uploader_main :: proc(u: ^Uploader) {
+	base.thread_register("uploader")
+	defer base.thread_unregister()
 	last := time.tick_now()
 	for !sync.atomic_load(&u.stop) {
 		time.sleep(20 * time.Millisecond)
