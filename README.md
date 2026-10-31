@@ -268,18 +268,26 @@ There is currently no relay or NAT hole punching.
 Multiplayer asks for your name the first time; afterwards it is in Options > Profile. Worlds
 keep each player's position by name.
 
+## Where things go
+
+[docs/layout.md](docs/layout.md) lists every folder, what belongs in it and the file-name
+patterns it allows. `./build.sh check` fails on a tracked file that matches no pattern of its
+folder, on a folder the manifest does not list, and on an untracked file anywhere outside
+`build/` (every temporary file goes under `build/`, which git ignores). Adding a folder means
+adding its row to the manifest in the same commit.
+
 ## Source layout
 
 See [docs/plan.md](docs/plan.md#layout). Packages depend only downward: `common/base/` depends on
 nothing, `common/game/` never imports platform or GPU code, and `client/ui/` never imports the renderer.
 
-Imports go through the collections `client`, `server`, `common` and `tools`
+Imports go through the collections `client`, `server` and `common`
 (`import "common:game"`, `import "client:gpu"`), never a relative path. `./build.sh` passes
 them to every `odin` it runs. To run `odin` yourself (`odin check client`, or an editor's
 language server) pass the same flags, which `ols.json` lists:
 
 ```
-odin check client -no-entry-point -collection:client=client -collection:server=server -collection:common=common -collection:tools=tools
+odin check client -no-entry-point -collection:client=client -collection:server=server -collection:common=common
 ```
 
 ## Documentation

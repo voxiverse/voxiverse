@@ -14,7 +14,7 @@ if ! build/build-driver self-fresh >/dev/null 2>&1; then
 	# Built under a name of its own and renamed over: another ./build.sh may be
 	# starting the old one or building it too, and a rename is atomic where writing
 	# over it is not.
-	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common -collection:tools=tools \
+	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common \
 		-export-dependencies:json -export-dependencies-file:build/cache/build-driver.deps.json
 	mv -f build/build-driver.new.$$ build/build-driver
 	build/build-driver self-built

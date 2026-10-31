@@ -8,7 +8,7 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-import "tools:build/limited"
+import "common:limited"
 
 // The Voxiverse build driver. build.sh / build.bat hand every argument to
 // it; its commands are listed by usage (`build help`). It runs from the
@@ -20,6 +20,7 @@ PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
 	"common/ogg",
+	"common/limited",
 	"client/audio",
 	"common/netcode",
 	"common/telemetry",
@@ -35,7 +36,7 @@ PACKAGES :: []string {
 	"client",
 	"client/mesh",
 	"client/sfx",
-	"dedicated",
+	"server/dedicated",
 	"tools/build",
 	"tools/netdump",
 	"tools/ogg",
@@ -79,7 +80,7 @@ SOURCE_DIRS :: []string {
 	"common/base",
 	"common/base/fuzz",
 	"common/ogg",
-	"dedicated",
+	"common/limited",
 	"client/audio",
 	"common/netcode",
 	"common/telemetry",
@@ -98,7 +99,7 @@ SOURCE_DIRS :: []string {
 }
 
 // COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
-// common:game, tools:build/limited). The driver passes them to every odin it runs; build.sh,
+// common:game, common:limited). The driver passes them to every odin it runs; build.sh,
 // build.bat (the driver's own build) and ols.json (the editor) repeat them, and a test keeps
 // those three in step. The list lives in package limited, which tests/ shares, so the
 // `odin` the tests run on their fixtures takes the same flags. A package's own directory is
@@ -111,7 +112,7 @@ CHECK_FLAGS :: []string{"-no-entry-point"}
 
 GAME_PACKAGE :: "client"
 GAME_NAME :: "voxiverse"
-SERVER_PACKAGE :: "dedicated"
+SERVER_PACKAGE :: "server/dedicated"
 SMOKE_PACKAGE :: "tests"
 SERVER_NAME :: "voxiverse-server"
 
@@ -566,6 +567,8 @@ check :: proc() -> bool {
 		source_lint() &&
 		import_lint() &&
 		collections_lint() &&
+		layout_lint() &&
+		scratch_lint() &&
 		test_lint() &&
 		ci_lint() &&
 		check_format() &&
@@ -1324,7 +1327,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/benchmark.odin), server and party (server/dedicated/bench.odin), or compare",
 		)
 		return false
 	}
@@ -1355,7 +1358,7 @@ bench :: proc(args: []string) -> bool {
 	}
 	exe := build_game(build_args) or_return
 	if scenario == "server" || scenario == "party" {
-		// The server alone (dedicated/bench.odin).
+		// The server alone (server/dedicated/bench.odin).
 		exe = path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	}
 	return run(slice.concatenate([][]string{{exe, "--benchmark", scenario}, extra[:]}))

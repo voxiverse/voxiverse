@@ -154,7 +154,7 @@ lint_test_servers :: proc(path, text: string) -> []string {
 // test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules above.
 test_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"client", "server", "common", "dedicated", "tools"}) {
+	for dir in ([]string{"client", "server", "common", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -255,7 +255,7 @@ lint_ci_test_names :: proc(path, text: string, tests: []string) -> []string {
 test_names :: proc() -> (names: []string, ok: bool) {
 	out := make([dynamic]string)
 	ok = true
-	for dir in ([]string{"tests", "common", "client", "server", "dedicated", "tools"}) {
+	for dir in ([]string{"tests", "common", "client", "server", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -413,7 +413,7 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 		append(
 			&found,
 			fmt.aprintf(
-				"%s:%d: import \"%s\" is a relative path: import through a collection (client:, server:, common:, tools:)",
+				"%s:%d: import \"%s\" is a relative path: import through a collection (client:, server:, common:)",
 				path,
 				line_no,
 				target,
@@ -426,7 +426,7 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 // import_lint runs lint_relative_imports over every first-party Odin file.
 import_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"tests", "common", "client", "server", "dedicated", "tools"}) {
+	for dir in ([]string{"tests", "common", "client", "server", "tools"}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {

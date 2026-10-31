@@ -7,7 +7,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
-import "tools:build/limited"
+import "common:limited"
 
 // The crash fixture (tests/crash_fixture) starts four named threads, then dies four ways. Each
 // run must fail and leave a bundle whose threads.txt names all five threads and whose crash.txt

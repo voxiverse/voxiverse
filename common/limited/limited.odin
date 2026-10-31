@@ -14,7 +14,6 @@ COLLECTIONS :: []string {
 	"-collection:client=client",
 	"-collection:server=server",
 	"-collection:common=common",
-	"-collection:tools=tools",
 }
 
 Run_Result :: enum {

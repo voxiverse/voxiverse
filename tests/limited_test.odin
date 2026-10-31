@@ -6,7 +6,7 @@ import "core:slice"
 import "core:testing"
 import "core:time"
 
-import "tools:build/limited"
+import "common:limited"
 
 // A command that outlasts its limit is killed with its children, and says so.
 @(test)

@@ -4,7 +4,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-import "tools:build/limited"
+import "common:limited"
 
 // A parallel job's output reaches its log on every OS, with a real child process (the
 // smoke suite's run_parallel tests do not run on Windows). On Windows the log once had

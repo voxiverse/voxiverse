@@ -124,7 +124,7 @@ compare_run :: proc(side: ^Compare_Side, scenario, size: string) -> bool {
 	if scenario ==
 	   "chunks" {cmd = {bench_exe}} else if slice.contains(TOOL_SCENARIOS, scenario) {cmd = {bench_exe, scenario}}
 	if scenario == "server" || scenario == "party" {
-		// The server alone (dedicated/bench.odin).
+		// The server alone (server/dedicated/bench.odin).
 		cmd = {
 			path_join({"build", strings.concatenate({"voxiverse-server", exe_suffix()})}),
 			"--benchmark",
