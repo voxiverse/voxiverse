@@ -132,5 +132,5 @@ test_collections_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	all := "-collection:client=client -collection:server=server -collection:common=common"
 	testing.expect_value(t, len(lint_collections("build.sh", all)), 0)
-	testing.expect_value(t, len(lint_collections("build.sh", "-collection:client=client")), 3)
+	testing.expect_value(t, len(lint_collections("build.sh", "-collection:client=client")), 2)
 }

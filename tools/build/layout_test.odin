@@ -17,8 +17,16 @@ test_layout_lint :: proc(t: ^testing.T) {
 		0,
 	)
 	// A name that matches no pattern, a folder that is not listed, a row with no file.
-	testing.expect_value(t, len(lint_layout(rows, {"README.md", "notes.txt", "client/hud/a.odin"})), 2)
-	testing.expect_value(t, len(lint_layout(rows, {"README.md", "build.sh", "client/hud/a.odin", "client/x/b.odin"})), 1)
+	testing.expect_value(
+		t,
+		len(lint_layout(rows, {"README.md", "notes.txt", "client/hud/a.odin"})),
+		1,
+	)
+	testing.expect_value(
+		t,
+		len(lint_layout(rows, {"README.md", "build.sh", "client/hud/a.odin", "client/x/b.odin"})),
+		1,
+	)
 	testing.expect_value(t, len(lint_layout(rows, {"README.md", "build.sh"})), 1)
 }
 

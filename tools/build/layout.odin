@@ -49,7 +49,7 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 		}
 		row: ^Layout_Row
 		for &r in rows {
-			if r.folder == folder {row = &r;break}
+			if r.folder == folder {row = &r; break}
 		}
 		if row == nil {
 			if !unlisted[folder] {
@@ -68,7 +68,7 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 		}
 		matched := false
 		for pattern in row.patterns {
-			if ok, _ := filepath.match(pattern, name); ok {matched = true;break}
+			if ok, _ := filepath.match(pattern, name); ok {matched = true; break}
 		}
 		if !matched {
 			append(
@@ -88,14 +88,20 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 	for row in rows {
 		used := false
 		for path in tracked {
-			if strings.has_prefix(path, row.folder + "/") &&
-			   strings.index_byte(path[len(row.folder) + 1:], '/') < 0 {used = true;break}
-			if row.folder == "." && strings.index_byte(path, '/') < 0 {used = true;break}
+			if len(path) > len(row.folder) + 1 &&
+			   strings.has_prefix(path, row.folder) &&
+			   path[len(row.folder)] == '/' &&
+			   strings.index_byte(path[len(row.folder) + 1:], '/') < 0 {used = true; break}
+			if row.folder == "." && strings.index_byte(path, '/') < 0 {used = true; break}
 		}
 		if !used {
 			append(
 				&found,
-				fmt.aprintf("%s: folder %s has no tracked file: delete its row", LAYOUT_MANIFEST, row.folder),
+				fmt.aprintf(
+					"%s: folder %s has no tracked file: delete its row",
+					LAYOUT_MANIFEST,
+					row.folder,
+				),
 			)
 		}
 	}
