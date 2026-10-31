@@ -78,7 +78,7 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `pack.json` | `json_parse` | random JSON to depth 45 (past the depth cap), long strings, escapes, numbers at the edges | |
 | `pack.registry` | `registry_build` over the base pack with one file replaced | the base pack's JSON files with one to four values replaced (a number by a string, an array by a 10 000-element one, ...) | errors carry a line inside the input |
 | `pack.png` | `png_texture` | a valid 16x16 PNG with IHDR sizes at the edges | CRCs repaired by the fixup |
-| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) still drives the suite's `test_ogg_fuzz` (20 000 cases) until Q2 |
+| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) still drives the suite's `test_ogg_fuzz` (20 000 cases) |
 | `pack.archive` | `pack_archive_read` | a valid archive of three files | refusals of bad paths and sizes |
 | `save.region` | `region_open`, then every chunk by `region_next_chunk` | a region of four chunks written by the save code | header checksum repaired |
 | `save.journal` | `journal_read_segment` | a segment of 64 records of every kind | header and record checksums repaired |
@@ -86,6 +86,12 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `save.player` | `player_parse` and `kit_parse` on the same bytes | a player file written by `player_json` | |
 | `save.structure` | `template_decode` | a template written by `template_encode` | |
 | `save.import` | `universe_import` of the bytes as an export file, under `build/tmp/fuzz/` | an export of a two-world universe | a refused import leaves nothing in `dest` |
+| `net.client_decode` | `decode_client` | one valid encoding of each of the 25 client messages, fields at their edges | |
+| `net.server_decode` | `decode_server` (with the chunk scratch array) | one valid encoding of every server message, chunks with palettes of 1-300 blocks, State and Snapshot messages | |
+| `net.state` | `receive_state` and `receive_snapshot` on a receiver that holds tick 1's snapshot and a record of every kind | a State message or a snapshot part of tick 2 (a delta against tick 1) from a sender the game's schema built | the baseline is built in an arena inside the case |
+| `net.packets` | `conn_packet`, then `conn_receive` and `conn_flush`, on a connection in one of three states (fresh; first fragments received; established, messages in flight both ways) | a packet the peer's `conn_flush` wrote, reliable fragments and unreliable records | the first byte picks the state |
+| `net.handshake` | the host's `handle` of one datagram from an address, with or without a peer admitted there first | a valid Connect, Response (with the host's cookie), Disconnect, Discover | the host's cookie key is fixed; the fixup repairs a mutated Response's cookie |
+| `text.parsers` | the first byte picks `format_parse`, `address_parse`, `id_parse`, `state_parse`, `account_parse`, `ability_parse`, `parse_time_of_day`, `damage_source_parse` or the chat's `parse_count` | a valid example of each | checks what each promised (an accepted address is valid, spans lie in the text, a time is in 0..1) |
 | `save.config` | the first byte picks `permissions_parse`, `grants_parse`, `packs_parse` or `counters_read` | each file as the server writes it | |
 
 Seeds are the generators; a committed corpus (`testdata/fuzz/<target>/`) is grown by hand with
