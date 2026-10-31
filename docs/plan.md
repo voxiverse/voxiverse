@@ -415,7 +415,7 @@ million tokens re-read per step), not the code it wrote. So:
     and the sandbox) → packs signed and checked (M54, M54g, M54h, M54i; split in four by #86) → the creator tools (M54c experiences,
     M54d edit mode and test-play, M54e a text area and the clipboard, M54f scripts edited in
     the game) → the client renderer (R7,
-    R8, R9, R10, R11, R11b, R12, R13; independent of the rest) → R15 (entities on the GPU,
+    R7b, R8, R9, R10, R11, R11b, R12, R13; independent of the rest; R7 split in two by #87) → R15 (entities on the GPU,
     after M50's entity storage) → M49d → M54b → secure transport and scale (M55, M55b) → the
     hooks for online services (M55c) → audio (M56, M56b, M57, M57b, M58, M58b). R14 stays
     held: the owner deferred it. Sharing experiences beyond one server comes after online
@@ -655,7 +655,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | M54e | [Creator tools: a multi-line text area and the system clipboard](milestones/M54e.md) | the `Text_Buffer` tests and fuzz; the clipboard smoke test on Linux; the `text_area` scenario within its limit; the suite, `build check` and CI green |
 | M54f | [Creator tools: scripts edited in the game](milestones/M54f.md) | the hostile writes refused with nothing written; diagnostics at their lines and a broken script not reloaded; a good write restarting scripts on the server and a UDP client; the overlay by pad; CI green |
 | Q6 | [Showcase experiences built only from packs and scripts (a placeholder)](milestones/Q6.md) | **blocked on the owner: the owner names each showcase**; none is invented |
-| R7 | [Occlusion culling (two-phase, depth pyramid)](milestones/R.md#r7-occlusion-culling) | `views` `gpu_world` at most 60% of R6's; no popping (`images`) |
+| R7 | [The depth pyramid and the occlusion test, checked against the CPU](milestones/R7.md) | `--check hiz` (every mip bit-exact against the CPU; every occlusion verdict equal) and the conservativeness property test pass in CI; `images` with scene counts; `gpu_hiz` within its budget (measured) |
+| R7b | [Two-phase occlusion culling in the frame](milestones/R7b.md) | `--check occlusion` finds no chunk hidden while visible; motion scenes unchanged on baselines from before culling; `views` `gpu_world` at most 60% of the commit before (measured) |
 | R8 | [Compact geometry: quad pulling, water merged](milestones/R.md#r8-compact-geometry) | geometry memory at most 55% of R7's; `images` passes |
 | R9 | [Memory: sub-allocation, a growing geometry arena, no lost meshes](milestones/R.md#r9-memory) | at most 10 `vkAllocateMemory` calls in `flight`; no mesh ever dropped |
 | R10 | [Uploads off the graphics queue](milestones/R.md#r10-uploads-off-the-graphics-queue) | `flight` frame p99 and worst at most 80% of R9's |
