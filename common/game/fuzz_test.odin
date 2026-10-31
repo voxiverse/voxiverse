@@ -55,7 +55,10 @@ test_fuzz_net_state_smoke :: proc(t: ^testing.T) {smoke_net(t, "net.state", 3000
 smoke_net :: proc(t: ^testing.T, name: string, cases: int) {
 	for &target in net_fuzz_targets() {
 		if target.name != name {continue}
-		report := fuzz.run_target(&target, {seed = 84, cases = cases, out_dir = "build/fuzz", regress = true})
+		report := fuzz.run_target(
+			&target,
+			{seed = 84, cases = cases, out_dir = "build/fuzz", regress = true},
+		)
 		defer fuzz.report_destroy(&report)
 		for f in report.failures {testing.expect(t, false, f)}
 		return
