@@ -45,6 +45,9 @@ Log_Sink :: struct {
 	// Set by the crash handler: the crashing thread may hold the lock, so
 	// from here on lines are written without it (best effort).
 	crashing:      bool,
+	// The process's own sink (debug_begin's) feeds the crash bundle's log ring; any other sink
+	// (a test's) must not: the ring is one per process, and a stray writer garbles it.
+	feeds_bundle:  bool,
 }
 
 // Log_Tag is a thread's tagged logger state; it must outlive the logger made
@@ -204,7 +207,7 @@ tagged_logger_proc :: proc(
 			location.line,
 		)
 	}
-	if crash_bundle_active() {
+	if s.feeds_bundle && crash_bundle_active() {
 		ring: [1024]u8
 		line := fmt.bprintf(
 			ring[:],

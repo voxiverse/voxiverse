@@ -84,6 +84,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 		}
 	}
 	d.logger = log_sink_init(&d.sink, d.log_file, console_level, tag)
+	d.sink.feeds_bundle = true
 	ctx.logger = d.logger
 	ctx.assertion_failure_proc = assertion_failure
 	when ODIN_SANITIZER_FLAGS == {} {crash_handler_install()} 	// sanitizers have their own
