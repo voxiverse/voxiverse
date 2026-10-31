@@ -250,21 +250,7 @@ Spec: [R9b.md](R9b.md) (split from R9 by #87).
 
 ## R10: uploads off the graphics queue
 
-**Why.** Chunk uploads are copies at the start of the frame's command buffer, competing
-with drawing, and bounded by an 8 MiB per-frame staging buffer.
-
-**Design (decided).** A transfer queue: a queue of a transfer-capable family other than
-the graphics family when one exists, else a second queue of the graphics family, else the
-graphics queue itself (the code path is the same). A 32 MiB staging ring; uploads recorded
-on the transfer queue's own command buffers; a timeline semaphore orders them before the
-frame that first draws the mesh; queue-family ownership transfers when the families
-differ. `world_apply` shows a mesh only when its upload's timeline value has been reached.
-
-**Tests.** Synchronization validation clean on lavapipe and locally; a client test that
-uploads more than one ring's worth in a frame and shows every mesh within three frames.
-
-**Exit check.** `flight`: frame p99 and worst at most 80% of R9's, p < 0.05; `gpu_upload`
-gone from the graphics queue's sections.
+Spec: [R10.md](R10.md) (checked against the code by #87).
 
 ## R11: the frame graph and an HDR target
 
