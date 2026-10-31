@@ -10,7 +10,6 @@ import "core:strings"
 import "core:time"
 
 import "client:audio"
-import "client:dev"
 import "client:font"
 import "client:gpu"
 import "client:mesh"
@@ -145,7 +144,7 @@ App :: struct {
 	triangle_stats:   base.Frame_Stats, // thousands drawn a frame, in a world
 	last_frame_ms:    f32,
 	seconds:          f32, // since start, wrapped every 1000 (moving water)
-	fps:              dev.Fps,
+	fps:              Fps,
 }
 
 // app_init brings everything up; on failure the caller still calls

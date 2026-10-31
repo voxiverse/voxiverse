@@ -40,7 +40,6 @@ PACKAGES :: []string {
 	"client/starfield",
 	"client/planet",
 	"client/formatted",
-	"client/dev",
 	"client/music",
 	"server/packs",
 	"client/sfx",
@@ -83,6 +82,7 @@ TEST_PACKAGES :: []string {
 	"client/sfx",
 	"client/platform",
 	"client/engine",
+	"client/music",
 	"tools/analytics",
 	"tools/music",
 	"tools/build",
@@ -116,7 +116,18 @@ ODIN_FLAGS :: []string{"-vet", "-strict-style", "-warnings-as-errors"}
 CHECK_FLAGS :: []string{"-no-entry-point"}
 
 GAME_PACKAGE :: "client/main"
-AUDIO_BASELINE_PACKAGE :: "client/engine"
+// AUDIO_BASELINES: the packages whose tests are the audio baselines, and which of their tests.
+Audio_Baseline_Run :: struct {
+	package_: string,
+	names:    string,
+}
+AUDIO_BASELINES :: []Audio_Baseline_Run {
+	{
+		"client/engine",
+		"engine.test_audio_baseline_burst,engine.test_audio_baseline_cave_walk,engine.test_audio_baseline_title_to_world,engine.test_audio_baseline_stress,engine.test_audio_baseline_music_session",
+	},
+	{"client/music", "music.test_music_hour_golden"},
+}
 GAME_NAME :: "voxiverse"
 SERVER_PACKAGE :: "server/dedicated"
 SMOKE_PACKAGE :: "tests"
@@ -1284,22 +1295,33 @@ audio_baselines :: proc(args: []string) -> bool {
 			append(&defines, strings.concatenate({"-define:VX_AUDIO_ONLY=", args[i]}))
 		}
 	}
-	out := path_join({"build", "test", strings.concatenate({"audio-baselines", exe_suffix()})})
-	os.make_directory_all(filepath.dir(out))
-	cmd := slice.concatenate(
-		[][]string {
-			{"odin", "test", AUDIO_BASELINE_PACKAGE},
-			ODIN_FLAGS,
-			COLLECTIONS,
+	for baseline in AUDIO_BASELINES {
+		out := path_join(
 			{
-				strings.concatenate({"-out:", out}),
-				"-define:ODIN_TEST_NAMES=engine.test_audio_baseline_burst,engine.test_audio_baseline_cave_walk,engine.test_audio_baseline_title_to_world,engine.test_audio_baseline_stress,engine.test_audio_baseline_music_session,engine.test_music_hour_golden",
+				"build",
+				"test",
+				strings.concatenate(
+					{"audio-baselines-", filepath.base(baseline.package_), exe_suffix()},
+				),
 			},
-			defines[:],
-			test_env_defines(),
-		},
-	)
-	return run(cmd)
+		)
+		os.make_directory_all(filepath.dir(out))
+		cmd := slice.concatenate(
+			[][]string {
+				{"odin", "test", baseline.package_},
+				ODIN_FLAGS,
+				COLLECTIONS,
+				{
+					strings.concatenate({"-out:", out}),
+					strings.concatenate({"-define:ODIN_TEST_NAMES=", baseline.names}),
+				},
+				defines[:],
+				test_env_defines(),
+			},
+		)
+		if !run(cmd) {return false}
+	}
+	return true
 }
 
 // run_tool builds and runs tools/<name> with args (netdump, replay, sfx).

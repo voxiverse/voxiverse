@@ -64,14 +64,13 @@ fail cannot be switched on first, and a per-folder allowance is an exemption.
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |
 | `client/audio/testdata` | Audio test input | `*.ogg` |
-| `client/dev` | Developer overlays (frame-time readout; L2b gathers the `dev_*` files) | `*.odin` |
 | `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, and the state every feature of `App` holds | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
 | `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |
 | `client/gpu` | Vulkan | `*.odin` |
 | `client/main` | The game's main package: entry point, frame and dispatch | `*.odin` |
 | `client/mesh` | Chunk meshing | `*.odin` |
-| `client/music` | The committed music: the piece table and its embedded files | `*.odin` |
+| `client/music` | The music: the piece table with its embedded files, and the director that picks what plays | `*.odin` |
 | `client/planet` | The planet palette for the title and creation backdrops | `*.odin` |
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
 | `client/render` | Frame rendering | `*.odin` |

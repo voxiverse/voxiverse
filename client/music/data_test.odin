@@ -1,4 +1,4 @@
-package engine
+package music
 
 import "client:audio"
 import "client:music"

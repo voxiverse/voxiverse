@@ -8,7 +8,9 @@ import "core:strings"
 import "core:testing"
 
 import "client:audio"
+import "client:music"
 import "client:sfx"
+import "client:testkit"
 
 // M32b's quality baselines: four scripted scenarios rendered offline, their
 // numbers compared with assets/baselines/audio/<scenario>.txt (client/audio/baseline.odin
@@ -20,7 +22,6 @@ import "client:sfx"
 // `build audiodump`), and the diff is reviewed like code.
 
 BASELINE_DIR :: "assets/baselines/audio"
-ACCEPT :: #config(VX_AUDIO_ACCEPT, "")
 WAV_DIR :: #config(VX_AUDIO_WAV_DIR, "") // `build audio -wav`: each scenario's master as a file
 BASELINE_STREAM :: #load("../audio/testdata/tone.ogg")
 BASELINE_RATE :: 48000
@@ -52,23 +53,23 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 	sounds_init(bank, m)
 	// The streams come after the effects in the sound table; a scenario without
 	// music has only the effects, so `build audiodump` can replay its capture.
-	music: audio.Sound_Id
-	tracks: []Music_Track
+	music_voice: audio.Sound_Id
+	tracks: []music.Music_Track
 	arena: virtual.Arena
-	player: Music_Player
-	director: Music_Director
+	player: music.Music_Player
+	director: music.Music_Director
 	defer {
-		music_player_destroy(&player)
+		music.music_player_destroy(&player)
 		virtual.arena_destroy(&arena)
 	}
 	if which == .music_session {
-		tracks = music_tracks(&arena)
-		assert(music_streams(&player, m, tracks, inline = true))
-		director_init(&director, tracks, 44)
+		tracks = music.music_tracks(&arena)
+		assert(music.music_streams(&player, m, tracks, inline = true))
+		music.director_init(&director, tracks, 44)
 	}
 	if which == .title_to_world || which == .stress {
 		ok: bool
-		music, ok = audio.add_stream(
+		music_voice, ok = audio.add_stream(
 			m,
 			BASELINE_STREAM,
 			loop = true,
@@ -158,7 +159,7 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 				release = 0.4,
 			},
 		)
-		audio.play(m, {sound = music, gain = {0.7, 0.7} * gain, bus = .Music, fade_in = 1.5})
+		audio.play(m, {sound = music_voice, gain = {0.7, 0.7} * gain, bus = .Music, fade_in = 1.5})
 		audio.play(
 			m,
 			{sound = bank.player[.Land][0], gain = g, bus = .UI, pitch = 2, start_frame = at(2.5)},
@@ -256,18 +257,18 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 				},
 			)
 		}
-		audio.play(m, {sound = music, gain = {0.4, 0.4} * gain, bus = .Music})
+		audio.play(m, {sound = music_voice, gain = {0.4, 0.4} * gain, bus = .Music})
 	}
 	an: audio.Analysis
 	defer audio.analysis_destroy(&an)
 	audio.analysis_attach(m, &an, audio.BASELINE_BUSES)
 	out: [2 * BASELINE_BLOCK]f32
-	actions := make([dynamic]Music_Action, context.temp_allocator)
+	actions := make([dynamic]music.Music_Action, context.temp_allocator)
 	holds: Snapshot_Conditions
 	for block in 0 ..< int(seconds * BASELINE_RATE) / BASELINE_BLOCK + 10 {
 		if which == .music_session {
 			now := f64(block * BASELINE_BLOCK) / BASELINE_RATE
-			in_ := Music_Input {
+			in_ := music.Music_Input {
 				session     = now >= 40,
 				loading     = now >= 40 && now < 45,
 				playing     = now >= 45,
@@ -289,10 +290,10 @@ scenario_run :: proc(which: Audio_Scenario, gain: f32 = 1) -> audio.Baseline {
 				)
 				holds = want
 			}
-			music_alive(&player, m, &director)
+			music.music_alive(&player, m, &director)
 			clear(&actions)
-			director_update(&director, in_, f32(BASELINE_BLOCK) / BASELINE_RATE, &actions)
-			music_apply(&player, m, tracks, actions[:])
+			music.director_update(&director, in_, f32(BASELINE_BLOCK) / BASELINE_RATE, &actions)
+			music.music_apply(&player, m, tracks, actions[:])
 		}
 		audio.mix(m, out[:])
 		audio.drain(m)
@@ -380,7 +381,7 @@ audio_baseline_check :: proc(t: ^testing.T, which: Audio_Scenario) {
 	defer delete(old_text)
 	old, have := audio.baseline_parse(string(old_text))
 	defer if have {audio.baseline_destroy(&old)}
-	if ACCEPT == "all" || ACCEPT == name {
+	if testkit.ACCEPT == "all" || testkit.ACCEPT == name {
 		text: string
 		if have {
 			text = audio.baseline_format(got, old)
