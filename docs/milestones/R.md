@@ -254,23 +254,7 @@ Spec: [R10.md](R10.md) (checked against the code by #87).
 
 ## R11: the frame graph and an HDR target
 
-**Why.** Every pass draws into the swapchain format inside one rendering scope; there is
-nowhere to put post-processing, half-resolution passes or intermediate images, and each new
-pass would need hand-written barriers.
-
-**Design (decided).** A small frame graph (`client/gpu/graph.odin`), not a general one:
-passes declared each frame with the images and buffers they read and write; images are
-transient, allocated from R9's allocator and aliased where lifetimes do not overlap;
-barriers are derived from the declarations (synchronization2). The scene renders into an
-`R16G16B16A16_SFLOAT` colour target; a final `tonemap` pass writes the swapchain image.
-The tonemap is the identity in this milestone (clamp, then the sRGB encode the swapchain
-already did), so the picture is unchanged; the offscreen benchmark path becomes the graph's
-output size.
-
-**Tests.** `images` passes with no re-accept; graph unit tests (barrier derivation, aliasing
-of two non-overlapping images).
-
-**Exit check.** `gpu_frame` on `views` within 5% of R10's; validation clean.
+Spec: [R11.md](R11.md) (checked against the code by #87).
 
 ## R11b: the look
 
