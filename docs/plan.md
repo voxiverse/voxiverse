@@ -415,8 +415,8 @@ million tokens re-read per step), not the code it wrote. So:
     and the sandbox) → packs signed and checked (M54, M54g, M54h, M54i; split in four by #86) → the creator tools (M54c experiences,
     M54d edit mode and test-play, M54e a text area and the clipboard, M54f scripts edited in
     the game) → the client renderer (R7,
-    R7b, R8, R9, R9b, R10, R11, R11b, R11c, R12, R13, R13b; independent of the rest; R7, R9, R11b and R13 split in two by #87) → R15 (entities on the GPU,
-    after M50's entity storage) → M49d → M54b → secure transport and scale (M55, M55b) → the
+    R7b, R8, R9, R9b, R10, R11, R11b, R11c, R12, R13, R13b; independent of the rest; R7, R9, R11b and R13 split in two by #87) → R15, R15b (entities on the GPU,
+    after M50's entity storage; R15b, M50d's bodies on the world pass, split from R15 by #87) → M49d → M54b → secure transport and scale (M55, M55b) → the
     hooks for online services (M55c) → audio (M56, M56b, M57, M57b, M58, M58b). R14 stays
     held: the owner deferred it. Sharing experiences beyond one server comes after online
     services, so it is not a row yet. Checked against the specs (#83): no dependency
@@ -668,7 +668,8 @@ re-read, CI round trips), so the next week is planned from numbers:
 | R13 | [The level-of-detail mesher: downsampled chunks with skirts, built and tested](milestones/R13.md) | the watertightness property test (no ray through a seam between levels) and the cell rules; `bench chunks -check` with exact LOD counts, coarse quads at most 30% and the `Mesh_Lod` budget; `images` unchanged |
 | R13b | [Far terrain at level of detail in the world](milestones/R13b.md) | `--check lod` in CI (no false occlusion, triangles at most 40% of no LOD, no terrain pixel turned to sky); `images` with far scenes against LOD and no-LOD baselines; `views-far` `gpu_world` at most 60% of the commit before (measured) |
 | R14 | [Far terrain beyond the interest area (a protocol change: the owner decides first)](milestones/R.md#r14-far-terrain-beyond-the-interest-area) | set when the owner approves the design |
-| R15 | [Entities and held items on the GPU](milestones/R.md#r15-entities-and-held-items-on-the-gpu) | `avatars` `avatar_draw` at most 25% of baseline |
+| R15 | [Entities and held items on the GPU: boxes as instances, held models uploaded once](milestones/R15.md) | `--check models` (every expanded vertex against the old CPU path) in CI; `images` with a `crowd` scene accepted before, unchanged; `avatars` `avatar_draw` at most 25% of the commit before (measured) |
+| R15b | [Moving bodies on the world pass: quad records with a pose, culled and occluded on the GPU](milestones/R15b.md) | `--check bodies`, `--check cull` with pieces and `--check occlusion` with moving bodies in CI; the bounds property test; `body` scene unchanged; `bodies` `frame_record` lower (measured) |
 | M49d | [A compact creation screen and a new Ignite animation (issue #63, after the LAN party)](milestones/M49d.md) | the tests in the spec pass (the layout fits 1280 x 720 with every control visible, Ignite's phases in order adding up to about 2.5 s, skipping goes to loading, Reduce motion gives the fade, no colour literals); CI screenshots of the creation screen and mid-Ignite frames; `build check`, the suite and CI green. Check by hand: listed in the spec |
 | M54b | [Bots, the dry run and staged rollout](milestones/M54b.md) | `test_pack_pipeline_end_to_end` passes. An altered and a forged pack are refused at install; The `loop` and `faucet` dry runs fail with their codes. The `softlock` dry run names its quest; `test_revert_restores_hash` passes. The determinism and bandwidth tests are unchanged on the bot harness (see the spec) |
 | M55 | [Secure transport, rate limits, validation and lag compensation](milestones/M55.md) | Tampered, replayed and forged packets are refused and counted (the proxy tests); `test_account_proof_bound` passes; The hostile client is refused, logged and kicked (`hostile_test`). Honest play stays clean (`test_honest_play_clean`) (see the spec) |

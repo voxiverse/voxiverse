@@ -294,16 +294,13 @@ baselines gain a far-column line and are re-accepted.
 
 ## R15: entities and held items on the GPU
 
-**Why.** Entity boxes and held models are rebuilt as vertices on the CPU every frame
-(`entity_pass.odin`, `held_pass.odin`; eight avatars cost 0.10 ms of CPU, `avatar_draw`).
-Cheap today; it grows with entity count.
+Spec: [R15.md](R15.md) (checked against the code and split by #87: boxes as instances of a
+unit cube, held models uploaded once).
 
-**Design (decided).** Model meshes (box sets, voxel item models) uploaded once into the
-geometry arena; per-instance transforms and pose data (limb angles) in a per-frame storage
-buffer; one instanced indirect draw per pass.
+## R15b: moving bodies on the world pass
 
-**Exit check.** `avatars`: `avatar_draw` at most 25% of baseline; `images` passes
-(held-item scenes).
+Spec: [R15b.md](R15b.md) (split from R15 by #87: M50d's bodies as world geometry with a pose,
+culled and occluded on the GPU).
 
 ## Visual changes that wait for the owner
 
