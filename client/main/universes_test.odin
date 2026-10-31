@@ -6,10 +6,11 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "client:engine"
+import "client:overlay"
+import "client:screen"
 import "common:game"
 import "server:core"
-import "client:main"
-import "client:engine"
 
 // The universes screen's cards (screen_universes.odin): the order, what a
 // card knows from its config, Export and Import through the buttons. (Rename
@@ -50,16 +51,16 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 	dir := "build/test/cards"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	engine.saves_override = dir
-	defer engine.saves_override = ""
+	screen.saves_override = dir
+	defer screen.saves_override = ""
 	make_universe(dir, "Oldest", 1, "creative", 72 * time.Hour)
 	make_universe(dir, "Newest", 42, "survival", time.Minute)
 	make_universe(dir, "Middle", 7, "creative", 5 * time.Hour)
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer engine.universes_destroy(&app.universes)
-	defer engine.creation_destroy(&app.creation)
-	engine.universes_refresh(&app.universes)
+	defer screen.universes_destroy(&app.universes)
+	defer screen.creation_destroy(&app.creation)
+	screen.universes_refresh(&app.universes)
 	names: [3]string
 	for e, i in app.universes.entries {names[i] = e.name}
 	testing.expect_value(t, names, [3]string{"Newest", "Middle", "Oldest"})
@@ -104,21 +105,21 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
-	engine.saves_override = dir
-	defer engine.saves_override = ""
+	screen.saves_override = dir
+	defer screen.saves_override = ""
 	if !server_made(t, dir, "Castle") {return}
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer engine.universes_destroy(&app.universes)
-	defer engine.creation_destroy(&app.creation)
-	defer engine.toasts_destroy(&app.toasts)
-	engine.universes_refresh(&app.universes)
+	defer screen.universes_destroy(&app.universes)
+	defer screen.creation_destroy(&app.creation)
+	defer overlay.toasts_destroy(&app.toasts)
+	screen.universes_refresh(&app.universes)
 	testing.expect_value(t, len(app.universes.entries), 1)
 	app.screen = .Universes
 	ui_frame(app)
 
-	main.open_menu(t, app, "Castle")
-	main.click(t, app, "Export")
+	open_menu(t, app, "Castle")
+	click(t, app, "Export")
 	archive := filepath.join({dir, "Castle.vxu"}, context.temp_allocator) or_else ""
 	testing.expect(t, os.exists(archive), "the archive was written")
 	testing.expect_value(t, app.universes.mode, engine.Saves_Mode.List)
@@ -126,11 +127,11 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 
 	// Import: the button asks for the file; the universe comes back (as a
 	// free name beside the one that is there).
-	main.click(t, app, "Import")
+	click(t, app, "Import")
 	testing.expect_value(t, app.universes.mode, engine.Saves_Mode.Import)
 	append(&app.universes.path, archive)
 	ui_frame(app)
-	main.click(t, app, "Import File")
+	click(t, app, "Import File")
 	testing.expect_value(t, app.universes.message, "")
 	testing.expect_value(t, len(app.universes.entries), 2)
 	testing.expect(
@@ -140,10 +141,10 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 		),
 	)
 	// A file that is not an export says so and adds nothing.
-	main.click(t, app, "Import")
+	click(t, app, "Import")
 	append(&app.universes.path, "build/test/nothing_here.vxu")
 	ui_frame(app)
-	main.click(t, app, "Import File")
+	click(t, app, "Import File")
 	testing.expect(t, app.universes.message != "")
 	testing.expect_value(t, len(app.universes.entries), 2)
 	free_all(context.temp_allocator)

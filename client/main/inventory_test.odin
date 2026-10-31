@@ -4,11 +4,14 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:testing"
 
+import "client:engine"
 import "client:font"
+import "client:menu"
+import "client:overlay"
+import "client:prompt"
 import "client:testkit"
 import "client:ui"
 import "common:game"
-import "client:engine"
 
 // The inventory overlay with the mouse: dragging a stack to another slot,
 // right-click halves, shift-click to the hotbar, a number key, dropping
@@ -47,20 +50,20 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	app.input.pressed = {.Tab}
 
 	engine.actions_sync(app)
-	engine.player_menu_keys(app)
+	menu.player_menu_keys(app)
 	app.input.pressed = {}
 	engine.actions_sync(app)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	testing.expect(t, menu.section_open(app, .Inventory))
 
 	SCREEN :: ui.Vec2{1280, 720}
 	frame :: proc(app: ^engine.App, in_: ui.Input) {
-		ui.begin_frame(&app.ui, in_, engine.SCREEN, 1)
-		engine.draw_overlays(app, &app.ui)
+		ui.begin_frame(&app.ui, in_, SCREEN, 1)
+		overlay.draw_overlays(app, &app.ui)
 		ui.end_frame(&app.ui)
 	}
 	at :: proc(app: ^engine.App, slot: int) -> ui.Vec2 {
-		ui.begin_frame(&app.ui, {}, engine.SCREEN, 1)
-		l := engine.inventory_layout(&app.ui, .Inventory)
+		ui.begin_frame(&app.ui, {}, SCREEN, 1)
+		l := menu.inventory_layout(&app.ui, .Inventory)
 		ui.end_frame(&app.ui)
 		r := l.slots[slot]
 		return {r.x + r.w / 2, r.y + r.h / 2}
@@ -104,8 +107,8 @@ test_inventory_overlay :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.inv_pending), 8) // each click, the swap, the drop
 	// Closing with a stack on the cursor puts it back.
 	frame(app, {mouse = at(app, 1), mouse_pressed = {.Right}, mouse_down = {.Right}})
-	engine.escape(app)
-	testing.expect(t, !engine.section_open(app, .Inventory))
+	overlay.escape(app)
+	testing.expect(t, !menu.section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor) && game.inventory_count(inv, stone) == 64)
 	// No catalog without the catalog ability: taking is refused before it is sent.
 	s.mode = testkit.mode(s.reg, "survival")
@@ -150,7 +153,7 @@ test_characters_screen :: proc(t: ^testing.T) {
 	th := &app.ui.theme
 	rows := len(s.characters) + 3
 	column := ui.rect_center(
-		{0, 0, engine.SCREEN.x, engine.SCREEN.y},
+		{0, 0, SCREEN.x, SCREEN.y},
 		360,
 		f32(rows) * (th.row_height + th.spacing) + 80,
 	)
@@ -158,18 +161,18 @@ test_characters_screen :: proc(t: ^testing.T) {
 		column.x + 180,
 		column.y + 80 + (th.row_height + th.spacing) + th.row_height / 2,
 	}
-	ui.begin_frame(&app.ui, {mouse = bob}, engine.SCREEN, 1)
+	ui.begin_frame(&app.ui, {mouse = bob}, SCREEN, 1)
 	app_ui(app, &app.ui)
 	ui.end_frame(&app.ui)
 	ui.begin_frame(
 		&app.ui,
 		{mouse = bob, mouse_pressed = {.Left}, mouse_down = {.Left}},
-		engine.SCREEN,
+		SCREEN,
 		1,
 	)
 	app_ui(app, &app.ui)
 	ui.end_frame(&app.ui)
-	ui.begin_frame(&app.ui, {mouse = bob, mouse_released = {.Left}}, engine.SCREEN, 1)
+	ui.begin_frame(&app.ui, {mouse = bob, mouse_released = {.Left}}, SCREEN, 1)
 	app_ui(app, &app.ui)
 	ui.end_frame(&app.ui)
 	testing.expect_value(t, s.state, engine.Session_State.Connecting)
@@ -209,21 +212,21 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	stone := game.item_of_block(testkit.test_reg(), .Stone)
 	s.inventory.slots[9] = {stone, 64, 0}
 
-	engine.chest_sync(app)
-	testing.expect(t, !engine.section_open(app, .Inventory), "opened with no chest")
+	menu.chest_sync(app)
+	testing.expect(t, !menu.section_open(app, .Inventory), "opened with no chest")
 	s.inventory.chest_open = true
-	engine.chest_sync(app)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	menu.chest_sync(app)
+	testing.expect(t, menu.section_open(app, .Inventory))
 	testing.expect_value(t, app.inventory_view.tab, engine.Inventory_Tab.Chest)
 
 	SCREEN :: ui.Vec2{1280, 720}
 	frame :: proc(app: ^engine.App, in_: ui.Input) {
-		ui.begin_frame(&app.ui, in_, engine.SCREEN, 1)
-		engine.draw_overlays(app, &app.ui)
+		ui.begin_frame(&app.ui, in_, SCREEN, 1)
+		overlay.draw_overlays(app, &app.ui)
 		ui.end_frame(&app.ui)
 	}
-	ui.begin_frame(&app.ui, {}, engine.SCREEN, 1)
-	l := engine.inventory_layout(&app.ui, .Chest)
+	ui.begin_frame(&app.ui, {}, SCREEN, 1)
+	l := menu.inventory_layout(&app.ui, .Chest)
 	ui.end_frame(&app.ui)
 	for i in 0 ..< game.CHEST_SLOTS {
 		testing.expectf(t, l.slots[game.CHEST_BASE + i].w > 0, "chest slot %d has no place", i)
@@ -259,8 +262,8 @@ test_chest_overlay :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.inv_pending), 1)
 	// The chest closes by itself (walked away): the overlay goes.
 	s.inventory.chest_open = false
-	engine.chest_sync(app)
-	testing.expect(t, !engine.section_open(app, .Inventory))
+	menu.chest_sync(app)
+	testing.expect(t, !menu.section_open(app, .Inventory))
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +290,7 @@ pad_cursor_to :: proc(t: ^testing.T, app: ^engine.App, slot: int, loc := #caller
 	v := &app.inventory_view
 	for _ in 0 ..< 60 {
 		if v.cursor == slot {return}
-		l := engine.inventory_layout(&app.ui, v.tab)
+		l := menu.inventory_layout(&app.ui, v.tab)
 		if v.cursor >= engine.CURSOR_CATALOG_BASE {
 			pad_go(app, .Down)
 			continue
@@ -326,7 +329,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 
 	// Y opens it, the cursor on the hand's slot.
 	pad_tap(app, .Y)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	testing.expect(t, menu.section_open(app, .Inventory))
 	testing.expect_value(t, v.cursor, 2)
 
 	// A picks the stack up, directions carry it, A puts it down.
@@ -358,7 +361,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	// The prompts say what the buttons do here (with the bar on).
 	app.settings.prompt_bar = true
 	pad_frame(app)
-	seen := engine.prompts_seen(app)
+	seen := prompt.prompts_seen(app)
 	testing.expect(t, len(seen) >= 5, "the inventory's prompt bar is drawn")
 
 	// The left stick's press: the Catalog. Up from the hotbar reaches the catalog; Y types a
@@ -376,7 +379,10 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_frame(app)
 	pad_tap(app, .A)
 	testing.expect(t, !game.stack_empty(inv.cursor))
-	testing.expect(t, strings.contains(engine.item_title(testkit.test_reg(), inv.cursor.item), "dirt"))
+	testing.expect(
+		t,
+		strings.contains(menu.item_title(testkit.test_reg(), inv.cursor.item), "dirt"),
+	)
 	taken := inv.cursor
 	pad_go(app, .Down)
 	testing.expect(
@@ -394,7 +400,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	testing.expect_value(t, inv.cursor, game.Stack{dirt, 10, 0})
 	pad_tap(app, .B)
-	testing.expect(t, !engine.section_open(app, .Inventory))
+	testing.expect(t, !menu.section_open(app, .Inventory))
 	testing.expect(t, game.stack_empty(inv.cursor))
 	testing.expect_value(t, inv.slots[0], game.Stack{dirt, 10, 0})
 
@@ -402,7 +408,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	inv.chest[0] = {stone, 5, 0}
 	inv.chest_open = true
 	pad_frame(app)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	testing.expect(t, menu.section_open(app, .Inventory))
 	testing.expect_value(t, v.tab, engine.Inventory_Tab.Chest)
 	pad_cursor_to(t, app, game.CHEST_BASE)
 	pad_tap(app, .A)
@@ -411,7 +417,7 @@ test_inventory_with_a_pad :: proc(t: ^testing.T) {
 	pad_tap(app, .A)
 	testing.expect_value(t, inv.chest[6], game.Stack{stone, 5, 0})
 	pad_tap(app, .B)
-	testing.expect(t, !engine.section_open(app, .Inventory))
+	testing.expect(t, !menu.section_open(app, .Inventory))
 	free_all(context.temp_allocator)
 }
 
@@ -431,13 +437,13 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 	// View opens the menu (the inventory first), RB steps to the statistics,
 	// with the list focused; A opens a group.
 	pad_tap(app, .Back)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	testing.expect(t, menu.section_open(app, .Inventory))
 	pad_tap(app, .Right_Bumper)
-	testing.expect(t, engine.section_open(app, .Statistics))
+	testing.expect(t, menu.section_open(app, .Statistics))
 	pad_tap(app, .Right_Bumper) // (round)
-	testing.expect(t, engine.section_open(app, .Inventory))
+	testing.expect(t, menu.section_open(app, .Inventory))
 	pad_tap(app, .Left_Bumper)
-	testing.expect(t, engine.section_open(app, .Statistics))
+	testing.expect(t, menu.section_open(app, .Statistics))
 	pad_frame(app)
 	testing.expect_value(t, ui.focused_label(&app.ui), "stats rows")
 	testing.expect_value(t, len(v.expanded), 0)
@@ -461,11 +467,11 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 
 	// B closes it; View opens it again (at the statistics, shown last) and closes it.
 	pad_tap(app, .B)
-	testing.expect(t, !engine.section_open(app, .Statistics))
+	testing.expect(t, !menu.section_open(app, .Statistics))
 	pad_tap(app, .Back)
-	testing.expect(t, engine.section_open(app, .Statistics))
+	testing.expect(t, menu.section_open(app, .Statistics))
 	pad_tap(app, .Back)
-	testing.expect(t, !engine.section_open(app, .Statistics))
+	testing.expect(t, !menu.section_open(app, .Statistics))
 	free_all(context.temp_allocator)
 }
 
@@ -474,14 +480,14 @@ test_stats_with_a_pad :: proc(t: ^testing.T) {
 // Creative; the details panel sits right of the pockets.
 @(test)
 test_inventory_layout_sections :: proc(t: ^testing.T) {
-	f: engine.Overlay_Fixture
-	engine.overlay_fixture(t, &f, true)
-	defer engine.overlay_fixture_destroy(&f)
-	ui.begin_frame(&f.app.ui, {}, engine.SCREEN, 1)
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, true)
+	defer overlay_fixture_destroy(&f)
+	ui.begin_frame(&f.app.ui, {}, SCREEN, 1)
 	defer ui.end_frame(&f.app.ui)
-	plain := engine.inventory_layout(&f.app.ui, .Inventory)
-	chest := engine.inventory_layout(&f.app.ui, .Chest)
-	creative := engine.inventory_layout(&f.app.ui, .Creative)
+	plain := menu.inventory_layout(&f.app.ui, .Inventory)
+	chest := menu.inventory_layout(&f.app.ui, .Chest)
+	creative := menu.inventory_layout(&f.app.ui, .Creative)
 	testing.expect(t, plain.preview.w > 0 && plain.preview.h > 0, "the preview shows")
 	testing.expect_value(t, chest.preview.w, 0)
 	first_chest, first_pocket := chest.slots[game.CHEST_BASE], chest.slots[game.HOTBAR_SLOTS]
@@ -499,9 +505,9 @@ test_inventory_layout_sections :: proc(t: ^testing.T) {
 	testing.expect(t, plain.sort.w > 0 && plain.search.w > 0)
 	testing.expect(t, creative.catalog.w > 0 && creative.details.w > 0)
 	// Everything is on the screen.
-	for l in ([]engine.Inventory_Layout{plain, chest, creative}) {
+	for l in ([]menu.Inventory_Layout{plain, chest, creative}) {
 		testing.expect(t, l.panel.x >= 0 && l.panel.y >= 0)
-		testing.expect(t, l.panel.x + l.panel.w <= engine.SCREEN.x && l.panel.y + l.panel.h <= engine.SCREEN.y)
+		testing.expect(t, l.panel.x + l.panel.w <= SCREEN.x && l.panel.y + l.panel.h <= SCREEN.y)
 	}
 }
 
@@ -509,22 +515,22 @@ test_inventory_layout_sections :: proc(t: ^testing.T) {
 // match; a tooltip lists the name, the description and the modifiers.
 @(test)
 test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
-	f: engine.Overlay_Fixture
-	engine.overlay_fixture(t, &f, false)
-	defer engine.overlay_fixture_destroy(&f)
+	f: Overlay_Fixture
+	overlay_fixture(t, &f, false)
+	defer overlay_fixture_destroy(&f)
 	reg := testkit.test_reg()
 	stone, dirt := game.item_of_block(reg, .Stone), game.item_of_block(reg, .Dirt)
 	f.s.inventory.slots[6] = {dirt, 3, 0}
 	f.s.inventory.slots[9] = {stone, 5, 0}
 	f.s.inventory.slots[12] = {dirt, 4, 0}
-	engine.overlay_frame(&f, {})
+	overlay_frame(&f, {})
 	sort := ui.Vec2{}
 	if r, ok := ui.find_widget(&f.app.ui, "Sort"); ok {sort = {r.x + r.w / 2, r.y + r.h / 2}}
 	testing.expect(t, sort != {}, "a Sort button")
 	before := len(f.s.inv_pending)
-	engine.overlay_frame(&f, {mouse = sort})
-	engine.overlay_frame(&f, {mouse = sort, mouse_pressed = {.Left}, mouse_down = {.Left}})
-	engine.overlay_frame(&f, {mouse = sort, mouse_released = {.Left}})
+	overlay_frame(&f, {mouse = sort})
+	overlay_frame(&f, {mouse = sort, mouse_pressed = {.Left}, mouse_down = {.Left}})
+	overlay_frame(&f, {mouse = sort, mouse_released = {.Left}})
 	testing.expect_value(t, len(f.s.inv_pending), before + 1)
 	// (Predicted at once: the dirt merged and the stacks in item order.)
 	grid := f.s.inventory.slots[game.HOTBAR_SLOTS:game.INVENTORY_SLOTS]
@@ -537,16 +543,16 @@ test_inventory_sort_search_and_tooltip :: proc(t: ^testing.T) {
 	testing.expect_value(t, counts[stone], 5)
 	testing.expect(t, game.stack_empty(grid[2]) && grid[1].item == hi)
 
-	testing.expect(t, engine.stack_matches(reg, {stone, 1, 0}, "STO"))
-	testing.expect(t, !engine.stack_matches(reg, {dirt, 1, 0}, "sto"))
-	testing.expect(t, !engine.stack_matches(reg, {}, "a"))
+	testing.expect(t, menu.stack_matches(reg, {stone, 1, 0}, "STO"))
+	testing.expect(t, !menu.stack_matches(reg, {dirt, 1, 0}, "sto"))
+	testing.expect(t, !menu.stack_matches(reg, {}, "a"))
 
 	boots := game.item_of_armor(.Boots)
-	lines := engine.item_lines(reg, boots)
+	lines := menu.item_lines(reg, boots)
 	testing.expect_value(t, lines[0], "boots")
 	testing.expect_value(t, lines[1], "Worn on the feet.")
 	testing.expect_value(t, lines[2], "Speed +10%")
 	testing.expect_value(t, lines[3], "Jump +10%")
-	none := engine.item_lines(reg, stone) // (a block's item: no description)
+	none := menu.item_lines(reg, stone) // (a block's item: no description)
 	testing.expect_value(t, len(none), 1)
 }

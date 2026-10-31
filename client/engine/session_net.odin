@@ -237,7 +237,6 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 }
 
 // notice keeps a message from the server for the console.
-@(private)
 notice :: proc(s: ^Session, text: string) {
 	plain := game.format_strip(text)
 	log.info("session ", plain)
@@ -326,7 +325,6 @@ fail :: proc(s: ^Session, reason: string) {
 	if !s.remote && s.pipe.allocator.procedure != nil {game.close(s.endpoint)}
 }
 
-@(private)
 send_message :: proc(s: ^Session, m: game.Client_Message) {
 	// Text the server would refuse to decode (ending the connection).
 	#partial switch v in m {

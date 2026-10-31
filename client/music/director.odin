@@ -5,7 +5,6 @@ import "core:log"
 import "core:mem/virtual"
 
 import "client:audio"
-import "client:music"
 import "common:base"
 import "common:worldgen"
 
@@ -53,8 +52,8 @@ Music_Info :: struct {
 // into arena (the caller destroys it when the tracks are done with).
 music_tracks :: proc(arena: ^virtual.Arena) -> []Music_Track {
 	allocator := virtual.arena_allocator(arena)
-	tracks := make([]Music_Track, len(music.MUSIC), allocator)
-	for f, i in music.MUSIC {
+	tracks := make([]Music_Track, len(MUSIC), allocator)
+	for f, i in MUSIC {
 		info: Music_Info
 		if err := json.unmarshal(transmute([]u8)f.json, &info, allocator = allocator); err != nil {
 			log.errorf("music metadata name=%s error=%v", f.name, err)
@@ -527,7 +526,7 @@ music_streams :: proc(
 	tracks: []Music_Track,
 	inline := false,
 ) -> bool {
-	for f, i in music.MUSIC {
+	for f, i in MUSIC {
 		id, ok := audio.add_stream(
 			m,
 			f.ogg,

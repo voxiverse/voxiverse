@@ -8,6 +8,8 @@ import "core:os"
 import "core:strings"
 import "core:time"
 
+import "client:autopilot"
+import "client:console"
 import "client:engine"
 import "common:base"
 
@@ -49,20 +51,20 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	scenario: engine.Scenario
 	if opts.benchmark != "" {
 		found: bool
-		if scenario, found = engine.scenario_find(opts.benchmark); !found {
+		if scenario, found = autopilot.scenario_find(opts.benchmark); !found {
 			log.errorf(
 				"no benchmark scenario %q (there are: %s)",
 				opts.benchmark,
-				engine.scenario_names(),
+				autopilot.scenario_names(),
 			)
 			return false
 		}
 		app.benchmark = true
 	}
-	check: engine.Check_Info
-	bench_size := engine.BENCH_SIZE
+	check: autopilot.Check_Info
+	bench_size := autopilot.BENCH_SIZE
 	if opts.bench_size != "" {
-		size, ok := engine.parse_size(opts.bench_size)
+		size, ok := autopilot.parse_size(opts.bench_size)
 		if !ok {
 			fmt.eprintfln(
 				"--bench-size: '%s' is not WIDTHxHEIGHT (such as 2560x1440)",
@@ -74,9 +76,9 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	}
 	if opts.check != "" {
 		found: bool
-		if check, found = engine.check_find(opts.check); !found {
+		if check, found = autopilot.check_find(opts.check); !found {
 			names := make([dynamic]string, context.temp_allocator)
-			for c in engine.CHECKS {append(&names, c.name)}
+			for c in autopilot.CHECKS {append(&names, c.name)}
 			log.errorf(
 				"no check %q (there are: %s)",
 				opts.check,
@@ -90,13 +92,13 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
 	if opts.scene != "" {
-		script, found := engine.scene_find(engine.SCENES_TEXT, opts.scene)
+		script, found := autopilot.scene_find(autopilot.SCENES_TEXT, opts.scene)
 		if !found {
 			log.errorf(
 				"no scene %q (there are: %s)",
 				opts.scene,
 				strings.join(
-					engine.scene_names(engine.SCENES_TEXT, context.temp_allocator),
+					autopilot.scene_names(autopilot.SCENES_TEXT, context.temp_allocator),
 					", ",
 					context.temp_allocator,
 				),
@@ -107,41 +109,41 @@ run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 			log.error("--scene runs its own script: not with --exec, --benchmark or --check")
 			return false
 		}
-		exec = engine.scene_exec(script) // (the script points into it while it runs: not temp)
+		exec = autopilot.scene_exec(script) // (the script points into it while it runs: not temp)
 		app.checking = true // (its settings: the benchmarks')
 	}
 
 	// The console shows the log too (from here on).
-	base.log_set_listener(sink, engine.console_listener, &app.console)
+	base.log_set_listener(sink, console.console_listener, &app.console)
 	defer base.log_set_listener(sink, nil, nil)
 
 	app.null_audio = opts.null_audio || opts.check == "audio" || opts.scene != ""
 	ok := app_init(app)
 	if ok {
-		if app.benchmark {engine.bench_begin(app, scenario, opts.smoke, bench_size)}
+		if app.benchmark {autopilot.bench_begin(app, scenario, opts.smoke, bench_size)}
 		if opts.scene != "" &&
-		   !engine.scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
+		   !autopilot.scene_begin(app, opts.scene) {app.script_failed, app.quit = true, true}
 		script: engine.Script
-		engine.script_init(&script, exec)
-		defer engine.script_destroy(&script)
+		console.script_init(&script, exec)
+		defer console.script_destroy(&script)
 		frames := 0
 		last := time.tick_now()
 		for opts.frames == 0 || frames < opts.frames {
 			free_all(context.temp_allocator)
-			engine.script_run(app, &script)
-			if check_pending && engine.script_done(&script) {
+			console.script_run(app, &script)
+			if check_pending && console.script_done(&script) {
 				// The check's view (its settings are the benchmarks' otherwise).
 				check_pending = false
 				app.fixed_view = {check.view_radius, check.view_height}
 				log.infof("check %s: %s", check.name, check.description)
 				check.start(app)
 			}
-			engine.scene_update(app, engine.script_done(&script))
+			autopilot.scene_update(app, console.script_done(&script))
 			capture := opts.capture_frame > 0 && frames + 1 == opts.capture_frame
 			if !app_frame(app, capture, frames + 1) {break}
 			{
 				base.profile_scope("benchmark driver")
-				engine.bench_update(app) // between frames: it may leave and join worlds
+				autopilot.bench_update(app) // between frames: it may leave and join worlds
 			}
 			frames += 1
 			if cap := engine.frame_cap(app); cap > 0 {

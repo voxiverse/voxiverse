@@ -1,0 +1,43 @@
+package main
+
+import "client:engine"
+import "common:game"
+import "server:core"
+
+// Frame_Rig: one session on the harness's simulated network, given a frame
+// of the actions the test chooses at every tick (a party of the harness, run
+// before the server's tick).
+Frame_Rig :: struct {
+	h:       core.Harness,
+	s:       ^engine.Session,
+	input:   engine.Input_State,
+	actions: ^engine.Actions,
+}
+
+@(private = "file")
+IDLE: engine.Actions
+
+rig_party :: proc(data: rawptr) {
+	r := (^Frame_Rig)(data)
+	engine.session_update(
+		r.s,
+		&r.input,
+		r.actions if r.actions != nil else &IDLE,
+		engine.SETTINGS_DEFAULTS,
+		{},
+		game.TICK_SECONDS,
+		true,
+	)
+}
+
+// rig_add makes s the rig's session and a party of its harness.
+rig_add :: proc(r: ^Frame_Rig, s: ^engine.Session) {
+	r.s = s
+	core.harness_add(&r.h, rig_party, r)
+}
+
+// rig_frame: one tick with the actions a.
+rig_frame :: proc(r: ^Frame_Rig, a: ^engine.Actions) {
+	r.actions = a
+	core.harness_step(&r.h)
+}

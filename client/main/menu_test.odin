@@ -8,13 +8,18 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
+import "client:console"
+import "client:engine"
 import "client:font"
+import "client:menu"
+import "client:overlay"
 import "client:platform"
+import "client:prompt"
+import "client:screen"
 import "client:testkit"
 import "client:ui"
 import "common:base"
 import "common:game"
-import "client:engine"
 
 // A UI test's app: the font, the UI and the base registry (a screen's
 // artwork takes its colours from it), nothing else.
@@ -43,19 +48,19 @@ ui_frame :: proc(app: ^engine.App, input: ui.Input = {}) {
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	#partial switch app.screen {
 	case .Title:
-		engine.title_screen(app, &app.ui)
+		screen.title_screen(app, &app.ui)
 	case .Options:
-		engine.options_screen(app, &app.ui)
+		screen.options_screen(app, &app.ui)
 	case .Credits:
-		engine.credits_screen(app, &app.ui)
+		screen.credits_screen(app, &app.ui)
 	case .Universes:
-		engine.universes_screen(app, &app.ui)
+		screen.universes_screen(app, &app.ui)
 	case .Creation:
-		engine.creation_screen(app, &app.ui)
+		screen.creation_screen(app, &app.ui)
 	case .Multiplayer:
-		engine.multiplayer_screen(app, &app.ui)
+		screen.multiplayer_screen(app, &app.ui)
 	case .Failed:
-		engine.failed_screen(app, &app.ui)
+		screen.failed_screen(app, &app.ui)
 	}
 	ui.end_frame(&app.ui)
 	app.input.pressed, app.input.pad_pressed = {}, {}
@@ -97,7 +102,7 @@ test_credits_from_options :: proc(t: ^testing.T) {
 	click(t, app, "Back")
 	testing.expect_value(t, app.screen, engine.Screen.Options)
 	click(t, app, "Credits")
-	engine.escape(app)
+	overlay.escape(app)
 	ui_frame(app)
 	testing.expect_value(t, app.screen, engine.Screen.Options)
 }
@@ -137,7 +142,7 @@ test_options_screen :: proc(t: ^testing.T) {
 
 	// Escape: as it was.
 	click(t, app, "Mouse Button 4")
-	engine.escape(app)
+	overlay.escape(app)
 	ui_frame(app)
 	testing.expect(t, app.options.listening == .None && app.settings.keys.jump == .Mouse_4)
 	testing.expect_value(t, app.screen, engine.Screen.Options)
@@ -233,8 +238,8 @@ test_saves_screen :: proc(t: ^testing.T) {
 	dir := "build/test/saves"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	engine.saves_override = dir
-	defer engine.saves_override = ""
+	screen.saves_override = dir
+	defer screen.saves_override = ""
 	for name in ([]string{"Old", "Castle"}) {
 		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
 		os.make_directory_all(save)
@@ -243,9 +248,9 @@ test_saves_screen :: proc(t: ^testing.T) {
 	}
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer engine.universes_destroy(&app.universes)
-	defer engine.creation_destroy(&app.creation)
-	engine.universes_refresh(&app.universes)
+	defer screen.universes_destroy(&app.universes)
+	defer screen.creation_destroy(&app.creation)
+	screen.universes_refresh(&app.universes)
 	testing.expect_value(t, len(app.universes.entries), 2)
 	app.screen = .Universes
 	ui_frame(app)
@@ -282,8 +287,8 @@ test_saves_screen :: proc(t: ^testing.T) {
 test_multiplayer_screen :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer engine.multiplayer_destroy(&app.multiplayer)
-	engine.multiplayer_open(app)
+	defer screen.multiplayer_destroy(&app.multiplayer)
+	screen.multiplayer_open(app)
 	testing.expect_value(t, app.multiplayer.mode, engine.Multiplayer_Mode.Name)
 	ui_frame(app)
 	append(&app.multiplayer.name, "no spaces")
@@ -312,9 +317,9 @@ test_multiplayer_screen :: proc(t: ^testing.T) {
 test_screens_speak_plainly :: proc(t: ^testing.T) {
 	app := ui_app(t)
 	defer ui_app_free(app)
-	defer engine.universes_destroy(&app.universes)
-	defer engine.creation_destroy(&app.creation)
-	defer engine.multiplayer_destroy(&app.multiplayer)
+	defer screen.universes_destroy(&app.universes)
+	defer screen.creation_destroy(&app.creation)
+	defer screen.multiplayer_destroy(&app.multiplayer)
 
 	// ("universe" is a player's word now, M48d.)
 	WORDS :: []string{"scratch", "chunk", "session", "mesh", "interest", "var", "null"}
@@ -346,12 +351,12 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 		app.universes.mode = mode
 		check(t, app, fmt.tprint("Singleplayer", mode))
 	}
-	engine.multiplayer_open(app)
+	screen.multiplayer_open(app)
 	for mode in engine.Multiplayer_Mode {
 		app.multiplayer.mode = mode
 		check(t, app, fmt.tprint("Multiplayer", mode))
 	}
-	engine.multiplayer_close(&app.multiplayer)
+	screen.multiplayer_close(&app.multiplayer)
 	app.screen = .Options
 	for tab in engine.Options_Tab {
 		app.options.tab = tab
@@ -387,7 +392,7 @@ test_options_tabs_by_keys :: proc(t: ^testing.T) {
 	}
 	step(app, keys.tab_prev)
 	testing.expect_value(t, app.options.tab, engine.Options_Tab.Profile)
-	testing.expect_value(t, engine.tab_name(.Audio), "Audio")
+	testing.expect_value(t, screen.tab_name(.Audio), "Audio")
 
 	// Hovering a row, a half second on, shows its help (the first row's place
 	// is where the rest follow: one row and its gap apart).
@@ -406,11 +411,11 @@ test_options_tabs_by_keys :: proc(t: ^testing.T) {
 		ui_frame(app)
 		row_h := f32(36 + 10) // row height and gap
 		first: ui.Rect
-		for field, i in engine.OPTIONS_TABS[tab] {
+		for field, i in screen.OPTIONS_TABS[tab] {
 			v, _ := base.var_find(table, field)
 			if i == 0 {
 				// The first row's rectangle, from its widget (the rows below it follow).
-				label := engine.var_label(table, v)
+				label := screen.var_label(table, v)
 				if c, ok := base.var_choice(table, &app.settings, v); ok {
 					label = fmt.tprintf("%s: %s", label, v.choices[c].label)
 				}
@@ -424,10 +429,10 @@ test_options_tabs_by_keys :: proc(t: ^testing.T) {
 		}
 		if tab != .Controls {continue}
 		// The bindings, each scrolled into view: the key's cell, the pad's cell.
-		index := len(engine.OPTIONS_TABS[tab]) + 2
-		for g in 0 ..< len(engine.BINDING_GROUPS) {
+		index := len(screen.OPTIONS_TABS[tab]) + 2
+		for g in 0 ..< len(screen.BINDING_GROUPS) {
 			index += 1 // the group's heading
-			for a in engine.binding_rows(app, g) {
+			for a in screen.binding_rows(app, g) {
 				app.options.scroll = max(0, f32(index) * row_h - 200)
 				ui_frame(app)
 				y := first.y + f32(index) * row_h - app.options.scroll + first.h / 2
@@ -485,15 +490,15 @@ pad_frame :: proc(app: ^engine.App, events: ..platform.Event) {
 	engine.actions_sync(app, 1.0 / 60)
 	input := engine.ui_input(&app.input, 1)
 	menu_actions(app, &input)
-	engine.chat_keys(app, &input)
-	engine.chest_sync(app)
-	engine.player_menu_keys(app)
-	engine.dial_keys(app)
+	overlay.chat_keys(app, &input)
+	menu.chest_sync(app)
+	menu.player_menu_keys(app)
+	overlay.dial_keys(app)
 	ui.begin_frame(&app.ui, input, {1280, 720}, 1)
 	s := app.session
 	if app.screen == .Game && s != nil && s.state == .Playing && s.loading == nil {
-		engine.draw_overlays(app, &app.ui) // (the world itself needs a GPU)
-		engine.prompt_bar(app, &app.ui, engine.prompt_items(app))
+		overlay.draw_overlays(app, &app.ui) // (the world itself needs a GPU)
+		prompt.prompt_bar(app, &app.ui, prompt.prompt_items(app))
 	} else {
 		app_ui(app, &app.ui)
 	}
@@ -521,7 +526,12 @@ pad_go :: proc(app: ^engine.App, dir: ui.Nav) {
 }
 
 // pad_focus: Down, then Up, until the focused widget says label.
-pad_focus :: proc(t: ^testing.T, app: ^engine.App, label: string, loc := #caller_location) -> bool {
+pad_focus :: proc(
+	t: ^testing.T,
+	app: ^engine.App,
+	label: string,
+	loc := #caller_location,
+) -> bool {
 	passed := make([dynamic]string, context.temp_allocator)
 	if ui.focused_label(&app.ui) == label {return true}
 	for dir in ([2]ui.Nav{.Down, .Up}) {
@@ -598,8 +608,8 @@ rig_make :: proc(t: ^testing.T) -> ^Rig {
 	app.symbol_font, ok = font.load(engine.SYMBOL_FONT_DATA)
 	testing.expect(t, ok)
 	app.ui.glyphs.fallback = &app.symbol_font
-	testing.expect(t, engine.prompt_icons_init(&app.prompt_icons, &app.ui))
-	engine.console_init(&app.console)
+	testing.expect(t, prompt.prompt_icons_init(&app.prompt_icons, &app.ui))
+	console.console_init(&app.console)
 	engine.line_editor_init(&app.chat)
 	game.pipe_init(&r.pipe)
 	r.s = new(engine.Session)
@@ -625,15 +635,15 @@ rig_free :: proc(r: ^Rig) {
 	delete(s.grants)
 	engine.stats_data_clear(&s.player_stats)
 	delete(s.player_stats.lines)
-	engine.stats_view_destroy(&r.app.stats_view)
+	menu.stats_view_destroy(&r.app.stats_view)
 	delete(r.app.inventory_search)
 	free(s)
 	delete(r.app.new_character)
 	engine.line_editor_destroy(&r.app.chat)
-	engine.console_destroy(&r.app.console)
-	engine.universes_destroy(&r.app.universes)
-	engine.creation_destroy(&r.app.creation)
-	engine.multiplayer_destroy(&r.app.multiplayer)
+	console.console_destroy(&r.app.console)
+	screen.universes_destroy(&r.app.universes)
+	screen.creation_destroy(&r.app.creation)
+	screen.multiplayer_destroy(&r.app.multiplayer)
 	ui_app_free(r.app)
 	free(r)
 }
@@ -643,8 +653,8 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	dir := "build/test/pad_saves"
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	engine.saves_override = dir
-	defer engine.saves_override = ""
+	screen.saves_override = dir
+	defer screen.saves_override = ""
 	for name in ([]string{"Old", "Castle"}) {
 		save := filepath.join({dir, name}, context.temp_allocator) or_else ""
 		os.make_directory_all(save)
@@ -862,7 +872,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	pad_focus(t, app, "Allow commands")
 	pad_tap(app, .A)
 	testing.expect(t, app.lan.commands)
-	commands := engine.lan_commands(s, app.lan)
+	commands := overlay.lan_commands(s, app.lan)
 	testing.expect_value(t, commands[1], "rule guest_role mod")
 	testing.expect_value(t, commands[2], "open_lan")
 	testing.expect(t, strings.has_prefix(commands[0], "rule default_game_mode "))
@@ -877,7 +887,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.overlays.count, 0)
 
 	// The dial: seven symbols by directions and A, one erased by X.
-	engine.dial_open(app, {10, 20, 30})
+	overlay.dial_open(app, {10, 20, 30})
 	pad_frame(app)
 	d := &app.dial
 	pad_tap(app, .A) // 0
@@ -933,10 +943,10 @@ test_prompts_follow_device :: proc(t: ^testing.T) {
 	// Off by default (an accessibility option): nothing is drawn until it is on.
 	testing.expect(t, !engine.SETTINGS_DEFAULTS.prompt_bar, "the bar is off by default")
 	pad_frame(app)
-	testing.expect_value(t, len(engine.prompts_seen(app)), 0)
+	testing.expect_value(t, len(prompt.prompts_seen(app)), 0)
 	app.settings.prompt_bar = true
 	has :: proc(app: ^engine.App, g: engine.Prompt_Glyph) -> bool {
-		for seen in engine.prompts_seen(app) {if seen == g {return true}}
+		for seen in prompt.prompts_seen(app) {if seen == g {return true}}
 		return false
 	}
 	key :: proc(k: platform.Key) -> platform.Event {
@@ -976,10 +986,14 @@ test_prompts_follow_device :: proc(t: ^testing.T) {
 	testing.expect(t, has(app, {.Disc, "B"}) && has(app, {.Disc, "A"}), "Switch letters")
 
 	// The glyphs are all made: drawn, none empty, edges anti-aliased.
-	pixels := make([][4]u8, engine.PROMPT_ICON_SIZE * engine.PROMPT_ICON_SIZE, context.temp_allocator)
+	pixels := make(
+		[][4]u8,
+		prompt.PROMPT_ICON_SIZE * prompt.PROMPT_ICON_SIZE,
+		context.temp_allocator,
+	)
 	seen_icons := make(map[ui.Icon]bool, 32, context.temp_allocator)
 	for shape in engine.Prompt_Shape {
-		engine.prompt_shape_pixels(shape, pixels)
+		prompt.prompt_shape_pixels(shape, pixels)
 		covered, partial := 0, 0
 		for p in pixels {
 			if p.a > 0 {covered += 1}

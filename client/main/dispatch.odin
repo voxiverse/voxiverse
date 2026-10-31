@@ -1,9 +1,15 @@
 package main
 
 
+import "client:dev"
+import "client:engine"
+import "client:hud"
+import "client:menu"
+import "client:overlay"
+import "client:prompt"
+import "client:screen"
 import "client:starfield"
 import "client:ui"
-import "client:engine"
 
 
 // Screens, with overlays over them (overlay.odin). Escape backs out one
@@ -14,7 +20,7 @@ handle_global_keys :: proc(app: ^engine.App, input: ^ui.Input) {
 	if app.options.listening != .None {
 		// The button pressed is being bound: only Escape or Start (leave
 		// it) counts.
-		if app.input.escape || .Start in app.input.pad_pressed {engine.escape(app)}
+		if app.input.escape || .Start in app.input.pad_pressed {overlay.escape(app)}
 		return
 	}
 	if app.input.console_toggle {engine.overlay_toggle(&app.overlays, .Console)}
@@ -27,18 +33,18 @@ handle_global_keys :: proc(app: ^engine.App, input: ^ui.Input) {
 			engine.overlay_close(&app.overlays, .Game_Menu)
 		}
 	}
-	engine.hud_keys(app)
+	hud.hud_keys(app)
 	if engine.action_pressed(&app.actions, .Screenshot) {engine.screenshot_request(app, "")}
 	if engine.action_pressed(&app.actions, .Fullscreen) {
 		app.settings.fullscreen = !app.settings.fullscreen
 		engine.settings_changed(app)
 	}
 	menu_actions(app, input)
-	engine.chat_keys(app, input)
-	engine.chest_sync(app)
-	engine.player_menu_keys(app)
-	engine.dial_keys(app)
-	engine.death_sync(app)
+	overlay.chat_keys(app, input)
+	menu.chest_sync(app)
+	menu.player_menu_keys(app)
+	overlay.dial_keys(app)
+	overlay.death_sync(app)
 }
 
 // menu_actions: what the menus take from the actions this frame: back and the
@@ -77,9 +83,9 @@ menu_actions :: proc(app: ^engine.App, input: ^ui.Input) {
 		}
 	}
 	if app.input.escape || engine.action_pressed(a, .Menu_Back) {
-		engine.escape(app)
+		overlay.escape(app)
 	} else if engine.action_pressed(a, .Pause) && !osk {
-		engine.pause_toggle(app)
+		overlay.pause_toggle(app)
 	}
 }
 
@@ -102,28 +108,28 @@ app_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	}
 	switch app.screen {
 	case .Title:
-		engine.title_screen(app, ctx)
+		screen.title_screen(app, ctx)
 	case .Options:
-		engine.options_screen(app, ctx)
+		screen.options_screen(app, ctx)
 	case .Credits:
-		engine.credits_screen(app, ctx)
+		screen.credits_screen(app, ctx)
 	case .Universes:
-		engine.universes_screen(app, ctx)
+		screen.universes_screen(app, ctx)
 	case .Creation:
-		engine.creation_screen(app, ctx)
+		screen.creation_screen(app, ctx)
 	case .Multiplayer:
-		engine.multiplayer_screen(app, ctx)
+		screen.multiplayer_screen(app, ctx)
 	case .Game:
-		engine.game_screen(app, ctx)
+		hud.game_screen(app, ctx)
 	case .Failed:
-		engine.failed_screen(app, ctx)
+		screen.failed_screen(app, ctx)
 	}
-	if app.debug.overlay {engine.debug_overlay(app, ctx)}
-	if app.settings.show_fps {engine.fps_overlay(app, ctx)}
-	engine.draw_overlays(app, ctx)
-	engine.ignite_ui(app, ctx)
-	engine.toasts_ui(app, ctx)
+	if app.debug.overlay {dev.debug_overlay(app, ctx)}
+	if app.settings.show_fps {dev.fps_overlay(app, ctx)}
+	overlay.draw_overlays(app, ctx)
+	screen.ignite_ui(app, ctx)
+	overlay.toasts_ui(app, ctx)
 	if !(app.hud_hidden && app.screen == .Game && app.overlays.count == 0) {
-		engine.prompt_bar(app, ctx, engine.prompt_items(app)) // (F1 hides it with the rest of the HUD)
+		prompt.prompt_bar(app, ctx, prompt.prompt_items(app)) // (F1 hides it with the rest of the HUD)
 	}
 }

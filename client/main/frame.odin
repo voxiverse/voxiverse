@@ -1,17 +1,24 @@
 package main
 
-import "core:log"
-import "core:os"
-import "core:time"
 import "client:audio"
+import "client:autopilot"
+import "client:console"
+import "client:dev"
+import "client:engine"
 import "client:font"
 import "client:gpu"
+import "client:menu"
+import "client:overlay"
 import "client:platform"
+import "client:prompt"
 import "client:render"
+import "client:screen"
 import "client:ui"
 import "common:base"
 import "common:game"
-import "client:engine"
+import "core:log"
+import "core:os"
+import "core:time"
 
 // app_init brings everything up; on failure the caller still calls
 // app_destroy, which handles partially initialised apps.
@@ -19,16 +26,16 @@ app_init :: proc(app: ^engine.App) -> bool {
 	app.started = time.tick_now()
 	app.launched = time.tick_now()
 	app.registry = game.registry_base()
-	engine.console_init(&app.console)
+	console.console_init(&app.console)
 	engine.line_editor_init(&app.chat)
-	engine.register_builtin_commands(&app.console)
+	console.register_builtin_commands(&app.console)
 	if app.benchmark || app.checking {
-		app.settings = engine.BENCHMARK_SETTINGS // (the player's are not read)
+		app.settings = autopilot.BENCHMARK_SETTINGS // (the player's are not read)
 	} else {
 		engine.settings_load(app)
 	}
 	engine.account_load(app)
-	engine.console_history_load(&app.console)
+	console.console_history_load(&app.console)
 	app.debug = engine.DEBUG_DEFAULTS
 	app.telemetry = engine.TELEMETRY_DEFAULTS
 	engine.shader_watch_init(&app.shader_watch)
@@ -75,7 +82,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 		platform.set_window_icon(&app.window, images[:])
 	}
 	if !engine.item_icons_init(app.registry, &app.item_icons, &app.ui) {return false}
-	if !engine.prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
+	if !prompt.prompt_icons_init(&app.prompt_icons, &app.ui) {return false}
 	render.debug_draw_init(&app.debug_draw)
 	render.entity_draw_init(&app.entity_draw)
 	render.held_draw_init(&app.held_draw)
@@ -112,17 +119,17 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 		a.drift_ppm,
 	)
 	audio.device_close(&app.audio_device) // before the sounds it plays go
-	engine.audio_ring_stop(app)
+	dev.audio_ring_stop(app)
 	audio.streams_close(app.mixer)
 	engine.sounds_destroy(&app.sounds)
 	engine.music_destroy(app)
 	free(app.mixer)
 	if app.settings_dirty {engine.settings_save(app)}
-	engine.console_history_save(&app.console)
+	console.console_history_save(&app.console)
 	delete(app.item_icons)
 	game.registry_destroy(app.registry)
 	delete(app.inventory_search)
-	engine.stats_view_destroy(&app.stats_view)
+	menu.stats_view_destroy(&app.stats_view)
 	engine.reporter_destroy(&app.reporter)
 	ui.destroy(&app.ui)
 	render.debug_draw_destroy(&app.debug_draw)
@@ -131,11 +138,11 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	engine.held_cache_destroy(&app.held_cache)
 	engine.held_mesh_destroy(&app.held_arm)
 	engine.shader_watch_destroy(&app.shader_watch)
-	engine.universes_destroy(&app.universes)
-	engine.creation_destroy(&app.creation)
+	screen.universes_destroy(&app.universes)
+	screen.creation_destroy(&app.creation)
 	delete(app.cues)
-	engine.toasts_destroy(&app.toasts)
-	engine.multiplayer_destroy(&app.multiplayer)
+	overlay.toasts_destroy(&app.toasts)
+	screen.multiplayer_destroy(&app.multiplayer)
 	delete(app.failed.reason)
 	delete(app.message)
 	for n in app.screenshot_names {delete(n)}
@@ -145,7 +152,7 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	platform.window_close(&app.window)
 	engine.input_destroy(&app.input)
 	delete(app.injected)
-	engine.console_destroy(&app.console)
+	console.console_destroy(&app.console)
 	engine.line_editor_destroy(&app.chat)
 	return
 }
@@ -201,14 +208,17 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			engine.music_update(app, app.last_frame_ms / 1000)
 			engine.snapshots_update(app, app.last_frame_ms / 1000)
 		}
-		engine.audio_debug_update(app)
+		dev.audio_debug_update(app)
 	}
 	if app.session != nil {
 		// Paused alone in our own world, it stands still; anyone else could
 		// be playing (a remote server, the LAN open), so it runs on.
 		engine.session_freeze(app.session, engine.world_paused(app))
 		// (The pad flight check runs on whatever desktop: focus is given.)
-		platform.set_mouse_captured(w, engine.game_controls(app) && (w.focused || app.fly_test.pad))
+		platform.set_mouse_captured(
+			w,
+			engine.game_controls(app) && (w.focused || app.fly_test.pad),
+		)
 		conditions := game.Conditions {
 			latency_ms     = app.debug.net_latency_ms,
 			jitter_ms      = app.debug.net_jitter_ms,
@@ -238,10 +248,10 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			engine.apply_registry(app, s.reg)
 			engine.world_remesh_all(&s.world)
 		}
-		engine.fly_test_update(app)
-		engine.blast_test_update(app)
-		engine.audio_check_update(app)
-		engine.tour_test_update(app)
+		autopilot.fly_test_update(app)
+		autopilot.blast_test_update(app)
+		autopilot.audio_check_update(app)
+		autopilot.tour_test_update(app)
 		if !app.benchmark {engine.sounds_play(&app.sounds, app.mixer, app.session.reg, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
 		for n in app.session.notices {
@@ -249,12 +259,16 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			delete(n)
 		}
 		clear(&app.session.notices)
-		engine.loading_update(app.session)
+		screen.loading_update(app.session)
 		base.profile_end()
 		if s := app.session; s.state == .Failed {
 			// Why, on a screen of its own; Back to where we came from.
 			title := "Connection Lost" if s.welcome.view_radius != 0 else "Could Not Join"
-			failed := engine.Failed{title, engine.sentence(s.failure), .Multiplayer if s.remote else .Title}
+			failed := engine.Failed {
+				title,
+				screen.sentence(s.failure),
+				.Multiplayer if s.remote else .Title,
+			}
 			engine.leave_world(app)
 			app.failed = failed
 			app.screen = .Failed
@@ -305,7 +319,12 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			base.profile_scope("scene (avatars, entities, view model)")
 			s := app.session
 			width, height := engine.render_size(app)
-			camera = engine.camera_render(&s.view, width, height, engine.camera_fov(s, app.settings))
+			camera = engine.camera_render(
+				&s.view,
+				width,
+				height,
+				engine.camera_fov(s, app.settings),
+			)
 			fog := f32(s.welcome.view_radius * game.CHUNK_SIZE)
 			sky := render.sky_at(game.time_of_day(s.clock))
 			scene = render.scene_upload(
@@ -324,7 +343,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 			engine.world_debug_lines(app)
 			engine.avatars_draw(s, &app.entity_draw, &app.held_draw, &app.held_cache)
 			engine.entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
-			engine.bench_avatars_draw(app, s)
+			autopilot.bench_avatars_draw(app, s)
 			view_scene = engine.view_model_frame(app, s, width, height)
 		}
 		entity_uploads: {
