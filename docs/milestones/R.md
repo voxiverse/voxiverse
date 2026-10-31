@@ -142,8 +142,12 @@ These hold unless a milestone states an exception.
    current NVIDIA and AMD drivers all expose it; it is requested at device creation and the
    device is refused, with a clear log line, when it is missing. Used by this arc:
    `multiDrawIndirect`, `drawIndirectFirstInstance` (core features, universally exposed),
-   compute shaders, storage images, `timelineSemaphore` (1.2 core). Not used:
-   `drawIndirectCount`, mesh shaders, ray tracing, sampler min/max reduction.
+   compute shaders, storage images (R7's pyramid, through a descriptor set of its own, no
+   update-after-bind), `timelineSemaphore` (1.2 core, R10), `SAMPLED_IMAGE` on
+   `D32_SFLOAT` with optimal tiling (R7: checked per device), and, only if R12's measured
+   candidate is kept, `shaderUniformBufferArrayDynamicIndexing` (1.0). Not used:
+   `drawIndirectCount`, mesh shaders, ray tracing, sampler min/max reduction, subgroup
+   operations (#87: every reduction in the arc is written without them).
 6. **Documentation.** The milestone updates docs/debugging.md (Graphics, Profiling) to the
    documentation standard (SerenityOS and Ladybird's `Documentation/`), adds its row's
    result to the cost table, and appends its outcome to history.md.
@@ -223,7 +227,7 @@ Done: its spec and outcome are in history.md, "R6: GPU culling". `gpu_world` ros
 
 ## R5b: the indirect draws' cost (after R6)
 
-Done: its spec and outcome are in history.md, "R5b: the indirect draws' cost". `gpu_world` stayed above 8a0879e's; R8 is left it.
+Done: its spec and outcome are in history.md, "R5b: the indirect draws' cost". `gpu_world` stayed above 8a0879e's; it is left to R8.
 
 ## R7: the depth pyramid and the occlusion test
 
