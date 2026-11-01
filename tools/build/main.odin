@@ -183,6 +183,7 @@ main :: proc() {
 	case "check",
 	     "test",
 	     "smoke",
+	     "fuzz",
 	     "build",
 	     "determinism",
 	     "run",
