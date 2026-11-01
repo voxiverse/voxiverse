@@ -366,20 +366,24 @@ test_pad_settings_round_trip :: proc(t: ^testing.T) {
 
 	// An older file: no pad. or stick_ lines; defaults, nothing odd.
 	_ = os.write_entire_file(path, transmute([]u8)string("fov = 90\nkey.jump = g\n"))
-	old: engine.App
-	engine.settings_load(&old)
+	// (on the heap: an App is 237 KB, and a test thread's stack is 512 KB on macOS)
+	old := new(engine.App)
+	defer free(old)
+	engine.settings_load(old)
 	testing.expect(t, old.settings.pad == engine.DEFAULT_PAD_BINDINGS)
 	testing.expect_value(t, old.settings.fov, 90)
 	testing.expect_value(t, old.settings.keys.jump, platform.Key.G)
 
-	a: engine.App
+	a := new(engine.App)
+	defer free(a)
 	a.settings = engine.SETTINGS_DEFAULTS
 	a.settings.pad.jump, a.settings.pad.hotbar_next, a.settings.pad.attack = .X, .Dpad_Right, .None
 	a.settings.stick_look_speed, a.settings.stick_dead_zone = 1.75, 0.2
 	a.settings.stick_response, a.settings.stick_invert, a.settings.stick_swap = 3, true, true
-	engine.settings_save(&a)
-	b: engine.App
-	engine.settings_load(&b)
+	engine.settings_save(a)
+	b := new(engine.App)
+	defer free(b)
+	engine.settings_load(b)
 	testing.expect(t, a.settings == b.settings)
 	testing.expect_value(t, b.settings.pad.jump, platform.Pad_Button.X)
 	testing.expect_value(t, b.settings.pad.attack, platform.Pad_Button.None)

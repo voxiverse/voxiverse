@@ -13,8 +13,10 @@ import "common:game"
 // inside their ranges.
 @(test)
 test_variable_tables :: proc(t: ^testing.T) {
-	app: engine.App
-	for v in engine.app_variables(&app) {
+	// (on the heap: an App is 237 KB, and a test thread's stack is 512 KB on macOS)
+	app := new(engine.App)
+	defer free(app)
+	for v in engine.app_variables(app) {
 		testing.expectf(
 			t,
 			base.var_table_check(v.table),
@@ -32,20 +34,23 @@ test_settings_round_trip :: proc(t: ^testing.T) {
 	defer os.unset_env("VX_SETTINGS")
 	defer os.remove(path)
 
-	a: engine.App
-	engine.settings_load(&a) // no file yet: defaults
+	// (on the heap: an App is 237 KB, and a test thread's stack is 512 KB on macOS)
+	a := new(engine.App)
+	defer free(a)
+	engine.settings_load(a) // no file yet: defaults
 	testing.expect(t, a.settings == engine.SETTINGS_DEFAULTS)
 	a.settings.fov, a.settings.render_distance, a.settings.invert_mouse = 95, 20, true
 	a.settings.keys.jump, a.settings.keys.attack = .G, .Mouse_5
-	engine.settings_save(&a)
+	engine.settings_save(a)
 
-	b: engine.App
-	engine.settings_load(&b)
+	b := new(engine.App)
+	defer free(b)
+	engine.settings_load(b)
 	testing.expect(t, a.settings == b.settings)
 
 	// Scripted changes are never marked for saving.
 	b.scripted = true
-	engine.settings_changed(&b)
+	engine.settings_changed(b)
 	testing.expect(t, !b.settings_dirty)
 }
 
