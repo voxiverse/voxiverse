@@ -28,7 +28,20 @@ directly in it, not its sub-folders: each sub-folder has its own row.
 5. **Fuzz code** is named `fuzz*.odin` (`fuzz.odin`, `fuzz_<target>.odin`; its test is
    `fuzz_test.odin`) in the package that owns the thing fuzzed.
 
-## The move (state of the work: L2 of 3 done)
+## The cap
+
+Cap: `70` files per package.
+
+The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
+their code by rule 2 and are not counted) and fails a folder over the cap; the number is
+read from the line above. Chosen from the final layout (L3): `server/core` 67, `common/game` 59,
+`client/engine` 58, `common/base` 39, every other package 25 or fewer. 70 leaves the largest
+three a few files of room and no more, so a package that keeps growing must split into feature
+packages rather than get a bigger number. There is no per-folder allowance (that would be an
+exemption) and no per-file line cap. `server/core` is one cycle (L2b); when it is split, lower
+the cap.
+
+## The move (state of the work: L3 of 3 done)
 
 Packages were split into feature packages (milestone rows L1 and L2, specs in
 [history.md](history.md)): no package sits at the root of `client/` or `server/`. `server/core`
@@ -37,9 +50,7 @@ is the server's one package (its state is one cycle around `Server`, `Client` an
 feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
 import it, in that order, with `client/main` on top. The tests that share a fixture which needs
 the whole frame (`ui_frame`, `overlay_fixture`) live in `client/main`. The **cap on files per
-package** (rule 5 of the owner's decisions, #96) is switched on by L3, which chooses it
-knowing the counts of `server/core` and `client/engine`; a per-folder allowance is an
-exemption.
+package** (#96) was switched on by L3, see above.
 
 ## Folders
 

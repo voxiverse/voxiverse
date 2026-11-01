@@ -71,3 +71,21 @@ test_package_lists_lint :: proc(t: ^testing.T) {
 	// A sibling that only shares a prefix is not under a source dir.
 	testing.expect_value(t, run({"tools2/a.odin"}, {}, {"tools2"}, {}, {"tools"}), 1)
 }
+
+@(test)
+test_cap_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	testing.expect_value(t, parse_cap("x\n\nCap: `70` files per package.\n"), 70)
+	testing.expect_value(t, parse_cap("no cap here"), 0)
+	tracked := []string {
+		"a/x.odin",
+		"a/y.odin",
+		"a/y_test.odin",
+		"a/z_test.odin",
+		"b/x.odin",
+		"b/notes.md",
+	}
+	testing.expect_value(t, len(lint_cap(2, tracked)), 0)
+	testing.expect_value(t, len(lint_cap(1, tracked)), 1)
+	testing.expect_value(t, len(lint_cap(0, tracked)), 1)
+}

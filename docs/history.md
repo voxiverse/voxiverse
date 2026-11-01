@@ -9419,3 +9419,16 @@ Differed from the spec:
   three `dev_*` files.
 - CI's crash step greps `console::console_execute` (the symbol's package).
 
+
+
+## L3: the cap on files per package
+
+Exit: the manifest records a cap on files per package (a number, chosen from the final layout,
+with the reasoning), `check` fails a package over it, and the lint has a test on text. No
+per-file line cap.
+
+## Check by hand
+
+None.
+
+Differed: the cap counts non-test `.odin` files directly in a folder (tests sit beside their code), is 70, and is read from a `Cap: `N`` line in docs/layout.md by the `layout` lint (no separate lint).

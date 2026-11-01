@@ -3,6 +3,7 @@ package build
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
 import "core:strings"
 
 // The layout lints, run by `check`: docs/layout.md lists every folder and the file-name
@@ -126,6 +127,51 @@ lint_scratch :: proc(untracked: []string) -> []string {
 	return found[:]
 }
 
+// parse_cap reads the cap from the manifest: a line `Cap: `N` files per package`. Zero when absent.
+parse_cap :: proc(text: string) -> int {
+	rest_text := text
+	for line in strings.split_lines_iterator(&rest_text) {
+		at := strings.index(line, "Cap: `")
+		if at < 0 {continue}
+		rest := line[at + len("Cap: `"):]
+		end := strings.index_byte(rest, '`')
+		if end < 0 {continue}
+		n, ok := strconv.parse_int(rest[:end])
+		return n if ok else 0
+	}
+	return 0
+}
+
+// lint_cap: no package holds more than `cap` non-test `.odin` files directly in its folder
+// (tests sit beside their code and are not counted). There is no per-folder allowance.
+lint_cap :: proc(cap: int, tracked: []string) -> []string {
+	found := make([dynamic]string)
+	if cap <= 0 {
+		append(&found, fmt.aprintf("%s: no `Cap: `N` files per package` line", LAYOUT_MANIFEST))
+		return found[:]
+	}
+	counts := make(map[string]int, allocator = context.temp_allocator)
+	for path in tracked {
+		if !strings.has_suffix(path, ".odin") || strings.has_suffix(path, "_test.odin") {continue}
+		counts[filepath.dir(path)] += 1
+	}
+	for dir, n in counts {
+		if n > cap {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s: %d files, over the cap of %d per package: split it into feature packages (see %s)",
+					dir,
+					n,
+					cap,
+					LAYOUT_MANIFEST,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
 layout_lint :: proc() -> bool {
 	data, err := os.read_entire_file_from_path(LAYOUT_MANIFEST, context.allocator)
 	if err != nil {
@@ -147,7 +193,11 @@ layout_lint :: proc() -> bool {
 		fmt.eprintln(msg)
 		ok = false
 	}
-	if ok {fmt.println("lint   every file is in a folder docs/layout.md lists, under a pattern it allows")}
+	for msg in lint_cap(parse_cap(string(data)), kept[:]) {
+		fmt.eprintln(msg)
+		ok = false
+	}
+	if ok {fmt.println("lint   every file is in a folder docs/layout.md lists, under a pattern it allows, and no package is over the cap")}
 	return ok
 }
 
