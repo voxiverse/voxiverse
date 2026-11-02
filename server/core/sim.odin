@@ -321,3 +321,21 @@ sift_down :: proc(h: []Update, i: int) {
 		i = m
 	}
 }
+
+// light_above: the light at q for grass to spread by: 15 under open sky,
+// else what the nearest lamp gives (15 less its distance), else 0.
+light_above :: proc(w: ^World, q: game.Block_Pos) -> int {
+	if column_top(w, q.x, q.z) < q.y {return 15}
+	best := 0
+	for y in i32(-6) ..= 6 {
+		for z in i32(-6) ..= 6 {
+			for x in i32(-6) ..= 6 {
+				d := int(abs(x) + abs(y) + abs(z))
+				if d > 6 {continue}
+				b, _ := chunks_block(&w.chunks, q + {x, y, z})
+				if b == .Lamp {best = max(best, 15 - d)}
+			}
+		}
+	}
+	return best
+}

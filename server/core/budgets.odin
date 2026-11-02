@@ -448,3 +448,70 @@ budget_rules :: proc() -> (r: Budget_Rules, ok: bool) {
 	r.compile_us = max(with - plain, 0)
 	return r, true
 }
+
+// ---- random ticks (M49e) ----
+
+Budget_Random :: struct {
+	worst_us: i64, // the slowest random_ticks call
+	runs:     int, // random rules run
+	run_ns:   f64, // the calls' CPU time over the runs, ns
+}
+
+// budget_random_ticks: 512 ready, non-uniform chunks (a seeded mix of grass, dirt, farmland,
+// wheat stages, water and lamps), random_tick_speed 3, 600 calls of random_ticks alone.
+budget_random_ticks :: proc() -> (r: Budget_Random, ok: bool) {
+	h := new(Harness)
+	defer free(h)
+	w := budget_world(h) or_return
+	defer harness_stop(h)
+	for y in i32(5) ..< 8 {
+		for z in i32(-4) ..< 4 {
+			for x in i32(-4) ..< 4 {chunks_insert(&w.chunks, {x, y, z}, .Air, nil)}
+		}
+	}
+	mix := [?]game.Block {
+		.Grass,
+		.Grass,
+		.Grass,
+		.Dirt,
+		.Dirt,
+		.Farmland,
+		.Farmland_Moist,
+		.Wheat_0,
+		.Wheat_3,
+		.Wheat_5,
+		.Wheat_7,
+		.Water,
+		.Lamp,
+		.Stone,
+		.Air,
+		.Air,
+	}
+	gen := base.rng_make(49)
+	act := world_act(w, .Command)
+	for y in i32(0) ..< 8 {
+		for z in i32(-4) ..< 4 {
+			for x in i32(-4) ..< 4 {
+				origin := game.chunk_origin({x, y, z})
+				for _ in 0 ..< 400 {
+					i := int(base.rng_u32(&gen)) & (game.CHUNK_VOLUME - 1)
+					b := mix[base.rng_int_max(&gen, len(mix))]
+					set_block(w, origin + game.local_from_index(i), b, act)
+				}
+			}
+		}
+	}
+	w.rules.random_tick_speed = 3
+	total := i64(0)
+	for _ in 0 ..< 600 {
+		start := base.thread_cpu_us()
+		random_ticks(w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		free_all(context.temp_allocator)
+	}
+	r.runs = w.random_runs
+	r.run_ns = f64(total) * 1000 / f64(max(r.runs, 1))
+	return r, true
+}

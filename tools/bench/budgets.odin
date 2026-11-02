@@ -20,7 +20,7 @@ import "server:core"
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 2
+BUDGETS_VERSION :: 3
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3)"`,
@@ -42,6 +42,8 @@ BUDGET_LIMITS := [?]struct {
 	{.Rules_Tick, 16_000}, // half the tick: the old test's 8 ms, doubled for slow runners as the flood's is
 	{.Rule_Run, 3000},
 	{.Rules_Compile, 50_000},
+	{.Random_Ticks, 2000},
+	{.Random_Rule_Run, 4000}, // (the grass rule may read light: 377 cells)
 }
 
 // The save is given this many ticks to commit before the scene gives up (the
@@ -140,4 +142,11 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	base.metric_add(.Rules_Tick, f32(rules.worst_us))
 	base.metric_add(.Rule_Run, f32(rules.run_ns))
 	base.metric_add(.Rules_Compile, f32(rules.compile_us))
+
+	random, randomed := core.budget_random_ticks()
+	if !randomed || random.runs < 10_000 {
+		append(failures, fmt.aprintf("only %d random rule runs", random.runs))
+	}
+	base.metric_add(.Random_Ticks, f32(random.worst_us))
+	base.metric_add(.Random_Rule_Run, f32(random.run_ns))
 }

@@ -291,3 +291,17 @@ support_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> 
 	if !game.has_support_rule(t, block) {return true}
 	return game.support_holds(t, block, pos, game.Block_Query{&w.chunks, chunks_block, t})
 }
+
+// farmland_wet: water within 4 blocks across, on the farmland's level or the one above
+// (the hoe's test; the random rule in data/sim/growth.json reads the same box).
+farmland_wet :: proc(w: ^World, p: game.Block_Pos) -> bool {
+	for y in i32(0) ..= 1 {
+		for z in i32(-4) ..= 4 {
+			for x in i32(-4) ..= 4 {
+				b, _ := chunks_block(&w.chunks, p + {x, y, z})
+				if _, water := game.water_level(b); water {return true}
+			}
+		}
+	}
+	return false
+}

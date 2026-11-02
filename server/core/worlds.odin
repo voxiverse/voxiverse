@@ -35,6 +35,7 @@ World :: struct {
 	changes:           Changes, // blocks changed this tick (changes.odin)
 	stats:             Counters, // the world's totals (stats.odin; <world>/stats.json)
 	tick_rng:          base.Rng, // which blocks get random ticks (random_ticks.odin)
+	random_runs:       int, // random rules run (a count for the budget; random_ticks.odin)
 	command_rng:       base.Rng, // @r (commands_world.odin)
 	updates:           Updates, // scheduled block updates: flowing water (liquids.odin)
 	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)

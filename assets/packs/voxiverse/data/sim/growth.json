@@ -1,0 +1,41 @@
+{
+  "wheat": {"list": ["voxiverse:wheat_0", "voxiverse:wheat_1", "voxiverse:wheat_2",
+                     "voxiverse:wheat_3", "voxiverse:wheat_4", "voxiverse:wheat_5",
+                     "voxiverse:wheat_6", "voxiverse:wheat_7"]},
+  "grass": {
+    "blocks": ["voxiverse:grass"],
+    "trigger": "random",
+    "do": [
+      "require loaded above",
+      {"if": "above is @opaque", "then": ["set self voxiverse:dirt", "stop"]},
+      {"repeat": 4, "do": [
+        "pick t -1..1 -3..1 -1..1",
+        "require t is voxiverse:dirt",
+        "require t + (0, 1, 0) not @opaque",
+        "require t + (0, 1, 0).light >= 9",
+        "set t voxiverse:grass"
+      ]}
+    ]
+  },
+  "farmland": {
+    "blocks": ["voxiverse:farmland", "voxiverse:farmland_moist"],
+    "trigger": "random",
+    "do": [
+      "require loaded above",
+      {"if": "any box(-4..4, 0..1, -4..4) is $voxiverse:water",
+       "then": [{"if": "self is voxiverse:farmland", "then": ["set self voxiverse:farmland_moist"]}],
+       "else": [{"if": "self is voxiverse:farmland_moist", "then": ["set self voxiverse:farmland"],
+                 "else": [{"if": "above not $voxiverse:wheat", "then": ["set self voxiverse:dirt"]}]}]}
+    ]
+  },
+  "wheat_growth": {
+    "blocks": ["$voxiverse:wheat"],
+    "trigger": "random",
+    "do": [
+      "require loaded above",
+      "require index($voxiverse:wheat, self) < 7",
+      {"if": "below is voxiverse:farmland_moist", "then": ["chance 3"], "else": ["chance 6"]},
+      "set self $voxiverse:wheat[index($voxiverse:wheat, self) + 1]"
+    ]
+  }
+}

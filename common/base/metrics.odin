@@ -66,6 +66,8 @@ Metric :: enum u8 {
 	Rules_Tick, // the slowest world tick with 10 000 creep cells waiting (statement rules), us
 	Rule_Run, // CPU ns per statement-rule run in that scene
 	Rules_Compile, // compiling the test pack and 500 rules near the limits, us
+	Random_Ticks, // the slowest random_ticks call over 512 chunks (M49e), us
+	Random_Rule_Run, // CPU ns per random rule run in that scene
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us
 	// The avatars scenario: one value per frame.
@@ -141,6 +143,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Rules_Tick           = {"rules_tick", "us", false},
 	.Rule_Run             = {"rule_run", "ns", false},
 	.Rules_Compile        = {"rules_compile", "us", false},
+	.Random_Ticks         = {"random_ticks", "us", false},
+	.Random_Rule_Run      = {"random_rule_run", "ns", false},
 	.View_Model           = {"view_model", "us", false},
 	.Avatar_Draw          = {"avatar_draw", "ms", false},
 	.Ogg_Decode           = {"ogg_decode", "ms", false},
