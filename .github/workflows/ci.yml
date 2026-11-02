@@ -360,7 +360,7 @@ jobs:
       - name: Compare
         run: ./build.sh determinism --compare build/determinism
 
-  # Release packages (docs/plan.md, M21): one per platform, from every push (kept
+  # Release packages: one per platform, from every push (kept
   # as workflow artifacts, for testers), each unpacked on its own and run
   # from there: nothing beside it is needed. macOS waits for its backend
   # (M1b). Linux builds on the oldest supported Ubuntu, so the game runs on

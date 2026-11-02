@@ -349,9 +349,7 @@ usage :: proc() {
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
-	fmt.println(
-		"  bench     run a benchmark scenario (docs/plan.md, M19; results in build/benchmarks/):",
-	)
+	fmt.println("  bench     run a benchmark scenario (results in build/benchmarks/):")
 	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
 	fmt.println(
 		"              ogg          the Ogg decoder against miniaudio's, on the music (no game)",
@@ -383,9 +381,7 @@ usage :: proc() {
 	fmt.println(
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
-	fmt.println(
-		"  package   a release package for this platform in build/dist/ (docs/plan.md, M21)",
-	)
+	fmt.println("  package   a release package for this platform in build/dist/")
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(

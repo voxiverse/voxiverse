@@ -43,8 +43,7 @@ the cap.
 
 ## The move (state of the work: L3 of 3 done)
 
-Packages were split into feature packages (milestone rows L1 and L2, specs in
-[history.md](history.md)): no package sits at the root of `client/` or `server/`. `server/core`
+Packages were split into feature packages : no package sits at the root of `client/` or `server/`. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
 `client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
 feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
@@ -121,8 +120,7 @@ package** (#96) was switched on by L3, see above.
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
 | `common/worldgen` | World generators | `*.odin` |
-| `docs` | Documents and this manifest | `*.md` |
-| `docs/milestones` | Milestone specs | `*.md` |
+| `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

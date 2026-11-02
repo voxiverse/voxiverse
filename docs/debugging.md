@@ -931,8 +931,7 @@ the offscreen image itself, not the window's scaled copy of it. It is written to
 For each scene the comparison reports two numbers: the share of pixels whose largest colour
 channel differs from the baseline's by more than 8/255, and the mean absolute difference of
 the colour channels. A scene fails when the first is above 0.1% or the second above 0.5/255
-(`IMAGE_MAX_SHARE`, `IMAGE_MAX_MEAN` in `tools/build/images.odin`; how they were settled is
-in [history.md](history.md), R1). A failed scene also gets `build/images/<scene>.diff.png`:
+(`IMAGE_MAX_SHARE`, `IMAGE_MAX_MEAN` in `tools/build/images.odin`). A failed scene also gets `build/images/<scene>.diff.png`:
 the baseline in dim grey, the differing pixels in red. Each run's log is
 `build/images/<scene>.log`. CI uploads `build/images/` as the `images` artifact when a step
 fails.

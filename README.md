@@ -12,7 +12,7 @@ Voxiverse is pre-alpha and under active development. It runs on **Windows and Li
 (Apple Silicon) builds and packages in CI but is not tested on hardware by the project.
 
 - [docs/platforms.md](docs/platforms.md) describes what runs where and what each platform requires.
-- [docs/plan.md](docs/plan.md) contains the design and the milestones.
+- [docs/](docs/README.md) holds the technical docs: the design, the glossary, the layout and one cheat sheet per system.
 
 ## Download
 
@@ -278,7 +278,7 @@ adding its row to the manifest in the same commit.
 
 ## Source layout
 
-See [docs/plan.md](docs/plan.md#layout). Packages depend only downward: `common/base/` depends on
+See [docs/layout.md](docs/layout.md) and [docs/design.md](docs/design.md). Packages depend only downward: `common/base/` depends on
 nothing, `common/game/` never imports platform or GPU code, and `client/ui/` never imports the renderer.
 
 Imports go through the collections `client`, `server` and `common`
@@ -299,8 +299,8 @@ odin check client -no-entry-point -collection:client=client -collection:server=s
 | [docs/determinism.md](docs/determinism.md) | What the simulation guarantees to be bit-identical, and the rules that keep it so. |
 | [docs/saves.md](docs/saves.md) | The universe directory, the save transaction, backups, export and import. |
 | [docs/telemetry.md](docs/telemetry.md) | What telemetry collects, how it is transported, and how to query it. |
-| [docs/script_api_notes.md](docs/script_api_notes.md) | The procedures and events the script API will expose. |
-| [docs/party_checks.md](docs/party_checks.md) | The manual check procedure for a LAN playtest. |
+| [docs/script.md](docs/script.md) | The script language and its VM. |
+| [docs/README.md](docs/README.md) | Every doc, including the design, the glossary and the layout manifest. |
 
 ## Licence
 

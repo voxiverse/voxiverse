@@ -37,7 +37,7 @@ Options :: struct {
 	capture:     string `usage:"write every packet to this pcap file (Wireshark: tools/wireshark)"`,
 	benchmark:   string `usage:"run the server benchmark scenario (server) and quit: simulated players, nothing saved"`,
 	smoke:       bool `usage:"with --benchmark: one short repetition (CI: the scenario still works)"`,
-	telemetry:   string `usage:"send this server's event log to the collector at host:port (anonymous: see docs/plan.md, M27)"`,
+	telemetry:   string `usage:"send this server's event log to the collector at host:port (anonymous: see docs/telemetry.md)"`,
 	collector:   bool `usage:"run a telemetry collector instead of a world: --universe is its directory, --port its port (default 27316)"`,
 	backups:     int `usage:"rolling backups kept (default 5, 0: none)"`,
 	check:       bool `usage:"check the universe's files read whole, print what does not, and quit (exit 1 on a problem)"`,
