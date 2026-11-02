@@ -1,0 +1,10 @@
+--! lua
+local function make()
+  local t = {}
+  local function add(x) t[#t + 1] = x return #t end
+  return add
+end
+local a = make()
+a(1) a(2)
+print(a(3))
+--! expect: 3

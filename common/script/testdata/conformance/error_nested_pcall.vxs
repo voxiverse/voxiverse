@@ -1,0 +1,9 @@
+local function inner() error("in") end
+local ok, e = pcall(function()
+  local ok2, e2 = pcall(inner)
+  print("inner", ok2, e2)
+  error("outer", 0)
+end)
+print(ok, e)
+--! expect: inner	false	error_nested_pcall.vxs:1: in
+--! expect: false	outer

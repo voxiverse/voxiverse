@@ -1,0 +1,7 @@
+--! lua
+print(1e308 * 10)
+print(-1e308 * 10)
+print(.5, 5., 3e2, 0x10, 1E-2)
+--! expect: inf
+--! expect: -inf
+--! expect: 0.5	5.0	300.0	16	0.01

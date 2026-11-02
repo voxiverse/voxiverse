@@ -1,0 +1,6 @@
+local t = setmetatable({}, {__tostring = function(self) return "custom" end})
+print(t, tostring(t))
+local bad = setmetatable({}, {__tostring = function() return 1 end})
+print(pcall(tostring, bad))
+--! expect: custom	custom
+--! expect: false	tostring_meta.vxs:4: '__tostring' must return a string

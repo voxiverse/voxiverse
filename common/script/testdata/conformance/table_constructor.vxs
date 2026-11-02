@@ -1,0 +1,11 @@
+--! lua
+local function three() return 1, 2, 3 end
+local t = {three()}
+local u = {three(), three()}
+local v = {(three())}
+local w = {three(), 10}
+print(#t, #u, #v, #w)
+local x = {a = 1, ["b"] = 2, 3, [10] = 4; 5}
+print(x.a, x.b, x[1], x[2], x[10])
+--! expect: 3	4	1	2
+--! expect: 1	2	3	5	4

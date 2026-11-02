@@ -1,0 +1,6 @@
+local type_ = type
+print(type(1), type("x"))
+local type = 5
+print(type)
+--! expect: number	string
+--! expect: 5

@@ -1,0 +1,6 @@
+local function add(a: number, b: number): number return a + b end
+local function pair(): (number, string) return 1, "x" end
+local function va(...: any): () end
+local f: (number, number) -> number = add
+print(add(1, 2), pair(), f(3, 4))
+--! expect: 3	1	7

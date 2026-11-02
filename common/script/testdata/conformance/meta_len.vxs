@@ -1,0 +1,3 @@
+local t = setmetatable({1, 2}, {__len = function() return 42 end})
+print(#t, rawlen(t))
+--! expect: 42	2

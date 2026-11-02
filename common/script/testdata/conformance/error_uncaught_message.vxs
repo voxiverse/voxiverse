@@ -1,0 +1,9 @@
+local function on_tick()
+  local h = playr.health
+end
+player = {}
+on_tick()
+--! error: error_uncaught_message.vxs:2:13: runtime error: attempt to index a nil value (global 'playr')
+--! error: hint: no global 'playr' exists; did you mean 'player'?
+--! error: stack traceback:
+--! error:   error_uncaught_message.vxs:2: in function 'on_tick'

@@ -1,0 +1,12 @@
+--! lua
+local a, b, c = 1, 2
+print(a, b, c)
+a, b = b, a
+print(a, b)
+local t = {}
+local i = 1
+i, t[i] = i + 1, 20
+print(i, t[1], t[2])
+--! expect: 1	2	nil
+--! expect: 2	1
+--! expect: 2	20	nil

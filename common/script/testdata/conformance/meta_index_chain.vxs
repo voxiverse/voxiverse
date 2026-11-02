@@ -1,0 +1,6 @@
+--! lua
+local a = {a = 1}
+local b = setmetatable({b = 2}, {__index = a})
+local c = setmetatable({c = 3}, {__index = b})
+print(c.a, c.b, c.c, c.d)
+--! expect: 1	2	3	nil

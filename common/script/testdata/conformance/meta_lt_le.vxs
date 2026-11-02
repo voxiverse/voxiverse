@@ -1,0 +1,7 @@
+--! lua
+local M = {}
+M.__lt = function(a, b) return a.v < b.v end
+M.__le = function(a, b) return a.v <= b.v end
+local a, b = setmetatable({v = 1}, M), setmetatable({v = 2}, M)
+print(a < b, a <= b, a > b, a >= b, b >= a)
+--! expect: true	true	false	false	true

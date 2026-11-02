@@ -1,0 +1,12 @@
+--! lua
+assert(#"\a\b\f\n\r\t\v\\\"\'" == 10)
+assert("\65\066\0677" == "ABC7")
+assert("\x41\x62" == "Ab")
+assert("\u{48}\u{49}" == "HI")
+assert(#"\u{7FF}" == 2 and #"\u{FFFF}" == 3 and #"\u{10FFFF}" == 4)
+assert("a\z
+      b" == "ab")
+assert("line\
+next" == "line\nnext")
+print("ok")
+--! expect: ok

@@ -1,0 +1,6 @@
+local t = {}
+print(t[0/0])
+local ok, e = pcall(function() t[0/0] = 1 end)
+print(ok, e)
+--! expect: nil
+--! expect: false	table_nan_key.vxs:3: index is NaN

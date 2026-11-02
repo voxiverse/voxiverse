@@ -1,0 +1,7 @@
+local P = {}
+P.__index = function(t, k) return k * 2 end
+local t = setmetatable({}, P)
+local s = 0
+for i = 1, 200 do s = s + t[i] end
+print(s)
+--! expect: 40200

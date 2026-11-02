@@ -1,0 +1,7 @@
+local k = 0
+repeat
+  k = k + 1
+  if k == 2 then continue end
+  local done = k > 3
+until done
+--! error: 'continue' here would skip local 'done', which 'until' uses

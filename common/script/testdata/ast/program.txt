@@ -1,0 +1,186 @@
+Type_Alias 2:1 Point
+  type:
+    T_Record 2:14
+      list:
+        T_Field 2:15 x
+          T_Name 2:18 number
+        T_Field 2:26 y
+          T_Optional 2:35
+            T_Name 2:29 number
+Local 3:1
+  list:
+    Binding 3:7 a
+      type:
+        T_Name 3:10 integer
+    Binding 3:19 b
+  list2:
+    Int 3:23 1
+    Float 3:26 2.5
+Local_Function 4:7 add
+  Function 4:7 add
+    T_Name 4:43 number
+    list:
+      Binding 4:20 x
+        type:
+          T_Name 4:23 number
+      Binding 4:31 y
+        type:
+          T_Name 4:34 number
+    body:
+      Return 5:3
+        list:
+          Binop 5:12 +
+            Name 5:10 x
+            Binop 5:16 *
+              Name 5:14 y
+              Binop 5:20 ^
+                Int 5:18 2
+                Unop 5:22 -
+                  Name 5:23 x
+Function_Stat 7:1 +
+  Index 7:20
+    Index 7:13
+      Name 7:10 obj
+      String 7:14 "method"
+    String 7:21 "call"
+  Function 7:1 obj.method:call +
+    T_Name 7:31 any
+    list:
+      Binding 7:1 self
+    body:
+      Compound 8:10 +=
+        Index 8:3
+          Name 8:3 self
+          String 8:8 "n"
+        Unop 8:13 #
+          Table 8:14
+            list:
+              Field_Pos 8:15
+                Vararg 8:15
+If 10:1 +
+  list:
+    Clause 10:1
+      Binop 10:21 or
+        Binop 10:11 and
+          Binop 10:6 ~=
+            Name 10:4 a
+            Name 10:9 b
+          Unop 10:15 not
+            Name 10:19 c
+        Name 10:24 d
+      body:
+        Call_Stat 11:3
+          Call 11:3
+            Name 11:3 print
+            list:
+              Binop 11:13 ..
+                String 11:9 "x"
+                String 11:16 "y"
+              String 11:21 "z"
+    Clause 12:1
+      Name 12:8 a
+      body:
+        Assign 13:3
+          list:
+            Name 13:3 goto_
+          list2:
+            Nil 13:11
+  list2:
+    Local 15:3
+      list:
+        Binding 15:9 t
+      list2:
+        Table 15:13
+          list:
+            Field_Pos 15:14
+              Int 15:14 1
+            Field_Named 15:17 k
+              Int 15:21 2
+            Field_Keyed 15:24
+              Int 15:25 3
+              True 15:30
+            Field_Pos 15:36
+              Call 15:36
+                Name 15:36 f
+Numeric_For 17:1
+  Binding 17:5 i
+  Int 17:9 1
+  Int 17:12 10
+  Int 17:16 2
+  body:
+    Continue 17:21
+Generic_For 18:1
+  list:
+    Binding 18:5 k
+    Binding 18:8 v
+  list2:
+    Call 18:13
+      Name 18:13 pairs
+      list:
+        Name 18:19 t
+  body:
+    Break 18:25
+While 19:1
+  Binop 19:9 <
+    Name 19:7 a
+    Name 19:11 b
+  body:
+    Assign 19:16
+      list:
+        Name 19:16 a
+      list2:
+        Binop 19:22 +
+          Name 19:20 a
+          Int 19:24 1
+Repeat 20:1
+  Name 20:32 done
+  body:
+    Local 20:8
+      list:
+        Binding 20:14 done
+      list2:
+        True 20:21
+Do 21:1
+  body:
+    Local 21:4
+      list:
+        Binding 21:10 f
+      list2:
+        Function 21:14
+Assign 22:1
+  list:
+    Name 22:1 x
+    Index 22:4
+      Name 22:4 y
+      String 22:6 "z"
+    Index 22:9
+      Name 22:9 w
+      Int 22:11 1
+  list2:
+    Call 22:16
+      Name 22:16 f
+    Method_Call 22:23 h
+      Name 22:21 g
+      list:
+        String 22:25 "s"
+    Call 22:30
+      Name 22:30 i
+      list:
+        Table 22:32
+Return 23:1
+  list:
+    Binop 23:14 |
+      Binop 23:10 &
+        Name 23:8 a
+        Name 23:12 b
+      Binop 23:18 ~
+        Name 23:16 c
+        Binop 23:27 >>
+          Binop 23:22 <<
+            Name 23:20 d
+            Int 23:25 1
+          Binop 23:37 %
+            Binop 23:32 //
+              Int 23:30 2
+              Int 23:35 3
+            Int 23:39 4

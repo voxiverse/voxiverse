@@ -20,6 +20,7 @@ PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
 	"common/ogg",
+	"common/script",
 	"common/limited",
 	"client/audio",
 	"common/netcode",
@@ -54,6 +55,7 @@ PACKAGES :: []string {
 	"server/dedicated",
 	"tools/build",
 	"tools/netdump",
+	"tools/script",
 	"tools/ogg",
 	"tools/schema",
 	"tools/packcheck",
@@ -76,6 +78,7 @@ TEST_PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
 	"common/ogg",
+	"common/script",
 	"client/audio",
 	"common/netcode",
 	"common/telemetry",
@@ -103,6 +106,7 @@ SOURCE_DIRS :: []string {
 	"common/base",
 	"common/base/fuzz",
 	"common/ogg",
+	"common/script",
 	"common/limited",
 	"common/netcode",
 	"common/telemetry",
@@ -225,6 +229,7 @@ main :: proc() {
 	case "debug":
 		ok = debug_game(args[1:])
 	case "netdump",
+	     "script",
 	     "audiodump",
 	     "replay",
 	     "sfx",
@@ -314,6 +319,9 @@ usage :: proc() {
 		"  audiodump dump an audio capture: timeline, voice decisions, loudness, a bus as WAV (-report, -bus:, -wav:)",
 	)
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
+	fmt.println(
+		"  script    run or list a script (script run <file> [--slice N] [--memory N] [--disasm]; script disasm <file>)",
+	)
 	fmt.println(
 		"  schema    rewrite the Wireshark dissector's generated schema block from the game's state kinds",
 	)
@@ -1360,7 +1368,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		COLLECTIONS,
 		// The map generates millions of columns: optimized. The benchmark
 		// as a release build, with line tables for perf.
-		{"-o:speed"} if name == "worldmap" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
+		{"-o:speed"} if name == "worldmap" || name == "script" else {"-o:speed", "-debug", "-define:VX_DEV=false"} if name == "bench" else {},
 		version_defines(version_of()),
 	},
 	)

@@ -1,0 +1,9 @@
+--! lua
+local M = {__concat = function(a, b)
+  local x = type(a) == "table" and a.s or a
+  local y = type(b) == "table" and b.s or b
+  return x .. y
+end}
+local t = setmetatable({s = "T"}, M)
+print("a" .. t, t .. "b", "x" .. t .. "y" .. "z")
+--! expect: aT	Tb	xTyz

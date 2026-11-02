@@ -1,0 +1,6 @@
+local function loop(n, acc)
+  if n == 0 then return acc end
+  return loop(n - 1, acc + 1)
+end
+print(loop(100000, 0))
+--! expect: 100000

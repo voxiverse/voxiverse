@@ -1,0 +1,15 @@
+local depth = 0
+local function h(e) depth = depth + 1 return "h:" .. e end
+local r = {xpcall(function()
+  local ok, e = xpcall(function() error("inner", 0) end, h)
+  print(ok, e)
+  error("outer", 0)
+end, h)}
+print(r[1], r[2], depth)
+print(xpcall(function() return 1, 2 end, h))
+local ok, e = xpcall(rawlen, h, 5)
+print(ok, e)
+--! expect: false	h:inner
+--! expect: false	h:outer	2
+--! expect: true	1	2
+--! expect: false	h:bad argument #1 to 'rawlen' (table or string expected)

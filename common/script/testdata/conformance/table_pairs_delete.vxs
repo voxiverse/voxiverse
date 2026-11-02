@@ -1,0 +1,9 @@
+local t = {}
+for i = 1, 8 do t["k" .. i] = i end
+local seen = ""
+for k, v in pairs(t) do
+  t[k] = nil
+  seen = seen .. v
+end
+print(seen, next(t))
+--! expect: 12345678	nil

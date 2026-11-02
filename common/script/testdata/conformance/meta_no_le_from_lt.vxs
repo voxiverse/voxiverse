@@ -1,0 +1,7 @@
+local M = {__lt = function(a, b) return true end}
+local a, b = setmetatable({}, M), setmetatable({}, M)
+print(a < b)
+local ok, e = pcall(function() return a <= b end)
+print(ok, e)
+--! expect: true
+--! expect: false	meta_no_le_from_lt.vxs:4: attempt to compare two table values

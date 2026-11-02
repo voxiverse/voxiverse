@@ -1,0 +1,8 @@
+--! lua
+print(pcall(function() return 1, 2, 3 end))
+print(pcall(function() end))
+print(pcall(print, "via"))
+--! expect: true	1	2	3
+--! expect: true
+--! expect: via
+--! expect: true

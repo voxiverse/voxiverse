@@ -1,0 +1,7 @@
+--! lua
+local M = {__eq = function(a, b) return a.id == b.id end}
+local a = setmetatable({id = 1}, M)
+local b = setmetatable({id = 1}, M)
+local c = setmetatable({id = 2}, M)
+print(a == b, a ~= b, a == c, a == 1, rawequal(a, b))
+--! expect: true	false	false	false	false

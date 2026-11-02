@@ -1,0 +1,5 @@
+--! lua
+local nan = 0/0
+assert(nan ~= nan)
+print(nan == nan, nan < 1, nan > 1)
+--! expect: false	false	false

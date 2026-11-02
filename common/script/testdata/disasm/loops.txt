@@ -1,0 +1,34 @@
+module <loops.vxs> (30 instructions; 0 params + vararg, 8 registers, 0 upvalues, 3 constants)
+     1  [0:0]     VARARGPREP   0
+     2  [1:11]    NEWTABLE     0 0 0
+     3  [1:11]    EXTRAARG     0
+     4  [2:1]     LOADI        1 1
+     5  [2:1]     LOADI        2 10
+     6  [2:1]     LOADI        3 1
+     7  [2:1]     FORPREP      1 8        ; to 17
+     8  [3:8]     MODK         5 4 0      ; 2
+     9  [3:12]    EQI          5 0 0
+    10  [3:12]    JMP          1          ; to 12
+    11  [3:22]    JMP          4          ; to 16
+    12  [4:5]     LEN          5 0
+    13  [4:8]     ADDI         5 5 1
+    14  [4:17]    MULK         6 4 1      ; 2.5
+    15  [4:3]     SETTABLE     0 5 6
+    16  [2:1]     FORLOOP      1 9        ; to 8
+    17  [6:1]     LOADI        1 0
+    18  [7:13]    GETGLOBAL    2 2        ; "ipairs"
+    19  [7:20]    MOVE         3 0
+    20  [7:13]    CALL         2 2 4
+    21  [7:1]     TFORPREP     2 1        ; to 23
+    22  [7:28]    ADD          1 1 6
+    23  [7:1]     TFORCALL     2 2
+    24  [7:1]     TFORLOOP     2 3        ; to 22
+    25  [8:9]     GTI          1 1 0
+    26  [8:9]     JMP          2          ; to 29
+    27  [8:22]    IDIVK        1 1 0      ; 2
+    28  [8:16]    JMP          -4         ; to 25
+    29  [9:1]     RETURN1      1
+    30  [9:1]     RETURN0
+constants (3): 0 2 1 2.5 2 "ipairs"
+locals (11): 0 t 4-30 1 (for state) 7-16 2 (for state) 7-16 3 (for state) 7-16 4 i 8-15 5 s 18-30 6 (for state) 21-24 7 (for state) 21-24 8 (for state) 21-24 9 _ 22-22 10 v 22-22
+upvalues (0):

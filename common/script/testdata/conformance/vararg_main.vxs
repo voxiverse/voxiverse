@@ -1,0 +1,3 @@
+local n = select("#", ...)
+print(n)
+--! expect: 0

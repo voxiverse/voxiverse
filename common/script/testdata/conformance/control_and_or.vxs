@@ -1,0 +1,9 @@
+--! lua
+print(1 and 2, nil and 1, false or "x", nil or false, 1 or error("no"))
+print(not nil, not 0, not not "")
+local x = nil
+local y = x and x.field or "default"
+print(y)
+--! expect: 2	nil	x	false	1
+--! expect: true	false	true
+--! expect: default

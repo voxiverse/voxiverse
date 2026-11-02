@@ -1,0 +1,6 @@
+--! lua
+local i, s = 0, 0
+while i < 10 do i = i + 1 s = s + i end
+print(i, s)
+while false do error("never") end
+--! expect: 10	55

@@ -1,0 +1,6 @@
+local ok, e = pcall(function() local z = 0 return 1 // z end)
+print(ok, e)
+ok, e = pcall(function() local z = 0 return 1 % z end)
+print(ok, e)
+--! expect: false	arith_int_divzero.vxs:1: attempt to perform 'n//0'
+--! expect: false	arith_int_divzero.vxs:3: attempt to perform 'n%%0'

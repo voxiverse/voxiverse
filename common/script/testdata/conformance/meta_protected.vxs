@@ -1,0 +1,6 @@
+local t = setmetatable({}, {__metatable = "locked"})
+print(getmetatable(t))
+local ok, e = pcall(setmetatable, t, {})
+print(ok, e)
+--! expect: locked
+--! expect: false	cannot change a protected metatable

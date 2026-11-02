@@ -17,6 +17,7 @@ DETERMINISM_DIRS :: []string {
 	"server/collector",
 	"server/dedicated",
 	"common/worldgen",
+	"common/script",
 }
 
 @(rodata)

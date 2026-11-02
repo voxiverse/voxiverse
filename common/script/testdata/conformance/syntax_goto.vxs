@@ -1,0 +1,3 @@
+goto skip
+--! error: syntax error: goto is not supported
+--! error: hint: use 'continue' or 'break', or a flag variable

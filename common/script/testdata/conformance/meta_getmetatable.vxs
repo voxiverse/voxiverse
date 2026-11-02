@@ -1,0 +1,7 @@
+--! lua
+local mt = {}
+local t = setmetatable({}, mt)
+print(getmetatable(t) == mt, getmetatable({}), getmetatable(1))
+print(getmetatable("s").__index == nil)
+--! expect: true	nil	nil
+--! expect: true

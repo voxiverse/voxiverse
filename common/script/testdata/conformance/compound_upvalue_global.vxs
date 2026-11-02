@@ -1,0 +1,7 @@
+local u = 1
+local function f() u += 1 end
+f() f()
+G = 1
+G += 41
+print(u, G)
+--! expect: 3	42

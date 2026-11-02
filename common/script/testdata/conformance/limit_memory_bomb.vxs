@@ -1,0 +1,4 @@
+local t = {} while true do t[#t+1] = {} end
+--! memory: 1048576
+--! limit: memory
+--! error: not enough memory

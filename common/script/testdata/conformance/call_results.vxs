@@ -1,0 +1,12 @@
+--! lua
+local function none() end
+local function two() return 1, 2 end
+print(none())
+print(two(), two())
+print(two(), (two()))
+local x, y, z = two()
+print(x, y, z)
+--! expect: 
+--! expect: 1	1	2
+--! expect: 1	1
+--! expect: 1	2	nil

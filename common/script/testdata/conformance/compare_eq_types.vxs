@@ -1,0 +1,3 @@
+--! lua
+print(1 == "1", nil == false, true == true, "a" == "a")
+--! expect: false	false	true	true

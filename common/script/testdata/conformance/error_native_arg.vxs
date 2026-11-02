@@ -1,0 +1,8 @@
+print(pcall(rawlen, 5))
+print(pcall(rawget, "x", 1))
+print(pcall(tonumber, "10", 99))
+print(pcall(setmetatable))
+--! expect: false	bad argument #1 to 'rawlen' (table or string expected)
+--! expect: false	bad argument #1 to 'rawget' (table expected, got string)
+--! expect: false	bad argument #2 to 'tonumber' (base out of range)
+--! expect: false	bad argument #1 to 'setmetatable' (table expected, got no value)

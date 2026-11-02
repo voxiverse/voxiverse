@@ -1,0 +1,8 @@
+local t = {}
+t.a = 1 t.b = 2 t.c = 3
+t.a = nil
+t.a = 4
+local s = ""
+for k, v in pairs(t) do s = s .. k .. v end
+print(s)
+--! expect: a4b2c3

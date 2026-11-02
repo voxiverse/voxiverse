@@ -1,0 +1,6 @@
+local a, b = {}, {}
+print(a == b, a ~= b, a == a)
+local ok, e = pcall(function() return a < b end)
+print(ok, e)
+--! expect: false	true	true
+--! expect: false	compare_table_error.vxs:3: attempt to compare two table values

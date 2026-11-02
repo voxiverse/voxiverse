@@ -1,0 +1,6 @@
+--! lua
+local function cls(x)
+  if x < 0 then return "neg" elseif x == 0 then return "zero" elseif x < 10 then return "small" else return "big" end
+end
+print(cls(-1), cls(0), cls(5), cls(50))
+--! expect: neg	zero	small	big

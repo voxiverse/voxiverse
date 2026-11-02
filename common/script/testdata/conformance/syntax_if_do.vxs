@@ -1,0 +1,2 @@
+if x do end
+--! error: syntax error: 'then' expected

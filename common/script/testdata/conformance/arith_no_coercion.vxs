@@ -1,0 +1,3 @@
+local ok, e = pcall(function() return "10" + 1 end)
+print(ok, e)
+--! expect: false	arith_no_coercion.vxs:1: attempt to perform arithmetic on a string value (constant '10')

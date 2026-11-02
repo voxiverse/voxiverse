@@ -1,0 +1,5 @@
+--! lua
+assert(0xA == 10 and 0Xff == 255)
+assert(0x10000000000000000 == 0)
+print(0xdeadbeef)
+--! expect: 3735928559

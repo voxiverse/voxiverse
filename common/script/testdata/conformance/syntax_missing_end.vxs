@@ -1,0 +1,5 @@
+function f()
+  if x then
+    return 1
+--! error: syntax error
+--! error: 'end' expected

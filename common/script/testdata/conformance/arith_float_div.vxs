@@ -1,0 +1,5 @@
+--! lua
+print(3 / 2, 1 / 0, -1 / 0, 4 / 2)
+print(1 // 0.0, -1 // 0.0, 7.5 // 2)
+--! expect: 1.5	inf	-inf	2.0
+--! expect: inf	-inf	3.0

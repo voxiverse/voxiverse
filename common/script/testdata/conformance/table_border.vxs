@@ -1,0 +1,10 @@
+--! lua
+local t = {}
+for i = 1, 10 do t[i] = i end
+print(#t)
+t[10] = nil
+print(#t)
+t[5] = nil
+assert(#t == 9 or #t == 4)
+--! expect: 10
+--! expect: 9

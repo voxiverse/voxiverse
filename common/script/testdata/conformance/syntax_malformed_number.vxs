@@ -1,0 +1,2 @@
+local x = 3..2
+--! error: syntax error: malformed number

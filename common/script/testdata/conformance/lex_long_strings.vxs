@@ -1,0 +1,11 @@
+--! lua
+local a = [[one]]
+local b = [==[with ]] inside]==]
+local c = [[
+first newline skipped]]
+assert(a == "one")
+assert(b == "with ]] inside")
+assert(c == "first newline skipped")
+assert([=[]=] == "")
+print(#b)
+--! expect: 14

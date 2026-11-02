@@ -1,0 +1,9 @@
+--! lua
+local max = 9223372036854775807
+local min = -9223372036854775807 - 1
+assert(max + 1 == min)
+assert(min - 1 == max)
+assert(-min == min)
+assert(max * 2 == -2)
+print(min // -1, min % -1)
+--! expect: -9223372036854775808	0

@@ -1,0 +1,3 @@
+local x <const> = 1
+--! error: syntax error
+--! error: <const>

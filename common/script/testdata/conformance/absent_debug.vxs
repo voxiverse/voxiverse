@@ -1,0 +1,2 @@
+debug.getinfo(1)
+--! error: 'debug.getinfo' is not available in scripts

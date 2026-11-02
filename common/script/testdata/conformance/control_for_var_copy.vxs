@@ -1,0 +1,8 @@
+--! lua
+local n = 0
+for i = 1, 3 do
+  local i = i * 2
+  n = n + i
+end
+print(n)
+--! expect: 12

@@ -1,0 +1,3 @@
+local function rec(n) if n == 0 then error("deep") end rec(n - 1) end
+rec(50)
+--! error: levels skipped

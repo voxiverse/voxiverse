@@ -1,0 +1,9 @@
+--! lua
+-- a line comment
+--[[ a long
+comment ]] local x = 1
+--[==[ another ]] still
+]==]
+x = x + 1 -- trailing
+print(x)
+--! expect: 2

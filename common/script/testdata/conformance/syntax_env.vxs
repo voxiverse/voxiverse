@@ -1,0 +1,2 @@
+local x = _ENV
+--! error: '_ENV' is not supported

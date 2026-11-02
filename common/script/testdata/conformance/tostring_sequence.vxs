@@ -1,0 +1,7 @@
+local a = {}
+local b = {}
+local f = function() end
+print(tostring(a), tostring(b), tostring(f))
+print(tostring(a))
+--! expect: table: 0x00000001	table: 0x00000002	function: 0x00000003
+--! expect: table: 0x00000001

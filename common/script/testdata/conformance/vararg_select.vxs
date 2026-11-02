@@ -1,0 +1,9 @@
+--! lua
+print(select("#"), select("#", nil), select("#", nil, nil))
+print(select(2, "a", "b", "c"))
+print(select(-1, "a", "b", "c"))
+print(pcall(select, 0, 1))
+--! expect: 0	1	2
+--! expect: b	c
+--! expect: c
+--! expect: false	bad argument #1 to 'select' (index out of range)

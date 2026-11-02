@@ -1,0 +1,4 @@
+print(type(collectgarbage("count")))
+collectgarbage("collect")
+--! expect: number
+--! error: collectgarbage('collect') is not available in scripts

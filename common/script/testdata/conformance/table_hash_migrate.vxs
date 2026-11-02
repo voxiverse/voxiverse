@@ -1,0 +1,11 @@
+local t = {}
+t[3] = "c" t[2] = "b"
+print(#t)
+t[1] = "a"
+print(#t, t[1], t[2], t[3])
+local s = ""
+for k, v in pairs(t) do s = s .. k .. v end
+print(s)
+--! expect: 0
+--! expect: 3	a	b	c
+--! expect: 1a2b3c

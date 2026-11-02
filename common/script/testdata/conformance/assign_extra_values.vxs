@@ -1,0 +1,6 @@
+--! lua
+local calls = 0
+local function f() calls = calls + 1 return 1 end
+local a = 1, f(), f()
+print(a, calls)
+--! expect: 1	2

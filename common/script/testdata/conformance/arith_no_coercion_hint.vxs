@@ -1,0 +1,4 @@
+local s = "10"
+local n = s * 2
+--! error: attempt to perform arithmetic on a string value (local 's')
+--! error: hint: convert it with tonumber() first

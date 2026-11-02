@@ -1,0 +1,23 @@
+-- One of everything the parser builds.
+type Point = {x: number, y: number?}
+local a: integer, b = 1, 2.5
+local function add(x: number, y: number): number
+  return x + y * 2 ^ -x
+end
+function obj.method:call(...: any)
+  self.n += #{...}
+end
+if a ~= b and not c or d then
+  print("x" .. 'y', [[z]])
+elseif a then
+  goto_ = nil
+else
+  local t = {1, k = 2, [3] = true; f()}
+end
+for i = 1, 10, 2 do continue end
+for k, v in pairs(t) do break end
+while a < b do a = a + 1 end
+repeat local done = true until done
+do local f = function() end end
+x, y.z, w[1] = f(), g:h "s", i {}
+return a & b | c ~ d << 1 >> 2 // 3 % 4

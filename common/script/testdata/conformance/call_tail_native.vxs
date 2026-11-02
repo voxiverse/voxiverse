@@ -1,0 +1,7 @@
+--! lua
+local function f(x) return tostring(x) end
+print(f(12))
+local function g(...) return select("#", ...) end
+print(g(1, 2, 3))
+--! expect: 12
+--! expect: 3

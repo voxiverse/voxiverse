@@ -1,0 +1,4 @@
+local cfg
+local function f() return cfg.x end
+f()
+--! error: attempt to index a nil value (upvalue 'cfg')

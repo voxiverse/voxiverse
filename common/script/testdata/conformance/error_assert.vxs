@@ -1,0 +1,8 @@
+print(pcall(assert, false))
+print(pcall(assert, nil, "custom message"))
+print(assert(1, 2))
+assert(1 == 2, "math is broken")
+--! expect: false	assertion failed!
+--! expect: false	custom message
+--! expect: 1	2
+--! error: math is broken

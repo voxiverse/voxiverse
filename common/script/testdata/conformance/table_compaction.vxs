@@ -1,0 +1,13 @@
+local t = {}
+for i = 1, 100 do t["k" .. i] = i end
+for i = 1, 90 do t["k" .. i] = nil end
+for i = 101, 150 do t["k" .. i] = i end
+local s, n = 0, 0
+local first
+for k, v in pairs(t) do
+  if not first then first = k end
+  s = s + v
+  n = n + 1
+end
+print(n, s, first)
+--! expect: 60	7230	k91

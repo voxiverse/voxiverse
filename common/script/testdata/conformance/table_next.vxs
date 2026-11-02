@@ -1,0 +1,16 @@
+local t = {1, 2, x = 3}
+local k, v = next(t)
+print(k, v)
+k, v = next(t, k)
+print(k, v)
+k, v = next(t, k)
+print(k, v)
+print(next(t, k))
+print(pcall(next, t, "nope"))
+print(next({}))
+--! expect: 1	1
+--! expect: 2	2
+--! expect: x	3
+--! expect: nil
+--! expect: false	invalid key to 'next'
+--! expect: nil

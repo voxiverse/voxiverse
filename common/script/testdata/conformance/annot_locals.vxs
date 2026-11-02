@@ -1,0 +1,7 @@
+local x: number = 1
+local s: string?, t: {number} = "a", {1}
+local m: {[string]: number} = {}
+local r: {name: string, age: integer,} = {name = "n", age = 1}
+local u: number | string | nil = 2
+print(x, s, #t, r.name, u)
+--! expect: 1	a	1	n	2

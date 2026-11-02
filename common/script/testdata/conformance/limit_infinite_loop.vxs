@@ -1,0 +1,3 @@
+while true do end
+--! limit: instructions
+--! error: script ran too long

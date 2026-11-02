@@ -1,0 +1,8 @@
+local fs = {}
+for i = 1, 10 do
+  local v = i * 10
+  fs[#fs + 1] = function() return v end
+  if i == 3 then break end
+end
+print(#fs, fs[1](), fs[3]())
+--! expect: 3	10	30

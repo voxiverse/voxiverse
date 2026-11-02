@@ -1,0 +1,4 @@
+local obj = {update = function() end}
+obj:updat()
+--! error: attempt to call a nil value (method 'updat')
+--! error: did you mean 'update'?

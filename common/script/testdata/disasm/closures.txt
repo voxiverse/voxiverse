@@ -1,0 +1,68 @@
+module <closures.vxs> (22 instructions; 0 params + vararg, 9 registers, 0 upvalues, 6 constants)
+     1  [0:0]     VARARGPREP   0
+     2  [1:7]     CLOSURE      0 0        ; function <closures.vxs:1>
+     3  [9:13]    NEWTABLE     1 1 0
+     4  [9:13]    EXTRAARG     0
+     5  [9:14]    SETFIELD     1 0 1 1    ; "name" "o"
+     6  [10:1]    CLOSURE      2 1        ; function <closures.vxs:10>
+     7  [10:13]   SETFIELD     1 2 2      ; "greet"
+     8  [11:11]   MOVE         2 0
+     9  [11:11]   LOADI        3 1
+    10  [11:11]   LOADK        4 3        ; "a"
+    11  [11:11]   LOADK        5 4        ; "b"
+    12  [11:11]   CALL         2 4 2
+    13  [12:1]    GETGLOBAL    3 5        ; "print"
+    14  [12:7]    MOVE         4 2
+    15  [12:7]    CALL         4 1 2
+    16  [12:16]   SELF         5 1 2 1    ; "greet"
+    17  [12:22]   MOVE         7 2
+    18  [12:22]   LOADI        8 2
+    19  [12:22]   CALL         7 2 0
+    20  [12:16]   CALL         5 0 0
+    21  [12:1]    CALL         3 0 1
+    22  [12:1]    RETURN0
+constants (6): 0 "name" 1 "o" 2 "greet" 3 "a" 4 "b" 5 "print"
+locals (3): 0 counter 3-22 1 obj 6-22 2 c 13-22
+upvalues (0):
+
+function <closures.vxs:1-8> counter (9 instructions; 1 param + vararg, 5 registers, 0 upvalues, 2 constants)
+     1  [1:7]     VARARGPREP   1
+     2  [2:13]    MOVE         1 0
+     3  [3:17]    GETGLOBAL    2 0        ; "select"
+     4  [3:17]    LOADK        3 1        ; "#"
+     5  [3:29]    VARARG       4 0
+     6  [3:17]    CALL         2 0 2
+     7  [4:10]    CLOSURE      3 0        ; function <closures.vxs:4>
+     8  [4:3]     RETURN1      3
+     9  [8:3]     RETURN0
+constants (2): 0 "select" 1 "#"
+locals (3): 0 start 1-9 1 n 3-9 2 extra 7-9
+upvalues (0):
+
+function <closures.vxs:4-7> (anonymous) (10 instructions; 1 param, 3 registers, 2 upvalues, 0 constants)
+     1  [5:9]     GETUPVAL     1 0        ; n
+     2  [5:19]    TESTSET      2 0 1
+     3  [5:19]    JMP          1          ; to 5
+     4  [5:11]    LOADI        2 1
+     5  [5:11]    ADD          1 1 2
+     6  [5:5]     SETUPVAL     1 0        ; n
+     7  [6:12]    GETUPVAL     1 0        ; n
+     8  [6:15]    GETUPVAL     2 1        ; extra
+     9  [6:5]     RETURN       1 3
+    10  [7:5]     RETURN0
+constants (0):
+locals (1): 0 step 1-10
+upvalues (2): 0 n (in stack, register 1) 1 extra (in stack, register 2)
+
+function <closures.vxs:10-10> obj:greet (8 instructions; 2 params, 6 registers, 0 upvalues, 3 constants)
+     1  [10:34]   GETFIELD     2 0 0      ; "name"
+     2  [10:51]   LOADK        3 1        ; " "
+     3  [10:54]   GETGLOBAL    4 2        ; "tostring"
+     4  [10:63]   MOVE         5 1
+     5  [10:54]   CALL         4 2 2
+     6  [10:51]   CONCAT       2 3
+     7  [10:27]   RETURN1      2
+     8  [10:27]   RETURN0
+constants (3): 0 "name" 1 " " 2 "tostring"
+locals (2): 0 self 1-8 1 other 1-8
+upvalues (0):

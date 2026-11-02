@@ -1,0 +1,4 @@
+local t = {}
+local x = t.count + 1
+--! error: arith_nil_error.vxs:2:
+--! error: attempt to perform arithmetic on a nil value (field 'count')

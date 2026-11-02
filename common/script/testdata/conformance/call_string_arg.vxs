@@ -1,0 +1,3 @@
+local function f(x) return type(x) end
+print(f"str", f{1}, f[[long]])
+--! expect: string	table	string

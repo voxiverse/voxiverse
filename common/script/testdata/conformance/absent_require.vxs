@@ -1,0 +1,2 @@
+local m = require("mod")
+--! error: 'require' is not available in scripts

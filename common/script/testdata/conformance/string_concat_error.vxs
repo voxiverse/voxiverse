@@ -1,0 +1,6 @@
+local ok, e = pcall(function() local t = {} return "a" .. t end)
+print(ok, e)
+ok, e = pcall(function() return "a" .. nil end)
+print(ok, e)
+--! expect: false	string_concat_error.vxs:1: attempt to concatenate a table value (local 't')
+--! expect: false	string_concat_error.vxs:3: attempt to concatenate a nil value

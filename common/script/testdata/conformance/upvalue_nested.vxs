@@ -1,0 +1,14 @@
+--! lua
+local function outer()
+  local x = 1
+  return function()
+    return function()
+      x = x + 1
+      return x
+    end
+  end
+end
+local mid = outer()
+local f1, f2 = mid(), mid()
+print(f1(), f2(), f1())
+--! expect: 2	3	4

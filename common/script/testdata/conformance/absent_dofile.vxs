@@ -1,0 +1,2 @@
+dofile("x.lua")
+--! error: 'dofile' is not available in scripts

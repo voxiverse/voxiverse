@@ -1,0 +1,9 @@
+local function fails() local x = nil; return x.y end
+local ok, tb = xpcall(function() return fails() end, debug.traceback)
+print(ok)
+print(tb)
+--! expect: false
+--! expect: error_xpcall_traceback.vxs:1: attempt to index a nil value (local 'x')
+--! expect: stack traceback:
+--! expect:   error_xpcall_traceback.vxs:1: in function 'fails'
+--! expect:   error_xpcall_traceback.vxs:2: in main module

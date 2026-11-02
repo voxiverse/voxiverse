@@ -1,0 +1,14 @@
+--! lua
+local log = {}
+local t = setmetatable({}, {__newindex = function(self, k, v) rawset(self, k, v * 2) end})
+t.x = 5
+print(t.x)
+local store = {}
+local u = setmetatable({}, {__newindex = store})
+u.y = 1
+print(rawget(u, "y"), store.y)
+t.x = 7
+print(t.x)
+--! expect: 10
+--! expect: nil	1
+--! expect: 7

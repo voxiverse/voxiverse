@@ -1,0 +1,8 @@
+--! lua
+local a = "ab" .. "c"
+local b = "a" .. "bc"
+print(a == b, rawequal(a, b))
+local t = {[a] = 1}
+print(t[b], t.abc)
+--! expect: true	true
+--! expect: 1	1

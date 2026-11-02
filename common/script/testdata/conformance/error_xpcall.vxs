@@ -1,0 +1,5 @@
+local function handler(e) return "handled: " .. e end
+print(xpcall(function() error("bad", 0) end, handler))
+print(xpcall(function(a, b) return a + b end, handler, 1, 2))
+--! expect: false	handled: bad
+--! expect: true	3

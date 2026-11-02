@@ -1,0 +1,5 @@
+local x = 0
+while x < 10 then
+end
+--! error: syntax_while_then.vxs:2:14: syntax error: 'do' expected after the 'while' condition, got 'then'
+--! error: hint: a while loop is written 'while <condition> do ... end'

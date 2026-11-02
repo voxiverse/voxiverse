@@ -1,0 +1,29 @@
+-- The prelude: library functions written in the language itself, compiled into every VM
+-- and called once with a table of private natives only it can see.
+local P = ...
+local rawtostring, write, metafield = P.rawtostring, P.write, P.metafield
+local type, error, select = type, error, select
+
+function tostring(v)
+  local h = metafield(v, "__tostring")
+  if h ~= nil then
+    local s = h(v)
+    if type(s) ~= "string" then
+      error("'__tostring' must return a string", 2)
+    end
+    return s
+  end
+  return rawtostring(v)
+end
+
+local tostring = tostring
+
+function print(...)
+  local n = select("#", ...)
+  local args = {...}
+  for i = 1, n do
+    if i > 1 then write("\t") end
+    write(tostring(args[i]))
+  end
+  write("\n")
+end

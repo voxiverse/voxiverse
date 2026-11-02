@@ -1,0 +1,9 @@
+local function f() error("lvl1") end
+local function g() error("lvl2", 2) end
+local function h() error("lvl0", 0) end
+print(pcall(f))
+print(pcall(function() g() end))
+print(pcall(h))
+--! expect: false	error_levels.vxs:1: lvl1
+--! expect: false	error_levels.vxs:5: lvl2
+--! expect: false	lvl0

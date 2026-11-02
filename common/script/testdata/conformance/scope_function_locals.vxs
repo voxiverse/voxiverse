@@ -1,0 +1,9 @@
+--! lua
+local function f(a, b)
+  local c = a + b
+  return c, a, b
+end
+print(f(1, 2))
+print(f(1))
+--! error: attempt to perform arithmetic on a nil value (local 'b')
+--! expect: 3	1	2

@@ -1,0 +1,2 @@
+load("return 1")
+--! error: 'load' is not available in scripts

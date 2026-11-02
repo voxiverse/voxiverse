@@ -1,0 +1,6 @@
+local t = {}
+print(t[nil])
+local ok, e = pcall(function() t[nil] = 1 end)
+print(ok, e)
+--! expect: nil
+--! expect: false	table_nil_key.vxs:3: index is nil

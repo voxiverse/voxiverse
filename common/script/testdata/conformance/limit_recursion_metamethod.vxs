@@ -1,0 +1,4 @@
+local t = setmetatable({}, {})
+getmetatable(t).__index = function(s, k) return s[k] end
+print(pcall(function() return t.x end))
+--! limit: call_depth

@@ -1,0 +1,13 @@
+local calls = 0
+local t = {0, 0}
+local function f() calls = calls + 1 return 1 end
+t[f()] += 1
+t[f()] += 10
+print(calls, t[1])
+local o = {v = {n = 1}}
+local gets = 0
+local function g() gets = gets + 1 return o end
+g().v.n += 1
+print(gets, o.v.n)
+--! expect: 2	11
+--! expect: 1	2

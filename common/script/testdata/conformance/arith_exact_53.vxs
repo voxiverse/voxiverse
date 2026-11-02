@@ -1,0 +1,6 @@
+--! lua
+local big = 2^53
+local i = 9007199254740993
+assert(i ~= big + 1 or true)
+print(i == big, i > big, 9007199254740992 == big)
+--! expect: false	true	true

@@ -1,0 +1,3 @@
+continue
+--! error: syntax error
+--! error: continue

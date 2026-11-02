@@ -111,6 +111,10 @@ package** (#96) was switched on by L3, see above.
 | `common/ogg/testdata` | Ogg digests | `*.txt` |
 | `common/ogg/testdata/edge` | Edge-case Ogg files | `*.ogg` |
 | `common/ogg/testdata/reference` | Reference decodes | `*.s16` |
+| `common/script` | The script language: compiler, VM and the base library | `*.odin`, `*.vxs` |
+| `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
+| `common/script/testdata/conformance` | The language's conformance files | `*.vxs` |
+| `common/script/testdata/disasm` | Programs and their listings | `*.vxs`, `*.txt` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
 | `common/worldgen` | World generators | `*.odin` |
 | `docs` | Documents and this manifest | `*.md` |
@@ -133,6 +137,7 @@ package** (#96) was switched on by L3, see above.
 | `tools/music` | The music renderer | `*.odin` |
 | `tools/music/testdata` | The renderer's test score | `*.score` |
 | `tools/netdump` | The packet dump tool | `*.odin` |
+| `tools/script` | The script tool (run, disasm) | `*.odin` |
 | `tools/ogg` | The Ogg tool | `*.odin` |
 | `tools/packcheck` | The pack checker | `*.odin` |
 | `tools/replay` | The replay tool | `*.odin` |

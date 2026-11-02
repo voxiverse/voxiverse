@@ -1,0 +1,5 @@
+for i: integer = 1, 2 do print(i) end
+for k: string, v: number in pairs({a = 1}) do print(k, v) end
+--! expect: 1
+--! expect: 2
+--! expect: a	1

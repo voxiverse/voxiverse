@@ -1,0 +1,6 @@
+local ok, e = pcall(function()
+  local s = "xxxxxxxxxxxxxxxx"
+  while true do s = s .. s end
+end)
+print(ok, e)
+--! expect: false	limit_string_grow.vxs:3: string too large

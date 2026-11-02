@@ -1,0 +1,9 @@
+--! lua
+print(pcall(error, nil))
+print(pcall(error, 42))
+print(select(2, pcall(error, {code = 7})).code)
+print(pcall(error, true))
+--! expect: false	nil
+--! expect: false	42
+--! expect: 7
+--! expect: false	true

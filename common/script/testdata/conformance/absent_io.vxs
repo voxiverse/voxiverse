@@ -1,0 +1,2 @@
+io.write("x")
+--! error: 'io.write' is not available in scripts

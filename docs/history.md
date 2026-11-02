@@ -9432,3 +9432,74 @@ per-file line cap.
 None.
 
 Differed: the cap counts non-test `.odin` files directly in a folder (tests sit beside their code), is 70, and is read from a `Cap: `N`` line in docs/layout.md by the `layout` lint (no separate lint).
+
+# M51a: the language and the core VM
+
+Builds: `value.odin`, `heap.odin` (allocation, free, no collection), `object.odin`,
+`string.odin`, `table.odin`, the lexer, AST and parser (annotations included), `opcodes.odin`,
+the compiler, `vm.odin`, `exec.odin`, `call.odin`, `arith.odin`, `number_format.odin`,
+`errors.odin`, `api.odin` (natives, `Native_Call`, check and push helpers, host-side values),
+`lib_base.odin` and the base part of `prelude.vxs`, `disasm.odin`; the metering of
+instructions, `run_instructions`, `call_depth` and `memory` (the cap faults at once: no
+collector yet), suspension, `resume` and `abort`; `pcall`, `xpcall`, `error`; the empty
+barrier procedures at every store; `base.pow` with its tests and the line in
+`docs/determinism.md`; `tools/script` with `run` and `disasm`; the build driver's lists and
+the numbers lint over `common/script/`; `docs/script.md` (the language as above, for a reader who
+knows Lua: what is kept, added, dropped and different, the limits, the error format).
+Not here: coroutines, the string/table/math/utf8 libraries (only what the base library and
+the tests need: `string.rep` for the limit test waits for M51b), the collector, pins,
+handles, host yields, the trace, snapshots, fuzzers. No coroutine opcode or field is needed
+beyond what the design lists, so M51b adds them without changing the format.
+
+Tests: `test_conformance` (at least 120 files in the M51a areas; each also in slices of 7);
+`lexer_test.odin` (every token, positions, the number edge cases); `parser_test.odin` (an AST
+dump of a fixed program against `testdata/ast/*.txt`; nesting 200 deep accepted, 201 refused
+with its message); `disasm_test.odin` (three fixed programs' listings against
+`testdata/disasm/*.txt`, which also pin the register allocation); `error_test.odin` (25 syntax
+and 20 runtime errors formatted exactly, columns and hints included); `vm_test.odin`
+(suspend and resume give the same output as straight through; `abort` leaves the VM idle and
+usable; a fault leaves globals intact; two VMs on two threads give identical output;
+natives' argument errors; `call_depth`; tail calls do not count); `common/base/numbers_test.odin`
+for `pow`.
+
+Also (2026-10-30, #83): `parser_fuzz_test.odin`, `test_parser_random_bytes`: 2 000 inputs
+at a fixed seed (random bytes, and conformance files with random bytes inserted, deleted or
+flipped) compiled with a 64 KiB-instruction slice; every one compiles or gives a
+`Script_Error` with a line, no panic, the scratch arena reset, the VM's heap unchanged by a
+failed compile (`heap_check` after each). M51c's fuzzers go further; this keeps the parser
+honest from its first commit. A test never asserts a time (T5): the slice and instruction
+limits are counts.
+
+Checked against the code (2026-10-30, #83): `PACKAGES`, `TEST_PACKAGES`
+(`tools/build/main.odin`) and `DETERMINISM_DIRS` (`tools/build/determinism.odin`) exist under
+those names; `base.pow` does not exist yet (this row adds it, in `common/base/numbers.odin` beside
+`sin`, `cos`, `exp`, with its golden values in `common/base/numbers_test.odin`); `tools/script` is
+added to the tool list beside `netdump` in `tools/build/main.odin`'s run switch.
+
+Exit check: the suite and CI green; `build script run` runs a sample and `build script
+disasm` lists it; an infinite loop suspends at its slice, resumes and faults at
+`run_instructions`; an allocation bomb faults `.Memory` at the cap; unbounded recursion faults
+`.Call_Depth` through `pcall`; none of them crashes or hangs.
+
+The design shared by M51a-c is in [M51.md](milestones/M51.md); read it first.
+
+Differed (M51a, done 2026-11-01): an earlier session of the lane had left the values, heap,
+objects, strings, tables, lexer, parser, compiler, dispatch loop, calls and errors in the tree,
+uncompiled; this one finished them (`api.odin`, `lib_base.odin`, `prelude.vxs`, `disasm.odin`,
+`tools/script`) and fixed what the tests found: `__index` and `__newindex` tables and
+other slow paths looped for ever (the frame's position was not saved before a path that
+reloads it), a caught error left one result too many, `next` lost keys moved from the hash
+part into the array part, the instruction fault pointed at the instruction before. The
+`xpcall` handler runs above the failing frames, as the design says, so `debug.traceback`
+sees them; they are unwound when it returns. `base.pow` gives a canonical NaN (the sign
+and payload x64 and arm64 give one differ). The absent names (`io`, `os`, `load`,
+`math.random`...) stay absent: their message replaces the error of calling or indexing the
+nil. A tail-called module frame does not count toward `call_depth` (a module ending
+`return f(n)`). `#` of `{1, 2, nil, 4}` is 2 (the array part ends at the nil), where Lua
+gives 4. The conformance runner is `conformance_test.odin`; 178 files. M51.md was corrected
+where the code differs (the `Proto` and `Script_Error` fields, `compile`'s allocator, the
+absent names).
+
+## Check by hand
+
+None.

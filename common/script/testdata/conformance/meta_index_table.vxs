@@ -1,0 +1,5 @@
+--! lua
+local base = {greet = function() return "hi" end, x = 1}
+local obj = setmetatable({}, {__index = base})
+print(obj.greet(), obj.x, obj.y, rawget(obj, "x"))
+--! expect: hi	1	nil	nil

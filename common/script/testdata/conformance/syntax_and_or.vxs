@@ -1,0 +1,3 @@
+if a && b then end
+--! error: syntax error
+--! error: 'and'

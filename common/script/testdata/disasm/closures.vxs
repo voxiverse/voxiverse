@@ -1,0 +1,12 @@
+local function counter(start, ...)
+  local n = start
+  local extra = select("#", ...)
+  return function(step)
+    n = n + (step or 1)
+    return n, extra
+  end
+end
+local obj = {name = "o"}
+function obj:greet(other) return self.name .. " " .. tostring(other) end
+local c = counter(1, "a", "b")
+print(c(), obj:greet(c(2)))

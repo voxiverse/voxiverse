@@ -1,0 +1,5 @@
+--! lua
+local function fact(n) if n <= 1 then return 1 end return n * fact(n - 1) end
+local function fib(n) if n < 2 then return n end return fib(n - 1) + fib(n - 2) end
+print(fact(20), fib(20))
+--! expect: 2432902008176640000	6765

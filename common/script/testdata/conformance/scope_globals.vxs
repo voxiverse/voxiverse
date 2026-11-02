@@ -1,0 +1,6 @@
+--! lua
+g = 5
+local function set() g = g + 1 end
+set() set()
+print(g, _G == nil)
+--! expect: 7	true

@@ -1,0 +1,4 @@
+print(pcall(setmetatable, 1, {}))
+print(pcall(setmetatable, {}, 1))
+--! expect: false	bad argument #1 to 'setmetatable' (table expected, got number)
+--! expect: false	bad argument #2 to 'setmetatable' (nil or table expected, got number)

@@ -1,0 +1,11 @@
+local t = {10, 20, 30}
+t.z = 1 t.a = 2 t.m = 3
+t[100] = 4
+local out = {}
+for k, v in pairs(t) do out[#out + 1] = tostring(k) .. "=" .. tostring(v) end
+print(table_concat == nil, #out)
+local s = ""
+for i = 1, #out do s = s .. out[i] .. " " end
+print(s)
+--! expect: true	7
+--! expect: 1=10 2=20 3=30 z=1 a=2 m=3 100=4 

@@ -1,0 +1,8 @@
+--! lua
+local m = 9223372036854775807
+print(m < 2^63, m + 0.0 == 2^63, m == 2^63)
+print(2^53 < 2^53 + 1, 9007199254740993 > 2^53)
+print(1 < 1.5, 2 <= 2.0, 3 > 2.9, -1 >= -1.0)
+--! expect: true	true	false
+--! expect: false	true
+--! expect: true	true	true	true

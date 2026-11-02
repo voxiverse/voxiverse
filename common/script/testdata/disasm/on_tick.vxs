@@ -1,0 +1,7 @@
+local count = 0
+function on_tick(self)
+  local h = player.health
+  if h < 10 then
+    count = count + 1
+  end
+end

@@ -1,0 +1,2 @@
+for i = 1, "x" do end
+--! error: 'for' limit must be a number

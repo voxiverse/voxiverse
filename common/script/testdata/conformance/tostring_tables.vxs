@@ -1,0 +1,5 @@
+local a, b = {}, {}
+print(tostring(a) == tostring(a), tostring(a) ~= tostring(b))
+print(tostring(print) == tostring(print))
+--! expect: true	true
+--! expect: true

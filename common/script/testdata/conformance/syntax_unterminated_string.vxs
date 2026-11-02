@@ -1,0 +1,3 @@
+local s = "abc
+print(s)
+--! error: syntax error: unfinished string

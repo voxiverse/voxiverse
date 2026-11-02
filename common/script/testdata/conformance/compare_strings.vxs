@@ -1,0 +1,5 @@
+--! lua
+print("a" < "b", "abc" < "abd", "" < "a", "Z" < "a", "a\0b" < "a\0c")
+print("abc" <= "abc", "b" >= "a", "x" == "x")
+--! expect: true	true	true	true	true
+--! expect: true	true	true

@@ -1,0 +1,13 @@
+local function range(n)
+  local i = 0
+  return function() i = i + 1 if i <= n then return i end end
+end
+local s = 0
+for v in range(5) do s = s + v end
+print(s)
+local function iter(st, c) if c < st then return c + 1, c * c end end
+for a, b in iter, 3, 0 do print(a, b) end
+--! expect: 15
+--! expect: 1	0
+--! expect: 2	1
+--! expect: 3	4

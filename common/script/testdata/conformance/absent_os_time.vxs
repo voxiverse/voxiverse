@@ -1,0 +1,2 @@
+local t = os.time()
+--! error: 'os.time' is not available in scripts

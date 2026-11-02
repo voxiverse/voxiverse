@@ -1,0 +1,11 @@
+--! lua
+local function f(a, ...)
+  local n = select("#", ...)
+  return a, n, ...
+end
+print(f())
+print(f(1))
+print(f(1, 2, 3))
+--! expect: nil	0
+--! expect: 1	0
+--! expect: 1	2	2	3

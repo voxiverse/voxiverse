@@ -1,0 +1,3 @@
+local s = "\u{110000}"
+--! error: syntax error
+--! error: UTF-8 value too large

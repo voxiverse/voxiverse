@@ -1,0 +1,5 @@
+--! lua
+print(tostring(nil), tostring(true), tostring(false), tostring(12), tostring("s"))
+print(type(tostring(1.5)))
+--! expect: nil	true	false	12	s
+--! expect: string

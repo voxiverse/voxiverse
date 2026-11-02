@@ -1,0 +1,8 @@
+--! lua
+local function pack(...) return {...}, select("#", ...) end
+local t, n = pack(1, nil, 3)
+print(n, t[1], t[2], t[3])
+local e, m = pack()
+print(m, #e)
+--! expect: 3	1	nil	3
+--! expect: 0	0

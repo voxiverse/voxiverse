@@ -1,0 +1,7 @@
+--! lua
+print("x=" .. 3, 1 .. 2, "a" .. 1.5 .. "b", "f" .. 2^63)
+local s = "a"
+s = s .. "b" .. "c" .. 1
+print(s)
+--! expect: x=3	12	a1.5b	f9.2233720368548e+18
+--! expect: abc1

@@ -1,0 +1,3 @@
+local ok, e = pcall(function() local x = 1.5 return x | 0 end)
+print(ok, e)
+--! expect: false	bitwise_float_error.vxs:1: number has no integer representation (local 'x')

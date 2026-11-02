@@ -1,0 +1,4 @@
+counter = 1
+local ok = pcall(function() counter = 2 error("x") end)
+print(ok, counter)
+--! expect: false	2

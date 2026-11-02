@@ -1,0 +1,12 @@
+--! lua
+local x = 1
+do
+  local x = 2
+  print(x)
+end
+print(x)
+local x = x + 10
+print(x)
+--! expect: 2
+--! expect: 1
+--! expect: 11

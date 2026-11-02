@@ -1,0 +1,10 @@
+local t = {1, 2, nil, 4}
+local n = 0
+for i, v in ipairs(t) do n = n + 1 end
+print(n)
+local p = setmetatable({}, {__index = function(_, i) if i < 3 then return i end end})
+n = 0
+for i, v in ipairs(p) do n = n + 1 end
+print(n)
+--! expect: 2
+--! expect: 0

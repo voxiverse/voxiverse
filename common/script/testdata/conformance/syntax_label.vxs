@@ -1,0 +1,3 @@
+::top::
+--! error: syntax error
+--! error: labels are not supported

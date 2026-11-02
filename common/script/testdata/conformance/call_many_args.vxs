@@ -1,0 +1,7 @@
+--! lua
+local function count(...) return select("#", ...) end
+local t = {}
+for i = 1, 300 do t[i] = i end
+local function unpack_(t, i) i = i or 1 if i <= #t then return t[i], unpack_(t, i + 1) end end
+print(count(unpack_(t)))
+--! expect: 300

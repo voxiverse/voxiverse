@@ -1,0 +1,7 @@
+--! lua
+local obj = {n = 1}
+function obj:add(k) self.n = self.n + k return self end
+function obj.get(self) return self.n end
+obj:add(2):add(3)
+print(obj:get(), obj.get(obj))
+--! expect: 6	6

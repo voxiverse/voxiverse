@@ -1,0 +1,2 @@
+print(xpcall(function() error("first") end, function(e) error("second") end))
+--! expect: false	error in error handling

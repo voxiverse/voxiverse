@@ -1,0 +1,4 @@
+if a != b then end
+--! error: syntax error
+--! error: '!=' is not an operator
+--! error: hint: write 'not equal' as '~='

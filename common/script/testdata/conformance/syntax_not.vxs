@@ -1,0 +1,3 @@
+local x = !a
+--! error: syntax error
+--! error: 'not'

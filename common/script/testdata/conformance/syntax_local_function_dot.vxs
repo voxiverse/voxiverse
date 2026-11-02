@@ -1,0 +1,2 @@
+local function a.b() end
+--! error: syntax error

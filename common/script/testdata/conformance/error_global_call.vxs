@@ -1,0 +1,2 @@
+undefined_function()
+--! error: attempt to call a nil value (global 'undefined_function')

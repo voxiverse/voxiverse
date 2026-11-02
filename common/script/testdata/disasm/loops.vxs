@@ -1,0 +1,9 @@
+local t = {}
+for i = 1, 10 do
+  if i % 2 == 0 then continue end
+  t[#t + 1] = i * 2.5
+end
+local s = 0
+for _, v in ipairs(t) do s += v end
+while s > 1 do s = s // 2 end
+return s

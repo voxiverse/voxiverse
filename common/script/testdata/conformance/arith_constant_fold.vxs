@@ -1,0 +1,7 @@
+--! lua
+local a = 2 * 3 + 4
+local b = 1 / 0
+local c = 0 / 0
+local d = -0.0
+print(a, b, c ~= c, 1/d)
+--! expect: 10	inf	true	-inf

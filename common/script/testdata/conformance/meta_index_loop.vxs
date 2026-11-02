@@ -1,0 +1,5 @@
+local a = {}
+setmetatable(a, {__index = a})
+local ok, e = pcall(function() return a.x end)
+print(ok, e)
+--! expect: false	meta_index_loop.vxs:3: '__index' chain too long; possible loop

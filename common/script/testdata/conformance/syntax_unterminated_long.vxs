@@ -1,0 +1,4 @@
+local s = [[abc
+
+--! error: syntax error
+--! error: unfinished long string

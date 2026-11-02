@@ -1,0 +1,16 @@
+--! lua
+local V = {}
+V.__index = V
+local function vec(x, y) return setmetatable({x = x, y = y}, V) end
+V.__add = function(a, b) return vec(a.x + b.x, a.y + b.y) end
+V.__sub = function(a, b) return vec(a.x - b.x, a.y - b.y) end
+V.__mul = function(a, b) if type(b) == "number" then return vec(a.x * b, a.y * b) end return a.x * b.x + a.y * b.y end
+V.__div = function(a, b) return vec(a.x / b, a.y / b) end
+V.__mod = function(a, b) return vec(a.x % b, a.y % b) end
+V.__idiv = function(a, b) return vec(a.x // b, a.y // b) end
+V.__pow = function(a, b) return vec(a.x ^ b, a.y ^ b) end
+V.__unm = function(a) return vec(-a.x, -a.y) end
+local a, b = vec(1, 2), vec(3, 4)
+local c = a + b
+print(c.x, c.y, (b - a).x, a * b, (a * 2).y, (b / 2).x, (b % 2).x, (b // 2).y, (a ^ 2).y, (-a).x)
+--! expect: 4	6	2	11	4	1.5	1	2	4.0	-1

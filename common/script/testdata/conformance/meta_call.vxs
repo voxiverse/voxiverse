@@ -1,0 +1,4 @@
+--! lua
+local callable = setmetatable({}, {__call = function(self, a, b) return a + b end})
+print(callable(2, 3))
+--! expect: 5

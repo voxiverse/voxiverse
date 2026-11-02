@@ -1,0 +1,10 @@
+local t = {1, 2, 3, nil, 5}
+print(#t)
+local u = {}
+u[1] = 1 u[2] = 2 u[4] = 4
+print(#u)
+u[3] = 3
+print(#u)
+--! expect: 3
+--! expect: 2
+--! expect: 4
