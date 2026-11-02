@@ -10,7 +10,7 @@ import "core:slice"
 // runs). Files end in a CRC-32 of everything before it, so damage is
 // detected instead of loaded.
 //
-// Format 4 (older ones are refused: before 1.0 nothing is compatible): a header
+// Format 5 (older ones are refused: before 1.0 nothing is compatible): a header
 // that indexes the chunks, each with its own CRC-32, so that damage to one
 // chunk loses only that chunk, and names the blocks: the chunks hold block
 // numbers, the header says which block each number was (its id), so a
@@ -23,10 +23,11 @@ import "core:slice"
 // u32 length, u32 CRC-32 of the payload }, sorted by chunk_pos_less), varint
 // top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
 // the payloads (each chunk's blocks, then its block entities as
-// write_block_entities, offset counted from here).
+// write_block_entities, then its waiting updates as write_chunk_payload, offset
+// counted from here). Format 5 added the updates (M49).
 
 REGION_MAGIC :: "VXRG"
-REGION_FORMAT :: 4
+REGION_FORMAT :: 5
 REGION_SIZE :: 16 // chunk columns per side
 REGION_SHIFT :: 4
 
@@ -40,6 +41,7 @@ Saved_Chunk :: struct {
 	pos:      Chunk_Pos,
 	blocks:   ^Chunk_Blocks,
 	entities: []Block_Entity,
+	updates:  []Saved_Update, // waiting scheduled updates (nil: none)
 }
 
 Saved_Top :: struct {
@@ -61,7 +63,7 @@ region_encode :: proc(
 	writer_init(&scratch, context.temp_allocator)
 	for c, i in chunks {
 		clear(&scratch.buf)
-		write_chunk_payload(&scratch, c.blocks, c.entities)
+		write_chunk_payload(&scratch, c.blocks, c.entities, c.updates)
 		encoded[i] = {c.pos, slice.clone(scratch.buf[:], context.temp_allocator)}
 	}
 	region_encode_bytes(reg, w, region, encoded, tops, generation)
@@ -250,6 +252,7 @@ region_next_chunk :: proc(
 	r: ^Region_Reader,
 	dst: ^Block_Array,
 	entities: ^[dynamic]Block_Entity,
+	updates: ^[dynamic]Saved_Update = nil,
 ) -> (
 	pos: Chunk_Pos,
 	uniform: Block,
@@ -269,7 +272,8 @@ region_next_chunk :: proc(
 		cr.block_limit = u32(len(r.remap))
 		cr.items, cr.reg = r.items, r.reader.reg
 		clear(entities)
-		uniform, is_uniform = read_chunk_payload(&cr, dst, entities)
+		if updates != nil {clear(updates)}
+		uniform, is_uniform = read_chunk_payload(&cr, dst, entities, updates)
 		if !reader_finish(&cr) {
 			append(&r.dropped, e.pos)
 			continue

@@ -200,14 +200,16 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	scratch := new(game.Block_Array, context.temp_allocator)
 	r := game.reader_make(bytes, w.server.registry)
 	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
-	uniform, is_uniform := game.read_chunk_payload(&r, scratch, &entities)
+	waiting := make([dynamic]game.Saved_Update, context.temp_allocator)
+	uniform, is_uniform := game.read_chunk_payload(&r, scratch, &entities, &waiting)
 	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch, entities[:])
 	origin := game.chunk_origin(pos)
 	if chunk := chunks_get(&w.chunks, pos); chunk != nil {
 		ledger_entities(w, chunk.block_entities[:], .Scope_In)
 		entities_reconcile(w, chunk)
 	}
-	wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
+	sim_restore(w, pos, waiting[:]) // (what was waiting when it was saved, as due then)
+	sim_wake_box(w, origin, origin + game.CHUNK_SIZE - 1, 0) // flowing again where it was
 	delete(bytes)
 	delete_key(&w.saved, pos)
 	return true
@@ -228,7 +230,7 @@ keep_edits :: proc(w: ^World, c: ^Chunk) {
 	ledger_entities(w, c.block_entities[:], .Scope_Out)
 	wr := &w.server.store.writer
 	clear(&wr.buf)
-	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:])
+	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:], sim_take_chunk(w, c.pos))
 	if old, had := w.saved[c.pos]; had {delete(old)}
 	w.saved[c.pos] = transmute([]u8)strings.clone(string(wr.buf[:])) // an owned copy
 }
@@ -347,9 +349,10 @@ region_ingest :: proc(
 	ok = open_err == .None
 	loaded := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
+	waiting := make([dynamic]game.Saved_Update, context.temp_allocator)
 	wr := &w.server.store.writer
 	for ok {
-		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch, &entities)
+		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch, &entities, &waiting)
 		if !got {
 			ok = r.reader.ok
 			break
@@ -359,7 +362,7 @@ region_ingest :: proc(
 			uniform = uniform,
 			array   = nil if is_uniform else scratch,
 		}
-		game.write_chunk_payload(wr, &blocks, entities[:])
+		game.write_chunk_payload(wr, &blocks, entities[:], waiting[:])
 		w.saved[pos] = transmute([]u8)strings.clone(string(wr.buf[:]))
 		append(&loaded, pos)
 	}

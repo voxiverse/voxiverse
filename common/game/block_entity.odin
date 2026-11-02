@@ -147,24 +147,59 @@ read_block_entities :: proc(r: ^Reader, out: ^[dynamic]Block_Entity) {
 	}
 }
 
-// write_chunk_payload: a chunk as saved: its blocks, then its entities.
-write_chunk_payload :: proc(w: ^Writer, c: ^Chunk_Blocks, entities: []Block_Entity) {
-	write_chunk_blocks(w, c)
-	write_block_entities(w, entities)
+// Saved_Update: a scheduled update waiting in a saved chunk (M49): the cell and how many ticks
+// from the save it was due, so the simulation goes on across a save and load.
+Saved_Update :: struct {
+	local: u16, // the cell's local_index
+	delta: u32, // ticks until due (0: due now)
 }
 
-// read_chunk_payload reads what write_chunk_payload wrote (blocks as
-// read_chunk_blocks; entities appended to out).
+// write_chunk_payload: a chunk as saved: its blocks, its entities, then its waiting updates
+// (varint n, then per update varint local and varint delta, in the order given).
+write_chunk_payload :: proc(
+	w: ^Writer,
+	c: ^Chunk_Blocks,
+	entities: []Block_Entity,
+	updates: []Saved_Update = nil,
+) {
+	write_chunk_blocks(w, c)
+	write_block_entities(w, entities)
+	write_varint(w, u32(len(updates)))
+	for u in updates {
+		write_varint(w, u32(u.local))
+		write_varint(w, u.delta)
+	}
+}
+
+// read_chunk_payload reads what write_chunk_payload wrote (blocks as read_chunk_blocks;
+// entities appended to out; updates appended to updates if given, else read and dropped).
 read_chunk_payload :: proc(
 	r: ^Reader,
 	dst: ^Block_Array,
 	out: ^[dynamic]Block_Entity,
+	updates: ^[dynamic]Saved_Update = nil,
 ) -> (
 	uniform: Block,
 	is_uniform: bool,
 ) {
 	uniform, is_uniform = read_chunk_blocks(r, dst)
 	read_block_entities(r, out)
+	n := read_varint(r)
+	if !r.ok {return}
+	if n > CHUNK_VOLUME {
+		reader_fail(r)
+		return
+	}
+	for _ in 0 ..< n {
+		local := read_varint(r)
+		delta := read_varint(r)
+		if !r.ok {return}
+		if local >= CHUNK_VOLUME {
+			reader_fail(r)
+			return
+		}
+		if updates != nil {append(updates, Saved_Update{u16(local), delta})}
+	}
 	return
 }
 

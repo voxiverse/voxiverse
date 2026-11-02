@@ -23,7 +23,10 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	}
 	held.slots[0] = {item_of_material(.Seeds), 3, 0}
 	held.slots[24] = {item_of_material(.Seeds), 1, 0}
-	chunks := []Saved_Chunk{{{-3, 0, 40}, &terrain, {held}}, {{-16, CHUNK_MIN_Y, 47}, &air, nil}}
+	chunks := []Saved_Chunk {
+		{{-3, 0, 40}, &terrain, {held}, nil},
+		{{-16, CHUNK_MIN_Y, 47}, &air, nil, nil},
+	}
 	tops := []Saved_Top{{-40, 600, 12}, {-1, 512, WORLD_MIN_Y}}
 	testing.expect_value(t, region_of({-16, 0, 47}), region)
 
@@ -104,7 +107,7 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 		uniform = marble,
 	}
 	region := Region_Pos{0, 0}
-	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk, nil}, {{2, 0, 2}, &solid, nil}}
+	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk, nil, nil}, {{2, 0, 2}, &solid, nil, nil}}
 	w: Writer
 	writer_init(&w, context.temp_allocator)
 	region_encode(with_pack, &w, region, chunks, nil)
@@ -154,4 +157,32 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 	_, _, is_uniform, ok = region_next_chunk(&r, scratch, &ents)
 	testing.expect(t, ok && !is_uniform && scratch[5] == marble2)
 	chunk_release(&chunk, &arrays)
+}
+
+@(test)
+test_chunk_payload_keeps_waiting_updates :: proc(t: ^testing.T) {
+	blocks := Chunk_Blocks {
+		uniform = .Stone,
+	}
+	waiting := []Saved_Update{{0, 0}, {17, 5}, {4095, 1200}}
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	write_chunk_payload(&w, &blocks, nil, waiting)
+	scratch := new(Block_Array, context.temp_allocator)
+	r := reader_make(w.buf[:])
+	r.block_limit = 1000
+	entities := make([dynamic]Block_Entity, context.temp_allocator)
+	got := make([dynamic]Saved_Update, context.temp_allocator)
+	uniform, is_uniform := read_chunk_payload(&r, scratch, &entities, &got)
+	testing.expect(t, reader_finish(&r) && is_uniform && uniform == .Stone)
+	testing.expect_value(t, len(got), 3)
+	for u, i in waiting {testing.expect_value(t, got[i], u)}
+
+	// A cell outside the chunk is damage.
+	clear(&w.buf)
+	write_chunk_payload(&w, &blocks, nil, {{4096, 0}})
+	r = reader_make(w.buf[:])
+	r.block_limit = 1000
+	read_chunk_payload(&r, scratch, &entities)
+	testing.expect(t, !reader_finish(&r), "a cell past the chunk was accepted")
 }

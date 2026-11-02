@@ -30,7 +30,7 @@ Chunk :: struct {
 	state:          Chunk_State,
 	blocks:         game.Chunk_Blocks,
 	modified:       bool, // edited since generated (saved when unloaded: save.odin)
-	water:          bool, // may hold water (set when it does, never cleared): liquids skip it if not
+	restless:       bool, // may hold a block with simulation rules (set when it does, never cleared): waking skips it if not
 	capture:        u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
 	block_entities: [dynamic]game.Block_Entity, // sorted by local (block_entities.odin; heap)
 }
@@ -41,6 +41,7 @@ Chunk_Store :: struct {
 	chunks:        base.Pool(Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
+	reg:           ^game.Registry, // for the rules' tables (sim_restless); set by the world
 	jobs:          base.Jobs,
 	done:          base.Queue(^Gen_Task), // finished tasks, from workers
 	free_tasks:    [dynamic]^Gen_Task,
@@ -94,7 +95,6 @@ Gen_Task :: struct {
 	array:      ^game.Block_Array,
 	uniform:    game.Block,
 	is_uniform: bool,
-	water:      bool, // it holds water
 	skipped:    bool, // shutting down: not generated
 	ms:         f32, // how long generating took
 	// Or a column's natural tops instead of a chunk (chunks_request_tops):
@@ -166,7 +166,7 @@ chunks_set_block :: proc(w: ^Chunk_Store, p: game.Block_Pos, b: game.Block) -> b
 	chunk_cow(w, c)
 	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
 	c.modified = true
-	if _, water := game.water_level(b); water {c.water = true}
+	if block_has_rules(w, b) {c.restless = true}
 	return true
 }
 
@@ -243,7 +243,7 @@ chunks_insert :: proc(
 			array = dst,
 		}
 	}
-	chunk.water = has_water(&chunk.blocks)
+	chunk.restless = chunk_restless(w, &chunk.blocks)
 	if len(entities) > 0 {
 		chunk.block_entities = make([dynamic]game.Block_Entity, runtime.heap_allocator())
 		append(&chunk.block_entities, ..entities)
@@ -277,7 +277,6 @@ chunks_collect :: proc(
 		chunk := base.pool_get(&w.chunks, task.handle)
 		assert(chunk != nil && chunk.state == .Generating, "generating chunks are never unloaded")
 		chunk.state = .Ready
-		chunk.water = task.water
 		chunk.blocks = {
 			array = task.array,
 		}
@@ -288,6 +287,7 @@ chunks_collect :: proc(
 			}
 		}
 		append(&w.free_tasks, task)
+		chunk.restless = chunk_restless(w, &chunk.blocks)
 		if !keep(chunk.pos, data) {chunks_unload(w, chunk.pos)}
 	}
 }
@@ -325,27 +325,7 @@ generate_job :: proc(data: rawptr) {
 			task.array,
 			&w.caches[context.user_index],
 		)
-		made := game.Chunk_Blocks {
-			uniform = task.uniform,
-		}
-		if !task.is_uniform {made = {
-				array = task.array,
-			}}
-		task.water = has_water(&made)
 		task.ms = f32(time.duration_milliseconds(time.tick_since(start)))
 	}
 	base.queue_push(&w.done, task)
-}
-
-// has_water: whether any of blocks is water.
-@(private)
-has_water :: proc(blocks: ^game.Chunk_Blocks) -> bool {
-	if blocks.array == nil {
-		_, water := game.water_level(blocks.uniform)
-		return water
-	}
-	for b in blocks.array {
-		if _, water := game.water_level(b); water {return true}
-	}
-	return false
 }

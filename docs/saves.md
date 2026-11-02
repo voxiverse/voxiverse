@@ -13,7 +13,7 @@ save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json in universes from before accounts)
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
-worlds/<address>/regions/r.<x>.<z>.vxr      region format 4
+worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
 lock                                          held while the universe is open (never part of a save)

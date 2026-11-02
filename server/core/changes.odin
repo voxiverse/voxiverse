@@ -62,7 +62,7 @@ set_block :: proc(
 	if before, seen := ch.blocks[p]; seen && before != who {who = -1}
 	ch.blocks[p] = who
 	if column_edited(w, p, b) {ch.columns[{p.x >> game.CHUNK_SHIFT, p.z >> game.CHUNK_SHIFT}] = {}}
-	wake_water(w, p, cause.action)
+	sim_wake(w, p, cause.action)
 	for d in ([6][3]i32{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}}) {
 		support_check(w, p + d, cause.action) // (a plant or a ladder beside lost its footing, perhaps)
 	}

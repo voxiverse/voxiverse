@@ -82,6 +82,7 @@ world_start :: proc(w: ^World) -> bool {
 		virtual.arena_destroy(&w.arena)
 		return false
 	}
+	w.chunks.reg = s.registry
 	w.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
 	if err := updates_init(&w.updates, arena); err != nil {
 		log.errorf("server cannot allocate a world's block updates: %v", err)

@@ -75,6 +75,7 @@ package** (#96) was switched on by L3, see above.
 | `assets/packs/voxiverse/data/items` | Items | `*.json` |
 | `assets/packs/voxiverse/data/models` | Models | `*.json` |
 | `assets/packs/voxiverse/data/shapes` | Block shapes | `*.json` |
+| `assets/packs/voxiverse/data/sim` | Simulation rules (fluids) | `*.json` |
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |

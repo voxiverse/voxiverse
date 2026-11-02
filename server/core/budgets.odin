@@ -230,7 +230,7 @@ budget_world :: proc(h: ^Harness) -> (w: ^World, ok: bool) {
 // flush and the journal.
 budget_world_tick :: proc(s: ^Server, w: ^World) {
 	s.tick += 1
-	updates_run(w)
+	sim_run_scheduled(w)
 	changes_flush(w)
 	journal_tick(w)
 	free_all(context.temp_allocator)

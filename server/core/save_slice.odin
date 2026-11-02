@@ -38,9 +38,10 @@ SAVE_SLICE_US :: 2000
 
 // Cap_Region: a region captured, its loaded chunks still to be encoded.
 Cap_Region :: struct {
-	job:  ^Region_Job,
-	live: [dynamic]game.Chunk_Pos, // marked chunks to encode
-	next: int,
+	job:     ^Region_Job,
+	live:    [dynamic]game.Chunk_Pos, // marked chunks to encode
+	waiting: map[game.Chunk_Pos][]game.Saved_Update, // their scheduled updates at T (heap)
+	next:    int,
 }
 
 Cap_World :: struct {
@@ -164,6 +165,10 @@ world_capture :: proc(s: ^Server, job: ^Save_Job, w: ^World) {
 			append(&cw.regions[i].live, c.pos)
 		}
 	}
+	for &r in cw.regions {
+		if len(r.live) == 0 {continue}
+		r.waiting = sim_waiting(w, r.live[:], heap())
+	}
 	for column, top in w.tops {
 		r := game.region_of({column.x >> game.CHUNK_SHIFT, 0, column.y >> game.CHUNK_SHIFT})
 		if i, ok := index[r]; ok {
@@ -229,6 +234,8 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 			return
 		}
 		append(&job.batch.regions, cr.job)
+		for _, got in cr.waiting {delete(got, heap())}
+		delete(cr.waiting)
 		cr.job = nil
 		job.ri += 1
 		return
@@ -270,7 +277,7 @@ chunk_encode :: proc(job: ^Save_Job, cw: ^Cap_World, cr: ^Cap_Region, pos: game.
 		return
 	}
 	clear(&job.writer.buf)
-	game.write_chunk_payload(&job.writer, blocks, entities)
+	game.write_chunk_payload(&job.writer, blocks, entities, cr.waiting[pos])
 	append(&cr.job.chunks, Job_Chunk{pos = pos, bytes = slice.clone(job.writer.buf[:], heap())})
 }
 

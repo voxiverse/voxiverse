@@ -139,6 +139,8 @@ Content_Kind :: enum u8 {
 	Shape,
 	Game_Mode,
 	Model,
+	Channel,
+	Sim_Rule,
 }
 
 Block_Flag :: enum u8 {
@@ -394,6 +396,8 @@ Registry :: struct {
 	structures: []Structure_Def,
 	game_modes: []Mode_Def,
 	models:     []Model_Def,
+	channels:   []Channel_Info, // by channel id; 0 is voxiverse:light
+	sim:        Sim_Rules,
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
 	hash:       u64,
@@ -820,6 +824,7 @@ registry_text_of :: proc(
 			m.voxels,
 		)
 	}
+	registry_sim_text(reg, &b)
 	if all {
 		for s in reg.structures {
 			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)

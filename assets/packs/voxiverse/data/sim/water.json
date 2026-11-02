@@ -1,0 +1,13 @@
+{
+  "water": {
+    "behaviour": "flow",
+    "levels": [
+      "voxiverse:water", "voxiverse:water_1", "voxiverse:water_2", "voxiverse:water_3",
+      "voxiverse:water_4", "voxiverse:water_5", "voxiverse:water_6", "voxiverse:water_7"
+    ],
+    "falling": "voxiverse:falling_water",
+    "delay": 5,
+    "reach": 4,
+    "sources_form": true
+  }
+}

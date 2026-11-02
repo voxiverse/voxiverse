@@ -100,7 +100,7 @@ bulk_edit :: proc(
 	}
 	if changed == 0 {return 0, .Done, protected}
 
-	wake_water_box(w, lo, hi, cause.action)
+	sim_wake_box(w, lo, hi, cause.action)
 	supports_check_box(w, lo, hi, cause.action)
 	shapes_update_box(w, lo, hi, cause)
 	for z in lo.z ..= hi.z {
@@ -170,7 +170,7 @@ edit_chunk :: proc(
 					log.errorf("server bulk edit stopped chunk=%v error=%v", c.pos, err)
 					return
 				}
-				if _, water := game.water_level(new); water {c.water = true}
+				if block_has_rules(&w.chunks, new) {c.restless = true}
 				entity_lifecycle(w, p, old, new, act)
 				append(&entries, game.Journal_Entry{pos = p, old = old, new = new})
 				changed += 1

@@ -459,7 +459,7 @@ tick :: proc(s: ^Server) {
 				if !anyone_wants(w, pos, game.SERVER_UNLOAD_MARGIN) {return false}
 				// Water next door that stopped at this chunk's edge flows on.
 				origin := game.chunk_origin(pos)
-				wake_water_box(w, origin, origin + game.CHUNK_SIZE - 1, 0, only_border = true)
+				sim_wake_box(w, origin, origin + game.CHUNK_SIZE - 1, 0, only_border = true)
 				return true
 			},
 			w,
@@ -510,7 +510,7 @@ tick :: proc(s: ^Server) {
 			unload_unwanted(w)
 		}
 		if !frozen {
-			updates_run(w)
+			sim_run_scheduled(w)
 			{
 				base.profile_scope("random ticks")
 				random_ticks(w)

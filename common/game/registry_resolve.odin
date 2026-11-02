@@ -511,6 +511,9 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	reg.game_modes = make([]Mode_Def, len(b.defs[.Game_Mode]))
 	for &m, i in b.defs[.Game_Mode] {reg.game_modes[i] = read_game_mode(b, &m, item_numbers)}
 
+	// --- Channels. ---
+	read_channels(b, reg)
+
 	// --- Structures. ---
 	if len(b.defs[.Structure]) > MAX_STRUCTURES {
 		fail(
@@ -544,6 +547,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 		for c in tmpl.cells {hasher_mix(&h, u64(c))}
 		reg.structures[i] = {m.id, tmpl, hasher_finish(h)}
 	}
+	if len(b.errs) > 0 {return}
+
+	// --- Simulation rules (named blocks must exist). ---
+	build_sim_rules(b, reg)
 	if len(b.errs) > 0 {return}
 
 	reg.packs = make([]Pack_Info, len(b.packs))
