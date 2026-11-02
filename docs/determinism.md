@@ -12,7 +12,8 @@ on this property:
 - a client on one operating system predicts what a server on another decides.
 
 Read this document before changing shared code (`common/game/`, `server/`, `common/worldgen/`).
-`build check` enforces rules 2 and 3.
+`build check` enforces rules 2 and 3 over `common/game`, `common/worldgen`, `common/script`
+and the server packages (`tools/build/determinism.odin`).
 
 ## Tiers
 
@@ -24,8 +25,8 @@ Read this document before changing shared code (`common/game/`, `server/`, `comm
 
 A live server is not lockstep: inputs and chunk jobs arrive when they arrive. The
 reproducible form is the **stepped server** (`Config.stepped`). A stepped server starts no
-thread, runs chunk jobs inline, and receives inputs per tick. It is currently used by the tests and the
-cross-OS job, and will be used by replay. No map iteration order and no thread
+thread, runs chunk jobs inline, and receives inputs per tick. The tests and the cross-OS job
+run on it. No map iteration order and no thread
 completion order may reach state or the wire.
 
 ## Rules
@@ -35,8 +36,8 @@ completion order may reach state or the wire.
    against that changing.
 2. **Transcendentals.** Transcendental functions in state come from `common/base/numbers.odin`:
    `base.sin`, `base.cos`, `base.sincos` and `base.exp`, each for `f32` (computed in `f64`
-   and rounded once) and for `f64`, `base.pow` (`f64`; the script VM's `^`, M51a) and `base.fmod` (`f64`, exact
-   as C's `fmod`; the script VM's `%` and `math.fmod`, M51c). They
+   and rounded once) and for `f64`, `base.pow` (`f64`; the script VM's `^`) and `base.fmod` (`f64`, exact
+   as C's `fmod`; the script VM's `%` and `math.fmod`). They
    are plain Odin code: Cephes' sine and cosine as `core:math.sincos_f64` has them,
    FreeBSD's `e_exp.c` for `exp` and its `e_pow.c` for `pow` (exact on powers of two and of
    ten, `sqrt` for `y = 0.5`, C99 Annex F's special cases, and a NaN result always
@@ -66,8 +67,8 @@ completion order may reach state or the wire.
 6. **Float-to-integer casts.** A float is cast to an integer only when it is known to be in
    range. Out-of-range and NaN casts behave differently on x64 and arm64.
 7. **Toolchain updates.** A toolchain bump (`odinup.toml`) can change the Odin code of
-   `core:math`. The cross-OS job and the world generation golden test run on every commit,
-   so a bump that changes state fails CI on the bump itself.
+   `core:math`. The cross-OS job and the golden hashes of world generation run on every
+   commit, so a bump that changes state fails CI on the bump itself.
 
 A line that is not state declares so with a trailing `// numbers: <why>` comment, and the lint
 accepts it. Examples are `prediction_decay`'s visual offset and the pipe's simulated jitter.
@@ -97,7 +98,7 @@ is reported by name.
 
 ## The harness
 
-`server/core/harness.odin` provides the stepped server that tests run on (T2, issue #66). A
+`server/core/harness.odin` provides the stepped server that tests run on. A
 `Harness` holds the server, an in-memory network, and the parties that play on it. A test
 waits for a **number of ticks**, never for a clock or a sleep.
 
@@ -108,7 +109,7 @@ waits for a **number of ticks**, never for a clock or a sleep.
 1. The network's clock moves to the time of the tick about to run
    (`simnet_tick_time(tick)`: `tick * 1 s / TICK_RATE` in integers after a fixed epoch, so
    30 ticks are exactly one second).
-2. Every party takes its turn, in the order added: the M38 mirror, a test client, a
+2. Every party takes its turn, in the order added: the mirror, a test client, a
    `engine.Session`, a bot.
 3. The server steps.
 
@@ -172,7 +173,7 @@ pipe's `Fake_Client`. A wait lasts at most `seconds * TICK_RATE` ticks; it never
 
 ## Scenarios
 
-`server/core/scenario_test.odin` (T3) plays a `Scenario` on the harness. A scenario is a sequence
+`server/core/scenario_test.odin` plays a `Scenario` on the harness. A scenario is a sequence
 of steps, each consisting of a tick, a player and an operation, played by the mirror
 (player 0, predicting) and bots on the simulated network. Whatever the scenario does, the
 runner checks that:
@@ -189,7 +190,7 @@ A new area of play is covered by a new scenario, not by a new test with its own 
 ## The cross-OS job
 
 `build determinism` runs `core.test_determinism_session`, a scripted 10 000-tick session
-on a stepped server with seed 38 and a mirror client on the pipe. It runs at `-o:minimal`
+on a stepped server with seed 38 and a mirror client on the pipe (`DETERMINISM_SEED`). It runs at `-o:minimal`
 and at `-o:speed`, each writing `build/determinism/<os>.<opt>.txt` (one line per tick with
 every section's hash, and a full dump at each checkpoint), and compares the logs.
 
@@ -204,16 +205,18 @@ addresses, and compares every tick's root. A difference is reported as:
 diverged at tick 5000: Entities: entities[0].yaw = 0x3f8ccccd (1.1) vs ...
 ```
 
-The everyday suite runs 2 000 ticks (`-define:VX_DETERMINISM_TICKS=n`).
+The everyday suite runs 2 000 ticks; `-define:VX_DETERMINISM_TICKS=n` sets the length.
 
 ## The desync detector
 
 Every 30 inputs, the client sends a `Prediction_Check`: a 32-bit hash per field of the state
 it predicted after that input. The server hashes its own state after the same input.
 
-The server judges a check only if the player has been **quiet** for 60 ticks. `disturb`
-marks a player as disturbed on a teleport, a landing, knockback, saved state, a rules change,
-a refused input, or a changed block within 4 blocks of the player's box. When a judged check
+The server judges a check only if the player has been **quiet** for 60 ticks
+(`DESYNC_QUIET_TICKS`; `DESYNC_CHECK_INPUTS` is 30). `disturb` marks a player as disturbed on
+joining, a teleport, a landing, knockback, death and respawn, a change of game mode, a change
+of gear, a rules change in the world, a refused input, or a changed block within 4 blocks of
+the player's box (`DESYNC_NEAR`). When a judged check
 differs, the server names the differing fields:
 
 ```
@@ -222,6 +225,3 @@ server desync player=<name> sequence=<n> fields=velocity,position
 
 Desyncs are counted in `Stats.desyncs`, `checks_judged`, `checks_skipped`, and the minute's
 tick summary line. A check never changes state.
-
-The following are not implemented: sending a desync dump back to the client, showing desyncs
-in F3, and lockstep determinism of the live server.

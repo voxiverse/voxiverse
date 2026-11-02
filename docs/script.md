@@ -3,7 +3,7 @@
 Gameplay scripts (`.vxs` files) are written in our own Lua-like language, compiled to
 bytecode and run by a register VM in Odin (`common/script/`). If you know Lua 5.4, you know
 most of it: this page lists what is kept, what is added, what is dropped and what is
-different, then the limits and how errors look. The design is in M51's spec (history.md).
+different, then the limits and how errors look.
 
 A *script* is a `.vxs` source; compiling one gives a *module*, its top-level function. A
 *run* is one call from the host into the VM until it returns, errors, faults or suspends; a
@@ -55,8 +55,9 @@ There is no ambient clock, randomness, I/O or code loading: no `io`, `os`, `pack
 `require`, `load`, `loadstring`, `loadfile`, `dofile`, `string.dump`, `math.random`,
 `math.randomseed`; `collectgarbage` only takes `"count"`; `debug` has only `traceback`.
 Using one says where to look instead, e.g. `'math.random' is not available in scripts:
-randomness comes from the world API`. The world API (M52) gives randomness, time in ticks,
-and `require` within a pack.
+randomness comes from the world API`. Randomness, time and module loading belong to the
+host, which supplies them as natives; the VM has none of its own. The VM is hosted by the
+`./build.sh script` tools, the benchmark and the fuzzers (see Tools).
 
 Metamethods not supported: `__gc`, `__mode` (weak tables), `__close`, `__pairs`, `__name`
 and the bitwise ones.
@@ -210,7 +211,7 @@ the run; `--trace` writes every instruction executed, with the register it set, 
 calls of natives, suspensions, errors and collector steps to stderr);
 `./build.sh script disasm <file>` lists its bytecode, one block per function.
 
-`./build.sh bench script [-check] [--smoke] [--lua <exe>]` (also `./build.sh script bench`)
+`./build.sh bench script [-check] [--smoke] [-repetitions N] [--lua <exe>]` (also `./build.sh script bench`)
 runs the benchmark programs of `common/script/testdata/bench` and, with `--lua`, the same
 programs under that Lua 5.4, printing the ratios; `./build.sh script conform --lua <exe>`
 runs the conformance files marked `--! lua` under both and compares what they print.

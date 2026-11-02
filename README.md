@@ -104,7 +104,7 @@ Run `./build.sh <command>` on Linux and macOS, and `build <command>` on Windows
 | `run` | Builds and runs the game. Arguments after `--` are passed to the game, e.g. `run -- --frames 120`. |
 | `serve` | Builds and runs the dedicated server. Arguments after `--` are passed to it. |
 | `debug` | Builds the game and starts it in gdb/lldb (RAD Debugger on Windows) with the Odin pretty-printers. |
-| `netdump`, `replay` | Prints a network trace, or replays its client messages against a fresh server (see [docs/debugging.md](docs/debugging.md)). |
+| `netdump`, `replay` | Prints a network trace, or replays its client messages against a fresh server (see [docs/network.md](docs/network.md)). |
 | `sfx` | Writes every sound effect to `build/sounds/*.wav`. |
 | `worldmap` | Draws a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation). |
 | `bench <scenario>` | Benchmarks under fixed conditions. Scenarios: `chunks` (generation, light and meshing on one thread; `-check` as in CI), `telemetry` (an event's emit and write cost; `-check` as in CI), `budgets` (the server's save, audit, counters, journal and flood costs; `-check` as in CI), and the game scenarios `viewmodel`, `load`, `views`, `flight`. Results are written to `build/benchmarks/`. |
@@ -191,7 +191,7 @@ Options are organized in tabs:
 
 Commands are entered in the chat, starting with `/`; Tab completes the commands you are
 permitted to use. In your own world you may do anything. On a server, you may do what its
-roles allow (see [Permissions](docs/debugging.md#permissions)).
+roles allow (see [Permissions](docs/server.md#permissions)).
 
 Builders edit in bulk. `/pos1` and `/pos2` mark the corners of a box at the block you are
 looking at; then `/fill stone`, `/replace dirt sand`, or `/sphere 5 stone` (at the first
@@ -295,7 +295,7 @@ odin check client -no-entry-point -collection:client=client -collection:server=s
 | Document | Contents |
 |---|---|
 | [docs/platforms.md](docs/platforms.md) | Supported systems, platform tiers, and how to report a problem. |
-| [docs/debugging.md](docs/debugging.md) | Debugging, profiling, benchmarking, and the developer-facing systems. |
+| [docs/debugging.md](docs/debugging.md) | Debugging; the other developer docs (graphics, benchmarking, network, server, world) are listed in [docs/README.md](docs/README.md). |
 | [docs/determinism.md](docs/determinism.md) | What the simulation guarantees to be bit-identical, and the rules that keep it so. |
 | [docs/saves.md](docs/saves.md) | The universe directory, the save transaction, backups, export and import. |
 | [docs/telemetry.md](docs/telemetry.md) | What telemetry collects, how it is transported, and how to query it. |

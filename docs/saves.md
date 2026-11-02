@@ -1,6 +1,6 @@
 # Saves
 
-This document describes how the server stores a universe on disk (M46, M46b).
+This document describes how the server stores a universe on disk.
 
 A universe is a directory. Everything the server keeps is in that directory, and nothing
 else is.
@@ -11,7 +11,7 @@ else is.
 universe.cfg            format, seed, home world, kit, generation, age
 save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
-characters/<account>/<name>.json   (players/<name>.json in universes from before accounts)
+characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
@@ -86,7 +86,7 @@ performed. If there is no `save.tx`, every `.new` and `.tmp` file is removed and
 generation stands.
 
 A save is therefore either the old generation or the new one, never a mixture. This also keeps
-a character's stack and the chest it came from consistent (M31's ledger cannot observe a
+a character's stack and the chest it came from consistent (the item ledger cannot observe a
 mixture).
 
 A failed batch is logged; its files are held in `Store.carry`, and the next save writes them
@@ -117,7 +117,7 @@ A region file has the same bytes whenever it is written (tops are sorted).
 
 ## Export and import
 
-A `.vxu` file contains one universe (`server/core/export.odin`): a header, then each file with
+A `.vxu` file contains one universe (`server/core/export.odin`): a header (the format and the universe's packs with their hashes), then each file with
 its path, size and CRC, then a seal over every path and CRC. The files are those of a
 backup, plus the journal up to the end that its `world.cfg` records. `--no-journal` omits
 the journal, which names characters. The file is not compressed, because regions are already
@@ -143,7 +143,7 @@ Import never trusts the file. It refuses, naming the offending path:
 
 Import writes `<dest>.import/`, checks every CRC and the seal, and then renames the directory
 to `<dest>`. The universe therefore appears whole or not at all. An older universe is
-migrated when it is opened.
+handled when it is opened, as in [Migrations](#migrations).
 
 ## One process per universe
 
@@ -162,21 +162,20 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 ## Formats
 
-`SAVE_FORMAT` (6) is recorded in `universe.cfg` and in each `world.cfg`.
+`SAVE_FORMAT` (6) is recorded in `universe.cfg` and in each `world.cfg`. A universe of any other format is refused (see [Migrations](#migrations)).
 
 ### Region format 5
 
-A region file in format 5 stores, after each chunk's blocks, its block entities, its waiting
+A region file (`REGION_FORMAT`, 5) stores, after each chunk's blocks, its block entities, its waiting
 simulation updates (`varint n`, then per update the cell's local index and the ticks until
 it is due; written when the chunk is saved or unloaded, scheduled again when it loads) and its
 channels: `varint n`, then per channel its name and its values (one value, or a palette and
 runs). Only stored, saved channels not at their default are written, so a chunk without
 any costs one byte. A channel name the world's packs no longer have is dropped when the
-region loads, with one warning naming it and the region. It also has a table of item IDs
-after the block names. It has:
+region loads, with one warning naming it and the region. A region file has:
 
-- a header with the names of the blocks: every block of the registry, by its number (the
-  IDs), followed by the item ID table;
+- a header with the names of the blocks (every block of the registry, by its number: the
+  IDs), followed by a table of item IDs;
 - an index: position, offset, length and CRC per chunk;
 - a CRC of the header.
 
@@ -210,23 +209,20 @@ them whole.
 
 A failing entry commits nothing, and the open fails with its reason.
 
-`MIGRATIONS` is currently empty. Before 1.0 nothing is compatible, so M47a (format 6) did not
-migrate format 5, nor the formats from before universes, which it previously upgraded in
-memory. A universe of an older format is refused with the following message, and nothing in
-it is touched:
+`MIGRATIONS` is empty: before 1.0 nothing is compatible, so a universe of an older format is
+refused with the following message, and nothing in it is touched:
 
 ```
 this world was made by an older build; create a new one
 ```
 
-The chain is retained for the first release that must keep saves. The rules for migrations
-are then:
+The chain exists for the first release that must keep saves. The rules for a migration:
 
 - A migration reads only files of its `from` format, with readers frozen beside it (never the
-  current reader, which will change).
+  current reader, which changes).
 - A migration is never edited once released.
-- A migration is tested from a committed fixture of its `from` format, written by the code
-  of that format. Fixtures are marked `-text` in `.gitattributes`.
+- A migration is tested from a committed fixture of its `from` format (under `assets/fixtures/`), written by the
+  code of that format. Fixtures are marked `-text` in `.gitattributes`.
 
 ## Backups
 

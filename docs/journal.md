@@ -1,4 +1,4 @@
-# The edit journal (M45)
+# The edit journal
 
 Every block a world's state changes is recorded with its cause: who (an actor), through
 what (a system), and how (the mechanism of this one change). A bad script's or griefer's
@@ -28,14 +28,19 @@ Where each path gets its action:
 | a plant losing its footing | the action of the change under it | Support |
 | flowing water | `Update.action`: the action of the change that woke it; `action_world(w, .Liquid)` when woken by a chunk loading | Liquid |
 | random ticks, gates, grazing | `action_world(w, <system>)`: the world's own, one per system per tick | Random_Tick, Gate, Graze |
+| a pack's statement rule | `Rule`: the action of the change that woke it, else the world's | Rule |
+| a rule or a game mode changed | `journal_setting`: an action of its own with no blocks, the command text saying what | Setting |
 | rollback, undo, redo | their own action | Rollback, Undo, Redo |
 
 Consequences inherit their cause, so rolling back a griefer also restores the water they
 released, and rolling back someone else's change next to water they woke leaves that water
 (it is theirs: reported as `kept`).
 
-Entities and inventories are not journaled (M50, M31's ledger); a block entity's value is kept with the entry that removed it, in memory only (M48b, `server/core/block_entities.odin`: a rollback puts a broken chest back with what it held, taking its spilled stacks back from the ground; M48c saves the values);
-rules, the clock and generator parameters get marker records only (`Params`).
+Entities and inventories are not journaled (the item ledger covers items). A block entity's
+value is kept with the entry that removed it (`server/core/block_entities.odin`): in memory
+for the newest `ENTITY_UNDO_MAX` (4096), and in the segment files as an `Entity` record. A
+rollback puts a broken chest back with what it held, taking its spilled stacks back from the
+ground. Generator parameters get a marker record only (`Params`).
 
 ## Time
 
@@ -49,7 +54,7 @@ clock. `Tick` records carry the wall clock for people.
 closes, and a new one begins at each server start. Format (`common/game/journal.odin`,
 varints as `game.Writer`):
 
-    header:  "VXJN" u32 format(1) u32 seq u64 first_age u8 flags u32 crc32(header)
+    header:  "VXJN" u32 format(2) u32 seq u64 first_age u8 flags u32 crc32(header)
     records: u8 type, varint length, payload, u32 crc32(type, length, payload)
       1 Tick     varint64 age, svarint64 unix_ms
       2 Actor    varint index, u8 kind, string name (<= 64)
@@ -58,7 +63,10 @@ varints as `game.Writer`):
                  count x { varint local index, varint old, varint new, svarint action delta, u8 how }
       5 Save     varint64 age
       6 Params   varint64 age
+      7 Entity   svarint cx cy cz, varint local index, varint64 age, varint action,
+                 value (block_entity_pack's bytes, <= 16 KiB)
 
+An actor's `kind` is `World`, `Character` or `Script` (reserved for the script sandbox).
 Actors and actions are declared in a segment before their first use there, so every
 segment reads alone. Entries are grouped by tick (a `Tick` record per age) and by chunk,
 in the order appended, so per position the order is the order of the changes. A reader
@@ -67,8 +75,7 @@ stops at the first bad or short record (a torn tail) and reports its offset.
 `world_save` flushes, appends `Save`, then writes `world.cfg` with `journal.segment`,
 `journal.offset` and `journal.next_action`. At world start, segments after the recorded one
 are deleted and the recorded one is cut to the offset, so the journal never describes
-edits the loaded regions do not have. A save from before M45 has no keys: it starts an
-empty journal.
+edits the loaded regions do not have.
 
 ### Compaction and retention
 
@@ -78,7 +85,8 @@ segment per save: a closed segment whose newest change is older than `JOURNAL_DE
 late, never early) is rewritten once, with header flag `JOURNAL_COMPACTED`, through
 `<seq>.vxj.tmp` and a rename. A run of changes of one block by one action becomes one entry
 (the first `old`, the last `new`, the last age and `how`); entries that changed nothing are
-dropped; `Save` records go, the `Params` records and the actors and actions still named stay.
+dropped; `Save` records go, the `Params` records and the actors and actions still named stay; of
+the `Entity` records the first removal's value is kept.
 Only a run is merged, never changes of other actions in between, so the chain of `old`/`new`
 per block still agrees and replay holds. A rollback over compacted history gives the same net
 result; what is lost is the time resolution inside the segment's span (a rollback that begins
@@ -87,8 +95,8 @@ records, is never touched.
 
 Retention, in the same place: segments whose next one began more than `JOURNAL_KEEP` (7 days)
 ago are deleted, then the oldest while the directory is over `JOURNAL_MAX_BYTES` (256 MiB);
-never the newest. After retention a replay from the generator is no longer possible; replay
-from a snapshot newer than the oldest segment still is. `Config.journal_detail`,
+never the newest. After retention a replay from the generator is impossible; replay from a
+snapshot newer than the oldest segment works. `Config.journal_detail`,
 `journal_keep` and `journal_max_bytes` override the three for tests.
 
 ## Region protection
@@ -123,14 +131,16 @@ block is still what the run left (`expect`); entries appended meanwhile are fold
 so water that moved is not left behind. Chunks not loaded are loaded from the save, 16 a tick
 at most and while 64 slots are free. Progress every 5 s and at the end:
 `Rollback done (action 812): 12345 restored, 12 kept (changed by others since), 0 missing`.
+An undo of 4096 changes or fewer is applied within its tick.
 
-Not restored: dropped items and spilled chest contents (a restored chest is empty),
-entities, inventories.
+Not restored: entities, inventories, and items someone picked up from a broken chest's
+spill meanwhile (items are moved, never made); a chest whose removal the journal no longer
+holds comes back empty.
 
 `/undo [n]`, `/redo [n]` (node `world.edit.undo`, not in `default` or `mod`): undo rolls back
 the caller's last n actions by action id over the ring, as an `Undo` action; redo rolls back
 the `Undo` action. A new action of the caller clears its redo. An action whose first entry has
-left the ring is "too old to undo; use /rollback". `/history x y z` lists the last 8 changes
+left the ring is "Too old to undo; use /rollback". An undo reaches back `UNDO_DEPTH` (32) actions. `/history x y z` (node `world.rollback`) lists the last 8 changes
 at a block from the ring.
 
 ## Replay

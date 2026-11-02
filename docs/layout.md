@@ -15,13 +15,13 @@ directly in it, not its sub-folders: each sub-folder has its own row.
    output goes under `build/` (`build/tmp/` for scratch). The `scratch` lint in `check` fails
    when an untracked, non-ignored file exists anywhere else in the tree: commit it (with its
    row here) or delete it.
-2. **The folder is the noun** (the target; see *The move*): a feature has its own folder and
+2. **The folder is the noun** (see *Packages*): a feature has its own folder and
    its files drop the feature's prefix (`client/hud/hotbar.odin`, not `hud_hotbar.odin`).
    Names are singular snake_case. Platform suffixes `_linux`, `_windows`, `_darwin`, `_posix`
    and `_other` stay. A test is `<file>_test.odin`, beside the code it tests; tests spanning
    several packages, and their fixtures, go in `tests/`.
 3. **One folder per tool**: a tool is a main package in `tools/<name>/`; code shared between
-   tools goes in `tools/lib/` or `common/`. A library-plus-tool pair keeps the library in
+   tools goes in `common/`. A library-plus-tool pair keeps the library in
    `common/` or `client/` and only the command line in `tools/`.
 4. **A new feature gets a new folder** (a package) and a row here. No package sits at the
    root of a collection: imports read `collection:name`.
@@ -34,22 +34,22 @@ Cap: `70` files per package.
 
 The `layout` lint counts the non-test `.odin` files directly in a folder (tests sit beside
 their code by rule 2 and are not counted) and fails a folder over the cap; the number is
-read from the line above. Chosen from the final layout (L3): `server/core` 67, `common/game` 59,
-`client/engine` 58, `common/base` 39, every other package 25 or fewer. 70 leaves the largest
-three a few files of room and no more, so a package that keeps growing must split into feature
-packages rather than get a bigger number. There is no per-folder allowance (that would be an
-exemption) and no per-file line cap. `server/core` is one cycle (L2b); when it is split, lower
-the cap.
+read from the line above. The largest packages are `server/core` (70 files), `common/game`
+(63), `client/engine` (58) and `common/base` (39); every other package has 31 or fewer. The
+cap leaves the largest no room beyond it, so a package that keeps growing splits into
+feature packages rather than get a bigger number. There is no per-folder allowance (that would
+be an exemption) and no per-file line cap. `server/core` is one cycle, which is why it is a
+single package.
 
-## The move (state of the work: L3 of 3 done)
+## Packages
 
-Packages were split into feature packages : no package sits at the root of `client/` or `server/`. `server/core`
+No package sits at the root of `client/` or `server/`; each feature has its own. `server/core`
 is the server's one package (its state is one cycle around `Server`, `Client` and `World`);
 `client/engine` holds `App`, `Session`, and the state of every feature `App` holds, and the
 feature packages (`prompt`, `menu`, `screen`, `dev`, `console`, `overlay`, `hud`, `autopilot`)
 import it, in that order, with `client/main` on top. The tests that share a fixture which needs
 the whole frame (`ui_frame`, `overlay_fixture`) live in `client/main`. The **cap on files per
-package** (#96) was switched on by L3, see above.
+package** is enforced by the `layout` lint (see above).
 
 ## Folders
 

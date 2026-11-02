@@ -4,18 +4,17 @@ Every parser of untrusted input is a **target** of one harness of ours, written 
 (`common/base/fuzz`, the driver `tools/fuzz`, the command `build fuzz`). Ground rule 6 says
 untrusted input is validated at the edge; this is how that is a checked claim anyone can rerun.
 
-## Why our own harness, guided by outcome signatures
+## Why outcome signatures
 
 Odin's pinned compiler has no coverage instrumentation (`odin build -help`: `-sanitize` offers
 address, memory and thread only; no SanitizerCoverage, no libFuzzer). Building the targets as
 LLVM IR and linking them with clang's `-fsanitize=fuzzer` would add clang and libFuzzer (C++)
 to the build, work on Linux only, and depend on an unsupported output path with Odin's
-runtime. So the harness is guided by **outcome signatures**, not edge coverage: each target
+runtime. The harness therefore is guided by **outcome signatures**, not edge coverage: each target
 returns a `u64` that says what the input made the decoder do (the error or refusal, the stage
 reached, a bucket of bytes consumed), and an input whose signature the run has not seen joins
 the run's corpus. That finds the decoder's distinct paths through its errors, which is where a
-hostile file goes. When Odin gains coverage instrumentation the harness adds edge coverage as a
-second signature source; nothing else changes.
+hostile file goes.
 
 ## Running it
 
@@ -69,7 +68,7 @@ Then:
    `common/ogg/testdata/edge/regress/`.
 
 A failure inside `core:` (for example `core:image/png`) is fixed in our layer, by checking what
-we hand it, and is written below with the input, for the owner to report upstream.
+we hand it.
 
 ## The targets
 
@@ -79,7 +78,7 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `pack.registry` | `registry_build` over the base pack with one file replaced | the base pack's JSON files with one to four values replaced (a number by a string, an array by a 10 000-element one, ...) | errors carry a line inside the input |
 | `pack.sim_rules` | `registry_build` over the base pack and `sim_test` with one `data/sim` file | rules written from the grammar (statements, conditions, boxes, picks, nesting past the limits), which the harness mutates | a compiled rule costs at most 4 096; errors carry a line inside the input |
 | `pack.png` | `png_texture` | a valid 16x16 PNG with IHDR sizes at the edges | CRCs repaired by the fixup |
-| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) still drives the suite's `test_ogg_fuzz` (20 000 cases) |
+| `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) drives the suite's `test_ogg_fuzz` (20 000 cases) |
 | `pack.archive` | `pack_archive_read` | a valid archive of three files | refusals of bad paths and sizes |
 | `save.region` | `region_open`, then every chunk by `region_next_chunk` | a region of four chunks written by the save code | header checksum repaired |
 | `save.journal` | `journal_read_segment` | a segment of 64 records of every kind | header and record checksums repaired |
@@ -119,12 +118,7 @@ it after the case.
 - The suite on all three OSes: `test_fuzz_smoke` (`common/script/fuzz_test.odin`: the four
   script targets at seed 51, 300, 200, 100 and 100 cases); each other target's `test_fuzz_<target>_smoke` (200 cases at seed 84
   and its regression files; the three `net.client_decode`, `net.server_decode` and `net.state`
-  run 25 000, 25 000 and 3 000, as many as the loops they replaced), the harness's own tests (`common/base/fuzz/fuzz_test.odin`).
+  run 25 000, 25 000 and 3 000), the harness's own tests (`common/base/fuzz/fuzz_test.odin`).
 - `.github/workflows/nightly.yml` ("Fuzz · nightly", 03:17 UTC and by hand): every target four
   minutes under AddressSanitizer at the run number's seed; `build/fuzz/` is uploaded when
   anything failed. A failed nightly run is a bug like any failed run.
-
-## Found so far
-
-- `pack_archive_read` leaked the file table and the files read so far when it refused an
-  archive (found by the first smoke run; fixed, the refusal frees them).

@@ -201,7 +201,7 @@ permissions_text :: proc(p: ^Permissions, allocator := context.temp_allocator) -
 	b := strings.builder_make(allocator)
 	strings.write_string(
 		&b,
-		"# Voxiverse permissions (written by the server; see docs/debugging.md)\n",
+		"# Voxiverse permissions (written by the server; see docs/server.md)\n",
 	)
 	role_names := sorted_keys(p.roles)
 	for name in role_names {
