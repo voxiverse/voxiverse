@@ -31,7 +31,6 @@ heap_release :: proc(vm: ^VM) {
 	vm.mem = nil
 }
 
-@(private = "file")
 heap_commit :: proc(vm: ^VM, need: u32) -> bool {
 	if need <= vm.committed {return true}
 	target := (u64(need) + COMMIT_STEP - 1) / COMMIT_STEP * COMMIT_STEP
@@ -43,7 +42,6 @@ heap_commit :: proc(vm: ^VM, need: u32) -> bool {
 	return true
 }
 
-@(private = "file")
 large_class :: #force_inline proc "contextless" (size: u32) -> int {
 	return int(31 - bits.count_leading_zeros(size))
 }

@@ -35,7 +35,8 @@ completion order may reach state or the wire.
    against that changing.
 2. **Transcendentals.** Transcendental functions in state come from `common/base/numbers.odin`:
    `base.sin`, `base.cos`, `base.sincos` and `base.exp`, each for `f32` (computed in `f64`
-   and rounded once) and for `f64`, and `base.pow` (`f64`; the script VM's `^`, M51a). They
+   and rounded once) and for `f64`, `base.pow` (`f64`; the script VM's `^`, M51a) and `base.fmod` (`f64`, exact
+   as C's `fmod`; the script VM's `%` and `math.fmod`, M51c). They
    are plain Odin code: Cephes' sine and cosine as `core:math.sincos_f64` has them,
    FreeBSD's `e_exp.c` for `exp` and its `e_pow.c` for `pow` (exact on powers of two and of
    ten, `sqrt` for `y = 0.5`, C99 Annex F's special cases, and a NaN result always

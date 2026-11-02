@@ -1,6 +1,7 @@
 package script
 
 import "base:runtime"
+import "core:fmt"
 import "core:mem"
 import "core:strings"
 
@@ -39,11 +40,13 @@ Lib :: enum u8 {
 }
 
 Config :: struct {
-	limits:    Limits,
-	seed:      u64,
-	libs:      bit_set[Lib],
-	natives:   []Native_Spec,
-	gc_stress: bool,
+	limits:       Limits,
+	seed:         u64,
+	libs:         bit_set[Lib],
+	natives:      []Native_Spec,
+	handle_kinds: []string, // registered in order at vm_create and restore (kinds 1, 2, ...)
+	gc_stress:    bool,
+	verify:       bool, // run verify_proto after every compile (always in tests)
 }
 
 default_config :: proc() -> Config {
@@ -144,6 +147,7 @@ VM :: struct {
 	gc:             Gc_State,
 	gc_params:      Gc_Params,
 	gc_stress:      bool,
+	verify:         bool,
 	pending:        bool, // the next instruction boundary has work: the collector, the trace
 	fresh:          [dynamic]Ref, // objects made since the last instruction boundary
 	trace:          Trace_State,
@@ -180,6 +184,7 @@ vm_create :: proc(config: Config, allocator := context.allocator) -> (^VM, Scrip
 	vm.allocator = allocator
 	vm.limits = limits
 	vm.seed = config.seed
+	vm.verify = config.verify
 	vm.natives = make([dynamic]Native_Spec, allocator)
 	vm.output = make([dynamic]u8, allocator)
 	vm.fresh = make([dynamic]Ref, allocator)
@@ -239,14 +244,8 @@ setup_vm :: proc(vm: ^VM, config: Config) -> bool {
 	t.stack_cap = 64
 	t.frames = frames
 	t.frame_cap = 16
-	// The natives: the libraries' first, then the host's, in order.
-	append(&vm.natives, ..BASE_NATIVES[:])
-	append(&vm.natives, ..STRING_NATIVES[:])
-	append(&vm.natives, ..TABLE_NATIVES[:])
-	append(&vm.natives, ..MATH_NATIVES[:])
-	append(&vm.natives, ..UTF8_NATIVES[:])
-	append(&vm.natives, ..COROUTINE_NATIVES[:])
-	append(&vm.natives, ..config.natives)
+	natives_init(vm, config)
+	for k in config.handle_kinds {register_handle_kind(vm, k)}
 	if !open_base(vm) {return false}
 	// The string library is always there for the prelude (string.format); a VM without
 	// it has no global 'string'.
@@ -261,6 +260,18 @@ setup_vm :: proc(vm: ^VM, config: Config) -> bool {
 		if !lib_bind(vm, pt, pair[0], native_value(vm, pair[1])) {return false}
 	}
 	return true
+}
+
+// natives_init: the natives, the libraries' first, then the host's, in order (snapshots
+// record them by name).
+natives_init :: proc(vm: ^VM, config: Config) {
+	append(&vm.natives, ..BASE_NATIVES[:])
+	append(&vm.natives, ..STRING_NATIVES[:])
+	append(&vm.natives, ..TABLE_NATIVES[:])
+	append(&vm.natives, ..MATH_NATIVES[:])
+	append(&vm.natives, ..UTF8_NATIVES[:])
+	append(&vm.natives, ..COROUTINE_NATIVES[:])
+	append(&vm.natives, ..config.natives)
 }
 
 vm_destroy :: proc(vm: ^VM) {
@@ -306,6 +317,19 @@ compile :: proc(
 		}
 		return NIL, e
 	}
+	if ODIN_TEST || vm.verify {
+		if good, problem := verify_tree(vm, proto); !good {
+			return NIL, Script_Error {
+				kind = .Runtime,
+				message = fmt.aprintf(
+					"the compiler made a function the verifier refuses: %s",
+					problem,
+					allocator = allocator,
+				),
+				source = strings.clone(name, allocator),
+			}
+		}
+	}
 	envr := as_ref(env) if env.tag == .Table else vm.globals
 	cl := heap_alloc(vm, .Closure, size_of(Closure))
 	if cl == 0 {
@@ -338,7 +362,7 @@ call :: proc(
 	}
 	th := obj(vm, vm.main_thread, Thread)
 	th.top = 0
-	th.frame_count = 0
+	frames_drop(vm, th, 0)
 	vm.current = vm.main_thread
 	vm.yielding = false
 	clear(&vm.fresh)
@@ -427,7 +451,7 @@ abort :: proc(vm: ^VM) {
 	vm.yielding = false
 	th := obj(vm, vm.main_thread, Thread)
 	close_upvals(vm, th, 0)
-	th.frame_count = 0
+	frames_drop(vm, th, 0)
 	th.top = 0
 	vm.depth = 0
 	vm.state = .Idle
@@ -506,7 +530,7 @@ finish_run :: proc(vm: ^VM, status: Run_Status, allocator: mem.Allocator) -> Run
 	vm.err.has_value = false
 	close_upvals(vm, th, 0)
 	th.top = 0
-	th.frame_count = 0
+	frames_drop(vm, th, 0)
 	vm.depth = 0
 	vm.fault = .None
 	vm.state = .Idle

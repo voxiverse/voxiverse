@@ -1,5 +1,6 @@
 package base
 
+import "core:c/libc"
 import "core:math"
 import "core:testing"
 
@@ -260,3 +261,52 @@ test_pow_golden :: proc(t: ^testing.T) {
 
 @(private = "file")
 POW_GOLDEN :: u64(0x6751935c7a485e3) // FNV-1a over the bits of pow(x, y) for every pair of inputs, recorded on Linux
+
+// fmod is exact: it equals libm's fmod (which IEEE 754 makes exact too) on every pair of
+// inputs, signs, subnormals and huge quotients included.
+@(test)
+test_fmod_exact :: proc(t: ^testing.T) {
+	testing.expect_value(t, fmod(1e300, 3.25), 2.75)
+	testing.expect_value(t, fmod(-5.5, 2), -1.5)
+	testing.expect_value(t, fmod(5.5, -2), 1.5)
+	testing.expect_value(t, fmod(3, math.inf_f64(1)), 3)
+	testing.expect(t, transmute(u64)fmod(1, 0) == 0x7FF8_0000_0000_0000)
+	testing.expect(t, transmute(u64)fmod(math.inf_f64(1), 2) == 0x7FF8_0000_0000_0000)
+	testing.expect(t, transmute(u64)fmod(-4, 2) == transmute(u64)f64(-0.0))
+	rng := rng_make(0xf00d)
+	for x in INPUTS {
+		for y in INPUTS {
+			if y == 0 || math.is_inf(x) || math.is_nan(x) || math.is_nan(y) {continue}
+			testing.expectf(
+				t,
+				fmod(x, y) == libc_fmod(x, y),
+				"fmod(%v, %v) = %v, libm %v",
+				x,
+				y,
+				fmod(x, y),
+				libc_fmod(x, y),
+			)
+		}
+	}
+	for _ in 0 ..< 20_000 {
+		x := transmute(f64)(rng_u64(&rng) &~ (u64(0x7ff) << 52) |
+			u64(rng_int_max(&rng, 0x7ff)) << 52)
+		y := transmute(f64)(rng_u64(&rng) &~ (u64(0x7ff) << 52) |
+			u64(rng_int_max(&rng, 0x7ff)) << 52)
+		if y == 0 {continue}
+		testing.expectf(
+			t,
+			transmute(u64)fmod(x, y) == transmute(u64)libc_fmod(x, y),
+			"fmod(%v, %v) = %v, libm %v",
+			x,
+			y,
+			fmod(x, y),
+			libc_fmod(x, y),
+		)
+	}
+}
+
+@(private = "file")
+libc_fmod :: proc(x, y: f64) -> f64 {
+	return libc.fmod(x, y)
+}

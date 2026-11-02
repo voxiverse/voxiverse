@@ -199,6 +199,10 @@ jobs:
       # file printing the same under both.
       - name: Benchmark check, script
         run: ./build.sh bench script -check --lua lua5.4
+      # The script fuzzer's generated programs (M51c) run by PUC Lua 5.4 too: 2 000 at the
+      # fixed seed 51, each printing the same under both (docs/fuzzing.md).
+      - name: Fuzz (smoke), script programs against Lua
+        run: ./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP; its numbers compare with nothing.
       - name: Server benchmark (smoke)

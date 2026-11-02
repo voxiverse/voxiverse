@@ -19,14 +19,23 @@ import "common:base"
 
 // Target is one decoder of untrusted input.
 Target :: struct {
-	name:       string, // "<area>.<thing>": pack.json, save.region
-	run:        proc(data: []u8, allocator: runtime.Allocator) -> u64, // the signature
-	seeds:      string, // the committed seed corpus: testdata/fuzz/<name>/
-	dictionary: []string, // tokens the mutator inserts
-	max_len:    int, // the cap on an input
-	generate:   proc(rng: ^base.Rng, out: ^[dynamic]u8), // optional: a structured input
-	alloc_cap:  int, // bytes live at once; 0: max_len * 64
-	fixup:      proc(data: ^[dynamic]u8), // optional: repairs checksums after mutation (half the cases)
+	name:          string, // "<area>.<thing>": pack.json, save.region
+	run:           proc(data: []u8, allocator: runtime.Allocator) -> u64, // the signature
+	seeds:         string, // the committed seed corpus: testdata/fuzz/<name>/
+	dictionary:    []string, // tokens the mutator inserts
+	max_len:       int, // the cap on an input
+	generate:      proc(rng: ^base.Rng, out: ^[dynamic]u8), // optional: a structured input
+	alloc_cap:     int, // bytes live at once; 0: max_len * 64
+	fixup:         proc(data: ^[dynamic]u8), // optional: repairs checksums after mutation (half the cases)
+	// A target with options of its own (what follows `--` on the tool's command line):
+	// check_options says what is wrong with them ("" when nothing), run_options runs a case
+	// with them (in place of run).
+	check_options: proc(options: []string) -> string,
+	run_options:   proc(data: []u8, options: []string, allocator: runtime.Allocator) -> u64,
+	options:       []string,
+	// optional: the target's own minimizer, run before the harness's (it removes what the
+	// format is made of: statements, expressions), keeping check's failure.
+	shrink:        proc(data: []u8, check: Check_Proc, user: rawptr) -> []u8,
 }
 
 Failure :: enum {
@@ -118,7 +127,11 @@ run_case :: proc(t: ^Target, data: []u8) -> (res: Case_Result) {
 	crash_input_set(t, data)
 	started := base.thread_cpu_us()
 	watchdog_begin()
-	res.signature = t.run(data, allocator)
+	if t.run_options != nil {
+		res.signature = t.run_options(data, t.options, allocator)
+	} else {
+		res.signature = t.run(data, allocator)
+	}
 	watchdog_end()
 	elapsed := base.thread_cpu_us() - started
 	free_all(context.temp_allocator)

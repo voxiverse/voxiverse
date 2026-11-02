@@ -364,3 +364,54 @@ keys_sorted :: proc(
 	sort_by(keys[:], less)
 	return keys[:]
 }
+
+// fmod: x - n*y for the integer n that x/y truncates to, exactly (C's fmod, as musl writes
+// it: the remainder of the mantissas by shift and subtract, so no rounding at all). The
+// result has x's sign; fmod(x, ±0), fmod(±inf, y) and a NaN operand give the canonical NaN.
+// The script VM's `%` and math.fmod (core:math.mod computes x - round(x/y)*y, which loses
+// the remainder of a large x).
+fmod :: proc "contextless" (x, y: f64) -> f64 {
+	ux, uy := transmute(u64)x, transmute(u64)y
+	ex, ey := i64(ux >> 52 & 0x7ff), i64(uy >> 52 & 0x7ff)
+	sx := ux >> 63
+	if uy << 1 == 0 || y != y || ex == 0x7ff {return transmute(f64)u64(0x7FF8_0000_0000_0000)}
+	if ux << 1 <= uy << 1 {
+		if ux << 1 == uy << 1 {return 0 * x}
+		return x
+	}
+	// The mantissas, normalized (a subnormal shifted up, its exponent below 1).
+	if ex == 0 {
+		for i := ux << 12; i >> 63 == 0; i <<= 1 {ex -= 1}
+		ux <<= u64(-ex + 1)
+	} else {
+		ux &= ~u64(0) >> 12
+		ux |= 1 << 52
+	}
+	if ey == 0 {
+		for i := uy << 12; i >> 63 == 0; i <<= 1 {ey -= 1}
+		uy <<= u64(-ey + 1)
+	} else {
+		uy &= ~u64(0) >> 12
+		uy |= 1 << 52
+	}
+	for ; ex > ey; ex -= 1 {
+		i := ux - uy
+		if i >> 63 == 0 {
+			if i == 0 {return 0 * x}
+			ux = i
+		}
+		ux <<= 1
+	}
+	if i := ux - uy; i >> 63 == 0 {
+		if i == 0 {return 0 * x}
+		ux = i
+	}
+	for ; ux >> 52 == 0; ux <<= 1 {ex -= 1}
+	if ex > 0 {
+		ux -= 1 << 52
+		ux |= u64(ex) << 52
+	} else {
+		ux >>= u64(-ex + 1)
+	}
+	return transmute(f64)(ux | sx << 63)
+}

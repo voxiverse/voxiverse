@@ -1,0 +1,17 @@
+--! lua
+-- Float % and math.fmod are exact for a large dividend, as C's fmod is (found by the
+-- generated-program fuzzer against Lua 5.4: 1e300 % 3.25 gave 0.0).
+--! expect: 2.75
+--! expect: 0.5
+--! expect: -0.5
+--! expect: 2.75
+--! expect: -2.75
+--! expect: 3.5527136788005e-15
+--! expect: 1.5	0.5
+print(1e300 % 3.25)
+print((-1e300) % 3.25)
+print(1e300 % -3.25)
+print(math.fmod(1e300, 3.25))
+print(math.fmod(-1e300, 3.25))
+print(2^60 % 0.1)
+print(5.5 % 2, -5.5 % 2)

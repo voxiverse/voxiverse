@@ -134,7 +134,7 @@ int_mod :: proc "contextless" (a, b: i64) -> i64 {
 }
 
 float_mod :: proc "contextless" (a, b: f64) -> f64 {
-	m := math.mod(a, b)
+	m := base.fmod(a, b)
 	if m != 0 && (m < 0) != (b < 0) {m += b}
 	return m
 }

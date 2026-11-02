@@ -5,6 +5,7 @@ import "common:base/fuzz"
 import "common:game"
 import "common:netcode"
 import "common:ogg"
+import "common:script"
 import "server:core"
 
 // every_target: the harness's table. A package that adds a decoder of untrusted input lists
@@ -16,6 +17,7 @@ every_target :: proc() -> []fuzz.Target {
 	append(&out, ..game.net_fuzz_targets())
 	append(&out, ..netcode.net_fuzz_targets())
 	append(&out, ..ogg.ogg_fuzz_targets())
+	append(&out, ..script.script_fuzz_targets())
 	append(&out, ..core.server_fuzz_targets())
 	return out[:]
 }

@@ -10712,3 +10712,98 @@ watches that, not the session.
   takes the prebuilt release, not odinup.
 
 - *Differed:* nothing; the tree matched the table. The Decisions row *Arenas* had already been written by the spec's commit.
+
+# M51c: snapshots, the verifier and the fuzzers
+
+Builds: `snapshot.odin` (format, `snapshot`, `restore`, the structural validation,
+`restore_unchecked` for tests), `verify.odin` (`verify_proto`, run after every compile when
+`ODIN_TEST` or `Config.verify` is set, and always on restore), `fuzz.odin` (the fuzzers, as
+targets of Q1's harness in `tools/fuzz/targets.odin`), `test_fuzz_smoke`; regression files
+for whatever the fuzzers find, fixed in this milestone.
+
+Tests: every conformance file run with a snapshot, `vm_destroy` and `restore` at every slice
+of 13 units gives the same output and the same final heap hash as running straight;
+`test_snapshot_golden`: a fixed program suspended at a fixed point snapshots to bytes whose
+`XXH64` is a constant in the test, so the suite on Linux, Windows and macOS proves the bytes
+identical across OSes; a snapshot restored and snapshotted again gives the same bytes;
+`restore` refuses a truncated file, a flipped byte (checksum), version 2, a missing native and
+a missing handle kind, each with its exact message; pins and handles survive restore;  the
+size of a snapshot of a full 16 MiB heap is at most the heap's live bytes plus 5% (a count); `verify_proto` accepts every
+proto the conformance suite compiles and refuses ten hand-broken ones (register out of
+range, jump outside, wrong constant type, missing `EXTRAARG`, no final return, ...).
+
+**Timing moves to the bench (2026-10-30, #83; T5 removed `-o:speed` test steps and the
+event-cost test).** `build bench script` (M51b) gains the snapshot measurements: a VM with a
+full 16 MiB heap snapshotted and restored with validation, three times each, CPU time of the
+thread; `-check` fails over 100 ms for either, in "Benchmark check, script" on the three OSes.
+
+**The fuzzers in CI (revised 2026-10-30, #84: Q1's harness runs them).** Q1 built the
+fuzz harness (`base/fuzz`, `tools/fuzz`, `build fuzz`, the steps "Fuzz (smoke)" and
+"Fuzz · nightly"). M51c's fuzzers are four targets in it, not a command of their own:
+`script.source` (mutated sources: the compiler), `script.generated` (generated programs, run
+straight and in slices of 13 with snapshot and restore at every slice, outputs equal),
+`script.bytecode` (mutated bytecode through `verify_proto`: refused or run identically, never
+a crash, never a read outside the heap: the VM's bounds checks stay on in the fuzz build) and
+`script.snapshot` (mutated snapshots through `restore`). Their signature (Q1's outcome
+signature) is the error kind, the compile phase or fault reached, and the instruction count's
+bucket. They run in "Fuzz (smoke)" at Q1's fixed seed and every night with the others, and
+`test_fuzz_smoke` stays in the suite. With `lua5.4` in the Linux job (M51b), "Fuzz (smoke)"
+also runs `build fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4` (options after
+`--` go to the target): the generated programs in the common subset compared with the
+reference Lua. A failing case is minimized by the harness (`--minimize`) and, for
+`script.source` and `script.generated`, also by the target's own minimizer, which removes
+statements and expressions while the failure holds; it is committed to
+`testdata/fuzz/<target>/regress/` with its fix.
+
+**Threat model and fuzzing (Q1, Q5; #84):** mark the threat rows this milestone's defences
+answer `built` in `docs/threat_model.md`, with their covers (tests, fuzz targets), in the same
+commit; an untrusted input it adds gets a target in `build fuzz` (Q1's harness) and a line in
+`docs/fuzzing.md`. `lint:quality_docs` fails otherwise.
+
+Exit check: the suite and CI green, with the fuzz step clean at its fixed seed and budget;
+snapshot, restore and continue equals running straight through on every conformance file;
+the golden snapshot hash holds on all three OSes; malformed snapshots are refused without a
+crash.
+
+The design shared by M51a-c is in [M51.md](M51.md); read it first.
+
+Differed (M51c, done 2026-11-02): an earlier session of the lane had left `verify.odin` in
+the tree, uncommitted; this one wired it in (`Config.verify`, and always under `ODIN_TEST`:
+a refused proto is a compile error naming the instruction) and built the rest. Decided
+here, unattended: the conformance snapshot pass (`test_conformance_snapshot`, its own test
+so it runs beside the others) restores at every slice of 13 units for a file's first 1 000
+slices and then at every 1 000th, every file alike: `limit_infinite_loop` runs its 10 000 000
+units, 770 000 slices, and a restore with its validation takes about 2 ms in the debug build
+the suite uses, so restoring at all of them would take half an hour. `script.generated` restores at every suspension of its slices-of-13 run for the first 200 and then at every 2 000th (a mutated program may run its 2 000 000 units; the harness fails a case over 2 s of CPU, and one generated program of 28 000 units took 3.3 s restoring at all 2 300 of its slices). Slicing alone changed
+the heap (a popped frame kept the pc saved at a suspension): popped frames are now zeroed
+(`frames_drop`), and the snapshot pass compares its heap with the straight run's.
+`restore` takes the heap's size from its `Config` (the snapshot's when 0) and the other
+limits, the seed and the pacing from the snapshot; natives are remapped by name, while
+handle kinds keep their numbers (handle values in the heap carry them): `Config` gains
+`handle_kinds`, registered in order at `vm_create` and `restore`, and a snapshot whose kind
+has another number in the new VM is refused. The format also carries the run's budget,
+depth, fault and pending flags, `call_through` and the pending output; the trace is not
+snapshotted. The checksum is checked once the lengths are known, so a truncated file says
+"the snapshot is truncated", not "damaged". `heap_check` was hardened for restore (free
+lists without cycles and on their size class, a buffer reference of 0 with a count refused)
+and `structure_check` added (table indexes with room and exact counts, gray and open-upvalue
+lists without cycles, closures matching their protos, frames inside their stacks,
+continuations inside the frame below). Found by the fuzzers and fixed: `heap_check` refused a
+dead string still in the intern index ahead of the sweep (a legitimate state; the regression
+file `common/script/testdata/fuzz/script.generated/regress/heap-check-dead-interned-string.bin`,
+not minimized: the target's minimizer looped on `(nil)` then, fixed since); float `%` and
+`math.fmod` used `core:math.mod` (`x - round(x/y)*y`), which loses a large dividend's remainder
+(`1e300 % 3.25` gave 0.0, Lua 2.75): `base.fmod` is C's exact `fmod` (musl's algorithm,
+equal to libm's on 20 000 random pairs), with `arith_float_mod_exact.vxs`. The harness's
+`Target` gains `check_options`, `run_options`, `options` (what follows `--`) and `shrink` (a
+target's own minimizer, run before the bytes'). The regression files live in
+`common/script/testdata/fuzz/<target>/regress/`. The Lua comparison runs in "Game · Linux
+x64" ("Fuzz (smoke), script programs against Lua"), the job that installs `lua5.4`; "Fuzz
+(smoke)" is in the test job, which does not. `docs/threat_model.md` does not exist yet (Q5
+builds it), so there were no rows to mark. The snapshot of a full 16 MiB heap took 16.2 ms
+and its restore 22.8 ms here (`build bench script --smoke`).
+
+## Check by hand
+
+- None needs a person: the golden snapshot hash (`test_snapshot_golden`) is checked by the
+  suite on Windows and macOS in CI, which is the cross-OS proof; read that CI run's result.

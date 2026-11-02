@@ -203,7 +203,6 @@ mark_ref :: proc(vm: ^VM, r: Ref) {
 	}
 }
 
-@(private = "file")
 gclist_of :: proc(vm: ^VM, r: Ref) -> ^Ref {
 	#partial switch obj_kind(vm, r) {
 	case .Table:
@@ -427,6 +426,14 @@ close_run :: proc(vm: ^VM, end: u32) {
 // object of an allowed kind, the intern index made of live strings, and the colours the
 // phase allows. Tests and fuzzers run it.
 heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
+	is_block :: proc(starts: []u8, r: Ref) -> bool {
+		idx := u32(r) >> 4
+		return(
+			u32(r) % 16 == 0 &&
+			int(idx / 8) < len(starts) &&
+			starts[idx / 8] & (1 << (idx % 8)) != 0 \
+		)
+	}
 	starts := make([]u8, (vm.top >> 4) / 8 + 1, context.temp_allocator)
 	at := u32(HEAP_START)
 	in_use: u64
@@ -446,18 +453,29 @@ heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
 	}
 	if at != vm.top {return false, "the blocks do not end at top"}
 	if in_use != vm.in_use {return false, "bytes in use disagree with the blocks"}
+	// A free list longer than the heap has blocks has a cycle.
+	blocks := int(vm.top / 16)
 	for head, i in vm.free_small {
+		n := 0
 		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
 			fb := (^Free_Block)(&vm.mem[b])
-			if u32(b) >= vm.top || fb.kind != .Free || fb.size != u32(i + 1) * 16 {
+			n += 1
+			if n > blocks {return false, "a small free list has a cycle"}
+			if !is_block(starts, b) || fb.kind != .Free || fb.size != u32(i + 1) * 16 {
 				return false, "a small free list holds a wrong block"
 			}
 		}
 	}
-	for head in vm.free_large {
+	for head, i in vm.free_large {
+		n := 0
 		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
 			fb := (^Free_Block)(&vm.mem[b])
-			if u32(b) >= vm.top || fb.kind != .Free || fb.size <= SMALL_MAX {
+			n += 1
+			if n > blocks {return false, "a large free list has a cycle"}
+			if !is_block(starts, b) ||
+			   fb.kind != .Free ||
+			   fb.size <= SMALL_MAX ||
+			   large_class(fb.size) != i {
 				return false, "a large free list holds a wrong block"
 			}
 		}
@@ -498,7 +516,7 @@ heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
 		return false
 	}
 	values_ok :: proc(ck: ^Check, r: Ref, n: u32) -> bool {
-		if r == 0 {return true}
+		if r == 0 {return n == 0}
 		if !ref_ok(ck, r, {.Values}) {return false}
 		h := (^Header)(&ck.vm.mem[r])
 		if BUF_DATA + int(n) * size_of(Value) > int(h.size) {return false}
@@ -574,7 +592,11 @@ heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
 			bad =
 				!bytes_ok(&ck, p.code, int(p.code_len) * 4) ||
 				!values_ok(&ck, p.consts, p.consts_len) ||
+				(p.protos == 0 && p.protos_len > 0) ||
 				(p.protos != 0 && !ref_ok(&ck, p.protos, {.Values})) ||
+				(p.protos != 0 &&
+						BUF_DATA + int(p.protos_len) * size_of(Value) >
+							int((^Header)(&vm.mem[p.protos]).size)) ||
 				!bytes_ok(&ck, p.upvals, int(p.upvals_len) * size_of(Upval_Desc)) ||
 				!bytes_ok(&ck, p.lines, int(p.code_len) * size_of(Line_Info)) ||
 				!bytes_ok(&ck, p.locals, int(p.locals_len) * size_of(Local_Info)) ||
@@ -603,8 +625,13 @@ heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
 	for e in slots {
 		if e == 0 {continue}
 		count += 1
-		if !ref_ok(&ck, Ref(e), {.String}, false) {
-			return false, "the intern index holds a dead or wrong block"
+		// A string the sweep has yet to reach may be dead: the sweep takes it out of the
+		// index when it frees it. Behind the cursor nothing is dead.
+		if !is_start(&ck, Ref(e)) || obj_kind(vm, Ref(e)) != .String {
+			return false, "the intern index holds a block that is not a string"
+		}
+		if ck.dead != 255 && (^Header)(&vm.mem[e]).mark == ck.dead && e < vm.gc.sweep {
+			return false, "the intern index holds a string the sweep has freed"
 		}
 	}
 	if count != vm.intern_count {return false, "the intern count disagrees with the index"}

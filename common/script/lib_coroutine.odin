@@ -146,7 +146,7 @@ co_close :: proc(c: ^Native_Call) -> Native_Status {
 // thread_kill: a coroutine dead, its upvalues closed, its frames and stack gone.
 thread_kill :: proc(vm: ^VM, th: ^Thread) {
 	close_upvals(vm, th, 0)
-	th.frame_count = 0
+	frames_drop(vm, th, 0)
 	th.top = 0
 	th.status = .Dead
 	th.resumer = 0

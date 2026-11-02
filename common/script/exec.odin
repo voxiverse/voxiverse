@@ -955,7 +955,7 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				res := frame_result_slot(vm, s.th, fp)
 				close_upvals(vm, s.th, f.base)
 				for j in 0 ..= nargs {s.stack[res + j] = s.stack[ra + j]}
-				s.th.frame_count -= 1
+				frames_drop(vm, s.th, s.th.frame_count - 1)
 				vm.depth -= 1
 				if precall(
 					   vm,
@@ -1014,7 +1014,7 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 					for j in 0 ..< w {s.stack[res + j] = s.stack[ra + j] if j < n else NIL}
 					th.top = res + w
 				}
-				th.frame_count -= 1
+				frames_drop(vm, th, th.frame_count - 1)
 				vm.depth -= 1
 				f := top_frame(vm, th)
 				s.base = f.base

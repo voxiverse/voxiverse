@@ -116,6 +116,7 @@ package** (#96) was switched on by L3, see above.
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
 | `common/script/testdata/bench` | The VM's benchmark programs and their instruction budgets | `*.vxs`, `budgets.txt` |
 | `common/script/testdata/conformance` | The language's conformance files | `*.vxs` |
+| `common/script/testdata/fuzz/script.generated/regress` | Generated programs a fuzzer failed on, replayed by the suite | `*.bin` |
 | `common/script/testdata/disasm` | Programs and their listings | `*.vxs`, `*.txt` |
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |

@@ -85,7 +85,7 @@ m_fmod :: proc(c: ^Native_Call) -> Native_Status {
 		if d == -1 {return push_int(c, 0)}
 		return push_int(c, as_int(a) % d)
 	}
-	return push_float(c, math.mod(to_float(a), to_float(b)))
+	return push_float(c, base.fmod(to_float(a), to_float(b)))
 }
 
 @(private = "file")

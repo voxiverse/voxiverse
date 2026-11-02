@@ -1,0 +1,86 @@
+-- vxs-gen 259adcf2f4435788
+local out = {}
+local function show(v)
+  local t = type(v)
+  if t == "number" then
+    if v ~= v then return "nan" end
+    return math.type(v) .. ":" .. tostring(v)
+  elseif t == "table" then
+    return "table#" .. #v
+  elseif t == "function" or t == "thread" then
+    return t
+  end
+  return tostring(v)
+end
+local function emit(v) out[#out + 1] = show(v) end
+local ok = pcall(function()
+local function va1(...) return select('#', ...), ... end
+emit((va1((255 // ((1 % 5) + 7)), nil, tostring(255))))
+emit(select('#', va1()))
+for i2 = 1, 0, 2 do
+  local co3 = coroutine.wrap(function(a) for i = 1, 3 do a = a + coroutine.yield(a * i) end return a end)
+  emit(co3(i2)) emit(co3(1)) emit(co3(2)) emit(co3(3))
+end
+local v4 = math.sqrt(math.abs((math.sqrt(math.abs(0.5)) + (2^53 + 2^53))))
+local function va5(...) return select('#', ...), ... end
+emit((va5((-1 ~ -3), nil, "hello")))
+emit(select('#', va5()))
+emit(-1.5)
+local function va6(...) return select('#', ...), ... end
+emit((va6((0 | 0), nil, ("hello" .. ""))))
+emit(select('#', va6()))
+local fs7 = {}
+for i8 = 1, 4 do fs7[i8] = function() return i8 * (-3 & 255) end end
+for _, f in ipairs(fs7) do emit(f()) end
+local mt9 = {__add = function(a, b) return a.v + b.v end, __eq = function(a, b) return a.v == b.v end, __lt = function(a, b) return a.v < b.v end, __le = function(a, b) return a.v <= b.v end, __len = function(a) return a.v end, __call = function(a, x) return a.v * x end, __concat = function(a, b) return "cat" end, __unm = function(a) return -a.v end, __index = function(t, k) return k .. "!" end}
+local v10 = setmetatable({v = 1000000007}, mt9)
+local v11 = setmetatable({v = 255}, mt9)
+emit(v10 + v11) emit(v10 == v11) emit(v10 < v11) emit(v11 <= v10) emit(#v10) emit(v10(3)) emit(v10 .. v11) emit(-v11) emit(v10.zz)
+local v12 = {}
+for k = 1, 4 do v12[k] = (k * 2) % 11 end
+table.sort(v12) emit(table.concat(v12, ","))
+emit((pcall(function() local t = nil; return t.x end)))
+local v13 = {}
+for k = 1, 3 do v13[k] = (k * 6) % 11 end
+table.sort(v13) emit(table.concat(v13, ","))
+local fs14 = {}
+for i15 = 1, 1 do fs14[i15] = function() return i15 * (- math.mininteger) end end
+for _, f in ipairs(fs14) do emit(f()) end
+local c16 = 0
+while c16 < 3 do
+  c16 = c16 + 1
+  if (#"123" | #"123") < ((7 + 7) | (0 * math.mininteger)) then
+    local v17 = {}
+    for k = 1, 6 do v17[k] = (k * 3) % 11 end
+    table.sort(v17) emit(table.concat(v17, ","))
+    local v18 = {}
+    for k = 1, 2 do v18[k] = (k * 1) % 11 end
+    table.sort(v18) emit(table.concat(v18, ","))
+  else
+    v13[#v13] = nil
+    emit((string.find(tostring((math.maxinteger & -3)), "l", 1, true))) emit(string.byte(tostring((math.maxinteger & -3)) .. "q", 1)) emit(string.reverse(tostring((math.maxinteger & -3))))
+  end
+end
+for i19 = 2, 1, -1 do
+  emit((string.find((string.format("%d:%s", -1, "hello") .. ""), "l", 1, true))) emit(string.byte((string.format("%d:%s", -1, "hello") .. "") .. "q", 1)) emit(string.reverse((string.format("%d:%s", -1, "hello") .. "")))
+end
+for i20 = 3, 5 do
+  local function va21(...) return select('#', ...), ... end
+  emit((va21((7 * -3), nil, (string.gsub("x y z", "[aeiou]", "#")))))
+  emit(select('#', va21()))
+end
+v10[#v10] = nil
+emit(#v12)
+local mt22 = {__add = function(a, b) return a.v + b.v end, __eq = function(a, b) return a.v == b.v end, __lt = function(a, b) return a.v < b.v end, __le = function(a, b) return end, __len = function(a) return a.v end, __call = function(a, x) return a.v * x end, __concat = function(a, b) return "cat" end, __unm = function(a) return -a.v end, __index = function(t, k) return k .. "!" end}
+local v23 = setmetatable({v = (-1 * 1000000007)}, mt22)
+local v24 = setmetatable({v = (-1 - -3)}, mt22)
+emit(v23 + v24) emit(v23 == v24) emit(v23 < v24) emit(v24 <= v23) emit(#v23) emit(v23(3)) emit(v23 .. v24) emit(-v24) emit(v23.zz)
+local v25 = ("" .. "hello")
+emit(7)
+local c26 = 0
+while c26 < 4 do
+  c26 = c26 + 1
+end
+end)
+print(table.concat(out, " "))
+print(ok)

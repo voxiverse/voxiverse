@@ -8,7 +8,8 @@ import "core:strings"
 import "core:testing"
 
 // The conformance suite: every file in testdata/conformance, in name order, each in a
-// fresh VM, straight through, in slices of 7 units and under gc_stress (heap_check after).
+// fresh VM, straight through, in slices of 7 units and under gc_stress (heap_check after);
+// test_conformance_snapshot runs each with a snapshot and restore at every slice of 13 units.
 // Header comments say what to expect.
 
 CONFORMANCE_FILES := #load_directory("testdata/conformance")
@@ -59,12 +60,15 @@ conformance_expect :: proc(src: string) -> (e: Conformance_Expect, ok: bool) {
 	return e, true
 }
 
+SNAPSHOT_EVERY_FIRST :: 1000
+
 Conformance_Run :: struct {
 	output:  string,
 	status:  Run_Status,
 	error:   Script_Error,
 	text:    string, // the formatted error
 	resumes: int,
+	heap:    u64, // heap_hash at the end
 }
 
 // conformance_run compiles and runs one file with a slice, resuming until it ends.
@@ -73,6 +77,7 @@ conformance_run :: proc(
 	slice: i64,
 	memory: int,
 	gc_stress := false,
+	snapshots := false, // snapshot, vm_destroy and restore at every suspension
 ) -> (
 	r: Conformance_Run,
 ) {
@@ -100,12 +105,28 @@ conformance_run :: proc(
 		strings.write_string(&out, output_take(vm, context.temp_allocator))
 		if res.status != .Suspended {break}
 		r.resumes += 1
+		// Every slice for the first SNAPSHOT_EVERY_FIRST, then every SNAPSHOT_EVERY_FIRST-th
+		// (a run of millions of units would take an hour of restores otherwise).
+		if snapshots &&
+		   (r.resumes <= SNAPSHOT_EVERY_FIRST || r.resumes % SNAPSHOT_EVERY_FIRST == 0) {
+			bytes := snapshot(vm, context.temp_allocator)
+			vm_destroy(vm)
+			rerr: Script_Error
+			vm, rerr = restore(bytes, config, context.temp_allocator)
+			if rerr.kind != .None {
+				r.status = .Error
+				r.text = fmt.tprintf("restore: %s", rerr.message)
+				r.output = strings.to_string(out)
+				return
+			}
+		}
 		res = resume(vm, nil, slice, context.temp_allocator)
 	}
 	r.output = strings.to_string(out)
 	r.status = res.status
 	r.error = res.error
 	if res.status == .Error {r.text = error_string(res.error, context.temp_allocator)}
+	r.heap = heap_hash(vm)
 	if ok, problem := heap_check(vm); !ok {
 		r.status = .Error
 		r.text = fmt.tprintf("heap_check: %s", problem)
@@ -199,6 +220,44 @@ test_conformance :: proc(t: ^testing.T) {
 			if problem := conformance_check(e, stressed); problem != "" {
 				testing.expectf(t, false, "%s (under gc_stress): %s", f.name, problem)
 			}
+		}
+		free_all(context.temp_allocator)
+	}
+}
+
+// With a snapshot, vm_destroy and restore at every slice of 13 units (the first 1 000 slices,
+// then every 1 000th): the same output, the same end and the same heap as straight through.
+@(test)
+test_conformance_snapshot :: proc(t: ^testing.T) {
+	files := slice.clone(CONFORMANCE_FILES[:])
+	defer delete(files)
+	slice.sort_by(files, proc(a, b: runtime.Load_Directory_File) -> bool {return a.name < b.name})
+	for f in files {
+		src := string(f.data)
+		e, ok := conformance_expect(src)
+		if !testing.expectf(t, ok, "%s: a malformed '--!' header", f.name) {continue}
+		straight := conformance_run(
+			f.name,
+			src,
+			e.slice if e.slice > 0 else DEFAULT_SLICE,
+			e.memory,
+		)
+		snapped := conformance_run(f.name, src, 13, e.memory, snapshots = true)
+		if problem := conformance_check(e, snapped); problem != "" {
+			testing.expectf(t, false, "%s (restored at every slice of 13): %s", f.name, problem)
+		} else {
+			testing.expectf(
+				t,
+				snapped.heap == straight.heap,
+				"%s: restoring at every slice of 13 changed the heap",
+				f.name,
+			)
+			testing.expectf(
+				t,
+				snapped.resumes > 0 || straight.resumes == 0,
+				"%s: never suspended",
+				f.name,
+			)
 		}
 		free_all(context.temp_allocator)
 	}

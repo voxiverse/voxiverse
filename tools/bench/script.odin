@@ -29,6 +29,9 @@ SCRIPT_MAX_GEOMEAN :: 2.5
 SCRIPT_BENCH_DIR :: "common/script/testdata/bench"
 SCRIPT_CONFORMANCE_DIR :: "common/script/testdata/conformance"
 SCRIPT_BUDGETS :: "common/script/testdata/bench/budgets.txt"
+// SCRIPT_SNAPSHOT_MAX_MS: -check fails a snapshot or a restore (with its validation) of a
+// VM with a full 16 MiB heap over this, CPU time of the thread (M51c).
+SCRIPT_SNAPSHOT_MAX_MS :: 100.0
 
 SCRIPT_PROGRAMS := [?]struct {
 	name:   string,
@@ -111,6 +114,7 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 	ours, luas: [N][dynamic]f64
 	counts: [N]u64
 	outputs: [N]string
+	snaps, restores: [dynamic]f64
 	for rep in 0 ..< opts.repetitions {
 		base.metrics_start()
 		for p, i in SCRIPT_PROGRAMS {
@@ -147,6 +151,13 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 				}
 				append(&luas[i], lua_ms)
 			}
+		}
+		snap, rest, sok := script_snapshot_times(failures)
+		if sok {
+			base.metric_add(.Script_Snapshot, f32(snap))
+			base.metric_add(.Script_Restore, f32(rest))
+			append(&snaps, snap)
+			append(&restores, rest)
 		}
 		base.bench_repetition_end(&result)
 		free_all(context.temp_allocator)
@@ -224,8 +235,63 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 			)
 		}
 	}
+	if len(snaps) > 0 {
+		sm, rm := slice.max(snaps[:]), slice.max(restores[:])
+		fmt.printfln(
+			"snapshot of a full 16 MiB heap: %.1f ms, restore with validation: %.1f ms (the most of %d)",
+			sm,
+			rm,
+			len(snaps),
+		)
+		if opts.check && (sm > SCRIPT_SNAPSHOT_MAX_MS || rm > SCRIPT_SNAPSHOT_MAX_MS) {
+			append(
+				failures,
+				fmt.aprintf(
+					"snapshot %.1f ms, restore %.1f ms: over %.0f ms",
+					sm,
+					rm,
+					SCRIPT_SNAPSHOT_MAX_MS,
+				),
+			)
+		}
+	}
 	if path := base.bench_result_write(&result); path != "" {fmt.printfln("result %s", path)}
 	base.bench_result_destroy(&result)
+}
+
+// script_snapshot_times: a VM's 16 MiB heap filled with live strings, snapshotted and
+// restored (validation included); CPU time of this thread, ms.
+@(private = "file")
+script_snapshot_times :: proc(failures: ^[dynamic]string) -> (snap, rest: f64, ok: bool) {
+	vm, e := script.vm_create(script.default_config())
+	if e.kind != .None {
+		append(failures, fmt.aprintf("snapshot: vm_create: %s", e.message))
+		return
+	}
+	defer script.vm_destroy(vm)
+	fn, ce := script.compile(vm, script.SNAPSHOT_FILL, "fill", allocator = context.temp_allocator)
+	if ce.kind != .None {
+		append(failures, fmt.aprintf("snapshot: compile: %s", ce.message))
+		return
+	}
+	r := script.call(vm, fn, nil, max(i64), context.temp_allocator)
+	if r.status != .Done {
+		append(failures, fmt.aprintf("snapshot: the fill ended %v", r.status))
+		return
+	}
+	script.collect(vm)
+	t0 := base.thread_cpu_us()
+	bytes := script.snapshot(vm)
+	t1 := base.thread_cpu_us()
+	defer delete(bytes)
+	vm2, re := script.restore(bytes, script.default_config())
+	t2 := base.thread_cpu_us()
+	if re.kind != .None {
+		append(failures, fmt.aprintf("snapshot: restore: %s", re.message))
+		return
+	}
+	script.vm_destroy(vm2)
+	return f64(t1 - t0) / 1000, f64(t2 - t1) / 1000, true
 }
 
 // script_read_budgets: lines "<program> <units>"; '#' starts a comment.

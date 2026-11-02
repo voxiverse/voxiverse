@@ -28,7 +28,7 @@ second signature source; nothing else changes.
 ./build.sh fuzz <target> --case <file>                   one input: its signature and result
 ./build.sh fuzz <target> --minimize <file>               shrink a failing input to <file>.min
 ./build.sh fuzz <target> --keep <dir>                    write the run's corpus out (by hand, to grow seeds)
-./build.sh fuzz <target> -- <options>                    options for a target that has its own (none yet)
+./build.sh fuzz <target> -- <options>                    options for a target that has its own (script.generated: --lua <exe>)
 ```
 
 Each target runs in a process of its own. If it crashes the supervisor records it and starts
@@ -97,6 +97,10 @@ we hand it, and is written below with the input, for the owner to report upstrea
 | `net.server_session` | a stepped server (the harness's flat world) with one seat the case drives by hand: its frames (a length byte, then one client message) are sent one a tick, up to 64 ticks | a run of consecutive messages the scripted session sent, each left as it was, with one to three bytes changed, or raw bytes | after the case: the server still steps, its state hash computes, the item ledger balances, no freed seat keeps a name; a message that does not decode ends the seat with "invalid message" (its slot reset), and the server is built again |
 | `net.client_session` | the client's receive path (`handle_packets`) on a headless session (no window, no GPU, no server), frame by frame (two-byte length, then one server message) | the packets a stepped server sent one client in its first 200 ticks, from the start or a cut, mutated; sometimes a pack phase (`Packs`, then `Pack_Part`s of a small archive, damaged or cut, the hash right or wrong) | the session fails with a reason or keeps running; the chunk pool stays within its capacity; the pack cache is `build/tmp/fuzz/client_packs` |
 | `commands.player` | `admin` on one command line, by an operator (the owner) or a guest (the default role's grants) | a command from the table, its arguments drawn from numbers at the edges, `~` coordinates, selectors, ids known and unknown, the usage's own words, very long words | a command refused to a guest changes no section of the state hash and writes no journal entry; the chunks an operator's command changes are journaled with the operator as actor |
+| `script.source` | `compile`, then a run of 10 000 units in 1 MiB, `heap_check` after | a conformance file or the prelude with one to four source mutations (a token inserted, a span deleted, doubled or spliced from another file, the end cut off, a span nested 300 times in `( )` or `do end`) | a syntax error's line and column lie in the source and its message is not empty; every proto passes `verify_proto`; the target's own minimizer removes lines and bracketed expressions |
+| `script.generated` | a program run straight, in slices of 1..97, in slices of 13 with a snapshot and restore at every suspension, and under `gc_stress` | well-formed programs in the common subset of Lua 5.4 (mixed arithmetic at its edges, strings, tables, closures over loop variables, every metamethod, `pcall`, varargs, coroutines), each ending with a digest of its values | the outputs equal; the heaps of the first three equal; `-- --lua <exe>` also runs each unmodified generated program (its first line's hash holds) under that Lua and compares |
+| `script.bytecode` | a program compiled, then one to four of its instructions changed (bits, opcode, operands, swaps) from the input's hash, `verify_proto`, then a run | the generated programs | `verify_proto` refuses, or the code runs to any end; `heap_check` after |
+| `script.snapshot` | `restore_unchecked` (no checksum, so a mutation reaches the validation), then up to 21 slices | a generated program's snapshot at a suspension | refused with a message, or restored and run to any end; `heap_check` after |
 
 The stateful targets (`net.server_session`, `commands.player`) keep one server across cases and
 build it again every 50 cases or when a case ended the seat: they run under the server's own
@@ -110,7 +114,10 @@ it after the case.
 ## CI
 
 - "Fuzz (smoke)" in "Test · Linux x64", after Test: `./build.sh fuzz --smoke`.
-- The suite on all three OSes: each target's `test_fuzz_<target>_smoke` (200 cases at seed 84
+- "Fuzz (smoke), script programs against Lua" in "Game · Linux x64" (which installs
+  `lua5.4`): `./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4`.
+- The suite on all three OSes: `test_fuzz_smoke` (`common/script/fuzz_test.odin`: the four
+  script targets at seed 51, 300, 200, 100 and 100 cases); each other target's `test_fuzz_<target>_smoke` (200 cases at seed 84
   and its regression files; the three `net.client_decode`, `net.server_decode` and `net.state`
   run 25 000, 25 000 and 3 000, as many as the loops they replaced), the harness's own tests (`common/base/fuzz/fuzz_test.odin`).
 - `.github/workflows/nightly.yml` ("Fuzz · nightly", 03:17 UTC and by hand): every target four

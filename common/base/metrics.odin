@@ -83,6 +83,8 @@ Metric :: enum u8 {
 	Script_Loop, // an integer sum to 10^8, ms
 	Script_Method, // 10^7 method calls through __index, ms
 	Script_String, // building, format, find and gsub, ms
+	Script_Snapshot, // a snapshot of a VM with a full 16 MiB heap, ms
+	Script_Restore, // its restore, validation included, ms
 }
 
 Metric_Info :: struct {
@@ -156,6 +158,8 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Script_Loop          = {"script_loop", "ms", false},
 	.Script_Method        = {"script_method", "ms", false},
 	.Script_String        = {"script_string", "ms", false},
+	.Script_Snapshot      = {"script_snapshot", "ms", false},
+	.Script_Restore       = {"script_restore", "ms", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)

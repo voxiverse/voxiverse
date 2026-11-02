@@ -139,6 +139,19 @@ on every machine; only `collectgarbage("count")` and whether a run reaches the m
 depend on when it runs. When an allocation finds no room, the collector first finishes a
 full cycle, and only then is the memory limit a fault.
 
+## Snapshots
+
+A VM that is not running (idle, suspended between slices, or waiting on the host) can be
+saved as bytes and restored later, in another process or on another OS, where it goes on
+exactly where it stopped: its globals, pins, coroutines, a suspended run and the collector's
+state all come back. The heap is copied as it is, so the same state gives the same bytes on
+every machine (64-bit little-endian: x64 and arm64), and a snapshot is about as big as the
+memory the VM uses. Restoring checks the file before anything runs (its checksum, every
+object, every frame, every function's bytecode), and refuses a damaged one with a message
+naming the problem; a snapshot needs the same natives and handle kinds, by name, in the VM
+that restores it. Snapshots are not migrated: one from another version of the format is
+refused ("snapshot version 2; this build reads 1").
+
 ## Limits
 
 Each VM has its own limits, set by the host:

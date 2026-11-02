@@ -24,6 +24,14 @@ thread_frames :: #force_inline proc "contextless" (vm: ^VM, th: ^Thread) -> []Fr
 	return bytes_of(vm, th.frames, Frame, th.frame_cap)
 }
 
+// frames_drop pops the frames above n and zeroes them: a dead frame's bytes (its last saved
+// pc) would otherwise depend on where the run was sliced, and equal states hash equal.
+frames_drop :: #force_inline proc "contextless" (vm: ^VM, th: ^Thread, n: u32) {
+	frames := thread_frames(vm, th)
+	for i in n ..< th.frame_count {frames[i] = {}}
+	th.frame_count = n
+}
+
 top_frame :: #force_inline proc "contextless" (vm: ^VM, th: ^Thread) -> ^Frame {
 	return &thread_frames(vm, th)[th.frame_count - 1]
 }
@@ -494,7 +502,7 @@ finish_handler :: proc(vm: ^VM, th: ^Thread, handler_slot: u32, arg: u32, v: Val
 		slot = frame_result_slot(vm, th, &frames[catcher]) - 2
 		close_upvals(vm, th, slot)
 		vm.depth -= th.frame_count - u32(catcher)
-		th.frame_count = u32(catcher)
+		frames_drop(vm, th, u32(catcher))
 	}
 	stack := thread_stack(vm, th)
 	stack[slot] = FALSE
@@ -529,7 +537,7 @@ poscall :: proc(vm: ^VM, th: ^Thread, ra, n: u32) -> Pos_Result {
 	fp := top_frame(vm, th)
 	f := fp^
 	res := frame_result_slot(vm, th, fp)
-	th.frame_count -= 1
+	frames_drop(vm, th, th.frame_count - 1)
 	vm.depth -= 1
 	stack := thread_stack(vm, th)
 	switch f.cont {
@@ -838,7 +846,7 @@ throw :: proc(vm: ^VM) -> bool {
 	case .Pcall:
 		close_upvals(vm, th, res)
 		vm.depth -= th.frame_count - u32(catcher)
-		th.frame_count = u32(catcher)
+		frames_drop(vm, th, u32(catcher))
 		stack := thread_stack(vm, th)
 		stack[res - 1] = FALSE
 		stack[res] = value
@@ -853,7 +861,7 @@ throw :: proc(vm: ^VM) -> bool {
 		if vm.fault != .None {return throw(vm)}
 		close_upvals(vm, th, res)
 		vm.depth -= th.frame_count - u32(catcher)
-		th.frame_count = u32(catcher)
+		frames_drop(vm, th, u32(catcher))
 		finish_handler(vm, th, res, f.cont_arg, msg)
 	}
 	return true

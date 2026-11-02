@@ -70,9 +70,16 @@ main :: proc() {
 		}
 	}
 	if len(extra) > 0 {
-		// (a target with switches of its own, M51c's `--lua <exe>`, reads them here)
-		fmt.eprintfln("fuzz: %s takes no option %q", target.name, extra[0])
-		os.exit(2)
+		// A target with switches of its own (M51c's `--lua <exe>`) reads them.
+		if target.check_options == nil {
+			fmt.eprintfln("fuzz: %s takes no option %q", target.name, extra[0])
+			os.exit(2)
+		}
+		if problem := target.check_options(extra); problem != "" {
+			fmt.eprintfln("fuzz: %s: %s", target.name, problem)
+			os.exit(2)
+		}
+		target.options = extra
 	}
 	switch {
 	case case_file != "":
@@ -122,18 +129,26 @@ minimize :: proc(target: ^fuzz.Target, cfg: fuzz.Config, file: string) {
 	Child :: struct {
 		target, tmp: string,
 		self:        string,
+		options:     []string,
 	}
 	child := Child {
-		target = target.name,
-		tmp    = "build/tmp/fuzz-minimize.bin",
+		target  = target.name,
+		tmp     = "build/tmp/fuzz-minimize.bin",
+		options = target.options,
 	}
 	child.self, _ = os.get_executable_path(context.allocator)
 	os.make_directory_all("build/tmp")
 	check :: proc(candidate: []u8, user: rawptr) -> string {
 		c := (^Child)(user)
 		_ = os.write_entire_file_from_bytes(c.tmp, candidate)
+		command := make([dynamic]string, context.temp_allocator)
+		append(&command, c.self, c.target, "--case", c.tmp, "--out", "build/tmp/fuzz-minimize")
+		if len(c.options) > 0 {
+			append(&command, "--")
+			append(&command, ..c.options)
+		}
 		state, stdout, stderr, perr := os.process_exec(
-			{command = {c.self, c.target, "--case", c.tmp, "--out", "build/tmp/fuzz-minimize"}},
+			{command = command[:]},
 			context.temp_allocator,
 		)
 		if perr != nil {return ""}
@@ -150,6 +165,12 @@ minimize :: proc(target: ^fuzz.Target, cfg: fuzz.Config, file: string) {
 	if want == "" {
 		fmt.eprintfln("fuzz: %s does not fail on %s", file, target.name)
 		os.exit(1)
+	}
+	if target.shrink != nil {
+		// The target's own minimizer first (statements, expressions), then the bytes.
+		shrunk := target.shrink(data, check, &child)
+		delete(data)
+		data = shrunk
 	}
 	small := fuzz.minimize(data, check, &child)
 	out := strings.concatenate({file, ".min"})
