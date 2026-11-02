@@ -89,3 +89,13 @@ test_parallel_job_reports_exit_status :: proc(t: ^testing.T) {
 		testing.expect_value(t, status, 3)
 	}
 }
+
+// A run that dies with nothing said still names the tests it was running.
+@(test)
+test_failure_excerpt_names_the_unfinished_tests :: proc(t: ^testing.T) {
+	log := "[INFO ] start\n[INFO ] Test #0 p.a changed state to Running.\n[INFO ] Test #1 p.b changed state to Running.\n[INFO ] Test #0 p.a changed state to Successful.\n[INFO ] Test #2 p.c changed state to Running.\n"
+	text := failure_excerpt(log, 6)
+	testing.expect(t, strings.contains(text, "(2)"), text)
+	testing.expect(t, strings.contains(text, "  p.b\n  p.c\n"), text)
+	testing.expect(t, !strings.contains(text, "  p.a\n"), text)
+}

@@ -859,6 +859,9 @@ test_env_defines :: proc() -> []string {
 	defines := make([dynamic]string)
 	// A leak or a bad free fails the test, naming the allocation (tracking stays on, its default).
 	append(&defines, "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true")
+	// The runner logs each test's state change as it happens, so a process that dies without a
+	// word (#104, #105) still leaves the names of the tests it was running in its log.
+	append(&defines, "-define:ODIN_TEST_LOG_STATE_CHANGES=true")
 	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS", "ODIN_TEST_NAMES"}) {
 		if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
 			append(&defines, fmt.aprintf("-define:%s=%s", name, value))
@@ -980,7 +983,8 @@ FAILURE_MARKS :: []string {
 // (up to 40), then the log's last 15 lines. A log without any cause line says so and
 // gives the exit status (status < 0: there is none, the run was killed at its limit).
 // On POSIX a process killed by a signal reports the signal number as its status
-// (6 abort, 9 kill, 11 segfault), which the Odin runtime does not tell from an exit(n).
+// (6 abort, 9 kill, 11 segfault), which the Odin runtime does not tell from an exit(n). Without a cause line it also
+// lists the tests the runner logged as started and not finished.
 failure_excerpt :: proc(log: string, status: int, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(allocator)
 	lines := strings.split_lines(strings.trim_right(log, "\r\n"), context.temp_allocator)
@@ -1006,9 +1010,47 @@ failure_excerpt :: proc(log: string, status: int, allocator := context.temp_allo
 	} else {
 		fmt.sbprintln(&b, "NO ERROR LINE in the log: the process was killed at its time limit")
 	}
+	if len(causes) == 0 {
+		running := unfinished_tests(lines)
+		if len(running) > 0 {
+			fmt.sbprintfln(
+				&b,
+				"--- tests started and not finished (%d): the run died in one of these ---",
+				len(running),
+			)
+			for name in running {fmt.sbprintfln(&b, "  %s", name)}
+		}
+	}
 	fmt.sbprintfln(&b, "--- last lines of the log (%d lines in all) ---", len(lines))
 	for line in lines[max(0, len(lines) - 15):] {fmt.sbprintln(&b, line)}
 	return strings.to_string(b)
+}
+
+// unfinished_tests: from the runner's "Test #n pkg.name changed state to Running." lines
+// (test_env_defines asks for them), the tests that started and never reached Successful
+// or Failed, in start order.
+unfinished_tests :: proc(lines: []string) -> []string {
+	running := make([dynamic]string, context.temp_allocator)
+	for line in lines {
+		i := strings.index(line, "Test #")
+		j := strings.index(line, " changed state to ")
+		if i < 0 || j < i {continue}
+		fields := strings.fields(line[i:j], context.temp_allocator)
+		if len(fields) < 3 {continue}
+		name := fields[2]
+		state := line[j + len(" changed state to "):]
+		if strings.has_prefix(state, "Running") {
+			append(&running, name)
+		} else if strings.has_prefix(state, "Successful") || strings.has_prefix(state, "Failed") {
+			for r, k in running {
+				if r == name {
+					ordered_remove(&running, k)
+					break
+				}
+			}
+		}
+	}
+	return running[:]
 }
 
 // test_packages runs packages' tests, width at a time, each under its time limit; a run
