@@ -86,7 +86,8 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 @(private = "file")
 server_made :: proc(t: ^testing.T, dir, name: string) -> bool {
 	path := filepath.join({dir, name}, context.temp_allocator) or_else ""
-	h: core.Harness
+	h := new(core.Harness) // (heap: a Harness is too big for a test thread's stack on macOS, #104)
+	defer free(h)
 	config := core.Config {
 		seed        = 5,
 		view_radius = 2,
@@ -94,8 +95,8 @@ server_made :: proc(t: ^testing.T, dir, name: string) -> bool {
 		save_dir    = path,
 		generator   = .Classic,
 	}
-	if !testing.expect(t, core.harness_start(&h, config)) {return false}
-	core.harness_stop(&h)
+	if !testing.expect(t, core.harness_start(h, config)) {return false}
+	core.harness_stop(h)
 	return true
 }
 

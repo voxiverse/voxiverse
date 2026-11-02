@@ -51,11 +51,9 @@ link_connect :: proc(
 	allocator := context.allocator,
 	sim: ^Simnet = nil,
 ) -> net.Network_Error {
-	l^ = {
-		server    = server,
-		started   = now,
-		allocator = allocator,
-	}
+	// Field by field: a literal of the whole Link is built on the stack first (65 KB) and copied.
+	l^ = {}
+	l.server, l.started, l.allocator = server, now, allocator
 	socket_open(&l.socket, 0, sim = sim) or_return
 	l.password = strings.clone(password, allocator)
 	crypto.rand_bytes(mem.ptr_to_bytes(&l.salt))

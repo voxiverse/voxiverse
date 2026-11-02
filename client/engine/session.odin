@@ -217,10 +217,10 @@ mesh_worker_count :: proc() -> int {
 // session_start starts the server and connects to it. On failure the
 // caller still calls session_end.
 session_start :: proc(s: ^Session, config: Session_Config) -> bool {
-	s^ = {
-		config    = config,
-		last_jump = -1e9,
-	}
+	// Field by field: a literal of the whole Session is built on the stack first (214 KB,
+	// past what a test thread has on macOS, #104) and copied.
+	s^ = {}
+	s.config, s.last_jump = config, -1e9
 	loading_begin(s, false)
 	if err := virtual.arena_init_growing(&s.arena); err != nil {
 		log.errorf("session cannot reserve memory: %v", err)

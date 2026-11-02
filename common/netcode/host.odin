@@ -94,10 +94,8 @@ host_open :: proc(
 	allocator := context.allocator,
 	sim: ^Simnet = nil,
 ) -> net.Network_Error {
-	h^ = {
-		allocator = allocator,
-		password  = password,
-	}
+	h^ = {}
+	h.allocator, h.password = allocator, password
 	socket_open(&h.socket, port, sim = sim) or_return
 	crypto.rand_bytes(h.secret[:])
 	crypto.rand_bytes(mem.ptr_to_bytes(&h.instance))
@@ -218,7 +216,7 @@ free_received :: proc(h: ^Host) {
 
 @(private = "file")
 find :: proc(h: ^Host, from: net.Endpoint) -> Peer_Id {
-	for p, i in h.peers {
+	for &p, i in h.peers { 	// (by reference: a Peer is 64 KB, and a copy of it a stack frame)
 		if p.active && p.address == from {return Peer_Id(i + 1)}
 	}
 	return 0
@@ -276,7 +274,7 @@ handle :: proc(h: ^Host, data: []u8, from: net.Endpoint, now: time.Tick) {
 			}
 		}
 		slot := -1
-		for p, i in h.peers {
+		for &p, i in h.peers { 	// (by reference: a Peer is 64 KB, and a copy of it a stack frame)
 			if !p.active {
 				slot = i
 				break
@@ -289,11 +287,8 @@ handle :: proc(h: ^Host, data: []u8, from: net.Endpoint, now: time.Tick) {
 		token: u32
 		crypto.rand_bytes(mem.ptr_to_bytes(&token))
 		p := &h.peers[slot]
-		p^ = {
-			active  = true,
-			address = from,
-			salt    = salt,
-		}
+		p^ = {}
+		p.active, p.address, p.salt = true, from, salt
 		conn_init(&p.conn, token, now, h.allocator)
 		send_accept(h, from, salt, token, now)
 		append(&h.events, Peer_Connected{Peer_Id(slot + 1), from})

@@ -210,7 +210,9 @@ test_the_arm_is_the_avatars :: proc(t: ^testing.T) {
 
 @(test)
 test_the_view_model_projection_ignores_the_fov :: proc(t: ^testing.T) {
-	s: engine.Session
+	// On the heap: a Session is far past the 512 KB a test thread has on macOS (#104).
+	s := new(engine.Session)
+	defer free(s)
 	s.reg = testkit.test_reg()
 	aspect := f32(16.0 / 9.0)
 	want := engine.view_model_projection(aspect)
@@ -223,7 +225,7 @@ test_the_view_model_projection_ignores_the_fov :: proc(t: ^testing.T) {
 				}
 				// The world's field of view moves with all of it ...
 				if kick == 0 && zoom == 0 {
-					testing.expect_value(t, engine.camera_fov(&s, settings), fov)
+					testing.expect_value(t, engine.camera_fov(s, settings), fov)
 				}
 				// ... the view model's matrix with none of it.
 				testing.expect_value(t, engine.view_model_projection(aspect), want)

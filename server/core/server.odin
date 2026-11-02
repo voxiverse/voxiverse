@@ -174,10 +174,9 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config.view_height <= game.MAX_VIEW_HEIGHT &&
 		(config.workers > 0 || config.stepped),
 	)
-	s^ = {
-		config = config,
-		local  = local,
-	}
+	// Field by field: a literal of the whole Server is built on the stack first (88 KB) and copied.
+	s^ = {}
+	s.config, s.local = config, local
 	s.schema = game.game_schema()
 	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
@@ -330,9 +329,8 @@ teardown :: proc(s: ^Server, world: bool) {
 	base.queue_destroy(&s.calls)
 	refusal := s.refusal // (a failed start says why, after the rest is gone)
 	virtual.arena_destroy(&s.arena)
-	s^ = {
-		refusal = refusal,
-	}
+	s^ = {}
+	s.refusal = refusal
 }
 
 // freeze stops (or restarts) time and entities while the local player is

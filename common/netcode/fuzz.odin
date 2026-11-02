@@ -187,11 +187,11 @@ fuzz_net_handshake :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 		handle(&h, first[:], FUZZ_FROM, now)
 	}
 	peers := 0
-	for p in h.peers {if p.active {peers += 1}}
+	for &p in h.peers {if p.active {peers += 1}}
 	before := len(h.events)
 	handle(&h, data[1:], FUZZ_FROM, now)
 	after := 0
-	for p in h.peers {if p.active {after += 1}}
+	for &p in h.peers {if p.active {after += 1}}
 	if after > len(h.peers) {fuzz.fail("more peers than seats")}
 	return fuzz.sig_mix(
 		2,

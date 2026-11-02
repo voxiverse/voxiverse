@@ -331,7 +331,9 @@ test_render_clock_smooth :: proc(t: ^testing.T) {
 // after PUFF_SECONDS; its death is heard where it was.
 @(test)
 test_entity_death_puff :: proc(t: ^testing.T) {
-	s: engine.Session
+	// On the heap: a Session is far past the 512 KB a test thread has on macOS (#104).
+	s := new(engine.Session)
+	defer free(s)
 	s.reg = testkit.test_reg()
 	s.puffs = make([dynamic]engine.Puff, 0, engine.MAX_PUFFS)
 	defer delete(s.puffs)
@@ -341,26 +343,26 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 		kind      = .Sheep,
 		last_seen = {10, 64, 10},
 	}
-	engine.entity_died(&s, &e)
+	engine.entity_died(s, &e)
 	testing.expect_value(t, len(s.puffs), engine.PUFF_PIECES)
 	testing.expect(t, len(s.sounds) == 1 && s.sounds[0].kind == .Entity_Die)
 	d: render.Entity_Draw
 	render.entity_draw_init(&d)
 	defer render.entity_draw_destroy(&d)
-	engine.entities_draw(&s, &d, 0.1)
+	engine.entities_draw(s, &d, 0.1)
 	testing.expect_value(t, len(d.boxes), engine.PUFF_PIECES)
 	for p in s.puffs {testing.expect(t, p.position != {10, 64, 10} || p.velocity != {})}
 	for _ in 0 ..< 10 {
 		clear(&d.boxes)
-		engine.entities_draw(&s, &d, 0.1)
+		engine.entities_draw(s, &d, 0.1)
 	}
 	testing.expect_value(t, len(s.puffs), 0)
 	testing.expect_value(t, len(d.boxes), 0)
 
 	// Effects never grow the particles past their room: the rest are dropped.
-	for len(s.puffs) < engine.MAX_PUFFS - 5 {engine.entity_died(&s, &e)}
-	engine.explosion_effects(&s, {0, 64, 0}, 6)
-	engine.entity_died(&s, &e)
+	for len(s.puffs) < engine.MAX_PUFFS - 5 {engine.entity_died(s, &e)}
+	engine.explosion_effects(s, {0, 64, 0}, 6)
+	engine.entity_died(s, &e)
 	testing.expect_value(t, len(s.puffs), engine.MAX_PUFFS)
 	testing.expect_value(t, cap(s.puffs), engine.MAX_PUFFS)
 }

@@ -115,19 +115,13 @@ In_Slot :: struct {
 }
 
 conn_init :: proc(c: ^Conn, token: u32, now: time.Tick, allocator := context.allocator) {
-	c^ = {
-		token       = token,
-		allocator   = allocator,
-		rate        = DEFAULT_RATE,
-		rtt_ms      = 100,
-		// Until a packet arrives, acknowledge none: 0 would claim our peer's
-		// first packet (lost, its messages would never be resent).
-		recv_latest = 0xffff,
-		allowance   = DEFAULT_RATE * 0.05 + 4 * MTU,
-		last_flush  = now,
-		last_send   = now,
-		last_recv   = now,
-	}
+	c^ = {} // (not a literal of the whole Conn: that is built on the stack, then copied)
+	c.token, c.allocator, c.rate, c.rtt_ms = token, allocator, DEFAULT_RATE, 100
+	// Until a packet arrives, acknowledge none: 0 would claim our peer's
+	// first packet (lost, its messages would never be resent).
+	c.recv_latest = 0xffff
+	c.allowance = DEFAULT_RATE * 0.05 + 4 * MTU
+	c.last_flush, c.last_send, c.last_recv = now, now, now
 	c.out = make([dynamic]Out_Message, allocator)
 	c.unreliable = make([dynamic][]u8, allocator)
 	c.partial = make([dynamic]u8, allocator)
