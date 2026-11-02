@@ -1,0 +1,7 @@
+-- A fixed program for the trace: a call, a native, a metamethod, a caught error,
+-- and suspensions (run in slices of 25).
+local function add(a, b) return a + b end
+local v = setmetatable({}, {__add = function(x, y) return 10 end})
+local n = add(1, 2) + #("abc"):sub(2)
+local ok = pcall(error, "x")
+print(n, v + 1, ok)

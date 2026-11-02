@@ -1,0 +1,16 @@
+--! lua
+-- A yield crosses pcall, and an error inside pcall in a coroutine is caught there.
+local co = coroutine.wrap(function()
+  local ok, v = pcall(function()
+    local x = coroutine.yield("in pcall")
+    error("boom " .. x, 0)
+  end)
+  coroutine.yield(tostring(ok) .. " " .. v)
+  return "end"
+end)
+print(co())
+print(co("x"))
+print(co())
+--! expect: in pcall
+--! expect: false boom x
+--! expect: end

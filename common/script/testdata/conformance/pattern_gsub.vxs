@@ -1,0 +1,25 @@
+--! lua
+print(string.gsub("hello world", "o", "0"))
+print(string.gsub("hello world", "o", "0", 1))
+print(string.gsub("hello", "", "-"))
+print(string.gsub("abc", "%w", "%0%0"))
+print(string.gsub("hello world", "(%w+)", "<%1>"))
+print(string.gsub("$name is $age", "%$(%w+)", {name = "Ann", age = 30}))
+print(string.gsub("abc", "%w", function(c) return c:upper() .. "." end))
+print(string.gsub("abc", "b", function() return nil end))
+print(string.gsub("x = 1, y = 2", "(%w+) = (%w+)", "%2 = %1"))
+print(string.gsub("abc", "^a", "X"), string.gsub("aaa", "^a", "X"))
+print(string.gsub("one two", "(%w+)", "%%"))
+print(string.gsub("abc", ".", {a = 1, b = false}))
+--! expect: hell0 w0rld	2
+--! expect: hell0 world	1
+--! expect: -h-e-l-l-o-	6
+--! expect: aabbcc	3
+--! expect: <hello> <world>	2
+--! expect: Ann is 30	2
+--! expect: A.B.C.	3
+--! expect: abc	1
+--! expect: 1 = x, 2 = y	2
+--! expect: Xbc	Xaa	1
+--! expect: % %	2
+--! expect: 1bc	3

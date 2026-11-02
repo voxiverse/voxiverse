@@ -1,0 +1,13 @@
+--! lua
+print(math.sqrt(16), math.sqrt(2))
+print(math.exp(0), math.log(1), math.log(8, 2), math.log(100, 10))
+print(math.sin(0), math.cos(0), math.tan(0))
+print(string.format("%.6f %.6f %.6f", math.sin(1), math.cos(1), math.tan(1)))
+print(string.format("%.6f %.6f %.6f %.6f", math.asin(1), math.acos(0), math.atan(1), math.atan(1, -1)))
+print(string.format("%.6f", math.exp(1)))
+--! expect: 4.0	1.4142135623731
+--! expect: 1.0	0.0	3.0	2.0
+--! expect: 0.0	1.0	0.0
+--! expect: 0.841471 0.540302 1.557408
+--! expect: 1.570796 1.570796 0.785398 2.356194
+--! expect: 2.718282

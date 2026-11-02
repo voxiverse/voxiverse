@@ -1,0 +1,15 @@
+-- Strings: .. and table.concat building, string.format, find, gsub.
+local count = 0
+local total = 0
+for r = 1, 200 do
+	local parts = {}
+	for i = 1, 500 do parts[#parts + 1] = string.format("%d:%05.2f", i, i / 7) end
+	local s = table.concat(parts, ",")
+	local t = ""
+	for i = 1, 100 do t = t .. "ab" .. i end
+	local _, n = s:gsub("%d+:", "")
+	count = count + n
+	local a, b = s:find("499:", 1, true)
+	total = total + a + b + #t
+end
+print(count, total)

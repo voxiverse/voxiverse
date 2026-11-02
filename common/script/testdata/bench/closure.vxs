@@ -1,0 +1,9 @@
+-- 10^7 calls of a closure updating an upvalue.
+local function counter()
+	local n = 0
+	return function(d) n = n + d; return n end
+end
+local c = counter()
+local last = 0
+for i = 1, 10000000 do last = c(1) end
+print(last)

@@ -3,9 +3,9 @@ print(9223372036854775807)
 print(9223372036854775808)
 print(0xffffffffffffffff)
 print(0x7fffffffffffffff)
-print(math == nil)
+print(math.maxinteger)
 --! expect: 9223372036854775807
 --! expect: 9.2233720368548e+18
 --! expect: -1
 --! expect: 9223372036854775807
---! expect: true
+--! expect: 9223372036854775807

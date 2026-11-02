@@ -1,0 +1,16 @@
+--! lua
+local words = {}
+for w in string.gmatch("one two  three", "%a+") do words[#words + 1] = w end
+print(#words, table.concat(words, ","))
+for k, v in string.gmatch("a=1, b=2", "(%w+)=(%w+)") do io_ = (io_ or "") .. k .. v end
+print(io_)
+local n = 0
+for _ in ("abc"):gmatch("") do n = n + 1 end
+print(n)
+local pos = {}
+for p in ("hello"):gmatch("()l") do pos[#pos + 1] = p end
+print(pos[1], pos[2])
+--! expect: 3	one,two,three
+--! expect: a1b2
+--! expect: 4
+--! expect: 3	4

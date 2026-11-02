@@ -1,0 +1,23 @@
+--! lua
+print(math.abs(-3), math.abs(-2.5), math.abs(math.mininteger) == math.mininteger)
+print(math.floor(3.7), math.floor(-3.2), math.ceil(3.2), math.ceil(-3.7), math.floor(5))
+print(math.type(math.floor(2.0^70)), math.floor(2.0^70) == 2.0^70)
+print(math.max(1, 5, 3), math.min(4, 2, 8), math.max(1, 2.5), math.min(1.0, 1))
+print(math.tointeger(3.0), math.tointeger(3.5), math.tointeger({}), math.tointeger(7))
+print(math.type(1), math.type(1.0), math.type("1"))
+print(math.fmod(7, 3), math.fmod(-7, 3), math.fmod(7, -3), math.fmod(7.5, 2))
+print(math.modf(3.7), math.modf(-3.7), math.modf(5))
+print(math.ult(1, -1), math.ult(-1, 1))
+print(math.huge, -math.huge, math.pi)
+print(math.maxinteger, math.mininteger)
+--! expect: 3	2.5	true
+--! expect: 3	-4	4	-3	5
+--! expect: float	true
+--! expect: 5	2	2.5	1.0
+--! expect: 3	nil	nil	7
+--! expect: integer	float	nil
+--! expect: 1	-1	1	1.5
+--! expect: 3	-3	5	0.0
+--! expect: true	false
+--! expect: inf	-inf	3.1415926535898
+--! expect: 9223372036854775807	-9223372036854775808

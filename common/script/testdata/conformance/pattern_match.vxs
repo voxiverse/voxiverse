@@ -1,0 +1,27 @@
+--! lua
+print(string.match("hello 123 world", "%d+"))
+print(string.match("key=val", "(%w+)=(%w+)"))
+print(string.match("  trim  ", "^%s*(.-)%s*$") .. "|")
+print(string.match("abc", "()b()"))
+print(string.match("2024-01-15", "(%d+)-(%d+)-(%d+)"))
+print(string.match("THE (quick) fox", "%((%a+)%)"))
+print(string.match("f(a(b)c)d", "%b()"))
+print(string.match("THE quick", "%f[%a]%a+", 4))
+print(string.match("hello", "^h"), string.match("hello", "^e"), string.match("hello", "o$"))
+print(string.match("aaa", "a-b"), string.match("aaab", "a-b"), string.match("x", "x?y?"))
+print(string.match("[x]", "[]x[]+"), string.match("a-b", "[a%-]+"), string.match("A1_", "[%u%d_]+"))
+print(string.match("hello hello", "(h%a+) %1"))
+print(string.match("abc", "[^a]+"), string.match("\0a", "%z?a") == nil)
+--! expect: 123
+--! expect: key	val
+--! expect: trim|
+--! expect: 2	3
+--! expect: 2024	01	15
+--! expect: quick
+--! expect: (a(b)c)
+--! expect: quick
+--! expect: h	nil	o
+--! expect: nil	aaab	x
+--! expect: [x]	a-	A1_
+--! expect: hello
+--! expect: bc	false

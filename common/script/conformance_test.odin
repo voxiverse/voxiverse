@@ -8,7 +8,8 @@ import "core:strings"
 import "core:testing"
 
 // The conformance suite: every file in testdata/conformance, in name order, each in a
-// fresh VM, straight through and in slices of 7 units. Header comments say what to expect.
+// fresh VM, straight through, in slices of 7 units and under gc_stress (heap_check after).
+// Header comments say what to expect.
 
 CONFORMANCE_FILES := #load_directory("testdata/conformance")
 
@@ -67,8 +68,16 @@ Conformance_Run :: struct {
 }
 
 // conformance_run compiles and runs one file with a slice, resuming until it ends.
-conformance_run :: proc(name, src: string, slice: i64, memory: int) -> (r: Conformance_Run) {
+conformance_run :: proc(
+	name, src: string,
+	slice: i64,
+	memory: int,
+	gc_stress := false,
+) -> (
+	r: Conformance_Run,
+) {
 	config := default_config()
+	config.gc_stress = gc_stress
 	if memory > 0 {config.limits.memory = memory}
 	vm, verr := vm_create(config, context.temp_allocator)
 	if verr.kind != .None {
@@ -145,8 +154,8 @@ test_conformance :: proc(t: ^testing.T) {
 	slice.sort_by(files, proc(a, b: runtime.Load_Directory_File) -> bool {return a.name < b.name})
 	testing.expectf(
 		t,
-		len(files) >= 120,
-		"%d conformance files; M51a has at least 120",
+		len(files) >= 200,
+		"%d conformance files; M51b has at least 200",
 		len(files),
 	)
 	for f in files {
@@ -176,6 +185,20 @@ test_conformance :: proc(t: ^testing.T) {
 				"%s: slices of 7 changed the output",
 				f.name,
 			)
+		}
+		// Under gc_stress (the collector always cycling): the same output. Only whether a
+		// run hits the memory limit may depend on the collector's timing.
+		if e.limit != .Memory {
+			stressed := conformance_run(
+				f.name,
+				src,
+				e.slice if e.slice > 0 else DEFAULT_SLICE,
+				e.memory,
+				true,
+			)
+			if problem := conformance_check(e, stressed); problem != "" {
+				testing.expectf(t, false, "%s (under gc_stress): %s", f.name, problem)
+			}
 		}
 		free_all(context.temp_allocator)
 	}

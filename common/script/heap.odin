@@ -49,30 +49,68 @@ large_class :: #force_inline proc "contextless" (size: u32) -> int {
 }
 
 // heap_alloc gives a zeroed block of kind holding size bytes (header included). It
-// charges the meter one unit per 64 bytes; when there is no room it sets the memory
-// fault and returns 0.
+// charges the meter one unit per 64 bytes. When there is no room, inside a run, the
+// collector finishes its cycle and runs a full one, and the allocation is tried once more;
+// then it sets the memory fault and returns 0.
 heap_alloc :: proc(vm: ^VM, kind: Obj_Kind, size: int) -> Ref {
 	if size <= 0 || u64(size) > u64(len(vm.mem)) {
 		vm.fault = .Memory
+		vm.pending = true
 		return 0
 	}
 	need := u32((size + 15) &~ 15)
 	vm.meter -= i64((need + 63) / 64)
+	r := heap_take(vm, need)
+	if r == 0 && vm.state == .Running && !vm.gc.collecting {
+		gc_emergency(vm)
+		r = heap_take(vm, need)
+	}
+	if r == 0 {
+		vm.fault = .Memory
+		vm.pending = true
+		return 0
+	}
+	h := (^Header)(&vm.mem[r])
+	h^ = Header {
+		size = h.size,
+		kind = kind,
+		mark = vm.gc.white,
+	}
+	sz := u64(h.size)
+	vm.in_use += sz
+	vm.gc.peak = max(vm.gc.peak, vm.in_use)
+	vm.gc.allocated += i64(sz)
+	vm.gc.credit -= i64(sz)
+	if vm.state == .Running {append(&vm.fresh, r)}
+	vm.pending = true
+	return r
+}
+
+// heap_take finds room for need bytes: a free list's block, or the end of the heap. The
+// block's header has its size; 0 when there is no room.
+@(private = "file")
+heap_take :: proc(vm: ^VM, need: u32) -> Ref {
 	r: Ref
 	if need <= SMALL_MAX {
 		list := &vm.free_small[need / 16 - 1]
 		if list^ != 0 {
 			r = list^
-			list^ = (^Free_Block)(&vm.mem[r]).next
+			fb := (^Free_Block)(&vm.mem[r])
+			list^ = fb.next
+			fb.next = 0
+			return r
 		}
-	} else {
-		search: for c in large_class(need) ..< len(vm.free_large) {
+	}
+	// A large free block, split (the sweep merges free neighbours, so small blocks come
+	// from large ones too).
+	{
+		for c in large_class(max(need, SMALL_MAX + 16)) ..< len(vm.free_large) {
 			prev: ^Ref = &vm.free_large[c]
 			for b := prev^; b != 0; {
 				fb := (^Free_Block)(&vm.mem[b])
 				if fb.size >= need {
 					prev^ = fb.next
-					r = b
+					fb.next = 0
 					rest := fb.size - need
 					if rest >= 16 {
 						fb.size = need
@@ -82,39 +120,22 @@ heap_alloc :: proc(vm: ^VM, kind: Obj_Kind, size: int) -> Ref {
 						rb.kind = .Free
 						free_push(vm, rest_ref)
 					}
-					break search
+					return b
 				}
 				prev = &fb.next
 				b = fb.next
 			}
 		}
 	}
-	if r == 0 {
-		if u64(vm.top) + u64(need) > u64(len(vm.mem)) || !heap_commit(vm, vm.top + need) {
-			vm.fault = .Memory
-			return 0
-		}
-		r = Ref(vm.top)
-		vm.top += need
-		h := (^Header)(&vm.mem[r])
-		h^ = Header {
-			size = need,
-			kind = kind,
-		}
-	} else {
-		h := (^Free_Block)(&vm.mem[r])
-		sz := h.size
-		h.next = 0
-		h.hdr = Header {
-			size = sz,
-			kind = kind,
-		}
+	if u64(vm.top) + u64(need) > u64(len(vm.mem)) || !heap_commit(vm, vm.top + need) {
+		return 0
 	}
-	vm.in_use += u64((^Header)(&vm.mem[r]).size)
+	r = Ref(vm.top)
+	vm.top += need
+	(^Header)(&vm.mem[r]).size = need
 	return r
 }
 
-@(private = "file")
 free_push :: proc(vm: ^VM, r: Ref) {
 	fb := (^Free_Block)(&vm.mem[r])
 	if fb.size <= SMALL_MAX {
@@ -138,6 +159,8 @@ heap_free :: proc(vm: ^VM, r: Ref) {
 	mem.zero(&vm.mem[u32(r)], int(size))
 	h.size = size
 	h.kind = .Free
+	// A block the sweep has still to pass joins its free run there.
+	if vm.gc.phase == .Sweep && u32(r) >= vm.gc.sweep {return}
 	free_push(vm, r)
 }
 
@@ -149,39 +172,4 @@ alloc_values :: proc(vm: ^VM, n: u32) -> Ref {
 // alloc_bytes: a Bytes buffer of n bytes.
 alloc_bytes :: proc(vm: ^VM, n: int) -> Ref {
 	return heap_alloc(vm, .Bytes, BUF_DATA + max(n, 1))
-}
-
-// heap_check walks the heap: headers sane, every block inside top, free lists made of
-// free blocks. M51b adds the references and the collector's colours.
-heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
-	at := u32(HEAP_START)
-	in_use: u64
-	for at < vm.top {
-		h := (^Header)(&vm.mem[at])
-		if h.size < 16 || h.size % 16 != 0 || at + h.size > vm.top {
-			return false, "a block header has a bad size"
-		}
-		if h.kind > .Bytes {return false, "a block header has a bad kind"}
-		if h.kind != .Free {in_use += u64(h.size)}
-		at += h.size
-	}
-	if at != vm.top {return false, "the blocks do not end at top"}
-	if in_use != vm.in_use {return false, "bytes in use disagree with the blocks"}
-	for head, i in vm.free_small {
-		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
-			fb := (^Free_Block)(&vm.mem[b])
-			if u32(b) >= vm.top || fb.kind != .Free || fb.size != u32(i + 1) * 16 {
-				return false, "a small free list holds a wrong block"
-			}
-		}
-	}
-	for head in vm.free_large {
-		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
-			fb := (^Free_Block)(&vm.mem[b])
-			if u32(b) >= vm.top || fb.kind != .Free || fb.size <= SMALL_MAX {
-				return false, "a large free list holds a wrong block"
-			}
-		}
-	}
-	return true, ""
 }

@@ -1,0 +1,10 @@
+--! lua
+local s = "hello world"
+print(s:sub(1, 5), s:sub(-5), s:sub(7, -1), s:sub(0), s:sub(20), s:sub(-100, 2))
+print(("abc"):sub(2, 1) == "", ("abc"):sub(3, 3))
+print(s:len(), #s, string.len(""))
+print(s:upper(), ("MiXeD 1"):lower(), ("abc"):reverse())
+--! expect: hello	world	world	hello world		he
+--! expect: true	c
+--! expect: 11	11	0
+--! expect: HELLO WORLD	mixed 1	cba

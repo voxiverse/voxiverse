@@ -1,0 +1,4 @@
+-- An integer loop: the sum to 10^8.
+local s = 0
+for i = 1, 100000000 do s = s + i end
+print(s)

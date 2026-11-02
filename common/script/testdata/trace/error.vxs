@@ -1,0 +1,6 @@
+-- An error a pcall catches inside a script function, then one nothing catches.
+local function f(t) return t.x end
+print(pcall(f, nil))
+local co = coroutine.wrap(function(a) local b = coroutine.yield(a + 1); return b * 2 end)
+print(co(1), co(5))
+f(nil)

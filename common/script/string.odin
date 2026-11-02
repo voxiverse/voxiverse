@@ -33,7 +33,11 @@ intern :: proc(vm: ^VM, s: string) -> Ref {
 		r := Ref(slots[i])
 		if r == 0 {break}
 		str := (^String)(&vm.mem[r])
-		if str.hash == h && int(str.len) == len(s) && string_bytes(vm, r) == s {return r}
+		if str.hash == h && int(str.len) == len(s) && string_bytes(vm, r) == s {
+			// A string the sweep has yet to free is in use again.
+			if vm.gc.phase == .Sweep && str.mark == vm.gc.white ~ 1 {str.mark = vm.gc.white}
+			return r
+		}
 		i = (i + 1) & vm.intern_mask
 	}
 	r := heap_alloc(vm, .String, STRING_DATA + len(s) + 1)
@@ -42,9 +46,11 @@ intern :: proc(vm: ^VM, s: string) -> Ref {
 	str.len = u32(len(s))
 	str.hash = h
 	if len(s) > 0 {mem.copy(&vm.mem[u32(r) + STRING_DATA], raw_data(s), len(s))}
-	// The index may have moved: no, it is a heap block that stays; look up the slot again
-	// only if it grows below.
+	// A collection inside the allocation may have removed strings from the index:
+	// find the free slot again.
 	slots = bytes_of(vm, vm.intern, u32, vm.intern_mask + 1)
+	i = h & vm.intern_mask
+	for slots[i] != 0 {i = (i + 1) & vm.intern_mask}
 	slots[i] = u32(r)
 	vm.intern_count += 1
 	if vm.intern_count * 4 >= (vm.intern_mask + 1) * 3 {
@@ -86,4 +92,31 @@ new_string :: proc(vm: ^VM, s: string) -> Value {
 	r := intern(vm, s)
 	if r == 0 {return NIL}
 	return ref_value(.String, r)
+}
+
+// intern_remove takes a string the sweep frees out of the index (backward-shift
+// deletion, so probing needs no tombstones).
+intern_remove :: proc(vm: ^VM, r: Ref) {
+	mask := vm.intern_mask
+	slots := bytes_of(vm, vm.intern, u32, mask + 1)
+	i := (^String)(&vm.mem[r]).hash & mask
+	for slots[i] != u32(r) {
+		if slots[i] == 0 {return}
+		i = (i + 1) & mask
+	}
+	slots[i] = 0
+	vm.intern_count -= 1
+	j := i
+	for {
+		j = (j + 1) & mask
+		e := slots[j]
+		if e == 0 {return}
+		home := (^String)(&vm.mem[e]).hash & mask
+		// e may move to i when i lies cyclically in [home, j).
+		if (j - home) & mask >= (j - i) & mask {
+			slots[i] = e
+			slots[j] = 0
+			i = j
+		}
+	}
 }

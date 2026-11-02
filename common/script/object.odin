@@ -107,9 +107,10 @@ Closure :: struct {
 	id:        u32,
 	nup:       u16,
 	_:         u16,
+	gclist:    Ref,
 	// nup upvalue Refs follow
 }
-CLOSURE_UPVALS :: 24
+CLOSURE_UPVALS :: 28
 #assert(size_of(Closure) == CLOSURE_UPVALS)
 
 Intrinsic :: enum u8 {
@@ -128,7 +129,7 @@ Native_Closure :: struct {
 	_:         u8,
 	nup:       u16,
 	id:        u32,
-	_:         u32,
+	gclist:    Ref,
 	// nup values follow
 }
 NATIVE_UPVALS :: 24
@@ -161,10 +162,23 @@ Thread :: struct {
 	frame_cap:   u32,
 	open_upvals: Ref,
 	status:      Thread_Status,
-	_:           [3]u8,
+	wait_flags:  bit_set[Wait_Flag;u8],
+	wait_cont:   Cont,
+	_:           u8,
 	resumer:     Ref,
 	id:          u32,
 	gclist:      Ref,
+	// Where the values this thread waits for go (a resume, a yield or a host yield
+	// stopped it inside the native call at wait_slot).
+	wait_slot:   u32,
+	wait_nres:   i16,
+	_:           u16,
+	wait_arg:    u32,
+}
+
+Wait_Flag :: enum u8 {
+	True_Prefix, // coroutine.resume: the values come after a true
+	Wrap, // a coroutine.wrap function: an error in the coroutine is raised again here
 }
 
 // Cont: what finishes the caller's instruction when a frame returns.
@@ -236,8 +250,3 @@ native_upvals :: #force_inline proc "contextless" (vm: ^VM, r: Ref) -> []Value {
 obj_kind :: #force_inline proc "contextless" (vm: ^VM, r: Ref) -> Obj_Kind {
 	return (^Header)(&vm.mem[r]).kind
 }
-
-// The collector's barriers: empty until M51b fills them in. Every store into a heap
-// object calls one.
-barrier_back :: #force_inline proc "contextless" (vm: ^VM, t: Ref) {}
-barrier_forward :: #force_inline proc "contextless" (vm: ^VM, owner: Ref, v: Value) {}

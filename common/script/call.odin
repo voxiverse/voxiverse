@@ -76,6 +76,9 @@ metatable_of :: proc(vm: ^VM, v: Value) -> Ref {
 		return obj(vm, as_ref(v), Table).meta
 	case .String:
 		return vm.string_meta
+	case .Handle:
+		mt := table_get_int(vm, vm.handle_metas, i64(v.kind))
+		if mt.tag == .Table {return as_ref(mt)}
 	}
 	return 0
 }
@@ -189,13 +192,20 @@ precall :: proc(
 	if !resolve_call(vm, th, func, &nargs) {return .Error}
 	r := as_ref(thread_stack(vm, th)[func])
 	if obj_kind(vm, r) == .Native_Closure {
-		#partial switch obj(vm, r, Native_Closure).intrinsic {
+		switch obj(vm, r, Native_Closure).intrinsic {
+		case .None:
 		case .Pcall:
 			return call_pcall(vm, th, func, nargs, nresults, cont)
 		case .Xpcall:
 			return call_xpcall(vm, th, func, nargs, nresults, cont)
+		case .Resume:
+			return call_resume(vm, th, func, nargs, nresults, cont, cont_arg, false)
+		case .Wrap:
+			return call_resume(vm, th, func, nargs, nresults, cont, cont_arg, true)
+		case .Yield:
+			return call_yield(vm, th, func, nargs, nresults, cont, cont_arg)
 		}
-		return call_native(vm, th, func, nargs, nresults)
+		return call_native(vm, th, func, nargs, nresults, cont, cont_arg)
 	}
 	p := obj(vm, obj(vm, r, Closure).proto, Proto)
 	nfix := u32(p.num_params)
@@ -227,6 +237,7 @@ precall :: proc(
 	}
 	if vm.depth >= vm.limits.call_depth {
 		vm.fault = .Call_Depth
+		vm.pending = true
 		return .Error
 	}
 	fr := push_frame(vm, th)
@@ -247,7 +258,17 @@ precall :: proc(
 	return .Script
 }
 
-call_native :: proc(vm: ^VM, th: ^Thread, func, nargs: u32, nresults: i16) -> Call_Status {
+// call_native runs a native. A native that yields to the host leaves its values on the
+// stack for the host and returns .Script (the run stops at the next instruction
+// boundary); the host's values become its results.
+call_native :: proc(
+	vm: ^VM,
+	th: ^Thread,
+	func, nargs: u32,
+	nresults: i16,
+	cont := Cont.None,
+	cont_arg: u32 = 0,
+) -> Call_Status {
 	if !ensure_stack(vm, th, func + 1 + nargs + MIN_NATIVE_STACK) {return .Error}
 	th.top = func + 1 + nargs
 	r := as_ref(thread_stack(vm, th)[func])
@@ -262,9 +283,28 @@ call_native :: proc(vm: ^VM, th: ^Thread, func, nargs: u32, nresults: i16) -> Ca
 		closure = r,
 		name    = spec.name,
 	}
+	// A private native of the prelude ("string.format/raw") speaks as its function.
+	if k := strings.index_byte(spec.name, '/'); k >= 0 {c.name = spec.name[:k]}
+	if vm.trace.on {trace_event(vm, "C %d call native '%s' args=%d", vm.depth, c.name, nargs)}
 	vm.meter -= i64(spec.cost)
 	st := spec.fn(&c)
 	if vm.fault != .None || st == .Error {return .Error}
+	if st == .Yield {
+		if cont != .None &&
+		   cont != .Host &&
+		   cont != .Store &&
+		   cont != .Compare &&
+		   cont != .Discard &&
+		   cont != .Concat {
+			rt_errorf(vm, "call it from script code", "'%s' cannot yield from here", spec.name)
+			return .Error
+		}
+		set_wait(th, func, nresults, cont, cont_arg, {})
+		vm.yielding = true
+		vm.yield_from = c.ret
+		vm.pending = true
+		return .Script
+	}
 	move_results(vm, th, c.ret, th.top - c.ret, func, nresults)
 	return .Native_Done
 }
@@ -307,10 +347,18 @@ call_pcall :: proc(
 		return precall(vm, th, func + 1, n, nresults, .Pcall, 0, {.Protected})
 	}
 	if obj(vm, r, Native_Closure).intrinsic != .None {
-		rt_error(vm, "pcall cannot call pcall or xpcall directly", "wrap the call in a function")
-		return .Error
+		// A coroutine function runs inside a script frame (the prelude's call_through),
+		// which pcall protects.
+		if !call_through(vm, th, func + 1, &n) {return .Error}
+		return precall(vm, th, func + 1, n, nresults, .Pcall, 0, {.Protected})
 	}
 	#partial switch call_native(vm, th, func + 1, n, -1) {
+	case .Script:
+		// A host yield: the host's values come back after a true.
+		th.wait_slot = func
+		th.wait_nres = nresults
+		th.wait_flags = {.True_Prefix}
+		return .Script
 	case .Native_Done:
 		stack := thread_stack(vm, th)
 		stack[func] = TRUE
@@ -349,10 +397,15 @@ call_xpcall :: proc(
 		return precall(vm, th, func + 2, n, nresults, .Xpcall, 0, {.Protected})
 	}
 	if obj(vm, r, Native_Closure).intrinsic != .None {
-		rt_error(vm, "xpcall cannot call pcall or xpcall directly", "wrap the call in a function")
-		return .Error
+		if !call_through(vm, th, func + 2, &n) {return .Error}
+		return precall(vm, th, func + 2, n, nresults, .Xpcall, 0, {.Protected})
 	}
 	#partial switch call_native(vm, th, func + 2, n, -1) {
+	case .Script:
+		th.wait_slot = func
+		th.wait_nres = nresults
+		th.wait_flags = {.True_Prefix}
+		return .Script
 	case .Native_Done:
 		stack = thread_stack(vm, th)
 		count := th.top - (func + 2)
@@ -365,10 +418,24 @@ call_xpcall :: proc(
 	return call_handler(vm, th, func, nresults, error_value_bare(vm))
 }
 
+// call_through puts the prelude's call_through(f, ...) in f's place at slot.
+@(private = "file")
+call_through :: proc(vm: ^VM, th: ^Thread, slot: u32, nargs: ^u32) -> bool {
+	top := slot + 1 + nargs^
+	if !ensure_stack(vm, th, top + 1 + EXTRA_STACK) {return false}
+	stack := thread_stack(vm, th)
+	for i := top; i > slot; i -= 1 {stack[i] = stack[i - 1]}
+	stack[slot] = vm.call_through
+	nargs^ += 1
+	th.top = top + 1
+	return true
+}
+
 // caught: a protected call at slot returns false and the error value.
 @(private = "file")
 caught :: proc(vm: ^VM, th: ^Thread, slot: u32, nresults: i16, value: Value) -> Call_Status {
 	if vm.fault != .None {return .Error}
+	if vm.trace.on {trace_event(vm, "E %d error caught by pcall", vm.depth)}
 	stack := thread_stack(vm, th)
 	stack[slot] = FALSE
 	stack[slot + 1] = value
@@ -435,6 +502,15 @@ finish_handler :: proc(vm: ^VM, th: ^Thread, handler_slot: u32, arg: u32, v: Val
 	move_results(vm, th, slot, 2, slot, nresults)
 }
 
+// error_value_at: the pending error as a value, a message with its position.
+error_value_at :: proc(vm: ^VM, th: ^Thread) -> Value {
+	if vm.err.has_value {return vm.err.value}
+	return new_string(
+		vm,
+		fmt.tprintf("%s%s", position_prefix(vm, th, vm.err.level), strings.to_string(vm.err.msg)),
+	)
+}
+
 // error_value_bare: the pending error as a value, without a position.
 @(private = "file")
 error_value_bare :: proc(vm: ^VM) -> Value {
@@ -473,7 +549,10 @@ poscall :: proc(vm: ^VM, th: ^Thread, ra, n: u32) -> Pos_Result {
 		move_results(vm, th, slot, n + 1, slot, f.nresults)
 	case .Xpcall_Handler:
 		finish_handler(vm, th, res, f.cont_arg, stack[ra] if n > 0 else NIL)
-	case .Store, .Compare, .Discard, .Concat, .Resume:
+	case .Resume:
+		// The coroutine's function returned: its resumer goes on.
+		if !coroutine_return(vm, vm.current, ra, n) {return .Error}
+	case .Store, .Compare, .Discard, .Concat:
 		v := stack[ra] if n > 0 else NIL
 		if !finish_cont(vm, th, f.cont, f.cont_arg, v) {return .Error}
 	}
@@ -611,9 +690,26 @@ frame_pos :: proc(
 }
 
 // level_frame: the frame of error level n (1: the running script function).
+// A prelude frame there stands for the script function that called into the prelude, so
+// errors of the prelude's functions and natives point at the script.
 level_frame :: proc(vm: ^VM, th: ^Thread, level: int) -> (u32, bool) {
 	if level < 1 || u32(level) > th.frame_count {return 0, false}
-	return th.frame_count - u32(level), true
+	fi := th.frame_count - u32(level)
+	frames := thread_frames(vm, th)
+	for {
+		// The level's function called by pcall, xpcall, resume or the host has no script
+		// caller: as Lua's natives there, no position. (A metamethod's caller is the
+		// script instruction that ran it.)
+		if fi + 1 < th.frame_count {
+			#partial switch frames[fi + 1].cont {
+			case .Host, .Pcall, .Xpcall, .Xpcall_Handler, .Resume:
+				return 0, false
+			}
+		}
+		if string_bytes(vm, frame_proto(vm, th, &frames[fi]).source) != "prelude" {return fi, true}
+		if fi == 0 {return 0, false}
+		fi -= 1
+	}
 }
 
 // position_prefix: "source:line: " of a level, or "".
@@ -684,6 +780,7 @@ traceback :: proc(vm: ^VM, th: ^Thread, allocator := context.allocator) -> []Tra
 // run goes on), false when it ends the run (vm.err.final is set).
 throw :: proc(vm: ^VM) -> bool {
 	th := obj(vm, vm.current, Thread)
+	if vm.trace.on {trace_error(vm)}
 	if vm.fault != .None {
 		final_error(vm, th, .Limit)
 		return false
@@ -697,6 +794,24 @@ throw :: proc(vm: ^VM) -> bool {
 			break
 		}
 		if f.cont == .Host {break}
+	}
+	if catcher < 0 && vm.current != vm.main_thread && th.resumer != 0 {
+		// Nothing in the coroutine catches it: the coroutine dies, its resumer goes on.
+		value := error_value_at(vm, th)
+		if vm.fault != .None {
+			final_error(vm, th, .Limit)
+			return false
+		}
+		again, ok := coroutine_error(vm, value)
+		if !ok {return throw(vm)}
+		if again {
+			vm.err.value = value
+			vm.err.has_value = true
+			vm.err.level = 1
+		} else {
+			return true
+		}
+		return throw(vm)
 	}
 	if catcher < 0 {
 		final_error(vm, th, .Runtime)

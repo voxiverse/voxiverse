@@ -1,0 +1,5 @@
+--! lua
+print(("ab"):rep(3), ("ab"):rep(3, "-"), ("x"):rep(0) == "", ("x"):rep(-1) == "")
+print(#string.rep("abc", 1000))
+--! expect: ababab	ab-ab-ab	true	true
+--! expect: 3000

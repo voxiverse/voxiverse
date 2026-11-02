@@ -1,0 +1,21 @@
+--! lua
+print(string.find("hello world", "wor"))
+print(string.find("hello world", "o", 6))
+print(string.find("hello", "l+"))
+print(string.find("a.b", ".", 1, true))
+print(string.find("abc", "x"))
+print(string.find("hello", "(l)(l)"))
+print(string.find("hello", "", 10))
+print(string.find("hello", "", 6))
+print(string.find("key = value", "(%w+)%s*=%s*(%w+)"))
+print(("[test]"):find("[", 1, true))
+--! expect: 7	9
+--! expect: 8	8
+--! expect: 3	4
+--! expect: 2	2
+--! expect: nil
+--! expect: 3	4	l	l
+--! expect: nil
+--! expect: 6	5
+--! expect: 1	11	key	value
+--! expect: 1	1

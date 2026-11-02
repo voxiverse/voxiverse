@@ -228,8 +228,17 @@ main :: proc() {
 		ok = serve(args[1:])
 	case "debug":
 		ok = debug_game(args[1:])
+	case "script":
+		// `script bench` and `script conform` are the bench tool's script scenario
+		// (tools/bench/script.odin); the rest is tools/script.
+		if len(args) > 1 && args[1] == "bench" {
+			ok = run_tool("bench", slice.concatenate([][]string{{"script"}, args[2:]}))
+		} else if len(args) > 1 && args[1] == "conform" {
+			ok = run_tool("bench", slice.concatenate([][]string{{"script", "-conform"}, args[2:]}))
+		} else {
+			ok = run_tool(args[0], args[1:], release = true)
+		}
 	case "netdump",
-	     "script",
 	     "audiodump",
 	     "replay",
 	     "sfx",
@@ -320,7 +329,7 @@ usage :: proc() {
 	)
 	fmt.println("  netdump   print a network trace (build/net.trace; -summary, -kind:chunk, ...)")
 	fmt.println(
-		"  script    run or list a script (script run <file> [--slice N] [--memory N] [--disasm]; script disasm <file>)",
+		"  script    run or list a script (script run <file> [--slice N] [--memory N] [--trace] [--disasm]; script disasm <file>; script bench [-check] [--smoke] [--lua <exe>]; script conform --lua <exe>)",
 	)
 	fmt.println(
 		"  schema    rewrite the Wireshark dissector's generated schema block from the game's state kinds",
@@ -1485,14 +1494,17 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 bench :: proc(args: []string) -> bool {
 	if len(args) == 0 {
 		fmt.eprintln(
-			"build: bench <scenario>: chunks, telemetry, budgets, ogg (no game), load, views, flight, edits, audio (client/autopilot/benchmark.odin), server and party (server/dedicated/bench.odin), or compare",
+			"build: bench <scenario>: chunks, telemetry, budgets, ogg, script (no game), load, views, flight, edits, audio (client/autopilot/benchmark.odin), server and party (server/dedicated/bench.odin), or compare",
 		)
 		return false
 	}
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
-	if scenario == "telemetry" || scenario == "budgets" || scenario == "ogg" {
+	if scenario == "telemetry" ||
+	   scenario == "budgets" ||
+	   scenario == "ogg" ||
+	   scenario == "script" {
 		return run_tool("bench", args)
 	}
 	build_args := []string{"--release"}

@@ -27,3 +27,135 @@ function print(...)
   end
   write("\n")
 end
+
+local sub, byte, find, pack, unpack, concat, rawlen =
+  P.sub, P.byte, P.find, P.pack, P.unpack, P.concat, P.rawlen
+local find_from, gsub_raw, format_scan, format_raw =
+  P.find_from, P.gsub_raw, P.format_scan, P.format_raw
+
+local function arg_error(i, fname, what, v)
+  error("bad argument #" .. i .. " to '" .. fname .. "' (" .. what .. " expected, got " ..
+    (v == nil and "no value" or type(v)) .. ")", 3)
+end
+
+function string.format(fmt, ...)
+  local kinds = format_scan(fmt)
+  if not find(kinds, "s", 1, true) then return format_raw(fmt, ...) end
+  local args = pack(...)
+  for i = 1, #kinds do
+    if i <= args.n and byte(kinds, i) == 115 then args[i] = tostring(args[i]) end
+  end
+  return format_raw(fmt, unpack(args, 1, args.n))
+end
+
+local gsub_fn = function(s, p, f, max_n)
+  local anchor = false
+  if byte(p, 1) == 94 then anchor = true; p = sub(p, 2) end
+  local out, n, src, last = {}, 0, 1, 0
+  while max_n == nil or n < max_n do
+    local r = pack(find_from(s, p, src, last, anchor))
+    local st, e = r[1], r[2]
+    if st == nil then break end
+    if st > src then out[#out + 1] = sub(s, src, st - 1) end
+    n = n + 1
+    local v = f(unpack(r, 3, r.n))
+    if v == nil or v == false then
+      out[#out + 1] = sub(s, st, e - 1)
+    elseif type(v) == "string" or type(v) == "number" then
+      out[#out + 1] = v
+    else
+      error("invalid replacement value (a " .. type(v) .. ")", 3)
+    end
+    src, last = e, e
+    if anchor then break end
+  end
+  if src <= #s then out[#out + 1] = sub(s, src) end
+  return concat(out), n
+end
+
+function string.gsub(s, p, repl, n)
+  if type(repl) == "function" then
+    if type(s) ~= "string" then arg_error(1, "string.gsub", "string", s) end
+    if type(p) ~= "string" then arg_error(2, "string.gsub", "string", p) end
+    if n ~= nil and type(n) ~= "number" then arg_error(4, "string.gsub", "number", n) end
+    local r, count = gsub_fn(s, p, repl, n)
+    return r, count
+  end
+  return gsub_raw(s, p, repl, n)
+end
+
+function string.gmatch(s, p, init)
+  if type(s) ~= "string" then arg_error(1, "string.gmatch", "string", s) end
+  if type(p) ~= "string" then arg_error(2, "string.gmatch", "string", p) end
+  local src = 1
+  if init ~= nil then
+    if type(init) ~= "number" then arg_error(3, "string.gmatch", "number", init) end
+    src = init
+    if src < 0 then src = #s + src + 1; if src < 1 then src = 1 end
+    elseif src == 0 then src = 1 end
+    if src > #s + 1 then src = #s + 1 end
+  end
+  local last = 0
+  return function()
+    if src > #s + 1 then return nil end
+    local r = pack(find_from(s, p, src, last, false))
+    if r[1] == nil then src = #s + 2; return nil end
+    src, last = r[2], r[2]
+    return unpack(r, 3, r.n)
+  end
+end
+
+if table then
+  local function less(a, b) return a < b end
+
+  -- A stable merge sort: insertion sort on runs of 8, then merges between two buffers.
+  function table.sort(t, cmp)
+    if type(t) ~= "table" then arg_error(1, "table.sort", "table", t) end
+    if cmp ~= nil and type(cmp) ~= "function" then arg_error(2, "table.sort", "function", cmp) end
+    local lt = cmp or less
+    local n = rawlen(t)
+    if n < 2 then return end
+    local a, b = {}, {}
+    for i = 1, n do a[i] = t[i] end
+    for lo = 1, n, 8 do
+      local hi = lo + 7
+      if hi > n then hi = n end
+      for i = lo + 1, hi do
+        local v = a[i]
+        local j = i - 1
+        while j >= lo and lt(v, a[j]) do
+          a[j + 1] = a[j]
+          j = j - 1
+        end
+        a[j + 1] = v
+      end
+    end
+    local width = 8
+    while width < n do
+      for lo = 1, n, 2 * width do
+        local mid, hi = lo + width, lo + 2 * width
+        if mid > n + 1 then mid = n + 1 end
+        if hi > n + 1 then hi = n + 1 end
+        local i, j, k = lo, mid, lo
+        while i < mid and j < hi do
+          if lt(a[j], a[i]) then
+            b[k] = a[j]; j = j + 1
+          else
+            b[k] = a[i]; i = i + 1
+          end
+          k = k + 1
+        end
+        while i < mid do b[k] = a[i]; i = i + 1; k = k + 1 end
+        while j < hi do b[k] = a[j]; j = j + 1; k = k + 1 end
+      end
+      a, b = b, a
+      width = width * 2
+    end
+    for i = 1, n do t[i] = a[i] end
+  end
+end
+
+-- pcall and xpcall run a coroutine function (resume, yield, a wrap) through this.
+function P.call_through(f, ...)
+  return f(...)
+end

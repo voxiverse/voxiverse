@@ -1,0 +1,8 @@
+-- A float recurrence, 10^7 steps (the logistic map).
+local x = 0.5
+local acc = 0.0
+for i = 1, 10000000 do
+	x = 3.7 * x * (1.0 - x)
+	acc = acc + x
+end
+print(string.format("%.6f %.6f", x, acc))

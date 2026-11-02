@@ -101,7 +101,43 @@ rawset, select, setmetatable, tonumber, tostring, type, xpcall`, `collectgarbage
 buffer, which the host drains. `tonumber(s [, base])` takes decimal and hex integers, decimal
 floats and bases 2 to 36, with surrounding spaces; anything else gives `nil`.
 
-The string, table, math and utf8 libraries and coroutines come with M51b.
+## The other libraries
+
+Only what is listed exists.
+
+- **string**: `byte, char, find, format, gmatch, gsub, len, lower, match, rep, reverse, sub,
+  upper` and `split(s, sep)` (Luau's: a plain separator, every field kept, `split("a,,b",
+  ",")` is `{"a", "", "b"}`). Strings have it as their metatable's `__index`, so
+  `("x"):rep(3)` works. Patterns are Lua 5.4's (classes `%a %c %d %g %l %p %s %u %w %x` and
+  their negations, ASCII only; sets, `%b`, `%f`, anchors, up to 32 captures, position
+  captures). A match is limited to 1 000 000 steps ("pattern too complex") and 200 levels of
+  recursion. `format` takes `%d %i %c %x %X %o %e %E %f %g %G %q %s %%` with the flags
+  `- + space # 0`, width and precision up to 99 (no `%a`); `%s` honours `__tostring`. There is
+  no `pack`, `unpack`, `packsize` or `dump`.
+- **table**: `concat, insert, move, pack, remove, sort, unpack`. They are raw (no `__index`,
+  `__newindex` or `__len`). `sort` is a **stable** merge sort, so equal elements keep their
+  order, and an inconsistent comparator never raises "invalid order function".
+- **math**: `abs, ceil, floor, fmod, modf, sqrt, exp, log (x [, base]), sin, cos, tan, asin,
+  acos, atan (y [, x]), max, min, tointeger, type, ult`, and `pi, huge, maxinteger,
+  mininteger`. No `random` (randomness comes from the world API). `log(x, 2)` and
+  `log(x, 10)` are `log(x) / log(base)`, which may differ from Lua in the last bit.
+  `math.tointeger("8")` is `nil` (no string coercion).
+- **utf8**: `char, charpattern, codepoint, codes, len, offset`, strict: no surrogates, nothing
+  above U+10FFFF (`utf8.char(0x110000)` is an error).
+- **coroutine**: `create, resume, yield, status, wrap, isyieldable, running, close`. A
+  coroutine can yield from anywhere inside it: through `pcall`, metamethods, `table.sort`'s
+  comparator, `string.gsub`'s function. When a run suspends at its slice (or the host's
+  native yields) inside a coroutine, the whole chain of coroutines keeps its state and goes
+  on when the host resumes. `coroutine.yield` outside a coroutine is an error.
+
+## Memory
+
+Each VM collects its own garbage, incrementally, as the script allocates (a cycle of tables
+is freed like anything else; there are no weak tables and no `__gc`). The collector's work is
+counted in bytes, never in time, so a script does the same work and gives the same results
+on every machine; only `collectgarbage("count")` and whether a run reaches the memory limit
+depend on when it runs. When an allocation finds no room, the collector first finishes a
+full cycle, and only then is the memory limit a fault.
 
 ## Limits
 
@@ -155,6 +191,13 @@ reported. A limit fault reads `limit exceeded: ...` with the limit and the usual
 
 ## Tools
 
-`./build.sh script run <file> [--slice N] [--memory N] [--disasm]` runs a script, resuming
-it after each slice; `./build.sh script disasm <file>` lists its bytecode, one block per
-function.
+`./build.sh script run <file> [--slice N] [--memory N] [--instructions N] [--trace]
+[--disasm]` runs a script, resuming it after each slice (`--instructions 0`: no limit on
+the run; `--trace` writes every instruction executed, with the register it set, and the
+calls of natives, suspensions, errors and collector steps to stderr);
+`./build.sh script disasm <file>` lists its bytecode, one block per function.
+
+`./build.sh bench script [-check] [--smoke] [--lua <exe>]` (also `./build.sh script bench`)
+runs the benchmark programs of `common/script/testdata/bench` and, with `--lua`, the same
+programs under that Lua 5.4, printing the ratios; `./build.sh script conform --lua <exe>`
+runs the conformance files marked `--! lua` under both and compares what they print.

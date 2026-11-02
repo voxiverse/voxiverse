@@ -1,0 +1,14 @@
+-- table.sort is a stable merge sort: equal keys keep their order.
+local recs = {}
+for i = 1, 40 do recs[i] = {key = i % 3, id = i} end
+table.sort(recs, function(a, b) return a.key < b.key end)
+local out = {}
+for i = 1, 40 do out[i] = recs[i].key .. ":" .. recs[i].id end
+print(out[1], out[2], out[13], out[14], out[40])
+local ids_in_order = true
+for i = 2, 40 do
+  if recs[i].key == recs[i - 1].key and recs[i].id < recs[i - 1].id then ids_in_order = false end
+end
+print(ids_in_order)
+--! expect: 0:3	0:6	0:39	1:1	2:38
+--! expect: true

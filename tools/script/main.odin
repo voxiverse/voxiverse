@@ -9,11 +9,17 @@ import "common:script"
 
 // The script tool.
 //
-//	build script run <file> [--slice N] [--memory N] [--disasm]
+//	build script run <file> [--slice N] [--memory N] [--instructions N] [--trace] [--disasm]
 //	build script disasm <file>
+//
+// --instructions is the run's limit (0: none); --trace writes the instruction trace to
+// stderr. `build script bench` and `build script conform` are the bench tool's
+// (tools/bench/script.odin).
 
 usage :: proc() {
-	fmt.eprintln("usage: script run <file> [--slice N] [--memory N] [--disasm]")
+	fmt.eprintln(
+		"usage: script run <file> [--slice N] [--memory N] [--instructions N] [--trace] [--disasm]",
+	)
 	fmt.eprintln("       script disasm <file>")
 	os.exit(2)
 }
@@ -25,19 +31,30 @@ main :: proc() {
 	file := ""
 	slice: i64 = script.DEFAULT_SLICE
 	memory := script.DEFAULT_LIMITS.memory
+	instructions := script.DEFAULT_LIMITS.run_instructions
 	list := false
+	trace := false
 	for i := 1; i < len(args); i += 1 {
 		a := args[i]
 		switch a {
-		case "--slice", "--memory":
+		case "--slice", "--memory", "--instructions":
 			if i + 1 >= len(args) {usage()}
 			n, ok := strconv.parse_i64(args[i + 1])
-			if !ok || n <= 0 {
+			if !ok || n < 0 || (n == 0 && a != "--instructions") {
 				fmt.eprintfln("script: %s needs a positive number, got %q", a, args[i + 1])
 				os.exit(2)
 			}
-			if a == "--slice" {slice = n} else {memory = int(n)}
+			switch a {
+			case "--slice":
+				slice = n
+			case "--memory":
+				memory = int(n)
+			case:
+				instructions = n
+			}
 			i += 1
+		case "--trace":
+			trace = true
 		case "--disasm":
 			list = true
 		case:
@@ -54,6 +71,7 @@ main :: proc() {
 	}
 	config := script.default_config()
 	config.limits.memory = memory
+	config.limits.run_instructions = instructions
 	vm, verr := script.vm_create(config)
 	if verr.kind != .None {
 		fmt.eprintln(script.error_string(verr))
@@ -71,9 +89,12 @@ main :: proc() {
 		fmt.print(strings.to_string(b))
 		if command == "disasm" {return}
 	}
+	script.trace_set(vm, trace)
 	r := script.call(vm, fn, nil, slice)
 	for {
 		fmt.print(script.output_take(vm, context.temp_allocator))
+		// The trace goes to stderr, so the output stays apart.
+		if trace {fmt.eprint(script.trace_take(vm, context.temp_allocator))}
 		free_all(context.temp_allocator)
 		if r.status != .Suspended {break}
 		r = script.resume(vm, nil, slice)

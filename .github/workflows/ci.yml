@@ -87,6 +87,11 @@ jobs:
       # time on this thread, budgets for a slow runner.
       - name: Benchmark check, budgets
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench budgets -check
+      # The script VM's benchmark programs (M51b): each one's instruction units within
+      # its budget (exact counts, the same on every OS; one repetition, as the times
+      # judge nothing here: the ratios to Lua are checked on Linux).
+      - name: Benchmark check, script
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench script -check --smoke
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP on every platform; its numbers compare with nothing.
       - name: Server benchmark (smoke)
@@ -188,6 +193,12 @@ jobs:
         run: ./build.sh bench telemetry -check
       - name: Benchmark check, budgets
         run: ./build.sh bench budgets -check
+      # The script VM against PUC Lua 5.4 (M51b, installed above): each benchmark program
+      # at most 4x Lua's CPU time and 2.5x in geometric mean (ratios on this runner, so
+      # its speed cancels), the instruction budgets, and every `--! lua` conformance
+      # file printing the same under both.
+      - name: Benchmark check, script
+        run: ./build.sh bench script -check --lua lua5.4
       # The server's benchmark scenario, short (M19): simulated players over
       # UDP; its numbers compare with nothing.
       - name: Server benchmark (smoke)

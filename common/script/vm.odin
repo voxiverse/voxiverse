@@ -47,7 +47,7 @@ Config :: struct {
 }
 
 default_config :: proc() -> Config {
-	return Config{limits = DEFAULT_LIMITS, libs = {.Base}}
+	return Config{limits = DEFAULT_LIMITS, libs = ~bit_set[Lib]{}}
 }
 
 Run_Status :: enum u8 {
@@ -135,8 +135,18 @@ VM :: struct {
 	prelude_table:  Ref,
 	main_thread:    Ref,
 	current:        Ref,
+	handle_metas:   Ref, // a table: handle kind -> its metatable
+	call_through:   Value, // the prelude's function(f, ...) return f(...) end
 	mm_names:       [Metamethod]Ref,
 	natives:        [dynamic]Native_Spec,
+	handle_kinds:   [dynamic]string,
+	// The collector.
+	gc:             Gc_State,
+	gc_params:      Gc_Params,
+	gc_stress:      bool,
+	pending:        bool, // the next instruction boundary has work: the collector, the trace
+	fresh:          [dynamic]Ref, // objects made since the last instruction boundary
+	trace:          Trace_State,
 	// The run.
 	state:          VM_State,
 	meter:          i64, // units left in this slice
@@ -145,6 +155,8 @@ VM :: struct {
 	run_used:       i64,
 	depth:          u32,
 	fault:          Limit_Kind,
+	yielding:       bool, // a native yielded to the host: the run stops at the boundary
+	yield_from:     u32, // where the yielded values begin on the current thread's stack
 	err:            Pending_Error,
 	run_allocator:  runtime.Allocator,
 	// Output.
@@ -170,6 +182,9 @@ vm_create :: proc(config: Config, allocator := context.allocator) -> (^VM, Scrip
 	vm.seed = config.seed
 	vm.natives = make([dynamic]Native_Spec, allocator)
 	vm.output = make([dynamic]u8, allocator)
+	vm.fresh = make([dynamic]Ref, allocator)
+	vm.handle_kinds = make([dynamic]string, allocator)
+	gc_init(vm, config.gc_stress)
 	vm.err.msg = strings.builder_make(allocator)
 	vm.err.hint = strings.builder_make(allocator)
 	if !heap_init(vm) {
@@ -204,7 +219,9 @@ setup_vm :: proc(vm: ^VM, config: Config) -> bool {
 	vm.registry = table_new(vm)
 	vm.string_meta = table_new(vm)
 	vm.prelude_table = table_new(vm)
+	vm.handle_metas = table_new(vm)
 	if vm.globals == 0 ||
+	   vm.handle_metas == 0 ||
 	   vm.registry == 0 ||
 	   vm.string_meta == 0 ||
 	   vm.prelude_table == 0 {return false}
@@ -224,8 +241,26 @@ setup_vm :: proc(vm: ^VM, config: Config) -> bool {
 	t.frame_cap = 16
 	// The natives: the libraries' first, then the host's, in order.
 	append(&vm.natives, ..BASE_NATIVES[:])
+	append(&vm.natives, ..STRING_NATIVES[:])
+	append(&vm.natives, ..TABLE_NATIVES[:])
+	append(&vm.natives, ..MATH_NATIVES[:])
+	append(&vm.natives, ..UTF8_NATIVES[:])
+	append(&vm.natives, ..COROUTINE_NATIVES[:])
 	append(&vm.natives, ..config.natives)
-	return open_base(vm)
+	if !open_base(vm) {return false}
+	// The string library is always there for the prelude (string.format); a VM without
+	// it has no global 'string'.
+	if !open_string(vm) {return false}
+	if .Table in config.libs && !open_table(vm) {return false}
+	if .Math in config.libs && !open_math(vm) {return false}
+	if .Utf8 in config.libs && !open_utf8(vm) {return false}
+	if .Coroutine in config.libs && !open_coroutine(vm) {return false}
+	// What the prelude uses, whichever libraries the globals have.
+	pt := ref_value(.Table, vm.prelude_table)
+	for pair in ([?][2]string{{"sub", "string.sub"}, {"byte", "string.byte"}, {"find", "string.find"}, {"pack", "table.pack"}, {"unpack", "table.unpack"}, {"concat", "table.concat"}, {"rawlen", "rawlen"}}) {
+		if !lib_bind(vm, pt, pair[0], native_value(vm, pair[1])) {return false}
+	}
+	return true
 }
 
 vm_destroy :: proc(vm: ^VM) {
@@ -234,6 +269,10 @@ vm_destroy :: proc(vm: ^VM) {
 	heap_release(vm)
 	delete(vm.natives)
 	delete(vm.output)
+	delete(vm.fresh)
+	for k in vm.handle_kinds {delete(k, allocator)}
+	delete(vm.handle_kinds)
+	trace_destroy(vm)
 	strings.builder_destroy(&vm.err.msg)
 	strings.builder_destroy(&vm.err.hint)
 	free(vm, allocator)
@@ -301,6 +340,8 @@ call :: proc(
 	th.top = 0
 	th.frame_count = 0
 	vm.current = vm.main_thread
+	vm.yielding = false
+	clear(&vm.fresh)
 	vm.run_used = 0
 	vm.depth = 0
 	vm.fault = .None
@@ -316,6 +357,12 @@ call :: proc(
 	th.top = u32(len(args)) + 1
 	switch precall(vm, th, 0, u32(len(args)), -1, .Host, 0) {
 	case .Script:
+		if th.frame_count == 0 && !vm.yielding {
+			// Only a native that yields can stop without a frame.
+			rt_error(vm, "this function cannot be called by the host")
+			throw(vm)
+			return finish_run(vm, .Error, allocator)
+		}
 	case .Native_Done:
 		return finish_run(vm, .Done, allocator)
 	case .Error:
@@ -331,7 +378,32 @@ resume :: proc(
 	slice: i64 = DEFAULT_SLICE,
 	allocator := context.allocator,
 ) -> Run_Result {
-	_ = values
+	if vm.state == .Yielded {
+		// The values become the yielding native's results.
+		vm.state = .Running
+		vm.run_allocator = allocator
+		clear(&vm.fresh)
+		start_slice(vm, slice)
+		th := obj(vm, vm.current, Thread)
+		at := vm.yield_from
+		n := u32(len(values))
+		if !ensure_stack(vm, th, at + n + 1 + EXTRA_STACK) {
+			if !throw(vm) {return finish_run(vm, .Error, allocator)}
+		} else {
+			stack := thread_stack(vm, th)
+			for v, i in values {stack[at + u32(i)] = v}
+			th.top = at + n
+			if th.frame_count == 0 {
+				// The host called the yielding native itself: its results end the run.
+				move_results(vm, th, at, n, 0, -1)
+				return finish_run(vm, .Done, allocator)
+			}
+			if !deliver(vm, th, at, n) {
+				if !throw(vm) {return finish_run(vm, .Error, allocator)}
+			}
+		}
+		return run(vm, allocator)
+	}
 	if vm.state != .Suspended {
 		return Run_Result {
 			status = .Error,
@@ -343,6 +415,7 @@ resume :: proc(
 	}
 	vm.state = .Running
 	vm.run_allocator = allocator
+	clear(&vm.fresh)
 	start_slice(vm, slice)
 	return run(vm, allocator)
 }
@@ -350,6 +423,8 @@ resume :: proc(
 // abort ends a suspended run: its frames gone, upvalues closed, the VM idle.
 abort :: proc(vm: ^VM) {
 	if vm.state != .Suspended && vm.state != .Yielded {return}
+	unwind_threads(vm)
+	vm.yielding = false
 	th := obj(vm, vm.main_thread, Thread)
 	close_upvals(vm, th, 0)
 	th.frame_count = 0
@@ -389,8 +464,17 @@ start_slice :: proc(vm: ^VM, slice: i64) {
 
 @(private = "file")
 run :: proc(vm: ^VM, allocator: mem.Allocator) -> Run_Result {
-	r := execute(vm)
+	r := Exec_Result.Yielded if vm.yielding else execute(vm)
 	switch r {
+	case .Yielded:
+		vm.yielding = false
+		vm.run_used += vm.budget - vm.meter
+		vm.state = .Yielded
+		th := obj(vm, vm.current, Thread)
+		n := th.top - vm.yield_from
+		results := make([]Value, n, allocator)
+		copy(results, thread_stack(vm, th)[vm.yield_from:th.top])
+		return Run_Result{status = .Yielded, results = results}
 	case .Done:
 		return finish_run(vm, .Done, allocator)
 	case .Suspended:
@@ -417,6 +501,9 @@ finish_run :: proc(vm: ^VM, status: Run_Status, allocator: mem.Allocator) -> Run
 		result.error = vm.err.final
 		vm.err.final = {}
 	}
+	unwind_threads(vm)
+	vm.yielding = false
+	vm.err.has_value = false
 	close_upvals(vm, th, 0)
 	th.top = 0
 	th.frame_count = 0
@@ -433,6 +520,7 @@ load_prelude :: proc(vm: ^VM) -> (Script_Error, bool) {
 	if e.kind != .None {return e, false}
 	r := call(vm, fn, {ref_value(.Table, vm.prelude_table)}, max(i64), context.temp_allocator)
 	if r.status != .Done {return r.error, false}
+	vm.call_through = table_get(vm, vm.prelude_table, new_string(vm, "call_through"))
 	return {}, true
 }
 

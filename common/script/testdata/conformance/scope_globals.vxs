@@ -1,4 +1,3 @@
---! lua
 g = 5
 local function set() g = g + 1 end
 set() set()

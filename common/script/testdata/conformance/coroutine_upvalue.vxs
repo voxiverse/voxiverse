@@ -1,0 +1,21 @@
+--! lua
+-- Upvalues of a coroutine's stack stay right while it is suspended and after it ends.
+local get, set
+local co = coroutine.wrap(function()
+  local x = 1
+  get = function() return x end
+  set = function(v) x = v end
+  coroutine.yield()
+  x = x + 10
+  coroutine.yield()
+end)
+co()
+print(get())
+set(5)
+co()
+print(get())
+set(7)
+print(get())
+--! expect: 1
+--! expect: 15
+--! expect: 7

@@ -1,0 +1,21 @@
+--! lua
+print(utf8.char(72, 228, 8364, 128512))
+print(utf8.len("häll€"), #"häll€")
+print(utf8.codepoint("häll€", 1, -1))
+print(utf8.offset("häll€", 3), utf8.offset("häll€", -1))
+local cps = {}
+for p, c in utf8.codes("aé€") do cps[#cps + 1] = p .. ":" .. c end
+print(table.concat(cps, " "))
+print(utf8.len("\xff"))
+print(utf8.charpattern == "[\0-\x7F\xC2-\xFD][\x80-\xBF]*")
+print(#utf8.char(0x10FFFF))
+print(utf8.len("\xed\xa0\x80"))
+--! expect: Hä€😀
+--! expect: 5	8
+--! expect: 104	228	108	108	8364
+--! expect: 4	6
+--! expect: 1:97 2:233 4:8364
+--! expect: nil	1
+--! expect: true
+--! expect: 4
+--! expect: nil	1

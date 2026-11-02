@@ -9,6 +9,7 @@ import "core:strings"
 Exec_Result :: enum u8 {
 	Done,
 	Suspended,
+	Yielded,
 	Error,
 }
 
@@ -26,6 +27,7 @@ State :: struct {
 
 @(private = "file")
 load :: proc(vm: ^VM, s: ^State) {
+	s.th = obj(vm, vm.current, Thread)
 	th := s.th
 	f := top_frame(vm, th)
 	s.base = f.base
@@ -52,6 +54,23 @@ fail :: proc(vm: ^VM, s: ^State) -> bool {
 		return true
 	}
 	return false
+}
+
+// float_fast: + - * / of two floats (the operands converted), inline; other ops go
+// through arith.
+@(private = "file")
+float_fast :: #force_inline proc "contextless" (op: Arith_Op, x, y: f64) -> (Value, bool) {
+	#partial switch op {
+	case .Add:
+		return float_value(x + y), true
+	case .Sub:
+		return float_value(x - y), true
+	case .Mul:
+		return float_value(x * y), true
+	case .Div:
+		return float_value(x / y), true
+	}
+	return {}, false
 }
 
 @(private = "file")
@@ -465,6 +484,25 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 	s.th = obj(vm, vm.current, Thread)
 	load(vm, &s)
 	for {
+		if vm.pending {
+			// The instruction boundary's work: a host yield, the collector, the trace.
+			vm.pending = false
+			if vm.yielding {
+				save(vm, &s)
+				return .Yielded
+			}
+			if vm.fault != .None {
+				// (set with pending: a fault is raised at the next boundary)
+				if fail(vm, &s) {continue}
+				return .Error
+			}
+			clear(&vm.fresh)
+			if vm.gc.credit <= 0 {gc_safe_point(vm)}
+			if vm.trace.on {
+				trace_instruction(vm, s.th, s.pc)
+				vm.pending = true
+			}
+		}
 		vm.meter -= 1
 		if vm.meter < 0 {
 			save(vm, &s)
@@ -475,11 +513,8 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				if fail(vm, &s) {continue}
 				return .Error
 			}
+			if vm.trace.on {trace_suspend(vm)}
 			return .Suspended
-		}
-		if vm.fault != .None {
-			if fail(vm, &s) {continue}
-			return .Error
 		}
 		i := s.code[s.pc]
 		s.pc += 1
@@ -553,18 +588,30 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				s.stack[ra + 1] = t
 			}
 			if t.tag == .Table {
+				// The fast path follows __index while it is a table (methods); a
+				// function there, or a chain too long, takes the slow path.
 				tr := as_ref(t)
-				v: Value
-				if key.tag == .String {
-					v = table_get_str(vm, tr, key)
-				} else if key.tag == .Int {
-					v = table_get_int(vm, tr, as_int(key))
-				} else {
-					v = table_get(vm, tr, key)
+				v := table_get_key(vm, tr, key)
+				hops := 0
+				for v.tag == .Nil && hops < 100 {
+					mt := obj(vm, tr, Table).meta
+					if mt == 0 {break}
+					h := mt_field(vm, mt, .Index)
+					if h.tag != .Table {break}
+					tr = as_ref(h)
+					v = table_get_key(vm, tr, key)
+					hops += 1
 				}
-				if v.tag != .Nil || obj(vm, tr, Table).meta == 0 {
+				if v.tag != .Nil {
 					s.stack[ra] = v
 					continue
+				}
+				if hops < 100 {
+					mt := obj(vm, tr, Table).meta
+					if mt == 0 || mt_field(vm, mt, .Index).tag == .Nil {
+						s.stack[ra] = NIL
+						continue
+					}
 				}
 			}
 			if get_slow(vm, &s, t, key, a, i32(arg_b(i))) == .Error {
@@ -584,6 +631,10 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				key = s.k[arg_b(i)]
 			}
 			val := s.k[arg_c(i)] if arg_k(i) != 0 else s.stack[s.base + arg_c(i)]
+			if t.tag == .Table && val.tag != .Nil && table_replace(vm, as_ref(t), key, val) {
+				// (the key is present, so __newindex is not consulted)
+				continue
+			}
 			if t.tag == .Table && obj(vm, as_ref(t), Table).meta == 0 {
 				if !set_result(vm, table_set(vm, as_ref(t), key, val)) {
 					if fail(vm, &s) {continue}
@@ -635,6 +686,13 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				s.stack[ra] = int_value(as_int(x) + as_int(y))
 				continue
 			}
+			if (av.tag == .Float && (bv.tag == .Float || bv.tag == .Int)) ||
+			   (av.tag == .Int && bv.tag == .Float) {
+				if f, ok := float_fast(op, to_float(av), to_float(bv)); ok {
+					s.stack[ra] = f
+					continue
+				}
+			}
 			r, st := arith(op, av, bv)
 			if st == .Ok {
 				s.stack[ra] = r
@@ -679,6 +737,11 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 					continue
 				case .Mul:
 					s.stack[ra] = int_value(as_int(x) * as_int(y))
+					continue
+				}
+			} else if (x.tag == .Float || x.tag == .Int) && (y.tag == .Float || y.tag == .Int) {
+				if f, ok := float_fast(op, to_float(x), to_float(y)); ok {
+					s.stack[ra] = f
 					continue
 				}
 			}
@@ -835,6 +898,37 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 			nargs := b - 1 if b != 0 else s.th.top - (ra + 1)
 			if b != 0 {s.th.top = ra + b}
 			save(vm, &s)
+			// The fast path: a script function without varargs, when the stack and the
+			// frames have room (precall does the same, and everything else).
+			if fv := s.stack[ra]; fv.tag == .Function && obj_kind(vm, as_ref(fv)) == .Closure {
+				cr := as_ref(fv)
+				p := obj(vm, obj(vm, cr, Closure).proto, Proto)
+				th := s.th
+				nfix := u32(p.num_params)
+				top := ra + 1 + u32(p.max_stack)
+				if p.is_vararg == 0 &&
+				   vm.depth < vm.limits.call_depth &&
+				   th.frame_count < th.frame_cap &&
+				   ra + 1 + max(nargs, nfix) + u32(p.max_stack) + EXTRA_STACK <= th.stack_cap {
+					for j in nargs ..< nfix {s.stack[ra + 1 + j] = NIL}
+					th.frame_count += 1
+					vm.depth += 1
+					top_frame(vm, th)^ = Frame {
+						func     = ra,
+						base     = ra + 1,
+						top      = top,
+						nresults = i16(arg_c(i)) - 1,
+					}
+					th.top = top
+					s.base = ra + 1
+					s.pc = 0
+					s.cl = cr
+					s.p = p
+					s.code = bytes_of(vm, p.code, Instr, p.code_len)
+					s.k = values_of(vm, p.consts, p.consts_len)
+					continue
+				}
+			}
 			switch precall(vm, s.th, ra, nargs, i16(arg_c(i)) - 1, .None, 0) {
 			case .Script:
 				load(vm, &s)
@@ -903,7 +997,34 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 			case .RETURN1:
 				n = 1
 			}
-			if s.th.open_upvals != 0 {close_upvals(vm, s.th, s.base)}
+			if s.th.open_upvals != 0 && obj(vm, s.th.open_upvals, Upvalue).slot >= s.base {
+				close_upvals(vm, s.th, s.base)
+			}
+			// The fast path: back to a script caller, from a function without varargs.
+			th := s.th
+			if fp := top_frame(vm, th);
+			   fp.cont == .None && s.p.is_vararg == 0 && th.frame_count > 1 {
+				res := fp.func
+				want := fp.nresults
+				if want < 0 {
+					for j in 0 ..< n {s.stack[res + j] = s.stack[ra + j]}
+					th.top = res + n
+				} else {
+					w := u32(want)
+					for j in 0 ..< w {s.stack[res + j] = s.stack[ra + j] if j < n else NIL}
+					th.top = res + w
+				}
+				th.frame_count -= 1
+				vm.depth -= 1
+				f := top_frame(vm, th)
+				s.base = f.base
+				s.pc = f.pc
+				s.cl = as_ref(s.stack[f.func])
+				s.p = obj(vm, obj(vm, s.cl, Closure).proto, Proto)
+				s.code = bytes_of(vm, s.p.code, Instr, s.p.code_len)
+				s.k = values_of(vm, s.p.consts, s.p.consts_len)
+				continue
+			}
 			switch poscall(vm, s.th, ra, n) {
 			case .Continue:
 				load(vm, &s)

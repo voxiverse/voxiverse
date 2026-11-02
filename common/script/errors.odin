@@ -133,7 +133,6 @@ rt_errorf :: proc(vm: ^VM, hint: string, format: string, args: ..any) -> bool {
 
 // Name descriptions (Lua's getobjname).
 
-@(private = "file")
 sets_a :: proc(op: Op) -> bool {
 	#partial switch op {
 	case .SETUPVAL,

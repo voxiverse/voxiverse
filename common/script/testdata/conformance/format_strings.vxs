@@ -1,0 +1,15 @@
+--! lua
+print(string.format("%s|%10s|%-10s|%.2s", "abc", "right", "left", "truncate"))
+print(string.format("%s %s %s %s", 1, 2.5, true, nil))
+print(string.format("%q", 'he said "hi"\n\\'))
+print(string.format("%q", 1/0), string.format("%q", 42), string.format("%q", "a\0b"))
+local t = setmetatable({}, {__tostring = function() return "TOSTR" end})
+print(string.format("[%s]", t))
+print(("%d items"):format(3))
+--! expect: abc|     right|left      |tr
+--! expect: 1 2.5 true nil
+--! expect: "he said \"hi\"\
+--! expect: \\"
+--! expect: 1e9999	42	"a\0b"
+--! expect: [TOSTR]
+--! expect: 3 items

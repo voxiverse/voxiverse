@@ -1,0 +1,7 @@
+-- utf8 is strict: no code points over U+10FFFF (Lua 5.4's lax mode is not offered).
+print(pcall(utf8.char, 0x110000))
+print(utf8.len("\xf4\x90\x80\x80"))
+print(utf8.codepoint("\u{10FFFF}"))
+--! expect: false	bad argument #1 to 'utf8.char' (value out of range)
+--! expect: nil	1
+--! expect: 1114111

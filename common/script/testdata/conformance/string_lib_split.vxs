@@ -1,0 +1,11 @@
+local t = ("a,b,,c"):split(",")
+print(#t, t[1], t[2], t[3] == "", t[4])
+local u = string.split("one  two", " ")
+print(#u, u[1], u[2] == "", u[3])
+local v = ("abc"):split("")
+print(#v, v[1], v[3])
+print(#("x"):split("--"), #(""):split(","), ("a--b"):split("--")[2])
+--! expect: 4	a	b	true	c
+--! expect: 3	one	true	two
+--! expect: 3	a	c
+--! expect: 1	1	b

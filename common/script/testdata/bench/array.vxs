@@ -1,0 +1,10 @@
+-- Fill and sum an array of 10^6, 20 times.
+local total = 0
+for r = 1, 20 do
+	local t = {}
+	for i = 1, 1000000 do t[i] = i + r end
+	local s = 0
+	for i = 1, #t do s = s + t[i] end
+	total = total + s
+end
+print(total)

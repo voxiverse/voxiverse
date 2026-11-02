@@ -1,0 +1,24 @@
+--! lua
+local t = {5, 2, 8, 1, 9, 3}
+table.sort(t)
+print(table.concat(t, " "))
+table.sort(t, function(a, b) return a > b end)
+print(table.concat(t, " "))
+local words = {"pear", "apple", "fig", "banana"}
+table.sort(words)
+print(table.concat(words, " "))
+local big = {}
+for i = 1, 1000 do big[i] = (i * 7919) % 1009 end
+table.sort(big)
+local ok = true
+for i = 2, #big do if big[i - 1] > big[i] then ok = false end end
+print(ok, big[1], big[1000])
+table.sort({})
+local one = {1}
+table.sort(one)
+print(one[1])
+--! expect: 1 2 3 5 8 9
+--! expect: 9 8 5 3 2 1
+--! expect: apple banana fig pear
+--! expect: true	1	1008
+--! expect: 1

@@ -1,0 +1,28 @@
+-- Errors inside coroutines: resume returns false and the message; wrap raises it.
+local co = coroutine.create(function() error("bad thing") end)
+local ok, msg = coroutine.resume(co)
+print(ok, msg)
+print(coroutine.status(co))
+local w = coroutine.wrap(function() error({code = 7}) end)
+local ok2, e = pcall(w)
+print(ok2)
+local ok3, e3 = pcall(function() return w() end)
+print(ok3, e3)
+local w2 = coroutine.wrap(function() local x = nil; return x.y end)
+local ok4, e4 = pcall(function() return w2() end)
+print(ok4, e4)
+print(pcall(coroutine.yield, 1))
+print(select("#", pcall(function() coroutine.yield() end)))
+print(pcall(function() coroutine.yield() end))
+local c2 = coroutine.wrap(function() return 1 end)
+c2()
+print(pcall(function() return c2() end))
+--! expect: false	coroutine_errors.vxs:2: bad thing
+--! expect: dead
+--! expect: false
+--! expect: false	coroutine_errors.vxs:9: cannot resume dead coroutine
+--! expect: false	coroutine_errors.vxs:11: attempt to index a nil value (local 'x')
+--! expect: false	attempt to yield from outside a coroutine
+--! expect: 2
+--! expect: false	coroutine_errors.vxs:16: attempt to yield from outside a coroutine
+--! expect: false	coroutine_errors.vxs:19: cannot resume dead coroutine

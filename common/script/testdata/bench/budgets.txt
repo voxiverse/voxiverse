@@ -1,0 +1,11 @@
+# The instruction units each benchmark program uses in our VM (exact on every OS:
+# `build bench script -check` fails when a program uses more). Lower a number when a
+# change makes the VM do less; raise one only knowingly (a change that does more work).
+array 130486435
+closure 100000064
+fib 38770481
+float 60000080
+hash 12691716
+loop 200000055
+method 130000110
+string 3153004

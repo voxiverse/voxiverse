@@ -1,0 +1,10 @@
+print(pcall(string.format, "%d", 1.5))
+print(pcall(string.format, "%d"))
+print(pcall(string.format, "%y", 1))
+print(pcall(string.format, "%d", "x"))
+print(pcall(string.format, "%100d", 1))
+--! expect: false	bad argument #2 to 'string.format' (number has no integer representation)
+--! expect: false	bad argument #2 to 'string.format' (no value)
+--! expect: false	invalid conversion '%y' to 'format'
+--! expect: false	bad argument #2 to 'string.format' (number expected, got string)
+--! expect: false	invalid conversion (width too long)

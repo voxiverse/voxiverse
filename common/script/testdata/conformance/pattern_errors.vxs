@@ -1,0 +1,16 @@
+print(pcall(string.find, "a", "[a"))
+print(pcall(string.find, "a", "%"))
+print(pcall(string.match, "a", "(a"))
+print(pcall(string.match, "a", "a)"))
+print(pcall(string.gsub, "a", "a", "%2"))
+print(pcall(string.gsub, "a", "a", true))
+print(pcall(string.gsub, "abc", "%w", function() return {} end))
+print(pcall(string.find, "a", "%f"))
+--! expect: false	malformed pattern (missing ']')
+--! expect: false	malformed pattern (ends with '%')
+--! expect: false	unfinished capture
+--! expect: false	invalid pattern capture
+--! expect: false	invalid capture index %2 in replacement string
+--! expect: false	bad argument #3 to 'string.gsub' (string/function/table expected, got boolean)
+--! expect: false	invalid replacement value (a table)
+--! expect: false	missing '[' after '%f' in pattern

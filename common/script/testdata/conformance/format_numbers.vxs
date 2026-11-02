@@ -1,0 +1,17 @@
+--! lua
+print(string.format("%d %i %5d|%-5d|%05d", 42, -7, 42, 42, 42))
+print(string.format("%+d % d %.3d %x %X %#x %o", 5, 5, 7, 255, 255, 255, 8))
+print(string.format("%f %.2f %10.3f|%-10.1f|", 3.14159, 2.5, -1.5, 0.25))
+print(string.format("%e %.3E %g %g %g", 12345.678, 0.00012, 100000, 1000000, 0.0001))
+print(string.format("%g %g %.3g %#g %G", 1e20, 0.1, 2/3, 1.5, 1e-20))
+print(string.format("%c%c%c", 76, 117, 97))
+print(string.format("%5.1f%%", 99.44))
+print(string.format("%d", 3.0), string.format("%x", -1))
+--! expect: 42 -7    42|42   |00042
+--! expect: +5  5 007 ff FF 0xff 10
+--! expect: 3.141590 2.50     -1.500|0.2       |
+--! expect: 1.234568e+04 1.200E-04 100000 1e+06 0.0001
+--! expect: 1e+20 0.1 0.667 1.50000 1E-20
+--! expect: Lua
+--! expect:  99.4%
+--! expect: 3	ffffffffffffffff

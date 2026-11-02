@@ -1,0 +1,17 @@
+--! lua
+-- Many coroutines alive at once, and a coroutine whose body is a native.
+local cos = {}
+for i = 1, 200 do
+  cos[i] = coroutine.create(function(x) local y = coroutine.yield(x * 2) return x + y end)
+end
+local s = 0
+for i = 1, 200 do local _, v = coroutine.resume(cos[i], i) s = s + v end
+for i = 1, 200 do local _, v = coroutine.resume(cos[i], 1) s = s + v end
+print(s)
+local n = coroutine.wrap(select)
+print(n("#", 1, 2, 3))
+local up = coroutine.wrap(function(...) coroutine.yield(select("#", ...)) return #{...} end)
+print(up(1, 2, 3), up())
+--! expect: 60500
+--! expect: 3
+--! expect: 3	3

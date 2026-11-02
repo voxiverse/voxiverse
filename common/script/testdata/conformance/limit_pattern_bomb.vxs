@@ -1,0 +1,8 @@
+-- A pattern bomb errors "pattern too complex" (catchable: nothing was made).
+local s = string.rep("a", 5000)
+local ok, e = pcall(string.find, s, string.rep("a?", 5000) .. string.rep("a", 5000))
+print(ok, e)
+local ok2, e2 = pcall(string.find, string.rep("a", 3000), string.rep("a*", 30) .. "b")
+print(ok2, e2)
+--! expect: false	pattern too complex
+--! expect: false	pattern too complex

@@ -112,10 +112,12 @@ package** (#96) was switched on by L3, see above.
 | `common/ogg/testdata` | Ogg digests | `*.txt` |
 | `common/ogg/testdata/edge` | Edge-case Ogg files | `*.ogg` |
 | `common/ogg/testdata/reference` | Reference decodes | `*.s16` |
-| `common/script` | The script language: compiler, VM and the base library | `*.odin`, `*.vxs` |
+| `common/script` | The script language: compiler, VM, collector, libraries and trace | `*.odin`, `*.vxs` |
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
+| `common/script/testdata/bench` | The VM's benchmark programs and their instruction budgets | `*.vxs`, `budgets.txt` |
 | `common/script/testdata/conformance` | The language's conformance files | `*.vxs` |
 | `common/script/testdata/disasm` | Programs and their listings | `*.vxs`, `*.txt` |
+| `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
 | `common/worldgen` | World generators | `*.odin` |
 | `docs` | Documents and this manifest | `*.md` |

@@ -1,0 +1,13 @@
+--! lua
+local co = coroutine.create(function() coroutine.yield(1) end)
+coroutine.resume(co)
+print(coroutine.status(co))
+print(coroutine.close(co))
+print(coroutine.status(co))
+print(coroutine.resume(co))
+print(coroutine.close(coroutine.create(print)))
+--! expect: suspended
+--! expect: true
+--! expect: dead
+--! expect: false	cannot resume dead coroutine
+--! expect: true

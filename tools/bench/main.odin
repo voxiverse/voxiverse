@@ -83,6 +83,10 @@ main :: proc() {
 		ogg_main()
 		return
 	}
+	if len(os.args) > 1 && os.args[1] == "script" {
+		script_main(os.args[2:])
+		return
+	}
 	if len(os.args) > 1 && os.args[1] == "budgets" {
 		budgets_main(os.args[2:])
 		return

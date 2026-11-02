@@ -1,0 +1,24 @@
+-- A yield inside a metamethod, and inside table.sort's comparator.
+local mt = {__index = function(t, k) return coroutine.yield(k) end,
+            __add = function(a, b) return coroutine.yield("add") end}
+local co = coroutine.wrap(function()
+  local t = setmetatable({}, mt)
+  local v = t.foo
+  local w = t + 1
+  return v .. w
+end)
+print(co())
+print(co("A"))
+print(co("B"))
+local sorter = coroutine.wrap(function()
+  local t = {3, 1, 2}
+  table.sort(t, function(a, b) coroutine.yield("cmp") return a < b end)
+  return table.concat(t, ",")
+end)
+local r = sorter()
+while r == "cmp" do r = sorter() end
+print(r)
+--! expect: foo
+--! expect: add
+--! expect: AB
+--! expect: 1,2,3

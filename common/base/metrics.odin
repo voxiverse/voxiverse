@@ -69,6 +69,15 @@ Metric :: enum u8 {
 	Avatar_Draw, // building every avatar's vertices for a frame (BENCH_AVATARS), ms
 	// The ogg scenario: one value per piece of music.
 	Ogg_Decode, // one piece decoded whole by common/ogg, ms
+	// The script scenario: one value per program a repetition (tools/bench/script.odin).
+	Script_Array, // fill and sum an array of 10^6, 20 times, ms
+	Script_Closure, // 10^7 calls of a closure, ms
+	Script_Fib, // recursive fib(32), ms
+	Script_Float, // a float recurrence, 10^7 steps, ms
+	Script_Hash, // 10^6 string-keyed inserts and lookups, ms
+	Script_Loop, // an integer sum to 10^8, ms
+	Script_Method, // 10^7 method calls through __index, ms
+	Script_String, // building, format, find and gsub, ms
 }
 
 Metric_Info :: struct {
@@ -129,6 +138,14 @@ METRIC_INFO := [Metric]Metric_Info {
 	.View_Model           = {"view_model", "us", false},
 	.Avatar_Draw          = {"avatar_draw", "ms", false},
 	.Ogg_Decode           = {"ogg_decode", "ms", false},
+	.Script_Array         = {"script_array", "ms", false},
+	.Script_Closure       = {"script_closure", "ms", false},
+	.Script_Fib           = {"script_fib", "ms", false},
+	.Script_Float         = {"script_float", "ms", false},
+	.Script_Hash          = {"script_hash", "ms", false},
+	.Script_Loop          = {"script_loop", "ms", false},
+	.Script_Method        = {"script_method", "ms", false},
+	.Script_String        = {"script_string", "ms", false},
 }
 
 METRIC_SAMPLES :: 1 << 16 // kept per metric (the newest, if more come)

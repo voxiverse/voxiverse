@@ -1,0 +1,25 @@
+--! lua
+local function gen(n)
+  return coroutine.wrap(function()
+    for i = 1, n do coroutine.yield(i) end
+  end)
+end
+local s = 0
+for v in gen(5) do s = s + v end
+print(s)
+local co = coroutine.create(function(a, b)
+  local c = coroutine.yield(a + b)
+  local d, e = coroutine.yield(c * 2)
+  return d + e, "done"
+end)
+print(coroutine.resume(co, 1, 2))
+print(coroutine.resume(co, 10))
+print(coroutine.resume(co, 3, 4))
+print(coroutine.resume(co))
+print(coroutine.status(co))
+--! expect: 15
+--! expect: true	3
+--! expect: true	20
+--! expect: true	7	done
+--! expect: false	cannot resume dead coroutine
+--! expect: dead

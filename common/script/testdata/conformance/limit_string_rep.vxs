@@ -1,0 +1,8 @@
+-- A string over string_max (1 MiB) is an error pcall catches: nothing was made.
+local ok, e = pcall(string.rep, "x", 2^30)
+print(ok, e)
+print(#string.rep("x", 2^20))
+print(pcall(string.rep, "x", 2^20 + 1))
+--! expect: false	string too large
+--! expect: 1048576
+--! expect: false	string too large

@@ -1,0 +1,19 @@
+--! lua
+local t = {}
+table.insert(t, "a")
+table.insert(t, "c")
+table.insert(t, 2, "b")
+table.insert(t, 1, "z")
+print(#t, table.concat(t, ","))
+print(table.remove(t), table.remove(t, 1), #t, table.concat(t, ","))
+print(table.remove({}), #t)
+local u = {1, 2, 3}
+print(table.remove(u, #u + 1), #u)
+print(pcall(table.insert, {1}, 5, 2))
+print(pcall(table.insert, {}, 1, 2, 3))
+--! expect: 4	z,a,b,c
+--! expect: c	z	2	a,b
+--! expect: nil	2
+--! expect: nil	3
+--! expect: false	bad argument #2 to 'table.insert' (position out of bounds)
+--! expect: false	wrong number of arguments to 'insert'

@@ -1,0 +1,14 @@
+print(pcall(math.floor, "x"))
+print(pcall(math.fmod, 1, 0))
+print(pcall(math.max))
+print(math.fmod(1, 0.0) ~= math.fmod(1, 0.0))
+print(pcall(math.type))
+print(math.random == nil)
+print(math.tointeger("8"))
+--! expect: false	bad argument #1 to 'math.floor' (number expected, got string)
+--! expect: false	bad argument #2 to 'math.fmod' (zero)
+--! expect: false	bad argument #1 to 'math.max' (number expected, got no value)
+--! expect: true
+--! expect: false	bad argument #1 to 'math.type' (value expected)
+--! expect: true
+--! expect: nil

@@ -9928,3 +9928,94 @@ appended after `Tally`; a `Cell` key reads a channel id from 1 to `MAX_CHANNELS`
 may repeat its position's index with a later channel. The fuzz is a mutation test of the
 layered encodings (`test_layered_chunk_mutations`) since the net fuzz's registry has no
 channels. The client's pools are sized from the registry it has when its world starts.
+
+# M51b: the collector, the libraries, coroutines and the host API
+
+Builds: `gc.odin` (everything under "The collector"), `heap_check`, the barriers filled in,
+the full-collection retry before the memory fault; `lib_string.odin` and `lib_pattern.odin`,
+`lib_table.odin`, `lib_math.odin`, `lib_utf8.odin`, `lib_coroutine.odin` and the rest of the
+prelude; coroutines (the `Thread` status, resume chain, intrinsics, `wrap`, `close`); pins,
+handles with kind metatables, `host_yield`; `trace.odin` and `run --trace`; the benchmark
+programs, `build script bench`, `build bench script`, `--lua`, and `build script conform
+--lua`; `docs/script.md` gains the libraries.
+
+Tests: the conformance suite grows to at least 200 files (the M51b areas) and every file also
+runs under `gc_stress` with `heap_check` after; `gc_test.odin`: `for i = 1, 10^6 do local t =
+{i} end` in a 1 MiB VM finishes with `top` under 512 KiB (memory flat); a cycle of two tables
+is freed; a string only the intern index holds is freed and removed from it; a black table
+given a new white value keeps it (the barrier: built with a stepped collector, checked by
+`heap_check` and by reading the value after a full cycle); the memory fault happens only
+after a full collection (a program whose garbage alone exceeds the cap finishes); the cost
+of a collection is counted in allocation units and is the same on every run;
+`host_test.odin`: a pinned function survives ten full collections and is called; a handle
+kind with a metatable (`h:pos()` reaches the native through `__index`); a native yields to
+the host, the host resumes with values, the script continues with them, also from inside a
+coroutine and inside `pcall`; `trace_test.odin`: a fixed program's trace against
+`testdata/trace/*.txt`; the benchmark programs give the same output under Lua 5.4 and ours
+(`--! lua` files and the bench, by hand).
+
+**The benchmark, gated (2026-10-30, #83; was measured by hand).** `build bench script`
+(`tools/bench/script.odin`, dispatched like `ogg` and `budgets` in `tools/bench/main.odin`)
+runs `common/script/testdata/bench/*.vxs` in our VM and, with `--lua <exe>`, in PUC Lua 5.4,
+each program three times, CPU time of the thread for ours and the child's user time for
+Lua's; `-check` fails when a program is over 4x Lua's time or the geometric mean over 2.5x
+(ratios on the same runner, so the runner's speed cancels). CI's Linux test job installs
+`lua5.4` through the apt cache (`.github/actions/apt`; a build-time tool, never shipped: the
+*Third-party code* decision allows it) and runs `build bench script -check --lua lua5.4` as
+"Benchmark check, script". Without `--lua` (Windows, macOS, and locally without Lua) the
+step runs our side only and checks a per-program instruction budget recorded beside the
+programs (counts, not time), so a change that makes the VM execute more instructions fails
+on every OS. `build script conform --lua lua5.4` runs in the same step: every `--! lua`
+conformance file prints the same under both.
+
+Also: a GC fuzz (`test_gc_fuzz`, fixed seed, 500 generated programs from M51c's generator
+shape, written here as a small allocation-pattern generator: tables, strings, closures,
+cycles, weak-free) under `gc_stress` with `heap_check` after every step; and the memory
+statistics a host reads (`vm_stats(vm) -> {heap_used, heap_peak, collections, units}`) so
+M52's `/script list` and the profiler show them.
+
+Exit check: the suite and CI green, with "Benchmark check, script" passing on Linux (ratios
+and conformance against Lua 5.4) and the instruction budgets on the three OSes; memory stays
+flat under churn; every conformance file gives the same output under `gc_stress`; the ratios
+are written in the row's history.md entry.
+
+The design shared by M51a-c is in [M51.md](M51.md); read it first.
+
+Differed (M51b, done 2026-11-02): an earlier session of the lane had left `gc.odin`, the
+libraries, coroutines, pins, handles, `host_yield`, `trace.odin`, `gc_test.odin` and 36
+conformance files in the tree, uncommitted; this one finished the milestone. The
+conformance files that failed were wrong where Lua 5.4 agrees with us (`utf8_basic`'s
+byte count and `print` truncation, `sort_basic`'s least value, `modf`), and the VM was
+wrong where it differs: `math.modf`'s integral part is an integer when it fits, and an
+error raised in a function that `pcall`, `xpcall`, `resume` or the host called (a native,
+or the prelude's `string.format`, `string.gsub`, `table.sort`) has no position, as Lua's
+natives there (`level_frame`). A `--! lua` file holds only the common subset: what is ours
+on purpose (yields through `table.sort`, `_G` absent, the 1 MiB string limit, strict
+`utf8.char`, `math.tointeger("8")` being nil) and what differs between Lua 5.4 patch
+releases (`table.concat`'s message) moved to files without the mark (`limit_string_rep`,
+`table_lib_errors`, `utf8_strict`). Handle kinds are registered on the VM after
+`vm_create` (numbered in that order), not in `Config`. The trace's `G` line names the phase
+and gives bytes; a suspension replaces the line of the instruction that runs on resume; `E`
+lines mark raises. `vm_stats` also gives the units of the last run (`run_units`: what the
+budgets count). `build script bench` and `build script conform` run the bench tool's script
+scenario (the driver routes them; one implementation). "Benchmark check, script" is in the
+Linux game job, which already installs `lua5.4` (not the test job); on Windows and macOS it
+runs `-check --smoke` (budgets only, one repetition). Each side's time is the least of its
+three runs, not the median: on a busy machine the medians swung a ratio from 2.6 to 4.0
+between runs. The ratios fell from a geometric mean of 2.63 (method 4.4x, closure 4.1x)
+with the dispatch loop's fast paths: a script call and return without `precall`/`poscall`,
+`__index` chains of tables followed inline, a store to a key present done in place (no
+`__newindex` lookup), float `+ - * /` inline, the fault check moved behind `pending`. The
+ratios, here (`build bench script -check --lua lua`, Lua 5.4.8, least of three): array 2.89,
+closure 2.57, fib 2.59, float 2.70, hash 0.73, loop 2.12, method 2.60, string 1.68;
+geometric mean 2.08. M51.md was corrected where the code differs (handles, the trace's
+lines, where the CI step runs).
+
+## Check by hand
+
+- On Ubuntu with `lua5.4` (Lua 5.4.6, what CI installs), run `./build.sh script conform --lua
+  lua5.4`: expect "94 conformance files compared with lua5.4" and no "bench failed" line
+  (here only Lua 5.4.8 was at hand; the files avoid what changed between patch releases).
+- On Windows and macOS, run `./build.sh bench script -check --smoke`: expect each program's
+  units equal to its budget in `common/script/testdata/bench/budgets.txt` and "bench check
+  passed".

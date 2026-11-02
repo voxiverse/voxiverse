@@ -53,14 +53,12 @@ hash_find :: proc(vm: ^VM, t: ^Table, key: Value) -> int {
 	slots := bytes_of(vm, t.index, u32, t.index_mask + 1)
 	entries := values_of(vm, t.entries, t.entries_cap * 2)
 	i := key_hash(key, vm) & t.index_mask
-	first := true
 	for {
-		if !first {vm.meter -= 1}
-		first = false
 		e := slots[i]
 		if e == 0 {return -1}
 		if key_same(entries[(e - 1) * 2], key) {return int(e - 1)}
 		i = (i + 1) & t.index_mask
+		vm.meter -= 1 // each probe after the first
 	}
 }
 
@@ -114,11 +112,42 @@ table_get_int :: proc(vm: ^VM, tr: Ref, k: i64) -> Value {
 	return values_of(vm, t.entries, t.entries_cap * 2)[e * 2 + 1]
 }
 
-table_get_str :: proc(vm: ^VM, tr: Ref, key: Value) -> Value {
+table_get_str :: #force_inline proc(vm: ^VM, tr: Ref, key: Value) -> Value {
 	t := obj(vm, tr, Table)
 	e := hash_find(vm, t, key)
 	if e < 0 {return NIL}
 	return values_of(vm, t.entries, t.entries_cap * 2)[e * 2 + 1]
+}
+
+// table_get_key: table_get with the common key types first.
+table_get_key :: #force_inline proc(vm: ^VM, tr: Ref, key: Value) -> Value {
+	if key.tag == .String {return table_get_str(vm, tr, key)}
+	if key.tag == .Int {return table_get_int(vm, tr, as_int(key))}
+	return table_get(vm, tr, key)
+}
+
+// table_replace sets the value of a key the table holds (a live entry) to a non-nil
+// value: true when it did; false (and nothing changed) when the key is absent.
+table_replace :: proc(vm: ^VM, tr: Ref, key_in: Value, val: Value) -> bool {
+	t := obj(vm, tr, Table)
+	slot: ^Value
+	if key_in.tag == .Int && as_int(key_in) >= 1 && as_int(key_in) <= i64(t.arr_len) {
+		slot = &values_of(vm, t.arr, t.arr_cap)[as_int(key_in) - 1]
+	} else {
+		key := normalize_key(key_in)
+		if key.tag == .Nil || (key.tag == .Float && as_float(key) != as_float(key)) {return false}
+		if key.tag == .Int && as_int(key) >= 1 && as_int(key) <= i64(t.arr_len) {
+			slot = &values_of(vm, t.arr, t.arr_cap)[as_int(key) - 1]
+		} else {
+			e := hash_find(vm, t, key)
+			if e < 0 {return false}
+			slot = &values_of(vm, t.entries, t.entries_cap * 2)[e * 2 + 1]
+		}
+	}
+	if slot.tag == .Nil {return false}
+	barrier_back(vm, tr)
+	slot^ = val
+	return true
 }
 
 table_get :: proc(vm: ^VM, tr: Ref, key_in: Value) -> Value {
