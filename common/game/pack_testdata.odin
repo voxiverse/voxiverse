@@ -93,3 +93,69 @@ test_asset_pack :: proc(
 	append(&files, Pack_File{TEST_MARBLE_OGG, TEST_CLICK})
 	return {"testpack", files[:]}
 }
+
+// sim_test (M49b): a pack with a creeping substance and fire, defined without engine code:
+// the rule language's test pack. Its channels, blocks, tag and rules are the constants
+// below; sim_test_pack adds files of the caller's (broken rules for the refusal tests).
+SIM_TEST_MANIFEST :: `{"format": 1, "namespace": "sim_test", "version": "1.0.0", "title": "Simulation test pack", "requires": ["voxiverse"]}`
+SIM_TEST_CHANNELS :: `{"wetness": {"bits": 4, "default": 0, "saved": true, "replicated": true}, "secret": {"bits": 8, "default": 0, "saved": true, "replicated": false}, "potency": {"bits": 4, "default": 0, "saved": true, "replicated": true}}`
+SIM_TEST_BLOCKS :: `{"creep": {"collides": true, "opaque": true, "breakable": true, "textures": {"all": "voxiverse:stone"}}, "fire": {"collides": false, "opaque": false, "targetable": false, "breakable": true, "light": 15, "textures": {"all": "voxiverse:water"}}}`
+SIM_TEST_TAG :: `{"flammable": {"values": ["voxiverse:planks", "voxiverse:log", "voxiverse:leaves", "voxiverse:wool"]}}`
+SIM_TEST_CREEP :: `{
+  "creep": {
+    "blocks": ["sim_test:creep"],
+    "trigger": "scheduled",
+    "delay": 10,
+    "do": [
+      "require self.potency > 0",
+      {"repeat": 2, "do": [
+        "pick t -1..1 -1..1 -1..1",
+        "require t is voxiverse:stone",
+        "set t sim_test:creep",
+        "set t.potency self.potency - 1",
+        "schedule t 10"
+      ]}
+    ]
+  }
+}`
+SIM_TEST_FIRE :: `{
+  "fire": {
+    "blocks": ["sim_test:fire"],
+    "trigger": "scheduled",
+    "delay": 15,
+    "wake": ["placed", "neighbour"],
+    "do": [
+      {"if": "count box(-1..1, -1..1, -1..1) is #sim_test:flammable == 0",
+       "then": ["set self voxiverse:air", "stop"]},
+      "schedule self 15",
+      {"repeat": 3, "do": [
+        "pick t -1..1 -1..1 -1..1",
+        "require t is #sim_test:flammable",
+        "chance 3",
+        "set t sim_test:fire"
+      ]},
+      "chance 6",
+      "set self voxiverse:air"
+    ]
+  }
+}`
+
+sim_test_pack :: proc(
+	extra: []Pack_File = nil,
+	with_rules := true,
+	allocator := context.temp_allocator,
+	creep := SIM_TEST_CREEP,
+) -> Pack_Source {
+	files := make([dynamic]Pack_File, allocator)
+	text :: proc(s: string) -> []u8 {return transmute([]u8)s}
+	append(&files, Pack_File{"pack.json", text(SIM_TEST_MANIFEST)})
+	append(&files, Pack_File{"data/channels/test.json", text(SIM_TEST_CHANNELS)})
+	append(&files, Pack_File{"data/blocks/substances.json", text(SIM_TEST_BLOCKS)})
+	append(&files, Pack_File{"data/block_tags/flammable.json", text(SIM_TEST_TAG)})
+	if with_rules {
+		append(&files, Pack_File{"data/sim/creep.json", text(creep)})
+		append(&files, Pack_File{"data/sim/fire.json", text(SIM_TEST_FIRE)})
+	}
+	append(&files, ..extra)
+	return {"sim_test", files[:]}
+}

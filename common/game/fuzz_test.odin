@@ -26,6 +26,9 @@ test_fuzz_pack_json_smoke :: proc(t: ^testing.T) {smoke(t, "pack.json")}
 test_fuzz_pack_registry_smoke :: proc(t: ^testing.T) {smoke(t, "pack.registry")}
 
 @(test)
+test_fuzz_pack_sim_rules_smoke :: proc(t: ^testing.T) {smoke(t, "pack.sim_rules")}
+
+@(test)
 test_fuzz_pack_png_smoke :: proc(t: ^testing.T) {smoke(t, "pack.png")}
 
 @(test)

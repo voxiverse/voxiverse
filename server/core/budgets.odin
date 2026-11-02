@@ -1,6 +1,8 @@
 package core
 
+import "base:runtime"
 import "core:fmt"
+import "core:strings"
 
 import "common:base"
 import "common:game"
@@ -211,8 +213,9 @@ budget_counters :: proc(reg: ^game.Registry) -> (building_us, work_us: i64, byte
 // chunks round the origin (blocks -64 to 63 sideways and 0 to 79 up), room for
 // the scenes' platform, pool and fills.
 @(private = "file")
-budget_world :: proc(h: ^Harness) -> (w: ^World, ok: bool) {
+budget_world :: proc(h: ^Harness, extra: []game.Pack_Source = nil) -> (w: ^World, ok: bool) {
 	config := harness_world()
+	config.extra_packs = extra
 	config.journal_timed = true
 	config.view_radius, config.view_height = 7, 2 // (the pool's size: every chunk the scenes hold)
 	if !harness_start(h, config) {return}
@@ -347,5 +350,101 @@ budget_journal :: proc() -> (r: Budget_Journal, ok: bool) {
 	r.share = f64(w.journal.cost_ticks) / f64(total)
 	r.per_tick_us = r.share * f64(cpu_us) / 600
 	r.head = w.journal.head
+	return r, true
+}
+
+// ---- the rules (M49b) ----
+
+Budget_Rules :: struct {
+	worst_us:   i64, // the slowest world tick
+	most:       int, // the most cells waiting at once
+	runs:       int, // rule runs
+	run_ns:     f64, // the ticks' CPU time over the runs, ns
+	max_reads:  i32, // the most one run read (within the rule's cost)
+	compile_us: i64, // compiling the test pack and 500 rules near the limits
+}
+
+// budget_rule_text: n rules near the limits (cost 3 000 to 4 000): a box of 9 x 9 x 9 read
+// once or twice, picks, chances and writes, each with its own numbers.
+budget_rule_text :: proc(n: int, allocator: runtime.Allocator) -> string {
+	sb := strings.builder_make(allocator)
+	strings.write_string(&sb, "{")
+	for i in 0 ..< n {
+		if i > 0 {strings.write_string(&sb, ",")}
+		fmt.sbprintf(
+			&sb,
+			`"gen%d": {{"blocks": ["sim_test:creep"], "trigger": "random", "do": [
+  "require count box(-4..4, -4..4, -4..4) is @opaque >= %d",
+  {{"repeat": 4, "do": ["pick t -%d..%d -1..1 -%d..%d", "require t is #sim_test:flammable", "chance %d", "set t sim_test:fire", "set t.potency self.potency + 1"]}},
+  {{"if": "any box(-4..4, 0..0, -4..4) is voxiverse:air and self.light >= %d", "then": ["set above voxiverse:air"], "else": ["schedule self %d"]}}
+]}}`,
+			i,
+			i % 300,
+			1 + i % 4,
+			1 + i % 4,
+			1 + i % 4,
+			1 + i % 4,
+			2 + i % 7,
+			i % 15,
+			1 + i % 1200,
+		)
+	}
+	strings.write_string(&sb, "}")
+	return strings.to_string(sb)
+}
+
+// budget_rules: 10 000 creep cells scheduled at once (a 100 x 100 layer at potency 15 on a
+// stone slab), 300 ticks; and the time to compile the test pack with 500 more rules.
+budget_rules :: proc() -> (r: Budget_Rules, ok: bool) {
+	a := runtime.default_allocator()
+	packs := make([]game.Pack_Source, 1, a)
+	defer delete(packs, a)
+	packs[0] = game.sim_test_pack(allocator = a)
+	h := new(Harness)
+	defer free(h)
+	w := budget_world(h, packs) or_return
+	defer harness_stop(h)
+	s := &h.srv
+	creep, _ := game.registry_block(s.registry, "sim_test:creep")
+	potency, _ := game.registry_channel(s.registry, "sim_test:potency")
+	act := world_act(w, .Command)
+	bulk_edit(w, {shape = Box{{-50, 58, -50}, {49, 61, 49}}, op = .Set, block = .Stone}, act)
+	bulk_edit(w, {shape = Box{{-50, 62, -50}, {49, 62, 49}}, op = .Set, block = creep}, act)
+	for z in i32(-50) ..< 50 {
+		for x in i32(-50) ..< 50 {set_channel(w, {x, 62, z}, potency, 15, act)}
+	}
+	runs_before := w.updates.run
+	total := i64(0)
+	for _ in 0 ..< 300 {
+		start := base.thread_cpu_us()
+		budget_world_tick(s, w)
+		took := base.thread_cpu_us() - start
+		total += took
+		r.worst_us = max(r.worst_us, took)
+		r.most = max(r.most, w.updates.count)
+	}
+	r.runs = w.updates.run - runs_before
+	r.run_ns = f64(total) * 1000 / f64(max(r.runs, 1))
+	// Compiling: the registry with and without 500 rules near the limits.
+	build :: proc(extra: []game.Pack_File, a: runtime.Allocator) -> (us: i64, built: bool) {
+		sources := []game.Pack_Source {
+			game.base_pack_source(context.temp_allocator),
+			game.sim_test_pack(extra, allocator = context.temp_allocator),
+		}
+		start := base.thread_cpu_us()
+		reg, errs := game.registry_build(sources, .Server, a)
+		us = base.thread_cpu_us() - start
+		if reg == nil {
+			for e in errs {fmt.eprintln(game.pack_error_text(e))}
+			return us, false
+		}
+		game.registry_destroy(reg)
+		return us, true
+	}
+	plain := build(nil, a) or_return
+	text := budget_rule_text(500, a)
+	defer delete(text, a)
+	with := build([]game.Pack_File{{"data/sim/gen.json", transmute([]u8)text}}, a) or_return
+	r.compile_us = max(with - plain, 0)
 	return r, true
 }

@@ -20,7 +20,7 @@ import "server:core"
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 1
+BUDGETS_VERSION :: 2
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3)"`,
@@ -39,6 +39,9 @@ BUDGET_LIMITS := [?]struct {
 	{.Journal_Share, 5},
 	{.Journal_Tick, 500},
 	{.Flood_Tick, 33_000}, // a tick
+	{.Rules_Tick, 16_000}, // half the tick: the old test's 8 ms, doubled for slow runners as the flood's is
+	{.Rule_Run, 3000},
+	{.Rules_Compile, 50_000},
 }
 
 // The save is given this many ticks to commit before the scene gives up (the
@@ -129,4 +132,12 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 		append(failures, fmt.aprintf("only %d block updates flowing", flood.most))
 	}
 	base.metric_add(.Flood_Tick, f32(flood.worst_us))
+
+	rules, ruled := core.budget_rules()
+	if !ruled || rules.most < 10_000 {
+		append(failures, fmt.aprintf("only %d rule cells waiting", rules.most))
+	}
+	base.metric_add(.Rules_Tick, f32(rules.worst_us))
+	base.metric_add(.Rule_Run, f32(rules.run_ns))
+	base.metric_add(.Rules_Compile, f32(rules.compile_us))
 }

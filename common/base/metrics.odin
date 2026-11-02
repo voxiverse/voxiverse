@@ -63,6 +63,9 @@ Metric :: enum u8 {
 	Journal_Share, // the journal's share of the ticks' time under a flood and blasts, %
 	Journal_Tick, // its mean cost in a tick, us
 	Flood_Tick, // the slowest world tick with 10 000 blocks of water flowing, us
+	Rules_Tick, // the slowest world tick with 10 000 creep cells waiting (statement rules), us
+	Rule_Run, // CPU ns per statement-rule run in that scene
+	Rules_Compile, // compiling the test pack and 500 rules near the limits, us
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us
 	// The avatars scenario: one value per frame.
@@ -135,6 +138,9 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Journal_Share        = {"journal_share", "%", false},
 	.Journal_Tick         = {"journal_tick", "us", false},
 	.Flood_Tick           = {"flood_tick", "us", false},
+	.Rules_Tick           = {"rules_tick", "us", false},
+	.Rule_Run             = {"rule_run", "ns", false},
+	.Rules_Compile        = {"rules_compile", "us", false},
 	.View_Model           = {"view_model", "us", false},
 	.Avatar_Draw          = {"avatar_draw", "ms", false},
 	.Ogg_Decode           = {"ogg_decode", "ms", false},

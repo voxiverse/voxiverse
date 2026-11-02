@@ -1,6 +1,7 @@
 package game
 
 import "base:runtime"
+import "core:fmt"
 import "core:hash"
 import "core:mem"
 import "core:strings"
@@ -46,6 +47,35 @@ game_fuzz_targets :: proc() -> []fuzz.Target {
 			dictionary = {"\"", "null", "[]", "{}", "99999999999", "-1", "\"unknown:thing\""},
 			max_len = 64 << 10,
 			generate = fuzz_generate_registry,
+			alloc_cap = 64 << 20,
+		},
+		{
+			name = "pack.sim_rules",
+			run = fuzz_pack_sim_rules,
+			seeds = SEEDS + "pack.sim_rules",
+			dictionary = {
+				"require ",
+				"chance ",
+				"pick ",
+				"set ",
+				"schedule ",
+				"stop",
+				"self",
+				"above",
+				"..",
+				"$",
+				"#",
+				"@",
+				"box(",
+				".light",
+				" and ",
+				" or ",
+				"index(",
+				"count ",
+				"any ",
+			},
+			max_len = 32 << 10,
+			generate = fuzz_generate_sim_rules,
 			alloc_cap = 64 << 20,
 		},
 		{
@@ -570,4 +600,218 @@ fuzz_generate_structure :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	writer_init(&w, context.temp_allocator)
 	template_encode(&w, &t, reg)
 	append(out, ..w.buf[:])
+}
+
+// ---- pack.sim_rules
+//
+// The input is a data/sim file, compiled with the base pack and sim_test (its channels,
+// blocks and tag, without its rules). Contract: the result is a compiled program or errors
+// with a line and column inside the input, and a compiled program costs at most
+// RULE_MAX_COST.
+
+fuzz_pack_sim_rules :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
+	context.allocator = allocator
+	extra := []Pack_File{{"data/sim/fuzz.json", data}}
+	sources := []Pack_Source {
+		base_pack_source(context.temp_allocator),
+		sim_test_pack(extra, with_rules = false, allocator = context.temp_allocator),
+	}
+	reg, errs := registry_build(sources, .Server, allocator)
+	defer registry_destroy(reg)
+	defer pack_errors_destroy(errs, allocator)
+	lines := strings.count(string(data), "\n") + 1
+	for e in errs {
+		if e.line < 0 || e.column < 0 {fuzz.fail("error with line %d column %d", e.line, e.column)}
+		if e.file == "data/sim/fuzz.json" && e.line > 0 && int(e.line) > lines {
+			fuzz.fail("error at line %d of a file of %d lines", e.line, lines)
+		}
+	}
+	if len(errs) > 0 {
+		return fuzz.sig_mix(1, fuzz.sig_text(errs[0].message), fuzz.sig_bucket(len(errs)))
+	}
+	programs := 0
+	for r in reg.sim.rules {
+		if !r.is_program {continue}
+		programs += 1
+		if r.program.cost > RULE_MAX_COST {fuzz.fail("rule %s costs %d", r.id, r.program.cost)}
+	}
+	return fuzz.sig_mix(2, fuzz.sig_bucket(programs), fuzz.sig_bucket(len(reg.sim.lists)))
+}
+
+@(private = "file")
+Rule_Gen :: struct {
+	rng:   ^base.Rng,
+	b:     ^strings.Builder,
+	picks: int,
+}
+
+@(private = "file")
+gen_pick :: proc(g: ^Rule_Gen, n: int) -> int {return base.rng_int_max(g.rng, n)}
+
+@(private = "file")
+gen_cell :: proc(g: ^Rule_Gen) -> string {
+	cells := [?]string {
+		"self",
+		"above",
+		"below",
+		"north",
+		"south",
+		"east",
+		"west",
+		"self + (1, 0, -1)",
+		"self + (0, 9, 0)",
+	}
+	if g.picks > 0 && gen_pick(g, 3) == 0 {
+		names := [?]string{"p0", "p1", "p2", "p3", "p4"}
+		return names[gen_pick(g, g.picks)]
+	}
+	return cells[gen_pick(g, len(cells))]
+}
+
+@(private = "file")
+gen_matcher :: proc(g: ^Rule_Gen) -> string {
+	m := [?]string {
+		"voxiverse:stone",
+		"voxiverse:air",
+		"#sim_test:flammable",
+		"@opaque",
+		"@collides",
+		"$voxiverse:water",
+		"voxiverse:planks_stairs[half=top]",
+		"sim_test:creep",
+		"voxiverse:nothing",
+	}
+	return m[gen_pick(g, len(m))]
+}
+
+@(private = "file")
+gen_expr :: proc(g: ^Rule_Gen) -> string {
+	switch gen_pick(g, 5) {
+	case 0:
+		return fmt.tprintf("%d", gen_pick(g, 20) - 3)
+	case 1:
+		return fmt.tprintf("%s.potency", gen_cell(g))
+	case 2:
+		return fmt.tprintf("%s.light", gen_cell(g))
+	case 3:
+		return fmt.tprintf("index($voxiverse:water, %s)", gen_cell(g))
+	}
+	return fmt.tprintf("%s.potency + %d", gen_cell(g), gen_pick(g, 5))
+}
+
+@(private = "file")
+gen_box :: proc(g: ^Rule_Gen) -> string {
+	w := 1 + gen_pick(g, 9)
+	return fmt.tprintf("box(-%d..%d, -%d..%d, 0..%d)", w / 2, w / 2, w / 2, w / 2, gen_pick(g, 3))
+}
+
+@(private = "file")
+gen_cond :: proc(g: ^Rule_Gen, depth: int) -> string {
+	switch gen_pick(g, 8) {
+	case 0:
+		return fmt.tprintf("%s is %s", gen_cell(g), gen_matcher(g))
+	case 1:
+		return fmt.tprintf("%s not %s", gen_cell(g), gen_matcher(g))
+	case 2:
+		return fmt.tprintf("loaded %s", gen_cell(g))
+	case 3:
+		return fmt.tprintf("any %s is %s", gen_box(g), gen_matcher(g))
+	case 4:
+		return fmt.tprintf("count %s is %s >= %d", gen_box(g), gen_matcher(g), gen_pick(g, 5))
+	case 5:
+		if depth < 3 {
+			return fmt.tprintf(
+				"(%s) %s %s",
+				gen_cond(g, depth + 1),
+				gen_pick(g, 2) == 0 ? "and" : "or",
+				gen_cond(g, depth + 1),
+			)
+		}
+	}
+	cmps := [?]string{"==", "!=", "<", "<=", ">", ">="}
+	return fmt.tprintf("%s %s %s", gen_expr(g), cmps[gen_pick(g, 6)], gen_expr(g))
+}
+
+@(private = "file")
+gen_statement :: proc(g: ^Rule_Gen, depth: int) {
+	b := g.b
+	switch gen_pick(g, 14) {
+	case 0, 1:
+		fmt.sbprintf(b, `"require %s"`, gen_cond(g, 0))
+	case 2:
+		fmt.sbprintf(b, `"chance %d"`, 2 + gen_pick(g, 9))
+	case 3:
+		if g.picks < 5 {
+			fmt.sbprintf(
+				b,
+				`"pick p%d -%d..%d -1..1 -%d..%d"`,
+				g.picks,
+				gen_pick(g, 4),
+				gen_pick(g, 4),
+				gen_pick(g, 4),
+				gen_pick(g, 4),
+			)
+			g.picks += 1
+		} else {
+			strings.write_string(b, `"stop"`)
+		}
+	case 4:
+		fmt.sbprintf(b, `"set %s %s"`, gen_cell(g), gen_matcher(g))
+	case 5:
+		fmt.sbprintf(b, `"set %s.potency %s"`, gen_cell(g), gen_expr(g))
+	case 6:
+		fmt.sbprintf(b, `"set %s $voxiverse:water[%s]"`, gen_cell(g), gen_expr(g))
+	case 7:
+		fmt.sbprintf(b, `"schedule %s %d"`, gen_cell(g), 1 + gen_pick(g, 1300))
+	case 8:
+		strings.write_string(b, `"stop"`)
+	case 9, 10:
+		if depth < 5 {
+			fmt.sbprintf(b, `{{"repeat": %d, "do": [`, 1 + gen_pick(g, 17))
+			gen_list(g, depth + 1)
+			strings.write_string(b, "]}")
+		} else {
+			strings.write_string(b, `"stop"`)
+		}
+	case 11, 12:
+		if depth < 5 {
+			fmt.sbprintf(b, `{{"if": "%s", "then": [`, gen_cond(g, 0))
+			gen_list(g, depth + 1)
+			strings.write_string(b, "]")
+			if gen_pick(g, 2) == 0 {
+				strings.write_string(b, `, "else": [`)
+				gen_list(g, depth + 1)
+				strings.write_string(b, "]")
+			}
+			strings.write_string(b, "}")
+		} else {
+			strings.write_string(b, `"stop"`)
+		}
+	case:
+		fmt.sbprintf(b, `"set %s[half] %s"`, gen_cell(g), gen_expr(g))
+	}
+}
+
+@(private = "file")
+gen_list :: proc(g: ^Rule_Gen, depth: int) {
+	n := 1 + gen_pick(g, 4)
+	for i in 0 ..< n {
+		if i > 0 {strings.write_string(g.b, ",\n  ")}
+		gen_statement(g, depth)
+	}
+}
+
+fuzz_generate_sim_rules :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
+	b := strings.builder_make(context.temp_allocator)
+	g := Rule_Gen {
+		rng = rng,
+		b   = &b,
+	}
+	strings.write_string(
+		&b,
+		`{"r": {"blocks": ["sim_test:creep"], "trigger": "scheduled", "do": [`,
+	)
+	gen_list(&g, 0)
+	strings.write_string(&b, "]}}")
+	append(out, ..transmute([]u8)strings.to_string(b))
 }

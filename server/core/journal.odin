@@ -323,7 +323,8 @@ undo_push :: proc(j: ^Journal, a: ^Live_Action) {
 	     .Random_Tick,
 	     .Support,
 	     .Gate,
-	     .Graze:
+	     .Graze,
+	     .Rule:
 	}
 	u, has := &j.undo[a.actor]
 	if !has {

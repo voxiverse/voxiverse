@@ -29,6 +29,7 @@ Edit_System :: enum u8 {
 	Undo,
 	Redo,
 	Setting, // a rule or a player's game mode changed (no blocks: the action's command says what)
+	Rule, // a pack's statement rule (M49b)
 }
 
 MAX_ACTION_COMMAND :: 256 // bytes of the command text an action records

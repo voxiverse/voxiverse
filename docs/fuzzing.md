@@ -77,6 +77,7 @@ we hand it, and is written below with the input, for the owner to report upstrea
 |---|---|---|---|
 | `pack.json` | `json_parse` | random JSON to depth 45 (past the depth cap), long strings, escapes, numbers at the edges | |
 | `pack.registry` | `registry_build` over the base pack with one file replaced | the base pack's JSON files with one to four values replaced (a number by a string, an array by a 10 000-element one, ...) | errors carry a line inside the input |
+| `pack.sim_rules` | `registry_build` over the base pack and `sim_test` with one `data/sim` file | rules written from the grammar (statements, conditions, boxes, picks, nesting past the limits), which the harness mutates | a compiled rule costs at most 4 096; errors carry a line inside the input |
 | `pack.png` | `png_texture` | a valid 16x16 PNG with IHDR sizes at the edges | CRCs repaired by the fixup |
 | `pack.ogg` | `ogg.fuzz_one` | the edge-case files as seeds (`common/ogg/testdata/edge/`) | moved from `build ogg fuzz`; page CRCs repaired; `ogg.mutate` (page-header extremes, shuffled setup bytes, spliced files) still drives the suite's `test_ogg_fuzz` (20 000 cases) |
 | `pack.archive` | `pack_archive_read` | a valid archive of three files | refusals of bad paths and sizes |

@@ -132,6 +132,7 @@ sim_restless :: proc(w: ^World, p: game.Block_Pos) -> bool {
 	b, loaded := chunks_block(&w.chunks, p)
 	if !loaded || int(b) >= len(sim.wakes) || .Load not_in sim.wakes[b] {return false}
 	for r in sim.scheduled[b] {
+		if sim.rules[r].is_program {return true}
 		switch sim.rules[r].behaviour {
 		case .Flow:
 			if flow_restless(w, p, r) {return true}
@@ -185,9 +186,14 @@ sim_update :: proc(w: ^World, p: game.Block_Pos, action: Action_Id) {
 	b, loaded := chunks_block(&w.chunks, p)
 	if !loaded || int(b) >= len(sim.scheduled) {return}
 	for r in sim.scheduled[b] {
-		switch sim.rules[r].behaviour {
-		case .Flow:
-			flow_update(w, p, r, action)
+		if sim.rules[r].is_program {
+			act := Act{action, .Rule} if action != 0 else world_act(w, .Rule)
+			rule_run(w, p, &sim.rules[r], act)
+		} else {
+			switch sim.rules[r].behaviour {
+			case .Flow:
+				flow_update(w, p, r, action)
+			}
 		}
 		if now, _ := chunks_block(&w.chunks, p); now != b {return}
 	}
