@@ -127,10 +127,11 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 		extent.width,
 		extent.height,
 		DEPTH_FORMAT,
-		{.DEPTH_STENCIL_ATTACHMENT},
+		DEPTH_USAGE,
 		"depth",
 	)
 	if !ok {return false}
+	g.depth_version += 1
 	log.infof(
 		"gpu swapchain size=%dx%d images=%d format=%v",
 		extent.width,

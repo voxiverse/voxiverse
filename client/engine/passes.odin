@@ -113,8 +113,8 @@ PASSES := [Pass]Pass_Info {
 	},
 	.World = {
 		shader = "world",
-		others = {"world_cutout", "water", "world_cull"},
-		includes = {"scene", "world"},
+		others = {"world_cutout", "water", "world_cull", "hiz", "occlusion_check"},
+		includes = {"scene", "world", "occlusion"},
 		init = world_pass_init,
 		reload = proc(app: ^App, vert, frag: []u8) -> bool {
 			shaders := world_shaders(vert, frag) or_return
@@ -158,5 +158,7 @@ world_shaders :: proc(vert, frag: []u8) -> (shaders: render.World_Shaders, ok: b
 	shaders.fragment[.Cutout] = read_shader("world_cutout.frag.spv") or_return
 	shaders.fragment[.Translucent] = read_shader("water.frag.spv") or_return
 	shaders.cull = read_shader("world_cull.comp.spv") or_return
+	shaders.hiz = read_shader("hiz.comp.spv") or_return
+	shaders.occlusion_check = read_shader("occlusion_check.comp.spv") or_return
 	return shaders, true
 }

@@ -32,6 +32,11 @@ Image :: struct {
 // over distance.
 DEPTH_FORMAT :: vk.Format.D32_SFLOAT
 
+// DEPTH_USAGE: a frame's depth image is also sampled (the depth pyramid is
+// built from it between the world and the rest: render/hiz.odin). Device
+// selection requires SAMPLED_IMAGE on DEPTH_FORMAT (supports_required_features).
+DEPTH_USAGE :: vk.ImageUsageFlags{.DEPTH_STENCIL_ATTACHMENT, .SAMPLED}
+
 // buffer_address is where shaders find b (GL_EXT_buffer_reference); b needs
 // SHADER_DEVICE_ADDRESS usage.
 buffer_address :: proc(g: ^Gpu, b: Buffer) -> u64 {

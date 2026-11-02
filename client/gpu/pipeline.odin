@@ -203,8 +203,17 @@ create_pipeline :: proc(g: ^Gpu, desc: Pipeline_Desc) -> (p: Pipeline, ok: bool)
 }
 
 // create_compute_pipeline makes a compute pipeline on the shared layout
-// (its shader reads and writes buffers by address, given in push constants).
-create_compute_pipeline :: proc(g: ^Gpu, name: string, spirv: []byte) -> (p: Pipeline, ok: bool) {
+// (its shader reads and writes buffers by address, given in push constants),
+// or on a layout of its own (the depth pyramid's: storage images).
+create_compute_pipeline :: proc(
+	g: ^Gpu,
+	name: string,
+	spirv: []byte,
+	layout: vk.PipelineLayout = 0,
+) -> (
+	p: Pipeline,
+	ok: bool,
+) {
 	module := create_shader_module(g, spirv) or_return
 	defer vk.DestroyShaderModule(g.device, module, nil)
 	info := vk.ComputePipelineCreateInfo {
@@ -215,7 +224,7 @@ create_compute_pipeline :: proc(g: ^Gpu, name: string, spirv: []byte) -> (p: Pip
 			module = module,
 			pName = "main",
 		},
-		layout = g.pipeline_layout,
+		layout = layout if layout != 0 else g.pipeline_layout,
 	}
 	{
 		base.profile_begin("create pipeline", name)
@@ -230,8 +239,14 @@ create_compute_pipeline :: proc(g: ^Gpu, name: string, spirv: []byte) -> (p: Pip
 }
 
 // replace_compute_pipeline: replace_pipeline's for a compute pipeline.
-replace_compute_pipeline :: proc(g: ^Gpu, p: ^Pipeline, name: string, spirv: []byte) -> bool {
-	fresh := create_compute_pipeline(g, name, spirv) or_return
+replace_compute_pipeline :: proc(
+	g: ^Gpu,
+	p: ^Pipeline,
+	name: string,
+	spirv: []byte,
+	layout: vk.PipelineLayout = 0,
+) -> bool {
+	fresh := create_compute_pipeline(g, name, spirv, layout) or_return
 	wait_idle(g)
 	destroy_pipeline(g, p)
 	p^ = fresh

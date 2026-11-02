@@ -361,6 +361,11 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		gpu.begin_rendering(frame, {0, 0, 0, 1})
 		if in_world {
 			render.world_draw(&app.world_pass, g, frame, scene)
+			// The depth pyramid from the world's opaque and cutout depth alone
+			// (render/hiz.odin): the frame's rendering is split round it.
+			gpu.end_rendering(frame)
+			render.hiz_frame(&app.world_pass.hiz, g, frame)
+			gpu.begin_rendering(frame, {0, 0, 0, 1}, load = true)
 			render.entity_draw(&app.entity_pass, g, frame, scene)
 			render.held_draw_world(&app.held_pass, g, frame, scene, textures)
 			render.sky_draw(&app.sky_pass, g, frame, scene)
@@ -372,6 +377,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		gpu.end_rendering(frame)
 		base.profile_end()
 		gpu.end_frame(g, frame)
+		engine.scene_count(app)
 	}
 	return true
 }

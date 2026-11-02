@@ -136,9 +136,25 @@ Scene_Phase :: enum u8 {
 }
 
 Scene_Run :: struct {
-	name:   string,
-	phase:  Scene_Phase,
-	frames: int, // in this phase
+	name:    string,
+	phase:   Scene_Phase,
+	frames:  int, // in this phase
+	counts:  Scene_Counts, // what the picture's frame drew (written beside it)
+	counted: bool,
+}
+
+// Scene_Counts: what a scene's frame drew,
+// written to images/<scene>.counts beside its picture, one `name value` a
+// line, and compared with the baseline's by `build images`. Every count is
+// computed from integers (the cull pass's statistics, the draw calls), so
+// each must be equal.
+Scene_Counts :: struct {
+	world_meshes:         int,
+	world_triangles:      int,
+	draw_calls:           int,
+	api_draw_calls:       int,
+	world_api_draw_calls: int,
+	frame_triangles:      int,
 }
 
 Tour_Test_Phase :: enum u8 {

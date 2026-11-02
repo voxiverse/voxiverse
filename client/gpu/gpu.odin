@@ -59,6 +59,7 @@ Gpu :: struct {
 	gpu_frame_stats:         base.Frame_Stats,
 	draws:                   Draw_Counts, // this frame's draw calls so far (draw.odin)
 	memory_bytes:            int, // device memory allocated by us, now (resources.odin)
+	depth_version:           u32, // counts the frames' depth images made (render/hiz.odin remakes its sets)
 	memory_budget:           bool, // VK_EXT_memory_budget: memory_report has the driver's view
 	// Pipelines (pipeline.odin, pipeline_cache.odin)
 	pipeline_cache:          vk.PipelineCache,
@@ -329,6 +330,15 @@ pick_physical_device :: proc(g: ^Gpu) -> bool {
 		if !ok ||
 		   props.apiVersion < vk.API_VERSION_1_3 ||
 		   !supports_required_features(device) {continue}
+		if !depth_sampleable(device) {
+			name := props.deviceName
+			log.warnf(
+				"gpu refused device=%q: %v cannot be sampled with optimal tiling (the depth pyramid reads the depth buffer)",
+				string(cstring(&name[0])),
+				DEPTH_FORMAT,
+			)
+			continue
+		}
 		score := 0
 		#partial switch props.deviceType {
 		case .DISCRETE_GPU:
@@ -401,6 +411,15 @@ supports_required_features :: proc(device: vk.PhysicalDevice) -> bool {
 		features12.shaderSampledImageArrayNonUniformIndexing &&
 		features12.bufferDeviceAddress,
 	)
+}
+
+// depth_sampleable: DEPTH_FORMAT can be sampled (the depth pyramid reads
+// the frame's depth): not guaranteed by Vulkan, checked per device.
+@(private)
+depth_sampleable :: proc(device: vk.PhysicalDevice) -> bool {
+	props: vk.FormatProperties
+	vk.GetPhysicalDeviceFormatProperties(device, DEPTH_FORMAT, &props)
+	return .SAMPLED_IMAGE in props.optimalTilingFeatures
 }
 
 @(private)

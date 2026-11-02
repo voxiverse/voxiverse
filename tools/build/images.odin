@@ -7,6 +7,7 @@ import "core:image/png"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import "core:time"
 
@@ -22,6 +23,8 @@ import "common:limited"
 // the pictures first); a scene's name alone renders and compares only that
 // one. Pictures go to build/images/<scene>.png, a failure's difference to
 // build/images/<scene>.diff.png and each run's log to build/images/<scene>.log.
+// Each scene also writes its counts, build/images/<scene>.counts, compared
+// with <name>.counts beside the picture (and accepted with it): see Count.
 
 IMAGES_DIR :: "assets/baselines/images"
 IMAGES_SCENES :: IMAGES_DIR + "/scenes.txt"
@@ -85,6 +88,115 @@ image_diff_picture :: proc(baseline, rendered: []u8, allocator := context.alloca
 		out[i + 3] = 255
 	}
 	return out
+}
+
+// Scene counts: each scene also writes what
+// its picture's frame drew, <scene>.counts, one `name value` a line
+// (client/engine/screenshots.odin, scene_counts_text). The baseline's lines
+// may add `~tolerance`: a count that depends on rasterization, which must be
+// within it; every other count must be equal.
+
+Count :: struct {
+	name:      string,
+	value:     i64,
+	tolerance: i64, // 0: must be equal
+}
+
+// images_counts_parse reads a counts file's text; false (with the line) on
+// a line that is not `name value [~tolerance]`, or a name given twice.
+images_counts_parse :: proc(
+	text: string,
+	allocator := context.allocator,
+) -> (
+	counts: []Count,
+	bad: string,
+	ok: bool,
+) {
+	out := make([dynamic]Count, allocator)
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		l := strings.trim_space(line)
+		if l == "" {continue}
+		fields := strings.fields(l, context.temp_allocator)
+		c: Count
+		value_ok, tolerance_ok := false, true
+		if len(fields) == 2 || len(fields) == 3 {
+			c.name = fields[0]
+			c.value, value_ok = strconv.parse_i64(fields[1])
+			if len(fields) == 3 {
+				tolerance_ok = strings.has_prefix(fields[2], "~")
+				if tolerance_ok {c.tolerance, tolerance_ok = strconv.parse_i64(fields[2][1:])}
+				tolerance_ok = tolerance_ok && c.tolerance >= 0
+			}
+		}
+		for o in out {if o.name == c.name {value_ok = false}}
+		if !value_ok || !tolerance_ok {
+			delete(out)
+			return nil, l, false
+		}
+		append(&out, c)
+	}
+	return out[:], "", true
+}
+
+// images_counts_compare: what differs between a baseline's counts and a
+// run's, one line each (none: they match). A count missing on either side
+// differs.
+images_counts_compare :: proc(
+	baseline, rendered: []Count,
+	allocator := context.allocator,
+) -> []string {
+	out := make([dynamic]string, allocator)
+	for b in baseline {
+		found := false
+		for r in rendered {
+			if r.name != b.name {continue}
+			found = true
+			if abs(r.value - b.value) > b.tolerance {
+				if b.tolerance == 0 {
+					append(&out, fmt.aprintf("%s %d, the baseline %d", b.name, r.value, b.value, allocator = allocator))
+				} else {
+					append(&out, fmt.aprintf("%s %d, the baseline %d ~%d", b.name, r.value, b.value, b.tolerance, allocator = allocator))
+				}
+			}
+		}
+		if !found {append(&out, fmt.aprintf("%s missing (the baseline %d)", b.name, b.value, allocator = allocator))}
+	}
+	for r in rendered {
+		found := false
+		for b in baseline {if b.name == r.name {found = true}}
+		if !found {append(&out, fmt.aprintf("%s %d, not in the baseline", r.name, r.value, allocator = allocator))}
+	}
+	return out[:]
+}
+
+// images_counts_check compares a scene's counts file with its baseline's
+// (failures printed, one line each); false if they differ or cannot be read.
+@(private = "file")
+images_counts_check :: proc(name, rendered_path, baseline_path: string) -> bool {
+	rendered_text, rerr := os.read_entire_file_from_path(rendered_path, context.allocator)
+	if rerr != nil {
+		fmt.printfln("%-14s FAIL: the scene wrote no %s", name, rendered_path)
+		return false
+	}
+	baseline_text, berr := os.read_entire_file_from_path(baseline_path, context.allocator)
+	if berr != nil {
+		fmt.printfln("%-14s FAIL: no baseline %s (build images --accept %s)", name, baseline_path, name)
+		return false
+	}
+	rendered, rbad, rok := images_counts_parse(string(rendered_text))
+	if !rok {
+		fmt.printfln("%-14s FAIL: %s: not a count: %q", name, rendered_path, rbad)
+		return false
+	}
+	baseline, bbad, bok := images_counts_parse(string(baseline_text))
+	if !bok {
+		fmt.printfln("%-14s FAIL: %s: not a count: %q", name, baseline_path, bbad)
+		return false
+	}
+	differ := images_counts_compare(baseline, rendered)
+	for d in differ {fmt.printfln("%-14s FAIL: count %s", name, d)}
+	return len(differ) == 0
 }
 
 // Picture: an RGBA8 picture read from a PNG.
@@ -193,7 +305,7 @@ images :: proc(args: []string) -> bool {
 	// next to the executable, and xvfb-run -a picks displays racily.
 	jobs := make([]limited.Job, len(chosen))
 	for name, i in chosen {
-		for ext in ([]string{".png", ".diff.png"}) {
+		for ext in ([]string{".png", ".diff.png", ".counts"}) {
 			os.remove(path_join({IMAGES_OUT, strings.concatenate({name, ext})}))
 		}
 		jobs[i] = {
@@ -227,10 +339,21 @@ images :: proc(args: []string) -> bool {
 			fmt.printfln("%-14s FAIL: %s is not a picture", name, rendered_path)
 			continue
 		}
+		rendered_counts := path_join({IMAGES_OUT, strings.concatenate({name, ".counts"})})
+		baseline_counts := path_join({IMAGES_DIR, strings.concatenate({name, ".counts"})})
 		if accept {
 			data, _ := os.read_entire_file_from_path(rendered_path, context.allocator)
 			if werr := os.write_entire_file(baseline_path, data); werr != nil {
 				fmt.printfln("%-14s FAIL: cannot write %s: %v", name, baseline_path, werr)
+				continue
+			}
+			counts, cerr := os.read_entire_file_from_path(rendered_counts, context.allocator)
+			if cerr != nil {
+				fmt.printfln("%-14s FAIL: the scene wrote no %s", name, rendered_counts)
+				continue
+			}
+			if werr := os.write_entire_file(baseline_counts, counts); werr != nil {
+				fmt.printfln("%-14s FAIL: cannot write %s: %v", name, baseline_counts, werr)
 				continue
 			}
 			fmt.printfln("%-14s accepted (%s)", name, baseline_path)
@@ -260,9 +383,11 @@ images :: proc(args: []string) -> bool {
 		}
 		d := image_diff(baseline.rgba, rendered.rgba)
 		verdict := "PASS"
-		if image_passes(d) {
+		// The counts after the picture's: a scene passes when both do.
+		counts_pass := images_counts_check(name, rendered_counts, baseline_counts)
+		if image_passes(d) && counts_pass {
 			passed += 1
-		} else {
+		} else if !image_passes(d) {
 			verdict = "FAIL"
 			diff := image_diff_picture(baseline.rgba, rendered.rgba)
 			out, _ := base.png_encode(rendered.width, rendered.height, diff)
@@ -271,6 +396,7 @@ images :: proc(args: []string) -> bool {
 				fmt.eprintfln("build: images: cannot write %s: %v", diff_path, werr)
 			}
 		}
+		if !counts_pass {verdict = "FAIL"}
 		fmt.printfln(
 			"%-14s %.3f%% of pixels differ, mean %.3f/255  %s",
 			name,

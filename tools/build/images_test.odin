@@ -81,3 +81,37 @@ test_scenes_of :: proc(t: ^testing.T) {
 		testing.expect_value(t, names[1], "cave")
 	}
 }
+
+// Scene counts: the parse, an exact count equal and changed, a toleranced
+// count within and outside its tolerance, and a count on one side only.
+@(test)
+test_images_counts :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	baseline, _, ok := images_counts_parse("world_meshes 120\nchunks_occluded 40 ~2\n")
+	testing.expect(t, ok)
+	testing.expect_value(t, len(baseline), 2)
+	if len(baseline) == 2 {
+		testing.expect_value(t, baseline[1], Count{"chunks_occluded", 40, 2})
+	}
+	same, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 40\n")
+	testing.expect_value(t, len(images_counts_compare(baseline, same)), 0)
+	changed, _, _ := images_counts_parse("world_meshes 121\nchunks_occluded 40\n")
+	differ := images_counts_compare(baseline, changed)
+	testing.expect_value(t, len(differ), 1)
+	if len(differ) == 1 {testing.expect_value(t, differ[0], "world_meshes 121, the baseline 120")}
+	within, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 38\n")
+	testing.expect_value(t, len(images_counts_compare(baseline, within)), 0)
+	outside, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 43\n")
+	differ = images_counts_compare(baseline, outside)
+	testing.expect_value(t, len(differ), 1)
+	if len(differ) == 1 {testing.expect_value(t, differ[0], "chunks_occluded 43, the baseline 40 ~2")}
+	extra, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 40\ndraw_calls 9\n")
+	testing.expect_value(t, len(images_counts_compare(baseline, extra)), 1)
+	missing, _, _ := images_counts_parse("world_meshes 120\n")
+	testing.expect_value(t, len(images_counts_compare(baseline, missing)), 1)
+	for bad in ([]string{"world_meshes\n", "world_meshes x\n", "a 1 2\n", "a 1 ~-1\n", "a 1\na 2\n"}) {
+		_, line, parsed := images_counts_parse(bad)
+		testing.expect(t, !parsed, bad)
+		testing.expect(t, line != "", bad)
+	}
+}

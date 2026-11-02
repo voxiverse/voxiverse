@@ -16,6 +16,7 @@ A label names the pass in validation messages and GPU captures, and times it on 
 | `upload chunk meshes` | Copies of new chunk meshes from the staging buffer. |
 | `cull` | The world's culling pass (compute, before rendering): the draw commands of the opaque and cutout layers. |
 | `world` | Opaque and cutout terrain. |
+| `depth pyramid` | The depth pyramid, from the world's depth (compute, between the two halves of the frame's rendering). |
 | `entities` | Avatars, sheep, items, projectiles. |
 | `held` | The item in hand, in third person (`held_draw_world`) and first person (`held_draw_view`). |
 | `sky` | The sky, after the world, at the far plane. |
@@ -31,7 +32,7 @@ back once its frame slot's fence has signalled. The results appear in three plac
 
 - the F3 overlay (`GPU x ms`) and the exit log line `gpu frame times`;
 - benchmark metrics: `gpu_frame` (without `gpu_present_copy`), `gpu_world`, `gpu_water`,
-  `gpu_sky`, `gpu_entities`, `gpu_held`, `gpu_upload`, `gpu_cull`, `gpu_ui`,
+  `gpu_sky`, `gpu_entities`, `gpu_held`, `gpu_upload`, `gpu_cull`, `gpu_hiz`, `gpu_ui`,
   `gpu_present_copy`;
 - in a profiling build, the trace's GPU track, named `GPU (calibrated) <device>, <driver>`.
   With `VK_KHR_calibrated_timestamps` the GPU events sit on the CPU tracks' clock; otherwise
@@ -116,6 +117,42 @@ missing at the edge of the screen points at the planes (the scene's `view_proj`)
 missing on one side of every chunk at `facing`; garbage geometry at the record layout
 (`render_test.odin` asserts `Cull_Record`, `Cull_Push` and `Cull_Stats` against the shader's
 declarations).
+
+## The depth pyramid
+
+The frame's rendering is split in two (`client/main/frame.odin`): the first scope draws the
+world's opaque and cutout layers; then, outside rendering, `hiz_frame`
+(`client/render/hiz.odin`) builds the depth pyramid from that depth alone; the second scope
+(`begin_rendering(load = true)`) loads colour and depth and draws everything else. Depth is
+stored in every scope. The depth image is `SAMPLED` too (a device whose `D32_SFLOAT` cannot
+be sampled is refused, `gpu refused device=...`) and goes to `SHADER_READ_ONLY_OPTIMAL` for
+the pyramid and back.
+
+The pyramid is an `R32_SFLOAT` image in `GENERAL`, registered as a bindless texture
+(`Hiz_Info`: level 0's size, the levels, its texture id). Level 0 is the largest power of
+two at or below the depth image's size on each axis (1280 x 720 gives 1024 x 512); a
+level-0 texel covers the depth texels `[floor(x * W / w0), ceil((x + 1) * W / w0))`, so
+footprints overlap when the size is not a power of two and no texel is missed. Each level
+holds the **minimum** of what it covers: in reverse Z the farthest depth. `hiz.comp` writes
+four levels a dispatch (1280 x 720: three dispatches for ten levels): the first from a
+sampled source (the depth image, or the level above), the next three reduced in shared
+memory, each group owning a 16 x 16 tile; four storage images is the least a device allows
+a shader stage. It runs on a pipeline layout of its own (a descriptor set per dispatch),
+with a barrier between dispatches. The sets are written by `hiz_resize` when the depth
+image is remade (`Gpu.depth_version`), after the GPU is idle.
+
+`occlusion.glsl` holds the occlusion test (`occluded`), and `occlusion_reference` in
+`hiz.odin` is the same rules on the CPU: a box with a corner at or behind the near plane is
+not occluded; otherwise the level where its screen rectangle covers at most 2 x 2 texels is
+read, and the box is occluded when its nearest corner depth is below the farthest of those
+four (strictly). `test_occlusion_is_conservative` (`hiz_test.odin`) checks against a CPU
+raster that no box with a visible pixel is ever called occluded; `--check hiz` checks the
+GPU against both references on lavapipe. Nothing is culled with the pyramid yet.
+
+Synchronization validation does not track shader accesses by default in recent layers, so
+a missing barrier between two dispatches goes unreported. To check the pyramid's barriers,
+run with `VK_KHRONOS_VALIDATION_SYNCVAL_SHADER_ACCESSES_HEURISTIC=true` (the layer warns of
+false positives with it; `--check hiz` runs clean, much slower).
 
 ## Memory
 

@@ -1,0 +1,40 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+#extension GL_GOOGLE_include_directive : require
+#include "occlusion.glsl"
+
+// `--check hiz` (render/hiz_check.odin): the occlusion test on generated
+// boxes, one invocation a box, each verdict written for the CPU to compare
+// with occlusion_reference's.
+
+layout(local_size_x = 64) in;
+
+struct Box {
+	vec4 lo; // xyz
+	vec4 hi;
+};
+
+layout(buffer_reference, std430) readonly buffer Boxes {
+	Box boxes[];
+};
+
+layout(buffer_reference, std430) writeonly buffer Verdicts {
+	uint verdicts[];
+};
+
+layout(push_constant) uniform Push {
+	mat4 view_proj;
+	Boxes boxes;
+	Verdicts verdicts;
+	Hiz_Info hiz;
+	uint count;
+} push;
+
+void main() {
+	uint i = gl_GlobalInvocationID.x;
+	if (i >= push.count) {
+		return;
+	}
+	Box b = push.boxes.boxes[i];
+	push.verdicts.verdicts[i] = occluded(push.view_proj, b.lo.xyz, b.hi.xyz, push.hiz) ? 1u : 0u;
+}

@@ -35,6 +35,7 @@ Metric :: enum u8 {
 	Gpu_Held, // the item in hand (first and third person)
 	Gpu_Upload, // chunk mesh uploads (copies)
 	Gpu_Cull, // the world's culling pass (compute: the draw commands written)
+	Gpu_Hiz, // the depth pyramid (compute: built from the world's depth)
 	// Work on the pools, per job, ms.
 	Generate_Chunk,
 	Column_Tops,
@@ -120,6 +121,7 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Gpu_Held             = {"gpu_held", "ms", false},
 	.Gpu_Upload           = {"gpu_upload", "ms", false},
 	.Gpu_Cull             = {"gpu_cull", "ms", false},
+	.Gpu_Hiz              = {"gpu_hiz", "ms", false},
 	.Generate_Chunk       = {"generate_chunk", "ms", false},
 	.Column_Tops          = {"column_tops", "ms", false},
 	.Light_Chunk          = {"light_chunk", "ms", false},

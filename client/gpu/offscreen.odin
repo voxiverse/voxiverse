@@ -46,13 +46,14 @@ set_offscreen :: proc(g: ^Gpu, width, height: u32) -> bool {
 		width,
 		height,
 		DEPTH_FORMAT,
-		{.DEPTH_STENCIL_ATTACHMENT},
+		DEPTH_USAGE,
 		"offscreen depth",
 	)
 	if !ok {
 		destroy_image(g, &o.color)
 		return false
 	}
+	g.depth_version += 1
 	o.size = {width, height}
 	g.swapchain.stale = true // rebuilt with TRANSFER_DST images, for the copy
 	log.infof("gpu drawing offscreen size=%dx%d", width, height)

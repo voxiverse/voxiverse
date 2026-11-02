@@ -103,6 +103,7 @@ App :: struct {
 	blast_test:       Blast_Test,
 	audio_check:      Audio_Check,
 	cull_check:       Exit_Check, // `--check cull` (cull_check_run)
+	hiz_check:        Exit_Check, // `--check hiz` (hiz_check_run)
 	tour_test:        Tour_Test,
 	server_failed:    bool, // a session's server stopped on an error (fails the run)
 	script_failed:    bool, // an --exec script could not go on (fails the run)

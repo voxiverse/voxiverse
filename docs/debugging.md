@@ -223,8 +223,8 @@ its picture:
 
 `--check <name>` runs a check with the benchmarks' fixed settings (its own view), after any
 `--exec` script (which may prepare the state), and then quits, failing the run if the check
-failed. CI runs `fly` (on the CPU driver, with AddressSanitizer and with profiling), `blast`
-and `cull`.
+failed. CI runs `fly` (on the CPU driver, with AddressSanitizer and with profiling), `blast`,
+`cull` and `hiz`.
 
 | Check | Description |
 |---|---|
@@ -232,6 +232,7 @@ and `cull`.
 | `fly_pad` | The same flight on a synthetic gamepad. |
 | `tour` | Visits every biome (view 4 x 3) and screenshots each (`biome_<name>`), then fails on a biome not found, a frame p99 over 100 ms, chunk generation or meshing p99 on the workers over budget (5 and 10 ms in an optimized build, ten times that otherwise), or memory growth after the first biome. |
 | `cull` | Runs the world's culling shader on 343 chunks round a camera, from fixed cameras, outside the frames, and fails on any command, in-view bit or count that differs from the CPU's rules (`cull_reference`). Needs no world. |
+| `hiz` | Builds the depth pyramid from depth images of five sizes (filled from a hash and from a CPU raster of boxes) and fails on any texel of any level that differs from `hiz_reference`, bit for bit; then runs the occlusion test (`occlusion.glsl`) on 4 096 boxes from four cameras and fails on any verdict that differs from `occlusion_reference`. Needs no world. |
 | `blast` | Hovers above the spawn (view 4 x 2) and sets off 12 rockets and explosions in turn, then fails on a frame p99 or server tick over 100 ms, a blast not shown whole (its meshes in one frame), arena growth, or chunks that differ from the server's (both sides hash them). F3 shows how many bulk edits were shown whole and how many late (on a timeout). |
 | `audio` | 30 s of a busy session into the null device: fails on underruns, NaN, dropped or late commands, or the callback outside its block. |
 
@@ -351,6 +352,14 @@ the colour channels. A scene fails when the first is above 0.1% or the second ab
 the baseline in dim grey, the differing pixels in red. Each run's log is
 `build/images/<scene>.log`. CI uploads `build/images/` as the `images` artifact when a step
 fails.
+
+Each scene also writes `build/images/<scene>.counts`, what its picture's frame drew (the
+culling pass's statistics and the draw counts: `world_meshes`, `world_triangles`,
+`draw_calls`, `api_draw_calls`, `world_api_draw_calls`, `frame_triangles`), one `name
+value` a line. It is compared after the picture with the baseline's `<scene>.counts`: each
+count must be equal, or within the baseline's `~tolerance` where a line gives one; a
+difference fails the scene, naming the count, the baseline and the value. `--accept` writes
+both files.
 
 ```
 ./build.sh images                      # every scene, compared

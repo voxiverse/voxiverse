@@ -54,8 +54,55 @@ screenshots_save :: proc(app: ^App) {
 		}
 		log.infof("screenshot saved path=%s size=%dx%d", path, w, h)
 		if app.scene.phase == .Shooting {
+			counts_path :=
+				filepath.join(
+					{dir, strings.concatenate({name, ".counts"}, context.temp_allocator)},
+					context.temp_allocator,
+				) or_else name
+			if !app.scene.counted {
+				log.errorf("scene %s: its picture's frame was not counted", app.scene.name)
+				app.script_failed, app.quit = true, true
+				continue
+			}
+			text := scene_counts_text(app.scene.counts, context.temp_allocator)
+			if werr := os.write_entire_file(counts_path, transmute([]u8)text); werr != nil {
+				log.errorf("scene cannot write path=%s error=%v", counts_path, werr)
+				app.script_failed, app.quit = true, true
+				continue
+			}
 			app.scene.phase, app.quit = .Done, true // (the scene's picture: its run is over)
 		}
 		toast(app, .Screenshot_Saved, on_click = open_screenshots)
 	}
+}
+
+// scene_counts_text: c as `name value` lines (build images reads them back:
+// tools/build/images.odin, images_counts_parse).
+scene_counts_text :: proc(c: Scene_Counts, allocator := context.allocator) -> string {
+	return fmt.aprintf(
+		"world_meshes %d\nworld_triangles %d\ndraw_calls %d\napi_draw_calls %d\nworld_api_draw_calls %d\nframe_triangles %d\n",
+		c.world_meshes,
+		c.world_triangles,
+		c.draw_calls,
+		c.api_draw_calls,
+		c.world_api_draw_calls,
+		c.frame_triangles,
+		allocator = allocator,
+	)
+}
+
+// scene_count records what the frame just recorded drew, if it is a
+// scene's picture (the screenshot was asked for before it): call after
+// gpu.end_frame.
+scene_count :: proc(app: ^App) {
+	if app.scene.phase != .Shooting || app.scene.counted {return}
+	app.scene.counts = {
+		world_meshes         = app.world_pass.stats.drawn,
+		world_triangles      = app.world_pass.stats.triangles,
+		draw_calls           = app.g.draws.calls,
+		api_draw_calls       = app.g.draws.api_calls,
+		world_api_draw_calls = app.world_pass.stats.api_draws,
+		frame_triangles      = app.g.draws.triangles,
+	}
+	app.scene.counted = true
 }

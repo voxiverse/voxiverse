@@ -61,7 +61,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github/workflows` | CI | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/baselines/audio` | Audio baselines, compared as text | `*.txt`, `*.decisions` |
-| `assets/baselines/images` | Image baselines and their scene list | `*.png`, `*.txt` |
+| `assets/baselines/images` | Image baselines, their scenes' counts and their scene list | `*.png`, `*.counts`, `*.txt` |
 | `assets/baselines/net` | The bandwidth baseline | `*.txt` |
 | `assets/fonts` | The one font and its licence | `*.ttf`, `*.txt` |
 | `assets/music` | Rendered music: Ogg, score and decisions, credits | `*.ogg`, `*.score`, `*.json`, `*.txt` |

@@ -74,7 +74,7 @@ bindless_init :: proc(g: ^Gpu) -> bool {
 			binding = 0,
 			descriptorType = .SAMPLED_IMAGE,
 			descriptorCount = MAX_TEXTURES,
-			stageFlags = {.VERTEX, .FRAGMENT},
+			stageFlags = {.VERTEX, .FRAGMENT, .COMPUTE}, // compute: the occlusion test reads the depth pyramid
 		},
 		{
 			binding = 1,
@@ -144,14 +144,22 @@ bindless_destroy :: proc(g: ^Gpu) {
 }
 
 // register_texture makes an image view sampleable by Texture_Id. The image
-// must be in SHADER_READ_ONLY_OPTIMAL whenever a shader samples it.
-register_texture :: proc(g: ^Gpu, view: vk.ImageView) -> (id: Texture_Id, ok: bool) {
+// must be in layout (SHADER_READ_ONLY_OPTIMAL, or GENERAL for an image also
+// written as storage: the depth pyramid) whenever a shader samples it.
+register_texture :: proc(
+	g: ^Gpu,
+	view: vk.ImageView,
+	layout := vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+) -> (
+	id: Texture_Id,
+	ok: bool,
+) {
 	b := &g.bindless
 	for used, i in b.texture_ids {
 		if used {continue}
 		info := vk.DescriptorImageInfo {
 			imageView   = view,
-			imageLayout = .SHADER_READ_ONLY_OPTIMAL,
+			imageLayout = layout,
 		}
 		write := vk.WriteDescriptorSet {
 			sType           = .WRITE_DESCRIPTOR_SET,
@@ -180,6 +188,12 @@ unregister_texture :: proc(g: ^Gpu, id: Texture_Id) {
 // drawing with any pipeline.
 bind_globals :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
 	vk.CmdBindDescriptorSets(cmd, .GRAPHICS, g.pipeline_layout, 0, 1, &g.bindless.set, 0, nil)
+}
+
+// bind_globals_compute: bind_globals for compute pipelines (those that
+// sample textures by id).
+bind_globals_compute :: proc(g: ^Gpu, cmd: vk.CommandBuffer) {
+	vk.CmdBindDescriptorSets(cmd, .COMPUTE, g.pipeline_layout, 0, 1, &g.bindless.set, 0, nil)
 }
 
 // push_constants sends up to PUSH_CONSTANT_SIZE bytes to the current draw.

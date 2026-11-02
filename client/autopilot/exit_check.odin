@@ -85,6 +85,13 @@ CHECKS := [?]Check_Info {
 		proc(app: ^engine.App) {cull_check_run(app)},
 	},
 	{
+		"hiz",
+		"the depth pyramid and the occlusion test against the CPU's: every level bit-exact, every verdict equal",
+		2,
+		2,
+		proc(app: ^engine.App) {hiz_check_run(app)},
+	},
+	{
 		"audio",
 		"30 s of a busy session into the null device: no underruns, NaN, dropped or late commands, the callback in its block",
 		3,
@@ -146,5 +153,18 @@ cull_check_run :: proc(app: ^engine.App) {
 		quit = true,
 	}
 	failures := render.world_cull_check(&app.world_pass, &app.g)
+	exit_check_finish(app, c, failures[:])
+}
+
+// hiz_check_run: the depth pyramid's check (render.hiz_check), at once: no
+// world, the world pass's pyramid and occlusion test on depth images of
+// its own.
+hiz_check_run :: proc(app: ^engine.App) {
+	c := &app.hiz_check
+	c^ = {
+		name = "hiz_check",
+		quit = true,
+	}
+	failures := render.hiz_check(&app.world_pass, &app.g)
 	exit_check_finish(app, c, failures[:])
 }

@@ -216,13 +216,16 @@ end_frame :: proc(g: ^Gpu, frame: Frame) {
 
 // begin_rendering starts dynamic rendering into the frame's image, cleared
 // to clear_color, with viewport and scissor covering it, and the depth
-// buffer cleared to 0 (the far plane in reverse Z).
-begin_rendering :: proc(frame: Frame, clear_color: [4]f32) {
+// buffer cleared to 0 (the far plane in reverse Z). With load, colour and
+// depth are kept as the frame's last rendering left them (the frame's
+// rendering is split round the depth pyramid: render/hiz.odin). Depth is
+// always stored.
+begin_rendering :: proc(frame: Frame, clear_color: [4]f32, load := false) {
 	attachment := vk.RenderingAttachmentInfo {
 		sType = .RENDERING_ATTACHMENT_INFO,
 		imageView = frame.view,
 		imageLayout = .COLOR_ATTACHMENT_OPTIMAL,
-		loadOp = .CLEAR,
+		loadOp = .LOAD if load else .CLEAR,
 		storeOp = .STORE,
 		clearValue = {color = {float32 = clear_color}},
 	}
@@ -230,8 +233,8 @@ begin_rendering :: proc(frame: Frame, clear_color: [4]f32) {
 		sType = .RENDERING_ATTACHMENT_INFO,
 		imageView = frame.depth.view,
 		imageLayout = .DEPTH_ATTACHMENT_OPTIMAL,
-		loadOp = .CLEAR,
-		storeOp = .DONT_CARE,
+		loadOp = .LOAD if load else .CLEAR,
+		storeOp = .STORE,
 		clearValue = {depthStencil = {depth = 0}},
 	}
 	area := vk.Rect2D {

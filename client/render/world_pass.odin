@@ -26,6 +26,7 @@ import "common:base"
 //	render.world_cull(&pass, &g, frame, scene, camera)   // the draw commands (GPU culling)
 //	... begin_rendering ...
 //	render.world_draw(&pass, &g, frame, scene)           // opaque, cutout
+//	... end_rendering; render.hiz_frame(&pass.hiz, ...); begin_rendering(load) (hiz.odin) ...
 //	... entities, sky ...
 //	render.world_draw_translucent(&pass, &g, frame, scene, time)
 //
@@ -126,11 +127,14 @@ Mesh_Layer :: enum u8 {
 }
 
 // World_Shaders: the world's SPIR-V, one vertex shader for every layer,
-// and the culling pass's compute shader.
+// the culling pass's compute shader, the depth pyramid's (hiz.odin) and the
+// occlusion test's check (hiz_check.odin).
 World_Shaders :: struct {
-	vertex:   []byte,
-	fragment: [Mesh_Layer][]byte,
-	cull:     []byte,
+	vertex:          []byte,
+	fragment:        [Mesh_Layer][]byte,
+	cull:            []byte,
+	hiz:             []byte,
+	occlusion_check: []byte,
 }
 
 Upload_Result :: enum {
@@ -143,6 +147,8 @@ World_Pass :: struct {
 	settings:         World_Settings,
 	pipelines:        [Mesh_Layer]gpu.Pipeline,
 	cull_pipeline:    gpu.Pipeline,
+	hiz:              Hiz, // the depth pyramid of the world's depth (hiz.odin)
+	occlusion_check:  gpu.Pipeline, // `--check hiz`'s (occlusion_check.comp)
 	vertices:         gpu.Buffer,
 	chunk_draws:      gpu.Buffer, // one Chunk_Draw per mesh pool slot
 	ranges:           base.Range_Allocator, // in vertices
@@ -272,6 +278,12 @@ world_init :: proc(
 		pipeline = gpu.create_pipeline(g, world_pipeline_desc(g, shaders, layer)) or_return
 	}
 	p.cull_pipeline = gpu.create_compute_pipeline(g, "world cull", shaders.cull) or_return
+	hiz_init(&p.hiz, g, shaders.hiz) or_return
+	p.occlusion_check = gpu.create_compute_pipeline(
+		g,
+		"occlusion check",
+		shaders.occlusion_check,
+	) or_return
 	p.cull_records = gpu.create_buffer(
 		g,
 		max_meshes * size_of(Cull_Record),
@@ -449,6 +461,10 @@ world_reload :: proc(p: ^World_Pass, g: ^gpu.Gpu, shaders: World_Shaders) -> boo
 		if !gpu.replace_pipeline(g, &pipeline, world_pipeline_desc(g, shaders, layer)) {ok = false}
 	}
 	if !gpu.replace_compute_pipeline(g, &p.cull_pipeline, "world cull", shaders.cull) {ok = false}
+	if !hiz_reload(&p.hiz, g, shaders.hiz) {ok = false}
+	if !gpu.replace_compute_pipeline(g, &p.occlusion_check, "occlusion check", shaders.occlusion_check) {
+		ok = false
+	}
 	return ok
 }
 
@@ -489,6 +505,8 @@ world_destroy :: proc(p: ^World_Pass, g: ^gpu.Gpu) {
 	gpu.destroy_buffer(g, &p.vertices)
 	for &pipeline in p.pipelines {gpu.destroy_pipeline(g, &pipeline)}
 	gpu.destroy_pipeline(g, &p.cull_pipeline)
+	gpu.destroy_pipeline(g, &p.occlusion_check)
+	hiz_destroy(&p.hiz, g)
 	p^ = {}
 }
 

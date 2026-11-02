@@ -252,6 +252,7 @@ GPU_SECTION_METRICS := [?]struct {
 	{"held", .Gpu_Held},
 	{"upload chunk meshes", .Gpu_Upload},
 	{"cull", .Gpu_Cull},
+	{"depth pyramid", .Gpu_Hiz},
 }
 
 // timing_setup decides at device creation whether timestamps work on this
