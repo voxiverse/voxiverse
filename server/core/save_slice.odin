@@ -266,18 +266,20 @@ job_step :: proc(s: ^Server, job: ^Save_Job) {
 chunk_encode :: proc(job: ^Save_Job, cw: ^Cap_World, cr: ^Cap_Region, pos: game.Chunk_Pos) {
 	blocks: ^game.Chunk_Blocks
 	entities: []game.Block_Entity
+	layers: []game.Saved_Channel
 	if copy, ok := &cw.world.chunks.cow.copies[pos]; ok {
-		blocks, entities = &copy.blocks, copy.entities
+		blocks, entities, layers = &copy.blocks, copy.entities, copy.layers
 	} else if c := chunks_get(&cw.world.chunks, pos);
 	   c != nil && c.state == .Ready && c.capture == job.id {
 		blocks, entities = &c.blocks, c.block_entities[:]
+		layers = chunk_saved_layers(&cw.world.chunks, c, context.temp_allocator)
 	} else {
 		log.errorf("server save lost a chunk it captured chunk=%v", pos)
 		job.ok = false
 		return
 	}
 	clear(&job.writer.buf)
-	game.write_chunk_payload(&job.writer, blocks, entities, cr.waiting[pos])
+	game.write_chunk_payload(&job.writer, blocks, entities, cr.waiting[pos], layers)
 	append(&cr.job.chunks, Job_Chunk{pos = pos, bytes = slice.clone(job.writer.buf[:], heap())})
 }
 
@@ -295,6 +297,8 @@ job_release :: proc(s: ^Server, job: ^Save_Job) {
 		for _, copy in w.chunks.cow.copies {
 			if copy.blocks.array != nil {free(copy.blocks.array, heap())}
 			delete(copy.entities, heap())
+			for l in copy.layers {free(l.values, heap())}
+			delete(copy.layers, heap())
 		}
 		delete(w.chunks.cow.copies)
 		free(w.chunks.cow, heap())

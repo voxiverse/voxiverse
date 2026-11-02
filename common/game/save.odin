@@ -23,8 +23,8 @@ import "core:slice"
 // u32 length, u32 CRC-32 of the payload }, sorted by chunk_pos_less), varint
 // top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
 // the payloads (each chunk's blocks, then its block entities as
-// write_block_entities, then its waiting updates as write_chunk_payload, offset
-// counted from here). Format 5 added the updates (M49).
+// write_block_entities, then its waiting updates and channels as write_chunk_payload,
+// offset counted from here). Format 5 added the updates and channels (M49).
 
 REGION_MAGIC :: "VXRG"
 REGION_FORMAT :: 5
@@ -42,6 +42,7 @@ Saved_Chunk :: struct {
 	blocks:   ^Chunk_Blocks,
 	entities: []Block_Entity,
 	updates:  []Saved_Update, // waiting scheduled updates (nil: none)
+	layers:   []Saved_Channel, // stored channels not at their default (nil: none)
 }
 
 Saved_Top :: struct {
@@ -63,7 +64,7 @@ region_encode :: proc(
 	writer_init(&scratch, context.temp_allocator)
 	for c, i in chunks {
 		clear(&scratch.buf)
-		write_chunk_payload(&scratch, c.blocks, c.entities, c.updates)
+		write_chunk_payload(&scratch, c.blocks, c.entities, c.updates, c.layers)
 		encoded[i] = {c.pos, slice.clone(scratch.buf[:], context.temp_allocator)}
 	}
 	region_encode_bytes(reg, w, region, encoded, tops, generation)
@@ -253,6 +254,8 @@ region_next_chunk :: proc(
 	dst: ^Block_Array,
 	entities: ^[dynamic]Block_Entity,
 	updates: ^[dynamic]Saved_Update = nil,
+	layers: ^[dynamic]Saved_Channel = nil,
+	unknown: ^[dynamic]string = nil,
 ) -> (
 	pos: Chunk_Pos,
 	uniform: Block,
@@ -273,7 +276,8 @@ region_next_chunk :: proc(
 		cr.items, cr.reg = r.items, r.reader.reg
 		clear(entities)
 		if updates != nil {clear(updates)}
-		uniform, is_uniform = read_chunk_payload(&cr, dst, entities, updates)
+		if layers != nil {clear(layers)}
+		uniform, is_uniform = read_chunk_payload(&cr, dst, entities, updates, layers, unknown)
 		if !reader_finish(&cr) {
 			append(&r.dropped, e.pos)
 			continue

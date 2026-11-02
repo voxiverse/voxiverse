@@ -102,7 +102,7 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 	case .Chunks:
 		for w, i in s.worlds {
 			if k.b != nil { 	// a dump names every loaded chunk
-				for pos in loaded_chunks(w) {chunk_line(k, i, pos, &chunks_get(&w.chunks, pos).blocks)}
+				for pos in loaded_chunks(w) {chunk_line(k, s, i, pos, chunks_get(&w.chunks, pos))}
 				continue
 			}
 			slice.sort_by(w.touched[:], game.chunk_pos_less)
@@ -112,7 +112,7 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 				last = pos
 				chunk := chunks_get(&w.chunks, pos)
 				if chunk == nil || chunk.state != .Ready {continue}
-				chunk_line(k, i, pos, &chunk.blocks)
+				chunk_line(k, s, i, pos, chunk)
 			}
 			clear(&w.touched)
 		}
@@ -156,9 +156,12 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 
 // chunk_line folds a chunk by its blocks' hash: a dump names the chunk.
 @(private = "file")
-chunk_line :: proc(k: ^Sink, world: int, pos: game.Chunk_Pos, blocks: ^game.Chunk_Blocks) {
+chunk_line :: proc(k: ^Sink, s: ^Server, world: int, pos: game.Chunk_Pos, c: ^Chunk) {
 	h := game.hasher_make()
-	game.hash_chunk_blocks(&h, blocks)
+	game.hash_chunk_blocks(&h, &c.blocks)
+	defaults := make([]u16, game.MAX_CHANNELS, context.temp_allocator)
+	for info, id in s.registry.channels {if id < game.MAX_CHANNELS {defaults[id] = info.default}}
+	game.hash_chunk_layers(&h, &c.layers, defaults, {1, 2, 3, 4, 5, 6, 7}) // (0: light, computed)
 	hash := game.hasher_finish(h)
 	fold(k, wpath(world, fmt.tprintf("chunks[(%d, %d, %d)]", pos.x, pos.y, pos.z)), hash)
 }

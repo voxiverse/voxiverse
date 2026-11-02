@@ -1,6 +1,7 @@
 package core
 
 import "base:runtime"
+import "core:log"
 import "core:mem"
 import "core:slice"
 import "core:time"
@@ -33,6 +34,7 @@ Chunk :: struct {
 	restless:       bool, // may hold a block with simulation rules (set when it does, never cleared): waking skips it if not
 	capture:        u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
 	block_entities: [dynamic]game.Block_Entity, // sorted by local (block_entities.odin; heap)
+	layers:         game.Chunk_Layers, // the stored channels (channels.odin), pages from Chunk_Store.pools
 }
 
 Chunk_Store :: struct {
@@ -41,6 +43,7 @@ Chunk_Store :: struct {
 	chunks:        base.Pool(Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
+	pools:         game.Layer_Pools, // pages of the stored channels (capacity: chunks x channels)
 	reg:           ^game.Registry, // for the rules' tables (sim_restless); set by the world
 	jobs:          base.Jobs,
 	done:          base.Queue(^Gen_Task), // finished tasks, from workers
@@ -65,6 +68,7 @@ Cow :: struct {
 Cow_Copy :: struct {
 	blocks:   game.Chunk_Blocks,
 	entities: []game.Block_Entity, // (heap)
+	layers:   []game.Saved_Channel, // (heap)
 }
 
 // chunk_cow copies c's blocks for the running save, if c is still marked for it.
@@ -78,7 +82,11 @@ chunk_cow :: proc(w: ^Chunk_Store, c: ^Chunk) {
 		a^ = c.blocks.array^
 		copy_blocks.array = a
 	}
-	w.cow.copies[c.pos] = {copy_blocks, slice.clone(c.block_entities[:], runtime.heap_allocator())}
+	w.cow.copies[c.pos] = {
+		copy_blocks,
+		slice.clone(c.block_entities[:], runtime.heap_allocator()),
+		chunk_saved_layers(w, c, runtime.heap_allocator()),
+	}
 }
 
 // Jobs queued per worker: enough that results collected once a tick keep the
@@ -144,6 +152,7 @@ chunks_destroy :: proc(w: ^Chunk_Store) {
 	base.jobs_destroy(&w.jobs)
 	base.queue_destroy(&w.done)
 	game.block_arrays_destroy(&w.arrays)
+	game.layer_pools_destroy(&w.pools)
 	it: base.Pool_Iterator
 	for c in base.pool_next(&w.chunks, &it) {delete(c.block_entities)}
 	delete(w.tops_done)
@@ -182,7 +191,10 @@ chunks_get :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> ^Chunk {
 chunks_request :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) -> bool {
 	if w.in_flight >= w.max_in_flight || w.hold {return false}
 	assert(pos not_in w.by_pos)
-	handle, _, ok := base.pool_add(&w.chunks, Chunk{pos = pos, state = .Generating})
+	handle, _, ok := base.pool_add(
+		&w.chunks,
+		Chunk{pos = pos, state = .Generating, layers = chunk_layers_new(w)},
+	)
 	assert(ok, "chunk pool full")
 	array, err := game.block_arrays_take(&w.arrays)
 	assert(err == nil, "chunk arrays exhausted") // as many as pool slots
@@ -225,11 +237,12 @@ chunks_insert :: proc(
 	uniform: game.Block,
 	array: ^game.Block_Array,
 	entities: []game.Block_Entity = nil,
+	layers: []game.Saved_Channel = nil,
 ) -> ^Chunk {
 	assert(pos not_in w.by_pos)
 	handle, chunk, ok := base.pool_add(
 		&w.chunks,
-		Chunk{pos = pos, state = .Ready, modified = true},
+		Chunk{pos = pos, state = .Ready, modified = true, layers = chunk_layers_new(w)},
 	)
 	assert(ok, "chunk pool full")
 	chunk.blocks = {
@@ -244,6 +257,11 @@ chunks_insert :: proc(
 		}
 	}
 	chunk.restless = chunk_restless(w, &chunk.blocks)
+	if len(layers) > 0 && w.reg != nil {
+		if err := game.layers_apply(&chunk.layers, &w.pools, w.reg.channels, layers); err != nil {
+			log.errorf("server chunk channels not loaded chunk=%v error=%v", pos, err)
+		}
+	}
 	if len(entities) > 0 {
 		chunk.block_entities = make([dynamic]game.Block_Entity, runtime.heap_allocator())
 		append(&chunk.block_entities, ..entities)
@@ -300,6 +318,7 @@ chunks_unload :: proc(w: ^Chunk_Store, pos: game.Chunk_Pos) {
 	assert(chunk.state == .Ready)
 	chunk_cow(w, chunk)
 	game.chunk_release(&chunk.blocks, &w.arrays)
+	game.layers_release(&chunk.layers, &w.pools)
 	delete(chunk.block_entities)
 	delete_key(&w.by_pos, pos)
 	base.pool_remove(&w.chunks, h)

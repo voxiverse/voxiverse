@@ -171,6 +171,60 @@ admin_setblock :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return admin_fill(s, c, fill)
 }
 
+// admin_cell: /cell <x y z> [<channel> [<value>]]: every channel's value at the cell, one
+// channel's, or sets one (clamped to its max, said so; a computed channel is read-only).
+@(private)
+admin_cell :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if len(args) < 3 || len(args) > 5 {return false}
+	p: game.Block_Pos
+	for a, i in args[:3] {
+		n := strconv.parse_int(a) or_return
+		p[i] = i32(n)
+	}
+	w := c.world
+	infos := s.registry.channels
+	if len(args) == 3 {
+		for info, id in infos {
+			v, loaded := chunks_channel(w, p, id)
+			if !loaded {notice(s, c, "That cell is not loaded."); return true}
+			notice(s, c, fmt.tprintf("%s = %d", info.name, v))
+		}
+		return true
+	}
+	id, found := game.registry_channel(s.registry, args[3])
+	if !found {
+		notice(s, c, fmt.tprintf("There is no channel %s.", args[3]))
+		return true
+	}
+	if len(args) == 4 {
+		v, loaded := chunks_channel(w, p, id)
+		if !loaded {notice(s, c, "That cell is not loaded."); return true}
+		notice(s, c, fmt.tprintf("%s = %d", infos[id].name, v))
+		return true
+	}
+	if infos[id].computed != .None {
+		notice(
+			s,
+			c,
+			fmt.tprintf("%s is computed from the blocks: it cannot be set.", infos[id].name),
+		)
+		return true
+	}
+	n := strconv.parse_int(args[4]) or_return
+	v := u16(clamp(n, 0, int(game.channel_max(infos[id]))))
+	if int(v) != n {
+		notice(
+			s,
+			c,
+			fmt.tprintf("%d is out of range for %s: set %d instead.", n, infos[id].name, v),
+		)
+	}
+	if !set_channel(w, p, id, v, world_act(w, .Command), c) {
+		notice(s, c, "That cell could not be set (not loaded, or protected).")
+	}
+	return true
+}
+
 // admin_time: time set <t>, time add <hours>, time query (t: 0..1 of a day or a
 // name; a bare <t> is a set).
 @(private)

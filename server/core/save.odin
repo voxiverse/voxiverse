@@ -6,6 +6,7 @@ import "core:math"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:time"
@@ -201,8 +202,9 @@ request_chunk :: proc(w: ^World, pos: game.Chunk_Pos) -> bool {
 	r := game.reader_make(bytes, w.server.registry)
 	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
 	waiting := make([dynamic]game.Saved_Update, context.temp_allocator)
-	uniform, is_uniform := game.read_chunk_payload(&r, scratch, &entities, &waiting)
-	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch, entities[:])
+	layers := make([dynamic]game.Saved_Channel, context.temp_allocator)
+	uniform, is_uniform := game.read_chunk_payload(&r, scratch, &entities, &waiting, &layers)
+	chunks_insert(&w.chunks, pos, uniform, nil if is_uniform else scratch, entities[:], layers[:])
 	origin := game.chunk_origin(pos)
 	if chunk := chunks_get(&w.chunks, pos); chunk != nil {
 		ledger_entities(w, chunk.block_entities[:], .Scope_In)
@@ -230,7 +232,9 @@ keep_edits :: proc(w: ^World, c: ^Chunk) {
 	ledger_entities(w, c.block_entities[:], .Scope_Out)
 	wr := &w.server.store.writer
 	clear(&wr.buf)
-	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:], sim_take_chunk(w, c.pos))
+	game.layers_compact(&c.layers, &w.chunks.pools)
+	layers := chunk_saved_layers(&w.chunks, c, context.temp_allocator)
+	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:], sim_take_chunk(w, c.pos), layers)
 	if old, had := w.saved[c.pos]; had {delete(old)}
 	w.saved[c.pos] = transmute([]u8)strings.clone(string(wr.buf[:])) // an owned copy
 }
@@ -350,9 +354,18 @@ region_ingest :: proc(
 	loaded := make([dynamic]game.Chunk_Pos, context.temp_allocator)
 	entities := make([dynamic]game.Block_Entity, context.temp_allocator)
 	waiting := make([dynamic]game.Saved_Update, context.temp_allocator)
+	layers := make([dynamic]game.Saved_Channel, context.temp_allocator)
+	unknown := make([dynamic]string, context.temp_allocator)
 	wr := &w.server.store.writer
 	for ok {
-		pos, uniform, is_uniform, got := game.region_next_chunk(&r, scratch, &entities, &waiting)
+		pos, uniform, is_uniform, got := game.region_next_chunk(
+			&r,
+			scratch,
+			&entities,
+			&waiting,
+			&layers,
+			&unknown,
+		)
 		if !got {
 			ok = r.reader.ok
 			break
@@ -362,11 +375,20 @@ region_ingest :: proc(
 			uniform = uniform,
 			array   = nil if is_uniform else scratch,
 		}
-		game.write_chunk_payload(wr, &blocks, entities[:], waiting[:])
+		game.write_chunk_payload(wr, &blocks, entities[:], waiting[:], layers[:])
 		w.saved[pos] = transmute([]u8)strings.clone(string(wr.buf[:]))
 		append(&loaded, pos)
 	}
 	ok = ok && game.region_tops(&r, &tops)
+	slice.sort(unknown[:])
+	for name, i in unknown {
+		if i > 0 && unknown[i - 1] == name {continue}
+		log.warnf(
+			"server dropped channel %q from a saved region: this world's packs no longer have it path=%s",
+			name,
+			path,
+		)
+	}
 	for pos in r.dropped {
 		log.errorf(
 			"server chunk damaged in its region file, not loaded (its edits are lost) path=%s chunk=%v",

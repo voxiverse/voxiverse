@@ -83,6 +83,12 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	w.chunks.reg = s.registry
+	if err := channels_init(&w.chunks, s.capacity); err != nil {
+		log.errorf("server cannot allocate a world's channels: %v", err)
+		chunks_destroy(&w.chunks)
+		virtual.arena_destroy(&w.arena)
+		return false
+	}
 	w.natural = make([]Natural_Slot, NATURAL_CACHE, arena)
 	if err := updates_init(&w.updates, arena); err != nil {
 		log.errorf("server cannot allocate a world's block updates: %v", err)

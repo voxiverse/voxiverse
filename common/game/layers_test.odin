@@ -128,8 +128,14 @@ test_layers_hash_ignores_mode :: proc(t: ^testing.T) {
 	l.channels[1].uniform = 3
 	testing.expect(t, layers_default(&l, defaults))
 	which := bit_set[0 ..< MAX_CHANNELS]{0, 1}
-	base := u64(77)
-	testing.expect_value(t, layers_hash_add(base, &l, defaults, which), base)
+	hash :: proc(l: ^Chunk_Layers, d: []u16, w: bit_set[0 ..< MAX_CHANNELS]) -> u64 {
+		h := hasher_make()
+		hasher_mix(&h, 77)
+		hash_chunk_layers(&h, l, d, w)
+		return h.h
+	}
+	base := hash(&Chunk_Layers{channels = {1 = {uniform = 3}}}, defaults, which)
+	testing.expect_value(t, hash(&l, defaults, which), base)
 	// the same values in Large and in Direct hash alike
 	a, b: Layer_Pools
 	assert(layer_pools_init(&a, 2) == nil)
@@ -142,12 +148,90 @@ test_layers_hash_ignores_mode :: proc(t: ^testing.T) {
 	for i in 0 ..< 300 {channel_set(&y.channels[0], &b, i, u16(i))}
 	for i in 100 ..< 300 {channel_set(&y.channels[0], &b, i, 0)}
 	testing.expect_value(t, y.channels[0].mode, Channel_Mode.Direct)
-	testing.expect_value(
-		t,
-		layers_hash_add(base, &x, defaults, which),
-		layers_hash_add(base, &y, defaults, which),
-	)
-	testing.expect(t, layers_hash_add(base, &x, defaults, which) != base)
+	testing.expect_value(t, hash(&x, defaults, which), hash(&y, defaults, which))
+	testing.expect(t, hash(&x, defaults, which) != base)
 	layers_release(&x, &a)
 	layers_release(&y, &b)
+}
+
+@(test)
+test_channel_body_round_trip :: proc(t: ^testing.T) {
+	values := new([CHANNEL_CELLS]u16, context.temp_allocator)
+	out := new([CHANNEL_CELLS]u16, context.temp_allocator)
+	for shape in 0 ..< 3 {
+		for i in 0 ..< CHANNEL_CELLS {
+			switch shape {
+			case 0:
+				values[i] = 7
+			case 1:
+				values[i] = u16(i / 100 % 4)
+			case:
+				values[i] = u16(i * 31 % 1000)
+			}
+		}
+		w: Writer
+		writer_init(&w, context.temp_allocator)
+		write_channel_body(&w, values)
+		r := reader_make(w.buf[:])
+		read_channel_body(&r, out, 1000)
+		testing.expect(t, reader_finish(&r), "a body did not read back whole")
+		testing.expect(t, out^ == values^, "the values changed")
+		if shape == 0 {testing.expect_value(t, len(w.buf), 2)} 	// (uniform: a tag and a value)
+	}
+}
+
+@(test)
+test_channel_body_refuses_damage :: proc(t: ^testing.T) {
+	out := new([CHANNEL_CELLS]u16, context.temp_allocator)
+	body :: proc(f: proc(w: ^Writer)) -> []u8 {
+		w: Writer
+		writer_init(&w, context.temp_allocator)
+		f(&w)
+		return w.buf[:]
+	}
+	cases := [?][]u8 {
+		body(proc(w: ^Writer) {write_u8(w, 0); write_varint(w, 16)}), 	// above max 15
+		body(proc(w: ^Writer) {write_u8(w, 2)}), 	// an unknown tag
+		body(proc(w: ^Writer) {write_u8(w, 1); write_varint(w, 0)}), 	// an empty palette
+		body(proc(w: ^Writer) {write_u8(w, 1); write_varint(w, 5000)}), 	// too big a palette
+		body(proc(w: ^Writer) {write_u8(w, 1); write_varint(w, 1); write_varint(w, 99)}), 	// above max
+		body(proc(w: ^Writer) {
+			write_u8(w, 1)
+			write_varint(w, 1)
+			write_varint(w, 3)
+			write_varint(w, 4000)
+			write_varint(w, 0)
+		}), // runs short of 4096
+		body(proc(w: ^Writer) {
+			write_u8(w, 1)
+			write_varint(w, 1)
+			write_varint(w, 3)
+			write_varint(w, 4097)
+			write_varint(w, 0)
+		}), // runs past it
+		body(proc(w: ^Writer) {
+			write_u8(w, 1)
+			write_varint(w, 1)
+			write_varint(w, 3)
+			write_varint(w, 4096)
+			write_varint(w, 1)
+		}), // an index past the palette
+	}
+	for c, i in cases {
+		r := reader_make(c)
+		read_channel_body(&r, out, 15)
+		testing.expectf(t, !reader_finish(&r), "damaged body %d was accepted", i)
+	}
+}
+
+@(test)
+test_layers_without_values_cost_one_byte :: proc(t: ^testing.T) {
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	write_layers(&w, nil)
+	testing.expect_value(t, len(w.buf), 1)
+	r := reader_make(w.buf[:])
+	got := make([dynamic]Saved_Channel, context.temp_allocator)
+	read_layers(&r, &got)
+	testing.expect(t, reader_finish(&r) && len(got) == 0)
 }

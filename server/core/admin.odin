@@ -42,6 +42,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		"world.time",
 	},
 	{"setblock", "<x y z> <block>", {4, 4}, admin_setblock, "world.edit.bulk"},
+	{"cell", "<x y z> [<channel> [<value>]]", {3, 5}, admin_cell, "world.edit.bulk"},
 	{"rule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
 	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
 	{"damage", "<player> <amount>", {2, 2}, admin_damage, "voxiverse.command.damage"},

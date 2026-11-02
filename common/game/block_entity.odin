@@ -161,6 +161,7 @@ write_chunk_payload :: proc(
 	c: ^Chunk_Blocks,
 	entities: []Block_Entity,
 	updates: []Saved_Update = nil,
+	layers: []Saved_Channel = nil,
 ) {
 	write_chunk_blocks(w, c)
 	write_block_entities(w, entities)
@@ -169,6 +170,7 @@ write_chunk_payload :: proc(
 		write_varint(w, u32(u.local))
 		write_varint(w, u.delta)
 	}
+	write_layers(w, layers)
 }
 
 // read_chunk_payload reads what write_chunk_payload wrote (blocks as read_chunk_blocks;
@@ -178,6 +180,8 @@ read_chunk_payload :: proc(
 	dst: ^Block_Array,
 	out: ^[dynamic]Block_Entity,
 	updates: ^[dynamic]Saved_Update = nil,
+	layers: ^[dynamic]Saved_Channel = nil,
+	unknown: ^[dynamic]string = nil,
 ) -> (
 	uniform: Block,
 	is_uniform: bool,
@@ -199,6 +203,12 @@ read_chunk_payload :: proc(
 			return
 		}
 		if updates != nil {append(updates, Saved_Update{u16(local), delta})}
+	}
+	if layers != nil {
+		read_layers(r, layers, unknown)
+	} else {
+		sink := make([dynamic]Saved_Channel, context.temp_allocator)
+		read_layers(r, &sink, unknown)
 	}
 	return
 }

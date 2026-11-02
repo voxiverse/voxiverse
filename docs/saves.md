@@ -164,10 +164,16 @@ releases the lock with its process, so a crash leaves no stale lock.
 
 `SAVE_FORMAT` (6) is recorded in `universe.cfg` and in each `world.cfg`.
 
-### Region format 4
+### Region format 5
 
-A region file in format 4 stores block entities after each chunk's blocks, and a table of
-item IDs after the block names. It has:
+A region file in format 5 stores, after each chunk's blocks, its block entities, its waiting
+simulation updates (`varint n`, then per update the cell's local index and the ticks until
+it is due; written when the chunk is saved or unloaded, scheduled again when it loads) and its
+channels: `varint n`, then per channel its name and its values (one value, or a palette and
+runs). Only stored, saved channels not at their default are written, so a chunk without
+any costs one byte. A channel name the world's packs no longer have is dropped when the
+region loads, with one warning naming it and the region. It also has a table of item IDs
+after the block names. It has:
 
 - a header with the names of the blocks: every block of the registry, by its number (the
   IDs), followed by the item ID table;

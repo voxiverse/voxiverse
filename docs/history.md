@@ -9503,3 +9503,355 @@ absent names).
 ## Check by hand
 
 None.
+
+# M49: voxel layers and the simulation framework (channels, the scheduler, liquids as data)
+
+**Why.** Packs (M47) can add blocks, but nothing a block *does* by itself is data: flowing
+water is `server/liquids.odin`, grass, farmland and wheat are a `switch` in
+`server/random_ticks.odin`, and a cell can hold nothing but its block. Scripts (M51-M52)
+and agents need both: values a cell carries besides its block, and behaviour a pack
+declares. The survey for this section found:
+
+- `server/liquids.odin` (294 lines) is already a small active-cell simulation: a binary
+  heap of `Update {due: u64, pos: Block_Pos}` ordered by (due, y, z, x), at most one per
+  position (`queued`, a fixed map), `MAX_UPDATES` 65 536, `UPDATE_BUDGET` 4 096 run a
+  tick, `WATER_DELAY` 5 ticks. Every `set_block` calls `wake_water` (the cell and its six
+  neighbours, if water); bulk edits and arriving chunks call `wake_water_box`, which looks
+  only at chunks whose `Chunk.water` flag is set and schedules only `restless` water
+  (flowing, or a source beside somewhere it could go). Updates in unloaded chunks are
+  dropped and woken again when the chunk loads. Nothing of the queue is saved.
+- The water rules themselves are one function per step (`fed_level`, `takes_water`,
+  `ways_down`, `distance_down`): `distance_down` is a recursive search up to
+  `WATER_REACH` 4 blocks that no neighbourhood rule can say. Water levels are block ids
+  (`Water`, `Water_1..7`, `Water_Falling`: eight separate built-in blocks, still so after
+  M48, `voxiverse:water`, `voxiverse:water_1`..`_7`, `voxiverse:water_falling` in
+  `assets/packs/voxiverse/data/blocks/water.json`; not states of one type), read only
+  through `game.water_level` and `game.water_block` (`common/game/block.odin`).
+- `server/random_ticks.odin`: per ready, non-uniform chunk in pool slot order,
+  `rules.random_tick_speed` (3) indices drawn from `w.tick_rng` (`rng_u32 & 4095`); a
+  block with a random tick runs it. The RNG draws per kind are fixed by the code
+  (grass: four tries of `rng_int_max(3)`, `(5)`, `(3)`; wheat: one `rng_int_max(3 or 6)`
+  below ripe; farmland: none). "Light" is `light_above`: 15 above the column's top, else
+  15 less the Manhattan distance to the nearest lamp within 6.
+- Light is not stored anywhere (PLAN, "World data": a pure function inside the mesh job),
+  on purpose.
+- The state hash (M38) hashes the update heap as stored (section `Liquids`), changed
+  chunks as position and blocks (`Chunks`) and the RNGs (`Random`); the bandwidth
+  baseline (`assets/baselines/net/bandwidth.txt`) pins the stepped session's root at its
+  last tick, and the session has water (tick 2500) and a farm (3000). So "liquids and
+  random ticks give unchanged results" has an exact test already: the roots must not move.
+
+**This milestone is split in two, decided now** (each one sitting, each with its exit
+check): **M49** builds the layers, the scheduler and the `flow` behaviour, and moves
+liquids onto them; **M49b** adds neighbour rules as data (the statement language) and
+**M49e** moves random ticks onto it (split from M49b, #85). A fluid declared by a pack is already "a spreading substance
+with no engine code", so the PLAN's exit check is met by M49; M49b meets it again with a
+substance written in rules.
+
+**Design (M49).**
+
+*Channels* (`common/game/layers.odin`). A **channel** is a named per-cell value beside the block,
+declared by a pack, `u16` at most:
+
+- `Channel_Info {name: string, bits: u8 (1..16), default: u16, saved: bool, replicated:
+  bool, keep: bool, computed: Computed (None, Light)}`. `max` is `1 << bits - 1`.
+  `keep`: the value survives a change of the cell's block (default false: a block change
+  resets the channel to its default, so no stale value outlives what it belonged to).
+- Registry `channel` (M47's mechanism: namespaced names, ids by load order, conflicts and
+  overrides as M47 decides for every registry). `MAX_CHANNELS :: 8` per world, besides
+  the block; a ninth is refused at pack load.
+- One built-in channel, `voxiverse:light` (the base pack's namespace is `voxiverse`,
+  `BASE_NAMESPACE`), `computed = .Light`: no storage, never saved or
+  replicated, read-only; its value at p is today's `light_above(w, p)` (moved to
+  `server/sim.odin` unchanged). Stored light stays out (the core design keeps light a
+  pure function of blocks); rules that need light read this.
+- The base pack declares no stored channel. The test pack below declares two.
+
+*Storage.* The block channel is untouched (`Chunk_Blocks`, uniform or a flat `u16`
+array: the hot path of physics and meshing). The others are palette-compressed:
+
+- `Channel :: struct {mode: Channel_Mode, uniform: u16, page: rawptr}` with
+  `Channel_Mode :: enum u8 {Uniform, Small, Large, Direct}`;
+  `Chunk_Layers :: struct {channels: [MAX_CHANNELS]Channel}` (128 bytes a chunk). The
+  server's `Chunk` and the client's `Client_Chunk` gain `layers: game.Chunk_Layers`.
+- Pages: Small = `palette: [16]u16`, `count: u8`, 4096 four-bit indices (2 080 bytes);
+  Large = `palette: [256]u16`, `count: u16`, 4096 byte indices (4 610 bytes); Direct =
+  4096 `u16` (8 192 bytes). Each class comes from a `game.Page_Pool` (Block_Arrays'
+  scheme, generalised: one virtual reservation of `capacity * page_size`, committed in
+  steps of 64 pages, a free list, `.Out_Of_Memory` past capacity). Capacity per class is
+  the world's chunk capacity times the number of stored channels declared, so memory has
+  the same hard ceiling as blocks and is flat over churn. `Block_Arrays` stays as it is.
+- `channel_get(ch, i) -> u16`, `channel_set(ch, pools, i, v) -> mem.Allocator_Error`:
+  a uniform channel set to another value becomes Small with palette `[uniform, v]`; a
+  17th distinct value promotes Small to Large, a 257th Large to Direct (copying, the old
+  page given back). Values above `max` are a caller bug (asserted); rules clamp before
+  (M49b).
+- `layers_compact(layers, pools)` rebuilds each palette in first-occurrence index order
+  and takes the smallest mode that fits (Uniform if one value). It runs when a chunk is
+  saved or unloaded, never in the middle of a tick, so representation never depends on
+  timing.
+- `layers_release` gives every page back (chunk unload, world unload).
+
+*Reading and writing cells on the server* (`server/chunks.odin`, `server/changes.odin`):
+`chunks_channel(w, p, ch) -> (u16, bool)` (false: not loaded; computed channels
+computed) and `set_channel(w, p, ch, v, by: ^Client = nil) -> bool`, which goes through
+M45's pipeline like `set_block` (same cause rules: a player, a command, or the system
+`sim` with the rule's name), marks the chunk edited, records the change in
+`Changes.cells: map[Cell_Key]struct{}` (`Cell_Key {pos: Block_Pos, channel: u8}`, temp)
+and wakes the cell like a block change (below). `set_block` resets every channel of the
+cell without `keep` to its default when the block changes, recording each that was not
+already the default.
+
+*Replication* (M39's records, plus the chunk stream):
+
+- A chunk sent whole carries its replicated channels. `common/game/codec.odin`'s
+  `Chunk_Encoding` gains `Uniform_Layers` and `Palette_Runs_Layers`: the blocks exactly
+  as the plain encodings, then `varint n` and n channels, each `varint channel id`, then
+  `u8 0` and `varint value` (uniform) or `u8 1`, `varint palette count`, the palette as
+  varints and runs of `varint run, varint index` (as blocks). A chunk whose replicated
+  channels are all uniform at their defaults uses the plain encoding, so it costs not one
+  byte more (the bandwidth test checks it). `write_chunk(w, blocks, layers, which:
+  Channel_Set, infos)` and `read_chunk` replace `write_chunk_blocks`/`read_chunk_blocks`
+  (the old names stay as wrappers for the plain case); `read_chunk` refuses an unknown
+  channel id, a channel listed twice, a value above the channel's `max`, palettes over
+  4096 entries, runs not summing to 4096, and an index past the palette.
+- Single changes: a new state kind `Channel` (`Channel_Record {value: u16}`), reliable,
+  write-through (like `Block`), key type `Cell`: a `Block_Pos` plus the channel id.
+  `game.Key` gains `d: i32` (0 for the existing key types; `key_less` compares it last);
+  the `Cell` key is encoded as the `Block_Pos` key is, then `varint channel`. The client's
+  apply refuses a value above the channel's `max` (the kind's `check` cannot see the key)
+  with `fail(s, "the server sent channel <name> value <v> above <max>")`.
+  `changes_flush` puts a `Channel` record for each changed cell of a replicated channel in
+  a chunk the client has and that is not being sent whole, after the `Block` records,
+  sorted by (`block_pos_less`, channel).
+- The client keeps the layers (`world_set_channel`, its own `Page_Pool`s sized from the
+  interest area like its block arrays) and does nothing else with them yet; scripts and
+  rendering read them later. The determinism mirror and `net_test`'s clients keep them
+  too.
+
+*Saves* (M46's format): a region's chunk record gains a `layers` section (the saved
+channels in the chunk encoding above, ids replaced by indices into a per-region palette
+of channel names, M47's rule for names in saves) and an `updates` section (below). A
+channel name the world no longer has is dropped on load with one warning naming it and
+the region; the region format is bumped, and a region of the older format is refused
+as an older build's world (M47a's message; no migration before 1.0).
+
+*The hash* (M38): a chunk whose stored channels are all uniform at their defaults hashes
+exactly as before (position and blocks), so worlds without channels keep their roots.
+Otherwise each non-default channel adds its id and its 4096 values (as `u16`, by index:
+values, never the palette or mode, so compaction cannot change a hash). `world_hash`
+includes replicated channels only (what a mirror can check).
+
+*The scheduler* (`server/sim.odin`, replacing the queue half of `liquids.odin`):
+
+- `World.updates: Updates` keeps its exact layout (`Update {due, pos}`, the heap, the
+  fixed `queued` map, `MAX_UPDATES`, `UPDATE_BUDGET` 4 096): an update names a cell, not
+  a rule; the cell's content picks what runs when it is due. So the `Liquids` hash section
+  is unchanged.
+- `World.sim: ^game.Sim_Rules`, the compiled rules of the world's packs (`common/game/sim.odin`):
+  `rules: []Rule` in pack load order then file order, and per block value (M48's state
+  ids) `scheduled: []u16` and `random: []u16` (rule indices, M49b; run by random ticks from M49e), `wakes:
+  Wake_Set` and `delay: u16` (the smallest delay of its scheduled rules). The tables are
+  built at pack load and swapped only at a tick boundary (M47's hot reload); the queue
+  keeps its positions across a swap.
+- `sim_update(w, p)` (was `water_update`'s caller): for each scheduled rule of the block
+  at p, in order, run it; if a rule changed the block at p, the rest of the old block's
+  rules are skipped.
+- **Wakes** (`Wake :: enum {Placed, Neighbour, Load}`): `sim_wake(w, p)` replaces
+  `wake_water` and is called where it was (every `set_block`, and `set_channel`): p, then
+  its six neighbours in today's order; p is scheduled if its block wakes on `Placed` or
+  `Neighbour`, a neighbour if it wakes on `Neighbour`, each after its block's `delay`.
+  `sim_wake_box(w, lo, hi, only_border)` replaces `wake_water_box` (bulk edits, saved
+  chunks loading, a chunk arriving next to waiting water): it visits only chunks whose
+  `restless` flag is set (was `Chunk.water`: set when a block with scheduled rules is
+  written into the chunk or found in it when it is generated or loaded, never cleared)
+  and schedules cells whose block wakes on `Load` and whose rule's restless test passes
+  (the flow behaviour's is today's `restless`; a rule's own (M49b) is "always").
+  Generation stops computing `water` on the worker: `chunks_collect` scans a collected
+  non-uniform array once against the `restless` bit array (one bit per block value) on
+  the tick thread (a few microseconds a chunk).
+- `sim_run_scheduled(w)` replaces `updates_run` at the same place in the tick (before
+  random ticks, entities, containers), with the same budget, order and drop logging.
+- **Saved updates.** When a chunk is saved or unloaded, the updates due in it are written
+  to its record's `updates` section (`varint n`, then per update `u16 local index` and
+  `varint (due - tick)`, in heap order (due, pos)) and, on unload, removed from the heap
+  (`sim_take_chunk(w, pos)`, one pass over the heap rebuilding it). On load they are
+  scheduled again at `tick + delta` before the chunk's border is woken. A chunk that is
+  not saved (unedited) loses its updates, as today. This keeps rules that do not wake on
+  `Load` running across a save (the M49b test pack's creep), and a stepped run with a
+  save and load in the middle hashes like one without (a test).
+- Every cause the scheduler gives M45's pipeline is `system sim <rule name>`.
+- `Sim_Stats {waiting, run, dropped, random_run, rules: []Rule_Stats {runs, changes}}` on
+  the world; `Stats.updates_waiting` keeps its name (the liquids test reads it); the
+  minute's tick summary log line gains `sim_run` and `sim_dropped`.
+
+*The flow behaviour* (`server/flow.odin`, the rule half of `liquids.odin` moved and
+parameterised; the file `liquids.odin` goes):
+
+- A rule with `behaviour flow` is a `Fluid {levels: []Block (the source, then flowing levels
+  1..n, n in 1..15), falling: Block, delay: u16 (1..1200), reach: i32 (0..6), sources_form:
+  bool}`. The blocks are named in the rule (block ids or M48 state texts, `state_parse`), so
+  water, which is eight separate blocks (checked 2026-10-30, #83: M48 did not turn it into
+  states), and a pack fluid made of one type's states are the same thing to the rule.
+  `fluid_level(f, b) -> (level, is_fluid)` is the index of `b` in `levels`, or `n + 1` for
+  `falling` (today's `WATER_FALLING_LEVEL`); `fluid_block(f, level)` is the inverse. For
+  water they equal `game.water_level` and `game.water_block` (a test over every water
+  block);
+  client (mesh, physics, landing, fog) uses.
+- `flow_update(w, p, f)` is `water_update` with `WATER_REACH`, 7, `WATER_DELAY` and
+  "between two sources" replaced by `f.reach`, `f.levels`, `f.delay` and
+  `f.sources_form`, and `takes_water` by `takes_fluid(f, b, level)`: a block of this
+  fluid as today; **a block of another fluid is never taken** (fluids do not mix: what
+  happens where two meet is a rule for later); anything else as today (air, replaceable,
+  or not colliding and breakable). With water's numbers the arithmetic and the order of
+  reads and writes are today's line for line, so the dam break, the flood and the roots
+  cannot move.
+- The pack file (pack JSON, M47; registry kind `sim_rule`, files in `data/sim/`, so both sides
+  build the same tables), `assets/packs/voxiverse/data/sim/water.json`:
+
+  ```json
+  {
+    "water": {
+      "behaviour": "flow",
+      "levels": ["voxiverse:water", "voxiverse:water_1", "voxiverse:water_2", "voxiverse:water_3",
+                 "voxiverse:water_4", "voxiverse:water_5", "voxiverse:water_6", "voxiverse:water_7"],
+      "falling": "voxiverse:water_falling",
+      "delay": 5, "reach": 4, "sources_form": true
+    }
+  }
+  ```
+
+  A flow rule wakes on `Placed`, `Neighbour` and `Load` (fixed). Load-time checks, each a
+  `Pack_Error` with file, line, column and the fix: every block named exists; no block is
+  named twice; each number in range; one flow rule per block; a flow
+  rule has no statements (M49b).
+- The client is unchanged: water draws, swims and fogs from `water_level` as before. A
+  pack fluid other than water flows on the server and draws as its block's M48 render
+  shape; level-height drawing and swimming for pack fluids are left out.
+
+*The command.* `/cell <x y z> [<channel> [<value>]]` (cheats, permission
+`world.edit.bulk`, the admin table in `server/admin.odin`): prints every channel's value
+at the cell, or one, or sets one (through `set_channel`, clamped to its `max`, with a
+notice saying so). `/cell` on a computed channel prints it and refuses a set.
+
+*The test pack* (`sim_test`, beside M47's test pack, loaded only by the tests that ask
+for it):
+
+`data/channels/test.json`: `{"wetness": {"bits": 4, "default": 0, "saved": true,
+"replicated": true}, "secret": {"bits": 8, "default": 0, "saved": true, "replicated":
+false}}`; `data/blocks/oil.json`: a type `oil` with states `level` 0..3 and `falling`, not
+colliding, breakable; `data/sim/oil.json`: `{"oil": {"behaviour": "flow", "levels":
+["sim_test:oil[level=0]", "sim_test:oil[level=1]", "sim_test:oil[level=2]",
+"sim_test:oil[level=3]"], "falling": "sim_test:oil[falling=true]", "delay": 15, "reach": 2,
+"sources_form": false}}`.
+
+**The order of the steps** (each leaves the suite passing):
+
+1. `game.Page_Pool`, `common/game/layers.odin` (channels, modes, promotion, compaction, release)
+   and their unit tests; the `channel` registry and its pack parsing.
+2. Layers in the server and client chunks; `chunks_channel`, `set_channel`, the reset on
+   block change, `/cell`; the hash rule.
+3. The chunk encodings with layers, the `Channel` state kind and `Cell` key, the client's
+   apply; then the bandwidth tests must still pass with identical roots and bytes.
+4. Saves: the `layers` section and the name palette.
+5. `common/game/sim.odin` (`Sim_Rules`, the rule registry with `behaviour flow` only),
+   `server/sim.odin` (dispatch, wakes, `restless`, budget) and `server/flow.odin`;
+   `assets/packs/voxiverse/data/sim/water.json`; `liquids.odin` deleted. Then `liquids_test.odin`,
+   `determinism_test.odin` and the bandwidth tests must pass untouched.
+6. Saved updates, the test pack and its tests.
+
+If the session must split anyway, the remainder is M49c: step 6, with
+`test_updates_survive_save` and `test_pack_fluid_flows` as its exit check.
+
+**Left out (M49):**
+
+- Neighbour rules in data (M49b) and random ticks on them (M49e).
+- Water in its own channel beside a solid block (waterlogged slabs, stairs, fences): water
+  stays a block with states. A fluid channel touches meshing, physics, light, edits and
+  items; it waits until a gameplay need asks for it (see the notes).
+- Stored light, coloured light (the "atmosphere and lighting" tier).
+- Rendering pack channels, and level heights and swimming for pack fluids.
+- Fluids meeting fluids (lava and water make stone): a rule for when rules exist.
+- Client-side simulation or prediction of fluids (the server decides; records follow).
+- Per-script or per-cause budgets (M52).
+
+**Tests (M49):**
+
+- `common/game/layers_test.odin`: get and set through Uniform → Small → Large → Direct and the
+  values intact at every step; compaction back down gives the same values and the
+  smallest mode, palette in first-occurrence order; release returns every page (pool
+  in-use 0); a pool at capacity returns `.Out_Of_Memory`; 10 000 random sets against a
+  plain array, equal throughout; the hash of a chunk with default channels equals its
+  old hash; the hash does not depend on mode (the same values in Large and Direct hash
+  alike).
+- `common/game/protocol_test.odin`: the layered encodings round-trip (uniform, palette, several
+  channels, the plain case byte-identical to before); every malformed case above fails
+  with the reader failed; `test_chunk_decode_fuzz` covers the new encodings; the
+  `Channel` record and `Cell` key round-trip through `test_new_field_needs_no_code`'s
+  machinery; the dissector schema regenerated (`build schema`).
+- `server/layers_test.odin` (stepped server, the test pack):
+  - `test_channels_replicate`: `/cell` sets 1 000 cells of `wetness` over three chunks
+    and 10 of `secret`; the mirror holds exactly the server's `wetness`, and no `secret`;
+    a chunk sent whole after the sets carries them; a block change resets `wetness` there
+    on both sides.
+  - `test_channels_saved`: the same, saved, the server stopped and started on the
+    directory: both channels as they were; a region whose palette names a channel the
+    pack no longer has loads with one warning.
+- `server/flow_test.odin`:
+  - `test_fluid_level_is_water_level`: for each of water's eight blocks, `fluid_level`
+    equals `water_level` and `fluid_block` inverts it.
+  - `test_pack_fluid_flows` (the exit's "no engine code"): an oil source placed on a
+    platform spreads exactly three cells each way along flat ground (levels 3), falls off
+    an edge, does not form sources, never enters a water cell beside it, and leaves the
+    water unchanged; two stepped runs end with the same world hash.
+  - `test_updates_survive_save`: water flowing over a platform; at tick 40 the world is
+    saved and its chunks unloaded and reloaded (stepped: `world_save`, then unload and
+    `chunks_insert` from the save); at tick 400 its world hash equals an uninterrupted
+    run's.
+  - Broken flow rules refused at load, each with its file:line message: an unknown block,
+    a block named twice, 16 flowing levels, `reach` 7, two flow rules for one block.
+- Unchanged and passing: `server/liquids_test.odin` (the dam break and the flood),
+  `server/determinism_test.odin`, `server/bandwidth_test.odin` (roots and bytes exactly
+  the committed baseline's), `server/farming_test.odin`, the rest of the suite.
+
+**Exit check (M49):**
+
+- `server/liquids_test.odin` passes and is byte-identical to before
+  (`git diff --exit-code <the commit the M49 session starts from> --
+  server/liquids_test.odin`, quoted in the report; the file changed since M48 in T2-T5, so
+  the base is the session's start, 2026-10-30, #83): M11's tests unchanged, on the new
+  framework.
+- `test_water_flood` keeps 10 000 flowing cells (the tick budget is `build bench budgets`, T5; its
+  scene `budget_flood` runs on the new framework too).
+- `test_pack_fluid_flows` passes: a pack defines a spreading substance with no engine code.
+- The bandwidth tests pass with the baseline's roots and no more bytes: liquids gave the
+  same results, and chunks without channels cost nothing more.
+- The layers, save and replication tests pass; `build determinism`, `build check` and the
+  whole suite pass; the CI run of the commit is green.
+
+**Check by hand (M49):** in a world, break a lake's wall and watch it flood as before; `/cell
+~ ~-1 ~` prints `base:light`.
+
+## Differed (M49, built unattended, 2026-11-01)
+
+- **Split once**: the replication step (the layered chunk encodings, the `Channel` record
+  and `Cell` key, the client's layers, `test_channels_replicate`, the protocol tests) is
+  **M49c** (docs/milestones/M49c.md), not step 6: step 6's saved updates and tests were
+  built here. A channel flagged `replicated` is stored, saved and hashed on the server
+  and not yet sent; `world_hash`/the checkpoint do not yet include replicated channels.
+- Paths are `server/core/` and `common/game/`, not `server/`. `light_above` stayed in
+  `random_ticks.odin` (the light channel calls it). The registry file is
+  `common/game/registry_sim.odin`; `Fluid` and `fluid_level` live there.
+- The saved form of channels sits in each chunk record with the channel *names* (not a
+  per-region name palette), so a record is self-describing; the shared body encoding is
+  `write_channel_body` (`layers_codec.odin`). Region format 5 (bumped once for updates and
+  channels). The hash function is `hash_chunk_layers` on a `Hasher` (the state hash's
+  mixing), not a `chunks_hash_add` word; the Chunks section passes every stored channel.
+- Channel changes are not in the edit journal (its entries are block changes), so a rollback
+  does not undo them; `admit` (protection) is honoured. Capture and copy-on-write for the
+  running save copy a chunk's saved channels as plain arrays (`Cow_Copy.layers`).
+- The bandwidth baseline's bytes grew by 5 (the new `/cell` command is in the Grants
+  command list every client is sent); roots unchanged; baseline re-accepted.
+- The mixed-fluids rule ("a block of another fluid is never taken") and the flow rules are
+  as specified; `test_channels_set_and_reset` and `test_channels_saved` (including a pack
+  that drops a channel: one warning) are in `server/core/layers_test.odin`.

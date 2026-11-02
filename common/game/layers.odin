@@ -225,7 +225,6 @@ channel_set :: proc(ch: ^Channel, pools: ^Layer_Pools, i: int, v: u16) -> mem.Al
 	return nil
 }
 
-@(private = "file")
 channel_release :: proc(ch: ^Channel, pools: ^Layer_Pools) {
 	switch ch.mode {
 	case .Uniform:
@@ -324,24 +323,22 @@ layers_default :: proc(l: ^Chunk_Layers, defaults: []u16) -> bool {
 	return true
 }
 
-// layers_hash_add folds the stored channels of one chunk into the hash h (a chunks_hash_add
-// word): each channel not uniform at its default adds its id and its 4096 values, by index
+// hash_chunk_layers folds the stored channels of one chunk into h (after hash_chunk): each
+// channel in which not uniform at its default adds its id and its 4096 values, by index
 // (values, never the palette or mode, so compaction cannot change a hash). Nothing is
-// added for a chunk whose channels are all default.
-layers_hash_add :: proc(
-	h: u64,
+// added for a chunk whose channels are all default, so worlds without channels keep
+// their hashes.
+hash_chunk_layers :: proc(
+	h: ^Hasher,
 	l: ^Chunk_Layers,
 	defaults: []u16,
 	which: bit_set[0 ..< MAX_CHANNELS],
-) -> u64 {
-	h := h
-	mix :: #force_inline proc(h: u64, v: u64) -> u64 {return (h ~ v) * 0x100000001b3}
+) {
 	for &ch, id in l.channels {
 		if id not_in which {continue}
 		d := defaults[id] if id < len(defaults) else 0
 		if ch.mode == .Uniform && ch.uniform == d {continue}
-		h = mix(h, u64(id) | 1 << 40)
-		for i in 0 ..< CHANNEL_CELLS {h = mix(h, u64(channel_get(&ch, i)))}
+		hasher_mix(h, u64(id) | 1 << 40)
+		for i in 0 ..< CHANNEL_CELLS {hasher_mix(h, u64(channel_get(&ch, i)))}
 	}
-	return h
 }

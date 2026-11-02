@@ -24,8 +24,8 @@ test_region_round_trip :: proc(t: ^testing.T) {
 	held.slots[0] = {item_of_material(.Seeds), 3, 0}
 	held.slots[24] = {item_of_material(.Seeds), 1, 0}
 	chunks := []Saved_Chunk {
-		{{-3, 0, 40}, &terrain, {held}, nil},
-		{{-16, CHUNK_MIN_Y, 47}, &air, nil, nil},
+		{{-3, 0, 40}, &terrain, {held}, nil, nil},
+		{{-16, CHUNK_MIN_Y, 47}, &air, nil, nil, nil},
 	}
 	tops := []Saved_Top{{-40, 600, 12}, {-1, 512, WORLD_MIN_Y}}
 	testing.expect_value(t, region_of({-16, 0, 47}), region)
@@ -107,7 +107,7 @@ test_region_names_round_trip :: proc(t: ^testing.T) {
 		uniform = marble,
 	}
 	region := Region_Pos{0, 0}
-	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk, nil, nil}, {{2, 0, 2}, &solid, nil, nil}}
+	chunks := []Saved_Chunk{{{1, 0, 2}, &chunk, nil, nil, nil}, {{2, 0, 2}, &solid, nil, nil, nil}}
 	w: Writer
 	writer_init(&w, context.temp_allocator)
 	region_encode(with_pack, &w, region, chunks, nil)

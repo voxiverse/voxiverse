@@ -18,19 +18,20 @@ Changes :: struct {
 	blocks:  map[game.Block_Pos]int,
 	chunks:  map[game.Chunk_Pos]struct{}, // changed in bulk: sent whole
 	columns: map[[2]i32]struct{}, // chunk columns whose tops moved
+	cells:   map[Cell_Key]struct{}, // channel values changed one cell at a time (channels.odin)
 }
 
 // A chunk with more single changes than this in a tick is sent whole.
 @(private = "file")
 MAX_BLOCK_MESSAGES :: game.MAX_BLOCKS_CHANGED
 
-@(private = "file")
 changes_begin :: proc(w: ^World) -> ^Changes {
 	ch := &w.changes
 	if ch.blocks == nil {
 		ch.blocks = make(map[game.Block_Pos]int, 16, context.temp_allocator)
 		ch.chunks = make(map[game.Chunk_Pos]struct{}, 16, context.temp_allocator)
 		ch.columns = make(map[[2]i32]struct{}, 16, context.temp_allocator)
+		ch.cells = make(map[Cell_Key]struct{}, 16, context.temp_allocator)
 	}
 	return ch
 }
@@ -54,6 +55,7 @@ set_block :: proc(
 	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks}
 	b = game.shape_update(s.registry, b, p, query) // (a fence set by a command joins what is beside it)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
+	if old != b {channels_reset_cell(w, p)}
 	journal_entry(w, cause, p, old, b)
 	entity_lifecycle(w, p, old, b, cause)
 	mark_edited(w, game.chunk_of(p))
@@ -94,6 +96,7 @@ changes_flush :: proc(w: ^World) {
 	if s.config.stepped {
 		for p in ch.blocks {append(&w.touched, game.chunk_of(p))}
 		for pos in ch.chunks {append(&w.touched, pos)}
+		for k in ch.cells {append(&w.touched, game.chunk_of(k.pos))}
 	}
 	per_chunk := make(map[game.Chunk_Pos]int, len(ch.blocks), context.temp_allocator)
 	for p in ch.blocks {per_chunk[game.chunk_of(p)] += 1}
