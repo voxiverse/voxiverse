@@ -8,7 +8,7 @@ import "core:testing"
 
 import "common:game"
 
-// M14's exit check for items, two players over UDP: the kit, dropping a
+// The exit check for items, two players over UDP: the kit, dropping a
 // stack that the other picks up, placing using one up, breaking leaving
 // the block to pick up, a refused request answered with the inventory as
 // it was, the catalog only with its permission; inventories kept through a

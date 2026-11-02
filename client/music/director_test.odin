@@ -13,7 +13,7 @@ import "client:testkit"
 import "common:game"
 import "common:worldgen"
 
-// The music director (M44), on a clock and seed of its own: no mixer, the
+// The music director, on a clock and seed of its own: no mixer, the
 // test plays the app's part (a voice lives as long as its track is long).
 
 // test_tracks: names and tags made for the tests, not the committed set.

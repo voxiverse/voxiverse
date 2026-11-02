@@ -5,7 +5,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-// The score parser (docs/history.md, M43, has the grammar). A score is read
+// The score parser (the grammar is in this file). A score is read
 // in one pass into per-part lists of bars, then the bars are played out in
 // order (repeats expanded), each checked against the meter in force.
 

@@ -3,7 +3,7 @@ package game
 import "core:math"
 import "core:slice"
 
-// What the server replicates to clients (M39): the game's state kinds and
+// What the server replicates to clients: the game's state kinds and
 // event kinds, as tables the schema (schema.odin) is derived from. A new
 // replicated value is a struct, an entry here, and the code that puts it; the
 // codec, the dissector's table and the tests of the wire follow from the types.
@@ -83,7 +83,7 @@ Player_Record :: struct {
 	name:   string `net:"max=16"`,
 	worn:   [WORN_SLOTS]Item, // head to feet; NO_ITEM: nothing
 	held:   Item, // the hotbar item in hand (NO_ITEM: none), for the avatar's raised arm
-	kills:  u32, // the counters `kills` and `deaths` (M48g), for the player list
+	kills:  u32, // the counters `kills` and `deaths`, for the player list
 	deaths: u32,
 }
 
@@ -128,7 +128,7 @@ MAX_BIOMES :: 32
 
 NO_BIOME :: 255 // Place.biome: not an Earth world
 
-// Place: where the player is, for the music (M44): the biome under their feet
+// Place: where the player is, for the music: the biome under their feet
 // (the worldgen.Biome ordinal; NO_BIOME in a world that is not Earth's) and the
 // world's warmth and wetness, a hundred times the generator's parameters.
 Place :: struct {

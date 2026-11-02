@@ -12,7 +12,7 @@ import "client:ui"
 import "common:game"
 import "common:worldgen"
 
-// Universe creation (M48e): the name, the
+// Universe creation: the name, the
 // seed as the glyphs of its home world's gate address (typed text or a number
 // becomes a seed; Roll draws one), the galaxy around the home world, a
 // small home-world preview, the game mode, and Ignite, which creates the

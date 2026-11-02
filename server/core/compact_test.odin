@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:game"
 
-// M46b: a region file holds only what differs from the generator's (compact.odin).
+// A region file holds only what differs from the generator's (compact.odin).
 
 // region_has: the chunks (and the number of tops) a world's region file holds;
 // none if there is no file.

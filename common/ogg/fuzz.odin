@@ -8,7 +8,7 @@ import "common:base/fuzz"
 
 // The fuzz target and the Ogg-specific mutations (`mutate`, used by `test_ogg_fuzz`). The suite
 // (`test_ogg_fuzz`, `test_fuzz_pack_ogg_smoke`) and `build fuzz` run the same
-// code; M51c's fuzzers call `fuzz_one`.
+// code; the script fuzzers call `fuzz_one`.
 
 FUZZ_MAX_FRAMES :: 10_000_000
 

@@ -152,7 +152,7 @@ App :: struct {
 audio_init :: proc(app: ^App) {
 	sounds_init(&app.sounds, app.mixer)
 	music_init(app)
-	// Explosions and the like duck the music (duck 1 is M58's).
+	// Explosions and the like duck the music.
 	audio.set_duck(
 		app.mixer,
 		0,
@@ -279,8 +279,7 @@ frame_cap :: proc(app: ^App) -> time.Duration {
 }
 
 // SCRATCH_SPAWN: where exit checks start in the scratch world: fixed, so
-// their budgets keep meaning the same ground (the generator's spawn there
-// before M13 kept spawns off trees and the shore).
+// their budgets keep meaning the same ground (the generator keeps spawns off trees and the shore).
 SCRATCH_SPAWN :: [3]f64{24.5, 11, 8.5}
 
 // SCRATCH_SEED: the seed of the scratch world (singleplayer, exit checks).

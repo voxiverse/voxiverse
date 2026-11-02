@@ -10,7 +10,7 @@ import "core:strings"
 import "common:base"
 import "common:base/fuzz"
 
-// The fuzzers (M51c): four targets of Q1's harness (`build fuzz script.source
+// The fuzzers: four targets of the fuzz harness (`build fuzz script.source
 // script.generated script.bytecode script.snapshot`, docs/fuzzing.md). Their signature is
 // the error kind, the compile phase or fault reached, and the instruction count's bucket.
 //

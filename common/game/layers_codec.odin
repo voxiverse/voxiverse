@@ -2,7 +2,7 @@ package game
 
 import "core:mem"
 
-// The saved form of a chunk's channels (M49): after the blocks, entities and waiting
+// The saved form of a chunk's channels: after the blocks, entities and waiting
 // updates of a chunk record, `varint n` and n channels, each `string name` (the
 // channel's own, so a record names its channels whatever the registry's order) and a
 // body: `u8 0, varint value` (uniform) or `u8 1, varint palette count, the palette as

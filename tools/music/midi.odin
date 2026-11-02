@@ -3,7 +3,7 @@ package music_tool
 import "core:math"
 import "core:slice"
 
-// MIDI: format 0 and 1 in, format 1 out. The subset is in docs/history.md (M43).
+// MIDI: format 0 and 1 in, format 1 out. The subset is what this file reads.
 
 @(private = "file")
 Reader :: struct {

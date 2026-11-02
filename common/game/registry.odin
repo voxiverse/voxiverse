@@ -168,7 +168,7 @@ Layer_Kind :: enum u8 {
 	Translucent,
 }
 
-// Block_Type: one block definition (a number per definition, in M47's order);
+// Block_Type: one block definition (a number per definition, in load order);
 // a Block is a state id, and a type owns a run of them (Type_Def).
 Block_Type :: distinct u16
 

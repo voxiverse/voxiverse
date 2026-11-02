@@ -522,7 +522,7 @@ test_broken_packs :: proc(t: ^testing.T) {
 		{
 			"loot tables",
 			one({{"server/loot_tables/a.json", "{}"}}),
-			`testpack/server/loot_tables/: loot tables are read from M53 on; remove the directory`,
+			`testpack/server/loot_tables/: loot tables are not supported; remove the directory`,
 		},
 		{
 			"file over the limit",

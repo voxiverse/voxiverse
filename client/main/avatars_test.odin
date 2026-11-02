@@ -139,7 +139,7 @@ test_snapshot_speed_from_the_track :: proc(t: ^testing.T) {
 }
 
 // The arm that holds something swings its hand to the front (-z, the way the
-// avatar looks), a weapon's level; at rest it hangs (M48k found the raised
+// avatar looks), a weapon's level; at rest it hangs (the raised
 // arm pointing backwards).
 @(test)
 test_avatar_arm_raises_forward :: proc(t: ^testing.T) {

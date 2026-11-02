@@ -37,7 +37,7 @@ import "common:base"
 // at its pool slot; world.vert reads it as a per-instance attribute, so a
 // command's firstInstance (the mesh's slot) picks its chunk.
 //
-// Culling is on the GPU (R6). Every mesh shown has a Cull_Record in a dense
+// Culling is on the GPU. Every mesh shown has a Cull_Record in a dense
 // table (its place: live_at); world_cull dispatches world_cull.comp, one
 // invocation per record, which tests the chunk against the frustum (from
 // the scene buffer) and writes CULL_RUNS vk.DrawIndexedIndirectCommand per
@@ -50,7 +50,7 @@ import "common:base"
 // triangles, commands) is read back FRAMES_IN_FLIGHT frames late, for the
 // statistics. (Vertices come through vertex input,
 // not pulled by address: on the development machine's GPU pulling cost the
-// world pass 5-10%; R8's quad records bring pulling, with their own check.)
+// world pass 5-10%.)
 
 WORLD_VERTEX_SIZE :: 8
 // The most quads one layer of a chunk can have: every face of every block
@@ -74,7 +74,7 @@ Chunk_Draw :: struct {
 // two groups can face it); when there are three, the gap with fewer vertices
 // is drawn too (`bridged`: its faces all face away, the back-face culling
 // drops them), so two commands cover every case: a command costs the GPU more
-// than a few vertices do (R5b; test_runs_of_visible_face_groups).
+// than a few vertices do (test_runs_of_visible_face_groups).
 CULL_RUNS :: 2
 CULL_LAYERS :: 2 // opaque and cutout: culled on the GPU (water on the CPU)
 

@@ -94,7 +94,7 @@ test_asset_pack :: proc(
 	return {"testpack", files[:]}
 }
 
-// sim_test (M49b): a pack with a creeping substance and fire, defined without engine code:
+// sim_test: a pack with a creeping substance and fire, defined without engine code:
 // the rule language's test pack. Its channels, blocks, tag and rules are the constants
 // below; sim_test_pack adds files of the caller's (broken rules for the refusal tests).
 SIM_TEST_MANIFEST :: `{"format": 1, "namespace": "sim_test", "version": "1.0.0", "title": "Simulation test pack", "requires": ["voxiverse"]}`

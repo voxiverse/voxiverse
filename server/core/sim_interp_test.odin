@@ -10,7 +10,7 @@ import "core:testing"
 import "common:base"
 import "common:game"
 
-// M49b: the interpreter, statement by statement. The rules are `random` rules over
+// The interpreter, statement by statement. The rules are `random` rules over
 // sim_test:creep (nothing runs them but these tests, by calling rule_run), written into a
 // pack file; the world is the stepped test world.
 

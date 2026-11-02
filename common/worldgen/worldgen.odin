@@ -15,8 +15,8 @@ import "common:game"
 // generating the whole column, and where players first appear.
 
 Kind :: enum u8 {
-	Earth, // continents, biomes, rivers, mountains, caves, trees (M10)
-	Classic, // M3's heightmap hills (worlds made before M10)
+	Earth, // continents, biomes, rivers, mountains, caves, trees
+	Classic, // heightmap hills (older worlds)
 	Flat, // the same everywhere, for every seed (the tests' world)
 }
 

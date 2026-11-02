@@ -10,7 +10,7 @@ import "core:sync"
 import "common:base"
 import "common:base/fuzz"
 
-// The fuzz targets of what a pack or a save brings (Q1, docs/fuzzing.md). Each `fuzz_*` runs
+// The fuzz targets of what a pack or a save brings (docs/fuzzing.md). Each `fuzz_*` runs
 // the decoder through its public entry and returns an outcome signature; the harness's
 // table (tools/fuzz) lists game_fuzz_targets, and the suite replays their regression files.
 

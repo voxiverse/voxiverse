@@ -3,7 +3,7 @@ package game
 import "core:fmt"
 import "core:strings"
 
-// Channels and simulation rules in the registry (M49).
+// Channels and simulation rules in the registry.
 //
 // data/channels/<file>.json: {"wetness": {"bits": 4, "default": 0, "saved": true, "replicated": true}}
 // data/sim/<file>.json:      {"water": {"behaviour": "flow", "levels": [...], "falling": "...", ...}}
@@ -111,7 +111,7 @@ Sim_Rules :: struct {
 	rules:      []Rule,
 	lists:      []Rule_List,
 	scheduled:  [][]u16, // by block: rule indices (nil for most blocks)
-	random:     [][]u16, // by block: statement rules that run on a random tick (M49e runs them)
+	random:     [][]u16, // by block: statement rules that run on a random tick
 	wakes:      []Wake_Set,
 	delay:      []u16, // by block: the smallest delay of its rules
 	flow_rule:  []u16, // by block: the flow rule it belongs to, plus one (0: none)

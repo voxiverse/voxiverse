@@ -12,7 +12,7 @@ import "common:game"
 import "common:worldgen"
 import "server:core"
 
-// M10's exit check (`--check tour`, exit_check.odin's CHECKS): it visits every
+// The exit check (`--check tour`, exit_check.odin's CHECKS): it visits every
 // biome of an Earth world in turn (`locate`, then waiting for the land to
 // load and mesh) and screenshots each (biome_<name>). Then it checks that
 // frames, and chunk generation and meshing on the workers, kept within

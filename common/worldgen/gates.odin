@@ -4,7 +4,7 @@ import "core:math"
 
 import "common:game"
 
-// Gates (M18): a ring standing on a platform, its 15 chevrons around it (the
+// Gates: a ring standing on a platform, its 15 chevrons around it (the
 // first 7 lit to dial a world in the galaxy; the other 8 dark until a gate
 // can reach other galaxies). They are rare (a structure set), and none
 // stands within Params.gate_distance of the world's middle: something to

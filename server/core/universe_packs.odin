@@ -142,7 +142,7 @@ packs_text :: proc(reg: ^game.Registry, allocator := context.temp_allocator) -> 
 // which loads them as air). Every region's header is read once, at start.
 universe_blocks_check :: proc(s: ^Server) -> bool {
 	if s.store.dir == "" {return true}
-	// A world with a containers.cfg is from before block entities (M48b): its
+	// A world with a containers.cfg is from before block entities: its
 	// chests' contents are not read any more, so it is an older build's world.
 	worlds, _ := os.read_all_directory_by_path(
 		fmt.tprintf("%s/%s", s.store.dir, WORLDS_DIR),

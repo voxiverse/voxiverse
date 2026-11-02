@@ -9,7 +9,7 @@ import "core:sync"
 import "common:base"
 import "common:base/fuzz"
 
-// The fuzz targets of the protocol's decoders (Q2, docs/fuzzing.md): every message a client
+// The fuzz targets of the protocol's decoders (docs/fuzzing.md): every message a client
 // sends, every message a server sends, and the state records under them. tools/fuzz lists
 // net_fuzz_targets; the suite replays their regression files.
 

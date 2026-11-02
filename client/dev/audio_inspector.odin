@@ -9,7 +9,7 @@ import "client:engine"
 import "client:ui"
 import "common:base"
 
-// The audio inspector (M32e, dev builds): F8 freezes the last stretch of the
+// The audio inspector (dev builds): F8 freezes the last stretch of the
 // mixer (audio.inspect_freeze: the rolling capture's newest window, replayed
 // through a mixer of its own) and plays the last half second of it in a loop
 // in place of the live output. The panel lists the buses and the frozen voices

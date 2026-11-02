@@ -8,8 +8,8 @@ import "core:testing"
 
 import "common:game"
 
-// M49b: neighbour rules as data. A pack defines a creeping substance (with a channel of its
-// own) and fire in rule files only; the server runs them on M49's scheduler.
+// Neighbour rules as data. A pack defines a creeping substance (with a channel of its
+// own) and fire in rule files only; the server runs them on the update scheduler.
 
 @(private = "file")
 rules_config :: proc(dir: string, extra: []game.Pack_File = nil) -> Config {

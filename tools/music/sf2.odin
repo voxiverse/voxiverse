@@ -2,7 +2,7 @@ package music_tool
 
 import "core:math"
 
-// SoundFont 2.01, the subset in docs/history.md (M43): read into zones, then
+// SoundFont 2.01, the subset this file reads: read into zones, then
 // resolved for a key and velocity into the numbers a voice needs. Every index
 // is checked before use: a damaged file is an error, never a crash.
 

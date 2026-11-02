@@ -8,7 +8,7 @@ import "common:base"
 import "common:base/fuzz"
 import "common:game"
 
-// The stateful fuzz targets (Q2b, docs/fuzzing.md): what happens after a message decodes.
+// The stateful fuzz targets (docs/fuzzing.md): what happens after a message decodes.
 // A stepped server (the harness's flat world) has one seat, the session's mirror on the
 // pipe, which a case drives by hand: `net.server_session` sends it a sequence of client
 // messages, `commands.player` runs one command line as an operator or as a guest. The server

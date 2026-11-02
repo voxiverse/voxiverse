@@ -4,7 +4,7 @@ import "core:testing"
 
 import "common:base"
 
-// M49c: replicated channels on the wire: the layered chunk encodings and the Cell key.
+// Replicated channels on the wire: the layered chunk encodings and the Cell key.
 
 // wire_reg: the base registry with channels: 0 light (computed), 1 wetness (4 bits),
 // 2 secret (not replicated), 3 tint (3 bits, default 5), 4 a computed one.

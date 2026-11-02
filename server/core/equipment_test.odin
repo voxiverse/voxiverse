@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 
-// M22b's exit check, two players over UDP: armor goes on through the
+// The exit check, two players over UDP: armor goes on through the
 // inventory's own actions (only into the slot it fits; swapping; quick
 // equip), the other player is told what is worn (and again when it comes
 // off, and on joining later), and equipment is kept through a restart.

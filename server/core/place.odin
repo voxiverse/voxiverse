@@ -5,7 +5,7 @@ import "core:math"
 import "common:game"
 import "common:worldgen"
 
-// The place record (M44): the biome under the player's feet and the world's
+// The place record: the biome under the player's feet and the world's
 // warmth and wetness, for the client's music. Put every PLACE_TICKS ticks; the
 // sender sends it only when it differs from what the client has.
 

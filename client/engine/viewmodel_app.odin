@@ -4,7 +4,7 @@ package engine
 import "client:render"
 import "common:game"
 
-// The view model's frame (docs/milestones/M48k.md): step the animations, make
+// The view model's frame: step the animations, make
 // the arm's and the item's vertices in view space and the scene they are drawn
 // with. The session's events (swings, shots, reloads) arrive through
 // vm_event on s.vm.

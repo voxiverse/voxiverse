@@ -12,7 +12,7 @@ import "core:time"
 import "common:base"
 import "common:script"
 
-// The `script` benchmark scenario (docs/plan.md, M51b; `build bench script`, also
+// The `script` benchmark scenario (`build bench script`, also
 // `build script bench`): the programs of common/script/testdata/bench, each run
 // -repetitions times in our VM (CPU time of this thread) and, with --lua <exe>, under
 // that interpreter (the child's user time); each side's time is its least. Each program's time is a metric and the
@@ -30,7 +30,7 @@ SCRIPT_BENCH_DIR :: "common/script/testdata/bench"
 SCRIPT_CONFORMANCE_DIR :: "common/script/testdata/conformance"
 SCRIPT_BUDGETS :: "common/script/testdata/bench/budgets.txt"
 // SCRIPT_SNAPSHOT_MAX_MS: -check fails a snapshot or a restore (with its validation) of a
-// VM with a full 16 MiB heap over this, CPU time of the thread (M51c).
+// VM with a full 16 MiB heap over this, CPU time of the thread.
 SCRIPT_SNAPSHOT_MAX_MS :: 100.0
 
 SCRIPT_PROGRAMS := [?]struct {

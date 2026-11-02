@@ -12,7 +12,7 @@ import "core:testing"
 import "common:base"
 import "common:game"
 
-// M46: the crash harness. Faults injected into the disk layer (not real kills),
+// The crash harness. Faults injected into the disk layer (not real kills),
 // so every point is reproducible: a save is run with the "process" dying at one
 // operation, then the universe is recovered and checked, and must be exactly
 // the generation before the save or the one it wrote, never a mix.

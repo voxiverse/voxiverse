@@ -24,7 +24,7 @@ import "core:slice"
 // top count, the tops (i32 x, z, top), u32 CRC-32 of everything above; then
 // the payloads (each chunk's blocks, then its block entities as
 // write_block_entities, then its waiting updates and channels as write_chunk_payload,
-// offset counted from here). Format 5 added the updates and channels (M49).
+// offset counted from here). Format 5 added the updates and channels.
 
 REGION_MAGIC :: "VXRG"
 REGION_FORMAT :: 5

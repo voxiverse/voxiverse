@@ -4,7 +4,7 @@ import "core:hash/xxhash"
 import "core:strings"
 import "core:testing"
 
-// Snapshots (M51c): the golden bytes, snapshot of a restore equal to the snapshot, the
+// Snapshots: the golden bytes, snapshot of a restore equal to the snapshot, the
 // refusals with their messages, pins and handles across a restore, the size of a full heap.
 
 @(private = "file")

@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:base"
 
-// M39's state model, end to end through test kinds of the tests' own: the
+// The state model, end to end through test kinds of the tests' own: the
 // sender's encoder and the receiver's decoder, with no game type involved.
 
 Dt_Motion :: struct {

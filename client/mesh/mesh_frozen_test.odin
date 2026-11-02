@@ -1,7 +1,7 @@
 package mesh
 
 // Frozen copies of how the Odin tables drew blocks before the registry did
-// (M47a): test_base_looks_the_same compares the base pack against them.
+//: test_base_looks_the_same compares the base pack against them.
 
 import "common:game"
 

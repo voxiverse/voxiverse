@@ -83,7 +83,7 @@ wait_for :: proc(
 	return net_wait(t, clients, done, 12)
 }
 
-// M25's exit check, over UDP and the save: two sheep fed wheat make a lamb of
+// The exit check, over UDP and the save: two sheep fed wheat make a lamb of
 // their genes; fed wheat uses it up (not while one waits); a lamb is small,
 // not shorn, grows up on time and sooner with wheat; a second player sees
 // the lamb and the black sheep; genes, age and waits are kept.

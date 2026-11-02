@@ -11,7 +11,7 @@ import "common:base"
 import "common:game"
 import "server:core"
 
-// The M3 exit check (`--check fly`, exit_check.odin's CHECKS): it waits
+// The exit check (`--check fly`, exit_check.odin's CHECKS): it waits
 // for the world around the spawn to load, then flies the camera in a
 // straight line and checks that memory stays put while it streams in new
 // terrain and drops the old: the session arenas must not grow at all, and

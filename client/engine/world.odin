@@ -23,7 +23,7 @@ import "common:game"
 // are dropped. Mesh uploads and removals touch the GPU, so they wait for
 // world_apply in the frame's recording phase.
 //
-// Light (R4): a task first lights its chunk (game.light_chunk, the chunk
+// Light: a task first lights its chunk (game.light_chunk, the chunk
 // and its 1-block border), then meshes it only if it must. Each chunk keeps
 // the light its mesh was made with (Light_Cache) and the key of what that
 // light was computed from: its 27 chunks' block versions and the column
@@ -48,7 +48,7 @@ Light_Cache :: struct {
 Client_Chunk :: struct {
 	pos:            game.Chunk_Pos,
 	blocks:         game.Chunk_Blocks,
-	layers:         game.Chunk_Layers, // the replicated channels (M49c): kept, not yet used
+	layers:         game.Chunk_Layers, // the replicated channels: kept, not yet used
 	version:        u32, // bumped whenever its mesh's inputs change: its blocks, or a neighbour's
 	blocks_version: u32, // bumped whenever its own blocks change (what light keys are made of)
 	light:          ^Light_Cache, // the light its mesh was made with (nil: none yet)

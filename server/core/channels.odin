@@ -4,7 +4,7 @@ import "core:mem"
 
 import "common:game"
 
-// Channels (M49): named values a cell carries beside its block, declared by packs
+// Channels: named values a cell carries beside its block, declared by packs
 // (data/channels). The server keeps each chunk's stored channels in game.Chunk_Layers
 // (palette-compressed pages from Chunk_Store.pools); light, the built-in computed
 // channel, is read from the blocks. Changes go through set_channel, which wakes the

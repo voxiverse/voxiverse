@@ -10,7 +10,7 @@ import "core:hash"
 Actor_Kind :: enum u8 {
 	World, // the world itself (natural water, random ticks, gates, grazing)
 	Character, // a character, by name
-	Script, // reserved for the sandbox (M52): a <pack>:<script> id
+	Script, // reserved for the sandbox: a <pack>:<script> id
 }
 
 // Edit_System: the mechanism of a change. Append-only: values are written to disk.
@@ -29,7 +29,7 @@ Edit_System :: enum u8 {
 	Undo,
 	Redo,
 	Setting, // a rule or a player's game mode changed (no blocks: the action's command says what)
-	Rule, // a pack's statement rule (M49b)
+	Rule, // a pack's statement rule
 }
 
 MAX_ACTION_COMMAND :: 256 // bytes of the command text an action records
@@ -67,7 +67,7 @@ Journal_Entry :: struct {
 //	header:  "VXJN" u32 format u32 seq u64 first_age u8 flags u32 crc32(header)
 //	records: u8 type, varint length, payload, u32 crc32(type, length, payload)
 JOURNAL_MAGIC :: "VXJN"
-JOURNAL_FORMAT :: 2 // 2: Entity records (M48c)
+JOURNAL_FORMAT :: 2 // 2: Entity records
 JOURNAL_HEADER_SIZE :: 4 + 4 + 4 + 8 + 1 + 4
 MAX_ENTITY_VALUE :: 1 << 14 // bytes of one Entity record's value
 JOURNAL_COMPACTED :: u8(1) // header flag bit 0

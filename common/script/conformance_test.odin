@@ -176,7 +176,7 @@ test_conformance :: proc(t: ^testing.T) {
 	testing.expectf(
 		t,
 		len(files) >= 200,
-		"%d conformance files; M51b has at least 200",
+		"%d conformance files; the suite has at least 200",
 		len(files),
 	)
 	for f in files {

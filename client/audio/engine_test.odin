@@ -3,7 +3,7 @@ package audio
 import "core:math"
 import "core:testing"
 
-// Tests for M32a: the true-peak limiter, the compressor, the reverb, the
+// Tests: the true-peak limiter, the compressor, the reverb, the
 // windowed-sinc resampler, scheduled starts and the listener's options.
 
 @(private = "file")

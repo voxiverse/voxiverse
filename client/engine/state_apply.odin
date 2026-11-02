@@ -9,7 +9,7 @@ import "common:base"
 import "common:game"
 import "common:worldgen"
 
-// What the server's State and Snapshot messages do to the session (M39): the
+// What the server's State and Snapshot messages do to the session: the
 // receiver decodes them into records and events (common/game/replica.odin), and one
 // table says what each kind of record does here, a switch what each event does.
 

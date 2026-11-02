@@ -227,7 +227,7 @@ read_string :: proc(r: ^Reader, max_len: int) -> string {
 // palette of the distinct blocks, then runs of (length, palette index) in
 // local_index order covering exactly CHUNK_VOLUME blocks.
 
-// The layered encodings (M49c) are the plain ones followed by `varint n` and n channels,
+// The layered encodings are the plain ones followed by `varint n` and n channels,
 // each `varint channel id` and write_channel_body's body: a chunk whose replicated
 // channels are all uniform at their defaults uses the plain encoding.
 @(private = "file")

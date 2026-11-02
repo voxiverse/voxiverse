@@ -30,8 +30,7 @@ IMAGES_OUT :: "build/images"
 // A pixel differs when one of its channels differs by more than
 // IMAGE_TOLERANCE (of 255). A scene fails when more than IMAGE_MAX_SHARE of
 // its pixels differ, or when the mean absolute difference of its channels
-// is above IMAGE_MAX_MEAN (of 255). Settled by measurement (docs/history.md,
-// R1): four times the largest difference seen between runs, never below
+// is above IMAGE_MAX_MEAN (of 255). Settled by measurement (by measurement): four times the largest difference seen between runs, never below
 // these.
 IMAGE_TOLERANCE :: 8
 IMAGE_MAX_SHARE :: 0.001

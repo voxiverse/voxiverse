@@ -3,7 +3,7 @@ package core
 import "common:base"
 import "common:game"
 
-// The interpreter of statement rules (M49b): runs a game.Rule_Program (compiled at load,
+// The interpreter of statement rules: runs a game.Rule_Program (compiled at load,
 // common/game/sim_rules.odin) on one cell. A frame of at most five bound cells (self and the
 // picks) on the stack, an explicit stack of the lists and `repeat`s being run, no recursion,
 // no loops but `repeat`, and nothing allocated here. Writes go through set_block and

@@ -7,7 +7,7 @@ import "core:testing"
 
 import "common:game"
 
-// M49: fluids are data. Water's levels are the rule's levels; a pack's own fluid (oil: a
+// Fluids are data. Water's levels are the rule's levels; a pack's own fluid (oil: a
 // type with states, no engine code) spreads by the same behaviour, and broken flow rules
 // are refused at load with their file, line and the fix.
 

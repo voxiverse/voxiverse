@@ -3,7 +3,7 @@ package game
 import "core:mem"
 import "core:slice"
 
-// Replicas and the wire of the state model (M39). A Replica holds records of a
+// Replicas and the wire of the state model. A Replica holds records of a
 // schema's kinds, sorted by key. A Sender keeps what one receiver has been
 // told and turns what the game puts this tick into State messages (the
 // reliable lane: deltas against the last value sent) and Snapshot messages

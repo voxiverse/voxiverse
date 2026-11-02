@@ -5,7 +5,7 @@ import "common:game"
 
 // Random ticks (Minecraft's): every tick, in each loaded chunk, a few blocks
 // (rules.random_tick_speed, 3 by default) are picked at random, and one that
-// has random rules runs them (M49e: the base pack's data/sim/growth.json: grass
+// has random rules runs them (the base pack's data/sim/growth.json: grass
 // spreads and dies, farmland wets and dries, wheat grows). What they change goes
 // through set_block like any change (clients told, column tops, plants above checked).
 //

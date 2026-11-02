@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:game"
 
-// M48: stairs, slabs and ladders on a built course, walked by a mirror client
+// Stairs, slabs and ladders on a built course, walked by a mirror client
 // against a stepped server: they collide, step up and climb the same on both
 // sides, tick by tick, with no correction and no difference in the world.
 
@@ -132,7 +132,7 @@ test_shapes_agree :: proc(t: ^testing.T) {
 	testing.expect(t, chunks_agree(sess), "the mirror's chunks hash otherwise than the server's")
 }
 
-// M48b: fences that join and let go, and a door placed, opened, walked through,
+// Fences that join and let go, and a door placed, opened, walked through,
 // closed and bumped, on a mirror against a stepped server: no correction, the
 // same chunks.
 

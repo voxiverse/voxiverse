@@ -8,13 +8,13 @@ import "client:audio"
 import "common:base"
 import "common:worldgen"
 
-// The music director (M44): a state machine the app feeds with what is going
+// The music director: a state machine the app feeds with what is going
 // on (the session, the place, the time) and whose actions the app
 // carries out on the mixer (music_apply), so tests need no mixer. It plays the
 // title's piece on the menus, lets the world's music come and go in
 // waits and tracks (one at a time, picked to fit where the player is), and
 // punctuates deaths and arrivals with stingers. The pieces and their tags are
-// the committed assets/music (music_data.odin, M43b).
+// the committed assets/music (music_data.odin).
 
 Music_Role :: enum u8 {
 	Piece, // played in a world

@@ -3,7 +3,7 @@ package audio
 import "core:math"
 import "core:testing"
 
-// Tests for M32e's inspector engine: freeze, solo, mute, the monitor.
+// Tests for the inspector engine: freeze, solo, mute, the monitor.
 
 @(private = "file")
 Rig :: struct {

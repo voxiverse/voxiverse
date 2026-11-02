@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:game"
 
-// M4's exit check: a scripted player (walking, turning, jumping, breaking
+// The exit check: a scripted player (walking, turning, jumping, breaking
 // and placing) gives the same results with 200 ms of latency each way (and
 // jitter) as with none, and the client's prediction ends exactly where the
 // server is.
@@ -202,7 +202,7 @@ run_script :: proc(
 			mode = "survival" if death else "",
 		},
 		local = true,
-	) {return} 	// (M4's gentle hills: corrections only from latency, not chunks still arriving under a forest)
+	) {return} 	// (gentle hills: corrections only from latency, not chunks still arriving under a forest)
 	defer harness_stop(&h)
 	game.pipe_set_conditions(&h.pipe, {latency_ms = latency_ms, jitter_ms = jitter_ms})
 
@@ -423,7 +423,7 @@ test_desync_caught :: proc(t: ^testing.T) {
 	)
 }
 
-// M48: stairs and slabs placed from every side with 200 ms of latency each way and
+// Stairs and slabs placed from every side with 200 ms of latency each way and
 // jitter: each edit carries what it followed, the server runs the same rule and
 // agrees, the client's blocks end equal to the server's; an edit whose state
 // disagrees with its context is refused.
@@ -575,7 +575,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 	testing.expect(t, c.results[101].accepted, "the honest edit after it was refused")
 }
 
-// M48b: a door placed, opened and closed at 200 ms each way with jitter: both
+// A door placed, opened and closed at 200 ms each way with jitter: both
 // halves are predicted and the server agrees; a door with no room above is
 // refused and both cells are put back (the upper half by the companion).
 @(test)

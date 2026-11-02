@@ -4,7 +4,7 @@ import "core:slice"
 import "core:sync"
 import "core:time"
 
-// Metrics: named measurements a benchmark reports (docs/plan.md, M19), in every
+// Metrics: named measurements a benchmark reports, in every
 // build. Each is a ring of samples (ms, or a count) written from any thread:
 // an atomic index, no lock. Recording happens only between metrics_start
 // and metrics_stop (a benchmark's measured part), so outside one a metric
@@ -40,7 +40,7 @@ Metric :: enum u8 {
 	Column_Tops,
 	Light_Chunk, // a chunk's light (game.light_chunk; the client's, only when its light's inputs changed)
 	Mesh_Faces, // its faces (the snapshot and mesh.mesh_chunk)
-	Mesh_Chunk, // a mesh job: the client's meshing of a lit chunk (its light is Light_Chunk's, R4)
+	Mesh_Chunk, // a mesh job: the client's meshing of a lit chunk (its light is Light_Chunk's)
 	// The server, a tick at a time, ms.
 	Server_Tick,
 	Server_Stream,
@@ -66,7 +66,7 @@ Metric :: enum u8 {
 	Rules_Tick, // the slowest world tick with 10 000 creep cells waiting (statement rules), us
 	Rule_Run, // CPU ns per statement-rule run in that scene
 	Rules_Compile, // compiling the test pack and 500 rules near the limits, us
-	Random_Ticks, // the slowest random_ticks call over 512 chunks (M49e), us
+	Random_Ticks, // the slowest random_ticks call over 512 chunks, us
 	Random_Rule_Run, // CPU ns per random rule run in that scene
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us

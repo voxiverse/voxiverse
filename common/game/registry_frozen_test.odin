@@ -3,7 +3,7 @@ package game
 import "base:runtime"
 import "core:sync"
 
-// Frozen copies of the tables the registry replaced (M47a): the equivalence
+// Frozen copies of the tables the registry replaced: the equivalence
 // tests compare the base pack against them, so they outlive the tables.
 
 // Frozen_Block_Info: everything about a block that client and server agree on

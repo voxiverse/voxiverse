@@ -10,7 +10,7 @@ import "core:testing"
 
 import "common:game"
 
-// M45: the edit journal. test_grief_rolled_back is the exit check: a player
+// The edit journal. test_grief_rolled_back is the exit check: a player
 // builds a house, a pool, a chest and a field; a grief of every kind of change
 // follows; one /rollback puts the world back, hash for hash.
 
@@ -441,7 +441,7 @@ copy_regions :: proc(s: ^Server, w: ^World, snapshot: string) {
 	}
 }
 
-// M38's scripted session, with a save directory: its journal replayed onto
+// The scripted session, with a save directory: its journal replayed onto
 // the generator, and onto a snapshot saved in the middle, gives the world it
 // ended with; a write that bypassed the pipeline is found.
 @(test)
@@ -635,7 +635,7 @@ grief_close_keep :: proc(g: ^Grief) {
 	}
 }
 
-// The journal under load: M11's flood (10 000 flowing blocks), 20 blasts of
+// The journal under load: the flood (10 000 flowing blocks), 20 blasts of
 // radius 6 and ten 32 x 32 x 32 fills over 600 ticks write a lot of entries.
 // What that costs is `build bench budgets`.
 @(test)
@@ -645,7 +645,7 @@ test_journal_scene :: proc(t: ^testing.T) {
 	testing.expectf(t, r.head > 20000, "the scenario changed only %d blocks", r.head)
 }
 
-// M48c: a filled chest broken, the server restarted: the rollback finds the
+// A filled chest broken, the server restarted: the rollback finds the
 // chest's value in the segment files (the ring and the memory are empty); a
 // compacted journal still holds it.
 chest_after_restart :: proc(t: ^testing.T, name: string, compact: bool) {

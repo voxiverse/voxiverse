@@ -6,7 +6,7 @@ import "core:strings"
 
 import "common:game"
 
-// Sending packs (the Packs phase of joining, M47b): after a remote client's
+// Sending packs (the Packs phase of joining): after a remote client's
 // Proof the server lists the universe's packs (not the base pack), the client
 // asks for those it lacks, and the parts go out in order, at most
 // PACK_SEND_PER_TICK bytes a tick to a client. A pack is never sent in the

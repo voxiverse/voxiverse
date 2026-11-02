@@ -11,7 +11,7 @@ import "common:base"
 import "common:game"
 import "common:netcode"
 
-// The mirror and the session (M38, moved out of determinism_test.odin by Q2b so a fuzz
+// The mirror and the session (shared with determinism_test.odin so a fuzz
 // target can use them): a test client on the pipe of a stepped server, and the session that
 // pairs it with its server. No behaviour of its own: the determinism tests, the scenarios
 // and the fuzz targets drive it.
@@ -30,7 +30,7 @@ Mirror :: struct {
 	scratch:       ^game.Block_Array,
 	arrays:        game.Block_Arrays,
 	chunks:        map[game.Chunk_Pos]game.Chunk_Blocks,
-	layers:        map[game.Chunk_Pos]game.Chunk_Layers, // its replicated channels (M49c)
+	layers:        map[game.Chunk_Pos]game.Chunk_Layers, // its replicated channels
 	pools:         game.Layer_Pools,
 	prediction:    game.Prediction,
 	rules:         game.Rules,

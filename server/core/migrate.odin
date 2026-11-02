@@ -17,7 +17,7 @@ import "common:base"
 // The rules for writing one are in docs/saves.md: it reads only files of its
 // `from` format, with readers frozen beside it; it is never edited once released;
 // it is tested from a committed fixture (assets/fixtures/save-v<from>).
-// The registry is empty (M47a): older formats are refused, not migrated, before
+// The registry is empty: older formats are refused, not migrated, before
 // 1.0 (docs/saves.md).
 
 Migration :: struct {

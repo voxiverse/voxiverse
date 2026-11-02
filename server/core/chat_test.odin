@@ -7,7 +7,7 @@ import "core:testing"
 
 import "common:game"
 
-// M13's exit check for chat: two players over UDP, one a moderator with a
+// The exit check for chat: two players over UDP, one a moderator with a
 // tag. Formatting where the role allows it (as written where not), an
 // ignore, a mute, a line taken back, the rate; mutes and ignores kept with
 // the world.

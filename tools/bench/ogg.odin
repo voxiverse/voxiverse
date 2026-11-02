@@ -8,7 +8,7 @@ import "core:time"
 import "common:base"
 import "common:ogg"
 
-// The `ogg` benchmark scenario (docs/plan.md, M53c; `build bench ogg`): the
+// The `ogg` benchmark scenario (`build bench ogg`): the
 // committed music decoded whole by common/ogg and, for comparison, by
 // miniaudio's decoder, each three times, the best kept. Reported as seconds of
 // audio decoded per second of CPU for both and their ratio. There is no pass

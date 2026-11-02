@@ -6,7 +6,7 @@ import "core:slice"
 import "core:testing"
 import "core:time"
 
-// The host and the link run over a Simnet stepped by the test (T4b): no
+// The host and the link run over a Simnet stepped by the test: no
 // socket, no thread, no wall clock. The real-UDP round trips are in tests/.
 @(private = "file")
 loopback :: proc(port: int) -> net.Endpoint {

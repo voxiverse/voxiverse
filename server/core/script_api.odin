@@ -3,9 +3,8 @@ package core
 import "common:base"
 import "common:game"
 
-// The shape of the script API for the party systems (docs/script_api_notes.md).
-// No VM exists yet: these are the typed procedures M51 and M52 will wrap as
-// natives, each with the capability a script needs to call it. A script never
+// The script API for the party systems: the typed procedures a script's natives
+// wrap, each with the capability a script needs to call it. A script never
 // changes a mode, health or a rule except through them.
 
 Capability :: distinct string

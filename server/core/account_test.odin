@@ -27,7 +27,7 @@ test_account_proofs :: proc(t: ^testing.T) {
 	testing.expect(t, ok && back == alice.account && len(text) == 64)
 }
 
-// M16's exit check over UDP: an account is its key (a proof signed with
+// The exit check over UDP: an account is its key (a proof signed with
 // another is refused); a name is its account's (another account can't take
 // it); asking, a client is shown its characters and chooses; a character
 // from before accounts goes to the first account that plays it; a ban

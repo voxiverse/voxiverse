@@ -2,7 +2,7 @@ package game
 
 import "core:slice"
 
-// Block entities (M48b): the data a block keeps beyond its state, a chest's
+// Block entities: the data a block keeps beyond its state, a chest's
 // stacks. A type says it has one (`"entity": {"kind": "container", "slots": 25}`);
 // the kinds are the engine's. A chunk holds its entities sorted by `local`
 // (the index of the block in the chunk), found by binary search.
@@ -147,7 +147,7 @@ read_block_entities :: proc(r: ^Reader, out: ^[dynamic]Block_Entity) {
 	}
 }
 
-// Saved_Update: a scheduled update waiting in a saved chunk (M49): the cell and how many ticks
+// Saved_Update: a scheduled update waiting in a saved chunk: the cell and how many ticks
 // from the save it was due, so the simulation goes on across a save and load.
 Saved_Update :: struct {
 	local: u16, // the cell's local_index
@@ -214,7 +214,7 @@ read_chunk_payload :: proc(
 }
 
 // block_entity_pack: a value that reads back under any registry, for the
-// journal (M48c): a table of the item ids its slots hold, then the value with
+// journal: a table of the item ids its slots hold, then the value with
 // each item as 1 + its place in the table.
 block_entity_pack :: proc(
 	reg: ^Registry,

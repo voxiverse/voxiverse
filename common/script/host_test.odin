@@ -2,7 +2,7 @@ package script
 
 import "core:testing"
 
-// The host API of M51b: pins survive collections, handle kinds with metatables, and a
+// The host API: pins survive collections, handle kinds with metatables, and a
 // native that yields to the host (at top level, inside a coroutine, inside pcall).
 
 @(private = "file")

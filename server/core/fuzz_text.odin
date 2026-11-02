@@ -7,7 +7,7 @@ import "common:base"
 import "common:base/fuzz"
 import "common:game"
 
-// text.parsers (Q2, docs/fuzzing.md): the parsers chat and commands hand players' text to.
+// text.parsers (docs/fuzzing.md): the parsers chat and commands hand players' text to.
 // The first byte picks the parser; the rest is its text.
 
 FUZZ_TEXT_PARSERS :: 9

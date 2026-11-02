@@ -4,7 +4,7 @@ import "core:hash"
 import "core:strconv"
 import "core:strings"
 
-// A universe's seed as the player sees it (docs/milestones/M48e.md, history.md): its
+// A universe's seed as the player sees it: its
 // home world's gate address, shown as glyphs, and the galaxy around it as a
 // set of stars. Both are pure functions of the seed (state, not free: the
 // seed to address mapping is the one the server saves a universe under).

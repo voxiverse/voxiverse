@@ -2,7 +2,7 @@ package worldgen
 
 import "common:game"
 
-// The flat generator (T2): the same at every (x, z) and for every seed, so a
+// The flat generator: the same at every (x, z) and for every seed, so a
 // test's world does not move when terrain code changes. From the top: air,
 // grass at y -1, three layers of dirt, stone, and a bedrock floor at
 // WORLD_MIN_Y. Most of its chunks are uniform.

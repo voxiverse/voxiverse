@@ -8,7 +8,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-// The committed music (assets/music, M43b): every piece decodes to what its
+// The committed music (assets/music): every piece decodes to what its
 // metadata says, at the loudness the mix expects, loops without a seam, and
 // the set stays inside its size budget.
 

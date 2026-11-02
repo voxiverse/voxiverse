@@ -3,7 +3,7 @@ package core
 import "common:base"
 import "common:game"
 
-// Blocks that hold things (M30, on block entities since M48b): a chest's
+// Blocks that hold things (on block entities): a chest's
 // contents are the container entity of its block (block_entities.odin), kept
 // with its chunk, saved with it, made when the block is placed and removed
 // with it (its contents spill out). A player looking into a chest has its

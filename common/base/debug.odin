@@ -52,7 +52,7 @@ Debug :: struct {
 	attached:   Crash_Attachment,
 }
 
-// A file the crash report names (M32e: the audio ring's last window): the
+// A file the crash report names (the audio ring's last window): the
 // path in a fixed buffer, since the handler may not allocate, and when it was
 // written.
 Crash_Attachment :: struct {

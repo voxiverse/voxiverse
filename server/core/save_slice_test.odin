@@ -7,7 +7,7 @@ import "core:testing"
 
 import "common:game"
 
-// M46b: a save describes the tick it began on, however many ticks it takes to
+// A save describes the tick it began on, however many ticks it takes to
 // encode (save_slice.odin).
 
 // slice_scene: a stepped server with a house, a chest, edits in two regions and

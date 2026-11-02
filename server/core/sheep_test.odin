@@ -30,7 +30,7 @@ wool_dropped :: proc(srv: ^Server, name: string) -> int {
 	return d.count
 }
 
-// M23's exit check, over UDP and the save: using a sheep drops 1 to 3 wool
+// The exit check, over UDP and the save: using a sheep drops 1 to 3 wool
 // and shears it (a second player sees it shorn); using a shorn sheep does
 // nothing; a shorn sheep is shorn after save and load.
 @(test)

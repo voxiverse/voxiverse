@@ -10,7 +10,7 @@ import "client:render"
 import "client:testkit"
 import "common:game"
 
-// The view model (docs/milestones/M48k.md): a mesh for each held kind, its own
+// The view model: a mesh for each held kind, its own
 // projection, the animations' states, the third-person hand, F1.
 
 @(private = "file")

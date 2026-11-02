@@ -6,7 +6,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 
-// Versions, Windows resources and release packages (docs/plan.md, M21).
+// Versions, Windows resources and release packages.
 
 // Version: what a build is, from git (common/base/version.odin says how players
 // see it).

@@ -7,7 +7,7 @@ import "core:time"
 import "common:base"
 import "common:base/fuzz"
 
-// The fuzz targets of the packet layer and the host's first datagrams (Q2, docs/fuzzing.md):
+// The fuzz targets of the packet layer and the host's first datagrams (docs/fuzzing.md):
 // what any machine on the network can send to a port. tools/fuzz lists net_fuzz_targets; the
 // suite replays their regression files.
 

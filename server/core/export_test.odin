@@ -9,7 +9,7 @@ import "core:testing"
 import "common:base"
 import "common:game"
 
-// M46b: a universe as one file and back (export.odin).
+// A universe as one file and back (export.odin).
 
 @(private = "file")
 Test_File :: struct {
@@ -269,7 +269,7 @@ test_import_refuses_damaged_files :: proc(t: ^testing.T) {
 	testing.expect(t, problem != "", "a file that is not an export was accepted")
 }
 
-// M47i: a universe's packs travel in its export, are listed in its header
+// A universe's packs travel in its export, are listed in its header
 // (their hashes, readable without unpacking), and are built into a registry
 // before an import is accepted.
 @(private = "file")

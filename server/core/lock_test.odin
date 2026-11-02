@@ -7,7 +7,7 @@ import "core:testing"
 
 import "common:base"
 
-// M46b: one process has a universe open at a time (the lock file).
+// One process has a universe open at a time (the lock file).
 
 // refused: whether the lock is refused (which the server logs as an error: quieted).
 refused :: proc(dir: string) -> bool {

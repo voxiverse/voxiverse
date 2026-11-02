@@ -16,7 +16,7 @@ import "common:base"
 import "common:game"
 import "server:core"
 
-// Benchmarks (docs/plan.md, M19): `voxiverse --benchmark <scenario>` runs a
+// Benchmarks: `voxiverse --benchmark <scenario>` runs a
 // scenario by itself and writes its result (base.bench_result_write); `build
 // bench <scenario>` does that with a release build. Everything that changes
 // the numbers is fixed here, not taken from the player: the settings
@@ -31,7 +31,7 @@ SCENARIOS := [?]engine.Scenario {
 	{
 		"views",
 		.Views,
-		2, // 2: the view model (the start kit's rocket launcher) is drawn too (M48k)
+		2, // 2: the view model (the start kit's rocket launcher) is drawn too
 		3,
 		"sixteen still views from the spawn (eight ways, at the horizon and down)",
 		{},
@@ -41,13 +41,13 @@ SCENARIOS := [?]engine.Scenario {
 		.Views,
 		1,
 		3,
-		"views' sixteen still views at view radius 24, height 12 (R6: culling's cost as the view grows)",
+		"views' sixteen still views at view radius 24, height 12 (culling's cost as the view grows)",
 		{24, 12},
 	},
 	{
 		"flight",
 		.Flight,
-		2, // 2: the view model is drawn too (M48k)
+		2, // 2: the view model is drawn too
 		3,
 		"fly 600 blocks over the land at 40 blocks/s, looking ahead and down",
 		{},
@@ -55,7 +55,7 @@ SCENARIOS := [?]engine.Scenario {
 	{
 		"edits",
 		.Edits,
-		2, // 2: the explosions are queued, not waited for (R2: server.call_async)
+		2, // 2: the explosions are queued, not waited for (server.call_async)
 		3,
 		"12 explosions round the spawn, until re-meshed and the water is still",
 		{},
@@ -466,7 +466,7 @@ BENCH_AUDIO_BLOCKS :: 1000
 BENCH_AUDIO_SMOKE_BLOCKS :: 100
 BENCH_AUDIO_WARMUP :: 50
 BENCH_AUDIO_STREAM :: #load("../audio/testdata/tone.ogg")
-// BENCH_AUDIO_BUDGET: a core's share the mix may take (docs/plan.md, M32c: 5%),
+// BENCH_AUDIO_BUDGET: a core's share the mix may take (5%),
 // judged on the median block of a release build.
 BENCH_AUDIO_BUDGET :: 0.05
 

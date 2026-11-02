@@ -7,7 +7,7 @@ import "client:planet"
 import "client:ui"
 import "common:game"
 
-// Ignite (M48e): the big bang after
+// Ignite: the big bang after
 // the creation screen's button. The galaxy view collapses to a point, flashes
 // and zooms into the home world, then the loading screen takes over, while
 // the universe is created and the world loads in the background (the

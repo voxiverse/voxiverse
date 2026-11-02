@@ -13,7 +13,7 @@ import "common:base"
 import "common:game"
 import "server:packs"
 
-// Export and import (M46b): one universe as one file, to move it between
+// Export and import: one universe as one file, to move it between
 // machines or keep it. A .vxu file is
 //
 //	"VXUX" u32 format (2)  u32 save_format  u64 generation  u64 age

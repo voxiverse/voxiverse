@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 
-// M11's exit check: a dam break. A pool of water on a raised stone
+// The exit check: a dam break. A pool of water on a raised stone
 // platform (rimmed, so the land below plays no part) loses a wall; the
 // water floods out and settles. Run twice, it settles into the same water;
 // both players over UDP end with exactly the server's blocks.

@@ -321,7 +321,7 @@ test_screens_speak_plainly :: proc(t: ^testing.T) {
 	defer screen.creation_destroy(&app.creation)
 	defer screen.multiplayer_destroy(&app.multiplayer)
 
-	// ("universe" is a player's word now, M48d.)
+	// ("universe" is a player's word.)
 	WORDS :: []string{"scratch", "chunk", "session", "mesh", "interest", "var", "null"}
 	check :: proc(t: ^testing.T, app: ^engine.App, what: string) {
 		ui_frame(app)
@@ -478,7 +478,7 @@ test_keep_awake_on_title :: proc(t: ^testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Menus with a pad (M42): every screen and dialog driven by pad events alone:
+// Menus with a pad: every screen and dialog driven by pad events alone:
 // no mouse, no keys, no direct calls to escape.
 // ---------------------------------------------------------------------------
 
@@ -1007,7 +1007,7 @@ test_prompts_follow_device :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// The music gap option (M44): Options > Audio cycles Rare, Normal, Often,
+// The music gap option: Options > Audio cycles Rare, Normal, Often,
 // Constant, and the settings text written keeps the choice.
 @(test)
 test_music_gap_option :: proc(t: ^testing.T) {

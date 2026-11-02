@@ -8,7 +8,7 @@ import "core:testing"
 
 import "common:game"
 
-// A universe's packs (M47a): a pack the universe lists adds a block with no
+// A universe's packs: a pack the universe lists adds a block with no
 // code of its own; the block is placed, saved by name and loaded again, and a
 // universe whose packs no longer define a saved block is refused (unless it
 // says `unknown_blocks = air`).

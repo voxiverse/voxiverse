@@ -5,7 +5,7 @@ import "core:mem"
 import "core:strings"
 import "core:testing"
 
-// M49b: the rule language's compiler. Rules are written into a pack file (data/sim/bad.json
+// The rule language's compiler. Rules are written into a pack file (data/sim/bad.json
 // of the pack sim_test) and compiled with the base pack, so every refusal is checked as a
 // player sees it: pack, file, line, column and message.
 

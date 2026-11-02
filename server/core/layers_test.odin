@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:game"
 
-// M49: channels, the values a cell carries beside its block: /cell sets them, a block
+// Channels, the values a cell carries beside its block: /cell sets them, a block
 // change resets them, they are saved with the chunk, and a chunk without any hashes as it
 // did before.
 

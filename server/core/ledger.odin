@@ -7,7 +7,7 @@ import "core:slice"
 import "common:game"
 import "common:telemetry"
 
-// The item ledger (M31): every item that enters or leaves what the server
+// The item ledger: every item that enters or leaves what the server
 // holds is one call to ledger with a reason (a faucet: count positive, a
 // sink: negative); the audit sums everything held and checks it against the
 // entries. Moves (pick up, drop, merge, chest in and out, equip, death spill,

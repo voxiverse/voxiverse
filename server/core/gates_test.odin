@@ -10,7 +10,7 @@ import "core:testing"
 import "common:game"
 import "common:worldgen"
 
-// M18's exit check over UDP: misdials are refused; a dialed gate opens,
+// The exit check over UDP: misdials are refused; a dialed gate opens,
 // alice walks through its horizon to the far world's gate, and once the
 // gates close she dials home from there and walks back.
 @(test)

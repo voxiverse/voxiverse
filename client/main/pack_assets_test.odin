@@ -12,7 +12,7 @@ import "client:mesh"
 import "client:sfx"
 import "common:game"
 
-// M47i: a pack's PNG is its texture's layer, level 0, exactly; its Ogg is the
+// A pack's PNG is its texture's layer, level 0, exactly; its Ogg is the
 // sound bank's samples (decoded whole, mono, at the mixer's rate).
 
 @(private = "file")
@@ -116,7 +116,7 @@ brightest_block_light :: proc(w: ^engine.World, pos: game.Chunk_Pos) -> (best: u
 	return best, true
 }
 
-// M47i, hot reload: swapping the registry's contents (what a reload does)
+// Hot reload: swapping the registry's contents (what a reload does)
 // changes what the next mesh of a chunk is made of: marble lights 7 and then
 // 12, and the stone beside it, one air block away, shows it.
 @(test)

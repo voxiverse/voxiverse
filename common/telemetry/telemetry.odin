@@ -18,7 +18,7 @@ import "core:time"
 // new event is dropped and counted, and the count is written as an event of
 // its own (Events_Dropped), so a loss is always visible.
 //
-// Anonymisation, uploading and the collector are M27's: events carry the
+// Anonymisation, uploading and the collector belong to the collector pipeline: events carry the
 // actor as a player id in a world, never a name.
 
 // Kind: append-only (the numbers are in no file, but the names are in every log).

@@ -148,7 +148,7 @@ free_push :: proc(vm: ^VM, r: Ref) {
 }
 
 // heap_free returns a block to its free list, zeroed. Used directly only for buffers
-// their owner replaces; the sweep (M51b) frees everything else.
+// their owner replaces; the sweep frees everything else.
 heap_free :: proc(vm: ^VM, r: Ref) {
 	if r == 0 {return}
 	h := (^Header)(&vm.mem[r])

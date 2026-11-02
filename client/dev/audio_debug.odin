@@ -12,7 +12,7 @@ import "client:audio"
 import "client:engine"
 import "common:base"
 
-// The audio recorder in the running game (M32d). From the start the mixer
+// The audio recorder in the running game. From the start the mixer
 // keeps its last minute or so in a ring (audio.capture_start_ring: the commands
 // and mix calls, and the mixer's state every 15 s so what is kept can be
 // replayed from its middle). It is written to captures/audio-<n>.vxac, for

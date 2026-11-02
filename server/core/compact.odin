@@ -6,7 +6,7 @@ import "core:slice"
 import "common:game"
 import "common:worldgen"
 
-// Region compaction (M46b). A region's file holds the chunks edits left
+// Region compaction. A region's file holds the chunks edits left
 // different from the generator's and the column tops that differ from its
 // own. Edits get undone (a rollback, an undo, a redo), so as the save worker
 // prepares each region it:

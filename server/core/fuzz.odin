@@ -11,7 +11,7 @@ import "common:base"
 import "common:base/fuzz"
 import "common:game"
 
-// The fuzz targets of what a save or a universe's files bring (Q1, docs/fuzzing.md): save
+// The fuzz targets of what a save or a universe's files bring (docs/fuzzing.md): save
 // transactions, player records, an export file, the universe's config files. tools/fuzz lists
 // server_fuzz_targets; the suite replays their regression files.
 

@@ -4,7 +4,7 @@ import "base:runtime"
 import "core:mem"
 import "core:strings"
 
-// The value codec of the state model (M39), derived from schema.odin's fields:
+// The value codec of the state model, derived from schema.odin's fields:
 // whole values (creates, events, array elements), field deltas (changes), and
 // the comparisons, copies and checks that go with them. Nothing here knows a
 // game type.

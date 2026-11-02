@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:hash/xxhash"
 import "core:strings"
 
-// Snapshots (M51c): a VM that is idle, suspended or yielded, as bytes, and a new VM made
+// Snapshots: a VM that is idle, suspended or yielded, as bytes, and a new VM made
 // from them. The heap is copied as it is (objects refer to each other by offset), so equal
 // VM states give equal bytes on every OS. The format, little-endian, version 1:
 //

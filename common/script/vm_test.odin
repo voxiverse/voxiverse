@@ -146,7 +146,7 @@ test_fault_keeps_globals :: proc(t: ^testing.T) {
 		"check",
 		allocator = context.temp_allocator,
 	)
-	// The bomb's table is still referenced from nothing, but no collector runs before M51b:
+	// The bomb's table is still referenced from nothing, but no collector has run:
 	// the check needs only a little memory, which the free lists or the cap may not have.
 	r = call(vm, check, nil, allocator = context.temp_allocator)
 	if r.status == .Done {

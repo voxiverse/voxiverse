@@ -7,7 +7,7 @@ import "core:reflect"
 import "core:strconv"
 import "core:strings"
 
-// The state schema (M39): what the server replicates to clients, described by
+// The state schema: what the server replicates to clients, described by
 // the value types themselves. A state kind is a value type with a key and a
 // lane; an event kind is a one-off value. schema_make walks each type's
 // runtime.Type_Info once and builds a flat field list per kind, from which the

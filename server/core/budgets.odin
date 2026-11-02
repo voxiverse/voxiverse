@@ -7,7 +7,7 @@ import "core:strings"
 import "common:base"
 import "common:game"
 
-// The server's timed scenes (docs/plan.md, T5; `build bench budgets`). A test
+// The server's timed scenes (`build bench budgets`). A test
 // never asserts a time: the tests call these for what the scene does (a save
 // that commits, 10 000 blocks flowing, an audit with no lines) and
 // tools/bench/budgets.odin judges what they cost, in a release build, against
@@ -262,7 +262,7 @@ Budget_Flood :: struct {
 	most:     int, // the most block updates waiting
 }
 
-// budget_flood: M11's flood: a 100 x 100 sheet of water 8 blocks over a
+// budget_flood: the flood: a 100 x 100 sheet of water 8 blocks over a
 // platform with a hole in it, 8 seconds of ticks.
 budget_flood :: proc() -> (r: Budget_Flood, ok: bool) {
 	h := new(Harness)
@@ -294,7 +294,7 @@ Budget_Journal :: struct {
 	head:        u64, // entries written
 }
 
-// budget_journal: the journal's cost under M11's flood (10 000 flowing
+// budget_journal: the journal's cost under the flood (10 000 flowing
 // blocks), 20 blasts of radius 6 and ten 32 x 32 x 32 fills over 600 ticks.
 budget_journal :: proc() -> (r: Budget_Journal, ok: bool) {
 	h := new(Harness)
@@ -353,7 +353,7 @@ budget_journal :: proc() -> (r: Budget_Journal, ok: bool) {
 	return r, true
 }
 
-// ---- the rules (M49b) ----
+// ---- the rules ----
 
 Budget_Rules :: struct {
 	worst_us:   i64, // the slowest world tick
@@ -449,7 +449,7 @@ budget_rules :: proc() -> (r: Budget_Rules, ok: bool) {
 	return r, true
 }
 
-// ---- random ticks (M49e) ----
+// ---- random ticks ----
 
 Budget_Random :: struct {
 	worst_us: i64, // the slowest random_ticks call

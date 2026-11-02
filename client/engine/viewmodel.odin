@@ -6,7 +6,7 @@ import "core:math/linalg"
 import "client:render"
 import "client:ui"
 
-// The view model (docs/milestones/M48k.md): the avatar's right arm and what it
+// The view model: the avatar's right arm and what it
 // holds, drawn over the world from the camera, in a pass of its own with a
 // fixed field of view. Its animations are a pure state (Vm_State) the session
 // feeds with events (a swing, a place, a shot, a reload) and steps with the

@@ -7,7 +7,7 @@ import "core:time"
 import "client:music"
 import "common:game"
 
-// The music in the app (M44): the director, fed each frame from the session,
+// The music in the app: the director, fed each frame from the session,
 // and its actions carried out on the mixer.
 
 Music_App :: struct {

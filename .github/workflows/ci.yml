@@ -56,7 +56,7 @@ jobs:
           name: test-logs-${{ matrix.os }}
           path: build/test/*.log
           if-no-files-found: ignore
-      # The scripted 10 000-tick session at both optimization levels (M38):
+      # The scripted 10 000-tick session at both optimization levels:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
@@ -74,25 +74,25 @@ jobs:
         run: ./build.sh smoke
       - name: Build game
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
-      # The chunk pipeline (M19): exact counts, and every stage within a
+      # The chunk pipeline: exact counts, and every stage within a
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench chunks -check
-      # Telemetry's cost (M26, M29, T5): an event is a lock and a copy, and the
+      # Telemetry's cost: an event is a lock and a copy, and the
       # writer keeps up; budgets for a slow runner.
       - name: Benchmark check, telemetry
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench telemetry -check
-      # What the server's heavy work costs (T5; the budgets the tests held: a
+      # What the server's heavy work costs (the budgets the tests held: a
       # save, the audit, counters, the journal, 10 000 blocks of water); CPU
       # time on this thread, budgets for a slow runner.
       - name: Benchmark check, budgets
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench budgets -check
-      # The script VM's benchmark programs (M51b): each one's instruction units within
+      # The script VM's benchmark programs: each one's instruction units within
       # its budget (exact counts, the same on every OS; one repetition, as the times
       # judge nothing here: the ratios to Lua are checked on Linux).
       - name: Benchmark check, script
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench script -check --smoke
-      # The server's benchmark scenario, short (M19): simulated players over
+      # The server's benchmark scenario, short: simulated players over
       # UDP on every platform; its numbers compare with nothing.
       - name: Server benchmark (smoke)
         run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
@@ -112,7 +112,7 @@ jobs:
 
       - name: Check
         run: ./build.sh check
-      # A virtual gamepad for the platform package's hot-plug test (M41): the
+      # A virtual gamepad for the platform package's hot-plug test: the
       # uinput device writable, and the pad's event node readable by the
       # runner user. VX_REQUIRE_UINPUT makes the test fail rather than skip.
       - name: Virtual gamepad
@@ -123,7 +123,7 @@ jobs:
           sudo udevadm control --reload-rules
           echo "VX_REQUIRE_UINPUT=1" >> "$GITHUB_ENV"
       # One run of the suite per push, with a random seed that changes with
-      # the push (M29: a test that passes under one seed and fails under
+      # the push (a test that passes under one seed and fails under
       # another is a flake or a nondeterminism, and fails the run; the tests'
       # worlds are still: game.rules_still). The seed is the run number: a
       # re-run of the same run uses the same seed, so a failure that depends
@@ -144,10 +144,10 @@ jobs:
           if-no-files-found: ignore
       # Every parser of untrusted input, 2 000 cases each at the fixed seed 84 (a push never
       # fails on a seed nobody has seen: the nightly run takes others), then the regression
-      # files of every crash found (Q1, docs/fuzzing.md).
+      # files of every crash found (docs/fuzzing.md).
       - name: Fuzz (smoke)
         run: ./build.sh fuzz --smoke
-      # The scripted 10 000-tick session at both optimization levels (M38):
+      # The scripted 10 000-tick session at both optimization levels:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
         run: ./build.sh determinism
@@ -157,7 +157,7 @@ jobs:
           name: determinism-ubuntu-latest
           path: build/determinism/
           if-no-files-found: error
-      # The smoke suite (T6): what needs a real thread, socket, audio device,
+      # The smoke suite: what needs a real thread, socket, audio device,
       # child process or clock, one test at a time. Here, not in the game job,
       # because the virtual gamepad above is set up here and the game job is
       # the longest.
@@ -185,7 +185,7 @@ jobs:
 
       - name: Build game
         run: ./build.sh build
-      # The chunk pipeline (M19): exact counts, and every stage within a
+      # The chunk pipeline: exact counts, and every stage within a
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
         run: ./build.sh bench chunks -check
@@ -193,23 +193,23 @@ jobs:
         run: ./build.sh bench telemetry -check
       - name: Benchmark check, budgets
         run: ./build.sh bench budgets -check
-      # The script VM against PUC Lua 5.4 (M51b, installed above): each benchmark program
+      # The script VM against PUC Lua 5.4 (installed above): each benchmark program
       # at most 4x Lua's CPU time and 2.5x in geometric mean (ratios on this runner, so
       # its speed cancels), the instruction budgets, and every `--! lua` conformance
       # file printing the same under both.
       - name: Benchmark check, script
         run: ./build.sh bench script -check --lua lua5.4
-      # The script fuzzer's generated programs (M51c) run by PUC Lua 5.4 too: 2 000 at the
+      # The script fuzzer's generated programs run by PUC Lua 5.4 too: 2 000 at the
       # fixed seed 51, each printing the same under both (docs/fuzzing.md).
       - name: Fuzz (smoke), script programs against Lua
         run: ./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4
-      # The server's benchmark scenario, short (M19): simulated players over
+      # The server's benchmark scenario, short: simulated players over
       # UDP; its numbers compare with nothing.
       - name: Server benchmark (smoke)
         run: ./build/voxiverse-server --benchmark server --smoke
 
       # The world streams through a flight and memory stays flat (fly_test,
-      # M3's check), recorded: every message decodes, and replaying the
+      # the check), recorded: every message decodes, and replaying the
       # client's messages against a fresh server goes cleanly.
       - name: Flight, trace and replay
         run: |
@@ -218,27 +218,27 @@ jobs:
           ./build.sh netdump -summary
           ./build.sh replay -speed:2
 
-      # The same flight on a synthetic gamepad (M41): events in, the actions,
+      # The same flight on a synthetic gamepad: events in, the actions,
       # the predicted inputs out.
       - name: Gamepad flight
         run: xvfb-run -a ./build/voxiverse --check fly_pad
 
-      # GPU culling (R6): the culling shader's commands, for fixed chunks and
+      # GPU culling: the culling shader's commands, for fixed chunks and
       # cameras, exactly the CPU's rules' (lavapipe).
       - name: Culling check
         run: xvfb-run -a ./build/voxiverse --check cull
 
-      # Bulk edits (M9): rockets and explosions, each shown whole, and the
+      # Bulk edits: rockets and explosions, each shown whole, and the
       # client's chunks end up exactly the server's.
       - name: Blast test
         run: xvfb-run -a ./build/voxiverse --check blast
 
-      # Worldgen (M10): every biome visited, screenshotted (uploaded below),
+      # Worldgen: every biome visited, screenshotted (uploaded below),
       # within frame, generation and meshing budgets, memory flat.
       - name: Biome tour
         run: xvfb-run -a ./build/voxiverse --check tour
 
-      # The game's benchmark scenarios, short (M19): each still runs to its
+      # The game's benchmark scenarios, short: each still runs to its
       # end (fixed conditions, offscreen drawing, its result written) on the
       # CPU driver under validation; timing here means nothing.
       - name: Benchmark scenarios (smoke)
@@ -247,13 +247,13 @@ jobs:
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
           done
 
-      # Real-time audio (M32d): 30 s of a busy session mixed into the null
+      # Real-time audio: 30 s of a busy session mixed into the null
       # device; no underruns, non-finite samples, dropped or late commands,
       # the callback within its budget, the rolling capture written.
       - name: Audio smoke run
         run: xvfb-run -a ./build/voxiverse --check audio
 
-      # Every screen a player meets (M20), screenshotted (uploaded below):
+      # Every screen a player meets, screenshotted (uploaded below):
       # the menus and Options' tabs, the loading screen, a failed join.
       - name: Screens
         run: |
@@ -266,13 +266,13 @@ jobs:
       - name: Sky
         run: xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait_world; set rules.daylight_cycle 0; /tp 0 12 0 -90 8; wait 30; /time 0.26; wait 5; screenshot sky_sunrise; /tp 0 12 0 -90 50; /time 0.4; wait 5; screenshot sky_day; /tp 0 12 0 90 8; /time 0.77; wait 5; screenshot sky_dusk; /tp 0 12 0 -90 20; /time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
-      # What the hands hold (M48k): each weapon, a block, a shaped block and a flat
+      # What the hands hold: each weapon, a block, a shaped block and a flat
       # item, seen in first person and from the side in third (screenshots
       # uploaded below, for the owner's review of the models).
       - name: Held items
         run: xvfb-run -a ./build/voxiverse --exec "set name ci; set vsync false; set render_distance 4; singleplayer; wait_world; sleep 1; /clear ci; sleep 1; /give ci pistol; sleep 1; hold pistol; camera first; sleep 1; screenshot held_pistol_first; camera behind 90; sleep 1; screenshot held_pistol_third; sleep 1; /clear ci; sleep 1; /give ci rifle; sleep 1; hold rifle; camera first; sleep 1; screenshot held_rifle_first; camera behind 90; sleep 1; screenshot held_rifle_third; sleep 1; /clear ci; sleep 1; /give ci sniper; sleep 1; hold sniper; camera first; sleep 1; screenshot held_sniper_first; camera behind 90; sleep 1; screenshot held_sniper_third; sleep 1; /clear ci; sleep 1; /give ci rocket_launcher; sleep 1; hold rocket_launcher; camera first; sleep 1; screenshot held_rocket_launcher_first; camera behind 90; sleep 1; screenshot held_rocket_launcher_third; sleep 1; /clear ci; sleep 1; /give ci dirt; sleep 1; hold dirt; camera first; sleep 1; screenshot held_dirt_first; camera behind 90; sleep 1; screenshot held_dirt_third; sleep 1; /clear ci; sleep 1; /give ci planks_stairs; sleep 1; hold planks_stairs; camera first; sleep 1; screenshot held_planks_stairs_first; camera behind 90; sleep 1; screenshot held_planks_stairs_third; sleep 1; /clear ci; sleep 1; /give ci hoe; sleep 1; hold hoe; camera first; sleep 1; screenshot held_hoe_first; camera behind 90; sleep 1; screenshot held_hoe_third; sleep 1; quit"
 
-      # Visual baselines (R1): every scene of assets/baselines/images/scenes.txt
+      # Visual baselines: every scene of assets/baselines/images/scenes.txt
       # rendered on lavapipe and compared with its baseline, within tolerances;
       # the pictures, the differences and the logs are uploaded on a failure.
       - name: Visual baselines
@@ -309,7 +309,7 @@ jobs:
           rm -rf build/tmp/crash-home && mkdir -p build/tmp/crash-home
           if VX_SETTINGS=build/tmp/crash-home/settings.cfg xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
           grep 'crash signal=SIGSEGV' build/crash.txt && grep 'at console::console_execute' build/crash.txt
-          # The bundle (Q3): the signal, the main thread and another, the log and the actions.
+          # The bundle: the signal, the main thread and another, the log and the actions.
           bundle=$(ls -d build/tmp/crash-home/crashes/*/ | tail -n 1)
           grep 'signal=SIGSEGV' "$bundle/crash.txt"
           grep 'thread main (crashing)' "$bundle/threads.txt" && grep '^thread audio' "$bundle/threads.txt"
@@ -327,7 +327,7 @@ jobs:
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --check fly
           python3 tools/debugger/check_spall.py build/voxiverse.spall
-          # The view model's frame within its budget (T5; judged on a release build).
+          # The view model's frame within its budget (judged on a release build).
           xvfb-run -a ./build/voxiverse --benchmark viewmodel
           # The optimized build's chunk budgets (tighter than a debug build's).
           xvfb-run -a ./build/voxiverse --check tour
@@ -343,7 +343,7 @@ jobs:
       - name: Debugger printers
         run: tools/debugger/test_printers.sh
   # The same session's state hashes, from every OS at both optimization levels
-  # (M38), must agree line by line: a divergence is named by tick and section.
+  # must agree line by line: a divergence is named by tick and section.
   determinism:
     name: Determinism · all OSes
     needs: [build, linux-tests]
@@ -363,7 +363,7 @@ jobs:
   # Release packages: one per platform, from every push (kept
   # as workflow artifacts, for testers), each unpacked on its own and run
   # from there: nothing beside it is needed. macOS waits for its backend
-  # (M1b). Linux builds on the oldest supported Ubuntu, so the game runs on
+  # Linux builds on the oldest supported Ubuntu, so the game runs on
   # older distributions (glibc).
   package:
     name: Package · ${{ matrix.name }}

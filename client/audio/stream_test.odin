@@ -5,7 +5,7 @@ import "core:testing"
 
 import "common:ogg"
 
-// Tests for M32c's streams: what comes out of a stream voice is the file's
+// Tests for the streams: what comes out of a stream voice is the file's
 // decode, loops have no seam, a starved decoder is counted and never skipped
 // over, and a stream is one voice among the rest.
 

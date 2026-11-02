@@ -13,7 +13,7 @@ import "common:base"
 import "common:game"
 import "server:core"
 
-// M9's exit check (`--check blast`, exit_check.odin's CHECKS): it waits
+// The exit check (`--check blast`, exit_check.odin's CHECKS): it waits
 // for the world, hovers above the spawn and fires: rockets and radius-6
 // explosions in turn, a little further round each time. Then it checks the
 // frames and server ticks kept within budget, no bulk edit's meshes had to

@@ -247,8 +247,8 @@ act_current :: proc(w: ^World, act: Act) -> Act {
 }
 
 // admit: whether the actor of act may change the block at p. The one place
-// a change can be refused for who caused it (region protection, M45b;
-// capabilities and budgets, M52).
+// a change can be refused for who caused it (region protection;
+// capabilities and budgets).
 admit :: proc(w: ^World, act: Act, p: game.Block_Pos) -> Admit {
 	if len(w.protections) == 0 {return .Yes}
 	if protection_refusing(w, act, p) != nil {return .Protected}

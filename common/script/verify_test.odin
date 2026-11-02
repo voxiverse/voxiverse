@@ -3,7 +3,7 @@ package script
 import "core:strings"
 import "core:testing"
 
-// verify_proto (M51c): every proto the conformance suite compiles passes; hand-broken ones
+// verify_proto: every proto the conformance suite compiles passes; hand-broken ones
 // are refused, each with its reason.
 
 @(test)

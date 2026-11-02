@@ -5,7 +5,7 @@ import "core:mem"
 import "core:sync"
 import "core:time"
 
-// The freeze-and-solo inspector's engine (M32e; the overlay is
+// The freeze-and-solo inspector's engine (the overlay is
 // client/dev/audio_inspector.odin). A freeze takes the rolling capture's newest
 // window out of the live mixer (capture_ring_bytes), replays it through a
 // mixer of its own with the live mixer's sounds, and keeps what it did: the

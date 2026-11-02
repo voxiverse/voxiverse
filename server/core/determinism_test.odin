@@ -9,7 +9,7 @@ import "core:testing"
 
 import "common:base"
 
-// M38: the simulation is a function of what reaches it at each tick boundary.
+// The simulation is a function of what reaches it at each tick boundary.
 // A stepped server (no thread, inline chunk jobs) is run twice side by side
 // through a scripted session, each with a mirror client on its pipe, and every
 // tick's state hash is compared; the first difference is named by field.

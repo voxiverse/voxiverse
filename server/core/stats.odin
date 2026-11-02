@@ -15,7 +15,7 @@ import "common:telemetry"
 
 // Statistics and events: everything the server counts or measures goes
 // through record (a player did something) or record_world (the world did): it
-// emits a telemetry event (the log, M27's upload) and adds to the counters
+// emits a telemetry event (the log, the upload) and adds to the counters
 // the kind names (telemetry.KIND_INFO), the player's and the world's. Hot
 // paths that cannot afford an event a tick (movement) call stat_add with the
 // amount they accumulated. Counters are dotted names, a parent's total being

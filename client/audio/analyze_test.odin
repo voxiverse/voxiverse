@@ -3,7 +3,7 @@ package audio
 import "core:math"
 import "core:testing"
 
-// Tests for M32b: what the analysis says about a mix, and the baselines.
+// Tests: what the analysis says about a mix, and the baselines.
 
 @(private = "file")
 tone_sound :: proc(seconds: f32, hz: f64, gain: f32) -> []f32 {

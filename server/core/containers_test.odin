@@ -101,7 +101,7 @@ open_chest :: proc(t: ^testing.T, srv: ^Server, a: ^Net_Client, pos: game.Block_
 	return net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].inventory.chest_open})
 }
 
-// M30: a chest holds what is put in it, kept through save and load; breaking
+// A chest holds what is put in it, kept through save and load; breaking
 // it spills everything; one far from its block, or not a chest, opens nothing.
 @(test)
 test_chest_keeps_and_spills :: proc(t: ^testing.T) {

@@ -57,7 +57,7 @@ Gc_State :: struct {
 	peak:        u64, // the most bytes in use
 }
 
-// Memory statistics a host reads (M52's /script list, the profiler).
+// Memory statistics a host reads (the /script list, the profiler).
 Vm_Stats :: struct {
 	heap_used:   u64,
 	heap_peak:   u64,

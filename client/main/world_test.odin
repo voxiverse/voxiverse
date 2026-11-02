@@ -172,7 +172,7 @@ settled_world :: proc(t: ^testing.T, w: ^engine.World, fill: game.Block, arena: 
 	}
 }
 
-// R3: a frame's 200 block records in one chunk are absorbed once: flowing
+// A frame's 200 block records in one chunk are absorbed once: flowing
 // water (no hole it could open) meshes nothing on the main thread, and every
 // chunk its light reaches is dirtied once; 200 broken blocks inside one
 // chunk mesh it on the spot once.
@@ -216,7 +216,7 @@ test_world_changes_settle_once_per_chunk :: proc(t: ^testing.T) {
 	engine.world_destroy(&w)
 }
 
-// R3: the x-ray rule. A cell opens a hole when what it held drew opaque or
+// The x-ray rule. A cell opens a hole when what it held drew opaque or
 // cutout faces and it holds something else now.
 @(test)
 test_opens_hole :: proc(t: ^testing.T) {

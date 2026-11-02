@@ -12,7 +12,7 @@ import "core:time"
 
 import "common:base"
 
-// The fuzz harness (Q1, docs/fuzzing.md). Odin's compiler has no coverage
+// The fuzz harness (docs/fuzzing.md). Odin's compiler has no coverage
 // instrumentation, so the harness is guided by outcome signatures: each target returns a u64
 // that says what the input made the decoder do (the error, the stage reached, a bucket of
 // bytes consumed), and an input with a signature the run has not seen joins the corpus.

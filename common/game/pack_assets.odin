@@ -10,7 +10,7 @@ import "common:ogg"
 // A pack's own art and sound (assets/textures/*.png, assets/sounds/*.ogg),
 // checked when the registry is built. Both files come over the network, so
 // they are read by code that is bounds-checked: the PNG by Odin's decoder
-// after its header says 16x16, the Ogg by `common/ogg` (M53c): scanned for its
+// after its header says 16x16, the Ogg by `common/ogg`: scanned for its
 // length and decoded once, so the client only plays a file that passed.
 
 TEXTURE_SIZE :: 16 // a block texture is this many pixels square

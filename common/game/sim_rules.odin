@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:reflect"
 import "core:strings"
 
-// Neighbour rules as data (M49b): a statement rule's `do` array (strings in the rule
+// Neighbour rules as data: a statement rule's `do` array (strings in the rule
 // language, see sim_lexer.odin; the JSON gives the structure) is compiled here to a flat,
 // index-linked Rule_Program that server/core/sim_interp.odin runs. The checks that bound a
 // rule (cost, reach, nesting, picks, boxes) are all made at load; every refusal is one

@@ -7,11 +7,11 @@ import NS "core:sys/darwin/Foundation"
 // macOS gamepads: the GameController framework through the Objective-C
 // runtime. Controllers are matched to slots by object pointer (retained
 // while in a slot); those without an extended gamepad are skipped. The
-// framework's connect notifications need the run loop that M1b brings, which
+// framework's connect notifications need a run loop the app does not run, which
 // is why [GCController controllers] is polled. Compiled and its pure parts
 // tested here; running it waits for a tester's Mac.
 //
-// M47e's decision: the list is still read each poll rather than through
+// The decision: the list is still read each poll rather than through
 // GCControllerDidConnect/DidDisconnect observers on a delegate class made at
 // run time. The list is the framework's own truth (a connect or disconnect
 // shows on the next frame, which is as soon as the notification would reach

@@ -10,7 +10,7 @@ import "core:testing"
 import "common:base"
 import "common:game"
 
-// The reference for the differential test (M49e): the random tick of grass, farmland and
+// The reference for the differential test: the random tick of grass, farmland and
 // wheat as it was written in Odin before it became data (assets/packs/voxiverse/data/sim/
 // growth.json). The only copy of that code; test_random_rules_match_code holds the rules to it.
 

@@ -267,7 +267,7 @@ test_chest_overlay :: proc(t: ^testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// The inventory and the statistics with a pad (M42b): pad events alone.
+// The inventory and the statistics with a pad: pad events alone.
 // ---------------------------------------------------------------------------
 
 // pad_rig: a rig playing, with a pad in use, the catalog granted.

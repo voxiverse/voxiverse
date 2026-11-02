@@ -391,7 +391,7 @@ test_layout_cuts :: proc(t: ^testing.T) {
 	testing.expect_value(t, b, Rect{10, 65, 200, 40})
 }
 
-// The bug found by hand in M2: the title screen's "Quit" and the quit
+// A bug found by hand: the title screen's "Quit" and the quit
 // dialog's "Quit" shared an id; the inert one under the modal consumed the
 // mouse release, so the dialog's button never clicked.
 quit_frames :: proc(ctx: ^Context, input: Input, scope_dialog: bool) -> (dialog_quit: bool) {
@@ -581,7 +581,7 @@ test_tooltip_waits_then_shows :: proc(t: ^testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Directional navigation (M42)
+// Directional navigation
 // ---------------------------------------------------------------------------
 
 nav :: proc(n: bit_set[Nav], pad := true) -> Input {

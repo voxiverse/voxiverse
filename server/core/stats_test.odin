@@ -56,7 +56,7 @@ flush_events :: proc(srv: ^Server) {
 	call(srv, proc(s: ^Server, data: rawptr) {telemetry.sink_flush(&s.sink)}, nil)
 }
 
-// M26's exit check, over UDP and the save: a scripted session (chat,
+// The exit check, over UDP and the save: a scripted session (chat,
 // commands, a teleport, placing and breaking, a sheep sheared and hit, an item
 // dropped, walking) gives exactly the expected counters and the events in
 // order, kept through save and load, and shown over UDP.

@@ -612,7 +612,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 // `./build.sh test -define:VX_LOSS_SEED=<n>` (try others to hunt).
 LOSS_SEED :: u64(#config(VX_LOSS_SEED, 7))
 
-// M7's exit check (the half a machine can do alone): two players over a
+// The exit check (the half a machine can do alone): two players over a
 // simulated network with 10% loss, 10% duplication and jitter, both
 // ways: the whole interest area arrives; they see each other; an edit by
 // one reaches the other. (That every chunk arrives whole under loss is the

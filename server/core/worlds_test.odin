@@ -36,7 +36,7 @@ test_world_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, w1.rules.gravity >= 16 && w1.rules.gravity <= 48)
 }
 
-// M17's exit check over UDP: an admin travels to another world with her
+// The exit check over UDP: an admin travels to another world with her
 // inventory and builds there; the other player stays home; the world she
 // left goes when empty, its edit kept in its own directory; travelling back
 // and forth keeps memory flat.

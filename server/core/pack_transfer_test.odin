@@ -8,12 +8,12 @@ import "core:testing"
 import "common:game"
 import "common:netcode"
 
-// M47b: a universe's packs go to a joining client, over a simulated network with
+// A universe's packs go to a joining client, over a simulated network with
 // loss; the client keeps them by hash and a second join needs no parts.
 
 @(private = "file")
 transfer_pack :: proc() -> game.Pack_Source {
-	// marble, with a PNG texture and Ogg sounds (M47i: they cross the join too)
+	// marble, with a PNG texture and Ogg sounds (they cross the join too)
 	files := make([dynamic]game.Pack_File, context.temp_allocator)
 	append(&files, ..game.test_asset_pack().files)
 	// A server-only file: a structure of the base pack (valid, and not sent).

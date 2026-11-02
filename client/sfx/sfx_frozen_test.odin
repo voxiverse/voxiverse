@@ -1,6 +1,6 @@
 package sfx
 
-// The Odin table of what blocks sounded like before the registry said so (M47a).
+// The Odin table of what blocks sounded like before the registry said so.
 
 import "common:game"
 

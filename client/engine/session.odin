@@ -207,8 +207,8 @@ worker_count :: proc() -> int {
 }
 
 // mesh_worker_count: our light and mesh threads: a quarter of the cores,
-// at least two (R4 measured half the cores in flight: frames slower, each
-// light slower; history.md).
+// at least two (half the cores in flight measured slower frames, each
+// light slower).
 @(private)
 mesh_worker_count :: proc() -> int {
 	return max(2, os.get_processor_core_count() / 4)

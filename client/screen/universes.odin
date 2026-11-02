@@ -16,10 +16,10 @@ import "common:base"
 import "common:game"
 import "server:core"
 
-// Singleplayer's saves (docs/plan.md M20, M48e): one
+// Singleplayer's saves: one
 // directory each under saves/ in the user data directory (or VX_SAVES),
 // written by the server (server/core/save.odin): a universe (universe.cfg) or,
-// from before M17, a single world (world.cfg). The screen shows them as
+// an older save, a single world (world.cfg). The screen shows them as
 // cards, the one played last first: a galaxy thumbnail drawn from the seed,
 // the name, the game mode and when it was played. A click enters the
 // universe (the server puts the character where it last stood); a card's

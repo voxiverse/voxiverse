@@ -11,7 +11,7 @@ import "common:limited"
 
 // The crash fixture (tests/crash_fixture) starts four named threads, then dies four ways. Each
 // run must fail and leave a bundle whose threads.txt names all five threads and whose crash.txt
-// names the crashing one (Q3). Where another thread's stack is not collected yet (Windows), only
+// names the crashing one. Where another thread's stack is not collected yet (Windows), only
 // the crashing thread's frames are required.
 @(private = "file")
 fixture_run :: proc(t: ^testing.T, exe: string, mode: string) -> (dir: string, ok: bool) {
@@ -60,7 +60,7 @@ test_crash_bundles_name_every_thread :: proc(t: ^testing.T) {
 	}
 	for c in ([]Case{{"main-segv", "main", "signal=SIGSEGV"}, {"worker-segv", "delta", "signal=SIGSEGV"}, {"assert", "main", "the fixture's assert"}, {"overflow", "delta", "stack overflow"}}) {
 		when ODIN_OS == .Windows {
-			if c.mode != "main-segv" {continue} 	// (the others' stacks: Q3b)
+			if c.mode != "main-segv" {continue} 	// (the others' stacks are not collected on every platform)
 		}
 		dir, ok := fixture_run(t, exe, c.mode)
 		if !ok {continue}

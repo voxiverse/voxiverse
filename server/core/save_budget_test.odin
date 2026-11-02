@@ -3,7 +3,7 @@ package core
 import "core:os"
 import "core:testing"
 
-// M46b's scene: a server holding a lot (200 characters, 512 edited chunks, 100
+// The scene: a server holding a lot (200 characters, 512 edited chunks, 100
 // chests, 400 entities) saves as a running server does, then blocking. The
 // test checks that it works; what it costs the tick is `build bench budgets`
 // (server/core/budgets.odin).

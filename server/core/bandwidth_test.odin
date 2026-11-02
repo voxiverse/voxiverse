@@ -9,7 +9,7 @@ import "core:testing"
 import "common:game"
 import "common:netcode"
 
-// M39's bandwidth benchmark. A stepped session is deterministic, so the bytes
+// The bandwidth benchmark. A stepped session is deterministic, so the bytes
 // it moves are too, on every OS: the numbers are exact, not statistical. Two
 // scenarios run on the stepped server with the mirror client of
 // determinism_test.odin, counted by the pipe's traffic counters in both

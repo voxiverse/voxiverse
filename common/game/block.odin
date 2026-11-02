@@ -44,13 +44,13 @@ Block :: enum u16 {
 	Stone_Bricks,
 	Planks,
 	Glass,
-	// Gates (M18): found, never made or broken.
+	// Gates: found, never made or broken.
 	Gate_Ring,
 	Gate_Chevron, // dark
 	Gate_Chevron_Lit, // locked while dialing, and while open
 	Gate_Horizon, // the open gate's surface: walking in travels
 	Wool, // white; from a sheep
-	// Farming (M24): tilled ground, and wheat in eight stages (block states,
+	// Farming: tilled ground, and wheat in eight stages (block states,
 	// as water has its levels).
 	Farmland, // dry
 	Farmland_Moist, // water is near
@@ -62,8 +62,8 @@ Block :: enum u16 {
 	Wheat_5,
 	Wheat_6,
 	Wheat_7, // ripe
-	Wool_Black, // from a sheep with the recessive wool gene (M25)
-	Chest, // holds 25 stacks (M30): a block with a record of its own (server/core/containers.odin)
+	Wool_Black, // from a sheep with the recessive wool gene
+	Chest, // holds 25 stacks: a block with a record of its own (server/core/containers.odin)
 }
 
 // BUILTIN_BLOCK_IDS: the ids of the blocks engine code names (the members

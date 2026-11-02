@@ -2,7 +2,7 @@ package script
 
 import "core:fmt"
 
-// The bytecode verifier (M51c). verify_proto checks one proto's code against what the
+// The bytecode verifier. verify_proto checks one proto's code against what the
 // dispatch loop assumes, so a proto that passes runs without reading outside its frame,
 // its constants, its upvalues or its code: registers below max_stack (with the ranges an
 // instruction touches), constant and proto indices in range and of the right type,

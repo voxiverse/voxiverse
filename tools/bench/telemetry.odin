@@ -9,7 +9,7 @@ import "core:time"
 import "common:base"
 import "common:telemetry"
 
-// The `telemetry` benchmark scenario (docs/plan.md, T5; `build bench telemetry`):
+// The `telemetry` benchmark scenario (`build bench telemetry`):
 // what an event costs the server on its tick. Emitting is a lock and a copy;
 // the writer, drained as the ring half fills (a server's writer drains as it
 // goes), formats and writes every event and loses none. Each is a metric (µs

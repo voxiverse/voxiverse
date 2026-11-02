@@ -6,7 +6,7 @@ import "core:strings"
 import "core:testing"
 
 // A pack of stairs, slabs, a ladder and a three-property block: the shapes
-// of M48's spec, as data.
+// as data.
 STATES_PACK :: []File {
 	{
 		"data/shapes/stairs.json",

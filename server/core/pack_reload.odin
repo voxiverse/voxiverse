@@ -8,7 +8,7 @@ import "core:path/filepath"
 import "common:base"
 import "common:game"
 
-// Hot reload of the packs (development builds, `Config.pack_watch`; M47i): a
+// Hot reload of the packs (development builds, `Config.pack_watch`): a
 // pack author edits a file and sees it in the running game. It is a
 // development tool, not a way to send packs into a running universe: the
 // registry never grows, so a reload that would change the number of any

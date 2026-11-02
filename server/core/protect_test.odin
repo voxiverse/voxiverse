@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 
-// M45b: region protection. A protection holds out a non-member's edits, by
+// Region protection. A protection holds out a non-member's edits, by
 // hand, by fill and by flowing water; its members and the owner pass; the list
 // survives a save and a load.
 

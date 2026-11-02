@@ -4,8 +4,7 @@ import "core:fmt"
 import "core:strconv"
 import "core:strings"
 
-// Addresses: a world's name in its universe (docs/plan.md, "Addresses: how many
-// worlds"): a galaxy (GALAXY_LENGTH different symbols, in order) and a
+// Addresses: a world's name in its universe: a galaxy (GALAXY_LENGTH different symbols, in order) and a
 // world in it (WORLD_LENGTH different symbols, in order), symbols being
 // SYMBOLS letters of Old Turkic. Written world first, then the galaxy. In
 // file names, two hex digits a symbol ("0a1b...-..."), galaxy first: file

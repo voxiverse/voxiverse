@@ -5,7 +5,7 @@ import "core:math/noise"
 
 import "common:game"
 
-// The classic generator (M3; worlds made before M10 keep it).
+// The classic generator (worlds made before the default generator keep it).
 //
 // Terrain: a heightmap from two noise layers (broad continents, local hills),
 // grass over dirt over stone, sand and gravel in the lowlands, and tunnels

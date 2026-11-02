@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 
-// M22c's exit check: a plant breaks, and drops its item, when the block
+// The exit check: a plant breaks, and drops its item, when the block
 // under it goes or stops holding it; one rule for a single block, a chain
 // of plants, and a bulk edit; a plant is not placed where it would not hold.
 @(test)

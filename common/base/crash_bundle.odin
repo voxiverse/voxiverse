@@ -10,7 +10,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 
-// Crash bundles (docs/plan.md, Q3): a crash leaves one folder with what a fix needs.
+// Crash bundles: a crash leaves one folder with what a fix needs.
 //
 //	<crashes dir>/<UTC yyyy-mm-dd_hh-mm-ss>-<pid>/
 //	    crash.txt    what happened, which thread, the build, OS, CPU, GPU, uptime, the state

@@ -6,8 +6,8 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-// The soundfont is downloaded, not committed (docs/plan.md, Assets): the
-// FreePats Upright Piano KW, CC0 by the page's word. The hash is pinned (M43b),
+// The soundfont is downloaded, not committed: the
+// FreePats Upright Piano KW, CC0 by the page's word. The hash is pinned,
 // after the license was read on the download page itself: CC0 1.0.
 SOUNDFONT_URL :: "https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-small-SF2-20190703.7z"
 SOUNDFONT_FILE :: "UprightPianoKW-small-SF2-20190703.7z"

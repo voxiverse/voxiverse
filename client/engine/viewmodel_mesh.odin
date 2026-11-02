@@ -4,7 +4,7 @@ import "client:mesh"
 import "client:render"
 import "common:game"
 
-// What a hand holds, as meshes (docs/milestones/M48k.md). Pure: no GPU, no
+// What a hand holds, as meshes. Pure: no GPU, no
 // session. Every mesh is a triangle list of render.Held_Vertex with the
 // grip at the origin, in blocks: +x right, +y up, -z front (the way a gun
 // points). The pose (viewmodel.odin) puts the grip where the hand is.

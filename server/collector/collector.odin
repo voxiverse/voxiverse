@@ -18,7 +18,7 @@ import "common:game"
 import "common:netcode"
 import "common:telemetry"
 
-// The collector: the end of M27's pipe. Servers (a player's singleplayer
+// The collector: the end of the telemetry pipe. Servers (a player's singleplayer
 // world, a dedicated server) send their event logs to it in batches over the
 // game's own netcode, authenticated as joining is (Hello, Challenge, Proof:
 // an account's key); it validates every line, tells the sender apart from

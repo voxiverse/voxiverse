@@ -11,7 +11,7 @@ import "common:base/fuzz"
 import "common:game"
 import "server:core"
 
-// net.client_session (Q2b, docs/fuzzing.md): a headless session (no window, no GPU, no server)
+// net.client_session (docs/fuzzing.md): a headless session (no window, no GPU, no server)
 // fed what a server sends, in order, through the receive path: the handshake, the pack phase,
 // the welcome, the world and its state. The case is frames, a two-byte little-endian length and
 // that many bytes of one server message. The session either fails with a reason shown to the

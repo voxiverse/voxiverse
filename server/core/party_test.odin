@@ -11,7 +11,7 @@ import "core:testing"
 import "common:game"
 import "common:telemetry"
 
-// M48j: the LAN party's hardening. Six and eight scripted bots play survival
+// The LAN party's hardening. Six and eight scripted bots play survival
 // with the survival kit (the weapons, the hook and the boots) against a stepped server over the harness's simulated network (the caller
 // runs the ticks, so six thousand of them take seconds, not five minutes):
 // moving, shooting, being shot, dying, respawning, reloading; one operator

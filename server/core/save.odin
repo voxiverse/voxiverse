@@ -39,9 +39,9 @@ WORLDS_DIR :: "worlds"
 WORLD_FILE :: "world.cfg"
 ENTITIES_FILE :: "entities.cfg"
 // 2: players by name (format 1's single player becomes LEGACY_PLAYER); 3:
-// players in players/ (player_data.odin); 4: a universe of worlds; 5 (M46):
+// players in players/ (player_data.odin); 4: a universe of worlds; 5:
 // regions with a checksum per chunk, saves as transactions (save_tx.odin),
-// migrations in a registry (migrate.odin); 6 (M47a): regions name their
+// migrations in a registry (migrate.odin); 6: regions name their
 // blocks, universes list their packs. Older ones are refused (no migration
 // before 1.0).
 SAVE_FORMAT :: 6
@@ -53,7 +53,7 @@ Store :: struct {
 	characters:     map[string]game.Account, // every character's account, by name
 	writer:         game.Writer,
 	last_save:      u64, // the tick of the last save
-	// M46 (save_tx.odin): the disk, the save worker, and the save in flight.
+	// The disk (save_tx.odin): the disk, the save worker, and the save in flight.
 	disk:           base.Disk,
 	jobs:           base.Jobs,
 	jobs_ready:     bool,
@@ -705,7 +705,7 @@ write_entities :: proc(w: ^World) -> bool {
 			e.health,
 			e.natural,
 		)
-		if e.kind == .Item { 	// (and the action that dropped it, M48c: a rollback takes it back after a restart)
+		if e.kind == .Item { 	// (and the action that dropped it: a rollback takes it back after a restart)
 			fmt.sbprintf(
 				&b,
 				" %s %d %d",
@@ -757,8 +757,8 @@ load_entities :: proc(w: ^World) {
 			}
 			if f[0] == "critter" {kind, found = .Sheep, true} 	// (before it was a sheep)
 			// An item has its stack after, a sheep whether it is shorn; no other has more.
-			// An item has its stack after; a sheep whether it is shorn (and, from
-			// M25, its genes, growth, love and wait); no other has more.
+			// An item has its stack after; a sheep whether it is shorn (and, with
+			// its genes, growth, love and wait); no other has more.
 			if found && kind == .Item && len(f) != 9 && len(f) != 10 {ok = false}
 			if found && kind == .Sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
 			if found && kind != .Item && kind != .Sheep && len(f) != 7 {ok = false}

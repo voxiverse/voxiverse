@@ -66,7 +66,7 @@ Stream :: struct {
 
 @(private)
 Decoder :: struct {
-	d:       ^ogg.Decoder, // our own Odin decoder (M53c), made on the decoder thread's behalf
+	d:       ^ogg.Decoder, // our own Odin decoder, made on the decoder thread's behalf
 	open:    bool,
 	epoch:   u32,
 	pos:     int, // frames of the file consumed this pass

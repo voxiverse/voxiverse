@@ -70,7 +70,7 @@ main :: proc() {
 		}
 	}
 	if len(extra) > 0 {
-		// A target with switches of its own (M51c's `--lua <exe>`) reads them.
+		// A target with switches of its own (the script targets' `--lua <exe>`) reads them.
 		if target.check_options == nil {
 			fmt.eprintfln("fuzz: %s takes no option %q", target.name, extra[0])
 			os.exit(2)

@@ -8,7 +8,7 @@ import "core:testing"
 import "common:game"
 import "common:telemetry"
 
-// M31: the item ledger and its audit.
+// The item ledger and its audit.
 
 @(private = "file")
 config :: proc(dir: string, death_drops := false) -> Config {

@@ -6,7 +6,7 @@ import "core:testing"
 
 import "client:audio"
 
-// M32c's exit check "old effects heard as before": a fixed scene of the
+// The exit check "old effects heard as before": a fixed scene of the
 // block sounds (a break, a place, a step, a landing, at two pitches) is
 // mixed offline and its energy in third-octave bands compared with the
 // numbers taken before the streams and the capture hook went in. The mixer
@@ -17,8 +17,8 @@ SPECTRUM_RATE :: 48000
 SPECTRUM_BANDS :: 24 // third octaves from 50 Hz to 12.5 kHz
 SPECTRUM_FLOOR :: -60.0 // dB under the loudest band: quieter bands are not compared
 
-// EFFECTS_BANDS: dB of each band, from the mix before M32c (what the
-// listener heard through M32a); see effects_scene.
+// EFFECTS_BANDS: dB of each band, from the mix before streams (what the
+// listener heard from the one-shot voices alone); see effects_scene.
 @(rodata)
 EFFECTS_BANDS := [SPECTRUM_BANDS]f64 {
 	-51.05,

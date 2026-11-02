@@ -7,7 +7,7 @@ import "core:slice"
 import "common:base"
 import "common:game"
 
-// Block entities (M48b, common/game/block_entity.odin): the data a block
+// Block entities (common/game/block_entity.odin): the data a block
 // keeps beyond its state, held by its chunk. One point decides when they
 // exist: entity_lifecycle, called wherever a block changes (set_block, bulk
 // edits), compares the kind the old state has with the new one's.

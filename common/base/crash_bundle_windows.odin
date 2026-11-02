@@ -4,7 +4,7 @@ import "core:fmt"
 import win "core:sys/windows"
 
 // The Windows half of crash bundles: files by CreateFileW/WriteFile. Other threads' stacks are
-// not collected yet (Q3b: SuspendThread, GetThreadContext, RtlVirtualUnwind): threads.txt holds
+// not collected yet (it needs SuspendThread, GetThreadContext, RtlVirtualUnwind): threads.txt holds
 // the crashing thread's stack and lists the others as "did not answer".
 
 Thread_Handle :: win.DWORD

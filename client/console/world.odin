@@ -8,7 +8,7 @@ import "client:engine"
 import "common:game"
 
 
-// The developer console's world primitives (docs/plan.md M19, commands): placing
+// The developer console's world primitives (commands): placing
 // the camera for a picture. Everything that changes the world is a server
 // command, typed with a slash (as in the chat); nothing here duplicates a key,
 // the UI or a server command.

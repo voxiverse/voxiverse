@@ -75,7 +75,7 @@ pause :: proc(t: ^testing.T, clients: []^Net_Client, seconds: f64) {
 	net_wait(t, clients, proc(cs: []^Net_Client) -> bool {return false}, seconds)
 }
 
-// M28's server half: a fall costs a point a block past three; an explosion by
+// The server half: a fall costs a point a block past three; an explosion by
 // its nearness; death sends a player to the spawn with full health, their
 // things dropped by the rule; rules.damage off hurts nothing; the client is
 // told; experience and level come from events and are kept.

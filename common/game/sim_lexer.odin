@@ -1,6 +1,6 @@
 package game
 
-// The lexer of the rule language (M49b): one rule statement, condition or expression is a
+// The lexer of the rule language: one rule statement, condition or expression is a
 // short string in a pack's JSON; this cuts it into at most MAX_RULE_TOKENS tokens, each with
 // the line and column of its first byte in the pack file, and allocates nothing.
 //

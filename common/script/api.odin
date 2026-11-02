@@ -289,7 +289,7 @@ unpin :: proc(vm: ^VM, p: Pin) {
 	table_set_raw(vm, ref_value(.Table, vm.registry), int_value(i64(p)), NIL)
 }
 
-// Handles: opaque 64-bit ids with a host-defined kind (M52's entities, players,
+// Handles: opaque 64-bit ids with a host-defined kind (the game's entities, players,
 // positions). Kinds are numbered from 1 in registration order and recorded by name.
 
 register_handle_kind :: proc(vm: ^VM, name: string) -> u16 {

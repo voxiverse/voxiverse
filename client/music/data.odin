@@ -2,7 +2,7 @@ package music
 
 // The rendered music (assets/music, made by `build music`) inside the
 // executable: the Ogg of each piece and its metadata (a `.json`, read by the
-// director, M44). Nothing plays it yet. The order is fixed, the title first.
+// director). The order is fixed, the title first.
 
 Music_File :: struct {
 	name: string,

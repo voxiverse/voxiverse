@@ -11,7 +11,7 @@ import "client:engine"
 import "client:screen"
 import "common:base"
 
-// M32d's real-time check (`--check audio`, exit_check.odin's CHECKS): the
+// The real-time check (`--check audio`, exit_check.odin's CHECKS): the
 // game mixes into the null device (audio.device_open_null: the real callback
 // path, paced by the wall clock, no sound card) for 30 seconds while a world
 // of our own stands about, and sounds are played into it as in a busy

@@ -3,7 +3,7 @@ package game
 import "core:mem"
 import "core:mem/virtual"
 
-// Voxel layers: a channel is a named per-cell value beside the block (M49),
+// Voxel layers: a channel is a named per-cell value beside the block,
 // `u16` at most. The block channel is Chunk_Blocks (the hot path of physics and
 // meshing); the others are palette-compressed here, one Channel a chunk each:
 // Uniform (one value), Small (a 16-entry palette and four-bit indices), Large

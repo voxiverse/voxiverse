@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:testing"
 
-// The pack archive (M47b): canonical bytes, no server/ files, and every
+// The pack archive: canonical bytes, no server/ files, and every
 // malformed archive refused with a message.
 
 @(private = "file")

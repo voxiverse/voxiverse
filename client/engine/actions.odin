@@ -151,7 +151,7 @@ PAD_COVERED_BY :: [?]struct {
 	{.Hotbar_3, "the bumpers cycle the hotbar"},
 	{.Hotbar_4, "the bumpers cycle the hotbar"},
 	{.Hotbar_5, "the bumpers cycle the hotbar"},
-	{.Command, "the chat, then a slash (menus with a pad: M42)"},
+	{.Command, "the chat, then a slash (menus with a pad)"},
 	{.Stats, "the player menu: View, then LB and RB"},
 	{.World_Map, "the player menu: View, then LB and RB"},
 	{.Journal, "the player menu: View, then LB and RB"},

@@ -10,7 +10,7 @@ import "common:base"
 import "common:game"
 import "common:worldgen"
 
-// R4: the light cache. Terrain from the generator (5x5 chunk columns, five
+// The light cache. Terrain from the generator (5x5 chunk columns, five
 // chunks high round the surface: the middle 3x3x3 can be meshed) is meshed
 // through the world's tasks (no workers: each runs as it is started), and
 // every mesh is compared with one made the old way, lit from scratch.
@@ -286,7 +286,7 @@ test_light_reused_when_the_key_matches :: proc(t: ^testing.T) {
 	expect_identical(t, &f, "after the registry")
 }
 
-// R3b: a job's snapshot is by reference; an edit meanwhile writes a copy.
+// A job's snapshot is by reference; an edit meanwhile writes a copy.
 
 @(private = "file")
 find_array_chunk :: proc(f: ^Cache_Fixture) -> game.Chunk_Pos {

@@ -6,7 +6,7 @@ import "core:testing"
 
 import "common:game"
 
-// M45b: a segment older than the detail window is rewritten with one entry per
+// A segment older than the detail window is rewritten with one entry per
 // run of changes of a block by one action; a rollback over compacted history
 // puts back what a rollback over the detailed one does; retention deletes by
 // age and by size.

@@ -9,14 +9,14 @@ import "common:base"
 import "common:game"
 import "server:core"
 
-// The `budgets` benchmark scenario (docs/plan.md, T5; `build bench budgets`):
+// The `budgets` benchmark scenario (`build bench budgets`):
 // what the server's heavy work costs, each scene of server/core/budgets.odin once a
 // repetition, in CPU time of this thread: a save (what the tick pays to start
 // it, its largest slice, a blocking one), the item audit, saving and loading
 // many counters, the journal under a flood and blasts, 10 000 blocks of water
 // flowing. No test judges any of these: the tests call the scenes for what
 // they do. The budgets sit here beside the scenario, like `chunks`'s CHECK,
-// and are the ones the tests held (M11, M43, M45, M46b), several times a fast
+// and are the ones the tests held, several times a fast
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 

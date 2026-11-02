@@ -11,7 +11,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 
-// A save that does not stall the tick (M46b).
+// A save that does not stall the tick.
 //
 // A save must describe one tick (items move between inventories, chests and
 // dropped stacks), yet encoding a large universe takes longer than a tick. So

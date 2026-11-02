@@ -378,7 +378,7 @@ Chunk_Message :: struct {
 	pos:        Chunk_Pos,
 	uniform:    Block,
 	is_uniform: bool,
-	channels:   []Wire_Channel, // the replicated channels not uniform at their default (M49c); the rest are at their defaults
+	channels:   []Wire_Channel, // the replicated channels not uniform at their default; the rest are at their defaults
 }
 
 Unload_Chunk :: struct {

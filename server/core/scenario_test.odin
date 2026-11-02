@@ -9,7 +9,7 @@ import "core:testing"
 import "common:game"
 import "common:netcode"
 
-// T3: scenarios with invariants. A scenario is data: steps (a tick, a player, an
+// Scenarios with invariants. A scenario is data: steps (a tick, a player, an
 // operation) played on the harness (harness.odin) by one runner. Player 0 is the
 // mirror (determinism_test.odin): it predicts, so it is the one that can desync,
 // and it walks, jumps and flies; players 1.. are bots on the simulated network
@@ -18,7 +18,7 @@ import "common:netcode"
 //
 //   - no desync: the server judged the mirror's Prediction_Checks and found none
 //     different, and the mirror's prediction ends where the server says it is;
-//   - item conservation: `audit` (the M31 ledger) is balanced every second;
+//   - item conservation: `audit` (the item ledger) is balanced every second;
 //   - agreement: every chunk a player holds is the server's, block for block, and
 //     what each bot was told of its own position and health is the server's;
 //   - replay: the scenario is played twice and the state hash of every tick is the

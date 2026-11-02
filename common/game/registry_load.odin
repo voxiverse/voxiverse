@@ -525,7 +525,7 @@ read_pack_manifest :: proc(b: ^Reg_Build, pi: int, src: Pack_Source) {
 						"server/loot_tables/",
 						0,
 						0,
-						"loot tables are read from M53 on; remove the directory",
+						"loot tables are not supported; remove the directory",
 					)
 					loot_reported = true
 				}

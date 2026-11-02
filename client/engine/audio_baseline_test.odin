@@ -12,7 +12,7 @@ import "client:music"
 import "client:sfx"
 import "client:testkit"
 
-// M32b's quality baselines: four scripted scenarios rendered offline, their
+// The quality baselines: four scripted scenarios rendered offline, their
 // numbers compared with assets/baselines/audio/<scenario>.txt (client/audio/baseline.odin
 // says what is measured and how much may move). A sound retuned without
 // accepting its baseline fails here; `build audio --accept <scenario|all>`

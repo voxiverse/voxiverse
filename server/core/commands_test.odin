@@ -42,7 +42,7 @@ near :: proc(a, b: [3]f64) -> bool {
 	return abs(d.x) + abs(d.z) < 0.01
 }
 
-// M13's commands over UDP, an admin and a player: warps, homes (as many as
+// The commands over UDP, an admin and a player: warps, homes (as many as
 // the role's max_homes), teleport requests and back, whispers and answers,
 // actions, nicknames, who is here, kicking, bans by name and address, the
 // server's status; kept with the world.
