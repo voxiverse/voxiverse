@@ -117,7 +117,7 @@ The profiling tools, from narrowest to widest:
   (`Voxiverse 0.1.2+40 (135f897a933a) client, release build, profiling, arguments:
   --benchmark edits`).
 - **CPU.** There is one track per thread (`main`, `server`, `mesh 1`..., `worldgen 1`...,
-  `save 1`), with nested scopes. A `frame` and a `server tick` carry their number (`#2047`:
+  `save 1`), with nested scopes. A `frame` and a `server tick` carry their number (for example `frame 2047`:
   for a frame, the frame count from 1, as `--capture-frame` counts; for a tick, the server's
   tick).
 - **GPU.** A track named `GPU (calibrated) <device>, <driver>` holds the frame and every
