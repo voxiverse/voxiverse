@@ -785,7 +785,7 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 			}
 		}
 		for b in builds {
-			name := filepath.base(b[1])
+			name := test_name(b[1]) // the whole path: client/music and tools/music share a last element (#101)
 			out := path_join({"build", "cross", target, b[0], name})
 			os.make_directory_all(filepath.dir(out))
 			cmd := slice.concatenate(
@@ -925,15 +925,24 @@ smoke :: proc() -> bool {
 	return test_packages({SMOKE_PACKAGE}, {"-define:ODIN_TEST_THREADS=1"}, 1)
 }
 
+// test_name: the file name a test package's binary, log and timing are kept under: its
+// whole path with the slashes turned into dashes. The last element alone is not unique
+// (client/music and tools/music were both `music`: run in parallel they wrote one binary,
+// failed with "Text file busy", and the passing run's log replaced the failing one's, #101).
+test_name :: proc(pkg: string) -> string {
+	result, _ := strings.replace_all(pkg, "/", "-")
+	return result
+}
+
 // test_binary: where a test package's executable is kept.
 test_binary :: proc(pkg: string) -> string {
-	return path_join({"build", "test", strings.concatenate({filepath.base(pkg), exe_suffix()})})
+	return path_join({"build", "test", strings.concatenate({test_name(pkg), exe_suffix()})})
 }
 
 // test_log: where a test package's output is kept. A package that passed prints one
 // line (its test count and time); the whole output is printed only when it failed.
 test_log :: proc(pkg: string) -> string {
-	return path_join({"build", "test", strings.concatenate({filepath.base(pkg), ".log"})})
+	return path_join({"build", "test", strings.concatenate({test_name(pkg), ".log"})})
 }
 
 // test_count: " N tests", from the test runner's last words in the log at path ("" if not there).
@@ -978,7 +987,7 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		os.make_directory_all(filepath.dir(out))
 		step := &state.steps[i]
 		step^ = Odin_Step {
-			name   = strings.concatenate({"test-", filepath.base(pkg)}),
+			name   = strings.concatenate({"test-", test_name(pkg)}),
 			cmd    = slice.concatenate(
 				[][]string {
 					{"odin", "test", pkg},
