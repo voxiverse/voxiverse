@@ -10613,3 +10613,102 @@ before (`/rule random_tick_speed 300` makes it quick to see).
 - M49b's grammar has no parenthesised cells: `t + (0, 1, 0)`, not `(t + (0, 1, 0))`; `growth.json` is written so.
 - The differential test runs in one world, not two: for each case it ticks by the reference, reads the 9 x 9 x 9 around the cell, puts the world back, ticks by the rules and compares the changed blocks (position order, not write order) and the RNG state; the journal is compared by its entry count and action count (each write opens its own action: `random_tick` passes `Act{0, .Random_Tick}`, since one action per run changed the journal hash and so the bandwidth roots; found by the roots, which is why the count is compared). Neighbourhoods: 17 cubes filled from the palette (every fourth beside an unloaded chunk), up to 400 cases each; the test also requires that over a tenth of the cases changed something, and a changed chance in `growth.json` makes it fail.
 - `World.random_runs` counts random rule runs for the budget. `Metric` gained `Random_Ticks` and `Random_Rule_Run`; `BUDGETS_VERSION` 3.
+
+## M0: the skeleton
+
+### Why
+
+M0 is the plan's first row: the layout, the build driver (`check`, `build`, `run`, `test`),
+`base/` (pools, handles, arenas) with tests, and CI set up through odinup on Windows, Linux
+and macOS. Its exit check is "`check` + `test` green in CI". The code was written on
+2026-10-22 (8b68fd8 "M0: build driver, zero-setup shader compiler, base.Pool, CI"), before
+specs were written down, and every later milestone has built on it. What M0 never got was a
+spec, a "done" in its row and a line in the cost table. Two of the row's words also no longer
+match the tree. This milestone closes M0 against the tree as it is now. It writes no code.
+
+### What the tree has (checked 2026-11-02, against e383f48)
+
+| The row says | The tree has | Where |
+|---|---|---|
+| layout | `common/`, `client/`, `server/`, `tools/`, `assets/`, `docs/`, `tests/`, every folder in `docs/layout.md`, kept in step by `check`'s layout lint (L1-L3) | `docs/layout.md`, `tools/build/layout.odin` |
+| build driver: `check`, `build`, `run`, `test` | `tools/build` (an Odin program); `build.sh` and `build.bat` only build it and hand over. `./build.sh help` lists `check`, `test`, `build` and `run`, plus later commands | `tools/build/main.odin` (the command switch) |
+| `base/` pools, handles | `base.Pool(T, H)`: fixed capacity, generational `u32` handles (20-bit slot, 12-bit generation, slot 0 reserved so the zero handle is never valid), stable pointers; `base.map_make_fixed` makes a map (keys to handles) that never grows | `common/base/pool.odin`, `common/base/fixed_map.odin` |
+| `base/` arenas | No arena type in `base`. Every arena is `core:mem/virtual`'s `virtual.Arena` (`arena_init_growing`), owned by its lifetime: the client's `Session`, the server, each world, the UI's frame arena, the registry. Frame and tick scratch is `context.temp_allocator`, freed every frame (`client/main/main.odin`), every tick (`server/core/server.odin`, `server/core/stepped.odin`) and every job (`common/base/jobs.odin`) | see "Decided" below |
+| with tests | `common/base/pool_test.odin`: 10 tests, one of them `test_pool_in_arena` (a pool inside a `virtual.Arena`, freed with it) and `test_fixed_map_never_grows` | `common/base/pool_test.odin` |
+| CI bootstrapped with odinup on Windows/Linux/macOS | CI runs on Windows x64, Linux x64 and macOS arm64. Since M21 (d8244a4, 2026-10-25) it takes the Odin release `odinup.toml` pins, prebuilt, through `laytan/setup-odin`, not odinup's build from source; odinfmt is built at the ols revision `odinup.toml` pins. Developers still set up with odinup (README) | `.github/actions/setup/action.yml`, `.github/workflows/ci.yml`; history.md, M21 |
+
+### Decided
+
+- **M0 is closed as built, not rebuilt.** The row's goals are met. The two places where the
+  words differ from the tree are design choices made later, and both follow the plan's
+  principles, so the words change, not the code.
+- **No arena type in `base`.** Rule: "Odin `core:` first" (Decisions, *Third-party code*).
+  `core:mem/virtual` already gives a growing arena that frees in one call, which is all ground
+  rule 1 asks for. A `base` wrapper would be a second name for the same thing (ground rule 8).
+  The Layout block's `base/` line stops listing arenas. Recorded in the plan's Decisions table
+  (*Arenas*).
+- **CI's toolchain stays as M21 set it.** Same pinned release as odinup, downloaded prebuilt.
+  M21 already decided and recorded this in history.md. M0's row is reworded to match; nothing
+  in CI changes.
+- **The cost line has no measures:** `| M0 | n/a | n/a | 0 | ... |`. The 2026-10-22 session
+  was not measured, and this one writes only docs.
+
+### Steps, in order
+
+1. Check the table above against the tree as it is when the session starts. Use `./build.sh
+   help` for the commands, `grep -n '@(test)' common/base/pool_test.odin` for the tests,
+   `grep -rn 'virtual.arena_init_growing' --include=*.odin client server common` for the
+   arenas, and `.github/actions/setup/action.yml` for CI. If something has moved, correct this
+   spec in the same commit and say so in the report.
+2. `docs/plan.md`, the Layout block: change the `base/` line from `handles + pools, arenas,
+   math, rng, log, machine facts` to `handles + pools, math, rng, log, machine facts (arenas
+   are core:mem/virtual's)`. Keep the column alignment.
+3. `docs/plan.md`, the M0 row: the slice reads `Skeleton: layout, build driver (`check`,
+   `build`, `run`, `test`), `base/` (pools, handles) with tests, CI on Windows/Linux/macOS
+   with the Odin `odinup.toml` pins` and stops linking this file. The exit check column gets
+   `(done: 8b68fd8, 2026-10-22; arenas are core:mem/virtual's (Decisions, *Arenas*); CI's Odin
+   comes prebuilt through setup-odin since M21)`.
+4. `docs/plan.md`, the cost table: add `| M0 | n/a | n/a | 0 | the skeleton closed as built:
+   the row matched to the tree, no code (an unattended session) |` after the last row.
+5. Add this spec to the end of `docs/history.md` as `## M0: the skeleton`, with the headings
+   one level down, and delete `docs/milestones/M0.md`.
+
+### Left out
+
+- An arena type, or any other code, in `base` (decided above).
+- Putting odinup back into CI (M21's decision stands).
+- New tests. The row's claims are covered by tests that already exist, and "no more
+  infrastructure" rules out a test that only checks a command name exists.
+- The other early rows with no "done" and no spec (M1, M1b, M2, M3, M3.5 and so on): each is
+  its own row's business.
+- Changing the README's setup steps.
+
+### Tests
+
+None added. These already cover M0's claims and must pass:
+
+- `common/base`: the 10 tests in `pool_test.odin` (`test_pool_add_get_remove`,
+  `test_pool_zero_handle_is_invalid`, `test_pool_stale_handle_after_reuse`,
+  `test_pool_full`, `test_pool_pointers_stay_valid`, `test_pool_iteration_skips_removed`,
+  `test_pool_remove_during_iteration`, `test_pool_in_arena`, `test_pool_generation_wraps`,
+  `test_fixed_map_never_grows`).
+- `tools/build`: the driver's own tests (cache, layout, lints, platforms and so on).
+- `check`'s layout, scratch and package-list lints, which keep the layout as it is listed.
+
+### Exit check
+
+`./build.sh check` and `./build.sh test` pass (`./build.sh test common/base tools/build` first,
+then the whole suite). `./build.sh help` lists `check`, `test`, `build` and `run`. The M0
+row reads done as in step 3. The cost table has M0's line. `docs/history.md` ends with `## M0:
+the skeleton`, and `docs/milestones/M0.md` is gone. CI is green on the commit: the loop
+watches that, not the session.
+
+### Check by hand
+
+- On a fresh Windows x64 and a fresh macOS arm64 machine with nothing installed, follow the
+  README: install odinup, run `odinup install` in the clone, then `build.bat check` (Windows)
+  or `./build.sh check` (macOS), then `./build.sh run` (`build.bat run`). Expect both to work
+  with no other setup step: the game's title screen opens. CI does not run this, because CI
+  takes the prebuilt release, not odinup.
+
+- *Differed:* nothing; the tree matched the table. The Decisions row *Arenas* had already been written by the spec's commit.
