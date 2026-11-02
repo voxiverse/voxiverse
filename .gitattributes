@@ -8,3 +8,5 @@ assets/fixtures/** -text
 common/ogg/testdata/digests.txt text eol=lf
 common/ogg/testdata/reference/*.s16 -text
 common/script/testdata/fuzz/** -text
+# The prelude's text is in every VM's heap, so in every snapshot: the same bytes on every OS.
+common/script/prelude.vxs text eol=lf

@@ -27,7 +27,9 @@ GOLDEN_HASH :: 0x26adf66621a17b28
 golden_vm :: proc(t: ^testing.T, cfg: Config) -> ^VM {
 	vm, e := vm_create(cfg)
 	if !testing.expectf(t, e.kind == .None, "vm_create: %s", e.message) {return nil}
-	fn, ce := compile(vm, GOLDEN_SOURCE, "golden", allocator = context.temp_allocator)
+	// The source's text is in the heap: a checkout with CRLF line endings must not change it.
+	source, _ := strings.replace_all(GOLDEN_SOURCE, "\r\n", "\n", context.temp_allocator)
+	fn, ce := compile(vm, source, "golden", allocator = context.temp_allocator)
 	if !testing.expectf(t, ce.kind == .None, "compile: %s", ce.message) {
 		vm_destroy(vm)
 		return nil

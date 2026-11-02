@@ -457,27 +457,28 @@ heap_check :: proc(vm: ^VM) -> (ok: bool, problem: string) {
 	blocks := int(vm.top / 16)
 	for head, i in vm.free_small {
 		n := 0
-		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
-			fb := (^Free_Block)(&vm.mem[b])
+		for b := head; b != 0; {
 			n += 1
 			if n > blocks {return false, "a small free list has a cycle"}
-			if !is_block(starts, b) || fb.kind != .Free || fb.size != u32(i + 1) * 16 {
+			if !is_block(starts, b) {return false, "a small free list holds a wrong block"}
+			fb := (^Free_Block)(&vm.mem[b])
+			if fb.kind != .Free || fb.size != u32(i + 1) * 16 {
 				return false, "a small free list holds a wrong block"
 			}
+			b = fb.next
 		}
 	}
 	for head, i in vm.free_large {
 		n := 0
-		for b := head; b != 0; b = (^Free_Block)(&vm.mem[b]).next {
-			fb := (^Free_Block)(&vm.mem[b])
+		for b := head; b != 0; {
 			n += 1
 			if n > blocks {return false, "a large free list has a cycle"}
-			if !is_block(starts, b) ||
-			   fb.kind != .Free ||
-			   fb.size <= SMALL_MAX ||
-			   large_class(fb.size) != i {
+			if !is_block(starts, b) {return false, "a large free list holds a wrong block"}
+			fb := (^Free_Block)(&vm.mem[b])
+			if fb.kind != .Free || fb.size <= SMALL_MAX || large_class(fb.size) != i {
 				return false, "a large free list holds a wrong block"
 			}
+			b = fb.next
 		}
 	}
 	Check :: struct {
