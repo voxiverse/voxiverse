@@ -26,7 +26,9 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "client_weapons"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	rig: Frame_Rig
+	// (on the heap: a Frame_Rig holds a whole Harness, 95 KB, and a test thread's stack is 512 KB on macOS)
+	rig := new(Frame_Rig)
+	defer free(rig)
 	config := core.Config {
 		save_dir    = dir,
 		kit         = "rocket_launcher 1", // (the world's kit: the blocks of the other tests are not wanted)
@@ -58,7 +60,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		},
 	)
 	defer engine.session_end(s, nil, nil)
-	rig_add(&rig, s)
+	rig_add(rig, s)
 	idle: engine.Actions
 	pistol, _ := game.item_by_name(s.reg, "pistol")
 	rig.actions = &idle
@@ -70,7 +72,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 				s.server_inventory.slots[game.HOTBAR_SLOTS].item == pistol &&
 				s.prediction.state.on_ground \
 			)
-		}, &rig, 3000)
+		}, rig, 3000)
 	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}
 	// The survival kit: the hotbar's rifle, shotgun, sniper, launcher and hook, the pistol in
 	// the pockets. The pistol is what this test fires: it swaps into the first slot.
@@ -84,12 +86,12 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 			s := (^Frame_Rig)(data).s
 			pistol, _ := game.item_by_name(s.reg, "pistol")
 			return s.server_inventory.slots[0].item == pistol
-		}, &rig, 300)
+		}, rig, 300)
 	testing.expect_value(t, s.inventory.slots[0].item, pistol)
 	testing.expect_value(t, s.inventory.slots[0].ammo, u8(12))
 	testing.expect_value(t, s.inventory.slots[2].item, sniper)
 	testing.expect_value(t, s.inventory.slots[2].ammo, u8(5))
-	for _ in 0 ..< 30 {rig_frame(&rig, &idle)}
+	for _ in 0 ..< 30 {rig_frame(rig, &idle)}
 
 	// A target in front of us, a block off, in line with the eyes' look down at it.
 	feet := s.prediction.state.position
@@ -97,7 +99,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	if !testing.expect(t, sheep != nil) {return}
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))
-	for _ in 0 ..< 6 {rig_frame(&rig, &idle)} 	// (a few ticks of history to rewind to)
+	for _ in 0 ..< 6 {rig_frame(rig, &idle)} 	// (a few ticks of history to rewind to)
 	sheep.body.position = feet + {0, 0, -1.4}
 
 	// Fire: the effects are there the same frame; no hit is guessed.
@@ -105,7 +107,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		pressed = {.Attack},
 		down    = {.Attack},
 	}
-	rig_frame(&rig, &press)
+	rig_frame(rig, &press)
 	testing.expect_value(t, s.shots, 1)
 	testing.expect(t, has_sound(s, .Shot_Pistol), "the shot's sound plays at once")
 	testing.expect(t, len(s.puffs) > 0, "the tracer and the flash are at once")
@@ -117,11 +119,11 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	hold_down := engine.Actions {
 		down = {.Attack},
 	}
-	for _ in 0 ..< 20 {rig_frame(&rig, &hold_down)}
+	for _ in 0 ..< 20 {rig_frame(rig, &hold_down)}
 	testing.expect_value(t, s.shots, 1)
-	rig_frame(&rig, &idle)
+	rig_frame(rig, &idle)
 	// The server's word arrived: the magazine, the hit.
-	for _ in 0 ..< 10 {rig_frame(&rig, &idle)}
+	for _ in 0 ..< 10 {rig_frame(rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].ammo, u8(11))
 	testing.expect_value(t, s.confirms, 1)
 	testing.expect(t, has_sound(s, .Hit), "the hit has its sound")
@@ -130,10 +132,10 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	reload := engine.Actions {
 		pressed = {.Reload},
 	}
-	rig_frame(&rig, &reload)
+	rig_frame(rig, &reload)
 	testing.expect(t, engine.weapon_reloading(s), "the reload shows")
-	rig_frame(&rig, &reload)
-	for _ in 0 ..< int(1.4 * game.TICK_RATE) + 10 {rig_frame(&rig, &idle)}
+	rig_frame(rig, &reload)
+	for _ in 0 ..< int(1.4 * game.TICK_RATE) + 10 {rig_frame(rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].ammo, u8(12))
 	testing.expect(t, !engine.weapon_reloading(s))
 
@@ -142,11 +144,11 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	select := engine.Actions {
 		pressed = {.Hotbar_3},
 	}
-	rig_frame(&rig, &select)
+	rig_frame(rig, &select)
 	zoom := engine.Actions {
 		down = {.Use},
 	}
-	for _ in 0 ..< 30 {rig_frame(&rig, &zoom)}
+	for _ in 0 ..< 30 {rig_frame(rig, &zoom)}
 	fov := engine.camera_fov(s, engine.SETTINGS_DEFAULTS)
 	testing.expectf(
 		t,
@@ -156,7 +158,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		engine.SETTINGS_DEFAULTS.fov,
 	)
 	testing.expect(t, engine.zoom_factor(s) < 0.3)
-	for _ in 0 ..< 30 {rig_frame(&rig, &idle)}
+	for _ in 0 ..< 30 {rig_frame(rig, &idle)}
 	testing.expect(
 		t,
 		abs(engine.camera_fov(s, engine.SETTINGS_DEFAULTS) - engine.SETTINGS_DEFAULTS.fov) < 1,

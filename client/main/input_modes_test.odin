@@ -276,7 +276,9 @@ test_f3_coordinates :: proc(t: ^testing.T) {
 // hand goes to the offhand and back; with nothing in either, nothing moves.
 @(test)
 test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
-	rig: Frame_Rig
+	// (on the heap: a Frame_Rig holds a whole Harness, 95 KB, and a test thread's stack is 512 KB on macOS)
+	rig := new(Frame_Rig)
+	defer free(rig)
 	config := core.Config {
 		seed        = 33,
 		view_radius = 3,
@@ -305,33 +307,33 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 		},
 	)
 	defer engine.session_end(s, nil, nil)
-	rig_add(&rig, s)
+	rig_add(rig, s)
 	idle: engine.Actions
 	rig.actions = &idle
 	core.harness_step_until(&rig.h, proc(data: rawptr) -> bool {
 			s := (^Frame_Rig)(data).s
 			return s.state == .Playing && s.server_inventory.slots[0].item != 0
-		}, &rig, 3000)
+		}, rig, 3000)
 	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}
 	launcher := s.inventory.slots[0].item // (whatever the kit put in the hand)
 	testing.expect(t, launcher != 0)
 	swap := engine.Actions {
 		pressed = {.Swap_Offhand},
 	}
-	rig_frame(&rig, &swap)
+	rig_frame(rig, &swap)
 	testing.expect_value(t, s.inventory.equipment[.Offhand].item, launcher) // predicted at once
 	testing.expect(t, game.stack_empty(s.inventory.slots[0]))
-	for _ in 0 ..< 60 {rig_frame(&rig, &idle)}
+	for _ in 0 ..< 60 {rig_frame(rig, &idle)}
 	testing.expect_value(t, s.server_inventory.equipment[.Offhand].item, launcher) // and the server's word
 	testing.expect(t, game.stack_empty(s.server_inventory.slots[0]))
-	rig_frame(&rig, &swap)
-	for _ in 0 ..< 60 {rig_frame(&rig, &idle)}
+	rig_frame(rig, &swap)
+	for _ in 0 ..< 60 {rig_frame(rig, &idle)}
 	testing.expect_value(t, s.server_inventory.slots[0].item, launcher)
 	testing.expect(t, game.stack_empty(s.server_inventory.equipment[.Offhand]))
 	// Both empty: nothing to swap (not even sent as a change).
 	s.inventory.slots[0] = {}
 	s.server_inventory.slots[0] = {}
 	before := s.inventory
-	rig_frame(&rig, &swap)
+	rig_frame(rig, &swap)
 	testing.expect(t, s.inventory == before)
 }
