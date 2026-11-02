@@ -21,6 +21,8 @@ Net_Client :: struct {
 	name:                        string,
 	scratch:                     ^game.Block_Array,
 	arrays:                      game.Block_Arrays,
+	layers:                      map[game.Chunk_Pos]game.Chunk_Layers, // the replicated channels
+	pools:                       game.Layer_Pools,
 	chunks:                      map[game.Chunk_Pos]game.Chunk_Blocks,
 	welcome:                     game.Welcome,
 	welcomed:                    bool,
@@ -116,6 +118,7 @@ net_connect :: proc(
 	now := sim.now
 	c.scratch = new(game.Block_Array)
 	game.block_arrays_init(&c.arrays, 4096)
+	game.layer_pools_init(&c.pools, 4096 * 4)
 	c.schema = game.game_schema()
 	game.receiver_init(&c.rx, &c.schema, test_reg())
 	netcode.link_connect(&c.link, {net.IP4_Loopback, port}, password, now, sim = sim)
@@ -136,6 +139,9 @@ net_close :: proc(c: ^Net_Client) {
 	game.receiver_destroy(&c.rx)
 	game.schema_destroy(&c.schema)
 	for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
+	for _, &l in c.layers {game.layers_release(&l, &c.pools)}
+	delete(c.layers)
+	game.layer_pools_destroy(&c.pools)
 	game.block_arrays_destroy(&c.arrays)
 	delete(c.chunks)
 	for _, n in c.others {delete(n)}
@@ -202,6 +208,13 @@ net_send :: proc(c: ^Net_Client, m: game.Client_Message) {
 net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 	for g in got {
 		switch game.State_Kind(g.kind) {
+		case .Channel:
+			p := game.key_block(g.key)
+			if l, have := &c.layers[game.chunk_of(p)]; have && g.op != .Remove {
+				v := (^game.Channel_Record)(g.value).value
+				i := game.local_index(game.local_of(p))
+				game.layers_set(l, &c.pools, int(g.key.d), i, v)
+			}
 		case .Own_Player:
 			if v := (^game.Own_Player)(g.value)^; v.teleports != u8(c.teleports) {
 				c.teleports = int(v.teleports)
@@ -360,6 +373,8 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			game.receiver_reset(&c.rx)
 			c.travels += 1
 			for _, &b in c.chunks {game.chunk_release(&b, &c.arrays)}
+			for _, &l in c.layers {game.layers_release(&l, &c.pools)}
+			clear(&c.layers)
 			clear(&c.chunks)
 			clear(&c.entities)
 		case game.Reject:
@@ -375,7 +390,16 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 			}
 			if old, had := &c.chunks[v.pos]; had {game.chunk_release(old, &c.arrays)}
 			c.chunks[v.pos] = b
+			if c.reg != nil {
+				if v.pos not_in c.layers {c.layers[v.pos] = {}}
+				l := &c.layers[v.pos]
+				game.layers_from_wire(l, &c.pools, c.reg.channels, v.channels)
+			}
 		case game.Unload_Chunk:
+			if l, had := &c.layers[v.pos]; had {
+				game.layers_release(l, &c.pools)
+				delete_key(&c.layers, v.pos)
+			}
 			if old, had := &c.chunks[v.pos]; had {
 				game.chunk_release(old, &c.arrays)
 				delete_key(&c.chunks, v.pos)

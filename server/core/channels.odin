@@ -54,6 +54,18 @@ chunk_saved_layers :: proc(
 	return out[:]
 }
 
+// chunk_message: the message that sends chunk whole: its blocks go beside it (send_message),
+// and the replicated channels not uniform at their defaults are in it.
+chunk_message :: proc(w: ^World, chunk: ^Chunk) -> game.Chunk_Message {
+	m := game.Chunk_Message {
+		pos = chunk.pos,
+	}
+	if reg := w.server.registry; reg != nil && len(reg.channels) > 1 {
+		m.channels = game.chunk_wire_channels(&chunk.layers, reg.channels)
+	}
+	return m
+}
+
 // chunks_channel reads channel ch at p: false if the chunk is not loaded (or there is no
 // such channel). A computed channel is computed.
 chunks_channel :: proc(w: ^World, p: game.Block_Pos, ch: int) -> (u16, bool) {

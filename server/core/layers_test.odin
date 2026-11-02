@@ -161,3 +161,82 @@ test_channels_saved :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, wrong, 0)
 }
+
+// mirror_wetness: how many cells of the mirror's chunks differ from the server's in channel id
+// (and how many cells the mirror holds a value above the default in).
+@(private = "file")
+mirror_differs :: proc(g: ^Grief, id: int) -> (differ, nonzero: int) {
+	w := grief_world(g)
+	m := &g.sess.mirror
+	for pos, &layers in m.layers {
+		c := chunks_get(&w.chunks, pos)
+		if c == nil {continue}
+		for i in 0 ..< game.CHANNEL_CELLS {
+			a := game.channel_get(&layers.channels[id], i)
+			b := game.channel_get(&c.layers.channels[id], i)
+			if a != b {differ += 1}
+			if a != 0 {nonzero += 1}
+		}
+	}
+	return
+}
+
+@(test)
+test_channels_replicate :: proc(t: ^testing.T) {
+	dir := "build/tmp/channels_replicate"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	g, opened := grief_open(t, dir, channel_config(dir, CHANNELS_JSON))
+	defer grief_close(g)
+	if !opened {return}
+	w := grief_world(g)
+	wet, secret := chan(w, "sim_test:wetness"), chan(w, "sim_test:secret")
+	cells, _ := cells_set(g)
+	run(g, 3)
+	testing.expect(t, len(g.sess.mirror.layers) > 0, "the mirror holds no layers")
+
+	// The mirror holds exactly the server's wetness, and no secret.
+	differ, nonzero := mirror_differs(g, wet)
+	testing.expect_value(t, differ, 0)
+	testing.expect(
+		t,
+		nonzero >= 900,
+		"the mirror has too few wet cells (the cells overwrite each other)",
+	)
+	_, secret_seen := mirror_differs(g, secret)
+	testing.expect_value(t, secret_seen, 0)
+	chunks_with := make(map[game.Chunk_Pos]struct{}, 8, context.temp_allocator)
+	for p in cells {chunks_with[game.chunk_of(p)] = {}}
+	testing.expect(t, len(chunks_with) >= 3, "the cells are not over three chunks")
+
+	// A chunk sent whole after the sets carries them: the mirror forgets its layers first.
+	for pos in chunks_with {
+		l := &g.sess.mirror.layers[pos]
+		game.layers_release(l, &g.sess.mirror.pools)
+		l^ = {}
+		changes_chunk(w, pos)
+	}
+	run(g, 3)
+	differ, nonzero = mirror_differs(g, wet)
+	testing.expect_value(t, differ, 0)
+	testing.expect(t, nonzero >= 900, "the whole chunks did not carry the channel")
+
+	// A block change resets wetness there, on both sides.
+	p := cells[len(cells) - 1]
+	testing.expect(t, value(w, p, wet) != 0)
+	testing.expect(t, set_block(w, p, .Stone, world_act(w, .Command)))
+	run(g, 2)
+	testing.expect_value(t, value(w, p, wet), 0)
+	mv, _ := mirror_channel(g, p, wet)
+	testing.expect_value(t, mv, 0)
+	differ, _ = mirror_differs(g, wet)
+	testing.expect_value(t, differ, 0)
+	testing.expect_value(t, len(g.sess.failures), 0)
+}
+
+@(private = "file")
+mirror_channel :: proc(g: ^Grief, p: game.Block_Pos, id: int) -> (u16, bool) {
+	l, ok := &g.sess.mirror.layers[game.chunk_of(p)]
+	if !ok {return 0, false}
+	return game.channel_get(&l.channels[id], game.local_index(game.local_of(p))), true
+}

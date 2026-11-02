@@ -203,7 +203,8 @@ loaded_chunks :: proc(w: ^World) -> []game.Chunk_Pos {
 hash_chunks :: proc(w: ^World, positions: []game.Chunk_Pos) -> u64 {
 	h := game.hasher_make()
 	for pos in positions {
-		game.hash_chunk(&h, pos, &chunks_get(&w.chunks, pos).blocks)
+		c := chunks_get(&w.chunks, pos)
+		game.hash_chunk(&h, pos, &c.blocks, &c.layers, w.server.registry.channels)
 	}
 	return game.hasher_finish(h)
 }

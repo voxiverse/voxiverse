@@ -378,6 +378,7 @@ Chunk_Message :: struct {
 	pos:        Chunk_Pos,
 	uniform:    Block,
 	is_uniform: bool,
+	channels:   []Wire_Channel, // the replicated channels not uniform at their default (M49c); the rest are at their defaults
 }
 
 Unload_Chunk :: struct {
@@ -867,7 +868,7 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Chunk_Message:
 		write_u8(w, u8(Server_Kind.Chunk))
 		write_chunk_pos(w, v.pos)
-		write_chunk_blocks(w, blocks)
+		write_chunk(w, blocks, v.channels)
 	case Unload_Chunk:
 		write_u8(w, u8(Server_Kind.Unload_Chunk))
 		write_chunk_pos(w, v.pos)
@@ -1148,7 +1149,7 @@ decode_server :: proc(
 		c := Chunk_Message {
 			pos = read_chunk_pos(&r),
 		}
-		c.uniform, c.is_uniform = read_chunk_blocks(&r, blocks)
+		c.uniform, c.is_uniform, c.channels = read_chunk(&r, blocks)
 		m = c
 	case u8(Server_Kind.Unload_Chunk):
 		m = Unload_Chunk {

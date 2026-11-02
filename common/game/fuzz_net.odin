@@ -384,6 +384,7 @@ fuzz_net_put :: proc(tx: ^Sender, rng: ^base.Rng) {
 					a = i32(i + 1),
 					b = i32(i),
 					c = 0,
+					d = i32(i + 1) if k.key == .Cell else 0, // (a Cell's channel: never 0, the computed light)
 				}}
 			switch {
 			case k.is_event:

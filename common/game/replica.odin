@@ -20,9 +20,9 @@ GROUP_HEADER_MAX :: 10
 STATE_MESSAGE :: u8(36) // Server_Kind.State
 SNAPSHOT_MESSAGE :: u8(37) // Server_Kind.Snapshot
 
-// Key: an id in a, or a Block_Pos in a, b, c.
+// Key: an id in a, or a Block_Pos in a, b, c (and a channel id in d for a Cell).
 Key :: struct {
-	a, b, c: i32,
+	a, b, c, d: i32,
 }
 
 Op :: enum u8 {
@@ -51,7 +51,9 @@ Replica :: struct {
 
 key_block :: proc(k: Key) -> Block_Pos {return {k.a, k.b, k.c}}
 
-key_of_block :: proc(p: Block_Pos) -> Key {return {p.x, p.y, p.z}}
+key_of_block :: proc(p: Block_Pos) -> Key {return {p.x, p.y, p.z, 0}}
+
+key_of_cell :: proc(p: Block_Pos, channel: int) -> Key {return {p.x, p.y, p.z, i32(channel)}}
 
 chunk_less_xyz :: proc(a, b: Chunk_Pos) -> bool {
 	if a.x != b.x {return a.x < b.x}
@@ -62,11 +64,13 @@ chunk_less_xyz :: proc(a, b: Chunk_Pos) -> bool {
 // key_less: the order records are sorted and written in. Blocks: by chunk,
 // then local index (so a chunk's changes are together).
 key_less :: proc(t: Key_Type, a, b: Key) -> bool {
-	if t == .Block {
+	if t == .Block || t == .Cell {
 		pa, pb := key_block(a), key_block(b)
 		ca, cb := chunk_of(pa), chunk_of(pb)
 		if ca != cb {return chunk_less_xyz(ca, cb)}
-		return local_index(local_of(pa)) < local_index(local_of(pb))
+		ia, ib := local_index(local_of(pa)), local_index(local_of(pb))
+		if ia != ib {return ia < ib}
+		return a.d < b.d
 	}
 	return u32(a.a) < u32(b.a)
 }
@@ -208,7 +212,7 @@ write_key :: proc(w: ^Writer, t: Key_Type, key: Key, has_prev: bool, prev: Key) 
 	case .Player, .Entity:
 		base := u64(u32(prev.a)) if has_prev else 0
 		write_varint64(w, u64(u32(key.a)) - base)
-	case .Block:
+	case .Block, .Cell:
 		p := key_block(key)
 		c := chunk_of(p)
 		index := local_index(local_of(p))
@@ -221,6 +225,7 @@ write_key :: proc(w: ^Writer, t: Key_Type, key: Key, has_prev: bool, prev: Key) 
 			write_svarint(w, c.z)
 			write_varint(w, u32(index))
 		}
+		if t == .Cell {write_varint(w, u32(key.d))}
 	}
 }
 
@@ -236,7 +241,7 @@ read_key :: proc(r: ^Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Ke
 		limit := u64(MAX_PLAYERS) if t == .Player else u64(max(u32)) + 1
 		if v >= limit {r.ok = false}
 		key.a = i32(u32(v))
-	case .Block:
+	case .Block, .Cell:
 		head := read_varint(r)
 		c: Chunk_Pos
 		index: u32
@@ -244,7 +249,9 @@ read_key :: proc(r: ^Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Ke
 			if !has_prev {r.ok = false; return}
 			c = chunk_of(key_block(prev))
 			index = head - 1
-			if has_prev && index <= u32(local_index(local_of(key_block(prev)))) {r.ok = false}
+			// (a Cell may repeat its position's index with a later channel: checked below)
+			if t == .Block && index <= u32(local_index(local_of(key_block(prev)))) {r.ok = false}
+			if t == .Cell && index < u32(local_index(local_of(key_block(prev)))) {r.ok = false}
 		} else {
 			c = {read_svarint(r), read_svarint(r), read_svarint(r)}
 			index = read_varint(r)
@@ -258,6 +265,18 @@ read_key :: proc(r: ^Reader, t: Key_Type, has_prev: bool, prev: Key) -> (key: Ke
 		if r.ok {
 			p := chunk_origin(c) + local_from_index(int(index))
 			key = key_of_block(p)
+		}
+		if t == .Cell {
+			ch := read_varint(r)
+			if ch == 0 || ch >= MAX_CHANNELS {r.ok = false}
+			key.d = i32(ch)
+			if r.ok &&
+			   has_prev &&
+			   head != 0 &&
+			   key_block(prev) == key_block(key) &&
+			   key.d <= prev.d {
+				r.ok = false
+			}
 		}
 	}
 	return
@@ -838,7 +857,7 @@ sort_by_priority :: proc(schema: ^Schema, cs: []Candidate, order: []int) {
 estimate_entry :: proc(k: ^Schema_Kind, op: Op, mask: u64, value: rawptr) -> int {
 	w: Writer
 	writer_init(&w, context.temp_allocator, 64)
-	write_entry(&w, k, op, mask, {max(i32), max(i32), max(i32)}, value, value, false, {})
+	write_entry(&w, k, op, mask, {max(i32), max(i32), max(i32), 0}, value, value, false, {})
 	return len(w.buf) + 5
 }
 

@@ -284,8 +284,24 @@ hash_chunk_blocks :: proc(h: ^Hasher, c: ^Chunk_Blocks) {
 }
 
 // hash_chunk folds a chunk's position and blocks (a checkpoint's unit).
-hash_chunk :: proc(h: ^Hasher, pos: Chunk_Pos, c: ^Chunk_Blocks) {
+// With layers, the replicated channels follow (what a mirror holds: infos tells which).
+hash_chunk :: proc(
+	h: ^Hasher,
+	pos: Chunk_Pos,
+	c: ^Chunk_Blocks,
+	layers: ^Chunk_Layers = nil,
+	infos: []Channel_Info = nil,
+) {
 	hasher_mix(h, u64(u32(pos.x)) | u64(u32(pos.y)) << 32)
 	hasher_mix(h, u64(u32(pos.z)))
 	hash_chunk_blocks(h, c)
+	if layers == nil {return}
+	defaults: [MAX_CHANNELS]u16
+	which: bit_set[0 ..< MAX_CHANNELS]
+	for info, id in infos {
+		if id >= MAX_CHANNELS {break}
+		defaults[id] = info.default
+		if info.replicated && info.computed == .None {which += {id}}
+	}
+	hash_chunk_layers(h, layers, defaults[:], which)
 }

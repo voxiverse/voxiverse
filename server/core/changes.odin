@@ -109,6 +109,8 @@ changes_flush :: proc(w: ^World) {
 	bulk := base.keys_sorted(ch.chunks, game.chunk_pos_less, context.temp_allocator)
 	columns := base.keys_sorted(ch.columns, column_less, context.temp_allocator)
 	edits := base.keys_sorted(ch.blocks, game.block_pos_less, context.temp_allocator)
+	cells := base.keys_sorted(ch.cells, cell_less, context.temp_allocator)
+	infos := s.registry.channels
 	for &c, i in s.clients {
 		if c.state != .Playing || c.world != w {continue}
 		disturb_near_changes(s, &c, edits, bulk)
@@ -122,7 +124,7 @@ changes_flush :: proc(w: ^World) {
 		}
 		for pos in whole {
 			chunk := chunks_get(&w.chunks, pos)
-			send_message(s, &c, game.Chunk_Message{pos = pos}, &chunk.blocks)
+			send_message(s, &c, chunk_message(w, chunk), &chunk.blocks)
 		}
 		// A player's edit, heard; the world's changes (flowing water), quietly.
 		for p in edits {
@@ -133,7 +135,23 @@ changes_flush :: proc(w: ^World) {
 			record := game.Block_Record{u16(b), who >= 0}
 			state_put(s, &c, .Block, &record, game.key_of_block(p))
 		}
+		// A replicated channel's changed cells, after the blocks (a block change reset
+		// its channels: the reset is among them).
+		for k in cells {
+			chunk := game.chunk_of(k.pos)
+			if chunk in ch.chunks || chunk in busy_set || chunk not_in c.has {continue}
+			if int(k.channel) >= len(infos) || !infos[k.channel].replicated {continue}
+			v, _ := chunks_channel(w, k.pos, int(k.channel))
+			record := game.Channel_Record{v}
+			state_put(s, &c, .Channel, &record, game.key_of_cell(k.pos, int(k.channel)))
+		}
 	}
+}
+
+@(private = "file")
+cell_less :: proc(a, b: Cell_Key) -> bool {
+	if a.pos != b.pos {return game.block_pos_less(a.pos, b.pos)}
+	return a.channel < b.channel
 }
 
 @(private = "file")

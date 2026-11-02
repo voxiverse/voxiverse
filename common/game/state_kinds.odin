@@ -31,6 +31,7 @@ State_Kind :: enum u8 {
 	Block,
 	Place,
 	Tally,
+	Channel,
 }
 
 Event_Kind :: enum u8 {
@@ -115,6 +116,11 @@ Entity_Motion :: struct {
 Block_Record :: struct {
 	block: u16, // a block number (any pack's): check_block_record asks the registry
 	heard: bool,
+}
+
+// Channel_Record: a replicated channel's value at a cell (key: the cell and the channel).
+Channel_Record :: struct {
+	value: u16, // at most the channel's max: the client's apply asks the registry
 }
 
 // MAX_BIOMES: the most biomes a generator may have (a Place's biome is below it).
@@ -235,6 +241,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	},
 	.Place = {name = "place", value = Place, check = check_place},
 	.Tally = {name = "tally", value = Tally},
+	.Channel = {name = "channel", value = Channel_Record, key = .Cell, write_through = true},
 }
 
 @(rodata)

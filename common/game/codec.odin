@@ -227,10 +227,68 @@ read_string :: proc(r: ^Reader, max_len: int) -> string {
 // palette of the distinct blocks, then runs of (length, palette index) in
 // local_index order covering exactly CHUNK_VOLUME blocks.
 
+// The layered encodings (M49c) are the plain ones followed by `varint n` and n channels,
+// each `varint channel id` and write_channel_body's body: a chunk whose replicated
+// channels are all uniform at their defaults uses the plain encoding.
 @(private = "file")
 Chunk_Encoding :: enum u8 {
 	Uniform,
 	Palette_Runs,
+	Uniform_Layers,
+	Palette_Runs_Layers,
+}
+
+// Wire_Channel: one channel of a chunk as the chunk message carries it.
+Wire_Channel :: struct {
+	id:     u8,
+	values: ^[CHANNEL_CELLS]u16, // (the decoder's: from the temp allocator)
+}
+
+// chunk_wire_channels: the replicated, stored channels of l that are not uniform at their
+// default, as plain arrays from allocator (nil for the plain encoding).
+chunk_wire_channels :: proc(
+	l: ^Chunk_Layers,
+	infos: []Channel_Info,
+	allocator := context.temp_allocator,
+) -> []Wire_Channel {
+	out: [dynamic]Wire_Channel
+	for info, id in infos {
+		if !info.replicated || info.computed != .None || id >= MAX_CHANNELS {continue}
+		ch := &l.channels[id]
+		if ch.mode == .Uniform && ch.uniform == info.default {continue}
+		if out == nil {out = make([dynamic]Wire_Channel, allocator)}
+		v := new([CHANNEL_CELLS]u16, allocator)
+		for i in 0 ..< CHANNEL_CELLS {v[i] = channel_get(ch, i)}
+		append(&out, Wire_Channel{u8(id), v})
+	}
+	return out[:]
+}
+
+write_chunk :: proc(w: ^Writer, c: ^Chunk_Blocks, channels: []Wire_Channel) {
+	start := len(w.buf)
+	write_chunk_blocks(w, c)
+	if len(channels) == 0 {return}
+	w.buf[start] += 2 // (Uniform to Uniform_Layers, Palette_Runs to Palette_Runs_Layers)
+	write_varint(w, u32(len(channels)))
+	for ch in channels {
+		write_varint(w, u32(ch.id))
+		write_channel_body(w, ch.values)
+	}
+}
+
+// read_chunk is read_chunk_blocks for a chunk message: the layered encodings too, their
+// channels from the temp allocator. A channel the reader's registry does not have or
+// computes, one listed twice, or a value above its max fails the reader.
+read_chunk :: proc(
+	r: ^Reader,
+	dst: ^Block_Array,
+) -> (
+	uniform: Block,
+	is_uniform: bool,
+	channels: []Wire_Channel,
+) {
+	uniform, is_uniform = read_chunk_encoded(r, dst, true, &channels)
+	return
 }
 
 write_chunk_blocks :: proc(w: ^Writer, c: ^Chunk_Blocks) {
@@ -266,7 +324,26 @@ write_chunk_blocks :: proc(w: ^Writer, c: ^Chunk_Blocks) {
 // read_chunk_blocks decodes into dst; is_uniform reports a uniform chunk
 // (dst untouched). Anything malformed fails the reader.
 read_chunk_blocks :: proc(r: ^Reader, dst: ^Block_Array) -> (uniform: Block, is_uniform: bool) {
+	return read_chunk_encoded(r, dst, false, nil)
+}
+
+@(private = "file")
+read_chunk_encoded :: proc(
+	r: ^Reader,
+	dst: ^Block_Array,
+	layers: bool,
+	channels: ^[]Wire_Channel,
+) -> (
+	uniform: Block,
+	is_uniform: bool,
+) {
 	encoding := read_u8(r)
+	layered := encoding >= u8(Chunk_Encoding.Uniform_Layers)
+	if layered {
+		if !layers {reader_fail(r); return}
+		encoding -= 2
+	}
+	defer if layered && r.ok {read_chunk_channels(r, channels)}
 	switch encoding {
 	case u8(Chunk_Encoding.Uniform):
 		id := read_u16(r)
@@ -304,4 +381,23 @@ read_chunk_blocks :: proc(r: ^Reader, dst: ^Block_Array) -> (uniform: Block, is_
 	}
 	reader_fail(r)
 	return
+}
+
+@(private = "file")
+read_chunk_channels :: proc(r: ^Reader, out: ^[]Wire_Channel) {
+	n := read_varint(r)
+	if !r.ok || r.reg == nil || n == 0 || n > MAX_CHANNELS {reader_fail(r); return}
+	list := make([dynamic]Wire_Channel, context.temp_allocator)
+	for _ in 0 ..< n {
+		id := read_varint(r)
+		if !r.ok || id >= u32(len(r.reg.channels)) || id >= MAX_CHANNELS {reader_fail(r); return}
+		info := r.reg.channels[id]
+		if info.computed != .None {reader_fail(r); return}
+		for c in list {if u32(c.id) == id {reader_fail(r); return}}
+		values := new([CHANNEL_CELLS]u16, context.temp_allocator)
+		read_channel_body(r, values, channel_max(info))
+		if !r.ok {return}
+		append(&list, Wire_Channel{u8(id), values})
+	}
+	out^ = list[:]
 }

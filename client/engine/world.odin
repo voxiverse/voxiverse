@@ -48,6 +48,7 @@ Light_Cache :: struct {
 Client_Chunk :: struct {
 	pos:            game.Chunk_Pos,
 	blocks:         game.Chunk_Blocks,
+	layers:         game.Chunk_Layers, // the replicated channels (M49c): kept, not yet used
 	version:        u32, // bumped whenever its mesh's inputs change: its blocks, or a neighbour's
 	blocks_version: u32, // bumped whenever its own blocks change (what light keys are made of)
 	light:          ^Light_Cache, // the light its mesh was made with (nil: none yet)
@@ -85,6 +86,7 @@ World :: struct {
 	chunks:        base.Pool(Client_Chunk, Chunk_Handle),
 	by_pos:        map[game.Chunk_Pos]Chunk_Handle,
 	arrays:        game.Block_Arrays,
+	pools:         game.Layer_Pools, // the pages of the chunks' layers
 	jobs:          base.Jobs,
 	done:          base.Queue(^Mesh_Task), // from workers
 	free_tasks:    [dynamic]^Mesh_Task,
@@ -198,6 +200,11 @@ world_init :: proc(
 		capacity + 27 * (workers * MESH_TASKS_PER_WORKER + URGENT_TASKS + 1),
 		arena,
 	) or_return
+	game.layer_pools_init(
+		&w.pools,
+		capacity * game.registry_replicated_channels(reg),
+		arena,
+	) or_return
 	w.to_mesh = make([dynamic]Chunk_Handle, 0, capacity, arena) or_return
 	w.mesh_removals = make([dynamic]render.Mesh_Handle, 0, capacity, arena) or_return
 	// Columns: at most one per loaded chunk (in practice far fewer).
@@ -238,6 +245,7 @@ world_destroy :: proc(w: ^World) {
 		game.light_scratch_destroy(&t.scratch)
 	}
 	game.block_arrays_destroy(&w.arrays)
+	game.layer_pools_destroy(&w.pools)
 	for l in w.light_all {free(l, w.light_all.allocator)}
 	delete(w.light_all)
 	delete(w.light_free)
@@ -245,6 +253,20 @@ world_destroy :: proc(w: ^World) {
 	delete(w.cells)
 	delete(w.holes)
 	w^ = {}
+}
+
+// world_set_channel sets a replicated channel's value at p (false: no such chunk, or out of pages).
+world_set_channel :: proc(w: ^World, p: game.Block_Pos, ch: int, v: u16) -> bool {
+	c := world_get(w, game.chunk_of(p))
+	if c == nil {return false}
+	return game.layers_set(&c.layers, &w.pools, ch, game.local_index(game.local_of(p)), v) == nil
+}
+
+// world_channel reads a replicated channel's value at p.
+world_channel :: proc(w: ^World, p: game.Block_Pos, ch: int) -> (u16, bool) {
+	c := world_get(w, game.chunk_of(p))
+	if c == nil || ch < 0 || ch >= game.MAX_CHANNELS {return 0, false}
+	return game.channel_get(&c.layers.channels[ch], game.local_index(game.local_of(p))), true
 }
 
 // world_block reads one block for physics (game.Block_Query); not loaded
@@ -269,6 +291,7 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 	if exists {
 		c = base.pool_get(&w.chunks, h)
 		game.chunk_release(&c.blocks, &w.arrays)
+		game.layers_release(&c.layers, &w.pools)
 	} else {
 		column, has_column := &w.columns[[2]i32{m.pos.x, m.pos.z}]
 		if !has_column {
@@ -283,6 +306,10 @@ world_set_chunk :: proc(w: ^World, m: game.Chunk_Message, scratch: ^game.Block_A
 			return false
 		}
 		w.by_pos[m.pos] = h
+	}
+	if game.layers_from_wire(&c.layers, &w.pools, w.reg.channels, m.channels) != nil {
+		log.error("client out of channel pages")
+		return false
 	}
 	if m.is_uniform {
 		c.blocks = {
@@ -562,6 +589,7 @@ world_remove_chunk :: proc(w: ^World, pos: game.Chunk_Pos) {
 	if c.mesh != 0 {append(&w.mesh_removals, c.mesh)}
 	if c.pending != 0 {append(&w.mesh_removals, c.pending)}
 	game.chunk_release(&c.blocks, &w.arrays)
+	game.layers_release(&c.layers, &w.pools)
 	light_release(w, c)
 	delete_key(&w.by_pos, pos)
 	column := &w.columns[[2]i32{pos.x, pos.z}]

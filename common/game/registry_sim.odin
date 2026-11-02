@@ -41,6 +41,13 @@ registry_channel :: proc(reg: ^Registry, text: string) -> (int, bool) {
 	return int(n), found
 }
 
+// registry_replicated_channels: how many channels a client keeps (replicated, not computed).
+registry_replicated_channels :: proc(reg: ^Registry) -> int {
+	n := 0
+	for c in reg.channels {if c.replicated && c.computed == .None {n += 1}}
+	return n
+}
+
 // channels_stored: how many channels have storage (are not computed).
 registry_stored_channels :: proc(reg: ^Registry) -> int {
 	n := 0

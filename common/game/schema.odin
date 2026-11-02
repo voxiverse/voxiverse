@@ -33,6 +33,7 @@ Key_Type :: enum u8 {
 	Player,
 	Entity,
 	Block,
+	Cell, // a Block_Pos and a channel id
 }
 
 // Predicted: how a client reconciles a record of the kind with what it

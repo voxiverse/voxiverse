@@ -1,5 +1,6 @@
 package engine
 
+import "core:fmt"
 import "core:log"
 import "core:strings"
 import "core:time"
@@ -33,6 +34,7 @@ APPLY := [game.State_Kind]Apply_Proc {
 	.Block         = apply_block,
 	.Place         = apply_place,
 	.Tally         = apply_tally,
+	.Channel       = apply_channel,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -222,6 +224,31 @@ apply_block :: proc(s: ^Session, g: game.Received) {
 	old, _ := world_block(&s.world, p)
 	block := game.Block(v.block)
 	if world_set_block(&s.world, p, block) && old != block {edit_sound(s, p, old, block)}
+}
+
+@(private)
+apply_channel :: proc(s: ^Session, g: game.Received) {
+	if g.op == .Remove {return}
+	id := int(g.key.d)
+	v := (^game.Channel_Record)(g.value).value
+	if id <= 0 || id >= len(s.reg.channels) || !s.reg.channels[id].replicated {
+		fail(s, fmt.tprintf("the server sent a value of channel %d, which is not replicated", id))
+		return
+	}
+	info := s.reg.channels[id]
+	if v > game.channel_max(info) {
+		fail(
+			s,
+			fmt.tprintf(
+				"the server sent channel %s value %d above %d",
+				info.name,
+				v,
+				game.channel_max(info),
+			),
+		)
+		return
+	}
+	world_set_channel(&s.world, game.key_block(g.key), id, v)
 }
 
 @(private)

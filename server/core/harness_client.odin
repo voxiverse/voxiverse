@@ -30,6 +30,8 @@ Mirror :: struct {
 	scratch:       ^game.Block_Array,
 	arrays:        game.Block_Arrays,
 	chunks:        map[game.Chunk_Pos]game.Chunk_Blocks,
+	layers:        map[game.Chunk_Pos]game.Chunk_Layers, // its replicated channels (M49c)
+	pools:         game.Layer_Pools,
 	prediction:    game.Prediction,
 	rules:         game.Rules,
 	welcomed:      bool,
@@ -135,10 +137,19 @@ mirror_pump :: proc(sess: ^Session) {
 			}
 			if old, had := &m.chunks[v.pos]; had {game.chunk_release(old, &m.arrays)}
 			m.chunks[v.pos] = blocks
+			if v.pos not_in m.layers {m.layers[v.pos] = {}}
+			l := &m.layers[v.pos]
+			if game.layers_from_wire(l, &m.pools, m.rx.reg.channels, v.channels) != nil {
+				append(&sess.failures, "the mirror is out of channel pages")
+			}
 		case game.Unload_Chunk:
 			if old, had := &m.chunks[v.pos]; had {
 				game.chunk_release(old, &m.arrays)
 				delete_key(&m.chunks, v.pos)
+			}
+			if l, had := &m.layers[v.pos]; had {
+				game.layers_release(l, &m.pools)
+				delete_key(&m.layers, v.pos)
 			}
 		case game.State_Message:
 			got := make([dynamic]game.Received, context.temp_allocator)
@@ -188,6 +199,21 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		case .Block:
 			v := (^game.Block_Record)(g.value)
 			mirror_set(m, game.key_block(g.key), game.Block(v.block))
+		case .Channel:
+			p := game.key_block(g.key)
+			if l, ok := &m.layers[game.chunk_of(p)]; ok && g.op != .Remove {
+				v := (^game.Channel_Record)(g.value).value
+				if game.layers_set(
+					   l,
+					   &m.pools,
+					   int(g.key.d),
+					   game.local_index(game.local_of(p)),
+					   v,
+				   ) !=
+				   nil {
+					append(&sess.failures, "the mirror is out of channel pages")
+				}
+			}
 		case .Own_Player:
 			v := (^game.Own_Player)(g.value)^
 			m.last_update = v
@@ -263,6 +289,7 @@ session_start :: proc(
 	m.endpoint = harness_local(&sess.h)
 	m.scratch = new(game.Block_Array)
 	game.block_arrays_init(&m.arrays, 2048)
+	game.layer_pools_init(&m.pools, 2048 * game.registry_replicated_channels(sess.h.srv.registry))
 	m.key = test_key("determinism")
 	m.schema = game.game_schema()
 	game.receiver_init(&m.rx, &m.schema, sess.h.srv.registry)
@@ -290,6 +317,9 @@ session_stop :: proc(sess: ^Session) {
 	m := &sess.mirror
 	for _, &c in m.chunks {game.chunk_release(&c, &m.arrays)}
 	delete(m.chunks)
+	for _, &l in m.layers {game.layers_release(&l, &m.pools)}
+	delete(m.layers)
+	game.layer_pools_destroy(&m.pools)
 	delete(m.entities)
 	for n in m.notices {delete(n)}
 	delete(m.notices)
@@ -470,7 +500,8 @@ checkpoint :: proc(sess: ^Session) -> Checkpoint {
 	for pos in m.chunks {append(&held, pos)}
 	slice.sort_by(held[:], game.chunk_pos_less)
 	h := game.hasher_make()
-	for pos in held {game.hash_chunk(&h, pos, &m.chunks[pos])}
+	channels := sess.h.srv.registry.channels
+	for pos in held {game.hash_chunk(&h, pos, &m.chunks[pos], &m.layers[pos], channels)}
 	return {hash_chunks(sess.h.srv.home, held[:]), game.hasher_finish(h)}
 }
 

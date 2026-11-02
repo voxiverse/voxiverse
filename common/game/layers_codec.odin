@@ -158,3 +158,41 @@ layers_apply :: proc(
 	}
 	return nil
 }
+
+// layers_from_wire makes l what a chunk message said: every channel at its default but
+// the ones listed (a mirror's or client's copy; released first).
+layers_from_wire :: proc(
+	l: ^Chunk_Layers,
+	pools: ^Layer_Pools,
+	infos: []Channel_Info,
+	wire: []Wire_Channel,
+) -> mem.Allocator_Error {
+	layers_release(l, pools)
+	for info, id in infos {
+		if id < MAX_CHANNELS {l.channels[id] = {
+				uniform = info.default,
+			}}
+	}
+	for wc in wire {
+		if int(wc.id) >= len(infos) {continue}
+		ch := &l.channels[wc.id]
+		d := infos[wc.id].default
+		for v, i in wc.values {
+			if v != d {channel_set(ch, pools, i, v) or_return}
+		}
+		channel_compact(ch, pools)
+	}
+	return nil
+}
+
+// layers_set sets one channel's value at local index i (the pools may be exhausted).
+layers_set :: proc(
+	l: ^Chunk_Layers,
+	pools: ^Layer_Pools,
+	ch: int,
+	i: int,
+	v: u16,
+) -> mem.Allocator_Error {
+	if ch < 0 || ch >= MAX_CHANNELS {return nil}
+	return channel_set(&l.channels[ch], pools, i, v)
+}

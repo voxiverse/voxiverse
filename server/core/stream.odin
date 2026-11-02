@@ -239,7 +239,7 @@ stream :: proc(s: ^Server, c: ^Client) -> (sent: int) {
 		c.columns[column] += 1
 		{
 			base.profile_scope("send chunk")
-			bytes -= send_message(s, c, game.Chunk_Message{pos = pos}, &chunk.blocks)
+			bytes -= send_message(s, c, chunk_message(w, chunk), &chunk.blocks)
 		}
 		c.has[pos] = {}
 		budget -= 1
