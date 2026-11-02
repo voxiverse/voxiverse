@@ -535,6 +535,7 @@ re-read, CI round trips), so the next week is planned from numbers:
 
 | # | Slice | Exit check |
 |---|---|---|
+| F1 | [client/main fails on macOS CI with no cause shown (issue #104, #105; the owner's priority, first among the open rows)](milestones/F1.md) | the macOS log of a failed `client/main` run is read through the new failure report, its cause is fixed at the root (no retry, skip or loosened bound), and `./build.sh test client/main` passes under load with `ODIN_TEST_RANDOM_SEED=20995611411 ODIN_TEST_THREADS=3` | (part one done: `failure_excerpt` in `tools/build/main.odin` prints the first error line or the exit status, `Job.status`, CI uploads `build/test/*.log` on failure; the name collision is already fixed (#101, `test_name`)) |
 | M0 | Skeleton: layout, build driver (`check`, `build`, `run`, `test`), `base/` (pools, handles, arenas) with tests, CI bootstrapped with odinup on Windows/Linux/macOS | `check` + `test` green in CI |
 | M1 | Window + GPU: Win32 and X11 backends, Vulkan device/swapchain/frames in flight, a clear + triangle, resize/minimize | Runs on Windows and Linux with zero validation messages |
 | M1b | macOS spike: Cocoa backend + MoltenVK showing the same triangle | Confirms MoltenVK covers the Vulkan features we use (needs a Mac). Replaced by M47d and M47e (2026-10-27, slimmed down by #35): the port is built and packaged in CI, a tester's Mac is the only check |

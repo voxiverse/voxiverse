@@ -48,6 +48,14 @@ jobs:
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
       - name: Test
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
+      # The packages' own output, kept when a test failed (the report shows the first error line; the rest is here).
+      - name: Test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ matrix.os }}
+          path: build/test/*.log
+          if-no-files-found: ignore
       # The scripted 10 000-tick session at both optimization levels (M38):
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
@@ -122,6 +130,13 @@ jobs:
         run: |
           echo "ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"
           ./build.sh test || { echo "::error::tests failed with ODIN_TEST_RANDOM_SEED=$ODIN_TEST_RANDOM_SEED"; exit 1; }
+      - name: Test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-ubuntu-latest
+          path: build/test/*.log
+          if-no-files-found: ignore
       # Every parser of untrusted input, 2 000 cases each at the fixed seed 84 (a push never
       # fails on a seed nobody has seen: the nightly run takes others), then the regression
       # files of every crash found (Q1, docs/fuzzing.md).

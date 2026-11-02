@@ -957,10 +957,58 @@ test_count :: proc(path: string) -> string {
 	return fmt.tprintf(" %s %s", fields[1], strings.trim_right(fields[2], "."))
 }
 
-// print_file writes a file's content to stdout (nothing if it cannot be read).
-print_file :: proc(path: string) {
-	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
-	if err == nil {os.write(os.stdout, data)}
+// FAILURE_MARKS: what makes a log line a cause: the test runner's [ERROR] lines (failed
+// expects, bad memory, a panic it caught) and what a crash prints.
+FAILURE_MARKS :: []string {
+	"[ERROR]",
+	"[FATAL]",
+	"panic",
+	"Panic",
+	"Assertion",
+	"assertion",
+	"Segmentation",
+	"Illegal instruction",
+	"signal",
+	"Bad memory",
+	"bad free",
+	"The following test",
+	"Failed test",
+}
+
+// failure_excerpt is what a failed package's report shows (instead of the head of its
+// log, which is only start-up lines): the first cause line first, then every cause line
+// (up to 40), then the log's last 15 lines. A log without any cause line says so and
+// gives the exit status (status < 0: there is none, the run was killed at its limit).
+// On POSIX a process killed by a signal reports the signal number as its status
+// (6 abort, 9 kill, 11 segfault), which the Odin runtime does not tell from an exit(n).
+failure_excerpt :: proc(log: string, status: int, allocator := context.temp_allocator) -> string {
+	b := strings.builder_make(allocator)
+	lines := strings.split_lines(strings.trim_right(log, "\r\n"), context.temp_allocator)
+	causes := make([dynamic]string, context.temp_allocator)
+	for line in lines {
+		for mark in FAILURE_MARKS {
+			if strings.contains(line, mark) {
+				append(&causes, line)
+				break
+			}
+		}
+	}
+	if len(causes) > 0 {
+		fmt.sbprintfln(&b, "first error line: %s", causes[0])
+		fmt.sbprintfln(&b, "--- %d error lines ---", len(causes))
+		for line in causes[:min(len(causes), 40)] {fmt.sbprintln(&b, line)}
+	} else if status >= 0 {
+		fmt.sbprintfln(
+			&b,
+			"NO ERROR LINE in the log: the process ended with exit status %d with nothing said (a crash or a kill: on macOS and Linux a status such as 6, 9 or 11 is the signal ABRT, KILL or SEGV)",
+			status,
+		)
+	} else {
+		fmt.sbprintln(&b, "NO ERROR LINE in the log: the process was killed at its time limit")
+	}
+	fmt.sbprintfln(&b, "--- last lines of the log (%d lines in all) ---", len(lines))
+	for line in lines[max(0, len(lines) - 15):] {fmt.sbprintln(&b, line)}
+	return strings.to_string(b)
 }
 
 // test_packages runs packages' tests, width at a time, each under its time limit; a run
@@ -972,12 +1020,14 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		packages: []string,
 		steps:    []Odin_Step,
 		limits:   []time.Duration,
+		statuses: []int, // each job's exit status (limited.Job.status)
 		ok:       bool,
 	}
 	state := State {
 		packages = packages,
 		steps    = make([]Odin_Step, len(packages)),
 		limits   = make([]time.Duration, len(packages)),
+		statuses = make([]int, len(packages)),
 		ok       = true,
 	}
 	jobs := make([]limited.Job, len(packages))
@@ -1009,10 +1059,11 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		}
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
 		jobs[i] = limited.Job {
-			cmd   = cmd,
-			limit = state.limits[i],
-			log   = test_log(pkg),
-			quiet = true, // (printed by done when the package failed)
+			cmd    = cmd,
+			limit  = state.limits[i],
+			log    = test_log(pkg),
+			quiet  = true, // (printed by done when the package failed)
+			status = &state.statuses[i],
 		}
 	}
 	if reused > 0 {fmt.printfln("test   %d unchanged since built: run without compiling", reused)}
@@ -1037,11 +1088,13 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 			)
 			fmt.printfln("test   %s%s (%.1f s)", pkg, test_count(test_log(pkg)), seconds)
 		case .Failed:
-			print_file(test_log(pkg))
+			data, _ := os.read_entire_file_from_path(test_log(pkg), context.temp_allocator)
+			fmt.eprint(failure_excerpt(string(data), state.statuses[index]))
 			fmt.eprintfln("test   %s FAILED (its output: %s)", pkg, test_log(pkg))
 			state.ok = false
 		case .Timed_Out:
-			print_file(test_log(pkg))
+			data, _ := os.read_entire_file_from_path(test_log(pkg), context.temp_allocator)
+			fmt.eprint(failure_excerpt(string(data), -1))
 			fmt.eprintfln(
 				"test   %s FAILED: still running after %.0f s (the limit): killed it and its children",
 				pkg,

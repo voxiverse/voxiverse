@@ -84,6 +84,7 @@ Job :: struct {
 	log:    string, // its stdout and stderr until it ends (a file run_parallel overwrites)
 	errors: string, // its stderr instead, when set
 	quiet:  bool, // its log is not printed (the caller reads it)
+	status: ^int, // when set, told the exit status the job ended with (on POSIX a kill is its signal number; -1: none, it was killed at its limit or never started)
 }
 
 // Job_Done is told each job's end, in the order they end, after its output is printed.
@@ -131,6 +132,7 @@ run_parallel :: proc(
 		}
 		for next < len(jobs) && len(running) < max(width, 1) {
 			job := jobs[next]
+			if job.status != nil {job.status^ = -1}
 			if p, ok := job_start(job); ok {
 				append(&running, Running{next, p, time.tick_now()})
 			} else {
@@ -146,6 +148,7 @@ run_parallel :: proc(
 			job := jobs[r.index]
 			result: Run_Result
 			state, werr := os.process_wait(r.process, 0)
+			if job.status != nil {job.status^ = state.exit_code if werr == nil else -1}
 			if werr == nil {
 				result = .Ok if state.exited && state.exit_code == 0 else .Failed
 			} else if job.limit > 0 && time.tick_since(r.started) > job.limit {
