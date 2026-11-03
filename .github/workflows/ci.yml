@@ -639,7 +639,15 @@ jobs:
           # What the loader will be given: the manifest and what sits beside it.
           Get-ChildItem (Split-Path $icd) | Format-Table Name, Length
           Get-Content $icd
-          $env:VK_DRIVER_FILES = $icd
+          # The registry, not VK_DRIVER_FILES: the Vulkan loader ignores that
+          # variable (and VK_ICD_FILENAMES) in an elevated process, as a
+          # security rule, and the runners are elevated. It reads drivers from
+          # this key: a REG_DWORD of 0 named with the manifest's absolute path.
+          $icdFull = (Resolve-Path $icd).Path
+          $key = "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers"
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name $icdFull -PropertyType DWord -Value 0 -Force | Out-Null
+          Get-ItemProperty $key
           $env:VX_SAVES = "$env:RUNNER_TEMP\saves"
           $env:VX_SETTINGS = "$env:RUNNER_TEMP\settings.cfg"
           Remove-Item .\screenshots\package.png -ErrorAction SilentlyContinue
