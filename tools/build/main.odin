@@ -278,6 +278,8 @@ main :: proc() {
 			step.started = info.modification_time
 			odin_step_succeeded(&step)
 		}
+	case "release-notes":
+		ok = release_notes_command(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		ok = true
@@ -326,6 +328,9 @@ usage :: proc() {
 	)
 	fmt.println(
 		"  determinism  run the scripted session at -o:minimal and -o:speed and compare the logs (--compare <dir>: every log in a directory)",
+	)
+	fmt.println(
+		"  release-notes <tag> <file>  write a version tag's draft release notes (changes since the previous version tag, the script API's, downloads)",
 	)
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")

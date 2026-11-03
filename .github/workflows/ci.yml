@@ -1,14 +1,14 @@
 name: ci
 on:
   # Branch pushes: not for changes to Markdown alone (README, PLAN, DEBUGGING):
-  # nothing there is built or tested. Tags: only the named releases (v0.1.0,
-  # v0.2.0...), which need the packages and the draft release. A patch tag
-  # (v0.1.1, the daily ones) points at a commit main's CI has already tested.
+  # nothing there is built or tested. Tags: every version tag (v*.*.*)
+  # builds the packages and drafts a release; it usually points at a commit
+  # main's CI has already tested.
   # (GitHub ignores paths for tags, and a push event with both filters runs
   # for a branch matching `branches` or a tag matching `tags`.)
   push:
     branches: ["**"]
-    tags: ["v*.*.0"]
+    tags: ["v*.*.*"]
     paths-ignore: ["**.md"]
   pull_request:
     paths-ignore: ["**.md"]
@@ -30,7 +30,7 @@ env:
 # pinned shader compiler itself).
 
 jobs:
-  # Whether this run has anything left to test. A v*.*.0 tag on a commit whose
+  # Whether this run has anything left to test. A version tag on a commit whose
   # push run on main passed has been tested: its test jobs are skipped and only
   # the packages, their checks and the draft release run. A tag on any other
   # commit, and every branch push, run everything.
@@ -671,16 +671,15 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  # A minor version tag (v0.1.0, a named playtest build) makes a draft GitHub
-  # Release with the packages and their checksums: nothing is public until it
-  # is looked at and published by hand. The tag's message is the release's
-  # name. Patch tags (v0.1.1, the daily ones) make no release.
+  # Every version tag (v*.*.*) makes a draft GitHub Release with the packages
+  # and their checksums: nothing is public until it is looked at and published
+  # by hand. The tag's message is the release's name.
   release:
     name: Draft release
     # Runs when the packages built and either main already tested this commit
     # (the test jobs were skipped) or every test job passed.
     if: >-
-      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && endsWith(github.ref, '.0')
+      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v')
       && needs.package.result == 'success'
       && (needs.gate.outputs.tested == 'true'
       || (needs.build.result == 'success' && needs.linux-tests.result == 'success'
@@ -695,6 +694,7 @@ jobs:
           fetch-depth: 0 # the history: the notes list the commits since the last tag
       - name: Tags
         run: git fetch --force --tags origin
+      - uses: ./.github/actions/setup
       # The packages as files (a zip is not unpacked).
       - uses: actions/download-artifact@v8
         with:
@@ -713,6 +713,7 @@ jobs:
             "tag $TAG" | "tag $VERSION" | "commit "*) TITLE="Voxiverse $VERSION" ;;
             *) TITLE="Voxiverse ${NAME#tag } ($VERSION)" ;;
           esac
+          ./build.sh release-notes "$TAG" "$RUNNER_TEMP/notes.md"
           cd dist
           ls -l
           # Exactly the three packages, as files, for this version.
@@ -721,33 +722,4 @@ jobs:
           test -f "voxiverse-$VERSION-linux-x64.tar.gz"
           test -f "voxiverse-$VERSION-macos-arm64.zip"
           sha256sum * > SHA256SUMS
-          # The notes: the milestones done since the previous x.y.0 tag (or
-          # since the start), from the commit subjects, to be edited.
-          PREV="$(git tag --list 'v*.*.0' --sort=-v:refname | grep -vx "$TAG" | while read -r t; do
-            if git merge-base --is-ancestor "$t" "$TAG"; then echo "$t"; break; fi
-          done)"
-          RANGE="${PREV:+$PREV..}$TAG"
-          LIST="$(git log --reverse --format=%s "$RANGE" | grep -E '^M[0-9]+[a-z]*: ' | awk '!seen[$0]++ {print "- " $0}' || true)"
-          # The first x.y.0 tag runs from the start: keep the 40 newest.
-          if [ -z "$PREV" ]; then
-            COUNT="$(printf '%s\n' "$LIST" | grep -c '^- ' || true)"
-            if [ "$COUNT" -gt 40 ]; then
-              LIST="$(printf '%s\n' "$LIST" | tail -n 40)"$'\n'"- …and $((COUNT - 40)) earlier milestones"
-            fi
-          fi
-          {
-            echo "## What's in it"
-            echo
-            echo "${LIST:-- (no milestone commits)}"
-            echo
-            echo "## Downloads"
-            echo
-            echo "- Windows (64-bit): the .zip. Windows may warn about an unknown publisher (not code-signed yet): More info, Run anyway."
-            echo "- Linux (64-bit): the .tar.gz. Needs a Vulkan 1.3 driver."
-            echo "- macOS (Apple Silicon): the .zip. macOS asks you to confirm opening an app that is not from the App Store: see README.txt."
-            echo
-            echo "Will it run on your computer, and what to include in a report: https://github.com/voxiverse/voxiverse/blob/main/docs/platforms.md"
-            echo
-            echo "README.txt inside says where settings and saves are kept. SHA256SUMS lists each file's checksum."
-          } > ../notes.md
-          gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file ../notes.md *
+          gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" *

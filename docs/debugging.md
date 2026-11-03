@@ -394,9 +394,12 @@ leak, sanitizer report, malformed trace or printer regression fails the build.
 A failed step does not stop the steps that don't depend on it: each runs under
 `!cancelled()`, so one run reports every failure (a step that needs the built game runs only if
 the build succeeded). The determinism job compares whatever logs exist and fails if any
-platform's pair is missing. A `v*.*.0` tag on a commit whose push run on main passed skips the
+platform's pair is missing. A version tag (`v*.*.*`) on a commit whose push run on main passed skips the
 test jobs and only builds and checks the packages and drafts the release; on any other commit it
-runs everything.
+runs everything. Every version tag drafts a GitHub release with the packages and `SHA256SUMS`.
+Its notes come from `./build.sh release-notes <tag> <file>`: every commit subject since the
+previous version tag that is its ancestor, and a Script API section of the commits that change
+`docs/script*`.
 
 ### Reports
 
