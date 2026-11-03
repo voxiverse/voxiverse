@@ -6,6 +6,7 @@ import "core:log"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "core:sync"
 import NS "core:sys/darwin/Foundation"
 import "core:sys/posix"
 import vk "vendor:vulkan"
@@ -276,6 +277,11 @@ foreign carbon {
 	kTISPropertyUnicodeKeyLayoutData: rawptr
 }
 
+// The Text Input Sources API aborts the process when two threads are inside it
+// at once, so every call into it goes through this lock.
+@(private = "file")
+tis_lock: sync.Mutex
+
 // The layout's character for a physical key, without modifiers and without
 // dead-key state: what the key is "marked" as.
 @(private)
@@ -288,6 +294,7 @@ native_key_symbol :: proc(w: ^Window, key: Key) -> Key {
 		}
 	}
 	if keycode < 0 {return .Unknown}
+	sync.mutex_guard(&tis_lock)
 	source := TISCopyCurrentKeyboardLayoutInputSource()
 	if source == nil {return .Unknown}
 	defer CFRelease(source)
