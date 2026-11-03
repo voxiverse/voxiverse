@@ -36,7 +36,8 @@ crash_signal :: proc "c" (sig: posix.Signal, info: ^posix.siginfo_t, _: rawptr) 
 	buf: [128]u8
 	address := info.si_addr if info != nil else nil
 	what := fmt.bprintf(buf[:], "signal=%v address=%p", sig, address)
-	if sig == .SIGSEGV && stack_overflow_at(address) {
+	// A guard page is hit as SIGSEGV (Linux) or SIGBUS (macOS).
+	if (sig == .SIGSEGV || sig == .SIGBUS) && stack_overflow_at(address) {
 		what = fmt.bprintf(buf[:], "signal=%v address=%p (stack overflow)", sig, address)
 	}
 	crash_report(what)

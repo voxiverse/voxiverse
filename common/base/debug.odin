@@ -185,7 +185,6 @@ crash_report :: proc(what: string) {
 	context.logger = active.logger
 	sync.atomic_store(&active.sink.crashing, true)
 	log.fatalf("crash %s", what)
-	if !log_stack_trace(.Fatal, 2) {log.fatal("  (no frames of ours on this thread's stack)")}
 	if a := &active.attached; a.path_len > 0 {
 		log.fatalf(
 			"crash attached file=%s age_s=%.0f",
@@ -197,7 +196,13 @@ crash_report :: proc(what: string) {
 		log.fatalf("crash full log: %s", active.log_path)
 		os.flush(active.log_file)
 	}
+	// The bundle first: resolving symbols below can hang or die (on macOS it runs
+	// CoreSymbolication on a small signal stack), and the bundle writes raw frames before it
+	// resolves any. The resolving trace is then bounded by the same watchdog.
 	if dir := crash_bundle_write(what); dir != "" {log.fatalf("crash bundle: %s", dir)}
+	bundle_watchdog(true)
+	if !log_stack_trace(.Fatal, 2) {log.fatal("  (no frames of ours on this thread's stack)")}
+	bundle_watchdog(false)
 }
 
 // debug_break stops in an attached debugger when VX_BREAK=1; otherwise it
