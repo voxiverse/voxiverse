@@ -25,6 +25,33 @@ concurrency:
 # pinned shader compiler itself).
 
 jobs:
+  # Whether this run has anything left to test. A v*.*.0 tag on a commit whose
+  # push run on main passed has been tested: its test jobs are skipped and only
+  # the packages, their checks and the draft release run. A tag on any other
+  # commit, and every branch push, run everything.
+  gate:
+    name: Tested on main?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      tested: ${{ steps.green.outputs.tested }}
+    steps:
+      - name: Green push run on main for this commit
+        id: green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tested=false
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&branch=main&event=push&status=success&per_page=1" --jq .total_count)"
+            echo "successful push runs on main for ${GITHUB_SHA}: ${count}"
+            [ "${count}" -gt 0 ] && tested=true
+          fi
+          echo "tested=${tested}" >> "$GITHUB_OUTPUT"
+
   # macOS and Windows: everything but the Linux-only checks, which the two
   # Linux jobs below run in parallel (the Linux job alone was CI's length).
   build:
@@ -35,6 +62,8 @@ jobs:
         include:
           - { os: macos-latest, name: macOS arm64 }
           - { os: windows-latest, name: Windows x64 }
+    needs: gate
+    if: ${{ needs.gate.outputs.tested != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -45,8 +74,10 @@ jobs:
           dev: true
 
       - name: Check
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
       - name: Test
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
       # The packages' own output, kept when a test failed (the report shows the first error line; the rest is here).
       - name: Test logs
@@ -59,48 +90,59 @@ jobs:
       # The scripted 10 000-tick session at both optimization levels:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
       - name: Determinism logs
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: determinism-${{ matrix.os }}
           path: build/determinism/
-          if-no-files-found: error
+          if-no-files-found: ignore # the comparison job fails on a missing log
       # The window's zoom and green buttons against a real AppKit window (the
       # runner has a window server).
       - name: Smoke
-        if: runner.os == 'macOS'
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
         timeout-minutes: 15 # a hang fails this step; it once starved the runner for 50 minutes
         run: ./build.sh smoke
       - name: Build game
+        id: build
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
       # The chunk pipeline: exact counts, and every stage within a
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench chunks -check
       # Telemetry's cost: an event is a lock and a copy, and the
       # writer keeps up; budgets for a slow runner.
       - name: Benchmark check, telemetry
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench telemetry -check
       # What the server's heavy work costs (the budgets the tests held: a
       # save, the audit, counters, the journal, 10 000 blocks of water); CPU
       # time on this thread, budgets for a slow runner.
       - name: Benchmark check, budgets
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench budgets -check
       # The script VM's benchmark programs: each one's instruction units within
       # its budget (exact counts, the same on every OS; one repetition, as the times
       # judge nothing here: the ratios to Lua are checked on Linux).
       - name: Benchmark check, script
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench script -check --smoke
       # The server's benchmark scenario, short: simulated players over
       # UDP on every platform; its numbers compare with nothing.
       - name: Server benchmark (smoke)
+        if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
 
   # Linux, the tests: no window, nothing but the compiler. Runs beside
   # "Game · Linux x64", which needs the apt packages and a built game.
   linux-tests:
     name: Test · Linux x64
+    needs: gate
+    if: ${{ needs.gate.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -111,11 +153,13 @@ jobs:
           dev: true
 
       - name: Check
+        if: ${{ !cancelled() }}
         run: ./build.sh check
       # A virtual gamepad for the platform package's hot-plug test: the
       # uinput device writable, and the pad's event node readable by the
       # runner user. VX_REQUIRE_UINPUT makes the test fail rather than skip.
       - name: Virtual gamepad
+        if: ${{ !cancelled() }}
         run: |
           sudo modprobe uinput
           sudo chmod 0666 /dev/uinput
@@ -130,6 +174,7 @@ jobs:
       # on it fails again rather than passing as a flake. It is printed
       # first, and again if the tests fail (set it to reproduce).
       - name: Test
+        if: ${{ !cancelled() }}
         env:
           ODIN_TEST_RANDOM_SEED: ${{ github.run_number }}
         run: |
@@ -146,22 +191,26 @@ jobs:
       # fails on a seed nobody has seen: the nightly run takes others), then the regression
       # files of every crash found (docs/fuzzing.md).
       - name: Fuzz (smoke)
+        if: ${{ !cancelled() }}
         run: ./build.sh fuzz --smoke
       # The scripted 10 000-tick session at both optimization levels:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
+        if: ${{ !cancelled() }}
         run: ./build.sh determinism
       - name: Determinism logs
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: determinism-ubuntu-latest
           path: build/determinism/
-          if-no-files-found: error
+          if-no-files-found: ignore # the comparison job fails on a missing log
       # The smoke suite: what needs a real thread, socket, audio device,
       # child process or clock, one test at a time. Here, not in the game job,
       # because the virtual gamepad above is set up here and the game job is
       # the longest.
       - name: Smoke
+        if: ${{ !cancelled() }}
         run: ./build.sh smoke
 
   # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
@@ -169,6 +218,8 @@ jobs:
   # report or failed check fails the run.
   linux-game:
     name: Game · Linux x64
+    needs: gate
+    if: ${{ needs.gate.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -184,34 +235,43 @@ jobs:
         run: echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
 
       - name: Build game
+        id: build
+        if: ${{ !cancelled() }}
         run: ./build.sh build
       # The chunk pipeline: exact counts, and every stage within a
       # generous budget (an optimized build, one thread).
       - name: Benchmark check
+        if: ${{ !cancelled() }}
         run: ./build.sh bench chunks -check
       - name: Benchmark check, telemetry
+        if: ${{ !cancelled() }}
         run: ./build.sh bench telemetry -check
       - name: Benchmark check, budgets
+        if: ${{ !cancelled() }}
         run: ./build.sh bench budgets -check
       # The script VM against PUC Lua 5.4 (installed above): each benchmark program
       # at most 4x Lua's CPU time and 2.5x in geometric mean (ratios on this runner, so
       # its speed cancels), the instruction budgets, and every `--! lua` conformance
       # file printing the same under both.
       - name: Benchmark check, script
+        if: ${{ !cancelled() }}
         run: ./build.sh bench script -check --lua lua5.4
       # The script fuzzer's generated programs run by PUC Lua 5.4 too: 2 000 at the
       # fixed seed 51, each printing the same under both (docs/fuzzing.md).
       - name: Fuzz (smoke), script programs against Lua
+        if: ${{ !cancelled() }}
         run: ./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4
       # The server's benchmark scenario, short: simulated players over
       # UDP; its numbers compare with nothing.
       - name: Server benchmark (smoke)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./build/voxiverse-server --benchmark server --smoke
 
       # The world streams through a flight and memory stays flat (fly_test,
       # the check), recorded: every message decodes, and replaying the
       # client's messages against a fresh server goes cleanly.
       - name: Flight, trace and replay
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           xvfb-run -a ./build/voxiverse --frames 120
           xvfb-run -a ./build/voxiverse --exec "set debug.net_trace 1; set debug.net_latency_ms 30" --check fly
@@ -221,32 +281,38 @@ jobs:
       # The same flight on a synthetic gamepad: events in, the actions,
       # the predicted inputs out.
       - name: Gamepad flight
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check fly_pad
 
       # GPU culling: the culling shader's commands, for fixed chunks and
       # cameras, exactly the CPU's rules' (lavapipe).
       - name: Culling check
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check cull
 
       # The depth pyramid and the occlusion test: every level of the
       # pyramid bit-exact against the CPU's, every verdict equal (lavapipe).
       - name: Depth pyramid check
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check hiz
 
       # Bulk edits: rockets and explosions, each shown whole, and the
       # client's chunks end up exactly the server's.
       - name: Blast test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check blast
 
       # Worldgen: every biome visited, screenshotted (uploaded below),
       # within frame, generation and meshing budgets, memory flat.
       - name: Biome tour
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check tour
 
       # The game's benchmark scenarios, short: each still runs to its
       # end (fixed conditions, offscreen drawing, its result written) on the
       # CPU driver under validation; timing here means nothing.
       - name: Benchmark scenarios (smoke)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           for scenario in load views flight edits audio viewmodel; do
             xvfb-run -a ./build/voxiverse --benchmark $scenario --smoke
@@ -256,11 +322,13 @@ jobs:
       # device; no underruns, non-finite samples, dropped or late commands,
       # the callback within its budget, the rolling capture written.
       - name: Audio smoke run
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check audio
 
       # Every screen a player meets, screenshotted (uploaded below):
       # the menus and Options' tabs, the loading screen, a failed join.
       - name: Screens
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           xvfb-run -a ./build/voxiverse --exec "set name ci; sleep 2; screenshot screen_title; wait 3; screen worlds; wait 3; screenshot screen_saves; wait 3; screen worlds create; wait 3; screenshot screen_create_save; wait 3; screen multiplayer; sleep 1; screenshot screen_multiplayer; wait 3; screen multiplayer direct; wait 3; screenshot screen_direct_connection; wait 3; screen options video; wait 3; screenshot screen_options_video; wait 3; screen options sound; wait 3; screenshot screen_options_sound; wait 3; screen options controls; wait 3; screenshot screen_options_controls; wait 3; screen options accessibility; wait 3; screenshot screen_options_accessibility; wait 3; screen options profile; wait 3; screenshot screen_options_profile; wait 3; screen credits; wait 3; screenshot screen_credits; wait 3; screen title; screen quit; wait 3; screenshot screen_quit; wait 3; quit"
           xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait 20; screenshot screen_loading; wait_world; screen menu; wait 3; screenshot screen_game_menu; wait 3; screen game; /give Player cap; /give Player tunic; /give Player trousers; /give Player boots; wait 5; /wear; wait 5; screen inventory; wait 3; screenshot screen_inventory; wait 3; screen game; screen inventory creative; wait 3; screenshot screen_creative; wait 3; screen game; screen stats; wait 3; screenshot screen_stats; wait 3; quit"
@@ -269,18 +337,21 @@ jobs:
 
       # The sky through a day (screenshots uploaded below).
       - name: Sky
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --exec "set render_distance 4; singleplayer; wait_world; set rules.daylight_cycle 0; /tp 0 12 0 -90 8; wait 30; /time 0.26; wait 5; screenshot sky_sunrise; /tp 0 12 0 -90 50; /time 0.4; wait 5; screenshot sky_day; /tp 0 12 0 90 8; /time 0.77; wait 5; screenshot sky_dusk; /tp 0 12 0 -90 20; /time 0.8; wait 5; screenshot sky_night; wait 5; quit"
 
       # What the hands hold: each weapon, a block, a shaped block and a flat
       # item, seen in first person and from the side in third (screenshots
       # uploaded below, for the owner's review of the models).
       - name: Held items
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --exec "set name ci; set vsync false; set render_distance 4; singleplayer; wait_world; sleep 1; /clear ci; sleep 1; /give ci pistol; sleep 1; hold pistol; camera first; sleep 1; screenshot held_pistol_first; camera behind 90; sleep 1; screenshot held_pistol_third; sleep 1; /clear ci; sleep 1; /give ci rifle; sleep 1; hold rifle; camera first; sleep 1; screenshot held_rifle_first; camera behind 90; sleep 1; screenshot held_rifle_third; sleep 1; /clear ci; sleep 1; /give ci sniper; sleep 1; hold sniper; camera first; sleep 1; screenshot held_sniper_first; camera behind 90; sleep 1; screenshot held_sniper_third; sleep 1; /clear ci; sleep 1; /give ci rocket_launcher; sleep 1; hold rocket_launcher; camera first; sleep 1; screenshot held_rocket_launcher_first; camera behind 90; sleep 1; screenshot held_rocket_launcher_third; sleep 1; /clear ci; sleep 1; /give ci dirt; sleep 1; hold dirt; camera first; sleep 1; screenshot held_dirt_first; camera behind 90; sleep 1; screenshot held_dirt_third; sleep 1; /clear ci; sleep 1; /give ci planks_stairs; sleep 1; hold planks_stairs; camera first; sleep 1; screenshot held_planks_stairs_first; camera behind 90; sleep 1; screenshot held_planks_stairs_third; sleep 1; /clear ci; sleep 1; /give ci hoe; sleep 1; hold hoe; camera first; sleep 1; screenshot held_hoe_first; camera behind 90; sleep 1; screenshot held_hoe_third; sleep 1; quit"
 
       # Visual baselines: every scene of assets/baselines/images/scenes.txt
       # rendered on lavapipe and compared with its baseline, within tolerances;
       # the pictures, the differences and the logs are uploaded on a failure.
       - name: Visual baselines
+        if: ${{ !cancelled() }}
         run: ./build.sh images
       - name: Visual baselines' pictures
         if: failure()
@@ -294,6 +365,7 @@ jobs:
       # server capturing every packet; the Wireshark dissector must decode
       # them all (our harness, then tshark itself).
       - name: Multiplayer and Wireshark
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           ./build/voxiverse-server --universe build/ci-universe --view-radius 3 --view-height 2 --capture build/server.pcap > build/server.log 2>&1 &
           SERVER=$!
@@ -310,6 +382,7 @@ jobs:
 
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           rm -rf build/tmp/crash-home && mkdir -p build/tmp/crash-home
           if VX_SETTINGS=build/tmp/crash-home/settings.cfg xvfb-run -a ./build/voxiverse --exec crash > build/crash.txt 2>&1; then echo "crash did not crash"; exit 1; fi
@@ -321,6 +394,7 @@ jobs:
           test -s "$bundle/log.txt" && grep 'command crash' "$bundle/actions.txt"
 
       - name: AddressSanitizer
+        if: ${{ !cancelled() }}
         run: |
           ./build.sh build --sanitize
           ASAN_OPTIONS=detect_leaks=0 xvfb-run -a ./build/voxiverse --frames 60
@@ -328,6 +402,7 @@ jobs:
 
       # A release build's flight, profiled: the trace must be well formed.
       - name: Profiling
+        if: ${{ !cancelled() }}
         run: |
           ./build.sh build --release --profile
           xvfb-run -a ./build/voxiverse --check fly
@@ -346,12 +421,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: Debugger printers
+        if: ${{ !cancelled() }}
         run: tools/debugger/test_printers.sh
   # The same session's state hashes, from every OS at both optimization levels
   # must agree line by line: a divergence is named by tick and section.
   determinism:
     name: Determinism · all OSes
-    needs: [build, linux-tests]
+    needs: [gate, build, linux-tests]
+    # Whatever the test jobs did: the logs that exist are compared.
+    if: ${{ !cancelled() && needs.gate.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -362,7 +440,24 @@ jobs:
           pattern: determinism-*
           path: build/determinism
           merge-multiple: true
+      # Every platform's pair of logs must be there (a job that died before
+      # writing its logs is a failure here, not a smaller comparison).
+      - name: Logs of every platform
+        run: |
+          missing=0
+          for log in linux darwin windows; do
+            for level in minimal speed; do
+              if [ ! -f "build/determinism/$log.$level.txt" ]; then
+                echo "::error::missing determinism log $log.$level.txt"
+                missing=1
+              fi
+            done
+          done
+          ls build/determinism || true
+          exit $missing
+      # Compares what exists even when a log is missing, to show any difference too.
       - name: Compare
+        if: ${{ !cancelled() }}
         run: ./build.sh determinism --compare build/determinism
 
   # Release packages: one per platform, from every push (kept
@@ -480,8 +575,15 @@ jobs:
   # name. Patch tags (v0.1.1, the daily ones) make no release.
   release:
     name: Draft release
-    if: startsWith(github.ref, 'refs/tags/v') && endsWith(github.ref, '.0')
-    needs: [build, linux-tests, linux-game, package]
+    # Runs when the packages built and either main already tested this commit
+    # (the test jobs were skipped) or every test job passed.
+    if: >-
+      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && endsWith(github.ref, '.0')
+      && needs.package.result == 'success'
+      && (needs.gate.outputs.tested == 'true'
+      || (needs.build.result == 'success' && needs.linux-tests.result == 'success'
+      && needs.linux-game.result == 'success')) }}
+    needs: [gate, build, linux-tests, linux-game, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -378,3 +378,10 @@ Every push builds on Windows, Linux and macOS. On Linux, CI also runs real frame
 CPU Vulkan driver under the validation layer (normally, with AddressSanitizer, and with
 profiling, checking the trace), and checks the gdb/lldb printers. Any validation finding,
 leak, sanitizer report, malformed trace or printer regression fails the build.
+
+A failed step does not stop the steps that don't depend on it: each runs under
+`!cancelled()`, so one run reports every failure (a step that needs the built game runs only if
+the build succeeded). The determinism job compares whatever logs exist and fails if any
+platform's pair is missing. A `v*.*.0` tag on a commit whose push run on main passed skips the
+test jobs and only builds and checks the packages and drafts the release; on any other commit it
+runs everything.
