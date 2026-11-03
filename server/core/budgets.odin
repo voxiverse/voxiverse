@@ -517,6 +517,10 @@ budget_random_ticks :: proc() -> (r: Budget_Random, ok: bool) {
 		took := base.thread_cpu_us() - start
 		total += took
 		r.worst_us = max(r.worst_us, took)
+		// What the tick does after the random ticks: the changes' maps live in the temp
+		// allocator, so they are flushed (and the journal's tick ended) before it is freed.
+		changes_flush(w)
+		journal_tick(w)
 		free_all(context.temp_allocator)
 	}
 	r.runs = w.random_runs

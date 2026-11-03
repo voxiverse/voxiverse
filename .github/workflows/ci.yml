@@ -632,13 +632,20 @@ jobs:
           $env:VX_SAVES = "$env:RUNNER_TEMP\saves"
           $env:VX_SETTINGS = "$env:RUNNER_TEMP\settings.cfg"
           Remove-Item .\screenshots\package.png -ErrorAction SilentlyContinue
-          $game = Start-Process .\voxiverse.exe -ArgumentList '--exec "set render_distance 4; singleplayer; wait_world; screenshot package; wait 3; quit"' -PassThru
+          # The Vulkan loader says on stderr which drivers it tried and why one failed.
+          $env:VK_LOADER_DEBUG = "error,warn,driver"
+          $loaderLog = "$env:RUNNER_TEMP\game-stderr.txt"
+          $game = Start-Process .\voxiverse.exe -ArgumentList '--exec "set render_distance 4; singleplayer; wait_world; screenshot package; wait 3; quit"' -PassThru -RedirectStandardError $loaderLog
           if (-not $game.WaitForExit(600000)) {
             $game.Kill()
             "the game did not finish in 10 minutes"
             exit 1
           }
-          if ($game.ExitCode -ne 0) { "the game exited with $($game.ExitCode)"; exit 1 }
+          if ($game.ExitCode -ne 0) {
+            "the game exited with $($game.ExitCode)"
+            Get-Content $loaderLog -TotalCount 100
+            exit 1
+          }
           if (-not (Test-Path .\screenshots\package.png)) { "no screenshots\package.png"; exit 1 }
           # The version information linked in (the file's Details tab).
           $info = (Get-Item .\voxiverse.exe).VersionInfo

@@ -111,21 +111,23 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 		engine.passes_destroy(app)
 		render.scene_destroy(&app.scenes, &app.g)
 	}
-	a := audio.stats(app.mixer)
-	log.infof(
-		"audio device=%v played=%d mixed_seconds=%.1f dropped=%d underruns=%d late=%d callback_max_us=%d drift_ppm=%.1f",
-		app.audio_device.open,
-		a.played,
-		f64(a.frames) / f64(max(app.mixer.rate, 1)),
-		app.mixer.dropped,
-		a.underruns,
-		a.late,
-		a.cb_max_ns / 1000,
-		a.drift_ppm,
-	)
+	if app.mixer != nil { 	// (nil when init failed before it: no usable GPU)
+		a := audio.stats(app.mixer)
+		log.infof(
+			"audio device=%v played=%d mixed_seconds=%.1f dropped=%d underruns=%d late=%d callback_max_us=%d drift_ppm=%.1f",
+			app.audio_device.open,
+			a.played,
+			f64(a.frames) / f64(max(app.mixer.rate, 1)),
+			app.mixer.dropped,
+			a.underruns,
+			a.late,
+			a.cb_max_ns / 1000,
+			a.drift_ppm,
+		)
+	}
 	audio.device_close(&app.audio_device) // before the sounds it plays go
 	dev.audio_ring_stop(app)
-	audio.streams_close(app.mixer)
+	if app.mixer != nil {audio.streams_close(app.mixer)}
 	engine.sounds_destroy(&app.sounds)
 	engine.music_destroy(app)
 	free(app.mixer)
