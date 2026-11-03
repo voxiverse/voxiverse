@@ -624,16 +624,28 @@ jobs:
           $fetched
           $icd = ($fetched | Where-Object { $_ -like 'icd=*' }).Substring(4)
           $runtime = ($fetched | Where-Object { $_ -like 'runtime=*' }).Substring(8)
-          if (-not (Test-Path "$env:SystemRoot\System32\vulkan-1.dll")) {
+          # A loader older than the pinned runtime may predate VK_DRIVER_FILES
+          # and find no driver (ERROR_INCOMPATIBLE_DRIVER): install the pinned one
+          # unless the installed loader is at least as new.
+          $loaderPath = "$env:SystemRoot\System32\vulkan-1.dll"
+          $pinned = [version]((Split-Path $runtime -Leaf) -replace '^VulkanRT-(\d+\.\d+\.\d+\.\d+)-Installer\.exe$', '$1')
+          $have = if (Test-Path $loaderPath) { [version]((Get-Item $loaderPath).VersionInfo.ProductVersion -replace ',', '.' -replace ' ', '') } else { $null }
+          "Vulkan loader installed: $have; pinned: $pinned"
+          if ($null -eq $have -or $have -lt $pinned) {
             Start-Process $runtime -ArgumentList "/S" -Wait
-            if (-not (Test-Path "$env:SystemRoot\System32\vulkan-1.dll")) { "the Vulkan loader did not install"; exit 1 }
+            if (-not (Test-Path $loaderPath)) { "the Vulkan loader did not install"; exit 1 }
+            "Vulkan loader now: $((Get-Item $loaderPath).VersionInfo.ProductVersion)"
           }
+          # What the loader will be given: the manifest and what sits beside it.
+          Get-ChildItem (Split-Path $icd) | Format-Table Name, Length
+          Get-Content $icd
           $env:VK_DRIVER_FILES = $icd
           $env:VX_SAVES = "$env:RUNNER_TEMP\saves"
           $env:VX_SETTINGS = "$env:RUNNER_TEMP\settings.cfg"
           Remove-Item .\screenshots\package.png -ErrorAction SilentlyContinue
           # The Vulkan loader says on stderr which drivers it tried and why one failed.
           $env:VK_LOADER_DEBUG = "error,warn,driver"
+          $env:VK_LOADER_LAYERS_DISABLE = "~all~"
           $loaderLog = "$env:RUNNER_TEMP\game-stderr.txt"
           $game = Start-Process .\voxiverse.exe -ArgumentList '--exec "set render_distance 4; singleplayer; wait_world; screenshot package; wait 3; quit"' -PassThru -RedirectStandardError $loaderLog
           if (-not $game.WaitForExit(600000)) {
