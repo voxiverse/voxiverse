@@ -645,6 +645,29 @@ jobs:
           $info | Format-List ProductName, ProductVersion, FileDescription, FileVersion
           if ($info.ProductName -ne "Voxiverse") { exit 1 }
 
+      # The crash bundle the played package left, if it died: every file of the
+      # newest one is printed, and all of them are uploaded.
+      - name: Crash bundles (Windows)
+        if: ${{ failure() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\crashes"
+          if (-not (Test-Path $dir)) { "no crashes directory"; exit 0 }
+          $newest = Get-ChildItem $dir -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
+          if ($newest) {
+            Get-ChildItem $newest.FullName -File | ForEach-Object {
+              "==== $($_.Name)"
+              if ($_.Extension -eq ".txt") { Get-Content $_.FullName -TotalCount 200 }
+            }
+          }
+      - name: Upload crash bundles (Windows)
+        if: ${{ failure() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-crashes
+          path: ${{ runner.temp }}\crashes
+          if-no-files-found: ignore
+
       # Not run: no window server or GPU here. Unpacked as a user would, its
       # bundle checked and both programs asked for their version.
       - name: Check the package (macOS)

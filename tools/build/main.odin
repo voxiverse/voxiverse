@@ -1683,6 +1683,16 @@ run :: proc(cmd: []string) -> bool {
 		return false
 	}
 	state, werr := os.process_wait(child)
+	if werr == nil && state.exited && state.exit_code != 0 {
+		// (a child that died on a fault leaves no message of its own: its exit code,
+		// an NTSTATUS on Windows or the signal on Unix, is all there is to see)
+		fmt.eprintfln(
+			"build: '%s' exited with %d (%#x)",
+			cmd[0],
+			state.exit_code,
+			u32(state.exit_code),
+		)
+	}
 	return werr == nil && state.exited && state.exit_code == 0
 }
 
