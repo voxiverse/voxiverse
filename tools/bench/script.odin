@@ -188,6 +188,18 @@ script_bench :: proc(opts: Script_Options, broken, over: ^[dynamic]string) {
 			r := base.median_of(ratios[:])
 			log_sum += math.ln(r)
 			lua_ms, ratio = fmt.tprintf("%.1f", l), fmt.tprintf("%.2f", r)
+			if opts.check {
+				judge_report(
+					"script",
+					p.name,
+					"lua_ratio",
+					r,
+					"x",
+					true,
+					SCRIPT_MAX_RATIO,
+					ratios[:],
+				)
+			}
 			if opts.check && len(broken) == 0 && r > SCRIPT_MAX_RATIO {
 				append(
 					over,
@@ -206,6 +218,18 @@ script_bench :: proc(opts: Script_Options, broken, over: ^[dynamic]string) {
 			each,
 		)
 		if opts.check {
+			if has_budget {
+				judge_report(
+					"script",
+					p.name,
+					"units",
+					f64(counts[i]),
+					"units",
+					true,
+					f64(budget),
+					{f64(counts[i])},
+				)
+			}
 			if !has_budget {
 				append(broken, fmt.aprintf("%s has no budget in %s", p.name, SCRIPT_BUDGETS))
 			} else if counts[i] > budget {
@@ -231,6 +255,18 @@ script_bench :: proc(opts: Script_Options, broken, over: ^[dynamic]string) {
 	if opts.lua != "" {
 		g := math.exp(log_sum / f64(N))
 		fmt.printfln("geometric mean of the ratios: %.2f", g)
+		if opts.check {
+			judge_report(
+				"script",
+				"all programs",
+				"lua_geomean",
+				g,
+				"x",
+				true,
+				SCRIPT_MAX_GEOMEAN,
+				{g},
+			)
+		}
 		if opts.check && len(broken) == 0 && g > SCRIPT_MAX_GEOMEAN {
 			append(
 				over,
@@ -249,6 +285,28 @@ script_bench :: proc(opts: Script_Options, broken, over: ^[dynamic]string) {
 			snap_runs,
 			restore_runs,
 		)
+		if opts.check {
+			judge_report(
+				"script",
+				"snapshot",
+				"snapshot",
+				sm,
+				"ms",
+				true,
+				SCRIPT_SNAPSHOT_MAX_MS,
+				snaps[:],
+			)
+			judge_report(
+				"script",
+				"snapshot",
+				"restore",
+				rm,
+				"ms",
+				true,
+				SCRIPT_SNAPSHOT_MAX_MS,
+				restores[:],
+			)
+		}
 		if opts.check &&
 		   len(broken) == 0 &&
 		   (sm > SCRIPT_SNAPSHOT_MAX_MS || rm > SCRIPT_SNAPSHOT_MAX_MS) {

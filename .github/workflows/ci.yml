@@ -136,6 +136,14 @@ jobs:
       - name: Server benchmark (smoke)
         if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
+      # Each test's time and result and each budget's median and runs (docs/debugging.md).
+      - name: Reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-${{ matrix.os == 'macos-latest' && 'macos' || 'windows' }}
+          path: build/reports/
+          if-no-files-found: ignore
 
   # Linux, the tests: no window, nothing but the compiler. Runs beside
   # "Game · Linux x64", which needs the apt packages and a built game.
@@ -212,6 +220,14 @@ jobs:
       - name: Smoke
         if: ${{ !cancelled() }}
         run: ./build.sh smoke
+      # Each test's time and result and each budget's median and runs (docs/debugging.md).
+      - name: Reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-linux
+          path: build/reports/
+          if-no-files-found: ignore
 
   # Linux, the game and the tools: real frames on Mesa's CPU Vulkan driver
   # under the validation layer, any validation finding, leak, sanitizer
@@ -266,6 +282,14 @@ jobs:
       - name: Server benchmark (smoke)
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./build/voxiverse-server --benchmark server --smoke
+      # Each test's time and result and each budget's median and runs (docs/debugging.md).
+      - name: Reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-linux-game
+          path: build/reports/
+          if-no-files-found: ignore
 
       # The world streams through a flight and memory stays flat (fly_test,
       # the check), recorded: every message decodes, and replaying the

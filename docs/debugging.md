@@ -385,3 +385,28 @@ the build succeeded). The determinism job compares whatever logs exist and fails
 platform's pair is missing. A `v*.*.0` tag on a commit whose push run on main passed skips the
 test jobs and only builds and checks the packages and drafts the release; on any other commit it
 runs everything.
+
+### Reports
+
+`./build.sh test` writes `build/reports/tests.jsonl` (recreated by each run): one JSON object
+per line per test that ran, `{"package": "client/main", "test": "test_creative_tab", "result":
+"pass", "seconds": 1.25}`. `package` is the driver's package path and `test` the name the runner
+prints without its package. `result` is `pass` or `fail`; a test the process died in (started,
+never finished) is `fail`. The format also allows `skip`, which nothing produces: core:testing
+has no skip. `seconds` is measured by the driver, which stamps the runner's state-change log
+lines as it sees them (about every 10 ms), so it is accurate to that.
+
+Each `bench <scenario> -check` run (chunks, telemetry, budgets, script) appends to
+`build/reports/bench.jsonl`, one object per judged quantity: `{"bench": "budgets", "scene":
+"the save", "metric": "save_slice", "value": 2107, "unit": "us", "limit": 3000, "runs": [2101,
+2107, 2175]}`. `value` is what the check judged (the median of the runs; for chunks and
+telemetry the median of each repetition's mean) and `runs` is every run's value. `limit` is
+left out for a quantity without one: the chunk counts (`chunks`, `meshed`, `vertices`), which
+are held to exact values, have one run and no limit. Script lines are the instruction units of
+each program (limit: its budget in `common/script/testdata/bench/budgets.txt`), its ratio to
+Lua, the geometric mean of the ratios, and the snapshot and restore times. The file is not
+cleared between benches, so a clean tree starts from a removed `build/reports/`.
+
+Every CI job that runs tests or benches uploads `build/reports/` as the artifact
+`reports-<os>` (`linux`, `windows`, `macos`; the game job's is `reports-linux-game`), also when
+an earlier step failed.

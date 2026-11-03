@@ -94,6 +94,18 @@ telemetry_main :: proc(args: []string) {
 			fmt.tprintf("%.3f", base.median_of(p99s[:])),
 			judge_runs_text(runs_means[:], 3),
 		)
+		if opts.check {
+			judge_report(
+				"telemetry",
+				"per event",
+				base.METRIC_INFO[b.metric].name,
+				mean,
+				"us",
+				true,
+				b.us,
+				runs_means[:],
+			)
+		}
 		if opts.check && len(broken) == 0 && mean > b.us {
 			append(
 				&over,

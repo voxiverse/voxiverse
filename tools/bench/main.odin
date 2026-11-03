@@ -184,6 +184,23 @@ main :: proc() {
 			fmt.tprintf("%.3f", base.median_of(p99s[:])),
 			judge_runs_text(runs_means[:], 3),
 		)
+		if opts.check {
+			// (the limit, when the stage has one, is in the report line below)
+			limit, has := 0.0, false
+			for b in CHECK.budget_ms {
+				if b.metric == stage {limit, has = b.ms, true}
+			}
+			judge_report(
+				"chunks",
+				"the region",
+				base.METRIC_INFO[stage].name,
+				mean,
+				"ms",
+				has,
+				limit,
+				runs_means[:],
+			)
+		}
 		if opts.check && len(broken) == 0 {
 			for b in CHECK.budget_ms {
 				if b.metric == stage && mean > b.ms {
@@ -201,6 +218,12 @@ main :: proc() {
 		}
 	}
 	if opts.check && len(broken) == 0 {
+		for c in ([]struct {
+				name: string,
+				n:    int,
+			}{{"chunks", counts.chunks}, {"meshed", counts.meshed}, {"vertices", counts.vertices}}) {
+			judge_report("chunks", "the region", c.name, f64(c.n), "count", false, 0, {f64(c.n)})
+		}
 		got := [3]int{counts.chunks, counts.meshed, counts.vertices}
 		want := [3]int{CHECK.chunks, CHECK.meshed, CHECK.vertices}
 		if got != want {

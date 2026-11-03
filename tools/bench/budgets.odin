@@ -84,6 +84,18 @@ budgets_main :: proc(args: []string) {
 			fmt.tprintf("%.2f %s", b.limit, info.unit),
 			runs_text,
 		)
+		if opts.check {
+			judge_report(
+				"budgets",
+				budget_scene(b.metric),
+				info.name,
+				median,
+				info.unit,
+				true,
+				b.limit,
+				values[:],
+			)
+		}
 		if opts.check && len(broken) == 0 && median > b.limit {
 			append(
 				&over,

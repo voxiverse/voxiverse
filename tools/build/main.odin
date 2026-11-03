@@ -914,6 +914,7 @@ test :: proc(named: []string) -> bool {
 		}
 		packages = slice.clone(named)
 	}
+	os.remove(path_join({REPORT_DIR, "tests.jsonl"})) // this run's tests only
 	last :: proc(pkg: string) -> f64 {
 		data, err := os.read_entire_file_from_path(
 			strings.concatenate({test_binary(pkg), ".seconds"}),
@@ -1058,6 +1059,111 @@ unfinished_tests :: proc(lines: []string) -> []string {
 	return running[:]
 }
 
+// Test_Watch follows one package's log while its tests run: the runner's state-change
+// lines are stamped only to the second, so the driver stamps each line with the time it
+// first saw it (limited.Job.poll, every 10 ms) and takes a test's time from those.
+Test_Watch :: struct {
+	log:     string,
+	offset:  int, // how much of the log has been read (up to the last whole line)
+	started: map[string]time.Tick, // tests running
+	events:  [dynamic]Test_Report,
+}
+
+// Test_Report is one line of build/reports/tests.jsonl.
+Test_Report :: struct {
+	package_: string,
+	test:     string,
+	result:   string, // "pass", "fail" or "skip"
+	seconds:  f64,
+}
+
+test_watch_poll :: proc(data: rawptr) {
+	w := (^Test_Watch)(data)
+	text, err := os.read_entire_file_from_path(w.log, context.temp_allocator)
+	if err != nil || len(text) <= w.offset {return}
+	now := time.tick_now()
+	rest := string(text[w.offset:])
+	for {
+		end := strings.index_byte(rest, '\n')
+		if end < 0 {break}
+		test_watch_line(w, rest[:end], now)
+		w.offset += end + 1
+		rest = rest[end + 1:]
+	}
+}
+
+test_watch_line :: proc(w: ^Test_Watch, line: string, now: time.Tick) {
+	i := strings.index(line, "Test #")
+	j := strings.index(line, " changed state to ")
+	if i < 0 || j < i {return}
+	fields := strings.fields(line[i:j], context.temp_allocator)
+	if len(fields) < 3 {return}
+	name := fields[2]
+	state := line[j + len(" changed state to "):]
+	if w.started == nil {w.started = make(map[string]time.Tick)}
+	if strings.has_prefix(state, "Running") {
+		w.started[strings.clone(name)] = now
+	} else if strings.has_prefix(state, "Successful") || strings.has_prefix(state, "Failed") {
+		if began, ok := w.started[name]; ok {
+			result := "pass" if strings.has_prefix(state, "Successful") else "fail"
+			append(
+				&w.events,
+				Test_Report {
+					test = strings.clone(name),
+					result = result,
+					seconds = time.duration_seconds(time.tick_diff(began, now)),
+				},
+			)
+			delete_key(&w.started, name)
+		}
+	}
+}
+
+// report_dir: where the machine-readable reports are kept.
+REPORT_DIR :: "build/reports"
+
+// test_report_line: one test's line (names as the runner prints them: `main.test_x` is
+// test `test_x`; the package is the driver's path).
+test_report_line :: proc(pkg, name, result: string, seconds: f64) -> string {
+	short := name
+	if k := strings.index_byte(name, '.'); k >= 0 {short = name[k + 1:]}
+	return fmt.aprintfln(
+		`{{"package": %q, "test": %q, "result": %q, "seconds": %.3f}}`,
+		pkg,
+		short,
+		result,
+		seconds,
+	)
+}
+
+// write_test_reports appends a package's finished tests to build/reports/tests.jsonl; a
+// test started and never finished (the process died in it) is a "fail".
+write_test_reports :: proc(pkg: string, w: ^Test_Watch) {
+	test_watch_poll(w)
+	b := strings.builder_make()
+	for e in w.events {
+		strings.write_string(&b, test_report_line(pkg, e.test, e.result, e.seconds))
+	}
+	now := time.tick_now()
+	for name, began in w.started {
+		strings.write_string(
+			&b,
+			test_report_line(pkg, name, "fail", time.duration_seconds(time.tick_diff(began, now))),
+		)
+	}
+	append_report("tests.jsonl", strings.to_string(b))
+}
+
+// append_report adds text to a file of build/reports.
+append_report :: proc(file, text: string) {
+	if len(text) == 0 {return}
+	os.make_directory_all(REPORT_DIR)
+	f, err := os.open(path_join({REPORT_DIR, file}), {.Write, .Create, .Append})
+	if err != nil {return}
+	defer os.close(f)
+	os.write_string(f, text)
+}
+
 // test_packages runs packages' tests, width at a time, each under its time limit; a run
 // that outlasts it is killed with its children and reported as a failure naming the
 // package. A package whose inputs are unchanged since its binary was built runs that
@@ -1068,6 +1174,7 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		steps:    []Odin_Step,
 		limits:   []time.Duration,
 		statuses: []int, // each job's exit status (limited.Job.status)
+		watches:  []^Test_Watch, // each job's log watcher: the tests' times
 		ok:       bool,
 	}
 	state := State {
@@ -1075,6 +1182,7 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		steps    = make([]Odin_Step, len(packages)),
 		limits   = make([]time.Duration, len(packages)),
 		statuses = make([]int, len(packages)),
+		watches  = make([]^Test_Watch, len(packages)),
 		ok       = true,
 	}
 	jobs := make([]limited.Job, len(packages))
@@ -1105,12 +1213,16 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		}
 		cmd := test_run_command(build, out)
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
+		state.watches[i] = new(Test_Watch)
+		state.watches[i].log = test_log(pkg)
 		jobs[i] = limited.Job {
-			cmd    = cmd,
-			limit  = state.limits[i],
-			log    = test_log(pkg),
-			quiet  = true, // (printed by done when the package failed)
-			status = &state.statuses[i],
+			poll      = test_watch_poll,
+			poll_data = state.watches[i],
+			cmd       = cmd,
+			limit     = state.limits[i],
+			log       = test_log(pkg),
+			quiet     = true, // (printed by done when the package failed)
+			status    = &state.statuses[i],
 		}
 	}
 	if reused > 0 {fmt.printfln("test   %d unchanged since built: run without compiling", reused)}
@@ -1127,6 +1239,7 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		   time.diff(step.started, info.modification_time) >= 0 {
 			odin_step_succeeded(step)
 		}
+		write_test_reports(pkg, state.watches[index])
 		switch result {
 		case .Ok:
 			_ = os.write_entire_file(

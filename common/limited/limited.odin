@@ -79,12 +79,14 @@ capture :: proc(cmd: []string) -> (output: string, ok: bool) {
 
 // Job is one command of run_parallel's.
 Job :: struct {
-	cmd:    []string,
-	limit:  time.Duration, // killed with its children at this (0: no limit)
-	log:    string, // its stdout and stderr until it ends (a file run_parallel overwrites)
-	errors: string, // its stderr instead, when set
-	quiet:  bool, // its log is not printed (the caller reads it)
-	status: ^int, // when set, told the exit status the job ended with (on POSIX a kill is its signal number; -1: none, it was killed at its limit or never started)
+	cmd:       []string,
+	limit:     time.Duration, // killed with its children at this (0: no limit)
+	log:       string, // its stdout and stderr until it ends (a file run_parallel overwrites)
+	errors:    string, // its stderr instead, when set
+	quiet:     bool, // its log is not printed (the caller reads it)
+	poll:      proc(data: rawptr), // when set, called with poll_data about every 10 ms while the job runs, and once more when it has ended
+	poll_data: rawptr,
+	status:    ^int, // when set, told the exit status the job ended with (on POSIX a kill is its signal number; -1: none, it was killed at its limit or never started)
 }
 
 // Job_Done is told each job's end, in the order they end, after its output is printed.
@@ -147,6 +149,7 @@ run_parallel :: proc(
 			r := running[i]
 			job := jobs[r.index]
 			result: Run_Result
+			if job.poll != nil {job.poll(job.poll_data)}
 			state, werr := os.process_wait(r.process, 0)
 			if job.status != nil {job.status^ = state.exit_code if werr == nil else -1}
 			if werr == nil {
@@ -160,6 +163,7 @@ run_parallel :: proc(
 			}
 			results[r.index] = result
 			job_finish(job)
+			if job.poll != nil {job.poll(job.poll_data)}
 			if done != nil {
 				done(data, r.index, result, time.duration_seconds(time.tick_since(r.started)))
 			}
