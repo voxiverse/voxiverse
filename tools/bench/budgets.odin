@@ -46,12 +46,6 @@ BUDGET_LIMITS := [?]struct {
 	{.Random_Rule_Run, 4000}, // (the grass rule may read light: 377 cells)
 }
 
-// The save is given this many ticks to commit before the scene gives up (the
-// worker is a real thread and the stepped ticks are fast, so the ticks it
-// took is no unit of time and no budget: what the save costs the tick is the
-// capture and the slices).
-BUDGET_COMMIT_TICKS :: 1500
-
 budgets_main :: proc(args: []string) {
 	opts := Budgets_Options {
 		repetitions = 3,
@@ -105,7 +99,8 @@ budgets_main :: proc(args: []string) {
 @(private = "file")
 budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string) {
 	os.remove_all(dir)
-	save, saved := core.budget_save(dir, BUDGET_COMMIT_TICKS)
+	fmt.printfln("scene: %s", "the save")
+	save, saved := core.budget_save(dir, core.BUDGET_COMMIT_SECONDS)
 	os.remove_all(dir)
 	if !saved || !save.committed || !save.blocking_ok {
 		append(failures, fmt.aprintf("the save: %v", save))
@@ -114,14 +109,17 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	base.metric_add(.Save_Slice, f32(save.slice_worst_us))
 	base.metric_add(.Save_Blocking, f32(save.blocking_ms))
 
+	fmt.printfln("scene: %s", "the audit")
 	lines, audit_us := core.budget_audit(reg)
 	if lines != 0 {append(failures, fmt.aprintf("the audit gave %d lines", lines))}
 	base.metric_add(.Audit, f32(audit_us))
 
+	fmt.printfln("scene: %s", "the counters")
 	building, work, _, bad := core.budget_counters(reg)
 	if bad != 0 {append(failures, fmt.aprintf("%d players did not read back", bad))}
 	base.metric_add(.Counters_Ratio, f32(work) / f32(max(building, 1)))
 
+	fmt.printfln("scene: %s", "the journal")
 	journal, journaled := core.budget_journal()
 	if !journaled || journal.head <= 20_000 {
 		append(failures, fmt.aprintf("the journal scene changed %d blocks", journal.head))
@@ -129,12 +127,14 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	base.metric_add(.Journal_Share, f32(journal.share * 100))
 	base.metric_add(.Journal_Tick, f32(journal.per_tick_us))
 
+	fmt.printfln("scene: %s", "the flood")
 	flood, flooded := core.budget_flood()
 	if !flooded || flood.most < 10_000 {
 		append(failures, fmt.aprintf("only %d block updates flowing", flood.most))
 	}
 	base.metric_add(.Flood_Tick, f32(flood.worst_us))
 
+	fmt.printfln("scene: %s", "the rules")
 	rules, ruled := core.budget_rules()
 	if !ruled || rules.most < 10_000 {
 		append(failures, fmt.aprintf("only %d rule cells waiting", rules.most))
@@ -143,6 +143,7 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	base.metric_add(.Rule_Run, f32(rules.run_ns))
 	base.metric_add(.Rules_Compile, f32(rules.compile_us))
 
+	fmt.printfln("scene: %s", "the random ticks")
 	random, randomed := core.budget_random_ticks()
 	if !randomed || random.runs < 10_000 {
 		append(failures, fmt.aprintf("only %d random rule runs", random.runs))

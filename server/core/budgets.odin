@@ -3,6 +3,7 @@ package core
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
+import "core:time"
 
 import "common:base"
 import "common:game"
@@ -84,11 +85,16 @@ budget_save_scene :: proc(s: ^Server) {
 	}
 }
 
+// The save is given this long to commit before the scene gives up.
+BUDGET_COMMIT_SECONDS :: 60.0
+
 // budget_save: the scene saved as a running server saves, then once more
 // blocking. dir is the world's directory (the caller removes it). ok is false
-// when the server would not start or the capture failed; a save that never
-// commits is `committed = false` after max_ticks.
-budget_save :: proc(dir: string, max_ticks: int) -> (r: Budget_Save, ok: bool) {
+// when the server would not start or the capture failed; a save that is not
+// committed after max_seconds of wall time (the worker is a real thread
+// writing files, so a count of ticks is no measure of its speed) is
+// `committed = false`.
+budget_save :: proc(dir: string, max_seconds: f64) -> (r: Budget_Save, ok: bool) {
 	h := new(Harness)
 	defer free(h)
 	config := harness_world()
@@ -106,11 +112,13 @@ budget_save :: proc(dir: string, max_ticks: int) -> (r: Budget_Save, ok: bool) {
 	st.jobs_ready = true
 	generation := st.generation
 
+	began := time.tick_now()
 	start := base.thread_cpu_us()
 	if !save_begin(s) {return}
 	r.capture_us = base.thread_cpu_us() - start
 	for st.job != nil || st.inflight != nil {
-		if r.ticks >= max_ticks {return r, true}
+		if time.duration_seconds(time.tick_since(began)) >= max_seconds {return r, true}
+		if st.job == nil {time.sleep(time.Millisecond)} 	// (the worker is writing: the ticks are only polling it)
 		harness_step(h)
 		r.ticks += 1
 	}

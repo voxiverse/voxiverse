@@ -13,7 +13,7 @@ test_save_200_characters :: proc(t: ^testing.T) {
 	dir := scratch_dir("budget")
 	defer delete(dir)
 	defer os.remove_all(dir)
-	r, ok := budget_save(dir, 1500)
+	r, ok := budget_save(dir, BUDGET_COMMIT_SECONDS)
 	testing.expect(t, ok, "the capture failed")
 	testing.expect(t, r.committed, "the save never committed")
 	testing.expect(t, r.blocking_ok, "the blocking save failed")
