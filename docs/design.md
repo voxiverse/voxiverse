@@ -229,7 +229,8 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   `ODIN_TEST_RANDOM_SEED` set to the run number (a re-run repeats it). `./build.sh test` turns
   `ODIN_TEST_RANDOM_SEED`, `ODIN_TEST_THREADS` and `ODIN_TEST_NAMES` from the environment into
   `-define:` flags (Odin reads them only as defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh
-  test` reproduces a CI failure. Ubuntu packages come from a cache of their `.deb` files
+  test` reproduces a CI failure; `-test-name:<name>` sets `ODIN_TEST_NAMES` for the named
+  packages (see [debugging.md](debugging.md#switches)). Ubuntu packages come from a cache of their `.deb` files
   (`.github/actions/apt`).
 - **Test memory.** A test's big values go on the heap (`new`, `defer free`): the runner's
   threads have the platform's default stack, 512 KB on macOS against Linux's 8 MB, and a test

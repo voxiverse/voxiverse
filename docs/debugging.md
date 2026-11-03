@@ -58,6 +58,9 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `VX_SETTINGS=<path>` | The settings file (empty: none is read or written). The crash bundles and `account.key` live beside it. |
 | `VX_SAVES=<dir>` | Where saves go. |
 | `build run --sanitize` | AddressSanitizer build: reports use-after-free and buffer overflows with the offending line (Linux/macOS). |
+| `build test [<package>...] -sanitize:address` | The tests under AddressSanitizer (also `-sanitize:thread`; Linux/macOS). Runs at the same 512 KiB thread stack as every test run. |
+| `build test [<package>...] -o:speed` | The tests at an optimisation level (`none`, `minimal`, `size`, `speed`, `aggressive`). |
+| `build test <package> -test-name:<name>` | Only that test (repeatable; `test_x` is the package's own, `pkg.test_x` is taken as written). `ODIN_TEST_NAMES=a,b` does the same. |
 | `build run --profile` | Writes a profile trace (see [benchmarking.md](benchmarking.md#profiling)); combine with `--release`. |
 | `build debug [--lldb]` | Starts a debug build in gdb (or lldb) with the Odin printers loaded. |
 | `run -- --frames N` | Runs N frames and exits; fails on any validation finding or leak (as CI does). |
@@ -253,9 +256,14 @@ The server, the worldgen workers and the mesh workers log, assert and allocate i
 way as the main thread (they inherit its context), and each has its own track in profile
 traces.
 
-Odin's `-sanitize:thread` instruments only function entry and exit, not memory accesses, so
-it finds no races. Threaded code is instead covered by deterministic tests
-(`common/base/queue_test.odin`, `server/core/server_test.odin`).
+`build test <package> -sanitize:thread` runs the tests under ThreadSanitizer, which reports
+a data race (two threads incrementing one global, say) with both stacks. Threaded code is
+also covered by deterministic tests (`common/base/queue_test.odin`,
+`server/core/server_test.odin`).
+
+Each option set of `build test` keeps its own binary, log and timing beside the default's
+(`build/test/<package>.speed`, `.address`, `.thread`), so a sanitizer run does not rebuild over
+the plain one.
 
 ## Debuggers
 

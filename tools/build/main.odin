@@ -313,6 +313,15 @@ usage :: proc() {
 		"            (a package unchanged since built runs without compiling; its output is kept in build/test/<package>.log, printed only when it fails)",
 	)
 	fmt.println(
+		"            options, after or among the packages: -o:<none|minimal|size|speed|aggressive>, -sanitize:address|thread (Linux, macOS),",
+	)
+	fmt.println(
+		"            -test-name:<name> (repeatable; `test_x` is the package's own, `pkg.test_x` is taken as written; ODIN_TEST_NAMES=a,b does the same)",
+	)
+	fmt.println(
+		"            (each option set keeps its own binary and log: build/test/<package>.speed, .address, .thread)",
+	)
+	fmt.println(
 		"  smoke     run the smoke suite (real threads, sockets, audio devices, child processes), one test at a time",
 	)
 	fmt.println(
@@ -605,6 +614,7 @@ check :: proc() -> bool {
 			&jobs,
 			Check_Job {
 				label = strings.concatenate({"check  ", pkg}),
+				target = host_target(),
 				cmd = slice.concatenate(
 					[][]string{{"odin", "check", pkg}, ODIN_FLAGS, COLLECTIONS, CHECK_FLAGS},
 				),
@@ -634,9 +644,10 @@ check :: proc() -> bool {
 // Check_Job: one of check's commands; a cached one (step set) is skipped while its
 // inputs are unchanged.
 Check_Job :: struct {
-	label: string,
-	cmd:   []string,
-	step:  Maybe(Odin_Step),
+	label:  string,
+	target: string, // what it builds for: named when it fails
+	cmd:    []string,
+	step:   Maybe(Odin_Step),
 }
 
 // run_checks runs check's jobs in parallel, skipping cached ones whose inputs are
@@ -646,6 +657,7 @@ run_checks :: proc(jobs: []Check_Job) -> bool {
 		jobs:    []Check_Job,
 		indices: [dynamic]int, // jobs[indices[i]] is run_parallel's i
 		steps:   [dynamic]Odin_Step,
+		failed:  [dynamic]Failed_Log, // what the failed jobs said, printed grouped at the end
 		ok:      bool,
 	}
 	state := State {
@@ -661,25 +673,30 @@ run_checks :: proc(jobs: []Check_Job) -> bool {
 			cmd = odin_step_command(step)
 		}
 		append(&state.indices, i)
-		append(&run_jobs, limited.Job{cmd = cmd, log = job_log(len(run_jobs))})
+		append(&run_jobs, limited.Job{cmd = cmd, log = job_log(len(run_jobs)), quiet = true})
 	}
 	if unchanged > 0 {fmt.printfln("cross  %d unchanged since they last passed", unchanged)}
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
 		job := &state.jobs[state.indices[index]]
+		log, _ := os.read_entire_file_from_path(job_log(index), context.temp_allocator)
 		switch result {
 		case .Ok:
 			if step, cached := &job.step.?; cached {odin_step_succeeded(step)}
+			if len(log) > 0 {os.write(os.stdout, log)}
 			fmt.println(job.label)
 		case .Interrupted:
 			fmt.eprintfln("%s interrupted", job.label)
 			state.ok = false
 		case .Failed, .Timed_Out:
 			fmt.eprintfln("%s FAILED", job.label)
+			append(&state.failed, Failed_Log{job.target, strings.clone(string(log))})
 			state.ok = false
 		}
 	}
 	parallel(run_jobs[:], jobs_width(), done, &state)
+	// One error reached by several targets (or packages) is printed once, naming them.
+	if len(state.failed) > 0 {fmt.eprint(group_errors(state.failed[:]))}
 	return state.ok
 }
 
@@ -811,6 +828,7 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 				jobs,
 				Check_Job {
 					label = strings.concatenate({"cross  ", target, " ", b[0], " ", b[1]}),
+					target = target,
 					cmd = cmd,
 					// The objects are not used: what is kept is that they built.
 					step = Odin_Step {
@@ -866,8 +884,8 @@ check_no_binaries :: proc() -> bool {
 // ODIN_TEST_NAMES into -define flags: Odin's test runner reads them only as compile-time
 // defines, so the variable alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to
 // reproduce a failure, `ODIN_TEST_NAMES=core.test_x ./build.sh test server/core` for one
-// test) is ignored.
-test_env_defines :: proc() -> []string {
+// test) is ignored. `names` (from -test-name:) replaces the environment's ODIN_TEST_NAMES.
+test_env_defines :: proc(names := "") -> []string {
 	defines := make([dynamic]string)
 	// A leak or a bad free fails the test, naming the allocation (tracking stays on, its default).
 	append(&defines, "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true")
@@ -875,7 +893,9 @@ test_env_defines :: proc() -> []string {
 	// word (#104, #105) still leaves the names of the tests it was running in its log.
 	append(&defines, "-define:ODIN_TEST_LOG_STATE_CHANGES=true")
 	for name in ([]string{"ODIN_TEST_RANDOM_SEED", "ODIN_TEST_THREADS", "ODIN_TEST_NAMES"}) {
-		if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
+		if name == "ODIN_TEST_NAMES" && len(names) > 0 {
+			append(&defines, fmt.aprintf("-define:ODIN_TEST_NAMES=%s", names))
+		} else if value, found := os.lookup_env(name, context.allocator); found && len(value) > 0 {
 			append(&defines, fmt.aprintf("-define:%s=%s", name, value))
 		}
 	}
@@ -908,9 +928,104 @@ test_timeout :: proc(last_run: string) -> time.Duration {
 	return limit
 }
 
+// Test_Options: what `test` takes besides package names. Each distinct set of build
+// flags keeps its own binary, log and timing (test_suffix), so a -o:speed or sanitizer
+// run does not rebuild over the default binary or overwrite its timing.
+Test_Options :: struct {
+	optimization: string, // "-o:speed" (empty: the compiler's default)
+	sanitizer:    string, // "address" or "thread" (empty: none)
+	names:        []string, // -test-name: the tests to run (empty: all, or the environment's)
+}
+
+// parse_test_args splits `test`'s arguments into packages and options. Options start
+// with a dash and use Odin's own spellings: -o:<level>, -sanitize:address|thread and
+// -test-name:<name> (repeatable).
+parse_test_args :: proc(args: []string) -> (packages: []string, opts: Test_Options, ok: bool) {
+	pkgs := make([dynamic]string)
+	names := make([dynamic]string)
+	for arg in args {
+		switch {
+		case !strings.has_prefix(arg, "-"):
+			append(&pkgs, arg)
+		case strings.has_prefix(arg, "-o:"):
+			level := arg[len("-o:"):]
+			if !slice.contains([]string{"none", "minimal", "size", "speed", "aggressive"}, level) {
+				fmt.eprintfln(
+					"build: test: '%s': the levels are none, minimal, size, speed, aggressive",
+					arg,
+				)
+				return
+			}
+			opts.optimization = arg
+		case strings.has_prefix(arg, "-sanitize:"):
+			kind := arg[len("-sanitize:"):]
+			if kind != "address" && kind != "thread" {
+				fmt.eprintfln("build: test: '%s': the sanitizers are address and thread", arg)
+				return
+			}
+			when ODIN_OS == .Windows {
+				fmt.eprintln("build: test: sanitizers are for Linux and macOS")
+				return
+			}
+			opts.sanitizer = kind
+		case strings.has_prefix(arg, "-test-name:"):
+			name := arg[len("-test-name:"):]
+			if len(name) == 0 {
+				fmt.eprintln("build: test: -test-name: needs a test name")
+				return
+			}
+			append(&names, name)
+		case:
+			fmt.eprintfln(
+				"build: test: unknown option '%s' (-o:<level>, -sanitize:address|thread, -test-name:<name>)",
+				arg,
+			)
+			return
+		}
+	}
+	opts.names = names[:]
+	return pkgs[:], opts, true
+}
+
+// test_suffix: what is added to a package's binary, log and timing names for opts.
+test_suffix :: proc(opts: Test_Options) -> string {
+	b := strings.builder_make()
+	if len(opts.optimization) > 0 {fmt.sbprintf(&b, ".%s", opts.optimization[len("-o:"):])}
+	if len(opts.sanitizer) > 0 {fmt.sbprintf(&b, ".%s", opts.sanitizer)}
+	return strings.to_string(b)
+}
+
+// test_flags: the compiler flags opts adds to a package's test build.
+test_flags :: proc(opts: Test_Options) -> []string {
+	flags := make([dynamic]string)
+	if len(opts.optimization) > 0 {append(&flags, opts.optimization)}
+	if len(opts.sanitizer) >
+	   0 {append(&flags, strings.concatenate({"-sanitize:", opts.sanitizer}))}
+	return flags[:]
+}
+
+// qualified_test_names: a name without a package ("test_x") is the package's own
+// (`core.test_x` in server/core), as the runner's ODIN_TEST_NAMES wants it.
+qualified_test_names :: proc(pkg: string, names: []string) -> string {
+	qualified := make([dynamic]string, context.temp_allocator)
+	for name in names {
+		if strings.contains(name, ".") {
+			append(&qualified, name)
+		} else {
+			append(
+				&qualified,
+				strings.concatenate({filepath.base(pkg), ".", name}, context.temp_allocator),
+			)
+		}
+	}
+	return strings.join(qualified[:], ",", context.temp_allocator)
+}
+
 // test runs the test packages (or only the named ones) in parallel, the slowest last
 // time first (it bounds the whole), each under its time limit.
-test :: proc(named: []string) -> bool {
+test :: proc(args: []string) -> bool {
+	named, opts, parsed := parse_test_args(args)
+	if !parsed {return false}
 	packages := slice.clone(TEST_PACKAGES)
 	if len(named) > 0 {
 		for pkg in named {
@@ -921,24 +1036,30 @@ test :: proc(named: []string) -> bool {
 		}
 		packages = slice.clone(named)
 	}
+	suffix := test_suffix(opts)
 	os.remove(path_join({REPORT_DIR, "tests.jsonl"})) // this run's tests only
-	last :: proc(pkg: string) -> f64 {
+	Timed :: struct {
+		pkg:     string,
+		seconds: f64,
+	}
+	timed := make([]Timed, len(packages))
+	for pkg, i in packages {
+		timed[i] = {pkg, 1e9} // never timed: first
 		data, err := os.read_entire_file_from_path(
-			strings.concatenate({test_binary(pkg), ".seconds"}),
+			strings.concatenate({test_binary(pkg, suffix), ".seconds"}),
 			context.temp_allocator,
 		)
-		if err != nil {return 1e9} 	// never timed: first
-		seconds, _ := strconv.parse_f64(strings.trim_space(string(data)))
-		return seconds
+		if err == nil {timed[i].seconds, _ = strconv.parse_f64(strings.trim_space(string(data)))}
 	}
-	slice.sort_by(packages, proc(a, b: string) -> bool {return last(a) > last(b)})
-	return test_packages(packages, {}, jobs_width())
+	slice.sort_by(timed, proc(a, b: Timed) -> bool {return a.seconds > b.seconds})
+	for t, i in timed {packages[i] = t.pkg}
+	return test_packages(packages, {}, jobs_width(), opts)
 }
 
 // smoke runs the smoke suite on one thread: its tests start threads, sockets and clocks of
 // their own, and two at once would only compete for the machine.
 smoke :: proc() -> bool {
-	return test_packages({SMOKE_PACKAGE}, {"-define:ODIN_TEST_THREADS=1"}, 1)
+	return test_packages({SMOKE_PACKAGE}, {"-define:ODIN_TEST_THREADS=1"}, 1, {})
 }
 
 // test_name: the file name a test package's binary, log and timing are kept under: its
@@ -951,14 +1072,16 @@ test_name :: proc(pkg: string) -> string {
 }
 
 // test_binary: where a test package's executable is kept.
-test_binary :: proc(pkg: string) -> string {
-	return path_join({"build", "test", strings.concatenate({test_name(pkg), exe_suffix()})})
+test_binary :: proc(pkg: string, suffix := "") -> string {
+	return path_join(
+		{"build", "test", strings.concatenate({test_name(pkg), suffix, exe_suffix()})},
+	)
 }
 
 // test_log: where a test package's output is kept. A package that passed prints one
 // line (its test count and time); the whole output is printed only when it failed.
-test_log :: proc(pkg: string) -> string {
-	return path_join({"build", "test", strings.concatenate({test_name(pkg), ".log"})})
+test_log :: proc(pkg: string, suffix := "") -> string {
+	return path_join({"build", "test", strings.concatenate({test_name(pkg), suffix, ".log"})})
 }
 
 // test_count: " N tests", from the test runner's last words in the log at path ("" if not there).
@@ -1175,17 +1298,25 @@ append_report :: proc(file, text: string) {
 // that outlasts it is killed with its children and reported as a failure naming the
 // package. A package whose inputs are unchanged since its binary was built runs that
 // binary again instead of compiling it.
-test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
+test_packages :: proc(
+	packages: []string,
+	extra: []string,
+	width: int,
+	opts: Test_Options,
+) -> bool {
+	suffix := test_suffix(opts)
 	State :: struct {
 		packages: []string,
 		steps:    []Odin_Step,
 		limits:   []time.Duration,
 		statuses: []int, // each job's exit status (limited.Job.status)
 		watches:  []^Test_Watch, // each job's log watcher: the tests' times
+		suffix:   string,
 		ok:       bool,
 	}
 	state := State {
 		packages = packages,
+		suffix   = suffix,
 		steps    = make([]Odin_Step, len(packages)),
 		limits   = make([]time.Duration, len(packages)),
 		statuses = make([]int, len(packages)),
@@ -1195,18 +1326,20 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 	jobs := make([]limited.Job, len(packages))
 	reused := 0
 	for pkg, i in packages {
-		out := test_binary(pkg)
+		out := test_binary(pkg, suffix)
+		log := test_log(pkg, suffix)
 		os.make_directory_all(filepath.dir(out))
 		step := &state.steps[i]
 		step^ = Odin_Step {
-			name   = strings.concatenate({"test-", test_name(pkg)}),
+			name   = strings.concatenate({"test-", test_name(pkg), suffix}),
 			cmd    = slice.concatenate(
 				[][]string {
 					test_odin_command(pkg),
 					ODIN_FLAGS,
 					COLLECTIONS,
 					test_odin_flags(out),
-					test_env_defines(),
+					test_env_defines(qualified_test_names(pkg, opts.names)),
+					test_flags(opts),
 					extra,
 				},
 			),
@@ -1218,16 +1351,16 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 		} else {
 			build = odin_step_command(step)
 		}
-		cmd := test_run_command(build, out)
+		cmd := test_run_command(build, out, opts.sanitizer != "")
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
 		state.watches[i] = new(Test_Watch)
-		state.watches[i].log = test_log(pkg)
+		state.watches[i].log = log
 		jobs[i] = limited.Job {
 			poll      = test_watch_poll,
 			poll_data = state.watches[i],
 			cmd       = cmd,
 			limit     = state.limits[i],
-			log       = test_log(pkg),
+			log       = log,
 			quiet     = true, // (printed by done when the package failed)
 			status    = &state.statuses[i],
 		}
@@ -1253,14 +1386,25 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 				strings.concatenate({step.output, ".seconds"}),
 				fmt.tprintf("%.1f", seconds),
 			)
-			fmt.printfln("test   %s%s (%.1f s)", pkg, test_count(test_log(pkg)), seconds)
+			fmt.printfln(
+				"test   %s%s (%.1f s)",
+				pkg,
+				test_count(test_log(pkg, state.suffix)),
+				seconds,
+			)
 		case .Failed:
-			data, _ := os.read_entire_file_from_path(test_log(pkg), context.temp_allocator)
+			data, _ := os.read_entire_file_from_path(
+				test_log(pkg, state.suffix),
+				context.temp_allocator,
+			)
 			fmt.eprint(failure_excerpt(string(data), state.statuses[index]))
-			fmt.eprintfln("test   %s FAILED (its output: %s)", pkg, test_log(pkg))
+			fmt.eprintfln("test   %s FAILED (its output: %s)", pkg, test_log(pkg, state.suffix))
 			state.ok = false
 		case .Timed_Out:
-			data, _ := os.read_entire_file_from_path(test_log(pkg), context.temp_allocator)
+			data, _ := os.read_entire_file_from_path(
+				test_log(pkg, state.suffix),
+				context.temp_allocator,
+			)
 			fmt.eprint(failure_excerpt(string(data), -1))
 			fmt.eprintfln(
 				"test   %s FAILED: still running after %.0f s (the limit): killed it and its children",
@@ -1284,7 +1428,7 @@ TEST_STACK_KIB :: 512
 // is up to date) and runs it. On Linux a thread's default stack is the stack rlimit, so
 // the run is made under macOS's thread stack size: the limit is set after the build, in
 // the shell that execs the test, and the driver and the compiler keep their own.
-test_run_command :: proc(build: []string, exe: string) -> []string {
+test_run_command :: proc(build: []string, exe: string, sanitized := false) -> []string {
 	when ODIN_OS == .Linux {
 		script := fmt.tprintf(
 			"exe=$1; shift; if [ $# -gt 0 ]; then \"$@\" || exit $?; fi; ulimit -s %d && exec \"$exe\"",
