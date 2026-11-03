@@ -18,6 +18,7 @@ import "common:base"
 import "common:game"
 import "core:log"
 import "core:os"
+import "core:strings"
 import "core:time"
 
 // app_init brings everything up; on failure the caller still calls
@@ -58,7 +59,11 @@ app_init :: proc(app: ^engine.App) -> bool {
 		return false
 	}
 	if !gpu.init_device(g, surface) {return false}
-	gpu.pipeline_cache_open(g, engine.path_next_to_exe("pipeline-cache.bin"))
+	cache_path := engine.path_next_to_exe("pipeline-cache.bin")
+	if dir, set := base.state_dir_override(); set {
+		cache_path = strings.concatenate({dir, "/pipeline-cache.bin"}, context.temp_allocator)
+	}
+	gpu.pipeline_cache_open(g, cache_path)
 	capture_dir := engine.path_next_to_exe("captures")
 	if gpu.renderdoc_attach(&app.renderdoc, capture_dir, "voxiverse") {
 		os.make_directory_all(capture_dir)

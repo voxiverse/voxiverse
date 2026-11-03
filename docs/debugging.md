@@ -353,6 +353,10 @@ the baseline in dim grey, the differing pixels in red. Each run's log is
 `build/images/<scene>.log`. CI uploads `build/images/` as the `images` artifact when a step
 fails.
 
+Scenes render in parallel (about half the cores, at most six), each with its own X display and
+its own directory `build/images/<scene>.state/`, which `VX_SETTINGS` (settings, crash bundles)
+and `VX_STATE_DIR` (the game's log and pipeline cache, instead of the executable's) point to.
+
 Each scene also writes `build/images/<scene>.counts`, what its picture's frame drew (the
 culling pass's statistics and the draw counts: `world_meshes`, `world_triangles`,
 `draw_calls`, `api_draw_calls`, `world_api_draw_calls`, `frame_triangles`), one `name
@@ -408,5 +412,5 @@ Lua, the geometric mean of the ratios, and the snapshot and restore times. The f
 cleared between benches, so a clean tree starts from a removed `build/reports/`.
 
 Every CI job that runs tests or benches uploads `build/reports/` as the artifact
-`reports-<os>` (`linux`, `windows`, `macos`; the game job's is `reports-linux-game`), also when
+`reports-<os>` (`linux`, `windows`, `macos`; the scenario job's is `reports-linux-game`), also when
 an earlier step failed.

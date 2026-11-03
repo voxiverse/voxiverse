@@ -22,7 +22,8 @@ import "common:limited"
 // file. `--accept <scene|all>` makes what was rendered the baseline (review
 // the pictures first); a scene's name alone renders and compares only that
 // one. Pictures go to build/images/<scene>.png, a failure's difference to
-// build/images/<scene>.diff.png and each run's log to build/images/<scene>.log.
+// build/images/<scene>.diff.png and each run's log to build/images/<scene>.log; the game's own
+// log, settings and pipeline cache are in build/images/<scene>.state/.
 // Each scene also writes its counts, build/images/<scene>.counts, compared
 // with <name>.counts beside the picture (and accepted with it): see Count.
 
@@ -38,6 +39,13 @@ IMAGES_OUT :: "build/images"
 IMAGE_TOLERANCE :: 8
 IMAGE_MAX_SHARE :: 0.001
 IMAGE_MAX_MEAN :: 0.5
+
+// images_width: how many scenes render at once (lavapipe draws on the CPU, so about
+// half the cores, at most IMAGE_MAX_PARALLEL).
+IMAGE_MAX_PARALLEL :: 6
+images_width :: proc() -> int {
+	return clamp(os.get_processor_core_count() / 2, 1, IMAGE_MAX_PARALLEL)
+}
 
 // IMAGE_SCENE_LIMIT: a scene still running at this is killed and fails.
 IMAGE_SCENE_LIMIT :: 5 * time.Minute
@@ -325,17 +333,37 @@ images :: proc(args: []string) -> bool {
 	exe := build_game({}) or_return
 	os.make_directory_all(IMAGES_OUT)
 
-	// One at a time: the games share their log, settings and pipeline cache
-	// next to the executable, and xvfb-run -a picks displays racily.
+	// In parallel: each scene has its own settings file, log and pipeline cache
+	// (a directory under build/images, VX_SETTINGS and VX_STATE_DIR) and its own X
+	// display (xvfb-run -n: -a picks displays racily when several start at once).
+	// The display numbers start at a base that depends on this process, so two
+	// builds on one machine rarely meet.
+	display_base := 100 + (os.get_pid() % 150) * 20
+	root, _ := os.get_working_directory(context.allocator)
 	jobs := make([]limited.Job, len(chosen))
 	for name, i in chosen {
 		for ext in ([]string{".png", ".diff.png", ".counts"}) {
 			os.remove(path_join({IMAGES_OUT, strings.concatenate({name, ext})}))
 		}
+		state := path_join({root, IMAGES_OUT, strings.concatenate({name, ".state"})})
+		os.remove_all(state)
+		os.make_directory_all(state)
 		jobs[i] = {
 			// (cloned: a slice literal here would be one array for every job)
 			cmd   = slice.clone(
-				[]string{"xvfb-run", "-a", "-s", "-screen 0 1280x720x24", exe, "--scene", name},
+				[]string {
+					"xvfb-run",
+					"-n",
+					fmt.tprintf("%d", display_base + i),
+					"-s",
+					"-screen 0 1280x720x24",
+					"env",
+					strings.concatenate({"VX_STATE_DIR=", state}),
+					strings.concatenate({"VX_SETTINGS=", state, "/settings.cfg"}),
+					exe,
+					"--scene",
+					name,
+				},
 			),
 			limit = IMAGE_SCENE_LIMIT,
 			log   = path_join({IMAGES_OUT, strings.concatenate({name, ".log"})}),
@@ -343,7 +371,7 @@ images :: proc(args: []string) -> bool {
 		}
 	}
 	fmt.printfln("images %d scene(s) on lavapipe (%s)", len(chosen), filepath.base(icd))
-	results := limited.run_parallel(jobs, 1)
+	results := limited.run_parallel(jobs, images_width())
 
 	passed := 0
 	for name, i in chosen {

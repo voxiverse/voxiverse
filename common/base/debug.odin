@@ -266,9 +266,20 @@ log_rotate :: proc(path: string) {
 	}
 }
 
-// log_file_path places the log next to the executable (build/ in dev).
+// state_dir_override: VX_STATE_DIR, a directory that holds the log and the pipeline cache
+// instead of the executable's (runs that share one executable at once, such as the
+// visual baselines' scenes, each get their own).
+state_dir_override :: proc() -> (string, bool) {
+	dir, set := os.lookup_env("VX_STATE_DIR", context.temp_allocator)
+	return dir, set && dir != ""
+}
+
+// log_file_path places the log next to the executable (build/ in dev), or in VX_STATE_DIR.
 @(private = "file")
 log_file_path :: proc(name: string) -> (string, bool) {
+	if dir, set := state_dir_override(); set {
+		return strings.concatenate({dir, "/", name}, context.temp_allocator), true
+	}
 	dir, err := os.get_executable_directory(context.temp_allocator)
 	if err != nil {return "", false}
 	return strings.concatenate({dir, "/", name}, context.temp_allocator), true

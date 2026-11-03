@@ -218,10 +218,14 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   list) and takes seconds in parallel. A test that loops over independent cases that each take
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the
   runner's threads share them; an `#assert` on the count says when a case lacks its test.
-- **CI uses exactly the same path**, cached between runs. Its Linux checks are two parallel
-  jobs, "Test · Linux x64" (check, tests, determinism, the smoke suite, the fuzz smoke run) and
-  "Game · Linux x64" (everything that runs the game or tools under xvfb); macOS and Windows run
-  one job each. Every check runs on every push. The tests run once, with
+- **CI uses exactly the same path**, cached between runs. Its Linux checks are three parallel
+  jobs, "Test · Linux x64" (check, tests, determinism, the smoke suite, the fuzz smoke run),
+  "Game · Linux x64" (the scenario checks: benchmarks, fuzz, flight, culling, audio,
+  multiplayer, crash handler, printers) and "Game · Linux x64, images" (visual baselines,
+  AddressSanitizer, profiling, screens, sky and held items); macOS and Windows run one job
+  each. CI sets `VX_CI=1`, which makes `check` skip its cross-target object builds (every Tier 1
+  target compiles natively in its own job); locally they run. A tool's executable (`bench`) is
+  built once per job and reused while its inputs are unchanged. Every check runs on every push. The tests run once, with
   `ODIN_TEST_RANDOM_SEED` set to the run number (a re-run repeats it). `./build.sh test` turns
   `ODIN_TEST_RANDOM_SEED`, `ODIN_TEST_THREADS` and `ODIN_TEST_NAMES` from the environment into
   `-define:` flags (Odin reads them only as defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh

@@ -113,7 +113,7 @@ it after the case.
 ## CI
 
 - "Fuzz (smoke)" in "Test · Linux x64", after Test: `./build.sh fuzz --smoke`.
-- "Fuzz (smoke), script programs against Lua" in "Game · Linux x64" (which installs
+- "Fuzz (smoke), script programs against Lua" in "Game · Linux x64" (scenarios; it installs
   `lua5.4`): `./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4`.
 - The suite on all three OSes: `test_fuzz_smoke` (`common/script/fuzz_test.odin`: the four
   script targets at seed 51, 300, 200, 100 and 100 cases); each other target's `test_fuzz_<target>_smoke` (200 cases at seed 84

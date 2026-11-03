@@ -606,7 +606,9 @@ check :: proc() -> bool {
 			},
 		)
 	}
-	ok := cross_jobs(&jobs)
+	// CI builds every Tier 1 target natively in its own job: VX_CI skips the cross builds.
+	ok := true
+	if os.get_env("VX_CI", context.temp_allocator) != "1" {ok = cross_jobs(&jobs)}
 	ok = run_checks(jobs[:]) && ok
 	return(
 		determinism_lint() &&
@@ -1618,7 +1620,8 @@ run_tool :: proc(name: string, args: []string, release := false) -> bool {
 	return run(slice.concatenate([][]string{{exe}, args}))
 }
 
-// build_tool builds tools/<name> into build/.
+// build_tool builds tools/<name> into build/, unless its inputs and the executable are
+// what they were at the last build (a Odin_Step: a second bench step starts at once).
 build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
 	cmd := slice.concatenate(
@@ -1632,7 +1635,15 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		version_defines(version_of()),
 	},
 	)
-	return exe, run(cmd)
+	step := Odin_Step {
+		name   = strings.concatenate({"tool-", name}),
+		cmd    = cmd,
+		output = exe,
+	}
+	if odin_step_fresh(&step) {return exe, true}
+	if !run(odin_step_command(&step)) {return exe, false}
+	odin_step_succeeded(&step)
+	return exe, true
 }
 
 // bench runs a benchmark scenario the one way: `chunks` is tools/bench
