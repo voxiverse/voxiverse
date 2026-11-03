@@ -216,6 +216,8 @@ main :: proc() {
 		ok = format_sources()
 	case "shaders":
 		ok = shaders()
+	case "lavapipe":
+		ok = lavapipe()
 	case "icon":
 		ok = write_icon()
 	case "build":
@@ -318,6 +320,9 @@ usage :: proc() {
 	)
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
+	fmt.println(
+		"  lavapipe  fetch the pinned software Vulkan driver and runtime for Windows CI (prints their paths)",
+	)
 	fmt.println(
 		"  audio     run the audio baselines (--accept <scenario|all> rewrites them, --wav <dir> renders each to a WAV)",
 	)

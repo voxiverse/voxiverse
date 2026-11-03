@@ -104,12 +104,12 @@ jobs:
           name: determinism-${{ matrix.os }}
           path: build/determinism/
           if-no-files-found: ignore # the comparison job fails on a missing log
-      # The window's zoom and green buttons against a real AppKit window (the
-      # runner has a window server).
+      # What needs real threads, sockets, audio devices and child processes
+      # (on macOS also the window's buttons against a real AppKit window).
       - name: Smoke
-        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        if: ${{ !cancelled() && runner.os != 'Linux' }}
         timeout-minutes: 15 # a hang fails this step; it once starved the runner for 50 minutes
-        run: ./build.sh smoke
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} smoke
       - name: Build game
         id: build
         if: ${{ !cancelled() }}
@@ -542,7 +542,7 @@ jobs:
           - { os: windows-latest, name: Windows x64 }
           - { os: macos-latest, name: macOS arm64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40 # the Windows package also plays a world on a software driver
     steps:
       - uses: actions/checkout@v7
         with:
@@ -605,6 +605,33 @@ jobs:
           # The game is a windowed program: PowerShell would not wait for it.
           $game = Start-Process .\voxiverse.exe -ArgumentList "--version" -Wait -PassThru
           if ($game.ExitCode -ne 0) { exit 1 }
+          # The game itself, to a loaded world and a screenshot, on Mesa's
+          # lavapipe (software Vulkan: the runner has no GPU). The driver and
+          # the Vulkan loader are fetched by the build, pinned and hash
+          # checked, and live outside the package, which stays as shipped.
+          Push-Location $env:GITHUB_WORKSPACE
+          $fetched = & .\build.bat lavapipe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Pop-Location
+          $fetched
+          $icd = ($fetched | Where-Object { $_ -like 'icd=*' }).Substring(4)
+          $runtime = ($fetched | Where-Object { $_ -like 'runtime=*' }).Substring(8)
+          if (-not (Test-Path "$env:SystemRoot\System32\vulkan-1.dll")) {
+            Start-Process $runtime -ArgumentList "/S" -Wait
+            if (-not (Test-Path "$env:SystemRoot\System32\vulkan-1.dll")) { "the Vulkan loader did not install"; exit 1 }
+          }
+          $env:VK_DRIVER_FILES = $icd
+          $env:VX_SAVES = "$env:RUNNER_TEMP\saves"
+          $env:VX_SETTINGS = "$env:RUNNER_TEMP\settings.cfg"
+          Remove-Item .\screenshots\package.png -ErrorAction SilentlyContinue
+          $game = Start-Process .\voxiverse.exe -ArgumentList '--exec "set render_distance 4; singleplayer; wait_world; screenshot package; wait 3; quit"' -PassThru
+          if (-not $game.WaitForExit(600000)) {
+            $game.Kill()
+            "the game did not finish in 10 minutes"
+            exit 1
+          }
+          if ($game.ExitCode -ne 0) { "the game exited with $($game.ExitCode)"; exit 1 }
+          if (-not (Test-Path .\screenshots\package.png)) { "no screenshots\package.png"; exit 1 }
           # The version information linked in (the file's Details tab).
           $info = (Get-Item .\voxiverse.exe).VersionInfo
           $info | Format-List ProductName, ProductVersion, FileDescription, FileVersion

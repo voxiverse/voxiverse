@@ -28,7 +28,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: build/tools
-        key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin', 'tools/build/moltenvk.odin') }}
+        key: glslang-${{ steps.pins.outputs.image }}-${{ hashFiles('tools/build/glslang.odin', 'tools/build/moltenvk.odin', 'tools/build/lavapipe.odin') }}
 
     - name: Cache odinfmt
       if: inputs.dev == 'true'
