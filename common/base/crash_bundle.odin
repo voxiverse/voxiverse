@@ -255,13 +255,9 @@ crash_bundle_write :: proc(what: string) -> string {
 	defer bundle_watchdog(false)
 	if !bundle_mkdir(name) {return ""}
 
-	// Every other thread captures its stack; this one's goes first.
+	// crash.txt, written before anything that walks a stack: a death in the walk leaves it.
 	var_frames: [BUNDLE_FRAMES]rawptr
 	own_n := 0
-	{
-		own_n = trace.capture_fill(([^]trace.Capture_Entry)(&var_frames[0])[:BUNDLE_FRAMES], 0)
-	}
-	// crash.txt
 	{
 		gpu := string(b.gpu[:b.gpu_len]) if b.gpu_len > 0 else "none yet"
 		state := string(b.state[:b.state_len]) if b.state_len > 0 else "unknown"
@@ -284,7 +280,11 @@ crash_bundle_write :: proc(what: string) -> string {
 	// takes locks, allocates and talks to other processes), so a thread or a hang there leaves
 	// the pass before it, and the watchdog ends the process.
 	for pass in 0 ..< 3 {
-		if pass == 1 {threads_capture_others()}
+		if pass == 1 {
+			// This thread's own frames first, then every other thread's.
+			own_n = trace.capture_fill(([^]trace.Capture_Entry)(&var_frames[0])[:BUNDLE_FRAMES], 0)
+			threads_capture_others()
+		}
 		sb := strings.builder_from_bytes(b.text[1])
 		fmt.sbprintf(&sb, "thread %s (crashing)\n", thread_name_here())
 		write_frames(&sb, var_frames[:own_n], pass == 2)

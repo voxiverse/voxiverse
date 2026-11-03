@@ -58,7 +58,7 @@ release_notes :: proc(repo: string, tag: string) -> (notes: string, ok: bool) {
 
 	section :: proc(repo, range_, heading: string, capped: bool, pathspec: string) -> string {
 		args := make([dynamic]string, 0, 12)
-		append(&args, "log", "--reverse", "--no-merges", "--format=%s", range_)
+		append(&args, "log", "--reverse", "--topo-order", "--no-merges", "--format=%s", range_)
 		if pathspec != "" {append(&args, "--", pathspec)}
 		out, _ := git(repo, ..args[:])
 		subjects := make([dynamic]string)
