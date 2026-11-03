@@ -36,6 +36,10 @@ text_of :: proc(dir, file: string) -> string {
 	return string(data)
 }
 
+// How crash.txt names a memory fault: the signal (POSIX) or the exception code (Windows).
+@(private = "file")
+SEGV :: "exception=0xc0000005" when ODIN_OS == .Windows else "signal=SIGSEGV"
+
 @(test)
 test_crash_bundles_name_every_thread :: proc(t: ^testing.T) {
 	os.make_directory_all("build/tmp")
@@ -58,7 +62,7 @@ test_crash_bundles_name_every_thread :: proc(t: ^testing.T) {
 	Case :: struct {
 		mode, thread, what: string,
 	}
-	for c in ([]Case{{"main-segv", "main", "signal=SIGSEGV"}, {"worker-segv", "delta", "signal=SIGSEGV"}, {"assert", "main", "the fixture's assert"}, {"overflow", "delta", "stack overflow"}}) {
+	for c in ([]Case{{"main-segv", "main", SEGV}, {"worker-segv", "delta", "signal=SIGSEGV"}, {"assert", "main", "the fixture's assert"}, {"overflow", "delta", "stack overflow"}}) {
 		when ODIN_OS == .Windows {
 			if c.mode != "main-segv" {continue} 	// (the others' stacks are not collected on every platform)
 		}
