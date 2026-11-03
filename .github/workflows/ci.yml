@@ -92,6 +92,14 @@ jobs:
           name: test-logs-${{ matrix.os }}
           path: build/test/*.log
           if-no-files-found: ignore
+      # macOS crash reports (.ips) for a test binary that died with a signal and no message.
+      - name: Crash reports
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-reports-${{ matrix.os }}
+          path: ~/Library/Logs/DiagnosticReports/*.ips
+          if-no-files-found: ignore
       # The scripted 10 000-tick session at both optimization levels:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
