@@ -13,16 +13,12 @@ import "core:sys/posix"
 FATAL_SIGNALS := [?]posix.Signal{.SIGSEGV, .SIGBUS, .SIGFPE, .SIGILL}
 
 @(private = "file")
-ALT_STACK_BYTES :: 128 * 1024 // the report's frames use about 14 KiB on Linux; the rest is headroom
-
-@(private = "file")
-alt_stack: []u8 // the main thread's, from the heap like the workers' (page-aligned by the allocator, never part of the image)
+alt_stack: [64 * 1024]u8 // the main thread's; workers' overflows go unreported
 
 @(private)
 crash_handler_install :: proc() {
-	if alt_stack == nil {alt_stack = make([]u8, ALT_STACK_BYTES, runtime.heap_allocator())}
 	stack := posix.stack_t {
-		ss_sp   = raw_data(alt_stack),
+		ss_sp   = &alt_stack[0],
 		ss_size = len(alt_stack),
 	}
 	posix.sigaltstack(&stack, nil)
