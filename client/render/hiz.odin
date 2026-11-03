@@ -24,25 +24,21 @@ import "client:gpu"
 // on each axis separately (1280 x 720 gives 1024 x 512); each level below
 // halves each axis down to 1. A level-0 texel x covers depth texels
 // [floor(x * W / w0), ceil((x + 1) * W / w0)) across and likewise down, so
-// every depth texel is in some footprint. One dispatch writes up to
-// HIZ_LEVELS_PER_DISPATCH levels (hiz.comp): the first from a sampled source
-// (the depth image, or the level above), the rest reduced in shared memory;
-// a barrier between dispatches.
+// every depth texel is in some footprint. One dispatch per level
+// (hiz.comp), each reading the one above as a sampled image and writing its
+// own as a storage image, with a barrier between.
 //
 // The pyramid is R32_SFLOAT, in GENERAL layout whenever it is used, sampled
 // by texture id (Hiz_Info) by compute shaders on the shared layout. There
 // is one, shared by the frames in flight like the depth image it is built
 // from (their work is ordered on the one queue). Its compute pass has a
-// pipeline layout of its own: one descriptor set per dispatch (binding 0 the
-// source, binding 1 its levels as storage images), written when the pyramid is remade
+// pipeline layout of its own: one descriptor set per level (binding 0 the
+// source, binding 1 the level, binding 2 a sampler for the source's
+// gathers), written when the pyramid is remade
 // (hiz_resize: after the GPU is idle, never while a frame uses them).
 
 HIZ_MAX_MIPS :: 16 // level 0 at most 32768 texels wide
-HIZ_TILE :: 16 // the first level's texels a hiz.comp group writes, each way
-// hiz.comp's HIZ_LEVELS: four storage images, the least a device allows a
-// shader stage (maxPerStageDescriptorStorageImages).
-HIZ_LEVELS_PER_DISPATCH :: 4
-HIZ_MAX_DISPATCHES :: (HIZ_MAX_MIPS + HIZ_LEVELS_PER_DISPATCH - 1) / HIZ_LEVELS_PER_DISPATCH
+HIZ_GROUP :: 8 // hiz.comp's local size, each way
 
 Hiz :: struct {
 	image:           gpu.Image,
@@ -50,11 +46,12 @@ Hiz :: struct {
 	size:            [2]u32, // level 0's
 	depth_size:      [2]u32, // the depth image it is built from
 	views:           [HIZ_MAX_MIPS]vk.ImageView, // one level each
-	sets:            [HIZ_MAX_DISPATCHES]vk.DescriptorSet,
+	sets:            [HIZ_MAX_MIPS]vk.DescriptorSet,
 	texture_id:      gpu.Texture_Id, // the whole pyramid, sampled (in GENERAL)
 	layout:          vk.DescriptorSetLayout,
 	pipeline_layout: vk.PipelineLayout,
 	pool:            vk.DescriptorPool,
+	sampler:         vk.Sampler, // nearest, clamped: hiz.comp's gathers
 	pipeline:        gpu.Pipeline,
 	depth_version:   u32, // gpu.Gpu.depth_version the sets were written for
 }
@@ -69,8 +66,7 @@ Hiz_Info :: struct {
 @(private = "file")
 Hiz_Push :: struct {
 	source_size: [2]u32,
-	target_size: [2]u32, // the first level's
-	levels:      u32, // written by the dispatch
+	target_size: [2]u32,
 }
 
 // hiz_sizes: level 0's size and the number of levels for a depth image.
@@ -95,11 +91,6 @@ hiz_footprint :: proc(x, source, target: u32) -> (lo, hi: u32) {
 	return x * source / target, ((x + 1) * source + target - 1) / target
 }
 
-// hiz_dispatches: how many dispatches build a pyramid of `mips` levels.
-hiz_dispatches :: proc(mips: u32) -> u32 {
-	return (mips + HIZ_LEVELS_PER_DISPATCH - 1) / HIZ_LEVELS_PER_DISPATCH
-}
-
 hiz_info :: proc(h: ^Hiz) -> Hiz_Info {
 	return {h.size, h.mips, u32(h.texture_id)}
 }
@@ -108,13 +99,36 @@ hiz_info :: proc(h: ^Hiz) -> Hiz_Info {
 // pyramid itself is made by hiz_resize.
 hiz_init :: proc(h: ^Hiz, g: ^gpu.Gpu, spirv: []byte) -> bool {
 	h^ = {}
-	bindings := [2]vk.DescriptorSetLayoutBinding {
-		{binding = 0, descriptorType = .SAMPLED_IMAGE, descriptorCount = 1, stageFlags = {.COMPUTE}},
+	sampler_info := vk.SamplerCreateInfo {
+		sType        = .SAMPLER_CREATE_INFO,
+		magFilter    = .NEAREST,
+		minFilter    = .NEAREST,
+		mipmapMode   = .NEAREST,
+		addressModeU = .CLAMP_TO_EDGE,
+		addressModeV = .CLAMP_TO_EDGE,
+		addressModeW = .CLAMP_TO_EDGE,
+	}
+	gpu.check(vk.CreateSampler(g.device, &sampler_info, nil, &h.sampler)) or_return
+	gpu.set_name(g, .SAMPLER, u64(h.sampler), "depth pyramid sampler")
+	bindings := [3]vk.DescriptorSetLayoutBinding {
+		{
+			binding = 0,
+			descriptorType = .SAMPLED_IMAGE,
+			descriptorCount = 1,
+			stageFlags = {.COMPUTE},
+		},
 		{
 			binding = 1,
 			descriptorType = .STORAGE_IMAGE,
-			descriptorCount = HIZ_LEVELS_PER_DISPATCH,
+			descriptorCount = 1,
 			stageFlags = {.COMPUTE},
+		},
+		{
+			binding = 2,
+			descriptorType = .SAMPLER,
+			descriptorCount = 1,
+			stageFlags = {.COMPUTE},
+			pImmutableSamplers = &h.sampler,
 		},
 	}
 	layout_info := vk.DescriptorSetLayoutCreateInfo {
@@ -136,18 +150,24 @@ hiz_init :: proc(h: ^Hiz, g: ^gpu.Gpu, spirv: []byte) -> bool {
 	}
 	gpu.check(vk.CreatePipelineLayout(g.device, &pl_info, nil, &h.pipeline_layout)) or_return
 	gpu.set_name(g, .PIPELINE_LAYOUT, u64(h.pipeline_layout), "depth pyramid layout")
-	sizes := [2]vk.DescriptorPoolSize {
-		{.SAMPLED_IMAGE, HIZ_MAX_DISPATCHES},
-		{.STORAGE_IMAGE, HIZ_MAX_DISPATCHES * HIZ_LEVELS_PER_DISPATCH},
+	sizes := [3]vk.DescriptorPoolSize {
+		{.SAMPLED_IMAGE, HIZ_MAX_MIPS},
+		{.SAMPLER, HIZ_MAX_MIPS},
+		{.STORAGE_IMAGE, HIZ_MAX_MIPS},
 	}
 	pool_info := vk.DescriptorPoolCreateInfo {
 		sType         = .DESCRIPTOR_POOL_CREATE_INFO,
-		maxSets       = HIZ_MAX_DISPATCHES,
+		maxSets       = HIZ_MAX_MIPS,
 		poolSizeCount = len(sizes),
 		pPoolSizes    = &sizes[0],
 	}
 	gpu.check(vk.CreateDescriptorPool(g.device, &pool_info, nil, &h.pool)) or_return
-	h.pipeline = gpu.create_compute_pipeline(g, "depth pyramid", spirv, h.pipeline_layout) or_return
+	h.pipeline = gpu.create_compute_pipeline(
+		g,
+		"depth pyramid",
+		spirv,
+		h.pipeline_layout,
+	) or_return
 	return true
 }
 
@@ -163,6 +183,7 @@ hiz_destroy :: proc(h: ^Hiz, g: ^gpu.Gpu) {
 	if h.pool != 0 {vk.DestroyDescriptorPool(g.device, h.pool, nil)}
 	if h.pipeline_layout != 0 {vk.DestroyPipelineLayout(g.device, h.pipeline_layout, nil)}
 	if h.layout != 0 {vk.DestroyDescriptorSetLayout(g.device, h.layout, nil)}
+	if h.sampler != 0 {vk.DestroySampler(g.device, h.sampler, nil)}
 	h^ = {}
 }
 
@@ -200,12 +221,12 @@ hiz_resize :: proc(h: ^Hiz, g: ^gpu.Gpu, depth: gpu.Image) -> bool {
 		mips = h.mips,
 	) or_return
 	h.texture_id = gpu.register_texture(g, h.image.view, .GENERAL) or_return
-	layouts: [HIZ_MAX_DISPATCHES]vk.DescriptorSetLayout
+	layouts: [HIZ_MAX_MIPS]vk.DescriptorSetLayout
 	for &l in layouts {l = h.layout}
 	alloc := vk.DescriptorSetAllocateInfo {
 		sType              = .DESCRIPTOR_SET_ALLOCATE_INFO,
 		descriptorPool     = h.pool,
-		descriptorSetCount = hiz_dispatches(h.mips),
+		descriptorSetCount = h.mips,
 		pSetLayouts        = &layouts[0],
 	}
 	gpu.check(vk.AllocateDescriptorSets(g.device, &alloc, &h.sets[0])) or_return
@@ -215,30 +236,34 @@ hiz_resize :: proc(h: ^Hiz, g: ^gpu.Gpu, depth: gpu.Image) -> bool {
 			image = h.image.handle,
 			viewType = .D2,
 			format = .R32_SFLOAT,
-			subresourceRange = {aspectMask = {.COLOR}, baseMipLevel = level, levelCount = 1, layerCount = 1},
+			subresourceRange = {
+				aspectMask = {.COLOR},
+				baseMipLevel = level,
+				levelCount = 1,
+				layerCount = 1,
+			},
 		}
 		gpu.check(vk.CreateImageView(g.device, &view_info, nil, &h.views[level])) or_return
-		gpu.set_name(g, .IMAGE_VIEW, u64(h.views[level]), fmt.tprintf("depth pyramid level %d", level))
+		gpu.set_name(
+			g,
+			.IMAGE_VIEW,
+			u64(h.views[level]),
+			fmt.tprintf("depth pyramid level %d", level),
+		)
 	}
-	for d in 0 ..< hiz_dispatches(h.mips) {
-		first := d * HIZ_LEVELS_PER_DISPATCH
+	for level in 0 ..< h.mips {
 		source := vk.DescriptorImageInfo {
-			imageView   = depth.view if first == 0 else h.views[first - 1],
-			imageLayout = .SHADER_READ_ONLY_OPTIMAL if first == 0 else .GENERAL,
+			imageView   = depth.view if level == 0 else h.views[level - 1],
+			imageLayout = .SHADER_READ_ONLY_OPTIMAL if level == 0 else .GENERAL,
 		}
-		// Past the last level, the last again: written to every element,
-		// never stored to by the shader.
-		targets: [HIZ_LEVELS_PER_DISPATCH]vk.DescriptorImageInfo
-		for &t, i in targets {
-			t = {
-				imageView   = h.views[min(first + u32(i), h.mips - 1)],
-				imageLayout = .GENERAL,
-			}
+		target := vk.DescriptorImageInfo {
+			imageView   = h.views[level],
+			imageLayout = .GENERAL,
 		}
 		writes := [2]vk.WriteDescriptorSet {
 			{
 				sType = .WRITE_DESCRIPTOR_SET,
-				dstSet = h.sets[d],
+				dstSet = h.sets[level],
 				dstBinding = 0,
 				descriptorCount = 1,
 				descriptorType = .SAMPLED_IMAGE,
@@ -246,11 +271,11 @@ hiz_resize :: proc(h: ^Hiz, g: ^gpu.Gpu, depth: gpu.Image) -> bool {
 			},
 			{
 				sType = .WRITE_DESCRIPTOR_SET,
-				dstSet = h.sets[d],
+				dstSet = h.sets[level],
 				dstBinding = 1,
-				descriptorCount = HIZ_LEVELS_PER_DISPATCH,
+				descriptorCount = 1,
 				descriptorType = .STORAGE_IMAGE,
-				pImageInfo = &targets[0],
+				pImageInfo = &target,
 			},
 		}
 		vk.UpdateDescriptorSets(g.device, len(writes), &writes[0], 0, nil)
@@ -318,9 +343,8 @@ hiz_build :: proc(h: ^Hiz, g: ^gpu.Gpu, cmd: vk.CommandBuffer, depth: gpu.Image)
 	image_barriers(cmd, to_read[:])
 	vk.CmdBindPipeline(cmd, .COMPUTE, h.pipeline.handle)
 	source := [2]u32{depth.width, depth.height}
-	for d in 0 ..< hiz_dispatches(h.mips) {
-		first := d * HIZ_LEVELS_PER_DISPATCH
-		if d > 0 {
+	for level in 0 ..< h.mips {
+		if level > 0 {
 			// The level above, written, before it is read.
 			memory_barrier(
 				cmd,
@@ -330,13 +354,17 @@ hiz_build :: proc(h: ^Hiz, g: ^gpu.Gpu, cmd: vk.CommandBuffer, depth: gpu.Image)
 				{.SHADER_SAMPLED_READ},
 			)
 		}
-		target := hiz_mip_size(h.size, first)
-		levels := min(h.mips - first, HIZ_LEVELS_PER_DISPATCH)
-		vk.CmdBindDescriptorSets(cmd, .COMPUTE, h.pipeline_layout, 0, 1, &h.sets[d], 0, nil)
-		push := Hiz_Push{source, target, levels}
+		target := hiz_mip_size(h.size, level)
+		vk.CmdBindDescriptorSets(cmd, .COMPUTE, h.pipeline_layout, 0, 1, &h.sets[level], 0, nil)
+		push := Hiz_Push{source, target}
 		vk.CmdPushConstants(cmd, h.pipeline_layout, {.COMPUTE}, 0, size_of(push), &push)
-		vk.CmdDispatch(cmd, (target.x + HIZ_TILE - 1) / HIZ_TILE, (target.y + HIZ_TILE - 1) / HIZ_TILE, 1)
-		source = hiz_mip_size(h.size, first + levels - 1)
+		vk.CmdDispatch(
+			cmd,
+			(target.x + HIZ_GROUP - 1) / HIZ_GROUP,
+			(target.y + HIZ_GROUP - 1) / HIZ_GROUP,
+			1,
+		)
+		source = target
 	}
 	// The depth back to its tests (after this pass's reads); the pyramid to
 	// compute shaders' sampled reads and copies.
@@ -414,7 +442,7 @@ HIZ_NEAR_W :: 1e-3 // occlusion.glsl's
 // inputs came to a boundary where the GPU's rounding could decide
 // otherwise (the check keeps its boxes away from them).
 Occlusion_Verdict :: struct {
-	occluded: bool,
+	occluded:     bool,
 	// The smallest distances: of the nearest depth from the farthest; of a
 	// rectangle edge from a texel edge at the level tested, or of the extent
 	// from the next level's, in level-0 texels; of a corner's w from HIZ_NEAR_W
@@ -475,7 +503,9 @@ occlusion_reference :: proc(
 		t1[axis] = clamp(i32(floor_f32(b[axis] / scale)), 0, last[axis])
 	}
 	level_data := hiz.levels[level]
-	fetch :: proc(data: []f32, width: u32, t: [2]i32) -> f32 {return data[u32(t.y) * width + u32(t.x)]}
+	fetch :: proc(data: []f32, width: u32, t: [2]i32) -> f32 {return(
+			data[u32(t.y) * width + u32(t.x)] \
+		)}
 	farthest := min(
 		min(fetch(level_data, mip.x, t0), fetch(level_data, mip.x, {t1.x, t0.y})),
 		min(fetch(level_data, mip.x, {t0.x, t1.y}), fetch(level_data, mip.x, t1)),

@@ -54,7 +54,8 @@ Raster_Rays :: struct {
 raster_rays :: proc(c: Raster_Camera) -> Raster_Rays {
 	f := 1 / math.tan(c.fov / 2)
 	rotation :=
-		linalg.matrix4_rotate_f32(-c.pitch, {1, 0, 0}) * linalg.matrix4_rotate_f32(-c.yaw, {0, 1, 0})
+		linalg.matrix4_rotate_f32(-c.pitch, {1, 0, 0}) *
+		linalg.matrix4_rotate_f32(-c.yaw, {0, 1, 0})
 	// The view's rotation is orthonormal: its inverse is its transpose, whose
 	// columns are the rows here.
 	return {
@@ -151,7 +152,8 @@ box_visible_in :: proc(depth: []f32, size: [2]u32, c: Raster_Camera, b: Raster_B
 		v := (f32(y) + 0.5) / f32(size.y) * 2 - 1
 		for x in x0 ..= x1 {
 			u := (f32(x) + 0.5) / f32(size.x) * 2 - 1
-			if box_pixel_depth(c, raster_ray(rays, u, v), b) > depth[y * int(size.x) + x] {return true}
+			if box_pixel_depth(c, raster_ray(rays, u, v), b) >
+			   depth[y * int(size.x) + x] {return true}
 		}
 	}
 	return false
@@ -159,15 +161,22 @@ box_visible_in :: proc(depth: []f32, size: [2]u32, c: Raster_Camera, b: Raster_B
 
 // random_box: a box of sides in [small, large] round a point at a distance
 // in [near, far] in front of the camera, within a cone round its view.
-random_box :: proc(r: ^base.Rng, c: Raster_Camera, near, far, small, large: f32, spread: f32 = 1.2) -> Raster_Box {
+random_box :: proc(
+	r: ^base.Rng,
+	c: Raster_Camera,
+	near, far, small, large: f32,
+	spread: f32 = 1.2,
+) -> Raster_Box {
 	u := base.rng_f32_range(r, -spread, spread)
 	v := base.rng_f32_range(r, -spread, spread)
 	at := c.eye + raster_ray(raster_rays(c), u, v) * base.rng_f32_range(r, near, far)
-	half := [3]f32 {
-		base.rng_f32_range(r, small, large),
-		base.rng_f32_range(r, small, large),
-		base.rng_f32_range(r, small, large),
-	} / 2
+	half :=
+		[3]f32 {
+			base.rng_f32_range(r, small, large),
+			base.rng_f32_range(r, small, large),
+			base.rng_f32_range(r, small, large),
+		} /
+		2
 	return {at - half, at + half}
 }
 
@@ -205,7 +214,14 @@ hiz_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]string) {
 				c, boxes := check_scene(0, size)
 				hiz_raster(depth, size, c, boxes)
 			}
-			if !pyramid_case(p, g, depth, size, fmt.tprintf("%dx%d %s", size.x, size.y, fill == 0 ? "hash" : "raster"), &failures) {
+			if !pyramid_case(
+				p,
+				g,
+				depth,
+				size,
+				fmt.tprintf("%dx%d %s", size.x, size.y, fill == 0 ? "hash" : "raster"),
+				&failures,
+			) {
 				return
 			}
 			if len(failures) > 20 {return}
@@ -221,7 +237,11 @@ hiz_check :: proc(p: ^World_Pass, g: ^gpu.Gpu) -> (failures: [dynamic]string) {
 check_scene :: proc(k: int, size: [2]u32) -> (c: Raster_Camera, boxes: []Raster_Box) {
 	r := base.rng_make(u64(87 + k))
 	c = {
-		eye    = {base.rng_f32_range(&r, -5, 5), base.rng_f32_range(&r, -5, 5), base.rng_f32_range(&r, -5, 5)},
+		eye    = {
+			base.rng_f32_range(&r, -5, 5),
+			base.rng_f32_range(&r, -5, 5),
+			base.rng_f32_range(&r, -5, 5),
+		},
 		yaw    = base.rng_f32_range(&r, -math.PI, math.PI),
 		pitch  = base.rng_f32_range(&r, -0.8, 0.8),
 		fov    = math.PI / 2.5,
@@ -251,7 +271,14 @@ pyramid_case :: proc(
 	fail :: proc(failures: ^[dynamic]string, format: string, args: ..any) {
 		append(failures, fmt.tprintf(format, ..args))
 	}
-	image, ok := gpu.create_image(g, size.x, size.y, gpu.DEPTH_FORMAT, gpu.DEPTH_USAGE + {.TRANSFER_DST}, "hiz check depth")
+	image, ok := gpu.create_image(
+		g,
+		size.x,
+		size.y,
+		gpu.DEPTH_FORMAT,
+		gpu.DEPTH_USAGE + {.TRANSFER_DST},
+		"hiz check depth",
+	)
 	if !ok {
 		fail(failures, "%s: could not make its depth image", name)
 		return false
@@ -301,7 +328,14 @@ pyramid_case :: proc(
 		)
 		offset += int(m.x * m.y)
 	}
-	vk.CmdCopyImageToBuffer(run.cmd, h.image.handle, .GENERAL, readback.handle, u32(len(regions)), raw_data(regions))
+	vk.CmdCopyImageToBuffer(
+		run.cmd,
+		h.image.handle,
+		.GENERAL,
+		readback.handle,
+		u32(len(regions)),
+		raw_data(regions),
+	)
 	memory_barrier(run.cmd, {.COPY}, {.TRANSFER_WRITE}, {.HOST}, {.HOST_READ})
 	if !gpu.one_shot_end(g, &run) {
 		fail(failures, "%s: its commands did not run", name)
@@ -309,7 +343,15 @@ pyramid_case :: proc(
 	}
 	want := hiz_reference(depth, size, context.temp_allocator)
 	if want.size != h.size || want.mips != h.mips {
-		fail(failures, "%s: pyramid %v %d levels, the reference's %v %d", name, h.size, h.mips, want.size, want.mips)
+		fail(
+			failures,
+			"%s: pyramid %v %d levels, the reference's %v %d",
+			name,
+			h.size,
+			h.mips,
+			want.size,
+			want.mips,
+		)
 		return true
 	}
 	got := ([^]u32)(readback.mapped)
@@ -365,7 +407,11 @@ depth_upload :: proc(cmd: vk.CommandBuffer, image: gpu.Image, upload: gpu.Buffer
 		srcStageMask     = {.COPY},
 		srcAccessMask    = {.TRANSFER_WRITE},
 		dstStageMask     = {.EARLY_FRAGMENT_TESTS, .LATE_FRAGMENT_TESTS, .COMPUTE_SHADER},
-		dstAccessMask    = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE, .SHADER_SAMPLED_READ},
+		dstAccessMask    = {
+			.DEPTH_STENCIL_ATTACHMENT_READ,
+			.DEPTH_STENCIL_ATTACHMENT_WRITE,
+			.SHADER_SAMPLED_READ,
+		},
 		oldLayout        = .TRANSFER_DST_OPTIMAL,
 		newLayout        = .DEPTH_ATTACHMENT_OPTIMAL,
 		image            = image.handle,
@@ -397,7 +443,14 @@ occlusion_cases :: proc(p: ^World_Pass, g: ^gpu.Gpu, failures: ^[dynamic]string)
 	}
 	SIZE :: [2]u32{640, 360}
 	N :: HIZ_CHECK_BOXES
-	image, ok := gpu.create_image(g, SIZE.x, SIZE.y, gpu.DEPTH_FORMAT, gpu.DEPTH_USAGE + {.TRANSFER_DST}, "hiz check depth")
+	image, ok := gpu.create_image(
+		g,
+		SIZE.x,
+		SIZE.y,
+		gpu.DEPTH_FORMAT,
+		gpu.DEPTH_USAGE + {.TRANSFER_DST},
+		"hiz check depth",
+	)
 	if !ok {
 		fail(failures, "occlusion: could not make its depth image")
 		return
@@ -439,17 +492,28 @@ occlusion_cases :: proc(p: ^World_Pass, g: ^gpu.Gpu, failures: ^[dynamic]string)
 			}
 			b := random_box(&r, c, 0.5, 60, 0.05, 6, 1.6)
 			v := occlusion_reference(view_proj, b.lo, b.hi, &want)
-			if v.depth_margin < HIZ_DEPTH_MARGIN || v.texel_margin < HIZ_TEXEL_MARGIN || v.ndc_margin < HIZ_NDC_MARGIN {continue}
+			if v.depth_margin < HIZ_DEPTH_MARGIN ||
+			   v.texel_margin < HIZ_TEXEL_MARGIN ||
+			   v.ndc_margin < HIZ_NDC_MARGIN {continue}
 			boxes[i], verdict[i] = b, v.occluded
 			if v.occluded {occluded_count += 1}
 			i += 1
 		}
 		if occluded_count < N / 4 || N - occluded_count < N / 4 {
-			fail(failures, "occlusion camera %d: %d of %d boxes occluded: not a test of both verdicts", k, occluded_count, N)
+			fail(
+				failures,
+				"occlusion camera %d: %d of %d boxes occluded: not a test of both verdicts",
+				k,
+				occluded_count,
+				N,
+			)
 		}
 		copy(([^]f32)(upload.mapped)[:len(depth)], depth)
 		for b, i in boxes {
-			([^]Check_Box)(boxes_buffer.mapped)[i] = {{b.lo.x, b.lo.y, b.lo.z, 0}, {b.hi.x, b.hi.y, b.hi.z, 0}}
+			([^]Check_Box)(boxes_buffer.mapped)[i] = {
+				{b.lo.x, b.lo.y, b.lo.z, 0},
+				{b.hi.x, b.hi.y, b.hi.z, 0},
+			}
 		}
 		for &b in verdicts.mapped[:verdicts.size] {b = 0xa5}
 		run, started := gpu.one_shot_begin(g)

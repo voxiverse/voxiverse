@@ -104,7 +104,8 @@ test_images_counts :: proc(t: ^testing.T) {
 	outside, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 43\n")
 	differ = images_counts_compare(baseline, outside)
 	testing.expect_value(t, len(differ), 1)
-	if len(differ) == 1 {testing.expect_value(t, differ[0], "chunks_occluded 43, the baseline 40 ~2")}
+	if len(differ) ==
+	   1 {testing.expect_value(t, differ[0], "chunks_occluded 43, the baseline 40 ~2")}
 	extra, _, _ := images_counts_parse("world_meshes 120\nchunks_occluded 40\ndraw_calls 9\n")
 	testing.expect_value(t, len(images_counts_compare(baseline, extra)), 1)
 	missing, _, _ := images_counts_parse("world_meshes 120\n")

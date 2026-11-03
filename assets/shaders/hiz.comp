@@ -1,96 +1,59 @@
 #version 460
-#extension GL_EXT_samplerless_texture_functions : require
 
-// The depth pyramid (render/hiz.odin, hiz_build): up to HIZ_LEVELS levels
-// per dispatch. Each texel of a level is the minimum of the source texels
-// it covers: in reverse Z (near 1, far 0) the farthest depth there.
+// The depth pyramid (render/hiz.odin, hiz_build): one dispatch per level.
+// Each texel of the level written is the minimum of the source texels it
+// covers: in reverse Z (near 1, far 0) the farthest depth there. Level 0
+// reads the frame's depth image, whose size need not be twice level 0's: a
+// texel covers source texels [floor(x * W / w), ceil((x + 1) * W / w))
+// across (likewise down), so every source texel is in some texel's
+// footprint. Each level below reads the one above, exactly 2 x 2 (or 1 on an
+// axis already 1 wide). hiz_reference (hiz.odin) is the same on the CPU.
 //
-// The first level a dispatch writes reads `source` (the frame's depth image
-// for level 0, else the level above), whose size need not be twice the
-// level's: a texel covers source texels [floor(x * W / w), ceil((x + 1) * W
-// / w)) across (likewise down), so every source texel is in some texel's
-// footprint. The levels are powers of two, so the divisions are shifts, and
-// the source is under twice the level, so a footprint is at most 3 texels
-// each way. The levels after it are reduced in shared memory, exactly 2 x 2
-// (or 1 on an axis already 1 wide): each group owns a 16 x 16 tile of the
-// first level and the 8 x 8, 4 x 4 and 2 x 2 it reduces to, so groups never
-// share a texel. hiz_reference (hiz.odin) is the same on the CPU.
-
-const uint HIZ_LEVELS = 4u; // hiz.odin's HIZ_LEVELS_PER_DISPATCH
-const uint TILE = 16u;
+// The source is read with gathers (four texels a read, unfiltered: the
+// minimum stays exact), which the development machine's GPU does faster
+// than the texel fetches it replaces.
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(set = 0, binding = 0) uniform texture2D source; // the depth image, or the level above
-layout(set = 0, binding = 1, r32f) uniform writeonly image2D targets[HIZ_LEVELS];
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D target;
+layout(set = 0, binding = 2) uniform sampler nearest; // clamped to the edge
 
 layout(push_constant) uniform Push {
 	uvec2 source_size;
-	uvec2 target_size; // the first level's
-	uint levels;       // written by this dispatch, 1 to HIZ_LEVELS
+	uvec2 target_size;
 } push;
 
-shared float tile[2][TILE * TILE];
-
-// A constant index each (indexing an image array by a variable needs a
-// device feature).
-void store(uint level, uvec2 t, float v) {
-	switch (level) {
-	case 0u: imageStore(targets[0], ivec2(t), vec4(v)); break;
-	case 1u: imageStore(targets[1], ivec2(t), vec4(v)); break;
-	case 2u: imageStore(targets[2], ivec2(t), vec4(v)); break;
-	default: imageStore(targets[3], ivec2(t), vec4(v)); break;
-	}
-}
-
-float footprint_min(uvec2 t, uvec2 shift) {
-	uvec2 lo = (t * push.source_size) >> shift;
-	uvec2 hi = ((t + 1u) * push.source_size + push.target_size - 1u) >> shift;
-	uvec2 last = hi - 1u;
-	float farthest = texelFetch(source, ivec2(lo), 0).r;
-	for (uint j = 0u; j < 3u; j++) {
-		for (uint i = 0u; i < 3u; i++) {
-			// A texel read twice changes no minimum.
-			farthest = min(farthest, texelFetch(source, ivec2(min(lo + uvec2(i, j), last)), 0).r);
-		}
-	}
-	return farthest;
+// The minimum of the 2 x 2 source texels from `base` (one gather), or of
+// its first column or row alone where `two` is false on that axis.
+float gather_min(uvec2 base, bvec2 two) {
+	// At the corner shared by texels base and base + 1: the gather's four.
+	vec4 v = textureGather(sampler2D(source, nearest), (vec2(base) + 1.0) / vec2(push.source_size));
+	// x (i0, j1), y (i1, j1), z (i1, j0), w (i0, j0)
+	float m = v.w;
+	if (two.x) m = min(m, v.z);
+	if (two.y) m = min(m, v.x);
+	if (two.x && two.y) m = min(m, v.y);
+	return m;
 }
 
 void main() {
-	uvec2 local = gl_LocalInvocationID.xy;
-	uvec2 size = push.target_size;
-	uvec2 shift = uvec2(findMSB(size.x), findMSB(size.y));
-	uvec2 origin = gl_WorkGroupID.xy * TILE;
-	uvec2 region = min(size - origin, uvec2(TILE)); // a power of two, at least 1
-
-	// The first level: four texels an invocation.
-	for (uint n = 0u; n < 4u; n++) {
-		uvec2 l = local * 2u + uvec2(n & 1u, n >> 1u);
-		if (all(lessThan(l, region))) {
-			float v = footprint_min(origin + l, shift);
-			store(0u, origin + l, v);
-			tile[0][l.y * TILE + l.x] = v;
-		}
+	uvec2 t = gl_GlobalInvocationID.xy;
+	if (any(greaterThanEqual(t, push.target_size))) {
+		return;
 	}
-	barrier();
-
-	for (uint m = 1u; m < push.levels; m++) {
-		uint from = (m - 1u) & 1u;
-		uvec2 halves = uvec2(greaterThan(size, uvec2(1u))); // 1 on an axis that halves
-		size = max(size >> 1u, uvec2(1u));
-		origin >>= halves;
-		region = max(region >> halves, uvec2(1u));
-		if (all(lessThan(local, region))) {
-			uvec2 s0 = local << halves;
-			uvec2 s1 = s0 + halves;
-			float v = min(
-				min(tile[from][s0.y * TILE + s0.x], tile[from][s0.y * TILE + s1.x]),
-				min(tile[from][s1.y * TILE + s0.x], tile[from][s1.y * TILE + s1.x])
-			);
-			store(m, origin + local, v);
-			tile[from ^ 1u][local.y * TILE + local.x] = v;
-		}
-		barrier();
-	}
+	// The target is a power of two on each axis: the divisions are shifts.
+	uvec2 shift = uvec2(findMSB(push.target_size.x), findMSB(push.target_size.y));
+	uvec2 lo = (t * push.source_size) >> shift;
+	uvec2 hi = ((t + 1u) * push.source_size + push.target_size - 1u) >> shift;
+	// The source is under twice the target: a footprint is 1 to 3 texels
+	// each way, so one gather, or two or four overlapping (a texel read twice
+	// changes no minimum).
+	uvec2 w = hi - lo;
+	bvec2 two = greaterThan(w, uvec2(1u));
+	float farthest = gather_min(lo, two);
+	if (w.x == 3u) farthest = min(farthest, gather_min(lo + uvec2(1u, 0u), two));
+	if (w.y == 3u) farthest = min(farthest, gather_min(lo + uvec2(0u, 1u), two));
+	if (w.x == 3u && w.y == 3u) farthest = min(farthest, gather_min(lo + uvec2(1u, 1u), two));
+	imageStore(target, ivec2(t), vec4(farthest));
 }

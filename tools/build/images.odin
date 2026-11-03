@@ -154,9 +154,28 @@ images_counts_compare :: proc(
 			found = true
 			if abs(r.value - b.value) > b.tolerance {
 				if b.tolerance == 0 {
-					append(&out, fmt.aprintf("%s %d, the baseline %d", b.name, r.value, b.value, allocator = allocator))
+					append(
+						&out,
+						fmt.aprintf(
+							"%s %d, the baseline %d",
+							b.name,
+							r.value,
+							b.value,
+							allocator = allocator,
+						),
+					)
 				} else {
-					append(&out, fmt.aprintf("%s %d, the baseline %d ~%d", b.name, r.value, b.value, b.tolerance, allocator = allocator))
+					append(
+						&out,
+						fmt.aprintf(
+							"%s %d, the baseline %d ~%d",
+							b.name,
+							r.value,
+							b.value,
+							b.tolerance,
+							allocator = allocator,
+						),
+					)
 				}
 			}
 		}
@@ -181,7 +200,12 @@ images_counts_check :: proc(name, rendered_path, baseline_path: string) -> bool 
 	}
 	baseline_text, berr := os.read_entire_file_from_path(baseline_path, context.allocator)
 	if berr != nil {
-		fmt.printfln("%-14s FAIL: no baseline %s (build images --accept %s)", name, baseline_path, name)
+		fmt.printfln(
+			"%-14s FAIL: no baseline %s (build images --accept %s)",
+			name,
+			baseline_path,
+			name,
+		)
 		return false
 	}
 	rendered, rbad, rok := images_counts_parse(string(rendered_text))

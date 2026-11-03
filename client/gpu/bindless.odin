@@ -71,10 +71,10 @@ bindless_init :: proc(g: ^Gpu) -> bool {
 	samplers := b.samplers
 	bindings := [2]vk.DescriptorSetLayoutBinding {
 		{
-			binding = 0,
-			descriptorType = .SAMPLED_IMAGE,
+			binding         = 0,
+			descriptorType  = .SAMPLED_IMAGE,
 			descriptorCount = MAX_TEXTURES,
-			stageFlags = {.VERTEX, .FRAGMENT, .COMPUTE}, // compute: the occlusion test reads the depth pyramid
+			stageFlags      = {.VERTEX, .FRAGMENT, .COMPUTE}, // compute: the occlusion test reads the depth pyramid
 		},
 		{
 			binding = 1,

@@ -41,14 +41,7 @@ set_offscreen :: proc(g: ^Gpu, width, height: u32) -> bool {
 		"offscreen colour",
 	)
 	if !ok {return false}
-	o.depth, ok = create_image(
-		g,
-		width,
-		height,
-		DEPTH_FORMAT,
-		DEPTH_USAGE,
-		"offscreen depth",
-	)
+	o.depth, ok = create_image(g, width, height, DEPTH_FORMAT, DEPTH_USAGE, "offscreen depth")
 	if !ok {
 		destroy_image(g, &o.color)
 		return false

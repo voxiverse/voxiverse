@@ -134,11 +134,10 @@ two at or below the depth image's size on each axis (1280 x 720 gives 1024 x 512
 level-0 texel covers the depth texels `[floor(x * W / w0), ceil((x + 1) * W / w0))`, so
 footprints overlap when the size is not a power of two and no texel is missed. Each level
 holds the **minimum** of what it covers: in reverse Z the farthest depth. `hiz.comp` writes
-four levels a dispatch (1280 x 720: three dispatches for ten levels): the first from a
-sampled source (the depth image, or the level above), the next three reduced in shared
-memory, each group owning a 16 x 16 tile; four storage images is the least a device allows
-a shader stage. It runs on a pipeline layout of its own (a descriptor set per dispatch),
-with a barrier between dispatches. The sets are written by `hiz_resize` when the depth
+one level a dispatch, reading the level above (the depth image for level 0) with gathers
+(four texels a read, unfiltered, so the minimum stays exact) and writing its own as a storage
+image. It runs on a pipeline layout of its own (a descriptor set per level), with a barrier
+between dispatches. The sets are written by `hiz_resize` when the depth
 image is remade (`Gpu.depth_version`), after the GPU is idle.
 
 `occlusion.glsl` holds the occlusion test (`occluded`), and `occlusion_reference` in

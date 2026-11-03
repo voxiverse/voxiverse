@@ -122,14 +122,7 @@ recreate_swapchain :: proc(g: ^Gpu, width, height: i32) -> bool {
 	}
 	set_name(g, .SWAPCHAIN_KHR, u64(handle), "swapchain")
 	ok: bool
-	sc.depth, ok = create_image(
-		g,
-		extent.width,
-		extent.height,
-		DEPTH_FORMAT,
-		DEPTH_USAGE,
-		"depth",
-	)
+	sc.depth, ok = create_image(g, extent.width, extent.height, DEPTH_FORMAT, DEPTH_USAGE, "depth")
 	if !ok {return false}
 	g.depth_version += 1
 	log.infof(

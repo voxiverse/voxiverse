@@ -462,7 +462,12 @@ world_reload :: proc(p: ^World_Pass, g: ^gpu.Gpu, shaders: World_Shaders) -> boo
 	}
 	if !gpu.replace_compute_pipeline(g, &p.cull_pipeline, "world cull", shaders.cull) {ok = false}
 	if !hiz_reload(&p.hiz, g, shaders.hiz) {ok = false}
-	if !gpu.replace_compute_pipeline(g, &p.occlusion_check, "occlusion check", shaders.occlusion_check) {
+	if !gpu.replace_compute_pipeline(
+		g,
+		&p.occlusion_check,
+		"occlusion check",
+		shaders.occlusion_check,
+	) {
 		ok = false
 	}
 	return ok
