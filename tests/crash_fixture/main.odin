@@ -4,7 +4,7 @@ package crash_fixture
 //
 //	crash_fixture <crashes dir> main-segv | worker-segv | assert | overflow
 //
-// Four named threads are running when it crashes, so the bundle must name five threads.
+// Four named threads are parked in their loops when it crashes, so the bundle must name five threads.
 
 import "base:intrinsics"
 import "common:base"
@@ -13,7 +13,7 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
-ready: u32
+parked: u32 // workers that have slept once: past their start-up, in their loop
 mode: string
 
 main :: proc() {
@@ -29,7 +29,7 @@ main :: proc() {
 		t.init_context = base.thread_context()
 		thread.start(t)
 	}
-	for sync.atomic_load(&ready) < 4 {time.sleep(time.Millisecond)}
+	for sync.atomic_load(&parked) < 4 {time.sleep(time.Millisecond)}
 	switch mode {
 	case "main-segv":
 		crash_now()
@@ -57,9 +57,10 @@ worker :: proc(t: ^thread.Thread) {
 	name := string(cstring(t.data))
 	base.thread_register(name)
 	defer base.thread_unregister()
-	sync.atomic_add(&ready, 1)
+	time.sleep(time.Millisecond)
+	sync.atomic_add(&parked, 1)
 	if name == "delta" {
-		time.sleep(300 * time.Millisecond) // the others are parked by now
+		for sync.atomic_load(&parked) < 4 {time.sleep(time.Millisecond)}
 		switch mode {
 		case "worker-segv":
 			crash_now()

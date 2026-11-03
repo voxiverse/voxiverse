@@ -261,8 +261,6 @@ crash_bundle_write :: proc(what: string) -> string {
 	{
 		own_n = trace.capture_fill(([^]trace.Capture_Entry)(&var_frames[0])[:BUNDLE_FRAMES], 0)
 	}
-	threads_capture_others()
-
 	// crash.txt
 	{
 		gpu := string(b.gpu[:b.gpu_len]) if b.gpu_len > 0 else "none yet"
@@ -279,22 +277,25 @@ crash_bundle_write :: proc(what: string) -> string {
 		)
 		bundle_file(name, "crash.txt", transmute([]u8)text)
 	}
-	// threads.txt: first with raw addresses (nothing to go wrong), then, with the frames
-	// resolved to our procedures, over it. Resolving asks the C library or the OS for symbols
-	// (on macOS CoreSymbolication, which takes locks, allocates and talks to other processes),
-	// so a hang there leaves the raw file, and the watchdog ends the process.
-	for resolve in ([]bool{false, true}) {
+	// threads.txt in three passes, each over the last: before the other threads are asked for
+	// their stacks (the names, nothing else), after (raw addresses, nothing to go wrong), and
+	// with the frames resolved to our procedures. Asking runs a handler on every other thread,
+	// and resolving asks the C library or the OS for symbols (on macOS CoreSymbolication, which
+	// takes locks, allocates and talks to other processes), so a thread or a hang there leaves
+	// the pass before it, and the watchdog ends the process.
+	for pass in 0 ..< 3 {
+		if pass == 1 {threads_capture_others()}
 		sb := strings.builder_from_bytes(b.text[1])
 		fmt.sbprintf(&sb, "thread %s (crashing)\n", thread_name_here())
-		write_frames(&sb, var_frames[:own_n], resolve)
+		write_frames(&sb, var_frames[:own_n], pass == 2)
 		for i in 0 ..< BUNDLE_THREADS {
 			s := &slots[i]
 			if sync.atomic_load(&s.used) != 1 || my_slot == i + 1 {continue}
 			fmt.sbprintf(&sb, "thread %s\n", string(s.name[:s.name_len]))
-			if sync.atomic_load(&s.done) == 0 {
+			if pass == 0 || sync.atomic_load(&s.done) == 0 {
 				strings.write_string(&sb, "  did not answer\n")
 			} else {
-				write_frames(&sb, s.frames[:s.frame_n], resolve)
+				write_frames(&sb, s.frames[:s.frame_n], pass == 2)
 			}
 		}
 		bundle_file(name, "threads.txt", sb.buf[:])
