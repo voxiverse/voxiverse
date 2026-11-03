@@ -24,15 +24,16 @@ item_icons_init :: proc(reg: ^game.Registry, icons: ^Item_Icons, ctx: ^ui.Contex
 		context.temp_allocator,
 	)
 	for &pixels, layer in layers {mesh.texture_layer_pixels(reg, u32(layer), pixels[:])}
-	pixels: [ICON_SIZE * ICON_SIZE][4]u8
+	// (64 KB: not on the stack, a test thread's is small)
+	pixels := new([ICON_SIZE * ICON_SIZE][4]u8, context.temp_allocator)
 	for item in game.every_item(reg) {
 		if item in icons {continue} 	// (made at start-up: the session of a universe with packs adds its own)
 		info, _ := game.item_info(reg, item)
-		if !item_sprite(item, info, &pixels) {
+		if !item_sprite(item, info, pixels) {
 			if reg.blocks.defs[info.block].render == .Cross {
-				block_flat(reg, info.block, layers, &pixels) // (plants are crossed planes, not cubes)
+				block_flat(reg, info.block, layers, pixels) // (plants are crossed planes, not cubes)
 			} else if info.block != .Air {
-				block_cube(reg, info.block, layers, &pixels)
+				block_cube(reg, info.block, layers, pixels)
 			} else {
 				continue // (a pack's item with no art of its own: none)
 			}
