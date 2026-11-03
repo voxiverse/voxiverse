@@ -23,7 +23,7 @@ import "server:core"
 BUDGETS_VERSION :: 3
 
 Budgets_Options :: struct {
-	repetitions: int `usage:"times the whole is done (default 3)"`,
+	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
 	check:       bool `usage:"fail unless every scene works and every median is within its budget (CI)"`,
 }
 
@@ -47,63 +47,63 @@ BUDGET_LIMITS := [?]struct {
 }
 
 budgets_main :: proc(args: []string) {
-	opts := Budgets_Options {
-		repetitions = 3,
-	}
+	opts: Budgets_Options
 	argv := make([]string, len(args) + 1, context.temp_allocator)
 	copy(argv[1:], args)
-	flags.parse_or_exit(&opts, argv, .Odin)
 	result := base.Bench_Result {
 		scenario = "budgets",
 		version  = BUDGETS_VERSION,
 	}
-	failures := make([dynamic]string) // (not the temp allocator: the scenes free it)
+	flags.parse_or_exit(&opts, argv, .Odin)
+	runs := judge_runs(opts.repetitions, opts.check)
+	broken := make([dynamic]string) // (not the temp allocator: the scenes free it)
+	over := make([dynamic]string)
 	// (on the heap too: the scenes free the temp allocator, and a path in it is
 	// garbage from the second repetition on)
 	dir := filepath.join({"build", "tmp", "bench_budgets"}) or_else ""
 	defer delete(dir)
 	reg := game.registry_base(context.allocator)
 	defer game.registry_destroy(reg)
-	for _ in 0 ..< max(opts.repetitions, 1) {
+	for _ in 0 ..< runs {
 		base.metrics_start()
-		budgets_run(dir, reg, &failures)
+		budgets_run(dir, reg, &broken)
 		base.bench_repetition_end(&result)
+		if len(broken) > 0 {break} 	// broken at once: more runs would only repeat it
 	}
 	os.remove_all(dir)
-	fmt.printfln("%-16s %14s %14s", "scene", "median", "budget")
+	fmt.printfln("%-16s %14s %14s  %s", "scene", "median", "budget", "each run")
 	for b in BUDGET_LIMITS {
-		values := make([dynamic]f64, context.temp_allocator)
-		for r in result.repetitions {append(&values, r[b.metric].median)}
+		values := judge_metric_runs(&result, b.metric)
+		runs_text := judge_runs_text(values[:], 2)
 		median := base.median_of(values[:])
 		info := base.METRIC_INFO[b.metric]
 		fmt.printfln(
-			"%-16s %14s %14s",
+			"%-16s %14s %14s  %s",
 			info.name,
 			fmt.tprintf("%.2f %s", median, info.unit),
 			fmt.tprintf("%.2f %s", b.limit, info.unit),
+			runs_text,
 		)
-		if opts.check && median > b.limit {
+		if opts.check && len(broken) == 0 && median > b.limit {
 			append(
-				&failures,
+				&over,
 				fmt.tprintf("%s %.2f %s, over its %.2f", info.name, median, info.unit, b.limit),
 			)
 		}
 	}
 	if path := base.bench_result_write(&result); path != "" {fmt.printfln("result %s", path)}
 	base.bench_result_destroy(&result)
-	for f in failures {fmt.eprintfln("bench failed: %s", f)}
-	if len(failures) > 0 {os.exit(1)}
-	if opts.check {fmt.println("bench check passed")}
+	judge_end(broken[:], over[:], opts.check)
 }
 
 @(private = "file")
-budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string) {
+budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) {
 	os.remove_all(dir)
 	fmt.printfln("scene: %s", "the save")
 	save, saved := core.budget_save(dir, core.BUDGET_COMMIT_SECONDS)
 	os.remove_all(dir)
 	if !saved || !save.committed || !save.blocking_ok {
-		append(failures, fmt.aprintf("the save: %v", save))
+		append(broken, fmt.aprintf("the save: %v", save))
 	}
 	base.metric_add(.Save_Capture, f32(save.capture_us))
 	base.metric_add(.Save_Slice, f32(save.slice_worst_us))
@@ -111,18 +111,18 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 
 	fmt.printfln("scene: %s", "the audit")
 	lines, audit_us := core.budget_audit(reg)
-	if lines != 0 {append(failures, fmt.aprintf("the audit gave %d lines", lines))}
+	if lines != 0 {append(broken, fmt.aprintf("the audit gave %d lines", lines))}
 	base.metric_add(.Audit, f32(audit_us))
 
 	fmt.printfln("scene: %s", "the counters")
 	building, work, _, bad := core.budget_counters(reg)
-	if bad != 0 {append(failures, fmt.aprintf("%d players did not read back", bad))}
+	if bad != 0 {append(broken, fmt.aprintf("%d players did not read back", bad))}
 	base.metric_add(.Counters_Ratio, f32(work) / f32(max(building, 1)))
 
 	fmt.printfln("scene: %s", "the journal")
 	journal, journaled := core.budget_journal()
 	if !journaled || journal.head <= 20_000 {
-		append(failures, fmt.aprintf("the journal scene changed %d blocks", journal.head))
+		append(broken, fmt.aprintf("the journal scene changed %d blocks", journal.head))
 	}
 	base.metric_add(.Journal_Share, f32(journal.share * 100))
 	base.metric_add(.Journal_Tick, f32(journal.per_tick_us))
@@ -130,14 +130,14 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	fmt.printfln("scene: %s", "the flood")
 	flood, flooded := core.budget_flood()
 	if !flooded || flood.most < 10_000 {
-		append(failures, fmt.aprintf("only %d block updates flowing", flood.most))
+		append(broken, fmt.aprintf("only %d block updates flowing", flood.most))
 	}
 	base.metric_add(.Flood_Tick, f32(flood.worst_us))
 
 	fmt.printfln("scene: %s", "the rules")
 	rules, ruled := core.budget_rules()
 	if !ruled || rules.most < 10_000 {
-		append(failures, fmt.aprintf("only %d rule cells waiting", rules.most))
+		append(broken, fmt.aprintf("only %d rule cells waiting", rules.most))
 	}
 	base.metric_add(.Rules_Tick, f32(rules.worst_us))
 	base.metric_add(.Rule_Run, f32(rules.run_ns))
@@ -146,7 +146,7 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, failures: ^[dynamic]string
 	fmt.printfln("scene: %s", "the random ticks")
 	random, randomed := core.budget_random_ticks()
 	if !randomed || random.runs < 10_000 {
-		append(failures, fmt.aprintf("only %d random rule runs", random.runs))
+		append(broken, fmt.aprintf("only %d random rule runs", random.runs))
 	}
 	base.metric_add(.Random_Ticks, f32(random.worst_us))
 	base.metric_add(.Random_Rule_Run, f32(random.run_ns))

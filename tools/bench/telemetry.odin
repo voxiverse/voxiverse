@@ -21,7 +21,7 @@ TELEMETRY_VERSION :: 1
 TELEMETRY_EVENTS :: 50_000
 
 Telemetry_Options :: struct {
-	repetitions: int `usage:"times the whole is done (default 3)"`,
+	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
 	check:       bool `usage:"fail unless nothing is dropped and the means are within budget (CI)"`,
 }
 
@@ -31,23 +31,23 @@ TELEMETRY_BUDGET_US := [2]struct {
 }{{.Telemetry_Emit, 5}, {.Telemetry_Write, 50}}
 
 telemetry_main :: proc(args: []string) {
-	opts := Telemetry_Options {
-		repetitions = 3,
-	}
+	opts: Telemetry_Options
 	argv := make([]string, len(args) + 1, context.temp_allocator)
 	copy(argv[1:], args)
 	flags.parse_or_exit(&opts, argv, .Odin)
+	runs := judge_runs(opts.repetitions, opts.check)
 	result := base.Bench_Result {
 		scenario = "telemetry",
 		version  = TELEMETRY_VERSION,
 	}
-	failures := make([dynamic]string, context.temp_allocator)
+	broken := make([dynamic]string, context.temp_allocator)
+	over := make([dynamic]string, context.temp_allocator)
 	dir := filepath.join({"build", "tmp", "bench_telemetry"}, context.temp_allocator) or_else ""
-	for _ in 0 ..< max(opts.repetitions, 1) {
+	for _ in 0 ..< runs {
 		written, dropped := telemetry_run(dir)
 		if dropped != 0 || written != TELEMETRY_EVENTS {
 			append(
-				&failures,
+				&broken,
 				fmt.tprintf(
 					"%d events written, %d dropped, of %d",
 					written,
@@ -57,10 +57,19 @@ telemetry_main :: proc(args: []string) {
 			)
 		}
 		base.bench_repetition_end(&result)
+		if len(broken) > 0 {break}
 	}
 	os.remove_all(dir)
 	append(&result.counts, base.Bench_Count{"events", TELEMETRY_EVENTS})
-	fmt.printfln("%-16s %8s %8s %8s %8s", "per event (us)", "calls", "mean", "median", "p99")
+	fmt.printfln(
+		"%-16s %8s %8s %8s %8s  %s",
+		"per event (us)",
+		"calls",
+		"mean",
+		"median",
+		"p99",
+		"each run's mean",
+	)
 	for b in TELEMETRY_BUDGET_US {
 		means, medians, p99s := make([dynamic]f64), make([dynamic]f64), make([dynamic]f64)
 		defer delete(means)
@@ -73,18 +82,21 @@ telemetry_main :: proc(args: []string) {
 			append(&p99s, r[b.metric].p99)
 			calls = r[b.metric].count
 		}
+		runs_means := make([dynamic]f64, context.temp_allocator)
+		append(&runs_means, ..means[:])
 		mean := base.median_of(means[:])
 		fmt.printfln(
-			"%-16s %8s %8s %8s %8s",
+			"%-16s %8s %8s %8s %8s  %s",
 			base.METRIC_INFO[b.metric].name,
 			fmt.tprint(calls),
 			fmt.tprintf("%.3f", mean),
 			fmt.tprintf("%.3f", base.median_of(medians[:])),
 			fmt.tprintf("%.3f", base.median_of(p99s[:])),
+			judge_runs_text(runs_means[:], 3),
 		)
-		if opts.check && mean > b.us {
+		if opts.check && len(broken) == 0 && mean > b.us {
 			append(
-				&failures,
+				&over,
 				fmt.tprintf(
 					"%s %.3f us an event, over its %.3f",
 					base.METRIC_INFO[b.metric].name,
@@ -96,9 +108,7 @@ telemetry_main :: proc(args: []string) {
 	}
 	if path := base.bench_result_write(&result); path != "" {fmt.printfln("result %s", path)}
 	base.bench_result_destroy(&result)
-	for f in failures {fmt.eprintfln("bench failed: %s", f)}
-	if len(failures) > 0 {os.exit(1)}
-	if opts.check {fmt.println("bench check passed")}
+	judge_end(broken[:], over[:], opts.check)
 }
 
 // telemetry_run emits TELEMETRY_EVENTS into a stepped sink writing to dir,

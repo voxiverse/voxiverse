@@ -55,7 +55,7 @@ newer than the inventory beside them. They are the only part of a save not taken
 - `stop` (a `save` with wait) finishes the running save immediately and then saves again.
 - Timing follows the wall clock. The number of ticks a save takes varies; what it writes, and
   any hashed state, does not.
-- `build bench budgets -check` enforces the following limits on the CI runner: capture at most
+- `build bench budgets -check` enforces the following limits (each judged by the median of 5 runs) on the CI runner: capture at most
   4 ms, a slice tick at most 3 ms, and a blocking save at most 1.5 s.
   `test_save_200_characters` checks that the same scene commits. The number of ticks the
   worker takes is wall-clock time, not a budget.

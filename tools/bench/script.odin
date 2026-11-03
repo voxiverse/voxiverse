@@ -64,9 +64,7 @@ script_usage :: proc() -> ! {
 }
 
 script_main :: proc(args: []string) {
-	opts := Script_Options {
-		repetitions = 3,
-	}
+	opts: Script_Options
 	for i := 0; i < len(args); i += 1 {
 		a := strings.trim_left(args[i], "-")
 		switch a {
@@ -90,21 +88,20 @@ script_main :: proc(args: []string) {
 			script_usage()
 		}
 	}
-	failures := make([dynamic]string)
+	opts.repetitions = judge_runs(opts.repetitions, opts.check)
+	broken, over := make([dynamic]string), make([dynamic]string)
 	if opts.conform {
 		if opts.lua == "" {script_usage()}
-		script_conform(opts.lua, &failures)
+		script_conform(opts.lua, &broken)
 	} else {
-		script_bench(opts, &failures)
-		if opts.lua != "" {script_conform(opts.lua, &failures)}
+		script_bench(opts, &broken, &over)
+		if opts.lua != "" {script_conform(opts.lua, &broken)}
 	}
-	for f in failures {fmt.eprintfln("bench failed: %s", f)}
-	if len(failures) > 0 {os.exit(1)}
-	if opts.check {fmt.println("bench check passed")}
+	judge_end(broken[:], over[:], opts.check)
 }
 
 @(private = "file")
-script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
+script_bench :: proc(opts: Script_Options, broken, over: ^[dynamic]string) {
 	budgets := script_read_budgets()
 	result := base.Bench_Result {
 		scenario = "script",
@@ -122,7 +119,7 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 				filepath.join({SCRIPT_BENCH_DIR, strings.concatenate({p.name, ".vxs"})}) or_else ""
 			out, failure, units, ms, ok := script_run_ours(path)
 			if !ok {
-				append(failures, fmt.aprintf("%s: %s", p.name, failure))
+				append(broken, fmt.aprintf("%s: %s", p.name, failure))
 				continue
 			}
 			base.metric_add(p.metric, f32(ms))
@@ -131,28 +128,25 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 				counts[i] = units
 				outputs[i] = out
 			} else if units != counts[i] || out != outputs[i] {
-				append(
-					failures,
-					fmt.aprintf("%s: a repetition gave other output or units", p.name),
-				)
+				append(broken, fmt.aprintf("%s: a repetition gave other output or units", p.name))
 			}
 			if opts.lua != "" {
 				lua_out, lua_err, lua_ms, lua_ok := script_run_lua(opts.lua, path)
 				if !lua_ok {
 					append(
-						failures,
+						broken,
 						fmt.aprintf("%s: %s failed: %s", p.name, opts.lua, script_clip(lua_err)),
 					)
 				} else if lua_out != out {
 					append(
-						failures,
+						broken,
 						fmt.aprintf("%s: %s", p.name, script_first_difference(out, lua_out)),
 					)
 				}
 				append(&luas[i], lua_ms)
 			}
 		}
-		snap, rest, sok := script_snapshot_times(failures)
+		snap, rest, sok := script_snapshot_times(broken)
 		if sok {
 			base.metric_add(.Script_Snapshot, f32(snap))
 			base.metric_add(.Script_Restore, f32(rest))
@@ -161,53 +155,62 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 		}
 		base.bench_repetition_end(&result)
 		free_all(context.temp_allocator)
+		if len(broken) > 0 {break} 	// broken at once: more runs would only repeat it
 	}
 	for p, i in SCRIPT_PROGRAMS {append(&result.counts, base.Bench_Count{p.name, int(counts[i])})}
 
 	fmt.printfln(
-		"%-10s %14s %14s %10s %10s %8s",
+		"%-10s %14s %14s %10s %10s %8s  %s",
 		"program",
 		"units",
 		"budget",
 		"ours ms",
 		"lua ms",
 		"ratio",
+		"each run: ours ms (ratio)",
 	)
 	log_sum := 0.0
 	for p, i in SCRIPT_PROGRAMS {
-		// The least of the repetitions, for both sides: CPU time only grows with what
-		// else the machine does (caches, frequency), so the least is the closest to the
-		// program's own cost, and the ratio the steadiest.
-		ms := slice.min(ours[i][:]) if len(ours[i]) > 0 else 0
+		// The median of the runs, for each side and for the ratio, which is
+		// taken within a run (both sides measured together, so the machine's speed
+		// at that moment cancels).
+		runs := slice.clone(ours[i][:], context.temp_allocator)
+		ms := base.median_of(runs) if len(runs) > 0 else 0
 		budget, has_budget := budgets[p.name]
-		lua_ms, ratio := "", ""
+		lua_ms, ratio, each := "", "", judge_runs_text(ours[i][:], 1)
 		if opts.lua != "" && len(luas[i]) > 0 {
-			l := slice.min(luas[i][:])
-			r := ms / max(l, 0.001)
+			ratios := make([dynamic]f64, context.temp_allocator)
+			for o, k in ours[i] {
+				if k < len(luas[i]) {append(&ratios, o / max(luas[i][k], 0.001))}
+			}
+			each = fmt.tprintf("%s (%s)", each, judge_runs_text(ratios[:], 2))
+			l := base.median_of(slice.clone(luas[i][:], context.temp_allocator))
+			r := base.median_of(ratios[:])
 			log_sum += math.ln(r)
 			lua_ms, ratio = fmt.tprintf("%.1f", l), fmt.tprintf("%.2f", r)
-			if opts.check && r > SCRIPT_MAX_RATIO {
+			if opts.check && len(broken) == 0 && r > SCRIPT_MAX_RATIO {
 				append(
-					failures,
+					over,
 					fmt.aprintf("%s %.2fx Lua's time, over %.1fx", p.name, r, SCRIPT_MAX_RATIO),
 				)
 			}
 		}
 		fmt.printfln(
-			"%-10s %14s %14s %10s %10s %8s",
+			"%-10s %14s %14s %10s %10s %8s  %s",
 			p.name,
 			fmt.tprint(counts[i]),
 			fmt.tprint(budget) if has_budget else "-",
 			fmt.tprintf("%.1f", ms),
 			lua_ms,
 			ratio,
+			each,
 		)
 		if opts.check {
 			if !has_budget {
-				append(failures, fmt.aprintf("%s has no budget in %s", p.name, SCRIPT_BUDGETS))
+				append(broken, fmt.aprintf("%s has no budget in %s", p.name, SCRIPT_BUDGETS))
 			} else if counts[i] > budget {
 				append(
-					failures,
+					over,
 					fmt.aprintf(
 						"%s used %d instruction units, over its budget of %d (%s)",
 						p.name,
@@ -228,24 +231,29 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 	if opts.lua != "" {
 		g := math.exp(log_sum / f64(N))
 		fmt.printfln("geometric mean of the ratios: %.2f", g)
-		if opts.check && g > SCRIPT_MAX_GEOMEAN {
+		if opts.check && len(broken) == 0 && g > SCRIPT_MAX_GEOMEAN {
 			append(
-				failures,
+				over,
 				fmt.aprintf("geometric mean %.2fx Lua's time, over %.1fx", g, SCRIPT_MAX_GEOMEAN),
 			)
 		}
 	}
 	if len(snaps) > 0 {
-		sm, rm := slice.max(snaps[:]), slice.max(restores[:])
+		snap_runs, restore_runs := judge_runs_text(snaps[:], 1), judge_runs_text(restores[:], 1)
+		sm, rm := base.median_of(snaps[:]), base.median_of(restores[:])
 		fmt.printfln(
-			"snapshot of a full 16 MiB heap: %.1f ms, restore with validation: %.1f ms (the most of %d)",
+			"snapshot of a full 16 MiB heap: %.1f ms, restore with validation: %.1f ms (the median of %d; runs: %s | %s)",
 			sm,
 			rm,
 			len(snaps),
+			snap_runs,
+			restore_runs,
 		)
-		if opts.check && (sm > SCRIPT_SNAPSHOT_MAX_MS || rm > SCRIPT_SNAPSHOT_MAX_MS) {
+		if opts.check &&
+		   len(broken) == 0 &&
+		   (sm > SCRIPT_SNAPSHOT_MAX_MS || rm > SCRIPT_SNAPSHOT_MAX_MS) {
 			append(
-				failures,
+				over,
 				fmt.aprintf(
 					"snapshot %.1f ms, restore %.1f ms: over %.0f ms",
 					sm,
@@ -262,21 +270,21 @@ script_bench :: proc(opts: Script_Options, failures: ^[dynamic]string) {
 // script_snapshot_times: a VM's 16 MiB heap filled with live strings, snapshotted and
 // restored (validation included); CPU time of this thread, ms.
 @(private = "file")
-script_snapshot_times :: proc(failures: ^[dynamic]string) -> (snap, rest: f64, ok: bool) {
+script_snapshot_times :: proc(broken: ^[dynamic]string) -> (snap, rest: f64, ok: bool) {
 	vm, e := script.vm_create(script.default_config())
 	if e.kind != .None {
-		append(failures, fmt.aprintf("snapshot: vm_create: %s", e.message))
+		append(broken, fmt.aprintf("snapshot: vm_create: %s", e.message))
 		return
 	}
 	defer script.vm_destroy(vm)
 	fn, ce := script.compile(vm, script.SNAPSHOT_FILL, "fill", allocator = context.temp_allocator)
 	if ce.kind != .None {
-		append(failures, fmt.aprintf("snapshot: compile: %s", ce.message))
+		append(broken, fmt.aprintf("snapshot: compile: %s", ce.message))
 		return
 	}
 	r := script.call(vm, fn, nil, max(i64), context.temp_allocator)
 	if r.status != .Done {
-		append(failures, fmt.aprintf("snapshot: the fill ended %v", r.status))
+		append(broken, fmt.aprintf("snapshot: the fill ended %v", r.status))
 		return
 	}
 	script.collect(vm)
@@ -287,7 +295,7 @@ script_snapshot_times :: proc(failures: ^[dynamic]string) -> (snap, rest: f64, o
 	vm2, re := script.restore(bytes, script.default_config())
 	t2 := base.thread_cpu_us()
 	if re.kind != .None {
-		append(failures, fmt.aprintf("snapshot: restore: %s", re.message))
+		append(broken, fmt.aprintf("snapshot: restore: %s", re.message))
 		return
 	}
 	script.vm_destroy(vm2)
@@ -376,10 +384,10 @@ script_clip :: proc(s: string) -> string {
 // script_conform: every conformance file marked `--! lua` prints the same in ours and
 // under the reference interpreter.
 @(private = "file")
-script_conform :: proc(lua: string, failures: ^[dynamic]string) {
+script_conform :: proc(lua: string, broken: ^[dynamic]string) {
 	entries, err := os.read_all_directory_by_path(SCRIPT_CONFORMANCE_DIR, context.allocator)
 	if err != nil {
-		append(failures, fmt.aprintf("cannot read %s: %v", SCRIPT_CONFORMANCE_DIR, err))
+		append(broken, fmt.aprintf("cannot read %s: %v", SCRIPT_CONFORMANCE_DIR, err))
 		return
 	}
 	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
@@ -401,7 +409,7 @@ script_conform :: proc(lua: string, failures: ^[dynamic]string) {
 		theirs, lua_stderr, _, lua_ok := script_run_lua(lua, e.fullpath)
 		if ours_ok != lua_ok || ours != theirs {
 			append(
-				failures,
+				broken,
 				fmt.aprintf(
 					"conformance %s: ours %s, %s %s; %s%s",
 					e.name,
@@ -416,5 +424,5 @@ script_conform :: proc(lua: string, failures: ^[dynamic]string) {
 		free_all(context.temp_allocator)
 	}
 	fmt.printfln("%d conformance files compared with %s", compared, lua)
-	if compared == 0 {append(failures, "no conformance file is marked '--! lua'")}
+	if compared == 0 {append(broken, "no conformance file is marked '--! lua'")}
 }

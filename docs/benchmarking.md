@@ -8,7 +8,7 @@ proportions from traces.
 
 | Scenario | Measures |
 |---|---|
-| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check` (CI), it also fails if the chunk, mesh or vertex counts changed or a stage exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. |
+| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check` (CI), it also fails if the chunk, mesh or vertex counts changed or a stage's median over 5 runs exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. |
 | `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks. |
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame. |
 | `views-far` | The same views at view radius 24, height 12: what culling and recording cost as the view grows. A name of its own: it never compares with `views`. On a machine whose CPU and GPU share power (an integrated GPU), `frame_record` follows the GPU's load as much as the CPU's work: compare it with `views` drawn at a size that loads the GPU as much (`-size:2560x1440`). |
@@ -49,6 +49,16 @@ may do nothing while the workers catch up, and the heavy ticks are what matters.
 comparable only on one machine (identified by its fingerprint) and one scenario version. The
 metrics are `base.Metric` (`common/base/metrics.odin`): recorded in any build, but only while
 a benchmark is measuring. `--profile` adds a Spall trace of the run.
+
+### How `-check` judges a budget
+
+`bench chunks`, `telemetry`, `budgets` and `script` with `-check` measure each budgeted
+quantity over 5 runs (`-repetitions N` changes it; `script --smoke` is one) and compare the
+**median** with the limit, so one noisy run decides nothing. The table prints every run's value
+beside the median, and the result file keeps every run. A scene or stage that fails to run in
+any run (an error, a missing result, changed counts) is reported as `bench broken` and fails at
+once, without judging budgets: a median never hides it. A median over its limit is
+`bench over budget`. The script's time ratios to Lua are the median of the per-run ratios.
 
 ### Comparing two versions
 

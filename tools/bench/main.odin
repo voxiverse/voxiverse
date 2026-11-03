@@ -25,7 +25,7 @@ Options :: struct {
 	radius:      int `usage:"chunk columns each way from the centre (default 3)"`,
 	x:           int `usage:"the centre, x (blocks)"`,
 	z:           int `usage:"the centre, z (blocks)"`,
-	repetitions: int `usage:"times the whole is done from scratch (default 3)"`,
+	repetitions: int `usage:"times the whole is done from scratch (default 3, 5 with -check)"`,
 	check:       bool `usage:"fail unless the counts are CHECK's and every stage's mean is within its budget (CI)"`,
 }
 
@@ -71,9 +71,8 @@ Counts :: struct {
 
 main :: proc() {
 	opts := Options {
-		seed        = 1,
-		radius      = 3,
-		repetitions = 3,
+		seed   = 1,
+		radius = 3,
 	}
 	if len(os.args) > 1 && os.args[1] == "telemetry" {
 		telemetry_main(os.args[2:])
@@ -102,13 +101,15 @@ main :: proc() {
 		version  = SCENARIO_VERSION,
 	}
 	counts: Counts
-	failures := make([dynamic]string, context.temp_allocator)
-	for rep in 0 ..< max(opts.repetitions, 1) {
+	broken := make([dynamic]string, context.temp_allocator)
+	over := make([dynamic]string, context.temp_allocator)
+	for rep in 0 ..< judge_runs(opts.repetitions, opts.check) {
 		c := run(opts)
 		if rep ==
-		   0 {counts = c} else if c != counts {append(&failures, "the counts differed between repetitions")}
+		   0 {counts = c} else if c != counts {append(&broken, "the counts differed between repetitions")}
 		base.bench_repetition_end(&result)
 		free_all(context.temp_allocator)
+		if len(broken) > 0 {break}
 	}
 	append(
 		&result.counts,
@@ -150,7 +151,15 @@ main :: proc() {
 		f64(counts.vertices * size_of(mesh.Vertex)) / m / 1024,
 	)
 	// (Odin pads numbers given a width with zeros: strings are padded with spaces.)
-	fmt.printfln("%-16s %8s %8s %8s %8s", "stage (ms)", "calls", "mean", "median", "p99")
+	fmt.printfln(
+		"%-16s %8s %8s %8s %8s  %s",
+		"stage (ms)",
+		"calls",
+		"mean",
+		"median",
+		"p99",
+		"each run's mean",
+	)
 	for stage in STAGES {
 		means, medians, p99s := make([dynamic]f64), make([dynamic]f64), make([dynamic]f64)
 		defer delete(means)
@@ -163,20 +172,23 @@ main :: proc() {
 			append(&p99s, r[stage].p99)
 			calls = r[stage].count
 		}
+		runs_means := make([dynamic]f64, context.temp_allocator)
+		append(&runs_means, ..means[:])
 		mean := base.median_of(means[:])
 		fmt.printfln(
-			"%-16s %8s %8s %8s %8s",
+			"%-16s %8s %8s %8s %8s  %s",
 			base.METRIC_INFO[stage].name,
 			fmt.tprint(calls),
 			fmt.tprintf("%.3f", mean),
 			fmt.tprintf("%.3f", base.median_of(medians[:])),
 			fmt.tprintf("%.3f", base.median_of(p99s[:])),
+			judge_runs_text(runs_means[:], 3),
 		)
-		if opts.check {
+		if opts.check && len(broken) == 0 {
 			for b in CHECK.budget_ms {
 				if b.metric == stage && mean > b.ms {
 					append(
-						&failures,
+						&over,
 						fmt.tprintf(
 							"%s %.3f ms a call, over its %.3f",
 							base.METRIC_INFO[stage].name,
@@ -188,21 +200,16 @@ main :: proc() {
 			}
 		}
 	}
-	if opts.check {
+	if opts.check && len(broken) == 0 {
 		got := [3]int{counts.chunks, counts.meshed, counts.vertices}
 		want := [3]int{CHECK.chunks, CHECK.meshed, CHECK.vertices}
 		if got != want {
-			append(
-				&failures,
-				fmt.tprintf("counts (chunks, meshed, vertices) %v, not %v", got, want),
-			)
+			append(&broken, fmt.tprintf("counts (chunks, meshed, vertices) %v, not %v", got, want))
 		}
 	}
 	if path := base.bench_result_write(&result); path != "" {fmt.printfln("result %s", path)}
 	base.bench_result_destroy(&result)
-	for f in failures {fmt.eprintfln("bench failed: %s", f)}
-	if len(failures) > 0 {os.exit(1)}
-	if opts.check {fmt.println("bench check passed")}
+	judge_end(broken[:], over[:], opts.check)
 }
 
 // run generates the region and lights and meshes it once, recording the
