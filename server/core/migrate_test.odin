@@ -160,7 +160,8 @@ test_older_save_is_refused :: proc(t: ^testing.T) {
 		os.make_directory_all(dir)
 		path := fmt.tprintf("%s/%s", dir, case_.file)
 		testing.expect(t, os.write_entire_file(path, transmute([]u8)case_.text) == nil)
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		config := Config {
 			seed        = 7,
 			view_radius = 2,
@@ -169,7 +170,7 @@ test_older_save_is_refused :: proc(t: ^testing.T) {
 		}
 		{
 			context.logger = log.nil_logger() // (the refusal is the point)
-			testing.expect(t, !harness_start(&h, config), "an older save was opened")
+			testing.expect(t, !harness_start(h, config), "an older save was opened")
 		}
 		testing.expect_value(t, h.srv.refusal, OLDER_BUILD)
 		data, _ := os.read_entire_file_from_path(path, context.temp_allocator)
@@ -191,9 +192,10 @@ test_containers_cfg_world_is_refused :: proc(t: ^testing.T) {
 		save_dir    = dir,
 	}
 	{
-		h: Harness
-		if !testing.expect(t, harness_start(&h, config)) {return}
-		harness_stop(&h)
+		h := new(Harness)
+		defer free(h)
+		if !testing.expect(t, harness_start(h, config)) {return}
+		harness_stop(h)
 	}
 	worlds, _ := os.read_all_directory_by_path(
 		fmt.tprintf("%s/%s", dir, WORLDS_DIR),
@@ -202,8 +204,9 @@ test_containers_cfg_world_is_refused :: proc(t: ^testing.T) {
 	testing.expect(t, len(worlds) == 1)
 	path := fmt.tprintf("%s/%s/%s/containers.cfg", dir, WORLDS_DIR, worlds[0].name)
 	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("1 2 3\n")) == nil)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	context.logger = log.nil_logger()
-	testing.expect(t, !harness_start(&h, config), "a world with a containers.cfg was opened")
+	testing.expect(t, !harness_start(h, config), "a world with a containers.cfg was opened")
 	testing.expect_value(t, h.srv.refusal, OLDER_BUILD)
 }

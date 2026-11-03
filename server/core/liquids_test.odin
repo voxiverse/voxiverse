@@ -49,16 +49,20 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 		listen          = true,
 		everyone_cheats = true,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a, b: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	defer net_close(&a)
-	defer net_close(&b)
-	if !testing.expect(t, net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	defer net_close(a)
+	defer net_close(b)
+	if !testing.expect(t, net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {
 			return(
 				landed(cs[0]) &&
 				landed(cs[1]) &&
@@ -78,29 +82,29 @@ dam_break :: proc(t: ^testing.T) -> (result: Dam_Result, ok: bool) {
 		fmt.tprintf("fill 6 %d -6 11 %d -1 stone", y + 1, y + 3),
 		fmt.tprintf("fill 7 %d -5 10 %d -2 water", y + 1, y + 2),
 	}
-	for c in commands {net_send(&a, game.Command{c})}
-	settle(t, &a, &b, 2)
-	net_send(&a, game.Command{fmt.tprintf("fill 11 %d -5 11 %d -2 air", y + 1, y + 3)}) // the dam breaks
-	settle(t, &a, &b, 6)
+	for c in commands {net_send(a, game.Command{c})}
+	settle(t, a, b, 2)
+	net_send(a, game.Command{fmt.tprintf("fill 11 %d -5 11 %d -2 air", y + 1, y + 3)}) // the dam breaks
+	settle(t, a, b, 6)
 
 	// Settled: the hash no longer moves; both players have the server's.
 	last: u64
 	for _ in 0 ..< 10 {
-		h, count := server_hash(t, srv, &a)
-		if h == last && h == client_hash(&a) && stats(srv).updates_waiting == 0 {
-			hb, _ := server_hash(t, srv, &b)
-			testing.expectf(t, hb == client_hash(&b), "b's chunks differ from the server's")
+		h, count := server_hash(t, srv, a)
+		if h == last && h == client_hash(a) && stats(srv).updates_waiting == 0 {
+			hb, _ := server_hash(t, srv, b)
+			testing.expectf(t, hb == client_hash(b), "b's chunks differ from the server's")
 			testing.expect(t, count == len(a.chunks))
 			result.hash = h
 			ok = true
 			break
 		}
 		last = h
-		settle(t, &a, &b, 1)
+		settle(t, a, b, 1)
 	}
 	for z in i32(-8) ..= 11 {
 		for x in i32(4) ..= 23 {
-			blk, _ := net_block(&a, {x, y + 1, z})
+			blk, _ := net_block(a, {x, y + 1, z})
 			if _, water := game.water_level(blk); water {result.water += 1}
 		}
 	}
@@ -155,18 +159,20 @@ test_water_flood :: proc(t: ^testing.T) {
 		listen          = true,
 		everyone_cheats = true,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
 	if !testing.expect(
 		t,
 		net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) >= game.interest_count(7, 2) // all of it
 		},
@@ -181,19 +187,19 @@ test_water_flood :: proc(t: ^testing.T) {
 		fmt.tprintf("fill %d %d %d %d %d %d air", x0, y + 1, z0, x0 + 99, y + 1, z0 + 99),
 		fmt.tprintf("fill %d %d %d %d %d %d water", x0, y + 8, z0, x0 + 99, y + 8, z0 + 99),
 	}
-	for c in commands {net_send(&a, game.Command{c})}
+	for c in commands {net_send(a, game.Command{c})}
 	// The fills' own ticks are bulk edits, not flowing water: from their
 	// answers on.
 	if !testing.expect(
 		t,
-		net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].notices) >= 3}),
+		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].notices) >= 3}),
 		"the fills were not answered",
 	) {return}
-	harness_step(&h, 4)
+	harness_step(h, 4)
 	most := 0
 	for _ in 0 ..< 8 * game.TICK_RATE {
-		net_pump(t, &a)
-		harness_step(&h)
+		net_pump(t, a)
+		harness_step(h)
 		st := stats(srv)
 		most = max(most, st.updates_waiting)
 	}

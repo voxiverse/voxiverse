@@ -167,20 +167,21 @@ wait_until :: proc(
 test_server_streams_and_unloads :: proc(t: ^testing.T) {
 	RADIUS :: 3
 	HEIGHT :: 2
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{seed = 5, view_radius = RADIUS, view_height = HEIGHT, allow_cheats = true},
 			local = true,
 		),
 	)
 
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -259,7 +260,7 @@ test_server_streams_and_unloads :: proc(t: ^testing.T) {
 		c.unloads,
 		final.arena_used,
 	)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 }
 
 @(test)
@@ -283,18 +284,19 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		{raw = {0xee, 1, 2}, reason = "invalid message"},
 	}
 	for tc in cases {
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		testing.expect(
 			t,
 			harness_start(
-				&h,
+				h,
 				{seed = 1, view_radius = 2, view_height = 1, allow_cheats = tc.cheats},
 				local = true,
 			),
 		)
 		c := Fake_Client {
-			endpoint = harness_local(&h),
-			stepper  = &h,
+			endpoint = harness_local(h),
+			stepper  = h,
 			scratch  = new(game.Block_Array),
 		}
 		if tc.raw != nil {
@@ -309,7 +311,7 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 		)
 		testing.expect_value(t, c.rejected, tc.reason)
 		testing.expect(t, game.is_closed(c.endpoint))
-		testing.expect(t, harness_stop(&h)) // a bad client is not a server failure
+		testing.expect(t, harness_stop(h)) // a bad client is not a server failure
 		free(c.scratch)
 		delete(c.has)
 		delete(c.columns)
@@ -319,14 +321,12 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 // A player without the permission is told no, and stays.
 @(test)
 test_server_refuses_without_permission :: proc(t: ^testing.T) {
-	h: Harness
-	testing.expect(
-		t,
-		harness_start(&h, {seed = 1, view_radius = 2, view_height = 1}, local = true),
-	)
+	h := new(Harness)
+	defer free(h)
+	testing.expect(t, harness_start(h, {seed = 1, view_radius = 2, view_height = 1}, local = true))
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -345,26 +345,27 @@ test_server_refuses_without_permission :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, c.rejected, "")
 	testing.expect(t, !game.is_closed(c.endpoint))
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 }
 
 // The server moves the player from inputs, at most one per tick however
 // fast they arrive, and acknowledges them.
 @(test)
 test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{seed = 5, generator = .Classic, view_radius = 2, view_height = 2},
 			local = true,
 		),
 	)
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -375,7 +376,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	testing.expect(t, wait_until(t, &c, proc(c: ^Fake_Client) -> bool {return c.welcomed}))
 	for i in 1 ..= 60 { 	// a second of standing still lets it fall and land
 		fake_send(&c, game.Input{u32(i), {}, 0})
-		harness_step(&h)
+		harness_step(h)
 		fake_receive(t, &c)
 	}
 	testing.expect(
@@ -419,7 +420,7 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 	for i in 61 ..= 150 {
 		fake_send(&c, game.Input{u32(i), {move = {0, 1}, yaw = -math.PI / 2}, 0})
 	}
-	harness_step(&h, game.TICK_RATE)
+	harness_step(h, game.TICK_RATE)
 	fake_receive(t, &c)
 	ticks := f64(stats(srv).tick - sent_at)
 	applied := f64(c.player.acked - 60)
@@ -437,25 +438,26 @@ test_server_moves_player_from_inputs :: proc(t: ^testing.T) {
 		start_x,
 		c.player.state.position.x,
 	)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 }
 
 // An edit waits for the input it follows: one sent before the inputs that
 // bring the player into reach is judged from where those inputs put him.
 @(test)
 test_edit_follows_its_input :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{seed = 5, view_radius = 2, view_height = 2, allow_cheats = true},
 			local = true,
 		),
 	)
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -471,7 +473,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	for i in 0 ..< 45 {
 		seq += 1
 		fake_send(&c, game.Input{seq, {buttons = {.Toggle_Fly} if i == 0 else {}}, 0})
-		harness_step(&h)
+		harness_step(h)
 		fake_receive(t, &c)
 	}
 	@(static) want: u32
@@ -490,7 +492,7 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 	for _ in 0 ..< 30 {
 		seq += 1
 		fake_send(&c, game.Input{seq, {move = {0, 1}, yaw = -math.PI / 2}, 0})
-		harness_step(&h)
+		harness_step(h)
 		fake_receive(t, &c)
 	}
 	testing.expect(
@@ -504,25 +506,26 @@ test_edit_follows_its_input :: proc(t: ^testing.T) {
 		start_x,
 		c.player.state.position.x,
 	)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 }
 
 // Paused alone, the world stands still (time, entities); open to the LAN,
 // a freeze is ignored: someone else could be playing.
 @(test)
 test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	ok := harness_start(
-		&h,
+		h,
 		{seed = 5, view_radius = 2, view_height = 1, allow_cheats = true},
 		local = true,
 	)
 	if !testing.expect(t, ok) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -545,29 +548,29 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 		fake_receive(t, c)
 	}
 	freeze(srv, true)
-	harness_step(&h, 33)
-	look(t, &h, &c, &seq)
+	harness_step(h, 33)
+	look(t, h, &c, &seq)
 	before = c.clock
-	harness_step(&h, 63)
-	look(t, &h, &c, &seq)
+	harness_step(h, 63)
+	look(t, h, &c, &seq)
 	testing.expectf(t, c.clock == before, "time went on while frozen: %v -> %v", before, c.clock)
 
 	freeze(srv, false)
 	for _ in 0 ..< 3 * game.TICK_RATE {
 		if c.clock > before {break}
-		look(t, &h, &c, &seq)
+		look(t, h, &c, &seq)
 	}
 	testing.expect(t, c.clock > before, "time did not go on after the freeze")
 
 	// Open to the LAN: freezing does nothing.
 	fake_send(&c, game.Command{"open_lan"})
-	harness_step(&h, 3)
+	harness_step(h, 3)
 	freeze(srv, true)
-	harness_step(&h, 33)
-	look(t, &h, &c, &seq)
+	harness_step(h, 33)
+	look(t, h, &c, &seq)
 	before = c.clock
-	harness_step(&h, 63)
-	look(t, &h, &c, &seq)
+	harness_step(h, 63)
+	look(t, h, &c, &seq)
 	testing.expectf(t, c.clock > before, "a world open to the LAN froze at %v", before)
 }
 
@@ -575,17 +578,18 @@ test_server_freezes_for_the_local_player :: proc(t: ^testing.T) {
 // arguments are wrong, and that an unknown one is unknown.
 @(test)
 test_admin_commands :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	ok := harness_start(
-		&h,
+		h,
 		{seed = 5, view_radius = 2, view_height = 1, allow_cheats = true},
 		local = true,
 	)
 	if !testing.expect(t, ok) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -673,9 +677,10 @@ test_server_start_fails_cleanly :: proc(t: ^testing.T) {
 		view_height = 1,
 		listen      = true,
 	}
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer testing.expect(t, harness_stop(&h))
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer testing.expect(t, harness_stop(h))
 	config.port = h.srv.host.socket.port
 	config.stepped, config.net = true, &h.net // (the same simulated network)
 	testing.expect(
@@ -701,11 +706,12 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 		save_dir     = dir,
 	}
 	{
-		h: Harness
-		if !testing.expect(t, harness_start(&h, config, local = true)) {return}
+		h := new(Harness)
+		defer free(h)
+		if !testing.expect(t, harness_start(h, config, local = true)) {return}
 		c := Fake_Client {
-			endpoint = harness_local(&h),
-			stepper  = &h,
+			endpoint = harness_local(h),
+			stepper  = h,
 			scratch  = new(game.Block_Array),
 		}
 		defer free(c.scratch)
@@ -742,15 +748,16 @@ test_worldgen_settings :: proc(t: ^testing.T) {
 		made := false
 		for n in c.notices {made ||= strings.has_prefix(n, "regen: ") && n != "regen: 0 chunks made again"}
 		testing.expect(t, made, "regen made nothing")
-		testing.expect(t, harness_stop(&h))
+		testing.expect(t, harness_stop(h))
 	}
 	// Kept by the save.
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	testing.expect_value(t, srv.home.params.tree_density, 0)
 	testing.expect_value(t, srv.home.chunks.gen.params.tree_density, 0)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 }
 
 // Structures: save a build, paste it elsewhere, save that: the same file;
@@ -760,7 +767,8 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "structures"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	config := Config {
 		rules        = quiet_rules(),
 		seed         = 5,
@@ -770,11 +778,11 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 		allow_cheats = true,
 		save_dir     = dir,
 	}
-	if !testing.expect(t, harness_start(&h, config, local = true)) {return}
-	defer harness_stop(&h)
+	if !testing.expect(t, harness_start(h, config, local = true)) {return}
+	defer harness_stop(h)
 	c := Fake_Client {
-		endpoint = harness_local(&h),
-		stepper  = &h,
+		endpoint = harness_local(h),
+		stepper  = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)

@@ -214,13 +214,15 @@ step :: proc(srv: ^Server, name: string, n: int) -> Report {
 test_ledger_session :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_session")
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	defer net_close(&a)
-	if !testing.expect(t, join_one(t, &h, &a, "a"), "never landed") {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	defer net_close(a)
+	if !testing.expect(t, join_one(t, h, a, "a"), "never landed") {return}
 
 	r := step(srv, "a", 0)
 	expect_balanced(t, r, "after joining (the kit)")
@@ -325,14 +327,16 @@ settle :: proc(t: ^testing.T, a: ^Net_Client, seconds: f64) {
 test_ledger_scenarios :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_scenarios")
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir, death_drops = true))) {return}
+	if !testing.expect(t, harness_start(h, config(dir, death_drops = true))) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a: Net_Client
-	defer net_close(&a)
-	if !testing.expect(t, join_one(t, &h, &a, "a"), "never landed") {return}
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	defer net_close(a)
+	if !testing.expect(t, join_one(t, h, a, "a"), "never landed") {return}
 
 	// A chest, filled and emptied through requests.
 	pos := beside_of(srv, "a")
@@ -341,13 +345,13 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 	n: u32
 	for slot in 0 ..< 3 {
 		n += 1
-		net_send(&a, game.Inventory_Request{n, {.Quick_Move, slot, 0}})
+		net_send(a, game.Inventory_Request{n, {.Quick_Move, slot, 0}})
 	}
-	settle(t, &a, 0.4)
+	settle(t, a, 0.4)
 	expect_balanced(t, audit_now(srv), "stacks in a chest")
 	// Broken, it spills.
 	put_block_at(srv, pos, .Air)
-	settle(t, &a, 0.4)
+	settle(t, a, 0.4)
 	expect_balanced(t, audit_now(srv), "a chest broken")
 
 	// Travel away and back.
@@ -355,31 +359,31 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 	d = scenario(srv, "a", 0, away)
 	testing.expect(t, d.ok, "no travel")
 	testing.expect_value(t, d.count, 0)
-	settle(t, &a, 0.6)
+	settle(t, a, 0.6)
 
 	// Death drops everything where they fell (in the other world).
 	d = scenario(srv, "a", 1)
 	testing.expect_value(t, d.count, 0)
-	settle(t, &a, 0.4)
+	settle(t, a, 0.4)
 
 	// Home: the other world goes once nobody is in it, with its dropped
 	// stacks; going there again loads them from its save.
 	d = scenario(srv, "a", 0, srv.home.address)
 	testing.expect_value(t, d.count, 0)
 	for _ in 0 ..< 40 {
-		settle(t, &a, 0.1)
+		settle(t, a, 0.1)
 		if scenario(srv, "a", 4).count == 0 && stats(srv).worlds == 1 {break}
 	}
 	testing.expect_value(t, stats(srv).worlds, 1)
 	expect_balanced(t, audit_now(srv), "a world unloaded")
 	d = scenario(srv, "a", 0, away)
 	testing.expect_value(t, d.count, 0)
-	settle(t, &a, 0.6)
+	settle(t, a, 0.6)
 	expect_balanced(t, audit_now(srv), "a world loaded again")
 
 	// Gone with what they carry, back with a saved character that had
 	// more than it could hold.
-	net_close(&a)
+	net_close(a)
 	for _ in 0 ..< 100 {
 		r := Report {
 			name = "a",
@@ -389,13 +393,13 @@ test_ledger_scenarios :: proc(t: ^testing.T) {
 				r.flag = client_by_name(s, r.name) != nil
 			}, &r)
 		if !r.flag {break}
-		harness_step(&h)
+		harness_step(h)
 	}
 	expect_balanced(t, audit_now(srv), "a player gone")
 	d = scenario(srv, "a", 3)
 	testing.expect(t, d.ok, "no saved character")
-	a = {}
-	if !testing.expect(t, join_one(t, &h, &a, "a"), "never came back") {return}
+	a^ = {}
+	if !testing.expect(t, join_one(t, h, a, "a"), "never came back") {return}
 	expect_balanced(t, audit_now(srv), "a player back")
 	r := audit_now(srv, {game.item_of_block(test_reg(), .Dirt), 0, 0, 0})
 	testing.expect(t, r.rows[0][.Spill_Old] == 9, "the old stack was not in the ledger")
@@ -525,16 +529,20 @@ test_inventory_fuzz :: proc(t: ^testing.T) {
 test_ledger_fuzz_over_udp :: proc(t: ^testing.T) {
 	dir := test_dir("ledger_fuzz")
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir, death_drops = true))) {return}
-	defer harness_stop(&h)
-	a, b: Net_Client
-	defer net_close(&a)
-	defer net_close(&b)
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	both := []^Net_Client{&a, &b}
+	if !testing.expect(t, harness_start(h, config(dir, death_drops = true))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	defer net_close(a)
+	defer net_close(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	both := []^Net_Client{a, b}
 	ok := net_wait(
 		t,
 		both,

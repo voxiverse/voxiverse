@@ -29,19 +29,23 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 		listen      = true,
 		generator   = .Classic,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
+	defer if !stopped {harness_stop(h)}
 	stone, dirt := game.item_of_block(test_reg(), .Stone), game.item_of_block(test_reg(), .Dirt)
 
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	both := []^Net_Client{&alice, &bob}
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
 	ok := net_wait(
 		t,
 		both,
@@ -82,7 +86,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	alice.look = {0, -1.5}
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.2)
 	alice.seq += 1
-	net_send(&alice, game.Inventory_Request{1, {.Drop, 0, 1}})
+	net_send(alice, game.Inventory_Request{1, {.Drop, 0, 1}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			cs[0].inv_acked == 1 &&
@@ -93,14 +97,14 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, game.inventory_count(&alice.inventory, stone), 0)
 
 	// Alice places dirt (slot 1) beside her: one used up.
-	net_send(&alice, game.Inventory_Request{2, {.Select, 0, 1}})
+	net_send(alice, game.Inventory_Request{2, {.Select, 0, 1}})
 	feet := alice.update.state.position
 	beside := game.Block_Pos {
 		i32(math.floor(feet.x)) + 1,
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.edit_plain(1, alice.seq, beside, .Dirt))
+	net_send(alice, game.edit_plain(1, alice.seq, beside, .Dirt))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			1 in cs[0].results &&
@@ -109,7 +113,7 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 	})
 	testing.expect(t, ok && alice.results[1].accepted, "placing did not use one up")
 	// She breaks it: it falls at her side; she picks it up.
-	net_send(&alice, game.edit_plain(2, alice.seq, beside, .Air))
+	net_send(alice, game.edit_plain(2, alice.seq, beside, .Air))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return game.inventory_count(&cs[0].inventory, game.item_of_block(test_reg(), .Dirt)) == 64
 	})
@@ -125,18 +129,18 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 
 	// Refused: a click on nothing, the catalog without items.catalog.
 	before := bob.inventory
-	net_send(&bob, game.Inventory_Request{1, {.Click, 25, 0}})
-	net_send(&bob, game.Inventory_Request{2, {.Take, game.CURSOR_SLOT, int(dirt)}})
+	net_send(bob, game.Inventory_Request{1, {.Click, 25, 0}})
+	net_send(bob, game.Inventory_Request{2, {.Take, game.CURSOR_SLOT, int(dirt)}})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].inv_acked == 2})
 	testing.expect(t, ok && bob.inventory == before, "a refused request changed the inventory")
 
 	// Kept: after a restart, each carries what they carried.
 	alice_had, bob_had := alice.inventory, bob.inventory
-	net_close(&alice)
-	net_close(&bob)
-	alice, bob = {}, {}
+	net_close(alice)
+	net_close(bob)
+	alice^, bob^ = {}, {}
 	expect_items_balanced(t, srv)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 	stopped = true
 	for name in ([]string{"alice", "bob"}) {
 		path :=
@@ -151,10 +155,10 @@ test_items_over_the_network :: proc(t: ^testing.T) {
 			) or_else ""
 		testing.expectf(t, os.exists(path), "%s not written", path)
 	}
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped = false
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
 	ok = net_wait(
 		t,
 		both,

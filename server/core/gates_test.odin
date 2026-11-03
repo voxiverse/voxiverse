@@ -42,9 +42,10 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		generator   = .Earth,
 		gate_open   = 2,
 	}
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
 	srv := &h.srv
 	home := srv.home.address
 	home_gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
@@ -62,10 +63,11 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	there, far_has := worldgen.arrival_gate(&far_gen)
 	if !testing.expect(t, far_has, "no gate at the far end") {return}
 
-	alice: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	defer net_close(&alice)
-	clients := []^Net_Client{&alice}
+	alice := new(Net_Client)
+	defer free(alice)
+	net_connect(alice, 0, "alice", h = h)
+	defer net_close(alice)
+	clients := []^Net_Client{alice}
 	ok := net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed && cs[0].update.acked > 0
 		}, 30)
@@ -115,7 +117,7 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 		}
 		return ok
 	}
-	if !testing.expect(t, walk_up(t, &alice, here), "alice never reached the gate") {return}
+	if !testing.expect(t, walk_up(t, alice, here), "alice never reached the gate") {return}
 
 	// Misdials: another galaxy, this very world, not a gate (and a symbol
 	// twice is not an address: no Dial decodes).
@@ -135,21 +137,21 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 	ring := worldgen.gate_at(here, 0, 5)
 	elsewhere := away
 	elsewhere.galaxy = game.address_derive(5).galaxy
-	misdial(t, &alice, {ring, elsewhere}, "galaxy")
-	misdial(t, &alice, {ring, home}, "own world")
-	misdial(t, &alice, {ring - {0, 40, 0}, away}, "not a gate")
+	misdial(t, alice, {ring, elsewhere}, "galaxy")
+	misdial(t, alice, {ring, home}, "own world")
+	misdial(t, alice, {ring - {0, 40, 0}, away}, "not a gate")
 
 	// Dial: the chevrons light, the horizon forms; walk in.
 	@(static) gate: worldgen.Structure
 	gate = here
-	net_send(&alice, game.Dial{ring, away})
+	net_send(alice, game.Dial{ring, away})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)
 	if !testing.expect(t, ok, "the gate never opened") {return}
 	chevrons := worldgen.gate_chevrons(here)
 	for c in chevrons[:game.WORLD_LENGTH] {
-		b, _ := net_block(&alice, c)
+		b, _ := net_block(alice, c)
 		testing.expect_value(t, b, game.Block.Gate_Chevron_Lit)
 	}
 	alice.move = {0, 1}
@@ -179,8 +181,8 @@ test_gates_over_the_network :: proc(t: ^testing.T) {
 			return len(cs[0].chunks) > 20 && gate_seen(cs[0], gate, .Air)
 		}, 15)
 	testing.expect(t, ok, "the far gate never closed")
-	if !testing.expect(t, walk_up(t, &alice, there)) {return}
-	net_send(&alice, game.Dial{worldgen.gate_at(there, 10, 5), home})
+	if !testing.expect(t, walk_up(t, alice, there)) {return}
+	net_send(alice, game.Dial{worldgen.gate_at(there, 10, 5), home})
 	ok = net_wait(t, clients, proc(cs: []^Net_Client) -> bool {
 			return gate_seen(cs[0], gate, .Gate_Horizon)
 		}, 10)

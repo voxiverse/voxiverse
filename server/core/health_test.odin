@@ -84,22 +84,24 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "health"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
-	pause(t, {&a}, 0.3)
+	pause(t, {a}, 0.3)
 	start_at := probe(srv, "a")
 	testing.expect_value(t, start_at.health, f32(game.BASE_HEALTH))
 	ok = net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].health.max == game.BASE_HEALTH},
 	)
 	testing.expect(t, ok, "the client was not told its health")
@@ -112,10 +114,10 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	})
 	// (a slow runner takes a while to land: wait for the hurt, then for it to settle)
 	for _ in 0 ..< 40 {
-		pause(t, {&a}, 0.25)
+		pause(t, {a}, 0.25)
 		if probe(srv, "a").health < game.BASE_HEALTH {break}
 	}
-	pause(t, {&a}, 0.5)
+	pause(t, {a}, 0.5)
 	after := probe(srv, "a")
 	testing.expectf(
 		t,
@@ -126,7 +128,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	)
 	ok = net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].health.health < game.BASE_HEALTH - 4},
 	)
 	testing.expect(t, ok, "the client was not told it was hurt")
@@ -136,7 +138,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		c.player.position.y += 2
 		c.player.on_ground = false
 	})
-	pause(t, {&a}, 1)
+	pause(t, {a}, 1)
 	testing.expect_value(t, probe(srv, "a").health, hurt)
 
 	// An explosion 3 blocks away, blast reach 8: (1 - 3/8) * 12 = 7.5.
@@ -162,7 +164,7 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		set_game_mode(s, c, survival, {"test", ""})
 		c.health = c.max_health
 	})
-	pause(t, {&a}, 0.1) // (the tick that takes it in)
+	pause(t, {a}, 0.1) // (the tick that takes it in)
 	testing.expect_value(t, probe(srv, "a").health, f32(game.BASE_HEALTH))
 
 	// Death: full health at the spawn again, the inventory kept (keep_inventory).
@@ -170,14 +172,14 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 		c.player.position += {40, 0, 40}
 		damage(s, c, 100, {kind = .Command})
 	})
-	pause(t, {&a}, 0.5)
+	pause(t, {a}, 0.5)
 	testing.expect(t, a.health.dead && a.deaths == 1, "the client was told it is dead")
 	testing.expect_value(t, probe(srv, "a").health, f32(0))
 	with_client(srv, "a", proc(s: ^Server, c: ^Client) {
 		was_dead, first_respawn, second_respawn = c.dead, respawn(s, c), respawn(s, c)
 	})
 	testing.expect(t, was_dead && first_respawn && !second_respawn, "respawn works once")
-	pause(t, {&a}, 0.5)
+	pause(t, {a}, 0.5)
 	died := probe(srv, "a")
 	testing.expect_value(t, died.health, f32(game.BASE_HEALTH))
 	testing.expectf(
@@ -228,18 +230,19 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 	)
 
 	// Kept: the experience through save and load.
-	net_close(&a)
-	a = {}
-	harness_step(&h, 4)
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
 	expect_items_balanced(t, srv)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 	stopped = true
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
 	stopped = false
-	again: Net_Client
-	net_connect(&again, 0, "a", h = &h)
-	defer net_close(&again)
-	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	again := new(Net_Client)
+	defer free(again)
+	net_connect(again, 0, "a", h = h)
+	defer net_close(again)
+	ok = net_wait(t, {again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
 	back := probe(srv, "a")
 	testing.expect_value(t, back.xp, grown.xp)
@@ -252,15 +255,17 @@ test_damage_death_and_xp :: proc(t: ^testing.T) {
 // and jump from the same inventory: common/game/physics_test.odin).
 @(test)
 test_worn_armor_raises_health :: proc(t: ^testing.T) {
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config(""))) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config(""))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
 	ok := net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return(
 				landed(cs[0]) &&
 				cs[0].health.max == game.BASE_HEALTH \
@@ -268,12 +273,12 @@ test_worn_armor_raises_health :: proc(t: ^testing.T) {
 	)
 	if !testing.expect(t, ok, "never landed with its health") {return}
 	for item in ([]string{"cap", "tunic", "trousers", "boots"}) {
-		net_send(&a, game.Command{fmt.tprintf("give @s %s", item)})
+		net_send(a, game.Command{fmt.tprintf("give @s %s", item)})
 	}
-	net_send(&a, game.Command{"wear"})
+	net_send(a, game.Command{"wear"})
 	ok = net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].health.max == game.BASE_HEALTH + 8},
 	)
 	testing.expectf(
@@ -284,15 +289,15 @@ test_worn_armor_raises_health :: proc(t: ^testing.T) {
 		game.BASE_HEALTH + 8,
 	)
 	// Taking one off lowers it (and what was in excess is cut off).
-	net_send(&a, game.Command{"clear @s tunic"})
-	pause(t, {&a}, 0.3)
+	net_send(a, game.Command{"clear @s tunic"})
+	pause(t, {a}, 0.3)
 	net_send(
-		&a,
+		a,
 		game.Inventory_Request{1, {.Quick_Move, game.EQUIP_BASE + int(game.Equip_Slot.Chest), 0}},
 	)
 	ok = net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].health.max == game.BASE_HEALTH + 4},
 	)
 	testing.expect(t, ok, "the tunic taken off did not lower the maximum")

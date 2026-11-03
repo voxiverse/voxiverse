@@ -75,11 +75,12 @@ test_permissions_commands :: proc(t: ^testing.T) {
 		save_dir     = dir,
 	}
 	{
-		h: Harness
-		if !testing.expect(t, harness_start(&h, config, local = true)) {return}
+		h := new(Harness)
+		defer free(h)
+		if !testing.expect(t, harness_start(h, config, local = true)) {return}
 		c := Fake_Client {
-			endpoint = harness_local(&h),
-			stepper  = &h,
+			endpoint = harness_local(h),
+			stepper  = h,
 			scratch  = new(game.Block_Array),
 		}
 		defer free(c.scratch)
@@ -99,7 +100,7 @@ test_permissions_commands :: proc(t: ^testing.T) {
 			testing.expect_value(t, c.notices[3], "user: done")
 			testing.expect(t, strings.has_prefix(c.notices[5], "Usage: role"), c.notices[5])
 		}
-		testing.expect(t, harness_stop(&h))
+		testing.expect(t, harness_stop(h))
 	}
 	// Saved, and read back.
 	s: Server

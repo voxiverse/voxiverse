@@ -1087,23 +1087,23 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 			name   = strings.concatenate({"test-", test_name(pkg)}),
 			cmd    = slice.concatenate(
 				[][]string {
-					{"odin", "test", pkg},
+					test_odin_command(pkg),
 					ODIN_FLAGS,
 					COLLECTIONS,
-					{strings.concatenate({"-out:", out}), "-keep-executable"},
+					test_odin_flags(out),
 					test_env_defines(),
 					extra,
 				},
 			),
 			output = out,
 		}
-		cmd: []string
+		build: []string
 		if odin_step_fresh(step) {
-			cmd = slice.clone([]string{out})
 			reused += 1
 		} else {
-			cmd = odin_step_command(step)
+			build = odin_step_command(step)
 		}
+		cmd := test_run_command(build, out)
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
 		jobs[i] = limited.Job {
 			cmd    = cmd,
@@ -1155,6 +1155,44 @@ test_packages :: proc(packages: []string, extra: []string, width: int) -> bool {
 	}
 	parallel(jobs, width, done, &state)
 	return state.ok
+}
+
+// TEST_STACK_KIB is the thread stack macOS gives a test thread.
+TEST_STACK_KIB :: 512
+
+// test_run_command is the command that builds a test executable (build, empty when it
+// is up to date) and runs it. On Linux a thread's default stack is the stack rlimit, so
+// the run is made under macOS's thread stack size: the limit is set after the build, in
+// the shell that execs the test, and the driver and the compiler keep their own.
+test_run_command :: proc(build: []string, exe: string) -> []string {
+	when ODIN_OS == .Linux {
+		script := fmt.tprintf(
+			"exe=$1; shift; if [ $# -gt 0 ]; then \"$@\" || exit $?; fi; ulimit -s %d && exec \"$exe\"",
+			TEST_STACK_KIB,
+		)
+		return slice.concatenate([][]string{{"sh", "-c", script, "sh", exe}, build})
+	} else {
+		if len(build) == 0 {return slice.clone([]string{exe})}
+		return build // `odin test` builds and runs
+	}
+}
+
+// test_odin_command and test_odin_flags: Linux only builds the test executable here
+// (test_run_command runs it); elsewhere `odin test` builds and runs it.
+test_odin_command :: proc(pkg: string) -> []string {
+	when ODIN_OS == .Linux {
+		return slice.clone([]string{"odin", "build", pkg, "-build-mode:test"})
+	} else {
+		return slice.clone([]string{"odin", "test", pkg})
+	}
+}
+
+test_odin_flags :: proc(out: string) -> []string {
+	when ODIN_OS == .Linux {
+		return slice.clone([]string{strings.concatenate({"-out:", out})})
+	} else {
+		return slice.clone([]string{strings.concatenate({"-out:", out}), "-keep-executable"})
+	}
 }
 
 // ---------------------------------------------------------------------------

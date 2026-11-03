@@ -173,7 +173,8 @@ test_save_round_trip :: proc(t: ^testing.T) {
 
 	// Session 1: land, edit, walk a little, quit.
 	{
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		config := Config {
 			seed         = 77,
 			view_radius  = 3,
@@ -181,15 +182,15 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			allow_cheats = true,
 			save_dir     = dir,
 		}
-		testing.expect(t, harness_start(&h, config, local = true))
+		testing.expect(t, harness_start(h, config, local = true))
 		c: Save_Client
-		client_open(&c, &h)
+		client_open(&c, h)
 		defer client_close(&c)
 		c.key = test_key("test")
 		send(&c, test_hello("test"))
 		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		if !testing.expect(t, until(t, &c, landed), "never landed") {
-			harness_stop(&h)
+			harness_stop(h)
 			return
 		}
 		feet := c.player.state.position
@@ -287,7 +288,7 @@ test_save_round_trip :: proc(t: ^testing.T) {
 		left_at = c.player.state
 		left_time = c.time.? or_else -1
 		testing.expectf(t, abs(left_time - 0.9) < 0.01, "time %v after setting 0.9", left_time)
-		testing.expect(t, harness_stop(&h), "the save failed")
+		testing.expect(t, harness_stop(h), "the save failed")
 		// The clock kept running until the save: what the reload must continue
 		// from is the time the server wrote, not the last one the client saw.
 		saved_time = saved_clock(dir, 77)
@@ -309,7 +310,8 @@ test_save_round_trip :: proc(t: ^testing.T) {
 
 	// Session 2: same directory, another seed in the config: the saved world wins.
 	{
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		srv := &h.srv
 		config := Config {
 			seed         = 12345,
@@ -318,11 +320,11 @@ test_save_round_trip :: proc(t: ^testing.T) {
 			allow_cheats = true,
 			save_dir     = dir,
 		}
-		testing.expect(t, harness_start(&h, config, local = true))
-		defer harness_stop(&h)
+		testing.expect(t, harness_start(h, config, local = true))
+		defer harness_stop(h)
 		testing.expect_value(t, srv.config.seed, 77)
 		c: Save_Client
-		client_open(&c, &h)
+		client_open(&c, h)
 		defer client_close(&c)
 		c.key = test_key("test")
 		send(&c, test_hello("test"))
@@ -376,12 +378,13 @@ test_save_round_trip :: proc(t: ^testing.T) {
 
 @(test)
 test_edits_survive_unloading :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	// No directory: unloaded edits are kept in memory for the session.
 	testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{
 				seed = 8,
 				generator = .Classic,
@@ -392,9 +395,9 @@ test_edits_survive_unloading :: proc(t: ^testing.T) {
 			local = true,
 		),
 	)
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	c: Save_Client
-	client_open(&c, &h)
+	client_open(&c, h)
 	defer client_close(&c)
 	c.key = test_key("test")
 	send(&c, test_hello("test"))
@@ -440,17 +443,18 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	// A world with one edit, saved.
 	{
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		testing.expect(
 			t,
 			harness_start(
-				&h,
+				h,
 				{seed = 9, view_radius = 2, view_height = 2, save_dir = dir},
 				local = true,
 			),
 		)
 		c: Save_Client
-		client_open(&c, &h)
+		client_open(&c, h)
 		defer client_close(&c)
 		c.key = test_key("test")
 		send(&c, test_hello("test"))
@@ -467,7 +471,7 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 			),
 		)
 		testing.expect(t, until(t, &c, proc(c: ^Save_Client) -> bool {return len(c.results) == 1}))
-		testing.expect(t, harness_stop(&h))
+		testing.expect(t, harness_stop(h))
 	}
 	// Damage every region file.
 	regions := filepath.join({home_dir(dir, 9), "regions"}, context.temp_allocator) or_else dir
@@ -486,23 +490,24 @@ test_damaged_region_is_moved_aside :: proc(t: ^testing.T) {
 	quiet.lowest_level = .Fatal
 	context.logger = quiet
 	{
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		testing.expect(
 			t,
 			harness_start(
-				&h,
+				h,
 				{seed = 9, view_radius = 2, view_height = 2, save_dir = dir},
 				local = true,
 			),
 		)
 		c: Save_Client
-		client_open(&c, &h)
+		client_open(&c, h)
 		defer client_close(&c)
 		c.key = test_key("test")
 		send(&c, test_hello("test"))
 		until(t, &c, proc(c: ^Save_Client) -> bool {return c.welcomed})
 		testing.expect(t, until(t, &c, landed), "the world did not load past the damaged file")
-		testing.expect(t, harness_stop(&h))
+		testing.expect(t, harness_stop(h))
 	}
 	entries, _ = os.read_all_directory_by_path(regions, context.temp_allocator)
 	aside := 0
@@ -524,11 +529,12 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 		view_height = 1,
 		save_dir    = dir,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if testing.expect(t, harness_start(&h, config)) {
+	if testing.expect(t, harness_start(h, config)) {
 		testing.expect_value(t, srv.home.generator, worldgen.Kind.Earth)
-		testing.expect(t, harness_stop(&h))
+		testing.expect(t, harness_stop(h))
 	}
 	moved := filepath.join({home_dir(dir, 5), WORLD_FILE}, context.temp_allocator) or_else ""
 	saved, _ := os.read_entire_file_from_path(moved, context.temp_allocator)
@@ -544,7 +550,7 @@ test_world_generator_kept :: proc(t: ^testing.T) {
 	_ = os.write_entire_file(moved, transmute([]u8)text)
 	{
 		context.logger = log.nil_logger() // its error is the point
-		testing.expect(t, !harness_start(&h, config), "a world from an unknown generator loaded")
+		testing.expect(t, !harness_start(h, config), "a world from an unknown generator loaded")
 	}
 }
 

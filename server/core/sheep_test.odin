@@ -49,25 +49,29 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		save_dir        = dir,
 		no_sheep        = true, // (only the summoned one: natural ones spawn by day)
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a, b: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	defer net_close(&a)
-	defer net_close(&b)
-	both := []^Net_Client{&a, &b}
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	defer net_close(a)
+	defer net_close(b)
+	both := []^Net_Client{a, b}
 	ok := net_wait(
 		t,
 		both,
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(&a, game.Command{"time midnight"}) // (no sheep of their own)
-	net_send(&a, game.Command{"summon sheep"})
+	net_send(a, game.Command{"time midnight"}) // (no sheep of their own)
+	net_send(a, game.Command{"summon sheep"})
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return len(cs[0].entities) == 1 && len(cs[1].entities) == 1
 	})
@@ -77,7 +81,7 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	testing.expect(t, !a.shorn[id] && !b.shorn[id], "it starts shorn")
 
 	// Used: shorn, and 1 to 3 wool.
-	net_send(&a, game.Use_Entity{id, a.seq})
+	net_send(a, game.Use_Entity{id, a.seq})
 	// (Both must have been told: the server sends to each client on its own,
 	// so b hearing first does not mean a has.)
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
@@ -96,26 +100,26 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	wool := wool_dropped(srv, "a")
 	testing.expectf(t, wool >= 1 && wool <= 3, "%d wool dropped", wool)
 	// Used again: nothing more.
-	net_send(&a, game.Use_Entity{id, a.seq})
+	net_send(a, game.Use_Entity{id, a.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
 	testing.expect_value(t, wool_dropped(srv, "a"), wool)
 
 	// Too far to use: another sheep, and a player far from it.
 	// (Reach is judged by the server.)
-	net_send(&b, game.Teleport{position = {400.5, 120, 0.5}})
+	net_send(b, game.Teleport{position = {400.5, 120, 0.5}})
 	ok = net_wait(
 		t,
 		both,
 		proc(cs: []^Net_Client) -> bool {return cs[1].update.state.position.x > 300},
 	)
 	testing.expect(t, ok)
-	net_send(&b, game.Use_Entity{id, b.seq})
+	net_send(b, game.Use_Entity{id, b.seq})
 	net_wait(t, both, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 
 	// Kept: stop, read the file, start again.
-	netcode_close_both(&h, &a, &b)
+	netcode_close_both(h, a, b)
 	expect_items_balanced(t, srv)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 	stopped = true
 	saved, _ := os.read_entire_file_from_path(
 		filepath.join({home_dir(dir, 23), ENTITIES_FILE}, context.temp_allocator) or_else "",
@@ -126,12 +130,13 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 		strings.contains(string(saved), "sheep") && strings.contains(string(saved), "true"),
 		"shorn was not saved",
 	)
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped = false
-	again: Net_Client
-	net_connect(&again, 0, "a", h = &h)
-	defer net_close(&again)
-	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {
+	again := new(Net_Client)
+	defer free(again)
+	net_connect(again, 0, "a", h = h)
+	defer net_close(again)
+	ok = net_wait(t, {again}, proc(cs: []^Net_Client) -> bool {
 		for _, v in cs[0].shorn {if v {return true}}
 		return false
 	})
@@ -161,14 +166,16 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		everyone_cheats = true,
 		no_sheep        = true, // (the test counts its own two: natural ones spawn by day)
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	if !testing.expect(t, net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	if !testing.expect(t, net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) > 100
 		}), "never landed") {return}
 	Case :: struct {
@@ -213,7 +220,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 		},
 		&c,
 	)
-	harness_step(&h, 2 * game.TICK_RATE)
+	harness_step(h, 2 * game.TICK_RATE)
 	Result :: struct {
 		c:           ^Case,
 		front_block: game.Block,
@@ -265,26 +272,29 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 		generator   = .Classic,
 		no_sheep    = true,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, harness_start(h, config)) {return}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
-	net_close(&a)
-	a = {}
-	harness_step(&h, 4)
-	testing.expect(t, harness_stop(&h))
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
 	path := filepath.join({home_dir(dir, 24), ENTITIES_FILE}, context.temp_allocator) or_else ""
 	old := "# Voxiverse entities\ncritter 4.5000 20.0000 4.5000 1.0000 4 false\n"
 	testing.expect(t, os.write_entire_file(path, transmute([]u8)old) == nil)
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	b: Net_Client
-	net_connect(&b, 0, "a", h = &h)
-	defer net_close(&b)
-	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(b, 0, "a", h = h)
+	defer net_close(b)
+	ok = net_wait(t, {b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
 	n := 0
 	call(srv, proc(s: ^Server, data: rawptr) {

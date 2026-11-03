@@ -229,7 +229,9 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   (`.github/actions/apt`).
 - **Test memory.** A test's big values go on the heap (`new`, `defer free`): the runner's
   threads have the platform's default stack, 512 KB on macOS against Linux's 8 MB, and a test
-  that overflows it dies with a silent exit and no message. Code under test follows the same
+  that overflows it dies with a silent exit and no message. On Linux `./build.sh test` runs each
+  test executable with its stack limit at 512 KiB (set after the build, for the run only), so an
+  overflow fails here as it does on macOS. Code under test follows the same
   rule: `s^ = {...}` builds the whole literal on the stack before copying, so a large struct
   (`Session`, 214 KB) is assigned `s^ = {}` and then its fields, and `for &p in h.peers` loops
   by reference rather than copying a 64 KB `Peer` per step. `ulimit -s 160 ./build.sh test

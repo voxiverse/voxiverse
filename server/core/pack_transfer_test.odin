@@ -39,12 +39,13 @@ test_pack_transfer :: proc(t: ^testing.T) {
 		seed       = LOSS_SEED,
 	}
 	extra := []game.Pack_Source{transfer_pack()}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{
 				rules = quiet_rules(),
 				seed = 31,
@@ -58,19 +59,20 @@ test_pack_transfer :: proc(t: ^testing.T) {
 			conditions = bad,
 		),
 	) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	testing.expect_value(t, len(srv.pack_blobs), 1)
 
-	join :: proc(h: ^Harness, name: string, cache: string) -> Net_Client {
-		c: Net_Client
-		net_connect(&c, 0, name, h = h)
+	join :: proc(h: ^Harness, name: string, cache: string) -> ^Net_Client {
+		c := new(Net_Client)
+		net_connect(c, 0, name, h = h)
 		c.pack_cache = cache
 		return c
 	}
 
-	a := join(&h, "alpha", cache)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
+	a := join(h, "alpha", cache)
+	defer free(a)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed || cs[0].packs_error != ""
 		}, 60)
 	testing.expect(t, ok, "the client was not welcomed")
@@ -115,9 +117,10 @@ test_pack_transfer :: proc(t: ^testing.T) {
 		)
 	}
 	// A pack arrives whole the first time only.
-	b := join(&h, "beta", cache)
-	defer net_close(&b)
-	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {
+	b := join(h, "beta", cache)
+	defer free(b)
+	defer net_close(b)
+	ok = net_wait(t, {b}, proc(cs: []^Net_Client) -> bool {
 			return cs[0].welcomed || cs[0].packs_error != ""
 		}, 60)
 	testing.expect(t, ok, "the second client was not welcomed")

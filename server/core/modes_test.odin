@@ -69,12 +69,13 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	)
 	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				seed = 21,
 				mode = "survival",
@@ -87,13 +88,16 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	both := []^Net_Client{&alice, &bob}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return(
 			cs[0].welcomed &&
@@ -117,8 +121,8 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	}
 
 	// The operator makes themselves creative: they may fly; bob stays in survival.
-	net_send(&alice, game.Command{"gamemode creative"})
-	expect_told(t, &alice, {&bob}, "alice: game mode creative")
+	net_send(alice, game.Command{"gamemode creative"})
+	expect_told(t, alice, {bob}, "alice: game mode creative")
 	a, b := probe(srv, "alice"), probe(srv, "bob")
 	testing.expect(t, .Fly in a.abilities && .Invulnerable in a.abilities, "alice can fly")
 	testing.expect(t, .Fly not_in b.abilities && b.label == "survival", "bob stays in survival")
@@ -126,20 +130,20 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.mode, "voxiverse:survival")
 
 	// Without the nodes: refused, clearly, whoever the target is.
-	net_send(&bob, game.Command{"gamemode creative"})
-	expect_told(t, &bob, {&alice}, "You may not change your own game mode.")
-	net_send(&bob, game.Command{"gamemode creative alice"})
-	expect_told(t, &bob, {&alice}, "You may not change another player's game mode.")
+	net_send(bob, game.Command{"gamemode creative"})
+	expect_told(t, bob, {alice}, "You may not change your own game mode.")
+	net_send(bob, game.Command{"gamemode creative alice"})
+	expect_told(t, bob, {alice}, "You may not change another player's game mode.")
 	testing.expect_value(t, probe(srv, "bob").label, "survival")
-	net_send(&bob, game.Command{"gamemode"}) // asking is free
-	expect_told(t, &bob, {&alice}, "game mode survival")
+	net_send(bob, game.Command{"gamemode"}) // asking is free
+	expect_told(t, bob, {alice}, "game mode survival")
 
 	// The operator changes bob's; he is told; a mode that does not exist is refused.
-	net_send(&alice, game.Command{"gamemode creative bob"})
-	expect_told(t, &bob, {&alice}, "Your game mode is now creative")
+	net_send(alice, game.Command{"gamemode creative bob"})
+	expect_told(t, bob, {alice}, "Your game mode is now creative")
 	testing.expect_value(t, probe(srv, "bob").label, "creative")
-	net_send(&alice, game.Command{"gamemode spectator"})
-	expect_told(t, &alice, {&bob}, "No game mode spectator")
+	net_send(alice, game.Command{"gamemode spectator"})
+	expect_told(t, alice, {bob}, "No game mode spectator")
 
 	// The journal says who changed what.
 	Journal_Probe :: struct {
@@ -165,16 +169,16 @@ test_gamemode_is_per_player_and_guarded :: proc(t: ^testing.T) {
 	)
 
 	// Rules: read by anyone, set only with the node, journalled with who set them.
-	net_send(&bob, game.Command{"rule pvp false"})
-	expect_told(t, &bob, {&alice}, "You may not change rules here.")
-	net_send(&bob, game.Command{"rule pvp"})
-	expect_told(t, &bob, {&alice}, "pvp = true")
-	net_send(&alice, game.Command{"rule pvp false"})
-	expect_told(t, &alice, {&bob}, "pvp = false")
-	net_send(&alice, game.Command{"rule default_game_mode creative"})
-	expect_told(t, &alice, {&bob}, "default_game_mode = creative")
-	net_send(&alice, game.Command{"rule keep_inventory false"})
-	expect_told(t, &alice, {&bob}, "keep_inventory = false")
+	net_send(bob, game.Command{"rule pvp false"})
+	expect_told(t, bob, {alice}, "You may not change rules here.")
+	net_send(bob, game.Command{"rule pvp"})
+	expect_told(t, bob, {alice}, "pvp = true")
+	net_send(alice, game.Command{"rule pvp false"})
+	expect_told(t, alice, {bob}, "pvp = false")
+	net_send(alice, game.Command{"rule default_game_mode creative"})
+	expect_told(t, alice, {bob}, "default_game_mode = creative")
+	net_send(alice, game.Command{"rule keep_inventory false"})
+	expect_told(t, alice, {bob}, "keep_inventory = false")
 	rules_found: int
 	call(srv, proc(s: ^Server, data: rawptr) {
 			n := (^int)(data)

@@ -155,12 +155,13 @@ test_party_toys :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
 	toys = {}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				seed = 22,
 				mode = "survival",
@@ -174,13 +175,16 @@ test_party_toys :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	both := []^Net_Client{&alice, &bob}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return cs[0].welcomed && cs[1].welcomed && cs[0].mode != "" && cs[1].mode != ""
 	})

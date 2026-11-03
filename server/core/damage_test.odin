@@ -137,12 +137,13 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 	defer os.remove_all(dir)
 	os.make_directory_all(dir)
 	res = {}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				seed = 22,
 				mode = "survival",
@@ -156,13 +157,16 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	both := []^Net_Client{&alice, &bob}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		return cs[0].welcomed && cs[1].welcomed && cs[0].mode != "" && cs[1].mode != ""
 	})
@@ -231,7 +235,7 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 	testing.expect(t, alice.health.dead && alice.hits > 0, "alice was told: dead, and hit")
 
 	// Respawn: refused alive, the button when dead, the kit once.
-	net_send(&bob, game.Respawn{})
+	net_send(bob, game.Respawn{})
 	call(srv, respawn_scenario, nil)
 	testing.expect(t, res.respawn_refused_alive, "respawn was accepted while alive")
 	testing.expect_value(t, res.after_respawn_health, f32(20))

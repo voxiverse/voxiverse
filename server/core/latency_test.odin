@@ -190,10 +190,11 @@ run_script :: proc(
 	result: Run_Result,
 	ok: bool,
 ) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !harness_start(
-		&h,
+		h,
 		{
 			seed = 5,
 			generator = .Classic,
@@ -203,12 +204,12 @@ run_script :: proc(
 		},
 		local = true,
 	) {return} 	// (gentle hills: corrections only from latency, not chunks still arriving under a forest)
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	game.pipe_set_conditions(&h.pipe, {latency_ms = latency_ms, jitter_ms = jitter_ms})
 
 	c := Predicting_Client {
-		endpoint = harness_local(&h),
-		h        = &h,
+		endpoint = harness_local(h),
+		h        = h,
 		scratch  = new(game.Block_Array),
 		mode     = game.NO_MODE,
 	}
@@ -224,14 +225,14 @@ run_script :: proc(
 	send(&c, test_hello("latency_test"))
 	// Each phase gets its own budget of ticks.
 	PHASE_BUDGET :: 20 * game.TICK_RATE
-	deadline := harness_ticks(&h) + PHASE_BUDGET
+	deadline := harness_ticks(h) + PHASE_BUDGET
 
 	// Join, and stand still until the world is there and the player has
 	// landed (and the server agrees).
 	for !c.welcomed {
 		pump(t, &c)
 		harness_step(c.h)
-		if harness_ticks(&h) > deadline {return}
+		if harness_ticks(h) > deadline {return}
 	}
 	for {
 		pump(t, &c)
@@ -248,7 +249,7 @@ run_script :: proc(
 		s := c.last_update.state
 		settled := s.on_ground && c.last_update.acked > 0 && len(c.chunks) > 200
 		if settled && c.prediction.state == s {break}
-		if harness_ticks(&h) > deadline {return}
+		if harness_ticks(h) > deadline {return}
 	}
 
 	if hook { 	// (the server's character holds it too: its mods come from the inventory)
@@ -260,7 +261,7 @@ run_script :: proc(
 				c.inv_changed = true
 			}, &item)
 	}
-	deadline = harness_ticks(&h) + PHASE_BUDGET
+	deadline = harness_ticks(h) + PHASE_BUDGET
 	// The script: 150 ticks of walking and jumping, three edits.
 	EDIT_TICKS :: [3]int{40, 80, 120}
 	corrections_before := c.prediction.corrections
@@ -319,14 +320,14 @@ run_script :: proc(
 		harness_step(c.h)
 	}
 	// Everything acknowledged and answered.
-	deadline = harness_ticks(&h) + PHASE_BUDGET
+	deadline = harness_ticks(h) + PHASE_BUDGET
 	last := c.prediction.next_sequence - 1
 	for c.last_update.acked != last ||
 	    (len(c.results) < 3 && !fly && !hook) ||
 	    c.prediction.count > 0 {
 		pump(t, &c)
 		harness_step(c.h)
-		if harness_ticks(&h) > deadline {return}
+		if harness_ticks(h) > deadline {return}
 	}
 	result.server_state = c.last_update.state
 	result.predicted = c.prediction.state
@@ -429,12 +430,13 @@ test_desync_caught :: proc(t: ^testing.T) {
 // disagrees with its context is refused.
 @(test)
 test_shaped_placements_with_latency :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{
 				seed = 5,
 				generator = .Classic,
@@ -445,11 +447,11 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 			local = true,
 		),
 	) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	game.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
 	c := Predicting_Client {
-		endpoint = harness_local(&h),
-		h        = &h,
+		endpoint = harness_local(h),
+		h        = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -461,11 +463,11 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 	defer delete(c.results)
 	c.key = test_key("latency_test")
 	send(&c, test_hello("latency_test"))
-	deadline := harness_ticks(&h) + 20 * game.TICK_RATE
+	deadline := harness_ticks(h) + 20 * game.TICK_RATE
 	for !c.welcomed {
 		pump(t, &c)
 		harness_step(c.h)
-		if !testing.expect(t, harness_ticks(&h) < deadline, "no welcome") {return}
+		if !testing.expect(t, harness_ticks(h) < deadline, "no welcome") {return}
 	}
 	stand :: proc(t: ^testing.T, c: ^Predicting_Client, yaw: f32, ticks: int) -> u32 {
 		seq: u32
@@ -491,7 +493,7 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 		   c.last_update.acked > 0 &&
 		   len(c.chunks) > 200 &&
 		   c.prediction.state == s {break}
-		if !testing.expect(t, harness_ticks(&h) < deadline, "never landed") {return}
+		if !testing.expect(t, harness_ticks(h) < deadline, "never landed") {return}
 	}
 	p := c.prediction.state.position
 	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
@@ -552,10 +554,10 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 		game.Edit{101, seq, fpos, fstate, forged_ctx.target, u8(forged_ctx.face), forged_ctx.hit},
 	)
 	// All answered.
-	deadline = harness_ticks(&h) + 20 * game.TICK_RATE
+	deadline = harness_ticks(h) + 20 * game.TICK_RATE
 	for len(c.results) < len(placed) + 2 {
 		stand(t, &c, 0, 1)
-		if !testing.expect(t, harness_ticks(&h) < deadline, "not all answered") {return}
+		if !testing.expect(t, harness_ticks(h) < deadline, "not all answered") {return}
 	}
 	for pl in placed {
 		r := c.results[pl.id]
@@ -580,12 +582,13 @@ test_shaped_placements_with_latency :: proc(t: ^testing.T) {
 // refused and both cells are put back (the upper half by the companion).
 @(test)
 test_doors_with_latency :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			{
 				seed = 5,
 				generator = .Classic,
@@ -596,11 +599,11 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 			local = true,
 		),
 	) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	game.pipe_set_conditions(&h.pipe, {latency_ms = 200, jitter_ms = 60})
 	c := Predicting_Client {
-		endpoint = harness_local(&h),
-		h        = &h,
+		endpoint = harness_local(h),
+		h        = h,
 		scratch  = new(game.Block_Array),
 	}
 	defer free(c.scratch)
@@ -612,11 +615,11 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 	defer delete(c.results)
 	c.key = test_key("latency_test")
 	send(&c, test_hello("latency_test"))
-	deadline := harness_ticks(&h) + 20 * game.TICK_RATE
+	deadline := harness_ticks(h) + 20 * game.TICK_RATE
 	for !c.welcomed {
 		pump(t, &c)
-		harness_step(&h)
-		if !testing.expect(t, harness_ticks(&h) < deadline, "no welcome") {return}
+		harness_step(h)
+		if !testing.expect(t, harness_ticks(h) < deadline, "no welcome") {return}
 	}
 	stand :: proc(t: ^testing.T, c: ^Predicting_Client, ticks: int) -> u32 {
 		seq: u32
@@ -637,7 +640,7 @@ test_doors_with_latency :: proc(t: ^testing.T) {
 		   c.last_update.acked > 0 &&
 		   len(c.chunks) > 200 &&
 		   c.prediction.state == s {break}
-		if !testing.expect(t, harness_ticks(&h) < deadline, "never landed") {return}
+		if !testing.expect(t, harness_ticks(h) < deadline, "never landed") {return}
 	}
 	p := c.prediction.state.position
 	o := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}

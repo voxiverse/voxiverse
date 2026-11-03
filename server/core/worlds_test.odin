@@ -68,21 +68,25 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		generator   = .Classic,
 		world_idle  = 0.5,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
+	defer if !stopped {harness_stop(h)}
 	home := srv.home.address
 	away := game.address_derive(999)
 	@(static) want: game.Address
 
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	both := []^Net_Client{&alice, &bob}
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
 	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		ready :: proc(c: ^Net_Client) -> bool {return(
 				c.welcomed &&
@@ -97,7 +101,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 
 	// Alice travels away, carrying what she carries; bob stays home.
 	net_send(
-		&alice,
+		alice,
 		game.Command {
 			strings.concatenate({"travel ", game.address_dir(away)}, context.temp_allocator),
 		},
@@ -118,13 +122,13 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&alice, game.edit_plain(1, alice.seq, at, .Stone))
+	net_send(alice, game.edit_plain(1, alice.seq, at, .Stone))
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && alice.results[1].accepted, "her edit was refused")
 
 	// Home again: the other world goes once empty, its edit saved there.
 	net_send(
-		&alice,
+		alice,
 		game.Command {
 			strings.concatenate({"travel ", game.address_dir(home)}, context.temp_allocator),
 		},
@@ -155,7 +159,7 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 	for _ in 0 ..< 3 {
 		for target in ([]game.Address{away, home}) {
 			net_send(
-				&alice,
+				alice,
 				game.Command {
 					strings.concatenate(
 						{"travel ", game.address_dir(target)},

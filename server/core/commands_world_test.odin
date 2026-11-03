@@ -27,7 +27,8 @@ pump :: proc(t: ^testing.T, clients: []^Net_Client, seconds := 0.4) {
 // /seed, /give to everyone, /wear, /help, /locate.
 @(test)
 test_world_commands :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	config := Config {
 		seed            = 27,
@@ -40,14 +41,17 @@ test_world_commands :: proc(t: ^testing.T) {
 		everyone_cheats = true,
 		no_sheep        = true,
 	}
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a, b: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	defer net_close(&a)
-	defer net_close(&b)
-	both := []^Net_Client{&a, &b}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	defer net_close(a)
+	defer net_close(b)
+	both := []^Net_Client{a, b}
 	ok := net_wait(
 		t,
 		both,
@@ -62,19 +66,19 @@ test_world_commands :: proc(t: ^testing.T) {
 		i32(math.floor(p.y)) + 3,
 		i32(math.floor(p.z)),
 	}
-	cmd(&a, "setblock ~2 ~3 ~ glass")
+	cmd(a, "setblock ~2 ~3 ~ glass")
 	pump(t, both)
 	testing.expect_value(t, block_on_server(srv, target), game.Block.Glass)
 
 	// /time and /rule.
-	cmd(&a, "time set midnight")
+	cmd(a, "time set midnight")
 	pump(t, both, 0.3)
 	testing.expect(
 		t,
 		abs(clock_fraction(srv)) < 0.02 || clock_fraction(srv) > 0.98,
 		"time set midnight",
 	)
-	cmd(&a, "time add 6")
+	cmd(a, "time add 6")
 	pump(t, both, 0.3)
 	testing.expectf(
 		t,
@@ -82,35 +86,35 @@ test_world_commands :: proc(t: ^testing.T) {
 		"time add 6 gave %.3f",
 		clock_fraction(srv),
 	)
-	cmd(&a, "time query")
-	cmd(&a, "rule drops false")
-	cmd(&a, "rule drops")
-	cmd(&a, "rule")
-	cmd(&a, "seed")
-	cmd(&a, "help tp")
-	cmd(&a, "help")
+	cmd(a, "time query")
+	cmd(a, "rule drops false")
+	cmd(a, "rule drops")
+	cmd(a, "rule")
+	cmd(a, "seed")
+	cmd(a, "help tp")
+	cmd(a, "help")
 	pump(t, both)
-	testing.expect(t, said(&a, "It is 0.25"), "time query")
-	testing.expect(t, said(&a, "drops = false"), "rule drops")
-	testing.expect(t, said(&a, "random_tick_speed"), "rule lists the rules")
-	testing.expect(t, said(&a, "Seed: 27"), "seed")
-	testing.expect(t, said(&a, "teleport.tp"), "help tp")
+	testing.expect(t, said(a, "It is 0.25"), "time query")
+	testing.expect(t, said(a, "drops = false"), "rule drops")
+	testing.expect(t, said(a, "random_tick_speed"), "rule lists the rules")
+	testing.expect(t, said(a, "Seed: 27"), "seed")
+	testing.expect(t, said(a, "teleport.tp"), "help tp")
 	testing.expect(
 		t,
-		said(&a, "Commands:") && said(&a, "locate") && said(&a, "setblock"),
+		said(a, "Commands:") && said(a, "locate") && said(a, "setblock"),
 		"help lists the commands",
 	)
 
 	// /summon with a count, /kill.
-	cmd(&a, "summon sheep 3")
+	cmd(a, "summon sheep 3")
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 3})
 	testing.expect(t, ok, "summon sheep 3")
-	cmd(&a, "kill sheep")
+	cmd(a, "kill sheep")
 	pump(t, both)
-	testing.expect(t, said(&a, "Killed 3"), "kill sheep")
+	testing.expect(t, said(a, "Killed 3"), "kill sheep")
 
 	// /tp x y z with angles, and ~ relative; the other to us by selector.
-	cmd(&a, "tp 100 150 100 90 -30")
+	cmd(a, "tp 100 150 100 90 -30")
 	ok = net_wait(
 		t,
 		both,
@@ -118,14 +122,14 @@ test_world_commands :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, ok, "tp x y z did not move a")
 	at := a.update.state.position
-	cmd(&a, "tp ~5 ~ ~-5")
+	cmd(a, "tp ~5 ~ ~-5")
 	ok = net_wait(
 		t,
 		both,
 		proc(cs: []^Net_Client) -> bool {return abs(cs[0].update.state.position.x - 105) < 2},
 	)
 	testing.expectf(t, ok, "tp ~5 ~ ~-5 left a at %v (was %v)", a.update.state.position, at)
-	cmd(&a, "tp b @s")
+	cmd(a, "tp b @s")
 	ok = net_wait(
 		t,
 		both,
@@ -141,30 +145,26 @@ test_world_commands :: proc(t: ^testing.T) {
 	stone := game.item_of_block(test_reg(), .Stone)
 	before_a, before_b :=
 		game.inventory_count(&a.inventory, stone), game.inventory_count(&b.inventory, stone)
-	cmd(&a, "give @a stone 10")
-	cmd(&a, "give @s cap")
-	cmd(&a, "wear")
+	cmd(a, "give @a stone 10")
+	cmd(a, "give @s cap")
+	cmd(a, "wear")
 	pump(t, both, 0.6)
 	testing.expect_value(t, game.inventory_count(&a.inventory, stone), before_a + 10)
 	testing.expect_value(t, game.inventory_count(&b.inventory, stone), before_b + 10)
 	testing.expect_value(t, a.inventory.equipment[.Head].item, game.item_of_armor(.Cap))
 
 	// /locate, with or without the kind of thing, and a refusal for a nonsense name.
-	cmd(&a, "locate gate")
+	cmd(a, "locate gate")
 	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
 		for n in cs[0].notices {if strings.has_prefix(n, "gate at ") {return true}}
 		return false
 	})
 	testing.expect(t, ok, "locate gate")
-	cmd(&a, "locate structure dungeon")
-	cmd(&a, "locate nowhere")
+	cmd(a, "locate structure dungeon")
+	cmd(a, "locate nowhere")
 	pump(t, both, 0.6)
-	testing.expect(
-		t,
-		said(&a, "dungeon at ") || said(&a, "No dungeon"),
-		"locate structure dungeon",
-	)
-	testing.expect(t, said(&a, "Usage: locate") || said(&a, "nowhere"), "locate nowhere")
+	testing.expect(t, said(a, "dungeon at ") || said(a, "No dungeon"), "locate structure dungeon")
+	testing.expect(t, said(a, "Usage: locate") || said(a, "nowhere"), "locate nowhere")
 }
 
 @(private = "file")

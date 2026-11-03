@@ -14,12 +14,13 @@ test_place_record :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	rules := quiet_rules()
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				mode = "survival",
 				rules = rules,
@@ -34,20 +35,21 @@ test_place_record :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
+	defer harness_stop(h)
 	gen := worldgen.generator_make(.Earth, srv.home.seed, srv.registry, srv.home.params)
 	desert, found := worldgen.locate(&gen, .Desert, 0, 0, 8192)
 	ocean, found_ocean := worldgen.locate(&gen, .Ocean, 0, 0, 8192)
 	if !testing.expect(t, found && found_ocean, "the test seed has a desert and an ocean") {return}
 
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
 	if !testing.expect(
 		t,
 		net_wait(
 			t,
-			{&a},
+			{a},
 			proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[0].update.acked > 0},
 			30,
 		),
@@ -75,7 +77,7 @@ test_place_record :: proc(t: ^testing.T) {
 	to(srv, desert)
 	ok := net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].place.biome == u8(worldgen.Biome.Desert)},
 		5,
 	)
@@ -84,13 +86,13 @@ test_place_record :: proc(t: ^testing.T) {
 	testing.expect_value(t, a.place.wetness, i8(0))
 	// Standing still, nothing more is sent.
 	seen := a.places
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 1)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 1)
 	testing.expect_value(t, a.places, seen)
 	// Another biome: told again.
 	to(srv, ocean)
 	ok = net_wait(
 		t,
-		{&a},
+		{a},
 		proc(cs: []^Net_Client) -> bool {return cs[0].place.biome == u8(worldgen.Biome.Ocean)},
 		5,
 	)
@@ -100,6 +102,6 @@ test_place_record :: proc(t: ^testing.T) {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			if c := client_by_name(s, "a"); c != nil {damage(s, c, 1000, {kind = .Command})}
 		}, nil)
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].deaths == 1}, 5)
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].deaths == 1}, 5)
 	testing.expect(t, ok, "the client was not told it died")
 }

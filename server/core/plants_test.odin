@@ -21,14 +21,16 @@ test_plants_need_support :: proc(t: ^testing.T) {
 		listen          = true,
 		everyone_cheats = true,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	if !testing.expect(t, net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	if !testing.expect(t, net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {
 			return landed(cs[0]) && len(cs[0].chunks) > 100
 		}), "never landed") {return}
 	x, z := i32(math.floor(a.update.state.position.x)), i32(math.floor(a.update.state.position.z))
@@ -112,20 +114,20 @@ test_plants_need_support :: proc(t: ^testing.T) {
 	for f in data.failures {testing.expect(t, false, f)}
 
 	// A bulk edit: a row of grass with flowers, the row replaced by air.
-	net_send(&a, game.Command{"fill 0 0 0 0 0 0 air"}) // (a command that does nothing: the permission check)
+	net_send(a, game.Command{"fill 0 0 0 0 0 0 air"}) // (a command that does nothing: the permission check)
 	for dx in i32(0) ..< 6 {
-		net_send(&a, game.Command{bulk_at("fill", x + 10 + dx, y, z, "grass")})
-		net_send(&a, game.Command{bulk_at("fill", x + 10 + dx, y + 1, z, "poppy")})
+		net_send(a, game.Command{bulk_at("fill", x + 10 + dx, y, z, "grass")})
+		net_send(a, game.Command{bulk_at("fill", x + 10 + dx, y + 1, z, "poppy")})
 	}
-	net_for(t, {&a}, 1)
+	net_for(t, {a}, 1)
 	for dx in i32(0) ..< 6 {
-		b, _ := net_block(&a, {x + 10 + dx, y + 1, z})
+		b, _ := net_block(a, {x + 10 + dx, y + 1, z})
 		testing.expect_value(t, b, game.Block.Poppy)
 	}
-	net_send(&a, game.Command{bulk_row("fill", x + 10, x + 15, y, z, "air")})
-	net_for(t, {&a}, 1)
+	net_send(a, game.Command{bulk_row("fill", x + 10, x + 15, y, z, "air")})
+	net_for(t, {a}, 1)
 	for dx in i32(0) ..< 6 {
-		b, _ := net_block(&a, {x + 10 + dx, y + 1, z})
+		b, _ := net_block(a, {x + 10 + dx, y + 1, z})
 		testing.expectf(t, b == .Air, "a poppy stayed at %d after the bulk edit", dx)
 	}
 	after := poppies_dropped(srv, x + 5)

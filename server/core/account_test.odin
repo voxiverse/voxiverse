@@ -51,53 +51,59 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 		listen      = true,
 		generator   = .Classic,
 	}
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
+	defer if !stopped {harness_stop(h)}
 
-	alice: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	defer net_close(&alice)
-	ok := net_wait(t, {&alice}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
+	alice := new(Net_Client)
+	defer free(alice)
+	net_connect(alice, 0, "alice", h = h)
+	defer net_close(alice)
+	ok := net_wait(t, {alice}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
 	if !testing.expect(t, ok, "alice never joined") {return}
 
 	// Claiming to be alice's account without its key.
-	forger: Net_Client
+	forger := new(Net_Client)
+	defer free(forger)
 	forger.key_name, forger.sign_name = "alice", "mallory"
-	net_connect(&forger, 0, "alice2", h = &h)
-	defer net_close(&forger)
+	net_connect(forger, 0, "alice2", h = h)
+	defer net_close(forger)
 	ok = net_wait(
 		t,
-		{&forger, &alice},
+		{forger, alice},
 		proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""},
 	)
 	testing.expect_value(t, forger.rejected, "the account's proof is wrong")
 
 	// Another account, alice's name (once she has left: not "playing").
-	netcode_close_and_wait(t, &alice)
-	thief: Net_Client
+	netcode_close_and_wait(t, alice)
+	thief := new(Net_Client)
+	defer free(thief)
 	thief.key_name = "mallory"
-	net_connect(&thief, 0, "alice", h = &h)
-	defer net_close(&thief)
-	ok = net_wait(t, {&thief}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
+	net_connect(thief, 0, "alice", h = h)
+	defer net_close(thief)
+	ok = net_wait(t, {thief}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
 	testing.expect_value(t, thief.rejected, "that name is another account's")
 
 	// Asking: alice's account has alice; it chooses alice.
-	again: Net_Client
+	again := new(Net_Client)
+	defer free(again)
 	again.key_name, again.ask = "alice", true
-	net_connect(&again, 0, "alice", h = &h)
-	defer net_close(&again)
-	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
+	net_connect(again, 0, "alice", h = h)
+	defer net_close(again)
+	ok = net_wait(t, {again}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
 	testing.expect(t, ok && again.characters == "alice", "alice was not offered alice")
 
 	// bea from before accounts: the first account to play her has her (and
 	// what she carried).
-	bea: Net_Client
+	bea := new(Net_Client)
+	defer free(bea)
 	bea.key_name = "beatrice"
-	net_connect(&bea, 0, "bea", h = &h)
-	defer net_close(&bea)
-	ok = net_wait(t, {&bea}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_updates > 0})
+	net_connect(bea, 0, "bea", h = h)
+	defer net_close(bea)
+	ok = net_wait(t, {bea}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_updates > 0})
 	testing.expect(t, ok)
 	testing.expect_value(
 		t,
@@ -107,7 +113,7 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 
 	// A ban follows the account: alice banned, her account can't play a new
 	// character either.
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 	stopped = true
 	moved :=
 		filepath.join(
@@ -126,13 +132,14 @@ test_accounts_over_the_network :: proc(t: ^testing.T) {
 		context.temp_allocator,
 	)
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)ban) == nil)
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped = false
-	alt: Net_Client
+	alt := new(Net_Client)
+	defer free(alt)
 	alt.key_name = "alice"
-	net_connect(&alt, 0, "alice_alt", h = &h)
-	defer net_close(&alt)
-	ok = net_wait(t, {&alt}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
+	net_connect(alt, 0, "alice_alt", h = h)
+	defer net_close(alt)
+	ok = net_wait(t, {alt}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
 	testing.expect_value(t, alt.rejected, "Banned for good: griefing")
 }
 

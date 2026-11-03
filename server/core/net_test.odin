@@ -509,15 +509,16 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 		listen      = true,
 		name        = "net test",
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	// No local player; listen on a free port.
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
+	defer if !stopped {harness_stop(h)}
 
 	alice, bob, impostor: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
+	net_connect(&alice, 0, "alice", h = h)
+	net_connect(&bob, 0, "bob", h = h)
 	defer net_close(&alice)
 	defer net_close(&bob)
 	ok := net_wait(t, {&alice, &bob}, proc(cs: []^Net_Client) -> bool {
@@ -548,7 +549,7 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 	testing.expect_value(t, bob.others[alice.welcome.player], "alice")
 
 	// The same name again is refused.
-	net_connect(&impostor, 0, "alice", h = &h)
+	net_connect(&impostor, 0, "alice", h = h)
 	defer net_close(&impostor)
 	ok = net_wait(t, {&impostor, &alice, &bob}, proc(cs: []^Net_Client) -> bool {
 		return cs[0].rejected != ""
@@ -586,13 +587,13 @@ test_players_over_the_network :: proc(t: ^testing.T) {
 
 	// Saved by name: after a restart, each comes back where they were.
 	netcode.link_close(&alice.link, "bye")
-	harness_step(&h, 4)
-	testing.expect(t, harness_stop(&h))
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
 	stopped = true
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped = false
 	again: Net_Client
-	net_connect(&again, 0, "bob", h = &h)
+	net_connect(&again, 0, "bob", h = h)
 	defer net_close(&again)
 	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return cs[0].welcomed})
 	if testing.expect(t, ok) {
@@ -636,14 +637,15 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		everyone_cheats = true,
 		no_sheep        = true, // (the summoned one is the only one: natural ones spawn by day, when the timing lets them)
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config, conditions = bad)) {return}
-	defer harness_stop(&h)
+	if !testing.expect(t, harness_start(h, config, conditions = bad)) {return}
+	defer harness_stop(h)
 
 	a, b: Net_Client
-	net_connect(&a, 0, "alpha", h = &h)
-	net_connect(&b, 0, "beta", h = &h)
+	net_connect(&a, 0, "alpha", h = h)
+	net_connect(&b, 0, "beta", h = h)
 	defer net_close(&a)
 	defer net_close(&b)
 	// The whole interest area, not just enough to land on.
@@ -715,7 +717,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		if converged {break}
 		net_pump(t, &a)
 		net_pump(t, &b)
-		harness_step(&h)
+		harness_step(h)
 		call(
 			srv,
 			proc(s: ^Server, data: rawptr) {
@@ -798,11 +800,12 @@ test_schema_mismatch_refused :: proc(t: ^testing.T) {
 		max_players = 2,
 		listen      = true,
 	}
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
 	c: Net_Client
-	net_connect(&c, 0, "stranger", h = &h)
+	net_connect(&c, 0, "stranger", h = h)
 	defer net_close(&c)
 	c.schema.hash += 1
 	ok := net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})

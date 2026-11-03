@@ -20,18 +20,22 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 		listen          = true,
 		everyone_cheats = true,
 	}
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config)) {return}
-	defer harness_stop(&h)
-	a, b: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	defer net_close(&a)
-	defer net_close(&b)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	defer net_close(a)
+	defer net_close(b)
 	ok := net_wait(
 		t,
-		{&a, &b},
+		{a, b},
 		proc(cs: []^Net_Client) -> bool {return(
 				landed(cs[0]) &&
 				landed(cs[1]) &&
@@ -58,7 +62,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 
 	// Fill: a stone box, seen by both.
 	net_send(
-		&a,
+		a,
 		game.Command {
 			fmt.tprintf(
 				"fill %d %d %d %d %d %d stone",
@@ -71,7 +75,7 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 			),
 		},
 	)
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {
 			return all_are(cs[0], box_lo, box_hi, .Stone) && all_are(cs[1], box_lo, box_hi, .Stone)
 		})
 	testing.expect(t, ok, "the filled box did not reach both players")
@@ -80,21 +84,18 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	// A sphere of air inside it.
 	@(static) center: game.Block_Pos
 	center = {7, base_y + 7, 0}
-	net_send(
-		&a,
-		game.Command{fmt.tprintf("sphere %d %d %d 1.5 air", center.x, center.y, center.z)},
-	)
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
-			b0, _ := net_block(cs[0], center)
-			b1, _ := net_block(cs[1], center)
-			return b0 == .Air && b1 == .Air
-		})
+	net_send(a, game.Command{fmt.tprintf("sphere %d %d %d 1.5 air", center.x, center.y, center.z)})
+	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {
+		b0, _ := net_block(cs[0], center)
+		b1, _ := net_block(cs[1], center)
+		return b0 == .Air && b1 == .Air
+	})
 	testing.expect(t, ok, "the sphere was not carved for both")
 
 	// Too big: refused, nothing changes.
 	before := a.bulk_begins
-	net_send(&a, game.Command{"fill -100 0 -100 100 60 100 dirt"})
-	net_for(t, {&a}, 0.3)
+	net_send(a, game.Command{"fill -100 0 -100 100 60 100 dirt"})
+	net_for(t, {a}, 0.3)
 	testing.expect_value(t, a.bulk_begins, before)
 
 	// An explosion: air inside, and the two players agree on every block
@@ -106,13 +107,13 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 	}
 	blast_at := Blast{blast}
 	call(srv, proc(s: ^Server, data: rawptr) {explode_by(s, "a", (^Blast)(data).at, 4)}, &blast_at)
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {
+	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {
 		x0, _ := net_block(cs[0], blast)
 		x1, _ := net_block(cs[1], blast)
 		return x0 == .Air && x1 == .Air && cs[0].explosions > 0 && cs[1].explosions > 0
 	})
 	testing.expect(t, ok, "the explosion did not reach both")
-	net_ticks(t, {&a, &b}, 20)
+	net_ticks(t, {a, b}, 20)
 	differ := 0
 	for pos, &blocks in a.chunks {
 		other, both := &b.chunks[pos]
@@ -129,12 +130,12 @@ test_bulk_edits_and_rockets :: proc(t: ^testing.T) {
 
 	// A rocket, straight down from up high: it hits the ground and blows.
 	explosions := a.explosions
-	net_send(&a, game.Teleport{position = a.update.state.position + {0, 20, 0}})
-	net_for(t, {&a}, 0.2)
-	net_send(&a, game.Fire{a.seq, 0, -1.5})
+	net_send(a, game.Teleport{position = a.update.state.position + {0, 20, 0}})
+	net_for(t, {a}, 0.2)
+	net_send(a, game.Fire{a.seq, 0, -1.5})
 	@(static) want: int
 	want = explosions + 1
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {return cs[0].explosions >= want})
+	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {return cs[0].explosions >= want})
 	testing.expect(t, ok, "the rocket never exploded")
 }
 

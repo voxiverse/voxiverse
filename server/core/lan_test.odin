@@ -52,12 +52,13 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	)
 	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				seed = 22,
 				mode = "creative",
@@ -70,22 +71,27 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
-	alice, bob, cy: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	defer net_close(&cy)
-	if !testing.expect(t, net_wait(t, {&alice, &bob}, joined), "never joined") {return}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	cy := new(Net_Client)
+	defer free(cy)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	defer net_close(cy)
+	if !testing.expect(t, net_wait(t, {alice, bob}, joined), "never joined") {return}
 
 	lan_srv = srv
-	both := []^Net_Client{&alice, &bob}
+	both := []^Net_Client{alice, bob}
 	// Off (the default role only): the guest has no commands nodes.
 	testing.expect(t, !may(srv, "bob", "teleport.tp"))
 	testing.expect(t, may(srv, "alice", "teleport.tp"))
 	// Allow commands: the mod role, for the guest already in, at once.
-	net_send(&alice, game.Command{"rule guest_role mod"})
+	net_send(alice, game.Command{"rule guest_role mod"})
 	testing.expect(
 		t,
 		net_wait(
@@ -97,7 +103,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		"bob has the mod role",
 	)
 	testing.expect(t, !may(srv, "bob", "server.open_lan"), "mod is not admin")
-	net_send(&alice, game.Command{"rule guest_role default"})
+	net_send(alice, game.Command{"rule guest_role default"})
 	testing.expect(
 		t,
 		net_wait(
@@ -110,7 +116,7 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 	)
 
 	// The guests' game mode: a guest who joins afterwards has it, not the universe's.
-	net_send(&alice, game.Command{"rule default_game_mode survival"})
+	net_send(alice, game.Command{"rule default_game_mode survival"})
 	testing.expect(
 		t,
 		net_wait(
@@ -124,22 +130,17 @@ test_open_to_lan_settings :: proc(t: ^testing.T) {
 		),
 		"the rule is set",
 	)
-	net_connect(&cy, 0, "cy", h = &h)
-	if !testing.expect(t, net_wait(t, {&alice, &cy}, joined), "cy never joined") {return}
+	net_connect(cy, 0, "cy", h = h)
+	if !testing.expect(t, net_wait(t, {alice, cy}, joined), "cy never joined") {return}
 	testing.expect_value(t, cy.mode, "voxiverse:survival")
 	testing.expect_value(t, alice.mode, "voxiverse:creative") // (the host's own is theirs)
 
 	// Close LAN: the port is shut, the guests' role is gone.
-	net_send(&alice, game.Command{"rule guest_role mod"})
-	net_send(&alice, game.Command{"close_lan"})
+	net_send(alice, game.Command{"rule guest_role mod"})
+	net_send(alice, game.Command{"close_lan"})
 	testing.expect(
 		t,
-		net_wait(
-			t,
-			{&alice, &bob},
-			proc(_: []^Net_Client) -> bool {return !listening(lan_srv)},
-			5,
-		),
+		net_wait(t, {alice, bob}, proc(_: []^Net_Client) -> bool {return !listening(lan_srv)}, 5),
 		"the port is shut",
 	)
 	testing.expect_value(t, base_rule(srv, "guest_role"), "")
@@ -215,12 +216,13 @@ test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
 	)
 	cfg := filepath.join({dir, PERMISSIONS_FILE}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)perms) == nil)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
 	if !testing.expect(
 		t,
 		harness_start(
-			&h,
+			h,
 			Config {
 				seed = 22,
 				mode = "creative",
@@ -233,19 +235,22 @@ test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
 			},
 		),
 	) {return}
-	defer harness_stop(&h)
-	alice, bob: Net_Client
-	net_connect(&alice, 0, "alice", h = &h)
-	net_connect(&bob, 0, "bob", h = &h)
-	defer net_close(&alice)
-	defer net_close(&bob)
-	if !testing.expect(t, net_wait(t, {&alice, &bob}, joined), "never joined") {return}
+	defer harness_stop(h)
+	alice := new(Net_Client)
+	defer free(alice)
+	bob := new(Net_Client)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	if !testing.expect(t, net_wait(t, {alice, bob}, joined), "never joined") {return}
 	lan_srv = srv
-	both := []^Net_Client{&alice, &bob}
+	both := []^Net_Client{alice, bob}
 	testing.expect(t, may(srv, "alice", "world.fire"), "the host may fire")
 	testing.expect(t, !may(srv, "bob", "world.fire"), "(the old world: not yet)")
 
-	net_send(&alice, game.Command{"open_lan"})
+	net_send(alice, game.Command{"open_lan"})
 	testing.expect(
 		t,
 		net_wait(
@@ -257,7 +262,7 @@ test_guest_fires_the_launcher_on_an_opened_world :: proc(t: ^testing.T) {
 		"bob may fire once the world is open",
 	)
 	testing.expect_value(t, fired_at_of(srv, "bob"), 0)
-	net_send(&bob, game.Fire{bob.seq, 0, 0})
+	net_send(bob, game.Fire{bob.seq, 0, 0})
 	testing.expect(
 		t,
 		net_wait(

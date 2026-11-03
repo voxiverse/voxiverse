@@ -43,21 +43,23 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		save_dir        = dir,
 		no_sheep        = true,
 	}
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config)) {return}
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(&a, game.Command{"time midnight"})
+	net_send(a, game.Command{"time midnight"})
 	for _ in 0 ..< MAX_ENTITIES / 20 + 10 {
-		net_send(&a, game.Command{"summon sheep 20"})
-		net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
+		net_send(a, game.Command{"summon sheep 20"})
+		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 	}
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
 	testing.expect_value(t, entity_count(&h.srv, "a"), MAX_ENTITIES) // full, and no more
 	refused := false
 	for n in a.notices {refused ||= strings.contains(n, "Too many entities")}
@@ -75,14 +77,14 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		nil,
 	)
 	for _ in 0 ..< 3 * game.TICK_RATE {
-		net_pump(t, &a)
-		harness_step(&h)
+		net_pump(t, a)
+		harness_step(h)
 	}
 	testing.expect(t, entity_count(&h.srv, "a") < MAX_ENTITIES, "the blast killed nothing")
 	testing.expect_value(t, entity_count(&h.srv, "a"), 0)
-	net_close(&a)
-	a = {}
-	harness_step(&h, 4)
-	testing.expect(t, harness_stop(&h))
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
 	stopped = true
 }

@@ -79,13 +79,15 @@ farm_run :: proc(t: ^testing.T, srv: ^Server, f: ^Farm, body: proc(s: ^Server, d
 // Grass spreads into lit dirt and not into dark dirt, and dies under stone.
 @(test)
 test_grass_spreads_and_dies :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
-	f := farm_at(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
+	f := farm_at(a)
 	farm_run(
 		t,
 		srv,
@@ -123,13 +125,15 @@ test_grass_spreads_and_dies :: proc(t: ^testing.T) {
 // moist never straight to dirt; wheat keeps farmland.
 @(test)
 test_farmland_moisture :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
-	f := farm_at(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
+	f := farm_at(a)
 	farm_run(
 		t,
 		srv,
@@ -166,13 +170,15 @@ test_farmland_moisture :: proc(t: ^testing.T) {
 // on moist farmland, 1 in 6 on dry; the mean over many plants.
 @(test)
 test_wheat_ripens :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
-	f := farm_at(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
+	f := farm_at(a)
 	farm_run(t, srv, &f, proc(s: ^Server, data: rawptr) {
 		f := (^Farm)(data)
 		w := client_by_name(s, f.name).world
@@ -216,13 +222,15 @@ test_wheat_ripens :: proc(t: ^testing.T) {
 // once ripe; farmland dirt; nothing with rules.drops off.
 @(test)
 test_crop_drops :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
-	f := farm_at(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
+	f := farm_at(a)
 	farm_run(
 		t,
 		srv,
@@ -273,13 +281,15 @@ test_crop_drops :: proc(t: ^testing.T) {
 // reverts without anyone calling anything; at speed 0 nothing changes.
 @(test)
 test_random_ticks_run :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
-	f := farm_at(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
+	f := farm_at(a)
 	farm_run(
 		t,
 		srv,
@@ -310,12 +320,14 @@ test_random_ticks_run :: proc(t: ^testing.T) {
 // farmland; breaking the farmland takes the wheat with it.
 @(test)
 test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a) {return}
-	defer harness_stop(&h)
-	defer net_close(&a)
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a) {return}
+	defer harness_stop(h)
+	defer net_close(a)
 	feet := a.update.state.position
 	ground := game.Block_Pos {
 		i32(math.floor(feet.x)),
@@ -333,7 +345,7 @@ test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
 			set_block(w, d.ground + {0, 1, 0}, .Air, test_act(w))
 			set_block(w, d.ground + {0, 2, 0}, .Air, test_act(w))
 		}, &d)
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	hoe, seeds := game.item_of_tool(.Hoe), game.item_of_material(.Seeds)
 	// Hoe in slot 3 (hotbar 4), seeds in slot 4 (the kit's sand and log go to the cursor, and are lost).
 	seq := u32(0)
@@ -341,11 +353,11 @@ test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
 		seq^ += 1
 		net_send(a, game.Inventory_Request{seq^, {kind, slot, arg}})
 	}
-	req(&a, &seq, .Take, game.CURSOR_SLOT, int(hoe))
-	req(&a, &seq, .Click, 3)
-	req(&a, &seq, .Take, game.CURSOR_SLOT, int(seeds))
-	req(&a, &seq, .Click, 4)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 4})
+	req(a, &seq, .Take, game.CURSOR_SLOT, int(hoe))
+	req(a, &seq, .Click, 3)
+	req(a, &seq, .Take, game.CURSOR_SLOT, int(seeds))
+	req(a, &seq, .Click, 4)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 4})
 	testing.expect(
 		t,
 		ok && a.inventory.slots[3].item == hoe && a.inventory.slots[4].item == seeds,
@@ -354,39 +366,39 @@ test_hoe_and_seeds_over_the_network :: proc(t: ^testing.T) {
 	pos := ground
 	up := pos + {0, 1, 0}
 	// Without a hoe in hand (slot 0 holds stone): refused.
-	net_send(&a, game.edit_plain(1, a.seq, pos, .Farmland))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
+	net_send(a, game.edit_plain(1, a.seq, pos, .Farmland))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && !a.results[1].accepted, "tilled without a hoe")
 	// With it (slot 3 selected): farmland.
-	req(&a, &seq, .Select, 0, 3)
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 5})
-	net_send(&a, game.edit_plain(2, a.seq, pos, .Farmland))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
+	req(a, &seq, .Select, 0, 3)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 5})
+	net_send(a, game.edit_plain(2, a.seq, pos, .Farmland))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the hoe did not till")
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	b := server_block(srv, pos)
 	testing.expect(t, game.block_is_farmland(b), "no farmland")
 	// Tilling it again, or a block with something above it: refused.
-	net_send(&a, game.edit_plain(3, a.seq, pos, .Farmland))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 3 in cs[0].results})
+	net_send(a, game.edit_plain(3, a.seq, pos, .Farmland))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 3 in cs[0].results})
 	testing.expect(t, ok && !a.results[3].accepted, "tilled farmland")
 	// Seeds (slot 4) on the farmland: wheat, one seed used; on the grass beside: refused.
-	req(&a, &seq, .Select, 0, 4)
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 6})
-	net_send(&a, game.edit_plain(4, a.seq, pos + {1, 1, 0}, .Wheat_0)) // beside, in the air: nothing under it
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 4 in cs[0].results})
+	req(a, &seq, .Select, 0, 4)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return cs[0].inv_acked == 6})
+	net_send(a, game.edit_plain(4, a.seq, pos + {1, 1, 0}, .Wheat_0)) // beside, in the air: nothing under it
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 4 in cs[0].results})
 	testing.expect(t, ok && !a.results[4].accepted, "seeds in the air")
-	net_send(&a, game.edit_plain(5, a.seq, up, .Wheat_0))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 5 in cs[0].results})
+	net_send(a, game.edit_plain(5, a.seq, up, .Wheat_0))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 5 in cs[0].results})
 	testing.expect(t, ok && a.results[5].accepted, "seeds on farmland were refused")
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.3)
 	b = server_block(srv, up)
 	testing.expect_value(t, b, game.Block.Wheat_0)
 	// Breaking the farmland takes the wheat with it, and leaves dirt.
-	net_send(&a, game.edit_plain(6, a.seq, pos, .Air))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 6 in cs[0].results})
+	net_send(a, game.edit_plain(6, a.seq, pos, .Air))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 6 in cs[0].results})
 	testing.expect(t, ok && a.results[6].accepted)
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
 	b = server_block(srv, up)
 	testing.expect_value(t, b, game.Block.Air)
 }
@@ -397,14 +409,16 @@ test_farming_saved :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "farming"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	a: Net_Client
-	if !farm_server(t, &h, &a, dir) {return}
+	a := new(Net_Client)
+	defer free(a)
+	if !farm_server(t, h, a, dir) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	defer net_close(&a)
-	f := farm_at(&a)
+	defer if !stopped {harness_stop(h)}
+	defer net_close(a)
+	f := farm_at(a)
 	call(
 		srv,
 		proc(s: ^Server, data: rawptr) {
@@ -420,21 +434,22 @@ test_farming_saved :: proc(t: ^testing.T) {
 		},
 		&f,
 	)
-	net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
-	net_close(&a)
-	a = {}
-	harness_step(&h, 4)
+	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
 	expect_items_balanced(t, srv)
-	testing.expect(t, harness_stop(&h))
+	testing.expect(t, harness_stop(h))
 	stopped = true
-	if !testing.expect(t, harness_start(&h, farm_config(dir))) {return}
+	if !testing.expect(t, harness_start(h, farm_config(dir))) {return}
 	stopped = false
-	again: Net_Client
-	net_connect(&again, 0, "a", h = &h)
-	defer net_close(&again)
+	again := new(Net_Client)
+	defer free(again)
+	net_connect(again, 0, "a", h = h)
+	defer net_close(again)
 	ok := net_wait(
 		t,
-		{&again},
+		{again},
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && len(cs[0].chunks) > 100},
 	)
 	testing.expect(t, ok)

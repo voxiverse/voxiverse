@@ -8,9 +8,10 @@ import "core:testing"
 // and in order with the waiting calls queued beside it.
 @(test)
 test_call_async_runs_a_copy_at_the_next_tick :: proc(t: ^testing.T) {
-	h: Harness
-	if !testing.expect(t, harness_start(&h, harness_world())) {return}
-	defer harness_stop(&h)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
 
 	Seen :: struct {
 		values: [dynamic]int,
@@ -39,8 +40,8 @@ test_call_async_runs_a_copy_at_the_next_tick :: proc(t: ^testing.T) {
 	call_async(&h.srv, record, mem.ptr_to_bytes(&d))
 	d.value = 3 // (after both are queued: neither sees it)
 	testing.expect_value(t, len(seen.values), 0) // nothing runs before the step
-	harness_step(&h)
-	harness_step(&h)
+	harness_step(h)
+	harness_step(h)
 	testing.expect_value(t, len(seen.values), 2)
 	if len(seen.values) == 2 {
 		testing.expect_value(t, seen.values[0], 1)

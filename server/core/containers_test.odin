@@ -108,57 +108,61 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "chest"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
 	pos := beside(srv, "a")
 	// Not a chest (nothing there): it does not open.
-	net_send(&a, game.Use_Block{pos, 0})
-	pause(t, {&a}, 0.3)
+	net_send(a, game.Use_Block{pos, 0})
+	pause(t, {a}, 0.3)
 	testing.expect(t, !a.inventory.chest_open, "air opened as a chest")
 	put_block(srv, pos, .Chest)
 	// (a new player has a kit of stacks of 64)
 	first, second := a.inventory.slots[0], a.inventory.slots[1]
-	if !testing.expect(t, open_chest(t, srv, &a, pos), "the chest did not open") {return}
+	if !testing.expect(t, open_chest(t, srv, a, pos), "the chest did not open") {return}
 	n: u32
-	request(&a, &n, .Quick_Move, 0)
-	request(&a, &n, .Quick_Move, 1)
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {
+	request(a, &n, .Quick_Move, 0)
+	request(a, &n, .Quick_Move, 1)
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {
 		return cs[0].inventory.chest[0].count == 64 && cs[0].inventory.chest[1].count == 64
 	})
 	if !testing.expect(t, ok, "the stacks did not go into the chest") {return}
 	testing.expect(t, game.stack_empty(a.inventory.slots[0]), "and stayed in the hand")
-	request(&a, &n, .Close, game.CURSOR_SLOT)
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return !cs[0].inventory.chest_open})
+	request(a, &n, .Close, game.CURSOR_SLOT)
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return !cs[0].inventory.chest_open})
 	testing.expect(t, ok, "the chest did not close")
 	rec := record_at(srv, pos)
 	testing.expect(t, rec.has && rec.slots[0] == first, "the record lacks the first stack")
 	testing.expect(t, rec.slots[1] == second, "or the second")
 	// A request naming a chest slot while none is open does nothing.
-	request(&a, &n, .Click, game.CHEST_BASE)
-	pause(t, {&a}, 0.3)
+	request(a, &n, .Click, game.CHEST_BASE)
+	pause(t, {a}, 0.3)
 	testing.expect(t, game.stack_empty(a.inventory.cursor), "a closed chest's slot was taken")
 
 	expect_items_balanced(t, srv)
-	harness_stop(&h)
+	harness_stop(h)
 	stopped = true
 
 	// Saved and loaded: the same.
-	h2: Harness
+	h2 := new(Harness)
+	defer free(h2)
 	srv2 := &h2.srv
-	if !testing.expect(t, harness_start(&h2, config(dir))) {return}
-	defer harness_stop(&h2)
-	b: Net_Client
-	net_connect(&b, 0, "a", h = &h2)
-	defer net_close(&b)
-	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, harness_start(h2, config(dir))) {return}
+	defer harness_stop(h2)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(b, 0, "a", h = h2)
+	defer net_close(b)
+	ok = net_wait(t, {b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed again") {return}
 	rec = record_at(srv2, pos)
 	testing.expect(
@@ -167,11 +171,11 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 		"the chest lost its contents over a save",
 	)
 	// (its block is saved with the world's regions: still there)
-	if !testing.expect(t, open_chest(t, srv2, &b, pos), "the loaded chest did not open") {return}
+	if !testing.expect(t, open_chest(t, srv2, b, pos), "the loaded chest did not open") {return}
 	testing.expect_value(t, b.inventory.chest[0].count, 64)
 	// Broken (by the world): everything spills out and the record is gone; the looker's chest closes.
 	put_block(srv2, pos, .Air)
-	ok = net_wait(t, {&b}, proc(cs: []^Net_Client) -> bool {return !cs[0].inventory.chest_open})
+	ok = net_wait(t, {b}, proc(cs: []^Net_Client) -> bool {return !cs[0].inventory.chest_open})
 	testing.expect(t, ok, "a broken chest stayed open")
 	rec = record_at(srv2, pos)
 	testing.expect(t, !rec.has, "the record outlived its block")
@@ -182,14 +186,16 @@ test_chest_keeps_and_spills :: proc(t: ^testing.T) {
 // pipeline, what it held spilling out: no sweep is needed.
 @(test)
 test_explosion_removes_the_entity :: proc(t: ^testing.T) {
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(""))) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, harness_start(h, config(""))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
 	pos := beside(srv, "a")
 	put_block(srv, pos, .Chest)
@@ -211,7 +217,7 @@ test_explosion_removes_the_entity :: proc(t: ^testing.T) {
 		&d,
 	)
 	testing.expect(t, !d.has, "the entity outlived its block")
-	pause(t, {&a}, 0.3)
+	pause(t, {a}, 0.3)
 	rec := record_at(srv, pos)
 	testing.expect_value(t, rec.items, 5)
 }

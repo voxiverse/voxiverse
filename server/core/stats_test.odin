@@ -65,53 +65,55 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "stats"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
 	stopped := false
-	defer if !stopped {harness_stop(&h)}
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
-	pause(t, &a, 0.2)
+	pause(t, a, 0.2)
 
-	net_send(&a, game.Chat{"hello"})
-	net_send(&a, game.Chat{"again"})
-	net_send(&a, game.Command{"time noon"})
-	net_send(&a, game.Command{"spawn"})
-	pause(t, &a, 0.5)
+	net_send(a, game.Chat{"hello"})
+	net_send(a, game.Chat{"again"})
+	net_send(a, game.Command{"time noon"})
+	net_send(a, game.Command{"spawn"})
+	pause(t, a, 0.5)
 	// Place dirt beside, break it.
-	net_send(&a, game.Inventory_Request{1, {.Select, 0, 1}})
+	net_send(a, game.Inventory_Request{1, {.Select, 0, 1}})
 	feet := a.update.state.position
 	beside := game.Block_Pos {
 		i32(math.floor(feet.x)) + 1,
 		i32(math.floor(feet.y)),
 		i32(math.floor(feet.z)),
 	}
-	net_send(&a, game.edit_plain(1, a.seq, beside, .Dirt))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
+	net_send(a, game.edit_plain(1, a.seq, beside, .Dirt))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 1 in cs[0].results})
 	testing.expect(t, ok && a.results[1].accepted, "the dirt was not placed")
-	net_send(&a, game.edit_plain(2, a.seq, beside, .Air))
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
+	net_send(a, game.edit_plain(2, a.seq, beside, .Air))
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return 2 in cs[0].results})
 	testing.expect(t, ok && a.results[2].accepted, "the dirt was not broken")
 	// A sheep: sheared, then hit once.
-	net_send(&a, game.Command{"summon sheep"})
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
+	net_send(a, game.Command{"summon sheep"})
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
 	testing.expect(t, ok, "no sheep")
 	id: u32
 	for k in a.entities {id = k}
-	net_send(&a, game.Use_Entity{id, a.seq})
-	pause(t, &a, 0.3)
-	net_send(&a, game.Attack{id, a.seq})
-	pause(t, &a, 0.3)
+	net_send(a, game.Use_Entity{id, a.seq})
+	pause(t, a, 0.3)
+	net_send(a, game.Attack{id, a.seq})
+	pause(t, a, 0.3)
 	// One stone dropped; some walking.
-	net_send(&a, game.Inventory_Request{2, {.Drop, 0, 0}})
+	net_send(a, game.Inventory_Request{2, {.Drop, 0, 0}})
 	a.move = {0, 1}
-	pause(t, &a, 1.5)
+	pause(t, a, 1.5)
 	a.move = {0, 0}
-	pause(t, &a, 0.2)
+	pause(t, a, 0.2)
 	// A position sample is due every 10 s: make it due now.
 	call(srv, proc(s: ^Server, data: rawptr) {
 			c := client_by_name(s, "a")
@@ -187,8 +189,8 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	)
 
 	// Over UDP: the stats page shows the server's numbers.
-	net_send(&a, game.Stats_Request{filter = "chat", page = 0})
-	ok = net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].stats_text) > 0})
+	net_send(a, game.Stats_Request{filter = "chat", page = 0})
+	ok = net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return len(cs[0].stats_text) > 0})
 	testing.expectf(
 		t,
 		ok && strings.contains(a.stats_text, "chat.lines 2"),
@@ -197,10 +199,10 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 	)
 
 	// Kept: save and load.
-	net_close(&a)
-	a = {}
-	harness_step(&h, 4)
-	testing.expect(t, harness_stop(&h))
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
 	stopped = true
 	world_stats, _ := os.read_entire_file_from_path(
 		filepath.join({home_dir(dir, 26), STATS_FILE}, context.temp_allocator) or_else "",
@@ -211,12 +213,13 @@ test_a_scripted_session_counts_and_logs :: proc(t: ^testing.T) {
 		strings.contains(string(world_stats), `"chat.lines": 2`),
 		"the world's totals were not written",
 	)
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
 	stopped = false
-	again: Net_Client
-	net_connect(&again, 0, "a", h = &h)
-	defer net_close(&again)
-	ok = net_wait(t, {&again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	again := new(Net_Client)
+	defer free(again)
+	net_connect(again, 0, "a", h = h)
+	defer net_close(again)
+	ok = net_wait(t, {again}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	testing.expect(t, ok)
 	loaded := counters_of(srv, "a")
 	defer counters_free(&loaded)
@@ -247,29 +250,33 @@ read_log :: proc(dir: string) -> string {
 // player asking for another's gets an empty page.
 @(test)
 test_others_stats_need_permission :: proc(t: ^testing.T) {
-	h: Harness
-	if !testing.expect(t, harness_start(&h, config("", cheats = false))) {return}
-	defer harness_stop(&h)
-	a, b: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	net_connect(&b, 0, "b", h = &h)
-	defer net_close(&a)
-	defer net_close(&b)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config("", cheats = false))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(a, 0, "a", h = h)
+	net_connect(b, 0, "b", h = h)
+	defer net_close(a)
+	defer net_close(b)
 	ok := net_wait(
 		t,
-		{&a, &b},
+		{a, b},
 		proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])},
 	)
 	if !testing.expect(t, ok, "never landed") {return}
-	net_send(&a, game.Stats_Request{filter = "", page = 0, of = "b"})
-	net_send(&b, game.Stats_Request{filter = "", page = 0})
-	ok = net_wait(t, {&a, &b}, proc(cs: []^Net_Client) -> bool {return len(cs[1].stats_text) > 0})
+	net_send(a, game.Stats_Request{filter = "", page = 0, of = "b"})
+	net_send(b, game.Stats_Request{filter = "", page = 0})
+	ok = net_wait(t, {a, b}, proc(cs: []^Net_Client) -> bool {return len(cs[1].stats_text) > 0})
 	testing.expect(
 		t,
 		ok && strings.contains(b.stats_text, "sessions 1"),
 		"a player's own stats were not sent",
 	)
-	pause(t, &a, 0.3)
+	pause(t, a, 0.3)
 	testing.expectf(t, a.stats_text == "", "a saw b's stats: %q", a.stats_text)
 }
 
@@ -281,14 +288,16 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 	dir := filepath.join({"build", "test", "reports"}, context.temp_allocator) or_else ""
 	os.remove_all(dir)
 	defer os.remove_all(dir)
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	srv := &h.srv
-	if !testing.expect(t, harness_start(&h, config(dir))) {return}
-	defer harness_stop(&h)
-	a: Net_Client
-	net_connect(&a, 0, "a", h = &h)
-	defer net_close(&a)
-	ok := net_wait(t, {&a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, harness_start(h, config(dir))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
 	if !testing.expect(t, ok, "never landed") {return}
 	report :: proc(kind: telemetry.Kind, text: string, n: [3]u32) -> game.Telemetry_Report {
 		r := game.Telemetry_Report {
@@ -297,12 +306,12 @@ test_client_reports_are_validated :: proc(t: ^testing.T) {
 		r.entries[0] = {u8(kind), text, n}
 		return r
 	}
-	net_send(&a, report(.Client_Info, "linux", {16, 70, 4000})) // good
-	net_send(&a, report(.Block_Mined, "stone", {1, 0, 0})) // a kind the server alone reports
-	net_send(&a, report(.Client_Overlay, "inv\x01entory", {5, 0, 0})) // a control character
-	net_send(&a, report(.Client_Overlay, "inventory", {1 << 31, 0, 0})) // an absurd number
-	for _ in 0 ..< 10 {net_send(&a, report(.Client_Info, "flood", {1, 1, 1}))}
-	pause(t, &a, 0.5)
+	net_send(a, report(.Client_Info, "linux", {16, 70, 4000})) // good
+	net_send(a, report(.Block_Mined, "stone", {1, 0, 0})) // a kind the server alone reports
+	net_send(a, report(.Client_Overlay, "inv\x01entory", {5, 0, 0})) // a control character
+	net_send(a, report(.Client_Overlay, "inventory", {1 << 31, 0, 0})) // an absurd number
+	for _ in 0 ..< 10 {net_send(a, report(.Client_Info, "flood", {1, 1, 1}))}
+	pause(t, a, 0.5)
 	refused := u64(0)
 	call(srv, proc(s: ^Server, data: rawptr) {
 			if c := client_by_name(s, "a");

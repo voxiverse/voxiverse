@@ -99,12 +99,13 @@ test_unknown_block_refuses_the_world :: proc(t: ^testing.T) {
 	grief_close(g)
 
 	// Without the pack: refused, naming the block.
-	h: Harness
+	h := new(Harness)
+	defer free(h)
 	{
 		context.logger = log.nil_logger() // (the refusal is the point)
 		testing.expect(
 			t,
-			!harness_start(&h, pack_config(dir, false)),
+			!harness_start(h, pack_config(dir, false)),
 			"a world with unknown blocks loaded",
 		)
 	}

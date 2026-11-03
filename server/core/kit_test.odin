@@ -44,7 +44,8 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 		dir := filepath.join({"build", "test", "kit_default"}, context.temp_allocator) or_else ""
 		os.remove_all(dir)
 		defer os.remove_all(dir)
-		h: Harness
+		h := new(Harness)
+		defer free(h)
 		config := Config {
 			rules           = quiet_rules(),
 			everyone_cheats = cheats,
@@ -57,17 +58,18 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			generator       = .Classic,
 			kit             = DEFAULT_KIT_TEXT,
 		}
-		if !testing.expect(t, harness_start(&h, config)) {return}
+		if !testing.expect(t, harness_start(h, config)) {return}
 		stopped := false
-		defer if !stopped {harness_stop(&h)}
-		a: Net_Client
-		net_connect(&a, 0, "alice", h = &h)
-		defer net_close(&a)
+		defer if !stopped {harness_stop(h)}
+		a := new(Net_Client)
+		defer free(a)
+		net_connect(a, 0, "alice", h = h)
+		defer net_close(a)
 		if !testing.expect(
 			t,
 			net_wait(
 				t,
-				{&a},
+				{a},
 				proc(cs: []^Net_Client) -> bool {return(
 						cs[0].inv_updates > 0 &&
 						cs[0].update.acked > 0 &&
@@ -94,6 +96,6 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			"cheats %v",
 			cheats,
 		)
-		stopped = harness_stop(&h)
+		stopped = harness_stop(h)
 	}
 }
