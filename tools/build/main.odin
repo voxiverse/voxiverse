@@ -1202,6 +1202,7 @@ Test_Watch :: struct {
 	offset:  int, // how much of the log has been read (up to the last whole line)
 	started: map[string]time.Tick, // tests running
 	events:  [dynamic]Test_Report,
+	buf:     [dynamic]u8, // what was read from the log this poll, reused
 }
 
 // Test_Report is one line of build/reports/tests.jsonl.
@@ -1214,10 +1215,24 @@ Test_Report :: struct {
 
 test_watch_poll :: proc(data: rawptr) {
 	w := (^Test_Watch)(data)
-	text, err := os.read_entire_file_from_path(w.log, context.temp_allocator)
-	if err != nil || len(text) <= w.offset {return}
+	f, err := os.open(w.log)
+	if err != nil {return}
+	defer os.close(f)
+	size, serr := os.file_size(f)
+	if serr != nil || int(size) <= w.offset {return}
+	// Only what was appended since the last whole line, into a buffer the watcher
+	// keeps and reuses (a partial last line is read again once it is complete).
+	if _, e := os.seek(f, i64(w.offset), .Start); e != nil {return}
+	want := int(size) - w.offset
+	resize(&w.buf, want)
+	got := 0
+	for got < want {
+		n, rerr := os.read(f, w.buf[got:])
+		if rerr != nil || n <= 0 {break}
+		got += n
+	}
 	now := time.tick_now()
-	rest := string(text[w.offset:])
+	rest := string(w.buf[:got])
 	for {
 		end := strings.index_byte(rest, '\n')
 		if end < 0 {break}
