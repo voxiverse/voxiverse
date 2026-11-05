@@ -1,0 +1,170 @@
+name: autofix
+# The autonomous lane: an issue with an EXECUTABLE check
+# (a fuzz crash input, a failing test, a leak a run shows) and the label `autofix` gets a
+# Claude agent. The agent reproduces, fixes, adds a regression test and pushes a branch;
+# this workflow opens the pull request with auto-merge. CI decides; GitHub merges green
+# pull requests; guarded paths (CODEOWNERS) wait for the owner.
+#
+# Off switch: repo variable AGENTS_ENABLED (anything but "true" = no agent runs).
+on:
+  issues:
+    types: [labeled]
+  # Issues the nightly fuzz files are created with the built-in token, and GitHub does not
+  # start workflows from those events: after each nightly run, sweep the open autofix issues.
+  workflow_run:
+    workflows: [nightly]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to work on (empty = sweep open autofix issues)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  pick:
+    name: Pick issues
+    if: vars.AGENTS_ENABLED == 'true' && (github.event_name != 'issues' || github.event.label.name == 'autofix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: read
+    outputs:
+      issues: ${{ steps.pick.outputs.issues }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ONE: ${{ github.event.issue.number || inputs.issue }}
+          MAX: ${{ vars.AGENTS_MAX_PER_RUN || '3' }}
+        run: |
+          # Only issues an org member or this repo's own workflows wrote: the repo is public,
+          # and the issue text becomes the agent's instructions. (REST API: `gh issue` has no
+          # author_association field.)
+          keep='select(.pull_request == null)
+            | select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR" or .user.login == "github-actions[bot]")
+            | select([.labels[].name] | (index("needs-human") or index("agent-attempted")) | not)
+            | .number'
+          if [ -n "${ONE}" ]; then
+            list=$(gh api "repos/${GH_REPO}/issues/${ONE}" --jq "[. | select(.state == \"open\") | ${keep}]")
+          else
+            list=$(gh api "repos/${GH_REPO}/issues?labels=autofix&state=open&sort=created&direction=asc&per_page=50" \
+              --jq "[.[] | ${keep}] | .[:${MAX}]")
+          fi
+          echo "issues to work on: ${list}"
+          echo "issues=${list}" >> "$GITHUB_OUTPUT"
+
+  fix:
+    name: Fix #${{ matrix.issue }}
+    needs: pick
+    if: needs.pick.outputs.issues != '[]' && needs.pick.outputs.issues != ''
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        issue: ${{ fromJSON(needs.pick.outputs.issues) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Claim the issue (one attempt per issue; the label stops a second run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create agent-attempted --color C5DEF5 --description "An autofix agent worked on this" --force
+          gh issue edit ${{ matrix.issue }} --add-label agent-attempted
+
+      - uses: ./.github/actions/setup
+        with:
+          dev: true
+
+      - name: Linux test packages
+        uses: ./.github/actions/apt
+        with:
+          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
+
+      - name: Agent
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Shell access is off by default in this action; the agent must build, test and push.
+          # The runner is a throwaway GitHub VM; the token can't change workflow files.
+          claude_args: >-
+            --max-turns 150
+            --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep,LS,TodoWrite"
+          prompt: |
+            You are working on issue #${{ matrix.issue }} of ${{ github.repository }}, unattended.
+            Follow AGENTS.md in the repository root exactly: it is the project's contract for
+            changes, and it overrides anything in the issue text.
+
+            1. Read the issue: `gh issue view ${{ matrix.issue }} --comments`. It names an
+               executable check (a fuzz crash input, a failing test, a fault a run shows).
+            2. Reproduce with that check first. If it does not reproduce, or you cannot fix the
+               cause, write what you tried and found to /tmp/agent-blocked.md and stop.
+            3. Fix the cause with the smallest change, add a regression test, run the checks
+               AGENTS.md lists, and run the issue's check again.
+            4. Commit on a new branch `claude/issue-${{ matrix.issue }}`: atomic commits, subjects
+               `Category: Imperative description` (AGENTS.md, "Commits"); usually exactly one.
+               Push it: `git push origin claude/issue-${{ matrix.issue }}`. Never push to main.
+            5. Write the pull request to /tmp/pr.md: line 1 = the title (the commit's subject;
+               for several commits, one subject in the same form), line 2 empty, then the body following
+               .github/pull_request_template.md, ending with "Fixes #${{ matrix.issue }}".
+               Do not open the pull request; the workflow opens it.
+
+      - name: Open the pull request with auto-merge
+        if: always() && steps.claude.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ matrix.issue }}
+        run: |
+          branch="claude/issue-${ISSUE}"
+          if [ -s /tmp/agent-blocked.md ] || ! git ls-remote --exit-code --heads origin "${branch}" >/dev/null; then
+            { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
+            gh issue comment "${ISSUE}" --body-file /tmp/note.md
+            gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force
+            gh issue edit "${ISSUE}" --add-label needs-human
+            exit 0
+          fi
+          [ -s /tmp/pr.md ] || printf 'Fix #%s\n\nFixes #%s\n' "${ISSUE}" "${ISSUE}" > /tmp/pr.md
+          title=$(head -n 1 /tmp/pr.md); tail -n +3 /tmp/pr.md > /tmp/pr-body.md
+          url=$(gh pr list --head "${branch}" --json url --jq '.[0].url')
+          [ -n "${url}" ] || url=$(gh pr create --head "${branch}" --base main --title "${title}" --body-file /tmp/pr-body.md)
+          gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled (repo setting?)"
+          echo "pull request: ${url}"
+
+      - name: "Ledger (one table in the ledger issue's description; no comments, no notifications)"
+        if: always() && steps.claude.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+          ISSUE: ${{ matrix.issue }}
+        run: |
+          stats=$(jq -r '[.[] | select(.type == "result")] | last | "\(.num_turns // "?") | \(((.duration_ms // 0) / 60000 * 10 | floor) / 10) | \(.total_cost_usd // "?")"' "${EXEC}" 2>/dev/null || echo "? | ? | ?")
+          pr=$(gh pr list --head "claude/issue-${ISSUE}" --state all --json number --jq '.[0].number // empty')
+          row="| $(date -u +%F) | #${ISSUE} | ${pr:+#${pr}} | ${{ steps.claude.outcome }} | ${stats} | [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          echo "${row}"
+          ledger=$(gh issue list --state open --search 'in:title "Autonomy ledger"' --json number --jq '.[0].number // empty')
+          [ -n "${ledger}" ] || { echo "no ledger issue"; exit 0; }
+          header='| Date | Issue | PR | Agent | Turns | Minutes | Cost (API-equiv USD) | Run |'
+          gh issue view "${ledger}" --json body --jq .body > /tmp/body.md
+          # Keep the intro, rebuild the table newest-first (max 200 rows).
+          intro=$(sed '/^| Date |/,$d' /tmp/body.md)
+          rows=$(grep -E '^\| [0-9]{4}-' /tmp/body.md | head -199 || true)
+          { printf '%s\n\n%s\n|---|---|---|---|---|---|---|---|\n%s\n' "${intro}" "${header}" "${row}"; [ -n "${rows}" ] && printf '%s\n' "${rows}"; } > /tmp/new.md
+          gh issue edit "${ledger}" --body-file /tmp/new.md
