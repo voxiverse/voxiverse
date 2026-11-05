@@ -117,6 +117,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/script/testdata/bench` | The VM's benchmark programs and their instruction budgets | `*.vxs`, `budgets.txt` |
 | `common/script/testdata/conformance` | The language's conformance files | `*.vxs` |
 | `common/script/testdata/fuzz/script.generated/regress` | Generated programs a fuzzer failed on, replayed by the suite | `*.bin` |
+| `common/script/testdata/fuzz/script.snapshot/regress` | Snapshots the restore validation once let through, replayed by the suite | `*.bin` |
 | `common/script/testdata/disasm` | Programs and their listings | `*.vxs`, `*.txt` |
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |

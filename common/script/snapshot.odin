@@ -575,7 +575,14 @@ structure_check :: proc(vm: ^VM) -> (bool, string) {
 		h := (^Header)(&vm.mem[at])
 		r := Ref(at)
 		at += h.size
-		if h.kind == .Free || h.mark == dead {continue}
+		if h.kind == .Free {
+			// An allocation hands a free block out as it is, so it must be zeroed.
+			for b in vm.mem[u32(r) + size_of(Free_Block):at] {
+				if b != 0 {return false, fmt.tprintf("the free block at %d is not zeroed", r)}
+			}
+			continue
+		}
+		if h.mark == dead {continue}
 		#partial switch h.kind {
 		case .Table:
 			t := (^Table)(h)
@@ -691,6 +698,13 @@ thread_check :: proc(vm: ^VM, r: Ref, blocks: int) -> (bool, string) {
 		   f.top > th.stack_cap ||
 		   f.top < f.base {
 			return false, fmt.tprintf("frame %d of the thread at %d is outside its stack", i, r)
+		}
+		if f.nresults > 0 && u64(f.func) + u64(f.nresults) > u64(th.stack_cap) {
+			return false, fmt.tprintf(
+				"frame %d of the thread at %d returns outside its stack",
+				i,
+				r,
+			)
 		}
 		fn := stack[f.func]
 		if .Native in f.flags {
