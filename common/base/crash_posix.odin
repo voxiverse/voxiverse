@@ -12,13 +12,20 @@ import "core:sys/posix"
 @(private = "file")
 FATAL_SIGNALS := [?]posix.Signal{.SIGSEGV, .SIGBUS, .SIGFPE, .SIGILL}
 
+// The main thread's alternate stack comes from the heap, as the workers' do. As a global array
+// in the image it made the macOS main-segv crash bundle die intermittently while capturing the
+// crashing thread's own frames; the workers' heap stacks never did. SIGSTKSZ on macOS is 128 KiB.
 @(private = "file")
-alt_stack: [64 * 1024]u8 // the main thread's; workers' overflows go unreported
+MAIN_ALT_STACK_BYTES :: 128 * 1024
+
+@(private = "file")
+alt_stack: []u8
 
 @(private)
 crash_handler_install :: proc() {
+	if alt_stack == nil {alt_stack = make([]u8, MAIN_ALT_STACK_BYTES, runtime.heap_allocator())}
 	stack := posix.stack_t {
-		ss_sp   = &alt_stack[0],
+		ss_sp   = raw_data(alt_stack),
 		ss_size = len(alt_stack),
 	}
 	posix.sigaltstack(&stack, nil)
