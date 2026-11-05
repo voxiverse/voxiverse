@@ -9,9 +9,7 @@ on:
   push:
     branches: ["**"]
     tags: ["v*.*.*"]
-    paths-ignore: ["**.md"]
   pull_request:
-    paths-ignore: ["**.md"]
   workflow_dispatch:
 
 # A newer push to the same branch cancels the run before it (only the
@@ -41,9 +39,31 @@ jobs:
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     outputs:
       tested: ${{ steps.green.outputs.tested }}
+      code: ${{ steps.changes.outputs.code }}
     steps:
+      # Markdown-only changes skip the build and test jobs (they used to skip the whole
+      # workflow, but then the required "CI result" check would never report).
+      - name: Anything but Markdown changed?
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files=""
+          if [ -n "${PR}" ]; then
+            files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
+          elif [ "${GITHUB_REF_TYPE}" = branch ] && [ -n "${BEFORE}" ] && [ "${BEFORE}" != 0000000000000000000000000000000000000000 ]; then
+            files="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BEFORE}...${GITHUB_SHA}" --jq '.files[].filename')" || files=""
+          fi
+          code=true
+          if [ -n "${files}" ] && ! printf '%s\n' "${files}" | grep -qvE '\.md$'; then code=false; fi
+          echo "code changed: ${code}"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+
       - name: Green push run on main for this commit
         id: green
         env:
@@ -68,7 +88,7 @@ jobs:
           - { os: macos-latest, name: macOS arm64 }
           - { os: windows-latest, name: Windows x64 }
     needs: gate
-    if: ${{ needs.gate.outputs.tested != 'true' }}
+    if: ${{ needs.gate.outputs.tested != 'true' && needs.gate.outputs.code == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -163,7 +183,7 @@ jobs:
   linux-tests:
     name: Test · Linux x64
     needs: gate
-    if: ${{ needs.gate.outputs.tested != 'true' }}
+    if: ${{ needs.gate.outputs.tested != 'true' && needs.gate.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -249,7 +269,7 @@ jobs:
   linux-game:
     name: Game · Linux x64
     needs: gate
-    if: ${{ needs.gate.outputs.tested != 'true' }}
+    if: ${{ needs.gate.outputs.tested != 'true' && needs.gate.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -416,7 +436,7 @@ jobs:
   linux-images:
     name: Game · Linux x64, images
     needs: gate
-    if: ${{ needs.gate.outputs.tested != 'true' }}
+    if: ${{ needs.gate.outputs.tested != 'true' && needs.gate.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -504,7 +524,7 @@ jobs:
     name: Determinism · all OSes
     needs: [gate, build, linux-tests]
     # Whatever the test jobs did: the logs that exist are compared.
-    if: ${{ !cancelled() && needs.gate.outputs.tested != 'true' }}
+    if: ${{ !cancelled() && needs.gate.outputs.tested != 'true' && needs.gate.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -542,6 +562,8 @@ jobs:
   # older distributions (glibc).
   package:
     name: Package · ${{ matrix.name }}
+    needs: gate
+    if: ${{ needs.gate.outputs.code == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -773,3 +795,20 @@ jobs:
           test -f "voxiverse-$VERSION-macos-arm64.zip"
           sha256sum * > SHA256SUMS
           gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" *
+
+  # The ONE check the main ruleset requires: every job above passed, or was skipped on
+  # purpose (a Markdown-only change, or a tag whose commit main's CI already tested).
+  result:
+    name: CI result
+    if: ${{ always() }}
+    needs: [gate, build, linux-tests, linux-game, linux-images, determinism, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed or was skipped on purpose
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "${RESULTS}" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "${RESULTS}" | jq '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length')
+          [ "${bad}" -eq 0 ]
