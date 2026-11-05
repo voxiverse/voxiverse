@@ -382,6 +382,11 @@ sweep_some :: proc(vm: ^VM, budget: i64) -> i64 {
 			}
 			mem.zero(h, int(size))
 			if vm.gc.sweep_run == 0 {vm.gc.sweep_run = at}
+			// The run's first header covers the run so far, so a walk of the heap between
+			// slices (heap_check, a snapshot) finds sane blocks; close_run writes it last.
+			run := (^Header)(&vm.mem[vm.gc.sweep_run])
+			run.size = at + size - vm.gc.sweep_run
+			run.kind = .Free
 		} else {
 			close_run(vm, at)
 			h.mark = vm.gc.white
