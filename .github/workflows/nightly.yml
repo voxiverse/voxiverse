@@ -12,6 +12,9 @@ jobs:
     timeout-minutes: 150
     # main only: a manual run from a branch would fuzz that branch under the nightly's name.
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
 
@@ -21,7 +24,8 @@ jobs:
       # names its seed and its input. The input is minimized and committed as a regression
       # file with its fix (docs/fuzzing.md).
       - name: Fuzz
-        run: ./build.sh fuzz --sanitize --seconds 240 --seed ${{ github.run_number }}
+        shell: bash
+        run: ./build.sh fuzz --sanitize --seconds 240 --seed ${{ github.run_number }} 2>&1 | tee build/fuzz-run.log
 
       - name: Failures
         if: failure()
@@ -30,3 +34,27 @@ jobs:
           name: fuzz-failures
           path: build/fuzz/
           if-no-files-found: ignore
+
+      # One open issue per failing target, labelled autofix: a fuzz crash comes with its own
+      # check (the input), so it is pre-approved work for the autonomous lane (autofix.yml
+      # sweeps open autofix issues after this workflow). A target that keeps failing is one
+      # issue with a history of comments, not a pile.
+      - name: Issues for failing targets
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create fuzz --color B60205 --description "Found by the nightly fuzz" --force
+          gh label create autofix --color 0E8A16 --description "Has an executable check: an agent fixes it" --force
+          for target in $(grep -oE 'fuzz FAILED: [A-Za-z0-9._-]+' build/fuzz-run.log | awk '{print $3}' | sort -u); do
+            lines=$(grep -F "${target}" build/fuzz-run.log | grep -E 'FAIL|out of range|crash|heap' | head -20)
+            body=$(printf 'Nightly run %s at `%s` (seed %s) failed for `%s`.\n\nRun, log and inputs (artifact `fuzz-failures`): %s\n\n```\n%s\n```\n\nReproduce and minimize: docs/fuzzing.md, "A crash found". The check: `./build.sh fuzz %s --case <input>` must pass.\n' \
+              "${{ github.run_number }}" "${GITHUB_SHA::12}" "${{ github.run_number }}" "${target}" "${RUN_URL}" "${lines}" "${target}")
+            title="Fuzz: ${target}"
+            number=$(gh issue list --state open --label fuzz --limit 200 --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)
+            if [ -n "${number}" ]; then gh issue comment "${number}" --body "${body}"
+            else gh issue create --title "${title}" --label fuzz --label autofix --body "${body}"; fi
+          done
