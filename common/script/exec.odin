@@ -1092,6 +1092,12 @@ execute :: proc(vm: ^VM) -> Exec_Result {
 				last += arg_ax(s.code[s.pc]) * (MAXARG_C + 1)
 				s.pc += 1
 			}
+			if s.stack[ra].tag != .Table {
+				// (compiled code always has a table here; checked code may not)
+				rt_error(vm, "SETLIST on a non-table", "the register must hold a table")
+				if fail(vm, &s) {continue}
+				return .Error
+			}
 			tr := as_ref(s.stack[ra])
 			failed := false
 			for j in 1 ..= n {
