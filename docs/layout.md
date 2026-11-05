@@ -55,7 +55,8 @@ package** is enforced by the `layout` lint (see above).
 
 | Folder | What belongs | Patterns |
 |---|---|---|
-| `.` | The repository's own top-level files | `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `build.sh`, `build.bat`, `odinup.toml`, `ols.json` |
+| `.` | The repository's own top-level files; `AGENTS.md` is the contract for changes (agents and people), `CLAUDE.md` imports it | `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`, `build.sh`, `build.bat`, `odinup.toml`, `ols.json` |
+| `.github` | Repository policy: who reviews guarded paths, and the pull request template | `CODEOWNERS`, `pull_request_template.md` |
 | `.github/actions/apt` | The composite action that installs packages | `*.yml` |
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
 | `.github/workflows` | CI | `*.yml` |

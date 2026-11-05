@@ -1,0 +1,13 @@
+# Guarded paths: pull requests touching these wait for the owner's review, even when green.
+# Everything else merges automatically once the "CI result" check passes (ruleset on main).
+# Rationale: an agent must not change what judges its work
+# (CI), its own rules (AGENTS.md), the build and toolchain, or what ships to players.
+
+.github/                @voxiverse-admin
+tools/build/            @voxiverse-admin
+odinup.toml             @voxiverse-admin
+build.sh                @voxiverse-admin
+build.bat               @voxiverse-admin
+docs/security*          @voxiverse-admin
+AGENTS.md               @voxiverse-admin
+CLAUDE.md               @voxiverse-admin
