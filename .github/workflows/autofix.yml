@@ -68,7 +68,7 @@ jobs:
           if [ -n "${ONE}" ]; then
             list=$(gh api "repos/${GH_REPO}/issues/${ONE}" --jq "[. | select(.state == \"open\") | ${keep}]")
           else
-            # autofix issues first, then the oldest open task of each milestone.
+            # The oldest open task of each milestone first, then autofix issues.
             fixes=$(gh api "repos/${GH_REPO}/issues?labels=autofix&state=open&sort=created&direction=asc&per_page=50" \
               --jq "[.[] | ${keep}]")
             tasks=$(gh api "repos/${GH_REPO}/issues?labels=agent&state=open&sort=created&direction=asc&per_page=100" \
@@ -76,7 +76,7 @@ jobs:
                 | map(.[0].i | select([.labels[].name] | (index(\"needs-human\") or index(\"agent-attempted\")) | not)
                       | select(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\")
                       | .number)")
-            list=$(jq -c -n --argjson a "${fixes}" --argjson b "${tasks}" --argjson max "${MAX}" '$a + $b | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end) | .[:$max]')
+            list=$(jq -c -n --argjson a "${fixes}" --argjson b "${tasks}" --argjson max "${MAX}" '$b + $a | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end) | .[:$max]')
           fi
           echo "issues to work on: ${list}"
           echo "issues=${list}" >> "$GITHUB_OUTPUT"
@@ -158,8 +158,17 @@ jobs:
           GH_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE: ${{ matrix.issue }}
+          EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           branch="claude/issue-${ISSUE}"
+          # A usage limit is not the agent's failure: give the issue its attempt back, so a
+          # later sweep (after the limit resets) takes it again.
+          last=$(jq -r '[.[] | select(.type == "result")] | last | select(.is_error == true) | .result // ""' "${EXEC}" 2>/dev/null || true)
+          if printf '%s' "${last}" | grep -qiE 'usage limit|limit reached|rate.limit'; then
+            echo "stopped by a usage limit: ${last}"
+            gh issue edit "${ISSUE}" --remove-label agent-attempted
+            exit 0
+          fi
           if [ -s /tmp/agent-blocked.md ] || ! git ls-remote --exit-code --heads origin "${branch}" >/dev/null; then
             { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
             gh issue comment "${ISSUE}" --body-file /tmp/note.md
