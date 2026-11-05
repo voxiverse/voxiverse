@@ -21,7 +21,7 @@ while true do n = n + 1 end`
 // same on every OS, or snapshots are not portable. A change to the heap's layout, the
 // compiler's output or the prelude changes it: then this constant changes with it.
 @(private = "file")
-GOLDEN_HASH :: 0x26adf66621a17b28
+GOLDEN_HASH :: 0x1d217edb0bffd978
 
 @(private = "file")
 golden_vm :: proc(t: ^testing.T, cfg: Config) -> ^VM {

@@ -502,7 +502,8 @@ run :: proc(vm: ^VM, allocator: mem.Allocator) -> Run_Result {
 	case .Done:
 		return finish_run(vm, .Done, allocator)
 	case .Suspended:
-		vm.run_used += vm.budget - vm.meter
+		// (the boundary that suspended charged a unit for an instruction it did not run)
+		vm.run_used += vm.budget - vm.meter - 1
 		vm.state = .Suspended
 		return Run_Result{status = .Suspended}
 	case .Error:
