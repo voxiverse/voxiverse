@@ -23,7 +23,10 @@ how old their history; about 1 world in 8 with animals has peoples; the home wor
 none): the dial shows it for the world a last symbol would reach, the creation screen for the
 home world. The home world is Earth, which has one fixed address in every universe
 (`EARTH_GALAXY`, the Milky Way's, and `EARTH_WORLD` in `common/game/address.odin`; a test pins
-them, they never change). A world loads when someone travels there, and unloads
+them, they never change). Earth's terrain is seeded from its address alone (`terrain_seed` in
+`server/core/worlds.odin`), so the same block stands at the same place in every universe; a new
+universe takes Earth's address when `Config.earth` is set, else one made from its seed (the alien
+start); a saved universe keeps the home address it was made with. A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 
