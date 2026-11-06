@@ -136,7 +136,10 @@ entities_tick :: proc(w: ^World) {
 	e := &w.entities
 	e.budget = PATH_BUDGET_PER_TICK
 	entity_world_begin_tick(w.entity_world)
-	defer game.store_apply(&w.entity_world.store)
+	defer {
+		game.store_apply(&w.entity_world.store)
+		entities_sync_spatial(w)
+	}
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	Blast :: struct {
@@ -175,6 +178,22 @@ entities_tick :: proc(w: ^World) {
 	}
 	// After the walk over the list: explosions change it.
 	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
+}
+
+// entities_sync_spatial moves each listed entity's spatial box to its position
+// (after store_apply, so every entity has its link): what the spatial service
+// answers is where the entity is at the end of every tick. Until the systems
+// move onto the store, the list is the truth and the service follows it.
+entities_sync_spatial :: proc(w: ^World) {
+	ew := w.entity_world
+	for &ent in w.entities.list {
+		h, ok := game.store_find(&ew.store, game.Entity_Id(ent.id))
+		if !ok {continue}
+		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
+		if sl == nil {continue}
+		lo, hi := game.entity_box(ent.kind, ent.body.position)
+		game.spatial_move(&ew.spatial, sl.handle, lo, hi)
+	}
 }
 
 // sheep_flags: what clients are told about a sheep.
