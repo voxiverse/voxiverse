@@ -112,6 +112,35 @@ and persona name, auth tickets, a Workshop query; on the server `BeginAuthSessio
   started with `--steam`.
 - **Callbacks** run once a frame (the server: once a tick) and allocate nothing.
 
+### How a build reaches Steam
+
+`./build.sh steam [folder]` lays out the depots from the three release packages (the
+`.zip` for Windows and macOS and the `.tar.gz` for Linux, found in `build/dist/` or the
+folder given) in `build/steam/`:
+
+- `depots/windows-x64/`, `depots/linux-x64/`, `depots/macos-arm64/`: one depot per
+  operating system, each the package's contents (the game, the server, the licences; the
+  game carries its assets). The Steamworks library has its slot beside the executable (in
+  `Voxiverse.app/Contents/MacOS` on macOS). It is Valve's file and not in this repository:
+  when `STEAM_REDIST_DIR` names a folder holding `steam_api64.dll`, `libsteam_api.so` and
+  `libsteam_api.dylib`, the layout copies each into its slot; without it the slot is empty
+  and the game plays without Steam.
+- `scripts/app_build.vdf` and `scripts/depot_build_<os>.vdf`, the SteamPipe scripts. The
+  app script sets the build live on the beta branch `playtest` and on no other: the default
+  branch is set by hand in Steamworks.
+
+`steam_appid.txt` is never in a depot: the layout deletes any, and the depot scripts
+exclude the name. (It is for running outside Steam only.)
+
+The IDs come from the repository variables `STEAM_APP_ID`, `STEAM_DEPOT_WINDOWS`,
+`STEAM_DEPOT_LINUX` and `STEAM_DEPOT_MACOS`. With any of them unset the layout uses
+placeholder IDs (App ID 0, depots 1 to 3) and says so; such a layout is for inspection and
+cannot be uploaded.
+
+CI does not run this yet: the job that builds the layout after the packages and uploads
+it with `steamcmd` to the branch `playtest` is still to come. A test
+(`tools/build/steam_test.odin`) parses the generated scripts.
+
 ## Reporting a problem
 
 Report problems on the project's issue tracker (linked from the README). Include:
