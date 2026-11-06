@@ -1,6 +1,7 @@
 package ui
 
 import "core:fmt"
+import "core:strings"
 import "core:unicode/utf8"
 
 // Widgets. Each takes its rect (usually ui.next(ctx)) and goes through
@@ -272,6 +273,7 @@ text_input :: proc(
 	r: Rect,
 	placeholder := "",
 	loc := #caller_location,
+	multiline := false,
 ) -> (
 	submitted: bool,
 ) {
@@ -283,7 +285,7 @@ text_input :: proc(
 		// The on-screen keyboard has the focus, and types into this field.
 		e.id, e.active = id, true
 		e.cursor, e.anchor = clamp(e.cursor, 0, len(text)), clamp(e.anchor, 0, len(text))
-		submitted = edit_text(ctx, e, text)
+		submitted = edit_text(ctx, e, text, multiline)
 		if osk_draw(ctx, e, text, r) {submitted = true}
 	} else if it.focused {
 		if e.id != id {
@@ -295,7 +297,7 @@ text_input :: proc(
 			}
 		}
 		e.active = true
-		submitted = edit_text(ctx, e, text)
+		submitted = edit_text(ctx, e, text, multiline)
 		// The pad's Confirm opens the on-screen keyboard (a keyboard's Enter submits).
 		if .Confirm in ctx.input.nav {osk_open(ctx, id)}
 	} else if e.id == id {
@@ -311,6 +313,10 @@ text_input :: proc(
 	content := string(text[:])
 	if len(content) == 0 && !it.focused {
 		draw_text(ctx, inner, placeholder, t.font_size, t.text_muted)
+		return
+	}
+	if multiline {
+		text_area_draw(ctx, e, content, inner, it.focused)
 		return
 	}
 	// Keep the cursor in view by scrolling the text left.
@@ -353,7 +359,14 @@ text_input :: proc(
 // Shift with a movement extends the selection. Text typed with Alt (not
 // AltGr, which is Ctrl+Alt) is a shortcut, not text.
 @(private)
-edit_text :: proc(ctx: ^Context, e: ^Text_Edit, text: ^[dynamic]u8) -> (submitted: bool) {
+edit_text :: proc(
+	ctx: ^Context,
+	e: ^Text_Edit,
+	text: ^[dynamic]u8,
+	multiline := false,
+) -> (
+	submitted: bool,
+) {
 	in_ := &ctx.input
 	keys := in_.keys_pressed
 	shift, ctrl, alt := .Shift in in_.modifiers, .Ctrl in in_.modifiers, .Alt in in_.modifiers
@@ -446,7 +459,53 @@ edit_text :: proc(ctx: ^Context, e: ^Text_Edit, text: ^[dynamic]u8) -> (submitte
 			e.anchor = e.cursor
 		}
 	}
+	if multiline && shift && .Enter in keys {
+		delete_selection(e, text)
+		inject_at(text, e.cursor, '\n')
+		e.cursor += 1
+		e.anchor = e.cursor
+		return false
+	}
 	return .Enter in keys
+}
+
+// text_area_draw draws a multi-line field's text (lines end at '\n'), scrolled
+// so the cursor's line shows, with the selection and the cursor.
+@(private)
+text_area_draw :: proc(ctx: ^Context, e: ^Text_Edit, content: string, inner: Rect, focused: bool) {
+	t := &ctx.theme
+	line_h := t.font_size * 1.35
+	visible := max(int(inner.h / line_h), 1)
+	cursor := min(e.cursor, len(content))
+	cursor_line := strings.count(content[:cursor], "\n")
+	first := max(cursor_line - visible + 1, 0)
+	a, b := min(e.cursor, e.anchor), max(e.cursor, e.anchor)
+	b = min(b, len(content))
+	a = min(a, b)
+	start, n := 0, 0
+	rest := content
+	for {
+		end := strings.index_byte(rest, '\n')
+		line := rest if end < 0 else rest[:end]
+		if n >= first && n < first + visible {
+			y := inner.y + f32(n - first) * line_h
+			if focused && a != b && a <= start + len(line) && b >= start {
+				la, lb := max(a, start) - start, min(b, start + len(line)) - start
+				x0 := measure_text(ctx, line[:la], t.font_size)
+				x1 := measure_text(ctx, line[:lb], t.font_size)
+				fill_rect(ctx, {inner.x + x0, y, max(x1 - x0, 3), line_h}, t.selection)
+			}
+			draw_text(ctx, {inner.x, y, inner.w, line_h}, line, t.font_size, t.text)
+			if focused && n == cursor_line {
+				x := measure_text(ctx, line[:cursor - start], t.font_size)
+				fill_rect(ctx, {inner.x + x, y + 2, 1.5, line_h - 4}, t.text)
+			}
+		}
+		if end < 0 {break}
+		start += end + 1
+		rest = rest[end + 1:]
+		n += 1
+	}
 }
 
 // word_start: where the word before i begins (skipping spaces and
