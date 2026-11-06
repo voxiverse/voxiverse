@@ -88,7 +88,8 @@ jobs:
           # org member as CONTRIBUTOR, so trusted logins are matched by name too.
           authors=$(printf '%s\n' ${AUTHORS} | jq -R . | jq -sc .)
           trusted="(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\" or (.user.login | IN(${authors}[])) or .user.login == \"github-actions[bot]\")"
-          issues() { gh api "repos/${GH_REPO}/issues?labels=$1&state=open&sort=created&direction=asc&per_page=100" --jq "[.[] | select(.pull_request == null) | select(${trusted})]"; }
+          # numbers and milestones only: the bodies would overflow the argument list of jq
+          issues() { gh api "repos/${GH_REPO}/issues?labels=$1&state=open&sort=created&direction=asc&per_page=100" --jq "[.[] | select(.pull_request == null) | select(${trusted}) | {number, milestone: .milestone.number}]"; }
 
           if [ -n "${ONE}" ]; then
             candidates="[${ONE}]"
@@ -96,7 +97,7 @@ jobs:
             agent=$(issues agent); fixes=$(issues autofix)
             candidates=$(jq -c -n --argjson a "${agent}" --argjson f "${fixes}" '
               ($a | map(select(.milestone == null)) | map(.number))
-              + ($a | map(select(.milestone != null)) | group_by(.milestone.number) | map(.[0].number))
+              + ($a | map(select(.milestone != null)) | group_by(.milestone) | map(.[0].number))
               + ($f | map(.number))
               | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end)')
           fi
