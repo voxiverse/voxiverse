@@ -99,10 +99,11 @@ main :: proc() {
 	case opts.collector:
 		ok = run_collector(opts)
 	case:
-		base.crash_bundle_init(
-			filepath.join({opts.universe, "crashes"}, context.temp_allocator) or_else "",
-			"server",
-		)
+		crashes := filepath.join({opts.universe, "crashes"}, context.temp_allocator) or_else ""
+		if newest, n := base.crash_bundle_claim_unseen(crashes); n > 0 {
+			fmt.printfln("crash report from the last run: %s", newest)
+		}
+		base.crash_bundle_init(crashes, "server")
 		ok = run(&host, opts)
 	}
 	base.profile_stop()

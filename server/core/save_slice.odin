@@ -336,6 +336,7 @@ save_job_commit :: proc(s: ^Server, job: ^Save_Job) -> bool {
 	if !ok {log.errorf("server save could not stage everything, it is committed as it is")}
 	committed := store_commit(s, wait)
 	log.infof("server saved worlds=%d dir=%s", len(s.worlds), st.dir)
+	base.crash_bundle_action("save", fmt.tprintf("worlds=%d", len(s.worlds)))
 	job_free(job)
 	return ok && committed
 }
