@@ -191,6 +191,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		}
 		engine.input_update(&app.input, events)
 		engine.actions_sync(app, app.last_frame_ms / 1000)
+		engine.crash_track(app)
 	}
 	if w.close_requested || app.quit {return false}
 
