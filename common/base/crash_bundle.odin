@@ -427,3 +427,20 @@ bundle_prune :: proc(root: string) {
 		os.remove_all(fmt.tprintf("%s/%s", root, n))
 	}
 }
+
+// crash_bundle_claim_unseen finds the bundles in root without a `seen` file, marks them seen,
+// and returns the newest one's path ("" if none) and how many there were. For the dedicated
+// server, which has no one to show a dialog to: it prints the path once and is done.
+crash_bundle_claim_unseen :: proc(root: string) -> (newest: string, count: int) {
+	infos, err := os.read_directory_by_path(root, -1, context.temp_allocator)
+	if err != nil {return}
+	for fi in infos {
+		if fi.type != .Directory {continue}
+		dir := fmt.tprintf("%s/%s", root, fi.name)
+		if os.exists(fmt.tprintf("%s/seen", dir)) {continue}
+		_ = os.write_entire_file(fmt.tprintf("%s/seen", dir), transmute([]u8)string("seen\n"))
+		count += 1
+		if dir > newest {newest = dir} 	// (names start with the UTC time)
+	}
+	return
+}
