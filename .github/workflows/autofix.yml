@@ -35,6 +35,9 @@ on:
       issue:
         description: Issue number to work on (empty = a normal sweep)
         required: false
+      mode:
+        description: "With issue: work or ci-fix, already claimed by a sweep (empty = decide)"
+        required: false
 
 permissions:
   contents: read
@@ -55,6 +58,7 @@ jobs:
       issues: write
       pull-requests: read
       checks: read
+      actions: write # starts each agent as a run of its own (workflow_dispatch)
     outputs:
       work: ${{ steps.pick.outputs.work }}
     steps:
@@ -63,6 +67,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ONE: ${{ inputs.issue }}
+          MODE: ${{ inputs.mode }}
+          EVENT: ${{ github.event_name }}
           MAX: ${{ vars.AGENTS_MAX_PER_RUN || '3' }}
           NOT_BEFORE: ${{ vars.AGENTS_NOT_BEFORE }}
           # Logins trusted to write agent instructions, space-separated.
@@ -71,6 +77,11 @@ jobs:
           set -euo pipefail
           if [ -n "${NOT_BEFORE}" ] && [ "$(date -u +%s)" -lt "$(date -u -d "${NOT_BEFORE}" +%s)" ]; then
             echo "not before ${NOT_BEFORE}: nothing picked"; echo "work=[]" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # A run a sweep started for one claimed issue: work on it as told.
+          if [ -n "${ONE}" ] && [ -n "${MODE}" ]; then
+            [[ "${ONE}" =~ ^[0-9]+$ ]] && [[ "${MODE}" =~ ^(work|ci-fix)$ ]] || { echo "bad input"; exit 1; }
+            echo "work=[{\"issue\":${ONE},\"mode\":\"${MODE}\"}]" >> "$GITHUB_OUTPUT"; exit 0
           fi
           # The repo is public and the issue text becomes the agent's instructions: only issues an
           # org member, a trusted login or this repo's workflows wrote. GITHUB_TOKEN sees a private
@@ -122,6 +133,14 @@ jobs:
             work=$(jq -c --argjson n "${n}" --arg m "${mode}" '. + [{issue: $n, mode: $m}]' <<< "${work}")
           done
           echo "work: ${work}"
+          # Claude's action runs only on some events (not push): a sweep starts each agent
+          # as a workflow_dispatch run of its own and works on nothing itself.
+          if [ "${EVENT}" != workflow_dispatch ]; then
+            jq -c '.[]' <<< "${work}" | while read -r item; do
+              gh workflow run autofix.yml --ref main -f issue="$(jq -r .issue <<< "${item}")" -f mode="$(jq -r .mode <<< "${item}")"
+            done
+            work='[]'
+          fi
           echo "work=${work}" >> "$GITHUB_OUTPUT"
 
   fix:
@@ -226,6 +245,8 @@ jobs:
         run: |
           branch="claude/issue-${ISSUE}"
           gh issue edit "${ISSUE}" --remove-label agent-running >/dev/null || true
+          # The agent never started (the action failed before Claude ran): not an attempt.
+          if [ ! -s "${EXEC:-/nonexistent}" ]; then echo "the agent did not run"; exit 0; fi
           gh label create agent-attempted --color C5DEF5 --description "An agent worked on this" --force >/dev/null
           gh issue edit "${ISSUE}" --add-label agent-attempted >/dev/null || true
           # A usage limit is not the agent's failure: the next sweep takes it again.
