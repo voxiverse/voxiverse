@@ -21,7 +21,9 @@ length), so it is the same kind of world in any universe; the universe seed dete
 terrain. The address also says what lives there (`worldgen.world_life`: life, how many peoples,
 how old their history; about 1 world in 8 with animals has peoples; the home world, Earth, has
 none): the dial shows it for the world a last symbol would reach, the creation screen for the
-home world. The home world is Earth. A world loads when someone travels there, and unloads
+home world. The home world is Earth, which has one fixed address in every universe
+(`EARTH_GALAXY`, the Milky Way's, and `EARTH_WORLD` in `common/game/address.odin`; a test pins
+them, they never change). A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 

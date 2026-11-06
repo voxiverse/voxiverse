@@ -40,3 +40,14 @@ test_addresses :: proc(t: ^testing.T) {
 	testing.expect(t, address_hash(home) != address_hash(address_derive(1)))
 	for r in SYMBOL_RUNES {testing.expect(t, r >= 0x10C00 && r <= 0x10C48)}
 }
+
+// Earth's address is valid and never changes: saves and terrain are named by it.
+@(test)
+test_earth_address :: proc(t: ^testing.T) {
+	earth := earth_address()
+	testing.expect(t, address_valid(earth))
+	testing.expect_value(t, address_dir(earth), "031116051f091a0c-0e022314071d0b")
+	back, ok := address_parse("031116051f091a0c-0e022314071d0b", {})
+	testing.expect(t, ok && back == earth)
+	testing.expect(t, address_derive(0) != earth && address_derive(1) != earth)
+}
