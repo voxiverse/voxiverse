@@ -11,8 +11,7 @@ import "common:limited"
 
 // The crash fixture (tests/crash_fixture) starts four named threads, then dies four ways. Each
 // run must fail and leave a bundle whose threads.txt names all five threads and whose crash.txt
-// names the crashing one. Where another thread's stack is not collected yet (Windows), only
-// the crashing thread's frames are required.
+// names the crashing one.
 @(private = "file")
 fixture_run :: proc(t: ^testing.T, exe: string, mode: string) -> (dir: string, ok: bool) {
 	root := fmt.tprintf("build/tmp/crash_bundles_%s", mode)
@@ -62,10 +61,7 @@ test_crash_bundles_name_every_thread :: proc(t: ^testing.T) {
 	Case :: struct {
 		mode, thread, what: string,
 	}
-	for c in ([]Case{{"main-segv", "main", SEGV}, {"worker-segv", "delta", "signal=SIGSEGV"}, {"assert", "main", "the fixture's assert"}, {"overflow", "delta", "stack overflow"}}) {
-		when ODIN_OS == .Windows {
-			if c.mode != "main-segv" {continue} 	// (the others' stacks are not collected on every platform)
-		}
+	for c in ([]Case{{"main-segv", "main", SEGV}, {"worker-segv", "delta", SEGV}, {"assert", "main", "the fixture's assert"}, {"overflow", "delta", "stack overflow"}}) {
 		dir, ok := fixture_run(t, exe, c.mode)
 		if !ok {continue}
 		crash := text_of(dir, "crash.txt")
@@ -85,32 +81,24 @@ test_crash_bundles_name_every_thread :: proc(t: ^testing.T) {
 			c.mode,
 			threads,
 		)
-		when ODIN_OS != .Windows {
-			for name in ([]string{"main", "alpha", "beta", "gamma", "delta"}) {
-				testing.expectf(
-					t,
-					strings.contains(threads, fmt.tprintf("thread %s", name)),
-					"%s: no %s in %s",
-					c.mode,
-					name,
-					threads,
-				)
-			}
+		for name in ([]string{"main", "alpha", "beta", "gamma", "delta"}) {
 			testing.expectf(
 				t,
-				!strings.contains(threads, "did not answer"),
-				"%s: %s",
+				strings.contains(threads, fmt.tprintf("thread %s", name)),
+				"%s: no %s in %s",
 				c.mode,
-				threads,
-			)
-			testing.expectf(
-				t,
-				strings.contains(threads, "  at "),
-				"%s: no frame of ours in %s",
-				c.mode,
+				name,
 				threads,
 			)
 		}
+		testing.expectf(t, !strings.contains(threads, "did not answer"), "%s: %s", c.mode, threads)
+		testing.expectf(
+			t,
+			strings.contains(threads, "  at "),
+			"%s: no frame of ours in %s",
+			c.mode,
+			threads,
+		)
 		testing.expectf(t, len(text_of(dir, "log.txt")) > 0, "%s: an empty log", c.mode)
 		os.remove_all(fmt.tprintf("build/tmp/crash_bundles_%s", c.mode))
 	}
