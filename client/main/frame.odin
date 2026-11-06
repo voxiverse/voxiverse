@@ -36,6 +36,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 		engine.settings_load(app)
 	}
 	engine.account_load(app)
+	engine.steam_start(app)
 	console.console_history_load(&app.console)
 	app.debug = engine.DEBUG_DEFAULTS
 	app.telemetry = engine.TELEMETRY_DEFAULTS
@@ -132,6 +133,7 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	engine.music_destroy(app)
 	free(app.mixer)
 	engine.devchat_stop(app)
+	engine.steam_stop(app)
 	if app.settings_dirty {engine.settings_save(app)}
 	console.console_history_save(&app.console)
 	delete(app.item_icons)
@@ -208,6 +210,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
 	engine.keep_awake_update(app)
 	engine.devchat_sync(app)
+	engine.steam_update(app)
 	gpu.set_vsync(&app.g, app.settings.vsync)
 	{
 		base.profile_scope("audio and music")

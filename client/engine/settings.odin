@@ -22,6 +22,7 @@ Settings :: struct {
 	share_asked:       bool, // the question was answered
 	collector:         base.Var_Text, // the collector's address ("": DEFAULT_COLLECTOR)
 	devchat:           base.Var_Text, // the developer chat's collector (host:port; "": off)
+	steam:             bool, // use Steam when its library is beside the game (off: never; read at start)
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
 	vsync:             bool, // wait for the display (off: up to max_fps)
@@ -66,6 +67,7 @@ Settings :: struct {
 
 @(rodata)
 SETTINGS_DEFAULTS := Settings {
+	steam             = true,
 	vsync             = true,
 	max_fps           = 0,
 	fov               = 70,
@@ -108,6 +110,10 @@ SETTINGS_VARS := [?]base.Var {
 	{field = "share_asked", help = "the question about sharing play data was answered"},
 	{field = "collector", help = "where play data goes (host:port); empty: the default"},
 	{field = "devchat", help = "the developer chat's collector (host:port); empty: off"},
+	{
+		field = "steam",
+		help = "use Steam when its library is beside the game; off never loads it (read at start)",
+	},
 	{
 		field = "fullscreen",
 		label = "Display",
