@@ -181,9 +181,11 @@ jobs:
                  pull request, say what changed and how the owner will notice it in the game.
                - **Milestone task**: its checks say when it is done.
                - **Fuzz crash or failing test**: run its check first; it must fail before your fix.
-            3. Branch `claude/issue-${{ matrix.issue }}` from origin/main (`git checkout -B ...
-               origin/main`). Prefer finishing the whole issue in one pull request. If it is too big,
-               do a part that stands on its own.
+            3. Branch `claude/issue-${{ matrix.issue }}`: if `origin/claude/issue-${{ matrix.issue }}` exists
+               (an earlier attempt pushed but opened no pull request), continue from it
+               (`git checkout -B claude/issue-${{ matrix.issue }} origin/claude/issue-${{ matrix.issue }} && git rebase origin/main`);
+               otherwise start from origin/main. Push with `--force-with-lease`. Prefer finishing the
+               whole issue in one pull request. If it is too big, do a part that stands on its own.
             4. Before pushing, run what CI runs on Linux: `./build.sh check` and `./build.sh test`, and
                fix everything they report (a new folder needs its docs/layout.md row). Commits per
                AGENTS.md, "Commits".
@@ -232,17 +234,12 @@ jobs:
             exit 0
           fi
           url=$(gh pr list --head "${branch}" --state open --json url --jq '.[0].url // empty')
-          if [ -z "${url}" ] && git ls-remote --exit-code --heads "https://github.com/${GH_REPO}.git" "${branch}" >/dev/null; then
-            # Pushed but no pull request: open it here and start CI by hand (a pull request
-            # opened with this job's token starts no workflow; a dispatch does).
-            url=$(gh pr create --head "${branch}" --base main --title "Work on #${ISSUE}" \
-                  --body "Opened by the workflow from the agent's branch. Part of #${ISSUE}" || true)
-            [ -n "${url}" ] && gh workflow run ci.yml --ref "${branch}" || true
-          fi
           if [ -n "${url}" ]; then
             gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled"
             echo "pull request: ${url}"; exit 0
           fi
+          # No pull request (a pushed branch without one counts too: the next agent opens it,
+          # since a pull request opened with this job's token would start neither CI nor Guard).
           # No change at all. One retry (the next agent reads this note), then the owner.
           { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
           gh issue comment "${ISSUE}" --body-file /tmp/note.md
