@@ -141,12 +141,15 @@ message the collector refused keeps its reason and is not sent again. Replies ar
 after the newest one in the file: every 30 s while the chat screen is open, every 5 minutes
 otherwise, and at once when a message is written.
 
-F9 (rebindable in Options) or the **Developer chat** button on the title screen and in the game menu (shown only while the
-setting is set) opens the conversation: each entry with who wrote it and when, a reply's link
-under it, and whether a message still waits to be sent. Enter or Send sends the line (at most
-4000 bytes, counted beside it); "Attach where I am" adds the universe and the position. A reply
-that arrives while the chat is closed shows "Reply from the developers" in the top right
-corner until the chat is opened.
+F9 (rebindable in Options) or the **Developer chat** button on the title screen and in the game
+menu (shown only while the setting is set) opens the conversation: each entry with who wrote
+it and when (UTC), a reply's link as text under it, and whether a message still waits to be
+sent. A status line says connecting, connected or offline, and how many messages wait. The
+input takes several lines: Enter or Send sends, Shift+Enter starts a new line; the byte count
+(at most 4000) is beside it. "Attach where I am" (on by default) adds the universe, the world,
+the position and the tick; the game's version is always attached. A reply that arrives while
+the chat is closed shows a toast, "Reply from the developers: F9", once; it never interrupts
+play.
 
 ## Querying the data
 
