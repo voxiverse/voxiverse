@@ -32,6 +32,7 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Host | A player whose client runs the universe (singleplayer, LAN) | `engine.session_hosting` |
 | Entity | Anything in a world besides blocks and players: sheep, rockets, dropped stacks | `game.Entity_Kind` |
 | Archetype store | Entities grouped by their set of components, one column table per set, structural changes deferred and applied in issue order. Not used by the game yet (entities v2, part one) | `game.Entity_Store` (`common/game/archetype.odin`) |
+| Spatial query service | A grid of chunk-sized cells holding entity boxes; sphere, cylinder, box, nearest, count and cast queries return ids ascending. Not used by the game yet (entities v2, part one) | `game.Spatial` (`common/game/spatial.odin`) |
 
 **What happens**
 
