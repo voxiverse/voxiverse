@@ -32,7 +32,8 @@ import "common:telemetry"
 // DuckDB (or jq) reads them in place. A batch says where in the sender's
 // day-file it begins: the collector remembers how far each (pid, day) got
 // (cursors.jsonl, replayed at start), so a batch sent twice is written once.
-// Source addresses are never logged.
+// Source addresses are never logged. Developer chat (devchat.odin) is the one
+// other thing it carries.
 
 BATCH_LINE_MAX :: 2048
 BATCH_LINES_MAX :: 400
@@ -63,21 +64,30 @@ Collector_Stats :: struct {
 	refused:          u64, // batches refused for a bad line, size, order, or rate
 	forged:           u64, // proofs that did not verify
 	reports:          u64,
+	dev_stored:       u64, // developer messages written
+	dev_duplicates:   u64, // developer messages sent again (acknowledged, not written)
+	dev_refused:      u64, // developer messages refused with a reason (not an admin, empty)
 }
 
 Collector :: struct {
-	host:    netcode.Host,
-	dir:     string,
-	salt:    [16]u8,
-	peers:   map[netcode.Peer_Id]Collector_Peer,
-	cursors: map[string]u64, // "pid|day" -> offset after what was written
-	stats:   Collector_Stats,
-	mutex:   sync.Mutex, // for stats and port (the thread writes them)
-	thread:  ^thread.Thread,
-	stop:    bool, // (atomic)
-	writer:  game.Writer,
-	port:    int,
-	now:     time.Tick, // the step's time (the OS's on the thread, the network's when stepped)
+	host:           netcode.Host,
+	dir:            string,
+	salt:           [16]u8,
+	peers:          map[netcode.Peer_Id]Collector_Peer,
+	cursors:        map[string]u64, // "pid|day" -> offset after what was written
+	stats:          Collector_Stats,
+	mutex:          sync.Mutex, // for stats and port (the thread writes them)
+	thread:         ^thread.Thread,
+	stop:           bool, // (atomic)
+	writer:         game.Writer,
+	port:           int,
+	now:            time.Tick, // the step's time (the OS's on the thread, the network's when stepped)
+	// admins.cfg: who developer chat hears (devchat.odin)
+	admins:         map[game.Account]struct{},
+	admins_text:    string, // (heap) the file as last read
+	admins_loaded:  bool,
+	admins_checked: bool,
+	admins_at:      time.Tick,
 }
 
 // collector_open opens the collector in dir on a UDP port (0: any), or on a
@@ -126,6 +136,8 @@ collector_close :: proc(c: ^Collector) {
 	delete(c.peers)
 	for k in c.cursors {delete(k)}
 	delete(c.cursors)
+	delete(c.admins)
+	delete(c.admins_text)
 	delete(c.dir)
 	c^ = {}
 }
@@ -224,15 +236,31 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 			refuse(c, id, "a batch before a proof")
 			return
 		}
-		if time.tick_diff(p.window, c.now) > BATCH_WINDOW {
-			p.window, p.count = c.now, 0
-		}
-		p.count += 1
-		if p.count > BATCHES_PER_WINDOW {
+		if !rate_ok(c, p) {
 			refuse(c, id, "too many batches")
 			return
 		}
 		take_batch(c, id, p, v)
+	case game.Dev_Message:
+		if p.state != .Ready {
+			refuse(c, id, "a message before a proof")
+			return
+		}
+		if !rate_ok(c, p) {
+			refuse(c, id, "too many messages")
+			return
+		}
+		take_dev_message(c, id, p, v)
+	case game.Dev_Fetch:
+		if p.state != .Ready {
+			refuse(c, id, "a fetch before a proof")
+			return
+		}
+		if !rate_ok(c, p) {
+			refuse(c, id, "too many messages")
+			return
+		}
+		take_dev_fetch(c, id, p, v)
 	case game.Input,
 	     game.Ping,
 	     game.Teleport,
@@ -257,6 +285,16 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 	     game.Telemetry_Report:
 		refuse(c, id, "this is a telemetry collector")
 	}
+}
+
+// rate_ok counts a batch or developer message of p in its window; false past the limit.
+@(private)
+rate_ok :: proc(c: ^Collector, p: ^Collector_Peer) -> bool {
+	if time.tick_diff(p.window, c.now) > BATCH_WINDOW {
+		p.window, p.count = c.now, 0
+	}
+	p.count += 1
+	return p.count <= BATCHES_PER_WINDOW
 }
 
 // pid_of: the anonymous id of an account: the first 8 bytes of the salted hash, in hex.

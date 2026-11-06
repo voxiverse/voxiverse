@@ -434,3 +434,241 @@ test_a_report_round_trips :: proc(t: ^testing.T) {
 	testing.expect(t, found, "the report is not in the lake")
 	free_all(context.temp_allocator)
 }
+
+// ---- developer chat
+
+// raw_prove: connects and proves `key`.
+@(private = "file")
+raw_prove :: proc(r: ^Raw, rig: ^Rig, key: ^game.Account_Key) -> bool {
+	raw_connect(r, rig) or_return
+	nonce := raw_challenge(r, key.account) or_return
+	raw_send(r, game.Proof{game.account_sign(key, nonce)})
+	return true
+}
+
+// raw_answer steps until the collector sends a message of the wanted kind; its
+// strings are copied to the temp allocator (the packet is freed).
+@(private = "file")
+raw_answer :: proc(r: ^Raw, $T: typeid) -> (v: T, ok: bool) {
+	scratch := new(game.Block_Array)
+	defer free(scratch)
+	got := make([dynamic][]u8, context.temp_allocator)
+	for _ in 0 ..< 600 {
+		netcode.link_update(&r.link, r.rig.net.now)
+		clear(&got)
+		netcode.link_receive(&r.link, &got)
+		for data in got {
+			defer netcode.link_free(&r.link, data)
+			m, decoded := game.decode_server(data, scratch)
+			if !decoded {continue}
+			if x, is_t := m.(T); is_t {
+				v, ok = x, true
+				when T == game.Dev_Ack {
+					v.reason = strings.clone(x.reason, context.temp_allocator)
+				} else when T == game.Dev_Replies {
+					for &e in v.entries[:v.count] {
+						e.id = strings.clone(e.id, context.temp_allocator)
+						e.text = strings.clone(e.text, context.temp_allocator)
+						e.link = strings.clone(e.link, context.temp_allocator)
+					}
+				}
+			}
+		}
+		if ok {return}
+		netcode.link_flush(&r.link, r.rig.net.now)
+		rig_step(r.rig)
+	}
+	return
+}
+
+@(private = "file")
+count_files :: proc(dir: string) -> int {
+	infos, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
+	return len(infos)
+}
+
+@(private = "file")
+write_reply :: proc(dir, name, body: string) {
+	os.make_directory_all(dir)
+	_ = os.write_entire_file(fmt.tprintf("%s/%s", dir, name), transmute([]u8)body)
+}
+
+// An admin's message is stored once however often it is sent; a non-admin's is
+// refused and nothing is written; an oversized one is refused.
+@(test)
+test_devchat_messages :: proc(t: ^testing.T) {
+	lake, logs := fresh("devchat_in")
+	defer os.remove_all(lake)
+	defer os.remove_all(logs)
+	rig: Rig
+	// The admins file exists before the collector starts, and changes later.
+	admin, other := game.account_key_make(), game.account_key_make()
+	os.make_directory_all(lake)
+	_ = os.write_entire_file(
+		fmt.tprintf("%s/admins.cfg", lake),
+		transmute([]u8)fmt.tprintf(
+			"# the owner\n%s  # me\nnot a key\n",
+			game.account_text(admin.account),
+		),
+	)
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
+	inbox := fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))
+
+	r: Raw
+	if !testing.expect(t, raw_prove(&r, &rig, &admin)) {return}
+	msg := game.Dev_Message {
+		id       = 0xabcd1234,
+		text     = "the sky is square \"here\"\nüber",
+		version  = "0.26",
+		universe = "Home",
+		world    = "A1",
+		has_pos  = true,
+		pos      = {1, -2, 3},
+		has_tick = true,
+		tick     = 99,
+	}
+	raw_send(&r, msg)
+	ack, ok := raw_answer(&r, game.Dev_Ack)
+	testing.expect(t, ok && ack.ok && ack.id == msg.id, "the message was not acknowledged")
+	raw_send(&r, msg) // the ack was "lost": sent again
+	ack, ok = raw_answer(&r, game.Dev_Ack)
+	testing.expect(t, ok && ack.ok, "the resend was not acknowledged")
+	testing.expect_value(t, count_files(inbox), 1)
+	testing.expect_value(t, rig_stats(&rig).dev_stored, 1)
+	testing.expect_value(t, rig_stats(&rig).dev_duplicates, 1)
+	infos, _ := os.read_all_directory_by_path(inbox, context.temp_allocator)
+	if len(infos) == 1 {
+		testing.expect(t, strings.has_suffix(infos[0].name, "-abcd1234.json"), infos[0].name)
+		data, _ := os.read_entire_file_from_path(infos[0].fullpath, context.temp_allocator)
+		for want in ([]string{`"text":"the sky is square \"here\"\nüber"`, `"version":"0.26"`, `"universe":"Home"`, `"world":"A1"`, `"position":[1,-2,3]`, `"tick":99`}) {
+			testing.expectf(
+				t,
+				strings.contains(string(data), want),
+				"missing %s in %s",
+				want,
+				data,
+			)
+		}
+	}
+	// A second message is a second file.
+	msg.id = 7
+	raw_send(&r, msg)
+	_, ok = raw_answer(&r, game.Dev_Ack)
+	testing.expect(t, ok)
+	testing.expect_value(t, count_files(inbox), 2)
+	raw_close(&r)
+
+	// Not an admin: refused with a reason, nothing written.
+	r2: Raw
+	if !testing.expect(t, raw_prove(&r2, &rig, &other)) {return}
+	raw_send(&r2, msg)
+	ack, ok = raw_answer(&r2, game.Dev_Ack)
+	testing.expect(
+		t,
+		ok && !ack.ok && ack.reason != "",
+		"a non-admin was not refused with a reason",
+	)
+	testing.expect_value(t, count_files(fmt.tprintf("%s/devchat", lake)), 1) // (the admin's only)
+	testing.expect_value(t, rig_stats(&rig).dev_refused, 1)
+	// ... until the file names it.
+	f, _ := os.open(fmt.tprintf("%s/admins.cfg", lake), {.Write, .Append})
+	os.write_string(f, fmt.tprintf("%s\n", game.account_text(other.account)))
+	os.close(f)
+	rig_run(&rig, 1.5)
+	raw_send(&r2, msg)
+	ack, ok = raw_answer(&r2, game.Dev_Ack)
+	testing.expect(t, ok && ack.ok, "a newly listed admin was not heard")
+	raw_close(&r2)
+
+	// Over the limit: refused (the message is invalid on the wire), nothing written.
+	r3: Raw
+	if !testing.expect(t, raw_prove(&r3, &rig, &admin)) {return}
+	before := rig_stats(&rig).refused
+	big := game.Dev_Message {
+		id   = 1,
+		text = strings.repeat("x", game.MAX_DEV_TEXT + 1, context.temp_allocator),
+	}
+	clear(&r3.writer.buf)
+	// (encoded by hand: the encoder does not stop an oversized text)
+	game.encode_client(&r3.writer, big)
+	netcode.link_send(&r3.link, r3.writer.buf[:], true)
+	netcode.link_flush(&r3.link, rig.net.now)
+	testing.expect(t, wait_refused(&rig, before, 1), "an oversized message was not refused")
+	testing.expect_value(t, count_files(inbox), 2)
+	raw_close(&r3)
+	// ... and exactly the limit is taken.
+	r4: Raw
+	if !testing.expect(t, raw_prove(&r4, &rig, &admin)) {return}
+	raw_send(
+		&r4,
+		game.Dev_Message {
+			id = 2,
+			text = strings.repeat("y", game.MAX_DEV_TEXT, context.temp_allocator),
+		},
+	)
+	ack, ok = raw_answer(&r4, game.Dev_Ack)
+	testing.expect(t, ok && ack.ok, "a message of the limit's size was refused")
+	raw_close(&r4)
+	free_all(context.temp_allocator)
+}
+
+// Replies arrive in name order, only after after_id, and a malformed file is skipped.
+@(test)
+test_devchat_replies :: proc(t: ^testing.T) {
+	lake, logs := fresh("devchat_out")
+	defer os.remove_all(lake)
+	defer os.remove_all(logs)
+	rig: Rig
+	admin, other := game.account_key_make(), game.account_key_make()
+	os.make_directory_all(lake)
+	_ = os.write_entire_file(
+		fmt.tprintf("%s/admins.cfg", lake),
+		transmute([]u8)game.account_text(admin.account),
+	)
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
+	out := fmt.tprintf("%s/devchat/%s/out", lake, game.account_text(admin.account))
+	write_reply(out, "0003.json", `{"id":"0003","time":3000,"text":"third"}`)
+	write_reply(
+		out,
+		"0001.json",
+		`{"id":"0001","time":1000,"text":"first","link":"https://example.org/a"}`,
+	)
+	write_reply(out, "0002.json", `{"id":"0002","time":2000,"text":"second ü"}`)
+	write_reply(out, "0002b.json", `{"id":"0002b","time":2500,`) // cut off
+	write_reply(out, "0002c.json", `{"id":"wrong","time":2600,"text":"id is not the name"}`)
+	write_reply(out, "0002d.json", `{"id":"0002d","time":2700,"text":""}`)
+	write_reply(out, "notes.txt", "not a reply")
+
+	r: Raw
+	if !testing.expect(t, raw_prove(&r, &rig, &admin)) {return}
+	raw_send(&r, game.Dev_Fetch{""})
+	all, ok := raw_answer(&r, game.Dev_Replies)
+	if testing.expect(t, ok) && testing.expect_value(t, all.count, 3) {
+		testing.expect_value(t, all.entries[0].id, "0001")
+		testing.expect_value(t, all.entries[0].link, "https://example.org/a")
+		testing.expect_value(t, all.entries[0].time, 1000)
+		testing.expect_value(t, all.entries[1].text, "second ü")
+		testing.expect_value(t, all.entries[2].id, "0003")
+	}
+	raw_send(&r, game.Dev_Fetch{"0001"})
+	rest, ok2 := raw_answer(&r, game.Dev_Replies)
+	if testing.expect(t, ok2) && testing.expect_value(t, rest.count, 2) {
+		testing.expect_value(t, rest.entries[0].id, "0002")
+		testing.expect_value(t, rest.entries[1].id, "0003")
+	}
+	raw_send(&r, game.Dev_Fetch{"0003"})
+	none, ok3 := raw_answer(&r, game.Dev_Replies)
+	testing.expect(t, ok3 && none.count == 0, "replies came after the last one")
+	raw_close(&r)
+
+	// Another account sees none of them.
+	r2: Raw
+	if !testing.expect(t, raw_prove(&r2, &rig, &other)) {return}
+	raw_send(&r2, game.Dev_Fetch{""})
+	nobody, ok4 := raw_answer(&r2, game.Dev_Replies)
+	testing.expect(t, ok4 && nobody.count == 0, "a non-admin was sent replies")
+	raw_close(&r2)
+	free_all(context.temp_allocator)
+}

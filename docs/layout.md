@@ -126,7 +126,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/worldgen` | World generators | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
-| `server/collector` | The telemetry collector | `*.odin` |
+| `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
 | `server/packs` | Reading pack folders from disk (L2b gathers the `pack_*` files) | `*.odin` |
 | `tests` | Tests spanning several packages | `*.odin` |
