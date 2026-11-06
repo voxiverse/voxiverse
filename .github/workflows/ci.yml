@@ -796,6 +796,45 @@ jobs:
           sha256sum * > SHA256SUMS
           gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" *
 
+  # Every push to main whose packages built and whose Linux tests passed becomes the rolling
+  # "playtest" pre-release: one fixed link, always the newest playable main, for every OS.
+  playtest:
+    name: Playtest build
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.package.result == 'success' && needs.build.result == 'success'
+      && needs.linux-tests.result == 'success' }}
+    needs: [build, linux-tests, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: playtest
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: voxiverse-*
+          path: dist
+          merge-multiple: true
+          skip-decompress: true
+      - name: Replace the playtest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          cd dist
+          ls -l
+          sha256sum * > SHA256SUMS
+          subject=$(gh api "repos/${GH_REPO}/commits/${SHA}" --jq '.commit.message | split("\n")[0]')
+          printf 'The newest `main` that passed its tests: `%s`, %s.\n\nLast change: %s\n\nThis release is replaced on every merge. Feedback: open an issue with the **Playtest feedback** form; an agent works on it.\n' \
+            "${SHA::12}" "$(date -u '+%F %H:%M UTC')" "${subject}" > "${RUNNER_TEMP}/notes.md"
+          gh release delete playtest --cleanup-tag --yes 2>/dev/null || true
+          gh release create playtest --target "${SHA}" --prerelease --latest=false \
+            --title "Playtest: newest main (${SHA::7})" --notes-file "${RUNNER_TEMP}/notes.md" *
+
   # The ONE check the main ruleset requires: every job above passed, or was skipped on
   # purpose (a Markdown-only change, or a tag whose commit main's CI already tested).
   result:
