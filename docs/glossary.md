@@ -31,6 +31,7 @@ One word per thing, in code, docs and UI alike. Where the code uses another word
 | Owner | A player with every permission: the local player of a world played here (singleplayer, with cheats allowed), or everyone when the server runs with `--cheats` | `core.is_owner` |
 | Host | A player whose client runs the universe (singleplayer, LAN) | `engine.session_hosting` |
 | Entity | Anything in a world besides blocks and players: sheep, rockets, dropped stacks | `game.Entity_Kind` |
+| Archetype store | Entities grouped by their set of components, one column table per set, structural changes deferred and applied in issue order. Not used by the game yet (entities v2, part one) | `game.Entity_Store` (`common/game/archetype.odin`) |
 
 **What happens**
 
