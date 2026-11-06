@@ -76,6 +76,7 @@ precipitation_build :: proc(
 	rain := make([]f64, n, context.temp_allocator)
 	belt := make([]f64, n, context.temp_allocator)
 	front := make([]f64, n, context.temp_allocator)
+	shares := make([]f64, n, context.temp_allocator)
 	mix := make([]f64, h, context.temp_allocator)
 	for j in 0 ..< h {
 		mix[j] = 0.02 + 0.25 * clamp((abs(climate_lat(h, j)) - 20) / 20, 0, 1)
@@ -96,15 +97,34 @@ precipitation_build :: proc(
 		}
 		for k in 0 ..< n {
 			q[k] = vapour_pressure(f64(t.month[m][k]) / 10) if !l.is_land[k] else 0
+			nq[k] = q[k]
+		}
+		// what a cell rains of its air does not change between sweeps
+		for j in 0 ..< h {
+			for i in 0 ..< w {
+				k := j * w + i
+				if !l.is_land[k] {continue}
+				wd := winds[m][k]
+				u, v := f64(wd.x) / WIND_UNIT, f64(wd.y) / WIND_UNIT
+				ui := i - int(math.round(u)) // the cell upwind
+				uj := j + int(math.round(v))
+				rise: f64
+				if uj >= 0 && uj < h {
+					rise = f64(l.elevation[k] - l.elevation[uj * w + (ui + w) % w]) / 1000
+				}
+				damp := clamp(belt[k] * 3, 0.1, 1)
+				share := RAIN_BASE * (belt[k] + FRONT_GAIN * front[k] * 0.5)
+				share += OROGRAPHIC * clamp(rise, 0, 2) * damp
+				if rise < 0 {share *= 0.7} 	// descending air
+				if c.cold[k] {share *= COLD_DRY}
+				shares[k] = min(share * SWEEP_CELLS, 0.9)
+			}
 		}
 		for _ in 0 ..< SWEEPS {
 			for j in 0 ..< h {
 				for i in 0 ..< w {
 					k := j * w + i
-					if !l.is_land[k] {
-						nq[k] = vapour_pressure(f64(t.month[m][k]) / 10)
-						continue
-					}
+					if !l.is_land[k] {continue} 	// (the sea's vapour is in nq from the start)
 					wd := winds[m][k]
 					u, v := f64(wd.x) / WIND_UNIT, f64(wd.y) / WIND_UNIT
 					x := (f64(i) + 0.5 - u * SWEEP_CELLS) / f64(w)
@@ -126,20 +146,7 @@ precipitation_build :: proc(
 				for i in 0 ..< w {
 					k := j * w + i
 					if !l.is_land[k] {rain[k] = 0; continue}
-					wd := winds[m][k]
-					u, v := f64(wd.x) / WIND_UNIT, f64(wd.y) / WIND_UNIT
-					ui := i - int(math.round(u)) // the cell upwind
-					uj := j + int(math.round(v))
-					rise: f64
-					if uj >= 0 && uj < h {
-						rise = f64(l.elevation[k] - l.elevation[uj * w + (ui + w) % w]) / 1000
-					}
-					damp := clamp(belt[k] * 3, 0.1, 1)
-					share := RAIN_BASE * (belt[k] + FRONT_GAIN * front[k] * 0.5)
-					share += OROGRAPHIC * clamp(rise, 0, 2) * damp
-					if rise < 0 {share *= 0.7} 	// descending air
-					if c.cold[k] {share *= COLD_DRY}
-					share = min(share * SWEEP_CELLS, 0.9)
+					share := shares[k]
 					r := q[k] * share
 					wet := clamp(r / 2, 0, 1)
 					q[k] -= r
