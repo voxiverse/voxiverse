@@ -295,3 +295,87 @@ test_players_are_entities :: proc(t: ^testing.T) {
 	testing.expect(t, harness_stop(h))
 	stopped = true
 }
+
+@(private = "file")
+Sync_Probe :: struct {
+	listed:    int, // entities in the list
+	entries:   int, // spatial entries, players excluded
+	at_rest:   int, // listed entities whose spatial box is their own box
+	moved:     bool, // some entity is no longer where it spawned
+	spawned:   [dynamic][3]f64,
+	spawn_now: bool,
+}
+
+@(private = "file")
+sync_probe :: proc(s: ^Server, data: rawptr) {
+	d := (^Sync_Probe)(data)
+	c := client_by_name(s, "a")
+	if c == nil {return}
+	w := c.world
+	if d.spawn_now {
+		d.spawn_now = false
+		for dx in ([]f64{-3, 0, 3}) {
+			p := c.player.position + {dx, 6, 3}
+			ent := entity_spawn(w, .Sheep, p, false)
+			append(&d.spawned, p)
+			_ = ent
+		}
+		return
+	}
+	ew := w.entity_world
+	d.listed, d.at_rest = len(w.entities.list), 0
+	found: [dynamic]game.Entity_Id
+	found.allocator = context.temp_allocator
+	game.spatial_sphere(&ew.spatial, c.player.position, 1e4, {none = {.Player}}, &found)
+	d.entries = len(found)
+	for e, i in w.entities.list {
+		if e.body.position != d.spawned[i] {d.moved = true}
+		h, ok := game.store_find(&ew.store, game.Entity_Id(e.id))
+		if !ok {continue}
+		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
+		if sl == nil {continue}
+		lo, hi := game.entity_box(e.kind, e.body.position)
+		got := game.spatial_get(&ew.spatial, sl.handle)
+		if got.lo == lo && got.hi == hi {d.at_rest += 1}
+	}
+}
+
+// The spatial service follows the list: after every tick each listed
+// entity's spatial box is its own box where it now is (it was left where the
+// entity spawned, so queries saw a falling sheep in the air it left).
+@(test)
+test_spatial_follows_list :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.listen = true
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	if !testing.expect(
+		t,
+		net_wait(
+			t,
+			{a},
+			proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[0].update.acked > 0},
+			30,
+		),
+		"never joined",
+	) {return}
+	d := Sync_Probe {
+		spawn_now = true,
+	}
+	defer delete(d.spawned)
+	call(&h.srv, sync_probe, &d)
+	for _ in 0 ..< 40 {
+		harness_step(h)
+		call(&h.srv, sync_probe, &d)
+		testing.expect_value(t, d.listed, 3)
+		testing.expect_value(t, d.entries, 3)
+		testing.expect_value(t, d.at_rest, 3)
+	}
+	testing.expect(t, d.moved, "the sheep never fell: the test proves nothing")
+}
