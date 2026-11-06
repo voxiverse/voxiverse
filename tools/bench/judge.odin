@@ -111,7 +111,7 @@ budget_scene :: proc(m: base.Metric) -> string {
 		return "the spatial service"
 	case .Collide_Move:
 		return "the collision"
-	case .Planet_Build:
+	case .Planet_Build, .Planet_History:
 		return "the planet"
 	}
 	return ""
