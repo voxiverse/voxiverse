@@ -1094,3 +1094,35 @@ entity_kill :: proc(ew: ^Entity_World, h: game.Entity_Handle, cause: u8, act: Ac
 	if game.store_despawn(st, h) != .None {return}
 	append(&ew.deaths, death)
 }
+
+// world_entity_spawn is entity_world_spawn for a caller with chunks: it
+// refuses a position whose chunk (or the one below) is not ready.
+world_entity_spawn :: proc(
+	w: ^World,
+	kind: game.Kind_Id,
+	position: [3]f64,
+	act: Act,
+) -> (
+	id: game.Entity_Id,
+	h: game.Entity_Handle,
+	err: Spawn_Error,
+) {
+	if !chunk_ready(w, position) {return 0, 0, .Not_Loaded}
+	return entity_world_spawn(w.entity_world, w.server.registry, kind, position, act)
+}
+
+// world_entity_kill is entity_kill, then the Entity_Died event to every
+// playing client of the world that knew the entity.
+world_entity_kill :: proc(w: ^World, h: game.Entity_Handle, cause: u8, act: Act) {
+	ew := w.entity_world
+	before := len(ew.deaths)
+	entity_kill(ew, h, cause, act)
+	if len(ew.deaths) == before {return}
+	s := w.server
+	died := game.Entity_Died{u32(ew.deaths[before].id)}
+	for &c in s.clients {
+		if c.state == .Playing && c.world == w && entity_known(&c, died.entity) {
+			event_send(s, &c, .Entity_Died, &died)
+		}
+	}
+}
