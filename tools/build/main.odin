@@ -385,7 +385,9 @@ usage :: proc() {
 	fmt.println(
 		"  music     render assets/music/*.score|*.mid to Ogg (--force, --wav <dir>, --midi, --audition <name> [--from <s>])",
 	)
-	fmt.println("  planet    the home world's relief: planet import <ETOPO5.DAT>")
+	fmt.println(
+		"  planet    the home world's relief: planet import <ETOPO5.DAT> | planet maps [dir]",
+	)
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)

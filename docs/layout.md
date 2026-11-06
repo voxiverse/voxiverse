@@ -159,5 +159,5 @@ package** is enforced by the `layout` lint (see above).
 | `tools/schema` | The schema tool | `*.odin` |
 | `tools/sfx` | The sound-effect tool (`build sfx`: recipes to WAVs and a targets report) | `*.odin` |
 | `tools/wireshark` | The Wireshark dissector | `*.lua` |
-| `tools/planet` | The planet tool (`build planet import`: NOAA ETOPO5 to the relief file) | `*.odin` |
+| `tools/planet` | The planet tool (`build planet import`: NOAA ETOPO5 to the relief file; `build planet maps`: PNGs of the climate model) | `*.odin` |
 | `tools/worldmap` | The world map tool | `*.odin` |
