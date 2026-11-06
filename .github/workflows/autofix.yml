@@ -52,7 +52,9 @@ jobs:
     timeout-minutes: 5
     # One pick at a time: it labels what it takes (agent-running), so the next pick skips it.
     concurrency:
-      group: autofix-pick
+      # a sweep at a time; each dispatched run in a group of its own (one pending per group:
+      # dispatches sharing the sweep's group cancelled one another)
+      group: autofix-pick-${{ inputs.issue || 'sweep' }}
       cancel-in-progress: false
     permissions:
       issues: write
