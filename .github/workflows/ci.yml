@@ -155,9 +155,19 @@ jobs:
       # What the server's heavy work costs (the budgets the tests held: a
       # save, the audit, counters, the journal, 10 000 blocks of water); CPU
       # time on this thread, budgets for a slow runner.
+      # A miss is confirmed by a second check (docs/benchmarking.md): a slow runner moves every
+      # run of the first, and so its median; a real regression fails both.
       - name: Benchmark check, budgets
         if: ${{ !cancelled() }}
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench budgets -check
+        shell: pwsh
+        run: |
+          $build = if ($IsWindows) { '.\build.bat' } else { './build.sh' }
+          & $build bench budgets -check
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::over budget once, checking again"
+            & $build bench budgets -check
+          }
+          exit $LASTEXITCODE
       # The script VM's benchmark programs: each one's instruction units within
       # its budget (exact counts, the same on every OS; one repetition, as the times
       # judge nothing here: the ratios to Lua are checked on Linux).
@@ -296,9 +306,14 @@ jobs:
       - name: Benchmark check, telemetry
         if: ${{ !cancelled() }}
         run: ./build.sh bench telemetry -check
+      # A miss is confirmed by a second check, as on the other OSes.
       - name: Benchmark check, budgets
         if: ${{ !cancelled() }}
-        run: ./build.sh bench budgets -check
+        run: |
+          ./build.sh bench budgets -check || {
+            echo "::warning::over budget once, checking again"
+            ./build.sh bench budgets -check
+          }
       # The script VM against PUC Lua 5.4 (installed above): each benchmark program
       # at most 4x Lua's CPU time and 2.5x in geometric mean (ratios on this runner, so
       # its speed cancels), the instruction budgets, and every `--! lua` conformance
