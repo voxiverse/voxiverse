@@ -152,7 +152,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		seed            = BENCH_SEED,
 		view_radius     = 6 if party else 12,
 		view_height     = 4 if party else 6,
-		workers         = max(1, os.get_processor_core_count() / 2),
+		workers         = max(1, base.cpu_count() / 2),
 		everyone_cheats = !party, // (the teleport up, flying)
 		mode            = "survival" if party else "",
 		max_players     = BENCH_BOTS,

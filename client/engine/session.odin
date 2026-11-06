@@ -6,7 +6,6 @@ import "core:math"
 import "core:mem"
 import "core:mem/virtual"
 import "core:net"
-import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
@@ -207,7 +206,7 @@ Session_Stats :: struct {
 // leaving the rest to the game.
 @(private)
 worker_count :: proc() -> int {
-	return max(1, os.get_processor_core_count() / 4)
+	return max(1, base.cpu_count() / 4)
 }
 
 // mesh_worker_count: our light and mesh threads: a quarter of the cores,
@@ -215,7 +214,7 @@ worker_count :: proc() -> int {
 // light slower).
 @(private)
 mesh_worker_count :: proc() -> int {
-	return max(2, os.get_processor_core_count() / 4)
+	return max(2, base.cpu_count() / 4)
 }
 
 // session_start starts the server and connects to it. On failure the

@@ -2,7 +2,6 @@ package engine
 
 import "base:runtime"
 import "core:mem/virtual"
-import "core:os"
 import "core:strings"
 import "core:sync"
 
@@ -72,7 +71,9 @@ fuzz_session_start :: proc(s: ^Session) {
 fuzz_client_session :: proc(data: []u8, allocator: runtime.Allocator) -> u64 {
 	context.allocator = runtime.heap_allocator()
 	defer free_all(context.temp_allocator)
-	os.set_env("VX_PACKS", FUZZ_PACKS_DIR)
+	info := base.boot_info()
+	info.env.packs = FUZZ_PACKS_DIR
+	base.boot_install(info)
 	s := new(Session)
 	defer free(s)
 	fuzz_session_start(s)

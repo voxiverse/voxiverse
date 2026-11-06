@@ -124,7 +124,7 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 		seed            = seed,
 		view_radius     = i32(clamp(opts.view_radius, 2, 32)),
 		view_height     = i32(clamp(opts.view_height, 1, 16)),
-		workers         = max(1, os.get_processor_core_count() / 2),
+		workers         = max(1, host.boot.cpu_count / 2),
 		everyone_cheats = opts.cheats,
 		save_dir        = opts.universe,
 		max_players     = opts.max_players,

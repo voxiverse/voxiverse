@@ -422,7 +422,7 @@ ui_scale :: proc(app: ^App) -> f32 {
 // "0" = off, otherwise a comma list of "1"/"on", "best" (best-practices
 // advice) and "gpu" (GPU-assisted shader checks).
 validation_options :: proc() -> gpu.Validation {
-	value, set := os.lookup_env("VX_VALIDATION", context.temp_allocator)
+	value, set := base.boot_info().env.validation.?
 	if !set {return {enabled = base.DEV}}
 	v: gpu.Validation
 	for word in split_commas(value) {

@@ -2,6 +2,8 @@ package main
 
 import "core:math"
 import "core:os"
+
+import "common:base"
 import "core:reflect"
 import "core:testing"
 
@@ -360,8 +362,11 @@ test_pad_button_names :: proc(t: ^testing.T) {
 test_pad_settings_round_trip :: proc(t: ^testing.T) {
 	path := "build/test/pad_settings_test.cfg"
 	os.make_directory_all("build/test")
-	os.set_env("VX_SETTINGS", path)
-	defer os.unset_env("VX_SETTINGS")
+	saved := base.boot_info()
+	info := saved
+	info.env.settings = path
+	base.boot_install(info)
+	defer base.boot_install(saved)
 	defer os.remove(path)
 
 	// An older file: no pad. or stick_ lines; defaults, nothing odd.

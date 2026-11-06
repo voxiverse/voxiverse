@@ -509,7 +509,7 @@ server_table :: proc(name: string) -> (base.Var_Table, bool) {
 // settings_path: VX_SETTINGS, else voxiverse/settings.cfg in the user's
 // config directory.
 settings_path :: proc() -> (string, bool) {
-	if p, set := os.lookup_env("VX_SETTINGS", context.temp_allocator); set {return p, p != ""}
+	if p, set := base.boot_info().env.settings.?; set {return p, p != ""}
 	dir, err := os.user_config_dir(context.temp_allocator)
 	if err != nil {return "", false}
 	return filepath.join({dir, "voxiverse", "settings.cfg"}, context.temp_allocator) or_else "",

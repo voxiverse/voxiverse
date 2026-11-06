@@ -1,9 +1,10 @@
 package platform
 
 import "core:log"
-import "core:os"
 import "core:strings"
 import "core:sys/linux"
+
+import "common:base"
 
 // Linux gamepads: /dev/input/event* devices read directly (never js*, never
 // grabbed), found by scanning once and watching the directory with inotify
@@ -57,12 +58,8 @@ native_pads_open :: proc(p: ^Pads) {
 	for &d in n.pads {
 		d.fd = -1
 	}
-	n.ignore = strings.clone(
-		os.get_env("SDL_GAMECONTROLLER_IGNORE_DEVICES", context.temp_allocator),
-	)
-	n.except = strings.clone(
-		os.get_env("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", context.temp_allocator),
-	)
+	n.ignore = strings.clone(base.boot_info().env.pad_ignore)
+	n.except = strings.clone(base.boot_info().env.pad_ignore_except)
 	fd, err := linux.inotify_init1({.NONBLOCK, .CLOEXEC})
 	n.inotify = -1
 	if err != .NONE {
