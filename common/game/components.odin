@@ -89,11 +89,12 @@ Origin :: struct {
 	action: u32,
 }
 
-// Hurt_By: the last damage, kept 10 s.
+// Hurt_By: the last damage, kept 10 s (by tick).
 Hurt_By :: struct {
 	action: u32,
 	entity: Entity_Id,
 	cause:  u8,
+	tick:   u32, // the server tick of the damage
 }
 
 // Frozen (tag): its chunk, or the one below, is not ready.
