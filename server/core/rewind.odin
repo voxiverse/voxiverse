@@ -50,8 +50,20 @@ rewind_record :: proc(s: ^Server, w: ^World) {
 		if c.state != .Playing || c.world != w {continue}
 		append(&f.players, Rewind_Body{u32(i), c.player.position, c.player.crouched})
 	}
-	for &ent in w.entities.list {
-		if !game.ENTITY_INFO[ent.kind].hittable {continue}
+	// One query over the Hittable entries (ids ascending); the box is the
+	// whole world, which the service clamps to the cells it has seen.
+	if game.spatial_count_entries(&w.entity_world.spatial) == 0 {return}
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_box(
+		&w.entity_world.spatial,
+		{-1e8, -1e8, -1e8},
+		{1e8, 1e8, 1e8},
+		{all = {.Hittable}},
+		&found,
+	)
+	for id in found {
+		ent, i := entity_find(w, u32(id))
+		if i < 0 {continue}
 		append(&f.creatures, Rewind_Body{ent.id, ent.body.position, false})
 	}
 }
