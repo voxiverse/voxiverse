@@ -59,6 +59,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github` | Repository policy: who reviews guarded paths, and the pull request template | `CODEOWNERS`, `pull_request_template.md` |
 | `.github/actions/apt` | The composite action that installs packages | `*.yml` |
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
+| `.github/ISSUE_TEMPLATE` | The issue forms | `*.yml` |
 | `.github/workflows` | CI | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/baselines/audio` | Audio baselines, compared as text | `*.txt`, `*.decisions` |
