@@ -1,6 +1,7 @@
 package core
 
 import "core:math"
+import "core:math/linalg"
 
 import "common:game"
 import "common:netcode"
@@ -93,8 +94,22 @@ shot_trace :: proc(
 			res = {.Player, t, &o, 0, point.y >= lo.y + HEAD_START * (hi.y - lo.y)}
 		}
 	}
-	for &ent in w.entities.list {
-		if !game.ENTITY_INFO[ent.kind].hittable {continue}
+	// The candidates come from the spatial service: the hittable creatures
+	// whose current boxes touch the ray's bounds, widened by what a creature
+	// can move within the rewound ticks (REWIND_REACH blocks a tick).
+	margin := f64(rewind_ticks(latency_ms)) * REWIND_REACH
+	end := origin + dir * res.distance
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_box(
+		&w.entity_world.spatial,
+		linalg.min(origin, end) - margin,
+		linalg.max(origin, end) + margin,
+		{all = {.Hittable}},
+		&found,
+	)
+	for id in found {
+		ent, i := entity_find(w, u32(id))
+		if i < 0 {continue}
 		at := ent.body.position
 		if frame != nil {
 			if b, there := rewind_body(frame.creatures[:], ent.id); there {at = b.position}
