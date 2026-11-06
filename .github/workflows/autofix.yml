@@ -227,12 +227,45 @@ jobs:
         with:
           packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
 
+      # The push gate (a Claude Code PreToolUse hook, below): the agent's `git push` runs only
+      # after what CI runs on Linux passes in this job. Last night 3 of the 8 real failures failed
+      # on Linux too (a build error, a test, the fuzz smoke) and each cost a CI run and a ci-fix
+      # round; here the agent hears of them in minutes, before anything leaves the runner.
+      - name: Push gate
+        if: matrix.mode != 'dry'
+        run: |
+          cat > "${RUNNER_TEMP}/push-gate.sh" <<'GATE'
+          #!/usr/bin/env bash
+          # PreToolUse hook (Bash): a `git push` runs only after what CI runs on Linux passes here.
+          in=$(cat)
+          cmd=$(jq -r '.tool_input.command // ""' <<< "${in}")
+          grep -qE '(^|[;&|( ]) *git +push' <<< "${cmd}" || exit 0
+          cd "$(jq -r '.cwd // "."' <<< "${in}")" 2>/dev/null && cd "$(git rev-parse --show-toplevel)" || exit 0
+          log="${RUNNER_TEMP:-/tmp}/push-gate.log"
+          for step in "check" "test" "fuzz --smoke" "determinism" "smoke"; do
+            start=$(date +%s)
+            if ! ./build.sh ${step} > "${log}" 2>&1; then
+              {
+                echo "Push blocked: \`./build.sh ${step}\` fails here, and CI runs it on Linux too."
+                echo "Fix the cause (never weaken or skip a check), then push again. Its last lines:"
+                tail -n 60 "${log}"
+              } >&2
+              exit 2
+            fi
+            echo "push gate: ${step} passed in $(( $(date +%s) - start ))s" >&2
+          done
+          exit 0
+          GATE
+
       - name: Agent
         id: claude
         if: matrix.mode != 'dry'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: >-
+            {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command",
+            "command": "bash ${{ runner.temp }}/push-gate.sh", "timeout": 2400}]}]}}
           # the sweep dispatches each agent run itself (github-actions is the actor)
           allowed_bots: "github-actions"
           claude_args: >-
@@ -268,7 +301,9 @@ jobs:
                whole issue in one pull request. If it is too big, do a part that stands on its own.
             4. Before pushing, run what CI runs on Linux: `./build.sh check` and `./build.sh test`, and
                fix everything they report (a new folder needs its docs/layout.md row). Commits per
-               AGENTS.md, "Commits".
+               AGENTS.md, "Commits". Every `git push` you run first passes a gate (check, test,
+               fuzz --smoke, determinism, smoke; several minutes): a push it blocks tells you what
+               failed. Fix that and push again.
             5. Push, then open the pull request and turn on auto-merge, as your last actions:
                `gh pr create --head claude/issue-${{ matrix.issue }} --base main --title "<subject>" --body-file /tmp/pr.md`
                `gh pr merge --auto --rebase claude/issue-${{ matrix.issue }}`
