@@ -142,3 +142,23 @@ test_world_holds_entity_world :: proc(t: ^testing.T) {
 	testing.expect_value(t, w.entity_world.tick, before + 1)
 	testing.expect_value(t, game.store_count(&w.entity_world.store), 0)
 }
+
+@(test)
+test_world_spawn_not_loaded :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	sheep, _ := game.registry_kind(h.srv.registry, "sheep")
+	_, _, err := world_entity_spawn(w, sheep, {1e6, 64, 1e6}, Act{})
+	testing.expect_value(t, err, Spawn_Error.Not_Loaded)
+	testing.expect_value(t, game.store_count(&w.entity_world.store), 0)
+	// a kill nobody knew of records the death and sends nothing
+	id, eh, err2 := entity_world_spawn(w.entity_world, h.srv.registry, sheep, {1, 64, 1}, Act{})
+	testing.expect_value(t, err2, Spawn_Error.None)
+	game.store_apply(&w.entity_world.store)
+	world_entity_kill(w, eh, 3, Act{})
+	testing.expect_value(t, len(w.entity_world.deaths), 1)
+	testing.expect_value(t, w.entity_world.deaths[0].id, id)
+}
