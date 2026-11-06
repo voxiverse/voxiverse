@@ -2,6 +2,7 @@ package core
 
 import "base:runtime"
 import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:time"
 
@@ -443,7 +444,7 @@ budget_rules :: proc() -> (r: Budget_Rules, ok: bool) {
 		reg, errs := game.registry_build(sources, .Server, a)
 		us = base.thread_cpu_us() - start
 		if reg == nil {
-			for e in errs {fmt.eprintln(game.pack_error_text(e))}
+			for e in errs {log.error(game.pack_error_text(e))}
 			return us, false
 		}
 		game.registry_destroy(reg)

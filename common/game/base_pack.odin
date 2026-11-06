@@ -1,7 +1,7 @@
 package game
 
 import "base:runtime"
-import "core:fmt"
+import "core:log"
 import "core:path/filepath"
 import "core:strings"
 
@@ -65,7 +65,7 @@ registry_base :: proc(allocator := context.allocator) -> ^Registry {
 	src := base_pack_source(context.temp_allocator)
 	reg, errs := registry_build({src}, .Server, allocator)
 	if reg == nil {
-		for e in errs {fmt.eprintln(pack_error_text(e))}
+		for e in errs {log.error(pack_error_text(e))}
 		panic("the base pack does not build")
 	}
 	return reg

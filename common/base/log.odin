@@ -5,7 +5,6 @@ import "core:log"
 import "core:os"
 import "core:strings"
 import "core:sync"
-import "core:terminal"
 import "core:terminal/ansi"
 import "core:time"
 
@@ -69,7 +68,7 @@ log_sink_init :: proc(
 		start         = time.tick_now(),
 		file          = file,
 		console_level = console_level,
-		color         = terminal.color_enabled && terminal.is_terminal(os.stderr),
+		color         = out_is_color(.Err),
 	}
 	if file != nil {
 		now := time.now()
@@ -193,7 +192,8 @@ tagged_logger_proc :: proc(
 			if level >= .Warning {fmt.sbprintf(&b, " (%s:%d)", file, location.line)}
 		}
 		// Errors to stderr, the rest to stdout; one write per line.
-		fmt.fprintln(os.stderr if level >= .Error else os.stdout, strings.to_string(b))
+		strings.write_byte(&b, '\n')
+		out_write(.Err if level >= .Error else .Out, strings.to_string(b))
 	}
 	if s.file != nil {
 		fmt.fprintfln(

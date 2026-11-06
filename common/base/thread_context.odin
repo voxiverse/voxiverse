@@ -1,7 +1,6 @@
 package base
 
 import "base:runtime"
-import "core:fmt"
 import "core:os"
 
 // thread_context is the context a thread we start should run in: the caller's
@@ -20,7 +19,7 @@ thread_context :: proc() -> runtime.Context {
 
 @(private = "file")
 thread_assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Location) -> ! {
-	fmt.eprintfln("%s: %s (%v)", prefix, message, loc)
-	fmt.eprintln("a thread outside the test runner failed: ending the run")
+	out_printfln(.Err, "%s: %s (%v)", prefix, message, loc)
+	out_write(.Err, "a thread outside the test runner failed: ending the run\n")
 	os.exit(2)
 }
