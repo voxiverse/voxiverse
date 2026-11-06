@@ -8,9 +8,9 @@ name: guard
 # checked out or run.
 #
 # A pull request that changes the agents' workflow (autofix.yml) is also run once, dry, before
-# it merges: a sweep on its branch that labels nothing and starts its picks as one-turn agent
-# runs (autofix.yml, "Harness check"). Guard passes only if they all start and finish green;
-# last night's three harness bugs would each have failed here instead of on main.
+# it merges: a sweep on its branch that labels nothing and starts its picks as dry agent runs
+# (autofix.yml, "Harness check"). Guard passes only if they all finish green. (Claude itself
+# runs only from main's copy of the workflow, so a branch checks everything up to it.)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
