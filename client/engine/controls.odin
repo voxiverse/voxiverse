@@ -48,6 +48,7 @@ Bindings :: struct {
 	hotbar_previous: platform.Key,
 	screenshot:      platform.Key,
 	fullscreen:      platform.Key,
+	dev_chat:        platform.Key, // developer chat (while the devchat setting is set)
 	tab_prev:        platform.Key, // menus: the tab before
 	tab_next:        platform.Key, // menus: the tab after
 }
@@ -85,6 +86,7 @@ DEFAULT_BINDINGS :: Bindings {
 	hotbar_5     = .Num_5,
 	screenshot   = .F2,
 	fullscreen   = .F11,
+	dev_chat     = .F9,
 	tab_prev     = .Q,
 	tab_next     = .E,
 }
@@ -176,6 +178,11 @@ BINDING_VARS := [?]base.Var {
 		field = "fullscreen",
 		label = "Toggle fullscreen",
 		help = "Switch between a window and the whole screen.",
+	},
+	{
+		field = "dev_chat",
+		label = "Developer chat",
+		help = "Open the conversation with the developers (when the devchat setting names a collector).",
 	},
 	{
 		field = "tab_prev",

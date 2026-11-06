@@ -141,7 +141,7 @@ message the collector refused keeps its reason and is not sent again. Replies ar
 after the newest one in the file: every 30 s while the chat screen is open, every 5 minutes
 otherwise, and at once when a message is written.
 
-The **Developer chat** button on the title screen and in the game menu (shown only while the
+F9 (rebindable in Options) or the **Developer chat** button on the title screen and in the game menu (shown only while the
 setting is set) opens the conversation: each entry with who wrote it and when, a reply's link
 under it, and whether a message still waits to be sent. Enter or Send sends the line (at most
 4000 bytes, counted beside it); "Attach where I am" adds the universe and the position. A reply
