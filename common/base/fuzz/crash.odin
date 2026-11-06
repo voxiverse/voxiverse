@@ -150,8 +150,8 @@ crash_save :: proc(crash: ^Crash_State, what: string) {
 		fmt.tprintf("%s/crash-%016x.txt", dir, hash),
 		transmute([]u8)note,
 	)
-	fmt.eprintfln("fuzz-failure: %s", failure_key(what))
-	fmt.eprintfln("fuzz-input: %s", path)
+	base.out_printfln(.Err, "fuzz-failure: %s", failure_key(what))
+	base.out_printfln(.Err, "fuzz-input: %s", path)
 }
 
 // assertion_failure: a failed assert or a panic inside a target saves the input, then stops.
