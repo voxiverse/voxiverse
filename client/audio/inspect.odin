@@ -203,7 +203,7 @@ inspect_replay :: proc(fz: ^Frozen) -> bool {
 				keep = voice_kept(fz, c.id)
 			case Fade_Cmd:
 				keep = voice_kept(fz, c.id)
-			case Bus_Cmd, Duck_Cmd, Snapshot_Cmd, Reverb_Cmd, Listener_Cmd:
+			case Bus_Cmd, Duck_Cmd, Snapshot_Cmd, Reverb_Cmd, Listener_Cmd, Replace_Cmd:
 			}
 		}
 		if keep {append(&records, r)}
