@@ -45,6 +45,20 @@ Ugc_Send :: #type proc "c" (self: rawptr, query: u64) -> u64
 @(private)
 Ugc_Release :: #type proc "c" (self: rawptr, query: u64) -> bool
 
+@(private)
+Ugc_Count :: #type proc "c" (self: rawptr) -> u32
+@(private)
+Ugc_Subscribed :: #type proc "c" (self: rawptr, ids: ^u64, max: u32) -> u32
+@(private)
+Ugc_Install_Info :: #type proc "c" (
+	self: rawptr,
+	id: u64,
+	size: ^u64,
+	folder: [^]u8,
+	folder_size: u32,
+	stamp: ^u32,
+) -> bool
+
 Real :: struct {
 	lib:              dynlib.Library,
 	shutdown:         Void_Proc,
@@ -59,6 +73,9 @@ Real :: struct {
 	ugc_create:       Ugc_Create,
 	ugc_send:         Ugc_Send,
 	ugc_release:      Ugc_Release,
+	ugc_count:        Ugc_Count,
+	ugc_subscribed:   Ugc_Subscribed,
+	ugc_install_info: Ugc_Install_Info,
 }
 
 @(private)
@@ -95,6 +112,12 @@ real_open :: proc(r: ^Real, dir: string) -> bool {
 	)
 	r.ugc_send = cast(Ugc_Send)sc.symbol(lib, "SteamAPI_ISteamUGC_SendQueryUGCRequest")
 	r.ugc_release = cast(Ugc_Release)sc.symbol(lib, "SteamAPI_ISteamUGC_ReleaseQueryUGCRequest")
+	r.ugc_count = cast(Ugc_Count)sc.symbol(lib, "SteamAPI_ISteamUGC_GetNumSubscribedItems")
+	r.ugc_subscribed = cast(Ugc_Subscribed)sc.symbol(lib, "SteamAPI_ISteamUGC_GetSubscribedItems")
+	r.ugc_install_info = cast(Ugc_Install_Info)sc.symbol(
+		lib,
+		"SteamAPI_ISteamUGC_GetItemInstallInfo",
+	)
 
 	if init == nil ||
 	   r.shutdown == nil ||

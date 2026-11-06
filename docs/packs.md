@@ -132,3 +132,19 @@ hostile), player input, generated text and names, and the pack transport.
 | Items | Every item entering or leaving what the server holds is one `ledger` call with a reason (a faucet counts positive, a sink negative); an audit sums everything held against the entries and reports a mismatch without fixing it. |
 | Damage from bad changes | Every block change carries an actor, a system and a mechanism in the journal; a bad actor's changes are undone from it ([journal.md](journal.md)). |
 | Telemetry | Aggregate behaviour only: no names, chat text or addresses ([telemetry.md](telemetry.md)); the consent question is off by default (`telemetry.ask` = 0) and nothing is sent while it is unanswered. |
+
+## Workshop packs
+
+With Steam on (docs/platforms.md, "Steam"), the packs a player subscribed to on the Steam
+Workshop are one more pack source beside the local ones; with Steam off the source does not
+exist (`client/steam/workshop.odin`).
+
+- **Layout.** An item's folder (Steam names it by the item's id) holds the pack as a sub-folder
+  named by its namespace, in the layout above. An item with no pack folder is refused.
+- **Trust.** Nothing from the Workshop is trusted more than a local pack: its folder is read by
+  `server/packs` (symlinks and files past the limits refused) and the result goes through the
+  same `registry_build`, so a malformed item fails with the errors a local pack gets.
+- **Publishing.** `workshop_publish_info` takes the title and description from the local pack's
+  `pack.json` and the preview from a `preview.png` of at most 1 MiB in its folder;
+  `workshop_publish` hands them to Steam. The real Steam does not publish yet; the fake records
+  the call. There is no menu entry for either yet.
