@@ -30,7 +30,7 @@ permission. Minecraft's command names are accepted where the equivalent exists: 
 | `/fill [box] <block>`, `/replace [box] <from> <to>`, `/sphere [x y z] <radius> <block>` | Bulk edits (`world.edit.bulk`; at most 64x64x64 blocks) of the selection, or of a given box `x1 y1 z1 x2 y2 z2`. The server applies them in one pass and sends each touched chunk whole, after a `Bulk_Begin` stating how many follow. |
 | `/structure save <name> [box] [clear]`, `/structure paste <name> [x y z] [turns]`, `/structure list` | Keeps the selection (or a box) as `<world>/structures/<name>.vxs` (air is kept as void, so pasting leaves what is there; with `clear`, as air) / places one at pos1 (or x y z) through the bulk edit pipeline, turned 0-3 quarters (`world.structure`). |
 | `/regen [radius]` | Regenerates the unedited chunks within a radius (1-8 chunks) from the generator in its current configuration (`world.gen`). |
-| `/summon [kind] [count]`, `/kill <kind\|all> [radius]` | Summons sheep in front of you (`world.summon`) / removes the entities of a kind within a radius (`world.kill`). Sheep also appear by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one player, and despawn when nobody is within 80 blocks. |
+| `/summon [kind] [count]`, `/kill <kind\|all> [radius]` | Summons sheep in front of you (`world.summon`) / removes the entities of a kind within a radius (`world.kill`). `/tag <kind\|all> add\|remove <name> [radius]` tags the entity world's entities of a kind within a radius (`world.tag`; for tests and admins). Sheep also appear by themselves in daylight on grass 16-40 blocks from a player, at most 6 near one player, and despawn when nobody is within 80 blocks. |
 | `/damage <player> <amount>` | Hurts a player like any damage source: abilities and rules decide the effect. |
 | `/seed`, `/packs`, `/pack reload` | The world's seed / the packs the universe runs, in load order / development builds: re-reads the packs' files and swaps the registry (`server.packs`). |
 | `/save`, `/export` | Saves the universe (`server.save`) / saves, then writes the universe as one file in `exports/` (`server.export`). |
@@ -73,7 +73,7 @@ permission. Minecraft's command names are accepted where the equivalent exists: 
 What a player may do is a set of nodes: dotted lower-case words. The families in use:
 
 - `world.*`: `world.edit` (build), `world.edit.bulk`, `world.edit.undo`, `world.fire`,
-  `world.summon`, `world.kill`, `world.structure`, `world.time`, `world.gen`, `world.spawn`,
+  `world.summon`, `world.kill`, `world.tag`, `world.structure`, `world.time`, `world.gen`, `world.spawn`,
   `world.travel`, `world.rollback`, `world.protect`;
 - `debug.coordinates`: F3 shows position, chunk and the block underneath when
   `rules.show_coordinates` is off;

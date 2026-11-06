@@ -48,6 +48,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"gamerule", "[name] [value]", {0, 2}, admin_rule, "info.rules"},
 	{"damage", "<player> <amount>", {2, 2}, admin_damage, "voxiverse.command.damage"},
 	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
+	{"tag", "<kind|all> add|remove <name> [radius]", {3, 4}, admin_tag, "world.tag"},
 	{"seed", "", {0, 0}, admin_seed, "info.seed"},
 	{"packs", "", {0, 0}, admin_packs, "info.packs"},
 	{"pack", "reload", {1, 1}, admin_pack, "server.packs"},

@@ -342,6 +342,45 @@ admin_kill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
+// admin_tag: tag <kind|all> add|remove <name> [radius]: the entity world's
+// entities of a kind within a radius (32), for tests and admins.
+@(private)
+admin_tag :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if args[1] != "add" && args[1] != "remove" {return false}
+	radius := 32.0
+	if len(args) == 4 {
+		radius = strconv.parse_f64(args[3]) or_return
+		if !(radius > 0 && radius <= 256) {return false}
+	}
+	kind: game.Kind_Id
+	if args[0] != "all" {
+		ok: bool
+		if kind, ok = game.registry_kind(s.registry, args[0]); !ok {
+			notice(s, c, fmt.tprintf("&cNo entity kind %s", args[0]))
+			return true
+		}
+	}
+	n, err := entity_tag_near(
+		c.world.entity_world,
+		kind,
+		c.player.position,
+		radius,
+		args[1] == "add",
+		args[2],
+	)
+	switch err {
+	case .None, .Stale:
+		notice(s, c, fmt.tprintf("Tagged %d", n))
+	case .Bad_Name:
+		notice(s, c, "&cA tag is 1 to 32 of a-z 0-9 _ :")
+	case .Names_Full:
+		notice(s, c, "&cThis world has too many tag names")
+	case .Tags_Full:
+		notice(s, c, fmt.tprintf("&cAn entity has 4 tags already (%d tagged)", n))
+	}
+	return true
+}
+
 // admin_seed: the world's seed.
 @(private)
 admin_seed :: proc(s: ^Server, c: ^Client, args: []string) -> bool {

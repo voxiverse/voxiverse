@@ -1042,6 +1042,35 @@ entity_has_tag :: proc(ew: ^Entity_World, h: game.Entity_Handle, name: string) -
 	return false
 }
 
+// entity_tag_near adds (or removes) a tag on every entity of a kind (0: any)
+// within radius of center, and returns how many it changed. It stops at the
+// first error (a bad name, a full name table or a full entity).
+entity_tag_near :: proc(
+	ew: ^Entity_World,
+	kind: game.Kind_Id,
+	center: [3]f64,
+	radius: f64,
+	add: bool,
+	name: string,
+) -> (
+	count: int,
+	err: Tag_Error,
+) {
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(&ew.spatial, center, radius, {kind = u16(kind)}, &found)
+	for id in found {
+		h, ok := game.store_find(&ew.store, id)
+		if !ok {continue}
+		if add {
+			if err = entity_tag(ew, h, name); err != .None {return}
+		} else {
+			entity_untag(ew, h, name)
+		}
+		count += 1
+	}
+	return
+}
+
 // entity_hurt takes amount from the entity's health, remembering who did it
 // (by: 0 for nobody), and kills it at zero. False for a stale handle or an
 // entity without health.
