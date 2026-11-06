@@ -710,3 +710,64 @@ spatial_chunk :: proc(sp: ^Spatial, pos: Chunk_Pos, out: ^[dynamic]Entity_Id) {
 	}
 	slice.sort(out[start:])
 }
+
+// cells_find appends to out, in (y, z, x) order, every loaded block position
+// in lo ..< hi whose block m has. It returns how many it appended, or -1
+// (appending nothing) when the box holds more than max_volume cells.
+cells_find :: proc(
+	q: Block_Query,
+	lo, hi: Block_Pos,
+	m: ^Matcher,
+	out: ^[dynamic]Block_Pos,
+	max_volume := 32_768,
+) -> int {
+	if hi.x <= lo.x || hi.y <= lo.y || hi.z <= lo.z {return 0}
+	volume := int(hi.x - lo.x) * int(hi.y - lo.y) * int(hi.z - lo.z)
+	if volume > max_volume {return -1}
+	n := 0
+	for y in lo.y ..< hi.y {
+		for z in lo.z ..< hi.z {
+			for x in lo.x ..< hi.x {
+				b, loaded := q.get(q.data, {x, y, z})
+				if loaded && rule_matcher_has(m, b) {
+					append(out, Block_Pos{x, y, z})
+					n += 1
+				}
+			}
+		}
+	}
+	return n
+}
+
+// cells_nearest: the matching loaded cell whose centre is nearest to center,
+// within radius; ties go to the first in (y, z, x) order. ok is false when
+// there is none (or the radius needs more cells than cells_find allows).
+cells_nearest :: proc(
+	q: Block_Query,
+	center: [3]f64,
+	radius: f64,
+	m: ^Matcher,
+) -> (
+	pos: Block_Pos,
+	ok: bool,
+) {
+	lo := Block_Pos {
+		i32(math.floor(center.x - radius)),
+		i32(math.floor(center.y - radius)),
+		i32(math.floor(center.z - radius)),
+	}
+	hi := Block_Pos {
+		i32(math.floor(center.x + radius)) + 1,
+		i32(math.floor(center.y + radius)) + 1,
+		i32(math.floor(center.z + radius)) + 1,
+	}
+	found := make([dynamic]Block_Pos, 0, 0, context.temp_allocator)
+	if cells_find(q, lo, hi, m, &found) < 0 {return}
+	best := radius * radius
+	for p in found {
+		d := [3]f64{f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5} - center
+		d2 := d.x * d.x + d.y * d.y + d.z * d.z
+		if d2 <= best && (!ok || d2 < best) {best, pos, ok = d2, p, true}
+	}
+	return
+}

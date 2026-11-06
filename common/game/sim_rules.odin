@@ -103,6 +103,29 @@ rule_matcher_has :: #force_inline proc(m: ^Rule_Matcher, b: Block) -> bool {
 	return i >> 6 < len(m.bits) && m.bits[i >> 6] & (1 << u64(i & 63)) != 0
 }
 
+// Matcher is the shared compiled block matcher: a bit per block value.
+Matcher :: Rule_Matcher
+
+// matcher_compile: `text` (`ns:name[...]`, `#tag`, `@flag` or `$list`) as a
+// matcher over the registry's blocks. ok is false when the text is not one
+// matcher (unknown id, tag, flag or list, or text left over).
+matcher_compile :: proc(reg: ^Registry, text: string) -> (m: Matcher, ok: bool) {
+	c := Rule_Compiler {
+		reg = reg,
+	}
+	m = new_matcher(&c) // (the caller frees m.bits)
+	keep := context.allocator
+	context.allocator = context.temp_allocator // (messages nobody reads)
+	p: Rule_Parser
+	if !lex_value(
+		&c,
+		{kind = .String, line = 1, column = 1, s = text},
+		&p,
+	) {delete(m.bits, keep); return {}, false}
+	if !parse_matcher_into(&p, &m) || !finish(&p) {delete(m.bits, keep); return {}, false}
+	return m, true
+}
+
 Rule_Program :: struct {
 	stmts:    []Rule_Stmt, // stmts[first] starts the rule
 	first:    i32,
@@ -173,6 +196,7 @@ Rule_Parser :: struct {
 rule_fail :: proc(c: ^Rule_Compiler, why: Rule_Refusal, line, column: i32, message: string) {
 	if c.errors == 0 {c.first = why}
 	c.errors += 1
+	if c.b == nil {return} 	// a matcher compiled outside a pack build: no report
 	if c.errors > RULE_MAX_ERRORS {return}
 	// (at most RULE_MAX_ERRORS a file: the file's earlier rules count)
 	n := 0
