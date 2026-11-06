@@ -5,6 +5,7 @@ name: autofix
 # (`autofix` issues) are worked when there is room.
 #
 # Order of work, each sweep (at most AGENTS_MAX_PER_RUN, 3 side by side):
+#   0. `priority` issues: while one is open, nothing else starts;
 #   1. playtest feedback: open `agent` issues without a milestone, oldest first;
 #   2. milestone tasks: the oldest open `agent` issue of each milestone (one at a time per
 #      milestone, so a task never starts before the one it builds on has merged);
@@ -18,6 +19,8 @@ name: autofix
 # A failed CI run counts only after it failed twice: a sweep reruns a first failure's failed jobs
 # (a flake passes the second time) before an agent is sent to fix it.
 # An issue whose exit check is already met on main is closed by the agent that finds it so.
+# A task whose body says "Starts after #N" waits until #N is closed (queued milestones that build
+# on another milestone's work).
 # Harness check: workflow_dispatch with dry=true on a branch sweeps without labelling and starts
 # each pick as a `dry` agent run (one turn, no change) on that branch (guard.yml runs it for
 # every pull request that changes this file).
@@ -57,7 +60,7 @@ jobs:
     name: Pick issues
     if: >-
       vars.AGENTS_ENABLED == 'true'
-      && (github.event_name != 'issues' || github.event.label.name == 'autofix' || github.event.label.name == 'agent')
+      && (github.event_name != 'issues' || github.event.label.name == 'autofix' || github.event.label.name == 'agent' || github.event.label.name == 'priority')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # One pick at a time: it labels what it takes (agent-running), so the next pick skips it.
@@ -119,9 +122,13 @@ jobs:
           if [ -n "${ONE}" ]; then
             candidates="[${ONE}]"
           else
-            agent=$(issues agent); fixes=$(issues autofix)
-            candidates=$(jq -c -n --argjson a "${agent}" --argjson f "${fixes}" '
-              ($a | map(select(.milestone == null)) | map(.number))
+            agent=$(issues agent); fixes=$(issues autofix); priority=$(issues priority)
+            # `priority` pre-empts all: while one is open, it is the only work a sweep starts
+            # (agents already working finish; a toolchain bump touches everything).
+            if [ "$(jq length <<< "${priority}")" -gt 0 ]; then agent='[]'; fixes='[]'; fi
+            candidates=$(jq -c -n --argjson p "${priority}" --argjson a "${agent}" --argjson f "${fixes}" '
+              ($p | map(.number))
+              + ($a | map(select(.milestone == null)) | map(.number))
               + ($a | map(select(.milestone != null)) | group_by(.milestone) | map(.[0].number))
               + ($f | map(.number))
               | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end)')
@@ -133,6 +140,13 @@ jobs:
             [ "$(jq length <<< "${work}")" -lt "${MAX}" ] || break
             labels=$(gh api "repos/${GH_REPO}/issues/${n}" --jq '[.labels[].name] | join(" ")')
             case " ${labels} " in *" needs-human "*|*" agent-running "*) echo "#${n}: skip (${labels})"; continue ;; esac
+            # "Starts after #M" in the body: the task waits (and its milestone with it) until #M is
+            # closed, so a queued task that needs another milestone's work never starts early.
+            waiting=""
+            for m in $(gh api "repos/${GH_REPO}/issues/${n}" --jq .body | grep -oiE 'starts after #[0-9]+' | grep -oE '[0-9]+' || true); do
+              [ "$(gh api "repos/${GH_REPO}/issues/${m}" --jq .state)" = open ] && waiting="${waiting} #${m}"
+            done
+            if [ -n "${waiting}" ]; then echo "#${n}: waits for${waiting}"; continue; fi
             branch="claude/issue-${n}"
             prs=$(gh pr list --head "${branch}" --state all --json number --jq 'length')
             if [ "${prs}" -ge 8 ]; then
