@@ -77,6 +77,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse/data/models` | Models | `*.json` |
 | `assets/packs/voxiverse/data/shapes` | Block shapes | `*.json` |
 | `assets/packs/voxiverse/data/sim` | Simulation rules (fluids) | `*.json` |
+| `assets/packs/voxiverse/data/entities` | Entity kinds (animals, the engine's own) | `*.json` |
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |

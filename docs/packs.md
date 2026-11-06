@@ -32,7 +32,7 @@ Each registry kind has one directory and one JSON object of named definitions pe
 | Texture, Sound | `assets/textures`, `assets/sounds` (each with a `blocks.json` naming the files or generators) |
 | Block, Item, Block tag, Item tag, Recipe | `data/blocks`, `data/items`, `data/block_tags`, `data/item_tags`, `data/recipes` |
 | Shape, Model, Game mode | `data/shapes`, `data/models`, `data/game_modes` |
-| Channel, Sim rule | `data/channels`, `data/sim` |
+| Channel, Sim rule, Entity | `data/channels`, `data/sim`, `data/entities` |
 | Structure | `server/structures` |
 
 A file elsewhere in a pack is refused with the layout above in the message. Pack JSON is RFC 8259
@@ -43,6 +43,26 @@ assigned in load order; packs load in the order the universe lists them.
 
 `./build.sh packs [<dir>...]` loads the base pack plus the given pack directories the way a
 universe does, prints every error and a summary with the registry hash (`tools/packcheck`).
+
+## Entity kinds
+
+Entity kinds are `data/entities/*.json` entries (`common/game/registry_entities.odin`); the base
+pack's are `animals.json` (`sheep`) and `engine.json` (`rocket`, `item`, `player`), with the
+numbers the engine's tables hold today. A kind is a `Kind_Id` (its registry index + 1; 0 is none)
+and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the registry is built
+(a `Pack_Error` at the value, saying the fix):
+
+- `box` `[width, height]`, each 0.1..4; `health` (default 1); `saved`, `summonable`, `hittable`.
+- `physics` (`none`, `walker`, `item`, `projectile`) with its block of numbers (`walker`, `item`
+  or `projectile`), required with it and refused without it.
+- `brain` (`none`, `grazer`; `grazer` needs `walker`), `with` (`wool`, `genes`, `breeding`),
+  `looks` (at most 16; each is computed from a component the kind must have in `with`).
+- `fields`: at most 8 saved numbers, `{"name": {"type": "u8"|"u16", "min": n, "max": n}}`.
+- `model`: `sheep`, `rocket`, `item`, `player` or `{"box": [r, g, b]}`.
+- `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`,
+  `within`, `distance`, `group`), all required.
+
+The server's entities do not read these yet; moving them onto kinds is the rest of M50e.
 
 ## Simulation rules
 

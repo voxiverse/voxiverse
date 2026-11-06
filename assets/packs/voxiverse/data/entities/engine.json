@@ -1,0 +1,22 @@
+{
+  "rocket": {
+    "box": [0.3, 0.3],
+    "health": 1,
+    "physics": "projectile",
+    "projectile": {"speed": 32, "gravity": 3, "life": 6, "explode": 4},
+    "model": "rocket"
+  },
+  "item": {
+    "box": [0.25, 0.25],
+    "health": 1,
+    "saved": true,
+    "physics": "item",
+    "item": {"pickup_delay": 0.5, "owner_delay": 2, "range": 1.5, "merge": 1.0, "life": 300, "throw": 9},
+    "model": "item"
+  },
+  "player": {
+    "box": [0.6, 1.8],
+    "physics": "none",
+    "model": "player"
+  }
+}

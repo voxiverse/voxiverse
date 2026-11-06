@@ -141,6 +141,7 @@ Content_Kind :: enum u8 {
 	Model,
 	Channel,
 	Sim_Rule,
+	Entity,
 }
 
 Block_Flag :: enum u8 {
@@ -398,6 +399,7 @@ Registry :: struct {
 	models:     []Model_Def,
 	channels:   []Channel_Info, // by channel id; 0 is voxiverse:light
 	sim:        Sim_Rules,
+	kinds:      []Kind_Info, // entity kinds: a Kind_Id is the index + 1
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
 	hash:       u64,
@@ -825,6 +827,7 @@ registry_text_of :: proc(
 		)
 	}
 	registry_sim_text(reg, &b)
+	entity_kinds_text(reg, &b)
 	if all {
 		for s in reg.structures {
 			fmt.sbprintf(&b, "structure %s %v %x\n", s.id, s.template.size, s.hash)

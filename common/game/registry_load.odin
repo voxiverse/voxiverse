@@ -75,12 +75,13 @@ KIND_DIRS := [Content_Kind]string {
 	.Model     = "data/models",
 	.Channel   = "data/channels",
 	.Sim_Rule  = "data/sim",
+	.Entity    = "data/entities",
 }
 
 // What a pack holds, by side: assets/ is the client's alone, data/ is both
 // sides', server/ is the server's alone (the server sends assets/ and data/).
 @(private)
-PACK_LAYOUT_HELP :: "not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/ (both sides) and server/structures/ (server only)"
+PACK_LAYOUT_HELP :: "not a pack file; a pack holds pack.json and the directories assets/textures/, assets/sounds/ (client only), data/blocks/, data/items/, data/block_tags/, data/item_tags/, data/recipes/, data/shapes/, data/game_modes/, data/models/, data/channels/, data/sim/, data/entities/ (both sides) and server/structures/ (server only)"
 
 @(private)
 KIND_NAMES := [Content_Kind]string {
@@ -97,6 +98,7 @@ KIND_NAMES := [Content_Kind]string {
 	.Model     = "a model",
 	.Channel   = "a channel",
 	.Sim_Rule  = "a simulation rule",
+	.Entity    = "an entity kind",
 }
 
 @(private)
@@ -114,6 +116,7 @@ KIND_ADJ := [Content_Kind]string {
 	.Model     = "model",
 	.Channel   = "channel",
 	.Sim_Rule  = "simulation rule",
+	.Entity    = "kind",
 }
 
 @(private)
@@ -692,6 +695,8 @@ fields_of :: proc(kind: Content_Kind) -> []string {
 		return CHANNEL_FIELDS
 	case .Sim_Rule:
 		return SIM_FIELDS
+	case .Entity:
+		return ENTITY_FIELDS
 	}
 	return nil
 }

@@ -553,6 +553,10 @@ resolve_all :: proc(b: ^Reg_Build, reg: ^Registry) {
 	build_sim_rules(b, reg)
 	if len(b.errs) > 0 {return}
 
+	// --- Entity kinds (spawn matchers name blocks). ---
+	build_entity_kinds(b, reg)
+	if len(b.errs) > 0 {return}
+
 	reg.packs = make([]Pack_Info, len(b.packs))
 	copy(reg.packs, b.packs[:])
 	reg.hash = registry_hash_of(reg)

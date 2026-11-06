@@ -1,0 +1,25 @@
+{
+  "sheep": {
+    "box": [0.8, 0.9],
+    "health": 4,
+    "saved": true,
+    "summonable": true,
+    "hittable": true,
+    "physics": "walker",
+    "walker": {"walk_speed": 1.4, "run_speed": 4.2, "jump": 1.2, "step": 0},
+    "brain": "grazer",
+    "with": ["wool", "genes", "breeding"],
+    "looks": ["shorn", "lamb", "black", "spotted", "in_love"],
+    "model": "sheep",
+    "spawn": {
+      "on": "voxiverse:grass",
+      "day": [0.27, 0.73],
+      "every": 60,
+      "chance": 0.5,
+      "cap": 6,
+      "within": 48,
+      "distance": [16, 40],
+      "group": [1, 3]
+    }
+  }
+}
