@@ -65,6 +65,7 @@ queue_report :: proc(r: ^Reporter, kind: telemetry.Kind, text: string, a, b, c: 
 
 // telemetry_update: once a frame while playing.
 telemetry_update :: proc(app: ^App) {
+	crash_offer_update(app)
 	r := &app.reporter
 	// The one question, the first time (not in scripts, benchmarks or checks),
 	// and only while telemetry.ask is on (off by default).

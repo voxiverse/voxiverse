@@ -117,6 +117,7 @@ App :: struct {
 	settings:         Settings,
 	screen:           Screen,
 	overlays:         Overlays, // what is open over the screen (overlay.odin)
+	crash_offer:      Crash_Offer, // the dialog about earlier crashes (crash_offer.odin)
 	crash_track:      Crash_Track, // what the crash bundle was told (crash_track.odin)
 	account:          game.Account_Key, // who we are to servers (account.odin)
 	new_character:    [dynamic]u8, // the name typed on the characters screen

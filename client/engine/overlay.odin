@@ -12,6 +12,7 @@ Overlay :: enum u8 {
 	Audio_Inspector, // F8, dev builds: the audio freeze and solo (dev_audio_inspector.odin)
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 	Open_To_LAN, // the game menu's dialog (overlay_lan.odin)
+	Crash_Report, // the offer to open the last crash's folder (crash_offer.odin)
 	Death, // dead: how, and the Respawn button (overlay_death.odin)
 	Devchat, // the conversation with the developers (overlay/devchat.odin)
 }
@@ -42,6 +43,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Audio_Inspector = {takes = {.Mouse}, in_game = true}, // the game runs on
 	.Consent = {takes = {.Keyboard, .Mouse}},
 	.Open_To_LAN = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
+	.Crash_Report = {takes = {.Keyboard, .Mouse}},
 	.Death = {takes = {.Keyboard, .Mouse}, in_game = true},
 	.Devchat = {takes = {.Keyboard, .Mouse}},
 }
