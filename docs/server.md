@@ -46,6 +46,7 @@ permission. Minecraft's command names are accepted where the equivalent exists: 
 | `/home [name]`, `/sethome [name]`, `/delhome <name>`, `/homes` | Your homes (`teleport.home`; at most your role's `max_homes` metadata, 3 for `default`). |
 | `/warp [name]`, `/warps` / `/setwarp <name>`, `/delwarp <name>` | The world's warps (`teleport.warp` / `teleport.warp.set`). |
 | `/tpa <player>`, `/tpahere <player>`, `/tpaccept`, `/tpdeny` | Requests to go to someone, or for them to come to you (`teleport.tpa`; two minutes to answer). |
+| `/where`, `/goto <lat lon \| place>` | On a planet world (`worldgen.planet`): the latitude, longitude and elevation under you / to the surface at a latitude and longitude, or a named place (everest, k2, sahara, amazon, nile_delta, alps, greenland, antarctica, atacama, siberia, great_barrier_reef, grand_canyon; `PLANET_PLACES`). |
 | `/back`, `/top` | Where you were before your last teleport / up onto the highest block. |
 
 `/travel`, `/address` and `/worlds` are in [world.md](world.md#worlds). Homes, warps, `back` and `tp` remember their world and travel to it.

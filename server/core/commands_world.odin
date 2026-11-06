@@ -8,6 +8,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:worldgen"
 
 // Server commands about the world and the players in it, after Minecraft's
 // most useful ones: selectors (@s @p @a @r) wherever a command takes a
@@ -460,4 +461,84 @@ admin_help :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 rule_name :: proc(name: string) -> string {
 	if strings.has_prefix(name, "rules.") {return name}
 	return strings.concatenate({"rules.", name}, context.temp_allocator)
+}
+
+// admin_where: /where: the latitude, longitude and elevation of an Earth
+// planet world's surface under the player (and the block position).
+@(private)
+admin_where :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	p := c.player.position
+	x, z := i32(math.floor(p.x)), i32(math.floor(p.z))
+	if c.world.params.planet == 0 {
+		notice(
+			s,
+			c,
+			fmt.tprintf(
+				"At %d %d %d (this world is not built on the planet)",
+				x,
+				i32(math.floor(p.y)),
+				z,
+			),
+		)
+		return true
+	}
+	lat, lon := worldgen.planet_lat_lon(x, z)
+	notice(
+		s,
+		c,
+		fmt.tprintf(
+			"%.2f°%s %.2f°%s, elevation %d m, block %d %d %d",
+			abs(lat),
+			"N" if lat >= 0 else "S",
+			abs(lon),
+			"E" if lon >= 0 else "W",
+			int(worldgen.planet_elevation(x, z)),
+			x,
+			i32(math.floor(p.y)),
+			z,
+		),
+	)
+	return true
+}
+
+// admin_goto: /goto <lat> <lon> or /goto <place>: to the surface there on an
+// Earth planet world.
+@(private)
+admin_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	lat, lon: f64
+	switch len(args) {
+	case 1:
+		place, found := worldgen.planet_place(strings.to_lower(args[0], context.temp_allocator))
+		if !found {
+			names := make([dynamic]string, context.temp_allocator)
+			for pl in worldgen.PLANET_PLACES {append(&names, pl.name)}
+			notice(
+				s,
+				c,
+				fmt.tprintf(
+					"&cNo such place. Try: %s",
+					strings.join(names[:], " ", context.temp_allocator),
+				),
+			)
+			return true
+		}
+		lat, lon = place.lat, place.lon
+	case 2:
+		lat = strconv.parse_f64(args[0]) or_return
+		lon = strconv.parse_f64(args[1]) or_return
+	case:
+		return false
+	}
+	if c.world.params.planet == 0 {
+		notice(s, c, "&cThis world is not built on the planet")
+		return true
+	}
+	if abs(lat) >= 90 || abs(lon) >= 180 {
+		notice(s, c, "&cLatitude is within 90 and longitude within 180 degrees")
+		return true
+	}
+	x, z := worldgen.planet_block_of(lat, lon)
+	top := column_top(c.world, x, z)
+	land(s, c, {f64(x) + 0.5, f64(top + 1), f64(z) + 0.5}, c.look, .Ground)
+	return true
 }
