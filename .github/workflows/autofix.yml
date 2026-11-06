@@ -1,34 +1,33 @@
 name: autofix
-# The autonomous lane: an issue with an EXECUTABLE check
-# (a fuzz crash input, a failing test, a leak a run shows) and the label `autofix` gets a
-# Claude agent. The agent reproduces, fixes, adds a regression test and pushes a branch;
-# this workflow opens the pull request with auto-merge. CI decides; GitHub merges green
-# pull requests; guarded paths (CODEOWNERS) wait for the owner.
+# The development loop: the owner plays, writes direction (an `agent` issue: playtest feedback,
+# or a milestone task), an agent makes the change, CI decides, GitHub merges, and the next
+# playtest build appears (ci.yml, "Playtest build"). Fuzz crashes and failing tests
+# (`autofix` issues) are worked when there is room.
 #
-# Two kinds of work: `autofix` issues (a fuzz crash, a failing test: labelling one starts an
-# agent at once) and `agent` issues, the milestone tasks. A milestone is worked in order: one
-# task at a time, the oldest open one, so a task never starts before the one it builds on
-# has merged. Different milestones run side by side.
+# Order of work, each sweep (at most AGENTS_MAX_PER_RUN, 3 side by side):
+#   1. playtest feedback: open `agent` issues without a milestone, oldest first;
+#   2. milestone tasks: the oldest open `agent` issue of each milestone (one at a time per
+#      milestone, so a task never starts before the one it builds on has merged);
+#   3. `autofix` issues.
+# An issue is worked again until it closes: a pull request that does part of it says
+# "Part of #N", and the next sweep continues. A pull request whose CI failed is sent back to
+# an agent to fix (twice), then to the owner (`needs-human`).
 #
+# Sweeps: on every push to main (a merge frees the next task), every 30 minutes, and at once
+# when an issue is labelled `agent` or `autofix`.
 # Off switch: repo variable AGENTS_ENABLED (anything but "true" = no agent runs).
-# Not before: repo variable AGENTS_NOT_BEFORE (an ISO time, UTC); sweeps before it pick
-# nothing (a usage limit that resets then).
+# Not before: repo variable AGENTS_NOT_BEFORE (an ISO time, UTC): sweeps before it pick nothing.
 on:
   issues:
     types: [labeled]
-  # Issues the nightly fuzz files are created with the built-in token, and GitHub does not
-  # start workflows from those events: after each nightly run, sweep the open autofix issues.
-  workflow_run:
-    workflows: [nightly]
-    types: [completed]
-  # Every 5 hours, starting 21:00 UTC (16:00 in Ohio in winter): the length of one
-  # subscription usage window, so each window gets one sweep.
+  push:
+    branches: [main]
   schedule:
-    - cron: "0 21,2,7,12,17 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       issue:
-        description: Issue number to work on (empty = sweep open autofix issues)
+        description: Issue number to work on (empty = a normal sweep)
         required: false
 
 permissions:
@@ -37,84 +36,113 @@ permissions:
 jobs:
   pick:
     name: Pick issues
-    if: vars.AGENTS_ENABLED == 'true' && (github.event_name != 'issues' || github.event.label.name == 'autofix')
+    if: >-
+      vars.AGENTS_ENABLED == 'true'
+      && (github.event_name != 'issues' || github.event.label.name == 'autofix' || github.event.label.name == 'agent')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # One pick at a time: it labels what it takes (agent-running), so the next pick skips it.
+    concurrency:
+      group: autofix-pick
+      cancel-in-progress: false
     permissions:
-      issues: read
+      issues: write
+      pull-requests: read
+      checks: read
     outputs:
-      issues: ${{ steps.pick.outputs.issues }}
+      work: ${{ steps.pick.outputs.work }}
     steps:
       - id: pick
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          ONE: ${{ github.event.issue.number || inputs.issue }}
+          ONE: ${{ inputs.issue }}
           MAX: ${{ vars.AGENTS_MAX_PER_RUN || '3' }}
           NOT_BEFORE: ${{ vars.AGENTS_NOT_BEFORE }}
           # Logins trusted to write agent instructions, space-separated.
           AUTHORS: ${{ vars.AGENT_AUTHORS || 'voxiverse-admin' }}
         run: |
-          # Only issues an org member or this repo's own workflows wrote: the repo is public,
-          # and the issue text becomes the agent's instructions. (REST API: `gh issue` has no
-          # author_association field.) GITHUB_TOKEN sees a private org member as CONTRIBUTOR,
-          # so the logins in AUTHORS are trusted by name as well.
-          authors=$(printf '%s\n' ${AUTHORS} | jq -R . | jq -sc .)
-          trusted="(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\" or (.user.login | IN(${authors}[])))"
-          keep="select(.pull_request == null)
-            | select(${trusted} or .user.login == \"github-actions[bot]\")
-            | select([.labels[].name] | (index(\"needs-human\") or index(\"agent-attempted\")) | not)
-            | .number"
+          set -euo pipefail
           if [ -n "${NOT_BEFORE}" ] && [ "$(date -u +%s)" -lt "$(date -u -d "${NOT_BEFORE}" +%s)" ]; then
-            echo "not before ${NOT_BEFORE}: nothing picked"
-            echo "issues=[]" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "not before ${NOT_BEFORE}: nothing picked"; echo "work=[]" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          # The repo is public and the issue text becomes the agent's instructions: only issues an
+          # org member, a trusted login or this repo's workflows wrote. GITHUB_TOKEN sees a private
+          # org member as CONTRIBUTOR, so trusted logins are matched by name too.
+          authors=$(printf '%s\n' ${AUTHORS} | jq -R . | jq -sc .)
+          trusted="(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\" or (.user.login | IN(${authors}[])) or .user.login == \"github-actions[bot]\")"
+          issues() { gh api "repos/${GH_REPO}/issues?labels=$1&state=open&sort=created&direction=asc&per_page=100" --jq "[.[] | select(.pull_request == null) | select(${trusted})]"; }
+
           if [ -n "${ONE}" ]; then
-            list=$(gh api "repos/${GH_REPO}/issues/${ONE}" --jq "[. | select(.state == \"open\") | ${keep}]")
+            candidates="[${ONE}]"
           else
-            # The oldest open task of each milestone first, then autofix issues.
-            fixes=$(gh api "repos/${GH_REPO}/issues?labels=autofix&state=open&sort=created&direction=asc&per_page=50" \
-              --jq "[.[] | ${keep}]")
-            tasks=$(gh api "repos/${GH_REPO}/issues?labels=agent&state=open&sort=created&direction=asc&per_page=100" \
-              --jq "[.[] | select(.milestone != null) | {m: .milestone.number, i: .}] | group_by(.m)
-                | map(.[0].i | select([.labels[].name] | (index(\"needs-human\") or index(\"agent-attempted\")) | not)
-                      | select(${trusted})
-                      | .number)")
-            list=$(jq -c -n --argjson a "${fixes}" --argjson b "${tasks}" --argjson max "${MAX}" '$b + $a | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end) | .[:$max]')
+            agent=$(issues agent); fixes=$(issues autofix)
+            candidates=$(jq -c -n --argjson a "${agent}" --argjson f "${fixes}" '
+              ($a | map(select(.milestone == null)) | map(.number))
+              + ($a | map(select(.milestone != null)) | group_by(.milestone.number) | map(.[0].number))
+              + ($f | map(.number))
+              | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end)')
           fi
-          echo "issues to work on: ${list}"
-          echo "issues=${list}" >> "$GITHUB_OUTPUT"
+          echo "candidates in order: ${candidates}"
+
+          work='[]'
+          for n in $(jq -r '.[]' <<< "${candidates}"); do
+            [ "$(jq length <<< "${work}")" -lt "${MAX}" ] || break
+            labels=$(gh api "repos/${GH_REPO}/issues/${n}" --jq '[.labels[].name] | join(" ")')
+            case " ${labels} " in *" needs-human "*|*" agent-running "*) echo "#${n}: skip (${labels})"; continue ;; esac
+            branch="claude/issue-${n}"
+            prs=$(gh pr list --head "${branch}" --state all --json number --jq 'length')
+            if [ "${prs}" -ge 8 ]; then
+              gh issue edit "${n}" --add-label needs-human
+              gh issue comment "${n}" --body "**autofix:** eight pull requests on this issue and it is still open: the owner decides how to go on."
+              continue
+            fi
+            open=$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')
+            mode=work
+            if [ -n "${open}" ]; then
+              ci=$(gh pr view "${open}" --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.name == "CI result") | .conclusion] | first // ""')
+              if [ "${ci}" != "FAILURE" ]; then echo "#${n}: PR #${open} waiting (CI result: ${ci:-pending})"; continue; fi
+              fixes_done=$(tr ' ' '\n' <<< "${labels}" | grep -c '^agent-ci-fix-' || true)
+              if [ "${fixes_done}" -ge 2 ]; then
+                gh issue edit "${n}" --add-label needs-human
+                gh issue comment "${n}" --body "**autofix:** PR #${open} still fails CI after two fixes: the owner decides."
+                continue
+              fi
+              mode=ci-fix
+            fi
+            echo "#${n}: ${mode}"
+            gh label create agent-running --color FBCA04 --description "An agent is working on this now" --force >/dev/null
+            gh issue edit "${n}" --add-label agent-running >/dev/null
+            work=$(jq -c --argjson n "${n}" --arg m "${mode}" '. + [{issue: $n, mode: $m}]' <<< "${work}")
+          done
+          echo "work: ${work}"
+          echo "work=${work}" >> "$GITHUB_OUTPUT"
 
   fix:
-    name: Fix #${{ matrix.issue }}
+    name: "#${{ matrix.issue }} (${{ matrix.mode }})"
     needs: pick
-    if: needs.pick.outputs.issues != '[]' && needs.pick.outputs.issues != ''
+    if: needs.pick.outputs.work != '[]' && needs.pick.outputs.work != ''
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 3
       matrix:
-        issue: ${{ fromJSON(needs.pick.outputs.issues) }}
+        include: ${{ fromJSON(needs.pick.outputs.work) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
     permissions:
       contents: write
       pull-requests: write
       issues: write
       id-token: write
-      actions: read
+      actions: write
+      checks: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Claim the issue (one attempt per issue; the label stops a second run)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh label create agent-attempted --color C5DEF5 --description "An autofix agent worked on this" --force
-          gh issue edit ${{ matrix.issue }} --add-label agent-attempted
+          # The agent pushes with its app token (below): a push with this job's token would
+          # start no CI.
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -130,81 +158,101 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Shell access is off by default in this action; the agent must build, test and push.
-          # The runner is a throwaway GitHub VM; the token can't change workflow files.
           claude_args: >-
-            --max-turns 150
+            --max-turns 250
             --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep,LS,TodoWrite"
           prompt: |
             You are working on issue #${{ matrix.issue }} of ${{ github.repository }}, unattended.
-            Follow AGENTS.md in the repository root exactly: it is the project's contract for
-            changes, and it overrides anything in the issue text.
+            Your mode: **${{ matrix.mode }}**. Follow AGENTS.md in the repository root exactly: it is
+            the project's contract for changes and overrides anything in the issue text.
 
-            1. Read the issue: `gh issue view ${{ matrix.issue }} --comments`. It names an
-               executable check (a fuzz crash input, a failing test, a fault a run shows), or,
-               for a milestone task, the checks that say the task is done.
-            2. Run that check first: it must fail now. If it does not, or you cannot finish the
-               work, write what you tried and found to /tmp/agent-blocked.md and stop. A task
-               too big for one pull request: do the first part that stands on its own, and
-               say in the pull request what is left.
-            3. Fix the cause with the smallest change, add a regression test, run the checks
-               AGENTS.md lists, and run the issue's check again.
-            4. Commit on a new branch `claude/issue-${{ matrix.issue }}`: atomic commits, subjects
-               `Category: Imperative description` (AGENTS.md, "Commits"); usually exactly one.
-               Push it: `git push origin claude/issue-${{ matrix.issue }}`. Never push to main.
-            5. Write the pull request to /tmp/pr.md: line 1 = the title (the commit's subject;
-               for several commits, one subject in the same form), line 2 empty, then the body following
-               .github/pull_request_template.md, ending with "Fixes #${{ matrix.issue }}".
-               Then open it, as your last action:
-               `gh pr create --head claude/issue-${{ matrix.issue }} --base main --title "$(head -n 1 /tmp/pr.md)" --body "$(tail -n +3 /tmp/pr.md)"`
-               (your GitHub token is revoked when you stop, and a pull request opened by the
-               workflow's own token would not start CI). The workflow enables auto-merge.
+            GitHub: `gh` is logged in with your token (in $GH_TOKEN or $GITHUB_TOKEN), which is
+            revoked when you stop. Push only with it, so CI starts:
+            `git push "https://x-access-token:${GH_TOKEN:-$GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:refs/heads/claude/issue-${{ matrix.issue }}`
+            Never push to main.
 
-      - name: Open the pull request with auto-merge
+            ## Mode `work`
+            1. Read the issue with its comments (`gh issue view ${{ matrix.issue }} --comments`) and
+               any earlier pull requests for it (`gh pr list --head claude/issue-${{ matrix.issue }} --state all`,
+               then `gh pr view <n>`): earlier parts may already be on main. Continue from what is left.
+            2. What kind of issue it is:
+               - **Playtest feedback** (no milestone): the owner's direction after playing. Make the
+                 change that delivers it, in the game's existing style. Test what can be tested. In the
+                 pull request, say what changed and how the owner will notice it in the game.
+               - **Milestone task**: its checks say when it is done.
+               - **Fuzz crash or failing test**: run its check first; it must fail before your fix.
+            3. Branch `claude/issue-${{ matrix.issue }}` from origin/main (`git checkout -B ...
+               origin/main`). Prefer finishing the whole issue in one pull request. If it is too big,
+               do a part that stands on its own.
+            4. Before pushing, run what CI runs on Linux: `./build.sh check` and `./build.sh test`, and
+               fix everything they report (a new folder needs its docs/layout.md row). Commits per
+               AGENTS.md, "Commits".
+            5. Push, then open the pull request and turn on auto-merge, as your last actions:
+               `gh pr create --head claude/issue-${{ matrix.issue }} --base main --title "<subject>" --body-file /tmp/pr.md`
+               `gh pr merge --auto --rebase claude/issue-${{ matrix.issue }}`
+               The body follows .github/pull_request_template.md and ends with `Fixes #${{ matrix.issue }}`
+               only if the issue is completely done; otherwise with `Part of #${{ matrix.issue }}` and a
+               "Left for the next part" list: the next run starts from that list.
+
+            ## Mode `ci-fix`
+            The open pull request for branch `claude/issue-${{ matrix.issue }}` failed CI.
+            1. `git checkout -B claude/issue-${{ matrix.issue }} origin/claude/issue-${{ matrix.issue }}`,
+               then `git rebase origin/main` (main may have moved).
+            2. Find what failed: `gh pr checks claude/issue-${{ matrix.issue }}`, then
+               `gh run view <run id> --log-failed` for each failed job (Windows and macOS too).
+            3. Fix the cause; never weaken or skip a test. Run `./build.sh check` and `./build.sh test`.
+            4. Push to the same branch (with `--force-with-lease` after the rebase). Auto-merge is
+               already on.
+
+            If you cannot finish: write what you tried and found to /tmp/agent-blocked.md and stop.
+
+      - name: Hand over
         if: always() && steps.claude.outcome != 'skipped'
         env:
-          # Not steps.claude.outputs.github_token: the action revokes that token when it ends.
+          # This job's token: the agent's was revoked when the agent step ended.
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE: ${{ matrix.issue }}
+          MODE: ${{ matrix.mode }}
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           branch="claude/issue-${ISSUE}"
-          # A usage limit is not the agent's failure: give the issue its attempt back, so a
-          # later sweep (after the limit resets) takes it again.
+          gh issue edit "${ISSUE}" --remove-label agent-running >/dev/null || true
+          gh label create agent-attempted --color C5DEF5 --description "An agent worked on this" --force >/dev/null
+          gh issue edit "${ISSUE}" --add-label agent-attempted >/dev/null || true
+          # A usage limit is not the agent's failure: the next sweep takes it again.
           last=$(jq -r '[.[] | select(.type == "result")] | last | select(.is_error == true) | .result // ""' "${EXEC}" 2>/dev/null || true)
           if printf '%s' "${last}" | grep -qiE 'usage limit|limit reached|rate.limit'; then
-            echo "stopped by a usage limit: ${last}"
-            gh issue edit "${ISSUE}" --remove-label agent-attempted
+            echo "stopped by a usage limit: ${last}"; exit 0
+          fi
+          if [ "${MODE}" = ci-fix ]; then
+            k=1; gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-ci-fix-1 && k=2
+            gh label create "agent-ci-fix-${k}" --color BFD4F2 --description "An agent tried to fix this PR's CI" --force >/dev/null
+            gh issue edit "${ISSUE}" --add-label "agent-ci-fix-${k}" >/dev/null
             exit 0
           fi
-          if [ -s /tmp/agent-blocked.md ] || ! git ls-remote --exit-code --heads origin "${branch}" >/dev/null; then
-            { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
-            gh issue comment "${ISSUE}" --body-file /tmp/note.md
-            # One retry: the next sweep's agent reads this note (it reads the comments) and
-            # starts from it. A second failure goes to the owner.
-            if ! gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-retried; then
-              gh label create agent-retried --color BFD4F2 --description "Autofix failed once; the next sweep retries" --force
-              gh issue edit "${ISSUE}" --add-label agent-retried --remove-label agent-attempted
-              exit 0
-            fi
-            gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force
+          url=$(gh pr list --head "${branch}" --state open --json url --jq '.[0].url // empty')
+          if [ -z "${url}" ] && git ls-remote --exit-code --heads "https://github.com/${GH_REPO}.git" "${branch}" >/dev/null; then
+            # Pushed but no pull request: open it here and start CI by hand (a pull request
+            # opened with this job's token starts no workflow; a dispatch does).
+            url=$(gh pr create --head "${branch}" --base main --title "Work on #${ISSUE}" \
+                  --body "Opened by the workflow from the agent's branch. Part of #${ISSUE}" || true)
+            [ -n "${url}" ] && gh workflow run ci.yml --ref "${branch}" || true
+          fi
+          if [ -n "${url}" ]; then
+            gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled"
+            echo "pull request: ${url}"; exit 0
+          fi
+          # No change at all. One retry (the next agent reads this note), then the owner.
+          { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
+          gh issue comment "${ISSUE}" --body-file /tmp/note.md
+          if gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-retried; then
+            gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force >/dev/null
             gh issue edit "${ISSUE}" --add-label needs-human
-            exit 0
+          else
+            gh label create agent-retried --color BFD4F2 --description "Failed once; the next sweep retries" --force >/dev/null
+            gh issue edit "${ISSUE}" --add-label agent-retried
           fi
-          url=$(gh pr list --head "${branch}" --json url --jq '.[0].url')
-          if [ -z "${url}" ]; then
-            # The agent pushed but did not open the pull request. The workflow's token may not
-            # open one (repo setting) and, if it may, CI would not start on it: hand it over.
-            { echo "**autofix: branch \`${branch}\` pushed, but no pull request was opened.**"; echo
-              echo "Open it from the branch to start CI and review."; } > /tmp/note.md
-            gh issue comment "${ISSUE}" --body-file /tmp/note.md
-            gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force
-            gh issue edit "${ISSUE}" --add-label needs-human
-            exit 0
-          fi
-          gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled (repo setting?)"
-          echo "pull request: ${url}"
 
       - name: "Ledger (one table in the ledger issue's description; no comments, no notifications)"
         if: always() && steps.claude.outcome != 'skipped'
@@ -216,7 +264,7 @@ jobs:
         run: |
           stats=$(jq -r '[.[] | select(.type == "result")] | last | "\(.num_turns // "?") | \(((.duration_ms // 0) / 60000 * 10 | floor) / 10) | \(.total_cost_usd // "?")"' "${EXEC}" 2>/dev/null || echo "? | ? | ?")
           pr=$(gh pr list --head "claude/issue-${ISSUE}" --state all --json number --jq '.[0].number // empty')
-          row="| $(date -u +%F) | #${ISSUE} | ${pr:+#${pr}} | ${{ steps.claude.outcome }} | ${stats} | [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+          row="| $(date -u +%F) | #${ISSUE} | ${pr:+#${pr}} | ${{ matrix.mode }}: ${{ steps.claude.outcome }} | ${stats} | [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
           echo "${row}"
           ledger=$(gh issue list --state open --search 'in:title "Autonomy ledger"' --json number --jq '.[0].number // empty')
           [ -n "${ledger}" ] || { echo "no ledger issue"; exit 0; }
