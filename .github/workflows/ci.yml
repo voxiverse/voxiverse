@@ -796,6 +796,67 @@ jobs:
           sha256sum * > SHA256SUMS
           gh release create "$TAG" --draft --prerelease --verify-tag --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" *
 
+  # The Steam depots (`build steam`, docs/platforms.md): the three packages laid out as
+  # one depot per OS with their SteamPipe scripts, kept as an artifact. The upload is a
+  # second step that runs only where the STEAM_BUILDER secrets and the App ID exist, and
+  # goes to the beta branch "playtest", never the default branch; without them it is
+  # skipped and the job is green.
+  steam:
+    name: Steam depots
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.package.result == 'success' }}
+    needs: [package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: steam
+      cancel-in-progress: false
+    env:
+      STEAM_APP_ID: ${{ vars.STEAM_APP_ID }}
+      STEAM_DEPOT_WINDOWS: ${{ vars.STEAM_DEPOT_WINDOWS }}
+      STEAM_DEPOT_LINUX: ${{ vars.STEAM_DEPOT_LINUX }}
+      STEAM_DEPOT_MACOS: ${{ vars.STEAM_DEPOT_MACOS }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags: the version comes from them
+      - name: Tags
+        run: git fetch --force --tags origin
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: voxiverse-*
+          path: dist
+          merge-multiple: true
+          skip-decompress: true
+      - name: Lay out the depots
+        run: ./build.sh steam dist
+      - name: Upload the depot layout
+        uses: actions/upload-artifact@v7
+        with:
+          name: steam-depots
+          path: |
+            build/steam/depots
+            build/steam/scripts
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload to Steam (branch playtest)
+        env:
+          STEAM_BUILDER_USER: ${{ secrets.STEAM_BUILDER_USER }}
+          STEAM_BUILDER_PASSWORD: ${{ secrets.STEAM_BUILDER_PASSWORD }}
+        run: |
+          if [ -z "$STEAM_BUILDER_USER" ] || [ -z "$STEAM_BUILDER_PASSWORD" ] || [ -z "$STEAM_APP_ID" ]; then
+            echo "No STEAM_BUILDER secrets or STEAM_APP_ID: not uploading to Steam."
+            exit 0
+          fi
+          # Never a default-branch upload, whatever the script says.
+          grep -qE '"setlive"[[:space:]]+"playtest"' build/steam/scripts/app_build.vdf # (build steam writes a tab)
+          mkdir -p "$RUNNER_TEMP/steamcmd"
+          curl -fsSL --retry 3 https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz -C "$RUNNER_TEMP/steamcmd"
+          "$RUNNER_TEMP/steamcmd/steamcmd.sh" +login "$STEAM_BUILDER_USER" "$STEAM_BUILDER_PASSWORD" \
+            +run_app_build "$PWD/build/steam/scripts/app_build.vdf" +quit
+
   # Every push to main whose packages built and whose Linux tests passed becomes the rolling
   # "playtest" pre-release: one fixed link, always the newest playable main, for every OS.
   playtest:
