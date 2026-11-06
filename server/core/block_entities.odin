@@ -240,8 +240,26 @@ entity_restore :: proc(
 			d.x * d.x + d.y * d.y + d.z * d.z <= RESTORE_REACH * RESTORE_REACH \
 		)
 	}
-	for &ent in w.entities.list {
-		if near(&ent, here, from.action) {lying[ent.stack.item] += ent.stack.count}
+	// The spatial service names the stacks about (its boxes are where they
+	// were at the end of the last tick, so it asks a little wider); the list
+	// says which are near now. Highest id first, as the take below goes.
+	about := make([dynamic]game.Entity_Id, context.temp_allocator)
+	if item_kind, ok := game.registry_kind(w.server.registry, "voxiverse:item"); ok {
+		game.spatial_sphere(
+			&w.entity_world.spatial,
+			here,
+			RESTORE_REACH + RESTORE_SLACK,
+			{kind = u16(item_kind)},
+			&about,
+		)
+	}
+	slice.reverse_sort(about[:])
+	stacks := make([dynamic]u32, context.temp_allocator)
+	for id in about {
+		ent, _ := entity_find(w, u32(id))
+		if ent == nil || !near(ent, here, from.action) {continue}
+		append(&stacks, u32(id))
+		lying[ent.stack.item] += ent.stack.count
 	}
 	block_entity_touch(w, p)
 	taken := make(map[game.Item]int, context.temp_allocator)
@@ -252,9 +270,9 @@ entity_restore :: proc(
 		taken[st.item] += n
 		if n > 0 {e.slots[i] = {st.item, n, 0}}
 	}
-	for i := len(w.entities.list) - 1; i >= 0; i -= 1 {
-		ent := &w.entities.list[i]
-		if !near(ent, here, from.action) {continue}
+	for id in stacks {
+		ent, i := entity_find(w, id)
+		if ent == nil {continue}
 		n := min(ent.stack.count, taken[ent.stack.item])
 		if n == 0 {continue}
 		taken[ent.stack.item] -= n
@@ -262,3 +280,8 @@ entity_restore :: proc(
 		if ent.stack.count == 0 {entity_gone(w, i)}
 	}
 }
+
+// RESTORE_SLACK: how far a stack can have moved since the spatial service
+// last saw it (a tick of falling or being thrown).
+@(private = "file")
+RESTORE_SLACK :: 2

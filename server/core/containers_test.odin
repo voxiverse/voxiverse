@@ -337,3 +337,55 @@ test_block_without_entity_made :: proc(t: ^testing.T) {
 	testing.expect_value(t, e.kind, game.Block_Entity_Kind.Container)
 	for st in e.slots {testing.expect(t, game.stack_empty(st), "the new entity is not empty")}
 }
+
+// A rollback putting a chest back takes its spilled stacks (those of the
+// action that spilled them, within reach) back into it, the highest id first,
+// and leaves those out of reach alone.
+@(test)
+test_restore_takes_spilled_stacks :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	srv := &h.srv
+	if !testing.expect(t, harness_start(h, config(""))) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	if !testing.expect(t, ok, "never landed") {return}
+	pos := beside(srv, "a")
+	put_block(srv, pos, .Chest)
+	d := Block_Data {
+		pos = pos,
+	}
+	call(srv, proc(s: ^Server, data: rawptr) {
+			d := (^Block_Data)(data)
+			w := s.worlds[0]
+			planks := game.item_of_block(test_reg(), .Planks)
+			e := block_entity_at(w, d.pos)
+			e.slots[0] = {planks, 5, 0}
+			value := e^
+			key := Entity_Undo_Key{d.pos, 77, 1}
+			bytes := game.block_entity_pack(s.registry, &value, context.temp_allocator)
+			e.slots[0] = {}
+			here := [3]f64{f64(d.pos.x) + 0.5, f64(d.pos.y) + 0.5, f64(d.pos.z) + 0.5}
+			near_a := spawn_item(w, here + {1, 0, 0}, {planks, 3, 0}, {}, -1)
+			near_b := spawn_item(w, here + {0, 0, 2}, {planks, 4, 0}, {}, -1)
+			far := spawn_item(w, here + {20, 0, 0}, {planks, 9, 0}, {}, -1)
+			other := spawn_item(w, here + {0, 0, 1}, {planks, 9, 0}, {}, -1)
+			near_a.action, near_b.action, far.action, other.action = 77, 77, 77, 5
+			ids := [4]u32{near_a.id, near_b.id, far.id, other.id}
+			disk := make(map[Entity_Undo_Key][]u8, context.temp_allocator)
+			disk[key] = bytes
+			entity_restore(w, d.pos, key, disk)
+			d.slots[0] = block_entity_at(w, d.pos).slots[0]
+			for id in ids {
+				if ent, _ := entity_find(w, id); ent != nil {d.items += int(ent.stack.count)}
+			}
+		}, &d)
+	testing.expect_value(t, d.slots[0].count, 5)
+	// 3 + 4 spilled, 5 taken (the highest id first: 4, then 1 of the 3); 2 of
+	// them left, and the far stack and the other action's stay whole.
+	testing.expect_value(t, d.items, 2 + 9 + 9)
+}
