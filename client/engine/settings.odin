@@ -21,6 +21,7 @@ Settings :: struct {
 	share_data:        bool, // send anonymous play data to the collector (asked once)
 	share_asked:       bool, // the question was answered
 	collector:         base.Var_Text, // the collector's address ("": DEFAULT_COLLECTOR)
+	devchat:           base.Var_Text, // the developer chat's collector (host:port; "": off)
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
 	vsync:             bool, // wait for the display (off: up to max_fps)
@@ -106,6 +107,7 @@ SETTINGS_VARS := [?]base.Var {
 	},
 	{field = "share_asked", help = "the question about sharing play data was answered"},
 	{field = "collector", help = "where play data goes (host:port); empty: the default"},
+	{field = "devchat", help = "the developer chat's collector (host:port); empty: off"},
 	{
 		field = "fullscreen",
 		label = "Display",

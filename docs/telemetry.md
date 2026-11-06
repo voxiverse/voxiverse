@@ -128,6 +128,19 @@ one JSON object:
 A file that is not valid JSON or breaks a rule is skipped and logged, never sent. Other files
 in `out/` (without the `.json` suffix) are ignored.
 
+
+### In the game
+
+The `devchat` setting names the collector (`host:port`; a bare host gets port 27316). Empty,
+the default, means developer chat is off: no connection is ever made. A benchmark or a
+check never chats. With it set, the game (`server/collector/devchat_client.odin`, started by
+`client/engine/devchat.odin`) keeps the conversation in `devchat.jsonl` beside the settings:
+one JSON object a line, oldest first, `"from": "me"` or `"dev"`. A message the player writes
+goes into the file at once and is sent, in order, whenever the collector can be reached; a
+message the collector refused keeps its reason and is not sent again. Replies are fetched
+after the newest one in the file: every 30 s while the chat screen is open, every 5 minutes
+otherwise, and at once when a message is written.
+
 ## Querying the data
 
 `build analytics --pull host:/path/lake` pulls the lake into `./lake`; it requires rsync.
