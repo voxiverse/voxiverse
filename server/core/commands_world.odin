@@ -329,12 +329,21 @@ admin_kill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	}
 	killed := 0
 	w := c.world
-	for i := len(w.entities.list) - 1; i >= 0; i -= 1 {
-		e := &w.entities.list[i]
+	// The hittable entities within the radius come from the spatial service;
+	// a death removes its row, so each is found again by id.
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&w.entity_world.spatial,
+		c.player.position,
+		radius,
+		{all = {.Hittable}},
+		&found,
+	)
+	for id in found {
+		e, i := entity_find(w, u32(id))
+		if i < 0 {continue}
 		info := game.ENTITY_INFO[e.kind]
-		if !info.hittable || (args[0] != "all" && args[0] != info.name) {continue}
-		d := e.body.position - c.player.position
-		if d.x * d.x + d.y * d.y + d.z * d.z > radius * radius {continue}
+		if args[0] != "all" && args[0] != info.name {continue}
 		entity_died(w, i)
 		killed += 1
 	}
