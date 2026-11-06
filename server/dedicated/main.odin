@@ -1,6 +1,5 @@
 package dedicated
 
-import "core:crypto"
 import "core:flags"
 import "core:fmt"
 import "core:log"
@@ -118,7 +117,7 @@ main :: proc() {
 
 run :: proc(host: ^base.Host, opts: Options) -> bool {
 	seed := opts.seed
-	if seed == 0 {crypto.rand_bytes(mem.ptr_to_bytes(&seed))}
+	if seed == 0 {host.entropy(mem.ptr_to_bytes(&seed))}
 	name := opts.name
 	if name == "" {name = filepath.base(opts.universe)}
 	config := core.Config {

@@ -1,10 +1,11 @@
 package netcode
 
-import "core:crypto"
 import "core:mem"
 import "core:net"
 import "core:strings"
 import "core:time"
+
+import "common:base"
 
 // The client's side: one connection to one server.
 //
@@ -56,7 +57,7 @@ link_connect :: proc(
 	l.server, l.started, l.allocator = server, now, allocator
 	socket_open(&l.socket, 0, sim = sim) or_return
 	l.password = strings.clone(password, allocator)
-	crypto.rand_bytes(mem.ptr_to_bytes(&l.salt))
+	base.entropy_fill(mem.ptr_to_bytes(&l.salt))
 	l.buffer = make([dynamic]u8, allocator)
 	l.packets = make([dynamic][]u8, allocator)
 	send_handshake(l, now)
@@ -229,7 +230,7 @@ discovery_open :: proc(
 		allocator = allocator,
 	}
 	socket_open(&d.socket, 0, broadcast = sim == nil, sim = sim) or_return
-	crypto.rand_bytes(mem.ptr_to_bytes(&d.nonce))
+	base.entropy_fill(mem.ptr_to_bytes(&d.nonce))
 	d.found = make([dynamic]Found_Server, allocator)
 	d.targets = make([dynamic]net.Address, allocator)
 	append(&d.targets, net.IP4_Loopback)

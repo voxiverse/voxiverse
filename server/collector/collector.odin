@@ -1,6 +1,5 @@
 package collector
 
-import "core:crypto"
 import "core:crypto/hash"
 import "core:encoding/hex"
 import "core:fmt"
@@ -446,7 +445,7 @@ load_salt :: proc(c: ^Collector) {
 		copy(c.salt[:], data)
 		return
 	}
-	crypto.rand_bytes(c.salt[:])
+	base.entropy_fill(c.salt[:])
 	_ = os.write_entire_file(path, c.salt[:])
 }
 

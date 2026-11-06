@@ -1,6 +1,5 @@
 package game
 
-import "core:math/rand"
 import "core:mem"
 import "core:sync"
 import "core:time"
@@ -138,7 +137,7 @@ send :: proc(e: Endpoint, data: []u8) -> bool {
 	{
 		sync.guard(&p.mutex)
 		c := p.conditions
-		draw := base.rng_f32(&p.rng) if p.seeded else rand.float32() // numbers: the pipe's simulated jitter
+		draw := base.rng_f32(&p.rng) if p.seeded else base.rng_f32(base.cosmetic_rng()) // numbers: the pipe's simulated jitter
 		delay := c.latency_ms + c.jitter_ms * draw // numbers: the pipe's simulated jitter
 		due = time.tick_add(due, time.Duration(f64(delay) * f64(time.Millisecond)))
 		// Bandwidth: a packet cannot arrive before the previous one plus its

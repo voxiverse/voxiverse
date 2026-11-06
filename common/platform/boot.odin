@@ -1,6 +1,7 @@
 package platform_common
 
 import "base:runtime"
+import "core:crypto"
 import "core:os"
 import "core:terminal"
 
@@ -17,8 +18,10 @@ boot :: proc(host: ^base.Host) {
 	host^ = {
 		boot = {args = os.args[1:] if len(os.args) > 0 else nil},
 		output = {write = output_write, is_color = output_is_color},
+		entropy = crypto.rand_bytes,
 	}
 	base.output_install(host.output)
+	base.entropy_install(host.entropy)
 }
 
 @(private = "file")

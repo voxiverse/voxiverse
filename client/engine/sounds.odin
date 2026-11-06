@@ -3,10 +3,10 @@ package engine
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:math/rand"
 
 import "client:audio"
 import "client:sfx"
+import "common:base"
 import "common:game"
 
 // Sounds: the synthesized effects (client/sfx), made once at startup and
@@ -207,8 +207,8 @@ sounds_play :: proc(
 		}
 		gain := audio.spatial_gain({f32(d.x), f32(d.y), f32(d.z)}, right, e.volume, range)
 		if gain == {} {continue}
-		pitch := rand.float32_range(0.9, 1.1)
-		variant := rand.int_max(sfx.VARIANTS)
+		pitch := base.rng_f32_range(base.cosmetic_rng(), 0.9, 1.1)
+		variant := base.rng_int_max(base.cosmetic_rng(), sfx.VARIANTS)
 		switch e.kind {
 		case .Entity_Hurt:
 			audio.play(
