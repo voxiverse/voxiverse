@@ -234,6 +234,29 @@ jobs:
       - name: Push gate
         if: matrix.mode != 'dry'
         run: |
+          # The deadline: the agent's GitHub token is an app token that expires an hour after the
+          # agent starts (#109 lost 2.5 hours of finished work to it, twice). After 45 minutes
+          # only committing, pushing and opening the pull request are allowed.
+          date +%s > "${RUNNER_TEMP}/agent-start"
+          cat > "${RUNNER_TEMP}/deadline.sh" <<'DEADLINE'
+          #!/usr/bin/env bash
+          in=$(cat)
+          start=$(cat "${RUNNER_TEMP:-/tmp}/agent-start" 2>/dev/null || date +%s)
+          [ $(( $(date +%s) - start )) -lt 2700 ] && exit 0
+          tool=$(jq -r '.tool_name // ""' <<< "${in}")
+          cmd=$(jq -r '.tool_input.command // ""' <<< "${in}")
+          path=$(jq -r '.tool_input.file_path // ""' <<< "${in}")
+          case "${tool}" in
+            Bash) grep -qE '^[[:space:]]*(git|gh|cat|echo|printf|ls|cd)([[:space:]]|$)' <<< "${cmd}" && exit 0 ;;
+            Write|Edit|MultiEdit) case "${path}" in /tmp/*) exit 0 ;; esac ;;
+          esac
+          {
+            echo "Deadline: 45 minutes have passed, and your GitHub token expires at 60. Stop working now:"
+            echo "commit what you have (it must pass the push gate), push, and open the pull request with"
+            echo "\`Part of #N\` and a \"Left for the next part\" list; the next run continues from it."
+          } >&2
+          exit 2
+          DEADLINE
           cat > "${RUNNER_TEMP}/push-gate.sh" <<'GATE'
           #!/usr/bin/env bash
           # PreToolUse hook (Bash): a `git push` runs only after what CI runs on Linux passes here.
@@ -266,8 +289,9 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           settings: >-
-            {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command",
-            "command": "bash ${{ runner.temp }}/push-gate.sh", "timeout": 2400}]}]}}
+            {"hooks": {"PreToolUse": [
+            {"matcher": "*", "hooks": [{"type": "command", "command": "bash ${{ runner.temp }}/deadline.sh", "timeout": 30}]},
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash ${{ runner.temp }}/push-gate.sh", "timeout": 2400}]}]}}
           # the sweep dispatches each agent run itself (github-actions is the actor)
           allowed_bots: "github-actions"
           claude_args: >-
@@ -322,6 +346,11 @@ jobs:
             3. Fix the cause; never weaken or skip a test. Run `./build.sh check` and `./build.sh test`.
             4. Push to the same branch (with `--force-with-lease` after the rebase). Auto-merge is
                already on.
+
+            **Time:** your GitHub token expires one hour after you start. Commit, push and open the pull
+            request within 45 minutes (a hook allows nothing else after that); for a large issue, push a
+            part that stands on its own with `Part of #N` and a "Left for the next part" list early rather
+            than lose the work. Fitting constants, long searches and slow experiments go in later parts.
 
             If you cannot finish: write what you tried and found to /tmp/agent-blocked.md and stop.
 
