@@ -245,6 +245,7 @@ jobs:
           for step in "check" "test" "fuzz --smoke" "determinism" "smoke"; do
             start=$(date +%s)
             if ! ./build.sh ${step} > "${log}" 2>&1; then
+              echo "{\"step\": \"${step}\", \"ok\": false, \"s\": $(( $(date +%s) - start ))}" >> "${RUNNER_TEMP:-/tmp}/push-gate.jsonl"
               {
                 echo "Push blocked: \`./build.sh ${step}\` fails here, and CI runs it on Linux too."
                 echo "Fix the cause (never weaken or skip a check), then push again. Its last lines:"
@@ -252,6 +253,7 @@ jobs:
               } >&2
               exit 2
             fi
+            echo "{\"step\": \"${step}\", \"ok\": true, \"s\": $(( $(date +%s) - start ))}" >> "${RUNNER_TEMP:-/tmp}/push-gate.jsonl"
             echo "push gate: ${step} passed in $(( $(date +%s) - start ))s" >&2
           done
           exit 0
@@ -363,31 +365,43 @@ jobs:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           branch="claude/issue-${ISSUE}"
+          # The run's numbers, as an annotation (read back by the harness report through the
+          # check-runs API): outcome, turns, minutes, cost, and what the push gate caught.
+          outcome=unknown
+          metrics() {
+            local stats gate pr
+            stats=$(jq -c '[.[] | select(.type == "result")] | last | {turns: .num_turns, ms: .duration_ms, cost: .total_cost_usd, error: .is_error}' "${EXEC}" 2>/dev/null || true)
+            gate=$(jq -sc '{gate_runs: map(select(.step == "check")) | length, gate_blocks: map(select(.ok == false)) | length, gate_blocked_by: map(select(.ok == false) | .step), gate_s: (map(.s) | add // 0)}' "${RUNNER_TEMP}/push-gate.jsonl" 2>/dev/null || true)
+            pr=$(gh pr list --head "${branch}" --state all --json number --jq 'map(.number) | max // 0' 2>/dev/null || true)
+            [ -n "${stats}" ] || stats='{}'; [ -n "${gate}" ] || gate='{}'; [ -n "${pr}" ] || pr=0
+            echo "::notice title=agent-run::$(jq -cn --argjson s "${stats}" --argjson g "${gate}" --argjson i "${ISSUE}" --arg m "${MODE}" --arg o "${outcome}" --argjson p "${pr}" '{issue: $i, mode: $m, outcome: $o, pr: $p} + $s + $g')"
+          }
+          trap metrics EXIT
           gh issue edit "${ISSUE}" --remove-label agent-running >/dev/null || true
           # The agent never started (the action failed before Claude ran): not an attempt.
-          if [ ! -s "${EXEC:-/nonexistent}" ]; then echo "the agent did not run"; exit 0; fi
+          if [ ! -s "${EXEC:-/nonexistent}" ]; then outcome=not-run; echo "the agent did not run"; exit 0; fi
           gh label create agent-attempted --color C5DEF5 --description "An agent worked on this" --force >/dev/null
           gh issue edit "${ISSUE}" --add-label agent-attempted >/dev/null || true
           # A usage limit is not the agent's failure: the next sweep takes it again.
           last=$(jq -r '[.[] | select(.type == "result")] | last | select(.is_error == true) | .result // ""' "${EXEC}" 2>/dev/null || true)
           if printf '%s' "${last}" | grep -qiE 'usage limit|limit reached|rate.limit'; then
-            echo "stopped by a usage limit: ${last}"; exit 0
+            outcome=usage-limit; echo "stopped by a usage limit: ${last}"; exit 0
           fi
           if [ "${MODE}" = work ] && [ -s /tmp/agent-done.md ]; then
             { echo "**autofix: done.**"; echo; cat /tmp/agent-done.md; } > /tmp/note.md
             gh issue close "${ISSUE}" --comment "$(cat /tmp/note.md)"
-            exit 0
+            outcome=done-already; exit 0
           fi
           if [ "${MODE}" = ci-fix ]; then
             k=1; gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-ci-fix-1 && k=2
             gh label create "agent-ci-fix-${k}" --color BFD4F2 --description "An agent tried to fix this PR's CI" --force >/dev/null
             gh issue edit "${ISSUE}" --add-label "agent-ci-fix-${k}" >/dev/null
-            exit 0
+            outcome=ci-fix; exit 0
           fi
           url=$(gh pr list --head "${branch}" --state open --json url --jq '.[0].url // empty')
           if [ -n "${url}" ]; then
             gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled"
-            echo "pull request: ${url}"; exit 0
+            outcome=pr; echo "pull request: ${url}"; exit 0
           fi
           # No pull request (a pushed branch without one counts too: the next agent opens it,
           # since a pull request opened with this job's token would start neither CI nor Guard).
@@ -401,6 +415,7 @@ jobs:
             else echo "The agent stopped without a branch."; fi
           } > /tmp/note.md
           gh issue comment "${ISSUE}" --body-file /tmp/note.md
+          outcome=no-change
           if gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-retried; then
             gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force >/dev/null
             gh issue edit "${ISSUE}" --add-label needs-human
