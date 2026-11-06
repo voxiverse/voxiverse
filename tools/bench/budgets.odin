@@ -4,9 +4,11 @@ import "core:flags"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:time"
 
 import "common:base"
 import "common:game"
+import "common:planet"
 import "server:core"
 
 // The `budgets` benchmark scenario (`build bench budgets`):
@@ -14,13 +16,13 @@ import "server:core"
 // repetition, in CPU time of this thread: a save (what the tick pays to start
 // it, its largest slice, a blocking one), the item audit, saving and loading
 // many counters, the journal under a flood and blasts, 10 000 blocks of water
-// flowing. No test judges any of these: the tests call the scenes for what
+// flowing, building the planet's climate. No test judges any of these: the tests call the scenes for what
 // they do. The budgets sit here beside the scenario, like `chunks`'s CHECK,
 // and are the ones the tests held, several times a fast
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 4
+BUDGETS_VERSION :: 5
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
@@ -49,6 +51,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Spatial_Move, 250},
 	{.Spatial_Sphere, 3000},
 	{.Collide_Move, 2000},
+	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
 }
 
 budgets_main :: proc(args: []string) {
@@ -168,7 +171,27 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 	base.metric_add(.Random_Ticks, f32(random.worst_us))
 	base.metric_add(.Random_Rule_Run, f32(random.run_ns))
 
+	fmt.printfln("scene: %s", "the planet")
+	base.metric_add(.Planet_Build, f32(budget_planet(broken)))
+
 	budget_entities(reg, broken)
+}
+
+// budget_planet builds the planet from the committed relief and says how many ms it took.
+@(private = "file")
+budget_planet :: proc(broken: ^[dynamic]string) -> f64 {
+	relief, ok := planet.relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	if !ok {
+		append(broken, "the relief file does not load")
+		return 0
+	}
+	defer planet.relief_destroy(&relief)
+	start := time.tick_now()
+	p := planet.planet_build(relief)
+	ms := time.duration_milliseconds(time.tick_since(start))
+	defer planet.planet_destroy(&p)
+	free_all(context.temp_allocator)
+	return ms
 }
 
 @(private = "file")
