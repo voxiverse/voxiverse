@@ -100,6 +100,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
 | `client/render` | Frame rendering | `*.odin` |
 | `client/sfx` | Sound-effect synthesis | `*.odin` |
+| `client/steam` | The client's Steam: one interface over the run-time-loaded Steamworks flat API and a fake | `*.odin` |
 | `client/starfield` | The starfield backdrop | `*.odin` |
 | `client/testkit` | Helpers the packages' tests share (the base registry, a mode by name); only tests import it | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
@@ -123,12 +124,14 @@ package** is enforced by the `layout` lint (see above).
 | `common/script/testdata/fuzz/script.snapshot/regress` | Snapshots the restore validation once let through, replayed by the suite | `*.bin` |
 | `common/script/testdata/disasm` | Programs and their listings | `*.vxs`, `*.txt` |
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
+| `common/steam` | What both Steam packages share: SteamID, loading the library from beside the executable, the fake's tickets | `*.odin` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
 | `common/worldgen` | World generators | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |
+| `server/steam` | The dedicated server's Steam: auth sessions over the game server flat API and a fake | `*.odin` |
 | `server/packs` | Reading pack folders from disk (L2b gathers the `pack_*` files) | `*.odin` |
 | `tests` | Tests spanning several packages | `*.odin` |
 | `tests/crash_fixture` | A child process the crash tests start | `*.odin` |
