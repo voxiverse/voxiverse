@@ -1,8 +1,9 @@
 package game
 
-import "core:crypto"
 import "core:crypto/ed25519"
 import "core:encoding/hex"
+
+import "common:base"
 
 // Accounts: an account is an Ed25519 key pair the client makes and keeps;
 // the public key is the account. Joining, the server sends a nonce and the
@@ -25,7 +26,7 @@ PROOF_CONTEXT :: "voxiverse join v1"
 // account_key_make: a new account.
 account_key_make :: proc() -> (k: Account_Key) {
 	seed: [ed25519.PRIVATE_KEY_SIZE]u8
-	crypto.rand_bytes(seed[:])
+	base.entropy_fill(seed[:])
 	account_key_set(&k, seed[:])
 	return
 }
@@ -70,7 +71,7 @@ account_verify :: proc(account: Account, nonce: Nonce, sig: Signature) -> bool {
 
 // nonce_make: a fresh challenge.
 nonce_make :: proc() -> (n: Nonce) {
-	crypto.rand_bytes(n[:])
+	base.entropy_fill(n[:])
 	return
 }
 

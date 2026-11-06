@@ -7,6 +7,8 @@ import "core:mem"
 import "core:net"
 import "core:time"
 
+import "common:base"
+
 // The server's side: one socket, many peers. A peer gets in only by
 // answering a challenge: the server sends a cookie (a keyed hash of the
 // peer's address, its salt and the time) and keeps no state until the
@@ -97,8 +99,8 @@ host_open :: proc(
 	h^ = {}
 	h.allocator, h.password = allocator, password
 	socket_open(&h.socket, port, sim = sim) or_return
-	crypto.rand_bytes(h.secret[:])
-	crypto.rand_bytes(mem.ptr_to_bytes(&h.instance))
+	base.entropy_fill(h.secret[:])
+	base.entropy_fill(mem.ptr_to_bytes(&h.instance))
 	h.peers = make([]Peer, max_peers, allocator)
 	h.info = make([dynamic]u8, allocator)
 	h.events = make([dynamic]Host_Event, allocator)
@@ -285,7 +287,7 @@ handle :: proc(h: ^Host, data: []u8, from: net.Endpoint, now: time.Tick) {
 			return
 		}
 		token: u32
-		crypto.rand_bytes(mem.ptr_to_bytes(&token))
+		base.entropy_fill(mem.ptr_to_bytes(&token))
 		p := &h.peers[slot]
 		p^ = {}
 		p.active, p.address, p.salt = true, from, salt

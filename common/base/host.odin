@@ -8,10 +8,14 @@ import "core:fmt"
 // the core imports only base and never a platform package. Tests fill it with fakes.
 //
 // The services land one step at a time (docs/design.md, "The OS quarantine"): so far the boot
-// information and the output (stdout and stderr).
+// information, the output (stdout and stderr) and the entropy.
 Host :: struct {
-	boot:   Boot_Info,
-	output: Output_Service,
+	boot:    Boot_Info,
+	output:  Output_Service,
+	// Key material from the operating system's secure source: account keys, nonces,
+	// salts, secrets. Never for gameplay randomness (see Rng, and cosmetic_rng for what
+	// need not repeat).
+	entropy: proc(out: []u8),
 }
 
 // Boot_Info: what the process was started with, read once at boot.
@@ -59,4 +63,52 @@ out_printfln :: proc(stream: Output_Stream, format: string, args: ..any) {
 	text := fmt.bprintf(buf[:len(buf) - 1], format, ..args)
 	buf[len(text)] = '\n'
 	out_write(stream, string(buf[:len(text) + 1]))
+}
+
+@(private = "file")
+entropy: proc(out: []u8)
+
+// entropy_install makes source the process's entropy (platform.boot does it); the code that
+// needs key material has no Host to read it from.
+entropy_install :: proc(source: proc(out: []u8)) {
+	entropy = source
+}
+
+// entropy_fill fills out with secure random bytes. It stops the process when none is
+// installed: a key from a fixed stream would be a quiet hole. Test builds fall back to a
+// fixed stream, so a package's tests need not boot a platform.
+entropy_fill :: proc(out: []u8) {
+	if entropy != nil {
+		entropy(out)
+		return
+	}
+	when ODIN_TEST {
+		@(static) fixed := Rng {
+			s = {1, 2, 3, 4},
+		}
+		for &b in out {b = u8(rng_u64(&fixed))}
+	} else {
+		panic("entropy_fill: no entropy installed (platform.boot was not called)")
+	}
+}
+
+@(private = "file")
+@(thread_local)
+cosmetic: Rng
+@(private = "file")
+@(thread_local)
+cosmetic_ready: bool
+
+// cosmetic_rng is the calling thread's stream for randomness that never reaches state and
+// need not repeat: particles, sound pitch, a pipe's jitter. It is seeded from the entropy
+// once per thread. Anything the simulation, a save or a replay can see uses an Rng made
+// from a seed (docs/determinism.md).
+cosmetic_rng :: proc() -> ^Rng {
+	if !cosmetic_ready {
+		seed: u64
+		entropy_fill((cast([^]u8)&seed)[:size_of(seed)])
+		cosmetic = rng_make(seed)
+		cosmetic_ready = true
+	}
+	return &cosmetic
 }

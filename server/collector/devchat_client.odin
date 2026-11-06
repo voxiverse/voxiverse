@@ -1,6 +1,5 @@
 package collector
 
-import "core:crypto"
 import "core:encoding/json"
 import "core:fmt"
 import "core:net"
@@ -140,7 +139,7 @@ chat_send :: proc(c: ^Chat, text: string, ctx: Chat_Context) -> bool {
 	if len(strings.trim_space(text)) == 0 || len(text) > game.MAX_DEV_TEXT {return false}
 	sync.mutex_lock(&c.mutex)
 	id: [4]u8
-	crypto.rand_bytes(id[:])
+	base.entropy_fill(id[:])
 	e := Chat_Entry {
 		from_me  = true,
 		id       = fmt.aprintf("%02x%02x%02x%02x", id[0], id[1], id[2], id[3]),

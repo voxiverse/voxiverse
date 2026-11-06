@@ -1,11 +1,11 @@
 package engine
 
 import "core:math"
-import "core:math/rand"
 import "core:time"
 
 import "client:mesh"
 import "client:render"
+import "common:base"
 import "common:game"
 
 // Entities as the client shows them: interpolated like the other players
@@ -78,7 +78,7 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		case .Sheep:
 			sheep(d, v, e.stride, hurt, e.flags)
 			if .In_Love in e.flags &&
-			   rand.float32() <
+			   base.rng_f32(base.cosmetic_rng()) <
 				   0.06 {hearts(s, v.position + {0, f64(1.2 * (0.5 if .Lamb in e.flags else 1)), 0})}
 		case .Rocket:
 			rocket(s, d, v)
@@ -221,15 +221,15 @@ rocket :: proc(s: ^Session, d: ^render.Entity_Draw, v: Other_View) {
 	)
 	tail := centre + turn_yaw({0, 0, 0.4}, v.yaw)
 	render.entity_box(d, tail, v.yaw, v.pitch, -0.07, 0.07, FLAME, .Body)
-	if rand.float32() < 0.6 {
+	if base.rng_f32(base.cosmetic_rng()) < 0.6 {
 		puff_add(
 			s,
 			Puff {
 				position = tail,
 				velocity = {
-					rand.float32_range(-0.4, 0.4),
-					rand.float32_range(0.2, 0.8),
-					rand.float32_range(-0.4, 0.4),
+					base.rng_f32_range(base.cosmetic_rng(), -0.4, 0.4),
+					base.rng_f32_range(base.cosmetic_rng(), 0.2, 0.8),
+					base.rng_f32_range(base.cosmetic_rng(), -0.4, 0.4),
 				},
 				life = 1.2,
 				size = 0.12,
@@ -247,7 +247,11 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 		// A random point in the sphere; a piece of its block, flung out.
 		p: [3]f64
 		for {
-			p = {rand.float64_range(-1, 1), rand.float64_range(-1, 1), rand.float64_range(-1, 1)}
+			p = {
+				base.rng_f64_range(base.cosmetic_rng(), -1, 1),
+				base.rng_f64_range(base.cosmetic_rng(), -1, 1),
+				base.rng_f64_range(base.cosmetic_rng(), -1, 1),
+			}
 			if p.x * p.x + p.y * p.y + p.z * p.z <= 1 {break}
 		}
 		at := center + p * radius
@@ -256,13 +260,15 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 			{i32(math.floor(at.x)), i32(math.floor(at.y)), i32(math.floor(at.z))},
 		)
 		if !game.block_collides(&s.reg.blocks, b) {continue}
-		out := [3]f32{f32(p.x), f32(p.y) + 0.6, f32(p.z)} * rand.float32_range(6, 14)
+		out :=
+			[3]f32{f32(p.x), f32(p.y) + 0.6, f32(p.z)} *
+			base.rng_f32_range(base.cosmetic_rng(), 6, 14)
 		puff_add(
 			s,
 			{
 				position = at,
 				velocity = out,
-				life = rand.float32_range(0.8, 1.6),
+				life = base.rng_f32_range(base.cosmetic_rng(), 0.8, 1.6),
 				size = 0.11,
 				gravity = 22,
 				color = debris_colour(s, b),
@@ -271,17 +277,17 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 	}
 	for _ in 0 ..< 24 {
 		dir := [3]f32 {
-			rand.float32_range(-1, 1),
-			rand.float32_range(-0.2, 1),
-			rand.float32_range(-1, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -1, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -0.2, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -1, 1),
 		}
 		puff_add(
 			s,
 			{
 				position = center,
 				velocity = dir * f32(radius) * 1.6,
-				life = rand.float32_range(1, 2),
-				size = rand.float32_range(0.25, 0.45),
+				life = base.rng_f32_range(base.cosmetic_rng(), 1, 2),
+				size = base.rng_f32_range(base.cosmetic_rng(), 0.25, 0.45),
 				drag = 2,
 				color = SMOKE,
 			},
@@ -289,9 +295,9 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 	}
 	for _ in 0 ..< 10 {
 		dir := [3]f32 {
-			rand.float32_range(-1, 1),
-			rand.float32_range(-1, 1),
-			rand.float32_range(-1, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -1, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -1, 1),
+			base.rng_f32_range(base.cosmetic_rng(), -1, 1),
 		}
 		puff_add(
 			s,
@@ -312,12 +318,12 @@ explosion_effects :: proc(s: ^Session, center: [3]f64, radius: f64) {
 entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 	at := e.last_seen
 	for _ in 0 ..< PUFF_PIECES {
-		angle := rand.float32_range(0, math.TAU)
-		speed := rand.float32_range(1.5, 3.5)
+		angle := base.rng_f32_range(base.cosmetic_rng(), 0, math.TAU)
+		speed := base.rng_f32_range(base.cosmetic_rng(), 1.5, 3.5)
 		offset := [3]f64 {
-			f64(rand.float32_range(-0.3, 0.3)),
-			f64(rand.float32_range(0.3, 0.8)),
-			f64(rand.float32_range(-0.3, 0.3)),
+			f64(base.rng_f32_range(base.cosmetic_rng(), -0.3, 0.3)),
+			f64(base.rng_f32_range(base.cosmetic_rng(), 0.3, 0.8)),
+			f64(base.rng_f32_range(base.cosmetic_rng(), -0.3, 0.3)),
 		}
 		puff_add(
 			s,
@@ -325,13 +331,13 @@ entity_died :: proc(s: ^Session, e: ^Other_Entity) {
 				position = at + offset,
 				velocity = {
 					math.cos(angle) * speed,
-					rand.float32_range(2, 5),
+					base.rng_f32_range(base.cosmetic_rng(), 2, 5),
 					math.sin(angle) * speed,
 				},
 				life = PUFF_SECONDS,
 				size = 0.07,
 				gravity = 18,
-				color = WOOL if rand.float32() < 0.7 else HIDE,
+				color = WOOL if base.rng_f32(base.cosmetic_rng()) < 0.7 else HIDE,
 			},
 		)
 	}
@@ -418,7 +424,7 @@ debris_colour :: proc(s: ^Session, b: game.Block) -> [4]u8 {
 	side := mesh.block_texture(s.reg, b, .Pos_X)
 	pixels := &s.texels[side]
 	for _ in 0 ..< 8 {
-		c := pixels[rand.int_max(len(pixels))]
+		c := pixels[base.rng_int_max(base.cosmetic_rng(), len(pixels))]
 		if c.a != 0 {return {c.r, c.g, c.b, 255}}
 	}
 	return {128, 128, 128, 255}
@@ -430,7 +436,12 @@ hearts :: proc(s: ^Session, at: [3]f64) {
 	puff_add(
 		s,
 		Puff {
-			position = at + {rand.float64_range(-0.3, 0.3), 0, rand.float64_range(-0.3, 0.3)},
+			position = at +
+			{
+					base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
+					0,
+					base.rng_f64_range(base.cosmetic_rng(), -0.3, 0.3),
+				},
 			velocity = {0, 0.9, 0},
 			life = 1.1,
 			size = 0.09,

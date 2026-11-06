@@ -20,3 +20,14 @@ test_boot_installs_the_output :: proc(t: ^testing.T) {
 	testing.expect(t, host.output.write != nil)
 	testing.expect(t, host.output.is_color != nil)
 }
+
+@(test)
+test_boot_installs_the_entropy :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	testing.expect(t, host.entropy != nil)
+	a, b: [32]u8
+	base.entropy_fill(a[:])
+	base.entropy_fill(b[:])
+	testing.expect(t, a != b)
+}
