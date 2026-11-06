@@ -119,7 +119,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/ogg/testdata/edge` | Edge-case Ogg files | `*.ogg` |
 | `common/ogg/testdata/reference` | Reference decodes | `*.s16` |
 | `common/platform` | The platform layer both binaries share: reads the machine (arguments, environment, process id, core count, folders, CPU and OS, stdout and stderr, entropy, clocks, stack calls, the system libraries to link) into the `base.Host` at boot | `*.odin` |
-| `common/planet` | The home world as a planet: Earth's relief (its file format), sunlight, temperature, winds, ocean currents, moisture and rain, and later Köppen | `*.odin` |
+| `common/planet` | The home world as a planet: Earth's relief (its file format), sunlight, temperature, winds, ocean currents, moisture and rain, Köppen classes and the sampling of the climate | `*.odin` |
 | `common/script` | The script language: compiler, VM, collector, libraries and trace | `*.odin`, `*.vxs` |
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
 | `common/script/testdata/bench` | The VM's benchmark programs and their instruction budgets | `*.vxs`, `budgets.txt` |
