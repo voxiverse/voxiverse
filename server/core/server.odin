@@ -134,6 +134,7 @@ Server :: struct {
 	listening:      bool,
 	capture:        netcode.Capture, // (config.capture)
 	perms:          Permissions, // who may do what (permissions.odin)
+	admins:         game.Admins, // admins.cfg: accounts and SteamIDs that have the role admin (permissions.odin)
 	community:      Community, // nicknames, mutes, homes, warps, bans (community.odin)
 	chat:           Chat_State, // (chat.odin)
 	kit:            [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
@@ -213,6 +214,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	}
 	permissions_open(s)
 	community_open(s)
+	admins_open(s)
 	telemetry.sink_start(
 		&s.sink,
 		filepath.join({s.store.dir, "telemetry"}, context.temp_allocator) or_else "" if s.store.dir != "" else "",
@@ -319,6 +321,7 @@ teardown :: proc(s: ^Server, world: bool) {
 	store_close(s)
 	permissions_destroy(&s.perms)
 	community_destroy(&s.community)
+	game.admins_destroy(&s.admins)
 	for w in s.worlds {world_close(w)} 	// (first: it joins the generator workers, which read the registry)
 	delete(s.worlds)
 	game.registry_destroy(s.registry)

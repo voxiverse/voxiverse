@@ -204,6 +204,24 @@ run_collector :: proc(opts: Options) -> bool {
 	port := opts.port if opts.port != netcode.DEFAULT_PORT else COLLECTOR_PORT
 	c := new(collector.Collector)
 	defer free(c)
+	if opts.steam {
+		dir, err := os.get_executable_directory(context.temp_allocator)
+		if err != nil {
+			log.error("steam off: the executable's folder is unknown")
+		} else {
+			steam.open_real(
+				&steam_server_state,
+				dir,
+				true,
+				0,
+				u16(port),
+				u16(port + 1),
+				cstring(base.VERSION),
+			)
+		}
+		c.steam = &steam_server_state
+	}
+	defer if opts.steam {steam.shutdown(&steam_server_state)}
 	if !collector.collector_start(c, opts.universe, port) {return false}
 	catch_stop()
 	log.infof("collector ready dir=%s port=%d (Ctrl+C stops it)", opts.universe, c.port)

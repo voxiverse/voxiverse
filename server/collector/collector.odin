@@ -16,7 +16,9 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import steam_common "common:steam"
 import "common:telemetry"
+import steam_server "server:steam"
 
 // The collector: the end of the telemetry pipe. Servers (a player's singleplayer
 // world, a dedicated server) send their event logs to it in batches over the
@@ -49,12 +51,13 @@ Peer_State :: enum u8 {
 }
 
 Collector_Peer :: struct {
-	state:   Peer_State,
-	nonce:   game.Nonce,
-	account: game.Account,
-	pid:     string, // (heap)
-	window:  time.Tick,
-	count:   int,
+	state:    Peer_State,
+	nonce:    game.Nonce,
+	account:  game.Account,
+	steam_id: u64, // its SteamID, only when `steam` accepted the Hello's ticket (0: none)
+	pid:      string, // (heap)
+	window:   time.Tick,
+	count:    int,
 }
 
 Collector_Stats :: struct {
@@ -83,7 +86,8 @@ Collector :: struct {
 	port:           int,
 	now:            time.Tick, // the step's time (the OS's on the thread, the network's when stepped)
 	// admins.cfg: who developer chat hears (devchat.odin)
-	admins:         map[game.Account]struct{},
+	admins:         game.Admins,
+	steam:          ^steam_server.Server, // checks Hello tickets (nil or off: tickets are ignored, `steam:` admins never match); the caller opens and shuts it, and runs its callbacks while the collector is stepped by hand
 	admins_text:    string, // (heap) the file as last read
 	admins_loaded:  bool,
 	admins_checked: bool,
@@ -93,7 +97,9 @@ Collector :: struct {
 // collector_open opens the collector in dir on a UDP port (0: any), or on a
 // port of `sim`, with nothing running: the caller steps it (collector_step).
 collector_open :: proc(c: ^Collector, dir: string, port: int, sim: ^netcode.Simnet = nil) -> bool {
+	steam := c.steam // (set by the caller before opening)
 	c^ = {}
+	c.steam = steam
 	c.dir = strings.clone(dir)
 	os.make_directory_all(dir)
 	if err := netcode.host_open(&c.host, port, 64, sim = sim); err != nil {
@@ -136,7 +142,7 @@ collector_close :: proc(c: ^Collector) {
 	delete(c.peers)
 	for k in c.cursors {delete(k)}
 	delete(c.cursors)
-	delete(c.admins)
+	game.admins_destroy(&c.admins)
 	delete(c.admins_text)
 	delete(c.dir)
 	c^ = {}
@@ -162,6 +168,7 @@ collector_main :: proc(c: ^Collector) {
 // messages, what is owed back.
 collector_step :: proc(c: ^Collector, now: time.Tick) {
 	c.now = now
+	if c.steam != nil {steam_server.run_callbacks(c.steam)}
 	netcode.host_update(&c.host, now)
 	for e in c.host.events {
 		switch v in e {
@@ -213,6 +220,15 @@ handle :: proc(c: ^Collector, id: netcode.Peer_Id, data: []u8) {
 			return
 		}
 		p.account = v.account
+		p.steam_id = 0
+		if len(v.ticket) > 0 && c.steam != nil && steam_server.on(c.steam) {
+			sid := steam_common.Steam_ID(v.steam_id)
+			result := steam_server.begin_auth(c.steam, sid, v.ticket)
+			if result == .Ok {
+				steam_server.end_auth(c.steam, sid)
+				p.steam_id = v.steam_id
+			}
+		}
 		p.nonce = game.nonce_make()
 		p.state = .Proving
 		send(c, id, game.Challenge{p.nonce})

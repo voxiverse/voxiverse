@@ -75,9 +75,15 @@ collector's `--universe` directory).
 
 ### Admins
 
-`<dir>/admins.cfg`: one account public key in hex (64 digits) per line; `#` starts a comment
-(a whole line or the end of one). A line that is not a key is logged and skipped. The file
-is read at start and again within a second of it changing.
+`<dir>/admins.cfg`: one entry per line, an account public key in hex (64 digits) or
+`steam:<SteamID64>`; `#` starts a comment (a whole line or the end of one). A line that is
+neither is logged and skipped. The file is read at start and again within a second of it
+changing. The server reads the same format ([docs/server.md](server.md#admins)).
+
+A `steam:` line admits a player only when the collector runs with `--steam` and Steam accepted
+the ticket in that connection's `Hello`. A SteamID that a client only claims (no ticket, a bad
+one, or a ticket for another ID), or any `steam:` line on a collector without Steam, admits no
+one; the account-key lines work as before.
 
 ### Messages in
 
