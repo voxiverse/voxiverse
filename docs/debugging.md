@@ -334,9 +334,10 @@ the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has. CI's Linux ga
 the same command for every change.
 
 The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
-`name: script`; the script is console commands separated by `;`, as `--exec` takes them.
+`name: [@WxH] script`; the script is console commands separated by `;`, as `--exec` takes them.
 `voxiverse --scene <name>` runs one scene and quits: it joins the scratch world at its fixed
-spawn and draws offscreen at 640 x 360 (`client/autopilot/scene.odin`). It takes no
+spawn and draws offscreen at 640 x 360, or at the size an `@WxH` before the script gives
+(`client/autopilot/scene.odin`; a malformed size is an error naming the line). It takes no
 `--exec`, `--benchmark` or `--check`. Whatever could change the picture from one run to the
 next is fixed:
 
@@ -347,6 +348,15 @@ next is fixed:
 - the water's animation stopped;
 - no chat lines and no toasts: they fade with the clock, so they are cleared two frames
   before the picture.
+
+A scene whose script starts with `screen` is a menu's: it never joins the scratch world, the
+menus' animations stand still (every frame's step is 0, so the starfield, the planet's turn
+and the stars' settling are as at the start), and after the script it draws ten frames. Two
+development commands and a variable serve such scenes: `creation seed <n|text>` sets the
+creation screen's seed as if typed, `ignite show` starts Ignite with that screen's galaxy and
+planet (no universe is made), and `set debug.ignite_at <seconds>` holds an active Ignite at
+that time (a key or click still skips it). The `creation` and `ignite_*` scenes use them, at
+1280 x 720.
 
 After the scene's own script, the run waits a second for the server to answer, waits until
 the world around the player is loaded and meshed, and draws ten more frames. The picture is

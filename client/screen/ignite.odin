@@ -76,11 +76,13 @@ ignite_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	skip := i.frames > 0 && (ctx.input.keys_pressed != {} || ctx.input.mouse_pressed != {})
 	i.frames += 1
 	dt := min(app.last_frame_ms / 1000, 0.1)
-	if skip || !ignite_step(i, dt) {
+	held := app.debug.ignite_at > 0 // (for pictures: time stands still at it)
+	if held {i.t = app.debug.ignite_at}
+	if skip || (!held && !ignite_step(i, dt)) {
 		i.active = false
 		return
 	}
-	if !i.reduce {
+	if !i.reduce && !held {
 		if phase, _ := ignite_phase(i.t); phase == .Streaks {
 			starfield.starfield_update(&i.fire, dt, false, IGNITE_WARP_SPEED)
 		}

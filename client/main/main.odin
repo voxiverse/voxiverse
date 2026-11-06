@@ -95,7 +95,11 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
 	if opts.scene != "" {
-		script, found := autopilot.scene_find(autopilot.SCENES_TEXT, opts.scene)
+		script, _, found, err := autopilot.scene_find(autopilot.SCENES_TEXT, opts.scene)
+		if err != "" {
+			log.error(err)
+			return false
+		}
 		if !found {
 			log.errorf(
 				"no scene %q (there are: %s)",
@@ -161,6 +165,7 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 				app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
 			}
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
+			if app.scene.menu {app.last_frame_ms = 0} 	// (a menu scene stands still)
 			if app.screen == .Game {
 				base.frame_stats_add(
 					&app.triangle_stats,

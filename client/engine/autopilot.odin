@@ -141,6 +141,7 @@ Scene_Run :: struct {
 	frames:  int, // in this phase
 	counts:  Scene_Counts, // what the picture's frame drew (written beside it)
 	counted: bool,
+	menu:    bool, // a menu's scene: no world, its animations stand still
 }
 
 // Scene_Counts: what a scene's frame drew,
