@@ -86,6 +86,28 @@ The pinned shader compiler is downloaded for Windows x86_64, Linux x86_64 and ma
 GLSLANG=/path/to/glslangValidator ./build.sh
 ```
 
+## Steam
+
+Steam is one way in to the game, never the only one. The game and the dedicated server bind
+the Steamworks flat C API by hand (`client/steam`, `server/steam`, shared pieces in
+`common/steam`): only the functions in use (init and shutdown, callbacks, the local SteamID
+and persona name, auth tickets, a Workshop query; on the server `BeginAuthSession` and
+`EndAuthSession`).
+
+- **What is loaded.** `steam_api64.dll` (Windows), `libsteam_api.so` (Linux) or
+  `libsteam_api.dylib` (macOS), opened at run time from the folder of the executable, never
+  from the system's search path. No Steamworks SDK file is in the repository and nothing links
+  against it.
+- **When Steam is off.** When the `steam` setting is off (`set steam 0`; read at start), when
+  the library is not beside the executable, when it lacks a function the game needs, or when
+  its init fails (Steam is not running, the game was not started through it). The game then
+  plays exactly as without Steam; it says why once in the log (`steam off: ...`), with no
+  dialog. A benchmark or a check never starts Steam.
+- **Tests.** Both packages have a fake with deterministic SteamIDs; a fake client's tickets
+  validate only against the fake server, and failures (init, tickets, expiry, Workshop) are
+  scripted.
+- **Callbacks** run once a frame (the server: once a tick) and allocate nothing.
+
 ## Reporting a problem
 
 Report problems on the project's issue tracker (linked from the README). Include:
