@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem/virtual"
-import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
@@ -455,8 +454,8 @@ content_mismatch :: proc(reg: ^game.Registry, w: game.Welcome) -> string {
 // (the packs of servers joined, by hash; game.pack_cache_store).
 packs_cache_dir :: proc() -> string {
 	if p, set := base.boot_info().env.packs.?; set && p != "" {return p}
-	dir, err := os.user_data_dir(context.temp_allocator)
-	if err != nil {return ""}
+	dir := base.boot_info().dirs.data
+	if dir == "" {return ""}
 	return filepath.join({dir, "voxiverse", "packs"}, context.temp_allocator) or_else ""
 }
 

@@ -21,6 +21,7 @@ boot :: proc(host: ^base.Host) {
 			env = read_env(),
 			pid = os.get_pid(),
 			cpu_count = os.get_processor_core_count(),
+			dirs = read_dirs(),
 		},
 		output = {write = output_write, is_color = output_is_color},
 		entropy = crypto.rand_bytes,
@@ -49,13 +50,13 @@ output_is_color :: proc "contextless" (stream: base.Output_Stream) -> bool {
 
 @(private = "file")
 env_maybe :: proc(name: string) -> Maybe(string) {
-	value, set := os.lookup_env(name, context.allocator)
+	value, set := os.lookup_env(name, runtime.heap_allocator())
 	return value if set else nil
 }
 
 @(private = "file")
 env_string :: proc(name: string) -> string {
-	return os.get_env(name, context.allocator)
+	return os.get_env(name, runtime.heap_allocator())
 }
 
 // read_env reads the variables the game cares about; the strings live as long as the process.
@@ -71,5 +72,26 @@ read_env :: proc() -> base.Env {
 		break_on_error = env_string("VX_BREAK") == "1",
 		pad_ignore = env_string("SDL_GAMECONTROLLER_IGNORE_DEVICES"),
 		pad_ignore_except = env_string("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT"),
+	}
+}
+
+@(private = "file")
+dir_or_empty :: proc(dir: string, err: os.Error) -> string {
+	return dir if err == nil else ""
+}
+
+// read_dirs asks the OS for the folders once; the strings live as long as the process.
+@(private = "file")
+read_dirs :: proc() -> base.Dirs {
+	a := runtime.heap_allocator() // not the context one: a test's tracking allocator would call it a leak
+	exe, exe_err := os.get_executable_directory(a)
+	data, data_err := os.user_data_dir(a)
+	config, config_err := os.user_config_dir(a)
+	home, home_err := os.user_home_dir(a)
+	return {
+		exe = dir_or_empty(exe, exe_err),
+		data = dir_or_empty(data, data_err),
+		config = dir_or_empty(config, config_err),
+		home = dir_or_empty(home, home_err),
 	}
 }

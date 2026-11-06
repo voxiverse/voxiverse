@@ -89,7 +89,7 @@ crash_bundle_init :: proc(root: string, app: string) -> bool {
 	b := new(Crash_Bundle, allocator)
 	b.allocator = allocator
 	b.root_len = copy(b.root[:], root)
-	if home, err := os.user_home_dir(context.temp_allocator); err == nil {
+	if home := boot_info().dirs.home; home != "" {
 		b.home_len = copy(b.home[:], home)
 		if b.home_len < len(home) {b.home_len = 0} 	// too long to compare: not replaced
 	}

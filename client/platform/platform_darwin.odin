@@ -9,6 +9,8 @@ import "core:strings"
 import "core:sync"
 import NS "core:sys/darwin/Foundation"
 import "core:sys/posix"
+
+import "common:base"
 import vk "vendor:vulkan"
 
 // macOS backend: AppKit through core:sys/darwin/Foundation (the Objective-C
@@ -56,7 +58,7 @@ callback_ctx: runtime.Context // what the callbacks run in
 @(private)
 native_vulkan_loader_name :: proc() -> string {
 	dll :: "libMoltenVK.dylib"
-	if dir, err := os.get_executable_directory(context.temp_allocator); err == nil {
+	if dir := base.boot_info().dirs.exe; dir != "" {
 		candidates := [3][]string {
 			{dir, "..", "Frameworks", dll},
 			{dir, dll},

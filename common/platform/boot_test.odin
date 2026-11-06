@@ -44,3 +44,14 @@ test_boot_reads_the_process_and_environment :: proc(t: ^testing.T) {
 	testing.expect_value(t, got_set, set)
 	if set {testing.expect_value(t, got, value)}
 }
+
+@(test)
+test_boot_reads_the_directories :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	exe, err := os.get_executable_directory(context.temp_allocator)
+	testing.expect_value(t, err, nil)
+	testing.expect_value(t, host.boot.dirs.exe, exe)
+	testing.expect(t, host.boot.dirs.exe != "")
+	testing.expect_value(t, base.boot_info().dirs, host.boot.dirs)
+}

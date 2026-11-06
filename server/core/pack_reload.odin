@@ -42,8 +42,8 @@ Pack_Reload :: struct {
 // build without it (a shipped game, or not run from the repository's build/).
 dev_base_dir :: proc() -> string {
 	when !base.DEV {return ""}
-	exe_dir, err := os.get_executable_directory(context.temp_allocator)
-	if err != nil {return ""}
+	exe_dir := base.boot_info().dirs.exe
+	if exe_dir == "" {return ""}
 	dir, _ := filepath.join(
 		{filepath.dir(exe_dir), "assets", "packs", game.BASE_NAMESPACE},
 		context.temp_allocator,
