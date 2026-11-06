@@ -38,6 +38,7 @@ Params :: struct {
 	palette:         f32, // the surface's blocks (PALETTES); 0: Earth's
 	gates:           f32, // 1: gates stand (common/worldgen/gates.odin); 0: none (worlds made before them)
 	gate_distance:   f32, // blocks: none nearer the world's middle (where the spawn is sought)
+	planet:          f32, // 1: built on common/planet, the height Earth's real relief (earth_planet.odin); 0: noise (worlds made before it)
 }
 
 @(rodata)
@@ -161,6 +162,10 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	}
 	c.height = height
 	c.rough = p.overhang * mountainous * smooth(0.35, 0.85, ridge)
+	if p.planet != 0 {
+		planet_shape(p, &c, x, z, hills, ridge)
+		height = c.height
+	}
 
 	// The climate is sampled a few blocks away, a different way for each
 	// column: across a border the two sides mix, dithered, instead of

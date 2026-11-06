@@ -131,7 +131,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/script/testdata/trace` | Programs and their instruction traces | `*.vxs`, `*.txt` |
 | `common/steam` | What both Steam packages share: SteamID, loading the library from beside the executable, the fake's tickets | `*.odin` |
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
-| `common/worldgen` | World generators | `*.odin` |
+| `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |

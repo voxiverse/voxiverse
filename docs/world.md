@@ -26,7 +26,12 @@ home world. The home world is Earth, which has one fixed address in every univer
 them, they never change). Earth's terrain is seeded from its address alone (`terrain_seed` in
 `server/core/worlds.odin`), so the same block stands at the same place in every universe; a new
 universe takes Earth's address when `Config.earth` is set, else one made from its seed (the alien
-start); a saved universe keeps the home address it was made with. A world loads when someone travels there, and unloads
+start); a saved universe keeps the home address it was made with. The generator parameter
+`worldgen.planet` (0 by default; nothing sets it yet) builds the height on `common/planet`: block x
+is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
+column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with
+the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Biomes
+from Köppen, rivers from the relief, ice sheets and the world's end come in later parts. A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 
