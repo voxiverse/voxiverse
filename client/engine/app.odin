@@ -16,6 +16,7 @@ import "client:mesh"
 import "client:platform"
 import "client:render"
 import "client:starfield"
+import "client:steam"
 import "client:ui"
 import "common:base"
 import "common:game"
@@ -84,6 +85,7 @@ App :: struct {
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
 	devchat:          Devchat, // developer chat (devchat.odin): runs while the setting names a collector
+	steam:            steam.Client, // Steam (steam.odin): off unless its library is beside the game
 	debug:            Debug_Switches,
 	telemetry:        Telemetry_Switches,
 	settings_dirty:   bool, // changed since loaded or saved
