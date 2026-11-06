@@ -91,6 +91,7 @@ Session :: struct {
 	notices:          [dynamic]string, // from the server, for the console (heap: the App prints and frees them)
 	welcome:          game.Welcome,
 	reg:              ^game.Registry, // what the blocks and items are: the game's, or (hosting) the universe's
+	available:        []core.Pack_Candidate, // packs found outside the universe: local, Workshop (arena)
 	reg_owned:        bool, // reg is the universe's own (freed with the session)
 	reg_fresh:        ^game.Registry, // the registry the server's reload made, waiting for the mesh jobs to end (hot reload; the App swaps it in)
 	reg_swapped:      bool, // reg was replaced by the packs of the server joined (the App makes the new items' icons, then clears it)
@@ -272,7 +273,12 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	// Our own world: its server here, through the pipe.
 	game.pipe_init(&s.pipe) // heap: both threads allocate and free packets
 	s.endpoint = {&s.pipe, .Client}
-	if own := core.registry_for_dir(config.save_dir, base_dir = core.dev_base_dir()); own != nil {
+	s.available = pack_candidates(config.steam, arena)
+	if own := core.registry_for_dir(
+		config.save_dir,
+		base_dir = core.dev_base_dir(),
+		available = s.available,
+	); own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
 		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)
 		game.receiver_init(&s.rx, &s.schema, s.reg)
@@ -281,19 +287,20 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	if !core.start(
 	&s.server,
 	{
-		seed         = config.seed,
-		mode         = config.mode,
-		view_radius  = config.view_radius,
-		view_height  = config.view_height,
-		workers      = worker_count(),
-		allow_cheats = true, // our own world
-		save_dir     = config.save_dir,
-		pack_watch   = base.DEV, // (a development build reloads packs when their files change)
-		spawn        = config.spawn,
-		no_sheep     = config.no_sheep,
-		upload       = config.upload,
-		rules        = still_rules() if config.no_sheep else {},
-		name         = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
+		seed            = config.seed,
+		mode            = config.mode,
+		view_radius     = config.view_radius,
+		view_height     = config.view_height,
+		workers         = worker_count(),
+		allow_cheats    = true, // our own world
+		save_dir        = config.save_dir,
+		available_packs = s.available,
+		pack_watch      = base.DEV, // (a development build reloads packs when their files change)
+		spawn           = config.spawn,
+		no_sheep        = config.no_sheep,
+		upload          = config.upload,
+		rules           = still_rules() if config.no_sheep else {},
+		name            = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},
 	) {

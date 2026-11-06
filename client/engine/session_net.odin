@@ -400,7 +400,11 @@ packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
 		fail(s, "the server reloaded its packs; join again")
 		return
 	}
-	fresh := core.registry_for_dir(s.config.save_dir, base_dir = core.dev_base_dir())
+	fresh := core.registry_for_dir(
+		s.config.save_dir,
+		base_dir = core.dev_base_dir(),
+		available = s.available,
+	)
 	if fresh == nil {
 		fail(s, "the reloaded packs do not load here; see the log")
 		return
