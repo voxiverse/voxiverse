@@ -181,6 +181,13 @@ jobs:
           if [ -s /tmp/agent-blocked.md ] || ! git ls-remote --exit-code --heads origin "${branch}" >/dev/null; then
             { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
             gh issue comment "${ISSUE}" --body-file /tmp/note.md
+            # One retry: the next sweep's agent reads this note (it reads the comments) and
+            # starts from it. A second failure goes to the owner.
+            if ! gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-retried; then
+              gh label create agent-retried --color BFD4F2 --description "Autofix failed once; the next sweep retries" --force
+              gh issue edit "${ISSUE}" --add-label agent-retried --remove-label agent-attempted
+              exit 0
+            fi
             gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force
             gh issue edit "${ISSUE}" --add-label needs-human
             exit 0
