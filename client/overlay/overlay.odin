@@ -81,6 +81,9 @@ close_overlay :: proc(app: ^engine.App, which: engine.Overlay) {
 		return
 	case .Death:
 		return // (only Respawn leaves it)
+	case .Devchat:
+		engine.devchat_close(app)
+		return
 	case .Player_Menu:
 		menu.player_menu_close(app)
 		return
@@ -121,6 +124,9 @@ draw_overlays :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			lan_dialog_ui(app, ctx)
 		case .Death:
 			death_ui(app, ctx)
+		case .Devchat:
+			devchat_ui(app, ctx, top)
 		}
 	}
+	devchat_notice(app, ctx)
 }

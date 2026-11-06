@@ -120,6 +120,10 @@ App :: struct {
 	chat:             Line_Editor, // the chat's line (overlay_chat.odin)
 	chat_scroll:      f32, // lines scrolled up in the open chat
 	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
+	devchat_line:     Line_Editor, // developer chat's line (overlay/devchat.odin)
+	devchat_attach:   bool, // attach where the player is to what they write
+	devchat_seen:     u64, // replies seen (more arrived: the notice shows)
+	devchat_scroll:   f32, // entries scrolled up
 	splash:           string, // the title screen's, chosen once (screen_title.odin)
 	started:          time.Tick, // when the app began (the splash's pulse)
 	toasts:           Toasts, // the notices at the top right (overlay_toasts.odin)
