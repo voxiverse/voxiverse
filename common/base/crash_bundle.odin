@@ -99,7 +99,7 @@ crash_bundle_init :: proc(root: string, app: string) -> bool {
 	for &t in b.text {t = make([]u8, BUNDLE_TEXT, allocator)}
 	b.arena_mem = make([]u8, BUNDLE_ARENA, allocator)
 
-	cpu, cores, threads, os_name := machine_facts(context.temp_allocator)
+	machine := boot_info().machine
 	profile := "development" if DEV else "release"
 	if ODIN_SANITIZER_FLAGS != {} {profile = "sanitize"}
 	h := fmt.bprintf(
@@ -109,10 +109,10 @@ crash_bundle_init :: proc(root: string, app: string) -> bool {
 		VERSION,
 		COMMIT,
 		profile,
-		os_name,
-		cpu,
-		cores,
-		threads,
+		machine.os,
+		machine.cpu,
+		machine.cores,
+		machine.threads,
 	)
 	b.header_len = len(h)
 	bundle_prune(root)

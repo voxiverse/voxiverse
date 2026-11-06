@@ -65,9 +65,9 @@ Machine :: struct {
 }
 
 machine_info :: proc(gpu, driver: string, allocator := context.temp_allocator) -> (m: Machine) {
-	cpu: string
-	cpu, m.cores, m.threads, m.os = machine_facts(allocator)
-	m.cpu = strings.trim_space(cpu)
+	facts := boot_info().machine
+	m.cores, m.threads, m.os = facts.cores, facts.threads, facts.os
+	m.cpu = strings.trim_space(facts.cpu)
 	if m.cpu == "" {m.cpu = "unknown"}
 	key := fmt.tprintf("%s|%d|%d|%s|%s|%s", m.cpu, m.cores, m.threads, m.os, gpu, driver)
 	m.fingerprint = fmt.aprintf("%08x", hash.fnv32a(transmute([]u8)key), allocator = allocator)
