@@ -244,6 +244,12 @@ jobs:
           cat > "${RUNNER_TEMP}/deadline.sh" <<'DEADLINE'
           #!/usr/bin/env bash
           in=$(cat)
+          # Nothing notifies an unattended agent when a background command ends: it stops waiting
+          # (#102's run ended "the tests are still running, I'll wait for the completion notice").
+          if [ "$(jq -r '.tool_input.run_in_background // false' <<< "${in}")" = true ]; then
+            echo "Run it in the foreground: in this unattended session nothing tells you when a background command ends, so you would stop before it does." >&2
+            exit 2
+          fi
           start=$(cat "${RUNNER_TEMP:-/tmp}/agent-start" 2>/dev/null || date +%s)
           [ $(( $(date +%s) - start )) -lt 2700 ] && exit 0
           tool=$(jq -r '.tool_name // ""' <<< "${in}")
@@ -350,6 +356,7 @@ jobs:
             4. Push to the same branch (with `--force-with-lease` after the rebase). Auto-merge is
                already on.
 
+            **Never run a command in the background** (nothing notifies you when it ends; a hook refuses it).
             **Time:** your GitHub token expires one hour after you start. Commit, push and open the pull
             request within 45 minutes (a hook allows nothing else after that); for a large issue, push a
             part that stands on its own with `Part of #N` and a "Left for the next part" list early rather
