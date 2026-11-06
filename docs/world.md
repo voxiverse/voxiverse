@@ -167,7 +167,8 @@ each tree's own position, not its chunk's. A world whose `world.cfg` has no
 `planet.history(planet, address, seed, day, interventions)` (`common/planet/history.odin`) is the
 peoples of a planet from their beginning to `day` (365 days a year), in steps of 10 years: a
 pure function, so the history at any day is computed, never a running state; the same inputs give
-the same history on every OS. Interventions are accepted and not applied yet.
+the same history on every OS. Interventions (`Intervention`, kind `INTERVENTION_SETTLEMENT`) enter
+at their day and place and change nothing before it.
 
 - **Where farming begins:** each land cell has a *suitability* from its climate: the cool-season
   annuals' Mediterranean and steppe climates (a long, harsh dry season kills perennials; a
@@ -179,7 +180,18 @@ the same history on every OS. Interventions are accepted and not applied yet.
   cell) over its rate; a people arises there unless one began within 1 200 km.
 - **Peoples** grow logistically to the land's capacity (rain and warmth, more along rivers) times
   what they know; knowledge grows with their numbers; a crowded cell settles the best free
-  neighbouring cell. 6 000 years take about 20 ms optimized (`build bench budgets`, `planet_history`).
+  neighbouring cell.
+- **War:** at borders the people stronger by numbers times knowledge (1.3 times) takes cells; one
+  with none left is conquered. **Collapse:** a crowded people (numbers over 0.6 of the land's
+  capacity) in a *drought decade* lose half their land, which becomes ruins (`History.ruins`).
+  Droughts are seeded per decade and 6-cell block, at a chance from the climate's variability
+  (`drought_probability`: scarce and seasonal rain; `drought_in`). **Eras** come from knowledge
+  (Stone, Bronze, Iron, then a later one named per world). Names are built from a per-world
+  syllable set.
+- **The chronicle** (`History.events`, by year): every `Event` (farming, era, war, conquest,
+  collapse, founding) has a `text` and a `cause`, e.g. "The Taka lose half their land" because
+  "a great drought, with their land crowded".
+- 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of
   real early farming (Fertile Crescent, Anatolia, Nile, Indus, Yellow River, Mesoamerica, Andes,
