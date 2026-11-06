@@ -77,6 +77,7 @@ Config :: struct {
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
 	steam:                 ^steam_server.Server, // checks joining players' Steam tickets (nil or off: tickets are ignored); the caller opens and shuts it
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
+	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
 }
 
 DEFAULT_MAX_PLAYERS :: 8

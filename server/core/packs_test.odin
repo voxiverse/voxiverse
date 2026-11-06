@@ -127,3 +127,45 @@ test_unknown_block_refuses_the_world :: proc(t: ^testing.T) {
 	testing.expect(t, loaded)
 	testing.expect_value(t, b, game.Block.Air)
 }
+
+// A listed pack the universe does not hold is found among the candidates (the client's
+// local packs, the Workshop); a candidate that did not read cleanly stops the universe,
+// naming where it came from; a candidate nobody lists is never loaded.
+@(test)
+test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
+	found := []Pack_Candidate{{source = marble_pack(), origin = "Workshop item 7"}}
+	reg, _, problems := packs_registry("", {"testpack"}, available = found)
+	testing.expect_value(t, len(problems), 0)
+	testing.expect(t, reg != nil, "the listed pack was not found")
+	if reg != nil {
+		_, has := game.registry_block(reg, "testpack:marble")
+		testing.expect(t, has, "the Workshop pack's block is not in the registry")
+		game.registry_destroy(reg)
+	}
+
+	reg, _, problems = packs_registry("", nil, available = found)
+	testing.expect(t, reg != nil, "an unlisted candidate stopped the universe")
+	if reg != nil {
+		_, has := game.registry_block(reg, "testpack:marble")
+		testing.expect(t, !has, "an unlisted candidate was loaded")
+		game.registry_destroy(reg)
+	}
+
+	bad := []Pack_Candidate {
+		{
+			source = {namespace = "testpack"},
+			origin = "Workshop item 7",
+			problems = {"cannot read the item"},
+		},
+	}
+	reg, _, problems = packs_registry("", {"testpack"}, available = bad)
+	testing.expect(t, reg == nil, "a bad Workshop item did not stop the universe")
+	testing.expect(
+		t,
+		len(problems) == 1 && strings.contains(problems[0], "Workshop item 7"),
+		"the problem does not name the item",
+	)
+
+	reg, _, problems = packs_registry("", {"testpack"})
+	testing.expect(t, reg == nil && len(problems) == 1, "a missing pack was not refused")
+}
