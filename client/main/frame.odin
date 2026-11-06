@@ -36,6 +36,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 		app.settings = autopilot.BENCHMARK_SETTINGS // (the player's are not read)
 	} else {
 		engine.settings_load(app)
+		if dir, found := engine.crashes_dir(); found {engine.crash_offer_root(app, dir)}
 	}
 	engine.account_load(app)
 	engine.steam_start(app)
