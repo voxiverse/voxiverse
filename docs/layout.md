@@ -70,6 +70,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse` | The base pack's manifest | `*.json` |
 | `assets/packs/voxiverse/assets/sounds` | The base pack's sound table | `*.json` |
 | `assets/packs/voxiverse/assets/textures` | The base pack's texture table | `*.json` |
+| `assets/planet` | The home world's relief and its source notes | `*.bin`, `README.md` |
 | `assets/sounds` | Sound recipes and the targets of their classes | `*.recipe`, `targets.txt` |
 | `assets/packs/voxiverse/data/block_tags` | Block tags | `*.json` |
 | `assets/packs/voxiverse/data/blocks` | Blocks | `*.json` |
@@ -158,4 +159,5 @@ package** is enforced by the `layout` lint (see above).
 | `tools/schema` | The schema tool | `*.odin` |
 | `tools/sfx` | The sound-effect tool (`build sfx`: recipes to WAVs and a targets report) | `*.odin` |
 | `tools/wireshark` | The Wireshark dissector | `*.lua` |
+| `tools/planet` | The planet tool (`build planet import`: NOAA ETOPO5 to the relief file) | `*.odin` |
 | `tools/worldmap` | The world map tool | `*.odin` |
