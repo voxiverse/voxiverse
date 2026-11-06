@@ -7,6 +7,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+import "common:base"
 import "common:game"
 import "common:netcode"
 import "common:worldgen"
@@ -221,6 +222,7 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 			return
 		}
 		record(s, c, .Command, cmd.name)
+		base.crash_bundle_action("command", cmd.name)
 		switch cmd.name {
 		case "tp", "home", "warp", "spawn", "back", "travel":
 			record(s, c, .Teleport, cmd.name)

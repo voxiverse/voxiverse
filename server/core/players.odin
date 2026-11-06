@@ -1,5 +1,6 @@
 package core
 
+import "core:fmt"
 import "core:log"
 
 import "common:base"
@@ -84,6 +85,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	for &other in s.clients {if other.state == .Playing {online += 1}}
 	record(s, c, .Session_Start, n0 = i64(online))
 	chat_system(s, game.format_join({display_name(s, c), "&e joined"}))
+	base.crash_bundle_action("join", fmt.tprintf("players=%d", players_online(s)))
 	m := member_get(&s.community, name)
 	m.seen = now_unix()
 	if c.address != "" {set_string(&m.ip, c.address)}
@@ -109,6 +111,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	ledger_inventory(s, c.world, .Scope_Out, &c.inventory)
 	keep_player(s, c)
 	chat_system(s, game.format_join({display_name(s, c), "&e left"}))
+	base.crash_bundle_action("leave", fmt.tprintf("players=%d", players_online(s) - 1))
 	member_get(&s.community, client_name(c)).seen = now_unix()
 	log.infof(
 		"server player left player=%d name=%q reason=%s",
@@ -260,4 +263,11 @@ kick_due :: proc(s: ^Server) {
 			leave(s, &c, c.kick_reason)
 		}
 	}
+}
+
+// players_online: how many clients are playing (for the crash bundle's records: counts, no names).
+@(private)
+players_online :: proc(s: ^Server) -> (n: int) {
+	for &c in s.clients {if c.state == .Playing {n += 1}}
+	return
 }
