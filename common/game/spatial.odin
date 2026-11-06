@@ -1,5 +1,6 @@
 package game
 
+import "base:intrinsics"
 import "core:math"
 import "core:slice"
 
@@ -53,12 +54,18 @@ Slot :: struct {
 }
 
 Spatial :: struct {
-	cells:   map[Chunk_Pos]u32, // head slot + 1
-	slots:   [dynamic]Slot,
-	free:    [dynamic]u32,
-	large:   u32, // head of the Large list, + 1
-	count:   int,
-	scratch: [dynamic]Entity_Id,
+	cells:            map[Chunk_Pos]u32, // head slot + 1
+	slots:            [dynamic]Slot,
+	free:             [dynamic]u32,
+	large:            u32, // head of the Large list, + 1
+	// The cells ever used, as a box (it only grows): queries do not look up
+	// cells outside it, which costs a hash each.
+	seen_lo, seen_hi: Chunk_Pos,
+	seen:             bool,
+	count:            int,
+	scratch:          [dynamic]Entity_Id,
+	sorted:           [dynamic]Entity_Id, // sort_ids' second buffer
+	bits:             [dynamic]u64, // sort_ids' bitset, all zero between sorts
 }
 
 spatial_init :: proc(sp: ^Spatial, allocator := context.allocator) {
@@ -66,6 +73,8 @@ spatial_init :: proc(sp: ^Spatial, allocator := context.allocator) {
 	sp.slots = make([dynamic]Slot, allocator)
 	sp.free = make([dynamic]u32, allocator)
 	sp.scratch = make([dynamic]Entity_Id, allocator)
+	sp.sorted = make([dynamic]Entity_Id, allocator)
+	sp.bits = make([dynamic]u64, allocator)
 }
 
 spatial_destroy :: proc(sp: ^Spatial) {
@@ -73,6 +82,8 @@ spatial_destroy :: proc(sp: ^Spatial) {
 	delete(sp.slots)
 	delete(sp.free)
 	delete(sp.scratch)
+	delete(sp.sorted)
+	delete(sp.bits)
 	sp^ = {}
 }
 
@@ -112,6 +123,20 @@ link :: proc(sp: ^Spatial, i: u32) {
 		head = &sp.large
 	} else {
 		if s.cell not_in sp.cells {sp.cells[s.cell] = 0}
+		if sp.seen {
+			sp.seen_lo = {
+				min(sp.seen_lo.x, s.cell.x),
+				min(sp.seen_lo.y, s.cell.y),
+				min(sp.seen_lo.z, s.cell.z),
+			}
+			sp.seen_hi = {
+				max(sp.seen_hi.x, s.cell.x),
+				max(sp.seen_hi.y, s.cell.y),
+				max(sp.seen_hi.z, s.cell.z),
+			}
+		} else {
+			sp.seen_lo, sp.seen_hi, sp.seen = s.cell, s.cell, true
+		}
 		head = &sp.cells[s.cell]
 	}
 	s.prev, s.next = 0, head^
@@ -263,7 +288,7 @@ Collect :: struct {
 }
 
 @(private = "file")
-matches :: proc(c: ^Collect, e: ^Spatial_Entry) -> bool {
+matches :: #force_inline proc(c: ^Collect, e: ^Spatial_Entry) -> bool {
 	if !passes(e, c.filter) {return false}
 	switch c.shape {
 	case .Sphere:
@@ -291,11 +316,110 @@ collect_into :: proc(data: rawptr, e: ^Spatial_Entry) {
 	if matches(c, e) {append(&c.sp.scratch, e.id)}
 }
 
+// SORT_BITSET_IDS: ids below this are sorted through a bitset.
+@(private = "file")
+SORT_BITSET_IDS :: 1 << 16
+
+// sort_ids puts the scratch ids in ascending order: insertion for a few,
+// else a least-significant-byte radix sort (generic sorts cost most of a
+// query that finds a hundred entries).
+@(private = "file")
+sort_ids :: proc(sp: ^Spatial) {
+	a := sp.scratch[:]
+	if len(a) <= 24 {
+		for i in 1 ..< len(a) {
+			v := a[i]
+			j := i
+			for j > 0 && a[j - 1] > v {a[j] = a[j - 1]; j -= 1}
+			a[j] = v
+		}
+		return
+	}
+	top: u32
+	for v in a {top |= u32(v)}
+	if top < SORT_BITSET_IDS {
+		// small ids: mark them in a bitset and read it back in order
+		words := int(top >> 6) + 1
+		if len(sp.bits) < words {resize(&sp.bits, words)}
+		for v in a {sp.bits[u32(v) >> 6] |= 1 << (u32(v) & 63)}
+		n := 0
+		for w in 0 ..< words {
+			b := sp.bits[w]
+			sp.bits[w] = 0
+			for b != 0 {
+				a[n] = Entity_Id(u32(w) << 6 | u32(intrinsics.count_trailing_zeros(b)))
+				n += 1
+				b &= b - 1
+			}
+		}
+		return
+	}
+	resize(&sp.sorted, len(a))
+	from, to := a, sp.sorted[:]
+	for shift: uint = 0; shift < 32 && (top >> shift) != 0; shift += 8 {
+		counts: [257]int
+		for v in from {counts[int((u32(v) >> shift) & 0xff) + 1] += 1}
+		if counts[int((u32(from[0]) >> shift) & 0xff) + 1] == len(from) {continue} 	// (one bucket: this byte is the same)
+		for i in 1 ..< 257 {counts[i] += counts[i - 1]}
+		for v in from {
+			k := int((u32(v) >> shift) & 0xff)
+			to[counts[k]] = v
+			counts[k] += 1
+		}
+		from, to = to, from
+	}
+	if raw_data(from) != raw_data(a) {copy(a, from)}
+}
+
+// cell_reachable: false when no point of the cell (where an entry's bottom
+// centre lies) can be inside a Sphere or Cylinder query, so its lookup and
+// walk are skipped; the corner cells of a query box are mostly such.
+@(private = "file")
+cell_reachable :: #force_inline proc(c: ^Collect, cell: Chunk_Pos) -> bool {
+	if c.shape == .Box {return true}
+	d: [3]f64
+	for a in 0 ..< 3 {
+		lo := f64(cell[a]) * CHUNK_SIZE
+		d[a] = max(lo - c.center[a], 0, c.center[a] - (lo + CHUNK_SIZE))
+	}
+	if c.shape == .Cylinder {
+		return d.x * d.x + d.z * d.z <= c.radius * c.radius && d.y <= c.half_h
+	}
+	return d.x * d.x + d.y * d.y + d.z * d.z <= c.radius * c.radius
+}
+
 @(private = "file")
 run :: proc(c: ^Collect, margin: f64, lo, hi: [3]f64, out: ^[dynamic]Entity_Id) {
 	clear(&c.sp.scratch)
-	visit(c.sp, lo, hi, margin, c, collect_into)
-	slice.sort(c.sp.scratch[:])
+	sp := c.sp
+	cl, ch: Chunk_Pos
+	for a in 0 ..< 3 {
+		cl[a] = i32(math.floor((lo[a] - margin) / CHUNK_SIZE))
+		ch[a] = i32(math.floor((hi[a] + margin) / CHUNK_SIZE))
+	}
+	if sp.seen {
+		cl = {max(cl.x, sp.seen_lo.x), max(cl.y, sp.seen_lo.y), max(cl.z, sp.seen_lo.z)}
+		ch = {min(ch.x, sp.seen_hi.x), min(ch.y, sp.seen_hi.y), min(ch.z, sp.seen_hi.z)}
+	}
+	// (the cells are walked here, not through visit's callback: a call per entry
+	// is most of what a query costs)
+	for y in cl.y ..= ch.y {
+		for z in cl.z ..= ch.z {
+			for x in cl.x ..= ch.x {
+				if !cell_reachable(c, {x, y, z}) {continue}
+				for i := sp.cells[{x, y, z}] or_else 0; i != 0; i = sp.slots[i - 1].next {
+					if matches(
+						c,
+						&sp.slots[i - 1].entry,
+					) {append(&sp.scratch, sp.slots[i - 1].entry.id)}
+				}
+			}
+		}
+	}
+	for i := sp.large; i != 0; i = sp.slots[i - 1].next {
+		collect_into(c, &sp.slots[i - 1].entry)
+	}
+	sort_ids(c.sp)
 	append(out, ..c.sp.scratch[:])
 }
 
