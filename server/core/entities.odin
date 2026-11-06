@@ -397,13 +397,30 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 			)
 		}
 	}
-	for i := 0; i < len(w.entities.list); {
-		ent := &w.entities.list[i]
+	// What is thrown comes from the spatial service: the boxes it holds are
+	// where things stood at the end of the last tick, so the sphere is widened
+	// by ROCKET_REACH. Candidates are walked in list order, as the full loop
+	// was; a death removes its row, so each is found again by id.
+	found := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&w.entity_world.spatial,
+		center,
+		reach + ROCKET_REACH,
+		{all = {.Hittable}},
+		&found,
+	)
+	order := make([dynamic]int, context.temp_allocator)
+	for id in found {
+		if _, j := entity_find(w, u32(id)); j >= 0 {append(&order, j)}
+	}
+	slice.sort(order[:])
+	ids := make([dynamic]u32, context.temp_allocator)
+	for j in order {append(&ids, w.entities.list[j].id)}
+	for id in ids {
+		ent, i := entity_find(w, id)
+		if i < 0 {continue}
 		impulse, near := push(ent.body.position + {0, 0.4, 0}, center, reach)
-		if !near || !game.ENTITY_INFO[ent.kind].hittable {
-			i += 1
-			continue
-		}
+		if !near || !game.ENTITY_INFO[ent.kind].hittable {continue}
 		ent.body.velocity += impulse
 		ent.body.on_ground = false
 		d := ent.body.position - center
@@ -419,7 +436,6 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 			hurt  = HURT_TICKS,
 		}
 		entity_hurt_shown(w, ent.id)
-		i += 1
 	}
 }
 
