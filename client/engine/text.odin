@@ -3,6 +3,8 @@ package engine
 import "core:fmt"
 import "core:strings"
 
+import "common:worldgen"
+
 // The UI's strings: every string the player reads goes
 // through a key. `Text` names them, TEXT_EN is the English table, tr formats
 // one: arguments are positional, {0}, {1}, ... Item and block names are not
@@ -45,6 +47,13 @@ Text :: enum u16 {
 	Dial_Dial_A_World,
 	Dial_Erase,
 	Dial_Cancel,
+	Life_None,
+	Life_Microbial,
+	Life_Plants,
+	Life_Animals,
+	Life_Peoples, // {0}: the life, {1}: how many peoples (a word), {2}: years of history
+	Life_One_People,
+	Life_Peoples_Count, // {0}: the number of peoples as a word
 	Crash_Title,
 	Crash_Saved,
 	Crash_Not_Sent,
@@ -178,6 +187,13 @@ TEXT_EN := [Text]string {
 	.Dial_Dial_A_World                      = "Dial a world",
 	.Dial_Erase                             = "Erase",
 	.Dial_Cancel                            = "Cancel",
+	.Life_None                              = "No life",
+	.Life_Microbial                         = "Microbial life",
+	.Life_Plants                            = "Plants",
+	.Life_Animals                           = "Plants and animals",
+	.Life_Peoples                           = "{0}; {1}, about {2} years of history",
+	.Life_One_People                        = "one people",
+	.Life_Peoples_Count                     = "{0} peoples",
 	.Crash_Title                            = "Voxiverse closed unexpectedly last time",
 	.Crash_Saved                            = "A report was saved on this computer.",
 	.Crash_Not_Sent                         = "Nothing was sent anywhere.",
@@ -297,4 +313,22 @@ tr :: proc(key: Text, args: ..any) -> string {
 		strings.write_byte(&b, text[i])
 	}
 	return strings.to_string(b)
+}
+
+// life_line: what lives on a world, in one line: "Plants and animals; three
+// peoples, about 4 000 years of history".
+life_line :: proc(w: worldgen.World_Life) -> string {
+	life := tr(Text(int(Text.Life_None) + int(w.life)))
+	if w.peoples == 0 {return life}
+	words := [?]string{"", "", "two", "three", "four", "five"}
+	count := tr(.Life_One_People)
+	if w.peoples > 1 && int(w.peoples) < len(words) {
+		count = tr(.Life_Peoples_Count, words[w.peoples])
+	} else if w.peoples > 1 {
+		count = tr(.Life_Peoples_Count, int(w.peoples))
+	}
+	years := int(w.peoples_age + 50) / 100 * 100
+	digits := fmt.tprintf("%d", years)
+	if years >= 1000 {digits = fmt.tprintf("%d %03d", years / 1000, years % 1000)}
+	return tr(.Life_Peoples, life, count, digits)
 }

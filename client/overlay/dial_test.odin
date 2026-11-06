@@ -7,6 +7,7 @@ import "client:font"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "common:worldgen"
 
 // The dial overlay with the mouse: a symbol a click, none twice, Backspace
 // and Erase take the last back, the seventh sends Dial (this galaxy, the
@@ -79,7 +80,16 @@ test_dial_overlay :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.count, 0)
 	// Seven: Dial is sent, the overlay closes.
 	picks := [game.WORLD_LENGTH]u8{39, 0, 7, 21, 5, 33, 18}
-	for p in picks {click(app, l.symbols[p])}
+	for p in picks[:game.WORLD_LENGTH - 1] {click(app, l.symbols[p])}
+	// Six in, the pointer on a symbol: the line says what lives on that world.
+	at := ui.Vec2{l.symbols[picks[6]].x + 2, l.symbols[picks[6]].y + 2}
+	frame(app, {mouse = at})
+	want_addr := game.Address{s.welcome.address.galaxy, picks}
+	want := engine.life_line(worldgen.world_life(want_addr))
+	shown := false
+	for text in app.ui.texts {shown ||= text == want}
+	testing.expectf(t, shown, "the dial does not say %q", want)
+	click(app, l.symbols[picks[6]])
 	testing.expect(t, !engine.overlay_is_open(&app.overlays, .Dial))
 	m, decoded := game.decode_client(s.writer.buf[:], testkit.test_reg())
 	sent, is_dial := m.(game.Dial)
