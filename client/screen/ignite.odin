@@ -70,7 +70,7 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^engine.Ignite) {
 	screen := ctx.screen
 	centre := ui.Vec2{screen.w / 2, screen.h / 2}
 	if i.reduce {
-		ui.fill_rect(ctx, screen, {0, 0, 0, u8(255 * (1 - clamp(i.t / IGNITE_FADE, 0, 1)))})
+		ui.fill_rect(ctx, screen, faded(ctx.theme.background, 1 - clamp(i.t / IGNITE_FADE, 0, 1)))
 		return
 	}
 	fade_start := f32(IGNITE_COLLAPSE + IGNITE_FLASH + IGNITE_ZOOM)
@@ -78,7 +78,7 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^engine.Ignite) {
 		// The galaxy falls into its middle.
 		e := clamp(i.t / IGNITE_COLLAPSE, 0, 1)
 		e = e * e * e
-		ui.fill_rect(ctx, screen, {0, 0, 0, 255})
+		ui.fill_rect(ctx, screen, ctx.theme.background)
 		side := min(screen.w, screen.h) * 0.8
 		view := ui.Rect{centre.x - side / 2, centre.y - side / 2, side, side}
 		for s in i.stars {
@@ -93,13 +93,13 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^engine.Ignite) {
 	} else if i.t < IGNITE_COLLAPSE + IGNITE_FLASH {
 		// One white flash, up and down.
 		x := (i.t - IGNITE_COLLAPSE) / IGNITE_FLASH
-		ui.fill_rect(ctx, screen, {0, 0, 0, 255})
-		ui.fill_rect(ctx, screen, {255, 255, 255, u8(255 * (1 - abs(2 * x - 1)))})
+		ui.fill_rect(ctx, screen, ctx.theme.background)
+		ui.fill_rect(ctx, screen, faded(ctx.theme.text, 1 - abs(2 * x - 1)))
 	} else if i.t < fade_start {
 		// Into the home world: its disc grows until it fills the screen.
 		z := (i.t - IGNITE_COLLAPSE - IGNITE_FLASH) / IGNITE_ZOOM
 		z = z * z * z
-		ui.fill_rect(ctx, screen, {0, 0, 0, 255})
+		ui.fill_rect(ctx, screen, ctx.theme.background)
 		radius := 4 + z * math.sqrt(screen.w * screen.w + screen.h * screen.h)
 		draw_planet(ctx, centre, radius, i.t, 1, i.planet)
 	} else {
@@ -108,6 +108,13 @@ ignite_draw :: proc(ctx: ^ui.Context, i: ^engine.Ignite) {
 		radius := 4 + math.sqrt(screen.w * screen.w + screen.h * screen.h)
 		draw_planet(ctx, centre, radius, i.t, 1 - x, i.planet)
 	}
+}
+
+// faded: c with its alpha scaled by a (0..1).
+faded :: proc(c: ui.Color, a: f32) -> ui.Color {
+	out := c
+	out.a = u8(f32(c.a) * clamp(a, 0, 1))
+	return out
 }
 
 // draw_planet draws a lit sphere (the home world's colours: water, ground,

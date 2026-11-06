@@ -29,6 +29,18 @@ test_colour_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	testing.expect_value(t, len(lint_colour_literals("f", "c := ui.Color{1, 2, 3, 4}\n")), 1)
 	testing.expect_value(t, len(lint_colour_literals("f", "// ui.Color{ in a comment\n")), 0)
+	testing.expect_value(
+		t,
+		len(lint_colour_literals("f", "ui.fill_rect(c, r, {0, 0, 0, 255})\n")),
+		1,
+	)
+	testing.expect_value(
+		t,
+		len(lint_colour_literals("f", "ui.fill_rect(c, r, {255, 255, 255, u8(a)})\n")),
+		1,
+	)
+	testing.expect_value(t, len(lint_colour_literals("f", "r := ui.Rect{0, 0, w, h}\n")), 0)
+	testing.expect_value(t, len(lint_colour_literals("f", "// {0, 0, 0, 255}\n")), 0)
 }
 
 @(test)
@@ -139,6 +151,8 @@ test_collections_lint :: proc(t: ^testing.T) {
 test_layer_files :: proc(t: ^testing.T) {
 	testing.expect(t, is_layer_file("client/hud/hotbar.odin"))
 	testing.expect(t, is_layer_file("client/console/line.odin"))
+	testing.expect(t, is_layer_file("/home/x/voxiverse/client/screen/ignite.odin"))
+	testing.expect(t, !is_layer_file("/home/x/voxiverse/client/engine/ignite.odin"))
 	testing.expect(t, !is_layer_file("client/engine/hud_game.odin"))
 	testing.expect(t, !is_layer_file("client/engine/session.odin"))
 	testing.expect(t, !is_layer_file("client/hud/hud_test.odin"))

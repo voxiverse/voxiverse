@@ -139,7 +139,9 @@ chat_lines :: proc(app: ^engine.App, ctx: ^ui.Context, area: ui.Rect, open: bool
 		wrapped := formatted.wrap_formatted(ctx, e.text, size, width - 2 * t.padding)
 		block := f32(len(wrapped)) * line_h
 		y -= block
-		ui.fill_rect(ctx, {area.x, y, width, block}, {0, 0, 0, u8(140 * alpha)})
+		shade := ctx.theme.text_shadow
+		shade.a = u8(140 * alpha)
+		ui.fill_rect(ctx, {area.x, y, width, block}, shade)
 		for line, k in wrapped {
 			baseline := y + f32(k) * line_h + (line_h - (ascent - descent)) / 2 + ascent
 			color := t.text
