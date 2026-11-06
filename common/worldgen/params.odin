@@ -38,6 +38,13 @@ PARAMS_VARS := [?]base.Var {
 		step = 100,
 	},
 	{
+		field = "planet",
+		help = "the height is Earth's real relief (1) or noise (0)",
+		min = 0,
+		max = 1,
+		step = 1,
+	},
+	{
 		field = "palette",
 		help = "the surface's blocks: 0 Earth, 1 ash, 2 frost, 3 clay, 4 dunes",
 		min = 0,
