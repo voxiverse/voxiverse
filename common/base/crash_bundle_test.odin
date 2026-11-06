@@ -46,6 +46,12 @@ test_crash_bundle_files :: proc(t: ^testing.T) {
 	defer os.remove_all(SCRATCH)
 	// retention: twelve old bundles, the newest ten stay
 	for i in 1 ..= 12 {os.make_directory_all(fmt.tprintf("%s/2020-01-%02d_00-00-00-1", SCRATCH, i))}
+	// the home directory comes from the boot information, which no unit test boots: a fixed one
+	saved_boot := boot_info()
+	info := saved_boot
+	info.dirs.home = "/home/tester"
+	boot_install(info)
+	defer boot_install(saved_boot)
 	if !testing.expect(t, crash_bundle_init(SCRATCH, "game")) {return}
 	defer crash_bundle_destroy()
 	infos, _ := os.read_directory_by_path(SCRATCH, -1, context.temp_allocator)
