@@ -23,6 +23,12 @@ crash_filter :: proc "system" (info: ^win.EXCEPTION_POINTERS) -> win.LONG {
 		code, address =
 			u32(info.ExceptionRecord.ExceptionCode), info.ExceptionRecord.ExceptionAddress
 	}
+	if code == win.EXCEPTION_STACK_OVERFLOW {
+		crash_report(
+			fmt.bprintf(buf[:], "exception=0x%08x address=%p (stack overflow)", code, address),
+		)
+		return 0
+	}
 	crash_report(fmt.bprintf(buf[:], "exception=0x%08x address=%p", code, address))
 	return 0 // EXCEPTION_CONTINUE_SEARCH
 }
