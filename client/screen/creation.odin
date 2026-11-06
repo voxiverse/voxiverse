@@ -10,6 +10,7 @@ import "client:engine"
 import "client:planet"
 import "client:ui"
 import "common:game"
+import "common:worldgen"
 
 // Universe creation: the name, the
 // seed as the glyphs of its home world's gate address (typed text or a number
@@ -173,6 +174,12 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if ui.button(ctx, engine.tr(.Creation_Roll), l.roll) {
 		creation_roll(c, u64(time.now()._nsec))
 	}
+	// The home world is Earth: animals, no peoples (a line at the planet's foot).
+	home := worldgen.world_life(game.seed_glyphs(c.seed), home = true)
+	line := l.planet
+	line.y += line.h - t.row_height
+	line.h = t.row_height
+	ui.label(ctx, engine.life_line(home), line, .Center, t.text_muted)
 	mode := 1 if c.mode == MODE_SURVIVAL else 0
 	names := [2]string{engine.tr(.Universes_Mode_Creative), engine.tr(.Universes_Mode_Survival)}
 	ui.choice(ctx, engine.tr(.Creation_Mode), &mode, names[:], l.mode)

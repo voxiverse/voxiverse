@@ -18,7 +18,10 @@ Old Turkic symbols and a world of seven, each symbol distinct within its part
 
 The address alone determines the world's kind (generator parameters, palette, gravity, day
 length), so it is the same kind of world in any universe; the universe seed determines its
-terrain. The home world is Earth. A world loads when someone travels there, and unloads
+terrain. The address also says what lives there (`worldgen.world_life`: life, how many peoples,
+how old their history; about 1 world in 8 with animals has peoples; the home world, Earth, has
+none): the dial shows it for the world a last symbol would reach, the creation screen for the
+home world. The home world is Earth. A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 

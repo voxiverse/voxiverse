@@ -6,6 +6,7 @@ import "core:unicode/utf8"
 import "client:engine"
 import "client:ui"
 import "common:game"
+import "common:worldgen"
 
 // The dial overlay: right-click a gate's ring and pick a world of this
 // galaxy, symbol by symbol (none twice; Backspace takes the last back).
@@ -67,6 +68,7 @@ symbol_text :: proc(symbol: u8) -> string {
 Dial_Layout :: struct {
 	panel:   ui.Rect,
 	dialed:  ui.Rect, // the chevrons so far
+	life:    ui.Rect, // what lives on the world the seventh symbol under the pointer would dial
 	symbols: [game.SYMBOLS]ui.Rect,
 	erase:   ui.Rect,
 	cancel:  ui.Rect,
@@ -80,10 +82,11 @@ dial_layout :: proc(ctx: ^ui.Context) -> (l: Dial_Layout) {
 	grid_w := DIAL_COLUMNS * (DIAL_BUTTON.x + gap) - gap
 	grid_h := f32(rows) * (DIAL_BUTTON.y + gap) - gap
 	w := grid_w + 2 * t.padding
-	h := 3 * t.row_height + DIAL_BUTTON.y + grid_h + 4 * gap + 2 * t.padding
+	h := 4 * t.row_height + DIAL_BUTTON.y + grid_h + 4 * gap + 2 * t.padding
 	l.panel = ui.rect_center(ctx.screen, w, h)
 	inner := ui.rect_shrink(l.panel, t.padding)
 	ui.cut_top(&inner, 2 * t.row_height) // the title, this galaxy
+	l.life = ui.cut_top(&inner, t.row_height)
 	l.dialed = ui.cut_top(&inner, DIAL_BUTTON.y)
 	ui.cut_top(&inner, 2 * gap)
 	for i in 0 ..< game.SYMBOLS {
@@ -115,6 +118,10 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	   d.count > 0 {
 		d.count -= 1
 	}
+	taken :: proc(d: ^engine.Dial_View, i: int) -> bool {
+		for k in d.symbols[:d.count] {if int(k) == i {return true}}
+		return false
+	}
 	l := dial_layout(ctx)
 	ui.panel(ctx, l.panel)
 	inner := ui.rect_shrink(l.panel, t.padding)
@@ -130,6 +137,19 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		.Center,
 		t.text_muted,
 	)
+	// With six dialed, the world a symbol under the pointer would complete.
+	if d.count == game.WORLD_LENGTH - 1 {
+		for i in 0 ..< game.SYMBOLS {
+			if taken(d, i) || !ui.rect_contains(l.symbols[i], ctx.input.mouse) {continue}
+			a := game.Address {
+				galaxy = here.galaxy,
+			}
+			copy(a.world[:], d.symbols[:d.count])
+			a.world[game.WORLD_LENGTH - 1] = u8(i)
+			ui.label(ctx, engine.life_line(worldgen.world_life(a)), l.life, .Center, t.text_muted)
+			break
+		}
+	}
 	// The seven chevrons: what is dialed so far.
 	slots := l.dialed
 	slot_w := (slots.w - f32(game.WORLD_LENGTH - 1) * t.spacing) / game.WORLD_LENGTH
@@ -139,10 +159,6 @@ dial_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 		ui.fill_rect(ctx, r, t.slot_fill)
 		ui.stroke_rect(ctx, r, 2 if lit else 1, t.text if lit else t.faint_border)
 		if lit {ui.draw_text(ctx, r, symbol_text(d.symbols[k]), t.font_size * 1.5, t.text, .Center)}
-	}
-	taken :: proc(d: ^engine.Dial_View, i: int) -> bool {
-		for k in d.symbols[:d.count] {if int(k) == i {return true}}
-		return false
 	}
 	// A pad's focus starts on, and after a symbol is taken goes to, the next free one.
 	start := 0
