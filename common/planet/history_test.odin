@@ -162,3 +162,93 @@ test_history_deterministic :: proc(t: ^testing.T) {
 	}
 	for pe in a.peoples {testing.expect(t, pe.population >= 0)}
 }
+
+@(private = "file")
+chronicle_planet :: proc() -> (p: Planet, r: Relief) {
+	r, _ = relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	p = planet_build(r)
+	return
+}
+
+@(test)
+test_history_chronicle :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer relief_destroy(&r)
+	defer planet_destroy(&p)
+
+	dry := drought_probability(p)
+	defer delete(dry)
+	counts: [Event_Kind]int
+	for seed in u64(1) ..= 4 {
+		hist := history(p, 9, seed, 6000 * DAYS_PER_YEAR, nil)
+		defer history_destroy(&hist)
+		last := 0
+		for e in hist.events {
+			counts[e.kind] += 1
+			testing.expect(t, len(e.cause) > 0 && len(e.text) > 0, "an event has no cause")
+			testing.expect(t, e.year >= last, "the chronicle is not in order")
+			last = e.year
+			testing.expect(t, e.people >= 0 && e.people < len(hist.peoples))
+			if e.kind == .Collapse {
+				// A drought decade in the climate's statistics precedes every collapse.
+				testing.expectf(
+					t,
+					drought_in(dry, hist.width, 9, seed, e.year, hist.peoples[e.people].origin),
+					"collapse of the %s in %d with no drought",
+					hist.peoples[e.people].name,
+					e.year,
+				)
+			}
+		}
+		for pe in hist.peoples {testing.expect(t, len(pe.name) > 0)}
+	}
+	fmt.printfln("events over 4 worlds: %v", counts)
+	testing.expect(t, counts[.Farming] > 0 && counts[.War] > 0 && counts[.Collapse] > 0)
+}
+
+@(test)
+test_history_intervention :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer relief_destroy(&r)
+	defer planet_destroy(&p)
+
+	end := i64(6000 * DAYS_PER_YEAR)
+	base_h := history(p, 7, 3, end, nil)
+	defer history_destroy(&base_h)
+	// Free land at the end of the history: a place for a new settlement.
+	cell := -1
+	for k in 0 ..< len(base_h.owner) {
+		if p.land.is_land[k] && base_h.owner[k] == 0 {cell = k; break}
+	}
+	testing.expect(t, cell >= 0)
+	iv := Intervention {
+		day  = 3000 * DAYS_PER_YEAR + 100,
+		lat  = climate_lat(p.land.height, cell / p.land.width),
+		lon  = (f64(cell % p.land.width) + 0.5) * 360 / f64(p.land.width) - 180,
+		kind = INTERVENTION_SETTLEMENT,
+	}
+	// Nothing changes before its day.
+	before := history(p, 7, 3, iv.day - 1, {iv})
+	defer history_destroy(&before)
+	clean := history(p, 7, 3, iv.day - 1, nil)
+	defer history_destroy(&clean)
+	testing.expect_value(t, history_hash(before), history_hash(clean))
+	// From its day on, it is in the history.
+	for day in ([?]i64{iv.day, iv.day + 5000, end}) {
+		with := history(p, 7, 3, day, {iv})
+		defer history_destroy(&with)
+		found := false
+		for e in with.events {
+			if e.kind == .Founding && e.year == 3000 && with.peoples[e.people].origin == cell {
+				found = len(e.cause) > 0
+			}
+		}
+		testing.expectf(t, found, "no founding in the history at day %d", day)
+	}
+	again := history(p, 7, 3, end, {iv})
+	defer history_destroy(&again)
+	other := history(p, 7, 3, end, {iv})
+	defer history_destroy(&other)
+	testing.expect_value(t, history_hash(again), history_hash(other))
+	testing.expect(t, history_hash(again) != history_hash(base_h))
+}

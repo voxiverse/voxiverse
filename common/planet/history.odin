@@ -1,7 +1,10 @@
 package planet
 
+import "base:runtime"
 import "common:base"
+import "core:fmt"
 import "core:slice"
+import "core:strings"
 
 // History: the peoples of a planet from their beginning to a day, a pure function of the
 // planet model, the address, the seed and the day (docs/world.md, peoples). Time moves in
@@ -26,11 +29,87 @@ SETTLE_SHARE :: 0.3 // of the cell's people go
 KNOWLEDGE_RATE :: 0.012 // per step, times the people's share of a million
 KNOWLEDGE_MAX :: 12.0
 
-// Intervention is a player's act on the history. Not applied yet (a later part).
+// War: a people with more numbers times knowledge than a neighbour takes its border cells.
+WAR_RATIO :: 1.3 // the stronger must be this much stronger
+WAR_TAKE :: 0.5 // chance per border cell and step (every third step, in turns)
+WAR_LOSS :: 0.3 // of a taken cell's people die
+
+// Collapse: a crowded people (their numbers at COLLAPSE_CROWD of their land's capacity) in a
+// drought decade lose half their land, and then are safe for COLLAPSE_COOLDOWN steps.
+COLLAPSE_CROWD :: 0.6
+COLLAPSE_COOLDOWN :: 5
+COLLAPSE_MIN_CELLS :: 4
+DROUGHT_BLOCK :: 6 // a drought covers a block of this many cells square
+
+// Eras by knowledge: the first three are the same everywhere, later ones are named per world.
+ERA_KNOWLEDGE :: [?]f64{2, 4, 7, 10}
+ERA_NAMES :: [?]string{"Stone Age", "Bronze Age", "Iron Age"}
+ERA_LATER :: [?][1]string{{"Age of Sail"}, {"Age of Steam"}}
+
+// A world's peoples' names are built from a set of its syllables.
+SYLLABLES :: [?]string {
+	"ta",
+	"ka",
+	"ne",
+	"ri",
+	"sha",
+	"el",
+	"mo",
+	"ru",
+	"ven",
+	"dai",
+	"lo",
+	"kur",
+	"an",
+	"ith",
+	"so",
+	"bra",
+	"zu",
+	"mel",
+	"oth",
+	"pe",
+	"gri",
+	"ha",
+	"yu",
+	"dor",
+	"fen",
+	"qua",
+	"is",
+	"tor",
+	"wa",
+	"lin",
+	"ur",
+	"cha",
+}
+SYLLABLES_PER_WORLD :: 8
+
+// Intervention is a player's act on the history, at a day and a place.
 Intervention :: struct {
 	day:      i64,
 	lat, lon: f64,
-	kind:     u8,
+	kind:     u8, // INTERVENTION_*
+}
+
+INTERVENTION_SETTLEMENT :: 1 // founds a settlement (a new people on free land, else settlers)
+
+Event_Kind :: enum u8 {
+	Farming,
+	Era,
+	War,
+	Conquest,
+	Collapse,
+	Founding,
+}
+
+// Event is one thing that happened in the history, with why.
+Event :: struct {
+	year:   int,
+	kind:   Event_Kind,
+	people: int, // index in History.peoples
+	other:  int, // the other people (war, conquest), else -1
+	cell:   int, // where (a climate cell)
+	text:   string, // "The Taka lose half their land"
+	cause:  string, // "a great drought"
 }
 
 // People is one people: where farming began for them, how many they are, what they know.
@@ -40,6 +119,10 @@ People :: struct {
 	population:    f64,
 	cells:         int,
 	knowledge:     f64, // 1 at the beginning of farming
+	name:          string,
+	era:           int, // index into the eras (0: the Stone Age)
+	capacity:      f64, // what their land holds at what they know (this step)
+	cooldown:      int, // the step before which a collapse cannot happen again
 }
 
 // History is the state at `years`: who holds each climate cell and how many live there.
@@ -49,12 +132,21 @@ History :: struct {
 	owner:         []u16, // 0: nobody, else a people's index + 1
 	pop:           []f32,
 	peoples:       [dynamic]People,
+	events:        [dynamic]Event, // the chronicle, by year
+	ruins:         [dynamic]int, // cells that lost their people to a collapse
 }
 
 history_destroy :: proc(h: ^History) {
 	delete(h.owner)
 	delete(h.pop)
+	for pe in h.peoples {delete(pe.name)}
 	delete(h.peoples)
+	for e in h.events {
+		delete(e.text)
+		delete(e.cause)
+	}
+	delete(h.events)
+	delete(h.ruins)
 	h^ = {}
 }
 
@@ -65,6 +157,7 @@ Ground :: struct {
 	capacity: []f32, // 0..1 of the best land
 	river:    []f32, // 0..1: how big a river runs through the cell
 	suit:     []f32, // farming suitability, before biogeography
+	dry:      []f32, // chance per decade of a drought hitting the cell: its climate's variability
 	row_cos:  []f64,
 	cell_km:  f64,
 }
@@ -74,6 +167,7 @@ ground_destroy :: proc(g: ^Ground) {
 	delete(g.capacity)
 	delete(g.river)
 	delete(g.suit)
+	delete(g.dry)
 	delete(g.row_cos)
 }
 
@@ -124,6 +218,7 @@ ground_build :: proc(p: Planet, allocator := context.allocator) -> Ground {
 	g.capacity = make([]f32, n, allocator)
 	g.river = make([]f32, n, allocator)
 	g.suit = make([]f32, n, allocator)
+	g.dry = make([]f32, n, allocator)
 	g.row_cos = make([]f64, h, allocator)
 	g.cell_km = 40075.0 / f64(w)
 	annual := make([]f32, n, context.temp_allocator)
@@ -142,6 +237,12 @@ ground_build :: proc(p: Planet, allocator := context.allocator) -> Ground {
 				cold = min(cold, f64(p.temp.month[m][k]) / 10)
 			}
 			annual[k] = f32(pr)
+			// Rain varies most where it is scarce and where it comes in one season.
+			wettest := 0.0
+			for m in 0 ..< 12 {wettest = max(wettest, f64(p.precip.month[m][k]))}
+			aridity := clamp(1 - pr / 1200, 0, 1)
+			season := clamp((wettest / max(pr / 12, 1) - 1) / 4, 0, 1)
+			g.dry[k] = f32(0.02 + 0.1 * aridity + 0.06 * season)
 			mean_t[k] = f32(t / 12)
 			cold_t[k] = f32(cold)
 		}
@@ -260,8 +361,190 @@ suitability_of :: proc(
 	return out
 }
 
-// history computes the peoples from the beginning to `day` (365 days a year). Pure and
-// deterministic. `interventions` are accepted and not yet applied.
+// Sim is the running state of one history computation.
+@(private = "file")
+Sim :: struct {
+	p:         Planet,
+	g:         Ground,
+	res:       ^History,
+	root:      u64,
+	active:    [dynamic]int, // cells ever held, in the order taken
+	listed:    []bool, // in `active`
+	wars:      [dynamic]War,
+	allocator: runtime.Allocator,
+}
+
+@(private = "file")
+War :: struct {
+	a, b:  int, // the people who began it (a) and the other
+	since: int, // year
+}
+
+// drought_probability is each climate cell's chance per decade of a drought (the climate's
+// variability: rain varies most where it is scarce or seasonal); 0 over the sea.
+drought_probability :: proc(p: Planet, allocator := context.allocator) -> []f32 {
+	g := ground_build(p, context.temp_allocator)
+	out := make([]f32, len(g.dry), allocator)
+	copy(out, g.dry)
+	return out
+}
+
+// drought_in: whether a drought decade (the decade starting at `year`) hits cell k of a world.
+// A drought covers a block of cells; `dry` is drought_probability.
+drought_in :: proc(dry: []f32, width: int, address, seed: u64, year, k: int) -> bool {
+	return drought_hit(dry, width, mix64(address, seed), year / HISTORY_STEP_YEARS, k)
+}
+
+@(private = "file")
+drought_hit :: proc(dry: []f32, w: int, root: u64, step, k: int) -> bool {
+	i, j := k % w, k / w
+	cols := (w + DROUGHT_BLOCK - 1) / DROUGHT_BLOCK
+	block := (j / DROUGHT_BLOCK) * cols + i / DROUGHT_BLOCK
+	roll := unit(mix64(mix64(root, 0xd0d0), u64(step) << 32 | u64(block)))
+	return roll < f64(dry[k])
+}
+
+// era_of is the era a people's knowledge has reached.
+@(private = "file")
+era_of :: proc(knowledge: f64) -> int {
+	eras := ERA_KNOWLEDGE
+	e := 0
+	for t in eras {
+		if knowledge >= t {e += 1}
+	}
+	return e
+}
+
+// era_name: the first eras are the same everywhere, later ones are named per world.
+era_name :: proc(root: u64, era: int) -> string {
+	names := ERA_NAMES
+	if era < len(names) {return names[era]}
+	later := ERA_LATER
+	pick := int(mix64(root, u64(era)) % u64(len(later)))
+	return later[pick][0]
+}
+
+// people_name builds a name from the world's syllables (the same people, the same name).
+@(private = "file")
+make_name :: proc(s: ^Sim, index: int) -> string {
+	pool := SYLLABLES
+	set: [SYLLABLES_PER_WORLD]string
+	// The world's set: a seeded partial shuffle of the pool.
+	order: [len(pool)]int
+	for i in 0 ..< len(order) {order[i] = i}
+	for i in 0 ..< SYLLABLES_PER_WORLD {
+		r := i + int(mix64(s.root, u64(0x5111 + i)) % u64(len(order) - i))
+		order[i], order[r] = order[r], order[i]
+		set[i] = pool[order[i]]
+	}
+	for attempt in 0 ..< 50 {
+		h := mix64(mix64(s.root, u64(0x7a3e + index)), u64(attempt))
+		count := 2 + int(h % 2)
+		h = h >> 8
+		b := strings.builder_make(context.temp_allocator)
+		for c in 0 ..< count {
+			strings.write_string(&b, set[int(mix64(h, u64(c)) % SYLLABLES_PER_WORLD)])
+		}
+		name := strings.to_string(b)
+		cap := strings.concatenate(
+			{strings.to_upper(name[:1], context.temp_allocator), name[1:]},
+			s.allocator,
+		)
+		unique := true
+		for pe in s.res.peoples {
+			if pe.name == cap {unique = false}
+		}
+		if unique || attempt == 49 {return cap}
+		delete(cap, s.allocator)
+	}
+	return ""
+}
+
+@(private = "file")
+record :: proc(
+	s: ^Sim,
+	year: int,
+	kind: Event_Kind,
+	people, other, cell: int,
+	text, cause: string,
+) {
+	append(
+		&s.res.events,
+		Event {
+			year = year,
+			kind = kind,
+			people = people,
+			other = other,
+			cell = cell,
+			text = text,
+			cause = cause,
+		},
+	)
+}
+
+@(private = "file")
+tell :: proc(s: ^Sim, format: string, args: ..any) -> string {
+	return fmt.aprintf(format, ..args, allocator = s.allocator)
+}
+
+@(private = "file")
+hold :: proc(s: ^Sim, k, people: int) {
+	s.res.owner[k] = u16(people + 1)
+	if !s.listed[k] {
+		s.listed[k] = true
+		append(&s.active, k)
+	}
+}
+
+// found a new people at free land k.
+@(private = "file")
+found :: proc(s: ^Sim, k, year, decade: int) -> int {
+	index := len(s.res.peoples)
+	append(
+		&s.res.peoples,
+		People {
+			origin = k,
+			origin_decade = decade,
+			knowledge = 1,
+			cells = 1,
+			name = make_name(s, index),
+		},
+	)
+	hold(s, k, index)
+	s.res.pop[k] = 20
+	return index
+}
+
+@(private = "file")
+cell_of :: proc(res: History, lat, lon: f64) -> int {
+	j := clamp(int((90 - lat) / 180 * f64(res.height)), 0, res.height - 1)
+	i := int((lon + 180) / 360 * f64(res.width)) % res.width
+	if i < 0 {i += res.width}
+	return j * res.width + i
+}
+
+@(private = "file")
+apply_intervention :: proc(s: ^Sim, iv: Intervention, decade: int) {
+	if iv.kind != INTERVENTION_SETTLEMENT {return}
+	k := cell_of(s.res^, iv.lat, iv.lon)
+	if !s.p.land.is_land[k] {return}
+	year := int(max(iv.day, 0) / DAYS_PER_YEAR)
+	cause := tell(s, "a settlement founded from outside on day %d", iv.day)
+	if s.res.owner[k] == 0 {
+		who := found(s, k, year, decade)
+		name := s.res.peoples[who].name
+		record(s, year, .Founding, who, -1, k, tell(s, "The %s settle new land", name), cause)
+	} else {
+		who := int(s.res.owner[k]) - 1
+		s.res.pop[k] += 50
+		name := s.res.peoples[who].name
+		record(s, year, .Founding, who, -1, k, tell(s, "Settlers join the %s", name), cause)
+	}
+}
+
+// history computes the peoples from the beginning to `day` (365 days a year): their farming,
+// numbers, knowledge, wars, collapses and the chronicle of it. Pure and deterministic.
+// Interventions enter at their day and place; one after `day` changes nothing.
 history :: proc(
 	p: Planet,
 	address, seed: u64,
@@ -269,7 +552,6 @@ history :: proc(
 	interventions: []Intervention,
 	allocator := context.allocator,
 ) -> History {
-	_ = interventions
 	w, h := p.land.width, p.land.height
 	n := w * h
 	years := int(max(day, 0) / DAYS_PER_YEAR)
@@ -281,50 +563,97 @@ history :: proc(
 		owner   = make([]u16, n, allocator),
 		pop     = make([]f32, n, allocator),
 		peoples = make([dynamic]People, allocator),
+		events  = make([dynamic]Event, allocator),
+		ruins   = make([dynamic]int, allocator),
 	}
 	root := mix64(address, seed)
 	g := ground_build(p, context.temp_allocator)
 	suit := suitability_of(p, g, root, nil, context.temp_allocator)
+	s := Sim {
+		p         = p,
+		g         = g,
+		res       = &res,
+		root      = root,
+		active    = make([dynamic]int, context.temp_allocator),
+		listed    = make([]bool, n, context.temp_allocator),
+		wars      = make([dynamic]War, context.temp_allocator),
+		allocator = allocator,
+	}
 
 	// The cells that can begin farming, each with the decade it would (a hash of the cell
 	// and the world, over its rate): the ones inside the history, earliest first.
 	begins := make([dynamic]u64, context.temp_allocator)
 	for k in 0 ..< n {
-		s := f64(suit[k])
-		if s <= 0 {continue}
-		onset := unit(mix64(root, u64(k))) / (FARMING_RATE * s * s * s)
+		sv := f64(suit[k])
+		if sv <= 0 {continue}
+		onset := unit(mix64(root, u64(k))) / (FARMING_RATE * sv * sv * sv)
 		if onset < f64(steps) {append(&begins, u64(onset) << 32 | u64(k))}
 	}
 	slice.sort(begins[:])
 	next_begin := 0
 	apart := int(FARMING_APART_KM / g.cell_km) + 1
+	eras_at := ERA_KNOWLEDGE
 
-	active := make([dynamic]int, context.temp_allocator) // cells held, in the order taken
 	for step in 0 ..< steps {
 		sroot := mix64(root, u64(step))
+		year := step * HISTORY_STEP_YEARS
+		// 0. Interventions of this decade.
+		for iv in interventions {
+			if max(iv.day, 0) / DAYS_PER_YEAR / HISTORY_STEP_YEARS == i64(step) {
+				apply_intervention(&s, iv, step)
+			}
+		}
 		// 1. Farming begins somewhere new.
 		for next_begin < len(begins) && int(begins[next_begin] >> 32) <= step {
 			k := int(begins[next_begin] & 0xffff_ffff)
 			next_begin += 1
 			if res.owner[k] != 0 || near_people(res, k, apart) {continue}
-			append(&res.peoples, People{origin = k, origin_decade = step, knowledge = 1})
-			res.owner[k] = u16(len(res.peoples))
-			res.pop[k] = 20
-			append(&active, k)
-		}
-		// 2. Knowledge grows with numbers (as of the last step's count).
-		for &pe in res.peoples {
-			share := pe.population / 1e6
-			pe.knowledge = min(
-				pe.knowledge + KNOWLEDGE_RATE * share / (1 + share) * pe.knowledge,
-				KNOWLEDGE_MAX,
+			who := found(&s, k, year, step)
+			record(
+				&s,
+				year,
+				.Farming,
+				who,
+				-1,
+				k,
+				tell(&s, "The %s begin to farm", res.peoples[who].name),
+				tell(&s, "wild grasses and herds suited the land"),
 			)
+		}
+		// 2. Knowledge grows with numbers (as of the last step's count), and eras turn.
+		for &pe, who in res.peoples {
+			if pe.cells > 0 {
+				share := pe.population / 1e6
+				pe.knowledge = min(
+					pe.knowledge + KNOWLEDGE_RATE * share / (1 + share) * pe.knowledge,
+					KNOWLEDGE_MAX,
+				)
+				if era := era_of(pe.knowledge); era > pe.era {
+					pe.era = era
+					record(
+						&s,
+						year,
+						.Era,
+						who,
+						-1,
+						pe.origin,
+						tell(&s, "The %s enter the %s", pe.name, era_name(root, era)),
+						tell(
+							&s,
+							"their numbers passed on what they learned (knowledge %.0f)",
+							eras_at[era - 1],
+						),
+					)
+				}
+			}
 			pe.population = 0
+			pe.capacity = 0
 		}
 		// 3. Growth to capacity, and settling when crowded.
-		count := len(active)
+		count := len(s.active)
 		for a in 0 ..< count {
-			k := active[a]
+			k := s.active[a]
+			if res.owner[k] == 0 {continue}
 			pe := &res.peoples[res.owner[k] - 1]
 			dens := FORAGER_DENSITY + FARMER_DENSITY * (1 - 1 / pe.knowledge)
 			cap := max(f64(g.capacity[k]) * f64(g.area[k]) * dens, 1)
@@ -333,25 +662,119 @@ history :: proc(
 			// (a crowded cell looks for room every fourth decade, in turns)
 			if pop > CROWDED * cap && (step + k) % 4 == 0 {
 				if t := settle_target(p, g, res, k, mix64(sroot, u64(k) + u64(2 * n))); t >= 0 {
-					res.owner[t] = res.owner[k]
+					hold(&s, t, int(res.owner[k]) - 1)
 					res.pop[t] = f32(pop * SETTLE_SHARE)
 					pop -= pop * SETTLE_SHARE
-					append(&active, t)
+					pe.cells += 1
 				}
 			}
 			res.pop[k] = f32(pop)
 			pe.population += pop
+			pe.capacity += cap
+		}
+		// 4. War at the borders: the stronger by numbers and knowledge takes cells.
+		for a in 0 ..< len(s.active) {
+			k := s.active[a]
+			o := int(res.owner[k])
+			if o == 0 || (step + k) % 3 != 0 {continue}
+			roll := mix64(sroot, u64(k) + u64(3 * n))
+			d := int(roll % 8)
+			if d >= 4 {d += 1} 	// the eight neighbours (not the cell)
+			jj := k / w + d / 3 - 1
+			if jj < 0 || jj >= h {continue}
+			q := jj * w + (k % w + d % 3 - 1 + w) % w
+			ob := int(res.owner[q])
+			if ob == 0 || ob == o {continue}
+			a_pe, b_pe := &res.peoples[o - 1], &res.peoples[ob - 1]
+			if a_pe.population * a_pe.knowledge <
+			   WAR_RATIO * b_pe.population * b_pe.knowledge {continue}
+			if unit(mix64(roll, 77)) >= WAR_TAKE {continue}
+			if war_between(&s, o - 1, ob - 1) < 0 {
+				append(&s.wars, War{a = o - 1, b = ob - 1, since = year})
+				record(
+					&s,
+					year,
+					.War,
+					o - 1,
+					ob - 1,
+					q,
+					tell(&s, "The %s and the %s go to war", a_pe.name, b_pe.name),
+					tell(&s, "their borders met and the %s were the stronger", a_pe.name),
+				)
+			}
+			res.owner[q] = u16(o)
+			res.pop[q] *= 1 - WAR_LOSS
+			a_pe.cells += 1
+			b_pe.cells -= 1
+			if b_pe.cells == 0 {
+				wi := war_between(&s, o - 1, ob - 1)
+				long := year - s.wars[wi].since >= 50
+				record(
+					&s,
+					year,
+					.Conquest,
+					o - 1,
+					ob - 1,
+					q,
+					tell(&s, "The %s conquer the %s", a_pe.name, b_pe.name),
+					tell(&s, "%s war that took their last land", "a long" if long else "a short"),
+				)
+			}
+		}
+		// 5. Collapse: a drought decade takes half the land of a crowded people.
+		for &pe, who in res.peoples {
+			if pe.cells < COLLAPSE_MIN_CELLS || step < pe.cooldown {continue}
+			if pe.population < COLLAPSE_CROWD * pe.capacity {continue}
+			if !drought_hit(g.dry, w, root, step, pe.origin) {continue}
+			pe.cooldown = step + COLLAPSE_COOLDOWN
+			owned := 0
+			for k in s.active {
+				if int(res.owner[k]) != who + 1 {continue}
+				owned += 1
+				if owned % 2 == 0 {
+					res.owner[k] = 0
+					res.pop[k] = 0
+					pe.cells -= 1
+					append(&res.ruins, k)
+				}
+			}
+			record(
+				&s,
+				year,
+				.Collapse,
+				who,
+				-1,
+				pe.origin,
+				tell(&s, "The %s lose half their land", pe.name),
+				tell(&s, "a great drought, with their land crowded"),
+			)
+		}
+	}
+	// Interventions in the decade not yet run (after the last whole step, up to `day`).
+	for iv in interventions {
+		if iv.day <= day && max(iv.day, 0) / DAYS_PER_YEAR / HISTORY_STEP_YEARS >= i64(steps) {
+			apply_intervention(&s, iv, steps)
 		}
 	}
 	for &pe in res.peoples {
 		pe.population, pe.cells = 0, 0
 	}
-	for k in active {
+	for k in s.active {
+		if res.owner[k] == 0 {continue}
 		pe := &res.peoples[res.owner[k] - 1]
 		pe.population += f64(res.pop[k])
 		pe.cells += 1
 	}
+	slice.stable_sort_by(res.events[:], proc(a, b: Event) -> bool {return a.year < b.year})
 	return res
+}
+
+@(private = "file")
+war_between :: proc(s: ^Sim, a, b: int) -> int {
+	for w, i in s.wars {
+		if (w.a == a && w.b == b) || (w.a == b && w.b == a) {return i}
+	}
+	return -1
 }
 
 // near_people: some people began within `r` cells of k.
@@ -397,6 +820,16 @@ history_hash :: proc(h: History) -> u64 {
 		x = (x ~ u64(pe.origin)) * 0x100000001b3
 		x = (x ~ u64(pe.origin_decade)) * 0x100000001b3
 		x = (x ~ transmute(u64)pe.knowledge) * 0x100000001b3
+		for c in transmute([]u8)pe.name {x = (x ~ u64(c)) * 0x100000001b3}
 	}
+	for e in h.events {
+		x = (x ~ u64(e.year)) * 0x100000001b3
+		x = (x ~ u64(e.kind)) * 0x100000001b3
+		x = (x ~ u64(e.people)) * 0x100000001b3
+		x = (x ~ u64(e.cell)) * 0x100000001b3
+		for c in transmute([]u8)e.text {x = (x ~ u64(c)) * 0x100000001b3}
+		for c in transmute([]u8)e.cause {x = (x ~ u64(c)) * 0x100000001b3}
+	}
+	for c in h.ruins {x = (x ~ u64(c)) * 0x100000001b3}
 	return x
 }
