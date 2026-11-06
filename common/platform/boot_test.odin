@@ -1,5 +1,6 @@
 package platform_common
 
+import "core:fmt"
 import "core:os"
 import "core:testing"
 
@@ -78,4 +79,24 @@ test_boot_installs_the_clocks :: proc(t: ^testing.T) {
 	testing.expect(t, spin != 0)
 	b := base.ticks()
 	testing.expect(t, base.ticks() >= b)
+}
+
+@(test)
+test_boot_installs_the_file_lock :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	testing.expect(t, host.file.lock != nil)
+	testing.expect(t, host.file.unlock != nil)
+	path := fmt.tprintf("vx_boot_lock_%d", host.boot.pid) // relative: /tmp does not exist on Windows
+	defer os.remove(path)
+	first, _, ok := base.file_lock(path, "mine")
+	testing.expect(t, ok)
+	_, holder, again := base.file_lock(path, "other")
+	testing.expect(t, !again)
+	testing.expect_value(t, holder, "mine")
+	delete(holder)
+	base.file_unlock(&first)
+	second, _, retaken := base.file_lock(path, "")
+	testing.expect(t, retaken)
+	base.file_unlock(&second)
 }
