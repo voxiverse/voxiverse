@@ -214,7 +214,7 @@ connect :: proc(u: ^Uploader) -> bool {
 		}
 		uploader_wait(u)
 	}
-	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, "", 0})
+	up_send(u, game.Hello{game.PROTOCOL_VERSION, u.key.account, "", 0, 0, nil})
 	msg, ok := wait_message(u)
 	challenge, is_challenge := msg.(game.Challenge)
 	if !ok || !is_challenge {

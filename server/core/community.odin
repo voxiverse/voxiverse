@@ -4,11 +4,14 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:time"
 
 import "common:game"
+import steam_common "common:steam"
+import steam_server "server:steam"
 
 // What a world keeps about its people, besides their permissions: each
 // player's nickname, mute, ignore list, homes, when they were last seen and
@@ -22,6 +25,7 @@ import "common:game"
 //	ignore carol
 //	home base 10.5 70 4.5 0 0
 //	seen 1793000000
+//	steam 76561198000000000 <account hex>
 //
 // Times are Unix seconds; 0 as a ban's or mute's end: never.
 
@@ -56,6 +60,7 @@ Community :: struct {
 	bans:         map[string]Ban, // by character name
 	account_bans: map[string]Ban, // by account (hex)
 	ip_bans:      map[string]Ban,
+	steam_links:  map[u64]game.Account, // a SteamID's account key (steam.odin's join; docs/server.md)
 }
 
 FOREVER :: max(i64)
@@ -161,6 +166,7 @@ community_destroy :: proc(m: ^Community) {
 		ban_destroy(&b)
 	}
 	delete(m.account_bans)
+	delete(m.steam_links)
 	delete(m.motd)
 	m^ = {}
 }
@@ -218,6 +224,13 @@ community_parse :: proc(m: ^Community, text: string, home: game.Address) {
 			if f[0] == "ban_ip" {bans = &m.ip_bans}
 			if f[0] == "ban_account" {bans = &m.account_bans}
 			ban_set(bans, f[1], until, f[3], reason)
+		case "steam":
+			ok = len(f) == 3
+			if !ok {break}
+			id, is_id := strconv.parse_u64(f[1])
+			account, is_account := game.account_parse(f[2])
+			ok = is_id && id != 0 && is_account
+			if ok {m.steam_links[id] = account}
 		case "nick":
 			ok = member != nil && len(f) >= 2
 			if ok {set_string(&member.nick, strings.trim_space(tail))}
@@ -278,6 +291,12 @@ community_text :: proc(m: ^Community, allocator := context.temp_allocator) -> st
 	for name in sorted_keys(m.account_bans) {
 		ban := m.account_bans[name]
 		fmt.sbprintfln(&b, "ban_account %s %d %s %s", name, ban.until, ban.by, ban.reason)
+	}
+	ids := make([dynamic]u64, 0, len(m.steam_links), context.temp_allocator)
+	for id in m.steam_links {append(&ids, id)}
+	slice.sort(ids[:])
+	for id in ids {
+		fmt.sbprintfln(&b, "steam %d %s", id, game.account_text(m.steam_links[id]))
 	}
 	for name in sorted_keys(m.members) {
 		e := &m.members[name]
@@ -355,4 +374,57 @@ duration_parse :: proc(text: string) -> (seconds: i64, ok: bool) {
 	n := strconv.parse_i64(digits) or_return
 	if n <= 0 || n > 100 * 365 * 86400 / unit {return}
 	return n * unit, true
+}
+
+// steam_on: this server checks Steam tickets.
+steam_on :: proc(s: ^Server) -> bool {
+	return s.config.steam != nil && steam_server.on(s.config.steam)
+}
+
+// steam_hello checks the ticket of a Hello before the Challenge: "" when there is none to
+// check (no ticket, or this server has no Steam: it ignores them) or Steam accepts it and
+// the SteamID is free or already linked to this account; else the reason to refuse with.
+// The auth session lasts only for the check: the link, not the session, is what is kept.
+steam_hello :: proc(s: ^Server, h: game.Hello) -> string {
+	if len(h.ticket) == 0 || !steam_on(s) {return ""}
+	id := steam_common.Steam_ID(h.steam_id)
+	switch steam_server.begin_auth(s.config.steam, id, h.ticket) {
+	case .Ok:
+		steam_server.end_auth(s.config.steam, id)
+	case .Invalid_Ticket:
+		return "Steam refused your ticket"
+	case .Invalid_Version, .Game_Mismatch:
+		return "Steam says your ticket is for another game"
+	case .Expired_Ticket:
+		return "your Steam ticket has expired; restart the game and join again"
+	case .Duplicate_Request:
+		return "this Steam account is already joining"
+	case .Unavailable:
+		return "Steam could not check your ticket"
+	}
+	if linked, has := s.community.steam_links[h.steam_id]; has && linked != h.account {
+		return "this Steam account is linked to another account key on this server"
+	}
+	return ""
+}
+
+// steam_link records, once the account is proved, that the SteamID its Hello came with
+// belongs to it (the first join makes the link). "": fine; else why to refuse (a second
+// player won the SteamID with another key between this one's Hello and Proof).
+steam_link :: proc(s: ^Server, c: ^Client) -> string {
+	if c.steam_id == 0 {return ""}
+	linked, has := s.community.steam_links[c.steam_id]
+	if has {
+		if linked != c.account {
+			return "this Steam account is linked to another account key on this server"
+		}
+		return ""
+	}
+	s.community.steam_links[c.steam_id] = c.account
+	log.infof(
+		"server steam linked steam_id=%d account=%s",
+		c.steam_id,
+		game.account_text(c.account),
+	)
+	return ""
 }

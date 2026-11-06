@@ -18,6 +18,7 @@ import "common:netcode"
 import "common:telemetry"
 import "common:worldgen"
 import "server:collector"
+import steam_server "server:steam"
 
 // The authoritative side of a world, on its own thread at game.TICK_RATE.
 // Everything it owns lives in its session arena and is freed at once by
@@ -74,6 +75,7 @@ Config :: struct {
 	journal_detail:        u64, // tests: ticks a segment keeps its detail (0: JOURNAL_DETAIL)
 	journal_keep:          u64, // tests: ticks a segment is kept (0: JOURNAL_KEEP)
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
+	steam:                 ^steam_server.Server, // checks joining players' Steam tickets (nil or off: tickets are ignored); the caller opens and shuts it
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
 }
 
@@ -434,6 +436,7 @@ tick :: proc(s: ^Server) {
 	base.profile_scope_number("server tick", s.tick + 1)
 	base.metric_scope(.Server_Tick)
 	s.tick += 1
+	if s.config.steam != nil {steam_server.run_callbacks(s.config.steam)}
 	{
 		base.profile_scope("scheduled calls")
 		calls_run(s)
@@ -725,6 +728,17 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			disconnect(s, c, "names are 1 to 16 letters, digits, _ or -")
 			return
 		}
+		c.steam_id = 0
+		if why := steam_hello(s, v); why != "" {
+			log.infof(
+				"server steam join refused account=%s why=%q",
+				game.account_text(v.account),
+				why,
+			)
+			disconnect(s, c, why)
+			return
+		}
+		if steam_on(s) && len(v.ticket) > 0 {c.steam_id = v.steam_id}
 		c.account = v.account
 		c.wanted_len = copy(c.wanted[:], v.character)
 		c.nonce = game.nonce_make()
@@ -741,6 +755,10 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			return
 		}
 		c.nonce = {} // (used: a proof is for one nonce)
+		if why := steam_link(s, c); why != "" {
+			disconnect(s, c, why)
+			return
+		}
 		if packs_begin(s, c) {return}
 		proved(s, c)
 	case game.Pack_Want:

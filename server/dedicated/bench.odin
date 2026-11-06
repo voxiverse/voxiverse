@@ -268,7 +268,10 @@ pump :: proc(bots: []Bot) {
 		was := b.link.state
 		netcode.link_update(&b.link, now)
 		if was != .Connected && b.link.state == .Connected {
-			send(&b, game.Hello{game.PROTOCOL_VERSION, b.key.account, b.name, b.schema.hash})
+			send(
+				&b,
+				game.Hello{game.PROTOCOL_VERSION, b.key.account, b.name, b.schema.hash, 0, nil},
+			)
 		}
 		netcode.link_receive(&b.link, &b.messages)
 		for p in b.messages {

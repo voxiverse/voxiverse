@@ -9,6 +9,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
+import "client:steam"
 import "common:game"
 import "common:netcode"
 import "server:core"
@@ -16,6 +17,23 @@ import "server:core"
 // A session's messages: what the server sends (receive), what we send
 // (send_message), over the in-process pipe or the network link, with the
 // network's statistics and the optional trace.
+
+// session_steam_ticket asks Steam for a ticket to join with: the SteamID and the ticket (a
+// view into the session) for Hello, or none when Steam is off or gives no ticket (the
+// account key alone then: the server decides).
+@(private)
+session_steam_ticket :: proc(s: ^Session) -> (id: u64, ticket: []u8) {
+	c := s.config.steam
+	if c == nil || !steam.on(c) {return}
+	steam.cancel_ticket(c, &s.ticket)
+	if !steam.auth_ticket(c, &s.ticket) || s.ticket.len == 0 {
+		log.info("session joins without a Steam ticket: Steam gave none")
+		return
+	}
+	id = u64(steam.steam_id(c))
+	if id == 0 {return 0, nil}
+	return id, s.ticket.bytes[:s.ticket.len]
+}
 
 @(private)
 receive :: proc(s: ^Session) {
@@ -28,6 +46,7 @@ receive :: proc(s: ^Session) {
 		}
 		if was != .Connected && s.link.state == .Connected {
 			log.info("session connected")
+			steam_id, ticket := session_steam_ticket(s)
 			send_message(
 				s,
 				game.Hello {
@@ -35,6 +54,8 @@ receive :: proc(s: ^Session) {
 					s.config.key.account,
 					s.config.name,
 					s.schema.hash,
+					steam_id,
+					ticket,
 				},
 			)
 		}

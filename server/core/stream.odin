@@ -37,6 +37,7 @@ Client :: struct {
 	world:          ^World, // where they are (Playing)
 	account:        game.Account, // (proved once Playing)
 	nonce:          game.Nonce, // the Challenge sent
+	steam_id:       u64, // the SteamID its Hello proved with a ticket (0: none); linked once the account is proved
 	wanted:         [game.MAX_NAME_LENGTH]u8, // the character asked for in Hello ("": choose)
 	wanted_len:     int,
 	name_buf:       [game.MAX_NAME_LENGTH]u8,

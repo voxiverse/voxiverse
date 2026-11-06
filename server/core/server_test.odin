@@ -279,7 +279,14 @@ test_server_rejects_bad_clients :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{
-			first = game.Hello{game.PROTOCOL_VERSION + 1, test_key("old").account, "old", 0},
+			first = game.Hello {
+				game.PROTOCOL_VERSION + 1,
+				test_key("old").account,
+				"old",
+				0,
+				0,
+				nil,
+			},
 			reason = "protocol version mismatch",
 		},
 		{first = game.Input{}, reason = "message before hello"},

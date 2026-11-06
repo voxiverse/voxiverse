@@ -120,6 +120,9 @@ take :: proc(r: ^Reader, n: int) -> []u8 {
 	return b
 }
 
+// read_bytes returns the next n bytes as a view into the message (valid while it is).
+read_bytes :: proc(r: ^Reader, n: int) -> []u8 {return take(r, n)}
+
 read_u8 :: proc(r: ^Reader) -> u8 {
 	b := take(r, 1)
 	return b[0] if b != nil else 0

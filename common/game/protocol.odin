@@ -3,6 +3,7 @@ package game
 import "core:math"
 
 import "common:base"
+import sc "common:steam"
 
 // Messages between client and server. Every message travels as bytes, also
 // in-process, so singleplayer exercises the same encoding and validation as
@@ -15,7 +16,7 @@ import "common:base"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 36
+PROTOCOL_VERSION :: 37
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -37,7 +38,12 @@ Hello :: struct {
 	account:   Account,
 	character: string, // view into the message; name_valid, or ""
 	schema:    u64, // schema_hash of the state kinds the client knows (schema.odin)
+	steam_id:  u64, // the player's SteamID (0: not joining with Steam; then no ticket)
+	ticket:    []u8, // their Steam auth ticket (view into the message; at most MAX_STEAM_TICKET)
 }
+
+// MAX_STEAM_TICKET: the most bytes of Steam auth ticket a Hello holds.
+MAX_STEAM_TICKET :: sc.MAX_TICKET
 
 // Proof: the Challenge's nonce signed with the account's key.
 Proof :: struct {
@@ -794,6 +800,13 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_string(w, v.character)
 		write_u32(w, u32(v.schema >> 32))
 		write_u32(w, u32(v.schema))
+		// Steam, optional: a ticket's length (0: none), then the SteamID and the ticket.
+		write_varint(w, u32(len(v.ticket)))
+		if len(v.ticket) > 0 {
+			write_u32(w, u32(v.steam_id >> 32))
+			write_u32(w, u32(v.steam_id))
+			append(&w.buf, ..v.ticket)
+		}
 	case Proof:
 		write_u8(w, u8(Client_Kind.Proof))
 		sig := v.signature
@@ -1053,6 +1066,16 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		h.character = read_string(&r, MAX_NAME_LENGTH)
 		hi, lo := read_u32(&r), read_u32(&r)
 		h.schema = u64(hi) << 32 | u64(lo)
+		if n := read_varint(&r); n > 0 {
+			if n > MAX_STEAM_TICKET {
+				reader_fail(&r)
+			} else {
+				id_hi, id_lo := read_u32(&r), read_u32(&r)
+				h.steam_id = u64(id_hi) << 32 | u64(id_lo)
+				h.ticket = read_bytes(&r, int(n))
+				if h.steam_id == 0 {reader_fail(&r)}
+			}
+		}
 		m = h
 	case u8(Client_Kind.Proof):
 		p: Proof

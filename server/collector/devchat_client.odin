@@ -275,7 +275,7 @@ chat_connect :: proc(c: ^Chat) -> bool {
 		}
 		chat_wait(c)
 	}
-	chat_out(c, game.Hello{game.PROTOCOL_VERSION, c.key.account, "", 0})
+	chat_out(c, game.Hello{game.PROTOCOL_VERSION, c.key.account, "", 0, 0, nil})
 	msg, ok := chat_message(c)
 	challenge, is_challenge := msg.(game.Challenge)
 	if !ok || !is_challenge {

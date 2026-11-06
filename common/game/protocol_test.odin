@@ -33,7 +33,9 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	account: Account
 	account[0], account[31] = 7, 9
 	hello, ok := decode_client_t(
-		encode_c(Hello{PROTOCOL_VERSION, account, "Ünïcode name", 0xfeed_beef_0123_4567})[:],
+		encode_c(
+			Hello{PROTOCOL_VERSION, account, "Ünïcode name", 0xfeed_beef_0123_4567, 0, nil},
+		)[:],
 	)
 	testing.expect(t, ok)
 	testing.expect_value(t, hello.(Hello).character, "Ünïcode name")
@@ -156,7 +158,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, !ok)
 	reload: Client_Message
 	reload, ok = decode_client_t(encode_c(Reload{})[:])
-	testing.expect(t, ok && reload == Reload{})
+	_, is_reload := reload.(Reload) // (Client_Message is no longer comparable: Hello holds a slice)
+	testing.expect(t, ok && is_reload)
 	at: Client_Message
 	at, ok = decode_client_t(encode_c(Attack{12, 34})[:])
 	testing.expect(t, ok && at.(Attack) == Attack{12, 34})
@@ -349,12 +352,32 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 		_, ok := decode_server_t(longer[:], scratch)
 		testing.expect(t, !ok, "trailing byte accepted")
 	}
-	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc", 0}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(edit_plain(1, 2, {}, .Stone))}) {
+	for bytes in ([][dynamic]u8{encode_c(Hello{1, {}, "abc", 0, 0, nil}), encode_c(Input{}), encode_c(Ping{3}), encode_c(Teleport{}), encode_c(Set_Rule{"a", "b"}), encode_c(edit_plain(1, 2, {}, .Stone))}) {
 		for n in 0 ..< len(bytes) {
 			_, ok := decode_client_t(bytes[:n])
 			testing.expect(t, !ok)
 		}
 	}
+}
+
+// Hello's Steam part is optional: none is one zero byte; with a ticket it is the SteamID and
+// the ticket, and a ticket over the limit or a ticket without a SteamID is refused.
+@(test)
+test_hello_steam :: proc(t: ^testing.T) {
+	ticket := []u8{1, 2, 3, 4, 5}
+	id := u64(76561197960265737)
+	h, ok := decode_client_t(encode_c(Hello{PROTOCOL_VERSION, {}, "abc", 7, id, ticket})[:])
+	testing.expect(t, ok)
+	got, is_hello := h.(Hello)
+	testing.expect(t, is_hello && got.steam_id == id && slice.equal(got.ticket, ticket))
+	h, ok = decode_client_t(encode_c(Hello{PROTOCOL_VERSION, {}, "abc", 7, 0, nil})[:])
+	got, is_hello = h.(Hello)
+	testing.expect(t, ok && is_hello && got.steam_id == 0 && len(got.ticket) == 0)
+	big := make([]u8, MAX_STEAM_TICKET + 1, context.temp_allocator)
+	_, ok = decode_client_t(encode_c(Hello{PROTOCOL_VERSION, {}, "abc", 7, 5, big})[:])
+	testing.expect(t, !ok, "a ticket over the limit")
+	_, ok = decode_client_t(encode_c(Hello{PROTOCOL_VERSION, {}, "abc", 7, 0, ticket})[:])
+	testing.expect(t, !ok, "a ticket with no SteamID")
 }
 
 @(test)

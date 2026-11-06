@@ -103,7 +103,8 @@ handshake and checked by the client.
   fragmentation, unreliable latest-wins messages, a byte-rate limit.
 - The protocol has a version handshake (`Hello` carries the protocol and the schema hash;
   `Welcome` carries the protocol, tick rate, rules, interest area, registry hash and pack list),
-  validated decoding, and palette + RLE chunk encoding. A client joining a server fetches the
+  validated decoding (with Steam, `Hello` also carries the SteamID and an auth ticket, which a
+  server with Steam checks and links to the account: [server.md](server.md)), and palette + RLE chunk encoding. A client joining a server fetches the
   packs it lacks ([packs.md](packs.md)).
 - Players join with an account (a keypair the client makes; the server issues a `Challenge`
   and the client answers with a `Proof`) and choose a character.
