@@ -2,6 +2,7 @@ package core
 
 import "core:log"
 import "core:math"
+import "core:strings"
 
 import "common:base"
 import "common:game"
@@ -789,4 +790,304 @@ chunk_ready :: proc(w: ^World, p: [3]f64) -> bool {
 turn_towards :: proc(from, to: f32, rate: f32) -> f32 {
 	d := math.mod(to - from + 3 * math.PI, math.TAU) - math.PI
 	return from + d * rate
+}
+
+// The entity world of entities v2: the archetype store, the spatial service
+// and what hangs off them (tag names, this tick's deaths, the world's rng).
+// entity_world_spawn is the one way an entity comes to be; entity_kill the one way
+// it dies. Nothing in the game uses an Entity_World yet: the fixed Entity
+// list (entities.odin) still runs the world until the systems move onto it.
+
+MAX_ENTITY_WORLD :: 4096 // entities a world holds
+MAX_TAG_NAMES :: 256
+MAX_TAG_NAME_LEN :: 32
+HURT_KEPT_TICKS :: game.TICK_RATE * 10 // how long Hurt_By names a killer
+
+// The server's own components, after the shared ones.
+C_SPATIAL_LINK :: game.FIRST_SERVER_COMPONENT
+
+// Spatial_Link: the entity's entry in the spatial service. Releasing it (the
+// entity despawned) removes the entry.
+Spatial_Link :: struct {
+	handle: game.Spatial_Handle,
+}
+
+Spawn_Error :: enum u8 {
+	None,
+	Full, // the arena (or the store's command ring) is full
+	Unknown_Kind,
+	Not_Loaded, // its chunk is not loaded (checked by the caller that has chunks)
+	Out_Of_Ids,
+}
+
+Tag_Error :: enum u8 {
+	None,
+	Stale, // the entity is gone or not applied yet
+	Bad_Name, // empty, over 32 bytes, or outside [a-z0-9_:]
+	Names_Full, // 256 names already
+	Tags_Full, // the entity already has 4
+}
+
+Entity_Death :: struct {
+	id:       game.Entity_Id,
+	kind:     game.Kind_Id,
+	position: [3]f64,
+	cause:    u8,
+	killer:   game.Entity_Id, // 0: none (or the damage was over 10 s ago)
+	act:      Act,
+}
+
+Entity_World :: struct {
+	store:     game.Entity_Store,
+	spatial:   game.Spatial,
+	rng:       base.Rng,
+	budget:    int,
+	tick:      u32,
+	tag_names: [dynamic]string, // tag i is tag_names[i-1]
+	deaths:    [dynamic]Entity_Death, // this tick's
+	infos:     [game.FIRST_SERVER_COMPONENT + 1]game.Component_Info,
+}
+
+@(private = "file")
+spatial_release :: proc(owner: rawptr, value: rawptr) {
+	ew := (^Entity_World)(owner)
+	if h := (^Spatial_Link)(value).handle; h != 0 {game.spatial_remove(&ew.spatial, h)}
+}
+
+entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTITY_WORLD) {
+	ew^ = {}
+	shared := game.entity_component_infos()
+	for info, i in shared {ew.infos[i] = info}
+	ew.infos[C_SPATIAL_LINK] = game.Component_Info {
+		name    = "spatial_link",
+		type    = Spatial_Link,
+		size    = size_of(Spatial_Link),
+		align   = align_of(Spatial_Link),
+		release = spatial_release,
+	}
+	game.spatial_init(&ew.spatial)
+	// the store releases rows into the spatial service, so it is destroyed first
+	assert(
+		game.store_init(&ew.store, ew.infos[:], ew, max_entities, commands_per_entity = 6) == nil,
+	)
+	ew.rng = base.rng_make(seed)
+}
+
+entity_world_destroy :: proc(ew: ^Entity_World) {
+	game.store_destroy(&ew.store)
+	game.spatial_destroy(&ew.spatial)
+	for n in ew.tag_names {delete(n)}
+	delete(ew.tag_names)
+	delete(ew.deaths)
+	ew^ = {}
+}
+
+// entity_world_begin_tick: the tick counts on and last tick's deaths go.
+entity_world_begin_tick :: proc(ew: ^Entity_World) {
+	ew.tick += 1
+	clear(&ew.deaths)
+}
+
+// entity_world_spawn (to be entity_spawn when the fixed list goes) queues an entity of the kind at position (its bottom centre),
+// with the components the kind asks for. Like every structural change it is
+// seen by queries after store_apply; its id and handle are good at once.
+entity_world_spawn :: proc(
+	ew: ^Entity_World,
+	reg: ^game.Registry,
+	kind: game.Kind_Id,
+	position: [3]f64,
+	act: Act,
+) -> (
+	id: game.Entity_Id,
+	h: game.Entity_Handle,
+	err: Spawn_Error,
+) {
+	info := game.kind_info(reg, kind)
+	if info == nil {return 0, 0, .Unknown_Kind}
+	st := &ew.store
+	// the spawn, its adds and the spatial link all need ring room
+	if game.store_count(st) >= st.max || len(st.commands) - st.cmd_count < 5 {return 0, 0, .Full}
+
+	set := game.Component_Set {
+		int(game.C_TRANSFORM),
+		int(game.C_HEALTH),
+		int(game.C_AGE),
+		int(game.C_ORIGIN),
+		int(C_SPATIAL_LINK),
+	}
+	if info.physics != .None {set += {int(game.C_PHYSICS)}}
+	if .Wool in info.with {set += {int(game.C_WOOL)}}
+	if .Genes in info.with {set += {int(game.C_GENES)}}
+	if .Breeding in info.with {set += {int(game.C_BREEDING)}}
+	if info.hittable {set += {int(game.C_HURT_BY)}}
+	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
+
+	serr: game.Store_Error
+	id, h, serr = game.store_spawn(st, set, kind)
+	switch serr {
+	case .None:
+	case .Id_Exhausted:
+		return 0, 0, .Out_Of_Ids
+	case .Stale, .Command_Ring_Full, .Pool_Full:
+		return 0, 0, .Full
+	}
+
+	half := f64(info.box[0]) / 2
+	lo := [3]f64{position.x - half, position.y, position.z - half}
+	hi := [3]f64{position.x + half, position.y + f64(info.box[1]), position.z + half}
+	flags: game.Spatial_Flags
+	if info.hittable {flags += {.Hittable}}
+	if info.saved {flags += {.Saved}}
+	if info.model == .Player {flags += {.Player}}
+	if info.physics == .Item {flags += {.Item}}
+	sh, ok := game.spatial_insert(
+		&ew.spatial,
+		{id = id, lo = lo, hi = hi, kind = u16(kind), flags = flags},
+	)
+	if !ok {
+		// a kind's box is at most 4 (checked at load): this cannot happen
+		_ = game.store_despawn(st, h)
+		return 0, 0, .Full
+	}
+
+	tf := game.Transform {
+		position = position,
+	}
+	hp := game.Entity_Health {
+		health = i32(info.health),
+	}
+	origin := game.Origin {
+		action = u32(act.action),
+	}
+	link := Spatial_Link {
+		handle = sh,
+	}
+	_ = game.store_add(st, h, game.C_TRANSFORM, &tf)
+	_ = game.store_add(st, h, game.C_HEALTH, &hp)
+	_ = game.store_add(st, h, game.C_ORIGIN, &origin)
+	_ = game.store_add(st, h, C_SPATIAL_LINK, &link)
+	return id, h, .None
+}
+
+@(private = "file")
+tag_name_ok :: proc(name: string) -> bool {
+	if len(name) == 0 || len(name) > MAX_TAG_NAME_LEN {return false}
+	for c in transmute([]u8)name {
+		switch c {
+		case 'a' ..= 'z', '0' ..= '9', '_', ':':
+		case:
+			return false
+		}
+	}
+	return true
+}
+
+// tag_index: the interned index (1-based) of name, interning it when new.
+@(private = "file")
+tag_index :: proc(ew: ^Entity_World, name: string, intern: bool) -> (u16, Tag_Error) {
+	if !tag_name_ok(name) {return 0, .Bad_Name}
+	for n, i in ew.tag_names {
+		if n == name {return u16(i + 1), .None}
+	}
+	if !intern {return 0, .None}
+	if len(ew.tag_names) >= MAX_TAG_NAMES {return 0, .Names_Full}
+	append(&ew.tag_names, strings.clone(name))
+	return u16(len(ew.tag_names)), .None
+}
+
+// entity_tag adds the tag name to an entity (already applied), a no-op when
+// it has it. An entity's first tag adds the Tags component, deferred like
+// any structural change: it shows after the next store_apply.
+entity_tag :: proc(ew: ^Entity_World, h: game.Entity_Handle, name: string) -> Tag_Error {
+	st := &ew.store
+	if base.pool_get(&st.slots, h) == nil {return .Stale}
+	idx, err := tag_index(ew, name, true)
+	if err != .None {return err}
+	tags := game.store_get(st, h, game.C_TAGS, game.Tags)
+	if tags == nil {
+		fresh := game.Tags{}
+		fresh.tags[0] = idx
+		if game.store_add(st, h, game.C_TAGS, &fresh) != .None {return .Stale}
+		return .None
+	}
+	free := -1
+	for t, i in tags.tags {
+		if t == idx {return .None}
+		if t == 0 && free < 0 {free = i}
+	}
+	if free < 0 {return .Tags_Full}
+	tags.tags[free] = idx
+	return .None
+}
+
+entity_untag :: proc(ew: ^Entity_World, h: game.Entity_Handle, name: string) {
+	idx, _ := tag_index(ew, name, false)
+	tags := game.store_get(&ew.store, h, game.C_TAGS, game.Tags)
+	if idx == 0 || tags == nil {return}
+	for &t in tags.tags {
+		if t == idx {t = 0}
+	}
+}
+
+entity_has_tag :: proc(ew: ^Entity_World, h: game.Entity_Handle, name: string) -> bool {
+	idx, _ := tag_index(ew, name, false)
+	tags := game.store_get(&ew.store, h, game.C_TAGS, game.Tags)
+	if idx == 0 || tags == nil {return false}
+	for t in tags.tags {
+		if t == idx {return true}
+	}
+	return false
+}
+
+// entity_hurt takes amount from the entity's health, remembering who did it
+// (by: 0 for nobody), and kills it at zero. False for a stale handle or an
+// entity without health.
+entity_hurt :: proc(
+	ew: ^Entity_World,
+	h: game.Entity_Handle,
+	amount: i32,
+	act: Act,
+	by: game.Entity_Id,
+	cause: u8 = 0,
+) -> bool {
+	st := &ew.store
+	hp := game.store_get(st, h, game.C_HEALTH, game.Entity_Health)
+	if hp == nil {return false}
+	hurt := game.Hurt_By {
+		action = u32(act.action),
+		entity = by,
+		cause  = cause,
+		tick   = ew.tick,
+	}
+	if hb := game.store_get(st, h, game.C_HURT_BY, game.Hurt_By); hb != nil {hb^ = hurt}
+	hp.health -= amount
+	if hp.health <= 0 {
+		hp.health = 0
+		entity_kill(ew, h, cause, act)
+	}
+	return true
+}
+
+// entity_kill records the death (with the killer named by Hurt_By within 10 s)
+// and despawns the entity. Every death goes through here.
+entity_kill :: proc(ew: ^Entity_World, h: game.Entity_Handle, cause: u8, act: Act) {
+	st := &ew.store
+	tf := game.store_get(st, h, game.C_TRANSFORM, game.Transform)
+	if tf == nil {return}
+	death := Entity_Death {
+		kind     = game.store_kind(st, h),
+		position = tf.position,
+		cause    = cause,
+		act      = act,
+	}
+	if s := base.pool_get(&st.slots, h); s != nil {
+		if s.dying {return} 	// already dying: one death
+		death.id = s.id
+	}
+	if hb := game.store_get(st, h, game.C_HURT_BY, game.Hurt_By);
+	   hb != nil && hb.entity != 0 && ew.tick - hb.tick <= HURT_KEPT_TICKS {
+		death.killer = hb.entity
+	}
+	if game.store_despawn(st, h) != .None {return}
+	append(&ew.deaths, death)
 }
