@@ -15,3 +15,4 @@ cave: /sphere 24 -24 8 6 air; /setblock 24 -29 4 lamp; /tp 24.5 -26 10.5 0 -15
 water: /tp 69 6 -4 0 -35
 held_first: look 135 -20
 held_third: look 135 -10; camera behind 30
+devchat: sleep 1

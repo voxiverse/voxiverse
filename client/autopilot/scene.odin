@@ -1,10 +1,14 @@
 package autopilot
 
+import "core:fmt"
 import "core:log"
+import "core:os"
 import "core:strings"
 
 import "client:engine"
 import "client:gpu"
+import "common:game"
+import "server:collector"
 
 // Visual baselines (docs/debugging.md, "Visual baselines"): `voxiverse --scene
 // <name>` runs one scene of assets/baselines/images/scenes.txt, writes what it
@@ -79,7 +83,29 @@ scene_begin :: proc(app: ^engine.App, name: string) -> bool {
 		return false
 	}
 	engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+	if name == "devchat" {scene_devchat(app)}
 	return true
+}
+
+// DEVCHAT_FIXTURE: the conversation the "devchat" scene shows (the chat's file
+// form; fixed times, UTC on the screen).
+DEVCHAT_FIXTURE :: `{"from":"me","id":"0a0b0c01","time":1700000000000,"text":"the sky is square\nand the sun is a block","sent":true}
+{"from":"dev","id":"0001","time":1700000300000,"text":"Thanks, we saw it. A round sun is planned.","link":"https://example.org/sun"}
+{"from":"me","id":"0a0b0c02","time":1700000600000,"text":"will the moon be round too?"}
+`
+
+// scene_devchat: the "devchat" scene shows the developer chat over the world
+// with a fixed conversation and no network (the chat's thread is not started,
+// so it stays "connecting" and nothing waits on a collector).
+@(private = "file")
+scene_devchat :: proc(app: ^engine.App) {
+	dir := engine.path_next_to_exe("images")
+	file := fmt.tprintf("%s/devchat.fixture.jsonl", dir)
+	os.make_directory_all(dir)
+	_ = os.write_entire_file(file, transmute([]u8)string(DEVCHAT_FIXTURE))
+	collector.chat_open(&app.devchat.chat, file, {}, game.account_key_make())
+	app.devchat.running = true
+	engine.devchat_open(app)
 }
 
 // scene_update takes the picture once the scene's script is done; once a frame.
