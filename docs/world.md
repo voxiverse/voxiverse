@@ -199,6 +199,16 @@ at their day and place and change nothing before it.
 - **The chronicle** (`History.events`, by year): every `Event` (farming, era, war, conquest,
   collapse, founding) has a `text` and a `cause`, e.g. "The Taka lose half their land" because
   "a great drought, with their land crowded".
+- **Settlements, roads and ruins** (`common/planet/settlements.odin`), placed only when someone
+  arrives: `settlements_at(cache, planet, address, seed, day, interventions)` gives each
+  `Settlement` (cell, people, size, era, founded, ruined). A people has one settlement per
+  sqrt(numbers / 500), on its best held cells (capacity, plus rivers and coasts), sized by the
+  people living there. `roads_at` joins a people's settlements, each to the nearest linked, by the
+  cheapest path (A* over land; length plus climb, 50 m up costs 1 km). A *ruin* is a cell a
+  collapse emptied that nobody holds now (at least 50 people lived there); its `ruined` year and
+  people name the chronicle's collapse. `Settlement_Cache` keeps the history and placement and
+  recomputes only when the history changes (a new decade or an intervention). Placement for 10
+  peoples takes under 300 ms (`build bench budgets`, `planet_placement`).
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

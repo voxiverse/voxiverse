@@ -52,6 +52,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Spatial_Sphere, 3000},
 	{.Collide_Move, 2000},
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
+	{.Planet_Placement, 300}, // the issue's 300 ms for a world of 10 peoples
 	{.Planet_History, 200}, // the issue's 200 ms for 6 000 years; measured at about 20 ms
 }
 
@@ -173,9 +174,10 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 	base.metric_add(.Random_Rule_Run, f32(random.run_ns))
 
 	fmt.printfln("scene: %s", "the planet")
-	build_ms, history_ms := budget_planet(broken)
+	build_ms, history_ms, place_ms := budget_planet(broken)
 	base.metric_add(.Planet_Build, f32(build_ms))
 	base.metric_add(.Planet_History, f32(history_ms))
+	base.metric_add(.Planet_Placement, f32(place_ms))
 
 	budget_entities(reg, broken)
 }
@@ -183,11 +185,11 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 // budget_planet builds the planet from the committed relief, then its peoples' 6 000
 // years, and says how many ms each took.
 @(private = "file")
-budget_planet :: proc(broken: ^[dynamic]string) -> (build_ms, history_ms: f64) {
+budget_planet :: proc(broken: ^[dynamic]string) -> (build_ms, history_ms, place_ms: f64) {
 	relief, ok := planet.relief_decode(#load("../../assets/planet/earth_relief.bin"))
 	if !ok {
 		append(broken, "the relief file does not load")
-		return 0, 0
+		return 0, 0, 0
 	}
 	defer planet.relief_destroy(&relief)
 	start := time.tick_now()
@@ -199,6 +201,18 @@ budget_planet :: proc(broken: ^[dynamic]string) -> (build_ms, history_ms: f64) {
 	h := planet.history(p, 7, 3, 6000 * planet.DAYS_PER_YEAR, nil)
 	history_ms = time.duration_milliseconds(time.tick_since(start))
 	if len(h.peoples) == 0 {append(broken, "the planet's history has no peoples")}
+	// A world of 10 or more peoples (the seeds are searched; the first such one is placed).
+	for seed in u64(3) ..= 40 {
+		w := planet.history(p, 11, seed, 6000 * planet.DAYS_PER_YEAR, nil)
+		defer planet.history_destroy(&w)
+		if len(w.peoples) < 10 {continue}
+		start = time.tick_now()
+		pl := planet.place(p, w)
+		place_ms = time.duration_milliseconds(time.tick_since(start))
+		planet.placement_destroy(&pl)
+		break
+	}
+	if place_ms == 0 {append(broken, "no world with 10 peoples to place")}
 	planet.history_destroy(&h)
 	free_all(context.temp_allocator)
 	return
