@@ -60,16 +60,17 @@ star_spawn :: proc(f: ^Starfield, s: ^Star, z: f32) {
 	s.tint = u8(star_random(f) * len(STAR_TINTS)) % len(STAR_TINTS)
 }
 
-// starfield_update moves the stars on by dt seconds (none: reduce motion).
-starfield_update :: proc(f: ^Starfield, dt: f32, still: bool) {
+// starfield_update moves the stars on by dt seconds (none: reduce motion),
+// speed times as fast as the menus' (1). A zero f.random is seeded 0x5eed.
+starfield_update :: proc(f: ^Starfield, dt: f32, still: bool, speed: f32 = 1) {
 	if !f.seeded {
-		f.random = 0x5eed
+		if f.random == 0 {f.random = 0x5eed}
 		for &s in f.stars {star_spawn(f, &s, STAR_NEAR + star_random(f) * (1 - STAR_NEAR))}
 		f.seeded = true
 	}
 	if still {return}
 	for &s in f.stars {
-		s.z -= min(dt, 0.1) * STAR_SPEED
+		s.z -= min(dt, 0.1) * STAR_SPEED * speed
 		if s.z < STAR_NEAR || s.gone {
 			star_spawn(f, &s, 1)
 			s.gone = false
@@ -78,8 +79,15 @@ starfield_update :: proc(f: ^Starfield, dt: f32, still: bool) {
 }
 
 // starfield_draw draws the stars over the whole screen (first: behind
-// everything else); still: points only.
-starfield_draw :: proc(ctx: ^ui.Context, f: ^Starfield, still := false) {
+// everything else); still: points only. A streak longer than quads_max
+// pixels is drawn with only that many, spaced out (a bound on the draw
+// list for Ignite's fast streaks).
+starfield_draw :: proc(
+	ctx: ^ui.Context,
+	f: ^Starfield,
+	still := false,
+	quads_max := STAR_STREAK_MAX,
+) {
 	r := ctx.screen
 	centre := ui.Vec2{r.x + r.w / 2, r.y + r.h / 2}
 	spread := max(r.w, r.h) * 0.28
@@ -104,8 +112,9 @@ starfield_draw :: proc(ctx: ^ui.Context, f: ^Starfield, still := false) {
 			tail := centre + {s.x, s.y} / min(s.z + STAR_TRAIL, 1.2) * spread
 			d := head - tail
 			steps := min(int(max(abs(d.x), abs(d.y))), STAR_STREAK_MAX)
-			for i in 0 ..< steps {
-				k := f32(i) / f32(steps) // 0 tail .. 1 head
+			quads := min(steps, quads_max)
+			for i in 0 ..< quads {
+				k := f32(i) / f32(quads) // 0 tail .. 1 head
 				p := tail + d * k
 				ui.fill_rect(
 					ctx,
