@@ -250,6 +250,16 @@ describe :: proc(
 		case game.Stats_Request:
 			return fmt.tprintf("stats_request filter=%q page=%d of=%q", v.filter, v.page, v.of),
 				true
+		case game.Dev_Message:
+			return fmt.tprintf(
+					"dev_message id=%d bytes=%d version=%q",
+					v.id,
+					len(v.text),
+					v.version,
+				),
+				true
+		case game.Dev_Fetch:
+			return fmt.tprintf("dev_fetch after=%q", v.after_id), true
 		case game.Telemetry_Batch:
 			return fmt.tprintf(
 					"telemetry_batch %v day=%q offset=%d bytes=%d",
@@ -317,6 +327,10 @@ describe :: proc(
 			lo, hi := max(i32), min(i32)
 			for h in v.heights {lo, hi = min(lo, h), max(hi, h)}
 			return fmt.tprintf("column pos=%v heights=%d..%d", v.pos, lo, hi), true
+		case game.Dev_Ack:
+			return fmt.tprintf("dev_ack id=%d ok=%v reason=%q", v.id, v.ok, v.reason), true
+		case game.Dev_Replies:
+			return fmt.tprintf("dev_replies count=%d", v.count), true
 		case game.Telemetry_Ack:
 			return fmt.tprintf("telemetry_ack day=%q end=%d", v.day, v.end), true
 		case game.Stats_Page:

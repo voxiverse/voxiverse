@@ -199,6 +199,30 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	report.count = MAX_TELEMETRY_ENTRIES + 1
 	_, ok = decode_client_t(encode_c(report)[:])
 	testing.expect(t, !ok, "too many entries decoded")
+	dev := Dev_Message{9, "hi", "0.26", "Home", "A1", true, {1, -2, 3}, true, 1 << 40}
+	at, ok = decode_client_t(encode_c(dev)[:])
+	testing.expect(t, ok && at.(Dev_Message) == dev, "Dev_Message did not round trip")
+	at, ok = decode_client_t(encode_c(Dev_Fetch{"0001"})[:])
+	testing.expect(t, ok && at.(Dev_Fetch) == Dev_Fetch{"0001"})
+	_, ok = decode_client_t(
+		encode_c(
+			Dev_Message {
+				id = 1,
+				text = strings.repeat("x", MAX_DEV_TEXT + 1, context.temp_allocator),
+			},
+		)[:],
+	)
+	testing.expect(t, !ok, "an oversized Dev_Message decoded")
+	dack: Server_Message
+	dack, ok = decode_server_t(encode_s(Dev_Ack{9, false, "no"})[:], scratch)
+	testing.expect(t, ok && dack.(Dev_Ack) == Dev_Ack{9, false, "no"})
+	replies := Dev_Replies {
+		count = 2,
+	}
+	replies.entries[0] = {"0001", 1000, "first", ""}
+	replies.entries[1] = {"0002", 2000, "second", "https://example.org"}
+	dack, ok = decode_server_t(encode_s(replies)[:], scratch)
+	testing.expect(t, ok && dack.(Dev_Replies) == replies, "Dev_Replies did not round trip")
 	ack: Server_Message
 	ack, ok = decode_server_t(encode_s(Telemetry_Ack{"2026-10-25", 1 << 34 | 9})[:], scratch)
 	testing.expect(t, ok && ack.(Telemetry_Ack) == Telemetry_Ack{"2026-10-25", 1 << 34 | 9})
