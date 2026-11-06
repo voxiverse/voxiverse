@@ -307,3 +307,119 @@ test_spatial_flat :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(sp.cells), 0)
 	testing.expect_value(t, spatial_committed_bytes(&sp), round2)
 }
+
+@(test)
+test_cells_find :: proc(t: ^testing.T) {
+	reg := states_registry(t)
+	if reg == nil {return}
+	world: map[Block_Pos]Block
+	defer delete(world)
+	pool := [?]string {
+		"voxiverse:stone",
+		"voxiverse:dirt",
+		"voxiverse:grass",
+		"voxiverse:sand",
+		"voxiverse:water",
+		"voxiverse:glass",
+		"testpack:planks_slab[type=bottom]",
+		"testpack:planks_slab[type=top]",
+		"testpack:planks_stairs[facing=east,half=bottom]",
+	}
+	blocks: [len(pool)]Block
+	for s, i in pool {
+		b, ok := state_parse(reg, s)
+		if !testing.expect(t, ok, s) {return}
+		blocks[i] = b
+	}
+	rng := base.rng_make(77)
+	for x in i32(-8) ..< 8 {
+		for y in i32(0) ..< 8 {
+			for z in i32(-8) ..< 8 {
+				if x == 7 && z == 7 {continue} 	// an unloaded column
+				world[{x, y, z}] = blocks[base.rng_int_max(&rng, len(blocks))]
+			}
+		}
+	}
+	q := Block_Query {
+		data = &world,
+		get = proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
+			b, ok := (^map[Block_Pos]Block)(data)[p]
+			return b, ok
+		},
+		table = &reg.blocks,
+	}
+	texts := [?]string {
+		"voxiverse:stone",
+		"testpack:planks_slab[type=top]",
+		"testpack:planks_stairs",
+		"#voxiverse:wild_plant_soil",
+		"@liquid",
+		"$voxiverse:water",
+	}
+	for text in texts {
+		m, ok := matcher_compile(reg, text)
+		if !testing.expect(t, ok, text) {continue}
+		defer delete(m.bits)
+		for _ in 0 ..< 20 {
+			lo := Block_Pos {
+				i32(base.rng_int_max(&rng, 20)) - 10,
+				i32(base.rng_int_max(&rng, 10)) - 1,
+				i32(base.rng_int_max(&rng, 20)) - 10,
+			}
+			hi :=
+				lo +
+				{
+						i32(base.rng_int_max(&rng, 12)),
+						i32(base.rng_int_max(&rng, 6)),
+						i32(base.rng_int_max(&rng, 12)),
+					}
+			got, want: [dynamic]Block_Pos
+			defer delete(got)
+			defer delete(want)
+			n := cells_find(q, lo, hi, &m, &got)
+			for y in lo.y ..< hi.y {
+				for z in lo.z ..< hi.z {
+					for x in lo.x ..< hi.x {
+						if b, loaded := world[{x, y, z}]; loaded && rule_matcher_has(&m, b) {
+							append(&want, Block_Pos{x, y, z})
+						}
+					}
+				}
+			}
+			testing.expect_value(t, n, len(want))
+			testing.expect(t, slice.equal(got[:], want[:]), text)
+			center := [3]f64 {
+				base.rng_f64_range(&rng, -9, 9),
+				base.rng_f64_range(&rng, -1, 9),
+				base.rng_f64_range(&rng, -9, 9),
+			}
+			radius := base.rng_f64_range(&rng, 0.5, 6)
+			all: [dynamic]Block_Pos
+			defer delete(all)
+			cells_find(q, {-12, -8, -12}, {12, 16, 12}, &m, &all)
+			best: Block_Pos
+			found := false
+			bd := radius * radius
+			for p in all {
+				d := [3]f64{f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5} - center
+				d2 := d.x * d.x + d.y * d.y + d.z * d.z
+				if d2 <= bd && (!found || d2 < bd) {bd, best, found = d2, p, true}
+			}
+			pos, nok := cells_nearest(q, center, radius, &m)
+			testing.expect_value(t, nok, found)
+			if found {testing.expect_value(t, pos, best)}
+		}
+	}
+	// The volume cap: refused, nothing appended.
+	stone, _ := matcher_compile(reg, "voxiverse:stone")
+	defer delete(stone.bits)
+	out: [dynamic]Block_Pos
+	defer delete(out)
+	testing.expect_value(t, cells_find(q, {0, 0, 0}, {10, 10, 10}, &stone, &out, 999), -1)
+	testing.expect_value(t, len(out), 0)
+	// Text that is not one matcher does not compile.
+	_, bad := matcher_compile(reg, "voxiverse:nope")
+	testing.expect(t, !bad)
+	_, bad = matcher_compile(reg, "voxiverse:stone extra")
+	testing.expect(t, !bad)
+}
