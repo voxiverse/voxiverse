@@ -786,18 +786,19 @@ anyone_within :: proc(w: ^World, p: [3]f64, distance: f64) -> bool {
 	return ok
 }
 
+// nearest_player: the position of the player entity nearest p within the
+// distance, asked of the spatial service (a player counts from its first tick
+// in the world; clients that are not in w have no entity there).
 @(private = "file")
 nearest_player :: proc(w: ^World, p: [3]f64, within: f64) -> (at: [3]f64, ok: bool) {
-	s := w.server
-	best := within * within
-	for &c in s.clients {
-		if c.state != .Playing || c.world != w {continue}
-		d := c.player.position - p
-		if l := d.x * d.x + d.y * d.y + d.z * d.z; l < best {
-			best, at, ok = l, c.player.position, true
-		}
-	}
-	return
+	ew := w.entity_world
+	id, _, found := game.spatial_nearest(&ew.spatial, p, within, {all = {.Player}})
+	if !found {return}
+	h, live := game.store_find(&ew.store, id)
+	if !live {return}
+	tf := game.store_get(&ew.store, h, game.C_TRANSFORM, game.Transform)
+	if tf == nil {return}
+	return tf.position, true
 }
 
 // chunk_ready: the chunk at p and the one below are loaded (it can stand).
