@@ -151,6 +151,9 @@ When joining, the handshake proceeds as follows:
 3. The client sends its signature over the nonce (`Proof`). A wrong signature is refused, and a
    proof is valid for one nonce only.
 
+With Steam, `Hello` also carries the player's SteamID and an auth ticket (see
+[Joining with a Steam identity](#joining-with-a-steam-identity)); the steps above are the same.
+
 A character name belongs to the first account that plays it in that universe (otherwise the
 join is refused: `that name is another account's`). An account has at most 8 characters in a
 universe (`MAX_CHARACTERS`). The Multiplayer screen requests the account's characters (`Characters`) to choose or create one;
@@ -162,6 +165,33 @@ universe that predates accounts is assigned to the first account that plays that
 - `ban` also bans the character's account (`ban_account` in `community.cfg`).
 - `account <hex>` in `permissions.cfg` grants to every character of an account.
 - `whois` shows a character's account (`moderation.address`).
+
+## Joining with a Steam identity
+
+Steam is one way in, never the only one: a player without it joins with the account key alone.
+When the client has Steam on, `Hello` carries an optional SteamID and Steam auth ticket
+(`steam_id`, `ticket`; at most 1024 bytes). The client asks Steam for a fresh ticket for every
+join.
+
+- **A server without Steam** (the default) ignores them. `voxiverse-server --steam` turns Steam
+  on: it needs the Steamworks library beside the executable, otherwise it logs `steam server off:
+  ...` and runs as without Steam.
+- **A server with Steam** checks the ticket (a game server auth session, closed at once: only the
+  result is used) before it sends the `Challenge`. Steam's refusal is the join's refusal and the
+  client shows its reason: `Steam refused your ticket`, `Steam says your ticket is for another
+  game`, `your Steam ticket has expired; restart the game and join again`, `this Steam account is
+  already joining`, `Steam could not check your ticket` (no Steam answer: also a refusal, never
+  a wait). A `Hello` without a ticket is not refused.
+- **The link.** When the account is proved (after the `Proof`), the SteamID is linked to the
+  account key: the first join with a SteamID makes the link. Later, the same SteamID with another
+  key is refused with `this Steam account is linked to another account key on this server`. The
+  link is checked on a ticket's SteamID, so a player without Steam can still play an account
+  that is linked.
+- **What is stored.** One line in the universe's `community.cfg` for each link:
+  `steam <SteamID64> <account hex>`.
+- **To unlink an account**, stop the server, delete its `steam` line in `community.cfg` and
+  start it again (a running server writes the file back at its next save). The next join with
+  that SteamID links it to whichever key it comes with.
 
 ## Chat
 

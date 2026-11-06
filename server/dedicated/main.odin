@@ -17,6 +17,7 @@ import "common:netcode"
 import platform "common:platform"
 import "server:collector"
 import "server:core"
+import steam "server:steam"
 
 // voxiverse-server: a world with no window, for players to join over the
 // network. Ctrl+C (or SIGTERM) stops it cleanly: the world is saved and
@@ -46,11 +47,15 @@ Options :: struct {
 	export:      string `usage:"write the universe as one file (a .vxu) and quit (exit 1 if it is open elsewhere or cannot be written)"`,
 	no_journal:  bool `args:"name=no-journal" usage:"with --export: leave the journal out (it names characters)"`,
 	import_file: string `args:"name=import" usage:"make the universe --universe (a directory that does not exist yet) from a .vxu file and quit"`,
+	steam:       bool `usage:"check joining players' Steam tickets and link each SteamID to its account (needs the Steamworks library beside the executable; docs/server.md)"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
 // stop_requested is set by the Ctrl+C / SIGTERM handler (stop_*.odin).
 stop_requested: bool
+
+// steam_server_state: the server's Steam (--steam); the server thread reads it until it stops.
+steam_server_state: steam.Server
 
 main :: proc() {
 	host: base.Host
@@ -142,6 +147,24 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 	}
 	srv := new(core.Server)
 	defer free(srv)
+	if opts.steam {
+		dir, err := os.get_executable_directory(context.temp_allocator)
+		if err != nil {
+			log.error("steam off: the executable's folder is unknown")
+		} else {
+			steam.open_real(
+				&steam_server_state,
+				dir,
+				true,
+				0,
+				u16(opts.port),
+				u16(opts.port + 1),
+				cstring(base.VERSION),
+			)
+		}
+		config.steam = &steam_server_state
+	}
+	defer if opts.steam {steam.shutdown(&steam_server_state)}
 	if !core.start(srv, config, {}) {return false}
 	catch_stop()
 	log.infof(

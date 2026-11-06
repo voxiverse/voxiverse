@@ -86,7 +86,7 @@ we hand it.
 | `save.player` | `player_parse` and `kit_parse` on the same bytes | a player file written by `player_json` | |
 | `save.structure` | `template_decode` | a template written by `template_encode` | |
 | `save.import` | `universe_import` of the bytes as an export file, under `build/tmp/fuzz/` | an export of a two-world universe | a refused import leaves nothing in `dest` |
-| `net.client_decode` | `decode_client` | one valid encoding of each of the 25 client messages, fields at their edges | |
+| `net.client_decode` | `decode_client` | one valid encoding of each of the 25 client messages, fields at their edges (a `Hello` with and without a Steam ticket) | |
 | `net.server_decode` | `decode_server` (with the chunk scratch array) | one valid encoding of every server message, chunks with palettes of 1-300 blocks, State and Snapshot messages | |
 | `net.state` | `receive_state` and `receive_snapshot` on a receiver that holds tick 1's snapshot and a record of every kind | a State message or a snapshot part of tick 2 (a delta against tick 1) from a sender the game's schema built | the baseline is built in an arena inside the case |
 | `net.packets` | `conn_packet`, then `conn_receive` and `conn_flush`, on a connection in one of three states (fresh; first fragments received; established, messages in flight both ways) | a packet the peer's `conn_flush` wrote, reliable fragments and unreliable records | the first byte picks the state |

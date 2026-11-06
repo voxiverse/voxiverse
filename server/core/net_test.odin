@@ -71,6 +71,8 @@ Net_Client :: struct {
 	move:                        [2]f32, // and their move (right, forward)
 	key_name:                    string, // whose test_key it says it is (default: name)
 	sign_name:                   string, // whose test_key it signs with (default: key_name: an impostor if not)
+	steam_id:                    u64, // Hello carries this SteamID (0: none) and ticket
+	ticket:                      []u8,
 	ask:                         bool, // Hello without a character: Characters, then Choose name
 	characters:                  string, // the last Characters (temp: compared at once)
 	address:                     game.Address, // the world it is in (Welcome, World_Changed)
@@ -334,7 +336,14 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 		k := test_key(c.key_name if c.key_name != "" else c.name)
 		net_send(
 			c,
-			game.Hello{game.PROTOCOL_VERSION, k.account, "" if c.ask else c.name, c.schema.hash},
+			game.Hello {
+				game.PROTOCOL_VERSION,
+				k.account,
+				"" if c.ask else c.name,
+				c.schema.hash,
+				c.steam_id,
+				c.ticket,
+			},
 		)
 	}
 	netcode.link_receive(&c.link, &c.messages)

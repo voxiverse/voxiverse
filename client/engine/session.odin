@@ -14,6 +14,7 @@ import "core:time"
 import "client:gpu"
 import "client:mesh"
 import "client:render"
+import "client:steam"
 import "common:base"
 import "common:game"
 import "common:netcode"
@@ -45,6 +46,7 @@ Session_Config :: struct {
 	still_clouds: bool, // the clouds stay where they start: benchmarks
 	upload:       Maybe(core.Upload), // (hosting) send its event log to a collector
 	registry:     ^game.Registry, // the game's own (the base pack): what a remote server must match
+	steam:        ^steam.Client, // (joining) Steam: its ticket goes in Hello when it is on (nil: no Steam)
 	net:          ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
 }
 
@@ -68,6 +70,7 @@ Session :: struct {
 	arena:            virtual.Arena,
 	pipe:             game.Pipe, // to our own server (hosting)
 	endpoint:         game.Endpoint,
+	ticket:           steam.Ticket, // the Steam auth ticket Hello carried (cancelled at the end)
 	server:           core.Server,
 	remote:           bool, // playing on someone else's server, through link
 	link:             netcode.Link,
@@ -301,7 +304,14 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	if config.trace {session_trace(s)}
 	send_message(
 		s,
-		game.Hello{game.PROTOCOL_VERSION, s.config.key.account, s.config.name, s.schema.hash},
+		game.Hello {
+			game.PROTOCOL_VERSION,
+			s.config.key.account,
+			s.config.name,
+			s.schema.hash,
+			0,
+			nil,
+		},
 	)
 	return true
 }
@@ -349,6 +359,7 @@ session_free :: proc(s: ^Session) -> bool {
 	ok := true
 	if s.server.thread != nil {ok = core.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}
+	if s.config.steam != nil {steam.cancel_ticket(s.config.steam, &s.ticket)}
 	delete(s.entities) // the heap: entities come and go
 	game.receiver_destroy(&s.rx)
 	game.schema_destroy(&s.schema)

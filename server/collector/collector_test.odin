@@ -278,7 +278,7 @@ raw_send :: proc(r: ^Raw, m: game.Client_Message) {
 // raw_challenge: Hello, and the nonce the collector answers with.
 @(private = "file")
 raw_challenge :: proc(r: ^Raw, account: game.Account) -> (nonce: game.Nonce, ok: bool) {
-	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0})
+	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0, 0, nil})
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	got := make([dynamic][]u8, context.temp_allocator)

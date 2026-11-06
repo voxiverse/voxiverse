@@ -372,6 +372,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 	app.session = new(Session)
 	config := config
 	config.registry = app.registry
+	if steam.on(&app.steam) {config.steam = &app.steam}
 	if !session_start(app.session, config) {
 		app.message = fmt.aprintf("Could not start: %s", app.session.failure)
 		leave_world(app)

@@ -106,6 +106,10 @@ and persona name, auth tickets, a Workshop query; on the server `BeginAuthSessio
 - **Tests.** Both packages have a fake with deterministic SteamIDs; a fake client's tickets
   validate only against the fake server, and failures (init, tickets, expiry, Workshop) are
   scripted.
+- **Joining.** With Steam on, the client puts an auth ticket and its SteamID in `Hello` (see
+  [server.md](server.md#joining-with-a-steam-identity)); with Steam off `Hello` carries
+  neither and the account key stands alone. The dedicated server checks tickets only when
+  started with `--steam`.
 - **Callbacks** run once a frame (the server: once a tick) and allocate nothing.
 
 ## Reporting a problem

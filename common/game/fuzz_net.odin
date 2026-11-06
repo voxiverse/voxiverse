@@ -110,7 +110,17 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 	case 0:
 		account: Account
 		for &b in account {b = u8(base.rng_u32(rng))}
-		m = Hello{PROTOCOL_VERSION, account, "Steve_1", base.rng_u64(rng)}
+		h := Hello{PROTOCOL_VERSION, account, "Steve_1", base.rng_u64(rng), 0, nil}
+		if base.rng_int_max(rng, 2) == 0 { 	// (joining with Steam: an id and a ticket of any length up to the limit)
+			ticket := make(
+				[]u8,
+				base.rng_int_max(rng, MAX_STEAM_TICKET + 1),
+				context.temp_allocator,
+			)
+			for &b in ticket {b = u8(base.rng_u32(rng))}
+			if len(ticket) > 0 {h.steam_id, h.ticket = base.rng_u64(rng) | 1, ticket}
+		}
+		m = h
 	case 1:
 		m = Input {
 			sequence = edge_u32(rng),

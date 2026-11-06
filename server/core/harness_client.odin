@@ -534,5 +534,5 @@ test_key :: proc(name: string) -> (k: game.Account_Key) {
 
 test_hello :: proc(name: string) -> game.Hello {
 	schema := game.game_schema(context.temp_allocator)
-	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.hash}
+	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.hash, 0, nil}
 }
