@@ -1,20 +1,13 @@
 package audio
 
 import "common:base"
+import _ "common:platform" // (macOS: links CoreAudio for miniaudio)
 import "core:log"
 import "core:strings"
 import "core:sync"
 import "core:thread"
 import "core:time"
 import ma "vendor:miniaudio"
-
-// macOS: miniaudio's CoreAudio backend needs these linked (@(require) keeps
-// them though nothing here names a symbol of theirs).
-when ODIN_OS == .Darwin {
-	@(require) foreign import _coreaudio "system:CoreAudio.framework"
-	@(require) foreign import _audiotoolbox "system:AudioToolbox.framework"
-	@(require) foreign import _corefoundation "system:CoreFoundation.framework"
-}
 
 // The sound card, through miniaudio (only its device layer: it opens the
 // default output and calls us for samples; mixing is ours). No device (a
