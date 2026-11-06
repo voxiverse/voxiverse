@@ -38,7 +38,8 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
-	column := ui.rect_center(ctx.screen, 400, 4 * t.row_height + 3 * t.spacing + 120)
+	rows: f32 = 5 if app.devchat.running else 4
+	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 120)
 	logo := ui.cut_top(&column, 80)
 	ui.title(ctx, engine.tr(.Title_Voxiverse), logo)
 	if app.splash == "" {
@@ -75,6 +76,8 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		app.options.tab = .Video
 		app.screen = .Options
 	}
+	if app.devchat.running &&
+	   ui.button(ctx, engine.tr(.Devchat_Title), ui.next(ctx)) {engine.devchat_open(app)}
 	if ui.button(
 		ctx,
 		engine.tr(.Title_Quit_Game),
