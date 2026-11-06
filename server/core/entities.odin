@@ -423,6 +423,10 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	}
 }
 
+// ROCKET_REACH: how far past a rocket's step a box can be and still be
+// tested: a tall box's height, and a tick of its owner's or a target's running.
+ROCKET_REACH :: 4
+
 // rocket_step flies a rocket one tick; where it hit, if it did.
 @(private = "file")
 rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
@@ -443,13 +447,46 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	} else if !chunk_ready(w, from) {
 		return from, true // flew out of the loaded world
 	}
-	for &other in w.entities.list {
-		if other.id == ent.id || !game.ENTITY_INFO[other.kind].hittable {continue}
+	// Who the step can reach comes from the spatial service: the boxes it
+	// holds are where things stood at the end of the last tick, so it asks
+	// around the step's middle, wide enough for a tall box (its entry is the
+	// bottom centre) and for a tick of movement. The list and the clients say
+	// where each is now; both are walked in their order, as the full loops were.
+	ew := w.entity_world
+	mid := from + dir * (step / 2)
+	reach := step / 2 + ROCKET_REACH
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&ew.spatial,
+		mid,
+		reach,
+		{all = {.Hittable}, exclude = game.Entity_Id(ent.id)},
+		&near,
+	)
+	order := make([dynamic]int, context.temp_allocator)
+	for id in near {
+		if _, j := entity_find(w, u32(id)); j >= 0 {append(&order, j)}
+	}
+	slice.sort(order[:])
+	for j in order {
+		other := &w.entities.list[j]
+		if !game.ENTITY_INFO[other.kind].hittable {continue}
 		lo, hi := game.entity_box(other.kind, other.body.position)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
 	}
-	for &c, i in s.clients {
+	clear(&near)
+	game.spatial_sphere(&ew.spatial, mid, reach, {all = {.Player}}, &near)
+	who := make([dynamic]int, context.temp_allocator)
+	for id in near {
+		h, live := game.store_find(&ew.store, id)
+		if !live {continue}
+		link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link)
+		if link != nil && int(link.client) < len(s.clients) {append(&who, int(link.client))}
+	}
+	slice.sort(who[:])
+	for i in who {
+		c := &s.clients[i]
 		if c.state != .Playing ||
 		   c.world != w ||
 		   (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
