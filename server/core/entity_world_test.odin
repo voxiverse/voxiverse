@@ -128,3 +128,17 @@ test_spawn_full :: proc(t: ^testing.T) {
 	testing.expect_value(t, game.store_count(&ew.store), 4)
 	testing.expect_value(t, game.spatial_count_entries(&ew.spatial), 4)
 }
+
+@(test)
+test_world_holds_entity_world :: proc(t: ^testing.T) {
+	// the world's entity world is live and counts ticks beside the fixed list
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	before := w.entity_world.tick
+	entities_tick(w)
+	testing.expect_value(t, w.entity_world.tick, before + 1)
+	testing.expect_value(t, game.store_count(&w.entity_world.store), 0)
+}

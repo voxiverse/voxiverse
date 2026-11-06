@@ -1,5 +1,6 @@
 package core
 
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:mem/virtual"
@@ -31,6 +32,7 @@ World :: struct {
 	tops:              map[[2]i32]i32, // edited column tops (columns.odin)
 	natural:           []Natural_Slot, // natural column tops (columns.odin)
 	entities:          Entities, // (entities.odin)
+	entity_world:      ^Entity_World, // the entity store and spatial service (entities.odin; heap: its tables are large; runs beside `entities` until the systems move)
 	rewind:            Rewind, // where bodies stood lately (rewind.odin; heap)
 	changes:           Changes, // blocks changed this tick (changes.odin)
 	stats:             Counters, // the world's totals (stats.odin; <world>/stats.json)
@@ -98,6 +100,8 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	entities_init(&w.entities, w.seed)
+	w.entity_world = new(Entity_World, runtime.heap_allocator())
+	entity_world_init(w.entity_world, u64(w.seed) ~ 0xe7_0001)
 	w.tick_rng = base.rng_make(u64(w.seed) ~ 0x71c4_0001)
 	w.command_rng = base.rng_make(u64(w.seed) ~ 0xc0de_0001)
 	journal_init(w, arena)
@@ -121,6 +125,9 @@ world_close :: proc(w: ^World) {
 		ledger_world_scope(w, .Scope_Out)
 		chunks_destroy(&w.chunks)
 		entities_destroy(&w.entities)
+		entity_world_destroy(w.entity_world)
+		free(w.entity_world, runtime.heap_allocator())
+		w.entity_world = nil
 		virtual.arena_destroy(&w.arena)
 	}
 	delete(w.tops)

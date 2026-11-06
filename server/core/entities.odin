@@ -120,6 +120,8 @@ entities_tick :: proc(w: ^World) {
 	s := w.server
 	e := &w.entities
 	e.budget = PATH_BUDGET_PER_TICK
+	entity_world_begin_tick(w.entity_world)
+	defer game.store_apply(&w.entity_world.store)
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	Blast :: struct {
@@ -795,7 +797,8 @@ turn_towards :: proc(from, to: f32, rate: f32) -> f32 {
 // The entity world of entities v2: the archetype store, the spatial service
 // and what hangs off them (tag names, this tick's deaths, the world's rng).
 // entity_world_spawn is the one way an entity comes to be; entity_kill the one way
-// it dies. Nothing in the game uses an Entity_World yet: the fixed Entity
+// it dies. The world holds one (World.entity_world), ticked and applied by
+// entities_tick, but nothing spawns into it yet: the fixed Entity
 // list (entities.odin) still runs the world until the systems move onto it.
 
 MAX_ENTITY_WORLD :: 4096 // entities a world holds
