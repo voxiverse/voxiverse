@@ -203,3 +203,49 @@ test_still_sheep_stays_visible :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+@(test)
+test_dropped_stack_stays_visible :: proc(t: ^testing.T) {
+	p: Pair
+	defer pair_stop(&p)
+	if !pair_start(t, &p) {return}
+	send_message(p.mover, game.Command{"give mover stone 5"})
+	for _ in 0 ..< 100 {tick_all(&p)}
+	if !testing.expect(t, session_inventory_do(p.mover, {.Drop, p.mover.inventory.selected, 1})) {
+		return
+	}
+	// Both step away, so that nobody picks the stack up again; it lands, and
+	// then nothing more is sent about it.
+	for s in ([2]^Session{p.mover, p.watch}) {
+		session_teleport(s, {s.prediction.state.position + {0, 0, 12}, 0, 0})
+	}
+	for _ in 0 ..< 150 {
+		tick_all(&p)
+		if len(p.watch.entities) == 1 {break}
+	}
+	if !testing.expect_value(t, len(p.watch.entities), 1) {return}
+	for _ in 0 ..< 90 {tick_all(&p)} 	// it has settled
+	rest: [3]f64
+	for _, &e in p.watch.entities {
+		v, ok := seen(p.watch, &e.track)
+		if !testing.expect(t, ok) {return}
+		rest = v.position
+	}
+	// 5 s later, with no snapshot for it since it settled, it is still drawn there.
+	for tick in 0 ..< 150 {
+		tick_all(&p)
+		for _, &e in p.watch.entities {
+			v, ok := seen(p.watch, &e.track)
+			if !testing.expectf(t, ok, "the stack vanished at tick %d", tick) {return}
+			d := v.position - rest
+			testing.expectf(
+				t,
+				math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z) <= 1.0 / 64,
+				"moved to %v from %v",
+				v.position,
+				rest,
+			)
+		}
+	}
+	testing.expect_value(t, len(p.watch.entities), 1)
+}
