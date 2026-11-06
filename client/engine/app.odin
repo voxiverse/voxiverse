@@ -83,6 +83,7 @@ App :: struct {
 	cues:             [dynamic]string, // UI sound events fired (ui_cue)
 	multiplayer:      Multiplayer_Screen,
 	session:          ^Session, // nil outside a world
+	devchat:          Devchat, // developer chat (devchat.odin): runs while the setting names a collector
 	debug:            Debug_Switches,
 	telemetry:        Telemetry_Switches,
 	settings_dirty:   bool, // changed since loaded or saved

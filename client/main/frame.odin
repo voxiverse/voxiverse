@@ -131,6 +131,7 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	engine.sounds_destroy(&app.sounds)
 	engine.music_destroy(app)
 	free(app.mixer)
+	engine.devchat_stop(app)
 	if app.settings_dirty {engine.settings_save(app)}
 	console.console_history_save(&app.console)
 	delete(app.item_icons)
@@ -205,6 +206,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 	if app.settings.fullscreen !=
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
 	engine.keep_awake_update(app)
+	engine.devchat_sync(app)
 	gpu.set_vsync(&app.g, app.settings.vsync)
 	{
 		base.profile_scope("audio and music")
