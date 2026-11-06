@@ -8,12 +8,12 @@ import "core:math"
 // cell by cell, and land cells rain a fraction of what the air carries.
 
 SWEEPS :: 50 // semi-Lagrangian sweeps of the moisture field
-SWEEP_CELLS :: 2.0 // cells the air moves in one sweep
-RAIN_BASE :: 0.02 // the share of the air's vapour that rains per cell, before the belts
-FRONT_GAIN :: 4.0 // frontal lifting along the polar front, relative to plain flow
-OROGRAPHIC :: 0.3 // extra rain share per km of ground rising along the wind
-COLD_DRY :: 0.3 // rain over a cold current's coast is this share
-MM_PER_VAPOUR :: 70.0 // millimetres a month for one hPa of vapour rained out per sweep
+SWEEP_CELLS :: 2.153 // cells the air moves in one sweep
+RAIN_BASE :: 0.0416 // the share of the air's vapour that rains per cell, before the belts
+FRONT_GAIN :: 6.19 // frontal lifting along the polar front, relative to plain flow
+OROGRAPHIC :: 0.174 // extra rain share per km of ground rising along the wind
+COLD_DRY :: 0.302 // rain over a cold current's coast is this share
+MM_PER_VAPOUR :: 77.0 // millimetres a month for one hPa of vapour rained out per sweep
 
 // vapour_pressure is the saturation vapour pressure in hPa: 6.1 at 0 °C, 42.4 at 30 °C.
 vapour_pressure :: proc(celsius: f64) -> f64 {
