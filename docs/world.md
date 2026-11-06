@@ -161,3 +161,27 @@ Biome borders blend. Each column samples the climate up to `worldgen.biome_blend
 and trees mix over a band twice that wide instead of meeting at a line. Tree density follows
 each tree's own position, not its chunk's. A world whose `world.cfg` has no
 `worldgen.biome_blend` loads with 0, hard edges, so new chunks meet its saved ones.
+
+### Peoples' history
+
+`planet.history(planet, address, seed, day, interventions)` (`common/planet/history.odin`) is the
+peoples of a planet from their beginning to `day` (365 days a year), in steps of 10 years: a
+pure function, so the history at any day is computed, never a running state; the same inputs give
+the same history on every OS. Interventions are accepted and not applied yet.
+
+- **Where farming begins:** each land cell has a *suitability* from its climate: the cool-season
+  annuals' Mediterranean and steppe climates (a long, harsh dry season kills perennials; a
+  winter, not a tropical year that only looks dry), the dry edge of the savanna, and hot
+  desert along a big river (flow accumulated downhill over the cells' rain). Never rainforest
+  or cold. It is multiplied by **biogeography**, which domesticable species the region had: a
+  seeded field per world (`farming_suitability`; on Earth the real species would be given), which
+  is why a good region may never farm. Each cell's start decade is a hash of (address, seed,
+  cell) over its rate; a people arises there unless one began within 1 200 km.
+- **Peoples** grow logistically to the land's capacity (rain and warmth, more along rivers) times
+  what they know; knowledge grows with their numbers; a crowded cell settles the best free
+  neighbouring cell. 6 000 years take about 20 ms optimized (`build bench budgets`, `planet_history`).
+- Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
+  biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of
+  real early farming (Fertile Crescent, Anatolia, Nile, Indus, Yellow River, Mesoamerica, Andes,
+  Sahel, New Guinea). The model's Köppen errors in Africa (central-African savanna as Csb) are why
+  the bar is not higher.

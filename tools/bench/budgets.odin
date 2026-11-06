@@ -22,7 +22,7 @@ import "server:core"
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 5
+BUDGETS_VERSION :: 6
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
@@ -52,6 +52,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Spatial_Sphere, 3000},
 	{.Collide_Move, 2000},
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
+	{.Planet_History, 200}, // the issue's 200 ms for 6 000 years; measured at about 20 ms
 }
 
 budgets_main :: proc(args: []string) {
@@ -172,26 +173,35 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 	base.metric_add(.Random_Rule_Run, f32(random.run_ns))
 
 	fmt.printfln("scene: %s", "the planet")
-	base.metric_add(.Planet_Build, f32(budget_planet(broken)))
+	build_ms, history_ms := budget_planet(broken)
+	base.metric_add(.Planet_Build, f32(build_ms))
+	base.metric_add(.Planet_History, f32(history_ms))
 
 	budget_entities(reg, broken)
 }
 
-// budget_planet builds the planet from the committed relief and says how many ms it took.
+// budget_planet builds the planet from the committed relief, then its peoples' 6 000
+// years, and says how many ms each took.
 @(private = "file")
-budget_planet :: proc(broken: ^[dynamic]string) -> f64 {
+budget_planet :: proc(broken: ^[dynamic]string) -> (build_ms, history_ms: f64) {
 	relief, ok := planet.relief_decode(#load("../../assets/planet/earth_relief.bin"))
 	if !ok {
 		append(broken, "the relief file does not load")
-		return 0
+		return 0, 0
 	}
 	defer planet.relief_destroy(&relief)
 	start := time.tick_now()
 	p := planet.planet_build(relief)
-	ms := time.duration_milliseconds(time.tick_since(start))
+	build_ms = time.duration_milliseconds(time.tick_since(start))
 	defer planet.planet_destroy(&p)
 	free_all(context.temp_allocator)
-	return ms
+	start = time.tick_now()
+	h := planet.history(p, 7, 3, 6000 * planet.DAYS_PER_YEAR, nil)
+	history_ms = time.duration_milliseconds(time.tick_since(start))
+	if len(h.peoples) == 0 {append(broken, "the planet's history has no peoples")}
+	planet.history_destroy(&h)
+	free_all(context.temp_allocator)
+	return
 }
 
 @(private = "file")
