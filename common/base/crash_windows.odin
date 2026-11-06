@@ -11,6 +11,7 @@ import win "core:sys/windows"
 @(private)
 crash_handler_install :: proc() {
 	win.SetUnhandledExceptionFilter(crash_filter)
+	stack_guarantee() // the main thread (the others when they register)
 }
 
 @(private = "file")

@@ -67,7 +67,20 @@ bundle_platform_destroy :: proc() {}
 @(private)
 thread_platform_register :: proc(s: ^Thread_Slot) {
 	s.handle = win.GetCurrentThreadId()
+	stack_guarantee()
 }
+
+// stack_guarantee keeps stack for the crash filter on the calling thread: after a stack overflow
+// Windows runs the filter on what is left of the overflowed stack (a guard page), too little to
+// write a bundle, so the filter faulted again and the process died without one.
+@(private)
+stack_guarantee :: proc() {
+	size: win.ULONG = CRASH_STACK
+	SetThreadStackGuarantee(&size)
+}
+
+@(private = "file")
+CRASH_STACK :: 128 * 1024
 
 @(private)
 thread_platform_unregister :: proc(s: ^Thread_Slot) {}
@@ -94,6 +107,7 @@ CONTEXT_FULL :: 0x10000B // CONTEXT_AMD64 | CONTEXT_CONTROL | CONTEXT_INTEGER
 
 @(default_calling_convention = "system")
 foreign kernel32 {
+	SetThreadStackGuarantee :: proc(StackSizeInBytes: ^win.ULONG) -> win.BOOL ---
 	RtlLookupFunctionEntry :: proc(ControlPc: u64, ImageBase: ^u64, History: rawptr) -> rawptr ---
 	RtlVirtualUnwind :: proc(HandlerType: win.DWORD, ImageBase: u64, ControlPc: u64, FunctionEntry: rawptr, Context: ^win.CONTEXT, HandlerData: ^rawptr, EstablisherFrame: ^u64, ContextPointers: rawptr) -> rawptr ---
 }
