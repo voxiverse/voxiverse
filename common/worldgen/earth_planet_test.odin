@@ -54,3 +54,25 @@ test_planet_off_is_the_noise_world :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, game.WORLD_MAX_Y > 221)
 }
+
+@(test)
+test_planet_block_of_inverts_lat_lon :: proc(t: ^testing.T) {
+	for lat in ([]f64{-60, 0, 43.3, 80}) {
+		for lon in ([]f64{-120, 0, 5.4, 150}) {
+			x, z := planet_block_of(lat, lon)
+			la, lo := planet_lat_lon(x, z)
+			testing.expectf(t, abs(la - lat) < 0.01 && abs(lo - lon) < 0.01, "%v %v", la, lo)
+		}
+	}
+}
+
+@(test)
+test_planet_places_are_on_the_map :: proc(t: ^testing.T) {
+	for p in PLANET_PLACES {
+		testing.expectf(t, abs(p.lat) < 90 && abs(p.lon) < 180, "%s is off the map", p.name)
+		_, ok := planet_place(p.name)
+		testing.expectf(t, ok, "%s not found", p.name)
+	}
+	e, _ := planet_place("everest")
+	testing.expect(t, planet_elevation(planet_block_of(e.lat, e.lon)) > 4000)
+}
