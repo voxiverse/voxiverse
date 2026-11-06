@@ -28,6 +28,15 @@ packs_parse :: proc(value: string, allocator := context.allocator) -> []string {
 	return out[:]
 }
 
+// Pack_Candidate: a pack the client found outside the universe (its local packs folder,
+// the Workshop), read but not yet checked. problems are what reading it found; a universe
+// that lists the pack does not open on them.
+Pack_Candidate :: struct {
+	source:   game.Pack_Source,
+	origin:   string, // where it came from, for the message ("Workshop item 123")
+	problems: []string,
+}
+
 // universe_registry builds s.registry: the base pack, the universe's listed
 // packs, then config.extra_packs. Every problem is logged (and s.refusal says
 // the first), and false means the universe does not start.
@@ -40,6 +49,7 @@ universe_registry :: proc(s: ^Server) -> bool {
 		s.store.packs,
 		s.config.extra_packs,
 		base_dir,
+		s.config.available_packs,
 	)
 	for p in problems {
 		log.errorf("server packs %s", p)
@@ -61,6 +71,7 @@ packs_registry :: proc(
 	listed: []string,
 	extra: []game.Pack_Source = nil,
 	base_dir := "", // development: the base pack's files here, not the compiled-in ones
+	available: []Pack_Candidate = nil, // where a listed pack not in the universe is looked for, in order
 ) -> (
 	reg: ^game.Registry,
 	sources: []game.Pack_Source,
@@ -89,10 +100,20 @@ packs_registry :: proc(
 	for name in listed {
 		path := fmt.tprintf("%s/%s/%s", dir, PACKS_DIR, name)
 		if dir == "" || !os.is_directory(path) {
-			append(
-				&list,
-				fmt.tprintf("pack %s is listed in universe.cfg but %s is missing", name, path),
-			)
+			found := false
+			for c in available {
+				if c.source.namespace != name {continue}
+				found = true
+				for p in c.problems {append(&list, fmt.tprintf("%s (%s): %s", name, c.origin, p))}
+				append(&all, c.source)
+				break
+			}
+			if !found {
+				append(
+					&list,
+					fmt.tprintf("pack %s is listed in universe.cfg but %s is missing", name, path),
+				)
+			}
 			continue
 		}
 		src, errs := packs.pack_read_dir(path, context.temp_allocator)
@@ -205,6 +226,7 @@ registry_for_dir :: proc(
 	dir: string,
 	allocator := context.allocator,
 	base_dir := "",
+	available: []Pack_Candidate = nil,
 ) -> ^game.Registry {
 	text := ""
 	if dir != "" {
@@ -215,6 +237,12 @@ registry_for_dir :: proc(
 		if err == nil {text = string(data)}
 	}
 	value, _ := text_value(text, "packs")
-	reg, _, _ := packs_registry(dir, packs_parse(value, context.temp_allocator), nil, base_dir)
+	reg, _, _ := packs_registry(
+		dir,
+		packs_parse(value, context.temp_allocator),
+		nil,
+		base_dir,
+		available,
+	)
 	return reg
 }

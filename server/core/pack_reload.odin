@@ -128,6 +128,7 @@ reload_build :: proc(s: ^Server) {
 		s.store.packs,
 		s.config.extra_packs,
 		s.reload.base_dir,
+		s.config.available_packs,
 	)
 	if reg == nil {
 		reload_tell(s, problems)
