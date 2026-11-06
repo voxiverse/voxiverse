@@ -13,6 +13,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import "common:intervention"
 import "common:worldgen"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the home
@@ -290,6 +291,7 @@ world_stage :: proc(w: ^World) -> bool {
 	ok := write_world_file(w)
 	if w.protections_dirty && !protections_write(w) {ok = false}
 	journal_maintain(w)
+	if w.interventions_dirty && !interventions_write(w) {ok = false}
 	if !write_entities(w) {ok = false}
 	if !write_stats(w) {ok = false}
 	return ok
@@ -834,4 +836,86 @@ load_entities :: proc(w: ^World) {
 home_address :: proc(s: ^Server) -> game.Address {
 	if s.config.earth {return game.earth_address()}
 	return game.address_derive(u64(s.config.seed))
+}
+
+// interventions.vxi: the world's interventions log (common/intervention), in the save
+// transaction beside entities.cfg.
+INTERVENTIONS_FILE :: "interventions.vxi"
+
+interventions_write :: proc(w: ^World) -> bool {
+	if w.dir == "" {return true}
+	data := intervention.encode(&w.interventions, context.temp_allocator)
+	path :=
+		filepath.join(
+			{w.dir, INTERVENTIONS_FILE},
+			context.temp_allocator,
+		) or_else INTERVENTIONS_FILE
+	ok := store_write(w.server, path, data)
+	w.interventions_dirty = !ok
+	return ok
+}
+
+// interventions_record adds an intervention to the world's log, to be saved with it.
+interventions_record :: proc(w: ^World, iv: intervention.Intervention) -> bool {
+	if !intervention.record(&w.interventions, iv) {return false}
+	w.interventions_dirty = true
+	return true
+}
+
+// interventions_load reads the log of a world's directory. A damaged file is moved aside
+// (like a damaged region) and the world starts with an empty log; the file is never
+// half-read.
+interventions_load :: proc(w: ^World) {
+	if w.dir == "" {return}
+	path :=
+		filepath.join(
+			{w.dir, INTERVENTIONS_FILE},
+			context.temp_allocator,
+		) or_else INTERVENTIONS_FILE
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return} 	// none saved (a new world)
+	l, ok := intervention.decode(data)
+	if !ok {
+		aside := fmt.tprintf("%s.bad", path)
+		log.errorf("server interventions file is damaged, moved aside path=%s", path)
+		os.rename(path, aside)
+		return
+	}
+	w.interventions = l
+	if len(l.list) > 0 {log.infof("server loaded interventions count=%d", len(l.list))}
+}
+
+// admin_interventions: /interventions [radius]: the world's interventions, newest last
+// (no radius: the last 20; a radius in blocks: those within it of the player, the last 20).
+@(private)
+admin_interventions :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	l := &c.world.interventions
+	found := l.list[:]
+	if len(args) == 1 {
+		radius, ok := strconv.parse_int(args[0])
+		if !ok || radius < 0 || radius > 2 * game.WORLD_LIMIT {return false}
+		p := c.player.position
+		place := [3]i32{i32(math.floor(p.x)), i32(math.floor(p.y)), i32(math.floor(p.z))}
+		found = intervention.interventions_near(l, place, i32(radius), 0, context.temp_allocator)
+	}
+	if len(found) == 0 {
+		notice(s, c, "No interventions")
+		return true
+	}
+	for iv in found[max(0, len(found) - 20):] {
+		notice(
+			s,
+			c,
+			fmt.tprintf(
+				"day %.2f %v at %d %d %d by %s",
+				iv.day,
+				iv.kind,
+				iv.place.x,
+				iv.place.y,
+				iv.place.z,
+				iv.actor if iv.actor != "" else "(none)",
+			),
+		)
+	}
+	return true
 }

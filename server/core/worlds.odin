@@ -10,6 +10,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:intervention"
 import "common:worldgen"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
@@ -18,41 +19,43 @@ import "common:worldgen"
 // when it unloads.
 
 World :: struct {
-	server:            ^Server,
-	address:           game.Address,
-	arena:             virtual.Arena,
-	dir:               string, // its save directory ("": not saved)
-	generator:         worldgen.Kind,
-	seed:              i64,
-	params:            worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
-	rules:             game.Rules,
-	clock:             f64, // world time (common/game/time.odin)
-	spawn:             World_Spawn, // where arrivals land (spawn.odin)
-	chunks:            Chunk_Store,
-	tops:              map[[2]i32]i32, // edited column tops (columns.odin)
-	natural:           []Natural_Slot, // natural column tops (columns.odin)
-	entities:          Entities, // (entities.odin)
-	entity_world:      ^Entity_World, // the entity store and spatial service (entities.odin; heap: its tables are large; runs beside `entities` until the systems move)
-	rewind:            Rewind, // where bodies stood lately (rewind.odin; heap)
-	changes:           Changes, // blocks changed this tick (changes.odin)
-	stats:             Counters, // the world's totals (stats.odin; <world>/stats.json)
-	tick_rng:          base.Rng, // which blocks get random ticks (random_ticks.odin)
-	random_runs:       int, // random rules run (a count for the budget; random_ticks.odin)
-	command_rng:       base.Rng, // @r (commands_world.odin)
-	updates:           Updates, // scheduled block updates: flowing water (liquids.odin)
-	saved:             map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
-	regions:           map[game.Region_Pos]bool, // read from disk; true = changed since written
-	started:           bool, // world_start ran (its chunks and the rest exist)
-	idle_since:        u64, // the last tick someone was in it
-	touched:           [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
-	gates:             [dynamic]Gate, // active: dialing or open (gates.odin)
-	tops_pending:      map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
-	journal:           Journal, // who changed which block (journal.odin)
-	journal_resume:    Journal_Resume, // where its world.cfg says the journal ends
-	rollback:          ^Rollback_Job, // the running rollback (rollback.odin; heap)
-	protections:       [dynamic]Protection, // regions only members edit (protect.odin; heap)
-	protections_dirty: bool, // protections.cfg could not be written
-	revisit:           map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
+	server:              ^Server,
+	address:             game.Address,
+	arena:               virtual.Arena,
+	dir:                 string, // its save directory ("": not saved)
+	generator:           worldgen.Kind,
+	seed:                i64,
+	params:              worldgen.Params, // the Earth generator's (worldgen.*; chunks.gen has a copy)
+	rules:               game.Rules,
+	clock:               f64, // world time (common/game/time.odin)
+	spawn:               World_Spawn, // where arrivals land (spawn.odin)
+	chunks:              Chunk_Store,
+	tops:                map[[2]i32]i32, // edited column tops (columns.odin)
+	natural:             []Natural_Slot, // natural column tops (columns.odin)
+	entities:            Entities, // (entities.odin)
+	entity_world:        ^Entity_World, // the entity store and spatial service (entities.odin; heap: its tables are large; runs beside `entities` until the systems move)
+	rewind:              Rewind, // where bodies stood lately (rewind.odin; heap)
+	changes:             Changes, // blocks changed this tick (changes.odin)
+	stats:               Counters, // the world's totals (stats.odin; <world>/stats.json)
+	tick_rng:            base.Rng, // which blocks get random ticks (random_ticks.odin)
+	random_runs:         int, // random rules run (a count for the budget; random_ticks.odin)
+	command_rng:         base.Rng, // @r (commands_world.odin)
+	updates:             Updates, // scheduled block updates: flowing water (liquids.odin)
+	saved:               map[game.Chunk_Pos][]u8, // edited chunks not loaded: encoded blocks (save.odin)
+	regions:             map[game.Region_Pos]bool, // read from disk; true = changed since written
+	started:             bool, // world_start ran (its chunks and the rest exist)
+	idle_since:          u64, // the last tick someone was in it
+	touched:             [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
+	gates:               [dynamic]Gate, // active: dialing or open (gates.odin)
+	tops_pending:        map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
+	journal:             Journal, // who changed which block (journal.odin)
+	journal_resume:      Journal_Resume, // where its world.cfg says the journal ends
+	rollback:            ^Rollback_Job, // the running rollback (rollback.odin; heap)
+	protections:         [dynamic]Protection, // regions only members edit (protect.odin; heap)
+	protections_dirty:   bool, // protections.cfg could not be written
+	interventions:       intervention.Log, // what players did that the world's history carries forward (heap)
+	interventions_dirty: bool, // interventions changed since interventions.vxi was staged
+	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
 }
 
 // world_make: a world of the server's with its defaults, not yet started
@@ -114,6 +117,7 @@ world_start :: proc(w: ^World) -> bool {
 	w.command_rng = base.rng_make(u64(w.seed) ~ 0xc0de_0001)
 	journal_init(w, arena)
 	protections_load(w)
+	interventions_load(w)
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
@@ -128,6 +132,7 @@ world_close :: proc(w: ^World) {
 	rollback_free(w)
 	journal_close(w)
 	protections_free(w)
+	intervention.log_destroy(&w.interventions)
 	rewind_destroy(&w.rewind)
 	if w.started {
 		ledger_world_scope(w, .Scope_Out)
