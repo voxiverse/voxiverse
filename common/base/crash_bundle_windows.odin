@@ -8,7 +8,7 @@ foreign import kernel32 "system:Kernel32.lib"
 
 // The Windows half of crash bundles: files by CreateFileW/WriteFile, and every thread's stack:
 // the crashing thread suspends each registered thread, reads its context and walks its stack
-// with RtlLookupFunctionEntry and RtlVirtualUnwind (x64). Nothing is resumed: the process ends.
+// with RtlLookupFunctionEntry and RtlVirtualUnwind (x64), then resumes it.
 
 Thread_Handle :: win.DWORD
 Bundle_File :: win.HANDLE
@@ -93,7 +93,11 @@ threads_capture_others :: proc() {
 		sync.atomic_store(&s.done, 0)
 		h := win.OpenThread(win.THREAD_SUSPEND_RESUME | win.THREAD_GET_CONTEXT, false, s.handle)
 		if h == nil {continue}
+		defer win.CloseHandle(h)
 		if win.SuspendThread(h) == max(win.DWORD) {continue}
+		// resumed once its stack is read: a bundle written without a crash (a test, a hang
+		// report) leaves the process running, and a thread left suspended hangs whoever joins it
+		defer win.ResumeThread(h)
 		ctx: win.CONTEXT
 		ctx.ContextFlags = CONTEXT_FULL
 		if !win.GetThreadContext(h, &ctx) {continue}
