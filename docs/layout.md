@@ -70,6 +70,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse` | The base pack's manifest | `*.json` |
 | `assets/packs/voxiverse/assets/sounds` | The base pack's sound table | `*.json` |
 | `assets/packs/voxiverse/assets/textures` | The base pack's texture table | `*.json` |
+| `assets/sounds` | Sound recipes and the targets of their classes | `*.recipe`, `targets.txt` |
 | `assets/packs/voxiverse/data/block_tags` | Block tags | `*.json` |
 | `assets/packs/voxiverse/data/blocks` | Blocks | `*.json` |
 | `assets/packs/voxiverse/data/game_modes` | Game modes | `*.json` |
@@ -154,6 +155,6 @@ package** is enforced by the `layout` lint (see above).
 | `tools/packcheck` | The pack checker | `*.odin` |
 | `tools/replay` | The replay tool | `*.odin` |
 | `tools/schema` | The schema tool | `*.odin` |
-| `tools/sfx` | The sound-effect tool | `*.odin` |
+| `tools/sfx` | The sound-effect tool (`build sfx`: recipes to WAVs and a targets report) | `*.odin` |
 | `tools/wireshark` | The Wireshark dissector | `*.lua` |
 | `tools/worldmap` | The world map tool | `*.odin` |

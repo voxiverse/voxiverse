@@ -1,0 +1,90 @@
+# gravel: break, place and step.
+sound gravel.break
+  class block_break
+  length 0.6
+  gain -2 dB
+  layer transient
+    delay 0.0012
+    source click 0.5..0.7
+    envelope attack 0 hold 0 decay 0.01
+    filter highpass 800
+    level -18 dB
+  layer body
+    delay 0.0012
+    source modal gravel hardness 0.5..0.7 spread 0.94..1.06 length 0.0005 decay 3
+    envelope attack 0 hold 0 decay 0.075..0.1375 curve exp
+    pitch 0.8..1.2
+    filter highpass 450
+    level 10 dB
+  layer debris
+    delay 0.0012
+    source granular modal gravel count 12..20 size 0.004..0.012 pitch 0.8..1.6 gain -8..0 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.4
+    level 1 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.15..0.225
+    filter bandpass 1440..2160 q 0.8
+    level -6 dB
+end
+
+sound gravel.place
+  class block_place
+  length 0.35
+  gain -2 dB
+  layer transient
+    delay 0.0012
+    source click 0.45..0.63
+    envelope attack 0 hold 0 decay 0.006
+    filter highpass 800
+    level -18 dB
+  layer body
+    delay 0.0012
+    source modal gravel hardness 0.45..0.63 spread 0.94..1.06 length 0.0005 decay 2.4
+    envelope attack 0 hold 0 decay 0.042..0.077 curve exp
+    pitch 0.8..1.2
+    filter highpass 450
+    level 10 dB
+  layer debris
+    delay 0.0012
+    source granular modal gravel count 6..10 size 0.004..0.012 pitch 0.8..1.6 gain -8..0 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.15
+    level -4 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.084..0.126
+    filter bandpass 1440..2160 q 0.8
+    level -7 dB
+end
+
+sound gravel.step
+  class block_step
+  length 0.25
+  gain -7 dB
+  layer transient
+    delay 0.0012
+    source click 0.3..0.42
+    envelope attack 0 hold 0 decay 0.006
+    filter highpass 800
+    level -18 dB
+  layer body
+    delay 0.0012
+    source modal gravel hardness 0.3..0.42 spread 0.94..1.06 length 0.0005 decay 1.8
+    envelope attack 0 hold 0 decay 0.03..0.055 curve exp
+    pitch 0.8..1.2
+    filter highpass 450
+    level 10 dB
+  layer debris
+    delay 0.0012
+    source granular modal gravel count 4..8 size 0.004..0.012 pitch 0.8..1.6 gain -8..0 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.12
+    level -6 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.06..0.09
+    filter bandpass 1440..2160 q 0.8
+    level -8 dB
+end

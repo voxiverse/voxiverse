@@ -1,0 +1,34 @@
+# The sheep: a bleat through three formants.
+sound sheep.hurt
+  class creature_hurt
+  length 0.5
+  gain -5.5 dB
+  layer voice
+    delay 0.0012
+    source formant pitch 600..680 to 420..480 vowel bleat to a vibrato 7 40 jitter 0.6 shimmer 0.5 breath 0.08
+    envelope attack 0.02 hold 0.15 decay 0.25
+    level 0 dB
+  layer breath
+    delay 0.0012
+    source noise pink
+    envelope attack 0.02 hold 0.05 decay 0.15
+    filter bandpass 1500 q 1
+    level -22 dB
+end
+
+sound sheep.die
+  class creature_die
+  length 1.1
+  gain -5.5 dB
+  layer voice
+    delay 0.0012
+    source formant pitch 560..620 to 220..260 vowel bleat to o vibrato 6 50 jitter 0.7 shimmer 0.6 breath 0.1
+    envelope attack 0.03 hold 0.4 decay 0.6
+    level 0 dB
+  layer breath
+    delay 0.0012
+    source noise pink
+    envelope attack 0.05 hold 0.2 decay 0.4
+    filter bandpass 1200 q 1
+    level -22 dB
+end

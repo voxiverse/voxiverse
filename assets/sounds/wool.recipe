@@ -1,0 +1,90 @@
+# wool: break, place and step.
+sound wool.break
+  class block_break
+  length 0.6
+  gain -2 dB
+  layer transient
+    delay 0.0012
+    source click 0.5..0.7
+    envelope attack 0 hold 0 decay 0.01
+    filter highpass 150
+    level -20 dB
+  layer body
+    delay 0.0012
+    source modal wool hardness 0.1..0.2 spread 0.94..1.06 length 0.0015 decay 3
+    envelope attack 0 hold 0 decay 0.0625..0.125 curve exp
+    pitch 0.9..1.1
+    filter highpass 125
+    level 0 dB
+  layer debris
+    delay 0.0012
+    source granular noise count 12..20 size 0.006..0.02 pitch 0.8..1.6 gain -14..-4 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.4
+    level 11 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.16..0.24
+    filter bandpass 680..1020 q 0.6
+    level 5 dB
+end
+
+sound wool.place
+  class block_place
+  length 0.35
+  gain -2 dB
+  layer transient
+    delay 0.0012
+    source click 0.45..0.63
+    envelope attack 0 hold 0 decay 0.006
+    filter highpass 150
+    level -20 dB
+  layer body
+    delay 0.0012
+    source modal wool hardness 0.09..0.18 spread 0.94..1.06 length 0.0015 decay 2.4
+    envelope attack 0 hold 0 decay 0.035..0.07 curve exp
+    pitch 0.9..1.1
+    filter highpass 125
+    level 0 dB
+  layer debris
+    delay 0.0012
+    source granular noise count 6..10 size 0.006..0.02 pitch 0.8..1.6 gain -14..-4 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.15
+    level 6 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.0896..0.1344
+    filter bandpass 680..1020 q 0.6
+    level 4 dB
+end
+
+sound wool.step
+  class block_step
+  length 0.25
+  gain -7 dB
+  layer transient
+    delay 0.0012
+    source click 0.3..0.42
+    envelope attack 0 hold 0 decay 0.006
+    filter highpass 150
+    level -20 dB
+  layer body
+    delay 0.0012
+    source modal wool hardness 0.06..0.12 spread 0.94..1.06 length 0.0015 decay 1.8
+    envelope attack 0 hold 0 decay 0.025..0.05 curve exp
+    pitch 0.9..1.1
+    filter highpass 125
+    level 0 dB
+  layer debris
+    delay 0.0012
+    source granular noise count 4..8 size 0.006..0.02 pitch 0.8..1.6 gain -14..-4 dB spread 0.02..0.5 density front
+    envelope attack 0 hold 0.05 decay 0.12
+    level 4 dB
+  layer rustle
+    delay 0.0012
+    source noise pink
+    envelope attack 0.002 hold 0.02 decay 0.064..0.096
+    filter bandpass 680..1020 q 0.6
+    level 3 dB
+end

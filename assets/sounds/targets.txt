@@ -1,0 +1,77 @@
+# What each class of sound must measure (docs/audio.md). First estimates, to be
+# replaced by the reference analysis. peak dBFS, loud LUFS, length and decay s,
+# centroid Hz; low/mid/high are floors in dB re the total (below 250 Hz,
+# 250-2500, above 2500). The block classes take their centroid from the
+# `material` rows, by the word of the sound's name before its first dot.
+class block_break
+  peak -3..-1
+  loud -24..-14
+  length 0.15..0.6
+  decay 0.04..0.35
+  mid >= -8
+end
+class block_place
+  peak -4..-1
+  loud -26..-16
+  length 0.08..0.35
+  decay 0.03..0.2
+  mid >= -8
+end
+class block_step
+  peak -10..-4
+  loud -34..-22
+  length 0.05..0.25
+  decay 0.02..0.12
+end
+class land
+  peak -6..-2
+  loud -28..-18
+  length 0.1..0.4
+  decay 0.04..0.2
+  centroid 150..1200
+  low >= -10
+end
+class creature_hurt
+  peak -6..-2
+  loud -24..-14
+  length 0.2..0.7
+  decay 0.08..0.5
+  centroid 500..2500
+  mid >= -6
+end
+class creature_die
+  peak -6..-2
+  loud -22..-12
+  length 0.5..1.5
+  decay 0.2..1.0
+  centroid 400..2000
+  mid >= -6
+end
+class launch
+  peak -6..-2
+  loud -24..-14
+  length 0.3..1.2
+  decay 0.1..0.8
+  centroid 1500..6000
+  high >= -8
+end
+class boom
+  peak -1.5..-0.5
+  loud -14..-6
+  length 1.0..3.0
+  decay 0.3..1.5
+  centroid 80..600
+  low >= -4
+end
+
+material stone 1500..4000
+material wood 500..1800
+material dirt 200..900
+material grass 300..2500
+material gravel 800..3000
+material sand 1500..5000
+material glass 2500..7000
+material wool 300..1500
+material leaves 1500..6000
+material snow 400..1600
+material metal 600..3000
