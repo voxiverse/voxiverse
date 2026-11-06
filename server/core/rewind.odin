@@ -13,6 +13,7 @@ import "common:game"
 
 REWIND_MAX_TICKS :: 8 // about 250 ms at 30 Hz
 REWIND_RING :: REWIND_MAX_TICKS + 2
+REWIND_REACH :: 2.0 // blocks a creature can move in a tick, at most (60 b/s)
 
 // Rewind_Body: where one thing stood at the end of a tick.
 Rewind_Body :: struct {
