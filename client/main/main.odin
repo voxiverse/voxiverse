@@ -12,6 +12,7 @@ import "client:autopilot"
 import "client:console"
 import "client:engine"
 import "common:base"
+import platform "common:platform"
 
 // Entry point: debugging setup, then the App's lifetime and frame loop.
 // `--frames N` exits after N frames and fails the run on any validation
@@ -22,6 +23,8 @@ import "common:base"
 // `--check <name>` an exit check (exit_check.odin).
 
 main :: proc() {
+	host: base.Host
+	platform.boot(&host)
 	opts: engine.Options
 	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
 	if opts.version {
@@ -39,13 +42,13 @@ main :: proc() {
 			log.infof("profiling to %s (open with Spall: https://gravitymoth.com/spall/)", path)
 		}
 	}
-	ok := run(opts, &dbg.sink)
+	ok := run(&host, opts, &dbg.sink)
 	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
 }
 
-run :: proc(opts: engine.Options, sink: ^base.Log_Sink) -> bool {
+run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> bool {
 	app := new(engine.App)
 	defer free(app)
 	scenario: engine.Scenario
