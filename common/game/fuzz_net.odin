@@ -104,7 +104,7 @@ word :: proc(rng: ^base.Rng, max_len: int) -> string {
 }
 
 fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 25)
+	which := base.rng_int_max(rng, 27)
 	m: Client_Message
 	switch which {
 	case 0:
@@ -209,6 +209,20 @@ fuzz_net_generate_client :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 		m = Packs_Ready{base.rng_u64(rng)}
 	case 22:
 		m = Respawn{}
+	case 25:
+		m = Dev_Message {
+			id       = edge_u32(rng),
+			text     = word(rng, MAX_DEV_TEXT if base.rng_int_max(rng, 8) == 0 else 200),
+			version  = word(rng, 12),
+			universe = word(rng, MAX_DEV_FIELD),
+			world    = word(rng, MAX_DEV_FIELD),
+			has_pos  = base.rng_int_max(rng, 2) == 0,
+			pos      = {i32(edge_u32(rng)), 64, i32(edge_u32(rng))},
+			has_tick = base.rng_int_max(rng, 2) == 0,
+			tick     = base.rng_u64(rng),
+		}
+	case 26:
+		m = Dev_Fetch{word(rng, MAX_DEV_FIELD)}
 	case 23:
 		m = Shoot {
 			edge_u32(rng),
@@ -238,7 +252,7 @@ fuzz_net_server_decode :: proc(data: []u8, allocator: runtime.Allocator) -> u64 
 }
 
 fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
-	which := base.rng_int_max(rng, 18)
+	which := base.rng_int_max(rng, 20)
 	m: Server_Message
 	blocks: Chunk_Blocks
 	switch which {
@@ -333,6 +347,16 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			edge_u32(rng),
 			make([]u8, base.rng_int_max(rng, MAX_PACK_PART + 1), context.temp_allocator),
 		}
+	case 17:
+		m = Dev_Ack{edge_u32(rng), base.rng_int_max(rng, 2) == 0, word(rng, 60)}
+	case 18:
+		d := Dev_Replies {
+			count = base.rng_int_max(rng, MAX_DEV_REPLIES + 1),
+		}
+		for &e in d.entries {
+			e = {word(rng, 20), i64(base.rng_u32(rng)), word(rng, 300), word(rng, 40)}
+		}
+		m = d
 	case:
 		m = Packs_Changed{base.rng_u64(rng)}
 	}

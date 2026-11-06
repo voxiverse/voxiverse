@@ -164,6 +164,55 @@ Telemetry_Ack :: struct {
 	end: u64,
 }
 
+// Dev_Message: to a collector (collector/): a note from an admin account to the
+// developers (docs/telemetry.md, "Developer chat"). `id` is chosen by the client
+// and kept when it sends the message again, so a resend is stored once. The
+// context strings are "" when absent.
+Dev_Message :: struct {
+	id:       u32,
+	text:     string, // view into the message; at most MAX_DEV_TEXT bytes
+	version:  string, // the game's version
+	universe: string,
+	world:    string,
+	has_pos:  bool,
+	pos:      [3]i32,
+	has_tick: bool,
+	tick:     u64,
+}
+
+// Dev_Fetch asks for the replies after the one named `after_id` ("": all).
+Dev_Fetch :: struct {
+	after_id: string, // view into the message
+}
+
+// Dev_Ack answers a Dev_Message: taken (also when it was taken before), or
+// refused with a reason.
+Dev_Ack :: struct {
+	id:     u32,
+	ok:     bool,
+	reason: string,
+}
+
+// Dev_Reply: one reply of the developers.
+Dev_Reply :: struct {
+	id:   string,
+	time: i64, // unix ms
+	text: string,
+	link: string, // "": none
+}
+
+// Dev_Replies answers a Dev_Fetch: up to MAX_DEV_REPLIES replies in id order; fewer
+// than that means there are no more after them.
+Dev_Replies :: struct {
+	count:   int,
+	entries: [MAX_DEV_REPLIES]Dev_Reply,
+}
+
+MAX_DEV_TEXT :: 4000
+MAX_DEV_FIELD :: 64
+MAX_DEV_LINK :: 256
+MAX_DEV_REPLIES :: 8
+
 MAX_STATS_FILTER :: 32
 STATS_PAGE_LINES :: 120
 
@@ -281,6 +330,8 @@ Client_Message :: union {
 	Stats_Request,
 	Telemetry_Report,
 	Telemetry_Batch,
+	Dev_Message,
+	Dev_Fetch,
 	Use_Block,
 	Prediction_Check,
 	Pack_Want,
@@ -509,6 +560,8 @@ Server_Message :: union {
 	World_Changed,
 	Stats_Page,
 	Telemetry_Ack,
+	Dev_Ack,
+	Dev_Replies,
 	State_Message,
 	Snapshot_Message,
 	Packs,
@@ -549,6 +602,8 @@ Client_Kind :: enum u8 {
 	Respawn,
 	Shoot,
 	Reload,
+	Dev_Message,
+	Dev_Fetch,
 }
 
 @(private = "file")
@@ -579,6 +634,8 @@ Server_Kind :: enum u8 {
 	Packs         = 38,
 	Pack_Part     = 39,
 	Packs_Changed = 40,
+	Dev_Ack       = 41,
+	Dev_Replies   = 42,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -641,6 +698,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "telemetry"
 		case u8(Client_Kind.Telemetry_Batch):
 			return "telemetry_batch"
+		case u8(Client_Kind.Dev_Message):
+			return "dev_message"
+		case u8(Client_Kind.Dev_Fetch):
+			return "dev_fetch"
 		case u8(Client_Kind.Fire):
 			return "fire"
 		case u8(Client_Kind.Chat):
@@ -698,6 +759,10 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "stats_page"
 		case u8(Server_Kind.Telemetry_Ack):
 			return "telemetry_ack"
+		case u8(Server_Kind.Dev_Ack):
+			return "dev_ack"
+		case u8(Server_Kind.Dev_Replies):
+			return "dev_replies"
 		case u8(Server_Kind.State):
 			return "state"
 		case u8(Server_Kind.Snapshot):
@@ -705,6 +770,17 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 		}
 	}
 	return ""
+}
+
+@(private = "file")
+write_bool :: proc(w: ^Writer, b: bool) {write_u8(w, 1 if b else 0)}
+
+// read_bool: 0 or 1; anything else fails the reader.
+@(private = "file")
+read_bool :: proc(r: ^Reader) -> bool {
+	v := read_u8(r)
+	if v > 1 {reader_fail(r)}
+	return v == 1
 }
 
 // encode_client appends m to w.buf.
@@ -813,6 +889,20 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u32(w, u32(v.offset >> 32))
 		write_u32(w, u32(v.offset))
 		write_string(w, v.text)
+	case Dev_Message:
+		write_u8(w, u8(Client_Kind.Dev_Message))
+		write_u32(w, v.id)
+		write_string(w, v.text)
+		write_string(w, v.version)
+		write_string(w, v.universe)
+		write_string(w, v.world)
+		write_bool(w, v.has_pos)
+		for c in v.pos {write_i32(w, c)}
+		write_bool(w, v.has_tick)
+		write_fixed64(w, v.tick)
+	case Dev_Fetch:
+		write_u8(w, u8(Client_Kind.Dev_Fetch))
+		write_string(w, v.after_id)
 	case Telemetry_Report:
 		write_u8(w, u8(Client_Kind.Telemetry_Report))
 		write_u8(w, u8(v.count))
@@ -857,6 +947,21 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_string(w, v.day)
 		write_u32(w, u32(v.end >> 32))
 		write_u32(w, u32(v.end))
+	case Dev_Ack:
+		write_u8(w, u8(Server_Kind.Dev_Ack))
+		write_u32(w, v.id)
+		write_bool(w, v.ok)
+		write_string(w, v.reason)
+	case Dev_Replies:
+		write_u8(w, u8(Server_Kind.Dev_Replies))
+		write_u8(w, u8(v.count))
+		for i in 0 ..< min(v.count, MAX_DEV_REPLIES) {
+			e := v.entries[i]
+			write_string(w, e.id)
+			write_fixed64(w, u64(e.time))
+			write_string(w, e.text)
+			write_string(w, e.link)
+		}
 	case Stats_Page:
 		write_u8(w, u8(Server_Kind.Stats_Page))
 		write_u16(w, v.page)
@@ -1084,6 +1189,20 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		b.offset = u64(hi) << 32 | u64(lo)
 		b.text = read_string(&r, MAX_BATCH_TEXT)
 		m = b
+	case u8(Client_Kind.Dev_Message):
+		d: Dev_Message
+		d.id = read_u32(&r)
+		d.text = read_string(&r, MAX_DEV_TEXT)
+		d.version = read_string(&r, MAX_DEV_FIELD)
+		d.universe = read_string(&r, MAX_DEV_FIELD)
+		d.world = read_string(&r, MAX_DEV_FIELD)
+		d.has_pos = read_bool(&r)
+		for &c in d.pos {c = read_i32(&r)}
+		d.has_tick = read_bool(&r)
+		d.tick = read_fixed64(&r)
+		m = d
+	case u8(Client_Kind.Dev_Fetch):
+		m = Dev_Fetch{read_string(&r, MAX_DEV_FIELD)}
 	case u8(Client_Kind.Telemetry_Report):
 		rep: Telemetry_Report
 		rep.count = int(read_u8(&r))
@@ -1210,6 +1329,23 @@ decode_server :: proc(
 		hi, lo := read_u32(&r), read_u32(&r)
 		ack.end = u64(hi) << 32 | u64(lo)
 		m = ack
+	case u8(Server_Kind.Dev_Ack):
+		m = Dev_Ack {
+			id     = read_u32(&r),
+			ok     = read_bool(&r),
+			reason = read_string(&r, MAX_REASON_LENGTH),
+		}
+	case u8(Server_Kind.Dev_Replies):
+		rs: Dev_Replies
+		rs.count = int(read_u8(&r))
+		if rs.count > MAX_DEV_REPLIES {reader_fail(&r)}
+		for &e in rs.entries[:min(rs.count, MAX_DEV_REPLIES)] {
+			e.id = read_string(&r, MAX_DEV_FIELD)
+			e.time = i64(read_fixed64(&r))
+			e.text = read_string(&r, MAX_DEV_TEXT)
+			e.link = read_string(&r, MAX_DEV_LINK)
+		}
+		m = rs
 	case u8(Server_Kind.Stats_Page):
 		m = Stats_Page {
 			page  = read_u16(&r),

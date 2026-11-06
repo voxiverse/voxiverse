@@ -136,7 +136,12 @@ fake_receive :: proc(t: ^testing.T, c: ^Fake_Client) {
 			c.columns[v.pos] = v
 		case game.Bulk_Begin:
 			c.bulk_left = int(v.count)
-		case game.Pong, game.Stats_Page, game.Telemetry_Ack, game.World_Changed: // not checked here
+		case game.Pong,
+		     game.Stats_Page,
+		     game.Telemetry_Ack,
+		     game.World_Changed,
+		     game.Dev_Ack,
+		     game.Dev_Replies: // not checked here
 		case game.Unload_Chunk:
 			testing.expectf(t, v.pos in c.has, "unload of chunk %v the client lacks", v.pos)
 			delete_key(&c.has, v.pos)
