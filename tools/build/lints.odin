@@ -25,7 +25,11 @@ is_layer_file :: proc(path: string) -> bool {
 	folder, name := path[:slash], path[slash + 1:]
 	if strings.has_suffix(name, "_test.odin") {return false}
 	for layer in LAYER_FOLDERS {
-		if folder == layer {return true}
+		if folder == layer ||
+		   strings.has_suffix(
+			   folder,
+			   strings.concatenate({"/", layer}, context.temp_allocator),
+		   ) {return true}
 	}
 	return false
 }
@@ -43,8 +47,9 @@ lint_ui_literals :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// lint_colour_literals: no `ui.Color{` in a layer file: interface colours come from the
-// theme, artwork colours from data.
+// lint_colour_literals: no `ui.Color{` and no untyped colour literal (`{0, 0, 0, 255}`:
+// three integer literals and a fourth component) in a layer file: interface colours come from
+// the theme, artwork colours from data.
 lint_colour_literals :: proc(path, text: string) -> []string {
 	found := make([dynamic]string)
 	line_no := 0
@@ -52,7 +57,7 @@ lint_colour_literals :: proc(path, text: string) -> []string {
 	for line in strings.split_lines_iterator(&rest) {
 		line_no += 1
 		code, _, _ := strings.partition(line, "//")
-		if strings.contains(code, "ui.Color{") {
+		if strings.contains(code, "ui.Color{") || has_untyped_colour(code) {
 			append(
 				&found,
 				fmt.aprintf("%s:%d: a colour literal: use a theme colour", path, line_no),
@@ -60,6 +65,29 @@ lint_colour_literals :: proc(path, text: string) -> []string {
 		}
 	}
 	return found[:]
+}
+
+// has_untyped_colour: whether the code holds `{r, g, b, a}` with r, g and b integer literals.
+has_untyped_colour :: proc(code: string) -> bool {
+	rest := code
+	for {
+		open := strings.index_byte(rest, '{')
+		if open < 0 {return false}
+		rest = rest[open + 1:]
+		at := rest
+		ints := 0
+		for ints < 3 {
+			at = strings.trim_left_space(at)
+			n := 0
+			for n < len(at) && at[n] >= '0' && at[n] <= '9' {n += 1}
+			if n == 0 {break}
+			at = strings.trim_left_space(at[n:])
+			if len(at) == 0 || at[0] != ',' {break}
+			at = at[1:]
+			ints += 1
+		}
+		if ints == 3 && strings.contains(at, "}") {return true}
+	}
 }
 
 // lint_mode_names: no code tests a game mode by name; systems ask for abilities.

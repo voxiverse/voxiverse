@@ -48,6 +48,9 @@ prompt_icons_init :: proc(icons: ^engine.Prompt_Icons, ctx: ^ui.Context) -> bool
 	return true
 }
 
+// COVERAGE_INK: the mask's ink; the icon is tinted when drawn, so this is no interface colour.
+COVERAGE_INK :: u8(255)
+
 // prompt_shape_pixels: shape as white with its coverage in the alpha.
 prompt_shape_pixels :: proc(shape: engine.Prompt_Shape, pixels: [][4]u8) {
 	N :: PROMPT_ICON_SIZE
@@ -64,7 +67,7 @@ prompt_shape_pixels :: proc(shape: engine.Prompt_Shape, pixels: [][4]u8) {
 				}
 			}
 			a := u8(math.round(255 * sum / (PROMPT_SAMPLES * PROMPT_SAMPLES)))
-			pixels[x + y * N] = {255, 255, 255, a}
+			pixels[x + y * N] = {COVERAGE_INK, COVERAGE_INK, COVERAGE_INK, a}
 		}
 	}
 }
