@@ -39,6 +39,12 @@ handle_global_keys :: proc(app: ^engine.App, input: ^ui.Input) {
 		app.settings.fullscreen = !app.settings.fullscreen
 		engine.settings_changed(app)
 	}
+	if engine.action_pressed(&app.actions, .Dev_Chat) && app.devchat.running {
+		if engine.overlay_is_open(
+			&app.overlays,
+			.Devchat,
+		) {engine.devchat_close(app)} else {engine.devchat_open(app)}
+	}
 	menu_actions(app, input)
 	overlay.chat_keys(app, input)
 	menu.chest_sync(app)

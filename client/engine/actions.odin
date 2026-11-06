@@ -64,6 +64,7 @@ Action :: enum u8 {
 	Catalog, // the inventory's Pockets / Catalog switch on a pad (the left stick's press)
 	Screenshot,
 	Fullscreen,
+	Dev_Chat, // F9: developer chat, while the devchat setting is set
 }
 
 // Action_Context: where an action is read. World is game_controls(app);
@@ -134,6 +135,7 @@ ACTION_INFO := [Action]Action_Info {
 	.Catalog         = {{.Menu}, "Pockets or catalog", {}, {.Left_Stick, .None}},
 	.Screenshot      = {{.World, .Menu}, "Take screenshot", {}, {}},
 	.Fullscreen      = {{.World, .Menu}, "Toggle fullscreen", {}, {}},
+	.Dev_Chat        = {{.World, .Menu}, "Developer chat", {}, {}},
 }
 
 // PAD_COVERED_BY, KEY_COVERED_BY: why an action has no rebindable source on
@@ -163,6 +165,7 @@ PAD_COVERED_BY :: [?]struct {
 	{.Player_List, "not on pads (the pad's quick ring is next tier)"},
 	{.Screenshot, "not on pads"},
 	{.Fullscreen, "not on pads"},
+	{.Dev_Chat, "not on pads"},
 }
 
 KEY_COVERED_BY :: [?]struct {
@@ -268,6 +271,8 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.screenshot
 	case .Fullscreen:
 		return &b.fullscreen
+	case .Dev_Chat:
+		return &b.dev_chat
 	}
 	return nil
 }
@@ -302,7 +307,8 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 	     .Section_Prev,
 	     .Section_Next,
 	     .Catalog,
-	     .Fullscreen:
+	     .Fullscreen,
+	     .Dev_Chat:
 		return nil
 	case .Jump:
 		return &p.jump

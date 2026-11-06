@@ -116,6 +116,21 @@ test_devchat_screen :: proc(t: ^testing.T) {
 		!contains_part(app.ui.texts[:], engine.tr(.Devchat_Notice)),
 		"the notice stayed after the chat was opened",
 	)
+
+	// F9 (rebindable) opens it and closes it.
+	in_: ui.Input
+	app.input.pressed = {.F9}
+	engine.actions_sync(app)
+	handle_global_keys(app, &in_)
+	testing.expect(t, engine.overlay_is_open(&app.overlays, .Devchat), "F9 did not open the chat")
+	app.input.pressed = {.F9}
+	engine.actions_sync(app)
+	handle_global_keys(app, &in_)
+	testing.expect(
+		t,
+		!engine.overlay_is_open(&app.overlays, .Devchat),
+		"F9 did not close the chat",
+	)
 	app.devchat.running = false
 	free_all(context.temp_allocator)
 }
