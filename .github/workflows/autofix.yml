@@ -13,8 +13,8 @@ name: autofix
 # "Part of #N", and the next sweep continues. A pull request whose CI failed is sent back to
 # an agent to fix (twice), then to the owner (`needs-human`).
 #
-# Sweeps: on every push to main (a merge frees the next task), every 30 minutes, and at once
-# when an issue is labelled `agent` or `autofix`.
+# Sweeps: when any CI run finishes, on every push to main (a merge frees the next task), when
+# an issue is labelled `agent` or `autofix`, and twice an hour as a backup.
 # Off switch: repo variable AGENTS_ENABLED (anything but "true" = no agent runs).
 # Not before: repo variable AGENTS_NOT_BEFORE (an ISO time, UTC): sweeps before it pick nothing.
 on:
@@ -22,8 +22,14 @@ on:
     types: [labeled]
   push:
     branches: [main]
+  # Every finished CI run: a pull request that went green or red, or main, is the moment
+  # its milestone can move (merge, fix, next task). This is the loop's heartbeat.
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  # A backup only: GitHub drops or delays schedules at busy times (:00 and :30 most).
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       issue:
