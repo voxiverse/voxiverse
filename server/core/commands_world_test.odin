@@ -188,3 +188,39 @@ clock_fraction :: proc(srv: ^Server) -> f64 {
 	call(srv, proc(s: ^Server, data: rawptr) {(^f64)(data)^ = game.time_of_day(s.home.clock)}, &f)
 	return f
 }
+
+// /where and /goto answer plainly on a world that is not built on the planet.
+@(test)
+test_where_and_goto_need_the_planet :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := Config {
+		seed              = 27,
+		generator         = .Earth,
+		rules             = quiet_rules(),
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true,
+	}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	one := []^Net_Client{a}
+	if !testing.expect(
+		t,
+		net_wait(t, one, proc(cs: []^Net_Client) -> bool {return landed(cs[0])}),
+		"never landed",
+	) {return}
+	cmd(a, "where")
+	cmd(a, "goto everest")
+	cmd(a, "goto nowhere")
+	pump(t, one)
+	testing.expect(t, said(a, "not built on the planet"))
+	testing.expect(t, said(a, "At "))
+}
