@@ -93,6 +93,13 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		admin_protect,
 		"world.protect",
 	},
+	{
+		"interventions",
+		"[radius]  (no radius: the last 20 anywhere; radius: those within it of you)",
+		{0, 1},
+		admin_interventions,
+		"world.interventions",
+	},
 	{"history", "<x y z>", {3, 3}, admin_history, "world.rollback"},
 	{"undo", "[n]", {0, 1}, admin_undo, "world.edit.undo"},
 	{"redo", "[n]", {0, 1}, admin_redo, "world.edit.undo"},

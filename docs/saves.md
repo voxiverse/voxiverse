@@ -13,6 +13,7 @@ save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
+worlds/<address>/interventions.vxi            interventions log format 1
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
@@ -186,6 +187,19 @@ The chunks hold block numbers, and the header records which block each number de
 registry whose numbers have moved (a different pack set, or one pack ordered ahead of another) still
 loads them. A name the registry lacks causes the world to be refused at start, naming the
 blocks, unless `universe.cfg` says `unknown_blocks = air`, in which case they load as air.
+
+### The interventions log
+
+`interventions.vxi` (`common/intervention`) holds what players did that the world's history
+carries forward, in time order: `"VXIV"`, `u32 version` (1), `u32 count`, then per
+intervention its day (`f64`), place (3 x `i32`), kind (`u8`, append-only: `Founded_Settlement`,
+`Built`, `Destroyed`, `Taught`, `Traded`), the actor's name (`u8` length, bytes) and 16 data
+bytes, and last the CRC-32 of everything before it (all little-endian). It is staged in the save
+transaction when the log changed. A file that is cut, has a bad CRC, an unknown kind or
+records out of order is refused whole: the world moves it aside (`interventions.vxi.bad`),
+starts with an empty log and logs an error; `--check` reports it.
+`interventions_since(log, day)` and `interventions_near(log, place, radius_blocks, since_day)`
+are the queries for the systems that replay them.
 
 ### The edit journal
 

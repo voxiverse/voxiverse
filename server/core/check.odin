@@ -7,6 +7,7 @@ import "core:strconv"
 import "core:strings"
 
 import "common:game"
+import "common:intervention"
 
 // universe_check: is the universe in dir whole? Read-only; run it after
 // store_recover (the dedicated server's --check does). It reads every file the
@@ -136,6 +137,17 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 		false,
 		"protect",
 	)
+	interventions := fmt.tprintf("%s/%s", world, INTERVENTIONS_FILE)
+	if idata, ierr := os.read_entire_file_from_path(
+		full_path(dir, interventions),
+		context.temp_allocator,
+	); ierr == nil {
+		if log, ok := intervention.decode(idata); ok {
+			intervention.log_destroy(&log)
+		} else {
+			problem(r, "%s is damaged", interventions)
+		}
+	}
 	stats := fmt.tprintf("%s/%s", world, STATS_FILE)
 	if os.exists(full_path(dir, stats)) {check_json(r, dir, stats)}
 	// The journal, up to where the save says it ends.

@@ -55,6 +55,7 @@ permission. Minecraft's command names are accepted where the equivalent exists: 
 
 | Command | Effect |
 |---|---|
+| `/interventions [radius]` | Lists the last 20 of the world's interventions (a radius in blocks: those within it of you; `world.interventions`). |
 | `/history <x y z>` | Lists the last changes at a block (`world.rollback`). |
 | `/undo [n]`, `/redo [n]` | Undoes or redoes your own last n actions (`world.edit.undo`). |
 | `/rollback player <name> <time> [radius <n> \| sel \| world]`, `system <system> <time> [...]`, `area <time> [radius <n> \| sel]`, `status`, `cancel` | Reverts changes by a player, a system or in an area, up to a time back (`90s`, `10m`, `2h`, `1d`; `world.rollback`). |
@@ -75,7 +76,7 @@ What a player may do is a set of nodes: dotted lower-case words. The families in
 
 - `world.*`: `world.edit` (build), `world.edit.bulk`, `world.edit.undo`, `world.fire`,
   `world.summon`, `world.kill`, `world.tag`, `world.structure`, `world.time`, `world.gen`, `world.spawn`,
-  `world.travel`, `world.rollback`, `world.protect`;
+  `world.travel`, `world.rollback`, `world.protect`, `world.interventions`;
 - `debug.coordinates`: F3 shows position, chunk and the block underneath when
   `rules.show_coordinates` is off;
 - `teleport.*`, `chat.*`, `moderation.*`, `info.*`, `items.*`: the nodes the commands use;
