@@ -120,7 +120,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/ogg/testdata/edge` | Edge-case Ogg files | `*.ogg` |
 | `common/ogg/testdata/reference` | Reference decodes | `*.s16` |
 | `common/platform` | The platform layer both binaries share: reads the machine (arguments, environment, process id, core count, folders, CPU and OS, stdout and stderr, entropy, clocks, stack calls, the system libraries to link) into the `base.Host` at boot | `*.odin` |
-| `common/planet` | The home world as a planet: Earth's relief (its file format), sunlight, temperature, winds, ocean currents, moisture and rain, Köppen classes, rivers and lakes from the relief, the sampling of the climate, and the peoples' history | `*.odin` |
+| `common/planet` | The home world as a planet: Earth's relief (its file format), other worlds' relief by plate tectonics (`relief_generate`: an address and seed to a relief on the same grid), sunlight, temperature, winds, ocean currents, moisture and rain, Köppen classes, rivers and lakes from the relief, the sampling of the climate, and the peoples' history | `*.odin` |
 | `common/intervention` | A world's interventions log: what players did that its history carries forward, and its file | `*.odin` |
 | `common/script` | The script language: compiler, VM, collector, libraries and trace | `*.odin`, `*.vxs` |
 | `common/script/testdata/ast` | The parser's AST dumps | `*.vxs`, `*.txt` |
@@ -161,5 +161,5 @@ package** is enforced by the `layout` lint (see above).
 | `tools/schema` | The schema tool | `*.odin` |
 | `tools/sfx` | The sound-effect tool (`build sfx`: recipes to WAVs and a targets report) | `*.odin` |
 | `tools/wireshark` | The Wireshark dissector | `*.lua` |
-| `tools/planet` | The planet tool (`build planet import`: NOAA ETOPO5 to the relief file; `build planet maps`: PNGs of the climate model) | `*.odin` |
+| `tools/planet` | The planet tool (`build planet import`: NOAA ETOPO5 to the relief file; `build planet maps [--address <a>]`: PNGs of the climate model, of Earth's or a generated world) | `*.odin` |
 | `tools/worldmap` | The world map tool | `*.odin` |
