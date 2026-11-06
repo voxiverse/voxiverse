@@ -851,3 +851,35 @@ jobs:
           echo "${RESULTS}" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           bad=$(echo "${RESULTS}" | jq '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length')
           [ "${bad}" -eq 0 ]
+
+  # main must stay green: a failed push to main opens (or updates) one "main is red" issue
+  # labelled agent without a milestone, which the agents take before anything else
+  # (autofix.yml); the next green push to main closes it.
+  main-health:
+    name: Main health
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [gate, build, linux-tests, linux-game, linux-images, determinism, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULTS: ${{ toJSON(needs) }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          failed=$(echo "${RESULTS}" | jq -r '[to_entries[] | select(.value.result == "failure") | .key] | join(", ")')
+          cancelled=$(echo "${RESULTS}" | jq '[to_entries[] | select(.value.result == "cancelled")] | length')
+          open=$(gh issue list --state open --label agent --search 'in:title "main is red"' --json number,title --jq '[.[] | select(.title == "main is red") | .number][0] // empty')
+          if [ -n "${failed}" ]; then
+            body=$(printf 'CI failed on main at `%s` (jobs: %s).\n\nRun and logs: %s\n\nFix main first: find the failing step with `gh run view <run id> --log-failed`, fix the cause in one pull request (never weaken or skip a test), and say which commit broke it. This issue closes itself when main is green again.\n' "${SHA::12}" "${failed}" "${RUN_URL}")
+            if [ -n "${open}" ]; then gh issue comment "${open}" --body "${body}"
+            else
+              gh issue create --title "main is red" --label agent --body "${body}"
+            fi
+          elif [ "${cancelled}" -eq 0 ] && [ -n "${open}" ]; then
+            gh issue close "${open}" --comment "main is green again at \`${SHA::12}\` (${RUN_URL})."
+          fi
