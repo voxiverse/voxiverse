@@ -1,0 +1,18 @@
+name: Playtest feedback
+description: What you noticed playing, and what you want instead. An agent works on it at once.
+title: "Playtest: "
+labels: [agent]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What happened, and what you want
+      description: Say it the way you would to a developer sitting next to you. One topic per issue.
+      placeholder: "Jumping feels floaty: I want to land faster, like..."
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build (optional)
+      description: The playtest build's commit, from its title, if you know it.
