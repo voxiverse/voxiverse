@@ -71,6 +71,7 @@ PACKAGES :: []string {
 	"tools/sfx",
 	"tools/music",
 	"tools/worldmap",
+	"tools/planet",
 	"tools/bench",
 	"tools/debugger/printer_test",
 	"tools/fuzz",
@@ -264,6 +265,7 @@ main :: proc() {
 	     "sfx",
 	     "music",
 	     "worldmap",
+	     "planet",
 	     "analytics",
 	     "schema",
 	     "ogg":
@@ -383,6 +385,7 @@ usage :: proc() {
 	fmt.println(
 		"  music     render assets/music/*.score|*.mid to Ogg (--force, --wav <dir>, --midi, --audition <name> [--from <s>])",
 	)
+	fmt.println("  planet    the home world's relief: planet import <ETOPO5.DAT>")
 	fmt.println(
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
