@@ -19,6 +19,17 @@ Address :: struct {
 	world:  [WORLD_LENGTH]u8,
 }
 
+// Earth, the home world, has one fixed address, the same in every universe.
+// Chosen once; never change them (saves and the Earth terrain are named by them).
+// The galaxy is the Milky Way's.
+EARTH_GALAXY :: [GALAXY_LENGTH]u8{3, 17, 22, 5, 31, 9, 26, 12}
+EARTH_WORLD :: [WORLD_LENGTH]u8{14, 2, 35, 20, 7, 29, 11}
+
+// earth_address: Earth's address.
+earth_address :: proc() -> Address {
+	return Address{galaxy = EARTH_GALAXY, world = EARTH_WORLD}
+}
+
 // SYMBOL_RUNES: what each symbol is in Unicode (Old Turkic, Orkhon).
 @(rodata)
 SYMBOL_RUNES := [SYMBOLS]rune {
