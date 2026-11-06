@@ -489,6 +489,7 @@ tick :: proc(s: ^Server) {
 		if c.state != .Playing {continue}
 		base.profile_scope("player")
 		simulate_player(s, &c)
+		player_entity_sync(s, &c)
 		health_tick(s, &c)
 		weapons_tick(s, &c)
 		place_tick(s, &c)
@@ -500,6 +501,7 @@ tick :: proc(s: ^Server) {
 			drop_far(s, &c)
 		}
 	}
+	player_entities_release(s)
 	{
 		base.profile_scope("unload idle worlds and audit")
 		worlds_unload_idle(s)

@@ -864,14 +864,15 @@ Entity_Death :: struct {
 }
 
 Entity_World :: struct {
-	store:     game.Entity_Store,
-	spatial:   game.Spatial,
-	rng:       base.Rng,
-	budget:    int,
-	tick:      u32,
-	tag_names: [dynamic]string, // tag i is tag_names[i-1]
-	deaths:    [dynamic]Entity_Death, // this tick's
-	infos:     [game.FIRST_SERVER_COMPONENT + 1]game.Component_Info,
+	store:          game.Entity_Store,
+	spatial:        game.Spatial,
+	rng:            base.Rng,
+	budget:         int,
+	tick:           u32,
+	next_player_id: u32, // entities.odin: the ids of player entities
+	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
+	deaths:         [dynamic]Entity_Death, // this tick's
+	infos:          [game.FIRST_SERVER_COMPONENT + 1]game.Component_Info,
 }
 
 @(private = "file")
@@ -952,6 +953,7 @@ entity_world_spawn :: proc(
 	if .Genes in info.with {set += {int(game.C_GENES)}}
 	if .Breeding in info.with {set += {int(game.C_BREEDING)}}
 	if info.hittable {set += {int(game.C_HURT_BY)}}
+	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
 
 	serr: game.Store_Error
@@ -1185,6 +1187,80 @@ world_entity_kill :: proc(w: ^World, h: game.Entity_Handle, cause: u8, act: Act)
 	for &c in s.clients {
 		if c.state == .Playing && c.world == w && entity_known(&c, died.entity) {
 			event_send(s, &c, .Entity_Died, &died)
+		}
+	}
+}
+
+// --- Players as entities -----------------------------------------------------
+
+
+// Players as entities: each playing client has an entity of the kind
+// voxiverse:player in its world's entity world, so everything else finds
+// players through the spatial service. The player's movement stays
+// game.player_step on Client.player; the entity only follows it. The entity
+// is spawned when the client arrives in a world and despawned when it leaves
+// (travels, goes) or the world closes.
+
+PLAYER_ID_BASE :: 1 << 30
+
+// player_entity_sync (after simulate_player) keeps c's player entity: spawned
+// in c's world if it has none there, its Transform and spatial box following
+// c.player. An entity just spawned shows after the world's next store_apply
+// (it is made at c.player.position, so it is right from the start).
+player_entity_sync :: proc(s: ^Server, c: ^Client) {
+	w := c.world
+	if c.entity_id != 0 && c.entity_world != w {player_entity_release(s, c)}
+	ew := w.entity_world
+	if c.entity_id == 0 {
+		kind, ok := game.registry_kind(s.registry, "player")
+		if !ok {return}
+		// (ids above the list's own, until the list goes: no other entity has one)
+		ew.next_player_id += 1
+		want := game.Entity_Id(PLAYER_ID_BASE + ew.next_player_id)
+		id, _, err := entity_world_spawn(ew, s.registry, kind, c.player.position, {}, want)
+		if err != .None {return}
+		c.entity_id, c.entity_world = id, w
+		return
+	}
+	h, found := game.store_find(&ew.store, c.entity_id)
+	if !found {return}
+	tf := game.store_get(&ew.store, h, game.C_TRANSFORM, game.Transform)
+	if tf == nil {return} 	// not applied yet
+	tf.position = c.player.position
+	tf.yaw, tf.pitch = c.look[0], c.look[1]
+	if link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link); link != nil {
+		link.client = player_id(s, c)
+	}
+	if sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link); sl != nil {
+		half := f64(game.PLAYER_WIDTH) / 2
+		p := c.player.position
+		game.spatial_move(
+			&ew.spatial,
+			sl.handle,
+			{p.x - half, p.y, p.z - half},
+			{p.x + half, p.y + f64(game.PLAYER_HEIGHT), p.z + half},
+		)
+	}
+}
+
+// player_entity_release despawns c's player entity (if its world is still
+// open: a closed world took it along).
+player_entity_release :: proc(s: ^Server, c: ^Client) {
+	defer {c.entity_id, c.entity_world = 0, nil}
+	if c.entity_id == 0 {return}
+	open := false
+	for w in s.worlds {open ||= w == c.entity_world}
+	if !open {return}
+	ew := c.entity_world.entity_world
+	if h, ok := game.store_find(&ew.store, c.entity_id); ok {_ = game.store_despawn(&ew.store, h)}
+}
+
+// player_entities_release: the entities of clients that are no longer
+// playing, or are in another world, go (before idle worlds unload).
+player_entities_release :: proc(s: ^Server) {
+	for &c in s.clients {
+		if c.entity_id != 0 && (c.state != .Playing || c.world != c.entity_world) {
+			player_entity_release(s, &c)
 		}
 	}
 }

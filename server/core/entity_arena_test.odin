@@ -26,7 +26,11 @@ entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, missin
 			w := client_by_name(s, d.name).world
 			d.count = len(w.entities.list)
 			// the entity world holds exactly these, found by id
+			// (the players in it are entities too, and not the list's)
 			d.stored = game.store_count(&w.entity_world.store)
+			for &c in s.clients {
+				if c.state == .Playing && c.world == w {d.stored -= 1}
+			}
 			for e in w.entities.list {
 				if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(e.id)); !ok {
 					d.missing += 1
