@@ -148,10 +148,13 @@ jobs:
             done
             if [ -n "${waiting}" ]; then echo "#${n}: waits for${waiting}"; continue; fi
             branch="claude/issue-${n}"
-            prs=$(gh pr list --head "${branch}" --state all --json number --jq 'length')
-            if [ "${prs}" -ge 8 ]; then
+            # Thrashing is pull requests that fail and are closed unmerged, not merged ones: with the
+            # 45-minute deadline a big issue lands as many merged parts (#102: seven merged, steady).
+            failed=$(gh pr list --head "${branch}" --state closed --json mergedAt --jq '[.[] | select(.mergedAt == null)] | length')
+            prs=$(gh pr list --head "${branch}" --state all --limit 100 --json number --jq 'length')
+            if [ "${failed}" -ge 4 ] || [ "${prs}" -ge 30 ]; then
               act gh issue edit "${n}" --add-label needs-human
-              act gh issue comment "${n}" --body "**autofix:** eight pull requests on this issue and it is still open: the owner decides how to go on."
+              act gh issue comment "${n}" --body "**autofix:** ${failed} pull requests on this issue closed unmerged (${prs} in all) and it is still open: the owner decides how to go on."
               continue
             fi
             open=$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')
