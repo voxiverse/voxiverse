@@ -2,6 +2,8 @@ package fuzz
 
 import "base:runtime"
 
+import platform "common:platform"
+
 // Under AddressSanitizer a bad access ends the process in the sanitizer's own report: the
 // death callback is where the input is saved first.
 asan_death :: proc "c" () {
@@ -9,16 +11,6 @@ asan_death :: proc "c" () {
 	crash_hook("AddressSanitizer: a bad access (the report is above)")
 }
 
-when .Address in ODIN_SANITIZER_FLAGS {
-	foreign import asan_runtime "system:c"
-
-	foreign asan_runtime {
-		__sanitizer_set_death_callback :: proc "c" (callback: proc "c" ()) ---
-	}
-
-	asan_install :: proc() {
-		__sanitizer_set_death_callback(asan_death)
-	}
-} else {
-	asan_install :: proc() {}
+asan_install :: proc() {
+	platform.asan_set_death_callback(asan_death)
 }
