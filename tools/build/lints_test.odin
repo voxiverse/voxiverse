@@ -159,3 +159,18 @@ test_layer_files :: proc(t: ^testing.T) {
 	testing.expect(t, !is_layer_file("client/dev/panels.odin"))
 	testing.expect(t, !is_layer_file("hud_x.odin"))
 }
+
+@(test)
+test_os_quarantine_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	imp := "foreign import libc \"system:c\"\n"
+	testing.expect_value(t, len(lint_os_quarantine("common/base/x.odin", imp)), 1)
+	testing.expect_value(t, len(lint_os_quarantine("client/audio/device.odin", imp)), 1)
+	testing.expect_value(t, len(lint_os_quarantine("common/platform/x.odin", imp)), 0)
+	testing.expect_value(t, len(lint_os_quarantine("client/platform/x.odin", imp)), 0)
+	testing.expect_value(
+		t,
+		len(lint_os_quarantine("common/base/x.odin", "import \"core:os\"\n// foreign import\n")),
+		0,
+	)
+}
