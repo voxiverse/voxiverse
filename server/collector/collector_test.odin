@@ -672,3 +672,143 @@ test_devchat_replies :: proc(t: ^testing.T) {
 	raw_close(&r2)
 	free_all(context.temp_allocator)
 }
+
+// The game's chat (devchat_client.odin) on the simulated network: what the
+// player writes is delivered once, also when it was written offline; replies
+// arrive and are kept in the file across a restart.
+@(private = "file")
+rig_chat :: proc(r: ^Rig, c: ^Chat, path: string, key: game.Account_Key) {
+	chat_open(c, path, loopback(COLLECTOR_PORT), key, &r.net)
+	c.idle, c.idle_data = rig_idle, r
+}
+
+@(private = "file")
+chat_admin_lake :: proc(name: string) -> (lake, file: string, admin: game.Account_Key) {
+	lake, _ = fresh(name)
+	file = fmt.tprintf("build/test/%s_devchat.jsonl", name)
+	os.remove(file)
+	admin = game.account_key_make()
+	os.make_directory_all(lake)
+	_ = os.write_entire_file(
+		fmt.tprintf("%s/admins.cfg", lake),
+		transmute([]u8)game.account_text(admin.account),
+	)
+	return
+}
+
+@(test)
+test_chat_delivers_once :: proc(t: ^testing.T) {
+	lake, file, admin := chat_admin_lake("chat_once")
+	defer os.remove_all(lake)
+	defer os.remove(file)
+	rig: Rig
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
+	c: Chat
+	rig_chat(&rig, &c, file, admin)
+	defer chat_close(&c)
+	inbox := fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))
+
+	testing.expect(t, !chat_send(&c, "   ", {}), "an empty message was taken")
+	testing.expect(
+		t,
+		chat_send(
+			&c,
+			"the sky is square",
+			{version = "0.26", world = "A1", has_pos = true, pos = {1, 2, 3}},
+		),
+	)
+	chat_pass(&c)
+	entries, status, waiting, _ := chat_view(&c)
+	testing.expect_value(t, status, Chat_Status.Connected)
+	testing.expect_value(t, waiting, 0)
+	testing.expect(t, len(entries) == 1 && entries[0].sent, "the message was not marked sent")
+	testing.expect_value(t, count_files(inbox), 1)
+	chat_pass(&c) // nothing waits: nothing is sent again
+	testing.expect_value(t, count_files(inbox), 1)
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_chat_waits_while_offline :: proc(t: ^testing.T) {
+	lake, file, admin := chat_admin_lake("chat_offline")
+	defer os.remove_all(lake)
+	defer os.remove(file)
+	rig: Rig
+	netcode.simnet_init(&rig.net) // the collector is down
+	defer rig_close(&rig)
+	c: Chat
+	rig_chat(&rig, &c, file, admin)
+	testing.expect(t, chat_send(&c, "written offline", {}))
+	chat_pass(&c)
+	_, status, waiting, _ := chat_view(&c)
+	testing.expect_value(t, status, Chat_Status.Offline)
+	testing.expect_value(t, waiting, 1)
+	chat_close(&c) // the game is closed while offline...
+
+	rig.up = collector_open(&rig.c, lake, COLLECTOR_PORT, &rig.net)
+	if !testing.expect(t, rig.up) {return}
+	rig_chat(&rig, &c, file, admin) // ... and started again later
+	defer chat_close(&c)
+	_, _, waiting, _ = chat_view(&c)
+	testing.expect_value(t, waiting, 1)
+	chat_pass(&c)
+	entries, status2, waiting2, _ := chat_view(&c)
+	testing.expect_value(t, status2, Chat_Status.Connected)
+	testing.expect_value(t, waiting2, 0)
+	testing.expect(t, len(entries) == 1 && entries[0].text == "written offline")
+	testing.expect_value(
+		t,
+		count_files(fmt.tprintf("%s/devchat/%s/in", lake, game.account_text(admin.account))),
+		1,
+	)
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_chat_replies_survive_a_restart :: proc(t: ^testing.T) {
+	lake, file, admin := chat_admin_lake("chat_replies")
+	defer os.remove_all(lake)
+	defer os.remove(file)
+	rig: Rig
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
+	out := fmt.tprintf("%s/devchat/%s/out", lake, game.account_text(admin.account))
+	// More than one page (MAX_DEV_REPLIES), to see the fetch go on.
+	for i in 0 ..< game.MAX_DEV_REPLIES + 2 {
+		write_reply(
+			out,
+			fmt.tprintf("%04d.json", i),
+			fmt.tprintf(
+				`{{"id":"%04d","time":%d,"text":"reply %d","link":"https://example.org/%d"}}`,
+				i,
+				1000 + i,
+				i,
+				i,
+			),
+		)
+	}
+	c: Chat
+	rig_chat(&rig, &c, file, admin)
+	chat_pass(&c)
+	entries, _, _, _ := chat_view(&c)
+	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 2)
+	testing.expect_value(t, chat_replies(&c), u64(game.MAX_DEV_REPLIES + 2))
+	if len(entries) > 0 {
+		testing.expect_value(t, entries[0].text, "reply 0")
+		testing.expect_value(t, entries[0].link, "https://example.org/0")
+		testing.expect(t, !entries[0].from_me)
+	}
+	chat_close(&c)
+
+	rig_chat(&rig, &c, file, admin) // a restart: read back from the file
+	defer chat_close(&c)
+	entries, _, _, _ = chat_view(&c)
+	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 2)
+	write_reply(out, "9999.json", `{"id":"9999","time":5000,"text":"newest"}`)
+	chat_pass(&c) // only what came after
+	entries, _, _, _ = chat_view(&c)
+	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 3)
+	if len(entries) > 0 {testing.expect_value(t, entries[len(entries) - 1].text, "newest")}
+	free_all(context.temp_allocator)
+}
