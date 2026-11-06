@@ -1,5 +1,6 @@
 package base
 
+import "core:sync"
 import "core:testing"
 
 @(private = "file")
@@ -8,9 +9,12 @@ captured_text: [256]u8
 captured_len: int
 @(private = "file")
 captured_stream: Output_Stream
+@(private = "file")
+captured_thread: int // only the test's own writes: the service is the process's, and other tests log
 
 @(private = "file")
 fake_write :: proc "contextless" (stream: Output_Stream, text: string) {
+	if sync.current_thread_id() != captured_thread {return}
 	captured_stream = stream
 	n := min(len(captured_text) - captured_len, len(text))
 	copy(captured_text[captured_len:], text[:n])
@@ -22,9 +26,11 @@ fake_color :: proc "contextless" (stream: Output_Stream) -> bool {
 	return stream == .Err
 }
 
+// One test for the output service, installed and then not: it is the process's, so two tests
+// installing it in parallel took each other's out from under them.
 @(test)
 test_output_goes_through_the_installed_service :: proc(t: ^testing.T) {
-	captured_len = 0
+	captured_len, captured_thread = 0, sync.current_thread_id()
 	output_install({write = fake_write, is_color = fake_color})
 	defer output_install({})
 	out_printfln(.Err, "disk: %s failed", "write")
@@ -32,10 +38,8 @@ test_output_goes_through_the_installed_service :: proc(t: ^testing.T) {
 	testing.expect_value(t, captured_stream, Output_Stream.Err)
 	testing.expect(t, out_is_color(.Err))
 	testing.expect(t, !out_is_color(.Out))
-}
 
-@(test)
-test_output_without_a_service_is_dropped :: proc(t: ^testing.T) {
+	// Without a service, output is dropped (and nothing is in colour).
 	output_install({})
 	out_write(.Out, "nobody listens")
 	out_printfln(.Err, "nor here %d", 1)
