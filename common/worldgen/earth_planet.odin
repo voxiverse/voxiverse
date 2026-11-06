@@ -1,6 +1,7 @@
 package worldgen
 
 import "base:runtime"
+import "core:math"
 import "core:sync"
 
 import "common:planet"
@@ -84,4 +85,42 @@ planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 	if elevation > 0 {
 		c.rough = p.overhang * smooth(0.5, 0.9, spread) * smooth(0.35, 0.85, ridge)
 	}
+}
+
+// planet_block_of: the block column (x, z) at latitude and longitude, degrees
+// (the inverse of planet_lat_lon, rounded to the nearest column).
+planet_block_of :: proc(lat, lon: f64) -> (x, z: i32) {
+	return i32(
+		math.round(lon * (PLANET_CIRCUMFERENCE / 2) / 180),
+	), i32(math.round(-lat * (PLANET_CIRCUMFERENCE / 4) / 90))
+}
+
+// Planet_Place: a named place on Earth, for /goto.
+Planet_Place :: struct {
+	name:     string,
+	lat, lon: f64,
+}
+
+// PLANET_PLACES: the named places /goto knows, each a latitude and longitude.
+PLANET_PLACES :: [?]Planet_Place {
+	{"everest", 27.99, 86.93},
+	{"k2", 35.88, 76.51},
+	{"sahara", 23.0, 12.0},
+	{"amazon", -3.1, -60.0},
+	{"nile_delta", 31.0, 31.0},
+	{"alps", 46.5, 8.0},
+	{"greenland", 72.0, -40.0},
+	{"antarctica", -82.0, 0.0},
+	{"atacama", -24.5, -70.4},
+	{"siberia", 62.0, 105.0},
+	{"great_barrier_reef", -18.3, 147.7},
+	{"grand_canyon", 36.1, -112.1},
+}
+
+// planet_place: the named place called name (lower case).
+planet_place :: proc(name: string) -> (place: Planet_Place, ok: bool) {
+	for p in PLANET_PLACES {
+		if p.name == name {return p, true}
+	}
+	return {}, false
 }
