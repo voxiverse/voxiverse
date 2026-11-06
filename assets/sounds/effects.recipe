@@ -1,0 +1,73 @@
+# Landing, launch and the big boom.
+sound land
+  class land
+  length 0.35
+  gain -3 dB
+  layer thud
+    delay 0.0012
+    source modal dirt hardness 0.4..0.55 spread 0.94..1.06 length 0.002 decay 3
+    envelope attack 0 hold 0 decay 0.25..0.35 curve exp
+    pitch 1.4..1.8
+    level 0 dB
+  layer scuff
+    delay 0.0012
+    source noise brown
+    envelope attack 0.002 hold 0.03 decay 0.2..0.3
+    filter lowpass 1500
+    level -6 dB
+  layer grit
+    delay 0.0012
+    source granular noise count 4..8 size 0.006..0.02 pitch 0.8..1.4 gain -14..-6 dB spread 0.02..0.2 density front
+    envelope attack 0 hold 0.05 decay 0.15
+    level -10 dB
+end
+
+sound launch
+  class launch
+  length 0.8
+  gain -4 dB
+  layer whoosh
+    delay 0.0012
+    source noise white
+    envelope attack 0.03 hold 0.1 decay 0.35
+    filter bandpass 2500..3500 q 0.8
+    level 0 dB
+  layer sweep
+    delay 0.0012
+    source tone 1800..2200 to 3500..4500
+    envelope attack 0.02 hold 0.05 decay 0.3
+    level -14 dB
+  layer thump
+    delay 0.0012
+    source tone 160..200 to 70
+    envelope attack 0.003 hold 0 decay 0.15
+    level -8 dB
+end
+
+sound boom
+  class boom
+  length 2.5
+  gain -1 dB
+  layer thump
+    delay 0.0012
+    source tone 140..180 to 35
+    envelope attack 0.002 hold 0.45 decay 0.7
+    level 0 dB
+  layer crack
+    delay 0.0012
+    source click 0.9
+    envelope attack 0 hold 0 decay 0.02
+    filter lowpass 900
+    level -10 dB
+  layer rumble
+    delay 0.0012
+    source noise brown
+    envelope attack 0.01 hold 0.2 decay 1.2..1.6
+    filter lowpass 250..400
+    level -2 dB
+  layer debris
+    delay 0.0012
+    source granular modal stone count 10..16 size 0.01..0.03 pitch 0.2..0.5 gain -16..-6 dB spread 0.2..1.2 density back
+    envelope attack 0 hold 0.5 decay 0.8
+    level -8 dB
+end
