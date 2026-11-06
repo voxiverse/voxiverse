@@ -118,6 +118,39 @@ lint_mode_names :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
+// PLATFORM_PACKAGES: the only packages that may link a system library (the OS quarantine).
+PLATFORM_PACKAGES :: []string{"common/platform/", "client/platform/"}
+
+// lint_os_quarantine: no `foreign import` of a system library outside the platform packages,
+// and no exemption list. (Tests and tools/ keep direct OS access and are not scanned.)
+lint_os_quarantine :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	for prefix in PLATFORM_PACKAGES {
+		if strings.has_prefix(path, prefix) ||
+		   strings.contains(
+			   path,
+			   strings.concatenate({"/", prefix}, context.temp_allocator),
+		   ) {return found[:]}
+	}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		if strings.contains(code, "foreign import") || strings.contains(code, "\"system:") {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: foreign import or system: library outside the platform packages: move it behind common/platform or client/platform",
+					path,
+					line_no,
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
 // lint_miniaudio: `vendor:miniaudio` is the output device's layer only (client/audio/device.odin,
 // until the next tier replaces it): every Ogg the game reads goes through common/ogg.
 lint_miniaudio :: proc(path, text: string) -> []string {
@@ -246,6 +279,7 @@ source_lint :: proc() -> bool {
 				continue
 			}
 			append(&msgs, ..lint_mode_names(path, text))
+			append(&msgs, ..lint_os_quarantine(path, text))
 			if dir == "client" && is_layer_file(path) {
 				append(&msgs, ..lint_ui_literals(path, text))
 				append(&msgs, ..lint_colour_literals(path, text))
@@ -256,7 +290,7 @@ source_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   ui text, colours, mode names and miniaudio imports clean")}
+	if ok {fmt.println("lint   ui text, colours, mode names, miniaudio imports and the OS quarantine clean")}
 	return ok
 }
 
