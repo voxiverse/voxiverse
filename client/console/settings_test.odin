@@ -30,8 +30,11 @@ test_variable_tables :: proc(t: ^testing.T) {
 test_settings_round_trip :: proc(t: ^testing.T) {
 	path := "build/test/settings_test.cfg"
 	os.make_directory_all("build/test")
-	os.set_env("VX_SETTINGS", path)
-	defer os.unset_env("VX_SETTINGS")
+	saved := base.boot_info()
+	info := saved
+	info.env.settings = path
+	base.boot_install(info)
+	defer base.boot_install(saved)
 	defer os.remove(path)
 
 	// (on the heap: an App is 237 KB, and a test thread's stack is 512 KB on macOS)

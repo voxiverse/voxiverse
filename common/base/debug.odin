@@ -69,11 +69,10 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 	ctx := context
 	d^ = {}
 	d.backing = ctx.allocator
-	d.break_mode = os.get_env("VX_BREAK", context.temp_allocator) == "1"
+	d.break_mode = boot_info().env.break_on_error
 	active = d
 
-	console_level: log.Level =
-		.Debug if os.get_env("VX_LOG", context.temp_allocator) == "debug" else .Info
+	console_level: log.Level = .Debug if boot_info().env.log_debug else .Info
 	if path, ok := log_file_path(log_file_name); ok {
 		log_rotate(path)
 		if f, err := os.open(path, {.Write, .Create, .Trunc}); err == nil {
@@ -270,7 +269,7 @@ log_rotate :: proc(path: string) {
 // instead of the executable's (runs that share one executable at once, such as the
 // visual baselines' scenes, each get their own).
 state_dir_override :: proc() -> (string, bool) {
-	dir, set := os.lookup_env("VX_STATE_DIR", context.temp_allocator)
+	dir, set := boot_info().env.state_dir.?
 	return dir, set && dir != ""
 }
 

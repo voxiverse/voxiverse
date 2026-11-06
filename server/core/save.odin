@@ -132,7 +132,7 @@ UNIVERSE_LOCK :: "lock"
 // if another has it.
 universe_lock :: proc(st: ^Store, dir: string) -> bool {
 	path := filepath.join({dir, UNIVERSE_LOCK}, context.temp_allocator) or_else UNIVERSE_LOCK
-	lock, holder, ok := base.file_lock(path, fmt.tprintf("%d", os.get_pid()))
+	lock, holder, ok := base.file_lock(path, fmt.tprintf("%d", base.boot_info().pid))
 	defer delete(holder)
 	if !ok {
 		log.errorf(

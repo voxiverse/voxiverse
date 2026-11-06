@@ -10,6 +10,7 @@ import "core:strings"
 import "core:time"
 
 import "client:steam"
+import "common:base"
 import "common:game"
 import "common:netcode"
 import "server:core"
@@ -453,7 +454,7 @@ content_mismatch :: proc(reg: ^game.Registry, w: game.Welcome) -> string {
 // packs_cache_dir: VX_PACKS, else voxiverse/packs in the user data directory
 // (the packs of servers joined, by hash; game.pack_cache_store).
 packs_cache_dir :: proc() -> string {
-	if p, set := os.lookup_env("VX_PACKS", context.temp_allocator); set && p != "" {return p}
+	if p, set := base.boot_info().env.packs.?; set && p != "" {return p}
 	dir, err := os.user_data_dir(context.temp_allocator)
 	if err != nil {return ""}
 	return filepath.join({dir, "voxiverse", "packs"}, context.temp_allocator) or_else ""

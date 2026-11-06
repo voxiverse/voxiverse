@@ -37,7 +37,7 @@ saves_override: string
 // saves_dir: VX_SAVES, else voxiverse/saves in the user data directory.
 saves_dir :: proc() -> string {
 	if saves_override != "" {return saves_override}
-	if p, set := os.lookup_env("VX_SAVES", context.temp_allocator); set && p != "" {return p}
+	if p, set := base.boot_info().env.saves.?; set && p != "" {return p}
 	dir, err := os.user_data_dir(context.temp_allocator)
 	if err != nil {return "saves"}
 	return filepath.join({dir, "voxiverse", "saves"}, context.temp_allocator) or_else "saves"

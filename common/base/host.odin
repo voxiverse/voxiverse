@@ -20,7 +20,44 @@ Host :: struct {
 
 // Boot_Info: what the process was started with, read once at boot.
 Boot_Info :: struct {
-	args: []string, // argv[1:] (the program's own name is not in it)
+	args:      []string, // argv[1:] (the program's own name is not in it)
+	env:       Env, // every variable the game reads, read once at boot
+	pid:       int, // the process id (the universe lock names its holder)
+	cpu_count: int, // logical processors, to size the worker pools
+}
+
+// Env: the environment variables the game reads. A Maybe(string) is nil when the variable
+// is unset (set but empty is a string "", which some of them treat differently).
+Env :: struct {
+	validation:        Maybe(string), // VX_VALIDATION
+	packs:             Maybe(string), // VX_PACKS
+	settings:          Maybe(string), // VX_SETTINGS
+	saves:             Maybe(string), // VX_SAVES
+	state_dir:         Maybe(string), // VX_STATE_DIR
+	log_debug:         bool, // VX_LOG=debug
+	break_on_error:    bool, // VX_BREAK=1
+	pad_ignore:        string, // SDL_GAMECONTROLLER_IGNORE_DEVICES
+	pad_ignore_except: string, // SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT
+}
+
+@(private = "file")
+boot: Boot_Info
+
+// boot_install makes info the process's boot information (platform.boot does it, before
+// any thread starts); the code that needs it has no Host to read it from. Tests install a
+// Boot_Info of their own to stand in for the environment.
+boot_install :: proc(info: Boot_Info) {
+	boot = info
+}
+
+// boot_info is the boot information installed at start (zero until one is installed).
+boot_info :: proc() -> Boot_Info {
+	return boot
+}
+
+// cpu_count is the number of logical processors, at least 1.
+cpu_count :: proc() -> int {
+	return max(boot.cpu_count, 1)
 }
 
 Output_Stream :: enum {
