@@ -170,3 +170,103 @@ test_server_without_steam_ignores_ticket :: proc(t: ^testing.T) {
 steam_common_text :: proc(id: steam_common.Steam_ID) -> string {
 	return fmt.tprintf("%d", u64(id))
 }
+
+@(private = "file")
+Admin_Probe :: struct {
+	names:  [4]string,
+	admins: [4]bool,
+}
+
+// admin_probe: whether each of the named players has every permission (the admin role).
+@(private = "file")
+admin_probe :: proc(h: ^Harness, names: [4]string) -> [4]bool {
+	probe := Admin_Probe {
+		names = names,
+	}
+	call(&h.srv, proc(s: ^Server, data: rawptr) {
+			p := (^Admin_Probe)(data)
+			for name, i in p.names {
+				if c := client_by_name(s, name); c != nil {
+					p.admins[i] = allowed(s, c, "permissions.edit")
+				}
+			}
+		}, &probe)
+	return probe.admins
+}
+
+// The exit check of admins by SteamID: a `steam:` line in admins.cfg makes the player whose
+// ticket Steam accepted an admin, and no one else: not the same account key without Steam,
+// not another SteamID, not a client that sends the ID with a ticket for another one, and
+// not any client on a server without Steam (it cannot check the ID, so it never trusts it).
+@(test)
+test_steam_admin_line_grants_only_the_validated_player :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "steam_admin"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.make_directory_all(dir)
+	line := fmt.tprintf("# the owner\nsteam:%d # me\n", u64(steam_common.fake_id(9)))
+	_ = os.write_entire_file(
+		filepath.join({dir, ADMINS_FILE}, context.temp_allocator) or_else "",
+		transmute([]u8)line,
+	)
+	fake: steam_server.Server
+	testing.expect(t, steam_server.open_fake(&fake, {}))
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, steam_config(dir, &fake))) {return}
+	defer harness_stop(h)
+
+	owner := steam_join(t, h, "owner", "owner", 9)
+	defer steam_free(owner)
+	other := steam_join(t, h, "other", "other", 10)
+	defer steam_free(other)
+	plain := steam_join(t, h, "plain", "plain", 0)
+	defer steam_free(plain)
+	// A client that claims the owner's SteamID with a ticket made for another one.
+	liar := new(Net_Client)
+	defer steam_free(liar)
+	liar.key_name = "liar"
+	ticket := make([]u8, steam_common.FAKE_TICKET_LEN, context.temp_allocator)
+	steam_common.fake_ticket_make(ticket, steam_common.fake_id(11), 1)
+	liar.steam_id, liar.ticket = u64(steam_common.fake_id(9)), ticket
+	net_connect(liar, 0, "liar", h = h)
+	net_wait(
+		t,
+		{liar},
+		proc(cs: []^Net_Client) -> bool {return cs[0].welcomed || cs[0].rejected != ""},
+	)
+	testing.expect(t, owner.welcomed && other.welcomed && plain.welcomed)
+	admins := admin_probe(h, {"owner", "other", "plain", "liar"})
+	testing.expect(t, admins[0], "the validated owner is not an admin")
+	testing.expect(t, !admins[1], "another SteamID is an admin")
+	testing.expect(t, !admins[2], "a client without Steam is an admin")
+	testing.expect(t, !admins[3], "a client that claims the ID is an admin")
+
+	// The same account key without Steam is not the SteamID.
+	owner2 := steam_join(t, h, "owner2", "owner", 0)
+	defer steam_free(owner2)
+	testing.expect(t, owner2.welcomed)
+	testing.expect(t, !admin_probe(h, {"owner2", "", "", ""})[0], "the key alone was an admin")
+}
+
+// A server without Steam never trusts a claimed SteamID, listed or not.
+@(test)
+test_steam_admin_line_needs_steam_on :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "steam_admin_off"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	os.make_directory_all(dir)
+	line := fmt.tprintf("steam:%d\n", u64(steam_common.fake_id(9)))
+	_ = os.write_entire_file(
+		filepath.join({dir, ADMINS_FILE}, context.temp_allocator) or_else "",
+		transmute([]u8)line,
+	)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, steam_config(dir, nil))) {return}
+	defer harness_stop(h)
+	c := steam_join(t, h, "owner", "owner", 9)
+	defer steam_free(c)
+	testing.expect(t, c.welcomed)
+	testing.expect(t, !admin_probe(h, {"owner", "", "", ""})[0], "a claimed ID was trusted")
+}

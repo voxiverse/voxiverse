@@ -28,6 +28,7 @@ import "common:game"
 // dedicated server's --cheats) has every node.
 
 PERMISSIONS_FILE :: "permissions.cfg"
+ADMINS_FILE :: "admins.cfg"
 
 Role :: struct {
 	inherits: [dynamic]string,
@@ -289,6 +290,7 @@ resolve :: proc(
 	out: ^[dynamic]game.Grant,
 	allocator := context.allocator,
 	guest_role := "", // the world's rule: a role everyone has besides default
+	admin := false, // listed in admins.cfg: has the role admin
 ) {
 	if owner {append(out, game.Grant{strings.clone("*", allocator), true, 0})}
 	add :: proc(out: ^[dynamic]game.Grant, texts: []string, rank: int, allocator: mem.Allocator) {
@@ -309,6 +311,7 @@ resolve :: proc(
 	}
 	append(&level, "default")
 	if guest_role != "" {append(&level, guest_role)}
+	if admin {append(&level, "admin")}
 	seen := make(map[string]struct{}, 16, context.temp_allocator)
 	for rank := 1; len(level) > 0 && rank < 32; rank += 1 {
 		next := make([dynamic]string, context.temp_allocator)
@@ -401,6 +404,22 @@ permissions_allow_fire :: proc(s: ^Server) {
 	permissions_changed(s)
 }
 
+// admins_open reads the universe's admins.cfg (none: no admins besides permissions.cfg's).
+// c.steam_id is set only for a join whose ticket this server's Steam accepted, so a
+// `steam:` line never admits a client that only claims the ID.
+admins_open :: proc(s: ^Server) {
+	if s.store.dir == "" {return}
+	path := filepath.join({s.store.dir, ADMINS_FILE}, context.temp_allocator) or_else ADMINS_FILE
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return}
+	if bad := game.admins_parse(&s.admins, string(data)); bad > 0 {
+		log.warnf(
+			"server admins.cfg: lines that are not an account key or steam:<id> count=%d",
+			bad,
+		)
+	}
+}
+
 // is_owner: c has every node (the local player of a world played here;
 // everyone, with everyone_cheats).
 is_owner :: proc(s: ^Server, c: ^Client) -> bool {
@@ -413,7 +432,15 @@ refresh_grants :: proc(s: ^Server, c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
 	clear(&c.grants)
 	guest := base.var_text(&c.world.rules.guest_role) if c.world != nil else ""
-	resolve(&s.perms, client_name(c), c.account, is_owner(s, c), &c.grants, guest_role = guest)
+	resolve(
+		&s.perms,
+		client_name(c),
+		c.account,
+		is_owner(s, c),
+		&c.grants,
+		guest_role = guest,
+		admin = game.is_admin(&s.admins, c.account, c.steam_id),
+	)
 	grants := game.Grants{game.grants_text(c.grants[:]), commands_allowed(s, c)}
 	state_put(s, c, .Grants, &grants)
 }

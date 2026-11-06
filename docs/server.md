@@ -166,6 +166,20 @@ universe that predates accounts is assigned to the first account that plays that
 - `account <hex>` in `permissions.cfg` grants to every character of an account.
 - `whois` shows a character's account (`moderation.address`).
 
+### Admins
+
+`<universe>/admins.cfg` names the server's admins. One entry per line: an account public key in
+hex (64 digits) or `steam:<SteamID64>`; `#` starts a comment. A line that is neither is logged
+and skipped. Whoever it names has the role `admin` (in `permissions.cfg`, so its grants are the
+world's own) in addition to their other roles. The file is read when the server starts.
+
+A `steam:` line applies only to a join whose Steam ticket the server accepted (`--steam`, see
+[Joining with a Steam identity](#joining-with-a-steam-identity)); that is how the owner is admin
+on any server by signing in with Steam. A SteamID a client only claims (no ticket, a bad one, a
+ticket for another ID) or any ID on a server without Steam is never trusted, and the same account
+key without Steam is not the SteamID. The collector reads the same format
+([docs/telemetry.md](telemetry.md#admins)).
+
 ## Joining with a Steam identity
 
 Steam is one way in, never the only one: a player without it joins with the account key alone.

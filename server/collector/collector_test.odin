@@ -9,7 +9,9 @@ import "core:time"
 
 import "common:game"
 import "common:netcode"
+import steam_common "common:steam"
 import "common:telemetry"
+import steam_server "server:steam"
 
 @(private = "file")
 loopback :: proc(port: int) -> net.Endpoint {
@@ -277,8 +279,16 @@ raw_send :: proc(r: ^Raw, m: game.Client_Message) {
 
 // raw_challenge: Hello, and the nonce the collector answers with.
 @(private = "file")
-raw_challenge :: proc(r: ^Raw, account: game.Account) -> (nonce: game.Nonce, ok: bool) {
-	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0, 0, nil})
+raw_challenge :: proc(
+	r: ^Raw,
+	account: game.Account,
+	steam_id: u64 = 0,
+	ticket: []u8 = nil,
+) -> (
+	nonce: game.Nonce,
+	ok: bool,
+) {
+	raw_send(r, game.Hello{game.PROTOCOL_VERSION, account, "", 0, steam_id, ticket})
 	scratch := new(game.Block_Array)
 	defer free(scratch)
 	got := make([dynamic][]u8, context.temp_allocator)
@@ -810,5 +820,56 @@ test_chat_replies_survive_a_restart :: proc(t: ^testing.T) {
 	entries, _, _, _ = chat_view(&c)
 	testing.expect_value(t, len(entries), game.MAX_DEV_REPLIES + 3)
 	if len(entries) > 0 {testing.expect_value(t, entries[len(entries) - 1].text, "newest")}
+	free_all(context.temp_allocator)
+}
+
+// A `steam:` admins.cfg line admits the player whose ticket the collector's Steam accepted,
+// and no one else: not the same key without Steam, not a claimed ID with another's ticket.
+@(test)
+test_devchat_admin_by_steam :: proc(t: ^testing.T) {
+	lake, logs := fresh("devchat_steam")
+	defer os.remove_all(lake)
+	defer os.remove_all(logs)
+	os.make_directory_all(lake)
+	id := steam_common.fake_id(9)
+	_ = os.write_entire_file(
+		fmt.tprintf("%s/admins.cfg", lake),
+		transmute([]u8)fmt.tprintf("steam:%d\n", u64(id)),
+	)
+	fake: steam_server.Server
+	testing.expect(t, steam_server.open_fake(&fake, {}))
+	rig: Rig
+	rig.c.steam = &fake
+	if !testing.expect(t, rig_open(&rig, lake)) {return}
+	defer rig_close(&rig)
+	ticket_for :: proc(id: steam_common.Steam_ID) -> []u8 {
+		b := make([]u8, steam_common.FAKE_TICKET_LEN, context.temp_allocator)
+		steam_common.fake_ticket_make(b, id, 1)
+		return b
+	}
+	try :: proc(rig: ^Rig, claim: steam_common.Steam_ID, ticket: []u8) -> (heard: bool) {
+		key := game.account_key_make()
+		r: Raw
+		if !raw_connect(&r, rig) {return}
+		defer raw_close(&r)
+		nonce, ok := raw_challenge(&r, key.account, u64(claim), ticket)
+		if !ok {return}
+		raw_send(&r, game.Proof{game.account_sign(&key, nonce)})
+		raw_send(&r, game.Dev_Message{id = 1, text = "hello", version = "0.26"})
+		ack, got := raw_answer(&r, game.Dev_Ack)
+		return got && ack.ok
+	}
+	testing.expect(t, try(&rig, id, ticket_for(id)), "the validated SteamID was not heard")
+	testing.expect(t, !try(&rig, id, nil), "a key without a ticket was heard")
+	testing.expect(
+		t,
+		!try(&rig, id, ticket_for(steam_common.fake_id(10))),
+		"a claimed SteamID with another's ticket was heard",
+	)
+	testing.expect(
+		t,
+		!try(&rig, steam_common.fake_id(10), ticket_for(steam_common.fake_id(10))),
+		"an unlisted SteamID was heard",
+	)
 	free_all(context.temp_allocator)
 }

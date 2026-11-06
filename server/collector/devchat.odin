@@ -52,20 +52,13 @@ devchat_admins :: proc(c: ^Collector) {
 	delete(c.admins_text)
 	c.admins_text = strings.clone(string(data))
 	c.admins_loaded = true
-	clear(&c.admins)
-	rest := c.admins_text
-	for line in strings.split_lines_iterator(&rest) {
-		text := line
-		if hash := strings.index_byte(text, '#'); hash >= 0 {text = text[:hash]}
-		text = strings.trim_space(text)
-		if text == "" {continue}
-		if a, ok := game.account_parse(text); ok {
-			c.admins[a] = {}
-		} else {
-			log.warnf("collector admins.cfg: not an account key line=%q", text)
-		}
+	if bad := game.admins_parse(&c.admins, c.admins_text); bad > 0 {
+		log.warnf(
+			"collector admins.cfg: lines that are not an account key or steam:<id> count=%d",
+			bad,
+		)
 	}
-	log.infof("collector admins loaded count=%d", len(c.admins))
+	log.infof("collector admins loaded count=%d", len(c.admins.accounts) + len(c.admins.steam))
 }
 
 @(private)
@@ -86,7 +79,7 @@ take_dev_message :: proc(
 	m: game.Dev_Message,
 ) {
 	devchat_admins(c)
-	if p.account not_in c.admins {
+	if !game.is_admin(&c.admins, p.account, p.steam_id) {
 		dev_refuse(c, id, m, "this account is not a developer-chat admin")
 		return
 	}
@@ -159,7 +152,7 @@ reply_parse :: proc(data: []u8, stem: string) -> (r: game.Dev_Reply, ok: bool) {
 take_dev_fetch :: proc(c: ^Collector, id: netcode.Peer_Id, p: ^Collector_Peer, m: game.Dev_Fetch) {
 	devchat_admins(c)
 	out: game.Dev_Replies
-	if p.account in c.admins {
+	if game.is_admin(&c.admins, p.account, p.steam_id) {
 		dir := fmt.tprintf("%s/devchat/%s/out", c.dir, game.account_text(p.account))
 		infos, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
 		slice.sort_by(infos, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
