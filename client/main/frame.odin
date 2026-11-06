@@ -29,6 +29,8 @@ app_init :: proc(app: ^engine.App) -> bool {
 	app.registry = game.registry_base()
 	console.console_init(&app.console)
 	engine.line_editor_init(&app.chat)
+	engine.line_editor_init(&app.devchat_line)
+	app.devchat_attach = true
 	console.register_builtin_commands(&app.console)
 	if app.benchmark || app.checking {
 		app.settings = autopilot.BENCHMARK_SETTINGS // (the player's are not read)

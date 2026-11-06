@@ -13,6 +13,7 @@ Overlay :: enum u8 {
 	Consent, // the one-time question about sharing play data (telemetry.odin)
 	Open_To_LAN, // the game menu's dialog (overlay_lan.odin)
 	Death, // dead: how, and the Respawn button (overlay_death.odin)
+	Devchat, // the conversation with the developers (overlay/devchat.odin)
 }
 
 Overlay_Take :: enum u8 {
@@ -42,6 +43,7 @@ OVERLAY_INFO := [Overlay]Overlay_Info {
 	.Consent = {takes = {.Keyboard, .Mouse}},
 	.Open_To_LAN = {takes = {.Keyboard, .Mouse, .World}, in_game = true},
 	.Death = {takes = {.Keyboard, .Mouse}, in_game = true},
+	.Devchat = {takes = {.Keyboard, .Mouse}},
 }
 
 Overlays :: struct {

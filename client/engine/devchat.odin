@@ -68,3 +68,16 @@ devchat_stop :: proc(app: ^App) {
 	delete(app.devchat.address)
 	app.devchat.address = ""
 }
+
+// devchat_open opens the chat (an overlay) and fetches often while it is open.
+devchat_open :: proc(app: ^App) {
+	if !app.devchat.running {return}
+	overlay_open(&app.overlays, .Devchat)
+	collector.chat_set_active(&app.devchat.chat, true)
+	app.ui.edit = {} // the cursor to the end when it takes the focus
+}
+
+devchat_close :: proc(app: ^App) {
+	overlay_close(&app.overlays, .Devchat)
+	if app.devchat.running {collector.chat_set_active(&app.devchat.chat, false)}
+}
