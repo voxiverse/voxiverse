@@ -406,3 +406,25 @@ test_store_has_no_map :: proc(t: ^testing.T) {
 		testing.expect(t, !strings.contains(code, "map["), line)
 	}
 }
+
+// An entity keeps the kind it was spawned with, through a structural change
+// and until its despawn; no kind is 0.
+@(test)
+test_store_kind :: proc(t: ^testing.T) {
+	st: Entity_Store
+	testing.expect(t, store_init(&st, infos(), nil, 8) == nil)
+	defer store_destroy(&st)
+
+	_, a, _ := store_spawn(&st, {int(C_POS)}, Kind_Id(3))
+	_, b, _ := store_spawn(&st, {int(C_POS)})
+	testing.expect_value(t, store_kind(&st, a), Kind_Id(3)) // known before apply
+	store_apply(&st)
+	v := Vel{1}
+	testing.expect(t, store_add(&st, a, C_VEL, &v) == .None)
+	store_apply(&st) // the row moves to another table
+	testing.expect_value(t, store_kind(&st, a), Kind_Id(3))
+	testing.expect_value(t, store_kind(&st, b), Kind_Id(0))
+	testing.expect(t, store_despawn(&st, a) == .None)
+	store_apply(&st)
+	testing.expect_value(t, store_kind(&st, a), Kind_Id(0)) // a stale handle
+}

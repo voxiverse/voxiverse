@@ -67,6 +67,7 @@ Archetype :: struct {
 
 Entity_Slot :: struct {
 	id:        Entity_Id,
+	kind:      Kind_Id, // 0: none (a store used without kinds)
 	archetype: u16,
 	row:       u32,
 	dying:     bool, // a despawn is queued
@@ -299,12 +300,13 @@ store_count :: proc(st: ^Entity_Store) -> int {
 store_spawn :: proc(
 	st: ^Entity_Store,
 	set: Component_Set,
+	kind: Kind_Id = 0,
 ) -> (
 	id: Entity_Id,
 	h: Entity_Handle,
 	err: Store_Error,
 ) {
-	return store_spawn_with_id(st, set, st.next_id)
+	return store_spawn_with_id(st, set, st.next_id, kind)
 }
 
 // store_spawn_with_id is a load's spawn (M50f): the id is the saved one and
@@ -313,6 +315,7 @@ store_spawn_with_id :: proc(
 	st: ^Entity_Store,
 	set: Component_Set,
 	want: Entity_Id,
+	kind: Kind_Id = 0,
 ) -> (
 	id: Entity_Id,
 	h: Entity_Handle,
@@ -324,12 +327,22 @@ store_spawn_with_id :: proc(
 	}
 	if st.cmd_count == len(st.commands) {return 0, 0, .Command_Ring_Full}
 	if _, taken := store_find(st, want); taken {return 0, 0, .Stale}
-	handle, _, ok := base.pool_add(&st.slots, Entity_Slot{id = want, archetype = NO_ARCHETYPE})
+	handle, _, ok := base.pool_add(
+		&st.slots,
+		Entity_Slot{id = want, kind = kind, archetype = NO_ARCHETYPE},
+	)
 	if !ok {return 0, 0, .Pool_Full}
 	id_insert(st, want, handle)
 	st.next_id = max(st.next_id, want + 1)
 	push(st, Store_Command{kind = .Spawn, handle = handle, set = set})
 	return want, handle, .None
+}
+
+// store_kind is the kind an entity was spawned with (0 when none, or the
+// handle is stale).
+store_kind :: proc(st: ^Entity_Store, h: Entity_Handle) -> Kind_Id {
+	s := base.pool_get(&st.slots, h)
+	return s == nil ? 0 : s.kind
 }
 
 store_despawn :: proc(st: ^Entity_Store, h: Entity_Handle) -> Store_Error {
