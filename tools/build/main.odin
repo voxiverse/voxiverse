@@ -234,6 +234,8 @@ main :: proc() {
 		_, ok = build_game(args[1:])
 	case "package":
 		ok = package_game()
+	case "steam":
+		ok = steam(args[1:])
 	case "run":
 		ok = run_game(args[1:])
 	case "serve":
@@ -411,6 +413,9 @@ usage :: proc() {
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
 	fmt.println("  package   a release package for this platform in build/dist/")
+	fmt.println(
+		"  steam     lay out the Steam depots and their VDF scripts in build/steam/ from the three packages in build/dist/ (or a folder given)",
+	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
