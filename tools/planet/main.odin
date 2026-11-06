@@ -4,25 +4,63 @@ import "core:crypto/hash"
 import "core:encoding/hex"
 import "core:fmt"
 import "core:os"
+import "core:strconv"
 
 import "common:base"
+import "common:game"
 import "common:planet"
 
 // The home world's relief: reads NOAA ETOPO5 and writes the committed relief file.
 //
 //	build planet import <ETOPO5.DAT> [out]
-//	build planet maps [dir]          (PNGs of the climate model, default build/planet)
+//	build planet maps [dir] [--address <a>] [--seed N]
+//	                                 (PNGs of the climate model, default build/planet; with an
+//	                                 address, of the world generated for it: the address as
+//	                                 players write it or as a directory name, the seed 0 unless given)
 //
 // The source is downloaded, never committed (assets/planet/README.md has where from).
 
 main :: proc() {
 	args := os.args[1:]
 	if len(args) >= 1 && args[0] == "maps" {
-		dir := args[1] if len(args) > 1 else "build/planet"
-		os.exit(0 if maps_main(dir) else 1)
+		dir := "build/planet"
+		address: Maybe(game.Address)
+		seed := u64(0)
+		rest := args[1:]
+		for len(rest) > 0 {
+			switch rest[0] {
+			case "--address", "--seed":
+				if len(rest) < 2 {
+					fmt.eprintln("planet:", rest[0], "needs a value")
+					os.exit(2)
+				}
+				if rest[0] == "--address" {
+					a, ok := game.address_parse(rest[1], game.address_derive(seed).galaxy)
+					if !ok {
+						fmt.eprintln("planet: not an address:", rest[1])
+						os.exit(2)
+					}
+					address = a
+				} else {
+					n, ok := strconv.parse_u64(rest[1])
+					if !ok {
+						fmt.eprintln("planet: not a number:", rest[1])
+						os.exit(2)
+					}
+					seed = n
+				}
+				rest = rest[2:]
+			case:
+				dir = rest[0]
+				rest = rest[1:]
+			}
+		}
+		os.exit(0 if maps_main(dir, address, seed) else 1)
 	}
 	if len(args) < 2 || args[0] != "import" {
-		fmt.eprintln("usage: build planet import <ETOPO5.DAT> [out] | build planet maps [dir]")
+		fmt.eprintln(
+			"usage: build planet import <ETOPO5.DAT> [out] | build planet maps [dir] [--address <a>] [--seed N]",
+		)
 		os.exit(2)
 	}
 	out := args[2] if len(args) > 2 else "assets/planet/earth_relief.bin"
