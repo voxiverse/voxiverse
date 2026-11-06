@@ -1,5 +1,5 @@
 #+build windows
-package base
+package platform_common
 
 import "base:intrinsics"
 import "core:sync"
@@ -45,6 +45,7 @@ calibrate :: proc() -> u64 {
 // thread_cpu_us is the CPU time this thread has used, in microseconds: what a
 // budget test reads, so that other threads and processes taking the core
 // during the measurement do not count.
+@(private)
 thread_cpu_us :: proc() -> i64 {
 	rate := sync.atomic_load(&cycles_per_us)
 	if rate == 0 {
@@ -56,4 +57,5 @@ thread_cpu_us :: proc() -> i64 {
 
 // ticks is a cheap counter for the ratio of two spans (the unit differs by
 // platform: processor cycles here).
+@(private)
 ticks :: proc() -> u64 {return u64(intrinsics.read_cycle_counter())}

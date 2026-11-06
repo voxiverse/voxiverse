@@ -1,5 +1,5 @@
 #+build linux
-package base
+package platform_common
 
 import "core:c"
 
@@ -24,6 +24,7 @@ CLOCK_MONOTONIC_RAW :: 4
 // (CLOCK_MONOTONIC_RAW, the one the GPU's timestamps are calibrated against),
 // read through libc: its vDSO takes ~60 ns where spall's system call takes ~900,
 // twice a scope, which made a profiling build's timings several times too long.
+@(private)
 profile_now :: proc "contextless" () -> u64 {
 	t: Timespec
 	libc_clock_gettime(CLOCK_MONOTONIC_RAW, &t)

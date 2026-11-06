@@ -24,12 +24,18 @@ boot :: proc(host: ^base.Host) {
 			dirs = read_dirs(),
 			machine = read_machine(),
 		},
+		clock = {
+			thread_cpu_us = thread_cpu_us,
+			ticks = ticks,
+			profile_now = when_linux_profile_now(),
+		},
 		output = {write = output_write, is_color = output_is_color},
 		entropy = crypto.rand_bytes,
 	}
 	base.boot_install(host.boot)
 	base.output_install(host.output)
 	base.entropy_install(host.entropy)
+	base.clock_install(host.clock)
 }
 
 @(private = "file")
@@ -102,4 +108,11 @@ read_dirs :: proc() -> base.Dirs {
 read_machine :: proc() -> base.Machine_Facts {
 	cpu, cores, threads, os_name := machine_facts()
 	return {cpu = cpu, cores = cores, threads = threads, os = os_name}
+}
+
+// when_linux_profile_now is the trace clock where the platform has one of its own (Linux
+// reads CLOCK_MONOTONIC_RAW through libc, much cheaper than spall's system call); nil elsewhere.
+@(private = "file")
+when_linux_profile_now :: proc() -> proc "contextless" () -> u64 {
+	when ODIN_OS == .Linux {return profile_now} else {return nil}
 }
