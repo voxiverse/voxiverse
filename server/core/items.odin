@@ -1,6 +1,7 @@
 package core
 
 import "core:fmt"
+import "core:slice"
 
 import "common:base"
 import "common:game"
@@ -121,6 +122,10 @@ spawn_item :: proc(
 	return ent
 }
 
+// PICKUP_SLACK: how far a player can have moved since the spatial service
+// last saw them (a tick of running is well under this).
+PICKUP_SLACK :: 2
+
 // item_tick moves the dropped stack at index, merges into it the stacks of
 // its item near it, and gives it to a player walking over it. True when it
 // is gone (picked up, or old).
@@ -152,9 +157,30 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			ent = &w.entities.list[index]
 		}
 	}
-	for &c in s.clients {
+	// The players near it come from the spatial service (their boxes are where
+	// they stood at the end of the last tick, so it asks a little wider); the
+	// client says where each is now. Clients in order, as the loop over all did.
+	ew := w.entity_world
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&ew.spatial,
+		ent.body.position,
+		game.ITEM_PICKUP_RANGE + PICKUP_SLACK,
+		{all = {.Player}},
+		&near,
+	)
+	who := make([dynamic]int, context.temp_allocator)
+	for id in near {
+		h, live := game.store_find(&ew.store, id)
+		if !live {continue}
+		link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link)
+		if link != nil && int(link.client) < len(s.clients) {append(&who, int(link.client))}
+	}
+	slice.sort(who[:])
+	for ci in who {
+		c := &s.clients[ci]
 		if c.state != .Playing || c.world != w {continue}
-		delay := f32(2 if ent.owner == int(player_id(s, &c)) else game.ITEM_PICKUP_DELAY)
+		delay := f32(2 if ent.owner == int(player_id(s, c)) else game.ITEM_PICKUP_DELAY)
 		if f32(ent.age) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - ent.body.position
 		if d.x * d.x + d.y * d.y + d.z * d.z >
@@ -163,7 +189,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		if left.count == ent.stack.count {continue} 	// no room
 		record(
 			s,
-			&c,
+			c,
 			.Item_Picked,
 			game.item_name(s.registry, ent.stack.item),
 			i64(ent.stack.count - left.count),
