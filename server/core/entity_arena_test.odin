@@ -33,15 +33,15 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
-		rules           = quiet_rules(),
-		seed            = 81,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 2,
-		listen          = true,
-		everyone_cheats = true,
-		save_dir        = dir,
-		no_sheep        = true,
+		rules             = quiet_rules(),
+		seed              = 81,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		everyone_cheats   = true,
+		save_dir          = dir,
+		no_natural_spawns = true,
 	}
 	h := new(Harness)
 	defer free(h)

@@ -122,14 +122,14 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 	if !testing.expect(t, collector.collector_start(&c, lake, 0)) {return}
 	defer collector.collector_stop(&c)
 	config := core.Config {
-		seed        = 28,
-		generator   = .Classic,
-		rules       = game.RULES_DEFAULTS,
-		view_radius = 3,
-		view_height = 2,
-		workers     = 2,
-		no_sheep    = true,
-		save_dir    = quiet,
+		seed              = 28,
+		generator         = .Classic,
+		rules             = game.RULES_DEFAULTS,
+		view_radius       = 3,
+		view_height       = 2,
+		workers           = 2,
+		no_natural_spawns = true,
+		save_dir          = quiet,
 	}
 	// No consent: no upload configured. Nothing arrives.
 	if !play_a_little(t, config) {return}

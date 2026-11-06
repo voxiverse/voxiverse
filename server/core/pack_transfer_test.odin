@@ -53,7 +53,7 @@ test_pack_transfer :: proc(t: ^testing.T) {
 				view_height = 2,
 				max_players = 4,
 				listen = true,
-				no_sheep = true,
+				no_natural_spawns = true,
 				extra_packs = extra,
 			},
 			conditions = bad,

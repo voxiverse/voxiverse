@@ -153,7 +153,7 @@ test_the_damage_pipeline :: proc(t: ^testing.T) {
 				max_players = 4,
 				listen = true,
 				generator = .Classic,
-				no_sheep = true,
+				no_natural_spawns = true,
 			},
 		),
 	) {return}

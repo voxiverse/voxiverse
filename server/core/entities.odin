@@ -723,7 +723,7 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 @(private = "file")
 spawn_natural :: proc(w: ^World) {
 	s := w.server
-	if s.config.no_sheep {return}
+	if s.config.no_natural_spawns {return}
 	day := game.time_of_day(w.clock)
 	if day < 0.27 || day > 0.73 {return}
 	r := &w.entities.rng

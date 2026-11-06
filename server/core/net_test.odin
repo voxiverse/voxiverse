@@ -637,14 +637,14 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 		seed       = LOSS_SEED,
 	}
 	config := Config {
-		rules           = quiet_rules(),
-		seed            = 31,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 4,
-		listen          = true,
-		everyone_cheats = true,
-		no_sheep        = true, // (the summoned one is the only one: natural ones spawn by day, when the timing lets them)
+		rules             = quiet_rules(),
+		seed              = 31,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true, // (the summoned one is the only one: natural ones spawn by day, when the timing lets them)
 	}
 	h := new(Harness)
 	defer free(h)

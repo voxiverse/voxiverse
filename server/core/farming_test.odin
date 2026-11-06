@@ -34,7 +34,7 @@ farm_config :: proc(dir: string) -> Config {
 		listen = true,
 		everyone_cheats = true,
 		save_dir = dir,
-		no_sheep = true,
+		no_natural_spawns = true,
 	}
 }
 

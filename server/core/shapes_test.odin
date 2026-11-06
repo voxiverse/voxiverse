@@ -64,7 +64,7 @@ stand :: proc(m: ^Mirror) -> game.Player_State {
 test_shapes_agree :: proc(t: ^testing.T) {
 	sess := new(Session)
 	defer free(sess)
-	if !testing.expect(t, session_start(sess, {}, false, no_sheep = true)) {return}
+	if !testing.expect(t, session_start(sess, {}, false, no_natural_spawns = true)) {return}
 	defer session_stop(sess)
 	m := &sess.mirror
 	if !session_land(t, sess) {return}
@@ -170,7 +170,7 @@ text_of :: proc(b: game.Block) -> string {
 test_doors_and_fences_agree :: proc(t: ^testing.T) {
 	sess := new(Session)
 	defer free(sess)
-	if !testing.expect(t, session_start(sess, {}, false, no_sheep = true)) {return}
+	if !testing.expect(t, session_start(sess, {}, false, no_natural_spawns = true)) {return}
 	defer session_stop(sess)
 	m := &sess.mirror
 	if !session_land(t, sess) {return}

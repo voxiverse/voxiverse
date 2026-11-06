@@ -30,23 +30,23 @@ import "server:core"
 // Player_Updates have the last word.
 
 Session_Config :: struct {
-	name:         string, // the character to play ("": ask for the account's)
-	key:          game.Account_Key, // the account
-	join:         Maybe(Join), // play on that server; otherwise host the world here
-	seed:         i64,
-	mode:         string, // a new universe's default game mode ("": creative)
-	view_radius:  i32,
-	view_height:  i32,
-	trace:        bool, // record every message to net.trace from the start (hosting only)
-	capture:      bool, // write every packet to net.pcap (joining only)
-	save_dir:     string, // the world's directory; "" = scratch, not saved
-	spawn:        Maybe([3]f64), // a new world's spawn (else the generator's)
-	no_sheep:     bool, // (hosting) none appear by themselves: benchmarks
-	still_clouds: bool, // the clouds stay where they start: benchmarks
-	upload:       Maybe(core.Upload), // (hosting) send its event log to a collector
-	registry:     ^game.Registry, // the game's own (the base pack): what a remote server must match
-	steam:        ^steam.Client, // (joining) Steam: its ticket goes in Hello when it is on (nil: no Steam)
-	net:          ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
+	name:              string, // the character to play ("": ask for the account's)
+	key:               game.Account_Key, // the account
+	join:              Maybe(Join), // play on that server; otherwise host the world here
+	seed:              i64,
+	mode:              string, // a new universe's default game mode ("": creative)
+	view_radius:       i32,
+	view_height:       i32,
+	trace:             bool, // record every message to net.trace from the start (hosting only)
+	capture:           bool, // write every packet to net.pcap (joining only)
+	save_dir:          string, // the world's directory; "" = scratch, not saved
+	spawn:             Maybe([3]f64), // a new world's spawn (else the generator's)
+	no_natural_spawns: bool, // (hosting) none appear by themselves: benchmarks
+	still_clouds:      bool, // the clouds stay where they start: benchmarks
+	upload:            Maybe(core.Upload), // (hosting) send its event log to a collector
+	registry:          ^game.Registry, // the game's own (the base pack): what a remote server must match
+	steam:             ^steam.Client, // (joining) Steam: its ticket goes in Hello when it is on (nil: no Steam)
+	net:               ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
 }
 
 // Join: a server to play on.
@@ -286,20 +286,20 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	if !core.start(
 	&s.server,
 	{
-		seed            = config.seed,
-		mode            = config.mode,
-		view_radius     = config.view_radius,
-		view_height     = config.view_height,
-		workers         = worker_count(),
-		allow_cheats    = true, // our own world
-		save_dir        = config.save_dir,
-		available_packs = s.available,
-		pack_watch      = base.DEV, // (a development build reloads packs when their files change)
-		spawn           = config.spawn,
-		no_sheep        = config.no_sheep,
-		upload          = config.upload,
-		rules           = still_rules() if config.no_sheep else {},
-		name            = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
+		seed              = config.seed,
+		mode              = config.mode,
+		view_radius       = config.view_radius,
+		view_height       = config.view_height,
+		workers           = worker_count(),
+		allow_cheats      = true, // our own world
+		save_dir          = config.save_dir,
+		available_packs   = s.available,
+		pack_watch        = base.DEV, // (a development build reloads packs when their files change)
+		spawn             = config.spawn,
+		no_natural_spawns = config.no_natural_spawns,
+		upload            = config.upload,
+		rules             = still_rules() if config.no_natural_spawns else {},
+		name              = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
 	},
 	{&s.pipe, .Server},
 	) {

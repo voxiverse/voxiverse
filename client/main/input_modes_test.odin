@@ -280,13 +280,13 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 	rig := new(Frame_Rig)
 	defer free(rig)
 	config := core.Config {
-		seed        = 33,
-		view_radius = 3,
-		view_height = 2,
-		max_players = 2,
-		listen      = true,
-		no_sheep    = true,
-		rules       = engine.still_rules(),
+		seed              = 33,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		no_natural_spawns = true,
+		rules             = engine.still_rules(),
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
 	defer core.harness_stop(&rig.h)

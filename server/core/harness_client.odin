@@ -266,19 +266,19 @@ session_start :: proc(
 	sess: ^Session,
 	perturb: Perturb,
 	logging: bool,
-	no_sheep := false,
+	no_natural_spawns := false,
 	with: Maybe(Config) = nil,
 	conditions := netcode.Conditions{},
 ) -> bool {
 	config := Config {
-		seed         = DETERMINISM_SEED,
-		generator    = .Earth,
-		view_radius  = 4,
-		view_height  = 2,
-		allow_cheats = true,
-		max_players  = 1,
-		perturb      = perturb,
-		no_sheep     = no_sheep,
+		seed              = DETERMINISM_SEED,
+		generator         = .Earth,
+		view_radius       = 4,
+		view_height       = 2,
+		allow_cheats      = true,
+		max_players       = 1,
+		perturb           = perturb,
+		no_natural_spawns = no_natural_spawns,
 	}
 	if c, given := with.?; given {config = c}
 	if !harness_start(&sess.h, config, local = true, conditions = conditions) {return false}

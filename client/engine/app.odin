@@ -311,7 +311,7 @@ enter_world :: proc(
 	start_session(
 		app,
 		{
-			no_sheep = benchmark,
+			no_natural_spawns = benchmark,
 			still_clouds = benchmark,
 			name = player_name(&app.settings),
 			key = app.account,

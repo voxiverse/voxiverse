@@ -89,7 +89,7 @@ open_fixture :: proc(
 	expect = fixture_lines(string(data))
 	os.remove(fmt.tprintf("%s/expect.txt", dir))
 	cfg := grief_config(dir)
-	cfg.no_sheep = false
+	cfg.no_natural_spawns = false
 	g, ok = grief_open(t, dir, cfg)
 	if !ok {return}
 	// The chunks the fixture hashed: the 5 x 3 x 5 around its center.

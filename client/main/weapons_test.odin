@@ -30,16 +30,16 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	rig := new(Frame_Rig)
 	defer free(rig)
 	config := core.Config {
-		save_dir    = dir,
-		kit         = "rocket_launcher 1", // (the world's kit: the blocks of the other tests are not wanted)
-		seed        = 33,
-		view_radius = 3,
-		view_height = 2,
-		max_players = 2,
-		listen      = true,
-		no_sheep    = true,
-		mode        = "survival",
-		rules       = engine.still_rules(),
+		save_dir          = dir,
+		kit               = "rocket_launcher 1", // (the world's kit: the blocks of the other tests are not wanted)
+		seed              = 33,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		no_natural_spawns = true,
+		mode              = "survival",
+		rules             = engine.still_rules(),
 	}
 	if !testing.expect(t, core.harness_start(&rig.h, config)) {return}
 	defer core.harness_stop(&rig.h)

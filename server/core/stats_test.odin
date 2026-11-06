@@ -41,7 +41,7 @@ config :: proc(dir: string, cheats := true) -> Config {
 		listen = true,
 		everyone_cheats = cheats,
 		save_dir = dir,
-		no_sheep = true,
+		no_natural_spawns = true,
 	}
 }
 

@@ -70,7 +70,7 @@ harness_world :: proc() -> Config {
 		max_players = 8,
 		allow_cheats = true,
 		everyone_cheats = true,
-		no_sheep = true,
+		no_natural_spawns = true,
 		backups = 0,
 		rules = harness_rules(),
 	}
