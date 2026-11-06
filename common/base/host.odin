@@ -8,7 +8,7 @@ import "core:fmt"
 // the core imports only base and never a platform package. Tests fill it with fakes.
 //
 // The services land one step at a time (docs/design.md, "The OS quarantine"): so far the boot
-// information, the output (stdout and stderr) and the entropy.
+// information, the output (stdout and stderr), the entropy and the clocks.
 Host :: struct {
 	boot:    Boot_Info,
 	output:  Output_Service,
@@ -16,6 +16,7 @@ Host :: struct {
 	// salts, secrets. Never for gameplay randomness (see Rng, and cosmetic_rng for what
 	// need not repeat).
 	entropy: proc(out: []u8),
+	clock:   Clock_Service,
 }
 
 // Boot_Info: what the process was started with, read once at boot.
@@ -166,4 +167,39 @@ cosmetic_rng :: proc() -> ^Rng {
 		cosmetic_ready = true
 	}
 	return &cosmetic
+}
+
+// Clock_Service: the clocks that read the OS. The platform fills it; `clock_install` makes
+// it the process's one set (platform.boot does it).
+Clock_Service :: struct {
+	// The CPU time this thread has used, in microseconds: what a budget test reads, so that
+	// other threads and processes taking the core during the measurement do not count.
+	thread_cpu_us: proc() -> i64,
+	// A cheap counter for the ratio of two spans (its unit differs by platform).
+	ticks:         proc() -> u64,
+	// The trace's clock in nanoseconds (the clock spall reads); nil where spall's own will do.
+	profile_now:   proc "contextless" () -> u64,
+}
+
+@(private)
+clock: Clock_Service
+
+// clock_install makes service the process's clocks (platform.boot does it, before any
+// thread starts).
+clock_install :: proc(service: Clock_Service) {
+	clock = service
+}
+
+// thread_cpu_us is the CPU time this thread has used, in microseconds. It stops the
+// process when no clock is installed: a budget measured against 0 would pass quietly.
+thread_cpu_us :: proc() -> i64 {
+	if clock.thread_cpu_us ==
+	   nil {panic("thread_cpu_us: no clock installed (platform.boot was not called)")}
+	return clock.thread_cpu_us()
+}
+
+// ticks is a cheap counter for the ratio of two spans (the unit differs by platform).
+ticks :: proc() -> u64 {
+	if clock.ticks == nil {panic("ticks: no clock installed (platform.boot was not called)")}
+	return clock.ticks()
 }

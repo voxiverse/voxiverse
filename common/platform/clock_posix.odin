@@ -1,11 +1,12 @@
 #+build linux, darwin
-package base
+package platform_common
 
 import "core:sys/posix"
 
 // thread_cpu_us is the CPU time this thread has used, in microseconds: what a
 // budget test reads, so that other threads and processes taking the core
 // during the measurement do not count.
+@(private)
 thread_cpu_us :: proc() -> i64 {
 	ts: posix.timespec
 	posix.clock_gettime(.THREAD_CPUTIME_ID, &ts)
@@ -16,6 +17,7 @@ thread_cpu_us :: proc() -> i64 {
 // here; the unit differs by platform). The processor's own cycle counter would
 // do, but it reads 0 on arm64 macOS, and the thread's CPU clock costs more than
 // the calls it would time.
+@(private)
 ticks :: proc() -> u64 {
 	ts: posix.timespec
 	posix.clock_gettime(.MONOTONIC, &ts)

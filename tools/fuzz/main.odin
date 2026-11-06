@@ -7,6 +7,7 @@ import "core:strings"
 
 import "common:base"
 import "common:base/fuzz"
+import platform "common:platform"
 
 // The fuzz driver (docs/fuzzing.md): one process, one target at a time, supervised by
 // `build fuzz` (tools/build/fuzz.odin), which starts it again after a crash.
@@ -18,6 +19,8 @@ import "common:base/fuzz"
 main :: proc() {
 	// Targets that make keys or nonces read the Host entropy; a fixed stream keeps a crash
 	// input replayable (the fuzzer finds bugs, it does not need secrets).
+	host: base.Host
+	platform.boot(&host) // the clocks
 	base.entropy_install(fixed_entropy)
 	args := os.args[1:]
 	if len(args) == 0 {usage()}

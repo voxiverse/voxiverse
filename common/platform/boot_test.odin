@@ -64,3 +64,18 @@ test_boot_reads_the_machine :: proc(t: ^testing.T) {
 	testing.expect(t, host.boot.machine.threads > 0)
 	testing.expect_value(t, base.boot_info().machine, host.boot.machine)
 }
+
+@(test)
+test_boot_installs_the_clocks :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	testing.expect(t, host.clock.thread_cpu_us != nil)
+	testing.expect(t, host.clock.ticks != nil)
+	a := base.thread_cpu_us()
+	spin := 0
+	for i in 0 ..< 2_000_000 {spin += i}
+	testing.expect(t, base.thread_cpu_us() >= a)
+	testing.expect(t, spin != 0)
+	b := base.ticks()
+	testing.expect(t, base.ticks() >= b)
+}
