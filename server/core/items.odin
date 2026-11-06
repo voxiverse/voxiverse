@@ -143,18 +143,38 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(s.registry, ent.stack.item)
 	if ent.age % 10 == 0 {
-		// Those after it in the list (not yet moved this tick) join it.
-		for j := len(w.entities.list) - 1; j > index; j -= 1 {
-			other := &w.entities.list[j]
-			if other.kind != .Item || other.stack.item != ent.stack.item {continue}
-			if ent.stack.count + other.stack.count > size {continue}
-			d := other.body.position - ent.body.position
-			if d.x * d.x + d.y * d.y + d.z * d.z >
-			   game.ITEM_MERGE_RANGE * game.ITEM_MERGE_RANGE {continue}
-			ent.stack.count += other.stack.count
-			ent.age = min(ent.age, other.age)
-			entity_gone(w, j)
-			ent = &w.entities.list[index]
+		// Those after it in the list (not yet moved this tick) join it. The
+		// spatial service names the item stacks near it (asking a little wider,
+		// as their boxes are where they were at the end of the last tick); the
+		// list says where each is now and whether it comes after.
+		if item_kind, ok := game.registry_kind(s.registry, "voxiverse:item"); ok {
+			ew := w.entity_world
+			near := make([dynamic]game.Entity_Id, context.temp_allocator)
+			game.spatial_sphere(
+				&ew.spatial,
+				ent.body.position,
+				game.ITEM_MERGE_RANGE + PICKUP_SLACK,
+				{kind = u16(item_kind), exclude = game.Entity_Id(ent.id)},
+				&near,
+			)
+			// highest list index first, as the walk down the list did
+			order := make([dynamic]int, context.temp_allocator)
+			for id in near {
+				if _, j := entity_find(w, u32(id)); j > index {append(&order, j)}
+			}
+			slice.sort(order[:])
+			#reverse for j in order {
+				other := &w.entities.list[j]
+				if other.kind != .Item || other.stack.item != ent.stack.item {continue}
+				if ent.stack.count + other.stack.count > size {continue}
+				d := other.body.position - ent.body.position
+				if d.x * d.x + d.y * d.y + d.z * d.z >
+				   game.ITEM_MERGE_RANGE * game.ITEM_MERGE_RANGE {continue}
+				ent.stack.count += other.stack.count
+				ent.age = min(ent.age, other.age)
+				entity_gone(w, j)
+				ent = &w.entities.list[index]
+			}
 		}
 	}
 	// The players near it come from the spatial service (their boxes are where
