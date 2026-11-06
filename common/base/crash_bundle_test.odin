@@ -135,3 +135,19 @@ test_crash_bundle_files :: proc(t: ^testing.T) {
 	testing.expect(t, strings.has_suffix(actions[len(actions) - 1], " action move_299"))
 	testing.expect(t, strings.has_prefix(actions[0], "t="))
 }
+
+@(test)
+test_crash_bundle_claim_unseen :: proc(t: ^testing.T) {
+	root := "build/tmp/crash_claim"
+	os.remove_all(root)
+	defer os.remove_all(root)
+	os.make_directory_all(fmt.tprintf("%s/2020-01-01_00-00-00-1", root))
+	os.make_directory_all(fmt.tprintf("%s/2020-01-03_00-00-00-1", root))
+	os.make_directory_all(fmt.tprintf("%s/2020-01-02_00-00-00-1", root))
+	_ = os.write_entire_file(fmt.tprintf("%s/2020-01-02_00-00-00-1/seen", root), []u8{'x'})
+	newest, n := crash_bundle_claim_unseen(root)
+	testing.expect_value(t, n, 2)
+	testing.expect_value(t, newest, fmt.tprintf("%s/2020-01-03_00-00-00-1", root))
+	_, again := crash_bundle_claim_unseen(root)
+	testing.expect_value(t, again, 0)
+}
