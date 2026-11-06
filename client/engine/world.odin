@@ -538,7 +538,13 @@ predict_column_top :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
 	if !ok {return}
 	i := int(p.x & game.CHUNK_MASK) + int(p.z & game.CHUNK_MASK) * game.CHUNK_SIZE
 	old := column.heights[i]
-	top := game.column_top_after(game.Block_Query{w, world_block, &w.reg.blocks}, old, p, b, nil)
+	top := game.column_top_after(
+		game.Block_Query{w, world_block, &w.reg.blocks, {}},
+		old,
+		p,
+		b,
+		nil,
+	)
 	if top == old {return}
 	column.heights[i] = top
 	append(

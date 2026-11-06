@@ -74,7 +74,7 @@ shot_trace :: proc(
 	res := Shot_Result {
 		distance = range,
 	}
-	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks}
+	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks, {}}
 	if hit, ok := game.raycast(query, origin, dir, range); ok {
 		res.kind, res.distance = .Block, hit.distance
 	}

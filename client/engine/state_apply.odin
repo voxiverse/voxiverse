@@ -59,7 +59,7 @@ apply_own_player :: proc(s: ^Session, g: game.Received) {
 		&s.prediction,
 		v,
 		&s.rules,
-		{&s.world, world_block, &s.reg.blocks},
+		{&s.world, world_block, &s.reg.blocks, {}},
 		game.derive_character(s.reg, s.mode, &s.inventory),
 		teleported,
 	)

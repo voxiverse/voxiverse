@@ -65,7 +65,7 @@ client_block :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 
 @(private = "file")
 query :: proc(c: ^Predicting_Client) -> game.Block_Query {
-	return {c, client_block, test_blocks()}
+	return {c, client_block, test_blocks(), {}}
 }
 
 @(private = "file")

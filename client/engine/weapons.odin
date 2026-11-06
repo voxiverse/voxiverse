@@ -116,7 +116,7 @@ session_shoot :: proc(s: ^Session, stack: game.Stack, w: game.Weapon_Info, press
 	// server's: the same procedure and seed).
 	f := render.forward(s.camera.yaw, s.camera.pitch)
 	dir := [3]f64{f64(f.x), f64(f.y), f64(f.z)}
-	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	right := [3]f64{f64(math.cos(s.camera.yaw)), 0, -f64(math.sin(s.camera.yaw))}
 	muzzle := s.camera.position + dir * 0.6 + right * 0.18 - {0, 0.16, 0}
 	rays, count := game.pellet_dirs(

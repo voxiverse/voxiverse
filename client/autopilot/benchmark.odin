@@ -271,7 +271,7 @@ bench_update :: proc(app: ^engine.App) {
 		}
 		if b.scenario.kind == .Edits {
 			// The ground at fixed places round the spawn (the world is fixed).
-			query := game.Block_Query{&s.world, engine.world_block, &s.reg.blocks}
+			query := game.Block_Query{&s.world, engine.world_block, &s.reg.blocks, {}}
 			for &t, k in b.targets {
 				angle := f64(k) * 2 * math.PI / engine.BENCH_EDITS
 				x := engine.SCRATCH_SPAWN.x + BENCH_EDIT_RING * math.cos(angle)
@@ -299,7 +299,7 @@ bench_update :: proc(app: ^engine.App) {
 		}
 		if b.scenario.kind == .Avatars {
 			// The ring in front of the spawn, each avatar on the ground there.
-			query := game.Block_Query{&s.world, engine.world_block, &s.reg.blocks}
+			query := game.Block_Query{&s.world, engine.world_block, &s.reg.blocks, {}}
 			feet := s.prediction.state.position
 			for &p, k in b.crowd {
 				angle := f64(k) * 2 * math.PI / engine.BENCH_AVATARS

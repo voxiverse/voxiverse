@@ -86,15 +86,8 @@ body_step :: proc(
 	b.velocity.y = max(b.velocity.y - rules.gravity * dt, -rules.terminal_velocity)
 	vy := (vy_before + b.velocity.y) / 2
 	delta := [3]f64{f64(b.velocity.x * dt), f64(vy * dt), f64(b.velocity.z * dt)}
-	b.on_ground = false
-	for axis in ([3]int{1, 0, 2}) {
-		moved, hit := sweep(b.position, info.width, info.height, axis, delta[axis], q)
-		b.position[axis] += moved
-		if hit {
-			if axis == 1 && delta.y < 0 {b.on_ground = true}
-			b.velocity[axis] = 0
-		}
-	}
+	c := collide_move(q, b.position, info.width / 2, info.height, delta, b.velocity, 0)
+	b.position, b.velocity, b.on_ground = c.position, c.velocity, c.on_ground
 }
 
 // entity_box is an entity's box at position.

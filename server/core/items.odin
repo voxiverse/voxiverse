@@ -133,7 +133,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		return true
 	}
 	if !chunk_ready(w, ent.body.position) {return false} 	// its ground is not loaded: it waits
-	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	game.body_step(&ent.body, .Item, {}, false, &w.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(s.registry, ent.stack.item)

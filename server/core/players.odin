@@ -124,7 +124,7 @@ farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 simulate_player :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	buf: [game.INPUT_BUDGET_MAX]game.Input
-	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	run_due_actions(s, c) // after inputs applied in earlier ticks
 	if c.inv_changed {disturb(s, c)} 	// (the mods its gear gives)
 	waiting := landing_tick(s, c)

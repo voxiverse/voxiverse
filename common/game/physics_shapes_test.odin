@@ -20,7 +20,7 @@ shaped_query :: proc(w: ^Shaped_World, reg: ^Registry) -> Block_Query {
 			w := (^Shaped_World)(data)
 			if b, ok := w.blocks[p]; ok {return b, true}
 			return .Stone if p.y < w.floor else .Air, true
-		}, &reg.blocks}
+		}, &reg.blocks, {}}
 }
 
 // --- The frozen sweep: what it was before shapes (one layer at a time). ---

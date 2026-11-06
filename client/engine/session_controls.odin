@@ -156,7 +156,7 @@ session_edit :: proc(s: ^Session, place: bool, block: game.Block) -> bool {
 			hit    = game.hit_sixteenths(hit.point, hit.block),
 			yaw    = s.input_yaw,
 		}
-		query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+		query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 		pos, state, ok := game.placement(
 			s.reg,
 			game.block_type_of(&s.reg.blocks, block),
@@ -224,7 +224,7 @@ predict_edit :: proc(s: ^Session, pos: game.Block_Pos, block: game.Block) -> boo
 
 // predict_neighbours: the four neighbours of pos follow it (shape_update).
 predict_neighbours :: proc(s: ^Session, pos: game.Block_Pos) {
-	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	changes: [4]game.Block_Change
 	for c in changes[:game.neighbour_updates(s.reg, pos, query, &changes)] {
 		world_set_block(&s.world, c.pos, c.b)

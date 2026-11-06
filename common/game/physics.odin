@@ -125,6 +125,29 @@ Block_Query :: struct {
 	data:  rawptr,
 	get:   proc(data: rawptr, p: Block_Pos) -> (b: Block, loaded: bool),
 	table: ^Block_Table, // what the blocks are (the registry's)
+	extra: Box_Source, // boxes besides the cells' (nil boxes: none, and nothing changes)
+}
+
+// World_Box is an axis-aligned collision box in world units.
+World_Box :: struct {
+	lo, hi: [3]f64,
+}
+
+// Box_Source gives collision boxes that are not blocks. `boxes` appends to
+// `out` every box that may overlap [lo, hi] (extra ones are harmless: each
+// box is tested like a cell's). Collision asks once per call with the bounds
+// it searches; the boxes collide exactly like cells' boxes do.
+Box_Source :: struct {
+	data:  rawptr,
+	boxes: proc(data: rawptr, lo, hi: [3]f64, out: ^[dynamic]World_Box),
+}
+
+// extra_boxes: the source's boxes in [lo, hi] (in the temp allocator; none
+// when there is no source).
+extra_boxes :: proc(q: Block_Query, lo, hi: [3]f64) -> [dynamic]World_Box {
+	out := make([dynamic]World_Box, 0, 0, context.temp_allocator)
+	if q.extra.boxes != nil {q.extra.boxes(q.extra.data, lo, hi, &out)}
+	return out
 }
 
 // player_step advances the player by dt seconds (one tick).
@@ -273,7 +296,20 @@ player_step :: proc(
 		}
 	}
 	if stopped && s.on_ground && !s.flying && !swimming {
-		try_step_up(s, q, stepped_from, delta, vel_before)
+		if r, ok := step_up(
+			q,
+			s.position,
+			PLAYER_WIDTH / 2,
+			player_height(s^),
+			stepped_from,
+			delta,
+			vel_before,
+			STEP_HEIGHT,
+		); ok {
+			s.position = r.position
+			s.velocity.x, s.velocity.z = r.velocity.x, r.velocity.z
+			s.on_ground = true
+		}
 	}
 	if s.flying && s.on_ground {s.flying = false} 	// landing ends flight
 	s.jump_held = jump
@@ -305,33 +341,6 @@ on_climbable :: proc(q: Block_Query, position: [3]f64, height: f64) -> bool {
 	return false
 }
 
-// try_step_up: a player on the ground who was stopped sideways tries the
-// same horizontal move from STEP_HEIGHT higher (up, across, down by what it
-// rose) and keeps it only if it went strictly farther; otherwise nothing
-// changes. from: where the horizontal moves began.
-@(private = "file")
-try_step_up :: proc(s: ^Player_State, q: Block_Query, from, delta: [3]f64, vel: [3]f32) {
-	height := player_height(s^)
-	normal := abs(s.position.x - from.x) + abs(s.position.z - from.z)
-	p := from
-	rose, _ := sweep(p, PLAYER_WIDTH, height, 1, STEP_HEIGHT, q)
-	if rose <= 0 {return}
-	p.y += rose
-	v := vel
-	for axis in ([2]int{0, 2}) {
-		moved, hit := sweep(p, PLAYER_WIDTH, height, axis, delta[axis], q)
-		p[axis] += moved
-		if hit {v[axis] = 0}
-	}
-	dropped, landed := sweep(p, PLAYER_WIDTH, height, 1, -rose, q)
-	if !landed {return}
-	p.y += dropped
-	if abs(p.x - from.x) + abs(p.z - from.z) <= normal {return}
-	s.position = p
-	s.velocity.x, s.velocity.z = v.x, v.z
-	s.on_ground = true
-}
-
 // player_box is the player's box (feet centre at its position).
 player_box :: proc(s: Player_State) -> (lo, hi: [3]f64) {
 	half :: PLAYER_WIDTH / 2
@@ -359,6 +368,18 @@ box_blocked :: proc(q: Block_Query, position: [3]f64, width, height: f64) -> boo
 				for box in cell_boxes(q, p) {
 					if box_overlaps(box, p, lo, hi) {return true}
 				}
+			}
+		}
+	}
+	if q.extra.boxes != nil {
+		for box in extra_boxes(q, lo, hi) {
+			if box.lo.x < hi.x &&
+			   box.hi.x > lo.x &&
+			   box.lo.y < hi.y &&
+			   box.hi.y > lo.y &&
+			   box.lo.z < hi.z &&
+			   box.hi.z > lo.z {
+				return true
 			}
 		}
 	}
@@ -501,6 +522,18 @@ sweep :: proc(
 				}
 			}
 		}
+		if q.extra.boxes != nil {
+			slo, shi := lo, hi
+			shi[axis] = face + delta
+			for box in extra_boxes(q, slo, shi) {
+				blo, bhi := box.lo, box.hi
+				if blo[axis] < face - EPS || blo[axis] >= face + delta {continue}
+				if blo[axis] - face >= best {continue}
+				if blo[a1] >= hi[a1] - EPS || bhi[a1] <= lo[a1] + EPS {continue}
+				if blo[a2] >= hi[a2] - EPS || bhi[a2] <= lo[a2] + EPS {continue}
+				best, hit = blo[axis] - face, true
+			}
+		}
 	} else {
 		face := lo[axis]
 		first := i32(math.floor(face + EPS))
@@ -521,6 +554,18 @@ sweep :: proc(
 						best, best_set, hit = bhi[axis] - face, true, true
 					}
 				}
+			}
+		}
+		if q.extra.boxes != nil {
+			slo, shi := lo, hi
+			slo[axis] = face + delta
+			for box in extra_boxes(q, slo, shi) {
+				blo, bhi := box.lo, box.hi
+				if bhi[axis] > face + EPS || bhi[axis] <= face + delta {continue}
+				if best_set && bhi[axis] - face <= best {continue}
+				if blo[a1] >= hi[a1] - EPS || bhi[a1] <= lo[a1] + EPS {continue}
+				if blo[a2] >= hi[a2] - EPS || bhi[a2] <= lo[a2] + EPS {continue}
+				best, best_set, hit = bhi[axis] - face, true, true
 			}
 		}
 	}

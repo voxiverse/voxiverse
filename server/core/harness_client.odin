@@ -88,7 +88,7 @@ block_of :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 }
 
 query :: proc(m: ^Mirror) -> game.Block_Query {
-	return {m, block_of, test_blocks()}
+	return {m, block_of, test_blocks(), {}}
 }
 
 mirror_set :: proc(m: ^Mirror, p: game.Block_Pos, b: game.Block) {
