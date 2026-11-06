@@ -8,7 +8,7 @@ import "core:fmt"
 // the core imports only base and never a platform package. Tests fill it with fakes.
 //
 // The services land one step at a time (docs/design.md, "The OS quarantine"): so far the boot
-// information, the output (stdout and stderr), the entropy and the clocks.
+// information, the output (stdout and stderr), the entropy, the clocks and the file lock.
 Host :: struct {
 	boot:    Boot_Info,
 	output:  Output_Service,
@@ -17,6 +17,7 @@ Host :: struct {
 	// need not repeat).
 	entropy: proc(out: []u8),
 	clock:   Clock_Service,
+	file:    File_Service,
 }
 
 // Boot_Info: what the process was started with, read once at boot.
@@ -202,4 +203,46 @@ thread_cpu_us :: proc() -> i64 {
 ticks :: proc() -> u64 {
 	if clock.ticks == nil {panic("ticks: no clock installed (platform.boot was not called)")}
 	return clock.ticks()
+}
+
+// File_Lock: an exclusive lock on a file, held while it is open (the OS drops it with the
+// process, so a crash leaves none). The handle is the platform's, opaque to the core.
+File_Lock :: struct {
+	handle: uintptr,
+	ok:     bool,
+}
+
+// File_Service: the file operations that read the OS. The platform fills it;
+// `file_install` makes it the process's one (platform.boot does it).
+File_Service :: struct {
+	// Take the lock on path (made if missing) and write text into it. ok is false if
+	// another process (or another open of it) holds it; holder is then what that one
+	// wrote (heap, "" if unreadable).
+	lock:   proc(path, text: string) -> (lock: File_Lock, holder: string, ok: bool),
+	// Release the lock (the file stays).
+	unlock: proc(l: ^File_Lock),
+}
+
+@(private = "file")
+file: File_Service
+
+// file_install makes service the process's file operations (platform.boot does it).
+file_install :: proc(service: File_Service) {
+	file = service
+}
+
+// file_lock takes the lock on path (made if missing) and writes text into it. It stops the
+// process when no service is installed: a lock never taken would let two servers share a
+// universe.
+file_lock :: proc(path, text: string) -> (lock: File_Lock, holder: string, ok: bool) {
+	if file.lock ==
+	   nil {panic("file_lock: no file service installed (platform.boot was not called)")}
+	return file.lock(path, text)
+}
+
+// file_unlock releases the lock (the file stays).
+file_unlock :: proc(l: ^File_Lock) {
+	if file.unlock ==
+	   nil {panic("file_unlock: no file service installed (platform.boot was not called)")}
+	file.unlock(l)
 }
