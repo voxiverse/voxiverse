@@ -74,6 +74,7 @@ Metric :: enum u8 {
 	Spatial_Move, // CPU ns per move of 2 000 entries random-walking 0.2 blocks
 	Spatial_Sphere, // CPU ns per spatial_sphere of radius 16 among 2 000 entries
 	Collide_Move, // CPU ns per collide_move of a sheep-sized box, 0.15-block delta
+	Planet_Build, // building the home world's climate from its relief (common/planet), ms
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us
 	// The avatars scenario: one value per frame.
@@ -159,6 +160,7 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Spatial_Move         = {"spatial_move", "ns", false},
 	.Spatial_Sphere       = {"spatial_sphere", "ns", false},
 	.Collide_Move         = {"collide_move", "ns", false},
+	.Planet_Build         = {"planet_build", "ms", false},
 	.View_Model           = {"view_model", "us", false},
 	.Avatar_Draw          = {"avatar_draw", "ms", false},
 	.Ogg_Decode           = {"ogg_decode", "ms", false},
