@@ -25,6 +25,15 @@ Boot_Info :: struct {
 	pid:       int, // the process id (the universe lock names its holder)
 	cpu_count: int, // logical processors, to size the worker pools
 	dirs:      Dirs, // the folders the game reads and writes
+	machine:   Machine_Facts, // the CPU and OS, for benchmark results and crash bundles
+}
+
+// Machine_Facts: what the machine is, "" and 0 where the OS does not say.
+Machine_Facts :: struct {
+	cpu:     string, // the CPU's name
+	cores:   int, // physical cores
+	threads: int, // logical processors
+	os:      string, // the OS and its version
 }
 
 // Dirs: well-known folders, "" when the platform does not know one.

@@ -1,21 +1,21 @@
 #+build darwin
-package base
+package platform_common
 
+import "base:runtime"
 import "core:fmt"
 import "core:sys/unix"
 
 // machine_facts: the CPU, its cores and the OS, for benchmark results, from
 // the kernel (machine_other.odin says why not core:sys/info here).
 @(private)
-machine_facts :: proc(
-	allocator := context.temp_allocator,
-) -> (
-	cpu: string,
-	cores, threads: int,
-	os: string,
-) {
+machine_facts :: proc() -> (cpu: string, cores, threads: int, os: string) {
+	allocator := runtime.heap_allocator() // lives as long as the process
+
 	brand: [256]u8
-	if unix.sysctlbyname("machdep.cpu.brand_string", &brand) {cpu = fmt.tprint(cstring(&brand[0]))}
+	if unix.sysctlbyname(
+		"machdep.cpu.brand_string",
+		&brand,
+	) {cpu = fmt.aprint(cstring(&brand[0]), allocator = allocator)}
 	physical, logical: i32
 	if unix.sysctlbyname("hw.physicalcpu", &physical) {cores = int(physical)}
 	if unix.sysctlbyname("hw.logicalcpu", &logical) {threads = int(logical)}

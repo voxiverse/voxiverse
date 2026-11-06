@@ -7,6 +7,7 @@ import "core:os"
 import "client:mesh"
 import "common:base"
 import "common:game"
+import platform "common:platform"
 import "common:worldgen"
 
 // The `chunks` benchmark scenario (`build bench chunks`):
@@ -70,6 +71,8 @@ Counts :: struct {
 }
 
 main :: proc() {
+	host: base.Host
+	platform.boot(&host) // the machine facts a result records
 	opts := Options {
 		seed   = 1,
 		radius = 3,

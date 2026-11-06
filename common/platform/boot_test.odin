@@ -55,3 +55,12 @@ test_boot_reads_the_directories :: proc(t: ^testing.T) {
 	testing.expect(t, host.boot.dirs.exe != "")
 	testing.expect_value(t, base.boot_info().dirs, host.boot.dirs)
 }
+
+@(test)
+test_boot_reads_the_machine :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	testing.expect(t, host.boot.machine.os != "")
+	testing.expect(t, host.boot.machine.threads > 0)
+	testing.expect_value(t, base.boot_info().machine, host.boot.machine)
+}

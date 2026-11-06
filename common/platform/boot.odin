@@ -22,6 +22,7 @@ boot :: proc(host: ^base.Host) {
 			pid = os.get_pid(),
 			cpu_count = os.get_processor_core_count(),
 			dirs = read_dirs(),
+			machine = read_machine(),
 		},
 		output = {write = output_write, is_color = output_is_color},
 		entropy = crypto.rand_bytes,
@@ -94,4 +95,11 @@ read_dirs :: proc() -> base.Dirs {
 		config = dir_or_empty(config, config_err),
 		home = dir_or_empty(home, home_err),
 	}
+}
+
+// read_machine asks the OS what the machine is, once; the strings live as long as the process.
+@(private = "file")
+read_machine :: proc() -> base.Machine_Facts {
+	cpu, cores, threads, os_name := machine_facts()
+	return {cpu = cpu, cores = cores, threads = threads, os = os_name}
 }
