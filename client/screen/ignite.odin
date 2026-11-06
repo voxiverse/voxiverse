@@ -3,7 +3,7 @@ package screen
 import "core:math"
 
 import "client:engine"
-import "client:planet"
+import planet "client:planet"
 import "client:starfield"
 import "client:ui"
 import "common:game"
