@@ -163,7 +163,6 @@ test_history_deterministic :: proc(t: ^testing.T) {
 	for pe in a.peoples {testing.expect(t, pe.population >= 0)}
 }
 
-@(private = "file")
 chronicle_planet :: proc() -> (p: Planet, r: Relief) {
 	r, _ = relief_decode(#load("../../assets/planet/earth_relief.bin"))
 	p = planet_build(r)

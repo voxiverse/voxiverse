@@ -134,6 +134,16 @@ History :: struct {
 	peoples:       [dynamic]People,
 	events:        [dynamic]Event, // the chronicle, by year
 	ruins:         [dynamic]int, // cells that lost their people to a collapse
+	ruin_info:     [dynamic]Ruin_Info, // one per entry of `ruins`
+	since:         []i32, // the year each held cell came to its people
+}
+
+// Ruin_Info says who lost a ruined cell, when, and what it had been.
+Ruin_Info :: struct {
+	people:  int,
+	year:    int, // of the collapse (the chronicle has it)
+	founded: int, // the year the cell came to the people
+	pop:     f32, // the people who lived there
 }
 
 history_destroy :: proc(h: ^History) {
@@ -147,11 +157,13 @@ history_destroy :: proc(h: ^History) {
 	}
 	delete(h.events)
 	delete(h.ruins)
+	delete(h.ruin_info)
+	delete(h.since)
 	h^ = {}
 }
 
 // Terrain is what the peoples' ground gives, once per planet: capacity and farming.
-@(private = "file")
+@(private)
 Ground :: struct {
 	area:     []f32, // km² per cell
 	capacity: []f32, // 0..1 of the best land
@@ -171,7 +183,7 @@ ground_destroy :: proc(g: ^Ground) {
 	delete(g.row_cos)
 }
 
-@(private = "file")
+@(private)
 mix64 :: proc(a, b: u64) -> u64 {
 	z := (a ~ (b + 0x9e37_79b9_7f4a_7c15)) * 0xbf58_476d_1ce4_e5b9
 	z = (z ~ (z >> 30)) * 0x94d0_49bb_1331_11eb
@@ -209,7 +221,7 @@ biogeography :: proc(root: u64, lat, lon: f64) -> f64 {
 }
 
 // ground_build computes capacity, rivers and farming suitability from the climate grid.
-@(private = "file")
+@(private)
 ground_build :: proc(p: Planet, allocator := context.allocator) -> Ground {
 	w, h := p.land.width, p.land.height
 	n := w * h
@@ -488,8 +500,9 @@ tell :: proc(s: ^Sim, format: string, args: ..any) -> string {
 }
 
 @(private = "file")
-hold :: proc(s: ^Sim, k, people: int) {
+hold :: proc(s: ^Sim, k, people, year: int) {
 	s.res.owner[k] = u16(people + 1)
+	s.res.since[k] = i32(year)
 	if !s.listed[k] {
 		s.listed[k] = true
 		append(&s.active, k)
@@ -510,7 +523,7 @@ found :: proc(s: ^Sim, k, year, decade: int) -> int {
 			name = make_name(s, index),
 		},
 	)
-	hold(s, k, index)
+	hold(s, k, index, year)
 	s.res.pop[k] = 20
 	return index
 }
@@ -557,14 +570,16 @@ history :: proc(
 	years := int(max(day, 0) / DAYS_PER_YEAR)
 	steps := years / HISTORY_STEP_YEARS
 	res := History {
-		width   = w,
-		height  = h,
-		years   = steps * HISTORY_STEP_YEARS,
-		owner   = make([]u16, n, allocator),
-		pop     = make([]f32, n, allocator),
-		peoples = make([dynamic]People, allocator),
-		events  = make([dynamic]Event, allocator),
-		ruins   = make([dynamic]int, allocator),
+		width     = w,
+		height    = h,
+		years     = steps * HISTORY_STEP_YEARS,
+		owner     = make([]u16, n, allocator),
+		pop       = make([]f32, n, allocator),
+		peoples   = make([dynamic]People, allocator),
+		events    = make([dynamic]Event, allocator),
+		ruins     = make([dynamic]int, allocator),
+		ruin_info = make([dynamic]Ruin_Info, allocator),
+		since     = make([]i32, n, allocator),
 	}
 	root := mix64(address, seed)
 	g := ground_build(p, context.temp_allocator)
@@ -662,7 +677,7 @@ history :: proc(
 			// (a crowded cell looks for room every fourth decade, in turns)
 			if pop > CROWDED * cap && (step + k) % 4 == 0 {
 				if t := settle_target(p, g, res, k, mix64(sroot, u64(k) + u64(2 * n))); t >= 0 {
-					hold(&s, t, int(res.owner[k]) - 1)
+					hold(&s, t, int(res.owner[k]) - 1, year)
 					res.pop[t] = f32(pop * SETTLE_SHARE)
 					pop -= pop * SETTLE_SHARE
 					pe.cells += 1
@@ -703,6 +718,7 @@ history :: proc(
 				)
 			}
 			res.owner[q] = u16(o)
+			res.since[q] = i32(year)
 			res.pop[q] *= 1 - WAR_LOSS
 			a_pe.cells += 1
 			b_pe.cells -= 1
@@ -733,6 +749,15 @@ history :: proc(
 				owned += 1
 				if owned % 2 == 0 {
 					res.owner[k] = 0
+					append(
+						&res.ruin_info,
+						Ruin_Info {
+							people = who,
+							year = year,
+							founded = int(res.since[k]),
+							pop = res.pop[k],
+						},
+					)
 					res.pop[k] = 0
 					pe.cells -= 1
 					append(&res.ruins, k)
