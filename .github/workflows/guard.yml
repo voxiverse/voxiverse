@@ -6,27 +6,60 @@ name: guard
 # pull_request_target runs this file as it is on main, never the pull request's copy, so a
 # pull request cannot change its own guard. It reads only the API: no pull request code is
 # checked out or run.
+#
+# A pull request that changes the agents' workflow (autofix.yml) is also run once, dry, before
+# it merges: a sweep on its branch that labels nothing and starts its picks as one-turn agent
+# runs (autofix.yml, "Harness check"). Guard passes only if they all start and finish green;
+# last night's three harness bugs would each have failed here instead of on main.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
   pull-requests: read
+  actions: write # the harness check dispatches autofix.yml on the pull request's branch
 
 jobs:
   guard:
     name: Guard
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          if [ "${AUTHOR}" = voxiverse-admin ]; then echo "opened by voxiverse-admin: allowed"; exit 0; fi
+          # harness_check: a dry sweep of autofix.yml as it is on the pull request's branch, and the
+          # dry agent runs it starts; every one must finish green, and at least one agent must run.
+          harness_check() {
+            local since runs total open bad
+            since=$(date -u +%FT%TZ)
+            gh workflow run autofix.yml --ref "${HEAD_REF}" -f dry=true
+            for _ in $(seq 1 100); do
+              sleep 15
+              runs=$(gh run list --workflow autofix.yml --branch "${HEAD_REF}" --event workflow_dispatch --limit 20 \
+                --json createdAt,status,conclusion,url --jq "[.[] | select(.createdAt >= \"${since}\")]")
+              total=$(jq length <<< "${runs}")
+              open=$(jq '[.[] | select(.status != "completed")] | length' <<< "${runs}")
+              bad=$(jq -r '[.[] | select(.status == "completed" and .conclusion != "success") | .url] | join(" ")' <<< "${runs}")
+              if [ -n "${bad}" ]; then echo "::error::harness check failed: ${bad}"; exit 1; fi
+              if [ "${total}" -ge 2 ] && [ "${open}" -eq 0 ]; then
+                echo "harness check: ${total} runs green (the sweep and $((total - 1)) dry agents)"; return 0
+              fi
+            done
+            echo "::error::harness check: no dry agent run finished in 25 min (runs: ${total:-0})"; exit 1
+          }
+          if [ "${AUTHOR}" = voxiverse-admin ]; then
+            echo "opened by voxiverse-admin: allowed"
+            if gh api "repos/${GH_REPO}/pulls/${PR}/files" --paginate --jq '.[].filename' | grep -qx '.github/workflows/autofix.yml'; then
+              harness_check
+            fi
+            exit 0
+          fi
           guarded=$(gh api "repos/${GH_REPO}/pulls/${PR}/files" --paginate \
             --jq '.[] | .filename, (.previous_filename // empty)' \
             | grep -E '^(\.github/|AGENTS\.md$|CLAUDE\.md$|docs/security)' || true)
