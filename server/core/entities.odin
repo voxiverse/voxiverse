@@ -2,6 +2,7 @@ package core
 
 import "core:log"
 import "core:math"
+import "core:slice"
 import "core:strings"
 
 import "common:base"
@@ -270,19 +271,39 @@ sheep_life :: proc(ent: ^Entity) {
 }
 
 // mate_for: the nearest other sheep that is ready to breed within range of
-// ent (an adult in love), if any.
-@(private = "file")
+// ent (an adult in love), if any. The spatial service names the sheep near
+// ent (its boxes are where the sheep were at the end of the last tick, so it
+// asks a little wider than BREED_RANGE); the list says how far each is now
+// and whether it is ready.
 mate_for :: proc(w: ^World, ent: ^Entity) -> ^Entity {
+	ew := w.entity_world
+	kind_id, ok := game.registry_kind(w.server.registry, "voxiverse:sheep")
+	if !ok {return nil}
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_sphere(
+		&ew.spatial,
+		ent.body.position,
+		game.BREED_RANGE + MATE_SLACK,
+		{kind = u16(kind_id), exclude = game.Entity_Id(ent.id)},
+		&near,
+	)
+	slice.sort(near[:]) // the lowest id wins a tie, as the list's order did
 	best: ^Entity
 	best_d := f64(game.BREED_RANGE * game.BREED_RANGE)
-	for &other in w.entities.list {
-		if other.id == ent.id || other.kind != .Sheep || other.love <= 0 {continue}
+	for id in near {
+		other, _ := entity_find(w, u32(id))
+		if other == nil || other.kind != .Sheep || other.love <= 0 {continue}
 		if other.growth < game.LAMB_TICKS {continue}
 		d := other.body.position - ent.body.position
-		if dd := d.x * d.x + d.y * d.y + d.z * d.z; dd < best_d {best, best_d = &other, dd}
+		if dd := d.x * d.x + d.y * d.y + d.z * d.z; dd < best_d {best, best_d = other, dd}
 	}
 	return best
 }
+
+// MATE_SLACK: how far a sheep can have moved since the spatial service last
+// saw it (a sheep runs 4.2 blocks a second; a tick is a twentieth of that).
+@(private = "file")
+MATE_SLACK :: 2
 
 // breed: a and b have met: a lamb between them, of both, and each waits.
 @(private = "file")

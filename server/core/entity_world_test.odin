@@ -379,3 +379,79 @@ test_spatial_follows_list :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, d.moved, "the sheep never fell: the test proves nothing")
 }
+
+Mate_Probe :: struct {
+	spawn_now: bool,
+	checked:   int, // sheep asked
+	found:     int, // of those, how many had a mate
+	wrong:     int, // answers that differ from the list's own nearest
+}
+
+@(private = "file")
+mate_probe :: proc(s: ^Server, data: rawptr) {
+	d := (^Mate_Probe)(data)
+	c := client_by_name(s, "a")
+	if c == nil {return}
+	w := c.world
+	if d.spawn_now {
+		d.spawn_now = false
+		for i in 0 ..< 6 {
+			p := c.player.position + {f64(i) * 1.5 - 4, 0, 4}
+			if ent := entity_spawn(w, .Sheep, p, false); ent != nil {
+				ent.love = 1000 if i % 3 != 2 else 0
+				ent.growth = game.LAMB_TICKS if i != 4 else 0
+			}
+		}
+		return
+	}
+	for &ent in w.entities.list {
+		if ent.kind != .Sheep {continue}
+		want: ^Entity
+		best := f64(game.BREED_RANGE * game.BREED_RANGE)
+		for &o in w.entities.list {
+			if o.id == ent.id || o.kind != .Sheep || o.love <= 0 {continue}
+			if o.growth < game.LAMB_TICKS {continue}
+			v := o.body.position - ent.body.position
+			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = &o, dd}
+		}
+		d.checked += 1
+		if want != nil {d.found += 1}
+		if mate_for(w, &ent) != want {d.wrong += 1}
+	}
+}
+
+// mate_for asks the spatial service: for sheep in love and not, lambs among
+// them, falling and standing, it names the same mate a search of the list does.
+@(test)
+test_mate_for_matches_list :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.listen = true
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	if !testing.expect(
+		t,
+		net_wait(
+			t,
+			{a},
+			proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[0].update.acked > 0},
+			30,
+		),
+		"never joined",
+	) {return}
+	d := Mate_Probe {
+		spawn_now = true,
+	}
+	call(&h.srv, mate_probe, &d)
+	for _ in 0 ..< 10 {
+		harness_step(h)
+		call(&h.srv, mate_probe, &d)
+	}
+	testing.expect_value(t, d.wrong, 0)
+	testing.expect(t, d.found > 0, "no sheep had a mate: the test proves nothing")
+}
