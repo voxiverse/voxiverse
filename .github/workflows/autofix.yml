@@ -183,6 +183,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # the sweep dispatches each agent run itself (github-actions is the actor)
+          allowed_bots: "github-actions"
           claude_args: >-
             --max-turns 250
             --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep,LS,TodoWrite"
