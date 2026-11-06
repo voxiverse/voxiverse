@@ -5,6 +5,7 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
+import "common:base"
 import "common:base/fuzz"
 
 // The fuzz driver (docs/fuzzing.md): one process, one target at a time, supervised by
@@ -15,6 +16,9 @@ import "common:base/fuzz"
 //	fuzz <target> --case <file>
 //	fuzz <target> --minimize <file>
 main :: proc() {
+	// Targets that make keys or nonces read the Host entropy; a fixed stream keeps a crash
+	// input replayable (the fuzzer finds bugs, it does not need secrets).
+	base.entropy_install(fixed_entropy)
 	args := os.args[1:]
 	if len(args) == 0 {usage()}
 	targets := every_target()
@@ -176,4 +180,14 @@ minimize :: proc(target: ^fuzz.Target, cfg: fuzz.Config, file: string) {
 	out := strings.concatenate({file, ".min"})
 	_ = os.write_entire_file_from_bytes(out, small)
 	fmt.printfln("%s: %d bytes -> %d (%s)", out, len(data), len(small), want)
+}
+
+@(private = "file")
+fixed_stream := base.Rng {
+	s = {1, 2, 3, 4},
+}
+
+@(private = "file")
+fixed_entropy :: proc(out: []u8) {
+	for &b in out {b = u8(base.rng_u64(&fixed_stream))}
 }
