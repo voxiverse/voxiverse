@@ -1,10 +1,4 @@
-# Guarded paths: pull requests touching these wait for the owner's review, even when green.
-# Everything else merges automatically once the "CI result" check passes (ruleset on main).
-# Rationale: an agent must not change what judges its work (CI) or its own rules
-# (AGENTS.md). The build and toolchain are left to CI: milestone work changes them
-# routinely, and a review here would stall a whole milestone behind one pull request.
-
-.github/                @voxiverse-admin
-docs/security*          @voxiverse-admin
-AGENTS.md               @voxiverse-admin
-CLAUDE.md               @voxiverse-admin
+# No owner reviews: nothing waits for a person.
+# What judges and instructs the agents (.github/, AGENTS.md, CLAUDE.md, the security docs)
+# is protected by the required "Guard" check instead (.github/workflows/guard.yml): only
+# voxiverse-admin's pull requests may change it. Everything else merges when CI passes.

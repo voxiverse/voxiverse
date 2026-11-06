@@ -1,0 +1,38 @@
+name: guard
+# The check "Guard" (required by the main ruleset): a pull request that changes what judges
+# or instructs the agents (.github/, AGENTS.md, CLAUDE.md, the security docs) merges only if
+# voxiverse-admin opened it. Agents' pull requests that touch them fail here.
+#
+# pull_request_target runs this file as it is on main, never the pull request's copy, so a
+# pull request cannot change its own guard. It reads only the API: no pull request code is
+# checked out or run.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  guard:
+    name: Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          if [ "${AUTHOR}" = voxiverse-admin ]; then echo "opened by voxiverse-admin: allowed"; exit 0; fi
+          guarded=$(gh api "repos/${GH_REPO}/pulls/${PR}/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)' \
+            | grep -E '^(\.github/|AGENTS\.md$|CLAUDE\.md$|docs/security)' || true)
+          if [ -n "${guarded}" ]; then
+            echo "::error::${AUTHOR} may not change these (only voxiverse-admin may):"
+            printf '%s\n' "${guarded}"
+            exit 1
+          fi
+          echo "no guarded path changed"
