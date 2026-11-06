@@ -681,7 +681,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	testing.expect(t, ui.focused_label(&app.ui) != "saves", "Down at the last row leaves the list")
 
 	// New Universe: the creation screen; its name on the keyboard, B closes
-	// it (text kept), Cancel.
+	// it (text kept), B goes back.
 	pad_focus(t, app, "New Universe")
 	pad_tap(app, .A)
 	testing.expect_value(t, app.screen, engine.Screen.Creation)
@@ -700,9 +700,7 @@ test_menus_with_a_pad :: proc(t: ^testing.T) {
 	for text in app.ui.texts {if text == "Pad" {found = true}}
 	testing.expect(t, found, "the name is seen in the field")
 	pad_focus(t, app, "Ignite")
-	pad_go(app, .Left)
-	testing.expect_value(t, ui.focused_label(&app.ui), "Cancel")
-	pad_tap(app, .A)
+	pad_tap(app, .B) // (no Cancel button: B goes back)
 	testing.expect_value(t, app.screen, engine.Screen.Universes)
 	pad_tap(app, .B)
 	testing.expect_value(t, app.screen, engine.Screen.Title)
