@@ -93,7 +93,13 @@ test_boot_installs_the_file_lock :: proc(t: ^testing.T) {
 	testing.expect(t, ok)
 	_, holder, again := base.file_lock(path, "other")
 	testing.expect(t, !again)
-	testing.expect_value(t, holder, "mine")
+	// The holder's text is read back on POSIX; Windows opens the lock with no sharing, so nobody
+	// else can read it ("" by contract: lock_windows.odin).
+	when ODIN_OS == .Windows {
+		testing.expect_value(t, holder, "")
+	} else {
+		testing.expect_value(t, holder, "mine")
+	}
 	delete(holder)
 	base.file_unlock(&first)
 	second, _, retaken := base.file_lock(path, "")
