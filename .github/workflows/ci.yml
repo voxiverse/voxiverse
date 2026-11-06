@@ -1,13 +1,12 @@
 name: ci
 on:
-  # Branch pushes: not for changes to Markdown alone (README, PLAN, DEBUGGING):
-  # nothing there is built or tested. Tags: every version tag (v*.*.*)
-  # builds the packages and drafts a release; it usually points at a commit
-  # main's CI has already tested.
-  # (GitHub ignores paths for tags, and a push event with both filters runs
-  # for a branch matching `branches` or a tag matching `tags`.)
+  # Pushes to main, and every version tag (v*.*.*), which builds the packages and drafts a
+  # release (it usually points at a commit main's CI has already tested). Other branches are
+  # tested by their pull request's run: a push run as well ran everything twice.
+  # (A push event with both filters runs for a branch matching `branches` or a tag matching
+  # `tags`.)
   push:
-    branches: ["**"]
+    branches: [main]
     tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
@@ -31,7 +30,7 @@ jobs:
   # Whether this run has anything left to test. A version tag on a commit whose
   # push run on main passed has been tested: its test jobs are skipped and only
   # the packages, their checks and the draft release run. A tag on any other
-  # commit, and every branch push, run everything.
+  # commit, every push to main and every pull request run everything.
   gate:
     name: Tested on main?
     runs-on: ubuntu-latest
@@ -945,12 +944,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RESULTS: ${{ toJSON(needs) }}
           SHA: ${{ github.sha }}
+          ATTEMPT: ${{ github.run_attempt }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           failed=$(echo "${RESULTS}" | jq -r '[to_entries[] | select(.value.result == "failure") | .key] | join(", ")')
           cancelled=$(echo "${RESULTS}" | jq '[to_entries[] | select(.value.result == "cancelled")] | length')
           open=$(gh issue list --state open --label agent --search 'in:title "main is red"' --json number,title --jq '[.[] | select(.title == "main is red") | .number][0] // empty')
-          if [ -n "${failed}" ]; then
+          # A first failure is rerun by the next agent sweep (autofix.yml): only a second one is
+          # main being red (a flake passes the second time).
+          if [ -n "${failed}" ] && [ "${ATTEMPT}" -lt 2 ]; then
+            echo "failed once (${failed}): the sweep reruns it before it counts"
+          elif [ -n "${failed}" ]; then
             body=$(printf 'CI failed on main at `%s` (jobs: %s).\n\nRun and logs: %s\n\nFix main first: find the failing step with `gh run view <run id> --log-failed`, fix the cause in one pull request (never weaken or skip a test), and say which commit broke it. This issue closes itself when main is green again.\n' "${SHA::12}" "${failed}" "${RUN_URL}")
             if [ -n "${open}" ]; then gh issue comment "${open}" --body "${body}"
             else

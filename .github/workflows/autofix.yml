@@ -15,6 +15,12 @@ name: autofix
 #
 # Sweeps: when any CI run finishes, on every push to main (a merge frees the next task), when
 # an issue is labelled `agent` or `autofix`, and twice an hour as a backup.
+# A failed CI run counts only after it failed twice: a sweep reruns a first failure's failed jobs
+# (a flake passes the second time) before an agent is sent to fix it.
+# An issue whose exit check is already met on main is closed by the agent that finds it so.
+# Harness check: workflow_dispatch with dry=true on a branch sweeps without labelling and starts
+# each pick as a `dry` agent run (one turn, no change) on that branch (guard.yml runs it for
+# every pull request that changes this file).
 # Off switch: repo variable AGENTS_ENABLED (anything but "true" = no agent runs).
 # Not before: repo variable AGENTS_NOT_BEFORE (an ISO time, UTC): sweeps before it pick nothing.
 on:
@@ -36,8 +42,12 @@ on:
         description: Issue number to work on (empty = a normal sweep)
         required: false
       mode:
-        description: "With issue: work or ci-fix, already claimed by a sweep (empty = decide)"
+        description: "With issue: work, ci-fix or dry, already claimed by a sweep (empty = decide)"
         required: false
+      dry:
+        description: "Harness check: pick without labelling, start each pick as a dry run on this branch"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,7 +64,7 @@ jobs:
     concurrency:
       # a sweep at a time; each dispatched run in a group of its own (one pending per group:
       # dispatches sharing the sweep's group cancelled one another)
-      group: autofix-pick-${{ inputs.issue || 'sweep' }}
+      group: autofix-pick-${{ github.ref_name }}-${{ inputs.issue || 'sweep' }}
       cancel-in-progress: false
     permissions:
       issues: write
@@ -70,6 +80,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ONE: ${{ inputs.issue }}
           MODE: ${{ inputs.mode }}
+          DRY: ${{ inputs.dry && 'true' || 'false' }}
+          REF: ${{ github.ref_name }}
           EVENT: ${{ github.event_name }}
           MAX: ${{ vars.AGENTS_MAX_PER_RUN || '3' }}
           NOT_BEFORE: ${{ vars.AGENTS_NOT_BEFORE }}
@@ -82,9 +94,20 @@ jobs:
           fi
           # A run a sweep started for one claimed issue: work on it as told.
           if [ -n "${ONE}" ] && [ -n "${MODE}" ]; then
-            [[ "${ONE}" =~ ^[0-9]+$ ]] && [[ "${MODE}" =~ ^(work|ci-fix)$ ]] || { echo "bad input"; exit 1; }
+            [[ "${ONE}" =~ ^[0-9]+$ ]] && [[ "${MODE}" =~ ^(work|ci-fix|dry)$ ]] || { echo "bad input"; exit 1; }
             echo "work=[{\"issue\":${ONE},\"mode\":\"${MODE}\"}]" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          # act: a change to GitHub, or only its echo in a dry sweep.
+          act() { if [ "${DRY}" = true ]; then echo "dry: $*" >&2; else "$@"; fi; }
+          # rerun_first: a CI run's first failure is rerun (failed jobs and what needs them) before it
+          # counts; a flake passes the second time. Prints "rerun" when it reran.
+          rerun_first() {
+            local id attempt conclusion
+            read -r id attempt conclusion < <(gh run list --workflow ci.yml "$@" --limit 1 --json databaseId,attempt,conclusion --jq '.[0] | "\(.databaseId) \(.attempt) \(.conclusion)"')
+            if [ "${conclusion}" = failure ] && [ "${attempt}" = 1 ]; then act gh run rerun "${id}" --failed >/dev/null && echo rerun; fi
+          }
+          # main: its health issue opens only after the rerun failed too (ci.yml, main-health).
+          [ "$(rerun_first --branch main --event push)" = rerun ] && echo "main failed once: rerunning"
           # The repo is public and the issue text becomes the agent's instructions: only issues an
           # org member, a trusted login or this repo's workflows wrote. GITHUB_TOKEN sees a private
           # org member as CONTRIBUTOR, so trusted logins are matched by name too.
@@ -113,8 +136,8 @@ jobs:
             branch="claude/issue-${n}"
             prs=$(gh pr list --head "${branch}" --state all --json number --jq 'length')
             if [ "${prs}" -ge 8 ]; then
-              gh issue edit "${n}" --add-label needs-human
-              gh issue comment "${n}" --body "**autofix:** eight pull requests on this issue and it is still open: the owner decides how to go on."
+              act gh issue edit "${n}" --add-label needs-human
+              act gh issue comment "${n}" --body "**autofix:** eight pull requests on this issue and it is still open: the owner decides how to go on."
               continue
             fi
             open=$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')
@@ -122,25 +145,34 @@ jobs:
             if [ -n "${open}" ]; then
               ci=$(gh pr view "${open}" --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.name == "CI result") | .conclusion] | first // ""')
               if [ "${ci}" != "FAILURE" ]; then echo "#${n}: PR #${open} waiting (CI result: ${ci:-pending})"; continue; fi
+              if [ "$(rerun_first --branch "${branch}" --event pull_request)" = rerun ]; then
+                echo "#${n}: PR #${open} failed once: rerunning"; continue
+              fi
               fixes_done=$(tr ' ' '\n' <<< "${labels}" | grep -c '^agent-ci-fix-' || true)
               if [ "${fixes_done}" -ge 2 ]; then
-                gh issue edit "${n}" --add-label needs-human
-                gh issue comment "${n}" --body "**autofix:** PR #${open} still fails CI after two fixes: the owner decides."
+                act gh issue edit "${n}" --add-label needs-human
+                act gh issue comment "${n}" --body "**autofix:** PR #${open} still fails CI after two fixes: the owner decides."
                 continue
               fi
               mode=ci-fix
             fi
             echo "#${n}: ${mode}"
-            gh label create agent-running --color FBCA04 --description "An agent is working on this now" --force >/dev/null
-            gh issue edit "${n}" --add-label agent-running >/dev/null
+            act gh label create agent-running --color FBCA04 --description "An agent is working on this now" --force >/dev/null
+            act gh issue edit "${n}" --add-label agent-running >/dev/null
             work=$(jq -c --argjson n "${n}" --arg m "${mode}" '. + [{issue: $n, mode: $m}]' <<< "${work}")
           done
+          # A dry sweep starts agents even when nothing is free to pick: the check is that they start.
+          if [ "${DRY}" = true ] && [ "$(jq length <<< "${work}")" -eq 0 ]; then
+            work=$(jq -c --argjson m "${MAX}" '.[:$m] | map({issue: ., mode: "dry"}) | if length == 0 then [{issue: 0, mode: "dry"}] else . end' <<< "${candidates}")
+          fi
           echo "work: ${work}"
           # Claude's action runs only on some events (not push): a sweep starts each agent
           # as a workflow_dispatch run of its own and works on nothing itself.
-          if [ "${EVENT}" != workflow_dispatch ]; then
+          if [ "${EVENT}" != workflow_dispatch ] || [ "${DRY}" = true ]; then
+            ref=main; [ "${DRY}" = true ] && ref="${REF}"
             jq -c '.[]' <<< "${work}" | while read -r item; do
-              gh workflow run autofix.yml --ref main -f issue="$(jq -r .issue <<< "${item}")" -f mode="$(jq -r .mode <<< "${item}")"
+              mode=$(jq -r .mode <<< "${item}"); [ "${DRY}" = true ] && mode=dry
+              gh workflow run autofix.yml --ref "${ref}" -f issue="$(jq -r .issue <<< "${item}")" -f mode="${mode}"
             done
             work='[]'
           fi
@@ -183,6 +215,7 @@ jobs:
 
       - name: Agent
         id: claude
+        if: matrix.mode != 'dry'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -205,6 +238,9 @@ jobs:
             1. Read the issue with its comments (`gh issue view ${{ matrix.issue }} --comments`) and
                any earlier pull requests for it (`gh pr list --head claude/issue-${{ matrix.issue }} --state all`,
                then `gh pr view <n>`): earlier parts may already be on main. Continue from what is left.
+               If nothing is left (the issue's exit check is met on origin/main), open no pull request:
+               write to /tmp/agent-done.md which pull requests did it and how the exit check is met
+               (one short paragraph), and stop. The issue is closed with that note.
             2. What kind of issue it is:
                - **Playtest feedback** (no milestone): the owner's direction after playing. Make the
                  change that delivers it, in the game's existing style. Test what can be tested. In the
@@ -238,8 +274,30 @@ jobs:
 
             If you cannot finish: write what you tried and found to /tmp/agent-blocked.md and stop.
 
+      # Harness check (mode dry): the agent starts under this workflow as it is on this branch,
+      # answers once and changes nothing; the run fails if it did not start or answered an error.
+      - name: Agent (dry)
+        id: claude_dry
+        if: matrix.mode == 'dry'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "github-actions"
+          claude_args: --max-turns 1 --allowedTools "Read"
+          prompt: "Harness check: reply with the single word OK and do nothing else."
+
+      - name: Dry check
+        if: always() && matrix.mode == 'dry'
+        env:
+          EXEC: ${{ steps.claude_dry.outputs.execution_file }}
+        run: |
+          [ -s "${EXEC:-/nonexistent}" ] || { echo "::error::the agent did not start"; exit 1; }
+          err=$(jq -r '[.[] | select(.type == "result")] | last | .is_error' "${EXEC}")
+          [ "${err}" = false ] || { echo "::error::the agent's run ended in an error"; exit 1; }
+          echo "the agent started and answered"
+
       - name: Hand over
-        if: always() && steps.claude.outcome != 'skipped'
+        if: always() && steps.claude.outcome != 'skipped' && matrix.mode != 'dry'
         env:
           # This job's token: the agent's was revoked when the agent step ended.
           GH_TOKEN: ${{ github.token }}
@@ -258,6 +316,11 @@ jobs:
           last=$(jq -r '[.[] | select(.type == "result")] | last | select(.is_error == true) | .result // ""' "${EXEC}" 2>/dev/null || true)
           if printf '%s' "${last}" | grep -qiE 'usage limit|limit reached|rate.limit'; then
             echo "stopped by a usage limit: ${last}"; exit 0
+          fi
+          if [ "${MODE}" = work ] && [ -s /tmp/agent-done.md ]; then
+            { echo "**autofix: done.**"; echo; cat /tmp/agent-done.md; } > /tmp/note.md
+            gh issue close "${ISSUE}" --comment "$(cat /tmp/note.md)"
+            exit 0
           fi
           if [ "${MODE}" = ci-fix ]; then
             k=1; gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-ci-fix-1 && k=2
@@ -289,25 +352,3 @@ jobs:
             gh label create agent-retried --color BFD4F2 --description "Failed once; the next sweep retries" --force >/dev/null
             gh issue edit "${ISSUE}" --add-label agent-retried
           fi
-
-      - name: "Ledger (one table in the ledger issue's description; no comments, no notifications)"
-        if: always() && steps.claude.outcome != 'skipped'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          EXEC: ${{ steps.claude.outputs.execution_file }}
-          ISSUE: ${{ matrix.issue }}
-        run: |
-          stats=$(jq -r '[.[] | select(.type == "result")] | last | "\(.num_turns // "?") | \(((.duration_ms // 0) / 60000 * 10 | floor) / 10) | \(.total_cost_usd // "?")"' "${EXEC}" 2>/dev/null || echo "? | ? | ?")
-          pr=$(gh pr list --head "claude/issue-${ISSUE}" --state all --json number --jq '.[0].number // empty')
-          row="| $(date -u +%F) | #${ISSUE} | ${pr:+#${pr}} | ${{ matrix.mode }}: ${{ steps.claude.outcome }} | ${stats} | [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
-          echo "${row}"
-          ledger=$(gh issue list --state open --search 'in:title "Autonomy ledger"' --json number --jq '.[0].number // empty')
-          [ -n "${ledger}" ] || { echo "no ledger issue"; exit 0; }
-          header='| Date | Issue | PR | Agent | Turns | Minutes | Cost (API-equiv USD) | Run |'
-          gh issue view "${ledger}" --json body --jq .body > /tmp/body.md
-          # Keep the intro, rebuild the table newest-first (max 200 rows).
-          intro=$(sed '/^| Date |/,$d' /tmp/body.md)
-          rows=$(grep -E '^\| [0-9]{4}-' /tmp/body.md | head -199 || true)
-          { printf '%s\n\n%s\n|---|---|---|---|---|---|---|---|\n%s\n' "${intro}" "${header}" "${row}"; [ -n "${rows}" ] && printf '%s\n' "${rows}"; } > /tmp/new.md
-          gh issue edit "${ledger}" --body-file /tmp/new.md
