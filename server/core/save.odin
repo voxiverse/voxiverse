@@ -86,7 +86,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	game.writer_init(&st.writer)
 	home := s.home
 	if dir == "" {
-		home.address = game.address_derive(u64(s.config.seed))
+		home.address = home_address(s)
 		return true
 	}
 	if err := os.make_directory_all(dir); err != nil && err != .Exist {
@@ -115,7 +115,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 		return false
 	case:
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
-		home.address = game.address_derive(u64(s.config.seed))
+		home.address = home_address(s)
 		home.seed, home.generator = s.config.seed, s.config.generator
 		write_universe_file(s) or_return
 		st.format = SAVE_FORMAT
@@ -826,4 +826,11 @@ load_entities :: proc(w: ^World) {
 	}
 	if skipped > 0 {log.warnf("server entities skipped lines=%d path=%s", skipped, path)}
 	log.infof("server entities loaded count=%d", loaded)
+}
+
+// home_address: the address of a new universe's home world: Earth's, or one
+// made from the seed (the alien start).
+home_address :: proc(s: ^Server) -> game.Address {
+	if s.config.earth {return game.earth_address()}
+	return game.address_derive(u64(s.config.seed))
 }

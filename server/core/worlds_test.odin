@@ -1,12 +1,15 @@
 package core
 
+import "base:runtime"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:worldgen"
 
 // An address is the same kind of world in any universe (its parameters and
 // rules), with terrain of its own (the seed); the home world is Earth's.
@@ -190,4 +193,67 @@ test_worlds_over_the_network :: proc(t: ^testing.T) {
 		used,
 	)
 	testing.expect_value(t, alice.travels, 8)
+}
+
+// terrain_hash: a hash of some chunks of the terrain a world would generate.
+@(private = "file")
+terrain_hash :: proc(w: ^World, reg: ^game.Registry) -> u64 {
+	arr := new(game.Block_Array)
+	defer free(arr)
+	g := worldgen.generator_make(.Earth, terrain_seed(w), reg)
+	h := u64(0xcbf2_9ce4_8422_2325)
+	for k in i32(0) ..< 5 {
+		for cy in ([]i32{-2, 0, 1}) {
+			uniform, is_uniform := worldgen.generate(&g, {k * 41 - 90, cy, k * -29 + 60}, arr)
+			bytes: []u8
+			if is_uniform {
+				u := uniform
+				bytes = ([^]u8)(&u)[:size_of(u)]
+			} else {
+				bytes = slice.to_bytes(arr[:])
+			}
+			for b in bytes {h = (h ~ u64(b)) * 0x100_0000_01b3}
+		}
+	}
+	return h
+}
+
+// Earth is the same Earth in every universe: its terrain comes from its
+// address, not the universe's seed. Another world's terrain does follow the
+// seed.
+@(test)
+test_earth_same_in_every_universe :: proc(t: ^testing.T) {
+	reg := game.registry_base(runtime.default_allocator())
+	one, two: Server
+	one.config.seed, two.config.seed = 1, 2
+	earth := game.earth_address()
+	e1 := World {
+		server  = &one,
+		address = earth,
+	}
+	e2 := World {
+		server  = &two,
+		address = earth,
+	}
+	testing.expect_value(t, terrain_hash(&e1, reg), terrain_hash(&e2, reg))
+	other := game.address_derive(7)
+	a1 := World {
+		server  = &one,
+		address = other,
+		seed    = 1,
+	}
+	a2 := World {
+		server  = &two,
+		address = other,
+		seed    = 2,
+	}
+	testing.expect(
+		t,
+		terrain_hash(&a1, reg) != terrain_hash(&a2, reg),
+		"alien terrain ignored the seed",
+	)
+	// A new universe's home address: Earth's when asked, else made from the seed.
+	testing.expect_value(t, home_address(&one), game.address_derive(1))
+	one.config.earth = true
+	testing.expect_value(t, home_address(&one), earth)
 }

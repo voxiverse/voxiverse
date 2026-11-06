@@ -70,6 +70,14 @@ world_make :: proc(s: ^Server) -> ^World {
 	return w
 }
 
+// terrain_seed: the seed of a world's terrain. Earth's comes from its address
+// alone, so its terrain is the same in every universe; any other world's is
+// its seed.
+terrain_seed :: proc(w: ^World) -> i64 {
+	if w.address == game.earth_address() {return i64(game.address_hash(w.address))}
+	return w.seed
+}
+
 // world_start: its memory, chunks, entities, spawn; false (logged) if it
 // cannot have them.
 world_start :: proc(w: ^World) -> bool {
@@ -79,7 +87,7 @@ world_start :: proc(w: ^World) -> bool {
 		return false
 	}
 	arena := virtual.arena_allocator(&w.arena)
-	gen := worldgen.generator_make(w.generator, w.seed, s.registry, w.params)
+	gen := worldgen.generator_make(w.generator, terrain_seed(w), s.registry, w.params)
 	if err := chunks_init(&w.chunks, gen, s.capacity, s.config.workers, arena); err != nil {
 		log.errorf("server cannot allocate a world: %v", err)
 		virtual.arena_destroy(&w.arena)

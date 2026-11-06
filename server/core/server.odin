@@ -43,6 +43,7 @@ Config :: struct {
 	kit:                   string, // what new players are given, as world.cfg's kit says it ("": the world's own, else the default: the launcher)
 	upload:                Maybe(Upload), // (needs save_dir: a scratch world has no log)
 	seed:                  i64,
+	earth:                 bool, // a new universe's home world is Earth (its fixed address) rather than one made from the seed
 	mode:                  string, // a new universe's default game mode, by id ("": creative; a saved one keeps its own: universe.cfg)
 	mode_changed:          bool, // /gamemode changed it since the universe was made (saved)
 	generator:             worldgen.Kind, // for a new world (a saved one keeps its own)
