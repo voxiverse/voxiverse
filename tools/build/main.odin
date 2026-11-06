@@ -206,6 +206,7 @@ main :: proc() {
 	     "serve",
 	     "debug",
 	     "package",
+	     "sfx",
 	     "audiodump",
 	     "music",
 	     "bench",
