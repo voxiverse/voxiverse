@@ -194,3 +194,104 @@ test_tag_near :: proc(t: ^testing.T) {
 	_, err = entity_tag_near(&ew, 0, {0, 2, 3}, 10, true, "Bad Name")
 	testing.expect_value(t, err, Tag_Error.Bad_Name)
 }
+
+@(private = "file")
+Player_Probe :: struct {
+	name:      string,
+	travel_to: Maybe(game.Address),
+	players:   int, // player entities in the client's world (by the spatial service)
+	stored:    int, // the store's count
+	same:      bool, // its Transform equals the client's position
+	in_world:  bool, // the entity is in the client's own world
+}
+
+@(private = "file")
+player_probe :: proc(s: ^Server, data: rawptr) {
+	d := (^Player_Probe)(data)
+	c := client_by_name(s, d.name)
+	if c == nil {return}
+	if a, ok := d.travel_to.?; ok {
+		_ = travel(s, c, a)
+		d.travel_to = nil
+		return
+	}
+	ew := c.world.entity_world
+	d.players = 0
+	found: [dynamic]game.Entity_Id
+	found.allocator = context.temp_allocator
+	game.spatial_sphere(&ew.spatial, c.player.position, 1e4, {all = {.Player}}, &found)
+	d.players = len(found)
+	d.stored = game.store_count(&ew.store)
+	h, ok := game.store_find(&ew.store, c.entity_id)
+	d.in_world = ok && c.entity_world == c.world
+	d.same = false
+	if ok {
+		if tf := game.store_get(&ew.store, h, game.C_TRANSFORM, game.Transform); tf != nil {
+			d.same = tf.position == c.player.position
+		}
+	}
+}
+
+@(test)
+test_players_are_entities :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.listen = true
+	if !testing.expect(t, harness_start(h, config)) {return}
+	stopped := false
+	defer if !stopped {harness_stop(h)}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	if !testing.expect(
+		t,
+		net_wait(
+			t,
+			{a},
+			proc(cs: []^Net_Client) -> bool {return cs[0].welcomed && cs[0].update.acked > 0},
+			30,
+		),
+		"never joined",
+	) {return}
+	d := Player_Probe {
+		name = "a",
+	}
+	home := h.srv.home
+	// arriving: one player entity, where the player is, after every tick
+	for _ in 0 ..< 5 {
+		harness_step(h)
+		call(&h.srv, player_probe, &d)
+		testing.expect_value(t, d.players, 1)
+		testing.expect(t, d.same, "the entity is not where the player is")
+		testing.expect(t, d.in_world)
+	}
+	// travelling: it moves to the new world's store, and the old one is empty
+	d.travel_to = game.address_derive(31)
+	call(&h.srv, player_probe, &d)
+	for _ in 0 ..< 3 {
+		harness_step(h)
+		call(&h.srv, player_probe, &d)
+		testing.expect_value(t, d.players, 1)
+		testing.expect(t, d.same, "the entity is not where the player is")
+		testing.expect(t, d.in_world)
+	}
+	testing.expect(t, h.srv.clients[0].world != home)
+	testing.expect_value(t, game.store_count(&home.entity_world.store), 0)
+	testing.expect_value(t, game.spatial_count_entries(&home.entity_world.spatial), 0)
+	// leaving: despawned
+	world := h.srv.clients[0].world
+	net_close(a)
+	a^ = {}
+	for _ in 0 ..< 600 {
+		harness_step(h)
+		if h.srv.clients[0].state != .Playing {break}
+	}
+	harness_step(h, 2)
+	testing.expect_value(t, h.srv.clients[0].state, Client_State.Free)
+	testing.expect_value(t, game.store_count(&world.entity_world.store), 0)
+	testing.expect_value(t, game.spatial_count_entries(&world.entity_world.spatial), 0)
+	testing.expect(t, harness_stop(h))
+	stopped = true
+}

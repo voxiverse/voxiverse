@@ -105,6 +105,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 // are told it left.
 @(private)
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
+	player_entity_release(s, c)
 	if c.state != .Playing {return}
 	respawn(s, c) // (leaving at the death screen: kept alive, at the spawn)
 	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))

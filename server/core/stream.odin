@@ -35,6 +35,8 @@ Client :: struct {
 	link:           Client_Link,
 	grants:         [dynamic]game.Grant, // what they may do, resolved (heap; permissions.odin)
 	world:          ^World, // where they are (Playing)
+	entity_world:   ^World, // the world whose entity world holds their player entity (entities.odin)
+	entity_id:      game.Entity_Id, // their player entity there (0: none)
 	account:        game.Account, // (proved once Playing)
 	nonce:          game.Nonce, // the Challenge sent
 	steam_id:       u64, // the SteamID its Hello proved with a ticket (0: none); linked once the account is proved
