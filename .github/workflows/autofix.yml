@@ -273,7 +273,14 @@ jobs:
           # No pull request (a pushed branch without one counts too: the next agent opens it,
           # since a pull request opened with this job's token would start neither CI nor Guard).
           # No change at all. One retry (the next agent reads this note), then the owner.
-          { echo "**autofix: no change pushed.**"; echo; cat /tmp/agent-blocked.md 2>/dev/null || echo "The agent stopped without a branch."; } > /tmp/note.md
+          # Without a note of its own, the agent's last words say why (else nobody can tell).
+          said=$(jq -r '[.[] | select(.type == "result")] | last | .result // ""' "${EXEC}" 2>/dev/null | head -c 3000 || true)
+          {
+            echo "**autofix: no change pushed.**"; echo
+            if [ -s /tmp/agent-blocked.md ]; then cat /tmp/agent-blocked.md
+            elif [ -n "${said}" ]; then echo "The agent stopped without a branch. Its last message:"; echo; printf '%s\n' "${said}" | sed 's/^/> /'
+            else echo "The agent stopped without a branch."; fi
+          } > /tmp/note.md
           gh issue comment "${ISSUE}" --body-file /tmp/note.md
           if gh issue view "${ISSUE}" --json labels --jq '.labels[].name' | grep -qx agent-retried; then
             gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force >/dev/null
