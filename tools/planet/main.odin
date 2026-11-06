@@ -11,13 +11,18 @@ import "common:planet"
 // The home world's relief: reads NOAA ETOPO5 and writes the committed relief file.
 //
 //	build planet import <ETOPO5.DAT> [out]
+//	build planet maps [dir]          (PNGs of the climate model, default build/planet)
 //
 // The source is downloaded, never committed (assets/planet/README.md has where from).
 
 main :: proc() {
 	args := os.args[1:]
+	if len(args) >= 1 && args[0] == "maps" {
+		dir := args[1] if len(args) > 1 else "build/planet"
+		os.exit(0 if maps_main(dir) else 1)
+	}
 	if len(args) < 2 || args[0] != "import" {
-		fmt.eprintln("usage: build planet import <ETOPO5.DAT> [out]")
+		fmt.eprintln("usage: build planet import <ETOPO5.DAT> [out] | build planet maps [dir]")
 		os.exit(2)
 	}
 	out := args[2] if len(args) > 2 else "assets/planet/earth_relief.bin"
