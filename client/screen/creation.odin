@@ -10,7 +10,6 @@ import "client:engine"
 import "client:planet"
 import "client:ui"
 import "common:game"
-import "common:worldgen"
 
 // Universe creation: the name, the
 // seed as the glyphs of its home world's gate address (typed text or a number
@@ -72,37 +71,6 @@ creation_sync_seed :: proc(c: ^engine.Creation_Screen, entropy: u64) {
 	}
 }
 
-// Home_Facts: what the home world is like, in the generator's own
-// parameters (the home world is Earth's: worldgen's defaults and the rules'
-// defaults, whatever the seed; only its terrain's noise differs).
-Home_Facts :: struct {
-	warmth:  engine.Text, // Fact_Cold, Fact_Mild or Fact_Hot
-	wetness: engine.Text, // Fact_Dry, Fact_Moderate or Fact_Wet
-	minutes: int, // a day's length
-	terrain: engine.Text, // Fact_Terrain_*
-}
-
-home_facts_of :: proc(p: worldgen.Params, rules: game.Rules) -> (f: Home_Facts) {
-	f.warmth = .Fact_Mild
-	if p.warmth < -0.33 {f.warmth = .Fact_Cold} else if p.warmth > 0.33 {f.warmth = .Fact_Hot}
-	f.wetness = .Fact_Moderate
-	if p.wetness < -0.33 {f.wetness = .Fact_Dry} else if p.wetness > 0.33 {f.wetness = .Fact_Wet}
-	f.minutes = int(rules.day_length / 60)
-	switch {
-	case p.mountain_height >= 90:
-		f.terrain = .Fact_Terrain_Mountains
-	case p.hill_height >= 12:
-		f.terrain = .Fact_Terrain_Hills
-	case:
-		f.terrain = .Fact_Terrain_Flat
-	}
-	return
-}
-
-home_facts :: proc() -> Home_Facts {
-	return home_facts_of(worldgen.PARAMS_DEFAULTS, game.RULES_DEFAULTS)
-}
-
 // draw_galaxy draws stars as dots in r over a dark ground; settle (0 ..= 1)
 // fades them in (and brings them in from a little way out); the home star
 // is ringed.
@@ -134,6 +102,48 @@ draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []game.Star, settle: f3
 	}
 }
 
+// Creation_Layout: where the compact screen puts everything (a pure
+// function of the screen and the theme, so a test can check it fits).
+Creation_Layout :: struct {
+	panel, title, galaxy, planet, name, seed, glyphs, roll, mode, ignite: ui.Rect,
+	fits:                                                                 bool, // false: the panel needs more height than the screen has
+}
+
+CREATION_PANEL_WIDTH :: 720
+CREATION_TITLE_HEIGHT :: 60
+CREATION_ROLL_WIDTH :: 90
+CREATION_SEED_WIDTH :: 0.3 // of the seed row: the typed seed field
+
+// creation_layout: one centred panel: the title, the galaxy and the planet
+// side by side (each half the panel's width, square), then the name, the
+// seed row (field, glyphs, Roll), the mode toggle and Ignite.
+creation_layout :: proc(screen: ui.Rect, t: ui.Theme) -> (l: Creation_Layout) {
+	width := min(screen.w - 40, CREATION_PANEL_WIDTH)
+	band := width / 2
+	height := CREATION_TITLE_HEIGHT + band + 4 * (t.row_height + t.spacing)
+	l.fits = height <= screen.h && width > 0
+	l.panel = ui.rect_center(screen, width, height)
+	area := l.panel
+	l.title = ui.cut_top(&area, CREATION_TITLE_HEIGHT)
+	top := ui.cut_top(&area, band)
+	l.galaxy = ui.cut_left(&top, band)
+	l.planet = top
+	ui.cut_top(&area, t.spacing)
+	l.name = ui.cut_top(&area, t.row_height)
+	ui.cut_top(&area, t.spacing)
+	row := ui.cut_top(&area, t.row_height)
+	ui.cut_top(&area, t.spacing)
+	l.mode = ui.cut_top(&area, t.row_height)
+	ui.cut_top(&area, t.spacing)
+	l.ignite = ui.cut_top(&area, t.row_height)
+	l.roll = ui.cut_right(&row, CREATION_ROLL_WIDTH)
+	ui.cut_right(&row, t.spacing)
+	l.seed = ui.cut_left(&row, row.w * CREATION_SEED_WIDTH)
+	ui.cut_left(&row, t.spacing)
+	l.glyphs = row
+	return
+}
+
 creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "creation")
 	defer ui.pop_id(ctx)
@@ -144,70 +154,30 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if reduce {c.settle = 1} else {c.settle = min(c.settle + dt / CREATION_SETTLE_SECONDS, 1)}
 	if !reduce {c.spin += dt * 0.6}
 
-	area := ui.rect_center(ctx.screen, min(ctx.screen.w - 40, 1000), ctx.screen.h - 40)
-	ui.title(ctx, engine.tr(.Creation_Title), ui.cut_top(&area, 60))
-	bottom := ui.cut_bottom(&area, t.row_height)
-	ui.cut_bottom(&area, t.spacing)
-	left := ui.cut_left(&area, min(area.h, area.w * 0.55))
-	ui.cut_left(&area, 20)
-	draw_galaxy(ctx, ui.rect_shrink(left, 0), c.stars, c.settle)
-
-	ui.layout_begin(ctx, area)
-	ui.label(ctx, engine.tr(.Creation_Name), ui.next(ctx), .Left, t.text_muted)
-	ui.text_input(ctx, "name", &c.name, ui.next(ctx))
-	ui.label(ctx, engine.tr(.Creation_Seed), ui.next(ctx), .Left, t.text_muted)
-	row := ui.next(ctx)
-	roll := ui.cut_right(&row, 90)
-	ui.cut_right(&row, t.spacing)
-	ui.text_input(ctx, "seed", &c.seed_text, row)
+	l := creation_layout(ctx.screen, t^)
+	ui.title(ctx, engine.tr(.Creation_Title), l.title)
+	draw_galaxy(ctx, l.galaxy, c.stars, c.settle)
+	ui.fill_rect(ctx, l.planet, t.preview_fill)
+	draw_planet(
+		ctx,
+		{l.planet.x + l.planet.w / 2, l.planet.y + l.planet.h / 2},
+		min(l.planet.w, l.planet.h) * 0.4,
+		c.spin,
+		1,
+		c.planet,
+	)
+	ui.text_input(ctx, "name", &c.name, l.name, engine.tr(.Creation_Name))
+	ui.text_input(ctx, "seed", &c.seed_text, l.seed, engine.tr(.Creation_Seed))
 	creation_sync_seed(c, u64(time.now()._nsec))
-	if ui.button(ctx, engine.tr(.Creation_Roll), roll) {creation_roll(c, u64(time.now()._nsec))}
-	addr := game.seed_glyphs(c.seed)
-	ui.label(ctx, game.address_text(addr), ui.next(ctx), .Left)
-	ui.label(ctx, engine.tr(.Creation_Mode), ui.next(ctx), .Left, t.text_muted)
-	modes := ui.next(ctx)
-	half := (modes.w - t.spacing) / 2
-	if ui.button(
-		ctx,
-		engine.tr(.Universes_Mode_Creative),
-		ui.cut_left(&modes, half),
-		disabled = c.mode == MODE_CREATIVE,
-	) {c.mode = MODE_CREATIVE}
-	ui.cut_left(&modes, t.spacing)
-	if ui.button(
-		ctx,
-		engine.tr(.Universes_Mode_Survival),
-		modes,
-		disabled = c.mode == MODE_SURVIVAL,
-	) {
-		c.mode = MODE_SURVIVAL
+	ui.label(ctx, game.address_text(game.seed_glyphs(c.seed)), l.glyphs, .Center)
+	if ui.button(ctx, engine.tr(.Creation_Roll), l.roll) {
+		creation_roll(c, u64(time.now()._nsec))
 	}
-	ui.label(ctx, engine.tr(.Creation_Home_World), ui.next(ctx), .Left, t.text_muted)
-	facts := home_facts()
-	planet := ui.next(ctx, 130)
-	draw_planet(ctx, {planet.x + planet.w / 2, planet.y + planet.h / 2}, 60, c.spin, 1, c.planet)
-	ui.label(
-		ctx,
-		engine.tr(
-			.Creation_Climate,
-			engine.tr(.Fact_Pair, engine.tr(facts.warmth), engine.tr(facts.wetness)),
-		),
-		ui.next(ctx),
-		.Left,
-	)
-	ui.label(
-		ctx,
-		engine.tr(.Creation_Sky, engine.tr(.Fact_Sky_Day, facts.minutes)),
-		ui.next(ctx),
-		.Left,
-	)
-	ui.label(ctx, engine.tr(.Creation_Terrain, engine.tr(facts.terrain)), ui.next(ctx), .Left)
-	ui.layout_end(ctx)
-
-	cancel := ui.cut_left(&bottom, (bottom.w - t.spacing) / 3)
-	ui.cut_left(&bottom, t.spacing)
-	if ui.button(ctx, engine.tr(.Dial_Cancel), cancel) {app.screen = .Universes}
-	if ui.button(ctx, engine.tr(.Creation_Ignite), bottom) {creation_ignite(app)}
+	mode := 1 if c.mode == MODE_SURVIVAL else 0
+	names := [2]string{engine.tr(.Universes_Mode_Creative), engine.tr(.Universes_Mode_Survival)}
+	ui.choice(ctx, engine.tr(.Creation_Mode), &mode, names[:], l.mode)
+	c.mode = MODE_SURVIVAL if mode == 1 else MODE_CREATIVE
+	if ui.button(ctx, engine.tr(.Creation_Ignite), l.ignite) {creation_ignite(app)}
 }
 
 // creation_ignite creates the universe from the screen's choices and enters

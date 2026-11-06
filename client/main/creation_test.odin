@@ -1,5 +1,6 @@
 package main
 
+import "core:math"
 import "core:os"
 import "core:strings"
 import "core:testing"
@@ -91,34 +92,108 @@ test_typed_seed_shows_its_glyphs :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
-// The three facts under the preview are the generator's parameters: the
-// home world is Earth's, whatever the seed.
+@(private = "file")
+creation_frame :: proc(app: ^engine.App, input: ui.Input = {}) {
+	ui.begin_frame(&app.ui, input, SCREEN, 1)
+	screen.creation_screen(app, &app.ui)
+	ui.end_frame(&app.ui)
+}
+
+@(private = "file")
+inside :: proc(inner, outer: ui.Rect) -> bool {
+	return(
+		inner.w > 0 &&
+		inner.h > 0 &&
+		inner.x >= outer.x &&
+		inner.y >= outer.y &&
+		inner.x + inner.w <= outer.x + outer.w + 1e-3 &&
+		inner.y + inner.h <= outer.y + outer.h + 1e-3 \
+	)
+}
+
+@(private = "file")
+apart :: proc(a, b: ui.Rect) -> bool {
+	return(
+		a.x + a.w <= b.x + 1e-3 ||
+		b.x + b.w <= a.x + 1e-3 ||
+		a.y + a.h <= b.y + 1e-3 ||
+		b.y + b.h <= a.y + 1e-3 \
+	)
+}
+
+// The compact screen fits every supported window, at the automatic scale
+// (1.0 at 720 px, in quarter steps with the height), with nothing to scroll.
 @(test)
-test_preview_facts_are_the_generators :: proc(t: ^testing.T) {
-	f := screen.home_facts()
-	p := worldgen.PARAMS_DEFAULTS
-	testing.expect_value(t, f, screen.home_facts_of(p, game.RULES_DEFAULTS))
-	testing.expect_value(t, f.minutes, int(game.RULES_DEFAULTS.day_length / 60))
-	// The words follow the numbers.
-	p.warmth, p.wetness, p.mountain_height = -0.9, 0.9, 150
-	cold := screen.home_facts_of(p, game.RULES_DEFAULTS)
-	testing.expect_value(t, cold.warmth, engine.Text.Fact_Cold)
-	testing.expect_value(t, cold.wetness, engine.Text.Fact_Wet)
-	testing.expect_value(t, cold.terrain, engine.Text.Fact_Terrain_Mountains)
-	p.warmth, p.wetness, p.mountain_height, p.hill_height = 0.9, -0.9, 20, 2
-	hot := screen.home_facts_of(p, game.RULES_DEFAULTS)
-	testing.expect_value(t, hot.warmth, engine.Text.Fact_Hot)
-	testing.expect_value(t, hot.wetness, engine.Text.Fact_Dry)
-	testing.expect_value(t, hot.terrain, engine.Text.Fact_Terrain_Flat)
-	// All shown on the screen.
+test_creation_layout_fits :: proc(t: ^testing.T) {
+	sizes := make([dynamic][2]f32, context.temp_allocator)
+	for w := f32(1280); w <= 3840; w += 160 {append(&sizes, [2]f32{w, w * 9 / 16})}
+	append(&sizes, [2]f32{1280, 800}, [2]f32{1366, 768})
+	th := ui.DEFAULT_THEME
+	for size in sizes {
+		scale := clamp(math.round(size.y / 720 * 4) / 4, 1, 3)
+		r := ui.Rect{0, 0, size.x / scale, size.y / scale}
+		l := screen.creation_layout(r, th)
+		testing.expectf(t, l.fits, "%v: does not fit", size)
+		controls := [8]ui.Rect {
+			l.galaxy,
+			l.planet,
+			l.name,
+			l.seed,
+			l.glyphs,
+			l.roll,
+			l.mode,
+			l.ignite,
+		}
+		for c, i in controls {
+			testing.expectf(
+				t,
+				inside(c, r) && inside(c, l.panel),
+				"%v: control %d outside",
+				size,
+				i,
+			)
+			for d in controls[i + 1:] {
+				testing.expectf(t, apart(c, d), "%v: control %d overlaps", size, i)
+			}
+		}
+		top := l.galaxy.y + l.galaxy.h
+		testing.expect(t, l.name.y >= top && l.name.y < l.seed.y, "name below the band")
+		testing.expect(t, l.seed.y < l.mode.y && l.mode.y < l.ignite.y, "rows in order")
+		testing.expect(t, l.galaxy.x < l.planet.x && l.galaxy.h == l.planet.h, "galaxy, planet")
+		testing.expect(t, l.roll.y == l.seed.y && l.glyphs.y == l.seed.y, "one seed row")
+		testing.expect(t, abs(l.panel.x + l.panel.w / 2 - r.w / 2) < 1, "centred")
+		testing.expect(t, abs(l.panel.y + l.panel.h / 2 - r.h / 2) < 1, "centred")
+	}
+	// Too short a screen says so.
+	testing.expect(t, !screen.creation_layout({0, 0, 1280, 300}, th).fits)
+}
+
+// One click on the toggle flips the mode and back; Left and Right do the same
+// while it is focused; the mode reaches the plan.
+@(test)
+test_creation_mode_toggle :: proc(t: ^testing.T) {
 	app := creation_app(t)
 	defer creation_free(app)
-	ui_frame(app)
-	for want in ([]string{"Climate: ", "Sky: ", "Terrain: "}) {
-		seen := false
-		for text in app.ui.texts {if strings.has_prefix(text, want) {seen = true}}
-		testing.expectf(t, seen, "no %q line", want)
+	c := &app.creation
+	l := screen.creation_layout({0, 0, SCREEN.x, SCREEN.y}, app.ui.theme)
+	at := ui.Vec2{l.mode.x + l.mode.w / 2, l.mode.y + l.mode.h / 2}
+	click :: proc(app: ^engine.App, at: ui.Vec2) {
+		creation_frame(app, {mouse = at})
+		creation_frame(app, {mouse = at, mouse_down = {.Left}, mouse_pressed = {.Left}})
+		creation_frame(app, {mouse = at, mouse_released = {.Left}})
 	}
+	testing.expect_value(t, c.mode, "creative")
+	click(app, at)
+	testing.expect_value(t, c.mode, "survival")
+	click(app, at)
+	testing.expect_value(t, c.mode, "creative")
+	click(app, at) // (focused now)
+	creation_frame(app, {mouse = at, nav = {.Left}})
+	testing.expect_value(t, c.mode, "creative")
+	creation_frame(app, {mouse = at, nav = {.Right}})
+	testing.expect_value(t, c.mode, "survival")
+	plan := screen.universe_plan("Mode", 1, c.mode)
+	testing.expect_value(t, plan.mode, "survival")
 	free_all(context.temp_allocator)
 }
 
