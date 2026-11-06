@@ -528,6 +528,8 @@ capture_rows :: proc(f: ^Capture_File, allocator := context.allocator) -> []Row 
 			)
 		case Listener_Cmd:
 			row.text = fmt.aprintf("listener %v", c.options, allocator = allocator)
+		case Replace_Cmd:
+			row.text = fmt.aprintf("replace sound %d", c.id, allocator = allocator)
 		}
 		append(&rows, row)
 	}

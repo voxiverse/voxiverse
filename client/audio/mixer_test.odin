@@ -517,3 +517,42 @@ test_spatial_gain :: proc(t: ^testing.T) {
 	testing.expect(t, abs(here[0] - 0.5) < 1e-5 && abs(here[1] - 0.5) < 1e-5)
 	_ = math.PI
 }
+
+// sound_replace: a voice of the sound fades out in 5 ms and stops, the new
+// samples play from then on, and a Replaced event says the old ones are free.
+@(test)
+test_sound_replace :: proc(t: ^testing.T) {
+	m := new_mixer(48000)
+	defer free(m)
+	old := constant(48000, 0.5)
+	defer delete(old)
+	fresh := constant(4800, 0.25)
+	defer delete(fresh)
+	id := add_sound(m, {samples = old, rate = 48000})
+	v := play(m, {sound = id, gain = {1, 1}, pitch = 1})
+	out := mix_frames(m, 480)
+	delete(out)
+	testing.expect(t, sound_replace(m, id, {samples = fresh, rate = 48000}))
+	out = mix_frames(m, 4800)
+	delete(out)
+	ended, replaced: bool
+	for {
+		e := poll(m) or_break
+		switch e.kind {
+		case .Ended:
+			ended = e.voice == v && e.reason == .Stopped
+		case .Replaced:
+			replaced = e.sound == id
+		}
+	}
+	testing.expect(t, ended, "the voice is stopped")
+	testing.expect(t, replaced, "the old samples are free")
+	for s in out {testing.expect(t, s == s, "no NaN")}
+	testing.expect(t, m.sounds[id].samples[0] == 0.25)
+	p := play(m, {sound = id, gain = {1, 1}, pitch = 1})
+	testing.expect(t, p != 0)
+	late := latency(m)
+	out = mix_frames(m, 960)
+	defer delete(out)
+	testing.expect(t, abs(out[2 * (late + 10)] - 0.25) < 1e-6, "plays the new samples")
+}

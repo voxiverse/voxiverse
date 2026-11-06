@@ -38,8 +38,11 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   a fade-in and a per-voice low-pass. Resampling is a Kaiser-windowed sinc (32 taps a side,
   100 dB stop band) that stretches its kernel when the read step is above 1, so pitching up
   does not alias.
-- **Sources.** Sounds in memory (mono, or stereo for music; any rate; up to `MAX_SOUNDS` = 384,
-  of which the last 128 are a pack's, replaced whenever the pack set changes), and **streams**
+- **Sources.** Sounds in memory (mono, or stereo for music; any rate; up to `MAX_SOUNDS` = 1024,
+  of which the last 128 are a pack's, replaced whenever the pack set changes; `sound_replace`
+  swaps one sound's samples while the device runs: its voices fade out in 5 ms, the swap
+  happens at a block's start, and a `Replaced` event on the return ring (`Voice_Event.kind`)
+  says the old samples are free), and **streams**
   (music, long beds): a decoder thread fills a ring from an Ogg file in memory, an underrun is
   counted and never skipped over (the voice holds its place and is silent for that block),
   and a looping stream crossfades its end into its start with equal power inside the decoder.

@@ -552,6 +552,8 @@ command_raw :: proc(cmd: Command) -> (kind: u8, raw: []byte) {
 		return 8, bytes_of(&c)
 	case Listener_Cmd:
 		return 9, bytes_of(&c)
+	case Replace_Cmd:
+		return 0, nil // never recorded
 	}
 	return 0, nil
 }

@@ -32,7 +32,7 @@ import "core:sync"
 MAX_VOICES :: 128
 REAL_VOICES :: 64
 PACK_SOUND_SLOTS :: 128 // ids at the end of the table, set again whenever a pack's sounds change (set_pack_sounds)
-MAX_SOUNDS :: 256 + PACK_SOUND_SLOTS
+MAX_SOUNDS :: 896 + PACK_SOUND_SLOTS
 PACK_SOUND_BASE :: MAX_SOUNDS - PACK_SOUND_SLOTS
 MAX_BLOCK :: 512 // frames mixed at a time; parameters move once per block
 COMMAND_RING :: 512 // power of two
@@ -80,54 +80,63 @@ End_Reason :: enum u8 {
 
 // Voice_Event: what the audio thread tells the game.
 Voice_Event :: struct {
-	voice:  Voice_Id,
-	reason: End_Reason,
+	kind:   Event_Kind,
+	voice:  Voice_Id, // Ended: the voice
+	reason: End_Reason, // Ended: how
+	sound:  Sound_Id, // Replaced: the sound
+}
+
+Event_Kind :: enum u8 {
+	Ended, // a voice ended or was stopped: its handle is free
+	Replaced, // sound_replace took effect: nothing reads the old samples any more, free them
 }
 
 Mixer :: struct {
-	rate:       u32, // output frames per second
-	sounds:     [MAX_SOUNDS]Sound,
-	streams:    [MAX_SOUNDS]^Stream, // of a sound registered with add_stream (which has no samples)
-	names:      [MAX_SOUNDS][SOUND_NAME_LEN]u8, // for captures and the dump (set_sound_name)
-	bandwidth:  [MAX_SOUNDS]f32, // Hz of the highest content of a sound, 0 if unknown (see set_bandwidth)
-	count:      int,
-	swap_lock:  sync.Atomic_Mutex, // held by `mix`, and by set_pack_sounds while it replaces sounds the audio thread may be reading
+	rate:        u32, // output frames per second
+	sounds:      [MAX_SOUNDS]Sound,
+	streams:     [MAX_SOUNDS]^Stream, // of a sound registered with add_stream (which has no samples)
+	names:       [MAX_SOUNDS][SOUND_NAME_LEN]u8, // for captures and the dump (set_sound_name)
+	bandwidth:   [MAX_SOUNDS]f32, // Hz of the highest content of a sound, 0 if unknown (see set_bandwidth)
+	count:       int,
+	swap_lock:   sync.Atomic_Mutex, // held by `mix`, and by set_pack_sounds while it replaces sounds the audio thread may be reading
 	// Game thread only: the handle table.
-	handles:    [MAX_VOICES]Handle_Slot,
+	handles:     [MAX_VOICES]Handle_Slot,
 	// Audio thread only:
-	voices:     [MAX_VOICES]Voice,
-	buses:      [Bus]Bus_State,
-	ducks:      [MAX_DUCKS]Duck,
-	bus_buf:    [Bus][2 * MAX_BLOCK]f32,
-	limiter:    Limiter,
-	meter:      Meter,
-	sinc:       Sinc_Table,
-	reverb:     Reverb,
-	rev_in:     [2 * MAX_BLOCK]f32, // what the buses send to the reverb, this block
-	night:      Compressor, // the compressor on Master (Night mode)
-	listener:   Listener,
-	cross:      [2]f32, // headphone cross-feed filter state
-	clock:      u64, // frames mixed; the audio thread's time, which scheduled plays use
-	order:      [MAX_VOICES]u8, // scratch: voices by rank
+	voices:      [MAX_VOICES]Voice,
+	buses:       [Bus]Bus_State,
+	ducks:       [MAX_DUCKS]Duck,
+	bus_buf:     [Bus][2 * MAX_BLOCK]f32,
+	limiter:     Limiter,
+	meter:       Meter,
+	sinc:        Sinc_Table,
+	reverb:      Reverb,
+	rev_in:      [2 * MAX_BLOCK]f32, // what the buses send to the reverb, this block
+	night:       Compressor, // the compressor on Master (Night mode)
+	listener:    Listener,
+	cross:       [2]f32, // headphone cross-feed filter state
+	clock:       u64, // frames mixed; the audio thread's time, which scheduled plays use
+	order:       [MAX_VOICES]u8, // scratch: voices by rank
 	// The command ring: written by the game thread, read by the audio thread.
-	commands:   [COMMAND_RING]Queued,
-	written:    u32, // (atomic) commands written ever
-	read:       u32, // (atomic) commands read ever
-	dropped:    u32, // (atomic) commands that found the ring full (or no free handle), plays of a busy stream
+	commands:    [COMMAND_RING]Queued,
+	written:     u32, // (atomic) commands written ever
+	read:        u32, // (atomic) commands read ever
+	dropped:     u32, // (atomic) commands that found the ring full (or no free handle), plays of a busy stream
 	// Audio thread only: commands taken off the ring that wait for their frame.
-	held:       [MAX_HELD]Queued,
-	held_n:     int,
-	capture:    ^Capture, // (atomic) the recorder, when on
-	monitor:    ^Monitor, // (atomic) audio that takes the place of the output, when set (inspect.odin)
-	probe:      proc "contextless" (m: ^Mixer, user: rawptr, n: int), // offline analysis: called after each block (analyze.odin); nil in the game
-	probe_user: rawptr,
-	stage:      [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
-	stage_r:    [STREAM_STAGE]f32, // ... the right channel of a two-channel stream
+	held:        [MAX_HELD]Queued,
+	held_n:      int,
+	replacing:   [MAX_REPLACING]Replacing, // sounds waiting for their voices' fade-out
+	replacing_n: int,
+	capture:     ^Capture, // (atomic) the recorder, when on
+	monitor:     ^Monitor, // (atomic) audio that takes the place of the output, when set (inspect.odin)
+	probe:       proc "contextless" (m: ^Mixer, user: rawptr, n: int), // offline analysis: called after each block (analyze.odin); nil in the game
+	probe_user:  rawptr,
+	stage:       [STREAM_STAGE]f32, // a stream voice's window of its ring, this block
+	stage_r:     [STREAM_STAGE]f32, // ... the right channel of a two-channel stream
 	// The return ring: the other way round.
-	events:     [EVENT_RING]Voice_Event,
-	ev_write:   u32, // (atomic)
-	ev_read:    u32, // (atomic)
-	stats:      Stats, // (atomic fields) written by the audio thread
+	events:      [EVENT_RING]Voice_Event,
+	ev_write:    u32, // (atomic)
+	ev_read:     u32, // (atomic)
+	stats:       Stats, // (atomic fields) written by the audio thread
 }
 
 // Queued: a command and the mixer frame it takes effect on (0: the next block
@@ -247,6 +256,24 @@ Command :: union {
 	Snapshot_Cmd,
 	Reverb_Cmd,
 	Listener_Cmd,
+	Replace_Cmd,
+}
+
+// Replace_Cmd: sound_replace's. Not recorded in captures (it holds a pointer).
+@(private)
+Replace_Cmd :: struct {
+	id:    Sound_Id,
+	sound: Sound,
+}
+
+REPLACE_FADE :: 0.005 // seconds a replaced sound's voices fade out in
+MAX_REPLACING :: 16
+
+@(private)
+Replacing :: struct {
+	id:    Sound_Id,
+	sound: Sound,
+	due:   u64, // the frame the swap happens on
 }
 
 @(private)
@@ -338,6 +365,18 @@ set_pack_sounds :: proc(m: ^Mixer, sounds: []Sound) {
 	for i in 0 ..< PACK_SOUND_SLOTS {
 		m.sounds[PACK_SOUND_BASE + i] = sounds[i] if i < len(sounds) else {}
 	}
+}
+
+// sound_replace swaps the samples of sound `id` (a sound of samples, not a
+// stream or a pack slot) while the device runs: a command the audio thread
+// applies at a block's start. Voices playing the sound fade out over 5 ms and
+// stop, then the sound is swapped and a `Replaced` event is put on the return
+// ring (poll reads it, with the sound's id): only then does nothing read the
+// old samples, and the caller frees them. False when the command ring is full
+// (nothing changed).
+sound_replace :: proc(m: ^Mixer, id: Sound_Id, s: Sound) -> bool {
+	assert(int(id) < m.count && s.rate > 0)
+	return push(m, Replace_Cmd{id, s})
 }
 
 // set_sound_name gives a sound a name for captures and the dump (cut to
@@ -439,7 +478,7 @@ poll :: proc(m: ^Mixer) -> (e: Voice_Event, ok: bool) {
 	if r == w {return {}, false}
 	e = m.events[r & (EVENT_RING - 1)]
 	sync.atomic_store_explicit(&m.ev_read, r + 1, .Release)
-	free_handle(m, e.voice)
+	if e.kind == .Ended {free_handle(m, e.voice)}
 	return e, true
 }
 
@@ -515,6 +554,7 @@ mix :: proc "contextless" (m: ^Mixer, out: []f32) {
 		take_commands(m)
 		n := min(MAX_BLOCK, frames - done)
 		if due := next_held(m); due > m.clock {n = min(n, int(due - m.clock))}
+		if due := next_replace(m); due > m.clock {n = min(n, int(due - m.clock))}
 		guarded += mix_block(m, out[2 * done:][:2 * n], n)
 		m.clock += u64(n)
 		done += n
@@ -966,7 +1006,10 @@ report_ends :: proc "contextless" (m: ^Mixer) {
 		w := sync.atomic_load_explicit(&m.ev_write, .Relaxed)
 		r := sync.atomic_load_explicit(&m.ev_read, .Acquire)
 		if w - r == EVENT_RING {return}
-		m.events[w & (EVENT_RING - 1)] = {v.id, v.reason}
+		m.events[w & (EVENT_RING - 1)] = {
+			voice  = v.id,
+			reason = v.reason,
+		}
 		sync.atomic_store_explicit(&m.ev_write, w + 1, .Release)
 		v = {}
 	}
@@ -1005,9 +1048,12 @@ take_commands :: proc "contextless" (m: ^Mixer) {
 				kept += 1
 				continue
 			}
-			if rec != nil {capture_add(rec, {frame = m.clock, cmd = q.cmd})}
+			if _, replace := q.cmd.(Replace_Cmd); rec != nil && !replace {
+				capture_add(rec, {frame = m.clock, cmd = q.cmd})
+			}
 			apply_command(m, q.cmd)
 		}
+		finish_replacing(m)
 		applied := m.held_n - kept
 		m.held_n = kept
 		// Room again (a full table of waiting commands): take more of the ring.
@@ -1024,6 +1070,43 @@ next_held :: proc "contextless" (m: ^Mixer) -> u64 {
 		if f := m.held[i].frame; due == 0 || f < due {due = f}
 	}
 	return due
+}
+
+// next_replace: the frame of the soonest sound swap, 0 if none.
+@(private)
+next_replace :: proc "contextless" (m: ^Mixer) -> u64 {
+	due: u64
+	for i in 0 ..< m.replacing_n {
+		if f := m.replacing[i].due; due == 0 || f < due {due = f}
+	}
+	return due
+}
+
+// finish_replacing swaps the sounds whose voices have faded out, and tells
+// the game. One that finds the event ring full waits for the next block.
+@(private)
+finish_replacing :: proc "contextless" (m: ^Mixer) {
+	kept := 0
+	for i in 0 ..< m.replacing_n {
+		x := m.replacing[i]
+		w := sync.atomic_load_explicit(&m.ev_write, .Relaxed)
+		r := sync.atomic_load_explicit(&m.ev_read, .Acquire)
+		if x.due > m.clock || w - r == EVENT_RING {
+			m.replacing[kept] = x
+			kept += 1
+			continue
+		}
+		for &v in m.voices {
+			if v.state == .Playing && v.sound == x.id {end_voice(&v, .Stopped)}
+		}
+		m.sounds[x.id] = x.sound
+		m.events[w & (EVENT_RING - 1)] = {
+			kind  = .Replaced,
+			sound = x.id,
+		}
+		sync.atomic_store_explicit(&m.ev_write, w + 1, .Release)
+	}
+	m.replacing_n = kept
 }
 
 // apply_command carries one command out.
@@ -1075,6 +1158,33 @@ apply_command :: proc "contextless" (m: ^Mixer, cmd: Command) {
 		reverb_set(&m.reverb, c.rt60, c.damping, c.wet, c.early)
 	case Listener_Cmd:
 		apply_options(m, c.options)
+	case Replace_Cmd:
+		frames := u64(REPLACE_FADE * f32(m.rate))
+		for &v in m.voices {
+			if v.state != .Playing || v.sound != c.id {continue}
+			v.fade_to = 0
+			v.fade_step = -v.fade / f32(frames)
+			v.stop_fade = true
+			if v.fade_step == 0 {end_voice(&v, .Stopped)}
+		}
+		if m.replacing_n == MAX_REPLACING { 	// no room: swap now, after stopping at once
+			for &v in m.voices {
+				if v.state == .Playing && v.sound == c.id {end_voice(&v, .Stopped)}
+			}
+			w := sync.atomic_load_explicit(&m.ev_write, .Relaxed)
+			r := sync.atomic_load_explicit(&m.ev_read, .Acquire)
+			m.sounds[c.id] = c.sound
+			if w - r < EVENT_RING {
+				m.events[w & (EVENT_RING - 1)] = {
+					kind  = .Replaced,
+					sound = c.id,
+				}
+				sync.atomic_store_explicit(&m.ev_write, w + 1, .Release)
+			}
+			return
+		}
+		m.replacing[m.replacing_n] = {c.id, c.sound, m.clock + frames}
+		m.replacing_n += 1
 	}
 }
 
