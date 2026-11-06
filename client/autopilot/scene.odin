@@ -3,6 +3,7 @@ package autopilot
 import "core:fmt"
 import "core:log"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 
 import "client:engine"
@@ -20,8 +21,9 @@ import "server:collector"
 // day stopped at BENCH_TIME_OF_DAY unless the scene sets another, no random
 // ticks, no gravity: a player put somewhere stays there), the water's
 // animation stopped (App.seconds stays 0), no chat lines or toasts (they fade
-// with the clock: cleared before the picture), and the size: SCENE_SIZE,
-// drawn offscreen whatever the window is.
+// with the clock: cleared before the picture), and the size: SCENE_SIZE (or
+// the scene's own @WxH), drawn offscreen whatever the window is. A menu scene
+// (scene_is_menu) has no world, and its animations stand still.
 
 SCENES_TEXT :: #load("../../assets/baselines/images/scenes.txt", string)
 
@@ -35,21 +37,52 @@ SCENE_BEFORE ::
 	"wait_world; set rules.daylight_cycle 0; set rules.random_tick_speed 0; set rules.gravity 0; /time set " +
 	BENCH_TIME_OF_DAY +
 	"; sleep 1"
+SCENE_MENU_AFTER :: "wait 10" // (a menu scene has no world to wait for)
 SCENE_AFTER :: "sleep 1; wait_world; wait 10"
 
 // SCENE_CLEAR_FRAMES: frames drawn between clearing the overlays and the picture.
 SCENE_CLEAR_FRAMES :: 2
 
-// scene_find: the script of the scene called name in text (SCENES_TEXT's form).
-scene_find :: proc(text, name: string) -> (script: string, ok: bool) {
+// scene_find: the script of the scene called name in text (SCENES_TEXT's
+// form: `name: [@WxH] script`) and its size (SCENE_SIZE without an @WxH).
+// found is false when there is no such scene or its size is malformed (err
+// then names the line).
+scene_find :: proc(
+	text, name: string,
+) -> (
+	script: string,
+	size: [2]u32,
+	found: bool,
+	err: string,
+) {
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		n, colon, s := strings.partition(l, ":")
-		if colon != "" && strings.trim_space(n) == name {return strings.trim_space(s), true}
+		if colon == "" || strings.trim_space(n) != name {continue}
+		s = strings.trim_space(s)
+		size = SCENE_SIZE
+		if strings.has_prefix(s, "@") {
+			spec, _, after := strings.partition(s, " ")
+			w, x, h := strings.partition(spec[1:], "x")
+			wn, wok := strconv.parse_uint(w)
+			hn, hok := strconv.parse_uint(h)
+			if x == "" || !wok || !hok || wn == 0 || hn == 0 || wn > 16384 || hn > 16384 {
+				return "", {}, false, fmt.tprintf("scene %s: bad size %q in %q", name, spec, l)
+			}
+			size = {u32(wn), u32(hn)}
+			s = strings.trim_space(after)
+		}
+		return s, size, true, ""
 	}
-	return "", false
+	return "", {}, false, ""
+}
+
+// scene_is_menu: a scene that starts with a screen command is a menu's: it
+// never enters the scratch world, and what it shows stands still.
+scene_is_menu :: proc(script: string) -> bool {
+	return strings.has_prefix(script, "screen ")
 }
 
 // scene_names: every scene's name in text, in order.
@@ -67,6 +100,7 @@ scene_names :: proc(text: string, allocator := context.allocator) -> []string {
 
 // scene_exec: the whole script a scene runs (--exec's form).
 scene_exec :: proc(script: string, allocator := context.allocator) -> string {
+	if scene_is_menu(script) {return strings.join({script, SCENE_MENU_AFTER}, "; ", allocator)}
 	return strings.join({SCENE_BEFORE, script, SCENE_AFTER}, "; ", allocator)
 }
 
@@ -78,9 +112,18 @@ scene_begin :: proc(app: ^engine.App, name: string) -> bool {
 		phase = .Script,
 	}
 	app.screenshot_dir = "images"
-	if !gpu.set_offscreen(&app.g, SCENE_SIZE.x, SCENE_SIZE.y) {
+	script, size, found, err := scene_find(SCENES_TEXT, name)
+	if !found {
+		log.error(err if err != "" else fmt.tprintf("no scene %q", name))
+		return false
+	}
+	if !gpu.set_offscreen(&app.g, size.x, size.y) {
 		log.errorf("scene %s: cannot draw offscreen at a fixed size here", name)
 		return false
+	}
+	if scene_is_menu(script) {
+		app.scene.menu = true
+		return true
 	}
 	engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
 	if name == "devchat" {scene_devchat(app)}
@@ -116,6 +159,10 @@ scene_update :: proc(app: ^engine.App, script_done: bool) {
 	case .Script:
 		if !script_done {return}
 		s := app.session
+		if app.scene.menu {
+			sc.phase, sc.frames = .Clearing, 0
+			return
+		}
 		if s == nil || app.screen != .Game {
 			log.errorf("scene %s: not in the world when its picture was due", sc.name)
 			app.script_failed, app.quit = true, true

@@ -377,6 +377,7 @@ Debug_Switches :: struct {
 	net_bandwidth_kbps: f32,
 	net_loss:           f32, // percent
 	net_duplicate:      f32, // percent
+	ignite_at:          f32, // seconds: hold an Ignite at this time (0: play it)
 }
 
 @(rodata)
@@ -438,6 +439,13 @@ DEBUG_VARS := [?]base.Var {
 		min = 0,
 		max = 50,
 		step = 1,
+	},
+	{
+		field = "ignite_at",
+		help = "hold an active Ignite at this many seconds in, for pictures (0: it plays; a key or click still skips)",
+		min = 0,
+		max = 2.5,
+		step = 0.05,
 	},
 }
 

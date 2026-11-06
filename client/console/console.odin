@@ -512,6 +512,49 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		console_register(
 			c,
 			{
+				"creation",
+				"creation seed <n|text>: set the creation screen's seed as if typed (open it with `screen universes create`)",
+				proc(app: ^engine.App, args: []string) {
+					c := &app.creation
+					seed, ok := game.seed_of_text(args[1] if len(args) > 1 else "")
+					if args[0] != "seed" || !ok || app.screen != .Creation {
+						engine.console_print(
+							&app.console,
+							"creation: usage: creation seed <n|text>, on the creation screen",
+							.Warning,
+						)
+						return
+					}
+					clear(&c.seed_text)
+					append(&c.seed_text, args[1])
+					c.typed = true
+					screen.creation_set_seed(c, seed, false)
+				},
+			},
+			args = {2, 2},
+		)
+		console_register(
+			c,
+			{
+				"ignite",
+				"ignite show: play Ignite over the creation screen's galaxy and planet, without making a universe (hold it with set debug.ignite_at <seconds>)",
+				proc(app: ^engine.App, args: []string) {
+					if args[0] != "show" || app.screen != .Creation {
+						engine.console_print(
+							&app.console,
+							"ignite: usage: ignite show, on the creation screen",
+							.Warning,
+						)
+						return
+					}
+					screen.ignite_start(app, app.creation.stars, app.creation.seed)
+				},
+			},
+			args = {1, 1},
+		)
+		console_register(
+			c,
+			{
 				"pad",
 				"pad <button> down|up, pad <axis> <value>, pad connect <family>, pad disconnect: a synthetic gamepad (slot 0), for scripts and trying without one",
 				proc(app: ^engine.App, args: []string) {

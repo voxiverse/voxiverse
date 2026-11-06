@@ -2,6 +2,7 @@ package main
 
 import "core:math"
 import "core:os"
+import "core:reflect"
 import "core:strings"
 import "core:testing"
 
@@ -9,6 +10,7 @@ import "client:engine"
 import "client:mesh"
 import "client:planet"
 import "client:screen"
+import "client:starfield"
 import "client:ui"
 import "common:game"
 import "common:worldgen"
@@ -438,4 +440,152 @@ test_star_colours_come_from_the_stars :: proc(t: ^testing.T) {
 		testing.expect_value(t, seen[c].a, 255)
 		for o in 0 ..< c {testing.expect(t, seen[o] != seen[c], "each class has its own colour")}
 	}
+}
+
+// One frame of the screen at 1280 x 720 has no scroll area: every clip a
+// widget pushes lies inside the panel (or is the whole screen), so nothing
+// of the panel is clipped away, and no vertex leaves the screen.
+@(test)
+test_creation_draws_no_scroll :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	creation_frame(app)
+	l := screen.creation_layout({0, 0, SCREEN.x, SCREEN.y}, app.ui.theme)
+	testing.expect(t, l.fits)
+	testing.expect(t, len(app.ui.output.commands) > 0, "it draws")
+	for c in app.ui.output.commands {
+		whole :=
+			c.scissor[0] <= 0 &&
+			c.scissor[1] <= 0 &&
+			c.scissor[2] >= i32(SCREEN.x) &&
+			c.scissor[3] >= i32(SCREEN.y)
+		clip := ui.Rect{f32(c.scissor[0]), f32(c.scissor[1]), f32(c.scissor[2]), f32(c.scissor[3])}
+		testing.expectf(t, whole || inside(clip, l.panel), "a clip %v beyond the panel", c.scissor)
+	}
+	for v in app.ui.output.vertices {
+		testing.expect(
+			t,
+			v.pos.x >= -1 && v.pos.y >= -1 && v.pos.x <= SCREEN.x + 1 && v.pos.y <= SCREEN.y + 1,
+			"a vertex off the screen",
+		)
+	}
+	free_all(context.temp_allocator)
+}
+
+// A theme whose every colour field is its own sentinel.
+@(private = "file")
+sentinel_theme :: proc(base: u8) -> (th: ui.Theme, colours: [dynamic][3]u8) {
+	th = ui.DEFAULT_THEME
+	colours = make([dynamic][3]u8, context.temp_allocator)
+	n: u8
+	// (every Color field of the theme is a sentinel: found by type)
+	for f in reflect.struct_fields_zipped(ui.Theme) {
+		if f.type.id != typeid_of(ui.Color) {continue}
+		c := ui.Color{base + 7 * n, 255 - 5 * n, 40 + 3 * n, 255}
+		(^ui.Color)(rawptr(uintptr(&th) + f.offset))^ = c
+		append(&colours, [3]u8{c.r, c.g, c.b})
+		n += 1
+	}
+	return
+}
+
+// Every colour the screen and each phase of Ignite draw is a theme colour, a
+// star's colour, a warp tint or a lit shade of the planet's palette; another
+// theme changes every interface-coloured vertex.
+@(test)
+test_creation_colours_from_theme_or_data :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	app.last_frame_ms = 1000.0 / 60
+	allowed := make([dynamic][3]u8, context.temp_allocator)
+	for s in app.creation.stars {
+		c := game.star_color(s)
+		append(&allowed, [3]u8{c.r, c.g, c.b})
+	}
+	for c in starfield.STAR_TINTS {append(&allowed, c)}
+	p := app.creation.planet
+	palette := [4]ui.Color{p.water, p.ground, p.dry, p.ice}
+
+	lit_shade :: proc(v: [3]u8, p: ui.Color) -> bool {
+		// v = p * k per channel (truncated), 0.12 <= k <= 1
+		k := f32(0)
+		for ch in 0 ..< 3 {
+			if p[ch] > 100 {k = max(k, f32(v[ch]) / f32(p[ch]))}
+		}
+		if k > 1.001 || k < 0.1 {return false}
+		for ch in 0 ..< 3 {
+			if abs(f32(p[ch]) * k - f32(v[ch])) > 2 {return false}
+		}
+		return true
+	}
+
+	check :: proc(
+		t: ^testing.T,
+		what: string,
+		app: ^engine.App,
+		theme: [dynamic][3]u8,
+		allowed: [dynamic][3]u8,
+		palette: [4]ui.Color,
+		lit_shade: proc(v: [3]u8, p: ui.Color) -> bool,
+	) {
+		for v in app.ui.output.vertices {
+			c := [3]u8{v.color.r, v.color.g, v.color.b}
+			ok := false
+			for a in theme {ok ||= a == c}
+			for a in allowed {ok ||= a == c}
+			for p in palette {ok ||= lit_shade(c, p)}
+			testing.expectf(t, ok, "%s: a colour %v from nowhere", what, c)
+			if !ok {return}
+		}
+	}
+
+	th, colours := sentinel_theme(10)
+	app.ui.theme = th
+	creation_frame(app)
+	creation_frame(app)
+	check(t, "creation", app, colours, allowed, palette, lit_shade)
+	first := make([dynamic]ui.Color, context.temp_allocator)
+	for v in app.ui.output.vertices {append(&first, v.color)}
+
+	th2, _ := sentinel_theme(60)
+	app.ui.theme = th2
+	creation_frame(app)
+	testing.expect_value(t, len(app.ui.output.vertices), len(first))
+	changed, same := 0, 0
+	for v, i in app.ui.output.vertices {
+		if i >= len(first) {break}
+		if v.color != first[i] {changed += 1} else {same += 1}
+	}
+	testing.expect(t, changed > 0, "another theme changes the interface's colours")
+
+	// One frame in each phase of Ignite.
+	app.ui.theme = th
+	for at in ([]f32{0.4, 1.0, 1.4, 1.9, 2.4}) {
+		screen.ignite_start(app, app.creation.stars, app.creation.seed)
+		app.debug.ignite_at = at
+		ignite_frame(app)
+		ignite_frame(app)
+		check(t, "ignite", app, colours, allowed, palette, lit_shade)
+		app.ignite.active = false
+	}
+	free_all(context.temp_allocator)
+}
+
+// debug.ignite_at holds Ignite at that time (a picture's frozen frame); a key
+// still skips it.
+@(test)
+test_ignite_held_by_debug_time :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	app.last_frame_ms = 1000.0 / 60
+	screen.ignite_start(app, app.creation.stars, app.creation.seed)
+	app.debug.ignite_at = 1.35
+	for _ in 0 ..< 30 {ignite_frame(app)}
+	testing.expect(t, app.ignite.active, "still playing")
+	testing.expect_value(t, app.ignite.t, 1.35)
+	phase, _ := screen.ignite_phase(app.ignite.t)
+	testing.expect_value(t, phase, screen.Ignite_Phase.Streaks)
+	ignite_frame(app, {keys_pressed = {.Space}})
+	testing.expect(t, !app.ignite.active, "a key skips it")
+	free_all(context.temp_allocator)
 }
