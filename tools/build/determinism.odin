@@ -18,6 +18,7 @@ DETERMINISM_DIRS :: []string {
 	"server/dedicated",
 	"common/worldgen",
 	"common/planet",
+	"common/intervention",
 	"common/script",
 }
 
