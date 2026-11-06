@@ -38,8 +38,8 @@ saves_override: string
 saves_dir :: proc() -> string {
 	if saves_override != "" {return saves_override}
 	if p, set := base.boot_info().env.saves.?; set && p != "" {return p}
-	dir, err := os.user_data_dir(context.temp_allocator)
-	if err != nil {return "saves"}
+	dir := base.boot_info().dirs.data
+	if dir == "" {return "saves"}
 	return filepath.join({dir, "voxiverse", "saves"}, context.temp_allocator) or_else "saves"
 }
 

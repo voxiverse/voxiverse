@@ -279,7 +279,7 @@ log_file_path :: proc(name: string) -> (string, bool) {
 	if dir, set := state_dir_override(); set {
 		return strings.concatenate({dir, "/", name}, context.temp_allocator), true
 	}
-	dir, err := os.get_executable_directory(context.temp_allocator)
-	if err != nil {return "", false}
+	dir := boot_info().dirs.exe
+	if dir == "" {return "", false}
 	return strings.concatenate({dir, "/", name}, context.temp_allocator), true
 }

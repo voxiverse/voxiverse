@@ -75,7 +75,7 @@ test_crash_bundle_files :: proc(t: ^testing.T) {
 		strings.write_string(&all, line)
 		crash_bundle_log(line)
 	}
-	home, _ := os.user_home_dir(context.temp_allocator)
+	home := boot_info().dirs.home
 	crash_bundle_log(fmt.tprintf("at %s/world/save.dat\n", home))
 	for i in 0 ..< 300 {crash_bundle_action("action", fmt.tprintf("move_%d", i))}
 	crash_bundle_set_gpu("Test GPU driver 1.0 vulkan 1.3")

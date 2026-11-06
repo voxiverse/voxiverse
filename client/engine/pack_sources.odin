@@ -6,6 +6,7 @@ import "core:os"
 import "core:path/filepath"
 
 import "client:steam"
+import "common:base"
 import "common:game"
 import "server:core"
 import "server:packs"
@@ -20,8 +21,8 @@ LOCAL_PACKS_DIR :: "local_packs"
 // local_packs_dir: <user data>/voxiverse/local_packs, one folder per pack, named by its
 // namespace ("" when there is no user data directory).
 local_packs_dir :: proc() -> string {
-	dir, err := os.user_data_dir(context.temp_allocator)
-	if err != nil {return ""}
+	dir := base.boot_info().dirs.data
+	if dir == "" {return ""}
 	return filepath.join({dir, "voxiverse", LOCAL_PACKS_DIR}, context.temp_allocator) or_else ""
 }
 

@@ -1,9 +1,9 @@
 package engine
 
 import "core:log"
-import "core:os"
 
 import "client:steam"
+import "common:base"
 
 // Steam (docs/platforms.md, "Steam"): started once after the settings are read, when the
 // `steam` setting allows it and the Steamworks library sits beside the executable; its
@@ -12,8 +12,8 @@ import "client:steam"
 
 steam_start :: proc(app: ^App) {
 	if app.benchmark || app.checking {return}
-	dir, err := os.get_executable_directory(context.temp_allocator)
-	if err != nil {
+	dir := base.boot_info().dirs.exe
+	if dir == "" {
 		log.info("steam off: the executable's folder is unknown")
 		return
 	}

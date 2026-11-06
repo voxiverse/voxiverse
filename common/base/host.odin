@@ -24,6 +24,15 @@ Boot_Info :: struct {
 	env:       Env, // every variable the game reads, read once at boot
 	pid:       int, // the process id (the universe lock names its holder)
 	cpu_count: int, // logical processors, to size the worker pools
+	dirs:      Dirs, // the folders the game reads and writes
+}
+
+// Dirs: well-known folders, "" when the platform does not know one.
+Dirs :: struct {
+	exe:    string, // the executable's folder
+	data:   string, // the user's data folder
+	config: string, // the user's config folder
+	home:   string, // the user's home folder
 }
 
 // Env: the environment variables the game reads. A Maybe(string) is nil when the variable

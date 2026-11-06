@@ -77,7 +77,7 @@ main :: proc() {
 	log.infof("Voxiverse server %s (%s build)", base.version_text(), base.build_name())
 	if base.PROFILE {
 		// A profiling build (`build build --profile`): the trace beside the executable.
-		dir, _ := os.get_executable_directory(context.temp_allocator)
+		dir := base.boot_info().dirs.exe
 		path :=
 			filepath.join(
 				{dir, "voxiverse-server.spall"},
@@ -147,8 +147,8 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 	srv := new(core.Server)
 	defer free(srv)
 	if opts.steam {
-		dir, err := os.get_executable_directory(context.temp_allocator)
-		if err != nil {
+		dir := base.boot_info().dirs.exe
+		if dir == "" {
 			log.error("steam off: the executable's folder is unknown")
 		} else {
 			steam.open_real(
@@ -204,8 +204,8 @@ run_collector :: proc(opts: Options) -> bool {
 	c := new(collector.Collector)
 	defer free(c)
 	if opts.steam {
-		dir, err := os.get_executable_directory(context.temp_allocator)
-		if err != nil {
+		dir := base.boot_info().dirs.exe
+		if dir == "" {
 			log.error("steam off: the executable's folder is unknown")
 		} else {
 			steam.open_real(

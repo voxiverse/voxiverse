@@ -470,8 +470,8 @@ read_shader :: proc(name: string) -> ([]byte, bool) {
 
 // path_next_to_exe places a file beside the executable (build/ in dev).
 path_next_to_exe :: proc(name: string) -> string {
-	dir, err := os.get_executable_directory(context.temp_allocator)
-	if err != nil {return name}
+	dir := base.boot_info().dirs.exe
+	if dir == "" {return name}
 	path, _ := filepath.join({dir, name}, context.temp_allocator)
 	return path
 }

@@ -33,8 +33,8 @@ WATCH_INTERVAL :: 0.5 // seconds
 shader_watch_init :: proc(w: ^Shader_Watch) {
 	w^ = {}
 	when !base.DEV {return}
-	exe_dir, err := os.get_executable_directory(context.temp_allocator)
-	if err != nil {return}
+	exe_dir := base.boot_info().dirs.exe
+	if exe_dir == "" {return}
 	repo := filepath.dir(exe_dir)
 	sources := filepath.join({repo, "assets", "shaders"}, context.temp_allocator) or_else ""
 	driver :=
