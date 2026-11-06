@@ -60,6 +60,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github/actions/apt` | The composite action that installs packages | `*.yml` |
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
 | `.github/workflows` | CI | `*.yml` |
+| `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/baselines/audio` | Audio baselines, compared as text | `*.txt`, `*.decisions` |
 | `assets/baselines/images` | Image baselines, their scenes' counts and their scene list | `*.png`, `*.counts`, `*.txt` |
