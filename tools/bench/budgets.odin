@@ -20,7 +20,7 @@ import "server:core"
 // desktop's so a slow runner does not flake. The counters are a multiple of
 // what building them cost in the same run, not a number of seconds (#43).
 
-BUDGETS_VERSION :: 3
+BUDGETS_VERSION :: 4
 
 Budgets_Options :: struct {
 	repetitions: int `usage:"times the whole is done (default 3, 5 with -check)"`,
@@ -44,6 +44,11 @@ BUDGET_LIMITS := [?]struct {
 	{.Rules_Compile, 50_000},
 	{.Random_Ticks, 2000},
 	{.Random_Rule_Run, 4000}, // (the grass rule may read light: 377 cells)
+	{.Store_Op, 600},
+	{.Store_Iterate, 15},
+	{.Spatial_Move, 250},
+	{.Spatial_Sphere, 3000},
+	{.Collide_Move, 2000},
 }
 
 budgets_main :: proc(args: []string) {
@@ -162,4 +167,41 @@ budgets_run :: proc(dir: string, reg: ^game.Registry, broken: ^[dynamic]string) 
 	}
 	base.metric_add(.Random_Ticks, f32(random.worst_us))
 	base.metric_add(.Random_Rule_Run, f32(random.run_ns))
+
+	budget_entities(reg, broken)
+}
+
+@(private = "file")
+budget_entities :: proc(reg: ^game.Registry, broken: ^[dynamic]string) {
+	check :: proc(broken: ^[dynamic]string, what: string, r: core.Budget_Scene) {
+		if r.done != r.want {
+			append(broken, fmt.aprintf("%s did %d of the %d asked", what, r.done, r.want))
+		}
+	}
+	fmt.printfln("scene: %s", "the store")
+	store := core.budget_store()
+	// (an operation that is refused or finds nothing to do is not counted: most are applied)
+	if store.done < store.want / 2 {
+		append(
+			broken,
+			fmt.aprintf("the store applied %d of %d operations", store.done, store.want),
+		)
+	}
+	base.metric_add(.Store_Op, f32(store.ns))
+	iterate := core.budget_store_iterate()
+	check(broken, "the store's query", iterate)
+	base.metric_add(.Store_Iterate, f32(iterate.ns))
+
+	fmt.printfln("scene: %s", "the spatial service")
+	move := core.budget_spatial_move()
+	check(broken, "the spatial moves", move)
+	base.metric_add(.Spatial_Move, f32(move.ns))
+	sphere := core.budget_spatial_sphere()
+	check(broken, "the sphere queries", sphere)
+	base.metric_add(.Spatial_Sphere, f32(sphere.ns))
+
+	fmt.printfln("scene: %s", "the collision")
+	collide := core.budget_collide(reg)
+	check(broken, "the collide moves", collide)
+	base.metric_add(.Collide_Move, f32(collide.ns))
 }

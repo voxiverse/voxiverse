@@ -69,6 +69,11 @@ Metric :: enum u8 {
 	Rules_Compile, // compiling the test pack and 500 rules near the limits, us
 	Random_Ticks, // the slowest random_ticks call over 512 chunks, us
 	Random_Rule_Run, // CPU ns per random rule run in that scene
+	Store_Op, // CPU ns per archetype store operation (spawn, add, remove, despawn)
+	Store_Iterate, // CPU ns per row of a two-component query over 4 096 entities
+	Spatial_Move, // CPU ns per move of 2 000 entries random-walking 0.2 blocks
+	Spatial_Sphere, // CPU ns per spatial_sphere of radius 16 among 2 000 entries
+	Collide_Move, // CPU ns per collide_move of a sheep-sized box, 0.15-block delta
 	// The viewmodel scenario: one value per frame.
 	View_Model, // building the view model's vertices for a frame (the biggest model), us
 	// The avatars scenario: one value per frame.
@@ -149,6 +154,11 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Rules_Compile        = {"rules_compile", "us", false},
 	.Random_Ticks         = {"random_ticks", "us", false},
 	.Random_Rule_Run      = {"random_rule_run", "ns", false},
+	.Store_Op             = {"store_op", "ns", false},
+	.Store_Iterate        = {"store_iterate", "ns", false},
+	.Spatial_Move         = {"spatial_move", "ns", false},
+	.Spatial_Sphere       = {"spatial_sphere", "ns", false},
+	.Collide_Move         = {"collide_move", "ns", false},
 	.View_Model           = {"view_model", "us", false},
 	.Avatar_Draw          = {"avatar_draw", "ms", false},
 	.Ogg_Decode           = {"ogg_decode", "ms", false},

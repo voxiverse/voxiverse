@@ -527,3 +527,260 @@ budget_random_ticks :: proc() -> (r: Budget_Random, ok: bool) {
 	r.run_ns = f64(total) * 1000 / f64(max(r.runs, 1))
 	return r, true
 }
+
+// ---- entities v2: the store, the spatial service, collision ----
+
+// What a scene did, for budgets_run to compare with what it asked for: a scene
+// that silently does less cannot pass.
+Budget_Scene :: struct {
+	ns:   f64, // CPU ns per operation
+	done: int, // operations (or rows, queries, moves) carried out
+	want: int, // what the scene asked for
+}
+
+@(private = "file")
+Bench_A :: struct {
+	v: [3]f32,
+}
+
+@(private = "file")
+Bench_B :: struct {
+	n: i64,
+}
+
+@(private = "file")
+Bench_C :: struct {
+	x: u32,
+}
+
+@(private = "file")
+Bench_D :: struct {
+	y: u32,
+}
+
+@(private = "file")
+bench_infos :: proc() -> [4]game.Component_Info {
+	return {
+		{name = "a", type = Bench_A, size = size_of(Bench_A), align = align_of(Bench_A)},
+		{name = "b", type = Bench_B, size = size_of(Bench_B), align = align_of(Bench_B)},
+		{name = "c", type = Bench_C, size = size_of(Bench_C), align = align_of(Bench_C)},
+		{name = "d", type = Bench_D, size = size_of(Bench_D), align = align_of(Bench_D)},
+	}
+}
+
+BUDGET_STORE_OPS :: 200_000
+BUDGET_STORE_ROWS :: 4096
+
+// budget_store: 200 000 random spawn, add, remove and despawn operations with
+// an apply every 64 (ns per operation).
+budget_store :: proc() -> (r: Budget_Scene) {
+	infos := bench_infos()
+	st: game.Entity_Store
+	if game.store_init(&st, infos[:], nil, 8192) != nil {return}
+	defer game.store_destroy(&st)
+	live := make([dynamic]game.Entity_Handle, 0, 8192)
+	defer delete(live)
+	rng := base.rng_make(50)
+	r.want = BUDGET_STORE_OPS
+	start := base.thread_cpu_us()
+	value := Bench_C{}
+	for i in 0 ..< BUDGET_STORE_OPS {
+		pick := base.rng_int_max(&rng, 4)
+		switch {
+		case pick == 0 || len(live) < 64:
+			if len(live) < 4000 {
+				set := game.Component_Set{0}
+				if base.rng_int_max(&rng, 2) == 0 {set += {1}}
+				if base.rng_int_max(&rng, 2) == 0 {set += {3}}
+				if _, h, err := game.store_spawn(&st, set); err == .None {
+					append(&live, h)
+					r.done += 1
+				}
+			}
+		case pick == 1:
+			h := live[base.rng_int_max(&rng, len(live))]
+			if game.store_add(&st, h, 2, &value) == .None {r.done += 1}
+		case pick == 2:
+			h := live[base.rng_int_max(&rng, len(live))]
+			if game.store_remove(&st, h, 2) == .None {r.done += 1}
+		case:
+			k := base.rng_int_max(&rng, len(live))
+			if game.store_despawn(&st, live[k]) == .None {
+				r.done += 1
+				unordered_remove(&live, k)
+			}
+		}
+		if i % 64 == 63 {game.store_apply(&st)}
+	}
+	game.store_apply(&st)
+	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(BUDGET_STORE_OPS)
+	return
+}
+
+// budget_store_iterate: a two-component query over 4 096 entities in 8
+// archetypes, ns per row; done counts the rows visited.
+budget_store_iterate :: proc() -> (r: Budget_Scene) {
+	infos := bench_infos()
+	st: game.Entity_Store
+	if game.store_init(&st, infos[:], nil, 8192) != nil {return}
+	defer game.store_destroy(&st)
+	for i in 0 ..< BUDGET_STORE_ROWS {
+		set := game.Component_Set{0, 1}
+		if i % 8 >= 4 {set -= {1}} 	// (half lack the queried B)
+		if i % 2 == 1 {set += {2}}
+		if i % 4 >= 2 {set += {3}}
+		game.store_spawn(&st, set)
+	}
+	game.store_apply(&st)
+	r.want = BUDGET_STORE_ROWS / 2 * 50
+	sum: f32
+	start := base.thread_cpu_us()
+	for _ in 0 ..< 50 {
+		it := game.store_query(&st, {0, 1})
+		for a in game.query_next(&it) {
+			as := game.column(a, 0, Bench_A)
+			bs := game.column(a, 1, Bench_B)
+			for i in 0 ..< len(as) {
+				sum += as[i].v.x
+				bs[i].n += 1
+			}
+			r.done += len(as)
+		}
+	}
+	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(max(r.done, 1))
+	if sum != 0 {r.done = 0}
+	return
+}
+
+BUDGET_SPATIAL_ENTRIES :: 2000
+BUDGET_SPATIAL_STEPS :: 100
+
+// budget_spatial_move: 2 000 entries random-walking 0.2 blocks a step over
+// 128 x 128 blocks, ns per move.
+budget_spatial_move :: proc() -> (r: Budget_Scene) {
+	sp: game.Spatial
+	game.spatial_init(&sp)
+	defer game.spatial_destroy(&sp)
+	rng := base.rng_make(51)
+	handles: [BUDGET_SPATIAL_ENTRIES]game.Spatial_Handle
+	at: [BUDGET_SPATIAL_ENTRIES][3]f64
+	size := [3]f64{0.6, 1.8, 0.6}
+	for i in 0 ..< BUDGET_SPATIAL_ENTRIES {
+		at[i] = {
+			base.rng_f64_range(&rng, 0, 128),
+			base.rng_f64_range(&rng, 0, 16),
+			base.rng_f64_range(&rng, 0, 128),
+		}
+		h, _ := game.spatial_insert(
+			&sp,
+			{id = game.Entity_Id(i + 1), lo = at[i], hi = at[i] + size},
+		)
+		handles[i] = h
+	}
+	r.want = BUDGET_SPATIAL_ENTRIES * BUDGET_SPATIAL_STEPS
+	start := base.thread_cpu_us()
+	for _ in 0 ..< BUDGET_SPATIAL_STEPS {
+		for i in 0 ..< BUDGET_SPATIAL_ENTRIES {
+			at[i] += {
+				base.rng_f64_range(&rng, -0.2, 0.2),
+				base.rng_f64_range(&rng, -0.2, 0.2),
+				base.rng_f64_range(&rng, -0.2, 0.2),
+			}
+			if game.spatial_move(&sp, handles[i], at[i], at[i] + size) {r.done += 1}
+		}
+	}
+	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(max(r.done, 1))
+	return
+}
+
+BUDGET_SPHERES :: 10_000
+
+// budget_spatial_sphere: spatial_sphere of radius 16 among 2 000 entries over
+// 128 x 128 blocks, ns per query; done counts the queries that found someone
+// (about 8 % of the area is in a sphere: a scene that finds nothing did not
+// search).
+budget_spatial_sphere :: proc() -> (r: Budget_Scene) {
+	sp: game.Spatial
+	game.spatial_init(&sp)
+	defer game.spatial_destroy(&sp)
+	rng := base.rng_make(52)
+	for i in 0 ..< BUDGET_SPATIAL_ENTRIES {
+		p := [3]f64 {
+			base.rng_f64_range(&rng, 0, 128),
+			base.rng_f64_range(&rng, 0, 16),
+			base.rng_f64_range(&rng, 0, 128),
+		}
+		game.spatial_insert(&sp, {id = game.Entity_Id(i + 1), lo = p, hi = p + {0.6, 1.8, 0.6}})
+	}
+	out := make([dynamic]game.Entity_Id, 0, 512)
+	defer delete(out)
+	r.want = BUDGET_SPHERES
+	found := 0
+	start := base.thread_cpu_us()
+	for _ in 0 ..< BUDGET_SPHERES {
+		c := [3]f64 {
+			base.rng_f64_range(&rng, 16, 112),
+			base.rng_f64_range(&rng, 0, 16),
+			base.rng_f64_range(&rng, 16, 112),
+		}
+		clear(&out)
+		game.spatial_sphere(&sp, c, 16, {}, &out)
+		found += len(out)
+		r.done += 1
+	}
+	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(BUDGET_SPHERES)
+	if found == 0 {r.done = 0}
+	return
+}
+
+BUDGET_COLLIDES :: 20_000
+
+@(private = "file")
+Bench_Field :: struct {
+	blocks: map[game.Block_Pos]game.Block,
+}
+
+// budget_collide: collide_move of a sheep-sized box with a 0.15-block delta in
+// a field of blocks (the base pack's: it has no slabs or stairs), ns per
+// call; done counts the calls that were stopped by something.
+budget_collide :: proc(reg: ^game.Registry) -> (r: Budget_Scene) {
+	f: Bench_Field
+	defer delete(f.blocks)
+	rng := base.rng_make(53)
+	shapes := [?]game.Block{.Stone, .Planks, .Glass, .Cobblestone}
+	for x in i32(-4) ..< 4 {
+		for y in i32(0) ..< 8 {
+			for z in i32(-4) ..< 4 {
+				if base.rng_int_max(&rng, 3) == 0 {
+					f.blocks[{x, y, z}] = shapes[base.rng_int_max(&rng, len(shapes))]
+				}
+			}
+		}
+	}
+	q := game.Block_Query{&f, proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
+			f := (^Bench_Field)(data)
+			if b, ok := f.blocks[p]; ok {return b, true}
+			return .Stone if p.y < 0 else .Air, true
+		}, &reg.blocks, {}}
+	r.want = BUDGET_COLLIDES
+	hits := 0
+	start := base.thread_cpu_us()
+	for _ in 0 ..< BUDGET_COLLIDES {
+		pos := [3]f64 {
+			base.rng_f64_range(&rng, -3, 3),
+			base.rng_f64_range(&rng, 0, 7),
+			base.rng_f64_range(&rng, -3, 3),
+		}
+		delta := [3]f64 {
+			base.rng_f64_range(&rng, -0.15, 0.15),
+			base.rng_f64_range(&rng, -0.15, 0.15),
+			base.rng_f64_range(&rng, -0.15, 0.15),
+		}
+		c := game.collide_move(q, pos, 0.45, 0.9, delta, {}, 0)
+		if c.hit != {} {hits += 1}
+		r.done += 1
+	}
+	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(BUDGET_COLLIDES)
+	if hits == 0 {r.done = 0}
+	return
+}

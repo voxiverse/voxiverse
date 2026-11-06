@@ -105,6 +105,12 @@ budget_scene :: proc(m: base.Metric) -> string {
 		return "the rules"
 	case .Random_Ticks, .Random_Rule_Run:
 		return "the random ticks"
+	case .Store_Op, .Store_Iterate:
+		return "the store"
+	case .Spatial_Move, .Spatial_Sphere:
+		return "the spatial service"
+	case .Collide_Move:
+		return "the collision"
 	}
 	return ""
 }
