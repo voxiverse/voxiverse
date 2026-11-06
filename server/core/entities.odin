@@ -501,17 +501,28 @@ entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
 // by not being put).
 entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
-	near := f64(ENTITY_VIEW)
-	told := 0
-	for &ent in w.entities.list {
-		d := ent.body.position - c.player.position
-		if d.x * d.x + d.z * d.z > near * near {continue}
-		if told == game.MAX_KNOWN_ENTITIES {break}
-		told += 1
+	// The entities within ENTITY_VIEW horizontally (players are not told as
+	// entities), the lowest ids first, at most MAX_KNOWN_ENTITIES of them: the
+	// query answers in id order, which is the list's order the set was always
+	// cut in (a nearest-first cut changes the set every tick at the cap, and
+	// the receiver refuses a create past its record cap before it applies the
+	// removes of the same message).
+	around := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_cylinder(
+		&w.entity_world.spatial,
+		c.player.position,
+		ENTITY_VIEW,
+		SPAWN_HEIGHT,
+		{none = {.Player}},
+		&around,
+	)
+	for id in around[:min(len(around), game.MAX_KNOWN_ENTITIES)] {
+		ent, _ := entity_find(w, u32(id))
+		if ent == nil {continue}
 		key := game.key_entity(ent.id)
 		record := game.Entity_Record{ent.kind, ent.stack}
 		state_put(s, c, .Entity, &record, key)
-		motion := game.Entity_Motion{ent.body.position, ent.yaw, ent.pitch, sheep_flags(&ent)}
+		motion := game.Entity_Motion{ent.body.position, ent.yaw, ent.pitch, sheep_flags(ent)}
 		state_put(s, c, .Entity_Motion, &motion, key)
 	}
 }
