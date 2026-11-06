@@ -58,7 +58,9 @@ quantity over 5 runs (`-repetitions N` changes it; `script --smoke` is one) and 
 beside the median, and the result file keeps every run. A scene or stage that fails to run in
 any run (an error, a missing result, changed counts) is reported as `bench broken` and fails at
 once, without judging budgets: a median never hides it. A median over its limit is
-`bench over budget`. The script's time ratios to Lua are the median of the per-run ratios.
+`bench over budget`. In CI, `bench budgets -check` that ends over budget runs once more and fails only
+if the second check does too: a slow runner moves every run of a check (and so its median),
+while a real regression fails both. The script's time ratios to Lua are the median of the per-run ratios.
 
 ### Comparing two versions
 
