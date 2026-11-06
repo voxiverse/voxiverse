@@ -1,0 +1,14 @@
+package platform_common
+
+import "core:os"
+import "core:testing"
+
+import "common:base"
+
+@(test)
+test_boot_reads_the_arguments :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	testing.expect_value(t, len(host.boot.args), len(os.args) - 1)
+	for arg, i in host.boot.args {testing.expect_value(t, arg, os.args[i + 1])}
+}

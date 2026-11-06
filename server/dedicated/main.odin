@@ -14,6 +14,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:netcode"
+import platform "common:platform"
 import "server:collector"
 import "server:core"
 
@@ -52,6 +53,8 @@ Options :: struct {
 stop_requested: bool
 
 main :: proc() {
+	host: base.Host
+	platform.boot(&host)
 	opts := Options {
 		universe    = "universe",
 		port        = netcode.DEFAULT_PORT,
@@ -100,14 +103,14 @@ main :: proc() {
 			filepath.join({opts.universe, "crashes"}, context.temp_allocator) or_else "",
 			"server",
 		)
-		ok = run(opts)
+		ok = run(&host, opts)
 	}
 	base.profile_stop()
 	ok = base.debug_end(&dbg) && ok
 	os.exit(0 if ok else 1)
 }
 
-run :: proc(opts: Options) -> bool {
+run :: proc(host: ^base.Host, opts: Options) -> bool {
 	seed := opts.seed
 	if seed == 0 {crypto.rand_bytes(mem.ptr_to_bytes(&seed))}
 	name := opts.name
