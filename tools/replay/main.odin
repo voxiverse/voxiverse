@@ -7,6 +7,7 @@ import "core:time"
 
 import "common:base"
 import "common:game"
+import platform "common:platform"
 import "server:core"
 
 // replay feeds the client's messages from a network trace to a fresh server
@@ -32,6 +33,8 @@ base_registry: ^game.Registry
 
 main :: proc() {
 	base_registry = game.registry_base()
+	host: base.Host
+	platform.boot(&host)
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "replay.log", "replay")
 	opts := Options {

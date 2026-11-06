@@ -80,7 +80,7 @@ debug_begin :: proc(d: ^Debug, log_file_name: string, tag: string) -> runtime.Co
 			d.log_file = f
 			d.log_path = strings.clone(path, d.backing)
 		} else {
-			fmt.eprintfln("debug: cannot write log file %s: %v", path, err)
+			out_printfln(.Err, "debug: cannot write log file %s: %v", path, err)
 		}
 	}
 	d.logger = log_sink_init(&d.sink, d.log_file, console_level, tag)
@@ -178,7 +178,7 @@ crash_report :: proc(what: string) {
 		crash_hook(what)
 	}
 	if active == nil {
-		fmt.eprintfln("crash: %s", what)
+		out_printfln(.Err, "crash: %s", what)
 		return
 	}
 	context = runtime.default_context()
@@ -237,7 +237,7 @@ assertion_failure :: proc(prefix, message: string, loc: runtime.Source_Code_Loca
 		crash_hook(fmt.tprintf("%s: %s (%v)", prefix, message, loc))
 	}
 	// Write straight to stderr too: the logger may be what failed.
-	fmt.eprintfln("%s: %s (%v)", prefix, message, loc)
+	out_printfln(.Err, "%s: %s (%v)", prefix, message, loc)
 	if active != nil {
 		context.logger = active.logger
 		log.fatalf("%s: %s (%v)", prefix, message, loc)

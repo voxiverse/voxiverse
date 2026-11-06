@@ -1,6 +1,5 @@
 package base
 
-import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -325,7 +324,7 @@ disk_replace :: proc(d: ^Disk, path: string, data: []u8) -> Disk_Error {
 
 @(private = "file")
 disk_log :: proc(what, path: string, err: any) {
-	fmt.eprintfln("disk: %s failed path=%s error=%v", what, path, err)
+	out_printfln(.Err, "disk: %s failed path=%s error=%v", what, path, err)
 }
 
 cstring_temp :: proc(s: string) -> cstring {

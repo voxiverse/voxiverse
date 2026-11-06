@@ -8,6 +8,7 @@ package crash_fixture
 
 import "base:intrinsics"
 import "common:base"
+import platform "common:platform"
 import "core:os"
 import "core:sync"
 import "core:thread"
@@ -19,6 +20,8 @@ mode: string
 main :: proc() {
 	if len(os.args) < 3 {os.exit(2)}
 	mode = os.args[2]
+	host: base.Host
+	platform.boot(&host)
 	dbg: base.Debug
 	context = base.debug_begin(&dbg, "crash_fixture.log", "main")
 	if !base.crash_bundle_init(os.args[1], "game") {os.exit(2)}
