@@ -7,11 +7,19 @@ import sc "common:steam"
 // (server/steam), and failures are scripted.
 
 Fake_Script :: struct {
-	account:     u32, // the account number: the SteamID follows from it
-	name:        string, // "" : "Fake<account>"
-	fail_init:   bool, // init fails, as with no Steam client running
-	fail_ticket: bool, // auth_ticket fails
-	fail_ugc:    bool, // ugc_query_all fails
+	account:      u32, // the account number: the SteamID follows from it
+	name:         string, // "" : "Fake<account>"
+	fail_init:    bool, // init fails, as with no Steam client running
+	fail_ticket:  bool, // auth_ticket fails
+	fail_ugc:     bool, // ugc_query_all fails
+	items:        []Fake_Item, // the subscribed Workshop items
+	fail_publish: bool, // workshop_publish fails
+}
+
+// Fake_Item: a subscribed Workshop item: its id and the folder Steam installed it in.
+Fake_Item :: struct {
+	id:  u64,
+	dir: string,
 }
 
 Fake :: struct {
@@ -23,6 +31,8 @@ Fake :: struct {
 	next_nonce:   u32,
 	live_tickets: int,
 	live_queries: int,
+	published:    int, // workshop_publish calls that were accepted
+	last_publish: Publish, // the last one's metadata (its strings are the caller's)
 }
 
 @(private)

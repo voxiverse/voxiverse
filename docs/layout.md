@@ -100,7 +100,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/platform` | Windows, input and pads per OS | `*.odin` |
 | `client/render` | Frame rendering | `*.odin` |
 | `client/sfx` | Sound-effect synthesis | `*.odin` |
-| `client/steam` | The client's Steam: one interface over the run-time-loaded Steamworks flat API and a fake | `*.odin` |
+| `client/steam` | The client's Steam: one interface over the run-time-loaded Steamworks flat API and a fake, and the Workshop (subscribed packs, publishing) | `*.odin` |
 | `client/starfield` | The starfield backdrop | `*.odin` |
 | `client/testkit` | Helpers the packages' tests share (the base registry, a mode by name); only tests import it | `*.odin` |
 | `client/ui` | The UI toolkit | `*.odin` |
