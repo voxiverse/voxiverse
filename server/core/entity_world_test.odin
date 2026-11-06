@@ -162,3 +162,35 @@ test_world_spawn_not_loaded :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(w.entity_world.deaths), 1)
 	testing.expect_value(t, w.entity_world.deaths[0].id, id)
 }
+
+@(test)
+test_tag_near :: proc(t: ^testing.T) {
+	reg := test_registry()
+	if reg == nil {return}
+	defer game.registry_destroy(reg)
+	sheep, _ := game.registry_kind(reg, "sheep")
+	rocket, _ := game.registry_kind(reg, "rocket")
+	ew: Entity_World
+	entity_world_init(&ew, 1, 8)
+	defer entity_world_destroy(&ew)
+	_, near, _ := entity_world_spawn(&ew, reg, sheep, {1, 2, 3}, Act{})
+	_, far, _ := entity_world_spawn(&ew, reg, sheep, {100, 2, 3}, Act{})
+	_, rk, _ := entity_world_spawn(&ew, reg, rocket, {2, 2, 3}, Act{})
+	game.store_apply(&ew.store)
+
+	n, err := entity_tag_near(&ew, sheep, {0, 2, 3}, 10, true, "flock")
+	testing.expect_value(t, err, Tag_Error.None)
+	testing.expect_value(t, n, 1)
+	game.store_apply(&ew.store)
+	testing.expect(t, entity_has_tag(&ew, near, "flock"))
+	testing.expect(t, !entity_has_tag(&ew, far, "flock"))
+	testing.expect(t, !entity_has_tag(&ew, rk, "flock"))
+
+	n, _ = entity_tag_near(&ew, 0, {0, 2, 3}, 10, true, "flock")
+	testing.expect_value(t, n, 2)
+	n, _ = entity_tag_near(&ew, 0, {0, 2, 3}, 10, false, "flock")
+	testing.expect_value(t, n, 2)
+	testing.expect(t, !entity_has_tag(&ew, near, "flock"))
+	_, err = entity_tag_near(&ew, 0, {0, 2, 3}, 10, true, "Bad Name")
+	testing.expect_value(t, err, Tag_Error.Bad_Name)
+}
