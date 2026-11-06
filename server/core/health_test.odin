@@ -13,17 +13,17 @@ import "common:telemetry"
 config :: proc(dir: string) -> Config {
 	rules := quiet_rules()
 	return {
-		mode            = "survival", // (health is an ability of it)
-		seed            = 28,
-		generator       = .Classic,
-		rules           = rules,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 4,
-		listen          = true,
-		everyone_cheats = true,
-		save_dir        = dir,
-		no_sheep        = true,
+		mode              = "survival", // (health is an ability of it)
+		seed              = 28,
+		generator         = .Classic,
+		rules             = rules,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		save_dir          = dir,
+		no_natural_spawns = true,
 	}
 }
 

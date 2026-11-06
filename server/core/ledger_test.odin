@@ -25,7 +25,7 @@ config :: proc(dir: string, death_drops := false) -> Config {
 		listen = true,
 		everyone_cheats = true,
 		save_dir = dir,
-		no_sheep = true,
+		no_natural_spawns = true,
 		world_idle = 0.5,
 	}
 }

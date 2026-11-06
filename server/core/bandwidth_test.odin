@@ -47,7 +47,7 @@ bandwidth_run :: proc(t: ^testing.T, name: string) -> (b: Bandwidth, ok: bool) {
 	sess := new(Session)
 	defer free(sess)
 	crowd := name == "crowd"
-	if !testing.expect(t, session_start(sess, {}, false, no_sheep = crowd)) {return}
+	if !testing.expect(t, session_start(sess, {}, false, no_natural_spawns = crowd)) {return}
 	defer session_stop(sess)
 	if !session_land(t, sess) {return}
 	sess.script_at = sess.h.srv.tick

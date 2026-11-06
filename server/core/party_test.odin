@@ -389,16 +389,16 @@ party :: proc(t: ^testing.T, size: int) {
 	defer free(h)
 	srv := &h.srv
 	config := Config {
-		seed        = 23,
-		mode        = "survival",
-		view_radius = 2,
-		view_height = 1,
-		save_dir    = dir,
-		max_players = size,
-		listen      = true,
-		generator   = .Classic,
-		no_sheep    = true,
-		kit         = "rocket_launcher 1", // (the survival kit has the rest; the tests' own default is blocks)
+		seed              = 23,
+		mode              = "survival",
+		view_radius       = 2,
+		view_height       = 1,
+		save_dir          = dir,
+		max_players       = size,
+		listen            = true,
+		generator         = .Classic,
+		no_natural_spawns = true,
+		kit               = "rocket_launcher 1", // (the survival kit has the rest; the tests' own default is blocks)
 	}
 	started: bool
 	{

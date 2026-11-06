@@ -47,7 +47,7 @@ grief_config :: proc(dir: string, memory := 0, segment := 0) -> Config {
 		allow_cheats = true,
 		max_players = 1,
 		rules = rules_still(),
-		no_sheep = true,
+		no_natural_spawns = true,
 		save_dir = dir,
 		journal_memory = memory,
 		journal_segment_bytes = segment,

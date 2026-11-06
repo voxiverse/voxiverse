@@ -64,7 +64,7 @@ Config :: struct {
 	world_idle:            f64, // seconds a world with nobody in it stays loaded (0: WORLD_IDLE_SECONDS)
 	gate_open:             f64, // seconds a dialed gate stays open (0: GATE_OPEN_TICKS)
 	pack_watch:            bool, // development: reload the packs when their files change (pack_reload.odin)
-	no_sheep:              bool, // none appear by themselves (benchmarks: the same work every run)
+	no_natural_spawns:     bool, // none appear by themselves (benchmarks: the same work every run)
 	net:                   ^netcode.Simnet, // listen on this simulated network, not UDP (needs stepped; no conditions: the network's are the only ones)
 	stepped:               bool, // no thread: the caller runs ticks with step (determinism.md), workers may be 0
 	perturb:               Perturb, // tests only (refused unless stepped): a deliberate nondeterminism

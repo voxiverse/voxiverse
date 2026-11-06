@@ -31,15 +31,15 @@ test_world_commands :: proc(t: ^testing.T) {
 	defer free(h)
 	srv := &h.srv
 	config := Config {
-		seed            = 27,
-		generator       = .Earth,
-		rules           = quiet_rules(),
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 4,
-		listen          = true,
-		everyone_cheats = true,
-		no_sheep        = true,
+		seed              = 27,
+		generator         = .Earth,
+		rules             = quiet_rules(),
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true,
 	}
 	if !testing.expect(t, harness_start(h, config)) {return}
 	defer harness_stop(h)

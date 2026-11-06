@@ -31,7 +31,7 @@ test_place_record :: proc(t: ^testing.T) {
 				max_players = 2,
 				listen = true,
 				generator = .Earth,
-				no_sheep = true,
+				no_natural_spawns = true,
 			},
 		),
 	) {return}

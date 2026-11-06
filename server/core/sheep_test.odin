@@ -39,15 +39,15 @@ test_shearing_a_sheep :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
-		rules           = quiet_rules(),
-		seed            = 23,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 4,
-		listen          = true,
-		everyone_cheats = true,
-		save_dir        = dir,
-		no_sheep        = true, // (only the summoned one: natural ones spawn by day)
+		rules             = quiet_rules(),
+		seed              = 23,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		save_dir          = dir,
+		no_natural_spawns = true, // (only the summoned one: natural ones spawn by day)
 	}
 	h := new(Harness)
 	defer free(h)
@@ -156,15 +156,15 @@ netcode_close_both :: proc(h: ^Harness, a, b: ^Net_Client) {
 @(test)
 test_grazing_regrows_wool :: proc(t: ^testing.T) {
 	config := Config {
-		rules           = quiet_rules(),
-		seed            = 23,
-		generator       = .Classic,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 2,
-		listen          = true,
-		everyone_cheats = true,
-		no_sheep        = true, // (the test counts its own two: natural ones spawn by day)
+		rules             = quiet_rules(),
+		seed              = 23,
+		generator         = .Classic,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true, // (the test counts its own two: natural ones spawn by day)
 	}
 	h := new(Harness)
 	defer free(h)
@@ -262,15 +262,15 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	os.remove_all(dir)
 	defer os.remove_all(dir)
 	config := Config {
-		rules       = quiet_rules(),
-		seed        = 24,
-		view_radius = 3,
-		view_height = 2,
-		max_players = 2,
-		listen      = true,
-		save_dir    = dir,
-		generator   = .Classic,
-		no_sheep    = true,
+		rules             = quiet_rules(),
+		seed              = 24,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		save_dir          = dir,
+		generator         = .Classic,
+		no_natural_spawns = true,
 	}
 	h := new(Harness)
 	defer free(h)

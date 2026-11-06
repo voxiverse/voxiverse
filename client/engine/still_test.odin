@@ -51,15 +51,15 @@ seen :: proc(s: ^Session, t: ^Track) -> (v: Other_View, ok: bool) {
 @(private = "file")
 pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 	config := core.Config {
-		seed            = 33,
-		view_radius     = 3,
-		view_height     = 2,
-		max_players     = 4,
-		listen          = true,
-		allow_cheats    = true,
-		everyone_cheats = true,
-		no_sheep        = true,
-		rules           = still_rules(),
+		seed              = 33,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		allow_cheats      = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true,
+		rules             = still_rules(),
 	}
 	if !testing.expect(t, core.harness_start(&p.h, config)) {return false}
 	address := core.harness_address(&p.h)

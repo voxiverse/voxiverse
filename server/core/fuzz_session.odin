@@ -46,7 +46,7 @@ fuzz_seat :: proc() -> ^Fuzz_Fixture {
 	context.allocator = runtime.heap_allocator()
 	cfg := harness_world()
 	cfg.max_players = 2
-	if !session_start(&fx.sess, {}, false, no_sheep = true, with = cfg) {
+	if !session_start(&fx.sess, {}, false, no_natural_spawns = true, with = cfg) {
 		fuzz.fail("the fixture's server did not start")
 		return fx
 	}
@@ -154,7 +154,7 @@ fuzz_record :: proc() -> [][]u8 {
 	cfg := harness_world()
 	cfg.max_players = 2
 	sess.mirror.sent = &fuzz_recording
-	if !session_start(&sess, {}, false, no_sheep = true, with = cfg) {return nil}
+	if !session_start(&sess, {}, false, no_natural_spawns = true, with = cfg) {return nil}
 	for _ in 0 ..< FUZZ_RECORD_TICKS {session_step(&sess, true)}
 	sess.mirror.sent = nil
 	session_stop(&sess)
@@ -391,7 +391,7 @@ fuzz_heard :: proc(ticks: int) -> [][]u8 {
 	cfg := harness_world()
 	cfg.max_players = 2
 	sess.mirror.heard = &heard
-	if !session_start(&sess, {}, false, no_sheep = true, with = cfg) {return nil}
+	if !session_start(&sess, {}, false, no_natural_spawns = true, with = cfg) {return nil}
 	for _ in 0 ..< ticks {session_step(&sess, true)}
 	sess.mirror.heard = nil
 	session_stop(&sess)

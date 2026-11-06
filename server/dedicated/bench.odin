@@ -149,18 +149,18 @@ run_benchmark :: proc(scenario: string, smoke := false) -> bool {
 @(private = "file")
 bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -> bool {
 	config := core.Config {
-		seed            = BENCH_SEED,
-		view_radius     = 6 if party else 12,
-		view_height     = 4 if party else 6,
-		workers         = max(1, base.cpu_count() / 2),
-		everyone_cheats = !party, // (the teleport up, flying)
-		mode            = "survival" if party else "",
-		max_players     = BENCH_BOTS,
-		listen          = true,
-		port            = 0, // any free one
-		name            = "benchmark",
-		no_sheep        = true,
-		save_dir        = PARTY_UNIVERSE if party else "",
+		seed              = BENCH_SEED,
+		view_radius       = 6 if party else 12,
+		view_height       = 4 if party else 6,
+		workers           = max(1, base.cpu_count() / 2),
+		everyone_cheats   = !party, // (the teleport up, flying)
+		mode              = "survival" if party else "",
+		max_players       = BENCH_BOTS,
+		listen            = true,
+		port              = 0, // any free one
+		name              = "benchmark",
+		no_natural_spawns = true,
+		save_dir          = PARTY_UNIVERSE if party else "",
 	}
 	if party {os.remove_all(PARTY_UNIVERSE)}
 	srv := new(core.Server)
