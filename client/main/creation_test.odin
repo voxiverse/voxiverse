@@ -8,7 +8,7 @@ import "core:testing"
 
 import "client:engine"
 import "client:mesh"
-import "client:planet"
+import planet "client:planet"
 import "client:screen"
 import "client:starfield"
 import "client:ui"

@@ -7,7 +7,7 @@ MODE_CREATIVE :: "creative"
 MODE_SURVIVAL :: "survival"
 
 import "client:engine"
-import "client:planet"
+import planet "client:planet"
 import "client:ui"
 import "common:game"
 import "common:worldgen"

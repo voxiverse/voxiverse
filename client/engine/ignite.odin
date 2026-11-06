@@ -1,6 +1,6 @@
 package engine
 
-import "client:planet"
+import planet "client:planet"
 import "client:starfield"
 import "common:game"
 
