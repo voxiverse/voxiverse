@@ -144,7 +144,19 @@ exist (`client/steam/workshop.odin`).
 - **Trust.** Nothing from the Workshop is trusted more than a local pack: its folder is read by
   `server/packs` (symlinks and files past the limits refused) and the result goes through the
   same `registry_build`, so a malformed item fails with the errors a local pack gets.
-- **Publishing.** `workshop_publish_info` takes the title and description from the local pack's
-  `pack.json` and the preview from a `preview.png` of at most 1 MiB in its folder;
-  `workshop_publish` hands them to Steam. The real Steam does not publish yet; the fake records
-  the call. There is no menu entry for either yet.
+- **Where a listed pack is found.** `universe.cfg` lists packs by name as always; there is no
+  format change. A listed pack is looked for in the universe's `packs/<namespace>/`, then in the
+  local packs folder (`<user data>/voxiverse/local_packs/<namespace>/`), then in the subscribed
+  Workshop items. The client reads the last two once per session and gives them to the server
+  (`Config.available_packs`) and to `registry_for_dir` alike, so both build the same registry. A
+  subscribed item no universe lists is never loaded.
+- **A bad item** is treated like a bad local pack: a universe that lists it does not open, and
+  the `Pack_Error` (or the read problem, with "Workshop item <id>") names it. It is never skipped,
+  because a world built on a pack must not open without it. An item with no pack folder names no
+  pack, so nobody can list it: that is logged, not refused. Exporting a universe still takes only
+  the packs in its own `packs/` folder.
+- **Publishing.** The console command `workshop_publish <namespace>` publishes a pack of the local
+  packs folder. `workshop_publish_info` takes the title and description from its `pack.json` and
+  the preview from a `preview.png` of at most 1 MiB in its folder; `workshop_publish` hands them to
+  Steam. The real Steam does not publish yet; the fake records the call. A menu entry waits for a
+  pack screen.

@@ -206,6 +206,7 @@ console_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 }
 
 register_builtin_commands :: proc(c: ^engine.Console) {
+	register_workshop_command(c)
 	console_register(
 		c,
 		{
