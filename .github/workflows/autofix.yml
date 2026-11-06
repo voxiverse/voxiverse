@@ -274,8 +274,11 @@ jobs:
 
             If you cannot finish: write what you tried and found to /tmp/agent-blocked.md and stop.
 
-      # Harness check (mode dry): the agent starts under this workflow as it is on this branch,
-      # answers once and changes nothing; the run fails if it did not start or answered an error.
+      # Harness check (mode dry): the agent step under this workflow as it is on this branch.
+      # The action runs Claude only from the workflow as it is on main (a changed copy is skipped,
+      # successfully, as "workflow validation"), so on a branch this checks everything up to it:
+      # the pick, the dispatch, the concurrency groups, and the action's own refusals (a bot actor,
+      # a token), which fail the step. Run from main, it also checks that Claude answers.
       - name: Agent (dry)
         id: claude_dry
         if: matrix.mode == 'dry'
@@ -289,9 +292,13 @@ jobs:
       - name: Dry check
         if: always() && matrix.mode == 'dry'
         env:
+          OUTCOME: ${{ steps.claude_dry.outcome }}
           EXEC: ${{ steps.claude_dry.outputs.execution_file }}
         run: |
-          [ -s "${EXEC:-/nonexistent}" ] || { echo "::error::the agent did not start"; exit 1; }
+          [ "${OUTCOME}" = success ] || { echo "::error::the agent step failed (${OUTCOME})"; exit 1; }
+          if [ ! -s "${EXEC:-/nonexistent}" ]; then
+            echo "the agent step passed; Claude runs only from main's copy of this workflow"; exit 0
+          fi
           err=$(jq -r '[.[] | select(.type == "result")] | last | .is_error' "${EXEC}")
           [ "${err}" = false ] || { echo "::error::the agent's run ended in an error"; exit 1; }
           echo "the agent started and answered"
