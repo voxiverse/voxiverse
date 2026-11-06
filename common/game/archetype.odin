@@ -114,6 +114,7 @@ store_init :: proc(
 	owner: rawptr,
 	max_entities: int,
 	allocator := context.allocator,
+	commands_per_entity := 2, // ring room: a spawn with adds queues several
 ) -> mem.Allocator_Error {
 	assert(len(infos) <= 32 && max_entities > 0)
 	for info in infos {
@@ -130,7 +131,7 @@ store_init :: proc(
 	table := 8
 	for table < max_entities * 2 {table *= 2}
 	st.handles = make([]Entity_Handle, table, allocator) or_return
-	st.commands = make([]Store_Command, max_entities * 2, allocator) or_return
+	st.commands = make([]Store_Command, max_entities * commands_per_entity, allocator) or_return
 	return nil
 }
 
