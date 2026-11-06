@@ -24,6 +24,7 @@ ENTITY_VIEW :: 64 // blocks: a client is told about entities this near (horizont
 SPAWN_EVERY :: game.TICK_RATE * 2 // ticks between spawning attempts
 SPAWN_CAP :: 6 // sheep near one player, at most
 SPAWN_NEAR :: 48 // blocks: what counts as near a player, for the cap
+SPAWN_HEIGHT :: 4096 // half the cylinder's height: no vertical limit
 SPAWN_MIN, SPAWN_MAX :: 16, 40 // blocks from a player where sheep appear
 DESPAWN_DISTANCE :: 80 // natural sheep this far from everyone go
 PATH_BUDGET_PER_TICK :: 1500 // A* nodes for all entities in one tick
@@ -791,11 +792,18 @@ spawn_natural :: proc(w: ^World) {
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	for &c in s.clients {
 		if c.state != .Playing || c.world != w {continue}
-		near := 0
-		for ent in w.entities.list {
-			d := ent.body.position - c.player.position
-			if d.x * d.x + d.z * d.z < SPAWN_NEAR * SPAWN_NEAR {near += 1}
-		}
+		// Every entity near, of any kind but the players (who were never counted).
+		// The cylinder has no vertical limit, as the old count had none.
+		around := make([dynamic]game.Entity_Id, context.temp_allocator)
+		game.spatial_cylinder(
+			&w.entity_world.spatial,
+			c.player.position,
+			SPAWN_NEAR,
+			SPAWN_HEIGHT,
+			{none = {.Player}},
+			&around,
+		)
+		near := len(around)
 		if near >= SPAWN_CAP || base.rng_f32(r) > 0.5 {continue}
 		angle := base.rng_f64_range(r, 0, math.TAU)
 		distance := base.rng_f64_range(r, SPAWN_MIN, SPAWN_MAX)
