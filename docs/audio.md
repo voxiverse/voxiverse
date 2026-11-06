@@ -101,9 +101,14 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   buses and the frozen voices with what the engine decided about each, a spectrum of Master
   and the device's counters. A button solos a voice, a second press mutes it, a third clears
   it. Streams are not replayed.
-- `build sfx` writes every effect to `build/sounds/*.wav`.
+- `build sfx` reads the recipes (`assets/sounds/*.recipe`) and
+  writes every variant to `build/sounds/<name>.<v>.wav` (24-bit mono, 48 kHz) and a
+  `build/sounds/report.txt`: each measure of each variant against the target range of the
+  sound's class, `ok` or `OUT`. It exits 1 if any is out. The same check runs as a unit test
+  (`client/audio/synth/recipes_test.odin`).
 - The **synth library** (`client/audio/synth`) is the next generation of effects, not yet
-  wired into the game: float at 48 kHz, no lo-fi stage. A **recipe** is text (`sound <name>`
+  wired into the game (the recipes in assets/sounds exist and are checked, the game still plays
+  `client/sfx`): float at 48 kHz, no lo-fi stage. A **recipe** is text (`sound <name>`
   ... `end`; grammar and errors in `recipe.odin`'s header) of layers, each a source (noise,
   tone, click, modal, granular, formant, bubble), an envelope, a filter, a level and a delay,
   then the sound's EQ. `generate(sound, variant)` draws every range once per variant, in the
@@ -111,6 +116,18 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   `base`'s sin, cos and exp, so a recipe gives the same samples on every OS (the tests hold
   hashes). `gain` is the sound's peak in dBFS (default -2). Water has no modal table: it is
   made of Minnaert bubbles.
+- **Targets** (`assets/sounds/targets.txt`): one row per class of sound
+  (`block_break`, `block_place`, `block_step`, `land`, `creature_hurt`, `creature_die`, `launch`,
+  `boom`) and, for the block classes, one centroid range per material (the word of the sound's
+  name before its first dot). Measured on each variant at 48 kHz with the sound's own gain:
+  `peak` (sample peak, dBFS); `loud` (the loudest 400 ms momentary loudness, LUFS, of the sound
+  padded with 400 ms of silence, one ear: playing it in both ears reads 3 LU more); `length`
+  (to the end of the last 5 ms RMS frame above -60 dB re peak); `decay` (the peak to the first
+  5 ms RMS frame under -30 dB re peak); `centroid` (Hz, of the whole sound); `low`, `mid`,
+  `high` (energy below 250 Hz, 250-2500 Hz and above 2500 Hz, dB re the total; a row may give
+  floors). The numbers are first estimates for the reference analysis to replace.
+- Every layer of a recipe that begins at once starts 1.2 ms in (`delay 0.0012`): the sound's
+  first millisecond is faded in to leave no click, and an onset inside it is mostly lost.
 - The **null device** asks for a block every 10 ms by the wall clock and discards it, so CI's
   smoke run exercises the real callback path; the **file device** mixes as fast as it can and
   writes a WAV at close (at most 300 s), for scripted runs and listening to a scenario.

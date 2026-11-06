@@ -131,7 +131,7 @@ Every sound effect is synthesized at startup (`client/sfx`; there are no recordi
 by our own mixer (`client/audio/`). miniaudio only opens the sound card. Every Ogg file, including
 the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
 
-- `build sfx` writes every sound effect to `build/sounds/*.wav` for listening outside the game.
+- `build sfx` writes every recipe of the base pack to `build/sounds/*.wav` and a target report, for listening outside the game.
 - F3 shows the device, the voices playing, and the sounds played and dropped. The log's last
   `audio` line summarizes the run.
 - `audio_capture` (<kbd>F9</kbd>), the F8 inspector and `build audio` are described in
