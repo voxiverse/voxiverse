@@ -280,6 +280,124 @@ test_ignite_plays_and_skips :: proc(t: ^testing.T) {
 	free_all(context.temp_allocator)
 }
 
+// ignite_phase gives the five phases in order, each starting where the last
+// ends, x from 0 to 1 within each, Done from IGNITE_SECONDS.
+@(test)
+test_ignite_phases :: proc(t: ^testing.T) {
+	sum: f32
+	for d in screen.IGNITE_PHASES {sum += d}
+	testing.expect(t, abs(sum - screen.IGNITE_SECONDS) < 0.05, "the table sums to 2.5 s")
+	last := screen.Ignite_Phase.Wind
+	last_x: f32
+	for ms in 0 ..< 2500 {
+		phase, x := screen.ignite_phase(f32(ms) / 1000)
+		testing.expect(t, phase >= last && int(phase) <= int(last) + 1, "phases in order")
+		if phase == last {
+			testing.expect(t, x >= last_x && x <= 1, "x rises within a phase")
+		} else {
+			testing.expect(t, x < 0.05, "x starts at 0 in the next phase")
+		}
+		last, last_x = phase, x
+	}
+	testing.expect_value(t, last, screen.Ignite_Phase.Fade)
+	first, fx := screen.ignite_phase(0)
+	testing.expect_value(t, first, screen.Ignite_Phase.Wind)
+	testing.expect_value(t, fx, 0)
+	done, _ := screen.ignite_phase(screen.IGNITE_SECONDS)
+	testing.expect_value(t, done, screen.Ignite_Phase.Done)
+}
+
+// The plan: the galaxy winds to the centre, the ring grows, the streaks
+// are fast only in their phase, the planet grows from a dot to the screen,
+// the fade goes 0 to 1, and no frame draws more quads than the budget.
+@(test)
+test_ignite_plan :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	screen.ignite_start(app, app.creation.stars, app.creation.seed)
+	i := &app.ignite
+	rect := ui.Rect{0, 0, SCREEN.x, SCREEN.y}
+	centre := ui.Vec2{rect.w / 2, rect.h / 2}
+	at :: proc(i: ^engine.Ignite, rect: ui.Rect, t: f32) -> ^screen.Ignite_Frame {
+		i.t = t
+		f := new(screen.Ignite_Frame, context.temp_allocator)
+		f^ = screen.ignite_plan(i, rect)
+		return f
+	}
+	// The end of Wind: every star is at the centre.
+	end := at(i, rect, screen.IGNITE_PHASES[0] - 0.0001)
+	testing.expect_value(t, end.phase, screen.Ignite_Phase.Wind)
+	for k in 0 ..< end.star_count {
+		d := end.stars[k] - centre
+		testing.expect(t, abs(d.x) < 1e-1 && abs(d.y) < 1e-1, "a star reaches the centre")
+	}
+	// Wind turns the stars: a star away from the middle has moved sideways.
+	start := at(i, rect, 0)
+	mid := at(i, rect, screen.IGNITE_PHASES[0] / 2)
+	turned := 0
+	for k in 0 ..< mid.star_count {
+		a := start.stars[k] - centre
+		b := mid.stars[k] - centre
+		if abs(a.x * b.y - a.y * b.x) > 1 {turned += 1}
+	}
+	testing.expect(t, turned > mid.star_count / 2, "wind turns the stars about the centre")
+	// The ring grows strictly through Flash and Streaks; the streaks alone are fast.
+	ring: f32 = -1 // (the first Flash frame may have the ring at 0)
+	planet_first, planet_last, fade_first, fade_last: f32 = -1, 0, -1, 0
+	for ms in 1 ..< 2500 {
+		f := at(i, rect, f32(ms) / 1000)
+		if f.phase == .Flash || f.phase == .Streaks {
+			testing.expect(t, f.ring_radius > ring, "the ring grows")
+			ring = f.ring_radius
+		} else {
+			testing.expect_value(t, f.ring_radius, 0)
+		}
+		testing.expect_value(t, f.streak_speed > 1, f.phase == .Streaks)
+		if f.phase == .Dive && planet_first < 0 {planet_first = f.planet}
+		if f.phase == .Fade && fade_first < 0 {fade_first = f.fade_alpha}
+		planet_last, fade_last = f.planet, f.fade_alpha
+	}
+	testing.expect(t, planet_first < 8, "the planet starts as a dot")
+	testing.expect(t, planet_last >= math.sqrt(rect.w * rect.w + rect.h * rect.h) / 2, "and fills")
+	testing.expect(t, fade_first < 0.05 && fade_last > 0.95, "the fade goes 0 to 1")
+	// The budget: no frame's draw list is above IGNITE_MAX_QUADS quads.
+	app.last_frame_ms = 1000.0 / 60
+	screen.ignite_start(app, app.creation.stars, app.creation.seed)
+	most := 0
+	for _ in 0 ..< 200 {
+		ignite_frame(app)
+		most = max(most, len(app.ui.output.vertices))
+		if !app.ignite.active {break}
+	}
+	testing.expectf(t, most <= screen.IGNITE_MAX_QUADS * 4, "a frame has %d vertices", most)
+	free_all(context.temp_allocator)
+}
+
+// Reduce motion: the duration is the fade; the plan has nothing but the fade
+// and the draw list holds one rect.
+@(test)
+test_ignite_reduce_motion :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	app.settings.reduce_motion = true
+	app.last_frame_ms = 1000.0 / 60
+	screen.ignite_start(app, app.creation.stars, app.creation.seed)
+	testing.expect_value(t, screen.ignite_duration(true), screen.IGNITE_FADE)
+	for _ in 0 ..< 10 {
+		f := new(screen.Ignite_Frame, context.temp_allocator)
+		f^ = screen.ignite_plan(&app.ignite, {0, 0, SCREEN.x, SCREEN.y})
+		testing.expect(
+			t,
+			f.star_count == 0 && f.ring_radius == 0 && f.planet == 0 && f.streak_speed == 1,
+			"nothing but the fade",
+		)
+		ignite_frame(app)
+		if !app.ignite.active {break}
+		testing.expect_value(t, len(app.ui.output.vertices), 4)
+	}
+	free_all(context.temp_allocator)
+}
+
 // The planet Ignite draws takes its colours from the home world's kind:
 // its water, its palette's ground and dry ground, and snow; whatever the seed.
 @(test)
