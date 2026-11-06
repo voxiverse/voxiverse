@@ -52,14 +52,19 @@ jobs:
           ONE: ${{ github.event.issue.number || inputs.issue }}
           MAX: ${{ vars.AGENTS_MAX_PER_RUN || '3' }}
           NOT_BEFORE: ${{ vars.AGENTS_NOT_BEFORE }}
+          # Logins trusted to write agent instructions, space-separated.
+          AUTHORS: ${{ vars.AGENT_AUTHORS || 'voxiverse-admin' }}
         run: |
           # Only issues an org member or this repo's own workflows wrote: the repo is public,
           # and the issue text becomes the agent's instructions. (REST API: `gh issue` has no
-          # author_association field.)
-          keep='select(.pull_request == null)
-            | select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR" or .user.login == "github-actions[bot]")
-            | select([.labels[].name] | (index("needs-human") or index("agent-attempted")) | not)
-            | .number'
+          # author_association field.) GITHUB_TOKEN sees a private org member as CONTRIBUTOR,
+          # so the logins in AUTHORS are trusted by name as well.
+          authors=$(printf '%s\n' ${AUTHORS} | jq -R . | jq -sc .)
+          trusted="(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\" or (.user.login | IN(${authors}[])))"
+          keep="select(.pull_request == null)
+            | select(${trusted} or .user.login == \"github-actions[bot]\")
+            | select([.labels[].name] | (index(\"needs-human\") or index(\"agent-attempted\")) | not)
+            | .number"
           if [ -n "${NOT_BEFORE}" ] && [ "$(date -u +%s)" -lt "$(date -u -d "${NOT_BEFORE}" +%s)" ]; then
             echo "not before ${NOT_BEFORE}: nothing picked"
             echo "issues=[]" >> "$GITHUB_OUTPUT"
@@ -74,7 +79,7 @@ jobs:
             tasks=$(gh api "repos/${GH_REPO}/issues?labels=agent&state=open&sort=created&direction=asc&per_page=100" \
               --jq "[.[] | select(.milestone != null) | {m: .milestone.number, i: .}] | group_by(.m)
                 | map(.[0].i | select([.labels[].name] | (index(\"needs-human\") or index(\"agent-attempted\")) | not)
-                      | select(.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\")
+                      | select(${trusted})
                       | .number)")
             list=$(jq -c -n --argjson a "${fixes}" --argjson b "${tasks}" --argjson max "${MAX}" '$b + $a | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end) | .[:$max]')
           fi
@@ -150,12 +155,16 @@ jobs:
             5. Write the pull request to /tmp/pr.md: line 1 = the title (the commit's subject;
                for several commits, one subject in the same form), line 2 empty, then the body following
                .github/pull_request_template.md, ending with "Fixes #${{ matrix.issue }}".
-               Do not open the pull request; the workflow opens it.
+               Then open it, as your last action:
+               `gh pr create --head claude/issue-${{ matrix.issue }} --base main --title "$(head -n 1 /tmp/pr.md)" --body "$(tail -n +3 /tmp/pr.md)"`
+               (your GitHub token is revoked when you stop, and a pull request opened by the
+               workflow's own token would not start CI). The workflow enables auto-merge.
 
       - name: Open the pull request with auto-merge
         if: always() && steps.claude.outcome != 'skipped'
         env:
-          GH_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
+          # Not steps.claude.outputs.github_token: the action revokes that token when it ends.
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE: ${{ matrix.issue }}
           EXEC: ${{ steps.claude.outputs.execution_file }}
@@ -176,10 +185,17 @@ jobs:
             gh issue edit "${ISSUE}" --add-label needs-human
             exit 0
           fi
-          [ -s /tmp/pr.md ] || printf 'Fix #%s\n\nFixes #%s\n' "${ISSUE}" "${ISSUE}" > /tmp/pr.md
-          title=$(head -n 1 /tmp/pr.md); tail -n +3 /tmp/pr.md > /tmp/pr-body.md
           url=$(gh pr list --head "${branch}" --json url --jq '.[0].url')
-          [ -n "${url}" ] || url=$(gh pr create --head "${branch}" --base main --title "${title}" --body-file /tmp/pr-body.md)
+          if [ -z "${url}" ]; then
+            # The agent pushed but did not open the pull request. The workflow's token may not
+            # open one (repo setting) and, if it may, CI would not start on it: hand it over.
+            { echo "**autofix: branch \`${branch}\` pushed, but no pull request was opened.**"; echo
+              echo "Open it from the branch to start CI and review."; } > /tmp/note.md
+            gh issue comment "${ISSUE}" --body-file /tmp/note.md
+            gh label create needs-human --color D93F0B --description "Autofix could not finish: the owner decides" --force
+            gh issue edit "${ISSUE}" --add-label needs-human
+            exit 0
+          fi
           gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled (repo setting?)"
           echo "pull request: ${url}"
 
