@@ -49,12 +49,31 @@ Slot :: struct {
 	entry:      Spatial_Entry,
 	next, prev: u32, // + 1; 0 ends the list
 	cell:       Chunk_Pos,
+	pos:        u32, // in its cell's items
 	large:      bool,
 	used:       bool,
 }
 
+// Item mirrors what a Sphere or Cylinder query reads of an entry (its bottom
+// centre, id, kind and flags), packed per cell: a walk over a cell's items
+// reads memory in order, where the list chases a slot per entry.
+@(private = "file")
+Item :: struct {
+	at:    [3]f64,
+	id:    Entity_Id,
+	slot:  u32,
+	kind:  u16,
+	flags: Spatial_Flags,
+}
+
+@(private = "file")
+Cell :: struct {
+	head:  u32, // head slot + 1
+	items: [dynamic]Item,
+}
+
 Spatial :: struct {
-	cells:            map[Chunk_Pos]u32, // head slot + 1
+	cells:            map[Chunk_Pos]Cell,
 	slots:            [dynamic]Slot,
 	free:             [dynamic]u32,
 	large:            u32, // head of the Large list, + 1
@@ -69,7 +88,7 @@ Spatial :: struct {
 }
 
 spatial_init :: proc(sp: ^Spatial, allocator := context.allocator) {
-	sp.cells = make(map[Chunk_Pos]u32, allocator)
+	sp.cells = make(map[Chunk_Pos]Cell, allocator)
 	sp.slots = make([dynamic]Slot, allocator)
 	sp.free = make([dynamic]u32, allocator)
 	sp.scratch = make([dynamic]Entity_Id, allocator)
@@ -78,6 +97,7 @@ spatial_init :: proc(sp: ^Spatial, allocator := context.allocator) {
 }
 
 spatial_destroy :: proc(sp: ^Spatial) {
+	for _, &c in sp.cells {delete(c.items)}
 	delete(sp.cells)
 	delete(sp.slots)
 	delete(sp.free)
@@ -97,7 +117,7 @@ spatial_committed_bytes :: proc(sp: ^Spatial) -> int {
 	return(
 		cap(sp.slots) * size_of(Slot) +
 		cap(sp.free) * size_of(u32) +
-		cap(sp.cells) * (size_of(Chunk_Pos) + size_of(u32)) \
+		cap(sp.cells) * (size_of(Chunk_Pos) + size_of(Cell)) \
 	)
 }
 
@@ -122,7 +142,7 @@ link :: proc(sp: ^Spatial, i: u32) {
 	if s.large {
 		head = &sp.large
 	} else {
-		if s.cell not_in sp.cells {sp.cells[s.cell] = 0}
+		if s.cell not_in sp.cells {sp.cells[s.cell] = {}}
 		if sp.seen {
 			sp.seen_lo = {
 				min(sp.seen_lo.x, s.cell.x),
@@ -137,7 +157,14 @@ link :: proc(sp: ^Spatial, i: u32) {
 		} else {
 			sp.seen_lo, sp.seen_hi, sp.seen = s.cell, s.cell, true
 		}
-		head = &sp.cells[s.cell]
+		cell := &sp.cells[s.cell]
+		s.pos = u32(len(cell.items))
+		e := &s.entry
+		append(
+			&cell.items,
+			Item{at = bottom_centre(e), id = e.id, slot = i, kind = e.kind, flags = e.flags},
+		)
+		head = &cell.head
 	}
 	s.prev, s.next = 0, head^
 	if head^ != 0 {sp.slots[head^ - 1].prev = i + 1}
@@ -147,16 +174,28 @@ link :: proc(sp: ^Spatial, i: u32) {
 @(private = "file")
 unlink :: proc(sp: ^Spatial, i: u32) {
 	s := &sp.slots[i]
+	empty := false
+	if !s.large {
+		cell := &sp.cells[s.cell]
+		last := pop(&cell.items)
+		if s.pos < u32(len(cell.items)) {
+			cell.items[s.pos] = last
+			sp.slots[last.slot].pos = s.pos
+		}
+		empty = len(cell.items) == 0
+		if s.prev == 0 {cell.head = s.next}
+	}
 	if s.prev != 0 {
 		sp.slots[s.prev - 1].next = s.next
 	} else if s.large {
 		sp.large = s.next
-	} else if s.next != 0 {
-		sp.cells[s.cell] = s.next
-	} else {
-		delete_key(&sp.cells, s.cell)
 	}
 	if s.next != 0 {sp.slots[s.next - 1].prev = s.prev}
+	if empty {
+		cell := &sp.cells[s.cell]
+		delete(cell.items)
+		delete_key(&sp.cells, s.cell)
+	}
 	s.next, s.prev = 0, 0
 }
 
@@ -195,6 +234,8 @@ spatial_move :: proc(sp: ^Spatial, h: Spatial_Handle, lo, hi: [3]f64) -> bool {
 		unlink(sp, i)
 		s.cell = cell
 		link(sp, i)
+	} else if !s.large {
+		sp.cells[s.cell].items[s.pos].at = bottom_centre(&s.entry)
 	}
 	return true
 }
@@ -203,6 +244,7 @@ spatial_set_flags :: proc(sp: ^Spatial, h: Spatial_Handle, flags: Spatial_Flags)
 	s := &sp.slots[u32(h) - 1]
 	assert(s.used && (.Large in flags) == s.large, "Large cannot change")
 	s.entry.flags = flags
+	if !s.large {sp.cells[s.cell].items[s.pos].flags = flags}
 }
 
 spatial_remove :: proc(sp: ^Spatial, h: Spatial_Handle) {
@@ -265,7 +307,7 @@ visit_cell :: proc(
 	data: rawptr,
 	f: proc(data: rawptr, e: ^Spatial_Entry),
 ) {
-	head := sp.cells[c] or_else 0
+	head := (sp.cells[c].head if c in sp.cells else 0)
 	for i := head; i != 0; i = sp.slots[i - 1].next {
 		f(data, &sp.slots[i - 1].entry)
 	}
@@ -403,11 +445,37 @@ run :: proc(c: ^Collect, margin: f64, lo, hi: [3]f64, out: ^[dynamic]Entity_Id) 
 	}
 	// (the cells are walked here, not through visit's callback: a call per entry
 	// is most of what a query costs)
+	// (a sphere's and cylinder's test reads the cell's packed items instead:
+	// the distance first, since the filter rarely rejects what is near)
+	sphere := c.shape == .Sphere
+	cylinder := c.shape == .Cylinder
+	r2 := c.radius * c.radius
 	for y in cl.y ..= ch.y {
 		for z in cl.z ..= ch.z {
 			for x in cl.x ..= ch.x {
 				if !cell_reachable(c, {x, y, z}) {continue}
-				for i := sp.cells[{x, y, z}] or_else 0; i != 0; i = sp.slots[i - 1].next {
+				if sphere || cylinder {
+					cell, ok := &sp.cells[{x, y, z}]
+					if !ok {continue}
+					for &it in cell.items {
+						dx := it.at.x - c.center.x
+						dy := it.at.y - c.center.y
+						dz := it.at.z - c.center.z
+						near :=
+							dx * dx + dy * dy + dz * dz <= r2 if sphere else dx * dx + dz * dz <= r2 && abs(dy) <= c.half_h
+						if near &&
+						   (c.filter.kind == 0 || it.kind == c.filter.kind) &&
+						   c.filter.all <= it.flags &&
+						   c.filter.none & it.flags == {} &&
+						   (c.filter.exclude == 0 || it.id != c.filter.exclude) {
+							append(&sp.scratch, it.id)
+						}
+					}
+					continue
+				}
+				for i := (sp.cells[{x, y, z}].head if {x, y, z} in sp.cells else 0);
+				    i != 0;
+				    i = sp.slots[i - 1].next {
 					if matches(
 						c,
 						&sp.slots[i - 1].entry,
@@ -613,7 +681,7 @@ spatial_cast :: proc(
 		for y in cell.y - reach ..= cell.y + reach {
 			for z in cell.z - reach ..= cell.z + reach {
 				for x in cell.x - reach ..= cell.x + reach {
-					head := sp.cells[{x, y, z}] or_else 0
+					head := (sp.cells[{x, y, z}].head if {x, y, z} in sp.cells else 0)
 					for i := head; i != 0; i = sp.slots[i - 1].next {
 						cast_entry(&k, &sp.slots[i - 1].entry)
 					}
@@ -636,7 +704,7 @@ spatial_cast :: proc(
 // spatial_chunk appends the ids bucketed in chunk pos, ascending.
 spatial_chunk :: proc(sp: ^Spatial, pos: Chunk_Pos, out: ^[dynamic]Entity_Id) {
 	start := len(out)
-	head := sp.cells[pos] or_else 0
+	head := (sp.cells[pos].head if pos in sp.cells else 0)
 	for i := head; i != 0; i = sp.slots[i - 1].next {
 		append(out, sp.slots[i - 1].entry.id)
 	}
