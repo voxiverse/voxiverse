@@ -106,3 +106,16 @@ test_boot_installs_the_file_lock :: proc(t: ^testing.T) {
 	testing.expect(t, retaken)
 	base.file_unlock(&second)
 }
+
+@(test)
+test_boot_installs_the_stack_service_where_the_os_has_one :: proc(t: ^testing.T) {
+	host: base.Host
+	boot(&host)
+	when ODIN_OS == .Windows {
+		testing.expect(t, host.stack.guarantee != nil)
+		testing.expect(t, host.stack.capture_thread != nil)
+	} else {
+		testing.expect(t, host.stack.guarantee == nil)
+		testing.expect(t, host.stack.capture_thread == nil)
+	}
+}

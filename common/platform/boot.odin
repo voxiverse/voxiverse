@@ -30,6 +30,7 @@ boot :: proc(host: ^base.Host) {
 			profile_now = when_linux_profile_now(),
 		},
 		file = {lock = lock_file, unlock = unlock_file},
+		stack = stack_service(),
 		output = {write = output_write, is_color = output_is_color},
 		entropy = crypto.rand_bytes,
 	}
@@ -38,6 +39,7 @@ boot :: proc(host: ^base.Host) {
 	base.entropy_install(host.entropy)
 	base.clock_install(host.clock)
 	base.file_install(host.file)
+	base.stack_install(host.stack)
 }
 
 @(private = "file")

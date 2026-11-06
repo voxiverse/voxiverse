@@ -18,6 +18,7 @@ Host :: struct {
 	entropy: proc(out: []u8),
 	clock:   Clock_Service,
 	file:    File_Service,
+	stack:   Stack_Service,
 }
 
 // Boot_Info: what the process was started with, read once at boot.
@@ -245,4 +246,23 @@ file_unlock :: proc(l: ^File_Lock) {
 	if file.unlock ==
 	   nil {panic("file_unlock: no file service installed (platform.boot was not called)")}
 	file.unlock(l)
+}
+
+// Stack_Service: what the crash bundle asks the OS about thread stacks. The platform fills
+// it where the OS has the calls (Windows); the procedures are nil elsewhere, and the bundle
+// then goes without. `stack_install` makes it the process's one (platform.boot does it).
+Stack_Service :: struct {
+	// Keep bytes of stack for the crash filter on the calling thread.
+	guarantee:      proc(bytes: int),
+	// Suspend the thread with this OS id, walk its stack into frames and resume it; returns
+	// the frame count (0 when the thread could not be read).
+	capture_thread: proc(id: u32, frames: []rawptr) -> int,
+}
+
+@(private)
+stack: Stack_Service
+
+// stack_install makes service the process's stack service (platform.boot does it).
+stack_install :: proc(service: Stack_Service) {
+	stack = service
 }
