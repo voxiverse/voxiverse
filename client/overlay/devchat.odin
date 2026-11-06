@@ -28,6 +28,8 @@ devchat_context :: proc(app: ^engine.App, attach: bool) -> collector.Chat_Contex
 	s := app.session
 	if !attach || s == nil {return ctx}
 	if s.config.save_dir != "" {ctx.universe = filepath.base(s.config.save_dir)}
+	ctx.world = game.address_text(s.welcome.address)
+	ctx.has_tick, ctx.tick = true, u64(max(s.render_clock.time, 0))
 	p := s.prediction.state.position
 	ctx.has_pos, ctx.pos = true, {i32(p.x), i32(p.y), i32(p.z)}
 	return ctx
@@ -49,8 +51,16 @@ devchat_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	entries, status, waiting, _ := collector.chat_view(chat)
 	app.devchat_seen = collector.chat_replies(chat) // (open: every reply is seen)
 
-	area := ui.rect_center(ctx.screen, DEVCHAT_WIDTH, ctx.screen.h - 60)
-	ui.title(ctx, engine.tr(.Devchat_Title), ui.cut_top(&area, 60))
+	area := ui.rect_center(
+		ctx.screen,
+		min(DEVCHAT_WIDTH, ctx.screen.w - 2 * t.padding),
+		ctx.screen.h - (60 if ctx.screen.h >= 600 else 2 * t.padding),
+	)
+	ui.title(
+		ctx,
+		engine.tr(.Devchat_Title),
+		ui.cut_top(&area, 60 if ctx.screen.h >= 600 else t.row_height),
+	)
 	state := engine.tr(.Devchat_Connected)
 	switch status {
 	case .Unknown:
@@ -64,7 +74,7 @@ devchat_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 
 	buttons := ui.cut_bottom(&area, t.row_height)
 	ui.cut_bottom(&area, t.spacing)
-	input_rect := ui.cut_bottom(&area, t.row_height)
+	input_rect := ui.cut_bottom(&area, (3 if ctx.screen.h >= 600 else 1.5) * t.row_height)
 	ui.cut_bottom(&area, t.spacing)
 	attach_rect := ui.cut_bottom(&area, t.row_height)
 	ui.cut_bottom(&area, t.spacing)
@@ -75,25 +85,23 @@ devchat_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	counter := fmt.tprintf("%d / %d", len(app.devchat_line.text), game.MAX_DEV_TEXT)
 	counter_rect := ui.cut_right(&input_rect, 110)
 	ui.label(ctx, counter, counter_rect, .Right, t.text_muted)
-	r := engine.line_edit(
-		app,
+	submitted := ui.text_input(
 		ctx,
-		&app.devchat_line,
 		"devchat input",
+		&app.devchat_line.text,
 		input_rect,
-		{},
 		engine.tr(.Devchat_Hint),
-		top,
-		nil,
+		multiline = true,
 	)
-	send := r.submitted
+	if top && !ui.osk_is_open(ctx) {ctx.focused = ui.get_id(ctx, "devchat input")}
+	send := submitted
 	close_rect := ui.cut_right(&buttons, 180)
 	ui.cut_right(&buttons, t.spacing)
 	send_rect := ui.cut_right(&buttons, 180)
 	if ui.button(ctx, engine.tr(.Devchat_Send), send_rect) {send = true}
 	if ui.button(ctx, engine.tr(.Devchat_Close), close_rect) {engine.devchat_close(app)}
 	if send {
-		line := r.line if r.submitted else string(app.devchat_line.text[:])
+		line := string(app.devchat_line.text[:])
 		if collector.chat_send(chat, line, devchat_context(app, app.devchat_attach)) {
 			clear(&app.devchat_line.text)
 		}
@@ -143,7 +151,11 @@ devchat_lines :: proc(
 		}
 		body := e.text
 		if e.link != "" {body = strings.concatenate({body, "\n", e.link}, context.temp_allocator)}
-		wrapped := ui.wrap_words(ctx, body, size, width)
+		wrapped := make([dynamic]string, context.temp_allocator)
+		paragraphs := body
+		for paragraph in strings.split_lines_iterator(&paragraphs) {
+			append(&wrapped, ..ui.wrap_words(ctx, paragraph, size, width))
+		}
 		y -= f32(len(wrapped) + 1) * line_h + t.spacing
 		ui.label(
 			ctx,
@@ -164,20 +176,16 @@ devchat_lines :: proc(
 	}
 }
 
-// devchat_notice: a reply came while the chat was closed: a small notice in the
-// corner (never in the way of play) until the chat is opened.
-devchat_notice :: proc(app: ^engine.App, ctx: ^ui.Context) {
-	if !app.devchat.running || engine.overlay_is_open(&app.overlays, .Devchat) {return}
-	if collector.chat_replies(&app.devchat.chat) <= app.devchat_seen {return}
-	t := &ctx.theme
-	text := engine.tr(.Devchat_Notice)
-	w := ui.measure_text(ctx, text, t.font_size) + 2 * t.padding
-	r := ui.Rect {
-		ctx.screen.x + ctx.screen.w - w - t.padding,
-		ctx.screen.y + t.padding,
-		w,
-		t.row_height,
+// devchat_notice: a reply came while the chat was closed: a toast (never in
+// the way of play), once per reply, naming the key that opens the chat.
+devchat_notice :: proc(app: ^engine.App) {
+	if !app.devchat.running {return}
+	replies := collector.chat_replies(&app.devchat.chat)
+	if engine.overlay_is_open(&app.overlays, .Devchat) {
+		app.devchat_seen = replies
+		return
 	}
-	ui.fill_rect(ctx, r, {0, 0, 0, 160})
-	ui.label(ctx, text, r, .Center, t.text)
+	if replies <= app.devchat_seen {return}
+	app.devchat_seen = replies
+	engine.toast(app, .Devchat_Notice, engine.action_label(app, .Dev_Chat))
 }

@@ -133,5 +133,5 @@ draw_overlays :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			devchat_ui(app, ctx, top)
 		}
 	}
-	devchat_notice(app, ctx)
+	devchat_notice(app)
 }
