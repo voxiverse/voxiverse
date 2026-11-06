@@ -273,7 +273,7 @@ placement_agrees :: proc(s: ^Server, c: ^Client, e: game.Edit) -> bool {
 	face, is_face := game.Face(e.face), e.face < 6
 	if !is_face {return false}
 	w := c.world
-	query := game.Block_Query{&w.chunks, chunks_block, t}
+	query := game.Block_Query{&w.chunks, chunks_block, t, {}}
 	pos, state, ok := game.placement(
 		s.registry,
 		type,
@@ -289,7 +289,7 @@ placement_agrees :: proc(s: ^Server, c: ^Client, e: game.Edit) -> bool {
 support_placeable :: proc(w: ^World, pos: game.Block_Pos, block: game.Block) -> bool {
 	t := &w.server.registry.blocks
 	if !game.has_support_rule(t, block) {return true}
-	return game.support_holds(t, block, pos, game.Block_Query{&w.chunks, chunks_block, t})
+	return game.support_holds(t, block, pos, game.Block_Query{&w.chunks, chunks_block, t, {}})
 }
 
 // farmland_wet: water within 4 blocks across, on the farmland's level or the one above

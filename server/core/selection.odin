@@ -39,7 +39,7 @@ aimed_block :: proc(c: ^Client, reach: f64) -> (game.Block_Pos, bool) {
 		-base.cos(yaw) * base.cos(pitch),
 	}
 	hit, found := game.raycast(
-		game.Block_Query{&c.world.chunks, chunks_block, &c.world.server.registry.blocks},
+		game.Block_Query{&c.world.chunks, chunks_block, &c.world.server.registry.blocks, {}},
 		eye,
 		dir,
 		reach,

@@ -21,7 +21,7 @@ query :: proc(w: ^Test_World) -> Block_Query {
 			if limit, ok := w.unloaded_below.?; ok && p.y < limit {return .Air, false}
 			if p in w.water {return .Water, true}
 			return .Stone if p in w.solid else .Air, true
-		}, test_blocks()}
+		}, test_blocks(), {}}
 }
 
 @(private = "file")

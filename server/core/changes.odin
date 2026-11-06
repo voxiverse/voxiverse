@@ -52,7 +52,7 @@ set_block :: proc(
 	b := block
 	cause := act_current(w, act)
 	if admit(w, cause, p) != .Yes {return false}
-	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks}
+	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks, {}}
 	b = game.shape_update(s.registry, b, p, query) // (a fence set by a command joins what is beside it)
 	if !chunks_set_block(&w.chunks, p, b) {return false}
 	if old != b {channels_reset_cell(w, p)}

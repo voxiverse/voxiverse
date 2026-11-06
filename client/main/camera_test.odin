@@ -27,7 +27,7 @@ fake_get :: proc(data: rawptr, p: game.Block_Pos) -> (game.Block, bool) {
 }
 
 fake_query :: proc(w: ^Fake_World) -> game.Block_Query {
-	return {w, fake_get, testkit.test_blocks()}
+	return {w, fake_get, testkit.test_blocks(), {}}
 }
 
 @(private = "file")

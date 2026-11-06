@@ -71,7 +71,7 @@ world_query :: proc(w: ^World, reg: ^Registry) -> Block_Query {
 	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
 			w := (^World)(data)
 			return w[p] or_else .Air, true
-		}, &reg.blocks}
+		}, &reg.blocks, {}}
 }
 
 @(test)

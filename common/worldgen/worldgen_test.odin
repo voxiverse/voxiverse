@@ -381,6 +381,7 @@ test_spawn_on_open_ground :: proc(t: ^testing.T) {
 				return block(d.g, d.chunks, p), true
 			},
 			test_blocks(),
+			{},
 		}
 		spawn, _ := game.landing_spot(query, spawn_point(&g) + {0, 1, 0}, .Ground)
 		feet := game.Block_Pos {

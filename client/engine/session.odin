@@ -466,7 +466,7 @@ session_update :: proc(
 	// Fixed ticks, like the server's; a long hitch is not caught up on.
 	s.tick_time += dt
 	if s.tick_time > 4 * game.TICK_SECONDS {s.tick_time = game.TICK_SECONDS}
-	query := game.Block_Query{&s.world, world_block, &s.reg.blocks}
+	query := game.Block_Query{&s.world, world_block, &s.reg.blocks, {}}
 	for s.tick_time >= game.TICK_SECONDS {
 		base.profile_scope("prediction tick")
 		s.tick_time -= game.TICK_SECONDS

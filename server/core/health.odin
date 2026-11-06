@@ -35,7 +35,7 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	regenerate(s, c)
 	// A fall: from where the player left the ground to where they land.
 	p := c.player
-	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	safe :=
 		p.on_ground ||
 		p.flying ||

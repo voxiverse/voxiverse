@@ -11,7 +11,7 @@ map_query :: proc(w: ^Map_World, reg: ^Registry) -> Block_Query {
 	return {w, proc(data: rawptr, p: Block_Pos) -> (Block, bool) {
 			w := (^Map_World)(data)
 			return w[p] or_else .Air, true
-		}, &reg.blocks}
+		}, &reg.blocks, {}}
 }
 
 @(private = "file")
