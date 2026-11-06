@@ -111,6 +111,21 @@ entity_spawn :: proc(
 		},
 	)
 	e.next_id += 1
+	// the entity world holds the same entity under the same id, until the
+	// systems move onto it; the list stays the truth, so a refusal is no error
+	if kind_id, ok := game.registry_kind(
+		w.server.registry,
+		strings.concatenate({"voxiverse:", game.ENTITY_INFO[kind].name}, context.temp_allocator),
+	); ok {
+		_, _, _ = entity_world_spawn(
+			w.entity_world,
+			w.server.registry,
+			kind_id,
+			position,
+			{},
+			game.Entity_Id(e.next_id - 1),
+		)
+	}
 	return &e.list[len(e.list) - 1]
 }
 
@@ -433,6 +448,9 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 }
 
 entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
+	// an id the entity world does not know is no entity (the list is searched
+	// only for the index, until it goes)
+	if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); !ok {return nil, -1}
 	for &ent, i in w.entities.list {if ent.id == id {return &ent, i}}
 	return nil, -1
 }
@@ -488,6 +506,9 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 		}
 	}
 	unordered_remove(&w.entities.list, index)
+	if h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); ok {
+		_ = game.store_despawn(&w.entity_world.store, h)
+	}
 }
 
 // entity_hurt_shown: everyone who knows it sees it flinch.
@@ -798,8 +819,10 @@ turn_towards :: proc(from, to: f32, rate: f32) -> f32 {
 // and what hangs off them (tag names, this tick's deaths, the world's rng).
 // entity_world_spawn is the one way an entity comes to be; entity_kill the one way
 // it dies. The world holds one (World.entity_world), ticked and applied by
-// entities_tick, but nothing spawns into it yet: the fixed Entity
-// list (entities.odin) still runs the world until the systems move onto it.
+// entities_tick. entity_spawn and entity_remove mirror the fixed Entity list
+// into it under the same ids (positions are not kept up to date), and
+// entity_find asks it first; the list still runs the world until the systems
+// move onto it.
 
 MAX_ENTITY_WORLD :: 4096 // entities a world holds
 MAX_TAG_NAMES :: 256
@@ -869,6 +892,11 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		release = spatial_release,
 	}
 	game.spatial_init(&ew.spatial)
+	// room for the fixed list's worth of entries at once, so the tables are
+	// at their size from the start and memory is flat while play goes on
+	reserve(&ew.spatial.slots, 2 * MAX_ENTITIES)
+	reserve(&ew.spatial.free, 2 * MAX_ENTITIES)
+	reserve(&ew.spatial.cells, 256)
 	// the store releases rows into the spatial service, so it is destroyed first
 	assert(
 		game.store_init(&ew.store, ew.infos[:], ew, max_entities, commands_per_entity = 6) == nil,
@@ -900,6 +928,7 @@ entity_world_spawn :: proc(
 	kind: game.Kind_Id,
 	position: [3]f64,
 	act: Act,
+	want: game.Entity_Id = 0, // 0: the store's next id
 ) -> (
 	id: game.Entity_Id,
 	h: game.Entity_Handle,
@@ -926,7 +955,11 @@ entity_world_spawn :: proc(
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
 
 	serr: game.Store_Error
-	id, h, serr = game.store_spawn(st, set, kind)
+	if want == 0 {
+		id, h, serr = game.store_spawn(st, set, kind)
+	} else {
+		id, h, serr = game.store_spawn_with_id(st, set, want, kind)
+	}
 	switch serr {
 	case .None:
 	case .Id_Exhausted:

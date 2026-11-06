@@ -9,19 +9,33 @@ import "common:game"
 
 // entity_count: the entities awake in client name's world.
 @(private = "file")
-entity_count :: proc(srv: ^Server, name: string) -> (n: int) {
+entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, missing: int) {
 	Data :: struct {
-		name:  string,
-		count: int,
+		name:    string,
+		count:   int,
+		stored:  int,
+		missing: int,
 	}
 	d := Data {
 		name = name,
 	}
-	call(srv, proc(s: ^Server, data: rawptr) {
+	call(
+		srv,
+		proc(s: ^Server, data: rawptr) {
 			d := (^Data)(data)
-			d.count = len(client_by_name(s, d.name).world.entities.list)
-		}, &d)
-	return d.count
+			w := client_by_name(s, d.name).world
+			d.count = len(w.entities.list)
+			// the entity world holds exactly these, found by id
+			d.stored = game.store_count(&w.entity_world.store)
+			for e in w.entities.list {
+				if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(e.id)); !ok {
+					d.missing += 1
+				}
+			}
+		},
+		&d,
+	)
+	return d.count, d.stored, d.missing
 }
 
 // The playtest crash: /summon spammed past the arena's limit, then one
@@ -60,7 +74,10 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 	}
 	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
-	testing.expect_value(t, entity_count(&h.srv, "a"), MAX_ENTITIES) // full, and no more
+	n, stored, missing := entity_count(&h.srv, "a")
+	testing.expect_value(t, n, MAX_ENTITIES) // full, and no more
+	testing.expect_value(t, stored, MAX_ENTITIES)
+	testing.expect_value(t, missing, 0)
 	refused := false
 	for n in a.notices {refused ||= strings.contains(n, "Too many entities")}
 	testing.expect(t, refused, "the summoner was not told the arena is full")
@@ -80,8 +97,10 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		net_pump(t, a)
 		harness_step(h)
 	}
-	testing.expect(t, entity_count(&h.srv, "a") < MAX_ENTITIES, "the blast killed nothing")
-	testing.expect_value(t, entity_count(&h.srv, "a"), 0)
+	n, stored, missing = entity_count(&h.srv, "a")
+	testing.expect(t, n < MAX_ENTITIES, "the blast killed nothing")
+	testing.expect_value(t, n, 0)
+	testing.expect_value(t, stored, 0) // despawned from the entity world too
 	net_close(a)
 	a^ = {}
 	harness_step(h, 4)
