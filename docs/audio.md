@@ -102,6 +102,15 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   and the device's counters. A button solos a voice, a second press mutes it, a third clears
   it. Streams are not replayed.
 - `build sfx` writes every effect to `build/sounds/*.wav`.
+- The **synth library** (`client/audio/synth`) is the next generation of effects, not yet
+  wired into the game: float at 48 kHz, no lo-fi stage. A **recipe** is text (`sound <name>`
+  ... `end`; grammar and errors in `recipe.odin`'s header) of layers, each a source (noise,
+  tone, click, modal, granular, formant, bubble), an envelope, a filter, a level and a delay,
+  then the sound's EQ. `generate(sound, variant)` draws every range once per variant, in the
+  order the values appear, from `base.rng_make(seed * 64 + variant)`; all maths is f64 on
+  `base`'s sin, cos and exp, so a recipe gives the same samples on every OS (the tests hold
+  hashes). `gain` is the sound's peak in dBFS (default -2). Water has no modal table: it is
+  made of Minnaert bubbles.
 - The **null device** asks for a block every 10 ms by the wall clock and discards it, so CI's
   smoke run exercises the real callback path; the **file device** mixes as fast as it can and
   writes a WAV at close (at most 300 s), for scripted runs and listening to a scenario.

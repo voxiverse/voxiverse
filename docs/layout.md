@@ -81,6 +81,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/packs/voxiverse/server/structures` | Structures | `*.vxs` |
 | `assets/shaders` | GLSL sources | `*.vert`, `*.frag`, `*.comp`, `*.glsl` |
 | `client/audio` | Mixer, voices, effects, spatialization | `*.odin` |
+| `client/audio/synth` | The sound synthesis library: filters, modal, granular, formant and bubble sources, the layer mixer and the recipe parser | `*.odin` |
 | `client/audio/testdata` | Audio test input | `*.ogg` |
 | `client/autopilot` | The modes that drive the game with nobody at the keys: exit checks (`--check`), benchmarks (`--benchmark`), visual scenes (`--scene`) | `*.odin` |
 | `client/console` | The developer console: its view, its command line, its world primitives, startup scripts | `*.odin` |
