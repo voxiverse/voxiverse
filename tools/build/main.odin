@@ -729,6 +729,7 @@ run_game :: proc(args: []string) -> bool {
 	if i, found := slice.linear_search(args, "--"); found {
 		build_args, game_args = args[:i], args[i + 1:]
 	}
+	music_ensure_rendered()
 	exe, ok := build_game(build_args, server = false)
 	if !ok {return false}
 	release_build_lock()
