@@ -105,7 +105,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))
 	for _ in 0 ..< 6 {rig_frame(rig, &idle)} 	// (a few ticks of history to rewind to)
-	sheep.body.position = feet + {0, 0, -1.4}
+	core.entity_set_pos(rig.h.srv.worlds[0], sheep, feet + {0, 0, -1.4})
 
 	// Fire: the effects are there the same frame; no hit is guessed.
 	press := engine.Actions {

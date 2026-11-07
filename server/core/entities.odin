@@ -36,7 +36,6 @@ Entity :: struct {
 	id:     u32,
 	handle: game.Entity_Handle, // its row in the entity world's store (0: none)
 	kind:   game.Kind_Id,
-	body:   game.Entity_Body, // velocity and ground contact (its position is in the store)
 	brain:  Brain,
 	owner:  int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
 	stack:  game.Stack, // a dropped item's
@@ -120,7 +119,6 @@ entity_spawn :: proc(w: ^World, kind: game.Kind_Id, position: [3]f64, natural: b
 	// applied at once, so the components exist when the caller has the entity
 	game.store_apply(&w.entity_world.store)
 	entity_set_yaw(w, ent, base.rng_f32_range(&e.rng, -math.PI, math.PI))
-	entity_mirror(w, ent)
 	return ent
 }
 
@@ -134,7 +132,6 @@ entities_tick :: proc(w: ^World) {
 	defer {
 		game.store_apply(&w.entity_world.store)
 		entities_sync_spatial(w)
-		for &ent in e.list {entity_mirror(w, &ent)}
 	}
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
 	reg := w.server.registry
@@ -339,11 +336,13 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	ent := entity_spawn(c.world, s.registry.engine.rocket, start, false)
 	if ent == nil {return false}
 	entity_set_look(c.world, ent, yaw, pitch)
-	ent.body.velocity =
+	entity_set_velocity(
+		c.world,
+		ent,
 		{f32(dir.x), f32(dir.y), f32(dir.z)} *
-		game.kind_info(s.registry, ent.kind).projectile.speed
+		game.kind_info(s.registry, ent.kind).projectile.speed,
+	)
 	ent.owner = int(player_id(s, c))
-	entity_mirror(c.world, ent)
 	ent.action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
 	record(s, c, .Rocket_Fired)
 	return true
@@ -417,13 +416,12 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		if i < 0 {continue}
 		impulse, near := push(entity_pos(w, ent) + {0, 0.4, 0}, center, reach)
 		if !near || !game.kind_info(w.server.registry, ent.kind).hittable {continue}
-		ent.body.velocity += impulse
-		ent.body.on_ground = false
+		entity_set_velocity(w, ent, entity_velocity(w, ent) + impulse)
+		entity_set_on_ground(w, ent, false)
 		d := entity_pos(w, ent) - center
 		health := entity_health_of(w, ent)
 		health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
 		entity_set_health(w, ent, health)
-		entity_mirror(w, ent)
 		if health <= 0 {
 			entity_died(w, i)
 			continue
@@ -448,9 +446,9 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	s := w.server
 	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS >
 	   game.kind_info(s.registry, ent.kind).projectile.life {return entity_pos(w, ent), true}
-	ent.body.velocity.y -=
-		game.kind_info(s.registry, ent.kind).projectile.gravity * game.TICK_SECONDS
-	v := ent.body.velocity
+	v := entity_velocity(w, ent)
+	v.y -= game.kind_info(s.registry, ent.kind).projectile.gravity * game.TICK_SECONDS
+	entity_set_velocity(w, ent, v)
 	speed := math.sqrt(f64(v.x * v.x + v.y * v.y + v.z * v.z))
 	if speed < 1e-6 {return entity_pos(w, ent), true}
 	dir := [3]f64{f64(v.x), f64(v.y), f64(v.z)} / speed
@@ -528,13 +526,12 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 // caller). Knocked back, hurt (or dead), and scared.
 entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 	entity_set_health(w, ent, entity_health_of(w, ent) - 1)
-	defer entity_mirror(w, ent)
 	away := entity_pos(w, ent) - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
 	if l > 1e-6 {away /= l} else {away = {1, 0, 0}}
 	kb := game.ATTACK_KNOCKBACK
-	ent.body.velocity = {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]}
-	ent.body.on_ground = false
+	entity_set_velocity(w, ent, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
+	entity_set_on_ground(w, ent, false)
 	ent.brain = {
 		state = .Flee,
 		timer = FLEE_TICKS,
@@ -542,15 +539,6 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 		hurt  = HURT_TICKS,
 	}
 	return entity_health_of(w, ent) <= 0
-}
-
-// entity_mirror writes the list's copy of what the store still shares (physics)
-// into the store, until the systems read the store.
-entity_mirror :: proc(w: ^World, ent: ^Entity) {
-	st := &w.entity_world.store
-	if ph := game.store_get(st, ent.handle, game.C_PHYSICS, game.Physics); ph != nil {
-		ph^ = {ent.body.velocity, ent.body.on_ground}
-	}
 }
 
 // The door: what the store says of an entity (nil when it has no such part).
@@ -591,7 +579,8 @@ entity_set_look :: proc(w: ^World, ent: ^Entity, yaw, pitch: f32) {
 }
 
 // entity_body_step: game.body_step on ent, which sees one Entity_Body: the
-// position comes from the store before it and goes back after.
+// position, velocity and ground contact come from the store before it and
+// go back after. The one place a mover is gathered and written back.
 entity_body_step :: proc(
 	w: ^World,
 	ent: ^Entity,
@@ -600,10 +589,34 @@ entity_body_step :: proc(
 	jump: bool,
 	query: game.Block_Query,
 ) {
-	ent.body.position = entity_pos(w, ent)
-	game.body_step(&ent.body, info, wish, jump, &w.rules, query, game.TICK_SECONDS)
-	entity_set_pos(w, ent, ent.body.position)
-	ent.body.position = {}
+	body := game.Entity_Body {
+		position  = entity_pos(w, ent),
+		velocity  = entity_velocity(w, ent),
+		on_ground = entity_on_ground(w, ent),
+	}
+	game.body_step(&body, info, wish, jump, &w.rules, query, game.TICK_SECONDS)
+	entity_set_pos(w, ent, body.position)
+	entity_set_velocity(w, ent, body.velocity)
+	entity_set_on_ground(w, ent, body.on_ground)
+}
+
+// entity_velocity, entity_on_ground: its Physics (zero and false without one).
+entity_velocity :: proc(w: ^World, ent: ^Entity) -> [3]f32 {
+	if ph := entity_physics(w, ent); ph != nil {return ph.velocity}
+	return {}
+}
+
+entity_on_ground :: proc(w: ^World, ent: ^Entity) -> bool {
+	if ph := entity_physics(w, ent); ph != nil {return ph.on_ground}
+	return false
+}
+
+entity_set_velocity :: proc(w: ^World, ent: ^Entity, v: [3]f32) {
+	if ph := entity_physics(w, ent); ph != nil {ph.velocity = v}
+}
+
+entity_set_on_ground :: proc(w: ^World, ent: ^Entity, on: bool) {
+	if ph := entity_physics(w, ent); ph != nil {ph.on_ground = on}
 }
 
 entity_physics :: proc(w: ^World, ent: ^Entity) -> ^game.Physics {
@@ -976,6 +989,7 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
 	info := game.kind_info(w.server.registry, ent.kind)
 	pos := entity_pos(w, ent)
+	vel := entity_velocity(w, ent)
 	if b.state == .Mate {
 		// Straight at the one it wants (they are close, on open ground).
 		to := [2]f64{b.look_at.x - pos.x, b.look_at.z - pos.z}
@@ -987,9 +1001,7 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 			ent,
 			turn_towards(entity_yaw(w, ent), f32(math.atan2(-to.x, -to.y)), 0.3),
 		)
-		stuck :=
-			ent.body.on_ground &&
-			abs(ent.body.velocity.x) + abs(ent.body.velocity.z) < 0.1 * info.walker.walk_speed
+		stuck := entity_on_ground(w, ent) && abs(vel.x) + abs(vel.z) < 0.1 * info.walker.walk_speed
 		jump = stuck
 		return
 	}
@@ -1008,10 +1020,8 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	wish = dir * speed
 	entity_set_yaw(w, ent, turn_towards(entity_yaw(w, ent), f32(math.atan2(-to.x, -to.y)), 0.3))
 	// Up a step, or something in the way: jump.
-	blocked :=
-		ent.body.on_ground &&
-		math.abs(ent.body.velocity.x) + math.abs(ent.body.velocity.z) < 0.1 * speed
-	jump = ent.body.on_ground && (f64(target.y) > pos.y + 0.5 || blocked)
+	blocked := entity_on_ground(w, ent) && math.abs(vel.x) + math.abs(vel.z) < 0.1 * speed
+	jump = entity_on_ground(w, ent) && (f64(target.y) > pos.y + 0.5 || blocked)
 	if blocked {b.stuck += 1} else {b.stuck = 0}
 	return
 }

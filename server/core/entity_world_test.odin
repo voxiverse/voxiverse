@@ -456,20 +456,15 @@ test_mate_for_matches_list :: proc(t: ^testing.T) {
 	testing.expect(t, d.found > 0, "no sheep had a mate: the test proves nothing")
 }
 
-// entity_matches_store: every field the store holds equals the list's.
+// entity_matches_store: an entity has the store's transform, health and age.
 @(private = "file")
 entity_matches_store :: proc(t: ^testing.T, w: ^World, ent: ^Entity) {
 	tf := entity_transform(w, ent)
 	hp := entity_health(w, ent)
 	age := entity_age(w, ent)
-	if tf == nil || hp == nil || age == nil {
-		testing.expect(t, false, "an entity lacks transform, health or age")
+	if tf == nil || hp == nil || age == nil || entity_physics(w, ent) == nil {
+		testing.expect(t, false, "an entity lacks transform, physics, health or age")
 		return
-	}
-	testing.expect_value(t, ent.body.position, [3]f64{})
-	if ph := entity_physics(w, ent); ph != nil {
-		testing.expect_value(t, ph.velocity, ent.body.velocity)
-		testing.expect_value(t, ph.on_ground, ent.body.on_ground)
 	}
 }
 
@@ -501,4 +496,56 @@ test_store_copies_follow_the_list :: proc(t: ^testing.T) {
 		entity_attack(w, a, {0, 40, 0})
 		entity_matches_store(t, w, a)
 	}
+}
+
+// The exit test of the entity store: a sheep and an item go in through the
+// door and live, move, are hurt, age and despawn with every field read from
+// the store (Entity holds none of body, yaw, pitch, health, natural, age).
+@(test)
+test_entities_live_in_the_store :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	reg := w.server.registry
+	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
+	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 1, 0}, {1, 2, 3}, -1)
+	if !testing.expect(t, sheep != nil && item != nil) {return}
+	sheep_id, item_id := sheep.id, item.id
+	// spawned: in the store, with what the spawn gave
+	testing.expect_value(t, entity_pos(w, sheep), [3]f64{8.5, 40, 8.5})
+	testing.expect_value(t, entity_health_of(w, sheep), game.kind_info(reg, sheep.kind).health)
+	testing.expect_value(t, entity_age_of(w, sheep), 0)
+	testing.expect(t, !entity_is_natural(w, sheep))
+	wild := entity_spawn(w, reg.engine.sheep, {20.5, 40, 8.5}, true)
+	testing.expect(t, wild != nil && entity_is_natural(w, wild))
+	testing.expect_value(t, entity_velocity(w, item), [3]f32{1, 2, 3})
+	// moved: the store says where, and how fast
+	for _ in 0 ..< 5 {entities_tick(w)}
+	item, _ = entity_find(w, item_id)
+	sheep, _ = entity_find(w, sheep_id)
+	if !testing.expect(t, item != nil && sheep != nil) {return}
+	entity_set_pos(w, item, {11.5, 41, 8.5})
+	entity_set_velocity(w, item, {4, 5, 6})
+	entity_set_on_ground(w, item, true)
+	testing.expect_value(t, entity_pos(w, item), [3]f64{11.5, 41, 8.5})
+	testing.expect_value(t, entity_velocity(w, item), [3]f32{4, 5, 6})
+	testing.expect(t, entity_on_ground(w, item))
+	testing.expect_value(t, entity_age_of(w, item), 5)
+	testing.expect_value(t, entity_age_of(w, sheep), 5)
+	// hurt: health and knockback are in the store
+	before := entity_health_of(w, sheep)
+	entity_attack(w, sheep, {0, 40, 0})
+	testing.expect(t, entity_health_of(w, sheep) < before, "health did not drop")
+	testing.expect(t, !entity_on_ground(w, sheep))
+	testing.expect(t, entity_velocity(w, sheep) != {}, "no knockback")
+	// aged: set, then read back
+	entity_set_age(w, item, 100)
+	testing.expect_value(t, entity_age_of(w, item), 100)
+	// despawned: gone from the list and from the store
+	testing.expect(t, entity_remove(w, sheep_id))
+	game.store_apply(&w.entity_world.store)
+	_, found := game.store_find(&w.entity_world.store, game.Entity_Id(sheep_id))
+	testing.expect(t, !found, "the despawned sheep is still in the store")
 }
