@@ -75,15 +75,15 @@ Hashed_Entity :: struct {
 hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 	list := entities_view(w)
 	out := make([]Hashed_Entity, len(list), context.temp_allocator)
-	for e, i in list {
+	for &e, i in list {
 		out[i] = {
 			e.id,
 			u8(e.kind - 1),
 			e.body,
 			e.yaw,
 			e.pitch,
-			e.health,
-			e.natural,
+			entity_health_of(w, &e),
+			entity_is_natural(w, &e),
 			e.brain,
 			e.owner,
 			e.stack,
@@ -92,7 +92,7 @@ hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 			e.growth,
 			e.love,
 			e.wait,
-			e.age,
+			entity_age_of(w, &e),
 			e.action,
 		}
 	}

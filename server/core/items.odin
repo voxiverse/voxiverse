@@ -136,7 +136,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	s := w.server
 	ent := entity_at(w, index)
 	kind := game.kind_info(s.registry, ent.kind)
-	if f32(ent.age) * game.TICK_SECONDS > kind.item.life {
+	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS > kind.item.life {
 		ledger_stack(s, w, .Expire, ent.stack, -1)
 		return true
 	}
@@ -145,7 +145,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	game.body_step(&ent.body, kind, {}, false, &w.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(s.registry, ent.stack.item)
-	if ent.age % 10 == 0 {
+	if entity_age_of(w, ent) % 10 == 0 {
 		// Those after it in the list (not yet moved this tick) join it. The
 		// spatial service names the item stacks near it (asking a little wider,
 		// as their boxes are where they were at the end of the last tick); the
@@ -174,7 +174,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				if d.x * d.x + d.y * d.y + d.z * d.z >
 				   f64(kind.item.merge * kind.item.merge) {continue}
 				ent.stack.count += other.stack.count
-				ent.age = min(ent.age, other.age)
+				entity_set_age(w, ent, min(entity_age_of(w, ent), entity_age_of(w, other)))
 				entity_gone(w, j)
 				ent = entity_at(w, index)
 			}
@@ -205,7 +205,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		if c.state != .Playing || c.world != w {continue}
 		delay :=
 			kind.item.owner_delay if ent.owner == int(player_id(s, c)) else kind.item.pickup_delay
-		if f32(ent.age) * game.TICK_SECONDS < delay {continue}
+		if f32(entity_age_of(w, ent)) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - ent.body.position
 		if d.x * d.x + d.y * d.y + d.z * d.z > f64(kind.item.range * kind.item.range) {continue}
 		left := game.inventory_add(s.registry, &c.inventory, ent.stack)

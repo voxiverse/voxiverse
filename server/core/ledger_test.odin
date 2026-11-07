@@ -134,7 +134,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		for i in 0 ..< entity_count(w) {
 			e := entity_at(w, i)
 			if e.kind != test_reg().engine.item {continue}
-			e.age = int(300 * game.TICK_RATE) + 10
+			entity_set_age(w, e, int(300 * game.TICK_RATE) + 10)
 			if item_tick(w, i) {entity_gone(w, i)}
 			break
 		}

@@ -469,9 +469,6 @@ entity_matches_store :: proc(t: ^testing.T, w: ^World, ent: ^Entity) {
 	testing.expect_value(t, tf.position, ent.body.position)
 	testing.expect_value(t, tf.yaw, ent.yaw)
 	testing.expect_value(t, tf.pitch, ent.pitch)
-	testing.expect_value(t, int(hp.health), ent.health)
-	testing.expect_value(t, int(age.ticks), ent.age)
-	testing.expect_value(t, entity_is_natural(w, ent), ent.natural)
 	if ph := entity_physics(w, ent); ph != nil {
 		testing.expect_value(t, ph.velocity, ent.body.velocity)
 		testing.expect_value(t, ph.on_ground, ent.body.on_ground)

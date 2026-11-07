@@ -710,8 +710,8 @@ write_entities :: proc(w: ^World) -> bool {
 			e.body.position.y,
 			e.body.position.z,
 			e.yaw,
-			e.health,
-			e.natural,
+			entity_health_of(w, e),
+			entity_is_natural(w, e),
 		)
 		if e.kind == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
 			fmt.sbprintf(
@@ -817,7 +817,8 @@ load_entities :: proc(w: ^World) {
 			continue
 		}
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
-			e.yaw, e.health = yaw, min(health, game.kind_info(reg, kind).health)
+			e.yaw = yaw
+			entity_set_health(w, e, min(health, game.kind_info(reg, kind).health))
 			e.stack, e.action = stack, action
 			entity_mirror(w, e)
 			if kind == sheep && len(f) >= 8 {e.shorn = f[7] == "true"}

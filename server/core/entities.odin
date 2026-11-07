@@ -33,24 +33,21 @@ HURT_TICKS :: game.TICK_RATE / 3 // how long a hit stuns (no steering)
 FLEE_TICKS :: game.TICK_RATE * 5
 
 Entity :: struct {
-	id:      u32,
-	handle:  game.Entity_Handle, // its row in the entity world's store (0: none)
-	kind:    game.Kind_Id,
-	body:    game.Entity_Body,
-	yaw:     f32, // body: radians, turning left from -z
-	pitch:   f32, // head: up and down
-	health:  int,
-	natural: bool, // spawned by itself: may despawn
-	brain:   Brain,
-	owner:   int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
-	stack:   game.Stack, // a dropped item's
-	shorn:   bool, // a sheep without its wool, until it grazes
-	genes:   game.Genes, // a sheep's (genetics.odin)
-	growth:  int, // a lamb's ticks of growing up (an adult's: LAMB_TICKS)
-	love:    int, // ticks left that it is ready to breed (fed)
-	wait:    int, // ticks left before it can breed again
-	age:     int, // ticks
-	action:  u32, // a rocket's: the journal action that fired it (journal.odin)
+	id:     u32,
+	handle: game.Entity_Handle, // its row in the entity world's store (0: none)
+	kind:   game.Kind_Id,
+	body:   game.Entity_Body,
+	yaw:    f32, // body: radians, turning left from -z
+	pitch:  f32, // head: up and down
+	brain:  Brain,
+	owner:  int, // a rocket's: the client index that fired it; a dropped stack's dropper (-1: none)
+	stack:  game.Stack, // a dropped item's
+	shorn:  bool, // a sheep without its wool, until it grazes
+	genes:  game.Genes, // a sheep's (genetics.odin)
+	growth: int, // a lamb's ticks of growing up (an adult's: LAMB_TICKS)
+	love:   int, // ticks left that it is ready to breed (fed)
+	wait:   int, // ticks left before it can breed again
+	action: u32, // a rocket's: the journal action that fired it (journal.odin)
 }
 
 Brain_State :: enum u8 {
@@ -106,9 +103,7 @@ entity_spawn :: proc(w: ^World, kind: game.Kind_Id, position: [3]f64, natural: b
 			kind = kind,
 			body = {position = position},
 			yaw = base.rng_f32_range(&e.rng, -math.PI, math.PI),
-			health = game.kind_info(w.server.registry, kind).health,
 			growth = game.LAMB_TICKS, // (adult; a lamb is made lower)
-			natural = natural,
 			owner = -1,
 		},
 	)
@@ -154,8 +149,8 @@ entities_tick :: proc(w: ^World) {
 	blasts := make([dynamic]Blast, context.temp_allocator)
 	for i := 0; i < len(e.list); {
 		ent := &e.list[i]
-		ent.age += 1
-		if ent.natural && !anyone_within(w, ent.body.position, DESPAWN_DISTANCE) {
+		entity_set_age(w, ent, entity_age_of(w, ent) + 1)
+		if entity_is_natural(w, ent) && !anyone_within(w, ent.body.position, DESPAWN_DISTANCE) {
 			entities_unlink(e, i)
 			continue
 		}
@@ -433,9 +428,11 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		ent.body.velocity += impulse
 		ent.body.on_ground = false
 		d := ent.body.position - center
-		ent.health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
+		health := entity_health_of(w, ent)
+		health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
+		entity_set_health(w, ent, health)
 		entity_mirror(w, ent)
-		if ent.health <= 0 {
+		if health <= 0 {
 			entity_died(w, i)
 			continue
 		}
@@ -457,7 +454,7 @@ ROCKET_REACH :: 4
 @(private = "file")
 rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	s := w.server
-	if f32(ent.age) * game.TICK_SECONDS >
+	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS >
 	   game.kind_info(s.registry, ent.kind).projectile.life {return ent.body.position, true}
 	ent.body.velocity.y -=
 		game.kind_info(s.registry, ent.kind).projectile.gravity * game.TICK_SECONDS
@@ -518,7 +515,7 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		c := &s.clients[i]
 		if c.state != .Playing ||
 		   c.world != w ||
-		   (i == ent.owner && ent.age < game.TICK_RATE / 3) {continue}
+		   (i == ent.owner && entity_age_of(w, ent) < game.TICK_RATE / 3) {continue}
 		lo, hi := game.player_box(c.player)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
@@ -538,7 +535,7 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 // entity_attack: a player hits an entity (the reach is checked by the
 // caller). Knocked back, hurt (or dead), and scared.
 entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
-	ent.health -= 1
+	entity_set_health(w, ent, entity_health_of(w, ent) - 1)
 	defer entity_mirror(w, ent)
 	away := ent.body.position - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
@@ -552,11 +549,11 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 		from  = from,
 		hurt  = HURT_TICKS,
 	}
-	return ent.health <= 0
+	return entity_health_of(w, ent) <= 0
 }
 
-// entity_mirror writes the list's copy of what the store holds (transform,
-// physics, health, age) into the store, until the systems read the store.
+// entity_mirror writes the list's copy of what the store still shares (transform,
+// physics) into the store, until the systems read the store.
 entity_mirror :: proc(w: ^World, ent: ^Entity) {
 	st := &w.entity_world.store
 	if tf := game.store_get(st, ent.handle, game.C_TRANSFORM, game.Transform); tf != nil {
@@ -564,12 +561,6 @@ entity_mirror :: proc(w: ^World, ent: ^Entity) {
 	}
 	if ph := game.store_get(st, ent.handle, game.C_PHYSICS, game.Physics); ph != nil {
 		ph^ = {ent.body.velocity, ent.body.on_ground}
-	}
-	if hp := game.store_get(st, ent.handle, game.C_HEALTH, game.Entity_Health); hp != nil {
-		hp.health = i32(ent.health)
-	}
-	if age := game.store_get(st, ent.handle, game.C_AGE, game.Age); age != nil {
-		age.ticks = i32(ent.age)
 	}
 }
 
@@ -588,6 +579,24 @@ entity_health :: proc(w: ^World, ent: ^Entity) -> ^game.Entity_Health {
 
 entity_age :: proc(w: ^World, ent: ^Entity) -> ^game.Age {
 	return game.store_get(&w.entity_world.store, ent.handle, game.C_AGE, game.Age)
+}
+
+entity_health_of :: proc(w: ^World, ent: ^Entity) -> int {
+	if hp := entity_health(w, ent); hp != nil {return int(hp.health)}
+	return 0
+}
+
+entity_set_health :: proc(w: ^World, ent: ^Entity, health: int) {
+	if hp := entity_health(w, ent); hp != nil {hp.health = i32(health)}
+}
+
+entity_age_of :: proc(w: ^World, ent: ^Entity) -> int {
+	if age := entity_age(w, ent); age != nil {return int(age.ticks)}
+	return 0
+}
+
+entity_set_age :: proc(w: ^World, ent: ^Entity, ticks: int) {
+	if age := entity_age(w, ent); age != nil {age.ticks = i32(ticks)}
 }
 
 entity_is_natural :: proc(w: ^World, ent: ^Entity) -> bool {
