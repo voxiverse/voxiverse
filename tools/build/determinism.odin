@@ -19,6 +19,7 @@ DETERMINISM_DIRS :: []string {
 	"common/worldgen",
 	"common/planet",
 	"common/intervention",
+	"common/island",
 	"common/script",
 }
 
