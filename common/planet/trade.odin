@@ -142,7 +142,7 @@ convoy_step :: proc(e: Economy, m: ^Market, n: News, c: ^Convoy, ds: []Drought) 
 			append(&c.caravans, v)
 		}
 	}
-	market_step(e, m, ds)
+	market_step(e, m, ds, n)
 	convoy_arrive(n, c, m.month)
 }
 

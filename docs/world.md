@@ -258,8 +258,14 @@ at their day and place and change nothing before it.
   (`market_step`). A `Trader` (the player) holds the same knowledge (what they saw, what a town
   told them on `trader_arrive`) and buys and sells at a town's price as its stock moves, 5 %
   over/under (`SPREAD`); `trade_matters` says when a trade is large enough (a quarter of the
-  town's monthly need) to be a `Traded` intervention (#131). Not yet: the market screen, caravans
-  as entities, and the drought-first-profit check (see #141).
+  town's monthly need) to be a `Traded` intervention (#131). Knowing first pays: a drought
+  is priced *at once* in the towns it hits (their grain stock drops to where it would drain
+  over the drought's year, `grain_shock_begun`), and elsewhere only as news arrives, because
+  merchants judge a buyer by the price their own town last heard (`market_step` with the
+  island's `News`; no report, no shipment) and count what is already on the road. The first
+  trader to arrive sells at the peak; later ones meet the caravans that came before. Tested
+  by `test_first_to_a_drought_profits_more`. Not yet: the market screen (reached in play with
+  M inside a settlement's radius) and caravans as entities (see #141).
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

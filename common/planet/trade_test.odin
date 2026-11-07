@@ -106,3 +106,88 @@ test_trader_buys_and_sells :: proc(t: ^testing.T) {
 	defer trader_destroy(&broke)
 	testing.expect(t, trader_buy(&broke, e, &m, .Grain, 5) == 0)
 }
+
+// A trader who learns of a drought first and carries grain there profits more than one who
+// sets out once the news has reached the grain's town: the first sells at the peak, the later
+// one meets the caravans that came before.
+@(test)
+test_first_to_a_drought_profits_more :: proc(t: ^testing.T) {
+	p, r := chronicle_planet()
+	defer relief_destroy(&r)
+	defer planet_destroy(&p)
+	list := fixture(p, 150)
+	defer delete(list)
+	e := economy_build(p, list[:], nil)
+	defer economy_destroy(&e)
+	all := island(e)
+	defer delete(all)
+
+	// The drought town D and a grain town S one way off, outside the drought's radius.
+	d, s := -1, -1
+	search: for i in 0 ..< len(e.towns) {
+		if !e.towns[i].market[.Grain] || e.towns[i].production[.Grain] <= 0 {continue}
+		for l in e.links[e.link_first[i]:e.link_first[i + 1]] {
+			a, b := e.towns[i], e.towns[l.to]
+			far := km_between(a.lat, a.lon, b.lat, b.lon) > DROUGHT_RADIUS_KM
+			if far && b.market[.Grain] && b.production[.Grain] > 0 {
+				d, s = i, l.to
+				break search
+			}
+		}
+	}
+	testing.expect(t, d >= 0, "no pair of grain towns")
+	if d < 0 {return}
+	trip := travel_months(e, s, d)
+
+	WARM :: 12
+	run :: proc(e: Economy, all: []int, d, s: int, delay: int, trip: f64) -> (profit: f64) {
+		m := market_make(e, all, 0)
+		defer market_destroy(&m)
+		n := news_make(e, m)
+		defer news_destroy(&n)
+		c: Convoy
+		defer convoy_destroy(&c)
+		for _ in 0 ..< WARM {convoy_step(e, &m, n, &c, nil)}
+		ds := []Drought{{e.towns[d].lat, e.towns[d].lon, f32(WARM), 0.6}}
+		tr := trader_make(m, 1e9, s)
+		defer trader_destroy(&tr)
+		// The trader is told at the start; the others hear at S `delay` months later.
+		for _ in 0 ..< 1 + delay {convoy_step(e, &m, n, &c, ds)}
+		units := 0.3 * e.towns[s].size
+		trader_arrive(&tr, e, m, n, s)
+		start := tr.cash
+		bought := trader_buy(&tr, e, &m, .Grain, units)
+		for m.month < f64(WARM + 1 + delay) + trip {convoy_step(e, &m, n, &c, ds)}
+		tr.at = d
+		trader_sell(&tr, e, &m, .Grain, bought)
+		return (tr.cash - start) / f64(max(bought, 1e-6))
+	}
+	first := run(e, all, d, s, 0, trip)
+	// Later: once the news has reached S, measured on a run with no trader.
+	delay := 0
+	{
+		m := market_make(e, all, 0)
+		defer market_destroy(&m)
+		n := news_make(e, m)
+		defer news_destroy(&n)
+		c: Convoy
+		defer convoy_destroy(&c)
+		for _ in 0 ..< WARM {convoy_step(e, &m, n, &c, nil)}
+		ds := []Drought{{e.towns[d].lat, e.towns[d].lon, f32(WARM), 0.6}}
+		for delay < 12 {
+			convoy_step(e, &m, n, &c, ds)
+			delay += 1
+			rep := n.town[s].at[d][.Grain]
+			if rep.known && rep.month > WARM {break}
+		}
+	}
+	later := run(e, all, d, s, delay, trip)
+	testing.expectf(
+		t,
+		first > later,
+		"first %v per unit, after the news (%d months) %v",
+		first,
+		delay,
+		later,
+	)
+}
