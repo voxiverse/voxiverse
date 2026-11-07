@@ -2,6 +2,8 @@ package music
 
 import "client:audio"
 import "common:ogg"
+import "core:crypto/hash"
+import "core:encoding/hex"
 import "core:encoding/json"
 import "core:math"
 import "core:os"
@@ -16,12 +18,14 @@ import "core:testing"
 MUSIC_DIR :: #directory + "/../../assets/music/"
 
 Music_Meta :: struct {
-	title:  string,
-	source: string,
-	rate:   int,
-	frames: int,
-	loop:   bool,
-	lufs:   f64,
+	title:            string,
+	source:           string,
+	source_sha256:    string,
+	soundfont_sha256: string,
+	rate:             int,
+	frames:           int,
+	loop:             bool,
+	lufs:             f64,
 }
 
 // music_decode: the whole file as interleaved stereo float, by common/ogg.
@@ -89,11 +93,27 @@ music_decodes_to_its_metadata :: proc(t: ^testing.T, f: Music_File) {
 		f.name,
 	)
 	testing.expectf(t, meta.rate == 48000 && meta.frames > 0, "%s: %v", f.name, meta)
-	_, err := os.stat(
-		strings.concatenate({MUSIC_DIR, meta.source}, context.temp_allocator),
-		context.temp_allocator,
+	score_path := strings.concatenate({MUSIC_DIR, meta.source}, context.temp_allocator)
+	score_data, s_err := os.read_entire_file_from_path(score_path, context.temp_allocator)
+	testing.expectf(t, s_err == nil, "%s names %s, which does not exist", f.name, meta.source)
+	if s_err == nil {
+		h := hash.hash_bytes(.SHA256, score_data, context.temp_allocator)
+		sha := hex.encode(h[:], context.temp_allocator)
+		testing.expectf(
+			t,
+			meta.source_sha256 == string(sha),
+			"%s.score changed (got %s, json has %s): render it: build music",
+			f.name,
+			string(sha),
+			meta.source_sha256,
+		)
+	}
+	testing.expectf(
+		t,
+		len(meta.soundfont_sha256) > 0,
+		"%s has empty soundfont_sha256 (render it: build music)",
+		f.name,
 	)
-	testing.expectf(t, err == nil, "%s names %s, which does not exist", f.name, meta.source)
 	// Through a mixer at 48 kHz, as the game plays it: the voice ends at `frames`.
 	m := new(audio.Mixer)
 	defer free(m)
