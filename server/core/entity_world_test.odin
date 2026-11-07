@@ -328,13 +328,13 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 	found.allocator = context.temp_allocator
 	game.spatial_sphere(&ew.spatial, c.player.position, 1e4, {none = {.Player}}, &found)
 	d.entries = len(found)
-	for e, i in entities_view(w) {
-		if e.body.position != d.spawned[i] {d.moved = true}
+	for &e, i in entities_view(w) {
+		if entity_pos(w, &e) != d.spawned[i] {d.moved = true}
 		h, ok := game.store_find(&ew.store, game.Entity_Id(e.id))
 		if !ok {continue}
 		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
 		if sl == nil {continue}
-		lo, hi := game.entity_box(game.kind_info(test_reg(), e.kind), e.body.position)
+		lo, hi := game.entity_box(game.kind_info(test_reg(), e.kind), entity_pos(w, &e))
 		got := game.spatial_get(&ew.spatial, sl.handle)
 		if got.lo == lo && got.hi == hi {d.at_rest += 1}
 	}
@@ -411,7 +411,7 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		for &o in entities_view(w) {
 			if o.id == ent.id || o.kind != test_reg().engine.sheep || o.love <= 0 {continue}
 			if o.growth < game.LAMB_TICKS {continue}
-			v := o.body.position - ent.body.position
+			v := entity_pos(w, &o) - entity_pos(w, &ent)
 			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = &o, dd}
 		}
 		d.checked += 1
@@ -466,9 +466,7 @@ entity_matches_store :: proc(t: ^testing.T, w: ^World, ent: ^Entity) {
 		testing.expect(t, false, "an entity lacks transform, health or age")
 		return
 	}
-	testing.expect_value(t, tf.position, ent.body.position)
-	testing.expect_value(t, tf.yaw, ent.yaw)
-	testing.expect_value(t, tf.pitch, ent.pitch)
+	testing.expect_value(t, ent.body.position, [3]f64{})
 	if ph := entity_physics(w, ent); ph != nil {
 		testing.expect_value(t, ph.velocity, ent.body.velocity)
 		testing.expect_value(t, ph.on_ground, ent.body.on_ground)

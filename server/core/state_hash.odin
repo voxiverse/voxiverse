@@ -79,9 +79,9 @@ hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 		out[i] = {
 			e.id,
 			u8(e.kind - 1),
-			e.body,
-			e.yaw,
-			e.pitch,
+			{entity_pos(w, &e), e.body.velocity, e.body.on_ground},
+			entity_yaw(w, &e),
+			entity_pitch(w, &e),
 			entity_health_of(w, &e),
 			entity_is_natural(w, &e),
 			e.brain,

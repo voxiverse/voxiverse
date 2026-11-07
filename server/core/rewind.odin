@@ -64,7 +64,7 @@ rewind_record :: proc(s: ^Server, w: ^World) {
 	for id in found {
 		ent, i := entity_find(w, u32(id))
 		if i < 0 {continue}
-		append(&f.creatures, Rewind_Body{ent.id, ent.body.position, false})
+		append(&f.creatures, Rewind_Body{ent.id, entity_pos(w, ent), false})
 	}
 }
 

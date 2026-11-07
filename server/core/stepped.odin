@@ -31,7 +31,7 @@ perturb :: proc(s: ^Server) {
 		for w in s.worlds {
 			if entity_count(w) > 0 {
 				e := entity_at(w, 0)
-				e.yaw = ulp(e.yaw)
+				entity_set_yaw(w, e, ulp(entity_yaw(w, e)))
 				return
 			}
 		}

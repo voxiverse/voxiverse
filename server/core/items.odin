@@ -140,9 +140,9 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		ledger_stack(s, w, .Expire, ent.stack, -1)
 		return true
 	}
-	if !chunk_ready(w, ent.body.position) {return false} 	// its ground is not loaded: it waits
+	if !chunk_ready(w, entity_pos(w, ent)) {return false} 	// its ground is not loaded: it waits
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	game.body_step(&ent.body, kind, {}, false, &w.rules, query, game.TICK_SECONDS)
+	entity_body_step(w, ent, kind, {}, false, query)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(s.registry, ent.stack.item)
 	if entity_age_of(w, ent) % 10 == 0 {
@@ -155,7 +155,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			near := make([dynamic]game.Entity_Id, context.temp_allocator)
 			game.spatial_sphere(
 				&ew.spatial,
-				ent.body.position,
+				entity_pos(w, ent),
 				f64(kind.item.merge) + PICKUP_SLACK,
 				{kind = u16(item_kind), exclude = game.Entity_Id(ent.id)},
 				&near,
@@ -170,7 +170,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				other := entity_at(w, j)
 				if other.kind != ent.kind || other.stack.item != ent.stack.item {continue}
 				if ent.stack.count + other.stack.count > size {continue}
-				d := other.body.position - ent.body.position
+				d := entity_pos(w, other) - entity_pos(w, ent)
 				if d.x * d.x + d.y * d.y + d.z * d.z >
 				   f64(kind.item.merge * kind.item.merge) {continue}
 				ent.stack.count += other.stack.count
@@ -187,7 +187,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	near := make([dynamic]game.Entity_Id, context.temp_allocator)
 	game.spatial_sphere(
 		&ew.spatial,
-		ent.body.position,
+		entity_pos(w, ent),
 		f64(kind.item.range) + PICKUP_SLACK,
 		{all = {.Player}},
 		&near,
@@ -206,7 +206,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		delay :=
 			kind.item.owner_delay if ent.owner == int(player_id(s, c)) else kind.item.pickup_delay
 		if f32(entity_age_of(w, ent)) * game.TICK_SECONDS < delay {continue}
-		d := c.player.position + {0, 0.5, 0} - ent.body.position
+		d := c.player.position + {0, 0.5, 0} - entity_pos(w, ent)
 		if d.x * d.x + d.y * d.y + d.z * d.z > f64(kind.item.range * kind.item.range) {continue}
 		left := game.inventory_add(s.registry, &c.inventory, ent.stack)
 		if left.count == ent.stack.count {continue} 	// no room

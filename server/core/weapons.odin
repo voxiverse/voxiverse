@@ -110,7 +110,7 @@ shot_trace :: proc(
 	for id in found {
 		ent, i := entity_find(w, u32(id))
 		if i < 0 {continue}
-		at := ent.body.position
+		at := entity_pos(w, ent)
 		if frame != nil {
 			if b, there := rewind_body(frame.creatures[:], ent.id); there {at = b.position}
 		}
