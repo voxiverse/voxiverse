@@ -8,6 +8,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:planet"
 import "common:worldgen"
 
 // Server commands about the world and the players in it, after Minecraft's
@@ -483,16 +484,20 @@ admin_where :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		return true
 	}
 	lat, lon := worldgen.planet_lat_lon(x, z)
+	k, _ := worldgen.planet_climate(x, z)
 	notice(
 		s,
 		c,
 		fmt.tprintf(
-			"%.2f°%s %.2f°%s, elevation %d m, block %d %d %d",
+			"%.2f°%s %.2f°%s, elevation %d m, %s (%s), biome %s, block %d %d %d",
 			abs(lat),
 			"N" if lat >= 0 else "S",
 			abs(lon),
 			"E" if lon >= 0 else "W",
 			int(worldgen.planet_elevation(x, z)),
+			planet.koppen_code(k),
+			planet.koppen_name(k),
+			worldgen.BIOME_NAMES[worldgen.earth_biome(&c.world.chunks.gen, x, z)],
 			x,
 			i32(math.floor(p.y)),
 			z,
