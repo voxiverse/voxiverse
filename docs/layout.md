@@ -152,7 +152,7 @@ package** is enforced by the `layout` lint (see above).
 | `tools/debugger` | Debugger printers and trace helpers | `*.py`, `*.sh` |
 | `tools/debugger/printer_test` | The printers' test program | `*.odin` |
 | `tools/fuzz` | The fuzz tool | `*.odin` |
-| `tools/music` | The music renderer | `*.odin` |
+| `tools/music` | The music renderer, and the list of corpus files it downloads | `*.odin`, `corpus.txt` |
 | `tools/music/testdata` | The renderer's test score | `*.score` |
 | `tools/music/testdata/corpus` | Public-domain MIDI files for the ear's calibration, with their sources | `*.mid`, `SOURCES.txt` |
 | `tools/netdump` | The packet dump tool | `*.odin` |
