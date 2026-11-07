@@ -67,6 +67,7 @@ Piece :: struct {
 	humanize_vel:            u8,
 	reverb_rt60, reverb_wet: f32,
 	end:                     u32, // ticks: the end of the last bar (the loop point)
+	motifs:                  [dynamic]Stated, // the motifs a score states, in order
 }
 
 // piece_defaults is what a piece without a header says (every MIDI file).

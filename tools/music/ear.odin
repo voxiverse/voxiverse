@@ -32,7 +32,15 @@ Ear :: struct {
 	roughness_mean:    f64, // beats-weighted mean of the worst pair per slice
 	roughness_p95:     f64,
 	accomp_variety:    f64, // distinct bars among the other parts' bars
+	motifs:            [dynamic]Motif_Seen, // the motifs the score states
 	critique:          []string,
+}
+
+// A motif and where the score states it.
+Motif_Seen :: struct {
+	name:   string,
+	bars:   [dynamic]int, // the bar of each statement, in order
+	varied: [dynamic]bool, // ... and whether it was varied
 }
 
 // A melody note: the highest note at an onset.
@@ -57,6 +65,7 @@ LEAP :: 5 // semitones: a leap
 BIG_LEAP :: 9 // semitones: over this is a big leap
 CRITIQUE_LEAP :: 7 // the critique names unanswered leaps from this size
 CRITIQUE_RUN :: 8 // ... and a bar of an accompaniment part played this many times
+MOTIF_BARS_SHOWN :: 16 // bars listed for one motif (--json has all)
 CRITIQUE_LINES :: 30 // printed lines of one piece's critique (--json has all)
 
 Chord_Type :: struct {
@@ -599,6 +608,18 @@ listen :: proc(p: ^Piece, name, file: string) -> Ear {
 	lines := make([]string, len(findings))
 	for f, i in findings {lines[i] = f.text}
 	e.critique = lines
+	for st in p.motifs {
+		at := -1
+		for m, i in e.motifs {
+			if m.name == st.name {at = i}
+		}
+		if at < 0 {
+			append(&e.motifs, Motif_Seen{name = st.name})
+			at = len(e.motifs) - 1
+		}
+		append(&e.motifs[at].bars, bar_of(starts, st.start))
+		append(&e.motifs[at].varied, st.varied)
+	}
 	return e
 }
 
@@ -631,6 +652,22 @@ ear_report :: proc(e: Ear, b: ^strings.Builder) {
 		e.roughness_p95,
 		e.accomp_variety,
 	)
+	if len(e.motifs) > 0 {fmt.sbprintln(b, "  motifs:")}
+	for m in e.motifs {
+		varied := 0
+		for v in m.varied {
+			if v {varied += 1}
+		}
+		fmt.sbprintf(b, "    %s: stated %d times, %d varied; bars", m.name, len(m.bars), varied)
+		for bar, i in m.bars {
+			if i >= MOTIF_BARS_SHOWN {
+				fmt.sbprintf(b, " ... (+%d)", len(m.bars) - i)
+				break
+			}
+			fmt.sbprintf(b, " %d%s", bar, "'" if m.varied[i] else "")
+		}
+		fmt.sbprintln(b)
+	}
 	if len(e.critique) == 0 {return}
 	fmt.sbprintln(b, "  critique:")
 	for line, i in e.critique {
