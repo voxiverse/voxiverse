@@ -1,0 +1,765 @@
+{
+  "kind": "structures",
+  "group": "maritime",
+  "entries": [
+    {
+      "id": "pharos_of_alexandria",
+      "name": "Pharos of Alexandria",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Ptolemaic Egypt", "Roman"],
+      "era": "c. 297-283 BCE to medieval collapse (earthquakes, 1303 and 1323 CE)",
+      "footprint_m": [33, 33],
+      "height_m": 100,
+      "materials": ["limestone", "granite", "lead mortar"],
+      "purpose": "guiding light for shipping into the Great Harbour of Alexandria",
+      "parts": ["square lower tier", "octagonal middle tier", "cylindrical lantern tier", "great mirror (said to burn enemy ships, probably legend)", "statue of Zeus Soter (later Poseidon)", "fire beacon at the summit"],
+      "layout": [
+        "three-tiered tower on the islet of Pharos at the mouth of the harbour",
+        "linked to the mainland by the Heptastadion causeway",
+        "light visible far out to sea by day (white marble glare) and night (fire)"
+      ],
+      "found": "at Alexandria, Egypt; one of the Seven Wonders of the ancient world",
+      "notes": "Height figures vary (100-137 m); every medieval travel writer left a different number. Built by Sostratus of Cnidus for Ptolemy I/II."
+    },
+    {
+      "id": "carthage_cothon",
+      "name": "Carthaginian cothon (naval harbour)",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "mediterranean"],
+      "cultures": ["Carthaginian", "Roman"],
+      "era": "c. 3rd-2nd century BCE (destroyed 146 BCE)",
+      "footprint_m": [350, 350],
+      "height_m": 10,
+      "materials": ["cut stone", "limestone", "wood ship sheds", "tiles"],
+      "purpose": "hidden military harbour; Carthage's war fleet laid up under cover",
+      "parts": ["circular basin (~325 m across)", "artificial island with admiralty building", "ring of ~220 covered ship sheds", "narrow entrance with iron-clad boom", "outer rectangular commercial harbour next door"],
+      "layout": [
+        "dead-circular basin, unlike any other ancient naval harbour",
+        "island in the middle with the admiralty; sheds ring the water on both inner faces",
+        "entrance narrow enough to block with a ship and a chain"
+      ],
+      "found": "at Carthage (near Tunis); excavated in the 20th century, partially reconstructable from Appian and archaeology",
+      "notes": "Most distinctive harbour plan ever built: the enemy fleet sees nothing until the boom drops. Sheds held ~220 warships (Appian's figure)."
+    },
+    {
+      "id": "arsenale_di_venezia",
+      "name": "Arsenal of Venice",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "mediterranean"],
+      "cultures": ["Venetian"],
+      "era": "1104 (founded) to present; peak 1450-1600",
+      "footprint_m": [700, 700],
+      "height_m": 15,
+      "materials": ["brick", "istrian stone", "larch and oak timber", "hemp rigging", "iron"],
+      "purpose": "industrial dockyard for building, arming and outfitting the Venetian fleet",
+      "parts": ["walled water basins (darsena)", "long covered building sheds", "great gate (Porta Magna, 1460) with lions from Greece", "ropewalks", "cannon foundries", "mast pond"],
+      "layout": [
+        "walled complex, off-limits to citizens; largest industrial site in medieval Europe",
+        "ships moved through successive basins; hull, masting, rigging, armament in sequence",
+        "standardized parts and assembly-line method centuries before Ford"
+      ],
+      "found": "in Venice, northeast of the city centre; still a working (now mostly decommissioned) naval zone",
+      "notes": "Covers ~48 ha. Dante compared it to Hell with the pitch boiling; by 1500 it could launch a galley a day on ceremony."
+    },
+    {
+      "id": "harbor_boom_chain",
+      "name": "Harbour boom chain (Golden Horn)",
+      "origin": "human",
+      "biomes": ["ocean", "mediterranean"],
+      "cultures": ["Byzantine", "Roman"],
+      "era": "717 (first recorded use) to 1453",
+      "footprint_m": [750, 2],
+      "height_m": 3,
+      "materials": ["iron chain links", "timber floats", "stone anchor towers", "winches"],
+      "purpose": "blocking an enemy fleet from entering a harbour or strait",
+      "parts": ["massive iron chain", "floats of wood to keep the chain awash", "towers at each shore with windlasses", "stone piers at the water ends"],
+      "layout": [
+        "strung across the mouth of the Golden Horn from the Acropolis to Galata",
+        "sits at water level; galleys cannot ram through; small boats pass if chain lowered"
+      ],
+      "found": "at Constantinople (717 vs the Arabs, 1203-04 vs the Fourth Crusade, 1453 vs the Ottomans); similar chains protected Tyre, Alexandria, New York (War of 1812), Sydney",
+      "notes": "Failed in 1453 only because Mehmed II dragged his ships overland on greased logs into the Horn."
+    },
+    {
+      "id": "medieval_harbor_crane",
+      "name": "Medieval treadwheel harbour crane",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "river"],
+      "cultures": ["Northwest European", "Italian", "Mediterranean"],
+      "era": "c. 1200-1700",
+      "footprint_m": [6, 6],
+      "height_m": 18,
+      "materials": ["oak", "iron straps and axles", "rope (hemp)", "stone pivot base"],
+      "purpose": "lifting cargo between quay and ship",
+      "parts": ["vertical timber post", "jib arm", "great treadwheel (or two)", "rope wound on the wheel axle", "crane cabin with load window", "counterweight (sometimes water)"],
+      "layout": [
+        "mounted on the quay edge, often on a stone base projecting over the water",
+        "two dockers walk inside the treadwheel to raise the load",
+        "some are slewing cranes on a pivot; the earliest sit inside crane houses (Cologne, Antwerp, Gdansk, Bruges, Lisbon)"
+      ],
+      "found": "major medieval ports: Antwerp (still standing), Cologne, Gdansk, Bruges, Lisbon; a few survive as museums",
+      "notes": "Lifts 2-4 t. A direct ancestor of the dockside crane; the treadwheel is the same machine as the medieval siege hoist."
+    },
+    {
+      "id": "tidal_fish_weir",
+      "name": "Tidal fish weir (stake weir)",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "river"],
+      "cultures": ["Roman", "Medieval European", "Indigenous Australian", "Native North American", "Japanese"],
+      "era": "antiquity to now",
+      "footprint_m": [200, 10],
+      "height_m": 1,
+      "materials": ["stone", "wicker hurdles", "wood stakes", "brushwood"],
+      "purpose": "trapping fish at low tide in a walled enclosure on the flats",
+      "parts": ["V- or heart-shaped wall open to the sea", "central pound (keep net or basket)", "wing walls funnelling fish", "stakes to break the current"],
+      "layout": [
+        "built across tidal flats or estuaries, exposed at low water",
+        "wings guide fish toward a narrow trap they cannot escape on the ebb",
+        "visible only from above at low tide or as lines of stakes at high tide"
+      ],
+      "blueprint": [
+        "layer 0: . . . . . . .|. . w w w . .|. w . . . w .|w . . . . . w|. w . . . w .|. . w w w . .|. . . . . . .",
+        "legend: w stone/brush wall trap, . water or wet sand; walls lead fish to the centre pound"
+      ],
+      "found": "every tidal coast: Roman sites on the North Sea, medieval ones in England (mentioned in Domesday), Aboriginal stone traps on the Australian coast, Japanese ama fishing grounds",
+      "notes": "Cheap to build, free to run, needs a big tide range. Ideal low-effort shore economy in a coastal starter village."
+    },
+    {
+      "id": "lazaretto",
+      "name": "Lazaretto (quarantine station)",
+      "origin": "human",
+      "biomes": ["ocean", "mediterranean", "beach"],
+      "cultures": ["Venetian", "Ragusan", "Mediterranean port cities"],
+      "era": "1377 (Dubrovnik quarantine law) to 20th century",
+      "footprint_m": [300, 200],
+      "height_m": 10,
+      "materials": ["stone", "brick", "timber", "plaster"],
+      "purpose": "isolating crews, passengers and cargo from plagued ships before they enter port",
+      "parts": ["walled island compound", "quarantine sheds for goods (quaranta giorni, 40 days)", "sleeping quarters for crews", "chapel", "gatehouse", "anchorage offshore"],
+      "layout": [
+        "built on a small offshore island to cut the water route to the mainland",
+        "strict one-way flow: suspect cohorts in, disinfected goods out",
+        "first lazaretto: Santa Maria di Nazareth island (Venice, 1423); Dubrovnik's 1377 edict invented the 40-day quarantine"
+      ],
+      "found": "Venice (Lazzaretto Vecchio and Nuovo), Dubrovnik, Marseille, Genoa, Malta, Sydney; many linger as derelict islands near old ports",
+      "notes": "The original public-health cordon: a whole island needed to stop the plague by ship. Great atmospheric ruin site for a port city."
+    },
+    {
+      "id": "thames_barrier",
+      "name": "Thames Barrier",
+      "origin": "human",
+      "biomes": ["river", "ocean"],
+      "cultures": ["British"],
+      "era": "1974-1982 (opened 1982)",
+      "footprint_m": [520, 60],
+      "height_m": 20,
+      "materials": ["reinforced concrete", "steel gates", "cofferdam construction"],
+      "purpose": "keeping North Sea storm surges out of the tidal Thames and Greater London",
+      "parts": ["10 steel gates on 9 concrete piers", "4 large rising sector gates (61 m span)", "2 ship-passing rising gates", "4 smaller falling gates", "fishing fenders and sills"],
+      "layout": [
+        "spans the Thames at Woolwich Reach, 520 m wide",
+        "gates lie flat in sills when open (ships pass over), rotate upright to close (holds back 5 m+ surge)",
+        "designed for 1-in-1000 annual surge risk"
+      ],
+      "found": "at Woolwich Reach, London; visible from both banks as rows of hood-shaped piers",
+      "notes": "One of the largest movable flood barriers in the world. Closed 200+ times since 1982; every closure is a real event in the port's calendar."
+    },
+    {
+      "id": "la_rance_tidal_barrage",
+      "name": "La Rance tidal power station",
+      "origin": "human",
+      "biomes": ["ocean", "beach"],
+      "cultures": ["French"],
+      "era": "1960-1966 (opened 1966)",
+      "footprint_m": [750, 50],
+      "height_m": 10,
+      "materials": ["reinforced concrete", "steel turbines (24 bulb units)"],
+      "purpose": "generating electricity from the 13 m tide of the Rance estuary",
+      "parts": ["750 m barrage with road deck", "24 reversible bulb turbines (240 MW total)", "6 sluice gates", "ship lock"],
+      "layout": [
+        "crosses the Rance estuary between Saint-Malo and Dinard",
+        "turbines generate on both ebb and flood tides",
+        "doubled as a crossing; road traffic shares the deck"
+      ],
+      "found": "on the Rance estuary, Brittany; the world's first large tidal barrage and largest for decades (still among the biggest by capacity factor)",
+      "notes": "Best tidal range in Europe made the Rance the obvious first site; the barrage also tamed the estuary's bores."
+    },
+    {
+      "id": "panama_canal",
+      "name": "Panama Canal",
+      "origin": "human",
+      "biomes": ["rainforest"],
+      "cultures": ["American", "Panamanian"],
+      "era": "1904-1914 construction (opened 1914); French attempt 1881-1889",
+      "footprint_m": [82000, 150],
+      "height_m": 0,
+      "materials": ["concrete (locks)", "dredged rock and soil", "steel gates"],
+      "purpose": "linking the Atlantic and Pacific across the Isthmus of Panama",
+      "parts": ["Gatun Locks (Atlantic side, 3 steps)", "Pedro Miguel and Miraflores Locks (Pacific side)", "Gatun Lake (artificial, 26 m above sea level)", "Culebra (Gaillard) Cut through the Continental Divide", "artificial Miraflores/Gatun dams"],
+      "layout": [
+        "82 km cutting through mountains; all ships climb 26 m and descend by lock steps",
+        "the French sea-level attempt failed on yellow fever; the American lock design succeeded",
+        "expansion (2016) added a third lane of larger locks (Neopanamax)"
+      ],
+      "found": "across the Isthmus of Panama; about 140 km of transit including approach channels",
+      "notes": "Saves ~15,000 km by water versus rounding Cape Horn. One lock chamber is a perfect 1:1 voxel scale for a 200 m x 20 m gate."
+    },
+    {
+      "id": "suez_canal",
+      "name": "Suez Canal",
+      "origin": "human",
+      "biomes": ["desert", "beach"],
+      "cultures": ["French", "Egyptian", "Global"],
+      "era": "1859-1869 construction (opened 1869)",
+      "footprint_m": [193000, 300],
+      "height_m": 0,
+      "materials": ["dredged sand and rock", "surveyed alignment"],
+      "purpose": "sea-level waterway linking the Mediterranean to the Red Sea",
+      "parts": ["193 km of dredged channel", "parallel bypass at Ballah", "Great and Small Bitter Lakes (water reservoir)", "Port Said and Port Tewfik terminals"],
+      "layout": [
+        "straight-ish trench through the Egyptian desert, no locks (sea-level design)",
+        "widened and deepened repeatedly; modern depth ~24 m for fully laden 24,000-TEU ships"
+      ],
+      "found": "from Port Said (Mediterranean) to Suez (Red Sea); current handles ~10% of world trade",
+      "notes": "The Ever Given grounding (March 2021) blocked the canal for 6 days; the whole world noticed. Useful scale reference for any desert coast scene."
+    },
+    {
+      "id": "dry_dock",
+      "name": "Dry dock",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "river"],
+      "cultures": ["Mediterranean", "Northwest European", "Global"],
+      "era": "c. 400 BCE (Piraeus naval docks) to now",
+      "footprint_m": [100, 25],
+      "height_m": 0,
+      "materials": ["cut stone", "brick", "timber shuttering", "gravel bed", "modern: reinforced concrete"],
+      "purpose": "repairing and building ships below the waterline in the dry",
+      "parts": ["excavated basin", "caisson or gate at the sea end", "keel blocks along the centre line", "side steps for workers", "pump sump", "bollards and stairs"],
+      "layout": [
+        "aligned with a sheltered reach of coast or harbour mouth",
+        "ship floats in over the keel blocks, gate shuts, water pumped out",
+        "Great Harry's dock at Portsmouth (1495) is the surviving early example; Greek Zea naval docks are older"
+      ],
+      "found": "every major warship and repairing port; the word 'dockyard' derives from it",
+      "notes": "A whole ship sits on blocks below the harbour floor: the best dramatic reveal a port city can have."
+    },
+    {
+      "id": "slipway",
+      "name": "Slipway (marine railway / gridiron)",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Mediterranean", "Northwest European", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [80, 15],
+      "height_m": 0,
+      "materials": ["timber rails", "stone pads", "grease (tallow)", "modern: steel rails and winch"],
+      "purpose": "hauling small craft out of the water for repairs",
+      "parts": ["sloping ramp into the sea", "rails or greased timber ways", "winch or capstan at the top", "cradle or blocks", "mooring bollards"],
+      "layout": [
+        "ramp runs from above high-water mark down below low tide",
+        "boat slides down on launch, hauled up on ways for repair",
+        "careening for hull cleaning is the oldest version, done at neap tides on a beach"
+      ],
+      "found": "small boatyards, fishing harbours, lifeboat stations",
+      "notes": "Careening beaches are still used; a grounded caravel is a very plausible 15th-century scene."
+    },
+    {
+      "id": "bell_buoy",
+      "name": "Bell buoy",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Global"],
+      "era": "19th century to now (unlit predecessors from antiquity)",
+      "footprint_m": [2, 2],
+      "height_m": 3,
+      "materials": ["steel (modern) or timber (historical)", "bell (bronze)", "chain mooring", "concrete sinker"],
+      "purpose": "marking hazards and channel edges by sound when the sea moves the float",
+      "parts": ["conical or pillar float", "bell on a yoke that swings with the waves", "mooring chain to a seabed sinker", "optional topmark (cone, can, sphere)"],
+      "layout": [
+        "moored at a fixed point; only the float is visible at the surface",
+        "lanby (light vessel) buoys are larger relatives protecting lightships' stations"
+      ],
+      "found": "every navigable coast and river approach; red/green lateral marks at channel sides",
+      "notes": "The smallest maritime structure and the easiest to miss. Two or three along a channel entrance read instantly as 'shipping here'."
+    },
+    {
+      "id": "leading_lights",
+      "name": "Leading marks (leading lights)",
+      "origin": "human",
+      "biomes": ["ocean", "river", "beach"],
+      "cultures": ["Global"],
+      "era": "antiquity to now",
+      "footprint_m": [10, 2],
+      "height_m": 15,
+      "materials": ["stone or timber towers", "lantern room", "fixed lanterns (now LED)"],
+      "purpose": "two lights in line showing the safe line through a channel (range lights)",
+      "parts": ["front mark (lower tower)", "rear mark (taller tower)", "painted daymarks visible in daylight", "aligned on the safe bearing"],
+      "layout": [
+        "two towers of different heights on the same bearing from seaward",
+        "navigator lines them up; if one is offset, the ship is off the fairway",
+        "daymarks are often striped or patterned boards rather than lights"
+      ],
+      "found": "channel entrances, bar crossings, river mouths with shifting shoals; lights at Lynn, Zeebrugge, and countless harbour bars",
+      "notes": "Cheapest accurate navigation aid ever: two lamps on the right bearing. A pair of striped towers reads clearly at voxel scale."
+    },
+    {
+      "id": "trireme",
+      "name": "Trireme",
+      "origin": "human",
+      "biomes": ["ocean", "mediterranean"],
+      "cultures": ["Greek", "Phoenician", "Roman"],
+      "era": "c. 7th-4th century BCE",
+      "footprint_m": [37, 6],
+      "height_m": 6,
+      "materials": ["pine and fir planking", "oak ram", "bronze (all ornament)", "linen sails (used for passage only)"],
+      "purpose": "fast oared warship; ramming weapon, not a cargo carrier",
+      "parts": ["trireme hull (3 levels of oars, 170 rowers)", "bronze-shod ram", "mast with square sail (stepped ashore in battle)", "outrigger (parexeiresia)", "fighting platform at the bow"],
+      "layout": [
+        "long, narrow, almost flush-decked; no castles fore or aft",
+        "oars in three superimposed tiers, 85 per side",
+        "fought under oar power near shore; slow under sail"
+      ],
+      "found": "classical Mediterranean; Battle of Salamis (480 BCE) was fought by them",
+      "notes": "At voxel scale: one and a half building lots long, nothing else like it in profile. 170 rowers means the crew is a crowd."
+    },
+    {
+      "id": "viking_longship",
+      "name": "Viking longship",
+      "origin": "human",
+      "biomes": ["ocean", "frozen_ocean", "river"],
+      "cultures": ["Norse", "Scandinavian"],
+      "era": "c. 800-1050 CE",
+      "footprint_m": [28, 5],
+      "height_m": 8,
+      "materials": ["oak planking (clinker-built)", "iron rivets", "wool/linen sail", "hemp", "pine"],
+      "purpose": "fast warship and troop transport; beach-anywhere raider",
+      "parts": ["clinker-built flexible hull", "single square sail", "oars (up to 60)", "central mast", "carved bow and stern posts (dragon heads on great ships)", "shallow draft (~1 m)", "shields along the rail"],
+      "layout": [
+        "long, shallow, symmetric bow and stern - can reverse direction without turning",
+        "sails on open sea, rows upriver; lands anywhere a beach permits",
+        "Gokstad ship (~23 m) and Oseberg ship (~21 m) are the type fossils"
+      ],
+      "found": "Scandinavia and Viking expansion lands; found as burial ships in Norwegian fjords",
+      "notes": "Drakkars raided from Lindisfarne (793) to L'Anse aux Meadows. The ~1 m draft is the whole design secret."
+    },
+    {
+      "id": "cog",
+      "name": "Cog (Hanseatic cargo ship)",
+      "origin": "human",
+      "biomes": ["ocean", "river", "frozen_ocean"],
+      "cultures": ["Hanseatic", "Northwest European"],
+      "era": "c. 1200-1500",
+      "footprint_m": [24, 8],
+      "height_m": 12,
+      "materials": ["oak", "iron", "hempen rigging", "linen sail"],
+      "purpose": "bulk cargo carrier of the Hanseatic League: grain, timber, salt, fish",
+      "parts": ["single square sail", "straight sternpost with stern rudder (replacing side steering oars)", "flat-bottomed open hold", "high fore and aft castles (added for defence)", "straight stem and sternpost"],
+      "layout": [
+        "beamy, bluff-bowed tub of a ship; trades honesty for capacity",
+        "one mast, one sail, crew of ~15-20",
+        "remains the archetype of the medieval merchantman"
+      ],
+      "found": "North Sea and Baltic; wrecks (Bremen cog, 1380s) preserved in museums",
+      "notes": "200 tonnes deadweight with 15 sailors - astonishing economy. The straight stem is an easy voxel silhouette."
+    },
+    {
+      "id": "dhow",
+      "name": "Dhow (Arabian/Indian Ocean sailing ship)",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Arab", "Omani", "Gujarati", "Swahili"],
+      "era": "c. 7th century to now",
+      "footprint_m": [25, 6],
+      "height_m": 20,
+      "materials": ["teak (or coconut/larix locally)", "sewn or nailed planks", "cotton sail", "coir rope"],
+      "purpose": "monsoon-following cargo trade across the Indian Ocean",
+      "parts": ["lateen (settee) sail, one or two masts", "sewn-plank or nailed hull (no iron nails in the classic build)", "long overhanging stern", "slanted bow stem", "washboards and coaming"],
+      "layout": [
+        "sails with the monsoons: out in winter (to India), home in summer",
+        "rice, dates, horses, ivory and spices moved this way for a millennium",
+        "baghla and boom are the big Arab types (30-40 m); smaller sambuk and zaruq for coasts"
+      ],
+      "found": "from Zanzibar to Muscat to Gujarat; still the working ship of the Gulf and East Africa",
+      "notes": "Sewn hulls flex without working loose; timber choice tracked the monsoon route. Ideal trading vessel for a non-European coast."
+    },
+    {
+      "id": "junk",
+      "name": "Junk (Chinese sailing ship)",
+      "origin": "human",
+      "biomes": ["ocean", "river"],
+      "cultures": ["Chinese", "Southeast Asian"],
+      "era": "c. 960 (Song) to now",
+      "footprint_m": [40, 9],
+      "height_m": 30,
+      "materials": ["teak/pine", "iron", "hempen sail (battened, like a fan)", "watertight bulkheads"],
+      "purpose": "bulk cargo and treasure transport; the great ship of the Asian seas",
+      "parts": ["battened junk sail (reefs from the deck by lowering)", "balanced rudder (no tiller fighting)", "watertight compartment bulkheads", "lug sails on multiple masts", "high sterncastle", "leeboards (on many types)"],
+      "layout": [
+        "bluff hull, multi-masted, fan-like sails with bamboo battens",
+        "Chinese sources describe treasure ships over 100 m under Zheng He (early 1400s) - the scale is disputed but ordinary merchant junks ran 30-45 m"
+      ],
+      "found": "China coast, Taiwan, Southeast Asia; Zheng He's treasure voyages reached Arabia and East Africa (1405-1433)",
+      "notes": "Bulkheads made junks unsinkable by principle: a holed compartment is just one wet room. The European barque borrowed the rudder from China via the Indian Ocean."
+    },
+    {
+      "id": "caravel",
+      "name": "Caravel",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Portuguese", "Spanish"],
+      "era": "c. 1400-1600",
+      "footprint_m": [20, 6],
+      "height_m": 25,
+      "materials": ["oak/pine", "iron", "hempen rigging", "linen/canvas sails"],
+      "purpose": "exploration and dispatch; shallow-draft, weatherly, fast",
+      "parts": ["lateen (la Latina) or square (la Redonda) rig", "two or three masts", "flush deck", "small fore/aft castles", "axial rudder", "low, ovoid stern"],
+      "layout": [
+        "small enough for a crew of 20-25; shallow draft runs up rivers",
+        "lateen rig sailed closer to the wind - the key to beating home from Africa",
+        "Niña and Pinta were caravels; Santa Maria was a nao, not a caravel"
+      ],
+      "found": "Iberian expansion; Prince Henry's exploration down the West African coast; Columbus 1492",
+      "notes": "20 m of ship that opened two oceans' knowledge. The iconic 'Age of Discovery' hull."
+    },
+    {
+      "id": "galleon",
+      "name": "Galleon",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Spanish", "Portuguese", "English", "Dutch"],
+      "era": "c. 1520-1750",
+      "footprint_m": [48, 11],
+      "height_m": 40,
+      "materials": ["oak", "iron", "bronze cannon", "hempen rigging"],
+      "purpose": "heavily armed sailing warship and treasure carrier",
+      "parts": ["three or four decks", "high forecastle and quarter galleries", "poop deck with lanterns", "broadside gun ports (muzzle-loading)", "three or four masts: square courses forward, lateen mizzen aft", "beakhead at the bow"],
+      "layout": [
+        "long, narrow gun platform; firepower forward and aft but decisive broadside",
+        "Manila galleons ran the Acapulco-Manila route 1565-1815; Spanish Armada (1588) was galleons and carracks"
+      ],
+      "found": "Atlantic approaches, Caribbean convoys, the Manila trade",
+      "notes": "Sun-gilded sterns, rated in guns, sunk by storms more often than battles. San Juan de Ulúa (1568) shows the type arming up at anchor for a famous fight."
+    },
+    {
+      "id": "clipper",
+      "name": "Clipper",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["British", "American", "Australian"],
+      "era": "c. 1840-1880 (tea and wool races)",
+      "footprint_m": [85, 11],
+      "height_m": 55,
+      "materials": ["timber (teak, oak, pine)", "iron", "canvas"],
+      "purpose": "fastest sailing cargo ships ever; first to market with tea, wool, sugar",
+      "parts": ["sharp, yacht-like hull with enormous sail area", "three masts, skysails above royals", "very fine entry and long overhanging counter", "clipper bow (concave clipper stem)", "whaleboat on the davits"],
+      "layout": [
+        "flogged for speed: speed = first premium on cargo, so hull form chased records",
+        "Cutty Sark (85 m, 1869) is the surviving specimen; Thermopylae (1868) her great rival",
+        "tea from Foochow to London in ~100-110 days was the contest"
+      ],
+      "found": "China-England tea run, Australia-England wool run, California gold rush",
+      "notes": "Waterline fineness at the entry is the whole design: knives through the sea at 14+ knots. Last gasp of commercial sail before steam."
+    },
+    {
+      "id": "polynesian_voyaging_canoe",
+      "name": "Polynesian double-hulled voyaging canoe",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Polynesian", "Austronesian"],
+      "era": "c. 1500 BCE-1200 CE (voyage era); revived with Hokule'a 1976",
+      "footprint_m": [20, 7],
+      "height_m": 8,
+      "materials": ["breadfruit/kukui wood", "sennit (coconut fibre) lashings", "pandanus sails", "no metal in classic builds"],
+      "purpose": "two-way ocean voyaging carrying 20-40 people, plants and animals between islands",
+      "parts": ["two hulls (wa'a/vaka) lashed to crossbeams ('iako)", "deck platform", "claw/crab-claw sail or Oceanic lateen", "steering paddles", "shelters fore and aft", "stone anchors"],
+      "layout": [
+        "double hulls with the load on the platform; no keel, needs a navigator of star lore and wave reading",
+        "settlement of Remote Oceania (Fiji-Tonga-Samoa to Hawaii, Rapa Nui, New Zealand) was done aboard these",
+        "Hokule'a (1976) recreated the route Hawaii-Tahiti; her sister Hikianalia continues it"
+      ],
+      "found": "Polynesia: Hawaii, Samoa, Tonga, Tahiti, New Zealand, Rapa Nui; built today by revival crews",
+      "notes": "The most audacious ocean crossing ever sailed from known to unknown. The whole exploration of the Pacific fits in one 20-metre hull pair."
+    },
+    {
+      "id": "paddle_steamer",
+      "name": "Paddle steamer",
+      "origin": "human",
+      "biomes": ["river", "ocean"],
+      "cultures": ["British", "American", "French"],
+      "era": "1807 (Fulton's Clermont) to early 20th century",
+      "footprint_m": [65, 12],
+      "height_m": 30,
+      "materials": ["iron hull (later steel)", "paddle wheels", "coal-fired boilers", "wood trim and decks"],
+      "purpose": "scheduled passenger and cargo service where sail failed - rivers, estuaries, coastal routes",
+      "parts": ["side or stern paddle wheels", "two big funnels (fore-aft)", "ornate saloon cabins", "guards (floats) over the wheels", "walking beam engine (beam steamers)", "firebars and grates"],
+      "layout": [
+        "shallow-draft for rivers (Mississippi, Lower Rhine, Clyde); SS Great Western (1838) was the ocean-going version",
+        "wheelboxes and crossed funnels make the silhouette unmistakable",
+        "raced with sail packets for speed records on major routes"
+      ],
+      "found": "Mississippi and Ohio rivers, Clyde and Thames excursions, transatlantic crossings (until screw propulsion took over in the 1860s)",
+      "notes": "The first machine-age silhouette on the water. Great period atmosphere for an 1830s-1880s port."
+    },
+    {
+      "id": "container_ship",
+      "name": "Container ship (post-Panamax)",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Global"],
+      "era": "1956 (Ideal X, first container sailing) to now",
+      "footprint_m": [400, 60],
+      "height_m": 60,
+      "materials": ["steel", "container cell guides", "diesel engines"],
+      "purpose": "moving standardised 20/40-ft containers between hub ports",
+      "parts": ["steel hull 366-400 m (Emma Mærsk 397 m)", "cell guides for stacking to deck", "single big diesel (or until recently, HFO)", "cranes and time-critical stowage", "adjoined accommodation block, all cargo forward/ aft"],
+      "layout": [
+        "riding high with containers stacked 8-10 abreast to deck edge and one to two tiers above",
+        "capacity 13,000 to 24,000 TEU; Ever Given 20,000+",
+        "sails at ~22 knots on fixed pendulum schedules"
+      ],
+      "found": "every major trade lane; the Ever Given's March 2021 blockage of the Suez was the defining image of container trade",
+      "notes": "At voxel scale this is a cliff of coloured boxes: the scale problem becomes the whole scene. A single ship is a moving city block."
+    },
+    {
+      "id": "fish_aggregating_device",
+      "name": "Fish aggregating device (FAD)",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Global", "Pacific Islander", "Indian Ocean coastal"],
+      "era": "antiquity to now (motorised drifting FADs from the 20th century)",
+      "footprint_m": [4, 4],
+      "height_m": 2,
+      "materials": ["palm fronds/bamboo (traditional)", "plastic drums and ropes (modern)", "anchor stone or current drogue"],
+      "purpose": "attracting pelagic fish (tuna, mahi-mahi) to a known point for purse seining or handlining",
+      "parts": ["surface float of buoy/raft or clustered fronds", "submerged attractant skirt", "mooring rope to seabed weight", "top float with flag or light (modern)"],
+      "layout": [
+        "anchored raft or drifting tangle of stems 100-1000 m offshore",
+        "bait fish shelter under it; tuna follow within hours",
+        "traditional Pacific rig: coconut fronds tied round a log; modern: satellite-tracked plastic rafts"
+      ],
+      "found": "tropical seas everywhere; village tuna FADs anchor offshore in Pacific island EEZs",
+      "notes": "The cheapest marine structure that exists; invisible until you know to look. A fisherman's secret spot is a single object in the blue."
+    },
+    {
+      "id": "oyster_raft",
+      "name": "Oyster raft (hanging culture)",
+      "origin": "human",
+      "biomes": ["ocean", "beach"],
+      "cultures": ["Japanese", "French", "Dutch", "Global"],
+      "era": "c. 1900s (modern raft culture) to now",
+      "footprint_m": [20, 20],
+      "height_m": 1,
+      "materials": ["timber rafts", "nylon rope", "plastic floats", "shell/limestone spat collectors"],
+      "purpose": "growing oysters suspended in the water column below a floating raft",
+      "parts": ["wood or plastic raft grid", "looped hanging ropes with spat", "anchor weights", "service boat access lanes"],
+      "layout": [
+        "parallel rafts in a sheltered, plankton-rich bay",
+        "oysters hang 2-8 m deep; raft moves with the tide",
+        "Hiroshima raft culture is the canonical example; French tables (tables sur sol) are the shore equivalent"
+      ],
+      "found": "sheltered bays with plankton: Hiroshima, Brittany, Zeeland, Chesapeake (rack culture)",
+      "notes": "Low tide reveals acres of poles and floats in straight rows - the signature of any productive mollusc coast."
+    },
+    {
+      "id": "bouchot_mussel_poles",
+      "name": "Bouchot mussel poles",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["French"],
+      "era": "12th century to now (Bay of Mont-Saint-Michel)",
+      "footprint_m": [400, 100],
+      "height_m": 5,
+      "materials": ["oak/chestnut poles", "coconut fibre (coir)", "rope bands", "plastic sleeves today"],
+      "purpose": "growing mussels on intertidal poles in sheltered flats",
+      "parts": ["poles ~4-7 m high, driven in rows", "coiled rope sleeves for mussel seed", "star-shaped tables at low tide for training", "access tracks at low water"],
+      "layout": [
+        "long rows of poles marching across the tidal flats, parallel to the shore",
+        "rows are straight enough to navigate; harvested on foot at low tide",
+        "coir rope seeded in spring, mussels grown 12-18 months"
+      ],
+      "found": "Brittany and Normandy (Mont-Saint-Michel Bay is the classic landscape)",
+      "notes": "A forest of poles at low tide and invisible at high: the coast literally grows. A strong biome-specific scene for France."
+    },
+    {
+      "id": "pearl_oyster_farm",
+      "name": "Pearl oyster farm (grafting rafts)",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Japanese", "Polynesian (French Polynesia)"],
+      "era": "1893 (Mikimoto's first cultured pearl) to now",
+      "footprint_m": [100, 40],
+      "height_m": 1,
+      "materials": ["timber rafts", "net bags", "nylon buoys", "concrete anchors"],
+      "purpose": "growing and grafting Pinctada maxima/penguin/margaritifera for cultured pearls",
+      "parts": ["longline or raft grids with hanging nets", "grafters' work hut", "sorting and curing room", "ama diver landing stage"],
+      "layout": [
+        "rafts in a sheltered lagoon with clean, warm water",
+        "Oysters are seeded at 1-2 years, grafted at 2-3, harvested at 5-7",
+        "Ago Bay (Mikimoto's first site) and Garaffi/Gambier (French Polynesia) are the famous ones"
+      ],
+      "found": "Ago Bay (Japan), Gambier Islands and Tuamotus (French Polynesia), Broome approach (Australia)",
+      "notes": "Ten pearls from a thousand grafted oysters is a good year. A small, exquisite industry - very different in mood from a fish cannery."
+    },
+    {
+      "id": "salmon_net_pen",
+      "name": "Salmon net pen (sea cage)",
+      "origin": "human",
+      "biomes": ["ocean", "frozen_ocean"],
+      "cultures": ["Norwegian", "Scottish", "Chilean", "Global"],
+      "era": "late 1960s to now",
+      "footprint_m": [40, 40],
+      "height_m": 5,
+      "materials": ["HDPE rings", "nylon nets", "anchor blocks", "feed barges", "dive systems"],
+      "purpose": "farming Atlantic salmon in sea water for 2-3 years before harvest",
+      "parts": ["floating circular ring (13-50 m diameter)", "net bag", "mooring grid to seabed", "feed barge and pipes", "predator net (top)", "work skiff"],
+      "layout": [
+        "groups of 6-12 circular cages in a sheltered fjord or bay",
+        "automated feeding from a barge; divers net-clean monthly",
+        "escapes and sea lice are the industry's twin headaches"
+      ],
+      "found": "Norway fjords, Scotland west coast, Chile (Chiloé), Canadian BC, Tasmania",
+      "notes": "A cage of 200,000 salmon is a farm you can stand on the deck of. The coastline looks 'stocked' in a very distinctive way."
+    },
+    {
+      "id": "seaweed_farm",
+      "name": "Seaweed farm (nori/kelp lines)",
+      "origin": "human",
+      "biomes": ["ocean", "beach"],
+      "cultures": ["Japanese", "Korean", "Chinese", "Irish"],
+      "era": "c. 1670 (nori in Tokyo Bay first recorded) to now",
+      "footprint_m": [100, 50],
+      "height_m": 1,
+      "materials": ["bamboo/plastic poles", "nylon rope lines", "floats", "nets for spores"],
+      "purpose": "growing nori, wakame, kombu or dulse for food, carrageenan and alginate",
+      "parts": ["bamboo or plastic poles in rows", "horizontal lines between poles", "spore-seeded twine", "drying racks ashore"],
+      "layout": [
+        "grid of poles in shallow sheltered water, waist-deep at low tide",
+        "nets seeded with spores in summer, harvested in winter",
+        "China grows more kelp than anywhere; Japan/Korean nori dominates the food market"
+      ],
+      "found": "Tokyo Bay and Ariake Sea (Japan), Yellow Sea (China/Korea), Brittany (France), Maine (US)",
+      "notes": "At low tide the farm is a dark grid on the flats; at high tide, invisible. A good 'alive' coastal scene with minimal machinery."
+    },
+    {
+      "id": "whaling_station",
+      "name": "Shore whaling station",
+      "origin": "human",
+      "biomes": ["ocean", "beach", "frozen_ocean"],
+      "cultures": ["Norwegian", "British", "Japanese", "Global"],
+      "era": "c. 1900-1965 (modern era); Basque whaling from the 11th century",
+      "footprint_m": [300, 150],
+      "height_m": 20,
+      "materials": ["concrete", "brick", "steel slipways", "iron tryworks", "rail tracks"],
+      "purpose": "flensing and processing whales caught by catcher boats",
+      "parts": ["slipway into deep water", "flensing plan (ramp)", "tryworks/cookery with tall chimneys", "oil storage tanks", "bone and meal plant", "men's barracks and offices"],
+      "layout": [
+        "slipway aligned with the deep-water approach; carcass hauled up and stripped",
+        "tryworks reduces blubber to oil in continuous cookers",
+        "Grytviken, South Georgia (1904, Carl Anton Larsen) is the example; all closed by the 1965 factory-ship ban"
+      ],
+      "found": "South Georgia, Iceland, Norway, Newfoundland; now derelict or museum sites",
+      "notes": "An abandoned whaling station is the archetypal maritime ruin: huge slipway, rusted boilers, mountains of bone."
+    },
+    {
+      "id": "coastal_salt_pans",
+      "name": "Coastal salt pans (salterns)",
+      "origin": "human",
+      "biomes": ["beach", "mediterranean", "desert"],
+      "cultures": ["Roman", "Mediterranean", "Global"],
+      "era": "antiquity (Roman salinae) to now",
+      "footprint_m": [400, 150],
+      "height_m": 0,
+      "materials": ["clay", "stone", "sea water", "wind and sun"],
+      "purpose": "evaporating sea water to harvest salt",
+      "parts": ["inlet channel with sluice", "graduation/evaporation ponds in series", "crystallisation pans (smallest, last)", "salt heaps", "workers' shelter"],
+      "layout": [
+        "sequence of progressively saltier ponds stair-stepped from the sea",
+        "brine spends weeks in the first ponds, days in the last; salt is raked in summer",
+        "Aigues-Mortes (France, 13th c.) and the salterns of Brittany and Portugal still operate"
+      ],
+      "found": "every warm, dry, low coast: Mediterranean, Iberia, Brittany (fleur de sel), China, India",
+      "notes": "White geometric ponds from the air; a living industry older than Rome. Water colour shifts pink-purple with brine shrimp - great for map art."
+    },
+    {
+      "id": "tombolo",
+      "name": "Tombolo (sand or shingle causeway to an island)",
+      "origin": "natural",
+      "biomes": ["beach", "ocean"],
+      "cultures": null,
+      "era": "formed since sea level stabilised after the last ice age",
+      "footprint_m": [29000, 200],
+      "height_m": 15,
+      "materials": ["shingle", "sand"],
+      "purpose": "natural land connection between mainland and island (e.g. Chesil Beach-Portland)",
+      "parts": ["long curving ridge of shingle", "lagoon behind (the Fleet)", "island at the far end"],
+      "layout": [
+        "long narrow ridge of pebbles, arcuate in plan",
+        "Chesil Beach: 29 km long, up to 15 m high, 200 m wide at the base",
+        "forms where longshore drift builds a spit across an island's lee shadow"
+      ],
+      "found": "Chesil Beach (Dorset, England), Mont-Saint-Michel (tidal causeway approaches), Saint-Nazaire causeway (Brittany)",
+      "notes": "A natural 29-km breakwater. Walking the Fleet lagoon at low tide is one of Europe's stranger landscapes."
+    },
+    {
+      "id": "barrier_island",
+      "name": "Barrier island",
+      "origin": "natural",
+      "biomes": ["beach", "ocean"],
+      "cultures": null,
+      "era": "forming for the last ~6,000-8,000 years of sea-level stability",
+      "footprint_m": [30000, 800],
+      "height_m": 5,
+      "materials": ["sand", "dunes", "marsh behind"],
+      "purpose": "a wave-built sand ridge protecting the lagoon/estuary behind from the open sea",
+      "parts": ["ocean beach", "foredune ridge", "back-barrier marsh/lagoon", "tidal inlets"],
+      "layout": [
+        "long narrow sand ridge parallel to the mainland shore",
+        "cut by tidal inlets which migrate over decades",
+        "the US East/Gulf coast is one long chain: Outer Banks, Florida barrier islands, Mississippi-Alabama chain"
+      ],
+      "found": "passive margins: US East and Gulf coasts, the Wadden Sea barrier chain (Holland-German-Danish), West Africa, Queensland",
+      "notes": "The reason every low coast has a sheltered lagoonside village; the islands move landward as sea level rises."
+    },
+    {
+      "id": "tidal_flat",
+      "name": "Tidal flat (mudflat/sandflat)",
+      "origin": "natural",
+      "biomes": ["beach", "river", "ocean"],
+      "cultures": null,
+      "era": "forming continuously",
+      "footprint_m": [20000, 3000],
+      "height_m": 0,
+      "materials": ["mud", "sand", "sand/mud laminae", "salt crust"],
+      "purpose": "intertidal plain exposed twice daily; habitat for worms, shellfish, wading birds",
+      "parts": ["fine laminae of mud and sand", "tidal channels (creeks)", "salt-tolerant algal mats and Salicornia", "feeding flats"],
+      "layout": [
+        "vast, nearly flat expanse, inundated at high tide",
+        "highest biological productivity per area on Earth after rainforests",
+        "the Wadden Sea (Netherlands-Germany-Denmark, ~10,000 km²) is the world's largest continuous system"
+      ],
+      "found": "Wadden Sea, Morecambe Bay, Wash, estuaries everywhere with fine sediment and big tides",
+      "notes": "The landscape that most resembles a game's flat 'low tide' mode; a feeding ground for the world's migratory shorebirds."
+    },
+    {
+      "id": "salt_marsh",
+      "name": "Salt marsh",
+      "origin": "natural",
+      "biomes": ["beach", "river", "ocean"],
+      "cultures": null,
+      "era": "forming continuously where sheltered flats accumulate sediment",
+      "footprint_m": [3000, 1000],
+      "height_m": 1,
+      "materials": ["silt/clay", "Salicornia, Spartina, sea lavender", "peat"],
+      "purpose": "intertidal grassland trapping sediment and damping storm waves",
+      "parts": ["tidal creeks threading the marsh", "low marsh (flood-daily)", "high marsh (flood on spring tides only)", "creek banks with levees", "salt pans (bare hollows)"],
+      "layout": [
+        "behind barrier islands and in estuaries; drained by winding creeks",
+        "green-black, flat, bisected by shining creeks; mosquitoes and waders",
+        "turns sea salt into peat - a carbon store built in plain sight"
+      ],
+      "found": "every temperate coast with sheltered flats: US East coast, North Sea, New Zealand, Patagonia",
+      "notes": "The cheapest storm-surge defence ever devised, free. Spartina anglica transformed the British coast in the 19th century."
+    }
+  ]
+}
