@@ -107,6 +107,14 @@ Every font is CC0 1.0 by its download page, read before it was pinned; the credi
 | `felt` | the upright with a soft hammer: velocities compressed toward pp (`12 + 0.45 v`), a low-pass that opens with velocity (500 + 40 v Hz), the first 150 ms starting 3 dB quieter, the release 1.6 times longer | made from `piano` |
 | `freepats_harp` | Concert Harp (small SF2) | FreePats |
 | `freepats_bells` | Tubular Bells (small SF2) | FreePats |
+| `freepats_timpani` | Timpani (SF2) | FreePats |
+| `freepats_choir` | Synth Pad Choir (SF2) | FreePats |
+| `freepats_sweep` | Sweep Pad (SF2) | FreePats |
+| `freepats_bowed` | Synth Pad Bowed (SF2) | FreePats |
+| `freepats_synthstrings` | Synth Strings 1 (SF2) | FreePats |
+| `freepats_recorder` | Wooden Recorder (SF2) | FreePats |
+| `freepats_ocarina` | Ocarina (SF2) | FreePats |
+| `freepats_glass` | Glass (glasses of water) (SF2) | FreePats |
 
 Planned, not yet pinned: the other FreePats fonts (Timpani, the synth pads, Recorder, Ocarina,
 Glass) and the Versilian VSCO 2 Community Edition (SFZ, strings, flute, horn, celesta,

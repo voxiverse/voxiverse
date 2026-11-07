@@ -13,6 +13,38 @@ Tubular Bells, by Roberto, FreePats project,
 CC0 1.0 (public domain dedication),
 https://freepats.zenvoid.org/
 
+Timpani, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Synth Pad Choir, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Sweep Pad, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Synth Pad Bowed, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Synth Strings 1, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Wooden Recorder, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Ocarina, FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
+Glass (glasses of water), FreePats project,
+CC0 1.0 (public domain dedication),
+https://freepats.zenvoid.org/
+
 Music
 
 Music: Voxiverse, MIT
