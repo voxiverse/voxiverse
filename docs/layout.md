@@ -63,6 +63,12 @@ package** is enforced by the `layout` lint (see above).
 | `.github/workflows` | CI | `*.yml` |
 | `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
+| `assets/catalog` | Earth's content as data before it is in the game (the schemas in its README) | `README.md` |
+| `assets/catalog/fauna` | Animals, one file per biome | `*.json` |
+| `assets/catalog/flora` | Plants and fungi, one file per biome | `*.json` |
+| `assets/catalog/structures` | Built and natural features, one file per group | `*.json` |
+| `assets/catalog/materials` | Rocks, minerals and soils | `*.json` |
+| `assets/catalog/crops` | Domesticated plants and animals | `*.json` |
 | `assets/baselines/audio` | Audio baselines, compared as text | `*.txt`, `*.decisions` |
 | `assets/baselines/images` | Image baselines, their scenes' counts and their scene list | `*.png`, `*.counts`, `*.txt` |
 | `assets/baselines/music` | The ear's output on every score | `*.txt` |
