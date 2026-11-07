@@ -19,8 +19,6 @@ Voice :: struct {
 	left, right: f64,
 	step:        f64,
 	class_key:   int, // part * 65536 + exclusive class
-	font:        ^Soundfont,
-	felt:        bool, // the soft hammer's quieter attack
 }
 
 // Envelope: the volume envelope of a voice, one frame at a time. The attack
@@ -134,30 +132,6 @@ balance :: proc(pan: f32) -> (l, r: f64) {
 // the dry sound, then the reverb added, to the end of the last voice and the
 // reverb's tail. Two renders of the same input are identical.
 render :: proc(p: ^Piece, sf: ^Soundfont, rate := RATE) -> []f32 {
-	fonts := make(map[string]^Soundfont)
-	fonts["piano"], fonts["felt"] = sf, sf
-	return render_with(p, fonts, rate)
-}
-
-// FELT_*: the felt piano is the upright with a soft hammer.
-FELT_ATTACK_DB :: -3.0 // the first moments, back to full over FELT_ATTACK_S
-FELT_ATTACK_S :: 0.15
-FELT_RELEASE :: 1.6 // times the release
-
-// felt_velocity compresses a velocity toward pp.
-felt_velocity :: proc(vel: int) -> int {return 12 + vel * 45 / 100}
-
-// felt_zone darkens a zone: a low-pass that opens with velocity (v is the
-// compressed velocity), and a longer release.
-felt_zone :: proc(z: ^Zone_Params, v: int) {
-	hz := 500 + 40 * f64(v)
-	z.fc_cents = min(z.fc_cents, 1200 * math.log2(hz / 8.176))
-	z.release *= FELT_RELEASE
-}
-
-// render_with is render with a font per name: a part plays through the font
-// its score names (the piano when it names none).
-render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []f32 {
 	rf := f64(rate)
 	rng := base.rng_make(p.seed)
 	end_frame := int(frame_of(p, f64(p.end), rf) + 0.5)
@@ -177,18 +151,7 @@ render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []
 		}
 	}
 	presets := make([]int, len(p.parts))
-	part_font := make([]^Soundfont, len(p.parts))
-	felt := make([]bool, len(p.parts))
-	for part, i in p.parts {
-		def, _ := font_def(part.font)
-		part_font[i] = fonts[def.name]
-		felt[i] = def.felt
-		if part.preset != "" {
-			presets[i] = sf_find_named(part_font[i], part.preset)
-		} else {
-			presets[i] = sf_find_preset(part_font[i], part.bank, part.program)
-		}
-	}
+	for part, i in p.parts {presets[i] = sf_find_preset(sf, part.bank, part.program)}
 
 	voices: [dynamic]Voice
 	zones: [dynamic]Zone_Params
@@ -209,17 +172,13 @@ render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []
 		}
 		part := p.parts[n.part]
 		clear(&zones)
-		if felt[n.part] {vel = felt_velocity(vel)}
-		sf_zones(part_font[n.part], presets[n.part], int(n.key), vel, &zones)
+		sf_zones(sf, presets[n.part], int(n.key), vel, &zones)
 		bl, br := balance(part.pan)
 		pg := math.pow(10, f64(part.volume_db) / 20)
-		for &z in zones {
-			if felt[n.part] {felt_zone(&z, vel)}
+		for z in zones {
 			ang := (z.pan + 1) * math.PI / 4
 			v := Voice {
 				zone      = z,
-				font      = part_font[n.part],
-				felt      = felt[n.part],
 				start     = start,
 				release   = release,
 				cut       = -1,
@@ -246,7 +205,7 @@ render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []
 	table := new(audio.Sinc_Table)
 	audio.sinc_table_init(table)
 	left, right: [dynamic]f64
-	for &v in voices {render_voice(&v, v.font, table, rf, &left, &right)}
+	for &v in voices {render_voice(&v, sf, table, rf, &left, &right)}
 
 	reverb_frames := 0
 	if p.reverb_wet > 0 {reverb_frames = int(f64(p.reverb_rt60) * 1.7 * rf)}
@@ -303,10 +262,6 @@ render_voice :: proc(
 			x := audio.sinc_read(table, s, pos, v.step, loop_start, loop_end, looping)
 			if use_filter {x = audio.svf_lowpass(&filter, x)}
 			a := f64(x) * g * v.gain
-			if v.felt {
-				t := min(f64(f - v.start) / (FELT_ATTACK_S * rate), 1)
-				a *= math.pow(10, FELT_ATTACK_DB * (1 - t) / 20)
-			}
 			if fade >= 0 {
 				a *= 1 - f64(fade) / f64(fade_n)
 				fade += 1

@@ -69,8 +69,6 @@ Instrument_Decl :: struct {
 	name:    string,
 	bank:    u16,
 	program: u8,
-	font:    string,
-	preset:  string, // by name, for the fonts that have no bank:program
 }
 
 @(private = "file")
@@ -377,40 +375,22 @@ header_line :: proc(ps: ^Parse, toks: []Token, line: int) -> bool {
 		p.reverb_rt60 = f32(num_of(ps, line, args[0]) or_return)
 		p.reverb_wet = f32(num_of(ps, line, args[2]) or_return)
 	case "instrument":
-		// instrument <name> [font <font>] preset <bank:program | name>
 		need(ps, line, key, args, 3) or_return
-		at := 1
-		font := ""
-		if args[at].text == "font" {
-			need(ps, line, key, args, 5) or_return
-			font = args[at + 1].text
-			if _, known := font_def(font); !known {
-				return fail(
-					ps,
-					line,
-					args[at + 1].col,
-					"unknown font '%s' (%s)",
-					font,
-					font_names(),
-				)
-			}
-			at += 2
-		}
-		if args[at].text != "preset" {return fail(ps, line, args[at].col, "expected 'preset'")}
-		spec := args[at + 1]
-		def, _ := font_def(font)
-		if def.kind == .Sfz {
-			append(&ps.instruments, Instrument_Decl{args[0].text, 0, 0, font, spec.text})
-			break
-		}
-		colon := strings.index_byte(spec.text, ':')
-		bank, bok := strconv.parse_int(spec.text[:max(colon, 0)], 10)
+		if args[1].text != "preset" {return fail(ps, line, args[1].col, "expected 'preset'")}
+		colon := strings.index_byte(args[2].text, ':')
+		bank, bok := strconv.parse_int(args[2].text[:max(colon, 0)], 10)
 		prog, pok := 0, false
-		if colon >= 0 {prog, pok = strconv.parse_int(spec.text[colon + 1:], 10)}
+		if colon >= 0 {prog, pok = strconv.parse_int(args[2].text[colon + 1:], 10)}
 		if !bok || !pok || bank < 0 || bank > 16383 || prog < 0 || prog > 127 {
-			return fail(ps, line, spec.col, "bad preset '%s' (bank:program, like 0:0)", spec.text)
+			return fail(
+				ps,
+				line,
+				args[2].col,
+				"bad preset '%s' (bank:program, like 0:0)",
+				args[2].text,
+			)
 		}
-		append(&ps.instruments, Instrument_Decl{args[0].text, u16(bank), u8(prog), font, ""})
+		append(&ps.instruments, Instrument_Decl{args[0].text, u16(bank), u8(prog)})
 	case:
 		return fail(ps, line, key.col, "unknown word '%s'", key.text)
 	}
@@ -429,7 +409,6 @@ part_start :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 	for d in ps.instruments {
 		if d.name == toks[2].text {
 			part.bank, part.program = d.bank, d.program
-			part.font, part.preset = d.font, d.preset
 			found = true
 		}
 	}
