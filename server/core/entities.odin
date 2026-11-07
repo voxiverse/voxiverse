@@ -358,12 +358,12 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	s := w.server
 	record_world(s, w, .Explosion, n0 = i64(radius))
-	for &c in s.clients {
-		if c.state != .Playing || c.world != w {continue}
+	for i in players_near(w, center, 160 + PLAYER_MARGIN, SPAWN_HEIGHT) {
+		c := &s.clients[i]
 		d := c.player.position - center
 		if d.x * d.x + d.z * d.z < 160 * 160 {
 			blast := game.Explosion{center, f32(radius)}
-			event_send(s, &c, .Explosion, &blast)
+			event_send(s, c, .Explosion, &blast)
 		}
 	}
 	bulk_edit(
@@ -381,17 +381,17 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		dir := d / l
 		return {f32(dir.x) * strength, f32(dir.y) * strength + 4, f32(dir.z) * strength}, true
 	}
-	for &c in s.clients {
-		if c.state != .Playing || c.world != w {continue}
+	for i in players_near(w, center, reach + PLAYER_MARGIN, reach + PLAYER_MARGIN) {
+		c := &s.clients[i]
 		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
 			c.player.velocity += impulse
-			disturb(s, &c)
+			disturb(s, c)
 			c.player.on_ground = false
 			d := c.player.position + {0, 0.9, 0} - center
 			distance := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
 			damage(
 				s,
-				&c,
+				c,
 				f32(1 - distance / reach) * 12,
 				{kind = .Explosion, pos = center, placed = true},
 			)
@@ -648,6 +648,32 @@ entity_watchers :: proc(w: ^World, p: [3]f64) -> []int {
 		{all = {.Player}},
 		&near,
 	)
+	who := make([dynamic]int, context.temp_allocator)
+	for id in near {
+		h, live := game.store_find(&ew.store, id)
+		if !live {continue}
+		link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link)
+		if link == nil || int(link.client) >= len(s.clients) {continue}
+		c := &s.clients[link.client]
+		if c.state == .Playing && c.world == w {append(&who, int(link.client))}
+	}
+	slice.sort(who[:])
+	return who[:]
+}
+
+// PLAYER_MARGIN: how far a player's entity may lag its client's position (the
+// boxes are where players stood when the tick began).
+PLAYER_MARGIN :: 8
+
+// players_near: the indexes (ascending) of the playing clients of w whose
+// player entities are within radius horizontally and half_height vertically of
+// p. Callers widen the shape by PLAYER_MARGIN and test the client's own
+// position, so the answer is what a walk over all clients gave, by one query.
+players_near :: proc(w: ^World, p: [3]f64, radius, half_height: f64) -> []int {
+	s := w.server
+	ew := w.entity_world
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_cylinder(&ew.spatial, p, radius, half_height, {all = {.Player}}, &near)
 	who := make([dynamic]int, context.temp_allocator)
 	for id in near {
 		h, live := game.store_find(&ew.store, id)
