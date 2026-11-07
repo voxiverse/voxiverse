@@ -209,6 +209,19 @@ at their day and place and change nothing before it.
   people name the chronicle's collapse. `Settlement_Cache` keeps the history and placement and
   recomputes only when the history changes (a new decade or an intervention). Placement for 10
   peoples takes under 300 ms (`build bench budgets`, `planet_placement`).
+- **The economy, part 1** (`common/planet/economy.odin`): `economy_build(planet, settlements,
+  roads)` gives each standing settlement a `Town`. `produce` is what the land in its cell and the
+  ring around it gives, in *people supplied* (grain from rain and warmth, never in deserts or
+  under 5 °C; timber from forested Köppen classes; ore from rugged ground; fish and salt from
+  coasts, salt also from dry basins; wool from steppe and Mediterranean), and `tools` (ore and
+  timber, from the Bronze Age) and `cloth` (wool). A town's *normal price* of a good is the
+  cheaper of its own scarcity price (production against its people, within 0.5-4 times the base
+  price) and a maker's surplus within reach plus the carriage (distance; a road joining two
+  towns is a third of the cost). Where no maker is within reach there is **no market**
+  (`Town.market` false, price 0), never an absurd price. Grain, which cannot be kept, has a
+  yearly cycle: `town_price(town, good, month_fraction)` is lowest right after the harvest
+  (`harvest_month`: two months after the warmest, in the tropics after the wettest) and rises
+  ±12 % to the next one. 600 towns take under 100 ms.
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of
