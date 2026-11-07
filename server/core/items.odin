@@ -175,7 +175,9 @@ item_tick :: proc(w: ^World, ent: game.Entity_Handle) -> bool {
 				if d.x * d.x + d.y * d.y + d.z * d.z >
 				   f64(kind.item.merge * kind.item.merge) {continue}
 				entity_stack(w, ent)^.count += entity_stack(w, other)^.count
-				entity_set_age(w, ent, min(entity_age_of(w, ent), entity_age_of(w, other)))
+				// (the age system has run for every entity: this one before it was
+				// walked, so those after it count one tick less, as before the systems)
+				entity_set_age(w, ent, min(entity_age_of(w, ent), entity_age_of(w, other) - 1))
 				entity_gone(w, other)
 			}
 		}
