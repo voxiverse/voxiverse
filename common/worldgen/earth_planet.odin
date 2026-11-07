@@ -41,29 +41,39 @@ planet_relief :: proc() -> (planet.Relief, bool) {
 @(private = "file")
 shared_model: planet.Planet
 @(private = "file")
+shared_rivers: planet.Rivers
+@(private = "file")
 model_once: sync.Once
 
-// planet_model: Earth's climate grid, built once for the process (any thread)
-// from the relief, on first use.
-planet_model :: proc() -> planet.Planet {
+// model_load: Earth's climate grid and rivers, decoded from assets/planet/earth_climate.bin
+// (written by `build planet climate`, a test keeps it fresh). A file that does not match the
+// relief falls back to building the model: seconds, not milliseconds.
+@(private = "file")
+model_load :: proc() {
 	sync.once_do(&model_once, proc() {
 		r, _ := planet_relief()
-		shared_model = planet.planet_build(r, runtime.heap_allocator())
+		p, rv, ok := planet.climate_decode(
+			#load("../../assets/planet/earth_climate.bin"),
+			r,
+			runtime.heap_allocator(),
+		)
+		if !ok {
+			p = planet.planet_build(r, runtime.heap_allocator())
+			rv = planet.rivers_build(p.land, p.precip, runtime.heap_allocator())
+		}
+		shared_model, shared_rivers = p, rv
 	})
+}
+
+// planet_model: Earth's climate grid, for the process (any thread), loaded on first use.
+planet_model :: proc() -> planet.Planet {
+	model_load()
 	return shared_model
 }
 
-@(private = "file")
-shared_rivers: planet.Rivers
-@(private = "file")
-rivers_once: sync.Once
-
-// planet_rivers: the relief's rivers, routed once for the process (any thread).
+// planet_rivers: the relief's rivers, for the process (any thread), loaded on first use.
 planet_rivers :: proc() -> planet.Rivers {
-	sync.once_do(&rivers_once, proc() {
-		m := planet_model()
-		shared_rivers = planet.rivers_build(m.land, m.precip, runtime.heap_allocator())
-	})
+	model_load()
 	return shared_rivers
 }
 
