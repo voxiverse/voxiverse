@@ -158,8 +158,9 @@ world's mode (Earth: major, tonic C); the first note is in the octave of middle 
 note in the octave nearest the one before (a tie goes up), so no step is wider than a tritone.
 Rhythm: glyph div 7 (0 to 5) picks a length in eighths, `2 1 1 2 1 2`; the last note is always 6
 eighths (a dotted half). Earth's glyphs `14 2 35 20 7 29 11` give C E C B C D G, lengths 1 2 2 1 1 1
-6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece is written on it (`assets/music/title.score`); the Ignite cue
-that uses it is not written yet.
+6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece is written on it (`assets/music/title.score`); so is the Ignite cue
+(`assets/music/ignite.score`, 12 s, no loop: the hook, the loudest second at the planet's 1.6 s,
+then a soft C major). The cue is not rendered or in `client/music/data.odin` yet.
 
 ### The ear
 
