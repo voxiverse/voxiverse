@@ -693,6 +693,8 @@ market_signature :: proc(v: game.Market_View) -> u64 {
 market_update :: proc(s: ^Server, c: ^Client) {
 	town, ok := trader_where(c.world, c)
 	if !ok {
+		// Leaving a town: the client is told once (it shows the market only while there).
+		if c.market_at != 0 {send_message(s, c, game.Market_View{reason = .Away})}
 		c.market_at, c.market_sig = 0, 0
 		return
 	}

@@ -1027,6 +1027,18 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 	testing.expect_value(t, sold.goods[int(planet.Good.Grain)].cargo, 0)
 	testing.expect(t, sold.cash > bought.cash, "no silver for the sale")
 
+	// Walking out of the town: told once that they are away.
+	views = near.market_views
+	stand_at(cn, tw.lat + 1, tw.lon)
+	for _ in 0 ..< 100 {
+		if near.market_views != views {break}
+		net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
+	}
+	testing.expect_value(t, near.market_views, views + 1)
+	testing.expect_value(t, near.market.reason, game.Market_Reason.Away)
+	for _ in 0 ..< 30 {net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)}
+	testing.expect_value(t, near.market_views, views + 1)
+
 	// Away from every town: no view, and a forged trade is refused.
 	for _ in 0 ..< 50 {net_wait(t, {far}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)}
 	testing.expect_value(t, far.market_views, 0)

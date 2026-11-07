@@ -180,6 +180,7 @@ Session :: struct {
 	home:             game.Address, // the world we joined in (the music's "home")
 	died:             int, // Player_Died events seen (the music's death stinger)
 	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
+	market:           Market_State, // the town's market the server last sent (market.odin)
 	player_stats:     Stats_Data, // the counters the server last sent (menu_statistics.odin)
 	config:           Session_Config,
 	net:              Net_Stats,

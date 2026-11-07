@@ -50,6 +50,7 @@ handle_global_keys :: proc(app: ^engine.App, input: ^ui.Input) {
 	menu.chest_sync(app)
 	menu.player_menu_keys(app)
 	overlay.dial_keys(app)
+	screen.market_keys(app)
 	overlay.death_sync(app)
 }
 

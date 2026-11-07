@@ -45,6 +45,7 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	engine.weapon_hud(ctx, s)
 	health_bar(ctx, s)
 	hud_popup(app, ctx)
+	screen.market_hud_line(app, ctx)
 }
 
 // game_menu: over the game (alone in our own world, the world stands still

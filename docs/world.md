@@ -296,10 +296,12 @@ at their day and place and change nothing before it.
   the town deals in it, its price (silver per unit), its stock in units, the player's cargo, and
   the age in days of the news behind the price, and the player's silver. It is sent on arrival
   and when anything it shows changes, checked once a second, and as the answer to a trade. A
-  player away from every town is sent nothing. `Market_Trade` (good, buy or sell, quantity)
+  player away from every town is sent nothing, except one `Away` view as they walk out of a
+  town (the client shows the market only while it holds a view). `Market_Trade` (good, buy or sell, quantity)
   names no town: the server uses where the player stands, and answers with the new view or a
   `Market_View` whose `reason` is the refusal (`Away`, `No_Cash`, ...) and nothing else. The
-  client decodes and ignores the view until the market screen exists.
+  client keeps the last view (`Market_State`, `client/engine/market.odin`) and shows it: the
+  HUD line `Market of <town> (M)` and the market screen (`client/screen/market.odin`, key M).
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of
