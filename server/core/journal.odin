@@ -268,8 +268,35 @@ ring_oldest :: proc(j: ^Journal) -> u64 {
 journal_entry :: proc(w: ^World, act: Act, p: game.Block_Pos, old, new: game.Block) {
 	from := timed(w.server)
 	defer spent(w, from)
-	one := [1]game.Journal_Entry{{pos = p, old = old, new = new}}
-	journal_append(w, act, one[:])
+	s := w.server
+	j := &w.journal
+	age := age_of(s)
+	a := action_live(j, act.action)
+	if a != nil && a.first == 0 {
+		a.first = j.head + 1
+		undo_push(j, a)
+	}
+	size := u64(len(j.entries))
+	mask := size - 1
+	e := game.Journal_Entry {
+		pos    = p,
+		old    = old,
+		new    = new,
+		action = u32(act.action),
+		how    = act.how,
+		age    = age,
+	}
+	idx := j.head & mask if (size & mask) == 0 else j.head % size
+	j.entries[idx] = e
+	j.head += 1
+	if s.config.stepped {game.entry_hash(&j.tick_hash, e)}
+	if a != nil {a.entries += 1}
+	if w.dir != "" {
+		if act.how == .Rollback || act.how == .Undo || act.how == .Redo {
+			w.revisit[game.chunk_of(p)] = {}
+		}
+		append(&j.pending, e)
+	}
 }
 
 // journal_batch records many changes made by one act (a bulk edit's chunk):
@@ -293,14 +320,24 @@ journal_append :: proc(w: ^World, act: Act, entries: []game.Journal_Entry) {
 	}
 	hashing := s.config.stepped
 	size := u64(len(j.entries))
+	mask := size - 1
 	if w.dir != "" && (act.how == .Rollback || act.how == .Undo || act.how == .Redo) {
 		for e in entries {w.revisit[game.chunk_of(e.pos)] = {}}
 	}
-	for &e in entries {
-		e.action, e.how, e.age = u32(act.action), act.how, age
-		j.entries[j.head % size] = e
-		j.head += 1
-		if hashing {game.entry_hash(&j.tick_hash, e)}
+	if (size & mask) == 0 {
+		for &e in entries {
+			e.action, e.how, e.age = u32(act.action), act.how, age
+			j.entries[j.head & mask] = e
+			j.head += 1
+			if hashing {game.entry_hash(&j.tick_hash, e)}
+		}
+	} else {
+		for &e in entries {
+			e.action, e.how, e.age = u32(act.action), act.how, age
+			j.entries[j.head % size] = e
+			j.head += 1
+			if hashing {game.entry_hash(&j.tick_hash, e)}
+		}
 	}
 	if a != nil {a.entries += u32(len(entries))}
 	if w.dir != "" {append(&j.pending, ..entries)}
