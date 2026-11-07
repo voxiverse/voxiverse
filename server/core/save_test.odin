@@ -803,3 +803,124 @@ test_economy_file_damage_is_refused :: proc(t: ^testing.T) {
 	testing.expect(t, !economy_check(bad), "a flipped bit reads")
 	testing.expect(t, !economy_check(nil))
 }
+
+// ---- the player as a trader ----
+
+// stand_at puts a client on the block column of a town.
+@(private = "file")
+stand_at :: proc(c: ^Client, lat, lon: f32) {
+	c.player.position.x = f64(lon) / 180 * (worldgen.PLANET_CIRCUMFERENCE / 2)
+	c.player.position.z = -f64(lat) / 90 * (worldgen.PLANET_CIRCUMFERENCE / 4)
+}
+
+@(test)
+test_trader_buys_here_and_sells_there_for_a_profit :: proc(t: ^testing.T) {
+	dir := scratch_dir("trader_profit")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	we := r.w.economy
+	economy_sync(r.w, {r.observer})
+	if !testing.expect(t, we.resident) {return}
+	// The pair of towns and the good with the widest gap in price.
+	a, b, good, ratio := -1, -1, planet.Good.Grain, f32(0)
+	for ia in we.market.town {
+		for ib in we.market.town {
+			for g in planet.Good {
+				if !we.economy.towns[ia].market[g] || !we.economy.towns[ib].market[g] {continue}
+				pa, pb := economy_price(r.w, ia, g), economy_price(r.w, ib, g)
+				if pa > 0 && pb / pa > ratio {a, b, good, ratio = ia, ib, g, pb / pa}
+			}
+		}
+	}
+	if !testing.expect(t, ratio > 1.2, "no pair of towns with a margin") {return}
+	c: Client
+	purse := f64(1e7) // (a town's month of grain costs more than a new player's silver)
+	c.trader.cash = purse
+	ta, tb := we.economy.towns[a], we.economy.towns[b]
+	stand_at(&c, ta.lat, ta.lon)
+	units := f32(0.01) * ta.size
+	res, got := trade(r.w, &c, a, good, units, .Buy)
+	testing.expect_value(t, res, Trade_Result.Done)
+	testing.expect(t, got > 0 && c.trader.cargo[good] == got, "nothing bought")
+	testing.expect(t, c.trader.cash < purse, "the goods were free")
+	after_buy := c.trader.cash
+	stand_at(&c, tb.lat, tb.lon)
+	sold: f32
+	res, sold = trade(r.w, &c, b, good, got, .Sell)
+	testing.expect_value(t, res, Trade_Result.Done)
+	testing.expect_value(t, c.trader.cargo[good], 0)
+	testing.expect(t, c.trader.cash > purse, "no profit")
+	testing.expect(t, sold == got && c.trader.cash > after_buy)
+	// They saw both towns' prices where they stood.
+	_, seen_a := trader_known(&c.trader, u32(ta.cell), good)
+	_, seen_b := trader_known(&c.trader, u32(tb.cell), good)
+	testing.expect(t, seen_a && seen_b, "the prices seen were not remembered")
+}
+
+@(test)
+test_trader_is_refused :: proc(t: ^testing.T) {
+	dir := scratch_dir("trader_refused")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	we := r.w.economy
+	economy_sync(r.w, {r.observer})
+	tw := we.economy.towns[r.town]
+	c: Client
+	c.trader.cash = STARTING_PURSE
+	// Away from the town (a degree of latitude is 111 km).
+	stand_at(&c, tw.lat + 1, tw.lon)
+	res, _ := trade(r.w, &c, r.town, .Grain, 0.001 * tw.size, .Buy)
+	testing.expect_value(t, res, Trade_Result.Away)
+	testing.expect_value(t, c.trader.cash, STARTING_PURSE)
+	stand_at(&c, tw.lat, tw.lon)
+	// Without cargo.
+	res, _ = trade(r.w, &c, r.town, .Grain, 1, .Sell)
+	testing.expect_value(t, res, Trade_Result.No_Cargo)
+	// Without cash.
+	c.trader.cash = 0
+	res, _ = trade(r.w, &c, r.town, .Grain, 0.001 * tw.size, .Buy)
+	testing.expect_value(t, res, Trade_Result.No_Cash)
+	testing.expect_value(t, c.trader.cargo[.Grain], 0)
+	// More than the market holds.
+	c.trader.cash = 1e12
+	got: f32
+	res, got = trade(r.w, &c, r.town, .Grain, 100 * tw.size, .Buy)
+	testing.expect(t, got < 100 * tw.size, "bought more than there was")
+	res, _ = trade(r.w, &c, r.town, .Grain, 100 * tw.size, .Buy)
+	testing.expect_value(t, res, Trade_Result.No_Stock)
+	res, _ = trade(r.w, &c, r.town, .Grain, -1, .Buy)
+	testing.expect_value(t, res, Trade_Result.Bad_Quantity)
+}
+
+@(test)
+test_trader_is_saved_and_old_files_get_the_purse :: proc(t: ^testing.T) {
+	rec: Player_Record
+	rec.trader.cash = 33.5
+	rec.trader.cargo[.Salt] = 2.5
+	seen_put(&rec.trader, Seen{7, 1.25, 12, .Fish})
+	seen_put(&rec.trader, Seen{7, 9, 3, .Fish}) // older: not kept
+	seen_put(&rec.trader, Seen{9, 0.5, 14, .Ore})
+	back, ok := player_parse(test_reg(), player_json(test_reg(), &rec))
+	defer counters_free(&back.stats)
+	testing.expect(t, ok)
+	testing.expect_value(t, back.trader.cash, 33.5)
+	testing.expect_value(t, back.trader.cargo[.Salt], 2.5)
+	testing.expect_value(t, back.trader.count, 2)
+	s, known := trader_known(&back.trader, 7, .Fish)
+	testing.expect(t, known && s.price == 1.25 && s.month == 12)
+	// A file from before the trader.
+	old, old_ok := player_parse(
+		test_reg(),
+		transmute([]u8)string(`{"format": 2, "position": [1, 2, 3]}`),
+	)
+	defer counters_free(&old.stats)
+	testing.expect(t, old_ok)
+	testing.expect_value(t, old.trader.cash, STARTING_PURSE)
+	testing.expect_value(t, old.trader.count, 0)
+}

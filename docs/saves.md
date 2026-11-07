@@ -222,6 +222,14 @@ file that is cut, has a bad CRC or a number that is negative or not finite is mo
 (`economy.vxe.bad`) and the markets are recomputed; `--check` reports it. News and caravans in
 flight are not saved.
 
+### The player's trader
+
+A character file of format 3 (`PLAYER_FILE_FORMAT`) has a `trader` member: `cash` (silver),
+`cargo` (units of each good, in the order of `planet.Good`) and `seen`, the prices the player
+saw where they stood (`cell` of the town, `good`, `price`, `month` the price was true; at most
+`MAX_SEEN`, the oldest forgotten first). A file of format 1 or 2 loads with no cargo, nothing
+seen and the starting purse (`STARTING_PURSE`, 20 silver); so does a new player.
+
 ### The edit journal
 
 The edit journal stores block numbers, which are fixed for a universe. A universe's packs are

@@ -278,6 +278,17 @@ at their day and place and change nothing before it.
   clock is entered afresh instead of stepped. No system causes droughts yet, so none are
   stepped; the news and caravans in flight are not saved and start again when the market is
   next entered. (The islands of #132 do not exist yet: "near a player" stands in for them.)
+- **The player trades** (`server/core/player_data.odin`, `trade`). Each player carries a
+  `Trader_Record` (silver, cargo, the prices seen; saved in the character file, see
+  docs/saves.md). `trade(world, player, town, good, quantity, Buy | Sell)` refuses when the
+  world has no market in detail there, the quantity is not positive, the player is not within
+  `TRADE_RADIUS_KM` (15) of the town, the town does not deal in the good, the cargo (a sale is
+  all or nothing) or the silver is short, or the market's stock is at its reserve. A buy may be
+  filled in part. Goods and silver move through `trader_buy` / `trader_sell`, which move the
+  market's stock, hence its price, as an arriving caravan does. The player sees a town's
+  prices when they stand within its radius (once a second, and at each trade), and keeps those;
+  what the town knows of other towns is told them but not kept. Not yet: the market screen and
+  the `Traded` intervention for a large trade.
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

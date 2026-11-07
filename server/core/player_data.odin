@@ -10,6 +10,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:planet"
 
 // What is kept about each character: their own file in the universe,
 // characters/<account>/<name>.json (where they are, where they look,
@@ -25,7 +26,7 @@ import "common:game"
 
 CHARACTERS_DIR :: "characters"
 PLAYERS_DIR :: "players"
-PLAYER_FILE_FORMAT :: 2 // 2: a weapon's magazine (`ammo`); a file of 1 has none: full
+PLAYER_FILE_FORMAT :: 3 // 3: the trader; a file before has an empty one and the starting purse. 2: a weapon's magazine (`ammo`); a file of 1 has none: full
 
 Player_Record :: struct {
 	account:   Maybe(game.Account), // whose (none: from before accounts, unclaimed)
@@ -34,6 +35,7 @@ Player_Record :: struct {
 	look:      [2]f32, // yaw, pitch
 	mode:      base.Var_Text, // their game mode's id ("": none yet: the world's default)
 	inventory: game.Inventory,
+	trader:    Trader_Record, // silver, cargo and seen prices (trading.odin)
 	dirty:     bool, // changed since its file was written
 	stats:     Counters, // its counters (heap; stats.odin)
 	overflow:  [MAX_OVERFLOW]game.Stack, // read but with no room (an older, bigger inventory): dropped at their feet on joining
@@ -53,6 +55,22 @@ Player_File :: struct {
 	selected: int,
 	mode:     string, // their game mode's id (absent in a file from before modes)
 	items:    []File_Stack,
+	trader:   Trader_File, // format 3
+}
+
+@(private = "file")
+Trader_File :: struct {
+	cash:  f64,
+	cargo: [len(planet.Good)]f32,
+	seen:  []Seen_File,
+}
+
+@(private = "file")
+Seen_File :: struct {
+	cell:  u32,
+	good:  int,
+	price: f32,
+	month: f64,
 }
 
 @(private = "file")
@@ -176,6 +194,19 @@ player_parse :: proc(reg: ^game.Registry, data: []u8) -> (r: Player_Record, ok: 
 	base.var_text_set(&r.mode, f.mode) // (too long: none)
 	r.inventory.selected = clamp(f.selected, 0, game.HOTBAR_SLOTS - 1)
 	r.stats = stats
+	r.trader.cash = STARTING_PURSE
+	if f.format >= 3 {
+		tf := f.trader
+		r.trader.cash = tf.cash if tf.cash >= 0 && tf.cash < 1e15 else STARTING_PURSE
+		for v, i in tf.cargo {
+			r.trader.cargo[planet.Good(i)] = v if v >= 0 && v < 1e9 else 0
+		}
+		for sf in tf.seen {
+			if sf.good < 0 || sf.good >= len(planet.Good) {continue}
+			if !(sf.price >= 0 && sf.price < 1e9) || !(abs(sf.month) < 1e9) {continue}
+			seen_put(&r.trader, Seen{sf.cell, sf.price, f32(sf.month), planet.Good(sf.good)})
+		}
+	}
 	late := make([dynamic]game.Stack, context.temp_allocator)
 	for st in f.items {
 		item, known := game.item_by_name(reg, st.item)
@@ -242,18 +273,25 @@ player_json :: proc(reg: ^game.Registry, r: ^Player_Record) -> []u8 {
 			File_Stack{game.CURSOR_SLOT, game.item_id(reg, c.item), c.count, int(c.ammo)},
 		)
 	}
+	seen := make([dynamic]Seen_File, context.temp_allocator)
+	for i in 0 ..< r.trader.count {
+		e := r.trader.seen[i]
+		append(&seen, Seen_File{e.cell, int(e.good), e.price, f64(e.month)})
+	}
 	world := ""
 	if a, has := r.world.?; has {world = game.address_dir(a)}
 	f := Player_File {
-		format   = PLAYER_FILE_FORMAT,
-		world    = world,
+		format = PLAYER_FILE_FORMAT,
+		world = world,
 		position = r.state.position,
-		look     = r.look,
-		flying   = r.state.flying,
+		look = r.look,
+		flying = r.state.flying,
 		selected = r.inventory.selected,
-		mode     = base.var_text(&r.mode),
-		items    = items[:],
+		mode = base.var_text(&r.mode),
+		items = items[:],
+		trader = {cash = r.trader.cash, seen = seen[:]},
 	}
+	for g in planet.Good {f.trader.cargo[int(g)] = r.trader.cargo[g]}
 	data, _ := json.marshal(
 		f,
 		{pretty = true, use_spaces = true, spaces = 2},
@@ -325,6 +363,7 @@ keep_player :: proc(s: ^Server, c: ^Client) {
 		state     = c.player,
 		look      = c.look,
 		inventory = c.inventory,
+		trader    = c.trader,
 		mode      = mode_record_text(s, c),
 		dirty     = true,
 		stats     = counters_clone(c.stats),
@@ -403,4 +442,181 @@ give_kit :: proc(s: ^Server, c: ^Client) {
 		left := game.inventory_add(s.registry, &c.inventory, st)
 		ledger(s, c.world, .Kit, st.item, st.count - left.count)
 	}
+}
+
+// ---- the player as a trader ----
+// The player as a trader (docs/world.md, the economy). Each player carries silver, cargo and
+// the prices they have seen; the server is the authority: `trade` checks where they stand, what
+// they hold and what the market holds, and moves goods and silver through the same
+// `planet.trader_buy` and `trader_sell` that move the market's price as a caravan does.
+// What a player knows of a town's prices is what they saw standing in it (or were told there),
+// kept by the town's climate cell (stable between saves) with the month the price was true.
+
+STARTING_PURSE :: 20.0 // silver of a new player (and of an old file's)
+TRADE_RADIUS_KM :: 15.0 // a player this near a town may trade in it
+MAX_SEEN :: 192 // prices a player remembers: the oldest are forgotten first
+
+Seen :: struct {
+	cell:  u32,
+	price: f32,
+	month: f32, // (whole months: exact)
+	good:  planet.Good,
+}
+
+// Trader_Record is what a player carries as a trader; it holds no pointers (records copy).
+Trader_Record :: struct {
+	cash:  f64,
+	cargo: [planet.Good]f32,
+	seen:  [MAX_SEEN]Seen,
+	count: int,
+}
+
+Trade_Side :: enum {
+	Buy,
+	Sell,
+}
+
+Trade_Result :: enum {
+	Done,
+	No_Economy, // the world has no detailed market there
+	Bad_Quantity,
+	Away, // not within the town's radius
+	No_Market, // the town does not trade in the good
+	No_Cash,
+	No_Cargo,
+	No_Stock, // the market has too little to sell
+}
+
+// seen_put remembers a price unless a newer one of that town and good is kept.
+seen_put :: proc(t: ^Trader_Record, s: Seen) {
+	oldest := 0
+	for i in 0 ..< t.count {
+		e := &t.seen[i]
+		if e.cell == s.cell && e.good == s.good {
+			if s.month >= e.month {e^ = s}
+			return
+		}
+		if e.month < t.seen[oldest].month {oldest = i}
+	}
+	if t.count < MAX_SEEN {
+		t.seen[t.count] = s
+		t.count += 1
+	} else if s.month >= t.seen[oldest].month {
+		t.seen[oldest] = s
+	}
+}
+
+// trader_known: what a trader remembers of a town's price of a good.
+trader_known :: proc(t: ^Trader_Record, cell: u32, g: planet.Good) -> (Seen, bool) {
+	for i in 0 ..< t.count {
+		if t.seen[i].cell == cell && t.seen[i].good == g {return t.seen[i], true}
+	}
+	return {}, false
+}
+
+// trader_where: the town (an index in the economy) the player stands within the radius of,
+// the nearest one in detail.
+trader_where :: proc(w: ^World, c: ^Client) -> (town: int, ok: bool) {
+	we := w.economy
+	if we == nil || !we.built || !we.resident {return}
+	o := economy_observer(c)
+	best := f64(TRADE_RADIUS_KM)
+	for i in we.market.town {
+		tw := we.economy.towns[i]
+		if d := planet.km_between(tw.lat, tw.lon, f32(o.x), f32(o.y)); d < best {
+			best, town, ok = d, i, true
+		}
+	}
+	return
+}
+
+// trader_open makes the planet's trader of a player's, standing in market town `local` with
+// what they know of the towns in detail, and what the town tells.
+@(private = "file")
+trader_open :: proc(we: ^World_Economy, rec: ^Trader_Record, local: int) -> planet.Trader {
+	t := planet.trader_make(we.market, rec.cash, local)
+	t.cargo = rec.cargo
+	for j in 0 ..< len(we.market.town) {
+		cell := u32(we.economy.towns[we.market.town[j]].cell)
+		for g in planet.Good {
+			if s, ok := trader_known(rec, cell, g); ok {
+				planet.knowledge_see(&t.know, j, g, s.price, f64(s.month))
+			}
+		}
+	}
+	planet.trader_arrive(&t, we.economy, we.market, we.news, local)
+	return t
+}
+
+// trader_close takes a planet trader's cash, cargo and knowledge back into the record.
+@(private = "file")
+trader_close :: proc(we: ^World_Economy, rec: ^Trader_Record, t: ^planet.Trader) {
+	rec.cash, rec.cargo = t.cash, t.cargo
+	// Only what they saw where they stand is theirs to keep (what the town told is not).
+	cell := u32(we.economy.towns[we.market.town[t.at]].cell)
+	for g in planet.Good {
+		if r := t.know.at[t.at][g]; r.known {
+			seen_put(rec, Seen{cell, r.price, f32(r.month), g})
+		}
+	}
+	planet.trader_destroy(t)
+}
+
+// trader_visit: a player standing in a town sees its prices and is told what it knows.
+trader_visit :: proc(w: ^World, c: ^Client) {
+	town, ok := trader_where(w, c)
+	if !ok {return}
+	we := w.economy
+	t := trader_open(we, &c.trader, we.market.local[town])
+	trader_close(we, &c.trader, &t)
+}
+
+// trade: the player buys or sells `quantity` units (a person's month of the good) in a town
+// (an index in the economy). A buy may be filled in part when the stock or the silver runs out;
+// a sell is of the whole quantity or refused. Returns what was done and the units moved.
+trade :: proc(
+	w: ^World,
+	c: ^Client,
+	town: int,
+	g: planet.Good,
+	quantity: f32,
+	side: Trade_Side,
+) -> (
+	Trade_Result,
+	f32,
+) {
+	we := w.economy
+	if we == nil || !we.built || !we.resident || town < 0 || town >= len(we.economy.towns) {
+		return .No_Economy, 0
+	}
+	local := we.market.local[town]
+	if local < 0 {return .No_Economy, 0}
+	if !(quantity > 0) || math.is_inf(quantity) {return .Bad_Quantity, 0}
+	tw := we.economy.towns[town]
+	o := economy_observer(c)
+	if planet.km_between(tw.lat, tw.lon, f32(o.x), f32(o.y)) >= TRADE_RADIUS_KM {return .Away, 0}
+	if !tw.market[g] {return .No_Market, 0}
+	rec := &c.trader
+	if side == .Sell && rec.cargo[g] < quantity {return .No_Cargo, 0}
+
+	t := trader_open(we, rec, local)
+	moved: f32
+	result := Trade_Result.Done
+	switch side {
+	case .Buy:
+		moved = planet.trader_buy(&t, we.economy, &we.market, g, quantity)
+		if moved <= 0 {
+			step := f32(planet.IMPACT_STEP) * tw.size
+			if we.market.stock[local][g] - step / tw.size <= planet.RESERVE {
+				result = .No_Stock
+			} else {
+				result = .No_Cash
+			}
+		}
+	case .Sell:
+		moved = planet.trader_sell(&t, we.economy, &we.market, g, quantity)
+	}
+	trader_close(we, rec, &t)
+	if moved > 0 {we.dirty = true}
+	return result, moved
 }

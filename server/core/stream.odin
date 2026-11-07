@@ -83,6 +83,7 @@ Client :: struct {
 	reply_len:      int,
 	tpa:            Tpa, // a teleport request to it
 	inventory:      game.Inventory,
+	trader:         Trader_Record, // its silver, cargo and the prices it has seen (trading.odin)
 	stats:          Counters, // its character's counters (stats.odin; heap, keys owned)
 	joined_tick:    u64, // when it joined (session length)
 	last_position:  [3]f64, // for distance counters
