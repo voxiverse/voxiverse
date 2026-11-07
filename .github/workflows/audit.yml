@@ -1,0 +1,40 @@
+name: audit
+# The weekly polish audit (owner, 2026-11-07: "occasionally scan the project for missing
+# sounds and animations and do multiple iterations on them"). Each week it opens one audit
+# issue in the Polish milestone, labelled for a `split` agent (autofix.yml): the agent scans
+# the game for what a player would miss and writes each gap as a step; autofix files them as
+# Polish tasks. A week's audit that is still open is not doubled.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          open=$(gh issue list --state open --label agent --search 'in:title "Polish audit"' --json number --jq 'length')
+          if [ "${open}" -gt 0 ]; then echo "an audit is still open"; exit 0; fi
+          gh label create agent-split-next --color BFD4F2 --description "Too big for one run: the next sweep splits it" --force >/dev/null
+          gh label create agent-split-tried --color BFD4F2 --description "A split agent was sent" --force >/dev/null
+          cat > /tmp/audit.md <<'BODY'
+          The weekly polish audit (.github/workflows/audit.yml). A `split` agent reads this: **change no code**; write the gaps you find as steps (`/tmp/split/NN.md`, 2 to 8, the most noticeable to a player first), and this workflow files them as Polish tasks.
+
+          Look for what a player would notice is missing or poor, by reading the code and running what can be run:
+          - **Sounds:** every player action, block interaction, entity and UI event that makes no sound (compare the events the game raises with the sounds the recipes define); footsteps by surface; sounds the sound ear (`build sfx --ear`, when it exists) puts outside their bands.
+          - **Animations:** entities and players whose parts do not move when they act (walking, attacking, using, being hit, dying); first-person actions with no view-model motion; blocks and items that change state with no transition.
+          - **Feel:** feedback missing for an action (no particle, no shake, no sound when something breaks, lands or hits).
+          - **Music:** a place, time or event the music director has no piece for; pieces the music ear refuses.
+
+          Each step: one gap or a group of the same kind, what a player sees or hears now, what it should be, the files involved, and an exit check (a test, a measure, or screenshots or a render for the owner). Skip gaps already covered by an open issue. If you find fewer than two, the second step re-tunes the sound or animation the ear or your reading rates weakest.
+          BODY
+          sed -i 's/^          //' /tmp/audit.md
+          gh issue create --title "Polish audit: $(date -u +%Y-%m-%d)" --milestone Polish --label agent --label agent-split-next --label agent-split-tried --body-file /tmp/audit.md
