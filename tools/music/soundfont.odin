@@ -47,6 +47,54 @@ FONTS :: [?]Font_Def {
 		archive = "TubularBells-small-SF2-20241130.7z",
 		sha256 = "2ebd88d83f67a7a0174b61ca09f28d10355e49c2214b1c769b3cf11e84815c90",
 	},
+	{
+		name = "freepats_timpani",
+		url = "https://github.com/freepats/timpani/releases/download/2024-08-10/Timpani-SF2-20240810.7z",
+		archive = "Timpani-SF2-20240810.7z",
+		sha256 = "6a8dff96d9ad109c7ba6155b11f2c2dcc635850cdd43fc1db460f80c45a8e066",
+	},
+	{
+		name = "freepats_choir",
+		url = "https://github.com/freepats/synth-pad-choir/releases/download/2020-05-16/SynthPadChoir-SF2-20200516.7z",
+		archive = "SynthPadChoir-SF2-20200516.7z",
+		sha256 = "4a6024721615d15bedff030a7e8259d380fdcef51f2a223961c69dfbbbdb39f1",
+	},
+	{
+		name = "freepats_sweep",
+		url = "https://github.com/freepats/sweep-pad/releases/download/2019-08-13/SweepPad-SF2-20190813.7z",
+		archive = "SweepPad-SF2-20190813.7z",
+		sha256 = "2a2eb595b47e780fc633391f756e972e87512d61adcb9564c3c27b9ffca3fb63",
+	},
+	{
+		name = "freepats_bowed",
+		url = "https://github.com/freepats/synth-pad-bowed/releases/download/2019-07-19/SynthPadBowed-SF2-20190719.7z",
+		archive = "SynthPadBowed-SF2-20190719.7z",
+		sha256 = "70a1db4b7bd33caf1f37187e29ff367d8c78d7043a6e36cf1b5e99f72412bb56",
+	},
+	{
+		name = "freepats_synthstrings",
+		url = "https://github.com/freepats/synth-strings-1/releases/download/2020-05-28/SynthStrings1-SF2-20200528.7z",
+		archive = "SynthStrings1-SF2-20200528.7z",
+		sha256 = "1fed457941efbd6e1deca6937d1859db7920946709732265426785e9e11bcf55",
+	},
+	{
+		name = "freepats_recorder",
+		url = "https://freepats.zenvoid.org/Wind/Recorder1/Recorder-SF2-20201205.7z",
+		archive = "Recorder-SF2-20201205.7z",
+		sha256 = "60258c60fcef9e398aca22749cdbeaba792b8fa7c9115e63ceef3aff5d4bd1c0",
+	},
+	{
+		name = "freepats_ocarina",
+		url = "https://github.com/freepats/ocarina1/releases/download/2024-10-02/Ocarina-SF2-20241002.7z",
+		archive = "Ocarina-SF2-20241002.7z",
+		sha256 = "1d48403208a38555503bbd9f65d09815ee4edb10ba01e9a345935ae44c38179c",
+	},
+	{
+		name = "freepats_glass",
+		url = "https://freepats.zenvoid.org/ChromaticPercussion/Glass/Glass-SF2-20191227.7z",
+		archive = "Glass-SF2-20191227.7z",
+		sha256 = "e73912077f2cf4c16a6861ba0752c864ce78c1b5f609b890dfcbdb312a8bfb15",
+	},
 }
 
 // extra_fonts: fonts a test registers (an SFZ font made of synthetic files).
