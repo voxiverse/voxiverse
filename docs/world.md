@@ -290,3 +290,16 @@ detail, `Merged`, `Split`) and the chunks that entered and left detail in all; t
 debug level. `/islands` (admin) lists the islands. The server tells each player its island (the
 `Island` state: id and chunk count, worked out about twice a second) and F3's `island:` line shows
 it. Left for a later part: the systems that ask `island_of`.
+
+### Lazy systems
+
+A system whose state lives everywhere registers a `Lazy_System` (`common/island/lazy.odin`):
+`lazy_evaluate` (the region's state at a day, from its last `Summary` and the influences that have
+arrived, never by simulating), `detail_enter` (it becomes detailed from that state), `detail_step`
+(the full simulation, only in islands) and `detail_leave` (returns the Summary the next evaluation
+starts from). A `Lazy_World` drives it: `lazy_sync` takes an `Update_Result`'s `entered` and `left`
+chunks, `lazy_step` steps the detailed regions only (none: nothing a tick), `lazy_state` evaluates
+a region outside detail. Influence travels at the system's `speed_blocks_per_day`: an influence
+reaches a region `distance / speed` days after it happened, and is never seen before (nor from
+after the asked day). `Toy_Growth` (`toy_growth.odin`) is the proof: a logistic value per chunk
+with a closed form. Nothing in the server uses it yet.
