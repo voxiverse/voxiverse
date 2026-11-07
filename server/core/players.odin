@@ -2,6 +2,7 @@ package core
 
 import "core:fmt"
 import "core:log"
+import "core:time"
 
 import "common:base"
 import "common:game"
@@ -162,13 +163,23 @@ simulate_player :: proc(s: ^Server, c: ^Client) {
 		run_due_actions(s, c)
 	}
 	if c.inputs.discarded_now > 0 {
-		log.warnf(
-			"server input stall player=%d discarded=%d acked=%d target=%d",
-			player_id(s, c),
-			c.inputs.discarded_now,
-			c.inputs.last,
-			c.inputs.target,
-		)
+		// A stall: the server was busy (a slow tick is logged with its phases)
+		// or the client sent a burst after a hitch of its own. One line every
+		// 10 s with the total, and the server's slowest recent tick, says which.
+		c.stall_discarded += c.inputs.discarded_now
+		if c.stall_logged == {} || time.tick_since(c.stall_logged) >= 10 * time.Second {
+			slowest: u32 = 0
+			for us in s.tick_us {slowest = max(slowest, us)}
+			log.warnf(
+				"server input stall player=%d discarded=%d acked=%d target=%d slowest_tick_ms=%d",
+				player_id(s, c),
+				c.stall_discarded,
+				c.inputs.last,
+				c.inputs.target,
+				slowest / 1000,
+			)
+			c.stall_logged, c.stall_discarded = time.tick_now(), 0
+		}
 	} else if c.inputs.catching_up {
 		log.debugf(
 			"server input catch-up player=%d acked=%d target=%d",
