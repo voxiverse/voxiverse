@@ -38,6 +38,8 @@ creation_open :: proc(app: ^engine.App) {
 	c.mode = MODE_CREATIVE
 	creation_set_seed(c, u64(time.now()._nsec) ~ 0x5eed_5eed, false)
 	c.typed = false
+	c.alien = false
+	creation_show_galaxy(c, false)
 	c.planet = planet.home_planet_palette(app.registry)
 	app.screen = .Creation
 }
@@ -46,8 +48,26 @@ creation_open :: proc(app: ^engine.App) {
 // re-settle over CREATION_SETTLE_SECONDS).
 creation_set_seed :: proc(c: ^engine.Creation_Screen, seed: u64, animate: bool) {
 	c.seed = seed
-	game.galaxy_stars(game.seed_glyphs(seed), c.stars)
+	c.alien = true
+	creation_show_galaxy(c, animate)
+}
+
+// creation_home: the address of the home world the screen shows: Earth's, or
+// the alien one the seed makes.
+creation_home :: proc(c: ^engine.Creation_Screen) -> game.Address {
+	return game.seed_glyphs(c.seed) if c.alien else game.earth_address()
+}
+
+// creation_show_galaxy redraws the galaxy around the home world shown.
+creation_show_galaxy :: proc(c: ^engine.Creation_Screen, animate: bool) {
+	game.galaxy_stars(creation_home(c), c.stars)
 	c.settle = 0 if animate else 1
+}
+
+// creation_back_to_earth returns the start to Earth.
+creation_back_to_earth :: proc(c: ^engine.Creation_Screen) {
+	c.alien = false
+	creation_show_galaxy(c, true)
 }
 
 // creation_roll draws a new seed (entropy: where it comes from; the tests
@@ -106,13 +126,14 @@ draw_galaxy :: proc(ctx: ^ui.Context, r: ui.Rect, stars: []game.Star, settle: f3
 // Creation_Layout: where the compact screen puts everything (a pure
 // function of the screen and the theme, so a test can check it fits).
 Creation_Layout :: struct {
-	panel, title, galaxy, planet, name, seed, glyphs, roll, mode, ignite: ui.Rect,
-	fits:                                                                 bool, // false: the panel needs more height than the screen has
+	panel, title, galaxy, planet, name, seed, glyphs, roll, earth, mode, ignite: ui.Rect,
+	fits:                                                                        bool, // false: the panel needs more height than the screen has
 }
 
 CREATION_PANEL_WIDTH :: 720
 CREATION_TITLE_HEIGHT :: 60
 CREATION_ROLL_WIDTH :: 90
+CREATION_EARTH_WIDTH :: 150 // the Back to Earth button
 CREATION_SEED_WIDTH :: 0.3 // of the seed row: the typed seed field
 
 // creation_layout: one centred panel: the title, the galaxy and the planet
@@ -126,6 +147,13 @@ creation_layout :: proc(screen: ui.Rect, t: ui.Theme) -> (l: Creation_Layout) {
 	l.panel = ui.rect_center(screen, width, height)
 	area := l.panel
 	l.title = ui.cut_top(&area, CREATION_TITLE_HEIGHT)
+	// Back to Earth: at the title's right, level with it.
+	l.earth = ui.Rect {
+		l.title.x + l.title.w - CREATION_EARTH_WIDTH,
+		l.title.y + (l.title.h - t.row_height) / 2,
+		CREATION_EARTH_WIDTH,
+		t.row_height,
+	}
 	top := ui.cut_top(&area, band)
 	l.galaxy = ui.cut_left(&top, band)
 	l.planet = top
@@ -170,16 +198,22 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.text_input(ctx, "name", &c.name, l.name, engine.tr(.Creation_Name))
 	ui.text_input(ctx, "seed", &c.seed_text, l.seed, engine.tr(.Creation_Seed))
 	creation_sync_seed(c, u64(time.now()._nsec))
-	ui.label(ctx, game.address_text(game.seed_glyphs(c.seed)), l.glyphs, .Center)
+	ui.label(ctx, game.address_text(creation_home(c)), l.glyphs, .Center)
 	if ui.button(ctx, engine.tr(.Creation_Roll), l.roll) {
 		creation_roll(c, u64(time.now()._nsec))
 	}
 	// The home world is Earth: animals, no peoples (a line at the planet's foot).
-	home := worldgen.world_life(game.seed_glyphs(c.seed), home = true)
+	home := worldgen.world_life(creation_home(c), home = true)
 	line := l.planet
 	line.y += line.h - t.row_height
 	line.h = t.row_height
 	ui.label(ctx, engine.life_line(home), line, .Center, t.text_muted)
+	if c.alien {
+		top_line := l.planet
+		top_line.h = t.row_height
+		ui.label(ctx, engine.tr(.Creation_Alien_Start), top_line, .Center, t.text_muted)
+		if ui.button(ctx, engine.tr(.Creation_Back_To_Earth), l.earth) {creation_back_to_earth(c)}
+	}
 	mode := 1 if c.mode == MODE_SURVIVAL else 0
 	names := [2]string{engine.tr(.Universes_Mode_Creative), engine.tr(.Universes_Mode_Survival)}
 	ui.choice(ctx, engine.tr(.Creation_Mode), &mode, names[:], l.mode)
@@ -191,8 +225,8 @@ creation_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 // it, and the big bang plays over the loading.
 creation_ignite :: proc(app: ^engine.App) {
 	c := &app.creation
-	plan := universe_plan(string(c.name[:]), c.seed, c.mode)
-	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode)
+	plan := universe_plan(string(c.name[:]), c.seed, c.mode, !c.alien)
+	engine.enter_world(app, plan.path, i64(plan.seed), mode = plan.mode, earth = plan.earth)
 	if app.session == nil {return} 	// (it could not start: the message says why)
 	ignite_start(app, c.stars, c.seed)
 }

@@ -136,13 +136,14 @@ test_creation_layout_fits :: proc(t: ^testing.T) {
 		r := ui.Rect{0, 0, size.x / scale, size.y / scale}
 		l := screen.creation_layout(r, th)
 		testing.expectf(t, l.fits, "%v: does not fit", size)
-		controls := [8]ui.Rect {
+		controls := [9]ui.Rect {
 			l.galaxy,
 			l.planet,
 			l.name,
 			l.seed,
 			l.glyphs,
 			l.roll,
+			l.earth,
 			l.mode,
 			l.ignite,
 		}
@@ -587,5 +588,28 @@ test_ignite_held_by_debug_time :: proc(t: ^testing.T) {
 	testing.expect_value(t, phase, screen.Ignite_Phase.Streaks)
 	ignite_frame(app, {keys_pressed = {.Space}})
 	testing.expect(t, !app.ignite.active, "a key skips it")
+	free_all(context.temp_allocator)
+}
+
+// Earth is the start by default, with its fixed glyphs; Roll is an alien
+// home world; Back to Earth restores Earth.
+@(test)
+test_creation_starts_on_earth :: proc(t: ^testing.T) {
+	app := creation_app(t)
+	defer creation_free(app)
+	c := &app.creation
+	testing.expect(t, !c.alien, "Earth by default")
+	testing.expect_value(t, screen.creation_home(c), game.earth_address())
+	earth_stars := c.stars[1]
+	screen.creation_roll(c, 12345)
+	testing.expect(t, c.alien, "Roll is an alien start")
+	testing.expect_value(t, screen.creation_home(c), game.seed_glyphs(c.seed))
+	testing.expect(t, screen.creation_home(c) != game.earth_address(), "an alien address")
+	screen.creation_back_to_earth(c)
+	testing.expect(t, !c.alien)
+	testing.expect_value(t, screen.creation_home(c), game.earth_address())
+	testing.expect_value(t, c.stars[1], earth_stars)
+	plan := screen.universe_plan("E", c.seed, c.mode, !c.alien)
+	testing.expect(t, plan.earth, "Ignite on Earth asks for Earth")
 	free_all(context.temp_allocator)
 }

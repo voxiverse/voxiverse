@@ -6,6 +6,7 @@ import "common:game"
 Creation_Screen :: struct {
 	name:      [dynamic]u8,
 	seed_text: [dynamic]u8, // typed: a word or a number; empty: the rolled seed
+	alien:     bool, // the start is an alien home world made from seed (else Earth)
 	seed:      u64, // what the universe will be made with
 	typed:     bool, // seed comes from the text (else rolled)
 	mode:      string, // the new universe's default game mode (its id)

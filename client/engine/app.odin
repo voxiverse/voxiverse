@@ -306,6 +306,7 @@ enter_world :: proc(
 	spawn: Maybe([3]f64) = nil,
 	benchmark := false, // the same work every run: no sheep, still clouds
 	mode := "creative", // a new universe's default game mode
+	earth := false, // a new universe's home world is Earth
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
@@ -317,6 +318,7 @@ enter_world :: proc(
 			key = app.account,
 			seed = seed,
 			mode = mode,
+			earth = earth,
 			save_dir = save_dir,
 			spawn = spawn,
 			view_radius = view_radius,
