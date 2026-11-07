@@ -21,8 +21,9 @@ import "server:core"
 // written by the server (server/core/save.odin): a universe (universe.cfg) or,
 // an older save, a single world (world.cfg). The screen shows them as
 // cards, the one played last first: a galaxy thumbnail drawn from the seed,
-// the name, the game mode and when it was played. A click enters the
-// universe (the server puts the character where it last stood); a card's
+// the name, the game mode and when it was played. A click selects a card; a
+// double-click (or Confirm on the selected one) enters the universe (the
+// server puts the character where it last stood); a card's
 // "..." menu has Rename, Export and Delete (confirmed); New Universe opens
 // the creation screen (screen_creation.odin) and Import brings an exported
 // universe in from a file. Players see "universe"; the code says universe.
@@ -286,7 +287,7 @@ saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		)
 		if menu_clicked {
 			w.selected, w.mode = i, .Menu
-		} else if it.clicked {
+		} else if it.clicked && card_click(w, i, time.tick_now()) {
 			enter = i
 		}
 	}
@@ -314,6 +315,14 @@ saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		message_set(w, "")
 	}
 	if ui.button(ctx, engine.tr(.Credits_Back), buttons) {app.screen = .Title}
+}
+
+// card_click: a click on card i at now. One click selects the card; a second
+// on the same card within DOUBLE_CLICK says to play it.
+card_click :: proc(w: ^engine.Universes_Screen, i: int, now: time.Tick) -> (play: bool) {
+	if w.selected == i && time.tick_diff(w.last_click, now) < DOUBLE_CLICK {return true}
+	w.selected, w.last_click = i, now
+	return false
 }
 
 @(private = "file")
