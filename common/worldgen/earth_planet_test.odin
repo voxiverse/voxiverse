@@ -124,3 +124,30 @@ test_planet_biome_follows_koppen :: proc(t: ^testing.T) {
 	x, z = planet_block_of(88, 0)
 	testing.expect_value(t, earth_biome(&g, x, z), Biome.Frozen_Ocean)
 }
+
+// test_planet_rivers_are_carved: the Amazon's basin has river columns whose bed
+// lies under water standing at the river's level, with the river biome.
+@(test)
+test_planet_rivers_are_carved :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	x0, z0 := block_at(-3.1, -60)
+	found := 0
+	for dz := i32(-600); dz <= 600; dz += 6 {
+		for dx := i32(-600); dx <= 600; dx += 6 {
+			c := column_at(&g.params, g.seed, x0 + dx, z0 + dz)
+			if c.river < 0.5 {continue}
+			found += 1
+			testing.expect_value(t, c.biome, Biome.River)
+			testing.expect(
+				t,
+				c.height < f32(g.params.sea_level + c.lift),
+				"the bed is under water",
+			)
+			testing.expect(t, c.lift >= 0)
+		}
+	}
+	testing.expect(t, found > 20, "the Amazon's basin has rivers")
+	// The same on a column far from any river: dry, no lift.
+	x, z := block_at(0, -150)
+	testing.expect_value(t, column_at(&g.params, g.seed, x, z).lift, 0)
+}

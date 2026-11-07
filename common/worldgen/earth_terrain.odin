@@ -208,6 +208,7 @@ earth_generate :: proc(
 	for &row in cols {
 		for &col in row {
 			highest = max(highest, i32(math.floor(col.height + col.rough)) + 1)
+			highest = max(highest, p.sea_level + col.lift)
 			rough ||= col.rough > 0
 		}
 	}
@@ -259,8 +260,8 @@ earth_generate :: proc(
 						   in_cave(caves, l, p.cave_size) {b = .Air}
 					}
 					if b == .Stone {b = ore_at(seed, wx, y, wz)}
-				} else if y <= p.sea_level {
-					b = .Ice if y == p.sea_level && frozen(col.biome) else .Water
+				} else if y <= p.sea_level + col.lift {
+					b = .Ice if y == p.sea_level + col.lift && frozen(col.biome) else .Water
 				}
 				if y < game.WORLD_MIN_Y + 3 && is_bedrock(seed, wx, wz, y) {b = .Bedrock}
 				dst[game.local_index({x, y - origin.y, z})] = b

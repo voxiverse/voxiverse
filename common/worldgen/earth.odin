@@ -115,6 +115,7 @@ Column :: struct {
 	temperature: f32, // about -1..1
 	humidity:    f32,
 	river:       f32, // 0..1: how much of a river's bed this is
+	lift:        i32, // how far above sea level the water stands here (a river inland)
 	biome:       Biome,
 }
 
