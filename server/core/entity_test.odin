@@ -240,7 +240,7 @@ test_entity_find_without_a_scan :: proc(t: ^testing.T) {
 	entities_init(&w.entities, 1)
 	defer entities_destroy(&w.entities)
 	N :: 10_000
-	for _ in 0 ..< N {entity_add(w, Entity{kind = .Item, health = 1})}
+	for _ in 0 ..< N {entity_add(w, Entity{kind = test_reg().engine.item, health = 1})}
 	testing.expect_value(t, entity_count(w), N)
 	w.entities.lookups = 0
 	for id in 1 ..= u32(N) {

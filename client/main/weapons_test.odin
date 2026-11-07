@@ -95,7 +95,12 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 
 	// A target in front of us, a block off, in line with the eyes' look down at it.
 	feet := s.prediction.state.position
-	sheep := core.entity_spawn(rig.h.srv.worlds[0], .Sheep, feet + {0, 0, -1.4}, false)
+	sheep := core.entity_spawn(
+		rig.h.srv.worlds[0],
+		rig.h.srv.registry.engine.sheep,
+		feet + {0, 0, -1.4},
+		false,
+	)
 	if !testing.expect(t, sheep != nil) {return}
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))

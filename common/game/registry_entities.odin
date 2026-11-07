@@ -12,9 +12,9 @@ import "core:strings"
 //	           "brain": "grazer", "with": ["wool", "genes", "breeding"],
 //	           "looks": ["shorn", "lamb"], "model": "sheep", "spawn": {...}}}
 //
-// A kind is a Kind_Id (its index in the registry's kinds, plus one: 0 is "none"). Nothing
-// reads these yet but the tests: the server's entities still use game.Entity_Kind until
-// the entity systems move onto them.
+// A kind is a Kind_Id (its index in the registry's kinds, plus one: 0 is "none"). The server's
+// entities and the client's others hold one; `reg.engine` names the ones the engine's code
+// acts on.
 
 // Kind_Id: an entity kind, the registry index + 1; 0 is none (and "any" in a filter).
 Kind_Id :: distinct u16
@@ -149,12 +149,31 @@ Kind_Info :: struct {
 	spawn:      Maybe(Kind_Spawn_Rule),
 }
 
+// Engine_Kinds: the base pack's kinds the engine's code acts on by name (the sheep's
+// brain, the rocket launcher, dropped stacks); 0 where a registry has no such kind.
+Engine_Kinds :: struct {
+	sheep, rocket, item, player: Kind_Id,
+}
+
 registry_kind :: proc(reg: ^Registry, text: string) -> (Kind_Id, bool) {
 	id, ok := id_parse(text)
 	if !ok {return 0, false}
 	full := strings.concatenate({id.namespace, ":", id.name}, context.temp_allocator)
 	at, found := reg.ids[.Entity][full]
 	return Kind_Id(at + 1), found
+}
+
+// kind_name: the kind's name without its namespace ("sheep"): what a command or a
+// statistic calls it.
+kind_name :: proc(info: ^Kind_Info) -> string {
+	if at := strings.index_byte(info.id, ':'); at >= 0 {return info.id[at + 1:]}
+	return info.id
+}
+
+@(private)
+kind_by_full_id :: proc(reg: ^Registry, full: string) -> Kind_Id {
+	at, found := reg.ids[.Entity][full]
+	return Kind_Id(at + 1) if found else 0
 }
 
 // kind_info: the kind's definition; nil for 0 or an id the registry does not have.
@@ -793,6 +812,12 @@ build_entity_kinds :: proc(b: ^Reg_Build, reg: ^Registry) {
 	for &m, i in b.defs[.Entity] {
 		reg.kinds[i] = read_entity_kind(b, reg, &m)
 		reg.ids[.Entity][m.id] = u32(i)
+	}
+	reg.engine = {
+		sheep  = kind_by_full_id(reg, "voxiverse:sheep"),
+		rocket = kind_by_full_id(reg, "voxiverse:rocket"),
+		item   = kind_by_full_id(reg, "voxiverse:item"),
+		player = kind_by_full_id(reg, "voxiverse:player"),
 	}
 }
 

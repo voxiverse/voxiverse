@@ -47,6 +47,58 @@ Perturb_Kind :: enum u8 {
 	Player_Velocity,
 }
 
+// Hashed_Entity: an Entity as the state hash has always seen it: its kind the number
+// the Entity_Kind enum gave it (the registry's Kind_Id less one), so that kinds becoming
+// data moved no baseline. The fields follow Entity's, in its order.
+@(private = "file")
+Hashed_Entity :: struct {
+	id:      u32,
+	kind:    u8,
+	body:    game.Entity_Body,
+	yaw:     f32,
+	pitch:   f32,
+	health:  int,
+	natural: bool,
+	brain:   Brain,
+	owner:   int,
+	stack:   game.Stack,
+	shorn:   bool,
+	genes:   game.Genes,
+	growth:  int,
+	love:    int,
+	wait:    int,
+	age:     int,
+	action:  u32,
+}
+
+@(private = "file")
+hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
+	list := entities_view(w)
+	out := make([]Hashed_Entity, len(list), context.temp_allocator)
+	for e, i in list {
+		out[i] = {
+			e.id,
+			u8(e.kind - 1),
+			e.body,
+			e.yaw,
+			e.pitch,
+			e.health,
+			e.natural,
+			e.brain,
+			e.owner,
+			e.stack,
+			e.shorn,
+			e.genes,
+			e.growth,
+			e.love,
+			e.wait,
+			e.age,
+			e.action,
+		}
+	}
+	return out
+}
+
 @(private = "file")
 Sink :: struct {
 	h: game.Hasher,
@@ -97,7 +149,7 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 	case .Entities:
 		for w, i in s.worlds {
 			fold(k, wpath(i, "next_id"), w.entities.next_id)
-			fold(k, wpath(i, "entities"), entities_view(w))
+			fold(k, wpath(i, "entities"), hashed_entities(w))
 		}
 	case .Chunks:
 		for w, i in s.worlds {

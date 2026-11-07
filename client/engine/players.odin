@@ -26,7 +26,7 @@ Other_Player :: struct {
 
 // Other_Entity: an entity near us (entities.odin draws it).
 Other_Entity :: struct {
-	kind:      game.Entity_Kind,
+	kind:      game.Kind_Id,
 	stack:     game.Stack, // a dropped item's
 	flags:     game.Sheep_Flags, // a sheep's looks
 	track:     Track,

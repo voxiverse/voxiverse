@@ -74,7 +74,9 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		e.stride += f32(math.sqrt(moved.x * moved.x + moved.z * moved.z))
 		e.last_seen = v.position
 		hurt := e.hurt_at != {} && time.tick_since(e.hurt_at) < HURT_FLASH
-		switch e.kind {
+		info := game.kind_info(s.reg, e.kind)
+		if info == nil {continue}
+		switch info.model {
 		case .Sheep:
 			sheep(d, v, e.stride, hurt, e.flags)
 			if .In_Love in e.flags &&
@@ -84,6 +86,7 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 			rocket(s, d, v)
 		case .Item:
 			dropped_item(s, d, v, e.stack)
+		case .Player, .Box: // (not drawn from here yet)
 		}
 	}
 	for i := 0; i < len(s.puffs); {
@@ -359,10 +362,11 @@ entity_aimed :: proc(
 	if !live {return}
 	distance = max_distance
 	for key, &e in s.entities {
-		if !game.ENTITY_INFO[e.kind].hittable {continue}
+		info := game.kind_info(s.reg, e.kind)
+		if info == nil || !info.hittable {continue}
 		v, seen := track_view(&e.track, now)
 		if !seen {continue}
-		lo, hi := game.entity_box(e.kind, v.position)
+		lo, hi := game.entity_box(info, v.position)
 		if d, hit := game.ray_box(origin, dir, lo, hi, distance); hit && d <= distance {
 			id, distance, ok = key, d, true
 		}

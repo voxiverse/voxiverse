@@ -316,7 +316,7 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 		d.spawn_now = false
 		for dx in ([]f64{-3, 0, 3}) {
 			p := c.player.position + {dx, 6, 3}
-			ent := entity_spawn(w, .Sheep, p, false)
+			ent := entity_spawn(w, test_reg().engine.sheep, p, false)
 			append(&d.spawned, p)
 			_ = ent
 		}
@@ -334,7 +334,7 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 		if !ok {continue}
 		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
 		if sl == nil {continue}
-		lo, hi := game.entity_box(e.kind, e.body.position)
+		lo, hi := game.entity_box(game.kind_info(test_reg(), e.kind), e.body.position)
 		got := game.spatial_get(&ew.spatial, sl.handle)
 		if got.lo == lo && got.hi == hi {d.at_rest += 1}
 	}
@@ -397,7 +397,7 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		d.spawn_now = false
 		for i in 0 ..< 6 {
 			p := c.player.position + {f64(i) * 1.5 - 4, 0, 4}
-			if ent := entity_spawn(w, .Sheep, p, false); ent != nil {
+			if ent := entity_spawn(w, test_reg().engine.sheep, p, false); ent != nil {
 				ent.love = 1000 if i % 3 != 2 else 0
 				ent.growth = game.LAMB_TICKS if i != 4 else 0
 			}
@@ -405,11 +405,11 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		return
 	}
 	for &ent in entities_view(w) {
-		if ent.kind != .Sheep {continue}
+		if ent.kind != test_reg().engine.sheep {continue}
 		want: ^Entity
 		best := f64(game.BREED_RANGE * game.BREED_RANGE)
 		for &o in entities_view(w) {
-			if o.id == ent.id || o.kind != .Sheep || o.love <= 0 {continue}
+			if o.id == ent.id || o.kind != test_reg().engine.sheep || o.love <= 0 {continue}
 			if o.growth < game.LAMB_TICKS {continue}
 			v := o.body.position - ent.body.position
 			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = &o, dd}

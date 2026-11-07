@@ -101,7 +101,7 @@ Player_Motion :: struct {
 }
 
 Entity_Record :: struct {
-	kind:  Entity_Kind,
+	kind:  Kind_Id, // the registry's (a pack hash match makes it the same on both sides)
 	stack: Stack, // a dropped item's (else empty)
 }
 
@@ -360,8 +360,13 @@ check_player_motion :: proc(reg: ^Registry, v: rawptr) -> bool {
 
 @(private = "file")
 check_entity_record :: proc(reg: ^Registry, v: rawptr) -> bool {
-	st := (^Entity_Record)(v).stack
-	return st.count >= 0 && (st.item == NO_ITEM || item_valid(reg, st.item))
+	r := (^Entity_Record)(v)
+	st := r.stack
+	return(
+		kind_info(reg, r.kind) != nil &&
+		st.count >= 0 &&
+		(st.item == NO_ITEM || item_valid(reg, st.item)) \
+	)
 }
 
 @(private = "file")

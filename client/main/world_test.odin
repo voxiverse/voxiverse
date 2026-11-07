@@ -340,7 +340,7 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	defer delete(s.sounds)
 	defer delete(s.entities)
 	e := engine.Other_Entity {
-		kind      = .Sheep,
+		kind      = s.reg.engine.sheep,
 		last_seen = {10, 64, 10},
 	}
 	engine.entity_died(s, &e)

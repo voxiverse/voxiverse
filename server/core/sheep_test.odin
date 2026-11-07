@@ -22,7 +22,8 @@ wool_dropped :: proc(srv: ^Server, name: string) -> int {
 			d := (^Data)(data)
 			w := client_by_name(s, d.name).world
 			for e in entities_view(w) {
-				if e.kind == .Item && e.stack.item == game.item_of_block(test_reg(), .Wool) {
+				if e.kind == test_reg().engine.item &&
+				   e.stack.item == game.item_of_block(test_reg(), .Wool) {
 					d.count += e.stack.count
 				}
 			}
@@ -204,7 +205,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			for dx in ([]f64{-1.5, 1.5}) {
 				ent := entity_spawn(
 					w,
-					.Sheep,
+					test_reg().engine.sheep,
 					{f64(c.x) + 10 + dx, f64(c.y) + 1, f64(c.z) + 0.5},
 					false,
 				)
@@ -239,7 +240,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			r.front_block, _ = chunks_block(&w.chunks, r.c.front)
 			r.bare_block, _ = chunks_block(&w.chunks, r.c.bare)
 			for e in entities_view(w) {
-				if e.kind != .Sheep {continue}
+				if e.kind != test_reg().engine.sheep {continue}
 				// The grass one is the one on the grass half.
 				i := 0 if e.body.position.x < f64(r.c.x) + 10 else 1
 				r.shorn[i] = e.shorn
@@ -300,8 +301,72 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			w := client_by_name(s, "a").world
 			for e in entities_view(w) {
-				if e.kind == .Sheep && !e.shorn {(^int)(data)^ += 1}
+				if e.kind == test_reg().engine.sheep && !e.shorn {(^int)(data)^ += 1}
 			}
 		}, &n)
 	testing.expect_value(t, n, 1)
+}
+
+// Saves name kinds by their registry id: a save from before (the bare name) loads into
+// the same kind, a pack's kind the world no longer has is dropped (and reported), and
+// the next save writes the id.
+@(test)
+test_saves_name_kinds_by_id :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "sheep_ids"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	config := Config {
+		rules             = quiet_rules(),
+		seed              = 25,
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 2,
+		listen            = true,
+		save_dir          = dir,
+		generator         = .Classic,
+		no_natural_spawns = true,
+	}
+	h := new(Harness)
+	defer free(h)
+	srv := &h.srv
+	if !testing.expect(t, harness_start(h, config)) {return}
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	ok := net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	testing.expect(t, ok)
+	net_close(a)
+	a^ = {}
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
+	path := filepath.join({home_dir(dir, 25), ENTITIES_FILE}, context.temp_allocator) or_else ""
+	old :=
+		"# Voxiverse entities\nsheep 4.5000 20.0000 4.5000 1.0000 4 false\n" +
+		"voxiverse:sheep 6.5000 20.0000 4.5000 1.0000 4 false\n" +
+		"voxiverse:cow 8.5000 20.0000 4.5000 1.0000 4 false\n"
+	testing.expect(t, os.write_entire_file(path, transmute([]u8)old) == nil)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	b := new(Net_Client)
+	defer free(b)
+	net_connect(b, 0, "a", h = h)
+	defer net_close(b)
+	ok = net_wait(t, {b}, proc(cs: []^Net_Client) -> bool {return landed(cs[0])})
+	testing.expect(t, ok)
+	n := 0
+	call(srv, proc(s: ^Server, data: rawptr) {
+			w := client_by_name(s, "a").world
+			(^int)(data)^ = len(entities_view(w))
+			for e in entities_view(w) {
+				if e.kind != s.registry.engine.sheep {(^int)(data)^ = -100}
+			}
+		}, &n)
+	testing.expect_value(t, n, 2)
+	net_close(b)
+	b^ = {}
+	harness_step(h, 4)
+	testing.expect(t, harness_stop(h))
+	saved, _ := os.read_entire_file_from_path(path, context.temp_allocator)
+	testing.expect(t, strings.has_prefix(string(saved), "# Voxiverse entities"))
+	testing.expect(t, strings.contains(string(saved), "\nvoxiverse:sheep "), "the id is written")
+	testing.expect(t, !strings.contains(string(saved), "\nsheep "), "no bare name")
 }
