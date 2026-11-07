@@ -11,7 +11,7 @@ import "common:worldgen"
 // The music director: a state machine the app feeds with what is going
 // on (the session, the place, the time) and whose actions the app
 // carries out on the mixer (music_apply), so tests need no mixer. It plays the
-// title's piece on the menus, lets the world's music come and go in
+// title's piece on the menus (and the Ignite cue over the Ignite screen), lets the world's music come and go in
 // waits and tracks (one at a time, picked to fit where the player is), and
 // punctuates deaths and arrivals with stingers. The pieces and their tags are
 // the committed assets/music (music_data.odin).
@@ -21,6 +21,7 @@ Music_Role :: enum u8 {
 	Title, // looped on the menus
 	Death, // stinger
 	Discovery, // stinger
+	Ignite, // the cue of the Ignite screen, played once
 }
 
 // Music_Track: a piece and what its metadata says about where it fits (a
@@ -66,6 +67,8 @@ music_tracks :: proc(arena: ^virtual.Arena) -> []Music_Track {
 			role = .Death
 		case f.name == "discovery":
 			role = .Discovery
+		case f.name == "ignite":
+			role = .Ignite
 		}
 		tracks[i] = {
 			f.name,
@@ -86,6 +89,7 @@ music_tracks :: proc(arena: ^virtual.Arena) -> []Music_Track {
 Music_Tuning :: struct {
 	title_fade_in:  f32,
 	title_fade_out: f32,
+	ignite_fade:    f32, // the title's fade-out when the Ignite cue starts
 	first_min:      f32, // the first wait in a session
 	first_max:      f32,
 	rare_min:       f32, // the gap options' waits
@@ -108,6 +112,7 @@ Music_Tuning :: struct {
 MUSIC_DEFAULTS := Music_Tuning {
 	title_fade_in  = 2,
 	title_fade_out = 3,
+	ignite_fade    = 0.5,
 	first_min      = 30,
 	first_max      = 90,
 	rare_min       = 900,
@@ -129,6 +134,12 @@ MUSIC_DEFAULTS := Music_Tuning {
 @(rodata)
 MUSIC_VARS := [?]base.Var {
 	{field = "title_fade_in", help = "seconds the title's piece fades in", min = 0, max = 30},
+	{
+		field = "ignite_fade",
+		help = "seconds the title fades out when the Ignite cue starts",
+		min = 0,
+		max = 30,
+	},
 	{
 		field = "title_fade_out",
 		help = "seconds it fades out when a world loads",
@@ -182,7 +193,8 @@ music_table :: proc() -> base.Var_Table {
 MUSIC_SLOT_TITLE :: 0
 MUSIC_SLOT_PIECE :: 1
 MUSIC_SLOT_STINGER :: 2
-MUSIC_SLOT_STEM :: 3
+MUSIC_SLOT_IGNITE :: 3
+MUSIC_SLOT_STEM :: 4
 MUSIC_STEMS :: 4
 MUSIC_SLOTS :: MUSIC_SLOT_STEM + MUSIC_STEMS
 
@@ -191,6 +203,7 @@ Music_Input :: struct {
 	loading:     bool, // ... and its loading screen is up
 	paused:      bool, // `world_paused`
 	playing:     bool, // ... and it is playing
+	ignite:      bool, // the Ignite screen is up (no session exists then)
 	biome:       u8, // worldgen.Biome ordinal under the player, 255: not Earth
 	time_of_day: f64, // 0..1, noon at 0.5
 	depth:       f32, // the column's top at the player minus the feet, blocks
@@ -235,6 +248,7 @@ Music_Director :: struct {
 	last:       int, // the last piece played (-1: none)
 	cave:       bool, // the piece's level is the cave's
 	leave_left: f32, // seconds until the title may start again
+	ignite_was: bool, // the Ignite screen was up last frame
 	layers:     Music_Layered,
 }
 
@@ -363,6 +377,17 @@ director_update :: proc(
 		emit(out, {kind = .Stop, voice_slot = u8(slot), seconds = seconds})
 	}
 
+	// The Ignite screen starting: the title stops, the cue plays once from
+	// its t = 0. Without an ignite piece nothing happens.
+	if in_.ignite && !d.ignite_was {
+		if track := stinger_track(d, .Ignite); track >= 0 {
+			stop(d, out, MUSIC_SLOT_TITLE, t.ignite_fade)
+			d.on[MUSIC_SLOT_IGNITE] = true
+			emit(out, {kind = .Play, track = track, voice_slot = MUSIC_SLOT_IGNITE, gain = 1})
+		}
+	}
+	d.ignite_was = in_.ignite
+
 	if !in_.session {
 		if d.in_session {
 			// Back from a world: what plays fades out, then the title comes.
@@ -375,7 +400,7 @@ director_update :: proc(
 		}
 		if d.leave_left > 0 {
 			d.leave_left -= dt
-		} else if !d.on[MUSIC_SLOT_TITLE] {
+		} else if !d.on[MUSIC_SLOT_TITLE] && !d.on[MUSIC_SLOT_IGNITE] {
 			if title := 0; len(d.tracks) > 0 {
 				d.on[MUSIC_SLOT_TITLE] = true
 				emit(
@@ -426,7 +451,10 @@ director_update :: proc(
 			)
 		}
 	}
-	if !d.on[MUSIC_SLOT_PIECE] && !d.on[MUSIC_SLOT_STINGER] && !d.waiting {
+	if !d.on[MUSIC_SLOT_PIECE] &&
+	   !d.on[MUSIC_SLOT_STINGER] &&
+	   !d.on[MUSIC_SLOT_IGNITE] &&
+	   !d.waiting {
 		d.waiting = true
 		d.wait_left = director_wait(d, in_.gap)
 	}
