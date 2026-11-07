@@ -815,6 +815,7 @@ load_entities :: proc(w: ^World) {
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			e.yaw, e.health = yaw, min(health, game.kind_info(reg, kind).health)
 			e.stack, e.action = stack, action
+			entity_mirror(w, e)
 			if kind == sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
 			if kind == sheep && len(f) == 12 {
 				genes, ok1 := strconv.parse_int(f[8])
