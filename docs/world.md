@@ -228,6 +228,22 @@ at their day and place and change nothing before it.
   yearly cycle: `town_price(town, good, month_fraction)` is lowest right after the harvest
   (`harvest_month`: two months after the warmest, in the tropics after the wettest) and rises
   ±12 % to the next one. 600 towns take under 100 ms.
+- **The economy, part 2** (`common/planet/market.odin`): the same towns, two ways. *Detailed*
+  (`Market`, for the towns of one island): each town keeps a stock per good in months of need;
+  the price is its normal price over the stock (within 0.5-4 times); supply answers the price;
+  merchants load along `Economy.links` (each town's six cheapest ways) while a gap beats 60 %
+  of the way's carriage (`MERCHANT_SHARE`; the rest is profit, so the best ordinary trip pays
+  20-60 %), shipping a quarter of the gap and counting caravans already on the road to the
+  buyer (the expectation that keeps a market out of the cobweb). `market_step` is a month; the
+  island's 50 towns take under 0.5 ms a tick. *Lazy* (outside every island, no state):
+  `lazy_price` is the normal price times `exp` of the `Kernel` for each known `Drought` (grain
+  falls by a fraction of its yield within 400 km for a year). The kernel is the detailed model's
+  own response, measured once per world by `kernel_measure` (a standard drought at six towns,
+  against a run without), by distance (100 km bins) and months since the start; severity
+  scales its log. *Seams*: `market_enter` starts stocks so each price equals the lazy one;
+  `market_leave` keeps the detailed price's gap to the lazy one in `Lazy_State`, fading over
+  3 months. The islands themselves (who observes, what runs when) are issues #132 and #133;
+  this part takes the towns of an island as a list. Only grain is hit by droughts so far.
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

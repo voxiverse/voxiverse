@@ -76,7 +76,6 @@ test_production_follows_the_land :: proc(t: ^testing.T) {
 	}
 }
 
-@(private = "file")
 town_at :: proc(p: Planet, cell, era: int, size: f32) -> Settlement {
 	w, h := p.land.width, p.land.height
 	return Settlement {

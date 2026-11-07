@@ -56,6 +56,7 @@ GRAIN_SWING :: 0.12 // grain's price: this much above and below its mean through
 Town :: struct {
 	settlement: int, // index in the settlements given to economy_build
 	cell:       int,
+	lat, lon:   f32, // degrees
 	size:       f32, // people: the need
 	era:        int,
 	production: [Good]f32, // people supplied
@@ -64,12 +65,24 @@ Town :: struct {
 	harvest:    int, // month (0 is January) of the grain harvest
 }
 
+// Link is a way merchants take between two towns: the carriage in base prices.
+Link :: struct {
+	to:       int, // town index
+	carriage: f32,
+}
+
+LINKS_PER_TOWN :: 6 // each town's cheapest ways (a way is kept for both its ends)
+
 Economy :: struct {
-	towns: []Town, // the standing settlements, in order
+	towns:      []Town, // the standing settlements, in order
+	link_first: []int, // town i's links are links[link_first[i]:link_first[i+1]]
+	links:      []Link,
 }
 
 economy_destroy :: proc(e: ^Economy) {
 	delete(e.towns)
+	delete(e.link_first)
+	delete(e.links)
 	e^ = {}
 }
 
@@ -200,6 +213,8 @@ economy_build :: proc(
 		e.towns[i] = Town {
 			settlement = si,
 			cell       = s.cell,
+			lat        = f32(climate_lat(p.land.height, s.cell / p.land.width)),
+			lon        = f32((f64(s.cell % p.land.width) + 0.5) * 360 / f64(p.land.width) - 180),
 			size       = s.size,
 			era        = s.era,
 			production = produce(p, s.cell, s.era),
@@ -259,6 +274,40 @@ economy_build :: proc(
 			}
 			c := f32(km * rate)
 			if c <= REACH_COST {carriage[a * n + b], carriage[b * n + a] = c, c}
+		}
+	}
+	// The ways merchants take: each town's cheapest few, both ways.
+	chosen := make([]bool, n * n, context.temp_allocator)
+	picked := make([]bool, n, context.temp_allocator)
+	for a in 0 ..< n {
+		for &v in picked {v = false}
+		for _ in 0 ..< LINKS_PER_TOWN {
+			best := -1
+			for b in 0 ..< n {
+				c := carriage[a * n + b]
+				if c == 0 || picked[b] {continue}
+				if best < 0 || c < carriage[a * n + best] {best = b}
+			}
+			if best < 0 {break}
+			picked[best] = true
+			chosen[a * n + best], chosen[best * n + a] = true, true
+		}
+	}
+	e.link_first = make([]int, n + 1, allocator)
+	count := 0
+	for a in 0 ..< n {
+		e.link_first[a] = count
+		for b in 0 ..< n {if chosen[a * n + b] {count += 1}}
+	}
+	e.link_first[n] = count
+	e.links = make([]Link, count, allocator)
+	count = 0
+	for a in 0 ..< n {
+		for b in 0 ..< n {
+			if chosen[a * n + b] {
+				e.links[count] = Link{b, carriage[a * n + b]}
+				count += 1
+			}
 		}
 	}
 	for g in Good {
