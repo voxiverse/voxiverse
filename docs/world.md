@@ -37,7 +37,12 @@ and mixed forest are `Forest`, savanna, steppe and Mediterranean scrub `Plains`,
 subarctic `Taiga`, ET `Tundra`, EF `Ice_Sheet`, and seas colder than -1.8 °C in their coldest month
 `Frozen_Ocean`; the coast, the banks and high mountains keep the shape's biome. The climate grid is
 built once per process on first use (`planet_model`). `/where` prints the Köppen class and the biome.
-New biomes of their own, rivers from the relief and the spawn come in later parts. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
+`common/planet`'s `rivers_build` routes the climate grid's land to the sea (priority-flood fills
+depressions, each cell drains to its steepest lower neighbour on the filled surface, the rain
+accumulates downstream): `flow` per cell, `lake` for filled depressions 5 m deep or more, and
+`river_width` (2 blocks at `RIVER_FLOW`, 24 at `RIVER_FLOW_BIG`, growing as the square root of the
+flow). The world does not carve them yet.
+New biomes of their own, carving the rivers and the spawn come in later parts. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 
