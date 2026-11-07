@@ -38,6 +38,8 @@ Part :: struct {
 	volume_db: f32,
 	pan:       f32,
 	melody:    bool, // marked `melody` in the score: the ear listens to this part
+	font:      string, // the font the part plays through ("" is the piano)
+	preset:    string, // a preset by name (an SFZ file's stem), when the font has no bank:program
 }
 
 // Source is where a score wrote a note (a MIDI file has none): the ear's critique cites it.

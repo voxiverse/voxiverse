@@ -18,10 +18,13 @@ WORK_DIR :: "build/music-out" // (build/music is the tool itself)
 //	build music [<name>...] [--force] [--wav <dir>] [--midi]
 //	build music --audition <name> [--from <seconds>]
 //	build music ear [<name>...] [--json]
+//	build music --audition-instruments [--wav <dir>]
 //
 //	--force     render every piece, not only those whose source or soundfont changed
 //	--wav <dir> keep each piece's float master as a WAV
 //	--midi      write build/music-out/<name>.mid from each score, to open in a notation editor
+//	--audition-instruments  render each instrument's C2-C7 scale at pp, mf and ff to a WAV per
+//	            instrument (build/music-out/instruments, or --wav <dir>)
 //	--audition  play assets/music/<name>.ogg on the default device (looping if its .json says
 //	            so) until Enter is pressed; --from starts that many seconds in
 //
@@ -38,6 +41,7 @@ main :: proc() {
 	wav_dir: string
 	names: [dynamic]string
 	audition: string
+	instruments := false
 	from: f32
 	args := os.args[1:]
 	for i := 0; i < len(args); i += 1 {
@@ -56,6 +60,8 @@ main :: proc() {
 				fmt.eprintfln("music: --from wants seconds, not '%s'", args[i])
 				os.exit(2)
 			}
+		case "--audition-instruments":
+			instruments = true
 		case "--force":
 			force = true
 		case "--midi":
@@ -74,6 +80,10 @@ main :: proc() {
 			}
 			append(&names, args[i])
 		}
+	}
+	if instruments {
+		if !audition_instruments(wav_dir) {os.exit(1)}
+		return
 	}
 	if audition != "" {
 		if !play_audition(audition, from) {os.exit(1)}
@@ -108,24 +118,7 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 	os.make_directory_all(WORK_DIR)
 	if wav_dir != "" {os.make_directory_all(wav_dir)}
 
-	sf: Soundfont
-	sf_sha: string
-	if !midi {
-		path := soundfont_path() or_return
-		data, rerr := os.read_entire_file_from_path(path, context.allocator)
-		if rerr != nil {
-			fmt.eprintfln("music: cannot read %s", path)
-			return false
-		}
-		sf_sha = sha256_hex(data)
-		msg: string
-		ok: bool
-		sf, msg, ok = sf2_read(data)
-		if !ok {
-			fmt.eprintfln("music: %s: %s", path, msg)
-			return false
-		}
-	}
+	cache: map[string]^Loaded_Font
 	all_ok := true
 	for name in sources {
 		ext := filepath.ext(name)
@@ -166,6 +159,14 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			fmt.printfln("music: wrote %s", out)
 			continue
 		}
+		fonts: map[string]^Soundfont
+		sf_sha: string
+		fonts_ok: bool
+		if fonts, fonts_ok = fonts_load(&piece, &cache); !fonts_ok {
+			all_ok = false
+			continue
+		}
+		sf_sha = fonts_sha256(&piece, cache)
 		src_sha := sha256_hex(src)
 		json_path := strings.concatenate({MUSIC_DIR, "/", stem, ".json"})
 		ogg_path := strings.concatenate({MUSIC_DIR, "/", stem, ".ogg"})
@@ -174,7 +175,7 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			continue
 		}
 		fmt.printfln("music: rendering %s", stem)
-		stereo := render(&piece, &sf)
+		stereo := render_with(&piece, fonts)
 		m, ok := master(&piece, stereo)
 		if !ok {
 			fmt.eprintfln(
@@ -283,4 +284,79 @@ play_audition :: proc(name: string, from: f32) -> bool {
 	audio.device_close(&dev)
 	audio.streams_close(m)
 	return true
+}
+
+// audition_instruments renders the C2-C7 scale (C major, a note of half a
+// second, then pp, mf and ff one after the other) of every preset of every
+// font to build/music-out/instruments/<font>.<preset>.wav, or into --wav <dir>.
+audition_instruments :: proc(wav_dir: string) -> bool {
+	dir := wav_dir if wav_dir != "" else strings.concatenate({WORK_DIR, "/instruments"})
+	os.make_directory_all(dir)
+	cache: map[string]^Loaded_Font
+	all_ok := true
+	for def in FONTS {
+		p := piece_defaults()
+		append(&p.parts, Part{name = "a", font = def.name})
+		fonts, ok := fonts_load(&p, &cache)
+		if !ok {all_ok = false; continue}
+		sf := fonts[def.name]
+		for preset in sf.presets {
+			q := scale_piece(def.name, preset)
+			x := render_with(&q, fonts)
+			name := strings.concatenate({dir, "/", def.name, ".", sanitize(preset.name), ".wav"})
+			if !audio.wav_write(name, x, RATE) {
+				fmt.eprintfln("music: cannot write %s", name)
+				all_ok = false
+				continue
+			}
+			fmt.printfln("music: wrote %s", name)
+		}
+	}
+	return all_ok
+}
+
+@(private = "file")
+sanitize :: proc(s: string) -> string {
+	b := transmute([]u8)strings.clone(s)
+	for &c in b {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {c = '_'}
+	}
+	return string(b)
+}
+
+// scale_piece: the audition's notes for one preset, one part.
+scale_piece :: proc(font: string, preset: Sf_Preset) -> Piece {
+	p := piece_defaults()
+	p.reverb_wet = 0
+	p.humanize_ms, p.humanize_vel = 0, 0
+	part := Part {
+		name = "a",
+		font = font,
+	}
+	if sf_is_named_font(
+		font,
+	) {part.preset = preset.name} else {part.bank, part.program = preset.bank, u8(preset.preset)}
+	append(&p.parts, part)
+	append(&p.tempos, Tempo{0, 120})
+	append(&p.meters, Meter{0, 4, 4})
+	steps := [?]int{0, 2, 4, 5, 7, 9, 11}
+	tick := u32(0)
+	for vel in ([]u8{32, 64, 110}) {
+		for octave in 2 ..= 6 {
+			for s in steps {
+				append(&p.notes, Note{tick, PPQ / 2 * 2 - 1, u8(12 * (octave + 1) + s), vel, 0})
+				tick += PPQ
+			}
+		}
+		append(&p.notes, Note{tick, PPQ * 2 - 1, 96, vel, 0}) // C7
+		tick += PPQ * 3
+	}
+	p.end = tick
+	return p
+}
+
+@(private = "file")
+sf_is_named_font :: proc(font: string) -> bool {
+	def, _ := font_def(font)
+	return font_source(def).kind == .Sfz
 }
