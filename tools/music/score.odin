@@ -5,7 +5,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-// The score parser (the grammar is in this file). A score is read
+// The score parser (the grammar is in docs/audio.md). A score is read
 // in one pass into per-part lists of bars, then the bars are played out in
 // order (repeats expanded), each checked against the meter in force.
 
@@ -26,13 +26,46 @@ Ev :: struct {
 	key, vel:  u8,
 	kind:      Ev_Kind,
 	tie:       bool,
+	art:       Art,
+	ramp:      i32, // 1 + the index of the cresc or dim the note is under; 0 for none
+	ramp_idx:  i32, // the note's place among the ramp's notes
 	line, col: int,
 }
 
 Bar :: struct {
 	events:    [dynamic]Ev,
+	stmts:     [dynamic]Stmt, // motifs stated from this bar
 	length:    u32,
 	line, col: int, // of the bar line that closed it
+}
+
+// A motif stated at a place in a bar.
+Stmt :: struct {
+	name:   string,
+	rel:    u32,
+	varied: bool,
+}
+
+// A cresc or dim: the velocity runs from `from` to the next dynamic over the
+// `count` notes between.
+Ramp :: struct {
+	from, to: u8,
+	count:    i32,
+	up:       bool,
+	line:     int,
+	col:      int,
+}
+
+Sec_Line :: struct {
+	toks: []Token,
+	line: int,
+}
+
+Section :: struct {
+	name:   string,
+	repeat: int,
+	lines:  [dynamic]Sec_Line,
+	line:   int,
 }
 
 Part_Build :: struct {
@@ -46,6 +79,12 @@ Part_Build :: struct {
 	repeat_from: int, // index into order; -1 outside a repeat
 	repeat_line: int,
 	repeat_col:  int,
+	ramps:       [dynamic]Ramp,
+	ramp_open:   int, // index into ramps; -1 when none is open
+	sections:    [dynamic]Section,
+	sec_open:    int, // index into sections; -1 outside a section
+	formed:      bool, // a `form` line has been read
+	prime:       bool, // playing a primed section: motifs are varied
 }
 
 Mark :: struct {
@@ -60,6 +99,7 @@ Parse :: struct {
 	p:                  Piece,
 	err:                string,
 	instruments:        [dynamic]Instrument_Decl,
+	motifs:             [dynamic]Motif,
 	meter_marks:        [dynamic]Mark,
 	tempo_marks:        [dynamic]Mark,
 	positions_resolved: bool,
@@ -190,15 +230,30 @@ parse_all :: proc(ps: ^Parse, src: string) -> bool {
 		if toks[0].text == "part" {
 			if cur != nil {part_end(ps, cur) or_return}
 			resolve_positions(ps) or_return
-			append(&builds, Part_Build{line = line_no, vel = 80, dur = PPQ, repeat_from = -1})
+			append(
+				&builds,
+				Part_Build {
+					line = line_no,
+					vel = 80,
+					dur = PPQ,
+					repeat_from = -1,
+					ramp_open = -1,
+					sec_open = -1,
+				},
+			)
 			cur = &builds[len(builds) - 1]
 			part_start(ps, cur, toks, line_no) or_return
 			continue
 		}
-		if cur == nil {
+		if toks[0].text == "motif" {
+			if cur != nil && cur.sec_open >= 0 {
+				return fail(ps, line_no, toks[0].col, "a motif is declared outside a section")
+			}
+			motif_line(ps, toks, line_no) or_return
+		} else if cur == nil {
 			header_line(ps, toks, line_no) or_return
 		} else {
-			music_line(ps, cur, toks, line_no) or_return
+			part_line(ps, cur, toks, line_no) or_return
 		}
 		if len(rest) == 0 {break}
 	}
@@ -475,6 +530,22 @@ bar_line :: proc(b: ^Part_Build, line, col: int) {
 part_end :: proc(ps: ^Parse, b: ^Part_Build) -> bool {
 	bar_line(b, b.line, 1)
 	if b.repeat_from >= 0 {return fail(ps, b.repeat_line, b.repeat_col, "'|:' is never closed")}
+	if b.ramp_open >= 0 {
+		r := b.ramps[b.ramp_open]
+		return fail(ps, r.line, r.col, "the cresc or dim is not followed by a dynamic")
+	}
+	if b.sec_open >= 0 {
+		return fail(
+			ps,
+			b.sections[b.sec_open].line,
+			1,
+			"section '%s' is never closed with 'end'",
+			b.sections[b.sec_open].name,
+		)
+	}
+	if len(b.sections) > 0 && !b.formed {
+		return fail(ps, b.sections[0].line, 1, "the part declares sections but has no 'form'")
+	}
 	return true
 }
 
@@ -489,9 +560,24 @@ suffix :: proc(
 	dur: u32,
 	tie: bool,
 	vel: u8,
+	art: Art,
 	ok: bool,
 ) {
 	rest := s
+	if at := strings.index_byte(s, '^'); at >= 0 {
+		switch s[at + 1:] {
+		case "stacc":
+			art = .Stacc
+		case "ten":
+			art = .Ten
+		case "legato":
+			art = .Legato
+		case:
+			fail(ps, line, col + at, "unknown articulation '%s' (stacc, ten or legato)", s[at:])
+			return
+		}
+		rest = s[:at]
+	}
 	dur, vel = b.dur, b.vel
 	if len(rest) > 0 && rest[0] == ':' {
 		d, r, dok := parse_duration(rest[1:])
@@ -515,7 +601,7 @@ suffix :: proc(
 		fail(ps, line, col, "unexpected '%s'", rest)
 		return
 	}
-	return dur, tie, vel, true
+	return dur, tie, vel, art, true
 }
 
 @(private = "file")
@@ -547,15 +633,16 @@ music_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 			kind := Ev_Kind.Ped_Down if text == "ped" else .Ped_Up
 			append(&b.cur.events, Ev{rel = b.cur.length, kind = kind, line = line, col = t.col})
 		case text == "r" || strings.has_prefix(text, "r:"):
-			dur, _, _, ok := suffix(ps, b, line, t.col, text[1:])
+			dur, _, _, _, ok := suffix(ps, b, line, t.col, text[1:])
 			if !ok {return false}
 			b.dur = dur
 			b.cur.length += dur
 		case text[0] == '[':
 			close := strings.index_byte(text, ']')
 			if close < 0 {return fail(ps, line, t.col, "chord without ']'")}
-			dur, tie, vel, ok := suffix(ps, b, line, t.col + close + 1, text[close + 1:])
+			dur, tie, vel, art, ok := suffix(ps, b, line, t.col + close + 1, text[close + 1:])
 			if !ok {return false}
+			ramp, ramp_idx := ramp_tag(b, strings.contains(text[close + 1:], "!"))
 			inner := text[1:close]
 			count := 0
 			for pitch in strings.fields(inner) {
@@ -572,6 +659,9 @@ music_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 						key = u8(key),
 						vel = vel,
 						tie = tie,
+						art = art,
+						ramp = ramp,
+						ramp_idx = ramp_idx,
 						line = line,
 						col = t.col,
 					},
@@ -582,14 +672,43 @@ music_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 			b.dur = dur
 			b.cur.length += dur
 		case:
+			if text == "cresc" || text == "dim" {
+				if b.ramp_open >= 0 {
+					return fail(ps, line, t.col, "'%s' inside a cresc or dim", text)
+				}
+				append(
+					&b.ramps,
+					Ramp{from = b.vel, up = text == "cresc", line = line, col = t.col},
+				)
+				b.ramp_open = len(b.ramps) - 1
+				continue
+			}
 			if d, dok := dynamic_of(text); dok {
+				if b.ramp_open >= 0 {
+					r := &b.ramps[b.ramp_open]
+					if (d > r.from) != r.up || d == r.from {
+						return fail(
+							ps,
+							line,
+							t.col,
+							"the %s does not %s: it goes from %d to %d",
+							"cresc" if r.up else "dim",
+							"rise" if r.up else "fall",
+							r.from,
+							d,
+						)
+					}
+					r.to = d
+					b.ramp_open = -1
+				}
 				b.vel = d
 				continue
 			}
 			key, rest, kok := parse_pitch(text)
 			if !kok {return fail(ps, line, t.col, "unknown word '%s'", text)}
-			dur, tie, vel, ok := suffix(ps, b, line, t.col + len(text) - len(rest), rest)
+			dur, tie, vel, art, ok := suffix(ps, b, line, t.col + len(text) - len(rest), rest)
 			if !ok {return false}
+			ramp, ramp_idx := ramp_tag(b, strings.contains(rest, "!"))
 			append(
 				&b.cur.events,
 				Ev {
@@ -598,6 +717,9 @@ music_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 					key = u8(key),
 					vel = vel,
 					tie = tie,
+					art = art,
+					ramp = ramp,
+					ramp_idx = ramp_idx,
 					line = line,
 					col = t.col,
 				},
@@ -653,10 +775,21 @@ expand :: proc(ps: ^Parse, builds: []Part_Build) -> bool {
 					m.num,
 				)
 			}
+			for st in bar.stmts {
+				append(&p.motifs, Stated{st.name, u8(pi), tick + st.rel, st.varied})
+			}
 			for e in bar.events {
 				switch e.kind {
 				case .Note:
-					append(&raws, Note{tick + e.rel, e.length, e.key, e.vel, u8(pi)})
+					vel := e.vel
+					if e.ramp > 0 {
+						r := b.ramps[e.ramp - 1]
+						vel = u8(
+							int(r.from) +
+							(int(r.to) - int(r.from)) * int(e.ramp_idx) / int(r.count),
+						)
+					}
+					append(&raws, Note{tick + e.rel, e.length, e.key, vel, u8(pi)})
 					append(&tied, e)
 				case .Ped_Down:
 					append(&p.pedals, Pedal{tick + e.rel, u8(pi), true})
@@ -682,6 +815,17 @@ expand :: proc(ps: ^Parse, builds: []Part_Build) -> bool {
 		merge_ties(ps, raws[:], tied[:]) or_return
 		for n, i in raws {
 			if n.length == 0 {continue}
+			n := n
+			switch tied[i].art {
+			case .None:
+			case .Stacc:
+				n.length = max(n.length / 2, 1)
+			case .Ten:
+				n.velocity = u8(min(int(n.velocity) + TEN_ACCENT, 127))
+			case .Legato:
+				bpm := tempo_bpm_at(p.tempos[:], n.start)
+				n.length += u32(LEGATO_MS / 1000 * bpm * PPQ / 60 + 0.5)
+			}
 			append(&p.notes, n)
 			append(&p.sources, Source{n.start, n.part, n.key, u32(tied[i].line), u32(tied[i].col)})
 		}
@@ -725,4 +869,257 @@ merge_ties :: proc(ps: ^Parse, notes: []Note, evs: []Ev) -> bool {
 		}
 	}
 	return true
+}
+
+// ramp_tag places a note among the notes of the open cresc or dim; a note
+// with a velocity of its own is outside it.
+@(private = "file")
+ramp_tag :: proc(b: ^Part_Build, explicit: bool) -> (id, idx: i32) {
+	if explicit || b.ramp_open < 0 {return 0, 0}
+	r := &b.ramps[b.ramp_open]
+	idx = r.count
+	r.count += 1
+	return i32(b.ramp_open + 1), idx
+}
+
+// motif_line reads `motif <name> | g4:q a4:e ... |`: notes and rests with the
+// durations of a part's bars (a dynamic word pins the velocity of what follows),
+// no chords. The bar lines only separate; the figure is one run of notes.
+@(private = "file")
+motif_line :: proc(ps: ^Parse, toks: []Token, line: int) -> bool {
+	if len(toks) < 3 {return fail(ps, line, toks[0].col, "'motif' needs a name and its notes")}
+	name := toks[1].text
+	for m in ps.motifs {
+		if m.name ==
+		   name {return fail(ps, line, toks[1].col, "motif '%s' is already declared", name)}
+	}
+	m := Motif {
+		name = name,
+		line = line,
+	}
+	scratch := Part_Build {
+		dur = PPQ,
+	}
+	notes := 0
+	for t in toks[2:] {
+		text := t.text
+		switch {
+		case text == "|":
+		case text == "r" || strings.has_prefix(text, "r:"):
+			dur, _, _, _, ok := suffix(ps, &scratch, line, t.col, text[1:])
+			if !ok {return false}
+			scratch.dur = dur
+			append(&m.items, Item{rest = true, dur = dur})
+		case text[0] == '[':
+			return fail(ps, line, t.col, "a motif has no chords")
+		case:
+			if d, dok := dynamic_of(text); dok {
+				scratch.vel = d
+				continue
+			}
+			key, rest, kok := parse_pitch(text)
+			if !kok {return fail(ps, line, t.col, "unknown word '%s'", text)}
+			dur, tie, vel, art, ok := suffix(
+				ps,
+				&scratch,
+				line,
+				t.col + len(text) - len(rest),
+				rest,
+			)
+			if !ok {return false}
+			scratch.dur = dur
+			append(&m.items, Item{key = u8(key), dur = dur, vel = vel, tie = tie, art = art})
+			notes += 1
+		}
+	}
+	if notes == 0 {return fail(ps, line, toks[1].col, "motif '%s' has no note", name)}
+	append(&ps.motifs, m)
+	return true
+}
+
+// part_line reads a line of a part: the section and form words, else a line
+// of music or a `play`.
+@(private = "file")
+part_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool {
+	word := toks[0]
+	if b.sec_open >= 0 {
+		switch word.text {
+		case "end":
+			if len(toks) > 1 {return fail(ps, line, toks[1].col, "unexpected '%s'", toks[1].text)}
+			b.sec_open = -1
+		case "section", "form":
+			return fail(ps, line, word.col, "'%s' inside a section", word.text)
+		case:
+			append(&b.sections[b.sec_open].lines, Sec_Line{toks, line})
+		}
+		return true
+	}
+	switch word.text {
+	case "end":
+		return fail(ps, line, word.col, "'end' without 'section'")
+	case "section":
+		// section <name> [repeat <n>]
+		if len(toks) != 2 && len(toks) != 4 {
+			return fail(ps, line, word.col, "expected 'section <name> [repeat <n>]'")
+		}
+		name := toks[1].text
+		if strings.has_suffix(name, "'") {
+			return fail(ps, line, toks[1].col, "a section's name has no prime: 'form' primes it")
+		}
+		for s in b.sections {
+			if s.name ==
+			   name {return fail(ps, line, toks[1].col, "section '%s' is already declared", name)}
+		}
+		repeat := 1
+		if len(toks) == 4 {
+			if toks[2].text != "repeat" {return fail(ps, line, toks[2].col, "expected 'repeat'")}
+			repeat = int_of(ps, line, toks[3]) or_return
+			if repeat < 1 || repeat > 64 {
+				return fail(ps, line, toks[3].col, "repeat is from 1 to 64")
+			}
+		}
+		append(&b.sections, Section{name = name, repeat = repeat, line = line})
+		b.sec_open = len(b.sections) - 1
+		return true
+	case "form":
+		if len(toks) < 2 {return fail(ps, line, word.col, "'form' needs section names")}
+		for t in toks[1:] {
+			name := t.text
+			primed := strings.has_suffix(name, "'")
+			if primed {name = name[:len(name) - 1]}
+			at := -1
+			for s, i in b.sections {
+				if s.name == name {at = i}
+			}
+			if at < 0 {return fail(ps, line, t.col, "section '%s' is not declared", name)}
+			for _ in 0 ..< b.sections[at].repeat {
+				b.prime = primed
+				for sl in b.sections[at].lines {
+					body_line(ps, b, sl.toks, sl.line) or_return
+				}
+				b.prime = false
+			}
+		}
+		b.formed = true
+		return true
+	}
+	return body_line(ps, b, toks, line)
+}
+
+@(private = "file")
+body_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool {
+	if toks[0].text == "play" {return play_line(ps, b, toks, line)}
+	return music_line(ps, b, toks, line)
+}
+
+// play_line reads `play <motif> [transpose <n> | degrees <n>] [invert]
+// [retrograde] [augment <n>] [diminish <n>] [vary <seed>]`; the operations
+// apply in the order written.
+@(private = "file")
+play_line :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool {
+	if len(toks) < 2 {return fail(ps, line, toks[0].col, "'play' needs a motif")}
+	at := -1
+	for m, i in ps.motifs {
+		if m.name == toks[1].text {at = i}
+	}
+	if at < 0 {return fail(ps, line, toks[1].col, "motif '%s' is not declared", toks[1].text)}
+	ops: [dynamic]Op
+	varied := false
+	for i := 2; i < len(toks); {
+		kinds := [?]struct {
+			word: string,
+			kind: Op_Kind,
+			arg:  bool,
+		} {
+			{"transpose", .Transpose, true},
+			{"degrees", .Degrees, true},
+			{"invert", .Invert, false},
+			{"retrograde", .Retrograde, false},
+			{"augment", .Augment, true},
+			{"diminish", .Diminish, true},
+			{"vary", .Vary, true},
+		}
+		found := false
+		for k in kinds {
+			if k.word != toks[i].text {continue}
+			found = true
+			n := 0
+			if k.arg {
+				if i + 1 >=
+				   len(toks) {return fail(ps, line, toks[i].col, "'%s' needs a number", k.word)}
+				n = int_of(ps, line, toks[i + 1]) or_return
+			}
+			append(&ops, Op{k.kind, n})
+			varied ||= k.kind == .Vary
+			i += 2 if k.arg else 1
+			break
+		}
+		if !found {return fail(ps, line, toks[i].col, "unknown word '%s'", toks[i].text)}
+	}
+	if b.prime && !varied {
+		append(&ops, Op{.Vary, line * 7919 + 1})
+		varied = true
+	}
+	m, err := motif_apply(ps.motifs[at], ops[:], scale_of(ps.p.key, ps.p.mode))
+	if err != "" {return fail(ps, line, toks[0].col, "%s", err)}
+	append(&b.cur.stmts, Stmt{m.name, b.cur.length, varied})
+	start := part_tick(b)
+	for it in m.items {
+		emit_item(ps, b, it, &start, line, toks[0].col)
+		b.dur = it.dur
+	}
+	return true
+}
+
+// part_tick is where the next bar of a part starts.
+@(private = "file")
+part_tick :: proc(b: ^Part_Build) -> (tick: u32) {
+	for bi in b.order {tick += b.bars[bi].length}
+	return
+}
+
+// emit_item writes a motif's note or rest into the part, closing each bar when
+// it is full; a note that crosses a bar line is cut there and tied.
+@(private = "file")
+emit_item :: proc(ps: ^Parse, b: ^Part_Build, it: Item, start: ^u32, line, col: int) {
+	explicit := it.vel != 0
+	ramp, ramp_idx: i32
+	if !it.rest {ramp, ramp_idx = ramp_tag(b, explicit)}
+	vel := it.vel if explicit else b.vel
+	remaining := it.dur
+	for remaining > 0 {
+		m := Meter{0, 4, 4}
+		if len(ps.p.meters) > 0 {m = meter_at(ps.p.meters[:], start^)}
+		full := meter_bar_ticks(m)
+		if b.cur.length >= full {
+			start^ += b.cur.length
+			bar_line(b, line, col)
+			continue
+		}
+		piece := min(remaining, full - b.cur.length)
+		last := piece == remaining
+		if !it.rest {
+			append(
+				&b.cur.events,
+				Ev {
+					rel = b.cur.length,
+					length = piece,
+					key = it.key,
+					vel = vel,
+					tie = it.tie if last else true,
+					art = it.art,
+					ramp = ramp,
+					ramp_idx = ramp_idx,
+					line = line,
+					col = col,
+				},
+			)
+		}
+		b.cur.length += piece
+		remaining -= piece
+		if b.cur.length == full {
+			start^ += full
+			bar_line(b, line, col)
+		}
+	}
 }

@@ -122,6 +122,34 @@ glockenspiel).
 - `assets/music/CREDITS.txt` holds each source's credit line; the game's credits screen shows it.
   Read a download's license on its own page before committing anything rendered from it.
 
+### Motifs and form in a score
+
+Scores can state a figure once and develop it. Every existing score reads the same (a test
+hashes the notes of each committed score).
+
+- `motif <name> | g4:q a4:e b4:e d5:h |` declares a figure, on one line, anywhere before its
+  use: notes, rests (`r:q`) and dynamic words, no chords, no pedal. A note with no velocity of
+  its own takes the part's dynamic when played. The `|` only separates.
+- `play <name> [ops]` is a line of its own in a part. The operations apply in the order
+  written: `transpose <semitones>`, `degrees <n>` (along the piece's `key`, so in D dorian two
+  degrees up takes d to f), `invert` (around the first note), `retrograde` (the notes reversed,
+  each keeping its duration), `augment <n>` / `diminish <n>` (durations times or over n),
+  `vary <seed>` (at most one note in four moves a scale degree, never the first or last, never a
+  tied note; the same seed gives the same result). The figure fills bars by the meter; a note
+  crossing a bar line is cut and tied.
+- `section <name> [repeat <n>]` ... `end` records lines of a part without playing them;
+  `form A A B A'` plays them in that order (`repeat` plays a section n times each time it is
+  named). A name with a prime (`A'`) plays the section with `vary` applied to each of its
+  `play` lines that has none (the seed comes from the line). A part that declares sections
+  needs a `form`; sections do not nest.
+- `cresc` / `dim` before a run of notes ramp their velocity linearly to the next dynamic word
+  (`mp cresc c4:q d4 e4 f4 | f`); a note with its own `!velocity` stays out of the ramp.
+- An articulation follows a note or chord, after its duration and tie: `^stacc` (half the
+  length), `^ten` (full length, velocity +6), `^legato` (held 30 ms into the next note).
+
+The ear (below) lists each motif a piece states: how many times, how many varied, and the bar of
+each statement (a prime marks a varied one).
+
 ### The ear
 
 An agent cannot listen, so `build music ear [<name>...] [--json]` reads each score (or `.mid`)
@@ -144,6 +172,7 @@ every measure and every critique line for tools.
   amplitudes 0.88^k, a pedalled tail at half loudness), the worst pair per slice, the
   beat-weighted mean and 95th percentile. `accomp_variety`: distinct bars (pitches and rhythm)
   over the non-empty bars of the parts that are not the melody.
+- **The motifs** (only for scores that `play` any): `m: stated 4 times, 1 varied; bars 1 9 17 25'`.
 - **The critique** lists, worst first, what the author can fix, with the score's line and column:
   `meadow.score:31:12: bar 7: leap of 10 semitones (b5 to d7) not answered` (leaps from 7
   semitones), `bars 1-52: no figure of the melody comes back`, `bars 9-40: the arp part plays one
