@@ -42,6 +42,7 @@ Net_Client :: struct {
 	stats_text:                  string, // the last Stats_Page's lines (heap)
 	stats_pages:                 int,
 	health:                      game.Health, // the last Health message
+	island:                      game.Island, // the last Island record
 	mode:                        string, // the last Mode record's id (heap)
 	hurt:                        int, // Entity_Hurt messages
 	bulk_begins:                 int,
@@ -232,6 +233,8 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			delete(c.mode)
 			c.mode = strings.clone((^game.Mode_Record)(g.value).mode)
 		case .Rules, .Clock, .Variables, .Selection:
+		case .Island:
+			c.island = (^game.Island)(g.value)^
 		case .Tally:
 			c.tally = (^game.Tally)(g.value)^
 		case .Place:

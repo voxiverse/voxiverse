@@ -253,6 +253,24 @@ islands_update :: proc(s: ^Server, w: ^World) {
 	}
 }
 
+// island_put tells c which island it is in and how big it is (Island). The size is worked
+// out again about twice a second, not every tick.
+@(private)
+island_put :: proc(s: ^Server, c: ^Client) {
+	if s.tick >= c.island_put {
+		c.island_put = s.tick + game.TICK_RATE / 2
+		c.island = {}
+		id := u32(player_id(s, c))
+		for m in c.world.islands.members {
+			if m.observer.id == id {
+				c.island = {u32(m.island), u32(island.island_size(&c.world.islands, m.island))}
+				break
+			}
+		}
+	}
+	state_put(s, c, .Island, &c.island)
+}
+
 // worlds_unload_idle saves and frees the worlds nobody has been in for a
 // while (never the home world).
 worlds_unload_idle :: proc(s: ^Server) {

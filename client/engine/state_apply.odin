@@ -35,6 +35,7 @@ APPLY := [game.State_Kind]Apply_Proc {
 	.Place         = apply_place,
 	.Tally         = apply_tally,
 	.Channel       = apply_channel,
+	.Island        = apply_island,
 }
 
 // apply_received does what a message's records and events say, in order.
@@ -124,6 +125,11 @@ apply_variables :: proc(s: ^Session, g: game.Received) {
 @(private)
 apply_selection :: proc(s: ^Session, g: game.Received) {
 	s.selection = (^game.Selection)(g.value).corners // (drawn: camera.odin)
+}
+
+@(private)
+apply_island :: proc(s: ^Session, g: game.Received) {
+	s.island = (^game.Island)(g.value)^
 }
 
 @(private)

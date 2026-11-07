@@ -104,6 +104,8 @@ Client :: struct {
 	report_count:   int,
 	inv_acked:      u32, // its newest Inventory_Request applied
 	tx:             game.Sender, // what it has been told (replica.odin; made when it joins)
+	island_put:     u64, // the tick the Island record is next worked out
+	island:         game.Island, // what it said
 	clock_pending:  bool, // the Clock record is due (join, travel)
 	inv_changed:    bool, // since the end of the last tick
 	open_chest:     Maybe(game.Block_Pos), // the chest it is looking into (containers.odin)

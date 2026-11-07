@@ -41,6 +41,7 @@ replicate_tick :: proc(s: ^Server, c: ^Client) {
 	c.inv_changed = false
 	rules := c.world.rules
 	state_put(s, c, .Rules, &rules)
+	island_put(s, c)
 	if c.clock_pending || s.time_stopped {
 		c.clock_pending = false
 		clock := game.Clock{c.world.clock, u32(s.tick)}

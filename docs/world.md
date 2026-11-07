@@ -287,5 +287,6 @@ crosses a chunk border, a pass over the observers on every other tick.
 Ids are kept: a merge keeps the lowest id, a split leaves the id with the part holding most of the
 observers. One `update` returns the events (`Opened` and `Closed` with the chunks that entered or left
 detail, `Merged`, `Split`) and the chunks that entered and left detail in all; the server logs them at
-debug level. `/islands` (admin) lists the islands. Left for later parts: the F3 line (the player's
-island id and size, which needs the server to tell the client) and the systems that ask `island_of`.
+debug level. `/islands` (admin) lists the islands. The server tells each player its island (the
+`Island` state: id and chunk count, worked out about twice a second) and F3's `island:` line shows
+it. Left for a later part: the systems that ask `island_of`.

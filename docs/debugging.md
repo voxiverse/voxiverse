@@ -70,7 +70,7 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `run -- --scene <name>` | Renders one visual-baseline scene offscreen and quits (see [Visual baselines](#visual-baselines)). |
 | `run -- --null-audio` | Mixes into the null device (real time, no sound card). |
 | <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. CI uploads the folder; the world checks take a screenshot at the start and end of each flight. |
-| <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time. |
+| <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks). |
 | <kbd>F4</kbd> | The tuning panel (see [Variables](#variables)). |
 | <kbd>F8</kbd> | Development builds: the audio inspector ([audio.md](audio.md)). |
 

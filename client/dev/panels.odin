@@ -166,6 +166,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			)
 		}
 		append(&lines, net_line(s))
+		append(&lines, fmt.tprintf("island: %d (%d chunks)", s.island.id, s.island.chunks))
 		pr := &s.prediction
 		append(
 			&lines,

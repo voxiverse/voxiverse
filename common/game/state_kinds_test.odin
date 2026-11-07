@@ -123,6 +123,8 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	round_trip(t, &l, .Variables, {}, &variables)
 	selection := Selection{{Block_Pos{1, 2, 3}, nil}}
 	round_trip(t, &l, .Selection, {}, &selection)
+	island := Island{3, 441}
+	round_trip(t, &l, .Island, {}, &island)
 	place := Place{8, -20, 100}
 	round_trip(t, &l, .Place, {}, &place)
 	// Block_Changed (heard), Blocks_Changed (quiet)
