@@ -1017,6 +1017,7 @@ World_Economy :: struct {
 	job:       ^thread.Thread,
 	job_done:  bool, // (atomic) the job's results are in `next`
 	next:      Economy_Job,
+	alloc:     runtime.Allocator, // what the builds allocate with (their history, settlements, economy): what frees them
 	decade:    i64, // the history's decade the economy was built for
 	ivn:       int, // and its number of interventions
 }
@@ -1037,6 +1038,7 @@ Economy_Job :: struct {
 economy_job :: proc(data: rawptr) {
 	we := (^World_Economy)(data)
 	j := &we.next
+	context.allocator = we.alloc // (the cache's history and the economy: freed with it)
 	p := worldgen.planet_model()
 	list := planet.settlements_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
 	roads := planet.roads_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
@@ -1079,7 +1081,10 @@ economy_free :: proc(w: ^World) {
 	if we == nil {return}
 	if we.job != nil {economy_install(we)} 	// (a build under way: wait for it, then free it with the rest)
 	economy_drop(we)
-	planet.settlement_cache_destroy(&we.cache)
+	{
+		context.allocator = we.alloc if we.alloc != {} else context.allocator
+		planet.settlement_cache_destroy(&we.cache)
+	}
 	saved_destroy(&we.pending)
 	delete(we.droughts)
 	free(we)
@@ -1096,6 +1101,7 @@ economy_drop :: proc(we: ^World_Economy) {
 		we.resident = false
 	}
 	if we.built {
+		context.allocator = we.alloc if we.alloc != {} else context.allocator
 		planet.economy_destroy(&we.economy)
 		delete(we.mem)
 		we.mem = nil
@@ -1176,6 +1182,11 @@ economy_sync :: proc(w: ^World, observers: [][2]f64) {
 			interventions = slice.clone(ivs),
 			allocator     = context.allocator,
 		}
+		// A build on a thread allocates from the heap (the main thread's allocator
+		// may be a tracking one, for this thread alone); in the tick, the world's.
+		if we.alloc ==
+		   {} {we.alloc = context.allocator if w.server.config.stepped else runtime.heap_allocator()}
+		we.next.allocator = we.alloc
 		if w.server.config.stepped {
 			economy_job(we) // (a stepped server stays deterministic: built in the tick)
 			economy_install(we)
