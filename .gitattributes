@@ -11,3 +11,5 @@ common/script/testdata/fuzz/** -text
 # The prelude's text is in every VM's heap, so in every snapshot: the same bytes on every OS.
 common/script/prelude.vxs text eol=lf
 assets/baselines/images/*.counts text eol=lf
+# Scores are hashed into their render's metadata: the same bytes on every OS.
+assets/music/*.score text eol=lf
