@@ -18,6 +18,7 @@ WORK_DIR :: "build/music-out" // (build/music is the tool itself)
 //	build music [<name>...] [--force] [--wav <dir>] [--midi]
 //	build music --audition <name> [--from <seconds>]
 //	build music ear [<name>...] [--json]
+//	build music ear --calibrate [<dir>]
 //	build music --audition-instruments [--wav <dir>]
 //	build music corpus
 //
