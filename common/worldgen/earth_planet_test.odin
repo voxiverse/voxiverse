@@ -205,6 +205,18 @@ test_earth_places :: proc(t: ^testing.T) {
 	testing.expect_value(t, block, game.Block.Snow)
 	b, _, _ = surface(&g, "siberia")
 	testing.expect_value(t, b, Biome.Taiga)
+	// The Amazon: a wide river within a few hundred blocks.
+	pl, _ := planet_place("amazon")
+	ax, az := planet_block_of(pl.lat, pl.lon)
+	// Left for a later part: rainforest climate (the model gives Aw today).
+	_, width, _, found := planet_river_near(f64(ax), f64(az))
+	testing.expectf(
+		t,
+		found && width >= 10,
+		"the Amazon's river is %v wide (found %v)",
+		width,
+		found,
+	)
 	x, z := block_at(0, -150)
 	testing.expect_value(t, earth_biome(&g, x, z), Biome.Ocean)
 	testing.expect_value(t, column_top(&g, x, z), 0)
