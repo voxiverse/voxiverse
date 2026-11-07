@@ -1,5 +1,6 @@
 package music_tool
 
+import "core:fmt"
 import "core:math"
 
 import "client:audio"
@@ -158,6 +159,13 @@ felt_zone :: proc(z: ^Zone_Params, v: int) {
 // render_with is render with a font per name: a part plays through the font
 // its score names (the piano when it names none).
 render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []f32 {
+	for part in p.parts {
+		def, _ := font_def(part.font)
+		if fonts[def.name] == nil {
+			fmt.eprintfln("music: no font loaded for '%s'", part.font)
+			return nil
+		}
+	}
 	rf := f64(rate)
 	rng := base.rng_make(p.seed)
 	end_frame := int(frame_of(p, f64(p.end), rf) + 0.5)
