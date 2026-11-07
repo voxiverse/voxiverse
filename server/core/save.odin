@@ -1,5 +1,7 @@
 package core
 
+import "base:runtime"
+
 import "core:encoding/endian"
 import "core:fmt"
 import "core:hash"
@@ -11,6 +13,8 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
+import "core:sync"
+import "core:thread"
 import "core:time"
 
 import "common:base"
@@ -1008,11 +1012,72 @@ World_Economy :: struct {
 	pending:   Saved_Economy, // read from the file, not yet applied
 	has_saved: bool,
 	dirty:     bool,
+	// Building it takes seconds (the history to today, its settlements and roads,
+	// the economy and its kernel): a thread of its own does it, the tick goes on.
+	job:       ^thread.Thread,
+	job_done:  bool, // (atomic) the job's results are in `next`
+	next:      Economy_Job,
+	decade:    i64, // the history's decade the economy was built for
+	ivn:       int, // and its number of interventions
+}
+
+// Economy_Job: what an economy build is given and what it makes.
+Economy_Job :: struct {
+	address, seed: u64,
+	day, decade:   i64,
+	interventions: []planet.Intervention, // (the job's own copy)
+	allocator:     runtime.Allocator, // the world's: what frees the economy later
+	economy:       planet.Economy,
+	kernel:        planet.Kernel,
+}
+
+// economy_job builds the economy for we.next (on its own thread, or inline on a
+// stepped server).
+@(private = "file")
+economy_job :: proc(data: rawptr) {
+	we := (^World_Economy)(data)
+	j := &we.next
+	p := worldgen.planet_model()
+	list := planet.settlements_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
+	roads := planet.roads_at(&we.cache, p, j.address, j.seed, j.day, j.interventions)
+	j.economy = planet.economy_build(p, list, roads, j.allocator)
+	j.kernel = planet.kernel_measure(j.economy)
+	sync.atomic_store(&we.job_done, true)
+}
+
+@(private = "file")
+economy_job_thread :: proc(t: ^thread.Thread) {
+	base.thread_register("economy")
+	defer base.thread_unregister()
+	economy_job(t.data)
+	runtime.default_temp_allocator_destroy(&runtime.global_default_temp_allocator_data)
+}
+
+// economy_install takes a finished build in place of the economy before it.
+@(private = "file")
+economy_install :: proc(we: ^World_Economy) {
+	if we.job != nil {
+		thread.join(we.job)
+		thread.destroy(we.job)
+		we.job = nil
+	}
+	if we.built {
+		economy_drop(we)
+		we.dirty = true
+	}
+	we.economy, we.kernel = we.next.economy, we.next.kernel
+	we.mem = make([]planet.Lazy_State, len(we.economy.towns))
+	we.key, we.decade, we.ivn, we.built =
+		we.cache.key, we.next.decade, len(we.next.interventions), true
+	delete(we.next.interventions, we.next.allocator)
+	we.next = {}
+	sync.atomic_store(&we.job_done, false)
 }
 
 economy_free :: proc(w: ^World) {
 	we := w.economy
 	if we == nil {return}
+	if we.job != nil {economy_install(we)} 	// (a build under way: wait for it, then free it with the rest)
 	economy_drop(we)
 	planet.settlement_cache_destroy(&we.cache)
 	saved_destroy(&we.pending)
@@ -1096,36 +1161,31 @@ economy_sync :: proc(w: ^World, observers: [][2]f64) {
 	if w.params.planet == 0 {return}
 	if w.economy == nil {w.economy = new(World_Economy)}
 	we := w.economy
-	p := worldgen.planet_model()
+	if we.job != nil && sync.atomic_load(&we.job_done) {economy_install(we)}
 	day := ECONOMY_PRESENT + i64(w.clock)
-	list := planet.settlements_at(
-		&we.cache,
-		p,
-		game.address_hash(w.address),
-		u64(w.seed),
-		day,
-		economy_interventions(w),
-	)
-	if we.built && we.key != we.cache.key {
-		// The history changed (a new decade, an intervention): what was computed from it
-		// is dropped and comes again from the history function.
-		economy_drop(we)
-		we.dirty = true
+	decade := day / (10 * planet.DAYS_PER_YEAR)
+	ivs := economy_interventions(w)
+	if we.job == nil && (!we.built || decade != we.decade || len(ivs) != we.ivn) {
+		// The history changed (a new decade, an intervention) or there is none yet:
+		// build again. Until the new one is in, the old one (if any) serves.
+		we.next = Economy_Job {
+			address       = game.address_hash(w.address),
+			seed          = u64(w.seed),
+			day           = day,
+			decade        = decade,
+			interventions = slice.clone(ivs),
+			allocator     = context.allocator,
+		}
+		if w.server.config.stepped {
+			economy_job(we) // (a stepped server stays deterministic: built in the tick)
+			economy_install(we)
+		} else {
+			we.job = thread.create(economy_job_thread)
+			we.job.data = we
+			thread.start(we.job)
+		}
 	}
-	if !we.built {
-		roads := planet.roads_at(
-			&we.cache,
-			p,
-			game.address_hash(w.address),
-			u64(w.seed),
-			day,
-			economy_interventions(w),
-		)
-		we.economy = planet.economy_build(p, list, roads)
-		we.kernel = planet.kernel_measure(we.economy)
-		we.mem = make([]planet.Lazy_State, len(we.economy.towns))
-		we.key, we.built = we.cache.key, true
-	}
+	if !we.built {return} 	// (the first build is under way: no market yet)
 	if len(observers) == 0 && !we.resident {return}
 	month := economy_month(w.clock)
 	if we.has_saved {

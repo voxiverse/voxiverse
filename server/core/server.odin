@@ -110,6 +110,11 @@ Stats :: struct {
 }
 
 Server :: struct {
+	// The phases of the tick being run (slow-tick diagnosis: server_main logs
+	// them when a tick takes SLOW_TICK or longer).
+	tick_marks:     [8]Tick_Mark,
+	tick_mark_n:    int,
+	slow_logged:    time.Tick, // when a slow tick was last logged
 	config:         Config,
 	capacity:       int, // chunks
 	local:          game.Endpoint, // the in-process player's pipe (none: a dedicated server)
@@ -400,6 +405,52 @@ listen :: proc(s: ^Server, first, last: int) -> bool {
 	return false
 }
 
+Tick_Mark :: struct {
+	name: string,
+	at:   time.Tick,
+}
+
+SLOW_TICK :: 250 * time.Millisecond // a tick this long is logged with its phases
+
+// tick_mark ends a phase of the tick (named for what ran since the last mark).
+tick_mark :: proc(s: ^Server, name: string) {
+	if s.tick_mark_n < len(s.tick_marks) {
+		s.tick_marks[s.tick_mark_n] = {name, time.tick_now()}
+		s.tick_mark_n += 1
+	}
+}
+
+// slow_tick_log: a tick that took SLOW_TICK or longer, with how long each
+// phase took (at most one line every 5 s).
+@(private = "file")
+slow_tick_log :: proc(s: ^Server, start: time.Tick, took: time.Duration) {
+	if took < SLOW_TICK {return}
+	if s.slow_logged != {} && time.tick_since(s.slow_logged) < 5 * time.Second {return}
+	s.slow_logged = time.tick_now()
+	b := strings.builder_make(context.temp_allocator)
+	from := start
+	for m in s.tick_marks[:s.tick_mark_n] {
+		fmt.sbprintf(
+			&b,
+			" %s=%.0fms",
+			m.name,
+			time.duration_milliseconds(time.tick_diff(from, m.at)),
+		)
+		from = m.at
+	}
+	fmt.sbprintf(
+		&b,
+		" clients_and_network=%.0fms",
+		time.duration_milliseconds(time.tick_diff(from, time.tick_add(start, took))),
+	)
+	log.warnf(
+		"server slow tick tick=%d ms=%.0f%s",
+		s.tick,
+		time.duration_milliseconds(took),
+		strings.to_string(b),
+	)
+}
+
 @(private = "file")
 server_main :: proc(t: ^thread.Thread) {
 	base.thread_register("server")
@@ -411,9 +462,11 @@ server_main :: proc(t: ^thread.Thread) {
 	for !sync.atomic_load(&s.stopping) {
 		start := time.tick_now()
 		cpu := base.thread_cpu_us()
+		s.tick_mark_n = 0
 		tick(s)
-		free_all(context.temp_allocator)
 		took := time.tick_since(start)
+		slow_tick_log(s, start, took)
+		free_all(context.temp_allocator)
 		s.tick_us[s.tick % TICK_SUMMARY_TICKS] = u32(time.duration_microseconds(took))
 		publish_stats(
 			s,
@@ -457,6 +510,7 @@ tick :: proc(s: ^Server) {
 		}
 		if s.tick - s.store.last_save >= AUTOSAVE_SECONDS * game.TICK_RATE {save(s, wait = false)}
 	}
+	tick_mark(s, "saving")
 	for w in s.worlds {
 		chunks_collect(
 			&w.chunks,
@@ -476,12 +530,14 @@ tick :: proc(s: ^Server) {
 		base.profile_scope("receive messages")
 		receive_messages(s)
 	}
+	tick_mark(s, "chunks_and_messages")
 	frozen := sync.atomic_load(&s.frozen) && !s.listening
 	s.time_stopped = frozen
 	if !frozen {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
 	economy_tick(s)
+	tick_mark(s, "economy")
 	Move :: struct {
 		world:    ^World,
 		from, to: game.Chunk_Pos,
@@ -503,6 +559,7 @@ tick :: proc(s: ^Server) {
 			drop_far(s, &c)
 		}
 	}
+	tick_mark(s, "players")
 	player_entities_release(s)
 	for w in s.worlds {islands_update(s, w)}
 	{
@@ -546,6 +603,7 @@ tick :: proc(s: ^Server) {
 			journal_tick(w)
 		}
 	}
+	tick_mark(s, "worlds")
 	sent := 0
 	for &c in s.clients {
 		if c.state != .Playing {continue}
