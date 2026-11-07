@@ -85,15 +85,15 @@ hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 			entity_health_of(w, &e),
 			entity_is_natural(w, &e),
 			e.brain,
-			e.owner,
-			e.stack,
-			e.shorn,
-			e.genes,
-			e.growth,
-			e.love,
-			e.wait,
+			int(entity_owner(w, &e).client),
+			entity_stack(w, &e)^,
+			entity_wool(w, &e).shorn,
+			entity_genes(w, &e).genes,
+			int(entity_breeding(w, &e).growth),
+			int(entity_breeding(w, &e).love),
+			int(entity_breeding(w, &e).wait),
 			entity_age_of(w, &e),
-			e.action,
+			entity_owner(w, &e).action,
 		}
 	}
 	return out

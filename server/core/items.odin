@@ -117,9 +117,9 @@ spawn_item :: proc(
 		ledger_stack(w.server, w, .Void, stack, -1)
 		return nil
 	}
-	ent.stack = stack
+	entity_stack(w, ent)^ = stack
 	entity_set_velocity(w, ent, velocity)
-	ent.owner = owner
+	entity_owner(w, ent).client = i32(owner)
 	return ent
 }
 
@@ -136,7 +136,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	ent := entity_at(w, index)
 	kind := game.kind_info(s.registry, ent.kind)
 	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS > kind.item.life {
-		ledger_stack(s, w, .Expire, ent.stack, -1)
+		ledger_stack(s, w, .Expire, entity_stack(w, ent)^, -1)
 		return true
 	}
 	if !chunk_ready(w, entity_pos(w, ent)) {return false} 	// its ground is not loaded: it waits
@@ -146,7 +146,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		v := entity_velocity(w, ent)
 		entity_set_velocity(w, ent, {0, v.y, 0})
 	}
-	size := game.item_stack_size(s.registry, ent.stack.item)
+	size := game.item_stack_size(s.registry, entity_stack(w, ent)^.item)
 	if entity_age_of(w, ent) % 10 == 0 {
 		// Those after it in the list (not yet moved this tick) join it. The
 		// spatial service names the item stacks near it (asking a little wider,
@@ -170,12 +170,13 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			slice.sort(order[:])
 			#reverse for j in order {
 				other := entity_at(w, j)
-				if other.kind != ent.kind || other.stack.item != ent.stack.item {continue}
-				if ent.stack.count + other.stack.count > size {continue}
+				if other.kind != ent.kind ||
+				   entity_stack(w, other)^.item != entity_stack(w, ent)^.item {continue}
+				if entity_stack(w, ent)^.count + entity_stack(w, other)^.count > size {continue}
 				d := entity_pos(w, other) - entity_pos(w, ent)
 				if d.x * d.x + d.y * d.y + d.z * d.z >
 				   f64(kind.item.merge * kind.item.merge) {continue}
-				ent.stack.count += other.stack.count
+				entity_stack(w, ent)^.count += entity_stack(w, other)^.count
 				entity_set_age(w, ent, min(entity_age_of(w, ent), entity_age_of(w, other)))
 				entity_gone(w, j)
 				ent = entity_at(w, index)
@@ -206,20 +207,20 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		c := &s.clients[ci]
 		if c.state != .Playing || c.world != w {continue}
 		delay :=
-			kind.item.owner_delay if ent.owner == int(player_id(s, c)) else kind.item.pickup_delay
+			kind.item.owner_delay if int(entity_owner(w, ent).client) == int(player_id(s, c)) else kind.item.pickup_delay
 		if f32(entity_age_of(w, ent)) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - entity_pos(w, ent)
 		if d.x * d.x + d.y * d.y + d.z * d.z > f64(kind.item.range * kind.item.range) {continue}
-		left := game.inventory_add(s.registry, &c.inventory, ent.stack)
-		if left.count == ent.stack.count {continue} 	// no room
+		left := game.inventory_add(s.registry, &c.inventory, entity_stack(w, ent)^)
+		if left.count == entity_stack(w, ent)^.count {continue} 	// no room
 		record(
 			s,
 			c,
 			.Item_Picked,
-			game.item_name(s.registry, ent.stack.item),
-			i64(ent.stack.count - left.count),
+			game.item_name(s.registry, entity_stack(w, ent)^.item),
+			i64(entity_stack(w, ent)^.count - left.count),
 		)
-		ent.stack = left
+		entity_stack(w, ent)^ = left
 		c.inv_changed = true
 		if game.stack_empty(left) {return true}
 	}

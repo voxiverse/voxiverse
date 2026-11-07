@@ -398,8 +398,8 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		for i in 0 ..< 6 {
 			p := c.player.position + {f64(i) * 1.5 - 4, 0, 4}
 			if ent := entity_spawn(w, test_reg().engine.sheep, p, false); ent != nil {
-				ent.love = 1000 if i % 3 != 2 else 0
-				ent.growth = game.LAMB_TICKS if i != 4 else 0
+				entity_breeding(w, ent).love = 1000 if i % 3 != 2 else 0
+				entity_breeding(w, ent).growth = game.LAMB_TICKS if i != 4 else 0
 			}
 		}
 		return
@@ -409,8 +409,10 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		want: ^Entity
 		best := f64(game.BREED_RANGE * game.BREED_RANGE)
 		for &o in entities_view(w) {
-			if o.id == ent.id || o.kind != test_reg().engine.sheep || o.love <= 0 {continue}
-			if o.growth < game.LAMB_TICKS {continue}
+			if o.id == ent.id ||
+			   o.kind != test_reg().engine.sheep ||
+			   entity_breeding(w, &o).love <= 0 {continue}
+			if entity_breeding(w, &o).growth < game.LAMB_TICKS {continue}
 			v := entity_pos(w, &o) - entity_pos(w, &ent)
 			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = &o, dd}
 		}
@@ -548,4 +550,51 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	game.store_apply(&w.entity_world.store)
 	_, found := game.store_find(&w.entity_world.store, game.Entity_Id(sheep_id))
 	testing.expect(t, !found, "the despawned sheep is still in the store")
+}
+
+// A sheep's wool, genes and breeding, a dropped stack and a rocket's owner
+// live in the store's components: written through the door, they are in the
+// component rows, and a rocket without wool reads the defaults.
+@(test)
+test_plain_components_live_in_the_store :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	reg := w.server.registry
+	st := &w.entity_world.store
+	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
+	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 3, 0}, {}, 7)
+	rocket := entity_spawn(w, reg.engine.rocket, {12.5, 40, 8.5}, false)
+	if !testing.expect(t, sheep != nil && item != nil && rocket != nil) {return}
+	// the spawn's values
+	testing.expect_value(t, entity_breeding(w, sheep).growth, game.LAMB_TICKS)
+	testing.expect(t, !entity_wool(w, sheep).shorn)
+	testing.expect_value(t, entity_owner(w, rocket).client, -1)
+	// shorn, bred (genes and a lamb's growth), picked up, owned: all in the rows
+	entity_wool(w, sheep).shorn = true
+	entity_genes(w, sheep).genes = game.WOOL_BLACK
+	entity_breeding(w, sheep).love = 9
+	entity_owner(w, rocket).client = 3
+	entity_owner(w, rocket).action = 42
+	wool := game.store_get(st, sheep.handle, game.C_WOOL, game.Wool)
+	genes := game.store_get(st, sheep.handle, game.C_GENES, game.Component_Genes)
+	breeding := game.store_get(st, sheep.handle, game.C_BREEDING, game.Breeding)
+	stack := game.store_get(st, item.handle, game.C_STACK, game.Component_Stack)
+	owner := game.store_get(st, rocket.handle, game.C_OWNER, game.Owner)
+	if !testing.expect(
+		t,
+		wool != nil && genes != nil && breeding != nil && stack != nil && owner != nil,
+	) {return}
+	testing.expect(t, wool.shorn)
+	testing.expect_value(t, genes.genes, game.WOOL_BLACK)
+	testing.expect_value(t, breeding.love, 9)
+	testing.expect_value(t, stack.stack.count, 3)
+	testing.expect_value(t, owner.client, 3)
+	testing.expect_value(t, owner.action, 42)
+	testing.expect_value(t, entity_owner(w, item).client, 7)
+	// a rocket has no wool: reads give the default, and no row appears
+	testing.expect(t, !entity_wool(w, rocket).shorn)
+	testing.expect(t, game.store_get(st, rocket.handle, game.C_WOOL, game.Wool) == nil)
 }

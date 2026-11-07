@@ -119,7 +119,8 @@ container_gone :: proc(w: ^World, pos: game.Block_Pos, value: ^game.Block_Entity
 	for st in value.slots {
 		if game.stack_empty(st) {continue}
 		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
-		if ent := spawn_item(w, at, st, v, -1); ent != nil {ent.action = u32(cause.action)}
+		if ent := spawn_item(w, at, st, v, -1);
+		   ent != nil {entity_owner(w, ent).action = u32(cause.action)}
 	}
 }
 

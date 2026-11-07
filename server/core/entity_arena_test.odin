@@ -31,7 +31,7 @@ arena_entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, 
 			for &c in s.clients {
 				if c.state == .Playing && c.world == w {d.stored -= 1}
 			}
-			for e in entities_view(w) {
+			for &e in entities_view(w) {
 				if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(e.id)); !ok {
 					d.missing += 1
 				}

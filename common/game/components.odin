@@ -64,9 +64,11 @@ Component_Stack :: struct {
 	stack: Stack,
 }
 
-// Owner: who fired or dropped it (-1: nobody).
+// Owner: who fired or dropped it (-1: nobody), and for a rocket the journal
+// action that fired it (0: none).
 Owner :: struct {
-	client: i16,
+	client: i32,
+	action: u32,
 }
 
 // Fields: a pack kind's declared fields, saved, not replicated.
