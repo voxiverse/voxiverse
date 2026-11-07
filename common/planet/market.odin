@@ -89,6 +89,21 @@ grain_shock :: proc(t: Town, ds: []Drought, month: f64) -> f64 {
 	return f
 }
 
+// grain_shock_begun is the grain shock of the droughts that begin within the month at `month`
+// (1 when none does): the part of the news a town prices at once.
+grain_shock_begun :: proc(t: Town, ds: []Drought, month: f64) -> f64 {
+	f := 1.0
+	if t.production[.Grain] <= 0 {return f}
+	for d in ds {
+		age := month - f64(d.start)
+		if age < 0 || age >= 1 {continue}
+		dist := km_between(t.lat, t.lon, d.lat, d.lon)
+		if dist >= DROUGHT_RADIUS_KM {continue}
+		f *= 1 - f64(d.severity) * (1 - dist / DROUGHT_RADIUS_KM)
+	}
+	return f
+}
+
 market_make :: proc(
 	e: Economy,
 	towns: []int,
@@ -124,7 +139,7 @@ market_price :: proc(e: Economy, m: Market, i: int, g: Good, expected := false) 
 
 // market_step ticks the island a month: caravans land, supply answers prices (a drought cuts
 // grain's), merchants load where a gap beats the way's cost.
-market_step :: proc(e: Economy, m: ^Market, ds: []Drought) {
+market_step :: proc(e: Economy, m: ^Market, ds: []Drought, n := News{}) {
 	for i in 0 ..< len(m.town) {
 		t := e.towns[m.town[i]]
 		shock := grain_shock(t, ds, m.month)
@@ -136,6 +151,12 @@ market_step :: proc(e: Economy, m: ^Market, ds: []Drought) {
 			c := max(s, STOCK_MIN)
 			s += MONTH_RESTORE * f32(sh / math.sqrt(f64(c)) - 1)
 			m.stock[i][g] = clamp(s, 0, STOCK_MAX)
+		}
+		// News moves the price at once where it is known: a drought that begins now is
+		// priced at the stock it would drain to over its length (where the restoring
+		// supply balances the cut yield), not month by month as the stock drains.
+		if begun := grain_shock_begun(t, ds, m.month); begun < 1 && t.market[.Grain] {
+			m.stock[i][.Grain] = min(m.stock[i][.Grain], clamp(f32(begun * begun), 0, STOCK_MAX))
 		}
 	}
 	base_price := BASE_PRICE
@@ -151,6 +172,14 @@ market_step :: proc(e: Economy, m: ^Market, ds: []Drought) {
 				if m.stock[i][g] <= RESERVE {continue}
 				pa := market_price(e, m^, i, g)
 				pb := market_price(e, m^, j, g, true)
+				if len(n.town) > 0 {
+					// Merchants act on their own town's news: the buyer's price as it
+					// last reached the seller's town, with what is on the road to it.
+					r := n.town[i].at[j][g]
+					if !r.known {continue}
+					c := max(m.stock[j][g], STOCK_MIN)
+					pb = r.price * c / (c + m.inbound[j][g])
+				}
 				gap := pb - pa - base_price[g] * l.carriage * MERCHANT_SHARE
 				if gap <= 0 {continue}
 				goods := f32(SHIP_RATE) * gap / pb * min(a.size, b.size)
