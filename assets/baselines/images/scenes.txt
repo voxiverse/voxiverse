@@ -16,6 +16,10 @@ water: /tp 69 6 -4 0 -35
 held_first: look 135 -20
 held_third: look 135 -10; camera behind 30
 devchat: sleep 1
+# Earth scenes (`earth` first): the scratch world is Earth's planet world,
+# with the same fixed conditions; `/goto <place>` stands on the surface there.
+earth_everest: earth /goto everest; look 0 -10
+earth_sahara: earth /goto sahara; look 0 -5
 # The creation screen and Ignite (menu scenes: no world, time stands still;
 # `@WxH` is the size). Ignite is held at the time `debug.ignite_at` sets.
 creation: @1280x720 screen universes create; creation seed 42
