@@ -24,6 +24,7 @@ read it first (`CLAUDE.md` imports it). It is guarded: changes need the owner's 
   test is wrong, say why in the PR and leave the change to the owner.
 - No new dependencies, no new tools, no vendored code without the owner's approval.
 - Behavior a doc describes changes → the doc changes in the same PR.
+- A pull request that changes a score commits its render.
 - Guarded paths (`.github/CODEOWNERS`): CI, the build tooling, the toolchain pin, security
   docs, and this file. Touch them only when the fix truly needs it; those PRs wait for the
   owner.
