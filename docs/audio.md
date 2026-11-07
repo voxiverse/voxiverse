@@ -196,6 +196,15 @@ and put two scramblers (`scramble.odin`) on them, each a pure function of a piec
 `scramble_in_key` replaces each note by a random note of the piece's 7 commonest pitch classes
 within 7 semitones of the original and keeps rhythm. Neither is used by `build music` yet.
 
+**The corpus.** `tools/music/corpus.txt` lists the larger calibration corpus, one piece a line:
+`file<TAB>source page<TAB>licence<TAB>sha256` (`file` is the path under
+`https://www.mutopiaproject.org/ftp/`; the licence is `Public Domain` or `CC0`, read on the piece's
+page; a piece whose licence could not be confirmed is left out). `build music corpus` downloads
+each file into `build/tools/music-corpus` (not committed), checks its SHA-256, refuses and removes
+a file that does not match, and skips files already present. A test parses every file there with
+`midi_read` (it prints a notice and skips when the directory is absent, so a CI job has to run the step first;
+the owner adds it to ci.yml), and another checks the list itself.
+
 ## Tools
 
 - `build audio` runs the audio baselines (`assets/baselines/audio/`: `burst`, `cave_walk`,
