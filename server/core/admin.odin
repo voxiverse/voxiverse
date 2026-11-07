@@ -346,7 +346,7 @@ admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		count = n
 	}
 	for _ in 0 ..< count {
-		if len(c.world.entities.list) >= MAX_ENTITIES {
+		if summon_count(s, c.world) >= MAX_ENTITIES {
 			notice(s, c, fmt.tprintf("Too many entities (the limit is %d)", MAX_ENTITIES))
 			break
 		}
@@ -356,6 +356,17 @@ admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		}
 	}
 	return true
+}
+
+// summon_count is the entities in w that /summon's cap counts: the store's
+// rows less the players' own, which are in the store but never counted.
+@(private = "file")
+summon_count :: proc(s: ^Server, w: ^World) -> int {
+	n := game.store_count(&w.entity_world.store)
+	for &c in s.clients {
+		if c.entity_id != 0 && c.entity_world == w {n -= 1}
+	}
+	return n
 }
 
 @(private = "file")
