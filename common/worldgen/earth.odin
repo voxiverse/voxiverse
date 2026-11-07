@@ -269,6 +269,9 @@ palette_block :: proc(p: ^Params, b: game.Block) -> game.Block {
 	return b
 }
 
+// PLANET_ICE_DEPTH: how many blocks of snow and ice an ice sheet has in a planet world.
+PLANET_ICE_DEPTH :: 40
+
 @(private = "file")
 earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 	sea := p.sea_level
@@ -288,8 +291,14 @@ earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 		if depth == 0 && y < sea + 70 {return .Grass}
 		if depth < 3 && y < sea + 70 {return .Dirt}
 	case .Ice_Sheet:
-		if depth == 0 {return .Snow}
-		if depth < 12 {return .Ice}
+		if p.planet != 0 {
+			// Earth's ice sheets are ice and snow to a depth, not stone.
+			if depth < 2 {return .Snow}
+			if depth < PLANET_ICE_DEPTH {return .Ice}
+		} else {
+			if depth == 0 {return .Snow}
+			if depth < 12 {return .Ice}
+		}
 	case .Tundra:
 		if depth == 0 {return .Sand if underwater else .Snow}
 		if depth < 3 {return .Dirt}

@@ -221,3 +221,23 @@ test_earth_places :: proc(t: ^testing.T) {
 	testing.expect_value(t, earth_biome(&g, x, z), Biome.Ocean)
 	testing.expect_value(t, column_top(&g, x, z), 0)
 }
+
+// test_planet_ice_sheet_is_deep: a planet world's ice sheet is snow then ice
+// for PLANET_ICE_DEPTH blocks, where the noise world's stops at 12.
+@(test)
+test_planet_ice_sheet_is_deep :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	for d in i32(0) ..< PLANET_ICE_DEPTH {
+		b := surface_block(&g.params, .Ice_Sheet, d, 100)
+		want := game.Block.Snow if d < 2 else game.Block.Ice
+		testing.expectf(t, b == want, "depth %d is %v", d, b)
+	}
+	testing.expect_value(
+		t,
+		surface_block(&g.params, .Ice_Sheet, PLANET_ICE_DEPTH, 100),
+		game.Block.Stone,
+	)
+	old := PARAMS_DEFAULTS
+	old.planet = 0
+	testing.expect_value(t, surface_block(&old, .Ice_Sheet, 12, 100), game.Block.Stone)
+}
