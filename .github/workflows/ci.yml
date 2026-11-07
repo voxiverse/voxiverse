@@ -955,7 +955,7 @@ jobs:
           if [ -n "${failed}" ] && [ "${ATTEMPT}" -lt 2 ]; then
             echo "failed once (${failed}): the sweep reruns it before it counts"
           elif [ -n "${failed}" ]; then
-            body=$(printf 'CI failed on main at `%s` (jobs: %s).\n\nRun and logs: %s\n\nFix main first: find the failing step with `gh run view <run id> --log-failed`, fix the cause in one pull request (never weaken or skip a test), and say which commit broke it. This issue closes itself when main is green again.\n' "${SHA::12}" "${failed}" "${RUN_URL}")
+            body=$(printf 'CI failed on main at `%s` (jobs: %s).\n\nRun and logs: %s\n\nFix main first: find the failing step with `gh run view <run id> --log-failed`, fix the cause in one pull request (never weaken or skip a test), and say which commit broke it. If you cannot find the cause in this run (it fails only on an OS you cannot run, or you cannot reproduce it), revert the commit that broke it instead (`git revert`, a pull request ending `Fixes #<this issue>`), and comment on that commit'"'"'s task (reopen it if closed) with what you found, so it lands again with the failure found through its own pull request'"'"'s CI. Never leave main red for a guess. This issue closes itself when main is green again.\n' "${SHA::12}" "${failed}" "${RUN_URL}")
             if [ -n "${open}" ]; then gh issue comment "${open}" --body "${body}"
             else
               gh issue create --title "main is red" --label agent --body "${body}"
