@@ -154,7 +154,7 @@ each statement (a prime marks a varied one).
 
 An agent cannot listen, so `build music ear [<name>...] [--json]` reads each score (or `.mid`)
 through the parser the renderer uses and prints what a listener reacts to, then a critique an
-author can act on. Nothing is gated yet (the bands below are written, not yet enforced); `assets/baselines/music/ear.txt` is its output on every
+author can act on. `build music` gates scores on the bands below (see **The gate**); `assets/baselines/music/ear.txt` is its output on every
 score (rewrite it with `./build.sh music ear > assets/baselines/music/ear.txt`). `--json` writes
 every measure and every critique line for tools.
 
@@ -185,6 +185,14 @@ every measure and every critique line for tools.
   decimals) holds the gating measures; the others print as "reported, not gated". On a downloaded
   corpus `--calibrate` also retrains `expectation.bin`. The committed bands come from the
   six-piece subset until the full corpus has been downloaded and calibrated.
+- **The gate** (`gate.odin`): before rendering, `build music` listens to each score and compares
+  every gating measure with `assets/music/ear_bands.txt` (inside `low`..`high`, both ends
+  allowed). A score outside a band is refused: the error names the measure, the band, the score's
+  value and the first lines of the critique, and `build music` exits non-zero. `--midi` does not
+  gate. `assets/music/ear_pending.txt` lists, one name a line, the scores that fail today (all
+  seven); a pending score prints the same facts as a warning and renders. **The rule: nothing is
+  ever added to the list.** A test fails if a name in it is not a score or if its score now
+  passes (remove the name); a new score that fails is refused.
 - **The whole.** A note under `ped` sounds until `unped`, at half weight after its written length.
   `harmony_fit`: in each half bar, the share of sounding weight inside the best chord (major,
   minor, diminished, sus4, dominant 7th, minor 7th; a 4-note chord pays 0.15 x 4/12 so it does

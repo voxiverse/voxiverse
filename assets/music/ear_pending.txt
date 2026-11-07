@@ -1,0 +1,10 @@
+# Scores that fail the ear's bands today. They render with a warning.
+# Nothing is added here: a name whose score is gone, or whose score now
+# passes, fails a test and must be removed.
+death
+deep
+discovery
+far
+meadow
+night
+title
