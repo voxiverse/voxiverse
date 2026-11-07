@@ -255,7 +255,7 @@ test_entity_find_without_a_scan :: proc(t: ^testing.T) {
 			game.Entity_Id(i),
 			false,
 		)
-		entity_add(w, Entity{id = i, handle = h, kind = item})
+		_ = h
 	}
 	game.store_apply(&w.entity_world.store)
 	testing.expect_value(t, entity_count(w), N)
@@ -265,16 +265,18 @@ test_entity_find_without_a_scan :: proc(t: ^testing.T) {
 		testing.expect(t, ok && entity_id(w, e) == id)
 	}
 	testing.expect_value(t, w.entities.lookups, N)
-	testing.expect(t, entity_remove(w, 5))
-	testing.expect(t, !entity_remove(w, 5))
+	h5, _ := entity_get(w, 5)
+	_ = game.store_despawn(&w.entity_world.store, h5)
+	game.store_apply(&w.entity_world.store)
 	_, ok5 := entity_get(w, 5)
 	testing.expect(t, !ok5)
-	testing.expect_value(t, entity_index(w, N), 4) // the last took its place
 	testing.expect_value(t, entity_count(w), N - 1)
 	it := entities_each(w)
 	n := 0
-	for e, i in entities_next(&it) {
-		testing.expect_value(t, entity_index(w, entity_id(w, e)), i)
+	last: u32
+	for e in entities_next(&it) {
+		testing.expect(t, entity_id(w, e) > last, "the walk is not in id order")
+		last = entity_id(w, e)
 		n += 1
 	}
 	testing.expect_value(t, n, N - 1)
@@ -294,14 +296,13 @@ test_stale_handle_reads_defaults :: proc(t: ^testing.T) {
 	defer entity_world_destroy(w.entity_world)
 	item := test_reg().engine.item
 	_, h, _ := entity_world_spawn(w.entity_world, test_reg(), item, {1, 2, 3}, {}, 1, false)
-	entity_add(w, Entity{id = 1, handle = h, kind = item})
 	game.store_apply(&w.entity_world.store)
 	testing.expect_value(t, entity_kind(w, h), item)
 	testing.expect_value(t, entity_id(w, h), 1)
 	testing.expect_value(t, entity_pos(w, h), [3]f64{1, 2, 3})
 	got, ok := entity_get(w, 1)
 	testing.expect(t, ok && got == h)
-	testing.expect(t, entity_remove(w, 1))
+	entity_gone(w, h)
 	game.store_apply(&w.entity_world.store)
 	testing.expect_value(t, entity_kind(w, h), 0)
 	testing.expect_value(t, entity_id(w, h), 0)

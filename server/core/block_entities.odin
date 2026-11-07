@@ -247,7 +247,7 @@ entity_restore :: proc(
 		)
 	}
 	// The spatial service names the stacks about (its boxes are where they
-	// were at the end of the last tick, so it asks a little wider); the list
+	// were at the end of the last tick, so it asks a little wider); the store
 	// says which are near now. Highest id first, as the take below goes.
 	about := make([dynamic]game.Entity_Id, context.temp_allocator)
 	if item_kind, ok := game.registry_kind(w.server.registry, "voxiverse:item"); ok {
@@ -262,8 +262,8 @@ entity_restore :: proc(
 	slice.reverse_sort(about[:])
 	stacks := make([dynamic]u32, context.temp_allocator)
 	for id in about {
-		ent, _ := entity_find(w, u32(id))
-		if ent == 0 || !near(w, ent, here, from.action, w.server.registry.engine.item) {continue}
+		ent, got := entity_find(w, u32(id))
+		if !got || !near(w, ent, here, from.action, w.server.registry.engine.item) {continue}
 		append(&stacks, u32(id))
 		lying[entity_stack(w, ent)^.item] += entity_stack(w, ent)^.count
 	}
@@ -277,13 +277,13 @@ entity_restore :: proc(
 		if n > 0 {e.slots[i] = {st.item, n, 0}}
 	}
 	for id in stacks {
-		ent, i := entity_find(w, id)
-		if ent == 0 {continue}
+		ent, got := entity_find(w, id)
+		if !got {continue}
 		n := min(entity_stack(w, ent)^.count, taken[entity_stack(w, ent)^.item])
 		if n == 0 {continue}
 		taken[entity_stack(w, ent)^.item] -= n
 		entity_stack(w, ent)^.count -= n
-		if entity_stack(w, ent)^.count == 0 {entity_gone(w, i)}
+		if entity_stack(w, ent)^.count == 0 {entity_gone(w, ent)}
 	}
 }
 

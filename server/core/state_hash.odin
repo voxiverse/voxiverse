@@ -73,30 +73,33 @@ Hashed_Entity :: struct {
 
 @(private = "file")
 hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
-	list := entities_view(w)
-	out := make([]Hashed_Entity, len(list), context.temp_allocator)
-	for &e, i in list {
-		out[i] = {
-			e.id,
-			u8(e.kind - 1),
-			{entity_pos(w, e.handle), entity_velocity(w, e.handle), entity_on_ground(w, e.handle)},
-			entity_yaw(w, e.handle),
-			entity_pitch(w, e.handle),
-			entity_health_of(w, e.handle),
-			entity_is_natural(w, e.handle),
-			entity_brain(w, e.handle)^,
-			int(entity_owner(w, e.handle).client),
-			entity_stack(w, e.handle)^,
-			entity_wool(w, e.handle).shorn,
-			entity_genes(w, e.handle).genes,
-			int(entity_breeding(w, e.handle).growth),
-			int(entity_breeding(w, e.handle).love),
-			int(entity_breeding(w, e.handle).wait),
-			entity_age_of(w, e.handle),
-			entity_owner(w, e.handle).action,
-		}
+	out := make([dynamic]Hashed_Entity, context.temp_allocator)
+	it := entities_each(w) // in id order
+	for h in entities_next(&it) {
+		append(
+			&out,
+			Hashed_Entity {
+				entity_id(w, h),
+				u8(entity_kind(w, h) - 1),
+				{entity_pos(w, h), entity_velocity(w, h), entity_on_ground(w, h)},
+				entity_yaw(w, h),
+				entity_pitch(w, h),
+				entity_health_of(w, h),
+				entity_is_natural(w, h),
+				entity_brain(w, h)^,
+				int(entity_owner(w, h).client),
+				entity_stack(w, h)^,
+				entity_wool(w, h).shorn,
+				entity_genes(w, h).genes,
+				int(entity_breeding(w, h).growth),
+				int(entity_breeding(w, h).love),
+				int(entity_breeding(w, h).wait),
+				entity_age_of(w, h),
+				entity_owner(w, h).action,
+			},
+		)
 	}
-	return out
+	return out[:]
 }
 
 @(private = "file")

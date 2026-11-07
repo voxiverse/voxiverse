@@ -82,8 +82,9 @@ record_at :: proc(srv: ^Server, pos: game.Block_Pos) -> Block_Data {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
 			if e := block_entity_at(w, d.pos); e != nil {d.slots, d.has = e.slots, true}
-			for &e in entities_view(w) {
-				if e.kind == test_reg().engine.item {d.items += entity_stack(w, e.handle)^.count}
+			for e in entities_snapshot(w) {
+				if entity_kind(w, e) ==
+				   test_reg().engine.item {d.items += entity_stack(w, e)^.count}
 			}
 		}, &d)
 	return d

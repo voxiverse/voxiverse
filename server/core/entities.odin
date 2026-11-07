@@ -32,12 +32,6 @@ PATH_BUDGET_EACH :: 400
 HURT_TICKS :: game.TICK_RATE / 3 // how long a hit stuns (no steering)
 FLEE_TICKS :: game.TICK_RATE * 5
 
-Entity :: struct {
-	id:     u32,
-	handle: game.Entity_Handle, // its row in the entity world's store (0: none)
-	kind:   game.Kind_Id,
-}
-
 Brain_State :: enum u8 {
 	Idle, // standing; looking about
 	Look, // a player is close: watch them
@@ -60,8 +54,6 @@ Brain :: struct {
 }
 
 Entities :: struct {
-	list:    [dynamic]Entity, // awake (in loaded chunks); behind the door (entity_store.odin)
-	index:   map[u32]int, // id to place in list
 	lookups: int, // id lookups made (a test counts them)
 	next_id: u32,
 	budget:  int, // A* nodes left this tick
@@ -69,15 +61,12 @@ Entities :: struct {
 }
 
 entities_init :: proc(e: ^Entities, seed: i64) {
-	e.list = make([dynamic]Entity, 0, MAX_ENTITIES)
-	e.index = make(map[u32]int, MAX_ENTITIES)
 	e.next_id = 1
 	e.rng = base.rng_make(u64(seed) ~ 0x0e7e_0e7e)
 }
 
 entities_destroy :: proc(e: ^Entities) {
-	delete(e.list)
-	delete(e.index)
+	e^ = {}
 }
 
 // entity_spawn adds an entity at position (bottom centre); nil if full.
@@ -88,22 +77,19 @@ entity_spawn :: proc(
 	natural: bool,
 ) -> game.Entity_Handle {
 	e := &w.entities
-	if len(e.list) == MAX_ENTITIES {return 0}
-	entity_add(w, Entity{id = e.next_id, kind = kind})
+	if entity_count(w) >= MAX_ENTITIES {return 0}
+	id := e.next_id
 	e.next_id += 1
-	// the entity world holds the same entity under the same id, until the
-	// systems move onto it; the list stays the truth, so a refusal is no error
-	ent := &e.list[len(e.list) - 1]
 	_, h, _ := entity_world_spawn(
 		w.entity_world,
 		w.server.registry,
 		kind,
 		position,
 		{},
-		game.Entity_Id(e.next_id - 1),
+		game.Entity_Id(id),
 		natural,
 	)
-	ent.handle = h
+	if h == 0 {return 0}
 	// applied at once, so the components exist when the caller has the entity
 	game.store_apply(&w.entity_world.store)
 	entity_set_yaw(w, h, base.rng_f32_range(&e.rng, -math.PI, math.PI))
@@ -122,67 +108,82 @@ entities_tick :: proc(w: ^World) {
 		entities_sync_spatial(w)
 	}
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
-	reg := w.server.registry
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	Blast :: struct {
-		sphere: Sphere,
-		action: Action_Id,
-	}
 	blasts := make([dynamic]Blast, context.temp_allocator)
-	for i := 0; i < len(e.list); {
-		h := entity_at(w, i)
-		kind := entity_kind(w, h)
-		entity_set_age(w, h, entity_age_of(w, h) + 1)
-		if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
-			entities_unlink(e, i)
-			continue
+	// Entities in id order; one spawned during the walk (a lamb) has a higher
+	// id and is walked in this same tick, after the ones that were there.
+	walked: u32
+	for {
+		it := entities_each(w, after = walked)
+		any := false
+		for h in entities_next(&it) {
+			any = true
+			walked = max(walked, entity_id(w, h))
+			entity_tick(w, h, query, &blasts)
 		}
-		switch kind {
-		case reg.engine.sheep:
-			if chunk_ready(w, entity_pos(w, h)) { 	// else its ground is not loaded (yet): it waits
-				sheep_life(w, h)
-				think(w, h)
-				wish, jump := steer(w, h)
-				entity_body_step(w, h, game.kind_info(reg, kind), wish, jump, query)
-			}
-		case reg.engine.rocket:
-			if at, hit := rocket_step(w, h); hit {
-				append(
-					&blasts,
-					Blast {
-						{at, f64(game.kind_info(reg, kind).projectile.explode)},
-						Action_Id(entity_owner(w, h).action),
-					},
-				)
-				entity_died(w, i) // its explosion is what players see
-				continue
-			}
-		case reg.engine.item:
-			if item_tick(w, i) {
-				entity_gone(w, i)
-				continue
-			}
-		}
-		i += 1
+		if !any {break}
 	}
-	// After the walk over the list: explosions change it.
+	// After the walk: explosions change the set.
 	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
+}
+
+@(private = "file")
+Blast :: struct {
+	sphere: Sphere,
+	action: Action_Id,
+}
+
+// entity_tick: one entity's turn in entities_tick.
+@(private = "file")
+entity_tick :: proc(
+	w: ^World,
+	h: game.Entity_Handle,
+	query: game.Block_Query,
+	blasts: ^[dynamic]Blast,
+) {
+	reg := w.server.registry
+	kind := entity_kind(w, h)
+	entity_set_age(w, h, entity_age_of(w, h) + 1)
+	if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
+		entity_gone(w, h)
+		return
+	}
+	switch kind {
+	case reg.engine.sheep:
+		if chunk_ready(w, entity_pos(w, h)) { 	// else its ground is not loaded (yet): it waits
+			sheep_life(w, h)
+			think(w, h)
+			wish, jump := steer(w, h)
+			entity_body_step(w, h, game.kind_info(reg, kind), wish, jump, query)
+		}
+	case reg.engine.rocket:
+		if at, hit := rocket_step(w, h); hit {
+			append(
+				blasts,
+				Blast {
+					{at, f64(game.kind_info(reg, kind).projectile.explode)},
+					Action_Id(entity_owner(w, h).action),
+				},
+			)
+			entity_died(w, h) // its explosion is what players see
+		}
+	case reg.engine.item:
+		if item_tick(w, h) {entity_gone(w, h)}
+	}
 }
 
 // entities_sync_spatial moves each listed entity's spatial box to its position
 // (after store_apply, so every entity has its link): what the spatial service
-// answers is where the entity is at the end of every tick. Until the systems
-// move onto the store, the list is the truth and the service follows it.
+// answers is where the entity is at the end of every tick.
 entities_sync_spatial :: proc(w: ^World) {
 	ew := w.entity_world
-	for &ent in w.entities.list {
-		h, ok := game.store_find(&ew.store, game.Entity_Id(ent.id))
-		if !ok {continue}
+	it := entities_each(w)
+	for h in entities_next(&it) {
 		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
 		if sl == nil {continue}
 		lo, hi := game.entity_box(
-			game.kind_info(w.server.registry, ent.kind),
-			entity_pos(w, ent.handle),
+			game.kind_info(w.server.registry, entity_kind(w, h)),
+			entity_pos(w, h),
 		)
 		game.spatial_move(&ew.spatial, sl.handle, lo, hi)
 	}
@@ -263,7 +264,7 @@ sheep_life :: proc(w: ^World, h: game.Entity_Handle) {
 // mate_for: the nearest other sheep that is ready to breed within range of
 // ent (an adult in love), if any. The spatial service names the sheep near
 // ent (its boxes are where the sheep were at the end of the last tick, so it
-// asks a little wider than BREED_RANGE); the list says how far each is now
+// asks a little wider than BREED_RANGE); the store says how far each is now
 // and whether it is ready.
 mate_for :: proc(w: ^World, h: game.Entity_Handle) -> game.Entity_Handle {
 	ew := w.entity_world
@@ -399,8 +400,8 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	}
 	// What is thrown comes from the spatial service: the boxes it holds are
 	// where things stood at the end of the last tick, so the sphere is widened
-	// by ROCKET_REACH. Candidates are walked in list order, as the full loop
-	// was; a death removes its row, so each is found again by id.
+	// by ROCKET_REACH. Candidates are walked in id order; a death removes its
+	// row, so each is found again by id.
 	found := make([dynamic]game.Entity_Id, context.temp_allocator)
 	game.spatial_sphere(
 		&w.entity_world.spatial,
@@ -409,16 +410,11 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		{all = {.Hittable}},
 		&found,
 	)
-	order := make([dynamic]int, context.temp_allocator)
-	for id in found {
-		if _, j := entity_find(w, u32(id)); j >= 0 {append(&order, j)}
-	}
-	slice.sort(order[:])
-	ids := make([dynamic]u32, context.temp_allocator)
-	for j in order {append(&ids, w.entities.list[j].id)}
-	for id in ids {
-		h, i := entity_find(w, id)
-		if i < 0 {continue}
+	slice.sort(found[:])
+	for fid in found {
+		id := u32(fid)
+		h, ok := entity_find(w, id)
+		if !ok {continue}
 		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach)
 		if !near || !game.kind_info(w.server.registry, entity_kind(w, h)).hittable {continue}
 		entity_set_velocity(w, h, entity_velocity(w, h) + impulse)
@@ -428,7 +424,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
 		entity_set_health(w, h, health)
 		if health <= 0 {
-			entity_died(w, i)
+			entity_died(w, h)
 			continue
 		}
 		scare(entity_brain(w, h), center)
@@ -466,7 +462,7 @@ rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool)
 	// holds are where things stood at the end of the last tick, so it asks
 	// around the step's middle, wide enough for a tall box (its entry is the
 	// bottom centre) and for a tick of movement. The list and the clients say
-	// where each is now; both are walked in their order, as the full loops were.
+	// where each is now; both are walked in id order.
 	ew := w.entity_world
 	mid := from + dir * (step / 2)
 	reach := step / 2 + ROCKET_REACH
@@ -478,13 +474,10 @@ rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool)
 		{all = {.Hittable}, exclude = game.Entity_Id(entity_id(w, h))},
 		&near,
 	)
-	order := make([dynamic]int, context.temp_allocator)
+	slice.sort(near[:])
 	for id in near {
-		if _, j := entity_find(w, u32(id)); j >= 0 {append(&order, j)}
-	}
-	slice.sort(order[:])
-	for j in order {
-		other := entity_at(w, j)
+		other, there := entity_find(w, u32(id))
+		if !there {continue}
 		oinfo := game.kind_info(s.registry, entity_kind(w, other))
 		if !oinfo.hittable {continue}
 		lo, hi := game.entity_box(oinfo, entity_pos(w, other))
@@ -725,11 +718,12 @@ entity_is_natural :: proc(w: ^World, h: game.Entity_Handle) -> bool {
 	return game.store_get(&w.entity_world.store, h, game.C_NATURAL, game.Natural) != nil
 }
 
-entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, int) {
-	// an id the entity world does not know is no entity (the map gives the index)
-	if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); !ok {return 0, -1}
-	if i := entity_index(w, id); i >= 0 {return w.entities.list[i].handle, i}
-	return 0, -1
+// entity_find: the entity with this id (a player is no entity here).
+entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
+	w.entities.lookups += 1
+	h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id))
+	if !ok || !entity_listed(w, h) {return 0, false}
+	return h, true
 }
 
 // entities_put tells a client about the entities near it: what each is and
@@ -739,7 +733,7 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 	w := c.world
 	// The entities within ENTITY_VIEW horizontally (players are not told as
 	// entities), the lowest ids first, at most MAX_KNOWN_ENTITIES of them: the
-	// query answers in id order, which is the list's order the set was always
+	// query answers in id order, which is the order the set was always
 	// cut in (a nearest-first cut changes the set every tick at the cap, and
 	// the receiver refuses a create past its record cap before it applies the
 	// removes of the same message).
@@ -777,21 +771,21 @@ entity_known :: proc(c: ^Client, id: u32) -> bool {
 }
 
 // entity_died: tell everyone who knew it (they show it die), then forget it.
-entity_died :: proc(w: ^World, index: int) {
-	entity_retire(w, index, true)
+entity_died :: proc(w: ^World, h: game.Entity_Handle) {
+	entity_retire(w, h, true)
 }
 
 // entity_gone: as entity_died, without a death to show (a stack picked up).
-entity_gone :: proc(w: ^World, index: int) {
-	entity_retire(w, index, false)
+entity_gone :: proc(w: ^World, h: game.Entity_Handle) {
+	entity_retire(w, h, false)
 }
 
 @(private = "file")
-entity_retire :: proc(w: ^World, index: int, died: bool) {
+entity_retire :: proc(w: ^World, h: game.Entity_Handle, died: bool) {
 	s := w.server
-	id := w.entities.list[index].id
+	id := entity_id(w, h)
 	if died {
-		for i in entity_watchers(w, entity_pos(w, entity_at(w, index))) {
+		for i in entity_watchers(w, entity_pos(w, h)) {
 			c := &s.clients[i]
 			if entity_known(c, id) {
 				death := game.Entity_Died{id}
@@ -799,17 +793,14 @@ entity_retire :: proc(w: ^World, index: int, died: bool) {
 			}
 		}
 	}
-	entities_unlink(&w.entities, index)
-	if h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); ok {
-		_ = game.store_despawn(&w.entity_world.store, h)
-	}
+	_ = game.store_despawn(&w.entity_world.store, h)
 }
 
 // entity_hurt_shown: everyone who knows it sees it flinch.
 entity_hurt_shown :: proc(w: ^World, id: u32) {
 	s := w.server
-	h, _ := entity_find(w, id)
-	if h == 0 {return}
+	h, ok := entity_find(w, id)
+	if !ok {return}
 	for i in entity_watchers(w, entity_pos(w, h)) {
 		c := &s.clients[i]
 		if entity_known(c, id) {
@@ -1185,10 +1176,8 @@ turn_towards :: proc(from, to: f32, rate: f32) -> f32 {
 // and what hangs off them (tag names, this tick's deaths, the world's rng).
 // entity_world_spawn is the one way an entity comes to be; entity_kill the one way
 // it dies. The world holds one (World.entity_world), ticked and applied by
-// entities_tick. entity_spawn and entity_remove mirror the fixed Entity list
-// into it under the same ids (positions are not kept up to date), and
-// entity_find asks it first; the list still runs the world until the systems
-// move onto it.
+// entities_tick. entity_spawn is the entity door's way in, entity_gone and
+// entity_died the way out; every walk (entities_each) is in id order.
 
 MAX_ENTITY_WORLD :: 4096 // entities a world holds
 MAX_TAG_NAMES :: 256
@@ -1293,7 +1282,7 @@ entity_world_begin_tick :: proc(ew: ^Entity_World) {
 	clear(&ew.deaths)
 }
 
-// entity_world_spawn (to be entity_spawn when the fixed list goes) queues an entity of the kind at position (its bottom centre),
+// entity_world_spawn (entity_spawn adds the cap and the yaw) queues an entity of the kind at position (its bottom centre),
 // with the components the kind asks for. Like every structural change it is
 // seen by queries after store_apply; its id and handle are good at once.
 entity_world_spawn :: proc(
@@ -1604,7 +1593,7 @@ player_entity_sync :: proc(s: ^Server, c: ^Client) {
 	if c.entity_id == 0 {
 		kind, ok := game.registry_kind(s.registry, "player")
 		if !ok {return}
-		// (ids above the list's own, until the list goes: no other entity has one)
+		// (ids above the world's own: no other entity has one)
 		ew.next_player_id += 1
 		want := game.Entity_Id(PLAYER_ID_BASE + ew.next_player_id)
 		id, _, err := entity_world_spawn(ew, s.registry, kind, c.player.position, {}, want)
@@ -1655,35 +1644,31 @@ player_entities_release :: proc(s: ^Server) {
 	}
 }
 
-// ---- the door (the list's one entrance: everything outside this file uses these) ----
+// ---- the door (everything outside this file uses these) ----
 
-// The one door to the entities. Everything outside entities.odin reaches
-// the world's entities through these procs, never through the list behind
-// them, so a later step can change what stands behind the door. The list's
-// order is the order of every walk (and of the state hash); an id-to-index
-// map kept beside it answers a lookup without a scan.
+// The entities are the store's rows that are not players (a player's entity
+// is the client's own, see player_entity_sync). Every walk is in id order.
+
+// entity_listed: h is an entity of the world, not a player.
+entity_listed :: proc(w: ^World, h: game.Entity_Handle) -> bool {
+	slot := base.pool_get(&w.entity_world.store.slots, h)
+	if slot == nil || slot.dying {return false} 	// (a despawn is queued: gone to every walk)
+	return game.store_get(&w.entity_world.store, h, game.C_PLAYER_LINK, game.Player_Link) == nil
+}
 
 // entity_count: how many entities the world holds.
 entity_count :: proc(w: ^World) -> int {
-	return len(w.entities.list)
-}
-
-// entity_index: where entity id stands in the walk order; -1 when none.
-entity_index :: proc(w: ^World, id: u32) -> int {
-	w.entities.lookups += 1
-	if i, ok := w.entities.index[id]; ok {return i}
-	return -1
+	n := 0
+	it: base.Pool_Iterator
+	for _, h in base.pool_next(&w.entity_world.store.slots, &it) {
+		if entity_listed(w, h) {n += 1}
+	}
+	return n
 }
 
 // entity_get: the entity with this id.
 entity_get :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
-	if entity_index(w, id) < 0 {return 0, false}
-	return entity_handle_of(w, id)
-}
-
-// entity_handle_of: the store's handle of entity id (false when it has none).
-entity_handle_of :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
-	return game.store_find(&w.entity_world.store, game.Entity_Id(id))
+	return entity_find(w, id)
 }
 
 // entity_kind: the kind of the entity (0 for a stale handle).
@@ -1698,73 +1683,54 @@ entity_id :: proc(w: ^World, h: game.Entity_Handle) -> u32 {
 	return 0
 }
 
-// entity_at: the entity at this place of the walk order (an index from
-// entity_index or entities_each; removing an entity moves the last into its place).
-entity_at :: proc(w: ^World, index: int) -> game.Entity_Handle {
-	return w.entities.list[index].handle
-}
-
-// Entity_Iter walks the entities in the list's order.
+// Entity_Iter walks a snapshot of the entities, lowest id first.
 Entity_Iter :: struct {
-	w: ^World,
-	i: int,
+	w:       ^World,
+	handles: []game.Entity_Handle, // in the temp allocator
+	i:       int,
 }
 
-// entities_each starts a walk: `it := entities_each(w); for e, i in entities_next(&it)`.
-// (An entity added or removed during the walk is the walker's to account for.)
-entities_each :: proc(w: ^World) -> Entity_Iter {
-	return {w = w}
+// entities_each starts a walk: `it := entities_each(w); for e, i in entities_next(&it)`,
+// over the entities that stand now (those with an id above `after`). One
+// despawned during the walk is skipped; one spawned during it is not walked.
+entities_each :: proc(w: ^World, after: u32 = 0) -> Entity_Iter {
+	Row :: struct {
+		id: u32,
+		h:  game.Entity_Handle,
+	}
+	rows := make([dynamic]Row, context.temp_allocator)
+	it: base.Pool_Iterator
+	for _, h in base.pool_next(&w.entity_world.store.slots, &it) {
+		if id := entity_id(w, h); id > after && entity_listed(w, h) {append(&rows, Row{id, h})}
+	}
+	// ids order them (handles are slot places, reused)
+	slice.sort_by(rows[:], proc(a, b: Row) -> bool {return a.id < b.id})
+	handles := make([]game.Entity_Handle, len(rows), context.temp_allocator)
+	for r, i in rows {handles[i] = r.h}
+	return {w = w, handles = handles}
 }
 
 entities_next :: proc(it: ^Entity_Iter) -> (h: game.Entity_Handle, index: int, ok: bool) {
-	if it.i >= len(it.w.entities.list) {return}
-	index = it.i
-	it.i += 1
-	return it.w.entities.list[index].handle, index, true
-}
-
-// entities_view: all of them, in order, to read (the state hash folds it).
-entities_view :: proc(w: ^World) -> []Entity {
-	return w.entities.list[:]
-}
-
-// entity_add appends an entity as it is (its id is its own; one with id 0
-// gets the next free one) and returns it. No cap: entity_spawn keeps that.
-entity_add :: proc(w: ^World, ent: Entity) -> ^Entity {
-	e := &w.entities
-	ent := ent
-	if ent.id == 0 {
-		ent.id = e.next_id
-		e.next_id += 1
-	}
-	append(&e.list, ent)
-	e.index[ent.id] = len(e.list) - 1
-	return &e.list[len(e.list) - 1]
-}
-
-// entity_remove takes entity id out (the last one takes its place in the
-// order) and forgets it in the entity world; false when there is none.
-entity_remove :: proc(w: ^World, id: u32) -> bool {
-	i := entity_index(w, id)
-	if i < 0 {return false}
-	entities_unlink(&w.entities, i)
-	if w.entity_world != nil {
-		if h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); ok {
-			_ = game.store_despawn(&w.entity_world.store, h)
+	for it.i < len(it.handles) {
+		index = it.i
+		it.i += 1
+		h = it.handles[index]
+		if slot := base.pool_get(&it.w.entity_world.store.slots, h); slot != nil && !slot.dying {
+			return h, index, true
 		}
 	}
-	return true
+	return
 }
 
-// entities_clear drops every entity from the list.
+// entities_snapshot: the entities that stand now, lowest id first (in the
+// temp allocator).
+entities_snapshot :: proc(w: ^World) -> []game.Entity_Handle {
+	return entities_each(w).handles
+}
+
+// entities_clear despawns every entity (players stay).
 entities_clear :: proc(w: ^World) {
-	clear(&w.entities.list)
-	clear(&w.entities.index)
-}
-
-// entities_unlink removes the entity at index from the list and the map.
-entities_unlink :: proc(e: ^Entities, index: int) {
-	delete_key(&e.index, e.list[index].id)
-	unordered_remove(&e.list, index)
-	if index < len(e.list) {e.index[e.list[index].id] = index}
+	it := entities_each(w)
+	for h in entities_next(&it) {_ = game.store_despawn(&w.entity_world.store, h)}
+	game.store_apply(&w.entity_world.store)
 }
