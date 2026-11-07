@@ -18,13 +18,14 @@ Font_Kind :: enum {
 }
 
 Font_Def :: struct {
-	name:    string,
-	kind:    Font_Kind,
-	base:    string, // a font made from another: the felt piano is the upright
-	felt:    bool, // the soft hammer (felt_zone)
-	url:     string,
-	archive: string,
-	sha256:  string, // of the archive
+	name:        string,
+	kind:        Font_Kind,
+	base:        string, // a font made from another: the felt piano is the upright
+	felt:        bool, // the soft hammer (felt_zone)
+	url:         string,
+	archive:     string,
+	sha256:      string, // of the archive
+	font_sha256: string, // of the unpacked font (.sf2 or .sfz dir)
 }
 
 FONTS :: [?]Font_Def {
@@ -33,6 +34,7 @@ FONTS :: [?]Font_Def {
 		url = "https://freepats.zenvoid.org/Piano/UprightPianoKW/UprightPianoKW-small-SF2-20190703.7z",
 		archive = "UprightPianoKW-small-SF2-20190703.7z",
 		sha256 = "3bd025e7c2ffa9e6f3f99215ce383c9cebbac991cfbf9be1453cdb4328ec3492",
+		font_sha256 = "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
 	},
 	{name = "felt", base = "piano", felt = true},
 	{
@@ -40,60 +42,70 @@ FONTS :: [?]Font_Def {
 		url = "https://freepats.zenvoid.org/OrchestralStrings/ConcertHarp/ConcertHarp-small-SF2-20200702.tar.xz",
 		archive = "ConcertHarp-small-SF2-20200702.tar.xz",
 		sha256 = "04d149bd7446e24ce30874de34077aa81a21a1b8d228e5fa81611fc883b18f71",
+		font_sha256 = "1796607b3c7dc9ce0d98473c33068ea4c20ab3dfda38a44f157ee10bfed6ccb4",
 	},
 	{
 		name = "freepats_bells",
 		url = "https://github.com/freepats/tubular-bells1/releases/download/2024-11-30/TubularBells-small-SF2-20241130.7z",
 		archive = "TubularBells-small-SF2-20241130.7z",
 		sha256 = "2ebd88d83f67a7a0174b61ca09f28d10355e49c2214b1c769b3cf11e84815c90",
+		font_sha256 = "c65f95fa73d881aaaf317029b749abb8b99efb1c1838fb0f34855c5a7188a9eb",
 	},
 	{
 		name = "freepats_timpani",
 		url = "https://github.com/freepats/timpani/releases/download/2024-08-10/Timpani-SF2-20240810.7z",
 		archive = "Timpani-SF2-20240810.7z",
 		sha256 = "6a8dff96d9ad109c7ba6155b11f2c2dcc635850cdd43fc1db460f80c45a8e066",
+		font_sha256 = "f4f133d63bca297c98143e95c1f3fe5418a2a51d7b1f4d5470971eec7885d87b",
 	},
 	{
 		name = "freepats_choir",
 		url = "https://github.com/freepats/synth-pad-choir/releases/download/2020-05-16/SynthPadChoir-SF2-20200516.7z",
 		archive = "SynthPadChoir-SF2-20200516.7z",
 		sha256 = "4a6024721615d15bedff030a7e8259d380fdcef51f2a223961c69dfbbbdb39f1",
+		font_sha256 = "8688e074a15a40f2d9a251f9a642f67f91b1667ba6f4a1e765b9ee7347260c2d",
 	},
 	{
 		name = "freepats_sweep",
 		url = "https://github.com/freepats/sweep-pad/releases/download/2019-08-13/SweepPad-SF2-20190813.7z",
 		archive = "SweepPad-SF2-20190813.7z",
 		sha256 = "2a2eb595b47e780fc633391f756e972e87512d61adcb9564c3c27b9ffca3fb63",
+		font_sha256 = "5a09a1d8ab60d236907572a46af8b4211881e2f8c7325e75f782ad5d7acce433",
 	},
 	{
 		name = "freepats_bowed",
 		url = "https://github.com/freepats/synth-pad-bowed/releases/download/2019-07-19/SynthPadBowed-SF2-20190719.7z",
 		archive = "SynthPadBowed-SF2-20190719.7z",
 		sha256 = "70a1db4b7bd33caf1f37187e29ff367d8c78d7043a6e36cf1b5e99f72412bb56",
+		font_sha256 = "d20b2c26757c58665f83850515d68a7ecee11a87103f849be2406f026f9cf52a",
 	},
 	{
 		name = "freepats_synthstrings",
 		url = "https://github.com/freepats/synth-strings-1/releases/download/2020-05-28/SynthStrings1-SF2-20200528.7z",
 		archive = "SynthStrings1-SF2-20200528.7z",
 		sha256 = "1fed457941efbd6e1deca6937d1859db7920946709732265426785e9e11bcf55",
+		font_sha256 = "7df5074a9ca497adfc3b63a3501a9244495dbb3334b05bba00789bf83cfe6cd4",
 	},
 	{
 		name = "freepats_recorder",
 		url = "https://freepats.zenvoid.org/Wind/Recorder1/Recorder-SF2-20201205.7z",
 		archive = "Recorder-SF2-20201205.7z",
 		sha256 = "60258c60fcef9e398aca22749cdbeaba792b8fa7c9115e63ceef3aff5d4bd1c0",
+		font_sha256 = "fb89e90e6b8b40e6463c7edab8cbf4583abbd8fa2d3e32a9250ce7b91d480722",
 	},
 	{
 		name = "freepats_ocarina",
 		url = "https://github.com/freepats/ocarina1/releases/download/2024-10-02/Ocarina-SF2-20241002.7z",
 		archive = "Ocarina-SF2-20241002.7z",
 		sha256 = "1d48403208a38555503bbd9f65d09815ee4edb10ba01e9a345935ae44c38179c",
+		font_sha256 = "e92c42a68cb738663748ce512dfbc7f18c3c3ea38d12df9ce165b249e6da6bc6",
 	},
 	{
 		name = "freepats_glass",
 		url = "https://freepats.zenvoid.org/ChromaticPercussion/Glass/Glass-SF2-20191227.7z",
 		archive = "Glass-SF2-20191227.7z",
 		sha256 = "e73912077f2cf4c16a6861ba0752c864ce78c1b5f609b890dfcbdb312a8bfb15",
+		font_sha256 = "c86204d29aa2cb660b00d074468dbfc642cd9b93bdfe639555ba008a6c283968",
 	},
 }
 
@@ -284,6 +296,30 @@ fonts_sha256 :: proc(p: ^Piece, cache: map[string]^Loaded_Font) -> string {
 	for name in used {
 		def, _ := font_def(name)
 		fmt.sbprintf(&b, "%s=%s\n", name, cache[font_source(def).name].sha256)
+		if def.felt {strings.write_string(&b, "felt=1\n")}
+	}
+	return sha256_hex(transmute([]u8)strings.to_string(b))
+}
+
+// fonts_expected_sha256 computes the expected soundfont_sha256 for a piece from
+// the pinned font definitions, without requiring the fonts to be downloaded.
+fonts_expected_sha256 :: proc(p: ^Piece) -> string {
+	used: [dynamic]string
+	for part in p.parts {
+		def, _ := font_def(part.font)
+		if !contains(used[:], def.name) {append(&used, def.name)}
+	}
+	piano_def, _ := font_def("piano")
+	if len(used) == 1 && used[0] == "piano" {return piano_def.font_sha256}
+	for i in 1 ..< len(used) { 	// insertion sort: the names are few
+		for j := i;
+		    j > 0 && used[j] < used[j - 1];
+		    j -= 1 {used[j], used[j - 1] = used[j - 1], used[j]}
+	}
+	b: strings.Builder
+	for name in used {
+		def, _ := font_def(name)
+		fmt.sbprintf(&b, "%s=%s\n", name, font_source(def).font_sha256)
 		if def.felt {strings.write_string(&b, "felt=1\n")}
 	}
 	return sha256_hex(transmute([]u8)strings.to_string(b))
