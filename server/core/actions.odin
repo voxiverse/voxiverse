@@ -233,11 +233,13 @@ apply_edit_cells :: proc(
 attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	w := c.world
 	ent, index := entity_find(w, a.entity)
-	if ent == nil || !game.ENTITY_INFO[ent.kind].hittable {return} 	// gone already: a late click
+	if ent == nil {return} 	// gone already: a late click
+	info := game.kind_info(s.registry, ent.kind)
+	if !info.hittable {return}
 	if !entity_reachable(c, ent) {return}
-	record(s, c, .Entity_Hit, game.ENTITY_INFO[ent.kind].name)
+	record(s, c, .Entity_Hit, game.kind_name(info))
 	if entity_attack(w, ent, c.player.position) {
-		record(s, c, .Entity_Killed, game.ENTITY_INFO[ent.kind].name)
+		record(s, c, .Entity_Killed, game.kind_name(info))
 		log.debugf("server entity died id=%d by=%s", a.entity, client_name(c))
 		entity_died(w, index)
 	} else {

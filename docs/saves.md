@@ -21,6 +21,11 @@ lock                                          held while the universe is open (n
 telemetry/, analytics/, exports/              (never part of a save: analytics/ holds the session recordings)
 ```
 
+`entities.cfg` names each entity's kind by its registry id (`voxiverse:sheep`); a file
+written before kinds were data has the bare name (`sheep`, or `critter`), and that loads
+into the same kind. A line whose kind the world's packs no longer have (or no longer save)
+is dropped, and the server's log names the kind.
+
 ## Capturing a tick without stalling it
 
 A save must describe a single tick, because items move between inventories, chests and

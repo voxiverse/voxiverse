@@ -696,11 +696,12 @@ write_entities :: proc(w: ^World) -> bool {
 	)
 	it := entities_each(w)
 	for e in entities_next(&it) {
-		if !game.ENTITY_INFO[e.kind].saved {continue}
+		info := game.kind_info(w.server.registry, e.kind)
+		if !info.saved {continue}
 		fmt.sbprintf(
 			&b,
 			"%s %.4f %.4f %.4f %.4f %d %v",
-			game.ENTITY_INFO[e.kind].name,
+			info.id, // (a save before kinds were data wrote the bare name: load_entities reads both)
 			e.body.position.x,
 			e.body.position.y,
 			e.body.position.z,
@@ -708,7 +709,7 @@ write_entities :: proc(w: ^World) -> bool {
 			e.health,
 			e.natural,
 		)
-		if e.kind == .Item { 	// (and the action that dropped it: a rollback takes it back after a restart)
+		if e.kind == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
 			fmt.sbprintf(
 				&b,
 				" %s %d %d",
@@ -717,7 +718,7 @@ write_entities :: proc(w: ^World) -> bool {
 				e.action,
 			)
 		}
-		if e.kind == .Sheep {
+		if e.kind == w.server.registry.engine.sheep {
 			fmt.sbprintf(
 				&b,
 				" %v %d %d %d %d",
@@ -746,25 +747,29 @@ load_entities :: proc(w: ^World) {
 	if err != nil {return} 	// none saved (a new world, or an older one)
 	rest := string(data)
 	loaded, skipped := 0, 0
+	unknown := make([dynamic]string, context.temp_allocator)
 	for line in strings.split_lines_iterator(&rest) {
 		l := strings.trim_space(line)
 		if l == "" || l[0] == '#' {continue}
 		f := strings.fields(l, context.temp_allocator)
 		ok := len(f) >= 7 && len(f) <= 12
-		kind: game.Entity_Kind
+		reg := w.server.registry
+		sheep, item := reg.engine.sheep, reg.engine.item
+		kind: game.Kind_Id
 		found := false
 		if ok {
-			for k in game.Entity_Kind {
-				info := &game.ENTITY_INFO[k]
-				if info.saved && info.name == f[0] {kind, found = k, true}
+			// (a bare name is a base pack kind: the saves before kinds were data)
+			if k, has := game.registry_kind(reg, f[0]); has && game.kind_info(reg, k).saved {
+				kind, found = k, true
 			}
-			if f[0] == "critter" {kind, found = .Sheep, true} 	// (before it was a sheep)
+			if f[0] == "critter" {kind, found = sheep, true} 	// (before it was a sheep)
+			if !found {append(&unknown, f[0])}
 			// An item has its stack after, a sheep whether it is shorn; no other has more.
 			// An item has its stack after; a sheep whether it is shorn (and, with
 			// its genes, growth, love and wait); no other has more.
-			if found && kind == .Item && len(f) != 9 && len(f) != 10 {ok = false}
-			if found && kind == .Sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
-			if found && kind != .Item && kind != .Sheep && len(f) != 7 {ok = false}
+			if found && kind == item && len(f) != 9 && len(f) != 10 {ok = false}
+			if found && kind == sheep && len(f) != 7 && len(f) != 8 && len(f) != 12 {ok = false}
+			if found && kind != item && kind != sheep && len(f) != 7 {ok = false}
 		}
 		pos: [3]f64
 		yaw: f32
@@ -791,7 +796,7 @@ load_entities :: proc(w: ^World) {
 		}
 		stack: game.Stack
 		action: u32
-		if ok && found && kind == .Item {
+		if ok && found && kind == item {
 			// A dropped stack: what it is.
 			item, known := game.item_by_name(w.server.registry, f[7] if len(f) >= 9 else "")
 			n, counted := strconv.parse_int(f[8] if len(f) >= 9 else "")
@@ -808,10 +813,10 @@ load_entities :: proc(w: ^World) {
 			continue
 		}
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
-			e.yaw, e.health = yaw, min(health, game.ENTITY_INFO[kind].health)
+			e.yaw, e.health = yaw, min(health, game.kind_info(reg, kind).health)
 			e.stack, e.action = stack, action
-			if kind == .Sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
-			if kind == .Sheep && len(f) == 12 {
+			if kind == sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
+			if kind == sheep && len(f) == 12 {
 				genes, ok1 := strconv.parse_int(f[8])
 				growth, ok2 := strconv.parse_int(f[9])
 				love, ok3 := strconv.parse_int(f[10])
@@ -826,6 +831,15 @@ load_entities :: proc(w: ^World) {
 			}
 			loaded += 1
 		}
+	}
+	slice.sort(unknown[:])
+	for name, i in unknown {
+		if i > 0 && unknown[i - 1] == name {continue}
+		log.warnf(
+			"server dropped saved entities of kind %q: this world's packs no longer have it (or do not save it) path=%s",
+			name,
+			path,
+		)
 	}
 	if skipped > 0 {log.warnf("server entities skipped lines=%d path=%s", skipped, path)}
 	log.infof("server entities loaded count=%d", loaded)

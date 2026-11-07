@@ -81,7 +81,7 @@ budget_save_scene :: proc(s: ^Server) {
 		mark_edited(w, pos)
 	}
 	for n in 0 ..< 400 {
-		e := entity_spawn(w, .Item, {f64(1000 + n), 200, 1000}, false)
+		e := entity_spawn(w, w.server.registry.engine.item, {f64(1000 + n), 200, 1000}, false)
 		if e != nil {e.stack = {planks, 5, 0}}
 	}
 }
@@ -142,6 +142,7 @@ budget_save :: proc(dir: string, max_seconds: f64) -> (r: Budget_Save, ok: bool)
 budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	s := new(Server)
 	defer free(s)
+	s.registry = reg // (the audit tells the dropped items from the other entities by kind)
 	s.clients = make([]Client, 200)
 	defer delete(s.clients)
 	w := new(World)
@@ -166,7 +167,7 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	}
 	for i in 0 ..< 3000 {
 		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
-		entity_add(w, Entity{kind = .Item, stack = st})
+		entity_add(w, Entity{kind = reg.engine.item, stack = st})
 		given(s, st)
 	}
 	start := base.thread_cpu_us()

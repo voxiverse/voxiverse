@@ -134,7 +134,7 @@ local SCHEMA = {
     { name = "crouched", t = "bool" },
   } },
   { id = 11, name = "entity", key = "entity", lane = "reliable", fields = {
-    { name = "kind", t = "enum", signed = false },
+    { name = "kind", t = "u16" },
     { name = "stack.item", t = "u16" },
     { name = "stack.count", t = "i64" },
     { name = "stack.ammo", t = "u8" },

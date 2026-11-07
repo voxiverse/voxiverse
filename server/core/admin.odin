@@ -337,12 +337,12 @@ admin_sphere :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 @(private = "file")
 admin_summon :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
-	kind := game.Entity_Kind.Sheep
+	kind := s.registry.engine.sheep
 	if len(args) > 0 {
 		found := false
-		for k in game.Entity_Kind {
-			if game.ENTITY_INFO[k].name == args[0] &&
-			   game.ENTITY_INFO[k].summonable {kind, found = k, true}
+		for &info, i in s.registry.kinds {
+			if game.kind_name(&info) == args[0] &&
+			   info.summonable {kind, found = game.Kind_Id(i + 1), true}
 		}
 		if !found {return false}
 	}

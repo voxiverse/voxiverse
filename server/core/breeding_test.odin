@@ -25,7 +25,7 @@ sheep_list :: proc(srv: ^Server) -> []Sheep_Info {
 			w := client_by_name(s, "a").world
 			for e in entities_view(w) {
 				if e.kind ==
-				   .Sheep {append(out, Sheep_Info{e.id, e.genes, e.growth, e.love, e.wait, e.shorn})}
+				   test_reg().engine.sheep {append(out, Sheep_Info{e.id, e.genes, e.growth, e.love, e.wait, e.shorn})}
 			}
 		}, &out)
 	return out[:]
@@ -224,7 +224,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			if e, _ := entity_find(c.world, d.id); e != nil {
 				sheep_use(s, c, e)
 				for it in entities_view(c.world) {
-					if it.kind == .Item &&
+					if it.kind == test_reg().engine.item &&
 					   it.stack.item == game.item_of_block(test_reg(), .Wool_Black) {
 						d.n += it.stack.count
 					}

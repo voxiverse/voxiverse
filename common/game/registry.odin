@@ -400,6 +400,7 @@ Registry :: struct {
 	channels:   []Channel_Info, // by channel id; 0 is voxiverse:light
 	sim:        Sim_Rules,
 	kinds:      []Kind_Info, // entity kinds: a Kind_Id is the index + 1
+	engine:     Engine_Kinds, // the kinds the engine's code names (0: this registry has none)
 	packs:      []Pack_Info,
 	ids:        [Content_Kind]map[string]u32, // id text -> number (blocks, items) or index
 	hash:       u64,

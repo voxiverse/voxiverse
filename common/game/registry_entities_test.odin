@@ -3,8 +3,8 @@ package game
 import "core:strings"
 import "core:testing"
 
-// The base pack's kinds carry today's numbers, each written here beside the constant of
-// common/game/entity.odin it replaces (the Entity_Info table, ROCKET_* and ITEM_*).
+// The base pack's kinds carry today's numbers (the Entity_Info table, ROCKET_* and ITEM_*
+// constants they replaced).
 @(test)
 test_entity_kinds :: proc(t: ^testing.T) {
 	reg, errs0 := registry_build({base_pack_source(context.temp_allocator)})
@@ -25,18 +25,11 @@ test_entity_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, kind_info(reg, 5) == nil)
 
 	s := kind_info(reg, sheep_id)
-	info := ENTITY_INFO[.Sheep]
-	testing.expect_value(t, s.box, [2]f32{f32(info.width), f32(info.height)})
-	testing.expect_value(t, s.health, info.health)
-	testing.expect_value(t, s.saved, info.saved)
-	testing.expect_value(t, s.summonable, info.summonable)
-	testing.expect_value(t, s.hittable, info.hittable)
+	testing.expect_value(t, s.box, [2]f32{0.8, 0.9})
+	testing.expect_value(t, s.health, 4)
+	testing.expect(t, s.saved && s.summonable && s.hittable)
 	testing.expect_value(t, s.physics, Entity_Physics.Walker)
-	testing.expect_value(
-		t,
-		s.walker,
-		Kind_Walker_Info{info.walk_speed, info.run_speed, info.jump, 0},
-	)
+	testing.expect_value(t, s.walker, Kind_Walker_Info{1.4, 4.2, 1.2, 0})
 	testing.expect_value(t, s.brain, Entity_Brain.Grazer)
 	testing.expect_value(t, s.with, Entity_Parts{.Wool, .Genes, .Breeding})
 	testing.expect_value(t, len(s.looks), 5)
@@ -57,39 +50,22 @@ test_entity_kinds :: proc(t: ^testing.T) {
 
 	rocket_id, _ := registry_kind(reg, "rocket")
 	r := kind_info(reg, rocket_id)
-	info = ENTITY_INFO[.Rocket]
-	testing.expect_value(t, r.box, [2]f32{f32(info.width), f32(info.height)})
-	testing.expect_value(t, r.health, info.health)
+	testing.expect_value(t, r.box, [2]f32{0.3, 0.3})
+	testing.expect_value(t, r.health, 1)
 	testing.expect(t, !r.saved && !r.hittable && !r.summonable)
 	testing.expect_value(t, r.physics, Entity_Physics.Projectile)
-	testing.expect_value(
-		t,
-		r.projectile,
-		Kind_Projectile_Info{ROCKET_SPEED, ROCKET_GRAVITY, ROCKET_LIFE, ROCKET_RADIUS},
-	)
+	testing.expect_value(t, r.projectile, Kind_Projectile_Info{32, 3, 6, 4})
 	testing.expect_value(t, r.model, Entity_Model.Rocket)
 	_, spawns = r.spawn.?
 	testing.expect(t, !spawns)
 
 	item_id, _ := registry_kind(reg, "item")
 	it := kind_info(reg, item_id)
-	info = ENTITY_INFO[.Item]
-	testing.expect_value(t, it.box, [2]f32{f32(info.width), f32(info.height)})
-	testing.expect_value(t, it.health, info.health)
+	testing.expect_value(t, it.box, [2]f32{0.25, 0.25})
+	testing.expect_value(t, it.health, 1)
 	testing.expect(t, it.saved && !it.hittable)
 	testing.expect_value(t, it.physics, Entity_Physics.Item)
-	testing.expect_value(
-		t,
-		it.item,
-		Kind_Item_Info {
-			ITEM_PICKUP_DELAY,
-			2,
-			ITEM_PICKUP_RANGE,
-			ITEM_MERGE_RANGE,
-			ITEM_LIFE,
-			ITEM_THROW,
-		},
-	)
+	testing.expect_value(t, it.item, Kind_Item_Info{0.5, 2, 1.5, 1.0, 300, 9})
 	testing.expect_value(t, it.model, Entity_Model.Item)
 
 	player_id, _ := registry_kind(reg, "player")

@@ -99,7 +99,8 @@ drop_stack :: proc(s: ^Server, c: ^Client, stack: game.Stack) {
 	dir := [3]f32{-base.sin(yaw) * cp, base.sin(pitch), -base.cos(yaw) * cp}
 	eye := game.player_eye(c.player)
 	at := eye + {f64(dir.x), f64(dir.y), f64(dir.z)} * 0.4 - {0, 0.3, 0}
-	spawn_item(c.world, at, stack, dir * game.ITEM_THROW + {0, 2, 0}, int(player_id(s, c)))
+	throw := game.kind_info(s.registry, s.registry.engine.item).item.throw
+	spawn_item(c.world, at, stack, dir * throw + {0, 2, 0}, int(player_id(s, c)))
 }
 
 // spawn_item: a dropped stack at position (its bottom centre).
@@ -111,7 +112,7 @@ spawn_item :: proc(
 	velocity: [3]f32,
 	owner: int,
 ) -> ^Entity {
-	ent := entity_spawn(w, .Item, position, false)
+	ent := entity_spawn(w, w.server.registry.engine.item, position, false)
 	if ent == nil {
 		ledger_stack(w.server, w, .Void, stack, -1)
 		return nil
@@ -133,13 +134,14 @@ PICKUP_SLACK :: 2
 item_tick :: proc(w: ^World, index: int) -> bool {
 	s := w.server
 	ent := entity_at(w, index)
-	if f32(ent.age) * game.TICK_SECONDS > game.ITEM_LIFE {
+	kind := game.kind_info(s.registry, ent.kind)
+	if f32(ent.age) * game.TICK_SECONDS > kind.item.life {
 		ledger_stack(s, w, .Expire, ent.stack, -1)
 		return true
 	}
 	if !chunk_ready(w, ent.body.position) {return false} 	// its ground is not loaded: it waits
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	game.body_step(&ent.body, .Item, {}, false, &w.rules, query, game.TICK_SECONDS)
+	game.body_step(&ent.body, kind, {}, false, &w.rules, query, game.TICK_SECONDS)
 	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
 	size := game.item_stack_size(s.registry, ent.stack.item)
 	if ent.age % 10 == 0 {
@@ -147,13 +149,13 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 		// spatial service names the item stacks near it (asking a little wider,
 		// as their boxes are where they were at the end of the last tick); the
 		// list says where each is now and whether it comes after.
-		if item_kind, ok := game.registry_kind(s.registry, "voxiverse:item"); ok {
+		if item_kind := s.registry.engine.item; item_kind != 0 {
 			ew := w.entity_world
 			near := make([dynamic]game.Entity_Id, context.temp_allocator)
 			game.spatial_sphere(
 				&ew.spatial,
 				ent.body.position,
-				game.ITEM_MERGE_RANGE + PICKUP_SLACK,
+				f64(kind.item.merge) + PICKUP_SLACK,
 				{kind = u16(item_kind), exclude = game.Entity_Id(ent.id)},
 				&near,
 			)
@@ -165,11 +167,11 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			slice.sort(order[:])
 			#reverse for j in order {
 				other := entity_at(w, j)
-				if other.kind != .Item || other.stack.item != ent.stack.item {continue}
+				if other.kind != ent.kind || other.stack.item != ent.stack.item {continue}
 				if ent.stack.count + other.stack.count > size {continue}
 				d := other.body.position - ent.body.position
 				if d.x * d.x + d.y * d.y + d.z * d.z >
-				   game.ITEM_MERGE_RANGE * game.ITEM_MERGE_RANGE {continue}
+				   f64(kind.item.merge * kind.item.merge) {continue}
 				ent.stack.count += other.stack.count
 				ent.age = min(ent.age, other.age)
 				entity_gone(w, j)
@@ -185,7 +187,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	game.spatial_sphere(
 		&ew.spatial,
 		ent.body.position,
-		game.ITEM_PICKUP_RANGE + PICKUP_SLACK,
+		f64(kind.item.range) + PICKUP_SLACK,
 		{all = {.Player}},
 		&near,
 	)
@@ -200,11 +202,11 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	for ci in who {
 		c := &s.clients[ci]
 		if c.state != .Playing || c.world != w {continue}
-		delay := f32(2 if ent.owner == int(player_id(s, c)) else game.ITEM_PICKUP_DELAY)
+		delay :=
+			kind.item.owner_delay if ent.owner == int(player_id(s, c)) else kind.item.pickup_delay
 		if f32(ent.age) * game.TICK_SECONDS < delay {continue}
 		d := c.player.position + {0, 0.5, 0} - ent.body.position
-		if d.x * d.x + d.y * d.y + d.z * d.z >
-		   game.ITEM_PICKUP_RANGE * game.ITEM_PICKUP_RANGE {continue}
+		if d.x * d.x + d.y * d.y + d.z * d.z > f64(kind.item.range * kind.item.range) {continue}
 		left := game.inventory_add(s.registry, &c.inventory, ent.stack)
 		if left.count == ent.stack.count {continue} 	// no room
 		record(
