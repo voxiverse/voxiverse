@@ -74,7 +74,9 @@ Brain :: struct {
 }
 
 Entities :: struct {
-	list:    [dynamic]Entity, // awake (in loaded chunks)
+	list:    [dynamic]Entity, // awake (in loaded chunks); behind the door (entity_store.odin)
+	index:   map[u32]int, // id to place in list
+	lookups: int, // id lookups made (a test counts them)
 	next_id: u32,
 	budget:  int, // A* nodes left this tick
 	rng:     base.Rng,
@@ -82,12 +84,14 @@ Entities :: struct {
 
 entities_init :: proc(e: ^Entities, seed: i64) {
 	e.list = make([dynamic]Entity, 0, MAX_ENTITIES)
+	e.index = make(map[u32]int, MAX_ENTITIES)
 	e.next_id = 1
 	e.rng = base.rng_make(u64(seed) ~ 0x0e7e_0e7e)
 }
 
 entities_destroy :: proc(e: ^Entities) {
 	delete(e.list)
+	delete(e.index)
 }
 
 // entity_spawn adds an entity at position (bottom centre); nil if full.
@@ -99,8 +103,8 @@ entity_spawn :: proc(
 ) -> ^Entity {
 	e := &w.entities
 	if len(e.list) == MAX_ENTITIES {return nil}
-	append(
-		&e.list,
+	entity_add(
+		w,
 		Entity {
 			id = e.next_id,
 			kind = kind,
@@ -153,7 +157,7 @@ entities_tick :: proc(w: ^World) {
 		ent := &e.list[i]
 		ent.age += 1
 		if ent.natural && !anyone_within(w, ent.body.position, DESPAWN_DISTANCE) {
-			unordered_remove(&e.list, i)
+			entities_unlink(e, i)
 			continue
 		}
 		switch ent.kind {
@@ -542,10 +546,9 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 }
 
 entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
-	// an id the entity world does not know is no entity (the list is searched
-	// only for the index, until it goes)
+	// an id the entity world does not know is no entity (the map gives the index)
 	if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); !ok {return nil, -1}
-	for &ent, i in w.entities.list {if ent.id == id {return &ent, i}}
+	if i := entity_index(w, id); i >= 0 {return &w.entities.list[i], i}
 	return nil, -1
 }
 
@@ -590,16 +593,16 @@ entity_known :: proc(c: ^Client, id: u32) -> bool {
 
 // entity_died: tell everyone who knew it (they show it die), then forget it.
 entity_died :: proc(w: ^World, index: int) {
-	entity_remove(w, index, true)
+	entity_retire(w, index, true)
 }
 
 // entity_gone: as entity_died, without a death to show (a stack picked up).
 entity_gone :: proc(w: ^World, index: int) {
-	entity_remove(w, index, false)
+	entity_retire(w, index, false)
 }
 
 @(private = "file")
-entity_remove :: proc(w: ^World, index: int, died: bool) {
+entity_retire :: proc(w: ^World, index: int, died: bool) {
 	s := w.server
 	id := w.entities.list[index].id
 	if died {
@@ -611,7 +614,7 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 			}
 		}
 	}
-	unordered_remove(&w.entities.list, index)
+	entities_unlink(&w.entities, index)
 	if h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); ok {
 		_ = game.store_despawn(&w.entity_world.store, h)
 	}
@@ -1436,4 +1439,102 @@ player_entities_release :: proc(s: ^Server) {
 			player_entity_release(s, &c)
 		}
 	}
+}
+
+// ---- the door (the list's one entrance: everything outside this file uses these) ----
+
+// The one door to the entities. Everything outside entities.odin reaches
+// the world's entities through these procs, never through the list behind
+// them, so a later step can change what stands behind the door. The list's
+// order is the order of every walk (and of the state hash); an id-to-index
+// map kept beside it answers a lookup without a scan.
+
+// entity_count: how many entities the world holds.
+entity_count :: proc(w: ^World) -> int {
+	return len(w.entities.list)
+}
+
+// entity_index: where entity id stands in the walk order; -1 when none.
+entity_index :: proc(w: ^World, id: u32) -> int {
+	w.entities.lookups += 1
+	if i, ok := w.entities.index[id]; ok {return i}
+	return -1
+}
+
+// entity_get: the entity with this id.
+entity_get :: proc(w: ^World, id: u32) -> (^Entity, bool) {
+	i := entity_index(w, id)
+	if i < 0 {return nil, false}
+	return &w.entities.list[i], true
+}
+
+// entity_at: the entity at this place of the walk order (an index from
+// entity_index or entities_each; removing an entity moves the last into its place).
+entity_at :: proc(w: ^World, index: int) -> ^Entity {
+	return &w.entities.list[index]
+}
+
+// Entity_Iter walks the entities in the list's order.
+Entity_Iter :: struct {
+	w: ^World,
+	i: int,
+}
+
+// entities_each starts a walk: `it := entities_each(w); for e, i in entities_next(&it)`.
+// (An entity added or removed during the walk is the walker's to account for.)
+entities_each :: proc(w: ^World) -> Entity_Iter {
+	return {w = w}
+}
+
+entities_next :: proc(it: ^Entity_Iter) -> (e: ^Entity, index: int, ok: bool) {
+	if it.i >= len(it.w.entities.list) {return}
+	index = it.i
+	it.i += 1
+	return &it.w.entities.list[index], index, true
+}
+
+// entities_view: all of them, in order, to read (the state hash folds it).
+entities_view :: proc(w: ^World) -> []Entity {
+	return w.entities.list[:]
+}
+
+// entity_add appends an entity as it is (its id is its own; one with id 0
+// gets the next free one) and returns it. No cap: entity_spawn keeps that.
+entity_add :: proc(w: ^World, ent: Entity) -> ^Entity {
+	e := &w.entities
+	ent := ent
+	if ent.id == 0 {
+		ent.id = e.next_id
+		e.next_id += 1
+	}
+	append(&e.list, ent)
+	e.index[ent.id] = len(e.list) - 1
+	return &e.list[len(e.list) - 1]
+}
+
+// entity_remove takes entity id out (the last one takes its place in the
+// order) and forgets it in the entity world; false when there is none.
+entity_remove :: proc(w: ^World, id: u32) -> bool {
+	i := entity_index(w, id)
+	if i < 0 {return false}
+	entities_unlink(&w.entities, i)
+	if w.entity_world != nil {
+		if h, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); ok {
+			_ = game.store_despawn(&w.entity_world.store, h)
+		}
+	}
+	return true
+}
+
+// entities_clear drops every entity from the list.
+entities_clear :: proc(w: ^World) {
+	clear(&w.entities.list)
+	clear(&w.entities.index)
+}
+
+// entities_unlink removes the entity at index from the list and the map.
+entities_unlink :: proc(e: ^Entities, index: int) {
+	delete_key(&e.index, e.list[index].id)
+	unordered_remove(&e.list, index)
+	if index < len(e.list) {e.index[e.list[index].id] = index}
 }

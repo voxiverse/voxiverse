@@ -97,7 +97,7 @@ section :: proc(s: ^Server, sec: Hash_Section, k: ^Sink) {
 	case .Entities:
 		for w, i in s.worlds {
 			fold(k, wpath(i, "next_id"), w.entities.next_id)
-			fold(k, wpath(i, "entities"), w.entities.list[:])
+			fold(k, wpath(i, "entities"), entities_view(w))
 		}
 	case .Chunks:
 		for w, i in s.worlds {

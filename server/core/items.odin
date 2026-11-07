@@ -132,7 +132,7 @@ PICKUP_SLACK :: 2
 @(private)
 item_tick :: proc(w: ^World, index: int) -> bool {
 	s := w.server
-	ent := &w.entities.list[index]
+	ent := entity_at(w, index)
 	if f32(ent.age) * game.TICK_SECONDS > game.ITEM_LIFE {
 		ledger_stack(s, w, .Expire, ent.stack, -1)
 		return true
@@ -164,7 +164,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			}
 			slice.sort(order[:])
 			#reverse for j in order {
-				other := &w.entities.list[j]
+				other := entity_at(w, j)
 				if other.kind != .Item || other.stack.item != ent.stack.item {continue}
 				if ent.stack.count + other.stack.count > size {continue}
 				d := other.body.position - ent.body.position
@@ -173,7 +173,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				ent.stack.count += other.stack.count
 				ent.age = min(ent.age, other.age)
 				entity_gone(w, j)
-				ent = &w.entities.list[index]
+				ent = entity_at(w, index)
 			}
 		}
 	}

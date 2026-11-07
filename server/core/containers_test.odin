@@ -82,7 +82,7 @@ record_at :: proc(srv: ^Server, pos: game.Block_Pos) -> Block_Data {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
 			if e := block_entity_at(w, d.pos); e != nil {d.slots, d.has = e.slots, true}
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind == .Item {d.items += e.stack.count}
 			}
 		}, &d)

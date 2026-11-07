@@ -210,3 +210,55 @@ test_sheep_spawn_and_despawn :: proc(t: ^testing.T) {
 	ok = net_wait(t, {c}, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 0}, 20)
 	testing.expect(t, ok, "sheep stayed known after the watcher left")
 }
+
+// Only entities.odin and entity_store.odin reach into the entity list; every
+// other source goes through the door.
+@(test)
+test_entity_list_is_touched_nowhere_else :: proc(t: ^testing.T) {
+	needle := strings.concatenate({"entities", ".list"}, context.temp_allocator)
+	for root in ([]string{"server", "client", "common", "tools"}) {
+		files := make([dynamic]string, context.temp_allocator)
+		walk_files(root, "", &files)
+		for rel in files {
+			if !strings.has_suffix(rel, ".odin") {continue}
+			if rel == "core/entities.odin" {continue}
+			data, err := os.read_entire_file(full_path(root, rel), context.temp_allocator)
+			if err != nil {continue}
+			if strings.contains(string(data), needle) {
+				testing.expectf(t, false, "%s/%s reaches into the entity list", root, rel)
+			}
+		}
+	}
+}
+
+// 10 000 entities: each lookup is one map probe, no scan, and the order and
+// the lookups survive removals (the last entity takes the removed one's place).
+@(test)
+test_entity_find_without_a_scan :: proc(t: ^testing.T) {
+	w := new(World)
+	defer free(w)
+	entities_init(&w.entities, 1)
+	defer entities_destroy(&w.entities)
+	N :: 10_000
+	for _ in 0 ..< N {entity_add(w, Entity{kind = .Item, health = 1})}
+	testing.expect_value(t, entity_count(w), N)
+	w.entities.lookups = 0
+	for id in 1 ..= u32(N) {
+		e, ok := entity_get(w, id)
+		testing.expect(t, ok && e.id == id)
+	}
+	testing.expect_value(t, w.entities.lookups, N)
+	testing.expect(t, entity_remove(w, 5))
+	testing.expect(t, !entity_remove(w, 5))
+	_, ok5 := entity_get(w, 5)
+	testing.expect(t, !ok5)
+	testing.expect_value(t, entity_index(w, N), 4) // the last took its place
+	testing.expect_value(t, entity_count(w), N - 1)
+	it := entities_each(w)
+	n := 0
+	for e, i in entities_next(&it) {
+		testing.expect_value(t, entity_index(w, e.id), i)
+		n += 1
+	}
+	testing.expect_value(t, n, N - 1)
+}

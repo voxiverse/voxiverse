@@ -62,7 +62,7 @@ test_plants_need_support :: proc(t: ^testing.T) {
 				return b
 			}
 			drops :: proc(w: ^World, item: game.Item) -> (n: int) {
-				for e in w.entities.list {if e.kind == .Item && e.stack.item == item {n += 1}}
+				for e in entities_view(w) {if e.kind == .Item && e.stack.item == item {n += 1}}
 				return
 			}
 			// A flower on dirt, a dandelion on sand, tall grass on grass.
@@ -151,7 +151,7 @@ poppies_dropped :: proc(srv: ^Server, beyond: i32) -> (count: int) {
 			d := (^Data)(data)
 			n := &d.count
 			w := client_by_name(s, "a").world
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind == .Item &&
 				   e.stack.item == game.item_of_block(test_reg(), .Poppy) {n^ += e.stack.count}
 			}

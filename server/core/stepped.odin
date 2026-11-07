@@ -29,8 +29,8 @@ perturb :: proc(s: ^Server) {
 	case .None:
 	case .Entity_Yaw:
 		for w in s.worlds {
-			if len(w.entities.list) > 0 {
-				e := &w.entities.list[0]
+			if entity_count(w) > 0 {
+				e := entity_at(w, 0)
 				e.yaw = ulp(e.yaw)
 				return
 			}

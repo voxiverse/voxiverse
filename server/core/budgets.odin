@@ -146,7 +146,7 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	defer delete(s.clients)
 	w := new(World)
 	defer free(w)
-	defer delete(w.entities.list)
+	defer entities_destroy(&w.entities)
 	w.server = s
 	append(&s.worlds, w)
 	defer delete(s.worlds)
@@ -166,7 +166,7 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	}
 	for i in 0 ..< 3000 {
 		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
-		append(&w.entities.list, Entity{kind = .Item, stack = st})
+		entity_add(w, Entity{kind = .Item, stack = st})
 		given(s, st)
 	}
 	start := base.thread_cpu_us()

@@ -131,8 +131,8 @@ script :: proc(s: ^Server, data: rawptr) {
 		// Clearing takes the dirt back.
 		admin_clear(s, c, {"dirt"})
 		// An old stack on the ground expires.
-		for i in 0 ..< len(w.entities.list) {
-			e := &w.entities.list[i]
+		for i in 0 ..< entity_count(w) {
+			e := entity_at(w, i)
 			if e.kind != .Item {continue}
 			e.age = int(game.ITEM_LIFE * game.TICK_RATE) + 10
 			if item_tick(w, i) {entity_gone(w, i)}
@@ -143,7 +143,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		for g in c.grants {delete(g.pattern)}
 		clear(&c.grants)
 		summon(s, c, .Sheep)
-		for &e in w.entities.list {
+		for &e in entities_view(w) {
 			if e.kind != .Sheep {continue}
 			for st, i in c.inventory.slots {
 				if st.item == wheat { 	// (to the hand: a move)
@@ -161,10 +161,10 @@ script :: proc(s: ^Server, data: rawptr) {
 		}
 		// A world with no room for what is dropped: it is void.
 		ledger(s, w, .Give, stone, 5)
-		for len(w.entities.list) < MAX_ENTITIES {entity_spawn(w, .Sheep, {0, 100, 0}, false)}
+		for entity_count(w) < MAX_ENTITIES {entity_spawn(w, .Sheep, {0, 100, 0}, false)}
 		spawn_item(w, {0, 100, 0}, {stone, 5, 0}, {}, -1)
-		for len(w.entities.list) > 0 && w.entities.list[len(w.entities.list) - 1].kind == .Sheep {
-			entity_gone(w, len(w.entities.list) - 1)
+		for entity_count(w) > 0 && entity_at(w, entity_count(w) - 1).kind == .Sheep {
+			entity_gone(w, entity_count(w) - 1)
 		}
 		read_audit(s, r)
 	case 2:

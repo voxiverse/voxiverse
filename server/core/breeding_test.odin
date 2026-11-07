@@ -23,7 +23,7 @@ sheep_list :: proc(srv: ^Server) -> []Sheep_Info {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			out := (^[dynamic]Sheep_Info)(data)
 			w := client_by_name(s, "a").world
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind ==
 				   .Sheep {append(out, Sheep_Info{e.id, e.genes, e.growth, e.love, e.wait, e.shorn})}
 			}
@@ -223,7 +223,7 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			c.inventory.selected = 0 // (stone in hand)
 			if e, _ := entity_find(c.world, d.id); e != nil {
 				sheep_use(s, c, e)
-				for it in c.world.entities.list {
+				for it in entities_view(c.world) {
 					if it.kind == .Item &&
 					   it.stack.item == game.item_of_block(test_reg(), .Wool_Black) {
 						d.n += it.stack.count
