@@ -548,14 +548,51 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 		},
 	)
 	// The two are independent: compiled side by side, each printing its output whole.
-	results := parallel(
+	Target_Job :: struct {
+		pkg: string,
+		log: string,
+	}
+	State :: struct {
+		targets: [2]Target_Job,
+		ok:      bool,
+	}
+	state := State {
+		targets = {
+			{pkg = GAME_PACKAGE, log = job_log(0, ".game.log")},
+			{pkg = SERVER_PACKAGE, log = job_log(1, ".server.log")},
+		},
+		ok      = true,
+	}
+	for t in state.targets {
+		fmt.printfln("build  %s", t.pkg)
+	}
+	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
+		state := (^State)(data)
+		target := &state.targets[index]
+		log, _ := os.read_entire_file_from_path(target.log, context.temp_allocator)
+		switch result {
+		case .Ok:
+			if len(log) > 0 {os.write(os.stdout, log)}
+			fmt.printfln("built  %s (%.1f s)", target.pkg, seconds)
+		case .Interrupted:
+			fmt.eprintfln("build  %s interrupted", target.pkg)
+			state.ok = false
+		case .Failed, .Timed_Out:
+			fmt.eprintfln("build  %s FAILED", target.pkg)
+			if len(log) > 0 {os.write(os.stderr, log)}
+			state.ok = false
+		}
+	}
+	parallel(
 		{
-			{cmd = cmd, log = job_log(0, ".game.log")},
-			{cmd = server_cmd, log = job_log(0, ".server.log")},
+			{cmd = cmd, log = state.targets[0].log, quiet = true},
+			{cmd = server_cmd, log = state.targets[1].log, quiet = true},
 		},
 		2,
+		done,
+		&state,
 	)
-	if results[0] != .Ok || results[1] != .Ok {return "", false}
+	if !state.ok {return "", false}
 	fmt.printfln(
 		"built  %s, %s %s (%s%s%s%s)",
 		exe,
