@@ -42,15 +42,45 @@ Structure_Set :: struct {
 
 // LAND: biomes structures may stand in.
 @(private = "file")
-LAND :: bit_set[Biome]{.Plains, .Forest, .Taiga, .Tundra, .Desert, .Mountains}
+LAND :: bit_set[Biome] {
+	.Plains,
+	.Forest,
+	.Taiga,
+	.Tundra,
+	.Desert,
+	.Mountains,
+	.Rainforest,
+	.Savanna,
+	.Cold_Desert,
+	.Steppe,
+	.Mediterranean,
+	.Subtropical_Forest,
+	.Mixed_Forest,
+}
+
+// GREEN: the planet's biomes with grass, standing in for Plains and Forest.
+@(private = "file")
+GREEN :: bit_set[Biome] {
+	.Rainforest,
+	.Savanna,
+	.Steppe,
+	.Mediterranean,
+	.Subtropical_Forest,
+	.Mixed_Forest,
+}
 
 @(private = "file", rodata)
 SETS := [?]Structure_Set {
-	{.Tower, 448, 0.55, {.Plains, .Forest, .Taiga, .Tundra}},
-	{.Ruin, 288, 0.6, {.Plains, .Forest, .Taiga, .Desert}},
-	{.Well, 352, 0.5, {.Plains, .Desert}},
+	{.Tower, 448, 0.55, bit_set[Biome]{.Plains, .Forest, .Taiga, .Tundra} + GREEN},
+	{.Ruin, 288, 0.6, bit_set[Biome]{.Plains, .Forest, .Taiga, .Desert, .Cold_Desert} + GREEN},
+	{.Well, 352, 0.5, bit_set[Biome]{.Plains, .Desert, .Cold_Desert, .Savanna, .Steppe}},
 	{.Dungeon, 224, 0.7, LAND},
-	{.Gate, 1024, 0.35, {.Plains, .Forest, .Taiga, .Tundra, .Desert}},
+	{
+		.Gate,
+		1024,
+		0.35,
+		bit_set[Biome]{.Plains, .Forest, .Taiga, .Tundra, .Desert, .Cold_Desert} + GREEN,
+	},
 }
 
 // SINK: how far below the ground a kind's bottom is (a well's shaft).

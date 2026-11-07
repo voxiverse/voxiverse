@@ -3,6 +3,7 @@ package worldgen
 import "core:testing"
 
 import "common:game"
+import "common:planet"
 
 @(private = "file")
 block_at :: proc(lat, lon: f64) -> (x, z: i32) {
@@ -123,6 +124,64 @@ test_planet_biome_follows_koppen :: proc(t: ^testing.T) {
 	testing.expect_value(t, earth_biome(&g, x, z), Biome.Ocean)
 	x, z = planet_block_of(88, 0)
 	testing.expect_value(t, earth_biome(&g, x, z), Biome.Frozen_Ocean)
+}
+
+// koppen_biome: the biome docs/world.md gives a Köppen class, written out
+// apart from planet_biome_of.
+@(private = "file")
+koppen_biome :: proc(k: planet.Koppen) -> Biome {
+	#partial switch k {
+	case .Af, .Am:
+		return .Rainforest
+	case .Aw:
+		return .Savanna
+	case .BWh:
+		return .Desert
+	case .BWk:
+		return .Cold_Desert
+	case .BSh, .BSk:
+		return .Steppe
+	case .Csa, .Csb, .Csc:
+		return .Mediterranean
+	case .Cfa, .Cwa, .Cwb, .Cwc:
+		return .Subtropical_Forest
+	case .Cfb, .Cfc:
+		return .Forest
+	case .Dfa, .Dfb, .Dwa, .Dwb, .Dsa, .Dsb:
+		return .Mixed_Forest
+	case .ET:
+		return .Tundra
+	case .EF:
+		return .Ice_Sheet
+	}
+	return .Taiga // the subarctic classes
+}
+
+// test_biome_follows_koppen: over 1 000 random columns of a planet world the
+// land's biome is the one its class maps to, and a noise world never makes
+// one of the Köppen biomes.
+@(test)
+test_biome_follows_koppen :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	checked := 0
+	for i in i32(0) ..< 1000 {
+		x := i32(hash(9, i, 1) % 60000) - 30000
+		z := i32(hash(9, i, 2) % 30000) - 15000
+		c := column_at(&g.params, g.seed, x, z)
+		if c.height < 4 || c.river > 0 || c.biome == .Beach || c.biome == .Mountains {continue}
+		k, _ := planet_climate(x, z)
+		testing.expectf(t, c.biome == koppen_biome(k), "%d %d: %v is %v", x, z, k, c.biome)
+		checked += 1
+	}
+	testing.expectf(t, checked > 100, "only %d land columns", checked)
+
+	noise := generator_make(.Earth, 7, test_reg(), PARAMS_DEFAULTS)
+	for i in i32(0) ..< 1000 {
+		x := i32(hash(9, i, 3) % 60000) - 30000
+		z := i32(hash(9, i, 4) % 60000) - 30000
+		b := column_at(&noise.params, noise.seed, x, z).biome
+		testing.expectf(t, b < .Rainforest, "%d %d: a noise world made %v", x, z, b)
+	}
 }
 
 // test_planet_rivers_are_carved: the Amazon's basin has river columns whose bed
