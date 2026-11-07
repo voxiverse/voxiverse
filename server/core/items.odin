@@ -120,6 +120,7 @@ spawn_item :: proc(
 	ent.stack = stack
 	ent.body.velocity = velocity
 	ent.owner = owner
+	entity_mirror(w, ent)
 	return ent
 }
 

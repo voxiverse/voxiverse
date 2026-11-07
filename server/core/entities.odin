@@ -34,6 +34,7 @@ FLEE_TICKS :: game.TICK_RATE * 5
 
 Entity :: struct {
 	id:      u32,
+	handle:  game.Entity_Handle, // its row in the entity world's store (0: none)
 	kind:    game.Kind_Id,
 	body:    game.Entity_Body,
 	yaw:     f32, // body: radians, turning left from -z
@@ -114,15 +115,21 @@ entity_spawn :: proc(w: ^World, kind: game.Kind_Id, position: [3]f64, natural: b
 	e.next_id += 1
 	// the entity world holds the same entity under the same id, until the
 	// systems move onto it; the list stays the truth, so a refusal is no error
-	_, _, _ = entity_world_spawn(
+	ent := &e.list[len(e.list) - 1]
+	_, h, _ := entity_world_spawn(
 		w.entity_world,
 		w.server.registry,
 		kind,
 		position,
 		{},
 		game.Entity_Id(e.next_id - 1),
+		natural,
 	)
-	return &e.list[len(e.list) - 1]
+	ent.handle = h
+	// applied at once, so the components exist when the caller has the entity
+	game.store_apply(&w.entity_world.store)
+	entity_mirror(w, ent)
+	return ent
 }
 
 // entities_tick: spawning, despawning, thinking and moving, every tick.
@@ -135,6 +142,7 @@ entities_tick :: proc(w: ^World) {
 	defer {
 		game.store_apply(&w.entity_world.store)
 		entities_sync_spatial(w)
+		for &ent in e.list {entity_mirror(w, &ent)}
 	}
 	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
 	reg := w.server.registry
@@ -348,6 +356,7 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 		{f32(dir.x), f32(dir.y), f32(dir.z)} *
 		game.kind_info(s.registry, ent.kind).projectile.speed
 	ent.owner = int(player_id(s, c))
+	entity_mirror(c.world, ent)
 	ent.action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
 	record(s, c, .Rocket_Fired)
 	return true
@@ -425,6 +434,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		ent.body.on_ground = false
 		d := ent.body.position - center
 		ent.health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
+		entity_mirror(w, ent)
 		if ent.health <= 0 {
 			entity_died(w, i)
 			continue
@@ -529,6 +539,7 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 // caller). Knocked back, hurt (or dead), and scared.
 entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 	ent.health -= 1
+	defer entity_mirror(w, ent)
 	away := ent.body.position - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
 	if l > 1e-6 {away /= l} else {away = {1, 0, 0}}
@@ -542,6 +553,45 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 		hurt  = HURT_TICKS,
 	}
 	return ent.health <= 0
+}
+
+// entity_mirror writes the list's copy of what the store holds (transform,
+// physics, health, age) into the store, until the systems read the store.
+entity_mirror :: proc(w: ^World, ent: ^Entity) {
+	st := &w.entity_world.store
+	if tf := game.store_get(st, ent.handle, game.C_TRANSFORM, game.Transform); tf != nil {
+		tf^ = {ent.body.position, ent.yaw, ent.pitch}
+	}
+	if ph := game.store_get(st, ent.handle, game.C_PHYSICS, game.Physics); ph != nil {
+		ph^ = {ent.body.velocity, ent.body.on_ground}
+	}
+	if hp := game.store_get(st, ent.handle, game.C_HEALTH, game.Entity_Health); hp != nil {
+		hp.health = i32(ent.health)
+	}
+	if age := game.store_get(st, ent.handle, game.C_AGE, game.Age); age != nil {
+		age.ticks = i32(ent.age)
+	}
+}
+
+// The door: what the store says of an entity (nil when it has no such part).
+entity_transform :: proc(w: ^World, ent: ^Entity) -> ^game.Transform {
+	return game.store_get(&w.entity_world.store, ent.handle, game.C_TRANSFORM, game.Transform)
+}
+
+entity_physics :: proc(w: ^World, ent: ^Entity) -> ^game.Physics {
+	return game.store_get(&w.entity_world.store, ent.handle, game.C_PHYSICS, game.Physics)
+}
+
+entity_health :: proc(w: ^World, ent: ^Entity) -> ^game.Entity_Health {
+	return game.store_get(&w.entity_world.store, ent.handle, game.C_HEALTH, game.Entity_Health)
+}
+
+entity_age :: proc(w: ^World, ent: ^Entity) -> ^game.Age {
+	return game.store_get(&w.entity_world.store, ent.handle, game.C_AGE, game.Age)
+}
+
+entity_is_natural :: proc(w: ^World, ent: ^Entity) -> bool {
+	return game.store_get(&w.entity_world.store, ent.handle, game.C_NATURAL, game.Natural) != nil
 }
 
 entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
@@ -1112,6 +1162,7 @@ entity_world_spawn :: proc(
 	position: [3]f64,
 	act: Act,
 	want: game.Entity_Id = 0, // 0: the store's next id
+	natural := false, // spawned by itself: it may despawn
 ) -> (
 	id: game.Entity_Id,
 	h: game.Entity_Handle,
@@ -1137,6 +1188,7 @@ entity_world_spawn :: proc(
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}
+	if natural {set += {int(game.C_NATURAL)}}
 
 	serr: game.Store_Error
 	if want == 0 {

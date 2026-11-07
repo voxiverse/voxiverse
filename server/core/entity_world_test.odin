@@ -455,3 +455,55 @@ test_mate_for_matches_list :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.wrong, 0)
 	testing.expect(t, d.found > 0, "no sheep had a mate: the test proves nothing")
 }
+
+// entity_matches_store: every field the store holds equals the list's.
+@(private = "file")
+entity_matches_store :: proc(t: ^testing.T, w: ^World, ent: ^Entity) {
+	tf := entity_transform(w, ent)
+	hp := entity_health(w, ent)
+	age := entity_age(w, ent)
+	if tf == nil || hp == nil || age == nil {
+		testing.expect(t, false, "an entity lacks transform, health or age")
+		return
+	}
+	testing.expect_value(t, tf.position, ent.body.position)
+	testing.expect_value(t, tf.yaw, ent.yaw)
+	testing.expect_value(t, tf.pitch, ent.pitch)
+	testing.expect_value(t, int(hp.health), ent.health)
+	testing.expect_value(t, int(age.ticks), ent.age)
+	testing.expect_value(t, entity_is_natural(w, ent), ent.natural)
+	if ph := entity_physics(w, ent); ph != nil {
+		testing.expect_value(t, ph.velocity, ent.body.velocity)
+		testing.expect_value(t, ph.on_ground, ent.body.on_ground)
+	}
+}
+
+@(test)
+test_store_copies_follow_the_list :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	reg := w.server.registry
+	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, true)
+	item := spawn_item(w, {10.5, 40, 8.5}, {game.item_of_block(reg, .Wool), 1, 0}, {1, 2, 3}, -1)
+	testing.expect(t, sheep != nil && item != nil)
+	if sheep == nil || item == nil {return}
+	// the components exist when the spawn returns
+	entity_matches_store(t, w, sheep)
+	entity_matches_store(t, w, item)
+	testing.expect(t, entity_is_natural(w, sheep))
+	sheep_id, item_id := sheep.id, item.id
+	for _ in 0 ..< 30 {
+		entities_tick(w)
+		a, _ := entity_find(w, sheep_id)
+		b, _ := entity_find(w, item_id)
+		if a != nil {entity_matches_store(t, w, a)}
+		if b != nil {entity_matches_store(t, w, b)}
+	}
+	if a, _ := entity_find(w, sheep_id); a != nil {
+		entity_attack(w, a, {0, 40, 0})
+		entity_matches_store(t, w, a)
+	}
+}
