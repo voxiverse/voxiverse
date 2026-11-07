@@ -573,3 +573,25 @@ admin_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	land(s, c, {f64(x) + 0.5, f64(top + 1), f64(z) + 0.5}, c.look, .Ground)
 	return true
 }
+
+// admin_wander: /wander: to somewhere new at random: on a planet world a
+// habitable place anywhere on Earth (as a universe's start is chosen), on any
+// other world a spot within 5 000 blocks of the world's middle.
+@(private)
+admin_wander :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
+	r := base.rng_make(u64(s.tick) * 0x9e37_79b9_7f4a_7c15 ~ u64(player_id(s, c)))
+	x, z: i32
+	if w.params.planet != 0 {
+		lat, lon := worldgen.planet_spawn_pick(&w.params, terrain_seed(w), base.rng_u64(&r))
+		x, z = worldgen.planet_block_of(f64(lat), f64(lon))
+		notice(s, c, fmt.tprintf("Wandering to %.2f, %.2f", lat, lon))
+	} else {
+		x = i32(base.rng_f32_range(&r, -5000, 5000))
+		z = i32(base.rng_f32_range(&r, -5000, 5000))
+		notice(s, c, fmt.tprintf("Wandering to %d, %d", x, z))
+	}
+	top := column_top(w, x, z)
+	land(s, c, {f64(x) + 0.5, f64(top + 1), f64(z) + 0.5}, c.look, .Ground)
+	return true
+}

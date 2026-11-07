@@ -273,3 +273,32 @@ test_earth_world_is_planet :: proc(t: ^testing.T) {
 	world_set_planet(&a)
 	testing.expect_value(t, a.params.planet, worldgen.PARAMS_DEFAULTS.planet)
 }
+
+// Each universe begins somewhere else on the same Earth: the start comes from
+// the universe's seed (the same seed, the same start), on habitable land.
+@(test)
+test_earth_start_comes_from_the_universe_seed :: proc(t: ^testing.T) {
+	start :: proc(seed: i64) -> (f32, f32) {
+		w := World {
+			address = game.earth_address(),
+			seed    = seed,
+			params  = worldgen.PARAMS_DEFAULTS,
+		}
+		world_set_planet(&w)
+		return w.params.spawn_lat, w.params.spawn_lon
+	}
+	a_lat, a_lon := start(1)
+	b_lat, b_lon := start(2)
+	again_lat, again_lon := start(1)
+	testing.expect(
+		t,
+		a_lat == again_lat && a_lon == again_lon,
+		"the same seed gives the same start",
+	)
+	testing.expect(t, a_lat != b_lat || a_lon != b_lon, "two seeds give two starts")
+	for seed in i64(1) ..= 8 {
+		lat, lon := start(seed)
+		testing.expectf(t, lat >= -55 && lat <= 62, "seed %d: latitude %v", seed, lat)
+		testing.expectf(t, !(lat == 43.3 && lon == 5.4), "seed %d: still Marseille", seed)
+	}
+}

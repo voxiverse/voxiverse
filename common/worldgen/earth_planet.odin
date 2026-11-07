@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:math"
 import "core:sync"
 
+import "common:base"
 import "common:planet"
 
 // The planet parameter: an Earth world built on common/planet. Block x is
@@ -373,4 +374,33 @@ planet_biome :: proc(p: ^Params, c: ^Column, x, z: i32, mountainous: f32) {
 	case:
 		c.biome = planet_biome_of(k)
 	}
+}
+
+// planet_spawn_pick: where a universe begins on Earth, chosen by its seed:
+// habitable land between 55 degrees south and 62 north (not sea, ice, desert,
+// tundra, bare mountains, a beach or a river), so players of different
+// universes begin in different places. The Earth itself is the same in all.
+planet_spawn_pick :: proc(p: ^Params, terrain_seed: i64, universe_seed: u64) -> (lat, lon: f32) {
+	r := base.rng_make(universe_seed ~ 0x5a17_0b5e_7a27_c0de)
+	for _ in 0 ..< 400 {
+		la := base.rng_f32_range(&r, -55, 62)
+		lo := base.rng_f32_range(&r, -180, 180)
+		x, z := planet_block_of(f64(la), f64(lo))
+		c := column_at(p, terrain_seed, x, z)
+		if c.rough > 0 || c.height < f32(p.sea_level) + 3 {continue}
+		#partial switch c.biome {
+		case .Ocean,
+		     .Frozen_Ocean,
+		     .Beach,
+		     .River,
+		     .Desert,
+		     .Cold_Desert,
+		     .Ice_Sheet,
+		     .Tundra,
+		     .Mountains:
+			continue
+		}
+		return la, lo
+	}
+	return p.spawn_lat, p.spawn_lon
 }

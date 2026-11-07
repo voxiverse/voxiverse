@@ -85,9 +85,17 @@ terrain_seed :: proc(w: ^World) -> i64 {
 }
 
 // world_set_planet: a new world at Earth's address is built on the planet
-// model (Earth's real relief). Worlds made before keep their saved params.
+// model (Earth's real relief), its start chosen by the universe's seed (the
+// same Earth everywhere, a different place to begin in each universe).
+// Worlds made before keep their saved params.
 world_set_planet :: proc(w: ^World) {
-	if w.address == game.earth_address() {w.params.planet = 1}
+	if w.address != game.earth_address() {return}
+	w.params.planet = 1
+	w.params.spawn_lat, w.params.spawn_lon = worldgen.planet_spawn_pick(
+		&w.params,
+		terrain_seed(w),
+		u64(w.seed),
+	)
 }
 
 // world_start: its memory, chunks, entities, spawn; false (logged) if it
