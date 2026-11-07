@@ -455,7 +455,15 @@ Profile :: enum {
 
 // build_game compiles shaders, the game and the dedicated server; windowed:
 // the game is a windowed program on Windows (no console: a player's).
-build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool) {
+build_game :: proc(
+	args: []string,
+	windowed := false,
+	client := true,
+	server := true,
+) -> (
+	exe: string,
+	ok: bool,
+) {
 	profile := Profile.Dev
 	symbols, sanitize, trace := false, false, false
 	for arg in args {
@@ -497,9 +505,12 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 	if trace {append(&mode, "-define:VX_PROFILE=true")}
 	v := version_of()
 	append(&mode, ..version_defines(v))
-	shaders() or_return
-	when ODIN_OS == .Darwin {moltenvk_path() or_return} 	// the Vulkan driver, found at run time
+	if client {
+		shaders() or_return
+		when ODIN_OS == .Darwin {moltenvk_path() or_return} 	// the Vulkan driver, found at run time
+	}
 	exe = path_join({"build", strings.concatenate({GAME_NAME, exe_suffix()})})
+	server_exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	if sanitize {
 		append(&mode, "-sanitize:address")
 		// Leaks are the tracking allocator's job; LSan would also report
@@ -520,58 +531,103 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 	}
 	// Windows: the icon and version information linked in.
 	when ODIN_OS == .Windows {
-		rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
-		append(&game_extra, strings.concatenate({"-resource:", rc}))
-		if windowed {append(&game_extra, "-subsystem:windows")}
-		rc = windows_resource(v, SERVER_NAME, "Voxiverse server") or_return
-		append(&server_extra, strings.concatenate({"-resource:", rc}))
+		if client {
+			rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
+			append(&game_extra, strings.concatenate({"-resource:", rc}))
+			if windowed {append(&game_extra, "-subsystem:windows")}
+		}
+		if server {
+			rc := windows_resource(v, SERVER_NAME, "Voxiverse server") or_return
+			append(&server_extra, strings.concatenate({"-resource:", rc}))
+		}
 	}
-	cmd := slice.concatenate(
-		[][]string {
-			{"odin", "build", GAME_PACKAGE},
-			ODIN_FLAGS,
-			COLLECTIONS,
-			mode[:],
-			game_extra[:],
-			{strings.concatenate({"-out:", exe})},
-		},
-	)
-	server_exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
-	server_cmd := slice.concatenate(
-		[][]string {
-			{"odin", "build", SERVER_PACKAGE},
-			ODIN_FLAGS,
-			COLLECTIONS,
-			mode[:],
-			server_extra[:],
-			{strings.concatenate({"-out:", server_exe})},
-		},
-	)
+	cmd, server_cmd: []string
+	if client {
+		cmd = slice.concatenate(
+			[][]string {
+				{"odin", "build", GAME_PACKAGE},
+				ODIN_FLAGS,
+				COLLECTIONS,
+				mode[:],
+				game_extra[:],
+				{strings.concatenate({"-out:", exe})},
+			},
+		)
+	}
+	if server {
+		server_cmd = slice.concatenate(
+			[][]string {
+				{"odin", "build", SERVER_PACKAGE},
+				ODIN_FLAGS,
+				COLLECTIONS,
+				mode[:],
+				server_extra[:],
+				{strings.concatenate({"-out:", server_exe})},
+			},
+		)
+	}
 	// The two are independent: compiled side by side, each printing its output whole.
-	Target_Job :: struct {
-		pkg: string,
-		log: string,
+	Build_Target :: struct {
+		pkg:   string,
+		step:  Odin_Step,
+		fresh: bool,
+	}
+	targets: [2]Build_Target
+	target_count := 0
+	if client {
+		targets[target_count] = Build_Target {
+			pkg = GAME_PACKAGE,
+			step = Odin_Step{name = GAME_NAME, cmd = cmd, output = exe},
+		}
+		target_count += 1
+	}
+	if server {
+		targets[target_count] = Build_Target {
+			pkg = SERVER_PACKAGE,
+			step = Odin_Step{name = SERVER_NAME, cmd = server_cmd, output = server_exe},
+		}
+		target_count += 1
+	}
+	for i in 0 ..< target_count {
+		target := &targets[i]
+		target.fresh = odin_step_fresh(&target.step)
+		if target.fresh {
+			fmt.printfln("unchanged %s", target.pkg)
+		}
 	}
 	State :: struct {
-		targets: [2]Target_Job,
+		targets: [dynamic]^Build_Target,
 		ok:      bool,
 	}
 	state := State {
-		targets = {
-			{pkg = GAME_PACKAGE, log = job_log(0, ".game.log")},
-			{pkg = SERVER_PACKAGE, log = job_log(1, ".server.log")},
-		},
-		ok      = true,
+		ok = true,
 	}
-	for t in state.targets {
-		fmt.printfln("build  %s", t.pkg)
+	run_jobs := make([dynamic]limited.Job)
+	for i in 0 ..< target_count {
+		target := &targets[i]
+		if !target.fresh {
+			fmt.printfln("build  %s", target.pkg)
+			run_cmd := odin_step_command(&target.step)
+			append(&state.targets, target)
+			append(
+				&run_jobs,
+				limited.Job {
+					cmd = run_cmd,
+					log = job_log(len(run_jobs), ".build.log"),
+					quiet = true,
+				},
+			)
+		}
 	}
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
-		target := &state.targets[index]
-		log, _ := os.read_entire_file_from_path(target.log, context.temp_allocator)
+		target := state.targets[index]
+		step := &target.step
+		log_path := job_log(index, ".build.log")
+		log, _ := os.read_entire_file_from_path(log_path, context.temp_allocator)
 		switch result {
 		case .Ok:
+			odin_step_succeeded(step)
 			if len(log) > 0 {os.write(os.stdout, log)}
 			fmt.printfln("built  %s (%.1f s)", target.pkg, seconds)
 		case .Interrupted:
@@ -583,26 +639,25 @@ build_game :: proc(args: []string, windowed := false) -> (exe: string, ok: bool)
 			state.ok = false
 		}
 	}
-	parallel(
-		{
-			{cmd = cmd, log = state.targets[0].log, quiet = true},
-			{cmd = server_cmd, log = state.targets[1].log, quiet = true},
-		},
-		2,
-		done,
-		&state,
-	)
+	if len(run_jobs) > 0 {
+		parallel(run_jobs[:], min(len(run_jobs), 2), done, &state)
+	}
 	if !state.ok {return "", false}
+	built_paths: [dynamic]string
+	if client {append(&built_paths, exe)}
+	if server {append(&built_paths, server_exe)}
 	fmt.printfln(
-		"built  %s, %s %s (%s%s%s%s)",
-		exe,
-		server_exe,
+		"built  %s %s (%s%s%s%s)",
+		strings.join(built_paths[:], ", "),
 		version_text(v),
 		PROFILE_NAMES[profile],
 		" + symbols" if symbols else "",
 		" + sanitizer" if sanitize else "",
 		" + profiling" if trace else "",
 	)
+	if !client && server {
+		return server_exe, true
+	}
 	return exe, true
 }
 
@@ -657,13 +712,13 @@ debug_game :: proc(args: []string) -> bool {
 	}
 }
 
-// serve builds everything and runs the dedicated server with server_args.
+// serve builds the dedicated server and runs it with server_args.
 serve :: proc(args: []string) -> bool {
 	build_args, server_args := args, []string{}
 	if i, found := slice.linear_search(args, "--"); found {
 		build_args, server_args = args[:i], args[i + 1:]
 	}
-	build_game(build_args) or_return
+	build_game(build_args, client = false, server = true) or_return
 	release_build_lock()
 	exe := path_join({"build", strings.concatenate({SERVER_NAME, exe_suffix()})})
 	return run(slice.concatenate([][]string{{exe}, server_args}))
@@ -674,7 +729,7 @@ run_game :: proc(args: []string) -> bool {
 	if i, found := slice.linear_search(args, "--"); found {
 		build_args, game_args = args[:i], args[i + 1:]
 	}
-	exe, ok := build_game(build_args)
+	exe, ok := build_game(build_args, server = false)
 	if !ok {return false}
 	release_build_lock()
 	return run(slice.concatenate([][]string{{exe}, game_args}))
