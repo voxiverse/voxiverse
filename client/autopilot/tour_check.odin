@@ -101,11 +101,17 @@ tour_locate :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) 
 
 @(private = "file")
 tour_next :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) {
-	if int(t.biome) == len(worldgen.Biome) - 1 {
-		tour_test_finish(app, "")
-		return
+	// The ice sheet is only the planet world's end, past anything to locate.
+	next := t.biome
+	for {
+		if int(next) == len(worldgen.Biome) - 1 {
+			tour_test_finish(app, "")
+			return
+		}
+		next += worldgen.Biome(1)
+		if next != .Ice_Sheet {break}
 	}
-	t.biome += worldgen.Biome(1)
+	t.biome = next
 	tour_locate(app, t, s)
 }
 
