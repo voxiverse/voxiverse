@@ -1,0 +1,12 @@
+Public-domain MIDI files for the music tool's tests. Every file comes from the
+Mutopia Project (https://www.mutopiaproject.org); the licence is the one its
+piece page states. Only "Public Domain" (CC: No rights reserved) or CC0 may be
+added here.
+
+file                      piece                                         source page                                                          licence
+bach-bwv269.mid           Bach, Aus meines Herzens Grunde (Chorale 1)   https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=378          Public Domain
+bach-bwv691.mid           Bach, chorale prelude Wer nur den lieben Gott https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1616         Public Domain
+satie-gymnopedie1.mid     Satie, Gymnopedie No. 1                       https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=37           Public Domain
+folk-greensleeves.mid     Traditional, Greensleaves                     https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=109          Public Domain
+chopin-op28-4.mid         Chopin, Prelude Op. 28 No. 4                  https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=468          Public Domain
+chopin-op28-7.mid         Chopin, Prelude Op. 28 No. 7                  https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=470          Public Domain

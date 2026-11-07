@@ -179,6 +179,14 @@ every measure and every critique line for tools.
   bar 32 times` (from 8 times), `bar 12 beat 1: c7 over G major (pedalled from bar 11)`. The text
   prints 30 lines a piece; `--json` has all.
 
+**The calibration subset.** `tools/music/testdata/corpus/` holds six small public-domain MIDI files
+(two Bach chorales, a Satie Gymnopedie, Greensleeves, two Chopin preludes); `SOURCES.txt` gives each
+one's source page and licence (Public Domain or CC0 only). The tests read them with `midi_read`
+and put two scramblers (`scramble.odin`) on them, each a pure function of a piece and a seed:
+`scramble_shuffle` shuffles the pitches within each part and keeps rhythm and length;
+`scramble_in_key` replaces each note by a random note of the piece's 7 commonest pitch classes
+within 7 semitones of the original and keeps rhythm. Neither is used by `build music` yet.
+
 ## Tools
 
 - `build audio` runs the audio baselines (`assets/baselines/audio/`: `burst`, `cave_walk`,
