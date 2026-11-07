@@ -81,9 +81,14 @@ entities_destroy :: proc(e: ^Entities) {
 }
 
 // entity_spawn adds an entity at position (bottom centre); nil if full.
-entity_spawn :: proc(w: ^World, kind: game.Kind_Id, position: [3]f64, natural: bool) -> ^Entity {
+entity_spawn :: proc(
+	w: ^World,
+	kind: game.Kind_Id,
+	position: [3]f64,
+	natural: bool,
+) -> game.Entity_Handle {
 	e := &w.entities
-	if len(e.list) == MAX_ENTITIES {return nil}
+	if len(e.list) == MAX_ENTITIES {return 0}
 	entity_add(w, Entity{id = e.next_id, kind = kind})
 	e.next_id += 1
 	// the entity world holds the same entity under the same id, until the
@@ -101,8 +106,8 @@ entity_spawn :: proc(w: ^World, kind: game.Kind_Id, position: [3]f64, natural: b
 	ent.handle = h
 	// applied at once, so the components exist when the caller has the entity
 	game.store_apply(&w.entity_world.store)
-	entity_set_yaw(w, ent, base.rng_f32_range(&e.rng, -math.PI, math.PI))
-	return ent
+	entity_set_yaw(w, h, base.rng_f32_range(&e.rng, -math.PI, math.PI))
+	return h
 }
 
 // entities_tick: spawning, despawning, thinking and moving, every tick.
@@ -125,27 +130,28 @@ entities_tick :: proc(w: ^World) {
 	}
 	blasts := make([dynamic]Blast, context.temp_allocator)
 	for i := 0; i < len(e.list); {
-		ent := &e.list[i]
-		entity_set_age(w, ent, entity_age_of(w, ent) + 1)
-		if entity_is_natural(w, ent) && !anyone_within(w, entity_pos(w, ent), DESPAWN_DISTANCE) {
+		h := entity_at(w, i)
+		kind := entity_kind(w, h)
+		entity_set_age(w, h, entity_age_of(w, h) + 1)
+		if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
 			entities_unlink(e, i)
 			continue
 		}
-		switch ent.kind {
+		switch kind {
 		case reg.engine.sheep:
-			if chunk_ready(w, entity_pos(w, ent)) { 	// else its ground is not loaded (yet): it waits
-				sheep_life(w, ent)
-				think(w, ent)
-				wish, jump := steer(w, ent)
-				entity_body_step(w, ent, game.kind_info(reg, ent.kind), wish, jump, query)
+			if chunk_ready(w, entity_pos(w, h)) { 	// else its ground is not loaded (yet): it waits
+				sheep_life(w, h)
+				think(w, h)
+				wish, jump := steer(w, h)
+				entity_body_step(w, h, game.kind_info(reg, kind), wish, jump, query)
 			}
 		case reg.engine.rocket:
-			if at, hit := rocket_step(w, ent); hit {
+			if at, hit := rocket_step(w, h); hit {
 				append(
 					&blasts,
 					Blast {
-						{at, f64(game.kind_info(reg, ent.kind).projectile.explode)},
-						Action_Id(entity_owner(w, ent).action),
+						{at, f64(game.kind_info(reg, kind).projectile.explode)},
+						Action_Id(entity_owner(w, h).action),
 					},
 				)
 				entity_died(w, i) // its explosion is what players see
@@ -174,19 +180,28 @@ entities_sync_spatial :: proc(w: ^World) {
 		if !ok {continue}
 		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
 		if sl == nil {continue}
-		lo, hi := game.entity_box(game.kind_info(w.server.registry, ent.kind), entity_pos(w, &ent))
+		lo, hi := game.entity_box(
+			game.kind_info(w.server.registry, ent.kind),
+			entity_pos(w, ent.handle),
+		)
 		game.spatial_move(&ew.spatial, sl.handle, lo, hi)
 	}
 }
 
 // sheep_flags: what clients are told about a sheep.
-sheep_flags :: proc(w: ^World, reg: ^game.Registry, ent: ^Entity) -> (f: game.Sheep_Flags) {
-	if ent.kind != reg.engine.sheep {return}
-	if entity_wool(w, ent).shorn {f += {.Shorn}}
-	if entity_breeding(w, ent).growth < game.LAMB_TICKS {f += {.Lamb}}
-	if game.genes_black(entity_genes(w, ent).genes) {f += {.Black}}
-	if game.genes_spotted(entity_genes(w, ent).genes) {f += {.Spotted}}
-	if entity_breeding(w, ent).love > 0 {f += {.In_Love}}
+sheep_flags :: proc(
+	w: ^World,
+	reg: ^game.Registry,
+	h: game.Entity_Handle,
+) -> (
+	f: game.Sheep_Flags,
+) {
+	if entity_kind(w, h) != reg.engine.sheep {return}
+	if entity_wool(w, h).shorn {f += {.Shorn}}
+	if entity_breeding(w, h).growth < game.LAMB_TICKS {f += {.Lamb}}
+	if game.genes_black(entity_genes(w, h).genes) {f += {.Black}}
+	if game.genes_spotted(entity_genes(w, h).genes) {f += {.Spotted}}
+	if entity_breeding(w, h).love > 0 {f += {.In_Love}}
 	return
 }
 
@@ -194,19 +209,19 @@ sheep_flags :: proc(w: ^World, reg: ^game.Registry, ent: ^Entity) -> (f: game.Sh
 // sheep_use: wheat feeds it (an adult becomes ready to breed; a lamb grows
 // up a tenth sooner), anything else shears an adult by hand: 1 to 3 wool
 // (white or black by its genes) fall, and it is shorn until it eats grass.
-sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
+sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
 	w := c.world
-	lamb := entity_breeding(w, ent).growth < game.LAMB_TICKS
+	lamb := entity_breeding(w, h).growth < game.LAMB_TICKS
 	held := game.inventory_held(&c.inventory)
 	if !game.stack_empty(held) && held.item == game.item_of_material(.Wheat) {
 		switch {
 		case lamb:
-			entity_breeding(w, ent).growth = min(
-				entity_breeding(w, ent).growth + game.LAMB_TICKS / 10,
+			entity_breeding(w, h).growth = min(
+				entity_breeding(w, h).growth + game.LAMB_TICKS / 10,
 				game.LAMB_TICKS,
 			)
-		case entity_breeding(w, ent).love == 0 && entity_breeding(w, ent).wait == 0:
-			entity_breeding(w, ent).love = game.BREED_READY_TICKS
+		case entity_breeding(w, h).love == 0 && entity_breeding(w, h).wait == 0:
+			entity_breeding(w, h).love = game.BREED_READY_TICKS
 		case:
 			return false
 		}
@@ -220,18 +235,18 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 		}
 		return true
 	}
-	if entity_wool(w, ent).shorn || lamb {return false}
-	entity_wool(w, ent).shorn = true
+	if entity_wool(w, h).shorn || lamb {return false}
+	entity_wool(w, h).shorn = true
 	record(s, c, .Sheep_Sheared)
 	r := &w.entities.rng
 	wool := game.item_of_block(
 		s.registry,
-		.Wool_Black if game.genes_black(entity_genes(w, ent).genes) else .Wool,
+		.Wool_Black if game.genes_black(entity_genes(w, h).genes) else .Wool,
 	)
 	for _ in 0 ..< base.rng_int_range(r, 1, 4) {
 		v := [3]f32{base.rng_f32_range(r, -1, 1), 2.5, base.rng_f32_range(r, -1, 1)}
 		ledger(s, w, .Drop_Mob, wool, 1)
-		spawn_item(w, entity_pos(w, ent) + {0, 0.6, 0}, {wool, 1, 0}, v, -1)
+		spawn_item(w, entity_pos(w, h) + {0, 0.6, 0}, {wool, 1, 0}, v, -1)
 	}
 	return true
 }
@@ -239,10 +254,10 @@ sheep_use :: proc(s: ^Server, c: ^Client, ent: ^Entity) -> bool {
 // sheep_life: a sheep's clocks, one tick: a lamb grows, love and the wait
 // after a lamb run down.
 @(private = "file")
-sheep_life :: proc(w: ^World, ent: ^Entity) {
-	if entity_breeding(w, ent).growth < game.LAMB_TICKS {entity_breeding(w, ent).growth += 1}
-	if entity_breeding(w, ent).love > 0 {entity_breeding(w, ent).love -= 1}
-	if entity_breeding(w, ent).wait > 0 {entity_breeding(w, ent).wait -= 1}
+sheep_life :: proc(w: ^World, h: game.Entity_Handle) {
+	if entity_breeding(w, h).growth < game.LAMB_TICKS {entity_breeding(w, h).growth += 1}
+	if entity_breeding(w, h).love > 0 {entity_breeding(w, h).love -= 1}
+	if entity_breeding(w, h).wait > 0 {entity_breeding(w, h).wait -= 1}
 }
 
 // mate_for: the nearest other sheep that is ready to breed within range of
@@ -250,28 +265,28 @@ sheep_life :: proc(w: ^World, ent: ^Entity) {
 // ent (its boxes are where the sheep were at the end of the last tick, so it
 // asks a little wider than BREED_RANGE); the list says how far each is now
 // and whether it is ready.
-mate_for :: proc(w: ^World, ent: ^Entity) -> ^Entity {
+mate_for :: proc(w: ^World, h: game.Entity_Handle) -> game.Entity_Handle {
 	ew := w.entity_world
 	kind_id := w.server.registry.engine.sheep
-	if kind_id == 0 {return nil}
+	if kind_id == 0 {return 0}
 	near := make([dynamic]game.Entity_Id, context.temp_allocator)
 	game.spatial_sphere(
 		&ew.spatial,
-		entity_pos(w, ent),
+		entity_pos(w, h),
 		game.BREED_RANGE + MATE_SLACK,
-		{kind = u16(kind_id), exclude = game.Entity_Id(ent.id)},
+		{kind = u16(kind_id), exclude = game.Entity_Id(entity_id(w, h))},
 		&near,
 	)
 	slice.sort(near[:]) // the lowest id wins a tie, as the list's order did
-	best: ^Entity
+	best: game.Entity_Handle
 	best_d := f64(game.BREED_RANGE * game.BREED_RANGE)
 	for id in near {
 		other, _ := entity_find(w, u32(id))
-		if other == nil ||
-		   other.kind != w.server.registry.engine.sheep ||
+		if other == 0 ||
+		   entity_kind(w, other) != w.server.registry.engine.sheep ||
 		   entity_breeding(w, other).love <= 0 {continue}
 		if entity_breeding(w, other).growth < game.LAMB_TICKS {continue}
-		d := entity_pos(w, other) - entity_pos(w, ent)
+		d := entity_pos(w, other) - entity_pos(w, h)
 		if dd := d.x * d.x + d.y * d.y + d.z * d.z; dd < best_d {best, best_d = other, dd}
 	}
 	return best
@@ -284,14 +299,14 @@ MATE_SLACK :: 2
 
 // breed: a and b have met: a lamb between them, of both, and each waits.
 @(private = "file")
-breed :: proc(w: ^World, a, b: ^Entity) {
+breed :: proc(w: ^World, a, b: game.Entity_Handle) {
 	r := &w.entities.rng
 	at := (entity_pos(w, a) + entity_pos(w, b)) / 2
 	genes := game.genes_child(entity_genes(w, a).genes, entity_genes(w, b).genes, r)
 	entity_breeding(w, a).love, entity_breeding(w, b).love = 0, 0
 	entity_breeding(w, a).wait, entity_breeding(w, b).wait =
 		game.BREED_WAIT_TICKS, game.BREED_WAIT_TICKS
-	if lamb := entity_spawn(w, w.server.registry.engine.sheep, at, false); lamb != nil {
+	if lamb := entity_spawn(w, w.server.registry.engine.sheep, at, false); lamb != 0 {
 		entity_genes(w, lamb).genes, entity_breeding(w, lamb).growth = genes, 0
 		record_world(w.server, w, .Sheep_Born)
 	}
@@ -299,18 +314,18 @@ breed :: proc(w: ^World, a, b: ^Entity) {
 
 // use_entity: a player uses an entity, if it is within reach.
 use_entity :: proc(s: ^Server, c: ^Client, id: u32) {
-	ent, _ := entity_find(c.world, id)
-	if ent == nil || !entity_reachable(c, ent) {return}
-	if ent.kind == s.registry.engine.sheep {sheep_use(s, c, ent)} 	// (the only kind a player uses)
+	h, _ := entity_find(c.world, id)
+	if h == 0 || !entity_reachable(c, h) {return}
+	if entity_kind(c.world, h) == s.registry.engine.sheep {sheep_use(s, c, h)} 	// (the only kind a player uses)
 }
 
 // entity_reachable: ent is within a player's reach from where the server
 // has them (with the slack edits have).
-entity_reachable :: proc(c: ^Client, ent: ^Entity) -> bool {
+entity_reachable :: proc(c: ^Client, h: game.Entity_Handle) -> bool {
 	eye := game.player_eye(c.player)
 	lo, hi := game.entity_box(
-		game.kind_info(c.world.server.registry, ent.kind),
-		entity_pos(c.world, ent),
+		game.kind_info(c.world.server.registry, entity_kind(c.world, h)),
+		entity_pos(c.world, h),
 	)
 	closest := [3]f64{clamp(eye.x, lo.x, hi.x), clamp(eye.y, lo.y, hi.y), clamp(eye.z, lo.z, hi.z)}
 	d := closest - eye
@@ -323,17 +338,17 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 	dir := forward(yaw, pitch)
 	eye := game.player_eye(c.player)
 	start := eye + dir * 0.8 - {0, 0.15, 0} // the box's bottom centre
-	ent := entity_spawn(c.world, s.registry.engine.rocket, start, false)
-	if ent == nil {return false}
-	entity_set_look(c.world, ent, yaw, pitch)
+	h := entity_spawn(c.world, s.registry.engine.rocket, start, false)
+	if h == 0 {return false}
+	entity_set_look(c.world, h, yaw, pitch)
 	entity_set_velocity(
 		c.world,
-		ent,
+		h,
 		{f32(dir.x), f32(dir.y), f32(dir.z)} *
-		game.kind_info(s.registry, ent.kind).projectile.speed,
+		game.kind_info(s.registry, entity_kind(c.world, h)).projectile.speed,
 	)
-	entity_owner(c.world, ent).client = i32(player_id(s, c))
-	entity_owner(c.world, ent).action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
+	entity_owner(c.world, h).client = i32(player_id(s, c))
+	entity_owner(c.world, h).action = u32(action_begin(c.world, actor_of(s, c), .Explosion))
 	record(s, c, .Rocket_Fired)
 	return true
 }
@@ -402,22 +417,22 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	ids := make([dynamic]u32, context.temp_allocator)
 	for j in order {append(&ids, w.entities.list[j].id)}
 	for id in ids {
-		ent, i := entity_find(w, id)
+		h, i := entity_find(w, id)
 		if i < 0 {continue}
-		impulse, near := push(entity_pos(w, ent) + {0, 0.4, 0}, center, reach)
-		if !near || !game.kind_info(w.server.registry, ent.kind).hittable {continue}
-		entity_set_velocity(w, ent, entity_velocity(w, ent) + impulse)
-		entity_set_on_ground(w, ent, false)
-		d := entity_pos(w, ent) - center
-		health := entity_health_of(w, ent)
+		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach)
+		if !near || !game.kind_info(w.server.registry, entity_kind(w, h)).hittable {continue}
+		entity_set_velocity(w, h, entity_velocity(w, h) + impulse)
+		entity_set_on_ground(w, h, false)
+		d := entity_pos(w, h) - center
+		health := entity_health_of(w, h)
 		health -= 3 if d.x * d.x + d.y * d.y + d.z * d.z < radius * radius else 1
-		entity_set_health(w, ent, health)
+		entity_set_health(w, h, health)
 		if health <= 0 {
 			entity_died(w, i)
 			continue
 		}
-		scare(entity_brain(w, ent), center)
-		entity_hurt_shown(w, ent.id)
+		scare(entity_brain(w, h), center)
+		entity_hurt_shown(w, id)
 	}
 }
 
@@ -427,18 +442,18 @@ ROCKET_REACH :: 4
 
 // rocket_step flies a rocket one tick; where it hit, if it did.
 @(private = "file")
-rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
+rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool) {
 	s := w.server
-	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS >
-	   game.kind_info(s.registry, ent.kind).projectile.life {return entity_pos(w, ent), true}
-	v := entity_velocity(w, ent)
-	v.y -= game.kind_info(s.registry, ent.kind).projectile.gravity * game.TICK_SECONDS
-	entity_set_velocity(w, ent, v)
+	if f32(entity_age_of(w, h)) * game.TICK_SECONDS >
+	   game.kind_info(s.registry, entity_kind(w, h)).projectile.life {return entity_pos(w, h), true}
+	v := entity_velocity(w, h)
+	v.y -= game.kind_info(s.registry, entity_kind(w, h)).projectile.gravity * game.TICK_SECONDS
+	entity_set_velocity(w, h, v)
 	speed := math.sqrt(f64(v.x * v.x + v.y * v.y + v.z * v.z))
-	if speed < 1e-6 {return entity_pos(w, ent), true}
+	if speed < 1e-6 {return entity_pos(w, h), true}
 	dir := [3]f64{f64(v.x), f64(v.y), f64(v.z)} / speed
 	step := speed * f64(game.TICK_SECONDS)
-	from := entity_pos(w, ent) + {0, 0.15, 0}
+	from := entity_pos(w, h) + {0, 0.15, 0}
 	nearest := step
 	hit_at: [3]f64
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
@@ -460,7 +475,7 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		&ew.spatial,
 		mid,
 		reach,
-		{all = {.Hittable}, exclude = game.Entity_Id(ent.id)},
+		{all = {.Hittable}, exclude = game.Entity_Id(entity_id(w, h))},
 		&near,
 	)
 	order := make([dynamic]int, context.temp_allocator)
@@ -469,8 +484,8 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	}
 	slice.sort(order[:])
 	for j in order {
-		other := &w.entities.list[j]
-		oinfo := game.kind_info(s.registry, other.kind)
+		other := entity_at(w, j)
+		oinfo := game.kind_info(s.registry, entity_kind(w, other))
 		if !oinfo.hittable {continue}
 		lo, hi := game.entity_box(oinfo, entity_pos(w, other))
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
@@ -480,9 +495,9 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 	game.spatial_sphere(&ew.spatial, mid, reach, {all = {.Player}}, &near)
 	who := make([dynamic]int, context.temp_allocator)
 	for id in near {
-		h, live := game.store_find(&ew.store, id)
+		ph, live := game.store_find(&ew.store, id)
 		if !live {continue}
-		link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link)
+		link := game.store_get(&ew.store, ph, game.C_PLAYER_LINK, game.Player_Link)
 		if link != nil && int(link.client) < len(s.clients) {append(&who, int(link.client))}
 	}
 	slice.sort(who[:])
@@ -490,16 +505,16 @@ rocket_step :: proc(w: ^World, ent: ^Entity) -> (at: [3]f64, hit: bool) {
 		c := &s.clients[i]
 		if c.state != .Playing ||
 		   c.world != w ||
-		   (i == int(entity_owner(w, ent).client) &&
-				   entity_age_of(w, ent) < game.TICK_RATE / 3) {continue}
+		   (i == int(entity_owner(w, h).client) &&
+				   entity_age_of(w, h) < game.TICK_RATE / 3) {continue}
 		lo, hi := game.player_box(c.player)
 		if d, ok := game.ray_box(from, dir, lo, hi, nearest);
 		   ok {nearest, hit_at, hit = d, from + dir * d, true}
 	}
 	if hit {return hit_at, true}
-	entity_set_pos(w, ent, entity_pos(w, ent) + dir * step)
-	entity_set_yaw(w, ent, f32(math.atan2(-dir.x, -dir.z)))
-	entity_set_pitch(w, ent, clamp(f32(math.asin(clamp(dir.y, -1, 1))), -1.5, 1.5)) // within the protocol's limit
+	entity_set_pos(w, h, entity_pos(w, h) + dir * step)
+	entity_set_yaw(w, h, f32(math.atan2(-dir.x, -dir.z)))
+	entity_set_pitch(w, h, clamp(f32(math.asin(clamp(dir.y, -1, 1))), -1.5, 1.5)) // within the protocol's limit
 	return {}, false
 }
 
@@ -521,53 +536,53 @@ scare :: proc(b: ^Brain, from: [3]f64) {
 
 // entity_attack: a player hits an entity (the reach is checked by the
 // caller). Knocked back, hurt (or dead), and scared.
-entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
-	entity_set_health(w, ent, entity_health_of(w, ent) - 1)
-	away := entity_pos(w, ent) - from
+entity_attack :: proc(w: ^World, h: game.Entity_Handle, from: [3]f64) -> (died: bool) {
+	entity_set_health(w, h, entity_health_of(w, h) - 1)
+	away := entity_pos(w, h) - from
 	l := math.sqrt(away.x * away.x + away.z * away.z)
 	if l > 1e-6 {away /= l} else {away = {1, 0, 0}}
 	kb := game.ATTACK_KNOCKBACK
-	entity_set_velocity(w, ent, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
-	entity_set_on_ground(w, ent, false)
-	scare(entity_brain(w, ent), from)
-	return entity_health_of(w, ent) <= 0
+	entity_set_velocity(w, h, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
+	entity_set_on_ground(w, h, false)
+	scare(entity_brain(w, h), from)
+	return entity_health_of(w, h) <= 0
 }
 
 // The door: what the store says of an entity (nil when it has no such part).
-entity_transform :: proc(w: ^World, ent: ^Entity) -> ^game.Transform {
-	return game.store_get(&w.entity_world.store, ent.handle, game.C_TRANSFORM, game.Transform)
+entity_transform :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Transform {
+	return game.store_get(&w.entity_world.store, h, game.C_TRANSFORM, game.Transform)
 }
 
 // entity_pos: where ent is (its Transform; zero if it has none).
-entity_pos :: proc(w: ^World, ent: ^Entity) -> [3]f64 {
-	if tf := entity_transform(w, ent); tf != nil {return tf.position}
+entity_pos :: proc(w: ^World, h: game.Entity_Handle) -> [3]f64 {
+	if tf := entity_transform(w, h); tf != nil {return tf.position}
 	return {}
 }
 
-entity_set_pos :: proc(w: ^World, ent: ^Entity, p: [3]f64) {
-	if tf := entity_transform(w, ent); tf != nil {tf.position = p}
+entity_set_pos :: proc(w: ^World, h: game.Entity_Handle, p: [3]f64) {
+	if tf := entity_transform(w, h); tf != nil {tf.position = p}
 }
 
-entity_yaw :: proc(w: ^World, ent: ^Entity) -> f32 {
-	if tf := entity_transform(w, ent); tf != nil {return tf.yaw}
+entity_yaw :: proc(w: ^World, h: game.Entity_Handle) -> f32 {
+	if tf := entity_transform(w, h); tf != nil {return tf.yaw}
 	return 0
 }
 
-entity_pitch :: proc(w: ^World, ent: ^Entity) -> f32 {
-	if tf := entity_transform(w, ent); tf != nil {return tf.pitch}
+entity_pitch :: proc(w: ^World, h: game.Entity_Handle) -> f32 {
+	if tf := entity_transform(w, h); tf != nil {return tf.pitch}
 	return 0
 }
 
-entity_set_yaw :: proc(w: ^World, ent: ^Entity, yaw: f32) {
-	if tf := entity_transform(w, ent); tf != nil {tf.yaw = yaw}
+entity_set_yaw :: proc(w: ^World, h: game.Entity_Handle, yaw: f32) {
+	if tf := entity_transform(w, h); tf != nil {tf.yaw = yaw}
 }
 
-entity_set_pitch :: proc(w: ^World, ent: ^Entity, pitch: f32) {
-	if tf := entity_transform(w, ent); tf != nil {tf.pitch = pitch}
+entity_set_pitch :: proc(w: ^World, h: game.Entity_Handle, pitch: f32) {
+	if tf := entity_transform(w, h); tf != nil {tf.pitch = pitch}
 }
 
-entity_set_look :: proc(w: ^World, ent: ^Entity, yaw, pitch: f32) {
-	if tf := entity_transform(w, ent); tf != nil {tf.yaw, tf.pitch = yaw, pitch}
+entity_set_look :: proc(w: ^World, h: game.Entity_Handle, yaw, pitch: f32) {
+	if tf := entity_transform(w, h); tf != nil {tf.yaw, tf.pitch = yaw, pitch}
 }
 
 // entity_body_step: game.body_step on ent, which sees one Entity_Body: the
@@ -575,44 +590,44 @@ entity_set_look :: proc(w: ^World, ent: ^Entity, yaw, pitch: f32) {
 // go back after. The one place a mover is gathered and written back.
 entity_body_step :: proc(
 	w: ^World,
-	ent: ^Entity,
+	h: game.Entity_Handle,
 	info: ^game.Kind_Info,
 	wish: [2]f32,
 	jump: bool,
 	query: game.Block_Query,
 ) {
 	body := game.Entity_Body {
-		position  = entity_pos(w, ent),
-		velocity  = entity_velocity(w, ent),
-		on_ground = entity_on_ground(w, ent),
+		position  = entity_pos(w, h),
+		velocity  = entity_velocity(w, h),
+		on_ground = entity_on_ground(w, h),
 	}
 	game.body_step(&body, info, wish, jump, &w.rules, query, game.TICK_SECONDS)
-	entity_set_pos(w, ent, body.position)
-	entity_set_velocity(w, ent, body.velocity)
-	entity_set_on_ground(w, ent, body.on_ground)
+	entity_set_pos(w, h, body.position)
+	entity_set_velocity(w, h, body.velocity)
+	entity_set_on_ground(w, h, body.on_ground)
 }
 
 // entity_velocity, entity_on_ground: its Physics (zero and false without one).
-entity_velocity :: proc(w: ^World, ent: ^Entity) -> [3]f32 {
-	if ph := entity_physics(w, ent); ph != nil {return ph.velocity}
+entity_velocity :: proc(w: ^World, h: game.Entity_Handle) -> [3]f32 {
+	if ph := entity_physics(w, h); ph != nil {return ph.velocity}
 	return {}
 }
 
-entity_on_ground :: proc(w: ^World, ent: ^Entity) -> bool {
-	if ph := entity_physics(w, ent); ph != nil {return ph.on_ground}
+entity_on_ground :: proc(w: ^World, h: game.Entity_Handle) -> bool {
+	if ph := entity_physics(w, h); ph != nil {return ph.on_ground}
 	return false
 }
 
-entity_set_velocity :: proc(w: ^World, ent: ^Entity, v: [3]f32) {
-	if ph := entity_physics(w, ent); ph != nil {ph.velocity = v}
+entity_set_velocity :: proc(w: ^World, h: game.Entity_Handle, v: [3]f32) {
+	if ph := entity_physics(w, h); ph != nil {ph.velocity = v}
 }
 
-entity_set_on_ground :: proc(w: ^World, ent: ^Entity, on: bool) {
-	if ph := entity_physics(w, ent); ph != nil {ph.on_ground = on}
+entity_set_on_ground :: proc(w: ^World, h: game.Entity_Handle, on: bool) {
+	if ph := entity_physics(w, h); ph != nil {ph.on_ground = on}
 }
 
-entity_physics :: proc(w: ^World, ent: ^Entity) -> ^game.Physics {
-	return game.store_get(&w.entity_world.store, ent.handle, game.C_PHYSICS, game.Physics)
+entity_physics :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Physics {
+	return game.store_get(&w.entity_world.store, h, game.C_PHYSICS, game.Physics)
 }
 
 // The plain components behind the door. Each returns the entity's component;
@@ -633,29 +648,28 @@ scratch_brain: Brain
 
 // entity_brain: the entity's brain (a default one, written to nowhere, for an
 // entity without it: only grazers have one).
-entity_brain :: proc(w: ^World, ent: ^Entity) -> ^Brain {
-	if p := game.store_get(&w.entity_world.store, ent.handle, C_BRAIN, Brain); p != nil {return p}
+entity_brain :: proc(w: ^World, h: game.Entity_Handle) -> ^Brain {
+	if p := game.store_get(&w.entity_world.store, h, C_BRAIN, Brain); p != nil {return p}
 	scratch_brain = {}
 	return &scratch_brain
 }
 
-entity_wool :: proc(w: ^World, ent: ^Entity) -> ^game.Wool {
-	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_WOOL, game.Wool);
-	   p != nil {return p}
+entity_wool :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Wool {
+	if p := game.store_get(&w.entity_world.store, h, game.C_WOOL, game.Wool); p != nil {return p}
 	scratch_wool = {}
 	return &scratch_wool
 }
 
-entity_genes :: proc(w: ^World, ent: ^Entity) -> ^game.Component_Genes {
-	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_GENES, game.Component_Genes);
+entity_genes :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Component_Genes {
+	if p := game.store_get(&w.entity_world.store, h, game.C_GENES, game.Component_Genes);
 	   p != nil {return p}
 	scratch_genes = {}
 	return &scratch_genes
 }
 
 // entity_breeding: growth, love and wait (an adult's growth is LAMB_TICKS).
-entity_breeding :: proc(w: ^World, ent: ^Entity) -> ^game.Breeding {
-	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_BREEDING, game.Breeding);
+entity_breeding :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Breeding {
+	if p := game.store_get(&w.entity_world.store, h, game.C_BREEDING, game.Breeding);
 	   p != nil {return p}
 	scratch_breeding = {
 		growth = game.LAMB_TICKS,
@@ -664,8 +678,8 @@ entity_breeding :: proc(w: ^World, ent: ^Entity) -> ^game.Breeding {
 }
 
 // entity_stack: a dropped item's stack.
-entity_stack :: proc(w: ^World, ent: ^Entity) -> ^game.Stack {
-	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_STACK, game.Component_Stack);
+entity_stack :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Stack {
+	if p := game.store_get(&w.entity_world.store, h, game.C_STACK, game.Component_Stack);
 	   p != nil {return &p.stack}
 	scratch_stack = {}
 	return &scratch_stack.stack
@@ -673,50 +687,49 @@ entity_stack :: proc(w: ^World, ent: ^Entity) -> ^game.Stack {
 
 // entity_owner: a rocket's or a dropped stack's client index (-1: none) and a
 // rocket's journal action.
-entity_owner :: proc(w: ^World, ent: ^Entity) -> ^game.Owner {
-	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_OWNER, game.Owner);
-	   p != nil {return p}
+entity_owner :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Owner {
+	if p := game.store_get(&w.entity_world.store, h, game.C_OWNER, game.Owner); p != nil {return p}
 	scratch_owner = {
 		client = -1,
 	}
 	return &scratch_owner
 }
 
-entity_health :: proc(w: ^World, ent: ^Entity) -> ^game.Entity_Health {
-	return game.store_get(&w.entity_world.store, ent.handle, game.C_HEALTH, game.Entity_Health)
+entity_health :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Entity_Health {
+	return game.store_get(&w.entity_world.store, h, game.C_HEALTH, game.Entity_Health)
 }
 
-entity_age :: proc(w: ^World, ent: ^Entity) -> ^game.Age {
-	return game.store_get(&w.entity_world.store, ent.handle, game.C_AGE, game.Age)
+entity_age :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Age {
+	return game.store_get(&w.entity_world.store, h, game.C_AGE, game.Age)
 }
 
-entity_health_of :: proc(w: ^World, ent: ^Entity) -> int {
-	if hp := entity_health(w, ent); hp != nil {return int(hp.health)}
+entity_health_of :: proc(w: ^World, h: game.Entity_Handle) -> int {
+	if hp := entity_health(w, h); hp != nil {return int(hp.health)}
 	return 0
 }
 
-entity_set_health :: proc(w: ^World, ent: ^Entity, health: int) {
-	if hp := entity_health(w, ent); hp != nil {hp.health = i32(health)}
+entity_set_health :: proc(w: ^World, h: game.Entity_Handle, health: int) {
+	if hp := entity_health(w, h); hp != nil {hp.health = i32(health)}
 }
 
-entity_age_of :: proc(w: ^World, ent: ^Entity) -> int {
-	if age := entity_age(w, ent); age != nil {return int(age.ticks)}
+entity_age_of :: proc(w: ^World, h: game.Entity_Handle) -> int {
+	if age := entity_age(w, h); age != nil {return int(age.ticks)}
 	return 0
 }
 
-entity_set_age :: proc(w: ^World, ent: ^Entity, ticks: int) {
-	if age := entity_age(w, ent); age != nil {age.ticks = i32(ticks)}
+entity_set_age :: proc(w: ^World, h: game.Entity_Handle, ticks: int) {
+	if age := entity_age(w, h); age != nil {age.ticks = i32(ticks)}
 }
 
-entity_is_natural :: proc(w: ^World, ent: ^Entity) -> bool {
-	return game.store_get(&w.entity_world.store, ent.handle, game.C_NATURAL, game.Natural) != nil
+entity_is_natural :: proc(w: ^World, h: game.Entity_Handle) -> bool {
+	return game.store_get(&w.entity_world.store, h, game.C_NATURAL, game.Natural) != nil
 }
 
-entity_find :: proc(w: ^World, id: u32) -> (^Entity, int) {
+entity_find :: proc(w: ^World, id: u32) -> (game.Entity_Handle, int) {
 	// an id the entity world does not know is no entity (the map gives the index)
-	if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); !ok {return nil, -1}
-	if i := entity_index(w, id); i >= 0 {return &w.entities.list[i], i}
-	return nil, -1
+	if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(id)); !ok {return 0, -1}
+	if i := entity_index(w, id); i >= 0 {return w.entities.list[i].handle, i}
+	return 0, -1
 }
 
 // entities_put tells a client about the entities near it: what each is and
@@ -740,16 +753,16 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 		&around,
 	)
 	for id in around[:min(len(around), game.MAX_KNOWN_ENTITIES)] {
-		ent, _ := entity_find(w, u32(id))
-		if ent == nil {continue}
-		key := game.key_entity(ent.id)
-		record := game.Entity_Record{ent.kind, entity_stack(w, ent)^}
+		h, _ := entity_find(w, u32(id))
+		if h == 0 {continue}
+		key := game.key_entity(u32(id))
+		record := game.Entity_Record{entity_kind(w, h), entity_stack(w, h)^}
 		state_put(s, c, .Entity, &record, key)
 		motion := game.Entity_Motion {
-			entity_pos(w, ent),
-			entity_yaw(w, ent),
-			entity_pitch(w, ent),
-			sheep_flags(w, s.registry, ent),
+			entity_pos(w, h),
+			entity_yaw(w, h),
+			entity_pitch(w, h),
+			sheep_flags(w, s.registry, h),
 		}
 		state_put(s, c, .Entity_Motion, &motion, key)
 	}
@@ -778,7 +791,7 @@ entity_retire :: proc(w: ^World, index: int, died: bool) {
 	s := w.server
 	id := w.entities.list[index].id
 	if died {
-		for i in entity_watchers(w, entity_pos(w, &w.entities.list[index])) {
+		for i in entity_watchers(w, entity_pos(w, entity_at(w, index))) {
 			c := &s.clients[i]
 			if entity_known(c, id) {
 				death := game.Entity_Died{id}
@@ -795,9 +808,9 @@ entity_retire :: proc(w: ^World, index: int, died: bool) {
 // entity_hurt_shown: everyone who knows it sees it flinch.
 entity_hurt_shown :: proc(w: ^World, id: u32) {
 	s := w.server
-	ent, _ := entity_find(w, id)
-	if ent == nil {return}
-	for i in entity_watchers(w, entity_pos(w, ent)) {
+	h, _ := entity_find(w, id)
+	if h == 0 {return}
+	for i in entity_watchers(w, entity_pos(w, h)) {
 		c := &s.clients[i]
 		if entity_known(c, id) {
 			hurt := game.Entity_Hurt{id}
@@ -876,15 +889,15 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 	for dy in ([]i32{0, 1, -1, 2, -2, 3, -3}) {
 		p := at + {0, dy, 0}
 		if standable(query, p) {
-			if ent := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
-			   ent != nil {
+			if h := entity_spawn(w, kind, {f64(p.x) + 0.5, f64(p.y), f64(p.z) + 0.5}, false);
+			   h != 0 {
 				if kind == s.registry.engine.sheep {
-					entity_genes(w, ent).genes = game.genes_wild(&w.entities.rng)
+					entity_genes(w, h).genes = game.genes_wild(&w.entities.rng)
 				}
 				log.infof(
 					"server summoned kind=%s id=%d at=%v by=%s",
 					game.kind_info(s.registry, kind).id,
-					ent.id,
+					entity_id(w, h),
 					p,
 					client_name(c),
 				)
@@ -900,17 +913,17 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 
 // think moves the brain from state to state.
 @(private = "file")
-think :: proc(w: ^World, ent: ^Entity) {
-	b := entity_brain(w, ent)
+think :: proc(w: ^World, h: game.Entity_Handle) {
+	b := entity_brain(w, h)
 	r := &w.entities.rng
 	if b.hurt > 0 {b.hurt -= 1}
 	b.timer -= 1
-	pos := entity_pos(w, ent)
+	pos := entity_pos(w, h)
 	// Ready to breed: toward another that is; else as before.
-	if entity_breeding(w, ent).love > 0 &&
-	   entity_breeding(w, ent).growth >= game.LAMB_TICKS &&
+	if entity_breeding(w, h).love > 0 &&
+	   entity_breeding(w, h).growth >= game.LAMB_TICKS &&
 	   b.state != .Flee {
-		if m := mate_for(w, ent); m != nil {
+		if m := mate_for(w, h); m != 0 {
 			b.state, b.look_at = .Mate, entity_pos(w, m)
 		} else if b.state == .Mate {
 			b.state, b.timer = .Idle, 20
@@ -921,9 +934,10 @@ think :: proc(w: ^World, ent: ^Entity) {
 	switch b.state {
 	case .Mate:
 		// Close enough: the one with the lower id has the lamb.
-		if m := mate_for(w, ent); m != nil {
+		if m := mate_for(w, h); m != 0 {
 			d := entity_pos(w, m) - pos
-			if d.x * d.x + d.z * d.z < 1.6 * 1.6 && ent.id < m.id {breed(w, ent, m)}
+			if d.x * d.x + d.z * d.z < 1.6 * 1.6 &&
+			   entity_id(w, h) < entity_id(w, m) {breed(w, h, m)}
 		}
 	case .Flee:
 		if b.timer <= 0 {b.state, b.timer = .Idle, 20}
@@ -936,7 +950,7 @@ think :: proc(w: ^World, ent: ^Entity) {
 				pos +
 				away / l * 10 +
 				{base.rng_f64_range(r, -3, 3), 0, base.rng_f64_range(r, -3, 3)}
-			plan(w, ent, target)
+			plan(w, h, target)
 		}
 	case .Idle, .Look:
 		if p, ok := nearest_player(w, pos, 6); ok && base.rng_f32(r) < 0.95 {
@@ -946,8 +960,8 @@ think :: proc(w: ^World, ent: ^Entity) {
 			b.state = .Idle
 		}
 		// A shorn sheep with grass in front of it wants to eat.
-		if entity_wool(w, ent).shorn && b.timer <= 0 && base.rng_f32(r) < 0.6 {
-			if _, ahead := grass_ahead(w, ent); ahead {
+		if entity_wool(w, h).shorn && b.timer <= 0 && base.rng_f32(r) < 0.6 {
+			if _, ahead := grass_ahead(w, h); ahead {
 				b.state, b.timer = .Graze, base.rng_int_range(r, GRAZE_EAT_TICKS + 10, 120)
 			}
 		}
@@ -955,7 +969,7 @@ think :: proc(w: ^World, ent: ^Entity) {
 			switch {
 			case base.rng_f32(r) < 0.55:
 				target := pos + {base.rng_f64_range(r, -8, 8), 0, base.rng_f64_range(r, -8, 8)}
-				if plan(w, ent, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
+				if plan(w, h, target) {b.state, b.timer = .Wander, game.TICK_RATE * 12}
 			case base.rng_f32(r) < 0.5:
 				b.state, b.timer = .Graze, base.rng_int_range(r, 40, 120)
 			case:
@@ -968,7 +982,7 @@ think :: proc(w: ^World, ent: ^Entity) {
 			b.path.count = 0
 		}
 	case .Graze:
-		if b.timer == GRAZE_EAT_TICKS {graze_eat(w, ent)}
+		if b.timer == GRAZE_EAT_TICKS {graze_eat(w, h)}
 		if b.timer <= 0 {b.state, b.timer = .Idle, base.rng_int_range(r, 20, 60)}
 	}
 	// The head: down when grazing, at the player when looking, level else.
@@ -979,25 +993,24 @@ think :: proc(w: ^World, ent: ^Entity) {
 	case .Look:
 		d :=
 			b.look_at -
-			(pos + {0, game.kind_box(game.kind_info(w.server.registry, ent.kind))[1], 0})
+			(pos + {0, game.kind_box(game.kind_info(w.server.registry, entity_kind(w, h)))[1], 0})
 		flat := math.sqrt(d.x * d.x + d.z * d.z)
 		want_pitch = clamp(f32(math.atan2(d.y, flat)), -1, 1)
-		entity_set_yaw(w, ent, turn_towards(entity_yaw(w, ent), f32(math.atan2(-d.x, -d.z)), 0.15))
+		entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-d.x, -d.z)), 0.15))
 	case .Idle, .Wander, .Flee, .Mate:
 	}
-	pitch := entity_pitch(w, ent)
-	entity_set_pitch(w, ent, pitch + (want_pitch - pitch) * 0.2)
+	pitch := entity_pitch(w, h)
+	entity_set_pitch(w, h, pitch + (want_pitch - pitch) * 0.2)
 }
 
 GRAZE_EAT_TICKS :: 10 // ticks left of a graze when the head is down and the grass goes
 
 // grass_ahead: the grass block in front of ent's feet, if there is one.
 @(private = "file")
-grass_ahead :: proc(w: ^World, ent: ^Entity) -> (p: game.Block_Pos, ok: bool) {
-	pos := entity_pos(w, ent)
+grass_ahead :: proc(w: ^World, h: game.Entity_Handle) -> (p: game.Block_Pos, ok: bool) {
+	pos := entity_pos(w, h)
 	front :=
-		pos +
-		{-f64(base.sin(entity_yaw(w, ent))) * 0.8, 0, -f64(base.cos(entity_yaw(w, ent))) * 0.8}
+		pos + {-f64(base.sin(entity_yaw(w, h))) * 0.8, 0, -f64(base.cos(entity_yaw(w, h))) * 0.8}
 	p = {i32(math.floor(front.x)), i32(math.floor(pos.y + 0.01)) - 1, i32(math.floor(front.z))}
 	b, loaded := chunks_block(&w.chunks, p)
 	return p, loaded && b == .Grass
@@ -1006,21 +1019,21 @@ grass_ahead :: proc(w: ^World, ent: ^Entity) -> (p: game.Block_Pos, ok: bool) {
 // graze_eat: a sheep with its head down eats the grass in front of it: the
 // block becomes dirt, and a shorn sheep has its wool back.
 @(private = "file")
-graze_eat :: proc(w: ^World, ent: ^Entity) {
-	p, ok := grass_ahead(w, ent)
-	if !ok || !entity_wool(w, ent).shorn {return}
+graze_eat :: proc(w: ^World, h: game.Entity_Handle) {
+	p, ok := grass_ahead(w, h)
+	if !ok || !entity_wool(w, h).shorn {return}
 	set_block(w, p, .Dirt, world_act(w, .Graze))
-	entity_wool(w, ent).shorn = false
+	entity_wool(w, h).shorn = false
 }
 
 // plan finds a path to near target (from where the entity stands); false
 // if this tick's budget is spent or there is nowhere to go.
 @(private = "file")
-plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
+plan :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64) -> bool {
 	e := &w.entities
 	if e.budget < PATH_BUDGET_EACH {return false}
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	pos := entity_pos(w, ent)
+	pos := entity_pos(w, h)
 	start := game.Block_Pos {
 		i32(math.floor(pos.x)),
 		i32(math.floor(pos.y + 0.01)),
@@ -1037,7 +1050,7 @@ plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
 	e.budget -= PATH_BUDGET_EACH
 	path, ok := find_path(query, start, goal, PATH_BUDGET_EACH)
 	if !ok || path.count == 0 {return false}
-	b := entity_brain(w, ent)
+	b := entity_brain(w, h)
 	b.path = path
 	b.step = 0
 	b.stuck = 0
@@ -1046,24 +1059,20 @@ plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
 
 // steer: the wished-for velocity and whether to jump, following the path.
 @(private = "file")
-steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
-	b := entity_brain(w, ent)
+steer :: proc(w: ^World, h: game.Entity_Handle) -> (wish: [2]f32, jump: bool) {
+	b := entity_brain(w, h)
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
-	info := game.kind_info(w.server.registry, ent.kind)
-	pos := entity_pos(w, ent)
-	vel := entity_velocity(w, ent)
+	info := game.kind_info(w.server.registry, entity_kind(w, h))
+	pos := entity_pos(w, h)
+	vel := entity_velocity(w, h)
 	if b.state == .Mate {
 		// Straight at the one it wants (they are close, on open ground).
 		to := [2]f64{b.look_at.x - pos.x, b.look_at.z - pos.z}
 		dist := math.sqrt(to.x * to.x + to.y * to.y)
 		if dist < 1 {return}
 		wish = {f32(to.x / dist), f32(to.y / dist)} * info.walker.walk_speed
-		entity_set_yaw(
-			w,
-			ent,
-			turn_towards(entity_yaw(w, ent), f32(math.atan2(-to.x, -to.y)), 0.3),
-		)
-		stuck := entity_on_ground(w, ent) && abs(vel.x) + abs(vel.z) < 0.1 * info.walker.walk_speed
+		entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3))
+		stuck := entity_on_ground(w, h) && abs(vel.x) + abs(vel.z) < 0.1 * info.walker.walk_speed
 		jump = stuck
 		return
 	}
@@ -1080,10 +1089,10 @@ steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
 	speed := info.walker.run_speed if b.state == .Flee else info.walker.walk_speed
 	dir := [2]f32{f32(to.x / max(dist, 1e-6)), f32(to.y / max(dist, 1e-6))}
 	wish = dir * speed
-	entity_set_yaw(w, ent, turn_towards(entity_yaw(w, ent), f32(math.atan2(-to.x, -to.y)), 0.3))
+	entity_set_yaw(w, h, turn_towards(entity_yaw(w, h), f32(math.atan2(-to.x, -to.y)), 0.3))
 	// Up a step, or something in the way: jump.
-	blocked := entity_on_ground(w, ent) && math.abs(vel.x) + math.abs(vel.z) < 0.1 * speed
-	jump = entity_on_ground(w, ent) && (f64(target.y) > pos.y + 0.5 || blocked)
+	blocked := entity_on_ground(w, h) && math.abs(vel.x) + math.abs(vel.z) < 0.1 * speed
+	jump = entity_on_ground(w, h) && (f64(target.y) > pos.y + 0.5 || blocked)
 	if blocked {b.stuck += 1} else {b.stuck = 0}
 	return
 }
@@ -1130,7 +1139,7 @@ spawn_natural :: proc(w: ^World) {
 			b := game.Block_Pos{i32(math.floor(p.x)), at.y, i32(math.floor(p.z))}
 			if standable(query, b) {
 				if sheep := entity_spawn(w, w.server.registry.engine.sheep, p, true);
-				   sheep != nil {entity_genes(w, sheep).genes = game.genes_wild(r)}
+				   sheep != 0 {entity_genes(w, sheep).genes = game.genes_wild(r)}
 			}
 		}
 	}
@@ -1667,16 +1676,32 @@ entity_index :: proc(w: ^World, id: u32) -> int {
 }
 
 // entity_get: the entity with this id.
-entity_get :: proc(w: ^World, id: u32) -> (^Entity, bool) {
-	i := entity_index(w, id)
-	if i < 0 {return nil, false}
-	return &w.entities.list[i], true
+entity_get :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
+	if entity_index(w, id) < 0 {return 0, false}
+	return entity_handle_of(w, id)
+}
+
+// entity_handle_of: the store's handle of entity id (false when it has none).
+entity_handle_of :: proc(w: ^World, id: u32) -> (game.Entity_Handle, bool) {
+	return game.store_find(&w.entity_world.store, game.Entity_Id(id))
+}
+
+// entity_kind: the kind of the entity (0 for a stale handle).
+entity_kind :: proc(w: ^World, h: game.Entity_Handle) -> game.Kind_Id {
+	if s := base.pool_get(&w.entity_world.store.slots, h); s != nil {return s.kind}
+	return 0
+}
+
+// entity_id: the id of the entity (0 for a stale handle).
+entity_id :: proc(w: ^World, h: game.Entity_Handle) -> u32 {
+	if s := base.pool_get(&w.entity_world.store.slots, h); s != nil {return u32(s.id)}
+	return 0
 }
 
 // entity_at: the entity at this place of the walk order (an index from
 // entity_index or entities_each; removing an entity moves the last into its place).
-entity_at :: proc(w: ^World, index: int) -> ^Entity {
-	return &w.entities.list[index]
+entity_at :: proc(w: ^World, index: int) -> game.Entity_Handle {
+	return w.entities.list[index].handle
 }
 
 // Entity_Iter walks the entities in the list's order.
@@ -1691,11 +1716,11 @@ entities_each :: proc(w: ^World) -> Entity_Iter {
 	return {w = w}
 }
 
-entities_next :: proc(it: ^Entity_Iter) -> (e: ^Entity, index: int, ok: bool) {
+entities_next :: proc(it: ^Entity_Iter) -> (h: game.Entity_Handle, index: int, ok: bool) {
 	if it.i >= len(it.w.entities.list) {return}
 	index = it.i
 	it.i += 1
-	return &it.w.entities.list[index], index, true
+	return it.w.entities.list[index].handle, index, true
 }
 
 // entities_view: all of them, in order, to read (the state hash folds it).

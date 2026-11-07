@@ -232,10 +232,16 @@ entity_restore :: proc(
 	// What lies about of it: this action's stacks near p, per item.
 	here := [3]f64{f64(p.x) + 0.5, f64(p.y) + 0.5, f64(p.z) + 0.5}
 	lying := make(map[game.Item]int, context.temp_allocator)
-	near :: proc(w: ^World, ent: ^Entity, here: [3]f64, action: u32, item: game.Kind_Id) -> bool {
+	near :: proc(
+		w: ^World,
+		ent: game.Entity_Handle,
+		here: [3]f64,
+		action: u32,
+		item: game.Kind_Id,
+	) -> bool {
 		d := entity_pos(w, ent) - here
 		return(
-			ent.kind == item &&
+			entity_kind(w, ent) == item &&
 			entity_owner(w, ent).action == action &&
 			d.x * d.x + d.y * d.y + d.z * d.z <= RESTORE_REACH * RESTORE_REACH \
 		)
@@ -257,7 +263,7 @@ entity_restore :: proc(
 	stacks := make([dynamic]u32, context.temp_allocator)
 	for id in about {
 		ent, _ := entity_find(w, u32(id))
-		if ent == nil || !near(w, ent, here, from.action, w.server.registry.engine.item) {continue}
+		if ent == 0 || !near(w, ent, here, from.action, w.server.registry.engine.item) {continue}
 		append(&stacks, u32(id))
 		lying[entity_stack(w, ent)^.item] += entity_stack(w, ent)^.count
 	}
@@ -272,7 +278,7 @@ entity_restore :: proc(
 	}
 	for id in stacks {
 		ent, i := entity_find(w, id)
-		if ent == nil {continue}
+		if ent == 0 {continue}
 		n := min(entity_stack(w, ent)^.count, taken[entity_stack(w, ent)^.item])
 		if n == 0 {continue}
 		taken[entity_stack(w, ent)^.item] -= n

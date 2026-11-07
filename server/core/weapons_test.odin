@@ -282,7 +282,7 @@ rules_scenario :: proc(s: ^Server, _: rawptr) {
 	shoot_at(s, alice, chest(bob), 0)
 	res.pvp_off_hurt = hurt(bob)
 	sheep := entity_spawn(w, test_reg().engine.sheep, rig.base + {-4, 0, 0}, false)
-	if sheep != nil {
+	if sheep != 0 {
 		before := entity_health_of(w, sheep)
 		shoot_at(s, alice, entity_pos(w, sheep) + {0, 0.4, 0}, 0)
 		res.creature_hit = entity_health_of(w, sheep) == before - 1

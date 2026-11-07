@@ -111,11 +111,11 @@ spawn_item :: proc(
 	stack: game.Stack,
 	velocity: [3]f32,
 	owner: int,
-) -> ^Entity {
+) -> game.Entity_Handle {
 	ent := entity_spawn(w, w.server.registry.engine.item, position, false)
-	if ent == nil {
+	if ent == 0 {
 		ledger_stack(w.server, w, .Void, stack, -1)
-		return nil
+		return 0
 	}
 	entity_stack(w, ent)^ = stack
 	entity_set_velocity(w, ent, velocity)
@@ -134,7 +134,8 @@ PICKUP_SLACK :: 2
 item_tick :: proc(w: ^World, index: int) -> bool {
 	s := w.server
 	ent := entity_at(w, index)
-	kind := game.kind_info(s.registry, ent.kind)
+	ekind := entity_kind(w, ent)
+	kind := game.kind_info(s.registry, ekind)
 	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS > kind.item.life {
 		ledger_stack(s, w, .Expire, entity_stack(w, ent)^, -1)
 		return true
@@ -159,7 +160,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				&ew.spatial,
 				entity_pos(w, ent),
 				f64(kind.item.merge) + PICKUP_SLACK,
-				{kind = u16(item_kind), exclude = game.Entity_Id(ent.id)},
+				{kind = u16(item_kind), exclude = game.Entity_Id(entity_id(w, ent))},
 				&near,
 			)
 			// highest list index first, as the walk down the list did
@@ -170,7 +171,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 			slice.sort(order[:])
 			#reverse for j in order {
 				other := entity_at(w, j)
-				if other.kind != ent.kind ||
+				if entity_kind(w, other) != ekind ||
 				   entity_stack(w, other)^.item != entity_stack(w, ent)^.item {continue}
 				if entity_stack(w, ent)^.count + entity_stack(w, other)^.count > size {continue}
 				d := entity_pos(w, other) - entity_pos(w, ent)

@@ -84,7 +84,7 @@ budget_save_scene :: proc(s: ^Server) {
 	}
 	for n in 0 ..< 400 {
 		e := entity_spawn(w, w.server.registry.engine.item, {f64(1000 + n), 200, 1000}, false)
-		if e != nil {entity_stack(w, e)^ = {planks, 5, 0}}
+		if e != 0 {entity_stack(w, e)^ = {planks, 5, 0}}
 	}
 }
 
@@ -176,8 +176,8 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 		// (straight into the store: the list's cap is for play, not for this count)
 		id, h, _ := entity_world_spawn(w.entity_world, reg, reg.engine.item, {}, {}, 0, false)
 		game.store_apply(&w.entity_world.store)
-		ent := entity_add(w, Entity{id = u32(id), handle = h, kind = reg.engine.item})
-		entity_stack(w, ent)^ = st
+		entity_add(w, Entity{id = u32(id), handle = h, kind = reg.engine.item})
+		entity_stack(w, h)^ = st
 		given(s, st)
 	}
 	start := base.thread_cpu_us()

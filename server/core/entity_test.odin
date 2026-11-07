@@ -239,13 +239,30 @@ test_entity_find_without_a_scan :: proc(t: ^testing.T) {
 	defer free(w)
 	entities_init(&w.entities, 1)
 	defer entities_destroy(&w.entities)
+	w.entity_world = new(Entity_World)
+	defer free(w.entity_world)
+	entity_world_init(w.entity_world, 1, 16384)
+	defer entity_world_destroy(w.entity_world)
 	N :: 10_000
-	for _ in 0 ..< N {entity_add(w, Entity{kind = test_reg().engine.item})}
+	item := test_reg().engine.item
+	for i in 1 ..= u32(N) {
+		_, h, _ := entity_world_spawn(
+			w.entity_world,
+			test_reg(),
+			item,
+			{},
+			{},
+			game.Entity_Id(i),
+			false,
+		)
+		entity_add(w, Entity{id = i, handle = h, kind = item})
+	}
+	game.store_apply(&w.entity_world.store)
 	testing.expect_value(t, entity_count(w), N)
 	w.entities.lookups = 0
 	for id in 1 ..= u32(N) {
 		e, ok := entity_get(w, id)
-		testing.expect(t, ok && e.id == id)
+		testing.expect(t, ok && entity_id(w, e) == id)
 	}
 	testing.expect_value(t, w.entities.lookups, N)
 	testing.expect(t, entity_remove(w, 5))
@@ -257,8 +274,41 @@ test_entity_find_without_a_scan :: proc(t: ^testing.T) {
 	it := entities_each(w)
 	n := 0
 	for e, i in entities_next(&it) {
-		testing.expect_value(t, entity_index(w, e.id), i)
+		testing.expect_value(t, entity_index(w, entity_id(w, e)), i)
 		n += 1
 	}
 	testing.expect_value(t, n, N - 1)
+}
+
+// A handle whose entity is gone: the readers give their defaults, and the
+// entity's id is no entity any more.
+@(test)
+test_stale_handle_reads_defaults :: proc(t: ^testing.T) {
+	w := new(World)
+	defer free(w)
+	entities_init(&w.entities, 1)
+	defer entities_destroy(&w.entities)
+	w.entity_world = new(Entity_World)
+	defer free(w.entity_world)
+	entity_world_init(w.entity_world, 1, 8)
+	defer entity_world_destroy(w.entity_world)
+	item := test_reg().engine.item
+	_, h, _ := entity_world_spawn(w.entity_world, test_reg(), item, {1, 2, 3}, {}, 1, false)
+	entity_add(w, Entity{id = 1, handle = h, kind = item})
+	game.store_apply(&w.entity_world.store)
+	testing.expect_value(t, entity_kind(w, h), item)
+	testing.expect_value(t, entity_id(w, h), 1)
+	testing.expect_value(t, entity_pos(w, h), [3]f64{1, 2, 3})
+	got, ok := entity_get(w, 1)
+	testing.expect(t, ok && got == h)
+	testing.expect(t, entity_remove(w, 1))
+	game.store_apply(&w.entity_world.store)
+	testing.expect_value(t, entity_kind(w, h), 0)
+	testing.expect_value(t, entity_id(w, h), 0)
+	testing.expect_value(t, entity_pos(w, h), [3]f64{})
+	testing.expect_value(t, entity_owner(w, h).client, -1)
+	testing.expect_value(t, entity_breeding(w, h).growth, game.LAMB_TICKS)
+	testing.expect(t, entity_stack(w, h).count == 0)
+	_, ok = entity_get(w, 1)
+	testing.expect(t, !ok)
 }

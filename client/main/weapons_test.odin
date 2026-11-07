@@ -101,7 +101,7 @@ test_weapons_over_a_stepped_server :: proc(t: ^testing.T) {
 		feet + {0, 0, -1.4},
 		false,
 	)
-	if !testing.expect(t, sheep != nil) {return}
+	if !testing.expect(t, sheep != 0) {return}
 	s.camera.yaw = 0
 	s.camera.pitch = f32(math.atan2(-(1.62 - 0.45), 1.0))
 	for _ in 0 ..< 6 {rig_frame(rig, &idle)} 	// (a few ticks of history to rewind to)
