@@ -1,0 +1,673 @@
+{
+  "kind": "structures",
+  "group": "trade_and_transport",
+  "entries": [
+    {
+      "id": "roman_road",
+      "name": "Roman road (via / strata)",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mixed_forest", "steppe", "desert", "mountains", "mediterranean"],
+      "cultures": ["Roman"],
+      "era": "312 BCE to ~500 CE (roads reused into the Middle Ages)",
+      "footprint_m": [50, 5],
+      "height_m": 1,
+      "materials": ["basalt slabs", "gravel", "sand", "lime mortar", "cut stone kerbing"],
+      "purpose": "arterial military and trade route across the empire",
+      "parts": ["agger (raised cambered bed)", "paved center (basalt)", "ditches both sides", "kerbing", "milestone every Roman mile"],
+      "layout": [
+        "dead-straight segments between surveyed points, ignoring contour where possible",
+        "raised cambered core so rain runs off into side ditches",
+        "deep foundation layers (statumen, rudus, nucleus, summum dorsum)",
+        "milestone every Roman mile (1,480 m)"
+      ],
+      "found": "on the flattest and straightest line between cities; plains, coasts and passes",
+      "notes": "Via Appia (312 BCE) opened the network; by its height the empire held ~400,000 km of roads, half of it paved."
+    },
+    {
+      "id": "stone_arch_bridge",
+      "name": "Stone arch bridge",
+      "origin": "human",
+      "biomes": ["river", "mountains", "plains", "mediterranean", "mixed_forest"],
+      "cultures": ["Roman", "Medieval European", "Chinese", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [40, 6],
+      "height_m": 10,
+      "materials": ["dressed stone", "voussoir arches", "lime mortar (later Portland cement)"],
+      "purpose": "permanent span over rivers and gorges for foot, cart and pack traffic",
+      "parts": ["cut-stone piers", "semicircular or segmental arches", "spandrel walls", "road deck", "parapets"],
+      "layout": [
+        "one to many arches; older Roman work favors semicircular, later work segmental (flatter, longer spans)",
+        "piers end in cutwaters to split the flood current",
+        "road deck cambered over the crowns"
+      ],
+      "found": "at every settled river crossing that mattered; many Roman spans still carry traffic",
+      "notes": "Puente de Alcántara (Hispania, 106 CE) has carried carts for ~1,900 years. Arch stone in pure compression is the most durable span humans build."
+    },
+    {
+      "id": "iron_truss_bridge",
+      "name": "Iron/steel truss bridge",
+      "origin": "human",
+      "biomes": ["river", "mountains", "forest", "mixed_forest", "plains"],
+      "cultures": ["American", "British", "Global"],
+      "era": "1840s to now",
+      "footprint_m": [40, 6],
+      "height_m": 6,
+      "materials": ["wrought iron (later steel)", "rivets or pins", "timber or steel deck", "masonry abutments"],
+      "purpose": "cheap, strong railway and road spans of 30-80 m",
+      "parts": ["upper chord in compression", "lower chord in tension", "diagonal web members", "end portals", "deck girders"],
+      "layout": [
+        "two parallel trusses either side of the deck, or a through-truss the deck passes inside",
+        "panel lengths 5-10 m between verticals",
+        "on rail lines usually track carried on timber stringers over the deck"
+      ],
+      "found": "across every small river on 19th- and early 20th-century rail lines",
+      "notes": "The Pratt truss (1844) put diagonals in tension and was mass-produced with pinned joints, so remote crossings went up fast."
+    },
+    {
+      "id": "suspension_bridge",
+      "name": "Suspension bridge",
+      "origin": "human",
+      "biomes": ["river", "mountains", "ocean"],
+      "cultures": ["British", "American", "Japanese", "Global"],
+      "era": "1820s to now",
+      "footprint_m": [400, 12],
+      "height_m": 45,
+      "materials": ["wrought-iron chains or parallel steel wire cables", "stone or steel towers", "steel deck", "concrete anchorages"],
+      "purpose": "clear long spans (150 m to over 1 km) over broad water with no mid piers",
+      "parts": ["two towers", "main cables draped between towers and anchored in massive blocks", "vertical hanger cables", "stiffened deck", "anchorages"],
+      "layout": [
+        "cables sag in a catenary; load is pulled out and down into the anchorages",
+        "towers carry clear vertical compression only",
+        "deck must be aerodynamically stiff — open trussed deck or streamlined box girder"
+      ],
+      "found": "at broad river mouths, straits and bays where piers cannot be founded",
+      "notes": "Telford's Menai Strait bridge (Wales, 1826) proved iron chains; Tacoma Narrows (1940) proved the deck needs aerodynamic care. Modern spans exceed 2 km."
+    },
+    {
+      "id": "rope_footbridge",
+      "name": "Rope suspension footbridge",
+      "origin": "human",
+      "biomes": ["mountains", "rainforest"],
+      "cultures": ["Andean", "Himalayan", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [50, 1],
+      "height_m": 3,
+      "materials": ["twisted grass or ichu rope (now wire rope)", "timber deck planks", "stone anchor abutments"],
+      "purpose": "lightweight crossing of gorges for foot and pack traffic",
+      "parts": ["braided main ropes (hand-rails and deck)", "timber plank deck", "lashings", "stone anchor points on each cliff"],
+      "layout": [
+        "deck sags between anchor points; hand ropes lashed to deck every few planks",
+        "single file only; one person or one pack animal at a time",
+        "rope buds and anchors inspected and re-braided on a fixed cycle"
+      ],
+      "found": "across Himalayan and Andean gorges where no pier can stand",
+      "notes": "Peru's Q'eswachaka bridge has been re-braided by the Quechua community for some 600 years, in an annual festival."
+    },
+    {
+      "id": "railway_viaduct",
+      "name": "Railway viaduct",
+      "origin": "human",
+      "biomes": ["mountains", "forest", "river"],
+      "cultures": ["British", "French", "Global"],
+      "era": "1830s to now (grandest 1890-1914)",
+      "footprint_m": [380, 6],
+      "height_m": 30,
+      "materials": ["brick or mass concrete", "semicircular arches", "stone parapets and coping"],
+      "purpose": "carry a level rail line across a valley too deep or wide to embank cheaply",
+      "parts": ["row of semicircular arches", "piers with cutwaters", "parapets hiding the track", "drainage weep holes in spandrels"],
+      "layout": [
+        "many equal spans; rise of each arch chosen so the soffit clears peak flood",
+        "curved in plan where the line sweeps a hillside (Glenfinnan)",
+        "track on ballast directly on the arch fill"
+      ],
+      "found": "on mountain and branch lines crossing river gorges",
+      "notes": "Glenfinnan (Scotland, opened 1901) runs 21 mass-concrete arches, 380 m long and 30 m above the River Finnan — still in service."
+    },
+    {
+      "id": "railroad_trestle",
+      "name": "Timber railroad trestle",
+      "origin": "human",
+      "biomes": ["mountains", "forest", "plains"],
+      "cultures": ["American"],
+      "era": "1850s to ~1930 (mostly later filled in)",
+      "footprint_m": [120, 8],
+      "height_m": 30,
+      "materials": ["timber piles and stringers", "bolts and drift pins", "ballast and ties on top"],
+      "purpose": "race a rail line across a ravine before fill could be hauled in",
+      "parts": ["vertical timber pile bents", "longitudinal stringers", "cross bracing", "cap beams carrying ties"],
+      "layout": [
+        "repeating bents every 3-6 m, like a giant sawhorse row",
+        "bracing triangulates every bent in both directions",
+        "meant as scaffolding for tomorrow's earthfill, not as a monument"
+      ],
+      "found": "on 19th-century western US lines; most were buried under fill within a decade",
+      "notes": "Wyoming's Dale Creek trestle (1868) rose ~30 m; it survived barely 30 years before embankment replaced it."
+    },
+    {
+      "id": "railway_station",
+      "name": "Railway station",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mediterranean", "mixed_forest"],
+      "cultures": ["British", "Global"],
+      "era": "1830 to now",
+      "footprint_m": [120, 15],
+      "height_m": 9,
+      "materials": ["brick and dressed stone", "cast and wrought iron", "glass train-shed roof", "timber platforms"],
+      "purpose": "passenger and parcel interchange; the town-facing door of the railway",
+      "parts": ["arrival and departure train shed", "booking hall", "ticket office and luggage room", "platforms with canopies", "signal box"],
+      "layout": [
+        "track and platforms on axis, town forecourt in front",
+        "train shed spans all tracks with a single arched iron-and-glass roof",
+        "goods yard and sidings behind for freight"
+      ],
+      "found": "every town the railway reached; termini reshaped city edges",
+      "notes": "Liverpool Road, Manchester (1830) is the world's oldest surviving intercity terminus; London's termini (St Pancras, 1868) made arrival a piece of theatre."
+    },
+    {
+      "id": "railway_tunnel",
+      "name": "Railway tunnel",
+      "origin": "human",
+      "biomes": ["mountains"],
+      "cultures": ["British", "French", "Global"],
+      "era": "1830s to now",
+      "footprint_m": [13650, 8],
+      "height_m": 9,
+      "materials": ["bored rock", "brick or stone lining (modern concrete segments)", "drainage and ventilation"],
+      "purpose": "carry a rail line straight through a mountain instead of over it",
+      "parts": ["bores with masonry lining", "portals with headwalls", "shafts and drainage sumps", "ventilation adits (long bores)"],
+      "layout": [
+        "two headings driven from both faces to meet in the middle",
+        "gentle grade; clearance for the loading gauge at every section",
+        "refuge niches along tunnels too narrow for two lines"
+      ],
+      "found": "through the great ranges that blocked rail expansion — Alps, Appalachians, Andes",
+      "notes": "The Mont Cenis tunnel (France-Italy, 1857-1871, 13.7 km) was hand-drilled from both portals over 14 years; it put the Alps behind a 3-hour train."
+    },
+    {
+      "id": "canal_lock",
+      "name": "Pound lock",
+      "origin": "human",
+      "biomes": ["river", "plains", "forest"],
+      "cultures": ["Chinese", "Global"],
+      "era": "984 to now",
+      "footprint_m": [25, 5],
+      "height_m": 3,
+      "materials": ["stone or brick chamber walls", "mitred timber (later steel) gates", "paddles and sluices"],
+      "purpose": "lift or drop a boat between two water levels without emptying the reach",
+      "parts": ["chamber between two gates", "upstream and downstream gate pairs", "paddle sluices to fill/empty", "mooring bollards and ladders"],
+      "layout": [
+        "boat enters, gates shut behind it, paddles fill or drain the chamber ~3 m at a time",
+        "flights of locks stair-step a steep reach",
+        "single lock alternation saves water — each filling comes from the upper pound"
+      ],
+      "found": "on every navigable canal and river staircase ever built",
+      "notes": "Qiao Weiyue invented the pound lock on China's Grand Canal in 984, replacing flash locks that wrecked grain barges; mitred European doors followed centuries later."
+    },
+    {
+      "id": "grand_canal",
+      "name": "Grand Canal (Da Yunhe)",
+      "origin": "human",
+      "biomes": ["river", "plains"],
+      "cultures": ["Chinese"],
+      "era": "5th c. BCE sections, joined by the Sui dynasty (581-618), still in use",
+      "footprint_m": [1770000, 30],
+      "height_m": null,
+      "materials": ["excavated earth canal prism", "stone-lined banks and lock chambers", "towpaths"],
+      "purpose": "move grain and salt from the south to feed Beijing and the north",
+      "parts": ["1,770 km of continuous waterway Hangzhou-Beijing", "lock flights on the Shandong rise", "feeder reservoirs", "towpaths and courier stations"],
+      "layout": [
+        "three great reaches linked by ferry points and locks",
+        "summit level ~42 m above sea level in Shandong",
+        "barges tracked or towed by animal or human power"
+      ],
+      "found": "across eastern China; the world's longest canal, still navigated",
+      "notes": "Older than any surviving European canal by a millennium; joining north and south culturally as much as economically."
+    },
+    {
+      "id": "pontoon_bridge",
+      "name": "Pontoon (bridge of boats)",
+      "origin": "human",
+      "biomes": ["river"],
+      "cultures": ["Persian", "Roman", "Global"],
+      "era": "antiquity to now (mostly military)",
+      "footprint_m": [200, 8],
+      "height_m": 1,
+      "materials": ["boats or prefabricated floats", "timber deck", "chain, rope or hinge connections"],
+      "purpose": "cross a river fast, with no foundations, then strike it again",
+      "parts": ["row of boats/floats", "deck planking", "shore ramps", "anchors or upstream mooring lines"],
+      "layout": [
+        "floats spaced 3-6 m apart, deck lashed or hinged over them",
+        "held against the current by upstream moorings or heavy anchors",
+        "military bridges assemble from standard bays in hours"
+      ],
+      "found": "at armies on the move and at emergency flood repairs",
+      "notes": "Herodotus records Darius bridging the Hellespont with about 600 ships in 512 BCE; when storms smashed it he had the sea whipped 300 times."
+    },
+    {
+      "id": "bascule_bridge",
+      "name": "Bascule (lift) bridge",
+      "origin": "human",
+      "biomes": ["river", "beach", "ocean"],
+      "cultures": ["British", "Global"],
+      "era": "c. 1850 to now",
+      "footprint_m": [240, 16],
+      "height_m": 65,
+      "materials": ["granite and Portland stone towers", "riveted steel leaves", "counterweights", "hydraulic or electric drive"],
+      "purpose": "let road traffic cross while admitting tall ships through the navigation channel",
+      "parts": ["two fixed approach spans and towers", "twin bascule leaves", "counterweight pits at the tower bases", "machinery rooms"],
+      "layout": [
+        "leaves pivot low, near the waterline; the heavy rear swings down as the front lifts",
+        "still and moving together: both leaves rise or both stay down",
+        "lifting sequence interlocked with river traffic signals"
+      ],
+      "found": "where sea trade meets dense urban road traffic — old port cities",
+      "notes": "Tower Bridge (London, 1894) raises its bascules in about 5 minutes; steam-driven at opening, fully electric-hydraulic since 1976."
+    },
+    {
+      "id": "tidal_causeway",
+      "name": "Tidal causeway",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Global"],
+      "era": "antiquity to now",
+      "footprint_m": [400, 5],
+      "height_m": 1,
+      "materials": ["cobble and stone fill", "granite kerbstones", "occasional signalling poles"],
+      "purpose": "walk or drive to a tidal island twice a day, when the sea allows",
+      "parts": ["stone-cobbled track on a compacted fill", "kerbed edges", "refuge huts on stilts for the caught", "marker poles for the line of the road underwater"],
+      "layout": [
+        "dead-straight or gently curved track along the last exposed ridge of the seabed",
+        "passable only in the tide window; timetables published; warnings posted",
+        "causeway ends at a landing below the island's high-water mark"
+      ],
+      "found": "to tidal islands and headlands — Holy Island (Lindisfarne), St Michael's Mount",
+      "notes": "Lindisfarne's pilgrim path has been crossed by monks for 1,300 years; misjudge the tide and it drowns twice daily."
+    },
+    {
+      "id": "lighthouse",
+      "name": "Lighthouse",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Greek", "Roman", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [10, 10],
+      "height_m": 30,
+      "materials": ["masonry tower (stone or brick)", "iron lantern room", "glass optic (Fresnel lens from 1822)"],
+      "purpose": "warning and position-fix for coastal shipping; mark harbor entrances and rocks",
+      "parts": ["tower", "gallery and lantern room", "optic and lamp", "keeper's rooms (historic)", "fog signal (later)"],
+      "layout": [
+        "tall round taper tower, unwindowed on the seaward side in hard weather",
+        "built on the outermost rock or head so it is seen against dark sky or land",
+        "characteristic flash pattern identifies the light to mariners"
+      ],
+      "found": "on capes, reefs and harbor mouths wherever trade hugged a coast",
+      "notes": "The Pharos of Alexandria (c. 280 BCE) was a Wonder of the World; the Roman Tower of Hercules at A Coruña (2nd c. CE) still shines today."
+    },
+    {
+      "id": "harbor_breakwater",
+      "name": "Breakwater / mole",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Roman", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [400, 20],
+      "height_m": 6,
+      "materials": ["rubble-mound quarry stone", "dolos or tetrapod concrete armor (modern)", "caisson concrete blocks (Roman hydraulic concrete)"],
+      "purpose": "kill the swell so ships can moor and cargo can load in calm water",
+      "parts": ["long stone arm from the shore or a detached seawall", "armor-unit outer face", "lighthouse or beacon at the head (often)"],
+      "layout": [
+        "arms curve to wrap the anchorage; often two arms leave a narrow gap as the entrance",
+        "crest just above storm wave height; core of graded rubble under armor",
+        "inside the mole the water is effectively a harbor even on an open coast"
+      ],
+      "found": "on exposed coasts that became ports — Carthage, Portus near Rome, modern container ports",
+      "notes": "Claudius built Portus (46 CE) by sinking ship-timber caissons of hydraulic concrete in open sea — the largest marine concrete works of antiquity."
+    },
+    {
+      "id": "quay",
+      "name": "Quay / quayside",
+      "origin": "human",
+      "biomes": ["beach", "river", "ocean"],
+      "cultures": ["Classical", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [80, 8],
+      "height_m": 3,
+      "materials": ["stone or concrete vertical face", "timber or steel deck edge", "mooring bollards (iron)"],
+      "purpose": "let ships moor against deep water so cargo can move straight between hold and wagon",
+      "parts": ["vertical retaining wall face", "deck with bollards and curb", "ladders and fenders", "cranes (later)"],
+      "layout": [
+        "face set parallel to the berth line, depth at the wall enough for the largest expected ship",
+        "bollards every 10-20 m",
+        "open storage and transit sheds directly behind the face"
+      ],
+      "found": "inside every working harbor; the quay, not the anchorage, is the harbor",
+      "notes": "The Phoenician and Roman ports of Byblos, Carthage and Portus all turned on quay walls; the principle has not changed in 3,000 years."
+    },
+    {
+      "id": "pier",
+      "name": "Open-piled pier",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["British", "Global"],
+      "era": "1850s to now",
+      "footprint_m": [200, 10],
+      "height_m": 4,
+      "materials": ["iron or timber piles", "timber or steel deck", "iron cross-bracing"],
+      "purpose": "reach deep water past the surf zone without dredging to a quay",
+      "parts": ["piled bents out through the surf line", "deck with track or tramway", "pavilions and landing at the seaward end"],
+      "layout": [
+        "deck elevated so waves pass under between bents",
+        "single narrow stem off the beach, widening into a landing head",
+        "often doubled as a promenade for the town behind it"
+      ],
+      "found": "at gently shelving seaside resorts — the Victorian British coast above all",
+      "notes": "Brighton's Palace Pier (1899) mixed steamer berth with music-hall pavilion; hundreds of British piers rose 1850-1914."
+    },
+    {
+      "id": "dockside_warehouse",
+      "name": "Dockside warehouse",
+      "origin": "human",
+      "biomes": ["river", "beach", "steppe"],
+      "cultures": ["Harappan", "Global"],
+      "era": "c. 2400 BCE to now",
+      "footprint_m": [60, 25],
+      "height_m": 8,
+      "materials": ["fired and mud brick (ancient)", "stone and timber", "iron and glass (later)"],
+      "purpose": "dry bulk storage at the berth; customs control of goods in bond",
+      "parts": ["raised floor above flood level on blocks or arches", "ventilation voids beneath", "massive sealable doors", "weighing and tally rooms"],
+      "layout": [
+        "sited at the wharf head so cargo moves hold -> scale -> warehouse in one straight line",
+        "floor on piers or open arches to keep grain dry and walked by air",
+        "loading doors aligned to the quay edge"
+      ],
+      "found": "at every port that handled grain — Lothal, Alexandria, Ostia, Amsterdam",
+      "notes": "Lothal's warehouse (c. 2400 BCE) stood on 64 fired-brick blocks with ~1.2 m ventilation passages — inventory and quality control 4,500 years ago."
+    },
+    {
+      "id": "grand_bazaar",
+      "name": "Covered market (bazaar / suq)",
+      "origin": "human",
+      "biomes": ["mediterranean", "desert", "steppe", "subtropical_forest"],
+      "cultures": ["Ottoman", "Persian", "Arab", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [300, 250],
+      "height_m": 10,
+      "materials": ["cut stone and brick vaults", "domes on pendentives", "timber shopfronts"],
+      "purpose": "all-weather retail heart of a trade city — the legal marketplace under one roof",
+      "parts": ["vaulted streets crossing at domed bays", "hundreds of cell-like shops", "caravanserai inns adjoining", "gates locked at night (historic)"],
+      "layout": [
+        "a grid or radial mesh of straight vaulted lanes by trade: goldsmiths, spice, textiles, leather",
+        "domes mark the junctions and the most prestigious pitches",
+        "shops a single structural bay wide — max ~5 m frontage"
+      ],
+      "found": "at the meeting point of caravan roads inside old city walls",
+      "notes": "Istanbul's Grand Bazaar (founded c. 1461) still trades under ~61 covered streets and some 4,000 shops; one of the oldest roofed markets on Earth."
+    },
+    {
+      "id": "caravanserai",
+      "name": "Caravanserai",
+      "origin": "human",
+      "biomes": ["desert", "steppe", "mountains", "cold_desert"],
+      "cultures": ["Seljuk", "Ottoman", "Persian", "Mughal", "Arab"],
+      "era": "11th c. to 19th c. (some still host travelers)",
+      "footprint_m": [60, 60],
+      "height_m": 7,
+      "materials": ["dressed stone and brick", "timber roofing", "iron-banded doors"],
+      "purpose": "walled overnight hostel for caravans — merchants, pack animals and goods under one lock",
+      "parts": ["massive square outer wall, one defended gate", "open arcaded courtyard", "stables and stalls on the ground floor", "guest cells above", "well and cistern"],
+      "layout": [
+        "single defended gateway facing the road",
+        "courtyard with fountain/well; stalls along the inside wall",
+        "cells open off a covered gallery; roof flat for drying goods"
+      ],
+      "found": "every ~30-40 km along Silk Road and hajj routes — a day's march apart",
+      "notes": "Anatolia bristles with them; Sultanhanı (1236) is the largest Seljuk example. They were the internet of their day: rumor, credit and news moved with the caravans."
+    },
+    {
+      "id": "toll_gate",
+      "name": "Turnpike toll gate",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mixed_forest", "steppe"],
+      "cultures": ["British", "Global"],
+      "era": "1663 to ~1900",
+      "footprint_m": [6, 6],
+      "height_m": 3,
+      "materials": ["stone or brick posts", "timber boom arm", "small toll keeper's hut"],
+      "purpose": "collect road tolls to fund maintenance of a turnpike road",
+      "parts": ["two gate posts", "pivoted boom arm across the road", "toll booth beside the gate", "rating board listing tolls"],
+      "layout": [
+        "gate closes the full width of the road between the posts",
+        "booth adjacent to the driver's window for hand-to-hand payment",
+        "extra gates for riders and drovers; exemption for clergy and funerals (customary)"
+      ],
+      "blueprint": [
+        "layer 0: p . . . . p",
+        "layer 1: p a a a a p",
+        "layer 2: p . . . . p",
+        "legend: p stone post, a timber boom arm, . road/air"
+      ],
+      "found": "on every toll road in 18th-19th century Britain and its colonies",
+      "notes": "The Rebecca Riots (1839-43) saw Welsh farming communities dismantle tollgates by night, dressed as women, in protest at the toll burden."
+    },
+    {
+      "id": "milestone",
+      "name": "Road milestone",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mixed_forest", "mediterranean", "desert", "steppe", "mountains"],
+      "cultures": ["Roman", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [1, 1],
+      "height_m": 2,
+      "materials": ["carved stone cylinder or slab"],
+      "purpose": "state the distance to the next city along a road",
+      "parts": ["shaft with distance inscription", "capital (sometimes)", "painted or incised lettering"],
+      "layout": [
+        "set at the road edge, facing the oncoming traveller",
+        "one every Roman mile (1,480 m) on a Roman road; every mile or km since",
+        "inscription gives the emperor's titles and miles to the next caput viae"
+      ],
+      "found": "lining the roads of every organized empire — Rome, Inca, Qing, British Raj",
+      "notes": "Roman milestones were recarved like tree rings as emperors came and went; surviving Via Appia stones still carry their distances."
+    },
+    {
+      "id": "courier_relay_station",
+      "name": "Horse-post relay station",
+      "origin": "human",
+      "biomes": ["steppe", "desert", "plains", "mountains"],
+      "cultures": ["Persian", "Roman", "Mongol", "Chinese"],
+      "era": "c. 550 BCE to c. 1900",
+      "footprint_m": [18, 10],
+      "height_m": 5,
+      "materials": ["timber and brick or stone", "thatch or tile roof", "fenced horse lines"],
+      "purpose": "swap exhausted horses for fresh ones so an imperial dispatch never rides one animal to death",
+      "parts": ["stable block with stalls", "rider's room and fodder store", "yard for saddling", "signal or smoke/fire post (some networks)"],
+      "layout": [
+        "built exactly a horse's hard gallop apart — 25 to 40 km",
+        "small, hard, minimal comfort; a post, not an inn",
+        "couriers carry a sealed badge; fodder and remounts prepaid by the state"
+      ],
+      "found": "strung like beads along the Persian Royal Road, Roman cursus publicus and Mongol yam",
+      "notes": "Herodotus praised the Persian angareion — 'neither snow nor rain nor heat nor gloom of night stays these couriers' — still carved on the New York Post Office."
+    },
+    {
+      "id": "cable_ferry",
+      "name": "Cable (reaction) ferry",
+      "origin": "human",
+      "biomes": ["river"],
+      "cultures": ["British", "American", "Global"],
+      "era": "1850s to now (a few survive)",
+      "footprint_m": [200, 6],
+      "height_m": 2,
+      "materials": ["steel or wire-rope cable across the river", "flat-bottomed steel or timber ferry", "wooden or concrete landings"],
+      "purpose": "cross a river using the current itself — no engine, no bridge",
+      "parts": ["fixed cable strung bank to bank at deck height", "angled ferry hull with rudder rigged to the current", "landing slips with ramps"],
+      "layout": [
+        "ferry tethered to the cable; rudder set at a bias so the current pushes it diagonally downstream",
+        "boat sweeps a slow zigzag back and forth across the reach",
+        "works only on rivers with real current; replaced elsewhere by paddle or diesel ferries"
+      ],
+      "found": "on tidal and swift rivers — the Scottish Connel Ferry tradition and the US Pacific coast",
+      "notes": "A reaction ferry is its own current-driven engine: free energy from the river, forever, as long as the cable holds."
+    },
+    {
+      "id": "funicular",
+      "name": "Funicular railway",
+      "origin": "human",
+      "biomes": ["mountains"],
+      "cultures": ["French", "Swiss", "Global"],
+      "era": "1862 to now",
+      "footprint_m": [100, 6],
+      "height_m": 40,
+      "materials": ["steel rails", "wire rope", "counterbalanced two-car trains", "brake and winding gear"],
+      "purpose": "carry passengers straight up a slope too steep for a normal railway",
+      "parts": ["two cars on a single rope over a crown pulley", "passing loop mid-slope", "winding engine at the summit", "emergency brake rail"],
+      "layout": [
+        "two cars permanently coupled by the rope; one climbs as the other descends",
+        "single track with a staggered passing loop at the middle",
+        "cars counterbalance each other — the engine only fights friction"
+      ],
+      "found": "on steep city hills and resort slopes — Lyon, Montmartre, Valparaíso",
+      "notes": "Fourvière (Lyon, 1862) and Montmartre (Paris, 1900) prototypes still climb; a funicular sips a fraction of the energy of a rack railway."
+    },
+    {
+      "id": "aerial_ropeway",
+      "name": "Aerial material ropeway",
+      "origin": "human",
+      "biomes": ["mountains", "forest"],
+      "cultures": ["German", "Global"],
+      "era": "1874 to now",
+      "footprint_m": [1500, 2],
+      "height_m": 20,
+      "materials": ["wire rope", "lattice steel trestle towers", "buckets or skips", "electric winding machinery"],
+      "purpose": "haul ore, limestone or timber over terrain no road or rail can cross",
+      "parts": ["endless loop of rope over tower-sheave lines", "buckets detached at load and dump stations", "tensioning weights at the tail station", "support trestles every 50-150 m"],
+      "layout": [
+        "straight line of towers from mine/quarry to tip or railhead",
+        "downhill loaded, uphill empty — gravity does half the work",
+        "towers scaled to keep buckets clear of the ground and hillside"
+      ],
+      "found": "above Alpine mines and quarries; many still run a century after installation",
+      "notes": "Adolf Bleichert's firm built ropeways from 1874; they hauled 10-100+ tonnes an hour on lines roads never reached."
+    },
+    {
+      "id": "container_terminal",
+      "name": "Container terminal",
+      "origin": "human",
+      "biomes": ["beach", "river", "ocean"],
+      "cultures": ["American", "Global"],
+      "era": "1956 to now",
+      "footprint_m": [800, 300],
+      "height_m": 55,
+      "materials": ["concrete aprons and quay walls", "ship-to-shore gantry cranes", "rubber-tyred or rail gantries", "stacked steel containers"],
+      "purpose": "transfer intermodal TEU/FEU containers between ship, rail and truck",
+      "parts": ["berth with gantry cranes", "stacking yard with gantry cranes", "gate complex for trucks", "rail sidings (on-dock)", "reefer plug grid"],
+      "layout": [
+        "cranes on rails parallel to the berth; yard blocks behind in strict rows",
+        "traffic segregated: quay cranes -> yard -> gate with no crossings",
+        "modern terminals automated — driverless shuttles, camera OCR at the gates"
+      ],
+      "found": "at every deep-water anchorage in world trade — Rotterdam, Singapore, Shanghai",
+      "notes": "Malcom McLean's Ideal X carried 58 containers Newark-Houston in April 1956; the box cut port labor and time so hard it redrew global trade."
+    },
+    {
+      "id": "lothal_dock",
+      "name": "Lothal tidal dockyard",
+      "origin": "human",
+      "biomes": ["river", "steppe"],
+      "cultures": ["Harappan"],
+      "era": "c. 2400-1900 BCE",
+      "footprint_m": [215, 37],
+      "height_m": 4,
+      "materials": ["fired brick", "mud brick", "timber sluice gates"],
+      "purpose": "tidal berthing and repair yard for a seagoing trade city",
+      "parts": ["rectangular dock basin with vertical fired-brick walls", "inlet and outlet channels with sluice pens", "wharf 220 m long, ~4 m high", "warehouse on 64 brick piers at the wharf head"],
+      "layout": [
+        "basin oriented along the river; ships enter on the tide through the northern inlet",
+        "sluice gates held water in against the falling tide for berthing at low water",
+        "warehouse directly behind the wharf for sealed customs control"
+      ],
+      "found": "at Lothal, on the Bhogava river near the Gulf of Khambhat, Gujarat, India",
+      "notes": "Among the world's oldest known dockyards — contemporary with the Great Pyramid; its tidal sluice logic matches modern lock practice."
+    },
+    {
+      "id": "aqueduct",
+      "name": "Aqueduct bridge",
+      "origin": "human",
+      "biomes": ["mediterranean", "mountains", "desert"],
+      "cultures": ["Roman", "Global"],
+      "era": "antiquity to now",
+      "footprint_m": [275, 9],
+      "height_m": 49,
+      "materials": ["dressed limestone (no mortar at Pont du Gard)", "concrete core in later masonry"],
+      "purpose": "gravity delivery of water across a valley — bulk transport of water, not people",
+      "parts": ["tiered arches spanning the gap", "covered water channel (specus) on top", "settling tanks at each end"],
+      "layout": [
+        "constant gentle gradient (~1:3000) from mountain spring to city castellum",
+        "three tiers of arches at the high point; single tier or arcade elsewhere",
+        "channel roofed with slabs against contamination"
+      ],
+      "found": "where a city needed river-fed water and could build stone in volume — Nîmes, Segovia, Constantinople",
+      "notes": "Pont du Gard (Gardon valley, c. 40-60 CE, 275 m long, 49 m high) carried ~20,000 m³ of water a day to Nîmes; today a UNESCO site."
+    },
+    {
+      "id": "mountain_pass",
+      "name": "Mountain pass (col)",
+      "origin": "natural",
+      "biomes": ["mountains"],
+      "cultures": [],
+      "era": null,
+      "footprint_m": [5000, 300],
+      "height_m": 1070,
+      "materials": ["rock, scree and thin soils"],
+      "purpose": "the lowest line through a ridge — the natural corridor every road and railway of that range still uses",
+      "parts": ["the saddle itself", "switchback approach slopes", "cairn or pass marker", "often a hospice or toll station (human overlay)"],
+      "layout": [
+        "single line through the ridge where the crest dips lowest",
+        "flanked by cliffs; weather and snow decide the season of use",
+        "road, pack train, or railway tunnel follows the same geological weakness"
+      ],
+      "found": "wherever a range pinches low — Khyber, Gotthard, Brenner, St Bernard",
+      "notes": "The Khyber Pass (~1,070 m) threaded the trade roads between Central and South Asia for 2,000 years; armies and goods both had to funnel through it."
+    },
+    {
+      "id": "river_ford",
+      "name": "River ford",
+      "origin": "natural",
+      "biomes": ["river"],
+      "cultures": [],
+      "era": null,
+      "footprint_m": [30, 20],
+      "height_m": 0,
+      "materials": ["gravel and bedrock shelf"],
+      "purpose": "the shallowest wadeable point of a river — every bridge on that river was built here first",
+      "parts": ["gentle approach banks", "firm shallow bar of gravel or rock", "old track alignment on both sides"],
+      "layout": [
+        "where the river spreads wide and shallow over a resistant bar",
+        "track approaches perpendicular to flow, marked by worn ruts",
+        "bridge site, mill site and town site all inherited from the ford"
+      ],
+      "found": "upstream of bridge sites; fossilized in place-names like Oxford and Stratford",
+      "notes": "Oxford is literally the oxen's ford. The Romans bridged many rivers exactly where centuries of traffic had already picked the crossing."
+    },
+    {
+      "id": "natural_harbour",
+      "name": "Natural harbour",
+      "origin": "natural",
+      "biomes": ["beach", "ocean"],
+      "cultures": [],
+      "era": null,
+      "footprint_m": [8000, 3000],
+      "height_m": null,
+      "materials": ["drowned river valley (ria) or glacial trough (fjord) scenery", "sheltered deep water"],
+      "purpose": "free sheltered anchorage for a fleet — the single biggest head-start geography can give a port",
+      "parts": ["narrow entrance (Heads)", "broad sheltered basin", "deep water close inshore", "fresh water and gently shelving landing points"],
+      "layout": [
+        "wide deep basin behind a narrow mouth; forbids the open-sea swell",
+        "multiple river deltas or creeks giving wharf-able frontage",
+        "settlement clusters at the head of the harbour where goods land"
+      ],
+      "found": "on every coast that became a trade power — Sydney, Hong Kong, Pearl Harbor, Fiume",
+      "notes": "Sydney (Port Jackson, First Fleet 1788) needed zero breakwater; natural harbours pre-built by drowned valleys are why some cities became ports and others never did."
+    }
+  ]
+}
