@@ -21,7 +21,7 @@ proportions from traces.
 | `party` | The `server` scenario's bots in survival with the kit's weapons, shooting each other. Its universe is `build/benchmarks/party-universe`. |
 | `ogg` | The Ogg decoder against miniaudio (see [debugging.md](debugging.md#the-ogg-decoder)). |
 | `telemetry` | An event's emit and write cost; `-check` as in CI ([telemetry.md](telemetry.md)). |
-| `budgets` | The server's save, audit, counters, journal and flood costs, and the entity store, spatial service and collision (ns per operation); `-check` as in CI ([saves.md](saves.md)). |
+| `budgets` | The server's save, audit, counters, journal and flood costs, and the entity store, spatial service, collision (ns per operation) and the simulation islands of 64 walking observers (µs a tick); `-check` as in CI ([saves.md](saves.md)). |
 | `script` | The script VM (`build script bench`; [script.md](script.md)). |
 
 ### Benchmark conditions

@@ -50,6 +50,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	{"kill", "<kind|all> [radius]", {1, 2}, admin_kill, "world.kill"},
 	{"tag", "<kind|all> add|remove <name> [radius]", {3, 4}, admin_tag, "world.tag"},
 	{"seed", "", {0, 0}, admin_seed, "info.seed"},
+	{"islands", "", {0, 0}, admin_islands, "info.islands"},
 	{"packs", "", {0, 0}, admin_packs, "info.packs"},
 	{"pack", "reload", {1, 1}, admin_pack, "server.packs"},
 	{"wear", "", {0, 0}, admin_wear, "items.wear"},

@@ -266,3 +266,20 @@ at their day and place and change nothing before it.
   real early farming (Fertile Crescent, Anatolia, Nile, Indus, Yellow River, Mesoamerica, Andes,
   Sahel, New Guinea). The model's Köppen errors in Africa (central-African savanna as Csb) are why
   the bar is not higher.
+
+## Simulation islands
+
+The world is simulated in detail only around its observers (`common/island`; `server/core/worlds.odin`
+keeps one set per world, `islands_update`, once a tick). An **island** is the chunks within
+`rules.island_radius` of one or more observers (0, the default: the view distance plus 2). Distance is
+horizontal, in chunks: a column of chunks is one place. Observers whose chunks are within twice the
+radius of each other, or joined by a chain of such observers, are in one island: overlapping islands
+merge, and an island splits when its observers part. Nothing is stored per chunk: `island_of(chunk)`
+asks the observers (0: the chunk is in no island), so the islands are recomputed only when an observer
+crosses a chunk border, a pass over the observers on every other tick.
+
+Ids are kept: a merge keeps the lowest id, a split leaves the id with the part holding most of the
+observers. One `update` returns the events (`Opened` and `Closed` with the chunks that entered or left
+detail, `Merged`, `Split`) and the chunks that entered and left detail in all; the server logs them at
+debug level. `/islands` (admin) lists the islands. Left for later parts: the F3 line (the player's
+island id and size, which needs the server to tell the client) and the systems that ask `island_of`.
