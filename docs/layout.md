@@ -59,6 +59,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github` | Repository policy: who reviews guarded paths, and the pull request template | `CODEOWNERS`, `pull_request_template.md` |
 | `.github/actions/apt` | The composite action that installs packages | `*.yml` |
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
+| `.agents/skills/planner` | The planner skill for agents that plan and do not write the game's code (profiling, issues for the autofix harness) | `SKILL.md` |
 | `.github/workflows` | CI | `*.yml` |
 | `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
