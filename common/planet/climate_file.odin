@@ -168,28 +168,45 @@ climate_decode :: proc(
 	climate_each(&p, &rv, proc(a: []u8, size: int, ctx: rawptr) {
 			u := (^Unpack)(ctx)
 			n := len(a) / size
+			dst := raw_data(a)
+			src := raw_data(u.data)
 			for b in 0 ..< size {
 				prev := u8(0)
-				for i in 0 ..< n {
-					v: u8
+				idx := b
+				for i := 0; i < n; {
 					if u.zero > 0 {
-						u.zero -= 1
-					} else if u.at >= len(u.data) {
+						count := min(u.zero, n - i)
+						if size == 1 {
+							mem.set(&dst[i], prev, count)
+							idx += count
+						} else {
+							for _ in 0 ..< count {
+								dst[idx] = prev
+								idx += size
+							}
+						}
+						u.zero -= count
+						i += count
+						continue
+					}
+					if u.at >= len(u.data) {
 						u.ok = false
 						return
-					} else if u.data[u.at] == 0 {
-						if u.at + 1 >= len(u.data) || u.data[u.at + 1] == 0 {
+					}
+					if src[u.at] == 0 {
+						if u.at + 1 >= len(u.data) || src[u.at + 1] == 0 {
 							u.ok = false
 							return
 						}
-						u.zero = int(u.data[u.at + 1]) - 1
+						u.zero = int(src[u.at + 1])
 						u.at += 2
-					} else {
-						v = u.data[u.at]
-						u.at += 1
+						continue
 					}
-					prev += v
-					a[i * size + b] = prev
+					prev += src[u.at]
+					u.at += 1
+					dst[idx] = prev
+					idx += size
+					i += 1
 				}
 			}
 		}, &u)

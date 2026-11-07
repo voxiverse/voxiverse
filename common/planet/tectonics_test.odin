@@ -59,6 +59,7 @@ test_relief_generate_land_fraction :: proc(t: ^testing.T) {
 			ch.land_fraction,
 		)
 		testing.expect(t, ch.plates >= 8 && ch.plates <= 20)
+		free_all(context.temp_allocator)
 	}
 }
 
@@ -100,6 +101,7 @@ test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 			near,
 			high,
 		)
+		free_all(context.temp_allocator)
 	}
 }
 
@@ -119,6 +121,7 @@ test_relief_generate_climates :: proc(t: ^testing.T) {
 		testing.expectf(t, count >= 4, "world %d has %d Köppen groups", n, count)
 		planet_destroy(&p)
 		relief_destroy(&r)
+		free_all(context.temp_allocator)
 	}
 }
 
