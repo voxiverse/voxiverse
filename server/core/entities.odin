@@ -36,7 +36,6 @@ Entity :: struct {
 	id:     u32,
 	handle: game.Entity_Handle, // its row in the entity world's store (0: none)
 	kind:   game.Kind_Id,
-	brain:  Brain,
 }
 
 Brain_State :: enum u8 {
@@ -417,12 +416,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 			entity_died(w, i)
 			continue
 		}
-		ent.brain = {
-			state = .Flee,
-			timer = FLEE_TICKS,
-			from  = center,
-			hurt  = HURT_TICKS,
-		}
+		scare(entity_brain(w, ent), center)
 		entity_hurt_shown(w, ent.id)
 	}
 }
@@ -514,6 +508,17 @@ forward :: proc(yaw, pitch: f32) -> [3]f64 {
 	return {-base.sin(f64(yaw)) * cp, base.sin(f64(pitch)), -base.cos(f64(yaw)) * cp}
 }
 
+// scare: hit from a place, the brain flees and is stunned (the rest of it
+// reset; fields set one by one, a Brain literal would be built on the stack).
+@(private = "file")
+scare :: proc(b: ^Brain, from: [3]f64) {
+	b^ = {}
+	b.state = .Flee
+	b.timer = FLEE_TICKS
+	b.from = from
+	b.hurt = HURT_TICKS
+}
+
 // entity_attack: a player hits an entity (the reach is checked by the
 // caller). Knocked back, hurt (or dead), and scared.
 entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
@@ -524,12 +529,7 @@ entity_attack :: proc(w: ^World, ent: ^Entity, from: [3]f64) -> (died: bool) {
 	kb := game.ATTACK_KNOCKBACK
 	entity_set_velocity(w, ent, {f32(away.x) * kb[0], kb[1], f32(away.z) * kb[0]})
 	entity_set_on_ground(w, ent, false)
-	ent.brain = {
-		state = .Flee,
-		timer = FLEE_TICKS,
-		from  = from,
-		hurt  = HURT_TICKS,
-	}
+	scare(entity_brain(w, ent), from)
 	return entity_health_of(w, ent) <= 0
 }
 
@@ -628,6 +628,16 @@ scratch_breeding: game.Breeding
 scratch_stack: game.Component_Stack
 @(thread_local, private = "file")
 scratch_owner: game.Owner
+@(thread_local, private = "file")
+scratch_brain: Brain
+
+// entity_brain: the entity's brain (a default one, written to nowhere, for an
+// entity without it: only grazers have one).
+entity_brain :: proc(w: ^World, ent: ^Entity) -> ^Brain {
+	if p := game.store_get(&w.entity_world.store, ent.handle, C_BRAIN, Brain); p != nil {return p}
+	scratch_brain = {}
+	return &scratch_brain
+}
 
 entity_wool :: proc(w: ^World, ent: ^Entity) -> ^game.Wool {
 	if p := game.store_get(&w.entity_world.store, ent.handle, game.C_WOOL, game.Wool);
@@ -891,7 +901,7 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 // think moves the brain from state to state.
 @(private = "file")
 think :: proc(w: ^World, ent: ^Entity) {
-	b := &ent.brain
+	b := entity_brain(w, ent)
 	r := &w.entities.rng
 	if b.hurt > 0 {b.hurt -= 1}
 	b.timer -= 1
@@ -1027,16 +1037,17 @@ plan :: proc(w: ^World, ent: ^Entity, target: [3]f64) -> bool {
 	e.budget -= PATH_BUDGET_EACH
 	path, ok := find_path(query, start, goal, PATH_BUDGET_EACH)
 	if !ok || path.count == 0 {return false}
-	ent.brain.path = path
-	ent.brain.step = 0
-	ent.brain.stuck = 0
+	b := entity_brain(w, ent)
+	b.path = path
+	b.step = 0
+	b.stuck = 0
 	return true
 }
 
 // steer: the wished-for velocity and whether to jump, following the path.
 @(private = "file")
 steer :: proc(w: ^World, ent: ^Entity) -> (wish: [2]f32, jump: bool) {
-	b := &ent.brain
+	b := entity_brain(w, ent)
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
 	info := game.kind_info(w.server.registry, ent.kind)
 	pos := entity_pos(w, ent)
@@ -1177,6 +1188,7 @@ HURT_KEPT_TICKS :: game.TICK_RATE * 10 // how long Hurt_By names a killer
 
 // The server's own components, after the shared ones.
 C_SPATIAL_LINK :: game.FIRST_SERVER_COMPONENT
+C_BRAIN :: game.FIRST_SERVER_COMPONENT + 1 // a grazer's Brain (large: set at spawn)
 
 // Spatial_Link: the entity's entry in the spatial service. Releasing it (the
 // entity despawned) removes the entry.
@@ -1218,7 +1230,7 @@ Entity_World :: struct {
 	next_player_id: u32, // entities.odin: the ids of player entities
 	tag_names:      [dynamic]string, // tag i is tag_names[i-1]
 	deaths:         [dynamic]Entity_Death, // this tick's
-	infos:          [game.FIRST_SERVER_COMPONENT + 1]game.Component_Info,
+	infos:          [game.FIRST_SERVER_COMPONENT + 2]game.Component_Info,
 }
 
 @(private = "file")
@@ -1237,6 +1249,12 @@ entity_world_init :: proc(ew: ^Entity_World, seed: u64, max_entities := MAX_ENTI
 		size    = size_of(Spatial_Link),
 		align   = align_of(Spatial_Link),
 		release = spatial_release,
+	}
+	ew.infos[C_BRAIN] = game.Component_Info {
+		name  = "brain",
+		type  = Brain,
+		size  = size_of(Brain),
+		align = align_of(Brain),
 	}
 	game.spatial_init(&ew.spatial)
 	// room for the fixed list's worth of entries at once, so the tables are
@@ -1301,6 +1319,7 @@ entity_world_spawn :: proc(
 	if .Breeding in info.with {set += {int(game.C_BREEDING)}}
 	if info.physics == .Item {set += {int(game.C_STACK), int(game.C_OWNER)}}
 	if info.physics == .Projectile {set += {int(game.C_OWNER)}}
+	if info.brain == .Grazer {set += {int(C_BRAIN)}}
 	if info.hittable {set += {int(game.C_HURT_BY)}}
 	if info.model == .Player {set += {int(game.C_PLAYER_LINK)}}
 	if len(info.fields) > 0 {set += {int(game.C_FIELDS)}}

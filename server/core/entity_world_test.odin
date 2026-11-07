@@ -598,3 +598,34 @@ test_plain_components_live_in_the_store :: proc(t: ^testing.T) {
 	testing.expect(t, !entity_wool(w, rocket).shorn)
 	testing.expect(t, game.store_get(st, rocket.handle, game.C_WOOL, game.Wool) == nil)
 }
+
+// A sheep's brain is a store component: an attack sets Flee and the stun in
+// the row, and the next sheep in the same slot starts with a zeroed one.
+@(test)
+test_brain_lives_in_the_store :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	defer harness_stop(h)
+	w := h.srv.home
+	reg := w.server.registry
+	sheep := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
+	if !testing.expect(t, sheep != nil) {return}
+	row := game.store_get(&w.entity_world.store, sheep.handle, C_BRAIN, Brain)
+	if !testing.expect(t, row != nil, "a sheep has no brain component") {return}
+	testing.expect_value(t, row.state, Brain_State.Idle)
+	testing.expect_value(t, row.timer, 0)
+	entity_attack(w, sheep, {0, 40, 0})
+	testing.expect_value(t, row.state, Brain_State.Flee)
+	testing.expect_value(t, row.hurt, HURT_TICKS)
+	testing.expect_value(t, entity_brain(w, sheep), row)
+	// the slot is free again: its next entity does not inherit the brain
+	testing.expect(t, entity_remove(w, sheep.id))
+	game.store_apply(&w.entity_world.store)
+	again := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
+	if !testing.expect(t, again != nil) {return}
+	b := entity_brain(w, again)
+	testing.expect_value(t, b.state, Brain_State.Idle)
+	testing.expect_value(t, b.timer, 0)
+	testing.expect_value(t, b.hurt, 0)
+}

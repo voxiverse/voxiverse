@@ -211,10 +211,8 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 				)
 				entity_set_yaw(w, ent, 0) // facing -z
 				entity_wool(w, ent).shorn = true
-				ent.brain = {
-					state = .Graze,
-					timer = 40,
-				}
+				entity_brain(w, ent).state = .Graze
+				entity_brain(w, ent).timer = 40
 			}
 			c.front = {c.x + 8, c.y, c.z - 1} // (the block before the grass sheep's feet, at x 8.5)
 			c.bare = {c.x + 11, c.y, c.z - 1}

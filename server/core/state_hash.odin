@@ -84,7 +84,7 @@ hashed_entities :: proc(w: ^World) -> []Hashed_Entity {
 			entity_pitch(w, &e),
 			entity_health_of(w, &e),
 			entity_is_natural(w, &e),
-			e.brain,
+			entity_brain(w, &e)^,
 			int(entity_owner(w, &e).client),
 			entity_stack(w, &e)^,
 			entity_wool(w, &e).shorn,
