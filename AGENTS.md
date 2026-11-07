@@ -68,6 +68,18 @@ last line is read again once it is complete.
 
 No issue numbers in the subject; `Fixes #<n>` goes in the pull request description.
 
+**Attribution.** Every commit an AI model wrote ends with a trailer naming that exact model,
+as its maker writes it, so the history says who wrote what:
+
+```
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Co-Authored-By: Gemini 3.8 Flash <noreply@google.com>
+Co-Authored-By: Inkling 2 Small <noreply@opencode.ai>
+```
+
+The model, not the tool that ran it (not "Claude Code", "Antigravity" or "OpenCode"), and the
+version you are, not a family name. Two models on one commit: two trailers.
+
 ## Pull requests
 
 Branch `claude/issue-<n>` (agents) or a short descriptive name (people). The title follows
