@@ -126,6 +126,11 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 	os.make_directory_all(WORK_DIR)
 	if wav_dir != "" {os.make_directory_all(wav_dir)}
 
+	gate: Gate
+	if !midi {
+		ok: bool
+		if gate, ok = gate_load(); !ok {return false}
+	}
 	cache: map[string]^Loaded_Font
 	all_ok := true
 	for name in sources {
@@ -165,6 +170,10 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 				continue
 			}
 			fmt.printfln("music: wrote %s", out)
+			continue
+		}
+		if !gate_run(&gate, &piece, stem, path) {
+			all_ok = false
 			continue
 		}
 		fonts: map[string]^Soundfont
