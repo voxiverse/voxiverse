@@ -23,9 +23,9 @@ sheep_list :: proc(srv: ^Server) -> []Sheep_Info {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			out := (^[dynamic]Sheep_Info)(data)
 			w := client_by_name(s, "a").world
-			for &e in entities_view(w) {
-				if e.kind ==
-				   test_reg().engine.sheep {append(out, Sheep_Info{e.id, entity_genes(w, e.handle).genes, int(entity_breeding(w, e.handle).growth), int(entity_breeding(w, e.handle).love), int(entity_breeding(w, e.handle).wait), entity_wool(w, e.handle).shorn})}
+			for e in entities_snapshot(w) {
+				if entity_kind(w, e) ==
+				   test_reg().engine.sheep {append(out, Sheep_Info{entity_id(w, e), entity_genes(w, e).genes, int(entity_breeding(w, e).growth), int(entity_breeding(w, e).love), int(entity_breeding(w, e).wait), entity_wool(w, e).shorn})}
 			}
 		}, &out)
 	return out[:]
@@ -226,11 +226,10 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			if e, _ := entity_find(c.world, d.id); e != 0 {
 				sheep_use(s, c, e)
 				w := c.world
-				for &it in entities_view(w) {
-					if it.kind == test_reg().engine.item &&
-					   entity_stack(w, it.handle)^.item ==
-						   game.item_of_block(test_reg(), .Wool_Black) {
-						d.n += entity_stack(w, it.handle)^.count
+				for it in entities_snapshot(w) {
+					if entity_kind(w, it) == test_reg().engine.item &&
+					   entity_stack(w, it)^.item == game.item_of_block(test_reg(), .Wool_Black) {
+						d.n += entity_stack(w, it)^.count
 					}
 				}
 			}

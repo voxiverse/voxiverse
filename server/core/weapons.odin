@@ -108,8 +108,8 @@ shot_trace :: proc(
 		&found,
 	)
 	for id in found {
-		ent, i := entity_find(w, u32(id))
-		if i < 0 {continue}
+		ent, found := entity_find(w, u32(id))
+		if !found {continue}
 		at := entity_pos(w, ent)
 		if frame != nil {
 			if b, there := rewind_body(frame.creatures[:], u32(id)); there {at = b.position}
@@ -195,7 +195,7 @@ weapon_shoot :: proc(
 			creatures[creature_count] = res.creature
 			creature_count += 1
 			w := c.world
-			if ent, index := entity_find(w, res.creature); ent != 0 {
+			if ent, found := entity_find(w, res.creature); found {
 				hit = true
 				headshot ||= res.head
 				record(
@@ -212,7 +212,7 @@ weapon_shoot :: proc(
 						.Entity_Killed,
 						game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
 					)
-					entity_died(w, index)
+					entity_died(w, ent)
 				} else {
 					entity_hurt_shown(w, res.creature)
 				}

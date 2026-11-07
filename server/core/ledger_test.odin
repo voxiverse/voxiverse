@@ -131,11 +131,10 @@ script :: proc(s: ^Server, data: rawptr) {
 		// Clearing takes the dirt back.
 		admin_clear(s, c, {"dirt"})
 		// An old stack on the ground expires.
-		for i in 0 ..< entity_count(w) {
-			e := entity_at(w, i)
+		for e in entities_snapshot(w) {
 			if entity_kind(w, e) != test_reg().engine.item {continue}
 			entity_set_age(w, e, int(300 * game.TICK_RATE) + 10)
-			if item_tick(w, i) {entity_gone(w, i)}
+			if item_tick(w, e) {entity_gone(w, e)}
 			break
 		}
 		// A sheep: wheat fed to it, then it is shorn (by someone who must
@@ -143,8 +142,8 @@ script :: proc(s: ^Server, data: rawptr) {
 		for g in c.grants {delete(g.pattern)}
 		clear(&c.grants)
 		summon(s, c, test_reg().engine.sheep)
-		for &e in entities_view(w) {
-			if e.kind != test_reg().engine.sheep {continue}
+		for e in entities_snapshot(w) {
+			if entity_kind(w, e) != test_reg().engine.sheep {continue}
 			for st, i in c.inventory.slots {
 				if st.item == wheat { 	// (to the hand: a move)
 					c.inventory.slots[i], c.inventory.slots[0] =
@@ -153,20 +152,19 @@ script :: proc(s: ^Server, data: rawptr) {
 				}
 			}
 			c.inventory.selected = 0
-			sheep_use(s, c, e.handle)
+			sheep_use(s, c, e)
 			for i in 0 ..< game.HOTBAR_SLOTS {
 				if c.inventory.slots[i].item != wheat {c.inventory.selected = i}
 			}
-			sheep_use(s, c, e.handle)
+			sheep_use(s, c, e)
 		}
 		// A world with no room for what is dropped: it is void.
 		ledger(s, w, .Give, stone, 5)
 		for entity_count(w) <
 		    MAX_ENTITIES {entity_spawn(w, test_reg().engine.sheep, {0, 100, 0}, false)}
 		spawn_item(w, {0, 100, 0}, {stone, 5, 0}, {}, -1)
-		for entity_count(w) > 0 &&
-		    entity_kind(w, entity_at(w, entity_count(w) - 1)) == test_reg().engine.sheep {
-			entity_gone(w, entity_count(w) - 1)
+		for e in entities_snapshot(w) {
+			if entity_kind(w, e) == test_reg().engine.sheep {entity_gone(w, e)}
 		}
 		read_audit(s, r)
 	case 2:

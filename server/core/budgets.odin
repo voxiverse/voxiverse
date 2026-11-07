@@ -173,10 +173,9 @@ budget_audit :: proc(reg: ^game.Registry) -> (lines: int, us: i64) {
 	}
 	for i in 0 ..< 3000 {
 		st := game.Stack{items[i % len(items)], 1 + i % 7, 0}
-		// (straight into the store: the list's cap is for play, not for this count)
-		id, h, _ := entity_world_spawn(w.entity_world, reg, reg.engine.item, {}, {}, 0, false)
+		// (straight into the store: the cap is for play, not for this count)
+		_, h, _ := entity_world_spawn(w.entity_world, reg, reg.engine.item, {}, {}, 0, false)
 		game.store_apply(&w.entity_world.store)
-		entity_add(w, Entity{id = u32(id), handle = h, kind = reg.engine.item})
 		entity_stack(w, h)^ = st
 		given(s, st)
 	}

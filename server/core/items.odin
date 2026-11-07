@@ -131,9 +131,8 @@ PICKUP_SLACK :: 2
 // its item near it, and gives it to a player walking over it. True when it
 // is gone (picked up, or old).
 @(private)
-item_tick :: proc(w: ^World, index: int) -> bool {
+item_tick :: proc(w: ^World, ent: game.Entity_Handle) -> bool {
 	s := w.server
-	ent := entity_at(w, index)
 	ekind := entity_kind(w, ent)
 	kind := game.kind_info(s.registry, ekind)
 	if f32(entity_age_of(w, ent)) * game.TICK_SECONDS > kind.item.life {
@@ -149,10 +148,10 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	}
 	size := game.item_stack_size(s.registry, entity_stack(w, ent)^.item)
 	if entity_age_of(w, ent) % 10 == 0 {
-		// Those after it in the list (not yet moved this tick) join it. The
+		// Those after it in id order (not yet moved this tick) join it. The
 		// spatial service names the item stacks near it (asking a little wider,
 		// as their boxes are where they were at the end of the last tick); the
-		// list says where each is now and whether it comes after.
+		// store says where each is now and whether it comes after.
 		if item_kind := s.registry.engine.item; item_kind != 0 {
 			ew := w.entity_world
 			near := make([dynamic]game.Entity_Id, context.temp_allocator)
@@ -163,14 +162,12 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				{kind = u16(item_kind), exclude = game.Entity_Id(entity_id(w, ent))},
 				&near,
 			)
-			// highest list index first, as the walk down the list did
-			order := make([dynamic]int, context.temp_allocator)
-			for id in near {
-				if _, j := entity_find(w, u32(id)); j > index {append(&order, j)}
-			}
-			slice.sort(order[:])
-			#reverse for j in order {
-				other := entity_at(w, j)
+			// highest id first
+			slice.sort(near[:])
+			own := entity_id(w, ent)
+			#reverse for id in near {
+				other, found := entity_find(w, u32(id))
+				if !found || u32(id) < own {continue}
 				if entity_kind(w, other) != ekind ||
 				   entity_stack(w, other)^.item != entity_stack(w, ent)^.item {continue}
 				if entity_stack(w, ent)^.count + entity_stack(w, other)^.count > size {continue}
@@ -179,8 +176,7 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 				   f64(kind.item.merge * kind.item.merge) {continue}
 				entity_stack(w, ent)^.count += entity_stack(w, other)^.count
 				entity_set_age(w, ent, min(entity_age_of(w, ent), entity_age_of(w, other)))
-				entity_gone(w, j)
-				ent = entity_at(w, index)
+				entity_gone(w, other)
 			}
 		}
 	}

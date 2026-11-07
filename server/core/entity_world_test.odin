@@ -328,13 +328,13 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 	found.allocator = context.temp_allocator
 	game.spatial_sphere(&ew.spatial, c.player.position, 1e4, {none = {.Player}}, &found)
 	d.entries = len(found)
-	for &e, i in entities_view(w) {
-		if entity_pos(w, e.handle) != d.spawned[i] {d.moved = true}
-		h, ok := game.store_find(&ew.store, game.Entity_Id(e.id))
+	for e, i in entities_snapshot(w) {
+		if entity_pos(w, e) != d.spawned[i] {d.moved = true}
+		h, ok := game.store_find(&ew.store, game.Entity_Id(entity_id(w, e)))
 		if !ok {continue}
 		sl := game.store_get(&ew.store, h, C_SPATIAL_LINK, Spatial_Link)
 		if sl == nil {continue}
-		lo, hi := game.entity_box(game.kind_info(test_reg(), e.kind), entity_pos(w, e.handle))
+		lo, hi := game.entity_box(game.kind_info(test_reg(), entity_kind(w, e)), entity_pos(w, e))
 		got := game.spatial_get(&ew.spatial, sl.handle)
 		if got.lo == lo && got.hi == hi {d.at_rest += 1}
 	}
@@ -404,21 +404,21 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		}
 		return
 	}
-	for &ent in entities_view(w) {
-		if ent.kind != test_reg().engine.sheep {continue}
+	for ent in entities_snapshot(w) {
+		if entity_kind(w, ent) != test_reg().engine.sheep {continue}
 		want: game.Entity_Handle
 		best := f64(game.BREED_RANGE * game.BREED_RANGE)
-		for &o in entities_view(w) {
-			if o.id == ent.id ||
-			   o.kind != test_reg().engine.sheep ||
-			   entity_breeding(w, o.handle).love <= 0 {continue}
-			if entity_breeding(w, o.handle).growth < game.LAMB_TICKS {continue}
-			v := entity_pos(w, o.handle) - entity_pos(w, ent.handle)
-			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = o.handle, dd}
+		for o in entities_snapshot(w) {
+			if o == ent ||
+			   entity_kind(w, o) != test_reg().engine.sheep ||
+			   entity_breeding(w, o).love <= 0 {continue}
+			if entity_breeding(w, o).growth < game.LAMB_TICKS {continue}
+			v := entity_pos(w, o) - entity_pos(w, ent)
+			if dd := v.x * v.x + v.y * v.y + v.z * v.z; dd < best {want, best = o, dd}
 		}
 		d.checked += 1
 		if want != 0 {d.found += 1}
-		if mate_for(w, ent.handle) != want {d.wrong += 1}
+		if mate_for(w, ent) != want {d.wrong += 1}
 	}
 }
 
@@ -549,8 +549,8 @@ test_entities_live_in_the_store :: proc(t: ^testing.T) {
 	// aged: set, then read back
 	entity_set_age(w, item, 100)
 	testing.expect_value(t, entity_age_of(w, item), 100)
-	// despawned: gone from the list and from the store
-	testing.expect(t, entity_remove(w, sheep_id))
+	// despawned: gone from the store
+	entity_gone(w, sheep)
 	game.store_apply(&w.entity_world.store)
 	_, found := game.store_find(&w.entity_world.store, game.Entity_Id(sheep_id))
 	testing.expect(t, !found, "the despawned sheep is still in the store")
@@ -624,7 +624,7 @@ test_brain_lives_in_the_store :: proc(t: ^testing.T) {
 	testing.expect_value(t, row.hurt, HURT_TICKS)
 	testing.expect_value(t, entity_brain(w, sheep), row)
 	// the slot is free again: its next entity does not inherit the brain
-	testing.expect(t, entity_remove(w, entity_id(w, sheep)))
+	entity_gone(w, sheep)
 	game.store_apply(&w.entity_world.store)
 	again := entity_spawn(w, reg.engine.sheep, {8.5, 40, 8.5}, false)
 	if !testing.expect(t, again != 0) {return}
