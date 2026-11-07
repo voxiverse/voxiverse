@@ -165,6 +165,7 @@ Session :: struct {
 	teleports:        u8, // Own_Player.teleports as last seen
 	frozen:           bool, // paused, the world standing still (session_freeze)
 	selection:        [2]Maybe(game.Block_Pos), // the server's word on our world-editing selection (drawn)
+	island:           game.Island, // the simulation island we are in (F3)
 	stats:            Session_Stats,
 	mode:             int, // the game mode the server last said (Mode): an index into reg.game_modes
 	health:           f32, // as the server last said (Health)

@@ -64,6 +64,12 @@ test_players_islands_follow_them :: proc(t: ^testing.T) {
 	})
 	if !testing.expect(t, ok, "the players never landed") {return}
 	testing.expect_value(t, island_count(), 1)
+	// Each is told its island: the same id, a disc of chunks around the two.
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {
+		return cs[0].island.id != 0 && cs[0].island == cs[1].island
+	})
+	testing.expect(t, ok, "the players are not told one island")
+	testing.expect(t, alice.island.chunks >= 49, "the island is smaller than a view")
 
 	// Alice flies far away: two islands.
 	net_send(alice, game.Command{"tp 4000.5 80 4000.5"})

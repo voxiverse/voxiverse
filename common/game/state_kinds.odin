@@ -32,6 +32,7 @@ State_Kind :: enum u8 {
 	Place,
 	Tally,
 	Channel,
+	Island,
 }
 
 Event_Kind :: enum u8 {
@@ -85,6 +86,13 @@ Player_Record :: struct {
 	held:   Item, // the hotbar item in hand (NO_ITEM: none), for the avatar's raised arm
 	kills:  u32, // the counters `kills` and `deaths`, for the player list
 	deaths: u32,
+}
+
+// Island: the simulation island the player is in (id 0: none) and how many chunks
+// it holds (F3 shows them; common/island).
+Island :: struct {
+	id:     u32,
+	chunks: u32,
 }
 
 // Tally: our own kills and deaths (the others' are in their Player_Record).
@@ -242,6 +250,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	.Place = {name = "place", value = Place, check = check_place},
 	.Tally = {name = "tally", value = Tally},
 	.Channel = {name = "channel", value = Channel_Record, key = .Cell, write_through = true},
+	.Island = {name = "island", value = Island},
 }
 
 @(rodata)
