@@ -396,7 +396,7 @@ prompt_items :: proc(app: ^engine.App) -> []Prompt_Item {
 			append(&items, select, back, tabs)
 		case .Dial:
 			append(&items, select, Prompt_Item{.Menu_Secondary, "Erase", .None}, back)
-		case .Game_Menu, .Quit_Dialog, .Consent, .Chat, .Open_To_LAN, .Crash_Report:
+		case .Game_Menu, .Quit_Dialog, .Consent, .Chat, .Open_To_LAN, .Crash_Report, .Market:
 			append(&items, select, back)
 		case .Player_Menu:
 			if app.player_menu.section == .Inventory {

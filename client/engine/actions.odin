@@ -33,6 +33,7 @@ Action :: enum u8 {
 	Journal, // J
 	Character, // C
 	Atlas, // L
+	Market, // M, in a town: the market screen
 	Toggle_HUD, // F1
 	Camera, // F5
 	Swap_Offhand, // F
@@ -101,6 +102,7 @@ ACTION_INFO := [Action]Action_Info {
 	.Stats           = {{.World, .Menu}, "Statistics", {}, {}},
 	.Player_Menu     = {{.World, .Menu}, "Player menu", {}, {}},
 	.World_Map       = {{.World}, "Map", {}, {}},
+	.Market          = {{.World, .Menu}, "Market", {}, {}},
 	.Journal         = {{.World}, "Journal", {}, {}},
 	.Character       = {{.World}, "Character", {}, {}},
 	.Atlas           = {{.World}, "Atlas", {}, {}},
@@ -156,6 +158,7 @@ PAD_COVERED_BY :: [?]struct {
 	{.Command, "the chat, then a slash (menus with a pad)"},
 	{.Stats, "the player menu: View, then LB and RB"},
 	{.World_Map, "the player menu: View, then LB and RB"},
+	{.Market, "not on pads yet (the pad's quick ring is next tier)"},
 	{.Journal, "the player menu: View, then LB and RB"},
 	{.Character, "the player menu: View, then LB and RB"},
 	{.Atlas, "the player menu: View, then LB and RB"},
@@ -227,6 +230,8 @@ action_key :: proc(b: ^Bindings, a: Action) -> ^platform.Key {
 		return &b.player_menu
 	case .World_Map:
 		return &b.world_map
+	case .Market:
+		return &b.market
 	case .Journal:
 		return &b.journal
 	case .Character:
@@ -297,6 +302,7 @@ action_pad :: proc(p: ^Pad_Bindings, a: Action) -> ^platform.Pad_Button {
 	     .Menu_Right,
 	     .Stats,
 	     .World_Map,
+	     .Market,
 	     .Journal,
 	     .Character,
 	     .Atlas,

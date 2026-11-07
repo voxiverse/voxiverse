@@ -93,7 +93,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/menu` | The game menu, the player menu, the inventory and statistics sections | `*.odin` |
 | `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, dial, LAN, quit, toasts | `*.odin` |
 | `client/prompt` | Button prompts: an action's glyph and the prompt bar | `*.odin` |
-| `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer and loading screens | `*.odin` |
+| `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer, loading and market screens | `*.odin` |
 | `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, and the state every feature of `App` holds | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
 | `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |

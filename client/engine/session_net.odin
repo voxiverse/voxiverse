@@ -185,7 +185,8 @@ handle_packets :: proc(s: ^Session, packets: []game.Packet) {
 			for _, &o in s.others {track_hold(&o.track, s.rx.tick)}
 			for _, &e in s.entities {track_hold(&e.track, s.rx.tick)}
 		case game.Telemetry_Ack, game.Dev_Ack, game.Dev_Replies:
-		case game.Market_View: // (the market screen comes later; nothing shows it yet)
+		case game.Market_View:
+			market_take(&s.market, v)
 		case game.Stats_Page:
 			stats_data_take(&s.player_stats, v)
 		case game.Bulk_Begin:

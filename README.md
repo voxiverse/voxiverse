@@ -162,6 +162,7 @@ Windows, and `~/Library/Application Support` on macOS.
 | Left / right click | Break / place a block (hold to repeat). |
 | <kbd>1</kbd>–<kbd>5</kbd>, mouse wheel | Choose what to hold from the five-slot hotbar. A new player starts with stone, dirt, grass, sand, logs, leaves, water and lamps, and the rocket launcher where they are permitted to fire it. Placing a block uses one up; breaking a block drops it, to be picked up by walking over it. |
 | <kbd>E</kbd> | Inventory. Drag stacks between slots, right-click to split a stack, shift-click to move between the hotbar and the rest, or press a number key to swap with that hotbar slot. In your own world every item is available to take. |
+| <kbd>M</kbd> | Market. Within a town's reach the HUD says `Market of <town> (M)`; the key opens its market: each good's price, stock and how old the news behind the price is, your silver and cargo, and Buy and Sell with a quantity. Walking away closes it. |
 | <kbd>Q</kbd> | Drop one of the held item (<kbd>Ctrl</kbd>+<kbd>Q</kbd>: all of it). |
 | <kbd>T</kbd>, <kbd>/</kbd> | Chat / a server command (`/spawn`, `/mute bob 1h`; Tab completes). `&c` colours and `&l` bolds text where your role allows it. Up and Down step through what you have sent. |
 | <kbd>Esc</kbd> | Close whatever is open (chat, console, a menu); otherwise open the game menu (Back to Game, Options, Open to LAN, Save and Quit to Title). When you are alone in your own world, pausing stops the world. |

@@ -131,6 +131,8 @@ draw_overlays :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			death_ui(app, ctx)
 		case .Devchat:
 			devchat_ui(app, ctx, top)
+		case .Market:
+			screen.market_ui(app, ctx, top)
 		}
 	}
 	devchat_notice(app)
