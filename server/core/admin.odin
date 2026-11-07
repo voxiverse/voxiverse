@@ -137,6 +137,7 @@ ADMIN_COMMANDS := [?]Admin_Command {
 	},
 	{"where", "", {0, 0}, admin_where, "teleport.tp"},
 	{"goto", "<lat lon> | <place>", {1, 2}, admin_goto, "teleport.tp"},
+	{"wander", "", {0, 0}, admin_wander, "teleport.tp"},
 	{"tphere", "<player>", {1, 1}, admin_tphere, "teleport.tp.others"},
 	// Messaging, moderation, who and status (commands_people.odin).
 	{"msg", "<player> <words>", {2, 64}, admin_msg, "chat.msg"},
@@ -235,7 +236,7 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 		record(s, c, .Command, cmd.name)
 		base.crash_bundle_action("command", cmd.name)
 		switch cmd.name {
-		case "tp", "goto", "home", "warp", "spawn", "back", "travel":
+		case "tp", "goto", "wander", "home", "warp", "spawn", "back", "travel":
 			record(s, c, .Teleport, cmd.name)
 		case "msg", "r":
 			record(s, c, .Chat_Whisper)
