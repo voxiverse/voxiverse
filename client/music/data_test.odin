@@ -55,7 +55,7 @@ music_decode :: proc(file: []byte) -> (pcm: []f32, rate: int) {
 // One test per piece, so the runner's threads decode them side by side: each
 // decodes to what its metadata says, at the loudness the mix expects, and
 // loops without a seam.
-#assert(len(MUSIC) == 7, "a new piece needs its test below")
+#assert(len(MUSIC) == 8, "a new piece needs its test below")
 
 @(test)
 test_music_title :: proc(t: ^testing.T) {music_check(t, "title")}
@@ -71,6 +71,8 @@ test_music_far :: proc(t: ^testing.T) {music_check(t, "far")}
 test_music_death :: proc(t: ^testing.T) {music_check(t, "death")}
 @(test)
 test_music_discovery :: proc(t: ^testing.T) {music_check(t, "discovery")}
+@(test)
+test_music_ignite :: proc(t: ^testing.T) {music_check(t, "ignite")}
 
 @(private = "file")
 music_check :: proc(t: ^testing.T, name: string) {
@@ -185,9 +187,8 @@ music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
 	}
 }
 
-// Scores written but not yet rendered or listed in MUSIC. Step 5 of the Earth's
-// theme work (#176) renders ignite and removes it from here.
-UNRENDERED := [?]string{"ignite"}
+// Scores written but not yet rendered or listed in MUSIC (none now).
+UNRENDERED := [?]string{}
 
 @(test)
 test_music_set :: proc(t: ^testing.T) {
