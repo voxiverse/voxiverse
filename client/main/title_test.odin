@@ -1,6 +1,7 @@
 package main
 
 import "core:slice"
+import "core:strings"
 import "core:testing"
 
 import "client:screen"
@@ -48,4 +49,23 @@ test_title_buttons :: proc(t: ^testing.T) {
 		slice.contains(screen.splashes_parse(screen.SPLASHES), app.splash),
 		true,
 	)
+}
+
+// The splash arrives as a transmission: dial glyphs resolving into the text
+// from the left over SPLASH_REVEAL seconds; with reduce motion it is simply there.
+@(test)
+test_splash_resolves_from_glyphs :: proc(t: ^testing.T) {
+	text := "Not a modpack"
+	at0, _ := screen.splash_reveal(text, 0, false)
+	testing.expect(t, at0 != text, "at once: glyphs")
+	testing.expect(t, !strings.contains(at0, "N"), "no letter resolved yet")
+	testing.expect_value(t, strings.count(at0, " "), 2) // spaces stay spaces
+	half, _ := screen.splash_reveal(text, screen.SPLASH_REVEAL / 2, false)
+	testing.expect(t, strings.has_prefix(half, "Not a"), "half way: the first half resolved")
+	testing.expect(t, half != text, "half way: not all of it")
+	done, _ := screen.splash_reveal(text, screen.SPLASH_REVEAL, false)
+	testing.expect_value(t, done, text)
+	still, _ := screen.splash_reveal(text, 0, true)
+	testing.expect_value(t, still, text)
+	free_all(context.temp_allocator)
 }

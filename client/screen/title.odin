@@ -3,17 +3,47 @@ package screen
 import "core:math"
 import "core:strings"
 import "core:time"
+import "core:unicode/utf8"
 
 import "client:engine"
 import "client:ui"
 import "common:base"
+import "common:game"
 
 // SPLASHES: the splash texts (assets/splashes.txt, one per line; blank lines
 // and # lines ignored).
 SPLASHES :: #load("../../assets/splashes.txt", string)
 
-SPLASH_TILT :: -0.105 // radians: a few degrees, rising to the right
-SPLASH_PULSE :: 0.05 // how much its size swells and shrinks
+SPLASH_REVEAL :: 1.2 // seconds for the transmission's glyphs to resolve into the text
+
+// splash_reveal: the splash as it shows `seconds` after it arrived, a
+// transmission from another world: every letter is first a glyph of the dial
+// (picked by the letter) and the text resolves from the left over
+// SPLASH_REVEAL seconds; newest is the last letter resolved (-1: none yet).
+// With reduce_motion it is simply there.
+splash_reveal :: proc(
+	text: string,
+	seconds: f32,
+	reduce_motion: bool,
+) -> (
+	shown: string,
+	newest: int,
+) {
+	n := utf8.rune_count_in_string(text)
+	if reduce_motion || n == 0 || seconds >= SPLASH_REVEAL {return text, n - 1}
+	resolved := int(f32(n) * max(seconds, 0) / SPLASH_REVEAL)
+	b := strings.builder_make(context.temp_allocator)
+	i := 0
+	for r in text {
+		if i < resolved || r == ' ' {
+			strings.write_rune(&b, r)
+		} else {
+			strings.write_rune(&b, game.SYMBOL_RUNES[int(r) % game.SYMBOLS])
+		}
+		i += 1
+	}
+	return strings.to_string(b), resolved - 1
+}
 
 // splashes_parse: the entries of a splashes file (slices of text).
 splashes_parse :: proc(text: string, allocator := context.temp_allocator) -> []string {
@@ -44,23 +74,24 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.title(ctx, engine.tr(.Title_Voxiverse), logo)
 	if app.splash == "" {
 		app.splash = splash_choose(splashes_parse(SPLASHES), time.now()._nsec / 1e9)
+		app.splash_at = time.tick_now()
 	}
 	if app.splash != "" {
-		size := t.font_size
-		if !app.settings.reduce_motion {
-			size *=
-				1 +
-				SPLASH_PULSE *
-					math.sin(f32(time.duration_seconds(time.tick_since(app.started))) * 3)
+		// A transmission under the logo, level: dial glyphs resolving into the
+		// text, a faint flicker while it arrives, then steady.
+		seconds := f32(time.duration_seconds(time.tick_since(app.splash_at)))
+		shown, _ := splash_reveal(app.splash, seconds, app.settings.reduce_motion)
+		color := t.text_muted
+		if seconds < SPLASH_REVEAL && !app.settings.reduce_motion {
+			color.a = u8(f32(color.a) * (0.75 + 0.25 * math.sin(seconds * 40)))
 		}
-		ui.draw_text_tilted(
+		ui.draw_text(
 			ctx,
-			{logo.x + logo.w / 2 + 120, logo.y + logo.h - 4},
-			app.splash,
-			size,
-			t.text,
-			SPLASH_TILT,
-			t.font_size * (1 + SPLASH_PULSE),
+			{logo.x - 100, logo.y + logo.h + 4, logo.w + 200, t.font_size + 6},
+			shown,
+			t.font_size * 0.9,
+			color,
+			.Center,
 		)
 	}
 	ui.cut_top(&column, 40)
