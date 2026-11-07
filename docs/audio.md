@@ -66,7 +66,11 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
   and the time; the app carries out its actions on the mixer, so tests need no mixer. It plays
   the title piece on the menus, lets the world's music come and go in waits and tracks (one at
   a time, chosen by the track's place, time, depth and world tags in its metadata `.json`),
-  and punctuates deaths and discoveries with stingers. Every number is a `music.*` console
+  and punctuates deaths and discoveries with stingers. When the Ignite screen comes up the title
+  fades out (`music.ignite_fade`) and the `ignite` piece plays once from t = 0 of the screen's
+  animation, so its peak lands on the planet reveal; it is left to finish (the title does not
+  return and the world's first wait starts after it). With no `ignite` piece nothing happens.
+  Every number is a `music.*` console
   variable.
 
 ## Music pipeline
@@ -158,9 +162,11 @@ world's mode (Earth: major, tonic C); the first note is in the octave of middle 
 note in the octave nearest the one before (a tie goes up), so no step is wider than a tritone.
 Rhythm: glyph div 7 (0 to 5) picks a length in eighths, `2 1 1 2 1 2`; the last note is always 6
 eighths (a dotted half). Earth's glyphs `14 2 35 20 7 29 11` give C E C B C D G, lengths 1 2 2 1 1 1
-6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece is written on it (`assets/music/title.score`); so is the Ignite cue
-(`assets/music/ignite.score`, 12 s, no loop: the hook, the loudest second at the planet's 1.6 s,
-then a soft C major). The cue is not rendered or in `client/music/data.odin` yet.
+6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece is written on it (`assets/music/title.score`, looped on the menus); so is the
+Ignite cue (`assets/music/ignite.score`, 12 s, no loop: the hook, the loudest second at the
+planet's 1.6 s, `IGNITE_PHASES` in `client/screen/ignite.odin`, then a soft C major). The
+director plays the cue when the Ignite screen starts; the cue is not rendered or in
+`client/music/data.odin` yet, so until it is the director does nothing on Ignite.
 
 ### The ear
 

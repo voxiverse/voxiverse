@@ -489,3 +489,84 @@ test_music_hour_golden :: proc(t: ^testing.T) {
 	)
 	free_all(context.temp_allocator)
 }
+
+@(private = "file")
+ignite_tracks :: proc() -> []Music_Track {
+	tracks := make([dynamic]Music_Track, context.temp_allocator)
+	append(&tracks, ..TEST_TRACKS[:])
+	append(
+		&tracks,
+		Music_Track {
+			name = "ignite",
+			role = .Ignite,
+			seconds = 12,
+			place = {"any"},
+			time = {"any"},
+			depth = {"any"},
+			worlds = {"any"},
+		},
+	)
+	return tracks[:]
+}
+
+@(test)
+test_ignite_cue :: proc(t: ^testing.T) {
+	s: Sim
+	sim_init(&s, ignite_tracks(), 3)
+	sim_run(&s, 10)
+	testing.expect_value(t, len(s.plays), 1) // the title
+	// The Ignite screen comes up: the title stops, the cue plays once.
+	s.input.ignite = true
+	sim_step(&s, 0.1)
+	testing.expect_value(t, len(s.last), 2)
+	testing.expect_value(t, s.last[0].kind, Music_Action_Kind.Stop)
+	testing.expect_value(t, s.last[0].voice_slot, u8(MUSIC_SLOT_TITLE))
+	testing.expect_value(t, s.last[0].seconds, MUSIC_DEFAULTS.ignite_fade)
+	testing.expect_value(t, s.last[1].kind, Music_Action_Kind.Play)
+	testing.expect_value(t, s.last[1].track, 7)
+	testing.expect_value(t, s.last[1].gain, 1)
+	testing.expect_value(t, s.d.tracks[7].loop, false)
+	// Not again while it stays up.
+	sim_run(&s, 3)
+	testing.expect_value(t, len(s.plays), 2)
+	// The screen ends: the title does not come back while the cue plays.
+	s.input.ignite = false
+	sim_run(&s, 5)
+	testing.expect_value(t, len(s.plays), 2)
+	// After the cue the title returns on the menus.
+	sim_run(&s, 10)
+	testing.expect_value(t, len(s.plays), 3)
+	testing.expect_value(t, s.plays[2].track, 0)
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_ignite_cue_hands_off_to_world :: proc(t: ^testing.T) {
+	s: Sim
+	sim_init(&s, ignite_tracks(), 4)
+	s.input.gap = 3
+	s.input.ignite = true
+	sim_step(&s, 0.1)
+	s.input.ignite = false
+	sim_in_world(&s)
+	// The world's wait does not start before the cue ends (12 s).
+	sim_run(&s, 8)
+	testing.expect_value(t, len(s.plays), 1) // the cue only
+	sim_run(&s, 30)
+	testing.expect(t, len(s.plays) > 1, "the world's music came after the cue")
+	free_all(context.temp_allocator)
+}
+
+@(test)
+test_no_ignite_track_emits_nothing :: proc(t: ^testing.T) {
+	s: Sim
+	sim_init(&s, TEST_TRACKS[:], 5)
+	sim_run(&s, 5)
+	s.input.ignite = true
+	sim_step(&s, 0.1)
+	testing.expect_value(t, len(s.last), 0)
+	sim_run(&s, 5)
+	testing.expect_value(t, len(s.plays), 1)
+	testing.expect_value(t, s.stops, 0)
+	free_all(context.temp_allocator)
+}

@@ -64,6 +64,7 @@ music_input :: proc(app: ^App) -> (in_: music.Music_Input) {
 	m := &app.music
 	in_.gap = app.settings.music_gap
 	in_.biome = game.NO_BIOME
+	in_.ignite = app.ignite.active
 	s := app.session
 	if s == nil {return}
 	if s != m.session {
