@@ -99,32 +99,33 @@ night (melody: bells, 39 notes)
     assets/music/night.score:51:30: bar 42: leap of 7 semitones (g5 to c5) not answered
     assets/music/night.score:51:9: bar 41: leap of 7 semitones (c5 to g5) not answered
 
-title (melody: melody, 64 notes)
-  melody: stepwise 0.29  big_leaps 0.05  leap_recovered 0.17  motif_return 0.23  range 11  longest_run 4
-  surprise: 5.99 bits a note
-  whole: harmony_fit 0.96  strong_beat_clash 7/48  roughness mean 0.14 p95 0.23  accomp_variety 0.12
+title (melody: melody, 178 notes)
+  melody: stepwise 0.56  big_leaps 0.01  leap_recovered 0.15  motif_return 0.68  range 18  longest_run 5
+  surprise: 4.62 bits a note
+  whole: harmony_fit 0.94  strong_beat_clash 10/57  roughness mean 0.29 p95 0.60  accomp_variety 0.20
+  motifs:
+    hook: stated 19 times, 8 varied; bars 1 3 5 7 9' 11' 13' 15' 17' 19' 21' 23' 27 31 35 41 ... (+3)
+    answer: stated 5 times, 1 varied; bars 25 29 33' 37 39
   critique:
-    assets/music/title.score:18:30: bar 7 beat 1: a5 over A# major
-    assets/music/title.score:20:24: bar 14 beat 3: e6 over D minor (pedalled from bar 14)
-    assets/music/title.score:20:50: bar 16 beat 3: d6 over C major (pedalled from bar 16)
-    assets/music/title.score:22:30: bar 23 beat 1: a5 over A# major
-    assets/music/title.score:23:23: bar 26 beat 3: e6 over D minor (pedalled from bar 26)
-    assets/music/title.score:24:24: bar 30 beat 3: e6 over D minor (pedalled from bar 30)
-    assets/music/title.score:24:49: bar 32 beat 3: d6 over C major (pedalled from bar 32)
-    assets/music/title.score:20:31: bar 15: leap of 11 semitones (e6 to f5) not answered
-    assets/music/title.score:23:23: bar 26: leap of 11 semitones (f5 to e6) not answered
-    assets/music/title.score:24:31: bar 31: leap of 11 semitones (e6 to f5) not answered
-    assets/music/title.score:17:52: bar 4: leap of 9 semitones (e6 to g5) not answered
-    assets/music/title.score:19:49: bar 12: leap of 9 semitones (e6 to g5) not answered
-    assets/music/title.score:21:48: bar 20: leap of 9 semitones (e6 to g5) not answered
-    assets/music/title.score:21:5: bar 17: leap of 9 semitones (d6 to f5) not answered
-    assets/music/title.score:22:48: bar 24: leap of 9 semitones (e6 to g5) not answered
-    assets/music/title.score:26:12: bars 1-29: the arp part plays one bar 8 times
-    assets/music/title.score:35:8: bars 1-29: the bass part plays one bar 8 times
-    assets/music/title.score:18:18: bar 6: leap of 7 semitones (g5 to d6) not answered
-    assets/music/title.score:20:11: bar 13: leap of 7 semitones (c6 to f5) not answered
-    assets/music/title.score:21:11: bar 17: leap of 7 semitones (f5 to c6) not answered
-    assets/music/title.score:21:18: bar 18: leap of 7 semitones (c6 to f5) not answered
-    assets/music/title.score:21:36: bar 19: leap of 7 semitones (f5 to c6) not answered
-    assets/music/title.score:22:18: bar 22: leap of 7 semitones (g5 to d6) not answered
-    assets/music/title.score:24:37: bar 31: leap of 7 semitones (f5 to c6) not answered
+    assets/music/title.score:67:9: bars 9-40: the strings part plays one bar 22 times
+    assets/music/title.score:86:9: bars 9-39: the harp part plays one bar 21 times
+    assets/music/title.score:32:5: bar 26 beat 1: f4 over C major
+    assets/music/title.score:33:5: bar 28 beat 1: b4 over A minor
+    assets/music/title.score:34:5: bar 29 beat 3: b4 over F major
+    assets/music/title.score:34:5: bar 30 beat 1: g4 over F major
+    assets/music/title.score:35:5: bar 31 beat 1: c4 over G major
+    assets/music/title.score:37:5: bar 36 beat 1: d4 over A minor
+    assets/music/title.score:38:5: bar 37 beat 1: d4 over F major
+    assets/music/title.score:38:5: bar 37 beat 3: g4 over F major
+    assets/music/title.score:38:5: bar 38 beat 1: e4 over G major
+    assets/music/title.score:39:5: bar 40 beat 1: f4 over C major
+    assets/music/title.score:36:5: bar 33: leap of 11 semitones (f3 to e4) not answered
+    assets/music/title.score:48:10: bars 9-33: the pulse part plays one bar 10 times
+    assets/music/title.score:29:5: bar 11: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 13: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 15: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 17: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 19: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 21: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 23: leap of 7 semitones (g4 to c4) not answered
+    assets/music/title.score:29:5: bar 9: leap of 7 semitones (g4 to c4) not answered

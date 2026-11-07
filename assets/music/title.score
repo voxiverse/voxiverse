@@ -1,7 +1,7 @@
 title "Voxiverse"
 tempo 66
 meter 4/4
-key f major
+key c major
 mood calm
 place any
 time any
@@ -11,32 +11,88 @@ loop yes
 seed 5
 humanize timing 10 ms velocity 5
 reverb 2.8 s 0.55
-instrument piano preset 0:0
+instrument felt font felt preset 0:0
+instrument timp font freepats_timpani preset 0:0
+instrument strings font freepats_synthstrings preset 0:0
+instrument harp font freepats_harp preset 0:0
 
-part melody piano volume -3 dB pan 0.2
-  | mp f5:h. a5:q | f5:h f5:h | f5:h. a#5:q | e6:h g5:h |
-  | g5:h. g5:q | d6:h d6:h | a5:h. c6:q | e6:h c6:h |
-  | c6:h. a5:q | f5:h a5:h | a#5:h. c6:q | e6:h g5:h |
-  | c6:h. f5:q | a#5:h e6:h | f5:h. a#5:q | e6:h d6:h |
-  | f5:h. c6:q | f5:h f5:h | f5:h. c6:q | e6:h g5:h |
-  | g5:h. g5:q | d6:h d6:h | a5:h. c6:q | e6:h g5:h |
-  | c6:h. g5:q | f5:h e6:h | a#5:h. a#5:q | e6:h c6:h |
-  | c6:h. g5:q | a#5:h e6:h | f5:h. c6:q | e6:h d6:h |
-part arp piano volume -8 dB pan 0.0
-  | mp ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-  | ped f4:e a4:e c5:e a4:e c5:e a4:e c5:e a4:e unped | ped d5:e f5:e a5:e f5:e a5:e f5:e a5:e f5:e unped | ped a#4:e d5:e f5:e d5:e f5:e d5:e f5:e d5:e unped | ped c5:e e5:e g5:e e5:e g5:e e5:e g5:e e5:e unped |
-part bass piano volume -12 dB pan -0.25
-  | mp f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
-  | f3:h c4:q a4:q | d4:h. a4:q | a#3:h f4:q d5:q | c4:h. g4:q |
+# Earth's hook: motif_of(earth_address()), C E C B C D G, 1 2 2 1 1 1 6 eighths.
+motif hook | mp c4:e e4:q c4:q b3:e c4:e d4:e g4:h. r:q |
+# The counter-melody that answers it: stepwise, ends on a half note.
+motif answer | mp e4:e f4:e g4:q a4:q g4:q f4:e e4:e d4:q e4:h |
+
+part melody felt melody volume -3 dB pan 0.1
+  section A repeat 4
+    play hook
+  end
+  section D repeat 8
+    play hook
+  end
+  section B
+    play answer
+    play hook degrees 2
+    play answer degrees 1
+    play hook invert
+    play answer vary 3
+    play hook retrograde
+    play answer degrees -1
+    play answer
+  end
+  form A D' B A
+
+part pulse timp volume -10 dB pan -0.2
+  section A repeat 4
+    | r:w | r:w |
+  end
+  section D repeat 8
+    | mp c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
+  end
+  section B
+    | mp c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
+    | a1:q r:q a1:q r:q | a1:q r:q e2:q r:q |
+    | f1:q r:q f1:q r:q | f1:q r:q c2:q r:q |
+    | g1:q r:q g1:q r:q | g1:q r:q d2:q r:q |
+    | c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
+    | a1:q r:q a1:q r:q | a1:q r:q e2:q r:q |
+    | f1:q r:q f1:q r:q | g1:q r:q g1:q r:q |
+    | c2:h c2:h | c2:w |
+  end
+  form A D' B A
+
+part strings strings volume -12 dB pan 0.25
+  section A repeat 4
+    | r:w | r:w |
+  end
+  section D repeat 8
+    | p [c3 g3 e4]:w | [c3 g3 e4]:w |
+  end
+  section B
+    | p [c3 g3 e4]:w | [c3 g3 e4]:w |
+    | [a2 e3 c4]:w | [a2 e3 c4]:w |
+    | [f2 c3 a3]:w | [f2 c3 a3]:w |
+    | [g2 d3 b3]:w | [g2 d3 b3]:w |
+    | [c3 g3 e4]:w | [c3 g3 e4]:w |
+    | [a2 e3 c4]:w | [a2 e3 c4]:w |
+    | [f2 c3 a3]:w | [g2 d3 b3]:w |
+    | [c3 g3 e4]:w | [c3 g3 e4]:w |
+  end
+  form A D' B A
+
+part harp harp volume -9 dB pan 0.4
+  section A repeat 4
+    | r:w | r:w |
+  end
+  section D repeat 8
+    | p c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
+  end
+  section B
+    | p c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
+    | a4:e e5:e c5:e e5:e a4:e e5:e c5:e e5:e | a4:e e5:e c5:e e5:e a4:e e5:e c5:e e5:e |
+    | f4:e c5:e a4:e c5:e f4:e c5:e a4:e c5:e | f4:e c5:e a4:e c5:e f4:e c5:e a4:e c5:e |
+    | g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e | g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e |
+    | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
+    | a4:e e5:e c5:e e5:e a4:e e5:e c5:e e5:e | a4:e e5:e c5:e e5:e a4:e e5:e c5:e e5:e |
+    | f4:e c5:e a4:e c5:e f4:e c5:e a4:e c5:e | g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e |
+    | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:w |
+  end
+  form A D' B A
