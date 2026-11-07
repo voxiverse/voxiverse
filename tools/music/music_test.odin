@@ -797,6 +797,16 @@ register_sfz_test_font :: proc "contextless" () {
 }
 
 @(test)
+test_render_refuses_a_part_whose_font_is_missing :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	p := one_note(60, 960)
+	p.parts[0].font = "no_such_font"
+	fonts := make(map[string]^Soundfont)
+	testing.expect(t, render_with(&p, fonts) == nil)
+}
+
+@(test)
 test_sfz_region_pitch :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
