@@ -213,7 +213,7 @@ apply_entity_motion :: proc(s: ^Session, g: game.Received) {
 @(private)
 entity_snapshot :: proc(e: ^Other_Entity, tick: u32, m: game.Entity_Motion) {
 	track_add(&e.track, {tick, m.position, m.yaw, m.pitch, false, false})
-	e.flags = m.flags
+	e.looks = m.looks
 	if e.last_seen == {} {e.last_seen = m.position}
 }
 

@@ -38,7 +38,7 @@ Net_Client :: struct {
 	changed:                     [dynamic]Net_Block,
 	entities:                    map[u32][3]f64, // known entities, where last seen
 	shorn:                       map[u32]bool, // sheep as last told shorn or not
-	sheep:                       map[u32]game.Sheep_Flags, // and what else about their looks
+	sheep:                       map[u32]game.Entity_Looks, // and what else about their looks
 	stats_text:                  string, // the last Stats_Page's lines (heap)
 	market:                      game.Market_View, // the last Market_View (its town is market_town)
 	market_town:                 string, // (heap)
@@ -283,8 +283,15 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			v := (^game.Entity_Motion)(g.value)
 			if game.replica_get(&c.rx.live, int(game.State_Kind.Entity), g.key) != nil {
 				c.entities[id] = v.position
-				c.shorn[id] = .Shorn in v.flags
-				c.sheep[id] = v.flags
+				looks := game.kind_looks(
+					game.kind_info(
+						test_reg(),
+						(^game.Entity_Record)(game.replica_get(&c.rx.live, int(game.State_Kind.Entity), g.key)).kind,
+					),
+					v.looks,
+				)
+				c.shorn[id] = .Shorn in looks
+				c.sheep[id] = looks
 			}
 		case .Block:
 			v := (^game.Block_Record)(g.value)

@@ -59,6 +59,27 @@ Entity_Look :: enum u8 {
 ENTITY_LOOK_LIST := [?]string{"shorn", "lamb", "black", "spotted", "in_love"}
 #assert(len(ENTITY_LOOK_LIST) == len(Entity_Look))
 
+// Entity_Looks: a set of looks. On the wire a kind's looks are bit i for its i-th look
+// (Entity_Motion.looks); kind_looks turns those bits into this.
+Entity_Looks :: bit_set[Entity_Look;u8]
+
+// kind_looks: the looks a replicated entity of this kind shows. A bit past the kind's
+// looks means nothing and is dropped.
+kind_looks :: proc(info: ^Kind_Info, bits: u16) -> (set: Entity_Looks) {
+	for look, i in info.looks {
+		if bits & (1 << u16(i)) != 0 {set += {look}}
+	}
+	return
+}
+
+// look_bits: the wire bits for a set of looks of this kind (the inverse of kind_looks).
+look_bits :: proc(info: ^Kind_Info, set: Entity_Looks) -> (bits: u16) {
+	for look, i in info.looks {
+		if look in set {bits |= 1 << u16(i)}
+	}
+	return
+}
+
 // entity_look_part: the component a look is computed from.
 entity_look_part :: proc(l: Entity_Look) -> Entity_Part {
 	switch l {

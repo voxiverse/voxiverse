@@ -97,7 +97,7 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 	round_trip(t, &l, .Entity, key_entity(77), &sheep)
 	dropped := Entity_Record{test_reg().engine.item, {item_of_block(test_reg(), .Sand), 12, 0}}
 	round_trip(t, &l, .Entity, key_entity(78), &dropped)
-	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, {.Lamb, .Black}}
+	moving := Entity_Motion{{1, 2, 3}, 0.5, -0.2, 0b0110}
 	round_trip(t, &l, .Entity_Motion, key_entity(77), &moving)
 	// Inventory_Update, with a chest
 	inv: Inventory
@@ -217,8 +217,10 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 	refuse_event(t, &s, .Explosion, &boom, "an explosion of radius 1000")
 	kind_gap := Entity_Record{Kind_Id(200), {}}
 	refuse(t, &s, .Entity, key_entity(1), &kind_gap, "an entity kind that does not exist")
-	flags := Entity_Motion {
-		flags = transmute(Sheep_Flags)u8(0x80),
+	// (Entity_Motion.looks holds 16 bits and a record cannot know its kind: every value is
+	// well formed, and the client drops a bit past its kind's looks.)
+	far_look := Entity_Motion {
+		position = {1 << 40, 0, 0},
 	}
-	refuse(t, &s, .Entity_Motion, key_entity(1), &flags, "a sheep flag that does not exist")
+	refuse(t, &s, .Entity_Motion, key_entity(1), &far_look, "an entity outside the world")
 }

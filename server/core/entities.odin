@@ -113,20 +113,27 @@ entities_sync_spatial :: proc(w: ^World) {
 	}
 }
 
-// sheep_flags: what clients are told about a sheep.
-sheep_flags :: proc(
-	w: ^World,
-	reg: ^game.Registry,
-	h: game.Entity_Handle,
-) -> (
-	f: game.Sheep_Flags,
-) {
-	if entity_kind(w, h) != reg.engine.sheep {return}
-	if entity_wool(w, h).shorn {f += {.Shorn}}
-	if entity_breeding(w, h).growth < game.LAMB_TICKS {f += {.Lamb}}
-	if game.genes_black(entity_genes(w, h).genes) {f += {.Black}}
-	if game.genes_spotted(entity_genes(w, h).genes) {f += {.Spotted}}
-	if entity_breeding(w, h).love > 0 {f += {.In_Love}}
+// entity_looks: what clients are told about how an entity looks: bit i is the kind's
+// i-th look, each computed from the components it names.
+entity_looks :: proc(w: ^World, reg: ^game.Registry, h: game.Entity_Handle) -> (bits: u16) {
+	info := game.kind_info(reg, entity_kind(w, h))
+	if info == nil {return}
+	for look, i in info.looks {
+		on: bool
+		switch look {
+		case .Shorn:
+			on = entity_wool(w, h).shorn
+		case .Lamb:
+			on = entity_breeding(w, h).growth < game.LAMB_TICKS
+		case .Black:
+			on = game.genes_black(entity_genes(w, h).genes)
+		case .Spotted:
+			on = game.genes_spotted(entity_genes(w, h).genes)
+		case .In_Love:
+			on = entity_breeding(w, h).love > 0
+		}
+		if on {bits |= 1 << u16(i)}
+	}
 	return
 }
 
@@ -678,7 +685,7 @@ entities_put :: proc(s: ^Server, c: ^Client) {
 			entity_pos(w, h),
 			entity_yaw(w, h),
 			entity_pitch(w, h),
-			sheep_flags(w, s.registry, h),
+			entity_looks(w, s.registry, h),
 		}
 		state_put(s, c, .Entity_Motion, &motion, key)
 	}

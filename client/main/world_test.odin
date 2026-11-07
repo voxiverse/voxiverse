@@ -367,6 +367,49 @@ test_entity_death_puff :: proc(t: ^testing.T) {
 	testing.expect_value(t, cap(s.puffs), engine.MAX_PUFFS)
 }
 
+// A kind drawn as a box (a pack kind, no client code) is one box of the kind's size in the
+// kind's colour.
+@(test)
+test_box_model_entity :: proc(t: ^testing.T) {
+	s := new(engine.Session)
+	defer free(s)
+	reg := testkit.test_reg()^
+	reg.kinds = make([]game.Kind_Info, len(reg.kinds))
+	defer delete(reg.kinds)
+	copy(reg.kinds, testkit.test_reg().kinds)
+	cube := reg.engine.sheep
+	reg.kinds[int(cube) - 1].model = .Box
+	reg.kinds[int(cube) - 1].color = {200, 40, 40}
+	s.reg = &reg
+	s.entities, _ = base.map_make_fixed(map[u32]engine.Other_Entity, game.MAX_KNOWN_ENTITIES)
+	defer delete(s.entities)
+	s.puffs = make([dynamic]engine.Puff, 0, engine.MAX_PUFFS)
+	defer delete(s.puffs)
+	defer delete(s.sounds)
+	d: render.Entity_Draw
+	render.entity_draw_init(&d)
+	defer render.entity_draw_destroy(&d)
+	s.render_clock = {
+		time   = 5,
+		newest = 5,
+		heard  = true,
+	}
+	e := engine.Other_Entity {
+		kind = cube,
+	}
+	engine.track_add(&e.track, {5, {10, 64, 10}, 0, 0, false, false})
+	s.entities[1] = e
+	engine.entities_draw(s, &d, 0.1)
+	box := game.kind_box(game.kind_info(s.reg, cube))
+	testing.expect_value(t, len(d.boxes), 1)
+	if len(d.boxes) == 1 {
+		b := d.boxes[0]
+		testing.expect_value(t, b.color, [4]u8{200, 40, 40, 255})
+		testing.expect(t, abs(f64(b.hi.y - b.lo.y) - box[1]) < 1e-5)
+		testing.expect(t, abs(f64(b.hi.x - b.lo.x) - box[0]) < 1e-5)
+	}
+}
+
 // Loading waits for the ground around the player only: the 5x5 columns near,
 // from one chunk above down to one below (or to the lowest ground), each
 // here and meshed; far chunks do not matter.
