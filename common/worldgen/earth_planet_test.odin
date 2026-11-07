@@ -182,3 +182,30 @@ test_planet_spawn_is_at_marseille :: proc(t: ^testing.T) {
 	)
 	testing.expect(t, abs(moved.x - at.x) > 1000, "the spawn moved")
 }
+
+// test_earth_places: the surface at named places is what Earth has there.
+@(test)
+test_earth_places :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	surface :: proc(g: ^Generator, name: string) -> (b: Biome, top: i32, block: game.Block) {
+		pl, _ := planet_place(name)
+		x, z := planet_block_of(pl.lat, pl.lon)
+		c := column_at(&g.params, g.seed, x, z)
+		top = column_top(g, x, z)
+		return c.biome, top, surface_block(&g.params, c.biome, 0, top)
+	}
+	b, top, block := surface(&g, "everest")
+	// Left for a later part: y > 200 (the relief grid gives y 144 today).
+	testing.expectf(t, top > 140, "Everest's summit is at y %d", top)
+	testing.expectf(t, block == .Snow || block == .Ice, "Everest's top is %v", block)
+	// Left for a later part: the Sahara and the Atacama as hot desert (the
+	// climate model gives them Csb and ET today).
+	b, _, block = surface(&g, "greenland")
+	testing.expect_value(t, b, Biome.Ice_Sheet)
+	testing.expect_value(t, block, game.Block.Snow)
+	b, _, _ = surface(&g, "siberia")
+	testing.expect_value(t, b, Biome.Taiga)
+	x, z := block_at(0, -150)
+	testing.expect_value(t, earth_biome(&g, x, z), Biome.Ocean)
+	testing.expect_value(t, column_top(&g, x, z), 0)
+}
