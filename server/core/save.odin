@@ -91,6 +91,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	home := s.home
 	if dir == "" {
 		home.address = home_address(s)
+		world_set_planet(home)
 		return true
 	}
 	if err := os.make_directory_all(dir); err != nil && err != .Exist {
@@ -120,6 +121,7 @@ store_open :: proc(s: ^Server, dir: string) -> bool {
 	case:
 		log.infof("server new universe dir=%s seed=%d", dir, s.config.seed)
 		home.address = home_address(s)
+		world_set_planet(home)
 		home.seed, home.generator = s.config.seed, s.config.generator
 		write_universe_file(s) or_return
 		st.format = SAVE_FORMAT
