@@ -409,7 +409,10 @@ jobs:
             1. `git checkout -B claude/issue-${{ matrix.issue }} origin/claude/issue-${{ matrix.issue }}`,
                then `git rebase origin/main` (main may have moved).
             2. Find what failed: `gh pr checks claude/issue-${{ matrix.issue }}`, then
-               `gh run view <run id> --log-failed` for each failed job (Windows and macOS too).
+               `gh run view <run id> --log-failed` for each failed job (Windows and macOS too). A test's
+               full output (its prints, the tests running beside it) is in the run's `test-logs-<os>`
+               artifact: `gh run download <run id> -n test-logs-macos-latest -D /tmp/logs`. A crash on
+               one OS only is most often tests sharing state across the parallel test threads.
             3. Fix the cause; never weaken or skip a test. Run `./build.sh check` and `./build.sh test`.
             4. Push to the same branch (with `--force-with-lease` after the rebase). Auto-merge is
                already on.
