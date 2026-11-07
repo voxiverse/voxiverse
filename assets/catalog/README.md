@@ -93,3 +93,47 @@ separated by `|`, one character per block, with a legend.
 - Real things only, with their real names; plausible numbers, `null` when unknown.
 - Breadth before depth: the common and the iconic first, then the strange.
 - Write only your own file. Valid JSON (no comments, no trailing commas).
+
+## cultures/<region>.json: peoples, for other worlds' histories to borrow from
+
+```json
+{"id": "sumerians", "name": "Sumerians", "region": "Mesopotamia", "era": "4500-1900 BCE",
+ "climate": ["BWh along rivers"], "subsistence": ["irrigated barley", "sheep", "dates", "fish"],
+ "settlement": "walled cities around a temple platform", "dwellings": ["mudbrick_house"],
+ "monuments": ["ziggurat"], "crafts": ["pottery wheel", "bronze", "cuneiform tablets"],
+ "trade": ["timber and stone in", "grain and textiles out"], "beliefs": "city gods in temples",
+ "naming": {"syllables": ["en", "lil", "ur", "nam", "gal", "shu", "ki"], "examples": ["Enmerkar", "Urnamma"]},
+ "fell_by": "salt in the fields, invasion", "notes": "Writing was born keeping grain accounts."}
+```
+
+## technologies/<era>.json: what a people can know, in order
+
+```json
+{"id": "irrigation", "name": "Irrigation", "era": "neolithic", "years_ago": 8000,
+ "needs": ["farming", "pottery"], "unlocks": ["canals", "surplus grain"],
+ "how_found": "watching floods leave fertile silt", "materials": ["clay", "wood"],
+ "in_game": "fields beside rivers grow in dry seasons", "notes": "Turns deserts along rivers into cradles."}
+```
+
+Eras: paleolithic, neolithic, bronze, iron, classical, medieval, early_modern, industrial, modern.
+
+## items/<group>.json: things people make and carry
+
+```json
+{"id": "flint_hand_axe", "name": "Flint hand axe", "era": "paleolithic", "made_of": ["flint"],
+ "made_by": "knapping a nodule with a hammerstone", "use": ["chop", "butcher", "dig"],
+ "durability": "breaks on stone", "voxel_model": {"size": [5, 8, 2], "colors": ["#8a8274", "#5e574b"]},
+ "notes": "The first tool a player can make with no workbench."}
+```
+
+## lines/<group>.json: short texts the game shows
+
+```json
+{"id": "christmas_reindeer", "name": "Merry Christmas! The reindeer are in the tundra biome",
+ "use": "splash", "when": "christmas", "tone": "playful", "notes": null}
+```
+
+`name` holds the text itself (one line, under 60 characters for splashes). `use`: splash, world_message,
+journal, bestiary, death, tooltip. `when`: a holiday (new_year, valentines, st_patricks, easter,
+halloween, christmas), a condition for world messages (storm_near, sunset_coast, first_frost,
+herd_moving, ...), or `any`.
