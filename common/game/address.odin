@@ -182,3 +182,73 @@ address_parse :: proc(text: string, here_galaxy: [GALAXY_LENGTH]u8) -> (a: Addre
 	copy(a.world[:], symbols[:WORLD_LENGTH])
 	return a, address_valid(a)
 }
+
+// Motifs: a world's address as a tune. The seven glyphs of its world part
+// are seven notes (the hook of the world's theme). Pure and deterministic:
+// the same address gives the same notes on every machine.
+//
+// The rule (also in docs/audio.md):
+//   - pitch: the glyph mod 7 is a scale degree (0 is the home note) in the
+//     world's mode. The first note is in the octave of middle C (MIDI 60 is
+//     degree 1 of C); each later note is in the octave nearest the previous
+//     note (a tie goes up), so no step is wider than a tritone.
+//   - rhythm: the glyph div 7 (0..5) picks the length in eighths from
+//     MOTIF_LENGTHS; the last note is always MOTIF_LAST_LENGTH eighths, long
+//     enough to sing and let the phrase land.
+
+MOTIF_NOTES :: WORLD_LENGTH
+MOTIF_HOME :: 60 // MIDI note of degree 1 (C4); the tonic is C for every world.
+MOTIF_LENGTHS :: [6]u8{2, 1, 1, 2, 1, 2} // eighths, by glyph div 7
+MOTIF_LAST_LENGTH :: 6 // eighths: a dotted half
+
+Mode :: enum u8 {
+	Major,
+	Minor,
+}
+
+@(rodata)
+MODE_STEPS := [Mode][7]u8 {
+	.Major = {0, 2, 4, 5, 7, 9, 11},
+	.Minor = {0, 2, 3, 5, 7, 8, 10},
+}
+
+Motif_Note :: struct {
+	pitch:  u8, // MIDI note number
+	start:  u16, // in eighths from the start of the hook
+	length: u8, // in eighths
+}
+
+Motif :: [MOTIF_NOTES]Motif_Note
+
+// motif_of: the hook of a world's address, in the world's mode (Earth: major).
+motif_of :: proc(a: Address, mode := Mode.Major) -> (m: Motif) {
+	lengths := MOTIF_LENGTHS
+	steps := MODE_STEPS[mode]
+	start := u16(0)
+	prev := 0
+	for g, i in a.world {
+		pc := int(steps[int(g) % 7])
+		pitch: int
+		if i == 0 {
+			pitch = MOTIF_HOME + pc
+		} else {
+			// The note with pitch class pc nearest prev: round down to the octave at
+			// or below prev, then take whichever of it and the one above is nearer.
+			low := prev - ((prev - pc) %% 12)
+			pitch = low
+			if low + 12 - prev <= prev - low {pitch = low + 12}
+		}
+		length := u8(MOTIF_LAST_LENGTH)
+		if i < MOTIF_NOTES - 1 {length = lengths[(int(g) / 7) % len(lengths)]}
+		m[i] = Motif_Note{u8(pitch), start, length}
+		start += u16(length)
+		prev = pitch
+	}
+	return
+}
+
+// motif_eighths: the length of the whole hook in eighths.
+motif_eighths :: proc(m: Motif) -> int {
+	last := m[MOTIF_NOTES - 1]
+	return int(last.start) + int(last.length)
+}
