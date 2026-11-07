@@ -537,6 +537,8 @@ jobs:
           fi
           url=$(gh pr list --head "${branch}" --state open --json url --jq '.[0].url // empty')
           if [ -n "${url}" ]; then
+            # A new pull request gets its own two fixes (the labels counted an earlier one's).
+            gh issue edit "${ISSUE}" --remove-label agent-ci-fix-1 --remove-label agent-ci-fix-2 >/dev/null 2>&1 || true
             gh pr merge "${url}" --auto --rebase || echo "auto-merge not enabled"
             outcome=pr; echo "pull request: ${url}"; exit 0
           fi
