@@ -1,5 +1,5 @@
 title "Voxiverse"
-tempo 66
+tempo 72
 meter 4/4
 key c major
 mood calm
@@ -16,36 +16,48 @@ instrument timp font freepats_timpani preset 0:0
 instrument strings font freepats_synthstrings preset 0:0
 instrument harp font freepats_harp preset 0:0
 
-# Earth's hook: motif_of(earth_address()), C E C B C D G, 1 2 2 1 1 1 6 eighths.
-motif hook | mp c4:e e4:q c4:q b3:e c4:e d4:e g4:h. r:q |
-# The counter-melody that answers it: stepwise, ends on a half note.
+# The hook: a quick rise to the sixth, a turn, the leap to the top; the second
+# time it lands home. Stated three times, each fuller, then the theme.
+motif hook | mp g4:e c5:e e5:q. d5:e c5:e d5:e | e5:e g5:e e5:h r:q |
+motif hook_home | mp g4:e c5:e e5:q. d5:e c5:e d5:e | e5:e d5:e c5:h r:q |
+# The theme's own figure (the old opening hook) and the counter-melody that answers it.
+motif theme | mp c4:e e4:q c4:q b3:e c4:e d4:e g4:h. r:q |
 motif answer | mp e4:e f4:e g4:q a4:q g4:q f4:e e4:e d4:q e4:h |
 
 part melody felt melody volume -3 dB pan 0.1
-  section A repeat 4
+  section H1
     play hook
   end
-  section D repeat 8
+  section H2
+    play hook_home
+  end
+  section H3
     play hook
   end
   section B
     play answer
-    play hook degrees 2
+    play theme degrees 2
     play answer degrees 1
-    play hook invert
+    play theme invert
     play answer vary 3
-    play hook retrograde
+    play theme retrograde
     play answer degrees -1
     play answer
   end
-  form A D' B A
+  section E
+    play hook_home
+  end
+  form H1 H2 H3 B E
 
 part pulse timp volume -10 dB pan -0.2
-  section A repeat 4
+  section H1
     | r:w | r:w |
   end
-  section D repeat 8
-    | mp c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
+  section H2
+    | p c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
+  end
+  section H3
+    | p c2:q r:q c2:q r:q | c2:q r:q g2:q g2:e g2:e |
   end
   section B
     | mp c2:q r:q c2:q r:q | c2:q r:q g2:q r:q |
@@ -57,14 +69,20 @@ part pulse timp volume -10 dB pan -0.2
     | f1:q r:q f1:q r:q | g1:q r:q g1:q r:q |
     | c2:h c2:h | c2:w |
   end
-  form A D' B A
+  section E
+    | p c2:q r:q c2:q r:q | c2:w |
+  end
+  form H1 H2 H3 B E
 
 part strings strings volume -12 dB pan 0.25
-  section A repeat 4
+  section H1
     | r:w | r:w |
   end
-  section D repeat 8
+  section H2
     | p [c3 g3 e4]:w | [c3 g3 e4]:w |
+  end
+  section H3
+    | p [a2 e3 c4]:w | [g2 d3 b3]:w |
   end
   section B
     | p [c3 g3 e4]:w | [c3 g3 e4]:w |
@@ -76,14 +94,20 @@ part strings strings volume -12 dB pan 0.25
     | [f2 c3 a3]:w | [g2 d3 b3]:w |
     | [c3 g3 e4]:w | [c3 g3 e4]:w |
   end
-  form A D' B A
+  section E
+    | pp [c3 g3 e4]:w | [c3 g3 e4]:w |
+  end
+  form H1 H2 H3 B E
 
 part harp harp volume -9 dB pan 0.4
-  section A repeat 4
+  section H1
     | r:w | r:w |
   end
-  section D repeat 8
+  section H2
     | p c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
+  end
+  section H3
+    | p a4:e e5:e c5:e e5:e a4:e e5:e c5:e e5:e | g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e |
   end
   section B
     | p c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
@@ -95,4 +119,7 @@ part harp harp volume -9 dB pan 0.4
     | f4:e c5:e a4:e c5:e f4:e c5:e a4:e c5:e | g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e |
     | c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e | c5:w |
   end
-  form A D' B A
+  section E
+    | pp c5:e g5:e e5:e g5:e c5:h | c5:w |
+  end
+  form H1 H2 H3 B E
