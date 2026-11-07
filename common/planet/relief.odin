@@ -5,6 +5,7 @@ package planet
 import "core:bytes"
 import "core:compress/zlib"
 import "core:encoding/endian"
+import "core:mem"
 
 // The relief grid: 2048 x 1024 cells, 360 / 2048 degrees each. Cell centres sit at
 // longitude `-180 + (i + 0.5) * 360 / 2048` and latitude `90 - (j + 0.5) * 180 / 1024`.
@@ -107,8 +108,12 @@ relief_decode :: proc(data: []u8, allocator := context.allocator) -> (r: Relief,
 	if len(raw) != width * height * 2 {return}
 
 	r = relief_make(width, height, allocator)
-	for k in 0 ..< width * height {
-		r.elevation[k] = i16(u16(raw[2 * k]) | u16(raw[2 * k + 1]) << 8)
+	when ODIN_ENDIAN == .Little {
+		mem.copy(raw_data(r.elevation), raw_data(raw), len(raw))
+	} else {
+		for k in 0 ..< width * height {
+			r.elevation[k] = i16(u16(raw[2 * k]) | u16(raw[2 * k + 1]) << 8)
+		}
 	}
 	return r, true
 }
@@ -116,9 +121,15 @@ relief_decode :: proc(data: []u8, allocator := context.allocator) -> (r: Relief,
 // relief_hash is FNV-1a over the elevations' little-endian bytes.
 relief_hash :: proc(r: Relief) -> u64 {
 	h := u64(0xcbf29ce484222325)
-	for v in r.elevation {
-		h = (h ~ u64(u8(u16(v)))) * 0x100000001b3
-		h = (h ~ u64(u8(u16(v) >> 8))) * 0x100000001b3
+	when ODIN_ENDIAN == .Little {
+		for b in mem.slice_to_bytes(r.elevation) {
+			h = (h ~ u64(b)) * 0x100000001b3
+		}
+	} else {
+		for v in r.elevation {
+			h = (h ~ u64(u8(u16(v)))) * 0x100000001b3
+			h = (h ~ u64(u8(u16(v) >> 8))) * 0x100000001b3
+		}
 	}
 	return h
 }
