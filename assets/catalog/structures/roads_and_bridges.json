@@ -1,0 +1,746 @@
+{
+  "kind": "structures",
+  "group": "roads_and_bridges",
+  "entries": [
+    {
+      "id": "qhapaq_nan",
+      "name": "Qhapaq Ñan (Andean Road System)",
+      "origin": "human",
+      "biomes": ["mountains", "desert", "plains", "rainforest", "steppe"],
+      "cultures": ["Inca"],
+      "era": "c. 1400-1533 CE, built mostly in the 15th century on pre-Inca foundations",
+      "footprint_m": [30000000, 5],
+      "height_m": 1,
+      "materials": ["cut stone", "gravel", "adobe", "lime mortar", "timber", "rope"],
+      "purpose": "imperial army, chasqui courier and trade artery across Tawantinsuyu",
+      "parts": ["paved stone carriageway", "tamped gravel surfacing", "stone retaining walls", "drainage culverts", "waystations (tambos) every day's march", "rope suspension bridges at gorges", "causeways across swamps"],
+      "layout": [
+        "four main strands radiate from Cusco, one per suyo, tied by coastal and sierra longitudinal roads",
+        "steps wherever the grade defeats wheeled or hoofed travel",
+        "retaining walls and stepped ledges where the road crosses cliffs"
+      ],
+      "found": "along the Andes from southern Colombia through Ecuador, Peru and Bolivia to northwestern Argentina and central Chile",
+      "notes": "UNESCO World Heritage (2014); over 30,000 km by UNESCO's count, some estimates say 40,000. Chasqui relay runners carried messages the length of the empire, roughly 240 km a day."
+    },
+    {
+      "id": "silk_road",
+      "name": "Silk Road",
+      "origin": "human",
+      "biomes": ["desert", "steppe", "mountains", "mediterranean"],
+      "cultures": ["Chinese", "Central Asian", "Persian", "Arab", "Mediterranean"],
+      "era": "c. 130 BCE to c. 1453 CE",
+      "footprint_m": [6500000, 5],
+      "height_m": null,
+      "materials": ["compacted earth and gravel tracks", "stone pitching through passes", "caravanserai lodgings"],
+      "purpose": "overland exchange of silk, horses, glass, spices, ideas and religions between China and the Mediterranean",
+      "parts": ["chain of oasis cities (Chang'an, Samarkand, Merv, Palmyra)", "caravanserais and post horses", "northern steppe and southern Taklamakan rim branches", "Pamir and Tien Shan passes"],
+      "layout": [
+        "not one road but a lattice; caravans hopped from oasis to oasis",
+        "northern branch skirted the Tien Shan and Altai; southern branch ringed the Taklamakan desert",
+        "traffic faded as Indian Ocean shipping grew after the 1400s"
+      ],
+      "found": "from the Chinese capital west through Central Asia to the Levant and the Mediterranean",
+      "notes": "Opened after Zhang Qian's mission to the Yuezhi (139 BCE); Marco Polo travelled it c. 1271-1295. Silk bought in Chang'an sold at Antioch for many times its purchase price."
+    },
+    {
+      "id": "tokaido",
+      "name": "Tōkaidō (Eastern Sea Route)",
+      "origin": "human",
+      "biomes": ["plains", "mountains", "forest", "mixed_forest"],
+      "cultures": ["Japanese"],
+      "era": "c. 1600-1868 (Tokugawa shogunate)",
+      "footprint_m": [515000, 6],
+      "height_m": 1,
+      "materials": ["compacted earth", "gravel", "timber bridges and ferries", "stone paving in post towns"],
+      "purpose": "shogunate artery between Edo and Kyoto; daimyo alternate-attendance (sankin-kōtai) processions travelled it",
+      "parts": ["53 shukuba post towns (stations)", "river ferries and bridges at the major crossings", "tea houses, inns, horse and palanquin hire"],
+      "layout": [
+        "hugged the Pacific side of Honshū, longer and gentler than the mountain Nakasendō",
+        "post towns spaced a day's walk apart with inns licensed by the shogunate",
+        "traffic ranked by status: daimyo retinues, officials, pilgrims, merchants"
+      ],
+      "found": "from Edo (Tokyo) southwest along the coast to the capital (Kyoto)",
+      "notes": "Hiroshige's 1832 woodblock series The Fifty-three Stations of the Tōkaidō made the road famous worldwide. It is the ancestor of the modern Tōmei Expressway and the Tokaido Shinkansen corridor."
+    },
+    {
+      "id": "via_egnatia",
+      "name": "Via Egnatia",
+      "origin": "human",
+      "biomes": ["mountains", "plains", "mixed_forest", "forest"],
+      "cultures": ["Roman"],
+      "era": "c. 146 BCE onward; used into the Byzantine period",
+      "footprint_m": [1120000, 6],
+      "height_m": 1,
+      "materials": ["agger (raised cambered bed)", "gravel and cut stone paving", "lime mortar"],
+      "purpose": "Roman strategic road from the Adriatic to Byzantium; moved legions, mail and goods",
+      "parts": ["raised cambered roadbed", "mansiones (posting stations)", "milestones", "bridges and pass galleries"],
+      "layout": [
+        "from Dyrrhachium and Apollonia across the Balkans via Thessalonica to Byzantium",
+        "crossed the Pindus and other ranges in engineered passes",
+        "dead-straight between stations where the ground allowed"
+      ],
+      "found": "modern Albania, North Macedonia, Greece, and European Turkey",
+      "notes": "About 1,120 km. St Paul travelled it on his missionary journeys (Acts 16-17); the modern Egnatia Odos motorway retraces it."
+    },
+    {
+      "id": "persian_royal_road",
+      "name": "Persian Royal Road",
+      "origin": "human",
+      "biomes": ["steppe", "desert", "mountains", "mediterranean"],
+      "cultures": ["Persian"],
+      "era": "c. 500-330 BCE (Achaemenid), reused after",
+      "footprint_m": [2700000, 5],
+      "height_m": null,
+      "materials": ["compacted earth", "gravel and stone pitching", "ditches", "bridged river crossings"],
+      "purpose": "imperial courier and army road from Sardis (Lydia) to Susa",
+      "parts": ["posting stations (111 per Herodotus)", "fresh horses and riders at every station", "royal milestones", "guarded ferries over the great rivers"],
+      "layout": [
+        "from Sardis through Phrygia and the Anatolian plateau, along the upper Euphrates, across the Zagros to Susa",
+        "stations a fast day apart for royal mounted couriers",
+        "inspected and garrisoned as imperial infrastructure"
+      ],
+      "found": "western Anatolia to Khuzistan (modern Turkey, Syria, Iraq, Iran)",
+      "notes": "Herodotus 5.52-53 and 8.98: 111 royal posting stations; the angareion (post) was the fastest state service of antiquity. The US Post Office bears his 'neither snow nor rain nor heat nor gloom of night' line."
+    },
+    {
+      "id": "great_ocean_road",
+      "name": "Great Ocean Road",
+      "origin": "human",
+      "biomes": ["beach", "ocean", "forest", "mixed_forest", "plains"],
+      "cultures": ["Australian"],
+      "era": "built 1919-1932",
+      "footprint_m": [243000, 9],
+      "height_m": null,
+      "materials": ["Portland cement concrete deck", "cut rock and rubble abutments", "steel guardrail"],
+      "purpose": "touring and timber-access road; Depression-era employment scheme for returned servicemen",
+      "parts": ["cliff-perched carriageway over the Southern Ocean", "memorial arches at the eastern and western ends", "bridges over the Otways' creeks", "waterfront viewing platforms"],
+      "layout": [
+        "between Torquay and Allansford, 243 km along the Surf Coast and the Otway fringe",
+        "benched into sea cliffs, on rock fill over gullies",
+        "tight, slow corners; speeds well below highway norms"
+      ],
+      "found": "Victoria's southwestern coast, Australia",
+      "notes": "Roughly 3,000 returned servicemen built it after the First World War; the eastern terminus at Torquay holds a memorial arch."
+    },
+    {
+      "id": "route_66",
+      "name": "Route 66 (Will Rogers Highway)",
+      "origin": "human",
+      "biomes": ["plains", "desert", "mountains", "mixed_forest", "subtropical_forest"],
+      "cultures": ["American"],
+      "era": "1926-1985 (decommissioned 1985)",
+      "footprint_m": [3940000, 11],
+      "height_m": 0,
+      "materials": ["bituminous pavement", "concrete bridges", "trestle and truss crossings"],
+      "purpose": "first all-weather Chicago-Los Angeles corridor; main artery of Depression-era westward migration",
+      "parts": ["neon motor courts", "roadside diners and motels", "filling stations every few miles", "long river spans (e.g., over the Mississippi)"],
+      "layout": [
+        "from Chicago to Santa Monica through St. Louis, Oklahoma City, Amarillo and Flagstaff",
+        "progressively bypassed by the Interstate system 1956-1984",
+        "largely survives as state and local roads; signposted in places"
+      ],
+      "found": "Illinois, Missouri, Kansas, Oklahoma, Texas, New Mexico, Arizona, California",
+      "notes": "2,448 miles (3,940 km). John Steinbeck called it 'the Mother Road' in The Grapes of Wrath (1939); the shield retired in 1985."
+    },
+    {
+      "id": "interstate_highway",
+      "name": "US Interstate Highway System",
+      "origin": "human",
+      "biomes": ["plains", "mountains", "forest", "mixed_forest", "subtropical_forest", "desert", "mediterranean"],
+      "cultures": ["American"],
+      "era": "1956 onward (Federal-Aid Highway Act)",
+      "footprint_m": [77000000, 30],
+      "height_m": 0,
+      "materials": ["asphalt and Portland cement concrete", "steel girder and prestressed concrete bridges", "grade-separated interchanges"],
+      "purpose": "national defense and interstate commerce; 90% federally funded limited-access freeways",
+      "parts": ["grade-separated carriageways", "route shields and mile markers", "rest areas", "service plazas (turnpikes)"],
+      "layout": [
+        "grid of even/odd numbered routes (north-south odd, east-west even), with spurs around cities",
+        "access only via interchanges; no at-grade crossings",
+        "numbering encodes direction and region"
+      ],
+      "found": "all 50 states (Alaska and Hawaii have in-state freeway networks)",
+      "notes": "About 77,000 km; the largest public works programme in US history, signed by President Eisenhower, who admired the German autobahns seen in 1945."
+    },
+    {
+      "id": "autobahn",
+      "name": "Autobahn (Reichsautobahn)",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mixed_forest", "mountains"],
+      "cultures": ["German"],
+      "era": "1932 first segment Köln-Bonn; greatly expanded 1933-1945; still expanding",
+      "footprint_m": [13000000, 28],
+      "height_m": 0,
+      "materials": ["asphalt and concrete pavement", "steel and prestressed concrete bridges", "earthworks and viaducts"],
+      "purpose": "fast motor road linking Germany's industrial heartland; military and propaganda symbol",
+      "parts": ["dual carriageways with wide median", "no general speed limit on many sections", "paired rest houses (Raststätten)", "monumental viaducts (e.g., Kesseltal)"],
+      "layout": [
+        "radiating and linking rings from the Rhine, the Ruhr and Berlin",
+        "designed for uninterrupted high-speed running, unlike earlier AVUS racing track",
+        "widened and modernized continuously since 1945"
+      ],
+      "found": "throughout Germany, densest west of the Elbe",
+      "notes": "Around 13,000 km; grew from Weimar-era planning, not a Nazi invention, but was built as showpiece infrastructure with forced labour."
+    },
+    {
+      "id": "pan_american_highway",
+      "name": "Pan-American Highway",
+      "origin": "human",
+      "biomes": ["rainforest", "steppe", "desert", "mountains", "subtropical_forest", "plains"],
+      "cultures": ["Pan-American"],
+      "era": "1923 onward",
+      "footprint_m": [30000000, 20],
+      "height_m": null,
+      "materials": ["asphalt and concrete pavement", "steel and concrete bridges", "mountain tunnels and viaducts"],
+      "purpose": "continental road network linking Alaska to Patagonia",
+      "parts": ["linked national highways from Anchorage to Ushuaia", "border crossings with customs posts", "mountain passes and coastal causeways"],
+      "layout": [
+        "several roughly parallel routes branch and rejoin across the Americas",
+        "broken by the Darién Gap (Panama-Colombia), about 160 km of impassable jungle deliberately left unbuilt",
+        "passes over the Andes connect coastal and sierra branches"
+      ],
+      "found": "North, Central and South America",
+      "notes": "About 30,000 km, the longest road network on Earth; the unfinished Darién Gap keeps the ends from ever meeting."
+    },
+    {
+      "id": "grossglockner_high_alpine_road",
+      "name": "Grossglockner High Alpine Road",
+      "origin": "human",
+      "biomes": ["mountains"],
+      "cultures": ["Austrian"],
+      "era": "built 1930-1935",
+      "footprint_m": [48000, 9],
+      "height_m": null,
+      "materials": ["asphalt over rock-cut terraces", "stone retaining walls", "tunnels and avalanche galleries"],
+      "purpose": "tourist drive over the Hohe Tauern; jobs for Depression-era Austria",
+      "parts": ["long hairpin series", "summit area at Hochtor, 2,504 m", "viewpoints toward the Grossglockner (3,798 m)"],
+      "layout": [
+        "between Bruck an der Glocknerstraße and Heiligenblut, 48 km",
+        "climbs through pine then bare rock and ice to a pass crest",
+        "open roughly May to October; toll road"
+      ],
+      "found": "Salzburg and Carinthia, Austria",
+      "notes": "Europe's most famous mountain toll road; engineering masterpiece of interwar Austria. Highest point Hochtor at 2,504 m."
+    },
+    {
+      "id": "macadam_road",
+      "name": "Macadam road",
+      "origin": "human",
+      "biomes": ["plains", "forest", "mixed_forest", "steppe", "mediterranean", "mountains"],
+      "cultures": ["British"],
+      "era": "1820s onward",
+      "footprint_m": [8, 6],
+      "height_m": 0,
+      "materials": ["broken angular stone, compacted in layers", "gravel blinding"],
+      "purpose": "cheap, durable road without deep foundations; the default roadbed of the 19th century",
+      "parts": ["cambered formation", "compacted 150 mm layers of broken stone", "stone dust filling the voids"],
+      "layout": [
+        "raised, well-drained camber sheds water instead of relying on deep foundations",
+        "20 mm and smaller aggregate on top, bound by stone dust",
+        "a tar-bound version, tarmac (1901), gave the modern surface"
+      ],
+      "found": "every developed country from the 1820s onward",
+      "notes": "John Loudon McAdam, 1820s Scotland. His insight was drainage, not strength: a thin, well-cambered, stone-dust layer, rolled by traffic, outlasted thick foundations."
+    },
+    {
+      "id": "corduroy_road",
+      "name": "Corduroy road",
+      "origin": "human",
+      "biomes": ["forest", "taiga", "rainforest", "savanna"],
+      "cultures": ["American", "Scandinavian", "Russian"],
+      "era": "antiquity to the 20th century (pioneer and military)",
+      "footprint_m": [30, 4],
+      "height_m": 0,
+      "materials": ["felled logs laid transversely", "earth infill", "brush"],
+      "purpose": "cross swamp, muskeg and bog without wheeled vehicles sinking",
+      "parts": ["parallel rows of logs across the track", "gravel or earth on top", "ditched sides"],
+      "layout": [
+        "logs laid side by side at right angles to the line of travel",
+        "wheels ride log-end to log-end; hooves stay out of the mud",
+        "rots in a few years; kept up by constant replacement"
+      ],
+      "found": "colonial and Civil War supply roads, Canadian muskeg, Siberian taiga",
+      "notes": "The sound alone announced a corduroy road; carts rattled across it and riders hated it. Standard in swamp crossings into the early 20th century."
+    },
+    {
+      "id": "drove_road",
+      "name": "Drove road",
+      "origin": "human",
+      "biomes": ["plains", "steppe", "mixed_forest", "mediterranean"],
+      "cultures": ["English", "Welsh", "Scottish", "Spanish"],
+      "era": "medieval to 19th century (Spain's cañadas still law)",
+      "footprint_m": [1000, 36],
+      "height_m": 0,
+      "materials": ["grass-covered earth track", "hedge or wall boundaries", "occasional settlement gates"],
+      "purpose": "walk livestock hundreds of kilometres to market; cattle graze the verges en route",
+      "parts": ["wide grassy corridor (up to 36 m or more)", "inbye grazing strips", "folds, tolls and overnight rests", "inns and smithies at the termini"],
+      "layout": [
+        "broad straight corridors along parish and manor boundaries",
+        "wide enough that hundreds of head could move and feed without trampling crops",
+        "deepened by hoofs over centuries into hollowed-out lanes"
+      ],
+      "found": "Britain (Welsh drove roads to the Midlands and London) and Iberia (cañadas reales)",
+      "notes": "Hoof-hollows and wide green hedges still mark them; Spain's cañadas reales remain protected in law as ancient public rights of way."
+    },
+    {
+      "id": "holloway",
+      "name": "Holloway (sunken lane)",
+      "origin": "human",
+      "biomes": ["mixed_forest", "forest", "mediterranean"],
+      "cultures": ["English"],
+      "era": "prehistoric to now",
+      "footprint_m": [200, 3],
+      "height_m": 0,
+      "materials": ["eroded earth and gravel", "hedged or tree-lined banks"],
+      "purpose": "a way worn deep by traffic and rain; the sunken counterpart to a drove road",
+      "parts": ["sunken track 1-5 m below the fields", "overhanging hedges and roots", "banked verges"],
+      "layout": [
+        "formed by walkers, carts and ploughs plus rain runoff",
+        "follows the oldest available line, often prehistoric or Roman",
+        "tunnel-like enclosure makes a distinct microclimate"
+      ],
+      "found": "southern England, especially Wiltshire, Dorset and the Weald",
+      "notes": "Centuries of hooves, wheels and rain cut them down; some retain prehistoric alignments. Hedged holloways shelter birds and rare ferns."
+    },
+    {
+      "id": "via_salaria",
+      "name": "Via Salaria (Salt Road)",
+      "origin": "human",
+      "biomes": ["mountains", "mediterranean", "plains"],
+      "cultures": ["Roman", "Sabine"],
+      "era": "c. 1000 BCE (pre-Roman track) through antiquity",
+      "footprint_m": [240000, 5],
+      "height_m": 1,
+      "materials": ["compacted earth", "gravel", "cut stone in towns"],
+      "purpose": "move salt from the Adriatic to Rome",
+      "parts": ["salt depots along the course", "bridged river crossings", "milestones"],
+      "layout": [
+        "from the Adriatic (Picenum) through the Sabine hills to Rome",
+        "over the Apennine passes into the Tiber valley",
+        "lined with salt stores at regular intervals"
+      ],
+      "found": "central Italy, from the Adriatic coast to Rome",
+      "notes": "Salt was Rome's ration and preservative; the road's name survives in 'salary' (salarium, money for salt). One of Rome's oldest highways."
+    },
+    {
+      "id": "incense_route",
+      "name": "Incense Route",
+      "origin": "human",
+      "biomes": ["desert", "mediterranean"],
+      "cultures": ["Nabataean", "Arab"],
+      "era": "c. 300 BCE-200 CE",
+      "footprint_m": null,
+      "height_m": null,
+      "materials": ["compacted caravan track", "limestone water cisterns", "fortified wells"],
+      "purpose": "move frankincense and myrrh from South Arabia to the Mediterranean",
+      "parts": ["Negev staging posts (Avdat, Mamshit, Shivta)", "caravan trains of thousands of camels", "desert forts and water stores"],
+      "layout": [
+        "from southern Arabia up the Hejaz and across the Negev to Gaza",
+        "hopped from well to well; every caravan depended on stored water",
+        "terminated at the Mediterranean for onward shipment"
+      ],
+      "found": "Gaza to the Arabian Peninsula, through the Negev and the Sinai",
+      "notes": "UNESCO World Heritage (2005) for the Negev desert cities. Frankincense was worth its weight in silver in Roman markets."
+    },
+    {
+      "id": "amber_road",
+      "name": "Amber Road",
+      "origin": "human",
+      "biomes": ["forest", "mixed_forest", "mountains", "plains"],
+      "cultures": ["Roman", "Baltic"],
+      "era": "antiquity (c. 2000 BCE-500 CE)",
+      "footprint_m": null,
+      "height_m": null,
+      "materials": ["compacted track", "river portages", "caches and toll posts"],
+      "purpose": "carry Baltic amber to the Mediterranean",
+      "parts": ["Baltic coastal collection points (Samland)", "river portages (Vistula, Oder, Danube)", "tolls and sorting in Pannonia and Aquileia"],
+      "layout": [
+        "from the Samland coast (modern Kaliningrad/Poland) south through Central Europe to the Po valley",
+        "followed rivers and low passes, avoiding the Alpine crest where possible",
+        "goods moved in barrels and cakes of raw amber, sorted at Aquileia"
+      ],
+      "found": "from the Baltic coast through Central Europe to northern Italy",
+      "notes": "The Romans imported amber in bulk; Pliny complained a modest amber statue cost more than a healthy slave."
+    },
+    {
+      "id": "golden_gate_bridge",
+      "name": "Golden Gate Bridge",
+      "origin": "human",
+      "biomes": ["ocean", "beach"],
+      "cultures": ["American"],
+      "era": "1933-1937",
+      "footprint_m": [2737, 27],
+      "height_m": 227,
+      "materials": ["steel", "concrete anchorages", "International Orange paint"],
+      "purpose": "road crossing of the Golden Gate strait between San Francisco and Marin County",
+      "parts": ["two Art Deco towers, 227 m above water", "main span 1,280 m", "deep-water anchorages", "six traffic lanes and a pedestrian walkway"],
+      "layout": [
+        "spans the strait at a single stretch; no piers in the shipping channel",
+        "towers on concrete fender piers sunk to bedrock",
+        "painted International Orange for visibility in fog"
+      ],
+      "found": "San Francisco, California, USA (Golden Gate strait)",
+      "notes": "Chief engineer Joseph Strauss; 11 men died building it. Opened 27 May 1937. Painted endlessly; the US maintains the coat continuously."
+    },
+    {
+      "id": "brooklyn_bridge",
+      "name": "Brooklyn Bridge",
+      "origin": "human",
+      "biomes": ["river", "ocean"],
+      "cultures": ["American"],
+      "era": "1869-1883",
+      "footprint_m": [1834, 26],
+      "height_m": 84,
+      "materials": ["granite and limestone towers", "iron wire cables", "steel wire (later added)"],
+      "purpose": "first fixed road crossing of the East River between Manhattan and Brooklyn",
+      "parts": ["two Gothic masonry towers", "hybrid cable-stayed and suspension main span 486 m", "elevated pedestrian promenade", "great anchorages on both shores"],
+      "layout": [
+        "crosses from New York City Hall area to Brooklyn Heights",
+        "the promenade runs above the carriageways on diagonal stays",
+        "first day: about 1,800 vehicles and 150,000 people"
+      ],
+      "found": "New York City, USA (East River)",
+      "notes": "Designed by John A. Roebling, finished by his son Washington and daughter-in-law Emily Warren Roebling after John died in 1869. Opened 24 May 1883."
+    },
+    {
+      "id": "sydney_harbour_bridge",
+      "name": "Sydney Harbour Bridge",
+      "origin": "human",
+      "biomes": ["beach", "ocean"],
+      "cultures": ["Australian"],
+      "era": "1923-1932",
+      "footprint_m": [1149, 49],
+      "height_m": 134,
+      "materials": ["steel (about 6,000,000 rivets)", "granite-faced pylons"],
+      "purpose": "road, rail, cycle and pedestrian link across Port Jackson",
+      "parts": ["through-arch span of 503 m", "four granite-faced pylons, decorative, not load-bearing", "eight traffic lanes and two rail tracks"],
+      "layout": [
+        "arch rib springs from cliff-sited foundations; the deck hangs from it on steel hangers",
+        "deck hung from the arch; approaches on reinforced concrete viaducts",
+        "opened 19 March 1932; de Groot sabotaged the opening by cutting the ribbon on horseback"
+      ],
+      "found": "Port Jackson, Sydney, Australia",
+      "notes": "Nicknamed 'the Coathanger'. The pylons are pure decoration; the arch does all the work. Climb operator BridgeClimb runs trips over the arch daily since 1998."
+    },
+    {
+      "id": "akashi_kaikyo",
+      "name": "Akashi Kaikyō Bridge",
+      "origin": "human",
+      "biomes": ["ocean"],
+      "cultures": ["Japanese"],
+      "era": "1988-1998",
+      "footprint_m": [3911, 36],
+      "height_m": 298,
+      "materials": ["steel truss and box girder deck", "parallel steel wire cables"],
+      "purpose": "road crossing of the Akashi Strait (Honshū to Awaji Island)",
+      "parts": ["two towers, about 298 m tall", "main span of 1,991 m", "three spans total, 3,911 m overall"],
+      "layout": [
+        "spans the strait between Kobe and Awaji Island; no piers in the sea channel",
+        "towers founded on caissons sunk to the seabed",
+        "withstood the 1995 Great Hanshin earthquake mid-construction; the span grew 1 m"
+      ],
+      "found": "Akashi Strait, Hyōgo Prefecture, Japan",
+      "notes": "Longest suspension span in the world from 1998 until the 1915 Çanakkale Bridge opened in 2022 (2,023 m). Endured the Kobe quake without damage."
+    },
+    {
+      "id": "forth_rail_bridge",
+      "name": "Forth Bridge (rail)",
+      "origin": "human",
+      "biomes": ["river", "ocean", "beach"],
+      "cultures": ["British", "Scottish"],
+      "era": "1882-1890",
+      "footprint_m": [2529, 48],
+      "height_m": 110,
+      "materials": ["steel (about 54,000 tonnes)", "granite piers"],
+      "purpose": "rail crossing of the Firth of Forth for heavy trains",
+      "parts": ["two main cantilever spans of 521 m", "three double-cantilever towers", "massive granite foundation piers"],
+      "layout": [
+        "from South Queensferry to North Queensferry",
+        "parallel lines for two tracks",
+        "paint crew never fully finishes; painting is said never to end"
+      ],
+      "found": "Firth of Forth near Queensferry, Scotland",
+      "notes": "Britain's first great steel bridge; world's longest cantilever span until 1919 (Québec Bridge). UNESCO World Heritage (2015). Still carries freight and passenger trains."
+    },
+    {
+      "id": "london_bridge_medieval",
+      "name": "Old London Bridge (medieval)",
+      "origin": "human",
+      "biomes": ["river", "mixed_forest"],
+      "cultures": ["English"],
+      "era": "1176-1209 (stone); replaced 1831",
+      "footprint_m": [282, 7],
+      "height_m": 18,
+      "materials": ["ragstone rubble core", "chalk and rubble", "timber for houses", "starlings (piles of sunken timber)"],
+      "purpose": "road crossing of the Thames combining bridge, shop street and gate; rents funded maintenance",
+      "parts": ["19 stone arches", "timber-piled foundations and starlings", "two rows of houses and shops up to five storeys", "chapel of St Thomas Becket (1176)", "southern stone gate with pikes for traitors' heads"],
+      "layout": [
+        "about 926 feet (282 m) long",
+        "houses up to five storeys over the piers, projecting on hammer beams",
+        "roadway only about 4.5-6 m wide; house shops fronted it",
+        "starlings caused a 1.8 m water-level difference; rapids under the central arch"
+      ],
+      "found": "the River Thames between the City of London and Southwark",
+      "notes": "Up to 140 houses by the late 14th century; a 1.8 m drop across the starlings drowned many before the 1757-1759 Great Arch. Demolished 1831."
+    },
+    {
+      "id": "ponte_vecchio",
+      "name": "Ponte Vecchio",
+      "origin": "human",
+      "biomes": ["river", "mediterranean"],
+      "cultures": ["Italian"],
+      "era": "1345 to now (replacing earlier wooden bridges on the same site)",
+      "footprint_m": [84, 20],
+      "height_m": 12,
+      "materials": ["pietraforte sandstone", "lime mortar", "timber shops"],
+      "purpose": "road crossing of the Arno; shop rents paid for upkeep",
+      "parts": ["three segmental arches (main span 30 m)", "rows of shops (botteghe) cantilevered over both sides", "Vasari Corridor running above the deck (1565)", "Cellini bust at the centre"],
+      "layout": [
+        "spans the Arno at its narrowest point",
+        "shops projecting over both sides, back jetties added in the 17th century",
+        "the only Florence bridge spared by the retreating German army in August 1944"
+      ],
+      "found": "Florence, Italy (Via Por Santa Maria to Via de' Guicciardini)",
+      "notes": "Butchers evicted in 1565 by ducal decree; goldsmiths since. Rebuilt 1345 after the 1333 flood; the only Arno bridge not destroyed in 1944."
+    },
+    {
+      "id": "rialto_bridge",
+      "name": "Rialto Bridge (Ponte di Rialto)",
+      "origin": "human",
+      "biomes": ["river", "mediterranean"],
+      "cultures": ["Italian"],
+      "era": "1591 (current stone bridge; wooden bridges from c. 1173)",
+      "footprint_m": [48, 22],
+      "height_m": 7,
+      "materials": ["Istrian stone", "timber (earlier bridges)"],
+      "purpose": "main foot crossing of the Grand Canal and the commercial centre of Venice",
+      "parts": ["single stone arch span of 28.8 m", "two rows of 24 shops on the deck", "three walkways separated by the shops", "granite foundations on 12,000 wooden piles"],
+      "layout": [
+        "crosses the Grand Canal at its narrowest point",
+        "shops on both sides; central portico for the traffic of goods",
+        "turned to allow tall masts through the central arch"
+      ],
+      "found": "Venice, Italy (Grand Canal)",
+      "notes": "Antonio da Ponte won the 1588 competition against Palladio and Michelangelo; the foundation piles were driven into the lagoon mud as for every Venetian palace."
+    },
+    {
+      "id": "charles_bridge",
+      "name": "Charles Bridge (Karlův most)",
+      "origin": "human",
+      "biomes": ["river", "mixed_forest"],
+      "cultures": ["Czech", "Bohemian"],
+      "era": "1357-1402 (Gothic); statues added mainly 1683-1714",
+      "footprint_m": [516, 10],
+      "height_m": null,
+      "materials": ["sandstone blocks", "lime mortar (legendarily mixed with egg white, milk and whey)"],
+      "purpose": "royal road crossing of the Vltava between Prague Castle and the Old Town",
+      "parts": ["16 stone arches", "two Gothic bridge towers (Old Town and Lesser Town)", "30 Baroque statues lining the parapets", "paved walkway"],
+      "layout": [
+        "from Prague Castle across the Vltava to the Old Town",
+        "Old Town tower had two viewing levels; lesser tower gate opens to Malá Strana",
+        "statues were added over the 17th-18th centuries as votive offerings"
+      ],
+      "found": "Prague, Czech Republic",
+      "notes": "Begun by Charles IV in 1357; replaced the Judith Bridge (1158-1172), destroyed by flood in 1342. The saint John of Nepomuk statue is the most kissed one."
+    },
+    {
+      "id": "stara_most",
+      "name": "Stari Most (Mostar)",
+      "origin": "human",
+      "biomes": ["river", "mountains"],
+      "cultures": ["Ottoman", "Bosnian"],
+      "era": "1566-1567 (original); destroyed 1993; rebuilt 2001-2004",
+      "footprint_m": [29, 4],
+      "height_m": 24,
+      "materials": ["local Tenelija limestone", "lime mortar"],
+      "purpose": "foot crossing of the Neretva gorge linking Mostar's two Ottoman halves",
+      "parts": ["single stone arch span of 29 m", "fortified abutments (towers) on both banks", "stone ramp approaches"],
+      "layout": [
+        "spans the Neretva between the two fortified abutments",
+        "arch crown 24 m above the river",
+        "rebuilt using some original stones recovered from the riverbed"
+      ],
+      "found": "Mostar, Bosnia and Herzegovina",
+      "notes": "Designed by Mimar Hayruddin for Sultan Süleyman the Magnificent; blown up by Croat forces on 9 Nov 1993. UNESCO World Heritage (2005)."
+    },
+    {
+      "id": "victoria_falls_bridge",
+      "name": "Victoria Falls Bridge",
+      "origin": "human",
+      "biomes": ["river", "savanna", "subtropical_forest"],
+      "cultures": ["British", "Zambian", "Zimbabwean"],
+      "era": "1900-1905",
+      "footprint_m": [250, 6],
+      "height_m": 128,
+      "materials": ["steel arch rib", "concrete and masonry piers"],
+      "purpose": "rail and road crossing of the Zambezi below the Falls, on the imperial route from Cape to Cairo",
+      "parts": ["single steel arch span of 156.8 m", "deck 128 m above the gorge", "rail track and single carriageway with footpath"],
+      "layout": [
+        "crosses the gorge at right angles, about 450 m downstream of the falls",
+        "arch founded on cliff-edge piers; no piers in the river",
+        "viewing tours walk the arch; daredevils bungee and walk it on a plank"
+      ],
+      "found": "on the border of Zambia and Zimbabwe at Victoria Falls",
+      "notes": "Ralph Freeman designed it; opened by Lord Curzon in 1905. The prototype for the Sydney Harbour Bridge."
+    },
+    {
+      "id": "zhaozhou_bridge",
+      "name": "Zhaozhou Bridge (Anji Bridge)",
+      "origin": "human",
+      "biomes": ["river", "plains"],
+      "cultures": ["Chinese"],
+      "era": "c. 595-605 CE (Sui dynasty)",
+      "footprint_m": [51, 9],
+      "height_m": 7,
+      "materials": ["cut stone", "lime mortar"],
+      "purpose": "road bridge over the Xiao River on the imperial southern highway",
+      "parts": ["single open-spandrel stone segmental arch of 37.4 m", "28 small spandrel arches to lighten the load and pass flood water", "abutments keyed into rammed earth"],
+      "layout": [
+        "single arch spanning the Xiao River without intermediate piers",
+        "open spandrels cut the weight and let floods through safely",
+        "survived earthquakes, wars and floods for 1,400 years"
+      ],
+      "found": "Zhao County, Hebei Province, China",
+      "notes": "Oldest surviving open-spandrel stone arch bridge; architect Li Chun. Segmental stone arches 1,300 years before Europe's equivalents."
+    },
+    {
+      "id": "wooden_covered_bridge",
+      "name": "Wooden covered bridge",
+      "origin": "human",
+      "biomes": ["river", "forest", "mixed_forest", "plains"],
+      "cultures": ["American", "Swiss", "German"],
+      "era": "from the 18th century; peaked 19th century",
+      "footprint_m": [60, 5],
+      "height_m": 6,
+      "materials": ["timber truss (Town lattice, Howe, Burr arch)", "clapboard or vertical board siding", "shingle roof"],
+      "purpose": "roof keeps the truss dry; a wet wooden truss rots",
+      "parts": ["lattice or Howe truss", "full-height siding with portholes", "stone or timber abutments"],
+      "layout": [
+        "roof runs the full span; siding protects the joints",
+        "Town lattice truss used no iron, ideal for remote sites",
+        "single lane; weight limits posted or assumed"
+      ],
+      "found": "New England, Pennsylvania, the upper Midwest; similar traditions in Switzerland and Germany",
+      "notes": "The US built roughly 10,000-15,000; about 700 survive. Cornish-Windsor Covered Bridge (1866) at 137 m is the longest historic US example."
+    },
+    {
+      "id": "bailey_bridge",
+      "name": "Bailey bridge",
+      "origin": "human",
+      "biomes": ["river", "mountains", "forest"],
+      "cultures": ["British", "American"],
+      "era": "1941 onward",
+      "footprint_m": [30, 4],
+      "height_m": 3,
+      "materials": ["prefabricated steel panels pinned by hand"],
+      "purpose": "military and emergency span erected without cranes or special equipment",
+      "parts": ["pinned truss panels", "transoms and decking", "rollers and launching nose for the build"],
+      "layout": [
+        "panels pin together with hand tools; a 30 m Class-40 span assembles in hours",
+        "single, double or triple trusses deepen the capacity",
+        "launched from one bank with a nose, then dropped into place"
+      ],
+      "found": "WWII front lines, Korea, Vietnam, Afghanistan; disaster relief worldwide",
+      "notes": "Donald Bailey, a British civil servant, patented it in 1941. Some Bailey bridges erected after the 2015 Nepal earthquake carried traffic for decades."
+    },
+    {
+      "id": "millau_viaduct",
+      "name": "Millau Viaduct",
+      "origin": "human",
+      "biomes": ["mountains", "plains"],
+      "cultures": ["French"],
+      "era": "2001-2004",
+      "footprint_m": [2460, 32],
+      "height_m": 343,
+      "materials": ["steel deck (2,460 m of it)", "concrete piers up to 245 m"],
+      "purpose": "A75 autoroute crossing of the Tarn valley; removes a year-round traffic bottleneck",
+      "parts": ["seven concrete piers up to 245 m tall", "steel masts rise above the deck to 343 m", "six main spans of 342 m each", "highest bridge piers in the world"],
+      "layout": [
+        "between Clermont-Ferrand and Béziers, passing over the Tarn and the Tarn valley",
+        "deck 270 m above the valley floor",
+        "masts are thinner than the Eiffel Tower at its base"
+      ],
+      "found": "Millau, Aveyron, France",
+      "notes": "Designed by Norman Foster and Michel Virlogeux; opened December 2004. Still the tallest bridge in the world (mast 343 m)."
+    },
+    {
+      "id": "duge_bridge",
+      "name": "Duge Bridge (Beipanjiang)",
+      "origin": "human",
+      "biomes": ["mountains", "river"],
+      "cultures": ["Chinese"],
+      "era": "opened 29 December 2016",
+      "footprint_m": [1341, 26],
+      "height_m": 565,
+      "materials": ["steel truss cable-stayed deck", "concrete towers"],
+      "purpose": "G56 Hangzhou-Ruili Expressway over the Beipan River gorge",
+      "parts": ["deck 565 m above the Beipan River", "two towers on karst cliffs", "single main span of 720 m"],
+      "layout": [
+        "crosses the gorge between Liupanshui and Xuanwei",
+        "world's highest bridge deck from 2016 to 2025 (overtaken by the Huajiang Grand Canyon Bridge, 625 m)"
+      ],
+      "found": "Duge, on the Guizhou-Yunnan border, China",
+      "notes": "565 m above the gorge. Reduced the Liupanshui-Xuanwei drive from hours to minutes; a defining monument of China's highway programme."
+    },
+    {
+      "id": "natural_bridge_virginia",
+      "name": "Natural Bridge",
+      "origin": "natural",
+      "biomes": ["forest", "mixed_forest"],
+      "cultures": ["Monacan"],
+      "era": null,
+      "footprint_m": [27, 20],
+      "height_m": 65,
+      "materials": ["Ordovician limestone"],
+      "purpose": "limestone arch cut by Cedar Creek; a landmark crossing and sacred site",
+      "parts": ["tunnel-like natural arch 65 m high and 27 m wide", "Cedar Creek passes underneath", "walls worn by the creek"],
+      "layout": [
+        "the creek cut through a limestone ridge, leaving the arch as a roof",
+        "arch thickens at the crown; walls taper inward",
+        "Virginia acquired it in 2015 as a state park"
+      ],
+      "found": "Rockbridge County, Virginia, USA",
+      "notes": "George Washington surveyed it in 1750; sacred to the Monacan Nation. Formed over millions of years by Cedar Creek dissolving the limestone."
+    },
+    {
+      "id": "single_log_footbridge",
+      "name": "Single log footbridge",
+      "origin": "human",
+      "biomes": ["river", "forest", "rainforest", "taiga"],
+      "cultures": [],
+      "era": null,
+      "footprint_m": [8, 1],
+      "height_m": null,
+      "materials": ["a single sound tree trunk"],
+      "purpose": "foot crossing of narrow streams and ravines",
+      "parts": ["felled log spanning the gap", "notches or lashings at both ends"],
+      "layout": [
+        "one trunk felled across the gap, ends set into the banks",
+        "bark strips or adzed flat for footing",
+        "replaced when it rots or falls"
+      ],
+      "found": "tropical forests (Borneo, Congo Basin), Appalachian and Scandinavian backlands",
+      "notes": "The simplest bridge a human can build: one tree, one gap. Living root bridges in Meghalaya are the self-repairing living version of the same idea."
+    },
+    {
+      "id": "living_root_bridge",
+      "name": "Living root bridge (Meghalaya)",
+      "origin": "human",
+      "biomes": ["rainforest", "subtropical_forest"],
+      "cultures": ["Khasi", "Jaintia"],
+      "era": "unknown; centuries old, some still growing",
+      "footprint_m": [30, 2],
+      "height_m": null,
+      "materials": ["living rubber fig (Ficus elastica) aerial roots", "areca nut trunks as training guides"],
+      "purpose": "community foot crossing of monsoon streams, self-building and self-repairing",
+      "parts": ["two or more rubber figs planted on opposite banks", "roots trained and woven into a deck and rails", "betel nut/palm guides replaced as roots take over"],
+      "layout": [
+        "figs planted on each bank; aerial roots tied together until they fuse",
+        "the bridge thickens as the trees grow; 10-15 years to bear weight, decades more to mature",
+        "must be regrown, not repaired: dead roots are replaced by live ones"
+      ],
+      "found": "Mawlynnong, Pynursla, Nongriat and surrounding Khasi hills, Meghalaya, India",
+      "notes": "A living bridge strengthens with age and can outlast any timber span; monsoon floods only feed it. Some double-decker examples are 60+ years old."
+    }
+  ]
+}
