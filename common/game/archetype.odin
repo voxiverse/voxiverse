@@ -30,6 +30,7 @@ Entity_Handle :: distinct u32
 
 MAX_ARCHETYPES :: 64
 MAX_COMPONENT_SIZE :: 64 // a deferred add carries the value in its command
+MAX_LARGE_COMPONENT_SIZE :: 1024 // a component over MAX_COMPONENT_SIZE: set at spawn only
 ROWS_STEP :: 64 // rows committed at a time
 NO_ARCHETYPE :: u16(max(u16)) // a spawn not applied yet
 
@@ -50,6 +51,7 @@ Store_Error :: enum u8 {
 	Command_Ring_Full,
 	Id_Exhausted,
 	Pool_Full,
+	Large_Component, // add or remove of a component over MAX_COMPONENT_SIZE
 }
 
 Store_Column :: struct {
@@ -118,7 +120,10 @@ store_init :: proc(
 ) -> mem.Allocator_Error {
 	assert(len(infos) <= 32 && max_entities > 0)
 	for info in infos {
-		assert(info.size > 0 && info.size <= MAX_COMPONENT_SIZE, "component size out of range")
+		assert(
+			info.size > 0 && info.size <= MAX_LARGE_COMPONENT_SIZE,
+			"component size out of range",
+		)
 	}
 	st^ = {
 		infos     = infos,
@@ -354,10 +359,13 @@ store_despawn :: proc(st: ^Entity_Store, h: Entity_Handle) -> Store_Error {
 	return .None
 }
 
+// A component over MAX_COMPONENT_SIZE ("large") does not fit a command: it is
+// part of a spawn's set and never added or removed afterwards (.Large_Component).
 store_add :: proc(st: ^Entity_Store, h: Entity_Handle, c: Component, value: ^$T) -> Store_Error {
 	s := base.pool_get(&st.slots, h)
 	if s == nil || s.dying {return .Stale}
 	info := st.infos[c]
+	if info.size > MAX_COMPONENT_SIZE {return .Large_Component}
 	assert(info.type == T && size_of(T) == info.size, "component type mismatch")
 	cmd := Store_Command {
 		kind      = .Add,
@@ -371,6 +379,7 @@ store_add :: proc(st: ^Entity_Store, h: Entity_Handle, c: Component, value: ^$T)
 store_remove :: proc(st: ^Entity_Store, h: Entity_Handle, c: Component) -> Store_Error {
 	s := base.pool_get(&st.slots, h)
 	if s == nil || s.dying {return .Stale}
+	if st.infos[c].size > MAX_COMPONENT_SIZE {return .Large_Component}
 	return push(st, Store_Command{kind = .Remove, component = c, handle = h})
 }
 

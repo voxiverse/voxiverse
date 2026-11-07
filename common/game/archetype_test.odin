@@ -428,3 +428,50 @@ test_store_kind :: proc(t: ^testing.T) {
 	store_apply(&st)
 	testing.expect_value(t, store_kind(&st, a), Kind_Id(0)) // a stale handle
 }
+
+@(private = "file")
+Big :: struct {
+	bytes: [450]u8,
+}
+
+// A component over MAX_COMPONENT_SIZE is set at spawn, survives archetype
+// moves caused by other components, and is refused by add and remove.
+@(test)
+test_store_large_component :: proc(t: ^testing.T) {
+	testing.expect_value(t, size_of(Store_Command), 76) // the ring is unchanged
+	table := [5]Component_Info{}
+	copy(table[:], infos())
+	table[4] = {
+		name  = "Big",
+		type  = Big,
+		size  = size_of(Big),
+		align = align_of(Big),
+	}
+	C_BIG :: Component(4)
+	st: Entity_Store
+	testing.expect(t, store_init(&st, table[:], nil, 8) == nil)
+	defer store_destroy(&st)
+
+	_, h, _ := store_spawn(&st, {int(C_POS), int(C_BIG)})
+	store_apply(&st)
+	big := store_get(&st, h, C_BIG, Big)
+	testing.expect(t, big != nil)
+	for b in big.bytes {testing.expect_value(t, b, 0)} 	// zeroed
+	for i in 0 ..< len(big.bytes) {big.bytes[i] = u8(i * 7 + 1)}
+
+	v := Vel{2}
+	testing.expect(t, store_add(&st, h, C_VEL, &v) == .None)
+	store_apply(&st)
+	testing.expect(t, store_remove(&st, h, C_POS) == .None)
+	store_apply(&st)
+	testing.expect(t, store_remove(&st, h, C_VEL) == .None)
+	store_apply(&st)
+	big = store_get(&st, h, C_BIG, Big)
+	testing.expect(t, big != nil)
+	for i in 0 ..< len(big.bytes) {testing.expect_value(t, big.bytes[i], u8(i * 7 + 1))}
+
+	other := Big{}
+	testing.expect_value(t, store_add(&st, h, C_BIG, &other), Store_Error.Large_Component)
+	testing.expect_value(t, store_remove(&st, h, C_BIG), Store_Error.Large_Component)
+	testing.expect_value(t, st.cmd_count, 0)
+}
