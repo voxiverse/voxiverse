@@ -32,6 +32,7 @@ Chunk :: struct {
 	blocks:         game.Chunk_Blocks,
 	modified:       bool, // edited since generated (saved when unloaded: save.odin)
 	restless:       bool, // may hold a block with simulation rules (set when it does, never cleared): waking skips it if not
+	random_blocks:  int, // count of blocks with a random rule
 	capture:        u32, // the running save's id while its blocks are still to be copied (save_slice.odin)
 	block_entities: [dynamic]game.Block_Entity, // sorted by local (block_entities.odin; heap)
 	layers:         game.Chunk_Layers, // the stored channels (channels.odin), pages from Chunk_Store.pools
@@ -173,9 +174,14 @@ chunks_set_block :: proc(w: ^Chunk_Store, p: game.Block_Pos, b: game.Block) -> b
 	c := chunks_get(w, game.chunk_of(p))
 	if c == nil || c.state != .Ready {return false}
 	chunk_cow(w, c)
+	old := game.chunk_get(&c.blocks, game.local_of(p))
 	if game.chunk_set(&c.blocks, &w.arrays, game.local_of(p), b) != nil {return false}
 	c.modified = true
 	if block_has_rules(w, b) {c.restless = true}
+	if old != b {
+		if block_has_random(w, old) {c.random_blocks -= 1}
+		if block_has_random(w, b) {c.random_blocks += 1}
+	}
 	return true
 }
 
@@ -257,6 +263,7 @@ chunks_insert :: proc(
 		}
 	}
 	chunk.restless = chunk_restless(w, &chunk.blocks)
+	chunk.random_blocks = chunk_random_blocks(w, &chunk.blocks)
 	if len(layers) > 0 && w.reg != nil {
 		if err := game.layers_apply(&chunk.layers, &w.pools, w.reg.channels, layers); err != nil {
 			log.errorf("server chunk channels not loaded chunk=%v error=%v", pos, err)
@@ -306,6 +313,7 @@ chunks_collect :: proc(
 		}
 		append(&w.free_tasks, task)
 		chunk.restless = chunk_restless(w, &chunk.blocks)
+		chunk.random_blocks = chunk_random_blocks(w, &chunk.blocks)
 		if !keep(chunk.pos, data) {chunks_unload(w, chunk.pos)}
 	}
 }
