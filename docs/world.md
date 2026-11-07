@@ -249,6 +249,17 @@ at their day and place and change nothing before it.
   `market_leave` keeps the detailed price's gap to the lazy one in `Lazy_State`, fading over
   3 months. The islands themselves (who observes, what runs when) are issues #132 and #133;
   this part takes the towns of an island as a list. Only grain is hit by droughts so far.
+- **The economy, part 3** (`common/planet/trade.odin`): news at the speed of travellers. Every
+  town of an island keeps `Knowledge` (per town and good: the price it last heard and the month
+  that price was true, so news has an age). A `Caravan` leaves along each way (`convoy_step`)
+  with a copy of its origin's knowledge, refreshed with the origin's prices, and travels
+  `travel_months` (600 km a month, 1.3 times the line); on arrival the destination keeps the
+  newer of each report. Caravans carry news; the goods merchants move stay the market's
+  (`market_step`). A `Trader` (the player) holds the same knowledge (what they saw, what a town
+  told them on `trader_arrive`) and buys and sells at a town's price as its stock moves, 5 %
+  over/under (`SPREAD`); `trade_matters` says when a trade is large enough (a quarter of the
+  town's monthly need) to be a `Traded` intervention (#131). Not yet: the market screen, caravans
+  as entities, and the drought-first-profit check (see #141).
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of
