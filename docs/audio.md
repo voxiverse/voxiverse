@@ -80,6 +80,12 @@ to Ogg Vorbis with a metadata `.json` beside each (title, tags, length, and the 
 score and the SoundFont, so a piece is re-rendered only when an input changes); `build music
 --audition <name> [--from <s>]` plays one.
 
+- `build run` checks whether any piece is stale (the score changed or the soundfonts changed)
+  and re-renders it before compiling the game, so a score changed locally is heard at once.
+  If rendering cannot run (no 7z/bsdtar, offline), it warns and runs with the old audio.
+- CI refuses a stale render: a test checks that every score has up-to-date metadata and rendered
+  audio (`render it: build music`). A pull request that changes a score commits its render.
+
 - The renderer is our own SoundFont 2 reader and sample renderer in Odin (`tools/music`; no
   FluidSynth): presets, instruments, key and velocity zones, loops, a volume envelope, pan,
   tuning and a low-pass filter, with the engine's reverb on the render, mastered to the target
