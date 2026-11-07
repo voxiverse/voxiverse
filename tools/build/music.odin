@@ -197,3 +197,42 @@ music_ensure_rendered :: proc() -> bool {
 	}
 	return true
 }
+
+// music_command runs the music tool; when it re-rendered a piece (an Ogg in
+// assets/music changed), it updates everything a render touches in the same
+// run, so a render cannot ship without them: the decoder's digests and
+// reference windows (`ogg digests`, `ogg reference`) and the audio baseline
+// that plays the music (`audio --accept music_session`).
+music_command :: proc(args: []string) -> bool {
+	before := music_ogg_stamps()
+	if !run_tool("music", args, release = true) {return false}
+	after := music_ogg_stamps()
+	changed := make([dynamic]string, context.temp_allocator)
+	for name, stamp in after {
+		if old, had := before[name]; !had || old != stamp {append(&changed, name)}
+	}
+	if len(changed) == 0 {return true}
+	slice.sort(changed[:])
+	fmt.printfln(
+		"music: %s re-rendered: updating the digests, reference windows and baseline",
+		strings.join(changed[:], ", ", context.temp_allocator),
+	)
+	if !run_tool("ogg", {"digests"}, release = true) {return false}
+	if !run_tool("ogg", {"reference"}, release = true) {return false}
+	if !audio_baselines({"--accept", "music_session"}) {return false}
+	fmt.println("music: digests, reference windows and baseline music_session updated")
+	return true
+}
+
+// music_ogg_stamps: each rendered piece's size and modification time.
+@(private = "file")
+music_ogg_stamps :: proc() -> map[string][2]i64 {
+	stamps := make(map[string][2]i64, context.temp_allocator)
+	files, err := os.read_all_directory_by_path(MUSIC_DIR, context.temp_allocator)
+	if err != nil {return stamps}
+	for f in files {
+		if !strings.has_suffix(f.name, ".ogg") {continue}
+		stamps[f.name] = {f.size, f.modification_time._nsec}
+	}
+	return stamps
+}
