@@ -37,12 +37,21 @@ Part :: struct {
 	program:   u8,
 	volume_db: f32,
 	pan:       f32,
+	melody:    bool, // marked `melody` in the score: the ear listens to this part
+}
+
+// Source is where a score wrote a note (a MIDI file has none): the ear's critique cites it.
+Source :: struct {
+	start:     u32,
+	part, key: u8,
+	line, col: u32,
 }
 
 Piece :: struct {
 	title:                   string,
 	parts:                   [dynamic]Part,
 	notes:                   [dynamic]Note,
+	sources:                 [dynamic]Source,
 	pedals:                  [dynamic]Pedal,
 	tempos:                  [dynamic]Tempo,
 	meters:                  [dynamic]Meter,
