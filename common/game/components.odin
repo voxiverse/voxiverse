@@ -1,7 +1,8 @@
 package game
 
 // The components every entity kind is built from, shared by server and
-// client (entities v2). Each is plain data, at most MAX_COMPONENT_SIZE bytes.
+// client (entities v2). Each is plain data, at most MAX_COMPONENT_SIZE bytes
+// (a larger one is set at spawn only, see archetype.odin).
 // Components the server alone needs (Brain holds a path) are registered by
 // the server after these: its ids start at FIRST_SERVER_COMPONENT.
 //

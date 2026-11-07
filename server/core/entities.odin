@@ -1316,7 +1316,7 @@ entity_world_spawn :: proc(
 	case .None:
 	case .Id_Exhausted:
 		return 0, 0, .Out_Of_Ids
-	case .Stale, .Command_Ring_Full, .Pool_Full:
+	case .Stale, .Command_Ring_Full, .Pool_Full, .Large_Component:
 		return 0, 0, .Full
 	}
 
