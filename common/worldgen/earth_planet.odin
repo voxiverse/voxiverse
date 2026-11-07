@@ -38,6 +38,58 @@ planet_relief :: proc() -> (planet.Relief, bool) {
 	return shared_relief, shared_ok
 }
 
+@(private = "file")
+shared_model: planet.Planet
+@(private = "file")
+model_once: sync.Once
+
+// planet_model: Earth's climate grid, built once for the process (any thread)
+// from the relief, on first use.
+planet_model :: proc() -> planet.Planet {
+	sync.once_do(&model_once, proc() {
+		r, _ := planet_relief()
+		shared_model = planet.planet_build(r, runtime.heap_allocator())
+	})
+	return shared_model
+}
+
+// planet_climate: the Köppen class of the climate at block column (x, z), from
+// its own monthly climate (corrected by the lapse rate for its height, so
+// mountains climb through the zones), and the coldest month's temperature.
+planet_climate :: proc(x, z: i32) -> (k: planet.Koppen, coldest: f32) {
+	m := planet_model()
+	lat, lon := planet_lat_lon(x, z)
+	t, pr: [12]f64
+	coldest = max(f32)
+	for i in 0 ..< 12 {
+		s := planet.planet_climate_at(m, lat, lon, f64(i) + 0.5)
+		t[i], pr[i] = f64(s.temperature), f64(s.precipitation)
+		coldest = min(coldest, s.temperature)
+	}
+	return planet.koppen_classify(t, pr, lat >= 0), coldest
+}
+
+// planet_biome_of: the biome a Köppen class gives (docs/world.md, Worlds).
+planet_biome_of :: proc(k: planet.Koppen) -> Biome {
+	#partial switch k {
+	case .Af, .Am, .Cwa, .Cwb, .Cwc, .Cfa, .Cfb, .Cfc:
+		return .Forest // rainforest, subtropical and temperate forest
+	case .Aw, .BSh, .BSk, .Csa, .Csb, .Csc:
+		return .Plains // savanna, steppe, Mediterranean scrub
+	case .BWh, .BWk:
+		return .Desert
+	case .Dsa, .Dsb, .Dwa, .Dwb, .Dfa, .Dfb:
+		return .Forest // mixed forest
+	case .Dsc, .Dsd, .Dwc, .Dwd, .Dfc, .Dfd:
+		return .Taiga
+	case .ET:
+		return .Tundra
+	case .EF:
+		return .Ice_Sheet
+	}
+	return .Plains
+}
+
 // planet_lat_lon: the latitude and longitude, degrees, of block column (x, z).
 planet_lat_lon :: proc(x, z: i32) -> (lat, lon: f64) {
 	return -90 * f64(z) / (PLANET_CIRCUMFERENCE / 4), 180 * f64(x) / (PLANET_CIRCUMFERENCE / 2)
@@ -138,4 +190,25 @@ planet_place :: proc(name: string) -> (place: Planet_Place, ok: bool) {
 		if p.name == name {return p, true}
 	}
 	return {}, false
+}
+
+// planet_biome replaces a column's biome with the one its Köppen class gives:
+// the sea (frozen where its coldest month is under -1.8 °C), the banks and
+// the high mountains stay as the shape made them.
+@(private)
+planet_biome :: proc(p: ^Params, c: ^Column, x, z: i32, mountainous: f32) {
+	sea := f32(p.sea_level)
+	k, coldest := planet_climate(x, z)
+	switch {
+	case c.height < sea - 3 && c.river < 0.5:
+		c.biome = .Frozen_Ocean if coldest < -1.8 else .Ocean
+	case c.biome == .River || c.biome == .Beach:
+	// the shape's coast and banks
+	case k == .EF:
+		c.biome = .Ice_Sheet
+	case mountainous > 0.3 && c.height > sea + 45:
+		c.biome = .Mountains
+	case:
+		c.biome = planet_biome_of(k)
+	}
 }

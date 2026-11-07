@@ -192,6 +192,7 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	c.temperature += p.warmth
 	c.humidity += p.wetness
 	c.biome = biome_of(p, &c, continent, mountainous)
+	if p.planet != 0 {planet_biome(p, &c, x, z, mountainous)}
 	return
 }
 

@@ -30,8 +30,14 @@ start); a saved universe keeps the home address it was made with. The generator 
 `worldgen.planet` (0 by default; nothing sets it yet) builds the height on `common/planet`: block x
 is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
 column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with
-the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Biomes
-from Köppen, rivers from the relief and ice sheets come in later parts. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
+the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Its biome is
+the one the column's own Köppen class gives (`planet_climate`, the monthly climate corrected by the lapse
+rate for the column's height, so mountains climb through the zones): rainforest, subtropical, temperate
+and mixed forest are `Forest`, savanna, steppe and Mediterranean scrub `Plains`, deserts `Desert`,
+subarctic `Taiga`, ET `Tundra`, EF `Ice_Sheet`, and seas colder than -1.8 °C in their coldest month
+`Frozen_Ocean`; the coast, the banks and high mountains keep the shape's biome. The climate grid is
+built once per process on first use (`planet_model`). `/where` prints the Köppen class and the biome.
+New biomes of their own, rivers from the relief and the spawn come in later parts. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 

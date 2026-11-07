@@ -89,3 +89,38 @@ test_planet_world_ends_at_an_ice_wall :: proc(t: ^testing.T) {
 	testing.expect(t, !planet_past_the_edge(32768, -16384))
 	testing.expect(t, column_at(&g.params, g.seed, 0, 0).biome != .Ice_Sheet)
 }
+
+@(test)
+test_planet_biome_follows_koppen :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	checked := 0
+	for i in i32(0) ..< 1000 {
+		h := hash(5, i, 1)
+		x := i32(h % 60000) - 30000
+		z := i32(hash(5, i, 2) % 30000) - 15000
+		c := column_at(&g.params, g.seed, x, z)
+		if c.height < 4 || c.river > 0 || c.biome == .Beach || c.biome == .Mountains {continue}
+		k, _ := planet_climate(x, z)
+		testing.expectf(t, c.biome == planet_biome_of(k), "%d %d: %v is %v", x, z, k, c.biome)
+		checked += 1
+	}
+	testing.expectf(t, checked > 100, "only %d land columns", checked)
+	// Greenland's interior is ice, Siberia's forest is taiga.
+	for place in ([]struct {
+			name:  string,
+			biome: Biome,
+		}{{"greenland", .Ice_Sheet}, {"siberia", .Taiga}}) {
+		pl, _ := planet_place(place.name)
+		x, z := planet_block_of(pl.lat, pl.lon)
+		testing.expect_value(t, earth_biome(&g, x, z), place.biome)
+	}
+	// Everest's summit climbs through the zones: mountains or ice, never forest.
+	x, z := planet_block_of(27.99, 86.93)
+	b := earth_biome(&g, x, z)
+	testing.expect(t, b == .Mountains || b == .Ice_Sheet, "Everest's summit is not forest")
+	// The open Pacific is sea; the Arctic's is frozen.
+	x, z = planet_block_of(0, -150)
+	testing.expect_value(t, earth_biome(&g, x, z), Biome.Ocean)
+	x, z = planet_block_of(88, 0)
+	testing.expect_value(t, earth_biome(&g, x, z), Biome.Frozen_Ocean)
+}
