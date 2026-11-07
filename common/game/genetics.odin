@@ -52,17 +52,6 @@ genes_child :: proc(a, b: Genes, r: ^base.Rng) -> (g: Genes) {
 	return
 }
 
-// Sheep_Flag: what a client is told about a sheep (every tick, in
-// Entity_Entry): how it looks, and whether it is in love (hearts).
-Sheep_Flag :: enum u8 {
-	Shorn,
-	Lamb,
-	Black,
-	Spotted,
-	In_Love,
-}
-Sheep_Flags :: bit_set[Sheep_Flag;u8]
-
 // Breeding and growing (ticks): fed, a sheep is ready for BREED_READY_TICKS;
 // after a lamb it waits BREED_WAIT_TICKS; a lamb grows up in LAMB_TICKS; wheat
 // brings that forward by a tenth.

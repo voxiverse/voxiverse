@@ -78,15 +78,28 @@ entities_draw :: proc(s: ^Session, d: ^render.Entity_Draw, dt: f32) {
 		if info == nil {continue}
 		switch info.model {
 		case .Sheep:
-			sheep(d, v, e.stride, hurt, e.flags)
-			if .In_Love in e.flags &&
+			looks := game.kind_looks(info, e.looks)
+			sheep(d, v, e.stride, hurt, looks)
+			if .In_Love in looks &&
 			   base.rng_f32(base.cosmetic_rng()) <
-				   0.06 {hearts(s, v.position + {0, f64(1.2 * (0.5 if .Lamb in e.flags else 1)), 0})}
+				   0.06 {hearts(s, v.position + {0, f64(1.2 * (0.5 if .Lamb in looks else 1)), 0})}
 		case .Rocket:
 			rocket(s, d, v)
 		case .Item:
 			dropped_item(s, d, v, e.stack)
-		case .Player, .Box: // (not drawn from here yet)
+		case .Box:
+			lo, hi := game.entity_box(info, {})
+			render.entity_box(
+				d,
+				v.position,
+				v.yaw,
+				0,
+				{f32(lo.x), 0, f32(lo.z)},
+				{f32(hi.x), f32(hi.y), f32(hi.z)},
+				{info.color[0], info.color[1], info.color[2], 255},
+				.Body,
+			)
+		case .Player: // (players are drawn as players, not from here)
 		}
 	}
 	for i := 0; i < len(s.puffs); {
@@ -113,7 +126,7 @@ sheep :: proc(
 	v: Other_View,
 	stride: f32,
 	hurt: bool,
-	flags: game.Sheep_Flags,
+	flags: game.Entity_Looks,
 ) {
 	wool, hide := WOOL, HIDE
 	if .Black in flags {wool = WOOL_BLACK}

@@ -243,7 +243,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	s.sounds = make([dynamic]Sound_Event, 0, 64, arena)
 	s.notices = make([dynamic]string, 0, 16) // heap: notices come and go (an arena would only grow)
 	s.others = make(map[u16]Other_Player) // heap: players come and go (an arena would only grow)
-	s.entities = make(map[u32]Other_Entity, 64)
+	s.entities, _ = base.map_make_fixed(map[u32]Other_Entity, game.MAX_KNOWN_ENTITIES)
 	s.puffs = make([dynamic]Puff, 0, MAX_PUFFS, arena) // never grows: appends check the room
 	session_texels(s)
 	s.config.name = strings.clone(config.name, arena)

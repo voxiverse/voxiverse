@@ -144,7 +144,7 @@ local SCHEMA = {
     { name = "position", t = "array", scalar = true, count = 3, elem = { t = "f64" } },
     { name = "yaw", t = "f32" },
     { name = "pitch", t = "f32" },
-    { name = "flags", t = "bits" },
+    { name = "looks", t = "u16" },
   } },
   { id = 13, name = "block", key = "block", lane = "reliable", fields = {
     { name = "block", t = "u16" },
