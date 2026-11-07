@@ -92,7 +92,7 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		proc(s: ^Server, _: rawptr) {
 			c := client_by_name(s, "a")
 			p := c.player.position
-			for &e in entities_view(c.world) {e.health = 1} 	// (one blast kills any)
+			for &e in entities_view(c.world) {entity_set_health(c.world, &e, 1)} 	// (one blast kills any)
 			explode_by(s, "a", {i32(p.x), i32(p.y), i32(p.z)}, 12)
 		},
 		nil,
