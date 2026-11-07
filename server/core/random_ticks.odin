@@ -17,9 +17,16 @@ import "common:game"
 random_ticks :: proc(w: ^World) {
 	speed := int(w.rules.random_tick_speed)
 	if speed <= 0 {return}
+	base.profile_scope("sampling")
 	it: base.Pool_Iterator
 	for c in base.pool_next(&w.chunks.chunks, &it) { 	// (slot order: map order would change what grows)
 		if c.state != .Ready || c.blocks.array == nil {continue} 	// (uniform: nothing grows)
+		if c.random_blocks == 0 {
+			for _ in 0 ..< speed {
+				base.rng_u32(&w.tick_rng)
+			}
+			continue
+		}
 		origin := game.chunk_origin(c.pos)
 		for _ in 0 ..< speed {
 			i := int(base.rng_u32(&w.tick_rng)) & (game.CHUNK_VOLUME - 1)
@@ -40,6 +47,7 @@ has_random_tick :: proc(w: ^World, b: game.Block) -> bool {
 // block at p, the rest are skipped. The act has no action: the tick's action is opened by the first
 // write (set_block asks for it), as when this was code; opening it here would change the journal.
 random_tick :: proc(w: ^World, p: game.Block_Pos, b: game.Block) {
+	base.profile_scope("rules")
 	sim := &w.server.registry.sim
 	for ri in sim.random[b] {
 		w.random_runs += 1

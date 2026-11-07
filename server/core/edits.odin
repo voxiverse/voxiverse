@@ -171,6 +171,8 @@ edit_chunk :: proc(
 					return
 				}
 				if block_has_rules(&w.chunks, new) {c.restless = true}
+				if block_has_random(&w.chunks, old) {c.random_blocks -= 1}
+				if block_has_random(&w.chunks, new) {c.random_blocks += 1}
 				channels_reset_cell(w, p, false)
 				entity_lifecycle(w, p, old, new, act)
 				append(&entries, game.Journal_Entry{pos = p, old = old, new = new})

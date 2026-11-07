@@ -146,6 +146,24 @@ block_has_rules :: #force_inline proc(w: ^Chunk_Store, b: game.Block) -> bool {
 	return w.reg != nil && int(b) < len(w.reg.sim.scheduled) && len(w.reg.sim.scheduled[b]) > 0
 }
 
+// block_has_random: whether b has random tick rules.
+block_has_random :: #force_inline proc(w: ^Chunk_Store, b: game.Block) -> bool {
+	return w.reg != nil && int(b) < len(w.reg.sim.random) && len(w.reg.sim.random[b]) > 0
+}
+
+// chunk_random_blocks: count of blocks in the chunk with random rules.
+chunk_random_blocks :: proc(w: ^Chunk_Store, blocks: ^game.Chunk_Blocks) -> int {
+	if w.reg == nil {return 0}
+	if blocks.array == nil {
+		return game.CHUNK_VOLUME if block_has_random(w, blocks.uniform) else 0
+	}
+	count := 0
+	for b in blocks.array {
+		if block_has_random(w, b) {count += 1}
+	}
+	return count
+}
+
 // chunk_restless: whether any block of the chunk has rules (so waking looks at it).
 chunk_restless :: proc(w: ^Chunk_Store, blocks: ^game.Chunk_Blocks) -> bool {
 	if w.reg == nil || !w.reg.sim.any {return false}

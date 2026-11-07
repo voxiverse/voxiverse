@@ -323,3 +323,79 @@ test_pack_random_rule :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, hashes[0], hashes[1])
 }
+
+// test_random_blocks_count_exact: the count stays exact through generation, edits, loads
+// and a random tick that changes a block.
+@(test)
+test_random_blocks_count_exact :: proc(t: ^testing.T) {
+	count_chunk_random :: proc(w: ^World, c: ^Chunk) -> int {
+		if c.blocks.array == nil {
+			return game.CHUNK_VOLUME if has_random_tick(w, c.blocks.uniform) else 0
+		}
+		count := 0
+		for b in c.blocks.array {
+			if has_random_tick(w, b) {count += 1}
+		}
+		return count
+	}
+
+	dir := "build/tmp/random_blocks_count"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	g, ok := grief_open(t, dir)
+	if !ok {grief_close(g); return}
+	w := grief_world(g)
+	here := game.chunk_of(g.f)
+	c := chunks_get(&w.chunks, here)
+	if !testing.expect(t, c != nil && c.state == .Ready) {grief_close(g); return}
+
+	// 1. Generation: count is exact.
+	expected := count_chunk_random(w, c)
+	testing.expect_value(t, c.random_blocks, expected)
+	testing.expect(t, c.random_blocks > 0, "surface chunk around player should have grass")
+
+	// 2. Edits: single block edits and bulk edits maintain exact count.
+	act := world_act(w, .Command)
+	p := game.chunk_origin(here) + {5, 5, 5}
+	set_block(w, p, .Grass, act)
+	testing.expect_value(t, c.random_blocks, count_chunk_random(w, c))
+	set_block(w, p, .Stone, act)
+	testing.expect_value(t, c.random_blocks, count_chunk_random(w, c))
+
+	box_lo := game.chunk_origin(here) + {1, 1, 1}
+	box_hi := game.chunk_origin(here) + {4, 4, 4}
+	bulk_edit(w, Bulk_Edit{shape = Box{box_lo, box_hi}, op = .Set, block = .Grass}, act)
+	testing.expect_value(t, c.random_blocks, count_chunk_random(w, c))
+
+	bulk_edit(w, Bulk_Edit{shape = Box{box_lo, box_hi}, op = .Set, block = .Stone}, act)
+	testing.expect_value(t, c.random_blocks, count_chunk_random(w, c))
+
+	// 3. Loads: saving and reloading maintains exact count.
+	chunk_pos := c.pos
+	expected_saved := c.random_blocks
+	grief_close(g)
+
+	g2, ok2 := grief_open(t, dir)
+	if !ok2 {grief_close(g2); return}
+	defer grief_close(g2)
+	w2 := grief_world(g2)
+	c2 := chunks_get(&w2.chunks, chunk_pos)
+	if !testing.expect(t, c2 != nil && c2.state == .Ready) {return}
+	testing.expect_value(t, c2.random_blocks, count_chunk_random(w2, c2))
+	testing.expect_value(t, c2.random_blocks, expected_saved)
+
+	// 4. Random tick that changes a block: grass buried under stone turns into dirt.
+	grass_p := game.chunk_origin(chunk_pos) + {8, 8, 8}
+	above_p := grass_p + {0, 1, 0}
+	set_block(w2, grass_p, .Grass, world_act(w2, .Command))
+	set_block(w2, above_p, .Stone, world_act(w2, .Command))
+	count_before_tick := c2.random_blocks
+	testing.expect_value(t, count_before_tick, count_chunk_random(w2, c2))
+
+	random_tick(w2, grass_p, .Grass)
+
+	after_b, _ := chunks_block(&w2.chunks, grass_p)
+	testing.expect_value(t, after_b, game.Block.Dirt)
+	testing.expect_value(t, c2.random_blocks, count_before_tick - 1)
+	testing.expect_value(t, c2.random_blocks, count_chunk_random(w2, c2))
+}
