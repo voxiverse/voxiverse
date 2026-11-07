@@ -3,6 +3,7 @@ package music_tool
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
@@ -735,4 +736,238 @@ test_json_round_trip :: proc(t: ^testing.T) {
 		testing.expectf(t, at > last, "key %s is out of order", k)
 		last = at
 	}
+}
+
+// ---- the instruments ----------------------------------------------------------
+
+// write_sine_wav: n frames of a sine of `cycles` whole cycles, 16-bit mono at 44100.
+write_sine_wav :: proc(path: string, cycles, n: int) -> bool {
+	x := make([]f32, n)
+	for i in 0 ..< n {x[i] = 0.5 * f32(math.sin(2 * math.PI * f64(cycles) * f64(i) / f64(n)))}
+	b: [dynamic]u8
+	u32le :: proc(b: ^[dynamic]u8, v: u32) {append(b, u8(v), u8(v >> 8), u8(v >> 16), u8(v >> 24))}
+	u16le :: proc(b: ^[dynamic]u8, v: u16) {append(b, u8(v), u8(v >> 8))}
+	append(&b, "RIFF")
+	u32le(&b, u32(36 + 2 * n))
+	append(&b, "WAVEfmt ")
+	u32le(&b, 16)
+	u16le(&b, 1)
+	u16le(&b, 1)
+	u32le(&b, 44100)
+	u32le(&b, 88200)
+	u16le(&b, 2)
+	u16le(&b, 16)
+	append(&b, "data")
+	u32le(&b, u32(2 * n))
+	for v in x {u16le(&b, u16(i16(v * 32767)))}
+	return os.write_entire_file(path, b[:]) == nil
+}
+
+// sfz_font writes two looped sines (220 Hz, root a3, and 880 Hz, root a5) and
+// an SFZ file that gives them the keys below and above 66, and reads it.
+sfz_font :: proc(t: ^testing.T) -> (sf: Soundfont, ok: bool) {
+	dir, derr := os.make_directory_temp("", "vx-sfz-", context.allocator)
+	if derr != nil {return}
+	testing.expect(t, write_sine_wav(strings.concatenate({dir, "/low.wav"}), 110, 22050))
+	testing.expect(t, write_sine_wav(strings.concatenate({dir, "/high.wav"}), 440, 22050))
+	text := `// a test instrument
+<control> default_path=
+<group> loop_mode=loop_continuous loop_start=0 loop_end=22049 ampeg_release=0.2
+<region> sample=low.wav lokey=c0 hikey=f#4 pitch_keycenter=a3
+<region> sample=high.wav lokey=g4 hikey=g9 pitch_keycenter=a5
+`
+	testing.expect(
+		t,
+		os.write_entire_file(strings.concatenate({dir, "/cello_test.sfz"}), transmute([]u8)text) ==
+		nil,
+	)
+	msg: string
+	sf, msg, ok = sfz_read_dir(dir)
+	testing.expectf(t, ok, "the SFZ does not read: %s", msg)
+	return
+}
+
+@(test)
+test_sfz_region_pitch :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	sf, ok := sfz_font(t)
+	if !ok {return}
+	testing.expect_value(t, len(sf.presets), 1)
+	testing.expect_value(t, sf.presets[0].name, "cello_test")
+	testing.expect_value(t, sf_find_named(&sf, "cello_test"), 0)
+	testing.expect_value(t, sf_find_named(&sf, "nope"), -1)
+	// key 57 is the low sample at its root, 60 is three semitones up, and
+	// 69 is in the high region, an octave below its root (a5 = 81... 12 below).
+	for c in ([]struct {
+			key: u8,
+			hz:  f64,
+		}{{57, 220}, {60, 220 * math.pow(2, 3.0 / 12)}, {69, 440}, {81, 880}}) {
+		p := one_note(c.key, 960)
+		p.parts[0].font = "sfz_test"
+		p.parts[0].preset = "cello_test"
+		fonts := make(map[string]^Soundfont)
+		fonts["sfz_test"] = &sf
+		x := render_with(&p, fonts)
+		hz := pitch_of(x, 0.2, 0.7)
+		cents := 1200 * math.log2(hz / c.hz)
+		testing.expectf(
+			t,
+			abs(cents) < 2,
+			"key %d: %.3f Hz, %.2f cents off %.2f",
+			c.key,
+			hz,
+			cents,
+			c.hz,
+		)
+	}
+	// Which sample plays: the zones for key 57 name the low one, for 72 the high.
+	zones: [dynamic]Zone_Params
+	sf_zones(&sf, 0, 57, 100, &zones)
+	testing.expect_value(t, len(zones), 1)
+	testing.expect_value(t, sf.samples[zones[0].sample].name, "low.wav")
+	clear(&zones)
+	sf_zones(&sf, 0, 72, 100, &zones)
+	testing.expect_value(t, len(zones), 1)
+	testing.expect_value(t, sf.samples[zones[0].sample].name, "high.wav")
+	testing.expect_value(t, zones[0].mode, 1)
+	testing.expectf(t, abs(zones[0].release - 0.2) < 1e-3, "release %f", zones[0].release)
+	// SFZ key names.
+	for c in ([]struct {
+			s:   string,
+			key: int,
+		}{{"c4", 60}, {"a3", 57}, {"c#4", 61}, {"db4", 61}, {"g9", 127}, {"72", 72}}) {
+		k, kok := sfz_key(c.s)
+		testing.expect(t, kok)
+		testing.expect_value(t, k, c.key)
+	}
+}
+
+// brightness: the spectral centroid (Hz) of a render, from its third octaves.
+brightness :: proc(x: []f32) -> f64 {
+	bands := audio.third_octaves(x, RATE)
+	num, den: f64
+	for b, i in bands {
+		power := math.pow(10, b / 10)
+		num += power * 50 * math.pow(2, f64(i) / 3)
+		den += power
+	}
+	return num / den
+}
+
+rms :: proc(x: []f32) -> f64 {
+	sum: f64
+	for v in x {sum += f64(v) * f64(v)}
+	return math.sqrt(sum / f64(len(x)))
+}
+
+@(test)
+test_felt_is_quieter_and_darker :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	sf, ok := load_font(t)
+	if !ok {return}
+	fonts := make(map[string]^Soundfont)
+	fonts["piano"], fonts["felt"] = &sf, &sf
+	for vel in ([]u8{40, 80, 127}) {
+		results: [2]struct {
+			level, centroid: f64,
+		}
+		for name, i in ([]string{"piano", "felt"}) {
+			// Preset 1 is the noise: a broad spectrum, so a low-pass shows.
+			p := one_note(60, 960)
+			p.parts[0] = Part {
+				name = "a",
+				bank = 1,
+				font = name,
+			}
+			p.notes[0].velocity = vel
+			x := render_with(&p, fonts)
+			results[i] = {rms(x), brightness(x)}
+		}
+		testing.expectf(
+			t,
+			results[1].level < results[0].level,
+			"velocity %d: felt %.4f is not quieter than the upright %.4f",
+			vel,
+			results[1].level,
+			results[0].level,
+		)
+		testing.expectf(
+			t,
+			results[1].centroid < results[0].centroid,
+			"velocity %d: felt %.0f Hz is not darker than the upright %.0f Hz",
+			vel,
+			results[1].centroid,
+			results[0].centroid,
+		)
+	}
+	// The hammer is soft: velocities are compressed toward pp, and the
+	// filter opens with them.
+	testing.expect(t, felt_velocity(127) < 80 && felt_velocity(1) < 20)
+	a, b := Zone_Params {
+			fc_cents = 13500,
+		}, Zone_Params {
+			fc_cents = 13500,
+		}
+	felt_zone(&a, 20)
+	felt_zone(&b, 70)
+	testing.expect(t, a.fc_cents < b.fc_cents)
+}
+
+@(test)
+test_four_instruments_render_deterministically :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	sf, ok := load_font(t)
+	sfz, ok2 := sfz_font(t)
+	if !ok || !ok2 {return}
+	append(&extra_fonts, Font_Def{name = "sfz_test", kind = .Sfz})
+	defer clear(&extra_fonts)
+	src := `title "Four"
+tempo 100
+meter 4/4
+seed 3
+humanize timing 6 ms velocity 5
+reverb 1.5 s 0.2
+instrument a preset 0:0
+instrument b font felt preset 0:0
+instrument c font freepats_harp preset 2:0
+instrument d font sfz_test preset cello_test
+
+part one a
+  mf | c4:q e4 g4 c5 |
+part two b volume -3 dB
+  p | c3:h g3:h |
+part three c pan 0.3
+  mp | e5:e g5 c6:q r:h |
+part four d pan -0.3
+  mf | c3:w |
+`
+	p, msg, pok := score_parse(src, "four.score")
+	testing.expectf(t, pok, "%s", msg)
+	if !pok {return}
+	testing.expect_value(t, p.parts[1].font, "felt")
+	testing.expect_value(t, p.parts[2].font, "freepats_harp")
+	testing.expect_value(t, p.parts[3].preset, "cello_test")
+	fonts := make(map[string]^Soundfont)
+	fonts["piano"], fonts["felt"], fonts["freepats_harp"], fonts["sfz_test"] = &sf, &sf, &sf, &sfz
+	a := render_with(&p, fonts)
+	b := render_with(&p, fonts)
+	testing.expect(t, slice.equal(a, b), "two renders of four instruments differ")
+	testing.expect(t, rms(a) > 1e-3, "four instruments render to silence")
+	// A part on its own sounds in the mix: removing the SFZ part changes it.
+	q := p
+	q.notes = nil
+	for n in p.notes {
+		if n.part != 3 {append(&q.notes, n)}
+	}
+	c := render_with(&q, fonts)
+	testing.expect(t, !slice.equal(a, c), "the SFZ part adds nothing")
+	// A font that does not exist is a parse error.
+	_, msg2, ok3 := score_parse(
+		"instrument a font nope preset 0:0\npart x a\n  c4:w |\n",
+		"x.score",
+	)
+	testing.expect(t, !ok3 && strings.contains(msg2, "unknown font 'nope'"))
 }
