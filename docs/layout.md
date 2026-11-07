@@ -69,6 +69,10 @@ package** is enforced by the `layout` lint (see above).
 | `assets/catalog/structures` | Built and natural features, one file per group | `*.json` |
 | `assets/catalog/materials` | Rocks, minerals and soils | `*.json` |
 | `assets/catalog/crops` | Domesticated plants and animals | `*.json` |
+| `assets/catalog/cultures` | Peoples of Earth's past, one file per region | `*.json` |
+| `assets/catalog/technologies` | What a people can know, one file per era | `*.json` |
+| `assets/catalog/items` | Things people make and carry, one file per group | `*.json` |
+| `assets/catalog/lines` | Short texts the game shows (splashes, world messages, journal) | `*.json` |
 | `assets/baselines/audio` | Audio baselines, compared as text | `*.txt`, `*.decisions` |
 | `assets/baselines/images` | Image baselines, their scenes' counts and their scene list | `*.png`, `*.counts`, `*.txt` |
 | `assets/baselines/music` | The ear's output on every score | `*.txt` |
