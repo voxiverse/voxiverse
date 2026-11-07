@@ -69,6 +69,8 @@ planet_rivers :: proc() -> planet.Rivers {
 
 // PLANET_BANK: blocks of bank on each side of a river, rising to the land.
 PLANET_BANK :: 4
+// PLANET_LAKE_BANK: the lake share (0 to 1) where a lake's bank begins to rise.
+PLANET_LAKE_BANK :: 0.2
 
 // planet_river_near: the nearest river to block (x, z) as the distance from its
 // centre line, its width there and the point on the line nearest to (x, z).
@@ -204,7 +206,7 @@ planet_past_the_edge :: proc(x, z: i32) -> bool {
 
 // planet_shape sets a column's height and roughness from the relief, with the
 // noise's detail (hills, overhangs) scaled by the local ruggedness, and the
-// relief's rivers cut through it. Lakes come in a later part.
+// relief's rivers and lakes cut into it.
 @(private)
 planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 	r, _ := planet_relief()
@@ -226,8 +228,55 @@ planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 	c.rough = 0
 	if elevation > 0 {
 		c.rough = p.overhang * smooth(0.5, 0.9, spread) * smooth(0.35, 0.85, ridge)
-		planet_carve_river(p, c, x, z)
+		planet_carve_lake(p, c, x, z)
+		if c.river < 0.5 {planet_carve_river(p, c, x, z)}
 	}
+}
+
+// planet_lake_at: how much of block (x, z) is lake, 0 to 1, from the lake mask
+// of the four climate cells around it (interpolated, so the shore has no steps),
+// and the filled level (metres) of the lake cell that weighs most.
+planet_lake_at :: proc(x, z: i32) -> (share, level: f32) {
+	rv := planet_rivers()
+	w, h := rv.width, rv.height
+	cell := f64(PLANET_CIRCUMFERENCE) / f64(w)
+	fx := (f64(x) + PLANET_CIRCUMFERENCE / 2) / cell - 0.5
+	fz := (f64(z) + PLANET_CIRCUMFERENCE / 4) / cell - 0.5
+	i0, j0 := int(math.floor(fx)), int(math.floor(fz))
+	tx, tz := f32(fx - f64(i0)), f32(fz - f64(j0))
+	best: f32
+	for dj in 0 ..= 1 {
+		j := clamp(j0 + dj, 0, h - 1)
+		wz := tz if dj == 1 else 1 - tz
+		for di in 0 ..= 1 {
+			k := j * w + (i0 + di + w) % w
+			if !rv.lake[k] {continue}
+			wt := wz * (tx if di == 1 else 1 - tx)
+			share += wt
+			if wt > best {best, level = wt, rv.filled[k]}
+		}
+	}
+	return
+}
+
+// planet_carve_lake sinks a lake's bed under water that stands at the lake's
+// spill level (its filled level), with banks rising to the land at its edge.
+@(private = "file")
+planet_carve_lake :: proc(p: ^Params, c: ^Column, x, z: i32) {
+	share, level := planet_lake_at(x, z)
+	if share <= PLANET_LAKE_BANK {return}
+	sea := f32(p.sea_level)
+	surface := math.floor(level / PLANET_METRES_PER_BLOCK_Y) + sea
+	c.rough = 0
+	if share < 0.5 {
+		if c.height > surface {
+			c.height = mix(surface, c.height, smooth(PLANET_LAKE_BANK, 0.5, share))
+		}
+		return
+	}
+	c.height = surface - 0.5 - 3 * smooth(0.5, 0.9, share)
+	c.river = 1
+	c.lift = i32(surface - sea)
 }
 
 // planet_carve_river cuts the relief's river through a land column: a bed

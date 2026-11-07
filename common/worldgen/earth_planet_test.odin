@@ -344,3 +344,41 @@ test_planet_trees_follow_the_biome_tables :: proc(t: ^testing.T) {
 		steppe,
 	)
 }
+
+// test_planet_lakes: a lake of the real relief (the Great Lakes' region) is
+// water standing at its spill level, with land at its shore.
+@(test)
+test_planet_lakes :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	rv := planet_rivers()
+	w := rv.width
+	cell := f64(PLANET_CIRCUMFERENCE) / f64(w)
+	best, bd := -1, f32(0)
+	x0, z0 := block_at(41, -92)
+	x1, z1 := block_at(49, -76)
+	for k in 0 ..< len(rv.lake) {
+		if !rv.lake[k] {continue}
+		cx := (f64(k % w) + 0.5) * cell - PLANET_CIRCUMFERENCE / 2
+		cz := (f64(k / w) + 0.5) * cell - PLANET_CIRCUMFERENCE / 4
+		if cx < f64(x0) || cx > f64(x1) || cz < f64(z1) || cz > f64(z0) {continue}
+		if d := rv.filled[k]; d > bd || best < 0 {best, bd = k, d}
+	}
+	testing.expect(t, best >= 0, "the model finds a lake among the Great Lakes")
+	if best < 0 {return}
+	x := i32((f64(best % w) + 0.5) * cell - PLANET_CIRCUMFERENCE / 2)
+	z := i32((f64(best / w) + 0.5) * cell - PLANET_CIRCUMFERENCE / 4)
+	c := column_at(&g.params, g.seed, x, z)
+	spill := i32(rv.filled[best] / PLANET_METRES_PER_BLOCK_Y)
+	testing.expect_value(t, c.biome, Biome.River)
+	testing.expect_value(t, c.lift, spill)
+	testing.expect(t, c.height < f32(g.params.sea_level + spill), "the bed is under water")
+	shore := false
+	for dx := i32(0); dx < 4 * i32(cell); dx += 2 {
+		s := column_at(&g.params, g.seed, x + dx, z)
+		if s.river < 0.5 {
+			shore = true
+			break
+		}
+	}
+	testing.expect(t, shore, "the lake has a shore")
+}
