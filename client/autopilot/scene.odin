@@ -85,6 +85,20 @@ scene_is_menu :: proc(script: string) -> bool {
 	return strings.has_prefix(script, "screen ")
 }
 
+// scene_is_earth: a scene that starts with `earth` runs on an Earth planet
+// world (the scratch world at Earth's address, built on the planet model)
+// instead of the scratch world's own terrain; its script then stands on the
+// surface with `/goto <place>`.
+scene_is_earth :: proc(script: string) -> bool {
+	return strings.has_prefix(script, "earth ")
+}
+
+// scene_commands: a scene's script without its `earth` marker.
+scene_commands :: proc(script: string) -> string {
+	if scene_is_earth(script) {return strings.trim_space(script[len("earth "):])}
+	return script
+}
+
 // scene_names: every scene's name in text, in order.
 scene_names :: proc(text: string, allocator := context.allocator) -> []string {
 	names := make([dynamic]string, allocator)
@@ -101,7 +115,7 @@ scene_names :: proc(text: string, allocator := context.allocator) -> []string {
 // scene_exec: the whole script a scene runs (--exec's form).
 scene_exec :: proc(script: string, allocator := context.allocator) -> string {
 	if scene_is_menu(script) {return strings.join({script, SCENE_MENU_AFTER}, "; ", allocator)}
-	return strings.join({SCENE_BEFORE, script, SCENE_AFTER}, "; ", allocator)
+	return strings.join({SCENE_BEFORE, scene_commands(script), SCENE_AFTER}, "; ", allocator)
 }
 
 // scene_begin starts the scene called name (after app_init): offscreen at
@@ -125,7 +139,11 @@ scene_begin :: proc(app: ^engine.App, name: string) -> bool {
 		app.scene.menu = true
 		return true
 	}
-	engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+	if scene_is_earth(script) {
+		engine.enter_world(app, "", engine.SCRATCH_SEED, benchmark = true, earth = true)
+	} else {
+		engine.enter_world(app, "", engine.SCRATCH_SEED, engine.SCRATCH_SPAWN, benchmark = true)
+	}
 	if name == "devchat" {scene_devchat(app)}
 	return true
 }

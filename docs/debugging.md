@@ -349,6 +349,12 @@ next is fixed:
 - no chat lines and no toasts: they fade with the clock, so they are cleared two frames
   before the picture.
 
+A scene whose script starts with `earth` runs on an Earth planet world instead: the scratch
+world is made at Earth's address (built on the planet model, as a new universe's home world
+is), with the same fixed conditions (still clouds, no gravity, stopped time). The scene's
+script then stands on the surface with `/goto <place>` (a name of `PLANET_PLACES`, or a
+latitude and longitude) and frames it with `look`; `earth_everest` and `earth_sahara` do so.
+
 A scene whose script starts with `screen` is a menu's: it never joins the scratch world, the
 menus' animations stand still (every frame's step is 0, so the starfield, the planet's turn
 and the stars' settling are as at the start), and after the script it draws ten frames. Two

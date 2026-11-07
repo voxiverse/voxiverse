@@ -24,6 +24,9 @@ test_scene_sized_lines :: proc(t: ^testing.T) {
 		testing.expect(t, !found && err != "", "a malformed size is an error")
 		testing.expect(t, len(err) > 0 && contains(err, name), "naming the line")
 	}
+	script, _, found, _ = autopilot.scene_find("e: earth /goto everest; look 0 0\n", "e")
+	testing.expect(t, found && autopilot.scene_is_earth(script))
+	testing.expect_value(t, autopilot.scene_commands(script), "/goto everest; look 0 0")
 	_, _, found, err = autopilot.scene_find(text, "nope")
 	testing.expect(t, !found && err == "")
 	// Every scene of the real file parses.
