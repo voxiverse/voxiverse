@@ -1,11 +1,13 @@
 death (melody: right, 4 notes)
   melody: stepwise 0.00  big_leaps 0.00  leap_recovered 0.00  motif_return 0.00  range 12  longest_run 3
+  surprise: 6.21 bits a note
   whole: harmony_fit 1.00  strong_beat_clash 0/2  roughness mean 0.23 p95 0.36  accomp_variety 1.00
   critique:
     assets/music/death.score:17:12: bars 1-2: no figure of the melody comes back
 
 deep (melody: bells, 34 notes)
   melody: stepwise 0.36  big_leaps 0.15  leap_recovered 0.25  motif_return 0.00  range 22  longest_run 5
+  surprise: 5.87 bits a note
   whole: harmony_fit 0.94  strong_beat_clash 1/15  roughness mean 0.32 p95 0.67  accomp_variety 0.40
   critique:
     assets/music/deep.score:39:15: bars 1-40: no figure of the melody comes back
@@ -18,6 +20,7 @@ deep (melody: bells, 34 notes)
 
 discovery (melody: right, 13 notes)
   melody: stepwise 0.42  big_leaps 0.00  leap_recovered 0.33  motif_return 0.20  range 26  longest_run 7
+  surprise: 4.80 bits a note
   whole: harmony_fit 0.87  strong_beat_clash 1/5  roughness mean 0.17 p95 0.25  accomp_variety 1.00
   critique:
     assets/music/discovery.score:17:55: bar 2 beat 1: f#5 over A sus4 (pedalled from bar 1)
@@ -25,6 +28,7 @@ discovery (melody: right, 13 notes)
 
 far (melody: bells, 38 notes)
   melody: stepwise 0.35  big_leaps 0.24  leap_recovered 0.15  motif_return 0.00  range 26  longest_run 4
+  surprise: 5.36 bits a note
   whole: harmony_fit 0.94  strong_beat_clash 0/25  roughness mean 0.09 p95 0.17  accomp_variety 0.42
   critique:
     assets/music/far.score:43:12: bars 1-48: no figure of the melody comes back
@@ -41,6 +45,7 @@ far (melody: bells, 38 notes)
 
 meadow (melody: bells, 60 notes)
   melody: stepwise 0.31  big_leaps 0.25  leap_recovered 0.23  motif_return 0.00  range 22  longest_run 3
+  surprise: 5.61 bits a note
   whole: harmony_fit 0.95  strong_beat_clash 4/45  roughness mean 0.11 p95 0.30  accomp_variety 0.31
   critique:
     assets/music/meadow.score:45:32: bars 1-52: no figure of the melody comes back
@@ -70,6 +75,7 @@ meadow (melody: bells, 60 notes)
 
 night (melody: bells, 39 notes)
   melody: stepwise 0.26  big_leaps 0.16  leap_recovered 0.04  motif_return 0.00  range 22  longest_run 3
+  surprise: 5.92 bits a note
   whole: harmony_fit 0.97  strong_beat_clash 2/18  roughness mean 0.17 p95 0.42  accomp_variety 0.55
   critique:
     assets/music/night.score:41:17: bars 1-44: no figure of the melody comes back
@@ -95,6 +101,7 @@ night (melody: bells, 39 notes)
 
 title (melody: melody, 64 notes)
   melody: stepwise 0.29  big_leaps 0.05  leap_recovered 0.17  motif_return 0.23  range 11  longest_run 4
+  surprise: 5.99 bits a note
   whole: harmony_fit 0.96  strong_beat_clash 7/48  roughness mean 0.14 p95 0.23  accomp_variety 0.12
   critique:
     assets/music/title.score:18:30: bar 7 beat 1: a5 over A# major
