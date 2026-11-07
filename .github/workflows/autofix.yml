@@ -179,9 +179,16 @@ jobs:
             mode=work
             if [ -n "${open}" ]; then
               ci=$(gh pr view "${open}" --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.name == "CI result") | .conclusion] | first // ""')
-              if [ "${ci}" != "FAILURE" ]; then echo "#${n}: PR #${open} waiting (CI result: ${ci:-pending})"; continue; fi
-              if [ "$(rerun_first --branch "${branch}" --event pull_request)" = rerun ]; then
-                echo "#${n}: PR #${open} failed once: rerunning"; continue
+              # A pull request that conflicts with main never merges, green or not: it is sent back
+              # like a red one (the ci-fix agent starts by rebasing onto main).
+              conflict=$(gh pr view "${open}" --json mergeable --jq .mergeable)
+              if [ "${conflict}" != CONFLICTING ]; then
+                if [ "${ci}" != "FAILURE" ]; then echo "#${n}: PR #${open} waiting (CI result: ${ci:-pending})"; continue; fi
+                if [ "$(rerun_first --branch "${branch}" --event pull_request)" = rerun ]; then
+                  echo "#${n}: PR #${open} failed once: rerunning"; continue
+                fi
+              else
+                echo "#${n}: PR #${open} conflicts with main"
               fi
               fixes_done=$(tr ' ' '\n' <<< "${labels}" | grep -c '^agent-ci-fix-' || true)
               if [ "${fixes_done}" -ge 2 ]; then
@@ -365,7 +372,9 @@ jobs:
                "Left for the next part" list: the next run starts from that list.
 
             ## Mode `ci-fix`
-            The open pull request for branch `claude/issue-${{ matrix.issue }}` failed CI.
+            The open pull request for branch `claude/issue-${{ matrix.issue }}` failed CI, or conflicts
+            with main (then the rebase below is the fix: resolve each conflict keeping both sides' intent,
+            and if CI was green there is nothing else to find).
             1. `git checkout -B claude/issue-${{ matrix.issue }} origin/claude/issue-${{ matrix.issue }}`,
                then `git rebase origin/main` (main may have moved).
             2. Find what failed: `gh pr checks claude/issue-${{ matrix.issue }}`, then
