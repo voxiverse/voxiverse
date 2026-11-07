@@ -150,6 +150,17 @@ hashes the notes of each committed score).
 The ear (below) lists each motif a piece states: how many times, how many varied, and the bar of
 each statement (a prime marks a varied one).
 
+### Earth's hook (`motif_of`)
+
+`motif_of(address, mode)` (`common/game/address.odin`) turns the seven glyphs of a world's address
+into a seven-note hook, the same on every machine. Pitch: glyph mod 7 is the scale degree in the
+world's mode (Earth: major, tonic C); the first note is in the octave of middle C and each later
+note in the octave nearest the one before (a tie goes up), so no step is wider than a tritone.
+Rhythm: glyph div 7 (0 to 5) picks a length in eighths, `2 1 1 2 1 2`; the last note is always 6
+eighths (a dotted half). Earth's glyphs `14 2 35 20 7 29 11` give C E C B C D G, lengths 1 2 2 1 1 1
+6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece and the Ignite cue
+that use it are not written yet.
+
 ### The ear
 
 An agent cannot listen, so `build music ear [<name>...] [--json]` reads each score (or `.mid`)
