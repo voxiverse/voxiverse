@@ -46,7 +46,7 @@ test_existing_scores_read_as_before :: proc(t: ^testing.T) {
 		{"far", SCORE_FAR, 0xb2205f77065f7ee7},
 		{"meadow", SCORE_MEADOW, 0xa21c3cc4ea795c61},
 		{"night", SCORE_NIGHT, 0x9871acc29132bd7d},
-		{"title", SCORE_TITLE, 0x274ebe711c16a011},
+		{"title", SCORE_TITLE, 0x2c185dc69d41251b},
 	}
 	for c in cases {
 		p, err, ok := score_parse(c.src, c.name)

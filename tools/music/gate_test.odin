@@ -66,14 +66,14 @@ test_gate_refuses_scramble_accepts_master :: proc(t: ^testing.T) {
 test_gate_pending_warns_others_refuse :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
-	g := test_gate(t, []string{"title"})
-	p, msg, ok := score_parse(SCORE_TITLE, "title.score")
+	g := test_gate(t, []string{"night"})
+	p, msg, ok := score_parse(SCORE_NIGHT, "night.score")
 	testing.expectf(t, ok, "%s", msg)
-	vs := violations(&g, &p, "title")
-	testing.expect(t, len(vs) > 0, "title fails today")
-	testing.expect(t, gate_verdict(vs, "title", g.pending[:]) == .Warn)
-	testing.expect(t, gate_verdict(vs, "title", nil) == .Refuse)
-	testing.expect(t, gate_run(&g, &p, "title", "title.score"), "a pending score renders")
+	vs := violations(&g, &p, "night")
+	testing.expect(t, len(vs) > 0, "night fails today")
+	testing.expect(t, gate_verdict(vs, "night", g.pending[:]) == .Warn)
+	testing.expect(t, gate_verdict(vs, "night", nil) == .Refuse)
+	testing.expect(t, gate_run(&g, &p, "night", "night.score"), "a pending score renders")
 	testing.expect(
 		t,
 		!gate_run(&g, &p, "other", "other.score"),

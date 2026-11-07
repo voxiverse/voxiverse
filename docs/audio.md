@@ -158,8 +158,8 @@ world's mode (Earth: major, tonic C); the first note is in the octave of middle 
 note in the octave nearest the one before (a tie goes up), so no step is wider than a tritone.
 Rhythm: glyph div 7 (0 to 5) picks a length in eighths, `2 1 1 2 1 2`; the last note is always 6
 eighths (a dotted half). Earth's glyphs `14 2 35 20 7 29 11` give C E C B C D G, lengths 1 2 2 1 1 1
-6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece and the Ignite cue
-that use it are not written yet.
+6: 14 eighths, the largest leap 5 semitones, a range of 8. The title piece is written on it (`assets/music/title.score`); the Ignite cue
+that uses it is not written yet.
 
 ### The ear
 
@@ -200,8 +200,8 @@ every measure and every critique line for tools.
   every gating measure with `assets/music/ear_bands.txt` (inside `low`..`high`, both ends
   allowed). A score outside a band is refused: the error names the measure, the band, the score's
   value and the first lines of the critique, and `build music` exits non-zero. `--midi` does not
-  gate. `assets/music/ear_pending.txt` lists, one name a line, the scores that fail today (all
-  seven); a pending score prints the same facts as a warning and renders. **The rule: nothing is
+  gate. `assets/music/ear_pending.txt` lists, one name a line, the scores that fail today (the other six,
+  not the title); a pending score prints the same facts as a warning and renders. **The rule: nothing is
   ever added to the list.** A test fails if a name in it is not a score or if its score now
   passes (remove the name); a new score that fails is refused.
 - **The whole.** A note under `ped` sounds until `unped`, at half weight after its written length.
