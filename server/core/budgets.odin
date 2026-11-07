@@ -3,11 +3,13 @@ package core
 import "base:runtime"
 import "core:fmt"
 import "core:log"
+import "core:math"
 import "core:strings"
 import "core:time"
 
 import "common:base"
 import "common:game"
+import "common:island"
 
 // The server's timed scenes (`build bench budgets`). A test
 // never asserts a time: the tests call these for what the scene does (a save
@@ -784,5 +786,47 @@ budget_collide :: proc(reg: ^game.Registry) -> (r: Budget_Scene) {
 	}
 	r.ns = f64(base.thread_cpu_us() - start) * 1000 / f64(BUDGET_COLLIDES)
 	if hits == 0 {r.done = 0}
+	return
+}
+
+BUDGET_ISLAND_OBSERVERS :: 64
+BUDGET_ISLAND_TICKS :: 4000
+
+// budget_islands: 64 observers walking (sprinting, in random directions) over 400 x 400
+// blocks, the islands kept for them every tick as the server does; ns is the CPU time of a
+// tick, and done counts the ticks in which the islands changed.
+budget_islands :: proc() -> (r: Budget_Scene) {
+	is: island.Islands
+	defer island.destroy(&is)
+	rng := base.rng_make(132)
+	at: [BUDGET_ISLAND_OBSERVERS][2]f64
+	dir: [BUDGET_ISLAND_OBSERVERS][2]f64
+	obs: [BUDGET_ISLAND_OBSERVERS]island.Observer
+	for i in 0 ..< BUDGET_ISLAND_OBSERVERS {
+		at[i] = {base.rng_f64_range(&rng, 0, 400), base.rng_f64_range(&rng, 0, 400)}
+		dir[i] = {base.rng_f64_range(&rng, -1, 1), base.rng_f64_range(&rng, -1, 1)}
+	}
+	step := 5.6 * f64(game.TICK_SECONDS) // a sprint
+	r.want = BUDGET_ISLAND_TICKS
+	total: i64
+	for _ in 0 ..< BUDGET_ISLAND_TICKS {
+		for i in 0 ..< BUDGET_ISLAND_OBSERVERS {
+			at[i] += dir[i] * step
+			for k in 0 ..< 2 { 	// bounce at the edges of the field
+				if at[i][k] < 0 || at[i][k] > 400 {dir[i][k] = -dir[i][k]}
+			}
+			obs[i] = {
+				u32(i),
+				game.chunk_of({i32(math.floor(at[i].x)), 0, i32(math.floor(at[i].y))}),
+			}
+		}
+		start := base.thread_cpu_us()
+		res := island.update(&is, 9, obs[:]) // (the view distance of 7 plus 2)
+		total += base.thread_cpu_us() - start
+		if len(res.entered) + len(res.left) > 0 {r.done += 1}
+		free_all(context.temp_allocator)
+	}
+	r.ns = f64(total) * 1000 / BUDGET_ISLAND_TICKS
+	if r.done > 0 {r.done = r.want}
 	return
 }

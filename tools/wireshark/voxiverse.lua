@@ -104,6 +104,7 @@ local SCHEMA = {
     { name = "guest_role.buf", t = "array", scalar = true, count = 48, elem = { t = "u8" } },
     { name = "show_coordinates", t = "bool" },
     { name = "random_tick_speed", t = "i32" },
+    { name = "island_radius", t = "i32" },
   } },
   { id = 5, name = "clock", key = "none", lane = "reliable", fields = {
     { name = "time", t = "f64" },

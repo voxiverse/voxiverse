@@ -11,6 +11,7 @@ import "core:strings"
 import "common:base"
 import "common:game"
 import "common:intervention"
+import "common:island"
 import "common:worldgen"
 
 // Worlds: a universe (the server) has worlds, each a voxel space of its own:
@@ -53,6 +54,7 @@ World :: struct {
 	rollback:            ^Rollback_Job, // the running rollback (rollback.odin; heap)
 	protections:         [dynamic]Protection, // regions only members edit (protect.odin; heap)
 	protections_dirty:   bool, // protections.cfg could not be written
+	islands:             island.Islands, // who is observed where (islands_update)
 	interventions:       intervention.Log, // what players did that the world's history carries forward (heap)
 	interventions_dirty: bool, // interventions changed since interventions.vxi was staged
 	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
@@ -133,6 +135,7 @@ world_close :: proc(w: ^World) {
 	journal_close(w)
 	protections_free(w)
 	intervention.log_destroy(&w.interventions)
+	island.destroy(&w.islands)
 	rewind_destroy(&w.rewind)
 	if w.started {
 		ledger_world_scope(w, .Scope_Out)
@@ -220,6 +223,34 @@ world_load :: proc(s: ^Server, a: game.Address) -> ^World {
 	append(&s.worlds, w)
 	log.infof("server world loaded address=%s worlds=%d", game.address_dir(a), len(s.worlds))
 	return w
+}
+
+// island_radius_of: the chunks around an observer a world simulates in detail.
+island_radius_of :: proc(w: ^World) -> i32 {
+	if w.rules.island_radius > 0 {return w.rules.island_radius}
+	return w.server.config.view_radius + 2
+}
+
+// islands_update: the world's islands for the players in it now. It is a pass over the
+// players unless one crossed a chunk border, when the islands are worked out again
+// (common/island); each change is logged.
+islands_update :: proc(s: ^Server, w: ^World) {
+	observers := make([dynamic]island.Observer, context.temp_allocator)
+	for &c, id in s.clients {
+		if c.state == .Playing &&
+		   c.world == w {append(&observers, island.Observer{u32(id), c.center})}
+	}
+	r := island.update(&w.islands, island_radius_of(w), observers[:])
+	for e in r.events {
+		log.debugf(
+			"server island %v id=%d from=%d chunks=%d world=%s",
+			e.kind,
+			e.island,
+			e.from,
+			len(e.chunks),
+			game.address_dir(w.address),
+		)
+	}
 }
 
 // worlds_unload_idle saves and frees the worlds nobody has been in for a

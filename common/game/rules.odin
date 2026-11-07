@@ -32,6 +32,7 @@ Rules :: struct {
 	guest_role:           base.Var_Text, // the role players who are not the owner have besides default ("": none; Open to LAN's "Allow commands" sets mod)
 	show_coordinates:     bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
 	random_tick_speed:    i32, // blocks picked in each chunk each tick to change by themselves (0: none)
+	island_radius:        i32, // chunks around an observer simulated in detail (0: the view distance plus 2; docs/world.md)
 }
 
 @(rodata)
@@ -134,6 +135,13 @@ RULES_VARS := [?]base.Var {
 		help = "blocks picked in each chunk each tick: grass spreads, crops grow (0: none)",
 		min = 0,
 		max = 100,
+		step = 1,
+	},
+	{
+		field = "island_radius",
+		help = "chunks around each player simulated in detail (0: the view distance plus 2)",
+		min = 0,
+		max = 64,
 		step = 1,
 	},
 }

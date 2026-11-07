@@ -50,6 +50,7 @@ BUDGET_LIMITS := [?]struct {
 	{.Store_Iterate, 15},
 	{.Spatial_Move, 250},
 	{.Spatial_Sphere, 3000},
+	{.Island_Tick, 200}, // the issue's 0.2 ms a tick, 64 observers moving
 	{.Collide_Move, 2000},
 	{.Planet_Build, 2000}, // the issue's 2 s on a CI runner; measured at about 0.8 s
 	{.Planet_Placement, 300}, // the issue's 300 ms for a world of 10 peoples
@@ -246,6 +247,11 @@ budget_entities :: proc(reg: ^game.Registry, broken: ^[dynamic]string) {
 	sphere := core.budget_spatial_sphere()
 	check(broken, "the sphere queries", sphere)
 	base.metric_add(.Spatial_Sphere, f32(sphere.ns))
+
+	fmt.printfln("scene: %s", "the islands")
+	islands := core.budget_islands()
+	check(broken, "the island ticks", islands)
+	base.metric_add(.Island_Tick, f32(islands.ns / 1000))
 
 	fmt.printfln("scene: %s", "the collision")
 	collide := core.budget_collide(reg)

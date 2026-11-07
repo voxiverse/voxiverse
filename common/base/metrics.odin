@@ -73,6 +73,7 @@ Metric :: enum u8 {
 	Store_Iterate, // CPU ns per row of a two-component query over 4 096 entities
 	Spatial_Move, // CPU ns per move of 2 000 entries random-walking 0.2 blocks
 	Spatial_Sphere, // CPU ns per spatial_sphere of radius 16 among 2 000 entries
+	Island_Tick, // CPU us per server tick to keep the islands of 64 walking observers (common/island)
 	Collide_Move, // CPU ns per collide_move of a sheep-sized box, 0.15-block delta
 	Planet_Build, // building the home world's climate from its relief (common/planet), ms
 	Planet_History, // the peoples of that planet over 6 000 years (common/planet), ms
@@ -161,6 +162,7 @@ METRIC_INFO := [Metric]Metric_Info {
 	.Store_Iterate        = {"store_iterate", "ns", false},
 	.Spatial_Move         = {"spatial_move", "ns", false},
 	.Spatial_Sphere       = {"spatial_sphere", "ns", false},
+	.Island_Tick          = {"island_tick", "us", false},
 	.Collide_Move         = {"collide_move", "ns", false},
 	.Planet_Build         = {"planet_build", "ms", false},
 	.Planet_History       = {"planet_history", "ms", false},

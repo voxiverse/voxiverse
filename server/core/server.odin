@@ -503,6 +503,7 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	player_entities_release(s)
+	for w in s.worlds {islands_update(s, w)}
 	{
 		base.profile_scope("unload idle worlds and audit")
 		worlds_unload_idle(s)

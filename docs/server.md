@@ -23,6 +23,7 @@ permission. Minecraft's command names are accepted where the equivalent exists: 
 |---|---|
 | `/time set <t>`, `/time add <hours>`, `/time query` (and `/time <t>`) | The time of day: `sunrise day noon sunset night midnight` or `0..1` (`world.time`). |
 | `/rule [name] [value]` (`/gamerule`) | Lists the world's rules, shows one, or sets one (setting needs `voxiverse.command.rule`): `random_tick_speed`, `drops`, `reach`, `daylight_cycle` (false stops the clock), `day_length` (seconds per day), ... A change is journalled and announced to the world. |
+| `/islands` | Lists the world's simulation islands: each one's id, chunk count and players (`info.islands`; docs/world.md, "Simulation islands"). |
 | `/gamemode [mode] [player]` | Shows the mode, changes your own, or another player's. What a player may ask for is a permission (`voxiverse.command.gamemode.self`, `.others`); what the character can do is the mode's abilities. |
 | `/setblock <x y z> <block>` | Sets one block, through the bulk edit pipeline (`world.edit.bulk`). |
 | `/cell <x y z> [<channel> [<value>]]` | Shows every channel's value at a cell, one channel's, or sets one (clamped to its maximum; a computed channel is read-only). |

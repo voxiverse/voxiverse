@@ -8,6 +8,7 @@ import "core:strings"
 
 import "common:base"
 import "common:game"
+import "common:island"
 import "common:planet"
 import "common:worldgen"
 
@@ -396,6 +397,31 @@ admin_tag :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 @(private)
 admin_seed :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	notice(s, c, fmt.tprintf("Seed: %d", c.world.seed))
+	return true
+}
+
+// admin_islands: the world's simulation islands, one line each.
+@(private)
+admin_islands :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	w := c.world
+	ids := island.island_ids(&w.islands)
+	notice(s, c, fmt.tprintf("%d islands (radius %d chunks)", len(ids), w.islands.radius))
+	for id in ids {
+		names := make([dynamic]string, context.temp_allocator)
+		for pid in island.observers_of(&w.islands, id) {
+			if int(pid) < len(s.clients) {append(&names, client_name(&s.clients[pid]))}
+		}
+		notice(
+			s,
+			c,
+			fmt.tprintf(
+				"island %d: %d chunks, %s",
+				id,
+				island.island_size(&w.islands, id),
+				strings.join(names[:], ", ", context.temp_allocator),
+			),
+		)
+	}
 	return true
 }
 
