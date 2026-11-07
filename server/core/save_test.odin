@@ -924,3 +924,119 @@ test_trader_is_saved_and_old_files_get_the_purse :: proc(t: ^testing.T) {
 	testing.expect_value(t, old.trader.cash, STARTING_PURSE)
 	testing.expect_value(t, old.trader.count, 0)
 }
+
+// ---- the market on the wire ----
+
+@(private = "file")
+market_config :: proc(dir: string) -> Config {
+	return {
+		seed = 26,
+		generator = .Classic,
+		rules = quiet_rules(),
+		view_radius = 3,
+		view_height = 2,
+		max_players = 4,
+		listen = true,
+		everyone_cheats = true,
+		save_dir = dir,
+		no_natural_spawns = true,
+	}
+}
+
+// The exit check of the market on the wire: a client near a town is sent its view, trades and
+// is sent the new view; a client away from towns is sent none, and its forged trade is refused.
+@(test)
+test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
+	dir := scratch_dir("market_wire")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, market_config(dir))) {return}
+	defer harness_stop(h)
+	w := h.srv.worlds[0]
+	w.params.planet = 1
+	economy_sync(w, nil)
+	we := w.economy
+	if !testing.expect(t, we != nil && we.built && len(we.economy.towns) > 0, "no towns") {return}
+	town := -1
+	for tw, i in we.economy.towns {
+		if tw.market[.Grain] && tw.production[.Grain] > 0 {town = i; break}
+	}
+	if !testing.expect(t, town >= 0) {return}
+	tw := we.economy.towns[town]
+
+	near, far := new(Net_Client), new(Net_Client)
+	defer free(near)
+	defer free(far)
+	net_connect(near, 0, "near", h = h)
+	defer net_close(near)
+	net_connect(far, 0, "far", h = h)
+	defer net_close(far)
+	ok := net_wait(t, {near, far}, proc(cs: []^Net_Client) -> bool {
+		return cs[0].welcomed && cs[1].welcomed
+	})
+	if !testing.expect(t, ok, "never joined") {return}
+	cn, cf := client_by_name(&h.srv, "near"), client_by_name(&h.srv, "far")
+	if !testing.expect(t, cn != nil && cf != nil) {return}
+	stand_at(cn, tw.lat, tw.lon)
+	stand_at(cf, tw.lat + 1, tw.lon) // (a degree of latitude is 111 km)
+	cn.trader.cash = 1e7
+
+	// Arriving: the view comes by itself.
+	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return cs[0].market_views > 0}, 20)
+	if !testing.expect(t, ok, "no market view near a town") {return}
+	v := near.market
+	testing.expect_value(t, v.reason, game.Market_Reason.None)
+	testing.expect(t, strings.has_prefix(v.town, "Town "), "the town has no name")
+	g := v.goods[int(planet.Good.Grain)]
+	testing.expect(t, g.deals && g.price > 0 && g.stock > 0, "grain is not on sale")
+	testing.expect_value(t, g.age, 0)
+	testing.expect_value(t, v.cash, 1e7)
+
+	// Trading: the answer is the new view.
+	views := near.market_views
+	units := 0.01 * tw.size
+	net_send(near, game.Market_Trade{u8(planet.Good.Grain), false, units})
+	ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return cs[0].market_views > 0}, 10)
+	for near.market_views == views && ok {
+		ok = net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
+	}
+	bought := near.market
+	testing.expect_value(t, bought.reason, game.Market_Reason.None)
+	testing.expect(t, bought.goods[int(planet.Good.Grain)].cargo > 0, "nothing bought")
+	testing.expect(t, bought.cash < 1e7, "the grain was free")
+	testing.expect(
+		t,
+		bought.goods[int(planet.Good.Grain)].stock < g.stock,
+		"the stock did not fall",
+	)
+
+	// Selling what they carry gives silver back.
+	views = near.market_views
+	net_send(
+		near,
+		game.Market_Trade{u8(planet.Good.Grain), true, bought.goods[int(planet.Good.Grain)].cargo},
+	)
+	for _ in 0 ..< 100 {
+		if near.market_views != views {break}
+		net_wait(t, {near}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
+	}
+	sold := near.market
+	testing.expect_value(t, sold.reason, game.Market_Reason.None)
+	testing.expect_value(t, sold.goods[int(planet.Good.Grain)].cargo, 0)
+	testing.expect(t, sold.cash > bought.cash, "no silver for the sale")
+
+	// Away from every town: no view, and a forged trade is refused.
+	for _ in 0 ..< 50 {net_wait(t, {far}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)}
+	testing.expect_value(t, far.market_views, 0)
+	net_send(far, game.Market_Trade{u8(planet.Good.Grain), false, 1})
+	for _ in 0 ..< 100 {
+		if far.market_views > 0 {break}
+		net_wait(t, {far}, proc(cs: []^Net_Client) -> bool {return false}, 0.1)
+	}
+	testing.expect_value(t, far.market_views, 1)
+	testing.expect_value(t, far.market.reason, game.Market_Reason.Away)
+	testing.expect_value(t, cf.trader.cash, STARTING_PURSE)
+	testing.expect_value(t, cf.trader.cargo[.Grain], 0)
+}

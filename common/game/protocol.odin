@@ -16,7 +16,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 37
+PROTOCOL_VERSION :: 38
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -317,6 +317,19 @@ Prediction_Check :: struct {
 DESYNC_CHECK_INPUTS :: 30 // inputs between checks (one a second)
 DESYNC_QUIET_TICKS :: 60 // ticks without a disturbance before a check is judged
 
+// Market_Trade: the player buys or sells `quantity` units (a person's month of the good) of a
+// good in the town they stand in. It names no town: the server knows where they are, and
+// answers with a Market_View (the new one, or a refusal).
+Market_Trade :: struct {
+	good:     u8, // an index of planet.Good (below MARKET_GOODS)
+	sell:     bool, // false: buy
+	quantity: f32, // finite, above 0 and at most MAX_TRADE_QUANTITY
+}
+
+MARKET_GOODS :: 8 // goods in a Market_View (server/core checks it holds planet.Good)
+MAX_TRADE_QUANTITY :: 1e6
+MAX_MARKET_NAME :: 32
+
 Client_Message :: union {
 	Hello,
 	Input,
@@ -345,9 +358,42 @@ Client_Message :: union {
 	Respawn,
 	Shoot,
 	Reload,
+	Market_Trade,
 }
 
 // Server -> client.
+
+// Market_Reason: why a Market_Trade was refused (.None: it was not; the message is a view).
+Market_Reason :: enum u8 {
+	None,
+	No_Economy, // the world has no detailed market there
+	Bad_Quantity,
+	Away, // not within a town's radius
+	No_Market, // the town does not trade in the good
+	No_Cash,
+	No_Cargo,
+	No_Stock, // the market has too little to sell
+}
+
+// Market_Good: one good in a town: its price in silver per unit, the units in stock, the
+// player's cargo, and the age in days of the news behind the price (-1: not known).
+Market_Good :: struct {
+	deals: bool, // the town trades in it
+	price: f32,
+	stock: f32,
+	cargo: f32,
+	age:   f32,
+}
+
+// Market_View: the market of the town a player stands in, sent when they arrive and when
+// what they see changes (at most once a second), and as the answer to a Market_Trade. A
+// refusal (`reason` not .None) carries nothing else.
+Market_View :: struct {
+	reason: Market_Reason,
+	town:   string, // view into the message (at most MAX_MARKET_NAME)
+	cash:   f64, // the player's silver
+	goods:  [MARKET_GOODS]Market_Good,
+}
 
 // Pack_Entry: one pack of the universe, as the Packs message lists it.
 Pack_Entry :: struct {
@@ -573,6 +619,7 @@ Server_Message :: union {
 	Packs,
 	Pack_Part,
 	Packs_Changed,
+	Market_View,
 }
 
 MAX_VIEW_RADIUS :: 32
@@ -610,6 +657,7 @@ Client_Kind :: enum u8 {
 	Reload,
 	Dev_Message,
 	Dev_Fetch,
+	Market_Trade,
 }
 
 @(private = "file")
@@ -642,6 +690,7 @@ Server_Kind :: enum u8 {
 	Packs_Changed = 40,
 	Dev_Ack       = 41,
 	Dev_Replies   = 42,
+	Market_View   = 43,
 }
 
 // message_reliable: whether messages of a kind (from sender) must arrive,
@@ -726,6 +775,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "shoot"
 		case u8(Client_Kind.Reload):
 			return "reload"
+		case u8(Client_Kind.Market_Trade):
+			return "market_trade"
 		case u8(Client_Kind.Choose):
 			return "choose"
 		case u8(Client_Kind.Dial):
@@ -773,6 +824,8 @@ message_kind_name :: proc(sender: Side, kind: u8) -> string {
 			return "state"
 		case u8(Server_Kind.Snapshot):
 			return "snapshot"
+		case u8(Server_Kind.Market_View):
+			return "market_view"
 		}
 	}
 	return ""
@@ -827,6 +880,11 @@ encode_client :: proc(w: ^Writer, m: Client_Message) {
 		write_u8(w, u8(Client_Kind.Respawn))
 	case Reload:
 		write_u8(w, u8(Client_Kind.Reload))
+	case Market_Trade:
+		write_u8(w, u8(Client_Kind.Market_Trade))
+		write_u8(w, v.good)
+		write_u8(w, 1 if v.sell else 0)
+		write_f32(w, v.quantity)
 	case Shoot:
 		write_u8(w, u8(Client_Kind.Shoot))
 		write_u32(w, v.after)
@@ -1036,6 +1094,20 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 	case Packs_Changed:
 		write_u8(w, u8(Server_Kind.Packs_Changed))
 		write_fixed64(w, v.content)
+	case Market_View:
+		write_u8(w, u8(Server_Kind.Market_View))
+		write_u8(w, u8(v.reason))
+		if v.reason == .None {
+			write_string(w, v.town)
+			write_f64(w, v.cash)
+			for g in v.goods {
+				write_u8(w, 1 if g.deals else 0)
+				write_f32(w, g.price)
+				write_f32(w, g.stock)
+				write_f32(w, g.cargo)
+				write_f32(w, g.age)
+			}
+		}
 	case Pack_Part:
 		write_u8(w, u8(Server_Kind.Pack_Part))
 		write_u8(w, v.index)
@@ -1101,6 +1173,16 @@ decode_client :: proc(data: []u8, reg: ^Registry = nil) -> (m: Client_Message, o
 		m = Respawn{}
 	case u8(Client_Kind.Reload):
 		m = Reload{}
+	case u8(Client_Kind.Market_Trade):
+		t := Market_Trade {
+			good     = read_u8(&r),
+			sell     = read_bool(&r),
+			quantity = read_f32(&r),
+		}
+		if int(t.good) >= MARKET_GOODS || !(t.quantity > 0 && t.quantity <= MAX_TRADE_QUANTITY) {
+			reader_fail(&r)
+		}
+		m = t
 	case u8(Client_Kind.Shoot):
 		f := Shoot {
 			after = read_u32(&r),
@@ -1390,6 +1472,23 @@ decode_server :: proc(
 		m = ps
 	case u8(Server_Kind.Packs_Changed):
 		m = Packs_Changed{read_fixed64(&r)}
+	case u8(Server_Kind.Market_View):
+		v: Market_View
+		reason := read_u8(&r)
+		if reason > u8(Market_Reason.No_Stock) {reader_fail(&r)}
+		v.reason = Market_Reason(reason)
+		if v.reason == .None {
+			v.town = read_string(&r, MAX_MARKET_NAME)
+			v.cash = read_f64(&r)
+			for &g in v.goods {
+				g.deals = read_bool(&r)
+				g.price = read_f32(&r)
+				g.stock = read_f32(&r)
+				g.cargo = read_f32(&r)
+				g.age = read_f32(&r)
+			}
+		}
+		m = v
 	case u8(Server_Kind.Pack_Part):
 		part := Pack_Part {
 			index  = read_u8(&r),

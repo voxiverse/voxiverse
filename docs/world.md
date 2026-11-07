@@ -289,6 +289,17 @@ at their day and place and change nothing before it.
   prices when they stand within its radius (once a second, and at each trade), and keeps those;
   what the town knows of other towns is told them but not kept. Not yet: the market screen and
   the `Traded` intervention for a large trade.
+- **The market on the wire** (`server/core/player_data.odin`, `market_update`, `market_trade`;
+  `Market_View` and `Market_Trade` in `common/game/protocol.odin`). A player within
+  `TRADE_RADIUS_KM` of a town is sent a `Market_View`: the town's name (a placeholder,
+  "Town <climate cell>": the peoples' names are not kept with the economy), per good whether
+  the town deals in it, its price (silver per unit), its stock in units, the player's cargo, and
+  the age in days of the news behind the price, and the player's silver. It is sent on arrival
+  and when anything it shows changes, checked once a second, and as the answer to a trade. A
+  player away from every town is sent nothing. `Market_Trade` (good, buy or sell, quantity)
+  names no town: the server uses where the player stands, and answers with the new view or a
+  `Market_View` whose `reason` is the refusal (`Away`, `No_Cash`, ...) and nothing else. The
+  client decodes and ignores the view until the market screen exists.
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

@@ -265,6 +265,27 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	testing.expect(t, !pok, "an empty Pack_Part decoded")
 	changed, cok := decode_server_t(encode_s(Packs_Changed{0xfeed_beef_1234})[:], scratch)
 	testing.expect(t, cok && changed.(Packs_Changed) == Packs_Changed{0xfeed_beef_1234})
+	// The market: a view round-trips; a refusal carries only its reason; a trade is checked.
+	view := Market_View {
+		town = "Town 7",
+		cash = 12.5,
+	}
+	view.goods[2] = {true, 1.25, 300, 4, 15}
+	mv, mok := decode_server_t(encode_s(view)[:], scratch)
+	testing.expect(t, mok)
+	testing.expect_value(t, mv.(Market_View), view)
+	mv, mok = decode_server_t(encode_s(Market_View{reason = .Away})[:], scratch)
+	testing.expect(t, mok)
+	testing.expect_value(t, mv.(Market_View), Market_View{reason = .Away})
+	testing.expect_value(t, len(encode_s(Market_View{reason = .Away})), 2)
+	_, mok = decode_server_t([]u8{43, 99}, scratch)
+	testing.expect(t, !mok, "a Market_View with no such reason decoded")
+	mt, tok := decode_client_t(encode_c(Market_Trade{3, true, 2.5})[:])
+	testing.expect(t, tok && mt.(Market_Trade) == Market_Trade{3, true, 2.5})
+	for bad in ([]Market_Trade{{MARKET_GOODS, false, 1}, {0, false, 0}, {0, false, -1}, {0, false, MAX_TRADE_QUANTITY * 2}}) {
+		_, tok = decode_client_t(encode_c(bad)[:])
+		testing.expectf(t, !tok, "%v decoded", bad)
+	}
 	// Names: letters, digits, _ and -, 1..16 of them.
 	for name in ([]string{"a", "Player_1", "x-y", "0123456789abcdef"}) {testing.expectf(t, name_valid(name), "%q", name)}
 	for name in ([]string{"", "with space", "0123456789abcdefg", "é", "a/b"}) {testing.expectf(t, !name_valid(name), "%q", name)}

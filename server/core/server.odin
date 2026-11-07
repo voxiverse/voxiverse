@@ -817,6 +817,8 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 		queue_action(s, c, v)
 	case game.Reload:
 		weapon_reload(s, c)
+	case game.Market_Trade:
+		market_trade(s, c, v)
 	case game.Telemetry_Batch, game.Dev_Message, game.Dev_Fetch:
 		disconnect(s, c, "this is not a telemetry collector")
 	case game.Respawn:

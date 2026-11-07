@@ -40,6 +40,9 @@ Net_Client :: struct {
 	shorn:                       map[u32]bool, // sheep as last told shorn or not
 	sheep:                       map[u32]game.Sheep_Flags, // and what else about their looks
 	stats_text:                  string, // the last Stats_Page's lines (heap)
+	market:                      game.Market_View, // the last Market_View (its town is market_town)
+	market_town:                 string, // (heap)
+	market_views:                int, // Market_View messages received
 	stats_pages:                 int,
 	health:                      game.Health, // the last Health message
 	island:                      game.Island, // the last Island record
@@ -168,6 +171,7 @@ net_close :: proc(c: ^Net_Client) {
 	delete(c.shorn)
 	delete(c.sheep)
 	delete(c.stats_text)
+	delete(c.market_town)
 	delete(c.results)
 	delete(c.messages)
 	delete(c.rejected)
@@ -428,6 +432,11 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				"invalid Snapshot message",
 			)
 			net_apply(c, got[:])
+		case game.Market_View:
+			delete(c.market_town)
+			c.market, c.market_town = v, strings.clone(v.town)
+			c.market.town = c.market_town
+			c.market_views += 1
 		case game.Stats_Page:
 			delete(c.stats_text)
 			c.stats_text = strings.clone(v.text)
