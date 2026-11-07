@@ -150,3 +150,31 @@ test_export_and_import_through_the_cards :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.universes.entries), 2)
 	free_all(context.temp_allocator)
 }
+
+// A click selects a card and does not play it; a second click on it within
+// DOUBLE_CLICK plays it (the README: "play a save (or double-click it)").
+@(test)
+test_a_click_selects_and_a_double_click_plays :: proc(t: ^testing.T) {
+	w: engine.Universes_Screen
+	w.selected = -1
+	t0 := time.Tick {
+		_nsec = 1_000_000_000,
+	}
+	ms :: proc(t: time.Tick, n: i64) -> time.Tick {return time.Tick {
+			_nsec = t._nsec + n * 1_000_000,
+		}}
+	testing.expect(t, !screen.card_click(&w, 1, t0), "one click only selects")
+	testing.expect_value(t, w.selected, 1)
+	testing.expect(t, !screen.card_click(&w, 0, ms(t0, 100)), "a click on another card selects it")
+	testing.expect_value(t, w.selected, 0)
+	testing.expect(
+		t,
+		!screen.card_click(&w, 0, ms(t0, 900)),
+		"the same card after the window: selects again",
+	)
+	testing.expect(
+		t,
+		screen.card_click(&w, 0, ms(t0, 1100)),
+		"twice quickly on the same card: play",
+	)
+}

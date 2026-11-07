@@ -24,11 +24,12 @@ Saves_Mode :: enum u8 {
 }
 
 Universes_Screen :: struct {
-	entries:  [dynamic]Save_Entry,
-	mode:     Saves_Mode,
-	selected: int, // -1: none (the card the menu, rename or delete is about)
-	scroll:   f32, // cards scrolled
-	name:     [dynamic]u8, // Edit's name
-	path:     [dynamic]u8, // Import's file
-	message:  string, // why the last action failed (shown on the list)
+	entries:    [dynamic]Save_Entry,
+	mode:       Saves_Mode,
+	selected:   int, // -1: none (the card the menu, rename or delete is about)
+	last_click: time.Tick, // the selected card's last click (a second within DOUBLE_CLICK plays it)
+	scroll:     f32, // cards scrolled
+	name:       [dynamic]u8, // Edit's name
+	path:       [dynamic]u8, // Import's file
+	message:    string, // why the last action failed (shown on the list)
 }
