@@ -5,6 +5,7 @@ import "common:ogg"
 import "core:encoding/json"
 import "core:math"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -164,6 +165,10 @@ music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
 	}
 }
 
+// Scores written but not yet rendered or listed in MUSIC. Step 5 of the Earth's
+// theme work (#176) renders ignite and removes it from here.
+UNRENDERED := [?]string{"ignite"}
+
 @(test)
 test_music_set :: proc(t: ^testing.T) {
 	total := 0
@@ -174,8 +179,12 @@ test_music_set :: proc(t: ^testing.T) {
 	scores := 0
 	for e in files {
 		if !strings.has_suffix(e.name, ".score") {continue}
-		scores += 1
 		stem := e.name[:len(e.name) - len(".score")]
+		if slice.contains(UNRENDERED[:], stem) {
+			for f in MUSIC {testing.expectf(t, f.name != stem, "%s is listed: drop it from UNRENDERED", stem)}
+			continue
+		}
+		scores += 1
 		listed := false
 		for f in MUSIC {listed ||= f.name == stem}
 		testing.expectf(t, listed, "%s has no entry in MUSIC", e.name)

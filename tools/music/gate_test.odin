@@ -15,6 +15,7 @@ SCORES := [?]struct {
 	{"deep", SCORE_DEEP},
 	{"discovery", SCORE_DISCOVERY},
 	{"far", SCORE_FAR},
+	{"ignite", SCORE_IGNITE},
 	{"meadow", SCORE_MEADOW},
 	{"night", SCORE_NIGHT},
 	{"title", SCORE_TITLE},

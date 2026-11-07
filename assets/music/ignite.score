@@ -1,0 +1,54 @@
+title "Ignite"
+tempo 120
+meter 4/4
+key c major
+mood stinger
+place any
+time any
+depth any
+worlds any
+loop no
+seed 258
+humanize timing 8 ms velocity 4
+reverb 2.8 s 0.5
+instrument felt font felt preset 0:0
+instrument timp font freepats_timpani preset 0:0
+instrument strings font freepats_synthstrings preset 0:0
+instrument harp font freepats_harp preset 0:0
+
+# Earth's hook, the same as the title's: motif_of(earth_address()), C E C B C D G.
+# 120 bpm: a bar is 2 s, so the loud chord on beat 4 of bar 1 falls at 1.5 s and
+# the planet appears at 1.6 s. The rest is a settling to a soft C major.
+motif hook | p c4:e e4:q c4:q b3:e mf c4:e f d4:e g4:h. r:q |
+# The same figure, quiet, as the settling: it hands off to the world's music.
+motif calm | pp c4:e e4:q c4:q b3:e c4:e d4:e g4:h. r:q |
+
+part melody felt melody volume -3 dB pan 0.1
+  play hook
+  play calm
+  | pp c4:w |
+  | pp c4:w |
+
+part pulse timp volume -9 dB pan -0.2
+  | p c2:e c2:e c2:e c2:e mp c2:e c2:e f c2:q |
+  | f c2:q r:q mp g2:q r:q |
+  | p c2:h r:h |
+  | r:w |
+  | pp c2:w |
+  | r:w |
+
+part strings strings volume -10 dB pan 0.25
+  | p [c3 g3]:h mp [c3 g3 e4]:q f [c3 g3 c4 e4]:q |
+  | f [c3 g3 c4 e4]:h mp [f2 c3 a3]:h |
+  | mp [a2 e3 c4]:h [f2 c3 a3]:h |
+  | p [g2 d3 b3]:w |
+  | p [c3 g3 e4]:w |
+  | pp [c3 g3 e4]:w |
+
+part harp harp volume -8 dB pan 0.4
+  | p c5:e e5:e g5:e c6:e mp e6:e g5:e f c6:e g6:e |
+  | f g5:e e5:e c5:e g4:e mp c5:e g4:e e4:e c4:e |
+  | p c5:e g5:e e5:e g5:e c5:e g5:e e5:e g5:e |
+  | p g4:e d5:e b4:e d5:e g4:e d5:e b4:e d5:e |
+  | pp c5:h g5:h |
+  | pp c5:w |
