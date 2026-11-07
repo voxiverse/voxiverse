@@ -21,7 +21,7 @@ wool_dropped :: proc(srv: ^Server, name: string) -> int {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			d := (^Data)(data)
 			w := client_by_name(s, d.name).world
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind == .Item && e.stack.item == game.item_of_block(test_reg(), .Wool) {
 					d.count += e.stack.count
 				}
@@ -238,7 +238,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			w := client_by_name(s, "a").world
 			r.front_block, _ = chunks_block(&w.chunks, r.c.front)
 			r.bare_block, _ = chunks_block(&w.chunks, r.c.bare)
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind != .Sheep {continue}
 				// The grass one is the one on the grass half.
 				i := 0 if e.body.position.x < f64(r.c.x) + 10 else 1
@@ -299,7 +299,7 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 	n := 0
 	call(srv, proc(s: ^Server, data: rawptr) {
 			w := client_by_name(s, "a").world
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if e.kind == .Sheep && !e.shorn {(^int)(data)^ += 1}
 			}
 		}, &n)

@@ -692,7 +692,8 @@ write_entities :: proc(w: ^World) -> bool {
 		&b,
 		"# Voxiverse entities (written by the server): kind x y z yaw health natural [item count | shorn genes growth love wait]",
 	)
-	for e in w.entities.list {
+	it := entities_each(w)
+	for e in entities_next(&it) {
 		if !game.ENTITY_INFO[e.kind].saved {continue}
 		fmt.sbprintf(
 			&b,

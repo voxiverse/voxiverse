@@ -34,7 +34,7 @@ test_harness_world_is_still :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(m.chunks), HARNESS_INTEREST)
 	world := world_hash(&sess.h.srv)
 	for _ in 0 ..< 60 {session_step(&sess, false)}
-	testing.expect_value(t, len(sess.h.srv.home.entities.list), 0)
+	testing.expect_value(t, entity_count(sess.h.srv.home), 0)
 	testing.expect_value(t, world_hash(&sess.h.srv), world)
 	testing.expect_value(t, sess.h.srv.home.clock, clock)
 	testing.expect(t, chunks_agree(&sess), "the mirror's chunks differ from the server's")

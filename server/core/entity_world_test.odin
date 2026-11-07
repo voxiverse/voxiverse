@@ -323,12 +323,12 @@ sync_probe :: proc(s: ^Server, data: rawptr) {
 		return
 	}
 	ew := w.entity_world
-	d.listed, d.at_rest = len(w.entities.list), 0
+	d.listed, d.at_rest = entity_count(w), 0
 	found: [dynamic]game.Entity_Id
 	found.allocator = context.temp_allocator
 	game.spatial_sphere(&ew.spatial, c.player.position, 1e4, {none = {.Player}}, &found)
 	d.entries = len(found)
-	for e, i in w.entities.list {
+	for e, i in entities_view(w) {
 		if e.body.position != d.spawned[i] {d.moved = true}
 		h, ok := game.store_find(&ew.store, game.Entity_Id(e.id))
 		if !ok {continue}
@@ -404,11 +404,11 @@ mate_probe :: proc(s: ^Server, data: rawptr) {
 		}
 		return
 	}
-	for &ent in w.entities.list {
+	for &ent in entities_view(w) {
 		if ent.kind != .Sheep {continue}
 		want: ^Entity
 		best := f64(game.BREED_RANGE * game.BREED_RANGE)
-		for &o in w.entities.list {
+		for &o in entities_view(w) {
 			if o.id == ent.id || o.kind != .Sheep || o.love <= 0 {continue}
 			if o.growth < game.LAMB_TICKS {continue}
 			v := o.body.position - ent.body.position

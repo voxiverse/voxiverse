@@ -363,7 +363,8 @@ actions_prune :: proc(w: ^World) {
 	}
 	u := &w.updates
 	for k in 0 ..< u.count {if a := u.heap[k].action; a != 0 {lowest = min(lowest, a)}}
-	for &e in w.entities.list {if e.action != 0 {lowest = min(lowest, e.action)}}
+	it := entities_each(w)
+	for e in entities_next(&it) {if e.action != 0 {lowest = min(lowest, e.action)}}
 	if lowest <= j.actions_base {return}
 	n := int(lowest - j.actions_base)
 	for a in j.actions[:n] {delete(a.command)}

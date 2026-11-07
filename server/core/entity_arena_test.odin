@@ -7,9 +7,9 @@ import "core:testing"
 
 import "common:game"
 
-// entity_count: the entities awake in client name's world.
+// arena_entity_count: the entities awake in client name's world.
 @(private = "file")
-entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, missing: int) {
+arena_entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, missing: int) {
 	Data :: struct {
 		name:    string,
 		count:   int,
@@ -24,14 +24,14 @@ entity_count :: proc(srv: ^Server, name: string) -> (n: int, stored: int, missin
 		proc(s: ^Server, data: rawptr) {
 			d := (^Data)(data)
 			w := client_by_name(s, d.name).world
-			d.count = len(w.entities.list)
+			d.count = entity_count(w)
 			// the entity world holds exactly these, found by id
 			// (the players in it are entities too, and not the list's)
 			d.stored = game.store_count(&w.entity_world.store)
 			for &c in s.clients {
 				if c.state == .Playing && c.world == w {d.stored -= 1}
 			}
-			for e in w.entities.list {
+			for e in entities_view(w) {
 				if _, ok := game.store_find(&w.entity_world.store, game.Entity_Id(e.id)); !ok {
 					d.missing += 1
 				}
@@ -78,7 +78,7 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.05)
 	}
 	net_wait(t, {a}, proc(cs: []^Net_Client) -> bool {return false}, 0.5)
-	n, stored, missing := entity_count(&h.srv, "a")
+	n, stored, missing := arena_entity_count(&h.srv, "a")
 	testing.expect_value(t, n, MAX_ENTITIES) // full, and no more
 	testing.expect_value(t, stored, MAX_ENTITIES)
 	testing.expect_value(t, missing, 0)
@@ -92,7 +92,7 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		proc(s: ^Server, _: rawptr) {
 			c := client_by_name(s, "a")
 			p := c.player.position
-			for &e in c.world.entities.list {e.health = 1} 	// (one blast kills any)
+			for &e in entities_view(c.world) {e.health = 1} 	// (one blast kills any)
 			explode_by(s, "a", {i32(p.x), i32(p.y), i32(p.z)}, 12)
 		},
 		nil,
@@ -101,7 +101,7 @@ test_full_arena_and_one_blast :: proc(t: ^testing.T) {
 		net_pump(t, a)
 		harness_step(h)
 	}
-	n, stored, missing = entity_count(&h.srv, "a")
+	n, stored, missing = arena_entity_count(&h.srv, "a")
 	testing.expect(t, n < MAX_ENTITIES, "the blast killed nothing")
 	testing.expect_value(t, n, 0)
 	testing.expect_value(t, stored, 0) // despawned from the entity world too

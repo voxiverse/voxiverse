@@ -241,7 +241,7 @@ test_crop_drops :: proc(t: ^testing.T) {
 			p := game.Block_Pos{f.x, f.y, f.z}
 			seeds, wheat := game.item_of_material(.Seeds), game.item_of_material(.Wheat)
 			count :: proc(w: ^World, item: game.Item) -> (n: int) {
-				for e in w.entities.list {if e.kind == .Item && e.stack.item == item {n += e.stack.count}}
+				for e in entities_view(w) {if e.kind == .Item && e.stack.item == item {n += e.stack.count}}
 				return
 			}
 			// Tall grass: seeds about 1 in 8 (300 tries: 37 expected).
@@ -250,12 +250,12 @@ test_crop_drops :: proc(t: ^testing.T) {
 			if n < 18 ||
 			   n >
 				   60 {fail(f, fmt.tprintf("300 tall grass dropped %d seeds (about 37 expected)", n))}
-			clear(&w.entities.list)
+			entities_clear(w)
 			// Unripe wheat: one seed, no wheat. Ripe: one wheat, 1 to 3 seeds.
 			for stage in 0 ..< game.WHEAT_STAGES - 1 {block_drop(w, p, game.wheat_block(stage))}
 			if count(w, seeds) != 7 ||
 			   count(w, wheat) != 0 {fail(f, "unripe wheat did not leave exactly a seed each")}
-			clear(&w.entities.list)
+			entities_clear(w)
 			for _ in 0 ..< 40 {
 				before := count(w, seeds)
 				block_drop(w, p, .Wheat_7)
@@ -263,15 +263,15 @@ test_crop_drops :: proc(t: ^testing.T) {
 				if got < 1 || got > 3 {fail(f, "ripe wheat left seeds outside 1 to 3")}
 			}
 			if count(w, wheat) != 40 {fail(f, "ripe wheat did not leave one wheat each")}
-			clear(&w.entities.list)
+			entities_clear(w)
 			// Farmland breaks into dirt; with drops off, nothing.
 			block_drop(w, p, .Farmland_Moist)
 			if count(w, game.item_of_block(test_reg(), .Dirt)) !=
 			   1 {fail(f, "farmland did not leave dirt")}
-			clear(&w.entities.list)
+			entities_clear(w)
 			w.rules.drops = false
 			block_drop(w, p, .Wheat_7)
-			if len(w.entities.list) != 0 {fail(f, "a drop with rules.drops off")}
+			if entity_count(w) != 0 {fail(f, "a drop with rules.drops off")}
 			w.rules.drops = true
 		},
 	)
