@@ -1,6 +1,7 @@
 package core
 
 import "core:encoding/json"
+import "core:hash"
 import "core:log"
 import "core:math"
 import "core:os"
@@ -619,4 +620,131 @@ trade :: proc(
 	trader_close(we, rec, &t)
 	if moved > 0 {we.dirty = true}
 	return result, moved
+}
+
+// ---- the market on the wire ----
+// The market on the wire (docs/network.md, docs/world.md the economy). A player standing within
+// a town's radius is sent a `Market_View`: the town's name, each good's price and stock, the age
+// of the news behind each price, and their silver and cargo. It comes when they arrive and when
+// what it shows changes, checked once a second (`economy_tick`), and as the answer to their
+// `Market_Trade`, which also names no town: the server knows where they stand. A player away
+// from every town is sent nothing, and a trade from there is refused (`Away`).
+
+#assert(len(planet.Good) <= game.MARKET_GOODS)
+
+// market_view builds what a player in a town sees. `town` is an index in the economy.
+@(private = "file")
+market_view :: proc(w: ^World, c: ^Client, town: int) -> game.Market_View {
+	we := w.economy
+	local := we.market.local[town]
+	tw := we.economy.towns[town]
+	v := game.Market_View {
+		town = strings.clone(market_town_name(tw), context.temp_allocator),
+		cash = c.trader.cash,
+	}
+	for g in planet.Good {
+		e := &v.goods[int(g)]
+		e.age = -1
+		if !tw.market[g] {continue}
+		e.deals = true
+		e.price = planet.market_price(we.economy, we.market, local, g)
+		e.stock = we.market.stock[local][g] * tw.size
+		e.cargo = c.trader.cargo[g]
+		if s, ok := trader_known(&c.trader, u32(tw.cell), g); ok {
+			e.age = f32((we.market.month - f64(s.month)) * MONTH_DAYS)
+		}
+	}
+	return v
+}
+
+// market_town_name: what the town is called (its climate cell numbers it; the peoples' names
+// are not kept with the economy).
+@(private = "file")
+market_town_name :: proc(t: planet.Town) -> string {
+	return strings.concatenate({"Town ", itoa(t.cell)}, context.temp_allocator)
+}
+
+@(private = "file")
+itoa :: proc(n: int) -> string {
+	buf: [20]u8
+	i := len(buf)
+	v := max(n, 0)
+	for {
+		i -= 1
+		buf[i] = u8('0' + v % 10)
+		v /= 10
+		if v == 0 {break}
+	}
+	return strings.clone(string(buf[i:]), context.temp_allocator)
+}
+
+// market_signature hashes what a view shows, to tell whether it changed.
+@(private = "file")
+market_signature :: proc(v: game.Market_View) -> u64 {
+	v := v
+	h := hash.fnv64a(transmute([]u8)v.town)
+	h = hash.fnv64a(([^]u8)(&v.cash)[:size_of(v.cash)], h)
+	h = hash.fnv64a(([^]u8)(&v.goods)[:size_of(v.goods)], h)
+	return h
+}
+
+// market_update runs once a second for a playing client: it is sent the view of the town it
+// stands in when it arrives or when the view changed since the last it was sent.
+market_update :: proc(s: ^Server, c: ^Client) {
+	town, ok := trader_where(c.world, c)
+	if !ok {
+		c.market_at, c.market_sig = 0, 0
+		return
+	}
+	v := market_view(c.world, c, town)
+	sig := market_signature(v)
+	if c.market_at == town + 1 && c.market_sig == sig {return}
+	c.market_at, c.market_sig = town + 1, sig
+	send_message(s, c, v)
+}
+
+// market_trade answers a Market_Trade: the new view, or a refusal.
+@(private)
+market_trade :: proc(s: ^Server, c: ^Client, m: game.Market_Trade) {
+	w := c.world
+	town, ok := trader_where(w, c)
+	if !ok {
+		reason := game.Market_Reason.Away
+		if w == nil || w.economy == nil || !w.economy.built || !w.economy.resident {
+			reason = .No_Economy
+		}
+		send_message(s, c, game.Market_View{reason = reason})
+		return
+	}
+	result, _ := trade(w, c, town, planet.Good(m.good), m.quantity, .Sell if m.sell else .Buy)
+	if result != .Done {
+		send_message(s, c, game.Market_View{reason = market_reason(result)})
+		return
+	}
+	v := market_view(w, c, town)
+	c.market_at, c.market_sig = town + 1, market_signature(v)
+	send_message(s, c, v)
+}
+
+@(private = "file")
+market_reason :: proc(r: Trade_Result) -> game.Market_Reason {
+	switch r {
+	case .Done:
+		return .None
+	case .No_Economy:
+		return .No_Economy
+	case .Bad_Quantity:
+		return .Bad_Quantity
+	case .Away:
+		return .Away
+	case .No_Market:
+		return .No_Market
+	case .No_Cash:
+		return .No_Cash
+	case .No_Cargo:
+		return .No_Cargo
+	case .No_Stock:
+		return .No_Stock
+	}
+	return .No_Economy
 }

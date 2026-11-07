@@ -84,6 +84,8 @@ Client :: struct {
 	tpa:            Tpa, // a teleport request to it
 	inventory:      game.Inventory,
 	trader:         Trader_Record, // its silver, cargo and the prices it has seen (trading.odin)
+	market_at:      int, // the town (index in the economy, plus 1) it was last sent a Market_View of; 0: none
+	market_sig:     u64, // a hash of what that view showed
 	stats:          Counters, // its character's counters (stats.odin; heap, keys owned)
 	joined_tick:    u64, // when it joined (session length)
 	last_position:  [3]f64, // for distance counters

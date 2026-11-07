@@ -26,13 +26,13 @@ local PACKET_KINDS = {
 local CLIENT_KINDS = {
 	[1] = "hello", [2] = "input", [3] = "ping", [4] = "teleport",
 	[5] = "set_rule", [6] = "edit", [7] = "command", [8] = "attack",
-	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready", [23] = "respawn", [24] = "shoot", [25] = "reload", [26] = "dev_message", [27] = "dev_fetch",
+	[9] = "fire", [10] = "chat", [11] = "inventory_request", [12] = "proof", [13] = "choose", [14] = "dial", [15] = "use_entity", [16] = "stats_request", [17] = "telemetry", [18] = "telemetry_batch", [19] = "use_block", [20] = "prediction_check", [21] = "pack_want", [22] = "packs_ready", [23] = "respawn", [24] = "shoot", [25] = "reload", [26] = "dev_message", [27] = "dev_fetch", [28] = "market_trade",
 }
 local SERVER_KINDS = {
 	[1] = "welcome", [2] = "reject", [3] = "chunk", [4] = "unload",
 	[5] = "pong", [8] = "edit_result", [10] = "column", [20] = "bulk",
 	[28] = "challenge", [29] = "characters", [30] = "world_changed",
-	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot", [38] = "packs", [39] = "pack_part", [40] = "packs_changed", [41] = "dev_ack", [42] = "dev_replies",
+	[33] = "stats_page", [34] = "telemetry_ack", [36] = "state", [37] = "snapshot", [38] = "packs", [39] = "pack_part", [40] = "packs_changed", [41] = "dev_ack", [42] = "dev_replies", [43] = "market_view",
 }
 local STATE, SNAPSHOT = 36, 37
 

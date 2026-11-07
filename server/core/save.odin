@@ -1062,7 +1062,10 @@ economy_tick :: proc(s: ^Server) {
 		if len(observers) == 0 && w.economy == nil {continue}
 		economy_sync(w, observers[:])
 		for &c in s.clients {
-			if c.state == .Playing && c.world == w {trader_visit(w, &c)}
+			if c.state == .Playing && c.world == w {
+				trader_visit(w, &c)
+				market_update(s, &c)
+			}
 		}
 	}
 }
