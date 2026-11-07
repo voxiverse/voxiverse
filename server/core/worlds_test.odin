@@ -257,3 +257,19 @@ test_earth_same_in_every_universe :: proc(t: ^testing.T) {
 	one.config.earth = true
 	testing.expect_value(t, home_address(&one), earth)
 }
+
+// A new world at Earth's address is built on the planet model; an alien one
+// is not.
+@(test)
+test_earth_world_is_planet :: proc(t: ^testing.T) {
+	w := World {
+		address = game.earth_address(),
+	}
+	world_set_planet(&w)
+	testing.expect_value(t, w.params.planet, 1)
+	a := World {
+		address = game.address_derive(7),
+	}
+	world_set_planet(&a)
+	testing.expect_value(t, a.params.planet, worldgen.PARAMS_DEFAULTS.planet)
+}

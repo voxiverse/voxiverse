@@ -84,6 +84,12 @@ terrain_seed :: proc(w: ^World) -> i64 {
 	return w.seed
 }
 
+// world_set_planet: a new world at Earth's address is built on the planet
+// model (Earth's real relief). Worlds made before keep their saved params.
+world_set_planet :: proc(w: ^World) {
+	if w.address == game.earth_address() {w.params.planet = 1}
+}
+
 // world_start: its memory, chunks, entities, spawn; false (logged) if it
 // cannot have them.
 world_start :: proc(w: ^World) -> bool {
