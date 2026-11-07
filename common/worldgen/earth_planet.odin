@@ -137,14 +137,24 @@ planet_climate :: proc(x, z: i32) -> (k: planet.Koppen, coldest: f32) {
 // planet_biome_of: the biome a Köppen class gives (docs/world.md, Worlds).
 planet_biome_of :: proc(k: planet.Koppen) -> Biome {
 	#partial switch k {
-	case .Af, .Am, .Cwa, .Cwb, .Cwc, .Cfa, .Cfb, .Cfc:
-		return .Forest // rainforest, subtropical and temperate forest
-	case .Aw, .BSh, .BSk, .Csa, .Csb, .Csc:
-		return .Plains // savanna, steppe, Mediterranean scrub
-	case .BWh, .BWk:
+	case .Af, .Am:
+		return .Rainforest
+	case .Aw:
+		return .Savanna
+	case .Cfa, .Cwa, .Cwb, .Cwc:
+		return .Subtropical_Forest
+	case .Cfb, .Cfc:
+		return .Forest // temperate forest
+	case .Csa, .Csb, .Csc:
+		return .Mediterranean
+	case .BSh, .BSk:
+		return .Steppe
+	case .BWh:
 		return .Desert
+	case .BWk:
+		return .Cold_Desert
 	case .Dsa, .Dsb, .Dwa, .Dwb, .Dfa, .Dfb:
-		return .Forest // mixed forest
+		return .Mixed_Forest
 	case .Dsc, .Dsd, .Dwc, .Dwd, .Dfc, .Dfd:
 		return .Taiga
 	case .ET:

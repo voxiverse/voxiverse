@@ -25,24 +25,52 @@ Tree :: struct {
 // TREE_ODDS times the tree density).
 @(private = "file", rodata)
 TREE_TRIES := #partial [Biome]i32 {
-	.Plains    = 3,
-	.Forest    = 12,
-	.Taiga     = 10,
-	.Tundra    = 3,
-	.Mountains = 4,
-	.Desert    = 4,
+	.Plains             = 3,
+	.Forest             = 12,
+	.Taiga              = 10,
+	.Tundra             = 3,
+	.Mountains          = 4,
+	.Desert             = 4,
+	// The planet's biomes grow what the old ones they replace did (trees of their own: later).
+	.Rainforest         = 12,
+	.Subtropical_Forest = 12,
+	.Mixed_Forest       = 12,
+	.Savanna            = 3,
+	.Steppe             = 3,
+	.Mediterranean      = 3,
+	.Cold_Desert        = 4,
 }
 @(private)
 MOST_TREE_TRIES :: 12 // TREE_TRIES' largest
 
 @(private = "file", rodata)
 TREE_ODDS := #partial [Biome]f32 {
-	.Plains    = 0.2,
-	.Forest    = 0.7,
-	.Taiga     = 0.6,
-	.Tundra    = 0.25,
-	.Mountains = 0.3,
-	.Desert    = 0.35,
+	.Plains             = 0.2,
+	.Forest             = 0.7,
+	.Taiga              = 0.6,
+	.Tundra             = 0.25,
+	.Mountains          = 0.3,
+	.Desert             = 0.35,
+	.Rainforest         = 0.7,
+	.Subtropical_Forest = 0.7,
+	.Mixed_Forest       = 0.7,
+	.Savanna            = 0.2,
+	.Steppe             = 0.2,
+	.Mediterranean      = 0.2,
+	.Cold_Desert        = 0.35,
+}
+
+// OAK_LAND: biomes whose grass grows oaks.
+@(private = "file")
+OAK_LAND :: bit_set[Biome] {
+	.Plains,
+	.Forest,
+	.Rainforest,
+	.Savanna,
+	.Steppe,
+	.Mediterranean,
+	.Subtropical_Forest,
+	.Mixed_Forest,
 }
 
 // place_trees appends the trees of a chunk column.
@@ -75,7 +103,7 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		switch {
 		case c.biome == .Desert && top == .Sand:
 			append(out, Tree{{x, ground, z}, .Cactus, 1 + size % 3})
-		case top == .Grass && (c.biome == .Plains || c.biome == .Forest):
+		case top == .Grass && c.biome in OAK_LAND:
 			append(out, Tree{{x, ground, z}, .Oak, 4 + size % 3})
 		case top == .Grass || top == .Snow:
 			append(out, Tree{{x, ground, z}, .Spruce, 6 + size})
@@ -183,6 +211,18 @@ plant :: proc(
 		grass, flowers = 0.18, 0.03
 	case .Taiga, .Mountains:
 		grass = 0.08
+	case .Rainforest:
+		grass, flowers = 0.4, 0.02
+	case .Subtropical_Forest:
+		grass, flowers = 0.32, 0.03
+	case .Mixed_Forest:
+		grass, flowers = 0.26, 0.03
+	case .Savanna:
+		grass, flowers = 0.2, 0.01
+	case .Steppe:
+		grass, flowers = 0.12, 0.01
+	case .Mediterranean:
+		grass, flowers = 0.06, 0.04
 	}
 	r := chance(hash(seed ~ i64(Earth_Layer.Plant), origin.x + x, origin.z + z)) / p.plant_density
 	b: game.Block

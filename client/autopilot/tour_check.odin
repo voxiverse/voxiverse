@@ -93,6 +93,19 @@ tour_test_update :: proc(app: ^engine.App) {
 	}
 }
 
+// PLANET_ONLY: biomes only a planet world makes.
+@(private = "file")
+PLANET_ONLY :: bit_set[worldgen.Biome] {
+	.Ice_Sheet,
+	.Rainforest,
+	.Savanna,
+	.Cold_Desert,
+	.Steppe,
+	.Mediterranean,
+	.Subtropical_Forest,
+	.Mixed_Forest,
+}
+
 @(private = "file")
 tour_locate :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) {
 	engine.send_message(s, game.Command{fmt.tprintf("locate %s", worldgen.BIOME_NAMES[t.biome])})
@@ -101,7 +114,8 @@ tour_locate :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) 
 
 @(private = "file")
 tour_next :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) {
-	// The ice sheet is only the planet world's end, past anything to locate.
+	// The ice sheet and the Köppen biomes are the planet world's: a noise
+	// world has none to locate.
 	next := t.biome
 	for {
 		if int(next) == len(worldgen.Biome) - 1 {
@@ -109,7 +123,7 @@ tour_next :: proc(app: ^engine.App, t: ^engine.Tour_Test, s: ^engine.Session) {
 			return
 		}
 		next += worldgen.Biome(1)
-		if next != .Ice_Sheet {break}
+		if next not_in PLANET_ONLY {break}
 	}
 	t.biome = next
 	tour_locate(app, t, s)

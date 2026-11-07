@@ -75,20 +75,35 @@ Biome :: enum u8 {
 	Desert,
 	Mountains,
 	Ice_Sheet,
+	// Planet worlds only (Köppen classes, docs/world.md): noise worlds never make them.
+	Rainforest,
+	Savanna,
+	Cold_Desert,
+	Steppe,
+	Mediterranean,
+	Subtropical_Forest,
+	Mixed_Forest,
 }
 
 BIOME_NAMES := [Biome]string {
-	.Ocean        = "ocean",
-	.Frozen_Ocean = "frozen_ocean",
-	.Beach        = "beach",
-	.River        = "river",
-	.Plains       = "plains",
-	.Forest       = "forest",
-	.Taiga        = "taiga",
-	.Tundra       = "tundra",
-	.Desert       = "desert",
-	.Mountains    = "mountains",
-	.Ice_Sheet    = "ice_sheet",
+	.Ocean              = "ocean",
+	.Frozen_Ocean       = "frozen_ocean",
+	.Beach              = "beach",
+	.River              = "river",
+	.Plains             = "plains",
+	.Forest             = "forest",
+	.Taiga              = "taiga",
+	.Tundra             = "tundra",
+	.Desert             = "desert",
+	.Mountains          = "mountains",
+	.Ice_Sheet          = "ice_sheet",
+	.Rainforest         = "rainforest",
+	.Savanna            = "savanna",
+	.Cold_Desert        = "cold_desert",
+	.Steppe             = "steppe",
+	.Mediterranean      = "mediterranean",
+	.Subtropical_Forest = "subtropical_forest",
+	.Mixed_Forest       = "mixed_forest",
 }
 
 // Per-layer seeds, so layers are uncorrelated.
@@ -302,7 +317,19 @@ earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 	case .Tundra:
 		if depth == 0 {return .Sand if underwater else .Snow}
 		if depth < 3 {return .Dirt}
-	case .Plains, .Forest, .Taiga:
+	case .Cold_Desert:
+		if depth < 2 {return .Sand if underwater else .Gravel}
+		if depth < 5 {return .Sand}
+		if depth < 8 {return .Sandstone}
+	case .Plains,
+	     .Forest,
+	     .Taiga,
+	     .Rainforest,
+	     .Savanna,
+	     .Steppe,
+	     .Mediterranean,
+	     .Subtropical_Forest,
+	     .Mixed_Forest:
 		if depth == 0 {return .Sand if underwater else .Grass}
 		if depth < 3 {return .Dirt}
 	}

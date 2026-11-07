@@ -32,17 +32,24 @@ Options :: struct {
 }
 
 BIOME_COLOURS := [worldgen.Biome][3]f32 {
-	.Ocean        = {40, 70, 150},
-	.Frozen_Ocean = {150, 180, 215},
-	.Beach        = {222, 206, 150},
-	.River        = {60, 110, 190},
-	.Plains       = {120, 175, 80},
-	.Forest       = {50, 110, 45},
-	.Taiga        = {60, 110, 90},
-	.Tundra       = {225, 232, 240},
-	.Desert       = {225, 195, 120},
-	.Mountains    = {128, 124, 120},
-	.Ice_Sheet    = {235, 242, 250},
+	.Ocean              = {40, 70, 150},
+	.Frozen_Ocean       = {150, 180, 215},
+	.Beach              = {222, 206, 150},
+	.River              = {60, 110, 190},
+	.Plains             = {120, 175, 80},
+	.Forest             = {50, 110, 45},
+	.Taiga              = {60, 110, 90},
+	.Tundra             = {225, 232, 240},
+	.Desert             = {225, 195, 120},
+	.Mountains          = {128, 124, 120},
+	.Ice_Sheet          = {235, 242, 250},
+	.Rainforest         = {20, 90, 40},
+	.Savanna            = {170, 170, 80},
+	.Cold_Desert        = {185, 170, 140},
+	.Steppe             = {165, 175, 105},
+	.Mediterranean      = {140, 150, 85},
+	.Subtropical_Forest = {40, 130, 55},
+	.Mixed_Forest       = {70, 120, 60},
 }
 
 Job :: struct {

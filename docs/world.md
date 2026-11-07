@@ -34,9 +34,12 @@ is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north 
 column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with
 the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Its biome is
 the one the column's own Köppen class gives (`planet_climate`, the monthly climate corrected by the lapse
-rate for the column's height, so mountains climb through the zones): rainforest, subtropical, temperate
-and mixed forest are `Forest`, savanna, steppe and Mediterranean scrub `Plains`, deserts `Desert`,
-subarctic `Taiga`, ET `Tundra`, EF `Ice_Sheet`, and seas colder than -1.8 °C in their coldest month
+rate for the column's height, so mountains climb through the zones): Af/Am `Rainforest`, Aw `Savanna`, BWh `Desert`, BWk `Cold_Desert` (gravel over sand), BSh/BSk
+`Steppe`, Csa/Csb/Csc `Mediterranean`, Cfa/Cwa/Cwb/Cwc `Subtropical_Forest`, Cfb/Cfc `Forest`,
+Dfa/Dfb/Dwa/Dwb/Dsa/Dsb `Mixed_Forest`, the other subarctic classes `Taiga`, ET `Tundra`, EF `Ice_Sheet`
+(the new biomes are appended after `Ice_Sheet`; noise worlds never make them; they keep the old
+ones' trees until step 2 gives them their own; grass is densest in the rainforest and the forests, sparse
+in steppe and Mediterranean, and the cold desert has none), and seas colder than -1.8 °C in their coldest month
 `Frozen_Ocean`; the coast, the banks and high mountains keep the shape's biome. The climate grid is
 built once per process on first use (`planet_model`). `/where` prints the Köppen class and the biome.
 `common/planet`'s `rivers_build` routes the climate grid's land to the sea (priority-flood fills
