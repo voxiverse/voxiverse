@@ -133,7 +133,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		// An old stack on the ground expires.
 		for i in 0 ..< entity_count(w) {
 			e := entity_at(w, i)
-			if e.kind != test_reg().engine.item {continue}
+			if entity_kind(w, e) != test_reg().engine.item {continue}
 			entity_set_age(w, e, int(300 * game.TICK_RATE) + 10)
 			if item_tick(w, i) {entity_gone(w, i)}
 			break
@@ -153,11 +153,11 @@ script :: proc(s: ^Server, data: rawptr) {
 				}
 			}
 			c.inventory.selected = 0
-			sheep_use(s, c, &e)
+			sheep_use(s, c, e.handle)
 			for i in 0 ..< game.HOTBAR_SLOTS {
 				if c.inventory.slots[i].item != wheat {c.inventory.selected = i}
 			}
-			sheep_use(s, c, &e)
+			sheep_use(s, c, e.handle)
 		}
 		// A world with no room for what is dropped: it is void.
 		ledger(s, w, .Give, stone, 5)
@@ -165,7 +165,7 @@ script :: proc(s: ^Server, data: rawptr) {
 		    MAX_ENTITIES {entity_spawn(w, test_reg().engine.sheep, {0, 100, 0}, false)}
 		spawn_item(w, {0, 100, 0}, {stone, 5, 0}, {}, -1)
 		for entity_count(w) > 0 &&
-		    entity_at(w, entity_count(w) - 1).kind == test_reg().engine.sheep {
+		    entity_kind(w, entity_at(w, entity_count(w) - 1)) == test_reg().engine.sheep {
 			entity_gone(w, entity_count(w) - 1)
 		}
 		read_audit(s, r)

@@ -345,7 +345,7 @@ admin_kill :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	for id in found {
 		e, i := entity_find(w, u32(id))
 		if i < 0 {continue}
-		info := game.kind_info(s.registry, e.kind)
+		info := game.kind_info(s.registry, entity_kind(w, e))
 		if args[0] != "all" && args[0] != game.kind_name(info) {continue}
 		entity_died(w, i)
 		killed += 1

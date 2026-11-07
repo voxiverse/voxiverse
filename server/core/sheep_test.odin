@@ -23,8 +23,8 @@ wool_dropped :: proc(srv: ^Server, name: string) -> int {
 			w := client_by_name(s, d.name).world
 			for &e in entities_view(w) {
 				if e.kind == test_reg().engine.item &&
-				   entity_stack(w, &e)^.item == game.item_of_block(test_reg(), .Wool) {
-					d.count += entity_stack(w, &e)^.count
+				   entity_stack(w, e.handle)^.item == game.item_of_block(test_reg(), .Wool) {
+					d.count += entity_stack(w, e.handle)^.count
 				}
 			}
 		}, &d)
@@ -240,8 +240,8 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			for &e in entities_view(w) {
 				if e.kind != test_reg().engine.sheep {continue}
 				// The grass one is the one on the grass half.
-				i := 0 if entity_pos(w, &e).x < f64(r.c.x) + 10 else 1
-				r.shorn[i] = entity_wool(w, &e).shorn
+				i := 0 if entity_pos(w, e.handle).x < f64(r.c.x) + 10 else 1
+				r.shorn[i] = entity_wool(w, e.handle).shorn
 				r.sheep += 1
 			}
 		},
@@ -300,7 +300,7 @@ test_old_saves_have_sheep :: proc(t: ^testing.T) {
 			w := client_by_name(s, "a").world
 			for &e in entities_view(w) {
 				if e.kind == test_reg().engine.sheep &&
-				   !entity_wool(w, &e).shorn {(^int)(data)^ += 1}
+				   !entity_wool(w, e.handle).shorn {(^int)(data)^ += 1}
 			}
 		}, &n)
 	testing.expect_value(t, n, 1)

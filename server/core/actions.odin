@@ -233,8 +233,8 @@ apply_edit_cells :: proc(
 attack :: proc(s: ^Server, c: ^Client, a: game.Attack) {
 	w := c.world
 	ent, index := entity_find(w, a.entity)
-	if ent == nil {return} 	// gone already: a late click
-	info := game.kind_info(s.registry, ent.kind)
+	if ent == 0 {return} 	// gone already: a late click
+	info := game.kind_info(s.registry, entity_kind(w, ent))
 	if !info.hittable {return}
 	if !entity_reachable(c, ent) {return}
 	record(s, c, .Entity_Hit, game.kind_name(info))

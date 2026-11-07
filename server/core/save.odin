@@ -702,7 +702,7 @@ write_entities :: proc(w: ^World) -> bool {
 	)
 	it := entities_each(w)
 	for e in entities_next(&it) {
-		info := game.kind_info(w.server.registry, e.kind)
+		info := game.kind_info(w.server.registry, entity_kind(w, e))
 		if !info.saved {continue}
 		fmt.sbprintf(
 			&b,
@@ -715,7 +715,7 @@ write_entities :: proc(w: ^World) -> bool {
 			entity_health_of(w, e),
 			entity_is_natural(w, e),
 		)
-		if e.kind == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
+		if entity_kind(w, e) == w.server.registry.engine.item { 	// (and the action that dropped it: a rollback takes it back after a restart)
 			fmt.sbprintf(
 				&b,
 				" %s %d %d",
@@ -724,7 +724,7 @@ write_entities :: proc(w: ^World) -> bool {
 				entity_owner(w, e).action,
 			)
 		}
-		if e.kind == w.server.registry.engine.sheep {
+		if entity_kind(w, e) == w.server.registry.engine.sheep {
 			fmt.sbprintf(
 				&b,
 				" %v %d %d %d %d",
@@ -818,7 +818,7 @@ load_entities :: proc(w: ^World) {
 			skipped += 1
 			continue
 		}
-		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
+		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != 0 {
 			entity_set_yaw(w, e, yaw)
 			entity_set_health(w, e, min(health, game.kind_info(reg, kind).health))
 			entity_stack(w, e)^, entity_owner(w, e).action = stack, action

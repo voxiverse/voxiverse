@@ -112,12 +112,12 @@ shot_trace :: proc(
 		if i < 0 {continue}
 		at := entity_pos(w, ent)
 		if frame != nil {
-			if b, there := rewind_body(frame.creatures[:], ent.id); there {at = b.position}
+			if b, there := rewind_body(frame.creatures[:], u32(id)); there {at = b.position}
 		}
-		lo, hi := game.entity_box(game.kind_info(w.server.registry, ent.kind), at)
+		lo, hi := game.entity_box(game.kind_info(w.server.registry, entity_kind(w, ent)), at)
 		if t, hit := game.ray_box(origin, dir, lo, hi, res.distance); hit && t < res.distance {
 			point := origin + dir * t
-			res = {.Creature, t, nil, ent.id, point.y >= lo.y + HEAD_START * (hi.y - lo.y)}
+			res = {.Creature, t, nil, u32(id), point.y >= lo.y + HEAD_START * (hi.y - lo.y)}
 		}
 	}
 	return res
@@ -195,17 +195,22 @@ weapon_shoot :: proc(
 			creatures[creature_count] = res.creature
 			creature_count += 1
 			w := c.world
-			if ent, index := entity_find(w, res.creature); ent != nil {
+			if ent, index := entity_find(w, res.creature); ent != 0 {
 				hit = true
 				headshot ||= res.head
-				record(s, c, .Entity_Hit, game.kind_name(game.kind_info(s.registry, ent.kind)))
+				record(
+					s,
+					c,
+					.Entity_Hit,
+					game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
+				)
 				if entity_attack(w, ent, c.player.position) {
 					killed = true
 					record(
 						s,
 						c,
 						.Entity_Killed,
-						game.kind_name(game.kind_info(s.registry, ent.kind)),
+						game.kind_name(game.kind_info(s.registry, entity_kind(w, ent))),
 					)
 					entity_died(w, index)
 				} else {
