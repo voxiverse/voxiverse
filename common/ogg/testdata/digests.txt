@@ -4,7 +4,7 @@ assets/music/discovery.ogg 48000 2 411997 f5165f534066faaa
 assets/music/far.ogg 48000 2 10734233 283ffffaf6cfed70
 assets/music/meadow.ogg 48000 2 10771986 eb87695dbaeffc4a
 assets/music/night.ogg 48000 2 10637986 1c54325495c2f2cd
-assets/music/title.ogg 48000 2 5585455 7ba5831137355a0d
+assets/music/title.ogg 48000 2 8378182 18e8399d17b00e1e
 client/audio/testdata/tone.ogg 44100 2 132300 f26ecb285087d639
 common/game/testdata/click.ogg 16000 1 960 c407e782c333642c
 common/ogg/testdata/edge/block_64_64.ogg 44100 1 352 cd71669d888c306a
