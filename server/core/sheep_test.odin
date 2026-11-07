@@ -209,7 +209,7 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 					{f64(c.x) + 10 + dx, f64(c.y) + 1, f64(c.z) + 0.5},
 					false,
 				)
-				ent.yaw = 0 // facing -z
+				entity_set_yaw(w, ent, 0) // facing -z
 				ent.shorn = true
 				ent.brain = {
 					state = .Graze,
@@ -239,10 +239,10 @@ test_grazing_regrows_wool :: proc(t: ^testing.T) {
 			w := client_by_name(s, "a").world
 			r.front_block, _ = chunks_block(&w.chunks, r.c.front)
 			r.bare_block, _ = chunks_block(&w.chunks, r.c.bare)
-			for e in entities_view(w) {
+			for &e in entities_view(w) {
 				if e.kind != test_reg().engine.sheep {continue}
 				// The grass one is the one on the grass half.
-				i := 0 if e.body.position.x < f64(r.c.x) + 10 else 1
+				i := 0 if entity_pos(w, &e).x < f64(r.c.x) + 10 else 1
 				r.shorn[i] = e.shorn
 				r.sheep += 1
 			}

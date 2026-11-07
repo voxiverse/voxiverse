@@ -52,7 +52,7 @@ bring :: proc(srv: ^Server, id: u32) {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			c := client_by_name(s, "a")
 			if e, _ := entity_find(c.world, (^u32)(data)^); e != nil {
-				e.body.position = c.player.position + {0, 0, -4}
+				entity_set_pos(c.world, e, c.player.position + {0, 0, -4})
 				e.body.velocity = {}
 			}
 		}, &id)

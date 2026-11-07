@@ -706,10 +706,10 @@ write_entities :: proc(w: ^World) -> bool {
 			&b,
 			"%s %.4f %.4f %.4f %.4f %d %v",
 			info.id, // (a save before kinds were data wrote the bare name: load_entities reads both)
-			e.body.position.x,
-			e.body.position.y,
-			e.body.position.z,
-			e.yaw,
+			entity_pos(w, e).x,
+			entity_pos(w, e).y,
+			entity_pos(w, e).z,
+			entity_yaw(w, e),
 			entity_health_of(w, e),
 			entity_is_natural(w, e),
 		)
@@ -817,7 +817,7 @@ load_entities :: proc(w: ^World) {
 			continue
 		}
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
-			e.yaw = yaw
+			entity_set_yaw(w, e, yaw)
 			entity_set_health(w, e, min(health, game.kind_info(reg, kind).health))
 			e.stack, e.action = stack, action
 			entity_mirror(w, e)
