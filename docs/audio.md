@@ -80,37 +80,9 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   FluidSynth): presets, instruments, key and velocity zones, loops, a volume envelope, pan,
   tuning and a low-pass filter, with the engine's reverb on the render, mastered to the target
   above, encoded with `oggenc` or `ffmpeg`.
-- The fonts are downloaded, not committed, each pinned by the SHA-256 of its archive like glslang
-  and unpacked into `build/tools/soundfont/<font>` (`7zz`, `7z`, `7za` or `bsdtar` for `.7z`, `tar`
-  for `.tar.xz`). `VX_SOUNDFONT=<file.sf2>` renders the piano with another font. A score names
-  its instruments, any number: `instrument harp font freepats_harp preset 0:0` (`font` is
-  optional: the upright piano), and a piece is re-rendered when the font of any instrument it
-  uses changes (a piece that uses only the upright keeps the hash it always had).
-- **SFZ** is read in place by the renderer (`tools/music/sfz.odin`), not converted: `<control>`
-  (`default_path`), `<global>`, `<master>`, `<group>` and `<region>` with inheritance; `sample`
-  (PCM WAV, 16/24/32-bit or float, a stereo file mixed to mono), `lokey`, `hikey`, `key`,
-  `pitch_keycenter`, `lovel`, `hivel`, `offset`, `end`, `loop_mode`, `loop_start`, `loop_end`,
-  `ampeg_attack/hold/decay/sustain/release`, `volume`, `pan`, `tune`, `transpose`; other opcodes
-  are ignored. Each `.sfz` file is a preset named by its file name (`preset cello_sustain`).
-- `build music --audition-instruments [--wav <dir>]` renders the C2-C7 scale (C major, then a C7)
-  of every preset of every font, at pp (32), mf (64) and ff (110), to
-  `<font>.<preset>.wav` (default `build/music-out/instruments`), to listen to.
-
-### The instruments
-
-Every font is CC0 1.0 by its download page, read before it was pinned; the credit lines are in
-`assets/music/CREDITS.txt`.
-
-| Font name | What | Source |
-|---|---|---|
-| `piano` | Upright Piano KW (default) | FreePats |
-| `felt` | the upright with a soft hammer: velocities compressed toward pp (`12 + 0.45 v`), a low-pass that opens with velocity (500 + 40 v Hz), the first 150 ms starting 3 dB quieter, the release 1.6 times longer | made from `piano` |
-| `freepats_harp` | Concert Harp (small SF2) | FreePats |
-| `freepats_bells` | Tubular Bells (small SF2) | FreePats |
-
-Planned, not yet pinned: the other FreePats fonts (Timpani, the synth pads, Recorder, Ocarina,
-Glass) and the Versilian VSCO 2 Community Edition (SFZ, strings, flute, horn, celesta,
-glockenspiel).
+- The SoundFont is downloaded, not committed: FreePats Upright Piano KW (CC0 by its page), pinned
+  by SHA-256 like glslang and unpacked into `build/tools/soundfont` (`7zz`, `7z`, `7za` or
+  `bsdtar` is needed). `VX_SOUNDFONT=<file.sf2>` renders with another font.
 - `assets/music/CREDITS.txt` holds each source's credit line; the game's credits screen shows it.
   Read a download's license on its own page before committing anything rendered from it.
 
