@@ -266,6 +266,18 @@ at their day and place and change nothing before it.
   trader to arrive sells at the peak; later ones meet the caravans that came before. Tested
   by `test_first_to_a_drought_profits_more`. Not yet: the market screen (reached in play with
   M inside a settlement's radius) and caravans as entities (see #141).
+- **The server holds the markets** (`server/core/save.odin`, `World.economy`; only worlds
+  with `worldgen.planet`). The history's day is `ECONOMY_PRESENT` (6 000 years) plus the world
+  clock; the settlements are placed on the first arrival (`settlements_at`, cached; a new decade
+  or an intervention rebuilds the economy and drops what hung on it). Once a second the server
+  looks at where its players stand: towns within `ECONOMY_RADIUS_KM` (600) of one are in detail
+  (a `Market` with news and caravans, stepped by `convoy_step`), a market month being 30 world
+  days. A town that no player is near goes back to the lazy model (`market_leave`) and is
+  priced from the history function when perceived again (`market_enter`), so a year away
+  changes no price. A market resident for more than `ECONOMY_CATCH_UP` (120) months behind the
+  clock is entered afresh instead of stepped. No system causes droughts yet, so none are
+  stepped; the news and caravans in flight are not saved and start again when the market is
+  next entered. (The islands of #132 do not exist yet: "near a player" stands in for them.)
 - 6 000 years take about 50 ms optimized (`build bench budgets`, `planet_history`).
 - Test: of the 10 likeliest farming regions on Earth's planet model (with Earth's real
   biogeography; a test only, Earth has no peoples in the game) at least 5 lie within 1 200 km of

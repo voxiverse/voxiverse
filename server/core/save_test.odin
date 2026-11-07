@@ -10,6 +10,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:planet"
 import "common:worldgen"
 
 // The exit check: save -> quit -> load gives back exactly the world that
@@ -580,4 +581,225 @@ saved_clock :: proc(dir: string, seed: i64) -> f64 {
 		}
 	}
 	return -1
+}
+
+// The economy the server holds: arriving near a settlement builds its market, months step it
+// as the model does, a save gives the same prices, and a market left and come back to after a
+// year is the lazy one.
+
+@(private = "file")
+Rig :: struct {
+	g:        ^Grief,
+	w:        ^World,
+	observer: [2]f64, // a town with a market
+	town:     int,
+}
+
+// rig_open opens a planet world and builds its economy; the observer is a town's place.
+@(private = "file")
+rig_open :: proc(t: ^testing.T, dir: string) -> (r: Rig, ok: bool) {
+	r.g, ok = grief_open(t, dir)
+	if !ok {return}
+	r.w = grief_world(r.g)
+	r.w.params.planet = 1
+	return rig_find(t, &r)
+}
+
+@(private = "file")
+rig_find :: proc(t: ^testing.T, r: ^Rig) -> (Rig, bool) {
+	economy_sync(r.w, nil)
+	we := r.w.economy
+	if !testing.expect(t, we != nil && we.built && len(we.economy.towns) > 0, "no towns") {
+		return r^, false
+	}
+	r.town = -1
+	for tw, i in we.economy.towns {
+		if tw.market[.Grain] && tw.production[.Grain] > 0 {r.town = i; break}
+	}
+	if !testing.expect(t, r.town >= 0) {return r^, false}
+	tw := we.economy.towns[r.town]
+	r.observer = {f64(tw.lat), f64(tw.lon)}
+	return r^, true
+}
+
+@(private = "file")
+prices :: proc(w: ^World) -> (out: [dynamic][planet.Good]f32) {
+	for i in 0 ..< len(w.economy.economy.towns) {
+		row: [planet.Good]f32
+		for g in planet.Good {row[g] = economy_price(w, i, g)}
+		append(&out, row)
+	}
+	return
+}
+
+@(test)
+test_economy_arrival_builds_a_market :: proc(t: ^testing.T) {
+	dir := scratch_dir("economy_arrival")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	we := r.w.economy
+	testing.expect(t, !we.resident, "a market with nobody near")
+	economy_sync(r.w, {r.observer})
+	if !testing.expect(t, we.resident, "arriving built no market") {return}
+	i := we.market.local[r.town]
+	testing.expect(t, i >= 0, "the town near the observer is not in detail")
+	testing.expect(t, planet.market_price(we.economy, we.market, i, .Grain) > 0)
+	// A town far from everyone is not.
+	far := 0
+	for tw in we.economy.towns {
+		if planet.km_between(tw.lat, tw.lon, f32(r.observer.x), f32(r.observer.y)) >
+		   2 * ECONOMY_RADIUS_KM {far += 1}
+	}
+	testing.expect_value(t, len(we.market.town) + far <= len(we.economy.towns), true)
+	// Leaving drops it.
+	economy_sync(r.w, nil)
+	testing.expect(t, !we.resident, "the market stayed with nobody near")
+}
+
+@(test)
+test_economy_ten_months_step_as_the_model_does :: proc(t: ^testing.T) {
+	dir := scratch_dir("economy_steps")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	w, we := r.w, r.w.economy
+	w.clock = 100 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	if !testing.expect(t, we.resident) {return}
+
+	// The same island by hand: entered at the same month, stepped ten times.
+	towns := make([]int, len(we.market.town))
+	defer delete(towns)
+	copy(towns, we.market.town)
+	m := planet.market_make(we.economy, towns, we.market.month)
+	defer planet.market_destroy(&m)
+	planet.market_enter(we.economy, we.kernel, &m, we.mem, nil)
+	n := planet.news_make(we.economy, m)
+	defer planet.news_destroy(&n)
+	c: planet.Convoy
+	defer planet.convoy_destroy(&c)
+	for _ in 0 ..< 10 {planet.convoy_step(we.economy, &m, n, &c, nil)}
+
+	w.clock = 110 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	testing.expect_value(t, we.market.month, 110)
+	testing.expect_value(t, m.month, 110)
+	for ti, i in towns {
+		for g in planet.Good {
+			want := planet.market_price(we.economy, m, i, g)
+			got := economy_price(w, ti, g)
+			testing.expectf(t, got == want, "town %d %v: %v, the model says %v", ti, g, got, want)
+		}
+	}
+}
+
+@(test)
+test_economy_save_and_load_give_the_same_prices :: proc(t: ^testing.T) {
+	dir := scratch_dir("economy_save")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	w := r.w
+	w.clock = 50 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	w.clock = 54 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	before := prices(w)
+	defer delete(before)
+	key := w.economy.key
+	testing.expect(t, w.economy.resident)
+	w.params.planet = 0 // (see the reopening below)
+	testing.expect(t, world_save(w))
+	testing.expect(
+		t,
+		os.exists(filepath.join({w.dir, ECONOMY_FILE}, context.temp_allocator) or_else ""),
+		"no economy file",
+	)
+	grief_close_keep(r.g)
+
+	g2, ok2 := grief_open(t, dir)
+	defer grief_close(g2)
+	if !ok2 {return}
+	w2 := grief_world(g2)
+	// (The planet's terrain is a place the test player cannot land on, so the world is
+	// reopened as a flat one and told it is the planet's, then reads its file as world_start does.)
+	w2.params.planet = 1
+	economy_load(w2)
+	if !testing.expect(t, w2.economy != nil && w2.economy.has_saved, "the file was not read") {
+		return
+	}
+	testing.expect_value(t, economy_month(w2.clock), 54)
+	economy_sync(w2, {r.observer})
+	testing.expect_value(t, w2.economy.key, key)
+	after := prices(w2)
+	defer delete(after)
+	if !testing.expect_value(t, len(after), len(before)) {return}
+	for row, i in before {
+		for g in planet.Good {
+			testing.expectf(
+				t,
+				after[i][g] == row[g],
+				"town %d %v: %v then %v",
+				i,
+				g,
+				row[g],
+				after[i][g],
+			)
+		}
+	}
+}
+
+@(test)
+test_economy_back_after_a_year_matches_the_lazy_price :: proc(t: ^testing.T) {
+	dir := scratch_dir("economy_year")
+	defer delete(dir)
+	defer os.remove_all(dir)
+	r, ok := rig_open(t, dir)
+	defer grief_close(r.g)
+	if !ok {return}
+	w, we := r.w, r.w.economy
+	w.clock = 20 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	w.clock = 26 * MONTH_DAYS
+	economy_sync(w, {r.observer})
+	economy_sync(w, nil) // gone
+	testing.expect(t, !we.resident)
+	w.clock = 38 * MONTH_DAYS // a year on
+	before := prices(w) // what the lazy model says now
+	defer delete(before)
+	economy_sync(w, {r.observer}) // back
+	if !testing.expect(t, we.resident) {return}
+	worst := f32(0)
+	for ti in we.market.town {
+		for g in planet.Good {
+			if before[ti][g] == 0 {continue}
+			worst = max(worst, abs(economy_price(w, ti, g) / before[ti][g] - 1))
+		}
+	}
+	testing.expectf(t, worst < 0.05, "a year away, a price moved %v on return", worst)
+}
+
+@(test)
+test_economy_file_damage_is_refused :: proc(t: ^testing.T) {
+	we := World_Economy {
+		key = 7,
+	}
+	defer delete(we.mem)
+	data := economy_encode(&we, context.temp_allocator)
+	good, ok := economy_decode(data)
+	testing.expect(t, ok, "an empty economy does not read back")
+	saved_destroy(&good)
+	testing.expect(t, !economy_check(data[:len(data) - 1]), "a cut file reads")
+	bad := make([]u8, len(data), context.temp_allocator)
+	copy(bad, data)
+	bad[9] ~= 1
+	testing.expect(t, !economy_check(bad), "a flipped bit reads")
+	testing.expect(t, !economy_check(nil))
 }

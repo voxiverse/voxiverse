@@ -14,6 +14,7 @@ permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)
 worlds/<address>/world.cfg, entities.cfg, protections.cfg
 worlds/<address>/interventions.vxi            interventions log format 1
+worlds/<address>/economy.vxe                  economy format 1 (planet worlds)
 worlds/<address>/regions/r.<x>.<z>.vxr      region format 5
 worlds/<address>/journal/<seq>.vxj
 backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
@@ -205,6 +206,21 @@ records out of order is refused whole: the world moves it aside (`interventions.
 starts with an empty log and logs an error; `--check` reports it.
 `interventions_since(log, day)` and `interventions_near(log, place, radius_blocks, since_day)`
 are the queries for the systems that replay them.
+
+### The economy
+
+`economy.vxe` (`server/core/save.odin`) holds what the server computed of a planet world's
+markets that the history function does not give back: `"VXEC"`, `u32 version` (1), `u64` key of
+the placement it was made for, `f64` market month, `u32` market count, `u32` memory count, then
+per detailed town its climate cell (`u32`) and each good's stock and inbound goods (`f32`, in
+the order of `planet.Good`), per lazy memory its cell, each good's relative gap to the lazy price
+(`f32`) and the month it was left (`f64`), and last the CRC-32 of everything before it (all
+little-endian). It is staged in the save transaction when the economy changed. Normal prices,
+the kernel and the settlements are not stored: they come from the history. A file made for
+another placement (the history changed) is read and ignored, so the markets are recomputed; a
+file that is cut, has a bad CRC or a number that is negative or not finite is moved aside
+(`economy.vxe.bad`) and the markets are recomputed; `--check` reports it. News and caravans in
+flight are not saved.
 
 ### The edit journal
 
