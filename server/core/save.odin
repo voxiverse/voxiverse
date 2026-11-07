@@ -719,20 +719,20 @@ write_entities :: proc(w: ^World) -> bool {
 			fmt.sbprintf(
 				&b,
 				" %s %d %d",
-				game.item_id(w.server.registry, e.stack.item),
-				e.stack.count,
-				e.action,
+				game.item_id(w.server.registry, entity_stack(w, e).item),
+				entity_stack(w, e).count,
+				entity_owner(w, e).action,
 			)
 		}
 		if e.kind == w.server.registry.engine.sheep {
 			fmt.sbprintf(
 				&b,
 				" %v %d %d %d %d",
-				e.shorn,
-				transmute(u8)e.genes,
-				e.growth,
-				e.love,
-				e.wait,
+				entity_wool(w, e).shorn,
+				transmute(u8)entity_genes(w, e).genes,
+				entity_breeding(w, e).growth,
+				entity_breeding(w, e).love,
+				entity_breeding(w, e).wait,
 			)
 		}
 		strings.write_byte(&b, '\n')
@@ -821,19 +821,19 @@ load_entities :: proc(w: ^World) {
 		if e := entity_spawn(w, kind, pos, f[6] == "true"); e != nil {
 			entity_set_yaw(w, e, yaw)
 			entity_set_health(w, e, min(health, game.kind_info(reg, kind).health))
-			e.stack, e.action = stack, action
-			if kind == sheep && len(f) >= 8 {e.shorn = f[7] == "true"}
+			entity_stack(w, e)^, entity_owner(w, e).action = stack, action
+			if kind == sheep && len(f) >= 8 {entity_wool(w, e).shorn = f[7] == "true"}
 			if kind == sheep && len(f) == 12 {
 				genes, ok1 := strconv.parse_int(f[8])
 				growth, ok2 := strconv.parse_int(f[9])
 				love, ok3 := strconv.parse_int(f[10])
 				wait, ok4 := strconv.parse_int(f[11])
 				if ok1 && ok2 && ok3 && ok4 && genes >= 0 && genes < 16 {
-					e.genes = transmute(game.Genes)u8(genes)
-					e.growth = clamp(growth, 0, game.LAMB_TICKS)
-					e.love, e.wait =
-						clamp(love, 0, game.BREED_READY_TICKS),
-						clamp(wait, 0, game.BREED_WAIT_TICKS)
+					entity_genes(w, e).genes = transmute(game.Genes)u8(genes)
+					br := entity_breeding(w, e)
+					br.growth = i32(clamp(growth, 0, game.LAMB_TICKS))
+					br.love = i32(clamp(love, 0, game.BREED_READY_TICKS))
+					br.wait = i32(clamp(wait, 0, game.BREED_WAIT_TICKS))
 				}
 			}
 			loaded += 1

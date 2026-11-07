@@ -82,8 +82,8 @@ record_at :: proc(srv: ^Server, pos: game.Block_Pos) -> Block_Data {
 			d := (^Block_Data)(data)
 			w := s.worlds[0]
 			if e := block_entity_at(w, d.pos); e != nil {d.slots, d.has = e.slots, true}
-			for e in entities_view(w) {
-				if e.kind == test_reg().engine.item {d.items += e.stack.count}
+			for &e in entities_view(w) {
+				if e.kind == test_reg().engine.item {d.items += entity_stack(w, &e)^.count}
 			}
 		}, &d)
 	return d
@@ -374,14 +374,16 @@ test_restore_takes_spilled_stacks :: proc(t: ^testing.T) {
 			near_b := spawn_item(w, here + {0, 0, 2}, {planks, 4, 0}, {}, -1)
 			far := spawn_item(w, here + {20, 0, 0}, {planks, 9, 0}, {}, -1)
 			other := spawn_item(w, here + {0, 0, 1}, {planks, 9, 0}, {}, -1)
-			near_a.action, near_b.action, far.action, other.action = 77, 77, 77, 5
+			entity_owner(w, near_a).action, entity_owner(w, near_b).action, entity_owner(w, far).action, entity_owner(w, other).action =
+				77, 77, 77, 5
 			ids := [4]u32{near_a.id, near_b.id, far.id, other.id}
 			disk := make(map[Entity_Undo_Key][]u8, context.temp_allocator)
 			disk[key] = bytes
 			entity_restore(w, d.pos, key, disk)
 			d.slots[0] = block_entity_at(w, d.pos).slots[0]
 			for id in ids {
-				if ent, _ := entity_find(w, id); ent != nil {d.items += int(ent.stack.count)}
+				if ent, _ := entity_find(w, id);
+				   ent != nil {d.items += int(entity_stack(w, ent)^.count)}
 			}
 		}, &d)
 	testing.expect_value(t, d.slots[0].count, 5)

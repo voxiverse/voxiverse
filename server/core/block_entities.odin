@@ -236,7 +236,7 @@ entity_restore :: proc(
 		d := entity_pos(w, ent) - here
 		return(
 			ent.kind == item &&
-			ent.action == action &&
+			entity_owner(w, ent).action == action &&
 			d.x * d.x + d.y * d.y + d.z * d.z <= RESTORE_REACH * RESTORE_REACH \
 		)
 	}
@@ -259,7 +259,7 @@ entity_restore :: proc(
 		ent, _ := entity_find(w, u32(id))
 		if ent == nil || !near(w, ent, here, from.action, w.server.registry.engine.item) {continue}
 		append(&stacks, u32(id))
-		lying[ent.stack.item] += ent.stack.count
+		lying[entity_stack(w, ent)^.item] += entity_stack(w, ent)^.count
 	}
 	block_entity_touch(w, p)
 	taken := make(map[game.Item]int, context.temp_allocator)
@@ -273,11 +273,11 @@ entity_restore :: proc(
 	for id in stacks {
 		ent, i := entity_find(w, id)
 		if ent == nil {continue}
-		n := min(ent.stack.count, taken[ent.stack.item])
+		n := min(entity_stack(w, ent)^.count, taken[entity_stack(w, ent)^.item])
 		if n == 0 {continue}
-		taken[ent.stack.item] -= n
-		ent.stack.count -= n
-		if ent.stack.count == 0 {entity_gone(w, i)}
+		taken[entity_stack(w, ent)^.item] -= n
+		entity_stack(w, ent)^.count -= n
+		if entity_stack(w, ent)^.count == 0 {entity_gone(w, i)}
 	}
 }
 

@@ -85,7 +85,7 @@ ledger_world_scope :: proc(w: ^World, reason: game.Reason) {
 	}
 	it := entities_each(w)
 	for e in entities_next(&it) {
-		if e.kind == s.registry.engine.item {ledger_stack(s, w, reason, e.stack, sign)}
+		if e.kind == s.registry.engine.item {ledger_stack(s, w, reason, entity_stack(w, e)^, sign)}
 	}
 }
 
@@ -109,7 +109,7 @@ held_sums :: proc(s: ^Server) -> map[game.Item]i64 {
 		}
 		it := entities_each(w)
 		for e in entities_next(&it) {
-			if e.kind == s.registry.engine.item {add(&held, e.stack)}
+			if e.kind == s.registry.engine.item {add(&held, entity_stack(w, e)^)}
 		}
 	}
 	return held

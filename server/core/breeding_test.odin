@@ -23,9 +23,9 @@ sheep_list :: proc(srv: ^Server) -> []Sheep_Info {
 	call(srv, proc(s: ^Server, data: rawptr) {
 			out := (^[dynamic]Sheep_Info)(data)
 			w := client_by_name(s, "a").world
-			for e in entities_view(w) {
+			for &e in entities_view(w) {
 				if e.kind ==
-				   test_reg().engine.sheep {append(out, Sheep_Info{e.id, e.genes, e.growth, e.love, e.wait, e.shorn})}
+				   test_reg().engine.sheep {append(out, Sheep_Info{e.id, entity_genes(w, &e).genes, int(entity_breeding(w, &e).growth), int(entity_breeding(w, &e).love), int(entity_breeding(w, &e).wait), entity_wool(w, &e).shorn})}
 			}
 		}, &out)
 	return out[:]
@@ -39,8 +39,10 @@ sheep_set :: proc(srv: ^Server, info: Sheep_Info) {
 			i := (^Sheep_Info)(data)
 			w := client_by_name(s, "a").world
 			if e, _ := entity_find(w, i.id); e != nil {
-				e.genes, e.growth, e.love, e.wait, e.shorn =
-					i.genes, i.growth, i.love, i.wait, i.shorn
+				entity_genes(w, e).genes = i.genes
+				br := entity_breeding(w, e)
+				br.growth, br.love, br.wait = i32(i.growth), i32(i.love), i32(i.wait)
+				entity_wool(w, e).shorn = i.shorn
 			}
 		}, &info)
 }
@@ -223,10 +225,11 @@ test_breeding_lamb_to_adult :: proc(t: ^testing.T) {
 			c.inventory.selected = 0 // (stone in hand)
 			if e, _ := entity_find(c.world, d.id); e != nil {
 				sheep_use(s, c, e)
-				for it in entities_view(c.world) {
+				w := c.world
+				for &it in entities_view(w) {
 					if it.kind == test_reg().engine.item &&
-					   it.stack.item == game.item_of_block(test_reg(), .Wool_Black) {
-						d.n += it.stack.count
+					   entity_stack(w, &it)^.item == game.item_of_block(test_reg(), .Wool_Black) {
+						d.n += entity_stack(w, &it)^.count
 					}
 				}
 			}

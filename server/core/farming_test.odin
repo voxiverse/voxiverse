@@ -241,7 +241,7 @@ test_crop_drops :: proc(t: ^testing.T) {
 			p := game.Block_Pos{f.x, f.y, f.z}
 			seeds, wheat := game.item_of_material(.Seeds), game.item_of_material(.Wheat)
 			count :: proc(w: ^World, item: game.Item) -> (n: int) {
-				for e in entities_view(w) {if e.kind == test_reg().engine.item && e.stack.item == item {n += e.stack.count}}
+				for &e in entities_view(w) {if e.kind == test_reg().engine.item && entity_stack(w, &e)^.item == item {n += entity_stack(w, &e)^.count}}
 				return
 			}
 			// Tall grass: seeds about 1 in 8 (300 tries: 37 expected).
