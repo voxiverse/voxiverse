@@ -57,6 +57,7 @@ World :: struct {
 	islands:             island.Islands, // who is observed where (islands_update)
 	interventions:       intervention.Log, // what players did that the world's history carries forward (heap)
 	interventions_dirty: bool, // interventions changed since interventions.vxi was staged
+	economy:             ^World_Economy, // the markets near the observers (economy.odin; heap; nil until needed)
 	revisit:             map[game.Chunk_Pos]struct{}, // chunks a rollback, undo or redo touched since their region was written: compaction looks at them (compact.odin)
 }
 
@@ -120,6 +121,7 @@ world_start :: proc(w: ^World) -> bool {
 	journal_init(w, arena)
 	protections_load(w)
 	interventions_load(w)
+	economy_load(w)
 	w.started = true
 	spawn_choose(w)
 	load_entities(w)
@@ -136,6 +138,7 @@ world_close :: proc(w: ^World) {
 	protections_free(w)
 	intervention.log_destroy(&w.interventions)
 	island.destroy(&w.islands)
+	economy_free(w)
 	rewind_destroy(&w.rewind)
 	if w.started {
 		ledger_world_scope(w, .Scope_Out)

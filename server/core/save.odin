@@ -1,6 +1,8 @@
 package core
 
+import "core:encoding/endian"
 import "core:fmt"
+import "core:hash"
 import "core:log"
 import "core:math"
 import "core:mem/virtual"
@@ -14,6 +16,7 @@ import "core:time"
 import "common:base"
 import "common:game"
 import "common:intervention"
+import "common:planet"
 import "common:worldgen"
 
 // Saving: a universe is a directory: universe.cfg (format, seed, the home
@@ -292,6 +295,7 @@ world_stage :: proc(w: ^World) -> bool {
 	if w.protections_dirty && !protections_write(w) {ok = false}
 	journal_maintain(w)
 	if w.interventions_dirty && !interventions_write(w) {ok = false}
+	if w.economy != nil && w.economy.dirty && !economy_write(w) {ok = false}
 	if !write_entities(w) {ok = false}
 	if !write_stats(w) {ok = false}
 	return ok
@@ -933,4 +937,450 @@ admin_interventions :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 		)
 	}
 	return true
+}
+
+// The economy of a world (docs/world.md, the economy; docs/saves.md, economy.vxe): the server
+// holds the markets of the settlements near its observers (the players) and steps them on the
+// world clock, a market month being MONTH_DAYS world days. The towns are those the world's
+// history implies (`planet.settlements_at`, placed on arrival and cached); towns within
+// ECONOMY_RADIUS_KM of an observer are in detail (`planet.Market`, with news and caravans:
+// `planet.convoy_step`), all others are lazy (`planet.lazy_price`). A town that leaves every
+// observer's reach is handed back to the lazy model (`market_leave`), and priced again from
+// the history function when perceived again (`market_enter`), so nothing jumps.
+// Only worlds built on the planet have an economy.
+
+MONTH_DAYS :: 30 // world days in a market month
+ECONOMY_RADIUS_KM :: 600.0 // a town this near an observer is in detail
+ECONOMY_CATCH_UP :: 120 // months a resident market is stepped to catch up; more and it is entered again
+ECONOMY_PRESENT :: i64(6000 * planet.DAYS_PER_YEAR) // the history's day at world day 0
+ECONOMY_FILE :: "economy.vxe"
+
+@(private = "file")
+ECONOMY_MAGIC :: "VXEC"
+@(private = "file")
+ECONOMY_VERSION :: 1
+@(private = "file")
+GOODS :: len(planet.Good)
+
+// Saved_Market is a town's detailed state as the file holds it.
+@(private = "file")
+Saved_Market :: struct {
+	cell:    u32,
+	stock:   [planet.Good]f32,
+	inbound: [planet.Good]f32,
+}
+
+@(private = "file")
+Saved_Lazy :: struct {
+	cell: u32,
+	dev:  [planet.Good]f32,
+	left: f64,
+}
+
+// Saved_Economy is what a file holds, kept until the economy is built to take it.
+Saved_Economy :: struct {
+	key:    u64, // the placement it was made for
+	month:  f64,
+	market: [dynamic]Saved_Market,
+	lazy:   [dynamic]Saved_Lazy,
+}
+
+saved_destroy :: proc(s: ^Saved_Economy) {
+	delete(s.market)
+	delete(s.lazy)
+	s^ = {}
+}
+
+World_Economy :: struct {
+	cache:     planet.Settlement_Cache,
+	key:       u64, // the placement the economy was built for
+	built:     bool,
+	economy:   planet.Economy,
+	kernel:    planet.Kernel,
+	mem:       []planet.Lazy_State,
+	market:    planet.Market,
+	resident:  bool, // `market` holds towns
+	news:      planet.News,
+	convoy:    planet.Convoy,
+	droughts:  [dynamic]planet.Drought, // none yet: no system causes one
+	pending:   Saved_Economy, // read from the file, not yet applied
+	has_saved: bool,
+	dirty:     bool,
+}
+
+economy_free :: proc(w: ^World) {
+	we := w.economy
+	if we == nil {return}
+	economy_drop(we)
+	planet.settlement_cache_destroy(&we.cache)
+	saved_destroy(&we.pending)
+	delete(we.droughts)
+	free(we)
+	w.economy = nil
+}
+
+// economy_drop frees the built economy and everything held on it.
+@(private = "file")
+economy_drop :: proc(we: ^World_Economy) {
+	if we.resident {
+		planet.market_destroy(&we.market)
+		planet.news_destroy(&we.news)
+		planet.convoy_destroy(&we.convoy)
+		we.resident = false
+	}
+	if we.built {
+		planet.economy_destroy(&we.economy)
+		delete(we.mem)
+		we.mem = nil
+		we.built = false
+	}
+}
+
+// economy_month is the market month at a world clock (whole months).
+economy_month :: proc(clock: f64) -> f64 {
+	return f64(i64(clock / MONTH_DAYS))
+}
+
+// economy_observer is where a player stands on the planet, degrees.
+economy_observer :: proc(c: ^Client) -> [2]f64 {
+	lat, lon := worldgen.planet_lat_lon(i32(c.player.position.x), i32(c.player.position.z))
+	return {lat, lon}
+}
+
+// economy_tick runs once a second: the economy of every planet world a player is in.
+economy_tick :: proc(s: ^Server) {
+	if s.tick % game.TICK_RATE != 0 {return}
+	for w in s.worlds {
+		if w.params.planet == 0 || !w.started {continue}
+		observers := make([dynamic][2]f64, context.temp_allocator)
+		for &c in s.clients {
+			if c.state == .Playing && c.world == w {append(&observers, economy_observer(&c))}
+		}
+		if len(observers) == 0 && w.economy == nil {continue}
+		economy_sync(w, observers[:])
+	}
+}
+
+// economy_interventions turns the world's log into what the history takes: a settlement
+// founded at a place.
+@(private = "file")
+economy_interventions :: proc(w: ^World) -> []planet.Intervention {
+	out := make([dynamic]planet.Intervention, context.temp_allocator)
+	for iv in w.interventions.list {
+		if iv.kind != .Founded_Settlement {continue}
+		lat, lon := worldgen.planet_lat_lon(iv.place.x, iv.place.z)
+		append(
+			&out,
+			planet.Intervention {
+				day = ECONOMY_PRESENT + i64(iv.day),
+				lat = lat,
+				lon = lon,
+				kind = planet.INTERVENTION_SETTLEMENT,
+			},
+		)
+	}
+	return out[:]
+}
+
+// economy_sync brings the world's economy up to date: the towns near the observers are in
+// detail, stepped to the world clock's month; the rest are lazy.
+economy_sync :: proc(w: ^World, observers: [][2]f64) {
+	if w.params.planet == 0 {return}
+	if w.economy == nil {w.economy = new(World_Economy)}
+	we := w.economy
+	p := worldgen.planet_model()
+	day := ECONOMY_PRESENT + i64(w.clock)
+	list := planet.settlements_at(
+		&we.cache,
+		p,
+		game.address_hash(w.address),
+		u64(w.seed),
+		day,
+		economy_interventions(w),
+	)
+	if we.built && we.key != we.cache.key {
+		// The history changed (a new decade, an intervention): what was computed from it
+		// is dropped and comes again from the history function.
+		economy_drop(we)
+		we.dirty = true
+	}
+	if !we.built {
+		roads := planet.roads_at(
+			&we.cache,
+			p,
+			game.address_hash(w.address),
+			u64(w.seed),
+			day,
+			economy_interventions(w),
+		)
+		we.economy = planet.economy_build(p, list, roads)
+		we.kernel = planet.kernel_measure(we.economy)
+		we.mem = make([]planet.Lazy_State, len(we.economy.towns))
+		we.key, we.built = we.cache.key, true
+	}
+	if len(observers) == 0 && !we.resident {return}
+	month := economy_month(w.clock)
+	if we.has_saved {
+		economy_apply_saved(we)
+		we.has_saved = false
+	}
+	if we.resident && month - we.market.month > ECONOMY_CATCH_UP {
+		economy_leave(we)
+	}
+
+	// The towns to hold in detail.
+	want := make([dynamic]int, context.temp_allocator)
+	for t, i in we.economy.towns {
+		for o in observers {
+			if planet.km_between(t.lat, t.lon, f32(o.x), f32(o.y)) < ECONOMY_RADIUS_KM {
+				append(&want, i)
+				break
+			}
+		}
+	}
+	if !we.resident || !slice.equal(want[:], we.market.town) {
+		economy_hold(we, want[:], month)
+	}
+	for we.resident && we.market.month < month {
+		planet.convoy_step(we.economy, &we.market, we.news, &we.convoy, we.droughts[:])
+		we.dirty = true
+	}
+}
+
+// economy_leave hands the detailed towns back to the lazy model.
+@(private = "file")
+economy_leave :: proc(we: ^World_Economy) {
+	if !we.resident {return}
+	planet.market_leave(we.economy, we.kernel, we.market, we.mem, we.droughts[:])
+	planet.market_destroy(&we.market)
+	planet.news_destroy(&we.news)
+	planet.convoy_destroy(&we.convoy)
+	we.resident = false
+	we.dirty = true
+}
+
+// economy_hold makes `towns` the detailed ones at a month: the towns that stay keep their
+// stocks, those that leave go to the lazy model, those that come are priced from it.
+@(private = "file")
+economy_hold :: proc(we: ^World_Economy, towns: []int, month: f64) {
+	old := we.market
+	was := we.resident
+	if was {
+		planet.market_leave(we.economy, we.kernel, old, we.mem, we.droughts[:])
+		planet.news_destroy(&we.news)
+		planet.convoy_destroy(&we.convoy)
+		we.resident = false
+	}
+	if len(towns) == 0 {
+		if was {planet.market_destroy(&old)}
+		we.dirty = true
+		return
+	}
+	at := old.month if was else month
+	m := planet.market_make(we.economy, towns, at)
+	planet.market_enter(we.economy, we.kernel, &m, we.mem, we.droughts[:])
+	if was {
+		for ti, i in m.town {
+			if j := old.local[ti]; j >= 0 {
+				m.stock[i], m.inbound[i] = old.stock[j], old.inbound[j]
+			}
+		}
+		planet.market_destroy(&old)
+	}
+	we.market = m
+	we.news = planet.news_make(we.economy, we.market)
+	we.resident = true
+	we.dirty = true
+}
+
+// economy_apply_saved restores the market and the memories a file held, when it was made for
+// this placement; otherwise they are recomputed from the history.
+@(private = "file")
+economy_apply_saved :: proc(we: ^World_Economy) {
+	s := &we.pending
+	defer saved_destroy(s)
+	if s.key != we.key {return}
+	by_cell := make(map[u32]int, len(we.economy.towns), context.temp_allocator)
+	for t, i in we.economy.towns {by_cell[u32(t.cell)] = i}
+	for l in s.lazy {
+		if i, ok := by_cell[l.cell]; ok {
+			we.mem[i] = planet.Lazy_State {
+				dev  = l.dev,
+				left = l.left,
+			}
+		}
+	}
+	towns := make([dynamic]int, context.temp_allocator)
+	for m in s.market {
+		if i, ok := by_cell[m.cell]; ok {append(&towns, i)}
+	}
+	if len(towns) == 0 {return}
+	slice.sort(towns[:])
+	m := planet.market_make(we.economy, towns[:], s.month)
+	planet.market_enter(we.economy, we.kernel, &m, we.mem, we.droughts[:])
+	for sm in s.market {
+		i, ok := by_cell[sm.cell]
+		if !ok {continue}
+		j := m.local[i]
+		m.stock[j], m.inbound[j] = sm.stock, sm.inbound
+	}
+	we.market = m
+	we.news = planet.news_make(we.economy, we.market)
+	we.resident = true
+}
+
+// economy_price is a town's price now, by its index in the economy: the detailed one where it
+// is in detail, else the lazy one (0 where it has no market).
+economy_price :: proc(w: ^World, town: int, g: planet.Good) -> f32 {
+	we := w.economy
+	if we == nil || !we.built {return 0}
+	if we.resident {
+		if i := we.market.local[town]; i >= 0 {
+			return planet.market_price(we.economy, we.market, i, g)
+		}
+	}
+	month := economy_month(w.clock)
+	return planet.lazy_price(we.economy, we.kernel, we.mem[town], town, g, month, we.droughts[:])
+}
+
+// ---- the file ----
+
+@(private = "file")
+ENTRY_MARKET :: 4 + 2 * 4 * GOODS
+@(private = "file")
+ENTRY_LAZY :: 4 + 4 * GOODS + 8
+@(private = "file")
+ECONOMY_HEADER :: 4 + 4 + 8 + 8 + 4 + 4
+
+// economy_encode: "VXEC", u32 version, u64 placement key, f64 month, u32 market count, u32
+// lazy count, the market towns (cell u32, stock and inbound per good as f32), the lazy
+// memories (cell u32, dev per good as f32, left f64), the CRC-32 of all before it.
+economy_encode :: proc(we: ^World_Economy, allocator := context.allocator) -> []u8 {
+	nm := len(we.market.town) if we.resident else 0
+	lazy := make([dynamic]int, context.temp_allocator)
+	for m, i in we.mem {
+		if m.left != 0 || m.dev != {} {append(&lazy, i)}
+	}
+	size := ECONOMY_HEADER + nm * ENTRY_MARKET + len(lazy) * ENTRY_LAZY + 4
+	out := make([]u8, size, allocator)
+	copy(out, ECONOMY_MAGIC)
+	endian.put_u32(out[4:], .Little, ECONOMY_VERSION)
+	endian.put_u64(out[8:], .Little, we.key)
+	endian.put_f64(out[16:], .Little, we.market.month if we.resident else 0)
+	endian.put_u32(out[24:], .Little, u32(nm))
+	endian.put_u32(out[28:], .Little, u32(len(lazy)))
+	at := ECONOMY_HEADER
+	if we.resident {
+		for ti, i in we.market.town {
+			endian.put_u32(out[at:], .Little, u32(we.economy.towns[ti].cell))
+			at += 4
+			for g in planet.Good {
+				endian.put_f32(out[at:], .Little, we.market.stock[i][g])
+				endian.put_f32(out[at + 4 * GOODS:], .Little, we.market.inbound[i][g])
+				at += 4
+			}
+			at += 4 * GOODS
+		}
+	}
+	for i in lazy {
+		endian.put_u32(out[at:], .Little, u32(we.economy.towns[i].cell))
+		at += 4
+		for g in planet.Good {
+			endian.put_f32(out[at:], .Little, we.mem[i].dev[g])
+			at += 4
+		}
+		endian.put_f64(out[at:], .Little, we.mem[i].left)
+		at += 8
+	}
+	endian.put_u32(out[at:], .Little, hash.crc32(out[:at]))
+	return out
+}
+
+// economy_decode reads a file; ok is false for anything damaged (magic, version, CRC, a
+// length that does not match the counts, a non-finite or negative number).
+economy_decode :: proc(data: []u8) -> (s: Saved_Economy, ok: bool) {
+	if len(data) < ECONOMY_HEADER + 4 || string(data[:4]) != ECONOMY_MAGIC {return}
+	version, _ := endian.get_u32(data[4:], .Little)
+	if version != ECONOMY_VERSION {return}
+	end := len(data) - 4
+	crc, _ := endian.get_u32(data[end:], .Little)
+	if crc != hash.crc32(data[:end]) {return}
+	s.key, _ = endian.get_u64(data[8:], .Little)
+	s.month, _ = endian.get_f64(data[16:], .Little)
+	nm, _ := endian.get_u32(data[24:], .Little)
+	nl, _ := endian.get_u32(data[28:], .Little)
+	defer if !ok {saved_destroy(&s)}
+	if !(s.month >= 0 && s.month <= game.MAX_WORLD_TIME) {return}
+	if u64(nm) * ENTRY_MARKET + u64(nl) * ENTRY_LAZY + ECONOMY_HEADER != u64(end) {return}
+	sane :: proc(v: f32) -> bool {return v >= 0 && v < 1e6}
+	at := ECONOMY_HEADER
+	for _ in 0 ..< nm {
+		e: Saved_Market
+		e.cell, _ = endian.get_u32(data[at:], .Little)
+		at += 4
+		for g in planet.Good {
+			e.stock[g], _ = endian.get_f32(data[at:], .Little)
+			e.inbound[g], _ = endian.get_f32(data[at + 4 * GOODS:], .Little)
+			if !sane(e.stock[g]) || !sane(e.inbound[g]) {return}
+			at += 4
+		}
+		at += 4 * GOODS
+		append(&s.market, e)
+	}
+	for _ in 0 ..< nl {
+		e: Saved_Lazy
+		e.cell, _ = endian.get_u32(data[at:], .Little)
+		at += 4
+		for g in planet.Good {
+			d, _ := endian.get_f32(data[at:], .Little)
+			if !(d > -1 && d < 1e6) {return}
+			e.dev[g] = d
+			at += 4
+		}
+		e.left, _ = endian.get_f64(data[at:], .Little)
+		at += 8
+		if !(e.left >= 0 && e.left <= game.MAX_WORLD_TIME) {return}
+		append(&s.lazy, e)
+	}
+	return s, true
+}
+
+// economy_write stages economy.vxe (the save transaction calls it when the economy changed).
+economy_write :: proc(w: ^World) -> bool {
+	we := w.economy
+	if w.dir == "" || we == nil || !we.built {return true}
+	data := economy_encode(we, context.temp_allocator)
+	path := filepath.join({w.dir, ECONOMY_FILE}, context.temp_allocator) or_else ECONOMY_FILE
+	ok := store_write(w.server, path, data)
+	we.dirty = !ok
+	return ok
+}
+
+// economy_load reads the world's file; it is applied when the economy is first built. A
+// damaged file is moved aside and the economy starts from the history.
+economy_load :: proc(w: ^World) {
+	if w.dir == "" || w.params.planet == 0 {return}
+	path := filepath.join({w.dir, ECONOMY_FILE}, context.temp_allocator) or_else ECONOMY_FILE
+	data, err := os.read_entire_file_from_path(path, context.temp_allocator)
+	if err != nil {return}
+	s, ok := economy_decode(data)
+	if !ok {
+		log.errorf("server economy file is damaged, moved aside path=%s", path)
+		os.rename(path, path_aside(path))
+		return
+	}
+	w.economy = new(World_Economy)
+	w.economy.pending, w.economy.has_saved = s, true
+}
+
+@(private = "file")
+path_aside :: proc(path: string) -> string {
+	return fmt.tprintf("%s.bad", path)
+}
+
+// economy_check: is the file whole? (for --check)
+economy_check :: proc(data: []u8) -> bool {
+	s, ok := economy_decode(data)
+	if ok {saved_destroy(&s)}
+	return ok
 }

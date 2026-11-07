@@ -148,6 +148,13 @@ check_world :: proc(r: ^Check_Report, dir, world: string) {
 			problem(r, "%s is damaged", interventions)
 		}
 	}
+	economy := fmt.tprintf("%s/%s", world, ECONOMY_FILE)
+	if edata, eerr := os.read_entire_file_from_path(
+		full_path(dir, economy),
+		context.temp_allocator,
+	); eerr == nil {
+		if !economy_check(edata) {problem(r, "%s is damaged", economy)}
+	}
 	stats := fmt.tprintf("%s/%s", world, STATS_FILE)
 	if os.exists(full_path(dir, stats)) {check_json(r, dir, stats)}
 	// The journal, up to where the save says it ends.

@@ -481,6 +481,7 @@ tick :: proc(s: ^Server) {
 	if !frozen {
 		for w in s.worlds {w.clock = game.advance_time(w.clock, f64(game.TICK_SECONDS), &w.rules)}
 	}
+	economy_tick(s)
 	Move :: struct {
 		world:    ^World,
 		from, to: game.Chunk_Pos,
