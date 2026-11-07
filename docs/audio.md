@@ -154,7 +154,7 @@ each statement (a prime marks a varied one).
 
 An agent cannot listen, so `build music ear [<name>...] [--json]` reads each score (or `.mid`)
 through the parser the renderer uses and prints what a listener reacts to, then a critique an
-author can act on. Nothing is gated yet; `assets/baselines/music/ear.txt` is its output on every
+author can act on. Nothing is gated yet (the bands below are written, not yet enforced); `assets/baselines/music/ear.txt` is its output on every
 score (rewrite it with `./build.sh music ear > assets/baselines/music/ear.txt`). `--json` writes
 every measure and every critique line for tools.
 
@@ -173,6 +173,18 @@ every measure and every critique line for tools.
   `build music ear --train [<dir>]` trains on every `.mid` in the directory (default
   `tools/music/testdata/corpus`) and writes the file; today that is the calibration subset. A
   master of the subset scores lower surprise than its `scramble_in_key` copy (a test).
+- **Calibration** (`calibrate.odin`): `build music ear --calibrate [<dir>]` (default
+  `build/tools/music-corpus` when it holds `.mid` files, else the committed subset) makes a
+  `scramble_shuffle` (seed 1) and a `scramble_in_key` (seed 2) copy of each master, listens to all
+  three and prints, per measure (stepwise, surprise, big leaps, motif return, leap recovered,
+  harmony fit, strong-beat clash share), the **AUC**: how often the master scores better than its
+  copy, ties counting half, against each scrambler. The direction of "better" is a constant per
+  measure. A measure **gates** only if its AUC against random-in-key is at least 0.9; its
+  **band** is the masters' 10th to 90th percentile (one-sided: big leaps, surprise and clash share
+  at most, the others at least). `assets/music/ear_bands.txt` (measure, low, high, AUC; 4
+  decimals) holds the gating measures; the others print as "reported, not gated". On a downloaded
+  corpus `--calibrate` also retrains `expectation.bin`. The committed bands come from the
+  six-piece subset until the full corpus has been downloaded and calibrated.
 - **The whole.** A note under `ped` sounds until `unped`, at half weight after its written length.
   `harmony_fit`: in each half bar, the share of sounding weight inside the best chord (major,
   minor, diminished, sus4, dominant 7th, minor 7th; a 4-note chord pays 0.15 x 4/12 so it does

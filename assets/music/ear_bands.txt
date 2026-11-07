@@ -1,0 +1,6 @@
+# The ear's gating measures: name, band low, band high, AUC against
+# random-in-key. Written by `build music ear --calibrate`.
+stepwise	0.5036	1.0000	1.0000
+surprise	0.0000	5.2086	1.0000
+big_leaps	0.0000	0.0862	1.0000
+motif_return	0.1076	1.0000	1.0000
