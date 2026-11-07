@@ -15,3 +15,17 @@ height (u32 little-endian), then the elevations (i16 little-endian) as a zlib st
   `./build.sh planet import <path>/ETOPO5.DAT`. The source is never committed; the tool
   averages it (each cell the area-weighted mean of the source cells it covers) and rewrites
   this file byte for byte.
+
+# The home world's climate
+
+`earth_climate.bin` is Earth's climate grid and rivers as `planet_build` and `rivers_build`
+make them from `earth_relief.bin`, so the game decodes them (`common/planet/climate_file.odin`)
+instead of computing them at start (seconds at -o:minimal). Format: magic `VXCL`, version,
+the model's code version, the relief's hash, width, height, then every array of the model
+delta coded by byte plane and run-length coded.
+
+- **Write:** `./build.sh planet climate` (after a change to the relief or to any code the
+  climate model runs, and bump `CLIMATE_MODEL_VERSION` with the latter).
+- **Stale:** `test_earth_climate_file` fails when the file is not exactly what the model
+  builds from the committed relief. A file the game cannot use (another relief or version)
+  falls back to building the model.

@@ -13,6 +13,8 @@ import "common:planet"
 // The home world's relief: reads NOAA ETOPO5 and writes the committed relief file.
 //
 //	build planet import <ETOPO5.DAT> [out]
+//	build planet climate [out]       (Earth's climate and rivers, built from the committed relief,
+//	                                 to assets/planet/earth_climate.bin)
 //	build planet maps [dir] [--address <a>] [--seed N]
 //	                                 (PNGs of the climate model, default build/planet; with an
 //	                                 address, of the world generated for it: the address as
@@ -57,9 +59,13 @@ main :: proc() {
 		}
 		os.exit(0 if maps_main(dir, address, seed) else 1)
 	}
+	if len(args) >= 1 && args[0] == "climate" {
+		out := args[1] if len(args) > 1 else "assets/planet/earth_climate.bin"
+		os.exit(0 if climate_main(out) else 1)
+	}
 	if len(args) < 2 || args[0] != "import" {
 		fmt.eprintln(
-			"usage: build planet import <ETOPO5.DAT> [out] | build planet maps [dir] [--address <a>] [--seed N]",
+			"usage: build planet import <ETOPO5.DAT> [out] | build planet climate [out] | build planet maps [dir] [--address <a>] [--seed N]",
 		)
 		os.exit(2)
 	}
@@ -86,4 +92,26 @@ main :: proc() {
 		os.exit(1)
 	}
 	fmt.printfln("wrote %s (hash %016x)", out, planet.relief_hash(relief))
+}
+
+// climate_main builds Earth's climate and rivers from the committed relief and writes the file.
+climate_main :: proc(out: string) -> bool {
+	relief, ok := planet.relief_decode(#load("../../assets/planet/earth_relief.bin"))
+	if !ok {
+		fmt.eprintln("planet: the committed relief file does not load")
+		return false
+	}
+	defer planet.relief_destroy(&relief)
+	p := planet.planet_build(relief)
+	defer planet.planet_destroy(&p)
+	rv := planet.rivers_build(p.land, p.precip)
+	defer planet.rivers_destroy(&rv)
+	data := planet.climate_encode(relief, p, rv)
+	defer delete(data)
+	if err := os.write_entire_file(out, data); err != nil {
+		fmt.eprintln("planet: cannot write", out)
+		return false
+	}
+	fmt.printfln("wrote %s (%d bytes, climate hash %016x)", out, len(data), planet.planet_hash(p))
+	return true
 }
