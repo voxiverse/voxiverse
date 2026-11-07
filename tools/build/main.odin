@@ -269,13 +269,14 @@ main :: proc() {
 	     "audiodump",
 	     "replay",
 	     "sfx",
-	     "music",
 	     "worldmap",
 	     "planet",
 	     "analytics",
 	     "schema",
 	     "ogg":
 		ok = run_tool(args[0], args[1:], release = true)
+	case "music":
+		ok = music_command(args[1:])
 	case "packs":
 		ok = run_tool("packcheck", args[1:], release = true)
 	case "fuzz":

@@ -76,6 +76,9 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
 ## Music pipeline
 
 `build music [<name>...] [--force] [--wav <dir>] [--midi]` renders `assets/music/*.score|*.mid`
+(and, when a piece's Ogg changed, updates in the same run what every render touches: the
+decoder's digests and reference windows and the `music_session` baseline, so a render ships
+complete)
 to Ogg Vorbis with a metadata `.json` beside each (title, tags, length, and the hashes of the
 score and the SoundFont, so a piece is re-rendered only when an input changes); `build music
 --audition <name> [--from <s>]` plays one.
