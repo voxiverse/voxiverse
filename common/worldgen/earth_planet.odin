@@ -53,6 +53,71 @@ planet_model :: proc() -> planet.Planet {
 	return shared_model
 }
 
+@(private = "file")
+shared_rivers: planet.Rivers
+@(private = "file")
+rivers_once: sync.Once
+
+// planet_rivers: the relief's rivers, routed once for the process (any thread).
+planet_rivers :: proc() -> planet.Rivers {
+	sync.once_do(&rivers_once, proc() {
+		m := planet_model()
+		shared_rivers = planet.rivers_build(m.land, m.precip, runtime.heap_allocator())
+	})
+	return shared_rivers
+}
+
+// PLANET_BANK: blocks of bank on each side of a river, rising to the land.
+PLANET_BANK :: 4
+
+// planet_river_near: the nearest river to block (x, z) as the distance from its
+// centre line, its width there and the point on the line nearest to (x, z).
+// Rivers run as straight reaches between the centres of the climate cells,
+// bent a little by noise.
+planet_river_near :: proc(x, z: f64) -> (dist, width: f32, nearest: [2]f64, found: bool) {
+	rv := planet_rivers()
+	w, h := rv.width, rv.height
+	cell := f64(PLANET_CIRCUMFERENCE) / f64(w)
+	at := [2]f64{x, z}
+	at += {f64(fbm2(0x52a1, at / 90, 2)), f64(fbm2(0x52a2, at / 90, 2))} * 24
+	ci := int(math.floor((at.x + PLANET_CIRCUMFERENCE / 2) / cell))
+	cj := int(math.floor((at.y + PLANET_CIRCUMFERENCE / 4) / cell))
+	best := max(f32)
+	for dj in -1 ..= 1 {
+		j := cj + dj
+		if j < 0 || j >= h {continue}
+		for di in -1 ..= 1 {
+			i := (ci + di + w) % w
+			k := j * w + i
+			nx := int(rv.next[k])
+			if nx < 0 || planet.river_width(rv.flow[k]) == 0 {continue}
+			ni, nj := nx % w, nx / w
+			ddi := ((ni - i + w + w / 2) % w) - w / 2 // longitude wraps
+			a := [2]f64 {
+				(f64(ci + di) + 0.5) * cell - PLANET_CIRCUMFERENCE / 2,
+				(f64(j) + 0.5) * cell - PLANET_CIRCUMFERENCE / 4,
+			}
+			b := a + [2]f64{f64(ddi), f64(nj - j)} * cell
+			ab := b - a
+			t := clamp(linalg_dot(at - a, ab) / linalg_dot(ab, ab), 0, 1)
+			p := a + ab * t
+			d := f32(math.sqrt(linalg_dot(at - p, at - p)))
+			f := rv.flow[k]
+			if rv.flow[nx] > f {f = rv.flow[k] + (rv.flow[nx] - rv.flow[k]) * f32(t)}
+			wd := planet.river_width(f)
+			if d - wd / 2 < best {
+				best, dist, width, nearest, found = d - wd / 2, d, wd, p, true
+			}
+		}
+	}
+	return
+}
+
+@(private = "file")
+linalg_dot :: proc(a, b: [2]f64) -> f64 {
+	return a.x * b.x + a.y * b.y
+}
+
 // planet_climate: the Köppen class of the climate at block column (x, z), from
 // its own monthly climate (corrected by the lapse rate for its height, so
 // mountains climb through the zones), and the coldest month's temperature.
@@ -128,8 +193,8 @@ planet_past_the_edge :: proc(x, z: i32) -> bool {
 }
 
 // planet_shape sets a column's height and roughness from the relief, with the
-// noise's detail (hills, overhangs) scaled by the local ruggedness. Rivers
-// come from the relief in a later part, so none are carved here.
+// noise's detail (hills, overhangs) scaled by the local ruggedness, and the
+// relief's rivers cut through it. Lakes come in a later part.
 @(private)
 planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 	r, _ := planet_relief()
@@ -151,7 +216,33 @@ planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 	c.rough = 0
 	if elevation > 0 {
 		c.rough = p.overhang * smooth(0.5, 0.9, spread) * smooth(0.35, 0.85, ridge)
+		planet_carve_river(p, c, x, z)
 	}
+}
+
+// planet_carve_river cuts the relief's river through a land column: a bed
+// under water that stands at the river's own level, banks rising to the land.
+@(private = "file")
+planet_carve_river :: proc(p: ^Params, c: ^Column, x, z: i32) {
+	d, width, near, ok := planet_river_near(f64(x), f64(z))
+	if !ok {return}
+	half := width / 2
+	bank := half + PLANET_BANK
+	if d >= bank {return}
+	lat, lon := planet_lat_lon(i32(math.round(near.x)), i32(math.round(near.y)))
+	r, _ := planet_relief()
+	level := planet.planet_relief_at(planet.Planet{relief = r}, lat, lon)
+	sea := f32(p.sea_level)
+	surface := max(math.floor(level / PLANET_METRES_PER_BLOCK_Y + sea) - 1, sea)
+	c.rough = 0
+	if d >= half {
+		if c.height > surface {c.height = mix(surface, c.height, smooth(half, bank, d))}
+		return
+	}
+	across := d / half
+	c.height = surface - 0.5 - 3 * (1 - across * across)
+	c.river = 1
+	c.lift = i32(surface - sea)
 }
 
 // planet_block_of: the block column (x, z) at latitude and longitude, degrees
@@ -202,6 +293,8 @@ planet_biome :: proc(p: ^Params, c: ^Column, x, z: i32, mountainous: f32) {
 	switch {
 	case c.height < sea - 3 && c.river < 0.5:
 		c.biome = .Frozen_Ocean if coldest < -1.8 else .Ocean
+	case c.river > 0.5:
+		c.biome = .River
 	case c.biome == .River || c.biome == .Beach:
 	// the shape's coast and banks
 	case k == .EF:
