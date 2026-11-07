@@ -20,7 +20,8 @@ name: autofix
 # (a flake passes the second time) before an agent is sent to fix it.
 # An issue whose exit check is already met on main is closed by the agent that finds it so.
 # A task whose body says "Starts after #N" waits until #N is closed (queued milestones that build
-# on another milestone's work).
+# on another milestone's work, and its milestone waits with it); a task waiting on a task of its
+# own milestone lets the next one go (a big task split into steps filed after it).
 # Harness check: workflow_dispatch with dry=true on a branch sweeps without labelling and starts
 # each pick as a `dry` agent run (one turn, no change) on that branch (guard.yml runs it for
 # every pull request that changes this file).
@@ -129,24 +130,41 @@ jobs:
             candidates=$(jq -c -n --argjson p "${priority}" --argjson a "${agent}" --argjson f "${fixes}" '
               ($p | map(.number))
               + ($a | map(select(.milestone == null)) | map(.number))
-              + ($a | map(select(.milestone != null)) | group_by(.milestone) | map(.[0].number))
+              + ($a | map(select(.milestone != null)) | map(.number))
               + ($f | map(.number))
               | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end)')
           fi
           echo "candidates in order: ${candidates}"
 
+          # One task per milestone at a time: its oldest task that is not waiting. A milestone is
+          # taken by its first task that is running, has a pull request, needs the owner, is picked,
+          # or waits on another milestone; a task waiting on its own milestone lets the next one go.
+          milestone_of=$(jq -c '[.[] | select(.milestone != null) | {key: (.number | tostring), value: .milestone}] | from_entries' <<< "${agent:-[]}")
+          taken=' '
           work='[]'
           for n in $(jq -r '.[]' <<< "${candidates}"); do
             [ "$(jq length <<< "${work}")" -lt "${MAX}" ] || break
+            ms=$(jq -r --arg n "${n}" '.[$n] // empty' <<< "${milestone_of}")
+            case "${taken}" in *" m${ms} "*) [ -n "${ms}" ] && continue ;; esac
             labels=$(gh api "repos/${GH_REPO}/issues/${n}" --jq '[.labels[].name] | join(" ")')
-            case " ${labels} " in *" needs-human "*|*" agent-running "*) echo "#${n}: skip (${labels})"; continue ;; esac
+            case " ${labels} " in *" needs-human "*|*" agent-running "*) echo "#${n}: skip (${labels})"; [ -n "${ms}" ] && taken="${taken}m${ms} "; continue ;; esac
             # "Starts after #M" in the body: the task waits (and its milestone with it) until #M is
             # closed, so a queued task that needs another milestone's work never starts early.
-            waiting=""
+            # Waiting on a task of its own milestone lets the next task go; waiting on another
+            # milestone holds the whole milestone (its later tasks build on this one).
+            waiting=""; elsewhere=""
             for m in $(gh api "repos/${GH_REPO}/issues/${n}" --jq .body | grep -oiE 'starts after #[0-9]+' | grep -oE '[0-9]+' || true); do
-              [ "$(gh api "repos/${GH_REPO}/issues/${m}" --jq .state)" = open ] && waiting="${waiting} #${m}"
+              gate=$(gh api "repos/${GH_REPO}/issues/${m}" --jq '"\(.state) \(.milestone.number // "")"')
+              [ "${gate%% *}" = open ] || continue
+              waiting="${waiting} #${m}"
+              [ "${gate#* }" = "${ms}" ] || elsewhere=yes
             done
-            if [ -n "${waiting}" ]; then echo "#${n}: waits for${waiting}"; continue; fi
+            if [ -n "${waiting}" ]; then
+              echo "#${n}: waits for${waiting}"
+              [ -n "${elsewhere}" ] && [ -n "${ms}" ] && taken="${taken}m${ms} "
+              continue
+            fi
+            [ -n "${ms}" ] && taken="${taken}m${ms} "
             branch="claude/issue-${n}"
             # Thrashing is pull requests that fail and are closed unmerged, not merged ones: with the
             # 45-minute deadline a big issue lands as many merged parts (#102: seven merged, steady).
