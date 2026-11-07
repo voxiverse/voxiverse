@@ -67,7 +67,7 @@ package** is enforced by the `layout` lint (see above).
 | `assets/baselines/music` | The ear's output on every score | `*.txt` |
 | `assets/baselines/net` | The bandwidth baseline | `*.txt` |
 | `assets/fonts` | The one font and its licence | `*.ttf`, `*.txt` |
-| `assets/music` | Rendered music: Ogg, score and decisions, credits | `*.ogg`, `*.score`, `*.json`, `*.txt` |
+| `assets/music` | Rendered music: Ogg, score and decisions, credits | `*.ogg`, `*.score`, `*.json`, `*.txt`, `*.bin` |
 | `assets/packs/voxiverse` | The base pack's manifest | `*.json` |
 | `assets/packs/voxiverse/assets/sounds` | The base pack's sound table | `*.json` |
 | `assets/packs/voxiverse/assets/textures` | The base pack's texture table | `*.json` |

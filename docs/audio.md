@@ -164,6 +164,15 @@ every measure and every critique line for tools.
   the share followed by a step of at most 4 the other way; 1 when there are no leaps),
   `motif_return` (of the figures of three intervals with the ratios of their durations, the share
   heard again), `range` in semitones, and `longest_run` (intervals in one direction).
+- **Surprise** (`expectation.odin`): the mean information content, in bits a note, of the melody's
+  intervals under a variable-order (0 to 3) model with Witten-Bell interpolation, as IDyOM does;
+  intervals are clamped to +-12 semitones, all maths is f64 and iteration order is fixed, so every
+  OS gets the same number. The model is `assets/music/expectation.bin` (versioned binary, the
+  counts per context and the names of the pieces it was trained on). A piece whose name is in that
+  list is scored with its own counts subtracted, so no piece is scored by a model that saw it.
+  `build music ear --train [<dir>]` trains on every `.mid` in the directory (default
+  `tools/music/testdata/corpus`) and writes the file; today that is the calibration subset. A
+  master of the subset scores lower surprise than its `scramble_in_key` copy (a test).
 - **The whole.** A note under `ped` sounds until `unped`, at half weight after its written length.
   `harmony_fit`: in each half bar, the share of sounding weight inside the best chord (major,
   minor, diminished, sus4, dominant 7th, minor 7th; a 4-note chord pays 0.15 x 4/12 so it does

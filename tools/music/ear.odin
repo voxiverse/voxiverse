@@ -23,6 +23,7 @@ Ear :: struct {
 	big_leaps:         f64, // share of intervals over 9 semitones
 	leap_recovered:    f64, // of leaps of 5 or more, the share answered by a step the other way
 	motif_return:      f64, // of the 3-interval figures, the share heard again
+	surprise:          f64, // mean bits a note the expectation model needs for the intervals
 	range:             int, // semitones
 	longest_run:       int, // intervals in one direction
 	// the whole
@@ -411,7 +412,7 @@ bar_signatures :: proc(p: ^Piece, starts: []u32, part: int) -> []string {
 // ---- the ear ----------------------------------------------------------------
 
 // listen measures a piece and writes its critique.
-listen :: proc(p: ^Piece, name, file: string) -> Ear {
+listen :: proc(p: ^Piece, name, file: string, model: ^Expectation = nil) -> Ear {
 	e := Ear {
 		name = name,
 		file = file,
@@ -444,6 +445,9 @@ listen :: proc(p: ^Piece, name, file: string) -> Ear {
 		m = melody_line(p, mp)
 	}
 	e.melody_notes = len(m)
+	if model != nil {
+		e.surprise = expectation_bits(model, m, expectation_has(model, name))
+	}
 
 	if len(m) >= 2 {
 		n_iv := len(m) - 1
@@ -642,6 +646,7 @@ ear_report :: proc(e: Ear, b: ^strings.Builder) {
 		e.range,
 		e.longest_run,
 	)
+	fmt.sbprintfln(b, "  surprise: %.2f bits a note", e.surprise)
 	fmt.sbprintfln(
 		b,
 		"  whole: harmony_fit %.2f  strong_beat_clash %d/%d  roughness mean %.2f p95 %.2f  accomp_variety %.2f",
