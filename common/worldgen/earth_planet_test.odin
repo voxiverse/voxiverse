@@ -300,3 +300,47 @@ test_planet_ice_sheet_is_deep :: proc(t: ^testing.T) {
 	old.planet = 0
 	testing.expect_value(t, surface_block(&old, .Ice_Sheet, 12, 100), game.Block.Stone)
 }
+
+@(test)
+test_planet_trees_follow_the_biome_tables :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	trees, columns: [Biome]int
+	for i in i32(0) ..< 1500 {
+		x := i32(hash(9, i, 1) % 60000) - 30000
+		z := i32(hash(9, i, 2) % 28000) - 14000
+		cx, cz := x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT
+		b := column_at(&g.params, g.seed, cx * 16 + 8, cz * 16 + 8).biome
+		found := make([dynamic]Tree, context.temp_allocator)
+		place_trees(&g, {cx, cz}, &found)
+		columns[b] += 1
+		for tree in found {
+			ground := column_at(&g.params, g.seed, tree.ground.x, tree.ground.z).biome
+			if tree.kind != .Shrub && tree.kind != .Evergreen_Shrub {trees[ground] += 1}
+			if ground == .Tundra || ground == .Ice_Sheet {
+				testing.expectf(t, tree.kind == .Evergreen_Shrub, "a %v in %v", tree.kind, ground)
+			}
+			if ground ==
+			   .Desert {testing.expectf(t, tree.kind == .Shrub, "a %v in %v", tree.kind, ground)}
+		}
+	}
+	testing.expect_value(t, trees[.Tundra], 0)
+	testing.expect_value(t, trees[.Ice_Sheet], 0)
+	testing.expect_value(t, trees[.Desert], 0)
+	// Trees per chunk column (counted by ground biome, so only roughly): rainforest > savanna > steppe.
+	rate :: proc(trees, columns: [Biome]int, b: Biome) -> f32 {
+		return f32(trees[b]) / f32(max(columns[b], 1))
+	}
+	testing.expect(t, columns[.Rainforest] > 5 && columns[.Savanna] > 5 && columns[.Steppe] > 5)
+	rain, sav, steppe :=
+		rate(trees, columns, .Rainforest),
+		rate(trees, columns, .Savanna),
+		rate(trees, columns, .Steppe)
+	testing.expectf(
+		t,
+		rain > sav && sav > steppe,
+		"rainforest %v, savanna %v, steppe %v",
+		rain,
+		sav,
+		steppe,
+	)
+}
