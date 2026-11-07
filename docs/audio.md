@@ -86,6 +86,34 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
 - `assets/music/CREDITS.txt` holds each source's credit line; the game's credits screen shows it.
   Read a download's license on its own page before committing anything rendered from it.
 
+### The ear
+
+An agent cannot listen, so `build music ear [<name>...] [--json]` reads each score (or `.mid`)
+through the parser the renderer uses and prints what a listener reacts to, then a critique an
+author can act on. Nothing is gated yet; `assets/baselines/music/ear.txt` is its output on every
+score (rewrite it with `./build.sh music ear > assets/baselines/music/ear.txt`). `--json` writes
+every measure and every critique line for tools.
+
+- **The melody** is the part marked `melody` in the score (`part bells piano melody volume -6 dB`),
+  else the part with the highest mean pitch; at each onset its highest note. `stepwise` (share of
+  intervals of 2 semitones or less), `big_leaps` (over 9), `leap_recovered` (of leaps of 5 or more,
+  the share followed by a step of at most 4 the other way; 1 when there are no leaps),
+  `motif_return` (of the figures of three intervals with the ratios of their durations, the share
+  heard again), `range` in semitones, and `longest_run` (intervals in one direction).
+- **The whole.** A note under `ped` sounds until `unped`, at half weight after its written length.
+  `harmony_fit`: in each half bar, the share of sounding weight inside the best chord (major,
+  minor, diminished, sus4, dominant 7th, minor 7th; a 4-note chord pays 0.15 x 4/12 so it does
+  not win by size); `strong_beat_clash`: melody notes starting on a half bar outside that chord.
+  `roughness`: Sethares' sensory dissonance of each pair of sounding notes (6 harmonics,
+  amplitudes 0.88^k, a pedalled tail at half loudness), the worst pair per slice, the
+  beat-weighted mean and 95th percentile. `accomp_variety`: distinct bars (pitches and rhythm)
+  over the non-empty bars of the parts that are not the melody.
+- **The critique** lists, worst first, what the author can fix, with the score's line and column:
+  `meadow.score:31:12: bar 7: leap of 10 semitones (b5 to d7) not answered` (leaps from 7
+  semitones), `bars 1-52: no figure of the melody comes back`, `bars 9-40: the arp part plays one
+  bar 32 times` (from 8 times), `bar 12 beat 1: c7 over G major (pedalled from bar 11)`. The text
+  prints 30 lines a piece; `--json` has all.
+
 ## Tools
 
 - `build audio` runs the audio baselines (`assets/baselines/audio/`: `burst`, `cave_walk`,

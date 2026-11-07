@@ -1,0 +1,123 @@
+death (melody: right, 4 notes)
+  melody: stepwise 0.00  big_leaps 0.00  leap_recovered 0.00  motif_return 0.00  range 12  longest_run 3
+  whole: harmony_fit 1.00  strong_beat_clash 0/2  roughness mean 0.23 p95 0.36  accomp_variety 1.00
+  critique:
+    assets/music/death.score:17:12: bars 1-2: no figure of the melody comes back
+
+deep (melody: bells, 34 notes)
+  melody: stepwise 0.36  big_leaps 0.15  leap_recovered 0.25  motif_return 0.00  range 22  longest_run 5
+  whole: harmony_fit 0.94  strong_beat_clash 1/15  roughness mean 0.32 p95 0.67  accomp_variety 0.40
+  critique:
+    assets/music/deep.score:39:15: bars 1-40: no figure of the melody comes back
+    assets/music/deep.score:48:13: bar 37 beat 3: a3 over D# major (pedalled from bar 37)
+    assets/music/deep.score:41:14: bar 9: leap of 11 semitones (a#2 to a3) not answered
+    assets/music/deep.score:45:30: bar 26: leap of 11 semitones (a3 to a#2) not answered
+    assets/music/deep.score:47:14: bar 33: leap of 10 semitones (g3 to a2) not answered
+    assets/music/deep.score:42:16: bar 13: leap of 7 semitones (a#3 to f4) not answered
+    assets/music/deep.score:42:80: bar 16: leap of 7 semitones (g4 to c4) not answered
+
+discovery (melody: right, 13 notes)
+  melody: stepwise 0.42  big_leaps 0.00  leap_recovered 0.33  motif_return 0.20  range 26  longest_run 7
+  whole: harmony_fit 0.87  strong_beat_clash 1/5  roughness mean 0.17 p95 0.25  accomp_variety 1.00
+  critique:
+    assets/music/discovery.score:17:55: bar 2 beat 1: f#5 over A sus4 (pedalled from bar 1)
+    assets/music/discovery.score:17:17: bar 1: leap of 7 semitones (d4 to a4) not answered
+
+far (melody: bells, 38 notes)
+  melody: stepwise 0.35  big_leaps 0.24  leap_recovered 0.15  motif_return 0.00  range 26  longest_run 4
+  whole: harmony_fit 0.94  strong_beat_clash 0/25  roughness mean 0.09 p95 0.17  accomp_variety 0.42
+  critique:
+    assets/music/far.score:43:12: bars 1-48: no figure of the melody comes back
+    assets/music/far.score:54:9: bar 45: leap of 19 semitones (a#6 to d#5) not answered
+    assets/music/far.score:48:31: bar 22: leap of 17 semitones (d#7 to a#5) not answered
+    assets/music/far.score:53:73: bar 44: leap of 14 semitones (g#5 to a#6) not answered
+    assets/music/far.score:54:16: bar 45: leap of 13 semitones (d#5 to e6) not answered
+    assets/music/far.score:48:13: bar 21: leap of 12 semitones (d#6 to d#7) not answered
+    assets/music/far.score:48:67: bar 24: leap of 10 semitones (a#5 to g#6) not answered
+    assets/music/far.score:53:47: bar 43: leap of 10 semitones (f#6 to g#5) not answered
+    assets/music/far.score:46:29: bar 14: leap of 8 semitones (b5 to d#5) not answered
+    assets/music/far.score:49:65: bar 28: leap of 8 semitones (e6 to g#5) not answered
+    assets/music/far.score:52:70: bar 40: leap of 8 semitones (g#5 to e6) not answered
+
+meadow (melody: bells, 60 notes)
+  melody: stepwise 0.31  big_leaps 0.25  leap_recovered 0.23  motif_return 0.00  range 22  longest_run 3
+  whole: harmony_fit 0.95  strong_beat_clash 4/45  roughness mean 0.11 p95 0.30  accomp_variety 0.31
+  critique:
+    assets/music/meadow.score:45:32: bars 1-52: no figure of the melody comes back
+    assets/music/meadow.score:53:36: bar 34: leap of 15 semitones (e5 to g6) not answered
+    assets/music/meadow.score:57:25: bar 50: leap of 15 semitones (c7 to a5) not answered
+    assets/music/meadow.score:50:25: bar 22: leap of 13 semitones (b5 to c7) not answered
+    assets/music/meadow.score:46:77: bar 8 beat 3: b5 over A min7 (pedalled from bar 5)
+    assets/music/meadow.score:47:76: bar 12 beat 1: e6 over D minor (pedalled from bar 9)
+    assets/music/meadow.score:51:67: bar 28 beat 3: d6 over C major (pedalled from bar 25)
+    assets/music/meadow.score:52:36: bar 30 beat 3: e6 over D minor (pedalled from bar 29)
+    assets/music/meadow.score:52:75: bar 32: leap of 12 semitones (d7 to d6) not answered
+    assets/music/meadow.score:56:9: bar 45: leap of 12 semitones (a6 to a5) not answered
+    assets/music/meadow.score:47:54: bar 11: leap of 11 semitones (c6 to b6) not answered
+    assets/music/meadow.score:46:9: bar 5: leap of 10 semitones (a5 to g6) not answered
+    assets/music/meadow.score:47:76: bar 12: leap of 10 semitones (d7 to e6) not answered
+    assets/music/meadow.score:52:53: bar 31: leap of 10 semitones (e6 to d7) not answered
+    assets/music/meadow.score:55:63: bar 44: leap of 10 semitones (b5 to a6) not answered
+    assets/music/meadow.score:56:30: bar 46: leap of 10 semitones (a5 to g6) not answered
+    assets/music/meadow.score:51:13: bar 25: leap of 9 semitones (c6 to a6) not answered
+    assets/music/meadow.score:56:53: bar 47: leap of 8 semitones (g6 to b5) not answered
+    assets/music/meadow.score:56:70: bar 48: leap of 8 semitones (b5 to g6) not answered
+    assets/music/meadow.score:49:52: bar 19: leap of 7 semitones (e6 to a5) not answered
+    assets/music/meadow.score:50:67: bar 24: leap of 7 semitones (g6 to c6) not answered
+    assets/music/meadow.score:51:67: bar 28: leap of 7 semitones (a6 to d6) not answered
+    assets/music/meadow.score:53:13: bar 33: leap of 7 semitones (d6 to g5) not answered
+    assets/music/meadow.score:54:46: bar 39: leap of 7 semitones (d6 to a6) not answered
+
+night (melody: bells, 39 notes)
+  melody: stepwise 0.26  big_leaps 0.16  leap_recovered 0.04  motif_return 0.00  range 22  longest_run 3
+  whole: harmony_fit 0.97  strong_beat_clash 2/18  roughness mean 0.17 p95 0.42  accomp_variety 0.55
+  critique:
+    assets/music/night.score:41:17: bars 1-44: no figure of the melody comes back
+    assets/music/night.score:46:13: bar 21: leap of 16 semitones (f4 to a5) not answered
+    assets/music/night.score:49:25: bar 34: leap of 14 semitones (g5 to f4) not answered
+    assets/music/night.score:43:74: bar 12 beat 3: d5 over C major (pedalled from bar 9)
+    assets/music/night.score:45:47: bar 19: leap of 12 semitones (e4 to e5) not answered
+    assets/music/night.score:48:13: bar 29 beat 3: f5 over E minor (pedalled from bar 29)
+    assets/music/night.score:41:86: bar 4: leap of 11 semitones (e5 to f4) not answered
+    assets/music/night.score:45:73: bar 20: leap of 11 semitones (e5 to f4) not answered
+    assets/music/night.score:45:9: bar 17: leap of 10 semitones (d5 to e4) not answered
+    assets/music/night.score:48:13: bar 29: leap of 9 semitones (d6 to f5) not answered
+    assets/music/night.score:50:72: bar 40: leap of 9 semitones (a5 to c5) not answered
+    assets/music/night.score:48:73: bar 32: leap of 8 semitones (b4 to g5) not answered
+    assets/music/night.score:42:13: bar 5: leap of 7 semitones (f4 to c5) not answered
+    assets/music/night.score:42:51: bar 7: leap of 7 semitones (c5 to g5) not answered
+    assets/music/night.score:46:31: bar 22: leap of 7 semitones (a5 to d5) not answered
+    assets/music/night.score:47:13: bar 25: leap of 7 semitones (d5 to a5) not answered
+    assets/music/night.score:49:46: bar 35: leap of 7 semitones (f4 to c5) not answered
+    assets/music/night.score:50:13: bar 37: leap of 7 semitones (c5 to g5) not answered
+    assets/music/night.score:51:30: bar 42: leap of 7 semitones (g5 to c5) not answered
+    assets/music/night.score:51:9: bar 41: leap of 7 semitones (c5 to g5) not answered
+
+title (melody: melody, 64 notes)
+  melody: stepwise 0.29  big_leaps 0.05  leap_recovered 0.17  motif_return 0.23  range 11  longest_run 4
+  whole: harmony_fit 0.96  strong_beat_clash 7/48  roughness mean 0.14 p95 0.23  accomp_variety 0.12
+  critique:
+    assets/music/title.score:18:30: bar 7 beat 1: a5 over A# major
+    assets/music/title.score:20:24: bar 14 beat 3: e6 over D minor (pedalled from bar 14)
+    assets/music/title.score:20:50: bar 16 beat 3: d6 over C major (pedalled from bar 16)
+    assets/music/title.score:22:30: bar 23 beat 1: a5 over A# major
+    assets/music/title.score:23:23: bar 26 beat 3: e6 over D minor (pedalled from bar 26)
+    assets/music/title.score:24:24: bar 30 beat 3: e6 over D minor (pedalled from bar 30)
+    assets/music/title.score:24:49: bar 32 beat 3: d6 over C major (pedalled from bar 32)
+    assets/music/title.score:20:31: bar 15: leap of 11 semitones (e6 to f5) not answered
+    assets/music/title.score:23:23: bar 26: leap of 11 semitones (f5 to e6) not answered
+    assets/music/title.score:24:31: bar 31: leap of 11 semitones (e6 to f5) not answered
+    assets/music/title.score:17:52: bar 4: leap of 9 semitones (e6 to g5) not answered
+    assets/music/title.score:19:49: bar 12: leap of 9 semitones (e6 to g5) not answered
+    assets/music/title.score:21:48: bar 20: leap of 9 semitones (e6 to g5) not answered
+    assets/music/title.score:21:5: bar 17: leap of 9 semitones (d6 to f5) not answered
+    assets/music/title.score:22:48: bar 24: leap of 9 semitones (e6 to g5) not answered
+    assets/music/title.score:26:12: bars 1-29: the arp part plays one bar 8 times
+    assets/music/title.score:35:8: bars 1-29: the bass part plays one bar 8 times
+    assets/music/title.score:18:18: bar 6: leap of 7 semitones (g5 to d6) not answered
+    assets/music/title.score:20:11: bar 13: leap of 7 semitones (c6 to f5) not answered
+    assets/music/title.score:21:11: bar 17: leap of 7 semitones (f5 to c6) not answered
+    assets/music/title.score:21:18: bar 18: leap of 7 semitones (c6 to f5) not answered
+    assets/music/title.score:21:36: bar 19: leap of 7 semitones (f5 to c6) not answered
+    assets/music/title.score:22:18: bar 22: leap of 7 semitones (g5 to d6) not answered
+    assets/music/title.score:24:37: bar 31: leap of 7 semitones (f5 to c6) not answered

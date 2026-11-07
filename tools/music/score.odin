@@ -428,6 +428,9 @@ part_start :: proc(ps: ^Parse, b: ^Part_Build, toks: []Token, line: int) -> bool
 			if v < -1 || v > 1 {return fail(ps, line, toks[i + 1].col, "pan is from -1 to 1")}
 			part.pan = f32(v)
 			i += 2
+		case "melody":
+			part.melody = true
+			i += 1
 		case:
 			return fail(ps, line, toks[i].col, "unknown word '%s'", toks[i].text)
 		}
@@ -656,8 +659,10 @@ expand :: proc(ps: ^Parse, builds: []Part_Build) -> bool {
 			)
 		}
 		merge_ties(ps, raws[:], tied[:]) or_return
-		for n in raws {
-			if n.length > 0 {append(&p.notes, n)}
+		for n, i in raws {
+			if n.length == 0 {continue}
+			append(&p.notes, n)
+			append(&p.sources, Source{n.start, n.part, n.key, u32(tied[i].line), u32(tied[i].col)})
 		}
 	}
 	p.end = end

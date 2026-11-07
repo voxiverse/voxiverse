@@ -17,6 +17,7 @@ WORK_DIR :: "build/music-out" // (build/music is the tool itself)
 //
 //	build music [<name>...] [--force] [--wav <dir>] [--midi]
 //	build music --audition <name> [--from <seconds>]
+//	build music ear [<name>...] [--json]
 //
 //	--force     render every piece, not only those whose source or soundfont changed
 //	--wav <dir> keep each piece's float master as a WAV
@@ -24,9 +25,15 @@ WORK_DIR :: "build/music-out" // (build/music is the tool itself)
 //	--audition  play assets/music/<name>.ogg on the default device (looping if its .json says
 //	            so) until Enter is pressed; --from starts that many seconds in
 //
+// `ear` prints the measures and the critique of each score (docs/audio.md, "The ear").
+//
 // VX_SOUNDFONT=/path/file.sf2 renders with that soundfont.
 main :: proc() {
 	context.allocator = context.temp_allocator
+	if len(os.args) > 1 && os.args[1] == "ear" {
+		if !ear_main(os.args[2:]) {os.exit(1)}
+		return
+	}
 	force, midi := false, false
 	wav_dir: string
 	names: [dynamic]string
