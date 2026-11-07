@@ -13,7 +13,7 @@ dressed as a fact. `notes` holds what a designer should know (one or two sentenc
 
 Biomes are the game's (`common/worldgen/earth.odin`, `BIOME_NAMES`): ocean, frozen_ocean, beach,
 river, plains, forest, taiga, tundra, desert, mountains, ice_sheet, rainforest, savanna,
-cold_desert, steppe, mediterranean.
+cold_desert, steppe, mediterranean, subtropical_forest, mixed_forest.
 
 ## fauna/<biome>.json: animals
 
