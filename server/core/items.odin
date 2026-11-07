@@ -118,9 +118,8 @@ spawn_item :: proc(
 		return nil
 	}
 	ent.stack = stack
-	ent.body.velocity = velocity
+	entity_set_velocity(w, ent, velocity)
 	ent.owner = owner
-	entity_mirror(w, ent)
 	return ent
 }
 
@@ -143,7 +142,10 @@ item_tick :: proc(w: ^World, index: int) -> bool {
 	if !chunk_ready(w, entity_pos(w, ent)) {return false} 	// its ground is not loaded: it waits
 	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
 	entity_body_step(w, ent, kind, {}, false, query)
-	if ent.body.on_ground {ent.body.velocity.x, ent.body.velocity.z = 0, 0}
+	if entity_on_ground(w, ent) {
+		v := entity_velocity(w, ent)
+		entity_set_velocity(w, ent, {0, v.y, 0})
+	}
 	size := game.item_stack_size(s.registry, ent.stack.item)
 	if entity_age_of(w, ent) % 10 == 0 {
 		// Those after it in the list (not yet moved this tick) join it. The

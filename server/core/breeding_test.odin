@@ -53,7 +53,7 @@ bring :: proc(srv: ^Server, id: u32) {
 			c := client_by_name(s, "a")
 			if e, _ := entity_find(c.world, (^u32)(data)^); e != nil {
 				entity_set_pos(c.world, e, c.player.position + {0, 0, -4})
-				e.body.velocity = {}
+				entity_set_velocity(c.world, e, {})
 			}
 		}, &id)
 }
