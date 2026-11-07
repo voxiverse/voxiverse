@@ -139,6 +139,9 @@ jobs:
           # One task per milestone at a time: its oldest task that is not waiting. A milestone is
           # taken by its first task that is running, has a pull request, needs the owner, is picked,
           # or waits on another milestone; a task waiting on its own milestone lets the next one go.
+          # While main is red (its "main is red" issue is open), every pull request fails CI for
+          # main's fault: red pull requests (but the one fixing main) wait instead of costing ci-fix runs and their two tries.
+          main_red=$(gh issue list --state open --label agent --search 'in:title "main is red"' --json number,title --jq '[.[] | select(.title == "main is red") | .number][0] // 0')
           milestone_of=$(jq -c '[.[] | select(.milestone != null) | {key: (.number | tostring), value: .milestone}] | from_entries' <<< "${agent:-[]}")
           taken=' '
           work='[]'
@@ -189,6 +192,9 @@ jobs:
                 fi
               else
                 echo "#${n}: PR #${open} conflicts with main"
+              fi
+              if [ "${conflict}" != CONFLICTING ] && [ "${main_red}" -gt 0 ] && [ "${n}" != "${main_red}" ]; then
+                echo "#${n}: PR #${open} red while main is red: waits"; continue
               fi
               fixes_done=$(tr ' ' '\n' <<< "${labels}" | grep -c '^agent-ci-fix-' || true)
               if [ "${fixes_done}" -ge 2 ]; then
