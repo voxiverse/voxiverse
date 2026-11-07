@@ -13,6 +13,9 @@ Tree_Kind :: enum u8 {
 	Oak,
 	Spruce,
 	Cactus,
+	Acacia, // flat-topped: the savanna's tree
+	Shrub, // a leaf blob on a 1-block stem
+	Evergreen_Shrub, // the same in spruce blocks
 }
 
 Tree :: struct {
@@ -31,14 +34,14 @@ TREE_TRIES := #partial [Biome]i32 {
 	.Tundra             = 3,
 	.Mountains          = 4,
 	.Desert             = 4,
-	// The planet's biomes grow what the old ones they replace did (trees of their own: later).
+	// The planet's biomes (Tundra and Desert there grow shrubs: see `place_trees`).
 	.Rainforest         = 12,
 	.Subtropical_Forest = 12,
 	.Mixed_Forest       = 12,
-	.Savanna            = 3,
-	.Steppe             = 3,
-	.Mediterranean      = 3,
-	.Cold_Desert        = 4,
+	.Savanna            = 4,
+	.Steppe             = 2,
+	.Mediterranean      = 5,
+	.Cold_Desert        = 2,
 }
 @(private)
 MOST_TREE_TRIES :: 12 // TREE_TRIES' largest
@@ -51,13 +54,13 @@ TREE_ODDS := #partial [Biome]f32 {
 	.Tundra             = 0.25,
 	.Mountains          = 0.3,
 	.Desert             = 0.35,
-	.Rainforest         = 0.7,
+	.Rainforest         = 0.9,
 	.Subtropical_Forest = 0.7,
 	.Mixed_Forest       = 0.7,
-	.Savanna            = 0.2,
+	.Savanna            = 0.3,
 	.Steppe             = 0.2,
-	.Mediterranean      = 0.2,
-	.Cold_Desert        = 0.35,
+	.Mediterranean      = 0.3,
+	.Cold_Desert        = 0.3,
 }
 
 // OAK_LAND: biomes whose grass grows oaks.
@@ -93,6 +96,7 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		c := column_at(p, gen.seed, x, z)
 		odds := TREE_ODDS[c.biome] * p.tree_density
 		if blend {odds *= f32(TREE_TRIES[c.biome]) / MOST_TREE_TRIES}
+		if p.planet != 0 && c.biome == .Desert {odds *= 0.25} 	// rare shrubs
 		if chance(hash(gen.seed ~ i64(Earth_Layer.Tree) + 1, x, z)) >= odds {continue}
 		if c.rough > 0 {continue}
 		ground := i32(math.floor(c.height))
@@ -100,6 +104,10 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 		if near_piece(pieces[:], x, ground, z, 3) {continue} 	// clear of structures
 		top := surface_block(p, c.biome, 0, ground)
 		size := i32(h >> 12 & 3)
+		if p.planet != 0 {
+			planet_vegetation(c.biome, top, {x, ground, z}, size, h, out)
+			continue
+		}
 		switch {
 		case c.biome == .Desert && top == .Sand:
 			append(out, Tree{{x, ground, z}, .Cactus, 1 + size % 3})
@@ -109,6 +117,101 @@ place_trees :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree) {
 			append(out, Tree{{x, ground, z}, .Spruce, 6 + size})
 		}
 	}
+}
+
+// planet_vegetation appends the plant of planet world biome b standing on `top`
+// (if it grows one there).
+@(private = "file")
+planet_vegetation :: proc(
+	b: Biome,
+	top: game.Block,
+	ground: game.Block_Pos,
+	size: i32,
+	h: u32,
+	out: ^[dynamic]Tree,
+) {
+	grows := top == .Grass || top == .Sand || top == .Gravel || top == .Snow || top == .Dirt
+	t: Tree
+	switch b {
+	case .Rainforest:
+		if top != .Grass {return}
+		t = {
+			kind   = .Oak,
+			height = 8 + size,
+		} // tall broadleaf
+	case .Savanna:
+		if top != .Grass {return}
+		t = {
+			kind   = .Acacia,
+			height = 4 + size % 2,
+		}
+	case .Subtropical_Forest, .Forest:
+		if top != .Grass {return}
+		t = {
+			kind   = .Oak,
+			height = 4 + size % 3,
+		}
+	case .Mixed_Forest:
+		if top != .Grass {return}
+		if h >> 14 & 3 == 0 {
+			t = {
+				kind   = .Spruce,
+				height = 6 + size,
+			}
+		} else {
+			t = {
+				kind   = .Oak,
+				height = 4 + size % 3,
+			}
+		}
+	case .Mediterranean:
+		if top != .Grass {return}
+		if h >> 14 & 3 == 0 {
+			t = {
+				kind   = .Oak,
+				height = 4 + size % 2,
+			}
+		} else {
+			t = {
+				kind   = .Evergreen_Shrub,
+				height = 1,
+			}
+		}
+	case .Steppe, .Cold_Desert, .Desert:
+		if !grows {return}
+		t = {
+			kind   = .Shrub,
+			height = 1,
+		}
+	case .Tundra:
+		if !grows {return}
+		t = {
+			kind   = .Evergreen_Shrub,
+			height = 1,
+		} // dwarf shrubs, no trees
+	case .Taiga:
+		if top != .Grass && top != .Snow {return}
+		t = {
+			kind   = .Spruce,
+			height = 6 + size,
+		}
+	case .Plains, .Mountains:
+		if top == .Grass {
+			t =
+				{kind = .Oak, height = 4 + size % 3} if b == .Plains else {kind = .Spruce, height = 6 + size}
+		} else if top == .Snow {
+			t = {
+				kind   = .Spruce,
+				height = 6 + size,
+			}
+		} else {
+			return
+		}
+	case .Ocean, .Frozen_Ocean, .Beach, .River, .Ice_Sheet:
+		return
+	}
+	t.ground = ground
+	append(out, t)
 }
 
 // Put: where a tree's blocks go (a chunk's array, or the column tops).
@@ -148,6 +251,25 @@ tree_shape :: proc(seed: i64, t: Tree, data: rawptr, put: Put) {
 	switch t.kind {
 	case .Cactus:
 		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Cactus)}
+	case .Acacia:
+		// A bare trunk under a wide flat canopy.
+		top := g.y + t.height
+		for y in top ..= top + 1 {
+			r: i32 = 3 if y == top else 1
+			for dz in -r ..= r {
+				for dx in -r ..= r {
+					if abs(dx) + abs(dz) > r + 1 {continue} 	// rounded corners
+					put(data, {g.x + dx, y, g.z + dz}, .Leaves)
+				}
+			}
+		}
+		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Log)}
+	case .Shrub:
+		put(data, g + {0, 1, 0}, .Log)
+		shrub_leaves(g, .Leaves, put, data)
+	case .Evergreen_Shrub:
+		put(data, g + {0, 1, 0}, .Spruce_Log)
+		shrub_leaves(g, .Spruce_Leaves, put, data)
 	case .Oak:
 		// A rounded crown: two wide layers, two narrow, corners ragged.
 		top := g.y + t.height
@@ -187,6 +309,15 @@ tree_shape :: proc(seed: i64, t: Tree, data: rawptr, put: Put) {
 		}
 		for y in 1 ..= t.height {put(data, g + {0, y, 0}, .Spruce_Log)}
 	}
+}
+
+// shrub_leaves: the leaf blob of a shrub (a plus on the stem's level, one on top).
+@(private = "file")
+shrub_leaves :: proc(g: game.Block_Pos, leaves: game.Block, put: Put, data: rawptr) {
+	for d in ([4][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+		put(data, {g.x + d.x, g.y + 1, g.z + d.y}, leaves)
+	}
+	put(data, g + {0, 2, 0}, leaves)
 }
 
 // plant: tall grass or a flower on a grassy top (the block above it, if in
