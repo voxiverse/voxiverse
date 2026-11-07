@@ -45,6 +45,20 @@ PARAMS_VARS := [?]base.Var {
 		step = 1,
 	},
 	{
+		field = "spawn_lat",
+		help = "planet worlds: latitude the spawn is sought from, degrees north",
+		min = -90,
+		max = 90,
+		step = 0.1,
+	},
+	{
+		field = "spawn_lon",
+		help = "planet worlds: longitude the spawn is sought from, degrees east",
+		min = -180,
+		max = 180,
+		step = 0.1,
+	},
+	{
 		field = "palette",
 		help = "the surface's blocks: 0 Earth, 1 ash, 2 frost, 3 clay, 4 dunes",
 		min = 0,

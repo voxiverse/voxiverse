@@ -151,3 +151,34 @@ test_planet_rivers_are_carved :: proc(t: ^testing.T) {
 	x, z := block_at(0, -150)
 	testing.expect_value(t, column_at(&g.params, g.seed, x, z).lift, 0)
 }
+
+// test_planet_spawn_is_at_marseille: a planet world's spawn is the nearest dry,
+// open land to worldgen.spawn_lat / spawn_lon, and moves with them.
+@(test)
+test_planet_spawn_is_at_marseille :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	cx, cz := block_at(43.3, 5.4)
+	at := spawn_point(&g)
+	testing.expectf(
+		t,
+		abs(at.x - f64(cx)) < 3200 && abs(at.z - f64(cz)) < 3200,
+		"spawn %v is far from Marseille (%d, %d)",
+		at,
+		cx,
+		cz,
+	)
+	c := column_at(&g.params, g.seed, i32(at.x), i32(at.z))
+	testing.expect(t, c.height >= 2 && c.biome != .River && c.biome != .Ocean, "dry land")
+	testing.expect_value(t, spawn_point(&g), at)
+	// Moved to the Nile's delta, the spawn follows.
+	g.params.spawn_lat, g.params.spawn_lon = 31, 31
+	nx, nz := block_at(31, 31)
+	moved := spawn_point(&g)
+	testing.expectf(
+		t,
+		abs(moved.x - f64(nx)) < 3200 && abs(moved.z - f64(nz)) < 3200,
+		"spawn %v did not follow",
+		moved,
+	)
+	testing.expect(t, abs(moved.x - at.x) > 1000, "the spawn moved")
+}

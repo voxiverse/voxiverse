@@ -297,9 +297,12 @@ clear_unsupported_plants :: proc(t: ^game.Block_Table, dst: ^game.Block_Array) {
 	}
 }
 
-// earth_spawn: near the origin, on dry, flat-ish land.
+// earth_spawn: near the origin (planet worlds: near worldgen.spawn_lat and
+// spawn_lon), on dry, flat-ish land.
 earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
 	p := &gen.params
+	cx, cz: i32
+	if p.planet != 0 {cx, cz = planet_block_of(f64(p.spawn_lat), f64(p.spawn_lon))}
 	// Rings of growing radius, 16 blocks apart.
 	for r in i32(0) ..< 200 {
 		for i in i32(0) ..< max(1, 8 * r) {
@@ -316,7 +319,7 @@ earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
 			case:
 				x, z = -r, -t
 			}
-			x, z = x * 16 + 8, z * 16 + 8
+			x, z = cx + x * 16 + 8, cz + z * 16 + 8
 			c := column_at(p, gen.seed, x, z)
 			if c.rough > 0 || c.height < f32(p.sea_level) + 2 {continue}
 			if c.biome == .Mountains || c.biome == .Beach || c.biome == .River {continue}
@@ -324,8 +327,8 @@ earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
 			return {f64(x) + 0.5, f64(column_top(gen, x, z)) + 1, f64(z) + 0.5}
 		}
 	}
-	c := column_at(p, gen.seed, 0, 0)
-	return {0.5, max(f64(c.height), f64(p.sea_level)) + 2, 0.5}
+	c := column_at(p, gen.seed, cx, cz)
+	return {f64(cx) + 0.5, max(f64(c.height), f64(p.sea_level)) + 2, f64(cz) + 0.5}
 }
 
 // spawn_clear: no tree within 5 blocks of (x, z) (crowns reach over), no structure within 8,

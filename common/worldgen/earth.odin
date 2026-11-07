@@ -38,6 +38,8 @@ Params :: struct {
 	palette:         f32, // the surface's blocks (PALETTES); 0: Earth's
 	gates:           f32, // 1: gates stand (common/worldgen/gates.odin); 0: none (worlds made before them)
 	gate_distance:   f32, // blocks: none nearer the world's middle (where the spawn is sought)
+	spawn_lat:       f32, // planet worlds: the spawn is sought from this latitude (degrees north)
+	spawn_lon:       f32, // and longitude (degrees east); Marseille by default
 	planet:          f32, // 1: built on common/planet, the height Earth's real relief (earth_planet.odin); 0: noise (worlds made before it)
 }
 
@@ -57,6 +59,8 @@ PARAMS_DEFAULTS := Params {
 	biome_blend     = 8,
 	gates           = 1,
 	gate_distance   = 2000,
+	spawn_lat       = 43.3,
+	spawn_lon       = 5.4,
 }
 
 Biome :: enum u8 {
