@@ -603,10 +603,11 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 	s := w.server
 	id := w.entities.list[index].id
 	if died {
-		for &c in s.clients {
-			if c.state == .Playing && c.world == w && entity_known(&c, id) {
+		for i in entity_watchers(w, w.entities.list[index].body.position) {
+			c := &s.clients[i]
+			if entity_known(c, id) {
 				death := game.Entity_Died{id}
-				event_send(s, &c, .Entity_Died, &death)
+				event_send(s, c, .Entity_Died, &death)
 			}
 		}
 	}
@@ -619,12 +620,45 @@ entity_remove :: proc(w: ^World, index: int, died: bool) {
 // entity_hurt_shown: everyone who knows it sees it flinch.
 entity_hurt_shown :: proc(w: ^World, id: u32) {
 	s := w.server
-	for &c in s.clients {
-		if c.state == .Playing && c.world == w && entity_known(&c, id) {
+	ent, _ := entity_find(w, id)
+	if ent == nil {return}
+	for i in entity_watchers(w, ent.body.position) {
+		c := &s.clients[i]
+		if entity_known(c, id) {
 			hurt := game.Entity_Hurt{id}
-			event_send(s, &c, .Entity_Hurt, &hurt)
+			event_send(s, c, .Entity_Hurt, &hurt)
 		}
 	}
+}
+
+// entity_watchers: the indexes (ascending) of the playing clients of w whose
+// players are near enough to p to know an entity there: one spatial query over
+// the player entities, not a walk over all clients. The view is widened by a
+// margin, since a client was told one tick ago, when either side was a step
+// away; callers still ask entity_known.
+entity_watchers :: proc(w: ^World, p: [3]f64) -> []int {
+	s := w.server
+	ew := w.entity_world
+	near := make([dynamic]game.Entity_Id, context.temp_allocator)
+	game.spatial_cylinder(
+		&ew.spatial,
+		p,
+		ENTITY_VIEW + 4,
+		SPAWN_HEIGHT + 4,
+		{all = {.Player}},
+		&near,
+	)
+	who := make([dynamic]int, context.temp_allocator)
+	for id in near {
+		h, live := game.store_find(&ew.store, id)
+		if !live {continue}
+		link := game.store_get(&ew.store, h, game.C_PLAYER_LINK, game.Player_Link)
+		if link == nil || int(link.client) >= len(s.clients) {continue}
+		c := &s.clients[link.client]
+		if c.state == .Playing && c.world == w {append(&who, int(link.client))}
+	}
+	slice.sort(who[:])
+	return who[:]
 }
 
 // summon puts an entity in front of a player (cheats: Admin "summon").
