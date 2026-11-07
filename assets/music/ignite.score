@@ -26,7 +26,7 @@ motif calm | pp c4:e e4:q c4:q b3:e c4:e d4:e g4:h. r:q |
 part melody felt melody volume -3 dB pan 0.1
   play hook
   play calm
-  | pp c4:w |
+  | pp f4:q e4:q d4:h |
   | pp c4:w |
 
 part pulse timp volume -9 dB pan -0.2

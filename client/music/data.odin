@@ -41,4 +41,9 @@ MUSIC := [?]Music_File {
 		#load("../../assets/music/discovery.ogg"),
 		#load("../../assets/music/discovery.json", string),
 	},
+	{
+		"ignite",
+		#load("../../assets/music/ignite.ogg"),
+		#load("../../assets/music/ignite.json", string),
+	},
 }
