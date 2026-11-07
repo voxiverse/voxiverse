@@ -62,7 +62,20 @@ and its `Kind_Info` is `reg.kinds[id - 1]`. Fields, each checked when the regist
 - `spawn`: natural spawning (`on` a block matcher, `day` fractions, `every` ticks, `chance`, `cap`,
   `within`, `distance`, `group`), all required.
 
-The server's entities do not read these yet; moving them onto kinds is the rest of M50e.
+What a kind does each tick follows from these fields, not from its name: the server's entity
+systems (`entities_tick` in `server/core/entities.odin`) each run over the entities whose kind
+has their data, in this fixed order:
+
+1. age: every entity gets a tick older; a natural one with nobody within 80 blocks goes.
+2. brains: `brain: grazer`. The clocks of a kind with `breeding`, thinking (flee, look, wander,
+   graze, and mating, which makes the lamb) and steering; the wish goes to the walkers.
+3. walkers' physics: `physics: walker`. Each takes its step with the wish its brain made (none
+   without a brain); one whose ground is not loaded waits.
+4. items: `physics: item`. Expiry, falling, merging, pickup.
+5. rockets: `physics: projectile`. Flight and hits; the explosions wait for the end.
+6. explosions: the blasts the rockets made go off.
+
+A kind in a pack that is a walker with no brain falls and stands still; nothing in the code names it.
 
 ## Simulation rules
 

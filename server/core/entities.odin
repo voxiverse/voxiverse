@@ -9,7 +9,7 @@ import "common:base"
 import "common:game"
 
 // Entities on the server: sheep and rockets. What each kind is lies in
-// the registry (game.kind_info); what it does each tick, in entities_tick's switch. A
+// the registry (game.kind_info); what it does each tick, in the systems (below). A
 // sheep thinks (a small state machine), walks its path (A*, path.odin,
 // within a shared node budget) and moves by the shared body physics; a
 // rocket flies until it hits something and explodes. Each client is told
@@ -96,82 +96,6 @@ entity_spawn :: proc(
 	return h
 }
 
-// entities_tick: spawning, despawning, thinking and moving, every tick.
-entities_tick :: proc(w: ^World) {
-	base.profile_scope("entities")
-	s := w.server
-	e := &w.entities
-	e.budget = PATH_BUDGET_PER_TICK
-	entity_world_begin_tick(w.entity_world)
-	defer {
-		game.store_apply(&w.entity_world.store)
-		entities_sync_spatial(w)
-	}
-	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
-	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
-	blasts := make([dynamic]Blast, context.temp_allocator)
-	// Entities in id order; one spawned during the walk (a lamb) has a higher
-	// id and is walked in this same tick, after the ones that were there.
-	walked: u32
-	for {
-		it := entities_each(w, after = walked)
-		any := false
-		for h in entities_next(&it) {
-			any = true
-			walked = max(walked, entity_id(w, h))
-			entity_tick(w, h, query, &blasts)
-		}
-		if !any {break}
-	}
-	// After the walk: explosions change the set.
-	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
-}
-
-@(private = "file")
-Blast :: struct {
-	sphere: Sphere,
-	action: Action_Id,
-}
-
-// entity_tick: one entity's turn in entities_tick.
-@(private = "file")
-entity_tick :: proc(
-	w: ^World,
-	h: game.Entity_Handle,
-	query: game.Block_Query,
-	blasts: ^[dynamic]Blast,
-) {
-	reg := w.server.registry
-	kind := entity_kind(w, h)
-	entity_set_age(w, h, entity_age_of(w, h) + 1)
-	if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
-		entity_gone(w, h)
-		return
-	}
-	switch kind {
-	case reg.engine.sheep:
-		if chunk_ready(w, entity_pos(w, h)) { 	// else its ground is not loaded (yet): it waits
-			sheep_life(w, h)
-			think(w, h)
-			wish, jump := steer(w, h)
-			entity_body_step(w, h, game.kind_info(reg, kind), wish, jump, query)
-		}
-	case reg.engine.rocket:
-		if at, hit := rocket_step(w, h); hit {
-			append(
-				blasts,
-				Blast {
-					{at, f64(game.kind_info(reg, kind).projectile.explode)},
-					Action_Id(entity_owner(w, h).action),
-				},
-			)
-			entity_died(w, h) // its explosion is what players see
-		}
-	case reg.engine.item:
-		if item_tick(w, h) {entity_gone(w, h)}
-	}
-}
-
 // entities_sync_spatial moves each listed entity's spatial box to its position
 // (after store_apply, so every entity has its link): what the spatial service
 // answers is where the entity is at the end of every tick.
@@ -254,7 +178,6 @@ sheep_use :: proc(s: ^Server, c: ^Client, h: game.Entity_Handle) -> bool {
 
 // sheep_life: a sheep's clocks, one tick: a lamb grows, love and the wait
 // after a lamb run down.
-@(private = "file")
 sheep_life :: proc(w: ^World, h: game.Entity_Handle) {
 	if entity_breeding(w, h).growth < game.LAMB_TICKS {entity_breeding(w, h).growth += 1}
 	if entity_breeding(w, h).love > 0 {entity_breeding(w, h).love -= 1}
@@ -437,7 +360,6 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 ROCKET_REACH :: 4
 
 // rocket_step flies a rocket one tick; where it hit, if it did.
-@(private = "file")
 rocket_step :: proc(w: ^World, h: game.Entity_Handle) -> (at: [3]f64, hit: bool) {
 	s := w.server
 	if f32(entity_age_of(w, h)) * game.TICK_SECONDS >
@@ -903,7 +825,6 @@ summon :: proc(s: ^Server, c: ^Client, kind: game.Kind_Id) -> bool {
 // --- Behaviour --------------------------------------------------------------
 
 // think moves the brain from state to state.
-@(private = "file")
 think :: proc(w: ^World, h: game.Entity_Handle) {
 	b := entity_brain(w, h)
 	r := &w.entities.rng
@@ -1049,7 +970,6 @@ plan :: proc(w: ^World, h: game.Entity_Handle, target: [3]f64) -> bool {
 }
 
 // steer: the wished-for velocity and whether to jump, following the path.
-@(private = "file")
 steer :: proc(w: ^World, h: game.Entity_Handle) -> (wish: [2]f32, jump: bool) {
 	b := entity_brain(w, h)
 	if b.hurt > 0 {return} 	// stunned: knockback carries it
@@ -1090,7 +1010,6 @@ steer :: proc(w: ^World, h: game.Entity_Handle) -> (wish: [2]f32, jump: bool) {
 
 // spawn_natural: by day, sheep appear on grass around players with
 // room for more, out of sight distance from everyone (but not far).
-@(private = "file")
 spawn_natural :: proc(w: ^World) {
 	s := w.server
 	if s.config.no_natural_spawns {return}
@@ -1136,7 +1055,6 @@ spawn_natural :: proc(w: ^World) {
 	}
 }
 
-@(private = "file")
 anyone_within :: proc(w: ^World, p: [3]f64, distance: f64) -> bool {
 	_, ok := nearest_player(w, p, distance)
 	return ok
@@ -1733,4 +1651,131 @@ entities_clear :: proc(w: ^World) {
 	it := entities_each(w)
 	for h in entities_next(&it) {_ = game.store_despawn(&w.entity_world.store, h)}
 	game.store_apply(&w.entity_world.store)
+}
+
+// --- Systems -----------------------------------------------------------------
+
+// The entity systems: what entities do each tick. Each is a procedure over the entities
+// whose pack data gives them its components (the kind's `physics`, `brain` and
+// `with`), never over a kind by name, and they run in this fixed order:
+//
+//  1. age: every entity grows a tick older; a natural one nobody is near goes.
+//  2. brains (grazer): a sheep's clocks, its thinking (which includes mating and
+//     the lamb) and its steering; the wish goes to the walkers' physics.
+//  3. walkers' physics: every walker takes its step (the wish its brain made,
+//     none for a walker without a brain).
+//  4. items: a dropped stack expires, falls, merges and is picked up.
+//  5. rockets: a projectile flies and hits (its explosion waits for the end).
+//  6. explosions: those the rockets made go off, changing the set.
+//
+// A walker whose ground is not loaded waits, frozen, until it is.
+
+@(private = "file")
+Blast :: struct {
+	sphere: Sphere,
+	action: Action_Id,
+}
+
+@(private = "file")
+Wish :: struct {
+	wish: [2]f32,
+	jump: bool,
+}
+
+// entities_tick: spawning, despawning, thinking and moving, every tick.
+entities_tick :: proc(w: ^World) {
+	base.profile_scope("entities")
+	s := w.server
+	w.entities.budget = PATH_BUDGET_PER_TICK
+	entity_world_begin_tick(w.entity_world)
+	defer {
+		game.store_apply(&w.entity_world.store)
+		entities_sync_spatial(w)
+	}
+	if s.tick % SPAWN_EVERY == 0 {spawn_natural(w)}
+	query := game.Block_Query{&w.chunks, chunks_block, &w.server.registry.blocks, {}}
+	blasts := make([dynamic]Blast, context.temp_allocator)
+	wishes := make(map[game.Entity_Handle]Wish, context.temp_allocator)
+	system_age(w)
+	system_brains(w, &wishes)
+	system_walkers(w, &wishes, query)
+	system_items(w)
+	system_rockets(w, &blasts)
+	// After the walk: explosions change the set.
+	for b in blasts {explode(w, b.sphere.center, b.sphere.radius, b.action)}
+}
+
+// system_age: one tick older; a natural entity with nobody near goes.
+@(private = "file")
+system_age :: proc(w: ^World) {
+	it := entities_each(w)
+	for h in entities_next(&it) {
+		entity_set_age(w, h, entity_age_of(w, h) + 1)
+		if entity_is_natural(w, h) && !anyone_within(w, entity_pos(w, h), DESPAWN_DISTANCE) {
+			entity_gone(w, h)
+		}
+	}
+}
+
+@(private = "file")
+kind_of :: proc(w: ^World, h: game.Entity_Handle) -> ^game.Kind_Info {
+	return game.kind_info(w.server.registry, entity_kind(w, h))
+}
+
+// system_brains: the grazers. Entities in id order; one spawned during the
+// walk (a lamb) has a higher id and is walked in this same tick, after the
+// ones that were there.
+@(private = "file")
+system_brains :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish) {
+	walked: u32
+	for {
+		it := entities_each(w, after = walked)
+		any := false
+		for h in entities_next(&it) {
+			any = true
+			walked = max(walked, entity_id(w, h))
+			if kind_of(w, h).brain != .Grazer || !chunk_ready(w, entity_pos(w, h)) {continue}
+			sheep_life(w, h)
+			think(w, h)
+			wish, jump := steer(w, h)
+			wishes[h] = {wish, jump}
+		}
+		if !any {break}
+	}
+}
+
+// system_walkers: the physics of everything that walks.
+@(private = "file")
+system_walkers :: proc(w: ^World, wishes: ^map[game.Entity_Handle]Wish, query: game.Block_Query) {
+	it := entities_each(w)
+	for h in entities_next(&it) {
+		info := kind_of(w, h)
+		if info.physics != .Walker || !chunk_ready(w, entity_pos(w, h)) {continue}
+		wish := wishes[h] or_else {}
+		entity_body_step(w, h, info, wish.wish, wish.jump, query)
+	}
+}
+
+@(private = "file")
+system_items :: proc(w: ^World) {
+	it := entities_each(w)
+	for h in entities_next(&it) {
+		if kind_of(w, h).physics == .Item && item_tick(w, h) {entity_gone(w, h)}
+	}
+}
+
+@(private = "file")
+system_rockets :: proc(w: ^World, blasts: ^[dynamic]Blast) {
+	it := entities_each(w)
+	for h in entities_next(&it) {
+		info := kind_of(w, h)
+		if info.physics != .Projectile {continue}
+		if at, hit := rocket_step(w, h); hit {
+			append(
+				blasts,
+				Blast{{at, f64(info.projectile.explode)}, Action_Id(entity_owner(w, h).action)},
+			)
+			entity_died(w, h) // its explosion is what players see
+		}
+	}
 }
