@@ -208,10 +208,10 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   (`VX_JOBS=n` overrides); `test` runs the packages the same way, the slowest last time first,
   each printing its output whole when it ends; `test <package>...` runs only those. A step
   whose inputs are byte for byte what they were when it last succeeded is not repeated: a test
-  package runs its kept binary without compiling, a cross-OS object build and a file's
-  formatting check are not redone, a shader is not recompiled, and `build.sh`/`build.bat`
-  rebuild the driver only when its own inputs changed (`tools/build/cache.odin`, records in
-  `build/cache/`). A key is a 128-bit XXH3 over the command, `odin version` and the content of
+  package runs its kept binary without compiling, a game or server binary is skipped, a
+  cross-OS object build and a file's formatting check are not redone, a shader is not
+  recompiled, and `build.sh`/`build.bat` rebuild the driver only when its own inputs changed
+  (`tools/build/cache.odin`, records in `build/cache/`). A key is a 128-bit XXH3 over the command, `odin version` and the content of
   every file the compiler read (its `-export-dependencies` list: sources and `#load`s) plus the
   names in their directories, so a file added beside them counts; it is kept only when every
   input is older than the step's start. Modification times alone never decide: a stale result
