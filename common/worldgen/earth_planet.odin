@@ -66,6 +66,15 @@ planet_ruggedness :: proc(r: planet.Relief, lat, lon: f64) -> f32 {
 	return clamp(f32(int(hi) - int(lo)) / PLANET_RELIEF_SPREAD, 0, 1)
 }
 
+// PLANET_WALL_HEIGHT: how far above sea level the ice wall at the world's end stands.
+PLANET_WALL_HEIGHT :: 120
+
+// planet_past_the_edge: block column (x, z) lies beyond the poles or past the
+// date line, where the world ends at an ice wall.
+planet_past_the_edge :: proc(x, z: i32) -> bool {
+	return abs(z) > PLANET_CIRCUMFERENCE / 4 || abs(x) > PLANET_CIRCUMFERENCE / 2
+}
+
 // planet_shape sets a column's height and roughness from the relief, with the
 // noise's detail (hills, overhangs) scaled by the local ruggedness. Rivers
 // come from the relief in a later part, so none are carved here.
@@ -80,6 +89,12 @@ planet_shape :: proc(p: ^Params, c: ^Column, x, z: i32, hills, ridge: f32) {
 		height += hills * p.hill_height * spread
 	}
 	c.height = height
+	if planet_past_the_edge(x, z) {
+		c.height = f32(p.sea_level + PLANET_WALL_HEIGHT)
+		c.river = 0
+		c.rough = 0
+		return
+	}
 	c.river = 0
 	c.rough = 0
 	if elevation > 0 {

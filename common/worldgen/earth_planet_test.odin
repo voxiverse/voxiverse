@@ -76,3 +76,16 @@ test_planet_places_are_on_the_map :: proc(t: ^testing.T) {
 	e, _ := planet_place("everest")
 	testing.expect(t, planet_elevation(planet_block_of(e.lat, e.lon)) > 4000)
 }
+
+@(test)
+test_planet_world_ends_at_an_ice_wall :: proc(t: ^testing.T) {
+	g := planet_generator(1)
+	for at in ([][2]i32{{0, -16385}, {0, 16385}, {32769, 0}, {-32769, 100}}) {
+		testing.expect(t, planet_past_the_edge(at.x, at.y))
+		c := column_at(&g.params, g.seed, at.x, at.y)
+		testing.expect_value(t, c.biome, Biome.Ice_Sheet)
+		testing.expect_value(t, column_top(&g, at.x, at.y), PLANET_WALL_HEIGHT)
+	}
+	testing.expect(t, !planet_past_the_edge(32768, -16384))
+	testing.expect(t, column_at(&g.params, g.seed, 0, 0).biome != .Ice_Sheet)
+}

@@ -31,7 +31,7 @@ start); a saved universe keeps the home address it was made with. The generator 
 is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
 column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with
 the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Biomes
-from Köppen, rivers from the relief, ice sheets and the world's end come in later parts. A world loads when someone travels there, and unloads
+from Köppen, rivers from the relief and ice sheets come in later parts. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
 

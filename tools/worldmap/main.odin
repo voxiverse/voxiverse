@@ -42,6 +42,7 @@ BIOME_COLOURS := [worldgen.Biome][3]f32 {
 	.Tundra       = {225, 232, 240},
 	.Desert       = {225, 195, 120},
 	.Mountains    = {128, 124, 120},
+	.Ice_Sheet    = {235, 242, 250},
 }
 
 Job :: struct {

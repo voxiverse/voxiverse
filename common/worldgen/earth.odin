@@ -70,6 +70,7 @@ Biome :: enum u8 {
 	Tundra,
 	Desert,
 	Mountains,
+	Ice_Sheet,
 }
 
 BIOME_NAMES := [Biome]string {
@@ -83,6 +84,7 @@ BIOME_NAMES := [Biome]string {
 	.Tundra       = "tundra",
 	.Desert       = "desert",
 	.Mountains    = "mountains",
+	.Ice_Sheet    = "ice_sheet",
 }
 
 // Per-layer seeds, so layers are uncorrelated.
@@ -165,6 +167,12 @@ column_at :: proc(p: ^Params, seed: i64, x, z: i32) -> (c: Column) {
 	if p.planet != 0 {
 		planet_shape(p, &c, x, z, hills, ridge)
 		height = c.height
+		if planet_past_the_edge(x, z) {
+			// The world's end: a wall of ice, cold all through.
+			c.temperature, c.humidity = -1, 0
+			c.biome = .Ice_Sheet
+			return
+		}
 	}
 
 	// The climate is sampled a few blocks away, a different way for each
@@ -273,6 +281,9 @@ earth_surface :: proc(p: ^Params, b: Biome, depth, y: i32) -> game.Block {
 		if depth == 0 && y > sea + 95 {return .Snow}
 		if depth == 0 && y < sea + 70 {return .Grass}
 		if depth < 3 && y < sea + 70 {return .Dirt}
+	case .Ice_Sheet:
+		if depth == 0 {return .Snow}
+		if depth < 12 {return .Ice}
 	case .Tundra:
 		if depth == 0 {return .Sand if underwater else .Snow}
 		if depth < 3 {return .Dirt}
