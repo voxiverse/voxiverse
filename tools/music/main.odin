@@ -11,6 +11,7 @@ import "client:audio"
 
 MUSIC_DIR :: "assets/music"
 WORK_DIR :: "build/music-out" // (build/music is the tool itself)
+UNRENDERED := []string{"ignite"}
 
 // Renders the scores and MIDI files of assets/music to Ogg Vorbis through a
 // soundfont, with a metadata file beside each:
@@ -117,6 +118,7 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 		if ext != ".score" && ext != ".mid" {continue}
 		stem := f.name[:len(f.name) - len(ext)]
 		if len(names) > 0 && !contains(names, stem) && !contains(names, f.name) {continue}
+		if len(names) == 0 && contains(UNRENDERED, stem) {continue}
 		append(&sources, f.name)
 	}
 	if len(sources) == 0 {
@@ -191,7 +193,23 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			fmt.printfln("music: %s is up to date", stem)
 			continue
 		}
-		fmt.printfln("music: rendering %s", stem)
+		reason := "the score changed"
+		if force {
+			reason = "forced"
+		} else if !os.exists(json_path) || !os.exists(ogg_path) {
+			reason = "the score changed"
+		} else if data, jrerr := os.read_entire_file_from_path(json_path, context.allocator);
+		   jrerr == nil {
+			d: Done
+			if json.unmarshal(data, &d) == nil {
+				if d.source_sha256 != src_sha {
+					reason = "the score changed"
+				} else if d.soundfont_sha256 != sf_sha {
+					reason = "the font changed"
+				}
+			}
+		}
+		fmt.printfln("music: rendering %s (%s)", stem, reason)
 		stereo := render_with(&piece, fonts)
 		m, ok := master(&piece, stereo)
 		if !ok {
