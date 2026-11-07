@@ -154,6 +154,7 @@ package** is enforced by the `layout` lint (see above).
 | `tools/fuzz` | The fuzz tool | `*.odin` |
 | `tools/music` | The music renderer | `*.odin` |
 | `tools/music/testdata` | The renderer's test score | `*.score` |
+| `tools/music/testdata/corpus` | Public-domain MIDI files for the ear's calibration, with their sources | `*.mid`, `SOURCES.txt` |
 | `tools/netdump` | The packet dump tool | `*.odin` |
 | `tools/script` | The script tool (run, disasm) | `*.odin` |
 | `tools/ogg` | The Ogg tool | `*.odin` |
