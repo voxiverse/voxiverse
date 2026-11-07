@@ -26,7 +26,9 @@ home world. The home world is Earth, which has one fixed address in every univer
 them, they never change). Earth's terrain is seeded from its address alone (`terrain_seed` in
 `server/core/worlds.odin`), so the same block stands at the same place in every universe; a new
 universe takes Earth's address when `Config.earth` is set, else one made from its seed (the alien
-start); a saved universe keeps the home address it was made with. The generator parameter
+start). The creation screen starts on Earth (its fixed glyphs, the Milky Way); the seed field and
+Roll choose an alien home world instead (shown with its glyphs and a line saying it is the harder
+start), and Back to Earth returns; a saved universe keeps the home address it was made with. The generator parameter
 `worldgen.planet` (0 by default; nothing sets it yet) builds the height on `common/planet`: block x
 is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
 column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with

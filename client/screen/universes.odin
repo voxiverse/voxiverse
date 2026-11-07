@@ -154,17 +154,18 @@ free_save_path :: proc(name: string) -> string {
 
 // Universe_Plan: what Ignite (or a console command) creates.
 Universe_Plan :: struct {
-	path: string, // the directory (a free variant of the name)
-	seed: u64,
-	mode: string,
+	path:  string, // the directory (a free variant of the name)
+	seed:  u64,
+	mode:  string,
+	earth: bool, // the home world is Earth (else made from the seed)
 }
 
 // universe_plan: the directory for a universe called name (a free variant
 // of it, "New Universe" if nothing is left of it), with its seed and mode.
-universe_plan :: proc(name: string, seed: u64, mode: string) -> Universe_Plan {
+universe_plan :: proc(name: string, seed: u64, mode: string, earth := false) -> Universe_Plan {
 	base_name := save_dir_name(name)
 	if base_name == "" {base_name = "New Universe"}
-	return {free_save_path(base_name), seed, mode}
+	return {free_save_path(base_name), seed, mode, earth}
 }
 
 // world_create makes a directory for a new universe named name (a free

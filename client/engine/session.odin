@@ -34,6 +34,7 @@ Session_Config :: struct {
 	key:               game.Account_Key, // the account
 	join:              Maybe(Join), // play on that server; otherwise host the world here
 	seed:              i64,
+	earth:             bool, // a new universe's home world is Earth (else one made from the seed)
 	mode:              string, // a new universe's default game mode ("": creative)
 	view_radius:       i32,
 	view_height:       i32,
@@ -290,6 +291,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 	{
 		seed              = config.seed,
 		mode              = config.mode,
+		earth             = config.earth,
 		view_radius       = config.view_radius,
 		view_height       = config.view_height,
 		workers           = worker_count(),
