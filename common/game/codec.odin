@@ -48,12 +48,17 @@ write_f64 :: proc(w: ^Writer, v: f64) {
 }
 
 write_varint :: proc(w: ^Writer, v: u32) {
+	buf: [5]u8
 	v := v
+	n := 0
 	for v >= 0x80 {
-		append(&w.buf, u8(v) | 0x80)
+		buf[n] = u8(v) | 0x80
+		n += 1
 		v >>= 7
 	}
-	append(&w.buf, u8(v))
+	buf[n] = u8(v)
+	n += 1
+	append(&w.buf, ..buf[:n])
 }
 
 // write_svarint: a signed varint (zigzag: small magnitudes are short).
@@ -62,12 +67,17 @@ write_svarint :: proc(w: ^Writer, v: i32) {
 }
 
 write_varint64 :: proc(w: ^Writer, v: u64) {
+	buf: [10]u8
 	v := v
+	n := 0
 	for v >= 0x80 {
-		append(&w.buf, u8(v) | 0x80)
+		buf[n] = u8(v) | 0x80
+		n += 1
 		v >>= 7
 	}
-	append(&w.buf, u8(v))
+	buf[n] = u8(v)
+	n += 1
+	append(&w.buf, ..buf[:n])
 }
 
 // write_svarint64: zigzag, as write_svarint.
