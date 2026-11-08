@@ -71,7 +71,7 @@ player_list_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	for row in rows {
 		line := ui.cut_top(&inner, t.row_height)
 		kills, deaths, ping := columns(line)
-		ui.label(ctx, row.name, line, .Left)
+		ui.label_clipped(ctx, row.name, line, .Left)
 		ui.label(ctx, row.kills, kills, .Right)
 		ui.label(ctx, row.deaths, deaths, .Right)
 		ui.label(ctx, row.ping, ping, .Right, t.text_muted)

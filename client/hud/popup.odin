@@ -49,5 +49,5 @@ hud_popup :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	r := ctx.screen
 	row := ui.cut_bottom(&r, engine.SLOT_SIZE.y + 24 + 50) // (above the hearts)
 	row = ui.cut_top(&row, t.row_height)
-	ui.draw_text(ctx, row, menu.item_title(s.reg, p.item), t.font_size, t.text, .Center)
+	ui.label_elided(ctx, menu.item_title(s.reg, p.item), row, .Center)
 }
