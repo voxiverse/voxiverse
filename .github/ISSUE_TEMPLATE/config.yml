@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Voxiverse Discussions
+    url: https://github.com/voxiverse/voxiverse/discussions
+    about: Ask questions and discuss architectural ideas before filing an engineering issue.

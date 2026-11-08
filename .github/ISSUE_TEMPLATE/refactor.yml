@@ -1,0 +1,39 @@
+name: Architectural Refactor
+description: Codebase simplification, dead code removal, or structural cleanup.
+title: "Category: Imperative description of cleanup"
+labels: [refactor]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Refactors must not introduce caches, premature abstractions, or scope bloat. Keep changes atomic.
+  - type: input
+    id: category
+    attributes:
+      label: Category
+      description: The package path from docs/layout.md.
+      placeholder: "tools/build"
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why this refactor is needed
+      description: Explain the architectural debt, needless complexity, or rule violation being solved.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Planned Changes
+      description: Exact files and procedures to be altered or removed.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Verification commands demonstrating zero regressions.
+      placeholder: "./build.sh check && ./build.sh test"
+    validations:
+      required: true

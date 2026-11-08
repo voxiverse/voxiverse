@@ -1,0 +1,47 @@
+name: Engineering Task
+description: Planned engineering work, feature implementation, or milestone item.
+title: "Category: Imperative description"
+labels: [agent]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Follow the SerenityOS commit and issue discipline: title must be `Category: Imperative description` where Category matches a folder listed in `docs/layout.md` or `CI`/`Docs`/`Meta`.
+  - type: input
+    id: category
+    attributes:
+      label: Category
+      description: The package path from docs/layout.md (e.g. server/core, common/planet, tools/build, CI, Docs, Meta).
+      placeholder: "server/core"
+    validations:
+      required: true
+  - type: input
+    id: dependencies
+    attributes:
+      label: Starts after
+      description: Issues or PRs that block this task from starting (e.g. Starts after #104), or "None".
+      placeholder: "Starts after #104"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Motivation & Scope
+      description: What is needed and why. Stick strictly to the issue scope; no drive-by refactoring.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation Plan
+      description: Concrete design adhering to docs/design.md ground rules (cache minimization, SerenityOS discipline).
+    validations:
+      required: true
+  - type: textarea
+    id: exit_check
+    attributes:
+      label: Exit Check
+      description: The exact command or assertion that verifies this issue is complete.
+      placeholder: "./build.sh test server/core"
+    validations:
+      required: true

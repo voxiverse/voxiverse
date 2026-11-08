@@ -1,0 +1,49 @@
+name: Bug Report
+description: A defect, crash, fuzz failure, or regression with reproducible steps.
+title: "Category: Imperative description of bug"
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every bug fix must come with a regression test that fails before the fix and passes after (see `AGENTS.md`).
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux (x86_64)
+        - Windows (x86_64)
+        - macOS (Apple Silicon arm64)
+        - All Platforms
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Exact Reproduction Command
+      description: The exact command, fuzz corpus file, or test invocation reproducing the issue.
+      placeholder: "./build.sh test common/ogg"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior & Output
+      description: Stack trace, panic log, or error message.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened instead according to documentation or invariant.
+    validations:
+      required: true
+  - type: textarea
+    id: regression_test
+    attributes:
+      label: Regression Test
+      description: Where and how the regression test will be added.
+    validations:
+      required: true

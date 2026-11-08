@@ -62,7 +62,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
 | `.agents/skills/planner` | The planner skill for agents that plan and do not write the game's code (profiling, issues for the autofix harness) | `SKILL.md` |
 | `.github/workflows` | CI | `*.yml` |
-| `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback | `*.yml` |
+| `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback, tasks, bugs, refactors, and form config | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/catalog` | Earth's content as data before it is in the game (the schemas in its README) | `README.md` |
 | `assets/catalog/fauna` | Animals, one file per biome | `*.json` |

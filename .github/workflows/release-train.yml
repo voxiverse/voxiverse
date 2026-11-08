@@ -1,0 +1,82 @@
+name: release-train
+on:
+  schedule:
+    # Run every Friday at 18:00 UTC
+    - cron: '0 18 * * 5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  roll:
+    name: Friday Release Train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Process weekly release milestone
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Finding active version milestone..."
+          # Find the oldest open version milestone (matching 0.*.0)
+          active_milestone=$(gh api "repos/${REPO}/milestones?state=open&sort=due_on&direction=asc" --jq '[.[] | select(.title | test("^0\\.[0-9]+\\.0$"))][0]')
+
+          if [ -z "$active_milestone" ] || [ "$active_milestone" = "null" ]; then
+            echo "No active version milestone found. Exiting."
+            exit 0
+          fi
+
+          current_number=$(echo "$active_milestone" | jq -r '.number')
+          current_title=$(echo "$active_milestone" | jq -r '.title')
+          echo "Current release milestone: $current_title (number: $current_number)"
+
+          # Calculate next milestone title: 0.X.0 -> 0.(X+1).0
+          minor=$(echo "$current_title" | cut -d. -f2)
+          next_minor=$((minor + 1))
+          next_title="0.${next_minor}.0"
+          echo "Next release milestone: $next_title"
+
+          # Calculate next Friday 18:00 UTC due date
+          next_due=$(date -u -d "next Friday 18:00" '+%Y-%m-%dT18:00:00Z' 2>/dev/null || date -u '+%Y-%m-%dT18:00:00Z')
+
+          # Find or create next milestone
+          next_milestone_num=$(gh api "repos/${REPO}/milestones?state=all" --jq "[.[] | select(.title == \"$next_title\") | .number][0] // empty")
+          if [ -z "$next_milestone_num" ]; then
+            echo "Creating milestone $next_title with due date $next_due..."
+            next_milestone_num=$(gh api "repos/${REPO}/milestones" -f title="$next_title" -f due_on="$next_due" -f description="Weekly release train milestone $next_title" --jq '.number')
+          fi
+          echo "Next milestone number: $next_milestone_num"
+
+          # Move all open issues from current milestone to next milestone
+          open_issues=$(gh issue list --milestone "$current_title" --state open --json number --jq '.[].number')
+          for issue in $open_issues; do
+            echo "Moving open issue #$issue to $next_title..."
+            gh issue edit "$issue" --milestone "$next_title"
+            gh issue comment "$issue" --body "Rolled to milestone **$next_title** as part of the weekly Friday release train."
+          done
+
+          # Close current milestone (now at 100% completion)
+          echo "Closing milestone $current_title..."
+          gh api -X PATCH "repos/${REPO}/milestones/$current_number" -f state="closed"
+
+          # Verify latest push to main passed CI
+          head_sha=$(git rev-parse HEAD)
+          echo "Checking CI status of main at $head_sha..."
+          ci_status=$(gh api "repos/${REPO}/commits/${head_sha}/check-runs" --jq '[.check_runs[] | select(.name == "CI result") | .conclusion][0] // empty')
+
+          if [ "$ci_status" = "success" ]; then
+            tag="v${current_title}"
+            echo "Tagging release $tag at $head_sha..."
+            git tag -a "$tag" -m "Voxiverse $current_title" "$head_sha"
+            git push origin "$tag"
+            echo "Pushed tag $tag; ci.yml will draft release."
+          else
+            echo "Main CI status is '$ci_status' (not success); skipping automated tag push."
+          fi
