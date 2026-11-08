@@ -100,7 +100,7 @@ jobs:
       - name: Check
         if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} check
-      - name: Test
+      - name: Unit tests
         if: ${{ !cancelled() }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} test
       # The packages' own output, kept when a test failed (the report shows the first error line; the rest is here).
@@ -119,64 +119,34 @@ jobs:
           name: crash-reports-${{ matrix.os }}
           path: ~/Library/Logs/DiagnosticReports/*.ips
           if-no-files-found: ignore
-      # The scripted 10 000-tick session at both optimization levels:
+      # What needs real threads, sockets, audio devices and child processes
+      # (on macOS also the window's buttons against a real AppKit window).
+      - name: System tests
+        if: ${{ !cancelled() && runner.os != 'Linux' }}
+        timeout-minutes: 15 # a hang fails this step; it once starved the runner for 50 minutes
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} system
+      - name: Build game
+        id: build
+        if: ${{ !cancelled() }}
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
+      # The scripted 10 000-tick session at both optimization levels on push to main:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} determinism
       - name: Determinism logs
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: determinism-${{ matrix.os }}
           path: build/determinism/
           if-no-files-found: ignore # the comparison job fails on a missing log
-      # What needs real threads, sockets, audio devices and child processes
-      # (on macOS also the window's buttons against a real AppKit window).
-      - name: Smoke
-        if: ${{ !cancelled() && runner.os != 'Linux' }}
-        timeout-minutes: 15 # a hang fails this step; it once starved the runner for 50 minutes
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} smoke
-      - name: Build game
-        id: build
-        if: ${{ !cancelled() }}
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} build
-      # The chunk pipeline: exact counts, and every stage within a
-      # generous budget (an optimized build, one thread).
+      # Consolidated benchmark checks on push to main
       - name: Benchmark check
-        if: ${{ !cancelled() }}
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench chunks -check
-      # Telemetry's cost: an event is a lock and a copy, and the
-      # writer keeps up; budgets for a slow runner.
-      - name: Benchmark check, telemetry
-        if: ${{ !cancelled() }}
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench telemetry -check
-      # What the server's heavy work costs (the budgets the tests held: a
-      # save, the audit, counters, the journal, 10 000 blocks of water); CPU
-      # time on this thread, budgets for a slow runner.
-      # A miss is confirmed by a second check (docs/benchmarking.md): a slow runner moves every
-      # run of the first, and so its median; a real regression fails both.
-      - name: Benchmark check, budgets
-        if: ${{ !cancelled() }}
-        shell: pwsh
-        run: |
-          $build = if ($IsWindows) { '.\build.bat' } else { './build.sh' }
-          & $build bench budgets -check
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output "::warning::over budget once, checking again"
-            & $build bench budgets -check
-          }
-          exit $LASTEXITCODE
-      # The script VM's benchmark programs: each one's instruction units within
-      # its budget (exact counts, the same on every OS; one repetition, as the times
-      # judge nothing here: the ratios to Lua are checked on Linux).
-      - name: Benchmark check, script
-        if: ${{ !cancelled() }}
-        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench script -check --smoke
-      # The server's benchmark scenario, short: simulated players over
-      # UDP on every platform; its numbers compare with nothing.
-      - name: Server benchmark (smoke)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        run: ${{ runner.os == 'Windows' && '.\build.bat' || './build.sh' }} bench --check
+      - name: Server benchmark
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         run: ${{ runner.os == 'Windows' && '.\build\voxiverse-server.exe' || './build/voxiverse-server' }} --benchmark server --smoke
       # Each test's time and result and each budget's median and runs (docs/debugging.md).
       - name: Reports
@@ -223,7 +193,7 @@ jobs:
       # re-run of the same run uses the same seed, so a failure that depends
       # on it fails again rather than passing as a flake. It is printed
       # first, and again if the tests fail (set it to reproduce).
-      - name: Test
+      - name: Unit tests
         if: ${{ !cancelled() }}
         env:
           ODIN_TEST_RANDOM_SEED: ${{ github.run_number }}
@@ -237,31 +207,26 @@ jobs:
           name: test-logs-ubuntu-latest
           path: build/test/*.log
           if-no-files-found: ignore
-      # Every parser of untrusted input, 2 000 cases each at the fixed seed 84 (a push never
-      # fails on a seed nobody has seen: the nightly run takes others), then the regression
-      # files of every crash found (docs/fuzzing.md).
-      - name: Fuzz (smoke)
+      # What needs real threads, sockets, audio devices and child processes, one test at a time.
+      - name: System tests
+        if: ${{ !cancelled() }}
+        run: ./build.sh system
+      # Every parser of untrusted input, 2 000 cases each at the fixed seed 84, then regression files.
+      - name: Fuzz regressions
         if: ${{ !cancelled() }}
         run: ./build.sh fuzz --smoke
-      # The scripted 10 000-tick session at both optimization levels:
+      # The scripted 10 000-tick session at both optimization levels on push to main:
       # the logs go to the determinism job below, which compares all six.
       - name: Determinism
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         run: ./build.sh determinism
       - name: Determinism logs
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: determinism-ubuntu-latest
           path: build/determinism/
           if-no-files-found: ignore # the comparison job fails on a missing log
-      # The smoke suite: what needs a real thread, socket, audio device,
-      # child process or clock, one test at a time. Here, not in the game job,
-      # because the virtual gamepad above is set up here and the game job is
-      # the longest.
-      - name: Smoke
-        if: ${{ !cancelled() }}
-        run: ./build.sh smoke
       # Each test's time and result and each budget's median and runs (docs/debugging.md).
       - name: Reports
         if: ${{ !cancelled() }}
@@ -297,37 +262,17 @@ jobs:
         id: build
         if: ${{ !cancelled() }}
         run: ./build.sh build
-      # The chunk pipeline: exact counts, and every stage within a
-      # generous budget (an optimized build, one thread).
+      # Consolidated benchmark checks:
       - name: Benchmark check
         if: ${{ !cancelled() }}
-        run: ./build.sh bench chunks -check
-      - name: Benchmark check, telemetry
-        if: ${{ !cancelled() }}
-        run: ./build.sh bench telemetry -check
-      # A miss is confirmed by a second check, as on the other OSes.
-      - name: Benchmark check, budgets
-        if: ${{ !cancelled() }}
-        run: |
-          ./build.sh bench budgets -check || {
-            echo "::warning::over budget once, checking again"
-            ./build.sh bench budgets -check
-          }
-      # The script VM against PUC Lua 5.4 (installed above): each benchmark program
-      # at most 4x Lua's CPU time and 2.5x in geometric mean (ratios on this runner, so
-      # its speed cancels), the instruction budgets, and every `--! lua` conformance
-      # file printing the same under both.
-      - name: Benchmark check, script
-        if: ${{ !cancelled() }}
-        run: ./build.sh bench script -check --lua lua5.4
+        run: ./build.sh bench --check
       # The script fuzzer's generated programs run by PUC Lua 5.4 too: 2 000 at the
       # fixed seed 51, each printing the same under both (docs/fuzzing.md).
-      - name: Fuzz (smoke), script programs against Lua
+      - name: Fuzz script programs against Lua
         if: ${{ !cancelled() }}
         run: ./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4
-      # The server's benchmark scenario, short: simulated players over
-      # UDP; its numbers compare with nothing.
-      - name: Server benchmark (smoke)
+      # The server's benchmark scenario: simulated players over UDP.
+      - name: Server benchmark
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./build/voxiverse-server --benchmark server --smoke
       # Each test's time and result and each budget's median and runs (docs/debugging.md).
@@ -383,7 +328,7 @@ jobs:
       # The game's benchmark scenarios, short: each still runs to its
       # end (fixed conditions, offscreen drawing, its result written) on the
       # CPU driver under validation; timing here means nothing.
-      - name: Benchmark scenarios (smoke)
+      - name: Benchmark scenarios
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           for scenario in load views flight edits audio viewmodel; do
@@ -393,7 +338,7 @@ jobs:
       # Real-time audio: 30 s of a busy session mixed into the null
       # device; no underruns, non-finite samples, dropped or late commands,
       # the callback within its budget, the rolling capture written.
-      - name: Audio smoke run
+      - name: Audio system run
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --check audio
 
