@@ -1781,6 +1781,21 @@ run_tool :: proc(name: string, args: []string, release := false) -> bool {
 // build_tool builds tools/<name> into build/.
 build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
+	dir := path_join({"tools", name})
+	exe_info, exe_err := os.stat(exe, context.temp_allocator)
+	if exe_err == nil {
+		w := os.walker_create(dir)
+		defer os.walker_destroy(&w)
+		newer := false
+		for info in os.walker_walk(&w) {
+			if info.type == .Regular &&
+			   info.modification_time._nsec > exe_info.modification_time._nsec {
+				newer = true
+				break
+			}
+		}
+		if !newer {return exe, true}
+	}
 	cmd := slice.concatenate(
 	[][]string {
 		{"odin", "build", path_join({"tools", name}), strings.concatenate({"-out:", exe})},
@@ -1809,10 +1824,11 @@ bench :: proc(args: []string) -> bool {
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
 	if scenario == "--check" || scenario == "-check" || scenario == "check" {
-		if !run_tool("bench", {"-check"}) {return false}
-		if !run_tool("bench", {"telemetry", "-check"}) {return false}
-		if !run_tool("bench", {"budgets", "-check"}) {return false}
-		if !run_tool("bench", {"script", "-check"}) {return false}
+		exe := build_tool("bench") or_return
+		if !run({exe, "-check"}) {return false}
+		if !run({exe, "telemetry", "-check"}) {return false}
+		if !run({exe, "budgets", "-check"}) {return false}
+		if !run({exe, "script", "-check"}) {return false}
 		return true
 	}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
