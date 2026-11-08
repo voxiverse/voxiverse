@@ -242,6 +242,7 @@ keep_edits :: proc(w: ^World, c: ^Chunk) {
 	ledger_entities(w, c.block_entities[:], .Scope_Out)
 	wr := &w.server.store.writer
 	clear(&wr.buf)
+	game.chunk_compact(&c.blocks, &w.chunks.arrays)
 	game.layers_compact(&c.layers, &w.chunks.pools)
 	layers := chunk_saved_layers(&w.chunks, c, context.temp_allocator)
 	game.write_chunk_payload(wr, &c.blocks, c.block_entities[:], sim_take_chunk(w, c.pos), layers)
