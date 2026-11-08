@@ -2,11 +2,11 @@ package core
 
 import "common:game"
 
-// The flow behaviour: a fluid (data/sim/*.json, behaviour "flow") spreads by Minecraft's
-// rules for water: a source (level 0) stays; flowing levels 1..n live as long as something
-// feeds them (the fluid above, or beside it one level stronger), and spread down first,
-// else sideways one level weaker, towards the nearest way down within `reach` blocks
-// (every way, when there is none). Between two sources over firm ground a new source
+// The flow behaviour: a fluid (data/sim/*.json, behaviour "flow") spreads by discrete
+// cellular automata rules: a source (level 0) stays; flowing levels 1..n live as long
+// as something feeds them (the fluid above, or beside it one level stronger), and spread
+// down first, else sideways one level weaker, towards the nearest way down within `reach`
+// blocks (every way, when there is none). Between two sources over firm ground a new source
 // forms, if the rule says so. The numbers and the blocks are the rule's (game.Fluid);
 // water's are assets/packs/voxiverse/data/sim/water.json.
 
@@ -149,13 +149,29 @@ ways_down :: proc(fl: ^Flow, p: game.Block_Pos) -> (ways: [4]bool) {
 	reach := fl.f.reach
 	best := reach + 1
 	dist: [4]i32
+	can_take: [4]bool
 	for d, i in SIDES {
-		dist[i] = distance_down(fl, p + d, d, 1)
+		nb, loaded := chunks_block(&fl.w.chunks, p + d)
+		if !loaded || !takes_fluid(fl, nb, fl.weakest) {
+			dist[i] = reach + 1
+			continue
+		}
+		can_take[i] = true
+		under, _ := chunks_block(&fl.w.chunks, p + d + {0, -1, 0})
+		if takes_fluid(fl, under, fl.falling) {
+			dist[i] = 1
+			best = 1
+			continue
+		}
+		if best <= 1 {
+			dist[i] = reach + 1
+			continue
+		}
+		dist[i] = distance_down(fl, p + d, d, 1, best)
 		best = min(best, dist[i])
 	}
-	for d, i in SIDES {
-		nb, _ := chunks_block(&fl.w.chunks, p + d)
-		ways[i] = takes_fluid(fl, nb, fl.weakest) && (best > reach || dist[i] == best)
+	for _, i in SIDES {
+		ways[i] = can_take[i] && (best > reach || dist[i] == best)
 	}
 	return
 }
@@ -163,17 +179,18 @@ ways_down :: proc(fl: ^Flow, p: game.Block_Pos) -> (ways: [4]bool) {
 // distance_down: steps from p (reached in steps) to a block the fluid could fall from,
 // going on in any direction but back (reach + 1: none).
 @(private = "file")
-distance_down :: proc(fl: ^Flow, p, came: game.Block_Pos, steps: i32) -> i32 {
+distance_down :: proc(fl: ^Flow, p, came: game.Block_Pos, steps: i32, max_steps: i32) -> i32 {
 	reach := fl.f.reach
+	limit := min(reach, max_steps)
+	if steps >= limit {return reach + 1}
 	b, loaded := chunks_block(&fl.w.chunks, p)
 	if !loaded || !takes_fluid(fl, b, fl.weakest) {return reach + 1}
 	under, _ := chunks_block(&fl.w.chunks, p + {0, -1, 0})
 	if takes_fluid(fl, under, fl.falling) {return steps}
-	if steps >= reach {return reach + 1}
 	best := reach + 1
 	for d in SIDES {
 		if d == -came {continue}
-		best = min(best, distance_down(fl, p + d, d, steps + 1))
+		best = min(best, distance_down(fl, p + d, d, steps + 1, min(limit, best)))
 	}
 	return best
 }
