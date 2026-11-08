@@ -910,3 +910,55 @@ test_tilted_text_scales_continuously :: proc(t: ^testing.T) {
 		testing.expectf(t, len(ctx.glyphs.entries) == entries, "glyph cache grew at step %d", i)
 	}
 }
+
+@(test)
+test_layout_flow_and_anchors :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	begin_frame(ctx, at({0, 0}), SCREEN, 1)
+
+	// Column flow:
+	col_rect := Rect{10, 10, 200, 300}
+	begin_column(ctx, col_rect, 10)
+	r1 := next(ctx, 40)
+	r2 := next(ctx, 50)
+	end_column(ctx)
+	testing.expect_value(t, r1.y, 10)
+	testing.expect_value(t, r1.h, 40)
+	testing.expect_value(t, r2.y, 60) // 10 + 40 + 10 spacing
+	testing.expect_value(t, r2.h, 50)
+
+	// Row flow:
+	row_rect := Rect{20, 20, 300, 100}
+	begin_row(ctx, row_rect, 5)
+	c1 := next(ctx, 60)
+	c2 := next(ctx, 80)
+	end_row(ctx)
+	testing.expect_value(t, c1.x, 20)
+	testing.expect_value(t, c1.w, 60)
+	testing.expect_value(t, c2.x, 85) // 20 + 60 + 5 spacing
+	testing.expect_value(t, c2.w, 80)
+
+	// Anchors:
+	parent := Rect{100, 100, 200, 100}
+	p_tr := anchor_point(parent, .Top_Right, {10, -5})
+	testing.expect_value(t, p_tr, Vec2{310, 95})
+
+	a_c := anchor_rect(parent, .Center, {50, 40})
+	testing.expect_value(t, a_c, Rect{175, 130, 50, 40})
+
+	a_br := anchor_rect(parent, .Bottom_Right, {40, 20}, {5, 5})
+	testing.expect_value(t, a_br, Rect{265, 185, 40, 20})
+
+	// Text elision:
+	short_str := text_elide(ctx, "Hello", 200, 16)
+	testing.expect_value(t, short_str, "Hello")
+
+	long_str := "This is an extremely long piece of text that cannot possibly fit in a small width"
+	elided := text_elide(ctx, long_str, 80, 16)
+	testing.expect(t, strings.has_suffix(elided, "..."), "must end with ellipsis")
+	testing.expect(t, measure_text(ctx, elided, 16) <= 80, "elided text must fit width")
+
+	end_frame(ctx)
+}

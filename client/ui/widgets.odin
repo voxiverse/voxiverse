@@ -13,8 +13,40 @@ label :: proc(
 	r: Rect,
 	align := Align.Left,
 	color: Maybe(Color) = nil,
+	clip := false,
+	elide := false,
 ) {
-	draw_text(ctx, r, text, ctx.theme.font_size, color.? or_else ctx.theme.text, align)
+	str := text
+	if elide {
+		str = text_elide(ctx, text, r.w, ctx.theme.font_size)
+	}
+	if clip {
+		push_clip_rect(ctx, r)
+		defer pop_clip_rect(ctx)
+		draw_text(ctx, r, str, ctx.theme.font_size, color.? or_else ctx.theme.text, align)
+	} else {
+		draw_text(ctx, r, str, ctx.theme.font_size, color.? or_else ctx.theme.text, align)
+	}
+}
+
+label_clipped :: proc(
+	ctx: ^Context,
+	text: string,
+	r: Rect,
+	align := Align.Left,
+	color: Maybe(Color) = nil,
+) {
+	label(ctx, text, r, align, color, clip = true)
+}
+
+label_elided :: proc(
+	ctx: ^Context,
+	text: string,
+	r: Rect,
+	align := Align.Left,
+	color: Maybe(Color) = nil,
+) {
+	label(ctx, text, r, align, color, elide = true)
 }
 
 title :: proc(ctx: ^Context, text: string, r: Rect, align := Align.Center) {
