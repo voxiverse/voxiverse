@@ -862,3 +862,33 @@ test_structures_round_trip :: proc(t: ^testing.T) {
 		),
 	)
 }
+
+@(test)
+test_server_deadline_and_have_time :: proc(t: ^testing.T) {
+	testing.expect(t, have_time(nil), "nil server should always have time")
+
+	s: Server
+	s.config.stepped = true
+	testing.expect(t, have_time(&s), "stepped server should always have time")
+
+	s.config.stepped = false
+	mock_now: time.Tick
+	mock_now._nsec = 1_000_000_000
+	// Deadline 10ms in the future
+	s.tick_deadline = time.tick_add(mock_now, 10 * time.Millisecond)
+	testing.expect(t, have_time(&s, 0, mock_now), "future deadline has time")
+	testing.expect(
+		t,
+		have_time(&s, 2 * time.Millisecond, mock_now),
+		"future deadline with small margin has time",
+	)
+	testing.expect(
+		t,
+		!have_time(&s, 20 * time.Millisecond, mock_now),
+		"future deadline with large margin has no time",
+	)
+
+	// Deadline in past
+	s.tick_deadline = time.tick_add(mock_now, -5 * time.Millisecond)
+	testing.expect(t, !have_time(&s, 0, mock_now), "past deadline has no time")
+}
