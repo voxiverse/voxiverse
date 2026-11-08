@@ -28,5 +28,14 @@ test_earth_universe_starts_within_a_second :: proc(t: ^testing.T) {
 	took := time.tick_since(begin)
 	if !testing.expect(t, started) {return}
 	defer core.harness_stop(h)
-	testing.expectf(t, took < time.Second, "an Earth universe took %v to start", took)
+	// Linux CI's runner is the budget's measure (#275); the macOS and Windows
+	// runners run this unoptimized build about twice as slowly.
+	limit := time.Second when ODIN_OS == .Linux else 2 * time.Second
+	testing.expectf(
+		t,
+		took < limit,
+		"an Earth universe took %v to start (at most %v)",
+		took,
+		limit,
+	)
 }
