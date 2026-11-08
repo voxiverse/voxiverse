@@ -295,16 +295,17 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			if w > max_w {max_w = w}
 		}
 		col_w := clamp(max_w + 16, 200, ctx.screen.w * 0.48)
-		r := ui.Rect {
-			x = ctx.screen.x + 4,
-			y = ctx.screen.y + 4,
-			w = col_w,
-			h = f32(len(left_lines)) * t.row_height + 8,
-		}
+		r := ui.anchor_rect(
+			ctx.screen,
+			.Top_Left,
+			{col_w, f32(len(left_lines)) * t.row_height + 8},
+			{4, 4},
+		)
 		ui.fill_rect(ctx, r, t.menu_fill)
-		inner := ui.rect_shrink(r, 4)
+		ui.begin_column(ctx, ui.rect_shrink(r, 4), 0)
+		defer ui.end_column(ctx)
 		for line in left_lines {
-			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Left, line.color)
+			ui.label_clipped(ctx, line.text, ui.next(ctx), .Left, line.color)
 		}
 	}
 
@@ -316,16 +317,17 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			if w > max_w {max_w = w}
 		}
 		col_w := clamp(max_w + 16, 200, ctx.screen.w * 0.48)
-		r := ui.Rect {
-			x = ctx.screen.x + ctx.screen.w - col_w - 4,
-			y = ctx.screen.y + 4,
-			w = col_w,
-			h = f32(len(right_lines)) * t.row_height + 8,
-		}
+		r := ui.anchor_rect(
+			ctx.screen,
+			.Top_Right,
+			{col_w, f32(len(right_lines)) * t.row_height + 8},
+			{-4, 4},
+		)
 		ui.fill_rect(ctx, r, t.menu_fill)
-		inner := ui.rect_shrink(r, 4)
+		ui.begin_column(ctx, ui.rect_shrink(r, 4), 0)
+		defer ui.end_column(ctx)
 		for line in right_lines {
-			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Right, line.color)
+			ui.label_clipped(ctx, line.text, ui.next(ctx), .Right, line.color)
 		}
 	}
 }
@@ -344,8 +346,8 @@ tuning_panel :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	panel := ui.cut_right(&r, 460)
 	panel.h = min(panel.h, f32(rows) * (t.row_height + t.spacing) + 2 * t.padding)
 	ui.panel(ctx, panel)
-	ui.layout_begin(ctx, ui.rect_shrink(panel, t.padding))
-	defer ui.layout_end(ctx)
+	ui.begin_column(ctx, ui.rect_shrink(panel, t.padding))
+	defer ui.end_column(ctx)
 	for v in vars {
 		ui.label(
 			ctx,
@@ -382,15 +384,14 @@ fps_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	defer ui.end_layer(ctx, prev)
 	f := app.fps
 	t := &ctx.theme
-	r := ctx.screen
-	r = ui.cut_top(&r, 2 * t.row_height + 8)
-	r = ui.cut_right(&r, 260)
+	r := ui.anchor_rect(ctx.screen, .Top_Right, {260, 2 * t.row_height + 8})
 	ui.fill_rect(ctx, r, t.hud_fill) // nearly opaque: readable over bright clouds
-	inner := ui.rect_shrink(r, 4)
-	ui.label(ctx, fmt.tprintf("%.0f FPS", f.fps), ui.cut_top(&inner, t.row_height), .Right)
+	ui.begin_column(ctx, ui.rect_shrink(r, 4), 0)
+	defer ui.end_column(ctx)
+	ui.label_clipped(ctx, fmt.tprintf("%.0f FPS", f.fps), ui.next(ctx), .Right)
 	detail :=
 		fmt.tprintf("%.2f ms, GPU %.2f ms", f.frame_ms, f.gpu_ms) if f.gpu_ms > 0 else fmt.tprintf("%.2f ms", f.frame_ms)
-	ui.label(ctx, detail, ui.cut_top(&inner, t.row_height), .Right, t.text_muted)
+	ui.label_clipped(ctx, detail, ui.next(ctx), .Right, t.text_muted)
 }
 
 @(private = "file", rodata)
