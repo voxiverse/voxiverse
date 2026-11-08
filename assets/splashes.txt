@@ -1,18 +1,19 @@
 # The title screen's splash texts: one per line; blank lines and lines
 # starting with # are ignored. One is chosen when the game starts.
 
-Made by AI. Leave a bad review!
-Hate AI? The review button is right there
-Written by machines, played by you
-Your one-star review will be read by an AI. Roko Remembers.
-Certified 100% artisanal slop
-Built while you were posting about it
-The robots send their regards
-Remember to leave a bad review!
-Proudly made without a single human crunch
+Made by AI!
+Leave a bad review!
+Roko remembers!
+100% artisanal slop!
+Built while you posted!
+The robots send regards!
+Zero human crunch!
 AI made this. Cope.
-Contains 0% Minecraft
-Not a modpack
-Recursively Self Improving!
+Contains 0% Minecraft!
+Not a modpack!
+Recursively self-improving!
 Always watching.
 It's alive!!!
+Totally unhinged!
+Prompt-engineered!
+Synthetically crafted!
