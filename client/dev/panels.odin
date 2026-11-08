@@ -47,12 +47,32 @@ coordinates_shown :: proc(s: ^engine.Session) -> bool {
 
 // hotbar: the inventory's first row along the bottom, the one in hand framed.
 
+Overlay_Line :: struct {
+	text:  string,
+	color: Maybe(ui.Color),
+}
+
+@(private = "file")
+overlay_append :: proc(lines: ^[dynamic]Overlay_Line, text: string, color: Maybe(ui.Color) = nil) {
+	append(lines, Overlay_Line{text, color})
+}
+
 debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Tooltip)
 	defer ui.end_layer(ctx, prev)
-	lines := make([dynamic]string, context.temp_allocator)
-	append(
-		&lines,
+	t := &ctx.theme
+	left_lines := make([dynamic]Overlay_Line, context.temp_allocator)
+	right_lines := make([dynamic]Overlay_Line, context.temp_allocator)
+
+	fps_color: Maybe(ui.Color) = nil
+	if app.fps.fps < 30 {
+		fps_color = t.log_error
+	} else if app.fps.fps < 55 {
+		fps_color = t.log_warn
+	}
+
+	overlay_append(
+		&left_lines,
 		fmt.tprintf(
 			"%.0f FPS, frame %.2f ms, GPU %.2f ms, vsync %s (%v)",
 			app.fps.fps,
@@ -61,12 +81,13 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			"on" if app.g.swapchain.vsync else "off",
 			app.g.swapchain.present_mode,
 		),
+		fps_color,
 	)
 	if s := app.session; s != nil && s.state == .Playing {
 		p := s.camera.position
 		if coordinates_shown(s) {
-			append(
-				&lines,
+			overlay_append(
+				&left_lines,
 				fmt.tprintf(
 					"position %.1f %.1f %.1f  chunk %v  yaw %.0f pitch %.0f",
 					p.x,
@@ -78,43 +99,42 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 				),
 			)
 		}
-		append(&lines, fmt.tprintf("sky: time of day %.2f", game.time_of_day(s.clock)))
+		overlay_append(
+			&left_lines,
+			fmt.tprintf("sky: time of day %.2f", game.time_of_day(s.clock)),
+		)
 		w := &s.world
-		append(
-			&lines,
+		overlay_append(
+			&left_lines,
 			fmt.tprintf(
-				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), bulk edits %d whole %d late, session arena %.1f MiB",
+				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), bulk %d, arena %.1f MiB",
 				w.chunks.count,
 				len(w.chunks.items) - 1,
 				f64(w.arrays.committed) / (1 << 20),
 				w.stats.mesh_jobs_busy,
 				len(w.to_mesh),
 				w.stats.groups_shown,
-				w.stats.groups_late,
 				f64(s.arena.total_used) / (1 << 20),
 			),
 		)
-		// Work on the worker threads: meshing here, generating on our own
-		// server (a remote one's is its own business).
 		mesh_ms := base.frame_stats_summary(&w.stats.mesh_times)
 		work := fmt.tprintf("mesh %.2f ms (p99 %.2f)", mesh_ms.avg, mesh_ms.p99)
 		if engine.session_hosting(s) {
 			gen := core.stats(&s.server).generate
 			work = fmt.tprintf("generate %.2f ms (p99 %.2f), %s", gen.avg, gen.p99, work)
 		}
-		append(&lines, fmt.tprintf("chunks: %s", work))
+		overlay_append(&left_lines, fmt.tprintf("chunks: %s", work))
 		ws := &app.world_pass.stats
-		append(
-			&lines,
+		overlay_append(
+			&left_lines,
 			fmt.tprintf(
-				"render: %d draws (%d calls), %dk triangles; world %d meshes, %d drawn, vertices %.1f%% of %d M",
+				"render: %d draws (%d calls), %dk tris; %d meshes, %d drawn (verts %.1f%%)",
 				app.g.draws.calls,
 				app.g.draws.api_calls,
 				app.g.draws.triangles / 1000,
 				ws.meshes,
 				ws.drawn,
 				100 * f64(ws.vertices_used) / f64(engine.CHUNK_VERTEX_CAPACITY),
-				engine.CHUNK_VERTEX_CAPACITY >> 20,
 			),
 		)
 		memory := gpu.memory_report(&app.g)
@@ -127,19 +147,28 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 				f64(memory.budget) / (1 << 20),
 			)
 		}
-		append(
-			&lines,
-			fmt.tprintf("%s; uploads %.1f KiB this frame", vram, f64(ws.uploaded_bytes) / 1024),
+		overlay_append(
+			&left_lines,
+			fmt.tprintf("%s; uploads %.1f KiB", vram, f64(ws.uploaded_bytes) / 1024),
 		)
+
+		// Right column: Server, network, prediction & desync diagnostics
 		if s.remote {
 			c := &s.link.conn
-			append(
-				&lines,
+			overlay_append(
+				&right_lines,
 				fmt.tprintf(
-					"server: %s, %d other players, %d entities, link rtt %.0f ms, packets %d out / %d in, %d resent, %d duplicates",
+					"server: %s (remote), %d players, %d entities",
 					net.endpoint_to_string(s.link.server),
-					len(s.others),
+					len(s.others) + 1,
 					len(s.entities),
+				),
+				t.meter_fill,
+			)
+			overlay_append(
+				&right_lines,
+				fmt.tprintf(
+					"net: RTT %.0f ms, packets %d out / %d in, %d resent, %d dups",
 					c.rtt_ms,
 					c.stats.packets_sent,
 					c.stats.packets_received,
@@ -149,44 +178,115 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			)
 		} else {
 			st := core.stats(&s.server)
-			append(
-				&lines,
+			tps := 1000.0 / max(st.tick_ms, 1.0)
+			if tps > 20.0 {tps = 20.0}
+
+			tick_color: Maybe(ui.Color) = t.success
+			if st.tick_ms > 100.0 {
+				tick_color = t.log_error
+			} else if st.tick_ms > 50.0 {
+				tick_color = t.log_warn
+			}
+
+			overlay_append(
+				&right_lines,
 				fmt.tprintf(
-					"server: tick %.2f ms, %d chunks (%d generating), %d block updates waiting, arrays %.1f MiB, arena %.1f MiB, %d players, %d entities near%s",
+					"server: tick %.2f ms (%.1f TPS / 20)%s",
 					st.tick_ms,
+					tps,
+					fmt.tprintf(", port %d", st.port) if st.port != 0 else "",
+				),
+				tick_color,
+			)
+
+			// Breakdown of slowest server tick phases:
+			if st.slowest_phase_n > 0 {
+				pb := strings.builder_make(context.temp_allocator)
+				for i in 0 ..< st.slowest_phase_n {
+					phase := st.slowest_phases[i]
+					if i > 0 {strings.write_string(&pb, ", ")}
+					fmt.sbprintf(&pb, "%s %.0fms", phase.name, phase.ms)
+				}
+				phase_color: Maybe(ui.Color) = t.log_warn if st.tick_ms > 50.0 else nil
+				overlay_append(
+					&right_lines,
+					fmt.tprintf("phases: %s", strings.to_string(pb)),
+					phase_color,
+				)
+			}
+
+			overlay_append(
+				&right_lines,
+				fmt.tprintf(
+					"chunks: %d loaded (%d generating), %d block updates waiting",
 					st.chunks_loaded,
 					st.chunks_generating,
 					st.updates_waiting,
-					f64(st.arrays_bytes) / (1 << 20),
-					f64(st.arena_used) / (1 << 20),
-					st.clients,
-					len(s.entities),
-					fmt.tprintf(", LAN port %d", st.port) if st.port != 0 else "",
 				),
 			)
+			overlay_append(
+				&right_lines,
+				fmt.tprintf(
+					"server mem: arrays %.1f MiB, arena %.1f MiB, %d worlds",
+					f64(st.arrays_bytes) / (1 << 20),
+					f64(st.arena_used) / (1 << 20),
+					st.worlds,
+				),
+			)
+			overlay_append(
+				&right_lines,
+				fmt.tprintf("entities: %d near, %d players online", len(s.entities), st.clients),
+			)
 		}
-		append(&lines, net_line(s))
-		append(&lines, fmt.tprintf("island: %d (%d chunks)", s.island.id, s.island.chunks))
+
+		overlay_append(&right_lines, net_line(s))
+		overlay_append(
+			&right_lines,
+			fmt.tprintf("island: %d (%d chunks)", s.island.id, s.island.chunks),
+		)
+
 		pr := &s.prediction
-		append(
-			&lines,
+		err_dist := math.sqrt(
+			pr.error.x * pr.error.x + pr.error.y * pr.error.y + pr.error.z * pr.error.z,
+		)
+		pred_color: Maybe(ui.Color) = nil
+		if pr.corrections > 0 || err_dist > 0.05 {
+			pred_color = t.log_warn
+		}
+		overlay_append(
+			&right_lines,
 			fmt.tprintf(
-				"player: %s%s, inputs in flight %d, corrections %d (now %.2f blocks off)",
+				"prediction: %s%s, in flight %d",
 				"flying" if pr.state.flying else "walking",
 				", on ground" if pr.state.on_ground else "",
 				pr.count,
-				pr.corrections,
-				math.sqrt(
-					pr.error.x * pr.error.x + pr.error.y * pr.error.y + pr.error.z * pr.error.z,
-				),
 			),
+			pred_color,
 		)
+
+		if !s.remote {
+			st := core.stats(&s.server)
+			desync_color: Maybe(ui.Color) = nil
+			if st.desyncs > 0 || pr.corrections > 0 {
+				desync_color = t.log_error
+			}
+			overlay_append(
+				&right_lines,
+				fmt.tprintf(
+					"desyncs: %d detected, corrections %d (error %.2f m)",
+					st.desyncs,
+					pr.corrections,
+					err_dist,
+				),
+				desync_color,
+			)
+		}
 	}
 	a := audio.stats(app.mixer)
-	append(
-		&lines,
+	overlay_append(
+		&left_lines,
 		fmt.tprintf(
-			"audio: %s, %d voices (%d real), %d sounds played, %d dropped, %.1f LUFS",
+			"audio: %s, %d voices (%d real), %d played, %d dropped, %.1f LUFS",
 			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "no device (silent)",
 			a.voices,
 			a.real,
@@ -195,12 +295,38 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			a.momentary,
 		),
 	)
-	t := &ctx.theme
-	r := ctx.screen
-	r = ui.cut_top(&r, f32(len(lines)) * t.row_height + 8)
-	ui.fill_rect(ctx, r, t.menu_fill)
-	r = ui.rect_shrink(r, 4)
-	for line in lines {ui.label(ctx, line, ui.cut_top(&r, t.row_height), .Left)}
+
+	// Left column rendering:
+	if len(left_lines) > 0 {
+		col_w := min(ctx.screen.w * 0.48, 540)
+		r := ui.Rect {
+			x = ctx.screen.x + 4,
+			y = ctx.screen.y + 4,
+			w = col_w,
+			h = f32(len(left_lines)) * t.row_height + 8,
+		}
+		ui.fill_rect(ctx, r, t.menu_fill)
+		inner := ui.rect_shrink(r, 4)
+		for line in left_lines {
+			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Left, line.color)
+		}
+	}
+
+	// Right column rendering:
+	if len(right_lines) > 0 {
+		col_w := min(ctx.screen.w * 0.48, 540)
+		r := ui.Rect {
+			x = ctx.screen.x + ctx.screen.w - col_w - 4,
+			y = ctx.screen.y + 4,
+			w = col_w,
+			h = f32(len(right_lines)) * t.row_height + 8,
+		}
+		ui.fill_rect(ctx, r, t.menu_fill)
+		inner := ui.rect_shrink(r, 4)
+		for line in right_lines {
+			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Left, line.color)
+		}
+	}
 }
 
 // tuning_panel (F4): every variable, live; for tuning by feel.
