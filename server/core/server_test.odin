@@ -892,3 +892,26 @@ test_server_deadline_and_have_time :: proc(t: ^testing.T) {
 	s.tick_deadline = time.tick_add(mock_now, -5 * time.Millisecond)
 	testing.expect(t, !have_time(&s, 0, mock_now), "past deadline has no time")
 }
+
+@(test)
+test_server_mspt_ring_buffer :: proc(t: ^testing.T) {
+	s: Server
+	avg, mx := tick_times_record(&s, 10)
+	testing.expect_value(t, avg, 10)
+	testing.expect_value(t, mx, 10)
+
+	avg, mx = tick_times_record(&s, 20)
+	testing.expect_value(t, avg, 15)
+	testing.expect_value(t, mx, 20)
+
+	avg, mx = tick_times_record(&s, 30)
+	testing.expect_value(t, avg, 20)
+	testing.expect_value(t, mx, 30)
+
+	// Record 150 ticks at 12 ms each to test full ring wrap-around
+	for _ in 0 ..< 150 {
+		avg, mx = tick_times_record(&s, 12)
+	}
+	testing.expect_value(t, avg, 12)
+	testing.expect_value(t, mx, 12)
+}

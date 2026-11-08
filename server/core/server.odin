@@ -99,6 +99,8 @@ Stats :: struct {
 	tick:              u64,
 	tick_ms:           f32,
 	tick_cpu_ms:       f32, // the server thread's CPU time in the tick: what a budget test judges
+	tick_ms_avg:       f32, // rolling 100-tick average MSPT
+	tick_ms_max:       f32, // rolling 100-tick peak MSPT
 	chunks_loaded:     int,
 	chunks_generating: int,
 	arrays_allocated:  int,
@@ -148,6 +150,10 @@ Server :: struct {
 	overload_warn:     time.Tick, // when an overload warning was last logged
 	watchdog_thread:   ^Thread, // monitors tick responsiveness
 	watchdog_stopping: bool, // (atomic)
+	tick_times:        [100]f32, // rolling 100-sample MSPT ring buffer
+	tick_times_head:   int,
+	tick_times_count:  int,
+	tick_times_sum:    f32,
 	// Server thread only, after start:
 	arena:             virtual.Arena,
 	home:              ^World, // the universe's first world (always loaded)
@@ -1059,13 +1065,40 @@ update_info :: proc(s: ^Server) {
 }
 
 @(private)
+tick_times_record :: proc(s: ^Server, tick_ms: f32) -> (avg_ms, max_ms: f32) {
+	if s.tick_times_count < len(s.tick_times) {
+		s.tick_times[s.tick_times_head] = tick_ms
+		s.tick_times_sum += tick_ms
+		s.tick_times_count += 1
+		s.tick_times_head = (s.tick_times_head + 1) % len(s.tick_times)
+	} else {
+		old := s.tick_times[s.tick_times_head]
+		s.tick_times[s.tick_times_head] = tick_ms
+		s.tick_times_sum = s.tick_times_sum - old + tick_ms
+		s.tick_times_head = (s.tick_times_head + 1) % len(s.tick_times)
+	}
+	avg_ms = s.tick_times_sum / f32(max(1, s.tick_times_count))
+	for t in s.tick_times[:s.tick_times_count] {
+		max_ms = max(max_ms, t)
+	}
+	return
+}
+
+@(private)
 publish_stats :: proc(s: ^Server, tick_ms, tick_cpu_ms: f32) {
 	playing := 0
 	for c in s.clients {if c.state == .Playing {playing += 1}}
+	avg_ms: f32 = 0
+	max_ms: f32 = 0
+	if !s.config.stepped {
+		avg_ms, max_ms = tick_times_record(s, tick_ms)
+	}
 	st := Stats {
 		tick           = s.tick,
 		tick_ms        = tick_ms,
 		tick_cpu_ms    = tick_cpu_ms,
+		tick_ms_avg    = avg_ms,
+		tick_ms_max    = max_ms,
 		arena_used     = s.arena.total_used,
 		arena_reserved = s.arena.total_reserved,
 		clients        = playing,
