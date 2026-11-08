@@ -87,6 +87,11 @@ DEFAULT_MAX_PLAYERS :: 8
 // anyone wants it (a client's moves free what it left as it goes).
 UNLOAD_SWEEP_TICKS :: game.TICK_RATE * 10
 
+Phase_Timing :: struct {
+	name: string,
+	ms:   f32,
+}
+
 // Stats is a snapshot, published at the end of every tick.
 Stats :: struct {
 	tick:              u64,
@@ -107,13 +112,16 @@ Stats :: struct {
 	desyncs:           int, // prediction checks that differed
 	checks_judged:     int, // prediction checks compared
 	checks_skipped:    int, // ... and skipped (not quiet)
+	slowest_phases:    [4]Phase_Timing,
+	slowest_phase_n:   int,
 }
 
 Server :: struct {
 	// The phases of the tick being run (slow-tick diagnosis: server_main logs
 	// them when a tick takes SLOW_TICK or longer).
-	tick_marks:     [8]Tick_Mark,
+	tick_marks:     [16]Tick_Mark,
 	tick_mark_n:    int,
+	tick_start:     time.Tick,
 	slow_logged:    time.Tick, // when a slow tick was last logged
 	config:         Config,
 	capacity:       int, // chunks
@@ -438,11 +446,10 @@ slow_tick_log :: proc(s: ^Server, start: time.Tick, took: time.Duration) {
 		)
 		from = m.at
 	}
-	fmt.sbprintf(
-		&b,
-		" clients_and_network=%.0fms",
-		time.duration_milliseconds(time.tick_diff(from, time.tick_add(start, took))),
-	)
+	if took_ms := time.duration_milliseconds(time.tick_diff(from, time.tick_add(start, took)));
+	   took_ms > 0.5 {
+		fmt.sbprintf(&b, " tail=%.0fms", took_ms)
+	}
 	log.warnf(
 		"server slow tick tick=%d ms=%.0f%s",
 		s.tick,
@@ -461,6 +468,7 @@ server_main :: proc(t: ^thread.Thread) {
 	next := time.tick_now()
 	for !sync.atomic_load(&s.stopping) {
 		start := time.tick_now()
+		s.tick_start = start
 		cpu := base.thread_cpu_us()
 		s.tick_mark_n = 0
 		tick(s)
@@ -562,6 +570,7 @@ tick :: proc(s: ^Server) {
 	tick_mark(s, "players")
 	player_entities_release(s)
 	for w in s.worlds {islands_update(s, w)}
+	tick_mark(s, "islands")
 	{
 		base.profile_scope("unload idle worlds and audit")
 		worlds_unload_idle(s)
@@ -576,24 +585,41 @@ tick :: proc(s: ^Server) {
 			base.profile_scope("unload unwanted")
 			unload_unwanted(w)
 		}
+	}
+	tick_mark(s, "unloads")
+	for w in s.worlds {
 		if !frozen {
 			sim_run_scheduled(w)
-			{
-				base.profile_scope("random ticks")
-				random_ticks(w)
-			}
+		}
+	}
+	tick_mark(s, "block_updates")
+	for w in s.worlds {
+		if !frozen {
+			base.profile_scope("random ticks")
+			random_ticks(w)
+		}
+	}
+	tick_mark(s, "random_ticks")
+	for w in s.worlds {
+		if !frozen {
 			entities_tick(w)
 			{
 				base.profile_scope("containers")
 				containers_tick(w)
 			}
 		}
+	}
+	tick_mark(s, "entities")
+	for w in s.worlds {
 		rewind: {
 			base.profile_scope("rewind, gates and rollback")
 			rewind_record(s, w)
 			gates_tick(w)
 			rollback_tick(w)
 		}
+	}
+	tick_mark(s, "rewind_and_gates")
+	for w in s.worlds {
 		{
 			base.profile_scope("changes flush")
 			changes_flush(w)
@@ -603,7 +629,7 @@ tick :: proc(s: ^Server) {
 			journal_tick(w)
 		}
 	}
-	tick_mark(s, "worlds")
+	tick_mark(s, "changes_and_journal")
 	sent := 0
 	for &c in s.clients {
 		if c.state != .Playing {continue}
@@ -629,6 +655,7 @@ tick :: proc(s: ^Server) {
 		base.profile_scope("network flush")
 		netcode.host_flush(&s.host, server_now(s))
 	}
+	tick_mark(s, "network_and_packs")
 }
 
 // receive_messages handles what every player sent since the last tick: the
@@ -986,6 +1013,30 @@ publish_stats :: proc(s: ^Server, tick_ms, tick_cpu_ms: f32) {
 		st.arena_used += w.arena.total_used
 		st.arena_reserved += w.arena.total_reserved
 		st.updates_waiting += w.updates.count
+	}
+	phases: [16]Phase_Timing
+	pn := 0
+	if s.tick_start != {} {
+		from := s.tick_start
+		for m in s.tick_marks[:s.tick_mark_n] {
+			dur := f32(time.duration_milliseconds(time.tick_diff(from, m.at)))
+			from = m.at
+			if dur > 0.05 && pn < len(phases) {
+				phases[pn] = {m.name, dur}
+				pn += 1
+			}
+		}
+		for i in 0 ..< pn {
+			for j := i + 1; j < pn; j += 1 {
+				if phases[j].ms > phases[i].ms {
+					phases[i], phases[j] = phases[j], phases[i]
+				}
+			}
+		}
+		for i in 0 ..< min(pn, len(st.slowest_phases)) {
+			st.slowest_phases[i] = phases[i]
+			st.slowest_phase_n += 1
+		}
 	}
 	sync.guard(&s.stats_mutex)
 	// Sorting the window for percentiles: once a second is enough (the
