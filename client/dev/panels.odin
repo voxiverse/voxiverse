@@ -22,19 +22,11 @@ net_line :: proc(s: ^engine.Session) -> string {
 		for b in t.bytes {bytes += b}
 		return
 	}
-	busiest :: proc(t: game.Traffic, sender: game.Side) -> string {
-		best := 0
-		for m, k in t.messages {if m > t.messages[best] {best = k}}
-		if t.messages[best] == 0 {return "-"}
-		return fmt.tprintf("%s %d/s", game.message_kind_name(sender, u8(best)), t.messages[best])
-	}
 	return fmt.tprintf(
-		"net: rtt %.0f ms, down %.1f KB/s (%s), up %.2f KB/s (%s)%s",
+		"net: RTT %.0f ms, down %.1f KB/s, up %.1f KB/s%s",
 		n.rtt_ms,
 		f64(total(n.rates[.Server])) / 1000,
-		busiest(n.rates[.Server], .Server),
 		f64(total(n.rates[.Client])) / 1000,
-		busiest(n.rates[.Client], .Client),
 		", tracing" if game.pipe_tracing(&s.pipe) else "",
 	)
 }
@@ -107,7 +99,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		overlay_append(
 			&left_lines,
 			fmt.tprintf(
-				"client: %d/%d chunks, arrays %.1f MiB, meshing %d (%d waiting), bulk %d, arena %.1f MiB",
+				"client: %d/%d chunks, arrays %.1f MiB, mesh %d (%d wait), bulk %d, arena %.1f MiB",
 				w.chunks.count,
 				len(w.chunks.items) - 1,
 				f64(w.arrays.committed) / (1 << 20),
@@ -128,12 +120,12 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		overlay_append(
 			&left_lines,
 			fmt.tprintf(
-				"render: %d draws (%d calls), %dk tris; %d meshes, %d drawn (verts %.1f%%)",
+				"render: %d draws (%d calls), %dk tris; %d/%d meshes (verts %.1f%%)",
 				app.g.draws.calls,
 				app.g.draws.api_calls,
 				app.g.draws.triangles / 1000,
-				ws.meshes,
 				ws.drawn,
+				ws.meshes,
 				100 * f64(ws.vertices_used) / f64(engine.CHUNK_VERTEX_CAPACITY),
 			),
 		)
@@ -227,10 +219,9 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			overlay_append(
 				&right_lines,
 				fmt.tprintf(
-					"server mem: arrays %.1f MiB, arena %.1f MiB, %d worlds",
+					"server mem: arrays %.1f MiB, arena %.1f MiB",
 					f64(st.arrays_bytes) / (1 << 20),
 					f64(st.arena_used) / (1 << 20),
-					st.worlds,
 				),
 			)
 			overlay_append(
@@ -273,7 +264,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			overlay_append(
 				&right_lines,
 				fmt.tprintf(
-					"desyncs: %d detected, corrections %d (error %.2f m)",
+					"desyncs: %d, corrections %d (error %.2f m)",
 					st.desyncs,
 					pr.corrections,
 					err_dist,
@@ -286,8 +277,8 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	overlay_append(
 		&left_lines,
 		fmt.tprintf(
-			"audio: %s, %d voices (%d real), %d played, %d dropped, %.1f LUFS",
-			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "no device (silent)",
+			"audio: %s, voices %d (%d real), played %d, dropped %d, %.1f LUFS",
+			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "silent",
 			a.voices,
 			a.real,
 			a.played,
@@ -298,7 +289,12 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 
 	// Left column rendering:
 	if len(left_lines) > 0 {
-		col_w := min(ctx.screen.w * 0.48, 540)
+		max_w: f32 = 0
+		for line in left_lines {
+			w := ui.measure_text(ctx, line.text, t.font_size)
+			if w > max_w {max_w = w}
+		}
+		col_w := clamp(max_w + 16, 200, ctx.screen.w * 0.48)
 		r := ui.Rect {
 			x = ctx.screen.x + 4,
 			y = ctx.screen.y + 4,
@@ -314,7 +310,12 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 
 	// Right column rendering:
 	if len(right_lines) > 0 {
-		col_w := min(ctx.screen.w * 0.48, 540)
+		max_w: f32 = 0
+		for line in right_lines {
+			w := ui.measure_text(ctx, line.text, t.font_size)
+			if w > max_w {max_w = w}
+		}
+		col_w := clamp(max_w + 16, 200, ctx.screen.w * 0.48)
 		r := ui.Rect {
 			x = ctx.screen.x + ctx.screen.w - col_w - 4,
 			y = ctx.screen.y + 4,
@@ -324,7 +325,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.fill_rect(ctx, r, t.menu_fill)
 		inner := ui.rect_shrink(r, 4)
 		for line in right_lines {
-			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Left, line.color)
+			ui.label(ctx, line.text, ui.cut_top(&inner, t.row_height), .Right, line.color)
 		}
 	}
 }
