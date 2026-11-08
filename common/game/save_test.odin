@@ -186,3 +186,35 @@ test_chunk_payload_keeps_waiting_updates :: proc(t: ^testing.T) {
 	read_chunk_payload(&r, scratch, &entities)
 	testing.expect(t, !reader_finish(&r), "a cell past the chunk was accepted")
 }
+
+@(test)
+test_chunk_blocks_uniform_array_encodes_compact :: proc(t: ^testing.T) {
+	arr := new(Block_Array, context.temp_allocator)
+	for &b in arr {b = .Stone}
+
+	blocks := Chunk_Blocks {
+		array = arr,
+	}
+	w: Writer
+	writer_init(&w, context.temp_allocator)
+	write_chunk_blocks(&w, &blocks)
+	testing.expect_value(t, len(w.buf), 3) // 1 byte Uniform + 2 bytes Block id
+
+	r := reader_make(w.buf[:])
+	r.block_limit = 1000
+	scratch := new(Block_Array, context.temp_allocator)
+	uniform, is_uniform := read_chunk_blocks(&r, scratch)
+	testing.expect(t, is_uniform, "uniform array should decode as uniform chunk")
+	testing.expect_value(t, uniform, Block.Stone)
+
+	// One differing block switches to palette runs encoding
+	arr[42] = .Dirt
+	clear(&w.buf)
+	write_chunk_blocks(&w, &blocks)
+	testing.expect(t, len(w.buf) > 3, "mixed chunk must not encode as uniform")
+	r = reader_make(w.buf[:])
+	r.block_limit = 1000
+	uniform, is_uniform = read_chunk_blocks(&r, scratch)
+	testing.expect(t, !is_uniform, "mixed chunk must not report uniform")
+	testing.expect_value(t, scratch[42], Block.Dirt)
+}

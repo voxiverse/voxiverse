@@ -300,6 +300,19 @@ write_chunk_blocks :: proc(w: ^Writer, c: ^Chunk_Blocks) {
 		write_u16(w, u16(c.uniform))
 		return
 	}
+	first := c.array[0]
+	is_uniform := true
+	for b in c.array[1:] {
+		if b != first {
+			is_uniform = false
+			break
+		}
+	}
+	if is_uniform {
+		write_u8(w, u8(Chunk_Encoding.Uniform))
+		write_u16(w, u16(first))
+		return
+	}
 	write_u8(w, u8(Chunk_Encoding.Palette_Runs))
 	slot: [MAX_BLOCK_STATES]u16 // palette index + 1, 0 = not in the palette
 	palette: [MAX_BLOCK_STATES]Block
