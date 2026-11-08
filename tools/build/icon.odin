@@ -17,8 +17,11 @@ ICON_SIZES :: [7]int{16, 24, 32, 48, 64, 128, 256}
 ICON_FONT := #load("../../assets/fonts/jetbrains_mono_regular.ttf")
 
 // write_icon writes build/voxiverse.ico, build/icon-<size>.png for each size and
-// build/icon.png (the 256).
-write_icon :: proc() -> bool {
+// build/icon.png (the 256). Skips if files already exist unless force is true.
+write_icon :: proc(force := false) -> bool {
+	if !force && os.exists("build/voxiverse.ico") && os.exists("build/icon.png") {
+		return true
+	}
 	f, font_ok := font.load(ICON_FONT)
 	if !font_ok {
 		fmt.eprintln("build: icon: cannot read the font")

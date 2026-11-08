@@ -173,7 +173,7 @@ AUDIO_BASELINES :: []Audio_Baseline_Run {
 }
 GAME_NAME :: "voxiverse"
 SERVER_PACKAGE :: "server/dedicated"
-SMOKE_PACKAGE :: "tests"
+SYSTEM_PACKAGE :: "tests"
 SERVER_NAME :: "voxiverse-server"
 
 SHADER_DIR :: "assets/shaders"
@@ -210,7 +210,7 @@ main :: proc() {
 	switch args[0] {
 	case "check",
 	     "test",
-	     "smoke",
+	     "system",
 	     "fuzz",
 	     "build",
 	     "determinism",
@@ -233,8 +233,8 @@ main :: proc() {
 		ok = check()
 	case "test":
 		ok = test(args[1:])
-	case "smoke":
-		ok = smoke()
+	case "system":
+		ok = system()
 	case "determinism":
 		ok = determinism(args[1:])
 	case "fmt":
@@ -244,13 +244,11 @@ main :: proc() {
 	case "lavapipe":
 		ok = lavapipe()
 	case "icon":
-		ok = write_icon()
+		ok = write_icon(force = true)
 	case "build":
 		_, ok = build_game(args[1:])
 	case "package":
 		ok = package_game()
-	case "steam":
-		ok = steam(args[1:])
 	case "run":
 		ok = run_game(args[1:])
 	case "serve":
@@ -338,7 +336,7 @@ usage :: proc() {
 		"            (each option set keeps its own binary and log: build/test/<package>.speed, .address, .thread)",
 	)
 	fmt.println(
-		"  smoke     run the smoke suite (real threads, sockets, audio devices, child processes), one test at a time",
+		"  system    run the system test suite (real threads, sockets, audio devices, child processes), one test at a time",
 	)
 	fmt.println(
 		"  determinism  run the scripted session at -o:minimal and -o:speed and compare the logs (--compare <dir>: every log in a directory)",
@@ -418,9 +416,6 @@ usage :: proc() {
 		"              --profile    writing a Spall trace (with --release for real numbers)",
 	)
 	fmt.println("  package   a release package for this platform in build/dist/")
-	fmt.println(
-		"  steam     lay out the Steam depots and their VDF scripts in build/steam/ from the three packages in build/dist/ (or a folder given)",
-	)
 	fmt.println("  run       build, then run it; arguments after -- go to the game")
 	fmt.println("  serve     build, then run the dedicated server; arguments after -- go to it")
 	fmt.println(
@@ -517,16 +512,18 @@ build_game :: proc(
 		append(&game_extra, "-extra-linker-flags:-Wl,-rpath,@executable_path/../Frameworks")
 		append(&server_extra, "-minimum-os-version:" + MACOS_MINIMUM)
 	}
-	// Windows: the icon and version information linked in.
+	// Windows: the icon and version information linked in (release or windowed).
 	when ODIN_OS == .Windows {
-		if client {
-			rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
-			append(&game_extra, strings.concatenate({"-resource:", rc}))
-			if windowed {append(&game_extra, "-subsystem:windows")}
-		}
-		if server {
-			rc := windows_resource(v, SERVER_NAME, "Voxiverse server") or_return
-			append(&server_extra, strings.concatenate({"-resource:", rc}))
+		if profile == .Release || windowed {
+			if client {
+				rc := windows_resource(v, GAME_NAME, "Voxiverse") or_return
+				append(&game_extra, strings.concatenate({"-resource:", rc}))
+				if windowed {append(&game_extra, "-subsystem:windows")}
+			}
+			if server {
+				rc := windows_resource(v, SERVER_NAME, "Voxiverse server") or_return
+				append(&server_extra, strings.concatenate({"-resource:", rc}))
+			}
 		}
 	}
 	cmd, server_cmd: []string
@@ -730,8 +727,13 @@ check :: proc() -> bool {
 		)
 	}
 	// CI builds every Tier 1 target natively in its own job: VX_CI skips the cross builds.
+	// Local checks skip cross builds unless explicitly requested (VX_CROSS=1 or `check --cross`).
+	cross := os.get_env("VX_CROSS", context.temp_allocator) == "1"
+	for arg in os.args[1:] {
+		if arg == "--cross" {cross = true; break}
+	}
 	ok := true
-	if os.get_env("VX_CI", context.temp_allocator) != "1" {ok = cross_jobs(&jobs)}
+	if cross && os.get_env("VX_CI", context.temp_allocator) != "1" {ok = cross_jobs(&jobs)}
 	ok = run_checks(jobs[:]) && ok
 	return(
 		determinism_lint() &&
@@ -1133,10 +1135,10 @@ test :: proc(args: []string) -> bool {
 	return test_packages(packages, {}, jobs_width(), opts)
 }
 
-// smoke runs the smoke suite on one thread: its tests start threads, sockets and clocks of
+// system runs the system test suite on one thread: its tests start threads, sockets and clocks of
 // their own, and two at once would only compete for the machine.
-smoke :: proc() -> bool {
-	return test_packages({SMOKE_PACKAGE}, {"-define:ODIN_TEST_THREADS=1"}, 1, {})
+system :: proc() -> bool {
+	return test_packages({SYSTEM_PACKAGE}, {"-define:ODIN_TEST_THREADS=1"}, 1, {})
 }
 
 // test_name: the file name a test package's binary, log and timing are kept under: its
@@ -1612,9 +1614,25 @@ shaders :: proc() -> bool {
 	os.make_directory_all(SHADER_OUT_DIR)
 	ok := true
 	compiled := 0
+
+	newest_glsl_nsec: i64 = 0
+	for src in sources {
+		if filepath.ext(src.name) == ".glsl" {
+			if src.modification_time._nsec > newest_glsl_nsec {
+				newest_glsl_nsec = src.modification_time._nsec
+			}
+		}
+	}
+
 	for src in sources {
 		if !slice.contains(SHADER_EXTS, filepath.ext(src.name)) {continue}
 		out := path_join({SHADER_OUT_DIR, strings.concatenate({src.name, ".spv"})})
+		out_info, out_err := os.stat(out, context.temp_allocator)
+		if out_err == nil &&
+		   out_info.modification_time._nsec >= src.modification_time._nsec &&
+		   out_info.modification_time._nsec >= newest_glsl_nsec {
+			continue
+		}
 		cmd := []string {
 			glslang,
 			"-V",
@@ -1790,6 +1808,13 @@ bench :: proc(args: []string) -> bool {
 	}
 	scenario := args[0]
 	if scenario == "compare" {return bench_compare(args[1:])}
+	if scenario == "--check" || scenario == "-check" || scenario == "check" {
+		if !run_tool("bench", {"-check"}) {return false}
+		if !run_tool("bench", {"telemetry", "-check"}) {return false}
+		if !run_tool("bench", {"budgets", "-check"}) {return false}
+		if !run_tool("bench", {"script", "-check"}) {return false}
+		return true
+	}
 	if scenario == "chunks" {return run_tool("bench", args[1:])}
 	if scenario == "telemetry" ||
 	   scenario == "budgets" ||

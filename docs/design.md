@@ -212,7 +212,7 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
   threads share them; an `#assert` on the count says when a case lacks its test.
 - **CI uses exactly the same path.** Its Linux checks are three parallel
-  jobs, "Test · Linux x64" (check, tests, determinism, the smoke suite, the fuzz smoke run),
+  jobs, "Test · Linux x64" (check, tests, determinism, the system test suite, the fuzz regression run),
   "Game · Linux x64" (the scenario checks: benchmarks, fuzz, flight, culling, audio,
   multiplayer, crash handler, printers) and "Game · Linux x64, images" (visual baselines,
   AddressSanitizer, profiling, screens, sky and held items); macOS and Windows run one job
