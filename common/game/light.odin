@@ -91,26 +91,34 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 	// Open sky: everything above a column's top is air at full sky light.
 	// Spreading sideways starts only where a column's sky meets a taller
 	// neighbour's shade: from just above this top up to the neighbour's.
+	LIGHT_PLANE :: LIGHT_REGION * LIGHT_REGION
 	for z in i32(0) ..< LIGHT_REGION {
 		for x in i32(0) ..< LIGHT_REGION {
 			first := sky_start(input, region_origin, x, z) // local y of the lowest sky cell
-			for y in max(first, 0) ..< LIGHT_REGION {
-				i := region_index({x, y, z})
-				if !s.solid[i] {s.light[i] |= LIGHT_MAX << 4}
+			y0 := max(first, 0)
+			xz := int(x) + int(z) * LIGHT_REGION
+			sky_i := xz + int(y0) * LIGHT_PLANE
+			for _ in y0 ..< LIGHT_REGION {
+				if !s.solid[sky_i] {s.light[sky_i] |= LIGHT_MAX << 4}
+				sky_i += LIGHT_PLANE
 			}
 			highest := first - 1
 			// Seeping down into the top itself when it lets light through.
 			if first - 1 >= 0 &&
 			   first - 1 < LIGHT_REGION &&
-			   !s.solid[region_index({x, first - 1, z})] {highest = max(highest, first)}
+			   !s.solid[xz + int(first - 1) * LIGHT_PLANE] {highest = max(highest, first)}
 			for d in ([4][2]i32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 				nx, nz := x + d[0], z + d[1]
 				if nx < 0 || nz < 0 || nx >= LIGHT_REGION || nz >= LIGHT_REGION {continue}
 				highest = max(highest, sky_start(input, region_origin, nx, nz) - 1)
 			}
-			for y in max(first, 0) ..= min(highest, LIGHT_REGION - 1) {
-				i := region_index({x, y, z})
-				if !s.solid[i] {append(&s.queue, u32(i))}
+			y_high := min(highest, LIGHT_REGION - 1)
+			if y0 <= y_high {
+				q_i := xz + int(y0) * LIGHT_PLANE
+				for _ in y0 ..= y_high {
+					if !s.solid[q_i] {append(&s.queue, u32(q_i))}
+					q_i += LIGHT_PLANE
+				}
 			}
 		}
 	}
@@ -119,21 +127,21 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 		i := int(s.queue[head])
 		l := s.light[i]
 		sky, block := l >> 4, l & 15
-		p := region_pos(i)
-		for d in NEIGHBOURS {
-			n := p + d
-			if !in_region(n) {continue}
-			j := region_index(n)
-			if s.solid[j] {continue}
-			old := s.light[j]
-			new_sky := max(old >> 4, sky - 1 if sky > 0 else 0)
-			new_block := max(old & 15, block - 1 if block > 0 else 0)
-			new := new_sky << 4 | new_block
-			if new != old {
-				s.light[j] = new
-				append(&s.queue, u32(j))
-			}
-		}
+		if sky <= 1 && block <= 1 {continue}
+		target_sky := sky - 1 if sky > 0 else 0
+		target_block := block - 1 if block > 0 else 0
+
+		y := i / LIGHT_PLANE
+		rem := i - y * LIGHT_PLANE
+		z := rem / LIGHT_REGION
+		x := rem - z * LIGHT_REGION
+
+		if x > 0 {step_neighbor(s, i - 1, target_sky, target_block)}
+		if x < LIGHT_REGION - 1 {step_neighbor(s, i + 1, target_sky, target_block)}
+		if z > 0 {step_neighbor(s, i - LIGHT_REGION, target_sky, target_block)}
+		if z < LIGHT_REGION - 1 {step_neighbor(s, i + LIGHT_REGION, target_sky, target_block)}
+		if y > 0 {step_neighbor(s, i - LIGHT_PLANE, target_sky, target_block)}
+		if y < LIGHT_REGION - 1 {step_neighbor(s, i + LIGHT_PLANE, target_sky, target_block)}
 	}
 	// The centre chunk and its border.
 	for y in 0 ..< LIGHT_OUT {
@@ -146,6 +154,18 @@ light_chunk :: proc(input: ^Light_Input, s: ^Light_Scratch, out: ^[LIGHT_OUT_VOL
 	}
 }
 
+@(private = "file")
+step_neighbor :: #force_inline proc(s: ^Light_Scratch, j: int, target_sky, target_block: u8) {
+	if s.solid[j] {return}
+	old := s.light[j]
+	old_sky, old_block := old >> 4, old & 15
+	if old_sky >= target_sky && old_block >= target_block {return}
+	new_sky := max(old_sky, target_sky)
+	new_block := max(old_block, target_block)
+	s.light[j] = new_sky << 4 | new_block
+	append(&s.queue, u32(j))
+}
+
 // sky_start is the local y (in the region) of a column's lowest open-sky
 // cell: just above its top.
 @(private = "file")
@@ -155,31 +175,7 @@ sky_start :: #force_inline proc(input: ^Light_Input, region_origin: Block_Pos, x
 	return clamp(top + 1 - region_origin.y, -1, LIGHT_REGION) // -1: all of it
 }
 
-@(private = "file", rodata)
-NEIGHBOURS := [6][3]i32{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}
-
 @(private = "file")
 region_index :: #force_inline proc(p: [3]i32) -> int {
 	return int(p.x) + int(p.z) * LIGHT_REGION + int(p.y) * LIGHT_REGION * LIGHT_REGION
-}
-
-@(private = "file")
-region_pos :: #force_inline proc(i: int) -> [3]i32 {
-	return {
-		i32(i % LIGHT_REGION),
-		i32(i / (LIGHT_REGION * LIGHT_REGION)),
-		i32(i / LIGHT_REGION % LIGHT_REGION),
-	}
-}
-
-@(private = "file")
-in_region :: #force_inline proc(p: [3]i32) -> bool {
-	return(
-		p.x >= 0 &&
-		p.x < LIGHT_REGION &&
-		p.y >= 0 &&
-		p.y < LIGHT_REGION &&
-		p.z >= 0 &&
-		p.z < LIGHT_REGION \
-	)
 }
