@@ -636,29 +636,40 @@ world_remesh_all :: proc(w: ^World) {
 world_update :: proc(w: ^World, camera_chunk: game.Chunk_Pos) {
 	world_changes_settle(w) // what this frame's predictions changed
 	base.profile_scope("start meshing")
-	if len(w.to_mesh) > len(w.free_tasks) {
-		// More waiting than can start: a bulk edit's first, then the nearest.
+	if len(w.free_tasks) == 0 || len(w.to_mesh) == 0 {
+		w.stats.mesh_jobs_busy = len(w.tasks) - URGENT_TASKS - len(w.free_tasks)
+		return
+	}
+	k := min(len(w.free_tasks), len(w.to_mesh))
+	if len(w.to_mesh) > k {
+		// More waiting than can start: select the top k candidates
+		// (bulk edits first, then nearest to camera).
 		Sort :: struct {
 			w:      ^World,
 			camera: game.Chunk_Pos,
 		}
-		context.user_ptr = &Sort{w, camera_chunk}
-		slice.sort_by(
-			w.to_mesh[:],
-			proc(a, b: Chunk_Handle) -> bool {
-				s := (^Sort)(context.user_ptr)
-				ca, cb := base.pool_get(&s.w.chunks, a), base.pool_get(&s.w.chunks, b)
-				if ca == nil || cb == nil {return ca == nil && cb != nil} 	// stale first: dropped right away
-				// A hole a block change opened first, then a bulk edit's
-				// chunks (it is shown when all are done), then the nearest.
-				if ca.hurry != cb.hurry {return ca.hurry}
-				if (ca.group != 0) != (cb.group != 0) {return ca.group != 0}
-				return(
-					game.chunk_distance_sq(ca.pos, s.camera) <
-					game.chunk_distance_sq(cb.pos, s.camera) \
-				)
-			},
-		)
+		s := Sort{w, camera_chunk}
+		better :: proc(s: ^Sort, a, b: Chunk_Handle) -> bool {
+			ca, cb := base.pool_get(&s.w.chunks, a), base.pool_get(&s.w.chunks, b)
+			if ca == nil || cb == nil {return ca == nil && cb != nil}
+			if ca.hurry != cb.hurry {return ca.hurry}
+			if (ca.group != 0) != (cb.group != 0) {return ca.group != 0}
+			return(
+				game.chunk_distance_sq(ca.pos, s.camera) <
+				game.chunk_distance_sq(cb.pos, s.camera) \
+			)
+		}
+		for i in 0 ..< k {
+			best := i
+			for j in i + 1 ..< len(w.to_mesh) {
+				if better(&s, w.to_mesh[j], w.to_mesh[best]) {
+					best = j
+				}
+			}
+			if best != i {
+				w.to_mesh[i], w.to_mesh[best] = w.to_mesh[best], w.to_mesh[i]
+			}
+		}
 	}
 	started := 0
 	for started < len(w.to_mesh) && len(w.free_tasks) > 0 {
