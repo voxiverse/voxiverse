@@ -188,7 +188,7 @@ music_loudness_and_loops :: proc(t: ^testing.T, f: Music_File) {
 }
 
 // Scores written but not yet rendered or listed in MUSIC (none now).
-UNRENDERED := [?]string{}
+UNRENDERED: []string // (a slice: an empty array is dropped by the Windows linker while referenced)
 
 @(test)
 test_music_set :: proc(t: ^testing.T) {
