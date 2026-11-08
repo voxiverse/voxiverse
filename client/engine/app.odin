@@ -129,7 +129,7 @@ App :: struct {
 	devchat_seen:     u64, // replies seen (more arrived: the notice shows)
 	devchat_scroll:   f32, // entries scrolled up
 	splash:           string, // the title screen's, chosen once (screen_title.odin)
-	splash_at:        time.Tick, // when it was chosen: its transmission resolves from then
+	splash_at:        time.Tick, // when it was chosen: its stamp rings in from then
 	started:          time.Tick, // when the app began (the splash's pulse)
 	toasts:           Toasts, // the notices at the top right (overlay_toasts.odin)
 	hud_hidden:       bool, // F1: the HUD is hidden (not saved)
