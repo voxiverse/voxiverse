@@ -47,6 +47,7 @@ Options :: struct {
 	no_journal:  bool `args:"name=no-journal" usage:"with --export: leave the journal out (it names characters)"`,
 	import_file: string `args:"name=import" usage:"make the universe --universe (a directory that does not exist yet) from a .vxu file and quit"`,
 	steam:       bool `usage:"check joining players' Steam tickets and link each SteamID to its account (needs the Steamworks library beside the executable; docs/server.md)"`,
+	watchdog:    int `usage:"kill the server on a deadlocked tick (>0: seconds, default 60, 0: off)"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -66,6 +67,7 @@ main :: proc() {
 		view_radius = 12,
 		view_height = 6,
 		backups     = core.BACKUP_KEEP,
+		watchdog    = 60,
 	}
 	flags.parse_or_exit(&opts, os.args, .Unix, context.temp_allocator)
 	if opts.version {
@@ -121,19 +123,20 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 	name := opts.name
 	if name == "" {name = filepath.base(opts.universe)}
 	config := core.Config {
-		seed            = seed,
-		view_radius     = i32(clamp(opts.view_radius, 2, 32)),
-		view_height     = i32(clamp(opts.view_height, 1, 16)),
-		workers         = max(1, host.boot.cpu_count / 2),
-		everyone_cheats = opts.cheats,
-		save_dir        = opts.universe,
-		max_players     = opts.max_players,
-		listen          = true,
-		port            = opts.port,
-		password        = opts.password,
-		name            = name,
-		capture         = opts.capture,
-		backups         = max(0, opts.backups),
+		seed             = seed,
+		view_radius      = i32(clamp(opts.view_radius, 2, 32)),
+		view_height      = i32(clamp(opts.view_height, 1, 16)),
+		workers          = max(1, host.boot.cpu_count / 2),
+		everyone_cheats  = opts.cheats,
+		save_dir         = opts.universe,
+		max_players      = opts.max_players,
+		listen           = true,
+		port             = opts.port,
+		password         = opts.password,
+		name             = name,
+		capture          = opts.capture,
+		backups          = max(0, opts.backups),
+		watchdog_seconds = max(0, opts.watchdog),
 	}
 	if opts.telemetry != "" {
 		ep, err := net.resolve_ip4(opts.telemetry)
