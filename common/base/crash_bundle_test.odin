@@ -86,6 +86,9 @@ test_crash_bundle_files :: proc(t: ^testing.T) {
 	for i in 0 ..< 300 {crash_bundle_action("action", fmt.tprintf("move_%d", i))}
 	crash_bundle_set_gpu("Test GPU driver 1.0 vulkan 1.3")
 	crash_bundle_set_state("title")
+	crash_bundle_suppressed("malformed packet from peer 127.0.0.1:27315")
+	crash_bundle_suppressed("malformed packet from peer 127.0.0.1:27315")
+	crash_bundle_suppressed("disk read retry on chunk 14,-2")
 
 	track: mem.Tracking_Allocator
 	mem.tracking_allocator_init(&track, context.allocator)
@@ -108,6 +111,13 @@ test_crash_bundle_files :: proc(t: ^testing.T) {
 	for heading in ([]string{"app: game\n", "build: version=", "os: ", "cpu: ", "gpu: Test GPU driver", "uptime_s: ", "state: title\n"}) {
 		testing.expect(t, strings.contains(crash, heading), heading)
 	}
+	testing.expect(t, strings.contains(crash, "-- Suppressed Exceptions (2) --"), crash)
+	testing.expect(
+		t,
+		strings.contains(crash, "count=2] malformed packet from peer 127.0.0.1:27315"),
+		crash,
+	)
+	testing.expect(t, strings.contains(crash, "count=1] disk read retry on chunk 14,-2"), crash)
 
 	threads := read_text(dir, "threads.txt")
 	testing.expect(t, strings.has_prefix(threads, "thread tester (crashing)\n"), threads)
