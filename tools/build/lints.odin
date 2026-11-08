@@ -177,7 +177,7 @@ lint_miniaudio :: proc(path, text: string) -> []string {
 
 // lint_test_timing: no `*_test.odin` outside tests/ sleeps or reads a clock (time.sleep,
 // time.now, tick_now, tick_since): a unit test counts ticks and steps a harness; what
-// needs the real clock is a smoke test.
+// needs the real clock is a system test (tests/).
 lint_test_timing :: proc(path, text: string) -> []string {
 	found := make([dynamic]string)
 	line_no := 0
@@ -326,7 +326,7 @@ lint_ci_test_names :: proc(path, text: string, tests: []string) -> []string {
 	return found[:]
 }
 
-// test_names lists every `@(test)` proc under the first-party directories (SOURCE_DIRS' roots, and smoke) as "pkg.name".
+// test_names lists every `@(test)` proc under the first-party directories (SOURCE_DIRS' roots, and tests) as "pkg.name".
 test_names :: proc() -> (names: []string, ok: bool) {
 	out := make([dynamic]string)
 	ok = true

@@ -204,7 +204,7 @@ layout_lint :: proc() -> bool {
 // lint_package_lists: the driver's package lists stay complete. A folder holding a tracked
 // `.odin` file must be in `packages` (or `check` would never type-check it); a folder outside
 // tests/ holding an `@(test)` procedure must be in `test_packages` (or `test` would never run
-// it; tests/ and its fixtures are `build smoke`'s, by location); a test package must be a
+// it; tests/ and its fixtures are `build system`'s, by location); a test package must be a
 // package; and every such folder must lie under one of `source_dirs` (or the format check would
 // skip it). `with_tests` are the tracked files that contain an `@(test)` procedure.
 lint_package_lists :: proc(

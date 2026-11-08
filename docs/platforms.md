@@ -22,7 +22,7 @@ needs a software driver such as Mesa's lavapipe, which runs the game slowly.
 
 | Computer | Operating system and minimum version | CPU | Graphics | Download | Status |
 |---|---|---|---|---|---|
-| **Windows PC** | 64-bit Windows. The lowest supported version is not known: CI tests on the current Windows Server image, and Windows 10 and 11 are the intended versions. | 64-bit Intel/AMD | A Vulkan 1.3 driver from your GPU vendor | The `.zip` (`windows-x64`) | **Supported.** CI builds it, runs the tests and the smoke suite, and plays a world from the packaged game on a software Vulkan driver. |
+| **Windows PC** | 64-bit Windows. The lowest supported version is not known: CI tests on the current Windows Server image, and Windows 10 and 11 are the intended versions. | 64-bit Intel/AMD | A Vulkan 1.3 driver from your GPU vendor | The `.zip` (`windows-x64`) | **Supported.** CI builds it, runs the tests and the system test suite, and plays a world from the packaged game on a software Vulkan driver. |
 | **Linux PC** | A distribution with glibc 2.35 or newer (the package is built on Ubuntu 22.04, which has glibc 2.35): Ubuntu 22.04 and newer, Debian 12 and newer, Fedora 36 and newer, and distributions of the same age. Requires X11 or XWayland (Wayland desktops run the game through XWayland; there is no native Wayland backend). | 64-bit Intel/AMD | A Vulkan 1.3 driver: Mesa (open source, AMD and Intel); for NVIDIA, NVIDIA's own driver or `nouveau`/NVK | The `.tar.gz` (`linux-x64`) | **Supported.** CI builds it, runs the tests, and plays it in a virtual display on a software Vulkan driver. |
 | **Mac with Apple Silicon** | macOS. The minimum asked for is macOS 13 (`MACOS_MINIMUM` in `tools/build/macos_app.odin`, passed to the linker and written into the app's `Info.plist`). | Apple Silicon (M1 or newer) | Vulkan 1.3 is provided by MoltenVK, which runs on Apple's Metal and is bundled inside the app; there is nothing to install. | A `.app` in a `.zip` (`macos-arm64`). It is ad hoc signed and not notarized, so open it the first time with right-click, Open. | **Builds and packages in CI; not tested on hardware by the project.** CI builds the game and server, runs the unit tests, and produces the `.app` zip. The window, graphics, sound and gamepads are checked only by occasional testers. |
 | **Mac with an Intel chip** | Not known | 64-bit Intel | Through MoltenVK, as above | None | **Not built by CI and not run.** Tier 2 target. |
@@ -66,8 +66,8 @@ not.
 
 | Target | Current CI coverage | Not covered |
 |---|---|---|
-| Windows x86_64 (`windows_amd64`) | The "Test" job: format and compile check, the whole test suite, the smoke suite, the cross-OS determinism run, a game build, the chunk benchmark, and a short server benchmark. The "Package" job: builds the `.zip`, checks its paths as Explorer sees them, unpacks it, runs `voxiverse-server --version` and a 5 s server, runs `voxiverse --version`, plays a world from the packaged release game to a screenshot (on Mesa's lavapipe, fetched by `build lavapipe` at a pinned version and hash, with LunarG's Vulkan loader; neither is shipped), and checks the version resource. | Real GPU drivers (the runners have none) and the window as a user sees it; the manual checks remain on a real Windows machine. |
-| Linux x86_64 (`linux_amd64`) | "Test" (checks, tests, determinism, the smoke suite) and "Game" (the game on a software Vulkan driver in a virtual display: flights, screens, sky, multiplayer, crash handler, AddressSanitizer, profiling, screenshots). The "Package" job builds on Ubuntu 22.04 (glibc 2.35), unpacks the `.tar.gz`, and plays a world from it. | Nothing for Tier 1. There is no native Wayland backend; XWayland is used. |
+| Windows x86_64 (`windows_amd64`) | The "Test" job: format and compile check, the whole test suite, the system test suite, the cross-OS determinism run, a game build, the chunk benchmark, and a short server benchmark. The "Package" job: builds the `.zip`, checks its paths as Explorer sees them, unpacks it, runs `voxiverse-server --version` and a 5 s server, runs `voxiverse --version`, plays a world from the packaged release game to a screenshot (on Mesa's lavapipe, fetched by `build lavapipe` at a pinned version and hash, with LunarG's Vulkan loader; neither is shipped), and checks the version resource. | Real GPU drivers (the runners have none) and the window as a user sees it; the manual checks remain on a real Windows machine. |
+| Linux x86_64 (`linux_amd64`) | "Test" (checks, tests, determinism, the system test suite) and "Game" (the game on a software Vulkan driver in a virtual display: flights, screens, sky, multiplayer, crash handler, AddressSanitizer, profiling, screenshots). The "Package" job builds on Ubuntu 22.04 (glibc 2.35), unpacks the `.tar.gz`, and plays a world from it. | Nothing for Tier 1. There is no native Wayland backend; XWayland is used. |
 | macOS arm64 (`darwin_arm64`) | The "Test" job on `macos-latest`: the same checks, tests, determinism, game build, chunk benchmark and server benchmark as on Windows. The build downloads the pinned MoltenVK once (`build/tools/moltenvk/`, cached by hash in CI). The "Package · macOS arm64" job builds the `.app`, checks it (`plutil`, `codesign --verify`, `--version` of both programs) and uploads it as a zip. | Running the game, a GPU probe and any hardware check; testers cover them. |
 | Linux arm64 (`linux_arm64`) | Nothing. | Everything. A build here needs `GLSLANG` set from the distribution's package, since the pinned shader compiler has no arm64 download. |
 | macOS x86_64 (`darwin_amd64`) | Nothing. | Everything. The `.app` is built for this target only on request. |
@@ -114,32 +114,7 @@ and persona name, auth tickets, a Workshop query; on the server `BeginAuthSessio
 
 ### How a build reaches Steam
 
-`./build.sh steam [folder]` lays out the depots from the three release packages (the
-`.zip` for Windows and macOS and the `.tar.gz` for Linux, found in `build/dist/` or the
-folder given) in `build/steam/`:
-
-- `depots/windows-x64/`, `depots/linux-x64/`, `depots/macos-arm64/`: one depot per
-  operating system, each the package's contents (the game, the server, the licences; the
-  game carries its assets). The Steamworks library has its slot beside the executable (in
-  `Voxiverse.app/Contents/MacOS` on macOS). It is Valve's file and not in this repository:
-  when `STEAM_REDIST_DIR` names a folder holding `steam_api64.dll`, `libsteam_api.so` and
-  `libsteam_api.dylib`, the layout copies each into its slot; without it the slot is empty
-  and the game plays without Steam.
-- `scripts/app_build.vdf` and `scripts/depot_build_<os>.vdf`, the SteamPipe scripts. The
-  app script sets the build live on the beta branch `playtest` and on no other: the default
-  branch is set by hand in Steamworks.
-
-`steam_appid.txt` is never in a depot: the layout deletes any, and the depot scripts
-exclude the name. (It is for running outside Steam only.)
-
-The IDs come from the repository variables `STEAM_APP_ID`, `STEAM_DEPOT_WINDOWS`,
-`STEAM_DEPOT_LINUX` and `STEAM_DEPOT_MACOS`. With any of them unset the layout uses
-placeholder IDs (App ID 0, depots 1 to 3) and says so; such a layout is for inspection and
-cannot be uploaded.
-
-CI does not run this yet: the job that builds the layout after the packages and uploads
-it with `steamcmd` to the branch `playtest` is still to come. A test
-(`tools/build/steam_test.odin`) parses the generated scripts.
+SteamPipe depot packaging and upload tooling are deferred until Steamworks credentials and App IDs exist (per project ground rules on no premature scaffolding). Packaging currently generates standalone archive distributions in `build/dist/`.
 
 ## Reporting a problem
 

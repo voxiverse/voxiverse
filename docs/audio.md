@@ -297,5 +297,5 @@ the owner adds it to ci.yml), and another checks the list itself.
 - Every layer of a recipe that begins at once starts 1.2 ms in (`delay 0.0012`): the sound's
   first millisecond is faded in to leave no click, and an onset inside it is mostly lost.
 - The **null device** asks for a block every 10 ms by the wall clock and discards it, so CI's
-  smoke run exercises the real callback path; the **file device** mixes as fast as it can and
+  system test run exercises the real callback path; the **file device** mixes as fast as it can and
   writes a WAV at close (at most 300 s), for scripted runs and listening to a scenario.

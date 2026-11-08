@@ -7,7 +7,7 @@ import "core:testing"
 import "common:limited"
 
 // A parallel job's output reaches its log on every OS, with a real child process (the
-// smoke suite's run_parallel tests do not run on Windows). On Windows the log once had
+// system test suite's run_parallel tests do not run on Windows). On Windows the log once had
 // to be opened inheritable for the child to write to it at all: without that, check's
 // formatting step saw every file as empty.
 @(test)
