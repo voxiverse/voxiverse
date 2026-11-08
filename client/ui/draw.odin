@@ -3,6 +3,7 @@ package ui
 import "core:math"
 import "core:mem"
 import "core:strings"
+import "core:unicode/utf8"
 
 import "client:font"
 
@@ -311,6 +312,38 @@ measure_text :: proc(ctx: ^Context, text: string, size: f32) -> f32 {
 		width += font.advance(f, g) * size / f.units_per_em
 	}
 	return width
+}
+
+// text_elide truncates `text` with "..." if its rendered width exceeds `max_width`.
+text_elide :: proc(
+	ctx: ^Context,
+	text: string,
+	max_width: f32,
+	size: f32,
+	allocator := context.temp_allocator,
+) -> string {
+	if max_width <= 0 {return ""}
+	if measure_text(ctx, text, size) <= max_width {return text}
+	dots :: "..."
+	dots_w := measure_text(ctx, dots, size)
+	if dots_w > max_width {return ""}
+	limit := max_width - dots_w
+	width: f32 = 0
+	last_byte := 0
+	for r, byte_idx in text {
+		f, g := glyph_font(&ctx.glyphs, r)
+		adv := font.advance(f, g) * size / f.units_per_em
+		if width + adv > limit {
+			break
+		}
+		width += adv
+		last_byte = byte_idx + utf8.rune_size(r)
+	}
+	if last_byte == 0 {return dots}
+	b := strings.builder_make(allocator)
+	strings.write_string(&b, text[:last_byte])
+	strings.write_string(&b, dots)
+	return strings.to_string(b)
 }
 
 // font_line_metrics: ascent (above baseline, positive) and descent (below,
