@@ -309,6 +309,48 @@ test_spatial_flat :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_spatial_sparse_wide_box :: proc(t: ^testing.T) {
+	sp: Spatial
+	spatial_init(&sp)
+	defer spatial_destroy(&sp)
+
+	e1 := Spatial_Entry {
+		id    = 10,
+		lo    = {0, 10, 0},
+		hi    = {1, 11, 1},
+		flags = {.Hittable},
+	}
+	e2 := Spatial_Entry {
+		id    = 20,
+		lo    = {50000, 50, 50000},
+		hi    = {50001, 51, 50001},
+		flags = {.Hittable},
+	}
+	spatial_insert(&sp, e1)
+	spatial_insert(&sp, e2)
+
+	out: [dynamic]Entity_Id
+	defer delete(out)
+
+	spatial_box(&sp, {-1e8, -1e8, -1e8}, {1e8, 1e8, 1e8}, {all = {.Hittable}}, &out)
+	testing.expect_value(t, len(out), 2)
+	testing.expect_value(t, out[0], Entity_Id(10))
+	testing.expect_value(t, out[1], Entity_Id(20))
+
+	// Local box near e1:
+	clear(&out)
+	spatial_box(&sp, {-5, 5, -5}, {5, 15, 5}, {all = {.Hittable}}, &out)
+	testing.expect_value(t, len(out), 1)
+	testing.expect_value(t, out[0], Entity_Id(10))
+
+	// Local box near e2:
+	clear(&out)
+	spatial_box(&sp, {49990, 45, 49990}, {50010, 55, 50010}, {all = {.Hittable}}, &out)
+	testing.expect_value(t, len(out), 1)
+	testing.expect_value(t, out[0], Entity_Id(20))
+}
+
+@(test)
 test_cells_find :: proc(t: ^testing.T) {
 	reg := states_registry(t)
 	if reg == nil {return}

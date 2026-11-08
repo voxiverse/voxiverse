@@ -450,13 +450,20 @@ run :: proc(c: ^Collect, margin: f64, lo, hi: [3]f64, out: ^[dynamic]Entity_Id) 
 	sphere := c.shape == .Sphere
 	cylinder := c.shape == .Cylinder
 	r2 := c.radius * c.radius
-	for y in cl.y ..= ch.y {
-		for z in cl.z ..= ch.z {
-			for x in cl.x ..= ch.x {
-				if !cell_reachable(c, {x, y, z}) {continue}
+	if cl.x <= ch.x && cl.y <= ch.y && cl.z <= ch.z {
+		vol := i64(ch.x - cl.x + 1) * i64(ch.y - cl.y + 1) * i64(ch.z - cl.z + 1)
+		if vol > i64(len(sp.cells)) {
+			for pos, &cell in sp.cells {
+				if pos.x < cl.x ||
+				   pos.x > ch.x ||
+				   pos.y < cl.y ||
+				   pos.y > ch.y ||
+				   pos.z < cl.z ||
+				   pos.z > ch.z {
+					continue
+				}
+				if !cell_reachable(c, pos) {continue}
 				if sphere || cylinder {
-					cell, ok := &sp.cells[{x, y, z}]
-					if !ok {continue}
 					for &it in cell.items {
 						dx := it.at.x - c.center.x
 						dy := it.at.y - c.center.y
@@ -473,13 +480,45 @@ run :: proc(c: ^Collect, margin: f64, lo, hi: [3]f64, out: ^[dynamic]Entity_Id) 
 					}
 					continue
 				}
-				for i := (sp.cells[{x, y, z}].head if {x, y, z} in sp.cells else 0);
-				    i != 0;
-				    i = sp.slots[i - 1].next {
-					if matches(
-						c,
-						&sp.slots[i - 1].entry,
-					) {append(&sp.scratch, sp.slots[i - 1].entry.id)}
+				for i := cell.head; i != 0; i = sp.slots[i - 1].next {
+					if matches(c, &sp.slots[i - 1].entry) {
+						append(&sp.scratch, sp.slots[i - 1].entry.id)
+					}
+				}
+			}
+		} else {
+			for y in cl.y ..= ch.y {
+				for z in cl.z ..= ch.z {
+					for x in cl.x ..= ch.x {
+						if !cell_reachable(c, {x, y, z}) {continue}
+						if sphere || cylinder {
+							cell, ok := &sp.cells[{x, y, z}]
+							if !ok {continue}
+							for &it in cell.items {
+								dx := it.at.x - c.center.x
+								dy := it.at.y - c.center.y
+								dz := it.at.z - c.center.z
+								near :=
+									dx * dx + dy * dy + dz * dz <= r2 if sphere else dx * dx + dz * dz <= r2 && abs(dy) <= c.half_h
+								if near &&
+								   (c.filter.kind == 0 || it.kind == c.filter.kind) &&
+								   c.filter.all <= it.flags &&
+								   c.filter.none & it.flags == {} &&
+								   (c.filter.exclude == 0 || it.id != c.filter.exclude) {
+									append(&sp.scratch, it.id)
+								}
+							}
+							continue
+						}
+						for i := (sp.cells[{x, y, z}].head if {x, y, z} in sp.cells else 0);
+						    i != 0;
+						    i = sp.slots[i - 1].next {
+							if matches(
+								c,
+								&sp.slots[i - 1].entry,
+							) {append(&sp.scratch, sp.slots[i - 1].entry.id)}
+						}
+					}
 				}
 			}
 		}
