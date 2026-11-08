@@ -28,8 +28,8 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		)
 	}
 	ui.title(ctx, engine.tr(.Game_Menu_Game_Menu), heading)
-	ui.layout_begin(ctx, column)
-	defer ui.layout_end(ctx)
+	ui.begin_column(ctx, column)
+	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
 	if ui.button(
 		ctx,
