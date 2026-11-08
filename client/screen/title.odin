@@ -15,12 +15,12 @@ import "common:game"
 SPLASHES :: #load("../../assets/splashes.txt", string)
 
 SPLASH_REVEAL :: 0.75 // seconds for the dial glyphs to resolve into the text
-SPLASH_TILT :: -0.19 // resting angle of the stamp, radians: it rises to the right
-SPLASH_WOBBLE :: 0.045 // how far the angle breathes around SPLASH_TILT
-SPLASH_PULSE :: 0.08 // how much its size swells and shrinks
-SPLASH_TEMPO :: 5.2 // radians per second of the pulse and the wobble
-SPLASH_SPRING :: 5.0 // damping of the entrance pop
-SPLASH_SPRING_FREQ :: 11.0 // springiness of the entrance pop
+SPLASH_TILT :: -0.18 // resting angle of the stamp, radians: it rises to the right
+SPLASH_WOBBLE :: 0.015 // how far the angle breathes around SPLASH_TILT
+SPLASH_PULSE :: 0.025 // how much its size swells and shrinks
+SPLASH_TEMPO :: 2.5 // radians per second of the pulse and the wobble
+SPLASH_SPRING :: 5.6 // damping of the entrance pop
+SPLASH_SPRING_FREQ :: 9.0 // springiness of the entrance pop
 
 // splash_pop: the entrance, a stamp from above: nothing at 0 s, overshooting
 // to about 1.27, ringing down to 1 (a damped spring, closed form).
@@ -107,20 +107,29 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		seconds := f32(time.duration_seconds(time.tick_since(app.splash_at)))
 		reduce := app.settings.reduce_motion
 		shown, _ := splash_reveal(app.splash, seconds, reduce)
-		size := t.font_size * 1.1
+		size := t.font_size * 1.05
 		angle: f32 = SPLASH_TILT
 		color := t.text
 		if !reduce {
 			size *= splash_pop(seconds) * splash_pulse(seconds)
 			angle = splash_angle(seconds)
 			if seconds < SPLASH_REVEAL {
-				color.a = u8(f32(color.a) * (0.55 + 0.45 * math.sin(seconds * 22)))
+				color.a = u8(f32(color.a) * (0.7 + 0.3 * math.sin(seconds * 12)))
 			}
 		}
 		width := ui.measure_text(ctx, shown, size)
-		centre := ui.Vec2{logo.x + logo.w / 2 + logo.w * 0.22, logo.y + logo.h + 2}
-		// Never run off the right edge, however long the text is.
-		centre.x = min(centre.x, ctx.screen.x + ctx.screen.w - width / 2 - 8)
+		max_splash_w: f32 = 240
+		if width > max_splash_w {
+			size *= max_splash_w / width
+			width = max_splash_w
+		}
+		centre := ui.Vec2{logo.x + logo.w * 0.70, logo.y + logo.h * 0.52}
+		// Never run off the screen edges, however long the text is.
+		centre.x = clamp(
+			centre.x,
+			ctx.screen.x + width / 2 + 12,
+			ctx.screen.x + ctx.screen.w - width / 2 - 12,
+		)
 		ui.draw_text_tilted(
 			ctx,
 			{centre.x + 2, centre.y + 2},
@@ -128,9 +137,9 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			size,
 			t.text_shadow,
 			angle,
-			t.font_size * 1.1 * 1.5,
+			t.font_size * 1.05 * 1.3,
 		)
-		ui.draw_text_tilted(ctx, centre, shown, size, color, angle, t.font_size * 1.1 * 1.5)
+		ui.draw_text_tilted(ctx, centre, shown, size, color, angle, t.font_size * 1.05 * 1.3)
 	}
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)
