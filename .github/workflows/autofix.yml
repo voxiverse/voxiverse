@@ -309,7 +309,7 @@ jobs:
           grep -qE '(^|[;&|( ]) *git +push' <<< "${cmd}" || exit 0
           cd "$(jq -r '.cwd // "."' <<< "${in}")" 2>/dev/null && cd "$(git rev-parse --show-toplevel)" || exit 0
           log="${RUNNER_TEMP:-/tmp}/push-gate.log"
-          for step in "check" "test" "fuzz --smoke" "determinism" "system"; do
+          for step in "check" "test" "fuzz --smoke" "determinism" "smoke"; do
             start=$(date +%s)
             if ! ./build.sh ${step} > "${log}" 2>&1; then
               echo "{\"step\": \"${step}\", \"ok\": false, \"s\": $(( $(date +%s) - start ))}" >> "${RUNNER_TEMP:-/tmp}/push-gate.jsonl"
@@ -372,7 +372,7 @@ jobs:
             4. Before pushing, run what CI runs on Linux: `./build.sh check` and `./build.sh test`, and
                fix everything they report (a new folder needs its docs/layout.md row). Commits per
                AGENTS.md, "Commits". Every `git push` you run first passes a gate (check, test,
-               fuzz --smoke, determinism, system; several minutes): a push it blocks tells you what
+               fuzz --smoke, determinism, smoke; several minutes): a push it blocks tells you what
                failed. Fix that and push again.
             5. Push, then open the pull request and turn on auto-merge, as your last actions:
                `gh pr create --head claude/issue-${{ matrix.issue }} --base main --title "<subject>" --body-file /tmp/pr.md`
