@@ -6,6 +6,7 @@ import "core:log"
 import "core:mem"
 import "core:mem/virtual"
 import "core:net"
+import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
@@ -77,6 +78,7 @@ Config :: struct {
 	journal_keep:          u64, // tests: ticks a segment is kept (0: JOURNAL_KEEP)
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
 	steam:                 ^steam_server.Server, // checks joining players' Steam tickets (nil or off: tickets are ignored); the caller opens and shuts it
+	watchdog_seconds:      int, // kill on a deadlocked tick (>0: seconds, default 60 on dedicated, 0: off)
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
 	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
 }
@@ -116,62 +118,68 @@ Stats :: struct {
 	slowest_phase_n:   int,
 }
 
+Thread :: thread.Thread
+
 Server :: struct {
 	// The phases of the tick being run (slow-tick diagnosis: server_main logs
 	// them when a tick takes SLOW_TICK or longer).
-	tick_marks:     [16]Tick_Mark,
-	tick_mark_n:    int,
-	tick_start:     time.Tick,
-	slow_logged:    time.Tick, // when a slow tick was last logged
-	config:         Config,
-	capacity:       int, // chunks
-	local:          game.Endpoint, // the in-process player's pipe (none: a dedicated server)
-	thread:         ^thread.Thread,
-	stopping:       bool, // (atomic)
-	schema:         game.Schema, // what is replicated to clients (state_kinds.odin)
-	time_stopped:   bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
-	frozen:         bool, // (atomic) the local player paused: time and entities stand still
-	failed:         bool, // (atomic)
-	stats_mutex:    sync.Mutex,
-	stats:          Stats,
-	log_tag:        base.Log_Tag,
-	store:          Store, // saving (save.odin)
-	pack_blobs:     [dynamic]Pack_Blob, // the universe's packs as sent (pack_send.odin)
-	reload:         Pack_Reload, // hot reload of the packs (pack_reload.odin)
-	registry:       ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
-	refusal:        string, // why start returned false, when it is a message for the player
+	tick_marks:        [16]Tick_Mark,
+	tick_mark_n:       int,
+	tick_start:        time.Tick,
+	slow_logged:       time.Tick, // when a slow tick was last logged
+	config:            Config,
+	capacity:          int, // chunks
+	local:             game.Endpoint, // the in-process player's pipe (none: a dedicated server)
+	thread:            ^Thread,
+	stopping:          bool, // (atomic)
+	schema:            game.Schema, // what is replicated to clients (state_kinds.odin)
+	time_stopped:      bool, // the clock stands still (the local player paused): clients are given a new anchor every tick
+	frozen:            bool, // (atomic) the local player paused: time and entities stand still
+	failed:            bool, // (atomic)
+	stats_mutex:       sync.Mutex,
+	stats:             Stats,
+	log_tag:           base.Log_Tag,
+	store:             Store, // saving (save.odin)
+	pack_blobs:        [dynamic]Pack_Blob, // the universe's packs as sent (pack_send.odin)
+	reload:            Pack_Reload, // hot reload of the packs (pack_reload.odin)
+	registry:          ^game.Registry, // what blocks, items and recipes there are (universe_packs.odin); read only once started
+	refusal:           string, // why start returned false, when it is a message for the player
+	tick_deadline:     time.Tick, // absolute wall-clock deadline of current tick
+	overload_warn:     time.Tick, // when an overload warning was last logged
+	watchdog_thread:   ^Thread, // monitors tick responsiveness
+	watchdog_stopping: bool, // (atomic)
 	// Server thread only, after start:
-	arena:          virtual.Arena,
-	home:           ^World, // the universe's first world (always loaded)
-	worlds:         [dynamic]^World, // loaded (home first)
-	clients:        []Client, // index = player id
-	host:           netcode.Host, // remote players (listening when host_open)
-	listening:      bool,
-	capture:        netcode.Capture, // (config.capture)
-	perms:          Permissions, // who may do what (permissions.odin)
-	admins:         game.Admins, // admins.cfg: accounts and SteamIDs that have the role admin (permissions.odin)
-	community:      Community, // nicknames, mutes, homes, warps, bans (community.odin)
-	chat:           Chat_State, // (chat.odin)
-	kit:            [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
-	offsets:        []game.Chunk_Pos, // the interest area around a client, nearest first
-	unload_offsets: []game.Chunk_Pos, // ... with SERVER_UNLOAD_MARGIN (unload_left)
-	calls:          base.Queue(Server_Call), // from beside an in-process server (call.odin)
-	writer:         game.Writer,
-	tick:           u64,
-	sink:           telemetry.Sink, // events (stats.odin; telemetry/)
-	session:        telemetry.Sink, // the session recording's file (session_log.odin)
-	session_on:     bool,
-	log_sink:       ^base.Log_Sink, // whose warnings and errors it keeps
-	uploader:       collector.Uploader, // sends its log to a collector
-	uploading:      bool,
-	ledger:         Ledger, // every item made or unmade (ledger.odin)
-	desyncs:        int, // checks that differed (desync.odin)
-	desync_fields:  [game.Player_Field]int, // ... and in which fields
-	checks_judged:  int, // checks compared
-	checks_skipped: int, // checks not compared: the player was not quiet
-	hash_root:      u64, // a stepped server's chain of tick hashes (state_hash.odin)
-	age_base:       u64, // the universe's ticks before this run (universe.cfg; age_of)
-	tick_us:        [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
+	arena:             virtual.Arena,
+	home:              ^World, // the universe's first world (always loaded)
+	worlds:            [dynamic]^World, // loaded (home first)
+	clients:           []Client, // index = player id
+	host:              netcode.Host, // remote players (listening when host_open)
+	listening:         bool,
+	capture:           netcode.Capture, // (config.capture)
+	perms:             Permissions, // who may do what (permissions.odin)
+	admins:            game.Admins, // admins.cfg: accounts and SteamIDs that have the role admin (permissions.odin)
+	community:         Community, // nicknames, mutes, homes, warps, bans (community.odin)
+	chat:              Chat_State, // (chat.odin)
+	kit:               [dynamic]game.Stack, // what new players are given (player_data.odin; world.cfg)
+	offsets:           []game.Chunk_Pos, // the interest area around a client, nearest first
+	unload_offsets:    []game.Chunk_Pos, // ... with SERVER_UNLOAD_MARGIN (unload_left)
+	calls:             base.Queue(Server_Call), // from beside an in-process server (call.odin)
+	writer:            game.Writer,
+	tick:              u64,
+	sink:              telemetry.Sink, // events (stats.odin; telemetry/)
+	session:           telemetry.Sink, // the session recording's file (session_log.odin)
+	session_on:        bool,
+	log_sink:          ^base.Log_Sink, // whose warnings and errors it keeps
+	uploader:          collector.Uploader, // sends its log to a collector
+	uploading:         bool,
+	ledger:            Ledger, // every item made or unmade (ledger.odin)
+	desyncs:           int, // checks that differed (desync.odin)
+	desync_fields:     [game.Player_Field]int, // ... and in which fields
+	checks_judged:     int, // checks compared
+	checks_skipped:    int, // checks not compared: the player was not quiet
+	hash_root:         u64, // a stepped server's chain of tick hashes (state_hash.odin)
+	age_base:          u64, // the universe's ticks before this run (universe.cfg; age_of)
+	tick_us:           [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
 }
 
 // A rejected remote client is told why and dropped this many ticks later.
@@ -292,6 +300,12 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		s.thread.data = s
 		s.thread.init_context = base.thread_context()
 		thread.start(s.thread)
+		if config.watchdog_seconds > 0 {
+			s.watchdog_thread = thread.create(server_watchdog_proc, name = "watchdog")
+			s.watchdog_thread.data = s
+			s.watchdog_thread.init_context = base.thread_context()
+			thread.start(s.watchdog_thread)
+		}
 	}
 	log.infof(
 		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d",
@@ -310,10 +324,17 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 // remote players and frees the session. False if the server stopped
 // because of an error (or the last save failed).
 stop :: proc(s: ^Server) -> bool {
+	sync.atomic_store(&s.watchdog_stopping, true)
+	if s.watchdog_thread != nil {
+		thread.join(s.watchdog_thread)
+		thread.destroy(s.watchdog_thread)
+		s.watchdog_thread = nil
+	}
 	sync.atomic_store(&s.stopping, true)
 	if s.thread != nil {
 		thread.join(s.thread)
 		thread.destroy(s.thread)
+		s.thread = nil
 	}
 	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
 	if s.listening {netcode.host_close(&s.host, "the server stopped")}
@@ -458,6 +479,44 @@ slow_tick_log :: proc(s: ^Server, start: time.Tick, took: time.Duration) {
 	)
 }
 
+// have_time reports whether the server has remaining wall-clock budget in the
+// current tick, with an optional safety margin.
+have_time :: proc(s: ^Server, margin: time.Duration = 0, now: time.Tick = {}) -> bool {
+	if s == nil || s.config.stepped {return true}
+	current := now if now._nsec != 0 else time.tick_now()
+	return time.tick_diff(current, s.tick_deadline) > margin
+}
+
+@(private = "file")
+server_watchdog_proc :: proc(t: ^thread.Thread) {
+	base.thread_register("watchdog")
+	defer base.thread_unregister()
+	s := (^Server)(t.data)
+	max_dur := time.Duration(s.config.watchdog_seconds) * time.Second
+	for !sync.atomic_load(&s.watchdog_stopping) {
+		time.sleep(500 * time.Millisecond)
+		if sync.atomic_load(&s.watchdog_stopping) {break}
+		start := s.tick_start
+		if start._nsec != 0 {
+			elapsed := time.tick_since(start)
+			if elapsed > max_dur {
+				secs := time.duration_seconds(elapsed)
+				log.errorf(
+					"server watchdog: a single server tick has taken %.1f s (limit %d s); server appears deadlocked",
+					secs,
+					s.config.watchdog_seconds,
+				)
+				path := base.crash_bundle_write("watchdog: single tick deadlock")
+				if path != "" {
+					log.errorf("server watchdog: crash bundle written to %s", path)
+				}
+				time.sleep(5 * time.Second)
+				os.exit(1)
+			}
+		}
+	}
+}
+
 @(private = "file")
 server_main :: proc(t: ^thread.Thread) {
 	base.thread_register("server")
@@ -469,6 +528,7 @@ server_main :: proc(t: ^thread.Thread) {
 	for !sync.atomic_load(&s.stopping) {
 		start := time.tick_now()
 		s.tick_start = start
+		s.tick_deadline = time.tick_add(start, game.TICK_DURATION)
 		cpu := base.thread_cpu_us()
 		s.tick_mark_n = 0
 		tick(s)
@@ -481,12 +541,23 @@ server_main :: proc(t: ^thread.Thread) {
 			f32(time.duration_milliseconds(took)),
 			f32(base.thread_cpu_us() - cpu) / 1000,
 		)
+		s.tick_start = {}
 
 		next = time.tick_add(next, game.TICK_DURATION)
 		left := time.tick_diff(time.tick_now(), next)
 		if left < -5 * game.TICK_DURATION {
-			log.debugf("server behind, skipping ticks behind=%v", -left)
-			next = time.tick_now()
+			now := time.tick_now()
+			behind_ms := -time.duration_milliseconds(left)
+			skipped := int(-left / game.TICK_DURATION)
+			if time.duration_seconds(time.tick_since(s.overload_warn)) >= 10 {
+				s.overload_warn = now
+				log.warnf(
+					"can't keep up! server is %.0f ms (%d ticks) behind, skipping ticks",
+					behind_ms,
+					skipped,
+				)
+			}
+			next = now
 		} else if left > 0 {
 			time.sleep(left)
 		}

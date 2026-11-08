@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:log"
 import "core:mem"
 import "core:slice"
+import "core:time"
 
 import "common:base"
 import "common:game"
@@ -185,6 +186,24 @@ sim_run_scheduled :: proc(w: ^World) {
 	u := &w.updates
 	if u.dropped > 0 && u.count < MAX_UPDATES / 2 {u.dropped = 0}
 	for n := 0; n < UPDATE_BUDGET && u.count > 0 && u.heap[0].due <= s.tick; n += 1 {
+		p := u.heap[0].pos
+		action := Action_Id(u.heap[0].action)
+		u.count -= 1
+		u.heap[0] = u.heap[u.count]
+		sift_down(u.heap[:u.count], 0)
+		delete_key(&u.queued, p)
+		u.run += 1
+		sim_update(w, p, action)
+	}
+	// Aged task bypass: starved updates waiting >4 ticks bypass the regular budget
+	// up to AGED_BUDGET_CAP while the tick has budget headroom.
+	AGED_BUDGET_CAP :: 1024
+	for aged := 0;
+	    aged < AGED_BUDGET_CAP &&
+	    u.count > 0 &&
+	    u.heap[0].due + 4 < s.tick &&
+	    have_time(s, 2 * time.Millisecond);
+	    aged += 1 {
 		p := u.heap[0].pos
 		action := Action_Id(u.heap[0].action)
 		u.count -= 1
