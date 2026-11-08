@@ -95,13 +95,14 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	rows: f32 = 5 if app.devchat.running else 4
 	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 120)
 	logo := ui.cut_top(&column, 80)
-	ui.title(ctx, engine.tr(.Title_Voxiverse), logo)
+	title_text := engine.tr(.Title_Voxiverse)
+	ui.title(ctx, title_text, logo)
 	if app.splash == "" {
 		app.splash = splash_choose(splashes_parse(SPLASHES), time.now()._nsec / 1e9)
 		app.splash_at = time.tick_now()
 	}
 	if app.splash != "" {
-		// The stamp: it crackles in over the logo's corner (dial glyphs
+		// The stamp: it crackles in off the logo's right corner (dial glyphs
 		// resolving as it falls), overshoots, rings down, then breathes —
 		// size and angle together — never a held line of text.
 		seconds := f32(time.duration_seconds(time.tick_since(app.splash_at)))
@@ -123,13 +124,17 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			size *= max_splash_w / width
 			width = max_splash_w
 		}
-		centre := ui.Vec2{logo.x + logo.w * 0.70, logo.y + logo.h * 0.52}
-		// Never run off the screen edges, however long the text is.
-		centre.x = clamp(
-			centre.x,
-			ctx.screen.x + width / 2 + 12,
-			ctx.screen.x + ctx.screen.w - width / 2 - 12,
-		)
+		title_w := ui.measure_text(ctx, title_text, t.title_size)
+		title_right := logo.x + (logo.w + title_w) / 2
+		title_top := logo.y + (logo.h - t.title_size) / 2
+		centre := ui.Vec2{title_right + 8 + width / 2, logo.y + 28}
+		// Never run off the screen right edge; float above the title if pushed left.
+		if centre.x + width / 2 > ctx.screen.x + ctx.screen.w - 12 {
+			centre.x = ctx.screen.x + ctx.screen.w - width / 2 - 12
+			if centre.x - width / 2 < title_right {
+				centre.y = title_top - 10
+			}
+		}
 		ui.draw_text_tilted(
 			ctx,
 			{centre.x + 2, centre.y + 2},
@@ -142,8 +147,8 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.draw_text_tilted(ctx, centre, shown, size, color, angle, t.font_size * 1.05 * 1.3)
 	}
 	ui.cut_top(&column, 40)
-	ui.layout_begin(ctx, column)
-	defer ui.layout_end(ctx)
+	ui.begin_column(ctx, column)
+	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
 	if ui.button(ctx, engine.tr(.Title_Singleplayer), ui.next(ctx)) {
 		universes_refresh(&app.universes)
