@@ -106,8 +106,20 @@ test_relief_generate_mountains_by_convergent_boundaries :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_relief_generate_climates :: proc(t: ^testing.T) {
-	for n in 0 ..< 20 {
+test_relief_generate_climates_0 :: proc(t: ^testing.T) {relief_climates_check(t, 0, 5)}
+@(test)
+test_relief_generate_climates_1 :: proc(t: ^testing.T) {relief_climates_check(t, 5, 10)}
+@(test)
+test_relief_generate_climates_2 :: proc(t: ^testing.T) {relief_climates_check(t, 10, 15)}
+@(test)
+test_relief_generate_climates_3 :: proc(t: ^testing.T) {relief_climates_check(t, 15, 20)}
+
+// relief_climates_check: generated worlds from..<to each have at least four
+// Köppen groups on land. (Twenty worlds in four tests, so the runner's threads
+// build them side by side: one test of twenty outlasted macOS CI's limit.)
+@(private = "file")
+relief_climates_check :: proc(t: ^testing.T, from, to: int) {
+	for n in from ..< to {
 		a := address_n(u64(200 + n))
 		r := relief_generate(a, 5)
 		p := planet_build(r)
