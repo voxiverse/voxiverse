@@ -187,6 +187,45 @@ block_sound :: proc(
 	return set.ids[a][variant % int(set.count[a])], true
 }
 
+// sound_occlusion computes acoustic low-pass filtering and volume attenuation
+// caused by solid blocks between the listener and a sound emitter.
+sound_occlusion :: proc(
+	w: ^World,
+	reg: ^game.Registry,
+	listener: [3]f64,
+	source: [3]f64,
+) -> (
+	cutoff: f32,
+	gain_scale: f32,
+) {
+	if w == nil || reg == nil {return 0, 1}
+	d := source - listener
+	dist := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+	if dist < 0.5 {
+		return 0, 1 // self sounds and immediate contact events have direct sound path
+	}
+	query := game.Block_Query{w, world_block, &reg.blocks, {}}
+	// Cast from listener towards source, stopping just before source to avoid hitting
+	// the ground block underneath the emitter.
+	hit_from_listener, ok_fwd := game.raycast(query, listener, d, dist - 0.25)
+	if !ok_fwd {
+		return 0, 1 // unobstructed line of sight
+	}
+
+	// Reverse ray to measure obstacle thickness:
+	hit_from_source, ok_rev := game.raycast(query, source, -d, dist - 0.25)
+	thickness: f64 = 1.0
+	if ok_rev {
+		thickness = max((dist - hit_from_source.distance) - hit_from_listener.distance, 0.5)
+	}
+
+	// Thicker obstacles absorb more high-frequency acoustic energy:
+	if thickness > 1.5 {
+		return 450, 0.60 // deep occlusion (underground cavern / thick solid rock)
+	}
+	return 850, 0.80 // single partition / thin wall occlusion
+}
+
 // sounds_play plays a session's events of this frame, heard from view.
 sounds_play :: proc(
 	b: ^Sound_Bank,
@@ -194,10 +233,12 @@ sounds_play :: proc(
 	reg: ^game.Registry,
 	events: []Sound_Event,
 	view: View,
+	w: ^World = nil,
 ) {
 	right := [3]f32{math.cos(view.yaw), 0, -math.sin(view.yaw)}
 	for e in events {
 		d := e.position - view.position
+		cutoff, gain_scale := sound_occlusion(w, reg, view.position, e.position)
 		range: f32 = SOUND_RANGE
 		#partial switch e.kind {
 		case .Explosion:
@@ -205,7 +246,12 @@ sounds_play :: proc(
 		case .Shot_Pistol, .Shot_Rifle, .Shot_Sniper:
 			range = 3 * SOUND_RANGE // and so do shots
 		}
-		gain := audio.spatial_gain({f32(d.x), f32(d.y), f32(d.z)}, right, e.volume, range)
+		gain := audio.spatial_gain(
+			{f32(d.x), f32(d.y), f32(d.z)},
+			right,
+			e.volume * gain_scale,
+			range,
+		)
 		if gain == {} {continue}
 		pitch := base.rng_f32_range(base.cosmetic_rng(), 0.9, 1.1)
 		variant := base.rng_int_max(base.cosmetic_rng(), sfx.VARIANTS)
@@ -213,22 +259,46 @@ sounds_play :: proc(
 		case .Entity_Hurt:
 			audio.play(
 				m,
-				{sound = b.sheep[.Hurt][variant], gain = gain, pitch = pitch, bus = .World},
+				{
+					sound = b.sheep[.Hurt][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .World,
+					cutoff = cutoff,
+				},
 			)
 		case .Entity_Die:
 			audio.play(
 				m,
-				{sound = b.sheep[.Die][variant], gain = gain, pitch = pitch, bus = .World},
+				{
+					sound = b.sheep[.Die][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .World,
+					cutoff = cutoff,
+				},
 			)
 		case .Launch:
 			audio.play(
 				m,
-				{sound = b.blast[.Launch][variant], gain = gain, pitch = pitch, bus = .World},
+				{
+					sound = b.blast[.Launch][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .World,
+					cutoff = cutoff,
+				},
 			)
 		case .Explosion:
 			audio.play(
 				m,
-				{sound = b.blast[.Boom][variant], gain = gain, pitch = pitch * 0.9, bus = .World},
+				{
+					sound = b.blast[.Boom][variant],
+					gain = gain,
+					pitch = pitch * 0.9,
+					bus = .World,
+					cutoff = cutoff,
+				},
 			)
 		case .Shot_Pistol, .Shot_Rifle, .Shot_Sniper, .Hit, .Hit_Head, .Reload:
 			which: sfx.Gun_Sound
@@ -246,22 +316,37 @@ sounds_play :: proc(
 			}
 			audio.play(
 				m,
-				{sound = b.gun[which][variant], gain = gain, pitch = pitch, bus = .World},
+				{
+					sound = b.gun[which][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .World,
+					cutoff = cutoff,
+				},
 			)
 		case .Land:
 			audio.play(
 				m,
-				{sound = b.player[.Land][variant], gain = gain, pitch = pitch, bus = .Player},
+				{
+					sound = b.player[.Land][variant],
+					gain = gain,
+					pitch = pitch,
+					bus = .Player,
+					cutoff = cutoff,
+				},
 			)
 			if id, ok := block_sound(b, reg, e.block, .Step, variant); ok {
-				audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World})
+				audio.play(
+					m,
+					{sound = id, gain = gain, pitch = pitch, bus = .World, cutoff = cutoff},
+				)
 			}
 		case .Break, .Place, .Step:
 			action: sfx.Action =
 				.Break if e.kind == .Break else (.Place if e.kind == .Place else .Step)
 			id, ok := block_sound(b, reg, e.block, action, variant)
 			if !ok {continue}
-			audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World})
+			audio.play(m, {sound = id, gain = gain, pitch = pitch, bus = .World, cutoff = cutoff})
 		}
 	}
 }

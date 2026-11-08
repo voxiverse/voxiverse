@@ -268,7 +268,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		autopilot.blast_test_update(app)
 		autopilot.audio_check_update(app)
 		autopilot.tour_test_update(app)
-		if !app.benchmark {engine.sounds_play(&app.sounds, app.mixer, app.session.reg, app.session.sounds[:], app.session.camera)} 	// (a benchmark has no mixer)
+		if !app.benchmark {engine.sounds_play(&app.sounds, app.mixer, app.session.reg, app.session.sounds[:], app.session.camera, &app.session.world)} 	// (a benchmark has no mixer)
 		clear(&app.session.sounds)
 		for n in app.session.notices {
 			engine.console_print(&app.console, n)
