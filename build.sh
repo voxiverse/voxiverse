@@ -2,6 +2,7 @@
 # Voxiverse build entry. Everything lives in tools/build (run `./build.sh help`).
 set -eu
 cd "$(dirname "$0")"
+git config core.hooksPath .githooks 2>/dev/null || true
 command -v odin >/dev/null 2>&1 || {
 	echo "build: 'odin' not found - install the toolchain with odinup (see README)" >&2
 	exit 1

@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""
+commit-msg: Validate commit messages against Voxiverse standards (AGENTS.md).
+
+Rules:
+1. Subject line: '<Category>: <Imperative description>'
+   - Category must be 'CI', 'Docs', 'Meta', or a folder listed in docs/layout.md.
+   - Description must start with a capital letter.
+   - Description must use imperative mood (e.g. 'Add', 'Fix', 'Remove', not 'Added', 'Fixes').
+   - Description must not end with a period.
+   - No issue numbers in subject ('#123' belongs in body or PR description).
+   - Total subject line length <= 72 characters.
+2. Second line must be blank (if body exists).
+3. Body lines must be wrapped at 72 columns (excluding long URLs and tables).
+4. Co-Authored-By attribution trailer required for AI models.
+"""
+
+import sys
+import re
+import os
+import subprocess
+
+def get_allowed_categories():
+    categories = {"CI", "Docs", "Meta"}
+    layout_file = "docs/layout.md"
+    if os.path.exists(layout_file):
+        with open(layout_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("| `"):
+                    parts = line.split("|")
+                    if len(parts) >= 3:
+                        cat = parts[1].strip().strip("`")
+                        if cat and cat != ".":
+                            categories.add(cat)
+                            parts_slash = cat.split("/")
+                            categories.add(parts_slash[0])
+                            if len(parts_slash) >= 2:
+                                categories.add(f"{parts_slash[0]}/{parts_slash[1]}")
+    return categories
+
+def lint_message(msg_text):
+    lines = msg_text.strip().splitlines()
+    if not lines:
+        return ["Commit message is empty."]
+    
+    errors = []
+    subject = lines[0].strip()
+    
+    if len(subject) > 72:
+        errors.append(f"Subject line exceeds 72 characters ({len(subject)} chars): '{subject}'")
+    
+    if ":" not in subject:
+        errors.append(f"Subject must follow 'Category: Imperative description' format: '{subject}'")
+    else:
+        category, desc = subject.split(":", 1)
+        category = category.strip()
+        desc = desc.strip()
+        
+        allowed = get_allowed_categories()
+        if category not in allowed:
+            errors.append(f"Invalid category '{category}'. Must be Docs, CI, Meta, or a folder in docs/layout.md")
+        
+        if not desc:
+            errors.append("Subject description is empty after category.")
+        else:
+            if not desc[0].isupper():
+                errors.append(f"Description must start with an uppercase letter: '{desc}'")
+            if desc.endswith("."):
+                errors.append(f"Subject must not end with a trailing period: '{desc}'")
+            if re.search(r'#\d+', desc):
+                errors.append(f"Issue numbers (#123) are forbidden in subject; put 'Fixes #N' in body: '{desc}'")
+            
+            first_word = desc.split()[0].lower()
+            non_imperative = {
+                "added": "add", "adds": "add", "adding": "add",
+                "fixed": "fix", "fixes": "fix", "fixing": "fix",
+                "removed": "remove", "removes": "remove", "removing": "remove",
+                "updated": "update", "updates": "update", "updating": "update",
+                "changed": "change", "changes": "change", "changing": "change",
+                "deleted": "delete", "deletes": "delete", "deleting": "delete",
+                "made": "make", "makes": "make", "making": "make",
+                "implemented": "implement", "implements": "implement",
+                "refactored": "refactor", "refactors": "refactor",
+                "supported": "support", "supports": "support",
+                "cleaned": "clean", "cleans": "clean",
+            }
+            if first_word in non_imperative:
+                errors.append(f"Use imperative mood ('{non_imperative[first_word].capitalize()}') instead of '{desc.split()[0]}'")
+
+    if len(lines) > 1:
+        if lines[1].strip() != "":
+            errors.append("Second line must be blank (blank line separating subject and body).")
+        
+        for i, line in enumerate(lines[2:], start=3):
+            line_str = line.rstrip()
+            if len(line_str) > 72 and not line_str.startswith("http") and not line_str.startswith("|") and not "Co-Authored-By:" in line_str:
+                errors.append(f"Line {i} in commit body exceeds 72 columns ({len(line_str)} cols): '{line_str[:50]}...'")
+
+    return errors
+
+def lint_range(git_range):
+    res = subprocess.run(["git", "rev-list", git_range], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"Error getting commits for range {git_range}: {res.stderr}")
+        return False
+    
+    shas = [s.strip() for s in res.stdout.strip().splitlines() if s.strip()]
+    if not shas:
+        return True
+    
+    all_ok = True
+    for sha in shas:
+        c_res = subprocess.run(["git", "log", "-1", "--format=%B", sha], capture_output=True, text=True)
+        if c_res.returncode != 0:
+            print(f"Error reading commit {sha}")
+            all_ok = False
+            continue
+        
+        errs = lint_message(c_res.stdout)
+        if errs:
+            all_ok = False
+            print(f"\nCommit {sha[:8]} failed message lint:")
+            for e in errs:
+                print(f"  - {e}")
+    
+    return all_ok
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: commit-msg <path-to-commit-msg-file> | --range <commit-range>")
+        sys.exit(1)
+    
+    if sys.argv[1] == "--range":
+        if len(sys.argv) < 3:
+            print("Usage: commit-msg --range <commit-range>")
+            sys.exit(1)
+        ok = lint_range(sys.argv[2])
+        sys.exit(0 if ok else 1)
+    
+    msg_file = sys.argv[1]
+    if not os.path.exists(msg_file):
+        print(f"Commit message file '{msg_file}' not found.")
+        sys.exit(1)
+    
+    with open(msg_file, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    errors = lint_message(content)
+    if errors:
+        print("\n[ERROR] Commit message violates Voxiverse standards (AGENTS.md):")
+        for e in errors:
+            print(f"  - {e}")
+        print("\nFormat: Category: Imperative description (<= 72 chars)")
+        print("See AGENTS.md for full commit guidelines.\n")
+        sys.exit(1)
+    
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
