@@ -151,7 +151,7 @@ stats_ui :: proc(app: ^engine.App, ctx: ^ui.Context, top: bool) {
 	prev := ui.begin_layer(ctx, .Modal)
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
-	panel := ui.rect_center(ctx.screen, 560, 520)
+	panel := ui.rect_center(ctx.screen, 560, min(520, ctx.screen.h - 2 * t.padding))
 	ui.panel(ctx, panel)
 	inner := ui.rect_shrink(panel, t.padding)
 	if to, picked := section_tabs(app, ctx, ui.cut_top(&inner, t.row_height)); picked {

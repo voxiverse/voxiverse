@@ -341,6 +341,26 @@ test_clipping_and_culling :: proc(t: ^testing.T) {
 	testing.expect(t, glyphs > 0 && glyphs <= 6, "glyphs outside the clip are culled")
 }
 
+// A thickness thicker than half the rect gets clamped, so the outline is
+// drawn inside it and never outside.
+@(test)
+test_stroke_rect_clamps_thickness :: proc(t: ^testing.T) {
+	fx := setup(t)
+	defer teardown(fx)
+	ctx := &fx.ctx
+	begin_frame(ctx, {}, SCREEN, 1)
+	stroke_rect(ctx, {10, 10, 30, 6}, 10, {255, 255, 255, 255}) // thin: the two bars fill it
+	stroke_rect(ctx, {100, 100, 60, 60}, 10, {255, 255, 255, 255}) // room for four quads
+	stroke_rect(ctx, {100, 200, 0, 40}, 3, {255, 255, 255, 255}) // empty: skipped
+	end_frame(ctx)
+	testing.expect_value(t, len(ctx.output.vertices), 8 + 16)
+	for v in ctx.output.vertices {
+		thin := v.pos.x >= 10 && v.pos.x <= 40 && v.pos.y >= 10 && v.pos.y <= 16
+		thick := v.pos.x >= 100 && v.pos.x <= 160 && v.pos.y >= 100 && v.pos.y <= 160
+		testing.expect(t, thin || thick, "every vertex inside its rect")
+	}
+}
+
 @(test)
 test_layers_draw_in_order :: proc(t: ^testing.T) {
 	fx := setup(t)
@@ -556,6 +576,28 @@ test_opacity_halves_alpha :: proc(t: ^testing.T) {
 	testing.expect(t, near(p2, p1 / 2), "panel alpha")
 	testing.expect(t, near(t2, t1 / 2) && t1 == 255, "text alpha")
 	testing.expect(t, near(i2, i1 / 2) && i1 == 255, "icon alpha")
+}
+
+// The tooltip flips to the pointer's other side at the screen's edges, and
+// never sits outside them.
+@(test)
+test_tooltip_flips_at_edges :: proc(t: ^testing.T) {
+	screen := Rect{0, 0, 800, 600}
+	box := tooltip_rect({100, 100}, screen, 200, 100)
+	testing.expect_value(t, box.x, 112)
+	testing.expect_value(t, box.y, 112)
+	right := tooltip_rect({700, 100}, screen, 200, 100)
+	testing.expect_value(t, right.x, 488)
+	testing.expect_value(t, right.y, 112)
+	bottom := tooltip_rect({100, 550}, screen, 200, 100)
+	testing.expect_value(t, bottom.x, 112)
+	testing.expect_value(t, bottom.y, 438)
+	both := tooltip_rect({700, 550}, screen, 200, 100)
+	testing.expect_value(t, both.x, 488)
+	testing.expect_value(t, both.y, 438)
+	huge := tooltip_rect({700, 550}, screen, 900, 700)
+	testing.expect_value(t, huge.x, 0)
+	testing.expect_value(t, huge.y, 0)
 }
 
 @(test)
