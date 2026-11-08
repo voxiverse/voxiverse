@@ -565,6 +565,19 @@ TOOLTIP_DELAY :: 0.4
 // TOOLTIP_WIDTH: the widest a tooltip's text runs before it wraps (UI units).
 TOOLTIP_WIDTH :: 360
 
+// tooltip_rect: where a w by h tooltip sits: beside the pointer (right,
+// flipping to its left at the right edge) and below it (above it at the
+// bottom edge); clamped inside the screen.
+tooltip_rect :: proc(mouse: Vec2, screen: Rect, w, h: f32) -> Rect {
+	x := mouse.x + 12
+	if x + w > screen.x + screen.w {x = mouse.x - 12 - w}
+	x = clamp(x, screen.x, max(screen.x + screen.w - w, screen.x))
+	y := mouse.y + 12
+	if y + h > screen.y + screen.h {y = mouse.y - 12 - h}
+	y = clamp(y, screen.y, max(screen.y + screen.h - h, screen.y))
+	return {x, y, w, h}
+}
+
 // tooltip shows text by the mouse once it has stayed inside r (the part of
 // the widget that explains itself) for TOOLTIP_DELAY seconds. Moving to
 // another tooltip's area restarts the delay.
@@ -586,9 +599,7 @@ tooltip :: proc(ctx: ^Context, r: Rect, text: string) {
 	asc, desc := font_line_metrics(ctx, t.font_size)
 	line_h := asc - desc + 2
 	w, h := width + 2 * t.padding, f32(len(lines)) * line_h + 2 * t.padding
-	x := min(mouse.x + 12, ctx.screen.x + ctx.screen.w - w)
-	y := min(mouse.y + 12, ctx.screen.y + ctx.screen.h - h)
-	box := Rect{max(x, ctx.screen.x), max(y, ctx.screen.y), w, h}
+	box := tooltip_rect(mouse, ctx.screen, w, h)
 	prev := begin_layer(ctx, .Tooltip)
 	defer end_layer(ctx, prev)
 	append(&ctx.texts, text) // (what the frame says, whole: tests read it)
