@@ -34,10 +34,9 @@ test_music_check_stale_detects_changed_score :: proc(t: ^testing.T) {
 	_ = os.write_entire_file(score_path, "title \"Test\"\ntempo 100\n")
 	_ = os.write_entire_file(ogg_path, []u8{0})
 
-	piano, _ := music_font_def("piano")
 	json_content := fmt.tprintf(
 		"{{\n  \"source_sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"soundfont_sha256\": %q\n}}\n",
-		piano.font_sha256,
+		SOUNDFONT_SHA256,
 	)
 	_ = os.write_entire_file(json_path, json_content)
 

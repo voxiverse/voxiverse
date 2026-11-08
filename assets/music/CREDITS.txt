@@ -1,5 +1,8 @@
 Sound sources
 
+The instruments in assets/music/voxiverse.sf2 are curated and compiled
+from CC0 sample banks of the FreePats project:
+
 Upright Piano KW, by Gonzalo and Roberto, FreePats project,
 CC0 1.0 (public domain dedication),
 https://freepats.zenvoid.org/
