@@ -14,10 +14,34 @@ import "common:game"
 // and # lines ignored).
 SPLASHES :: #load("../../assets/splashes.txt", string)
 
-SPLASH_REVEAL :: 1.2 // seconds for the transmission's glyphs to resolve into the text
+SPLASH_REVEAL :: 0.75 // seconds for the dial glyphs to resolve into the text
+SPLASH_TILT :: -0.19 // resting angle of the stamp, radians: it rises to the right
+SPLASH_WOBBLE :: 0.045 // how far the angle breathes around SPLASH_TILT
+SPLASH_PULSE :: 0.08 // how much its size swells and shrinks
+SPLASH_TEMPO :: 5.2 // radians per second of the pulse and the wobble
+SPLASH_SPRING :: 5.0 // damping of the entrance pop
+SPLASH_SPRING_FREQ :: 11.0 // springiness of the entrance pop
+
+// splash_pop: the entrance, a stamp from above: nothing at 0 s, overshooting
+// to about 1.27, ringing down to 1 (a damped spring, closed form).
+splash_pop :: proc(seconds: f32) -> f32 {
+	if seconds <= 0 {return 0}
+	return 1 - math.exp(-SPLASH_SPRING * seconds) * math.cos(SPLASH_SPRING_FREQ * seconds)
+}
+
+// splash_pulse: the idle breathing, 1 +/- SPLASH_PULSE.
+splash_pulse :: proc(seconds: f32) -> f32 {
+	return 1 + SPLASH_PULSE * math.sin(max(seconds, 0) * SPLASH_TEMPO)
+}
+
+// splash_angle: the resting tilt breathing against the pulse (phase-shifted,
+// so the splash never holds still).
+splash_angle :: proc(seconds: f32) -> f32 {
+	return SPLASH_TILT + SPLASH_WOBBLE * math.sin(max(seconds, 0) * SPLASH_TEMPO - 1.1)
+}
 
 // splash_reveal: the splash as it shows `seconds` after it arrived, a
-// transmission from another world: every letter is first a glyph of the dial
+// stamp from elsewhere: every letter is first a glyph of the dial
 // (picked by the letter) and the text resolves from the left over
 // SPLASH_REVEAL seconds; newest is the last letter resolved (-1: none yet).
 // With reduce_motion it is simply there.
@@ -77,22 +101,36 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		app.splash_at = time.tick_now()
 	}
 	if app.splash != "" {
-		// A transmission under the logo, level: dial glyphs resolving into the
-		// text, a faint flicker while it arrives, then steady.
+		// The stamp: it crackles in over the logo's corner (dial glyphs
+		// resolving as it falls), overshoots, rings down, then breathes —
+		// size and angle together — never a held line of text.
 		seconds := f32(time.duration_seconds(time.tick_since(app.splash_at)))
-		shown, _ := splash_reveal(app.splash, seconds, app.settings.reduce_motion)
-		color := t.text_muted
-		if seconds < SPLASH_REVEAL && !app.settings.reduce_motion {
-			color.a = u8(f32(color.a) * (0.75 + 0.25 * math.sin(seconds * 40)))
+		reduce := app.settings.reduce_motion
+		shown, _ := splash_reveal(app.splash, seconds, reduce)
+		size := t.font_size * 1.1
+		angle: f32 = SPLASH_TILT
+		color := t.text
+		if !reduce {
+			size *= splash_pop(seconds) * splash_pulse(seconds)
+			angle = splash_angle(seconds)
+			if seconds < SPLASH_REVEAL {
+				color.a = u8(f32(color.a) * (0.55 + 0.45 * math.sin(seconds * 22)))
+			}
 		}
-		ui.draw_text(
+		width := ui.measure_text(ctx, shown, size)
+		centre := ui.Vec2{logo.x + logo.w / 2 + logo.w * 0.22, logo.y + logo.h + 2}
+		// Never run off the right edge, however long the text is.
+		centre.x = min(centre.x, ctx.screen.x + ctx.screen.w - width / 2 - 8)
+		ui.draw_text_tilted(
 			ctx,
-			{logo.x - 100, logo.y + logo.h + 4, logo.w + 200, t.font_size + 6},
+			{centre.x + 2, centre.y + 2},
 			shown,
-			t.font_size * 0.9,
-			color,
-			.Center,
+			size,
+			t.text_shadow,
+			angle,
+			t.font_size * 1.1 * 1.5,
 		)
+		ui.draw_text_tilted(ctx, centre, shown, size, color, angle, t.font_size * 1.1 * 1.5)
 	}
 	ui.cut_top(&column, 40)
 	ui.layout_begin(ctx, column)

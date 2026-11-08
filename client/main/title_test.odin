@@ -51,8 +51,8 @@ test_title_buttons :: proc(t: ^testing.T) {
 	)
 }
 
-// The splash arrives as a transmission: dial glyphs resolving into the text
-// from the left over SPLASH_REVEAL seconds; with reduce motion it is simply there.
+// The splash is a stamp: dial glyphs resolving into the text from the left
+// over SPLASH_REVEAL seconds; with reduce motion it is simply there.
 @(test)
 test_splash_resolves_from_glyphs :: proc(t: ^testing.T) {
 	text := "Not a modpack"
@@ -68,4 +68,32 @@ test_splash_resolves_from_glyphs :: proc(t: ^testing.T) {
 	still, _ := screen.splash_reveal(text, 0, true)
 	testing.expect_value(t, still, text)
 	free_all(context.temp_allocator)
+}
+
+// The stamp's motion: nothing at 0 s, an overshoot past 1, ringing down to
+// 1; the pulse breathes around 1; the angle breathes around the tilt; and
+// all of it rests still at rest values when seconds pass.
+@(test)
+test_splash_motion :: proc(t: ^testing.T) {
+	testing.expect_value(t, screen.splash_pop(0), 0)
+	peak: f32 = 0
+	for i := 1; i <= 200; i += 1 {
+		peak = max(peak, screen.splash_pop(f32(i) * 0.01))
+	}
+	testing.expect(t, peak > 1.1, "the stamp overshoots")
+	testing.expect(t, peak < 1.5, "the stamp's overshoot is a spring, not an explosion")
+	rest := screen.splash_pop(3)
+	testing.expect(t, rest > 0.99 && rest < 1.01, "the stamp settles to full size")
+	for i := 0; i <= 40; i += 1 {
+		seconds := f32(i) * 0.25
+		pulse := screen.splash_pulse(seconds)
+		testing.expect(t, pulse > 0.9 && pulse < 1.1, "the pulse stays a swell, not a blink")
+		angle := screen.splash_angle(seconds)
+		testing.expect(
+			t,
+			angle > screen.SPLASH_TILT - screen.SPLASH_WOBBLE - 0.001 &&
+			angle < screen.SPLASH_TILT + screen.SPLASH_WOBBLE + 0.001,
+			"the angle breathes around the tilt",
+		)
+	}
 }
