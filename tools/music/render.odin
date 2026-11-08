@@ -194,7 +194,12 @@ render_with :: proc(p: ^Piece, fonts: map[string]^Soundfont, rate := RATE) -> []
 		if part.preset != "" {
 			presets[i] = sf_find_named(part_font[i], part.preset)
 		} else {
-			presets[i] = sf_find_preset(part_font[i], part.bank, part.program)
+			bank := part.bank
+			prog := part.program
+			if bank == 0 && prog == 0 && def.program != 0 {
+				prog = def.program
+			}
+			presets[i] = sf_find_preset(part_font[i], bank, prog)
 		}
 	}
 

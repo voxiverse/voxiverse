@@ -75,7 +75,7 @@ test_stale_score_fails_freshness_check :: proc(t: ^testing.T) {
 	fake_sha := sha256_hex(transmute([]u8)fake_score)
 	d := Done {
 		source_sha256    = "0000000000000000000000000000000000000000000000000000000000000000",
-		soundfont_sha256 = "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
+		soundfont_sha256 = SOUNDFONT_SHA256,
 	}
 	testing.expect(t, d.source_sha256 != fake_sha, "stale score detected")
 }

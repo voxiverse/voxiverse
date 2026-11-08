@@ -11,111 +11,11 @@ import "core:strings"
 MUSIC_DIR :: "assets/music"
 MUSIC_UNRENDERED := []string{"ignite"}
 
-Music_Font_Def :: struct {
-	name:        string,
-	base:        string,
-	felt:        bool,
-	font_sha256: string,
-}
-
-MUSIC_FONTS := []Music_Font_Def {
-	{
-		name = "piano",
-		font_sha256 = "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f",
-	},
-	{name = "felt", base = "piano", felt = true},
-	{
-		name = "freepats_harp",
-		font_sha256 = "1796607b3c7dc9ce0d98473c33068ea4c20ab3dfda38a44f157ee10bfed6ccb4",
-	},
-	{
-		name = "freepats_bells",
-		font_sha256 = "c65f95fa73d881aaaf317029b749abb8b99efb1c1838fb0f34855c5a7188a9eb",
-	},
-	{
-		name = "freepats_timpani",
-		font_sha256 = "f4f133d63bca297c98143e95c1f3fe5418a2a51d7b1f4d5470971eec7885d87b",
-	},
-	{
-		name = "freepats_choir",
-		font_sha256 = "8688e074a15a40f2d9a251f9a642f67f91b1667ba6f4a1e765b9ee7347260c2d",
-	},
-	{
-		name = "freepats_sweep",
-		font_sha256 = "5a09a1d8ab60d236907572a46af8b4211881e2f8c7325e75f782ad5d7acce433",
-	},
-	{
-		name = "freepats_bowed",
-		font_sha256 = "d20b2c26757c58665f83850515d68a7ecee11a87103f849be2406f026f9cf52a",
-	},
-	{
-		name = "freepats_synthstrings",
-		font_sha256 = "7df5074a9ca497adfc3b63a3501a9244495dbb3334b05bba00789bf83cfe6cd4",
-	},
-	{
-		name = "freepats_recorder",
-		font_sha256 = "fb89e90e6b8b40e6463c7edab8cbf4583abbd8fa2d3e32a9250ce7b91d480722",
-	},
-	{
-		name = "freepats_ocarina",
-		font_sha256 = "e92c42a68cb738663748ce512dfbc7f18c3c3ea38d12df9ce165b249e6da6bc6",
-	},
-	{
-		name = "freepats_glass",
-		font_sha256 = "c86204d29aa2cb660b00d074468dbfc642cd9b93bdfe639555ba008a6c283968",
-	},
-}
-
-music_font_def :: proc(name: string) -> (Music_Font_Def, bool) {
-	n := name if name != "" else "piano"
-	for f in MUSIC_FONTS {
-		if f.name == n {return f, true}
-	}
-	return {}, false
-}
-
-music_font_source :: proc(def: Music_Font_Def) -> Music_Font_Def {
-	if def.base == "" {return def}
-	d, _ := music_font_def(def.base)
-	return d
-}
+SOUNDFONT_PATH :: "assets/music/voxiverse.sf2"
+SOUNDFONT_SHA256 :: "e402377d330065a3c1db59d32ddc341184b7b0e8f990e08aa9f3db35e7ab8f78"
 
 music_score_fonts_sha256 :: proc(score_text: string) -> string {
-	used := make([dynamic]string, context.temp_allocator)
-	lines := strings.split_lines(score_text, context.temp_allocator)
-	for line in lines {
-		trimmed := strings.trim_space(line)
-		if strings.has_prefix(trimmed, "instrument ") {
-			fields := strings.fields(trimmed, context.temp_allocator)
-			font_name := "piano"
-			for i := 0; i < len(fields) - 1; i += 1 {
-				if fields[i] == "font" {
-					font_name = fields[i + 1]
-					break
-				}
-			}
-			if !slice.contains(used[:], font_name) {append(&used, font_name)}
-		}
-	}
-	if len(used) == 0 {
-		append(&used, "piano")
-	}
-	if len(used) == 1 && used[0] == "piano" {
-		piano, _ := music_font_def("piano")
-		return piano.font_sha256
-	}
-	slice.sort(used[:])
-	b: strings.Builder
-	strings.builder_init(&b, context.temp_allocator)
-	for name in used {
-		def, ok := music_font_def(name)
-		if !ok {continue}
-		src := music_font_source(def)
-		fmt.sbprintf(&b, "%s=%s\n", name, src.font_sha256)
-		if def.felt {strings.write_string(&b, "felt=1\n")}
-	}
-	h := hash.hash_string(.SHA256, strings.to_string(b), context.temp_allocator)
-	return string(hex.encode(h[:], context.temp_allocator))
+	return SOUNDFONT_SHA256
 }
 
 Music_Done :: struct {
@@ -183,17 +83,13 @@ music_ensure_rendered :: proc() -> bool {
 
 	exe, ok := build_tool("music")
 	if !ok {
-		fmt.eprintln(
-			"warning: cannot render music (offline or no 7z/bsdtar); running with old audio",
-		)
-		return true
+		fmt.eprintln("music: could not build music tool")
+		return false
 	}
 	cmd := slice.concatenate([][]string{{exe}, names[:]}, context.temp_allocator)
 	if !run(cmd) {
-		fmt.eprintln(
-			"warning: cannot render music (offline or no 7z/bsdtar); running with old audio",
-		)
-		return true
+		fmt.eprintln("music: could not render music")
+		return false
 	}
 	return true
 }

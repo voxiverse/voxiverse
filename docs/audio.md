@@ -93,12 +93,11 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   FluidSynth): presets, instruments, key and velocity zones, loops, a volume envelope, pan,
   tuning and a low-pass filter, with the engine's reverb on the render, mastered to the target
   above, encoded with `oggenc` or `ffmpeg`.
-- The fonts are downloaded, not committed, each pinned by the SHA-256 of its archive like glslang
-  and unpacked into `build/tools/soundfont/<font>` (`7zz`, `7z`, `7za` or `bsdtar` for `.7z`, `tar`
-  for `.tar.xz`). `VX_SOUNDFONT=<file.sf2>` renders the piano with another font. A score names
-  its instruments, any number: `instrument harp font freepats_harp preset 0:0` (`font` is
-  optional: the upright piano), and a piece is re-rendered when the font of any instrument it
-  uses changes (a piece that uses only the upright keeps the hash it always had).
+- The instruments are consolidated into a committed, lightweight SoundFont 2 bank (`assets/music/voxiverse.sf2`),
+  curated from FreePats CC0 instruments. No network downloads or external archive unpackers are needed at build time.
+  `VX_SOUNDFONT=<file.sf2>` overrides the soundfont for local testing. A score names its instruments, any number:
+  `instrument harp font freepats_harp preset 0:0` (`font` is optional: the upright piano), and a piece is re-rendered
+  when the soundfont or score changes.
 - **SFZ** is read in place by the renderer (`tools/music/sfz.odin`), not converted: `<control>`
   (`default_path`), `<global>`, `<master>`, `<group>` and `<region>` with inheritance; `sample`
   (PCM WAV, 16/24/32-bit or float, a stereo file mixed to mono), `lokey`, `hikey`, `key`,
