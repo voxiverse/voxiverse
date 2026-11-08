@@ -10,6 +10,8 @@ import "core:time"
 
 import "common:limited"
 
+BUILD_DIR :: "build"
+
 // The Voxiverse build driver. build.sh / build.bat hand every argument to
 // it; its commands are listed by usage (`build help`). It runs from the
 // repository root (the wrapper scripts cd there).
@@ -196,10 +198,10 @@ main :: proc() {
 		// cross objects are one set of names, and two runs at once silently corrupt
 		// each other. A second run waits for the first. run, serve, debug and the tools
 		// let it go once built, so a game that is up never holds it.
-		os.make_directory_all(CACHE_DIR)
+		os.make_directory_all(BUILD_DIR)
 		locked: bool
 		build_lock, locked = lock_build(
-			path_join({CACHE_DIR, "lock"}),
+			path_join({BUILD_DIR, "lock"}),
 			fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
 		)
 		if !locked {os.exit(1)}
@@ -291,20 +293,8 @@ main :: proc() {
 		ok = trace(args[1:])
 	case "perf":
 		ok = perf_record(args[1:])
-	case "self-fresh":
-		// (build.sh: is this driver built from the sources there now?)
-		step := driver_step()
-		ok = odin_step_fresh(&step)
-	case "self-built":
-		// (build.sh, after building it: remember what it was built from)
-		step := driver_step()
-		started := path_join({CACHE_DIR, "build-driver.started"})
-		info, err := os.stat(started, context.allocator)
-		ok = err == nil
-		if ok {
-			step.started = info.modification_time
-			odin_step_succeeded(&step)
-		}
+	case "self-fresh", "self-built":
+		ok = true
 	case "release-notes":
 		ok = release_notes_command(args[1:])
 	case "help", "-h", "--help":
@@ -333,13 +323,10 @@ usage :: proc() {
 		"  check     type-check every package (-vet -strict-style), build objects for the other Tier 1 targets, verify formatting",
 	)
 	fmt.println(
-		"            (its builds for other targets skip what is unchanged since it last passed, by content: build/cache)",
-	)
-	fmt.println(
 		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core); `test <package>...`: only those",
 	)
 	fmt.println(
-		"            (a package unchanged since built runs without compiling; its output is kept in build/test/<package>.log, printed only when it fails)",
+		"            (output is kept in build/test/<package>.log, printed only when it fails)",
 	)
 	fmt.println(
 		"            options, after or among the packages: -o:<none|minimal|size|speed|aggressive>, -sanitize:address|thread (Linux, macOS),",
@@ -569,32 +556,27 @@ build_game :: proc(
 	}
 	// The two are independent: compiled side by side, each printing its output whole.
 	Build_Target :: struct {
-		pkg:   string,
-		step:  Odin_Step,
-		fresh: bool,
+		pkg: string,
+		cmd: []string,
+		out: string,
 	}
 	targets: [2]Build_Target
 	target_count := 0
 	if client {
 		targets[target_count] = Build_Target {
 			pkg = GAME_PACKAGE,
-			step = Odin_Step{name = GAME_NAME, cmd = cmd, output = exe},
+			cmd = cmd,
+			out = exe,
 		}
 		target_count += 1
 	}
 	if server {
 		targets[target_count] = Build_Target {
 			pkg = SERVER_PACKAGE,
-			step = Odin_Step{name = SERVER_NAME, cmd = server_cmd, output = server_exe},
+			cmd = server_cmd,
+			out = server_exe,
 		}
 		target_count += 1
-	}
-	for i in 0 ..< target_count {
-		target := &targets[i]
-		target.fresh = odin_step_fresh(&target.step)
-		if target.fresh {
-			fmt.printfln("unchanged %s", target.pkg)
-		}
 	}
 	State :: struct {
 		targets: [dynamic]^Build_Target,
@@ -606,29 +588,24 @@ build_game :: proc(
 	run_jobs := make([dynamic]limited.Job)
 	for i in 0 ..< target_count {
 		target := &targets[i]
-		if !target.fresh {
-			fmt.printfln("build  %s", target.pkg)
-			run_cmd := odin_step_command(&target.step)
-			append(&state.targets, target)
-			append(
-				&run_jobs,
-				limited.Job {
-					cmd = run_cmd,
-					log = job_log(len(run_jobs), ".build.log"),
-					quiet = true,
-				},
-			)
-		}
+		fmt.printfln("build  %s", target.pkg)
+		append(&state.targets, target)
+		append(
+			&run_jobs,
+			limited.Job {
+				cmd = target.cmd,
+				log = job_log(len(run_jobs), ".build.log"),
+				quiet = true,
+			},
+		)
 	}
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
 		target := state.targets[index]
-		step := &target.step
 		log_path := job_log(index, ".build.log")
 		log, _ := os.read_entire_file_from_path(log_path, context.temp_allocator)
 		switch result {
 		case .Ok:
-			odin_step_succeeded(step)
 			if len(log) > 0 {os.write(os.stdout, log)}
 			fmt.printfln("built  %s (%.1f s)", target.pkg, seconds)
 		case .Interrupted:
@@ -772,48 +749,38 @@ check :: proc() -> bool {
 	)
 }
 
-// Check_Job: one of check's commands; a cached one (step set) is skipped while its
-// inputs are unchanged.
+// Check_Job: one of check's commands.
 Check_Job :: struct {
 	label:  string,
 	target: string, // what it builds for: named when it fails
 	cmd:    []string,
-	step:   Maybe(Odin_Step),
 }
 
-// run_checks runs check's jobs in parallel, skipping cached ones whose inputs are
-// unchanged; each prints its label, FAILED after it when it failed.
+// run_checks runs check's jobs in parallel; each prints its label, FAILED after it when it failed.
 run_checks :: proc(jobs: []Check_Job) -> bool {
 	State :: struct {
-		jobs:    []Check_Job,
-		indices: [dynamic]int, // jobs[indices[i]] is run_parallel's i
-		steps:   [dynamic]Odin_Step,
-		failed:  [dynamic]Failed_Log, // what the failed jobs said, printed grouped at the end
-		ok:      bool,
+		jobs:   []Check_Job,
+		failed: [dynamic]Failed_Log, // what the failed jobs said, printed grouped at the end
+		ok:     bool,
 	}
 	state := State {
 		jobs = jobs,
 		ok   = true,
 	}
-	run_jobs := make([dynamic]limited.Job)
-	unchanged := 0
-	for &job, i in jobs {
-		cmd := job.cmd
-		if step, cached := &job.step.?; cached {
-			if odin_step_fresh(step) {unchanged += 1; continue}
-			cmd = odin_step_command(step)
+	run_jobs := make([]limited.Job, len(jobs))
+	for job, i in jobs {
+		run_jobs[i] = limited.Job {
+			cmd   = job.cmd,
+			log   = job_log(i),
+			quiet = true,
 		}
-		append(&state.indices, i)
-		append(&run_jobs, limited.Job{cmd = cmd, log = job_log(len(run_jobs)), quiet = true})
 	}
-	if unchanged > 0 {fmt.printfln("cross  %d unchanged since they last passed", unchanged)}
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
-		job := &state.jobs[state.indices[index]]
+		job := &state.jobs[index]
 		log, _ := os.read_entire_file_from_path(job_log(index), context.temp_allocator)
 		switch result {
 		case .Ok:
-			if step, cached := &job.step.?; cached {odin_step_succeeded(step)}
 			if len(log) > 0 {os.write(os.stdout, log)}
 			fmt.println(job.label)
 		case .Interrupted:
@@ -863,22 +830,6 @@ jobs_width :: proc() -> int {
 		if n, ok := strconv.parse_int(value); ok && n > 0 {return n}
 	}
 	return max(os.get_processor_core_count(), 1)
-}
-
-// driver_step: this driver's own build, as build.sh and build.bat run it (they pass the
-// dependency flags odin_step_command would add, and touch build-driver.started first).
-driver_step :: proc() -> Odin_Step {
-	exe := path_join({"build", strings.concatenate({"build-driver", exe_suffix()})})
-	return Odin_Step {
-		name = "build-driver",
-		cmd = slice.concatenate(
-			[][]string {
-				{"odin", "build", "tools/build", strings.concatenate({"-out:", exe})},
-				COLLECTIONS,
-			},
-		),
-		output = exe,
-	}
 }
 
 // host_target is the Odin target this driver runs on, as -target: spells it.
@@ -961,11 +912,6 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 					label = strings.concatenate({"cross  ", target, " ", b[0], " ", b[1]}),
 					target = target,
 					cmd = cmd,
-					// The objects are not used: what is kept is that they built.
-					step = Odin_Step {
-						name = strings.concatenate({"cross-", target, "-", b[0], "-", name}),
-						cmd = cmd,
-					},
 				},
 			)
 		}
@@ -1453,7 +1399,6 @@ test_packages :: proc(
 	suffix := test_suffix(opts)
 	State :: struct {
 		packages: []string,
-		steps:    []Odin_Step,
 		limits:   []time.Duration,
 		statuses: []int, // each job's exit status (limited.Job.status)
 		watches:  []^Test_Watch, // each job's log watcher: the tests' times
@@ -1463,40 +1408,27 @@ test_packages :: proc(
 	state := State {
 		packages = packages,
 		suffix   = suffix,
-		steps    = make([]Odin_Step, len(packages)),
 		limits   = make([]time.Duration, len(packages)),
 		statuses = make([]int, len(packages)),
 		watches  = make([]^Test_Watch, len(packages)),
 		ok       = true,
 	}
 	jobs := make([]limited.Job, len(packages))
-	reused := 0
 	for pkg, i in packages {
 		out := test_binary(pkg, suffix)
 		log := test_log(pkg, suffix)
 		os.make_directory_all(filepath.dir(out))
-		step := &state.steps[i]
-		step^ = Odin_Step {
-			name   = strings.concatenate({"test-", test_name(pkg), suffix}),
-			cmd    = slice.concatenate(
-				[][]string {
-					test_odin_command(pkg),
-					ODIN_FLAGS,
-					COLLECTIONS,
-					test_odin_flags(out),
-					test_env_defines(qualified_test_names(pkg, opts.names)),
-					test_flags(opts),
-					extra,
-				},
-			),
-			output = out,
-		}
-		build: []string
-		if odin_step_fresh(step) {
-			reused += 1
-		} else {
-			build = odin_step_command(step)
-		}
+		build := slice.concatenate(
+			[][]string {
+				test_odin_command(pkg),
+				ODIN_FLAGS,
+				COLLECTIONS,
+				test_odin_flags(out),
+				test_env_defines(qualified_test_names(pkg, opts.names)),
+				test_flags(opts),
+				extra,
+			},
+		)
 		cmd := test_run_command(build, out, opts.sanitizer != "")
 		state.limits[i] = test_timeout(strings.concatenate({out, ".seconds"}))
 		state.watches[i] = new(Test_Watch)
@@ -1511,25 +1443,15 @@ test_packages :: proc(
 			status    = &state.statuses[i],
 		}
 	}
-	if reused > 0 {fmt.printfln("test   %d unchanged since built: run without compiling", reused)}
 	done :: proc(data: rawptr, index: int, result: limited.Run_Result, seconds: f64) {
 		state := (^State)(data)
 		pkg := state.packages[index]
-		step := &state.steps[index]
-		// Built in this run (whatever the tests said): the binary is good for its inputs.
-		// Not when interrupted: the kill may have come while it was being written.
-		if info, err := os.stat(step.output, context.temp_allocator);
-		   result != .Interrupted &&
-		   err == nil &&
-		   step.started != {} &&
-		   time.diff(step.started, info.modification_time) >= 0 {
-			odin_step_succeeded(step)
-		}
+		out := test_binary(pkg, state.suffix)
 		write_test_reports(pkg, state.watches[index])
 		switch result {
 		case .Ok:
 			_ = os.write_entire_file(
-				strings.concatenate({step.output, ".seconds"}),
+				strings.concatenate({out, ".seconds"}),
 				fmt.tprintf("%.1f", seconds),
 			)
 			fmt.printfln(
@@ -1618,103 +1540,38 @@ format_sources :: proc() -> bool {
 	return ok
 }
 
-// check_format compares every source file with odinfmt's output, in parallel. A file
-// whose content odinfmt already found formatted (the same odinfmt, the same config) is
-// not given to it again: the clean ones' keys are kept in CACHE_DIR/fmt-clean.
+// check_format compares every source file with odinfmt's output, in parallel.
 check_format :: proc() -> bool {
 	if !have_odinfmt() {return false}
-	tool := fmt_identity()
-	record := path_join({CACHE_DIR, "fmt-clean"})
-	known := make(map[string]bool)
-	if data, err := os.read_entire_file_from_path(record, context.allocator); err == nil {
-		for line in strings.split_lines(string(data)) {if line != "" {known[line] = true}}
-	}
 	files := odin_files()
-	keys := make([]string, len(files))
-	todo := make([dynamic]int)
-	jobs := make([dynamic]limited.Job)
+	jobs := make([]limited.Job, len(files))
 	for path, i in files {
-		k: Key_Builder
-		key_begin(&k, "odinfmt")
-		key_text(&k, tool)
-		key_file(&k, path)
-		keys[i], _ = key_end(&k)
-		keys[i] = strings.clone(keys[i])
-		if keys[i] != "" && keys[i] in known {continue}
-		append(&todo, i)
-		append(
-			&jobs,
-			limited.Job {
-				cmd = slice.clone([]string{"odinfmt", path}),
-				log = job_log(len(jobs)),
-				errors = job_log(len(jobs), ".err"),
-				quiet = true,
-			},
-		)
+		jobs[i] = limited.Job {
+			cmd    = slice.clone([]string{"odinfmt", path}),
+			log    = job_log(i),
+			errors = job_log(i, ".err"),
+			quiet  = true,
+		}
 	}
 	results := parallel(jobs[:], jobs_width())
 	dirty := 0
-	clean := make([dynamic]string)
-	for key in known {append(&clean, key)}
-	for i, j in todo {
-		path := files[i]
-		formatted, ferr := os.read_entire_file_from_path(jobs[j].log, context.allocator)
+	for path, i in files {
+		formatted, ferr := os.read_entire_file_from_path(jobs[i].log, context.allocator)
 		current, cerr := os.read_entire_file_from_path(path, context.allocator)
-		if results[j] != .Ok ||
+		if results[i] != .Ok ||
 		   ferr != nil ||
 		   cerr != nil ||
 		   string(formatted) != string(current) {
 			fmt.eprintfln("fmt    %s needs formatting", path)
 			dirty += 1
-			continue
-		}
-		// Its key is kept only if what odinfmt read is what the key was made from.
-		if d, ok := file_digest(path); ok && d == content_digest(current) && keys[i] != "" {
-			append(&clean, keys[i])
 		}
 	}
-	// Only the keys of files there now: the record does not grow for ever.
-	now := make(map[string]bool)
-	for key in keys {now[key] = true}
-	text := strings.builder_make()
-	for key in clean {if key in now {strings.write_string(&text, key); strings.write_byte(&text, '\n')}}
-	os.make_directory_all(CACHE_DIR)
-	_ = os.write_entire_file(record, strings.to_string(text))
 	if dirty > 0 {
 		fmt.eprintfln("fmt    %d file(s) not formatted - run `build fmt`", dirty)
 		return false
 	}
-	fmt.printfln(
-		"fmt    clean (%d looked at, %d unchanged since)",
-		len(todo),
-		len(files) - len(todo),
-	)
+	fmt.printfln("fmt    clean (%d files checked)", len(files))
 	return true
-}
-
-// fmt_identity: what decides odinfmt's output besides the file: the odinfmt binary
-// itself and any odinfmt.json it would read (in the tree or above it).
-fmt_identity :: proc() -> string {
-	k: Key_Builder
-	key_begin(&k, "odinfmt tool")
-	exe := ""
-	lookup := []string{"sh", "-c", "command -v odinfmt"}
-	when ODIN_OS == .Windows {lookup = {"where", "odinfmt"}}
-	if out, ok := capture(lookup); ok {
-		exe = strings.trim_space(strings.split_lines(out)[0])
-	}
-	key_text(&k, exe)
-	if exe != "" {key_file(&k, exe)}
-	dir, _ := os.get_working_directory(context.allocator)
-	for {
-		config := path_join({dir, "odinfmt.json"})
-		if os.exists(config) {key_file(&k, config)}
-		parent := filepath.dir(dir)
-		if parent == dir {break}
-		dir = parent
-	}
-	key, ok := key_end(&k)
-	return strings.clone(key) if ok else "unknown"
 }
 
 have_odinfmt :: proc() -> bool {
@@ -1742,10 +1599,7 @@ odin_files :: proc() -> []string {
 // Shaders
 // ---------------------------------------------------------------------------
 
-// shaders compiles each assets/shaders/<name>.<stage> to
-// build/shaders/<name>.<stage>.spv unless its key (in CACHE_DIR/shaders: a release
-// carries build/shaders whole) says it was compiled from these bytes by this
-// compiler: the source, every .glsl a shader may #include, the command and glslang.
+// shaders compiles each assets/shaders/<name>.<stage> to build/shaders/<name>.<stage>.spv.
 shaders :: proc() -> bool {
 	sources, err := os.read_all_directory_by_path(SHADER_DIR, context.allocator)
 	if err != nil {
@@ -1756,13 +1610,11 @@ shaders :: proc() -> bool {
 	glslang, found := glslang_path()
 	if !found {return false}
 	os.make_directory_all(SHADER_OUT_DIR)
-	os.make_directory_all(path_join({CACHE_DIR, "shaders"}))
 	ok := true
 	compiled := 0
 	for src in sources {
 		if !slice.contains(SHADER_EXTS, filepath.ext(src.name)) {continue}
 		out := path_join({SHADER_OUT_DIR, strings.concatenate({src.name, ".spv"})})
-		record := path_join({CACHE_DIR, "shaders", strings.concatenate({src.name, ".key"})})
 		cmd := []string {
 			glslang,
 			"-V",
@@ -1778,26 +1630,9 @@ shaders :: proc() -> bool {
 			out,
 			src.fullpath,
 		}
-		k: Key_Builder
-		key_begin(&k, "glslang")
-		for part in cmd {key_text(&k, part)}
-		key_file(&k, glslang)
-		key_file(&k, src.fullpath)
-		for inc in sources {
-			if filepath.ext(inc.name) == ".glsl" {key_file(&k, inc.fullpath)}
-		}
-		key_listing(&k, SHADER_DIR)
-		key, keyed := key_end(&k)
-		if saved, rerr := os.read_entire_file_from_path(record, context.allocator);
-		   keyed && rerr == nil && string(saved) == key && os.exists(out) {
-			continue
-		}
-		os.remove(record)
 		if run(cmd) {
 			fmt.printfln("shader %s", src.name)
 			compiled += 1
-			// The key read before compiling: an edit made meanwhile is compiled next time.
-			if keyed {_ = os.write_entire_file(record, key)}
 		} else {
 			ok = false
 		}
@@ -1925,8 +1760,7 @@ run_tool :: proc(name: string, args: []string, release := false) -> bool {
 	return run(slice.concatenate([][]string{{exe}, args}))
 }
 
-// build_tool builds tools/<name> into build/, unless its inputs and the executable are
-// what they were at the last build (a Odin_Step: a second bench step starts at once).
+// build_tool builds tools/<name> into build/.
 build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 	exe = path_join({"build", strings.concatenate({name, exe_suffix()})})
 	cmd := slice.concatenate(
@@ -1940,14 +1774,7 @@ build_tool :: proc(name: string) -> (exe: string, ok: bool) {
 		version_defines(version_of()),
 	},
 	)
-	step := Odin_Step {
-		name   = strings.concatenate({"tool-", name}),
-		cmd    = cmd,
-		output = exe,
-	}
-	if odin_step_fresh(&step) {return exe, true}
-	if !run(odin_step_command(&step)) {return exe, false}
-	odin_step_succeeded(&step)
+	if !run(cmd) {return exe, false}
 	return exe, true
 }
 

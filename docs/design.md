@@ -201,32 +201,24 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   universal) with the `curl` and `tar` every supported OS ships, verifies its SHA-256 against
   hashes committed in the repo, and unpacks it into `build/tools/`. Everyone compiles with
   the same version; bumping it is a version constant plus three hashes. For unusual hosts
-  (e.g. Linux arm64) `GLSLANG=/path/to/glslangValidator` overrides it. Shaders recompile only
-  when their content key changes; compile errors point at the GLSL file and line.
-- **The inner loop is parallel and skips what is unchanged, by content.** `check` runs the
-  host's type checks and the other targets' object builds in one pool, one job per core
-  (`VX_JOBS=n` overrides); `test` runs the packages the same way, the slowest last time first,
-  each printing its output whole when it ends; `test <package>...` runs only those. A step
-  whose inputs are byte for byte what they were when it last succeeded is not repeated: a test
-  package runs its kept binary without compiling, a game or server binary is skipped, a
-  cross-OS object build and a file's formatting check are not redone, a shader is not
-  recompiled, and `build.sh`/`build.bat` rebuild the driver only when its own inputs changed
-  (`tools/build/cache.odin`, records in `build/cache/`). A key is a 128-bit XXH3 over the command, `odin version` and the content of
-  every file the compiler read (its `-export-dependencies` list: sources and `#load`s) plus the
-  names in their directories, so a file added beside them counts; it is kept only when every
-  input is older than the step's start. Modification times alone never decide: a stale result
-  is a wrong one, not a speedup. The host's `odin check` is not cached (it has no dependency
-  list) and takes seconds in parallel. A test that loops over independent cases that each take
-  seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the
-  runner's threads share them; an `#assert` on the count says when a case lacks its test.
-- **CI uses exactly the same path**, cached between runs. Its Linux checks are three parallel
+  (e.g. Linux arm64) `GLSLANG=/path/to/glslangValidator` overrides it. Compile errors
+  point at the GLSL file and line.
+- **The inner loop is parallel and clean.** `check` runs the host's type checks and the other
+  targets' object builds in one pool, one job per core (`VX_JOBS=n` overrides); `test` runs the
+  packages the same way, the slowest last time first, each printing its output whole when it ends;
+  `test <package>...` runs only those. Builds and tests execute directly in parallel without
+  intermediate compiler cache state: builds stay fast, reproducible, and deterministic, eliminating
+  state invalidation and stale cache artifacts. A test that loops over independent cases that each take
+  seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
+  threads share them; an `#assert` on the count says when a case lacks its test.
+- **CI uses exactly the same path.** Its Linux checks are three parallel
   jobs, "Test · Linux x64" (check, tests, determinism, the smoke suite, the fuzz smoke run),
   "Game · Linux x64" (the scenario checks: benchmarks, fuzz, flight, culling, audio,
   multiplayer, crash handler, printers) and "Game · Linux x64, images" (visual baselines,
   AddressSanitizer, profiling, screens, sky and held items); macOS and Windows run one job
   each. CI sets `VX_CI=1`, which makes `check` skip its cross-target object builds (every Tier 1
   target compiles natively in its own job); locally they run. A tool's executable (`bench`) is
-  built once per job and reused while its inputs are unchanged. Every check runs on every push. The tests run once, with
+  built once per job. Every check runs on every push. The tests run once, with
   `ODIN_TEST_RANDOM_SEED` set to the run number (a re-run repeats it). `./build.sh test` turns
   `ODIN_TEST_RANDOM_SEED`, `ODIN_TEST_THREADS` and `ODIN_TEST_NAMES` from the environment into
   `-define:` flags (Odin reads them only as defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh
