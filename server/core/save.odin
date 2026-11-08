@@ -1068,7 +1068,7 @@ economy_install :: proc(we: ^World_Economy) {
 		we.dirty = true
 	}
 	we.economy, we.kernel = we.next.economy, we.next.kernel
-	we.mem = make([]planet.Lazy_State, len(we.economy.towns))
+	we.mem = make([]planet.Lazy_State, len(we.economy.towns), we.alloc)
 	we.key, we.decade, we.ivn, we.built =
 		we.cache.key, we.next.decade, len(we.next.interventions), true
 	delete(we.next.interventions, we.next.allocator)
@@ -1174,19 +1174,20 @@ economy_sync :: proc(w: ^World, observers: [][2]f64) {
 	if we.job == nil && (!we.built || decade != we.decade || len(ivs) != we.ivn) {
 		// The history changed (a new decade, an intervention) or there is none yet:
 		// build again. Until the new one is in, the old one (if any) serves.
+		// A build on a thread allocates from the heap (the main thread's allocator
+		// may be a tracking one, for this thread alone); in the tick, the world's.
+		// Everything a build makes is allocated and freed with we.alloc.
+		if we.alloc == {} {
+			we.alloc = context.allocator if w.server.config.stepped else runtime.heap_allocator()
+		}
 		we.next = Economy_Job {
 			address       = game.address_hash(w.address),
 			seed          = u64(w.seed),
 			day           = day,
 			decade        = decade,
-			interventions = slice.clone(ivs),
-			allocator     = context.allocator,
+			interventions = slice.clone(ivs, we.alloc),
+			allocator     = we.alloc,
 		}
-		// A build on a thread allocates from the heap (the main thread's allocator
-		// may be a tracking one, for this thread alone); in the tick, the world's.
-		if we.alloc ==
-		   {} {we.alloc = context.allocator if w.server.config.stepped else runtime.heap_allocator()}
-		we.next.allocator = we.alloc
 		if w.server.config.stepped {
 			economy_job(we) // (a stepped server stays deterministic: built in the tick)
 			economy_install(we)
