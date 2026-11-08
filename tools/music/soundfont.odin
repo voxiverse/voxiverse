@@ -192,6 +192,15 @@ unpack :: proc(archive, dir: string) -> bool {
 		if !found {root = "C:\\Windows"}
 		exe := strings.concatenate({root, "\\System32\\tar.exe"})
 		if os.exists(exe) && run_command({exe, "-xf", archive, "-C", dir}) {return true}
+		// 7-Zip's installer does not put 7z.exe on PATH: look where it installs.
+		for var in ([]string{"ProgramFiles", "ProgramFiles(x86)"}) {
+			pf := os.lookup_env(var, context.allocator) or_continue
+			seven := strings.concatenate({pf, "\\7-Zip\\7z.exe"})
+			if os.exists(seven) &&
+			   run_command(
+				   {seven, "x", "-y", strings.concatenate({"-o", dir}), archive},
+			   ) {return true}
+		}
 	}
 	if strings.has_suffix(archive, ".tar.xz") || strings.has_suffix(archive, ".tar.gz") {
 		for tool in ([]string{"bsdtar", "tar"}) {
