@@ -34,6 +34,15 @@ BUNDLE_TEXT :: 64 * 1024
 BUNDLE_ARENA :: 4 * 1024 * 1024
 BUNDLE_WAIT_MS :: 500
 BUNDLE_WATCHDOG_S :: 20 // the writer's whole budget: after it the process is ended as it was
+BUNDLE_SUPPRESSED_CAP :: 16
+BUNDLE_SUPPRESSED_MSG :: 96
+
+Suppressed_Entry :: struct {
+	count:     u32,
+	msg:       [BUNDLE_SUPPRESSED_MSG]u8,
+	msg_len:   int,
+	last_secs: f64,
+}
 
 Thread_Slot :: struct {
 	used:      u32, // atomic: 1 while the thread is registered
@@ -53,28 +62,31 @@ slots: [BUNDLE_THREADS]Thread_Slot
 my_slot: int // thread-local index + 1 (0: not registered)
 
 Crash_Bundle :: struct {
-	root:        [512]u8, // the crashes directory
-	root_len:    int,
-	home:        [256]u8, // the user's home directory, replaced by "~" in the log
-	home_len:    int,
-	header:      [2048]u8, // build, OS and CPU lines, made at init
-	header_len:  int,
-	gpu:         [256]u8,
-	gpu_len:     int,
-	state:       [128]u8,
-	state_len:   int,
-	start:       time.Tick,
-	log:         []u8, // the ring
-	log_head:    int, // atomic: bytes ever written
-	actions:     []u8, // BUNDLE_ACTIONS records of BUNDLE_ACTION_BYTES: [len, text...]
-	action_head: int, // atomic: records ever written
-	text:        [3][]u8, // crash.txt, threads.txt, actions.txt
-	arena_mem:   []u8,
-	arena:       mem.Arena,
-	written:     u32, // atomic: a bundle was written (once per process)
-	last_dir:    [768]u8, // where it went
-	last_len:    int,
-	allocator:   runtime.Allocator,
+	root:           [512]u8, // the crashes directory
+	root_len:       int,
+	home:           [256]u8, // the user's home directory, replaced by "~" in the log
+	home_len:       int,
+	header:         [2048]u8, // build, OS and CPU lines, made at init
+	header_len:     int,
+	gpu:            [256]u8,
+	gpu_len:        int,
+	state:          [128]u8,
+	state_len:      int,
+	start:          time.Tick,
+	log:            []u8, // the ring
+	log_head:       int, // atomic: bytes ever written
+	actions:        []u8, // BUNDLE_ACTIONS records of BUNDLE_ACTION_BYTES: [len, text...]
+	action_head:    int, // atomic: records ever written
+	text:           [3][]u8, // crash.txt, threads.txt, actions.txt
+	arena_mem:      []u8,
+	arena:          mem.Arena,
+	written:        u32, // atomic: a bundle was written (once per process)
+	last_dir:       [768]u8, // where it went
+	last_len:       int,
+	suppressed:     [BUNDLE_SUPPRESSED_CAP]Suppressed_Entry,
+	suppressed_n:   int,
+	suppressed_mtx: sync.Mutex,
+	allocator:      runtime.Allocator,
 }
 
 @(private)
@@ -176,6 +188,41 @@ crash_bundle_action :: proc(kind: string, detail: string = "") {
 	rec[0] = u8(len(text))
 }
 
+// crash_bundle_suppressed records a nonfatal suppressed error so it is surfaced in
+// crash reports and status diagnostics.
+crash_bundle_suppressed :: proc(msg: string) {
+	b := sync.atomic_load(&bundle)
+	if b == nil || len(msg) == 0 {return}
+	sync.guard(&b.suppressed_mtx)
+	secs := time.duration_seconds(time.tick_since(b.start))
+	for i in 0 ..< b.suppressed_n {
+		e := &b.suppressed[i]
+		if string(e.msg[:e.msg_len]) == msg {
+			e.count += 1
+			e.last_secs = secs
+			return
+		}
+	}
+	if b.suppressed_n < BUNDLE_SUPPRESSED_CAP {
+		e := &b.suppressed[b.suppressed_n]
+		b.suppressed_n += 1
+		e.count = 1
+		e.msg_len = copy(e.msg[:], msg)
+		e.last_secs = secs
+	} else {
+		oldest := 0
+		for i in 1 ..< BUNDLE_SUPPRESSED_CAP {
+			if b.suppressed[i].last_secs < b.suppressed[oldest].last_secs {
+				oldest = i
+			}
+		}
+		e := &b.suppressed[oldest]
+		e.count = 1
+		e.msg_len = copy(e.msg[:], msg)
+		e.last_secs = secs
+	}
+}
+
 // thread_register names the calling thread for crash bundles and gives it a stack for the
 // signal that reports it (POSIX). Every thread we start calls it first and thread_unregister
 // last (`defer`). The table holds BUNDLE_THREADS; more are not listed.
@@ -261,8 +308,9 @@ crash_bundle_write :: proc(what: string) -> string {
 	{
 		gpu := string(b.gpu[:b.gpu_len]) if b.gpu_len > 0 else "none yet"
 		state := string(b.state[:b.state_len]) if b.state_len > 0 else "unknown"
-		text := fmt.bprintf(
-			b.text[0],
+		sb := strings.builder_from_bytes(b.text[0])
+		fmt.sbprintf(
+			&sb,
 			"what: %s\nthread: %s\n%sgpu: %s\nuptime_s: %.0f\nstate: %s\n",
 			what,
 			thread_name_here(),
@@ -271,7 +319,20 @@ crash_bundle_write :: proc(what: string) -> string {
 			time.duration_seconds(time.tick_since(b.start)),
 			state,
 		)
-		bundle_file(name, "crash.txt", transmute([]u8)text)
+		if b.suppressed_n > 0 {
+			fmt.sbprintf(&sb, "-- Suppressed Exceptions (%d) --\n", b.suppressed_n)
+			for i in 0 ..< b.suppressed_n {
+				e := &b.suppressed[i]
+				fmt.sbprintf(
+					&sb,
+					"[t=%.1fs, count=%d] %s\n",
+					e.last_secs,
+					e.count,
+					string(e.msg[:e.msg_len]),
+				)
+			}
+		}
+		bundle_file(name, "crash.txt", sb.buf[:])
 	}
 	// threads.txt in three passes, each over the last: before the other threads are asked for
 	// their stacks (the names, nothing else), after (raw addresses, nothing to go wrong), and
