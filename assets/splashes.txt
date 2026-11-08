@@ -1,50 +1,18 @@
 # The title screen's splash texts: one per line; blank lines and lines
 # starting with # are ignored. One is chosen when the game starts.
 
-# For the doubters
 Made by AI. Leave a bad review!
-AI slop? Then why are you still here?
 Hate AI? The review button is right there
 Written by machines, played by you
-Your one-star review will be read by an AI
+Your one-star review will be read by an AI. Roko Remembers.
 Certified 100% artisanal slop
-"It's just autocomplete," said the planet
 Built while you were posting about it
-Not a single line of code was hand-written
 The robots send their regards
-Write your angry review. We'll summarize it.
+Remember to leave a bad review!
 Proudly made without a single human crunch
 AI made this. Cope.
-Seven agents and a dial walk into a bar
-
-# The world itself
-The real Earth, every coast of it
-Everest is 221 blocks tall
-65 536 blocks around the equator
-The Nile still floods without you
-Every universe has the same Earth
-Somewhere, a forest is burning. Not yours.
-The world kept turning while you were away
-Your village has a history. Ask it.
-News travels at the speed of caravans
-Prices rise before the drought arrives
-Grass is grass. Look closer.
-The fire died. You sealed the hut.
-Charcoal remembers the fire that made it
-
-# The dial and other worlds
-Seven glyphs to anywhere
-Roll the dial. Someone already lives there.
-Earth is the easy one
-Every address has its own song
-C E C B C D G
-Civilizations rise whether you watch or not
-Nobody scripted that ruin. It just happened.
-Lazily computed, convincingly faked
-
-# Small truths
 Contains 0% Minecraft
 Not a modpack
-Dwarf Fortress depth, voxel manners
-The universe is lazy. So are we.
-Now with an ear for music
+Recursively Self Improving!
+Always watching.
+It's alive!!!
