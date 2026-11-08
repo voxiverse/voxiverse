@@ -184,6 +184,15 @@ font_path :: proc(font: Font_Def) -> (path: string, ok: bool) {
 
 @(private = "file")
 unpack :: proc(archive, dir: string) -> bool {
+	// Windows 10 and later carry tar.exe in System32: it is bsdtar (libarchive),
+	// which reads .7z and .tar.xz, so a stock Windows needs no 7-Zip. (A GNU tar
+	// from Git for Windows earlier on PATH would not read .7z: System32's is named.)
+	when ODIN_OS == .Windows {
+		root, found := os.lookup_env("SystemRoot", context.allocator)
+		if !found {root = "C:\\Windows"}
+		exe := strings.concatenate({root, "\\System32\\tar.exe"})
+		if os.exists(exe) && run_command({exe, "-xf", archive, "-C", dir}) {return true}
+	}
 	if strings.has_suffix(archive, ".tar.xz") || strings.has_suffix(archive, ".tar.gz") {
 		for tool in ([]string{"bsdtar", "tar"}) {
 			exe := find_on_path(tool) or_continue
@@ -191,10 +200,10 @@ unpack :: proc(archive, dir: string) -> bool {
 		}
 		return false
 	}
-	for tool in ([]string{"7zz", "7z", "7za", "bsdtar"}) {
+	for tool in ([]string{"7zz", "7z", "7za", "bsdtar", "tar"}) {
 		exe := find_on_path(tool) or_continue
 		cmd := []string{exe, "x", "-y", strings.concatenate({"-o", dir}), archive}
-		if tool == "bsdtar" {cmd = {exe, "-xf", archive, "-C", dir}}
+		if tool == "bsdtar" || tool == "tar" {cmd = {exe, "-xf", archive, "-C", dir}}
 		if run_command(cmd) {return true}
 	}
 	return false
