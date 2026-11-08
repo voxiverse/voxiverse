@@ -126,14 +126,14 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		}
 		title_w := ui.measure_text(ctx, title_text, t.title_size)
 		title_right := logo.x + (logo.w + title_w) / 2
-		title_top := logo.y + (logo.h - t.title_size) / 2
-		centre := ui.Vec2{title_right + 8 + width / 2, logo.y + 28}
-		// Never run off the screen right edge; float above the title if pushed left.
+		title_bottom := logo.y + (logo.h + t.title_size) / 2
+		centre := ui.Vec2{title_right + 15, title_bottom + 10}
+		// Never run off the screen right edge; keep within screen padding.
 		if centre.x + width / 2 > ctx.screen.x + ctx.screen.w - 12 {
 			centre.x = ctx.screen.x + ctx.screen.w - width / 2 - 12
-			if centre.x - width / 2 < title_right {
-				centre.y = title_top - 10
-			}
+		}
+		if centre.x - width / 2 < ctx.screen.x + 12 {
+			centre.x = ctx.screen.x + width / 2 + 12
 		}
 		ui.draw_text_tilted(
 			ctx,
