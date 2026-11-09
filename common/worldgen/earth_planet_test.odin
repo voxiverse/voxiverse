@@ -1,5 +1,6 @@
 package worldgen
 
+import "core:sync"
 import "core:testing"
 
 import "common:game"
@@ -264,6 +265,18 @@ test_earth_places :: proc(t: ^testing.T) {
 	testing.expect_value(t, block, game.Block.Snow)
 	b, _, _ = surface(&g, "siberia")
 	testing.expect_value(t, b, Biome.Taiga)
+	// The Sahara: raised, not the sea.
+	b, top, _ = surface(&g, "sahara")
+	testing.expectf(t, top > 0, "the Sahara's surface is at y %d", top)
+	testing.expectf(t, b != .Ocean && b != .Frozen_Ocean, "the Sahara is %v", b)
+	// The Atacama: a mountain desert on the Andes' flank.
+	b, top, _ = surface(&g, "atacama")
+	testing.expectf(t, top > 0, "the Atacama's surface is at y %d", top)
+	testing.expectf(t, b != .Ocean && b != .Frozen_Ocean, "the Atacama is %v", b)
+	// The Nile delta: at sea level.
+	b, top, _ = surface(&g, "nile_delta")
+	testing.expect_value(t, top, 0)
+	testing.expect_value(t, b, Biome.Desert)
 	// The Amazon: a wide river within a few hundred blocks.
 	pl, _ := planet_place("amazon")
 	ax, az := planet_block_of(pl.lat, pl.lon)
@@ -381,4 +394,18 @@ test_planet_lakes :: proc(t: ^testing.T) {
 		}
 	}
 	testing.expect(t, shore, "the lake has a shore")
+}
+
+// test_planet_model_builds_once: the planet model is made (decoded or built) once per
+// process; loading it any number of times, from any thread, does not make it again.
+@(test)
+test_planet_model_builds_once :: proc(t: ^testing.T) {
+	_ = planet_model()
+	before := sync.atomic_load(&model_builds)
+	testing.expect_value(t, before, 1)
+	for _ in 0 ..< 8 {
+		_ = planet_model()
+		_ = planet_rivers()
+	}
+	testing.expect_value(t, sync.atomic_load(&model_builds), before)
 }
