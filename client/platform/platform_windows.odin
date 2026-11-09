@@ -222,6 +222,24 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 @(private)
 native_set_window_min_size :: proc(w: ^Window, width, height: i32) {}
 
+// Always-on-top through HWND_TOPMOST / HWND_NOTOPMOST; the window floating
+// above others; used when the player wants the game handy while watching
+// another application.
+@(private)
+native_set_always_on_top :: proc(w: ^Window, on: bool) {
+	n := &w.native
+	topmost := win.HWND_TOPMOST if on else win.HWND_NOTOPMOST
+	win.SetWindowPos(
+		n.hwnd,
+		topmost,
+		0,
+		0,
+		0,
+		0,
+		win.SWP_NOMOVE | win.SWP_NOSIZE | win.SWP_NOACTIVATE,
+	)
+}
+
 @(private)
 native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	n := &w.native

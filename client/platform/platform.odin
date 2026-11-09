@@ -18,6 +18,7 @@ Window :: struct {
 	mouse_captured:        bool, // wanted (set_mouse_captured); held only while focused
 	fullscreen:            bool, // borderless, covering the monitor (set_fullscreen)
 	keep_awake:            bool, // the screen kept on (set_keep_awake)
+	always_on_top:         bool, // above normal windows (set_always_on_top)
 	events:                [dynamic]Event, // this frame's events, refilled by poll_events
 	pads:                  Pads, // gamepads (pad.odin)
 	native:                Native_Window, // per-OS state
@@ -397,6 +398,17 @@ set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 set_window_min_size :: proc(w: ^Window, width, height: i32) {
 	w.min_width, w.min_height = max(0, width), max(0, height)
 	native_set_window_min_size(w, w.min_width, w.min_height)
+}
+
+// set_always_on_top keeps the game above normal windows (e.g., a reference
+// window alongside another app). An opt-in chore: off by default, and the
+// fullscreen pile is left alone (a fullscreen window is always on top by
+// nature of covering the monitor). SDL: SDL_WINDOW_ALWAYS_ON_TOP; GLFW:
+// glfwSetWindowFloating; winit: Window::set_window_level.
+set_always_on_top :: proc(w: ^Window, on: bool) {
+	if w.always_on_top == on {return}
+	w.always_on_top = on
+	native_set_always_on_top(w, on)
 }
 
 // Icon_Image: the window's icon at one size (RGBA, straight alpha).

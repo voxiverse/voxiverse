@@ -532,6 +532,29 @@ native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
 	x.SetWMNormalHints(n.display, n.window, &hints)
 }
 
+// Always-on-top: asked of the window manager (EWMH _NET_WM_STATE_ABOVE).
+// Useful when the game needs to stay on top of other windows (e.g., while
+// the user is watching another app for reference). Default is off.
+@(private)
+native_set_always_on_top :: proc(w: ^Window, on: bool) {
+	n := &w.native
+	NET_WM_STATE_REMOVE :: 0
+	NET_WM_STATE_ADD :: 1
+	e: xlib.XEvent
+	e.xclient = {
+		type         = .ClientMessage,
+		window       = n.window,
+		message_type = x.InternAtom(n.display, "_NET_WM_STATE", false),
+		format       = 32,
+	}
+	e.xclient.data.l[0] = NET_WM_STATE_ADD if on else NET_WM_STATE_REMOVE
+	e.xclient.data.l[1] = int(x.InternAtom(n.display, "_NET_WM_STATE_ABOVE", false))
+	e.xclient.data.l[3] = 1 // from a normal application
+	root := x.RootWindow(n.display, x.DefaultScreen(n.display))
+	x.SendEvent(n.display, root, false, {.SubstructureNotify, .SubstructureRedirect}, &e)
+	x.Flush(n.display)
+}
+
 // Fullscreen: asked of the window manager (EWMH _NET_WM_STATE_FULLSCREEN),
 // which removes the frame and covers the monitor; the new size arrives as
 // a ConfigureNotify like any resize.

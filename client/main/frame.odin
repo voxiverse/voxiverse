@@ -221,6 +221,7 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 	if app.settings.fullscreen !=
 	   w.fullscreen {platform.set_fullscreen(w, app.settings.fullscreen)}
 	engine.keep_awake_update(app)
+	platform.set_always_on_top(&app.window, app.debug.always_on_top)
 	engine.devchat_sync(app)
 	engine.steam_update(app)
 	gpu.set_vsync(&app.g, app.settings.vsync)
