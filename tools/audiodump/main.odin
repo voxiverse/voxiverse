@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:strings"
+import "core:time"
 
 import "client:audio"
 import "client:engine"
@@ -27,6 +28,7 @@ import "common:base"
 Options :: struct {
 	file:        string `args:"pos=0" usage:"capture file"`,
 	report:      bool `usage:"per-bus loudness (BS.1770), true peak, range, correlation, real-time counters"`,
+	bench:       bool `usage:"benchmark offline replay throughput and per-block DSP timing"`,
 	bus:         string `usage:"the bus a -wav takes, or the only one the decisions and report cover (default Master)"`,
 	wav:         string `usage:"write the bus's audio to this 32-bit float WAV"`,
 	spectrogram: string `usage:"write the bus's spectrogram (log frequency, time across) to this PNG"`,
@@ -150,8 +152,11 @@ main :: proc() {
 	bank := new(engine.Sound_Bank)
 	engine.sounds_init(bank, m)
 	an: audio.Analysis
-	if (h.start_clock != 0 && f.state == nil) ||
-	   !audio.analyze_replay(m, &f, {.Master} | {bus}, &an) {
+	bench_start := time.tick_now()
+	replay_ok := !((h.start_clock != 0 && f.state == nil) ||
+		!audio.analyze_replay(m, &f, {.Master} | {bus}, &an))
+	bench_elapsed := time.tick_diff(bench_start, time.tick_now())
+	if !replay_ok {
 		fmt.println(
 			"\nno replay: the capture's sounds are not this build's (or it began mid-session);",
 			"decisions, reports and WAVs need the same sounds",
@@ -229,6 +234,16 @@ main :: proc() {
 		fmt.println(
 			"  (the real-time counters - underruns, late, callback time - live in the running game's audio overlay and log, not in a capture)",
 		)
+	}
+	if opts.bench {
+		total_s := f64(frames) / rate
+		cpu_s := time.duration_seconds(bench_elapsed)
+		speedup := total_s / max(cpu_s, 1e-9)
+		cpu_pct := (cpu_s / max(total_s, 1e-9)) * 100.0
+		fmt.println("\nbenchmark")
+		fmt.printfln("  audio length:   %.2f s (%d frames)", total_s, frames)
+		fmt.printfln("  replay CPU:     %.3f s (%.1fx real-time)", cpu_s, speedup)
+		fmt.printfln("  core load:      %.2f%% of 1 core", cpu_pct)
 	}
 	if opts.spectrogram != "" {
 		pixels, w, h := audio.spectrogram_rgba(an.audio[bus][:], h.rate, 4096)

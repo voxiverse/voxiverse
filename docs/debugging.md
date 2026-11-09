@@ -132,7 +132,7 @@ by our own mixer (`client/audio/`). miniaudio only opens the sound card. Every O
 the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
 
 - `build sfx` writes every recipe of the base pack to `build/sounds/*.wav` and a target report, for listening outside the game.
-- F3 shows the device, the voices playing, and the sounds played and dropped. The log's last
+- F3 shows the device, the voices playing, the DSP callback duration (µs), and the sounds played and dropped. The log's last
   `audio` line summarizes the run.
 - `audio_capture` (<kbd>F9</kbd>), the F8 inspector and `build audio` are described in
   [audio.md](audio.md).
