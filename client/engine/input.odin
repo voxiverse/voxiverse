@@ -44,7 +44,19 @@ input_update :: proc(s: ^Input_State, events: []platform.Event) {
 			if !v.repeat {s.pressed += {v.key}}
 			if v.key == .Escape && !v.repeat {s.escape = true}
 			if v.key == .Grave && !v.repeat {s.console_toggle = true}
+			// Ctrl+V / Cmd+V: ask the platform for the clipboard's text.
+			if v.key == .V && !v.repeat {
+				if .Left_Alt not_in s.held &&
+				   .Right_Alt not_in s.held &&
+				   s.held & {.Left_Control, .Right_Control} != {} {
+					platform.request_clipboard_paste()
+				}
+			}
 			if k, ok := ui_key(v.symbol); ok {s.keys_pressed += {k}}
+		case platform.Paste_Event:
+			for r in v.runes {
+				if r >= ' ' && r != 0x7f {append(&s.text, r)}
+			}
 		case platform.Text_Event:
 			if v.char != '`' {append(&s.text, v.char)} 	// the console key types nothing
 		case platform.Mouse_Move_Event:

@@ -28,6 +28,7 @@ Event :: union {
 	Resize_Event,
 	Focus_Event,
 	Fullscreen_Event,
+	Paste_Event, // the OS clipboard's text arrived (request_clipboard_paste)
 	Key_Event,
 	Text_Event,
 	Mouse_Move_Event,
@@ -52,6 +53,11 @@ Focus_Event :: struct {
 // the game's setting follows.
 Fullscreen_Event :: struct {
 	fullscreen: bool,
+}
+
+// Paste_Event: the text the clipboard holds, as runes (temp allocator).
+Paste_Event :: struct {
+	runes: []rune,
 }
 
 // Key_Event: key is where the key is on the keyboard (bindings: WASD stays
@@ -425,6 +431,24 @@ set_always_on_top :: proc(w: ^Window, on: bool) {
 	w.always_on_top = on
 	native_set_always_on_top(w, on)
 }
+
+// request_clipboard_paste asks the platform to read the clipboard and deliver
+// its text as a Paste_Event (next frame at the latest). It does nothing if
+// there is no window yet, the clipboard is empty, or the platform cannot
+// answer the request; no event is delivered then.
+request_clipboard_paste :: proc() {
+	native_request_clipboard_paste()
+}
+
+// set_clipboard_text copies the given string into the OS clipboard. On
+// X11 the content is served by this process until another client takes
+// the selection (or the process exits).
+set_clipboard_text :: proc(text: string) {
+	native_set_clipboard_text(text)
+}
+
+// CLIPBOARD_CAP: how much text is served or consumed in one clipboard op.
+CLIPBOARD_CAP :: 64 * 1024
 
 // Icon_Image: the window's icon at one size (RGBA, straight alpha).
 Icon_Image :: struct {

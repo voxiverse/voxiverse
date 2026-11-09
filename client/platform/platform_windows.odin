@@ -2,6 +2,7 @@ package platform
 
 import "base:runtime"
 import "core:log"
+import "core:strings"
 import win "core:sys/windows"
 import vk "vendor:vulkan"
 
@@ -166,6 +167,68 @@ create_icon_from_rgba :: proc(img: Icon_Image) -> win.HICON {
 	return win.CreateIconIndirect(&info)
 }
 
+// ---------------------------------------------------------------------------
+// Clipboard: CF_UNICODETEXT. (ah, also CF_TEXT is refused — UTF-16 only; no
+// modern Windows app writes it, and we only read what we ourselves might
+// have put here.)
+
+@(private = "file")
+clip_pending: string // heap text waiting to be delivered as Paste_Event
+
+@(private = "file")
+deliver_paste :: proc(w: ^Window) {
+	if len(clip_pending) == 0 {return}
+	runes := make([dynamic]rune, 0, len(clip_pending) + 1, context.temp_allocator)
+	for r in clip_pending {
+		if r >= ' ' && r != 0x7f {append(&runes, r)}
+	}
+	delete(clip_pending)
+	clip_pending = ""
+	if len(runes) == 0 {return}
+	push_event(w, Paste_Event{runes[:]})
+}
+
+@(private)
+native_request_clipboard_paste :: proc() {
+	if !win.OpenClipboard(nil) {return}
+	defer win.CloseClipboard()
+	handle := win.GetClipboardData(win.CF_UNICODETEXT)
+	if handle == nil {return}
+	size := win.GlobalSize(cast(win.LPVOID)handle)
+	locked := win.GlobalLock(cast(win.HGLOBAL)handle)
+	if locked == nil {return}
+	defer win.GlobalUnlock(cast(win.HGLOBAL)handle)
+	// Bound the scan by the allocation, not by the NUL; cap it so an
+	// enormous clipboard is dropped instead of consumed whole.
+	n := int(size / 2) - 1
+	if n <= 0 {return}
+	if n > CLIPBOARD_CAP {n = CLIPBOARD_CAP}
+	s := win.wstring(cast([^]u16)locked)
+	if s2, err := win.wstring_to_utf8_alloc(s, n); err == nil && s2 != "" {
+		clip_pending = strings.clone(s2)
+	}
+}
+
+@(private)
+native_set_clipboard_text :: proc(text: string) {
+	if !win.OpenClipboard(nil) {return}
+	defer win.CloseClipboard()
+	text16 := win.utf8_to_utf16_alloc(text, context.temp_allocator)
+	if text16 == nil {return}
+	n := len(text16)
+	handle := win.GlobalAlloc(win.GMEM_MOVEABLE | win.GMEM_ZEROINIT, size_of(u16) * (n + 1))
+	if handle == nil {return}
+	locked := win.GlobalLock(cast(win.HGLOBAL)handle)
+	if locked == nil {win.GlobalFree(handle); return}
+	dst := cast([^]u16)locked
+	for i in 0 ..< n {dst[i] = text16[i]}
+	dst[n] = 0
+	win.GlobalUnlock(cast(win.HGLOBAL)handle)
+	if win.SetClipboardData(win.CF_UNICODETEXT, cast(win.HANDLE)handle) == nil {
+		win.GlobalFree(handle) // failure: we still own it
+	}
+}
+
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {
 	flags := u32(ES_CONTINUOUS)
@@ -323,6 +386,7 @@ clip_cursor :: proc(w: ^Window) {
 
 @(private)
 native_poll :: proc(w: ^Window) {
+	deliver_paste(w)
 	msg: win.MSG
 	for win.PeekMessageW(&msg, nil, 0, 0, win.PM_REMOVE) {
 		win.TranslateMessage(&msg) // produces WM_CHAR from key messages

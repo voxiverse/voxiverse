@@ -803,6 +803,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 @(private)
 native_poll :: proc(w: ^Window) {
 	n := &w.native
+	deliver_paste(w)
 	pool := NS.AutoreleasePool.alloc()->init()
 	defer pool->drain()
 	past := msg(^NS.Object, class_of("NSDate"), "distantPast")
@@ -1145,6 +1146,55 @@ native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 		CFRelease(mode)
 	}
 	return info, true
+}
+
+// ---------------------------------------------------------------------------
+// Clipboard: NSPasteboard. UTF-8 plain text through cStringUsingEncoding:.
+
+@(private = "file")
+clip_pending: string // heap text waiting to be delivered as Paste_Event
+
+@(private = "file")
+deliver_paste :: proc(w: ^Window) {
+	if len(clip_pending) == 0 {return}
+	runes := make([dynamic]rune, 0, len(clip_pending) + 1, context.temp_allocator)
+	for r in clip_pending {
+		if r >= ' ' && r != 0x7f {append(&runes, r)}
+	}
+	delete(clip_pending)
+	clip_pending = ""
+	if len(runes) == 0 {return}
+	push_event(w, Paste_Event{runes[:]})
+}
+
+@(private)
+native_request_clipboard_paste :: proc() {
+	pasteboard := msg(^NS.Object, class_of("NSPasteboard"), "generalPasteboard")
+	s := msg(^NS.Object, pasteboard, "stringForType:", ns_string("public.utf8-plain-text"))
+	if s == nil {return}
+	cstr := msg(cstring, s, "cStringUsingEncoding:", NS.UInteger(4)) // NSUTF8StringEncoding = 4
+	if cstr == nil {return}
+	clip_pending = strings.clone(string(cstr))
+	if len(clip_pending) > CLIPBOARD_CAP {
+		log.warn("platform clipboard paste skipped: too much text")
+		delete(clip_pending)
+		clip_pending = ""
+	}
+}
+
+@(private)
+native_set_clipboard_text :: proc(text: string) {
+	s := text
+	if len(s) > CLIPBOARD_CAP {s = s[:CLIPBOARD_CAP]}
+	pasteboard := msg(^NS.Object, class_of("NSPasteboard"), "generalPasteboard")
+	_ = msg(NS.Integer, pasteboard, "clearContents")
+	_ = msg(
+		NS.BOOL,
+		pasteboard,
+		"setString:forType:",
+		ns_string(s),
+		ns_string("public.utf8-plain-text"),
+	)
 }
 
 // ---------------------------------------------------------------------------
