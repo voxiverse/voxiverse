@@ -450,16 +450,56 @@ set_clipboard_text :: proc(text: string) {
 // CLIPBOARD_CAP: how much text is served or consumed in one clipboard op.
 CLIPBOARD_CAP :: 64 * 1024
 
+// clipboard_capped truncates text to CLIPBOARD_CAP bytes for a set.
+clipboard_capped :: proc(text: string) -> string {
+	if len(text) > CLIPBOARD_CAP {return text[:CLIPBOARD_CAP]}
+	return text
+}
+
+// randr_mode_refresh_hz: XRRModeInfo.dotClock is kHz; refresh is
+// (dotClock * 1000) / (hTotal * vTotal) Hz.
+randr_mode_refresh_hz :: proc(dot_clock_khz, h_total, v_total: u64) -> f64 {
+	if h_total == 0 || v_total == 0 {return 0}
+	return f64(dot_clock_khz) * 1000 / (f64(h_total) * f64(v_total))
+}
+
+// cocoa_top_left_y / cocoa_from_top_left_y convert between Cocoa's
+// bottom-left origin and the top-left screen space Win32 and X11 use
+// (and that settings store). main_h is the primary screen's height.
+cocoa_top_left_y :: proc(cocoa_y, window_h, main_h: i32) -> i32 {
+	return main_h - cocoa_y - window_h
+}
+
+cocoa_from_top_left_y :: proc(top_y, window_h, main_h: i32) -> i32 {
+	return main_h - top_y - window_h
+}
+
 // Icon_Image: the window's icon at one size (RGBA, straight alpha).
 Icon_Image :: struct {
 	size: int,
 	rgba: []u8,
 }
 
-// set_window_icon gives the window its icon, the sizes it is offered (X11:
-// _NET_WM_ICON; Windows has the executable's resource; macOS: not yet).
+// set_window_icon gives the window its icon from the sizes offered (X11:
+// _NET_WM_ICON; Windows WM_SETICON small+big; macOS Dock representation).
 set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
 	native_set_window_icon(w, images)
+}
+
+// icon_pick: index of a valid square RGBA image nearest to target pixels.
+// Prefers the largest at or below the target; otherwise the smallest above.
+icon_pick :: proc(images: []Icon_Image, target: int) -> int {
+	best_le, best_gt := -1, -1
+	for img, i in images {
+		if img.size <= 0 || len(img.rgba) != img.size * img.size * 4 {continue}
+		if img.size <= target {
+			if best_le < 0 || img.size > images[best_le].size {best_le = i}
+		} else if best_gt < 0 || img.size < images[best_gt].size {
+			best_gt = i
+		}
+	}
+	if best_le >= 0 {return best_le}
+	return best_gt
 }
 
 // Display_Info: what a display is, its active pixel mode and how fast
@@ -482,6 +522,12 @@ display_count :: proc() -> (i32, bool) {
 // display_info: the display at index (0 is the primary), or ok false.
 display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 	return native_display_info(index)
+}
+
+// window_display_info: the display the window is on (nearest if straddling),
+// or ok false when the OS cannot say.
+window_display_info :: proc(w: ^Window) -> (info: Display_Info, ok: bool) {
+	return native_window_display_info(w)
 }
 
 // display_refresh: the primary display's refresh rate in Hz, or 0.

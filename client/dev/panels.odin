@@ -76,7 +76,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		),
 		fps_color,
 	)
-	if info, ok := platform.display_info(0); ok {
+	if info, ok := platform.window_display_info(&app.window); ok {
 		hz_text := "refresh unknown"
 		if info.refresh_hz != 0 {hz_text = fmt.tprintf("%.0f Hz", info.refresh_hz)}
 		name := info.name if info.name != "" else "(unnamed display)"

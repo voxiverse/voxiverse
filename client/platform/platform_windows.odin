@@ -20,6 +20,8 @@ Native_Window :: struct {
 	high_surrogate: u16, // first half of a UTF-16 surrogate pair from WM_CHAR
 	captured:       bool, // raw mouse input on, cursor hidden and clipped
 	windowed:       win.WINDOWPLACEMENT, // where the window was before fullscreen
+	icon_small:     win.HICON, // last WM_SETICON small we created (DestroyIcon on replace)
+	icon_big:       win.HICON, // last WM_SETICON big we created
 }
 
 @(private)
@@ -96,34 +98,58 @@ ICON_SMALL :: 0
 @(private = "file")
 ICON_BIG :: 1
 @(private = "file")
+ICON_SMALL_PX :: 16
+@(private = "file")
+ICON_BIG_PX :: 32
+@(private = "file")
 ES_CONTINUOUS :: 0x80000000
 @(private = "file")
 ES_SYSTEM_REQUIRED :: 0x00000001
 @(private = "file")
 ES_DISPLAY_REQUIRED :: 0x00000002
+@(private = "file")
+DM_DISPLAYFREQUENCY :: 0x00400000
+@(private = "file")
+HORZSIZE :: 4 // GetDeviceCaps: width in mm
+@(private = "file")
+VERTSIZE :: 6 // GetDeviceCaps: height in mm
 
 @(private = "file")
 keep_awake_warned: bool // a failure is told once per run
 
+// CreateDCW is not in core:sys/windows; used for a monitor's physical size.
+foreign import gdi32_extra "system:Gdi32.lib"
+
+@(private = "file", default_calling_convention = "system")
+foreign gdi32_extra {
+	CreateDCW :: proc(pwszDriver, pwszDevice, pszPort: win.LPCWSTR, pdm: ^win.DEVMODEW) -> win.HDC ---
+}
+
 // The display and the system stay on while this thread says so (until
 // it says ES_CONTINUOUS alone).
-// set_window_icon: build small and large icons from the RGBA images and
-// associate them with the window (WM_SETICON). When no valid images are
-// supplied, the .exe's resource icon stands.
+// set_window_icon: WM_SETICON with a 16px-ish and a 32px-ish HICON from the
+// offered RGBA sizes. We own those handles and DestroyIcon them on replace
+// and close; the .exe resource stands when nothing valid is offered.
 @(private)
 native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
-	best := -1
-	for img, i in images {
-		if len(img.rgba) != img.size * img.size * 4 {continue}
-		if best < 0 || img.size > images[best].size {best = i}
+	small_i := icon_pick(images, ICON_SMALL_PX)
+	big_i := icon_pick(images, ICON_BIG_PX)
+	if small_i < 0 && big_i < 0 {return}
+	if small_i < 0 {small_i = big_i}
+	if big_i < 0 {big_i = small_i}
+	h_small := create_icon_from_rgba(images[small_i])
+	h_big := h_small
+	if big_i != small_i {
+		h_big = create_icon_from_rgba(images[big_i])
+		if h_big == nil {h_big = h_small}
 	}
-	if best < 0 {return}
-	img := images[best]
-	hIcon := create_icon_from_rgba(img)
-	if hIcon == nil {return}
+	if h_small == nil {return}
 	n := &w.native
-	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_SMALL, win.LPARAM(uintptr(hIcon)))
-	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_BIG, win.LPARAM(uintptr(hIcon)))
+	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_SMALL, win.LPARAM(uintptr(h_small)))
+	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_BIG, win.LPARAM(uintptr(h_big)))
+	if n.icon_small != nil {win.DestroyIcon(n.icon_small)}
+	if n.icon_big != nil && n.icon_big != n.icon_small {win.DestroyIcon(n.icon_big)}
+	n.icon_small, n.icon_big = h_small, h_big
 }
 
 @(private = "file")
@@ -159,12 +185,15 @@ create_icon_from_rgba :: proc(img: Icon_Image) -> win.HICON {
 			pixels[dst_row + x] = (a << 24) | (r << 16) | (g << 8) | b
 		}
 	}
+	// 32-bpp color with a null mask: Windows uses the alpha channel.
 	info := win.ICONINFO {
 		fIcon    = true,
-		hbmMask  = nil, // all-opaque mask: icon doesn't use transparency here (alpha ignored)
+		hbmMask  = nil,
 		hbmColor = bm,
 	}
-	return win.CreateIconIndirect(&info)
+	icon := win.CreateIconIndirect(&info)
+	win.DeleteObject(win.HGDIOBJ(bm)) // CreateIconIndirect copied the bits
+	return icon
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +234,7 @@ native_request_clipboard_paste :: proc() {
 	if n > CLIPBOARD_CAP {n = CLIPBOARD_CAP}
 	s := win.wstring(cast([^]u16)locked)
 	if s2, err := win.wstring_to_utf8_alloc(s, n); err == nil && s2 != "" {
+		if len(clip_pending) > 0 {delete(clip_pending)}
 		clip_pending = strings.clone(s2)
 	}
 }
@@ -213,10 +243,14 @@ native_request_clipboard_paste :: proc() {
 native_set_clipboard_text :: proc(text: string) {
 	if !win.OpenClipboard(nil) {return}
 	defer win.CloseClipboard()
-	text16 := win.utf8_to_utf16_alloc(text, context.temp_allocator)
+	if !win.EmptyClipboard() {return}
+	text16 := win.utf8_to_utf16_alloc(clipboard_capped(text), context.temp_allocator)
 	if text16 == nil {return}
 	n := len(text16)
-	handle := win.GlobalAlloc(win.GMEM_MOVEABLE | win.GMEM_ZEROINIT, size_of(u16) * (n + 1))
+	handle := win.GlobalAlloc(
+		win.GMEM_MOVEABLE | win.GMEM_ZEROINIT,
+		win.SIZE_T(size_of(u16) * (n + 1)),
+	)
 	if handle == nil {return}
 	locked := win.GlobalLock(cast(win.HGLOBAL)handle)
 	if locked == nil {win.GlobalFree(handle); return}
@@ -247,6 +281,9 @@ native_set_keep_awake :: proc(w: ^Window, on: bool) {
 native_close :: proc(w: ^Window) {
 	n := &w.native
 	if n.captured {native_set_mouse_captured(w, false)}
+	if n.icon_small != nil {win.DestroyIcon(n.icon_small)}
+	if n.icon_big != nil && n.icon_big != n.icon_small {win.DestroyIcon(n.icon_big)}
+	n.icon_small, n.icon_big = nil, nil
 	if n.hwnd != nil {win.DestroyWindow(n.hwnd)}
 	win.UnregisterClassW(win.L(CLASS_NAME), n.instance)
 }
@@ -283,7 +320,24 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 // to propose a size for the dragging frame; the values we store in w are
 // honored on every event.
 @(private)
-native_set_window_min_size :: proc(w: ^Window, width, height: i32) {}
+native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
+	n := &w.native
+	if n.hwnd == nil {return}
+	// WM_GETMINMAXINFO reads w.min_*; nudge so a late set is applied now.
+	win.SetWindowPos(
+		n.hwnd,
+		nil,
+		0,
+		0,
+		0,
+		0,
+		win.SWP_NOMOVE |
+		win.SWP_NOSIZE |
+		win.SWP_NOZORDER |
+		win.SWP_NOACTIVATE |
+		win.SWP_FRAMECHANGED,
+	)
+}
 
 // Always-on-top through HWND_TOPMOST / HWND_NOTOPMOST; the window floating
 // above others; used when the player wants the game handy while watching
@@ -688,6 +742,37 @@ native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 	return {}, false
 }
 
+@(private)
+native_window_display_info :: proc(w: ^Window) -> (info: Display_Info, ok: bool) {
+	n := &w.native
+	if n.hwnd == nil {return {}, false}
+	hmon := win.MonitorFromWindow(n.hwnd, .MONITOR_DEFAULTTONEAREST)
+	mi: win.MONITORINFOEXW
+	mi.cbSize = size_of(win.MONITORINFOEXW)
+	if !win.GetMonitorInfoW(hmon, cast(^win.MONITORINFO)&mi) {
+		return native_display_info(0)
+	}
+	dev: win.DISPLAY_DEVICEW
+	dev.cb = size_of(win.DISPLAY_DEVICEW)
+	i, connected: u32
+	for {
+		if !win.EnumDisplayDevicesW(nil, i, &dev, 0) {break}
+		i += 1
+		if (dev.StateFlags & 0x00000001) == 0 {continue}
+		match := true
+		for k in 0 ..< win.CCHDEVICENAME {
+			if mi.szDevice[k] != dev.DeviceName[k] {match = false; break}
+			if mi.szDevice[k] == 0 {break}
+		}
+		if match {
+			info = display_info_from(connected, &dev)
+			return info, true
+		}
+		connected += 1
+	}
+	return native_display_info(0)
+}
+
 @(private = "file")
 display_info_from :: proc(index: u32, dev: ^win.DISPLAY_DEVICEW) -> Display_Info {
 	info := Display_Info {
@@ -699,16 +784,21 @@ display_info_from :: proc(index: u32, dev: ^win.DISPLAY_DEVICEW) -> Display_Info
 	   err == nil && s != "" {
 		info.name = s
 	}
+	device_name := win.wstring(raw_data(dev.DeviceName[:]))
 	devmode: win.DEVMODEW
 	devmode.dmSize = size_of(win.DEVMODEW)
 	devmode.dmFields = 0
-	if win.EnumDisplaySettingsW(
-		win.wstring(raw_data(dev.DeviceName[:])),
-		win.ENUM_CURRENT_SETTINGS,
-		&devmode,
-	) {
+	if win.EnumDisplaySettingsW(device_name, win.ENUM_CURRENT_SETTINGS, &devmode) {
 		info.width, info.height = i32(devmode.dmPelsWidth), i32(devmode.dmPelsHeight)
-		info.refresh_hz = f64(devmode.dmDisplayFrequency)
+		// 0/1 mean "default hardware rate", not a real Hz.
+		if (devmode.dmFields & DM_DISPLAYFREQUENCY) != 0 && devmode.dmDisplayFrequency > 1 {
+			info.refresh_hz = f64(devmode.dmDisplayFrequency)
+		}
+	}
+	if dc := CreateDCW(nil, device_name, nil, nil); dc != nil {
+		info.physical_mm_width = i32(win.GetDeviceCaps(dc, HORZSIZE))
+		info.physical_mm_height = i32(win.GetDeviceCaps(dc, VERTSIZE))
+		win.DeleteDC(dc)
 	}
 	return info
 }

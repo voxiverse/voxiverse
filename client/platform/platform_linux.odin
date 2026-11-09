@@ -19,33 +19,35 @@ native_vulkan_loader_name :: proc() -> string {
 }
 
 Native_Window :: struct {
-	display:          ^xlib.Display,
-	window:           xlib.Window,
-	wm_delete_window: xlib.Atom,
-	keys_down:        [Key]bool, // to tell auto-repeat presses from real ones
+	display:              ^xlib.Display,
+	window:               xlib.Window,
+	wm_delete_window:     xlib.Atom,
+	keys_down:            [Key]bool, // to tell auto-repeat presses from real ones
 	// Mouse capture: pointer grabbed, cursor hidden and kept at the centre.
 	// Motion comes from XInput2 raw events (device deltas, unaccelerated;
 	// XWayland feeds them from Wayland's relative pointer) when libXi is
 	// available, otherwise from how far the pointer moved off the centre.
-	captured:         bool,
-	xi_opcode:        i32, // XInput extension opcode; 0 without XInput2
-	grab_pending:     bool, // the grab failed (e.g. not yet viewable): retry
+	captured:             bool,
+	xi_opcode:            i32, // XInput extension opcode; 0 without XInput2
+	grab_pending:         bool, // the grab failed (e.g. not yet viewable): retry
 	// Until the first warp lands, motion is measured from wherever the
 	// pointer was before: ignore it.
-	awaiting_centre:  bool,
-	hidden_cursor:    xlib.Cursor,
-	awake_reset:      time.Tick, // when X's screensaver timer was last reset (keep_awake)
+	awaiting_centre:      bool,
+	hidden_cursor:        xlib.Cursor,
+	awake_reset:          time.Tick, // when X's screensaver timer was last reset (keep_awake)
 	// XIM for Unicode/composed text input (dead keys, CJK IMEs); an IM that
 	// supports neither preedit nor status is ignored. Fallback: Latin-1 text.
-	xim:              rawptr,
-	ic:               rawptr,
-	clipboard_atom:   xlib.Atom, // CLIPBOARD, interned at window open
-	utf8_atom:        xlib.Atom, // UTF8_STRING, interned at window open
-	targets_atom:     xlib.Atom, // TARGETS, interned at window open
-	paste_property:   xlib.Atom, // our property for the data OTHER clients ask us to convert
-	copy_text:        string, // the text we serve as the owner (context allocator)
-	paste_ready:      string, // text waiting to be delivered as Paste_Event (context allocator)
-	paste_pending:    bool, // a paste request is waiting for their reply
+	xim:                  rawptr,
+	ic:                   rawptr,
+	clipboard_atom:       xlib.Atom, // CLIPBOARD, interned at window open
+	utf8_atom:            xlib.Atom, // UTF8_STRING, interned at window open
+	targets_atom:         xlib.Atom, // TARGETS, interned at window open
+	paste_property:       xlib.Atom, // our property for the data OTHER clients ask us to convert
+	copy_text:            string, // the text we serve as the owner (context allocator)
+	paste_ready:          string, // text waiting to be delivered as Paste_Event (context allocator)
+	paste_pending:        bool, // a paste request is waiting for their reply
+	paste_tried_string:   bool, // UTF8_STRING failed; retrying with STRING
+	restore_w, restore_h: i32, // size before a _NET_WM_STATE_HIDDEN minimize
 }
 
 @(private)
@@ -130,7 +132,6 @@ X11 :: struct {
 		requestor: xlib.Window,
 		time: xlib.Time,
 	),
-	FreeBytes:                 proc "c" (data: rawptr) -> i32,
 	Pending:                   proc "c" (display: ^xlib.Display) -> i32,
 	NextEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
 	PeekEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
@@ -203,21 +204,24 @@ X11 :: struct {
 		detectable: b32,
 		supported: ^b32,
 	) -> b32,
-	XOpenIM:                   proc "c" (
+	// XIM / XFree: field names omit the leading X; initialize_symbols
+	// prefixes "X" (OpenIM → XOpenIM). A field already named XOpenIM looked
+	// up XXOpenIM and the whole libX11 load failed (Inkling).
+	OpenIM:                    proc "c" (
 		display: ^xlib.Display,
 		dbase: rawptr,
 		res_name: cstring,
 		res_class: cstring,
 	) -> rawptr,
-	XCloseIM:                  proc "c" (xim: rawptr) -> i32,
-	XCreateIC:                 proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
-	XDestroyIC:                proc "c" (xic: rawptr) -> i32,
-	XSetICFocus:               proc "c" (xic: rawptr) -> i32,
-	XUnsetICFocus:             proc "c" (xic: rawptr) -> i32,
-	XSetIMValues:              proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
-	XGetIMValues:              proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
-	XFilterEvent:              proc "c" (event: ^xlib.XEvent, w: xlib.Window) -> bool,
-	Xutf8LookupString:         proc "c" (
+	CloseIM:                   proc "c" (xim: rawptr) -> i32,
+	CreateIC:                  proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	DestroyIC:                 proc "c" (xic: rawptr) -> i32,
+	SetICFocus:                proc "c" (xic: rawptr) -> i32,
+	UnsetICFocus:              proc "c" (xic: rawptr) -> i32,
+	SetIMValues:               proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	GetIMValues:               proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	FilterEvent:               proc "c" (event: ^xlib.XEvent, w: xlib.Window) -> bool,
+	utf8LookupString:          proc "c" (
 		ic: rawptr,
 		event: ^xlib.XKeyEvent,
 		buffer: [^]u8,
@@ -225,7 +229,7 @@ X11 :: struct {
 		keysym: ^xlib.KeySym,
 		status: ^i32,
 	) -> i32,
-	XmbLookupString:           proc "c" (
+	mbLookupString:            proc "c" (
 		ic: rawptr,
 		event: ^xlib.XKeyEvent,
 		buffer: [^]u8,
@@ -233,7 +237,7 @@ X11 :: struct {
 		keysym: ^xlib.KeySym,
 		status: ^i32,
 	) -> i32,
-	XFree:                     proc "c" (ptr: rawptr) -> i32,
+	Free:                      proc "c" (ptr: rawptr) -> i32,
 	ChangeProperty:            proc "c" (
 		display: ^xlib.Display,
 		window: xlib.Window,
@@ -390,21 +394,21 @@ ic_destroy_callback :: proc "c" (xim: xlib.XIM, client_data: rawptr, call_data: 
 setup_xim :: proc(w: ^Window) {
 	n := &w.native
 	styles: ^xlib.XIMStyles
-	n.xim = x.XOpenIM(n.display, nil, nil, nil)
+	n.xim = x.OpenIM(n.display, nil, nil, nil)
 	if n.xim != nil {
 		im_cb := xlib.XIMCallback {
 			client_data = n,
 			callback    = xim_destroy_callback,
 		}
-		x.XSetIMValues(n.xim, "destroyCallback", &im_cb, nil)
+		x.SetIMValues(n.xim, "destroyCallback", &im_cb, nil)
 	}
 	if n.xim == nil {
 		log.info("platform no IM for this locale; text input will be Latin-1 only")
 		return
 	}
-	if x.XGetIMValues(n.xim, "queryInputStyle", &styles, nil) != nil {
+	if x.GetIMValues(n.xim, "queryInputStyle", &styles, nil) != nil {
 		log.info("platform this IM has no supported styles; text input will be Latin-1 only")
-		x.XCloseIM(n.xim)
+		x.CloseIM(n.xim)
 		n.xim = nil
 		return
 	}
@@ -416,10 +420,10 @@ setup_xim :: proc(w: ^Window) {
 			break
 		}
 	}
-	x.XFree(styles)
+	x.Free(styles)
 	if !found {
 		log.info("platform this IM supports no hidden style; text input will be Latin-1 only")
-		x.XCloseIM(n.xim)
+		x.CloseIM(n.xim)
 		n.xim = nil
 		return
 	}
@@ -428,7 +432,7 @@ setup_xim :: proc(w: ^Window) {
 		callback    = ic_destroy_callback,
 	}
 	style := xlib.XIMStyle(xlib.XIMPreeditNothing | xlib.XIMStatusNothing)
-	ic := x.XCreateIC(
+	ic := x.CreateIC(
 		n.xim,
 		"inputStyle",
 		style,
@@ -442,12 +446,12 @@ setup_xim :: proc(w: ^Window) {
 	)
 	if ic == nil {
 		log.info("platform could not create an IC; text input will be Latin-1 only")
-		x.XCloseIM(n.xim)
+		x.CloseIM(n.xim)
 		n.xim = nil
 		return
 	}
 	n.ic = ic
-	if w.focused {x.XSetICFocus(n.ic)}
+	if w.focused {x.SetICFocus(n.ic)}
 }
 
 @(private)
@@ -677,8 +681,8 @@ native_close :: proc(w: ^Window) {
 	if len(n.paste_ready) > 0 {delete(n.paste_ready)}
 	if len(n.copy_text) > 0 {delete(n.copy_text)}
 	if n.display == nil {return}
-	if n.ic != nil {x.XDestroyIC(n.ic); n.ic = nil}
-	if n.xim != nil {x.XCloseIM(n.xim); n.xim = nil}
+	if n.ic != nil {x.DestroyIC(n.ic); n.ic = nil}
+	if n.xim != nil {x.CloseIM(n.xim); n.xim = nil}
 	if n.captured {native_set_mouse_captured(w, false)}
 	if n.hidden_cursor != 0 {x.FreeCursor(n.display, n.hidden_cursor)}
 	if n.window != 0 {x.DestroyWindow(n.display, n.window)}
@@ -743,11 +747,11 @@ warp_to_centre :: proc(w: ^Window) {
 push_xim_text :: proc(w: ^Window, ic: rawptr, e: ^xlib.XKeyEvent) {
 	buf: [64]u8
 	status: i32
-	count := x.Xutf8LookupString(ic, e, &buf[0], len(buf), nil, &status)
+	count := x.utf8LookupString(ic, e, &buf[0], len(buf), nil, &status)
 	out: []u8
 	if status == XBufferOverflow {
 		out = make([]u8, count + 1, context.temp_allocator)
-		count = x.Xutf8LookupString(ic, e, raw_data(out), i32(count + 1), nil, &status)
+		count = x.utf8LookupString(ic, e, raw_data(out), i32(count + 1), nil, &status)
 	} else {
 		out = buf[:count]
 	}
@@ -807,7 +811,12 @@ native_poll :: proc(w: ^Window) {
 					add := e.xclient.data.l[0] == 1
 					if add {
 						// Closer to the minimization state the game treats as 0x0.
+						if w.width > 0 {n.restore_w, n.restore_h = w.width, w.height}
 						push_event(w, Resize_Event{0, 0})
+					} else if n.restore_w > 0 && n.restore_h > 0 {
+						// Some WMs clear HIDDEN without a ConfigureNotify; restore
+						// the last size so the game leaves the wait-events path.
+						push_event(w, Resize_Event{n.restore_w, n.restore_h})
 					}
 					break
 				}
@@ -831,7 +840,7 @@ native_poll :: proc(w: ^Window) {
 			}
 			switch sq.target {
 			case n.targets_atom:
-				list := [4]xlib.Atom{n.targets_atom, n.utf8_atom, XA_STRING, XA_ATOM}
+				list := [3]xlib.Atom{n.targets_atom, n.utf8_atom, XA_STRING}
 				_ = x.ChangeProperty(
 					n.display,
 					sq.requestor,
@@ -865,6 +874,20 @@ native_poll :: proc(w: ^Window) {
 		case .SelectionNotify:
 			sel := &e.xselection
 			if sel.property == 0 { 	// they could not give us anything
+				// UTF8_STRING failed: try legacy STRING once before giving up.
+				if n.paste_pending && !n.paste_tried_string {
+					n.paste_tried_string = true
+					x.ConvertSelection(
+						n.display,
+						n.clipboard_atom,
+						XA_STRING,
+						n.paste_property,
+						n.window,
+						xlib.Time(0),
+					)
+					x.Flush(n.display)
+					break
+				}
 				n.paste_pending = false
 				break
 			}
@@ -873,12 +896,14 @@ native_poll :: proc(w: ^Window) {
 			act_format: i32
 			nitems, bytes_after: uint
 			buf: rawptr
+			// long_length is in 32-bit units; ask for a whole CLIPBOARD_CAP.
+			long_len := (CLIPBOARD_CAP + 3) / 4
 			if x.GetWindowProperty(
 				   n.display,
 				   n.window,
 				   n.paste_property,
 				   0,
-				   4096,
+				   long_len,
 				   true,
 				   0,
 				   &act_type,
@@ -889,12 +914,17 @@ native_poll :: proc(w: ^Window) {
 			   ) ==
 				   .Success &&
 			   buf != nil {
-				paste := (cast([^]byte)buf)[:nitems]
+				count := int(nitems)
+				if act_format == 16 {count *= 2}
+				if act_format == 32 {count *= 4}
+				if count > CLIPBOARD_CAP {count = CLIPBOARD_CAP}
+				paste := (cast([^]byte)buf)[:count]
 				if len(n.paste_ready) > 0 {delete(n.paste_ready)}
 				n.paste_ready = strings.clone_from_bytes(paste) or_else ""
-				x.FreeBytes(buf)
+				x.Free(buf)
 			}
 			n.paste_pending = false
+			n.paste_tried_string = false
 		case .SelectionClear:
 			// Another client took the selection: stop serving our text.
 			if len(n.copy_text) > 0 {delete(n.copy_text); n.copy_text = ""}
@@ -905,7 +935,7 @@ native_poll :: proc(w: ^Window) {
 			}
 		case .FocusIn, .FocusOut:
 			if n.ic != nil {
-				if e.type == .FocusIn {x.XSetICFocus(n.ic)} else {x.XUnsetICFocus(n.ic)}
+				if e.type == .FocusIn {x.SetICFocus(n.ic)} else {x.UnsetICFocus(n.ic)}
 			}
 			push_event(w, Focus_Event{e.type == .FocusIn})
 		case .KeyPress, .KeyRelease:
@@ -915,7 +945,7 @@ native_poll :: proc(w: ^Window) {
 			// filter because the IM may modify it.
 			keycode := e.xkey.keycode
 			filtered := false
-			if n.ic != nil {filtered = x.XFilterEvent(&e, n.window)}
+			if n.ic != nil {filtered = x.FilterEvent(&e, n.window)}
 			// The IM consumed the event (dead keys, composed CJK): no game
 			// input, key repeat or text should fire from it.
 			if filtered {break}
@@ -1023,6 +1053,7 @@ native_request_clipboard_paste :: proc() {
 		xlib.Time(0),
 	)
 	n.paste_pending = true
+	n.paste_tried_string = false
 	x.Flush(n.display)
 }
 
@@ -1031,7 +1062,7 @@ native_set_clipboard_text :: proc(text: string) {
 	n := clipboard_window
 	if n == nil {return}
 	if len(n.copy_text) > 0 {delete(n.copy_text)}
-	n.copy_text = strings.clone(text)
+	n.copy_text = strings.clone(clipboard_capped(text))
 	x.SetSelectionOwner(n.display, n.clipboard_atom, n.window, xlib.Time(0))
 	x.Flush(n.display)
 }
@@ -1267,6 +1298,7 @@ native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 		}
 		if idx == want {
 			info = display_info_from(display, res, try)
+			info.index = index
 			rr.XRRFreeOutputInfo(try)
 			return info, true
 		}
@@ -1274,6 +1306,50 @@ native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 		idx += 1
 	}
 	return {}, false
+}
+
+@(private)
+native_window_display_info :: proc(w: ^Window) -> (info: Display_Info, ok: bool) {
+	n := &w.native
+	if n.display == nil || n.window == 0 {return {}, false}
+	if !rr_usable(n.display) {return {}, false}
+	wx, wy, pos_ok := native_window_position(w)
+	if !pos_ok {return {}, false}
+	cx, cy := wx + w.width / 2, wy + w.height / 2
+	root := x.RootWindow(n.display, x.DefaultScreen(n.display))
+	res := rr.XRRGetScreenResources(n.display, root)
+	if res == nil {return {}, false}
+	defer rr.XRRFreeScreenResources(res)
+	idx: i32
+	for i in 0 ..< res.noutput {
+		try := rr.XRRGetOutputInfo(n.display, res, res.outputs[i])
+		if try == nil {continue}
+		if try.connection != .RR_Connected {
+			rr.XRRFreeOutputInfo(try)
+			continue
+		}
+		if try.crtc != 0 {
+			crtc := rr.XRRGetCrtcInfo(n.display, res, try.crtc)
+			if crtc != nil {
+				inside :=
+					cx >= i32(crtc.x) &&
+					cy >= i32(crtc.y) &&
+					cx < i32(crtc.x) + i32(crtc.width) &&
+					cy < i32(crtc.y) + i32(crtc.height)
+				rr.XRRFreeCrtcInfo(crtc)
+				if inside {
+					info = display_info_from(n.display, res, try)
+					info.index = idx
+					rr.XRRFreeOutputInfo(try)
+					return info, true
+				}
+			}
+		}
+		rr.XRRFreeOutputInfo(try)
+		idx += 1
+	}
+	// Fall back to the primary when the window sits off every CRTC.
+	return native_display_info(0)
 }
 
 @(private = "file")
@@ -1296,10 +1372,11 @@ display_info_from :: proc(
 			info.width, info.height = i32(crtc.width), i32(crtc.height)
 			for j in 0 ..< res.nmode {
 				if res.modes[j].id == crtc.mode {
-					info.refresh_hz =
-						f64(res.modes[j].dotClock) /
-						1000 /
-						(f64(res.modes[j].hTotal) * f64(res.modes[j].vTotal))
+					info.refresh_hz = randr_mode_refresh_hz(
+						u64(res.modes[j].dotClock),
+						u64(res.modes[j].hTotal),
+						u64(res.modes[j].vTotal),
+					)
 					break
 				}
 			}
