@@ -356,7 +356,7 @@ A scene whose script starts with `earth` runs on an Earth planet world instead: 
 world is made at Earth's address (built on the planet model, as a new universe's home world
 is), with the same fixed conditions (still clouds, no gravity, stopped time). The scene's
 script then stands on the surface with `/goto <place>` (a name of `PLANET_PLACES`, or a
-latitude and longitude) and frames it with `look`; `earth_everest` and `earth_sahara` do so.
+latitude and longitude) and frames it with `look`; `earth_everest`, `earth_sahara`, `earth_amazon`, `earth_alps`, `earth_greenland` and `earth_nile` do so.
 
 A scene whose script starts with `screen` is a menu's: it never joins the scratch world, the
 menus' animations stand still (every frame's step is 0, so the starfield, the planet's turn
