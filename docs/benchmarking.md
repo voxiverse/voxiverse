@@ -180,7 +180,8 @@ that has not done so, a scope records nothing.
 - a per-second timeline;
 - the slowest frames and server ticks, with the scopes directly inside them;
 - the slowest three of each as a tree, down to every scope over 0.1 ms (calls merged:
-  `apply block change x43`), with time not covered by any scope shown as `(untimed)`.
+  `apply block change x43`), with time not covered by any scope shown as `(untimed)`;
+- structured data via `--json` or `--csv` for automated benchmark analysis and comparisons.
 
 `python3 tools/debugger/check_spall.py build/voxiverse.spall` validates a trace: it is
 well-formed and balanced, every GPU pass lies inside its frame, and passes are aligned when

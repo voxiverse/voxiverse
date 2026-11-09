@@ -20,6 +20,8 @@ import "common:game"
 Options :: struct {
 	file:    string `args:"pos=0" usage:"trace file (default build/net.trace)"`,
 	summary: bool `usage:"counts and bytes per message kind instead of messages"`,
+	stats:   bool `usage:"bandwidth analytics, category breakdown, packet size and jitter stats"`,
+	csv:     bool `usage:"export records as CSV (timestamp_sec,direction,kind,bytes)"`,
 	kind:    string `usage:"only this kind (-kind:list lists them)"`,
 	sender:  string `usage:"only messages from client or server"`,
 	from:    f64 `usage:"only from this many seconds into the session"`,
@@ -71,6 +73,183 @@ main :: proc() {
 		)
 	}
 	if !ok {fmt.eprintln("netdump: the trace is damaged or cut short; showing what precedes it")}
+
+	if opts.csv {
+		fmt.println("timestamp_sec,direction,kind,bytes")
+		shown := 0
+		for r in records {
+			secs := time.duration_seconds(r.time)
+			if secs < opts.from || (opts.to > 0 && secs > opts.to) {continue}
+			if opts.sender != "" &&
+			   opts.sender != (r.sender == .Client ? "client" : "server") {continue}
+			kind := game.message_kind_name(r.sender, r.data[0])
+			if opts.kind != "" && kind != opts.kind {continue}
+			dir := r.sender == .Client ? "client" : "server"
+			fmt.printfln("%.4f,%s,%s,%d", secs, dir, kind if kind != "" else "?", len(r.data))
+			shown += 1
+			if opts.limit > 0 && shown >= opts.limit {break}
+		}
+		return
+	}
+
+	if opts.stats {
+		Category :: enum {
+			Chunks,
+			State,
+			Snapshot,
+			Control,
+			Gameplay,
+		}
+		category_name := [Category]string {
+			.Chunks   = "Chunks & Terrain",
+			.State    = "State Model Deltas",
+			.Snapshot = "Snapshot Entities/Motion",
+			.Control  = "Session Control",
+			.Gameplay = "Gameplay & Actions",
+		}
+		cat_bytes: [Category]int
+		cat_msgs: [Category]int
+		client_bytes, server_bytes := 0, 0
+		client_msgs, server_msgs := 0, 0
+		min_bytes, max_bytes := max(int), 0
+		intervals := make([dynamic]f64, context.temp_allocator)
+		prev_time: Maybe(time.Duration) = nil
+		first_time: Maybe(time.Duration) = nil
+		last_time: time.Duration
+
+		for r in records {
+			secs := time.duration_seconds(r.time)
+			if secs < opts.from || (opts.to > 0 && secs > opts.to) {continue}
+			if opts.sender != "" &&
+			   opts.sender != (r.sender == .Client ? "client" : "server") {continue}
+			kind := game.message_kind_name(r.sender, r.data[0])
+			if opts.kind != "" && kind != opts.kind {continue}
+
+			sz := len(r.data)
+			if sz < min_bytes {min_bytes = sz}
+			if sz > max_bytes {max_bytes = sz}
+
+			if first_time == nil {first_time = r.time}
+			if prev, prev_ok := prev_time.?; prev_ok {
+				interval_ms := time.duration_milliseconds(r.time - prev)
+				if interval_ms >= 0 {append(&intervals, interval_ms)}
+			}
+			prev_time = r.time
+			last_time = r.time
+
+			if r.sender == .Client {
+				client_msgs += 1
+				client_bytes += sz
+			} else {
+				server_msgs += 1
+				server_bytes += sz
+			}
+
+			cat: Category = .Gameplay
+			switch kind {
+			case "chunk", "column", "bulk", "unload":
+				cat = .Chunks
+			case "state":
+				cat = .State
+			case "snapshot":
+				cat = .Snapshot
+			case "hello",
+			     "welcome",
+			     "reject",
+			     "ping",
+			     "pong",
+			     "challenge",
+			     "proof",
+			     "choose",
+			     "dial",
+			     "teleport",
+			     "characters",
+			     "world_changed",
+			     "stats_request",
+			     "stats_page",
+			     "pack_want",
+			     "packs",
+			     "pack_part",
+			     "packs_ready",
+			     "packs_changed":
+				cat = .Control
+			}
+			cat_bytes[cat] += sz
+			cat_msgs[cat] += 1
+		}
+
+		duration_s := 0.001
+		if f, first_ok := first_time.?; first_ok {
+			duration_s = max(time.duration_seconds(last_time - f), 0.001)
+		}
+		total_bytes := client_bytes + server_bytes
+		total_msgs := client_msgs + server_msgs
+		slice.sort(intervals[:])
+		p50_jitter := intervals[len(intervals) / 2] if len(intervals) > 0 else 0
+		p99_jitter :=
+			intervals[min(len(intervals) - 1, len(intervals) * 99 / 100)] if len(intervals) > 0 else 0
+		max_jitter := intervals[len(intervals) - 1] if len(intervals) > 0 else 0
+
+		fmt.println("\nnetwork traffic profile")
+		fmt.printfln("  duration:       %.2f s", duration_s)
+		fmt.printfln(
+			"  total messages: %d (%.1f msgs/s)",
+			total_msgs,
+			f64(total_msgs) / duration_s,
+		)
+		fmt.printfln(
+			"  total data:     %d B (%.1f KiB, %.2f KiB/s)",
+			total_bytes,
+			f64(total_bytes) / 1024,
+			(f64(total_bytes) / 1024) / duration_s,
+		)
+		fmt.printfln(
+			"  client -> server: %d msgs, %d B (%.1f KiB, %.1f%%)",
+			client_msgs,
+			client_bytes,
+			f64(client_bytes) / 1024,
+			100.0 * f64(client_bytes) / max(f64(total_bytes), 1),
+		)
+		fmt.printfln(
+			"  server -> client: %d msgs, %d B (%.1f KiB, %.1f%%)",
+			server_msgs,
+			server_bytes,
+			f64(server_bytes) / 1024,
+			100.0 * f64(server_bytes) / max(f64(total_bytes), 1),
+		)
+
+		fmt.println("\nmessage categories")
+		fmt.printfln("  %-26s %8s %10s %10s %8s", "category", "msgs", "bytes", "KiB/s", "share")
+		for cat in Category {
+			c_bytes := cat_bytes[cat]
+			c_msgs := cat_msgs[cat]
+			pct := 100.0 * f64(c_bytes) / max(f64(total_bytes), 1)
+			fmt.printfln(
+				"  %-26s % 8d % 10d % 10.2f % 7.1f%%",
+				category_name[cat],
+				c_msgs,
+				c_bytes,
+				(f64(c_bytes) / 1024) / duration_s,
+				pct,
+			)
+		}
+
+		fmt.println("\nmessage size & timing")
+		avg_bytes := f64(total_bytes) / max(f64(total_msgs), 1)
+		fmt.printfln(
+			"  packet payload sizes: min %d B, avg %.1f B, max %d B",
+			min_bytes if min_bytes != max(int) else 0,
+			avg_bytes,
+			max_bytes,
+		)
+		fmt.printfln(
+			"  inter-packet interval: p50 %.2f ms, p99 %.2f ms, max %.2f ms",
+			p50_jitter,
+			p99_jitter,
+			max_jitter,
+		)
+		return
+	}
 
 	scratch := new(game.Block_Array)
 	schema := game.game_schema()

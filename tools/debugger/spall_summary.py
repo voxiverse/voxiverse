@@ -11,6 +11,7 @@ The scopes for the timeline default to frame, server tick, generate chunk
 and mesh chunk. The format is core:prof/spall's (as check_spall.py reads).
 """
 import collections
+import json
 import struct
 import sys
 
@@ -84,15 +85,16 @@ def tree(track, spans, depth, indent):
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
-    names, events = read(sys.argv[1])
+    json_mode = '--json' in sys.argv
+    csv_mode = '--csv' in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ('--json', '--csv')]
+    if not args:
+        sys.exit(__doc__)
+    path = args[0]
+    names, events = read(path)
     if not events:
         sys.exit("no events")
-    print(f"trace:   {sys.argv[1]}")
-    print(f"process: {names.get('process', '(not named: an older trace)')}")
-    for tid, n in sorted((t, n) for t, n in names.items() if t != 'process' and n.startswith('GPU')):
-        print(f"gpu:     {n}")
-    print()
-    watch = sys.argv[2:] or ['frame', 'server tick', 'generate chunk', 'mesh chunk']
+
     # Worker threads are numbered ("worldgen 1", "mesh 2"): one row per pool.
     def thread(tid):
         n = names.get(tid, str(tid))
@@ -101,6 +103,41 @@ def main():
     by = collections.defaultdict(list)
     for tid, name, b, e, _depth, _args in events:
         by[(thread(tid), name)].append(ms(b, e))
+
+    if json_mode:
+        scopes_list = []
+        for (t, n), d in sorted(by.items(), key=lambda kv: -sum(kv[1])):
+            d.sort()
+            scopes_list.append({
+                "thread": t,
+                "scope": n,
+                "calls": len(d),
+                "total_ms": round(sum(d), 3),
+                "p50_ms": round(d[len(d) // 2], 3),
+                "p99_ms": round(d[min(len(d) - 1, len(d) * 99 // 100)], 3),
+                "max_ms": round(d[-1], 3),
+            })
+        print(json.dumps({
+            "trace": path,
+            "process": names.get('process', ''),
+            "scopes": scopes_list,
+        }, indent=2))
+        return
+
+    if csv_mode:
+        print("thread,scope,calls,total_ms,p50_ms,p99_ms,max_ms")
+        for (t, n), d in sorted(by.items(), key=lambda kv: -sum(kv[1])):
+            d.sort()
+            print(f"{t},{n},{len(d)},{sum(d):.3f},{d[len(d) // 2]:.3f},"
+                  f"{d[min(len(d) - 1, len(d) * 99 // 100)]:..3f},{d[-1]:.3f}".replace(":..", ":."))
+        return
+
+    print(f"trace:   {path}")
+    print(f"process: {names.get('process', '(not named: an older trace)')}")
+    for tid, n in sorted((t, n) for t, n in names.items() if t != 'process' and n.startswith('GPU')):
+        print(f"gpu:     {n}")
+    print()
+    watch = args[1:] or ['frame', 'server tick', 'generate chunk', 'mesh chunk']
     print(f"{'thread':16} {'scope':26} {'calls':>7} {'total ms':>10} {'p50':>8} {'p99':>8} {'max':>8}")
     for (t, n), d in sorted(by.items(), key=lambda kv: -sum(kv[1])):
         d.sort()
