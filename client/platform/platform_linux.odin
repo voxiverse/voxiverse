@@ -5,6 +5,7 @@ import "core:log"
 import "core:reflect"
 import "core:strings"
 import "core:time"
+import "core:unicode/utf8"
 import vk "vendor:vulkan"
 import "vendor:x11/xlib"
 
@@ -34,6 +35,10 @@ Native_Window :: struct {
 	awaiting_centre:  bool,
 	hidden_cursor:    xlib.Cursor,
 	awake_reset:      time.Tick, // when X's screensaver timer was last reset (keep_awake)
+	// XIM for Unicode/composed text input (dead keys, CJK IMEs); an IM that
+	// supports neither preedit nor status is ignored. Fallback: Latin-1 text.
+	xim:              rawptr,
+	ic:               rawptr,
 }
 
 @(private)
@@ -145,6 +150,37 @@ X11 :: struct {
 		detectable: b32,
 		supported: ^b32,
 	) -> b32,
+	XOpenIM:                   proc "c" (
+		display: ^xlib.Display,
+		dbase: rawptr,
+		res_name: cstring,
+		res_class: cstring,
+	) -> rawptr,
+	XCloseIM:                  proc "c" (xim: rawptr) -> i32,
+	XCreateIC:                 proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	XDestroyIC:                proc "c" (xic: rawptr) -> i32,
+	XSetICFocus:               proc "c" (xic: rawptr) -> i32,
+	XUnsetICFocus:             proc "c" (xic: rawptr) -> i32,
+	XSetIMValues:              proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	XGetIMValues:              proc "c" (xim: rawptr, #c_vararg args: ..any) -> rawptr,
+	XFilterEvent:              proc "c" (event: ^xlib.XEvent, w: xlib.Window) -> bool,
+	Xutf8LookupString:         proc "c" (
+		ic: rawptr,
+		event: ^xlib.XKeyEvent,
+		buffer: [^]u8,
+		length: i32,
+		keysym: ^xlib.KeySym,
+		status: ^i32,
+	) -> i32,
+	XmbLookupString:           proc "c" (
+		ic: rawptr,
+		event: ^xlib.XKeyEvent,
+		buffer: [^]u8,
+		length: i32,
+		keysym: ^xlib.KeySym,
+		status: ^i32,
+	) -> i32,
+	XFree:                     proc "c" (ptr: rawptr) -> i32,
 	ChangeProperty:            proc "c" (
 		display: ^xlib.Display,
 		window: xlib.Window,
@@ -214,6 +250,100 @@ XI_ALL_MASTER_DEVICES :: 1
 @(private)
 XI_RAW_MOTION :: 17
 
+// XIM error/status constants (Xlib protocol spec).
+@(private)
+XBufferOverflow :: 4
+@(private)
+XLookupChars :: 2
+@(private)
+XLookupBoth :: 3
+
+// xim_destroy_callback: the IM disappeared (its server exited). Its ICs are
+// gone with it; clear the references so we do not use them later.
+@(private)
+xim_destroy_callback :: proc "c" (xim: xlib.XIM, client_data: rawptr, call_data: rawptr) {
+	n := (^Native_Window)(client_data)
+	if n != nil {
+		n.ic = nil
+		n.xim = nil
+	}
+}
+
+// ic_destroy_callback: the IC was destroyed underneath us (IM exiting or
+// reset). Do not touch it afterwards.
+@(private)
+ic_destroy_callback :: proc "c" (xim: xlib.XIM, client_data: rawptr, call_data: rawptr) {
+	n := (^Native_Window)(client_data)
+	if n != nil {n.ic = nil}
+}
+
+// setup_xim opens the X input method and creates an input context (preedit
+// and status styles, the ones the app draws inside itself). On any failure
+// the window gets no IC and text input falls back to Latin-1.
+@(private)
+setup_xim :: proc(w: ^Window) {
+	n := &w.native
+	styles: ^xlib.XIMStyles
+	n.xim = x.XOpenIM(n.display, nil, nil, nil)
+	if n.xim != nil {
+		im_cb := xlib.XIMCallback {
+			client_data = n,
+			callback    = xim_destroy_callback,
+		}
+		x.XSetIMValues(n.xim, "destroyCallback", &im_cb, nil)
+	}
+	if n.xim == nil {
+		log.info("platform no IM for this locale; text input will be Latin-1 only")
+		return
+	}
+	if x.XGetIMValues(n.xim, "queryInputStyle", &styles, nil) != nil {
+		log.info("platform this IM has no supported styles; text input will be Latin-1 only")
+		x.XCloseIM(n.xim)
+		n.xim = nil
+		return
+	}
+	found := false
+	want := xlib.XIMStyle(xlib.XIMPreeditNothing | xlib.XIMStatusNothing)
+	for i in 0 ..< int(styles.count_styles) {
+		if styles.supported_styles[i] == want {
+			found = true
+			break
+		}
+	}
+	x.XFree(styles)
+	if !found {
+		log.info("platform this IM supports no hidden style; text input will be Latin-1 only")
+		x.XCloseIM(n.xim)
+		n.xim = nil
+		return
+	}
+	ic_cb := xlib.XICCallback {
+		client_data = n,
+		callback    = ic_destroy_callback,
+	}
+	style := xlib.XIMStyle(xlib.XIMPreeditNothing | xlib.XIMStatusNothing)
+	ic := x.XCreateIC(
+		n.xim,
+		"inputStyle",
+		style,
+		"clientWindow",
+		n.window,
+		"focusWindow",
+		n.window,
+		"destroyCallback",
+		&ic_cb,
+		nil,
+	)
+	if ic == nil {
+		log.info("platform could not create an IC; text input will be Latin-1 only")
+		x.XCloseIM(n.xim)
+		n.xim = nil
+		return
+	}
+	n.ic = ic
+	if w.focused {x.XSetICFocus(n.ic)}
+}
+
 @(private)
 native_open :: proc(w: ^Window, title: string) -> bool {
 	if x.__handle == nil {
@@ -269,6 +399,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	x.SetWMProtocols(n.display, n.window, &n.wm_delete_window, 1)
 	x.MapWindow(n.display, n.window)
 	x.Flush(n.display)
+	setup_xim(w)
 	setup_raw_motion(n)
 	return true
 }
@@ -372,6 +503,8 @@ native_set_keep_awake :: proc(w: ^Window, on: bool) {
 native_close :: proc(w: ^Window) {
 	n := &w.native
 	if n.display == nil {return}
+	if n.ic != nil {x.XDestroyIC(n.ic); n.ic = nil}
+	if n.xim != nil {x.XCloseIM(n.xim); n.xim = nil}
 	if n.captured {native_set_mouse_captured(w, false)}
 	if n.hidden_cursor != 0 {x.FreeCursor(n.display, n.hidden_cursor)}
 	if n.window != 0 {x.DestroyWindow(n.display, n.window)}
@@ -430,6 +563,32 @@ warp_to_centre :: proc(w: ^Window) {
 	x.WarpPointer(w.native.display, 0, w.native.window, 0, 0, 0, 0, w.width / 2, w.height / 2)
 }
 
+// push_xim_text: full input-method text (dead keys, CJK compose) from the
+// IC's UTF-8 lookup, as rune Text_Events.
+@(private)
+push_xim_text :: proc(w: ^Window, ic: rawptr, e: ^xlib.XKeyEvent) {
+	buf: [64]u8
+	status: i32
+	count := x.Xutf8LookupString(ic, e, &buf[0], len(buf), nil, &status)
+	out: []u8
+	if status == XBufferOverflow {
+		out = make([]u8, count + 1, context.temp_allocator)
+		count = x.Xutf8LookupString(ic, e, raw_data(out), i32(count + 1), nil, &status)
+	} else {
+		out = buf[:count]
+	}
+	if status == XLookupChars || status == XLookupBoth {
+		i := 0
+		for i < int(count) {
+			r, n := utf8.decode_rune_in_bytes(out[i:])
+			if r == utf8.RUNE_ERROR && n == 1 {break}
+			push_event(w, Text_Event{r})
+			i += n
+		}
+	}
+}
+
+
 @(private)
 native_poll :: proc(w: ^Window) {
 	n := &w.native
@@ -472,21 +631,38 @@ native_poll :: proc(w: ^Window) {
 				push_event(w, Resize_Event{width, height})
 			}
 		case .FocusIn, .FocusOut:
+			if n.ic != nil {
+				if e.type == .FocusIn {x.XSetICFocus(n.ic)} else {x.XUnsetICFocus(n.ic)}
+			}
 			push_event(w, Focus_Event{e.type == .FocusIn})
 		case .KeyPress, .KeyRelease:
+			// XIM first: a filtered event is consumed by the input method
+			// (dead keys, composed CJK) and no normal key repeat/text events
+			// should be generated from it. Note keycode is kept from before the
+			// filter because the IM may modify it.
+			keycode := e.xkey.keycode
+			filtered := false
+			if n.ic != nil {filtered = x.XFilterEvent(&e, n.window)}
+			// The IM consumed the event (dead keys, composed CJK): no game
+			// input, key repeat or text should fire from it.
+			if filtered {break}
 			pressed := e.type == .KeyPress
 			symbol := key_from_keysym(x.LookupKeysym(&e.xkey, 0))
-			key := key_from_evdev(e.xkey.keycode - 8)
+			key := key_from_evdev(keycode - 8)
 			if key == .Unknown {key = symbol}
 			repeat := pressed && n.keys_down[key]
 			n.keys_down[key] = pressed
 			push_event(w, Key_Event{key, symbol, pressed, repeat})
 			if pressed {
-				// Latin-1 text for now; full Unicode input (XIM) comes with the UI.
-				buf: [8]u8
-				if count := x.LookupString(&e.xkey, &buf[0], len(buf), nil, nil);
-				   count == 1 && buf[0] >= 0x20 && buf[0] != 0x7f {
-					push_event(w, Text_Event{rune(buf[0])})
+				if n.ic != nil {
+					push_xim_text(w, n.ic, &e.xkey)
+				} else {
+					// Latin-1 text for systems without an input method.
+					buf: [8]u8
+					if count := x.LookupString(&e.xkey, &buf[0], len(buf), nil, nil);
+					   count == 1 && buf[0] >= 0x20 && buf[0] != 0x7f {
+						push_event(w, Text_Event{rune(buf[0])})
+					}
 				}
 			}
 		case .MotionNotify:
