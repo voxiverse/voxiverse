@@ -8,6 +8,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
+import "core:time"
 
 import "client:dev"
 import "client:engine"
@@ -268,6 +269,50 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 		},
 		complete_screen,
 		args = {1, 2},
+	)
+	console_register(
+		c,
+		{
+			"title_date",
+			"title_date [MM-DD | YYYY-MM-DD | off]: fake the date (the title's holiday splash and theme); with no argument, show it",
+			proc(app: ^engine.App, args: []string) {
+				if len(args) == 0 {
+					y, m, d := 1970, 1, 1
+					if o, ok := app.title_date_override.?;
+					   ok {y, m, d = o[0], o[1], o[2]} else if ly, lm, ld, ok2 := engine.local_date_of(engine.app_wall(app)); ok2 {y, m, d = ly, lm, ld}
+					engine.console_print(
+						&app.console,
+						fmt.tprintf("title_date: %04d-%02d-%02d", y, m, d),
+					)
+					return
+				}
+				if args[0] == "off" {
+					app.title_date_override = nil
+					app.splash = "" // re-pick for the local date
+					engine.console_print(&app.console, "title_date: the local date again")
+					return
+				}
+				now := engine.app_wall(app)
+				cur_year := 2026
+				if dt, ok := time.time_to_datetime(now); ok {cur_year = int(dt.year)}
+				y, m, d, ok := engine.title_date_parse(args[0], cur_year)
+				if !ok {
+					engine.console_print(
+						&app.console,
+						fmt.tprintf("title_date: %q is not MM-DD, YYYY-MM-DD or off", args[0]),
+						.Warning,
+					)
+					return
+				}
+				app.title_date_override = [3]int{y, m, d}
+				app.splash = "" // re-pick for the faked date
+				engine.console_print(
+					&app.console,
+					fmt.tprintf("title_date: %04d-%02d-%02d", y, m, d),
+				)
+			},
+		},
+		args = {0, 1},
 	)
 	console_register(c, {"console", "show the console", proc(app: ^engine.App, args: []string) {
 			engine.overlay_open(&app.overlays, .Console)

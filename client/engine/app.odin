@@ -132,6 +132,8 @@ App :: struct {
 	devchat_scroll:      f32, // entries scrolled up
 	splash:              string, // the title screen's, chosen once (screen_title.odin)
 	splash_at:           time.Tick, // when it was chosen: its stamp rings in from then
+	title_date_override: Maybe([3]int), // fake the date (dev console `title_date`), for the holiday themes
+	holiday_fx:          Holiday_Fx, // the title screen's holiday backdrop (engine/holiday.odin)
 	started:             time.Tick, // when the app began (the splash's pulse)
 	toasts:              Toasts, // the notices at the top right (overlay_toasts.odin)
 	hud_hidden:          bool, // F1: the HUD is hidden (not saved)
