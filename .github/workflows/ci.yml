@@ -27,10 +27,12 @@ env:
 # pinned shader compiler itself).
 
 jobs:
-  # Whether this run has anything left to test. A version tag on a commit whose
-  # push run on main passed has been tested: its test jobs are skipped and only
-  # the packages, their checks and the draft release run. A tag on any other
-  # commit, every push to main and every pull request run everything.
+  # Whether this run has anything left to test. A commit is tested only when a
+  # `CI result` check succeeded on the exact commit, or on a pull request head
+  # whose tree equals the commit (a rebased or squash-merged pull request). Every
+  # other run builds and tests everything, and says in its log why it decided.
+  # The decision itself is a shell script with fixture tests: ./.github/scripts/
+  # tested-on-main.sh (and its test, run below before anything else).
   gate:
     name: Tested on main?
     runs-on: ubuntu-latest
@@ -43,6 +45,11 @@ jobs:
       tested: ${{ steps.green.outputs.tested }}
       code: ${{ steps.changes.outputs.code }}
     steps:
+      - uses: actions/checkout@v7
+
+      - name: The 'tested on main?' decision is tested
+        run: ./.github/scripts/tested-on-main_test.sh
+
       # Markdown-only changes skip the build and test jobs (they used to skip the whole
       # workflow, but then the required "CI result" check would never report).
       - name: Anything but Markdown changed?
@@ -63,17 +70,14 @@ jobs:
           echo "code changed: ${code}"
           echo "code=${code}" >> "$GITHUB_OUTPUT"
 
-      - name: Green push run on main for this commit
+      - name: Green CI result for this commit?
         id: green
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          tested=false
-          if [ "${GITHUB_REF_TYPE}" = tag ]; then
-            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&branch=main&event=push&status=success&per_page=1" --jq .total_count)"
-            echo "successful push runs on main for ${GITHUB_SHA}: ${count}"
-            [ "${count}" -gt 0 ] && tested=true
-          fi
+          ./.github/scripts/tested-on-main.sh "${GITHUB_SHA}" "${GITHUB_REF_TYPE:-unknown}" "${PR}" | tee "${RUNNER_TEMP}/green.log"
+          tested="$(sed -n 's/^tested=//p' "${RUNNER_TEMP}/green.log")"
           echo "tested=${tested}" >> "$GITHUB_OUTPUT"
 
   # macOS and Windows: everything but the Linux-only checks, which the two
