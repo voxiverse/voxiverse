@@ -185,6 +185,11 @@ Key :: enum u8 {
 	Right_Control,
 	Left_Alt,
 	Right_Alt,
+	Num_Asterisk, // the pad's '*'
+	Num_Slash, // the pad's '/'
+	Num_Plus, // the pad's '+'
+	Num_Minus, // the pad's '-'
+	Num_Decimal, // the pad's '.'
 	Mouse_Left,
 	Mouse_Right,
 	Mouse_Middle,
@@ -287,6 +292,11 @@ SCANCODES := [Key]u16 {
 	.Page_Down     = 0xE051,
 	.Insert        = 0xE052,
 	.Delete        = 0xE053,
+	.Num_Asterisk  = 0x37, // KP_Asterisk
+	.Num_Slash     = 0x62, // KP_Slash
+	.Num_Minus     = 0x4A, // KP_Minus
+	.Num_Plus      = 0x4E, // KP_Plus
+	.Num_Decimal   = 0x53, // KP_Decimal
 	.Mouse_Left    = 0,
 	.Mouse_Right   = 0,
 	.Mouse_Middle  = 0,

@@ -764,6 +764,38 @@ key_from_evdev :: proc(code: u32) -> Key {
 		return .Right_Control
 	case 100:
 		return .Right_Alt
+	// Keypad digits
+	case 71:
+		return .Num_7
+	case 72:
+		return .Num_8
+	case 73:
+		return .Num_9
+	case 75:
+		return .Num_4
+	case 76:
+		return .Num_5
+	case 77:
+		return .Num_6
+	case 79:
+		return .Num_1
+	case 80:
+		return .Num_2
+	case 81:
+		return .Num_3
+	case 82:
+		return .Num_0
+	// Keypad operators and punctuation
+	case 55:
+		return .Num_Asterisk
+	case 74:
+		return .Num_Minus
+	case 78:
+		return .Num_Plus
+	case 83:
+		return .Num_Decimal
+	case 98:
+		return .Num_Slash
 	case 102 ..= 111:
 		NAV := [?]Key {
 			.Home,
@@ -801,6 +833,21 @@ key_from_keysym :: proc(sym: xlib.KeySym) -> Key {
 		return Key(int(Key.F1) + int(sym - .XK_F1))
 	case .XK_Escape:
 		return .Escape
+
+	case .XK_KP_0 ..= .XK_KP_9:
+		return Key(int(Key.Num_0) + int(sym - .XK_KP_0))
+	case .XK_KP_Multiply:
+		return .Num_Asterisk
+	case .XK_KP_Add:
+		return .Num_Plus
+	case .XK_KP_Subtract:
+		return .Num_Minus
+	case .XK_KP_Decimal:
+		return .Num_Decimal
+	case .XK_KP_Divide:
+		return .Num_Slash
+	case .XK_KP_Separator:
+		return .Comma
 	case .XK_Return, .XK_KP_Enter:
 		return .Enter
 	case .XK_Tab:
