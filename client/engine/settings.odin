@@ -25,6 +25,8 @@ Settings :: struct {
 	steam:             bool, // use Steam when its library is beside the game (off: never; read at start)
 	// Video
 	fullscreen:        bool, // borderless, covering the monitor
+	window_width:      i32, // pixels; 0 = the default size
+	window_height:     i32, // pixels; 0 = the default size
 	vsync:             bool, // wait for the display (off: up to max_fps)
 	max_fps:           i32, // frames a second at most (0: no limit)
 	fov:               f32, // degrees, vertical
@@ -120,6 +122,8 @@ SETTINGS_VARS := [?]base.Var {
 		help = "Play in a window or cover the whole screen.",
 		choices = {{0, "Windowed"}, {1, "Fullscreen"}},
 	},
+	{field = "window_width", help = "window width in pixels (0 = the default)"},
+	{field = "window_height", help = "window height in pixels (0 = the default)"},
 	{
 		field = "vsync",
 		label = "VSync",

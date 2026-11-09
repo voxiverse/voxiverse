@@ -48,7 +48,10 @@ app_init :: proc(app: ^engine.App) -> bool {
 	// A benchmark's window has a title of its own, so a desktop can keep it out of the
 	// way (a window rule) without touching the game's.
 	title := "Voxiverse benchmark" if app.benchmark else "Voxiverse"
-	if !platform.window_open(&app.window, title, 1280, 720) {return false}
+	win_w, win_h := 1280, 720
+	if app.settings.window_width > 0 {win_w = int(app.settings.window_width)}
+	if app.settings.window_height > 0 {win_h = int(app.settings.window_height)}
+	if !platform.window_open(&app.window, title, i32(win_w), i32(win_h)) {return false}
 	platform.set_window_min_size(&app.window, 640, 360)
 	g := &app.g
 	extensions := platform.vulkan_instance_extensions()
@@ -163,6 +166,11 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	delete(app.screenshot_names)
 	delete(app.new_character)
 	validation_issues = gpu.destroy(&app.g)
+	if app.window.width > 0 && app.window.height > 0 && !app.settings.fullscreen {
+		app.settings.window_width = app.window.width
+		app.settings.window_height = app.window.height
+		engine.settings_changed(app)
+	}
 	platform.window_close(&app.window)
 	engine.input_destroy(&app.input)
 	delete(app.injected)
