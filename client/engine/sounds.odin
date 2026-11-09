@@ -199,6 +199,7 @@ sound_occlusion :: proc(
 	gain_scale: f32,
 ) {
 	if w == nil || reg == nil {return 0, 1}
+	base.profile_scope("audio occlusion raycast")
 	d := source - listener
 	dist := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
 	if dist < 0.5 {
@@ -235,6 +236,7 @@ sounds_play :: proc(
 	view: View,
 	w: ^World = nil,
 ) {
+	base.profile_scope("audio spatial update")
 	right := [3]f32{math.cos(view.yaw), 0, -math.sin(view.yaw)}
 	for e in events {
 		d := e.position - view.position

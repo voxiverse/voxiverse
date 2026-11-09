@@ -287,13 +287,18 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		}
 	}
 	a := audio.stats(app.mixer)
+	dsp_str := ""
+	if a.cb_last_ns > 0 {
+		dsp_str = fmt.tprintf(", DSP %.0f µs", f64(a.cb_last_ns) / 1000.0)
+	}
 	overlay_append(
 		&left_lines,
 		fmt.tprintf(
-			"audio: %s, voices %d (%d real), played %d, dropped %d, %.1f LUFS",
+			"audio: %s, voices %d (%d real)%s, played %d, dropped %d, %.1f LUFS",
 			fmt.tprintf("%d Hz", app.mixer.rate) if app.audio_device.open else "silent",
 			a.voices,
 			a.real,
+			dsp_str,
 			a.played,
 			sync.atomic_load(&app.mixer.dropped),
 			a.momentary,

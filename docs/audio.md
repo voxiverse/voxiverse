@@ -262,8 +262,8 @@ the owner adds it to ci.yml), and another checks the list itself.
   same build. The running game keeps the last minute or so in memory with a mixer-state
   snapshot every 15 s, and writes `captures/audio-<n>.vxac` on F9, with the `audio_capture`
   console command, and when the mixer underruns (rate-limited). `build audiodump` reads one:
-  the timeline, the engine's decision for each voice, loudness, any bus as a WAV (`-report`,
-  `-bus:`, `-wav:`).
+  the timeline, the engine's decision for each voice, loudness, offline throughput and DSP timing benchmark, any bus as a WAV (`-report`,
+  `-bench`, `-bus:`, `-wav:`).
 - The **freeze-and-solo inspector** (dev builds, F8) replays the newest capture window through
   a mixer of its own and loops the last half second in place of the live output, listing the
   buses and the frozen voices with what the engine decided about each, a spectrum of Master
