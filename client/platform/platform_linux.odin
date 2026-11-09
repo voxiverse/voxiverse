@@ -39,6 +39,13 @@ Native_Window :: struct {
 	// supports neither preedit nor status is ignored. Fallback: Latin-1 text.
 	xim:              rawptr,
 	ic:               rawptr,
+	clipboard_atom:   xlib.Atom, // CLIPBOARD, interned at window open
+	utf8_atom:        xlib.Atom, // UTF8_STRING, interned at window open
+	targets_atom:     xlib.Atom, // TARGETS, interned at window open
+	paste_property:   xlib.Atom, // our property for the data OTHER clients ask us to convert
+	copy_text:        string, // the text we serve as the owner (context allocator)
+	paste_ready:      string, // text waiting to be delivered as Paste_Event (context allocator)
+	paste_pending:    bool, // a paste request is waiting for their reply
 }
 
 @(private)
@@ -91,6 +98,39 @@ X11 :: struct {
 		dst_x, dst_y: ^i32,
 		dst_child: ^xlib.Window,
 	) -> xlib.Status,
+	GetSelectionOwner:         proc "c" (
+		display: ^xlib.Display,
+		selection: xlib.Atom,
+	) -> xlib.Window,
+	SetSelectionOwner:         proc "c" (
+		display: ^xlib.Display,
+		selection: xlib.Atom,
+		owner: xlib.Window,
+		time: xlib.Time,
+	),
+	GetWindowProperty:         proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		property: xlib.Atom,
+		long_offs: int,
+		long_len: int,
+		delete: b32,
+		req_type: xlib.Atom,
+		act_type: ^xlib.Atom,
+		act_format: ^i32,
+		nitems: ^uint,
+		bytes_after: ^uint,
+		props: ^rawptr,
+	) -> xlib.Status,
+	ConvertSelection:          proc "c" (
+		display: ^xlib.Display,
+		selection: xlib.Atom,
+		target: xlib.Atom,
+		property: xlib.Atom,
+		requestor: xlib.Window,
+		time: xlib.Time,
+	),
+	FreeBytes:                 proc "c" (data: rawptr) -> i32,
 	Pending:                   proc "c" (display: ^xlib.Display) -> i32,
 	NextEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
 	PeekEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
@@ -257,6 +297,15 @@ rr_usable :: proc(display: ^xlib.Display) -> bool {
 	}
 	return true
 }
+
+// The window for the clipboard API, which takes no window parameter; one
+// platform window is open per process at a time.
+@(private = "file")
+clipboard_window: ^Native_Window
+
+// The selection's common atoms (well-known identifiers).
+XA_STRING :: xlib.Atom(31)
+XA_ATOM :: xlib.Atom(4)
 
 // libXi, for raw mouse motion (optional).
 @(private)
@@ -454,10 +503,15 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	x.StoreName(n.display, n.window, strings.clone_to_cstring(title, context.temp_allocator))
 	n.wm_delete_window = x.InternAtom(n.display, "WM_DELETE_WINDOW", false)
 	x.SetWMProtocols(n.display, n.window, &n.wm_delete_window, 1)
+	n.clipboard_atom = x.InternAtom(n.display, "CLIPBOARD", false)
+	n.utf8_atom = x.InternAtom(n.display, "UTF8_STRING", false)
+	n.targets_atom = x.InternAtom(n.display, "TARGETS", false)
+	n.paste_property = x.InternAtom(n.display, "VOXIVERSE_CLIPBOARD", false)
 	x.MapWindow(n.display, n.window)
 	x.Flush(n.display)
 	setup_xim(w)
 	setup_raw_motion(n)
+	clipboard_window = n
 	return true
 }
 
@@ -619,6 +673,9 @@ native_set_keep_awake :: proc(w: ^Window, on: bool) {
 @(private)
 native_close :: proc(w: ^Window) {
 	n := &w.native
+	clipboard_window = nil
+	if len(n.paste_ready) > 0 {delete(n.paste_ready)}
+	if len(n.copy_text) > 0 {delete(n.copy_text)}
 	if n.display == nil {return}
 	if n.ic != nil {x.XDestroyIC(n.ic); n.ic = nil}
 	if n.xim != nil {x.XCloseIM(n.xim); n.xim = nil}
@@ -709,6 +766,22 @@ push_xim_text :: proc(w: ^Window, ic: rawptr, e: ^xlib.XKeyEvent) {
 @(private)
 native_poll :: proc(w: ^Window) {
 	n := &w.native
+	// Deliver any clipboard text as a Paste_Event before processing keys.
+	if len(n.paste_ready) > 0 {
+		runes := make(
+			[dynamic]rune,
+			0,
+			min(len(n.paste_ready), CLIPBOARD_CAP) + 1,
+			context.temp_allocator,
+		)
+		for r in n.paste_ready {
+			if r >= ' ' && r != 0x7f {append(&runes, r)}
+			if len(runes) >= CLIPBOARD_CAP {break}
+		}
+		delete(n.paste_ready)
+		n.paste_ready = ""
+		if len(runes) > 0 {push_event(w, Paste_Event{runes[:]})}
+	}
 	if w.keep_awake && time.tick_since(n.awake_reset) > KEEP_AWAKE_RESET {
 		x.ResetScreenSaver(n.display)
 		n.awake_reset = time.tick_now()
@@ -742,6 +815,89 @@ native_poll :: proc(w: ^Window) {
 			if xlib.Atom(e.xclient.data.l[0]) == n.wm_delete_window {
 				w.close_requested = true
 			}
+		case .SelectionRequest:
+			sq := &e.xselectionrequest
+			if sq.selection != n.clipboard_atom {break}
+			prop := sq.property
+			if prop == 0 {prop = sq.target} 	// ICCCM: no property means the target is the property
+			notify := xlib.XSelectionEvent {
+				type       = .SelectionNotify,
+				send_event = true,
+				display    = n.display,
+				requestor  = sq.requestor,
+				selection  = sq.selection,
+				target     = sq.target,
+				time       = sq.time,
+			}
+			switch sq.target {
+			case n.targets_atom:
+				list := [4]xlib.Atom{n.targets_atom, n.utf8_atom, XA_STRING, XA_ATOM}
+				_ = x.ChangeProperty(
+					n.display,
+					sq.requestor,
+					prop,
+					XA_ATOM,
+					32,
+					0,
+					&list[0],
+					len(list),
+				)
+				notify.property = prop
+			case n.utf8_atom, XA_STRING:
+				_ = x.ChangeProperty(
+					n.display,
+					sq.requestor,
+					prop,
+					sq.target,
+					8,
+					0,
+					raw_data(n.copy_text),
+					i32(len(n.copy_text)),
+				)
+				notify.property = prop
+			case:
+				notify.property = 0 // unsupported target: refuse
+			}
+			ev_reply: xlib.XEvent
+			ev_reply.xselection = notify
+			x.SendEvent(n.display, sq.requestor, false, xlib.EventMask{}, &ev_reply)
+			x.Flush(n.display)
+		case .SelectionNotify:
+			sel := &e.xselection
+			if sel.property == 0 { 	// they could not give us anything
+				n.paste_pending = false
+				break
+			}
+			if sel.property != n.paste_property || !n.paste_pending {break}
+			act_type: xlib.Atom
+			act_format: i32
+			nitems, bytes_after: uint
+			buf: rawptr
+			if x.GetWindowProperty(
+				   n.display,
+				   n.window,
+				   n.paste_property,
+				   0,
+				   4096,
+				   true,
+				   0,
+				   &act_type,
+				   &act_format,
+				   &nitems,
+				   &bytes_after,
+				   &buf,
+			   ) ==
+				   .Success &&
+			   buf != nil {
+				paste := (cast([^]byte)buf)[:nitems]
+				if len(n.paste_ready) > 0 {delete(n.paste_ready)}
+				n.paste_ready = strings.clone_from_bytes(paste) or_else ""
+				x.FreeBytes(buf)
+			}
+			n.paste_pending = false
+		case .SelectionClear:
+			// Another client took the selection: stop serving our text.
+			if len(n.copy_text) > 0 {delete(n.copy_text); n.copy_text = ""}
 		case .ConfigureNotify:
 			width, height := e.xconfigure.width, e.xconfigure.height
 			if width != w.width || height != w.height {
@@ -844,6 +1000,40 @@ native_poll :: proc(w: ^Window) {
 			}
 		}
 	}
+}
+
+@(private)
+native_request_clipboard_paste :: proc() {
+	n := clipboard_window
+	if n == nil || n.paste_pending {return}
+	owner := x.GetSelectionOwner(n.display, n.clipboard_atom)
+	if owner == 0 {return} 	// an empty clipboard unwraps to nothing
+	if owner == n.window {
+		if len(n.copy_text) > 0 && len(n.paste_ready) == 0 {
+			n.paste_ready = strings.clone(n.copy_text)
+		}
+		return
+	}
+	x.ConvertSelection(
+		n.display,
+		n.clipboard_atom,
+		n.utf8_atom,
+		n.paste_property,
+		n.window,
+		xlib.Time(0),
+	)
+	n.paste_pending = true
+	x.Flush(n.display)
+}
+
+@(private)
+native_set_clipboard_text :: proc(text: string) {
+	n := clipboard_window
+	if n == nil {return}
+	if len(n.copy_text) > 0 {delete(n.copy_text)}
+	n.copy_text = strings.clone(text)
+	x.SetSelectionOwner(n.display, n.clipboard_atom, n.window, xlib.Time(0))
+	x.Flush(n.display)
 }
 
 @(private)
