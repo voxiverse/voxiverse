@@ -258,7 +258,7 @@ jobs:
       - name: Linux test packages (CPU Vulkan, xvfb, debuggers, tshark)
         uses: ./.github/actions/apt
         with:
-          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
+          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4 libx11-6 libxi6
       - name: CPU Vulkan driver
         run: echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
 
@@ -415,7 +415,7 @@ jobs:
       - name: Linux test packages (CPU Vulkan, xvfb, debuggers, tshark)
         uses: ./.github/actions/apt
         with:
-          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4
+          packages: xvfb mesa-vulkan-drivers vulkan-validationlayers gdb lldb tshark lua5.4 libx11-6 libxi6
       - name: CPU Vulkan driver
         run: echo "VK_DRIVER_FILES=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' | head -n 1)" >> "$GITHUB_ENV"
 
@@ -560,7 +560,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: ./.github/actions/apt
         with:
-          packages: xvfb mesa-vulkan-drivers
+          packages: xvfb mesa-vulkan-drivers libx11-6 libxi6
 
       - name: Run the package (Linux)
         if: runner.os == 'Linux'
