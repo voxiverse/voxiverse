@@ -136,7 +136,13 @@ ADMIN_COMMANDS := [?]Admin_Command {
 		"teleport.tp",
 	},
 	{"where", "", {0, 0}, admin_where, "teleport.tp"},
-	{"goto", "<lat lon> | <place>", {1, 2}, admin_goto, "teleport.tp"},
+	{
+		"goto",
+		"<lat lon> | <place> | @Earth 27.98N 86.92E | @<world>-<galaxy> <x> <y> <z>",
+		{1, 4},
+		admin_goto,
+		"teleport.tp",
+	},
 	{"wander", "", {0, 0}, admin_wander, "teleport.tp"},
 	{"tphere", "<player>", {1, 1}, admin_tphere, "teleport.tp.others"},
 	// Messaging, moderation, who and status (commands_people.odin).

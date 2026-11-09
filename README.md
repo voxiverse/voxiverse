@@ -165,7 +165,7 @@ Windows, and `~/Library/Application Support` on macOS.
 | <kbd>M</kbd> | Market. Within a town's reach the HUD says `Market of <town> (M)`; the key opens its market: each good's price, stock and how old the news behind the price is, your silver and cargo, and Buy and Sell with a quantity. Walking away closes it. |
 | <kbd>Q</kbd> | Drop one of the held item (<kbd>Ctrl</kbd>+<kbd>Q</kbd>: all of it). |
 | <kbd>T</kbd>, <kbd>/</kbd> | Chat / a server command (`/spawn`, `/mute bob 1h`; Tab completes). `&c` colours and `&l` bolds text where your role allows it. Up and Down step through what you have sent. |
-| <kbd>Esc</kbd> | Close whatever is open (chat, console, a menu); otherwise open the game menu (Back to Game, Options, Open to LAN, Save and Quit to Title). When you are alone in your own world, pausing stops the world. |
+| <kbd>Esc</kbd> | Close whatever is open (chat, console, a menu); otherwise open the game menu (Back to Game, Options, Copy place, Open to LAN, Save and Quit to Title). When you are alone in your own world, pausing stops the world. |
 | <kbd>F11</kbd> | Fullscreen. |
 | <kbd>F2</kbd> | Screenshot. |
 | <kbd>F3</kbd> | Debug overlay: position, chunks, memory, server tick. |
@@ -197,6 +197,8 @@ roles allow (see [Permissions](docs/server.md#permissions)).
 Builders edit in bulk. `/pos1` and `/pos2` mark the corners of a box at the block you are
 looking at; then `/fill stone`, `/replace dirt sand`, or `/sphere 5 stone` (at the first
 corner) applies the edit.
+
+You can share a place. `/share` puts a code for where you are on the clipboard (`@Earth 27.98N 86.92E` on the planet world, `@<world>-<galaxy> x y z` on any other world) and prints it in the console; the game menu's **Copy place** button does the same. A friend pastes the code as `/goto @Earth 27.98N 86.92E` (or the `@<world>-<galaxy>` form) to land in the same spot.
 
 ### Worlds
 

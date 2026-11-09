@@ -14,7 +14,7 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	defer ui.end_layer(ctx, prev)
 	ui.backdrop(ctx)
 	port := core.stats(&s.server).port if engine.session_hosting(s) else 0
-	rows: f32 = 4 if port == 0 else 5
+	rows: f32 = 5 if port == 0 else 6
 	if app.devchat.running {rows += 1}
 	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 80)
 	heading := ui.cut_top(&column, 80)
@@ -41,6 +41,7 @@ game_menu :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		engine.tr(.Options),
 		ui.next(ctx),
 	) {engine.overlay_open(&app.overlays, .Options)}
+	if ui.button(ctx, engine.tr(.Game_Menu_Copy_Place), ui.next(ctx)) {engine.share_place(app)}
 	if app.devchat.running &&
 	   ui.button(ctx, engine.tr(.Devchat_Title), ui.next(ctx)) {engine.devchat_open(app)}
 	if engine.session_hosting(s) {

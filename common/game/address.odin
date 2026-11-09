@@ -252,3 +252,129 @@ motif_eighths :: proc(m: Motif) -> int {
 	last := m[MOTIF_NOTES - 1]
 	return int(last.start) + int(last.length)
 }
+
+// ---- place codes ("share a place") ----
+//
+// A place can be a short text a player pastes to a friend. On a planet
+// world it names the coordinates on the surface of Earth; on any other
+// world it names the address and the position. Earth is the one fixed
+// address every universe has, so it is the word @Earth.
+//
+//   @Earth 27.98N 86.92E
+//   @abcdefg-hijklmno 123 64 -876
+//
+// The address is its glyphs as Latin letters, case sensitive: 'a'..'z' for
+// symbols 0-25, 'A'..'N' for 26-39, world first, a '-', then the galaxy.
+
+LATIN_ALPHABET :: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"
+
+address_latin :: proc(a: Address, allocator := context.temp_allocator) -> string {
+	g, w := a.galaxy, a.world
+	alphabet := LATIN_ALPHABET
+	b := strings.builder_make(allocator)
+	for s in w {strings.write_byte(&b, alphabet[s])}
+	strings.write_byte(&b, '-')
+	for s in g {strings.write_byte(&b, alphabet[s])}
+	return strings.to_string(b)
+}
+
+@(private = "file")
+symbol_of_latin :: proc(c: u8) -> (int, bool) {
+	if c >= 'a' && c <= 'z' {return int(c - 'a'), true}
+	if c >= 'A' && c <= 'N' {return int(c - 'A') + 26, true}
+	return 0, false
+}
+
+// address_parse_latin reads the Latin-letter form (world, a '-', galaxy).
+address_parse_latin :: proc(text: string) -> (a: Address, ok: bool) {
+	t := strings.trim_space(text)
+	if len(t) != WORLD_LENGTH + 1 + GALAXY_LENGTH || t[WORLD_LENGTH] != '-' {
+		return {}, false
+	}
+	for i in 0 ..< WORLD_LENGTH {
+		a.world[i] = u8(symbol_of_latin(t[i]) or_return)
+	}
+	for i in 0 ..< GALAXY_LENGTH {
+		a.galaxy[i] = u8(symbol_of_latin(t[WORLD_LENGTH + 1 + i]) or_return)
+	}
+	return a, address_valid(a)
+}
+
+// Share: a place code parsed (@Earth with a surface position, or an
+// address with absolute coordinates).
+Share :: struct {
+	earth:    bool,
+	lat, lon: f64,
+	address:  Address,
+	x, y, z:  f64,
+}
+
+SHARE_FORM :: "@Earth 27.98N 86.92E or @<world>-<galaxy> <x> <y> <z>"
+
+@(private = "file")
+ascii_lower :: proc(c: u8) -> u8 {
+	return c + 32 if c >= 'A' && c <= 'Z' else c
+}
+
+@(private = "file")
+parse_hemisphere :: proc(s, allowed: string) -> (value: f64, ok: bool) {
+	// <number><hemisphere letter>
+	if len(s) < 2 {return 0, false}
+	letter := ascii_lower(s[len(s) - 1])
+	for i in 0 ..< len(allowed) {
+		if letter == ascii_lower(allowed[i]) {
+			n, parsed := strconv.parse_f64(s[:len(s) - 1])
+			if !parsed {return 0, false}
+			switch letter {
+			case 's', 'w':
+				return -n, true
+			case:
+				return n, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// share_parse reads a place code. ok is false for anything that is not one
+// (the caller says the expected form).
+share_parse :: proc(text: string) -> (share: Share, ok: bool) {
+	t := strings.trim_space(text)
+	if !strings.has_prefix(t, "@") {return {}, false}
+	fields := strings.fields(t[1:], context.temp_allocator)
+	defer delete(fields, context.temp_allocator)
+	if len(fields) == 3 && strings.equal_fold(fields[0], "earth") {
+		lat := parse_hemisphere(fields[1], "NS") or_return
+		lon := parse_hemisphere(fields[2], "EW") or_return
+		if abs(lat) > 90 || abs(lon) > 180 {return {}, false}
+		return Share{earth = true, lat = lat, lon = lon}, true
+	}
+	if len(fields) == 4 {
+		a := address_parse_latin(fields[0]) or_return
+		x := strconv.parse_f64(fields[1]) or_return
+		y := strconv.parse_f64(fields[2]) or_return
+		z := strconv.parse_f64(fields[3]) or_return
+		return Share{address = a, x = x, y = y, z = z}, true
+	}
+	return {}, false
+}
+
+// share_earth_code: @Earth <lat><N|S> <lon><E|W>
+share_earth_code :: proc(lat, lon: f64, allocator := context.temp_allocator) -> string {
+	lat_c := "N" if lat >= 0 else "S"
+	lon_c := "E" if lon >= 0 else "W"
+	b := strings.builder_make(allocator)
+	strings.write_string(&b, "@Earth ")
+	fmt.sbprintf(&b, "%.2f%s %.2f%s", abs(lat), lat_c, abs(lon), lon_c)
+	return strings.to_string(b)
+}
+
+// share_world_code: @<world>-<galaxy> <x> <y> <z>
+share_world_code :: proc(a: Address, x, y, z: f64, allocator := context.temp_allocator) -> string {
+	b := strings.builder_make(allocator)
+	strings.write_byte(&b, '@')
+	strings.write_string(&b, address_latin(a, allocator))
+	strings.write_byte(&b, ' ')
+	fmt.sbprintf(&b, "%.2f %.2f %.2f", x, y, z)
+	return strings.to_string(b)
+}
