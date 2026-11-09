@@ -91,6 +91,10 @@ foreign kernel32 {
 }
 
 @(private = "file")
+ICON_SMALL :: 0
+@(private = "file")
+ICON_BIG :: 1
+@(private = "file")
 ES_CONTINUOUS :: 0x80000000
 @(private = "file")
 ES_SYSTEM_REQUIRED :: 0x00000001
@@ -102,9 +106,65 @@ keep_awake_warned: bool // a failure is told once per run
 
 // The display and the system stay on while this thread says so (until
 // it says ES_CONTINUOUS alone).
-// The window's icon is the executable's resource.
+// set_window_icon: build small and large icons from the RGBA images and
+// associate them with the window (WM_SETICON). When no valid images are
+// supplied, the .exe's resource icon stands.
 @(private)
-native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {}
+native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
+	best := -1
+	for img, i in images {
+		if len(img.rgba) != img.size * img.size * 4 {continue}
+		if best < 0 || img.size > images[best].size {best = i}
+	}
+	if best < 0 {return}
+	img := images[best]
+	hIcon := create_icon_from_rgba(img)
+	if hIcon == nil {return}
+	n := &w.native
+	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_SMALL, win.LPARAM(uintptr(hIcon)))
+	win.SendMessageW(n.hwnd, win.WM_SETICON, ICON_BIG, win.LPARAM(uintptr(hIcon)))
+}
+
+@(private = "file")
+create_icon_from_rgba :: proc(img: Icon_Image) -> win.HICON {
+	header := win.BITMAPINFOHEADER {
+		biSize        = size_of(win.BITMAPINFOHEADER),
+		biWidth       = win.LONG(img.size),
+		biHeight      = win.LONG(img.size), // bottom-up: last row first
+		biPlanes      = 1,
+		biBitCount    = 32,
+		biCompression = win.BI_RGB,
+		biSizeImage   = u32(img.size * img.size * 4),
+	}
+	bi := win.BITMAPINFO {
+		bmiHeader = header,
+	}
+	dc := win.GetDC(nil)
+	bits: rawptr
+	bm := win.CreateDIBSection(dc, &bi, win.DIB_RGB_COLORS, &bits, nil, 0)
+	win.ReleaseDC(nil, dc)
+	if bm == nil {return nil}
+	pixels := ([^]u32)(bits)
+	size := img.size
+	for y in 0 ..< size {
+		dst_row := (size - 1 - y) * size
+		src_row := y * size
+		for x in 0 ..< size {
+			src := (src_row + x) * 4
+			r := u32(img.rgba[src + 0])
+			g := u32(img.rgba[src + 1])
+			b := u32(img.rgba[src + 2])
+			a := u32(img.rgba[src + 3])
+			pixels[dst_row + x] = (a << 24) | (r << 16) | (g << 8) | b
+		}
+	}
+	info := win.ICONINFO {
+		fIcon    = true,
+		hbmMask  = nil, // all-opaque mask: icon doesn't use transparency here (alpha ignored)
+		hbmColor = bm,
+	}
+	return win.CreateIconIndirect(&info)
+}
 
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {
