@@ -165,7 +165,9 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 				app.seconds = math.mod(app.seconds + app.last_frame_ms / 1000, 1000)
 			}
 			base.frame_stats_add(&app.frame_stats, app.last_frame_ms)
-			if app.scene.phase != .Done {app.last_frame_ms = 0} 	// (a scene's animations stand still)
+			// Scenes (menu or world) freeze frame dt so their picture is still;
+			// .Off is normal play — never freeze that (Inkling's != .Done did).
+			if engine.scene_freezes_frame_dt(app.scene.phase) {app.last_frame_ms = 0}
 			if app.screen == .Game {
 				base.frame_stats_add(
 					&app.triangle_stats,
