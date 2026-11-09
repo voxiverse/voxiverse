@@ -129,6 +129,19 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 				100 * f64(ws.vertices_used) / f64(engine.CHUNK_VERTEX_CAPACITY),
 			),
 		)
+		if app.g.pipeline_stats_supported && app.g.pipeline_stats.vertex_invocations > 0 {
+			ps := &app.g.pipeline_stats
+			overlay_append(
+				&left_lines,
+				fmt.tprintf(
+					"pipeline: vert %dk, clip %dk, frag %dk, comp %dk",
+					ps.vertex_invocations / 1000,
+					ps.clipping_primitives / 1000,
+					ps.fragment_invocations / 1000,
+					ps.compute_invocations / 1000,
+				),
+			)
+		}
 		memory := gpu.memory_report(&app.g)
 		vram := fmt.tprintf("memory: ours %.0f MiB", f64(memory.ours) / (1 << 20))
 		if memory.budget > 0 {

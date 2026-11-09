@@ -299,7 +299,12 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		app_ui(app, &app.ui)
 		ui.end_frame(&app.ui)
 	}
-	if capture_this_frame {gpu.renderdoc_capture(&app.renderdoc, "voxiverse")}
+	if capture_this_frame || app.renderdoc_requested {
+		title := app.renderdoc_title if app.renderdoc_title != "" else "voxiverse"
+		gpu.renderdoc_capture(&app.renderdoc, title)
+		app.renderdoc_requested = false
+		app.renderdoc_title = ""
+	}
 
 	frame: gpu.Frame
 	ok: bool
