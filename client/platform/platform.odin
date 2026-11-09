@@ -328,6 +328,7 @@ window_open :: proc(
 	w.focused = true
 	if !native_open(w, title) {
 		delete(w.events)
+		w^ = {}
 		return false
 	}
 	pads_open(&w.pads)
