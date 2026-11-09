@@ -5,6 +5,7 @@ import "core:strings"
 import "core:testing"
 
 import "common:game"
+import "common:worldgen"
 
 @(private = "file")
 said :: proc(c: ^Net_Client, what: string) -> bool {
@@ -223,4 +224,58 @@ test_where_and_goto_need_the_planet :: proc(t: ^testing.T) {
 	pump(t, one)
 	testing.expect(t, said(a, "not built on the planet"))
 	testing.expect(t, said(a, "At "))
+}
+
+// /goto with a place code: to the surface there on Earth, plainly refused
+// otherwise.
+@(test)
+test_goto_place_codes :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := Config {
+		seed              = 27,
+		earth             = true, // the home world: the real Earth
+		generator         = .Earth,
+		rules             = quiet_rules(),
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true,
+	}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	a := new(Net_Client)
+	defer free(a)
+	net_connect(a, 0, "a", h = h)
+	defer net_close(a)
+	one := []^Net_Client{a}
+	if !testing.expect(
+		t,
+		net_wait(t, one, proc(cs: []^Net_Client) -> bool {return landed(cs[0])}),
+		"never landed",
+	) {return}
+	cmd(a, "goto @Earth 27.98N 86.92E")
+	at := net_wait(t, one, proc(cs: []^Net_Client) -> bool {
+		want_x, want_z := worldgen.planet_block_of(27.98, 86.92)
+		p := cs[0].update.state.position
+		return abs(p.x - f64(want_x) - 0.5) < 2 && abs(p.z - f64(want_z) - 0.5) < 2
+	})
+	testing.expect(t, at, "not near the code's column")
+	cmd(a, "goto @Earth 0N 0E")
+	at = net_wait(t, one, proc(cs: []^Net_Client) -> bool {
+		p := cs[0].update.state.position
+		return abs(p.x) < 2 && abs(p.z) < 2
+	})
+	testing.expect(t, at, "not at the Gulf of Guinea")
+	cmd(a, "goto @Earth north east")
+	pump(t, one)
+	testing.expect(t, said(a, "Not a place code"), "refused with the expected form")
+	cmd(a, "goto @abcdefg-hijklmnp 1 2 3")
+	pump(t, one)
+	testing.expect(t, said(a, "not in this universe's reach"), "a foreign galaxy named plainly")
+	cmd(a, "goto everest")
+	pump(t, one)
+	testing.expect(t, !said(a, "not built on the planet"), "Earth is built on the planet")
 }

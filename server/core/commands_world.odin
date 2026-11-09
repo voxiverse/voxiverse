@@ -532,10 +532,11 @@ admin_where :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	return true
 }
 
-// admin_goto: /goto <lat> <lon> or /goto <place>: to the surface there on an
-// Earth planet world.
+// admin_goto: /goto <lat> <lon>, /goto <place>, or a place code
+// (/goto @Earth 27.98N 86.92E, /goto @<world>-<galaxy> <x> <y> <z>).
 @(private)
 admin_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	if args[0][0] == '@' {return share_goto(s, c, args)}
 	lat, lon: f64
 	switch len(args) {
 	case 1:
@@ -571,6 +572,50 @@ admin_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 	x, z := worldgen.planet_block_of(lat, lon)
 	top := column_top(c.world, x, z)
 	land(s, c, {f64(x) + 0.5, f64(top + 1), f64(z) + 0.5}, c.look, .Ground)
+	return true
+}
+
+// share_goto: a place code (see common/game/address.odin): @Earth with a
+// surface position on the planet world, or a world in this universe's
+// reach with absolute coordinates.
+@(private)
+share_goto :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
+	code := strings.join(args, " ", context.temp_allocator)
+	share, ok := game.share_parse(code)
+	if !ok {
+		notice(s, c, fmt.tprintf("&cNot a place code: %s", game.SHARE_FORM))
+		return true
+	}
+	if share.earth {
+		lat, lon := share.lat, share.lon
+		earth := game.earth_address()
+		from_elsewhere := c.world.address != earth
+		if from_elsewhere {
+			// From elsewhere: travel, then land on the surface.
+			_ = travel(s, c, earth)
+		}
+		x, z := worldgen.planet_block_of(lat, lon)
+		top := column_top(c.world, x, z)
+		land(
+			s,
+			c,
+			{f64(x) + 0.5, f64(top + 1), f64(z) + 0.5},
+			c.look,
+			.Ground,
+			remember = !from_elsewhere,
+		)
+		return true
+	}
+	a := share.address
+	if a != game.earth_address() && a.galaxy != c.world.address.galaxy {
+		notice(s, c, "&cthat world is not in this universe's reach")
+		return true
+	}
+	if a == c.world.address {
+		land(s, c, {share.x, share.y, share.z}, c.look, .Exact)
+		return true
+	}
+	notice_if(s, c, travel(s, c, a, Place{a, {share.x, share.y, share.z}, c.look}))
 	return true
 }
 

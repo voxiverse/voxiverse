@@ -326,6 +326,14 @@ planet_block_of :: proc(lat, lon: f64) -> (x, z: i32) {
 	), i32(math.round(-lat * (PLANET_CIRCUMFERENCE / 4) / 90))
 }
 
+// planet_latlon_of: the latitude and longitude of a block column (the inverse
+// of planet_block_of).
+planet_latlon_of :: proc(x, z: i32) -> (lat, lon: f64) {
+	lat = -f64(z) * 90.0 * 4 / PLANET_CIRCUMFERENCE
+	lon = f64(x) * 180.0 * 2 / PLANET_CIRCUMFERENCE
+	return
+}
+
 // Planet_Place: a named place on Earth, for /goto.
 Planet_Place :: struct {
 	name:     string,

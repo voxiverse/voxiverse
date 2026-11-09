@@ -67,6 +67,11 @@ console_execute :: proc(app: ^engine.App, line: string) {
 	engine.console_print(c, fmt.tprintf("> %s", text))
 	// A slash is a server command (as in the chat); plain words are the client's own.
 	if text[0] == '/' {
+		// `/share` is the client's own: the server has no clipboard.
+		if strings.equal_fold(strings.trim_space(text[1:]), "share") {
+			engine.share_place(app)
+			return
+		}
 		session := app.session
 		if session == nil || session.state != .Playing {
 			engine.console_print(c, "server commands need a world (join or start one)", .Warning)
@@ -313,6 +318,16 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 			},
 		},
 		args = {0, 1},
+	)
+	console_register(
+		c,
+		{
+			"share",
+			"share this place: the code for a friend (on the clipboard and in the console)",
+			proc(app: ^engine.App, args: []string) {
+				engine.share_place(app)
+			},
+		},
 	)
 	console_register(c, {"console", "show the console", proc(app: ^engine.App, args: []string) {
 			engine.overlay_open(&app.overlays, .Console)
