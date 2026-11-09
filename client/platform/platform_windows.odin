@@ -391,6 +391,18 @@ key_from_vk :: proc(wparam: win.WPARAM, lparam: win.LPARAM) -> Key {
 	vk_code := u32(wparam)
 	extended := (lparam & (1 << 24)) != 0
 	switch vk_code {
+	case win.VK_NUMPAD0 ..= win.VK_NUMPAD9:
+		return Key(int(Key.Num_0) + int(vk_code - win.VK_NUMPAD0))
+	case win.VK_MULTIPLY:
+		return .Num_Asterisk
+	case win.VK_ADD:
+		return .Num_Plus
+	case win.VK_SUBTRACT:
+		return .Num_Minus
+	case win.VK_DIVIDE:
+		return .Num_Slash
+	case win.VK_DECIMAL:
+		return .Num_Decimal
 	case 'A' ..= 'Z':
 		return Key(int(Key.A) + int(vk_code - 'A'))
 	case '0' ..= '9':
