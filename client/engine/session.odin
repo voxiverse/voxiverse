@@ -107,6 +107,8 @@ Session :: struct {
 	fov_kick:         f32, // 0 ..= 1: how far the sprint widening has come
 	bob_phase:        f32,
 	bob_amp:          f32, // 0 ..= 1, easing in and out as walking starts and stops
+	own_stride:       f32, // our own walk phase, for the third person avatar (avatars.odin)
+	own_stride_pos:   [3]f64, // the feet position its distance was last taken from
 	aiming:           bool, // a held item that aims is aimed (the crosshair stays in third person)
 	weapon_clock:     f64, // seconds, advanced by the frames (weapons.odin's timers)
 	shot_seen_by:     u16, // the shooter and place of the last shot drawn: a pattern's other rays are tracers only

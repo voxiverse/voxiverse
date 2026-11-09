@@ -362,7 +362,15 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 				),
 			)
 			engine.world_debug_lines(app)
-			engine.avatars_draw(s, &app.entity_draw, &app.held_draw, &app.held_cache)
+			engine.avatars_draw(
+				s,
+				&app.entity_draw,
+				&app.held_draw,
+				&app.held_cache,
+				app.last_frame_ms / 1000,
+				app.debug.own_stride,
+				app.debug.swing_at,
+			)
 			engine.entities_draw(s, &app.entity_draw, app.last_frame_ms / 1000)
 			autopilot.bench_avatars_draw(app, s)
 			view_scene = engine.view_model_frame(app, s, width, height)

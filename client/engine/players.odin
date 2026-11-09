@@ -21,6 +21,7 @@ Other_Player :: struct {
 	kills, deaths: u32, // for the player list
 	stride:        f32, // blocks walked, the limbs' phase (avatars.odin)
 	last_seen:     [3]f64, // where it was drawn last frame
+	swing:         f32, // seconds into the attack/use swing (0: none)
 	track:         Track,
 }
 
