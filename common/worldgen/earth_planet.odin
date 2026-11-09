@@ -45,6 +45,8 @@ shared_model: planet.Planet
 shared_rivers: planet.Rivers
 @(private = "file")
 model_once: sync.Once
+// model_builds counts how many times the model was made (decoded or built): once per process.
+model_builds: int
 
 // model_load: Earth's climate grid and rivers, decoded from assets/planet/earth_climate.bin
 // (written by `build planet climate`, a test keeps it fresh). A file that does not match the
@@ -52,6 +54,7 @@ model_once: sync.Once
 @(private = "file")
 model_load :: proc() {
 	sync.once_do(&model_once, proc() {
+		sync.atomic_add(&model_builds, 1)
 		r, _ := planet_relief()
 		p, rv, ok := planet.climate_decode(
 			#load("../../assets/planet/earth_climate.bin"),
