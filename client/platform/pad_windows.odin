@@ -14,10 +14,17 @@ XINPUT_PROBE_INTERVAL :: 250 * time.Millisecond
 
 @(private = "file")
 Get_State :: #type proc "system" (user: u32, state: ^Xinput_State) -> u32
+Set_State :: #type proc "system" (user: u32, vibration: ^XINPUT_VIBRATION) -> u32
+
+XINPUT_VIBRATION :: struct {
+	wLeftMotorSpeed:  u16,
+	wRightMotorSpeed: u16,
+}
 
 Native_Pads :: struct {
 	lib:        dynlib.Library,
 	get_state:  Get_State,
+	set_state:  Set_State, // nil when unavailable (older xinput)
 	last_probe: time.Tick,
 	next_probe: int,
 }
@@ -34,6 +41,12 @@ native_pads_open :: proc(p: ^Pads) {
 		}
 		n.lib = lib
 		n.get_state = cast(Get_State)proc_ptr
+		set_ptr, set_found := dynlib.symbol_address(lib, "XInputSetState")
+		if set_found {
+			n.set_state = cast(Set_State)set_ptr
+		} else {
+			log.info("platform pads: XInputSetState not found: no rumble")
+		}
 		break
 	}
 	if n.get_state == nil {log.info("platform pads: XInput not found: no gamepads")}
@@ -73,4 +86,16 @@ native_pads_poll :: proc(p: ^Pads) {
 		}
 	}
 	if probe {n.last_probe = time.tick_now()}
+}
+
+@(private)
+native_pads_rumble :: proc(p: ^Pads, index: u8, strong, weak: u16) -> (rumble, ok: bool) {
+	n := &p.native
+	if n.set_state == nil {return false, false}
+	vibration := XINPUT_VIBRATION {
+		wLeftMotorSpeed  = strong,
+		wRightMotorSpeed = weak,
+	}
+	res := n.set_state(u32(index), &vibration)
+	return res == 0, res == 0
 }

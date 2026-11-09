@@ -21,12 +21,16 @@ IN_DELETE :: 0x200
 
 @(private = "file")
 Linux_Pad :: struct {
-	fd:       linux.Fd,
-	open:     bool,
-	dropping: bool,
-	node:     [32]u8, // "event7"
-	node_len: int,
-	dev:      Evdev_Pad,
+	fd:        linux.Fd,
+	open:      bool,
+	dropping:  bool,
+	node:      [32]u8, // "event7"
+	node_len:  int,
+	dev:       Evdev_Pad,
+	has_ff:    bool,
+	ff_id:     i16,
+	ff_strong: u16,
+	ff_weak:   u16,
 }
 
 Native_Pads :: struct {
@@ -154,6 +158,9 @@ pad_close_slot :: proc(p: ^Pads, i: int) {
 	if d.open {linux.close(d.fd)}
 	d.open = false
 	d.fd = -1
+	d.has_ff = false
+	d.ff_id = -1
+	d.ff_strong, d.ff_weak = 0, 0
 	p.state[i] = {}
 }
 
@@ -197,6 +204,8 @@ pad_try_node :: proc(p: ^Pads, name: string) {
 	}
 	id: [4]u16
 	ioctl_ok(fd, EVIOCGID, &id)
+	eff_count: i32 = -1
+	ioctl_ok(fd, EVIOCGEFFECTS, &eff_count)
 	vendor, product := id[1], id[2]
 	if pad_ignored(vendor, product, n.ignore, n.except) {
 		log.debugf("platform pads: %s ignored (Steam presents it)", name)
@@ -215,6 +224,8 @@ pad_try_node :: proc(p: ^Pads, name: string) {
 	d := &n.pads[slot]
 	d^ = {}
 	d.fd, d.open = fd, true
+	d.ff_id = -1
+	if eff_count > 0 {d.has_ff = true}
 	copy(d.node[:], name)
 	d.node_len = len(name)
 	evdev_setup(&d.dev, vendor, product, devname, abs, ranges)
@@ -245,6 +256,53 @@ pad_resync :: proc(d: ^Linux_Pad) {
 			&info,
 		) {evdev_event(dev, EV_ABS, u16(a), info[0])}
 	}
+}
+
+// write_event writes a raw evdev input_event (timestamps zeroed; the kernel stamps).
+@(private = "file")
+write_event :: proc(fd: linux.Fd, type, code: u16, value: i32) -> bool {
+	ev: [24]u8 = {}
+	ev[16] = u8(type & 0xff)
+	ev[17] = u8((type >> 8) & 0xff)
+	ev[18] = u8(code & 0xff)
+	ev[19] = u8((code >> 8) & 0xff)
+	u := u32(value)
+	ev[20] = u8(u & 0xff)
+	ev[21] = u8((u >> 8) & 0xff)
+	ev[22] = u8((u >> 16) & 0xff)
+	ev[23] = u8((u >> 24) & 0xff)
+	_, err := linux.write(fd, ev[:])
+	return err == .NONE
+}
+
+@(private)
+native_pads_rumble :: proc(p: ^Pads, index: u8, strong, weak: u16) -> (rumble, ok: bool) {
+	d := &p.native.pads[int(index)]
+	if !d.open || !d.has_ff {return false, false}
+	if strong == 0 && weak == 0 {
+		if d.ff_id >= 0 {
+			if !write_event(d.fd, EV_FF, u16(d.ff_id), 0) {return false, false}
+			if !write_event(d.fd, EV_SYN, SYN_REPORT, 0) {return false, false}
+		}
+		d.ff_strong, d.ff_weak = 0, 0
+		return false, true
+	}
+	effect: Ff_Effect
+	effect.type = FF_RUMBLE
+	effect.id = d.ff_id
+	effect.replay = Ff_Replay {
+		length = 0xffff,
+	}
+	effect.rumble = Ff_Rumble_Effect{strong, weak}
+	if !ioctl_ok(d.fd, EVIOCSFF, &effect) {
+		d.has_ff = false
+		return false, false
+	}
+	d.ff_id = effect.id
+	if !write_event(d.fd, EV_FF, u16(d.ff_id), 1) {return false, false}
+	if !write_event(d.fd, EV_SYN, SYN_REPORT, 0) {return false, false}
+	d.ff_strong, d.ff_weak = strong, weak
+	return true, true
 }
 
 @(private = "file")

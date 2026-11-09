@@ -1,6 +1,7 @@
 package platform
 
 import "base:intrinsics"
+import "core:log"
 import "core:strings"
 import NS "core:sys/darwin/Foundation"
 
@@ -74,6 +75,14 @@ pressed :: proc(button: ^NS.Object) -> bool {
 @(private = "file")
 value :: proc(input: ^NS.Object) -> f32 {
 	return msg(f32, input, "value") if input != nil else 0
+}
+
+// native_pads_rumble: macOS has no force-feedback API for game pads; the
+// GameController haptics entry point is sensory click, not motor drive.
+@(private)
+native_pads_rumble :: proc(p: ^Pads, index: u8, strong, weak: u16) -> (rumble, ok: bool) {
+	log.info("platform pads: no force feedback on macOS; rumble ignored")
+	return false, false
 }
 
 native_pads_poll :: proc(p: ^Pads) {
