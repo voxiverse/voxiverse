@@ -214,3 +214,18 @@ test_pads_focus :: proc(t: ^testing.T) {
 	_, again := events[0].(Pad_Button_Event)
 	testing.expect(t, again)
 }
+
+// test_effect_layout: the Linux evdev force-feedback structs match the kernel ABI; a wrong size here makes the effect upload fail silently.
+@(test)
+test_effect_layout :: proc(t: ^testing.T) {
+	testing.expect_value(t, size_of(Ff_Effect), 48)
+	testing.expect_value(t, offset_of(Ff_Effect, trigger), 6)
+	testing.expect_value(t, offset_of(Ff_Effect, replay), 10)
+	testing.expect_value(t, offset_of(Ff_Effect, rumble), 16)
+	testing.expect_value(t, size_of(Ff_Trigger), 4)
+	testing.expect_value(t, size_of(Ff_Replay), 4)
+	testing.expect_value(t, size_of(Ff_Rumble_Effect), 4)
+	testing.expect_value(t, offset_of(Ff_Trigger, interval), 2)
+	testing.expect_value(t, offset_of(Ff_Replay, delay), 2)
+	testing.expect_value(t, offset_of(Ff_Rumble_Effect, weak_magnitude), 2)
+}

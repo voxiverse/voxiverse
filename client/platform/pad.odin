@@ -93,6 +93,15 @@ pads_close :: proc(p: ^Pads) {
 	native_pads_close(p)
 }
 
+// pads_rumble starts or stops a pad's rumble motors. `0` stops the effect.
+// `strong` and `weak` are relative motor magnitudes 0..1 (weak 1 = max).
+// Returns false when the platform or the pad has no rumble.
+pads_rumble :: proc(p: ^Pads, index: u8, strong, weak: f32) -> bool {
+	s, w := clamp(strong, 0, 1), clamp(weak, 0, 1)
+	_, ok := native_pads_rumble(p, index, u16(s * 0xffff + 0.5), u16(w * 0xffff + 0.5))
+	return ok
+}
+
 // pads_poll reads the pads and appends the changes to events. Unfocused
 // (deliver false) the state is kept and nothing is sent; when focus comes
 // back, sent is at rest so every held value is sent again.

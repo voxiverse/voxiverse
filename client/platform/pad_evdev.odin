@@ -39,6 +39,82 @@ ABS_HAT0X :: 0x10
 ABS_HAT0Y :: 0x11
 ABS_COUNT :: 0x40
 
+EV_FF :: 21
+FF_RUMBLE :: 0x50
+
+// Force-feedback structs (mirror <linux/input.h> exactly on 64-bit Linux);
+// neutral cross-platform data so tests can check them.
+Ff_Trigger :: struct {
+	button:   u16,
+	interval: u16,
+}
+Ff_Replay :: struct {
+	length: u16,
+	delay:  u16,
+}
+Ff_Envelope :: struct {
+	attack_length: u16,
+	attack_level:  u16,
+	fade_length:   u16,
+	fade_level:    u16,
+}
+Ff_Periodic_Effect :: struct {
+	waveform:    u16,
+	period:      u16,
+	magnitude:   i16,
+	offset:      i16,
+	phase:       u16,
+	_pad:        [2]u8,
+	envelope:    Ff_Envelope,
+	custom_len:  u32,
+	custom_data: rawptr,
+}
+Ff_Constant_Effect :: struct {
+	level:    i16,
+	envelope: Ff_Envelope,
+}
+Ff_Ramp_Effect :: struct {
+	start_level: i16,
+	end_level:   i16,
+	envelope:    Ff_Envelope,
+}
+Ff_Condition_Effect :: struct {
+	right_saturation: u16,
+	left_saturation:  u16,
+	right_coeff:      i16,
+	left_coeff:       i16,
+	deadband:         u16,
+	center:           i16,
+}
+Ff_Rumble_Effect :: struct {
+	strong_magnitude: u16,
+	weak_magnitude:   u16,
+}
+Ff_Haptic_Effect :: struct {
+	hid_usage: u16,
+	vendor_id: u16,
+	duration:  u16,
+	magnitude: u16,
+	_pad:      [4]u8,
+}
+
+// Ff_Effect mirrors struct ff_effect: type, id, direction, trigger, replay,
+// then a union — which we cover with an explicit size matching Kernel ABI.
+Ff_Effect :: struct {
+	type:      u16,
+	id:        i16,
+	direction: u16,
+	trigger:   Ff_Trigger,
+	replay:    Ff_Replay,
+	_pad:      [2]u8,
+	rumble:    Ff_Rumble_Effect,
+	_pad2:     [28]u8,
+}
+
+EVIOCSFF :: 0x40304580
+EVIOCGEFFECTS :: 0x80044584
+
+
 // Evdev_Layout: xpad and xpad-like drivers (Microsoft, Valve and every vendor
 // not named below) send X as 0x133 and Y as 0x134; Sony (hid-playstation) and
 // Nintendo (hid-nintendo) follow the kernel's positional rule: 0x133 the top
