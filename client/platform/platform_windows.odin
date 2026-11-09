@@ -535,3 +535,60 @@ key_from_vk :: proc(wparam: win.WPARAM, lparam: win.LPARAM) -> Key {
 	}
 	return .Unknown
 }
+
+// display_count: the number of active monitors the OS reports, with ok true/false.
+@(private)
+native_display_count :: proc() -> (count: i32, ok: bool) {
+	dev: win.DISPLAY_DEVICEW
+	dev.cb = size_of(win.DISPLAY_DEVICEW)
+	i, n: u32
+	for {
+		if !win.EnumDisplayDevicesW(nil, i, &dev, 0) {break}
+		if (dev.StateFlags & 0x00000001) != 0 {
+			n += 1
+		}
+		i += 1
+	}
+	return i32(n) if n > 0 else 1, n > 0
+}
+
+@(private)
+native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
+	dev: win.DISPLAY_DEVICEW
+	dev.cb = size_of(win.DISPLAY_DEVICEW)
+	i, connected: u32
+	for {
+		if !win.EnumDisplayDevicesW(nil, i, &dev, 0) {break}
+		i += 1
+		if (dev.StateFlags & 0x00000001) == 0 {continue} 	// not attached to desktop
+		if connected != u32(index) {connected += 1; continue}
+		info = display_info_from(u32(index), &dev)
+		return info, true
+	}
+	return {}, false
+}
+
+@(private = "file")
+display_info_from :: proc(index: u32, dev: ^win.DISPLAY_DEVICEW) -> Display_Info {
+	info := Display_Info {
+		index = i32(index),
+		// Caller uses this within a frame; build it on the temp allocator.
+		name  = "display",
+	}
+	if s, err := win.wstring_to_utf8_alloc(win.wstring(raw_data(dev.DeviceString[:])));
+	   err == nil && s != "" {
+		info.name = s
+	}
+	devmode: win.DEVMODEW
+	devmode.dmSize = size_of(win.DEVMODEW)
+	devmode.dmFields = 0
+	if win.EnumDisplaySettingsW(
+		win.wstring(raw_data(dev.DeviceName[:])),
+		win.ENUM_CURRENT_SETTINGS,
+		&devmode,
+	) {
+		info.width, info.height = i32(devmode.dmPelsWidth), i32(devmode.dmPelsHeight)
+		info.refresh_hz = f64(devmode.dmDisplayFrequency)
+	}
+	return info
+}

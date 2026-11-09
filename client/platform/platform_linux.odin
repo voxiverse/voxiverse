@@ -201,6 +201,50 @@ X11 :: struct {
 @(private)
 x: X11
 
+// libXrandr, for monitor names, sizes and refresh rates (optional).
+@(private)
+RR :: struct {
+	__handle:               dynlib.Library,
+	XRRGetScreenResources:  proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+	) -> ^xlib.XRRScreenResources,
+	XRRFreeScreenResources: proc "c" (resources: ^xlib.XRRScreenResources),
+	XRRGetOutputInfo:       proc "c" (
+		display: ^xlib.Display,
+		resources: ^xlib.XRRScreenResources,
+		output: xlib.RROutput,
+	) -> ^xlib.XRROutputInfo,
+	XRRFreeOutputInfo:      proc "c" (output_info: ^xlib.XRROutputInfo),
+	XRRGetCrtcInfo:         proc "c" (
+		display: ^xlib.Display,
+		resources: ^xlib.XRRScreenResources,
+		crtc: xlib.RRCrtc,
+	) -> ^xlib.XRRCrtcInfo,
+	XRRFreeCrtcInfo:        proc "c" (crtc_info: ^xlib.XRRCrtcInfo),
+}
+
+// Raw RandR: X outputs (connected monitors), their current CRTCs, the mode
+// the CRTC is on, and that mode's dot clock / totals give the refresh rate.
+@(private)
+rr: RR
+@(private)
+rr_failed: bool // set when libXrandr is unusable, for the rest of the run
+
+@(private)
+rr_usable :: proc(display: ^xlib.Display) -> bool {
+	if rr.__handle == nil {
+		if rr_failed {return false}
+		count, ok := dynlib.initialize_symbols(&rr, "libXrandr.so.2", "XRR")
+		if !ok || count != reflect.struct_field_count(RR) - 1 {
+			log.info("platform RandR unavailable: no monitor info or refresh rate")
+			rr_failed = true
+			return false
+		}
+	}
+	return true
+}
+
 // libXi, for raw mouse motion (optional).
 @(private)
 XI :: struct {
@@ -914,4 +958,90 @@ key_from_keysym :: proc(sym: xlib.KeySym) -> Key {
 		return .Right_Alt
 	}
 	return .Unknown
+}
+
+// display_count: the number of connected RandR outputs on the default display,
+// or 1/false if we cannot talk to RandR.
+@(private)
+native_display_count :: proc() -> (count: i32, ok: bool) {
+	display := x.OpenDisplay(nil)
+	if display == nil {return 1, false}
+	defer x.CloseDisplay(display)
+	if !rr_usable(display) {return 1, false}
+	root := x.RootWindow(display, x.DefaultScreen(display))
+	res := rr.XRRGetScreenResources(display, root)
+	if res == nil {return 1, false}
+	defer rr.XRRFreeScreenResources(res)
+	connected: i32
+	for i in 0 ..< res.noutput {
+		try := rr.XRRGetOutputInfo(display, res, res.outputs[i])
+		if try != nil {
+			if try.connection == .RR_Connected {connected += 1}
+			rr.XRRFreeOutputInfo(try)
+		}
+	}
+	return max(1, connected), true
+}
+
+@(private)
+native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
+	display := x.OpenDisplay(nil)
+	if display == nil {return {}, false}
+	defer x.CloseDisplay(display)
+	if !rr_usable(display) {return {}, false}
+	root := x.RootWindow(display, x.DefaultScreen(display))
+	res := rr.XRRGetScreenResources(display, root)
+	if res == nil {return {}, false}
+	defer rr.XRRFreeScreenResources(res)
+	want := int(index)
+	idx := 0
+	for i in 0 ..< res.noutput {
+		try := rr.XRRGetOutputInfo(display, res, res.outputs[i])
+		if try == nil {continue}
+		if try.connection != .RR_Connected {
+			rr.XRRFreeOutputInfo(try)
+			continue
+		}
+		if idx == want {
+			info = display_info_from(display, res, try)
+			rr.XRRFreeOutputInfo(try)
+			return info, true
+		}
+		rr.XRRFreeOutputInfo(try)
+		idx += 1
+	}
+	return {}, false
+}
+
+@(private = "file")
+display_info_from :: proc(
+	display: ^xlib.Display,
+	res: ^xlib.XRRScreenResources,
+	output: ^xlib.XRROutputInfo,
+) -> Display_Info {
+	info := Display_Info {
+		name               = strings.clone_from_cstring(
+			output.name,
+			context.temp_allocator,
+		) or_else "",
+		physical_mm_width  = i32(output.mm_width),
+		physical_mm_height = i32(output.mm_height),
+	}
+	if output.crtc != 0 {
+		crtc := rr.XRRGetCrtcInfo(display, res, output.crtc)
+		if crtc != nil {
+			info.width, info.height = i32(crtc.width), i32(crtc.height)
+			for j in 0 ..< res.nmode {
+				if res.modes[j].id == crtc.mode {
+					info.refresh_hz =
+						f64(res.modes[j].dotClock) /
+						1000 /
+						(f64(res.modes[j].hTotal) * f64(res.modes[j].vTotal))
+					break
+				}
+			}
+			rr.XRRFreeCrtcInfo(crtc)
+		}
+	}
+	return info
 }

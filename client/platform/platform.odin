@@ -401,6 +401,35 @@ set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
 	native_set_window_icon(w, images)
 }
 
+// Display_Info: what a display is, its active pixel mode and how fast
+// it refreshes. Names come from the OS when available (an X11 output
+// like "HDMI-1", an adapter label like "\\\\.\\DISPLAY1", or
+// a Cocoa device identifier), with "primary" as the default display.
+Display_Info :: struct {
+	index:                                 i32,
+	name:                                  string,
+	width, height:                         i32, // the active pixel mode
+	refresh_hz:                            f64, // 0 if unknown
+	physical_mm_width, physical_mm_height: i32, // 0 if unknown
+}
+
+// display_count: the number of active displays the OS reports.
+display_count :: proc() -> (i32, bool) {
+	return native_display_count()
+}
+
+// display_info: the display at index (0 is the primary), or ok false.
+display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
+	return native_display_info(index)
+}
+
+// display_refresh: the primary display's refresh rate in Hz, or 0.
+// Zero means unknown, invalid, or no OS refresh-rate support.
+display_refresh :: proc() -> f64 {
+	info, ok := display_info(0)
+	return info.refresh_hz if ok else 0
+}
+
 // set_keep_awake keeps the screen on (no screensaver, no display sleep)
 // while playing, or gives it back to the OS's idle rules. Best effort: where
 // the OS offers no way, it logs so and does nothing.
