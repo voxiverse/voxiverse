@@ -116,18 +116,30 @@ terrain_top :: proc(c: ^Column, g: ^Overhang_Grid, x, z: i32) -> i32 {
 	return i32(math.floor(c.height - c.rough))
 }
 
-// earth_tops: the natural tops of a chunk column (the highest blocks that
-// shade): the land, the sea, the trees standing on it (theirs and their
-// neighbours' crowns).
-earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_Cache = nil) {
-	p := &gen.params
-	// Trees from here and next door (first: the climate's entry is valid
-	// until the cache is used again).
-	trees := make([dynamic]Tree, context.temp_allocator)
-	for dz in i32(-1) ..= 1 {
-		for dx in i32(-1) ..= 1 {cached_trees(cache, gen, column + {dx, dz}, &trees)}
+// trees_collect: the trees of the column and its neighbours, appended in the
+// dz,dx order main used (their write order affects overlapping crowns).
+@(private)
+trees_collect :: proc(gen: ^Generator, column: [2]i32, out: ^[dynamic]Tree, cache: ^Column_Cache) {
+	if cache == nil {
+		for dz in i32(-1) ..= i32(1) {
+			for dx in i32(-1) ..= i32(1) {place_trees(gen, column + [2]i32{dx, dz}, out)}
+		}
+		return
 	}
-	cols := cached_columns(cache, gen, column)
+	for dz in i32(-1) ..= 1 {
+		for dx in i32(-1) ..= 1 {
+			ne := column_entry(cache, gen, column + [2]i32{dx, dz})
+			append(out, ..ne.trees[:ne.tree_count])
+			entry_done(ne)
+		}
+	}
+}
+
+// tops_middle: the land's tops from the climate, shared by both earth_tops
+// paths (the fresh fill, and the cache's).
+@(private)
+tops_middle :: proc(gen: ^Generator, column: [2]i32, cols: ^Columns, out: ^Tops) {
+	p := &gen.params
 	grid := new(Overhang_Grid, context.temp_allocator)
 	lo, hi := max(i32), min(i32)
 	for &row in cols {
@@ -146,8 +158,19 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_C
 			out[x + z * game.CHUNK_SIZE] = top
 		}
 	}
+}
+
+// tops_finish: the shared tail of earth_tops (structures and tree crowns).
+@(private)
+tops_finish :: proc(
+	gen: ^Generator,
+	out: ^Tops,
+	column: [2]i32,
+	cols: ^Columns,
+	trees: ^[dynamic]Tree,
+) {
+	p := &gen.params
 	origin := column * game.CHUNK_SIZE
-	// The trees' trunks and crowns.
 	Tops_Put :: struct {
 		origin: [2]i32,
 		out:    ^Tops,
@@ -172,6 +195,26 @@ earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_C
 	}
 }
 
+// earth_tops: the natural tops of a chunk column (the highest blocks that
+// shade): the land, the sea, the trees standing on it (theirs and their
+// neighbours' crowns).
+earth_tops :: proc(gen: ^Generator, column: [2]i32, out: ^Tops, cache: ^Column_Cache = nil) {
+	trees := make([dynamic]Tree, context.temp_allocator)
+	trees_collect(gen, column, &trees, cache)
+	cols: ^Columns
+	if cache == nil {
+		cols = new(Columns, context.temp_allocator)
+		columns_fill(&gen.params, gen.seed, column, cols)
+		tops_middle(gen, column, cols, out)
+	} else {
+		e := column_entry(cache, gen, column)
+		defer entry_done(e)
+		cols = &e.cols
+		tops_middle(gen, column, cols, out)
+	}
+	tops_finish(gen, out, column, cols, &trees)
+}
+
 // earth_generate fills dst with the chunk at c.
 earth_generate :: proc(
 	gen: ^Generator,
@@ -186,20 +229,24 @@ earth_generate :: proc(
 	seed := gen.seed
 	origin := game.chunk_origin(c)
 	column := [2]i32{c.x, c.z}
-	// Trees from this chunk column and its neighbours may reach in. (The
-	// climate after: an entry stays valid until the cache is used again.)
+	// One entry covers the climate and the trees of this column (the two hot
+	// parts). Each chunk of the column reuses it.
+	e := column_entry(cache, gen, column)
+	defer entry_done(e)
 	trees := make([dynamic]Tree, context.temp_allocator)
 	{
 		base.profile_scope("worldgen place trees")
 		for dz in i32(-1) ..= 1 {
-			for dx in i32(-1) ..= 1 {cached_trees(cache, gen, column + {dx, dz}, &trees)}
+			for dx in i32(-1) ..= 1 {
+				if dx == 0 && dz == 0 {append(&trees, ..e.trees[:e.tree_count]); continue}
+				ne := column_entry(cache, gen, column + [2]i32{dx, dz})
+				append(&trees, ..ne.trees[:ne.tree_count])
+				entry_done(ne)
+			}
 		}
 	}
-	cols: ^Columns
-	{
-		base.profile_scope("worldgen climate")
-		cols = cached_columns(cache, gen, column)
-	}
+	cols := &e.cols
+	base.profile_scope("worldgen climate")
 	pieces := make([dynamic]Piece, context.temp_allocator)
 	pieces_in(gen, {origin.x, origin.z}, &pieces)
 	highest := p.sea_level
@@ -297,6 +344,7 @@ clear_unsupported_plants :: proc(t: ^game.Block_Table, dst: ^game.Block_Array) {
 	}
 }
 
+
 // earth_spawn: near the origin (planet worlds: near worldgen.spawn_lat and
 // spawn_lon), on dry, flat-ish land.
 earth_spawn :: proc(gen: ^Generator) -> [3]f64 {
@@ -346,8 +394,8 @@ spawn_clear :: proc(gen: ^Generator, x, z: i32) -> bool {
 	if len(found) > 0 {return false}
 	trees := make([dynamic]Tree, context.temp_allocator)
 	column := [2]i32{x >> game.CHUNK_SHIFT, z >> game.CHUNK_SHIFT}
-	for dz in i32(-1) ..= 1 {
-		for dx in i32(-1) ..= 1 {place_trees(gen, column + {dx, dz}, &trees)}
+	for dz in i32(-1) ..= i32(1) {
+		for dx in i32(-1) ..= i32(1) {place_trees(gen, column + {dx, dz}, &trees)}
 	}
 	for t in trees {
 		if abs(t.ground.x - x) <= 5 && abs(t.ground.z - z) <= 5 {return false}

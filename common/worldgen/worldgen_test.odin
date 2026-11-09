@@ -1,8 +1,10 @@
 package worldgen
 
+import "core:hash"
 import "core:math"
 import "core:slice"
 import "core:testing"
+import "core:thread"
 
 import "common:base"
 import "common:game"
@@ -668,4 +670,87 @@ test_flat_world :: proc(t: ^testing.T) {
 	}
 	kind, ok := kind_by_name("flat")
 	testing.expect(t, ok && kind == .Flat)
+}
+
+// The shared cache hammered from several threads at once: every thread writes
+// the same chunks, into one cache, and the answer is byte for byte the same
+// as sequentially. (Three reads of a worker-light/hot race is exactly what
+// the test is for: a fill interrupted mid-way by another thread must not
+// leak out half-written trees or a half-filled climate.)
+@(test)
+test_shared_cache_from_threads :: proc(t: ^testing.T) {
+	CHUNKS := []game.Chunk_Pos {
+		{-3, 1, -4},
+		{0, 1, 0},
+		{2, 0, 3},
+		{3, 4, 1},
+		{-5, -2, 8},
+		{1, 3, 2},
+	}
+
+	// The sequential baseline, filled ahead of time.
+	seq := new(Column_Cache)
+	defer free(seq)
+	want := make([dynamic]u64, context.temp_allocator)
+	for _ in CHUNKS {append(&want, u64(0))}
+	{
+		g := generator_make(.Earth, 2, test_reg())
+		a := new(game.Block_Array)
+		defer free(a)
+		for c, i in CHUNKS {
+			generate(&g, c, a, seq)
+			want[i] = u64(hash.fnv32a(transmute([]u8)a[:]))
+		}
+	}
+
+	// Four threads, one cache, each beginning from a different point in the list
+	// (they do not meet at the same slot at the same time, on purpose).
+	cache := new(Column_Cache)
+	defer free(cache)
+	Job :: struct {
+		cache:  ^Column_Cache,
+		seed:   i64,
+		order:  int,
+		chunks: []game.Chunk_Pos,
+		got:    []u64,
+	}
+	job :: proc(d: rawptr) {
+		j := (^Job)(d)
+		g := generator_make(.Earth, j.seed, test_reg())
+		defer free_all(context.temp_allocator)
+		n := len(j.chunks)
+		for k in 0 ..< n {
+			i := (k + j.order * n / 4) % n
+			a := new(game.Block_Array)
+			_, _ = generate(&g, j.chunks[i], a, j.cache)
+			j.got[i] = u64(hash.fnv32a(transmute([]u8)a[:]))
+			free(a)
+		}
+	}
+	WORKERS :: 4
+	jobs: [WORKERS]Job
+	threads: [WORKERS]^thread.Thread
+	for w in 0 ..< WORKERS {
+		jobs[w] = Job {
+			cache  = cache,
+			seed   = 2,
+			order  = w,
+			chunks = CHUNKS,
+			got    = make([]u64, len(CHUNKS), context.temp_allocator),
+		}
+		threads[w] = thread.create_and_start_with_data(&jobs[w], job)
+	}
+	thread.join_multiple(..threads[:])
+	for th in threads {thread.destroy(th)}
+	for w in 0 ..< WORKERS {
+		for i in 0 ..< len(CHUNKS) {
+			testing.expectf(
+				t,
+				jobs[w].got[i] == want[i],
+				"worker %d: chunk %v differs across threads",
+				w,
+				CHUNKS[i],
+			)
+		}
+	}
 }
