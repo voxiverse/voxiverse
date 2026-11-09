@@ -358,9 +358,10 @@ is), with the same fixed conditions (still clouds, no gravity, stopped time). Th
 script then stands on the surface with `/goto <place>` (a name of `PLANET_PLACES`, or a
 latitude and longitude) and frames it with `look`; `earth_everest`, `earth_sahara`, `earth_amazon`, `earth_alps`, `earth_greenland` and `earth_nile` do so.
 
-A scene whose script starts with `screen` is a menu's: it never joins the scratch world, the
-menus' animations stand still (every frame's step is 0, so the starfield, the planet's turn
-and the stars' settling are as at the start), and after the script it draws ten frames. Two
+A scene whose script starts with `screen` is a menu's: it never joins the scratch world.
+While any scene is running (menu or world), frame dt is frozen (every frame's step is 0, so
+the starfield, the planet's turn, avatar breath and the stars' settling stay as at the
+start); menu scenes then draw ten frames after the script. Two
 development commands and a variable serve such scenes: `creation seed <n|text>` sets the
 creation screen's seed as if typed, `ignite show` starts Ignite with that screen's galaxy and
 planet (no universe is made), and `set debug.ignite_at <seconds>` holds an active Ignite at

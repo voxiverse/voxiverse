@@ -25,7 +25,7 @@ share_code :: proc(app: ^App) -> string {
 }
 
 // share_place: the code on the clipboard and in a toast; false outside a
-// running session or when the platform cannot reach the clipboard.
+// running session. Clipboard is best effort (void on every platform today).
 share_place :: proc(app: ^App) -> bool {
 	code := share_code(app)
 	if code == "" {
@@ -33,7 +33,6 @@ share_place :: proc(app: ^App) -> bool {
 		return false
 	}
 	console_print(&app.console, code)
-	// Best effort: native_set_clipboard_text returns nothing on this build.
 	platform.set_clipboard_text(code)
 	toast(app, .Share_Copied, code)
 	return true
