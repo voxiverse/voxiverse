@@ -122,6 +122,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/base/fuzz` | The fuzz harness | `*.odin` |
 | `common/game` | The shared game rules, formats and protocol | `*.odin` |
 | `common/game/testdata` | Game test input | `*.ogg` |
+| `common/game/testdata/fuzz/pack.png/regress` | PNG textures a fuzzer failed on, replayed by the suite | `*.bin` |
 | `common/limited` | Child processes under a time limit, shared by the driver and the tests | `*.odin` |
 | `common/netcode` | UDP connections | `*.odin` |
 | `common/ogg` | Ogg and Vorbis | `*.odin` |
