@@ -11,15 +11,16 @@ import vk "vendor:vulkan"
 // needs no development packages.
 
 Window :: struct {
-	width, height:   i32, // framebuffer size in pixels; 0 while minimized
-	focused:         bool,
-	close_requested: bool,
-	mouse_captured:  bool, // wanted (set_mouse_captured); held only while focused
-	fullscreen:      bool, // borderless, covering the monitor (set_fullscreen)
-	keep_awake:      bool, // the screen kept on (set_keep_awake)
-	events:          [dynamic]Event, // this frame's events, refilled by poll_events
-	pads:            Pads, // gamepads (pad.odin)
-	native:          Native_Window, // per-OS state
+	width, height:         i32, // framebuffer size in pixels; 0 while minimized
+	min_width, min_height: i32, // minimum window size; 0 means no constraint (set via set_window_min_size)
+	focused:               bool,
+	close_requested:       bool,
+	mouse_captured:        bool, // wanted (set_mouse_captured); held only while focused
+	fullscreen:            bool, // borderless, covering the monitor (set_fullscreen)
+	keep_awake:            bool, // the screen kept on (set_keep_awake)
+	events:                [dynamic]Event, // this frame's events, refilled by poll_events
+	pads:                  Pads, // gamepads (pad.odin)
+	native:                Native_Window, // per-OS state
 }
 
 Event :: union {
@@ -387,6 +388,15 @@ set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	if w.fullscreen == fullscreen {return}
 	w.fullscreen = fullscreen
 	native_set_fullscreen(w, fullscreen)
+}
+
+// set_window_min_size requires the window not shrink below `width` by
+// `height` pixels. 0 means no constraint (the default). SDL:
+// SDL_SetWindowMinimumSize; GLFW: glfwSetWindowSizeLimits (here kept
+// simple — one floor only; no max size because 3D should render at any size).
+set_window_min_size :: proc(w: ^Window, width, height: i32) {
+	w.min_width, w.min_height = max(0, width), max(0, height)
+	native_set_window_min_size(w, w.min_width, w.min_height)
 }
 
 // Icon_Image: the window's icon at one size (RGBA, straight alpha).
