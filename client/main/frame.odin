@@ -53,6 +53,14 @@ app_init :: proc(app: ^engine.App) -> bool {
 	if app.settings.window_height > 0 {win_h = int(app.settings.window_height)}
 	if !platform.window_open(&app.window, title, i32(win_w), i32(win_h)) {return false}
 	platform.set_window_min_size(&app.window, 640, 360)
+	if app.settings.window_x != -1 || app.settings.window_y != -1 {
+		// Keep a component that was never saved where the OS put it.
+		x, y, ok := platform.window_position(&app.window)
+		if !ok {x, y = 0, 0}
+		if app.settings.window_x != -1 {x = app.settings.window_x}
+		if app.settings.window_y != -1 {y = app.settings.window_y}
+		platform.set_window_position(&app.window, x, y)
+	}
 	g := &app.g
 	extensions := platform.vulkan_instance_extensions()
 	if !gpu.create_instance(
@@ -169,6 +177,9 @@ app_destroy :: proc(app: ^engine.App) -> (validation_issues: int) {
 	if app.window.width > 0 && app.window.height > 0 && !app.settings.fullscreen {
 		app.settings.window_width = app.window.width
 		app.settings.window_height = app.window.height
+		if x, y, ok := platform.window_position(&app.window); ok {
+			app.settings.window_x, app.settings.window_y = x, y
+		}
 		engine.settings_changed(app)
 	}
 	platform.window_close(&app.window)
