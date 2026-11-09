@@ -360,10 +360,15 @@ jobs:
           kill -INT $SERVER
           wait $SERVER
           lua5.4 tools/wireshark/check.lua build/server.pcap
-          tshark -X lua_script:tools/wireshark/voxiverse.lua -r build/server.pcap -Y voxiverse > build/tshark.txt
+          # Ubuntu 26.04 confines tshark with an AppArmor profile that lets it
+          # read files only under /tmp, /var/tmp or ~/tmp; give it copies there.
+          d="$(mktemp -d)"
+          cp build/server.pcap tools/wireshark/voxiverse.lua "$d"/
+          tshark -X lua_script:"$d"/voxiverse.lua -r "$d"/server.pcap -Y voxiverse > build/tshark.txt
           head -n 20 build/tshark.txt
           test "$(wc -l < build/tshark.txt)" -gt 50
-          test -z "$(tshark -X lua_script:tools/wireshark/voxiverse.lua -r build/server.pcap -Y '_ws.malformed || voxiverse.malformed')"
+          test -z "$(tshark -X lua_script:"$d"/voxiverse.lua -r "$d"/server.pcap -Y '_ws.malformed || voxiverse.malformed')"
+          rm -rf "$d"
 
       # A crash is reported with our stack, and still fails the run.
       - name: Crash handler
