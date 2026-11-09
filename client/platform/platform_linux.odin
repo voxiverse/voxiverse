@@ -448,6 +448,21 @@ native_poll :: proc(w: ^Window) {
 		x.NextEvent(n.display, &e)
 		#partial switch e.type {
 		case .ClientMessage:
+			state := x.InternAtom(n.display, "_NET_WM_STATE", true)
+			hidden := x.InternAtom(n.display, "_NET_WM_STATE_HIDDEN", true)
+			if state != 0 && xlib.Atom(e.xclient.message_type) == state {
+				// XEvent.xclient.data.l is an array of 32-bit ints; the X event format guarantees
+				// that even for pointer-size atoms we get at most 32 bits per slot.
+				a, b := xlib.Atom(e.xclient.data.l[1]), xlib.Atom(e.xclient.data.l[2])
+				if hidden != 0 && (a == hidden || b == hidden) {
+					add := e.xclient.data.l[0] == 1
+					if add {
+						// Closer to the minimization state the game treats as 0x0.
+						push_event(w, Resize_Event{0, 0})
+					}
+					break
+				}
+			}
 			if xlib.Atom(e.xclient.data.l[0]) == n.wm_delete_window {
 				w.close_requested = true
 			}
