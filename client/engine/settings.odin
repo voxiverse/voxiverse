@@ -384,6 +384,7 @@ Debug_Switches :: struct {
 	ignite_at:          f32, // seconds: hold an Ignite at this time (0: play it)
 	own_stride:         f32, // radians: hold the stride there (0: walk), for pictures
 	swing_at:           f32, // seconds into the swing to hold it (0: play it), for pictures
+	always_on_top:      bool, // keep above other windows (set debug.always_on_top 1)
 }
 
 @(rodata)
@@ -446,6 +447,7 @@ DEBUG_VARS := [?]base.Var {
 		max = 50,
 		step = 1,
 	},
+	{field = "always_on_top", help = "keep the game above other windows"},
 	{
 		field = "ignite_at",
 		help = "hold an active Ignite at this many seconds in, for pictures (0: it plays; a key or click still skips)",

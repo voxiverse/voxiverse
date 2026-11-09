@@ -1007,6 +1007,16 @@ native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	if (.FullScreen in style) != fullscreen {msg(nil, n.window, "toggleFullScreen:", nobj)}
 }
 
+// Always-on-top: NSFloatingWindowLevel (3) keeps the window above normal
+// windows; Normal (0) puts it back in the regular stack. Same peer surface as
+// SDL_WINDOW_ALWAYS_ON_TOP and GLFW's GLFW_FLOATING.
+@(private)
+native_set_always_on_top :: proc(w: ^Window, on: bool) {
+	n := &w.native
+	if n.window == nil {return}
+	msg(nil, n.window, "setLevel:", NS.WindowLevel.Floating if on else NS.WindowLevel.Normal)
+}
+
 // ---------------------------------------------------------------------------
 // Vulkan
 
