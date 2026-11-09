@@ -10,6 +10,7 @@ import "core:sync"
 import "client:audio"
 import "client:engine"
 import "client:gpu"
+import "client:platform"
 import "client:screen"
 import "client:ui"
 import "common:base"
@@ -75,6 +76,15 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		),
 		fps_color,
 	)
+	if info, ok := platform.display_info(0); ok {
+		hz_text := "refresh unknown"
+		if info.refresh_hz != 0 {hz_text = fmt.tprintf("%.0f Hz", info.refresh_hz)}
+		name := info.name if info.name != "" else "(unnamed display)"
+		overlay_append(
+			&left_lines,
+			fmt.tprintf("display: %s  %dx%d @ %s", name, info.width, info.height, hz_text),
+		)
+	}
 	if s := app.session; s != nil && s.state == .Playing {
 		p := s.camera.position
 		if coordinates_shown(s) {

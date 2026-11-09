@@ -7,6 +7,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
+import CF "core:sys/darwin/CoreFoundation"
 import NS "core:sys/darwin/Foundation"
 import "core:sys/posix"
 
@@ -1027,6 +1028,81 @@ native_vulkan_create_surface :: proc(
 	}
 	if vk.CreateMetalSurfaceEXT(instance, &info, nil, &surface) != .SUCCESS {return 0, false}
 	return surface, true
+}
+
+// ---------------------------------------------------------------------------
+// Display info: Cocoa CGDisplay. Active displays only; the primary is index 0.
+
+@(private = "file", default_calling_convention = "c")
+foreign coregraphics {
+	CGGetActiveDisplayList :: proc(maxDisplays: u32, displays: [^]u32, displayCount: ^u32) -> i32 ---
+	CGDisplayBounds :: proc(displayID: u32) -> NS.Rect ---
+	CGDisplayCopyDisplayMode :: proc(displayID: u32) -> rawptr ---
+	CGDisplayModeGetRefreshRate :: proc(mode: rawptr) -> f64 ---
+	CGDisplayModeGetWidth :: proc(mode: rawptr) -> i64 ---
+	CGDisplayModeGetHeight :: proc(mode: rawptr) -> i64 ---
+	CGDisplayCopyLocalizedName :: proc(displayID: u32) -> rawptr ---
+	CGDisplayScreenSize :: proc(displayID: u32) -> NS.Size ---
+}
+
+@(private = "file")
+cg_display_name :: proc(id: u32) -> string {
+	name := CGDisplayCopyLocalizedName(id)
+	if uintptr(name) == 0 {return ""}
+	defer CFRelease(name)
+	buf: [256]byte
+	if !CF.StringGetCString(
+		CF.String(CF.TypeRef(name)),
+		&buf[0],
+		CF.Index(len(buf) - 1),
+		CF.StringEncoding(0x08000100),
+	) {
+		return ""
+	}
+	return strings.clone_from_cstring(cast(cstring)&buf[0], context.temp_allocator) or_else ""
+}
+
+@(private)
+native_display_count :: proc() -> (count: i32, ok: bool) {
+	n: u32
+	if CGGetActiveDisplayList(0, nil, &n) != 0 {return 0, false}
+	return i32(n), n > 0
+}
+
+@(private)
+native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
+	n: u32
+	if CGGetActiveDisplayList(0, nil, &n) != 0 {return {}, false}
+	displays := make([]u32, i64(n), context.temp_allocator)
+	if CGGetActiveDisplayList(n, raw_data(displays), &n) != 0 {return {}, false}
+	primary := CGMainDisplayID()
+	want: u32
+	if index == 0 {
+		want = primary
+	} else {
+		seen: u32 = 1
+		for d in displays {
+			if d == primary {continue}
+			if i32(seen) == i32(index) {want = d; break}
+			seen += 1
+		}
+		if want == 0 {return {}, false}
+	}
+	info = Display_Info {
+		index              = index,
+		name               = cg_display_name(want),
+		physical_mm_width  = i32(CGDisplayScreenSize(want).width),
+		physical_mm_height = i32(CGDisplayScreenSize(want).height),
+	}
+	bounds := CGDisplayBounds(want)
+	info.width, info.height = i32(bounds.size.width), i32(bounds.size.height)
+	if mode := CGDisplayCopyDisplayMode(want); mode != nil {
+		info.refresh_hz = CGDisplayModeGetRefreshRate(mode)
+		info.width, info.height =
+			i32(CGDisplayModeGetWidth(mode)), i32(CGDisplayModeGetHeight(mode))
+		CFRelease(mode)
+	}
+	return info, true
 }
 
 // ---------------------------------------------------------------------------
