@@ -23,6 +23,23 @@ Action :: union {
 @(private)
 FIRE_EVERY :: game.TICK_RATE / 4
 
+// swing_near tells everyone within hearing of c that c swung: their avatars
+// see the arm arc (the swing events the view model gets, replicated). For an
+// action that did something; a swing that hits nothing shows on the swinger's
+// screen only, like a silent weapon.
+@(private)
+swing_near :: proc(s: ^Server, c: ^Client) {
+	for &o in s.clients {
+		if &o == c || o.state != .Playing || o.world != c.world {continue}
+		d := o.player.position - c.player.position
+		if d.x * d.x + d.y * d.y + d.z * d.z > SHOT_HEARD * SHOT_HEARD {continue}
+		swung := game.Swung {
+			player = player_id(s, c),
+		}
+		event_send(s, &o, .Swung, &swung)
+	}
+}
+
 // queue_action holds an action until the input it follows has been
 // applied (refusing it outright if too many are waiting).
 queue_action :: proc(s: ^Server, c: ^Client, a: Action) {
@@ -48,12 +65,16 @@ run_due_actions :: proc(s: ^Server, c: ^Client) {
 		}
 		switch v in a {
 		case game.Edit:
+			swing_near(s, c)
 			send_message(s, c, apply_edit(s, c, v))
 		case game.Attack:
+			swing_near(s, c)
 			attack(s, c, v)
 		case game.Use_Entity:
+			swing_near(s, c)
 			use_entity(s, c, v.entity)
 		case game.Use_Block:
+			swing_near(s, c)
 			use_block(s, c, v.pos)
 		case game.Fire:
 			if s.tick >= c.fired_at + FIRE_EVERY {

@@ -174,3 +174,60 @@ test_avatar_arm_raises_forward :: proc(t: ^testing.T) {
 	testing.expect_value(t, engine.hold_of(reg, named(reg, "stone")), engine.Hold.Item)
 	testing.expect_value(t, engine.hold_of(reg, named(reg, "hoe")), engine.Hold.Item)
 }
+
+// The attack/use arc: the right arm arcs down and across over
+// VM_SWING_SECONDS, the body turns into it; at either end the avatar is at
+// rest (or mid walk). Driven by the same events the view model gets.
+@(test)
+test_avatar_swing_arc :: proc(t: ^testing.T) {
+	// At rest before the swing: nothing.
+	edge := engine.avatar_pose(0, false, 0, .None, WALK, RUN, 0, 0)
+	testing.expect_value(t, edge.arms[1], 0)
+	testing.expect_value(t, edge.body_turn, 0)
+	// Mid-arc (half of the swing): the arm is well forward and down, the body turns.
+	mid := engine.avatar_pose(0, false, 0, .None, WALK, RUN, engine.VM_SWING_SECONDS * 0.5, 0)
+	testing.expect(t, mid.arms[1] > 1.1, "the arm arcs forward")
+	testing.expect(t, mid.body_turn > 0.08, "the body turns into the swing")
+	// The arc is a sinusoid: greatest in the middle, zero at both ends.
+	early := engine.avatar_pose(0, false, 0, .None, WALK, RUN, engine.VM_SWING_SECONDS * 0.25, 0)
+	late := engine.avatar_pose(0, false, 0, .None, WALK, RUN, engine.VM_SWING_SECONDS * 0.75, 0)
+	testing.expect(t, early.arms[1] < mid.arms[1] && late.arms[1] < mid.arms[1])
+	// Walking with a gun keeps it forward through the arc.
+	mid_held := engine.avatar_pose(
+		WALK,
+		false,
+		0,
+		.Gun,
+		WALK,
+		RUN,
+		engine.VM_SWING_SECONDS * 0.5,
+		0,
+	)
+	testing.expect(t, mid_held.arms[1] > engine.AVATAR_AIMED)
+	// By the end of the swing the arm is back.
+	done := engine.avatar_pose(0, false, 0, .None, WALK, RUN, engine.VM_SWING_SECONDS, 0)
+	testing.expect(t, abs(done.body_turn) < 1e-5)
+	testing.expect(t, done.arms[1] < 1e-5)
+}
+
+// The legs swing against each other while walking; the arms counter the legs;
+// the swing's arc stacks on top.
+@(test)
+test_avatar_swing_while_walking :: proc(t: ^testing.T) {
+	phase := f32(1.3)
+	pose := engine.avatar_pose(
+		WALK,
+		false,
+		phase,
+		.None,
+		WALK,
+		RUN,
+		engine.VM_SWING_SECONDS * 0.5,
+		0,
+	)
+	testing.expect_value(t, pose.legs[0], -pose.legs[1])
+	testing.expect_value(t, pose.arms[0], pose.legs[1])
+	// The right arm carries both the walk swing and the arc.
+	walk := engine.avatar_pose(WALK, false, phase, .None, WALK, RUN, 0, 0)
+	testing.expect(t, pose.arms[1] > walk.arms[1])
+}

@@ -35,3 +35,6 @@ title_st_patricks: @1280x720 screen title; title_date 03-17; sleep 2
 title_easter: @1280x720 screen title; title_date 2026-04-05; sleep 2
 title_halloween: @1280x720 screen title; title_date 10-31; sleep 2
 title_christmas: @1280x720 screen title; title_date 12-25; sleep 2
+# The third-person avatar's walk and attack arc, pinned for the picture.
+walk_third: look -90 0; camera behind 30; set debug.own_stride 1.2
+swing_third: camera behind 30; set debug.swing_at 0.14

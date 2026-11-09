@@ -378,6 +378,8 @@ Debug_Switches :: struct {
 	net_loss:           f32, // percent
 	net_duplicate:      f32, // percent
 	ignite_at:          f32, // seconds: hold an Ignite at this time (0: play it)
+	own_stride:         f32, // radians: hold the stride there (0: walk), for pictures
+	swing_at:           f32, // seconds into the swing to hold it (0: play it), for pictures
 }
 
 @(rodata)
@@ -446,6 +448,20 @@ DEBUG_VARS := [?]base.Var {
 		min = 0,
 		max = 2.5,
 		step = 0.05,
+	},
+	{
+		field = "own_stride",
+		help = "hold the player's stride at this many radians, for pictures of the walking avatar (0: it walks)",
+		min = 0,
+		max = 6.29,
+		step = 0.1,
+	},
+	{
+		field = "swing_at",
+		help = "hold the swing at this many seconds in, for pictures of the attack arc (0: it plays)",
+		min = 0,
+		max = 0.28,
+		step = 0.02,
 	},
 }
 

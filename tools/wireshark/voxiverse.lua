@@ -207,6 +207,9 @@ local SCHEMA = {
     { name = "kill", t = "bool" },
     { name = "headshot", t = "bool" },
   } },
+  { id = 28, name = "swung", key = "none", lane = "event", fields = {
+    { name = "player", t = "u16" },
+  } },
 }
 -- schema end
 

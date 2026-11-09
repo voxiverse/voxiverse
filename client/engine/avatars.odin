@@ -47,10 +47,11 @@ ARMOR_COLORS := [game.Armor][4]u8 {
 // and hip; the body's heights). Derived from the speed and the sneak flag the
 // server replicated, never from what the client guesses.
 Avatar_Pose :: struct {
-	legs:   [2]f32, // left, right: the swing about the hip
-	arms:   [2]f32, // left, right: opposite the legs; the right one raised with an item
-	hip:    f32, // the legs' length (sneaking: shorter)
-	neck_y: f32, // the shoulders' height
+	legs:      [2]f32, // left, right: the swing about the hip
+	arms:      [2]f32, // left, right: opposite the legs; the right one raised with an item
+	hip:       f32, // the legs' length (sneaking: shorter)
+	neck_y:    f32, // the shoulders' height
+	body_turn: f32, // the torso turns a little into the swing
 }
 
 AVATAR_MOVING :: 0.3 // blocks/s: below this it stands (replicated positions are not still to the last digit)
@@ -88,13 +89,17 @@ avatar_pose_advance :: proc(phase, distance: f32, crouched: bool) -> f32 {
 
 // avatar_pose: the pose at `phase` while going `speed` blocks/s. walk_speed
 // and sprint_speed are the world's rules: the swing grows from the walk's to
-// the run's between them. At rest every limb is still.
+// the run's between them. At rest every limb is still, breathing gently. The
+// swing is the attack/use arc (the same events the view model gets): the
+// right arm arcs down and across, the torso turning into it.
 avatar_pose :: proc(
 	speed: f32,
 	crouched: bool,
 	phase: f32,
 	hold: Hold,
 	walk_speed, sprint_speed: f32,
+	swing := f32(0),
+	clock := f32(0),
 ) -> (
 	pose: Avatar_Pose,
 ) {
@@ -103,18 +108,28 @@ avatar_pose :: proc(
 	raised: f32 = AVATAR_AIMED if hold == .Gun else AVATAR_RAISED
 	if speed < AVATAR_MOVING {
 		if hold != .None {pose.arms[1] = raised}
-		return
+		// A breath at rest: the arms ride a slow wave, never still.
+		breath := math.sin(max(clock, 0) * 2.2) * 0.05
+		pose.arms[0] += breath
+		pose.arms[1] += breath * 0.6
+	} else {
+		amp: f32 = AVATAR_SNEAK_SWING
+		if !crouched {
+			run := clamp((speed - walk_speed) / max(sprint_speed - walk_speed, 0.01), 0, 1)
+			amp = AVATAR_WALK_SWING + (AVATAR_RUN_SWING - AVATAR_WALK_SWING) * run
+		}
+		amp *= clamp((speed - AVATAR_MOVING) / (AVATAR_FULL_STEP - AVATAR_MOVING), 0.4, 1)
+		swing_leg := math.sin(phase) * amp
+		pose.legs = {swing_leg, -swing_leg}
+		pose.arms = {-swing_leg, swing_leg}
+		if hold != .None {pose.arms[1] = raised + swing_leg * 0.15}
 	}
-	amp: f32 = AVATAR_SNEAK_SWING
-	if !crouched {
-		run := clamp((speed - walk_speed) / max(sprint_speed - walk_speed, 0.01), 0, 1)
-		amp = AVATAR_WALK_SWING + (AVATAR_RUN_SWING - AVATAR_WALK_SWING) * run
+	// The attack or use arc (VM_SWING_SECONDS, like the view model).
+	if swing > 0 {
+		arc := math.sin(swing / VM_SWING_SECONDS * math.PI)
+		pose.arms[1] += arc * 1.2
+		pose.body_turn = arc * 0.12
 	}
-	amp *= clamp((speed - AVATAR_MOVING) / (AVATAR_FULL_STEP - AVATAR_MOVING), 0.4, 1)
-	swing := math.sin(phase) * amp
-	pose.legs = {swing, -swing}
-	pose.arms = {-swing, swing}
-	if hold != .None {pose.arms[1] = raised + swing * 0.15}
 	return
 }
 
@@ -135,6 +150,11 @@ Avatar_Hand :: struct {
 	entry: ^Held_Entry,
 }
 
+// swung_seen: someone near us swung (the arm arc, on their avatar).
+swung_seen :: proc(s: ^Session, v: ^game.Swung) {
+	if o, known := &s.others[v.player]; known {o.swing = 1e-4}
+}
+
 // avatars_draw adds every visible other player to the entity pass (their limbs
 // move on with the ground they cover each frame).
 avatars_draw :: proc(
@@ -142,16 +162,46 @@ avatars_draw :: proc(
 	d: ^render.Entity_Draw,
 	hand_draw: ^render.Held_Draw,
 	cache: ^Held_Cache,
+	dt: f32,
+	own_stride := f32(0),
+	swing_at := f32(0),
 ) {
 	if s.camera_mode != .First {
-		// Ourselves, standing.
+		// Ourselves: the limbs swing with the ground covered, like the others'.
+		new_pos := s.prediction.state.position
+		crouched := s.prediction.state.crouched
+		if s.own_stride_pos != {} && own_stride == 0 {
+			move := new_pos - s.own_stride_pos
+			s.own_stride = avatar_pose_advance(
+				s.own_stride,
+				f32(math.sqrt(move.x * move.x + move.z * move.z)),
+				crouched,
+			)
+		}
+		s.own_stride_pos = new_pos
+		vel := s.prediction.state.velocity
+		speed := math.sqrt(vel.x * vel.x + vel.z * vel.z)
+		stride := s.own_stride
+		if own_stride > 0 {stride = own_stride}
+		swing := s.vm.swing
+		if swing_at > 0 {swing = swing_at}
+		pose := avatar_pose(
+			speed,
+			crouched,
+			stride,
+			hold_of(s.reg, held(s).item),
+			s.rules.walk_speed,
+			s.rules.sprint_speed,
+			swing,
+			s.vm.clock,
+		)
 		avatar_draw(
 			s.reg,
 			d,
 			s.feet,
 			s.camera.yaw,
 			s.camera.pitch,
-			avatar_hold_pose(s.reg, s.prediction.state.crouched, held(s).item),
+			pose,
 			shirt_of(s.config.name),
 			game.worn_of(&s.inventory),
 			{hand_draw, held_entry(cache, s.reg, held(s).item)},
@@ -171,6 +221,10 @@ avatars_draw :: proc(
 			)
 		}
 		o.last_seen = v.position
+		if o.swing > 0 {
+			o.swing += dt
+			if o.swing >= VM_SWING_SECONDS {o.swing = 0}
+		}
 		pose := avatar_pose(
 			v.speed,
 			v.crouched,
@@ -178,6 +232,7 @@ avatars_draw :: proc(
 			hold_of(s.reg, o.held),
 			s.rules.walk_speed,
 			s.rules.sprint_speed,
+			o.swing,
 		)
 		avatar_draw(
 			s.reg,
@@ -207,9 +262,11 @@ avatar_draw :: proc(
 	hand := Avatar_Hand{},
 ) {
 	hip, neck_y := pose.hip, pose.neck_y
+	// The torso turns into the swing (the legs keep the stance).
+	body_yaw := yaw + pose.body_turn
 	if hand.draw != nil && hand.entry != nil && hand.entry.kind != .None {
 		// The item in the right hand: its grip at the hand, the arm's raise as the pose says.
-		xf := avatar_hand_matrix(hand.entry.kind, {0.375, neck_y - 0.1, 0}, yaw, pose.arms[1])
+		xf := avatar_hand_matrix(hand.entry.kind, {0.375, neck_y - 0.1, 0}, body_yaw, pose.arms[1])
 		render.held_world_begin(hand.draw, p)
 		for v in hand.entry.mesh.vertices {
 			at := xf * [4]f32{v.pos.x, v.pos.y, v.pos.z, 1}
@@ -240,11 +297,11 @@ avatar_draw :: proc(
 	for side, i in ([2]f32{-1, 1}) {
 		leg(d, p, yaw, pose.legs[i], hip, side, 0, hip, 0, LEGS)
 		// An arm hangs from the shoulder: a sleeve, then a hand.
-		shoulder := p + turn_yaw({side * 0.375, neck_y - 0.1, 0}, yaw)
+		shoulder := p + turn_yaw({side * 0.375, neck_y - 0.1, 0}, body_yaw)
 		render.entity_box(
 			d,
 			shoulder,
-			yaw,
+			body_yaw,
 			pose.arms[i],
 			{-0.075, -0.4, -0.075},
 			{0.075, 0.1, 0.075},
@@ -254,7 +311,7 @@ avatar_draw :: proc(
 		render.entity_box(
 			d,
 			shoulder,
-			yaw,
+			body_yaw,
 			pose.arms[i],
 			{-0.075, -0.65, -0.075},
 			{0.075, -0.4, 0.075},
@@ -262,12 +319,12 @@ avatar_draw :: proc(
 			.Body,
 		)
 	}
-	render.entity_box(d, p, yaw, 0, {-0.3, hip, -0.15}, {0.3, neck_y, 0.15}, shirt, .Body)
+	render.entity_box(d, p, body_yaw, 0, {-0.3, hip, -0.15}, {0.3, neck_y, 0.15}, shirt, .Body)
 	neck := p + {0, f64(neck_y), 0}
 	render.entity_box(
 		d,
 		neck,
-		yaw,
+		body_yaw,
 		pitch,
 		{-0.24, 0, -0.24},
 		{0.24, 0.48, 0.24},
@@ -286,7 +343,7 @@ avatar_draw :: proc(
 			render.entity_box(
 				d,
 				neck,
-				yaw,
+				body_yaw,
 				pitch,
 				{-0.24 - G, 0.3, -0.24 - G},
 				{0.24 + G, 0.48 + G, 0.24 + G},
@@ -297,7 +354,7 @@ avatar_draw :: proc(
 			render.entity_box(
 				d,
 				p,
-				yaw,
+				body_yaw,
 				0,
 				{-0.3 - G, hip + 0.05, -0.15 - G},
 				{0.3 + G, neck_y + 0.0, 0.15 + G},

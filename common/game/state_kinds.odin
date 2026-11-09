@@ -46,6 +46,8 @@ Event_Kind :: enum u8 {
 	Damage_Hit,
 	Shot,
 	Hit_Confirm,
+	// A player swung (attack or use): the arm arc anyone near sees (avatars.odin).
+	Swung,
 }
 
 // Own_Player: the player's authoritative state after the server applied
@@ -171,6 +173,12 @@ Shot :: struct {
 	end:     [3]f64,
 }
 
+// Swung: a player swung (attack or use): the arm arc anyone near sees
+// (avatars.odin). One-off; who swung.
+Swung :: struct {
+	player: u16,
+}
+
 // Hit_Confirm: the server says the shooter's shot hit someone (the hit marker
 // and its sound; never predicted).
 Hit_Confirm :: struct {
@@ -265,6 +273,7 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 	.Damage_Hit = {name = "damage_hit", value = Damage_Hit},
 	.Shot = {name = "shot", value = Shot, check = check_shot},
 	.Hit_Confirm = {name = "hit_confirm", value = Hit_Confirm},
+	.Swung = {name = "swung", value = Swung},
 }
 
 // game_schema builds the schema of the game's kinds. The server builds it when

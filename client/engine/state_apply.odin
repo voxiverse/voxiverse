@@ -287,6 +287,8 @@ apply_event :: proc(s: ^Session, g: game.Received) {
 		s.hurt_age = 0
 	case .Shot:
 		shot_seen(s, (^game.Shot)(g.value))
+	case .Swung:
+		swung_seen(s, (^game.Swung)(g.value))
 	case .Hit_Confirm:
 		hit_confirmed(s, (^game.Hit_Confirm)(g.value))
 	case .Player_Died:

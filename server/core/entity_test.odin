@@ -313,3 +313,47 @@ test_stale_handle_reads_defaults :: proc(t: ^testing.T) {
 	_, ok = entity_get(w, 1)
 	testing.expect(t, !ok)
 }
+
+// /summon sheep, a swing at it: bob sees alice's arch, alice sees her own.
+@(test)
+test_swung_reaches_others :: proc(t: ^testing.T) {
+	h := new(Harness)
+	defer free(h)
+	config := Config {
+		seed              = 27,
+		generator         = .Earth,
+		rules             = quiet_rules(),
+		view_radius       = 3,
+		view_height       = 2,
+		max_players       = 4,
+		listen            = true,
+		everyone_cheats   = true,
+		no_natural_spawns = true,
+	}
+	if !testing.expect(t, harness_start(h, config)) {return}
+	defer harness_stop(h)
+	alice, bob := new(Net_Client), new(Net_Client)
+	defer free(alice)
+	defer free(bob)
+	net_connect(alice, 0, "alice", h = h)
+	net_connect(bob, 0, "bob", h = h)
+	defer net_close(alice)
+	defer net_close(bob)
+	both := []^Net_Client{alice, bob}
+	if !testing.expect(
+		t,
+		net_wait(t, both, proc(cs: []^Net_Client) -> bool {return landed(cs[0]) && landed(cs[1])}),
+		"never landed",
+	) {return}
+	net_send(alice, game.Command{"summon sheep"})
+	ok := net_wait(t, both, proc(cs: []^Net_Client) -> bool {return len(cs[0].entities) == 1})
+	if !testing.expect(t, ok, "no sheep") {return}
+	id: u32 = 0
+	for k in alice.entities {id = k}
+	p := alice.entities[id]
+	net_send(alice, game.Teleport{position = p + {1.2, 0, 0}})
+	net_send(alice, game.Attack{id, alice.seq})
+	ok = net_wait(t, both, proc(cs: []^Net_Client) -> bool {return cs[1].swung >= 1})
+	testing.expect(t, ok, "bob never saw alice swing")
+	testing.expect_value(t, alice.swung, 0) // (the attacker predicts its own)
+}

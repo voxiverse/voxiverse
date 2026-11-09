@@ -57,6 +57,7 @@ Net_Client :: struct {
 	died:                        int, // Entity_Despawn with died
 	hits:                        int, // Damage_Hit events
 	shots_seen:                  int, // Shot events (another player's)
+	swung:                       int, // Swung events (another player's)
 	confirms:                    [dynamic]game.Hit_Confirm, // Hit_Confirm events (heap)
 	death_cause, death_attacker: string, // the last Player_Died
 	results:                     map[u32]game.Edit_Result,
@@ -328,6 +329,8 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 			c.shots_seen += 1
 		case .Hit_Confirm:
 			append(&c.confirms, (^game.Hit_Confirm)(g.value)^)
+		case .Swung:
+			c.swung += 1
 		}
 	}
 }
