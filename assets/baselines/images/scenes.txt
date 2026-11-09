@@ -27,3 +27,11 @@ ignite_wind: @1280x720 screen universes create; creation seed 42; set debug.igni
 ignite_flash: @1280x720 screen universes create; creation seed 42; set debug.ignite_at 0.95; ignite show
 ignite_streaks: @1280x720 screen universes create; creation seed 42; set debug.ignite_at 1.35; ignite show
 ignite_dive: @1280x720 screen universes create; creation seed 42; set debug.ignite_at 1.8; ignite show
+# The holiday title themes (menu scenes, the dev-faked date; `sleep` lets
+# the splash's stamp ring in and settle before the picture).
+title_new_year: @1280x720 screen title; title_date 01-01; sleep 2
+title_valentines: @1280x720 screen title; title_date 02-14; sleep 2
+title_st_patricks: @1280x720 screen title; title_date 03-17; sleep 2
+title_easter: @1280x720 screen title; title_date 2026-04-05; sleep 2
+title_halloween: @1280x720 screen title; title_date 10-31; sleep 2
+title_christmas: @1280x720 screen title; title_date 12-25; sleep 2

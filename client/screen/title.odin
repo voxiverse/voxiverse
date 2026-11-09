@@ -69,16 +69,11 @@ splash_reveal :: proc(
 	return strings.to_string(b), resolved - 1
 }
 
-// splashes_parse: the entries of a splashes file (slices of text).
+// splashes_parse: the entries of a splashes file (slices of text), skipping
+// comment lines and section headers ([<holiday>] starts a holiday's texts).
 splashes_parse :: proc(text: string, allocator := context.temp_allocator) -> []string {
-	out := make([dynamic]string, allocator)
-	rest := text
-	for line in strings.split_lines_iterator(&rest) {
-		l := strings.trim_space(line)
-		if l == "" || strings.has_prefix(l, "#") {continue}
-		append(&out, l)
-	}
-	return out[:]
+	parsed := splashes_parse_file(text, allocator)
+	return parsed.all
 }
 
 // splash_choose: the entry for the clock's second (a client-visual use of
@@ -92,25 +87,40 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
 	t := &ctx.theme
+	holiday := today_holiday(app)
+	if !app.settings.reduce_motion {
+		holiday_back(app, ctx, holiday, app.last_frame_ms / 1000)
+	}
 	rows: f32 = 5 if app.devchat.running else 4
 	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 120)
 	logo := ui.cut_top(&column, 80)
 	title_text := engine.tr(.Title_Voxiverse)
 	ui.title(ctx, title_text, logo)
 	if app.splash == "" {
-		app.splash = splash_choose(splashes_parse(SPLASHES), time.now()._nsec / 1e9)
-		app.splash_at = time.tick_now()
+		parsed := splashes_parse_file(SPLASHES)
+		y, m, d := 1970, 1, 1
+		if o, ok := app.title_date_override.?;
+		   ok {y, m, d = o[0], o[1], o[2]} else if ly, lm, ld, ok2 := engine.local_date_of(engine.app_wall(app)); ok2 {y, m, d = ly, lm, ld}
+		app.splash = splash_for(parsed, y, m, d, engine.app_wall(app)._nsec / i64(1e9))
+		app.splash_at = engine.app_tick(app)
 	}
 	if app.splash != "" {
 		// The stamp: it crackles in off the logo's right corner (dial glyphs
 		// resolving as it falls), overshoots, rings down, then breathes —
 		// size and angle together — never a held line of text.
-		seconds := f32(time.duration_seconds(time.tick_since(app.splash_at)))
-		reduce := app.settings.reduce_motion
+		seconds := f32(time.duration_seconds(engine.app_since(app, app.splash_at)))
+		reduce := app.settings.reduce_motion || app.scene.menu // (a scene's stamp stands still)
 		shown, _ := splash_reveal(app.splash, seconds, reduce)
 		size := t.font_size * 1.05
 		angle: f32 = SPLASH_TILT
 		color := t.text
+		shadow_color := t.text_shadow
+		#partial switch holiday {
+		case .Halloween:
+			shadow_color = engine.HALLOWEEN_SHADOW
+		case:
+		}
+		if tint, ok := engine.holiday_tint(holiday); ok {color = tint}
 		if !reduce {
 			size *= splash_pop(seconds) * splash_pulse(seconds)
 			angle = splash_angle(seconds)
@@ -140,7 +150,7 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			{centre.x + 2, centre.y + 2},
 			shown,
 			size,
-			t.text_shadow,
+			shadow_color,
 			angle,
 			t.font_size * 1.05 * 1.3,
 		)
@@ -170,12 +180,19 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		ui.label(ctx, app.message, ui.next(ctx), .Center, t.text_muted)
 	}
 	// The version, small and grey in the lower left (Minecraft's place for it).
-	small := t.font_size * 0.75
-	ui.draw_text(
-		ctx,
-		{ctx.screen.x + 8, ctx.screen.y + ctx.screen.h - small - 6, ctx.screen.w / 2, small},
-		engine.tr(.Title_Version, base.version_text()),
-		small,
-		t.text_muted,
-	)
+	// (Not in a menu scene: a baseline image must not change with the build's
+	// version string.)
+	if !app.scene.menu {
+		small := t.font_size * 0.75
+		ui.draw_text(
+			ctx,
+			{ctx.screen.x + 8, ctx.screen.y + ctx.screen.h - small - 6, ctx.screen.w / 2, small},
+			engine.tr(.Title_Version, base.version_text()),
+			small,
+			t.text_muted,
+		)
+	}
+	if !app.settings.reduce_motion {
+		holiday_front(app, ctx, holiday, app.last_frame_ms / 1000)
+	}
 }

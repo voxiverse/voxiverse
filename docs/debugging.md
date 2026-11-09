@@ -365,7 +365,11 @@ development commands and a variable serve such scenes: `creation seed <n|text>` 
 creation screen's seed as if typed, `ignite show` starts Ignite with that screen's galaxy and
 planet (no universe is made), and `set debug.ignite_at <seconds>` holds an active Ignite at
 that time (a key or click still skips it). The `creation` and `ignite_*` scenes use them, at
-1280 x 720.
+1280 x 720. The `title_*` scenes do the same for the title's holiday themes, at 1280 x 720:
+each fakes a holiday with the developer command `title_date MM-DD` (or `title_date
+YYYY-MM-DD`, and `title_date off` to go back to the local date), and sleeps so the splash's
+stamp rings in and settles before the picture. Easter's scene pins April 2026 specifically,
+so its baseline is the same every year.
 
 After the scene's own script, the run waits a second for the server to answer, waits until
 the world around the player is loaded and meshed, and draws ten more frames. The picture is
