@@ -29,7 +29,7 @@ universe takes Earth's address when `Config.earth` is set, else one made from it
 start). The creation screen starts on Earth (its fixed glyphs, the Milky Way); the seed field and
 Roll choose an alien home world instead (shown with its glyphs and a line saying it is the harder
 start), and Back to Earth returns; a saved universe keeps the home address it was made with. The generator parameter
-`worldgen.planet` (0 by default; nothing sets it yet) builds the height on `common/planet`: block x
+`worldgen.planet` (0 by default; `world_set_planet` in server/core/worlds.odin makes a newly made world at Earth's address one, with a spawn picked by the universe's seed) builds the height on `common/planet`: block x
 is longitude (`PLANET_CIRCUMFERENCE` 65 536 blocks round), z is latitude (north is -z), and a
 column's height is Earth's real relief (bicubic, `elevation / 40` m, ocean floors to y -200) with
 the noise's hills and overhangs scaled by the relief's local spread, so plains stay plains. Its biome is
@@ -49,7 +49,7 @@ decoded once per process on first use (`planet_model`) from `assets/planet/earth
 depressions, each cell drains to its steepest lower neighbour on the filled surface, the rain
 accumulates downstream): `flow` per cell, `lake` for filled depressions 5 m deep or more, and
 `river_width` (2 blocks at `RIVER_FLOW`, 24 at `RIVER_FLOW_BIG`, growing as the square root of the
-flow). The world does not carve them yet.
+flow).
 Planet worlds carve those rivers (`planet_carve_river`): each reach runs straight between cell centres, bent by noise, as wide as its flow, with a bed under water that stands at the river's own level (`Column.lift` above sea level), banks `PLANET_BANK` blocks wide, and the `River` biome. A planet world's spawn is the nearest dry, open land to `worldgen.spawn_lat` / `worldgen.spawn_lon` (43.3°N 5.4°E, Marseille, by default). A new world at Earth's address (`world_set_planet`) is a planet world, and its start is chosen by the universe's seed (`planet_spawn_pick`: habitable land between 55°S and 62°N, not sea, ice, desert, tundra, bare mountains, a beach or a river), so each universe begins somewhere else on the same Earth; worlds saved before keep their params. Lakes (`planet_carve_lake`) are the filled depressions: the lake mask of the four nearest climate cells is interpolated per column (`planet_lake_at`), so where the share is 0.5 or more the bed lies under water standing at the spill level (`filled` metres / 40 as y, `Column.lift`), the `River` biome, and between `PLANET_LAKE_BANK` (0.2) and 0.5 the land slopes down to the water. New biomes of their own come in later parts. Ice sheets are snow (2 blocks) over ice to `PLANET_ICE_DEPTH` (40) blocks. The world ends at an ice wall (the `Ice_Sheet` biome, `PLANET_WALL_HEIGHT` 120 above the sea) beyond the poles (|z| > 16 384) and past the date line (|x| > 32 768). A world loads when someone travels there, and unloads
 (saved, its memory freed) after `WORLD_IDLE_SECONDS` (10) empty; the home world remains
 loaded.
