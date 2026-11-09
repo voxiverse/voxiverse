@@ -508,6 +508,26 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 			},
 		},
 	)
+	console_register(
+		c,
+		{
+			"renderdoc",
+			"renderdoc [title]: capture the next frame into RenderDoc (F12)",
+			proc(app: ^engine.App, args: []string) {
+				if app.renderdoc.api == nil {
+					engine.console_print(
+						&app.console,
+						"renderdoc: RenderDoc is not attached (start the game from RenderDoc)",
+						.Warning,
+					)
+					return
+				}
+				app.renderdoc_requested = true
+				if len(args) > 0 {app.renderdoc_title = args[0]}
+				engine.console_print(&app.console, "renderdoc: frame capture queued")
+			},
+		},
+	)
 	when base.DEV {
 		console_register(
 			c,

@@ -33,49 +33,62 @@ Validation :: struct {
 	gpu_assisted:   bool, // checks inside shaders (out-of-bounds etc.); slow
 }
 
+// Pipeline_Stats records hardware workload counts from VK_QUERY_TYPE_PIPELINE_STATISTICS.
+Pipeline_Stats :: struct {
+	input_vertices:       u64,
+	input_primitives:     u64,
+	vertex_invocations:   u64,
+	clipping_invocations: u64,
+	clipping_primitives:  u64,
+	fragment_invocations: u64,
+	compute_invocations:  u64,
+}
+
 Gpu :: struct {
-	loader:                  dynlib.Library,
-	instance:                vk.Instance,
-	messenger:               vk.DebugUtilsMessengerEXT,
-	surface:                 vk.SurfaceKHR,
-	physical:                vk.PhysicalDevice,
-	device:                  vk.Device,
-	queue_family:            u32,
-	queue:                   vk.Queue,
-	device_name:             string,
-	driver:                  string, // its driver's name and version (benchmark results)
-	offscreen:               Offscreen, // frames drawn at a fixed size (set_offscreen)
-	swapchain:               Swapchain,
-	frames:                  [FRAMES_IN_FLIGHT]Frame_Sync,
-	frame_index:             int,
-	ctx:                     runtime.Context, // logger etc. for the validation callback
-	debug_utils:             bool, // object names and command labels are available
+	loader:                   dynlib.Library,
+	instance:                 vk.Instance,
+	messenger:                vk.DebugUtilsMessengerEXT,
+	surface:                  vk.SurfaceKHR,
+	physical:                 vk.PhysicalDevice,
+	device:                   vk.Device,
+	queue_family:             u32,
+	queue:                    vk.Queue,
+	device_name:              string,
+	driver:                   string, // its driver's name and version (benchmark results)
+	offscreen:                Offscreen, // frames drawn at a fixed size (set_offscreen)
+	swapchain:                Swapchain,
+	frames:                   [FRAMES_IN_FLIGHT]Frame_Sync,
+	frame_index:              int,
+	ctx:                      runtime.Context, // logger etc. for the validation callback
+	debug_utils:              bool, // object names and command labels are available
 	// GPU timing (timing.odin)
-	timing:                  bool,
-	calibrated:              bool, // GPU timestamps convertible to the trace clock
-	host_time_domain:        vk.TimeDomainKHR,
-	timestamp_period:        f32, // ns per tick
-	timestamp_mask:          u64,
-	gpu_frame_stats:         base.Frame_Stats,
-	draws:                   Draw_Counts, // this frame's draw calls so far (draw.odin)
-	memory_bytes:            int, // device memory allocated by us, now (resources.odin)
-	depth_version:           u32, // counts the frames' depth images made (render/hiz.odin remakes its sets)
-	memory_budget:           bool, // VK_EXT_memory_budget: memory_report has the driver's view
+	timing:                   bool,
+	calibrated:               bool, // GPU timestamps convertible to the trace clock
+	host_time_domain:         vk.TimeDomainKHR,
+	timestamp_period:         f32, // ns per tick
+	timestamp_mask:           u64,
+	gpu_frame_stats:          base.Frame_Stats,
+	pipeline_stats_supported: bool, // physical device supports PIPELINE_STATISTICS
+	pipeline_stats:           Pipeline_Stats, // latest completed frame's statistics
+	draws:                    Draw_Counts, // this frame's draw calls so far (draw.odin)
+	memory_bytes:             int, // device memory allocated by us, now (resources.odin)
+	depth_version:            u32, // counts the frames' depth images made (render/hiz.odin remakes its sets)
+	memory_budget:            bool, // VK_EXT_memory_budget: memory_report has the driver's view
 	// Pipelines (pipeline.odin, pipeline_cache.odin)
-	pipeline_cache:          vk.PipelineCache,
-	pipeline_cache_path:     string,
-	pipelines_built:         int,
-	pipelines_cached:        int, // of those, found in the cache (creation feedback)
-	pipeline_ms:             f64, // building them, in all
+	pipeline_cache:           vk.PipelineCache,
+	pipeline_cache_path:      string,
+	pipelines_built:          int,
+	pipelines_cached:         int, // of those, found in the cache (creation feedback)
+	pipeline_ms:              f64, // building them, in all
 	// Bindless textures and the pipeline layout every pipeline shares.
-	bindless:                Bindless,
-	pipeline_layout:         vk.PipelineLayout,
-	max_anisotropy:          f32, // 0 when not supported
-	max_draw_indirect_count: u32, // commands one indirect draw may take (draw.odin)
-	screenshot_requested:    bool,
+	bindless:                 Bindless,
+	pipeline_layout:          vk.PipelineLayout,
+	max_anisotropy:           f32, // 0 when not supported
+	max_draw_indirect_count:  u32, // commands one indirect draw may take (draw.odin)
+	screenshot_requested:     bool,
 	// Validation-layer warnings and errors since startup. Tests and CI runs
 	// treat any as a failure.
-	validation_issues:       int,
+	validation_issues:        int,
 }
 
 // create_instance opens the Vulkan loader and creates the instance, with the
@@ -216,6 +229,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 	}
 	supported: vk.PhysicalDeviceFeatures
 	vk.GetPhysicalDeviceFeatures(g.physical, &supported)
+	g.pipeline_stats_supported = bool(supported.pipelineStatisticsQuery)
 	features := vk.PhysicalDeviceFeatures2 {
 		sType = .PHYSICAL_DEVICE_FEATURES_2,
 		pNext = &features13,
@@ -225,6 +239,7 @@ init_device :: proc(g: ^Gpu, surface: vk.SurfaceKHR) -> bool {
 			// command naming its chunk's record by its first instance.
 			multiDrawIndirect         = true,
 			drawIndirectFirstInstance = true,
+			pipelineStatisticsQuery   = supported.pipelineStatisticsQuery,
 		},
 	}
 	device_extensions := make([dynamic]cstring, context.temp_allocator)

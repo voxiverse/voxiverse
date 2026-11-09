@@ -199,7 +199,7 @@ commands are:
 | `join <host[:port]> [password]`, `leave`, `quit` | Session control. |
 | `screen <title\|game\|menu\|inventory [creative]\|stats\|options [tab]\|universes [create]\|multiplayer [direct]\|credits\|quit>` | Switches screens. |
 | `set`, `vars`, `reset` | Variables (see [Variables](#variables)). |
-| `screenshot [name]`, `net_trace`, `audio_capture`, `crash` | Diagnostics (`crash`: development builds). |
+| `screenshot [name]`, `renderdoc [title]`, `net_trace`, `audio_capture`, `crash` | Diagnostics (`crash`: development builds; `renderdoc`: queues a frame capture when attached). |
 | `look <yaw> <pitch>`, `camera <first\|behind\|facing> [degrees]` | Places the camera for a picture (<kbd>F5</kbd> cycles the camera modes). |
 | `use`, `hold <item>` | For scripts: presses the right button once on the target (a chest opens, a sheep is sheared); selects the hotbar slot that holds an item. |
 | `pad <button> down\|up`, `pad <axis> <value>`, `pad connect <family>`, `pad disconnect` | Development builds: a synthetic gamepad (slot 0). |
@@ -311,10 +311,13 @@ state of a frame.
 
 1. Start the game from RenderDoc (Launch Application, or
    `renderdoccmd capture build/voxiverse`).
-2. Press F12 in the game, or pass `--capture-frame N` to capture frame N (counted from 1;
-   the trace's `frame #N` is the same frame).
+2. Press F12 in the game, run the console command `renderdoc [title]`, or pass
+   `--capture-frame N` to capture frame N (counted from 1; the trace's `frame #N` is the same frame).
 
 Captures are written to `build/captures/voxiverse_frameN.rdc` and listed in the log at exit.
+When supported by the physical device (`pipelineStatisticsQuery`), Vulkan pipeline statistics
+are queried across the frame: vertex, clipping, fragment, and compute shader invocations are
+displayed on the F3 overlay (`pipeline:`) and logged at exit (`gpu pipeline stats`).
 Every buffer, image, pipeline, sampler and per-frame object carries its name, and every pass
 its label. Shaders are compiled with debug information (`glslang -g`: line numbers and the
 source text), so a capture shows each shader's GLSL source. The richer NonSemantic debug

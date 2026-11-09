@@ -49,113 +49,115 @@ Screen :: enum u8 {
 CHUNK_VERTEX_CAPACITY :: 16 * 1024 * 1024
 
 App :: struct {
-	window:           platform.Window,
-	g:                gpu.Gpu,
-	renderdoc:        gpu.Renderdoc,
-	symbol_font:      font.Font, // (SYMBOL_FONT_DATA)
-	font:             font.Font,
-	ui:               ui.Context,
-	ui_pass:          render.Ui_Pass,
-	world_pass:       render.World_Pass,
-	sky_pass:         render.Sky_Pass,
-	scenes:           render.Scene_Buffers,
-	debug_pass:       render.Debug_Pass,
-	debug_draw:       render.Debug_Draw, // this frame's debug lines
-	entity_pass:      render.Entity_Pass,
-	entity_draw:      render.Entity_Draw, // this frame's boxes (players, entities, particles)
-	held_pass:        render.Held_Pass, // what the hands hold (viewmodel.odin)
-	held_draw:        render.Held_Draw, // this frame's held meshes: the view model, third person items
-	held_cache:       Held_Cache, // every item's mesh in a hand
-	held_arm:         Held_Mesh, // our right arm, in our shirt
-	held_arm_shirt:   [4]u8,
-	mixer:            ^audio.Mixer, // heap (it is large); fed to the sound card by audio_device
-	audio_device:     audio.Device,
-	null_audio:       bool, // mix into the null device, whatever the sound card (--null-audio, --check audio)
-	audio_debug:      Audio_Debug,
-	sounds:           Sound_Bank,
-	music:            Music_App, // the director and its voices (music_app.odin)
-	snapshots:        Snapshots, // what the mixer's snapshot holds (snapshots.odin)
-	volumes:          [audio.Bus]f32, // as last told to the mixer
-	listener:         audio.Listener, // ... and the listener's options
-	shader_watch:     Shader_Watch,
-	universes:        Universes_Screen,
-	creation:         Creation_Screen,
-	ignite:           Ignite,
-	cues:             [dynamic]string, // UI sound events fired (ui_cue)
-	multiplayer:      Multiplayer_Screen,
-	session:          ^Session, // nil outside a world
-	devchat:          Devchat, // developer chat (devchat.odin): runs while the setting names a collector
-	steam:            steam.Client, // Steam (steam.odin): off unless its library is beside the game
-	debug:            Debug_Switches,
-	telemetry:        Telemetry_Switches,
-	settings_dirty:   bool, // changed since loaded or saved
-	scripted:         bool, // running --exec commands: settings changes are not saved
-	benchmark:        bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
-	bench:            Bench, // the scenario running (benchmark.odin)
-	stars:            starfield.Starfield, // the menus' background (starfield.odin)
-	failed:           Failed, // the Failed screen's (screen_loading.odin)
-	credits:          Credits_View, // the Credits screen's scroll (screen_credits.odin)
-	options:          Options_View, // the Options screen's tab and state (screen_options.odin)
-	fixed_view:       [2]i32, // view radius, height: a benchmark's or check's (else view_size)
-	checking:         bool, // --check or --scene: BENCHMARK_SETTINGS (with the check's view), nothing saved
-	scene:            Scene_Run, // --scene: a visual baseline's (scenes.odin)
-	screenshot_names: [dynamic]string, // requested, not yet saved (oldest first)
-	screenshot_dir:   string, // where they go, next to the executable ("": screenshots)
-	message:          string, // shown on the title screen (why a session ended)
-	fly_test:         Fly_Test,
-	blast_test:       Blast_Test,
-	audio_check:      Audio_Check,
-	cull_check:       Exit_Check, // `--check cull` (cull_check_run)
-	hiz_check:        Exit_Check, // `--check hiz` (hiz_check_run)
-	tour_test:        Tour_Test,
-	server_failed:    bool, // a session's server stopped on an error (fails the run)
-	script_failed:    bool, // an --exec script could not go on (fails the run)
-	console:          Console,
-	input:            Input_State,
-	actions:          Actions, // this frame's actions (actions.odin)
-	injected:         [dynamic]platform.Event, // events the pad command and checks add
-	settings:         Settings,
-	screen:           Screen,
-	overlays:         Overlays, // what is open over the screen (overlay.odin)
-	crash_offer:      Crash_Offer, // the dialog about earlier crashes (crash_offer.odin)
-	crash_track:      Crash_Track, // what the crash bundle was told (crash_track.odin)
-	account:          game.Account_Key, // who we are to servers (account.odin)
-	new_character:    [dynamic]u8, // the name typed on the characters screen
-	chat:             Line_Editor, // the chat's line (overlay_chat.odin)
-	chat_scroll:      f32, // lines scrolled up in the open chat
-	chat_osk:         bool, // the chat was opened by a pad: its line opens the on-screen keyboard
-	devchat_line:     Line_Editor, // developer chat's line (overlay/devchat.odin)
-	devchat_attach:   bool, // attach where the player is to what they write
-	devchat_seen:     u64, // replies seen (more arrived: the notice shows)
-	devchat_scroll:   f32, // entries scrolled up
-	splash:           string, // the title screen's, chosen once (screen_title.odin)
-	splash_at:        time.Tick, // when it was chosen: its stamp rings in from then
-	started:          time.Tick, // when the app began (the splash's pulse)
-	toasts:           Toasts, // the notices at the top right (overlay_toasts.odin)
-	hud_hidden:       bool, // F1: the HUD is hidden (not saved)
-	popup:            Item_Popup, // the held item's name above the hotbar (hud_popup.odin)
-	lan:              Lan_Dialog, // the Open to LAN dialog's choices (overlay_lan.odin)
-	player_menu:      Player_Menu, // the section shown and the one shown last (menu_player.odin)
-	inventory_view:   Inventory_View, // the inventory overlay's (menu_inventory.odin)
-	reporter:         Reporter, // what the client tells the server about itself (telemetry.odin)
-	launched:         time.Tick, // when the program started
-	clock:            App_Clock, // the OS's unless a test fixed it (clock.odin)
-	stats_view:       Stats_View, // the statistics overlay's (menu_statistics.odin)
-	preview:          Preview, // the player in the inventory (preview.odin)
-	inventory_search: [dynamic]u8, // the Creative tab's search text
-	prompt_icons:     Prompt_Icons, // the button glyphs (hud_prompts.odin)
-	prompts_shown:    [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
-	prompts_count:    int,
-	shown:            ^game.Registry, // the registry the texture array, sound bank and icons were last made for (nil: none of a session)
-	registry:         ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
-	item_icons:       Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
-	dial:             Dial_View, // the dial overlay's (overlay_dial.odin)
-	quit:             bool,
-	frame_stats:      base.Frame_Stats,
-	triangle_stats:   base.Frame_Stats, // thousands drawn a frame, in a world
-	last_frame_ms:    f32,
-	seconds:          f32, // since start, wrapped every 1000 (moving water)
-	fps:              Fps,
+	window:              platform.Window,
+	g:                   gpu.Gpu,
+	renderdoc:           gpu.Renderdoc,
+	renderdoc_requested: bool,
+	renderdoc_title:     string,
+	symbol_font:         font.Font, // (SYMBOL_FONT_DATA)
+	font:                font.Font,
+	ui:                  ui.Context,
+	ui_pass:             render.Ui_Pass,
+	world_pass:          render.World_Pass,
+	sky_pass:            render.Sky_Pass,
+	scenes:              render.Scene_Buffers,
+	debug_pass:          render.Debug_Pass,
+	debug_draw:          render.Debug_Draw, // this frame's debug lines
+	entity_pass:         render.Entity_Pass,
+	entity_draw:         render.Entity_Draw, // this frame's boxes (players, entities, particles)
+	held_pass:           render.Held_Pass, // what the hands hold (viewmodel.odin)
+	held_draw:           render.Held_Draw, // this frame's held meshes: the view model, third person items
+	held_cache:          Held_Cache, // every item's mesh in a hand
+	held_arm:            Held_Mesh, // our right arm, in our shirt
+	held_arm_shirt:      [4]u8,
+	mixer:               ^audio.Mixer, // heap (it is large); fed to the sound card by audio_device
+	audio_device:        audio.Device,
+	null_audio:          bool, // mix into the null device, whatever the sound card (--null-audio, --check audio)
+	audio_debug:         Audio_Debug,
+	sounds:              Sound_Bank,
+	music:               Music_App, // the director and its voices (music_app.odin)
+	snapshots:           Snapshots, // what the mixer's snapshot holds (snapshots.odin)
+	volumes:             [audio.Bus]f32, // as last told to the mixer
+	listener:            audio.Listener, // ... and the listener's options
+	shader_watch:        Shader_Watch,
+	universes:           Universes_Screen,
+	creation:            Creation_Screen,
+	ignite:              Ignite,
+	cues:                [dynamic]string, // UI sound events fired (ui_cue)
+	multiplayer:         Multiplayer_Screen,
+	session:             ^Session, // nil outside a world
+	devchat:             Devchat, // developer chat (devchat.odin): runs while the setting names a collector
+	steam:               steam.Client, // Steam (steam.odin): off unless its library is beside the game
+	debug:               Debug_Switches,
+	telemetry:           Telemetry_Switches,
+	settings_dirty:      bool, // changed since loaded or saved
+	scripted:            bool, // running --exec commands: settings changes are not saved
+	benchmark:           bool, // --benchmark: BENCHMARK_SETTINGS, no sound device, nothing saved
+	bench:               Bench, // the scenario running (benchmark.odin)
+	stars:               starfield.Starfield, // the menus' background (starfield.odin)
+	failed:              Failed, // the Failed screen's (screen_loading.odin)
+	credits:             Credits_View, // the Credits screen's scroll (screen_credits.odin)
+	options:             Options_View, // the Options screen's tab and state (screen_options.odin)
+	fixed_view:          [2]i32, // view radius, height: a benchmark's or check's (else view_size)
+	checking:            bool, // --check or --scene: BENCHMARK_SETTINGS (with the check's view), nothing saved
+	scene:               Scene_Run, // --scene: a visual baseline's (scenes.odin)
+	screenshot_names:    [dynamic]string, // requested, not yet saved (oldest first)
+	screenshot_dir:      string, // where they go, next to the executable ("": screenshots)
+	message:             string, // shown on the title screen (why a session ended)
+	fly_test:            Fly_Test,
+	blast_test:          Blast_Test,
+	audio_check:         Audio_Check,
+	cull_check:          Exit_Check, // `--check cull` (cull_check_run)
+	hiz_check:           Exit_Check, // `--check hiz` (hiz_check_run)
+	tour_test:           Tour_Test,
+	server_failed:       bool, // a session's server stopped on an error (fails the run)
+	script_failed:       bool, // an --exec script could not go on (fails the run)
+	console:             Console,
+	input:               Input_State,
+	actions:             Actions, // this frame's actions (actions.odin)
+	injected:            [dynamic]platform.Event, // events the pad command and checks add
+	settings:            Settings,
+	screen:              Screen,
+	overlays:            Overlays, // what is open over the screen (overlay.odin)
+	crash_offer:         Crash_Offer, // the dialog about earlier crashes (crash_offer.odin)
+	crash_track:         Crash_Track, // what the crash bundle was told (crash_track.odin)
+	account:             game.Account_Key, // who we are to servers (account.odin)
+	new_character:       [dynamic]u8, // the name typed on the characters screen
+	chat:                Line_Editor, // the chat's line (overlay_chat.odin)
+	chat_scroll:         f32, // lines scrolled up in the open chat
+	chat_osk:            bool, // the chat was opened by a pad: its line opens the on-screen keyboard
+	devchat_line:        Line_Editor, // developer chat's line (overlay/devchat.odin)
+	devchat_attach:      bool, // attach where the player is to what they write
+	devchat_seen:        u64, // replies seen (more arrived: the notice shows)
+	devchat_scroll:      f32, // entries scrolled up
+	splash:              string, // the title screen's, chosen once (screen_title.odin)
+	splash_at:           time.Tick, // when it was chosen: its stamp rings in from then
+	started:             time.Tick, // when the app began (the splash's pulse)
+	toasts:              Toasts, // the notices at the top right (overlay_toasts.odin)
+	hud_hidden:          bool, // F1: the HUD is hidden (not saved)
+	popup:               Item_Popup, // the held item's name above the hotbar (hud_popup.odin)
+	lan:                 Lan_Dialog, // the Open to LAN dialog's choices (overlay_lan.odin)
+	player_menu:         Player_Menu, // the section shown and the one shown last (menu_player.odin)
+	inventory_view:      Inventory_View, // the inventory overlay's (menu_inventory.odin)
+	reporter:            Reporter, // what the client tells the server about itself (telemetry.odin)
+	launched:            time.Tick, // when the program started
+	clock:               App_Clock, // the OS's unless a test fixed it (clock.odin)
+	stats_view:          Stats_View, // the statistics overlay's (menu_statistics.odin)
+	preview:             Preview, // the player in the inventory (preview.odin)
+	inventory_search:    [dynamic]u8, // the Creative tab's search text
+	prompt_icons:        Prompt_Icons, // the button glyphs (hud_prompts.odin)
+	prompts_shown:       [PROMPTS_SHOWN_MAX]Prompt_Glyph, // this frame's, for tests (prompts_seen)
+	prompts_count:       int,
+	shown:               ^game.Registry, // the registry the texture array, sound bank and icons were last made for (nil: none of a session)
+	registry:            ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
+	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
+	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
+	quit:                bool,
+	frame_stats:         base.Frame_Stats,
+	triangle_stats:      base.Frame_Stats, // thousands drawn a frame, in a world
+	last_frame_ms:       f32,
+	seconds:             f32, // since start, wrapped every 1000 (moving water)
+	fps:                 Fps,
 }
 
 // audio_init makes the sounds and opens the sound card; without one the

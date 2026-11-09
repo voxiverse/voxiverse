@@ -33,6 +33,8 @@ Gpu_Section :: struct {
 @(private)
 Frame_Timing :: struct {
 	pool:          vk.QueryPool,
+	stats_pool:    vk.QueryPool,
+	stats_active:  bool,
 	sections:      [MAX_GPU_SECTIONS]Gpu_Section,
 	section_count: int,
 	query_count:   u32,
@@ -58,6 +60,18 @@ timing_log_summary :: proc(g: ^Gpu) {
 		s.p99,
 		s.max,
 	)
+	if g.pipeline_stats_supported && g.pipeline_stats.vertex_invocations > 0 {
+		ps := &g.pipeline_stats
+		log.infof(
+			"gpu pipeline stats: vert_in=%d prim_in=%d v_inv=%d clip_prim=%d f_inv=%d c_inv=%d",
+			ps.input_vertices,
+			ps.input_primitives,
+			ps.vertex_invocations,
+			ps.clipping_primitives,
+			ps.fragment_invocations,
+			ps.compute_invocations,
+		)
+	}
 }
 
 @(private)
@@ -70,12 +84,38 @@ timing_init :: proc(g: ^Gpu, t: ^Frame_Timing, index: int) -> bool {
 	}
 	check(vk.CreateQueryPool(g.device, &info, nil, &t.pool)) or_return
 	set_name(g, .QUERY_POOL, u64(t.pool), "frame timestamps")
+
+	if g.pipeline_stats_supported {
+		stats_info := vk.QueryPoolCreateInfo {
+			sType              = .QUERY_POOL_CREATE_INFO,
+			queryType          = .PIPELINE_STATISTICS,
+			queryCount         = 1,
+			pipelineStatistics = {
+				.INPUT_ASSEMBLY_VERTICES,
+				.INPUT_ASSEMBLY_PRIMITIVES,
+				.VERTEX_SHADER_INVOCATIONS,
+				.CLIPPING_INVOCATIONS,
+				.CLIPPING_PRIMITIVES,
+				.FRAGMENT_SHADER_INVOCATIONS,
+				.COMPUTE_SHADER_INVOCATIONS,
+			},
+		}
+		if vk.CreateQueryPool(g.device, &stats_info, nil, &t.stats_pool) == .SUCCESS {
+			set_name(g, .QUERY_POOL, u64(t.stats_pool), "frame pipeline statistics")
+		} else {
+			t.stats_pool = 0
+		}
+	}
 	return true
 }
 
 @(private)
 timing_destroy :: proc(g: ^Gpu, t: ^Frame_Timing) {
 	if t.pool != 0 {vk.DestroyQueryPool(g.device, t.pool, nil)}
+	if t.stats_pool != 0 {
+		vk.DestroyQueryPool(g.device, t.stats_pool, nil)
+		t.stats_pool = 0
+	}
 }
 
 // timing_frame_begin reads the slot's previous results (its fence has
@@ -89,6 +129,11 @@ timing_frame_begin :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	}
 	vk.CmdResetQueryPool(cmd, t.pool, 0, MAX_GPU_SECTIONS * 2)
 	t.section_count, t.query_count, t.open_count, t.dropped = 0, 0, 0, 0
+	if t.stats_pool != 0 {
+		vk.CmdResetQueryPool(cmd, t.stats_pool, 0, 1)
+		vk.CmdBeginQuery(cmd, t.stats_pool, 0, {})
+		t.stats_active = true
+	}
 	timing_section_begin(g, t, cmd, "frame")
 }
 
@@ -97,6 +142,10 @@ timing_frame_end :: proc(g: ^Gpu, t: ^Frame_Timing, cmd: vk.CommandBuffer) {
 	if !g.timing {return}
 	assert(t.open_count == 1, "gpu: begin_label without a matching end_label in this frame")
 	timing_section_end(g, t, cmd)
+	if t.stats_pool != 0 && t.stats_active {
+		vk.CmdEndQuery(cmd, t.stats_pool, 0)
+		t.stats_active = false
+	}
 }
 
 @(private)
@@ -184,6 +233,31 @@ timing_collect :: proc(g: ^Gpu, t: ^Frame_Timing) {
 	if frame.end_query != NO_QUERY {
 		ticks := (results[frame.end_query] - results[frame.begin_query]) & g.timestamp_mask
 		base.frame_stats_add(&g.gpu_frame_stats, f32(f64(ticks) * f64(g.timestamp_period) / 1e6))
+	}
+
+	if t.stats_pool != 0 {
+		stats_results: [7]u64
+		if vk.GetQueryPoolResults(
+			   g.device,
+			   t.stats_pool,
+			   0,
+			   1,
+			   size_of(stats_results),
+			   &stats_results[0],
+			   size_of(u64),
+			   {._64},
+		   ) ==
+		   .SUCCESS {
+			g.pipeline_stats = {
+				input_vertices       = stats_results[0],
+				input_primitives     = stats_results[1],
+				vertex_invocations   = stats_results[2],
+				clipping_invocations = stats_results[3],
+				clipping_primitives  = stats_results[4],
+				fragment_invocations = stats_results[5],
+				compute_invocations  = stats_results[6],
+			}
+		}
 	}
 
 	// A benchmark's metrics: each pass's time this frame (the render
