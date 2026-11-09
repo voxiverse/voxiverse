@@ -139,8 +139,10 @@ A pack's PNGs and Oggs come over the network, so they are read by bounds-checked
 checked when the registry is built (`common/game/pack_assets.odin`):
 
 - A block texture is exactly 16 x 16 pixels, at most `MAX_PNG_BYTES` = 64 KiB. The header is read
-  before the decoder (a PNG of a huge size packs into a few bytes); `core:image/png` decodes
-  it into RGBA8.
+  before the decoder (a PNG of a huge size packs into a few bytes); the file's chunks and its
+  zlib stream are checked first (`png_ok` in `common/game/png_check.odin`, CRC'd chunks and a
+  complete deflate structure, at most 4 KiB of output); `core:image/png` decodes only what
+  passed into RGBA8.
 - A sound is an Ogg of at most `MAX_OGG_BYTES` = 1 MiB and `MAX_SOUND_SECONDS` = 5 s, scanned for
   its length and decoded once by `common/ogg`, so the client only plays a file that passed.
   File-based sound sets total at most `MAX_PACK_SOUND_FILES` = 128 files over all packs.
@@ -158,7 +160,7 @@ hostile), player input, generated text and names, and the pack transport.
 | Surface | What holds |
 |---|---|
 | Pack transport | The archive limits and hash check above; JSON limits (`JSON_MAX_DEPTH` 32, `JSON_MAX_STRING` 4096, `JSON_MAX_ENTRIES` 4096, `JSON_MAX_FILE` 1 MiB); rule bounds checked at load. |
-| Decoders | Odin only: pack PNGs by `core:image/png` after a header check, pack Oggs by `common/ogg`. No C parses a hostile file; a pack's only code is a rule program the registry compiles. |
+| Decoders | Odin only: pack PNGs by `core:image/png` after the checked zlib walk (`png_ok`), pack Oggs by `common/ogg`. No C parses a hostile file; a pack's only code is a rule program the registry compiles. |
 | Network messages | Validated at the edge (ground rule 6 in [design.md](design.md)): ranges, length caps, a schema hash at join, fuzz targets for every decoder. |
 | Script VM | Memory-safe by construction, deterministic (no ambient clock, random, hash order or I/O), metered in instructions, memory and call depth, state serializable ([script.md](script.md)). Scripts are never transpiled or compiled to native code. |
 | Script authority | A script has no ambient authority. `server/core/script_api.odin` holds the typed natives for the party systems, each behind a named capability (`players.read`, `players.mode`, `rules.read`, `rules.set`, `players.damage`, `players.respawn`); a native records its cause as `script:<pack>` in the journal. The VM runs in `build script`, the benchmarks and the fuzz targets; the server does not run scripts. |
