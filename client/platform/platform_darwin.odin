@@ -28,9 +28,18 @@ foreign import carbon "system:Carbon.framework"
 foreign import coregraphics "system:CoreGraphics.framework"
 foreign import iokit "system:IOKit.framework"
 foreign import corefoundation "system:CoreFoundation.framework"
+// Local objc: NS.objc_lookUpClass lives in another package and the parallel
+// LLVM backend asserts "missing procedure 'objc_lookUpClass'" when several
+// test packages import platform at once (Inkling's clipboard made it flake).
+foreign import objc "system:objc"
 
 @(private = "file")
 msg :: intrinsics.objc_send
+
+@(private = "file", default_calling_convention = "c")
+foreign objc {
+	objc_lookUpClass :: proc(name: cstring) -> NS.Class ---
+}
 
 Native_Window :: struct {
 	app:           ^NS.Object, // NSApplication
@@ -92,7 +101,7 @@ nobj: ^NS.Object // nil, typed for a message argument
 // object builds of the test package, so classes are looked up here.)
 @(private = "file")
 class_of :: proc(name: cstring) -> ^NS.Object {
-	return (^NS.Object)(NS.objc_lookUpClass(name))
+	return (^NS.Object)(objc_lookUpClass(name))
 }
 
 @(private = "file")
@@ -353,6 +362,14 @@ foreign coregraphics {
 	CGMainDisplayID :: proc() -> u32 ---
 	CGDisplayHideCursor :: proc(display: u32) -> i32 ---
 	CGDisplayShowCursor :: proc(display: u32) -> i32 ---
+	CGGetActiveDisplayList :: proc(maxDisplays: u32, displays: [^]u32, displayCount: ^u32) -> i32 ---
+	CGDisplayBounds :: proc(displayID: u32) -> NS.Rect ---
+	CGDisplayCopyDisplayMode :: proc(displayID: u32) -> rawptr ---
+	CGDisplayModeGetRefreshRate :: proc(mode: rawptr) -> f64 ---
+	CGDisplayModeGetWidth :: proc(mode: rawptr) -> i64 ---
+	CGDisplayModeGetHeight :: proc(mode: rawptr) -> i64 ---
+	CGDisplayCopyLocalizedName :: proc(displayID: u32) -> rawptr ---
+	CGDisplayScreenSize :: proc(displayID: u32) -> NS.Size ---
 }
 
 @(private = "file")
@@ -487,8 +504,8 @@ add_method :: proc(cls: NS.Class, name: cstring, imp: rawptr, types: cstring) {
 
 @(private = "file")
 make_delegate_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
-	if cls == nil {return NS.objc_lookUpClass("VoxiverseDelegate")} 	// registered already
+	cls := NS.objc_allocateClassPair(objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
+	if cls == nil {return objc_lookUpClass("VoxiverseDelegate")} 	// registered already
 	// Quitting (Cmd+Q, the Dock's Quit) asks the game, as the close button
 	// elsewhere: it decides when to stop.
 	add_method(
@@ -639,8 +656,8 @@ view_insert_text :: proc(text: ^NS.Object) {
 // only turns keyDown into text.
 @(private = "file")
 make_view_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSView"), "VoxiverseView", 0)
-	if cls == nil {return NS.objc_lookUpClass("VoxiverseView")}
+	cls := NS.objc_allocateClassPair(objc_lookUpClass("NSView"), "VoxiverseView", 0)
+	if cls == nil {return objc_lookUpClass("VoxiverseView")}
 	add_method(
 		cls,
 		"acceptsFirstResponder",
@@ -1008,17 +1025,26 @@ native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	if (.FullScreen in style) != fullscreen {msg(nil, n.window, "toggleFullScreen:", nobj)}
 }
 
-// Placement: the content rect's origin lands at the given screen coordinates
-// (bottom-left origin, NSScreen space). "frame"/"setFrame:display:" read and
-// write the window including the title bar, like SDL_GetWindowPosition.
+// Placement: top-left screen coordinates, matching Win32/X11 and
+// SDL_GetWindowPosition. Cocoa's NSWindow frame is bottom-left; convert
+// through the primary screen height.
+@(private = "file")
+cocoa_main_screen_height :: proc() -> i32 {
+	screen := msg(^NS.Object, class_of("NSScreen"), "mainScreen")
+	if screen == nil {return 0}
+	frame := msg(NS.Rect, screen, "frame")
+	return i32(frame.size.height)
+}
+
 @(private)
 native_set_window_position :: proc(w: ^Window, x, y: i32) {
 	n := &w.native
 	if n.window == nil {return}
 	frame := msg(NS.Rect, n.window, "frame")
+	main_h := cocoa_main_screen_height()
 	frame.origin = {
 		x = NS.Float(x),
-		y = NS.Float(y),
+		y = NS.Float(cocoa_from_top_left_y(y, i32(frame.size.height), main_h)),
 	}
 	msg(nil, n.window, "setFrame:display:", frame, NS.BOOL(true))
 }
@@ -1028,7 +1054,10 @@ native_window_position :: proc(w: ^Window) -> (x, y: i32, ok: bool) {
 	n := &w.native
 	if n.window == nil {return 0, 0, false}
 	frame := msg(NS.Rect, n.window, "frame")
-	return i32(frame.origin.x), i32(frame.origin.y), true
+	main_h := cocoa_main_screen_height()
+	return i32(frame.origin.x),
+		cocoa_top_left_y(i32(frame.origin.y), i32(frame.size.height), main_h),
+		true
 }
 
 // Always-on-top: NSFloatingWindowLevel (3) keeps the window above normal
@@ -1075,18 +1104,6 @@ native_vulkan_create_surface :: proc(
 
 // ---------------------------------------------------------------------------
 // Display info: Cocoa CGDisplay. Active displays only; the primary is index 0.
-
-@(private = "file", default_calling_convention = "c")
-foreign coregraphics {
-	CGGetActiveDisplayList :: proc(maxDisplays: u32, displays: [^]u32, displayCount: ^u32) -> i32 ---
-	CGDisplayBounds :: proc(displayID: u32) -> NS.Rect ---
-	CGDisplayCopyDisplayMode :: proc(displayID: u32) -> rawptr ---
-	CGDisplayModeGetRefreshRate :: proc(mode: rawptr) -> f64 ---
-	CGDisplayModeGetWidth :: proc(mode: rawptr) -> i64 ---
-	CGDisplayModeGetHeight :: proc(mode: rawptr) -> i64 ---
-	CGDisplayCopyLocalizedName :: proc(displayID: u32) -> rawptr ---
-	CGDisplayScreenSize :: proc(displayID: u32) -> NS.Size ---
-}
 
 @(private = "file")
 cg_display_name :: proc(id: u32) -> string {
@@ -1148,6 +1165,47 @@ native_display_info :: proc(index: i32) -> (info: Display_Info, ok: bool) {
 	return info, true
 }
 
+@(private)
+native_window_display_info :: proc(w: ^Window) -> (info: Display_Info, ok: bool) {
+	n := &w.native
+	if n.window == nil {return {}, false}
+	screen := msg(^NS.Object, n.window, "screen")
+	if screen == nil {return native_display_info(0)}
+	screens := msg(^NS.Object, class_of("NSScreen"), "screens")
+	count := int(msg(NS.UInteger, screens, "count"))
+	for i in 0 ..< count {
+		s := msg(^NS.Object, screens, "objectAtIndex:", NS.UInteger(i))
+		if s == screen {
+			// NSScreen order is not CGDisplay index order; report what we can
+			// from the screen's deviceDescription display ID when present.
+			desc := msg(^NS.Object, screen, "deviceDescription")
+			key := ns_string("NSScreenNumber")
+			num := msg(^NS.Object, desc, "objectForKey:", key)
+			id: u32
+			if num != nil {
+				id = u32(msg(NS.UInteger, num, "unsignedIntegerValue"))
+			}
+			if id == 0 {return native_display_info(i32(i))}
+			info = Display_Info {
+				index              = i32(i),
+				name               = cg_display_name(id),
+				physical_mm_width  = i32(CGDisplayScreenSize(id).width),
+				physical_mm_height = i32(CGDisplayScreenSize(id).height),
+			}
+			bounds := CGDisplayBounds(id)
+			info.width, info.height = i32(bounds.size.width), i32(bounds.size.height)
+			if mode := CGDisplayCopyDisplayMode(id); mode != nil {
+				info.refresh_hz = CGDisplayModeGetRefreshRate(mode)
+				info.width, info.height =
+					i32(CGDisplayModeGetWidth(mode)), i32(CGDisplayModeGetHeight(mode))
+				CFRelease(mode)
+			}
+			return info, true
+		}
+	}
+	return native_display_info(0)
+}
+
 // ---------------------------------------------------------------------------
 // Clipboard: NSPasteboard. UTF-8 plain text through cStringUsingEncoding:.
 
@@ -1174,18 +1232,18 @@ native_request_clipboard_paste :: proc() {
 	if s == nil {return}
 	cstr := msg(cstring, s, "cStringUsingEncoding:", NS.UInteger(4)) // NSUTF8StringEncoding = 4
 	if cstr == nil {return}
-	clip_pending = strings.clone(string(cstr))
-	if len(clip_pending) > CLIPBOARD_CAP {
+	text := string(cstr)
+	if len(text) > CLIPBOARD_CAP {
 		log.warn("platform clipboard paste skipped: too much text")
-		delete(clip_pending)
-		clip_pending = ""
+		return
 	}
+	if len(clip_pending) > 0 {delete(clip_pending)}
+	clip_pending = strings.clone(text)
 }
 
 @(private)
 native_set_clipboard_text :: proc(text: string) {
-	s := text
-	if len(s) > CLIPBOARD_CAP {s = s[:CLIPBOARD_CAP]}
+	s := clipboard_capped(text)
 	pasteboard := msg(^NS.Object, class_of("NSPasteboard"), "generalPasteboard")
 	_ = msg(NS.Integer, pasteboard, "clearContents")
 	_ = msg(
