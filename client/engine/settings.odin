@@ -27,6 +27,8 @@ Settings :: struct {
 	fullscreen:        bool, // borderless, covering the monitor
 	window_width:      i32, // pixels; 0 = the default size
 	window_height:     i32, // pixels; 0 = the default size
+	window_x:          i32, // left edge in screen pixels; -1 = the default place
+	window_y:          i32, // top edge in screen pixels; -1 = the default place
 	vsync:             bool, // wait for the display (off: up to max_fps)
 	max_fps:           i32, // frames a second at most (0: no limit)
 	fov:               f32, // degrees, vertical
@@ -70,6 +72,8 @@ Settings :: struct {
 @(rodata)
 SETTINGS_DEFAULTS := Settings {
 	steam             = true,
+	window_x          = -1,
+	window_y          = -1,
 	vsync             = true,
 	max_fps           = 0,
 	fov               = 70,
@@ -124,6 +128,18 @@ SETTINGS_VARS := [?]base.Var {
 	},
 	{field = "window_width", help = "window width in pixels (0 = the default)"},
 	{field = "window_height", help = "window height in pixels (0 = the default)"},
+	{
+		field = "window_x",
+		help = "window left edge in screen pixels (-1 = the default place)",
+		min = -65536,
+		max = 65536,
+	},
+	{
+		field = "window_y",
+		help = "window top edge in screen pixels (-1 = the default place)",
+		min = -65536,
+		max = 65536,
+	},
 	{
 		field = "vsync",
 		label = "VSync",

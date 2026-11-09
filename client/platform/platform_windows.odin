@@ -240,6 +240,31 @@ native_set_always_on_top :: proc(w: ^Window, on: bool) {
 	)
 }
 
+// Placement: SetWindowPos moves the window and keeps its size and Z-order.
+// Reading it back uses GetWindowRect (frame coordinates, the same space
+// SetWindowPos takes its position in).
+@(private)
+native_set_window_position :: proc(w: ^Window, x, y: i32) {
+	n := &w.native
+	win.SetWindowPos(
+		n.hwnd,
+		nil,
+		x,
+		y,
+		0,
+		0,
+		win.SWP_NOSIZE | win.SWP_NOZORDER | win.SWP_NOACTIVATE,
+	)
+}
+
+@(private)
+native_window_position :: proc(w: ^Window) -> (x, y: i32, ok: bool) {
+	n := &w.native
+	rect: win.RECT
+	if !win.GetWindowRect(n.hwnd, &rect) {return 0, 0, false}
+	return rect.left, rect.top, true
+}
+
 @(private)
 native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	n := &w.native

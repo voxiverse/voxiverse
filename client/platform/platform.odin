@@ -400,6 +400,21 @@ set_window_min_size :: proc(w: ^Window, width, height: i32) {
 	native_set_window_min_size(w, w.min_width, w.min_height)
 }
 
+// set_window_position moves the window so its top-left corner is at (x, y)
+// in screen pixels. Negative values are valid (a monitor left of the primary).
+// On Wayland and with WMs that ignore client position requests, this is a
+// hint, like SDL_SetWindowPosition with SDL_WINDOWPOS_CENTERED.
+set_window_position :: proc(w: ^Window, x, y: i32) {
+	native_set_window_position(w, x, y)
+}
+
+// window_position reports the window's top-left corner in screen pixels,
+// reading it back from the OS (so the value is current even after the player
+// moved the window by the frame). ok false if the OS cannot answer.
+window_position :: proc(w: ^Window) -> (x, y: i32, ok: bool) {
+	return native_window_position(w)
+}
+
 // set_always_on_top keeps the game above normal windows (e.g., a reference
 // window alongside another app). An opt-in chore: off by default, and the
 // fullscreen pile is left alone (a fullscreen window is always on top by

@@ -1007,6 +1007,29 @@ native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	if (.FullScreen in style) != fullscreen {msg(nil, n.window, "toggleFullScreen:", nobj)}
 }
 
+// Placement: the content rect's origin lands at the given screen coordinates
+// (bottom-left origin, NSScreen space). "frame"/"setFrame:display:" read and
+// write the window including the title bar, like SDL_GetWindowPosition.
+@(private)
+native_set_window_position :: proc(w: ^Window, x, y: i32) {
+	n := &w.native
+	if n.window == nil {return}
+	frame := msg(NS.Rect, n.window, "frame")
+	frame.origin = {
+		x = NS.Float(x),
+		y = NS.Float(y),
+	}
+	msg(nil, n.window, "setFrame:display:", frame, NS.BOOL(true))
+}
+
+@(private)
+native_window_position :: proc(w: ^Window) -> (x, y: i32, ok: bool) {
+	n := &w.native
+	if n.window == nil {return 0, 0, false}
+	frame := msg(NS.Rect, n.window, "frame")
+	return i32(frame.origin.x), i32(frame.origin.y), true
+}
+
 // Always-on-top: NSFloatingWindowLevel (3) keeps the window above normal
 // windows; Normal (0) puts it back in the regular stack. Same peer surface as
 // SDL_WINDOW_ALWAYS_ON_TOP and GLFW's GLFW_FLOATING.

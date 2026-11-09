@@ -83,6 +83,14 @@ X11 :: struct {
 		hints: ^xlib.XSizeHints,
 	),
 	MapWindow:                 proc "c" (display: ^xlib.Display, window: xlib.Window) -> i32,
+	MoveWindow:                proc "c" (display: ^xlib.Display, window: xlib.Window, x, y: i32),
+	TranslateCoordinates:      proc "c" (
+		display: ^xlib.Display,
+		src_window, dst_window: xlib.Window,
+		src_x, src_y: i32,
+		dst_x, dst_y: ^i32,
+		dst_child: ^xlib.Window,
+	) -> xlib.Status,
 	Pending:                   proc "c" (display: ^xlib.Display) -> i32,
 	NextEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
 	PeekEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
@@ -530,6 +538,30 @@ native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
 		min_height = height,
 	}
 	x.SetWMNormalHints(n.display, n.window, &hints)
+}
+
+// Placement: XMoveWindow asks the WM to reconfigure to the given coordinates
+// (like the resize events, it is a request most WMs honor). Wayland-compositor
+// setups ignore it, matching SDL and GLFW.
+@(private)
+native_set_window_position :: proc(w: ^Window, xi32, yi32: i32) {
+	n := &w.native
+	x.MoveWindow(n.display, n.window, xi32, yi32)
+	x.Flush(n.display)
+}
+
+// Root-relative coordinates of the top-left corner of the window; frame
+// included, like SDL_GetWindowPosition on X11.
+@(private)
+native_window_position :: proc(w: ^Window) -> (wx, wy: i32, ok: bool) {
+	n := &w.native
+	root := x.RootWindow(n.display, x.DefaultScreen(n.display))
+	child: xlib.Window
+	rx, ry: i32
+	if x.TranslateCoordinates(n.display, n.window, root, 0, 0, &rx, &ry, &child) != .Success {
+		return 0, 0, false
+	}
+	return rx, ry, true
 }
 
 // Always-on-top: asked of the window manager (EWMH _NET_WM_STATE_ABOVE).
