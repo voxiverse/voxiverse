@@ -49,6 +49,7 @@ app_init :: proc(app: ^engine.App) -> bool {
 	// way (a window rule) without touching the game's.
 	title := "Voxiverse benchmark" if app.benchmark else "Voxiverse"
 	if !platform.window_open(&app.window, title, 1280, 720) {return false}
+	platform.set_window_min_size(&app.window, 640, 360)
 	g := &app.g
 	extensions := platform.vulkan_instance_extensions()
 	if !gpu.create_instance(

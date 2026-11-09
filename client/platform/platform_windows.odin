@@ -216,6 +216,12 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 
 // Fullscreen is borderless: the window loses its frame and covers its
 // monitor; leaving puts frame and placement back.
+// Minimum window size: Windows re-asks ptMinTrackSize every time it is about
+// to propose a size for the dragging frame; the values we store in w are
+// honored on every event.
+@(private)
+native_set_window_min_size :: proc(w: ^Window, width, height: i32) {}
+
 @(private)
 native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	n := &w.native
@@ -318,6 +324,13 @@ window_proc :: proc "system" (
 	}
 
 	switch msg {
+	case win.WM_GETMINMAXINFO:
+		if w.min_width > 0 || w.min_height > 0 {
+			info := cast(^win.MINMAXINFO)uintptr(lparam)
+			if w.min_width > 0 {info.ptMinTrackSize.x = w.min_width}
+			if w.min_height > 0 {info.ptMinTrackSize.y = w.min_height}
+		}
+		return 0
 	case win.WM_CLOSE:
 		w.close_requested = true
 		return 0

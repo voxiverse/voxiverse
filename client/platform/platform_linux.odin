@@ -77,6 +77,11 @@ X11 :: struct {
 		protocols: [^]xlib.Atom,
 		count: i32,
 	) -> xlib.Status,
+	SetWMNormalHints:          proc "c" (
+		display: ^xlib.Display,
+		window: xlib.Window,
+		hints: ^xlib.XSizeHints,
+	),
 	MapWindow:                 proc "c" (display: ^xlib.Display, window: xlib.Window) -> i32,
 	Pending:                   proc "c" (display: ^xlib.Display) -> i32,
 	NextEvent:                 proc "c" (display: ^xlib.Display, event: ^xlib.XEvent) -> i32,
@@ -512,6 +517,19 @@ native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
 		i32(len(data)),
 	)
 	x.Flush(n.display)
+}
+
+// Set the WM_NORMAL_HINTS property's minimum size; a WM that honors the
+// property (most modern ones do) refuses to shrink our window below it.
+@(private)
+native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
+	n := &w.native
+	hints := xlib.XSizeHints {
+		flags      = {.PMinSize},
+		min_width  = width,
+		min_height = height,
+	}
+	x.SetWMNormalHints(n.display, n.window, &hints)
 }
 
 // Fullscreen: asked of the window manager (EWMH _NET_WM_STATE_FULLSCREEN),

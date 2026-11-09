@@ -990,6 +990,15 @@ native_set_mouse_captured :: proc(w: ^Window, captured: bool) {
 
 // The window's own full-screen space: the state follows the delegate's
 // notifications (the green button works too).
+// setContentMinSize: the window refuses to shrink below this size; the user
+// gets the same indication the X11 hints give.
+@(private)
+native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
+	n := &w.native
+	if n.window == nil {return}
+	msg(nil, n.window, "setMinSize:", NS.Size{width = NS.Float(width), height = NS.Float(height)})
+}
+
 @(private)
 native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	n := &w.native
