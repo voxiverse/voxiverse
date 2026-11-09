@@ -61,6 +61,7 @@ package** is enforced by the `layout` lint (see above).
 | `.github/actions/apt` | The composite action that installs packages | `*.yml` |
 | `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
 | `.agents/skills/planner` | The planner skill for agents that plan and do not write the game's code (profiling, issues for the autofix harness) | `SKILL.md` |
+| `.github/scripts` | The shell scripts the workflows run, with their fixture-driven tests (`tested-on-main_test.sh` decides what a main run may skip) | `*.sh` |
 | `.github/workflows` | CI | `*.yml` |
 | `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback, tasks, bugs, refactors, and form config | `*.yml` |
 | `assets` | The assets' own notes | `*.txt` |
