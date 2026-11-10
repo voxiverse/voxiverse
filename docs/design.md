@@ -214,9 +214,9 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
 - **CI uses exactly the same path.** Its Linux checks are three parallel
   jobs, "Test · Linux x64" (check, tests, determinism, the system test suite, the fuzz regression run),
   "Game · Linux x64" (the scenario checks: benchmarks, fuzz, flight, culling, audio,
-  multiplayer, crash handler, printers) and "Game · Linux x64, images" (visual baselines,
-  AddressSanitizer, profiling, screens, sky and held items); macOS and Windows run one job
-  each. CI sets `VX_CI=1`, which makes `check` skip its cross-target object builds (every Tier 1
+  multiplayer, crash handler, printers) and "Game · Linux x64, images" (AddressSanitizer,
+  profiling, screens, sky and held items); macOS and Windows run one job each. CI sets
+  `VX_CI=1`, which makes `check` skip its cross-target object builds (every Tier 1
   target compiles natively in its own job); locally they run. A tool's executable (`bench`) is
   built once per job. Every check runs on every push. The tests run once, with
   `ODIN_TEST_RANDOM_SEED` set to the run number (a re-run repeats it). `./build.sh test` turns

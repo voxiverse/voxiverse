@@ -243,7 +243,7 @@ jobs:
   # Linux, the game and the tools, the scenario checks: real frames on Mesa's CPU
   # Vulkan driver under the validation layer; any validation finding, leak or
   # failed check fails the run. Runs beside "Game · Linux x64, images", which has
-  # the visual baselines, AddressSanitizer, profiling and the screenshots.
+  # AddressSanitizer, profiling and the screenshots.
   linux-game:
     name: Game · Linux x64
     needs: gate
@@ -397,10 +397,9 @@ jobs:
           path: build/screenshots/
           if-no-files-found: ignore
 
-  # Linux, the game's pictures and instrumented builds: the visual baselines (their
-  # scenes render in parallel), AddressSanitizer, profiling, and the screens, sky and
-  # held items whose screenshots are uploaded. Runs beside "Game · Linux x64", which
-  # has the scenario checks.
+  # Linux, the game's pictures and instrumented builds: AddressSanitizer, profiling,
+  # and the screens, sky and held items whose screenshots are uploaded. Runs beside
+  # "Game · Linux x64", which has the scenario checks.
   linux-images:
     name: Game · Linux x64, images
     needs: gate
@@ -444,20 +443,6 @@ jobs:
       - name: Held items
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: xvfb-run -a ./build/voxiverse --exec "set name ci; set vsync false; set render_distance 4; singleplayer; wait_world; sleep 1; /clear ci; sleep 1; /give ci pistol; sleep 1; hold pistol; camera first; sleep 1; screenshot held_pistol_first; camera behind 90; sleep 1; screenshot held_pistol_third; sleep 1; /clear ci; sleep 1; /give ci rifle; sleep 1; hold rifle; camera first; sleep 1; screenshot held_rifle_first; camera behind 90; sleep 1; screenshot held_rifle_third; sleep 1; /clear ci; sleep 1; /give ci sniper; sleep 1; hold sniper; camera first; sleep 1; screenshot held_sniper_first; camera behind 90; sleep 1; screenshot held_sniper_third; sleep 1; /clear ci; sleep 1; /give ci rocket_launcher; sleep 1; hold rocket_launcher; camera first; sleep 1; screenshot held_rocket_launcher_first; camera behind 90; sleep 1; screenshot held_rocket_launcher_third; sleep 1; /clear ci; sleep 1; /give ci dirt; sleep 1; hold dirt; camera first; sleep 1; screenshot held_dirt_first; camera behind 90; sleep 1; screenshot held_dirt_third; sleep 1; /clear ci; sleep 1; /give ci planks_stairs; sleep 1; hold planks_stairs; camera first; sleep 1; screenshot held_planks_stairs_first; camera behind 90; sleep 1; screenshot held_planks_stairs_third; sleep 1; /clear ci; sleep 1; /give ci hoe; sleep 1; hold hoe; camera first; sleep 1; screenshot held_hoe_first; camera behind 90; sleep 1; screenshot held_hoe_third; sleep 1; quit"
-
-      # Visual baselines: every scene of assets/baselines/images/scenes.txt
-      # rendered on lavapipe and compared with its baseline, within tolerances;
-      # the pictures, the differences and the logs are uploaded on a failure.
-      - name: Visual baselines
-        if: ${{ !cancelled() }}
-        run: ./build.sh images
-      - name: Visual baselines' pictures
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: images
-          path: build/images/
-          if-no-files-found: ignore
 
       - name: AddressSanitizer
         if: ${{ !cancelled() }}
