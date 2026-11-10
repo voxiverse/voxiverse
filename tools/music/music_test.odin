@@ -229,6 +229,32 @@ load_font :: proc(t: ^testing.T) -> (sf: Soundfont, ok: bool) {
 // ---- the score --------------------------------------------------------------
 
 @(test)
+test_text_lf_strips_cr_for_hash_and_parse :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+
+	lf := "title \"CRLF\"\ntempo 96\ninstrument piano preset 0:0\npart right piano\n  | c4:w |\n"
+	crlf := "title \"CRLF\"\r\ntempo 96\r\ninstrument piano preset 0:0\r\npart right piano\r\n  | c4:w |\r\n"
+	testing.expect_value(t, text_lf(lf), lf)
+	testing.expect_value(t, text_lf(crlf), lf)
+	testing.expect_value(
+		t,
+		sha256_hex(transmute([]u8)text_lf(crlf)),
+		sha256_hex(transmute([]u8)lf),
+	)
+
+	p_lf, err_lf, ok_lf := score_parse(lf, "t.score")
+	p_cr, err_cr, ok_cr := score_parse(crlf, "t.score")
+	testing.expectf(t, ok_lf, "LF: %s", err_lf)
+	testing.expectf(t, ok_cr, "CRLF: %s", err_cr)
+	if ok_lf && ok_cr {
+		testing.expect_value(t, p_cr.title, p_lf.title)
+		testing.expect_value(t, p_cr.end, p_lf.end)
+		testing.expect_value(t, len(p_cr.parts), len(p_lf.parts))
+	}
+}
+
+@(test)
 test_score_parses :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)

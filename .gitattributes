@@ -1,5 +1,6 @@
 # Native line endings everywhere (CRLF on Windows: odinfmt writes it there),
-# except files a test or generator compares byte for byte.
+# except files a test or generator compares byte for byte, and music inputs
+# whose bytes are hashed into committed renders.
 * text=auto
 tools/wireshark/*.lua text eol=lf
 assets/baselines/audio/*.decisions text eol=lf
@@ -11,5 +12,14 @@ common/script/testdata/fuzz/** -text
 # The prelude's text is in every VM's heap, so in every snapshot: the same bytes on every OS.
 common/script/prelude.vxs text eol=lf
 assets/baselines/images/*.counts text eol=lf
-# Scores are hashed into their render's metadata: the same bytes on every OS.
+# Scores and their side-car text are hashed / compared: LF on every OS.
 assets/music/*.score text eol=lf
+assets/music/*.json text eol=lf
+assets/music/ear_bands.txt text eol=lf
+assets/music/ear_pending.txt text eol=lf
+assets/music/CREDITS.txt text eol=lf
+# Music binaries: never subject to eol conversion (* text=auto would).
+assets/music/*.ogg -text
+assets/music/*.sf2 -text
+assets/music/*.bin -text
+assets/music/*.mid -text

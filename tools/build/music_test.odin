@@ -16,6 +16,43 @@ test_music_check_stale_clean_tree :: proc(t: ^testing.T) {
 	testing.expectf(t, len(stale) == 0, "expected 0 stale pieces, got %d", len(stale))
 }
 
+// A CRLF working copy of a score whose LF form matches the metadata is not stale:
+// Windows editors rewrite eol=lf files; that must not force build run to re-render.
+@(test)
+test_music_check_stale_ignores_crlf_on_score :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+
+	dir := "build/tmp/music_crlf_stale_test"
+	os.remove_all(dir)
+	os.make_directory_all(dir)
+	defer os.remove_all(dir)
+
+	lf := "title \"Test\"\ntempo 100\n"
+	crlf := "title \"Test\"\r\ntempo 100\r\n"
+	h := hash.hash_bytes(.SHA256, transmute([]u8)lf, context.temp_allocator)
+	src_sha := hex.encode(h[:], context.temp_allocator)
+
+	_ = os.write_entire_file(path_join({dir, "testpiece.score"}), crlf)
+	_ = os.write_entire_file(path_join({dir, "testpiece.ogg"}), []u8{0})
+	_ = os.write_entire_file(
+		path_join({dir, "testpiece.json"}),
+		fmt.tprintf(
+			"{{\n  \"source_sha256\": %q,\n  \"soundfont_sha256\": %q\n}}\n",
+			src_sha,
+			SOUNDFONT_SHA256,
+		),
+	)
+
+	stale := music_check_stale(dir)
+	testing.expectf(
+		t,
+		len(stale) == 0,
+		"CRLF score matching LF hash must not be stale, got %d",
+		len(stale),
+	)
+}
+
 // A score changed locally is detected by the build tool's check with reason "the score changed".
 @(test)
 test_music_check_stale_detects_changed_score :: proc(t: ^testing.T) {

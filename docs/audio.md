@@ -88,6 +88,10 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
   If rendering cannot run (no 7z/bsdtar, offline), it warns and runs with the old audio.
 - CI refuses a stale render: a test checks that every score has up-to-date metadata and rendered
   audio (`render it: build music`). A pull request that changes a score commits its render.
+- Scores are LF in git (`.gitattributes`). The stale check and the renderer hash and parse after
+  stripping CR, so a Windows editor that rewrites a score as CRLF does not look like a change and
+  does not re-render. Music binaries (`.ogg`, `.sf2`, `.bin`, `.mid`) are `-text` so git never
+  converts them.
 
 - The renderer is our own SoundFont 2 reader and sample renderer in Odin (`tools/music`; no
   FluidSynth): presets, instruments, key and velocity zones, loops, a volume envelope, pan,

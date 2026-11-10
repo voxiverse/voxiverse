@@ -146,7 +146,7 @@ ear_main :: proc(args: []string) -> bool {
 		}
 		piece: Piece
 		if ext == ".score" {
-			p, msg, pok := score_parse(string(src), path)
+			p, msg, pok := score_parse(text_lf(string(src)), path)
 			if !pok {
 				fmt.eprintln(msg)
 				ok = false

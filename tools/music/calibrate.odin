@@ -165,7 +165,7 @@ bands_write :: proc(bands: []Band) -> string {
 }
 
 bands_read :: proc(text: string) -> (bands: [dynamic]Band, ok: bool) {
-	rest := text
+	rest := text_lf(text)
 	for line in strings.split_lines_iterator(&rest) {
 		if len(strings.trim_space(line)) == 0 || line[0] == '#' {continue}
 		cols := strings.split(line, "\t")

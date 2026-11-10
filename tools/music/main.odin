@@ -146,8 +146,12 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			continue
 		}
 		piece: Piece
+		src_sha: string
 		if ext == ".score" {
-			p, msg, ok := score_parse(string(src), path)
+			// Hash and parse the LF form: a CRLF working copy is not a score change.
+			text := text_lf(string(src))
+			src_sha = sha256_hex(transmute([]u8)text)
+			p, msg, ok := score_parse(text, path)
 			if !ok {
 				fmt.eprintln(msg)
 				all_ok = false
@@ -155,6 +159,7 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			}
 			piece = p
 		} else {
+			src_sha = sha256_hex(src)
 			p, msg, ok := midi_read(src)
 			if !ok {
 				fmt.eprintfln("%s: %s", path, msg)
@@ -186,7 +191,6 @@ run :: proc(names: []string, force, midi: bool, wav_dir: string) -> bool {
 			continue
 		}
 		sf_sha = fonts_sha256(&piece, cache)
-		src_sha := sha256_hex(src)
 		json_path := strings.concatenate({MUSIC_DIR, "/", stem, ".json"})
 		ogg_path := strings.concatenate({MUSIC_DIR, "/", stem, ".ogg"})
 		if !force && up_to_date(json_path, ogg_path, src_sha, sf_sha) {

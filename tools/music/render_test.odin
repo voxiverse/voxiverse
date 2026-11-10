@@ -30,9 +30,10 @@ test_rendered_music_is_fresh :: proc(t: ^testing.T) {
 
 		src, rerr := os.read_entire_file_from_path(score_path, context.allocator)
 		if !testing.expectf(t, rerr == nil, "cannot read %s", score_path) {continue}
-		src_sha := sha256_hex(src)
+		text := text_lf(string(src))
+		src_sha := sha256_hex(transmute([]u8)text)
 
-		piece, _, pok := score_parse(string(src), score_path)
+		piece, _, pok := score_parse(text, score_path)
 		if !testing.expectf(t, pok, "cannot parse %s", score_path) {continue}
 		expected_sf := fonts_expected_sha256(&piece)
 

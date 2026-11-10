@@ -18,6 +18,22 @@ music_score_fonts_sha256 :: proc(score_text: string) -> string {
 	return SOUNDFONT_SHA256
 }
 
+// music_text_lf drops CR so a Windows CRLF score matches the LF bytes hashed
+// into its render metadata (same rule as tools/music text_lf). build run's
+// stale check must use this or it re-renders on every Windows checkout rewrite.
+music_text_lf :: proc(src: string, allocator := context.allocator) -> string {
+	if strings.index_byte(src, '\r') < 0 {return src}
+	out := make([]u8, len(src), allocator)
+	n := 0
+	for i in 0 ..< len(src) {
+		if src[i] != '\r' {
+			out[n] = src[i]
+			n += 1
+		}
+	}
+	return string(out[:n])
+}
+
 Music_Done :: struct {
 	source_sha256:    string,
 	soundfont_sha256: string,
@@ -46,7 +62,8 @@ music_check_stale :: proc(dir := MUSIC_DIR) -> (stale: [dynamic]Music_Stale_Piec
 		}
 		score_bytes, rerr := os.read_entire_file_from_path(score_path, context.temp_allocator)
 		if rerr != nil {continue}
-		sh := hash.hash_bytes(.SHA256, score_bytes, context.temp_allocator)
+		score_text := music_text_lf(string(score_bytes), context.temp_allocator)
+		sh := hash.hash_bytes(.SHA256, transmute([]u8)score_text, context.temp_allocator)
 		src_sha := string(hex.encode(sh[:], context.temp_allocator))
 
 		jbytes, jerr := os.read_entire_file_from_path(json_path, context.temp_allocator)
@@ -63,7 +80,7 @@ music_check_stale :: proc(dir := MUSIC_DIR) -> (stale: [dynamic]Music_Stale_Piec
 			append(&stale, Music_Stale_Piece{name = stem, reason = "the score changed"})
 			continue
 		}
-		expected_sf := music_score_fonts_sha256(string(score_bytes))
+		expected_sf := music_score_fonts_sha256(score_text)
 		if done.soundfont_sha256 != expected_sf {
 			append(&stale, Music_Stale_Piece{name = stem, reason = "the font changed"})
 			continue

@@ -140,6 +140,23 @@ sha256_hex :: proc(data: []u8) -> string {
 	return string(hex.encode(hash.hash_bytes(.SHA256, data)))
 }
 
+// text_lf drops CR so a Windows CRLF score matches the LF bytes committed and
+// hashed into its render metadata (.gitattributes pins *.score to eol=lf). A
+// CRLF rewrite by an editor must not look like a score change and must not
+// leave `\r` on each line for the parser (which splits on `\n` only).
+text_lf :: proc(src: string, allocator := context.allocator) -> string {
+	if strings.index_byte(src, '\r') < 0 {return src}
+	out := make([]u8, len(src), allocator)
+	n := 0
+	for i in 0 ..< len(src) {
+		if src[i] != '\r' {
+			out[n] = src[i]
+			n += 1
+		}
+	}
+	return string(out[:n])
+}
+
 // num formats a number with at most 3 decimals and at least one, as the
 // metadata writes them (a whole value as an integer when `whole`).
 num :: proc(v: f64, whole := false) -> string {

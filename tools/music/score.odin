@@ -199,12 +199,15 @@ int_of :: proc(ps: ^Parse, line: int, t: Token) -> (v: int, ok: bool) {
 }
 
 // score_parse reads a score. On an error err is "file:line:col: message".
+// CR is stripped first (text_lf): scores are LF in git, and a CRLF working
+// copy must parse like the committed bytes.
 score_parse :: proc(src, file: string) -> (p: Piece, err: string, ok: bool) {
+	text := text_lf(src)
 	ps := Parse {
 		file = file,
 		p    = piece_defaults(),
 	}
-	ok = parse_all(&ps, src)
+	ok = parse_all(&ps, text)
 	if !ok {return {}, ps.err, false}
 	return ps.p, "", true
 }

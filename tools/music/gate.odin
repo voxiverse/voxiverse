@@ -53,7 +53,7 @@ gate_message :: proc(e: Ear, vs: []Violation) -> string {
 
 // pending_read: one score name per line; blank lines and # comments skipped.
 pending_read :: proc(text: string) -> (names: [dynamic]string) {
-	rest := text
+	rest := text_lf(text)
 	for line in strings.split_lines_iterator(&rest) {
 		s := strings.trim_space(line)
 		if len(s) == 0 || s[0] == '#' {continue}
