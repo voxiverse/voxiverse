@@ -2,12 +2,12 @@ package platform
 
 import "base:intrinsics"
 import "base:runtime"
+import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
-import CF "core:sys/darwin/CoreFoundation"
 import NS "core:sys/darwin/Foundation"
 import "core:sys/posix"
 
@@ -25,12 +25,12 @@ import vk "vendor:vulkan"
 
 @(require) foreign import _quartzcore "system:QuartzCore.framework"
 foreign import carbon "system:Carbon.framework"
-foreign import coregraphics "system:CoreGraphics.framework"
+@(require) foreign import coregraphics "system:CoreGraphics.framework"
 foreign import iokit "system:IOKit.framework"
 foreign import corefoundation "system:CoreFoundation.framework"
-// Local objc: NS.objc_lookUpClass lives in another package and the parallel
-// LLVM backend asserts "missing procedure 'objc_lookUpClass'" when several
-// test packages import platform at once (Inkling's clipboard made it flake).
+// Local objc runtime: pulling these through NS/base:runtime trips the parallel
+// LLVM backend ("missing procedure 'objc_lookUpClass'") when several test
+// packages import platform at once.
 foreign import objc "system:objc"
 
 @(private = "file")
@@ -39,6 +39,12 @@ msg :: intrinsics.objc_send
 @(private = "file", default_calling_convention = "c")
 foreign objc {
 	objc_lookUpClass :: proc(name: cstring) -> NS.Class ---
+	objc_allocateClassPair :: proc(superclass: NS.Class, name: cstring, extraBytes: uint) -> NS.Class ---
+	objc_registerClassPair :: proc(cls: NS.Class) ---
+	objc_getProtocol :: proc(name: cstring) -> rawptr ---
+	class_addMethod :: proc(cls: NS.Class, name: NS.SEL, imp: rawptr, types: cstring) -> bool ---
+	class_addProtocol :: proc(cls: NS.Class, protocol: rawptr) -> bool ---
+	sel_registerName :: proc(name: cstring) -> NS.SEL ---
 }
 
 Native_Window :: struct {
@@ -368,7 +374,6 @@ foreign coregraphics {
 	CGDisplayModeGetRefreshRate :: proc(mode: rawptr) -> f64 ---
 	CGDisplayModeGetWidth :: proc(mode: rawptr) -> i64 ---
 	CGDisplayModeGetHeight :: proc(mode: rawptr) -> i64 ---
-	CGDisplayCopyLocalizedName :: proc(displayID: u32) -> rawptr ---
 	CGDisplayScreenSize :: proc(displayID: u32) -> NS.Size ---
 }
 
@@ -499,12 +504,12 @@ report_size :: proc(w: ^Window) {
 
 @(private = "file")
 add_method :: proc(cls: NS.Class, name: cstring, imp: rawptr, types: cstring) {
-	NS.class_addMethod(cls, NS.sel_registerName(name), auto_cast imp, types)
+	_ = class_addMethod(cls, sel_registerName(name), imp, types)
 }
 
 @(private = "file")
 make_delegate_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
+	cls := objc_allocateClassPair(objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
 	if cls == nil {return objc_lookUpClass("VoxiverseDelegate")} 	// registered already
 	// Quitting (Cmd+Q, the Dock's Quit) asks the game, as the close button
 	// elsewhere: it decides when to stop.
@@ -598,7 +603,7 @@ make_delegate_class :: proc() -> NS.Class {
 			}),
 		"B@:@" + rect_encoding,
 	)
-	NS.objc_registerClassPair(cls)
+	objc_registerClassPair(cls)
 	return cls
 }
 
@@ -656,7 +661,7 @@ view_insert_text :: proc(text: ^NS.Object) {
 // only turns keyDown into text.
 @(private = "file")
 make_view_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(objc_lookUpClass("NSView"), "VoxiverseView", 0)
+	cls := objc_allocateClassPair(objc_lookUpClass("NSView"), "VoxiverseView", 0)
 	if cls == nil {return objc_lookUpClass("VoxiverseView")}
 	add_method(
 		cls,
@@ -753,10 +758,10 @@ make_view_class :: proc() -> NS.Class {
 		),
 		"Q@:{CGPoint=dd}",
 	)
-	if proto := NS.objc_getProtocol("NSTextInputClient"); proto != nil {
-		NS.class_addProtocol(cls, proto)
+	if proto := objc_getProtocol("NSTextInputClient"); proto != nil {
+		_ = class_addProtocol(cls, proto)
 	}
-	NS.objc_registerClassPair(cls)
+	objc_registerClassPair(cls)
 	return cls
 }
 
@@ -778,7 +783,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 			menu,
 			"addItemWithTitle:action:keyEquivalent:",
 			ns_string(name),
-			NS.sel_registerName(action) if action != "" else nil,
+			sel_registerName(action) if action != "" else nil,
 			ns_string(key),
 		)
 	}
@@ -1105,21 +1110,11 @@ native_vulkan_create_surface :: proc(
 // ---------------------------------------------------------------------------
 // Display info: Cocoa CGDisplay. Active displays only; the primary is index 0.
 
+// CGDisplayCopyLocalizedName is not reliably linked on the CI macOS SDK
+// (undefined _CGDisplayCopyLocalizedName); name displays by id instead.
 @(private = "file")
 cg_display_name :: proc(id: u32) -> string {
-	name := CGDisplayCopyLocalizedName(id)
-	if uintptr(name) == 0 {return ""}
-	defer CFRelease(name)
-	buf: [256]byte
-	if !CF.StringGetCString(
-		CF.String(CF.TypeRef(name)),
-		&buf[0],
-		CF.Index(len(buf) - 1),
-		CF.StringEncoding(0x08000100),
-	) {
-		return ""
-	}
-	return strings.clone_from_cstring(cast(cstring)&buf[0], context.temp_allocator) or_else ""
+	return fmt.tprintf("display %d", id)
 }
 
 @(private)
