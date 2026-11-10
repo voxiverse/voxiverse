@@ -135,13 +135,6 @@ Scene_Phase :: enum u8 {
 	Done,
 }
 
-// scene_freezes_frame_dt: a running scene's picture must not ride wall-clock
-// dt (starfield, avatar breath, holiday FX). Normal play (.Off) and a finished
-// scene (.Done) keep real frame times.
-scene_freezes_frame_dt :: proc(phase: Scene_Phase) -> bool {
-	return phase != .Off && phase != .Done
-}
-
 Scene_Run :: struct {
 	name:    string,
 	phase:   Scene_Phase,
@@ -149,6 +142,14 @@ Scene_Run :: struct {
 	counts:  Scene_Counts, // what the picture's frame drew (written beside it)
 	counted: bool,
 	menu:    bool, // a menu's scene: no world, its animations stand still
+}
+
+// scene_freezes_frame_dt: only a menu's scene stands still (every frame's step
+// is 0). Normal play keeps its frame times, and so does a world scene: what
+// fades or settles there (the held item's name, the eye's height) must finish
+// before the picture is taken.
+scene_freezes_frame_dt :: proc(scene: Scene_Run) -> bool {
+	return scene.menu
 }
 
 // Scene_Counts: what a scene's frame drew,
