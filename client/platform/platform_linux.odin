@@ -368,45 +368,31 @@ XLookupChars :: 2
 @(private)
 XLookupBoth :: 3
 
-// xim_destroy_callback: the IM disappeared (its server exited). Its ICs are
-// gone with it; clear the references so we do not use them later.
-@(private)
-xim_destroy_callback :: proc "c" (xim: xlib.XIM, client_data: rawptr, call_data: rawptr) {
-	n := (^Native_Window)(client_data)
-	if n != nil {
-		n.ic = nil
-		n.xim = nil
-	}
-}
-
-// ic_destroy_callback: the IC was destroyed underneath us (IM exiting or
-// reset). Do not touch it afterwards.
-@(private)
-ic_destroy_callback :: proc "c" (xim: xlib.XIM, client_data: rawptr, call_data: rawptr) {
-	n := (^Native_Window)(client_data)
-	if n != nil {n.ic = nil}
-}
+// XN_* are the C string keys Xlib's varargs APIs expect (XNQueryInputStyle, …).
+@(private = "file")
+XN_QUERY_INPUT_STYLE :: cstring("queryInputStyle")
+@(private = "file")
+XN_INPUT_STYLE :: cstring("inputStyle")
+@(private = "file")
+XN_CLIENT_WINDOW :: cstring("clientWindow")
+@(private = "file")
+XN_FOCUS_WINDOW :: cstring("focusWindow")
 
 // setup_xim opens the X input method and creates an input context (preedit
 // and status styles, the ones the app draws inside itself). On any failure
 // the window gets no IC and text input falls back to Latin-1.
+// Destroy callbacks are omitted: Inkling's Odin string/nil varargs made
+// XSetIMValues segfault in strcmp under xvfb (CI).
 @(private)
 setup_xim :: proc(w: ^Window) {
 	n := &w.native
 	styles: ^xlib.XIMStyles
 	n.xim = x.OpenIM(n.display, nil, nil, nil)
-	if n.xim != nil {
-		im_cb := xlib.XIMCallback {
-			client_data = n,
-			callback    = xim_destroy_callback,
-		}
-		x.SetIMValues(n.xim, "destroyCallback", &im_cb, nil)
-	}
 	if n.xim == nil {
 		log.info("platform no IM for this locale; text input will be Latin-1 only")
 		return
 	}
-	if x.GetIMValues(n.xim, "queryInputStyle", &styles, nil) != nil {
+	if x.GetIMValues(n.xim, XN_QUERY_INPUT_STYLE, &styles, cstring(nil)) != nil || styles == nil {
 		log.info("platform this IM has no supported styles; text input will be Latin-1 only")
 		x.CloseIM(n.xim)
 		n.xim = nil
@@ -427,22 +413,16 @@ setup_xim :: proc(w: ^Window) {
 		n.xim = nil
 		return
 	}
-	ic_cb := xlib.XICCallback {
-		client_data = n,
-		callback    = ic_destroy_callback,
-	}
 	style := xlib.XIMStyle(xlib.XIMPreeditNothing | xlib.XIMStatusNothing)
 	ic := x.CreateIC(
 		n.xim,
-		"inputStyle",
+		XN_INPUT_STYLE,
 		style,
-		"clientWindow",
+		XN_CLIENT_WINDOW,
 		n.window,
-		"focusWindow",
+		XN_FOCUS_WINDOW,
 		n.window,
-		"destroyCallback",
-		&ic_cb,
-		nil,
+		cstring(nil),
 	)
 	if ic == nil {
 		log.info("platform could not create an IC; text input will be Latin-1 only")
