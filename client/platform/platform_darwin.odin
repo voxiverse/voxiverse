@@ -28,23 +28,22 @@ foreign import carbon "system:Carbon.framework"
 @(require) foreign import coregraphics "system:CoreGraphics.framework"
 foreign import iokit "system:IOKit.framework"
 foreign import corefoundation "system:CoreFoundation.framework"
-// Local objc runtime: pulling these through NS/base:runtime trips the parallel
-// LLVM backend ("missing procedure 'objc_lookUpClass'") when several test
-// packages import platform at once.
-foreign import objc "system:objc"
 
 @(private = "file")
 msg :: intrinsics.objc_send
 
-@(private = "file", default_calling_convention = "c")
-foreign objc {
-	objc_lookUpClass :: proc(name: cstring) -> NS.Class ---
-	objc_allocateClassPair :: proc(superclass: NS.Class, name: cstring, extraBytes: uint) -> NS.Class ---
-	objc_registerClassPair :: proc(cls: NS.Class) ---
-	objc_getProtocol :: proc(name: cstring) -> rawptr ---
-	class_addMethod :: proc(cls: NS.Class, name: NS.SEL, imp: rawptr, types: cstring) -> bool ---
-	class_addProtocol :: proc(cls: NS.Class, protocol: rawptr) -> bool ---
-	sel_registerName :: proc(name: cstring) -> NS.SEL ---
+// objc_runtime_needed is never called; required, it is in every build. At
+// startup the program looks up every selector and class its messages name,
+// through the runtime's sel_registerName and objc_lookUpClass, and the pinned
+// compiler (dev-2026-10) keeps those two only for code that reaches an
+// intrinsics.objc_find_selector (or objc_find_class), not for objc_send. A
+// build that reaches message sends alone (a test package that gets to the
+// clipboard but not to the pads' objc_find_selector) made the compiler fail:
+// "missing procedure 'objc_lookUpClass'". Drop this when the pinned compiler
+// keeps them for objc_send itself.
+@(private = "file", require)
+objc_runtime_needed :: proc() {
+	_ = intrinsics.objc_find_selector("self")
 }
 
 Native_Window :: struct {
@@ -107,7 +106,7 @@ nobj: ^NS.Object // nil, typed for a message argument
 // object builds of the test package, so classes are looked up here.)
 @(private = "file")
 class_of :: proc(name: cstring) -> ^NS.Object {
-	return (^NS.Object)(objc_lookUpClass(name))
+	return (^NS.Object)(NS.objc_lookUpClass(name))
 }
 
 @(private = "file")
@@ -504,13 +503,13 @@ report_size :: proc(w: ^Window) {
 
 @(private = "file")
 add_method :: proc(cls: NS.Class, name: cstring, imp: rawptr, types: cstring) {
-	_ = class_addMethod(cls, sel_registerName(name), imp, types)
+	NS.class_addMethod(cls, NS.sel_registerName(name), auto_cast imp, types)
 }
 
 @(private = "file")
 make_delegate_class :: proc() -> NS.Class {
-	cls := objc_allocateClassPair(objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
-	if cls == nil {return objc_lookUpClass("VoxiverseDelegate")} 	// registered already
+	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
+	if cls == nil {return NS.objc_lookUpClass("VoxiverseDelegate")} 	// registered already
 	// Quitting (Cmd+Q, the Dock's Quit) asks the game, as the close button
 	// elsewhere: it decides when to stop.
 	add_method(
@@ -603,7 +602,7 @@ make_delegate_class :: proc() -> NS.Class {
 			}),
 		"B@:@" + rect_encoding,
 	)
-	objc_registerClassPair(cls)
+	NS.objc_registerClassPair(cls)
 	return cls
 }
 
@@ -661,8 +660,8 @@ view_insert_text :: proc(text: ^NS.Object) {
 // only turns keyDown into text.
 @(private = "file")
 make_view_class :: proc() -> NS.Class {
-	cls := objc_allocateClassPair(objc_lookUpClass("NSView"), "VoxiverseView", 0)
-	if cls == nil {return objc_lookUpClass("VoxiverseView")}
+	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSView"), "VoxiverseView", 0)
+	if cls == nil {return NS.objc_lookUpClass("VoxiverseView")}
 	add_method(
 		cls,
 		"acceptsFirstResponder",
@@ -758,10 +757,10 @@ make_view_class :: proc() -> NS.Class {
 		),
 		"Q@:{CGPoint=dd}",
 	)
-	if proto := objc_getProtocol("NSTextInputClient"); proto != nil {
-		_ = class_addProtocol(cls, proto)
+	if proto := NS.objc_getProtocol("NSTextInputClient"); proto != nil {
+		NS.class_addProtocol(cls, proto)
 	}
-	objc_registerClassPair(cls)
+	NS.objc_registerClassPair(cls)
 	return cls
 }
 
@@ -783,7 +782,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 			menu,
 			"addItemWithTitle:action:keyEquivalent:",
 			ns_string(name),
-			sel_registerName(action) if action != "" else nil,
+			NS.sel_registerName(action) if action != "" else nil,
 			ns_string(key),
 		)
 	}
