@@ -108,27 +108,31 @@ complete_first :: proc(arg: int, words: []string) -> []string {
 	return words if arg == 0 else nil
 }
 
+// The words complete_screen and complete_vars offer: globals, as the slices
+// they return outlive the call (a literal in the procedure would be on its stack).
+@(private = "file")
+SCREEN_WORDS := []string {
+	"title",
+	"game",
+	"menu",
+	"inventory",
+	"stats",
+	"options",
+	"universes",
+	"multiplayer",
+	"quit",
+}
+@(private = "file")
+VAR_WORDS := []string{"rules.", "debug.", "telemetry."}
+
 @(private)
 complete_screen :: proc(app: ^engine.App, arg: int, args: []string) -> []string {
-	return complete_first(
-		arg,
-		{
-			"title",
-			"game",
-			"menu",
-			"inventory",
-			"stats",
-			"options",
-			"universes",
-			"multiplayer",
-			"quit",
-		},
-	)
+	return complete_first(arg, SCREEN_WORDS)
 }
 
 @(private)
 complete_vars :: proc(app: ^engine.App, arg: int, args: []string) -> []string {
-	return complete_first(arg, {"rules.", "debug.", "telemetry."})
+	return complete_first(arg, VAR_WORDS)
 }
 
 @(private)
