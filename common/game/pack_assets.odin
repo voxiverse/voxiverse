@@ -67,7 +67,7 @@ png_texture :: proc(
 		return {}, fmt.aprintf("cannot be decoded as a PNG (%v)", err), false
 	}
 	defer image.destroy(img, context.temp_allocator)
-	bytes := img.pixels.buf[:]
+	bytes := img.pixels[:]
 	step := img.depth / 8
 	n := TEXTURE_SIZE * TEXTURE_SIZE
 	if img.width != TEXTURE_SIZE ||
