@@ -17,7 +17,16 @@ call :: proc(s: ^Server, procedure: proc(s: ^Server, data: rawptr), data: rawptr
 		return
 	}
 	done: sync.Sema
-	base.queue_push(&s.calls, Server_Call{procedure = procedure, data = data, done = &done})
+	// data and done stay on the caller's stack: it waits below until the
+	// server has run the call and posted done, so neither outlives it.
+	base.queue_push(
+		&s.calls,
+		Server_Call {
+			procedure = procedure,
+			data = rawptr(data),
+			done = (^sync.Sema)(rawptr(&done)),
+		},
+	)
 	sync.sema_wait(&done)
 }
 
