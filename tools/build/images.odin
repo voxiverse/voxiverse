@@ -1,6 +1,5 @@
 package build
 
-import "core:bytes"
 import "core:fmt"
 import "core:image"
 import "core:image/png"
@@ -245,7 +244,7 @@ picture_read :: proc(path: string) -> (p: Picture, ok: bool) {
 		if img != nil {image.destroy(img)}
 		return
 	}
-	return {img.width, img.height, bytes.buffer_to_bytes(&img.pixels)}, true
+	return {img.width, img.height, img.pixels[:]}, true
 }
 
 // scenes_of: the scenes' names in a scenes file's text (client/autopilot/scene.odin
