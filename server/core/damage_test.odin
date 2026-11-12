@@ -116,11 +116,11 @@ respawn_scenario :: proc(s: ^Server, _: rawptr) {
 	if alice == nil || bob == nil {return}
 	res.respawn_refused_alive = !respawn(s, bob)
 	// A kit: three stone, given once and not doubled.
-	survival := alice.mode
-	old := s.registry.game_modes[survival].kit
+	survival := &s.registry.game_modes[alice.mode]
+	old := survival.kit
 	stone := game.item_of_block(s.registry, .Stone)
-	s.registry.game_modes[survival].kit = {{item = stone, count = 3}}
-	defer s.registry.game_modes[survival].kit = old
+	survival.kit = {{item = stone, count = 3}}
+	defer survival.kit = old
 	alice.inventory = {}
 	respawn(s, alice)
 	res.after_respawn_health = alice.health
