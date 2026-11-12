@@ -115,7 +115,9 @@ enter_block :: proc(c: ^Compiler, bl: ^Block, is_loop: bool) {
 		continue_list = NO_JUMP,
 		continue_nact = -1,
 	}
-	fs.block = bl
+	// bl is the caller's local: every caller unlinks it (leave_block,
+	// loop_block_end or loop_end) before it returns.
+	fs.block = (^Block)(rawptr(bl))
 }
 
 @(private = "file")
