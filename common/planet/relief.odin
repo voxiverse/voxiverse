@@ -2,8 +2,7 @@
 // committed `assets/planet/earth_relief.bin` (imported by `tools/planet`).
 package planet
 
-import "core:bytes"
-import "core:compress/zlib"
+import "core:compress/deflate"
 import "core:encoding/endian"
 import "core:mem"
 
@@ -100,12 +99,13 @@ relief_decode :: proc(data: []u8, allocator := context.allocator) -> (r: Relief,
 	if version != RELIEF_VERSION || w32 == 0 || h32 == 0 || w32 > 8192 || h32 > 8192 {return}
 	width, height := int(w32), int(h32)
 
-	buf: bytes.Buffer
-	defer bytes.buffer_destroy(&buf)
-	if zlib.inflate(data[RELIEF_HEADER_SIZE:], &buf, expected_output_size = width * height * 2) !=
+	raw: [dynamic]u8
+	defer delete(raw)
+	// (expected_output_size is also the most it inflates: more is an error)
+	size := width * height * 2
+	if deflate.inflate_zlib(&raw, data[RELIEF_HEADER_SIZE:], expected_output_size = size) !=
 	   nil {return}
-	raw := bytes.buffer_to_bytes(&buf)
-	if len(raw) != width * height * 2 {return}
+	if len(raw) != size {return}
 
 	r = relief_make(width, height, allocator)
 	when ODIN_ENDIAN == .Little {

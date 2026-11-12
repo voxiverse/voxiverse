@@ -2,7 +2,7 @@
 # https://github.com/voxiverse/odinup
 
 [toolchain]
-odin = "dev-2026-10"
+odin = "dev-2026-11"
 
 # For working on the code (language server, and odinfmt for `build check`
 # and `build fmt`): `odinup install --dev`.

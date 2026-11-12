@@ -21,5 +21,5 @@ test_png_round_trip :: proc(t: ^testing.T) {
 	if load_err != nil {return}
 	defer image.destroy(img)
 	testing.expect(t, img.width == W && img.height == H && img.channels == 4 && img.depth == 8)
-	testing.expect(t, bytes.equal(img.pixels.buf[:], pixels), "pixels differ")
+	testing.expect(t, bytes.equal(img.pixels[:], pixels), "pixels differ")
 }
