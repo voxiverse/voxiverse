@@ -896,6 +896,9 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 			for pkg in TEST_PACKAGES {
 				append(&builds, [2]string{"test", pkg})
 			}
+			// The macOS-only window fixture (#+build darwin): the native check skips it
+			// anywhere else, so before this only CI's macOS runner ever compiled it.
+			append(&builds, [2]string{"build", "tests/window_fixture"})
 		}
 		for b in builds {
 			name := test_name(b[1]) // the whole path: client/music and tools/music share a last element (#101)
