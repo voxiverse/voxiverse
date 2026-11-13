@@ -189,6 +189,10 @@ Server :: struct {
 	flood:             Flood, // proto/flood: the round (health.odin, "proto/flood")
 }
 
+// proto/flood: whether servers started from here on are Flood servers. The client turns
+// it off for scripted and checked runs; a dedicated server leaves it on.
+flood_enabled := true
+
 // A rejected remote client is told why and dropped this many ticks later.
 @(private)
 KICK_DELAY :: game.TICK_RATE
@@ -209,7 +213,8 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	)
 	// proto/flood: every non-test server is a Flood server: a flat world, survival.
 	config := config
-	if !config.stepped {
+	flood := !config.stepped && flood_enabled
+	if flood {
 		config.generator = .Flat
 		config.mode = "survival"
 		config.no_natural_spawns = true
@@ -288,7 +293,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	capacity :=
 		per_player * s.config.max_players + max(config.workers, 1) * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
-	if !config.stepped {flood_init(s)}
+	if flood {flood_init(s)}
 	if !world_start(s.home) {
 		teardown(s, world = false)
 		return false

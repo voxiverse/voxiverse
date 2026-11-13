@@ -13,6 +13,7 @@ import "client:console"
 import "client:engine"
 import "common:base"
 import platform "common:platform"
+import "server:core"
 
 // Entry point: debugging setup, then the App's lifetime and frame loop.
 // `--frames N` exits after N frames and fails the run on any validation
@@ -94,9 +95,11 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 	}
 	check_pending := opts.check != ""
 	// proto/flood: no script given: host a Flood world, open to the LAN, at once.
-	if opts.exec == "" && opts.scene == "" && opts.benchmark == "" && opts.check == "" {
-		opts.exec = "singleplayer; wait_world; /open_lan"
-	}
+	// Any scripted or checked run is the plain game (CI's checks fly the real world);
+	// VX_FLOOD=1 forces Flood for a scripted run.
+	plain := opts.exec == "" && opts.scene == "" && opts.benchmark == "" && opts.check == ""
+	core.flood_enabled = plain || os.get_env("VX_FLOOD", context.temp_allocator) == "1"
+	if plain {opts.exec = "singleplayer; wait_world; /open_lan"}
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
 	if opts.scene != "" {
