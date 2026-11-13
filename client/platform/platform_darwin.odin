@@ -8,10 +8,13 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
+import CF "core:sys/darwin/CoreFoundation"
 import NS "core:sys/darwin/Foundation"
+import ObjC "core:sys/darwin/ObjectiveC"
 import "core:sys/posix"
 
 import "common:base"
+import AK "vendor:darwin/AppKit"
 import vk "vendor:vulkan"
 
 // macOS backend: AppKit through core:sys/darwin/Foundation (the Objective-C
@@ -106,7 +109,7 @@ nobj: ^NS.Object // nil, typed for a message argument
 // object builds of the test package, so classes are looked up here.)
 @(private = "file")
 class_of :: proc(name: cstring) -> ^NS.Object {
-	return (^NS.Object)(NS.objc_lookUpClass(name))
+	return (^NS.Object)(ObjC.objc_lookUpClass(name))
 }
 
 @(private = "file")
@@ -117,7 +120,7 @@ as_object :: proc(cls: NS.Class) -> ^NS.Object {
 @(private = "file")
 ns_string :: proc(s: string) -> ^NS.String {
 	c := strings.clone_to_cstring(s, context.temp_allocator)
-	return NS.String.alloc()->initWithCString(c, .UTF8)
+	return NS.String.alloc()->initWithCString_encoding(c, NS.UTF8StringEncoding)
 }
 
 // ---------------------------------------------------------------------------
@@ -401,7 +404,7 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	configure_moltenvk()
 
 	n.app = msg(^NS.Object, class_of("NSApplication"), "sharedApplication")
-	msg(NS.BOOL, n.app, "setActivationPolicy:", NS.ActivationPolicy.Regular)
+	msg(NS.BOOL, n.app, "setActivationPolicy:", AK.ApplicationActivationPolicy.Regular)
 
 	delegate_class := make_delegate_class()
 	view_class := make_view_class()
@@ -418,9 +421,9 @@ native_open :: proc(w: ^Window, title: string) -> bool {
 	// bigger than the screen's usable area.
 	screen := msg(^NS.Object, class_of("NSScreen"), "mainScreen")
 	visible := msg(NS.Rect, screen, "visibleFrame")
-	width := clamp(f64(w.width), 640, max(640, f64(visible.width)))
-	height := clamp(f64(w.height), 360, max(360, f64(visible.height)))
-	style := NS.WindowStyleMask{.Titled, .Closable, .Miniaturizable, .Resizable}
+	width := clamp(f64(w.width), 640, max(640, f64(visible.size.width)))
+	height := clamp(f64(w.height), 360, max(360, f64(visible.size.height)))
+	style := AK.WindowStyleMask{.Titled, .Closable, .Miniaturizable, .Resizable}
 	rect := NS.Rect{{0, 0}, {NS.Float(width), NS.Float(height)}}
 	n.window = msg(
 		^NS.Object,
@@ -489,7 +492,7 @@ report_size :: proc(w: ^Window) {
 	if n.window == nil || n.view == nil {return}
 	n.scale = f64(msg(NS.Float, n.window, "backingScaleFactor"))
 	bounds := msg(NS.Rect, n.view, "bounds")
-	pw, ph := i32(f64(bounds.width) * n.scale), i32(f64(bounds.height) * n.scale)
+	pw, ph := i32(f64(bounds.size.width) * n.scale), i32(f64(bounds.size.height) * n.scale)
 	if msg(NS.BOOL, n.window, "isMiniaturized") {pw, ph = 0, 0}
 	if pw > 0 && ph > 0 {
 		msg(nil, n.layer, "setContentsScale:", NS.Float(n.scale))
@@ -503,13 +506,13 @@ report_size :: proc(w: ^Window) {
 
 @(private = "file")
 add_method :: proc(cls: NS.Class, name: cstring, imp: rawptr, types: cstring) {
-	NS.class_addMethod(cls, NS.sel_registerName(name), auto_cast imp, types)
+	ObjC.class_addMethod(cls, ObjC.sel_registerName(name), auto_cast imp, types)
 }
 
 @(private = "file")
 make_delegate_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
-	if cls == nil {return NS.objc_lookUpClass("VoxiverseDelegate")} 	// registered already
+	cls := ObjC.objc_allocateClassPair(ObjC.objc_lookUpClass("NSObject"), "VoxiverseDelegate", 0)
+	if cls == nil {return ObjC.objc_lookUpClass("VoxiverseDelegate")} 	// registered already
 	// Quitting (Cmd+Q, the Dock's Quit) asks the game, as the close button
 	// elsewhere: it decides when to stop.
 	add_method(
@@ -602,7 +605,7 @@ make_delegate_class :: proc() -> NS.Class {
 			}),
 		"B@:@" + rect_encoding,
 	)
-	NS.objc_registerClassPair(cls)
+	ObjC.objc_registerClassPair(cls)
 	return cls
 }
 
@@ -626,7 +629,7 @@ fullscreen_changed :: proc(w: ^Window, fullscreen: bool) {
 }
 
 @(private = "file")
-view_key_down :: proc(view: ^NS.Object, event: ^NS.Event) {
+view_key_down :: proc(view: ^NS.Object, event: ^AK.Event) {
 	// Command-keys are shortcuts, not text.
 	if .Command in event->modifierFlags() {return}
 	pool := NS.AutoreleasePool.alloc()->init()
@@ -660,15 +663,15 @@ view_insert_text :: proc(text: ^NS.Object) {
 // only turns keyDown into text.
 @(private = "file")
 make_view_class :: proc() -> NS.Class {
-	cls := NS.objc_allocateClassPair(NS.objc_lookUpClass("NSView"), "VoxiverseView", 0)
-	if cls == nil {return NS.objc_lookUpClass("VoxiverseView")}
+	cls := ObjC.objc_allocateClassPair(ObjC.objc_lookUpClass("NSView"), "VoxiverseView", 0)
+	if cls == nil {return ObjC.objc_lookUpClass("VoxiverseView")}
 	add_method(
 		cls,
 		"acceptsFirstResponder",
 		rawptr(proc "c" (self: NS.id, cmd: NS.SEL) -> NS.BOOL {return true}),
 		"B@:",
 	)
-	add_method(cls, "keyDown:", rawptr(proc "c" (self: NS.id, cmd: NS.SEL, event: ^NS.Event) {
+	add_method(cls, "keyDown:", rawptr(proc "c" (self: NS.id, cmd: NS.SEL, event: ^AK.Event) {
 			context = callback_ctx
 			view_key_down((^NS.Object)(self), event)
 		}), "v@:@")
@@ -757,10 +760,10 @@ make_view_class :: proc() -> NS.Class {
 		),
 		"Q@:{CGPoint=dd}",
 	)
-	if proto := NS.objc_getProtocol("NSTextInputClient"); proto != nil {
-		NS.class_addProtocol(cls, proto)
+	if proto := ObjC.objc_getProtocol("NSTextInputClient"); proto != nil {
+		ObjC.class_addProtocol(cls, proto)
 	}
-	NS.objc_registerClassPair(cls)
+	ObjC.objc_registerClassPair(cls)
 	return cls
 }
 
@@ -782,7 +785,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 			menu,
 			"addItemWithTitle:action:keyEquivalent:",
 			ns_string(name),
-			NS.sel_registerName(action) if action != "" else nil,
+			ObjC.sel_registerName(action) if action != "" else nil,
 			ns_string(key),
 		)
 	}
@@ -808,7 +811,7 @@ make_menu :: proc(app: ^NS.Object, title: string) {
 	add_item(window_menu, "Zoom", "performZoom:", "")
 	full := add_item(window_menu, "Enter Full Screen", "toggleFullScreen:", "f")
 	// Ctrl+Cmd+F, as in other applications.
-	msg(nil, full, "setKeyEquivalentModifierMask:", NS.EventModifierFlags{.Control, .Command})
+	msg(nil, full, "setKeyEquivalentModifierMask:", AK.EventModifierFlags{.Control, .Command})
 	window_item := add_item(bar, "Window", "", "")
 	msg(nil, window_item, "setSubmenu:", window_menu)
 
@@ -830,10 +833,10 @@ native_poll :: proc(w: ^Window) {
 	past := msg(^NS.Object, class_of("NSDate"), "distantPast")
 	for {
 		event := msg(
-			^NS.Event,
+			^AK.Event,
 			n.app,
 			"nextEventMatchingMask:untilDate:inMode:dequeue:",
-			NS.EventMaskAny,
+			AK.EventMaskAny,
 			past,
 			NS.DefaultRunLoopMode,
 			NS.BOOL(true),
@@ -853,10 +856,10 @@ native_wait :: proc(w: ^Window) {
 	defer pool->drain()
 	until := msg(^NS.Object, class_of("NSDate"), "dateWithTimeIntervalSinceNow:", f64(0.1))
 	msg(
-		^NS.Event,
+		^AK.Event,
 		w.native.app,
 		"nextEventMatchingMask:untilDate:inMode:dequeue:",
-		NS.EventMaskAny,
+		AK.EventMaskAny,
 		until,
 		NS.DefaultRunLoopMode,
 		NS.BOOL(false),
@@ -864,7 +867,7 @@ native_wait :: proc(w: ^Window) {
 }
 
 @(private = "file")
-handle_event :: proc(w: ^Window, event: ^NS.Event) {
+handle_event :: proc(w: ^Window, event: ^AK.Event) {
 	n := &w.native
 	#partial switch event->type() {
 	case .KeyDown:
@@ -941,7 +944,7 @@ handle_event :: proc(w: ^Window, event: ^NS.Event) {
 }
 
 @(private = "file")
-mouse_button :: proc(event: ^NS.Event) -> Mouse_Button {
+mouse_button :: proc(event: ^AK.Event) -> Mouse_Button {
 	switch event->buttonNumber() {
 	case 0:
 		return .Left
@@ -959,14 +962,14 @@ mouse_button :: proc(event: ^NS.Event) -> Mouse_Button {
 // of the view, and whether it is on the view (a click on the title bar is
 // not the game's).
 @(private = "file")
-mouse_position :: proc(w: ^Window, event: ^NS.Event) -> (x, y: f32, inside: bool) {
+mouse_position :: proc(w: ^Window, event: ^AK.Event) -> (x, y: f32, inside: bool) {
 	n := &w.native
 	if rawptr(event->window()) != rawptr(n.window) {return 0, 0, false}
 	p := event->locationInWindow()
 	bounds := msg(NS.Rect, n.view, "bounds")
 	x = f32(f64(p.x) * n.scale)
-	y = f32((f64(bounds.height) - f64(p.y)) * n.scale)
-	inside = p.x >= 0 && p.y >= 0 && p.x < bounds.width && p.y < bounds.height
+	y = f32((f64(bounds.size.height) - f64(p.y)) * n.scale)
+	inside = p.x >= 0 && p.y >= 0 && p.x < bounds.size.width && p.y < bounds.size.height
 	return
 }
 
@@ -1025,7 +1028,7 @@ native_set_window_min_size :: proc(w: ^Window, width, height: i32) {
 native_set_fullscreen :: proc(w: ^Window, fullscreen: bool) {
 	n := &w.native
 	if n.window == nil {return}
-	style := msg(NS.WindowStyleMask, n.window, "styleMask")
+	style := msg(AK.WindowStyleMask, n.window, "styleMask")
 	if (.FullScreen in style) != fullscreen {msg(nil, n.window, "toggleFullScreen:", nobj)}
 }
 
@@ -1071,7 +1074,12 @@ native_window_position :: proc(w: ^Window) -> (x, y: i32, ok: bool) {
 native_set_always_on_top :: proc(w: ^Window, on: bool) {
 	n := &w.native
 	if n.window == nil {return}
-	msg(nil, n.window, "setLevel:", NS.WindowLevel.Floating if on else NS.WindowLevel.Normal)
+	msg(
+		nil,
+		n.window,
+		"setLevel:",
+		AK.WindowLevel(AK.FloatingWindowLevel if on else AK.NormalWindowLevel),
+	)
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,7 +1266,6 @@ CFStringRef :: rawptr
 
 @(private = "file", default_calling_convention = "c")
 foreign corefoundation {
-	CFStringCreateWithCString :: proc(alloc: rawptr, s: cstring, encoding: u32) -> CFStringRef ---
 	CFRelease :: proc(cf: rawptr) ---
 	CFDataGetBytePtr :: proc(data: rawptr) -> rawptr ---
 }
@@ -1323,11 +1330,13 @@ native_set_window_icon :: proc(w: ^Window, images: []Icon_Image) {
 
 @(private)
 native_set_keep_awake :: proc(w: ^Window, on: bool) {
-	UTF8 :: 0x08000100
+	UTF8 :: CF.StringEncoding(CF.StringBuiltInEncodings.UTF8)
 	ON :: 255 // kIOPMAssertionLevelOn
 	if on {
-		kind := CFStringCreateWithCString(nil, "PreventUserIdleDisplaySleep", UTF8)
-		name := CFStringCreateWithCString(nil, "Voxiverse: playing", UTF8)
+		// (The compiler's CoreFoundation package declares this one: a second
+		// declaration of the same symbol with other types is an error.)
+		kind := CFStringRef(CF.StringCreateWithCString(nil, "PreventUserIdleDisplaySleep", UTF8))
+		name := CFStringRef(CF.StringCreateWithCString(nil, "Voxiverse: playing", UTF8))
 		defer CFRelease(kind)
 		defer CFRelease(name)
 		if IOPMAssertionCreateWithName(kind, ON, name, &assertion) != 0 {
