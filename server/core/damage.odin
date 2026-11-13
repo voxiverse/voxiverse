@@ -30,6 +30,7 @@ Damage_Result :: enum u8 {
 // damage: hurt target by amount health points from source.
 damage :: proc(s: ^Server, target: ^Client, amount: f32, source: Damage_Source) -> Damage_Result {
 	if !(amount > 0) || target.state != .Playing || target.dead {return .Ignored}
+	if s.flood.on {return .Blocked} 	// proto/flood: only the water takes you out
 	abilities := game.derive_abilities(s.registry, target.mode, &target.inventory)
 	if .Invulnerable in abilities {return .Blocked}
 	if attacker, by_player := source.attacker.?; by_player {

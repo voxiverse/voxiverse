@@ -119,6 +119,10 @@ Client :: struct {
 	check:           Maybe(game.Prediction_Check), // its newest, until that input is applied
 	selection:       [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 	command:         string, // the text of the command admin is running ("" otherwise; journal actions record it)
+	flood_round:     u16, // proto/flood: the round it was placed in (flood.odin)
+	flood_in:        bool, // ... it plays that round
+	flood_out:       bool, // ... and is out (spectating)
+	flood_under:     int, // ticks its head has been under water
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about
@@ -201,6 +205,7 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 @(private)
 anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 	s := w.server
+	if flood_wants(w, pos) {return true}
 	for &c in s.clients {
 		if c.world == w && client_wants(&c, pos, s.config, margin) {return true}
 	}

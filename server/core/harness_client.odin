@@ -258,6 +258,7 @@ mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 		     .Entity_Motion,
 		     .Tally,
 		     .Island,
+		     .Flood,
 		     .Place:
 		}
 	}

@@ -237,7 +237,7 @@ net_apply :: proc(c: ^Net_Client, got: []game.Received) {
 		case .Mode:
 			delete(c.mode)
 			c.mode = strings.clone((^game.Mode_Record)(g.value).mode)
-		case .Rules, .Clock, .Variables, .Selection:
+		case .Rules, .Clock, .Variables, .Selection, .Flood:
 		case .Island:
 			c.island = (^game.Island)(g.value)^
 		case .Tally:

@@ -33,6 +33,7 @@ State_Kind :: enum u8 {
 	Tally,
 	Channel,
 	Island,
+	Flood, // proto/flood: the round's state (flood.odin)
 }
 
 Event_Kind :: enum u8 {
@@ -259,6 +260,7 @@ STATE_KINDS := [State_Kind]State_Kind_Info {
 	.Tally = {name = "tally", value = Tally},
 	.Channel = {name = "channel", value = Channel_Record, key = .Cell, write_through = true},
 	.Island = {name = "island", value = Island},
+	.Flood = {name = "flood", value = Flood_State},
 }
 
 @(rodata)

@@ -186,6 +186,7 @@ Server :: struct {
 	hash_root:         u64, // a stepped server's chain of tick hashes (state_hash.odin)
 	age_base:          u64, // the universe's ticks before this run (universe.cfg; age_of)
 	tick_us:           [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
+	flood:             Flood, // proto/flood: the round (flood.odin)
 }
 
 // A rejected remote client is told why and dropped this many ticks later.
@@ -206,6 +207,14 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config.view_height <= game.MAX_VIEW_HEIGHT &&
 		(config.workers > 0 || config.stepped),
 	)
+	// proto/flood: every non-test server is a Flood server: a flat world, survival.
+	config := config
+	if !config.stepped {
+		config.generator = .Flat
+		config.mode = "survival"
+		config.no_natural_spawns = true
+		config.spawn = FLOOD_SPAWN
+	}
 	// Field by field: a literal of the whole Server is built on the stack first (88 KB) and copied.
 	s^ = {}
 	s.config, s.local = config, local
@@ -279,6 +288,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	capacity :=
 		per_player * s.config.max_players + max(config.workers, 1) * MAX_IN_FLIGHT_PER_WORKER
 	s.capacity = capacity
+	if !config.stepped {flood_init(s)}
 	if !world_start(s.home) {
 		teardown(s, world = false)
 		return false
@@ -687,6 +697,7 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	tick_mark(s, "entities")
+	flood_tick(s) // proto/flood
 	for w in s.worlds {
 		rewind: {
 			base.profile_scope("rewind, gates and rollback")

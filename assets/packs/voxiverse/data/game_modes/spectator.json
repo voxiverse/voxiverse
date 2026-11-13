@@ -1,0 +1,7 @@
+{
+	"spectator": {
+		"abilities": ["fly", "invulnerable"],
+		"kit": [],
+		"rules": {}
+	}
+}

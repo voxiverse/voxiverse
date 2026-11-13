@@ -288,6 +288,13 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 // carved (where loaded), and what is near is thrown (sheep hurt).
 explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 	s := w.server
+	radius := radius
+	throw := f32(1)
+	if s.flood.on && s.flood.rule == .Heavy { 	// proto/flood
+		radius *= FLOOD_HEAVY_RADIUS
+		throw = FLOOD_HEAVY_PUSH
+	}
+	if s.flood.on {log.infof("flood explosion at=%v radius=%.1f throw=%.1f", center, radius, throw)}
 	record_world(s, w, .Explosion, n0 = i64(radius))
 	for i in players_near(w, center, 160 + PLAYER_MARGIN, SPAWN_HEIGHT) {
 		c := &s.clients[i]
@@ -303,18 +310,19 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		{action, .Explosion},
 	)
 	reach := 2 * radius
-	push :: proc(at, center: [3]f64, reach: f64) -> (impulse: [3]f32, ok: bool) {
+	push :: proc(at, center: [3]f64, reach: f64, throw: f32) -> (impulse: [3]f32, ok: bool) {
 		d := at - center
 		l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
 		if l >= reach {return}
 		if l < 1e-6 {d, l = {0, 1, 0}, 1}
-		strength := f32(1 - l / reach) * 16
+		strength := f32(1 - l / reach) * 16 * throw
 		dir := d / l
-		return {f32(dir.x) * strength, f32(dir.y) * strength + 4, f32(dir.z) * strength}, true
+		return {f32(dir.x) * strength, f32(dir.y) * strength + 4 * throw, f32(dir.z) * strength},
+			true
 	}
 	for i in players_near(w, center, reach + PLAYER_MARGIN, reach + PLAYER_MARGIN) {
 		c := &s.clients[i]
-		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
+		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach, throw); near {
 			c.player.velocity += impulse
 			disturb(s, c)
 			c.player.on_ground = false
@@ -345,7 +353,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		id := u32(fid)
 		h, ok := entity_find(w, id)
 		if !ok {continue}
-		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach)
+		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach, throw)
 		if !near || !game.kind_info(w.server.registry, entity_kind(w, h)).hittable {continue}
 		entity_set_velocity(w, h, entity_velocity(w, h) + impulse)
 		entity_set_on_ground(w, h, false)
