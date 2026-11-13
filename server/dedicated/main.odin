@@ -167,6 +167,7 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 		config.steam = &steam_server_state
 	}
 	defer if opts.steam {steam.shutdown(&steam_server_state)}
+	core.flood_enabled = true // proto/flood: a served universe is a Flood server
 	if !core.start(srv, config, {}) {return false}
 	catch_stop()
 	log.infof(

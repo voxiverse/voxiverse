@@ -189,9 +189,10 @@ Server :: struct {
 	flood:             Flood, // proto/flood: the round (health.odin, "proto/flood")
 }
 
-// proto/flood: whether servers started from here on are Flood servers. The client turns
-// it off for scripted and checked runs; a dedicated server leaves it on.
-flood_enabled := true
+// proto/flood: whether servers started from here on are Flood servers. Off unless a
+// program turns it on: the client on a plain run, the dedicated server when it serves
+// a universe. Benchmarks, checks and tools measure the plain game.
+flood_enabled := false
 
 // A rejected remote client is told why and dropped this many ticks later.
 @(private)
