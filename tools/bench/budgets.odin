@@ -38,7 +38,9 @@ BUDGET_LIMITS := [?]struct {
 	{.Save_Blocking, 1500},
 	{.Audit, 10_000},
 	{.Counters_Ratio, 6}, // measured at 2 to 3
-	{.Journal_Share, 5},
+	// Measured on CI: 0.8 % on Windows, 3.7 to 5.1 % on the macOS runner (main read
+	// 4.5 % there with one repetition at 4.9 %), so a limit of 5 failed by chance.
+	{.Journal_Share, 10},
 	{.Journal_Tick, 500},
 	{.Flood_Tick, 33_000}, // a tick
 	{.Rules_Tick, 16_000}, // half the tick: the old test's 8 ms, doubled for slow runners as the flood's is
