@@ -44,10 +44,10 @@ pump_until :: proc(
 @(private = "file")
 close_to :: proc(a, b: NS.Rect) -> bool {
 	return(
-		abs(a.x - b.x) < 1 &&
-		abs(a.y - b.y) < 1 &&
-		abs(a.width - b.width) < 1 &&
-		abs(a.height - b.height) < 1 \
+		abs(a.origin.x - b.origin.x) < 1 &&
+		abs(a.origin.y - b.origin.y) < 1 &&
+		abs(a.size.width - b.size.width) < 1 &&
+		abs(a.size.height - b.size.height) < 1 \
 	)
 }
 
