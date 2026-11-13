@@ -186,7 +186,7 @@ Server :: struct {
 	hash_root:         u64, // a stepped server's chain of tick hashes (state_hash.odin)
 	age_base:          u64, // the universe's ticks before this run (universe.cfg; age_of)
 	tick_us:           [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
-	flood:             Flood, // proto/flood: the round (flood.odin)
+	flood:             Flood, // proto/flood: the round (health.odin, "proto/flood")
 }
 
 // A rejected remote client is told why and dropped this many ticks later.

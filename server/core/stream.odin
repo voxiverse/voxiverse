@@ -119,7 +119,7 @@ Client :: struct {
 	check:           Maybe(game.Prediction_Check), // its newest, until that input is applied
 	selection:       [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 	command:         string, // the text of the command admin is running ("" otherwise; journal actions record it)
-	flood_round:     u16, // proto/flood: the round it was placed in (flood.odin)
+	flood_round:     u16, // proto/flood: the round it was placed in (health.odin, "proto/flood")
 	flood_in:        bool, // ... it plays that round
 	flood_out:       bool, // ... and is out (spectating)
 	flood_under:     int, // ticks its head has been under water

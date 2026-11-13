@@ -83,7 +83,7 @@ flood_hud :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		}
 	case .Reveal:
 		head: string
-		color := ui.Colort.text
+		color := t.text
 		switch f.result {
 		case .Won:
 			head, color = "ROUND WON", t.success

@@ -20,7 +20,7 @@ No damage except drowning. Each round has a hidden rule; it is revealed at the e
 - `/flood rule baseline|tide|rot|heavy` starts a new round under that rule; `random` clears it
 - F3 shows the debug overlay: the first (orange) line is the round, rule included
 
-**Tuning:** all constants are at the top of `server/core/flood.odin` (`FLOOD_*`): arena size
+**Tuning:** all constants are in `server/core/health.odin` after the "proto/flood" line (`FLOOD_*`): arena size
 and height, goal height, countdown/reveal/grace/drown seconds, seconds per water layer per
 rule, tide amplitude/period, rot delay/spread/splash, heavy-blast radius and throw. The arena
 generator is `arena_template` in the same file. HUD: `client/hud/flood.odin`.
