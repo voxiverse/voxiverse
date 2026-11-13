@@ -472,7 +472,7 @@ spectate :: proc(s: ^Server, c: ^Client, teleport: bool) {
 	c.flood_round = s.flood.round
 	c.flood_out = true
 	c.flood_under = 0
-	if mode, ok := game.mode_find(s.registry, "spectator"); ok {
+	if mode, ok := game.mode_find(s.registry, "flood_out"); ok {
 		set_game_mode(s, c, mode, {"flood", ""})
 	}
 	c.player.flying = true

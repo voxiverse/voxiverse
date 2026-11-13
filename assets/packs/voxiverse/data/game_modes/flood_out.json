@@ -1,5 +1,5 @@
 {
-	"spectator": {
+	"flood_out": {
 		"abilities": ["fly", "invulnerable"],
 		"kit": [],
 		"rules": {}
