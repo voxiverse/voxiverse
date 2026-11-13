@@ -86,6 +86,24 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		)
 	}
 	if s := app.session; s != nil && s.state == .Playing {
+		// proto/flood: the round, rule included (hidden everywhere else)
+		fl := s.flood
+		overlay_append(
+			&left_lines,
+			fmt.tprintf(
+				"FLOOD round %d %v  rule %s  water y=%d  t=%ds  alive %d/%d  on goal %d  seed %d",
+				fl.round,
+				fl.phase,
+				game.FLOOD_RULE_NAMES[fl.rule],
+				fl.level,
+				fl.seconds,
+				fl.alive,
+				fl.players,
+				fl.on_goal,
+				fl.seed,
+			),
+			t.log_warn,
+		)
 		p := s.camera.position
 		if coordinates_shown(s) {
 			overlay_append(

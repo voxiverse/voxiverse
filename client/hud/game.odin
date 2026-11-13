@@ -46,6 +46,7 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	health_bar(ctx, s)
 	hud_popup(app, ctx)
 	screen.market_hud_line(app, ctx)
+	flood_hud(app, ctx) // proto/flood
 }
 
 // game_menu: over the game (alone in our own world, the world stands still

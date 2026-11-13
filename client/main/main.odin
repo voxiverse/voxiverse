@@ -49,6 +49,7 @@ main :: proc() {
 }
 
 run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> bool {
+	opts := opts
 	app := new(engine.App)
 	defer free(app)
 	scenario: engine.Scenario
@@ -92,6 +93,10 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 		app.checking = true
 	}
 	check_pending := opts.check != ""
+	// proto/flood: no script given: host a Flood world, open to the LAN, at once.
+	if opts.exec == "" && opts.scene == "" && opts.benchmark == "" && opts.check == "" {
+		opts.exec = "singleplayer; wait_world; /open_lan"
+	}
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
 	if opts.scene != "" {

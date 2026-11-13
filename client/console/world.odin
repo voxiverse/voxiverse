@@ -37,6 +37,15 @@ register_world_commands :: proc(c: ^engine.Console) {
 	console_register(
 		c,
 		{
+			"fire",
+			"fire: launch one rocket where you look (proto/flood: for scripts)",
+			proc(app: ^engine.App, args: []string) {engine.session_fire(app.session)},
+		},
+		needs = {.World},
+	)
+	console_register(
+		c,
+		{
 			"use",
 			"use: the right button once on what is aimed at (a chest opens, a sheep is sheared)",
 			proc(app: ^engine.App, args: []string) {

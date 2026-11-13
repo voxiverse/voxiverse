@@ -319,7 +319,7 @@ enter_world :: proc(
 		{
 			no_natural_spawns = benchmark,
 			still_clouds = benchmark,
-			name = player_name(&app.settings),
+			name = flood_name(app),
 			key = app.account,
 			seed = seed,
 			mode = mode,
@@ -332,6 +332,14 @@ enter_world :: proc(
 			upload = upload_target(app),
 		},
 	)
+}
+
+// flood_name: proto/flood: an unset name becomes Player-<4 hex of the account>, so
+// friends who never set one do not collide ("that name is another account's").
+flood_name :: proc(app: ^App) -> string {
+	if base.var_text(&app.settings.name) != "" {return player_name(&app.settings)}
+	a := app.account.account
+	return fmt.tprintf("%s-%02x%02x", DEFAULT_NAME, a[0], a[1])
 }
 
 // upload_target: where this world's events go: the collector, if the player
@@ -361,7 +369,7 @@ join_server :: proc(app: ^App, address: string, password: string, choose := fals
 	start_session(
 		app,
 		{
-			name        = "" if choose else player_name(&app.settings), // "": the server's list
+			name        = "" if choose else flood_name(app), // "": the server's list
 			key         = app.account,
 			join        = Join{ep, password},
 			capture     = app.debug.net_capture,
