@@ -16,7 +16,7 @@ import "common:game"
 INFO :: game.Game_Info {
 	id          = "stopwatch",
 	name        = "Stopwatch",
-	description = "Stay in the world: your time runs from when you join; beat the longest stay.",
+	description = "Stay as long as you can: the longest stay is the record.",
 }
 
 // seconds: ticks as seconds of play.
