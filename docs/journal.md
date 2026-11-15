@@ -29,7 +29,7 @@ Where each path gets its action:
 | flowing water | `Update.action`: the action of the change that woke it; `action_world(w, .Liquid)` when woken by a chunk loading | Liquid |
 | random ticks, gates, grazing | `action_world(w, <system>)`: the world's own, one per system per tick | Random_Tick, Gate, Graze |
 | a pack's statement rule | `Rule`: the action of the change that woke it, else the world's | Rule |
-| a rule or a game mode changed | `journal_setting`: an action of its own with no blocks, the command text saying what | Setting |
+| a rule or a game mode changed | `journal_setting`: an action of its own with no blocks, the command text saying what, its actor the player who asked or the game (`game_rule`, `game_mode`) | Setting |
 | rollback, undo, redo | their own action | Rollback, Undo, Redo |
 | a game ([games.md](games.md)) | `game_act(s, w, system)`: an action of the game's (actor kind `Game`, its id), one per cause | the system it names |
 

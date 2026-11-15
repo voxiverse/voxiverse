@@ -9,6 +9,7 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+import "common:base"
 import "common:game"
 
 // A scripted client: joins, then flies in a straight line, keeping the
@@ -917,8 +918,8 @@ test_server_mspt_ring_buffer :: proc(t: ^testing.T) {
 }
 
 // What a game may call (docs/games.md) does what the list says: its block changes are
-// journalled as the game's, a mode by id is set as the game's, a teleport lands (or
-// flies), the eyes are in water or not, announce speaks to everyone.
+// journalled as the game's, a mode by id and a world rule are set as the game's, a
+// teleport lands (or flies), the eyes are in water or not, announce speaks to everyone.
 @(test)
 test_game_api :: proc(t: ^testing.T) {
 	sess := new(Session)
@@ -972,6 +973,18 @@ test_game_api :: proc(t: ^testing.T) {
 	teleport(s, c, {2.5, 12, 2.5}, {0, -1}, flying = true)
 	harness_step(&sess.h, 5)
 	testing.expect(t, c.player.flying && c.player.position.y > 11, "the flyer fell")
+
+	// A world rule, set as the game's and told to the player; a rule there is not.
+	testing.expect_value(t, game_rule(s, w, "explosion_size", "1.75"), base.Var_Error.None)
+	testing.expect_value(t, w.rules.explosion_size, 1.75)
+	setting, _ := action_info(&w.journal, w.journal.next_action - 1)
+	testing.expect_value(t, setting.kind, game.Actor_Kind.Game)
+	testing.expect_value(t, setting.actor, "probe")
+	testing.expect_value(t, setting.system, game.Edit_System.Setting)
+	testing.expect_value(t, setting.command, "rule explosion_size 1.75")
+	harness_step(&sess.h, 2)
+	testing.expect_value(t, sess.mirror.rules.explosion_size, 1.75)
+	testing.expect_value(t, game_rule(s, w, "nonesuch", "1"), base.Var_Error.Unknown_Name)
 
 	// The eyes in water, and out of it.
 	testing.expect(t, !head_in_water(s, c))

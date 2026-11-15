@@ -260,17 +260,32 @@ admin_time :: proc(s: ^Server, c: ^Client, args: []string) -> bool {
 
 NODE_RULE :: "voxiverse.command.rule"
 
-// rule_set: the one place a world rule changes (the command and the console's
-// Set_Rule both come here): set, journalled with who asked, the world told.
+// rule_set: a player sets a world rule (the command and the console's Set_Rule both
+// come here): rule_change, with the player as who asked.
 rule_set :: proc(s: ^Server, c: ^Client, w: ^World, name, value: string) -> base.Var_Error {
+	return rule_change(s, w, name, value, {.Character, client_name(c), false})
+}
+
+// game_rule: the game the server runs sets w's rule called name (as the rule command
+// names it: explosion_size) to value, as text: rule_change, with the game (by its id)
+// as who asked. The world's players are told at the end of the tick (the Rules
+// record). For a game (docs/games.md), which never writes a world's rules itself.
+game_rule :: proc(s: ^Server, w: ^World, name, value: string) -> base.Var_Error {
+	return rule_change(s, w, name, value, {.Game, s.config.game.id, false})
+}
+
+// rule_change: the one place a world rule changes: set, journalled with by, the world
+// told.
+@(private = "file")
+rule_change :: proc(s: ^Server, w: ^World, name, value: string, by: Actor) -> base.Var_Error {
 	table := game.rules_table()
 	err := base.var_set(table, &w.rules, rule_name(name), value)
 	if err == .None || err == .Out_Of_Range {
 		if err == .Out_Of_Range {log.warnf("server rule clamped name=%q value=%q", name, value)}
-		log.infof("server rule changed name=%s value=%s by=%s", name, value, client_name(c))
+		log.infof("server rule changed name=%s value=%s by=%s", name, value, by.name)
 		v, _ := base.var_find(table, rule_name(name))
 		text := fmt.tprintf("rule %s %s", name, base.var_format(table, &w.rules, v))
-		journal_setting(w, Actor{.Character, client_name(c), false}, text)
+		journal_setting(w, by, text)
 		if rule_name(name) == "rules.guest_role" {
 			for &other in s.clients {
 				if other.state == .Playing && other.world == w {refresh_grants(s, &other)}

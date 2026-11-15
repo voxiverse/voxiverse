@@ -53,6 +53,7 @@ makes it for games, documented where it is declared.
 | `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
 | `hotbar_select(s, c, slot)` | Put a hotbar slot (0 ..< `game.HOTBAR_SLOTS`) in a player's hand, as if it chose it; false for a slot out of range |
 | `head_in_water(s, c)` | A player's eyes are in water |
+| `game_rule(s, w, name, value)` | Change a world's rule (`explosion_size`, as the `rule` command names it; the value as text), journalled as the game's and told to the world's players |
 | `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
 | `block_at(w, p)` | Read a block (false: not loaded) |
 | `game_act(s, w, system)`, `Act` | A cause for the game's block changes, its actor the game: one per cause |
@@ -60,9 +61,10 @@ makes it for games, documented where it is declared.
 
 The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config` and
 `registry`; `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
-and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is a
-world's rules (`w.rules.explosion_size = 1.75`; the Rules record carries them to the players
-at the end of the tick) and, in `start`, its clock; everything else goes through the list.
+and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is, in
+`start`, a world's clock; everything else goes through the list. A world's rules change
+through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), journalled as the
+game's like a player's `rule` command is as theirs.
 
 ## The client's side: `engine.Game`
 
