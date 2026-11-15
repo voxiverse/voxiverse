@@ -169,3 +169,56 @@ test_listed_pack_is_found_among_candidates :: proc(t: ^testing.T) {
 	reg, _, problems = packs_registry("", {"testpack"})
 	testing.expect(t, reg == nil && len(problems) == 1, "a missing pack was not refused")
 }
+
+// A game's own pack (Game.pack) is loaded with the game alone: its mode is there and
+// it is sent to joining players as the universe's packs are; a client hosting the game
+// builds the same registry (registry_for_dir with game_packs); a pack not named for its
+// game is refused.
+@(test)
+test_game_pack :: proc(t: ^testing.T) {
+	PACK :: `{"format": 1, "namespace": "packed", "version": "1.0.0", "title": "Packed", "requires": ["voxiverse"]}`
+	MODES :: `{"out": {"abilities": ["fly", "spectate"], "kit": [], "rules": {}}}`
+	packed := Game {
+		id   = "packed",
+		pack = {
+			"packed",
+			{
+				{"pack.json", transmute([]u8)string(PACK)},
+				{"data/game_modes/out.json", transmute([]u8)string(MODES)},
+			},
+		},
+	}
+	h := new(Harness)
+	defer free(h)
+	config := harness_world()
+	config.game = packed
+	if !testing.expect(t, harness_start(h, config)) {return}
+	_, found := game.mode_find(h.srv.registry, "packed:out")
+	testing.expect(t, found, "the game's mode is not there")
+	testing.expect(t, len(h.srv.pack_blobs) == 1 && h.srv.pack_blobs[0].namespace == "packed")
+	here := registry_for_dir("", extra = game_packs(packed))
+	testing.expect(
+		t,
+		here != nil && here.hash == h.srv.registry.hash,
+		"a host builds other content",
+	)
+	if here != nil {game.registry_destroy(here)}
+	hash := h.srv.registry.hash
+	harness_stop(h)
+
+	// Without the game, its pack is not loaded.
+	if !testing.expect(t, harness_start(h, harness_world())) {return}
+	_, found = game.mode_find(h.srv.registry, "packed:out")
+	testing.expect(t, !found, "a game's pack loaded without the game")
+	testing.expect(t, h.srv.registry.hash != hash)
+	harness_stop(h)
+
+	// A game's pack is named for it.
+	packed.pack.namespace = "other"
+	config.game = packed
+	{
+		context.logger = log.nil_logger() // (the refusal is the point)
+		testing.expect(t, !harness_start(h, config), "a pack not named for its game loaded")
+	}
+	testing.expect(t, strings.contains(h.srv.refusal, "a game's pack is named for the game"))
+}

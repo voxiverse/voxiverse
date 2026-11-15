@@ -57,6 +57,44 @@ test_layout_game_shape :: proc(t: ^testing.T) {
 	testing.expect(t, !row_matches("games/<game>", "games/tag/client"))
 }
 
+// A game's pack is laid out as the base pack is: its folders follow the base pack's rows.
+@(test)
+test_layout_game_pack :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	rows := parse_layout(
+		"| `assets/packs/voxiverse` | manifest | `*.json` |\n" +
+		"| `assets/packs/voxiverse/data/game_modes` | modes | `*.json` |\n" +
+		"| `games` | the games | `README.md` |\n",
+	)
+	with_base :: proc(game_files: ..string) -> []string {
+		files := make([dynamic]string)
+		append(
+			&files,
+			"assets/packs/voxiverse/pack.json",
+			"assets/packs/voxiverse/data/game_modes/a.json",
+		)
+		append(&files, "games/README.md")
+		append(&files, ..game_files)
+		return files[:]
+	}
+	ok := with_base("games/tag/pack/pack.json", "games/tag/pack/data/game_modes/b.json")
+	testing.expect_value(t, len(lint_layout(rows, ok)), 0)
+	// A file its row does not allow, a folder the base pack has no row for.
+	testing.expect_value(t, len(lint_layout(rows, with_base("games/tag/pack/notes.txt"))), 1)
+	testing.expect_value(
+		t,
+		len(lint_layout(rows, with_base("games/tag/pack/data/blocks/a.json"))),
+		1,
+	)
+	testing.expect_value(
+		t,
+		layout_folder("games/tag/pack/data/sim"),
+		"assets/packs/voxiverse/data/sim",
+	)
+	testing.expect_value(t, layout_folder("games/tag/server"), "games/tag/server")
+	testing.expect_value(t, layout_folder("games/Tag/pack"), "games/Tag/pack")
+}
+
 @(test)
 test_scratch_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator

@@ -418,6 +418,7 @@ packs_changed :: proc(s: ^Session, v: game.Packs_Changed) {
 		s.config.save_dir,
 		base_dir = core.dev_base_dir(),
 		available = s.available,
+		extra = core.game_packs(s.config.host_game),
 	)
 	if fresh == nil {
 		fail(s, "the reloaded packs do not load here; see the log")

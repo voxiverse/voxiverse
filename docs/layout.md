@@ -36,7 +36,10 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    sides use; it imports `common:` and `core:`, never `server:` or `client:`),
    `games/<game>/server` its server part (it exports the game's `core.Game`; no `client:`)
    and `games/<game>/client` its client part (it exports the game's `engine.Game`), each
-   with its tests beside it; its pack will be `games/<game>/pack/...`. The packages are
+   with its tests beside it. Its pack, if it has one, is `games/<game>/pack`, laid out as a
+   pack ([packs.md](packs.md)): each of its folders follows the base pack's row of the same
+   path (`games/<game>/pack/data/game_modes` is `assets/packs/voxiverse/data/game_modes`), so
+   a game's pack adds no row either (`layout_folder` in the `layout` lint). The packages are
    named for the game, `package <game>`, `package <game>_server` and `package <game>_client`
    (as `server/steam` is `steam_server`), so no two games' parts share a name, and code
    names an import of one by it: `stopwatch.seconds(...)`, and in the lists of games

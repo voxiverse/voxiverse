@@ -287,6 +287,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		config.save_dir,
 		base_dir = core.dev_base_dir(),
 		available = s.available,
+		extra = core.game_packs(config.host_game),
 	); own != nil {
 		s.reg, s.reg_owned = own, true // (the universe's packs: the base's, and what it lists)
 		game.receiver_destroy(&s.rx) // (the receiver is made again over the new registry)

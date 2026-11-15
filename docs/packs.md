@@ -110,6 +110,10 @@ hot reload, packs over the wire and the pack fuzz targets.
 A universe's packs are fixed while it runs: `universe.cfg`'s `packs` line lists their namespaces
 (the base pack is always first and never listed), each in `<universe>/packs/<namespace>/`, and the
 registry is built once at start. It never grows, and no pack is sent in the middle of a session.
+A server that runs a game ([games.md](games.md)) loads the game's own pack after the universe's
+(`Game.pack`, named for the game; `game_packs` in `server/core/universe_packs.odin`), and only
+then: it is one more pack of the session, hashed into the registry and sent to joining players
+like the others, and a client hosting the game builds it in from its own copy.
 
 - **Archive.** `pack_archive_make` writes one pack as one canonical file: `VXPK`, a version,
   a file count, then per file in byte order of path the path, the size and the bytes, so the

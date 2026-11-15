@@ -13,9 +13,9 @@ shared package (`package <game>`: the rules, constants and record types both sid
 ## The server's side: `core.Game`
 
 A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its id
-(the folder's name), the types of its state, and the hooks the server calls (`Game` in
-`server/core/server.odin`). Whoever starts the server puts it in `Config.game`; the zero
-`Game` is no game, and the server is the engine alone. Every hook may be nil.
+(the folder's name), the types of its state, its pack (below), and the hooks the server calls
+(`Game` in `server/core/server.odin`). Whoever starts the server puts it in `Config.game`; the
+zero `Game` is no game, and the server is the engine alone. Every hook may be nil.
 
 | Hook | When | Thread |
 |---|---|---|
@@ -104,6 +104,30 @@ tests run it on a stepped server with the harness's mirror client; its client pa
 play it whole, a session joining the server part over the harness's network and drawing its
 HUD, the one place a part imports another (the `import` lint lets a client part's tests
 import its server part). `voxiverse --game stopwatch` plays it in a world of our own.
+
+## The game's pack
+
+A game may bring content as data, a pack of its own ([packs.md](packs.md)) in
+`games/<game>/pack/`, named for the game (`pack.json`'s namespace and the folder: its ids read
+`<game>:<name>`), laid out as any pack ([layout.md](layout.md), rule 6). Its shared package
+names the files in a constant `game.Pack_Source`, each `#load`ed (the executable carries it, as
+it carries the base pack), and its server part puts it in `core.Game.pack`:
+
+```odin
+// games/flood/pack.odin (package flood)
+PACK :: game.Pack_Source {
+	namespace = "flood",
+	files = {
+		{"pack.json", #load("pack/pack.json")},
+		{"data/game_modes/modes.json", #load("pack/data/game_modes/modes.json")},
+	},
+}
+```
+
+The server loads it after the universe's packs only in a session that plays the game
+(`core.game_packs`); a pack not named for its game is refused at start. It is hashed into the
+registry and sent to joining players as any pack is, so a client without the game still builds
+the same content; a client hosting the game builds it in from the same constant.
 
 ## The game's state
 

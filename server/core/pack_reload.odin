@@ -126,7 +126,7 @@ reload_build :: proc(s: ^Server) {
 	reg, sources, problems := packs_registry(
 		s.store.dir,
 		s.store.packs,
-		s.config.extra_packs,
+		game_packs(s.config.game, s.config.extra_packs),
 		s.reload.base_dir,
 		s.config.available_packs,
 	)

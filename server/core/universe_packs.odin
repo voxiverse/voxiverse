@@ -38,16 +38,26 @@ Pack_Candidate :: struct {
 }
 
 // universe_registry builds s.registry: the base pack, the universe's listed
-// packs, then config.extra_packs. Every problem is logged (and s.refusal says
-// the first), and false means the universe does not start.
+// packs, the game's pack, then config.extra_packs (game_packs). Every problem is
+// logged (and s.refusal says the first), and false means the universe does not start.
 universe_registry :: proc(s: ^Server) -> bool {
 	base_dir := ""
 	if s.config.pack_watch {base_dir = dev_base_dir()}
 	s.reload.base_dir = strings.clone(base_dir)
+	g := s.config.game
+	if g.pack.namespace != "" && g.pack.namespace != g.id {
+		s.refusal = fmt.tprintf(
+			"the game %s's pack is called %s: a game's pack is named for the game",
+			g.id,
+			g.pack.namespace,
+		)
+		log.errorf("server packs %s", s.refusal)
+		return false
+	}
 	reg, sources, problems := packs_registry(
 		s.store.dir,
 		s.store.packs,
-		s.config.extra_packs,
+		game_packs(g, s.config.extra_packs),
 		base_dir,
 		s.config.available_packs,
 	)
@@ -60,6 +70,16 @@ universe_registry :: proc(s: ^Server) -> bool {
 	pack_blobs_make(s, sources)
 	log.infof("server packs loaded count=%d hash=%x", len(reg.packs), reg.hash)
 	return true
+}
+
+// game_packs: the packs a session loads after its universe's own: its game's pack
+// (Game.pack, when it has one), then extra (temp allocator). A game's pack is loaded
+// only where that game is played, and is sent to joining players like any other.
+game_packs :: proc(g: Game, extra: []game.Pack_Source = nil) -> []game.Pack_Source {
+	all := make([dynamic]game.Pack_Source, context.temp_allocator)
+	if g.pack.namespace != "" {append(&all, g.pack)}
+	append(&all, ..extra)
+	return all[:]
 }
 
 // packs_registry: the registry of the base pack, the packs listed (the
@@ -220,13 +240,15 @@ universe_blocks_check :: proc(s: ^Server) -> bool {
 }
 
 // registry_for_dir: a registry of its own for the universe in dir (as the
-// server there builds it), for a client that plays it here. nil if the
+// server there builds it), for a client that plays it here. extra: the packs
+// after the universe's (game_packs of the game it plays). nil if the
 // universe's packs do not load (the server says why when it starts).
 registry_for_dir :: proc(
 	dir: string,
 	allocator := context.allocator,
 	base_dir := "",
 	available: []Pack_Candidate = nil,
+	extra: []game.Pack_Source = nil,
 ) -> ^game.Registry {
 	text := ""
 	if dir != "" {
@@ -240,7 +262,7 @@ registry_for_dir :: proc(
 	reg, _, _ := packs_registry(
 		dir,
 		packs_parse(value, context.temp_allocator),
-		nil,
+		extra,
 		base_dir,
 		available,
 	)

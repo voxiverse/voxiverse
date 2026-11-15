@@ -79,7 +79,7 @@ Config :: struct {
 	journal_max_bytes:     u64, // tests: the journal directory's size limit (0: JOURNAL_MAX_BYTES)
 	steam:                 ^steam_server.Server, // checks joining players' Steam tickets (nil or off: tickets are ignored); the caller opens and shuts it
 	watchdog_seconds:      int, // kill on a deadlocked tick (>0: seconds, default 60 on dedicated, 0: off)
-	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
+	extra_packs:           []game.Pack_Source, // packs besides the universe's own and the game's (tests, tools), loaded last
 	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
 	game:                  Game, // the game the server runs (games/; zero: none, the engine alone)
 }
@@ -101,6 +101,7 @@ Game :: struct {
 	joined:       proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
 	left:         proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
 	command:      proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
+	pack:         game.Pack_Source, // its own pack (games/<game>/pack, named for the game; its shared package's): loaded only where it is played (game_packs)
 }
 
 // game_state: the game's state for the session, as the type it declared

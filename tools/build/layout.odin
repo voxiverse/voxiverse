@@ -71,14 +71,30 @@ row_matches :: proc(row, folder: string) -> bool {
 	}
 }
 
+// GAME_PACK_AS: a game's pack (`games/<game>/pack`) is laid out as a pack is, so each of
+// its folders follows the base pack's row of the same path (`games/<game>/pack/data/blocks`
+// is `assets/packs/voxiverse/data/blocks`): a game's pack adds no row either.
+GAME_PACK_AS :: "assets/packs/voxiverse"
+
+// layout_folder: the folder whose row covers folder: a game's pack folder is the base
+// pack's of the same path (GAME_PACK_AS), any other is itself.
+layout_folder :: proc(folder: string) -> string {
+	parts := strings.split_n(folder, "/", 4, context.temp_allocator)
+	if len(parts) < 3 || parts[0] != "games" || !is_game_name(parts[1]) || parts[2] != "pack" {
+		return folder
+	}
+	if len(parts) == 3 {return GAME_PACK_AS}
+	return strings.concatenate({GAME_PACK_AS, "/", parts[3]}, context.temp_allocator)
+}
+
 // folder_of: the folder a tracked path is in ("." for the root).
 folder_of :: proc(path: string) -> string {
 	if slash := strings.last_index_byte(path, '/'); slash >= 0 {return path[:slash]}
 	return "."
 }
 
-// lint_layout: every tracked file is in a listed folder (or one of a listed shape) and
-// matches one of its patterns.
+// lint_layout: every tracked file is in a listed folder (or one of a listed shape, or a
+// game's pack folder: layout_folder) and matches one of its patterns.
 lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 	found := make([dynamic]string)
 	unlisted := make(map[string]bool)
@@ -87,7 +103,7 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 		name := path[len(folder) + 1:] if folder != "." else path
 		row: ^Layout_Row
 		for &r in rows {
-			if row_matches(r.folder, folder) {row = &r; break}
+			if row_matches(r.folder, layout_folder(folder)) {row = &r; break}
 		}
 		if row == nil {
 			if !unlisted[folder] {
