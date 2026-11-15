@@ -16,7 +16,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 39
+PROTOCOL_VERSION :: 40
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -37,7 +37,7 @@ Hello :: struct {
 	protocol:  u32,
 	account:   Account,
 	character: string, // view into the message; name_valid, or ""
-	schema:    u64, // schema_hash of the state kinds the client knows (schema.odin)
+	schema:    u64, // the hash of the engine's state kinds (Schema.engine_hash: the game's are in Welcome's)
 	steam_id:  u64, // the player's SteamID (0: not joining with Steam; then no ticket)
 	ticket:    []u8, // their Steam auth ticket (view into the message; at most MAX_STEAM_TICKET)
 }
@@ -451,10 +451,31 @@ Welcome :: struct {
 	address:     Address, // the world the player is in
 	content:     u64, // the server's registry hash (registry.hash): its blocks, items, recipes...
 	packs:       string, // the universe's packs, "namespace@version" comma separated, in load order
+	game:        string, // the game the server runs, by id ("": none, the engine alone); game_id_valid
+	schema:      u64, // the hash of every state kind, the game's too (Hello's has the engine's alone)
 }
 
 // MAX_PACKS_TEXT: the longest Welcome.packs.
 MAX_PACKS_TEXT :: 2048
+
+// MAX_GAME_ID: the longest game id (a folder name of games/).
+MAX_GAME_ID :: 32
+
+// game_id_valid: an id is a game's folder name, singular snake_case: a lower-case
+// letter, then lower-case letters, digits and underscores; or "" (no game).
+game_id_valid :: proc(id: string) -> bool {
+	if len(id) > MAX_GAME_ID {return false}
+	for ch, i in transmute([]u8)id {
+		switch ch {
+		case 'a' ..= 'z':
+		case '0' ..= '9', '_':
+			if i == 0 {return false}
+		case:
+			return false
+		}
+	}
+	return true
+}
 
 // World_Changed: the player travelled to another world (its address and
 // rules): drop everything of the last one. Its chunks, entities and the
@@ -1008,6 +1029,8 @@ encode_server :: proc(w: ^Writer, m: Server_Message, blocks: ^Chunk_Blocks = nil
 		write_address(w, v.address)
 		write_fixed64(w, v.content)
 		write_string(w, v.packs)
+		write_string(w, v.game)
+		write_fixed64(w, v.schema)
 	case World_Changed:
 		write_u8(w, u8(Server_Kind.World_Changed))
 		write_address(w, v.address)
@@ -1358,7 +1381,10 @@ decode_server :: proc(
 		w.address = read_address(&r)
 		w.content = read_fixed64(&r)
 		w.packs = read_string(&r, MAX_PACKS_TEXT)
-		if w.view_radius == 0 ||
+		w.game = read_string(&r, MAX_GAME_ID)
+		w.schema = read_fixed64(&r)
+		if !game_id_valid(w.game) ||
+		   w.view_radius == 0 ||
 		   w.view_radius > MAX_VIEW_RADIUS ||
 		   w.view_height == 0 ||
 		   w.view_height > MAX_VIEW_HEIGHT {

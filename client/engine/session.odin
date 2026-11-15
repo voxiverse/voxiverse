@@ -320,7 +320,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 			game.PROTOCOL_VERSION,
 			s.config.key.account,
 			s.config.name,
-			s.schema.hash,
+			s.schema.engine_hash,
 			0,
 			nil,
 		},

@@ -101,8 +101,9 @@ handshake and checked by the client.
   client replica on purpose, so authority stays honest. Over the network, `common/netcode` is
   our reliability layer on UDP: acknowledgement bits, reliable ordered messages with
   fragmentation, unreliable latest-wins messages, a byte-rate limit.
-- The protocol has a version handshake (`Hello` carries the protocol and the schema hash;
-  `Welcome` carries the protocol, tick rate, rules, interest area, registry hash and pack list),
+- The protocol has a version handshake (`Hello` carries the protocol and the hash of the
+  engine's state kinds; `Welcome` carries the protocol, tick rate, rules, interest area,
+  registry hash, pack list, the game the server runs and the hash of every state kind),
   validated decoding (with Steam, `Hello` also carries the SteamID and an auth ticket, which a
   server with Steam checks and links to the account: [server.md](server.md)), and palette + RLE chunk encoding. A client joining a server fetches the
   packs it lacks ([packs.md](packs.md)).
@@ -114,15 +115,18 @@ Server-to-client state is **records** of typed **state kinds** (a value type, a 
 `game/state_kinds.odin`) and one-off **events**, encoded by one codec derived by reflection
 from the value types (field tags give string limits and the `acked` field). Adding a replicated
 value is a struct, an entry in the table and the code that puts it; the codec, the Wireshark
-dissector's table (`build schema`) and the wire tests follow from the types.
+dissector's table (`build schema`) and the wire tests follow from the types. A game declares
+its own kinds as data, which follow the engine's in the session's schema
+([games.md](games.md)).
 - Two lanes: reliable records are deltas against the last value sent; snapshot records (motion)
   are deltas against the newest snapshot the client acknowledged (`SNAPSHOT_RING` = 32 kept
   baselines, sent as at most 8 unreliable packets).
 - Keyed kinds are rebuilt every tick: what the server does not put is removed. Values travel
   exactly (no quantization).
-- The schema hash is checked when a client joins. The handshake, answers to one client's
-  requests and the bulk chunk streams stay plain messages; client-to-server messages are not
-  state.
+- The schema hash is checked when a client joins: the server checks the engine's kinds' in
+  `Hello`, the client every kind's (the game's too) in `Welcome`. The handshake, answers to one
+  client's requests and the bulk chunk streams stay plain messages; client-to-server messages
+  are not state.
 - Remote entities and players are drawn `INTERPOLATION_TICKS` (3) behind the newest update,
   interpolated, not predicted.
 

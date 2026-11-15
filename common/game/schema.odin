@@ -65,6 +65,15 @@ Event_Kind_Info :: struct {
 	check:   proc(reg: ^Registry, value: rawptr) -> bool,
 }
 
+// Game_Kinds: the state and event kinds a game replicates besides the engine's
+// (docs/games.md), declared as data in its shared package. A kind's name starts with
+// the game's id and a dot, and its value type is its own: the type names the kind
+// when the game puts a record or reads one.
+Game_Kinds :: struct {
+	states: []State_Kind_Info,
+	events: []Event_Kind_Info,
+}
+
 Field_Type :: enum u8 {
 	Bool,
 	Uint,
@@ -106,10 +115,11 @@ Schema_Kind :: struct {
 }
 
 Schema :: struct {
-	kinds:     []Schema_Kind, // state kinds, then event kinds
-	n_states:  int,
-	hash:      u64,
-	allocator: mem.Allocator,
+	kinds:       []Schema_Kind, // the engine's state kinds, its event kinds, then the game's (Game_Kinds) likewise
+	engine:      int, // kinds[:engine] are the engine's, kinds[engine:] the game's
+	engine_hash: u64, // the hash of the engine's kinds alone (what a client knows before it knows the game)
+	hash:        u64, // of every kind
+	allocator:   mem.Allocator,
 }
 
 Schema_Error :: struct {
@@ -122,55 +132,87 @@ schema_error_text :: proc(e: Schema_Error) -> string {
 	return fmt.tprintf("%s: %s: %s", e.kind, e.path, e.reason)
 }
 
-// schema_make builds the schema of kinds; the error (if any) names the first
-// field that cannot be replicated.
+// schema_make builds the schema of kinds: states and events, then a game's (ids
+// follow in that order); the error (if any) names the first field that cannot be
+// replicated.
 schema_make :: proc(
 	states: []State_Kind_Info,
 	events: []Event_Kind_Info,
+	game := Game_Kinds{},
 	allocator := context.allocator,
 ) -> (
 	s: Schema,
 	err: Schema_Error,
 ) {
 	s.allocator = allocator
-	s.n_states = len(states)
-	s.kinds = make([]Schema_Kind, len(states) + len(events), allocator)
-	for info, i in states {
-		k := &s.kinds[i]
-		k.info, k.id = info, i
-		if err = kind_build(k, allocator); err.reason != "" {
-			schema_destroy(&s)
-			return {}, err
+	s.engine = len(states) + len(events)
+	s.kinds = make([]Schema_Kind, s.engine + len(game.states) + len(game.events), allocator)
+	next := 0
+	add_states :: proc(s: ^Schema, next: ^int, infos: []State_Kind_Info) -> Schema_Error {
+		for info in infos {
+			k := &s.kinds[next^]
+			k.info, k.id = info, next^
+			next^ += 1
+			if err := kind_build(k, s.allocator); err.reason != "" {return err}
 		}
+		return {}
 	}
-	for e, i in events {
-		k := &s.kinds[len(states) + i]
-		k.info = {
-			name        = e.name,
-			value       = e.value,
-			version     = e.version,
-			check       = e.check,
-			max_records = 1,
+	add_events :: proc(s: ^Schema, next: ^int, infos: []Event_Kind_Info) -> Schema_Error {
+		for e in infos {
+			k := &s.kinds[next^]
+			k.info = {
+				name        = e.name,
+				value       = e.value,
+				version     = e.version,
+				check       = e.check,
+				max_records = 1,
+			}
+			k.id, k.is_event = next^, true
+			next^ += 1
+			if err := kind_build(k, s.allocator); err.reason != "" {return err}
 		}
-		k.id, k.is_event = len(states) + i, true
-		if err = kind_build(k, allocator); err.reason != "" {
-			schema_destroy(&s)
-			return {}, err
-		}
+		return {}
+	}
+	err = add_states(&s, &next, states)
+	if err.reason == "" {err = add_events(&s, &next, events)}
+	if err.reason == "" {err = add_states(&s, &next, game.states)}
+	if err.reason == "" {err = add_events(&s, &next, game.events)}
+	if err.reason != "" {
+		schema_destroy(&s)
+		return {}, err
 	}
 	for a, i in s.kinds {
 		for b in s.kinds[i + 1:] {
-			if a.name == b.name {
-				schema_destroy(&s)
-				return {}, {a.name, "", "two kinds have this name"}
+			switch {
+			case a.name == b.name:
+				err = {a.name, "", "two kinds have this name"}
+			case i >= s.engine && a.value == b.value:
+				err = {b.name, "", "a game's kinds have a value type each"}
+			case:
+				continue
 			}
+			schema_destroy(&s)
+			return {}, err
 		}
 	}
-	text := schema_text(&s)
+	s.engine_hash = text_hash(schema_text(&s, s.kinds[:s.engine]))
+	s.hash = text_hash(schema_text(&s))
+	return s, {}
+}
+
+@(private = "file")
+text_hash :: proc(text: string) -> u64 {
 	h := hasher_make()
 	hasher_bytes(&h, transmute([]u8)text)
-	s.hash = hasher_finish(h)
-	return s, {}
+	return hasher_finish(h)
+}
+
+// game_kind: the id of the game's kind (one of kinds[engine:]) whose value type is value.
+game_kind :: proc(s: ^Schema, value: typeid) -> (kind: int, found: bool) {
+	for k in s.kinds[s.engine:] {
+		if k.value == value {return k.id, true}
+	}
+	return
 }
 
 schema_destroy :: proc(s: ^Schema) {
@@ -494,12 +536,16 @@ type_text :: proc(sb: ^strings.Builder, ti: ^runtime.Type_Info) {
 	}
 }
 
-// schema_text writes the schema, one line per kind and per field, in kind
-// order: the text its hash is taken over, and what a person reads to see how
-// two versions differ.
-schema_text :: proc(s: ^Schema, allocator := context.temp_allocator) -> string {
+// schema_text writes the schema (or some of its kinds), one line per kind and per
+// field, in kind order: the text its hash is taken over, and what a person reads to
+// see how two versions differ.
+schema_text :: proc(
+	s: ^Schema,
+	kinds: []Schema_Kind = nil,
+	allocator := context.temp_allocator,
+) -> string {
 	sb := strings.builder_make(allocator)
-	for k in s.kinds {
+	for k in (kinds if kinds != nil else s.kinds) {
 		if k.is_event {
 			fmt.sbprintfln(&sb, "event %s %d", k.name, k.version)
 		} else {

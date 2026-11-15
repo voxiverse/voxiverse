@@ -71,6 +71,8 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 			address = w.address,
 			content = s.registry.hash,
 			packs = packs_text(s.registry),
+			game = s.config.game.id,
+			schema = s.schema.hash,
 		},
 	)
 	replica_seed(s, c) // (the rules came with the Welcome)

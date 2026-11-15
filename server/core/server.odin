@@ -91,6 +91,7 @@ Config :: struct {
 // server's, in its tick.
 Game :: struct {
 	id:           string, // its folder's name in games/ (the dedicated server's --game)
+	kinds:        game.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
 	server_state: typeid, // its state for the session (game_state): zero at start; nil: none
 	client_state: typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
 	configure:    proc(config: ^Config), // before anything else: may change the config
@@ -254,7 +255,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	// Field by field: a literal of the whole Server is built on the stack first (88 KB) and copied.
 	s^ = {}
 	s.config, s.local = config, local
-	s.schema = game.game_schema()
+	s.schema = game.game_schema(config.game.id, config.game.kinds)
 	assert(config.perturb.what == .None || config.stepped, "perturb is for stepped servers")
 	if s.config.max_players <= 0 {s.config.max_players = DEFAULT_MAX_PLAYERS}
 	s.config.max_players = min(s.config.max_players, game.MAX_PLAYERS)
@@ -953,13 +954,13 @@ handle :: proc(s: ^Server, c: ^Client, p: []u8) {
 			disconnect(s, c, "protocol version mismatch")
 			return
 		}
-		if v.schema != s.schema.hash {
+		if v.schema != s.schema.engine_hash {
 			disconnect(
 				s,
 				c,
 				fmt.tprintf(
 					"this server runs a different version of the game (state schema %016x vs %016x)",
-					s.schema.hash,
+					s.schema.engine_hash,
 					v.schema,
 				),
 			)

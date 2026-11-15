@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "core:testing"
 
+import "common:game"
+import "games:stopwatch"
 import "server:core"
 
 // The game on a stepped server with the local player: every hook runs, and both
@@ -69,6 +71,36 @@ test_stopwatch_hooks :: proc(t: ^testing.T) {
 	stopped := false
 	for l in lines {stopped ||= strings.has_prefix(l, "stopwatch stopped ")}
 	testing.expect(t, stopped, "stop did not report")
+}
+
+// The game's record crosses the wire: the mirror, a client with the game's kinds,
+// is told its time once a second; and a schema with the game's kinds hashes apart
+// from the engine's alone, so a client without them is refused (Welcome's hash).
+@(test)
+test_stopwatch_replicates :: proc(t: ^testing.T) {
+	sess := new(core.Session)
+	defer free(sess)
+	config := core.harness_world()
+	config.game = GAME
+	if !testing.expect(t, core.session_start(sess, {}, false, with = config)) {return}
+	defer core.session_stop(sess)
+	engine := game.game_schema(allocator = context.temp_allocator)
+	testing.expect(t, sess.mirror.schema.hash != engine.hash, "the game's kinds are not hashed")
+	testing.expect_value(t, sess.mirror.schema.engine_hash, engine.hash)
+
+	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
+	_, ok := core.harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	core.harness_step(&sess.h, 2)
+	times := core.mirror_game_record(&sess.mirror, stopwatch.Times)
+	if !testing.expect(t, times != nil, "no Times on joining") {return}
+	testing.expect_value(t, times^, stopwatch.Times{})
+
+	// Three seconds on, the time has run with the server's.
+	core.harness_step(&sess.h, 3 * game.TICK_RATE)
+	times = core.mirror_game_record(&sess.mirror, stopwatch.Times)
+	testing.expect(t, times.time >= 2 && times.time <= 3, "the time did not run")
+	testing.expect_value(t, len(sess.failures), 0)
 }
 
 // A server with no game is the engine alone: no state, no hooks.

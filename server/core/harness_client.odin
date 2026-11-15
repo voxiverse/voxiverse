@@ -123,6 +123,9 @@ mirror_pump :: proc(sess: ^Session) {
 		case game.Challenge:
 			mirror_send(m, game.Proof{game.account_sign(&m.key, v.nonce)})
 		case game.Welcome:
+			if v.schema != m.schema.hash {
+				append(&sess.failures, strings.clone("the mirror's schema is not the server's"))
+			}
 			m.rules, m.welcomed = v.rules, true
 			game.prediction_init(&m.prediction, {position = v.spawn})
 			rules := v.rules
@@ -185,10 +188,19 @@ chunks_agree :: proc(sess: ^Session) -> bool {
 	return c.server == c.mirror
 }
 
+// mirror_game_record: the mirror's record of the game's kind whose value type is T
+// (under key), or nil: what the server last put for it (a reliable kind's).
+mirror_game_record :: proc(m: ^Mirror, $T: typeid, key := game.Key{}) -> ^T {
+	kind, found := game.game_kind(&m.schema, T)
+	if !found {return nil}
+	return (^T)(game.replica_get(&m.rx.live, kind, key))
+}
+
 // mirror_apply: what the receiver yielded, as the mirror keeps it.
 mirror_apply :: proc(sess: ^Session, got: []game.Received) {
 	m := &sess.mirror
 	for g in got {
+		if g.kind >= m.schema.engine {continue} 	// a game's: they stay in m.rx (mirror_game_record)
 		if g.op == .Event {
 			if game.Event_Kind(g.kind - len(game.State_Kind)) == .Notice {
 				append(&m.notices, strings.clone((^game.Notice)(g.value).text))
@@ -292,7 +304,8 @@ session_start :: proc(
 	game.block_arrays_init(&m.arrays, 2048)
 	game.layer_pools_init(&m.pools, 2048 * game.registry_replicated_channels(sess.h.srv.registry))
 	m.key = test_key("determinism")
-	m.schema = game.game_schema()
+	// (the server's game's kinds too: the mirror checks Welcome's hash, as a client does)
+	m.schema = game.game_schema(sess.h.srv.config.game.id, sess.h.srv.config.game.kinds)
 	game.receiver_init(&m.rx, &m.schema, sess.h.srv.registry)
 	for sec in Hash_Section {sess.seen[sec] = make(map[u64]struct{})}
 	sess.logging = logging
@@ -534,6 +547,6 @@ test_key :: proc(name: string) -> (k: game.Account_Key) {
 }
 
 test_hello :: proc(name: string) -> game.Hello {
-	schema := game.game_schema(context.temp_allocator)
-	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.hash, 0, nil}
+	schema := game.game_schema(allocator = context.temp_allocator)
+	return {game.PROTOCOL_VERSION, test_key(name).account, name, schema.engine_hash, 0, nil}
 }

@@ -77,7 +77,7 @@ dt_schema :: proc() -> Schema {
 		{name = "ping", value = Dt_Ping},
 		{name = "all_event", value = Sch_All},
 	}
-	s, err := schema_make(states, events, context.temp_allocator)
+	s, err := schema_make(states, events, allocator = context.temp_allocator)
 	assert(err.reason == "", schema_error_text(err))
 	return s
 }
@@ -149,7 +149,7 @@ link_step :: proc(l: ^Link, origin := [3]i32{}) -> (reliable_bytes, snapshot_byt
 	clear(&l.messages)
 	clear(&l.events)
 	sender_flush(&l.tx, l.tick, origin, &l.messages)
-	got := make([dynamic]Received, context.temp_allocator)
+	got := make([dynamic]Received, allocator = context.temp_allocator)
 	for m in l.messages {
 		if m.snapshot {
 			snapshot_bytes += len(m.data)
@@ -214,7 +214,7 @@ gauge_round_trip :: proc(
 	mode_alone: bool,
 ) {
 	states := []State_Kind_Info{{name = "gauge", value = value}}
-	s, err := schema_make(states, nil, context.temp_allocator)
+	s, err := schema_make(states, nil, allocator = context.temp_allocator)
 	if !testing.expect(t, err.reason == "", schema_error_text(err)) {return}
 	l: Link
 	link_init(&l, &s)
@@ -270,8 +270,16 @@ test_new_field_needs_no_code :: proc(t: ^testing.T) {
 	b3 := Gauge2{5, 2, {-1e9, 0.25, 7}, .On}
 	gauge_round_trip(t, Gauge2, &b1, &b2, &b3, true)
 
-	s1, _ := schema_make({{name = "gauge", value = Gauge1}}, nil, context.temp_allocator)
-	s2, _ := schema_make({{name = "gauge", value = Gauge2}}, nil, context.temp_allocator)
+	s1, _ := schema_make(
+		{{name = "gauge", value = Gauge1}},
+		nil,
+		allocator = context.temp_allocator,
+	)
+	s2, _ := schema_make(
+		{{name = "gauge", value = Gauge2}},
+		nil,
+		allocator = context.temp_allocator,
+	)
 	testing.expect(t, schema_hash(&s1) != schema_hash(&s2), "the two schemas hash alike")
 }
 
@@ -474,7 +482,7 @@ test_reliable_lane_rules :: proc(t: ^testing.T) {
 	sender_event(&l.tx, DT_PING, &ping)
 	clear(&l.messages)
 	sender_flush(&l.tx, 99, {}, &l.messages)
-	got_all := make([dynamic]Received, context.temp_allocator)
+	got_all := make([dynamic]Received, allocator = context.temp_allocator)
 	for m in l.messages {testing.expect(t, receive_state(&l.rx, m.data, &got_all))}
 	ops: [dynamic]Op
 	defer delete(ops)
@@ -544,9 +552,9 @@ test_snapshot_part_lost_applies_in_part :: proc(t: ^testing.T) {
 			link_put(l, DT_MOTION, u32(i + 1), &m)
 		}
 		l.tick += 1
-		out := make([dynamic]Outgoing, context.temp_allocator)
+		out := make([dynamic]Outgoing, allocator = context.temp_allocator)
 		sender_flush(&l.tx, l.tick, {}, &out)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		for m, i in out {
 			if len(m.data) > SNAPSHOT_PART_BYTES {return false}
 			if i == drop_part {continue}
@@ -594,13 +602,13 @@ test_snapshot_baseline_gone :: proc(t: ^testing.T) {
 		m.position.x += 1
 		link_put(&l, DT_MOTION, 1, &m)
 		l.tick += 1
-		out := make([dynamic]Outgoing, context.temp_allocator)
+		out := make([dynamic]Outgoing, allocator = context.temp_allocator)
 		sender_flush(&l.tx, l.tick, {}, &out) // (never delivered, never acknowledged)
 	}
 	m.position.x += 1
 	link_put(&l, DT_MOTION, 1, &m)
 	l.tick += 1
-	out := make([dynamic]Outgoing, context.temp_allocator)
+	out := make([dynamic]Outgoing, allocator = context.temp_allocator)
 	sender_flush(&l.tx, l.tick, {}, &out)
 	if !testing.expect(t, len(out) == 1) {return}
 	r := reader_make(out[0].data)
@@ -616,7 +624,7 @@ test_snapshot_priority :: proc(t: ^testing.T) {
 	link_init(&l, &s)
 	defer link_destroy(&l)
 	// 400 records far too many for one snapshot, all changing every tick
-	motions := make([]Dt_Motion, 400, context.temp_allocator)
+	motions := make([]Dt_Motion, 400, allocator = context.temp_allocator)
 	for &m, i in motions {m.position = {f64(i), 0, 0}}
 	for _ in 1 ..= 40 {
 		for &m, i in motions {
@@ -668,7 +676,7 @@ valid_messages :: proc(l: ^Link) -> (state, snapshot: []u8) {
 	b := Dt_Block{.Stone, true}
 	sender_put(&l.tx, DT_BLOCK, key_of_block({1, 2, 3}), &b)
 	l.tick += 1
-	out := make([dynamic]Outgoing, context.temp_allocator)
+	out := make([dynamic]Outgoing, allocator = context.temp_allocator)
 	sender_flush(&l.tx, l.tick, {}, &out)
 	for o in out {
 		if o.snapshot {snapshot = o.data} else {state = o.data}
@@ -690,7 +698,7 @@ test_state_prefixes_fail :: proc(t: ^testing.T) {
 	link_init(&l, &s)
 	defer link_destroy(&l)
 	state, snapshot := valid_messages(&l)
-	got := make([dynamic]Received, context.temp_allocator)
+	got := make([dynamic]Received, allocator = context.temp_allocator)
 	{
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
@@ -730,7 +738,7 @@ Bad :: struct {
 
 @(private = "file")
 state_with :: proc(body: ..u8) -> []u8 {
-	out := make([dynamic]u8, context.temp_allocator)
+	out := make([dynamic]u8, allocator = context.temp_allocator)
 	append(&out, STATE_MESSAGE, 1)
 	append(&out, ..body)
 	return out[:]
@@ -743,7 +751,7 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 	link_init(&l, &s)
 	defer link_destroy(&l)
 	state, _ := valid_messages(&l)
-	with_trailing := slice.concatenate([][]u8{state, {0}}, context.temp_allocator)
+	with_trailing := slice.concatenate([][]u8{state, {0}}, allocator = context.temp_allocator)
 	// single: id 3, count 1, head (create) 1, n varint
 	cases := [?]Bad {
 		{"an unknown id", state_with(99, 1, 1)},
@@ -761,7 +769,7 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 	for c in cases {
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		testing.expectf(t, !receive_state(&rx, c.data, &got), "%s was accepted", c.why)
 	}
 
@@ -769,7 +777,7 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 	{
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		ok := receive_state(&rx, state_with(DT_SINGLE, 1, 1, 5), &got)
 		testing.expect(t, ok, "a valid create was refused")
 		ok = receive_state(&rx, state_with(DT_SINGLE, 1, 1, 5), &got)
@@ -779,16 +787,16 @@ test_state_malformed_cases :: proc(t: ^testing.T) {
 	{
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		testing.expect(t, receive_state(&rx, state_with(DT_SINGLE, 1, 1, 5), &got))
 	}
 	// a Block_Pos outside the world
 	{
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		w: Writer
-		writer_init(&w, context.temp_allocator)
+		writer_init(&w, allocator = context.temp_allocator)
 		write_u8(&w, STATE_MESSAGE)
 		write_varint(&w, 1)
 		write_varint(&w, DT_BLOCK)
@@ -814,7 +822,7 @@ test_snapshot_malformed_cases :: proc(t: ^testing.T) {
 	s := dt_schema()
 	snap :: proc(tick, back: u32, part, parts: u8, body: ..u8) -> []u8 {
 		w: Writer
-		writer_init(&w, context.temp_allocator)
+		writer_init(&w, allocator = context.temp_allocator)
 		write_u8(&w, SNAPSHOT_MESSAGE)
 		write_varint(&w, tick)
 		write_varint(&w, back)
@@ -836,13 +844,13 @@ test_snapshot_malformed_cases :: proc(t: ^testing.T) {
 	for c in cases {
 		rx := fresh_rx(&s)
 		defer receiver_destroy(&rx)
-		got := make([dynamic]Received, context.temp_allocator)
+		got := make([dynamic]Received, allocator = context.temp_allocator)
 		testing.expectf(t, !receive_snapshot(&rx, c.data, &got), "%s was accepted", c.why)
 	}
 	// a baseline the receiver lacks: dropped, counted, not an error
 	rx := fresh_rx(&s)
 	defer receiver_destroy(&rx)
-	got := make([dynamic]Received, context.temp_allocator)
+	got := make([dynamic]Received, allocator = context.temp_allocator)
 	testing.expect(t, receive_snapshot(&rx, snap(40, 5, 0, 1), &got))
 	testing.expect_value(t, rx.dropped, 1)
 	testing.expect_value(t, len(got), 0)

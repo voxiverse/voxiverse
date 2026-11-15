@@ -282,6 +282,8 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 			view_height = u32(base.rng_int_max(rng, 20)),
 			content     = base.rng_u64(rng),
 			packs       = word(rng, 40),
+			game        = word(rng, MAX_GAME_ID),
+			schema      = base.rng_u64(rng),
 		}
 	case 1:
 		m = Reject{word(rng, MAX_REASON_LENGTH)}
@@ -398,7 +400,7 @@ fuzz_net_generate_server :: proc(rng: ^base.Rng, out: ^[dynamic]u8) {
 fuzz_net_schema :: proc() -> ^Schema {
 	@(static) once: sync.Once
 	@(static) schema: Schema
-	sync.once_do(&once, proc() {schema = game_schema(runtime.heap_allocator())})
+	sync.once_do(&once, proc() {schema = game_schema(allocator = runtime.heap_allocator())})
 	return &schema
 }
 

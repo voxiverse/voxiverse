@@ -53,7 +53,7 @@ receive :: proc(s: ^Session) {
 					game.PROTOCOL_VERSION,
 					s.config.key.account,
 					s.config.name,
-					s.schema.hash,
+					s.schema.engine_hash,
 					steam_id,
 					ticket,
 				},
@@ -222,6 +222,14 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	}
 	if w.content != s.reg.hash {
 		fail(s, content_mismatch(s.reg, w))
+		return
+	}
+	if w.game != "" {
+		fail(s, fmt.tprintf("the server plays %s, a game this version does not have", w.game))
+		return
+	}
+	if w.schema != s.schema.hash {
+		fail(s, "the server runs a different version (its state schema is not ours)")
 		return
 	}
 	s.welcome = w

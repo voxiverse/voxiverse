@@ -39,7 +39,8 @@ Records are deltas against one of two baselines:
 A new replicated value is a struct plus an entry in `state_kinds.odin`. Afterwards,
 `build schema` regenerates the Wireshark dissector's table; the test
 `test_dissector_schema_current` fails while it is stale. A client whose schema hash differs is
-refused when joining.
+refused when joining: the server checks the engine's kinds' hash in `Hello`, the client the
+hash of every kind, the game's too, in `Welcome` ([games.md](games.md), Records and events).
 
 A message that fails to decode, or whose values are out of range, is refused as malformed.
 An aim pitch beyond `PITCH_LIMIT` (`Fire`, and therefore any aim computed straight up or

@@ -45,7 +45,7 @@ Table :: struct {
 
 Replica :: struct {
 	schema:    ^Schema,
-	tables:    []Table, // per state kind
+	tables:    []Table, // per kind (an event kind's stays empty)
 	allocator: mem.Allocator,
 }
 
@@ -77,7 +77,7 @@ key_less :: proc(t: Key_Type, a, b: Key) -> bool {
 
 replica_init :: proc(r: ^Replica, schema: ^Schema, allocator := context.allocator) {
 	r.schema, r.allocator = schema, allocator
-	r.tables = make([]Table, schema.n_states, allocator)
+	r.tables = make([]Table, len(schema.kinds), allocator)
 	for &t in r.tables {t.records = make([dynamic]Record, allocator)}
 }
 
@@ -164,7 +164,7 @@ replica_remove_at :: proc(r: ^Replica, kind: int, index: int) {
 // replica_copy_lane copies every record of the snapshot-lane kinds of src.
 @(private)
 replica_copy_snapshot :: proc(dst, src: ^Replica) {
-	for kind in 0 ..< src.schema.n_states {
+	for kind in 0 ..< len(src.schema.kinds) {
 		if src.schema.kinds[kind].lane != .Snapshot {continue}
 		for rec in src.tables[kind].records {
 			replica_upsert(dst, kind, rec.key, rec.value)
@@ -468,8 +468,8 @@ event_free :: proc(schema: ^Schema, e: Pending_Event) {
 // entity ids are per world): no removals are sent, and the next snapshot has no
 // baseline. Singletons stay.
 sender_reset :: proc(s: ^Sender) {
-	for kind in 0 ..< s.schema.n_states {
-		if s.schema.kinds[kind].key == .None {continue} 	// (a singleton persists)
+	for kind in 0 ..< len(s.schema.kinds) {
+		if s.schema.kinds[kind].key == .None {continue} 	// (a singleton persists, and an event kind has no records)
 		replica_clear_kind(&s.sent, kind)
 		replica_clear_kind(&s.cur, kind)
 	}
@@ -557,9 +557,9 @@ flush_reliable :: proc(s: ^Sender, tick: u32, out: ^[dynamic]Outgoing, allocator
 	gw: Group_Writer
 	gw_init(&gw, schema, STATE_MESSAGE_BYTES - 16, allocator)
 	removed := make([dynamic]Pending_Remove, context.temp_allocator)
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
-		if k.lane != .Reliable {continue}
+		if k.is_event || k.lane != .Reliable {continue}
 		table := &s.cur.tables[kind]
 		if k.write_through {
 			sort_loose(table.records[:], k.key)
@@ -618,9 +618,9 @@ flush_reliable :: proc(s: ^Sender, tick: u32, out: ^[dynamic]Outgoing, allocator
 		gw_entry(&gw, rm.kind, 2, .Remove, 0, rm.key, nil, nil)
 	}
 	// keyed records not put are gone from the view; the rest wait for the next put
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
-		if k.lane != .Reliable || k.key == .None {continue}
+		if k.is_event || k.lane != .Reliable || k.key == .None {continue}
 		recs := &s.cur.tables[kind].records
 		for i := len(recs) - 1; i >= 0; i -= 1 {
 			if !recs[i].touched {replica_remove_at(&s.cur, kind, i)}
@@ -709,7 +709,7 @@ flush_snapshot :: proc(
 		   found {replica_remove_at(&s.cur, rm.kind, i)}
 	}
 	clear(&s.removes)
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
 		if k.lane != .Snapshot || k.key == .None {continue}
 		recs := &s.cur.tables[kind].records
@@ -722,7 +722,7 @@ flush_snapshot :: proc(
 
 	cands := make([dynamic]Candidate, context.temp_allocator)
 	removed := make([dynamic]Pending_Remove, context.temp_allocator)
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
 		if k.lane != .Snapshot {continue}
 		for &rec, i in s.cur.tables[kind].records {
@@ -782,7 +782,7 @@ flush_snapshot :: proc(
 	gw: Group_Writer
 	gw_init(&gw, schema, SNAPSHOT_PART_BYTES - 16, allocator)
 	next := 0
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
 		if k.lane != .Snapshot {continue}
 		for ; next < len(cs) && cs[next].kind == kind; next += 1 {
@@ -921,7 +921,7 @@ receiver_destroy :: proc(rx: ^Receiver) {
 // receiver_reset drops the keyed records held and the snapshots (a new world).
 receiver_reset :: proc(rx: ^Receiver) {
 	blobs_free(rx)
-	for kind in 0 ..< rx.schema.n_states {
+	for kind in 0 ..< len(rx.schema.kinds) {
 		if rx.schema.kinds[kind].key != .None {replica_clear_kind(&rx.live, kind)}
 	}
 	replica_destroy(&rx.gather.work)
@@ -1115,7 +1115,7 @@ receive_snapshot :: proc(rx: ^Receiver, data: []u8, out: ^[dynamic]Received) -> 
 		id := int(read_varint(&r))
 		count := int(read_varint(&r))
 		if !r.ok ||
-		   id >= rx.schema.n_states ||
+		   id >= len(rx.schema.kinds) ||
 		   count < 1 ||
 		   count > len(data) - r.pos {return false}
 		k := &rx.schema.kinds[id]

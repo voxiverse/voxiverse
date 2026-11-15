@@ -3,10 +3,12 @@ package game
 import "core:math"
 import "core:slice"
 
-// What the server replicates to clients: the game's state kinds and
+// What the server replicates to clients: the engine's state kinds and
 // event kinds, as tables the schema (schema.odin) is derived from. A new
 // replicated value is a struct, an entry here, and the code that puts it; the
 // codec, the dissector's table and the tests of the wire follow from the types.
+// A game (games/) declares its own as data (Game_Kinds), and they follow these:
+// the engine's kinds keep their ids whatever game a session runs.
 //
 // Records are views of what the server wants the client to see now. Kinds
 // with a key (a player, an entity) are rebuilt every tick: what is not put is
@@ -276,19 +278,27 @@ EVENT_KINDS := [Event_Kind]Event_Kind_Info {
 	.Swung = {name = "swung", value = Swung},
 }
 
-// game_schema builds the schema of the game's kinds. The server builds it when
-// it starts, a client when it makes a session, tools where they decode: it is
-// not a global.
-game_schema :: proc(allocator := context.allocator) -> Schema {
+// game_schema builds the schema of the engine's kinds and, with a game (its id and
+// its Game_Kinds), the game's after them. The server builds it when it starts, a
+// client when it makes a session (again when Welcome names a game), tools where they
+// decode: it is not a global. A game's kinds are named for it ("<id>.<name>").
+game_schema :: proc(id := "", kinds := Game_Kinds{}, allocator := context.allocator) -> Schema {
+	for k in kinds.states {assert(game_kind_named(id, k.name), "a game's kind is named <id>.<name>")}
+	for k in kinds.events {assert(game_kind_named(id, k.name), "a game's kind is named <id>.<name>")}
 	s, err := schema_make(
 		slice.enumerated_array(&STATE_KINDS),
 		slice.enumerated_array(&EVENT_KINDS),
+		kinds,
 		allocator,
 	)
 	assert(err.reason == "", schema_error_text(err))
 	return s
 }
 
+@(private = "file")
+game_kind_named :: proc(id, name: string) -> bool {
+	return id != "" && len(name) > len(id) + 1 && name[:len(id)] == id && name[len(id)] == '.'
+}
 
 kind_of_event :: #force_inline proc(k: Event_Kind) -> int {return len(State_Kind) + int(k)}
 

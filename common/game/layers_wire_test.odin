@@ -243,7 +243,7 @@ Cell_Test :: struct {
 // cell, cells of two chunks; they arrive as the sender put them, sorted.
 @(test)
 test_channel_record_round_trip :: proc(t: ^testing.T) {
-	schema := game_schema(context.temp_allocator)
+	schema := game_schema(allocator = context.temp_allocator)
 	l: Link
 	link_init(&l, &schema)
 	defer link_destroy(&l)

@@ -49,7 +49,7 @@ event_round_trip :: proc(t: ^testing.T, l: ^Link, kind: Event_Kind, value: ^$T) 
 // Chat_Delete, Block_Changed, Blocks_Changed.
 @(test)
 test_every_moved_message_round_trips :: proc(t: ^testing.T) {
-	s := game_schema(context.temp_allocator)
+	s := game_schema(allocator = context.temp_allocator)
 	l: Link
 	link_init(&l, &s)
 	defer link_destroy(&l)
@@ -156,7 +156,7 @@ test_every_moved_message_round_trips :: proc(t: ^testing.T) {
 // What the old decoders refused, the kinds' checks refuse.
 @(test)
 test_kind_checks_refuse :: proc(t: ^testing.T) {
-	s := game_schema(context.temp_allocator)
+	s := game_schema(allocator = context.temp_allocator)
 	refuse :: proc(
 		t: ^testing.T,
 		s: ^Schema,
@@ -223,4 +223,96 @@ test_kind_checks_refuse :: proc(t: ^testing.T) {
 		position = {1 << 40, 0, 0},
 	}
 	refuse(t, &s, .Entity_Motion, key_entity(1), &far_look, "an entity outside the world")
+}
+
+// A game's kinds (Game_Kinds) follow the engine's: the engine's keep their ids, the
+// schema hash covers the game's (the engine's hash alone does not change), a game's kind
+// is found by its value type, and its records and events cross the wire as the engine's.
+@(test)
+test_game_kinds :: proc(t: ^testing.T) {
+	Score :: struct {
+		points: u32,
+		team:   u8,
+	}
+	Tagged :: struct {
+		who: string `net:"max=16"`,
+	}
+	Lap :: struct {
+		ticks: u64,
+	}
+	KINDS :: Game_Kinds {
+		states = {
+			{name = "tag.score", value = Score},
+			{name = "tag.lap", value = Lap, key = .Player, max_records = MAX_PLAYERS},
+		},
+		events = {{name = "tag.tagged", value = Tagged}},
+	}
+	engine := game_schema(allocator = context.temp_allocator)
+	s := game_schema("tag", KINDS, context.temp_allocator)
+	testing.expect_value(t, s.engine, len(State_Kind) + len(Event_Kind))
+	testing.expect_value(t, len(s.kinds), s.engine + 3)
+	for k, i in engine.kinds {
+		testing.expectf(t, s.kinds[i].name == k.name, "the engine's kind %s moved", k.name)
+	}
+	testing.expect(t, s.hash != engine.hash, "the game's kinds are not in the hash")
+	testing.expect_value(t, s.engine_hash, engine.hash)
+	testing.expect_value(t, engine.engine_hash, engine.hash)
+	other := game_schema(
+		"tag",
+		{states = {{name = "tag.score", value = Lap}}},
+		context.temp_allocator,
+	)
+	testing.expect(t, other.hash != s.hash, "a kind's value type is not in the hash")
+
+	score, found := game_kind(&s, Score)
+	testing.expect(t, found && score == s.engine && !s.kinds[score].is_event)
+	tagged, found_event := game_kind(&s, Tagged)
+	testing.expect(t, found_event && tagged == s.engine + 2 && s.kinds[tagged].is_event)
+	_, found = game_kind(&engine, Score)
+	testing.expect(t, !found, "a game's kind in a schema without the game")
+	_, found = game_kind(&s, Clock)
+	testing.expect(t, !found, "an engine kind found as a game's")
+
+	// Two kinds of a game with one value type: the type would not name the kind.
+	_, err := schema_make(
+		{},
+		{},
+		{states = {{name = "tag.a", value = Score}}, events = {{name = "tag.b", value = Score}}},
+		context.temp_allocator,
+	)
+	testing.expect_value(t, err.reason, "a game's kinds have a value type each")
+
+	l: Link
+	link_init(&l, &s)
+	defer link_destroy(&l)
+	points := Score{12, 2}
+	sender_put(&l.tx, score, {}, &points)
+	lap := game_kind(&s, Lap) or_else -1
+	laps := [2]Lap{{30}, {60}}
+	sender_put(&l.tx, lap, key_player(1), &laps[0])
+	sender_put(&l.tx, lap, key_player(2), &laps[1])
+	who := Tagged{"Steve_1"}
+	sender_event(&l.tx, tagged, &who)
+	link_step(&l)
+	if !testing.expect(t, !l.failed, "the receiver refused a game's kinds") {return}
+	got := (^Score)(replica_get(&l.view, score, {}))
+	testing.expect(t, got != nil && got^ == points)
+	for want, i in laps {
+		lap_got := (^Lap)(replica_get(&l.view, lap, key_player(u16(i + 1))))
+		testing.expect(t, lap_got != nil && lap_got^ == want)
+	}
+	if testing.expect_value(t, len(l.events), 1) {
+		testing.expect_value(t, l.events[0].kind, tagged)
+		testing.expect_value(t, (^Tagged)(l.events[0].value).who, "Steve_1")
+	}
+
+	// A receiver without the game knows none of its kinds: such a message is malformed.
+	bare: Receiver
+	receiver_init(&bare, &engine, test_reg())
+	defer receiver_destroy(&bare)
+	sender_put(&l.tx, score, {}, &Score{13, 2})
+	clear(&l.messages)
+	sender_flush(&l.tx, 9, {}, &l.messages)
+	out := make([dynamic]Received, context.temp_allocator)
+	testing.expect(t, len(l.messages) == 1 && !receive_state(&bare, l.messages[0].data, &out))
 }

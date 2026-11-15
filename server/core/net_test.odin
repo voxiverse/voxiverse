@@ -357,7 +357,7 @@ net_pump :: proc(t: ^testing.T, c: ^Net_Client) {
 				game.PROTOCOL_VERSION,
 				k.account,
 				"" if c.ask else c.name,
-				c.schema.hash,
+				c.schema.engine_hash,
 				c.steam_id,
 				c.ticket,
 			},
@@ -806,7 +806,7 @@ test_players_through_ten_percent_loss :: proc(t: ^testing.T) {
 // replicas_match: two replicas hold the same records of every snapshot-lane kind.
 @(private = "file")
 replicas_match :: proc(schema: ^game.Schema, x, y: ^game.Replica) -> bool {
-	for kind in 0 ..< schema.n_states {
+	for kind in 0 ..< len(schema.kinds) {
 		k := &schema.kinds[kind]
 		if k.lane != .Snapshot {continue}
 		xs, ys := x.tables[kind].records, y.tables[kind].records
@@ -838,7 +838,7 @@ test_schema_mismatch_refused :: proc(t: ^testing.T) {
 	c: Net_Client
 	net_connect(&c, 0, "stranger", h = h)
 	defer net_close(&c)
-	c.schema.hash += 1
+	c.schema.engine_hash += 1
 	ok := net_wait(t, {&c}, proc(cs: []^Net_Client) -> bool {return cs[0].rejected != ""})
 	testing.expect(t, ok, "a client with another schema was not refused")
 	testing.expect(

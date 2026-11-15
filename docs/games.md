@@ -65,3 +65,51 @@ state :: proc(s: ^core.Server) -> ^Round {return core.game_state(s, Round)}
 ```
 
 Anything a game keeps beyond these blocks it frees in its own hooks.
+
+## Records and events
+
+What a game tells its players beyond the engine's records (a score, a round, a timer) it
+replicates as the engine does ([design.md](design.md), State replication): **records** of
+typed state kinds and one-off **events**, by the same codec. It declares its kinds as data in
+its shared package, a `game.Game_Kinds` of `game.State_Kind_Info` and `game.Event_Kind_Info`
+(name, value type, key, lane, check...), and puts the value in `core.Game.kinds`:
+
+```odin
+// games/stopwatch/records.odin (package stopwatch)
+Times :: struct {
+	time:   u32,
+	record: u32,
+}
+
+Record_Broken :: struct {
+	name:    string `net:"max=16"`,
+	seconds: u32,
+}
+
+KINDS :: game.Game_Kinds {
+	states = {{name = "stopwatch.times", value = Times}},
+	events = {{name = "stopwatch.record_broken", value = Record_Broken}},
+}
+```
+
+- A kind's name is `<id>.<name>` (`game_schema` asserts it), and each of a game's kinds has a
+  value type of its own (`schema_make` refuses two alike): the type names the kind, so game
+  code holds no kind number and no cast.
+- The schema is a run-time value (`game.game_schema(id, kinds)`): the engine's kinds, then the
+  game's, the engine's keeping their ids whatever the game. No engine table (`State_Kind`,
+  `STATE_KINDS`, `Event_Kind`) knows a game; in a session without the game its kinds do not
+  exist, and a message that names one is malformed.
+- The server puts a record with `core.game_put(s, c, &times)` (a keyed kind: `key =
+  game.key_player(id)`), the counterpart of the engine's `state_put`, and sends an event with
+  `core.game_event(s, c, &broken)`. Puts coalesce, keyed kinds are views and singletons
+  persist, as for the engine's kinds.
+- The hashes: `Hello` carries the hash of the engine's kinds, which the server checks as
+  before; `Welcome` names the game (`game`, its id, "" for none) and carries the hash of every
+  kind (`schema`), which the client checks once it has the same game's kinds. A client and
+  server with different records of a game refuse each other as they do for the engine's.
+- The harness's mirror client builds its schema with the server's game, so a game's test
+  reads what its players were told: `core.mirror_game_record(&sess.mirror, stopwatch.Times)`.
+
+`build schema` writes the engine's kinds into the Wireshark dissector; a game's kinds are not
+in it. `build netdump` decodes with the engine's schema alone: in a trace of a session with a
+game, a State message that carries the game's records counts as one that does not decode.

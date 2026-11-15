@@ -28,6 +28,25 @@ event_send :: proc(s: ^Server, c: ^Client, kind: game.Event_Kind, value: ^$T) {
 	game.sender_event(&c.tx, game.kind_of_event(kind), value)
 }
 
+// game_put sets c's record of the game's kind whose value type is T (Game.kinds) for
+// this tick, under key for a keyed kind: state_put for a game. The type names the
+// kind, so a game's code holds no kind number.
+game_put :: proc(s: ^Server, c: ^Client, value: ^$T, key := game.Key{}) {
+	kind, found := game.game_kind(&s.schema, T)
+	assert(found && !s.schema.kinds[kind].is_event, "not a state kind of the game's")
+	if c.tx.schema == nil {return}
+	game.sender_put(&c.tx, kind, key, value)
+}
+
+// game_event queues a one-off event of the game's kind whose value type is T for c:
+// event_send for a game.
+game_event :: proc(s: ^Server, c: ^Client, value: ^$T) {
+	kind, found := game.game_kind(&s.schema, T)
+	assert(found && s.schema.kinds[kind].is_event, "not an event kind of the game's")
+	if c.tx.schema == nil {return}
+	game.sender_event(&c.tx, kind, value)
+}
+
 // replicate_tick puts what every client sees of the world at the end of a
 // tick: who is there, the entities, its inventory, the rules, the clock when
 // it is due. (Most of it is the same as last tick and costs nothing: the

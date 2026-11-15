@@ -7,8 +7,8 @@ import "common:game"
 // the longest stay of anyone who left is the record to beat, and /stopwatch tells a
 // player their time and the record.
 //
-// This is its shared package: what both of its sides use. The server part
-// (games/stopwatch/server) runs the game.
+// This is its shared package: what both of its sides use, its records among them
+// (records.odin). The server part (games/stopwatch/server) runs the game.
 
 // seconds: ticks as seconds of play.
 seconds :: proc(ticks: u64) -> f64 {return f64(ticks) / game.TICK_RATE}

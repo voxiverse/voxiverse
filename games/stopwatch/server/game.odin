@@ -3,14 +3,17 @@ package stopwatch_server
 import "core:fmt"
 import "core:log"
 
+import "common:game"
 import "games:stopwatch"
 import "server:core"
 
 // Stopwatch's server part (the game: games/stopwatch): it keeps every player's time
-// and the record, and answers /stopwatch.
+// and the record, tells each player theirs once a second (stopwatch.Times), tells
+// everyone when a record is broken, and answers /stopwatch.
 
 GAME :: core.Game {
 	id           = "stopwatch",
+	kinds        = stopwatch.KINDS,
 	server_state = Watch,
 	client_state = Lap,
 	configure    = configure,
@@ -60,21 +63,46 @@ stop :: proc(s: ^core.Server) {
 	)
 }
 
+// tick counts every player's time, and tells each theirs once a second.
 tick :: proc(s: ^core.Server) {
 	watch(s).ticks += 1
+	second := s.tick % game.TICK_RATE == 0
 	for &c in s.clients {
-		if c.state == .Playing {lap(s, &c).ticks += 1}
+		if c.state != .Playing {continue}
+		lap(s, &c).ticks += 1
+		if second {times_put(s, &c)}
 	}
+}
+
+// times_put tells c its time and the record, in whole seconds.
+times_put :: proc(s: ^core.Server, c: ^core.Client) {
+	times := stopwatch.Times {
+		time   = u32(lap(s, c).ticks / game.TICK_RATE),
+		record = u32(watch(s).record / game.TICK_RATE),
+	}
+	core.game_put(s, c, &times)
 }
 
 joined :: proc(s: ^core.Server, c: ^core.Client) {
 	watch(s).joins += 1
+	times_put(s, c)
 	core.notice(s, c, "Stopwatch: your time runs from now (/stopwatch shows it)")
 }
 
+// left: a stay longer than the record is the record, and everyone else still playing
+// is told whose.
 left :: proc(s: ^core.Server, c: ^core.Client) {
 	w := watch(s)
-	w.record = max(w.record, lap(s, c).ticks)
+	stayed := lap(s, c).ticks
+	if stayed <= w.record {return}
+	w.record = stayed
+	broken := stopwatch.Record_Broken {
+		name    = core.client_name(c),
+		seconds = u32(stayed / game.TICK_RATE),
+	}
+	for &other in s.clients {
+		if &other != c && other.state == .Playing {core.game_event(s, &other, &broken)}
+	}
 }
 
 // command: /stopwatch shows the player's time and the record; /stopwatch reset starts

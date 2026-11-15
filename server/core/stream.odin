@@ -172,7 +172,7 @@ client_reset :: proc(c: ^Client) {
 	}
 }
 
-@(private)
+// client_name: the name c plays as. Public: a game (Game) names its players.
 client_name :: proc(c: ^Client) -> string {
 	return string(c.name_buf[:c.name_len])
 }

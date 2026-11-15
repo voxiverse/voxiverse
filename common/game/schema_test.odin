@@ -42,7 +42,7 @@ one :: proc(value: typeid, lane := Lane.Reliable, key := Key_Type.None) -> (Sche
 	states := []State_Kind_Info {
 		{name = "thing", value = value, lane = lane, key = key, max_records = max_records},
 	}
-	return schema_make(states, nil, context.temp_allocator)
+	return schema_make(states, nil, allocator = context.temp_allocator)
 }
 
 @(test)
@@ -223,7 +223,7 @@ Sch_E2 :: struct {
 
 @(private = "file")
 hash_of :: proc(infos: []State_Kind_Info) -> u64 {
-	s, err := schema_make(infos, nil, context.temp_allocator)
+	s, err := schema_make(infos, nil, allocator = context.temp_allocator)
 	assert(err.reason == "")
 	return schema_hash(&s)
 }
@@ -293,7 +293,7 @@ test_schema_text_golden :: proc(t: ^testing.T) {
 		},
 	}
 	events := []Event_Kind_Info{{name = "flash", value = Sch_Inner}}
-	s, err := schema_make(states, events, context.temp_allocator)
+	s, err := schema_make(states, events, allocator = context.temp_allocator)
 	if !testing.expect(t, err.reason == "", schema_error_text(err)) {return}
 	want := `state thing 2 key=Entity lane=Reliable max=4 write_through=false priority=0
   field n u16

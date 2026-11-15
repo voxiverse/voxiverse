@@ -117,6 +117,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 		address_derive(7),
 		0,
 		"",
+		"stopwatch",
+		0xfeed_0123_4567_89ab,
 	}
 	moved: Server_Message
 	moved, ok = decode_server_t(
@@ -129,6 +131,17 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	m: Server_Message
 	m, ok = decode_server_t(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
+	// The game's id is a folder name of games/ (or none), checked at the edge.
+	no_game := welcome
+	no_game.game = ""
+	m, ok = decode_server_t(encode_s(no_game)[:], scratch)
+	testing.expect(t, ok && m.(Welcome).game == "")
+	for bad in ([]string{"Stopwatch", "_tag", "9lives", "tag/client", "a b"}) {
+		odd := welcome
+		odd.game = bad
+		_, ok = decode_server_t(encode_s(odd)[:], scratch)
+		testing.expectf(t, !ok, "the game id %q was let through", bad)
+	}
 	m, ok = decode_server_t(encode_s(Reject{"full"})[:], scratch)
 	testing.expect(t, ok && m.(Reject).reason == "full")
 	ping: Client_Message
@@ -351,6 +364,8 @@ test_truncated_messages_fail :: proc(t: ^testing.T) {
 				address_derive(1),
 				0xfeed,
 				"voxiverse@1.0.0",
+				"stopwatch",
+				0xbeef,
 			},
 		),
 		encode_s(Bulk_Begin{1}),
@@ -692,7 +707,7 @@ test_dissector_schema_current :: proc(t: ^testing.T) {
 		context.temp_allocator,
 	)
 	if !testing.expectf(t, err == nil, "cannot read the dissector: %v", err) {return}
-	s := game_schema(context.temp_allocator)
+	s := game_schema(allocator = context.temp_allocator)
 	b := strings.builder_make(context.temp_allocator)
 	schema_lua(&s, &b)
 	spliced, ok := schema_lua_splice(string(data), strings.to_string(b))
