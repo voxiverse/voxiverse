@@ -304,6 +304,15 @@ test_flood_heavy :: proc(t: ^testing.T) {
 	say(rig, "flood rule heavy")
 	testing.expect_value(t, w.rules.explosion_size, flood.HEAVY_SIZE)
 	testing.expect_value(t, w.rules.explosion_throw, flood.HEAVY_THROW)
+	// ... changed as Flood's (the journal says who), and the player told.
+	setting: core.Action_Info
+	for id := w.journal.next_action - 1; id > 0 && setting.system != .Setting; id -= 1 {
+		setting, _ = core.action_info(&w.journal, id)
+	}
+	testing.expect_value(t, setting.kind, game.Actor_Kind.Game)
+	testing.expect_value(t, setting.actor, "flood")
+	testing.expect_value(t, setting.command, "rule explosion_throw 2")
+	testing.expect_value(t, rig.sess.mirror.rules.explosion_size, flood.HEAVY_SIZE)
 	if !testing.expect(t, until_phase(rig, .Playing), "the round never started") {return}
 	heavy_at, plain_at := game.Block_Pos{8, -8, 8}, game.Block_Pos{24, -8, 24}
 	testing.expect_value(t, air(w, heavy_at) + air(w, plain_at), 0)

@@ -81,9 +81,9 @@ start :: proc(s: ^core.Server) -> bool {
 	f := state(s)
 	f.rng = base.rng_make(u64(s.config.seed) ~ 0xf100d)
 	w := s.home
-	w.rules.daylight_cycle = false
-	w.rules.drops = false
-	w.rules.random_tick_speed = 0
+	core.game_rule(s, w, "daylight_cycle", "false")
+	core.game_rule(s, w, "drops", "false")
+	core.game_rule(s, w, "random_tick_speed", "0")
 	w.clock = 0.5
 	core.world_keep(w, ARENA)
 	log.infof("flood started seed=%d", s.config.seed)
@@ -121,8 +121,9 @@ new_round :: proc(s: ^core.Server) {
 		f.rule = flood.Rule(base.rng_int_max(&f.rng, len(flood.Rule)))
 	}
 	heavy := f.rule == .Heavy
-	s.home.rules.explosion_size = flood.HEAVY_SIZE if heavy else 1
-	s.home.rules.explosion_throw = flood.HEAVY_THROW if heavy else 1
+	size, throw := flood.HEAVY_SIZE if heavy else 1, flood.HEAVY_THROW if heavy else 1
+	core.game_rule(s, s.home, "explosion_size", fmt.tprint(size))
+	core.game_rule(s, s.home, "explosion_throw", fmt.tprint(throw))
 	f.result, f.made_it, f.built = .None, 0, false
 	set_phase(s, .Countdown)
 	log.infof("flood round=%d seed=%d rule=%s", f.round, f.seed, flood.RULE_NAMES[f.rule])
