@@ -131,12 +131,8 @@ test_messages_round_trip :: proc(t: ^testing.T) {
 	m: Server_Message
 	m, ok = decode_server_t(encode_s(welcome)[:], scratch)
 	testing.expect(t, ok && m.(Welcome) == welcome)
-	// The game's id is a folder name of games/ (or none), checked at the edge.
-	no_game := welcome
-	no_game.game = ""
-	m, ok = decode_server_t(encode_s(no_game)[:], scratch)
-	testing.expect(t, ok && m.(Welcome).game == "")
-	for bad in ([]string{"Stopwatch", "_tag", "9lives", "tag/client", "a b"}) {
+	// The game's id is a folder name of games/, checked at the edge; there is always one.
+	for bad in ([]string{"", "Stopwatch", "_tag", "9lives", "tag/client", "a b"}) {
 		odd := welcome
 		odd.game = bad
 		_, ok = decode_server_t(encode_s(odd)[:], scratch)

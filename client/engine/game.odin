@@ -7,6 +7,7 @@ import "core:mem/virtual"
 
 import "client:ui"
 import "common:game"
+import "server:core"
 
 // Game: a game's client part (docs/games.md): what the client does for the game its
 // session plays. The engine never imports a game: client/main gives the App the games
@@ -24,6 +25,18 @@ Game :: struct {
 	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
 	commands:   []Command_Spec, // its console commands, there while a world plays it
 }
+
+// HARNESS_GAME: the client part of the game a harness server plays when its tests name
+// none (core.HARNESS_GAME): what a session joining one in a test or a fuzz target
+// needs, since every server names a game and a client must have it.
+HARNESS_GAME :: Game {
+	info = core.HARNESS_GAME.info,
+}
+
+// HARNESS_GAMES: a session's games (Session_Config.games) when it joins a harness
+// server: a list that outlives whoever starts the session.
+@(rodata)
+HARNESS_GAMES := []Game{HARNESS_GAME}
 
 // game_find: the game of that id among games.
 game_find :: proc(games: []Game, id: string) -> (^Game, bool) {
@@ -80,7 +93,6 @@ session_game_begin :: proc(s: ^Session, id: string) -> (ok: bool, why: string) {
 // session_game_started: the session is playing (welcomed): the game's started hook.
 @(private)
 session_game_started :: proc(s: ^Session) {
-	if s.game.id == "" {return}
 	s.game_playing = true
 	if s.game.started != nil {s.game.started(s)}
 }

@@ -300,6 +300,7 @@ test_swap_offhand_over_the_wire :: proc(t: ^testing.T) {
 			name = "swapper",
 			key = key,
 			join = engine.Join{address = core.harness_address(&rig.h)},
+			games = engine.HARNESS_GAMES,
 			view_radius = 3,
 			view_height = 2,
 			registry = testkit.test_reg(),

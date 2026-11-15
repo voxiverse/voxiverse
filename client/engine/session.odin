@@ -49,7 +49,7 @@ Session_Config :: struct {
 	steam:             ^steam.Client, // (joining) Steam: its ticket goes in Hello when it is on (nil: no Steam)
 	net:               ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
 	games:             []Game, // the games this client has: the one the server names is played (App.games)
-	host_game:         core.Game, // (hosting) the game our own server runs (zero: none; App.game)
+	host_game:         core.Game, // (hosting) the game our own server runs (App.game; every session plays one)
 }
 
 // Join: a server to play on.

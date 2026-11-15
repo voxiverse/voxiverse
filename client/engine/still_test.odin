@@ -78,6 +78,7 @@ pair_start :: proc(t: ^testing.T, p: ^Pair) -> bool {
 				name = name,
 				key = key,
 				join = Join{address = address},
+				games = HARNESS_GAMES,
 				view_radius = 3,
 				view_height = 2,
 				registry = testkit.test_reg(),

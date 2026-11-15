@@ -16,6 +16,7 @@ test_worker_panics_with_a_server_running :: proc(t: ^testing.T) {
 		view_radius = 2,
 		view_height = 1,
 		workers     = 1,
+		game        = core.HARNESS_GAME,
 	}
 	s: core.Server
 	if !testing.expect(t, core.start(&s, config, {})) {return}

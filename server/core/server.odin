@@ -81,7 +81,7 @@ Config :: struct {
 	watchdog_seconds:      int, // kill on a deadlocked tick (>0: seconds, default 60 on dedicated, 0: off)
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own and the game's (tests, tools), loaded last
 	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
-	game:                  Game, // the game the server runs (games/; zero: none, the engine alone)
+	game:                  Game, // the game the server runs (games/): every session plays one, so start refuses a config without it
 }
 
 // Game: a game the server runs (docs/games.md): its id, the types of its state, and
@@ -242,6 +242,10 @@ KICK_DELAY :: game.TICK_RATE
 // ({} for none).
 start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 	config := config
+	if !game.game_id_valid(config.game.id) {
+		log.errorf("server needs a game to play (Config.game; its id: %q)", config.game.id)
+		return false
+	}
 	if config.game.configure != nil {config.game.configure(&config)}
 	if config.net != nil && (!config.stepped || config.conditions != {}) {
 		log.warnf("a simulated network needs a stepped server and no conditions of its own")
@@ -387,7 +391,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config.workers,
 		capacity,
 		s.config.max_players,
-		config.game.id if config.game.id != "" else "none",
+		config.game.id,
 	)
 	return true
 }

@@ -28,9 +28,14 @@ INFO :: game.Game_Info {
 ## The server's side: `core.Game`
 
 A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its
-`info` (its shared package's `INFO`), the types of its state, its pack (below), and the hooks the server calls
-(`Game` in `server/core/server.odin`). Whoever starts the server puts it in `Config.game`; the
-zero `Game` is no game, and the server is the engine alone. Every hook may be nil.
+`info` (its shared package's `INFO`), the types of its state, its pack (below), and the hooks
+the server calls (`Game` in `server/core/server.odin`). Whoever starts the server puts it in
+`Config.game`. Every session plays exactly one game: `start` refuses a config whose game has no
+valid id. When nobody names one, the executables play `game.DEFAULT_GAME`, `sandbox`
+(`games/sandbox`: the engine's open world, its configure choosing the Earth generator); the
+engine's own tests play `core.HARNESS_GAME`, which the harness gives a config that names none
+(a game with no hooks, so the tests run the engine as it is; a session that joins one has its
+client part, `engine.HARNESS_GAMES`). Every hook may be nil.
 
 | Hook | When | Thread |
 |---|---|---|
@@ -115,7 +120,8 @@ received :: proc(s: ^engine.Session, r: game.Received) {
 
 ## Which game a session plays
 
-The server names its game in the handshake: `Welcome.game` (its id; "" for none). The client
+The server names its game in the handshake: `Welcome.game` (its id; never empty: a Welcome
+without one does not decode). The client
 looks for the client part of that id among the games it has (`App.games`); with it, the
 session's schema gains the game's kinds, its state is made and `Welcome.schema` must match
 (else the session fails: "the server runs a different version (its state schema is not
@@ -123,8 +129,8 @@ ours)"). A client without that game fails the session before playing with "the s
 <id>, a game this version does not have", which the player reads on the screen a failed
 session shows; nothing is half-applied. The server is told nothing: the client leaves.
 
-A world of our own plays the game `voxiverse --game <id>` names (default: none, exactly the
-engine alone): the client starts its embedded server with that game's server part
+A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`): the
+client starts its embedded server with that game's server part
 (`App.server_games`), whose Welcome then names it like any server's. The id must be a game
 with both parts; any other is refused at startup with the list of those there are.
 
@@ -141,7 +147,7 @@ folders in `games/` (the collection `generated` is `build/generated`):
 Both are sorted by folder, and an `#assert` keeps each game's id its folder's name. Only the
 executables' main packages import them (the `import` lint), the client's list `client/main`
 alone, so the dedicated server links no client code. The dedicated server runs one with
-`voxiverse-server --game <id>` (default: none); the client gives both lists to the App.
+`voxiverse-server --game <id>` (default: `sandbox`); the client gives both lists to the App.
 
 Adding a game is a folder `games/<game>/` holding its shared package, a `server` package
 that exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
@@ -237,7 +243,7 @@ KINDS :: game.Game_Kinds {
 - The client hands each of them to the client part's `received` hook, which reads it with
   `engine.game_value(s, r, stopwatch.Times)`; the engine applies none of them itself.
 - The hashes: `Hello` carries the hash of the engine's kinds, which the server checks as
-  before; `Welcome` names the game (`game`, its id, "" for none) and carries the hash of every
+  before; `Welcome` names the game (`game`, its id) and carries the hash of every
   kind (`schema`), which the client checks once it has the same game's kinds. A client and
   server with different records of a game refuse each other as they do for the engine's.
 - The harness's mirror client builds its schema with the server's game, so a game's test

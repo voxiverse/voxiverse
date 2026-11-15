@@ -51,7 +51,7 @@ Options :: struct {
 	import_file: string `args:"name=import" usage:"make the universe --universe (a directory that does not exist yet) from a .vxu file and quit"`,
 	steam:       bool `usage:"check joining players' Steam tickets and link each SteamID to its account (needs the Steamworks library beside the executable; docs/server.md)"`,
 	watchdog:    int `usage:"kill the server on a deadlocked tick (>0: seconds, default 60, 0: off)"`,
-	game:        string `usage:"the game to run, by id (a folder of games/; default: none, the engine alone)"`,
+	game:        string `usage:"the game to run, by id (a folder of games/; default: sandbox)"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -142,12 +142,11 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 		backups          = max(0, opts.backups),
 		watchdog_seconds = max(0, opts.watchdog),
 	}
-	if opts.game != "" {
-		found: bool
-		if config.game, found = game_find(opts.game); !found {
-			log.errorf("there is no game %q (the games: %s)", opts.game, game_ids())
-			return false
-		}
+	id := opts.game if opts.game != "" else game.DEFAULT_GAME
+	found: bool
+	if config.game, found = game_find(id); !found {
+		log.errorf("there is no game %q (the games: %s)", id, game_ids())
+		return false
 	}
 	if opts.telemetry != "" {
 		ep, err := net.resolve_ip4(opts.telemetry)

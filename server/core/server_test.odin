@@ -1014,3 +1014,17 @@ test_game_api :: proc(t: ^testing.T) {
 	for l in lines {said ||= strings.contains(l, `chat system text="Round 1 begins"`)}
 	testing.expect(t, said, "announce said nothing")
 }
+
+// Every session plays a game: a config whose game has no valid id is refused (the
+// harness's own, HARNESS_GAME, is given only to a config that names none).
+@(test)
+test_start_needs_a_game :: proc(t: ^testing.T) {
+	config := harness_world()
+	config.stepped = true
+	config.game = {
+		info = {id = "Not A Game"},
+	}
+	testing.expect(t, harness_refused(config), "a game with no valid id was played")
+	config.game = HARNESS_GAME
+	testing.expect(t, !harness_refused(config))
+}

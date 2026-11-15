@@ -155,7 +155,7 @@ App :: struct {
 	registry:            ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
 	games:               []Game, // the games' client parts this build has (client/main gives the list the driver writes)
 	server_games:        []core.Game, // ... and their server parts, for a world of our own
-	game:                string, // the game a world of our own plays, by id (--game; "": none, the engine alone)
+	game:                string, // the game a world of our own plays, by id (--game, else game.DEFAULT_GAME: client/main sets it)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,
@@ -339,13 +339,13 @@ enter_world :: proc(
 	)
 }
 
-// host_game: the server part of the game a world of our own plays (App.game; zero:
-// none). client/main checks the id against the games this build has.
+// host_game: the server part of the game a world of our own plays (App.game).
+// client/main checks the id against the games this build has; a game it lacks is the
+// zero Game, which the server refuses to start.
 host_game :: proc(app: ^App) -> core.Game {
 	for g in app.server_games {
 		if g.id == app.game {return g}
 	}
-	assert(app.game == "", "a game this build does not have")
 	return {}
 }
 

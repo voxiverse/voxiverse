@@ -16,7 +16,7 @@ import sc "common:steam"
 // chunks around the player (nearest first) and tells the client which to
 // drop.
 
-PROTOCOL_VERSION :: 40
+PROTOCOL_VERSION :: 41
 MAX_MESSAGE_SIZE :: 64 * 1024
 MAX_NAME_LENGTH :: 16
 MAX_CHARACTERS :: 8 // an account's in one universe
@@ -451,7 +451,7 @@ Welcome :: struct {
 	address:     Address, // the world the player is in
 	content:     u64, // the server's registry hash (registry.hash): its blocks, items, recipes...
 	packs:       string, // the universe's packs, "namespace@version" comma separated, in load order
-	game:        string, // the game the server runs, by id ("": none, the engine alone); game_id_valid
+	game:        string, // the game the server runs, by id (every session plays one); game_id_valid
 	schema:      u64, // the hash of every state kind, the game's too (Hello's has the engine's alone)
 }
 
@@ -461,10 +461,15 @@ MAX_PACKS_TEXT :: 2048
 // MAX_GAME_ID: the longest game id (a folder name of games/).
 MAX_GAME_ID :: 32
 
+// DEFAULT_GAME: the game a session plays when nobody names one (games/sandbox: the
+// engine's open world). There is no session without a game.
+DEFAULT_GAME :: "sandbox"
+
 // game_id_valid: an id is a game's folder name, singular snake_case: a lower-case
-// letter, then lower-case letters, digits and underscores; or "" (no game).
+// letter, then lower-case letters, digits and underscores (never "": every session
+// plays a game).
 game_id_valid :: proc(id: string) -> bool {
-	if len(id) > MAX_GAME_ID {return false}
+	if id == "" || len(id) > MAX_GAME_ID {return false}
 	for ch, i in transmute([]u8)id {
 		switch ch {
 		case 'a' ..= 'z':

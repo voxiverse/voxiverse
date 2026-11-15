@@ -10,6 +10,6 @@ Options :: struct {
 	bench_size:    string `usage:"with --benchmark: draw at WIDTHxHEIGHT instead of 1280x720 (results under <scenario>-WIDTHxHEIGHT)"`,
 	check:         string `usage:"run an exit check (fly, tour, blast) after any --exec script, and quit: fails the run if it fails"`,
 	scene:         string `usage:"render a visual baseline's scene (assets/baselines/images/scenes.txt) offscreen to images/<scene>.png, and quit"`,
-	game:          string `usage:"the game a world started here plays, by id (a folder of games/; default: none, the engine alone)"`,
+	game:          string `usage:"the game a world started here plays, by id (a folder of games/; default: sandbox)"`,
 	version:       bool `usage:"print the version and quit"`,
 }

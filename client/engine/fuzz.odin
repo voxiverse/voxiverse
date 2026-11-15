@@ -51,6 +51,7 @@ fuzz_session_start :: proc(s: ^Session) {
 	seed: [32]u8
 	game.account_key_set(&s.config.key, seed[:])
 	s.config.name = "fuzz"
+	s.config.games = HARNESS_GAMES // (the heard packets' Welcome names the harness's game)
 	loading_begin(s, false)
 	_ = virtual.arena_init_growing(&s.arena)
 	arena := virtual.arena_allocator(&s.arena)

@@ -32,14 +32,34 @@ Harness_Party :: struct {
 	data: rawptr,
 }
 
+// HARNESS_GAME: the game a harness server plays when its config names none (every
+// session plays one): no hooks and nothing of its own, so the engine's tests run the
+// engine as it is. A client that joins one needs its client part (engine.HARNESS_GAME).
+HARNESS_GAME :: Game {
+	info = {
+		id = "harness",
+		name = "Harness",
+		description = "The engine's tests' game: no rules of its own.",
+	},
+}
+
+// harness_game: config, playing HARNESS_GAME if it names no game.
+@(private = "file")
+harness_game :: proc(config: Config) -> Config {
+	c := config
+	if c.game.id == "" {c.game = HARNESS_GAME}
+	return c
+}
+
 // harness_refused: whether `start` refuses this configuration, and cleanly
 // (the refusal is the point, so its log is muted; a failed start leaves no
 // state behind). A test of a refusal asks here, so no test starts a server
-// itself; a server that did start is stopped again.
+// itself; a server that did start is stopped again. A config that names no
+// game plays HARNESS_GAME, as harness_start's does.
 harness_refused :: proc(config: Config) -> bool {
 	context.logger = log.nil_logger()
 	srv: Server
-	if start(&srv, config, {}) {
+	if start(&srv, harness_game(config), {}) {
 		stop(&srv)
 		return false
 	}
@@ -78,7 +98,8 @@ harness_world :: proc() -> Config {
 
 // harness_start starts the server on the harness's network (stepped, no
 // workers). h must stay at its address until harness_stop. local: the
-// in-process player takes seat 0 on a pipe, as singleplayer does.
+// in-process player takes seat 0 on a pipe, as singleplayer does. A config that
+// names no game plays HARNESS_GAME.
 harness_start :: proc(
 	h: ^Harness,
 	config: Config,
@@ -91,7 +112,7 @@ harness_start :: proc(
 	// server's allocations does not count what is in flight)
 	netcode.simnet_init(&h.net, conditions, runtime.heap_allocator())
 	h.net.now = harness_time(0)
-	c := config
+	c := harness_game(config)
 	c.stepped, c.workers, c.net = true, 0, &h.net
 	end: game.Endpoint
 	if local {

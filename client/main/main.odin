@@ -12,6 +12,7 @@ import "client:autopilot"
 import "client:console"
 import "client:engine"
 import "common:base"
+import "common:game"
 import platform "common:platform"
 
 import "generated:games"
@@ -96,12 +97,10 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 	}
 	check_pending := opts.check != ""
 	app.games, app.server_games = games_client.CLIENT, games.SERVER
-	if opts.game != "" {
-		if !game_playable(opts.game) {
-			log.errorf("there is no game %q (the games: %s)", opts.game, game_ids())
-			return false
-		}
-		app.game = opts.game
+	app.game = game_chosen(opts)
+	if !game_playable(app.game) {
+		log.errorf("there is no game %q (the games: %s)", app.game, game_ids())
+		return false
 	}
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
@@ -258,6 +257,12 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 		return false
 	}
 	return ok
+}
+
+// game_chosen: the game a world of our own plays: the one --game names, else the
+// default (game.DEFAULT_GAME): there is no world without a game.
+game_chosen :: proc(opts: engine.Options) -> string {
+	return opts.game if opts.game != "" else game.DEFAULT_GAME
 }
 
 // game_playable: games/ holds a game of that id with both parts, so a world of our own

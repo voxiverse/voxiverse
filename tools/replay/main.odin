@@ -78,11 +78,16 @@ run :: proc(opts: Options) -> bool {
 	) {log.warnf("replay cannot record path=%s", opts.out)}
 	srv: core.Server
 	config := core.Config {
-		seed         = header.seed,
-		view_radius  = i32(header.view_radius),
-		view_height  = i32(header.view_height),
-		workers      = 2,
+		seed = header.seed,
+		view_radius = i32(header.view_radius),
+		view_height = i32(header.view_height),
+		workers = 2,
 		allow_cheats = header.allow_cheats,
+		// The default game by its id alone: a tool imports no game, and the trace does not
+		// say which one its session played. The sandbox's one hook only chooses the Earth
+		// generator, which is the zero Config's anyway; another game's trace replays
+		// without that game's rules.
+		game = {info = {id = game.DEFAULT_GAME}},
 	}
 	if !core.start(&srv, config, {&pipe, .Server}) {return false}
 	client := game.Endpoint{&pipe, .Client}

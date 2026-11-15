@@ -224,11 +224,9 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		fail(s, content_mismatch(s.reg, w))
 		return
 	}
-	if w.game != "" {
-		if ok, why := session_game_begin(s, w.game); !ok {
-			fail(s, why)
-			return
-		}
+	if ok, why := session_game_begin(s, w.game); !ok {
+		fail(s, why)
+		return
 	}
 	if w.schema != s.schema.hash {
 		fail(s, "the server runs a different version (its state schema is not ours)")

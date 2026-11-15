@@ -15,6 +15,7 @@ import "client:testkit"
 import "client:ui"
 import "common:game"
 import "generated:games"
+import games_client "generated:games/client"
 import "server:core"
 
 // A world playing a game (engine.Game): the server names it in Welcome, the session takes
@@ -272,4 +273,30 @@ test_game_lists_outlive_their_readers :: proc(t: ^testing.T) {
 		for k in g.kinds.states {testing.expectf(t, strings.has_prefix(k.name, g.id), "%s: kind %q", g.id, k.name)}
 		for k in g.kinds.events {testing.expectf(t, strings.has_prefix(k.name, g.id), "%s: kind %q", g.id, k.name)}
 	}
+}
+
+// With no --game, a world of our own plays the sandbox: the game chosen is the default,
+// this build has both its parts, and a session playing the server part the App hosts
+// with (on the stepped server, where the embedded server runs on its own thread) plays it.
+@(test)
+test_no_game_plays_sandbox :: proc(t: ^testing.T) {
+	id := game_chosen({})
+	testing.expect_value(t, id, "sandbox")
+	testing.expect(t, game_playable(id), "this build cannot play the default game")
+	app := new(engine.App)
+	defer free(app)
+	app.games, app.server_games, app.game = games_client.CLIENT, games.SERVER, id
+	hosted := engine.host_game(app)
+	testing.expect_value(t, hosted.id, "sandbox")
+
+	rig := new(Frame_Rig)
+	defer free(rig)
+	s := new(engine.Session)
+	defer free(s)
+	if !counter_join(t, rig, s, hosted, app.games) {return}
+	defer core.harness_stop(&rig.h)
+	defer engine.session_end(s, nil, nil)
+	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}
+	testing.expect_value(t, s.game.id, "sandbox")
+	testing.expect_value(t, s.welcome.game, "sandbox")
 }

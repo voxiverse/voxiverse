@@ -122,6 +122,7 @@ test_a_server_uploads_its_log_only_when_told_to :: proc(t: ^testing.T) {
 	if !testing.expect(t, collector.collector_start(&c, lake, 0)) {return}
 	defer collector.collector_stop(&c)
 	config := core.Config {
+		game              = core.HARNESS_GAME,
 		seed              = 28,
 		generator         = .Classic,
 		rules             = game.RULES_DEFAULTS,

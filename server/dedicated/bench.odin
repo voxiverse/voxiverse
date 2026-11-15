@@ -162,6 +162,7 @@ bench_repetition :: proc(result: ^base.Bench_Result, smoke: bool, party: bool) -
 		no_natural_spawns = true,
 		save_dir          = PARTY_UNIVERSE if party else "",
 	}
+	config.game, _ = game_find(game.DEFAULT_GAME) // (the engine's own world, as a player gets)
 	if party {os.remove_all(PARTY_UNIVERSE)}
 	srv := new(core.Server)
 	defer free(srv)
