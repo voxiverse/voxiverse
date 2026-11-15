@@ -33,7 +33,7 @@ Mode_Result :: enum u8 {
 
 // Mode_Cause: why a mode changed, for the journal and the event.
 Mode_Cause :: struct {
-	how: string, // "join", "command", "script", "rule"
+	how: string, // "join", "command", "script", "rule", "game"
 	by:  string, // who asked: a player's name, a pack's id ("" for the world)
 }
 
@@ -83,11 +83,21 @@ set_game_mode :: proc(s: ^Server, c: ^Client, mode: int, cause: Mode_Cause) -> M
 		by :=
 			Actor{.Character, cause.by, false} if cause.by != "" && cause.how == "command" else Actor{}
 		if cause.how == "script" {by = {.Script, cause.by, false}}
+		if cause.how == "game" {by = {.Game, cause.by, false}}
 		journal_setting(c.world, by, text)
 		record(s, c, .Mode_Changed, label, 1 if cause.how == "command" else 0)
 	}
 	mode_put(s, c)
 	return .Ok
+}
+
+// game_mode: the game the server runs puts c in the mode called id ("survival", a
+// pack's "flood:out"); journalled with the game as who changed it. Unknown_Mode if
+// the registry has no such mode.
+game_mode :: proc(s: ^Server, c: ^Client, id: string) -> Mode_Result {
+	m, found := game.mode_find(s.registry, id)
+	if !found {return .Unknown_Mode}
+	return set_game_mode(s, c, m, {"game", s.config.game.id})
 }
 
 // mode_put: the Mode record (sent when it changes).

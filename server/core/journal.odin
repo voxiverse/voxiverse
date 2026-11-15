@@ -234,6 +234,14 @@ world_act :: proc(w: ^World, system: game.Edit_System) -> Act {
 	return {action_world(w, system), system}
 }
 
+// game_act: a cause for the game the server runs (Config.game) to change blocks by
+// through system: a new action whose actor is the game (Actor_Kind.Game, by its id).
+// One per cause: a game makes one for what it does in a tick (a round's arena, a
+// layer of water) and passes it to every set_block and bulk_edit of it.
+game_act :: proc(s: ^Server, w: ^World, system: game.Edit_System) -> Act {
+	return {action_begin(w, {.Game, s.config.game.id, false}, system), system}
+}
+
 action_live :: proc(j: ^Journal, id: Action_Id) -> ^Live_Action {
 	if u32(id) < j.actions_base || u32(id) >= j.next_action {return nil}
 	return &j.actions[u32(id) - j.actions_base]

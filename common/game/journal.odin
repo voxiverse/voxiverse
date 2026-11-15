@@ -11,6 +11,7 @@ Actor_Kind :: enum u8 {
 	World, // the world itself (natural water, random ticks, gates, grazing)
 	Character, // a character, by name
 	Script, // reserved for the sandbox: a <pack>:<script> id
+	Game, // the game the server runs (docs/games.md), by its id
 }
 
 // Edit_System: the mechanism of a change. Append-only: values are written to disk.

@@ -96,6 +96,12 @@ chat_line_send :: proc(s: ^Server, c: ^Client, id: u32, sender: u16, text: strin
 	event_send(s, c, .Chat_Line, &line)
 }
 
+// announce: a line in every playing player's chat, from the server (no one's): what a
+// game says to everyone (a round begins, who is out). Formatting codes (&a, &l) work.
+announce :: proc(s: ^Server, text: string) {
+	chat_system(s, text)
+}
+
 // chat_system: a line from the server to everyone (who joined, left...).
 @(private)
 chat_system :: proc(s: ^Server, text: string) {

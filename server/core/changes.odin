@@ -36,6 +36,12 @@ changes_begin :: proc(w: ^World) -> ^Changes {
 	return ch
 }
 
+// block_at: the block at p in w; false while its chunk is not loaded (or still
+// generating), and the block is then .Air.
+block_at :: proc(w: ^World, p: game.Block_Pos) -> (game.Block, bool) {
+	return chunks_block(&w.chunks, p)
+}
+
 // set_block changes one block, by act (its cause: journal.odin), told to
 // everyone but the player it came from (by; nil: the world itself); false if
 // its chunk is not loaded or the change is refused (admit).

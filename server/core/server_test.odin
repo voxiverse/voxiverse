@@ -915,3 +915,89 @@ test_server_mspt_ring_buffer :: proc(t: ^testing.T) {
 	testing.expect_value(t, avg, 12)
 	testing.expect_value(t, mx, 12)
 }
+
+// What a game may call (docs/games.md) does what the list says: its block changes are
+// journalled as the game's, a mode by id is set as the game's, a teleport lands (or
+// flies), the eyes are in water or not, announce speaks to everyone.
+@(test)
+test_game_api :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	config := harness_world()
+	config.game = Game {
+		id = "probe",
+	}
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 30)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	w := c.world
+
+	// Blocks: read, changed one by one and in bulk under a cause whose actor is the game.
+	p := game.Block_Pos{4, 3, 4}
+	b, loaded := block_at(w, p)
+	testing.expect(t, loaded && b == .Air)
+	act := game_act(s, w, .Structure)
+	testing.expect(t, set_block(w, p, .Stone, act))
+	changed, _, _ := bulk_edit(
+		w,
+		{shape = Box{{5, 3, 4}, {7, 3, 4}}, op = .Set, block = .Glass},
+		act,
+	)
+	testing.expect_value(t, changed, 3)
+	b, _ = block_at(w, {6, 3, 4})
+	testing.expect_value(t, b, game.Block.Glass)
+	info, known := action_info(&w.journal, u32(act.action))
+	testing.expect(t, known)
+	testing.expect_value(t, info.kind, game.Actor_Kind.Game)
+	testing.expect_value(t, info.actor, "probe")
+	testing.expect_value(t, info.system, game.Edit_System.Structure)
+	_, unloaded := block_at(w, {4000, 3, 4000})
+	testing.expect(t, !unloaded)
+
+	// A mode by id, journalled as the game's; an id the registry lacks.
+	testing.expect_value(t, game_mode(s, c, "survival"), Mode_Result.Ok)
+	testing.expect_value(t, game.mode_label(s.registry, c.mode), "survival")
+	testing.expect_value(t, game_mode(s, c, "nonesuch"), Mode_Result.Unknown_Mode)
+
+	// A teleport: standing (survival cannot fly), then flying in creative.
+	teleport(s, c, {2.5, 1, 2.5}, {0, -1})
+	harness_step(&sess.h, 5)
+	testing.expect(t, abs(c.player.position.x - 2.5) < 0.01 && !c.player.flying)
+	testing.expect_value(t, game_mode(s, c, "creative"), Mode_Result.Ok)
+	teleport(s, c, {2.5, 12, 2.5}, {0, -1}, flying = true)
+	harness_step(&sess.h, 5)
+	testing.expect(t, c.player.flying && c.player.position.y > 11, "the flyer fell")
+
+	// The eyes in water, and out of it.
+	testing.expect(t, !head_in_water(s, c))
+	eye := game.player_eye(c.player)
+	at := game.Block_Pos{i32(math.floor(eye.x)), i32(math.floor(eye.y)), i32(math.floor(eye.z))}
+	set_block(w, at, .Water, game_act(s, w, .Liquid))
+	testing.expect(t, head_in_water(s, c))
+
+	// announce: a chat line from no one, to everyone.
+	lines: [dynamic]string
+	defer {
+		for l in lines {delete(l)}
+		delete(lines)
+	}
+	{
+		context.logger = {
+			proc(data: rawptr, _: log.Level, text: string, _: log.Options, _ := #caller_location) {
+				append((^[dynamic]string)(data), strings.clone(text))
+			},
+			&lines,
+			.Info,
+			{},
+		}
+		announce(s, "&aRound 1&r begins")
+	}
+	said := false
+	for l in lines {said ||= strings.contains(l, `chat system text="Round 1 begins"`)}
+	testing.expect(t, said, "announce said nothing")
+}

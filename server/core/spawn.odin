@@ -69,6 +69,14 @@ land :: proc(
 	set_position(c, position)
 }
 
+// teleport moves c's player to position in its world, looking look (yaw, pitch),
+// flying if flying (and its mode lets it fly) and else standing where it fits there
+// once the blocks are loaded (land, Exact). Where it was is not kept for back.
+teleport :: proc(s: ^Server, c: ^Client, position: [3]f64, look: [2]f32, flying := false) {
+	c.player.flying = flying && has_ability(s, c, .Fly)
+	land(s, c, position, look, .Exact, remember = false)
+}
+
 // land_at_spawn: land at the world spawn.
 @(private)
 land_at_spawn :: proc(s: ^Server, c: ^Client, remember := true) {

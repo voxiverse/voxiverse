@@ -597,10 +597,94 @@ lint_game_package :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// import_lint runs lint_relative_imports, lint_game_imports and lint_game_package over
-// every first-party Odin file.
+// GAME_API_DOC holds the list of what a game may call of server:core (the table under
+// GAME_API_HEADING), which lint_game_api reads.
+GAME_API_DOC :: "docs/games.md"
+GAME_API_HEADING :: "## What a game may call"
+
+// parse_game_api: the names the table under GAME_API_HEADING lists in its first column,
+// each backticked span's leading identifier (`teleport(s, c, ...)` is teleport).
+parse_game_api :: proc(text: string) -> []string {
+	names := make([dynamic]string)
+	_, _, section := strings.partition(text, GAME_API_HEADING)
+	rest := section
+	for line in strings.split_lines_iterator(&rest) {
+		if strings.has_prefix(line, "## ") {break}
+		if !strings.has_prefix(line, "| `") {continue}
+		cell, _, _ := strings.partition(line[1:], "|")
+		for {
+			_, _, after := strings.partition(cell, "`")
+			span, found, more := strings.partition(after, "`")
+			if found == "" {break}
+			n := 0
+			for n < len(span) && is_ident_byte(span[n]) {n += 1}
+			if n > 0 {append(&names, span[:n])}
+			cell = more
+		}
+	}
+	return names[:]
+}
+
+@(private = "file")
+is_ident_byte :: proc(b: u8) -> bool {
+	switch b {
+	case 'a' ..= 'z', 'A' ..= 'Z', '0' ..= '9', '_':
+		return true
+	}
+	return false
+}
+
+// lint_game_api: a game's code names of server:core (imported as core) only what
+// GAME_API_DOC lists a game may call (api): much of server/core is visible to it, and
+// what a game reaches is the engine's to choose. Its tests, which drive the harness,
+// may name anything. path is relative to the repository, with forward slashes.
+lint_game_api :: proc(path, text: string, api: []string) -> []string {
+	found := make([dynamic]string)
+	if !strings.has_prefix(path, "games/") || strings.has_suffix(path, "_test.odin") {
+		return found[:]
+	}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		code, _, _ := strings.partition(line, "//")
+		for i := 0; i + len("core.") < len(code); i += 1 {
+			if !strings.has_prefix(code[i:], "core.") || (i > 0 && is_ident_byte(code[i - 1])) {
+				continue
+			}
+			start := i + len("core.")
+			end := start
+			for end < len(code) && is_ident_byte(code[end]) {end += 1}
+			name := code[start:end]
+			if name != "" && !slice.contains(api, name) {
+				append(
+					&found,
+					fmt.aprintf(
+						"%s:%d: core.%s is not something a game may call (%s, \"%s\")",
+						path,
+						line_no,
+						name,
+						GAME_API_DOC,
+						GAME_API_HEADING[3:],
+					),
+				)
+			}
+			i = end
+		}
+	}
+	return found[:]
+}
+
+// import_lint runs lint_relative_imports, lint_game_imports, lint_game_package and
+// lint_game_api over every first-party Odin file.
 import_lint :: proc() -> bool {
 	ok := true
+	doc, doc_err := os.read_entire_file_from_path(GAME_API_DOC, context.allocator)
+	if doc_err != nil {
+		fmt.eprintfln("lint   %s: unreadable", GAME_API_DOC)
+		return false
+	}
+	api := parse_game_api(string(doc))
 	for dir in ([]string{"tests", "common", "client", "server", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
@@ -625,9 +709,13 @@ import_lint :: proc() -> bool {
 				fmt.eprintln(msg)
 				ok = false
 			}
+			for msg in lint_game_api(path, string(data), api) {
+				fmt.eprintln(msg)
+				ok = false
+			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, and games' packages are named for them")}
+	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them and call what docs/games.md lists")}
 	return ok
 }
 

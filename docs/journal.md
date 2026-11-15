@@ -31,6 +31,7 @@ Where each path gets its action:
 | a pack's statement rule | `Rule`: the action of the change that woke it, else the world's | Rule |
 | a rule or a game mode changed | `journal_setting`: an action of its own with no blocks, the command text saying what | Setting |
 | rollback, undo, redo | their own action | Rollback, Undo, Redo |
+| a game ([games.md](games.md)) | `game_act(s, w, system)`: an action of the game's (actor kind `Game`, its id), one per cause | the system it names |
 
 Consequences inherit their cause, so rolling back a griefer also restores the water they
 released, and rolling back someone else's change next to water they woke leaves that water
@@ -66,7 +67,8 @@ varints as `game.Writer`):
       7 Entity   svarint cx cy cz, varint local index, varint64 age, varint action,
                  value (block_entity_pack's bytes, <= 16 KiB)
 
-An actor's `kind` is `World`, `Character` or `Script` (reserved for the script sandbox).
+An actor's `kind` is `World`, `Character`, `Script` (reserved for the script sandbox) or
+`Game` (the game the server runs, by its id).
 Actors and actions are declared in a segment before their first use there, so every
 segment reads alone. Entries are grouped by tick (a `Tick` record per age) and by chunk,
 in the order appended, so per position the order is the order of the changes. A reader

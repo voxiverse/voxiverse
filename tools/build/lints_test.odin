@@ -1,5 +1,7 @@
 package build
 
+import "core:os"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -246,4 +248,27 @@ test_os_quarantine_lint :: proc(t: ^testing.T) {
 		len(lint_os_quarantine("common/base/x.odin", "import \"core:os\"\n// foreign import\n")),
 		0,
 	)
+}
+
+// A game names of server:core only what docs/games.md lists; its tests may name anything.
+@(test)
+test_game_api_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	doc :=
+		"# Games\n\n## What a game may call\n\n| Name | For |\n|---|---|\n" +
+		"| `Game`, `notice(s, c, text)` | the game; telling |\n| `teleport(s, c, p)` | moving |\n\n" +
+		"## Next\n\n| `land(s, c)` | not listed |\n"
+	api := parse_game_api(doc)
+	testing.expect_value(t, len(api), 3)
+	testing.expect(t, slice.contains(api, "teleport") && !slice.contains(api, "land"))
+	code := "GAME :: core.Game{}\nf :: proc() {core.notice(s, c, \"x\"); score.land(s)} // core.land\n"
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", code, api)), 0)
+	bad := "f :: proc() {core.land(s, c); core.teleport(s, c, p)}\n"
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", bad, api)), 1)
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game_test.odin", bad, api)), 0)
+	testing.expect_value(t, len(lint_game_api("server/core/x.odin", bad, api)), 0)
+	// The real list holds what the model game calls.
+	real, err := os.read_entire_file_from_path(GAME_API_DOC, context.allocator)
+	testing.expect(t, err == nil)
+	testing.expect(t, slice.contains(parse_game_api(string(real)), "game_put"))
 }

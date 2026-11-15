@@ -27,12 +27,41 @@ zero `Game` is no game, and the server is the engine alone. Every hook may be ni
 | `command(s, c, name, args) -> bool` | A `/command` the server has none of (relative coordinates already expanded); the game checks its own arguments and permissions (`core.allowed`); false: unknown | the server's |
 | `stop(s)` | After the last tick, before the last save; only after a `start` that succeeded | the caller's |
 
-A game reaches the server through `server/core`'s exported procedures and the fields of
-`Server` and `Client`. Most of `server/core` is private to it; what games need is exported as
-they need it (`notice` tells a player something, `allowed` checks a permission).
+A game reaches the server through the procedures and types listed below and the fields of
+`Server`, `Client` and `World`. Much of `server/core` is visible to Odin code outside it; a game
+names only what the list holds, which the `import` lint checks.
 
 A game's tick runs inside the server's, so the stepped server (and its tests) run it too, and
 it follows [determinism.md](determinism.md): no clock, no unseeded randomness.
+
+## What a game may call
+
+A game's code (not its tests, which drive the harness: `session_start`, `harness_*`,
+`mirror_*`...) names of `server:core` only these; the `import` lint reads this table and
+refuses any other `core.<name>` in a game. A name joins the list with the engine commit that
+makes it for games, documented where it is declared.
+
+| Name | What it is for |
+|---|---|
+| `Game`, `Config`, `Server`, `Client`, `World`, `Mode_Result` | The game itself, the config `configure` changes, the session, a player, a world |
+| `game_state(s, T)`, `game_client_state(s, c, T)` | The game's state, for the session and for a seat |
+| `game_put(s, c, &value)`, `game_event(s, c, &value)` | Its records and events ([below](#records-and-events)) |
+| `notice(s, c, text)`, `announce(s, text)` | Tell one player; tell every player in the chat |
+| `client_name(c)`, `allowed(s, c, node)` | A player's name; whether it holds a permission |
+| `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
+| `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
+| `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
+| `head_in_water(s, c)` | A player's eyes are in water |
+| `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
+| `block_at(w, p)` | Read a block (false: not loaded) |
+| `game_act(s, w, system)`, `Act` | A cause for the game's block changes, its actor the game: one per cause |
+| `set_block(w, p, block, act)`, `bulk_edit(w, edit, act)`, `Bulk_Edit`, `Box`, `Sphere` | Change blocks through the edit journal ([journal.md](journal.md)) |
+
+The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config` and
+`registry`; `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
+and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is a
+world's rules (`w.rules.explosion_size = 1.75`; the Rules record carries them to the players
+at the end of the tick) and, in `start`, its clock; everything else goes through the list.
 
 ## The client's side: `engine.Game`
 

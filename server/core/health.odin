@@ -59,6 +59,14 @@ health_tick :: proc(s: ^Server, c: ^Client) {
 	state_put(s, c, .Health, &health) // (nothing is sent while it is unchanged)
 }
 
+// head_in_water: c's eyes are in water (where a game drowns a player: the engine
+// does not).
+head_in_water :: proc(s: ^Server, c: ^Client) -> bool {
+	w := c.world
+	query := game.Block_Query{&w.chunks, chunks_block, &s.registry.blocks, {}}
+	return game.in_water(query, game.player_eye(c.player), 0)
+}
+
 // heal_player: c recovers amount health points.
 heal_player :: proc(c: ^Client, amount: f32) {
 	c.health = min(c.health + amount, c.max_health)
