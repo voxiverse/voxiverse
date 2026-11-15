@@ -1,5 +1,6 @@
 package core
 
+import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -205,4 +206,54 @@ test_the_mode_is_saved_with_the_character :: proc(t: ^testing.T) {
 	old, ok2 := player_parse(test_reg(), player_json(test_reg(), &r2))
 	testing.expect(t, ok2)
 	testing.expect_value(t, base.var_text(&old.mode), "")
+}
+
+// A mode with the spectate ability only watches: the server refuses its edits and
+// rockets, which the same player in creative makes.
+@(test)
+test_spectators_change_nothing :: proc(t: ^testing.T) {
+	MODES :: `{"watcher": {"abilities": ["fly", "invulnerable", "spectate"], "kit": [], "rules": {}}}`
+	PACK :: `{"format": 1, "namespace": "watching", "version": "1.0.0", "title": "Watching", "requires": ["voxiverse"]}`
+	config := harness_world()
+	config.extra_packs = []game.Pack_Source {
+		{
+			"watching",
+			{
+				{"pack.json", transmute([]u8)string(PACK)},
+				{"data/game_modes/watcher.json", transmute([]u8)string(MODES)},
+			},
+		},
+	}
+	sess := new(Session)
+	defer free(sess)
+	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 30)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	watcher, found := game.mode_find(s.registry, "watching:watcher")
+	if !testing.expect(t, found, "the pack's mode is not there") {return}
+	creative, _ := game.mode_find(s.registry, "creative")
+
+	p := c.player.position
+	under := game.Block_Pos{i32(math.floor(p.x)), i32(math.floor(p.y)) - 1, i32(math.floor(p.z))}
+	was, _ := chunks_block(&c.world.chunks, under)
+	testing.expect(t, was != .Air, "the player stands on air")
+	testing.expect_value(t, set_game_mode(s, c, watcher, {"command", ""}), Mode_Result.Ok)
+	testing.expect(t, has_ability(s, c, .Spectate))
+	queue_action(s, c, game.edit_plain(1, c.inputs.last, under, .Air))
+	queue_action(s, c, game.Fire{c.inputs.last, 0, -1.5})
+	b, _ := chunks_block(&c.world.chunks, under)
+	testing.expect_value(t, b, was)
+	testing.expect_value(t, c.fired_at, 0)
+
+	testing.expect_value(t, set_game_mode(s, c, creative, {"command", ""}), Mode_Result.Ok)
+	queue_action(s, c, game.edit_plain(2, c.inputs.last, under, .Air))
+	queue_action(s, c, game.Fire{c.inputs.last, 0, -1.5})
+	b, _ = chunks_block(&c.world.chunks, under)
+	testing.expect_value(t, b, game.Block.Air)
+	testing.expect_value(t, c.fired_at, s.tick)
 }

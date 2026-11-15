@@ -90,7 +90,9 @@ What a player may do is a set of nodes: dotted lower-case words. The families in
 - `voxiverse.command.*`: `rule`, `damage` and the game-mode commands.
 
 What a character *can do* (flying, invulnerability, `infinite_items`, `catalog`) is not a
-permission but an ability its game mode grants (`common/game/abilities.odin`).
+permission but an ability its game mode grants (`common/game/abilities.odin`). A mode with
+`spectate` only watches: the server refuses its edits, hits, uses, rockets and shots
+(`run_due_actions`), and the client does not send them.
 
 ### Grants
 

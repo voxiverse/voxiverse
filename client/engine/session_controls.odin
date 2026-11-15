@@ -74,6 +74,7 @@ edit_controls :: proc(s: ^Session, input: ^Input_State, a: ^Actions, dt: f32) {
 	if action_pressed(a, .Pick) {session_pick(s)}
 	if action_pressed(a, .Swap_Offhand) {session_inventory_do(s, {.Swap_Offhand, 0, 0})}
 
+	if session_ability(s, .Spectate) {return} 	// (the server would refuse what we did)
 	s.edit_timer -= dt
 	breaking := action_down(a, .Attack)
 	placing := action_down(a, .Use)

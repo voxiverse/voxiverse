@@ -22,6 +22,7 @@ Ability :: enum u8 {
 	Health, // has health (a bar; damage applies)
 	Regenerate, // health comes back by itself (the world's natural_regeneration rule)
 	Drop_On_Death, // the inventory drops where they fell (unless the world keeps it)
+	Spectate, // only watches: its edits, hits, uses, rockets and shots do nothing (the server refuses them)
 }
 
 Abilities :: bit_set[Ability;u32]
@@ -35,6 +36,7 @@ ABILITY_NAMES := [Ability]string {
 	.Health         = "health",
 	.Regenerate     = "regenerate",
 	.Drop_On_Death  = "drop_on_death",
+	.Spectate       = "spectate",
 }
 
 ability_name :: proc(a: Ability) -> string {return ABILITY_NAMES[a]}
