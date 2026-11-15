@@ -21,7 +21,7 @@ import "common:game"
 INFO :: game.Game_Info {
 	id          = "flood",
 	name        = "Flood",
-	description = "Water rises in a walled arena: climb to the glowing platform before it reaches you.",
+	description = "Climb to the glowing platform before the rising water gets you.",
 }
 
 // The arena: its inside is x and z 0 ..< SIZE, y 0 ..< HEIGHT (the floor at 0), walled
