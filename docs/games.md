@@ -63,8 +63,9 @@ The fields a game reads: `Server`'s `tick`, `clients`, `home`, `worlds`, `config
 `registry`; `Client`'s `state`, `world`, `player` (its position, velocity, flying), `mode`
 and `inventory`; `World`'s `rules` and `clock`. What it writes of the engine's state is, in
 `start`, a world's clock; everything else goes through the list. A world's rules change
-through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), journalled as the
-game's like a player's `rule` command is as theirs.
+through `game_rule` (`core.game_rule(s, w, "explosion_size", "1.75")`), never by assignment:
+the `import` lint refuses `w.rules.<name> = ...` in a game's code, as it refuses a name the
+list lacks.
 
 ## The client's side: `engine.Game`
 

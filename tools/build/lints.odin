@@ -636,8 +636,10 @@ is_ident_byte :: proc(b: u8) -> bool {
 
 // lint_game_api: a game's code names of server:core (imported as core) only what
 // GAME_API_DOC lists a game may call (api): much of server/core is visible to it, and
-// what a game reaches is the engine's to choose. Its tests, which drive the harness,
-// may name anything. path is relative to the repository, with forward slashes.
+// what a game reaches is the engine's to choose. Nor does it assign to a world's rules
+// (w.rules.drops = false): it changes one with core.game_rule, journalled as the game's.
+// Its tests, which drive the harness, may do either. path is relative to the
+// repository, with forward slashes.
 lint_game_api :: proc(path, text: string, api: []string) -> []string {
 	found := make([dynamic]string)
 	if !strings.has_prefix(path, "games/") || strings.has_suffix(path, "_test.odin") {
@@ -648,6 +650,17 @@ lint_game_api :: proc(path, text: string, api: []string) -> []string {
 	for line in strings.split_lines_iterator(&rest) {
 		line_no += 1
 		code, _, _ := strings.partition(line, "//")
+		if assigns_rules(code) {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: a game does not write a world's rules: core.game_rule changes one (%s)",
+					path,
+					line_no,
+					GAME_API_DOC,
+				),
+			)
+		}
 		for i := 0; i + len("core.") < len(code); i += 1 {
 			if !strings.has_prefix(code[i:], "core.") || (i > 0 && is_ident_byte(code[i - 1])) {
 				continue
@@ -673,6 +686,31 @@ lint_game_api :: proc(path, text: string, api: []string) -> []string {
 		}
 	}
 	return found[:]
+}
+
+// assigns_rules: code assigns to a selector's rules or one of their fields
+// (`w.rules = r`, `s.home.rules.drops = false`, `w.rules.size *= 2`), not compares.
+@(private = "file")
+assigns_rules :: proc(code: string) -> bool {
+	for i := 0; i < len(code); i += 1 {
+		if !strings.has_prefix(code[i:], ".rules") {continue}
+		end := i + len(".rules")
+		if end < len(code) && is_ident_byte(code[end]) {continue} 	// (.rules_text)
+		for end < len(code) && code[end] == '.' {
+			end += 1
+			for end < len(code) && is_ident_byte(code[end]) {end += 1}
+		}
+		op := strings.trim_left_space(code[end:])
+		switch {
+		case strings.has_prefix(op, "=="):
+		case strings.has_prefix(op, "="):
+			return true
+		case len(op) >= 2 && op[1] == '=' && strings.index_byte("+-*/%|&~", op[0]) >= 0:
+			return true
+		}
+		i = end - 1
+	}
+	return false
 }
 
 // import_lint runs lint_relative_imports, lint_game_imports, lint_game_package and
@@ -715,7 +753,7 @@ import_lint :: proc() -> bool {
 			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them and call what docs/games.md lists")}
+	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, games' packages are named for them, call what docs/games.md lists and write no rules")}
 	return ok
 }
 

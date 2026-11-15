@@ -267,6 +267,12 @@ test_game_api_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", bad, api)), 1)
 	testing.expect_value(t, len(lint_game_api("games/tag/server/game_test.odin", bad, api)), 0)
 	testing.expect_value(t, len(lint_game_api("server/core/x.odin", bad, api)), 0)
+	// A world's rules: read and compared, never assigned.
+	rules := "f :: proc() {\n\tw.rules.drops = false\n\ts.home.rules.size *= 2\n\tw.rules = r\n}\n"
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", rules, api)), 3)
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game_test.odin", rules, api)), 0)
+	reads := "f :: proc() {if w.rules.drops == false || w.rules.size <= 2 {x = w.rules_text}}\n"
+	testing.expect_value(t, len(lint_game_api("games/tag/server/game.odin", reads, api)), 0)
 	// The real list holds what the model game calls.
 	real, err := os.read_entire_file_from_path(GAME_API_DOC, context.allocator)
 	testing.expect(t, err == nil)
