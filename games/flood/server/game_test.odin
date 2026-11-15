@@ -20,6 +20,7 @@ Rig :: struct {
 rig_start :: proc(t: ^testing.T, rig: ^Rig) -> bool {
 	config := core.harness_world()
 	config.game = GAME
+	config.kit = "rocket_launcher 1" // (a real world's: the engine's tests fill the hotbar with blocks)
 	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
 	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
 	_, ok := core.harness_step_until(&rig.sess.h, welcomed, &rig.sess, 600)
@@ -135,12 +136,18 @@ test_flood_round :: proc(t: ^testing.T) {
 	r = core.mirror_game_record(&rig.sess.mirror, flood.Round)
 	testing.expect(t, r.out && r.phase == .Reveal && r.result == .Lost && r.alive == 0)
 
-	// The next round places the player again.
+	// The next round places the player again, the launcher in hand whatever it held.
+	core.inventory(&rig.sess.mirror, .Select, 0, game.HOTBAR_SLOTS - 1)
+	core.harness_step(&rig.sess.h, 2)
+	testing.expect_value(t, c.inventory.selected, game.HOTBAR_SLOTS - 1)
 	if !testing.expect(t, until_phase(rig, .Countdown), "no next round") {return}
 	testing.expect_value(t, f.round, round + 1)
 	if !testing.expect(t, until_phase(rig, .Playing), "the next round never started") {return}
 	testing.expect(t, !runner(s, c).out)
 	testing.expect_value(t, mode_of(rig), flood.RUNNER_MODE)
+	testing.expect_value(t, game.inventory_held(&c.inventory).item, launcher)
+	core.harness_step(&rig.sess.h, 2)
+	testing.expect_value(t, game.inventory_held(&rig.sess.mirror.inventory).item, launcher)
 	testing.expect_value(t, f.level, 0)
 	testing.expect_value(t, len(rig.sess.failures), 0)
 }

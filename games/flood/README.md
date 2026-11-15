@@ -12,7 +12,8 @@ runs under a hidden rule, told only when it ends:
 | `rot` | What it wets crumbles a few seconds later |
 | `heavy` | Explosions are 1.75 times as large and throw twice as hard (the world's `explosion_size` and `explosion_throw` rules) |
 
-Every round gives the kit (rocket launcher, grappling hook, rifles, jump boots) and nothing
+Every round gives the kit (rocket launcher, grappling hook, rifles, jump boots), starts with the
+launcher in hand, and nothing
 hurts but the water: a runner is in `flood:runner`, a mode with no health, and an out player in
 `flood:out`, which flies and only watches (`spectate`). Both come from the game's own pack,
 `pack/`, loaded only where Flood is played. The arena is new each round, from its seed.

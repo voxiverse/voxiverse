@@ -133,8 +133,11 @@ here :: proc(s: ^core.Server, c: ^core.Client) -> bool {
 	return c.state == .Playing && c.world == s.home
 }
 
-// enlist: c plays this round: a runner with the kit, at the spawn (a step apart from
-// the next player).
+// LAUNCHER: what a runner holds when a round starts.
+LAUNCHER :: "voxiverse:rocket_launcher"
+
+// enlist: c plays this round: a runner with the kit and the launcher in hand, at the
+// spawn (a step apart from the next player).
 enlist :: proc(s: ^core.Server, c: ^core.Client, seat: int) {
 	r := runner(s, c)
 	r^ = {
@@ -143,6 +146,14 @@ enlist :: proc(s: ^core.Server, c: ^core.Client, seat: int) {
 	}
 	core.game_mode(s, c, flood.RUNNER_MODE)
 	core.kit_give(s, c)
+	if launcher, known := game.registry_item(s.registry, LAUNCHER); known {
+		for st, slot in c.inventory.slots[:game.HOTBAR_SLOTS] {
+			if st.item == launcher {
+				core.hotbar_select(s, c, slot)
+				break
+			}
+		}
+	}
 	jitter := [3]f64{f64(seat % 3) - 1, 0, f64(seat / 3 % 3) - 1}
 	core.teleport(s, c, flood.SPAWN + jitter, {0, 0})
 }
