@@ -59,10 +59,14 @@ radius is sent any, so the baseline scenarios, which are not on a planet, are un
 
 `server/core/bandwidth_test.odin` measures the exact bytes of a scripted session and of a crowd of
 100 sheep. `assets/baselines/net/bandwidth.txt` holds the numbers, which are rewritten with
-`-define:VX_BANDWIDTH_ACCEPT=true`:
+`-define:VX_BANDWIDTH_ACCEPT=true`, a define `./build.sh test` does not pass, so `odin test` is
+run with the driver's collections:
 
 ```sh
-ODIN_TEST_NAMES=core.test_bandwidth_accept ./build.sh test server/core
+odin test server/core -collection:client=client -collection:server=server \
+	-collection:common=common -collection:games=games -collection:generated=build/generated \
+	-define:VX_BANDWIDTH_ACCEPT=true -define:ODIN_TEST_NAMES=core.test_bandwidth_accept \
+	-out:build/tmp/bandwidth-accept
 ```
 
 ## Multiplayer tests

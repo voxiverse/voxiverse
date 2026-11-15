@@ -33,6 +33,8 @@ Rules :: struct {
 	show_coordinates:     bool, // F3 shows position, chunk and block under (players without debug.coordinates see none when off)
 	random_tick_speed:    i32, // blocks picked in each chunk each tick to change by themselves (0: none)
 	island_radius:        i32, // chunks around an observer simulated in detail (0: the view distance plus 2; docs/world.md)
+	explosion_size:       f32, // every explosion's radius, times this (a rocket's 4 blocks; what it carves and how far it reaches)
+	explosion_throw:      f32, // how hard an explosion throws what is near, times this
 }
 
 @(rodata)
@@ -59,6 +61,8 @@ RULES_DEFAULTS := Rules {
 	regen_rate           = 1,
 	show_coordinates     = true,
 	random_tick_speed    = 3,
+	explosion_size       = 1,
+	explosion_throw      = 1,
 }
 
 @(rodata)
@@ -143,6 +147,20 @@ RULES_VARS := [?]base.Var {
 		min = 0,
 		max = 64,
 		step = 1,
+	},
+	{
+		field = "explosion_size",
+		help = "explosions' radius, times this (what they carve, how far they hurt and throw)",
+		min = 0.25,
+		max = 4,
+		step = 0.25,
+	},
+	{
+		field = "explosion_throw",
+		help = "how hard explosions throw, times this",
+		min = 0,
+		max = 8,
+		step = 0.25,
 	},
 }
 

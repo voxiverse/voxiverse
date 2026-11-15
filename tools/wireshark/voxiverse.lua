@@ -105,6 +105,8 @@ local SCHEMA = {
     { name = "show_coordinates", t = "bool" },
     { name = "random_tick_speed", t = "i32" },
     { name = "island_radius", t = "i32" },
+    { name = "explosion_size", t = "f32" },
+    { name = "explosion_throw", t = "f32" },
   } },
   { id = 5, name = "clock", key = "none", lane = "reliable", fields = {
     { name = "time", t = "f64" },

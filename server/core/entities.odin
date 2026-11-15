@@ -285,9 +285,13 @@ fire :: proc(s: ^Server, c: ^Client, yaw, pitch: f32) -> bool {
 }
 
 // explode: a blast at center. Everyone near is shown it, the sphere is
-// carved (where loaded), and what is near is thrown (sheep hurt).
-explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
+// carved (where loaded), and what is near is thrown (sheep hurt). size is its
+// radius as the world's rules scale it: times explosion_size, the throw times
+// explosion_throw.
+explode :: proc(w: ^World, center: [3]f64, size: f64, action: Action_Id) {
 	s := w.server
+	radius := size * f64(w.rules.explosion_size)
+	throw := w.rules.explosion_throw
 	record_world(s, w, .Explosion, n0 = i64(radius))
 	for i in players_near(w, center, 160 + PLAYER_MARGIN, SPAWN_HEIGHT) {
 		c := &s.clients[i]
@@ -303,18 +307,19 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		{action, .Explosion},
 	)
 	reach := 2 * radius
-	push :: proc(at, center: [3]f64, reach: f64) -> (impulse: [3]f32, ok: bool) {
+	push :: proc(at, center: [3]f64, reach: f64, throw: f32) -> (impulse: [3]f32, ok: bool) {
 		d := at - center
 		l := math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
 		if l >= reach {return}
 		if l < 1e-6 {d, l = {0, 1, 0}, 1}
-		strength := f32(1 - l / reach) * 16
 		dir := d / l
-		return {f32(dir.x) * strength, f32(dir.y) * strength + 4, f32(dir.z) * strength}, true
+		strength := f32(1 - l / reach) * 16
+		impulse = {f32(dir.x), f32(dir.y), f32(dir.z)} * strength + {0, 4, 0}
+		return impulse * throw, true
 	}
 	for i in players_near(w, center, reach + PLAYER_MARGIN, reach + PLAYER_MARGIN) {
 		c := &s.clients[i]
-		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach); near {
+		if impulse, near := push(c.player.position + {0, 0.9, 0}, center, reach, throw); near {
 			c.player.velocity += impulse
 			disturb(s, c)
 			c.player.on_ground = false
@@ -345,7 +350,7 @@ explode :: proc(w: ^World, center: [3]f64, radius: f64, action: Action_Id) {
 		id := u32(fid)
 		h, ok := entity_find(w, id)
 		if !ok {continue}
-		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach)
+		impulse, near := push(entity_pos(w, h) + {0, 0.4, 0}, center, reach, throw)
 		if !near || !game.kind_info(w.server.registry, entity_kind(w, h)).hittable {continue}
 		entity_set_velocity(w, h, entity_velocity(w, h) + impulse)
 		entity_set_on_ground(w, h, false)
