@@ -93,9 +93,15 @@ session_game_ended :: proc(s: ^Session) {
 	if s.game.ended != nil {s.game.ended(s)}
 }
 
-// game_hud draws the game's HUD, if the session plays a game that has one.
-game_hud :: proc(s: ^Session, ctx: ^ui.Context) {
-	if s.game.hud != nil {s.game.hud(s, ctx)}
+// game_hud draws the game's HUD, if the session plays a game that has one, in the
+// screen below top (the F3 overlay's bottom while it is open: App.debug_bottom), so
+// neither covers the other.
+game_hud :: proc(s: ^Session, ctx: ^ui.Context, top: f32 = 0) {
+	if s.game.hud == nil {return}
+	whole := ctx.screen
+	defer ctx.screen = whole
+	if top > whole.y {ui.cut_top(&ctx.screen, top - whole.y)}
+	s.game.hud(s, ctx)
 }
 
 // game_debug_line: the game's F3 line ("" for none).

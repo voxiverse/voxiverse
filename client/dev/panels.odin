@@ -50,6 +50,8 @@ overlay_append :: proc(lines: ^[dynamic]Overlay_Line, text: string, color: Maybe
 	append(lines, Overlay_Line{text, color})
 }
 
+// debug_overlay: F3, two columns of lines at the top of the screen; app.debug_bottom
+// says how far down they reach, so the game's HUD is drawn below them (hud_draw).
 debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	prev := ui.begin_layer(ctx, .Tooltip)
 	defer ui.end_layer(ctx, prev)
@@ -331,6 +333,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			{4, 4},
 		)
 		ui.fill_rect(ctx, r, t.menu_fill)
+		app.debug_bottom = max(app.debug_bottom, r.y + r.h)
 		ui.begin_column(ctx, ui.rect_shrink(r, 4), 0)
 		defer ui.end_column(ctx)
 		for line in left_lines {
@@ -353,6 +356,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			{-4, 4},
 		)
 		ui.fill_rect(ctx, r, t.menu_fill)
+		app.debug_bottom = max(app.debug_bottom, r.y + r.h)
 		ui.begin_column(ctx, ui.rect_shrink(r, 4), 0)
 		defer ui.end_column(ctx)
 		for line in right_lines {

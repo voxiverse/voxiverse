@@ -5,7 +5,9 @@ import "core:log"
 import "core:strings"
 import "core:testing"
 
+import "client:audio"
 import "client:console"
+import "client:dev"
 import "client:engine"
 import "client:font"
 import "client:hud"
@@ -47,6 +49,7 @@ Counter_View :: struct {
 	started:  bool,
 	received: int,
 	count:    Count,
+	screen:   ui.Rect, // what its HUD was last given
 }
 
 COUNTER_CLIENT :: engine.Game {
@@ -56,8 +59,15 @@ COUNTER_CLIENT :: engine.Game {
 	started = proc(s: ^engine.Session) {engine.game_state(s, Counter_View).started = true},
 	received = counter_received,
 	hud = proc(s: ^engine.Session, ctx: ^ui.Context) {
-		count := engine.game_state(s, Counter_View).count
-		ui.label(ctx, fmt.tprintf("count %d", count.ticks), ctx.screen, .Center, ctx.theme.text)
+		view := engine.game_state(s, Counter_View)
+		view.screen = ctx.screen
+		ui.label(
+			ctx,
+			fmt.tprintf("count %d", view.count.ticks),
+			ctx.screen,
+			.Center,
+			ctx.theme.text,
+		)
 	},
 	debug = proc(s: ^engine.Session) -> string {
 		return fmt.tprintf("count %d", engine.game_state(s, Counter_View).count.ticks)
@@ -162,6 +172,21 @@ test_world_plays_a_game :: proc(t: ^testing.T) {
 	for text in app.ui.texts {shown ||= text == fmt.tprintf("count %d", view.count.ticks)}
 	ui_end(app)
 	testing.expect(t, shown, "the game's HUD was not drawn")
+	testing.expect_value(t, view.screen, ui.Rect{0, 0, SCREEN.x, SCREEN.y})
+	// With F3 open (drawn first, as app_ui does), the game's HUD is given the screen
+	// below the overlay, so neither covers the other.
+	mixer := new(audio.Mixer)
+	defer free(mixer)
+	audio.mixer_init(mixer, audio.DEVICE_RATE)
+	app.mixer = mixer
+	ui_begin(app)
+	dev.debug_overlay(app, &app.ui)
+	hud.hud_draw(app, &app.ui)
+	ui_end(app)
+	testing.expect(t, app.debug_bottom > 100, "F3 did not say how far down it reaches")
+	testing.expect_value(t, view.screen.y, app.debug_bottom)
+	testing.expect_value(t, view.screen.y + view.screen.h, SCREEN.y)
+	testing.expect_value(t, app.ui.screen, ui.Rect{0, 0, SCREEN.x, SCREEN.y})
 	testing.expect_value(
 		t,
 		engine.game_debug_line(s),

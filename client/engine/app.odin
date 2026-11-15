@@ -137,6 +137,7 @@ App :: struct {
 	started:             time.Tick, // when the app began (the splash's pulse)
 	toasts:              Toasts, // the notices at the top right (overlay_toasts.odin)
 	hud_hidden:          bool, // F1: the HUD is hidden (not saved)
+	debug_bottom:        f32, // this frame's F3 overlay reaches down to here (0: not shown): the game's HUD is drawn below it
 	popup:               Item_Popup, // the held item's name above the hotbar (hud_popup.odin)
 	lan:                 Lan_Dialog, // the Open to LAN dialog's choices (overlay_lan.odin)
 	player_menu:         Player_Menu, // the section shown and the one shown last (menu_player.odin)

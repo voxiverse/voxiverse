@@ -113,6 +113,10 @@ app_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 		)
 		starfield.starfield_draw(ctx, &app.stars, app.settings.reduce_motion)
 	}
+	// F3 first (it draws on the Tooltip layer, over everything), so the game's HUD
+	// knows how far down it reaches (App.debug_bottom).
+	app.debug_bottom = 0
+	if app.debug.overlay {dev.debug_overlay(app, ctx)}
 	switch app.screen {
 	case .Title:
 		screen.title_screen(app, ctx)
@@ -131,7 +135,6 @@ app_ui :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	case .Failed:
 		screen.failed_screen(app, ctx)
 	}
-	if app.debug.overlay {dev.debug_overlay(app, ctx)}
 	if app.settings.show_fps {dev.fps_overlay(app, ctx)}
 	overlay.draw_overlays(app, ctx)
 	screen.ignite_ui(app, ctx)

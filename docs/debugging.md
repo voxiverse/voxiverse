@@ -71,7 +71,7 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `run -- --null-audio` | Mixes into the null device (real time, no sound card). |
 | `run -- --game <id>` | A world started here (`singleplayer`, a universe) plays that game ([games.md](games.md)); default: none, the engine alone. |
 | <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. The world checks take a screenshot at the start and end of each flight. |
-| <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks), and the line of the game the world plays (`game <id>: ...`). |
+| <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks), and the line of the game the world plays (`game <id>: ...`). The game's HUD is drawn below it while it is open. |
 | <kbd>F4</kbd> | The tuning panel (see [Variables](#variables)). |
 | <kbd>F8</kbd> | Development builds: the audio inspector ([audio.md](audio.md)). |
 

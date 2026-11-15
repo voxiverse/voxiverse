@@ -81,7 +81,7 @@ on the main thread, in the frame.
 | `started(s)` | The session plays the game: welcomed, its state zero |
 | `ended(s)` | The session ends (only after `started`; its state still there) |
 | `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent |
-| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (`client/hud`'s `hud_draw`; F1 hides both), with the `ui.Context` |
+| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (`client/hud`'s `hud_draw`; F1 hides both), with the `ui.Context`; while F3 is open, its `ctx.screen` is the screen below the overlay (`App.debug_bottom`), so a bar at its top moves down rather than under the overlay |
 | `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
 | `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
 
