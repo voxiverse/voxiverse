@@ -320,6 +320,10 @@ app_frame :: proc(app: ^engine.App, capture_this_frame: bool, number: int) -> bo
 		app_ui(app, &app.ui)
 		ui.end_frame(&app.ui)
 	}
+	if app.launch != "" {
+		engine.play_game(app, app.launch) // (the launcher's pick: a world, from the next frame)
+		app.launch = ""
+	}
 	if capture_this_frame || app.renderdoc_requested {
 		title := app.renderdoc_title if app.renderdoc_title != "" else "voxiverse"
 		gpu.renderdoc_capture(&app.renderdoc, title)

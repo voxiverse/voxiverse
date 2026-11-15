@@ -156,6 +156,7 @@ App :: struct {
 	games:               []Game, // the games' client parts this build has (client/main gives the list the driver writes)
 	server_games:        []core.Game, // ... and their server parts, for a world of our own
 	game:                string, // the game a world of our own plays, by id (--game, else game.DEFAULT_GAME: client/main sets it)
+	launch:              string, // a game the title's launcher picked this frame (its id, constant data): the frame starts a world playing it after the UI (play_game)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,
@@ -338,6 +339,12 @@ enter_world :: proc(
 			host_game = host_game(app, game_id if game_id != "" else app.game),
 		},
 	)
+}
+
+// play_game starts a world of our own playing the game id: a scratch world (nothing
+// saved), as `singleplayer` starts one for App.game. The title's launcher and --game.
+play_game :: proc(app: ^App, id: string) {
+	enter_world(app, "", SCRATCH_SEED, game_id = id)
 }
 
 // host_game: the server part of the game id a world of our own plays. A game this

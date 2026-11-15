@@ -69,7 +69,7 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `run -- --check <name>` | Runs an exit check (see [Checks](#checks)). |
 | `run -- --scene <name>` | Renders one visual-baseline scene offscreen and quits (see [Visual baselines](#visual-baselines)). |
 | `run -- --null-audio` | Mixes into the null device (real time, no sound card). |
-| `run -- --game <id>` | A world started here (`singleplayer`, a new universe) plays that game ([games.md](games.md)); default: `sandbox`. A saved universe plays the game it records. |
+| `run -- --game <id>` | Straight into a scratch world playing that game, past the title's launcher (unless `--exec`, `--scene`, `--check` or `--benchmark` drives the run); a world started here (`singleplayer`, a new universe) plays it ([games.md](games.md)); default: `sandbox`. A saved universe plays the game it records. |
 | <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. The world checks take a screenshot at the start and end of each flight. |
 | <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks), and the line of the game the world plays (`game <id>: ...`). The game's HUD is drawn below it while it is open. |
 | <kbd>F4</kbd> | The tuning panel (see [Variables](#variables)). |

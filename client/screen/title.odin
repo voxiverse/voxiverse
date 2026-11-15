@@ -83,6 +83,26 @@ splash_choose :: proc(entries: []string, second: i64) -> string {
 	return entries[int(second % i64(len(entries)))]
 }
 
+// TITLE_WIDTH: the title's column, as wide as a game's one-line description may be in
+// the launcher's small text (a test holds every game to it).
+TITLE_WIDTH :: 520
+
+// LAUNCHER_ABOUT: the size of a game's description, of the theme's font size.
+LAUNCHER_ABOUT :: 0.8
+
+// launcher_games: the games the launcher lists: this build's (App.games), the default
+// first, then the rest in the list's order (by folder).
+launcher_games :: proc(app: ^engine.App) -> []^engine.Game {
+	list := make([dynamic]^engine.Game, 0, len(app.games), context.temp_allocator)
+	for &g in app.games {if g.id == game.DEFAULT_GAME {append(&list, &g)}}
+	for &g in app.games {if g.id != game.DEFAULT_GAME {append(&list, &g)}}
+	return list[:]
+}
+
+// title_screen: the logo and splash, the launcher (each game this build has: its name, a
+// button that plays it in a scratch world, and its description), then Singleplayer (the
+// saved universes), Multiplayer, Options and Quit. A game picked is App.launch: the
+// frame starts its world once the UI is drawn.
 title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.push_id(ctx, "title")
 	defer ui.pop_id(ctx)
@@ -91,8 +111,18 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if !app.settings.reduce_motion {
 		holiday_back(app, ctx, holiday, app.last_frame_ms / 1000)
 	}
+	games := launcher_games(app)
+	about := t.font_size * LAUNCHER_ABOUT // a game's description
 	rows: f32 = 5 if app.devchat.running else 4
-	column := ui.rect_center(ctx.screen, 400, rows * t.row_height + (rows - 1) * t.spacing + 120)
+	// Each game: its button and its description (each with the spacing after it), then a
+	// gap before the rest.
+	launcher := f32(len(games)) * (t.row_height + about + 4 + 2 * t.spacing)
+	if len(games) > 0 {launcher += 2 * t.spacing}
+	column := ui.rect_center(
+		ctx.screen,
+		TITLE_WIDTH,
+		rows * t.row_height + (rows - 1) * t.spacing + 120 + launcher,
+	)
 	logo := ui.cut_top(&column, 80)
 	title_text := engine.tr(.Title_Voxiverse)
 	ui.title(ctx, title_text, logo)
@@ -160,6 +190,13 @@ title_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	ui.begin_column(ctx, column)
 	defer ui.end_column(ctx)
 	ui.default_focus(ctx)
+	for g in games {
+		ui.push_id(ctx, g.id)
+		if ui.button(ctx, g.name, ui.next(ctx)) {app.launch = g.id}
+		ui.draw_text(ctx, ui.next(ctx, about + 4), g.description, about, t.text_muted, .Center)
+		ui.pop_id(ctx)
+	}
+	if len(games) > 0 {ui.next(ctx, t.spacing)} 	// (the games apart from the rest)
 	if ui.button(ctx, engine.tr(.Title_Singleplayer), ui.next(ctx)) {
 		universes_refresh(&app.universes)
 		app.screen = .Universes

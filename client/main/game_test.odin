@@ -95,10 +95,9 @@ counter_command :: proc(app: ^engine.App, args: []string) {
 	engine.console_print(&app.console, fmt.tprintf("the count is %d", count.ticks))
 }
 
-// counter_join: a session joining the rig's server (which plays server_game) with the
+// game_join: a session joining the rig's server (which plays server_game) with the
 // client games games, stepped until it plays or fails.
-@(private = "file")
-counter_join :: proc(
+game_join :: proc(
 	t: ^testing.T,
 	rig: ^Frame_Rig,
 	s: ^engine.Session,
@@ -146,7 +145,7 @@ test_world_plays_a_game :: proc(t: ^testing.T) {
 	s := new(engine.Session)
 	defer free(s)
 	games := []engine.Game{COUNTER_CLIENT}
-	if !counter_join(t, rig, s, COUNTER_SERVER, games) {return}
+	if !game_join(t, rig, s, COUNTER_SERVER, games) {return}
 	defer core.harness_stop(&rig.h)
 	defer engine.session_end(s, nil, nil)
 	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}
@@ -221,7 +220,7 @@ test_world_game_refused :: proc(t: ^testing.T) {
 		defer free(rig)
 		s := new(engine.Session)
 		defer free(s)
-		if !counter_join(t, rig, s, COUNTER_SERVER, nil) {return}
+		if !game_join(t, rig, s, COUNTER_SERVER, nil) {return}
 		defer core.harness_stop(&rig.h)
 		defer engine.session_end(s, nil, nil)
 		testing.expect_value(t, s.state, engine.Session_State.Failed)
@@ -243,7 +242,7 @@ test_world_game_refused :: proc(t: ^testing.T) {
 		defer free(rig)
 		s := new(engine.Session)
 		defer free(s)
-		if !counter_join(t, rig, s, COUNTER_SERVER, {other}) {return}
+		if !game_join(t, rig, s, COUNTER_SERVER, {other}) {return}
 		defer core.harness_stop(&rig.h)
 		defer engine.session_end(s, nil, nil)
 		testing.expect_value(t, s.state, engine.Session_State.Failed)
@@ -293,7 +292,7 @@ test_no_game_plays_sandbox :: proc(t: ^testing.T) {
 	defer free(rig)
 	s := new(engine.Session)
 	defer free(s)
-	if !counter_join(t, rig, s, hosted, app.games) {return}
+	if !game_join(t, rig, s, hosted, app.games) {return}
 	defer core.harness_stop(&rig.h)
 	defer engine.session_end(s, nil, nil)
 	if !testing.expect_value(t, s.state, engine.Session_State.Playing) {return}

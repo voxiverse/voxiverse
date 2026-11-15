@@ -13,7 +13,8 @@ shared package (`package <game>`: the rules, constants and record types both sid
 What names a game is declared once, in its shared package, and both parts take it: a
 `game.Game_Info` holding its id (the folder's name), the name players read and a line saying
 what it is (plain English for now: the launcher lists the games by them, and a game has no
-translation table yet). `core.Game` and `engine.Game` hold it by `using`, so `g.id` reads as
+translation table yet). The description is one line in the launcher's small text, at most the
+title's column wide (`screen.TITLE_WIDTH`; a `client/main` test measures every game's). `core.Game` and `engine.Game` hold it by `using`, so `g.id` reads as
 before:
 
 ```odin
@@ -21,7 +22,7 @@ before:
 INFO :: game.Game_Info {
 	id          = "flood",
 	name        = "Flood",
-	description = "Water rises in a walled arena: climb to the glowing platform before it reaches you.",
+	description = "Climb to the glowing platform before the rising water gets you.",
 }
 ```
 
@@ -136,6 +137,19 @@ universe of a game this build lacks is not opened ("This universe plays <id>, a 
 version does not have"). The client starts its embedded server with that game's server part
 (`App.server_games`), whose Welcome then names it like any server's. The id must be a game
 with both parts; any other is refused at startup with the list of those there are.
+
+### The launcher
+
+The title screen lists the games the client was built with (`App.games`, the driver's
+`CLIENT` list), the default first and the rest by folder: each its name on a button, its
+description under it, before Singleplayer (the saved universes), Multiplayer, Options and
+Quit. The mouse, the keyboard and a pad move through it as through the rest of the menu (the
+default game is lit at once). Picking a game sets `App.launch`; once the frame's UI is drawn,
+`play_game` starts a scratch world (nothing saved) playing it with the embedded server, the
+same path as `--game <id>` and `singleplayer`. `--game <id>` with no `--exec`, `--scene`,
+`--check` or `--benchmark` skips the title and goes straight into that world. Saved universes
+open with the game they record (above); a new universe, made from Singleplayer, plays the
+command line's game.
 
 ## The lists of games
 

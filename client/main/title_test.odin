@@ -4,8 +4,13 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
+import "client:engine"
 import "client:screen"
 import "client:ui"
+import "common:game"
+import "generated:games"
+import games_client "generated:games/client"
+import "server:core"
 
 @(test)
 test_splashes_parse :: proc(t: ^testing.T) {
@@ -95,5 +100,79 @@ test_splash_motion :: proc(t: ^testing.T) {
 			angle < screen.SPLASH_TILT + screen.SPLASH_WOBBLE + 0.001,
 			"the angle breathes around the tilt",
 		)
+	}
+}
+
+// The launcher: the title lists every game this build has (the default first, then by
+// folder), each a button with its description under it, on one line within the column;
+// the rest of the title follows. Picking one, by the mouse or by the pad as the rest of
+// the menu is driven, asks for a world playing it (App.launch, which the frame starts),
+// and the session that world's server part makes plays that game.
+@(test)
+test_launcher_lists_and_starts_every_game :: proc(t: ^testing.T) {
+	r := rig_make(t)
+	defer rig_free(r)
+	app := r.app
+	app.session = nil
+	app.screen = .Title
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	ui_frame(app)
+	order := make([dynamic]string, context.temp_allocator)
+	append(&order, game.DEFAULT_GAME)
+	for g in games_client.CLIENT {if g.id != game.DEFAULT_GAME {append(&order, g.id)}}
+	testing.expect_value(t, len(order), len(games.SERVER))
+	last: f32 = -1
+	about := app.ui.theme.font_size * screen.LAUNCHER_ABOUT
+	for id in order {
+		g, found := engine.game_find(app.games, id)
+		if !testing.expectf(t, found, "%s has no client part", id) {continue}
+		r, shown := ui.find_widget(&app.ui, g.name)
+		testing.expectf(t, shown, "the launcher does not list %s", g.name)
+		testing.expectf(t, r.y > last, "%s is out of order", g.name)
+		last = r.y
+		testing.expect(t, slice.contains(app.ui.texts[:], g.description), g.description)
+		testing.expectf(
+			t,
+			ui.measure_text(&app.ui, g.description, about) <= screen.TITLE_WIDTH,
+			"%s's description is wider than the title's column",
+			g.id,
+		)
+	}
+	singleplayer, _ := ui.find_widget(&app.ui, "Singleplayer")
+	testing.expect(t, singleplayer.y > last, "the games are not above the rest of the title")
+
+	// The pad: the default game is lit at once; Down moves to the next game, A picks it.
+	pad_connect(app, .Xbox)
+	pad_frame(app)
+	first, _ := engine.game_find(app.games, order[0])
+	testing.expect_value(t, ui.focused_label(&app.ui), first.name)
+	pad_go(app, .Down)
+	pad_tap(app, .A)
+	testing.expect_value(t, app.launch, order[1])
+	app.launch = ""
+
+	// The mouse: each game's button asks for its world; nothing starts in the UI itself.
+	for id in order {
+		g, _ := engine.game_find(app.games, id)
+		click(t, app, g.name)
+		testing.expect_value(t, app.launch, id)
+		testing.expect(t, app.session == nil && app.screen == .Title)
+		app.launch = ""
+	}
+
+	// What the frame then starts: a world hosted with that game's server part, whose
+	// session plays it (on the stepped server; the embedded one runs on its own thread).
+	for id in order {
+		hosted := engine.host_game(app, id)
+		testing.expect_value(t, hosted.id, id)
+		rig := new(Frame_Rig)
+		defer free(rig)
+		s := new(engine.Session)
+		defer free(s)
+		if !game_join(t, rig, s, hosted, app.games) {continue}
+		testing.expectf(t, s.state == .Playing, "%s: the session did not play (%s)", id, s.failure)
+		testing.expect_value(t, s.game.id, id)
+		engine.session_end(s, nil, nil)
+		core.harness_stop(&rig.h)
 	}
 }
