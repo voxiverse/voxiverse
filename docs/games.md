@@ -95,11 +95,15 @@ executables' main packages import them (the `import` lint), the client's list `c
 alone, so the dedicated server links no client code. The dedicated server runs one with
 `voxiverse-server --game <id>` (default: none); the client gives both lists to the App.
 
-Adding a game is a folder `games/<game>/` holding its shared package, a `server` package that
-exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
-engine.Game{...}`, with their tests beside them: nothing else.
-`games/stopwatch` is the model: the smallest game that uses every hook and both blocks of
-state, and tests that run it on a stepped server.
+Adding a game is a folder `games/<game>/` holding its shared package, a `server` package
+that exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
+engine.Game{...}`, with their tests beside them: nothing else. `games/stopwatch` is the
+model: the smallest game that uses every hook of the server's, a client part with its state,
+records, HUD, F3 line and command, and a record and an event of its own. Its server part's
+tests run it on a stepped server with the harness's mirror client; its client part's tests
+play it whole, a session joining the server part over the harness's network and drawing its
+HUD, the one place a part imports another (the `import` lint lets a client part's tests
+import its server part). `voxiverse --game stopwatch` plays it in a world of our own.
 
 ## The game's state
 

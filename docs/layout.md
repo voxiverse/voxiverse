@@ -44,10 +44,11 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    shape no game has is a stale row, as a folder with no file is). Nothing outside `games/`
    imports a game except the executables' main packages (`client/main`, `server/dedicated`;
    a game's client part `client/main` alone), a game imports no other game, and a part
-   imports no other part of its game but the shared package: the `import` lint in `check`,
-   which also checks the package names. The main packages reach the games through the lists
-   the driver writes from `games/` into `build/generated/games` (the packages
-   `generated:games` and `generated:games/client`), so those lists are no file either.
+   imports no other part of its game but the shared package (but for the client part's
+   tests, which play the game against its server part): the `import` lint in `check`, which
+   also checks the package names. The main packages reach the games through the lists the
+   driver writes from `games/` into `build/generated/games` (the packages `generated:games`
+   and `generated:games/client`), so those lists are no file either.
 
 ## The cap
 
@@ -164,6 +165,7 @@ package** is enforced by the `layout` lint (see above).
 | `games` | Where the games live (rule 6) | `README.md` |
 | `games/<game>` | A game's shared package: its rules, constants and the record types both sides use (the shape of every game's folder) | `*.odin`, `README.md` |
 | `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
+| `games/<game>/client` | A game's client part: its `engine.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

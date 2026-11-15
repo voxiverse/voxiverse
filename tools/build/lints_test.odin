@@ -161,6 +161,17 @@ test_game_import_lint :: proc(t: ^testing.T) {
 		len(lint_game_imports("games/tag/client/hud.odin", "import \"games:tag/server\"\n")),
 		1,
 	)
+	// (The client part's tests play the game against its server part; nothing else does.)
+	testing.expect_value(
+		t,
+		len(lint_game_imports("games/tag/client/hud_test.odin", "import \"games:tag/server\"\n")),
+		0,
+	)
+	testing.expect_value(
+		t,
+		len(lint_game_imports("games/tag/server/game_test.odin", "import \"games:tag/client\"\n")),
+		1,
+	)
 	// The lists of every game the driver writes: the main packages' only, the client's
 	// list client/main's.
 	list := "import \"generated:games\"\n"

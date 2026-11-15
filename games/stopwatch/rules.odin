@@ -8,7 +8,8 @@ import "common:game"
 // player their time and the record.
 //
 // This is its shared package: what both of its sides use, its records among them
-// (records.odin). The server part (games/stopwatch/server) runs the game.
+// (records.odin). The server part (games/stopwatch/server) runs the game; the client
+// part (games/stopwatch/client) shows a player their time.
 
 // seconds: ticks as seconds of play.
 seconds :: proc(ticks: u64) -> f64 {return f64(ticks) / game.TICK_RATE}

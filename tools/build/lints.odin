@@ -453,10 +453,12 @@ game_path_of :: proc(rest: string) -> (game: string, part: Game_Part) {
 // and a game imports no other game, nor the lists of games (generated:), which import
 // them all. Within a game the parts stay apart as the engine's do: the shared package
 // imports neither server: nor client:, the server part no client:, and a part imports no
-// other part of its game but the shared package. path is relative to the repository,
-// with forward slashes.
+// other part of its game but the shared package (but for the client part's tests, which
+// play the game against its server part, as client/main's play the engine's). path is
+// relative to the repository, with forward slashes.
 lint_game_imports :: proc(path, text: string) -> []string {
 	in_game := strings.has_prefix(path, "games/")
+	is_test := strings.has_suffix(path, "_test.odin")
 	own, own_part := "", Game_Part.Shared
 	if in_game {own, own_part = game_path_of(path[len("games/"):])}
 	found := make([dynamic]string)
@@ -490,7 +492,9 @@ lint_game_imports :: proc(path, text: string) -> []string {
 					target,
 					"a game imports no other game (what two share belongs in the engine)",
 				)
-			case in_game && part != .Shared:
+			case in_game &&
+			     part != .Shared &&
+			     !(own_part == .Client && part == .Server && is_test):
 				refuse(
 					&found,
 					path,
