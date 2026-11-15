@@ -137,8 +137,10 @@ import its server part). `voxiverse --game stopwatch` plays it in a world of our
 ## The game's pack
 
 A game may bring content as data, a pack of its own ([packs.md](packs.md)) in
-`games/<game>/pack/`, named for the game (`pack.json`'s namespace and the folder: its ids read
-`<game>:<name>`), laid out as any pack ([layout.md](layout.md), rule 6). Its shared package
+`games/<game>/pack/`, named for the game (`pack.json`'s namespace and the `Pack_Source`'s,
+though its folder is `pack`: its ids read `<game>:<name>`), laid out as any pack
+([layout.md](layout.md), rule 6). `./build.sh packs` checks a pack folder named for its
+namespace, so a copy of it named `<game>`. Its shared package
 names the files in a constant `game.Pack_Source`, each `#load`ed (the executable carries it, as
 it carries the base pack), and its server part puts it in `core.Game.pack`:
 
