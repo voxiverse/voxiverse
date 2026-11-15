@@ -76,38 +76,42 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 	ui.fill_rect(ctx, top, t.hud_fill)
 	ui.draw_text(ctx, top, status(f, int(s.camera.position.y)), t.font_size, t.text, .Center)
 
+	// The banners are laid out for a 720-high screen and shrink with a smaller one (the
+	// engine gives the HUD only the screen below F3 while it is open).
+	k := min(1, ctx.screen.h / 720)
 	mid := ctx.screen.y + ctx.screen.h / 2
-	big := t.title_size * 1.5
+	big := t.title_size * 1.5 * k
+	size := t.title_size * k
 	switch f.phase {
 	case .Waiting:
 	case .Countdown:
-		banner(ctx, mid - 140, fmt.tprintf("ROUND %d", f.round), big, t.focus_ring)
-		banner(ctx, mid - 60, fmt.tprintf("%d", f.countdown), big, t.text)
+		banner(ctx, mid - 140 * k, fmt.tprintf("ROUND %d", f.round), big, t.focus_ring)
+		banner(ctx, mid - 60 * k, fmt.tprintf("%d", f.countdown), big, t.text)
 		banner(
 			ctx,
-			mid + 40,
+			mid + 40 * k,
 			"Reach the glowing platform. Something is different.",
-			t.title_size * 0.6,
+			size * 0.6,
 			t.text,
 		)
 	case .Playing:
 		switch {
 		case f.out:
-			banner(ctx, mid - 140, "WATCHING: out of this round (fly)", t.title_size, t.log_error)
+			banner(ctx, mid - 140 * k, "WATCHING: out of this round (fly)", size, t.log_error)
 		case f.under > 0:
 			banner(
 				ctx,
-				mid - 140,
+				mid - 140 * k,
 				fmt.tprintf("DROWNING %.1f", f32(f.under) / 10),
-				t.title_size,
+				size,
 				t.log_error,
 			)
 		case f.seconds < u16(flood.GRACE):
 			banner(
 				ctx,
-				mid - 140,
+				mid - 140 * k,
 				fmt.tprintf("Water in %d", int(flood.GRACE) - int(f.seconds)),
-				t.title_size,
+				size,
 				t.focus_ring,
 			)
 		}
@@ -122,22 +126,22 @@ hud :: proc(s: ^engine.Session, ctx: ^ui.Context) {
 			head, color = "TIME UP", t.log_warn
 		case .None:
 		}
-		banner(ctx, mid - 180, head, big, color)
+		banner(ctx, mid - 180 * k, head, big, color)
 		banner(
 			ctx,
-			mid - 90,
+			mid - 90 * k,
 			fmt.tprintf("%d of %d made it", f.made_it, f.players),
-			t.title_size * 0.8,
+			size * 0.8,
 			t.text,
 		)
-		banner(ctx, mid - 10, "The rule was", t.title_size * 0.6, t.text_muted)
+		banner(ctx, mid - 10 * k, "The rule was", size * 0.6, t.text_muted)
 		title := strings.to_upper(flood.RULE_TITLES[f.rule], context.temp_allocator)
-		banner(ctx, mid + 60, title, t.title_size, t.log_warn)
+		banner(ctx, mid + 60 * k, title, size, t.log_warn)
 		banner(
 			ctx,
-			mid + 140,
+			mid + 140 * k,
 			fmt.tprintf("next round in %d", f.countdown),
-			t.title_size * 0.6,
+			size * 0.6,
 			t.text_muted,
 		)
 	}

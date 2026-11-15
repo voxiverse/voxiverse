@@ -131,4 +131,15 @@ test_flood_on_the_hud :: proc(t: ^testing.T) {
 	v.round.phase, v.round.result, v.round.rule = .Reveal, .Won, .Tide
 	testing.expect(t, drawn(app, "ROUND WON"))
 	testing.expect(t, drawn(app, "TIDE: THE WATER SURGED AND FELL BACK"))
+
+	// While F3 is open the engine gives the HUD only the screen below it (here from y 336):
+	// all Flood draws stays inside, the banners shrunk to fit.
+	ui.begin_frame(&app.ui, {}, {1280, 720}, 1)
+	engine.game_hud(s, &app.ui, 336)
+	low, high: f32 = 1e9, -1e9
+	for v in app.ui.output.layers[.Base].vertices {
+		low, high = min(low, v.pos.y), max(high, v.pos.y)
+	}
+	ui.end_frame(&app.ui)
+	testing.expectf(t, low >= 336 && high <= 720, "drawn from y %v to %v", low, high)
 }
