@@ -164,7 +164,9 @@ With Steam, `Hello` also carries the player's SteamID and an auth ticket (see
 A character name belongs to the first account that plays it in that universe (otherwise the
 join is refused: `that name is another account's`). An account has at most 8 characters in a
 universe (`MAX_CHARACTERS`). The Multiplayer screen requests the account's characters (`Characters`) to choose or create one;
-singleplayer, `join` and scripts play the settings' `name`.
+singleplayer, `join` and scripts play the settings' `name`. With no name set, a world of our
+own plays `Player` and another's server `Player-<the account's first two bytes in hex>`
+(`join_name`), so friends who never chose a name are not refused for sharing one.
 
 Each character is stored in `characters/<account>/<name>.json`. A `players/<name>.json` from a
 universe that predates accounts is assigned to the first account that plays that name.

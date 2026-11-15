@@ -375,7 +375,7 @@ join_server :: proc(app: ^App, address: string, password: string, choose := fals
 	start_session(
 		app,
 		{
-			name        = "" if choose else player_name(&app.settings), // "": the server's list
+			name        = "" if choose else join_name(&app.settings, app.account.account), // "": the server's list
 			key         = app.account,
 			join        = Join{ep, password},
 			capture     = app.debug.net_capture,

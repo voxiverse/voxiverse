@@ -1,5 +1,6 @@
 package engine
 
+import "core:fmt"
 import "core:log"
 import "core:os"
 import "core:path/filepath"
@@ -16,7 +17,7 @@ import "common:worldgen"
 // through the tables.
 
 Settings :: struct {
-	name:              base.Var_Text, // the player's name ("": DEFAULT_NAME)
+	name:              base.Var_Text, // the player's name ("": player_name and join_name say)
 	last_server:       base.Var_Text, // Direct Connection's last address
 	share_data:        bool, // send anonymous play data to the collector (asked once)
 	share_asked:       bool, // the question was answered
@@ -378,10 +379,20 @@ SETTINGS_VARS := [?]base.Var {
 DEFAULT_COLLECTOR :: "collector.voxiverse.net:27316"
 DEFAULT_NAME :: "Player" // also the one player of format-1 saves (server.LEGACY_PLAYER)
 
-// player_name: the name to play under.
+// player_name: the name to play under in a world of our own.
 player_name :: proc(s: ^Settings) -> string {
 	name := base.var_text(&s.name)
 	return name if name != "" else DEFAULT_NAME
+}
+
+// join_name: the name to join another's server under. A server keeps a name for the
+// account that first played it, so the players who never chose one cannot all be
+// DEFAULT_NAME: the second would be sent away ("that name is another account's"). An
+// unset name is DEFAULT_NAME and the account's first two bytes in hex, "Player-3f0a"
+// (temp allocator). A world of our own keeps DEFAULT_NAME (format-1 saves' one player).
+join_name :: proc(s: ^Settings, account: game.Account) -> string {
+	if name := base.var_text(&s.name); name != "" {return name}
+	return fmt.tprintf("%s-%02x%02x", DEFAULT_NAME, account[0], account[1])
 }
 
 // Debug switches: for development, never saved.
