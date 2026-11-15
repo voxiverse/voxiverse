@@ -278,9 +278,7 @@ lavapipe_icd :: proc() -> string {
 images :: proc(args: []string) -> bool {
 	// (a run-time test, not `when`: the rest still compiles, and is checked, everywhere)
 	if ODIN_OS != .Linux {
-		fmt.eprintln(
-			"build: images renders on lavapipe under xvfb-run, on Linux (CI's Linux job runs it for every change)",
-		)
+		fmt.eprintln("build: images renders on lavapipe under xvfb-run, on Linux")
 		return false
 	}
 	text, err := os.read_entire_file_from_path(IMAGES_SCENES, context.allocator)

@@ -55,15 +55,8 @@ package** is enforced by the `layout` lint (see above).
 
 | Folder | What belongs | Patterns |
 |---|---|---|
-| `.` | The repository's own top-level files; `AGENTS.md` is the contract for changes (agents and people), `CLAUDE.md` imports it | `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`, `build.sh`, `build.bat`, `odinup.toml`, `ols.json` |
-| `.github` | Repository policy: who reviews guarded paths, and the pull request template | `CODEOWNERS`, `pull_request_template.md` |
-| `.githooks` | Git hook scripts | `*` |
-| `.github/actions/apt` | The composite action that installs packages | `*.yml` |
-| `.github/actions/setup` | The composite action that sets the toolchain up | `*.yml` |
-| `.agents/skills/planner` | The planner skill for agents that plan and do not write the game's code (profiling, issues for the autofix harness) | `SKILL.md` |
-| `.github/scripts` | The shell scripts the workflows run, with their fixture-driven tests (`tested-on-main_test.sh` decides what a main run may skip) | `*.sh` |
-| `.github/workflows` | CI | `*.yml` |
-| `.github/ISSUE_TEMPLATE` | Issue forms: playtest feedback, tasks, bugs, refactors, and form config | `*.yml` |
+| `.` | The repository's own top-level files; `AGENTS.md` says how work is done here, `CLAUDE.md` imports it | `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`, `build.sh`, `build.bat`, `odinup.toml`, `ols.json` |
+| `.githooks` | Git hooks: `pre-commit` runs `build check`, `commit-msg` checks the subject | `*` |
 | `assets` | The assets' own notes | `*.txt` |
 | `assets/catalog` | Earth's content as data before it is in the game (the schemas in its README) | `README.md` |
 | `assets/catalog/fauna` | Animals, one file per biome | `*.json` |

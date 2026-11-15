@@ -152,7 +152,7 @@ DETERMINISM_TICKS :: 10000
 
 // determinism: `build determinism` runs the scripted session at -o:minimal and
 // -o:speed, one log each, and compares them; `build determinism --compare <dir>`
-// compares every log in a directory (CI: the six it downloaded).
+// compares every log in a directory (each operating system's pair, gathered by hand).
 determinism :: proc(args: []string) -> bool {
 	if len(args) == 2 && args[0] == "--compare" {return compare_dir(args[1])}
 	if len(args) != 0 {

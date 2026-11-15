@@ -4,7 +4,7 @@ Debug builds (`build run`, `build build`) detect most problems automatically and
 where they originated. This document covers what debug builds do, the switches that go
 further, the developer console and its checks, debuggers, and validation, GPU
 captures and visual baselines. Everything described here is
-exercised in CI or by `tools/debugger/test_printers.sh`.
+exercised by `tools/debugger/test_printers.sh`.
 
 Related documents: [graphics.md](graphics.md) (the renderer's passes, timings and culling),
 [benchmarking.md](benchmarking.md) (benchmarks and profiling),
@@ -63,13 +63,13 @@ Messages begin with the subsystem (`gpu`, `server`, `session`, ...) and write va
 | `build test <package> -test-name:<name>` | Only that test (repeatable; `test_x` is the package's own, `pkg.test_x` is taken as written). `ODIN_TEST_NAMES=a,b` does the same. |
 | `build run --profile` | Writes a profile trace (see [benchmarking.md](benchmarking.md#profiling)); combine with `--release`. |
 | `build debug [--lldb]` | Starts a debug build in gdb (or lldb) with the Odin printers loaded. |
-| `run -- --frames N` | Runs N frames and exits; fails on any validation finding or leak (as CI does). |
+| `run -- --frames N` | Runs N frames and exits; fails on any validation finding or leak. |
 | `run -- --capture-frame N` | Under RenderDoc: captures frame N (see [GPU captures](#gpu-captures)). |
 | `run -- --exec "cmd; cmd"` | Runs a script of console commands (see [Scripts](#scripts)). |
 | `run -- --check <name>` | Runs an exit check (see [Checks](#checks)). |
 | `run -- --scene <name>` | Renders one visual-baseline scene offscreen and quits (see [Visual baselines](#visual-baselines)). |
 | `run -- --null-audio` | Mixes into the null device (real time, no sound card). |
-| <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. CI uploads the folder; the world checks take a screenshot at the start and end of each flight. |
+| <kbd>F2</kbd> / `screenshot [name]` | Saves the next frame as `build/screenshots/<name>.png`. The world checks take a screenshot at the start and end of each flight. |
 | <kbd>F3</kbd> | Overlay: FPS, frame and GPU time per frame and the present mode (FIFO with vsync; IMMEDIATE without, or MAILBOX where the window system offers nothing else), position, client/server chunk counts, chunk memory, session arenas, meshing queue, draws, server tick time, the simulation island you are in (id and chunks). |
 | <kbd>F4</kbd> | The tuning panel (see [Variables](#variables)). |
 | <kbd>F8</kbd> | Development builds: the audio inspector ([audio.md](audio.md)). |
@@ -136,7 +136,7 @@ the music and a pack's sounds, is decoded by our own Odin code, `common/ogg`.
   `audio` line summarizes the run.
 - `audio_capture` (<kbd>F9</kbd>), the F8 inspector and `build audio` are described in
   [audio.md](audio.md).
-- Without a sound card (CI, a headless machine) the game logs a warning and runs silently.
+- Without a sound card (a headless machine) the game logs a warning and runs silently.
 - `set volume 0..1` sets the player's volume.
 - On Linux and macOS the build compiles Odin's miniaudio library once (into the Odin
   installation; Windows ships it), which requires a C compiler.
@@ -226,8 +226,7 @@ its picture:
 
 `--check <name>` runs a check with the benchmarks' fixed settings (its own view), after any
 `--exec` script (which may prepare the state), and then quits, failing the run if the check
-failed. CI runs `fly` (on the CPU driver, with AddressSanitizer and with profiling), `blast`,
-`cull` and `hiz`.
+failed. The checks are `fly`, `blast`, `cull` and `hiz`.
 
 | Check | Description |
 |---|---|
@@ -333,8 +332,7 @@ kept in the repository, so a change to the renderer that changes the picture is 
 test rather than by eye. It runs on Linux only, on lavapipe (Mesa's CPU Vulkan driver) under
 `xvfb-run`: the same on every machine, and never a window on the desktop. The build driver
 finds lavapipe's manifest in the system's ICD directories and points `VK_DRIVER_FILES` (and
-the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has. CI's Linux game job runs
-the same command for every change.
+the older `VK_ICD_FILENAMES`) at it, whatever GPU the machine has.
 
 The scenes are listed in `assets/baselines/images/scenes.txt`, one a line, as
 `name: [@WxH] script`; the script is console commands separated by `;`, as `--exec` takes them.
@@ -381,8 +379,7 @@ channel differs from the baseline's by more than 8/255, and the mean absolute di
 the colour channels. A scene fails when the first is above 0.1% or the second above 0.5/255
 (`IMAGE_MAX_SHARE`, `IMAGE_MAX_MEAN` in `tools/build/images.odin`). A failed scene also gets `build/images/<scene>.diff.png`:
 the baseline in dim grey, the differing pixels in red. Each run's log is
-`build/images/<scene>.log`. CI uploads `build/images/` as the `images` artifact when a step
-fails.
+`build/images/<scene>.log`.
 
 Scenes render in parallel (about half the cores, at most six), each with its own X display and
 its own directory `build/images/<scene>.state/`, which `VX_SETTINGS` (settings, crash bundles)
@@ -407,24 +404,7 @@ A change that alters the picture on purpose re-accepts only the scenes it change
 looking at their pictures and differences; the commit says which scenes and why. A new
 scene is a line in `scenes.txt` and `./build.sh images --accept <name>`.
 
-## Continuous integration
-
-Every push builds on Windows, Linux and macOS. On Linux, CI also runs real frames on Mesa's
-CPU Vulkan driver under the validation layer (normally, with AddressSanitizer, and with
-profiling, checking the trace), and checks the gdb/lldb printers. Any validation finding,
-leak, sanitizer report, malformed trace or printer regression fails the build.
-
-A failed step does not stop the steps that don't depend on it: each runs under
-`!cancelled()`, so one run reports every failure (a step that needs the built game runs only if
-the build succeeded). The determinism job compares whatever logs exist and fails if any
-platform's pair is missing. A version tag (`v*.*.*`) on a commit whose push run on main passed skips the
-test jobs and only builds and checks the packages and drafts the release; on any other commit it
-runs everything. Every version tag drafts a GitHub release with the packages and `SHA256SUMS`.
-Its notes come from `./build.sh release-notes <tag> <file>`: every commit subject since the
-previous version tag that is its ancestor, and a Script API section of the commits that change
-`docs/script*`.
-
-### Reports
+## Reports
 
 `./build.sh test` writes `build/reports/tests.jsonl` (recreated by each run): one JSON object
 per line per test that ran, `{"package": "client/main", "test": "test_creative_tab", "result":
@@ -444,7 +424,3 @@ are held to exact values, have one run and no limit. Script lines are the instru
 each program (limit: its budget in `common/script/testdata/bench/budgets.txt`), its ratio to
 Lua, the geometric mean of the ratios, and the snapshot and restore times. The file is not
 cleared between benches, so a clean tree starts from a removed `build/reports/`.
-
-Every CI job that runs tests or benches uploads `build/reports/` as the artifact
-`reports-<os>` (`linux`, `windows`, `macos`; the scenario job's is `reports-linux-game`), also when
-an earlier step failed.

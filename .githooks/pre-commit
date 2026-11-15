@@ -1,0 +1,3 @@
+#!/bin/sh
+# pre-commit: main is gated on this machine. A commit that fails `build check` does not land.
+exec ./build.sh check

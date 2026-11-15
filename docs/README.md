@@ -12,7 +12,7 @@ Plans and history don't live here: git is the history.
 | [glossary.md](glossary.md) | The project's terms, each with the code that implements it |
 | [layout.md](layout.md) | Where every file goes: every folder and its file-name patterns (`check` enforces it) |
 | [platforms.md](platforms.md) | What runs where, and what each platform requires |
-| [debugging.md](debugging.md) | What debug builds detect, the switches, the log, the console and checks, debuggers, GPU captures, visual baselines, CI |
+| [debugging.md](debugging.md) | What debug builds detect, the switches, the log, the console and checks, debuggers, GPU captures, visual baselines, reports |
 | [graphics.md](graphics.md) | The renderer's passes, GPU timings, draw counts, culling and chunk light |
 | [benchmarking.md](benchmarking.md) | Benchmark scenarios, comparing versions, profiling and Spall traces |
 | [network.md](network.md) | Network debugging tools, the state model and bandwidth baselines |

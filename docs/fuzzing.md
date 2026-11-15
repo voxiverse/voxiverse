@@ -20,7 +20,7 @@ hostile file goes.
 
 ```
 ./build.sh fuzz --list                                   the targets
-./build.sh fuzz --smoke                                  every target, 2 000 cases at seed 84, then its regression files (CI's push step)
+./build.sh fuzz --smoke                                  every target, 2 000 cases at seed 84, then its regression files
 ./build.sh fuzz [<target>...] --seed N --cases N         N cases each
 ./build.sh fuzz [<target>...] --seed N --seconds N       N seconds each
 ./build.sh fuzz --sanitize --seconds 60                  the same under AddressSanitizer (Linux)
@@ -110,15 +110,12 @@ Seeds are the generators; a committed corpus (`testdata/fuzz/<target>/`) is grow
 `--keep`. Where a decoder needs a file the target writes it under `build/tmp/fuzz/` and removes
 it after the case.
 
-## CI
+## When it runs
 
-- "Fuzz (smoke)" in "Test · Linux x64", after Test: `./build.sh fuzz --smoke`.
-- "Fuzz (smoke), script programs against Lua" in "Game · Linux x64" (scenarios; it installs
-  `lua5.4`): `./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4`.
-- The suite on all three OSes: `test_fuzz_smoke` (`common/script/fuzz_test.odin`: the four
+- The suite (`./build.sh test`): `test_fuzz_smoke` (`common/script/fuzz_test.odin`: the four
   script targets at seed 51, 300, 200, 100 and 100 cases); each other target's `test_fuzz_<target>_smoke` (200 cases at seed 84
   and its regression files; the three `net.client_decode`, `net.server_decode` and `net.state`
   run 25 000, 25 000 and 3 000), the harness's own tests (`common/base/fuzz/fuzz_test.odin`).
-- `.github/workflows/nightly.yml` ("Fuzz · nightly", 03:17 UTC and by hand): every target four
-  minutes under AddressSanitizer at the run number's seed; `build/fuzz/` is uploaded when
-  anything failed. A failed nightly run is a bug like any failed run.
+- By hand: `./build.sh fuzz --smoke`, and against Lua
+  `./build.sh fuzz script.generated --cases 2000 --seed 51 -- --lua lua5.4`. Nothing runs
+  the long fuzz on a schedule.

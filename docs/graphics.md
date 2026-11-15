@@ -112,7 +112,7 @@ with one `vkCmdDrawIndexedIndirect`:
 
 When culling goes wrong, `--check cull` runs `world_cull.comp` on a fixed set of chunks and
 cameras outside the frames and compares every command, bit and count with `cull_reference`,
-the same rules on the CPU (`client/render/cull_check.odin`); CI runs it on lavapipe. A chunk
+the same rules on the CPU (`client/render/cull_check.odin`); `--check cull` runs it. A chunk
 missing at the edge of the screen points at the planes (the scene's `view_proj`); faces
 missing on one side of every chunk at `facing`; garbage geometry at the record layout
 (`render_test.odin` asserts `Cull_Record`, `Cull_Push` and `Cull_Stats` against the shader's

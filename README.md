@@ -9,7 +9,7 @@ a single small executable.
 ## Status
 
 Voxiverse is pre-alpha and under active development. It runs on **Windows and Linux**. macOS
-(Apple Silicon) builds and packages in CI but is not tested on hardware by the project.
+(Apple Silicon) is a target that has never been run on hardware by the project.
 
 - [docs/platforms.md](docs/platforms.md) describes what runs where and what each platform requires.
 - [docs/](docs/README.md) holds the technical docs: the design, the glossary, the layout and one cheat sheet per system.
@@ -19,10 +19,6 @@ Voxiverse is pre-alpha and under active development. It runs on **Windows and Li
 Builds for 64-bit Windows and Linux are published on the
 [Releases](https://github.com/voxiverse/voxiverse/releases) page once a release exists. Unpack
 the archive and run the game; there is nothing to install.
-
-Every push to `main` also produces these builds, which are kept with the corresponding
-[CI run](https://github.com/voxiverse/voxiverse/actions). Downloading them requires a GitHub
-login.
 
 To determine which download applies to your system, and what your graphics driver and
 operating system must provide, see [docs/platforms.md](docs/platforms.md). To build the game
@@ -107,7 +103,7 @@ Run `./build.sh <command>` on Linux and macOS, and `build <command>` on Windows
 | `netdump`, `replay` | Prints a network trace, or replays its client messages against a fresh server (see [docs/network.md](docs/network.md)). |
 | `sfx` | Writes every sound effect to `build/sounds/*.wav`. |
 | `worldmap` | Draws a world from above to `build/worldmap.png` (`-seed:42 -size:4096`; `-bench:64` times chunk generation). |
-| `bench <scenario>` | Benchmarks under fixed conditions. Scenarios: `chunks` (generation, light and meshing on one thread; `-check` as in CI), `telemetry` (an event's emit and write cost; `-check` as in CI), `budgets` (the server's save, audit, counters, journal and flood costs; `-check` as in CI), and the game scenarios `viewmodel`, `load`, `views`, `flight`. Results are written to `build/benchmarks/`. |
+| `bench <scenario>` | Benchmarks under fixed conditions. Scenarios: `chunks` (generation, light and meshing on one thread; `-check` fails over budget), `telemetry` (an event's emit and write cost; `-check` fails over budget), `budgets` (the server's save, audit, counters, journal and flood costs; `-check` fails over budget), and the game scenarios `viewmodel`, `load`, `views`, `flight`. Results are written to `build/benchmarks/`. |
 | `trace` | Summarizes a profile trace (`build/voxiverse.spall`). |
 | `perf` | Records the game, `server` or `bench` under Linux perf and prints where the time went (`perf -- --exec "..."`). |
 | `package` | Builds a release package for this platform in `build/dist/`: one executable each for the game and the server, `README.txt`, and the licences. |
@@ -130,7 +126,7 @@ tag:
 git tag -a v0.21.0 -m "Pre-Alpha 1"
 ```
 
-CI builds the packages and creates a **draft** release, which is reviewed and published by hand.
+`./build.sh package` then builds this platform's package in `build/dist/`.
 
 ## Playing
 

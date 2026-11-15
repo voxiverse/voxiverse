@@ -68,7 +68,7 @@ completion order may reach state or the wire.
    range. Out-of-range and NaN casts behave differently on x64 and arm64.
 7. **Toolchain updates.** A toolchain bump (`odinup.toml`) can change the Odin code of
    `core:math`. The cross-OS job and the golden hashes of world generation run on every
-   commit, so a bump that changes state fails CI on the bump itself.
+   commit, so a bump that changes state fails the tests on the bump itself.
 
 A line that is not state declares so with a trailing `// numbers: <why>` comment, and the lint
 accepts it. Examples are `prediction_decay`'s visual offset and the pipe's simulated jitter.
@@ -194,8 +194,8 @@ on a stepped server with seed 38 and a mirror client on the pipe (`DETERMINISM_S
 and at `-o:speed`, each writing `build/determinism/<os>.<opt>.txt` (one line per tick with
 every section's hash, and a full dump at each checkpoint), and compares the logs.
 
-In CI, every Test job runs it and uploads its logs. The `determinism` job compares all six
-(`build determinism --compare <dir>`) and names the first differing tick, its sections, and
+To compare operating systems, gather each one's logs in a directory:
+`build determinism --compare <dir>` names the first differing tick, its sections, and
 the first differing line of the next checkpoint's dump.
 
 The test itself runs a session twice, side by side, with the two servers' maps at different

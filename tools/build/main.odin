@@ -318,7 +318,7 @@ release_build_lock :: proc() {
 usage :: proc() {
 	fmt.println("usage: build <command>")
 	fmt.println(
-		"  check     type-check every package (-vet -strict-style), build objects for the other Tier 1 targets, verify formatting",
+		"  check     type-check every package (-vet -strict-style), run the lints, verify formatting; --cross: also build objects for the other Tier 1 targets",
 	)
 	fmt.println(
 		"  test      run the unit tests, the packages in parallel (VX_JOBS=n at once, else one per core); `test <package>...`: only those",
@@ -347,7 +347,7 @@ usage :: proc() {
 	fmt.println("  fmt       format all sources in place (odinfmt)")
 	fmt.println("  shaders   compile assets/shaders to SPIR-V (fetches the pinned glslang once)")
 	fmt.println(
-		"  lavapipe  fetch the pinned software Vulkan driver and runtime for Windows CI (prints their paths)",
+		"  lavapipe  fetch the pinned software Vulkan driver and runtime for Windows (prints their paths)",
 	)
 	fmt.println(
 		"  audio     run the audio baselines (--accept <scenario|all> rewrites them, --wav <dir> renders each to a WAV)",
@@ -384,7 +384,9 @@ usage :: proc() {
 		"  worldmap  draw an Earth world from above to build/worldmap.png (-seed:N -size:4096 ...)",
 	)
 	fmt.println("  bench     run a benchmark scenario (results in build/benchmarks/):")
-	fmt.println("              chunks       generate, light and mesh on one thread (-check: CI's)")
+	fmt.println(
+		"              chunks       generate, light and mesh on one thread (-check: fails on a changed count or over budget)",
+	)
 	fmt.println(
 		"              ogg          the Ogg decoder against miniaudio's, on the music (no game)",
 	)
@@ -392,7 +394,7 @@ usage :: proc() {
 		"              load, views, flight, edits, audio  the game (a release build, fixed settings;",
 	)
 	fmt.println("                           server: the server alone, simulated players;")
-	fmt.println("                           --smoke: one short run, as CI does;")
+	fmt.println("                           --smoke: one short run;")
 	fmt.println("                           --profile: traced too;")
 	fmt.println("                           -size:WIDTHxHEIGHT: drawn at that size, not 1280x720)")
 	fmt.println(
@@ -726,14 +728,13 @@ check :: proc() -> bool {
 			},
 		)
 	}
-	// CI builds every Tier 1 target natively in its own job: VX_CI skips the cross builds.
-	// Local checks skip cross builds unless explicitly requested (VX_CROSS=1 or `check --cross`).
+	// The other Tier 1 targets' object builds run only when asked for (VX_CROSS=1 or `check --cross`).
 	cross := os.get_env("VX_CROSS", context.temp_allocator) == "1"
 	for arg in os.args[1:] {
 		if arg == "--cross" {cross = true; break}
 	}
 	ok := true
-	if cross && os.get_env("VX_CI", context.temp_allocator) != "1" {ok = cross_jobs(&jobs)}
+	if cross {ok = cross_jobs(&jobs)}
 	ok = run_checks(jobs[:]) && ok
 	return(
 		determinism_lint() &&
@@ -744,7 +745,6 @@ check :: proc() -> bool {
 		package_lists_lint() &&
 		scratch_lint() &&
 		test_lint() &&
-		ci_lint() &&
 		check_format() &&
 		check_no_binaries() &&
 		ok \
@@ -861,12 +861,11 @@ ensure_foreign_miniaudio :: proc() -> bool {
 
 // cross_jobs builds the game, the server and every test package as objects for
 // each Tier 1 target that is not the host, so code that only compiles on the host
-// (a variable used only inside `when ODIN_OS == .Linux`) fails here, not in CI.
+// (a variable used only inside `when ODIN_OS == .Linux`) fails here.
 // Objects only: nothing links or runs. Windows needs -windows-sdk-root to build
 // objects without the SDK (any existing directory will do). `odin test` takes no
 // such flag and refuses a Windows target without the real SDK, so Windows test
-// packages are checked natively on the Windows CI runner only; macOS ones are
-// cross-built here.
+// packages are checked only on a Windows machine; macOS ones are cross-built here.
 cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 	if !ensure_foreign_miniaudio() {return false}
 	host := host_target()
@@ -890,14 +889,14 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 		}
 		if windows {
 			// The driver itself: its Windows files (the lock, Ctrl-C, how a job's output
-			// reaches its log) build nowhere else before CI.
+			// reaches its log) build nowhere else on this machine.
 			append(&builds, [2]string{"build", "tools/build"})
 		} else {
 			for pkg in TEST_PACKAGES {
 				append(&builds, [2]string{"test", pkg})
 			}
 			// The macOS-only window fixture (#+build darwin): the native check skips it
-			// anywhere else, so before this only CI's macOS runner ever compiled it.
+			// anywhere else.
 			append(&builds, [2]string{"build", "tests/window_fixture"})
 		}
 		for b in builds {
@@ -964,7 +963,7 @@ check_no_binaries :: proc() -> bool {
 
 // test_env_defines turns the environment's ODIN_TEST_RANDOM_SEED, ODIN_TEST_THREADS and
 // ODIN_TEST_NAMES into -define flags: Odin's test runner reads them only as compile-time
-// defines, so the variable alone (CI's, or `ODIN_TEST_RANDOM_SEED=n ./build.sh test` to
+// defines, so the variable alone (`ODIN_TEST_RANDOM_SEED=n ./build.sh test` to
 // reproduce a failure, `ODIN_TEST_NAMES=core.test_x ./build.sh test server/core` for one
 // test) is ignored. `names` (from -test-name:) replaces the environment's ODIN_TEST_NAMES.
 test_env_defines :: proc(names := "") -> []string {

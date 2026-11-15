@@ -1,4 +1,0 @@
-# No owner reviews: nothing waits for a person.
-# What judges and instructs the agents (.github/, AGENTS.md, CLAUDE.md, the security docs)
-# is protected by the required "Guard" check instead (.github/workflows/guard.yml): only
-# voxiverse-admin's pull requests may change it. Everything else merges when CI passes.

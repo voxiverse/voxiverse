@@ -5,11 +5,11 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-// Software Vulkan for Windows CI, pinned and provisioned like the shader
+// Software Vulkan for Windows, pinned and provisioned like the shader
 // compiler (glslang.odin): `build lavapipe` downloads Mesa's lavapipe driver
 // and LunarG's Vulkan runtime (the loader, vulkan-1.dll), checks both
-// against the hashes below and keeps them in build/tools/. CI uses them to
-// run the packaged game on runners without a GPU; neither is shipped.
+// against the hashes below and keeps them in build/tools/. They run the
+// packaged game on a Windows machine without a GPU; neither is shipped.
 //
 // Mesa publishes no Windows builds of its own: the driver comes from
 // pal1000/mesa-dist-win's release (the MSVC build; only vulkan_lvp.dll and

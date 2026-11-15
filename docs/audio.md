@@ -12,7 +12,7 @@ buses, the voices and the effects are our Odin (`client/audio`); the Ogg Vorbis 
 | Area | Rule |
 |---|---|
 | Not used | FMOD, Wwise and OpenAL Soft: proprietary, or binaries beside the executable. |
-| Device | miniaudio, through `client/audio/device.odin` only (a lint rejects `vendor:miniaudio` anywhere else). It is asked for 48 kHz stereo and converts if the card differs. The device callback runs on the card's thread at real-time priority and measures itself (duration, clock drift). No device (a server, CI) is not an error: the game runs silent. |
+| Device | miniaudio, through `client/audio/device.odin` only (a lint rejects `vendor:miniaudio` anywhere else). It is asked for 48 kHz stereo and converts if the card differs. The device callback runs on the card's thread at real-time priority and measures itself (duration, clock drift). No device (a server, a headless machine) is not an error: the game runs silent. |
 | Output | Stereo `f32`, 48 kHz (`DEVICE_RATE`). |
 | Music codec | Ogg Vorbis, decoded at run time by `common/ogg`. Encoded only by the dev tool, with `oggenc` or `ffmpeg` found on the `PATH`; the encoded files are committed, so nobody else needs either. |
 | Music sources | A text score (`assets/music/*.score`, diff-friendly) or a standard MIDI file (`.mid`) becomes one note list; `build music` renders either. Scores export to `.mid`. |
@@ -86,8 +86,8 @@ score and the SoundFont, so a piece is re-rendered only when an input changes); 
 - `build run` checks whether any piece is stale (the score changed or the soundfonts changed)
   and re-renders it before compiling the game, so a score changed locally is heard at once.
   If rendering cannot run (no 7z/bsdtar, offline), it warns and runs with the old audio.
-- CI refuses a stale render: a test checks that every score has up-to-date metadata and rendered
-  audio (`render it: build music`). A pull request that changes a score commits its render.
+- A stale render fails the tests: one checks that every score has up-to-date metadata and rendered
+  audio (`render it: build music`). A commit that changes a score commits its render.
 
 - The renderer is our own SoundFont 2 reader and sample renderer in Odin (`tools/music`; no
   FluidSynth): presets, instruments, key and velocity zones, loops, a volume envelope, pan,
@@ -248,8 +248,7 @@ within 7 semitones of the original and keeps rhythm. Neither is used by `build m
 page; a piece whose licence could not be confirmed is left out). `build music corpus` downloads
 each file into `build/tools/music-corpus` (not committed), checks its SHA-256, refuses and removes
 a file that does not match, and skips files already present. A test parses every file there with
-`midi_read` (it prints a notice and skips when the directory is absent, so a CI job has to run the step first;
-the owner adds it to ci.yml), and another checks the list itself.
+`midi_read` (it prints a notice and skips when the directory is absent), and another checks the list itself.
 
 ## Tools
 
@@ -296,6 +295,6 @@ the owner adds it to ci.yml), and another checks the list itself.
   floors). The numbers are first estimates for the reference analysis to replace.
 - Every layer of a recipe that begins at once starts 1.2 ms in (`delay 0.0012`): the sound's
   first millisecond is faded in to leave no click, and an onset inside it is mostly lost.
-- The **null device** asks for a block every 10 ms by the wall clock and discards it, so CI's
+- The **null device** asks for a block every 10 ms by the wall clock and discards it, so the
   system test run exercises the real callback path; the **file device** mixes as fast as it can and
   writes a WAV at close (at most 300 s), for scripted runs and listening to a scenario.

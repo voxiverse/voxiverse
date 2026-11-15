@@ -211,20 +211,12 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   state invalidation and stale cache artifacts. A test that loops over independent cases that each take
   seconds (the music, the audio scenarios, seeking in each file) is one test per case, so the runner's
   threads share them; an `#assert` on the count says when a case lacks its test.
-- **CI uses exactly the same path.** Its Linux checks are three parallel
-  jobs, "Test · Linux x64" (check, tests, determinism, the system test suite, the fuzz regression run),
-  "Game · Linux x64" (the scenario checks: benchmarks, fuzz, flight, culling, audio,
-  multiplayer, crash handler, printers) and "Game · Linux x64, images" (AddressSanitizer,
-  profiling, screens, sky and held items); macOS and Windows run one job each. CI sets
-  `VX_CI=1`, which makes `check` skip its cross-target object builds (every Tier 1
-  target compiles natively in its own job); locally they run. A tool's executable (`bench`) is
-  built once per job. Every check runs on every push. The tests run once, with
-  `ODIN_TEST_RANDOM_SEED` set to the run number (a re-run repeats it). `./build.sh test` turns
+- **This machine is the gate.** There is no remote CI. The `pre-commit` hook runs `check`, and
+  `test` passes before a change lands on `main`. `./build.sh test` turns
   `ODIN_TEST_RANDOM_SEED`, `ODIN_TEST_THREADS` and `ODIN_TEST_NAMES` from the environment into
   `-define:` flags (Odin reads them only as defines), so `ODIN_TEST_RANDOM_SEED=n ./build.sh
-  test` reproduces a CI failure; `-test-name:<name>` sets `ODIN_TEST_NAMES` for the named
-  packages (see [debugging.md](debugging.md#switches)). Ubuntu packages come from a cache of their `.deb` files
-  (`.github/actions/apt`).
+  test` repeats a run; `-test-name:<name>` sets `ODIN_TEST_NAMES` for the named
+  packages (see [debugging.md](debugging.md#switches)).
 - **Test memory.** A test's big values go on the heap (`new`, `defer free`): the runner's
   threads have the platform's default stack, 512 KB on macOS against Linux's 8 MB, and a test
   that overflows it dies with a silent exit and no message. On Linux `./build.sh test` runs each
@@ -246,7 +238,7 @@ Setting up a fresh machine is: install odinup, then run `build`. Nothing else.
   keeps names unique.
 - **No test asserts a time.** A performance budget is a scenario of `build bench` (`chunks`,
   `telemetry`, `budgets`, `script`, and the game's `viewmodel` and `audio`) with its limits
-  beside it in code, gated by CI's "Benchmark check" steps in a release-like build; a test calls
+  beside it in code, checked by `bench <scenario> -check` in a release-like build; a test calls
   the same scene for what it does (`server/core/budgets.odin`: a save that commits, 10 000
   blocks flowing, an audit with no lines). A budget is read from `base.thread_cpu_us` (the
   thread's CPU time), not a wall clock: a core taken from the measured thread is not the work's

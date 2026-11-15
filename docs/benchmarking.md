@@ -8,7 +8,7 @@ proportions from traces.
 
 | Scenario | Measures |
 |---|---|
-| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check` (CI), it also fails if the chunk, mesh or vertex counts changed or a stage's median over 5 runs exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. |
+| `chunks` | Generating, lighting and meshing a fixed region on one thread, without the game (`tools/bench`). With `-check`, it also fails if the chunk, mesh or vertex counts changed or a stage's median over 5 runs exceeded a generous budget. Another region (`-seed`, `-radius`, `-x`, `-z`) is the scenario `chunks-custom`, never compared with `chunks`. |
 | `load` | Joining the scratch world until everything around is loaded and meshed: load time, the pools' work, server ticks. |
 | `views` | Sixteen still views from the spawn: each GPU pass, triangles, the CPU's frame. |
 | `views-far` | The same views at view radius 24, height 12: what culling and recording cost as the view grows. A name of its own: it never compares with `views`. On a machine whose CPU and GPU share power (an integrated GPU), `frame_record` follows the GPU's load as much as the CPU's work: compare it with `views` drawn at a size that loads the GPU as much (`-size:2560x1440`). |
@@ -20,8 +20,8 @@ proportions from traces.
 | `server` | The dedicated server alone (`voxiverse-server --benchmark server`): 8 simulated players join over UDP and fly out in 8 directions; ticks, streaming, generation, bytes sent. |
 | `party` | The `server` scenario's bots in survival with the kit's weapons, shooting each other. Its universe is `build/benchmarks/party-universe`. |
 | `ogg` | The Ogg decoder against miniaudio (see [debugging.md](debugging.md#the-ogg-decoder)). |
-| `telemetry` | An event's emit and write cost; `-check` as in CI ([telemetry.md](telemetry.md)). |
-| `budgets` | The server's save, audit, counters, journal and flood costs, and the entity store, spatial service, collision (ns per operation) and the simulation islands of 64 walking observers (µs a tick); `-check` as in CI ([saves.md](saves.md)). |
+| `telemetry` | An event's emit and write cost; `-check` as for chunks ([telemetry.md](telemetry.md)). |
+| `budgets` | The server's save, audit, counters, journal and flood costs, and the entity store, spatial service, collision (ns per operation) and the simulation islands of 64 walking observers (µs a tick); `-check` as for chunks ([saves.md](saves.md)). |
 | `script` | The script VM (`build script bench`; [script.md](script.md)). |
 
 ### Benchmark conditions
@@ -58,8 +58,8 @@ quantity over 5 runs (`-repetitions N` changes it; `script --smoke` is one) and 
 beside the median, and the result file keeps every run. A scene or stage that fails to run in
 any run (an error, a missing result, changed counts) is reported as `bench broken` and fails at
 once, without judging budgets: a median never hides it. A median over its limit is
-`bench over budget`. In CI, `bench budgets -check` that ends over budget runs once more and fails only
-if the second check does too: a slow runner moves every run of a check (and so its median),
+`bench over budget`. A `bench budgets -check` that ends over budget runs once more and fails only
+if the second check does too: a slow machine moves every run of a check (and so its median),
 while a real regression fails both. The script's time ratios to Lua are the median of the per-run ratios.
 
 ### Comparing two versions
@@ -94,14 +94,14 @@ medians move by several percent from run to run.
    noise; repeat with more runs if it matters.
 6. **Record the result in the commit message**: the scenario, the metrics that changed, A and
    B, and p, e.g. "views: gpu_world 1.098 -> 1.181 ms (+7.6%, p 0.008)".
-7. **Update pinned counts.** The exact counts in `bench chunks -check` (CI) are pinned. A
+7. **Update pinned counts.** The exact counts in `bench chunks -check` are pinned. A
    change that alters chunks, meshed chunks or vertices on purpose updates them in
    `tools/bench` in the same commit.
 
 ### Smoke runs
 
 `--smoke` (`build bench <scenario> --smoke`, and the game's and server's `--smoke`) runs a
-scenario once, briefly, with a small view. CI runs this to keep every scenario working. The
+scenario once, briefly, with a small view. It keeps every scenario working. The
 results are written to `<scenario>-smoke` and are not compared with anything.
 
 ## Profiling

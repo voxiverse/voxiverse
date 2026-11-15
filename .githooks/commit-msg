@@ -4,11 +4,11 @@ commit-msg: Validate commit messages against Voxiverse standards (AGENTS.md).
 
 Rules:
 1. Subject line: '<Category>: <Imperative description>'
-   - Category must be 'CI', 'Docs', 'Meta', or a folder listed in docs/layout.md.
+   - Category must be 'Docs', 'Meta', or a folder listed in docs/layout.md.
    - Description must start with a capital letter.
    - Description must use imperative mood (e.g. 'Add', 'Fix', 'Remove', not 'Added', 'Fixes').
    - Description must not end with a period.
-   - No issue numbers in subject ('#123' belongs in body or PR description).
+   - No issue numbers in subject.
    - Total subject line length <= 72 characters.
 2. Second line must be blank (if body exists).
 3. Body lines must be wrapped at 72 columns (excluding long URLs and tables).
@@ -21,7 +21,7 @@ import os
 import subprocess
 
 def get_allowed_categories():
-    categories = {"CI", "Docs", "Meta"}
+    categories = {"Docs", "Meta"}
     layout_file = "docs/layout.md"
     if os.path.exists(layout_file):
         with open(layout_file, "r", encoding="utf-8") as f:
@@ -58,7 +58,7 @@ def lint_message(msg_text):
         
         allowed = get_allowed_categories()
         if category not in allowed:
-            errors.append(f"Invalid category '{category}'. Must be Docs, CI, Meta, or a folder in docs/layout.md")
+            errors.append(f"Invalid category '{category}'. Must be Docs, Meta, or a folder in docs/layout.md")
         
         if not desc:
             errors.append("Subject description is empty after category.")
@@ -68,7 +68,7 @@ def lint_message(msg_text):
             if desc.endswith("."):
                 errors.append(f"Subject must not end with a trailing period: '{desc}'")
             if re.search(r'#\d+', desc):
-                errors.append(f"Issue numbers (#123) are forbidden in subject; put 'Fixes #N' in body: '{desc}'")
+                errors.append(f"Issue numbers (#123) are forbidden in the subject: '{desc}'")
             
             first_word = desc.split()[0].lower()
             non_imperative = {

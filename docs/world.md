@@ -137,7 +137,7 @@ travel as `block` records (not `heard`), sorted by chunk, in the tick's `state` 
 F3's server line shows the updates waiting.
 
 `server/core/liquids_test.odin` contains the dam break test (the same water twice, both players
-matching the server) and the flood test (10 000 blocks flowing within the tick budget; CI
+matching the server) and the flood test (10 000 blocks flowing within the tick budget; `bench budgets -check`
 also runs it optimized); `flow_test.odin` covers the rules.
 
 ## Structures
@@ -174,8 +174,8 @@ game (biomes, water depth, hill shading; `-size:`, `-x:`, `-z:`, `-scale:` and `
 the area, and a 4096-block map takes well under a second), and `-bench:64` generates whole
 chunk columns and reports the time per chunk.
 
-`common/worldgen/worldgen_test.odin` keeps hashes of two seeds' chunks. CI runs it on Windows,
-Linux and macOS, so a platform that rounds differently fails in CI rather than in a player's
+`common/worldgen/worldgen_test.odin` keeps hashes of two seeds' chunks. Run on Windows,
+Linux and macOS, it makes a platform that rounds differently fail in the tests rather than in a player's
 world.
 
 The generator's stages appear in the profiler as `worldgen climate`, `worldgen place trees`,
