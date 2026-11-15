@@ -15,7 +15,8 @@ player, and `@a` every player, where that is meaningful (`/give @a`, `/tp @a @s`
 Coordinates may be relative (`~`, `~5`, `~-2`); the first of a run is x, then y, then z.
 `/help` lists the commands you may use, and `/help <command>` shows a command's usage and
 permission. Minecraft's command names are accepted where the equivalent exists: `/tell`, `/w`,
-`/say`, `/gamerule`, `/teleport`.
+`/say`, `/gamerule`, `/teleport`. A game the server runs ([games.md](games.md)) adds its own
+commands: a command the server has none of goes to the game, and `/help` does not list them.
 
 ### World and time
 

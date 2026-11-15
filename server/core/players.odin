@@ -93,6 +93,7 @@ join :: proc(s: ^Server, c: ^Client, name: string) {
 	m.seen = now_unix()
 	if c.address != "" {set_string(&m.ip, c.address)}
 	if s.community.motd != "" {notice(s, c, s.community.motd)}
+	if s.config.game.joined != nil {s.config.game.joined(s, c)}
 }
 
 // leave: a client is gone (left, timed out or was dropped): its player is
@@ -110,6 +111,7 @@ leave :: proc(s: ^Server, c: ^Client, reason: string) {
 farewell :: proc(s: ^Server, c: ^Client, reason: string) {
 	player_entity_release(s, c)
 	if c.state != .Playing {return}
+	if s.config.game.left != nil {s.config.game.left(s, c)}
 	respawn(s, c) // (leaving at the death screen: kept alive, at the spawn)
 	record(s, c, .Session_End, n0 = i64((s.tick - c.joined_tick) / game.TICK_RATE))
 	ledger_inventory(s, c.world, .Scope_Out, &c.inventory)

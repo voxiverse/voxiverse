@@ -5,7 +5,7 @@ designs. A cheat sheet: it says what is true of the code. Terms are in
 [glossary.md](glossary.md); the folders and their files in [layout.md](layout.md). The audio
 engine is in [audio.md](audio.md); packs, the pack sandbox and the threat surface in
 [packs.md](packs.md); the script language in [script.md](script.md); the save format in
-[saves.md](saves.md); bit-identical state in [determinism.md](determinism.md); switches,
+[saves.md](saves.md); games and the server's hooks into them in [games.md](games.md); bit-identical state in [determinism.md](determinism.md); switches,
 profilers and crash reading in [debugging.md](debugging.md).
 
 ## Foundations

@@ -81,6 +81,48 @@ Config :: struct {
 	watchdog_seconds:      int, // kill on a deadlocked tick (>0: seconds, default 60 on dedicated, 0: off)
 	extra_packs:           []game.Pack_Source, // packs besides the universe's own (tests, tools), loaded last
 	available_packs:       []Pack_Candidate, // where a listed pack the universe lacks is found, in order (the client's local packs, the Workshop)
+	game:                  Game, // the game the server runs (games/; zero: none, the engine alone)
+}
+
+// Game: a game the server runs (docs/games.md): its id, the types of its state, and
+// the hooks the server calls. The engine never imports a game: whoever starts the
+// server puts one in Config.game. Any hook may be nil. configure and start run on
+// the thread that calls start, stop on the one that calls stop, the rest on the
+// server's, in its tick.
+Game :: struct {
+	id:           string, // its folder's name in games/ (the dedicated server's --game)
+	server_state: typeid, // its state for the session (game_state): zero at start; nil: none
+	client_state: typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none
+	configure:    proc(config: ^Config), // before anything else: may change the config
+	start:        proc(s: ^Server) -> bool, // the session is set up, no tick has run (false: start fails)
+	stop:         proc(s: ^Server), // after the last tick, before the last save
+	tick:         proc(s: ^Server), // every tick, after the entities' (also while frozen)
+	joined:       proc(s: ^Server, c: ^Client), // c is playing (welcomed, in its world)
+	left:         proc(s: ^Server, c: ^Client), // c is leaving (still seated, its state still there)
+	command:      proc(s: ^Server, c: ^Client, name: string, args: []string) -> (known: bool), // a command the server has none of; known false: "Unknown server command"
+}
+
+// game_state: the game's state for the session, as the type it declared
+// (Game.server_state). Its memory is the session's, freed by stop.
+game_state :: proc(s: ^Server, $T: typeid) -> ^T {
+	assert(s.config.game.server_state == T, "not the game's server_state")
+	return (^T)(raw_data(s.game_state))
+}
+
+// game_client_state: the game's state for c's seat, as the type it declared
+// (Game.client_state). Zero when a player takes the seat; its memory is the
+// session's.
+game_client_state :: proc(s: ^Server, c: ^Client, $T: typeid) -> ^T {
+	assert(s.config.game.client_state == T, "not the game's client_state")
+	return (^T)(raw_data(c.game_state))
+}
+
+// game_state_make: zeroed memory for a value of type state (none for nil).
+@(private = "file")
+game_state_make :: proc(state: typeid, allocator: mem.Allocator) -> ([]byte, mem.Allocator_Error) {
+	if state == nil {return nil, nil}
+	info := type_info_of(state)
+	return mem.alloc_bytes(info.size, info.align, allocator)
 }
 
 DEFAULT_MAX_PLAYERS :: 8
@@ -186,6 +228,7 @@ Server :: struct {
 	hash_root:         u64, // a stepped server's chain of tick hashes (state_hash.odin)
 	age_base:          u64, // the universe's ticks before this run (universe.cfg; age_of)
 	tick_us:           [TICK_SUMMARY_TICKS]u32, // the last minute's tick times, microseconds
+	game_state:        []byte, // the game's state for the session (game_state)
 }
 
 // A rejected remote client is told why and dropped this many ticks later.
@@ -196,6 +239,8 @@ KICK_DELAY :: game.TICK_RATE
 // its address until stop. local: the in-process player's end of a pipe
 // ({} for none).
 start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
+	config := config
+	if config.game.configure != nil {config.game.configure(&config)}
 	if config.net != nil && (!config.stepped || config.conditions != {}) {
 		log.warnf("a simulated network needs a stepped server and no conditions of its own")
 		return false
@@ -291,12 +336,30 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 			return false
 		}
 	}
+	{
+		err: mem.Allocator_Error
+		s.game_state, err = game_state_make(config.game.server_state, arena)
+		for &c in s.clients {
+			if err != nil {break}
+			c.game_state, err = game_state_make(config.game.client_state, arena)
+		}
+		if err != nil {
+			log.errorf("server cannot allocate the game's state game=%s: %v", config.game.id, err)
+			teardown(s, world = true)
+			return false
+		}
+	}
 	game.writer_init(&s.writer, arena, game.MAX_MESSAGE_SIZE) // never grows: the arena stays flat
 	if local.pipe != nil {
 		s.clients[0].state = .Connecting
 		s.clients[0].link = Local{}
 	}
 	if config.listen && !listen(s, config.port, config.port) {
+		teardown(s, world = true)
+		return false
+	}
+	if config.game.start != nil && !config.game.start(s) {
+		log.errorf("server game did not start game=%s", config.game.id)
 		teardown(s, world = true)
 		return false
 	}
@@ -314,7 +377,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		}
 	}
 	log.infof(
-		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d",
+		"server started seed=%d generator=%s view=%dx%d workers=%d capacity=%d seats=%d game=%s",
 		s.config.seed,
 		worldgen.KIND_NAMES[s.config.generator],
 		config.view_radius,
@@ -322,6 +385,7 @@ start :: proc(s: ^Server, config: Config, local: game.Endpoint) -> bool {
 		config.workers,
 		capacity,
 		s.config.max_players,
+		config.game.id if config.game.id != "" else "none",
 	)
 	return true
 }
@@ -342,6 +406,7 @@ stop :: proc(s: ^Server) -> bool {
 		thread.destroy(s.thread)
 		s.thread = nil
 	}
+	if s.config.game.stop != nil {s.config.game.stop(s)}
 	if !save(s) {sync.atomic_store(&s.failed, true)} 	// the last save must not fail quietly
 	if s.listening {netcode.host_close(&s.host, "the server stopped")}
 	used := s.arena.total_used
@@ -687,6 +752,11 @@ tick :: proc(s: ^Server) {
 		}
 	}
 	tick_mark(s, "entities")
+	if s.config.game.tick != nil {
+		base.profile_scope("game")
+		s.config.game.tick(s)
+		tick_mark(s, "game")
+	}
 	for w in s.worlds {
 		rewind: {
 			base.profile_scope("rewind, gates and rollback")
@@ -1025,7 +1095,8 @@ broadcast :: proc(s: ^Server, m: game.Server_Message, world: ^World = nil) {
 	}
 }
 
-@(private)
+// notice tells one player something (cut to game.MAX_NOTICE_TEXT, at a whole letter).
+// Public: a game (Game) speaks to its players with it.
 notice :: proc(s: ^Server, c: ^Client, text: string) {
 	log.info("server notice ", text)
 	text := text

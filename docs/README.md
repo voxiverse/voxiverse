@@ -17,6 +17,7 @@ Plans and history don't live here: git is the history.
 | [benchmarking.md](benchmarking.md) | Benchmark scenarios, comparing versions, profiling and Spall traces |
 | [network.md](network.md) | Network debugging tools, the state model and bandwidth baselines |
 | [server.md](server.md) | Server commands, permissions, accounts, chat and statistics |
+| [games.md](games.md) | What a game is: its folder, the server's hooks into it and its state |
 | [world.md](world.md) | Worlds and gates, items, liquids, structures and world generation |
 | [determinism.md](determinism.md) | What is bit-identical across machines and the rules that keep it so |
 | [journal.md](journal.md) | The edit journal: every block change with its cause; the one way blocks change |

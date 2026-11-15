@@ -119,6 +119,7 @@ Client :: struct {
 	check:           Maybe(game.Prediction_Check), // its newest, until that input is applied
 	selection:       [2]Maybe(game.Block_Pos), // world editing: /pos1, /pos2 (in its world; selection.odin)
 	command:         string, // the text of the command admin is running ("" otherwise; journal actions record it)
+	game_state:      []byte, // the game's state for this seat (game_client_state; kept, zeroed, by client_reset)
 }
 
 // What may be sent to a client per tick: bytes of chunks (at 30 Hz about
@@ -152,7 +153,7 @@ client_init :: proc(c: ^Client, config: Config, arena: mem.Allocator) -> mem.All
 	return nil
 }
 
-// client_reset frees the seat (keeping its maps' memory for the next).
+// client_reset frees the seat (keeping its maps' and the game's memory for the next).
 @(private)
 client_reset :: proc(c: ^Client) {
 	for g in c.grants {delete(g.pattern)}
@@ -160,12 +161,14 @@ client_reset :: proc(c: ^Client) {
 	delete(c.address)
 	counters_free(&c.stats)
 	game.sender_destroy(&c.tx)
-	has, columns := c.has, c.columns
+	has, columns, game_state := c.has, c.columns, c.game_state
 	clear(&has)
 	clear(&columns)
+	slice.zero(game_state)
 	c^ = {
-		has     = has,
-		columns = columns,
+		has        = has,
+		columns    = columns,
+		game_state = game_state,
 	}
 }
 

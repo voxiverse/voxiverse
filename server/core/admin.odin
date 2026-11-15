@@ -14,7 +14,8 @@ import "common:worldgen"
 
 // Admin commands: what a player who may cheat can ask of the server, as
 // text (game.Command; the console's commands send them). Each one checks its
-// own arguments; bad ones and unknown commands are answered with a notice.
+// own arguments; bad ones and unknown commands are answered with a notice. A
+// command the table lacks goes to the game the server runs (Game.command).
 
 @(private = "file")
 Admin_Command :: struct {
@@ -248,6 +249,17 @@ admin :: proc(s: ^Server, c: ^Client, command: string) {
 			record(s, c, .Chat_Whisper)
 		}
 		return
+	}
+	// Then the game's (Game.command), which checks its own arguments and permissions.
+	if s.config.game.command != nil {
+		c.command = command
+		known := s.config.game.command(s, c, f[0], expand_relative(c, f[1:]))
+		c.command = ""
+		if known {
+			record(s, c, .Command, f[0])
+			base.crash_bundle_action("command", f[0])
+			return
+		}
 	}
 	log.warnf("server unknown admin command command=%q by=%s", command, client_name(c))
 	notice(s, c, fmt.tprintf("Unknown server command: %s", f[0]))
