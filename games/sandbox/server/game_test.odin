@@ -19,6 +19,7 @@ test_sandbox_world :: proc(t: ^testing.T) {
 	testing.expect_value(t, srv.config.game.id, "sandbox")
 	testing.expect_value(t, srv.config.generator, worldgen.Kind.Earth)
 	testing.expect_value(t, srv.home.generator, worldgen.Kind.Earth)
+	testing.expect_value(t, srv.config.kit, KIT)
 	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
 	_, ok := core.harness_step_until(&sess.h, welcomed, sess, 600)
 	testing.expect(t, ok, "the player never joined")
