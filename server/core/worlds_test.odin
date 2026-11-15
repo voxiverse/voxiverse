@@ -302,3 +302,31 @@ test_earth_start_comes_from_the_universe_seed :: proc(t: ^testing.T) {
 		testing.expectf(t, !(lat == 43.3 && lon == 5.4), "seed %d: still Marseille", seed)
 	}
 }
+
+// A kept area is loaded with nobody near, stays loaded through the sweeps that free what
+// no player wants, and goes once it is released.
+@(test)
+test_world_keeps_an_area :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	if !testing.expect(t, session_start(sess, {}, false, with = harness_world())) {return}
+	defer session_stop(sess)
+	w := sess.h.srv.home
+	// Far from the spawn (the player's interest is 2 chunks around it): 3 x 2 x 3 chunks.
+	area := Box{{320, -16, 320}, {360, 15, 360}}
+	testing.expect(t, !world_ready(w, area))
+	world_keep(w, area)
+	ready :: proc(data: rawptr) -> bool {
+		w := (^World)(data)
+		return world_ready(w, {{320, -16, 320}, {360, 15, 360}})
+	}
+	_, ok := harness_step_until(&sess.h, ready, w, 300)
+	testing.expect(t, ok, "the kept area was never loaded")
+	harness_step(&sess.h, 2 * UNLOAD_SWEEP_TICKS)
+	testing.expect(t, world_ready(w, area), "a sweep freed a kept chunk")
+	testing.expect(t, chunks_get(&w.chunks, game.chunk_of(area.lo) - {1, 0, 0}) == nil)
+
+	world_release(w)
+	harness_step(&sess.h, UNLOAD_SWEEP_TICKS)
+	testing.expect(t, chunks_get(&w.chunks, game.chunk_of(area.lo)) == nil, "released, it stayed")
+}

@@ -84,7 +84,9 @@ handshake and checked by the client.
 - Interest is a cylinder around each player's chunk (radius and height announced in Welcome),
   sent nearest column first. The client drops chunks one past it and the server frees them two
   past it (`CLIENT_DROP_MARGIN`, `SERVER_UNLOAD_MARGIN`), so crossing a chunk border back and
-  forth sends nothing again. Both sides size their storage from it once, at join.
+  forth sends nothing again. Both sides size their storage from it once, at join. A world may
+  also keep an area loaded with nobody near (`world_keep` in `server/core/stream.odin`: a
+  game's arena), asked for at once and every tick until it is there, until `world_release`.
 - Every block change goes through the edit journal ([journal.md](journal.md)).
 
 ### Authority and netcode

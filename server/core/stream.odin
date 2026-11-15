@@ -200,14 +200,62 @@ client_wants :: proc(c: ^Client, pos: game.Chunk_Pos, config: Config, margin: i3
 	)
 }
 
-// anyone_wants: some playing client wants pos.
+// anyone_wants: some playing client wants pos, or w keeps it (world_keep).
 @(private)
 anyone_wants :: proc(w: ^World, pos: game.Chunk_Pos, margin: i32) -> bool {
 	s := w.server
+	for k in w.kept {if shape_has(k, pos) {return true}}
 	for &c in s.clients {
 		if c.world == w && client_wants(&c, pos, s.config, margin) {return true}
 	}
 	return false
+}
+
+// world_keep: the chunks that hold the blocks of area stay loaded in w whoever is near
+// (and so simulated, as every loaded chunk is), until world_release; those not loaded
+// are asked for at once and every tick until they are (keep_request). For an area a
+// game plays in whether or not a player is there: an arena, a goal. Not saved: a game
+// keeps what it needs again when it starts.
+world_keep :: proc(w: ^World, area: Box) {
+	append(&w.kept, Box{game.chunk_of(area.lo), game.chunk_of(area.hi)})
+	keep_request(w)
+}
+
+// world_release: w no longer keeps any area; its chunks go as no player wants them.
+world_release :: proc(w: ^World) {
+	clear(&w.kept)
+}
+
+// world_ready: every chunk that holds the blocks of area is loaded and generated, so
+// a bulk_edit of area changes all of it.
+world_ready :: proc(w: ^World, area: Box) -> bool {
+	lo, hi := game.chunk_of(area.lo), game.chunk_of(area.hi)
+	for y in lo.y ..= hi.y {
+		for z in lo.z ..= hi.z {
+			for x in lo.x ..= hi.x {
+				c := chunks_get(&w.chunks, {x, y, z})
+				if c == nil || c.state != .Ready {return false}
+			}
+		}
+	}
+	return true
+}
+
+// keep_request asks for the kept chunks that are not loaded (in order, until the
+// workers are full; the rest wait for the next tick).
+@(private)
+keep_request :: proc(w: ^World) {
+	for k in w.kept {
+		for y in k.lo.y ..= k.hi.y {
+			for z in k.lo.z ..= k.hi.z {
+				for x in k.lo.x ..= k.hi.x {
+					pos := game.Chunk_Pos{x, y, z}
+					if !game.in_world(pos) || chunks_get(&w.chunks, pos) != nil {continue}
+					if !request_chunk(w, pos) {return}
+				}
+			}
+		}
+	}
 }
 
 // stream requests and sends the nearest chunks the client lacks, within the

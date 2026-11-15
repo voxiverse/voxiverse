@@ -663,6 +663,7 @@ tick :: proc(s: ^Server) {
 	}
 	tick_mark(s, "saving")
 	for w in s.worlds {
+		keep_request(w)
 		chunks_collect(
 			&w.chunks,
 			proc(pos: game.Chunk_Pos, data: rawptr) -> bool {

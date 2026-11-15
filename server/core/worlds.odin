@@ -47,6 +47,7 @@ World :: struct {
 	started:             bool, // world_start ran (its chunks and the rest exist)
 	idle_since:          u64, // the last tick someone was in it
 	touched:             [dynamic]game.Chunk_Pos, // chunks changed this tick (a stepped server's hash; heap)
+	kept:                [dynamic]Box, // boxes of chunks (not blocks) kept loaded whoever is near (world_keep; heap)
 	gates:               [dynamic]Gate, // active: dialing or open (gates.odin)
 	tops_pending:        map[[2]i32]struct{}, // columns whose natural tops a worker is working out (heap)
 	journal:             Journal, // who changed which block (journal.odin)
@@ -166,6 +167,7 @@ world_close :: proc(w: ^World) {
 	delete(w.tops)
 	delete(w.gates)
 	delete(w.touched)
+	delete(w.kept)
 	delete(w.tops_pending)
 	for _, bytes in w.saved {delete(bytes)}
 	delete(w.saved)
@@ -289,7 +291,7 @@ island_put :: proc(s: ^Server, c: ^Client) {
 }
 
 // worlds_unload_idle saves and frees the worlds nobody has been in for a
-// while (never the home world).
+// while (never the home world, nor one that keeps an area loaded).
 worlds_unload_idle :: proc(s: ^Server) {
 	if s.store.job != nil {return} 	// (a world with a save running does not go until it commits)
 	idle :=
@@ -298,7 +300,9 @@ worlds_unload_idle :: proc(s: ^Server) {
 		w := s.worlds[i]
 		occupied := false
 		for &c in s.clients {occupied ||= c.state == .Playing && c.world == w}
-		if occupied || len(w.gates) > 0 {w.idle_since = max(w.idle_since, s.tick)}
+		if occupied ||
+		   len(w.gates) > 0 ||
+		   len(w.kept) > 0 {w.idle_since = max(w.idle_since, s.tick)}
 		if s.tick < w.idle_since + idle {continue}
 		world_save(w)
 		log.infof("server world unloaded address=%s", game.address_dir(w.address))
