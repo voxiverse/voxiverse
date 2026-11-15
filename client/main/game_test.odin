@@ -12,6 +12,7 @@ import "client:hud"
 import "client:testkit"
 import "client:ui"
 import "common:game"
+import "generated:games"
 import "server:core"
 
 // A world playing a game (engine.Game): the server names it in Welcome, the session takes
@@ -219,5 +220,25 @@ test_world_game_refused :: proc(t: ^testing.T) {
 			strings.has_prefix(s.failure, "the server runs a different version"),
 			s.failure,
 		)
+	}
+}
+
+// A Game read from the lists of games outlives the procedure that read it: its kinds are
+// slices, which a constant list built on that procedure's stack (the dedicated server's
+// game_find returned one that dangled, and its server failed to start).
+@(test)
+test_game_lists_outlive_their_readers :: proc(t: ^testing.T) {
+	taken :: proc(i: int) -> core.Game {return games.SERVER[i]}
+	scrub :: proc() -> (sum: int) {
+		junk: [16384]u8
+		for &b, i in junk {b = u8(i * 7 + 1)}
+		for b in junk {sum += int(b)}
+		return
+	}
+	for i in 0 ..< len(games.SERVER) {
+		g := taken(i)
+		testing.expect(t, scrub() > 0)
+		for k in g.kinds.states {testing.expectf(t, strings.has_prefix(k.name, g.id), "%s: kind %q", g.id, k.name)}
+		for k in g.kinds.events {testing.expectf(t, strings.has_prefix(k.name, g.id), "%s: kind %q", g.id, k.name)}
 	}
 }

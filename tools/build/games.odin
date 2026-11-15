@@ -62,7 +62,10 @@ games_with :: proc(part: string) -> []string {
 
 // game_list_text: the list of the named games' parts (each `games/<game>/<part>` package's
 // GAME, imported as `<game>_<part>`), in that order. The #assert keeps a game's id its
-// folder's name.
+// folder's name. The list is a read-only variable, not a constant: a constant slice of
+// Games is built afresh where it is used, the slices inside each (its kinds) on that
+// procedure's stack, so a Game taken from it dangled once the procedure returned (the
+// dedicated server's game_find).
 game_list_text :: proc(list: Game_List, names: []string) -> string {
 	b := strings.builder_make()
 	fmt.sbprintf(
@@ -79,7 +82,7 @@ game_list_text :: proc(list: Game_List, names: []string) -> string {
 	}
 	fmt.sbprintf(
 		&b,
-		"\n// %s: every game's %s part, by folder name.\n%s :: []%s{{",
+		"\n// %s: every game's %s part, by folder name.\n@(rodata)\n%s := []%s{{",
 		list.name,
 		list.part,
 		list.name,
