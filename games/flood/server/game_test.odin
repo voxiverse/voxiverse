@@ -20,7 +20,9 @@ Rig :: struct {
 rig_start :: proc(t: ^testing.T, rig: ^Rig) -> bool {
 	config := core.harness_world()
 	config.game = GAME
-	config.kit = "rocket_launcher 1" // (a real world's: the engine's tests fill the hotbar with blocks)
+	// (Not the engine's tests' kit, a hotbar of blocks the runner's kit could not join: a
+	// Flood world gives none of its own, and the launcher is the runner kit's first.)
+	config.kit = "rocket_launcher 1"
 	if !testing.expect(t, core.session_start(&rig.sess, {}, false, with = config)) {return false}
 	welcomed :: proc(data: rawptr) -> bool {return (^core.Session)(data).mirror.welcomed}
 	_, ok := core.harness_step_until(&rig.sess.h, welcomed, &rig.sess, 600)
