@@ -258,8 +258,8 @@ main :: proc() {
 			fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
 		)
 		if !locked {os.exit(1)}
-		// The main packages import the list of games (games.odin): every odin run needs it.
-		if !write_game_list() {os.exit(1)}
+		// The main packages import the lists of games (games.odin): every odin run needs them.
+		if !write_game_lists() {os.exit(1)}
 	}
 	ok: bool
 	switch args[0] {

@@ -11,7 +11,8 @@ import "common:worldgen"
 
 // What the server's State and Snapshot messages do to the session: the
 // receiver decodes them into records and events (common/game/replica.odin), and one
-// table says what each kind of record does here, a switch what each event does.
+// table says what each kind of record does here, a switch what each event does; the
+// game's kinds go to its received hook (game.odin).
 
 @(private)
 Apply_Proc :: proc(s: ^Session, g: game.Received)
@@ -42,6 +43,10 @@ APPLY := [game.State_Kind]Apply_Proc {
 @(private)
 apply_received :: proc(s: ^Session, got: []game.Received) {
 	for g in got {
+		if g.kind >= s.schema.engine { 	// the game's (game.odin)
+			if s.game.received != nil {s.game.received(s, g)}
+			continue
+		}
 		if g.op == .Event {
 			apply_event(s, g)
 		} else {

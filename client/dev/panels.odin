@@ -105,6 +105,7 @@ debug_overlay :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			&left_lines,
 			fmt.tprintf("sky: time of day %.2f", game.time_of_day(s.clock)),
 		)
+		if line := engine.game_debug_line(s); line != "" {overlay_append(&left_lines, line)}
 		w := &s.world
 		overlay_append(
 			&left_lines,

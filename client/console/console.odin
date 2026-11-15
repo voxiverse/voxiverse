@@ -91,6 +91,12 @@ console_execute :: proc(app: ^engine.App, line: string) {
 		}
 		return
 	}
+	// Then the game's the world plays (engine.Game.commands), while it plays.
+	if cmd, found := engine.game_command(app.session, args[0]);
+	   found && app.session.state == .Playing {
+		cmd.run(app, args[1:])
+		return
+	}
 	if session := app.session; session != nil {
 		for name in session.commands {
 			if name == args[0] {
@@ -338,6 +344,14 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 						&app.console,
 						fmt.tprintf("  %-10s %s", cmd.name, cmd.help),
 					)
+				}
+				if s := app.session; s != nil && s.state == .Playing {
+					for cmd in s.game.commands {
+						engine.console_print(
+							&app.console,
+							fmt.tprintf("  %-10s %s (%s)", cmd.name, cmd.help, s.game.id),
+						)
+					}
 				}
 				engine.console_print(
 					&app.console,

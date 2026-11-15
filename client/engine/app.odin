@@ -152,6 +152,9 @@ App :: struct {
 	prompts_count:       int,
 	shown:               ^game.Registry, // the registry the texture array, sound bank and icons were last made for (nil: none of a session)
 	registry:            ^game.Registry, // the game's own (the base pack); sessions use it unless they play a universe with packs
+	games:               []Game, // the games' client parts this build has (client/main gives the list the driver writes)
+	server_games:        []core.Game, // ... and their server parts, for a world of our own
+	game:                string, // the game a world of our own plays, by id (--game; "": none, the engine alone)
 	item_icons:          Item_Icons, // every item's icon, in the UI's atlas (icons.odin)
 	dial:                Dial_View, // the dial overlay's (overlay_dial.odin)
 	quit:                bool,
@@ -330,8 +333,19 @@ enter_world :: proc(
 			view_height = view_height,
 			trace = app.debug.net_trace,
 			upload = upload_target(app),
+			host_game = host_game(app),
 		},
 	)
+}
+
+// host_game: the server part of the game a world of our own plays (App.game; zero:
+// none). client/main checks the id against the games this build has.
+host_game :: proc(app: ^App) -> core.Game {
+	for g in app.server_games {
+		if g.id == app.game {return g}
+	}
+	assert(app.game == "", "a game this build does not have")
+	return {}
 }
 
 // upload_target: where this world's events go: the collector, if the player
@@ -379,6 +393,7 @@ start_session :: proc(app: ^App, config: Session_Config) {
 	app.session = new(Session)
 	config := config
 	config.registry = app.registry
+	config.games = app.games
 	if steam.on(&app.steam) {config.steam = &app.steam}
 	if !session_start(app.session, config) {
 		app.message = fmt.aprintf("Could not start: %s", app.session.failure)

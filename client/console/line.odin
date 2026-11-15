@@ -37,6 +37,9 @@ console_candidates :: proc(app: ^engine.App, before: []string) -> []string {
 	if len(before) == 0 {
 		names := make([dynamic]string, context.temp_allocator)
 		for cmd in c.commands {append(&names, cmd.name)}
+		if s := app.session; s != nil && s.state == .Playing {
+			for cmd in s.game.commands {append(&names, cmd.name)}
+		}
 		return names[:]
 	}
 	for cmd in c.commands {

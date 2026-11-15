@@ -225,14 +225,17 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 		return
 	}
 	if w.game != "" {
-		fail(s, fmt.tprintf("the server plays %s, a game this version does not have", w.game))
-		return
+		if ok, why := session_game_begin(s, w.game); !ok {
+			fail(s, why)
+			return
+		}
 	}
 	if w.schema != s.schema.hash {
 		fail(s, "the server runs a different version (its state schema is not ours)")
 		return
 	}
 	s.welcome = w
+	s.welcome.game = s.game.id // (w.game is a view into the message)
 	s.home = w.address
 	s.place = {
 		biome = game.NO_BIOME,
@@ -265,6 +268,7 @@ welcome :: proc(s: ^Session, w: game.Welcome) {
 	s.state = .Playing
 	if t, ok := s.teleport.?; ok {send_message(s, t)} 	// (the server says no if it may not)
 	log.infof("session joined view=%dx%d capacity=%d", w.view_radius, w.view_height, capacity)
+	session_game_started(s)
 }
 
 // notice keeps a message from the server for the console.

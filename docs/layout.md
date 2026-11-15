@@ -33,20 +33,21 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    no row here, and the build driver finds its packages by listing `games/`, so it adds no
    entry to a package list either. A game is three packages, as the engine is:
    `games/<game>` is its shared package (its rules, constants and the record types both
-   sides use; it imports `common:` and `core:`, never `server:` or `client:`) and
-   `games/<game>/server` its server part (it exports the game's `core.Game`; no `client:`),
-   each with its tests beside it; `games/<game>/client` will be its client part and
-   `games/<game>/pack/...` its pack. The packages are named for the game, `package <game>`,
-   `package <game>_server` and `package <game>_client` (as `server/steam` is
-   `steam_server`), so no two games' parts share a name, and code names an import of one by
-   it: `stopwatch.seconds(...)`, and in the list of games `stopwatch_server.GAME`. Each
-   shape gets its row with the first game that has one (a shape no game has is a stale row,
-   as a folder with no file is). Nothing outside `games/` imports a game except the
-   executables' main packages (`client/main`, `server/dedicated`), a game imports no other
-   game, and a part imports no other part of its game but the shared package: the `import`
-   lint in `check`, which also checks the package names. The main packages reach the games
-   through the list the driver writes from `games/` into `build/generated/games` (the
-   package `generated:games`), so that list is no file either.
+   sides use; it imports `common:` and `core:`, never `server:` or `client:`),
+   `games/<game>/server` its server part (it exports the game's `core.Game`; no `client:`)
+   and `games/<game>/client` its client part (it exports the game's `engine.Game`), each
+   with its tests beside it; its pack will be `games/<game>/pack/...`. The packages are
+   named for the game, `package <game>`, `package <game>_server` and `package <game>_client`
+   (as `server/steam` is `steam_server`), so no two games' parts share a name, and code
+   names an import of one by it: `stopwatch.seconds(...)`, and in the lists of games
+   `stopwatch_server.GAME`. Each shape gets its row with the first game that has one (a
+   shape no game has is a stale row, as a folder with no file is). Nothing outside `games/`
+   imports a game except the executables' main packages (`client/main`, `server/dedicated`;
+   a game's client part `client/main` alone), a game imports no other game, and a part
+   imports no other part of its game but the shared package: the `import` lint in `check`,
+   which also checks the package names. The main packages reach the games through the lists
+   the driver writes from `games/` into `build/generated/games` (the packages
+   `generated:games` and `generated:games/client`), so those lists are no file either.
 
 ## The cap
 
@@ -117,7 +118,7 @@ package** is enforced by the `layout` lint (see above).
 | `client/overlay` | The overlay stack's drawing and the dialogs: chat, death, dial, LAN, quit, toasts | `*.odin` |
 | `client/prompt` | Button prompts: an action's glyph and the prompt bar | `*.odin` |
 | `client/screen` | The title, options, credits, universes, creation, ignite, multiplayer, loading and market screens | `*.odin` |
-| `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, and the state every feature of `App` holds | `*.odin` |
+| `client/engine` | The client's state and machinery: `App`, `Session`, the world copy, settings, input, prediction, sounds, the client side of a game (`Game`), and the state every feature of `App` holds | `*.odin` |
 | `client/font` | The font rasterizer | `*.odin` |
 | `client/formatted` | Formatted text: drawing and wrapping styled runs | `*.odin` |
 | `client/gpu` | Vulkan | `*.odin` |

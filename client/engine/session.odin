@@ -48,6 +48,8 @@ Session_Config :: struct {
 	registry:          ^game.Registry, // the game's own (the base pack): what a remote server must match
 	steam:             ^steam.Client, // (joining) Steam: its ticket goes in Hello when it is on (nil: no Steam)
 	net:               ^netcode.Simnet, // (joining) connect on this simulated network, not UDP (tests)
+	games:             []Game, // the games this client has: the one the server names is played (App.games)
+	host_game:         core.Game, // (hosting) the game our own server runs (zero: none; App.game)
 }
 
 // Join: a server to play on.
@@ -185,6 +187,9 @@ Session :: struct {
 	arrivals:         int, // arrivals through a gate or travel (the music's discovery stinger)
 	market:           Market_State, // the town's market the server last sent (market.odin)
 	player_stats:     Stats_Data, // the counters the server last sent (menu_statistics.odin)
+	game:             Game, // the game the server plays (game.odin; zero: none)
+	game_state:       []byte, // its state (game_state), in the arena
+	game_playing:     bool, // its started hook ran (so ended will)
 	config:           Session_Config,
 	net:              Net_Stats,
 }
@@ -306,6 +311,7 @@ session_start :: proc(s: ^Session, config: Session_Config) -> bool {
 		upload            = config.upload,
 		rules             = still_rules() if config.no_natural_spawns else {},
 		name              = filepath.base(config.save_dir) if config.save_dir != "" else "Scratch world",
+		game              = config.host_game,
 	},
 	{&s.pipe, .Server},
 	) {
@@ -368,6 +374,7 @@ session_end :: proc(s: ^Session, pass: ^render.World_Pass, g: ^gpu.Gpu) -> bool 
 // session_free ends the session without a GPU: what session_end does after the world's
 // meshes are removed (the fuzz target, which has no GPU, ends its sessions here).
 session_free :: proc(s: ^Session) -> bool {
+	session_game_ended(s)
 	ok := true
 	if s.server.thread != nil {ok = core.stop(&s.server)}
 	if s.remote {netcode.link_close(&s.link, "left the game")}

@@ -30,8 +30,8 @@ game_screen :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	player_list_draw(app, ctx)
 }
 
-// hud_draw: the crosshair, the hotbar, the hearts and the item-name popup
-// (all of what F1 hides: hud_keys).
+// hud_draw: the crosshair, the hotbar, the hearts, the item-name popup and the
+// game's HUD (all of what F1 hides: hud_keys).
 hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	if app.hud_hidden {return}
 	s := app.session
@@ -46,6 +46,7 @@ hud_draw :: proc(app: ^engine.App, ctx: ^ui.Context) {
 	health_bar(ctx, s)
 	hud_popup(app, ctx)
 	screen.market_hud_line(app, ctx)
+	engine.game_hud(s, ctx) // the game's (its client part's)
 }
 
 // game_menu: over the game (alone in our own world, the world stands still

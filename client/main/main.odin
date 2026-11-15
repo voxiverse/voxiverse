@@ -14,6 +14,9 @@ import "client:engine"
 import "common:base"
 import platform "common:platform"
 
+import "generated:games"
+import games_client "generated:games/client"
+
 // Entry point: debugging setup, then the App's lifetime and frame loop.
 // `--frames N` exits after N frames and fails the run on any validation
 // finding or leak (CI and quick checks); `--capture-frame N` captures that
@@ -92,6 +95,14 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 		app.checking = true
 	}
 	check_pending := opts.check != ""
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	if opts.game != "" {
+		if !game_playable(opts.game) {
+			log.errorf("there is no game %q (the games: %s)", opts.game, game_ids())
+			return false
+		}
+		app.game = opts.game
+	}
 	exec := opts.exec
 	defer if raw_data(exec) != raw_data(opts.exec) {delete(exec)} 	// (a scene's own)
 	if opts.scene != "" {
@@ -247,6 +258,25 @@ run :: proc(host: ^base.Host, opts: engine.Options, sink: ^base.Log_Sink) -> boo
 		return false
 	}
 	return ok
+}
+
+// game_playable: games/ holds a game of that id with both parts, so a world of our own
+// can play it (generated:games, generated:games/client: the lists the driver writes).
+game_playable :: proc(id: string) -> bool {
+	_, client := engine.game_find(games_client.CLIENT, id)
+	for g in games.SERVER {
+		if g.id == id {return client}
+	}
+	return false
+}
+
+// game_ids: the ids of the games a world of our own can play, space apart.
+game_ids :: proc() -> string {
+	ids := make([dynamic]string, context.temp_allocator)
+	for g in games.SERVER {
+		if game_playable(g.id) {append(&ids, g.id)}
+	}
+	return strings.join(ids[:], " ", context.temp_allocator)
 }
 
 // log_frame_stats prints the run's frame times: wall clock per frame, vsync

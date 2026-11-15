@@ -7,7 +7,8 @@ outside its folder ([layout.md](layout.md), rule 6, and the `import` lint).
 
 A game's folder holds its packages as the engine's sides are split: `games/<game>` is its
 shared package (`package <game>`: the rules, constants and record types both sides use; only
-`common:` and `core:`), `games/<game>/server` its server part (`package <game>_server`).
+`common:` and `core:`), `games/<game>/server` its server part (`package <game>_server`) and
+`games/<game>/client` its client part (`package <game>_client`).
 
 ## The server's side: `core.Game`
 
@@ -33,18 +34,70 @@ they need it (`notice` tells a player something, `allowed` checks a permission).
 A game's tick runs inside the server's, so the stepped server (and its tests) run it too, and
 it follows [determinism.md](determinism.md): no clock, no unseeded randomness.
 
-## The list of games
+## The client's side: `engine.Game`
 
-No file lists the games. The build driver writes one before every `odin` it runs:
-`build/generated/games/games.odin`, the package `generated:games` (the collection
-`generated` is `build/generated`), whose `SERVER` holds every `games/<game>/server`
-package's `GAME`, sorted by folder. An `#assert` there keeps each game's id its folder's
-name. Only the executables' main packages import it (the `import` lint), and the dedicated
-server runs one with `voxiverse-server --game <id>` (default: none). The client has no games
-yet.
+A game's client part (`games/<game>/client`) exports one constant `engine.Game` value
+(`client/engine/game.odin`): its id, its kinds (the same `KINDS` of its shared package as the
+server part's), the type of its state, its console commands and the hooks the client calls.
+A `Session` holds the game it plays and its state (ground rule 1: the session's arena, freed
+with it; the App only holds the list of games, constant data). Every hook may be nil; all run
+on the main thread, in the frame.
 
-Adding a game is a folder `games/<game>/` holding its shared package and a `server` package
-that exports `GAME :: core.Game{...}`, with their tests beside them: nothing else.
+| Hook or field | When |
+|---|---|
+| `started(s)` | The session plays the game: welcomed, its state zero |
+| `ended(s)` | The session ends (only after `started`; its state still there) |
+| `received(s, r)` | A record of the game's kinds came, changed or went, or one of its events came, in the order sent |
+| `hud(s, ctx)` | Every frame in the world, after the engine's HUD (`client/hud`'s `hud_draw`; F1 hides both), with the `ui.Context` |
+| `debug(s) -> string` | Every frame with F3 open: one line of the overlay, shown as `game <id>: <line>` ("": none) |
+| `commands` | Console commands (`engine.Command_Spec`), there while a world plays the game: `help` lists them and Tab completes them |
+
+The accessors are typed as the server's are: `engine.game_state(s, T)` checks `T` is the
+declared state type; `engine.game_value(s, r, T)` is `r`'s value as `^T` when `r` is of the
+game's kind whose value type is `T` (nil for a removal), so a hook reads a record with no
+kind number and no cast:
+
+```odin
+received :: proc(s: ^engine.Session, r: game.Received) {
+	if times, ok := engine.game_value(s, r, stopwatch.Times); ok && times != nil {
+		view(s).times = times^
+	}
+}
+```
+
+## Which game a session plays
+
+The server names its game in the handshake: `Welcome.game` (its id; "" for none). The client
+looks for the client part of that id among the games it has (`App.games`); with it, the
+session's schema gains the game's kinds, its state is made and `Welcome.schema` must match
+(else the session fails: "the server runs a different version (its state schema is not
+ours)"). A client without that game fails the session before playing with "the server plays
+<id>, a game this version does not have", which the player reads on the screen a failed
+session shows; nothing is half-applied. The server is told nothing: the client leaves.
+
+A world of our own plays the game `voxiverse --game <id>` names (default: none, exactly the
+engine alone): the client starts its embedded server with that game's server part
+(`App.server_games`), whose Welcome then names it like any server's. The id must be a game
+with both parts; any other is refused at startup with the list of those there are.
+
+## The lists of games
+
+No file lists the games. The build driver writes two before every `odin` it runs, from the
+folders in `games/` (the collection `generated` is `build/generated`):
+
+- `build/generated/games/games.odin`, the package `generated:games`, whose `SERVER` holds
+  every `games/<game>/server` package's `GAME`;
+- `build/generated/games/client/games.odin`, the package `generated:games/client`, whose
+  `CLIENT` holds every `games/<game>/client` package's `GAME`.
+
+Both are sorted by folder, and an `#assert` keeps each game's id its folder's name. Only the
+executables' main packages import them (the `import` lint), the client's list `client/main`
+alone, so the dedicated server links no client code. The dedicated server runs one with
+`voxiverse-server --game <id>` (default: none); the client gives both lists to the App.
+
+Adding a game is a folder `games/<game>/` holding its shared package, a `server` package that
+exports `GAME :: core.Game{...}` and a `client` package that exports `GAME ::
+engine.Game{...}`, with their tests beside them: nothing else.
 `games/stopwatch` is the model: the smallest game that uses every hook and both blocks of
 state, and tests that run it on a stepped server.
 
@@ -103,6 +156,8 @@ KINDS :: game.Game_Kinds {
   game.key_player(id)`), the counterpart of the engine's `state_put`, and sends an event with
   `core.game_event(s, c, &broken)`. Puts coalesce, keyed kinds are views and singletons
   persist, as for the engine's kinds.
+- The client hands each of them to the client part's `received` hook, which reads it with
+  `engine.game_value(s, r, stopwatch.Times)`; the engine applies none of them itself.
 - The hashes: `Hello` carries the hash of the engine's kinds, which the server checks as
   before; `Welcome` names the game (`game`, its id, "" for none) and carries the hash of every
   kind (`schema`), which the client checks once it has the same game's kinds. A client and
