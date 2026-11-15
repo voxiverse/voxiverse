@@ -198,3 +198,30 @@ test_old_inventory_fits :: proc(t: ^testing.T) {
 	for st in r.overflow {if st.item == stone {over += st.count}}
 	testing.expect_value(t, over, 64 * (36 - game.INVENTORY_SLOTS))
 }
+
+// hotbar_select (a game's): the server puts another slot in hand and the player is told;
+// a slot past the hotbar changes nothing.
+@(test)
+test_hotbar_select :: proc(t: ^testing.T) {
+	sess := new(Session)
+	defer free(sess)
+	if !testing.expect(t, session_start(sess, {}, false, with = harness_world())) {return}
+	defer session_stop(sess)
+	welcomed :: proc(data: rawptr) -> bool {return (^Session)(data).mirror.welcomed}
+	_, ok := harness_step_until(&sess.h, welcomed, sess, 600)
+	if !testing.expect(t, ok, "the player never joined") {return}
+	harness_step(&sess.h, 5)
+	s := &sess.h.srv
+	c := &s.clients[0]
+	testing.expect_value(t, sess.mirror.inventory.selected, 0)
+
+	testing.expect(t, hotbar_select(s, c, 3))
+	harness_step(&sess.h, 5)
+	testing.expect_value(t, c.inventory.selected, 3)
+	testing.expect_value(t, sess.mirror.inventory.selected, 3)
+
+	testing.expect(t, !hotbar_select(s, c, game.HOTBAR_SLOTS))
+	testing.expect(t, !hotbar_select(s, c, -1))
+	harness_step(&sess.h, 5)
+	testing.expect_value(t, sess.mirror.inventory.selected, 3)
+}

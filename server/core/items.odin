@@ -37,6 +37,19 @@ inventory_request :: proc(s: ^Server, c: ^Client, q: game.Inventory_Request) {
 	if ok && !game.stack_empty(dropped) {drop_stack(s, c, dropped)}
 }
 
+// hotbar_select: c holds hotbar slot `slot` (0 ..< game.HOTBAR_SLOTS), as if it had
+// chosen it (the Select its client sends). false, and nothing changes, for a slot out
+// of range. The Inventory record tells the player at the end of the tick, and its
+// client takes it over its own choice. For a game (docs/games.md): the weapon a round
+// starts with in hand.
+hotbar_select :: proc(s: ^Server, c: ^Client, slot: int) -> bool {
+	if _, ok := game.inventory_apply(s.registry, &c.inventory, {.Select, 0, slot}, false); !ok {
+		return false
+	}
+	c.inv_changed = true
+	return true
+}
+
 // used_to_place: c placed block (from slot): one used up.
 @(private)
 used_to_place :: proc(s: ^Server, c: ^Client, slot: int) {

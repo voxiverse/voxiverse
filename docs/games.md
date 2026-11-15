@@ -51,6 +51,7 @@ makes it for games, documented where it is declared.
 | `teleport(s, c, position, look, flying)` | Move a player in its world (standing where it fits once the blocks are there, or flying) |
 | `game_mode(s, c, id)` | Put a player in a mode by id (a pack's too: `flood:out`); journalled as the game's |
 | `kit_give(s, c)` | Give a player what its mode's kit has that it lacks, weapons full |
+| `hotbar_select(s, c, slot)` | Put a hotbar slot (0 ..< `game.HOTBAR_SLOTS`) in a player's hand, as if it chose it; false for a slot out of range |
 | `head_in_water(s, c)` | A player's eyes are in water |
 | `world_keep(w, area)`, `world_ready(w, area)`, `world_release(w)` | Keep an area loaded with nobody near; whether all of it is there; let it go |
 | `block_at(w, p)` | Read a block (false: not loaded) |
