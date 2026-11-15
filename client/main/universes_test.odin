@@ -10,6 +10,8 @@ import "client:engine"
 import "client:overlay"
 import "client:screen"
 import "common:game"
+import "generated:games"
+import games_client "generated:games/client"
 import "server:core"
 
 // The universes screen's cards (screen_universes.odin): the order, what a
@@ -79,6 +81,48 @@ test_cards_newest_first_with_their_seed_and_mode :: proc(t: ^testing.T) {
 		for text in app.ui.texts {if strings.contains(text, want) {found = true}}
 		testing.expectf(t, found, "no %s on the cards", want)
 	}
+	free_all(context.temp_allocator)
+}
+
+// A card knows the game its universe plays (universe.cfg's game; one from before games
+// were recorded plays sandbox) and shows its name; a universe of a game this build lacks
+// is not opened, and the list says why.
+@(test)
+test_cards_know_their_game :: proc(t: ^testing.T) {
+	dir := "build/test/cards_game"
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	screen.saves_override = dir
+	defer screen.saves_override = ""
+	make_universe(dir, "Older", 1, "creative", 72 * time.Hour)
+	make_universe(dir, "Flooded", 2, "creative\ngame = flood", time.Hour)
+	make_universe(dir, "Elsewhere", 3, "creative\ngame = nonesuch", time.Minute)
+	app := ui_app(t)
+	defer ui_app_free(app)
+	defer screen.universes_destroy(&app.universes)
+	defer screen.creation_destroy(&app.creation)
+	app.games, app.server_games = games_client.CLIENT, games.SERVER
+	screen.universes_refresh(&app.universes)
+	e := app.universes.entries[:]
+	if !testing.expect_value(t, len(e), 3) {return}
+	testing.expect_value(t, e[0].game_id, "nonesuch")
+	testing.expect_value(t, e[1].game_id, "flood")
+	testing.expect_value(t, e[2].game_id, "")
+	testing.expect_value(t, screen.entry_game(&e[2]), "sandbox")
+	app.screen = .Universes
+	ui_frame(app)
+	for want in ([]string{"Flood, Creative", "Sandbox, Creative"}) {
+		found := false
+		for text in app.ui.texts {if strings.contains(text, want) {found = true}}
+		testing.expectf(t, found, "no %s on the cards", want)
+	}
+	screen.save_play(app, 0)
+	testing.expect(t, app.session == nil, "a universe of a game this build lacks was opened")
+	testing.expect_value(
+		t,
+		app.universes.message,
+		"This universe plays nonesuch, a game this version does not have",
+	)
 	free_all(context.temp_allocator)
 }
 

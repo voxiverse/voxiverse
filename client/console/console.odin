@@ -698,9 +698,11 @@ register_builtin_commands :: proc(c: ^engine.Console) {
 				name := strings.join(args, " ", context.temp_allocator)
 				path :=
 					filepath.join({screen.saves_dir(), name}, context.temp_allocator) or_else name
-				if os.exists(
-					path,
-				) {engine.enter_world(app, path, 0)} else {screen.world_create(app, name, "")}
+				if !os.exists(path) {
+					screen.world_create(app, name, "")
+				} else if why := screen.universe_enter(app, path); why != "" {
+					engine.console_print(&app.console, why)
+				}
 			},
 		},
 		complete_world,

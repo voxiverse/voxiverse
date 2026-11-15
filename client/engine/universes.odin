@@ -10,6 +10,7 @@ Save_Entry :: struct {
 	path:         string,
 	played:       time.Time, // its config file's last change: when it was last saved
 	seed:         u64, // the universe's seed (its home world's address, its galaxy)
+	game_id:      string, // the game it plays, as universe.cfg says it ("": from before games were recorded)
 	mode:         string, // the universe's default game mode, as universe.cfg says it
 	mode_changed: bool, // /gamemode changed it since it was made
 	stars:        [THUMB_STARS]game.Star, // its galaxy

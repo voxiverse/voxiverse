@@ -58,6 +58,7 @@ worlds_clear :: proc(w: ^engine.Universes_Screen) {
 		delete(e.name)
 		delete(e.path)
 		delete(e.mode)
+		delete(e.game_id)
 	}
 	clear(&w.entries)
 }
@@ -100,7 +101,8 @@ message_set :: proc(w: ^engine.Universes_Screen, text: string) {
 }
 
 // entry_read_config takes what a card shows from the universe's config file:
-// the seed (a thumbnail is its galaxy), the game mode and whether it changed.
+// the seed (a thumbnail is its galaxy), the game it plays, the game mode and whether
+// it changed.
 @(private = "file")
 entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 	data, err := os.read_entire_file_from_path(cfg, context.temp_allocator)
@@ -115,6 +117,8 @@ entry_read_config :: proc(e: ^engine.Save_Entry, cfg: string) {
 			if n, ok := strconv.parse_i64(value); ok {e.seed = u64(n)}
 		case "mode":
 			e.mode = strings.clone(value)
+		case "game":
+			e.game_id = strings.clone(value)
 		case "mode_changed":
 			e.mode_changed = value == "true"
 		}
@@ -271,6 +275,9 @@ saves_list :: proc(app: ^engine.App, ctx: ^ui.Context) {
 			.Universes_Mode_Survival if e.mode == MODE_SURVIVAL else .Universes_Mode_Creative,
 		)
 		if e.mode_changed {mode_text = engine.tr(.Universes_Mode_Changed, mode_text)}
+		if g, known := engine.game_find(app.games, entry_game(e)); known {
+			mode_text = engine.tr(.Universes_Game_Mode, g.name, mode_text)
+		}
 		ui.draw_text(ctx, ui.cut_top(&inner, t.font_size + 8), e.name, t.font_size, t.text, .Left)
 		small := t.font_size * 0.8
 		ui.draw_text(
@@ -325,11 +332,32 @@ card_click :: proc(w: ^engine.Universes_Screen, i: int, now: time.Tick) -> (play
 	return false
 }
 
-@(private = "file")
+// save_play opens universe i (universe_enter); why it could not is said on the list.
 save_play :: proc(app: ^engine.App, i: int) {
 	w := &app.universes
 	if i < 0 || i >= len(w.entries) {return}
-	engine.enter_world(app, w.entries[i].path, 0)
+	if why := universe_enter(app, w.entries[i].path); why != "" {message_set(w, why)}
+}
+
+// universe_enter plays the saved universe at path with the game it records (one from
+// before games were recorded played the engine's world: the default game, sandbox);
+// why not (temp allocator) if this build lacks that game.
+universe_enter :: proc(app: ^engine.App, path: string) -> (why: string) {
+	e: engine.Save_Entry
+	defer {
+		delete(e.mode)
+		delete(e.game_id)
+	}
+	entry_read_config(&e, filepath.join({path, "universe.cfg"}, context.temp_allocator) or_else "")
+	id := entry_game(&e)
+	if !engine.game_hostable(app, id) {return engine.tr(.Universes_Game_Missing, id)}
+	engine.enter_world(app, path, 0, game_id = id)
+	return ""
+}
+
+// entry_game: the game a universe plays.
+entry_game :: proc(e: ^engine.Save_Entry) -> string {
+	return e.game_id if e.game_id != "" else game.DEFAULT_GAME
 }
 
 // save_menu: a card's menu, over the list.

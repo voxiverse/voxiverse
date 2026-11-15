@@ -129,8 +129,11 @@ ours)"). A client without that game fails the session before playing with "the s
 <id>, a game this version does not have", which the player reads on the screen a failed
 session shows; nothing is half-applied. The server is told nothing: the client leaves.
 
-A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`): the
-client starts its embedded server with that game's server part
+A world of our own plays the game `voxiverse --game <id>` names (default: `sandbox`), but a
+saved universe plays the game it records (`universe.cfg`'s `game`, [saves.md](saves.md)): the
+universes screen and the `universe` command open it with that game, its card names it, and a
+universe of a game this build lacks is not opened ("This universe plays <id>, a game this
+version does not have"). The client starts its embedded server with that game's server part
 (`App.server_games`), whose Welcome then names it like any server's. The id must be a game
 with both parts; any other is refused at startup with the list of those there are.
 

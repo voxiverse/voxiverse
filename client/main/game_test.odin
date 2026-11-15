@@ -286,7 +286,7 @@ test_no_game_plays_sandbox :: proc(t: ^testing.T) {
 	app := new(engine.App)
 	defer free(app)
 	app.games, app.server_games, app.game = games_client.CLIENT, games.SERVER, id
-	hosted := engine.host_game(app)
+	hosted := engine.host_game(app, app.game)
 	testing.expect_value(t, hosted.id, "sandbox")
 
 	rig := new(Frame_Rig)

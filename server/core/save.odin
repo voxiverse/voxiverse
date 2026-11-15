@@ -23,8 +23,8 @@ import "common:intervention"
 import "common:planet"
 import "common:worldgen"
 
-// Saving: a universe is a directory: universe.cfg (format, seed, the home
-// world's address, the kit), characters/ and players/ (player_data.odin),
+// Saving: a universe is a directory: universe.cfg (format, seed, the game it
+// plays, the home world's address, the kit), characters/ and players/ (player_data.odin),
 // permissions.cfg, community.cfg, and worlds/<address>/ for each world
 // visited or edited: its world.cfg (generator, seed, time, spawn, rules,
 // generator parameters), entities.cfg, and regions/ with its edited chunks
@@ -458,6 +458,7 @@ write_universe_file :: proc(s: ^Server) -> bool {
 	fmt.sbprintfln(&b, "# Voxiverse universe (written by the server)")
 	fmt.sbprintfln(&b, "format = %d", SAVE_FORMAT)
 	fmt.sbprintfln(&b, "seed = %d", s.config.seed)
+	fmt.sbprintfln(&b, "game = %s", s.config.game.id)
 	fmt.sbprintfln(&b, "home = %s", game.address_dir(s.home.address))
 	fmt.sbprintfln(&b, "mode = %s", mode_config_text(s.config.mode))
 	if s.config.mode_changed {fmt.sbprintfln(&b, "mode_changed = true")}
@@ -504,6 +505,20 @@ read_universe_file :: proc(s: ^Server, text: string, path: string) -> bool {
 			s.store.format = n
 		case key == "seed":
 			if n, ok := strconv.parse_i64(value); ok {s.config.seed = n}
+		case key == "game":
+			// The game it was made for: another game's universe is refused, not played
+			// under rules it was not made for. (Before games were recorded, none is
+			// named: it plays the game it is opened with, recorded at the next save.)
+			if value != s.config.game.id {
+				s.refusal = fmt.tprintf("this universe plays %s, not %s", value, s.config.game.id)
+				log.errorf(
+					"server universe made for another game, not loaded path=%s game=%s playing=%s",
+					path,
+					value,
+					s.config.game.id,
+				)
+				return false
+			}
 		case key == "home":
 			a, ok := game.address_parse(value, {})
 			if !ok {

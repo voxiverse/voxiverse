@@ -316,6 +316,7 @@ enter_world :: proc(
 	benchmark := false, // the same work every run: no sheep, still clouds
 	mode := "creative", // a new universe's default game mode
 	earth := false, // a new universe's home world is Earth
+	game_id := "", // the game it plays ("": App.game, the command line's)
 ) {
 	view_radius, view_height := view_size(app)
 	start_session(
@@ -334,19 +335,26 @@ enter_world :: proc(
 			view_height = view_height,
 			trace = app.debug.net_trace,
 			upload = upload_target(app),
-			host_game = host_game(app),
+			host_game = host_game(app, game_id if game_id != "" else app.game),
 		},
 	)
 }
 
-// host_game: the server part of the game a world of our own plays (App.game).
-// client/main checks the id against the games this build has; a game it lacks is the
-// zero Game, which the server refuses to start.
-host_game :: proc(app: ^App) -> core.Game {
+// host_game: the server part of the game id a world of our own plays. A game this
+// build lacks is the zero Game, which the server refuses to start (client/main checks
+// --game, the universes screen a universe's game, before they get here).
+host_game :: proc(app: ^App, id: string) -> core.Game {
 	for g in app.server_games {
-		if g.id == app.game {return g}
+		if g.id == id {return g}
 	}
 	return {}
+}
+
+// game_hostable: this build has both parts of the game id, so a world of our own can
+// play it.
+game_hostable :: proc(app: ^App, id: string) -> bool {
+	_, client := game_find(app.games, id)
+	return client && host_game(app, id).id == id
 }
 
 // upload_target: where this world's events go: the collector, if the player

@@ -1052,3 +1052,50 @@ test_market_view_and_trade_over_the_net :: proc(t: ^testing.T) {
 	testing.expect_value(t, cf.trader.cash, STARTING_PURSE)
 	testing.expect_value(t, cf.trader.cargo[.Grain], 0)
 }
+
+// A universe records the game it is made for: a server playing another game refuses it,
+// and one from before games were recorded plays the game it is opened with and records it.
+@(test)
+test_universe_records_its_game :: proc(t: ^testing.T) {
+	dir := filepath.join({"build", "test", "universe_game"}, context.temp_allocator) or_else ""
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	cfg := filepath.join({dir, UNIVERSE_FILE}, context.temp_allocator) or_else ""
+	recorded :: proc(cfg: string) -> string {
+		data, err := os.read_entire_file_from_path(cfg, context.temp_allocator)
+		if err != nil {return "(unreadable)"}
+		rest := string(data)
+		for line in strings.split_lines_iterator(&rest) {
+			if strings.has_prefix(line, "game = ") {return line[len("game = "):]}
+		}
+		return ""
+	}
+	config := harness_world()
+	config.save_dir = dir
+	h := new(Harness)
+	defer free(h)
+	if !testing.expect(t, harness_start(h, config)) {return}
+	testing.expect(t, harness_stop(h))
+	testing.expect_value(t, recorded(cfg), HARNESS_GAME.id)
+
+	// Another game's server refuses it, and says why.
+	other := config
+	other.game = {
+		info = {id = "other"},
+	}
+	{
+		context.logger = log.nil_logger() // (the refusal is logged: the point)
+		testing.expect(t, !harness_start(h, other), "a universe was played by another game")
+	}
+	testing.expect_value(t, h.srv.refusal, "this universe plays harness, not other")
+	testing.expect_value(t, recorded(cfg), HARNESS_GAME.id)
+
+	// From before games were recorded: played by the game it is opened with, recorded.
+	data, _ := os.read_entire_file_from_path(cfg, context.temp_allocator)
+	before, _ := strings.replace_all(string(data), "game = harness\n", "", context.temp_allocator)
+	testing.expect(t, len(before) < len(data))
+	testing.expect(t, os.write_entire_file(cfg, transmute([]u8)before) == nil)
+	if !testing.expect(t, harness_start(h, other)) {return}
+	testing.expect(t, harness_stop(h))
+	testing.expect_value(t, recorded(cfg), "other")
+}

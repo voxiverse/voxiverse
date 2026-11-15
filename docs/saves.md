@@ -8,7 +8,7 @@ else is.
 ## Directory layout
 
 ```
-universe.cfg            format, seed, home world, kit, generation, age
+universe.cfg            format, seed, game, home world, kit, generation, age
 save.tx                 only while a save is being applied (the commit record)
 permissions.cfg, community.cfg
 characters/<account>/<name>.json   (players/<name>.json: a character file from before accounts, still read)
@@ -21,6 +21,14 @@ backups/g<generation>-<UTC time>/, pre-migration-<from>/, pre-restore-g<N>/
 lock                                          held while the universe is open (never part of a save)
 telemetry/, analytics/, exports/              (never part of a save: analytics/ holds the session recordings)
 ```
+
+A universe is made for one game ([games.md](games.md)): `universe.cfg`'s `game` is its id,
+written by the server that plays it. A server playing another game refuses the universe
+("this universe plays flood, not sandbox") rather than run it under rules it was not made
+for; the client opens a saved universe with the game it records. A universe from before
+games were recorded names none: it plays the game it is opened with, and the next save
+records that game (the client opens such a universe as `sandbox`, the engine's world that
+every universe made before then played).
 
 `entities.cfg` names each entity's kind by its registry id (`voxiverse:sheep`); a file
 written before kinds were data has the bare name (`sheep`, or `critter`), and that loads
