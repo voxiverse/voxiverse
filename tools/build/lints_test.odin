@@ -126,7 +126,7 @@ test_collections_lint :: proc(t: ^testing.T) {
 @(test)
 test_game_import_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
-	imports := "package x\nimport \"server:core\"\nimport tag \"games:tag\"\nimport \"games:tag/client\"\n"
+	imports := "package x\nimport \"server:core\"\nimport tag \"games:tag\"\nimport \"games:tag/server\"\n"
 	// The main packages may import a game; the engine, the tools and the tests may not.
 	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", imports)), 0)
 	testing.expect_value(t, len(lint_game_imports("client/main/main.odin", imports)), 0)
@@ -134,21 +134,79 @@ test_game_import_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_game_imports("client/engine/app.odin", imports)), 2)
 	testing.expect_value(t, len(lint_game_imports("tools/bench/main.odin", imports)), 2)
 	testing.expect_value(t, len(lint_game_imports("tests/x_test.odin", imports)), 2)
-	// A game imports itself (its client package its server one), never another game.
-	testing.expect_value(t, len(lint_game_imports("games/tag/client/hud.odin", imports)), 0)
-	testing.expect_value(t, len(lint_game_imports("games/tag/tag.odin", imports)), 0)
-	testing.expect_value(t, len(lint_game_imports("games/flood/flood.odin", imports)), 2)
-	// The list of every game the driver writes: the main packages' only.
+	// A game's client part: client/main's alone (the dedicated server links no client code).
+	client := "import \"games:tag/client\"\n"
+	testing.expect_value(t, len(lint_game_imports("client/main/main.odin", client)), 0)
+	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", client)), 1)
+	// A game imports no other game.
+	testing.expect_value(
+		t,
+		len(lint_game_imports("games/flood/server/game.odin", "import \"games:tag\"\n")),
+		1,
+	)
+	// Its parts are apart as the engine's are: the shared package imports no server or
+	// client code, the server part no client code, and a part only the shared package of
+	// its game.
+	shared := "import \"common:game\"\nimport \"core:fmt\"\n"
+	both := "import \"server:core\"\nimport \"client:engine\"\n"
+	testing.expect_value(t, len(lint_game_imports("games/tag/rules.odin", shared)), 0)
+	testing.expect_value(t, len(lint_game_imports("games/tag/rules.odin", both)), 2)
+	testing.expect_value(t, len(lint_game_imports("games/tag/server/game.odin", both)), 1)
+	testing.expect_value(t, len(lint_game_imports("games/tag/client/hud.odin", both)), 0)
+	own := "import \"games:tag\"\n"
+	testing.expect_value(t, len(lint_game_imports("games/tag/server/game.odin", own)), 0)
+	testing.expect_value(t, len(lint_game_imports("games/tag/client/hud.odin", own)), 0)
+	testing.expect_value(
+		t,
+		len(lint_game_imports("games/tag/client/hud.odin", "import \"games:tag/server\"\n")),
+		1,
+	)
+	// The lists of every game the driver writes: the main packages' only, the client's
+	// list client/main's.
 	list := "import \"generated:games\"\n"
 	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", list)), 0)
 	testing.expect_value(t, len(lint_game_imports("server/core/server.odin", list)), 1)
-	testing.expect_value(t, len(lint_game_imports("games/tag/tag.odin", list)), 1)
+	testing.expect_value(t, len(lint_game_imports("games/tag/server/game.odin", list)), 1)
+	client_list := "import \"generated:games/client\"\n"
+	testing.expect_value(t, len(lint_game_imports("client/main/main.odin", client_list)), 0)
+	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", client_list)), 1)
 	// Not an import: a string that only mentions one.
 	testing.expect_value(
 		t,
 		len(lint_game_imports("server/core/x.odin", "s := \"import \\\"games:tag\\\"\"\n")),
 		0,
 	)
+}
+
+@(test)
+test_game_package_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	testing.expect_value(
+		t,
+		len(lint_game_package("games/tag/rules.odin", "// x\npackage tag\n")),
+		0,
+	)
+	testing.expect_value(
+		t,
+		len(lint_game_package("games/tag/server/game.odin", "package tag_server\n")),
+		0,
+	)
+	testing.expect_value(
+		t,
+		len(lint_game_package("games/tag/client/hud.odin", "package tag_client\n")),
+		0,
+	)
+	testing.expect_value(
+		t,
+		len(lint_game_package("games/tag/server/game.odin", "package server\n")),
+		1,
+	)
+	testing.expect_value(
+		t,
+		len(lint_game_package("games/tag/client/hud.odin", "package tag\n")),
+		1,
+	)
+	testing.expect_value(t, len(lint_game_package("client/hud/game.odin", "package hud\n")), 0)
 }
 
 @(test)

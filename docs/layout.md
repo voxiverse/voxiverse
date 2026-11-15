@@ -28,17 +28,25 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    root of a collection: imports read `collection:name`.
 5. **Fuzz code** is named `fuzz*.odin` (`fuzz.odin`, `fuzz_<target>.odin`; its test is
    `fuzz_test.odin`) in the package that owns the thing fuzzed.
-6. **A game is a folder, `games/<game>/`**, named by the game's id (singular snake_case). Its
-   rows are shapes, not folders: `<game>` stands for any game's name, so a new game adds no
-   row here, and the build driver finds its packages by listing `games/`, so it adds no entry
-   to a package list either. `games/<game>` is the game's server-side package, its tests
-   beside it; its client package will be `games/<game>/client` and its pack
-   `games/<game>/pack/...`. Each shape gets its row with the first game that has one (a
-   shape no game has is a stale row, as a folder with no file is). Nothing
-   outside `games/` imports a game except the executables' main packages (`client/main`,
-   `server/dedicated`), and a game imports no other game: the `import` lint in `check`. The
-   main packages reach the games through the list the driver writes from `games/` into
-   `build/generated/games` (the package `generated:games`), so that list is no file either.
+6. **A game is a folder, `games/<game>/`**, named by the game's id (singular snake_case).
+   Its rows are shapes, not folders: `<game>` stands for any game's name, so a new game adds
+   no row here, and the build driver finds its packages by listing `games/`, so it adds no
+   entry to a package list either. A game is three packages, as the engine is:
+   `games/<game>` is its shared package (its rules, constants and the record types both
+   sides use; it imports `common:` and `core:`, never `server:` or `client:`) and
+   `games/<game>/server` its server part (it exports the game's `core.Game`; no `client:`),
+   each with its tests beside it; `games/<game>/client` will be its client part and
+   `games/<game>/pack/...` its pack. The packages are named for the game, `package <game>`,
+   `package <game>_server` and `package <game>_client` (as `server/steam` is
+   `steam_server`), so no two games' parts share a name, and code names an import of one by
+   it: `stopwatch.seconds(...)`, and in the list of games `stopwatch_server.GAME`. Each
+   shape gets its row with the first game that has one (a shape no game has is a stale row,
+   as a folder with no file is). Nothing outside `games/` imports a game except the
+   executables' main packages (`client/main`, `server/dedicated`), a game imports no other
+   game, and a part imports no other part of its game but the shared package: the `import`
+   lint in `check`, which also checks the package names. The main packages reach the games
+   through the list the driver writes from `games/` into `build/generated/games` (the
+   package `generated:games`), so that list is no file either.
 
 ## The cap
 
@@ -153,7 +161,8 @@ package** is enforced by the `layout` lint (see above).
 | `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `games` | Where the games live (rule 6) | `README.md` |
-| `games/<game>` | A game's server-side package and its tests (the shape of every game's folder) | `*.odin`, `README.md` |
+| `games/<game>` | A game's shared package: its rules, constants and the record types both sides use (the shape of every game's folder) | `*.odin`, `README.md` |
+| `games/<game>/server` | A game's server part: its `core.Game` and its tests | `*.odin` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

@@ -5,9 +5,13 @@ one: a round, a goal, a score. Each game is native Odin in its own folder, `game
 compiled against the engine. The engine never imports a game, and adding a game edits no file
 outside its folder ([layout.md](layout.md), rule 6, and the `import` lint).
 
+A game's folder holds its packages as the engine's sides are split: `games/<game>` is its
+shared package (`package <game>`: the rules, constants and record types both sides use; only
+`common:` and `core:`), `games/<game>/server` its server part (`package <game>_server`).
+
 ## The server's side: `core.Game`
 
-A game's server-side package (`games/<game>`) exports one constant `core.Game` value: its id
+A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its id
 (the folder's name), the types of its state, and the hooks the server calls (`Game` in
 `server/core/server.odin`). Whoever starts the server puts it in `Config.game`; the zero
 `Game` is no game, and the server is the engine alone. Every hook may be nil.
@@ -32,16 +36,17 @@ it follows [determinism.md](determinism.md): no clock, no unseeded randomness.
 ## The list of games
 
 No file lists the games. The build driver writes one before every `odin` it runs:
-`build/generated/games/games.odin`, the package `generated:games` (the collection `generated`
-is `build/generated`), whose `SERVER` holds every `games/<game>` package's `GAME`, sorted by
-folder. An `#assert` there keeps each game's id its folder's name. Only the executables' main
-packages import it (the `import` lint), and the dedicated server runs one with
-`voxiverse-server --game <id>` (default: none). The client has no games yet.
+`build/generated/games/games.odin`, the package `generated:games` (the collection
+`generated` is `build/generated`), whose `SERVER` holds every `games/<game>/server`
+package's `GAME`, sorted by folder. An `#assert` there keeps each game's id its folder's
+name. Only the executables' main packages import it (the `import` lint), and the dedicated
+server runs one with `voxiverse-server --game <id>` (default: none). The client has no games
+yet.
 
-Adding a game is a folder `games/<game>/` holding a package that exports
-`GAME :: core.Game{...}`, and its tests beside it: nothing else. `games/stopwatch` is the model:
-the smallest game that uses every hook and both blocks of state, and tests that run it on a
-stepped server.
+Adding a game is a folder `games/<game>/` holding its shared package and a `server` package
+that exports `GAME :: core.Game{...}`, with their tests beside them: nothing else.
+`games/stopwatch` is the model: the smallest game that uses every hook and both blocks of
+state, and tests that run it on a stepped server.
 
 ## The game's state
 

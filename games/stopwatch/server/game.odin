@@ -1,15 +1,13 @@
-package stopwatch
+package stopwatch_server
 
 import "core:fmt"
 import "core:log"
 
-import "common:game"
+import "games:stopwatch"
 import "server:core"
 
-// Stopwatch: the smallest game, and the model for the next (docs/games.md). It is
-// played in survival: every player's time in the world runs from when they join,
-// the longest stay of anyone who left is the record to beat, and /stopwatch tells a
-// player their time and the record.
+// Stopwatch's server part (the game: games/stopwatch): it keeps every player's time
+// and the record, and answers /stopwatch.
 
 GAME :: core.Game {
 	id           = "stopwatch",
@@ -40,9 +38,6 @@ Lap :: struct {
 watch :: proc(s: ^core.Server) -> ^Watch {return core.game_state(s, Watch)}
 lap :: proc(s: ^core.Server, c: ^core.Client) -> ^Lap {return core.game_client_state(s, c, Lap)}
 
-// seconds: ticks as seconds of play.
-seconds :: proc(ticks: u64) -> f64 {return f64(ticks) / game.TICK_RATE}
-
 // configure: a new universe is played in survival (staying is only a feat where one can
 // die); a mode asked for stays.
 configure :: proc(config: ^core.Config) {
@@ -61,7 +56,7 @@ stop :: proc(s: ^core.Server) {
 		"stopwatch stopped ticks=%d joins=%d record=%.1fs",
 		w.ticks,
 		w.joins,
-		seconds(w.record),
+		stopwatch.seconds(w.record),
 	)
 }
 
@@ -93,8 +88,8 @@ command :: proc(s: ^core.Server, c: ^core.Client, name: string, args: []string) 
 			c,
 			fmt.tprintf(
 				"Your time: %.1f s. The record: %.1f s",
-				seconds(lap(s, c).ticks),
-				seconds(watch(s).record),
+				stopwatch.seconds(lap(s, c).ticks),
+				stopwatch.seconds(watch(s).record),
 			),
 		)
 	case len(args) == 1 && args[0] == "reset":

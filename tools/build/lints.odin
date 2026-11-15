@@ -416,64 +416,185 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 }
 
 // GAME_IMPORTERS: the executables' main packages, the only code outside games/ that may
-// import a game, or the list of them the driver writes (generated:games; docs/games.md).
+// import a game, or the lists of them the driver writes (generated:games; docs/games.md).
 GAME_IMPORTERS :: []string{"client/main", "server/dedicated"}
 
-// lint_game_imports: the engine never imports a game, but for the executables' main
-// packages (GAME_IMPORTERS), and a game imports no other game; nor the list of games
-// (generated:games), which imports them all. path is relative to the repository, with
-// forward slashes.
-lint_game_imports :: proc(path, text: string) -> []string {
-	game_of :: proc(rest: string) -> string {
-		if slash := strings.index_byte(rest, '/'); slash >= 0 {return rest[:slash]}
-		return rest
+// CLIENT_IMPORTER: of those, the one that may import a game's client package or the list
+// of them (generated:games/client): the dedicated server links no client code.
+CLIENT_IMPORTER :: "client/main"
+
+// Game_Part: which of a game's packages a path is in (docs/layout.md, rule 6): its shared
+// package `games/<game>`, its server part `games/<game>/server` or its client part
+// `games/<game>/client`.
+Game_Part :: enum u8 {
+	Shared,
+	Server,
+	Client,
+}
+
+// game_path_of: the game and part of a path under games/ ("games/tag/client/hud.odin",
+// or an import's "tag/client"), from the first segment after games/.
+game_path_of :: proc(rest: string) -> (game: string, part: Game_Part) {
+	game = rest
+	after := ""
+	if slash := strings.index_byte(rest, '/');
+	   slash >= 0 {game, after = rest[:slash], rest[slash + 1:]}
+	switch {
+	case after == "server" || strings.has_prefix(after, "server/"):
+		part = .Server
+	case after == "client" || strings.has_prefix(after, "client/"):
+		part = .Client
 	}
-	own := ""
-	if strings.has_prefix(path, "games/") {own = game_of(path[len("games/"):])}
+	return
+}
+
+// lint_game_imports: the engine never imports a game, but for the executables' main
+// packages (GAME_IMPORTERS; a game's client part and the client list only client/main),
+// and a game imports no other game, nor the lists of games (generated:), which import
+// them all. Within a game the parts stay apart as the engine's do: the shared package
+// imports neither server: nor client:, the server part no client:, and a part imports no
+// other part of its game but the shared package. path is relative to the repository,
+// with forward slashes.
+lint_game_imports :: proc(path, text: string) -> []string {
+	in_game := strings.has_prefix(path, "games/")
+	own, own_part := "", Game_Part.Shared
+	if in_game {own, own_part = game_path_of(path[len("games/"):])}
 	found := make([dynamic]string)
 	line_no := 0
 	rest := text
+	refuse :: proc(found: ^[dynamic]string, path: string, line_no: int, target, why: string) {
+		append(found, fmt.aprintf("%s:%d: import \"%s\": %s", path, line_no, target, why))
+	}
 	for line in strings.split_lines_iterator(&rest) {
 		line_no += 1
 		target := import_target(line) or_continue
-		imported := ""
 		switch {
+		case in_game && strings.has_prefix(target, "server:") && own_part == .Shared:
+			refuse(
+				&found,
+				path,
+				line_no,
+				target,
+				"a game's shared package is both sides': it imports no server code",
+			)
+		case in_game && strings.has_prefix(target, "client:") && own_part != .Client:
+			refuse(&found, path, line_no, target, "only a game's client part imports client code")
 		case strings.has_prefix(target, "games:"):
-			imported = game_of(target[len("games:"):])
+			game, part := game_path_of(target[len("games:"):])
+			switch {
+			case in_game && game != own:
+				refuse(
+					&found,
+					path,
+					line_no,
+					target,
+					"a game imports no other game (what two share belongs in the engine)",
+				)
+			case in_game && part != .Shared:
+				refuse(
+					&found,
+					path,
+					line_no,
+					target,
+					"a game's parts share only its shared package",
+				)
+			case !in_game && !slice.contains(GAME_IMPORTERS, folder_of(path)):
+				refuse(
+					&found,
+					path,
+					line_no,
+					target,
+					fmt.tprintf(
+						"only the main packages (%s) import a game; the engine calls it through its hooks",
+						strings.join(GAME_IMPORTERS, ", ", context.temp_allocator),
+					),
+				)
+			case !in_game && part == .Client && folder_of(path) != CLIENT_IMPORTER:
+				refuse(
+					&found,
+					path,
+					line_no,
+					target,
+					"only " + CLIENT_IMPORTER + " imports a game's client part",
+				)
+			}
 		case strings.has_prefix(target, "generated:"):
-			imported = "*" // every game
-		case:
-			continue
-		}
-		switch {
-		case own != "" && imported != own:
-			append(
-				&found,
-				fmt.aprintf(
-					"%s:%d: import \"%s\": a game imports no other game (what two share belongs in the engine)",
+			switch {
+			case in_game:
+				refuse(
+					&found,
 					path,
 					line_no,
 					target,
-				),
-			)
-		case own == "" && !slice.contains(GAME_IMPORTERS, folder_of(path)):
-			append(
-				&found,
-				fmt.aprintf(
-					"%s:%d: import \"%s\": only the main packages (%s) import a game; the engine calls it through its hooks",
+					"a game imports no list of games (they import every game)",
+				)
+			case !slice.contains(GAME_IMPORTERS, folder_of(path)):
+				refuse(
+					&found,
 					path,
 					line_no,
 					target,
-					strings.join(GAME_IMPORTERS, ", ", context.temp_allocator),
-				),
-			)
+					fmt.tprintf(
+						"only the main packages (%s) import the list of games",
+						strings.join(GAME_IMPORTERS, ", ", context.temp_allocator),
+					),
+				)
+			case strings.has_prefix(target, "generated:games/client") &&
+			     folder_of(path) != CLIENT_IMPORTER:
+				refuse(
+					&found,
+					path,
+					line_no,
+					target,
+					"only " + CLIENT_IMPORTER + " imports the client list of games",
+				)
+			}
 		}
 	}
 	return found[:]
 }
 
-// import_lint runs lint_relative_imports and lint_game_imports over every first-party Odin
-// file.
+// lint_game_package: a game's packages are named for it (docs/layout.md, rule 6): the
+// shared package `<game>`, the server part `<game>_server`, the client part `<game>_client`,
+// so no two games' parts share a name and code that imports one names it so. path is relative to the repository, with forward slashes.
+lint_game_package :: proc(path, text: string) -> []string {
+	found := make([dynamic]string)
+	if !strings.has_prefix(path, "games/") {return found[:]}
+	game, part := game_path_of(path[len("games/"):])
+	want := game
+	switch part {
+	case .Shared:
+	case .Server:
+		want = strings.concatenate({game, "_server"}, context.temp_allocator)
+	case .Client:
+		want = strings.concatenate({game, "_client"}, context.temp_allocator)
+	}
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		trimmed := strings.trim_space(line)
+		if !strings.has_prefix(trimmed, "package ") {continue}
+		name := strings.trim_space(trimmed[len("package "):])
+		if name != want {
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: package %s: a game's package here is named %s",
+					path,
+					line_no,
+					name,
+					want,
+				),
+			)
+		}
+		break
+	}
+	return found[:]
+}
+
+// import_lint runs lint_relative_imports, lint_game_imports and lint_game_package over
+// every first-party Odin file.
 import_lint :: proc() -> bool {
 	ok := true
 	for dir in ([]string{"tests", "common", "client", "server", "tools", GAMES_DIR}) {
@@ -496,9 +617,13 @@ import_lint :: proc() -> bool {
 				fmt.eprintln(msg)
 				ok = false
 			}
+			for msg in lint_game_package(path, string(data)) {
+				fmt.eprintln(msg)
+				ok = false
+			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections, and only the main packages import a game")}
+	if ok {fmt.println("lint   imports go through collections, only the main packages import a game, and games' packages are named for them")}
 	return ok
 }
 

@@ -21,7 +21,7 @@ DETERMINISM_DIRS :: []string {
 	"common/intervention",
 	"common/island",
 	"common/script",
-	"games", // (a game's server side runs in the server's tick)
+	"games", // (a game's shared rules and its server part run in the server's tick)
 }
 
 @(rodata)

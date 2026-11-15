@@ -10,11 +10,14 @@ test_game_list :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(none, "SERVER :: []core.Game{}\n"))
 	testing.expect(t, !strings.contains(none, "games:"))
 	two := game_list_text({"stopwatch", "tag"})
-	testing.expect(t, strings.contains(two, "import game_stopwatch \"games:stopwatch\"\n"))
-	testing.expect(t, strings.contains(two, "import game_tag \"games:tag\"\n"))
 	testing.expect(
 		t,
-		strings.contains(two, "SERVER :: []core.Game{game_stopwatch.GAME, game_tag.GAME}\n"),
+		strings.contains(two, "import stopwatch_server \"games:stopwatch/server\"\n"),
 	)
-	testing.expect(t, strings.contains(two, "#assert(game_tag.GAME.id == \"tag\""))
+	testing.expect(t, strings.contains(two, "import tag_server \"games:tag/server\"\n"))
+	testing.expect(
+		t,
+		strings.contains(two, "SERVER :: []core.Game{stopwatch_server.GAME, tag_server.GAME}\n"),
+	)
+	testing.expect(t, strings.contains(two, "#assert(tag_server.GAME.id == \"tag\""))
 }

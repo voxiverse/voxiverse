@@ -1,4 +1,4 @@
-package stopwatch
+package stopwatch_server
 
 import "core:log"
 import "core:strings"
