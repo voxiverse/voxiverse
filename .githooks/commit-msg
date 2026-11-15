@@ -4,7 +4,8 @@ commit-msg: Validate commit messages against Voxiverse standards (AGENTS.md).
 
 Rules:
 1. Subject line: '<Category>: <Imperative description>'
-   - Category must be 'Docs', 'Meta', or a folder listed in docs/layout.md.
+   - Category must be 'Docs', 'Meta', or a folder listed in docs/layout.md (a row's
+     `<game>` segment, a shape, stands for any game's snake_case name).
    - Description must start with a capital letter.
    - Description must use imperative mood (e.g. 'Add', 'Fix', 'Remove', not 'Added', 'Fixes').
    - Description must not end with a period.
@@ -57,7 +58,11 @@ def lint_message(msg_text):
         desc = desc.strip()
         
         allowed = get_allowed_categories()
-        if category not in allowed:
+        shapes = [
+            re.compile("^" + re.escape(c).replace(re.escape("<game>"), "[a-z][a-z0-9_]*") + "$")
+            for c in allowed if "<game>" in c
+        ]
+        if category not in allowed and not any(s.match(category) for s in shapes):
             errors.append(f"Invalid category '{category}'. Must be Docs, Meta, or a folder in docs/layout.md")
         
         if not desc:

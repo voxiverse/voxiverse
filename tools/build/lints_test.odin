@@ -138,6 +138,11 @@ test_game_import_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_game_imports("games/tag/client/hud.odin", imports)), 0)
 	testing.expect_value(t, len(lint_game_imports("games/tag/tag.odin", imports)), 0)
 	testing.expect_value(t, len(lint_game_imports("games/flood/flood.odin", imports)), 2)
+	// The list of every game the driver writes: the main packages' only.
+	list := "import \"generated:games\"\n"
+	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", list)), 0)
+	testing.expect_value(t, len(lint_game_imports("server/core/server.odin", list)), 1)
+	testing.expect_value(t, len(lint_game_imports("games/tag/tag.odin", list)), 1)
 	// Not an import: a string that only mentions one.
 	testing.expect_value(
 		t,

@@ -29,6 +29,20 @@ they need it (`notice` tells a player something, `allowed` checks a permission).
 A game's tick runs inside the server's, so the stepped server (and its tests) run it too, and
 it follows [determinism.md](determinism.md): no clock, no unseeded randomness.
 
+## The list of games
+
+No file lists the games. The build driver writes one before every `odin` it runs:
+`build/generated/games/games.odin`, the package `generated:games` (the collection `generated`
+is `build/generated`), whose `SERVER` holds every `games/<game>` package's `GAME`, sorted by
+folder. An `#assert` there keeps each game's id its folder's name. Only the executables' main
+packages import it (the `import` lint), and the dedicated server runs one with
+`voxiverse-server --game <id>` (default: none). The client has no games yet.
+
+Adding a game is a folder `games/<game>/` holding a package that exports
+`GAME :: core.Game{...}`, and its tests beside it: nothing else. `games/stopwatch` is the model:
+the smallest game that uses every hook and both blocks of state, and tests that run it on a
+stepped server.
+
 ## The game's state
 
 A game declares two types and the server owns their memory (ground rule 1: the session's

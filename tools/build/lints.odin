@@ -229,7 +229,7 @@ lint_test_servers :: proc(path, text: string) -> []string {
 // test_lint scans the unit tests (every `_test.odin` outside tests/) with the two rules above.
 test_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"client", "server", "common", "tools"}) {
+	for dir in ([]string{"client", "server", "common", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -257,7 +257,7 @@ test_lint :: proc() -> bool {
 // source_lint runs the source lints over the first-party code.
 source_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"client", "server", "common"}) {
+	for dir in ([]string{"client", "server", "common", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -416,12 +416,13 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 }
 
 // GAME_IMPORTERS: the executables' main packages, the only code outside games/ that may
-// import a game (docs/games.md).
+// import a game, or the list of them the driver writes (generated:games; docs/games.md).
 GAME_IMPORTERS :: []string{"client/main", "server/dedicated"}
 
 // lint_game_imports: the engine never imports a game, but for the executables' main
-// packages (GAME_IMPORTERS), and a game imports no other game. path is relative to the
-// repository, with forward slashes.
+// packages (GAME_IMPORTERS), and a game imports no other game; nor the list of games
+// (generated:games), which imports them all. path is relative to the repository, with
+// forward slashes.
 lint_game_imports :: proc(path, text: string) -> []string {
 	game_of :: proc(rest: string) -> string {
 		if slash := strings.index_byte(rest, '/'); slash >= 0 {return rest[:slash]}
@@ -435,8 +436,15 @@ lint_game_imports :: proc(path, text: string) -> []string {
 	for line in strings.split_lines_iterator(&rest) {
 		line_no += 1
 		target := import_target(line) or_continue
-		if !strings.has_prefix(target, "games:") {continue}
-		imported := game_of(target[len("games:"):])
+		imported := ""
+		switch {
+		case strings.has_prefix(target, "games:"):
+			imported = game_of(target[len("games:"):])
+		case strings.has_prefix(target, "generated:"):
+			imported = "*" // every game
+		case:
+			continue
+		}
 		switch {
 		case own != "" && imported != own:
 			append(

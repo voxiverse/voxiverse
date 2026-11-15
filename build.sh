@@ -7,7 +7,7 @@ command -v odin >/dev/null 2>&1 || {
 	echo "build: 'odin' not found - install the toolchain with odinup (see README)" >&2
 	exit 1
 }
-mkdir -p build
+mkdir -p build/generated # (the collection of the code the driver writes)
 # The driver is rebuilt when missing or when its sources are newer.
 rebuild=0
 if [ ! -f build/build-driver ]; then
@@ -20,7 +20,7 @@ if [ "$rebuild" -eq 1 ]; then
 	# Built under a name of its own and renamed over: another ./build.sh may be
 	# starting the old one or building it too, and a rename is atomic where writing
 	# over it is not.
-	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common -collection:games=games
+	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common -collection:games=games -collection:generated=build/generated
 	mv -f build/build-driver.new.$$ build/build-driver
 fi
 exec build/build-driver "$@"

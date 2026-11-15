@@ -36,7 +36,9 @@ directly in it, not its sub-folders: each sub-folder has its own row. A row whos
    `games/<game>/pack/...`. Each shape gets its row with the first game that has one (a
    shape no game has is a stale row, as a folder with no file is). Nothing
    outside `games/` imports a game except the executables' main packages (`client/main`,
-   `server/dedicated`), and a game imports no other game: the `import` lint in `check`.
+   `server/dedicated`), and a game imports no other game: the `import` lint in `check`. The
+   main packages reach the games through the list the driver writes from `games/` into
+   `build/generated/games` (the package `generated:games`), so that list is no file either.
 
 ## The cap
 
@@ -151,6 +153,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
 | `games` | Where the games live (rule 6) | `README.md` |
+| `games/<game>` | A game's server-side package and its tests (the shape of every game's folder) | `*.odin`, `README.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

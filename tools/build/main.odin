@@ -195,7 +195,8 @@ all_test_packages :: proc() -> []string {
 }
 
 // COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
-// common:game, common:limited, games:<name>). The driver passes them to every odin it runs; build.sh,
+// common:game, common:limited, games:<name>, and generated:games, which the driver writes:
+// games.odin). The driver passes them to every odin it runs; build.sh,
 // build.bat (the driver's own build) and ols.json (the editor) repeat them, and a test keeps
 // those three in step. The list lives in package limited, which tests/ shares, so the
 // `odin` the tests run on their fixtures takes the same flags. A package's own directory is
@@ -257,6 +258,8 @@ main :: proc() {
 			fmt.tprintf("pid %d: build %s", os.get_pid(), strings.join(args, " ")),
 		)
 		if !locked {os.exit(1)}
+		// The main packages import the list of games (games.odin): every odin run needs it.
+		if !write_game_list() {os.exit(1)}
 	}
 	ok: bool
 	switch args[0] {

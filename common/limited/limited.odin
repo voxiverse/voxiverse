@@ -15,6 +15,7 @@ COLLECTIONS :: []string {
 	"-collection:server=server",
 	"-collection:common=common",
 	"-collection:games=games",
+	"-collection:generated=build/generated",
 }
 
 Run_Result :: enum {

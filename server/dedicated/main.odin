@@ -7,6 +7,7 @@ import "core:mem"
 import "core:net"
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 import "core:sync"
 import "core:time"
 
@@ -17,6 +18,8 @@ import platform "common:platform"
 import "server:collector"
 import "server:core"
 import steam "server:steam"
+
+import "generated:games"
 
 // voxiverse-server: a world with no window, for players to join over the
 // network. Ctrl+C (or SIGTERM) stops it cleanly: the world is saved and
@@ -48,6 +51,7 @@ Options :: struct {
 	import_file: string `args:"name=import" usage:"make the universe --universe (a directory that does not exist yet) from a .vxu file and quit"`,
 	steam:       bool `usage:"check joining players' Steam tickets and link each SteamID to its account (needs the Steamworks library beside the executable; docs/server.md)"`,
 	watchdog:    int `usage:"kill the server on a deadlocked tick (>0: seconds, default 60, 0: off)"`,
+	game:        string `usage:"the game to run, by id (a folder of games/; default: none, the engine alone)"`,
 	version:     bool `usage:"print the version and quit"`,
 }
 
@@ -137,6 +141,13 @@ run :: proc(host: ^base.Host, opts: Options) -> bool {
 		capture          = opts.capture,
 		backups          = max(0, opts.backups),
 		watchdog_seconds = max(0, opts.watchdog),
+	}
+	if opts.game != "" {
+		found: bool
+		if config.game, found = game_find(opts.game); !found {
+			log.errorf("there is no game %q (the games: %s)", opts.game, game_ids())
+			return false
+		}
 	}
 	if opts.telemetry != "" {
 		ep, err := net.resolve_ip4(opts.telemetry)
@@ -304,4 +315,20 @@ run_import :: proc(file, universe: string) -> bool {
 	}
 	fmt.printfln("%s: imported from %s", universe, file)
 	return true
+}
+
+// game_find: the game of that id, of those games/ holds (the list the build driver
+// writes: generated:games).
+game_find :: proc(id: string) -> (core.Game, bool) {
+	for g in games.SERVER {
+		if g.id == id {return g, true}
+	}
+	return {}, false
+}
+
+// game_ids: the games' ids, space apart.
+game_ids :: proc() -> string {
+	ids := make([]string, len(games.SERVER), context.temp_allocator)
+	for g, i in games.SERVER {ids[i] = g.id}
+	return strings.join(ids, " ", context.temp_allocator)
 }
