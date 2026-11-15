@@ -7,7 +7,8 @@ commit.** The table is the whole truth: there is no exemption, skip list or defa
 
 The rows are `| folder | what belongs there | file-name patterns |`. A pattern is a glob on the
 file's name (`*` and `?`), several are separated by commas. A folder's row covers the files
-directly in it, not its sub-folders: each sub-folder has its own row.
+directly in it, not its sub-folders: each sub-folder has its own row. A row whose folder has a
+`<game>` segment is a shape: it covers that folder of every game (rule 6).
 
 ## Rules
 
@@ -27,6 +28,15 @@ directly in it, not its sub-folders: each sub-folder has its own row.
    root of a collection: imports read `collection:name`.
 5. **Fuzz code** is named `fuzz*.odin` (`fuzz.odin`, `fuzz_<target>.odin`; its test is
    `fuzz_test.odin`) in the package that owns the thing fuzzed.
+6. **A game is a folder, `games/<game>/`**, named by the game's id (singular snake_case). Its
+   rows are shapes, not folders: `<game>` stands for any game's name, so a new game adds no
+   row here, and the build driver finds its packages by listing `games/`, so it adds no entry
+   to a package list either. `games/<game>` is the game's server-side package, its tests
+   beside it; its client package will be `games/<game>/client` and its pack
+   `games/<game>/pack/...`. Each shape gets its row with the first game that has one (a
+   shape no game has is a stale row, as a folder with no file is). Nothing
+   outside `games/` imports a game except the executables' main packages (`client/main`,
+   `server/dedicated`), and a game imports no other game: the `import` lint in `check`.
 
 ## The cap
 
@@ -140,6 +150,7 @@ package** is enforced by the `layout` lint (see above).
 | `common/telemetry` | Events, counters and the uploader format | `*.odin` |
 | `common/worldgen` | World generators (the Earth one can stand on the planet model's relief) | `*.odin` |
 | `docs` | Cheat sheets of how each system works now, and this manifest | `*.md` |
+| `games` | Where the games live (rule 6) | `README.md` |
 | `server/core` | The server: the world, clients, journal, save, commands, entities, pack files | `*.odin` |
 | `server/collector` | The telemetry collector and developer chat | `*.odin` |
 | `server/dedicated` | The dedicated server's main package | `*.odin` |

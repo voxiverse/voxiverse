@@ -37,20 +37,57 @@ parse_layout :: proc(text: string) -> []Layout_Row {
 	return rows[:]
 }
 
-// lint_layout: every tracked file is in a listed folder and matches one of its patterns.
+// GAME_SEGMENT, in a row's folder, stands for any game's folder name: `games/<game>` is the
+// shape of every game's folder, one row for all of them, so a new game adds no row.
+GAME_SEGMENT :: "<game>"
+
+// is_game_name: a game's folder name is singular snake_case: a lower-case letter, then
+// lower-case letters, digits and underscores.
+is_game_name :: proc(name: string) -> bool {
+	if name == "" || name[0] < 'a' || name[0] > 'z' {return false}
+	for ch in transmute([]u8)name {
+		switch ch {
+		case 'a' ..= 'z', '0' ..= '9', '_':
+		case:
+			return false
+		}
+	}
+	return true
+}
+
+// row_matches: folder is the row's folder, or has its shape: the same path with a game's
+// name for each GAME_SEGMENT.
+row_matches :: proc(row, folder: string) -> bool {
+	if row == folder {return true}
+	if !strings.contains(row, GAME_SEGMENT) {return false}
+	row_rest, folder_rest := row, folder
+	for {
+		want, more := strings.split_iterator(&row_rest, "/")
+		got, more_folder := strings.split_iterator(&folder_rest, "/")
+		if !more || !more_folder {return !more && !more_folder}
+		if want == GAME_SEGMENT {
+			if !is_game_name(got) {return false}
+		} else if want != got {return false}
+	}
+}
+
+// folder_of: the folder a tracked path is in ("." for the root).
+folder_of :: proc(path: string) -> string {
+	if slash := strings.last_index_byte(path, '/'); slash >= 0 {return path[:slash]}
+	return "."
+}
+
+// lint_layout: every tracked file is in a listed folder (or one of a listed shape) and
+// matches one of its patterns.
 lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 	found := make([dynamic]string)
 	unlisted := make(map[string]bool)
 	for path in tracked {
-		folder := "."
-		name := path
-		if slash := strings.last_index_byte(path, '/'); slash >= 0 {
-			folder = path[:slash]
-			name = path[slash + 1:]
-		}
+		folder := folder_of(path)
+		name := path[len(folder) + 1:] if folder != "." else path
 		row: ^Layout_Row
 		for &r in rows {
-			if r.folder == folder {row = &r; break}
+			if row_matches(r.folder, folder) {row = &r; break}
 		}
 		if row == nil {
 			if !unlisted[folder] {
@@ -78,22 +115,18 @@ lint_layout :: proc(rows: []Layout_Row, tracked: []string) -> []string {
 					"%s: %s does not match the patterns of %s in %s (%s)",
 					path,
 					name,
-					folder,
+					row.folder,
 					LAYOUT_MANIFEST,
 					strings.join(row.patterns, ", "),
 				),
 			)
 		}
 	}
-	// A listed folder with no tracked file is a stale row.
+	// A listed folder (or shape) with no tracked file is a stale row.
 	for row in rows {
 		used := false
 		for path in tracked {
-			if len(path) > len(row.folder) + 1 &&
-			   strings.has_prefix(path, row.folder) &&
-			   path[len(row.folder)] == '/' &&
-			   strings.index_byte(path[len(row.folder) + 1:], '/') < 0 {used = true; break}
-			if row.folder == "." && strings.index_byte(path, '/') < 0 {used = true; break}
+			if row_matches(row.folder, folder_of(path)) {used = true; break}
 		}
 		if !used {
 			append(
@@ -202,8 +235,8 @@ layout_lint :: proc() -> bool {
 }
 
 // lint_package_lists: the driver's package lists stay complete. A folder holding a tracked
-// `.odin` file must be in `packages` (or `check` would never type-check it); a folder outside
-// tests/ holding an `@(test)` procedure must be in `test_packages` (or `test` would never run
+// `.odin` file must be in `packages` (all_packages: or `check` would never type-check it); a folder outside
+// tests/ holding an `@(test)` procedure must be in `test_packages` (all_test_packages: or `test` would never run
 // it; tests/ and its fixtures are `build system`'s, by location); a test package must be a
 // package; and every such folder must lie under one of `source_dirs` (or the format check would
 // skip it). `with_tests` are the tracked files that contain an `@(test)` procedure.
@@ -211,10 +244,6 @@ lint_package_lists :: proc(
 	tracked, with_tests, packages, test_packages, source_dirs: []string,
 ) -> []string {
 	found := make([dynamic]string)
-	folder_of :: proc(path: string) -> string {
-		if slash := strings.last_index_byte(path, '/'); slash >= 0 {return path[:slash]}
-		return "."
-	}
 	has :: proc(list: []string, s: string) -> bool {
 		for x in list {if x == s {return true}}
 		return false
@@ -295,7 +324,13 @@ package_lists_lint :: proc() -> bool {
 			if p != "" {append(&with_tests, p)}
 		}
 	}
-	found := lint_package_lists(tracked[:], with_tests[:], PACKAGES, TEST_PACKAGES, SOURCE_DIRS)
+	found := lint_package_lists(
+		tracked[:],
+		with_tests[:],
+		all_packages(),
+		all_test_packages(),
+		SOURCE_DIRS,
+	)
 	for msg in found {fmt.eprintln(msg)}
 	if len(found) ==
 	   0 {fmt.println("lint   PACKAGES, TEST_PACKAGES and SOURCE_DIRS cover every Odin folder")}

@@ -30,6 +30,33 @@ test_layout_lint :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(lint_layout(rows, {"README.md", "build.sh"})), 1)
 }
 
+// A game's folders are one row for every game: `<game>` stands for a game's name.
+@(test)
+test_layout_game_shape :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	rows := parse_layout(
+		"| `games` | the games | `README.md` |\n| `games/<game>` | a game | `*.odin` |\n",
+	)
+	testing.expect_value(t, rows[1].folder, "games/<game>")
+	ok := []string{"games/README.md", "games/tag/tag.odin", "games/king_of_hill/rules.odin"}
+	testing.expect_value(t, len(lint_layout(rows, ok)), 0)
+	// A name that is not singular snake_case, a file the shape does not allow, a folder
+	// below the shape: each is reported.
+	testing.expect_value(t, len(lint_layout(rows, {"games/README.md", "games/Tag/tag.odin"})), 2)
+	testing.expect_value(t, len(lint_layout(rows, {"games/README.md", "games/tag/notes.txt"})), 1)
+	testing.expect_value(
+		t,
+		len(lint_layout(rows, {"games/README.md", "games/tag/tag.odin", "games/tag/x/a.odin"})),
+		1,
+	)
+	// A shape no game has yet is a stale row, as a folder with no file is.
+	testing.expect_value(t, len(lint_layout(rows, {"games/README.md"})), 1)
+	testing.expect(t, row_matches("games/<game>/client", "games/tag/client"))
+	testing.expect(t, !row_matches("games/<game>/client", "games/tag"))
+	testing.expect(t, !row_matches("games/<game>", "games/_tag"))
+	testing.expect(t, !row_matches("games/<game>", "games/tag/client"))
+}
+
 @(test)
 test_scratch_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator

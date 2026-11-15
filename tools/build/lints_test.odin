@@ -1,5 +1,6 @@
 package build
 
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -113,9 +114,36 @@ test_relative_import_lint :: proc(t: ^testing.T) {
 @(test)
 test_collections_lint :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
-	all := "-collection:client=client -collection:server=server -collection:common=common"
+	all := strings.join(COLLECTIONS, " ")
 	testing.expect_value(t, len(lint_collections("build.sh", all)), 0)
-	testing.expect_value(t, len(lint_collections("build.sh", "-collection:client=client")), 2)
+	testing.expect_value(
+		t,
+		len(lint_collections("build.sh", "-collection:client=client")),
+		len(COLLECTIONS) - 1,
+	)
+}
+
+@(test)
+test_game_import_lint :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	imports := "package x\nimport \"server:core\"\nimport tag \"games:tag\"\nimport \"games:tag/client\"\n"
+	// The main packages may import a game; the engine, the tools and the tests may not.
+	testing.expect_value(t, len(lint_game_imports("server/dedicated/main.odin", imports)), 0)
+	testing.expect_value(t, len(lint_game_imports("client/main/main.odin", imports)), 0)
+	testing.expect_value(t, len(lint_game_imports("server/core/server.odin", imports)), 2)
+	testing.expect_value(t, len(lint_game_imports("client/engine/app.odin", imports)), 2)
+	testing.expect_value(t, len(lint_game_imports("tools/bench/main.odin", imports)), 2)
+	testing.expect_value(t, len(lint_game_imports("tests/x_test.odin", imports)), 2)
+	// A game imports itself (its client package its server one), never another game.
+	testing.expect_value(t, len(lint_game_imports("games/tag/client/hud.odin", imports)), 0)
+	testing.expect_value(t, len(lint_game_imports("games/tag/tag.odin", imports)), 0)
+	testing.expect_value(t, len(lint_game_imports("games/flood/flood.odin", imports)), 2)
+	// Not an import: a string that only mentions one.
+	testing.expect_value(
+		t,
+		len(lint_game_imports("server/core/x.odin", "s := \"import \\\"games:tag\\\"\"\n")),
+		0,
+	)
 }
 
 @(test)

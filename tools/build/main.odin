@@ -17,7 +17,9 @@ BUILD_DIR :: "build"
 // repository root (the wrapper scripts cd there).
 
 // PACKAGES are type-checked by `check`, each on its own so one broken
-// package doesn't hide errors in the others.
+// package doesn't hide errors in the others. The games' packages are not
+// listed: they are found in games/ (game_packages), so a new game edits
+// nothing here. `all_packages` is the whole list.
 PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
@@ -84,7 +86,8 @@ PACKAGES :: []string {
 	"tests/panic_fixture",
 	"tests/window_fixture",
 }
-// TEST_PACKAGES contain @(test) procedures.
+// TEST_PACKAGES contain @(test) procedures (and so do the games' packages
+// game_packages finds with tests; `all_test_packages` is the whole list).
 TEST_PACKAGES :: []string {
 	"common/base",
 	"common/base/fuzz",
@@ -140,10 +143,59 @@ SOURCE_DIRS :: []string {
 	"server",
 	"tools",
 	"tests",
+	"games",
+}
+
+// GAMES_DIR holds one folder per game (docs/games.md), in the shape docs/layout.md gives.
+GAMES_DIR :: "games"
+
+// game_packages lists the packages under games/: every folder holding an `.odin` file,
+// and of those the ones holding a `_test.odin` file, each sorted. Found, not listed, so
+// adding a game edits no file of the driver's.
+game_packages :: proc() -> (packages, tested: []string) {
+	found := make(map[string]bool, context.temp_allocator) // folder: it holds a test
+	w := os.walker_create(GAMES_DIR)
+	defer os.walker_destroy(&w)
+	for info in os.walker_walk(&w) {
+		if info.type != .Regular || filepath.ext(info.name) != ".odin" {continue}
+		folder := repo_path(filepath.dir(info.fullpath))
+		found[folder] = found[folder] || strings.has_suffix(info.name, "_test.odin")
+	}
+	all := make([dynamic]string)
+	with_tests := make([dynamic]string)
+	for folder, has_test in found {
+		append(&all, folder)
+		if has_test {append(&with_tests, folder)}
+	}
+	slice.sort(all[:])
+	slice.sort(with_tests[:])
+	return all[:], with_tests[:]
+}
+
+// repo_path: a path (a walker's full one) as the repository names it: from its root,
+// where the driver runs, with forward slashes.
+repo_path :: proc(path: string) -> string {
+	cwd, _ := os.get_working_directory(context.temp_allocator)
+	rel, err := filepath.rel(cwd, path)
+	if err != .None {rel = strings.clone(path)}
+	slashed, _ := strings.replace_all(rel, "\\", "/")
+	return slashed
+}
+
+// all_packages: PACKAGES and the games' packages.
+all_packages :: proc() -> []string {
+	games, _ := game_packages()
+	return slice.concatenate([][]string{PACKAGES, games})
+}
+
+// all_test_packages: TEST_PACKAGES and the games' packages that have tests.
+all_test_packages :: proc() -> []string {
+	_, games := game_packages()
+	return slice.concatenate([][]string{TEST_PACKAGES, games})
 }
 
 // COLLECTIONS: the roots first-party code imports through (client:gpu, server:collector,
-// common:game, common:limited). The driver passes them to every odin it runs; build.sh,
+// common:game, common:limited, games:<name>). The driver passes them to every odin it runs; build.sh,
 // build.bat (the driver's own build) and ols.json (the editor) repeat them, and a test keeps
 // those three in step. The list lives in package limited, which tests/ shares, so the
 // `odin` the tests run on their fixtures takes the same flags. A package's own directory is
@@ -716,7 +768,7 @@ run_game :: proc(args: []string) -> bool {
 check :: proc() -> bool {
 	// The host's type checks and the other targets' object builds share one pool.
 	jobs := make([dynamic]Check_Job)
-	for pkg in PACKAGES {
+	for pkg in all_packages() {
 		append(
 			&jobs,
 			Check_Job {
@@ -892,7 +944,7 @@ cross_jobs :: proc(jobs: ^[dynamic]Check_Job) -> bool {
 			// reaches its log) build nowhere else on this machine.
 			append(&builds, [2]string{"build", "tools/build"})
 		} else {
-			for pkg in TEST_PACKAGES {
+			for pkg in all_test_packages() {
 				append(&builds, [2]string{"test", pkg})
 			}
 			// The macOS-only window fixture (#+build darwin): the native check skips it
@@ -1107,11 +1159,12 @@ qualified_test_names :: proc(pkg: string, names: []string) -> string {
 test :: proc(args: []string) -> bool {
 	named, opts, parsed := parse_test_args(args)
 	if !parsed {return false}
-	packages := slice.clone(TEST_PACKAGES)
+	all := all_test_packages()
+	packages := all
 	if len(named) > 0 {
 		for pkg in named {
-			if !slice.contains(TEST_PACKAGES, pkg) {
-				fmt.eprintfln("build: test: '%s' is not a test package (%v)", pkg, TEST_PACKAGES)
+			if !slice.contains(all, pkg) {
+				fmt.eprintfln("build: test: '%s' is not a test package (%v)", pkg, all)
 				return false
 			}
 		}

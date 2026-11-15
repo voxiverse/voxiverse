@@ -3,6 +3,7 @@ package build
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 
 // Source lints, run by `check` (they were tests that read the sources). None has an
@@ -379,6 +380,18 @@ literal_calls :: proc(source: string) -> []Literal_Call {
 	return out[:]
 }
 
+// import_target: the quoted path of an `import` or `foreign import` line, if it is one.
+import_target :: proc(line: string) -> (target: string, ok: bool) {
+	trimmed := strings.trim_left_space(line)
+	if !strings.has_prefix(trimmed, "import ") &&
+	   !strings.has_prefix(trimmed, "foreign import ") {return}
+	open := strings.index_byte(trimmed, '"')
+	if open < 0 {return}
+	target = trimmed[open + 1:]
+	if end := strings.index_byte(target, '"'); end >= 0 {target = target[:end]}
+	return target, true
+}
+
 // lint_relative_imports: every first-party import goes through a collection
 // (`common:game`, `client:gpu`), never a path relative to the importing file.
 lint_relative_imports :: proc(path, text: string) -> []string {
@@ -387,18 +400,12 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 	rest := text
 	for line in strings.split_lines_iterator(&rest) {
 		line_no += 1
-		trimmed := strings.trim_left_space(line)
-		if !strings.has_prefix(trimmed, "import ") &&
-		   !strings.has_prefix(trimmed, "foreign import ") {continue}
-		open := strings.index_byte(trimmed, '"')
-		if open < 0 {continue}
-		target := trimmed[open + 1:]
-		if end := strings.index_byte(target, '"'); end >= 0 {target = target[:end]}
+		target := import_target(line) or_continue
 		if strings.index_byte(target, ':') >= 0 {continue}
 		append(
 			&found,
 			fmt.aprintf(
-				"%s:%d: import \"%s\" is a relative path: import through a collection (client:, server:, common:)",
+				"%s:%d: import \"%s\" is a relative path: import through a collection (client:, server:, common:, games:)",
 				path,
 				line_no,
 				target,
@@ -408,10 +415,60 @@ lint_relative_imports :: proc(path, text: string) -> []string {
 	return found[:]
 }
 
-// import_lint runs lint_relative_imports over every first-party Odin file.
+// GAME_IMPORTERS: the executables' main packages, the only code outside games/ that may
+// import a game (docs/games.md).
+GAME_IMPORTERS :: []string{"client/main", "server/dedicated"}
+
+// lint_game_imports: the engine never imports a game, but for the executables' main
+// packages (GAME_IMPORTERS), and a game imports no other game. path is relative to the
+// repository, with forward slashes.
+lint_game_imports :: proc(path, text: string) -> []string {
+	game_of :: proc(rest: string) -> string {
+		if slash := strings.index_byte(rest, '/'); slash >= 0 {return rest[:slash]}
+		return rest
+	}
+	own := ""
+	if strings.has_prefix(path, "games/") {own = game_of(path[len("games/"):])}
+	found := make([dynamic]string)
+	line_no := 0
+	rest := text
+	for line in strings.split_lines_iterator(&rest) {
+		line_no += 1
+		target := import_target(line) or_continue
+		if !strings.has_prefix(target, "games:") {continue}
+		imported := game_of(target[len("games:"):])
+		switch {
+		case own != "" && imported != own:
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: import \"%s\": a game imports no other game (what two share belongs in the engine)",
+					path,
+					line_no,
+					target,
+				),
+			)
+		case own == "" && !slice.contains(GAME_IMPORTERS, folder_of(path)):
+			append(
+				&found,
+				fmt.aprintf(
+					"%s:%d: import \"%s\": only the main packages (%s) import a game; the engine calls it through its hooks",
+					path,
+					line_no,
+					target,
+					strings.join(GAME_IMPORTERS, ", ", context.temp_allocator),
+				),
+			)
+		}
+	}
+	return found[:]
+}
+
+// import_lint runs lint_relative_imports and lint_game_imports over every first-party Odin
+// file.
 import_lint :: proc() -> bool {
 	ok := true
-	for dir in ([]string{"tests", "common", "client", "server", "tools"}) {
+	for dir in ([]string{"tests", "common", "client", "server", "tools", GAMES_DIR}) {
 		w := os.walker_create(dir)
 		defer os.walker_destroy(&w)
 		for info in os.walker_walk(&w) {
@@ -422,14 +479,18 @@ import_lint :: proc() -> bool {
 				ok = false
 				continue
 			}
-			path, _ := strings.replace_all(info.fullpath, "\\", "/")
+			path := repo_path(info.fullpath)
 			for msg in lint_relative_imports(path, string(data)) {
+				fmt.eprintln(msg)
+				ok = false
+			}
+			for msg in lint_game_imports(path, string(data)) {
 				fmt.eprintln(msg)
 				ok = false
 			}
 		}
 	}
-	if ok {fmt.println("lint   imports go through collections")}
+	if ok {fmt.println("lint   imports go through collections, and only the main packages import a game")}
 	return ok
 }
 

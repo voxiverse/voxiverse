@@ -20,7 +20,7 @@ if [ "$rebuild" -eq 1 ]; then
 	# Built under a name of its own and renamed over: another ./build.sh may be
 	# starting the old one or building it too, and a rename is atomic where writing
 	# over it is not.
-	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common
+	odin build tools/build -out:build/build-driver.new.$$ -collection:client=client -collection:server=server -collection:common=common -collection:games=games
 	mv -f build/build-driver.new.$$ build/build-driver
 fi
 exec build/build-driver "$@"

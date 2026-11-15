@@ -2,7 +2,8 @@
 	"collections": [
 		{ "name": "client", "path": "client" },
 		{ "name": "server", "path": "server" },
-		{ "name": "common", "path": "common" }
+		{ "name": "common", "path": "common" },
+		{ "name": "games", "path": "games" }
 	],
 	"enable_semantic_tokens": false,
 	"enable_document_symbols": true,
