@@ -90,7 +90,7 @@ Config :: struct {
 // the thread that calls start, stop on the one that calls stop, the rest on the
 // server's, in its tick.
 Game :: struct {
-	id:           string, // its folder's name in games/ (the dedicated server's --game)
+	using info:   game.Game_Info, // its id (its folder's name in games/: the dedicated server's --game), name and description (its shared package's)
 	kinds:        game.Game_Kinds, // what it replicates besides the engine (its shared package's; game_put, game_event)
 	server_state: typeid, // its state for the session (game_state): zero at start; nil: none
 	client_state: typeid, // ... and for each seat (game_client_state): zero for each player who joins; nil: none

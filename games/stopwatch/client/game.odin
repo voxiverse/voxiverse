@@ -12,7 +12,7 @@ import "games:stopwatch"
 // it to the `stopwatch` console command.
 
 GAME :: engine.Game {
-	id       = "stopwatch",
+	info     = stopwatch.INFO,
 	kinds    = stopwatch.KINDS,
 	state    = View,
 	received = received,

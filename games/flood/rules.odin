@@ -3,6 +3,7 @@ package flood
 import "core:math"
 
 import "common:base"
+import "common:game"
 
 // Flood: water rises in a walled arena, and the players climb to the glowing platform at
 // its top before it reaches them. A head under water for two seconds (or a player outside
@@ -14,6 +15,14 @@ import "common:base"
 // This is its shared package: the rules both sides know, the record the server tells
 // each player (records.odin) and the game's pack (pack.odin). The server part
 // (games/flood/server) runs the rounds; the client part (games/flood/client) shows them.
+
+// INFO: the game's id, name and description, for both of its parts (the launcher
+// lists it by them).
+INFO :: game.Game_Info {
+	id          = "flood",
+	name        = "Flood",
+	description = "Water rises in a walled arena: climb to the glowing platform before it reaches you.",
+}
 
 // The arena: its inside is x and z 0 ..< SIZE, y 0 ..< HEIGHT (the floor at 0), walled
 // with bedrock to WALL_TOP.

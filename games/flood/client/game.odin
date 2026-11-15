@@ -13,7 +13,7 @@ import "games:flood"
 // warning, and at the end the result and the rule, big; and in F3, the rule too.
 
 GAME :: engine.Game {
-	id       = "flood",
+	info     = flood.INFO,
 	kinds    = flood.KINDS,
 	state    = View,
 	received = received,

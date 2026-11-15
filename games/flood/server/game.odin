@@ -16,7 +16,7 @@ import "server:core"
 // the round (flood.Round) every tick it changes.
 
 GAME :: core.Game {
-	id           = "flood",
+	info         = flood.INFO,
 	kinds        = flood.KINDS,
 	pack         = flood.PACK,
 	server_state = Flood,

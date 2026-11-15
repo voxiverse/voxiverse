@@ -179,7 +179,7 @@ test_game_pack :: proc(t: ^testing.T) {
 	PACK :: `{"format": 1, "namespace": "packed", "version": "1.0.0", "title": "Packed", "requires": ["voxiverse"]}`
 	MODES :: `{"out": {"abilities": ["fly", "spectate"], "kit": [], "rules": {}}}`
 	packed := Game {
-		id   = "packed",
+		info = {id = "packed"},
 		pack = {
 			"packed",
 			{

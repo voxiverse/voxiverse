@@ -65,6 +65,16 @@ Event_Kind_Info :: struct {
 	check:   proc(reg: ^Registry, value: rawptr) -> bool,
 }
 
+// Game_Info: what names a game (docs/games.md), declared once in its shared package
+// and taken by both of its parts (core.Game and engine.Game hold it by `using`): its
+// id (its folder's name in games/, what Welcome names), the name players read and a
+// line saying what it is, both in plain English (the launcher's list of games).
+Game_Info :: struct {
+	id:          string,
+	name:        string,
+	description: string,
+}
+
 // Game_Kinds: the state and event kinds a game replicates besides the engine's
 // (docs/games.md), declared as data in its shared package. A kind's name starts with
 // the game's id and a dot, and its value type is its own: the type names the kind

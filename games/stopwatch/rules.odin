@@ -11,5 +11,13 @@ import "common:game"
 // (records.odin). The server part (games/stopwatch/server) runs the game; the client
 // part (games/stopwatch/client) shows a player their time.
 
+// INFO: the game's id, name and description, for both of its parts (the launcher
+// lists it by them).
+INFO :: game.Game_Info {
+	id          = "stopwatch",
+	name        = "Stopwatch",
+	description = "Stay in the world: your time runs from when you join; beat the longest stay.",
+}
+
 // seconds: ticks as seconds of play.
 seconds :: proc(ticks: u64) -> f64 {return f64(ticks) / game.TICK_RATE}

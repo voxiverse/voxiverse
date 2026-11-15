@@ -30,9 +30,15 @@ COUNTER_KINDS :: game.Game_Kinds {
 	states = {{name = "counter.count", value = Count}},
 }
 
+COUNTER_INFO :: game.Game_Info {
+	id          = "counter",
+	name        = "Counter",
+	description = "The server's tick, counted.",
+}
+
 // The server part: every player is told the server's tick, every tick.
 COUNTER_SERVER :: core.Game {
-	id    = "counter",
+	info  = COUNTER_INFO,
 	kinds = COUNTER_KINDS,
 	tick  = counter_tick,
 }
@@ -53,7 +59,7 @@ Counter_View :: struct {
 }
 
 COUNTER_CLIENT :: engine.Game {
-	id = "counter",
+	info = COUNTER_INFO,
 	kinds = COUNTER_KINDS,
 	state = Counter_View,
 	started = proc(s: ^engine.Session) {engine.game_state(s, Counter_View).started = true},

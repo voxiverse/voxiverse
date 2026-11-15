@@ -14,15 +14,15 @@ import "common:game"
 // one its server names in Welcome (session_game_begin). Its state is the session's.
 // Any hook may be nil; all run on the main thread, in the frame.
 Game :: struct {
-	id:       string, // its folder's name in games/: what the server's Welcome names
-	kinds:    game.Game_Kinds, // what its server part replicates (its shared package's)
-	state:    typeid, // its state for the session (game_state): zero when the game begins; nil: none
-	started:  proc(s: ^Session), // the session plays the game: welcomed, its state zero
-	ended:    proc(s: ^Session), // the session ends (its state still there)
-	received: proc(s: ^Session, r: game.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
-	hud:      proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
-	debug:    proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
-	commands: []Command_Spec, // its console commands, there while a world plays it
+	using info: game.Game_Info, // its id (its folder's name in games/: what the server's Welcome names), name and description (its shared package's, as the server part's)
+	kinds:      game.Game_Kinds, // what its server part replicates (its shared package's)
+	state:      typeid, // its state for the session (game_state): zero when the game begins; nil: none
+	started:    proc(s: ^Session), // the session plays the game: welcomed, its state zero
+	ended:      proc(s: ^Session), // the session ends (its state still there)
+	received:   proc(s: ^Session, r: game.Received), // a record of the game's kinds came, changed or went, or an event (game_value)
+	hud:        proc(s: ^Session, ctx: ^ui.Context), // draw its HUD, after the engine's (F1 hides both)
+	debug:      proc(s: ^Session) -> string, // its line of the F3 overlay ("": none; temporary memory)
+	commands:   []Command_Spec, // its console commands, there while a world plays it
 }
 
 // game_find: the game of that id among games.

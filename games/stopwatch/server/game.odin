@@ -12,7 +12,7 @@ import "server:core"
 // everyone when a record is broken, and answers /stopwatch.
 
 GAME :: core.Game {
-	id           = "stopwatch",
+	info         = stopwatch.INFO,
 	kinds        = stopwatch.KINDS,
 	server_state = Watch,
 	client_state = Lap,

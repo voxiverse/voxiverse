@@ -926,7 +926,7 @@ test_game_api :: proc(t: ^testing.T) {
 	defer free(sess)
 	config := harness_world()
 	config.game = Game {
-		id = "probe",
+		info = {id = "probe"},
 	}
 	if !testing.expect(t, session_start(sess, {}, false, with = config)) {return}
 	defer session_stop(sess)

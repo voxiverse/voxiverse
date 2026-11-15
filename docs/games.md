@@ -10,10 +10,25 @@ shared package (`package <game>`: the rules, constants and record types both sid
 `common:` and `core:`), `games/<game>/server` its server part (`package <game>_server`) and
 `games/<game>/client` its client part (`package <game>_client`).
 
+What names a game is declared once, in its shared package, and both parts take it: a
+`game.Game_Info` holding its id (the folder's name), the name players read and a line saying
+what it is (plain English for now: the launcher lists the games by them, and a game has no
+translation table yet). `core.Game` and `engine.Game` hold it by `using`, so `g.id` reads as
+before:
+
+```odin
+// games/flood/rules.odin (package flood)
+INFO :: game.Game_Info {
+	id          = "flood",
+	name        = "Flood",
+	description = "Water rises in a walled arena: climb to the glowing platform before it reaches you.",
+}
+```
+
 ## The server's side: `core.Game`
 
-A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its id
-(the folder's name), the types of its state, its pack (below), and the hooks the server calls
+A game's server part (`games/<game>/server`) exports one constant `core.Game` value: its
+`info` (its shared package's `INFO`), the types of its state, its pack (below), and the hooks the server calls
 (`Game` in `server/core/server.odin`). Whoever starts the server puts it in `Config.game`; the
 zero `Game` is no game, and the server is the engine alone. Every hook may be nil.
 
@@ -70,7 +85,7 @@ list lacks.
 ## The client's side: `engine.Game`
 
 A game's client part (`games/<game>/client`) exports one constant `engine.Game` value
-(`client/engine/game.odin`): its id, its kinds (the same `KINDS` of its shared package as the
+(`client/engine/game.odin`): its `info` (the same `INFO` as the server part's), its kinds (the same `KINDS` of its shared package as the
 server part's), the type of its state, its console commands and the hooks the client calls.
 A `Session` holds the game it plays and its state (ground rule 1: the session's arena, freed
 with it; the App only holds the list of games, constant data). Every hook may be nil; all run
