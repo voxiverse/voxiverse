@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"namespace": "flood",
+	"version": "1.0.0",
+	"title": "Flood",
+	"description": "Flood's game modes: a runner's, and an out player's who only watches.",
+	"requires": ["voxiverse"]
+}
