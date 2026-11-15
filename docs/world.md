@@ -97,7 +97,9 @@ got); a refused request is rolled back.
 - Breaking a block drops the block's item where `rules.drops` is set (not with
   `infinite_items`).
 - The `catalog` ability lets the inventory take any item.
-- A player new to a world receives `world.cfg`'s `kit`.
+- A player new to a world receives the universe's kit (`universe.cfg`'s `kit`), chosen when
+  it was made by the game it plays (`Config.kit` in its configure: the sandbox's is the rocket
+  launcher; with none, nothing).
 
 Dropped stacks are entities. They fall, merge with stacks of the same item, are picked up by
 walking over them (after half a second; two seconds for the player who dropped them), and

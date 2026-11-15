@@ -7,8 +7,9 @@ import "core:testing"
 import "common:game"
 
 // The worlds the tests start give their players the blocks the old default
-// kit gave (the tests place and break them); the real default, the rocket
-// launcher alone, is what kit_default and a Config's kit are tested with.
+// kit gave (the tests place and break them); the real default is nothing (a
+// game's configure names a kit: the sandbox's, the rocket launcher alone, is
+// what a Config's kit is tested with).
 TEST_KIT :: "stone 64, dirt 64, grass 64, sand 64, log 64, leaves 64, water 64, lamp 64, rocket_launcher 1"
 
 // (Odin compiles a _test.odin file into every build of the package: without
@@ -20,21 +21,27 @@ when ODIN_TEST {
 	}
 }
 
+// The engine gives nothing by default: a kit is the game's (Config.kit) or the
+// universe's. (kit_default is the tests' override while they run.)
 @(test)
-test_default_kit_is_the_launcher :: proc(t: ^testing.T) {
+test_default_kit_is_nothing :: proc(t: ^testing.T) {
 	reg := game.test_reg()
 	kit: [dynamic]game.Stack
 	defer delete(kit)
+	stacks, parsed := kit_parse(reg, "")
+	testing.expect(t, parsed && len(stacks) == 0, "the engine's own kit is not empty")
 	launcher, ok := game.item_by_name(reg, "rocket_launcher")
 	if !testing.expect(t, ok) {return}
-	if stacks, parsed := kit_parse(reg, DEFAULT_KIT_TEXT); testing.expect(t, parsed) {
+	if stacks, parsed = kit_parse(reg, SANDBOX_KIT); testing.expect(t, parsed) {
 		testing.expect_value(t, len(stacks), 1)
 		testing.expect_value(t, stacks[0], game.Stack{launcher, 1, 0})
 	}
-	// (kit_default itself is the override while the tests run.)
 	kit_default(reg, &kit)
 	testing.expect(t, len(kit) > 1, "the tests' kit")
 }
+
+// SANDBOX_KIT: games/sandbox's KIT (the engine's tests import no game).
+SANDBOX_KIT :: "rocket_launcher 1"
 
 // A new player's inventory: the launcher in hotbar slot 1 and nothing else;
 // without world.fire not even that (the grants say: with cheats it is allowed).
@@ -56,7 +63,7 @@ test_new_character_has_the_launcher_only :: proc(t: ^testing.T) {
 			max_players     = 2,
 			listen          = true,
 			generator       = .Classic,
-			kit             = DEFAULT_KIT_TEXT,
+			kit             = SANDBOX_KIT,
 		}
 		if !testing.expect(t, harness_start(h, config)) {return}
 		stopped := false
